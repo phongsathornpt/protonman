@@ -41,17 +41,19 @@ commit.
   safely.
 - [x] Add project trust gating; untrusted project config is ignored with a
   warning.
-- [ ] Add protected-path checks; this moves with workspace-root enforcement
+- [x] Add protected-path checks; this moves with workspace-root enforcement
   into Step 3.
 
 ### Step 3 — coding tools
 
-- [ ] Port `write_file`, `search_replace`, `apply_patch`, `grep`, and
+- [x] Port `write_file`, `search_replace`, `apply_patch`, `grep`, and
   `list_dir` as separate handlers.
-- [ ] Add workspace-root path resolution, protected paths, and traversal
+- [x] Add workspace-root path resolution, protected paths, and traversal
   protection.
-- [ ] Add output limits, truncation metadata, and structured tool errors.
-- [ ] Add atomic edit/checkpoint support and git status integration.
+- [x] Add output limits and truncation metadata for read, grep, and listing
+  results. Structured error types remain in the next tool-contract slice.
+- [x] Add atomic edit writes for coding tools. Checkpoint support and git
+  status integration remain in the operations slice.
 
 ### Step 4 — model and tool loop
 

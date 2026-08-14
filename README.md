@@ -59,6 +59,9 @@ pattern = "*.md"
 
 [ui]
 permission_mode = "ask"
+
+[workspace]
+protected_paths = [".env", "secrets", "**/*.pem"]
 ```
 
 An omitted rule action defaults to `deny`, matching Grok's fail-closed
@@ -66,6 +69,9 @@ configuration behavior. The current workspace's permission mode is restored
 from a private file under `~/.proton/sessions/`; set `PROTON_SESSION_ID` to
 choose an explicit session key. `PROTON_HOME` can point Proton at an isolated
 state/config root for tests or disposable runs.
+
+File tools are confined to the current workspace, reject traversal and
+symlink escapes, and hide configured protected paths from search and listings.
 
 ## Verify
 

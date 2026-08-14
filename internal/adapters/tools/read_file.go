@@ -4,21 +4,27 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
+	"github.com/projectTHORN/proton/internal/adapters/workspace"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
-type readFileHandler struct{}
+const maxReadFileBytes = 2 * 1024 * 1024
+
+type readFileHandler struct {
+	workspace *workspace.Workspace
+}
 
 type readFileInput struct {
 	Path string `json:"path"`
 }
 
 // NewReadFile returns the filesystem read adapter.
-func NewReadFile() tool.Handler {
-	return readFileHandler{}
+func NewReadFile(workspaceRoot *workspace.Workspace) tool.Handler {
+	return readFileHandler{workspace: workspaceRoot}
 }
 
 func (readFileHandler) Definition() tool.Definition {
@@ -40,7 +46,10 @@ func (readFileHandler) Definition() tool.Definition {
 	}
 }
 
-func (readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
+func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
+	if h.workspace == nil {
+		return tool.Result{}, fmt.Errorf("read_file workspace is required")
+	}
 	var input readFileInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
 		return tool.Result{}, fmt.Errorf("decode read_file arguments: %w", err)
@@ -49,21 +58,39 @@ func (readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Result
 	if input.Path == "" {
 		return tool.Result{}, fmt.Errorf("read_file path is required")
 	}
-	if err := ctx.Err(); err != nil {
-		return tool.Result{}, fmt.Errorf("before reading %q: %w", input.Path, err)
+	path, err := h.workspace.Resolve(ctx, input.Path)
+	if err != nil {
+		return tool.Result{}, err
 	}
 
-	contents, err := os.ReadFile(input.Path)
+	file, err := os.Open(path)
+	if err != nil {
+		return tool.Result{}, fmt.Errorf("open %q: %w", input.Path, err)
+	}
+	contents, err := io.ReadAll(io.LimitReader(file, maxReadFileBytes+1))
+	closeErr := file.Close()
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("read %q: %w", input.Path, err)
+	}
+	if closeErr != nil {
+		return tool.Result{}, fmt.Errorf("close %q: %w", input.Path, closeErr)
 	}
 	if err := ctx.Err(); err != nil {
 		return tool.Result{}, fmt.Errorf("after reading %q: %w", input.Path, err)
 	}
+	truncated := len(contents) > maxReadFileBytes
+	if truncated {
+		contents = contents[:maxReadFileBytes]
+	}
+	output := string(contents)
+	if truncated {
+		output += "\n[output truncated at 2 MiB]"
+	}
 
 	return tool.Result{
-		CallID:   call.ID,
-		ToolName: call.Name,
-		Output:   string(contents),
+		CallID:    call.ID,
+		ToolName:  call.Name,
+		Output:    output,
+		Truncated: truncated,
 	}, nil
 }

@@ -81,6 +81,37 @@ tool = "bash"
 	}
 }
 
+func TestLoadProtectedPathsWithProjectTrust(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[workspace]
+protected_paths = [".env", "secrets"]
+`)
+	writeConfig(t, filepath.Join(workDir, ".proton", "config.toml"), `[workspace]
+protected_paths = ["**/*.pem"]
+`)
+
+	untrusted, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatalf("Load() untrusted error = %v", err)
+	}
+	if got, want := len(untrusted.ProtectedPaths), 2; got != want {
+		t.Fatalf("untrusted protected paths = %d, want %d", got, want)
+	}
+
+	trusted, err := Load(context.Background(), Options{
+		HomeDir:        homeDir,
+		WorkDir:        workDir,
+		ProjectTrusted: true,
+	})
+	if err != nil {
+		t.Fatalf("Load() trusted error = %v", err)
+	}
+	if got, want := len(trusted.ProtectedPaths), 3; got != want {
+		t.Fatalf("trusted protected paths = %d, want %d", got, want)
+	}
+}
+
 func writeConfig(t *testing.T, path string, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
