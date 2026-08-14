@@ -173,6 +173,50 @@ func TestANSIScreenRendersFrameAndRestoresTerminal(t *testing.T) {
 	}
 }
 
+func TestRenderFrameUsesLiveRegionLayout(t *testing.T) {
+	lines := renderFrame(Frame{
+		Scrollback: []string{"assistant: thinking", "tool running: read_file"},
+		Input:      "hello",
+		Activity:   "thinking",
+		Mode:       "ask",
+		PlanMode:   true,
+		Todo:       []TodoItem{{Text: "ship TUI", Done: false}},
+	}, 48, 12)
+	if got, want := len(lines), 12; got != want {
+		t.Fatalf("renderFrame() lines = %d, want %d", got, want)
+	}
+	output := strings.Join(lines, "\n")
+	for _, expected := range []string{
+		"assistant: thinking",
+		"TODO 0/1 complete",
+		"· thinking · permission: ask · plan on",
+		"❯ hello",
+		"proton · plan · :help",
+		"history · ←→ move",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("rendered layout does not contain %q: %s", expected, output)
+		}
+	}
+}
+
+func TestRenderFrameSanitizesTerminalSequences(t *testing.T) {
+	lines := renderFrame(Frame{
+		Scrollback: []string{"\x1b[31mprivate output\x1b[0m"},
+		Input:      "\x1b]0;private title\x07safe",
+		Mode:       "ask",
+	}, 48, 8)
+	output := strings.Join(lines, "\n")
+	for _, forbidden := range []string{"\x1b[31m", "\x1b]0;private title\x07"} {
+		if strings.Contains(output, forbidden) {
+			t.Fatalf("rendered layout contains terminal sequence %q: %q", forbidden, output)
+		}
+	}
+	if !strings.Contains(output, "private output") || !strings.Contains(output, "safe") {
+		t.Fatalf("sanitized content missing from output: %q", output)
+	}
+}
+
 type scriptedKeys struct {
 	keys  []Key
 	index int

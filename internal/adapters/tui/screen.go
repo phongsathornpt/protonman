@@ -7,7 +7,22 @@ import (
 	"strings"
 )
 
-// ANSIScreen renders full-screen frames using standard terminal escape sequences.
+const (
+	ansiReset  = "\x1b[0m"
+	ansiBold   = "\x1b[1m"
+	ansiDim    = "\x1b[2m"
+	ansiCyan   = "\x1b[36m"
+	ansiYellow = "\x1b[33m"
+	ansiGreen  = "\x1b[32m"
+	ansiRed    = "\x1b[31m"
+	ansiBlue   = "\x1b[34m"
+
+	fullscreenFooterRows = 4
+	maxTodoRows          = 4
+)
+
+// ANSIScreen renders the Grok-inspired live-region layout using terminal
+// escape sequences: bottom-anchored output, TODOs, status, prompt, and hints.
 type ANSIScreen struct {
 	writer io.Writer
 	width  int
@@ -55,7 +70,7 @@ func (s *ANSIScreen) Size() (int, int) {
 	return s.width, s.height
 }
 
-// Render draws a complete frame and positions the cursor at the input line.
+// Render draws a complete frame and positions the cursor at the prompt.
 func (s *ANSIScreen) Render(frame Frame) error {
 	lines := renderFrame(frame, s.width, s.height)
 	var output strings.Builder
@@ -67,6 +82,9 @@ func (s *ANSIScreen) Render(frame Frame) error {
 		output.WriteString(line)
 	}
 	cursorColumn := 3 + frame.Cursor
+	if cursorColumn < 1 {
+		cursorColumn = 1
+	}
 	if cursorColumn > s.width {
 		cursorColumn = s.width
 	}
@@ -81,51 +99,183 @@ func renderFrame(frame Frame, width int, height int) []string {
 	if width <= 0 {
 		width = 80
 	}
-	if height < 6 {
-		height = 6
+	if height < fullscreenFooterRows+2 {
+		height = fullscreenFooterRows + 2
 	}
-	lines := make([]string, 0, height)
-	planState := "off"
-	if frame.PlanMode {
-		planState = "on"
-	}
-	lines = append(lines, fitLine(" Proton | permission: "+frame.Mode+" | plan: "+planState, width))
 
-	contentHeight := height - 3
-	body := make([]string, 0, contentHeight)
+	bodyHeight := height - fullscreenFooterRows
+	body := make([]string, 0, bodyHeight)
 	if frame.Modal != nil {
-		body = append(body, fitLine("! "+frame.Modal.Title, width))
-		for _, bodyLine := range strings.Split(frame.Modal.Body, "\n") {
-			body = append(body, fitLine("  "+bodyLine, width))
-		}
-		body = append(body, fitLine("  "+frame.Modal.Choices, width))
+		body = append(body, renderModalLines(*frame.Modal, width)...)
 	} else {
-		scrollbackStart := len(frame.Scrollback) - contentHeight
-		if scrollbackStart < 0 {
-			scrollbackStart = 0
+		todoLines := renderTodoLines(frame.Todo, width)
+		scrollbackHeight := bodyHeight - len(todoLines)
+		if scrollbackHeight < 0 {
+			scrollbackHeight = 0
 		}
-		for _, line := range frame.Scrollback[scrollbackStart:] {
-			body = append(body, fitLine(line, width))
-		}
+		body = append(body, renderScrollback(frame.Scrollback, width, scrollbackHeight)...)
+		body = append(body, todoLines...)
 	}
-	if len(body) > contentHeight {
-		body = body[len(body)-contentHeight:]
+	if len(body) > bodyHeight {
+		body = body[len(body)-bodyHeight:]
 	}
-	lines = append(lines, body...)
-	for len(lines) < height-2 {
-		lines = append(lines, "")
+	for len(body) < bodyHeight {
+		body = append([]string{""}, body...)
 	}
 
-	todoSummary := todoSummary(frame.Todo)
-	lines = append(lines, fitLine("─ TODO "+todoSummary, width))
-	lines = append(lines, fitLine("> "+frame.Input, width))
-	for len(lines) < height {
-		lines = append(lines, "")
+	lines := append([]string{}, body...)
+	lines = append(lines, renderStatusLine(frame, width))
+	lines = append(lines, renderPromptLine(frame.Input, width))
+	lines = append(lines, renderInfoLine(frame, width))
+	lines = append(lines, styledLine(
+		"↑↓ history · ←→ move · Ctrl-C clear · :help commands",
+		width,
+		ansiDim,
+	))
+	return lines
+}
+
+func renderScrollback(scrollback []string, width int, height int) []string {
+	if height <= 0 || len(scrollback) == 0 {
+		return []string{}
 	}
-	if len(lines) > height {
-		lines = lines[:height]
+	start := len(scrollback) - height
+	if start < 0 {
+		start = 0
+	}
+	lines := make([]string, 0, len(scrollback)-start)
+	for _, line := range scrollback[start:] {
+		clean := sanitizeTerminalText(line)
+		style := ansiDim
+		switch {
+		case strings.HasPrefix(clean, "> "):
+			style = ansiCyan
+		case strings.HasPrefix(clean, "tool "), strings.HasPrefix(clean, "tool:"):
+			style = ansiYellow
+		case strings.HasPrefix(clean, "error:"), strings.HasPrefix(clean, "turn failed:"):
+			style = ansiRed
+		case strings.HasPrefix(clean, "assistant:"):
+			style = ansiBlue
+		}
+		lines = append(lines, styledLine(clean, width, style))
 	}
 	return lines
+}
+
+func renderTodoLines(items []TodoItem, width int) []string {
+	if len(items) == 0 || maxTodoRows == 0 {
+		return []string{}
+	}
+	visible := len(items)
+	if visible > maxTodoRows {
+		visible = maxTodoRows
+	}
+	lines := make([]string, 0, visible+1)
+	lines = append(lines, styledLine("TODO "+todoSummary(items), width, ansiBold+ansiCyan))
+	for _, item := range items[:visible] {
+		mark := "□"
+		style := ansiDim
+		if item.Done {
+			mark = "✓"
+			style = ansiGreen
+		}
+		text := "  " + mark + " " + sanitizeTerminalText(item.Text)
+		lines = append(lines, styledLine(text, width, style))
+	}
+	if len(items) > visible {
+		lines = append(lines, styledLine(
+			fmt.Sprintf("  … %d more", len(items)-visible),
+			width,
+			ansiDim,
+		))
+	}
+	return lines
+}
+
+func renderModalLines(modal Modal, width int) []string {
+	lines := []string{styledLine("╭─ "+sanitizeTerminalText(modal.Title), width, ansiBold+ansiYellow)}
+	for _, line := range strings.Split(modal.Body, "\n") {
+		lines = append(lines, styledLine("│ "+sanitizeTerminalText(line), width, ansiYellow))
+	}
+	lines = append(lines, styledLine("│ "+sanitizeTerminalText(modal.Choices), width, ansiBold+ansiYellow))
+	lines = append(lines, styledLine("╰─", width, ansiYellow))
+	return lines
+}
+
+func renderStatusLine(frame Frame, width int) string {
+	activity := strings.TrimSpace(frame.Activity)
+	if activity == "" {
+		activity = "idle"
+	}
+	planState := "plan off"
+	if frame.PlanMode {
+		planState = "plan on"
+	}
+	text := "· " + activity + " · permission: " + frame.Mode + " · " + planState
+	return styledLine(text, width, ansiCyan)
+}
+
+func renderPromptLine(input string, width int) string {
+	return styledLine("❯ "+sanitizeTerminalText(input), width, ansiBold+ansiCyan)
+}
+
+func renderInfoLine(frame Frame, width int) string {
+	planState := "plan off"
+	if frame.PlanMode {
+		planState = "plan"
+	}
+	return styledLine("proton · "+planState+" · :help", width, ansiDim)
+}
+
+func styledLine(text string, width int, style string) string {
+	return style + fitLine(text, width) + ansiReset
+}
+
+func sanitizeTerminalText(text string) string {
+	var builder strings.Builder
+	state := byte(0)
+	for _, value := range text {
+		if state == 0 {
+			switch {
+			case value == 0x1b:
+				state = 1
+			case value < 0x20 || value == 0x7f:
+				builder.WriteByte(' ')
+			default:
+				builder.WriteRune(value)
+			}
+			continue
+		}
+		switch state {
+		case 1:
+			switch value {
+			case '[':
+				state = 2
+			case ']':
+				state = 3
+			default:
+				state = 0
+			}
+		case 2:
+			if value >= '@' && value <= '~' {
+				state = 0
+			}
+		case 3:
+			switch value {
+			case 0x07:
+				state = 0
+			case 0x1b:
+				state = 4
+			}
+		case 4:
+			if value == '\\' {
+				state = 0
+			} else {
+				state = 3
+			}
+		}
+	}
+	return builder.String()
 }
 
 func todoSummary(items []TodoItem) string {
