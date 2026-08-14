@@ -1,8 +1,6 @@
-// Package tui provides the initial terminal UI adapter for Proton.
+// Package tui provides line-oriented and full-screen terminal adapters for Proton.
 //
-// This bootstrap UI is line-oriented so it works in plain terminals and CI.
-// The application boundary is intentionally ready for the full-screen event
-// loop planned in TODO.md.
+// Both adapters delegate policy and tool execution to application services.
 package tui
 
 import (
@@ -108,7 +106,8 @@ func (ui *UI) Run(ctx context.Context) error {
 	if _, err := fmt.Fprintln(ui.writer, "Proton — Go coding-agent port"); err != nil {
 		return fmt.Errorf("write welcome: %w", err)
 	}
-	if _, err := fmt.Fprintln(ui.writer, "Type :help for commands. Permission mode: "+ui.service.Mode().String()); err != nil {
+	helpHint := "Type :help for commands. Permission mode: " + ui.service.Mode().String()
+	if _, err := fmt.Fprintln(ui.writer, helpHint); err != nil {
 		return fmt.Errorf("write help hint: %w", err)
 	}
 
@@ -178,7 +177,13 @@ func (ui *UI) listTools() error {
 		return err
 	}
 	for _, definition := range ui.registry.Definitions() {
-		if _, err := fmt.Fprintf(ui.writer, "- %s [%s]: %s\n", definition.Name, definition.Kind, definition.Description); err != nil {
+		if _, err := fmt.Fprintf(
+			ui.writer,
+			"- %s [%s]: %s\n",
+			definition.Name,
+			definition.Kind,
+			definition.Description,
+		); err != nil {
 			return err
 		}
 	}
