@@ -113,6 +113,8 @@ type Result struct {
 	ExitCode *int
 	// Denied reports that execution was blocked before the handler ran.
 	Denied bool
+	// Truncated reports that an output limit shortened the result.
+	Truncated bool
 }
 
 // Handler executes one registered tool call.

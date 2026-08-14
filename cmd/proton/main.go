@@ -15,6 +15,7 @@ import (
 	"github.com/projectTHORN/proton/internal/adapters/session"
 	"github.com/projectTHORN/proton/internal/adapters/tools"
 	"github.com/projectTHORN/proton/internal/adapters/tui"
+	"github.com/projectTHORN/proton/internal/adapters/workspace"
 	"github.com/projectTHORN/proton/internal/application/toolcall"
 	"github.com/projectTHORN/proton/internal/domain/permission"
 )
@@ -52,7 +53,12 @@ func run(ctx context.Context) error {
 		fmt.Fprintln(os.Stderr, "warning:", warning)
 	}
 
-	registry, err := tools.NewDefaultRegistry()
+	workspaceRoot, err := workspace.New(workDir, loadedConfig.ProtectedPaths)
+	if err != nil {
+		return fmt.Errorf("create workspace policy: %w", err)
+	}
+
+	registry, err := tools.NewDefaultRegistry(workspaceRoot)
 	if err != nil {
 		return fmt.Errorf("create tool registry: %w", err)
 	}

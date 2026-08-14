@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/projectTHORN/proton/internal/adapters/workspace"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
@@ -34,11 +35,19 @@ func NewRegistry(handlers ...tool.Handler) (*Registry, error) {
 	return registry, nil
 }
 
-// NewDefaultRegistry creates the initial read and shell tool set.
-func NewDefaultRegistry() (*Registry, error) {
+// NewDefaultRegistry creates the default workspace-aware coding tool set.
+func NewDefaultRegistry(workspaceRoot *workspace.Workspace) (*Registry, error) {
+	if workspaceRoot == nil {
+		return nil, fmt.Errorf("create default registry: workspace is required")
+	}
 	return NewRegistry(
-		NewReadFile(),
-		NewBash(),
+		NewReadFile(workspaceRoot),
+		NewBash(workspaceRoot),
+		NewWriteFile(workspaceRoot),
+		NewSearchReplace(workspaceRoot),
+		NewApplyPatch(workspaceRoot),
+		NewGrep(workspaceRoot),
+		NewListDir(workspaceRoot),
 	)
 }
 
