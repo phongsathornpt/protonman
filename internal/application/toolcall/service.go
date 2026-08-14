@@ -110,18 +110,25 @@ func (s *Service) Definitions() []tool.Definition {
 // Call evaluates permission and executes one tool call if authorized.
 func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error) {
 	if err := call.Validate(); err != nil {
-		return tool.Result{}, err
+		return tool.Result{Failure: tool.FailureFromError(err)}, err
 	}
 	if err := ctx.Err(); err != nil {
-		return tool.Result{}, fmt.Errorf("before tool call: %w", err)
+		wrappedErr := fmt.Errorf("before tool call: %w", err)
+		return tool.Result{
+			CallID:   call.ID,
+			ToolName: call.Name,
+			Failure:  tool.FailureFromError(wrappedErr),
+		}, wrappedErr
 	}
 
 	handler, ok := s.registry.Lookup(call.Name)
 	if !ok {
+		unknownErr := fmt.Errorf("%w: %s", ErrUnknownTool, call.Name)
 		return tool.Result{
 			CallID:   call.ID,
 			ToolName: call.Name,
-		}, fmt.Errorf("%w: %s", ErrUnknownTool, call.Name)
+			Failure:  &tool.Failure{Code: tool.ErrorCodeUnknownTool, Message: unknownErr.Error()},
+		}, unknownErr
 	}
 	definition := handler.Definition()
 	request := permission.Request{
@@ -134,11 +141,13 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 
 	resolution := s.authorize(ctx, request)
 	if resolution.Action != permission.ActionAllow {
+		permissionErr := fmt.Errorf("%w: %s", ErrPermissionDenied, resolution.Reason)
 		return tool.Result{
 			CallID:   call.ID,
 			ToolName: call.Name,
 			Denied:   true,
-		}, fmt.Errorf("%w: %s", ErrPermissionDenied, resolution.Reason)
+			Failure:  &tool.Failure{Code: tool.ErrorCodePermissionDenied, Message: permissionErr.Error()},
+		}, permissionErr
 	}
 	if resolution.Scope == permission.GrantScopeSession {
 		s.rememberGrant(request.Key())
@@ -152,7 +161,11 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		result.ToolName = call.Name
 	}
 	if err != nil {
-		return result, fmt.Errorf("execute %s: %w", call.Name, err)
+		wrappedErr := fmt.Errorf("execute %s: %w", call.Name, err)
+		if result.Failure == nil {
+			result.Failure = tool.FailureFromError(wrappedErr)
+		}
+		return result, wrappedErr
 	}
 	return result, nil
 }

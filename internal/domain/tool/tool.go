@@ -32,6 +32,118 @@ const (
 // ErrInvalidCall indicates that a call envelope cannot be dispatched safely.
 var ErrInvalidCall = errors.New("invalid tool call")
 
+// ErrorCode classifies failures for model and headless clients.
+type ErrorCode string
+
+const (
+	// ErrorCodeInvalidArguments indicates that a call cannot be decoded or validated.
+	ErrorCodeInvalidArguments ErrorCode = "invalid_arguments"
+	// ErrorCodeCanceled indicates that the caller canceled execution.
+	ErrorCodeCanceled ErrorCode = "canceled"
+	// ErrorCodeDeadlineExceeded indicates that the call exceeded its deadline.
+	ErrorCodeDeadlineExceeded ErrorCode = "deadline_exceeded"
+	// ErrorCodePermissionDenied indicates that policy stopped the call.
+	ErrorCodePermissionDenied ErrorCode = "permission_denied"
+	// ErrorCodeUnknownTool indicates that no handler is registered for a call.
+	ErrorCodeUnknownTool ErrorCode = "unknown_tool"
+	// ErrorCodeNotFound indicates that a requested target does not exist.
+	ErrorCodeNotFound ErrorCode = "not_found"
+	// ErrorCodeProtectedPath indicates that a workspace target is protected.
+	ErrorCodeProtectedPath ErrorCode = "protected_path"
+	// ErrorCodeOutsideWorkspace indicates that a path escaped the workspace.
+	ErrorCodeOutsideWorkspace ErrorCode = "outside_workspace"
+	// ErrorCodeExecution is the safe fallback for handler failures.
+	ErrorCodeExecution ErrorCode = "execution_error"
+)
+
+// ToolError is an internal error with a stable model-facing classification.
+type ToolError struct {
+	Code    ErrorCode
+	Message string
+	Cause   error
+}
+
+// FailureCoder lets adapters classify an error without depending on a concrete
+// domain error type. The original error remains available through errors.Is.
+type FailureCoder interface {
+	FailureCode() ErrorCode
+}
+
+// NewToolError creates a classified tool error without an underlying cause.
+func NewToolError(code ErrorCode, message string) *ToolError {
+	return &ToolError{
+		Code:    code,
+		Message: strings.TrimSpace(message),
+	}
+}
+
+// WrapToolError creates a classified tool error while preserving its cause.
+func WrapToolError(code ErrorCode, message string, cause error) *ToolError {
+	return &ToolError{
+		Code:    code,
+		Message: strings.TrimSpace(message),
+		Cause:   cause,
+	}
+}
+
+// Error implements error.
+func (e *ToolError) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	if e.Message == "" && e.Cause != nil {
+		return e.Cause.Error()
+	}
+	if e.Cause == nil {
+		return e.Message
+	}
+	return fmt.Sprintf("%s: %v", e.Message, e.Cause)
+}
+
+// Unwrap exposes the underlying cause to errors.Is and errors.As.
+func (e *ToolError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Cause
+}
+
+// Failure is the serializable failure portion of a tool result.
+type Failure struct {
+	Code      ErrorCode `json:"code"`
+	Message   string    `json:"message"`
+	Retryable bool      `json:"retryable,omitempty"`
+}
+
+// FailureFromError converts an internal error into a stable result failure.
+func FailureFromError(err error) *Failure {
+	if err == nil {
+		return nil
+	}
+
+	failure := &Failure{
+		Code:    ErrorCodeExecution,
+		Message: err.Error(),
+	}
+	var toolErr *ToolError
+	var failureCoder FailureCoder
+	switch {
+	case errors.As(err, &toolErr):
+		failure.Code = toolErr.Code
+	case errors.As(err, &failureCoder):
+		failure.Code = failureCoder.FailureCode()
+	case errors.Is(err, ErrInvalidCall):
+		failure.Code = ErrorCodeInvalidArguments
+	case errors.Is(err, context.Canceled):
+		failure.Code = ErrorCodeCanceled
+		failure.Retryable = true
+	case errors.Is(err, context.DeadlineExceeded):
+		failure.Code = ErrorCodeDeadlineExceeded
+		failure.Retryable = true
+	}
+	return failure
+}
+
 // Call is the JSON-typed envelope passed from a model or UI to a tool.
 type Call struct {
 	// ID uniquely identifies the call within a turn or session.
@@ -104,17 +216,19 @@ func (d Definition) Validate() error {
 // Result is the model-facing output of a tool execution.
 type Result struct {
 	// CallID identifies the originating call.
-	CallID string
+	CallID string `json:"call_id"`
 	// ToolName identifies the handler that produced the result.
-	ToolName string
+	ToolName string `json:"tool_name"`
 	// Output is human- and model-readable text for this initial port slice.
-	Output string
+	Output string `json:"output,omitempty"`
 	// ExitCode is populated by process-backed tools when a process exits.
-	ExitCode *int
+	ExitCode *int `json:"exit_code,omitempty"`
 	// Denied reports that execution was blocked before the handler ran.
-	Denied bool
+	Denied bool `json:"denied,omitempty"`
 	// Truncated reports that an output limit shortened the result.
-	Truncated bool
+	Truncated bool `json:"truncated,omitempty"`
+	// Failure is populated when a tool call fails or is denied.
+	Failure *Failure `json:"error,omitempty"`
 }
 
 // Handler executes one registered tool call.
