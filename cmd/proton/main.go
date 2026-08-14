@@ -2,7 +2,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -98,15 +97,7 @@ func run(ctx context.Context) error {
 		}
 	}
 
-	reader := bufio.NewReader(os.Stdin)
-	fullscreen := strings.EqualFold(strings.TrimSpace(os.Getenv("PROTON_TUI")), "fullscreen")
 	serviceOptions := []toolcall.Option{toolcall.WithMode(initialMode)}
-	if !fullscreen {
-		serviceOptions = append(
-			serviceOptions,
-			toolcall.WithPrompt(tui.NewPermissionPrompt(reader, os.Stdout)),
-		)
-	}
 	observer, observerErr := configuredTelemetryObserver()
 	if observerErr != nil {
 		return observerErr
@@ -123,24 +114,15 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("create tool-call service: %w", err)
 	}
 
-	var runErr error
-	if fullscreen {
-		bubbleUI, uiErr := tui.NewBubbleTea(
-			service,
-			registry,
-			loadTodoItems(workDir),
-		)
-		if uiErr != nil {
-			return fmt.Errorf("create Bubble Tea UI: %w", uiErr)
-		}
-		runErr = bubbleUI.Run(ctx)
-	} else {
-		ui, uiErr := tui.New(service, registry, reader, os.Stdout)
-		if uiErr != nil {
-			return fmt.Errorf("create terminal UI: %w", uiErr)
-		}
-		runErr = ui.Run(ctx)
+	bubbleUI, uiErr := tui.NewBubbleTea(
+		service,
+		registry,
+		loadTodoItems(workDir),
+	)
+	if uiErr != nil {
+		return fmt.Errorf("create Bubble Tea UI: %w", uiErr)
 	}
+	runErr := bubbleUI.Run(ctx)
 	saveErr := stateStore.Save(ctx, sessionID, session.State{
 		PermissionMode: service.Mode().String(),
 	})
