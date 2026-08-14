@@ -23,6 +23,10 @@ small terminal UI for inspecting and exercising the boundary.
 go run ./cmd/proton
 ```
 
+The line-oriented UI is the default for plain terminals and CI. Set
+`PROTON_TUI=fullscreen` to use the ANSI full-screen event loop with prompt
+editing, scrollback, modal permission prompts, plan mode, and a TODO pane.
+
 Inside Proton:
 
 ```text

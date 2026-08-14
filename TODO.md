@@ -70,10 +70,11 @@ commit.
 
 ### Step 5 — full TUI
 
-- [ ] Replace the line-oriented bootstrap UI with a full-screen event loop.
-- [ ] Add scrollback, prompt editing, tool progress, modal permission views,
+- [x] Add a full-screen event loop adapter while retaining the line-oriented
+  bootstrap UI for plain terminals and CI.
+- [x] Add scrollback, prompt editing, tool progress, modal permission views,
   plan mode, and a TODO pane.
-- [ ] Keep the TUI as an adapter: it must not own policy or execute tools
+- [x] Keep the TUI as an adapter: it must not own policy or execute tools
   directly.
 
 ### Step 6 — safety and operations

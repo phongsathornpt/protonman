@@ -107,6 +107,13 @@ func (s *Service) Definitions() []tool.Definition {
 	return s.registry.Definitions()
 }
 
+// SetPrompt replaces the interactive resolver used by ask and auto modes.
+func (s *Service) SetPrompt(prompt PermissionPrompt) {
+	s.mu.Lock()
+	s.prompt = prompt
+	s.mu.Unlock()
+}
+
 // Call evaluates permission and executes one tool call if authorized.
 func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error) {
 	if err := call.Validate(); err != nil {
