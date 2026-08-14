@@ -30,22 +30,26 @@ commit.
   and mode switching.
 - [x] Add unit tests for policy matching and application-level enforcement.
 
-### Step 2 — configuration and session state (next)
+### Step 2 — configuration, trust, and session state (complete in this commit)
 
-- [ ] Load `~/.proton/config.toml` and project-local `.proton/config.toml`.
-- [ ] Preserve Grok's rule shape: `action`, `tool`, `pattern`, and
+- [x] Load `~/.proton/config.toml` and project-local `.proton/config.toml`.
+- [x] Preserve Grok's rule shape: `action`, `tool`, `pattern`, and
   `pattern_mode`.
-- [ ] Add session-scoped grants (`allow once`, `allow for session`) without
+- [x] Add session-scoped grants (`allow once`, `allow for session`) without
   mutating the static policy.
-- [ ] Persist the selected permission mode with a session and restore it
+- [x] Persist the selected permission mode with a session and restore it
   safely.
-- [ ] Add project trust and protected-path checks.
+- [x] Add project trust gating; untrusted project config is ignored with a
+  warning.
+- [ ] Add protected-path checks; this moves with workspace-root enforcement
+  into Step 3.
 
 ### Step 3 — coding tools
 
 - [ ] Port `write_file`, `search_replace`, `apply_patch`, `grep`, and
   `list_dir` as separate handlers.
-- [ ] Add workspace-root path resolution and traversal protection.
+- [ ] Add workspace-root path resolution, protected paths, and traversal
+  protection.
 - [ ] Add output limits, truncation metadata, and structured tool errors.
 - [ ] Add atomic edit/checkpoint support and git status integration.
 

@@ -154,7 +154,7 @@ func TestCallPolicyAllowSkipsPrompt(t *testing.T) {
 	}
 }
 
-func TestCallRememberedApprovalChangesMode(t *testing.T) {
+func TestCallSessionGrantDoesNotChangeMode(t *testing.T) {
 	handler := &fakeHandler{
 		definition: tool.Definition{
 			Name:                "bash",
@@ -167,8 +167,8 @@ func TestCallRememberedApprovalChangesMode(t *testing.T) {
 	service := newTestService(t, handler, permission.Config{}, WithPrompt(func(context.Context, permission.Request) (permission.Resolution, error) {
 		promptCalls++
 		return permission.Resolution{
-			Action:   permission.ActionAllow,
-			Remember: true,
+			Action: permission.ActionAllow,
+			Scope:  permission.GrantScopeSession,
 		}, nil
 	}))
 
@@ -181,7 +181,40 @@ func TestCallRememberedApprovalChangesMode(t *testing.T) {
 	if promptCalls != 1 {
 		t.Fatalf("prompt calls = %d, want 1", promptCalls)
 	}
-	if service.Mode() != permission.ModeAlwaysApprove {
-		t.Fatalf("service mode = %s, want always-approve", service.Mode())
+	if service.Mode() != permission.ModeAsk {
+		t.Fatalf("service mode = %s, want ask", service.Mode())
+	}
+}
+
+func TestCallSessionGrantIsNarrowToExactRequest(t *testing.T) {
+	handler := &fakeHandler{
+		definition: tool.Definition{
+			Name:                "bash",
+			Description:         "fake shell",
+			Kind:                tool.KindBash,
+			PermissionDetailKey: "command",
+		},
+	}
+	promptCalls := 0
+	service := newTestService(t, handler, permission.Config{}, WithPrompt(func(context.Context, permission.Request) (permission.Resolution, error) {
+		promptCalls++
+		return permission.Resolution{
+			Action: permission.ActionAllow,
+			Scope:  permission.GrantScopeSession,
+		}, nil
+	}))
+
+	if _, err := service.Call(context.Background(), testCall(t)); err != nil {
+		t.Fatalf("first Call() error = %v", err)
+	}
+	otherCall, err := tool.NewCall("call-2", "bash", json.RawMessage(`{"command":"printf other"}`))
+	if err != nil {
+		t.Fatalf("NewCall() error = %v", err)
+	}
+	if _, err := service.Call(context.Background(), otherCall); err != nil {
+		t.Fatalf("second Call() error = %v", err)
+	}
+	if promptCalls != 2 {
+		t.Fatalf("prompt calls = %d, want 2", promptCalls)
 	}
 }

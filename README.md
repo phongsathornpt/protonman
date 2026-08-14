@@ -33,9 +33,39 @@ Inside Proton:
 :quit
 ```
 
-The default mode is `ask`. A permission prompt accepts `y` for one call, `a`
-for always approve in the current process, and `n` to deny. Explicit policy
-denies remain effective even in always-approve mode.
+The default mode is `ask`. A permission prompt accepts `y` for one call, `s`
+for an exact-request grant lasting for the session, and `n` to deny. Explicit
+policy denies remain effective even in always-approve mode. Session grants do
+not mutate the static policy.
+
+## Configuration
+
+Proton loads `~/.proton/config.toml`. A project-local `.proton/config.toml`
+is only loaded when `PROTON_TRUST_PROJECT=1` is set.
+
+```toml
+[permission]
+default = "ask"
+
+[[permission.rules]]
+action = "deny"
+tool = "bash"
+pattern = "rm *"
+
+[[permission.rules]]
+action = "allow"
+tool = "read"
+pattern = "*.md"
+
+[ui]
+permission_mode = "ask"
+```
+
+An omitted rule action defaults to `deny`, matching Grok's fail-closed
+configuration behavior. The current workspace's permission mode is restored
+from a private file under `~/.proton/sessions/`; set `PROTON_SESSION_ID` to
+choose an explicit session key. `PROTON_HOME` can point Proton at an isolated
+state/config root for tests or disposable runs.
 
 ## Verify
 
