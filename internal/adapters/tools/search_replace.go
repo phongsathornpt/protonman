@@ -7,11 +7,13 @@ import (
 	"strings"
 
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
+	domaincheckpoint "github.com/projectTHORN/proton/internal/domain/checkpoint"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
 type searchReplaceHandler struct {
-	workspace *workspace.Workspace
+	workspace   *workspace.Workspace
+	checkpoints domaincheckpoint.Store
 }
 
 type searchReplaceInput struct {
@@ -22,8 +24,11 @@ type searchReplaceInput struct {
 }
 
 // NewSearchReplace returns the exact search-and-replace edit adapter.
-func NewSearchReplace(workspaceRoot *workspace.Workspace) tool.Handler {
-	return searchReplaceHandler{workspace: workspaceRoot}
+func NewSearchReplace(workspaceRoot *workspace.Workspace, stores ...domaincheckpoint.Store) tool.Handler {
+	return searchReplaceHandler{
+		workspace:   workspaceRoot,
+		checkpoints: selectCheckpointStore(stores),
+	}
 }
 
 func (searchReplaceHandler) Definition() tool.Definition {
@@ -75,10 +80,18 @@ func (h searchReplaceHandler) Execute(ctx context.Context, call tool.Call) (tool
 		if exists && len(contents) > 0 {
 			return tool.Result{}, fmt.Errorf("empty old_string cannot overwrite a non-empty file")
 		}
-		if err := atomicWrite(ctx, h.workspace, resolvedPath, []byte(input.NewString)); err != nil {
-			return tool.Result{}, fmt.Errorf("create %q: %w", input.FilePath, err)
+		checkpointID, err := h.checkpoints.Capture(ctx, []string{resolvedPath})
+		if err != nil {
+			return tool.Result{}, fmt.Errorf("checkpoint %q: %w", input.FilePath, err)
 		}
-		return editResult(call, resolvedPath, "created")
+		if err := atomicWrite(ctx, h.workspace, resolvedPath, []byte(input.NewString)); err != nil {
+			return tool.Result{
+				CallID:       call.ID,
+				ToolName:     call.Name,
+				CheckpointID: checkpointID,
+			}, fmt.Errorf("create %q: %w", input.FilePath, err)
+		}
+		return editResult(call, resolvedPath, "created", checkpointID)
 	}
 	if !exists {
 		return tool.Result{}, fmt.Errorf("edit target %q does not exist", input.FilePath)
@@ -96,16 +109,25 @@ func (h searchReplaceHandler) Execute(ctx context.Context, call tool.Call) (tool
 	if input.ReplaceAll {
 		updated = strings.ReplaceAll(content, input.OldString, input.NewString)
 	}
-	if err := atomicWrite(ctx, h.workspace, resolvedPath, []byte(updated)); err != nil {
-		return tool.Result{}, fmt.Errorf("update %q: %w", input.FilePath, err)
+	checkpointID, err := h.checkpoints.Capture(ctx, []string{resolvedPath})
+	if err != nil {
+		return tool.Result{}, fmt.Errorf("checkpoint %q: %w", input.FilePath, err)
 	}
-	return editResult(call, resolvedPath, "updated")
+	if err := atomicWrite(ctx, h.workspace, resolvedPath, []byte(updated)); err != nil {
+		return tool.Result{
+			CallID:       call.ID,
+			ToolName:     call.Name,
+			CheckpointID: checkpointID,
+		}, fmt.Errorf("update %q: %w", input.FilePath, err)
+	}
+	return editResult(call, resolvedPath, "updated", checkpointID)
 }
 
-func editResult(call tool.Call, path string, action string) (tool.Result, error) {
+func editResult(call tool.Call, path string, action string, checkpointID string) (tool.Result, error) {
 	return tool.Result{
-		CallID:   call.ID,
-		ToolName: call.Name,
-		Output:   fmt.Sprintf("The file %s has been %s.", path, action),
+		CallID:       call.ID,
+		ToolName:     call.Name,
+		Output:       fmt.Sprintf("The file %s has been %s.", path, action),
+		CheckpointID: checkpointID,
 	}, nil
 }

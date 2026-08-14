@@ -221,6 +221,11 @@ func (ui *UI) call(ctx context.Context, arguments []string) error {
 			return writeErr
 		}
 	}
+	if result.CheckpointID != "" {
+		if _, writeErr := fmt.Fprintf(ui.writer, "checkpoint: %s\n", result.CheckpointID); writeErr != nil {
+			return writeErr
+		}
+	}
 	if err != nil {
 		if result.Failure != nil {
 			return fmt.Errorf("[%s] %s", result.Failure.Code, result.Failure.Message)
