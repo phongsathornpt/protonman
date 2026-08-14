@@ -70,8 +70,8 @@ commit.
 
 ### Step 5 — full TUI
 
-- [x] Add a full-screen event loop adapter while retaining the line-oriented
-  bootstrap UI for plain terminals and CI.
+- [x] Make Bubble Tea the only terminal adapter and run the fullscreen UI on
+  every launch.
 - [x] Build the fullscreen adapter on Bubble Tea with Bubbles components and
   Lip Gloss styles for terminal lifecycle, input, viewport, and layout.
 - [x] Add scrollback, prompt editing, tool progress, modal permission views,
