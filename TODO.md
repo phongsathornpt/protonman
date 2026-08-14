@@ -62,8 +62,9 @@ commit.
 - [x] Add an injectable model client and stream model events.
 - [x] Translate model tool calls into `tool.Call` values and stream progress
   and terminal results back into the turn loop.
-- [ ] Add cancellation, timeouts, concurrent read-only calls, and bounded
-  execution queues.
+- [x] Add cancellation, timeouts, concurrent read-only calls, and bounded
+  execution queues. Interactive permission modes remain serialized; bounded
+  parallel reads are enabled only for `always-approve` mode.
 - [ ] Add MCP discovery and namespaced tool registration.
 
 ### Step 5 — full TUI

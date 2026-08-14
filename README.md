@@ -83,7 +83,10 @@ the result; `checkpoint_restore` is permission-gated.
 The provider-neutral model boundary is injectable: the application turn loop
 streams text, translates model tool calls into `tool.Call` values, executes
 them through the permission service, and sends structured results back on the
-next model request. A live provider adapter is still a later port step.
+next model request. It propagates cancellation, supports per-round and
+per-tool deadlines, and bounds concurrent read/grep calls without racing
+interactive permission prompts. A live provider adapter is still a later port
+step.
 
 ## Verify
 
