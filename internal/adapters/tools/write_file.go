@@ -7,11 +7,13 @@ import (
 	"strings"
 
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
+	domaincheckpoint "github.com/projectTHORN/proton/internal/domain/checkpoint"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
 type writeFileHandler struct {
-	workspace *workspace.Workspace
+	workspace   *workspace.Workspace
+	checkpoints domaincheckpoint.Store
 }
 
 type writeFileInput struct {
@@ -20,8 +22,11 @@ type writeFileInput struct {
 }
 
 // NewWriteFile returns the atomic whole-file write adapter.
-func NewWriteFile(workspaceRoot *workspace.Workspace) tool.Handler {
-	return writeFileHandler{workspace: workspaceRoot}
+func NewWriteFile(workspaceRoot *workspace.Workspace, stores ...domaincheckpoint.Store) tool.Handler {
+	return writeFileHandler{
+		workspace:   workspaceRoot,
+		checkpoints: selectCheckpointStore(stores),
+	}
 }
 
 func (writeFileHandler) Definition() tool.Definition {
@@ -57,12 +62,21 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	if err != nil {
 		return tool.Result{}, err
 	}
+	checkpointID, err := h.checkpoints.Capture(ctx, []string{resolvedPath})
+	if err != nil {
+		return tool.Result{}, fmt.Errorf("checkpoint %q: %w", input.FilePath, err)
+	}
 	if err := atomicWrite(ctx, h.workspace, resolvedPath, []byte(input.Content)); err != nil {
-		return tool.Result{}, fmt.Errorf("write %q: %w", input.FilePath, err)
+		return tool.Result{
+			CallID:       call.ID,
+			ToolName:     call.Name,
+			CheckpointID: checkpointID,
+		}, fmt.Errorf("write %q: %w", input.FilePath, err)
 	}
 	return tool.Result{
-		CallID:   call.ID,
-		ToolName: call.Name,
-		Output:   fmt.Sprintf("Wrote file successfully to %s.", resolvedPath),
+		CallID:       call.ID,
+		ToolName:     call.Name,
+		Output:       fmt.Sprintf("Wrote file successfully to %s.", resolvedPath),
+		CheckpointID: checkpointID,
 	}, nil
 }

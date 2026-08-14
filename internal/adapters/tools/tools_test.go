@@ -70,16 +70,34 @@ func TestFileToolsRejectTraversalAndProtectedPaths(t *testing.T) {
 	}{
 		{name: "write protected", handler: NewWriteFile(workspaceRoot), path: ".env", wantErr: workspace.ErrProtectedPath},
 		{name: "read protected", handler: NewReadFile(workspaceRoot), path: ".env", wantErr: workspace.ErrProtectedPath},
-		{name: "write traversal", handler: NewWriteFile(workspaceRoot), path: "../outside.txt", wantErr: workspace.ErrOutsideWorkspace},
-		{name: "read traversal", handler: NewReadFile(workspaceRoot), path: "../outside.txt", wantErr: workspace.ErrOutsideWorkspace},
-		{name: "read protected symlink", handler: NewReadFile(workspaceRoot), path: "linked-secret.txt", wantErr: workspace.ErrProtectedPath},
+		{
+			name:    "write traversal",
+			handler: NewWriteFile(workspaceRoot),
+			path:    "../outside.txt",
+			wantErr: workspace.ErrOutsideWorkspace,
+		},
+		{
+			name:    "read traversal",
+			handler: NewReadFile(workspaceRoot),
+			path:    "../outside.txt",
+			wantErr: workspace.ErrOutsideWorkspace,
+		},
+		{
+			name:    "read protected symlink",
+			handler: NewReadFile(workspaceRoot),
+			path:    "linked-secret.txt",
+			wantErr: workspace.ErrProtectedPath,
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := test.handler.Execute(context.Background(), newJSONCall(t, test.name, test.handler.Definition().Name, map[string]any{
-				"file_path": test.path,
-				"path":      test.path,
-				"content":   "should not be written",
-			}))
+			_, err := test.handler.Execute(
+				context.Background(),
+				newJSONCall(t, test.name, test.handler.Definition().Name, map[string]any{
+					"file_path": test.path,
+					"path":      test.path,
+					"content":   "should not be written",
+				}),
+			)
 			if !errors.Is(err, test.wantErr) {
 				t.Fatalf("error = %v, want errors.Is(..., %v)", err, test.wantErr)
 			}
@@ -219,8 +237,34 @@ func TestDefaultRegistryContainsCodingTools(t *testing.T) {
 		t.Fatalf("NewDefaultRegistry() error = %v", err)
 	}
 	definitions := registry.Definitions()
-	if got, want := len(definitions), 8; got != want {
+	if got, want := len(definitions), 9; got != want {
 		t.Fatalf("definition count = %d, want %d", got, want)
+	}
+}
+
+func TestWriteFilePublishesCheckpointID(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	checkpointStore := &recordingCheckpointStore{id: "checkpoint-test"}
+	result := executeJSON(t, NewWriteFile(workspaceRoot, checkpointStore), "write-checkpoint", map[string]any{
+		"file_path": "checkpointed.txt",
+		"content":   "checkpoint me\n",
+	})
+	if result.CheckpointID != checkpointStore.id {
+		t.Fatalf("checkpoint ID = %q, want %q", result.CheckpointID, checkpointStore.id)
+	}
+	wantPath := filepath.Join(workspaceRoot.Root(), "checkpointed.txt")
+	if len(checkpointStore.paths) != 1 || checkpointStore.paths[0] != wantPath {
+		t.Fatalf("checkpoint paths = %#v, want target path", checkpointStore.paths)
+	}
+
+	restoreResult := executeJSON(t, NewCheckpointRestore(checkpointStore), "restore-checkpoint", map[string]any{
+		"checkpoint_id": checkpointStore.id,
+	})
+	if !strings.Contains(restoreResult.Output, checkpointStore.id) {
+		t.Fatalf("restore output = %q, want checkpoint ID", restoreResult.Output)
+	}
+	if checkpointStore.restored != checkpointStore.id {
+		t.Fatalf("restored checkpoint = %q, want %q", checkpointStore.restored, checkpointStore.id)
 	}
 }
 
@@ -260,6 +304,22 @@ func newTestWorkspace(t *testing.T, protected []string) *workspace.Workspace {
 		t.Fatalf("workspace.New() error = %v", err)
 	}
 	return workspaceRoot
+}
+
+type recordingCheckpointStore struct {
+	id       string
+	paths    []string
+	restored string
+}
+
+func (s *recordingCheckpointStore) Capture(_ context.Context, paths []string) (string, error) {
+	s.paths = append([]string{}, paths...)
+	return s.id, nil
+}
+
+func (s *recordingCheckpointStore) Restore(_ context.Context, id string) error {
+	s.restored = id
+	return nil
 }
 
 func writeTestFile(t *testing.T, root string, relativePath string, content string) {

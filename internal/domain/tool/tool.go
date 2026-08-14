@@ -229,6 +229,8 @@ type Result struct {
 	Truncated bool `json:"truncated,omitempty"`
 	// Failure is populated when a tool call fails or is denied.
 	Failure *Failure `json:"error,omitempty"`
+	// CheckpointID identifies the pre-edit snapshot created by a mutating tool.
+	CheckpointID string `json:"checkpoint_id,omitempty"`
 }
 
 // Handler executes one registered tool call.
