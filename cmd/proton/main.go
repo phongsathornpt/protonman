@@ -97,22 +97,52 @@ func run(ctx context.Context) error {
 	}
 
 	reader := bufio.NewReader(os.Stdin)
+	fullscreen := strings.EqualFold(strings.TrimSpace(os.Getenv("PROTON_TUI")), "fullscreen")
+	serviceOptions := []toolcall.Option{toolcall.WithMode(initialMode)}
+	if !fullscreen {
+		serviceOptions = append(
+			serviceOptions,
+			toolcall.WithPrompt(tui.NewPermissionPrompt(reader, os.Stdout)),
+		)
+	}
 	service, err := toolcall.NewService(
 		registry,
 		policy,
-		toolcall.WithMode(initialMode),
-		toolcall.WithPrompt(tui.NewPermissionPrompt(reader, os.Stdout)),
+		serviceOptions...,
 	)
 	if err != nil {
 		return fmt.Errorf("create tool-call service: %w", err)
 	}
 
-	ui, err := tui.New(service, registry, reader, os.Stdout)
-	if err != nil {
-		return fmt.Errorf("create terminal UI: %w", err)
+	var runErr error
+	if fullscreen {
+		keys, keyErr := tui.NewRuneKeySource(os.Stdin)
+		if keyErr != nil {
+			return fmt.Errorf("create full-screen key source: %w", keyErr)
+		}
+		screen, screenErr := tui.NewANSIScreen(os.Stdout, 0, 0)
+		if screenErr != nil {
+			return fmt.Errorf("create full-screen screen: %w", screenErr)
+		}
+		fullScreenUI, uiErr := tui.NewFullScreen(
+			service,
+			registry,
+			keys,
+			screen,
+			tui.WithTodoItems(loadTodoItems(workDir)),
+		)
+		if uiErr != nil {
+			return fmt.Errorf("create full-screen UI: %w", uiErr)
+		}
+		service.SetPrompt(fullScreenUI.PermissionPrompt)
+		runErr = fullScreenUI.Run(ctx)
+	} else {
+		ui, uiErr := tui.New(service, registry, reader, os.Stdout)
+		if uiErr != nil {
+			return fmt.Errorf("create terminal UI: %w", uiErr)
+		}
+		runErr = ui.Run(ctx)
 	}
-
-	runErr := ui.Run(ctx)
 	saveErr := stateStore.Save(ctx, sessionID, session.State{
 		PermissionMode: service.Mode().String(),
 	})
@@ -126,6 +156,14 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("save session: %w", saveErr)
 	}
 	return nil
+}
+
+func loadTodoItems(workDir string) []tui.TodoItem {
+	contents, err := os.ReadFile(filepath.Join(workDir, "TODO.md"))
+	if err != nil {
+		return []tui.TodoItem{}
+	}
+	return tui.ParseTODO(string(contents))
 }
 
 func resolveSessionID(workDir string) string {
