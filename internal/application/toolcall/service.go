@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/projectTHORN/proton/internal/domain/permission"
 	"github.com/projectTHORN/proton/internal/domain/tool"
@@ -39,6 +40,17 @@ func WithMode(mode permission.Mode) Option {
 	}
 }
 
+// WithObserver attaches a redacted lifecycle event observer.
+func WithObserver(observer Observer) Option {
+	return func(service *Service) error {
+		if observer == nil {
+			return fmt.Errorf("%w: observer is required", ErrInvalidService)
+		}
+		service.observer = observer
+		return nil
+	}
+}
+
 // WithPrompt sets the interactive resolver used by ask and auto modes.
 func WithPrompt(prompt PermissionPrompt) Option {
 	return func(service *Service) error {
@@ -51,6 +63,7 @@ func WithPrompt(prompt PermissionPrompt) Option {
 type Service struct {
 	registry tool.Registry
 	policy   *permission.Policy
+	observer Observer
 
 	mu     sync.RWMutex
 	mode   permission.Mode
@@ -116,28 +129,44 @@ func (s *Service) SetPrompt(prompt PermissionPrompt) {
 
 // Call evaluates permission and executes one tool call if authorized.
 func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error) {
+	telemetry := callTelemetry{
+		started: time.Now(),
+		call:    call,
+	}
+	s.observeCallStarted(ctx, telemetry)
 	if err := call.Validate(); err != nil {
-		return tool.Result{Failure: tool.FailureFromError(err)}, err
+		result := tool.Result{
+			CallID:   call.ID,
+			ToolName: call.Name,
+			Failure:  tool.FailureFromError(err),
+		}
+		s.observeCallResult(ctx, telemetry, result, err)
+		return result, err
 	}
 	if err := ctx.Err(); err != nil {
 		wrappedErr := fmt.Errorf("before tool call: %w", err)
-		return tool.Result{
+		result := tool.Result{
 			CallID:   call.ID,
 			ToolName: call.Name,
 			Failure:  tool.FailureFromError(wrappedErr),
-		}, wrappedErr
+		}
+		s.observeCallResult(ctx, telemetry, result, wrappedErr)
+		return result, wrappedErr
 	}
 
 	handler, ok := s.registry.Lookup(call.Name)
 	if !ok {
 		unknownErr := fmt.Errorf("%w: %s", ErrUnknownTool, call.Name)
-		return tool.Result{
+		result := tool.Result{
 			CallID:   call.ID,
 			ToolName: call.Name,
 			Failure:  &tool.Failure{Code: tool.ErrorCodeUnknownTool, Message: unknownErr.Error()},
-		}, unknownErr
+		}
+		s.observeCallResult(ctx, telemetry, result, unknownErr)
+		return result, unknownErr
 	}
 	definition := handler.Definition()
+	telemetry.toolKind = permission.ToolKind(definition.Kind)
 	request := permission.Request{
 		CallID:    call.ID,
 		ToolName:  definition.Name,
@@ -147,14 +176,17 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 	}
 
 	resolution := s.authorize(ctx, request)
+	s.observePermission(ctx, telemetry, resolution)
 	if resolution.Action != permission.ActionAllow {
 		permissionErr := fmt.Errorf("%w: %s", ErrPermissionDenied, resolution.Reason)
-		return tool.Result{
+		result := tool.Result{
 			CallID:   call.ID,
 			ToolName: call.Name,
 			Denied:   true,
 			Failure:  &tool.Failure{Code: tool.ErrorCodePermissionDenied, Message: permissionErr.Error()},
-		}, permissionErr
+		}
+		s.observeCallResult(ctx, telemetry, result, permissionErr)
+		return result, permissionErr
 	}
 	if resolution.Scope == permission.GrantScopeSession {
 		s.rememberGrant(request.Key())
@@ -172,8 +204,10 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		if result.Failure == nil {
 			result.Failure = tool.FailureFromError(wrappedErr)
 		}
+		s.observeCallResult(ctx, telemetry, result, wrappedErr)
 		return result, wrappedErr
 	}
+	s.observeCallResult(ctx, telemetry, result, nil)
 	return result, nil
 }
 
