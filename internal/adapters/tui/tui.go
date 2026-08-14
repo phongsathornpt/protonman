@@ -1,4 +1,5 @@
-// Package tui provides line-oriented and full-screen terminal adapters for Proton.
+// Package tui provides line-oriented and Bubble Tea fullscreen terminal
+// adapters for Proton.
 //
 // Both adapters delegate policy and tool execution to application services.
 package tui

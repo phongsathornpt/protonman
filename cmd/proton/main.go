@@ -125,26 +125,15 @@ func run(ctx context.Context) error {
 
 	var runErr error
 	if fullscreen {
-		keys, keyErr := tui.NewRuneKeySource(os.Stdin)
-		if keyErr != nil {
-			return fmt.Errorf("create full-screen key source: %w", keyErr)
-		}
-		screen, screenErr := tui.NewANSIScreen(os.Stdout, 0, 0)
-		if screenErr != nil {
-			return fmt.Errorf("create full-screen screen: %w", screenErr)
-		}
-		fullScreenUI, uiErr := tui.NewFullScreen(
+		bubbleUI, uiErr := tui.NewBubbleTea(
 			service,
 			registry,
-			keys,
-			screen,
-			tui.WithTodoItems(loadTodoItems(workDir)),
+			loadTodoItems(workDir),
 		)
 		if uiErr != nil {
-			return fmt.Errorf("create full-screen UI: %w", uiErr)
+			return fmt.Errorf("create Bubble Tea UI: %w", uiErr)
 		}
-		service.SetPrompt(fullScreenUI.PermissionPrompt)
-		runErr = fullScreenUI.Run(ctx)
+		runErr = bubbleUI.Run(ctx)
 	} else {
 		ui, uiErr := tui.New(service, registry, reader, os.Stdout)
 		if uiErr != nil {
