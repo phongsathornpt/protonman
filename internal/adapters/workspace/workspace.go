@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
 // ErrOutsideWorkspace indicates that a path escapes the configured root,
@@ -78,7 +80,11 @@ func (w *Workspace) Resolve(ctx context.Context, input string) (string, error) {
 		return "", fmt.Errorf("resolve workspace path: %w", err)
 	}
 	if strings.TrimSpace(input) == "" {
-		return "", fmt.Errorf("%w: path is required", ErrOutsideWorkspace)
+		return "", newBoundaryError(
+			tool.ErrorCodeOutsideWorkspace,
+			"path is required",
+			ErrOutsideWorkspace,
+		)
 	}
 	path := input
 	if !filepath.IsAbs(path) {
@@ -99,7 +105,11 @@ func (w *Workspace) Resolve(ctx context.Context, input string) (string, error) {
 // walk, such as a grep candidate or directory entry.
 func (w *Workspace) CheckAbsolute(ctx context.Context, path string) error {
 	if !filepath.IsAbs(path) {
-		return fmt.Errorf("%w: path must be absolute", ErrOutsideWorkspace)
+		return newBoundaryError(
+			tool.ErrorCodeOutsideWorkspace,
+			"path must be absolute",
+			ErrOutsideWorkspace,
+		)
 	}
 	return w.checkAbsolute(ctx, filepath.Clean(path))
 }
@@ -114,10 +124,18 @@ func (w *Workspace) checkAbsolute(ctx context.Context, path string) error {
 		return fmt.Errorf("check workspace path: %w", err)
 	}
 	if !isWithin(w.root, path) {
-		return fmt.Errorf("%w: %q", ErrOutsideWorkspace, path)
+		return newBoundaryError(
+			tool.ErrorCodeOutsideWorkspace,
+			fmt.Sprintf("path is outside workspace: %q", path),
+			ErrOutsideWorkspace,
+		)
 	}
 	if w.isProtected(path) {
-		return fmt.Errorf("%w: %q", ErrProtectedPath, path)
+		return newBoundaryError(
+			tool.ErrorCodeProtectedPath,
+			fmt.Sprintf("path is protected: %q", path),
+			ErrProtectedPath,
+		)
 	}
 	if err := w.checkSymlinkBoundary(path); err != nil {
 		return err
@@ -135,12 +153,46 @@ func (w *Workspace) checkSymlinkBoundary(path string) error {
 		return fmt.Errorf("resolve path symlinks: %w", err)
 	}
 	if !isWithin(w.root, resolvedAncestor) {
-		return fmt.Errorf("%w: symlink target %q", ErrOutsideWorkspace, resolvedAncestor)
+		return newBoundaryError(
+			tool.ErrorCodeOutsideWorkspace,
+			fmt.Sprintf("symlink target is outside workspace: %q", resolvedAncestor),
+			ErrOutsideWorkspace,
+		)
 	}
 	if w.isProtected(resolvedAncestor) {
-		return fmt.Errorf("%w: symlink target %q", ErrProtectedPath, resolvedAncestor)
+		return newBoundaryError(
+			tool.ErrorCodeProtectedPath,
+			fmt.Sprintf("symlink target is protected: %q", resolvedAncestor),
+			ErrProtectedPath,
+		)
 	}
 	return nil
+}
+
+type boundaryError struct {
+	code    tool.ErrorCode
+	message string
+	cause   error
+}
+
+func newBoundaryError(code tool.ErrorCode, message string, cause error) error {
+	return boundaryError{
+		code:    code,
+		message: message,
+		cause:   cause,
+	}
+}
+
+func (e boundaryError) Error() string {
+	return e.message
+}
+
+func (e boundaryError) Unwrap() error {
+	return e.cause
+}
+
+func (e boundaryError) FailureCode() tool.ErrorCode {
+	return e.code
 }
 
 func (w *Workspace) isProtected(path string) bool {

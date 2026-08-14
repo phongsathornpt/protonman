@@ -51,9 +51,11 @@ commit.
 - [x] Add workspace-root path resolution, protected paths, and traversal
   protection.
 - [x] Add output limits and truncation metadata for read, grep, and listing
-  results. Structured error types remain in the next tool-contract slice.
-- [x] Add atomic edit writes for coding tools. Checkpoint support and git
-  status integration remain in the operations slice.
+  results.
+- [x] Add structured failure codes to tool results and permission errors.
+- [x] Add bounded `git_status` output as a permission-gated read tool.
+- [x] Add atomic edit writes for coding tools and bounded git status. Durable
+  checkpoint/restore support remains in the operations slice.
 
 ### Step 4 — model and tool loop
 

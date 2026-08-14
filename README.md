@@ -28,6 +28,7 @@ Inside Proton:
 :tools
 :call read_file {"path":"README.md"}
 :call bash {"command":"pwd"}
+:call git_status {}
 :mode always-approve
 :mode ask
 :quit
@@ -72,6 +73,8 @@ state/config root for tests or disposable runs.
 
 File tools are confined to the current workspace, reject traversal and
 symlink escapes, and hide configured protected paths from search and listings.
+Tool results include stable error codes for headless/model consumers; the TUI
+renders those codes when a call fails.
 
 ## Verify
 

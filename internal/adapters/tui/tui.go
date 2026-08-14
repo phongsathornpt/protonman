@@ -222,6 +222,9 @@ func (ui *UI) call(ctx context.Context, arguments []string) error {
 		}
 	}
 	if err != nil {
+		if result.Failure != nil {
+			return fmt.Errorf("[%s] %s", result.Failure.Code, result.Failure.Message)
+		}
 		return err
 	}
 	_, err = fmt.Fprintln(ui.writer, "tool completed")
