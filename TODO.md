@@ -72,6 +72,8 @@ commit.
 
 - [x] Add a full-screen event loop adapter while retaining the line-oriented
   bootstrap UI for plain terminals and CI.
+- [x] Build the fullscreen adapter on Bubble Tea with Bubbles components and
+  Lip Gloss styles for terminal lifecycle, input, viewport, and layout.
 - [x] Add scrollback, prompt editing, tool progress, modal permission views,
   plan mode, and a TODO pane.
 - [x] Port the minimal live-region hierarchy: bottom-anchored output, bounded

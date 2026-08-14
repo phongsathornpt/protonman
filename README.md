@@ -24,8 +24,11 @@ go run ./cmd/proton
 ```
 
 The line-oriented UI is the default for plain terminals and CI. Set
-`PROTON_TUI=fullscreen` to use the ANSI full-screen event loop with prompt
-editing, scrollback, modal permission prompts, plan mode, and a TODO pane.
+`PROTON_TUI=fullscreen` to use the Bubble Tea full-screen event loop with
+textarea prompt editing, viewport scrollback, modal permission prompts, plan
+mode, and a TODO pane. The adapter is composed from Bubble Tea, Bubbles
+(`textarea`, `viewport`, `spinner`, `help`, and `key`), and Lip Gloss layout
+styles.
 Its live-region layout follows Grok Build's minimal pager design: recent output
 is bottom-anchored above the TODO panel, activity/status, prompt, and compact
 info/shortcut rows. Rendered tool and model text is sanitized before it reaches
