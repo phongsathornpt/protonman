@@ -48,6 +48,7 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace) (*Registry, error) {
 		NewApplyPatch(workspaceRoot),
 		NewGrep(workspaceRoot),
 		NewListDir(workspaceRoot),
+		NewGitStatus(workspaceRoot),
 	)
 }
 

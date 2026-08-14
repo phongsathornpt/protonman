@@ -1,6 +1,9 @@
 package tool
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"testing"
 )
 
@@ -34,5 +37,62 @@ func TestDefinitionValidateRejectsUnknownKind(t *testing.T) {
 	}).Validate()
 	if err == nil {
 		t.Fatal("Definition.Validate() error = nil, want error")
+	}
+}
+
+func TestFailureFromErrorClassifiesStableCodes(t *testing.T) {
+	tests := []struct {
+		name      string
+		err       error
+		wantCode  ErrorCode
+		wantRetry bool
+	}{
+		{
+			name:      "invalid call",
+			err:       ErrInvalidCall,
+			wantCode:  ErrorCodeInvalidArguments,
+			wantRetry: false,
+		},
+		{
+			name:      "canceled",
+			err:       context.Canceled,
+			wantCode:  ErrorCodeCanceled,
+			wantRetry: true,
+		},
+		{
+			name:      "coded error",
+			err:       WrapToolError(ErrorCodeNotFound, "missing file", errors.New("no entry")),
+			wantCode:  ErrorCodeNotFound,
+			wantRetry: false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			failure := FailureFromError(test.err)
+			if failure == nil {
+				t.Fatal("FailureFromError() = nil")
+			}
+			if failure.Code != test.wantCode {
+				t.Fatalf("failure code = %q, want %q", failure.Code, test.wantCode)
+			}
+			if failure.Retryable != test.wantRetry {
+				t.Fatalf("failure retryable = %t, want %t", failure.Retryable, test.wantRetry)
+			}
+		})
+	}
+}
+
+func TestResultFailureHasStableJSONShape(t *testing.T) {
+	result := Result{
+		CallID:   "call-1",
+		ToolName: "read_file",
+		Failure:  &Failure{Code: ErrorCodeNotFound, Message: "missing"},
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	if got, want := string(encoded), `{"call_id":"call-1","tool_name":"read_file","error":{"code":"not_found","message":"missing"}}`; got != want {
+		t.Fatalf("JSON = %s, want %s", got, want)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -218,8 +219,36 @@ func TestDefaultRegistryContainsCodingTools(t *testing.T) {
 		t.Fatalf("NewDefaultRegistry() error = %v", err)
 	}
 	definitions := registry.Definitions()
-	if got, want := len(definitions), 7; got != want {
+	if got, want := len(definitions), 8; got != want {
 		t.Fatalf("definition count = %d, want %d", got, want)
+	}
+}
+
+func TestGitStatusReportsWorkspaceRepository(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	gitCommand := exec.Command("git", "init", "--quiet", workspaceRoot.Root())
+	if output, err := gitCommand.CombinedOutput(); err != nil {
+		t.Fatalf("git init error = %v, output = %s", err, output)
+	}
+	writeTestFile(t, workspaceRoot.Root(), "status.txt", "changed\n")
+
+	result := executeJSON(t, NewGitStatus(workspaceRoot), "status-1", map[string]any{})
+	if !strings.Contains(result.Output, "status.txt") {
+		t.Fatalf("git status output = %q, want status.txt", result.Output)
+	}
+	if !strings.Contains(result.Output, "??") {
+		t.Fatalf("git status output = %q, want untracked marker", result.Output)
+	}
+}
+
+func TestGitStatusRejectsNonRepository(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	_, err := NewGitStatus(workspaceRoot).Execute(
+		context.Background(),
+		newJSONCall(t, "status-2", "git_status", map[string]any{}),
+	)
+	if err == nil {
+		t.Fatal("git_status error = nil, want non-repository error")
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 type fakeHandler struct {
 	definition tool.Definition
 	calls      int
+	err        error
 }
 
 func (h *fakeHandler) Definition() tool.Definition {
@@ -21,11 +22,12 @@ func (h *fakeHandler) Definition() tool.Definition {
 
 func (h *fakeHandler) Execute(_ context.Context, call tool.Call) (tool.Result, error) {
 	h.calls++
-	return tool.Result{
+	result := tool.Result{
 		CallID:   call.ID,
 		ToolName: call.Name,
 		Output:   "executed",
-	}, nil
+	}
+	return result, h.err
 }
 
 type fakeRegistry struct {
@@ -88,6 +90,9 @@ func TestCallDeniedBeforeHandler(t *testing.T) {
 	}
 	if !result.Denied {
 		t.Fatal("Call() result.Denied = false, want true")
+	}
+	if result.Failure == nil || result.Failure.Code != tool.ErrorCodePermissionDenied {
+		t.Fatalf("Call() failure = %#v, want permission_denied", result.Failure)
 	}
 	if handler.calls != 0 {
 		t.Fatalf("handler calls = %d, want 0", handler.calls)
@@ -216,5 +221,35 @@ func TestCallSessionGrantIsNarrowToExactRequest(t *testing.T) {
 	}
 	if promptCalls != 2 {
 		t.Fatalf("prompt calls = %d, want 2", promptCalls)
+	}
+}
+
+func TestCallPropagatesStructuredHandlerFailure(t *testing.T) {
+	handler := &fakeHandler{
+		definition: tool.Definition{
+			Name:                "read_file",
+			Description:         "fake reader",
+			Kind:                tool.KindRead,
+			PermissionDetailKey: "path",
+		},
+		err: tool.WrapToolError(tool.ErrorCodeNotFound, "read target missing", errors.New("no such file")),
+	}
+	service := newTestService(t, handler, permission.Config{
+		Rules: []permission.Rule{{
+			Action: permission.ActionAllow,
+			Tool:   permission.ToolRead,
+		}},
+	})
+	call, err := tool.NewCall("call-1", "read_file", json.RawMessage(`{"path":"missing.txt"}`))
+	if err != nil {
+		t.Fatalf("NewCall() error = %v", err)
+	}
+
+	result, err := service.Call(context.Background(), call)
+	if err == nil {
+		t.Fatal("Call() error = nil, want handler error")
+	}
+	if result.Failure == nil || result.Failure.Code != tool.ErrorCodeNotFound {
+		t.Fatalf("Call() failure = %#v, want not_found", result.Failure)
 	}
 }
