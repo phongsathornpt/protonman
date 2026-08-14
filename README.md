@@ -26,6 +26,10 @@ go run ./cmd/proton
 The line-oriented UI is the default for plain terminals and CI. Set
 `PROTON_TUI=fullscreen` to use the ANSI full-screen event loop with prompt
 editing, scrollback, modal permission prompts, plan mode, and a TODO pane.
+Its live-region layout follows Grok Build's minimal pager design: recent output
+is bottom-anchored above the TODO panel, activity/status, prompt, and compact
+info/shortcut rows. Rendered tool and model text is sanitized before it reaches
+the terminal.
 Set `PROTON_TELEMETRY=stderr` to emit opt-in JSON lifecycle events for tool
 calls and permission decisions. Telemetry contains metadata and argument byte
 counts, never raw commands, paths, URLs, arguments, output, or error details.

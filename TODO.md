@@ -74,6 +74,8 @@ commit.
   bootstrap UI for plain terminals and CI.
 - [x] Add scrollback, prompt editing, tool progress, modal permission views,
   plan mode, and a TODO pane.
+- [x] Port the minimal live-region hierarchy: bottom-anchored output, bounded
+  TODOs, activity/status, prompt info, and shortcut rows.
 - [x] Keep the TUI as an adapter: it must not own policy or execute tools
   directly.
 
