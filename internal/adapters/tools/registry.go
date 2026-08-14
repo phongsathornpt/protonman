@@ -116,3 +116,4 @@ func cloneSchema(schema map[string]any) map[string]any {
 }
 
 var _ tool.Registry = (*Registry)(nil)
+var _ tool.Registrar = (*Registry)(nil)

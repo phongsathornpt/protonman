@@ -250,6 +250,12 @@ type Registry interface {
 	Definitions() []Definition
 }
 
+// Registrar extends a registry with safe handler registration for discovery adapters.
+type Registrar interface {
+	Registry
+	Register(Handler) error
+}
+
 func validKind(kind Kind) bool {
 	switch kind {
 	case KindRead, KindEdit, KindBash, KindGrep, KindMCP, KindWebFetch, KindWebSearch:
