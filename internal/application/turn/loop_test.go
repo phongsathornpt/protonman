@@ -6,7 +6,10 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/projectTHORN/proton/internal/application/toolcall"
 	"github.com/projectTHORN/proton/internal/domain/model"
@@ -194,9 +197,226 @@ func TestLoopStopsAtMaxRounds(t *testing.T) {
 	}
 }
 
+func TestLoopTimesOutIndividualToolCall(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{events: []model.Event{
+			{
+				Kind: model.EventToolCall,
+				ToolCall: model.ToolCall{
+					ID:        "call-timeout",
+					Name:      "read_file",
+					Arguments: json.RawMessage(`{"path":"slow.txt"}`),
+				},
+			},
+			{Kind: model.EventDone},
+		}},
+		{events: []model.Event{
+			{Kind: model.EventTextDelta, Text: "timed out safely"},
+			{Kind: model.EventDone},
+		}},
+	}}
+	handler := &contextBlockingHandler{
+		definition: readFileDefinition(),
+		started:    make(chan struct{}),
+	}
+	loop := newLoopForHandler(
+		t,
+		client,
+		handler,
+		permission.ActionAllow,
+		permission.ModeAsk,
+		WithToolTimeout(20*time.Millisecond),
+	)
+	events := make([]Event, 0)
+	result, err := loop.Run(
+		context.Background(),
+		[]model.Message{{Role: model.RoleUser, Content: "read slowly"}},
+		collectEvents(&events),
+	)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got, want := result.Message.Content, "timed out safely"; got != want {
+		t.Fatalf("final content = %q, want %q", got, want)
+	}
+	toolEvent := findEvent(events, EventToolResult)
+	if toolEvent.Result.Failure == nil || toolEvent.Result.Failure.Code != tool.ErrorCodeDeadlineExceeded {
+		t.Fatalf("tool result failure = %#v, want deadline_exceeded", toolEvent.Result.Failure)
+	}
+}
+
+func TestLoopCancelsModelStreamWithParentContext(t *testing.T) {
+	client := &blockingModelClient{started: make(chan struct{})}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	resultCh := make(chan error, 1)
+	go func() {
+		_, err := loop.Run(
+			ctx,
+			[]model.Message{{Role: model.RoleUser, Content: "wait"}},
+			nil,
+		)
+		resultCh <- err
+	}()
+	select {
+	case <-client.started:
+	case <-time.After(time.Second):
+		t.Fatal("model stream did not start")
+	}
+	cancel()
+	select {
+	case err := <-resultCh:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Run() error = %v, want context.Canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Run() did not stop after cancellation")
+	}
+}
+
+func TestLoopRunsApprovedReadCallsWithBoundedConcurrency(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{events: []model.Event{
+			{
+				Kind: model.EventToolCall,
+				ToolCall: model.ToolCall{
+					ID:        "call-read-1",
+					Name:      "read_file",
+					Arguments: json.RawMessage(`{"path":"one.txt"}`),
+				},
+			},
+			{
+				Kind: model.EventToolCall,
+				ToolCall: model.ToolCall{
+					ID:        "call-read-2",
+					Name:      "read_file",
+					Arguments: json.RawMessage(`{"path":"two.txt"}`),
+				},
+			},
+			{Kind: model.EventDone},
+		}},
+		{events: []model.Event{
+			{Kind: model.EventTextDelta, Text: "both read"},
+			{Kind: model.EventDone},
+		}},
+	}}
+	handler := &parallelHandler{
+		definition: readFileDefinition(),
+		started:    make(chan struct{}, 2),
+		release:    make(chan struct{}),
+	}
+	loop := newLoopForHandler(
+		t,
+		client,
+		handler,
+		permission.ActionAllow,
+		permission.ModeAlwaysApprove,
+		WithMaxParallelReads(2),
+	)
+	resultCh := make(chan struct {
+		result Result
+		err    error
+	}, 1)
+	go func() {
+		result, err := loop.Run(
+			context.Background(),
+			[]model.Message{{Role: model.RoleUser, Content: "read both"}},
+			nil,
+		)
+		resultCh <- struct {
+			result Result
+			err    error
+		}{result: result, err: err}
+	}()
+	for index := 0; index < 2; index++ {
+		select {
+		case <-handler.started:
+		case <-time.After(time.Second):
+			t.Fatal("read calls did not start concurrently")
+		}
+	}
+	close(handler.release)
+	select {
+	case outcome := <-resultCh:
+		if outcome.err != nil {
+			t.Fatalf("Run() error = %v", outcome.err)
+		}
+		if got, want := outcome.result.Message.Content, "both read"; got != want {
+			t.Fatalf("final content = %q, want %q", got, want)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Run() did not complete after read calls were released")
+	}
+	if got, want := handler.max.Load(), int32(2); got != want {
+		t.Fatalf("maximum concurrent calls = %d, want %d", got, want)
+	}
+}
+
 type recordingHandler struct {
 	definition tool.Definition
 	calls      []tool.Call
+}
+
+func readFileDefinition() tool.Definition {
+	return tool.Definition{
+		Name:                "read_file",
+		Description:         "read a file",
+		Kind:                tool.KindRead,
+		PermissionDetailKey: "path",
+	}
+}
+
+type contextBlockingHandler struct {
+	definition tool.Definition
+	started    chan struct{}
+	once       sync.Once
+}
+
+func (h *contextBlockingHandler) Definition() tool.Definition {
+	return h.definition
+}
+
+func (h *contextBlockingHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
+	h.once.Do(func() { close(h.started) })
+	<-ctx.Done()
+	return tool.Result{
+		CallID:   call.ID,
+		ToolName: call.Name,
+	}, ctx.Err()
+}
+
+type parallelHandler struct {
+	definition tool.Definition
+	started    chan struct{}
+	release    chan struct{}
+	current    atomic.Int32
+	max        atomic.Int32
+}
+
+func (h *parallelHandler) Definition() tool.Definition {
+	return h.definition
+}
+
+func (h *parallelHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
+	current := h.current.Add(1)
+	for {
+		maximum := h.max.Load()
+		if current <= maximum || h.max.CompareAndSwap(maximum, current) {
+			break
+		}
+	}
+	h.started <- struct{}{}
+	select {
+	case <-h.release:
+	case <-ctx.Done():
+	}
+	h.current.Add(-1)
+	return tool.Result{
+		CallID:   call.ID,
+		ToolName: call.Name,
+		Output:   "file contents",
+	}, nil
 }
 
 func (h *recordingHandler) Definition() tool.Definition {
@@ -213,18 +433,18 @@ func (h *recordingHandler) Execute(_ context.Context, call tool.Call) (tool.Resu
 }
 
 type recordingRegistry struct {
-	handler *recordingHandler
+	handler tool.Handler
 }
 
 func (r *recordingRegistry) Lookup(name string) (tool.Handler, bool) {
-	if name != r.handler.definition.Name {
+	if name != r.handler.Definition().Name {
 		return nil, false
 	}
 	return r.handler, true
 }
 
 func (r *recordingRegistry) Definitions() []tool.Definition {
-	return []tool.Definition{r.handler.definition}
+	return []tool.Definition{r.handler.Definition()}
 }
 
 type scriptedStreamSpec struct {
@@ -274,19 +494,32 @@ func (s *scriptedStream) Close() error {
 
 func newTestLoop(
 	t *testing.T,
-	client *scriptedClient,
+	client model.Client,
 	action permission.Action,
 	options ...Option,
 ) (*Loop, *recordingHandler) {
 	t.Helper()
-	handler := &recordingHandler{
-		definition: tool.Definition{
-			Name:                "read_file",
-			Description:         "read a file",
-			Kind:                tool.KindRead,
-			PermissionDetailKey: "path",
-		},
-	}
+	handler := &recordingHandler{definition: readFileDefinition()}
+	loop := newLoopForHandler(
+		t,
+		client,
+		handler,
+		action,
+		permission.ModeAsk,
+		options...,
+	)
+	return loop, handler
+}
+
+func newLoopForHandler(
+	t *testing.T,
+	client model.Client,
+	handler tool.Handler,
+	action permission.Action,
+	mode permission.Mode,
+	options ...Option,
+) *Loop {
+	t.Helper()
 	policy, err := permission.NewPolicy(permission.Config{
 		Rules: []permission.Rule{{
 			Action: action,
@@ -299,6 +532,7 @@ func newTestLoop(
 	service, err := toolcall.NewService(
 		&recordingRegistry{handler: handler},
 		policy,
+		toolcall.WithMode(mode),
 	)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
@@ -307,7 +541,28 @@ func newTestLoop(
 	if err != nil {
 		t.Fatalf("NewLoop() error = %v", err)
 	}
-	return loop, handler
+	return loop
+}
+
+type blockingModelClient struct {
+	started chan struct{}
+	once    sync.Once
+}
+
+func (c *blockingModelClient) Stream(context.Context, model.Request) (model.Stream, error) {
+	c.once.Do(func() { close(c.started) })
+	return blockingModelStream{}, nil
+}
+
+type blockingModelStream struct{}
+
+func (blockingModelStream) Next(ctx context.Context) (model.Event, error) {
+	<-ctx.Done()
+	return model.Event{}, ctx.Err()
+}
+
+func (blockingModelStream) Close() error {
+	return nil
 }
 
 func collectEvents(events *[]Event) Sink {
