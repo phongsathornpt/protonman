@@ -9,13 +9,19 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/projectTHORN/proton/internal/application/toolcall"
 	"github.com/projectTHORN/proton/internal/domain/model"
+	"github.com/projectTHORN/proton/internal/domain/permission"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
-const defaultMaxRounds = 8
+const (
+	defaultMaxRounds       = 8
+	defaultMaxParallelRead = 4
+)
 
 var (
 	// ErrInvalidLoop indicates that the loop cannot be constructed or started.
@@ -74,11 +80,47 @@ func WithMaxRounds(rounds int) Option {
 	}
 }
 
+// WithRoundTimeout bounds one model response and its tool calls.
+func WithRoundTimeout(timeout time.Duration) Option {
+	return func(loop *Loop) error {
+		if timeout < 0 {
+			return fmt.Errorf("%w: round timeout cannot be negative", ErrInvalidLoop)
+		}
+		loop.roundTimeout = timeout
+		return nil
+	}
+}
+
+// WithToolTimeout bounds one individual tool call. Zero disables this bound.
+func WithToolTimeout(timeout time.Duration) Option {
+	return func(loop *Loop) error {
+		if timeout < 0 {
+			return fmt.Errorf("%w: tool timeout cannot be negative", ErrInvalidLoop)
+		}
+		loop.toolTimeout = timeout
+		return nil
+	}
+}
+
+// WithMaxParallelReads bounds the read-only worker pool. One disables parallel dispatch.
+func WithMaxParallelReads(limit int) Option {
+	return func(loop *Loop) error {
+		if limit <= 0 {
+			return fmt.Errorf("%w: max parallel reads must be positive", ErrInvalidLoop)
+		}
+		loop.maxParallelReads = limit
+		return nil
+	}
+}
+
 // Loop coordinates model streaming and permission-aware tool dispatch.
 type Loop struct {
-	client    model.Client
-	tools     *toolcall.Service
-	maxRounds int
+	client           model.Client
+	tools            *toolcall.Service
+	maxRounds        int
+	roundTimeout     time.Duration
+	toolTimeout      time.Duration
+	maxParallelReads int
 }
 
 // NewLoop creates a provider-neutral model/tool execution loop.
@@ -90,9 +132,10 @@ func NewLoop(client model.Client, tools *toolcall.Service, options ...Option) (*
 		return nil, fmt.Errorf("%w: tool-call service is required", ErrInvalidLoop)
 	}
 	loop := &Loop{
-		client:    client,
-		tools:     tools,
-		maxRounds: defaultMaxRounds,
+		client:           client,
+		tools:            tools,
+		maxRounds:        defaultMaxRounds,
+		maxParallelReads: defaultMaxParallelRead,
 	}
 	for _, option := range options {
 		if option == nil {
@@ -126,12 +169,12 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		if err := request.Validate(); err != nil {
 			return l.fail(ctx, sink, round, err)
 		}
-		assistant, calls, err := l.streamRound(ctx, round, request, sink)
+		assistant, executions, err := l.runRound(ctx, round, request, sink)
 		if err != nil {
 			return Result{}, err
 		}
 		history = append(history, assistant)
-		if len(calls) == 0 {
+		if len(executions) == 0 {
 			result := Result{
 				Message: assistant,
 				Rounds:  round,
@@ -146,53 +189,231 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			return result, nil
 		}
 
-		for _, requestedCall := range calls {
-			call, err := tool.NewCall(
-				requestedCall.ID,
-				requestedCall.Name,
-				requestedCall.Arguments,
-			)
-			if err != nil {
-				return l.fail(ctx, sink, round, fmt.Errorf("translate model tool call: %w", err))
-			}
-			if err := emit(ctx, sink, Event{
-				Kind:  EventToolCall,
-				Round: round,
-				Call:  call,
-			}); err != nil {
-				return Result{}, err
-			}
-
-			toolResult, callErr := l.tools.Call(ctx, call)
-			if callErr != nil && toolResult.Failure == nil {
-				toolResult.Failure = tool.FailureFromError(callErr)
-			}
-			if err := emit(ctx, sink, Event{
-				Kind:   EventToolResult,
-				Round:  round,
-				Call:   call,
-				Result: toolResult,
-				Err:    callErr,
-			}); err != nil {
-				return Result{}, err
-			}
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return Result{}, fmt.Errorf("after tool call %q: %w", call.Name, ctxErr)
-			}
+		for _, execution := range executions {
+			toolResult := execution.result
 			content, err := json.Marshal(toolResult)
 			if err != nil {
-				return l.fail(ctx, sink, round, fmt.Errorf("encode tool result %q: %w", call.Name, err))
+				return l.fail(
+					ctx,
+					sink,
+					round,
+					fmt.Errorf("encode tool result %q: %w", execution.call.Name, err),
+				)
 			}
 			history = append(history, model.Message{
 				Role:       model.RoleTool,
 				Content:    string(content),
-				ToolCallID: call.ID,
-				ToolName:   call.Name,
+				ToolCallID: execution.call.ID,
+				ToolName:   execution.call.Name,
 			})
 		}
 	}
 
 	return l.fail(ctx, sink, l.maxRounds, fmt.Errorf("%w: %d rounds", ErrMaxRounds, l.maxRounds))
+}
+
+type executedCall struct {
+	call   tool.Call
+	result tool.Result
+	err    error
+}
+
+func (l *Loop) runRound(
+	parent context.Context,
+	round int,
+	request model.Request,
+	sink Sink,
+) (model.Message, []executedCall, error) {
+	roundContext, cancel := l.newRoundContext(parent)
+	defer cancel()
+
+	assistant, requestedCalls, err := l.streamRound(roundContext, round, request, sink)
+	if err != nil {
+		return model.Message{}, nil, err
+	}
+	if len(requestedCalls) == 0 {
+		return assistant, []executedCall{}, nil
+	}
+
+	calls := make([]tool.Call, 0, len(requestedCalls))
+	for _, requestedCall := range requestedCalls {
+		call, err := tool.NewCall(
+			requestedCall.ID,
+			requestedCall.Name,
+			requestedCall.Arguments,
+		)
+		if err != nil {
+			return model.Message{}, nil, fmt.Errorf("translate model tool call: %w", err)
+		}
+		if err := emit(roundContext, sink, Event{
+			Kind:  EventToolCall,
+			Round: round,
+			Call:  call,
+		}); err != nil {
+			return model.Message{}, nil, err
+		}
+		calls = append(calls, call)
+	}
+
+	executions := l.executeCalls(roundContext, calls)
+	if err := roundContext.Err(); err != nil {
+		return model.Message{}, nil, fmt.Errorf("execute model round %d: %w", round, err)
+	}
+	for _, execution := range executions {
+		if err := emit(roundContext, sink, Event{
+			Kind:   EventToolResult,
+			Round:  round,
+			Call:   execution.call,
+			Result: execution.result,
+			Err:    execution.err,
+		}); err != nil {
+			return model.Message{}, nil, err
+		}
+	}
+	return assistant, executions, nil
+}
+
+func (l *Loop) newRoundContext(parent context.Context) (context.Context, context.CancelFunc) {
+	if l.roundTimeout > 0 {
+		return context.WithTimeout(parent, l.roundTimeout)
+	}
+	return context.WithCancel(parent)
+}
+
+func (l *Loop) executeCalls(ctx context.Context, calls []tool.Call) []executedCall {
+	if l.canRunConcurrently(calls) {
+		return l.executeConcurrent(ctx, calls)
+	}
+	results := make([]executedCall, 0, len(calls))
+	for _, call := range calls {
+		if err := ctx.Err(); err != nil {
+			results = append(results, canceledCall(call, err))
+			continue
+		}
+		results = append(results, l.executeOne(ctx, call))
+	}
+	return results
+}
+
+func (l *Loop) canRunConcurrently(calls []tool.Call) bool {
+	if len(calls) < 2 || l.maxParallelReads < 2 {
+		return false
+	}
+	if l.tools.Mode() != permission.ModeAlwaysApprove {
+		return false
+	}
+	publishedDefinitions := l.tools.Definitions()
+	definitions := make(map[string]tool.Definition, len(publishedDefinitions))
+	for _, definition := range publishedDefinitions {
+		definitions[definition.Name] = definition
+	}
+	for _, call := range calls {
+		definition, ok := definitions[call.Name]
+		if !ok || !readOnlyKind(definition.Kind) {
+			return false
+		}
+	}
+	return true
+}
+
+func readOnlyKind(kind tool.Kind) bool {
+	return kind == tool.KindRead || kind == tool.KindGrep
+}
+
+func (l *Loop) executeConcurrent(ctx context.Context, calls []tool.Call) []executedCall {
+	workerCount := l.maxParallelReads
+	if workerCount > len(calls) {
+		workerCount = len(calls)
+	}
+
+	type indexedCall struct {
+		index int
+		call  tool.Call
+	}
+	type indexedResult struct {
+		index int
+		call  executedCall
+	}
+	jobs := make(chan indexedCall)
+	results := make(chan indexedResult, len(calls))
+	var workers sync.WaitGroup
+	workers.Add(workerCount)
+	for index := 0; index < workerCount; index++ {
+		go func() {
+			defer workers.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case job, ok := <-jobs:
+					if !ok {
+						return
+					}
+					results <- indexedResult{
+						index: job.index,
+						call:  l.executeOne(ctx, job.call),
+					}
+				}
+			}
+		}()
+	}
+
+sending:
+	for index, call := range calls {
+		select {
+		case jobs <- indexedCall{index: index, call: call}:
+		case <-ctx.Done():
+			break sending
+		}
+	}
+	close(jobs)
+	workers.Wait()
+	close(results)
+
+	executions := make([]executedCall, len(calls))
+	completed := make([]bool, len(calls))
+	for result := range results {
+		executions[result.index] = result.call
+		completed[result.index] = true
+	}
+	if err := ctx.Err(); err != nil {
+		for index, complete := range completed {
+			if !complete {
+				executions[index] = canceledCall(calls[index], err)
+			}
+		}
+	}
+	return executions
+}
+
+func (l *Loop) executeOne(ctx context.Context, call tool.Call) executedCall {
+	callContext := ctx
+	cancel := func() {}
+	if l.toolTimeout > 0 {
+		callContext, cancel = context.WithTimeout(ctx, l.toolTimeout)
+	}
+	result, err := l.tools.Call(callContext, call)
+	cancel()
+	if err != nil && result.Failure == nil {
+		result.Failure = tool.FailureFromError(err)
+	}
+	return executedCall{
+		call:   call,
+		result: result,
+		err:    err,
+	}
+}
+
+func canceledCall(call tool.Call, err error) executedCall {
+	return executedCall{
+		call: call,
+		result: tool.Result{
+			CallID:   call.ID,
+			ToolName: call.Name,
+			Failure:  tool.FailureFromError(err),
+		},
+		err: err,
+	}
 }
 
 func (l *Loop) streamRound(
