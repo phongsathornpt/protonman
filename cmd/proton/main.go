@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	checkpointadapter "github.com/projectTHORN/proton/internal/adapters/checkpoint"
 	"github.com/projectTHORN/proton/internal/adapters/config"
 	"github.com/projectTHORN/proton/internal/adapters/session"
+	"github.com/projectTHORN/proton/internal/adapters/telemetry"
 	"github.com/projectTHORN/proton/internal/adapters/tools"
 	"github.com/projectTHORN/proton/internal/adapters/tui"
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
@@ -105,6 +107,13 @@ func run(ctx context.Context) error {
 			toolcall.WithPrompt(tui.NewPermissionPrompt(reader, os.Stdout)),
 		)
 	}
+	observer, observerErr := configuredTelemetryObserver()
+	if observerErr != nil {
+		return observerErr
+	}
+	if observer != nil {
+		serviceOptions = append(serviceOptions, toolcall.WithObserver(observer))
+	}
 	service, err := toolcall.NewService(
 		registry,
 		policy,
@@ -184,5 +193,23 @@ func truthy(value string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func configuredTelemetryObserver() (toolcall.Observer, error) {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("PROTON_TELEMETRY"))) {
+	case "", "off", "false", "0":
+		return nil, nil
+	case "stderr":
+		logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+			Level: slog.LevelInfo,
+		}))
+		observer, err := telemetry.NewSlogObserver(logger)
+		if err != nil {
+			return nil, fmt.Errorf("create telemetry observer: %w", err)
+		}
+		return observer, nil
+	default:
+		return nil, fmt.Errorf("unsupported PROTON_TELEMETRY value %q", os.Getenv("PROTON_TELEMETRY"))
 	}
 }
