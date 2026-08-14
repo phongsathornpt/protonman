@@ -4,11 +4,13 @@ Proton is the Go-based coding-agent port of Grok Build. The repository starts
 with the execution boundary that the rest of the agent will depend on:
 
 ```text
-TUI / headless adapters
-          |
-    application service  -- permission check -->  domain policy
-          |
-       tool registry  -->  tool handlers (read_file, bash, ...)
+TUI / headless adapters       provider model client
+          |                           |
+          +------ application turn loop
+                              |
+                 tool-call service -- permission check --> domain policy
+                              |
+                         tool registry --> tool handlers
 ```
 
 The first slice is deliberately provider-neutral. It can execute a typed JSON
@@ -78,6 +80,10 @@ Tool results include stable error codes for headless/model consumers; the TUI
 renders those codes when a call fails.
 Mutating file tools create a private pre-edit checkpoint and return its ID in
 the result; `checkpoint_restore` is permission-gated.
+The provider-neutral model boundary is injectable: the application turn loop
+streams text, translates model tool calls into `tool.Call` values, executes
+them through the permission service, and sends structured results back on the
+next model request. A live provider adapter is still a later port step.
 
 ## Verify
 

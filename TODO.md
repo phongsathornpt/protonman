@@ -59,8 +59,8 @@ commit.
 
 ### Step 4 — model and tool loop
 
-- [ ] Add an injectable model client and stream model events.
-- [ ] Translate model tool calls into `tool.Call` values and stream progress
+- [x] Add an injectable model client and stream model events.
+- [x] Translate model tool calls into `tool.Call` values and stream progress
   and terminal results back into the turn loop.
 - [ ] Add cancellation, timeouts, concurrent read-only calls, and bounded
   execution queues.
@@ -91,6 +91,6 @@ commit.
 | `xai-grok-pager` | `internal/adapters/tui` |
 | shell/workspace composition | `cmd/proton` |
 
-The first commit deliberately stops before model transport, MCP, and OS
-sandboxing. Those features should build on the tested permission and dispatch
-boundary instead of creating a second execution path.
+The provider-neutral turn loop deliberately stops before a concrete model
+transport, MCP, and OS sandboxing. Those features should build on the tested
+permission and dispatch boundary instead of creating a second execution path.
