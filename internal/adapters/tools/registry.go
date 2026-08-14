@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
+	domaincheckpoint "github.com/projectTHORN/proton/internal/domain/checkpoint"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
@@ -36,19 +37,21 @@ func NewRegistry(handlers ...tool.Handler) (*Registry, error) {
 }
 
 // NewDefaultRegistry creates the default workspace-aware coding tool set.
-func NewDefaultRegistry(workspaceRoot *workspace.Workspace) (*Registry, error) {
+func NewDefaultRegistry(workspaceRoot *workspace.Workspace, stores ...domaincheckpoint.Store) (*Registry, error) {
 	if workspaceRoot == nil {
 		return nil, fmt.Errorf("create default registry: workspace is required")
 	}
+	checkpointStore := selectCheckpointStore(stores)
 	return NewRegistry(
 		NewReadFile(workspaceRoot),
 		NewBash(workspaceRoot),
-		NewWriteFile(workspaceRoot),
-		NewSearchReplace(workspaceRoot),
-		NewApplyPatch(workspaceRoot),
+		NewWriteFile(workspaceRoot, checkpointStore),
+		NewSearchReplace(workspaceRoot, checkpointStore),
+		NewApplyPatch(workspaceRoot, checkpointStore),
 		NewGrep(workspaceRoot),
 		NewListDir(workspaceRoot),
 		NewGitStatus(workspaceRoot),
+		NewCheckpointRestore(checkpointStore),
 	)
 }
 

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	checkpointadapter "github.com/projectTHORN/proton/internal/adapters/checkpoint"
 	"github.com/projectTHORN/proton/internal/adapters/config"
 	"github.com/projectTHORN/proton/internal/adapters/session"
 	"github.com/projectTHORN/proton/internal/adapters/tools"
@@ -57,8 +58,18 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("create workspace policy: %w", err)
 	}
+	checkpointRoot := filepath.Join(
+		homeDir,
+		".proton",
+		"checkpoints",
+		"workspace-"+workspaceKey(workDir),
+	)
+	checkpointStore, err := checkpointadapter.NewFileStore(checkpointRoot, workspaceRoot)
+	if err != nil {
+		return fmt.Errorf("create checkpoint store: %w", err)
+	}
 
-	registry, err := tools.NewDefaultRegistry(workspaceRoot)
+	registry, err := tools.NewDefaultRegistry(workspaceRoot, checkpointStore)
 	if err != nil {
 		return fmt.Errorf("create tool registry: %w", err)
 	}
@@ -121,8 +132,12 @@ func resolveSessionID(workDir string) string {
 	if configured := strings.TrimSpace(os.Getenv("PROTON_SESSION_ID")); configured != "" {
 		return configured
 	}
+	return "workspace-" + workspaceKey(workDir)
+}
+
+func workspaceKey(workDir string) string {
 	digest := sha256.Sum256([]byte(workDir))
-	return "workspace-" + hex.EncodeToString(digest[:8])
+	return hex.EncodeToString(digest[:8])
 }
 
 func truthy(value string) bool {

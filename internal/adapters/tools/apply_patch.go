@@ -9,11 +9,13 @@ import (
 	"strings"
 
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
+	domaincheckpoint "github.com/projectTHORN/proton/internal/domain/checkpoint"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
 type applyPatchHandler struct {
-	workspace *workspace.Workspace
+	workspace   *workspace.Workspace
+	checkpoints domaincheckpoint.Store
 }
 
 type applyPatchInput struct {
@@ -52,8 +54,11 @@ type plannedPatchChange struct {
 }
 
 // NewApplyPatch returns the Codex-format multi-file patch adapter.
-func NewApplyPatch(workspaceRoot *workspace.Workspace) tool.Handler {
-	return applyPatchHandler{workspace: workspaceRoot}
+func NewApplyPatch(workspaceRoot *workspace.Workspace, stores ...domaincheckpoint.Store) tool.Handler {
+	return applyPatchHandler{
+		workspace:   workspaceRoot,
+		checkpoints: selectCheckpointStore(stores),
+	}
 }
 
 func (applyPatchHandler) Definition() tool.Definition {
@@ -94,34 +99,49 @@ func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("plan apply_patch: %w", err)
 	}
+	checkpointPaths := make([]string, 0, len(changes)*2)
+	for _, change := range changes {
+		checkpointPaths = append(checkpointPaths, change.path)
+		if change.destination != "" {
+			checkpointPaths = append(checkpointPaths, change.destination)
+		}
+	}
+	checkpointID, err := h.checkpoints.Capture(ctx, checkpointPaths)
+	if err != nil {
+		return tool.Result{}, fmt.Errorf("checkpoint patch: %w", err)
+	}
 	for _, change := range changes {
 		if err := ctx.Err(); err != nil {
-			return tool.Result{}, fmt.Errorf("before applying patch: %w", err)
+			return patchFailureResult(call, checkpointID, fmt.Errorf("before applying patch: %w", err))
 		}
 		switch change.kind {
 		case patchAdd:
 			if err := atomicWrite(ctx, h.workspace, change.path, []byte(change.content)); err != nil {
-				return tool.Result{}, fmt.Errorf("write patched file %q: %w", change.path, err)
+				return patchFailureResult(call, checkpointID, fmt.Errorf("write patched file %q: %w", change.path, err))
 			}
 		case patchUpdate:
 			if change.destination == "" {
 				if err := atomicWrite(ctx, h.workspace, change.path, []byte(change.content)); err != nil {
-					return tool.Result{}, fmt.Errorf("write patched file %q: %w", change.path, err)
+					return patchFailureResult(call, checkpointID, fmt.Errorf("write patched file %q: %w", change.path, err))
 				}
 			}
 		case patchDelete:
 			if err := os.Remove(change.path); err != nil {
-				return tool.Result{}, fmt.Errorf("delete patched file %q: %w", change.path, err)
+				return patchFailureResult(call, checkpointID, fmt.Errorf("delete patched file %q: %w", change.path, err))
 			}
 		default:
-			return tool.Result{}, fmt.Errorf("apply_patch has unknown change kind %d", change.kind)
+			return patchFailureResult(
+				call,
+				checkpointID,
+				fmt.Errorf("apply_patch has unknown change kind %d", change.kind),
+			)
 		}
 		if change.destination != "" {
 			if err := atomicWrite(ctx, h.workspace, change.destination, []byte(change.content)); err != nil {
-				return tool.Result{}, fmt.Errorf("write moved file %q: %w", change.destination, err)
+				return patchFailureResult(call, checkpointID, fmt.Errorf("write moved file %q: %w", change.destination, err))
 			}
 			if err := os.Remove(change.path); err != nil {
-				return tool.Result{}, fmt.Errorf("remove moved source %q: %w", change.path, err)
+				return patchFailureResult(call, checkpointID, fmt.Errorf("remove moved source %q: %w", change.path, err))
 			}
 		}
 	}
@@ -141,10 +161,19 @@ func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 		output.WriteByte('\n')
 	}
 	return tool.Result{
-		CallID:   call.ID,
-		ToolName: call.Name,
-		Output:   output.String(),
+		CallID:       call.ID,
+		ToolName:     call.Name,
+		Output:       output.String(),
+		CheckpointID: checkpointID,
 	}, nil
+}
+
+func patchFailureResult(call tool.Call, checkpointID string, err error) (tool.Result, error) {
+	return tool.Result{
+		CallID:       call.ID,
+		ToolName:     call.Name,
+		CheckpointID: checkpointID,
+	}, err
 }
 
 func (h applyPatchHandler) planPatch(ctx context.Context, operations []patchOperation) ([]plannedPatchChange, error) {

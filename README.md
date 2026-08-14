@@ -29,6 +29,7 @@ Inside Proton:
 :call read_file {"path":"README.md"}
 :call bash {"command":"pwd"}
 :call git_status {}
+:call checkpoint_restore {"checkpoint_id":"checkpoint-..."}
 :mode always-approve
 :mode ask
 :quit
@@ -75,6 +76,8 @@ File tools are confined to the current workspace, reject traversal and
 symlink escapes, and hide configured protected paths from search and listings.
 Tool results include stable error codes for headless/model consumers; the TUI
 renders those codes when a call fails.
+Mutating file tools create a private pre-edit checkpoint and return its ID in
+the result; `checkpoint_restore` is permission-gated.
 
 ## Verify
 

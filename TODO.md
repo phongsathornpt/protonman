@@ -54,8 +54,8 @@ commit.
   results.
 - [x] Add structured failure codes to tool results and permission errors.
 - [x] Add bounded `git_status` output as a permission-gated read tool.
-- [x] Add atomic edit writes for coding tools and bounded git status. Durable
-  checkpoint/restore support remains in the operations slice.
+- [x] Add atomic edit writes for coding tools and durable checkpoint/restore
+  support.
 
 ### Step 4 — model and tool loop
 
