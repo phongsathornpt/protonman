@@ -65,7 +65,8 @@ commit.
 - [x] Add cancellation, timeouts, concurrent read-only calls, and bounded
   execution queues. Interactive permission modes remain serialized; bounded
   parallel reads are enabled only for `always-approve` mode.
-- [ ] Add MCP discovery and namespaced tool registration.
+- [x] Add injectable MCP discovery and namespaced `mcp.<server>.<tool>` tool
+  registration. Concrete MCP transports remain adapter-specific.
 
 ### Step 5 — full TUI
 

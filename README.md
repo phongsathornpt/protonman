@@ -87,6 +87,9 @@ next model request. It propagates cancellation, supports per-round and
 per-tool deadlines, and bounds concurrent read/grep calls without racing
 interactive permission prompts. A live provider adapter is still a later port
 step.
+MCP discovery is also injectable: discovered server tools are registered as
+`mcp.<server>.<tool>` with `KindMCP`, while invocations remain behind the same
+permission service. Concrete MCP transports are intentionally separate.
 
 ## Verify
 
