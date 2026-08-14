@@ -37,6 +37,20 @@ func (a Action) String() string {
 	}
 }
 
+// ParseAction parses the action names used by configuration files.
+func ParseAction(value string) (Action, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "allow":
+		return ActionAllow, nil
+	case "deny":
+		return ActionDeny, nil
+	case "ask":
+		return ActionAsk, nil
+	default:
+		return ActionUnknown, fmt.Errorf("unknown permission action %q", value)
+	}
+}
+
 // Mode controls what happens after static policy evaluation returns ask.
 type Mode uint8
 
@@ -121,6 +135,42 @@ const (
 	PatternModeDomain
 )
 
+// ParseToolKind parses the tool names used by configuration files.
+func ParseToolKind(value string) (ToolKind, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "any":
+		return ToolAny, nil
+	case "read":
+		return ToolRead, nil
+	case "edit":
+		return ToolEdit, nil
+	case "bash", "shell":
+		return ToolBash, nil
+	case "grep", "search":
+		return ToolGrep, nil
+	case "mcp":
+		return ToolMCP, nil
+	case "web_fetch", "web-fetch", "webfetch":
+		return ToolWebFetch, nil
+	case "web_search", "web-search", "websearch":
+		return ToolWebSearch, nil
+	default:
+		return "", fmt.Errorf("unknown permission tool %q", value)
+	}
+}
+
+// ParsePatternMode parses the pattern modes used by configuration files.
+func ParsePatternMode(value string) (PatternMode, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "glob":
+		return PatternModeGlob, nil
+	case "domain":
+		return PatternModeDomain, nil
+	default:
+		return PatternModeUnknown, fmt.Errorf("unknown permission pattern mode %q", value)
+	}
+}
+
 // Rule is one static permission rule.
 type Rule struct {
 	// Action is the decision when the rule matches.
@@ -165,13 +215,42 @@ type Decision struct {
 	Reason string
 }
 
+// GrantScope determines how long an interactive approval remains effective.
+type GrantScope uint8
+
+const (
+	// GrantScopeOnce applies only to the current call.
+	GrantScopeOnce GrantScope = iota + 1
+	// GrantScopeSession applies to matching calls until the process exits.
+	GrantScopeSession
+)
+
+// GrantKey identifies the narrow request a session grant covers.
+type GrantKey struct {
+	// ToolName prevents a grant for one tool from authorizing another tool.
+	ToolName string
+	// ToolKind keeps policy categories explicit in the key.
+	ToolKind ToolKind
+	// Detail is the exact command, path, or URL approved by the user.
+	Detail string
+}
+
+// Key returns the exact session-grant key for a request.
+func (r Request) Key() GrantKey {
+	return GrantKey{
+		ToolName: r.ToolName,
+		ToolKind: r.ToolKind,
+		Detail:   r.Detail,
+	}
+}
+
 // Resolution is the final result returned by an interactive prompt.
 type Resolution struct {
 	// Action must be allow or deny.
 	Action Action
-	// Remember changes the current process mode to always-approve when the
-	// action is allow.
-	Remember bool
+	// Scope controls whether an allow is one-shot or remembered for this
+	// exact request during the current process.
+	Scope GrantScope
 	// Reason is displayed in diagnostics and tests.
 	Reason string
 }

@@ -65,7 +65,7 @@ func NewPermissionPrompt(reader *bufio.Reader, writer io.Writer) toolcall.Permis
 		}
 		if _, err := fmt.Fprintf(
 			writer,
-			"\nPermission required: %s (%s)\nTarget: %s\nAllow once [y], always approve [a], deny [n]: ",
+			"\nPermission required: %s (%s)\nTarget: %s\nAllow once [y], allow for session [s], deny [n]: ",
 			request.ToolName,
 			request.ToolKind,
 			request.Detail,
@@ -83,11 +83,11 @@ func NewPermissionPrompt(reader *bufio.Reader, writer io.Writer) toolcall.Permis
 				Action: permission.ActionAllow,
 				Reason: "user allowed one call",
 			}, nil
-		case "a", "always", "always-approve":
+		case "s", "session":
 			return permission.Resolution{
-				Action:   permission.ActionAllow,
-				Remember: true,
-				Reason:   "user enabled always-approve",
+				Action: permission.ActionAllow,
+				Scope:  permission.GrantScopeSession,
+				Reason: "user allowed this exact request for the session",
 			}, nil
 		case "n", "no", "deny":
 			return permission.Resolution{

@@ -55,6 +55,7 @@ type Service struct {
 	mu     sync.RWMutex
 	mode   permission.Mode
 	prompt PermissionPrompt
+	grants map[permission.GrantKey]struct{}
 }
 
 // NewService builds a permission-aware tool-call service.
@@ -70,6 +71,7 @@ func NewService(registry tool.Registry, policy *permission.Policy, options ...Op
 		registry: registry,
 		policy:   policy,
 		mode:     permission.ModeAsk,
+		grants:   make(map[permission.GrantKey]struct{}),
 	}
 	for _, option := range options {
 		if option == nil {
@@ -130,16 +132,16 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		Arguments: append(json.RawMessage(nil), call.Arguments...),
 	}
 
-	if resolution := s.authorize(ctx, request); resolution.Action != permission.ActionAllow {
+	resolution := s.authorize(ctx, request)
+	if resolution.Action != permission.ActionAllow {
 		return tool.Result{
 			CallID:   call.ID,
 			ToolName: call.Name,
 			Denied:   true,
 		}, fmt.Errorf("%w: %s", ErrPermissionDenied, resolution.Reason)
-	} else if resolution.Remember {
-		if err := s.SetMode(permission.ModeAlwaysApprove); err != nil {
-			return tool.Result{}, fmt.Errorf("remember permission decision: %w", err)
-		}
+	}
+	if resolution.Scope == permission.GrantScopeSession {
+		s.rememberGrant(request.Key())
 	}
 
 	result, err := handler.Execute(ctx, call)
@@ -171,9 +173,16 @@ func (s *Service) authorize(ctx context.Context, request permission.Request) per
 	}
 
 	s.mu.RLock()
+	_, granted := s.grants[request.Key()]
 	mode := s.mode
 	prompt := s.prompt
 	s.mu.RUnlock()
+	if granted {
+		return permission.Resolution{
+			Action: permission.ActionAllow,
+			Reason: "allowed by session grant",
+		}
+	}
 
 	switch mode {
 	case permission.ModeAlwaysApprove:
@@ -210,7 +219,10 @@ func (s *Service) authorize(ctx context.Context, request permission.Request) per
 			resolution.Reason = "interactive permission decision"
 		}
 		if resolution.Action == permission.ActionDeny {
-			resolution.Remember = false
+			resolution.Scope = permission.GrantScopeOnce
+		}
+		if resolution.Scope != permission.GrantScopeOnce && resolution.Scope != permission.GrantScopeSession {
+			resolution.Scope = permission.GrantScopeOnce
 		}
 		return resolution
 	default:
@@ -219,6 +231,12 @@ func (s *Service) authorize(ctx context.Context, request permission.Request) per
 			Reason: "invalid permission mode",
 		}
 	}
+}
+
+func (s *Service) rememberGrant(key permission.GrantKey) {
+	s.mu.Lock()
+	s.grants[key] = struct{}{}
+	s.mu.Unlock()
 }
 
 func permissionDetail(definition tool.Definition, arguments json.RawMessage) string {
