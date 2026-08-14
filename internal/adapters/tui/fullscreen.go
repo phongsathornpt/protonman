@@ -81,6 +81,7 @@ type Frame struct {
 	Scrollback []string
 	Input      string
 	Cursor     int
+	Activity   string
 	Mode       string
 	PlanMode   bool
 	Todo       []TodoItem
@@ -148,6 +149,7 @@ type FullScreenUI struct {
 	cursor     int
 	todo       []TodoItem
 	planMode   bool
+	activity   string
 	nextID     uint64
 	modal      *Modal
 }
@@ -180,6 +182,7 @@ func NewFullScreen(
 		historyPos: 0,
 		scrollback: make([]string, 0),
 		todo:       make([]TodoItem, 0),
+		activity:   "idle",
 	}
 	for _, option := range options {
 		if option == nil {
@@ -216,6 +219,9 @@ func (ui *FullScreenUI) PermissionPrompt(
 	ctx context.Context,
 	request permission.Request,
 ) (permission.Resolution, error) {
+	previousActivity := ui.activity
+	ui.activity = "waiting for permission"
+	defer func() { ui.activity = previousActivity }()
 	ui.modal = &Modal{
 		Title:   "Permission required",
 		Body:    fmt.Sprintf("%s (%s)\nTarget: %s", request.ToolName, request.ToolKind, request.Detail),
@@ -294,6 +300,7 @@ func (ui *FullScreenUI) render() error {
 		Scrollback: append([]string{}, ui.scrollback...),
 		Input:      string(ui.input),
 		Cursor:     ui.cursor,
+		Activity:   ui.activity,
 		Mode:       ui.service.Mode().String(),
 		PlanMode:   ui.planMode,
 		Todo:       append([]TodoItem{}, ui.todo...),
@@ -406,6 +413,9 @@ func (ui *FullScreenUI) call(ctx context.Context, parts []string) error {
 		arguments = parts[2]
 	}
 	ui.nextID++
+	previousActivity := ui.activity
+	ui.activity = "running " + strings.TrimSpace(parts[1])
+	defer func() { ui.activity = previousActivity }()
 	call, err := tool.NewCall(
 		fmt.Sprintf("fullscreen-%d", ui.nextID),
 		strings.TrimSpace(parts[1]),
@@ -436,6 +446,9 @@ func (ui *FullScreenUI) runPrompt(ctx context.Context, prompt string) error {
 	if ui.runner == nil {
 		return errors.New("model client is not configured")
 	}
+	previousActivity := ui.activity
+	ui.activity = "thinking"
+	defer func() { ui.activity = previousActivity }()
 	_, err := ui.runner.Run(
 		ctx,
 		[]model.Message{{Role: model.RoleUser, Content: prompt}},
