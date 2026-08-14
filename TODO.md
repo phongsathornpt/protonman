@@ -80,7 +80,7 @@ commit.
 ### Step 6 — safety and operations
 
 - [ ] Add OS-level sandbox profiles and network restrictions.
-- [ ] Add redacted structured telemetry for tool and permission events.
+- [x] Add redacted structured telemetry for tool and permission events.
 - [ ] Add headless/ACP entry points and session persistence.
 - [ ] Run race, fuzz, integration, and end-to-end tests in CI.
 

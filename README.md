@@ -26,6 +26,9 @@ go run ./cmd/proton
 The line-oriented UI is the default for plain terminals and CI. Set
 `PROTON_TUI=fullscreen` to use the ANSI full-screen event loop with prompt
 editing, scrollback, modal permission prompts, plan mode, and a TODO pane.
+Set `PROTON_TELEMETRY=stderr` to emit opt-in JSON lifecycle events for tool
+calls and permission decisions. Telemetry contains metadata and argument byte
+counts, never raw commands, paths, URLs, arguments, output, or error details.
 
 Inside Proton:
 
@@ -94,6 +97,9 @@ step.
 MCP discovery is also injectable: discovered server tools are registered as
 `mcp.<server>.<tool>` with `KindMCP`, while invocations remain behind the same
 permission service. Concrete MCP transports are intentionally separate.
+The tool-call service also exposes a redacted observer boundary for structured
+telemetry; observers receive lifecycle metadata without permission details or
+tool results.
 
 ## Verify
 
