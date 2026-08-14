@@ -38,6 +38,8 @@ type Snapshot struct {
 	Permission permission.Config
 	// Mode is the configured initial permission mode.
 	Mode permission.Mode
+	// ProtectedPaths are workspace-relative paths that file tools must hide or reject.
+	ProtectedPaths []string
 	// Sources lists files that were loaded successfully.
 	Sources []string
 	// Warnings reports safe skips, such as an untrusted project config.
@@ -46,12 +48,17 @@ type Snapshot struct {
 
 type fileDocument struct {
 	Permission filePermission `toml:"permission"`
+	Workspace  fileWorkspace  `toml:"workspace"`
 	UI         fileUI         `toml:"ui"`
 }
 
 type filePermission struct {
 	Default string     `toml:"default"`
 	Rules   []fileRule `toml:"rules"`
+}
+
+type fileWorkspace struct {
+	ProtectedPaths []string `toml:"protected_paths"`
 }
 
 type fileRule struct {
@@ -96,9 +103,10 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 			Rules:   make([]permission.Rule, 0),
 			Default: permission.ActionAsk,
 		},
-		Mode:     permission.ModeAsk,
-		Sources:  make([]string, 0, 2),
-		Warnings: make([]string, 0),
+		Mode:           permission.ModeAsk,
+		ProtectedPaths: make([]string, 0),
+		Sources:        make([]string, 0, 2),
+		Warnings:       make([]string, 0),
 	}
 
 	userPath := filepath.Join(homeDir, userConfigRelativePath)
@@ -172,6 +180,13 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 			return fmt.Errorf("permission.rules[%d]: %w", index, err)
 		}
 		snapshot.Permission.Rules = append(snapshot.Permission.Rules, rule)
+	}
+	for _, protectedPath := range document.Workspace.ProtectedPaths {
+		protectedPath = strings.TrimSpace(protectedPath)
+		if protectedPath == "" {
+			return fmt.Errorf("workspace.protected_paths contains an empty path")
+		}
+		snapshot.ProtectedPaths = append(snapshot.ProtectedPaths, protectedPath)
 	}
 	if document.UI.PermissionMode != "" {
 		mode, err := permission.ParseMode(document.UI.PermissionMode)

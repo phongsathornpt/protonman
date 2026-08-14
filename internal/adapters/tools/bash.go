@@ -9,18 +9,21 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/projectTHORN/proton/internal/adapters/workspace"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
-type bashHandler struct{}
+type bashHandler struct {
+	workspace *workspace.Workspace
+}
 
 type bashInput struct {
 	Command string `json:"command"`
 }
 
 // NewBash returns the permission-gated shell command adapter.
-func NewBash() tool.Handler {
-	return bashHandler{}
+func NewBash(workspaceRoot *workspace.Workspace) tool.Handler {
+	return bashHandler{workspace: workspaceRoot}
 }
 
 func (bashHandler) Definition() tool.Definition {
@@ -42,7 +45,10 @@ func (bashHandler) Definition() tool.Definition {
 	}
 }
 
-func (bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
+func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
+	if h.workspace == nil {
+		return tool.Result{}, fmt.Errorf("bash workspace is required")
+	}
 	var input bashInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
 		return tool.Result{}, fmt.Errorf("decode bash arguments: %w", err)
@@ -56,6 +62,7 @@ func (bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, er
 	}
 
 	command := shellCommand(ctx, input.Command)
+	command.Dir = h.workspace.Root()
 	output, err := command.CombinedOutput()
 	result := tool.Result{
 		CallID:   call.ID,
