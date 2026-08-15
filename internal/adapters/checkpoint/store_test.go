@@ -74,6 +74,10 @@ func TestFileStoreRejectsUnsafeTargetsAndIDs(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, []string{".env"})
 	store := newTestStore(t, filepath.Join(t.TempDir(), "checkpoints"), workspaceRoot)
 	outside := filepath.Join(t.TempDir(), "outside.txt")
+	directory := filepath.Join(workspaceRoot.Root(), "directory")
+	if err := os.Mkdir(directory, 0o755); err != nil {
+		t.Fatalf("Mkdir() error = %v", err)
+	}
 
 	for _, test := range []struct {
 		name string
@@ -82,7 +86,7 @@ func TestFileStoreRejectsUnsafeTargetsAndIDs(t *testing.T) {
 	}{
 		{name: "protected", path: filepath.Join(workspaceRoot.Root(), ".env"), want: workspace.ErrProtectedPath},
 		{name: "outside", path: outside, want: workspace.ErrOutsideWorkspace},
-		{name: "directory", path: workspaceRoot.Root(), want: ErrUnsupportedCheckpointTarget},
+		{name: "directory", path: directory, want: ErrUnsupportedCheckpointTarget},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := store.Capture(context.Background(), []string{test.path})
@@ -109,6 +113,76 @@ func TestFileStoreRejectsSymlinkedStoreInsideWorkspace(t *testing.T) {
 	_, err := NewFileStore(filepath.Join(alias, "checkpoints"), workspaceRoot)
 	if err == nil {
 		t.Fatal("NewFileStore() error = nil, want workspace-bound store rejection")
+	}
+}
+
+func TestSnapshotFileRejectsParentSymlinkSwap(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	outside := t.TempDir()
+	workspaceRoot, err := workspace.New(root, nil)
+	if err != nil {
+		t.Fatalf("workspace.New() error = %v", err)
+	}
+
+	parent := filepath.Join(root, "safe")
+	if err := os.Mkdir(parent, 0o755); err != nil {
+		t.Fatalf("Mkdir() error = %v", err)
+	}
+	resolved, err := workspaceRoot.Resolve(ctx, "safe/file.txt")
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if err := os.Remove(parent); err != nil {
+		t.Fatalf("Remove() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "file.txt"), []byte("outside secret"), 0o600); err != nil {
+		t.Fatalf("outside WriteFile() error = %v", err)
+	}
+	if err := os.Symlink(outside, parent); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	if _, _, err := snapshotFile(ctx, workspaceRoot, resolved); err == nil {
+		t.Fatal("snapshotFile() error = nil, want symlink escape rejection")
+	}
+}
+
+func TestWriteWorkspaceFileRejectsParentSymlinkSwap(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	outside := t.TempDir()
+	workspaceRoot, err := workspace.New(root, nil)
+	if err != nil {
+		t.Fatalf("workspace.New() error = %v", err)
+	}
+
+	parent := filepath.Join(root, "safe")
+	if err := os.Mkdir(parent, 0o755); err != nil {
+		t.Fatalf("Mkdir() error = %v", err)
+	}
+	resolved, err := workspaceRoot.Resolve(ctx, "safe/file.txt")
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if err := os.Remove(parent); err != nil {
+		t.Fatalf("Remove() error = %v", err)
+	}
+	if err := os.Symlink(outside, parent); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	err = writeWorkspaceFile(ctx, workspaceRoot, resolved, fileSnapshot{
+		Path:    "safe/file.txt",
+		Exists:  true,
+		Mode:    0o600,
+		Content: []byte("restored secret"),
+	})
+	if err == nil {
+		t.Fatal("writeWorkspaceFile() error = nil, want symlink escape rejection")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "file.txt")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("outside file exists or stat failed unexpectedly: %v", err)
 	}
 }
 
