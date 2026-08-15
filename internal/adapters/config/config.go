@@ -12,6 +12,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/projectTHORN/proton/internal/domain/permission"
+	"github.com/projectTHORN/proton/internal/domain/sandbox"
 )
 
 const (
@@ -40,6 +41,8 @@ type Snapshot struct {
 	Mode permission.Mode
 	// ProtectedPaths are workspace-relative paths that file tools must hide or reject.
 	ProtectedPaths []string
+	// Sandbox is the requested OS confinement profile. Off is the default.
+	Sandbox sandbox.Name
 	// Sources lists files that were loaded successfully.
 	Sources []string
 	// Warnings reports safe skips, such as an untrusted project config.
@@ -50,6 +53,11 @@ type fileDocument struct {
 	Permission filePermission `toml:"permission"`
 	Workspace  fileWorkspace  `toml:"workspace"`
 	UI         fileUI         `toml:"ui"`
+	Sandbox    fileSandbox    `toml:"sandbox"`
+}
+
+type fileSandbox struct {
+	Profile string `toml:"profile"`
 }
 
 type filePermission struct {
@@ -105,6 +113,7 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 		},
 		Mode:           permission.ModeAsk,
 		ProtectedPaths: make([]string, 0),
+		Sandbox:        sandbox.NameOff,
 		Sources:        make([]string, 0, 2),
 		Warnings:       make([]string, 0),
 	}
@@ -194,6 +203,13 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 			return fmt.Errorf("ui.permission_mode: %w", err)
 		}
 		snapshot.Mode = mode
+	}
+	if document.Sandbox.Profile != "" {
+		name, err := sandbox.ParseName(document.Sandbox.Profile)
+		if err != nil {
+			return fmt.Errorf("sandbox.profile: %w", err)
+		}
+		snapshot.Sandbox = name
 	}
 	return nil
 }

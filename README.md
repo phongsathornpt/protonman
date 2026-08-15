@@ -21,17 +21,28 @@ small terminal UI for inspecting and exercising the boundary.
 
 ```sh
 go run ./cmd/proton
+go run ./cmd/proton -p '/call read_file {"path":"README.md"}'
+go run ./cmd/proton -y -p '/call bash {"command":"pwd"}' --output json
+go run ./cmd/proton --acp
+go run ./cmd/proton --sandbox strict
 ```
 
 Proton uses the Bubble Tea full-screen event loop with textarea prompt
 editing, viewport scrollback, modal permission prompts, plan mode, and a TODO
 pane. The adapter is composed from Bubble Tea, Bubbles (`textarea`,
-`viewport`, `spinner`, `help`, and `key`), and Lip Gloss layout styles. Run it
-from an interactive terminal; Bubble Tea owns raw input and terminal restore.
-Its live-region layout follows Grok Build's minimal pager design: recent output
-is bottom-anchored above the TODO panel, activity/status, prompt, and compact
-info/shortcut rows. Rendered tool and model text is sanitized before it reaches
-the terminal.
+`viewport`, `spinner`, and `key`), and Lip Gloss layout styles. Run the
+TUI from an interactive terminal; without a TTY Proton refuses to start
+the fullscreen UI and requires `-p` or `--headless`. Bubble Tea owns raw
+input and terminal restore. Headless runs share the same permission
+service and fail closed in `ask` mode — pass `-y` or
+`--permission-mode always-approve` for non-interactive writes. Session
+files under `~/.proton/sessions/` now keep a redacted transcript
+(roles, text, tool names) in addition to the permission mode.
+The live-region layout follows Grok Build's minimal pager design: a welcome
+card, typed transcript blocks, a TODO panel, activity/status, prompt, and a
+compact mode/info row. Type `/` for the command menu. Shift+Tab cycles
+ask → plan → always-approve. Rendered tool and model text is sanitized before
+it reaches the terminal.
 Set `PROTON_TELEMETRY=stderr` to emit opt-in JSON lifecycle events for tool
 calls and permission decisions. Telemetry contains metadata and argument byte
 counts, never raw commands, paths, URLs, arguments, output, or error details.
@@ -39,18 +50,21 @@ counts, never raw commands, paths, URLs, arguments, output, or error details.
 Inside Proton:
 
 ```text
-:help
-:tools
-:call read_file {"path":"README.md"}
-:call bash {"command":"pwd"}
-:call git_status {}
-:call checkpoint_restore {"checkpoint_id":"checkpoint-..."}
-:mode always-approve
-:mode ask
-:quit
+/help
+/tools
+/call read_file {"path":"README.md"}
+/call bash {"command":"pwd"}
+/call git_status {}
+/call checkpoint_restore {"checkpoint_id":"checkpoint-..."}
+/mode always-approve
+/always-approve
+/mode ask
+/quit
 ```
 
-The default mode is `ask`. A permission prompt accepts `y` for one call, `s`
+Colon prefixes (`:help`) remain aliases. `!` on an empty prompt runs `bash`
+through the same permission service. The default mode is `ask`. A permission
+prompt is an option list (`j`/`k`, `1`–`3`, Enter) with `y` for one call, `s`
 for an exact-request grant lasting for the session, and `n` to deny. Explicit
 policy denies remain effective even in always-approve mode. Session grants do
 not mutate the static policy.
@@ -76,6 +90,9 @@ pattern = "*.md"
 
 [ui]
 permission_mode = "ask"
+
+[sandbox]
+profile = "off"
 
 [workspace]
 protected_paths = [".env", "secrets", "**/*.pem"]
@@ -106,6 +123,11 @@ permission service. Concrete MCP transports are intentionally separate.
 The tool-call service also exposes a redacted observer boundary for structured
 telemetry; observers receive lifecycle metadata without permission details or
 tool results.
+Sandbox profiles (`off`, `workspace`, `read-only`, `strict`) confine child
+`bash` via `sandbox-exec` on macOS or `bwrap`/`unshare` on Linux, and
+`web_fetch` honors the same network policy. A requested confining profile
+fails closed when the host cannot enforce it. `--acp` serves line-delimited
+JSON-RPC (`initialize`, `session/new`, `session/prompt`) over stdio.
 
 ## Verify
 

@@ -80,13 +80,20 @@ commit.
   TODOs, activity/status, prompt info, and shortcut rows.
 - [x] Keep the TUI as an adapter: it must not own policy or execute tools
   directly.
+- [x] Port Grok-feel chrome: GrokNight theme, welcome card, `/` slash menu
+  (colon alias), Shift+Tab mode cycle, option-list permissions, typed
+  transcript blocks, `!` bash prefix, and streamed turn events.
 
 ### Step 6 — safety and operations
 
-- [ ] Add OS-level sandbox profiles and network restrictions.
+- [x] Add OS-level sandbox profiles and network restrictions.
 - [x] Add redacted structured telemetry for tool and permission events.
-- [ ] Add headless/ACP entry points and session persistence.
-- [ ] Run race, fuzz, integration, and end-to-end tests in CI.
+- [x] Add a headless `-p` / `--headless` entry point that uses the same
+  tool-call service. Ask mode stays fail-closed (no interactive prompt).
+- [x] Persist the conversation transcript with the session (content and tool
+  names only; never tool arguments).
+- [x] Run `go vet`, `go test`, and `go test -race` in CI.
+- [x] Add a concrete ACP transport and fuzz / end-to-end suites.
 
 ## Grok Build mapping
 
@@ -98,6 +105,6 @@ commit.
 | `xai-grok-pager` | `internal/adapters/tui` |
 | shell/workspace composition | `cmd/proton` |
 
-The provider-neutral turn loop deliberately stops before a concrete model
-transport, MCP, and OS sandboxing. Those features should build on the tested
-permission and dispatch boundary instead of creating a second execution path.
+The provider-neutral turn loop still stops before a live model transport.
+Sandbox, headless, and ACP all go through the same permission-aware tool
+service instead of creating a second execution path.
