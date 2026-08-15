@@ -117,7 +117,7 @@ separate, regression-tested changes rather than broad refactors.
 - [x] Harden edit and checkpoint filesystem I/O against symlink TOCTOU with
   pinned `os.Root` parent handles, no-symlink mutation paths, `SameFile`
   identity checks, and root-relative temp/rename/remove operations.
-- [ ] Add OS integration tests that execute the sandbox boundary, including
+- [x] Add OS integration tests that execute the sandbox boundary, including
   denied writes outside the workspace, allowed workspace writes, read-only
   denial, runtime command availability, and network blocking.
 
