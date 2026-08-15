@@ -16,6 +16,11 @@ import (
 // PermissionPrompt resolves an interactive permission request.
 type PermissionPrompt func(context.Context, permission.Request) (permission.Resolution, error)
 
+// CallGuard can fail closed before static policy, grants, or permission mode
+// evaluation. Adapters use it for temporary execution constraints such as a
+// read-only planning mode without weakening the shared policy layer.
+type CallGuard func(context.Context, permission.Request) error
+
 // ErrInvalidService indicates that an application service dependency is
 // missing or invalid.
 var ErrInvalidService = errors.New("invalid tool-call service")
@@ -68,6 +73,7 @@ type Service struct {
 	mu     sync.RWMutex
 	mode   permission.Mode
 	prompt PermissionPrompt
+	guard  CallGuard
 	grants map[permission.GrantKey]struct{}
 }
 
@@ -127,6 +133,14 @@ func (s *Service) SetPrompt(prompt PermissionPrompt) {
 	s.mu.Unlock()
 }
 
+// SetCallGuard replaces the temporary fail-closed guard evaluated before the
+// normal permission policy. Passing nil removes the guard.
+func (s *Service) SetCallGuard(guard CallGuard) {
+	s.mu.Lock()
+	s.guard = guard
+	s.mu.Unlock()
+}
+
 // Call evaluates permission and executes one tool call if authorized.
 func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error) {
 	telemetry := callTelemetry{
@@ -175,6 +189,23 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		Arguments: append(json.RawMessage(nil), call.Arguments...),
 	}
 
+	if guardErr := s.guardCall(ctx, request); guardErr != nil {
+		resolution := permission.Resolution{
+			Action: permission.ActionDeny,
+			Reason: guardErr.Error(),
+		}
+		s.observePermission(ctx, telemetry, resolution)
+		permissionErr := fmt.Errorf("%w: %s", ErrPermissionDenied, resolution.Reason)
+		result := tool.Result{
+			CallID:   call.ID,
+			ToolName: call.Name,
+			Denied:   true,
+			Failure:  &tool.Failure{Code: tool.ErrorCodePermissionDenied, Message: permissionErr.Error()},
+		}
+		s.observeCallResult(ctx, telemetry, result, permissionErr)
+		return result, permissionErr
+	}
+
 	resolution := s.authorize(ctx, request)
 	s.observePermission(ctx, telemetry, resolution)
 	if resolution.Action != permission.ActionAllow {
@@ -209,6 +240,16 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 	}
 	s.observeCallResult(ctx, telemetry, result, nil)
 	return result, nil
+}
+
+func (s *Service) guardCall(ctx context.Context, request permission.Request) error {
+	s.mu.RLock()
+	guard := s.guard
+	s.mu.RUnlock()
+	if guard == nil {
+		return nil
+	}
+	return guard(ctx, request)
 }
 
 func (s *Service) authorize(ctx context.Context, request permission.Request) permission.Resolution {
