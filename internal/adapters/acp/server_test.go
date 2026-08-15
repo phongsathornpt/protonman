@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/projectTHORN/proton/internal/application/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/application/turn"
@@ -49,7 +51,10 @@ func TestACPInitializeAndPrompt(t *testing.T) {
 }
 
 func TestACPCancelStopsInFlightPrompt(t *testing.T) {
-	runner := &blockingACPRunner{canceled: make(chan struct{})}
+	runner := &blockingACPRunner{
+		started:  make(chan struct{}),
+		canceled: make(chan struct{}),
+	}
 	server := newTestServerWithRunner(t, permission.ModeAlwaysApprove, runner)
 	created, _, err := server.dispatch(context.Background(), rpcRequest{Method: "session/new"})
 	if err != nil {
@@ -57,15 +62,40 @@ func TestACPCancelStopsInFlightPrompt(t *testing.T) {
 	}
 	sessionID := created.(sessionNewResult).SessionID
 
-	input := strings.Join([]string{
-		`{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":"` + sessionID + `","prompt":[{"type":"text","text":"wait"}]}}`,
-		`{"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"` + sessionID + `"}}`,
-	}, "\n") + "\n"
+	reader, writer := io.Pipe()
 	var output bytes.Buffer
-	if err := server.Serve(context.Background(), strings.NewReader(input), &output); err != nil {
-		t.Fatalf("Serve() error = %v", err)
+	serveDone := make(chan error, 1)
+	go func() {
+		serveDone <- server.Serve(context.Background(), reader, &output)
+	}()
+
+	prompt := `{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":"` + sessionID + `","prompt":[{"type":"text","text":"wait"}]}}` + "\n"
+	if _, err := io.WriteString(writer, prompt); err != nil {
+		t.Fatalf("write prompt error = %v", err)
+	}
+	select {
+	case <-runner.started:
+	case <-time.After(2 * time.Second):
+		_ = writer.Close()
+		t.Fatal("runner did not start prompt")
 	}
 
+	cancel := `{"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"` + sessionID + `"}}` + "\n"
+	if _, err := io.WriteString(writer, cancel); err != nil {
+		t.Fatalf("write cancel error = %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close ACP input error = %v", err)
+	}
+
+	select {
+	case err := <-serveDone:
+		if err != nil {
+			t.Fatalf("Serve() error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Serve() did not finish after cancellation")
+	}
 	select {
 	case <-runner.canceled:
 	default:
@@ -155,10 +185,12 @@ func (r acpRegistry) Definitions() []tool.Definition {
 }
 
 type blockingACPRunner struct {
+	started  chan struct{}
 	canceled chan struct{}
 }
 
 func (r *blockingACPRunner) Run(ctx context.Context, _ []model.Message, _ applicationturn.Sink) (applicationturn.Result, error) {
+	close(r.started)
 	<-ctx.Done()
 	close(r.canceled)
 	return applicationturn.Result{}, ctx.Err()
