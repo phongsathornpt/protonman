@@ -7,8 +7,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/projectTHORN/proton/internal/adapters/sandbox"
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
 	domaincheckpoint "github.com/projectTHORN/proton/internal/domain/checkpoint"
+	domainsandbox "github.com/projectTHORN/proton/internal/domain/sandbox"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
@@ -36,15 +38,41 @@ func NewRegistry(handlers ...tool.Handler) (*Registry, error) {
 	return registry, nil
 }
 
+// RegistryExtra configures optional sandbox and checkpoint adapters.
+type RegistryExtra struct {
+	Launcher sandbox.Launcher
+	Network  domainsandbox.NetworkPolicy
+}
+
 // NewDefaultRegistry creates the default workspace-aware coding tool set.
-func NewDefaultRegistry(workspaceRoot *workspace.Workspace, stores ...domaincheckpoint.Store) (*Registry, error) {
+func NewDefaultRegistry(workspaceRoot *workspace.Workspace, extras ...any) (*Registry, error) {
 	if workspaceRoot == nil {
 		return nil, fmt.Errorf("create default registry: workspace is required")
+	}
+	var stores []domaincheckpoint.Store
+	var extra RegistryExtra
+	for _, item := range extras {
+		switch value := item.(type) {
+		case domaincheckpoint.Store:
+			stores = append(stores, value)
+		case RegistryExtra:
+			extra = value
+		case sandbox.Launcher:
+			extra.Launcher = value
+		case domainsandbox.NetworkPolicy:
+			extra.Network = value
+		}
+	}
+	if extra.Network.Allowed == nil {
+		extra.Network.Allowed = []domainsandbox.Origin{}
+	}
+	if extra.Network.Mode == domainsandbox.NetworkUnknown {
+		extra.Network.Mode = domainsandbox.NetworkUnrestricted
 	}
 	checkpointStore := selectCheckpointStore(stores)
 	return NewRegistry(
 		NewReadFile(workspaceRoot),
-		NewBash(workspaceRoot),
+		NewBash(workspaceRoot, extra.Launcher),
 		NewWriteFile(workspaceRoot, checkpointStore),
 		NewSearchReplace(workspaceRoot, checkpointStore),
 		NewApplyPatch(workspaceRoot, checkpointStore),
@@ -52,6 +80,7 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, stores ...domainchec
 		NewListDir(workspaceRoot),
 		NewGitStatus(workspaceRoot),
 		NewCheckpointRestore(checkpointStore),
+		NewWebFetch(extra.Network),
 	)
 }
 

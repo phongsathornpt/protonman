@@ -7,11 +7,92 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/projectTHORN/proton/internal/application/toolcall"
+	applicationturn "github.com/projectTHORN/proton/internal/application/turn"
+	domainmodel "github.com/projectTHORN/proton/internal/domain/model"
 	"github.com/projectTHORN/proton/internal/domain/permission"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
+
+func TestCompletedTodoPaneIsHidden(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{
+		{Text: "done", Done: true},
+		{Text: "also done", Done: true},
+	})
+	model.resize(80, 24)
+	if strings.Contains(model.View(), "TODO") {
+		t.Fatalf("completed TODO pane still visible: %s", model.View())
+	}
+}
+
+func TestWelcomeSitsAtTopWithoutFloatingBox(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+	view := model.View()
+	plain := sanitizeBubbleText(view)
+	if idx := strings.Index(plain, "Proton"); idx < 0 || idx > 8 {
+		t.Fatalf("welcome is not at the top of the view: %q", plain[:minInt(80, len(plain))])
+	}
+	if strings.Count(view, "╭") > 1 {
+		t.Fatalf("idle view has extra boxes: %s", view)
+	}
+}
+
+func TestTodoPaneShowsPendingBeforeCompleted(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{
+		{Text: "already done", Done: true},
+		{Text: "still open", Done: false},
+		{Text: "also done", Done: true},
+	})
+	model.resize(80, 24)
+	view := model.View()
+	if !strings.Contains(view, "still open") {
+		t.Fatalf("todo pane hid the pending item: %s", view)
+	}
+	pendingAt := strings.Index(view, "still open")
+	doneAt := strings.Index(view, "already done")
+	if doneAt >= 0 && pendingAt > doneAt {
+		t.Fatal("completed todo rendered before pending todo")
+	}
+}
+
+func TestPromptIsSingleRow(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+	if model.prompt.Height() != 1 {
+		t.Fatalf("prompt height = %d, want 1", model.prompt.Height())
+	}
+	if strings.Count(model.promptView(), "❯") != 1 {
+		t.Fatalf("prompt chrome repeated:\n%s", model.promptView())
+	}
+}
+
+func TestLiveViewFitsTerminal(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{Text: "one", Done: false}})
+	model.resize(80, 24)
+	height := lipgloss.Height(model.View())
+	if height > 24 {
+		t.Fatalf("view height = %d, want <= 24:\n%s", height, model.View())
+	}
+}
+
+func TestBubbleModelAcceptsTypedRunes(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	if !model.prompt.Focused() {
+		t.Fatal("prompt is not focused; textarea will drop every key")
+	}
+
+	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	model = updated.(*bubbleModel)
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	model = updated.(*bubbleModel)
+
+	if got, want := model.prompt.Value(), "hi"; got != want {
+		t.Fatalf("typed value = %q, want %q", got, want)
+	}
+}
 
 func TestBubbleModelRendersComponentLayout(t *testing.T) {
 	registry, _ := newBubbleTestRegistry()
@@ -23,6 +104,7 @@ func TestBubbleModelRendersComponentLayout(t *testing.T) {
 		[]TodoItem{{Text: "ship Bubble Tea", Done: false}},
 		nil,
 		newPermissionBridge(),
+		"/tmp/proton",
 	)
 	model.resize(80, 24)
 	model.appendLine("assistant: ready")
@@ -30,11 +112,11 @@ func TestBubbleModelRendersComponentLayout(t *testing.T) {
 
 	view := model.View()
 	for _, expected := range []string{
-		"PROTON",
+		"Proton",
 		"assistant: ready",
 		"TODO 0/1 complete",
 		"ship Bubble Tea",
-		"permission: ask",
+		"ask",
 		"❯",
 		"ctrl+l",
 	} {
@@ -54,6 +136,7 @@ func TestBubbleModelRunsToolCommandThroughService(t *testing.T) {
 		emptyTodoItems(),
 		nil,
 		newPermissionBridge(),
+		"",
 	)
 	model.resize(80, 24)
 	model.prompt.SetValue(`:call read_file {"path":"README.md"}`)
@@ -67,12 +150,12 @@ func TestBubbleModelRunsToolCommandThroughService(t *testing.T) {
 		t.Fatalf("tool command message = %T, want toolResultMsg", message)
 	}
 	updated, _ := model.Update(resultMessage)
-	model = updated.(bubbleModel)
+	model = updated.(*bubbleModel)
 	if handler.calls != 1 {
 		t.Fatalf("handler calls = %d, want 1", handler.calls)
 	}
-	if !strings.Contains(strings.Join(model.scrollback, "\n"), "file contents") {
-		t.Fatalf("scrollback does not contain tool output: %#v", model.scrollback)
+	if !strings.Contains(plainTranscript(model), "file contents") {
+		t.Fatalf("scrollback does not contain tool output: %#v", model.blocks)
 	}
 }
 
@@ -125,6 +208,7 @@ func TestBubbleModelPermissionModalRespondsToSessionGrant(t *testing.T) {
 		emptyTodoItems(),
 		nil,
 		bridge,
+		"",
 	)
 	response := make(chan permissionResponse, 1)
 	model.modal = &permissionRequest{
@@ -140,7 +224,7 @@ func TestBubbleModelPermissionModalRespondsToSessionGrant(t *testing.T) {
 	if command != nil {
 		t.Fatalf("permission update command = %v, want nil", command)
 	}
-	model = updated.(bubbleModel)
+	model = updated.(*bubbleModel)
 	if model.modal != nil {
 		t.Fatal("permission modal remains open after session grant")
 	}
@@ -167,6 +251,7 @@ func TestBubbleModelHistoryUsesTextarea(t *testing.T) {
 		emptyTodoItems(),
 		nil,
 		newPermissionBridge(),
+		"",
 	)
 	model.prompt.SetValue(":help")
 	if command := model.submit(); command != nil {
@@ -190,6 +275,445 @@ func TestSanitizeBubbleTextRemovesControlCharacters(t *testing.T) {
 	if strings.Contains(got, "\n") {
 		t.Fatalf("sanitized text contains newline: %q", got)
 	}
+}
+
+func TestEmptyStateWithoutRunnerGuidesSlashCommands(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+
+	view := model.View()
+	for _, expected := range []string{
+		"No model configured",
+		"Type a message or /command",
+		"Proton",
+	} {
+		if !strings.Contains(view, expected) {
+			t.Fatalf("empty state view does not contain %q: %s", expected, view)
+		}
+	}
+	if got, want := model.prompt.Placeholder, "Type a message or /command…"; got != want {
+		t.Fatalf("placeholder = %q, want %q", got, want)
+	}
+}
+
+func TestSubmitWhileBusyQueuesDraft(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAlwaysApprove, emptyTodoItems())
+	model.resize(80, 24)
+	model.busy = true
+	model.prompt.SetValue(":help")
+
+	if command := model.submit(); command != nil {
+		t.Fatalf("busy submit command = %v, want nil", command)
+	}
+	if got := model.prompt.Value(); got != "" {
+		t.Fatalf("busy submit cleared prompt = %q, want empty", got)
+	}
+	if len(model.queue) != 1 || model.queue[0] != ":help" {
+		t.Fatalf("queue = %#v, want [:help]", model.queue)
+	}
+	if !strings.Contains(plainTranscript(model), "queued (1): :help") {
+		t.Fatalf("scrollback missing queue notice: %#v", model.blocks)
+	}
+
+	model.busy = false
+	if command := model.drainQueue(); command != nil {
+		t.Fatalf("queued :help command = %v, want nil", command)
+	}
+	if len(model.queue) != 0 {
+		t.Fatalf("queue after drain = %#v, want empty", model.queue)
+	}
+	if !strings.Contains(plainTranscript(model), "/help") {
+		t.Fatalf("drained :help did not render: %#v", model.blocks)
+	}
+}
+
+func TestPermissionCardOverlaysTranscript(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+	model.appendLine("assistant: ready")
+	model.refreshViewport()
+	model.modal = &permissionRequest{
+		request: permission.Request{
+			ToolName: "bash",
+			ToolKind: permission.ToolBash,
+			Detail:   "rm -rf tmp",
+		},
+		response: make(chan permissionResponse, 1),
+	}
+
+	if !strings.Contains(plainTranscript(model), "assistant: ready") {
+		t.Fatalf("overlay replaced the transcript: %#v", model.blocks)
+	}
+	view := model.View()
+	for _, expected := range []string{
+		"Permission required",
+		"bash",
+		"Allow for this request this session",
+		"esc read",
+	} {
+		if !strings.Contains(view, expected) {
+			t.Fatalf("overlay view does not contain %q: %s", expected, view)
+		}
+	}
+}
+
+func TestPermissionEscParksForScroll(t *testing.T) {
+	response := make(chan permissionResponse, 1)
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+	model.modal = &permissionRequest{
+		request: permission.Request{
+			ToolName: "read_file",
+			ToolKind: permission.ToolRead,
+			Detail:   "README.md",
+		},
+		response: response,
+	}
+
+	updated, command := model.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if command != nil {
+		t.Fatalf("esc park command = %v, want nil", command)
+	}
+	model = updated.(*bubbleModel)
+	if model.modal == nil {
+		t.Fatal("esc dismissed the permission card")
+	}
+	if !model.modalParked {
+		t.Fatal("esc did not park the permission card")
+	}
+	if !strings.Contains(model.View(), "tab return") {
+		t.Fatalf("parked view missing return hint: %s", model.View())
+	}
+
+	updated, command = model.Update(tea.KeyMsg{Type: tea.KeyTab})
+	if command != nil {
+		t.Fatalf("tab command = %v, want nil", command)
+	}
+	model = updated.(*bubbleModel)
+	if model.modalParked {
+		t.Fatal("tab did not return focus to the permission card")
+	}
+
+	updated, command = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	if command != nil {
+		t.Fatalf("deny command = %v, want nil", command)
+	}
+	model = updated.(*bubbleModel)
+	if model.modal != nil {
+		t.Fatal("deny left the permission card open")
+	}
+	select {
+	case result := <-response:
+		if result.resolution.Action != permission.ActionDeny {
+			t.Fatalf("permission action = %s, want deny", result.resolution.Action)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("deny did not send a response")
+	}
+}
+
+func TestPermissionOptionListEnterAndNumbers(t *testing.T) {
+	response := make(chan permissionResponse, 1)
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.modal = &permissionRequest{
+		request: permission.Request{
+			ToolName: "bash",
+			ToolKind: permission.ToolBash,
+			Detail:   "ls",
+		},
+		response: response,
+	}
+
+	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyDown})
+	model = updated.(*bubbleModel)
+	if model.permIndex != 1 {
+		t.Fatalf("permIndex after down = %d, want 1", model.permIndex)
+	}
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model = updated.(*bubbleModel)
+	if model.modal != nil {
+		t.Fatal("enter left permission modal open")
+	}
+	select {
+	case result := <-response:
+		if result.resolution.Scope != permission.GrantScopeSession {
+			t.Fatalf("enter on session row scope = %v", result.resolution.Scope)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("enter did not resolve permission")
+	}
+
+	response = make(chan permissionResponse, 1)
+	model.modal = &permissionRequest{
+		request:  permission.Request{ToolName: "bash", ToolKind: permission.ToolBash},
+		response: response,
+	}
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	model = updated.(*bubbleModel)
+	select {
+	case result := <-response:
+		if result.resolution.Action != permission.ActionDeny {
+			t.Fatalf("number 3 action = %s, want deny", result.resolution.Action)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("number shortcut did not resolve")
+	}
+}
+
+func TestAppendTurnResultCoalescesAssistantText(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.appendTurnResult(
+		[]applicationturn.Event{
+			{Kind: applicationturn.EventTextDelta, Text: "hello"},
+			{Kind: applicationturn.EventTextDelta, Text: " world"},
+		},
+		applicationturn.Result{Message: domainmodel.Message{Content: "hello world"}},
+		nil,
+	)
+
+	plain := plainTranscript(model)
+	if strings.Count(plain, "hello world") != 1 {
+		t.Fatalf("assistant text count = %d, want 1: %q", strings.Count(plain, "hello world"), plain)
+	}
+	if strings.Contains(plain, "assistant: hello") {
+		t.Fatalf("text deltas were not coalesced: %q", plain)
+	}
+}
+
+func TestAppendTurnResultPreservesToolNewlines(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.appendTurnResult(
+		[]applicationturn.Event{
+			{
+				Kind: applicationturn.EventToolResult,
+				Call: tool.Call{Name: "read_file"},
+				Result: tool.Result{
+					Output: "alpha\nbeta\ngamma",
+				},
+			},
+		},
+		applicationturn.Result{},
+		nil,
+	)
+
+	plain := plainTranscript(model)
+	if !strings.Contains(plain, "alpha\nbeta\ngamma") {
+		t.Fatalf("tool output newlines were flattened: %q", plain)
+	}
+}
+
+func TestRefreshViewportPreservesScrollWhenNotFollowing(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+	for range 40 {
+		model.appendLine("line")
+	}
+	model.refreshViewport()
+	model.viewport.GotoTop()
+	model.followTail = false
+
+	model.appendLine("tail")
+	model.refreshViewport()
+	if model.viewport.AtBottom() {
+		t.Fatal("refreshViewport followed the tail after the user scrolled up")
+	}
+	if model.followTail {
+		t.Fatal("followTail was re-enabled after a mid-scroll append")
+	}
+}
+
+func TestSlashDropdownFiltersAndTabAccepts(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+	model.prompt.SetValue("/he")
+	if !model.slashOpen() {
+		t.Fatal("slash dropdown did not open for /he")
+	}
+	matches := model.slashMatches()
+	if len(matches) != 1 || matches[0].name != "help" {
+		t.Fatalf("slash matches = %#v, want help", matches)
+	}
+	applied, command := model.acceptSlash(false)
+	if !applied || command != nil {
+		t.Fatalf("tab accept applied=%v command=%v", applied, command)
+	}
+	if got := model.prompt.Value(); got != "/help" {
+		t.Fatalf("tab accept value = %q, want /help", got)
+	}
+}
+
+func TestColonAliasDispatchesHelp(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.prompt.SetValue(":help")
+	if command := model.submit(); command != nil {
+		t.Fatalf("colon help command = %v, want nil", command)
+	}
+	if !strings.Contains(plainTranscript(model), "/call") {
+		t.Fatalf("colon alias did not render help: %q", plainTranscript(model))
+	}
+}
+
+func TestShiftTabCyclesAskPlanAlwaysApprove(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	model = updated.(*bubbleModel)
+	if !model.planMode {
+		t.Fatal("first shift+tab did not enter plan")
+	}
+	if model.service.Mode() != permission.ModeAsk {
+		t.Fatalf("plan cycle changed mode = %s", model.service.Mode())
+	}
+
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	model = updated.(*bubbleModel)
+	if model.planMode {
+		t.Fatal("second shift+tab left plan on")
+	}
+	if model.service.Mode() != permission.ModeAlwaysApprove {
+		t.Fatalf("second shift+tab mode = %s, want always-approve", model.service.Mode())
+	}
+
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	model = updated.(*bubbleModel)
+	if model.planMode || model.service.Mode() != permission.ModeAsk {
+		t.Fatalf("third shift+tab = plan=%v mode=%s", model.planMode, model.service.Mode())
+	}
+}
+
+func TestWelcomeCardReprintsAfterClear(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+	model.appendLine("gone")
+	model.prompt.SetValue("/clear")
+	_ = model.submit()
+	model.refreshViewport()
+	view := model.View()
+	if strings.Contains(plainTranscript(model), "gone") {
+		t.Fatal("clear left transcript body")
+	}
+	if !strings.Contains(view, "Proton") || !strings.Contains(view, "No model configured") {
+		t.Fatalf("clear did not reprint welcome: %s", view)
+	}
+}
+
+func TestStartTurnStreamsSinkEvents(t *testing.T) {
+	runner := &scriptedRunner{
+		events: []applicationturn.Event{
+			{Kind: applicationturn.EventTextDelta, Text: "hello"},
+			{Kind: applicationturn.EventTextDelta, Text: " stream"},
+		},
+		result: applicationturn.Result{
+			Message: domainmodel.Message{Role: domainmodel.RoleAssistant, Content: "hello stream"},
+		},
+	}
+	registry, _ := newBubbleTestRegistry()
+	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
+	model := newBubbleModel(
+		context.Background(),
+		service,
+		registry,
+		emptyTodoItems(),
+		runner,
+		newPermissionBridge(),
+		"",
+	)
+	command := model.startTurn("hi")
+	if command == nil {
+		t.Fatal("startTurn command = nil")
+	}
+	for range 3 {
+		message := command()
+		updated, next := model.Update(message)
+		model = updated.(*bubbleModel)
+		command = next
+		if command == nil {
+			break
+		}
+	}
+	plain := plainTranscript(model)
+	if !strings.Contains(plain, "hello stream") {
+		t.Fatalf("streamed transcript = %q, want hello stream", plain)
+	}
+	if model.busy {
+		t.Fatal("model still busy after streamed turn")
+	}
+}
+
+type scriptedRunner struct {
+	events []applicationturn.Event
+	result applicationturn.Result
+	err    error
+}
+
+func (r *scriptedRunner) Run(
+	ctx context.Context,
+	_ []domainmodel.Message,
+	sink applicationturn.Sink,
+) (applicationturn.Result, error) {
+	for _, event := range r.events {
+		if err := sink(ctx, event); err != nil {
+			return applicationturn.Result{}, err
+		}
+	}
+	return r.result, r.err
+}
+
+func TestBangPrefixSubmitsBashCall(t *testing.T) {
+	registry := newNamedTestRegistry(tool.Definition{
+		Name:                "bash",
+		Description:         "run a shell command",
+		Kind:                tool.KindBash,
+		PermissionDetailKey: "command",
+	})
+	service := newBubbleTestService(t, registry, permission.ModeAlwaysApprove, permission.Config{})
+	model := newBubbleModel(
+		context.Background(),
+		service,
+		registry,
+		emptyTodoItems(),
+		nil,
+		newPermissionBridge(),
+		"",
+	)
+	model.setBashMode(true)
+	model.prompt.SetValue("pwd")
+	command := model.submit()
+	if command == nil {
+		t.Fatal("bash submit command = nil")
+	}
+	if model.bashMode {
+		t.Fatal("bash mode stayed on after submit")
+	}
+	message := command()
+	resultMessage, ok := message.(toolResultMsg)
+	if !ok {
+		t.Fatalf("bash message = %T, want toolResultMsg", message)
+	}
+	if resultMessage.err != nil {
+		t.Fatalf("bash call error = %v", resultMessage.err)
+	}
+	if registry.handler.calls != 1 {
+		t.Fatalf("bash handler calls = %d, want 1", registry.handler.calls)
+	}
+}
+
+func newTestBubbleModel(
+	t *testing.T,
+	mode permission.Mode,
+	todo []TodoItem,
+) *bubbleModel {
+	t.Helper()
+	registry, _ := newBubbleTestRegistry()
+	service := newBubbleTestService(t, registry, mode, permission.Config{})
+	return newBubbleModel(
+		context.Background(),
+		service,
+		registry,
+		todo,
+		nil,
+		newPermissionBridge(),
+		"/tmp/proton",
+	)
 }
 
 func emptyTodoItems() []TodoItem {
@@ -230,15 +754,18 @@ func (r *bubbleTestRegistry) Definitions() []tool.Definition {
 }
 
 func newBubbleTestRegistry() (*bubbleTestRegistry, *bubbleTestHandler) {
-	handler := &bubbleTestHandler{
-		definition: tool.Definition{
-			Name:                "read_file",
-			Description:         "read a file",
-			Kind:                tool.KindRead,
-			PermissionDetailKey: "path",
-		},
-	}
-	return &bubbleTestRegistry{handler: handler}, handler
+	registry := newNamedTestRegistry(tool.Definition{
+		Name:                "read_file",
+		Description:         "read a file",
+		Kind:                tool.KindRead,
+		PermissionDetailKey: "path",
+	})
+	return registry, registry.handler
+}
+
+func newNamedTestRegistry(definition tool.Definition) *bubbleTestRegistry {
+	handler := &bubbleTestHandler{definition: definition}
+	return &bubbleTestRegistry{handler: handler}
 }
 
 func newBubbleTestService(

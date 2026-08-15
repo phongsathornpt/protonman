@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/domain/permission"
+	"github.com/projectTHORN/proton/internal/domain/sandbox"
 )
 
 func TestLoadLayeredConfigRequiresProjectTrust(t *testing.T) {
@@ -109,6 +110,23 @@ protected_paths = ["**/*.pem"]
 	}
 	if got, want := len(trusted.ProtectedPaths), 3; got != want {
 		t.Fatalf("trusted protected paths = %d, want %d", got, want)
+	}
+}
+
+func TestLoadSandboxProfile(t *testing.T) {
+	homeDir := t.TempDir()
+	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[sandbox]
+profile = "strict"
+`)
+	snapshot, err := Load(context.Background(), Options{
+		HomeDir: homeDir,
+		WorkDir: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if snapshot.Sandbox != sandbox.NameStrict {
+		t.Fatalf("sandbox = %s, want strict", snapshot.Sandbox)
 	}
 }
 

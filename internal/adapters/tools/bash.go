@@ -9,12 +9,14 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/projectTHORN/proton/internal/adapters/sandbox"
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
 type bashHandler struct {
 	workspace *workspace.Workspace
+	launcher  sandbox.Launcher
 }
 
 type bashInput struct {
@@ -22,8 +24,12 @@ type bashInput struct {
 }
 
 // NewBash returns the permission-gated shell command adapter.
-func NewBash(workspaceRoot *workspace.Workspace) tool.Handler {
-	return bashHandler{workspace: workspaceRoot}
+func NewBash(workspaceRoot *workspace.Workspace, launchers ...sandbox.Launcher) tool.Handler {
+	var launcher sandbox.Launcher
+	if len(launchers) > 0 {
+		launcher = launchers[0]
+	}
+	return bashHandler{workspace: workspaceRoot, launcher: launcher}
 }
 
 func (bashHandler) Definition() tool.Definition {
@@ -61,8 +67,10 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		return tool.Result{}, fmt.Errorf("before bash command: %w", err)
 	}
 
-	command := shellCommand(ctx, input.Command)
-	command.Dir = h.workspace.Root()
+	command, err := h.command(ctx, input.Command)
+	if err != nil {
+		return tool.Result{}, err
+	}
 	output, err := command.CombinedOutput()
 	result := tool.Result{
 		CallID:   call.ID,
@@ -86,9 +94,18 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	return result, fmt.Errorf("bash command failed: %w", err)
 }
 
-func shellCommand(ctx context.Context, command string) *exec.Cmd {
-	if runtime.GOOS == "windows" {
-		return exec.CommandContext(ctx, "cmd.exe", "/C", command)
+func (h bashHandler) command(ctx context.Context, command string) (*exec.Cmd, error) {
+	if h.launcher != nil {
+		return h.launcher.Command(ctx, h.workspace.Root(), command)
 	}
-	return exec.CommandContext(ctx, "sh", "-c", command)
+	return shellCommand(ctx, h.workspace.Root(), command), nil
+}
+
+func shellCommand(ctx context.Context, dir string, command string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	if runtime.GOOS == "windows" {
+		cmd = exec.CommandContext(ctx, "cmd.exe", "/C", command)
+	}
+	cmd.Dir = dir
+	return cmd
 }

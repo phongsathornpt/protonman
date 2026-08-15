@@ -14,7 +14,11 @@ import (
 	"github.com/projectTHORN/proton/internal/domain/permission"
 )
 
-const currentStateVersion = 1
+const (
+	currentStateVersion = 1
+	maxStoredMessages   = 200
+	maxStoredContent    = 32 * 1024
+)
 
 // State is the persisted portion of a Proton session.
 type State struct {
@@ -22,8 +26,19 @@ type State struct {
 	Version int `json:"version"`
 	// PermissionMode is the configured mode spelling, not an enum number.
 	PermissionMode string `json:"permission_mode"`
+	// Messages is the redacted conversation transcript. Tool arguments are
+	// never stored.
+	Messages []Message `json:"messages,omitempty"`
 	// UpdatedAt records the last successful save.
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// Message is one persisted conversation turn without tool arguments.
+type Message struct {
+	Role       string `json:"role"`
+	Content    string `json:"content,omitempty"`
+	ToolName   string `json:"tool_name,omitempty"`
+	ToolCallID string `json:"tool_call_id,omitempty"`
 }
 
 // ErrInvalidSessionID indicates that an ID could escape the session store
@@ -74,6 +89,9 @@ func (s *FileStore) Load(ctx context.Context, sessionID string) (State, bool, er
 	if _, err := permission.ParseMode(state.PermissionMode); err != nil {
 		return State{}, false, fmt.Errorf("session permission mode: %w", err)
 	}
+	if err := validateMessages(state.Messages); err != nil {
+		return State{}, false, fmt.Errorf("session messages: %w", err)
+	}
 	return state, true, nil
 }
 
@@ -93,6 +111,10 @@ func (s *FileStore) Save(ctx context.Context, sessionID string, state State) (sa
 	}
 	if _, err := permission.ParseMode(state.PermissionMode); err != nil {
 		return fmt.Errorf("session permission mode: %w", err)
+	}
+	state.Messages = sanitizeMessages(state.Messages)
+	if err := validateMessages(state.Messages); err != nil {
+		return fmt.Errorf("session messages: %w", err)
 	}
 	if state.UpdatedAt.IsZero() {
 		state.UpdatedAt = time.Now().UTC()
@@ -146,6 +168,34 @@ func (s *FileStore) Save(ctx context.Context, sessionID string, state State) (sa
 
 func (s *FileStore) path(sessionID string) string {
 	return filepath.Join(s.root, sessionID+".json")
+}
+
+func sanitizeMessages(messages []Message) []Message {
+	if len(messages) == 0 {
+		return []Message{}
+	}
+	if len(messages) > maxStoredMessages {
+		messages = messages[len(messages)-maxStoredMessages:]
+	}
+	cleaned := make([]Message, 0, len(messages))
+	for _, message := range messages {
+		if len(message.Content) > maxStoredContent {
+			message.Content = message.Content[:maxStoredContent]
+		}
+		cleaned = append(cleaned, message)
+	}
+	return cleaned
+}
+
+func validateMessages(messages []Message) error {
+	for _, message := range messages {
+		switch message.Role {
+		case "system", "user", "assistant", "tool":
+		default:
+			return fmt.Errorf("unsupported message role %q", message.Role)
+		}
+	}
+	return nil
 }
 
 func validateSessionID(sessionID string) error {

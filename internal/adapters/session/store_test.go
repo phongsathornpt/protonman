@@ -41,6 +41,51 @@ func TestFileStoreRoundTrip(t *testing.T) {
 	}
 }
 
+func TestFileStorePersistsMessagesWithoutArguments(t *testing.T) {
+	store, err := NewFileStore(filepath.Join(t.TempDir(), "sessions"))
+	if err != nil {
+		t.Fatalf("NewFileStore() error = %v", err)
+	}
+	want := State{
+		PermissionMode: permission.ModeAsk.String(),
+		Messages: []Message{
+			{Role: "user", Content: "list tools"},
+			{Role: "assistant", Content: "use /tools"},
+			{Role: "tool", Content: "ok", ToolName: "read_file", ToolCallID: "c1"},
+		},
+	}
+	if err := store.Save(context.Background(), "chat-1", want); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	got, found, err := store.Load(context.Background(), "chat-1")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !found {
+		t.Fatal("Load() found = false")
+	}
+	if len(got.Messages) != 3 {
+		t.Fatalf("messages = %d, want 3", len(got.Messages))
+	}
+	if got.Messages[2].ToolName != "read_file" || got.Messages[2].Content != "ok" {
+		t.Fatalf("tool message = %+v", got.Messages[2])
+	}
+}
+
+func TestFileStoreRejectsUnknownMessageRole(t *testing.T) {
+	store, err := NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewFileStore() error = %v", err)
+	}
+	err = store.Save(context.Background(), "bad", State{
+		PermissionMode: permission.ModeAsk.String(),
+		Messages:       []Message{{Role: "root", Content: "nope"}},
+	})
+	if err == nil {
+		t.Fatal("Save() error = nil, want invalid role")
+	}
+}
+
 func TestFileStoreMissingStateIsNotAnError(t *testing.T) {
 	store, err := NewFileStore(t.TempDir())
 	if err != nil {

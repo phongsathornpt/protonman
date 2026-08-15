@@ -237,7 +237,7 @@ func TestDefaultRegistryContainsCodingTools(t *testing.T) {
 		t.Fatalf("NewDefaultRegistry() error = %v", err)
 	}
 	definitions := registry.Definitions()
-	if got, want := len(definitions), 9; got != want {
+	if got, want := len(definitions), 10; got != want {
 		t.Fatalf("definition count = %d, want %d", got, want)
 	}
 }
