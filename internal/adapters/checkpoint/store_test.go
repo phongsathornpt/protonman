@@ -144,6 +144,44 @@ func TestSnapshotFileRejectsParentSymlinkSwap(t *testing.T) {
 	}
 }
 
+func TestWriteWorkspaceFileRejectsParentSymlinkSwap(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	outside := t.TempDir()
+	workspaceRoot, err := workspace.New(root, nil)
+	if err != nil {
+		t.Fatalf("workspace.New() error = %v", err)
+	}
+
+	parent := filepath.Join(root, "safe")
+	if err := os.Mkdir(parent, 0o755); err != nil {
+		t.Fatalf("Mkdir() error = %v", err)
+	}
+	resolved, err := workspaceRoot.Resolve(ctx, "safe/file.txt")
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if err := os.Remove(parent); err != nil {
+		t.Fatalf("Remove() error = %v", err)
+	}
+	if err := os.Symlink(outside, parent); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	err = writeWorkspaceFile(ctx, workspaceRoot, resolved, fileSnapshot{
+		Path:    "safe/file.txt",
+		Exists:  true,
+		Mode:    0o600,
+		Content: []byte("restored secret"),
+	})
+	if err == nil {
+		t.Fatal("writeWorkspaceFile() error = nil, want symlink escape rejection")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "file.txt")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("outside file exists or stat failed unexpectedly: %v", err)
+	}
+}
+
 func newTestStore(t *testing.T, root string, workspaceRoot *workspace.Workspace) *FileStore {
 	t.Helper()
 	store, err := NewFileStore(root, workspaceRoot)
