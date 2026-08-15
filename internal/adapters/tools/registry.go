@@ -38,41 +38,59 @@ func NewRegistry(handlers ...tool.Handler) (*Registry, error) {
 	return registry, nil
 }
 
-// RegistryExtra configures optional sandbox and checkpoint adapters.
-type RegistryExtra struct {
-	Launcher sandbox.Launcher
-	Network  domainsandbox.NetworkPolicy
+// RegistryOption configures the default coding-tool set.
+type RegistryOption func(*registryOptions) error
+
+type registryOptions struct {
+	stores   []domaincheckpoint.Store
+	launcher sandbox.Launcher
+	network  domainsandbox.NetworkPolicy
+}
+
+// WithCheckpointStore attaches durable edit checkpoints.
+func WithCheckpointStore(store domaincheckpoint.Store) RegistryOption {
+	return func(options *registryOptions) error {
+		if store == nil {
+			return fmt.Errorf("checkpoint store is required")
+		}
+		options.stores = append(options.stores, store)
+		return nil
+	}
+}
+
+// WithSandbox confines bash and web_fetch under the resolved profile.
+func WithSandbox(launcher sandbox.Launcher, network domainsandbox.NetworkPolicy) RegistryOption {
+	return func(options *registryOptions) error {
+		options.launcher = launcher
+		options.network = network
+		return nil
+	}
 }
 
 // NewDefaultRegistry creates the default workspace-aware coding tool set.
-func NewDefaultRegistry(workspaceRoot *workspace.Workspace, extras ...any) (*Registry, error) {
+func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryOption) (*Registry, error) {
 	if workspaceRoot == nil {
 		return nil, fmt.Errorf("create default registry: workspace is required")
 	}
-	var stores []domaincheckpoint.Store
-	var extra RegistryExtra
-	for _, item := range extras {
-		switch value := item.(type) {
-		case domaincheckpoint.Store:
-			stores = append(stores, value)
-		case RegistryExtra:
-			extra = value
-		case sandbox.Launcher:
-			extra.Launcher = value
-		case domainsandbox.NetworkPolicy:
-			extra.Network = value
+	cfg := registryOptions{
+		stores: make([]domaincheckpoint.Store, 0),
+		network: domainsandbox.NetworkPolicy{
+			Mode:    domainsandbox.NetworkUnrestricted,
+			Allowed: []domainsandbox.Origin{},
+		},
+	}
+	for _, option := range options {
+		if option == nil {
+			continue
+		}
+		if err := option(&cfg); err != nil {
+			return nil, fmt.Errorf("create default registry: %w", err)
 		}
 	}
-	if extra.Network.Allowed == nil {
-		extra.Network.Allowed = []domainsandbox.Origin{}
-	}
-	if extra.Network.Mode == domainsandbox.NetworkUnknown {
-		extra.Network.Mode = domainsandbox.NetworkUnrestricted
-	}
-	checkpointStore := selectCheckpointStore(stores)
+	checkpointStore := selectCheckpointStore(cfg.stores)
 	return NewRegistry(
 		NewReadFile(workspaceRoot),
-		NewBash(workspaceRoot, extra.Launcher),
+		NewBash(workspaceRoot, cfg.launcher),
 		NewWriteFile(workspaceRoot, checkpointStore),
 		NewSearchReplace(workspaceRoot, checkpointStore),
 		NewApplyPatch(workspaceRoot, checkpointStore),
@@ -80,7 +98,7 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, extras ...any) (*Reg
 		NewListDir(workspaceRoot),
 		NewGitStatus(workspaceRoot),
 		NewCheckpointRestore(checkpointStore),
-		NewWebFetch(extra.Network),
+		NewWebFetch(cfg.network),
 	)
 }
 

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/projectTHORN/proton/internal/domain/model"
 	"github.com/projectTHORN/proton/internal/domain/permission"
 )
 
@@ -49,9 +50,9 @@ func TestFileStorePersistsMessagesWithoutArguments(t *testing.T) {
 	want := State{
 		PermissionMode: permission.ModeAsk.String(),
 		Messages: []Message{
-			{Role: "user", Content: "list tools"},
-			{Role: "assistant", Content: "use /tools"},
-			{Role: "tool", Content: "ok", ToolName: "read_file", ToolCallID: "c1"},
+			{Role: model.RoleUser, Content: "list tools"},
+			{Role: model.RoleAssistant, Content: "use /tools"},
+			{Role: model.RoleTool, Content: "ok", ToolName: "read_file", ToolCallID: "c1"},
 		},
 	}
 	if err := store.Save(context.Background(), "chat-1", want); err != nil {
@@ -79,7 +80,7 @@ func TestFileStoreRejectsUnknownMessageRole(t *testing.T) {
 	}
 	err = store.Save(context.Background(), "bad", State{
 		PermissionMode: permission.ModeAsk.String(),
-		Messages:       []Message{{Role: "root", Content: "nope"}},
+		Messages:       []Message{{Role: model.Role("root"), Content: "nope"}},
 	})
 	if err == nil {
 		t.Fatal("Save() error = nil, want invalid role")

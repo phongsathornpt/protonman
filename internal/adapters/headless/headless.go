@@ -18,35 +18,43 @@ import (
 )
 
 // Format is the headless output encoding.
-type Format string
+type Format uint8
 
 const (
+	// FormatUnknown is the invalid zero value.
+	FormatUnknown Format = iota
 	// FormatText writes a human-readable transcript.
-	FormatText Format = "text"
+	FormatText
 	// FormatJSON writes one JSON object per event (NDJSON).
-	FormatJSON Format = "json"
+	FormatJSON
 )
+
+func (f Format) String() string {
+	switch f {
+	case FormatText:
+		return "text"
+	case FormatJSON:
+		return "json"
+	default:
+		return "unknown"
+	}
+}
 
 // ErrInvalidRunner indicates that the headless adapter cannot be constructed.
 var ErrInvalidRunner = errors.New("invalid headless runner")
-
-// TurnRunner is the optional model/tool loop used by ordinary prompts.
-type TurnRunner interface {
-	Run(context.Context, []model.Message, applicationturn.Sink) (applicationturn.Result, error)
-}
 
 // Runner is the non-interactive adapter over Proton services.
 type Runner struct {
 	service  *toolcall.Service
 	registry tool.Registry
-	runner   TurnRunner
+	runner   applicationturn.Runner
 	messages []model.Message
 	nextID   uint64
 }
 
 // New creates a fail-closed headless runner. Ask-mode calls stay denied
 // because no permission prompt is installed.
-func New(service *toolcall.Service, registry tool.Registry, runner TurnRunner) (*Runner, error) {
+func New(service *toolcall.Service, registry tool.Registry, runner applicationturn.Runner) (*Runner, error) {
 	if service == nil {
 		return nil, fmt.Errorf("%w: service is required", ErrInvalidRunner)
 	}
@@ -82,7 +90,7 @@ func (r *Runner) LoadSession(state session.State) error {
 	messages := make([]model.Message, 0, len(state.Messages))
 	for _, stored := range state.Messages {
 		messages = append(messages, model.Message{
-			Role:       model.Role(stored.Role),
+			Role:       stored.Role,
 			Content:    stored.Content,
 			ToolName:   stored.ToolName,
 			ToolCallID: stored.ToolCallID,
@@ -96,7 +104,7 @@ func (r *Runner) SessionState() []session.Message {
 	out := make([]session.Message, 0, len(r.messages))
 	for _, message := range r.messages {
 		out = append(out, session.Message{
-			Role:       string(message.Role),
+			Role:       message.Role,
 			Content:    message.Content,
 			ToolName:   message.ToolName,
 			ToolCallID: message.ToolCallID,
@@ -114,7 +122,7 @@ func (r *Runner) Run(ctx context.Context, prompt string, output io.Writer, forma
 		return fmt.Errorf("%w: output writer is required", ErrInvalidRunner)
 	}
 	if format != FormatText && format != FormatJSON {
-		return fmt.Errorf("%w: unsupported output format %q", ErrInvalidRunner, format)
+		return fmt.Errorf("%w: unsupported output format %s", ErrInvalidRunner, format)
 	}
 	prompt = strings.TrimSpace(prompt)
 	if prompt == "" {
@@ -327,6 +335,6 @@ func ParseFormat(value string) (Format, error) {
 	case "json":
 		return FormatJSON, nil
 	default:
-		return "", fmt.Errorf("unsupported output format %q", value)
+		return FormatUnknown, fmt.Errorf("unsupported output format %q", value)
 	}
 }

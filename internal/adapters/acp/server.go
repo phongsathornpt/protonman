@@ -13,6 +13,7 @@ import (
 
 	"github.com/projectTHORN/proton/internal/adapters/headless"
 	"github.com/projectTHORN/proton/internal/application/toolcall"
+	applicationturn "github.com/projectTHORN/proton/internal/application/turn"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
@@ -25,13 +26,13 @@ var ErrInvalidServer = errors.New("invalid ACP server")
 type Server struct {
 	service  *toolcall.Service
 	registry tool.Registry
-	runner   headless.TurnRunner
+	runner   applicationturn.Runner
 	sessions map[string]*headless.Runner
 	nextID   uint64
 }
 
 // New creates an ACP agent over Proton's existing tool-call service.
-func New(service *toolcall.Service, registry tool.Registry, runner headless.TurnRunner) (*Server, error) {
+func New(service *toolcall.Service, registry tool.Registry, runner applicationturn.Runner) (*Server, error) {
 	if service == nil {
 		return nil, fmt.Errorf("%w: service is required", ErrInvalidServer)
 	}
