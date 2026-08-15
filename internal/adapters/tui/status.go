@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -42,7 +43,7 @@ func (m bubbleModel) infoView() string {
 
 func (m bubbleModel) modeChip() string {
 	if m.planMode {
-		return planStyle.Render("plan")
+		return planStyle.Render("plan · read-only")
 	}
 	switch m.service.Mode() {
 	case permission.ModeAlwaysApprove:
@@ -68,35 +69,56 @@ func (m *bubbleModel) cycleMode() {
 	mode := m.service.Mode()
 	switch {
 	case m.planMode:
-		m.planMode = false
+		m.setPlanEnabled(false)
 		_ = m.service.SetMode(permission.ModeAlwaysApprove)
 	case mode == permission.ModeAlwaysApprove:
 		_ = m.service.SetMode(permission.ModeAsk)
 	default:
-		m.planMode = true
 		if mode != permission.ModeAsk && mode != permission.ModeAuto {
 			_ = m.service.SetMode(permission.ModeAsk)
 		}
+		m.setPlanEnabled(true)
 	}
 }
 
 func (m *bubbleModel) setPlanMode(argument string) {
+	enabled := m.planMode
 	switch strings.ToLower(argument) {
 	case "":
-		m.planMode = !m.planMode
+		enabled = !enabled
 	case "on", "true":
-		m.planMode = true
+		enabled = true
 	case "off", "false":
-		m.planMode = false
+		enabled = false
 	default:
 		m.appendError("usage: /plan [on|off]")
 		return
 	}
+	if enabled && m.service.Mode() != permission.ModeAsk && m.service.Mode() != permission.ModeAuto {
+		_ = m.service.SetMode(permission.ModeAsk)
+	}
+	m.setPlanEnabled(enabled)
 	state := "off"
 	if m.planMode {
-		state = "on"
+		state = "on (read-only)"
 	}
 	m.appendLine("plan mode: " + state)
+}
+
+func (m *bubbleModel) setPlanEnabled(enabled bool) {
+	m.planMode = enabled
+	if !enabled {
+		m.service.SetCallGuard(nil)
+		return
+	}
+	m.service.SetCallGuard(func(_ context.Context, request permission.Request) error {
+		switch request.ToolKind {
+		case permission.ToolRead, permission.ToolGrep, permission.ToolWebFetch, permission.ToolWebSearch:
+			return nil
+		default:
+			return fmt.Errorf("plan mode is read-only; %s tool %q is blocked", request.ToolKind, request.ToolName)
+		}
+	})
 }
 
 func formatElapsed(duration time.Duration) string {
