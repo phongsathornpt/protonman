@@ -119,13 +119,23 @@ func seatbeltProfile(profile domainsandbox.Profile, dir string) string {
 	builder.WriteString("(allow process-fork)\n")
 	builder.WriteString("(allow signal)\n")
 	builder.WriteString("(allow sysctl-read)\n")
-	// `allow default` must not leave host filesystem writes globally enabled.
-	// Deny writes first, then grant the workspace subtree only to profiles
-	// that are explicitly writable.
-	builder.WriteString("(deny file-write*)\n")
+	builder.WriteString("(deny file-write*\n")
+	builder.WriteString("  (require-all\n")
+	// Seatbelt deny rules take precedence over allow rules. A writable
+	// workspace therefore has to be excluded from the deny predicate itself;
+	// a later `(allow file-write* (subpath ...))` cannot override a global
+	// deny. Read-only profiles intentionally omit this exclusion.
 	if !profile.ReadOnly {
-		builder.WriteString("(allow file-write* (subpath " + seatbeltString(dir) + "))\n")
+		builder.WriteString("    (require-not (subpath " + seatbeltString(dir) + "))\n")
 	}
+	// Keep the small set of standard writable character devices usable. Basic
+	// shell/tool execution commonly redirects to /dev/null or reads randomness;
+	// denying these is unrelated to workspace filesystem confinement.
+	for _, device := range []string{"/dev/null", "/dev/zero", "/dev/random", "/dev/urandom"} {
+		builder.WriteString("    (require-not (literal " + seatbeltString(device) + "))\n")
+	}
+	builder.WriteString("  )\n")
+	builder.WriteString(")\n")
 	if profile.RestrictNetwork {
 		builder.WriteString("(deny network*)\n")
 	}
