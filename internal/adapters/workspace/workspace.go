@@ -303,6 +303,7 @@ func globMatch(pattern string, value string) bool {
 					current[valueIndex+1] = previous[valueIndex]
 				}
 			}
+		}
 		previous = current
 	}
 	return previous[len(v)]
