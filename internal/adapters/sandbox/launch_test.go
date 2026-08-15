@@ -61,25 +61,34 @@ func TestSeatbeltProfileDeniesWritesOutsideWorkspace(t *testing.T) {
 		t.Fatalf("NewProfile() error = %v", err)
 	}
 	text := seatbeltProfile(profile, "/tmp/ws")
-	if !strings.Contains(text, "(deny file-write*)") {
-		t.Fatalf("seatbelt profile missing global write deny: %s", text)
+	if !strings.Contains(text, "(deny file-write*") {
+		t.Fatalf("seatbelt profile missing write deny: %s", text)
 	}
-	if !strings.Contains(text, "(allow file-write* (subpath \"/tmp/ws\"))") {
-		t.Fatalf("seatbelt profile missing workspace write allow: %s", text)
+	if !strings.Contains(text, `(require-not (subpath "/tmp/ws"))`) {
+		t.Fatalf("seatbelt profile does not exclude workspace from write deny: %s", text)
+	}
+	if strings.Contains(text, "(allow file-write* (subpath") {
+		t.Fatalf("seatbelt profile relies on allow-over-deny semantics: %s", text)
+	}
+	if !strings.Contains(text, `(require-not (literal "/dev/null"))`) {
+		t.Fatalf("seatbelt profile does not preserve /dev/null writes: %s", text)
 	}
 }
 
-func TestSeatbeltReadOnlyProfileDoesNotAllowWorkspaceWrites(t *testing.T) {
+func TestSeatbeltReadOnlyProfileDoesNotExcludeWorkspaceFromWriteDeny(t *testing.T) {
 	profile, err := domainsandbox.NewProfile(domainsandbox.NameReadOnly, "/tmp/ws")
 	if err != nil {
 		t.Fatalf("NewProfile() error = %v", err)
 	}
 	text := seatbeltProfile(profile, "/tmp/ws")
-	if !strings.Contains(text, "(deny file-write*)") {
+	if !strings.Contains(text, "(deny file-write*") {
 		t.Fatalf("seatbelt profile missing write deny: %s", text)
 	}
-	if strings.Contains(text, "(allow file-write* (subpath") {
-		t.Fatalf("read-only profile unexpectedly permits workspace writes: %s", text)
+	if strings.Contains(text, `(require-not (subpath "/tmp/ws"))`) {
+		t.Fatalf("read-only profile unexpectedly excludes workspace from deny: %s", text)
+	}
+	if !strings.Contains(text, `(require-not (literal "/dev/null"))`) {
+		t.Fatalf("read-only profile does not preserve /dev/null writes: %s", text)
 	}
 }
 
