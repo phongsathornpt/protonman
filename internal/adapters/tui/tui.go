@@ -89,6 +89,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		return fmt.Errorf("start Bubble Tea UI: %w", err)
 	}
 	ui.service.SetPrompt(ui.PermissionPrompt)
+	defer ui.service.SetCallGuard(nil)
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	defer ui.bridge.Close()
