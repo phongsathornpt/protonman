@@ -203,6 +203,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.busy = false
 		m.busyStarted = time.Time{}
 		m.activity = "ready"
+		m.turnCancel = nil
 		m.appendToolResult(message.result, message.err)
 		m.refreshViewport()
 		return m, m.drainQueue()
@@ -219,9 +220,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if message.result.Message.Content != "" {
 			m.messages = append(m.messages, message.result.Message)
 		}
-		if message.err != nil {
-			m.appendError("turn failed: " + message.err.Error())
-		}
+		m.appendTurnFailure(message.err)
 		m.refreshViewport()
 		return m, m.drainQueue()
 	}
@@ -401,8 +400,12 @@ func (m *bubbleModel) startTool(call tool.Call) tea.Cmd {
 	m.activity = "running " + call.Name
 	m.appendToolRunning(call.Name)
 	m.refreshViewport()
+
+	ctx, cancel := context.WithCancel(m.ctx)
+	m.turnCancel = cancel
 	return func() tea.Msg {
-		result, callErr := m.service.Call(m.ctx, call)
+		defer cancel()
+		result, callErr := m.service.Call(ctx, call)
 		return toolResultMsg{result: result, err: callErr}
 	}
 }
@@ -437,7 +440,10 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 				}
 			},
 		)
-		events <- turnDoneMsg{result: result, err: err}
+		select {
+		case events <- turnDoneMsg{result: result, err: err}:
+		case <-m.ctx.Done():
+		}
 	}()
 	m.turnEvents = events
 	return waitTurnCh(events)
