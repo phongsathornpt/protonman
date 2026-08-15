@@ -95,6 +95,32 @@ commit.
 - [x] Run `go vet`, `go test`, and `go test -race` in CI.
 - [x] Add a concrete ACP transport and fuzz / end-to-end suites.
 
+### Security hardening follow-up
+
+Issues found during the post-port security/code-smell review. Keep these as
+separate, regression-tested changes rather than broad refactors.
+
+- [x] Make macOS writable sandbox profiles deny host writes outside the
+  workspace before granting the workspace subtree.
+- [x] Make every Linux confining profile fail closed when `bwrap` is
+  unavailable instead of falling back to a bare shell.
+- [x] Expose the host runtime read-only inside Bubblewrap so `sh`, loaders,
+  Git, and normal build tools remain usable while only the workspace is
+  writable.
+- [x] Normalize domain permission patterns so `PatternModeDomain` is truly
+  case-insensitive for both allow and deny rules.
+- [x] Make leading `**/` protected-path globs match root-level files as well as
+  nested files; cover `server.pem`, `certs/server.pem`, and deeper paths.
+- [ ] Implement real ACP `session/cancel`: keep per-session cancel functions
+  and decouple input reading from a running prompt so cancellation can be
+  processed while work is active.
+- [ ] Harden filesystem mutations against symlink TOCTOU between path checks
+  and `Open`/`MkdirAll`/`CreateTemp`/`Rename`; prefer descriptor-relative or
+  no-follow operations where supported.
+- [ ] Add OS integration tests that execute the sandbox boundary, including
+  denied writes outside the workspace, allowed workspace writes, read-only
+  denial, runtime command availability, and network blocking.
+
 ## Grok Build mapping
 
 | Grok Build area | Proton destination |
