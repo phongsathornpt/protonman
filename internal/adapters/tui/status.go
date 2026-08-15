@@ -112,6 +112,9 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 		return
 	}
 	m.service.SetCallGuard(func(_ context.Context, request permission.Request) error {
+		if !m.planMode {
+			return nil
+		}
 		switch request.ToolKind {
 		case permission.ToolRead, permission.ToolGrep, permission.ToolWebFetch, permission.ToolWebSearch:
 			return nil
