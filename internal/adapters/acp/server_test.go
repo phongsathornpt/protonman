@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/application/toolcall"
+	applicationturn "github.com/projectTHORN/proton/internal/application/turn"
+	"github.com/projectTHORN/proton/internal/domain/model"
 	"github.com/projectTHORN/proton/internal/domain/permission"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
@@ -43,6 +45,37 @@ func TestACPInitializeAndPrompt(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), `"stopReason":"end_turn"`) {
 		t.Fatalf("missing end_turn: %s", output.String())
+	}
+}
+
+func TestACPCancelStopsInFlightPrompt(t *testing.T) {
+	runner := &blockingACPRunner{canceled: make(chan struct{})}
+	server := newTestServerWithRunner(t, permission.ModeAlwaysApprove, runner)
+	created, _, err := server.dispatch(context.Background(), rpcRequest{Method: "session/new"})
+	if err != nil {
+		t.Fatalf("session/new error = %v", err)
+	}
+	sessionID := created.(sessionNewResult).SessionID
+
+	input := strings.Join([]string{
+		`{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":"` + sessionID + `","prompt":[{"type":"text","text":"wait"}]}}`,
+		`{"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"` + sessionID + `"}}`,
+	}, "\n") + "\n"
+	var output bytes.Buffer
+	if err := server.Serve(context.Background(), strings.NewReader(input), &output); err != nil {
+		t.Fatalf("Serve() error = %v", err)
+	}
+
+	select {
+	case <-runner.canceled:
+	default:
+		t.Fatal("runner did not observe prompt cancellation")
+	}
+	if !strings.Contains(output.String(), `"stopReason":"cancelled"`) {
+		t.Fatalf("cancelled prompt response = %s", output.String())
+	}
+	if strings.Contains(output.String(), `"session/update"`) {
+		t.Fatalf("cancelled prompt emitted completed content: %s", output.String())
 	}
 }
 
@@ -121,7 +154,22 @@ func (r acpRegistry) Definitions() []tool.Definition {
 	return []tool.Definition{r.handler.Definition()}
 }
 
+type blockingACPRunner struct {
+	canceled chan struct{}
+}
+
+func (r *blockingACPRunner) Run(ctx context.Context, _ []model.Message, _ applicationturn.Sink) (applicationturn.Result, error) {
+	<-ctx.Done()
+	close(r.canceled)
+	return applicationturn.Result{}, ctx.Err()
+}
+
 func newTestServer(t *testing.T, mode permission.Mode) *Server {
+	t.Helper()
+	return newTestServerWithRunner(t, mode, nil)
+}
+
+func newTestServerWithRunner(t *testing.T, mode permission.Mode, runner applicationturn.Runner) *Server {
 	t.Helper()
 	registry := acpRegistry{handler: acpHandler{definition: tool.Definition{
 		Name:        "read_file",
@@ -136,7 +184,7 @@ func newTestServer(t *testing.T, mode permission.Mode) *Server {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	server, err := New(service, registry, nil)
+	server, err := New(service, registry, runner)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
