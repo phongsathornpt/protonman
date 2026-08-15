@@ -42,7 +42,9 @@ func TestWorkspaceProtectedPathsCoverDescendantsAndGlobs(t *testing.T) {
 	}{
 		{name: "exact file", path: ".env"},
 		{name: "protected directory", path: "secrets/token.txt"},
-		{name: "nested glob", path: "certs/dev/server.pem"},
+		{name: "root doublestar glob", path: "server.pem"},
+		{name: "one-level doublestar glob", path: "certs/server.pem"},
+		{name: "nested doublestar glob", path: "certs/dev/server.pem"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

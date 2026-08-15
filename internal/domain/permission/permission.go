@@ -291,6 +291,9 @@ func NewPolicy(config Config) (*Policy, error) {
 		if patternMode != PatternModeGlob && patternMode != PatternModeDomain {
 			return nil, fmt.Errorf("%w: rule %d has invalid pattern mode %d", ErrInvalidConfig, i, patternMode)
 		}
+		if patternMode == PatternModeDomain {
+			rules[i].Pattern = strings.ToLower(strings.TrimSpace(rule.Pattern))
+		}
 	}
 
 	return &Policy{

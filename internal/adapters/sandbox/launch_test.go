@@ -30,19 +30,56 @@ func TestConfiningProfileFailsClosedWhenToolsMissing(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("windows launcher is fail-closed by design")
 	}
-	profile, err := domainsandbox.NewProfile(domainsandbox.NameStrict, t.TempDir())
+	profiles := []domainsandbox.Name{
+		domainsandbox.NameWorkspace,
+		domainsandbox.NameReadOnly,
+		domainsandbox.NameStrict,
+	}
+	for _, name := range profiles {
+		t.Run(name.String(), func(t *testing.T) {
+			profile, err := domainsandbox.NewProfile(name, t.TempDir())
+			if err != nil {
+				t.Fatalf("NewProfile() error = %v", err)
+			}
+			launcher := &OSLauncher{
+				Profile: profile,
+				LookPath: func(string) (string, error) {
+					return "", errors.New("missing")
+				},
+			}
+			_, err = launcher.Command(context.Background(), t.TempDir(), "echo hi")
+			if !errors.Is(err, ErrUnavailable) {
+				t.Fatalf("Command() error = %v, want unavailable", err)
+			}
+		})
+	}
+}
+
+func TestSeatbeltProfileDeniesWritesOutsideWorkspace(t *testing.T) {
+	profile, err := domainsandbox.NewProfile(domainsandbox.NameStrict, "/tmp/ws")
 	if err != nil {
 		t.Fatalf("NewProfile() error = %v", err)
 	}
-	launcher := &OSLauncher{
-		Profile: profile,
-		LookPath: func(string) (string, error) {
-			return "", errors.New("missing")
-		},
+	text := seatbeltProfile(profile, "/tmp/ws")
+	if !strings.Contains(text, "(deny file-write*)") {
+		t.Fatalf("seatbelt profile missing global write deny: %s", text)
 	}
-	_, err = launcher.Command(context.Background(), t.TempDir(), "echo hi")
-	if !errors.Is(err, ErrUnavailable) {
-		t.Fatalf("Command() error = %v, want unavailable", err)
+	if !strings.Contains(text, "(allow file-write* (subpath \"/tmp/ws\"))") {
+		t.Fatalf("seatbelt profile missing workspace write allow: %s", text)
+	}
+}
+
+func TestSeatbeltReadOnlyProfileDoesNotAllowWorkspaceWrites(t *testing.T) {
+	profile, err := domainsandbox.NewProfile(domainsandbox.NameReadOnly, "/tmp/ws")
+	if err != nil {
+		t.Fatalf("NewProfile() error = %v", err)
+	}
+	text := seatbeltProfile(profile, "/tmp/ws")
+	if !strings.Contains(text, "(deny file-write*)") {
+		t.Fatalf("seatbelt profile missing write deny: %s", text)
+	}
+	if strings.Contains(text, "(allow file-write* (subpath") {
+		t.Fatalf("read-only profile unexpectedly permits workspace writes: %s", text)
 	}
 }
 
@@ -57,6 +94,21 @@ func TestSeatbeltProfileDeniesNetworkWhenRestricted(t *testing.T) {
 	}
 	if !strings.Contains(text, "/tmp/ws") {
 		t.Fatalf("seatbelt profile missing workspace: %s", text)
+	}
+}
+
+func TestBwrapExposesHostRuntimeReadOnlyAndWorkspaceWritable(t *testing.T) {
+	profile, err := domainsandbox.NewProfile(domainsandbox.NameWorkspace, "/tmp/ws")
+	if err != nil {
+		t.Fatalf("NewProfile() error = %v", err)
+	}
+	cmd := bwrapCommand(context.Background(), "bwrap", profile, "/tmp/ws", "true")
+	joined := strings.Join(cmd.Args, " ")
+	if !strings.Contains(joined, "--ro-bind / /") {
+		t.Fatalf("bwrap args missing read-only host root: %s", joined)
+	}
+	if !strings.Contains(joined, "--bind /tmp/ws /tmp/ws") {
+		t.Fatalf("bwrap args missing writable workspace bind: %s", joined)
 	}
 }
 

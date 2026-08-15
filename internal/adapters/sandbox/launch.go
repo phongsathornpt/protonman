@@ -66,15 +66,11 @@ func (l *OSLauncher) Command(ctx context.Context, dir string, command string) (*
 		if path, err := lookPath("bwrap"); err == nil {
 			return bwrapCommand(ctx, path, l.Profile, dir, command), nil
 		}
-		if l.Profile.RestrictNetwork {
-			if _, err := lookPath("unshare"); err == nil {
-				cmd := exec.CommandContext(ctx, "unshare", "--net", "--", "sh", "-c", command)
-				cmd.Dir = dir
-				return cmd, nil
-			}
-			return nil, fmt.Errorf("%w: bwrap and unshare are missing", ErrUnavailable)
-		}
-		return bareShell(ctx, dir, command), nil
+		// unshare can isolate networking, but it cannot enforce the filesystem
+		// boundary required by every confining Proton profile. Never silently
+		// downgrade a requested workspace/read-only/strict sandbox to a bare
+		// shell.
+		return nil, fmt.Errorf("%w: bwrap is required for filesystem confinement", ErrUnavailable)
 	default:
 		return nil, fmt.Errorf("%w: %s is not supported", ErrUnavailable, runtime.GOOS)
 	}
@@ -90,17 +86,22 @@ func bareShell(ctx context.Context, dir string, command string) *exec.Cmd {
 }
 
 func bwrapCommand(ctx context.Context, bwrap string, profile domainsandbox.Profile, dir string, command string) *exec.Cmd {
-	bind := "--bind"
-	if profile.ReadOnly {
-		bind = "--ro-bind"
-	}
+	// Bubblewrap starts with an empty mount namespace. Expose the host root
+	// read-only so the shell, dynamic loader, git, compilers, and normal system
+	// tools remain usable, then over-mount only the workspace as writable when
+	// the selected profile permits writes.
 	args := []string{
 		"--die-with-parent",
+		"--ro-bind", "/", "/",
 		"--dev", "/dev",
 		"--proc", "/proc",
-		bind, dir, dir,
-		"--chdir", dir,
 	}
+	if profile.ReadOnly {
+		args = append(args, "--ro-bind", dir, dir)
+	} else {
+		args = append(args, "--bind", dir, dir)
+	}
+	args = append(args, "--chdir", dir)
 	if profile.RestrictNetwork {
 		args = append(args, "--unshare-net")
 	}
@@ -118,9 +119,11 @@ func seatbeltProfile(profile domainsandbox.Profile, dir string) string {
 	builder.WriteString("(allow process-fork)\n")
 	builder.WriteString("(allow signal)\n")
 	builder.WriteString("(allow sysctl-read)\n")
-	if profile.ReadOnly {
-		builder.WriteString("(deny file-write*)\n")
-	} else {
+	// `allow default` must not leave host filesystem writes globally enabled.
+	// Deny writes first, then grant the workspace subtree only to profiles
+	// that are explicitly writable.
+	builder.WriteString("(deny file-write*)\n")
+	if !profile.ReadOnly {
 		builder.WriteString("(allow file-write* (subpath " + seatbeltString(dir) + "))\n")
 	}
 	if profile.RestrictNetwork {
