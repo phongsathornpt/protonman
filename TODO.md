@@ -111,9 +111,9 @@ separate, regression-tested changes rather than broad refactors.
   case-insensitive for both allow and deny rules.
 - [x] Make leading `**/` protected-path globs match root-level files as well as
   nested files; cover `server.pem`, `certs/server.pem`, and deeper paths.
-- [ ] Implement real ACP `session/cancel`: keep per-session cancel functions
-  and decouple input reading from a running prompt so cancellation can be
-  processed while work is active.
+- [x] Implement real ACP `session/cancel`: keep per-session cancel functions,
+  continue reading protocol input while a prompt is active, and complete the
+  original prompt with `stopReason: cancelled`.
 - [ ] Harden filesystem mutations against symlink TOCTOU between path checks
   and `Open`/`MkdirAll`/`CreateTemp`/`Rename`; prefer descriptor-relative or
   no-follow operations where supported.
