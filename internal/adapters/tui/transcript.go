@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -106,27 +108,49 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 		body = joinBody(body, fmt.Sprintf("exit %d", *result.ExitCode))
 	}
 	if err != nil {
-		if result.Failure != nil {
-			m.pushBlock(Block{
-				Kind:  blockError,
-				Title: name,
-				Body:  fmt.Sprintf("[%s]: %s", result.Failure.Code, result.Failure.Message),
-				Code:  string(result.Failure.Code),
-			})
+		if errors.Is(err, context.Canceled) || failureCode(result) == tool.ErrorCodeCanceled {
+			block := Block{Kind: blockTool, Title: name, Body: "cancelled"}
+			if m.replaceRunningTool(name, block) {
+				return
+			}
+			m.pushBlock(block)
 			return
 		}
-		m.appendError(err.Error())
+		errorBlock := Block{Kind: blockError, Title: name, Body: err.Error()}
+		if result.Failure != nil {
+			errorBlock.Body = fmt.Sprintf("[%s]: %s", result.Failure.Code, result.Failure.Message)
+			errorBlock.Code = string(result.Failure.Code)
+		}
+		if m.replaceRunningTool(name, errorBlock) {
+			return
+		}
+		m.pushBlock(errorBlock)
 		return
 	}
-	if n := len(m.blocks); n > 0 {
-		last := &m.blocks[n-1]
-		if last.Kind == blockTool && last.Title == name && last.Running {
-			last.Running = false
-			last.Body = body
-			return
-		}
+	block := Block{Kind: blockTool, Title: name, Body: body}
+	if m.replaceRunningTool(name, block) {
+		return
 	}
-	m.pushBlock(Block{Kind: blockTool, Title: name, Body: body})
+	m.pushBlock(block)
+}
+
+func failureCode(result tool.Result) tool.ErrorCode {
+	if result.Failure == nil {
+		return ""
+	}
+	return result.Failure.Code
+}
+
+func (m *bubbleModel) replaceRunningTool(name string, replacement Block) bool {
+	for index := len(m.blocks) - 1; index >= 0; index-- {
+		block := m.blocks[index]
+		if block.Kind != blockTool || block.Title != name || !block.Running {
+			continue
+		}
+		m.blocks[index] = replacement
+		return true
+	}
+	return false
 }
 
 func (m *bubbleModel) applyTurnEvent(event applicationturn.Event) {
@@ -138,10 +162,24 @@ func (m *bubbleModel) applyTurnEvent(event applicationturn.Event) {
 	case applicationturn.EventToolResult:
 		m.applyToolResult(event.Call.Name, event.Result, nil)
 	case applicationturn.EventFailed:
-		if event.Err != nil {
-			m.appendError("turn failed: " + event.Err.Error())
-		}
+		m.appendTurnFailure(event.Err)
 	}
+}
+
+func (m *bubbleModel) appendTurnFailure(err error) {
+	if err == nil {
+		return
+	}
+	text := "turn failed: " + err.Error()
+	kind := blockError
+	if errors.Is(err, context.Canceled) {
+		text = "turn cancelled"
+		kind = blockSystem
+	}
+	if n := len(m.blocks); n > 0 && m.blocks[n-1].Kind == kind && m.blocks[n-1].Body == text {
+		return
+	}
+	m.pushBlock(Block{Kind: kind, Body: text})
 }
 
 func (m *bubbleModel) appendTurnResult(
@@ -159,16 +197,17 @@ func (m *bubbleModel) appendTurnResult(
 	if !sawAssistant && result.Message.Content != "" {
 		m.appendAssistant(result.Message.Content)
 	}
-	if err != nil {
-		m.appendError("turn failed: " + err.Error())
-	}
+	m.appendTurnFailure(err)
 }
 
 func (m *bubbleModel) appendToolResult(result tool.Result, err error) {
 	name := result.ToolName
 	if name == "" {
-		if n := len(m.blocks); n > 0 && m.blocks[n-1].Kind == blockTool {
-			name = m.blocks[n-1].Title
+		for index := len(m.blocks) - 1; index >= 0; index-- {
+			if m.blocks[index].Kind == blockTool && m.blocks[index].Running {
+				name = m.blocks[index].Title
+				break
+			}
 		}
 	}
 	m.applyToolResult(name, result, err)
