@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	"github.com/projectTHORN/proton/internal/adapters/headless"
 	"github.com/projectTHORN/proton/internal/application/toolcall"
@@ -27,8 +28,26 @@ type Server struct {
 	service  *toolcall.Service
 	registry tool.Registry
 	runner   applicationturn.Runner
-	sessions map[string]*headless.Runner
+
+	mu       sync.Mutex
+	sessions map[string]*acpSession
 	nextID   uint64
+}
+
+type acpSession struct {
+	runner *headless.Runner
+
+	mu        sync.Mutex
+	active    bool
+	cancelled bool
+	cancel    context.CancelFunc
+}
+
+type promptExecution struct {
+	session   *acpSession
+	ctx       context.Context
+	sessionID string
+	prompt    string
 }
 
 // New creates an ACP agent over Proton's existing tool-call service.
@@ -43,7 +62,7 @@ func New(service *toolcall.Service, registry tool.Registry, runner applicationtu
 		service:  service,
 		registry: registry,
 		runner:   runner,
-		sessions: make(map[string]*headless.Runner),
+		sessions: make(map[string]*acpSession),
 	}, nil
 }
 
@@ -81,6 +100,10 @@ type promptParams struct {
 	Prompt    []promptBlock `json:"prompt"`
 }
 
+type cancelParams struct {
+	SessionID string `json:"sessionId"`
+}
+
 type promptBlock struct {
 	Type string `json:"type"`
 	Text string `json:"text"`
@@ -90,7 +113,20 @@ type promptResult struct {
 	StopReason string `json:"stopReason"`
 }
 
-// Serve reads JSON-RPC requests until the input closes.
+type lockedWriter struct {
+	mu     sync.Mutex
+	writer io.Writer
+}
+
+func (w *lockedWriter) Write(payload []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.writer.Write(payload)
+}
+
+// Serve reads JSON-RPC requests until the input closes. Prompt turns run
+// independently from input scanning so a session/cancel notification can be
+// processed while model or tool work is still active.
 func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("start ACP server: %w", err)
@@ -98,8 +134,13 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 	if input == nil || output == nil {
 		return fmt.Errorf("%w: input and output are required", ErrInvalidServer)
 	}
+
+	writer := &lockedWriter{writer: output}
 	scanner := bufio.NewScanner(input)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	var prompts sync.WaitGroup
+	asyncErrors := make(chan error, 1)
+
 	for scanner.Scan() {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -108,37 +149,94 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 		if len(line) == 0 {
 			continue
 		}
-		if err := s.handleLine(ctx, line, output); err != nil {
-			return err
+		request, invalid := decodeRequest(line)
+		if invalid != nil {
+			if err := writeJSON(writer, invalid); err != nil {
+				return err
+			}
+			continue
 		}
+
+		if request.Method != "session/prompt" {
+			if err := s.handleRequest(ctx, request, writer); err != nil {
+				return err
+			}
+			continue
+		}
+
+		execution, err := s.preparePrompt(ctx, request.Params)
+		if err != nil {
+			if err := writeRequestResult(writer, request.ID, nil, nil, err); err != nil {
+				return err
+			}
+			continue
+		}
+		prompts.Add(1)
+		go func(request rpcRequest, execution promptExecution) {
+			defer prompts.Done()
+			result, notify, promptErr := s.executePrompt(execution)
+			if err := writeRequestResult(writer, request.ID, result, notify, promptErr); err != nil {
+				select {
+				case asyncErrors <- err:
+				default:
+				}
+			}
+		}(request, execution)
 	}
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("read ACP input: %w", err)
+
+	scanErr := scanner.Err()
+	prompts.Wait()
+	select {
+	case err := <-asyncErrors:
+		return err
+	default:
+	}
+	if scanErr != nil {
+		return fmt.Errorf("read ACP input: %w", scanErr)
 	}
 	return nil
 }
 
-func (s *Server) handleLine(ctx context.Context, line []byte, output io.Writer) error {
+func decodeRequest(line []byte) (rpcRequest, *rpcResponse) {
 	var request rpcRequest
 	if err := json.Unmarshal(line, &request); err != nil {
-		return writeJSON(output, rpcResponse{
+		return rpcRequest{}, &rpcResponse{
 			JSONRPC: "2.0",
 			Error:   &rpcError{Code: -32700, Message: "parse error"},
-		})
+		}
 	}
 	if request.Method == "" {
-		return writeJSON(output, rpcResponse{
+		return rpcRequest{}, &rpcResponse{
 			JSONRPC: "2.0",
 			ID:      request.ID,
 			Error:   &rpcError{Code: -32600, Message: "invalid request"},
-		})
+		}
 	}
+	return request, nil
+}
+
+func (s *Server) handleLine(ctx context.Context, line []byte, output io.Writer) error {
+	request, invalid := decodeRequest(bytes.TrimSpace(line))
+	if invalid != nil {
+		return writeJSON(output, invalid)
+	}
+	return s.handleRequest(ctx, request, output)
+}
+
+func (s *Server) handleRequest(ctx context.Context, request rpcRequest, output io.Writer) error {
 	result, notify, err := s.dispatch(ctx, request)
-	if err != nil {
+	return writeRequestResult(output, request.ID, result, notify, err)
+}
+
+func writeRequestResult(output io.Writer, id json.RawMessage, result any, notify *rpcNotification, requestErr error) error {
+	if requestErr != nil {
+		if len(id) == 0 || string(id) == "null" {
+			return nil
+		}
 		return writeJSON(output, rpcResponse{
 			JSONRPC: "2.0",
-			ID:      request.ID,
-			Error:   &rpcError{Code: -32000, Message: err.Error()},
+			ID:      id,
+			Error:   &rpcError{Code: -32000, Message: requestErr.Error()},
 		})
 	}
 	if notify != nil {
@@ -146,12 +244,12 @@ func (s *Server) handleLine(ctx context.Context, line []byte, output io.Writer) 
 			return err
 		}
 	}
-	if len(request.ID) == 0 || string(request.ID) == "null" {
+	if len(id) == 0 || string(id) == "null" {
 		return nil
 	}
 	return writeJSON(output, rpcResponse{
 		JSONRPC: "2.0",
-		ID:      request.ID,
+		ID:      id,
 		Result:  result,
 	})
 }
@@ -170,39 +268,77 @@ func (s *Server) dispatch(ctx context.Context, request rpcRequest) (any, *rpcNot
 			},
 		}, nil, nil
 	case "session/new":
-		s.nextID++
-		sessionID := fmt.Sprintf("acp-%d", s.nextID)
 		runner, err := headless.New(s.service, s.registry, s.runner)
 		if err != nil {
 			return nil, nil, err
 		}
-		s.sessions[sessionID] = runner
+		s.mu.Lock()
+		s.nextID++
+		sessionID := fmt.Sprintf("acp-%d", s.nextID)
+		s.sessions[sessionID] = &acpSession{runner: runner}
+		s.mu.Unlock()
 		return sessionNewResult{SessionID: sessionID}, nil, nil
 	case "session/prompt":
-		return s.prompt(ctx, request.Params)
+		execution, err := s.preparePrompt(ctx, request.Params)
+		if err != nil {
+			return nil, nil, err
+		}
+		return s.executePrompt(execution)
 	case "session/cancel":
+		if err := s.cancelPrompt(request.Params); err != nil {
+			return nil, nil, err
+		}
 		return map[string]any{}, nil, nil
 	default:
 		return nil, nil, fmt.Errorf("method %q is not supported", request.Method)
 	}
 }
 
-func (s *Server) prompt(ctx context.Context, raw json.RawMessage) (any, *rpcNotification, error) {
+func (s *Server) preparePrompt(ctx context.Context, raw json.RawMessage) (promptExecution, error) {
 	var params promptParams
 	if err := json.Unmarshal(raw, &params); err != nil {
-		return nil, nil, fmt.Errorf("decode session/prompt: %w", err)
+		return promptExecution{}, fmt.Errorf("decode session/prompt: %w", err)
 	}
-	runner, ok := s.sessions[params.SessionID]
+	params.SessionID = strings.TrimSpace(params.SessionID)
+	if params.SessionID == "" {
+		return promptExecution{}, fmt.Errorf("session/prompt sessionId is required")
+	}
+	session, ok := s.lookupSession(params.SessionID)
 	if !ok {
-		return nil, nil, fmt.Errorf("unknown session %q", params.SessionID)
+		return promptExecution{}, fmt.Errorf("unknown session %q", params.SessionID)
 	}
+
 	var builder strings.Builder
 	for _, block := range params.Prompt {
 		builder.WriteString(block.Text)
 	}
 	prompt := strings.TrimSpace(builder.String())
+
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.active {
+		return promptExecution{}, fmt.Errorf("session %q already has an active prompt", params.SessionID)
+	}
+	promptContext, cancel := context.WithCancel(ctx)
+	session.active = true
+	session.cancelled = false
+	session.cancel = cancel
+	return promptExecution{
+		session:   session,
+		ctx:       promptContext,
+		sessionID: params.SessionID,
+		prompt:    prompt,
+	}, nil
+}
+
+func (s *Server) executePrompt(execution promptExecution) (any, *rpcNotification, error) {
+	defer execution.finish()
 	var buffer bytes.Buffer
-	if err := runner.Run(ctx, prompt, &buffer, headless.FormatText); err != nil {
+	err := execution.session.runner.Run(execution.ctx, execution.prompt, &buffer, headless.FormatText)
+	if execution.wasCancelled() {
+		return promptResult{StopReason: "cancelled"}, nil, nil
+	}
+	if err != nil {
 		return nil, nil, err
 	}
 	text := strings.TrimRight(buffer.String(), "\n")
@@ -210,7 +346,7 @@ func (s *Server) prompt(ctx context.Context, raw json.RawMessage) (any, *rpcNoti
 		JSONRPC: "2.0",
 		Method:  "session/update",
 		Params: map[string]any{
-			"sessionId": params.SessionID,
+			"sessionId": execution.sessionID,
 			"update": map[string]any{
 				"sessionUpdate": "agent_message_chunk",
 				"content": map[string]any{
@@ -223,11 +359,63 @@ func (s *Server) prompt(ctx context.Context, raw json.RawMessage) (any, *rpcNoti
 	return promptResult{StopReason: "end_turn"}, notify, nil
 }
 
+func (s *Server) cancelPrompt(raw json.RawMessage) error {
+	var params cancelParams
+	if err := json.Unmarshal(raw, &params); err != nil {
+		return fmt.Errorf("decode session/cancel: %w", err)
+	}
+	params.SessionID = strings.TrimSpace(params.SessionID)
+	if params.SessionID == "" {
+		return fmt.Errorf("session/cancel sessionId is required")
+	}
+	session, ok := s.lookupSession(params.SessionID)
+	if !ok {
+		return fmt.Errorf("unknown session %q", params.SessionID)
+	}
+
+	session.mu.Lock()
+	cancel := session.cancel
+	if session.active && cancel != nil {
+		session.cancelled = true
+	}
+	session.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	return nil
+}
+
+func (s *Server) lookupSession(sessionID string) (*acpSession, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, ok := s.sessions[sessionID]
+	return session, ok
+}
+
+func (e promptExecution) wasCancelled() bool {
+	e.session.mu.Lock()
+	defer e.session.mu.Unlock()
+	return e.session.cancelled
+}
+
+func (e promptExecution) finish() {
+	e.session.mu.Lock()
+	cancel := e.session.cancel
+	e.session.active = false
+	e.session.cancelled = false
+	e.session.cancel = nil
+	e.session.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
 func writeJSON(output io.Writer, value any) error {
 	payload, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("encode ACP message: %w", err)
 	}
-	_, err = fmt.Fprintf(output, "%s\n", payload)
+	payload = append(payload, '\n')
+	_, err = output.Write(payload)
 	return err
 }
