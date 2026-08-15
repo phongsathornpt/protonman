@@ -74,6 +74,10 @@ func TestFileStoreRejectsUnsafeTargetsAndIDs(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, []string{".env"})
 	store := newTestStore(t, filepath.Join(t.TempDir(), "checkpoints"), workspaceRoot)
 	outside := filepath.Join(t.TempDir(), "outside.txt")
+	directory := filepath.Join(workspaceRoot.Root(), "directory")
+	if err := os.Mkdir(directory, 0o755); err != nil {
+		t.Fatalf("Mkdir() error = %v", err)
+	}
 
 	for _, test := range []struct {
 		name string
@@ -82,7 +86,7 @@ func TestFileStoreRejectsUnsafeTargetsAndIDs(t *testing.T) {
 	}{
 		{name: "protected", path: filepath.Join(workspaceRoot.Root(), ".env"), want: workspace.ErrProtectedPath},
 		{name: "outside", path: outside, want: workspace.ErrOutsideWorkspace},
-		{name: "directory", path: workspaceRoot.Root(), want: ErrUnsupportedCheckpointTarget},
+		{name: "directory", path: directory, want: ErrUnsupportedCheckpointTarget},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := store.Capture(context.Background(), []string{test.path})
