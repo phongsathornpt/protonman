@@ -199,8 +199,18 @@ func (w *Workspace) isProtected(path string) bool {
 	for _, entry := range w.protected {
 		if entry.glob {
 			relative, err := filepath.Rel(w.root, path)
-			if err == nil && globMatch(entry.pattern, filepath.ToSlash(relative)) {
-				return true
+			if err == nil {
+				relative = filepath.ToSlash(relative)
+				if globMatch(entry.pattern, relative) {
+					return true
+				}
+				// In glob syntax, a leading **/ means zero or more directory
+				// components. The generic matcher already handles one or more;
+				// this explicit zero-directory case protects root-level matches
+				// such as server.pem for **/*.pem.
+				if strings.HasPrefix(entry.pattern, "**/") && globMatch(strings.TrimPrefix(entry.pattern, "**/"), relative) {
+					return true
+				}
 			}
 			continue
 		}
@@ -293,7 +303,6 @@ func globMatch(pattern string, value string) bool {
 					current[valueIndex+1] = previous[valueIndex]
 				}
 			}
-		}
 		previous = current
 	}
 	return previous[len(v)]
