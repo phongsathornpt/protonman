@@ -60,6 +60,11 @@ type Event struct {
 // Sink receives loop events in emission order.
 type Sink func(context.Context, Event) error
 
+// Runner is the injectable model/tool loop used by TUI, headless, and ACP adapters.
+type Runner interface {
+	Run(context.Context, []model.Message, Sink) (Result, error)
+}
+
 // Result is the final assistant response from a completed turn.
 type Result struct {
 	Message model.Message
@@ -122,6 +127,8 @@ type Loop struct {
 	toolTimeout      time.Duration
 	maxParallelReads int
 }
+
+var _ Runner = (*Loop)(nil)
 
 // NewLoop creates a provider-neutral model/tool execution loop.
 func NewLoop(client model.Client, tools *toolcall.Service, options ...Option) (*Loop, error) {

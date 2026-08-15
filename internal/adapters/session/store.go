@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/domain/model"
 	"github.com/projectTHORN/proton/internal/domain/permission"
 )
 
@@ -35,10 +36,10 @@ type State struct {
 
 // Message is one persisted conversation turn without tool arguments.
 type Message struct {
-	Role       string `json:"role"`
-	Content    string `json:"content,omitempty"`
-	ToolName   string `json:"tool_name,omitempty"`
-	ToolCallID string `json:"tool_call_id,omitempty"`
+	Role       model.Role `json:"role"`
+	Content    string     `json:"content,omitempty"`
+	ToolName   string     `json:"tool_name,omitempty"`
+	ToolCallID string     `json:"tool_call_id,omitempty"`
 }
 
 // ErrInvalidSessionID indicates that an ID could escape the session store
@@ -189,10 +190,13 @@ func sanitizeMessages(messages []Message) []Message {
 
 func validateMessages(messages []Message) error {
 	for _, message := range messages {
-		switch message.Role {
-		case "system", "user", "assistant", "tool":
-		default:
-			return fmt.Errorf("unsupported message role %q", message.Role)
+		if err := (model.Message{
+			Role:       message.Role,
+			Content:    message.Content,
+			ToolName:   message.ToolName,
+			ToolCallID: message.ToolCallID,
+		}).Validate(); err != nil {
+			return err
 		}
 	}
 	return nil
