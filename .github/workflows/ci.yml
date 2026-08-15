@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Go verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Show Go version
+        run: go version
+
+      - name: Check formatting
+        shell: bash
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [[ -n "$unformatted" ]]; then
+            echo "The following files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Race test
+        run: go test -race ./...
