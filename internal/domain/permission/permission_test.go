@@ -107,6 +107,32 @@ func TestPolicyDomainPatternNormalizesHost(t *testing.T) {
 	}
 }
 
+func TestPolicyDomainPatternIsCaseInsensitive(t *testing.T) {
+	policy, err := NewPolicy(Config{
+		Rules: []Rule{
+			{
+				Action:      ActionDeny,
+				Tool:        ToolWebFetch,
+				Pattern:     "*.Example.COM",
+				PatternMode: PatternModeDomain,
+			},
+		},
+		Default: ActionAllow,
+	})
+	if err != nil {
+		t.Fatalf("NewPolicy() error = %v", err)
+	}
+
+	decision := policy.Evaluate(Request{
+		ToolName: "web_fetch",
+		ToolKind: ToolWebFetch,
+		Detail:   "https://api.example.com/v1/status",
+	})
+	if decision.Action != ActionDeny {
+		t.Fatalf("Evaluate().Action = %s, want deny", decision.Action)
+	}
+}
+
 func TestNewPolicyRejectsInvalidRule(t *testing.T) {
 	_, err := NewPolicy(Config{
 		Rules: []Rule{{Action: ActionUnknown, Tool: ToolBash}},
