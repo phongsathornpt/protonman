@@ -244,30 +244,67 @@ func (s *FileStore) validateRestoreEntries(ctx context.Context, entries []fileSn
 }
 
 func snapshotFile(ctx context.Context, workspaceRoot *workspace.Workspace, path string) (fileSnapshot, int, error) {
-	relativePath, err := filepath.Rel(workspaceRoot.Root(), path)
+	relativePath, err := checkpointRelativePath(workspaceRoot, path)
 	if err != nil {
-		return fileSnapshot{}, 0, fmt.Errorf("relative checkpoint path: %w", err)
+		return fileSnapshot{}, 0, err
 	}
-	info, err := os.Lstat(path)
+	parentRoot, base, err := workspaceRoot.OpenParentNoSymlinks(ctx, path, false)
+	if errors.Is(err, os.ErrNotExist) {
+		return fileSnapshot{Path: filepath.ToSlash(relativePath)}, 0, nil
+	}
+	if err != nil {
+		return fileSnapshot{}, 0, err
+	}
+	defer parentRoot.Close()
+
+	info, err := parentRoot.Lstat(base)
 	if errors.Is(err, os.ErrNotExist) {
 		return fileSnapshot{Path: filepath.ToSlash(relativePath)}, 0, nil
 	}
 	if err != nil {
 		return fileSnapshot{}, 0, fmt.Errorf("stat checkpoint target: %w", err)
 	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fileSnapshot{}, 0, fmt.Errorf("%w: checkpoint target %q", workspace.ErrSymlinkPath, relativePath)
+	}
 	if !info.Mode().IsRegular() {
 		return fileSnapshot{}, 0, fmt.Errorf("%w: %q", ErrUnsupportedCheckpointTarget, relativePath)
 	}
-	if info.Size() > maxCheckpointFileSize {
+	file, err := parentRoot.Open(base)
+	if err != nil {
+		return fileSnapshot{}, 0, fmt.Errorf("open checkpoint target: %w", err)
+	}
+	openedInfo, statErr := file.Stat()
+	if statErr != nil {
+		_ = file.Close()
+		return fileSnapshot{}, 0, fmt.Errorf("stat opened checkpoint target: %w", statErr)
+	}
+	if !os.SameFile(info, openedInfo) {
+		_ = file.Close()
+		return fileSnapshot{}, 0, fmt.Errorf("checkpoint target %q changed during validation", relativePath)
+	}
+	if !openedInfo.Mode().IsRegular() {
+		_ = file.Close()
+		return fileSnapshot{}, 0, fmt.Errorf("%w: %q", ErrUnsupportedCheckpointTarget, relativePath)
+	}
+	if openedInfo.Size() > maxCheckpointFileSize {
+		_ = file.Close()
 		return fileSnapshot{}, 0, fmt.Errorf(
 			"checkpoint file %q exceeds %d MiB",
 			relativePath,
 			maxCheckpointFileSize/(1024*1024),
 		)
 	}
-	contents, err := os.ReadFile(path)
-	if err != nil {
-		return fileSnapshot{}, 0, fmt.Errorf("read checkpoint target: %w", err)
+	contents, readErr := io.ReadAll(io.LimitReader(file, maxCheckpointFileSize+1))
+	closeErr := file.Close()
+	if readErr != nil {
+		return fileSnapshot{}, 0, fmt.Errorf("read checkpoint target: %w", readErr)
+	}
+	if closeErr != nil {
+		return fileSnapshot{}, 0, fmt.Errorf("close checkpoint target: %w", closeErr)
+	}
+	if len(contents) > maxCheckpointFileSize {
+		return fileSnapshot{}, 0, fmt.Errorf("checkpoint file %q exceeds %d MiB", relativePath, maxCheckpointFileSize/(1024*1024))
 	}
 	if err := ctx.Err(); err != nil {
 		return fileSnapshot{}, 0, fmt.Errorf("after reading checkpoint target: %w", err)
@@ -275,7 +312,7 @@ func snapshotFile(ctx context.Context, workspaceRoot *workspace.Workspace, path 
 	return fileSnapshot{
 		Path:    filepath.ToSlash(relativePath),
 		Exists:  true,
-		Mode:    uint32(info.Mode().Perm()),
+		Mode:    uint32(openedInfo.Mode().Perm()),
 		Content: contents,
 	}, len(contents), nil
 }
@@ -409,27 +446,35 @@ func writeWorkspaceFile(
 	path string,
 	snapshot fileSnapshot,
 ) error {
-	if err := workspaceRoot.CheckAbsolute(ctx, path); err != nil {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("before restoring file: %w", err)
+	}
+	parentRoot, base, err := workspaceRoot.OpenParentNoSymlinks(ctx, path, true)
+	if err != nil {
 		return err
 	}
-	parent := filepath.Dir(path)
-	if err := workspaceRoot.CheckAbsolute(ctx, parent); err != nil {
-		return err
+	defer parentRoot.Close()
+	if info, statErr := parentRoot.Lstat(base); statErr == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("%w: restore target %q", workspace.ErrSymlinkPath, path)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("%w: restore target %q is not a regular file", ErrUnsupportedCheckpointTarget, path)
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return fmt.Errorf("stat restore target: %w", statErr)
 	}
-	if err := os.MkdirAll(parent, 0o755); err != nil {
-		return fmt.Errorf("create restore parent: %w", err)
-	}
-	temporary, err := os.CreateTemp(parent, ".proton-restore-*")
+
+	temporary, temporaryName, err := createCheckpointRootTemp(parentRoot, ".proton-restore-")
 	if err != nil {
 		return fmt.Errorf("create restore temporary: %w", err)
 	}
-	temporaryPath := temporary.Name()
 	closed := false
 	defer func() {
 		if !closed {
 			_ = temporary.Close()
 		}
-		_ = os.Remove(temporaryPath)
+		_ = parentRoot.Remove(temporaryName)
 	}()
 	mode := os.FileMode(snapshot.Mode)
 	if mode == 0 {
@@ -451,17 +496,25 @@ func writeWorkspaceFile(
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("before installing restore: %w", err)
 	}
-	if err := os.Rename(temporaryPath, path); err != nil {
+	if err := parentRoot.Rename(temporaryName, base); err != nil {
 		return fmt.Errorf("install restore: %w", err)
 	}
 	return nil
 }
 
 func removeWorkspaceFile(ctx context.Context, workspaceRoot *workspace.Workspace, path string) error {
-	if err := workspaceRoot.CheckAbsolute(ctx, path); err != nil {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("before removing restored file: %w", err)
+	}
+	parentRoot, base, err := workspaceRoot.OpenParentNoSymlinks(ctx, path, false)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
 		return err
 	}
-	info, err := os.Lstat(path)
+	defer parentRoot.Close()
+	info, err := parentRoot.Lstat(base)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -471,10 +524,39 @@ func removeWorkspaceFile(ctx context.Context, workspaceRoot *workspace.Workspace
 	if info.IsDir() {
 		return fmt.Errorf("%w: restore target %q is a directory", ErrUnsupportedCheckpointTarget, path)
 	}
-	if err := os.Remove(path); err != nil {
+	if err := parentRoot.Remove(base); err != nil {
 		return fmt.Errorf("remove restore target: %w", err)
 	}
 	return nil
+}
+
+func checkpointRelativePath(workspaceRoot *workspace.Workspace, path string) (string, error) {
+	relative, err := filepath.Rel(workspaceRoot.Root(), filepath.Clean(path))
+	if err != nil {
+		return "", fmt.Errorf("relative checkpoint path: %w", err)
+	}
+	if relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("checkpoint path %q is outside workspace", path)
+	}
+	return relative, nil
+}
+
+func createCheckpointRootTemp(root *os.Root, prefix string) (*os.File, string, error) {
+	for attempt := 0; attempt < 16; attempt++ {
+		var random [8]byte
+		if _, err := rand.Read(random[:]); err != nil {
+			return nil, "", fmt.Errorf("generate restore temporary name: %w", err)
+		}
+		name := prefix + hex.EncodeToString(random[:])
+		file, err := root.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+		if err == nil {
+			return file, name, nil
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return nil, "", err
+		}
+	}
+	return nil, "", fmt.Errorf("could not allocate a unique restore temporary file")
 }
 
 var _ domaincheckpoint.Store = (*FileStore)(nil)
