@@ -106,11 +106,8 @@ func run(ctx context.Context, args []string) error {
 	}
 	registry, err := tools.NewDefaultRegistry(
 		workspaceRoot,
-		checkpointStore,
-		tools.RegistryExtra{
-			Launcher: launcher,
-			Network:  sandboxProfile.Network,
-		},
+		tools.WithCheckpointStore(checkpointStore),
+		tools.WithSandbox(launcher, sandboxProfile.Network),
 	)
 	if err != nil {
 		return fmt.Errorf("create tool registry: %w", err)

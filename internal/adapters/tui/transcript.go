@@ -10,11 +10,10 @@ import (
 
 const maxBubbleScrollback = 1000
 
-// BlockKind classifies one transcript entry for Grok-like rendering.
-type BlockKind uint8
+type blockKind uint8
 
 const (
-	blockUser BlockKind = iota
+	blockUser blockKind = iota
 	blockAssistant
 	blockTool
 	blockSystem
@@ -23,7 +22,7 @@ const (
 
 // Block is one typed transcript entry.
 type Block struct {
-	Kind    BlockKind
+	Kind    blockKind
 	Title   string
 	Body    string
 	Running bool

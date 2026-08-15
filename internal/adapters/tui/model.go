@@ -30,7 +30,7 @@ type bubbleModel struct {
 	ctx      context.Context
 	service  *toolcall.Service
 	registry tool.Registry
-	runner   TurnRunner
+	runner   applicationturn.Runner
 	bridge   *permissionBridge
 	workDir  string
 
@@ -80,7 +80,7 @@ func newBubbleModel(
 	service *toolcall.Service,
 	registry tool.Registry,
 	todo []TodoItem,
-	runner TurnRunner,
+	runner applicationturn.Runner,
 	bridge *permissionBridge,
 	workDir string,
 ) *bubbleModel {

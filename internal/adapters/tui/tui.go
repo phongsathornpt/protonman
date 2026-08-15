@@ -10,7 +10,6 @@ import (
 
 	"github.com/projectTHORN/proton/internal/application/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/application/turn"
-	"github.com/projectTHORN/proton/internal/domain/model"
 	"github.com/projectTHORN/proton/internal/domain/permission"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
@@ -18,13 +17,8 @@ import (
 // BubbleTeaOption configures the Bubble Tea fullscreen adapter.
 type BubbleTeaOption func(*BubbleTeaUI) error
 
-// TurnRunner is the optional provider-neutral model loop used by prompt input.
-type TurnRunner interface {
-	Run(context.Context, []model.Message, applicationturn.Sink) (applicationturn.Result, error)
-}
-
 // WithBubbleTeaRunner connects ordinary prompt input to the model/tool loop.
-func WithBubbleTeaRunner(runner TurnRunner) BubbleTeaOption {
+func WithBubbleTeaRunner(runner applicationturn.Runner) BubbleTeaOption {
 	return func(ui *BubbleTeaUI) error {
 		ui.runner = runner
 		return nil
@@ -44,7 +38,7 @@ type BubbleTeaUI struct {
 	service  *toolcall.Service
 	registry tool.Registry
 	todo     []TodoItem
-	runner   TurnRunner
+	runner   applicationturn.Runner
 	bridge   *permissionBridge
 	workDir  string
 }
