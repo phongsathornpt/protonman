@@ -114,9 +114,9 @@ separate, regression-tested changes rather than broad refactors.
 - [x] Implement real ACP `session/cancel`: keep per-session cancel functions,
   continue reading protocol input while a prompt is active, and complete the
   original prompt with `stopReason: cancelled`.
-- [ ] Harden filesystem mutations against symlink TOCTOU between path checks
-  and `Open`/`MkdirAll`/`CreateTemp`/`Rename`; prefer descriptor-relative or
-  no-follow operations where supported.
+- [x] Harden edit and checkpoint filesystem I/O against symlink TOCTOU with
+  pinned `os.Root` parent handles, no-symlink mutation paths, `SameFile`
+  identity checks, and root-relative temp/rename/remove operations.
 - [ ] Add OS integration tests that execute the sandbox boundary, including
   denied writes outside the workspace, allowed workspace writes, read-only
   denial, runtime command availability, and network blocking.
