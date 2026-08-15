@@ -1,4 +1,4 @@
-// Command proton starts the Proton coding-agent bootstrap UI.
+// Command proton starts the Proton coding-agent TUI or a headless run.
 package main
 
 import (
@@ -11,8 +11,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/projectTHORN/proton/internal/adapters/acp"
 	checkpointadapter "github.com/projectTHORN/proton/internal/adapters/checkpoint"
 	"github.com/projectTHORN/proton/internal/adapters/config"
+	"github.com/projectTHORN/proton/internal/adapters/headless"
+	"github.com/projectTHORN/proton/internal/adapters/sandbox"
 	"github.com/projectTHORN/proton/internal/adapters/session"
 	"github.com/projectTHORN/proton/internal/adapters/telemetry"
 	"github.com/projectTHORN/proton/internal/adapters/tools"
@@ -20,16 +23,27 @@ import (
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
 	"github.com/projectTHORN/proton/internal/application/toolcall"
 	"github.com/projectTHORN/proton/internal/domain/permission"
+	domainsandbox "github.com/projectTHORN/proton/internal/domain/sandbox"
+	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
 func main() {
-	if err := run(context.Background()); err != nil {
+	if err := run(context.Background(), os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context) error {
+func run(ctx context.Context, args []string) error {
+	options, err := parseArgs(args)
+	if err != nil {
+		return fmt.Errorf("%v\n\n%s", err, usage())
+	}
+	if options.help {
+		fmt.Fprint(os.Stdout, usage())
+		return nil
+	}
+
 	homeDir := strings.TrimSpace(os.Getenv("PROTON_HOME"))
 	if homeDir == "" {
 		resolvedHome, err := os.UserHomeDir()
@@ -70,7 +84,34 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("create checkpoint store: %w", err)
 	}
 
-	registry, err := tools.NewDefaultRegistry(workspaceRoot, checkpointStore)
+	sandboxName := loadedConfig.Sandbox
+	if configured := strings.TrimSpace(options.sandbox); configured != "" {
+		sandboxName, err = domainsandbox.ParseName(configured)
+		if err != nil {
+			return err
+		}
+	} else if configured := strings.TrimSpace(os.Getenv("PROTON_SANDBOX")); configured != "" {
+		sandboxName, err = domainsandbox.ParseName(configured)
+		if err != nil {
+			return err
+		}
+	}
+	sandboxProfile, err := domainsandbox.NewProfile(sandboxName, workDir)
+	if err != nil {
+		return fmt.Errorf("create sandbox profile: %w", err)
+	}
+	var launcher sandbox.Launcher
+	if sandboxProfile.Confines() {
+		launcher = sandbox.NewOSLauncher(sandboxProfile)
+	}
+	registry, err := tools.NewDefaultRegistry(
+		workspaceRoot,
+		checkpointStore,
+		tools.RegistryExtra{
+			Launcher: launcher,
+			Network:  sandboxProfile.Network,
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("create tool registry: %w", err)
 	}
@@ -96,6 +137,14 @@ func run(ctx context.Context) error {
 			return fmt.Errorf("restore session %q: %w", sessionID, err)
 		}
 	}
+	if options.yolo {
+		initialMode = permission.ModeAlwaysApprove
+	} else if strings.TrimSpace(options.mode) != "" {
+		initialMode, err = permission.ParseMode(options.mode)
+		if err != nil {
+			return err
+		}
+	}
 
 	serviceOptions := []toolcall.Option{toolcall.WithMode(initialMode)}
 	observer, observerErr := configuredTelemetryObserver()
@@ -114,10 +163,32 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("create tool-call service: %w", err)
 	}
 
+	if options.acp {
+		server, serverErr := acp.New(service, registry, nil)
+		if serverErr != nil {
+			return fmt.Errorf("create ACP server: %w", serverErr)
+		}
+		return server.Serve(ctx, os.Stdin, os.Stdout)
+	}
+	headlessPrompt := strings.TrimSpace(options.prompt)
+	if options.headless && headlessPrompt == "" {
+		headlessPrompt, err = readStdinPrompt()
+		if err != nil {
+			return err
+		}
+	}
+	if headlessPrompt != "" {
+		return runHeadless(ctx, service, registry, stateStore, sessionID, state, headlessPrompt, options.output)
+	}
+	if !stdinIsTerminal() || !stdoutIsTerminal() {
+		return fmt.Errorf("refusing to start the TUI without a terminal; use -p, --headless, or --acp")
+	}
+
 	bubbleUI, uiErr := tui.NewBubbleTea(
 		service,
 		registry,
 		loadTodoItems(workDir),
+		tui.WithWorkDir(workDir),
 	)
 	if uiErr != nil {
 		return fmt.Errorf("create Bubble Tea UI: %w", uiErr)
@@ -125,12 +196,51 @@ func run(ctx context.Context) error {
 	runErr := bubbleUI.Run(ctx)
 	saveErr := stateStore.Save(ctx, sessionID, session.State{
 		PermissionMode: service.Mode().String(),
+		Messages:       state.Messages,
 	})
 	if runErr != nil && saveErr != nil {
 		return fmt.Errorf("run terminal UI: %v; save session: %w", runErr, saveErr)
 	}
 	if runErr != nil {
 		return fmt.Errorf("run terminal UI: %w", runErr)
+	}
+	if saveErr != nil {
+		return fmt.Errorf("save session: %w", saveErr)
+	}
+	return nil
+}
+
+func runHeadless(
+	ctx context.Context,
+	service *toolcall.Service,
+	registry tool.Registry,
+	stateStore *session.FileStore,
+	sessionID string,
+	state session.State,
+	prompt string,
+	outputFormat string,
+) error {
+	format, err := headless.ParseFormat(outputFormat)
+	if err != nil {
+		return err
+	}
+	runner, err := headless.New(service, registry, nil)
+	if err != nil {
+		return fmt.Errorf("create headless runner: %w", err)
+	}
+	if err := runner.LoadSession(state); err != nil {
+		return fmt.Errorf("restore session transcript: %w", err)
+	}
+	runErr := runner.Run(ctx, prompt, os.Stdout, format)
+	saveErr := stateStore.Save(ctx, sessionID, session.State{
+		PermissionMode: service.Mode().String(),
+		Messages:       runner.SessionState(),
+	})
+	if runErr != nil && saveErr != nil {
+		return fmt.Errorf("run headless: %v; save session: %w", runErr, saveErr)
+	}
+	if runErr != nil {
+		return fmt.Errorf("run headless: %w", runErr)
 	}
 	if saveErr != nil {
 		return fmt.Errorf("save session: %w", saveErr)
