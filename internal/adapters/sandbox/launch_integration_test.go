@@ -18,8 +18,8 @@ import (
 const requireSandboxIntegrationEnv = "PROTON_REQUIRE_SANDBOX_INTEGRATION"
 
 func TestSandboxIntegrationWorkspaceBoundary(t *testing.T) {
-	workspaceDir := t.TempDir()
-	outsideDir := t.TempDir()
+	workspaceDir := integrationTempDir(t)
+	outsideDir := integrationTempDir(t)
 	insidePath := filepath.Join(workspaceDir, "inside.txt")
 	outsidePath := filepath.Join(outsideDir, "outside.txt")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -52,7 +52,7 @@ func TestSandboxIntegrationWorkspaceBoundary(t *testing.T) {
 }
 
 func TestSandboxIntegrationReadOnlyDeniesWorkspaceWrites(t *testing.T) {
-	workspaceDir := t.TempDir()
+	workspaceDir := integrationTempDir(t)
 	blockedPath := filepath.Join(workspaceDir, "blocked.txt")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -71,7 +71,7 @@ func TestSandboxIntegrationReadOnlyDeniesWorkspaceWrites(t *testing.T) {
 }
 
 func TestSandboxIntegrationRuntimeBinaryAvailable(t *testing.T) {
-	workspaceDir := t.TempDir()
+	workspaceDir := integrationTempDir(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -86,7 +86,7 @@ func TestSandboxIntegrationRuntimeBinaryAvailable(t *testing.T) {
 }
 
 func TestSandboxIntegrationStrictBlocksHostNetwork(t *testing.T) {
-	workspaceDir := t.TempDir()
+	workspaceDir := integrationTempDir(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen for host network probe: %v", err)
@@ -152,6 +152,16 @@ func integrationLauncher(t *testing.T, name domainsandbox.Name, workspaceDir str
 		integrationUnavailable(t, fmt.Sprintf("start %s sandbox probe: %v; output=%s", name, err, output))
 	}
 	return launcher
+}
+
+func integrationTempDir(t *testing.T) string {
+	t.Helper()
+	directory := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(directory)
+	if err != nil {
+		t.Fatalf("resolve integration temp directory: %v", err)
+	}
+	return resolved
 }
 
 func requireSandboxExecutable(t *testing.T) {
