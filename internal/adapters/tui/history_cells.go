@@ -63,6 +63,7 @@ func (c AssistantCell) LineCount() int     { return len(c.RawLines()) }
 // ToolCell is the generic representation for a tool that has no specialized
 // presentation model.
 type ToolCell struct {
+	CallID      string
 	Name        string
 	Body        string
 	Running     bool
@@ -90,6 +91,7 @@ func (c ToolCell) RawLines() []string {
 	return out
 }
 func (c ToolCell) LineCount() int           { return len(c.RawLines()) }
+func (c ToolCell) historyToolID() string    { return c.CallID }
 func (c ToolCell) historyToolName() string  { return c.Name }
 func (c ToolCell) historyToolRunning() bool { return c.Running }
 func (c ToolCell) bodyLines() []string {
@@ -98,6 +100,7 @@ func (c ToolCell) bodyLines() []string {
 
 // ExecCell gives shell execution a compact, command-oriented presentation.
 type ExecCell struct {
+	CallID      string
 	Name        string
 	Command     string
 	Body        string
@@ -134,6 +137,7 @@ func (c ExecCell) RawLines() []string {
 	return out
 }
 func (c ExecCell) LineCount() int           { return len(c.RawLines()) }
+func (c ExecCell) historyToolID() string    { return c.CallID }
 func (c ExecCell) historyToolName() string  { return c.Name }
 func (c ExecCell) historyToolRunning() bool { return c.Running }
 
@@ -141,6 +145,7 @@ func (c ExecCell) historyToolRunning() bool { return c.Running }
 // effort presentation metadata derived from already-validated tool arguments;
 // they never participate in authorization or execution.
 type PatchCell struct {
+	CallID      string
 	Name        string
 	Summary     string
 	Paths       []string
@@ -182,6 +187,7 @@ func (c PatchCell) RawLines() []string {
 	return out
 }
 func (c PatchCell) LineCount() int           { return len(c.RawLines()) }
+func (c PatchCell) historyToolID() string    { return c.CallID }
 func (c PatchCell) historyToolName() string  { return c.Name }
 func (c PatchCell) historyToolRunning() bool { return c.Running }
 
@@ -242,6 +248,7 @@ func (c ErrorCell) LineCount() int { return len(c.RawLines()) }
 
 type runningHistoryTool interface {
 	HistoryCell
+	historyToolID() string
 	historyToolName() string
 	historyToolRunning() bool
 }
@@ -300,6 +307,10 @@ func (s *HistoryState) StartTool(name string) {
 	s.StartToolCell(&ToolCell{Name: name, Running: true})
 }
 
+func (s *HistoryState) StartToolCall(callID string, name string) {
+	s.StartToolCell(&ToolCell{CallID: callID, Name: name, Running: true})
+}
+
 func (s *HistoryState) StartToolCell(cell HistoryCell) {
 	if cell == nil {
 		return
@@ -310,20 +321,27 @@ func (s *HistoryState) StartToolCell(cell HistoryCell) {
 
 func (s *HistoryState) CompleteTool(completed ToolCell) {
 	completed.Running = false
-	s.CompleteToolCell(completed.Name, &completed)
+	s.CompleteToolCall(completed.CallID, completed.Name, &completed)
 }
 
+// CompleteToolCell is the name-based compatibility path used by legacy tests.
+// Runtime tool events should use CompleteToolCall so parallel calls of the same
+// tool cannot be confused.
 func (s *HistoryState) CompleteToolCell(name string, completed HistoryCell) {
+	s.CompleteToolCall("", name, completed)
+}
+
+func (s *HistoryState) CompleteToolCall(callID string, name string, completed HistoryCell) {
 	if completed == nil {
 		return
 	}
-	if runningToolMatches(s.active, name) {
+	if runningToolMatches(s.active, callID, name) {
 		s.active = completed
 		s.CommitActive()
 		return
 	}
 	for i := len(s.committed) - 1; i >= 0; i-- {
-		if !runningToolMatches(s.committed[i], name) {
+		if !runningToolMatches(s.committed[i], callID, name) {
 			continue
 		}
 		s.committed[i] = completed
@@ -333,9 +351,15 @@ func (s *HistoryState) CompleteToolCell(name string, completed HistoryCell) {
 	s.Append(completed)
 }
 
-func runningToolMatches(cell HistoryCell, name string) bool {
+func runningToolMatches(cell HistoryCell, callID string, name string) bool {
 	running, ok := cell.(runningHistoryTool)
-	return ok && running.historyToolRunning() && running.historyToolName() == name
+	if !ok || !running.historyToolRunning() {
+		return false
+	}
+	if callID != "" {
+		return running.historyToolID() == callID
+	}
+	return name != "" && running.historyToolName() == name
 }
 
 func (s *HistoryState) CommitActive() {
