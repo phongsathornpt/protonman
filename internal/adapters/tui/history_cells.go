@@ -19,8 +19,8 @@ const (
 // HistoryCell is the renderable unit of TUI conversation history.
 //
 // Rich rendering and raw/copy-friendly output intentionally live behind the
-// same abstraction so specialized cells (exec, patch, plan, MCP) can evolve
-// without teaching the root Bubble Tea model about every presentation type.
+// same abstraction so specialized cells can evolve without teaching the root
+// Bubble Tea model about every presentation type.
 type HistoryCell interface {
 	Kind() HistoryCellKind
 	Render() []string
@@ -60,8 +60,8 @@ func (c AssistantCell) Render() []string {
 func (c AssistantCell) RawLines() []string { return rawTextLines(c.Text) }
 func (c AssistantCell) LineCount() int      { return len(c.RawLines()) }
 
-// ToolCell represents one tool execution. It may be committed while still
-// running when another parallel tool becomes the active cell.
+// ToolCell is the generic representation for a tool that has no specialized
+// presentation model.
 type ToolCell struct {
 	Name        string
 	Body        string
@@ -89,24 +89,119 @@ func (c ToolCell) RawLines() []string {
 	out = append(out, c.bodyLines()...)
 	return out
 }
-func (c ToolCell) LineCount() int { return len(c.RawLines()) }
+func (c ToolCell) LineCount() int        { return len(c.RawLines()) }
+func (c ToolCell) historyToolName() string { return c.Name }
+func (c ToolCell) historyToolRunning() bool { return c.Running }
 func (c ToolCell) bodyLines() []string {
-	body := strings.TrimRight(c.Body, "\n")
+	return resultBodyLines(c.Body, c.ExitCode, c.Truncated, c.Denied, c.FailureCode)
+}
+
+// ExecCell gives shell execution a compact, command-oriented presentation.
+type ExecCell struct {
+	Name        string
+	Command     string
+	Body        string
+	Running     bool
+	ExitCode    *int
+	Truncated   bool
+	Denied      bool
+	FailureCode string
+}
+
+func (ExecCell) Kind() HistoryCellKind { return HistoryCellTool }
+func (c ExecCell) Render() []string {
+	command := strings.TrimSpace(c.Command)
+	if command == "" {
+		command = c.Name
+	}
+	header := "$ " + sanitizeBubbleText(command)
+	if c.Running {
+		header += " …"
+	}
+	out := []string{commandStyle.Render(header)}
+	for _, line := range resultBodyLines(c.Body, c.ExitCode, c.Truncated, c.Denied, c.FailureCode) {
+		out = append(out, bodyStyle.Render("  "+sanitizeBubbleText(line)))
+	}
+	return out
+}
+func (c ExecCell) RawLines() []string {
+	command := strings.TrimSpace(c.Command)
+	if command == "" {
+		command = c.Name
+	}
+	out := []string{"$ " + sanitizeBubbleText(command)}
+	out = append(out, resultBodyLines(c.Body, c.ExitCode, c.Truncated, c.Denied, c.FailureCode)...)
+	return out
+}
+func (c ExecCell) LineCount() int           { return len(c.RawLines()) }
+func (c ExecCell) historyToolName() string  { return c.Name }
+func (c ExecCell) historyToolRunning() bool { return c.Running }
+
+// PatchCell gives edit tools a change-oriented presentation. Paths are best
+// effort presentation metadata derived from already-validated tool arguments;
+// they never participate in authorization or execution.
+type PatchCell struct {
+	Name        string
+	Summary     string
+	Paths       []string
+	Body        string
+	Running     bool
+	Truncated   bool
+	Denied      bool
+	FailureCode string
+}
+
+func (PatchCell) Kind() HistoryCellKind { return HistoryCellTool }
+func (c PatchCell) Render() []string {
+	title := c.Name
+	if strings.TrimSpace(c.Summary) != "" {
+		title += " · " + c.Summary
+	}
+	if c.Running {
+		title += " …"
+	}
+	out := []string{planStyle.Render("Δ " + sanitizeBubbleText(title))}
+	for _, path := range c.Paths {
+		out = append(out, mutedStyle.Render("  "+sanitizeBubbleText(path)))
+	}
+	for _, line := range resultBodyLines(c.Body, nil, c.Truncated, c.Denied, c.FailureCode) {
+		out = append(out, bodyStyle.Render("  "+sanitizeBubbleText(line)))
+	}
+	return out
+}
+func (c PatchCell) RawLines() []string {
+	title := c.Name
+	if strings.TrimSpace(c.Summary) != "" {
+		title += " · " + c.Summary
+	}
+	out := []string{"Δ " + sanitizeBubbleText(title)}
+	for _, path := range c.Paths {
+		out = append(out, sanitizeBubbleText(path))
+	}
+	out = append(out, resultBodyLines(c.Body, nil, c.Truncated, c.Denied, c.FailureCode)...)
+	return out
+}
+func (c PatchCell) LineCount() int           { return len(c.RawLines()) }
+func (c PatchCell) historyToolName() string  { return c.Name }
+func (c PatchCell) historyToolRunning() bool { return c.Running }
+
+func resultBodyLines(body string, exitCode *int, truncated bool, denied bool, failureCode string) []string {
+	body = strings.TrimRight(body, "\n")
 	parts := make([]string, 0, strings.Count(body, "\n")+4)
 	if body != "" {
 		parts = append(parts, rawTextLines(body)...)
 	}
-	if c.ExitCode != nil {
-		parts = append(parts, fmt.Sprintf("exit %d", *c.ExitCode))
+	if exitCode != nil {
+		parts = append(parts, fmt.Sprintf("exit %d", *exitCode))
 	}
-	if c.Truncated {
+	if truncated {
 		parts = append(parts, "output truncated")
 	}
-	if c.Denied {
+	if denied {
 		parts = append(parts, "denied")
 	}
-	if c.FailureCode != "" {
-		parts = append(parts, "failure: "+c.FailureCode)
+	if failureCode != "" {
+		parts = append(parts, "failure: "+failureCode)
 	}
 	return parts
 }
@@ -145,9 +240,14 @@ func (c ErrorCell) RawLines() []string {
 }
 func (c ErrorCell) LineCount() int { return len(c.RawLines()) }
 
+type runningHistoryTool interface {
+	HistoryCell
+	historyToolName() string
+	historyToolRunning() bool
+}
+
 // HistoryState separates finalized transcript cells from one mutable in-flight
-// cell. This mirrors the interaction model used by modern coding-agent TUIs
-// while remaining independent of the model/tool execution layer.
+// cell. Renderers always see committed cells plus the live active tail.
 type HistoryState struct {
 	committed []HistoryCell
 	active    HistoryCell
@@ -167,6 +267,10 @@ func (s *HistoryState) Cells() []HistoryCell {
 		cells = append(cells, s.active)
 	}
 	return cells
+}
+
+func (s *HistoryState) Committed() []HistoryCell {
+	return append([]HistoryCell{}, s.committed...)
 }
 
 func (s *HistoryState) Active() HistoryCell { return s.active }
@@ -193,27 +297,45 @@ func (s *HistoryState) AppendAssistantDelta(delta string) {
 }
 
 func (s *HistoryState) StartTool(name string) {
+	s.StartToolCell(&ToolCell{Name: name, Running: true})
+}
+
+func (s *HistoryState) StartToolCell(cell HistoryCell) {
+	if cell == nil {
+		return
+	}
 	s.CommitActive()
-	s.active = &ToolCell{Name: name, Running: true}
+	s.active = cell
 }
 
 func (s *HistoryState) CompleteTool(completed ToolCell) {
 	completed.Running = false
-	if active, ok := s.active.(*ToolCell); ok && active.Name == completed.Name {
-		s.active = &completed
+	s.CompleteToolCell(completed.Name, &completed)
+}
+
+func (s *HistoryState) CompleteToolCell(name string, completed HistoryCell) {
+	if completed == nil {
+		return
+	}
+	if runningToolMatches(s.active, name) {
+		s.active = completed
 		s.CommitActive()
 		return
 	}
 	for i := len(s.committed) - 1; i >= 0; i-- {
-		running, ok := s.committed[i].(*ToolCell)
-		if !ok || !running.Running || running.Name != completed.Name {
+		if !runningToolMatches(s.committed[i], name) {
 			continue
 		}
-		s.committed[i] = &completed
+		s.committed[i] = completed
 		s.trim()
 		return
 	}
-	s.Append(&completed)
+	s.Append(completed)
+}
+
+func runningToolMatches(cell HistoryCell, name string) bool {
+	running, ok := cell.(runningHistoryTool)
+	return ok && running.historyToolRunning() && running.historyToolName() == name
 }
 
 func (s *HistoryState) CommitActive() {
