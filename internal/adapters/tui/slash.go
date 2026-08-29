@@ -12,6 +12,7 @@ import (
 )
 
 const maxSlashRows = 6
+const slashViewID = "slash"
 
 type slashCommand struct {
 	name        string
@@ -26,10 +27,40 @@ var slashCatalog = []slashCommand{
 	{name: "mode", description: "show or set permission mode", takesArgs: true},
 	{name: "always-approve", aliases: []string{"yolo"}, description: "allow non-denied calls"},
 	{name: "plan", description: "toggle plan flag", takesArgs: true},
+	{name: "transcript", aliases: []string{"history"}, description: "open transcript"},
 	{name: "todo", description: "show the TODO pane"},
 	{name: "clear", aliases: []string{"new"}, description: "clear the transcript"},
 	{name: "call", description: "run a registered tool", takesArgs: true},
 	{name: "quit", aliases: []string{"exit"}, description: "leave Proton"},
+}
+
+type slashPaneView struct{ index int }
+
+func (*slashPaneView) ID() string                    { return slashViewID }
+func (*slashPaneView) ReplacesComposer() bool        { return false }
+func (v *slashPaneView) Render(m *bubbleModel) string { return m.renderSlash(v.index) }
+func (v *slashPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+	switch message.String() {
+	case "up":
+		m.moveSlash(-1)
+		return true, nil
+	case "down":
+		m.moveSlash(1)
+		return true, nil
+	case "tab":
+		_, command := m.acceptSlash(false)
+		return true, command
+	case "enter":
+		_, command := m.acceptSlash(true)
+		return true, command
+	case "esc":
+		// Dismiss completion without destroying the draft. Editing the command
+		// token can reopen completion through syncSlashView.
+		m.bottom.remove(slashViewID)
+		return true, nil
+	default:
+		return false, nil
+	}
 }
 
 func isCommandLine(line string) bool {
@@ -94,10 +125,14 @@ func fuzzyContains(target, query string) bool {
 }
 
 func (m bubbleModel) slashQuery() (prefix string, query string, ok bool) {
-	if m.bashMode || m.modal != nil {
+	if m.bottom == nil || m.bottom.bashMode() || m.bottom.has(permissionViewID) {
 		return "", "", false
 	}
-	value := m.prompt.Value()
+	prompt := m.bottom.prompt()
+	if prompt == nil {
+		return "", "", false
+	}
+	value := prompt.Value()
 	if !strings.HasPrefix(value, "/") && !strings.HasPrefix(value, ":") {
 		return "", "", false
 	}
@@ -123,79 +158,123 @@ func (m bubbleModel) slashMatches() []slashCommand {
 	return matches
 }
 
+func (m *bubbleModel) slashState() *slashPaneView {
+	if m.bottom == nil {
+		return nil
+	}
+	view, _ := m.bottom.find(slashViewID).(*slashPaneView)
+	return view
+}
+
+func (m *bubbleModel) syncSlashView() {
+	if m.bottom == nil {
+		return
+	}
+	matches := m.slashMatches()
+	if len(matches) == 0 {
+		m.bottom.remove(slashViewID)
+		return
+	}
+	view := m.slashState()
+	if view == nil {
+		view = &slashPaneView{}
+		m.bottom.push(view)
+	}
+	if view.index >= len(matches) {
+		view.index = len(matches) - 1
+	}
+	if view.index < 0 {
+		view.index = 0
+	}
+}
+
 func (m bubbleModel) slashOpen() bool {
-	return len(m.slashMatches()) > 0
+	return m.bottom != nil && m.bottom.has(slashViewID) && len(m.slashMatches()) > 0
 }
 
 func (m *bubbleModel) clampSlashIndex() {
-	matches := m.slashMatches()
-	if len(matches) == 0 {
-		m.slashIndex = 0
+	m.syncSlashView()
+	view := m.slashState()
+	if view == nil {
 		return
 	}
-	if m.slashIndex >= len(matches) {
-		m.slashIndex = len(matches) - 1
+	matches := m.slashMatches()
+	if view.index >= len(matches) {
+		view.index = len(matches) - 1
 	}
-	if m.slashIndex < 0 {
-		m.slashIndex = 0
+	if view.index < 0 {
+		view.index = 0
 	}
 }
 
 func (m *bubbleModel) moveSlash(delta int) {
+	m.syncSlashView()
+	view := m.slashState()
 	matches := m.slashMatches()
-	if len(matches) == 0 {
+	if view == nil || len(matches) == 0 {
 		return
 	}
-	m.slashIndex += delta
-	if m.slashIndex < 0 {
-		m.slashIndex = 0
+	view.index += delta
+	if view.index < 0 {
+		view.index = 0
 	}
-	if m.slashIndex >= len(matches) {
-		m.slashIndex = len(matches) - 1
+	if view.index >= len(matches) {
+		view.index = len(matches) - 1
 	}
 }
 
 func (m *bubbleModel) acceptSlash(run bool) (applied bool, command tea.Cmd) {
+	m.syncSlashView()
+	view := m.slashState()
 	matches := m.slashMatches()
-	if len(matches) == 0 {
+	if view == nil || len(matches) == 0 {
 		return false, nil
 	}
 	m.clampSlashIndex()
-	selected := matches[m.slashIndex]
+	selected := matches[view.index]
 	prefix, _, _ := m.slashQuery()
 	insertion := prefix + selected.name
+	prompt := m.bottom.prompt()
 	if selected.takesArgs {
 		insertion += " "
-		m.prompt.SetValue(insertion)
-		m.prompt.CursorEnd()
-		m.slashIndex = 0
+		prompt.SetValue(insertion)
+		prompt.CursorEnd()
+		m.bottom.remove(slashViewID)
 		return true, nil
 	}
 	if !run {
-		m.prompt.SetValue(insertion)
-		m.prompt.CursorEnd()
+		prompt.SetValue(insertion)
+		prompt.CursorEnd()
+		m.bottom.remove(slashViewID)
 		return true, nil
 	}
-	m.prompt.Reset()
+	prompt.Reset()
+	m.bottom.remove(slashViewID)
 	return true, m.dispatch(insertion)
 }
 
-func (m bubbleModel) slashView() string {
+func (m bubbleModel) renderSlash(index int) string {
 	matches := m.slashMatches()
 	if len(matches) == 0 {
 		return ""
 	}
+	if index < 0 {
+		index = 0
+	}
+	if index >= len(matches) {
+		index = len(matches) - 1
+	}
 	visible := matches
 	offset := 0
 	if len(visible) > maxSlashRows {
-		if m.slashIndex >= maxSlashRows {
-			offset = m.slashIndex - maxSlashRows + 1
+		if index >= maxSlashRows {
+			offset = index - maxSlashRows + 1
 		}
 		visible = matches[offset : offset+maxSlashRows]
 	}
 	lines := make([]string, 0, len(visible))
 	for i, command := range visible {
-		selected := offset+i == m.slashIndex
+		selected := offset+i == index
 		label := "/" + command.name
 		if selected {
 			row := glyphPrompt + fmt.Sprintf("%-16s %s", label, command.description)
@@ -206,6 +285,13 @@ func (m bubbleModel) slashView() string {
 		lines = append(lines, mutedStyle.Render(row))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (m bubbleModel) slashView() string {
+	if view := m.slashState(); view != nil {
+		return view.Render(&m)
+	}
+	return ""
 }
 
 func (m *bubbleModel) executeCommand(line string) tea.Cmd {
@@ -236,7 +322,7 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 			return nil
 		}
 		if mode == permission.ModeAlwaysApprove {
-			m.planMode = false
+			m.setPlanEnabled(false)
 		}
 		m.appendLine("permission mode: " + mode.String())
 	case "always-approve", "yolo":
@@ -245,10 +331,13 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 			m.refreshViewport()
 			return nil
 		}
-		m.planMode = false
+		m.setPlanEnabled(false)
 		m.appendLine("permission mode: " + permission.ModeAlwaysApprove.String())
 	case "plan":
 		m.setPlanMode(argument)
+	case "transcript", "history":
+		m.showTranscript = true
+		m.refreshTranscriptViewport(true)
 	case "todo":
 		m.todoHidden = false
 		m.appendTodo()
