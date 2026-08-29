@@ -89,9 +89,9 @@ func (c ToolCell) RawLines() []string {
 	out = append(out, c.bodyLines()...)
 	return out
 }
-func (c ToolCell) LineCount() int        { return len(c.RawLines()) }
-func (c ToolCell) historyToolName() string { return c.Name }
-func (c ToolCell) historyToolRunning() bool { return c.Running }
+func (c ToolCell) LineCount() int            { return len(c.RawLines()) }
+func (c ToolCell) historyToolName() string   { return c.Name }
+func (c ToolCell) historyToolRunning() bool  { return c.Running }
 func (c ToolCell) bodyLines() []string {
 	return resultBodyLines(c.Body, c.ExitCode, c.Truncated, c.Denied, c.FailureCode)
 }
