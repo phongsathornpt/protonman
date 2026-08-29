@@ -10,6 +10,7 @@ import (
 
 	"github.com/projectTHORN/proton/internal/application/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/application/turn"
+	"github.com/projectTHORN/proton/internal/domain/model"
 	"github.com/projectTHORN/proton/internal/domain/permission"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
@@ -33,14 +34,24 @@ func WithWorkDir(dir string) BubbleTeaOption {
 	}
 }
 
+// WithInitialMessages restores a previously persisted provider-neutral transcript.
+func WithInitialMessages(messages []model.Message) BubbleTeaOption {
+	return func(ui *BubbleTeaUI) error {
+		ui.initialMessages = model.CloneMessages(messages)
+		return nil
+	}
+}
+
 // BubbleTeaUI is the Bubble Tea terminal adapter over Proton services.
 type BubbleTeaUI struct {
-	service  *toolcall.Service
-	registry tool.Registry
-	todo     []TodoItem
-	runner   applicationturn.Runner
-	bridge   *permissionBridge
-	workDir  string
+	service         *toolcall.Service
+	registry        tool.Registry
+	todo            []TodoItem
+	runner          applicationturn.Runner
+	bridge          *permissionBridge
+	workDir         string
+	initialMessages []model.Message
+	finalMessages   []model.Message
 }
 
 // NewBubbleTea creates the component-based fullscreen TUI.
@@ -70,6 +81,7 @@ func NewBubbleTea(
 			return nil, err
 		}
 	}
+	ui.finalMessages = model.CloneMessages(ui.initialMessages)
 	return ui, nil
 }
 
@@ -80,6 +92,13 @@ func (ui *BubbleTeaUI) PermissionPrompt(
 	request permission.Request,
 ) (permission.Resolution, error) {
 	return ui.bridge.Prompt(ctx, request)
+}
+
+// SessionState returns the latest provider-neutral conversation state owned by
+// the TUI. The returned slice can be persisted without sharing mutable backing
+// storage with the live Bubble Tea model.
+func (ui *BubbleTeaUI) SessionState() []model.Message {
+	return model.CloneMessages(ui.finalMessages)
 }
 
 // Run starts Bubble Tea with raw input, alternate-screen rendering, and mouse
@@ -95,12 +114,25 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 	defer ui.bridge.Close()
 
 	program := tea.NewProgram(
-		newBubbleModel(runCtx, ui.service, ui.registry, ui.todo, ui.runner, ui.bridge, ui.workDir),
+		newBubbleModel(
+			runCtx,
+			ui.service,
+			ui.registry,
+			ui.todo,
+			ui.runner,
+			ui.bridge,
+			ui.workDir,
+			ui.initialMessages,
+		),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 		tea.WithContext(runCtx),
 	)
-	if _, err := program.Run(); err != nil {
+	finalModel, err := program.Run()
+	if modelState, ok := finalModel.(*bubbleModel); ok {
+		ui.finalMessages = model.CloneMessages(modelState.messages)
+	}
+	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return fmt.Errorf("run Bubble Tea UI: %w", ctxErr)
 		}
