@@ -144,22 +144,29 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 	state := m.ensureHistoryState()
 	handler, ok := m.registry.Lookup(call.Name)
 	if !ok {
-		state.StartTool(call.Name)
+		state.StartToolCall(call.ID, call.Name)
 		m.syncLegacyBlocks()
 		return
 	}
 	switch handler.Definition().Kind {
 	case tool.KindBash:
 		state.StartToolCell(&ExecCell{
+			CallID:  call.ID,
 			Name:    call.Name,
 			Command: extractStringArg(call.Arguments, "command"),
 			Running: true,
 		})
 	case tool.KindEdit:
 		summary, paths := editPresentation(call)
-		state.StartToolCell(&PatchCell{Name: call.Name, Summary: summary, Paths: paths, Running: true})
+		state.StartToolCell(&PatchCell{
+			CallID:  call.ID,
+			Name:    call.Name,
+			Summary: summary,
+			Paths:   paths,
+			Running: true,
+		})
 	default:
-		state.StartTool(call.Name)
+		state.StartToolCall(call.ID, call.Name)
 	}
 	m.syncLegacyBlocks()
 }
@@ -183,7 +190,7 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 			errorCell.Text = fmt.Sprintf("[%s]: %s", result.Failure.Code, result.Failure.Message)
 			errorCell.Code = string(result.Failure.Code)
 		}
-		state.CompleteToolCell(name, errorCell)
+		state.CompleteToolCall(result.CallID, name, errorCell)
 		m.syncLegacyBlocks()
 		return
 	}
@@ -191,45 +198,64 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 	if errors.Is(err, context.Canceled) || failureCode(result) == tool.ErrorCodeCanceled {
 		body = "cancelled"
 	}
-	completed := m.completedToolCell(name, body, result)
-	state.CompleteToolCell(name, completed)
+	completed := m.completedToolCell(result.CallID, name, body, result)
+	state.CompleteToolCall(result.CallID, name, completed)
 	m.syncLegacyBlocks()
 }
 
-func (m *bubbleModel) completedToolCell(name, body string, result tool.Result) HistoryCell {
+func (m *bubbleModel) completedToolCell(callID string, name string, body string, result tool.Result) HistoryCell {
 	failureCode := ""
 	if result.Failure != nil {
 		failureCode = string(result.Failure.Code)
 	}
-	if running := m.runningToolCell(name); running != nil {
+	if running := m.runningToolCell(callID, name); running != nil {
 		switch typed := running.(type) {
 		case *ExecCell:
 			return &ExecCell{
-				Name: typed.Name, Command: typed.Command, Body: body,
-				ExitCode: result.ExitCode, Truncated: result.Truncated,
-				Denied: result.Denied, FailureCode: failureCode,
+				CallID:      typed.CallID,
+				Name:        typed.Name,
+				Command:     typed.Command,
+				Body:        body,
+				ExitCode:    result.ExitCode,
+				Truncated:   result.Truncated,
+				Denied:      result.Denied,
+				FailureCode: failureCode,
 			}
 		case *PatchCell:
 			return &PatchCell{
-				Name: typed.Name, Summary: typed.Summary, Paths: append([]string{}, typed.Paths...),
-				Body: body, Truncated: result.Truncated, Denied: result.Denied, FailureCode: failureCode,
+				CallID:      typed.CallID,
+				Name:        typed.Name,
+				Summary:     typed.Summary,
+				Paths:       append([]string{}, typed.Paths...),
+				Body:        body,
+				Truncated:   result.Truncated,
+				Denied:      result.Denied,
+				FailureCode: failureCode,
 			}
+		case *ToolCell:
+			callID = typed.CallID
+			name = typed.Name
 		}
 	}
 	return &ToolCell{
-		Name: name, Body: body, ExitCode: result.ExitCode,
-		Truncated: result.Truncated, Denied: result.Denied, FailureCode: failureCode,
+		CallID:      callID,
+		Name:        name,
+		Body:        body,
+		ExitCode:    result.ExitCode,
+		Truncated:   result.Truncated,
+		Denied:      result.Denied,
+		FailureCode: failureCode,
 	}
 }
 
-func (m *bubbleModel) runningToolCell(name string) HistoryCell {
+func (m *bubbleModel) runningToolCell(callID string, name string) HistoryCell {
 	state := m.ensureHistoryState()
-	if runningToolMatches(state.Active(), name) {
+	if runningToolMatches(state.Active(), callID, name) {
 		return state.Active()
 	}
 	committed := state.Committed()
 	for i := len(committed) - 1; i >= 0; i-- {
-		if runningToolMatches(committed[i], name) {
+		if runningToolMatches(committed[i], callID, name) {
 			return committed[i]
 		}
 	}
@@ -254,7 +280,7 @@ func failureCode(result tool.Result) tool.ErrorCode {
 }
 
 func (m *bubbleModel) replaceRunningTool(name string, replacement Block) bool {
-	if m.runningToolCell(name) == nil {
+	if m.runningToolCell("", name) == nil {
 		return false
 	}
 	var cell HistoryCell
@@ -276,7 +302,14 @@ func (m *bubbleModel) applyTurnEvent(event applicationturn.Event) {
 	case applicationturn.EventToolCall:
 		m.appendToolCall(event.Call)
 	case applicationturn.EventToolResult:
-		m.applyToolResult(event.Call.Name, event.Result, nil)
+		result := event.Result
+		if result.CallID == "" {
+			result.CallID = event.Call.ID
+		}
+		if result.ToolName == "" {
+			result.ToolName = event.Call.Name
+		}
+		m.applyToolResult(event.Call.Name, result, nil)
 	case applicationturn.EventCompleted:
 		m.ensureHistoryState().CommitActive()
 		m.syncLegacyBlocks()
