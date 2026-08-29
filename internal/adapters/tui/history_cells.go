@@ -36,7 +36,7 @@ func (c UserCell) Render() []string {
 	return []string{userStyle.Render(glyphMark) + bodyStyle.Render(sanitizeBubbleText(c.Text))}
 }
 func (c UserCell) RawLines() []string { return rawTextLines(c.Text) }
-func (c UserCell) LineCount() int      { return len(c.RawLines()) }
+func (c UserCell) LineCount() int     { return len(c.RawLines()) }
 
 // AssistantCell is mutable while assistant output is streaming.
 type AssistantCell struct{ Text string }
@@ -58,7 +58,7 @@ func (c AssistantCell) Render() []string {
 	return out
 }
 func (c AssistantCell) RawLines() []string { return rawTextLines(c.Text) }
-func (c AssistantCell) LineCount() int      { return len(c.RawLines()) }
+func (c AssistantCell) LineCount() int     { return len(c.RawLines()) }
 
 // ToolCell is the generic representation for a tool that has no specialized
 // presentation model.
@@ -89,9 +89,9 @@ func (c ToolCell) RawLines() []string {
 	out = append(out, c.bodyLines()...)
 	return out
 }
-func (c ToolCell) LineCount() int            { return len(c.RawLines()) }
-func (c ToolCell) historyToolName() string   { return c.Name }
-func (c ToolCell) historyToolRunning() bool  { return c.Running }
+func (c ToolCell) LineCount() int           { return len(c.RawLines()) }
+func (c ToolCell) historyToolName() string  { return c.Name }
+func (c ToolCell) historyToolRunning() bool { return c.Running }
 func (c ToolCell) bodyLines() []string {
 	return resultBodyLines(c.Body, c.ExitCode, c.Truncated, c.Denied, c.FailureCode)
 }
@@ -214,7 +214,7 @@ func (c SystemCell) Render() []string {
 	return renderStyledLines(c.Text, func(line string) string { return mutedStyle.Render(line) })
 }
 func (c SystemCell) RawLines() []string { return rawTextLines(c.Text) }
-func (c SystemCell) LineCount() int      { return len(c.RawLines()) }
+func (c SystemCell) LineCount() int     { return len(c.RawLines()) }
 
 // ErrorCell renders a failed operation.
 type ErrorCell struct {
