@@ -38,6 +38,7 @@ func applyPromptChrome(prompt *textarea.Model, bash bool) {
 
 func (m *bubbleModel) setBashMode(on bool) {
 	m.bottom.setBashMode(on)
+	m.bashMode = on
 	m.syncSlashView()
 }
 
