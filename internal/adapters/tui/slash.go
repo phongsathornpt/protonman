@@ -36,9 +36,11 @@ var slashCatalog = []slashCommand{
 
 type slashPaneView struct{ index int }
 
-func (*slashPaneView) ID() string                    { return slashViewID }
-func (*slashPaneView) ReplacesComposer() bool        { return false }
-func (v *slashPaneView) Render(m *bubbleModel) string { return m.renderSlash(v.index) }
+func (*slashPaneView) ID() string             { return slashViewID }
+func (*slashPaneView) ReplacesComposer() bool { return false }
+func (v *slashPaneView) Render(m *bubbleModel) string {
+	return m.renderSlash(v.index)
+}
 func (v *slashPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
 	switch message.String() {
 	case "up":
@@ -189,7 +191,7 @@ func (m *bubbleModel) syncSlashView() {
 }
 
 func (m bubbleModel) slashOpen() bool {
-	return m.bottom != nil && m.bottom.has(slashViewID) && len(m.slashMatches()) > 0
+	return len(m.slashMatches()) > 0
 }
 
 func (m *bubbleModel) clampSlashIndex() {
