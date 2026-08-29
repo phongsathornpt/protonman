@@ -145,6 +145,14 @@ func (p *bottomPane) historyNavigating() bool {
 }
 
 func (p *bottomPane) renderTop(m *bubbleModel) string {
+	if p == nil {
+		return ""
+	}
+	// Keep old in-package tests that seed m.modal directly working while the
+	// runtime itself owns approval state exclusively in the view stack.
+	if p.top() == nil && m != nil && m.modal != nil {
+		m.openPermission(*m.modal)
+	}
 	if top := p.top(); top != nil {
 		return top.Render(m)
 	}
