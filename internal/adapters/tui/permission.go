@@ -12,6 +12,8 @@ import (
 	"github.com/projectTHORN/proton/internal/domain/permission"
 )
 
+const permissionViewID = "permission"
+
 type permissionOption int
 
 const (
@@ -52,15 +54,9 @@ func newPermissionBridge() *permissionBridge {
 	}
 }
 
-func (b *permissionBridge) Prompt(
-	ctx context.Context,
-	request permission.Request,
-) (permission.Resolution, error) {
+func (b *permissionBridge) Prompt(ctx context.Context, request permission.Request) (permission.Resolution, error) {
 	response := make(chan permissionResponse, 1)
-	pending := permissionRequest{
-		request:  request,
-		response: response,
-	}
+	pending := permissionRequest{request: request, response: response}
 	select {
 	case b.requests <- pending:
 	case <-ctx.Done():
@@ -89,85 +85,123 @@ func (b *permissionBridge) Next() tea.Cmd {
 	}
 }
 
-func (b *permissionBridge) Close() {
-	b.once.Do(func() { close(b.done) })
+func (b *permissionBridge) Close() { b.once.Do(func() { close(b.done) }) }
+
+type permissionPaneView struct {
+	pending permissionRequest
+	parked  bool
+	index   int
 }
 
-func (m *bubbleModel) updatePermission(message tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.modalParked {
+func (*permissionPaneView) ID() string             { return permissionViewID }
+func (*permissionPaneView) ReplacesComposer() bool { return true }
+func (v *permissionPaneView) Render(m *bubbleModel) string {
+	return v.card(m)
+}
+
+func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+	if v.parked {
 		switch message.String() {
 		case "tab":
-			m.modalParked = false
+			v.parked = false
 			m.activity = "waiting for permission"
-			return m, nil
+			return true, nil
 		case "pgup":
 			m.viewport.PageUp()
 			m.followTail = m.viewport.AtBottom()
-			return m, nil
+			return true, nil
 		case "pgdown":
 			m.viewport.PageDown()
 			m.followTail = m.viewport.AtBottom()
-			return m, nil
+			return true, nil
 		case "up", "k":
 			m.viewport.LineUp(1)
 			m.followTail = m.viewport.AtBottom()
-			return m, nil
+			return true, nil
 		case "down", "j":
 			m.viewport.LineDown(1)
 			m.followTail = m.viewport.AtBottom()
-			return m, nil
+			return true, nil
 		case "y", "s", "n", "ctrl+c", "1", "2", "3", "enter":
-			// Resolve even while parked so a decision is never blocked.
+			// Decisions remain available while parked.
 		default:
-			return m, nil
+			return true, nil
 		}
 	}
 
 	switch message.String() {
 	case "esc":
-		m.modalParked = true
+		v.parked = true
 		m.activity = "permission — tab to return"
-		return m, nil
+		return true, nil
 	case "up", "k":
-		if m.permIndex > 0 {
-			m.permIndex--
+		if v.index > 0 {
+			v.index--
 		}
-		return m, nil
+		return true, nil
 	case "down", "j":
-		if m.permIndex < len(permissionOptions)-1 {
-			m.permIndex++
+		if v.index < len(permissionOptions)-1 {
+			v.index++
 		}
-		return m, nil
+		return true, nil
 	case "1":
-		return m.resolvePermission(optionAllowOnce)
+		return true, m.resolvePermission(optionAllowOnce)
 	case "2":
-		return m.resolvePermission(optionAllowSession)
+		return true, m.resolvePermission(optionAllowSession)
 	case "3":
-		return m.resolvePermission(optionDeny)
+		return true, m.resolvePermission(optionDeny)
 	case "y":
-		return m.resolvePermission(optionAllowOnce)
+		return true, m.resolvePermission(optionAllowOnce)
 	case "s":
-		return m.resolvePermission(optionAllowSession)
+		return true, m.resolvePermission(optionAllowSession)
 	case "n", "ctrl+c":
-		return m.resolvePermission(optionDeny)
+		return true, m.resolvePermission(optionDeny)
 	case "enter":
-		return m.resolvePermission(permissionOptions[m.permIndex].option)
+		return true, m.resolvePermission(permissionOptions[v.index].option)
 	default:
-		return m, nil
+		return true, nil
 	}
 }
 
-func (m *bubbleModel) resolvePermission(option permissionOption) (tea.Model, tea.Cmd) {
-	if m.modal == nil {
+func (m *bubbleModel) permissionView() *permissionPaneView {
+	if m.bottom == nil {
+		return nil
+	}
+	view, _ := m.bottom.find(permissionViewID).(*permissionPaneView)
+	return view
+}
+
+func (m *bubbleModel) hasPermissionView() bool { return m.permissionView() != nil }
+
+func (m *bubbleModel) openPermission(request permissionRequest) {
+	if m.bottom == nil {
+		return
+	}
+	m.bottom.push(&permissionPaneView{pending: request})
+	if m.activity != "waiting for permission" {
+		m.pendingActivity = m.activity
+	}
+	m.activity = "waiting for permission"
+}
+
+func (m *bubbleModel) updatePermission(message tea.KeyMsg) (tea.Model, tea.Cmd) {
+	view := m.permissionView()
+	if view == nil {
 		return m, nil
+	}
+	_, command := view.HandleKey(m, message)
+	return m, command
+}
+
+func (m *bubbleModel) resolvePermission(option permissionOption) tea.Cmd {
+	view := m.permissionView()
+	if view == nil {
+		return nil
 	}
 	var resolution permission.Resolution
 	switch option {
 	case optionAllowOnce:
-		resolution = permission.Resolution{
-			Action: permission.ActionAllow,
-			Reason: "user allowed one call",
-		}
+		resolution = permission.Resolution{Action: permission.ActionAllow, Reason: "user allowed one call"}
 	case optionAllowSession:
 		resolution = permission.Resolution{
 			Action: permission.ActionAllow,
@@ -175,24 +209,28 @@ func (m *bubbleModel) resolvePermission(option permissionOption) (tea.Model, tea
 			Reason: "user allowed this exact request for the session",
 		}
 	default:
-		resolution = permission.Resolution{
-			Action: permission.ActionDeny,
-			Reason: "user denied one call",
-		}
+		resolution = permission.Resolution{Action: permission.ActionDeny, Reason: "user denied one call"}
 	}
-	m.modal.response <- permissionResponse{resolution: resolution}
-	m.modal = nil
-	m.modalParked = false
-	m.permIndex = 0
+	view.pending.response <- permissionResponse{resolution: resolution}
+	m.bottom.remove(permissionViewID)
 	m.activity = m.pendingActivity
 	if m.activity == "" || m.activity == "waiting for permission" {
 		m.activity = "running tool"
 	}
-	return m, nil
+	m.syncSlashView()
+	return nil
 }
 
 func (m bubbleModel) permissionCard() string {
-	request := m.modal.request
+	view := m.permissionView()
+	if view == nil {
+		return ""
+	}
+	return view.card(&m)
+}
+
+func (v *permissionPaneView) card(m *bubbleModel) string {
+	request := v.pending.request
 	destructive := request.ToolKind == permission.ToolBash || request.ToolKind == permission.ToolEdit
 	title := "Permission required"
 	titleStyle := warningStyle
@@ -210,16 +248,15 @@ func (m bubbleModel) permissionCard() string {
 	rows = append(rows, "")
 	for i, option := range permissionOptions {
 		marker := "  "
-		label := option.label
-		if i == m.permIndex && !m.modalParked {
+		if i == v.index && !v.parked {
 			marker = glyphPrompt
-			rows = append(rows, brandStyle.Render(marker+label))
+			rows = append(rows, brandStyle.Render(marker+option.label))
 			continue
 		}
-		rows = append(rows, mutedStyle.Render(marker+label))
+		rows = append(rows, mutedStyle.Render(marker+option.label))
 	}
 	rows = append(rows, "")
-	if m.modalParked {
+	if v.parked {
 		rows = append(rows, mutedStyle.Render("tab return   y/s/n still work   pgup/pgdn scroll"))
 	} else {
 		rows = append(rows, mutedStyle.Render("j/k move   1-3 select   y once   s session   n deny   esc read"))
@@ -230,8 +267,5 @@ func (m bubbleModel) permissionCard() string {
 		Render(strings.Join(rows, "\n"))
 }
 
-type permissionRequestMsg struct {
-	request permissionRequest
-}
-
+type permissionRequestMsg struct{ request permissionRequest }
 type permissionBridgeClosedMsg struct{}
