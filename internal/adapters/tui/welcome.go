@@ -7,7 +7,7 @@ func (m bubbleModel) welcomeCard() string {
 	if cwd := strings.TrimSpace(m.workDir); cwd != "" {
 		title += mutedStyle.Render("  " + cwd)
 	}
-	hint := mutedStyle.Render("Ask anything · /help")
+	hint := mutedStyle.Render("Ask anything · /help · ctrl+t transcript")
 	if m.runner == nil {
 		hint = mutedStyle.Render("No model configured · /help · /call <tool> <json>")
 	}
@@ -22,9 +22,11 @@ func promptPlaceholder(hasRunner bool) string {
 }
 
 func (m *bubbleModel) resetTranscript() {
-	m.blocks = make([]Block, 0)
+	m.ensureHistoryState().Reset()
+	m.syncLegacyBlocks()
 	m.followTail = true
 	m.showWelcome = true
+	m.refreshTranscriptViewport(true)
 }
 
 func minInt(left int, right int) int {
