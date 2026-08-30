@@ -19,16 +19,16 @@ func (m bubbleModel) statusView() string {
 		}
 		return statusStyle.Render(m.spinner.View() + " " + activity)
 	}
-	if m.modal != nil {
-		return warningStyle.Render("waiting for permission")
+	if m.hasPermissionView() {
+		return warningStyle.Render("action required · permission")
 	}
 	return ""
 }
 
 func (m bubbleModel) infoView() string {
-	if m.modal != nil {
-		if m.modalParked {
-			return mutedStyle.Render("tab return · y allow · s this request · n deny · pgup scroll")
+	if view := m.permissionView(); view != nil {
+		if view.parked {
+			return mutedStyle.Render("tab return · y allow · s session · n deny · pgup scroll")
 		}
 		return mutedStyle.Render("j/k move · 1-3 select · y once · s session · n deny · esc read")
 	}
@@ -36,8 +36,11 @@ func (m bubbleModel) infoView() string {
 	if n := len(m.queue); n > 0 {
 		parts = append(parts, mutedStyle.Render(fmt.Sprintf("%d queued", n)))
 	}
-	parts = append(parts, mutedStyle.Render("shift+tab"))
-	parts = append(parts, mutedStyle.Render("ctrl+l"))
+	parts = append(parts,
+		mutedStyle.Render("shift+tab mode"),
+		mutedStyle.Render("ctrl+t transcript"),
+		mutedStyle.Render("ctrl+l clear"),
+	)
 	return strings.Join(parts, mutedStyle.Render(glyphSep))
 }
 
@@ -56,13 +59,13 @@ func (m bubbleModel) modeChip() string {
 }
 
 func (m bubbleModel) shortcutHint() string {
-	if m.modal != nil {
+	if view := m.permissionView(); view != nil {
 		return m.infoView()
 	}
 	if m.slashOpen() {
 		return mutedStyle.Render("tab accept · enter run · esc close · ↑↓ move")
 	}
-	return mutedStyle.Render("enter send · shift+tab mode · ctrl+l clear · ctrl+c quit")
+	return mutedStyle.Render("enter send · ctrl+j newline · shift+tab mode · ctrl+t transcript · ctrl+c quit")
 }
 
 func (m *bubbleModel) cycleMode() {
@@ -193,9 +196,12 @@ func (m *bubbleModel) appendTodo() {
 }
 
 func (m bubbleModel) promptView() string {
+	if m.bottom == nil || m.bottom.prompt() == nil {
+		return ""
+	}
 	width := maxInt(1, m.width-2)
 	border := promptBorder
-	if m.bashMode {
+	if m.bottom.bashMode() {
 		border = commandColor
 	}
 	style := lipgloss.NewStyle().
@@ -203,5 +209,5 @@ func (m bubbleModel) promptView() string {
 		BorderForeground(border).
 		Padding(0, 1).
 		Width(width)
-	return style.Render(m.prompt.View())
+	return style.Render(m.bottom.prompt().View())
 }

@@ -10,35 +10,36 @@ const (
 	appVersion  = "dev"
 )
 
+// Prefer terminal-native ANSI colors so Proton remains readable across light,
+// dark and customized terminal themes. Primary body text intentionally uses
+// the terminal's default foreground.
 var (
-	accentAssistant = lipgloss.AdaptiveColor{Light: "#7D4BC6", Dark: "#BB9AF7"}
-	accentUser      = lipgloss.AdaptiveColor{Light: "#444444", Dark: "#C8C8C8"}
-	accentTool      = lipgloss.AdaptiveColor{Light: "#626262", Dark: "#787878"}
-	accentSystem    = lipgloss.AdaptiveColor{Light: "#2F64D2", Dark: "#7AA2F7"}
-	accentPlan      = lipgloss.AdaptiveColor{Light: "#A27612", Dark: "#FFDB8D"}
-	accentError     = lipgloss.AdaptiveColor{Light: "#CD3048", Dark: "#F7768E"}
-	accentSuccess   = lipgloss.AdaptiveColor{Light: "#378E23", Dark: "#9ECE6A"}
-	commandColor    = lipgloss.AdaptiveColor{Light: "#A27612", Dark: "#E0AF68"}
-	warningColor    = lipgloss.AdaptiveColor{Light: "#A27612", Dark: "#E0AF68"}
-	textPrimary     = lipgloss.AdaptiveColor{Light: "#262626", Dark: "#E1E1E1"}
-	mutedColor      = lipgloss.AdaptiveColor{Light: "#767676", Dark: "#6C6C6C"}
-	promptBorder    = lipgloss.AdaptiveColor{Light: "#B2B2B2", Dark: "#323237"}
+	accentAssistant = lipgloss.Color("5") // magenta: Proton identity
+	accentUser      = lipgloss.Color("6") // cyan: input/selection
+	accentTool      = lipgloss.Color("8") // dim tool chrome
+	accentSystem    = lipgloss.Color("6") // cyan: status/info
+	accentPlan      = lipgloss.Color("6")
+	accentError     = lipgloss.Color("1") // red
+	accentSuccess   = lipgloss.Color("2") // green
+	commandColor    = lipgloss.Color("6")
+	warningColor    = lipgloss.Color("5")
+	promptBorder    = lipgloss.Color("8")
 )
 
 var (
 	brandStyle     = lipgloss.NewStyle().Bold(true).Foreground(accentAssistant)
 	userStyle      = lipgloss.NewStyle().Foreground(accentUser)
-	assistantStyle = lipgloss.NewStyle().Foreground(accentAssistant)
+	assistantStyle = lipgloss.NewStyle()
 	toolStyle      = lipgloss.NewStyle().Foreground(accentTool)
 	systemStyle    = lipgloss.NewStyle().Foreground(accentSystem)
-	mutedStyle     = lipgloss.NewStyle().Foreground(mutedColor)
-	statusStyle    = lipgloss.NewStyle().Foreground(accentAssistant)
+	mutedStyle     = lipgloss.NewStyle().Faint(true)
+	statusStyle    = lipgloss.NewStyle().Foreground(accentSystem)
 	warningStyle   = lipgloss.NewStyle().Foreground(warningColor)
 	successStyle   = lipgloss.NewStyle().Foreground(accentSuccess)
 	errorStyle     = lipgloss.NewStyle().Foreground(accentError)
 	planStyle      = lipgloss.NewStyle().Foreground(accentPlan)
 	commandStyle   = lipgloss.NewStyle().Foreground(commandColor)
-	bodyStyle      = lipgloss.NewStyle().Foreground(textPrimary)
+	bodyStyle      = lipgloss.NewStyle()
 	modalStyle     = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(warningColor).
