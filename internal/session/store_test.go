@@ -51,7 +51,7 @@ func TestFileStorePersistsMessagesWithoutArguments(t *testing.T) {
 		PermissionMode: permission.ModeAsk.String(),
 		Messages: []Message{
 			{Role: model.RoleUser, Content: "list tools"},
-			{Role: model.RoleAssistant, Content: "use /tools"},
+			{Role: model.RoleAssistant, Content: "use /tools", ToolCalls: []ToolCall{{ID: "c1", Name: "read_file"}}},
 			{Role: model.RoleTool, Content: "ok", ToolName: "read_file", ToolCallID: "c1"},
 		},
 	}
@@ -70,6 +70,33 @@ func TestFileStorePersistsMessagesWithoutArguments(t *testing.T) {
 	}
 	if got.Messages[2].ToolName != "read_file" || got.Messages[2].Content != "ok" {
 		t.Fatalf("tool message = %+v", got.Messages[2])
+	}
+	if len(got.Messages[1].ToolCalls) != 1 || got.Messages[1].ToolCalls[0].Name != "read_file" {
+		t.Fatalf("assistant tool calls = %+v", got.Messages[1].ToolCalls)
+	}
+}
+
+func TestToolCallArgumentsAreNotPersisted(t *testing.T) {
+	store, err := NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewFileStore() error = %v", err)
+	}
+	if err := store.Save(context.Background(), "redacted", State{
+		PermissionMode: permission.ModeAsk.String(),
+		Messages: []Message{{
+			Role:      model.RoleAssistant,
+			ToolCalls: []ToolCall{{ID: "c1", Name: "bash"}},
+		}},
+	}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	loaded, found, err := store.Load(context.Background(), "redacted")
+	if err != nil || !found {
+		t.Fatalf("Load() = found %v, err %v", found, err)
+	}
+	modelMessages := ToModelMessages(loaded.Messages)
+	if got := string(modelMessages[0].ToolCalls[0].Arguments); got != "{}" {
+		t.Fatalf("restored tool arguments = %q, want redacted empty object", got)
 	}
 }
 
