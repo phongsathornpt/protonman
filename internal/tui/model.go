@@ -213,7 +213,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activity = "ready"
 		m.turnCancel = nil
 		m.appendToolResult(message.result, message.err)
-		m.refreshViewport()
+		m.relayout()
 		return m, m.drainQueue()
 	case turnDeltaMsg:
 		m.applyTurnEvent(message.event)
@@ -231,7 +231,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.messages = append(m.messages, message.result.Message)
 		}
 		m.appendTurnFailure(message.err)
-		m.refreshViewport()
+		m.relayout()
 		return m, m.drainQueue()
 	}
 	return m, nil
@@ -402,7 +402,7 @@ func (m *bubbleModel) startTool(call tool.Call) tea.Cmd {
 	m.busyStarted = time.Now()
 	m.activity = "running " + call.Name
 	m.appendToolCall(call)
-	m.refreshViewport()
+	m.relayout()
 
 	ctx, cancel := context.WithCancel(m.ctx)
 	m.turnCancel = cancel
@@ -416,14 +416,14 @@ func (m *bubbleModel) startTool(call tool.Call) tea.Cmd {
 func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 	if m.runner == nil {
 		m.appendError("model client is not configured; use /help or /call")
-		m.refreshViewport()
+		m.relayout()
 		return nil
 	}
 	m.messages = append(m.messages, model.Message{Role: model.RoleUser, Content: prompt})
 	m.busy = true
 	m.busyStarted = time.Now()
 	m.activity = "thinking"
-	m.refreshViewport()
+	m.relayout()
 
 	ctx, cancel := context.WithCancel(m.ctx)
 	m.turnCancel = cancel
