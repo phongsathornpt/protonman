@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/projectTHORN/proton/internal/permission"
 )
@@ -32,6 +33,12 @@ func (m bubbleModel) infoView() string {
 		}
 		return mutedStyle.Render("j/k move · 1-3 select · y once · s session · n deny · esc read")
 	}
+
+	targetWidth := m.width - 2
+	if targetWidth <= 0 {
+		targetWidth = 80
+	}
+
 	parts := []string{m.modeChip()}
 	if n := len(m.queue); n > 0 {
 		parts = append(parts, mutedStyle.Render(fmt.Sprintf("%d queued", n)))
@@ -39,20 +46,39 @@ func (m bubbleModel) infoView() string {
 	if m.skills != nil {
 		active := m.skills.ActivatedList()
 		if len(active) == 1 {
-			parts = append(parts, successStyle.Render("skill: "+active[0]))
+			cleanSkill := truncateWithEllipsis(active[0], maxInt(14, targetWidth/3))
+			parts = append(parts, successStyle.Render("skill: "+cleanSkill))
 		} else if len(active) > 1 {
 			parts = append(parts, successStyle.Render(fmt.Sprintf("%d skills active", len(active))))
 		}
 	}
-	parts = append(parts,
-		mutedStyle.Render("shift+tab mode"),
-		mutedStyle.Render("ctrl+t transcript"),
-		mutedStyle.Render("ctrl+l clear"),
-	)
+
+	candidates := []string{"shift+tab mode"}
 	if m.skills != nil && len(m.skills.List()) > 0 {
-		parts = append(parts, mutedStyle.Render("ctrl+s skills"))
+		candidates = append(candidates, "ctrl+s skills")
 	}
-	return strings.Join(parts, mutedStyle.Render(glyphSep))
+	candidates = append(candidates, "ctrl+t transcript", "ctrl+l clear")
+
+	sepStr := glyphSep
+	sepWidth := ansi.StringWidth(sepStr)
+	currentWidth := 0
+	for i, p := range parts {
+		if i > 0 {
+			currentWidth += sepWidth
+		}
+		currentWidth += ansi.StringWidth(p)
+	}
+
+	for _, cand := range candidates {
+		rendered := mutedStyle.Render(cand)
+		candWidth := ansi.StringWidth(rendered) + sepWidth
+		if currentWidth+candWidth <= targetWidth {
+			parts = append(parts, rendered)
+			currentWidth += candWidth
+		}
+	}
+
+	return strings.Join(parts, mutedStyle.Render(sepStr))
 }
 
 func (m bubbleModel) modeChip() string {
