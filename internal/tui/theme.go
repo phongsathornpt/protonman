@@ -14,10 +14,10 @@ const (
 // dark and customized terminal themes. Primary body text intentionally uses
 // the terminal's default foreground.
 var (
-	accentAssistant = lipgloss.Color("5") // magenta: Proton identity
-	accentUser      = lipgloss.Color("6") // cyan: input/selection
-	accentTool      = lipgloss.Color("8") // dim tool chrome
-	accentSystem    = lipgloss.Color("6") // cyan: status/info
+	accentAssistant = lipgloss.Color("5")                             // magenta: Proton identity
+	accentUser      = lipgloss.Color("6")                             // cyan: input/selection
+	accentTool      = lipgloss.AdaptiveColor{Light: "240", Dark: "8"} // dim tool chrome
+	accentSystem    = lipgloss.Color("6")                             // cyan: status/info
 	accentPlan      = lipgloss.Color("6")
 	accentError     = lipgloss.Color("1") // red
 	accentSuccess   = lipgloss.Color("2") // green
@@ -32,7 +32,7 @@ var (
 	assistantStyle = lipgloss.NewStyle()
 	toolStyle      = lipgloss.NewStyle().Foreground(accentTool)
 	systemStyle    = lipgloss.NewStyle().Foreground(accentSystem)
-	mutedStyle     = lipgloss.NewStyle().Faint(true)
+	mutedStyle     = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "238", Dark: "7"})
 	statusStyle    = lipgloss.NewStyle().Foreground(accentSystem)
 	warningStyle   = lipgloss.NewStyle().Foreground(warningColor)
 	successStyle   = lipgloss.NewStyle().Foreground(accentSuccess)
