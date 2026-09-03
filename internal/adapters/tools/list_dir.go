@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
@@ -65,6 +66,7 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 		return tool.Result{}, fmt.Errorf("list %q: %w", input.Path, err)
 	}
 	var output strings.Builder
+	output.Grow(len(entries) * 40)
 	truncated := false
 	for index, entry := range entries {
 		if err := ctx.Err(); err != nil {
@@ -98,7 +100,11 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 		if err != nil {
 			return tool.Result{}, fmt.Errorf("stat directory entry %q: %w", entry.Name(), err)
 		}
-		fmt.Fprintf(&output, "file %s (%d bytes)\n", entry.Name(), info.Size())
+		output.WriteString("file ")
+		output.WriteString(entry.Name())
+		output.WriteString(" (")
+		output.WriteString(strconv.FormatInt(info.Size(), 10))
+		output.WriteString(" bytes)\n")
 	}
 	if truncated {
 		output.WriteString("[directory output truncated at 1000 entries]\n")

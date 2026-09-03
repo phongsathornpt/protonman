@@ -67,20 +67,39 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("open %q: %w", input.Path, err)
 	}
-	contents, err := io.ReadAll(io.LimitReader(file, maxReadFileBytes+1))
-	closeErr := file.Close()
+	fileInfo, err := file.Stat()
 	if err != nil {
-		return tool.Result{}, fmt.Errorf("read %q: %w", input.Path, err)
+		_ = file.Close()
+		return tool.Result{}, fmt.Errorf("stat %q: %w", input.Path, err)
 	}
-	if closeErr != nil {
-		return tool.Result{}, fmt.Errorf("close %q: %w", input.Path, closeErr)
-	}
-	if err := ctx.Err(); err != nil {
-		return tool.Result{}, fmt.Errorf("after reading %q: %w", input.Path, err)
-	}
-	truncated := len(contents) > maxReadFileBytes
-	if truncated {
-		contents = contents[:maxReadFileBytes]
+
+	size := fileInfo.Size()
+	var contents []byte
+	var truncated bool
+
+	if size > 0 && size <= maxReadFileBytes {
+		contents = make([]byte, size)
+		_, readErr := io.ReadFull(file, contents)
+		closeErr := file.Close()
+		if readErr != nil && readErr != io.EOF && readErr != io.ErrUnexpectedEOF {
+			return tool.Result{}, fmt.Errorf("read %q: %w", input.Path, readErr)
+		}
+		if closeErr != nil {
+			return tool.Result{}, fmt.Errorf("close %q: %w", input.Path, closeErr)
+		}
+	} else {
+		contents, err = io.ReadAll(io.LimitReader(file, maxReadFileBytes+1))
+		closeErr := file.Close()
+		if err != nil {
+			return tool.Result{}, fmt.Errorf("read %q: %w", input.Path, err)
+		}
+		if closeErr != nil {
+			return tool.Result{}, fmt.Errorf("close %q: %w", input.Path, closeErr)
+		}
+		if len(contents) > maxReadFileBytes {
+			truncated = true
+			contents = contents[:maxReadFileBytes]
+		}
 	}
 	output := string(contents)
 	if truncated {
