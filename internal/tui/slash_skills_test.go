@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/skill"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -180,5 +181,79 @@ func TestSlashSkills(t *testing.T) {
 			t.Fatalf("expected skill to be deactivated via /skill disable")
 		}
 	})
+
+	t.Run("skill name autocomplete in composer", func(t *testing.T) {
+		model.bottom.remove(skillsViewID)
+		model.bottom.prompt().SetValue("/skill ")
+		if !model.slashOpen() {
+			t.Fatal("slash dropdown did not open for /skill ")
+		}
+		matches := model.slashMatches()
+		if len(matches) == 0 {
+			t.Fatal("expected matches for /skill ")
+		}
+
+		// Filter by prefix
+		model.bottom.prompt().SetValue("/skill pd")
+		matches = model.slashMatches()
+		if len(matches) != 1 || matches[0].name != "pdf-processing" {
+			t.Fatalf("expected pdf-processing match, got: %#v", matches)
+		}
+
+		// Tab accept completes the name
+		applied, cmd := model.acceptSlash(false)
+		if !applied || cmd != nil {
+			t.Fatalf("acceptSlash failed: applied=%v, cmd=%v", applied, cmd)
+		}
+		if got := model.bottom.prompt().Value(); got != "/skill pdf-processing" {
+			t.Fatalf("prompt value after accept = %q, want /skill pdf-processing", got)
+		}
+	})
+
+	t.Run("interactive bottom-pane skills picker", func(t *testing.T) {
+		model.bottom.remove(skillsViewID)
+		model.executeCommand("/skills")
+		if !model.bottom.has(skillsViewID) {
+			t.Fatal("expected skills picker in bottom pane after /skills")
+		}
+
+		// View rendered
+		rendered := model.bottom.renderTop(model)
+		if !strings.Contains(rendered, "Agent Skills") || !strings.Contains(rendered, "pdf-processing") {
+			t.Fatalf("unexpected picker render: %s", rendered)
+		}
+
+		// Space toggles skill
+		wasActive := model.skills.IsActivated("pdf-processing")
+		updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
+		model = updated.(*bubbleModel)
+		if model.skills.IsActivated("pdf-processing") == wasActive {
+			t.Fatalf("spacebar did not toggle skill active status")
+		}
+
+		// Esc closes picker
+		updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyEsc})
+		model = updated.(*bubbleModel)
+		if model.bottom.has(skillsViewID) {
+			t.Fatal("esc did not close skills picker")
+		}
+	})
+
+	t.Run("ctrl+s shortcut toggles skills picker", func(t *testing.T) {
+		model.bottom.remove(skillsViewID)
+		updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+		model = updated.(*bubbleModel)
+		if !model.bottom.has(skillsViewID) {
+			t.Fatal("ctrl+s did not open skills picker")
+		}
+
+		// Pressing ctrl+s again closes it
+		updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+		model = updated.(*bubbleModel)
+		if model.bottom.has(skillsViewID) {
+			t.Fatal("second ctrl+s did not close skills picker")
+		}
+	})
 }
+
 
