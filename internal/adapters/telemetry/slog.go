@@ -37,14 +37,14 @@ func (o *SlogObserver) Observe(ctx context.Context, event toolcall.Event) {
 	if event.ToolKind != "" {
 		attrs = append(attrs, slog.String("tool_kind", string(event.ToolKind)))
 	}
-	if event.Mode != "" {
-		attrs = append(attrs, slog.String("mode", event.Mode))
+	if event.Mode.Valid() {
+		attrs = append(attrs, slog.String("mode", event.Mode.String()))
 	}
-	if event.Decision != "" {
-		attrs = append(attrs, slog.String("decision", event.Decision))
+	if event.Decision.Valid() {
+		attrs = append(attrs, slog.String("decision", event.Decision.String()))
 	}
-	if event.GrantScope != "" {
-		attrs = append(attrs, slog.String("grant_scope", event.GrantScope))
+	if event.GrantScope.Valid() {
+		attrs = append(attrs, slog.String("grant_scope", event.GrantScope.String()))
 	}
 	if event.ArgumentBytes > 0 {
 		attrs = append(attrs, slog.Int("argument_bytes", event.ArgumentBytes))

@@ -25,8 +25,8 @@ func TestSlogObserverWritesStructuredRedactedEvent(t *testing.T) {
 		CallID:        "call-1",
 		ToolName:      "bash",
 		ToolKind:      permission.ToolBash,
-		Mode:          permission.ModeAsk.String(),
-		Decision:      permission.ActionDeny.String(),
+		Mode:          permission.ModeAsk,
+		Decision:      permission.ActionDeny,
 		ArgumentBytes: 42,
 		ErrorCode:     tool.ErrorCodePermissionDenied,
 	})

@@ -17,7 +17,7 @@ func TestServiceEmitsRedactedLifecycleEvents(t *testing.T) {
 		name         string
 		policy       permission.Config
 		wantKinds    []EventKind
-		wantDecision string
+		wantDecision permission.Action
 		wantCode     tool.ErrorCode
 		wantCalls    int
 	}{
@@ -30,7 +30,7 @@ func TestServiceEmitsRedactedLifecycleEvents(t *testing.T) {
 				}},
 			},
 			wantKinds:    []EventKind{EventCallStarted, EventPermissionResolved, EventCallCompleted},
-			wantDecision: "allow",
+			wantDecision: permission.ActionAllow,
 			wantCalls:    1,
 		},
 		{
@@ -43,7 +43,7 @@ func TestServiceEmitsRedactedLifecycleEvents(t *testing.T) {
 				}},
 			},
 			wantKinds:    []EventKind{EventCallStarted, EventPermissionResolved, EventCallFailed},
-			wantDecision: "deny",
+			wantDecision: permission.ActionDeny,
 			wantCode:     tool.ErrorCodePermissionDenied,
 		},
 	}
