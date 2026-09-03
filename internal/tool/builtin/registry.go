@@ -1,5 +1,5 @@
 // Package tools contains the first host-side tool adapters for Proton.
-package tools
+package builtin
 
 import (
 	"errors"

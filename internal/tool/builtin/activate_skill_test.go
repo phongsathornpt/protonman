@@ -1,4 +1,4 @@
-package tools_test
+package builtin
 
 import (
 	"context"
@@ -6,9 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/adapters/tools"
-	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/skill"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 func TestActivateSkill_Execute(t *testing.T) {
@@ -24,7 +23,7 @@ func TestActivateSkill_Execute(t *testing.T) {
 		Resources:    []string{"scripts/extract.py", "references/guide.md"},
 	}
 	skillReg := skill.NewRegistry(s)
-	handler := tools.NewActivateSkill(skillReg)
+	handler := NewActivateSkill(skillReg)
 
 	t.Run("successful activation", func(t *testing.T) {
 		args, _ := json.Marshal(map[string]any{"name": "pdf-processing"})
