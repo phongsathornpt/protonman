@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/skill"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -236,3 +237,76 @@ func TestSkillsCommandBoundedOutput(t *testing.T) {
 		t.Fatalf("expected bounded summary 'more skills' in transcript, got:\n%s", view)
 	}
 }
+
+func TestSkillsPickerCtrlCEscapesModal(t *testing.T) {
+	model := newTestSkillsModel(t, 5)
+	// Open picker via ctrl+s
+	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	model = updated.(*bubbleModel)
+	if !model.bottom.has(skillsViewID) {
+		t.Fatal("expected skills picker open")
+	}
+
+	// Press ctrl+c -> must dismiss modal
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	model = updated.(*bubbleModel)
+	if model.bottom.has(skillsViewID) {
+		t.Fatal("expected ctrl+c to close skills picker")
+	}
+}
+
+func TestTranscriptOverlayQAndCtrlC(t *testing.T) {
+	model := newTestSkillsModel(t, 2)
+	model.showTranscript = true
+
+	// 'q' closes transcript
+	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	model = updated.(*bubbleModel)
+	if model.showTranscript {
+		t.Fatal("expected 'q' to close transcript overlay")
+	}
+
+	// Re-open and test ctrl+c closes transcript
+	model.showTranscript = true
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	model = updated.(*bubbleModel)
+	if model.showTranscript {
+		t.Fatal("expected ctrl+c to close transcript overlay")
+	}
+}
+
+func TestMessageHistoryIntegrityOnTurnCancel(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+
+	// Simulate starting a turn (user prompt added to messages)
+	bModel.messages = append(bModel.messages, model.Message{Role: model.RoleUser, Content: "do something that will be cancelled"})
+
+	// Simulate turn cancellation or error before assistant tokens arrive
+	updated, _ := bModel.Update(turnDoneMsg{err: context.Canceled})
+	bModel = updated.(*bubbleModel)
+
+	// Invariant: The orphan user prompt must be rolled back so messages never has consecutive user turns
+	if len(bModel.messages) != 0 {
+		t.Fatalf("expected orphan user message to be rolled back on cancellation, got len=%d: %#v", len(bModel.messages), bModel.messages)
+	}
+}
+
+func TestQueueClearedOnTurnCancel(t *testing.T) {
+	model := newTestSkillsModel(t, 1)
+	model.busy = true
+	cancelled := false
+	model.turnCancel = func() { cancelled = true }
+	model.queue = []string{"next queued command 1", "next queued command 2"}
+
+	// User presses ctrl+c while busy
+	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	model = updated.(*bubbleModel)
+
+	if !cancelled {
+		t.Fatal("expected turnCancel to be called")
+	}
+	if len(model.queue) != 0 {
+		t.Fatalf("expected queue to be cleared on cancel, got: %v", model.queue)
+	}
+}
+
