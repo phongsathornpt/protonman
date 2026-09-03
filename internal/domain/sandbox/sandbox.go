@@ -47,6 +47,31 @@ func (n Name) String() string {
 	}
 }
 
+// Valid reports whether the profile name is a recognized non-zero profile.
+func (n Name) Valid() bool {
+	switch n {
+	case NameOff, NameWorkspace, NameReadOnly, NameStrict:
+		return true
+	default:
+		return false
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (n Name) MarshalText() ([]byte, error) {
+	return []byte(n.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (n *Name) UnmarshalText(text []byte) error {
+	parsed, err := ParseName(string(text))
+	if err != nil {
+		return err
+	}
+	*n = parsed
+	return nil
+}
+
 // ParseName parses built-in profile names. Unknown names fail closed.
 func ParseName(value string) (Name, error) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
@@ -76,6 +101,54 @@ const (
 	// NetworkAllowlist allows only exact http(s) origins.
 	NetworkAllowlist
 )
+
+// String returns the configuration spelling of a network mode.
+func (m NetworkMode) String() string {
+	switch m {
+	case NetworkUnrestricted:
+		return "unrestricted"
+	case NetworkBlocked:
+		return "blocked"
+	case NetworkAllowlist:
+		return "allowlist"
+	default:
+		return "unknown"
+	}
+}
+
+// Valid reports whether the network mode is a recognized non-zero mode.
+func (m NetworkMode) Valid() bool {
+	return m == NetworkUnrestricted || m == NetworkBlocked || m == NetworkAllowlist
+}
+
+// ParseNetworkMode parses network egress modes.
+func ParseNetworkMode(value string) (NetworkMode, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "unrestricted", "open":
+		return NetworkUnrestricted, nil
+	case "blocked", "deny", "none":
+		return NetworkBlocked, nil
+	case "allowlist", "whitelist":
+		return NetworkAllowlist, nil
+	default:
+		return NetworkUnknown, fmt.Errorf("%w: invalid network mode %q", ErrInvalidProfile, value)
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (m NetworkMode) MarshalText() ([]byte, error) {
+	return []byte(m.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (m *NetworkMode) UnmarshalText(text []byte) error {
+	parsed, err := ParseNetworkMode(string(text))
+	if err != nil {
+		return err
+	}
+	*m = parsed
+	return nil
+}
 
 // Origin is an exact http(s) origin: scheme, hostname, and port.
 type Origin struct {

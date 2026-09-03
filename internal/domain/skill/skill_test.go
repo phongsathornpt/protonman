@@ -91,6 +91,39 @@ func TestSkillValidate(t *testing.T) {
 	if err := invalidCompat.Validate(); err == nil {
 		t.Fatalf("expected error for compatibility > 500 chars")
 	}
+
+	invalidScope := valid
+	invalidScope.Scope = "invalid"
+	if err := invalidScope.Validate(); err == nil {
+		t.Fatalf("expected error for invalid scope")
+	}
+
+	emptyScope := valid
+	emptyScope.Scope = ""
+	if err := emptyScope.Validate(); err == nil {
+		t.Fatalf("expected error for empty scope")
+	}
+}
+
+func TestScopeParsingAndValidation(t *testing.T) {
+	for _, s := range []skill.Scope{skill.ScopeUser, skill.ScopeProject} {
+		if !s.Valid() {
+			t.Fatalf("expected scope %s to be valid", s)
+		}
+		parsed, err := skill.ParseScope(string(s))
+		if err != nil {
+			t.Fatalf("ParseScope(%s) error = %v", s, err)
+		}
+		if parsed != s {
+			t.Fatalf("parsed = %s, want %s", parsed, s)
+		}
+	}
+	if skill.Scope("unknown").Valid() {
+		t.Fatal("expected unknown scope to be invalid")
+	}
+	if _, err := skill.ParseScope("unknown"); err == nil {
+		t.Fatal("ParseScope(unknown) error = nil, want error")
+	}
 }
 
 func TestFormatCatalogXML(t *testing.T) {

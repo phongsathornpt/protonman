@@ -18,7 +18,26 @@ const (
 	ScopeProject Scope = "project"
 )
 
+// Valid reports whether the scope is a recognized discovery scope.
+func (s Scope) Valid() bool {
+	return s == ScopeUser || s == ScopeProject
+}
+
+// ParseScope parses a skill scope string.
+func ParseScope(value string) (Scope, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "user":
+		return ScopeUser, nil
+	case "project":
+		return ScopeProject, nil
+	default:
+		return "", fmt.Errorf("%w: %q", ErrInvalidScope, value)
+	}
+}
+
 var (
+	// ErrInvalidScope indicates an unsupported skill discovery scope.
+	ErrInvalidScope = errors.New("invalid skill scope")
 	// ErrInvalidName indicates a skill name violates specification constraints.
 	ErrInvalidName = errors.New("invalid skill name")
 	// ErrInvalidDescription indicates a skill description violates specification constraints.
@@ -49,6 +68,9 @@ func (s Skill) Validate() error {
 	}
 	if err := ValidateDescription(s.Description); err != nil {
 		return err
+	}
+	if !s.Scope.Valid() {
+		return fmt.Errorf("%w: %q", ErrInvalidScope, s.Scope)
 	}
 	if len(s.Compatibility) > 500 {
 		return fmt.Errorf("%w: compatibility must not exceed 500 characters", ErrInvalidCompatibility)
