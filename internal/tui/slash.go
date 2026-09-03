@@ -640,4 +640,3 @@ func (m *bubbleModel) handleSkillsCommand(isSkillSingle bool, argument string, p
 	m.refreshViewport()
 	return nil
 }
-

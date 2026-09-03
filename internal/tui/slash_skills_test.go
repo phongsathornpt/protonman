@@ -255,5 +255,3 @@ func TestSlashSkills(t *testing.T) {
 		}
 	})
 }
-
-
