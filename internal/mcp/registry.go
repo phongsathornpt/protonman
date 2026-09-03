@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 var (

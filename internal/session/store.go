@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/domain/model"
-	"github.com/projectTHORN/proton/internal/domain/permission"
+	"github.com/projectTHORN/proton/internal/model"
+	"github.com/projectTHORN/proton/internal/permission"
 )
 
 const (

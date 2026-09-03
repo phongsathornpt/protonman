@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/domain/permission"
-	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/permission"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 // EventKind identifies one redacted tool-call lifecycle event.

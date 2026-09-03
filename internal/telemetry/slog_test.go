@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/application/toolcall"
-	"github.com/projectTHORN/proton/internal/domain/permission"
-	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/permission"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 func TestSlogObserverWritesStructuredRedactedEvent(t *testing.T) {

@@ -11,7 +11,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/projectTHORN/proton/internal/domain/permission"
+	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/sandbox"
 )
 

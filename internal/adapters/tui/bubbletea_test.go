@@ -11,9 +11,9 @@ import (
 
 	"github.com/projectTHORN/proton/internal/application/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/application/turn"
-	domainmodel "github.com/projectTHORN/proton/internal/domain/model"
-	"github.com/projectTHORN/proton/internal/domain/permission"
-	"github.com/projectTHORN/proton/internal/domain/tool"
+	domainmodel "github.com/projectTHORN/proton/internal/model"
+	"github.com/projectTHORN/proton/internal/permission"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 func TestCompletedTodoPaneIsHidden(t *testing.T) {
