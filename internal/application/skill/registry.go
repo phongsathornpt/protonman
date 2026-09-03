@@ -144,4 +144,3 @@ func (r *Registry) Toggle(name string) (bool, error) {
 	}
 	return active, nil
 }
-

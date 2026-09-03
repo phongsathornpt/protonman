@@ -36,6 +36,15 @@ func (m bubbleModel) infoView() string {
 	if n := len(m.queue); n > 0 {
 		parts = append(parts, mutedStyle.Render(fmt.Sprintf("%d queued", n)))
 	}
+	if m.skills != nil {
+		if activeCount := len(m.skills.ActivatedList()); activeCount > 0 {
+			label := "skill active"
+			if activeCount > 1 {
+				label = "skills active"
+			}
+			parts = append(parts, successStyle.Render(fmt.Sprintf("%d %s", activeCount, label)))
+		}
+	}
 	parts = append(parts,
 		mutedStyle.Render("shift+tab mode"),
 		mutedStyle.Render("ctrl+t transcript"),
