@@ -15,6 +15,7 @@ import (
 	"github.com/projectTHORN/proton/internal/application/toolcall"
 	"github.com/projectTHORN/proton/internal/domain/model"
 	"github.com/projectTHORN/proton/internal/domain/permission"
+	"github.com/projectTHORN/proton/internal/domain/skill"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
@@ -118,6 +119,14 @@ func WithMaxParallelReads(limit int) Option {
 	}
 }
 
+// WithSkillCatalog supplies discovered skills for progressive disclosure in model requests.
+func WithSkillCatalog(skills []skill.CatalogItem) Option {
+	return func(loop *Loop) error {
+		loop.skills = append([]skill.CatalogItem{}, skills...)
+		return nil
+	}
+}
+
 // Loop coordinates model streaming and permission-aware tool dispatch.
 type Loop struct {
 	client           model.Client
@@ -126,6 +135,7 @@ type Loop struct {
 	roundTimeout     time.Duration
 	toolTimeout      time.Duration
 	maxParallelReads int
+	skills           []skill.CatalogItem
 }
 
 var _ Runner = (*Loop)(nil)
@@ -168,6 +178,18 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	}
 
 	history := model.CloneMessages(messages)
+	if len(l.skills) > 0 {
+		section := skill.SystemPromptSection(l.skills)
+		if len(history) > 0 && history[0].Role == model.RoleSystem {
+			history[0].Content = strings.TrimSpace(history[0].Content + "\n\n" + section)
+		} else {
+			systemMsg := model.Message{
+				Role:    model.RoleSystem,
+				Content: section,
+			}
+			history = append([]model.Message{systemMsg}, history...)
+		}
+	}
 	for round := 1; round <= l.maxRounds; round++ {
 		request := model.Request{
 			Messages: model.CloneMessages(history),
