@@ -130,4 +130,46 @@ func TestSlashSkills(t *testing.T) {
 			t.Fatalf("expected no active skill chip when 0 skills active, got: %s", info)
 		}
 	})
+
+	t.Run("unified skill commands and deactivation verbs", func(t *testing.T) {
+		model.skills.MarkActivated("pdf-processing")
+
+		// /skill active works identically to /skills active
+		model.executeCommand("/skill active")
+		if !strings.Contains(model.viewport.View(), "Active Agent Skills (1):") {
+			t.Fatalf("expected /skill active to list active skills")
+		}
+
+		// Duplicate activation guard
+		initialMsgCount := len(model.messages)
+		model.executeCommand("/skill pdf-processing")
+		if !strings.Contains(model.viewport.View(), "is already active") {
+			t.Fatalf("expected already active message on duplicate activation")
+		}
+		if len(model.messages) != initialMsgCount {
+			t.Fatalf("messages count increased on duplicate activation: %d != %d", len(model.messages), initialMsgCount)
+		}
+
+		// /skill deactivate
+		model.executeCommand("/skill deactivate pdf-processing")
+		if model.skills.IsActivated("pdf-processing") {
+			t.Fatalf("expected skill to be deactivated")
+		}
+		if !strings.Contains(model.viewport.View(), "Skill \"pdf-processing\" deactivated.") {
+			t.Fatalf("expected deactivated message")
+		}
+
+		// /skills toggle works
+		model.executeCommand("/skills toggle pdf-processing")
+		if !model.skills.IsActivated("pdf-processing") {
+			t.Fatalf("expected skill to be activated via /skills toggle")
+		}
+
+		// /skill disable
+		model.executeCommand("/skill disable pdf-processing")
+		if model.skills.IsActivated("pdf-processing") {
+			t.Fatalf("expected skill to be deactivated via /skill disable")
+		}
+	})
 }
+
