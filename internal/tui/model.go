@@ -190,11 +190,12 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.followTail = m.viewport.AtBottom()
 		return m, command
 	case spinner.TickMsg:
-		if !m.busy {
-			return m, nil
-		}
 		var command tea.Cmd
 		m.spinner, command = m.spinner.Update(message)
+		if m.busy {
+			m.historyState.SetSpinnerFrame(m.spinner.View())
+			m.refreshViewport()
+		}
 		return m, command
 	case cursor.BlinkMsg:
 		prompt := m.bottom.prompt()
@@ -402,6 +403,7 @@ func (m *bubbleModel) startTool(call tool.Call) tea.Cmd {
 	m.busyStarted = time.Now()
 	m.activity = "running " + call.Name
 	m.appendToolCall(call)
+	m.historyState.SetSpinnerFrame(m.spinner.View())
 	m.relayout()
 
 	ctx, cancel := context.WithCancel(m.ctx)
@@ -423,6 +425,8 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 	m.busy = true
 	m.busyStarted = time.Now()
 	m.activity = "thinking"
+	m.historyState.SetSpinnerFrame(m.spinner.View())
+	m.historyState.StartThinking()
 	m.relayout()
 
 	ctx, cancel := context.WithCancel(m.ctx)
