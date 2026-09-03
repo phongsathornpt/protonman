@@ -73,8 +73,8 @@ Step-by-step instructions for extracting text.
 
 	// Check resources
 	expectedResources := map[string]bool{
-		"scripts/extract.py":   false,
-		"references/guide.md":  false,
+		"scripts/extract.py":  false,
+		"references/guide.md": false,
 	}
 	for _, res := range parsed.Resources {
 		if _, ok := expectedResources[res]; ok {

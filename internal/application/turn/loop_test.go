@@ -650,4 +650,3 @@ func TestLoopAugmentsSystemPromptWithSkillCatalog(t *testing.T) {
 		t.Errorf("system message missing skill catalog: %s", reqMessages[0].Content)
 	}
 }
-
