@@ -76,11 +76,11 @@ type bubbleModel struct {
 }
 
 type bubbleKeyMap struct {
-	Submit     key.Binding
-	Clear      key.Binding
-	Quit       key.Binding
-	PageUp     key.Binding
-	PageDown   key.Binding
+	Submit       key.Binding
+	Clear        key.Binding
+	Quit         key.Binding
+	PageUp       key.Binding
+	PageDown     key.Binding
 	ToggleTodo   key.Binding
 	Transcript   key.Binding
 	CycleMode    key.Binding
@@ -153,11 +153,11 @@ func disableViewportKeys(pane *viewport.Model) {
 
 func newBubbleKeyMap() bubbleKeyMap {
 	return bubbleKeyMap{
-		Submit:     key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send")),
-		Clear:      key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear")),
-		Quit:       key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")),
-		PageUp:     key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "scroll")),
-		PageDown:   key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "scroll")),
+		Submit:       key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send")),
+		Clear:        key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear")),
+		Quit:         key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")),
+		PageUp:       key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "scroll")),
+		PageDown:     key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "scroll")),
 		ToggleTodo:   key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o", "todos")),
 		Transcript:   key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "transcript")),
 		CycleMode:    key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "mode")),
