@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -788,4 +789,20 @@ func newBubbleTestService(
 		t.Fatalf("NewService() error = %v", err)
 	}
 	return service
+}
+
+func TestSpinnerLifecycle(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, nil)
+
+	t.Run("tick returns single tick command without double-batching", func(t *testing.T) {
+		model.busy = true
+		_, cmd := model.Update(spinner.TickMsg{})
+		if cmd == nil {
+			t.Fatal("expected non-nil cmd, got nil")
+		}
+		msg := cmd()
+		if _, isBatch := msg.(tea.BatchMsg); isBatch {
+			t.Fatal("cmd returned BatchMsg, indicating exponential double-batching of ticks")
+		}
+	})
 }
