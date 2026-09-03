@@ -9,14 +9,14 @@ import (
 	"strings"
 	"time"
 
-	domainsandbox "github.com/projectTHORN/proton/internal/domain/sandbox"
 	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/sandbox"
 )
 
 const maxFetchBytes = 256 * 1024
 
 type webFetchHandler struct {
-	policy domainsandbox.NetworkPolicy
+	policy sandbox.NetworkPolicy
 	client *http.Client
 }
 
@@ -25,9 +25,9 @@ type webFetchInput struct {
 }
 
 // NewWebFetch returns a permission-gated URL fetch adapter.
-func NewWebFetch(policy domainsandbox.NetworkPolicy) tool.Handler {
+func NewWebFetch(policy sandbox.NetworkPolicy) tool.Handler {
 	if policy.Allowed == nil {
-		policy.Allowed = []domainsandbox.Origin{}
+		policy.Allowed = []sandbox.Origin{}
 	}
 	return webFetchHandler{
 		policy: policy,

@@ -11,8 +11,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	domainsandbox "github.com/projectTHORN/proton/internal/domain/sandbox"
 )
 
 const requireSandboxIntegrationEnv = "PROTON_REQUIRE_SANDBOX_INTEGRATION"
@@ -25,7 +23,7 @@ func TestSandboxIntegrationWorkspaceBoundary(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	launcher := integrationLauncher(t, domainsandbox.NameWorkspace, workspaceDir)
+	launcher := integrationLauncher(t, NameWorkspace, workspaceDir)
 	command := fmt.Sprintf(
 		"printf inside > %s; printf outside > %s",
 		shellQuote(insidePath),
@@ -57,7 +55,7 @@ func TestSandboxIntegrationReadOnlyDeniesWorkspaceWrites(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	launcher := integrationLauncher(t, domainsandbox.NameReadOnly, workspaceDir)
+	launcher := integrationLauncher(t, NameReadOnly, workspaceDir)
 	cmd, err := launcher.Command(ctx, workspaceDir, "printf blocked > "+shellQuote(blockedPath))
 	if err != nil {
 		t.Fatalf("Command() error = %v", err)
@@ -75,7 +73,7 @@ func TestSandboxIntegrationRuntimeBinaryAvailable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	launcher := integrationLauncher(t, domainsandbox.NameWorkspace, workspaceDir)
+	launcher := integrationLauncher(t, NameWorkspace, workspaceDir)
 	cmd, err := launcher.Command(ctx, workspaceDir, "git --version >/dev/null")
 	if err != nil {
 		t.Fatalf("Command() error = %v", err)
@@ -105,7 +103,7 @@ func TestSandboxIntegrationStrictBlocksHostNetwork(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	launcher := integrationLauncher(t, domainsandbox.NameStrict, workspaceDir)
+	launcher := integrationLauncher(t, NameStrict, workspaceDir)
 	command := shellQuote(executable) + " -test.run=^TestSandboxNetworkProbeHelper$ -test.count=1"
 	cmd, err := launcher.Command(ctx, workspaceDir, command)
 	if err != nil {
@@ -133,10 +131,10 @@ func TestSandboxNetworkProbeHelper(t *testing.T) {
 	_ = connection.Close()
 }
 
-func integrationLauncher(t *testing.T, name domainsandbox.Name, workspaceDir string) *OSLauncher {
+func integrationLauncher(t *testing.T, name Name, workspaceDir string) *OSLauncher {
 	t.Helper()
 	requireSandboxExecutable(t)
-	profile, err := domainsandbox.NewProfile(name, workspaceDir)
+	profile, err := NewProfile(name, workspaceDir)
 	if err != nil {
 		t.Fatalf("NewProfile(%s) error = %v", name, err)
 	}

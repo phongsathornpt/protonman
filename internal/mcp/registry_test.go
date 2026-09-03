@@ -8,7 +8,6 @@ import (
 
 	"github.com/projectTHORN/proton/internal/adapters/tools"
 	"github.com/projectTHORN/proton/internal/application/toolcall"
-	domainmcp "github.com/projectTHORN/proton/internal/domain/mcp"
 	"github.com/projectTHORN/proton/internal/domain/permission"
 	domaintool "github.com/projectTHORN/proton/internal/domain/tool"
 )
@@ -50,12 +49,12 @@ func TestNamespacedName(t *testing.T) {
 func TestDiscoverRegistersNamespacedToolsAndDispatches(t *testing.T) {
 	server := &fakeServer{
 		name: "github",
-		tools: []domainmcp.Tool{{
+		tools: []Tool{{
 			Name:        "search",
 			Description: "search issues",
 			InputSchema: map[string]any{"type": "object"},
 		}},
-		results: map[string]domainmcp.Result{
+		results: map[string]Result{
 			"search": {Output: "found 3 issues"},
 		},
 	}
@@ -102,8 +101,8 @@ func TestDiscoverRegistersNamespacedToolsAndDispatches(t *testing.T) {
 func TestDiscoverKeepsMCPCallsBehindPermission(t *testing.T) {
 	server := &fakeServer{
 		name:  "filesystem",
-		tools: []domainmcp.Tool{{Name: "read", Description: "read remote data"}},
-		results: map[string]domainmcp.Result{
+		tools: []Tool{{Name: "read", Description: "read remote data"}},
+		results: map[string]Result{
 			"read": {Output: "secret"},
 		},
 	}
@@ -134,7 +133,7 @@ func TestDiscoverKeepsMCPCallsBehindPermission(t *testing.T) {
 func TestDiscoverDoesNotPartiallyRegisterInvalidResults(t *testing.T) {
 	server := &fakeServer{
 		name: "broken",
-		tools: []domainmcp.Tool{
+		tools: []Tool{
 			{Name: "valid", Description: "valid tool"},
 			{Name: "bad tool", Description: "invalid namespace"},
 		},
@@ -154,11 +153,11 @@ func TestDiscoverDoesNotPartiallyRegisterInvalidResults(t *testing.T) {
 func TestDiscoverRejectsDuplicateToolsAndServers(t *testing.T) {
 	first := &fakeServer{
 		name:  "github",
-		tools: []domainmcp.Tool{{Name: "search", Description: "search"}},
+		tools: []Tool{{Name: "search", Description: "search"}},
 	}
 	second := &fakeServer{
 		name:  "github",
-		tools: []domainmcp.Tool{{Name: "issues", Description: "issues"}},
+		tools: []Tool{{Name: "issues", Description: "issues"}},
 	}
 	registry, err := tools.NewRegistry()
 	if err != nil {
@@ -178,8 +177,8 @@ func TestDiscoverRejectsDuplicateToolsAndServers(t *testing.T) {
 func TestMCPServerErrorBecomesStructuredToolFailure(t *testing.T) {
 	server := &fakeServer{
 		name:  "remote",
-		tools: []domainmcp.Tool{{Name: "fail", Description: "fails"}},
-		results: map[string]domainmcp.Result{
+		tools: []Tool{{Name: "fail", Description: "fails"}},
+		results: map[string]Result{
 			"fail": {Output: "remote failure", IsError: true},
 		},
 	}
@@ -209,8 +208,8 @@ func TestMCPServerErrorBecomesStructuredToolFailure(t *testing.T) {
 
 type fakeServer struct {
 	name    string
-	tools   []domainmcp.Tool
-	results map[string]domainmcp.Result
+	tools   []Tool
+	results map[string]Result
 	calls   []string
 }
 
@@ -218,11 +217,11 @@ func (s *fakeServer) Name() string {
 	return s.name
 }
 
-func (s *fakeServer) ListTools(context.Context) ([]domainmcp.Tool, error) {
-	return append([]domainmcp.Tool{}, s.tools...), nil
+func (s *fakeServer) ListTools(context.Context) ([]Tool, error) {
+	return append([]Tool{}, s.tools...), nil
 }
 
-func (s *fakeServer) CallTool(_ context.Context, name string, _ json.RawMessage) (domainmcp.Result, error) {
+func (s *fakeServer) CallTool(_ context.Context, name string, _ json.RawMessage) (Result, error) {
 	s.calls = append(s.calls, name)
 	return s.results[name], nil
 }

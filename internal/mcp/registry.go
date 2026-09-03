@@ -8,7 +8,6 @@ import (
 	"strings"
 	"unicode"
 
-	domainmcp "github.com/projectTHORN/proton/internal/domain/mcp"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
@@ -34,8 +33,9 @@ func NamespacedName(serverName string, toolName string) (string, error) {
 	return "mcp." + serverName + "." + toolName, nil
 }
 
-// Discover lists MCP tools and registers them under mcp.<server>.<tool> names.
-func Discover(ctx context.Context, registry tool.Registrar, servers ...domainmcp.Server) error {
+// Discover queries every server, registers each discovered tool under its
+// namespaced name, and wires invocations through tool.Handler.
+func Discover(ctx context.Context, registry tool.Registrar, servers ...Server) error {
 	if registry == nil {
 		return fmt.Errorf("discover MCP tools: registry is required")
 	}
@@ -97,16 +97,16 @@ func Discover(ctx context.Context, registry tool.Registrar, servers ...domainmcp
 }
 
 type serverToolHandler struct {
-	server     domainmcp.Server
+	server     Server
 	serverName string
-	manifest   domainmcp.Tool
+	manifest   Tool
 	definition tool.Definition
 }
 
 func newHandler(
-	server domainmcp.Server,
+	server Server,
 	serverName string,
-	manifest domainmcp.Tool,
+	manifest Tool,
 	name string,
 ) tool.Handler {
 	description := strings.TrimSpace(manifest.Description)

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	domaincheckpoint "github.com/projectTHORN/proton/internal/domain/checkpoint"
+	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
@@ -20,7 +20,7 @@ func (noCheckpointStore) Restore(context.Context, string) error {
 	return tool.NewToolError(tool.ErrorCodeExecution, "checkpoint store is not configured")
 }
 
-func selectCheckpointStore(stores []domaincheckpoint.Store) domaincheckpoint.Store {
+func selectCheckpointStore(stores []checkpoint.Store) checkpoint.Store {
 	if len(stores) > 0 && stores[0] != nil {
 		return stores[0]
 	}
@@ -28,7 +28,7 @@ func selectCheckpointStore(stores []domaincheckpoint.Store) domaincheckpoint.Sto
 }
 
 type restoreCheckpointHandler struct {
-	checkpoints domaincheckpoint.Store
+	checkpoints checkpoint.Store
 }
 
 type restoreCheckpointInput struct {
@@ -36,8 +36,8 @@ type restoreCheckpointInput struct {
 }
 
 // NewCheckpointRestore returns the permission-gated checkpoint restore adapter.
-func NewCheckpointRestore(store domaincheckpoint.Store) tool.Handler {
-	return restoreCheckpointHandler{checkpoints: selectCheckpointStore([]domaincheckpoint.Store{store})}
+func NewCheckpointRestore(store checkpoint.Store) tool.Handler {
+	return restoreCheckpointHandler{checkpoints: selectCheckpointStore([]checkpoint.Store{store})}
 }
 
 func (restoreCheckpointHandler) Definition() tool.Definition {

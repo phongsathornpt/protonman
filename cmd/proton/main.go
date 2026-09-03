@@ -12,10 +12,8 @@ import (
 	"strings"
 
 	"github.com/projectTHORN/proton/internal/adapters/acp"
-	checkpointadapter "github.com/projectTHORN/proton/internal/adapters/checkpoint"
 	"github.com/projectTHORN/proton/internal/adapters/config"
 	"github.com/projectTHORN/proton/internal/adapters/headless"
-	"github.com/projectTHORN/proton/internal/adapters/sandbox"
 	"github.com/projectTHORN/proton/internal/adapters/session"
 	"github.com/projectTHORN/proton/internal/adapters/skills"
 	"github.com/projectTHORN/proton/internal/adapters/telemetry"
@@ -24,9 +22,10 @@ import (
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
 	applicationskill "github.com/projectTHORN/proton/internal/application/skill"
 	"github.com/projectTHORN/proton/internal/application/toolcall"
+	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/domain/permission"
-	domainsandbox "github.com/projectTHORN/proton/internal/domain/sandbox"
 	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/sandbox"
 )
 
 func main() {
@@ -81,24 +80,24 @@ func run(ctx context.Context, args []string) error {
 		"checkpoints",
 		"workspace-"+workspaceKey(workDir),
 	)
-	checkpointStore, err := checkpointadapter.NewFileStore(checkpointRoot, workspaceRoot)
+	checkpointStore, err := checkpoint.NewFileStore(checkpointRoot, workspaceRoot)
 	if err != nil {
 		return fmt.Errorf("create checkpoint store: %w", err)
 	}
 
 	sandboxName := loadedConfig.Sandbox
 	if configured := strings.TrimSpace(options.sandbox); configured != "" {
-		sandboxName, err = domainsandbox.ParseName(configured)
+		sandboxName, err = sandbox.ParseName(configured)
 		if err != nil {
 			return err
 		}
 	} else if configured := strings.TrimSpace(os.Getenv("PROTON_SANDBOX")); configured != "" {
-		sandboxName, err = domainsandbox.ParseName(configured)
+		sandboxName, err = sandbox.ParseName(configured)
 		if err != nil {
 			return err
 		}
 	}
-	sandboxProfile, err := domainsandbox.NewProfile(sandboxName, workDir)
+	sandboxProfile, err := sandbox.NewProfile(sandboxName, workDir)
 	if err != nil {
 		return fmt.Errorf("create sandbox profile: %w", err)
 	}
