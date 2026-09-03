@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/skill"
@@ -309,4 +310,22 @@ func TestQueueClearedOnTurnCancel(t *testing.T) {
 		t.Fatalf("expected queue to be cleared on cancel, got: %v", model.queue)
 	}
 }
+
+func TestStatusBarNeverWrapsOn80Columns(t *testing.T) {
+	model := newTestSkillsModel(t, 5)
+	model.resize(80, 24)
+	// Activate a skill with a long name
+	model.skills.MarkActivated("skill-with-a-very-long-descriptive-name")
+
+	info := model.infoView()
+	lines := strings.Split(info, "\n")
+	if len(lines) > 1 {
+		t.Fatalf("expected infoView to be strictly a single line, got %d lines: %s", len(lines), info)
+	}
+	visualWidth := ansi.StringWidth(info)
+	if visualWidth > 80 {
+		t.Fatalf("expected infoView width <= 80, got %d: %s", visualWidth, info)
+	}
+}
+
 
