@@ -330,7 +330,7 @@ func TestLoopRunsApprovedReadCallsWithBoundedConcurrency(t *testing.T) {
 			err    error
 		}{result: result, err: err}
 	}()
-	for index := 0; index < 2; index++ {
+	for range 2 {
 		select {
 		case <-handler.started:
 		case <-time.After(time.Second):

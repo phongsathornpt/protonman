@@ -350,10 +350,7 @@ func readOnlyKind(kind tool.Kind) bool {
 }
 
 func (l *Loop) executeConcurrent(ctx context.Context, calls []tool.Call) []executedCall {
-	workerCount := l.maxParallelReads
-	if workerCount > len(calls) {
-		workerCount = len(calls)
-	}
+	workerCount := min(l.maxParallelReads, len(calls))
 
 	type indexedCall struct {
 		index int
@@ -367,7 +364,7 @@ func (l *Loop) executeConcurrent(ctx context.Context, calls []tool.Call) []execu
 	results := make(chan indexedResult, len(calls))
 	var workers sync.WaitGroup
 	workers.Add(workerCount)
-	for index := 0; index < workerCount; index++ {
+	for range workerCount {
 		go func() {
 			defer workers.Done()
 			for {

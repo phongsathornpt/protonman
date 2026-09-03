@@ -148,9 +148,9 @@ func FormatCatalogXML(items []CatalogItem) string {
 	b.WriteString("<available_skills>\n")
 	for _, item := range items {
 		b.WriteString("  <skill>\n")
-		b.WriteString(fmt.Sprintf("    <name>%s</name>\n", escapeXML(item.Name)))
-		b.WriteString(fmt.Sprintf("    <description>%s</description>\n", escapeXML(item.Description)))
-		b.WriteString(fmt.Sprintf("    <location>%s</location>\n", escapeXML(item.Location)))
+		fmt.Fprintf(&b, "    <name>%s</name>\n", escapeXML(item.Name))
+		fmt.Fprintf(&b, "    <description>%s</description>\n", escapeXML(item.Description))
+		fmt.Fprintf(&b, "    <location>%s</location>\n", escapeXML(item.Location))
 		b.WriteString("  </skill>\n")
 	}
 	b.WriteString("</available_skills>")

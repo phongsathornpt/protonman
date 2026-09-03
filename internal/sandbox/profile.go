@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"slices"
 	"strings"
 )
 
@@ -221,10 +222,8 @@ func (p NetworkPolicy) AllowURL(raw string) error {
 		if err != nil {
 			return fmt.Errorf("%w: %v", ErrNetworkDenied, err)
 		}
-		for _, allowed := range p.Allowed {
-			if allowed == origin {
-				return nil
-			}
+		if slices.Contains(p.Allowed, origin) {
+			return nil
 		}
 		return fmt.Errorf("%w: origin %s is not allowlisted", ErrNetworkDenied, origin)
 	default:
