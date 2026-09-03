@@ -5,10 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	applicationskill "github.com/projectTHORN/proton/internal/application/skill"
 	"github.com/projectTHORN/proton/internal/domain/permission"
-	domainskill "github.com/projectTHORN/proton/internal/domain/skill"
 	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/skill"
 )
 
 func TestSlashSkills(t *testing.T) {
@@ -29,16 +28,16 @@ func TestSlashSkills(t *testing.T) {
 	})
 
 	t.Run("skills registered with checkbox", func(t *testing.T) {
-		s := domainskill.Skill{
+		s := skill.Skill{
 			Name:         "pdf-processing",
 			Description:  "Extract PDF text",
-			Scope:        domainskill.ScopeUser,
+			Scope:        skill.ScopeUser,
 			Location:     "/home/user/.agents/skills/pdf-processing/SKILL.md",
 			BaseDir:      "/home/user/.agents/skills/pdf-processing",
 			Instructions: "# PDF Processing Guide\nExtracting text.",
 			Resources:    []string{"scripts/extract.py"},
 		}
-		model.skills = applicationskill.NewRegistry(s)
+		model.skills = skill.NewRegistry(s)
 
 		model.executeCommand("/skills")
 		content := model.viewport.View()

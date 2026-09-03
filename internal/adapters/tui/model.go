@@ -14,11 +14,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	applicationskill "github.com/projectTHORN/proton/internal/application/skill"
 	"github.com/projectTHORN/proton/internal/application/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/application/turn"
 	"github.com/projectTHORN/proton/internal/domain/model"
 	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/skill"
 )
 
 const (
@@ -31,7 +31,7 @@ type bubbleModel struct {
 	ctx      context.Context
 	service  *toolcall.Service
 	registry tool.Registry
-	skills   *applicationskill.Registry
+	skills   *skill.Registry
 	runner   applicationturn.Runner
 	bridge   *permissionBridge
 	workDir  string
