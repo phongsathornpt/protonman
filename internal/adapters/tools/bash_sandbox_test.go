@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/adapters/sandbox"
+	"github.com/projectTHORN/proton/internal/sandbox"
 )
 
 type recordingLauncher struct {

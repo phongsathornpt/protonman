@@ -7,13 +7,13 @@ import (
 	"strings"
 
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
-	domaincheckpoint "github.com/projectTHORN/proton/internal/domain/checkpoint"
+	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
 type searchReplaceHandler struct {
 	workspace   *workspace.Workspace
-	checkpoints domaincheckpoint.Store
+	checkpoints checkpoint.Store
 }
 
 type searchReplaceInput struct {
@@ -24,7 +24,7 @@ type searchReplaceInput struct {
 }
 
 // NewSearchReplace returns the exact search-and-replace edit adapter.
-func NewSearchReplace(workspaceRoot *workspace.Workspace, stores ...domaincheckpoint.Store) tool.Handler {
+func NewSearchReplace(workspaceRoot *workspace.Workspace, stores ...checkpoint.Store) tool.Handler {
 	return searchReplaceHandler{
 		workspace:   workspaceRoot,
 		checkpoints: selectCheckpointStore(stores),

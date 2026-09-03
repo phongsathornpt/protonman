@@ -9,13 +9,13 @@ import (
 	"strings"
 
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
-	domaincheckpoint "github.com/projectTHORN/proton/internal/domain/checkpoint"
+	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
 type applyPatchHandler struct {
 	workspace   *workspace.Workspace
-	checkpoints domaincheckpoint.Store
+	checkpoints checkpoint.Store
 }
 
 type applyPatchInput struct {
@@ -68,7 +68,7 @@ type plannedPatchChange struct {
 }
 
 // NewApplyPatch returns the Codex-format multi-file patch adapter.
-func NewApplyPatch(workspaceRoot *workspace.Workspace, stores ...domaincheckpoint.Store) tool.Handler {
+func NewApplyPatch(workspaceRoot *workspace.Workspace, stores ...checkpoint.Store) tool.Handler {
 	return applyPatchHandler{
 		workspace:   workspaceRoot,
 		checkpoints: selectCheckpointStore(stores),

@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
-	domaincheckpoint "github.com/projectTHORN/proton/internal/domain/checkpoint"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
@@ -559,4 +558,4 @@ func createCheckpointRootTemp(root *os.Root, prefix string) (*os.File, string, e
 	return nil, "", fmt.Errorf("could not allocate a unique restore temporary file")
 }
 
-var _ domaincheckpoint.Store = (*FileStore)(nil)
+var _ Store = (*FileStore)(nil)

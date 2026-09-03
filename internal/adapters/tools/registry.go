@@ -7,12 +7,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/projectTHORN/proton/internal/adapters/sandbox"
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
 	applicationskill "github.com/projectTHORN/proton/internal/application/skill"
-	domaincheckpoint "github.com/projectTHORN/proton/internal/domain/checkpoint"
-	domainsandbox "github.com/projectTHORN/proton/internal/domain/sandbox"
+	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/sandbox"
 )
 
 // ErrDuplicateTool indicates that a name is already registered.
@@ -43,14 +42,14 @@ func NewRegistry(handlers ...tool.Handler) (*Registry, error) {
 type RegistryOption func(*registryOptions) error
 
 type registryOptions struct {
-	stores   []domaincheckpoint.Store
+	stores   []checkpoint.Store
 	launcher sandbox.Launcher
-	network  domainsandbox.NetworkPolicy
+	network  sandbox.NetworkPolicy
 	skills   *applicationskill.Registry
 }
 
 // WithCheckpointStore attaches durable edit checkpoints.
-func WithCheckpointStore(store domaincheckpoint.Store) RegistryOption {
+func WithCheckpointStore(store checkpoint.Store) RegistryOption {
 	return func(options *registryOptions) error {
 		if store == nil {
 			return fmt.Errorf("checkpoint store is required")
@@ -61,7 +60,7 @@ func WithCheckpointStore(store domaincheckpoint.Store) RegistryOption {
 }
 
 // WithSandbox confines bash and web_fetch under the resolved profile.
-func WithSandbox(launcher sandbox.Launcher, network domainsandbox.NetworkPolicy) RegistryOption {
+func WithSandbox(launcher sandbox.Launcher, network sandbox.NetworkPolicy) RegistryOption {
 	return func(options *registryOptions) error {
 		options.launcher = launcher
 		options.network = network
@@ -83,10 +82,10 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 		return nil, fmt.Errorf("create default registry: workspace is required")
 	}
 	cfg := registryOptions{
-		stores: make([]domaincheckpoint.Store, 0),
-		network: domainsandbox.NetworkPolicy{
-			Mode:    domainsandbox.NetworkUnrestricted,
-			Allowed: []domainsandbox.Origin{},
+		stores: make([]checkpoint.Store, 0),
+		network: sandbox.NetworkPolicy{
+			Mode:    sandbox.NetworkUnrestricted,
+			Allowed: []sandbox.Origin{},
 		},
 	}
 	for _, option := range options {

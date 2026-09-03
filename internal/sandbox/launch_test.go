@@ -7,12 +7,10 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	domainsandbox "github.com/projectTHORN/proton/internal/domain/sandbox"
 )
 
 func TestOffProfileUsesBareShell(t *testing.T) {
-	profile, err := domainsandbox.NewProfile(domainsandbox.NameOff, "")
+	profile, err := NewProfile(NameOff, "")
 	if err != nil {
 		t.Fatalf("NewProfile() error = %v", err)
 	}
@@ -30,14 +28,14 @@ func TestConfiningProfileFailsClosedWhenToolsMissing(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("windows launcher is fail-closed by design")
 	}
-	profiles := []domainsandbox.Name{
-		domainsandbox.NameWorkspace,
-		domainsandbox.NameReadOnly,
-		domainsandbox.NameStrict,
+	profiles := []Name{
+		NameWorkspace,
+		NameReadOnly,
+		NameStrict,
 	}
 	for _, name := range profiles {
 		t.Run(name.String(), func(t *testing.T) {
-			profile, err := domainsandbox.NewProfile(name, t.TempDir())
+			profile, err := NewProfile(name, t.TempDir())
 			if err != nil {
 				t.Fatalf("NewProfile() error = %v", err)
 			}
@@ -56,7 +54,7 @@ func TestConfiningProfileFailsClosedWhenToolsMissing(t *testing.T) {
 }
 
 func TestSeatbeltProfileDeniesWritesOutsideWorkspace(t *testing.T) {
-	profile, err := domainsandbox.NewProfile(domainsandbox.NameStrict, "/tmp/ws")
+	profile, err := NewProfile(NameStrict, "/tmp/ws")
 	if err != nil {
 		t.Fatalf("NewProfile() error = %v", err)
 	}
@@ -76,7 +74,7 @@ func TestSeatbeltProfileDeniesWritesOutsideWorkspace(t *testing.T) {
 }
 
 func TestSeatbeltReadOnlyProfileDoesNotExcludeWorkspaceFromWriteDeny(t *testing.T) {
-	profile, err := domainsandbox.NewProfile(domainsandbox.NameReadOnly, "/tmp/ws")
+	profile, err := NewProfile(NameReadOnly, "/tmp/ws")
 	if err != nil {
 		t.Fatalf("NewProfile() error = %v", err)
 	}
@@ -93,7 +91,7 @@ func TestSeatbeltReadOnlyProfileDoesNotExcludeWorkspaceFromWriteDeny(t *testing.
 }
 
 func TestSeatbeltProfileDeniesNetworkWhenRestricted(t *testing.T) {
-	profile, err := domainsandbox.NewProfile(domainsandbox.NameStrict, "/tmp/ws")
+	profile, err := NewProfile(NameStrict, "/tmp/ws")
 	if err != nil {
 		t.Fatalf("NewProfile() error = %v", err)
 	}
@@ -107,7 +105,7 @@ func TestSeatbeltProfileDeniesNetworkWhenRestricted(t *testing.T) {
 }
 
 func TestBwrapExposesHostRuntimeReadOnlyAndWorkspaceWritable(t *testing.T) {
-	profile, err := domainsandbox.NewProfile(domainsandbox.NameWorkspace, "/tmp/ws")
+	profile, err := NewProfile(NameWorkspace, "/tmp/ws")
 	if err != nil {
 		t.Fatalf("NewProfile() error = %v", err)
 	}
@@ -122,7 +120,7 @@ func TestBwrapExposesHostRuntimeReadOnlyAndWorkspaceWritable(t *testing.T) {
 }
 
 func TestBwrapUsesUnshareNetWhenRestricted(t *testing.T) {
-	profile, err := domainsandbox.NewProfile(domainsandbox.NameStrict, "/tmp/ws")
+	profile, err := NewProfile(NameStrict, "/tmp/ws")
 	if err != nil {
 		t.Fatalf("NewProfile() error = %v", err)
 	}
