@@ -236,14 +236,6 @@ func decodeRequest(line []byte) (rpcRequest, *rpcResponse) {
 	return request, nil
 }
 
-func (s *Server) handleLine(ctx context.Context, line []byte, output io.Writer) error {
-	request, invalid := decodeRequest(bytes.TrimSpace(line))
-	if invalid != nil {
-		return writeJSON(output, invalid)
-	}
-	return s.handleRequest(ctx, request, output)
-}
-
 func (s *Server) handleRequest(ctx context.Context, request rpcRequest, output io.Writer) error {
 	result, notify, err := s.dispatch(ctx, request)
 	return writeRequestResult(output, request.ID, result, notify, err)

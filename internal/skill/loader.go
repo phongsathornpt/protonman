@@ -3,6 +3,7 @@ package skill
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -97,9 +98,7 @@ func Discover(ctx context.Context, opts Options) (DiscoveryResult, error) {
 
 	// Merge: user skills first, then project skills override
 	effective := make(map[string]Skill, len(userSkills)+len(projectSkills))
-	for name, s := range userSkills {
-		effective[name] = s
-	}
+	maps.Copy(effective, userSkills)
 	for name, s := range projectSkills {
 		if _, exists := userSkills[name]; exists {
 			result.Warnings = append(result.Warnings, fmt.Sprintf(

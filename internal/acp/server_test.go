@@ -139,7 +139,7 @@ func FuzzACPRequest(f *testing.F) {
 
 func extractSessionID(t *testing.T, raw []byte) string {
 	t.Helper()
-	for _, line := range bytes.Split(raw, []byte("\n")) {
+	for line := range bytes.SplitSeq(raw, []byte("\n")) {
 		if len(bytes.TrimSpace(line)) == 0 {
 			continue
 		}
