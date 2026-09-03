@@ -117,3 +117,63 @@ func FuzzParseOrigin(f *testing.F) {
 		}
 	})
 }
+
+func TestNameEnumAndTextMarshaling(t *testing.T) {
+	names := []Name{NameOff, NameWorkspace, NameReadOnly, NameStrict}
+	for _, n := range names {
+		if !n.Valid() {
+			t.Fatalf("expected name %s to be valid", n)
+		}
+		text, err := n.MarshalText()
+		if err != nil {
+			t.Fatalf("MarshalText() error = %v", err)
+		}
+		var decoded Name
+		if err := decoded.UnmarshalText(text); err != nil {
+			t.Fatalf("UnmarshalText() error = %v", err)
+		}
+		if decoded != n {
+			t.Fatalf("round-trip failed: got %s, want %s", decoded, n)
+		}
+	}
+	if NameUnknown.Valid() {
+		t.Fatal("NameUnknown should not be valid")
+	}
+	if Name(99).Valid() {
+		t.Fatal("Name(99) should not be valid")
+	}
+	var invalid Name
+	if err := invalid.UnmarshalText([]byte("invalid")); err == nil {
+		t.Fatal("UnmarshalText(invalid) error = nil, want error")
+	}
+}
+
+func TestNetworkModeEnumAndTextMarshaling(t *testing.T) {
+	modes := []NetworkMode{NetworkUnrestricted, NetworkBlocked, NetworkAllowlist}
+	for _, m := range modes {
+		if !m.Valid() {
+			t.Fatalf("expected network mode %s to be valid", m)
+		}
+		text, err := m.MarshalText()
+		if err != nil {
+			t.Fatalf("MarshalText() error = %v", err)
+		}
+		var decoded NetworkMode
+		if err := decoded.UnmarshalText(text); err != nil {
+			t.Fatalf("UnmarshalText() error = %v", err)
+		}
+		if decoded != m {
+			t.Fatalf("round-trip failed: got %s, want %s", decoded, m)
+		}
+	}
+	if NetworkUnknown.Valid() {
+		t.Fatal("NetworkUnknown should not be valid")
+	}
+	if NetworkMode(99).Valid() {
+		t.Fatal("NetworkMode(99) should not be valid")
+	}
+	var invalid NetworkMode
+	if err := invalid.UnmarshalText([]byte("invalid")); err == nil {
+		t.Fatal("UnmarshalText(invalid) error = nil, want error")
+	}
+}
