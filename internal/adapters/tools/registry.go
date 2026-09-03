@@ -9,6 +9,7 @@ import (
 
 	"github.com/projectTHORN/proton/internal/adapters/sandbox"
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
+	applicationskill "github.com/projectTHORN/proton/internal/application/skill"
 	domaincheckpoint "github.com/projectTHORN/proton/internal/domain/checkpoint"
 	domainsandbox "github.com/projectTHORN/proton/internal/domain/sandbox"
 	"github.com/projectTHORN/proton/internal/domain/tool"
@@ -45,6 +46,7 @@ type registryOptions struct {
 	stores   []domaincheckpoint.Store
 	launcher sandbox.Launcher
 	network  domainsandbox.NetworkPolicy
+	skills   *applicationskill.Registry
 }
 
 // WithCheckpointStore attaches durable edit checkpoints.
@@ -63,6 +65,14 @@ func WithSandbox(launcher sandbox.Launcher, network domainsandbox.NetworkPolicy)
 	return func(options *registryOptions) error {
 		options.launcher = launcher
 		options.network = network
+		return nil
+	}
+}
+
+// WithSkillRegistry attaches an Agent Skill registry and registers activate_skill.
+func WithSkillRegistry(registry *applicationskill.Registry) RegistryOption {
+	return func(options *registryOptions) error {
+		options.skills = registry
 		return nil
 	}
 }
@@ -88,7 +98,7 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 		}
 	}
 	checkpointStore := selectCheckpointStore(cfg.stores)
-	return NewRegistry(
+	handlers := []tool.Handler{
 		NewReadFile(workspaceRoot),
 		NewBash(workspaceRoot, cfg.launcher),
 		NewWriteFile(workspaceRoot, checkpointStore),
@@ -99,7 +109,11 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 		NewGitStatus(workspaceRoot),
 		NewCheckpointRestore(checkpointStore),
 		NewWebFetch(cfg.network),
-	)
+	}
+	if cfg.skills != nil {
+		handlers = append(handlers, NewActivateSkill(cfg.skills))
+	}
+	return NewRegistry(handlers...)
 }
 
 // Register adds a handler to the registry.
