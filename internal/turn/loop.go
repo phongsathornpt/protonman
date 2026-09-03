@@ -22,6 +22,7 @@ import (
 const (
 	defaultMaxRounds       = 8
 	defaultMaxParallelRead = 4
+	skillPromptMarker      = "<!-- proton:skill-catalog -->"
 )
 
 var (
@@ -185,11 +186,15 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	if len(l.skills) > 0 {
 		section := skill.SystemPromptSection(l.skills)
 		if len(history) > 0 && history[0].Role == model.RoleSystem {
-			history[0].Content = strings.TrimSpace(history[0].Content + "\n\n" + section)
+			base := history[0].Content
+			if marker := strings.Index(base, skillPromptMarker); marker >= 0 {
+				base = base[:marker]
+			}
+			history[0].Content = strings.TrimSpace(base + "\n\n" + skillPromptMarker + "\n" + section)
 		} else {
 			systemMsg := model.Message{
 				Role:    model.RoleSystem,
-				Content: section,
+				Content: skillPromptMarker + "\n" + section,
 			}
 			history = append([]model.Message{systemMsg}, history...)
 		}
