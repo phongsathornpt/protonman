@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
 // Action is the result of evaluating a permission rule.
@@ -36,6 +38,26 @@ func (a Action) String() string {
 	default:
 		return "unknown"
 	}
+}
+
+// Valid reports whether the action is a supported non-zero decision.
+func (a Action) Valid() bool {
+	return validAction(a)
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (a Action) MarshalText() ([]byte, error) {
+	return []byte(a.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (a *Action) UnmarshalText(text []byte) error {
+	parsed, err := ParseAction(string(text))
+	if err != nil {
+		return err
+	}
+	*a = parsed
+	return nil
 }
 
 // ParseAction parses the action names used by configuration files.
@@ -85,6 +107,31 @@ func (m Mode) String() string {
 	}
 }
 
+// Valid reports whether the mode is a supported non-zero mode.
+func (m Mode) Valid() bool {
+	switch m {
+	case ModeAsk, ModeAuto, ModeAlwaysApprove, ModeDeny:
+		return true
+	default:
+		return false
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (m Mode) MarshalText() ([]byte, error) {
+	return []byte(m.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (m *Mode) UnmarshalText(text []byte) error {
+	parsed, err := ParseMode(string(text))
+	if err != nil {
+		return err
+	}
+	*m = parsed
+	return nil
+}
+
 // ParseMode parses the mode names accepted by the TUI and future config.
 func ParseMode(value string) (Mode, error) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
@@ -102,25 +149,25 @@ func ParseMode(value string) (Mode, error) {
 }
 
 // ToolKind identifies the type of access a permission rule governs.
-type ToolKind string
+type ToolKind = tool.Kind
 
 const (
 	// ToolAny matches every tool kind.
 	ToolAny ToolKind = "any"
 	// ToolRead matches read-only filesystem tools.
-	ToolRead ToolKind = "read"
+	ToolRead ToolKind = tool.KindRead
 	// ToolEdit matches file-mutating tools.
-	ToolEdit ToolKind = "edit"
+	ToolEdit ToolKind = tool.KindEdit
 	// ToolBash matches shell execution tools.
-	ToolBash ToolKind = "bash"
+	ToolBash ToolKind = tool.KindBash
 	// ToolGrep matches content-search tools.
-	ToolGrep ToolKind = "grep"
+	ToolGrep ToolKind = tool.KindGrep
 	// ToolMCP matches tools supplied by MCP servers.
-	ToolMCP ToolKind = "mcp"
+	ToolMCP ToolKind = tool.KindMCP
 	// ToolWebFetch matches URL-fetching tools.
-	ToolWebFetch ToolKind = "web_fetch"
+	ToolWebFetch ToolKind = tool.KindWebFetch
 	// ToolWebSearch matches web-search tools.
-	ToolWebSearch ToolKind = "web_search"
+	ToolWebSearch ToolKind = tool.KindWebSearch
 )
 
 // PatternMode controls what part of a request a rule pattern matches.
@@ -135,6 +182,38 @@ const (
 	// PatternModeDomain matches a URL hostname, case-insensitively.
 	PatternModeDomain
 )
+
+// String returns the stable configuration spelling of a pattern mode.
+func (m PatternMode) String() string {
+	switch m {
+	case PatternModeGlob:
+		return "glob"
+	case PatternModeDomain:
+		return "domain"
+	default:
+		return "unknown"
+	}
+}
+
+// Valid reports whether the pattern mode is a recognized non-zero mode.
+func (m PatternMode) Valid() bool {
+	return m == PatternModeGlob || m == PatternModeDomain
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (m PatternMode) MarshalText() ([]byte, error) {
+	return []byte(m.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (m *PatternMode) UnmarshalText(text []byte) error {
+	parsed, err := ParsePatternMode(string(text))
+	if err != nil {
+		return err
+	}
+	*m = parsed
+	return nil
+}
 
 // ParseToolKind parses the tool names used by configuration files.
 func ParseToolKind(value string) (ToolKind, error) {
@@ -220,11 +299,57 @@ type Decision struct {
 type GrantScope uint8
 
 const (
+	// GrantScopeUnknown is the invalid zero value.
+	GrantScopeUnknown GrantScope = iota
 	// GrantScopeOnce applies only to the current call.
-	GrantScopeOnce GrantScope = iota + 1
+	GrantScopeOnce
 	// GrantScopeSession applies to matching calls until the process exits.
 	GrantScopeSession
 )
+
+// String returns the stable spelling of a grant scope.
+func (g GrantScope) String() string {
+	switch g {
+	case GrantScopeOnce:
+		return "once"
+	case GrantScopeSession:
+		return "session"
+	default:
+		return "unknown"
+	}
+}
+
+// Valid reports whether the grant scope is a recognized non-zero scope.
+func (g GrantScope) Valid() bool {
+	return g == GrantScopeOnce || g == GrantScopeSession
+}
+
+// ParseGrantScope parses the grant scope names.
+func ParseGrantScope(value string) (GrantScope, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "once":
+		return GrantScopeOnce, nil
+	case "session":
+		return GrantScopeSession, nil
+	default:
+		return GrantScopeUnknown, fmt.Errorf("unknown permission grant scope %q", value)
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (g GrantScope) MarshalText() ([]byte, error) {
+	return []byte(g.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (g *GrantScope) UnmarshalText(text []byte) error {
+	parsed, err := ParseGrantScope(string(text))
+	if err != nil {
+		return err
+	}
+	*g = parsed
+	return nil
+}
 
 // GrantKey identifies the narrow request a session grant covers.
 type GrantKey struct {
@@ -281,6 +406,10 @@ func NewPolicy(config Config) (*Policy, error) {
 		if !validAction(rule.Action) {
 			return nil, fmt.Errorf("%w: rule %d has invalid action %d", ErrInvalidConfig, i, rule.Action)
 		}
+		if rule.Tool == "" {
+			rule.Tool = ToolAny
+			rules[i].Tool = ToolAny
+		}
 		if !validToolKind(rule.Tool) {
 			return nil, fmt.Errorf("%w: rule %d has invalid tool %q", ErrInvalidConfig, i, rule.Tool)
 		}
@@ -289,8 +418,8 @@ func NewPolicy(config Config) (*Policy, error) {
 			patternMode = PatternModeGlob
 			rules[i].PatternMode = patternMode
 		}
-		if patternMode != PatternModeGlob && patternMode != PatternModeDomain {
-			return nil, fmt.Errorf("%w: rule %d has invalid pattern mode %d", ErrInvalidConfig, i, patternMode)
+		if !patternMode.Valid() {
+			return nil, fmt.Errorf("%w: rule %d has invalid pattern mode %s", ErrInvalidConfig, i, patternMode)
 		}
 		if patternMode == PatternModeDomain {
 			rules[i].Pattern = strings.ToLower(strings.TrimSpace(rule.Pattern))
@@ -484,6 +613,11 @@ func globMatchRunes(pattern, value string) bool {
 
 func validAction(action Action) bool {
 	return action == ActionAllow || action == ActionDeny || action == ActionAsk
+}
+
+// ValidToolKind reports whether a tool kind is supported by permission policy.
+func ValidToolKind(kind ToolKind) bool {
+	return validToolKind(kind)
 }
 
 func validToolKind(kind ToolKind) bool {
