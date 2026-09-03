@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/domain/permission"
-	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/permission"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 func TestServiceEmitsRedactedLifecycleEvents(t *testing.T) {

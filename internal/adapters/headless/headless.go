@@ -9,12 +9,12 @@ import (
 	"io"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/adapters/session"
+	"github.com/projectTHORN/proton/internal/session"
 	"github.com/projectTHORN/proton/internal/application/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/application/turn"
-	"github.com/projectTHORN/proton/internal/domain/model"
-	"github.com/projectTHORN/proton/internal/domain/permission"
-	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/model"
+	"github.com/projectTHORN/proton/internal/permission"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 // Format is the headless output encoding.

@@ -8,8 +8,8 @@ import (
 
 	"github.com/projectTHORN/proton/internal/adapters/tools"
 	"github.com/projectTHORN/proton/internal/application/toolcall"
-	"github.com/projectTHORN/proton/internal/domain/permission"
-	domaintool "github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/permission"
+	domaintool "github.com/projectTHORN/proton/internal/tool"
 )
 
 func TestNamespacedName(t *testing.T) {

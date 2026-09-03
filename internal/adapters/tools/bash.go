@@ -9,8 +9,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/adapters/workspace"
-	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/workspace"
+	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/sandbox"
 )
 
