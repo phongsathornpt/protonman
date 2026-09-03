@@ -263,12 +263,13 @@ func TestLoopCancelsModelStreamWithParentContext(t *testing.T) {
 	loop, _ := newTestLoop(t, client, permission.ActionAllow)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	events := make([]Event, 0)
 	resultCh := make(chan error, 1)
 	go func() {
 		_, err := loop.Run(
 			ctx,
 			[]model.Message{{Role: model.RoleUser, Content: "wait"}},
-			nil,
+			collectEvents(&events),
 		)
 		resultCh <- err
 	}()
@@ -285,6 +286,9 @@ func TestLoopCancelsModelStreamWithParentContext(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Run() did not stop after cancellation")
+	}
+	if got := events[len(events)-1].Kind; got != EventFailed {
+		t.Fatalf("last event kind = %q, want %q", got, EventFailed)
 	}
 }
 

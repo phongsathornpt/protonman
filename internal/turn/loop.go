@@ -209,7 +209,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		}
 		assistant, executions, err := l.runRound(ctx, round, request, sink)
 		if err != nil {
-			return Result{}, err
+			return l.fail(ctx, sink, round, err)
 		}
 		history = append(history, assistant)
 		turnMessages = append(turnMessages, assistant)
@@ -299,6 +299,18 @@ func (l *Loop) runRound(
 
 	executions := l.executeCalls(roundContext, calls)
 	if err := roundContext.Err(); err != nil {
+		emitContext := context.WithoutCancel(roundContext)
+		for _, execution := range executions {
+			if emitErr := emit(emitContext, sink, Event{
+				Kind:   EventToolResult,
+				Round:  round,
+				Call:   execution.call,
+				Result: execution.result,
+				Err:    execution.err,
+			}); emitErr != nil {
+				return model.Message{}, nil, emitErr
+			}
+		}
 		return model.Message{}, nil, fmt.Errorf("execute model round %d: %w", round, err)
 	}
 	for _, execution := range executions {
@@ -528,7 +540,13 @@ func consumeStream(
 }
 
 func (l *Loop) fail(ctx context.Context, sink Sink, round int, err error) (Result, error) {
-	if emitErr := emit(ctx, sink, Event{
+	emitContext := ctx
+	if ctx.Err() != nil {
+		// A terminal failure still needs to reach adapters after cancellation;
+		// preserve context values without inheriting the canceled state.
+		emitContext = context.WithoutCancel(ctx)
+	}
+	if emitErr := emit(emitContext, sink, Event{
 		Kind:  EventFailed,
 		Round: round,
 		Err:   err,
