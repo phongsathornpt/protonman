@@ -184,6 +184,17 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 		body = joinBody(body, "checkpoint: "+result.CheckpointID)
 	}
 
+	if result.Failure != nil && result.Failure.Message != "" && result.Failure.Code != tool.ErrorCodeCanceled {
+		errorCell := &ErrorCell{
+			Title: name,
+			Text:  fmt.Sprintf("[%s]: %s", result.Failure.Code, result.Failure.Message),
+			Code:  result.Failure.Code,
+		}
+		state.CompleteToolCall(result.CallID, name, errorCell)
+		m.syncLegacyBlocks()
+		return
+	}
+
 	if err != nil && !errors.Is(err, context.Canceled) && failureCode(result) != tool.ErrorCodeCanceled {
 		errorCell := &ErrorCell{Title: name, Text: err.Error()}
 		if result.Failure != nil {
@@ -338,7 +349,7 @@ func (m *bubbleModel) applyTurnEvent(event applicationturn.Event) {
 		if result.ToolName == "" {
 			result.ToolName = event.Call.Name
 		}
-		m.applyToolResult(event.Call.Name, result, nil)
+		m.applyToolResult(event.Call.Name, result, event.Err)
 	case applicationturn.EventCompleted:
 		m.ensureHistoryState().CommitActive()
 		m.syncLegacyBlocks()
