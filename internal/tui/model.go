@@ -81,9 +81,10 @@ type bubbleKeyMap struct {
 	Quit       key.Binding
 	PageUp     key.Binding
 	PageDown   key.Binding
-	ToggleTodo key.Binding
-	Transcript key.Binding
-	CycleMode  key.Binding
+	ToggleTodo   key.Binding
+	Transcript   key.Binding
+	CycleMode    key.Binding
+	ToggleSkills key.Binding
 }
 
 func newBubbleModel(
@@ -157,9 +158,10 @@ func newBubbleKeyMap() bubbleKeyMap {
 		Quit:       key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")),
 		PageUp:     key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "scroll")),
 		PageDown:   key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "scroll")),
-		ToggleTodo: key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o", "todos")),
-		Transcript: key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "transcript")),
-		CycleMode:  key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "mode")),
+		ToggleTodo:   key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o", "todos")),
+		Transcript:   key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "transcript")),
+		CycleMode:    key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "mode")),
+		ToggleSkills: key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "skills")),
 	}
 }
 
@@ -269,6 +271,20 @@ func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(message, m.keys.Transcript) {
 		m.showTranscript = true
 		m.refreshTranscriptViewport(true)
+		return m, nil
+	}
+	if message.Type == tea.KeyCtrlS || key.Matches(message, m.keys.ToggleSkills) {
+		if m.bottom.has(skillsViewID) {
+			m.bottom.remove(skillsViewID)
+			m.relayout()
+			return m, nil
+		}
+		if m.skills != nil && len(m.skills.List()) > 0 {
+			m.bottom.push(&skillsPaneView{})
+			m.relayout()
+			return m, nil
+		}
+		m.executeCommand("/skills")
 		return m, nil
 	}
 	if message.String() == "ctrl+c" {
