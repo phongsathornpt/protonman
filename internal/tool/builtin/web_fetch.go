@@ -1,11 +1,13 @@
 package builtin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -33,7 +35,13 @@ func NewWebFetch(policy sandbox.NetworkPolicy) tool.Handler {
 		policy: policy,
 		client: &http.Client{
 			Timeout: 10 * time.Second,
-			CheckRedirect: func(req *http.Request, _ []*http.Request) error {
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 10 {
+					return fmt.Errorf("stopped after 10 redirects")
+				}
+				if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
+					return fmt.Errorf("redirect to unsupported scheme %q", req.URL.Scheme)
+				}
 				return policy.AllowURL(req.URL.String())
 			},
 		},
@@ -68,6 +76,12 @@ func (h webFetchHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	if input.URL == "" {
 		return tool.Result{}, fmt.Errorf("web_fetch url is required")
 	}
+
+	parsedURL, err := url.Parse(input.URL)
+	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Hostname() == "" {
+		return tool.Result{}, fmt.Errorf("web_fetch url must be a valid http or https URL")
+	}
+
 	if err := h.policy.AllowURL(input.URL); err != nil {
 		return tool.Result{}, err
 	}
@@ -79,26 +93,68 @@ func (h webFetchHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("build web_fetch request: %w", err)
 	}
+	request.Header.Set("User-Agent", "Proton/1.0 (+https://github.com/projectTHORN/proton)")
+	request.Header.Set("Accept", "text/html,application/xhtml+xml,application/json,text/plain;q=0.9,*/*;q=0.8")
+
 	response, err := h.client.Do(request)
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("web_fetch: %w", err)
 	}
 	defer response.Body.Close()
+
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxFetchBytes+1))
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("read web_fetch body: %w", err)
 	}
-	result := tool.Result{
-		CallID:   call.ID,
-		ToolName: call.Name,
-		Output:   string(body),
+
+	contentType := response.Header.Get("Content-Type")
+	if isBinaryContent(contentType, body) {
+		displayType := contentType
+		if displayType == "" {
+			displayType = http.DetectContentType(body)
+		}
+		result := tool.Result{
+			CallID:   call.ID,
+			ToolName: call.Name,
+			Output:   fmt.Sprintf("[binary content omitted: %s, %d bytes]", displayType, len(body)),
+		}
+		return result, nil
 	}
+
+	output := string(body)
+	var truncated bool
 	if len(body) > maxFetchBytes {
-		result.Output = string(body[:maxFetchBytes])
-		result.Truncated = true
+		output = string(body[:maxFetchBytes]) + "\n[output truncated at 256 KiB]"
+		truncated = true
+	}
+
+	result := tool.Result{
+		CallID:    call.ID,
+		ToolName:  call.Name,
+		Output:    output,
+		Truncated: truncated,
 	}
 	if response.StatusCode >= 400 {
+		statusText := http.StatusText(response.StatusCode)
+		if statusText != "" {
+			return result, fmt.Errorf("web_fetch status %d: %s", response.StatusCode, statusText)
+		}
 		return result, fmt.Errorf("web_fetch status %d", response.StatusCode)
 	}
 	return result, nil
+}
+
+func isBinaryContent(contentType string, body []byte) bool {
+	mediaType := strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
+	if strings.HasPrefix(mediaType, "image/") ||
+		strings.HasPrefix(mediaType, "audio/") ||
+		strings.HasPrefix(mediaType, "video/") ||
+		mediaType == "application/octet-stream" ||
+		mediaType == "application/zip" ||
+		mediaType == "application/pdf" ||
+		mediaType == "application/gzip" {
+		return true
+	}
+	checkLen := min(len(body), 512)
+	return bytes.IndexByte(body[:checkLen], 0) != -1
 }
