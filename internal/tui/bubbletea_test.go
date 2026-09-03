@@ -350,7 +350,7 @@ func TestPermissionCardOverlaysTranscript(t *testing.T) {
 		"Permission required",
 		"bash",
 		"Allow for this request this session",
-		"esc read",
+		"esc park",
 	} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("overlay view does not contain %q: %s", expected, view)

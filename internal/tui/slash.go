@@ -30,11 +30,13 @@ var slashCatalog = []slashCommand{
 	{name: "skills", description: "list agent skills (or /skills active)", takesArgs: true},
 	{name: "skill", description: "show, activate, or toggle an agent skill", takesArgs: true},
 	{name: "mode", description: "show or set permission mode", takesArgs: true},
+	{name: "ask", description: "switch to ask permission mode"},
 	{name: "always-approve", aliases: []string{"yolo"}, description: "allow non-denied calls"},
 	{name: "plan", description: "toggle plan flag", takesArgs: true},
 	{name: "transcript", aliases: []string{"history"}, description: "open transcript"},
 	{name: "todo", description: "show the TODO pane"},
-	{name: "clear", aliases: []string{"new"}, description: "clear the transcript"},
+	{name: "clear", description: "clear the visible transcript"},
+	{name: "new", description: "start a new conversation"},
 	{name: "call", description: "run a registered tool", takesArgs: true},
 	{name: "quit", aliases: []string{"exit"}, description: "leave Proton"},
 }
@@ -477,6 +479,14 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 			m.setPlanEnabled(false)
 		}
 		m.appendLine("permission mode: " + mode.String())
+	case "ask":
+		if err := m.service.SetMode(permission.ModeAsk); err != nil {
+			m.appendError(err.Error())
+			m.refreshViewport()
+			return nil
+		}
+		m.setPlanEnabled(false)
+		m.appendLine("permission mode: " + permission.ModeAsk.String())
 	case "always-approve", "yolo":
 		if err := m.service.SetMode(permission.ModeAlwaysApprove); err != nil {
 			m.appendError(err.Error())
@@ -494,8 +504,12 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		m.todoHidden = false
 		m.appendTodo()
 		m.resize(m.width, m.height)
-	case "clear", "new":
+	case "clear":
 		m.resetTranscript()
+		m.refreshViewport()
+		return nil
+	case "new":
+		m.resetConversation()
 		m.refreshViewport()
 		return nil
 	case "call":

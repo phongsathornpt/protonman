@@ -14,7 +14,7 @@ func (m *bubbleModel) refreshTranscriptViewport(forceTail bool) {
 	follow := forceTail || m.transcriptViewport.AtBottom()
 	content := m.historyState.Raw()
 	if !m.rawTranscript {
-		content = strings.Join(m.historyState.RenderLines(), "\n")
+		content = strings.Join(m.historyState.RenderLinesAt(maxInt(8, m.transcriptViewport.Width)), "\n")
 	}
 	if strings.TrimSpace(content) == "" {
 		content = mutedStyle.Render("No transcript yet.")
@@ -33,7 +33,7 @@ func (m *bubbleModel) transcriptOverlayView() string {
 	header := brandStyle.Render("Transcript") + mutedStyle.Render(" · "+mode)
 	footer := mutedStyle.Render("esc/ctrl+t close · r raw/rich · pgup/pgdn scroll")
 	body := lipgloss.JoinVertical(lipgloss.Left, header, m.transcriptViewport.View(), footer)
-	width := maxInt(28, m.width-6)
+	width := maxInt(1, m.width-6)
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(accentAssistant).

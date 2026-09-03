@@ -218,7 +218,7 @@ func (v *skillsPaneView) Render(m *bubbleModel) string {
 	}
 	visible := skills[v.offset:visibleEnd]
 
-	maxWidth := maxInt(32, m.width-8)
+	maxWidth := maxInt(1, m.width-8)
 	rows := make([]string, 0, len(visible)+6)
 	activeCount := len(m.skills.ActivatedList())
 	title := fmt.Sprintf("Agent Skills (%d/%d active · item %d of %d)", activeCount, len(skills), v.index+1, len(skills))
@@ -253,7 +253,7 @@ func (v *skillsPaneView) Render(m *bubbleModel) string {
 	rows = append(rows, "", mutedStyle.Render("j/k move · space toggle · 1-9 jump · esc/enter close"))
 	return modalStyle.
 		BorderForeground(accentAssistant).
-		MaxWidth(maxInt(24, m.width-4)).
+		MaxWidth(maxInt(1, m.width-4)).
 		Render(strings.Join(rows, "\n"))
 }
 

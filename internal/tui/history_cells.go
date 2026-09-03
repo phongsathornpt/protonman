@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/projectTHORN/proton/internal/tool"
 )
 
@@ -50,12 +52,43 @@ type HistoryCell interface {
 	LineCount() int
 }
 
+// widthHistoryCell is implemented by cells whose rich presentation can wrap
+// to the current viewport. The compatibility methods on HistoryCell remain
+// available to callers that do not have a terminal width.
+type widthHistoryCell interface {
+	RenderWidth(width int) []string
+}
+
+func renderHistoryCell(cell HistoryCell, width int) []string {
+	if sized, ok := cell.(widthHistoryCell); ok {
+		return sized.RenderWidth(width)
+	}
+	return cell.Render()
+}
+
+func historyCellLineCount(cell HistoryCell, width int) int {
+	return len(renderHistoryCell(cell, width))
+}
+
 // UserCell renders submitted user input.
 type UserCell struct{ Text string }
 
 func (UserCell) Kind() HistoryCellKind { return HistoryCellUser }
-func (c UserCell) Render() []string {
-	return []string{userStyle.Render(glyphMark) + bodyStyle.Render(sanitizeBubbleText(c.Text))}
+func (c UserCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c UserCell) RenderWidth(width int) []string {
+	lines := safeWrappedLines(strings.TrimRight(c.Text, "\n"), maxInt(1, width-2))
+	if len(lines) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(lines))
+	for index, line := range lines {
+		prefix := "  "
+		if index == 0 {
+			prefix = glyphMark
+		}
+		out = append(out, userStyle.Render(prefix)+bodyStyle.Render(line))
+	}
+	return out
 }
 func (c UserCell) RawLines() []string { return rawTextLines(c.Text) }
 func (c UserCell) LineCount() int     { return len(c.RawLines()) }
@@ -64,18 +97,20 @@ func (c UserCell) LineCount() int     { return len(c.RawLines()) }
 type AssistantCell struct{ Text string }
 
 func (AssistantCell) Kind() HistoryCellKind { return HistoryCellAssistant }
-func (c AssistantCell) Render() []string {
+func (c AssistantCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c AssistantCell) RenderWidth(width int) []string {
 	text := strings.TrimRight(c.Text, "\n")
 	if text == "" {
 		return nil
 	}
-	out := make([]string, 0, strings.Count(text, "\n")+1)
-	for i, line := range strings.Split(text, "\n") {
+	lines := renderMarkdownLines(text, maxInt(8, width-2))
+	out := make([]string, 0, len(lines))
+	for index, line := range lines {
 		prefix := "  "
-		if i == 0 {
-			prefix = ""
+		if index == 0 {
+			prefix = "◉ "
 		}
-		out = append(out, assistantStyle.Render(prefix+sanitizeBubbleText(line)))
+		out = append(out, prefix+line)
 	}
 	return out
 }
@@ -97,7 +132,8 @@ type ToolCell struct {
 }
 
 func (ToolCell) Kind() HistoryCellKind { return HistoryCellTool }
-func (c ToolCell) Render() []string {
+func (c ToolCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c ToolCell) RenderWidth(width int) []string {
 	header := glyphTool + c.Name
 	if c.Running {
 		indicator := " …"
@@ -106,9 +142,14 @@ func (c ToolCell) Render() []string {
 		}
 		header += indicator
 	}
-	out := []string{toolStyle.Render(header)}
+	out := make([]string, 0, 1)
+	for _, line := range safeWrappedLines(header, maxInt(1, width)) {
+		out = append(out, toolStyle.Render(line))
+	}
 	for _, line := range c.bodyLines() {
-		out = append(out, bodyStyle.Render("  "+sanitizeBubbleText(line)))
+		for _, wrapped := range safeWrappedLines(line, maxInt(1, width-2)) {
+			out = append(out, bodyStyle.Render("  "+wrapped))
+		}
 	}
 	return out
 }
@@ -140,7 +181,8 @@ type ExecCell struct {
 }
 
 func (ExecCell) Kind() HistoryCellKind { return HistoryCellTool }
-func (c ExecCell) Render() []string {
+func (c ExecCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c ExecCell) RenderWidth(width int) []string {
 	command := strings.TrimSpace(c.Command)
 	if command == "" {
 		command = c.Name
@@ -153,9 +195,14 @@ func (c ExecCell) Render() []string {
 		}
 		header += indicator
 	}
-	out := []string{commandStyle.Render(header)}
+	out := make([]string, 0, 1)
+	for _, line := range safeWrappedLines(header, maxInt(1, width)) {
+		out = append(out, commandStyle.Render(line))
+	}
 	for _, line := range resultBodyLines(c.Body, c.ExitCode, c.Truncated, c.Denied, c.FailureCode) {
-		out = append(out, bodyStyle.Render("  "+sanitizeBubbleText(line)))
+		for _, wrapped := range safeWrappedLines(line, maxInt(1, width-2)) {
+			out = append(out, bodyStyle.Render("  "+wrapped))
+		}
 	}
 	return out
 }
@@ -190,7 +237,8 @@ type PatchCell struct {
 }
 
 func (PatchCell) Kind() HistoryCellKind { return HistoryCellTool }
-func (c PatchCell) Render() []string {
+func (c PatchCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c PatchCell) RenderWidth(width int) []string {
 	title := c.Name
 	if strings.TrimSpace(c.Summary) != "" {
 		title += " · " + c.Summary
@@ -202,12 +250,19 @@ func (c PatchCell) Render() []string {
 		}
 		title += indicator
 	}
-	out := []string{planStyle.Render("Δ " + sanitizeBubbleText(title))}
+	out := make([]string, 0, 1)
+	for _, line := range safeWrappedLines("Δ "+title, maxInt(1, width)) {
+		out = append(out, planStyle.Render(line))
+	}
 	for _, path := range c.Paths {
-		out = append(out, mutedStyle.Render("  "+sanitizeBubbleText(path)))
+		for _, wrapped := range safeWrappedLines(path, maxInt(1, width-2)) {
+			out = append(out, mutedStyle.Render("  "+wrapped))
+		}
 	}
 	for _, line := range resultBodyLines(c.Body, nil, c.Truncated, c.Denied, c.FailureCode) {
-		out = append(out, bodyStyle.Render("  "+sanitizeBubbleText(line)))
+		for _, wrapped := range safeWrappedLines(line, maxInt(1, width-2)) {
+			out = append(out, bodyStyle.Render("  "+wrapped))
+		}
 	}
 	return out
 }
@@ -253,8 +308,9 @@ func resultBodyLines(body string, exitCode *int, truncated bool, denied bool, fa
 type SystemCell struct{ Text string }
 
 func (SystemCell) Kind() HistoryCellKind { return HistoryCellSystem }
-func (c SystemCell) Render() []string {
-	return renderStyledLines(c.Text, func(line string) string { return mutedStyle.Render(line) })
+func (c SystemCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c SystemCell) RenderWidth(width int) []string {
+	return styledWrappedLines(c.Text, width, mutedStyle)
 }
 func (c SystemCell) RawLines() []string { return rawTextLines(c.Text) }
 func (c SystemCell) LineCount() int     { return len(c.RawLines()) }
@@ -267,12 +323,13 @@ type ErrorCell struct {
 }
 
 func (ErrorCell) Kind() HistoryCellKind { return HistoryCellError }
-func (c ErrorCell) Render() []string {
+func (c ErrorCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c ErrorCell) RenderWidth(width int) []string {
 	text := c.Text
 	if c.Title != "" {
 		text = c.Title + ": " + text
 	}
-	return renderStyledLines(text, func(line string) string { return errorStyle.Render(line) })
+	return styledWrappedLines(text, width, errorStyle)
 }
 func (c ErrorCell) RawLines() []string {
 	text := c.Text
@@ -290,7 +347,8 @@ type ThinkingCell struct {
 }
 
 func (ThinkingCell) Kind() HistoryCellKind { return HistoryCellAssistant }
-func (c ThinkingCell) Render() []string {
+func (c ThinkingCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c ThinkingCell) RenderWidth(_ int) []string {
 	indicator := "…"
 	if c.Spinner != "" {
 		indicator = c.Spinner
@@ -313,9 +371,11 @@ type HistoryState struct {
 	committed      []HistoryCell
 	active         HistoryCell
 	maxLines       int
+	renderWidth    int
 	cachedRender   []string
 	cachedRaw      []string
 	cacheValid     bool
+	cachedWidth    int
 	spinnerFrame   string
 	committedLines int
 }
@@ -324,7 +384,24 @@ func NewHistoryState(maxLines int) *HistoryState {
 	if maxLines <= 0 {
 		maxLines = maxBubbleScrollback
 	}
-	return &HistoryState{committed: make([]HistoryCell, 0), maxLines: maxLines}
+	return &HistoryState{committed: make([]HistoryCell, 0), maxLines: maxLines, renderWidth: defaultBubbleWidth}
+}
+
+// SetWidth updates the rich transcript width and invalidates visual caches.
+// Raw transcript consumers remain independent of terminal dimensions.
+func (s *HistoryState) SetWidth(width int) {
+	if s == nil {
+		return
+	}
+	if width <= 0 {
+		width = defaultBubbleWidth
+	}
+	if s.renderWidth == width {
+		return
+	}
+	s.renderWidth = width
+	s.recountCommitted()
+	s.cacheValid = false
 }
 
 func (s *HistoryState) SetSpinnerFrame(frame string) {
@@ -383,7 +460,7 @@ func (s *HistoryState) Append(cell HistoryCell) {
 	}
 	s.CommitActive()
 	s.committed = append(s.committed, cell)
-	s.committedLines += cell.LineCount()
+	s.committedLines += historyCellLineCount(cell, s.renderWidth)
 	s.cacheValid = false
 	s.trim()
 }
@@ -453,9 +530,9 @@ func (s *HistoryState) CompleteToolCall(callID string, name string, completed Hi
 		if !runningToolMatches(s.committed[i], callID, name) {
 			continue
 		}
-		s.committedLines -= s.committed[i].LineCount()
+		s.committedLines -= historyCellLineCount(s.committed[i], s.renderWidth)
 		s.committed[i] = completed
-		s.committedLines += completed.LineCount()
+		s.committedLines += historyCellLineCount(completed, s.renderWidth)
 		s.cacheValid = false
 		s.trim()
 		return
@@ -483,7 +560,7 @@ func (s *HistoryState) CommitActive() {
 		return
 	}
 	s.committed = append(s.committed, s.active)
-	s.committedLines += s.active.LineCount()
+	s.committedLines += historyCellLineCount(s.active, s.renderWidth)
 	s.active = nil
 	s.cacheValid = false
 	s.trim()
@@ -503,17 +580,21 @@ func (s *HistoryState) InvalidateCache() {
 }
 
 func (s *HistoryState) buildCommittedCache() {
-	if s.cacheValid {
+	if s.cacheValid && s.cachedWidth == s.renderWidth {
 		return
 	}
 	render := make([]string, 0, len(s.committed)*4)
 	raw := make([]string, 0, len(s.committed)*2)
-	for _, cell := range s.committed {
-		render = append(render, cell.Render()...)
+	for index, cell := range s.committed {
+		if index > 0 {
+			render = append(render, "")
+		}
+		render = append(render, renderHistoryCell(cell, s.renderWidth)...)
 		raw = append(raw, cell.RawLines()...)
 	}
 	s.cachedRender = render
 	s.cachedRaw = raw
+	s.cachedWidth = s.renderWidth
 	s.cacheValid = true
 }
 
@@ -522,9 +603,37 @@ func (s *HistoryState) RenderLines() []string {
 	if s.active == nil {
 		return append([]string(nil), s.cachedRender...)
 	}
-	out := make([]string, len(s.cachedRender), len(s.cachedRender)+s.active.LineCount()*2)
+	out := make([]string, len(s.cachedRender), len(s.cachedRender)+historyCellLineCount(s.active, s.renderWidth)+1)
 	copy(out, s.cachedRender)
-	return append(out, s.active.Render()...)
+	if len(out) > 0 {
+		out = append(out, "")
+	}
+	return append(out, renderHistoryCell(s.active, s.renderWidth)...)
+}
+
+// RenderLinesAt renders rich content at a temporary width, useful for the
+// narrower transcript overlay without changing the main viewport's cache.
+func (s *HistoryState) RenderLinesAt(width int) []string {
+	if s == nil {
+		return nil
+	}
+	if width <= 0 {
+		width = s.renderWidth
+	}
+	lines := make([]string, 0, len(s.committed)*4)
+	for index, cell := range s.committed {
+		if index > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, renderHistoryCell(cell, width)...)
+	}
+	if s.active != nil {
+		if len(lines) > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, renderHistoryCell(s.active, width)...)
+	}
+	return lines
 }
 
 func (s *HistoryState) Raw() string {
@@ -532,7 +641,7 @@ func (s *HistoryState) Raw() string {
 	if s.active == nil {
 		return strings.Join(s.cachedRaw, "\n")
 	}
-	out := make([]string, len(s.cachedRaw), len(s.cachedRaw)+s.active.LineCount())
+	out := make([]string, len(s.cachedRaw), len(s.cachedRaw)+len(s.active.RawLines()))
 	copy(out, s.cachedRaw)
 	out = append(out, s.active.RawLines()...)
 	return strings.Join(out, "\n")
@@ -541,12 +650,12 @@ func (s *HistoryState) Raw() string {
 func (s *HistoryState) trim() {
 	activeCount := 0
 	if s.active != nil {
-		activeCount = s.active.LineCount()
+		activeCount = historyCellLineCount(s.active, s.renderWidth)
 	}
 	for s.committedLines+activeCount > s.maxLines && len(s.committed) > 1 {
 		popped := s.committed[0]
 		s.committed = s.committed[1:]
-		s.committedLines -= popped.LineCount()
+		s.committedLines -= historyCellLineCount(popped, s.renderWidth)
 		s.cacheValid = false
 	}
 	if s.committedLines < 0 {
@@ -554,10 +663,17 @@ func (s *HistoryState) trim() {
 	}
 }
 
+func (s *HistoryState) recountCommitted() {
+	s.committedLines = 0
+	for _, cell := range s.committed {
+		s.committedLines += historyCellLineCount(cell, s.renderWidth)
+	}
+}
+
 func (s *HistoryState) lineCount() int {
 	total := s.committedLines
 	if s.active != nil {
-		total += s.active.LineCount()
+		total += historyCellLineCount(s.active, s.renderWidth)
 	}
 	return total
 }
@@ -578,6 +694,26 @@ func renderStyledLines(text string, style func(string) string) []string {
 	lines := rawTextLines(text)
 	for i := range lines {
 		lines[i] = style(lines[i])
+	}
+	return lines
+}
+
+func safeWrappedLines(text string, width int) []string {
+	text = strings.TrimRight(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	if text == "" {
+		return nil
+	}
+	lines := make([]string, 0, strings.Count(text, "\n")+1)
+	for _, line := range strings.Split(text, "\n") {
+		lines = append(lines, wrapLines(sanitizeBubbleText(line), width)...)
+	}
+	return lines
+}
+
+func styledWrappedLines(text string, width int, style lipgloss.Style) []string {
+	lines := safeWrappedLines(text, width)
+	for index := range lines {
+		lines[index] = style.Render(lines[index])
 	}
 	return lines
 }
