@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/workspace"
 	"github.com/projectTHORN/proton/internal/tool"
+	"github.com/projectTHORN/proton/internal/workspace"
 )
 
 const maxReadFileBytes = 2 * 1024 * 1024

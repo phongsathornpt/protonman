@@ -12,10 +12,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/projectTHORN/proton/internal/adapters/headless"
+	"github.com/projectTHORN/proton/internal/headless"
+	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/turn"
-	"github.com/projectTHORN/proton/internal/tool"
 )
 
 const protocolVersion = 1
@@ -126,8 +126,8 @@ const (
 )
 
 type promptBlock struct {
-	Type BlockType  `json:"type"`
-	Text string     `json:"text"`
+	Type BlockType `json:"type"`
+	Text string    `json:"text"`
 }
 
 type promptResult struct {

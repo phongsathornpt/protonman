@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/workspace"
 	"github.com/projectTHORN/proton/internal/tool"
+	"github.com/projectTHORN/proton/internal/workspace"
 )
 
 func TestWriteFileAndSearchReplace(t *testing.T) {

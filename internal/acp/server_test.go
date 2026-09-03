@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/toolcall"
-	applicationturn "github.com/projectTHORN/proton/internal/turn"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
+	"github.com/projectTHORN/proton/internal/toolcall"
+	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
 
 func TestACPInitializeAndPrompt(t *testing.T) {

@@ -6,10 +6,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/tool/builtin"
-	"github.com/projectTHORN/proton/internal/toolcall"
 	"github.com/projectTHORN/proton/internal/permission"
 	domaintool "github.com/projectTHORN/proton/internal/tool"
+	"github.com/projectTHORN/proton/internal/tool/builtin"
+	"github.com/projectTHORN/proton/internal/toolcall"
 )
 
 func TestNamespacedName(t *testing.T) {

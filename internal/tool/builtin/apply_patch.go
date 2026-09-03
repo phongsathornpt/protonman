@@ -8,9 +8,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/workspace"
 	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/tool"
+	"github.com/projectTHORN/proton/internal/workspace"
 )
 
 type applyPatchHandler struct {
