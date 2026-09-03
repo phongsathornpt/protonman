@@ -42,6 +42,34 @@ type Message struct {
 	ToolCallID string     `json:"tool_call_id,omitempty"`
 }
 
+// ToModelMessages converts persisted session messages to provider-neutral model messages.
+func ToModelMessages(stored []Message) []model.Message {
+	messages := make([]model.Message, 0, len(stored))
+	for _, message := range stored {
+		messages = append(messages, model.Message{
+			Role:       message.Role,
+			Content:    message.Content,
+			ToolName:   message.ToolName,
+			ToolCallID: message.ToolCallID,
+		})
+	}
+	return messages
+}
+
+// FromModelMessages converts provider-neutral model messages to persisted session messages.
+func FromModelMessages(messages []model.Message) []Message {
+	out := make([]Message, 0, len(messages))
+	for _, message := range messages {
+		out = append(out, Message{
+			Role:       message.Role,
+			Content:    message.Content,
+			ToolName:   message.ToolName,
+			ToolCallID: message.ToolCallID,
+		})
+	}
+	return out
+}
+
 // ErrInvalidSessionID indicates that an ID could escape the session store
 // directory or otherwise cannot name a state file safely.
 var ErrInvalidSessionID = errors.New("invalid session id")

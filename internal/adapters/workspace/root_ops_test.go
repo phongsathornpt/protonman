@@ -15,7 +15,7 @@ func TestOpenParentNoSymlinksCreatesAndPinsNestedParents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	path := filepath.Join(root, "a", "b", "file.txt")
+	path := filepath.Join(workspaceRoot.Root(), "a", "b", "file.txt")
 
 	parent, base, err := workspaceRoot.OpenParentNoSymlinks(ctx, path, true)
 	if err != nil {
