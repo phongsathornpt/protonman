@@ -33,10 +33,24 @@ type patchOperation struct {
 type patchOperationKind uint8
 
 const (
-	patchAdd patchOperationKind = iota + 1
+	patchUnknown patchOperationKind = iota
+	patchAdd
 	patchDelete
 	patchUpdate
 )
+
+func (k patchOperationKind) String() string {
+	switch k {
+	case patchAdd:
+		return "add"
+	case patchDelete:
+		return "delete"
+	case patchUpdate:
+		return "update"
+	default:
+		return "unknown"
+	}
+}
 
 type patchChunk struct {
 	context    string
@@ -242,7 +256,7 @@ func (h applyPatchHandler) planPatch(ctx context.Context, operations []patchOper
 				content:     updated,
 			})
 		default:
-			return nil, fmt.Errorf("unknown patch operation kind %d", operation.kind)
+			return nil, fmt.Errorf("unknown patch operation kind %s", operation.kind)
 		}
 	}
 	return changes, nil

@@ -40,6 +40,26 @@ func (f Format) String() string {
 	}
 }
 
+// Valid reports whether the format is a supported non-zero format.
+func (f Format) Valid() bool {
+	return f == FormatText || f == FormatJSON
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (f Format) MarshalText() ([]byte, error) {
+	return []byte(f.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (f *Format) UnmarshalText(text []byte) error {
+	parsed, err := ParseFormat(string(text))
+	if err != nil {
+		return err
+	}
+	*f = parsed
+	return nil
+}
+
 // ErrInvalidRunner indicates that the headless adapter cannot be constructed.
 var ErrInvalidRunner = errors.New("invalid headless runner")
 
@@ -232,12 +252,12 @@ func (r *Runner) runTurn(
 	result, err := r.runner.Run(ctx, r.Messages(), func(_ context.Context, event applicationturn.Event) error {
 		switch event.Kind {
 		case applicationturn.EventTextDelta:
-			return writeEvent(output, format, Event{Kind: "text", Text: event.Text})
+			return writeEvent(output, format, Event{Kind: EventKindText, Text: event.Text})
 		case applicationturn.EventToolCall:
-			return writeEvent(output, format, Event{Kind: "tool_call", Tool: event.Call.Name})
+			return writeEvent(output, format, Event{Kind: EventKindToolCall, Tool: event.Call.Name})
 		case applicationturn.EventToolResult:
 			return writeEvent(output, format, Event{
-				Kind:   "tool_result",
+				Kind:   EventKindToolResult,
 				Tool:   event.Call.Name,
 				Output: event.Result.Output,
 			})
@@ -249,19 +269,35 @@ func (r *Runner) runTurn(
 		r.messages = append(r.messages, result.Message)
 	}
 	if err != nil {
-		_ = writeEvent(output, format, Event{Kind: "failed", Error: err.Error()})
+		_ = writeEvent(output, format, Event{Kind: EventKindFailed, Error: err.Error()})
 		return err
 	}
-	return writeEvent(output, format, Event{Kind: "done"})
+	return writeEvent(output, format, Event{Kind: EventKindDone})
 }
+
+// EventKind identifies one headless output record.
+type EventKind string
+
+const (
+	// EventKindText is a stream text record.
+	EventKindText EventKind = "text"
+	// EventKindToolCall reports a running tool call.
+	EventKindToolCall EventKind = "tool_call"
+	// EventKindToolResult reports a completed tool call.
+	EventKindToolResult EventKind = "tool_result"
+	// EventKindFailed reports a failed execution.
+	EventKindFailed EventKind = "failed"
+	// EventKindDone marks the completion of a run.
+	EventKindDone EventKind = "done"
+)
 
 // Event is one headless output record.
 type Event struct {
-	Kind   string `json:"kind"`
-	Text   string `json:"text,omitempty"`
-	Tool   string `json:"tool,omitempty"`
-	Output string `json:"output,omitempty"`
-	Error  string `json:"error,omitempty"`
+	Kind   EventKind `json:"kind"`
+	Text   string    `json:"text,omitempty"`
+	Tool   string    `json:"tool,omitempty"`
+	Output string    `json:"output,omitempty"`
+	Error  string    `json:"error,omitempty"`
 }
 
 func writeEvent(output io.Writer, format Format, event Event) error {
@@ -275,13 +311,13 @@ func writeEvent(output io.Writer, format Format, event Event) error {
 		return err
 	default:
 		switch event.Kind {
-		case "text":
+		case EventKindText:
 			_, err := fmt.Fprintln(output, event.Text)
 			return err
-		case "tool_call":
+		case EventKindToolCall:
 			_, err := fmt.Fprintf(output, "tool running: %s\n", event.Tool)
 			return err
-		case "tool_result":
+		case EventKindToolResult:
 			if event.Output != "" {
 				if _, err := fmt.Fprintln(output, event.Output); err != nil {
 					return err
@@ -292,7 +328,7 @@ func writeEvent(output io.Writer, format Format, event Event) error {
 				return err
 			}
 			return nil
-		case "failed":
+		case EventKindFailed:
 			_, err := fmt.Fprintf(output, "error: %s\n", event.Error)
 			return err
 		default:
