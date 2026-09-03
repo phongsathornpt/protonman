@@ -806,3 +806,24 @@ func TestSpinnerLifecycle(t *testing.T) {
 		}
 	})
 }
+
+func TestFormatElapsed(t *testing.T) {
+	cases := []struct {
+		duration time.Duration
+		want     string
+	}{
+		{0, "0s"},
+		{500 * time.Millisecond, "0s"},
+		{999 * time.Millisecond, "0s"},
+		{time.Second, "1s"},
+		{5 * time.Second, "5s"},
+		{60 * time.Second, "1m0s"},
+		{61 * time.Second, "1m1s"},
+	}
+	for _, tc := range cases {
+		got := formatElapsed(tc.duration)
+		if got != tc.want {
+			t.Errorf("formatElapsed(%v) = %q, want %q", tc.duration, got, tc.want)
+		}
+	}
+}
