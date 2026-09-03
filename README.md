@@ -94,6 +94,8 @@ Type `/` at the prompt to open the autocomplete command menu, or use colon prefi
 | :--- | :--- | :--- |
 | `/help`, `:help` | Show available commands and keybindings | `/help` |
 | `/tools` | List registered tools and their schemas | `/tools` |
+| `/skills` | List discovered agent skills | `/skills` |
+| `/skill <name>` | Show or activate an agent skill | `/skill pdf-processing` |
 | `/call <tool> <args>` | Execute a tool directly with JSON arguments | `/call read_file {"path":"README.md"}` |
 | `/mode <mode>` | Change mode (`ask`, `plan`, `always-approve`) | `/mode always-approve` |
 | `/ask` | Switch directly to `ask` mode | `/ask` |
@@ -179,6 +181,21 @@ Sandbox profiles (`off`, `workspace`, `read-only`, `strict`) confine child
 `web_fetch` honors the same network policy. A requested confining profile
 fails closed when the host cannot enforce it. `--acp` serves line-delimited
 JSON-RPC (`initialize`, `session/new`, `session/prompt`) over stdio.
+
+## Agent Skills
+
+Proton supports the open [Agent Skills specification](https://agentskills.io). Skills are directory packages containing at minimum a `SKILL.md` file (YAML frontmatter + Markdown instructions) and optional `scripts/`, `references/`, and `assets/` subdirectories.
+
+### Discovery Scopes
+- **User-level**: `~/.proton/skills/` and `~/.agents/skills/`
+- **Project-level**: `<workspace>/.proton/skills/` and `<workspace>/.agents/skills/`
+- **Precedence**: Project-level skills override user-level skills with the same name.
+- **Project Trust Gating**: Project-local skills are only loaded when `PROTON_TRUST_PROJECT=1` is set. Untrusted project skills are safely skipped with a diagnostic warning.
+
+### Progressive Disclosure & Tool Activation
+- **Tier 1 (Catalog)**: Available skills are summarized as `<available_skills>` in the model's system prompt (~50-100 tokens/skill).
+- **Tier 2 (Activation)**: When a task matches a skill, the model invokes the read-only `activate_skill` tool (`/call activate_skill {"name":"..."}`), loading the full instructions and bundled resource file paths into context.
+- **In-TUI Commands**: Use `/skills` to list all discovered skills or `/skill <name>` to directly view and load a skill into the conversation.
 
 ## Verify
 

@@ -121,6 +121,16 @@ separate, regression-tested changes rather than broad refactors.
   denied writes outside the workspace, allowed workspace writes, read-only
   denial, runtime command availability, and network blocking.
 
+### Agent Skills support (complete in this commit)
+
+- [x] Define `internal/domain/skill` entities conforming to the `agentskills.io` standard.
+- [x] Add `SKILL.md` parser and scanner supporting user (`~/.proton/skills/`, `~/.agents/skills/`) and project scopes.
+- [x] Enforce project trust gating: untrusted project skills are safely skipped with a warning (`PROTON_TRUST_PROJECT=1`).
+- [x] Implement application `skill.Registry` and `activate_skill` tool handler for progressive disclosure tier 2.
+- [x] Implement tier 1 progressive disclosure by injecting `<available_skills>` catalog into turn loop model requests.
+- [x] Add `/skills` and `/skill <name>` slash commands to the Bubble Tea TUI.
+- [x] Add end-to-end test suite covering discovery, activation, and project trust gating.
+
 ## Grok Build mapping
 
 | Grok Build area | Proton destination |
