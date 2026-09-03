@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
+	"unicode/utf8"
 
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
 	"github.com/projectTHORN/proton/internal/domain/tool"
@@ -21,6 +23,13 @@ const (
 	maxGrepOutputBytes = 1 * 1024 * 1024
 	maxGrepLineLength  = 2000
 )
+
+var grepBufferPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, 64*1024)
+		return &b
+	},
+}
 
 var errGrepLimit = errors.New("grep result limit reached")
 
@@ -185,8 +194,9 @@ func scanGrepFile(
 	}
 	relative = filepath.ToSlash(relative)
 	scanner := bufio.NewScanner(io.LimitReader(file, maxEditFileBytes+1))
-	buffer := make([]byte, 64*1024)
-	scanner.Buffer(buffer, maxEditFileBytes)
+	bufPtr := grepBufferPool.Get().(*[]byte)
+	defer grepBufferPool.Put(bufPtr)
+	scanner.Buffer(*bufPtr, maxEditFileBytes)
 	lineNumber := 0
 	matchedFile = false
 	for scanner.Scan() {
@@ -194,13 +204,13 @@ func scanGrepFile(
 			return false, fmt.Errorf("grep %q: %w", relative, err)
 		}
 		lineNumber++
-		line := scanner.Text()
-		if !matcher.MatchString(line) {
+		lineBytes := scanner.Bytes()
+		if !matcher.Match(lineBytes) {
 			continue
 		}
 		matchedFile = true
 		*matchCount = *matchCount + 1
-		line = truncateGrepLine(line)
+		line := truncateGrepLine(string(lineBytes))
 		entry := fmt.Sprintf("%s:%d:%s\n", relative, lineNumber, line)
 		if output.Len()+len(entry) > maxGrepOutputBytes {
 			return true, errGrepLimit
@@ -218,9 +228,18 @@ func scanGrepFile(
 }
 
 func truncateGrepLine(line string) string {
-	runes := []rune(line)
-	if len(runes) <= maxGrepLineLength {
+	if len(line) <= maxGrepLineLength {
 		return line
 	}
-	return string(runes[:maxGrepLineLength]) + "…"
+	if utf8.RuneCountInString(line) <= maxGrepLineLength {
+		return line
+	}
+	count := 0
+	for i := range line {
+		if count == maxGrepLineLength {
+			return line[:i] + "…"
+		}
+		count++
+	}
+	return line + "…"
 }

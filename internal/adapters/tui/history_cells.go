@@ -256,9 +256,12 @@ type runningHistoryTool interface {
 // HistoryState separates finalized transcript cells from one mutable in-flight
 // cell. Renderers always see committed cells plus the live active tail.
 type HistoryState struct {
-	committed []HistoryCell
-	active    HistoryCell
-	maxLines  int
+	committed    []HistoryCell
+	active       HistoryCell
+	maxLines     int
+	cachedRender []string
+	cachedRaw    []string
+	cacheValid   bool
 }
 
 func NewHistoryState(maxLines int) *HistoryState {
@@ -288,6 +291,7 @@ func (s *HistoryState) Append(cell HistoryCell) {
 	}
 	s.CommitActive()
 	s.committed = append(s.committed, cell)
+	s.cacheValid = false
 	s.trim()
 }
 
@@ -345,6 +349,7 @@ func (s *HistoryState) CompleteToolCall(callID string, name string, completed Hi
 			continue
 		}
 		s.committed[i] = completed
+		s.cacheValid = false
 		s.trim()
 		return
 	}
@@ -368,33 +373,62 @@ func (s *HistoryState) CommitActive() {
 	}
 	s.committed = append(s.committed, s.active)
 	s.active = nil
+	s.cacheValid = false
 	s.trim()
 }
 
 func (s *HistoryState) Reset() {
 	s.committed = s.committed[:0]
 	s.active = nil
+	s.cacheValid = false
+	s.cachedRender = nil
+	s.cachedRaw = nil
+}
+
+func (s *HistoryState) InvalidateCache() {
+	s.cacheValid = false
+}
+
+func (s *HistoryState) buildCommittedCache() {
+	if s.cacheValid {
+		return
+	}
+	render := make([]string, 0, len(s.committed)*4)
+	raw := make([]string, 0, len(s.committed)*2)
+	for _, cell := range s.committed {
+		render = append(render, cell.Render()...)
+		raw = append(raw, cell.RawLines()...)
+	}
+	s.cachedRender = render
+	s.cachedRaw = raw
+	s.cacheValid = true
 }
 
 func (s *HistoryState) RenderLines() []string {
-	out := make([]string, 0)
-	for _, cell := range s.Cells() {
-		out = append(out, cell.Render()...)
+	s.buildCommittedCache()
+	if s.active == nil {
+		return append([]string(nil), s.cachedRender...)
 	}
-	return out
+	out := make([]string, len(s.cachedRender), len(s.cachedRender)+s.active.LineCount()*2)
+	copy(out, s.cachedRender)
+	return append(out, s.active.Render()...)
 }
 
 func (s *HistoryState) Raw() string {
-	out := make([]string, 0)
-	for _, cell := range s.Cells() {
-		out = append(out, cell.RawLines()...)
+	s.buildCommittedCache()
+	if s.active == nil {
+		return strings.Join(s.cachedRaw, "\n")
 	}
+	out := make([]string, len(s.cachedRaw), len(s.cachedRaw)+s.active.LineCount())
+	copy(out, s.cachedRaw)
+	out = append(out, s.active.RawLines()...)
 	return strings.Join(out, "\n")
 }
 
 func (s *HistoryState) trim() {
 	for s.lineCount() > s.maxLines && len(s.committed) > 1 {
 		s.committed = s.committed[1:]
+		s.cacheValid = false
 	}
 }
 
