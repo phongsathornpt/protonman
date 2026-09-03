@@ -201,3 +201,38 @@ func TestSlashAutocompleteWrapAround(t *testing.T) {
 		t.Fatalf("expected wrapped index 0, got %d", state.index)
 	}
 }
+
+func TestSlashAutocompleteAlignedColumns(t *testing.T) {
+	model := newTestSkillsModel(t, 5)
+	model.bottom.prompt().SetValue("/skill ")
+
+	if !model.slashOpen() {
+		t.Fatal("expected slash open for /skill ")
+	}
+
+	rendered := model.renderSlash(0)
+	// Check that checkboxes are consistently placed before names and descriptions use ellipsis
+	if !strings.Contains(rendered, "❯ [ ] skill-01") {
+		t.Fatalf("expected aligned cursor and checkbox '❯ [ ] skill-01', got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "  [ ] skill-02") {
+		t.Fatalf("expected aligned unselected row '  [ ] skill-02', got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "[user   ]") {
+		t.Fatalf("expected aligned scope tag '[user   ]', got:\n%s", rendered)
+	}
+}
+
+func TestSkillsCommandBoundedOutput(t *testing.T) {
+	model := newTestSkillsModel(t, 25)
+	model.executeCommand("/skills")
+
+	view := model.viewport.View()
+	// Should not dump 25 lines into viewport, but bound output and mention more skills
+	if strings.Contains(view, "skill-25") {
+		t.Fatalf("skill-25 should not be dumped into transcript for large list, got:\n%s", view)
+	}
+	if !strings.Contains(view, "more skills") {
+		t.Fatalf("expected bounded summary 'more skills' in transcript, got:\n%s", view)
+	}
+}

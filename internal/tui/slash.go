@@ -20,6 +20,8 @@ type slashCommand struct {
 	aliases     []string
 	description string
 	takesArgs   bool
+	prefixTag   string
+	scope       string
 }
 
 var slashCatalog = []slashCommand{
@@ -222,7 +224,9 @@ func (m bubbleModel) slashMatches() []slashCommand {
 				}
 				matches = append(matches, slashCommand{
 					name:        s.Name,
-					description: fmt.Sprintf("%s [%s] %s", box, s.Scope, s.Description),
+					description: s.Description,
+					prefixTag:   box,
+					scope:       string(s.Scope),
 					takesArgs:   false,
 				})
 			}
@@ -341,6 +345,20 @@ func (m *bubbleModel) acceptSlash(run bool) (applied bool, command tea.Cmd) {
 	return true, m.dispatch(insertion)
 }
 
+func truncateWithEllipsis(s string, maxLen int) string {
+	if maxLen <= 0 {
+		return ""
+	}
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	if maxLen <= 1 {
+		return string(runes[:maxLen])
+	}
+	return string(runes[:maxLen-1]) + "…"
+}
+
 func (m bubbleModel) renderSlash(index int) string {
 	matches := m.slashMatches()
 	if len(matches) == 0 {
@@ -363,19 +381,53 @@ func (m bubbleModel) renderSlash(index int) string {
 	sc, _ := m.parseSlashContext()
 	isSkill := sc.kind == slashKindSkill
 	lines := make([]string, 0, len(visible)+1)
+
+	maxName := 16
+	if isSkill {
+		for _, c := range visible {
+			if len(c.name) > maxName {
+				maxName = len(c.name)
+			}
+		}
+		if maxName > 26 {
+			maxName = 26
+		}
+	}
+
 	for i, command := range visible {
 		selected := offset+i == index
-		label := "/" + command.name
-		if isSkill {
-			label = command.name
-		}
+		cursor := "  "
 		if selected {
-			row := glyphPrompt + fmt.Sprintf("%-16s %s", label, command.description)
-			lines = append(lines, lipgloss.NewStyle().Bold(true).Foreground(accentAssistant).Render(row))
-			continue
+			cursor = glyphPrompt
 		}
-		row := fmt.Sprintf("  %-16s %s", label, command.description)
-		lines = append(lines, mutedStyle.Render(row))
+
+		var row string
+		if isSkill {
+			box := command.prefixTag
+			if box == "" {
+				box = "[ ]"
+			}
+			nameStr := truncateWithEllipsis(command.name, maxName)
+			scopeStr := ""
+			if command.scope != "" {
+				scopeStr = fmt.Sprintf("[%-7s]", command.scope)
+			}
+			consumed := 2 + len(box) + 1 + maxName + 1 + 9 + 1
+			remaining := maxInt(10, m.width-consumed-2)
+			descStr := truncateWithEllipsis(command.description, remaining)
+			row = fmt.Sprintf("%s%s %-*s %-9s %s", cursor, box, maxName, nameStr, scopeStr, descStr)
+		} else {
+			label := "/" + command.name
+			remaining := maxInt(10, m.width-20)
+			descStr := truncateWithEllipsis(command.description, remaining)
+			row = fmt.Sprintf("%s%-16s %s", cursor, label, descStr)
+		}
+
+		if selected {
+			lines = append(lines, lipgloss.NewStyle().Bold(true).Foreground(accentAssistant).Render(row))
+		} else {
+			lines = append(lines, mutedStyle.Render(row))
+		}
 	}
 	if len(matches) > maxSlashRows {
 		lines = append(lines, mutedStyle.Render(fmt.Sprintf("  (item %d of %d)", index+1, len(matches))))
@@ -534,12 +586,39 @@ func (m *bubbleModel) handleSkillsCommand(isSkillSingle bool, argument string, p
 		skillsList := m.skills.List()
 		activeCount := len(m.skills.ActivatedList())
 		m.appendLine(fmt.Sprintf("Agent Skills (%d/%d active):", activeCount, len(skillsList)))
-		for _, s := range skillsList {
-			box := "[ ]"
-			if m.skills.IsActivated(s.Name) {
-				box = "[x]"
+		maxPrint := 8
+		if len(skillsList) <= maxPrint {
+			for _, s := range skillsList {
+				box := "[ ]"
+				if m.skills.IsActivated(s.Name) {
+					box = "[x]"
+				}
+				cleanDesc := truncateWithEllipsis(s.Description, maxInt(20, m.width-len(s.Name)-20))
+				m.appendLine(fmt.Sprintf("  %s %s [%s]: %s", box, s.Name, s.Scope, cleanDesc))
 			}
-			m.appendLine(fmt.Sprintf("  %s %s [%s]: %s", box, s.Name, s.Scope, s.Description))
+		} else {
+			printed := 0
+			for _, s := range skillsList {
+				if m.skills.IsActivated(s.Name) {
+					cleanDesc := truncateWithEllipsis(s.Description, maxInt(20, m.width-len(s.Name)-20))
+					m.appendLine(fmt.Sprintf("  [x] %s [%s]: %s", s.Name, s.Scope, cleanDesc))
+					printed++
+				}
+			}
+			for _, s := range skillsList {
+				if printed >= maxPrint {
+					break
+				}
+				if !m.skills.IsActivated(s.Name) {
+					cleanDesc := truncateWithEllipsis(s.Description, maxInt(20, m.width-len(s.Name)-20))
+					m.appendLine(fmt.Sprintf("  [ ] %s [%s]: %s", s.Name, s.Scope, cleanDesc))
+					printed++
+				}
+			}
+			remaining := len(skillsList) - printed
+			if remaining > 0 {
+				m.appendLine(fmt.Sprintf("  … and %d more skills. (Browse all in picker below, or use /skill <name>)", remaining))
+			}
 		}
 		m.bottom.push(&skillsPaneView{})
 		m.relayout()
@@ -555,7 +634,8 @@ func (m *bubbleModel) handleSkillsCommand(isSkillSingle bool, argument string, p
 			m.appendLine(fmt.Sprintf("Active Agent Skills (%d):", len(active)))
 			for _, name := range active {
 				if s, ok := m.skills.Lookup(name); ok {
-					m.appendLine(fmt.Sprintf("  [x] %s [%s]: %s", s.Name, s.Scope, s.Description))
+					cleanDesc := truncateWithEllipsis(s.Description, maxInt(20, m.width-len(s.Name)-20))
+					m.appendLine(fmt.Sprintf("  [x] %s [%s]: %s", s.Name, s.Scope, cleanDesc))
 				}
 			}
 		}
