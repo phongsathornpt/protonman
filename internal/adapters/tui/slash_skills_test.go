@@ -6,15 +6,15 @@ import (
 	"testing"
 
 	applicationskill "github.com/projectTHORN/proton/internal/application/skill"
-	domainskill "github.com/projectTHORN/proton/internal/domain/skill"
 	"github.com/projectTHORN/proton/internal/domain/permission"
+	domainskill "github.com/projectTHORN/proton/internal/domain/skill"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
 func TestSlashSkills(t *testing.T) {
 	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{
-		Name: "read_file",
-		Kind: tool.KindRead,
+		Name:        "read_file",
+		Kind:        tool.KindRead,
 		Description: "read",
 	}}}
 	service := newBehaviorService(t, registry, permission.ModeAsk)
