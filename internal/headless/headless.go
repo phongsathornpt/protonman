@@ -265,8 +265,12 @@ func (r *Runner) runTurn(
 			return nil
 		}
 	})
-	if result.Message.Content != "" {
-		r.messages = append(r.messages, result.Message)
+	if err == nil {
+		if len(result.Messages) > 0 {
+			r.messages = append(r.messages, model.CloneMessages(result.Messages)...)
+		} else if result.Message.Content != "" {
+			r.messages = append(r.messages, result.Message)
+		}
 	}
 	if err != nil {
 		_ = writeEvent(output, format, Event{Kind: EventKindFailed, Error: err.Error()})

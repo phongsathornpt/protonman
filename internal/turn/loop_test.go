@@ -91,6 +91,18 @@ func TestLoopTranslatesToolCallsAndFeedsResultsBack(t *testing.T) {
 	if got, want := len(handler.calls), 1; got != want {
 		t.Fatalf("handler calls = %d, want %d", got, want)
 	}
+	if got, want := len(result.Messages), 3; got != want {
+		t.Fatalf("turn messages = %d, want %d", got, want)
+	}
+	if result.Messages[0].Role != model.RoleAssistant || len(result.Messages[0].ToolCalls) != 1 {
+		t.Fatalf("first turn message = %#v, want assistant tool call", result.Messages[0])
+	}
+	if result.Messages[1].Role != model.RoleTool || result.Messages[1].ToolCallID != "call-1" {
+		t.Fatalf("second turn message = %#v, want matching tool result", result.Messages[1])
+	}
+	if result.Messages[2].Role != model.RoleAssistant || result.Messages[2].Content != "I found it." {
+		t.Fatalf("final turn message = %#v, want final assistant", result.Messages[2])
+	}
 	if got, want := len(client.requests), 2; got != want {
 		t.Fatalf("model requests = %d, want %d", got, want)
 	}
