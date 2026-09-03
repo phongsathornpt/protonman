@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/projectTHORN/proton/internal/application/skill"
 	"github.com/projectTHORN/proton/internal/application/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/application/turn"
 	"github.com/projectTHORN/proton/internal/domain/model"
@@ -22,6 +23,14 @@ type BubbleTeaOption func(*BubbleTeaUI) error
 func WithBubbleTeaRunner(runner applicationturn.Runner) BubbleTeaOption {
 	return func(ui *BubbleTeaUI) error {
 		ui.runner = runner
+		return nil
+	}
+}
+
+// WithSkills attaches an Agent Skill registry for slash commands and display.
+func WithSkills(skills *skill.Registry) BubbleTeaOption {
+	return func(ui *BubbleTeaUI) error {
+		ui.skills = skills
 		return nil
 	}
 }
@@ -46,6 +55,7 @@ func WithInitialMessages(messages []model.Message) BubbleTeaOption {
 type BubbleTeaUI struct {
 	service         *toolcall.Service
 	registry        tool.Registry
+	skills          *skill.Registry
 	todo            []TodoItem
 	runner          applicationturn.Runner
 	bridge          *permissionBridge
@@ -113,17 +123,20 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 	defer cancel()
 	defer ui.bridge.Close()
 
+	bModel := newBubbleModel(
+		runCtx,
+		ui.service,
+		ui.registry,
+		ui.todo,
+		ui.runner,
+		ui.bridge,
+		ui.workDir,
+		ui.initialMessages,
+	)
+	bModel.skills = ui.skills
+
 	program := tea.NewProgram(
-		newBubbleModel(
-			runCtx,
-			ui.service,
-			ui.registry,
-			ui.todo,
-			ui.runner,
-			ui.bridge,
-			ui.workDir,
-			ui.initialMessages,
-		),
+		bModel,
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 		tea.WithContext(runCtx),
