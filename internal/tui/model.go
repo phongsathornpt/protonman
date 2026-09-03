@@ -348,7 +348,7 @@ func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	}
-	if message.String() == "up" && (prompt.Value() == "" || m.bottom.historyNavigating()) {
+	if message.String() == "up" {
 		m.historyPrevious()
 		m.syncSlashView()
 		return m, nil

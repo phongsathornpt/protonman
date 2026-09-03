@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -95,4 +96,57 @@ description: Project specific skill
 			t.Fatalf("expected skill_content in stdout, got: %s", result.stdout)
 		}
 	})
+}
+
+func TestE2EMultiSkillDiscoveryAndActivation(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+
+	// Create 3 user skills in PROTON_HOME
+	for _, name := range []string{"skill-alpha", "skill-beta", "skill-gamma"} {
+		skillDir := filepath.Join(home, ".proton", "skills", name)
+		if err := os.MkdirAll(skillDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		content := fmt.Sprintf("---\nname: %s\ndescription: Skill description for %s\n---\n# Instructions for %s\nRun %s properly.\n", name, name, name, name)
+		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// 1. Activate skill-alpha
+	result := runProton(t, runOptions{
+		args: []string{"-y", "-p", `/call activate_skill {"name":"skill-alpha"}`},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if result.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr = %s", result.exitCode, result.stderr)
+	}
+	if !strings.Contains(result.stdout, `<skill_content name="skill-alpha">`) {
+		t.Fatalf("stdout missing skill-alpha content: %s", result.stdout)
+	}
+
+	// 2. Activate skill-gamma
+	result = runProton(t, runOptions{
+		args: []string{"-y", "-p", `/call activate_skill {"name":"skill-gamma"}`},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if result.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr = %s", result.exitCode, result.stderr)
+	}
+	if !strings.Contains(result.stdout, `<skill_content name="skill-gamma">`) {
+		t.Fatalf("stdout missing skill-gamma content: %s", result.stdout)
+	}
+
+	// 3. Attempt unknown skill: should report available skills
+	result = runProton(t, runOptions{
+		args: []string{"-y", "-p", `/call activate_skill {"name":"skill-delta"}`},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if !strings.Contains(result.stdout, "skill-alpha") || !strings.Contains(result.stdout, "skill-beta") || !strings.Contains(result.stdout, "skill-gamma") {
+		t.Fatalf("expected available skills list in error response, got stdout: %s, stderr: %s", result.stdout, result.stderr)
+	}
 }
