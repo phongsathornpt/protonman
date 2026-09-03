@@ -249,9 +249,15 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.syncLegacyBlocks()
 		if message.result.Message.Content != "" {
 			m.messages = append(m.messages, message.result.Message)
+		} else if message.err != nil && len(m.messages) > 0 && m.messages[len(m.messages)-1].Role == model.RoleUser {
+			m.messages = m.messages[:len(m.messages)-1]
 		}
 		m.appendTurnFailure(message.err)
 		m.relayout()
+		if message.err != nil {
+			m.queue = nil
+			return m, nil
+		}
 		return m, m.drainQueue()
 	}
 	return m, nil
@@ -290,6 +296,7 @@ func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if message.String() == "ctrl+c" {
 		if m.busy && m.turnCancel != nil {
 			m.turnCancel()
+			m.queue = nil
 			return m, nil
 		}
 		prompt := m.bottom.prompt()
