@@ -117,3 +117,30 @@ func (r *Registry) ActivatedList() []string {
 	sort.Strings(result)
 	return result
 }
+
+// Deactivate unmarks a skill as active in the current session.
+func (r *Registry) Deactivate(name string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	delete(r.activated, strings.TrimSpace(name))
+}
+
+// Toggle flips a skill's active status. Returns new active state or error if skill not found.
+func (r *Registry) Toggle(name string) (bool, error) {
+	cleanName := strings.TrimSpace(name)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.skills[cleanName]; !exists {
+		return false, fmt.Errorf("skill %q not found", cleanName)
+	}
+
+	active := !r.activated[cleanName]
+	if active {
+		r.activated[cleanName] = true
+	} else {
+		delete(r.activated, cleanName)
+	}
+	return active, nil
+}

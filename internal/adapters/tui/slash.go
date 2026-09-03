@@ -25,8 +25,8 @@ type slashCommand struct {
 var slashCatalog = []slashCommand{
 	{name: "help", description: "list commands"},
 	{name: "tools", description: "list tools"},
-	{name: "skills", description: "list available agent skills"},
-	{name: "skill", description: "show or activate an agent skill", takesArgs: true},
+	{name: "skills", description: "list agent skills (or /skills active)", takesArgs: true},
+	{name: "skill", description: "show, activate, or toggle an agent skill", takesArgs: true},
 	{name: "mode", description: "show or set permission mode", takesArgs: true},
 	{name: "always-approve", aliases: []string{"yolo"}, description: "allow non-denied calls"},
 	{name: "plan", description: "toggle plan flag", takesArgs: true},
@@ -313,16 +313,41 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		if m.skills == nil || len(m.skills.List()) == 0 {
 			m.appendLine("No agent skills discovered.")
 			m.appendLine("Place skills in ~/.proton/skills/ or .proton/skills/ (with PROTON_TRUST_PROJECT=1).")
-		} else {
-			m.appendLine("Available Agent Skills:")
-			for _, s := range m.skills.List() {
-				m.appendLine(fmt.Sprintf("- %s [%s]: %s", s.Name, s.Scope, s.Description))
+			m.refreshViewport()
+			return nil
+		}
+
+		if strings.TrimSpace(argument) == "active" {
+			active := m.skills.ActivatedList()
+			if len(active) == 0 {
+				m.appendLine("No active agent skills in this session.")
+				m.appendLine("Activate skills using /skill <name> or the activate_skill tool.")
+			} else {
+				m.appendLine(fmt.Sprintf("Active Agent Skills (%d):", len(active)))
+				for _, name := range active {
+					if s, ok := m.skills.Lookup(name); ok {
+						m.appendLine(fmt.Sprintf("  [x] %s [%s]: %s", s.Name, s.Scope, s.Description))
+					}
+				}
 			}
+			m.refreshViewport()
+			return nil
+		}
+
+		skillsList := m.skills.List()
+		activeCount := len(m.skills.ActivatedList())
+		m.appendLine(fmt.Sprintf("Agent Skills (%d/%d active):", activeCount, len(skillsList)))
+		for _, s := range skillsList {
+			box := "[ ]"
+			if m.skills.IsActivated(s.Name) {
+				box = "[x]"
+			}
+			m.appendLine(fmt.Sprintf("  %s %s [%s]: %s", box, s.Name, s.Scope, s.Description))
 		}
 	case "skill":
-		skillName := strings.TrimSpace(argument)
-		if skillName == "" {
-			m.appendError("usage: /skill <name>")
+		trimmedArg := strings.TrimSpace(argument)
+		if trimmedArg == "" {
+			m.appendError("usage: /skill <name> or /skill toggle <name>")
 			m.refreshViewport()
 			return nil
 		}
@@ -331,6 +356,32 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 			m.refreshViewport()
 			return nil
 		}
+
+		if trimmedArg == "toggle" {
+			if len(parts) < 3 || strings.TrimSpace(parts[2]) == "" {
+				m.appendError("usage: /skill toggle <name>")
+				m.refreshViewport()
+				return nil
+			}
+			target := strings.TrimSpace(parts[2])
+			active, err := m.skills.Toggle(target)
+			if err != nil {
+				m.appendError(err.Error())
+				m.refreshViewport()
+				return nil
+			}
+			state := "deactivated"
+			box := "[ ]"
+			if active {
+				state = "activated"
+				box = "[x]"
+			}
+			m.appendLine(fmt.Sprintf("%s Skill %q %s.", box, target, state))
+			m.refreshViewport()
+			return nil
+		}
+
+		skillName := trimmedArg
 		s, ok := m.skills.Lookup(skillName)
 		if !ok {
 			m.appendError(fmt.Sprintf("skill %q not found; try /skills to list available skills", skillName))
@@ -338,7 +389,7 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 			return nil
 		}
 		m.skills.MarkActivated(s.Name)
-		m.appendLine(fmt.Sprintf("Activated skill %s [%s]:", s.Name, s.Scope))
+		m.appendLine(fmt.Sprintf("[x] Activated skill %s [%s]:", s.Name, s.Scope))
 		m.appendLine(s.Instructions)
 		if len(s.Resources) > 0 {
 			m.appendLine("Bundled resources:")
