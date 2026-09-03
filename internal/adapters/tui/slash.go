@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/projectTHORN/proton/internal/domain/model"
 	"github.com/projectTHORN/proton/internal/domain/permission"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
@@ -24,6 +25,8 @@ type slashCommand struct {
 var slashCatalog = []slashCommand{
 	{name: "help", description: "list commands"},
 	{name: "tools", description: "list tools"},
+	{name: "skills", description: "list available agent skills"},
+	{name: "skill", description: "show or activate an agent skill", takesArgs: true},
 	{name: "mode", description: "show or set permission mode", takesArgs: true},
 	{name: "always-approve", aliases: []string{"yolo"}, description: "allow non-denied calls"},
 	{name: "plan", description: "toggle plan flag", takesArgs: true},
@@ -306,6 +309,47 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		for _, definition := range m.registry.Definitions() {
 			m.appendLine(fmt.Sprintf("- %s [%s]: %s", definition.Name, definition.Kind, definition.Description))
 		}
+	case "skills":
+		if m.skills == nil || len(m.skills.List()) == 0 {
+			m.appendLine("No agent skills discovered.")
+			m.appendLine("Place skills in ~/.proton/skills/ or .proton/skills/ (with PROTON_TRUST_PROJECT=1).")
+		} else {
+			m.appendLine("Available Agent Skills:")
+			for _, s := range m.skills.List() {
+				m.appendLine(fmt.Sprintf("- %s [%s]: %s", s.Name, s.Scope, s.Description))
+			}
+		}
+	case "skill":
+		skillName := strings.TrimSpace(argument)
+		if skillName == "" {
+			m.appendError("usage: /skill <name>")
+			m.refreshViewport()
+			return nil
+		}
+		if m.skills == nil {
+			m.appendError("no skills registered")
+			m.refreshViewport()
+			return nil
+		}
+		s, ok := m.skills.Lookup(skillName)
+		if !ok {
+			m.appendError(fmt.Sprintf("skill %q not found; try /skills to list available skills", skillName))
+			m.refreshViewport()
+			return nil
+		}
+		m.skills.MarkActivated(s.Name)
+		m.appendLine(fmt.Sprintf("Activated skill %s [%s]:", s.Name, s.Scope))
+		m.appendLine(s.Instructions)
+		if len(s.Resources) > 0 {
+			m.appendLine("Bundled resources:")
+			for _, r := range s.Resources {
+				m.appendLine("  - " + r)
+			}
+		}
+		m.messages = append(m.messages, model.Message{
+			Role:    model.RoleUser,
+			Content: fmt.Sprintf("Activated skill %s [%s]:\n%s", s.Name, s.Scope, s.Instructions),
+		})
 	case "mode":
 		if argument == "" {
 			m.appendLine("permission mode: " + m.service.Mode().String())

@@ -17,10 +17,12 @@ import (
 	"github.com/projectTHORN/proton/internal/adapters/headless"
 	"github.com/projectTHORN/proton/internal/adapters/sandbox"
 	"github.com/projectTHORN/proton/internal/adapters/session"
+	"github.com/projectTHORN/proton/internal/adapters/skills"
 	"github.com/projectTHORN/proton/internal/adapters/telemetry"
 	"github.com/projectTHORN/proton/internal/adapters/tools"
 	"github.com/projectTHORN/proton/internal/adapters/tui"
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
+	applicationskill "github.com/projectTHORN/proton/internal/application/skill"
 	"github.com/projectTHORN/proton/internal/application/toolcall"
 	"github.com/projectTHORN/proton/internal/domain/permission"
 	domainsandbox "github.com/projectTHORN/proton/internal/domain/sandbox"
@@ -104,10 +106,25 @@ func run(ctx context.Context, args []string) error {
 	if sandboxProfile.Confines() {
 		launcher = sandbox.NewOSLauncher(sandboxProfile)
 	}
+
+	skillsResult, err := skills.Discover(ctx, skills.Options{
+		HomeDir:        homeDir,
+		WorkDir:        workDir,
+		ProjectTrusted: truthy(os.Getenv("PROTON_TRUST_PROJECT")),
+	})
+	if err != nil {
+		return fmt.Errorf("discover agent skills: %w", err)
+	}
+	for _, warning := range skillsResult.Warnings {
+		fmt.Fprintln(os.Stderr, "warning:", warning)
+	}
+	skillRegistry := applicationskill.NewRegistry(skillsResult.Skills...)
+
 	registry, err := tools.NewDefaultRegistry(
 		workspaceRoot,
 		tools.WithCheckpointStore(checkpointStore),
 		tools.WithSandbox(launcher, sandboxProfile.Network),
+		tools.WithSkillRegistry(skillRegistry),
 	)
 	if err != nil {
 		return fmt.Errorf("create tool registry: %w", err)
@@ -187,6 +204,7 @@ func run(ctx context.Context, args []string) error {
 		loadTodoItems(workDir),
 		tui.WithWorkDir(workDir),
 		tui.WithInitialMessages(session.ToModelMessages(state.Messages)),
+		tui.WithSkills(skillRegistry),
 	)
 	if uiErr != nil {
 		return fmt.Errorf("create Bubble Tea UI: %w", uiErr)

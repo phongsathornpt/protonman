@@ -14,6 +14,7 @@ import (
 	"github.com/projectTHORN/proton/internal/application/toolcall"
 	"github.com/projectTHORN/proton/internal/domain/model"
 	"github.com/projectTHORN/proton/internal/domain/permission"
+	"github.com/projectTHORN/proton/internal/domain/skill"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
@@ -603,4 +604,49 @@ func findEvent(events []Event, kind EventKind) Event {
 
 func contains(value string, target string) bool {
 	return strings.Contains(value, target)
+}
+
+func TestLoopAugmentsSystemPromptWithSkillCatalog(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{{
+		events: []model.Event{
+			{Kind: model.EventTextDelta, Text: "I see the skills"},
+			{Kind: model.EventDone},
+		},
+	}}}
+	catalog := []skill.CatalogItem{
+		{
+			Name:        "pdf-processing",
+			Description: "Handle PDFs",
+			Location:    "/path/to/SKILL.md",
+			Scope:       skill.ScopeUser,
+		},
+	}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithSkillCatalog(catalog))
+	events := make([]Event, 0)
+
+	result, err := loop.Run(
+		context.Background(),
+		[]model.Message{{Role: model.RoleUser, Content: "help with pdf"}},
+		collectEvents(&events),
+	)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if result.Message.Content != "I see the skills" {
+		t.Fatalf("unexpected content: %q", result.Message.Content)
+	}
+
+	if len(client.requests) == 0 {
+		t.Fatalf("expected at least 1 model request")
+	}
+	reqMessages := client.requests[0].Messages
+	if len(reqMessages) < 2 {
+		t.Fatalf("expected at least 2 messages (system + user), got %d", len(reqMessages))
+	}
+	if reqMessages[0].Role != model.RoleSystem {
+		t.Errorf("expected first message to be RoleSystem, got %s", reqMessages[0].Role)
+	}
+	if !strings.Contains(reqMessages[0].Content, "<available_skills>") || !strings.Contains(reqMessages[0].Content, "pdf-processing") {
+		t.Errorf("system message missing skill catalog: %s", reqMessages[0].Content)
+	}
 }
