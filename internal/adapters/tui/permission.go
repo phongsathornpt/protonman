@@ -201,7 +201,11 @@ func (m *bubbleModel) resolvePermission(option permissionOption) tea.Cmd {
 	var resolution permission.Resolution
 	switch option {
 	case optionAllowOnce:
-		resolution = permission.Resolution{Action: permission.ActionAllow, Reason: "user allowed one call"}
+		resolution = permission.Resolution{
+			Action: permission.ActionAllow,
+			Scope:  permission.GrantScopeOnce,
+			Reason: "user allowed one call",
+		}
 	case optionAllowSession:
 		resolution = permission.Resolution{
 			Action: permission.ActionAllow,

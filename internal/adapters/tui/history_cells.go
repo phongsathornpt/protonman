@@ -3,18 +3,40 @@ package tui
 import (
 	"fmt"
 	"strings"
+
+	"github.com/projectTHORN/proton/internal/domain/tool"
 )
 
 // HistoryCellKind identifies the semantic role of one transcript cell.
 type HistoryCellKind uint8
 
 const (
-	HistoryCellUser HistoryCellKind = iota
+	// HistoryCellUnknown is the invalid zero value.
+	HistoryCellUnknown HistoryCellKind = iota
+	HistoryCellUser
 	HistoryCellAssistant
 	HistoryCellTool
 	HistoryCellSystem
 	HistoryCellError
 )
+
+// String returns the human-readable spelling of a history cell kind.
+func (k HistoryCellKind) String() string {
+	switch k {
+	case HistoryCellUser:
+		return "user"
+	case HistoryCellAssistant:
+		return "assistant"
+	case HistoryCellTool:
+		return "tool"
+	case HistoryCellSystem:
+		return "system"
+	case HistoryCellError:
+		return "error"
+	default:
+		return "unknown"
+	}
+}
 
 // HistoryCell is the renderable unit of TUI conversation history.
 //
@@ -70,7 +92,7 @@ type ToolCell struct {
 	ExitCode    *int
 	Truncated   bool
 	Denied      bool
-	FailureCode string
+	FailureCode tool.ErrorCode
 }
 
 func (ToolCell) Kind() HistoryCellKind { return HistoryCellTool }
@@ -108,7 +130,7 @@ type ExecCell struct {
 	ExitCode    *int
 	Truncated   bool
 	Denied      bool
-	FailureCode string
+	FailureCode tool.ErrorCode
 }
 
 func (ExecCell) Kind() HistoryCellKind { return HistoryCellTool }
@@ -153,7 +175,7 @@ type PatchCell struct {
 	Running     bool
 	Truncated   bool
 	Denied      bool
-	FailureCode string
+	FailureCode tool.ErrorCode
 }
 
 func (PatchCell) Kind() HistoryCellKind { return HistoryCellTool }
@@ -191,7 +213,7 @@ func (c PatchCell) historyToolID() string    { return c.CallID }
 func (c PatchCell) historyToolName() string  { return c.Name }
 func (c PatchCell) historyToolRunning() bool { return c.Running }
 
-func resultBodyLines(body string, exitCode *int, truncated bool, denied bool, failureCode string) []string {
+func resultBodyLines(body string, exitCode *int, truncated bool, denied bool, failureCode tool.ErrorCode) []string {
 	body = strings.TrimRight(body, "\n")
 	parts := make([]string, 0, strings.Count(body, "\n")+4)
 	if body != "" {
@@ -207,7 +229,7 @@ func resultBodyLines(body string, exitCode *int, truncated bool, denied bool, fa
 		parts = append(parts, "denied")
 	}
 	if failureCode != "" {
-		parts = append(parts, "failure: "+failureCode)
+		parts = append(parts, "failure: "+string(failureCode))
 	}
 	return parts
 }
@@ -226,7 +248,7 @@ func (c SystemCell) LineCount() int     { return len(c.RawLines()) }
 type ErrorCell struct {
 	Title string
 	Text  string
-	Code  string
+	Code  tool.ErrorCode
 }
 
 func (ErrorCell) Kind() HistoryCellKind { return HistoryCellError }

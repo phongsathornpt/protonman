@@ -104,13 +104,34 @@ type cancelParams struct {
 	SessionID string `json:"sessionId"`
 }
 
+// StopReason represents the outcome of an ACP prompt turn.
+type StopReason string
+
+const (
+	StopReasonCancelled StopReason = "cancelled"
+	StopReasonEndTurn   StopReason = "end_turn"
+)
+
+// BlockType identifies the content type within an ACP prompt block.
+type BlockType string
+
+const (
+	BlockTypeText BlockType = "text"
+)
+
+const (
+	codeParseError     = -32700
+	codeInvalidRequest = -32600
+	codeServerError    = -32000
+)
+
 type promptBlock struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
+	Type BlockType  `json:"type"`
+	Text string     `json:"text"`
 }
 
 type promptResult struct {
-	StopReason string `json:"stopReason"`
+	StopReason StopReason `json:"stopReason"`
 }
 
 type lockedWriter struct {
@@ -202,14 +223,14 @@ func decodeRequest(line []byte) (rpcRequest, *rpcResponse) {
 	if err := json.Unmarshal(line, &request); err != nil {
 		return rpcRequest{}, &rpcResponse{
 			JSONRPC: "2.0",
-			Error:   &rpcError{Code: -32700, Message: "parse error"},
+			Error:   &rpcError{Code: codeParseError, Message: "parse error"},
 		}
 	}
 	if request.Method == "" {
 		return rpcRequest{}, &rpcResponse{
 			JSONRPC: "2.0",
 			ID:      request.ID,
-			Error:   &rpcError{Code: -32600, Message: "invalid request"},
+			Error:   &rpcError{Code: codeInvalidRequest, Message: "invalid request"},
 		}
 	}
 	return request, nil
@@ -236,7 +257,7 @@ func writeRequestResult(output io.Writer, id json.RawMessage, result any, notify
 		return writeJSON(output, rpcResponse{
 			JSONRPC: "2.0",
 			ID:      id,
-			Error:   &rpcError{Code: -32000, Message: requestErr.Error()},
+			Error:   &rpcError{Code: codeServerError, Message: requestErr.Error()},
 		})
 	}
 	if notify != nil {
@@ -336,7 +357,7 @@ func (s *Server) executePrompt(execution promptExecution) (any, *rpcNotification
 	var buffer bytes.Buffer
 	err := execution.session.runner.Run(execution.ctx, execution.prompt, &buffer, headless.FormatText)
 	if execution.wasCancelled() {
-		return promptResult{StopReason: "cancelled"}, nil, nil
+		return promptResult{StopReason: StopReasonCancelled}, nil, nil
 	}
 	if err != nil {
 		return nil, nil, err
@@ -350,13 +371,13 @@ func (s *Server) executePrompt(execution promptExecution) (any, *rpcNotification
 			"update": map[string]any{
 				"sessionUpdate": "agent_message_chunk",
 				"content": map[string]any{
-					"type": "text",
+					"type": string(BlockTypeText),
 					"text": text,
 				},
 			},
 		},
 	}
-	return promptResult{StopReason: "end_turn"}, notify, nil
+	return promptResult{StopReason: StopReasonEndTurn}, notify, nil
 }
 
 func (s *Server) cancelPrompt(raw json.RawMessage) error {

@@ -119,3 +119,23 @@ func TestHistoryStateBoundsCommittedScrollback(t *testing.T) {
 		t.Fatalf("trimmed transcript = %q", got)
 	}
 }
+
+func TestHistoryCellKindEnum(t *testing.T) {
+	tests := []struct {
+		kind HistoryCellKind
+		want string
+	}{
+		{HistoryCellUnknown, "unknown"},
+		{HistoryCellUser, "user"},
+		{HistoryCellAssistant, "assistant"},
+		{HistoryCellTool, "tool"},
+		{HistoryCellSystem, "system"},
+		{HistoryCellError, "error"},
+		{HistoryCellKind(99), "unknown"},
+	}
+	for _, tt := range tests {
+		if got := tt.kind.String(); got != tt.want {
+			t.Errorf("HistoryCellKind(%d).String() = %q, want %q", tt.kind, got, tt.want)
+		}
+	}
+}
