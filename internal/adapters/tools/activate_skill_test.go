@@ -7,24 +7,23 @@ import (
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/adapters/tools"
-	applicationskill "github.com/projectTHORN/proton/internal/application/skill"
-	domainskill "github.com/projectTHORN/proton/internal/domain/skill"
 	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/skill"
 )
 
 func TestActivateSkill_Execute(t *testing.T) {
 	ctx := context.Background()
 
-	s := domainskill.Skill{
+	s := skill.Skill{
 		Name:         "pdf-processing",
 		Description:  "Extract text from PDFs",
 		Location:     "/home/user/.agents/skills/pdf-processing/SKILL.md",
 		BaseDir:      "/home/user/.agents/skills/pdf-processing",
-		Scope:        domainskill.ScopeUser,
+		Scope:        skill.ScopeUser,
 		Instructions: "# PDF Processing\n\nRun scripts/extract.py to extract text.",
 		Resources:    []string{"scripts/extract.py", "references/guide.md"},
 	}
-	skillReg := applicationskill.NewRegistry(s)
+	skillReg := skill.NewRegistry(s)
 	handler := tools.NewActivateSkill(skillReg)
 
 	t.Run("successful activation", func(t *testing.T) {

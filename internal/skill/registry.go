@@ -7,8 +7,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-
-	"github.com/projectTHORN/proton/internal/domain/skill"
 )
 
 // ErrDuplicateSkill indicates a skill with the same name is already registered.
@@ -17,15 +15,15 @@ var ErrDuplicateSkill = errors.New("duplicate skill")
 // Registry manages discovered and activated skills.
 type Registry struct {
 	mu        sync.RWMutex
-	skills    map[string]skill.Skill
+	skills    map[string]Skill
 	order     []string
 	activated map[string]bool
 }
 
 // NewRegistry creates a registry populated with the provided skills.
-func NewRegistry(skills ...skill.Skill) *Registry {
+func NewRegistry(skills ...Skill) *Registry {
 	r := &Registry{
-		skills:    make(map[string]skill.Skill),
+		skills:    make(map[string]Skill),
 		order:     make([]string, 0, len(skills)),
 		activated: make(map[string]bool),
 	}
@@ -36,7 +34,7 @@ func NewRegistry(skills ...skill.Skill) *Registry {
 }
 
 // Register adds a skill to the registry.
-func (r *Registry) Register(s skill.Skill) error {
+func (r *Registry) Register(s Skill) error {
 	if err := s.Validate(); err != nil {
 		return fmt.Errorf("register skill: %w", err)
 	}
@@ -54,7 +52,7 @@ func (r *Registry) Register(s skill.Skill) error {
 }
 
 // Lookup finds a skill by name.
-func (r *Registry) Lookup(name string) (skill.Skill, bool) {
+func (r *Registry) Lookup(name string) (Skill, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -63,11 +61,11 @@ func (r *Registry) Lookup(name string) (skill.Skill, bool) {
 }
 
 // List returns all registered skills sorted by name.
-func (r *Registry) List() []skill.Skill {
+func (r *Registry) List() []Skill {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	result := make([]skill.Skill, 0, len(r.skills))
+	result := make([]Skill, 0, len(r.skills))
 	for _, s := range r.skills {
 		result = append(result, s)
 	}
@@ -78,9 +76,9 @@ func (r *Registry) List() []skill.Skill {
 }
 
 // Catalog returns catalog items for Tier 1 progressive disclosure.
-func (r *Registry) Catalog() []skill.CatalogItem {
+func (r *Registry) Catalog() []CatalogItem {
 	skills := r.List()
-	items := make([]skill.CatalogItem, 0, len(skills))
+	items := make([]CatalogItem, 0, len(skills))
 	for _, s := range skills {
 		items = append(items, s.ToCatalogItem())
 	}

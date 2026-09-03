@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"strings"
 
-	applicationskill "github.com/projectTHORN/proton/internal/application/skill"
 	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/skill"
 )
 
 type activateSkillHandler struct {
-	registry *applicationskill.Registry
+	registry *skill.Registry
 }
 
 type activateSkillInput struct {
@@ -19,7 +19,7 @@ type activateSkillInput struct {
 }
 
 // NewActivateSkill creates a tool.Handler that activates an Agent Skill.
-func NewActivateSkill(registry *applicationskill.Registry) tool.Handler {
+func NewActivateSkill(registry *skill.Registry) tool.Handler {
 	return activateSkillHandler{registry: registry}
 }
 

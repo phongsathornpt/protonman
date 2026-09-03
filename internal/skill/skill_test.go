@@ -1,10 +1,8 @@
-package skill_test
+package skill
 
 import (
 	"strings"
 	"testing"
-
-	"github.com/projectTHORN/proton/internal/domain/skill"
 )
 
 func TestValidateName(t *testing.T) {
@@ -32,7 +30,7 @@ func TestValidateName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := skill.ValidateName(tt.input)
+			err := ValidateName(tt.input)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("ValidateName(%q) err = %v, wantErr = %v", tt.input, err, tt.wantErr)
 			}
@@ -55,7 +53,7 @@ func TestValidateDescription(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := skill.ValidateDescription(tt.input)
+			err := ValidateDescription(tt.input)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("ValidateDescription() err = %v, wantErr = %v", err, tt.wantErr)
 			}
@@ -64,11 +62,11 @@ func TestValidateDescription(t *testing.T) {
 }
 
 func TestSkillValidate(t *testing.T) {
-	valid := skill.Skill{
+	valid := Skill{
 		Name:        "pdf-processing",
 		Description: "Process PDFs and extract text.",
 		Location:    "/path/to/SKILL.md",
-		Scope:       skill.ScopeProject,
+		Scope:       ScopeProject,
 	}
 	if err := valid.Validate(); err != nil {
 		t.Fatalf("expected valid skill, got %v", err)
@@ -106,11 +104,11 @@ func TestSkillValidate(t *testing.T) {
 }
 
 func TestScopeParsingAndValidation(t *testing.T) {
-	for _, s := range []skill.Scope{skill.ScopeUser, skill.ScopeProject} {
+	for _, s := range []Scope{ScopeUser, ScopeProject} {
 		if !s.Valid() {
 			t.Fatalf("expected scope %s to be valid", s)
 		}
-		parsed, err := skill.ParseScope(string(s))
+		parsed, err := ParseScope(string(s))
 		if err != nil {
 			t.Fatalf("ParseScope(%s) error = %v", s, err)
 		}
@@ -118,31 +116,31 @@ func TestScopeParsingAndValidation(t *testing.T) {
 			t.Fatalf("parsed = %s, want %s", parsed, s)
 		}
 	}
-	if skill.Scope("unknown").Valid() {
+	if Scope("unknown").Valid() {
 		t.Fatal("expected unknown scope to be invalid")
 	}
-	if _, err := skill.ParseScope("unknown"); err == nil {
+	if _, err := ParseScope("unknown"); err == nil {
 		t.Fatal("ParseScope(unknown) error = nil, want error")
 	}
 }
 
 func TestFormatCatalogXML(t *testing.T) {
 	t.Run("empty catalog", func(t *testing.T) {
-		if got := skill.FormatCatalogXML(nil); got != "" {
+		if got := FormatCatalogXML(nil); got != "" {
 			t.Fatalf("expected empty string, got %q", got)
 		}
 	})
 
 	t.Run("catalog with items and escaping", func(t *testing.T) {
-		items := []skill.CatalogItem{
+		items := []CatalogItem{
 			{
 				Name:        "pdf-tool",
 				Description: "Handles <PDF> & docs",
 				Location:    "/path/to/SKILL.md",
-				Scope:       skill.ScopeUser,
+				Scope:       ScopeUser,
 			},
 		}
-		got := skill.FormatCatalogXML(items)
+		got := FormatCatalogXML(items)
 		if !strings.Contains(got, "<available_skills>") {
 			t.Errorf("missing <available_skills> tag: %s", got)
 		}
@@ -156,19 +154,19 @@ func TestFormatCatalogXML(t *testing.T) {
 }
 
 func TestSystemPromptSection(t *testing.T) {
-	if got := skill.SystemPromptSection(nil); got != "" {
+	if got := SystemPromptSection(nil); got != "" {
 		t.Fatalf("expected empty string for nil catalog, got %q", got)
 	}
 
-	items := []skill.CatalogItem{
+	items := []CatalogItem{
 		{
 			Name:        "testing",
 			Description: "Run tests",
 			Location:    "/loc/SKILL.md",
-			Scope:       skill.ScopeProject,
+			Scope:       ScopeProject,
 		},
 	}
-	got := skill.SystemPromptSection(items)
+	got := SystemPromptSection(items)
 	if !strings.Contains(got, "activate_skill") {
 		t.Errorf("expected instruction mentioning activate_skill: %s", got)
 	}

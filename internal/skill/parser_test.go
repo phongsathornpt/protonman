@@ -1,12 +1,9 @@
-package skills_test
+package skill
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/projectTHORN/proton/internal/adapters/skills"
-	"github.com/projectTHORN/proton/internal/domain/skill"
 )
 
 func TestParseSkillFile_Valid(t *testing.T) {
@@ -44,7 +41,7 @@ Step-by-step instructions for extracting text.
 		t.Fatal(err)
 	}
 
-	parsed, err := skills.ParseSkillFile(skillFile, skill.ScopeUser)
+	parsed, err := ParseSkillFile(skillFile, ScopeUser)
 	if err != nil {
 		t.Fatalf("ParseSkillFile failed: %v", err)
 	}
@@ -107,7 +104,7 @@ Instructions here.
 		t.Fatal(err)
 	}
 
-	parsed, err := skills.ParseSkillFile(skillFile, skill.ScopeProject)
+	parsed, err := ParseSkillFile(skillFile, ScopeProject)
 	if err != nil {
 		t.Fatalf("expected lenient parsing to succeed, got error: %v", err)
 	}
@@ -122,7 +119,7 @@ func TestParseSkillFile_Errors(t *testing.T) {
 	t.Run("missing frontmatter", func(t *testing.T) {
 		skillFile := filepath.Join(tempDir, "SKILL1.md")
 		_ = os.WriteFile(skillFile, []byte("Just markdown without frontmatter"), 0o644)
-		_, err := skills.ParseSkillFile(skillFile, skill.ScopeUser)
+		_, err := ParseSkillFile(skillFile, ScopeUser)
 		if err == nil {
 			t.Fatal("expected error for missing frontmatter")
 		}
@@ -131,7 +128,7 @@ func TestParseSkillFile_Errors(t *testing.T) {
 	t.Run("invalid name in frontmatter", func(t *testing.T) {
 		skillFile := filepath.Join(tempDir, "SKILL2.md")
 		_ = os.WriteFile(skillFile, []byte("---\nname: Invalid_Name!\ndescription: A valid description.\n---\nBody"), 0o644)
-		_, err := skills.ParseSkillFile(skillFile, skill.ScopeUser)
+		_, err := ParseSkillFile(skillFile, ScopeUser)
 		if err == nil {
 			t.Fatal("expected error for invalid name")
 		}
@@ -140,7 +137,7 @@ func TestParseSkillFile_Errors(t *testing.T) {
 	t.Run("missing description", func(t *testing.T) {
 		skillFile := filepath.Join(tempDir, "SKILL3.md")
 		_ = os.WriteFile(skillFile, []byte("---\nname: valid-name\n---\nBody"), 0o644)
-		_, err := skills.ParseSkillFile(skillFile, skill.ScopeUser)
+		_, err := ParseSkillFile(skillFile, ScopeUser)
 		if err == nil {
 			t.Fatal("expected error for missing description")
 		}

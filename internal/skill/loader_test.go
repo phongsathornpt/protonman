@@ -1,4 +1,4 @@
-package skills_test
+package skill
 
 import (
 	"context"
@@ -6,9 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/projectTHORN/proton/internal/adapters/skills"
-	"github.com/projectTHORN/proton/internal/domain/skill"
 )
 
 func createSkill(t *testing.T, dir string, name string, desc string) {
@@ -38,7 +35,7 @@ func TestDiscover_UserAndProjectSkills(t *testing.T) {
 	createSkill(t, filepath.Join(workDir, ".proton", "skills"), "shared-skill", "Project overridden shared skill")
 
 	t.Run("untrusted project skips project skills", func(t *testing.T) {
-		res, err := skills.Discover(context.Background(), skills.Options{
+		res, err := Discover(context.Background(), Options{
 			HomeDir:        homeDir,
 			WorkDir:        workDir,
 			ProjectTrusted: false,
@@ -52,7 +49,7 @@ func TestDiscover_UserAndProjectSkills(t *testing.T) {
 			t.Fatalf("expected 2 skills, got %d", len(res.Skills))
 		}
 		for _, s := range res.Skills {
-			if s.Scope != skill.ScopeUser {
+			if s.Scope != ScopeUser {
 				t.Errorf("expected ScopeUser, got %s for skill %s", s.Scope, s.Name)
 			}
 			if s.Name == "project-skill" {
@@ -74,7 +71,7 @@ func TestDiscover_UserAndProjectSkills(t *testing.T) {
 	})
 
 	t.Run("trusted project loads project skills and overrides user skills", func(t *testing.T) {
-		res, err := skills.Discover(context.Background(), skills.Options{
+		res, err := Discover(context.Background(), Options{
 			HomeDir:        homeDir,
 			WorkDir:        workDir,
 			ProjectTrusted: true,
@@ -87,21 +84,21 @@ func TestDiscover_UserAndProjectSkills(t *testing.T) {
 			t.Fatalf("expected 3 skills, got %d", len(res.Skills))
 		}
 
-		skillMap := make(map[string]skill.Skill)
+		skillMap := make(map[string]Skill)
 		for _, s := range res.Skills {
 			skillMap[s.Name] = s
 		}
 
-		if s, ok := skillMap["user-skill"]; !ok || s.Scope != skill.ScopeUser {
+		if s, ok := skillMap["user-skill"]; !ok || s.Scope != ScopeUser {
 			t.Errorf("expected user-skill to have ScopeUser")
 		}
-		if s, ok := skillMap["project-skill"]; !ok || s.Scope != skill.ScopeProject {
+		if s, ok := skillMap["project-skill"]; !ok || s.Scope != ScopeProject {
 			t.Errorf("expected project-skill to have ScopeProject")
 		}
 		if s, ok := skillMap["shared-skill"]; !ok {
 			t.Errorf("expected shared-skill to be present")
 		} else {
-			if s.Scope != skill.ScopeProject {
+			if s.Scope != ScopeProject {
 				t.Errorf("expected project scope to override user scope, got %s", s.Scope)
 			}
 			if s.Description != "Project overridden shared skill" {
