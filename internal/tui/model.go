@@ -166,7 +166,7 @@ func newBubbleKeyMap() bubbleKeyMap {
 }
 
 func (m *bubbleModel) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, m.bridge.Next(), textarea.Blink)
+	return tea.Batch(m.bridge.Next(), textarea.Blink)
 }
 
 func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -208,10 +208,11 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case spinner.TickMsg:
 		var command tea.Cmd
 		m.spinner, command = m.spinner.Update(message)
-		if m.busy {
-			m.historyState.SetSpinnerFrame(m.spinner.View())
-			m.refreshViewport()
+		if !m.busy {
+			return m, nil
 		}
+		m.historyState.SetSpinnerFrame(m.spinner.View())
+		m.refreshViewport()
 		return m, command
 	case cursor.BlinkMsg:
 		prompt := m.bottom.prompt()
@@ -231,7 +232,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.turnCancel = nil
 		m.appendToolResult(message.result, message.err)
 		m.relayout()
-		return m, m.drainQueue()
+		return m, m.withSpinner(m.drainQueue())
 	case turnDeltaMsg:
 		m.applyTurnEvent(message.event)
 		for {
@@ -252,7 +253,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 		m.refreshViewport()
-		return m, waitTurnCh(m.turnEvents)
+		return m, m.withSpinner(waitTurnCh(m.turnEvents))
 	case turnDoneMsg:
 		m.busy = false
 		m.busyStarted = time.Time{}
@@ -272,7 +273,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.queue = nil
 			return m, nil
 		}
-		return m, m.drainQueue()
+		return m, m.withSpinner(m.drainQueue())
 	}
 	return m, nil
 }
@@ -281,7 +282,7 @@ func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if top := m.bottom.top(); top != nil {
 		if handled, command := top.HandleKey(m, message); handled {
 			m.relayout()
-			return m, command
+			return m, m.withSpinner(command)
 		}
 	}
 	if message.Type == tea.KeyShiftTab || key.Matches(message, m.keys.CycleMode) {
@@ -343,7 +344,7 @@ func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if message.String() == "tab" && m.busy {
-		return m, m.submit()
+		return m, m.withSpinner(m.submit())
 	}
 	prompt := m.bottom.prompt()
 	if message.String() == "esc" {
@@ -356,7 +357,7 @@ func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if message.String() == "enter" {
-		return m, m.submit()
+		return m, m.withSpinner(m.submit())
 	}
 	if !m.bottom.bashMode() && prompt.Value() == "" && message.String() == "!" {
 		m.setBashMode(true)
@@ -370,9 +371,15 @@ func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	if message.String() == "up" {
-		m.historyPrevious()
-		m.syncSlashView()
-		return m, nil
+		// Keep the textarea's vertical navigation intact for multiline prompts.
+		// History recall is only unambiguous on a single-line draft or at the
+		// very top-left of a multiline draft.
+		lineInfo := prompt.LineInfo()
+		if prompt.LineCount() == 1 || (prompt.Line() == 0 && lineInfo.RowOffset == 0 && lineInfo.ColumnOffset == 0) {
+			m.historyPrevious()
+			m.syncSlashView()
+			return m, nil
+		}
 	}
 	if message.String() == "down" && m.bottom.historyNavigating() {
 		m.historyNext()
@@ -510,6 +517,13 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 	return waitTurnCh(events)
 }
 
+func (m *bubbleModel) withSpinner(command tea.Cmd) tea.Cmd {
+	if command == nil || !m.busy {
+		return command
+	}
+	return tea.Batch(m.spinner.Tick, command)
+}
+
 func waitTurnCh(events <-chan tea.Msg) tea.Cmd {
 	if events == nil {
 		return nil
@@ -553,9 +567,10 @@ func (m *bubbleModel) resize(width int, height int) {
 	prompt := m.bottom.prompt()
 	prompt.SetWidth(maxInt(1, width-4))
 	m.syncPromptHeight()
-	m.transcriptViewport.Width = maxInt(20, width-10)
-	m.transcriptViewport.Height = maxInt(3, height-10)
+	m.transcriptViewport.Width = maxInt(1, width-10)
+	m.transcriptViewport.Height = maxInt(1, height-10)
 	if m.historyState != nil {
+		m.historyState.SetWidth(width)
 		m.historyState.InvalidateCache()
 	}
 	m.relayout()

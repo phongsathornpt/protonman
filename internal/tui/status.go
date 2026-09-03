@@ -18,7 +18,10 @@ func (m bubbleModel) statusView() string {
 		if !m.busyStarted.IsZero() {
 			activity += " " + formatElapsed(time.Since(m.busyStarted))
 		}
-		return statusStyle.Render(m.spinner.View() + " " + activity)
+		// The animated frame lives in the active transcript cell. Keeping the
+		// status row static avoids two competing motion signals and reduces
+		// redraw noise while still exposing the operation and elapsed time.
+		return statusStyle.Render("• " + activity)
 	}
 	if m.hasPermissionView() {
 		return warningStyle.Render("action required · permission")
@@ -31,7 +34,7 @@ func (m bubbleModel) infoView() string {
 		if view.parked {
 			return mutedStyle.Render("tab return · y allow · s session · n deny · pgup scroll")
 		}
-		return mutedStyle.Render("j/k move · 1-3 select · y once · s session · n deny · esc read")
+		return mutedStyle.Render("j/k move · 1-3 select · y once · s session · n deny · esc park")
 	}
 
 	targetWidth := m.width - 2

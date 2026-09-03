@@ -8,31 +8,56 @@ import (
 )
 
 func wrapWords(text string, width int) string {
-	if width < 8 || ansi.StringWidth(text) <= width {
-		return text
+	return strings.Join(wrapLines(text, width), "\n")
+}
+
+// wrapLines wraps text without dropping the tail of long tokens. The old
+// implementation truncated a single long path/URL/command, which is unsafe in
+// permission prompts and made tool output impossible to inspect completely.
+func wrapLines(text string, width int) []string {
+	if width <= 0 {
+		return []string{text}
 	}
-	words := strings.Fields(text)
-	lines := make([]string, 0)
-	var current string
-	for _, word := range words {
-		if ansi.StringWidth(word) > width {
-			word = ansi.Truncate(word, width, "")
-		}
-		if current == "" {
-			current = word
+	lines := make([]string, 0, strings.Count(text, "\n")+1)
+	for _, source := range strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n") {
+		if source == "" {
+			lines = append(lines, "")
 			continue
 		}
-		if ansi.StringWidth(current)+1+ansi.StringWidth(word) <= width {
-			current += " " + word
-			continue
+		remaining := source
+		firstChunk := true
+		for remaining != "" {
+			if !firstChunk {
+				remaining = strings.TrimLeft(remaining, " \t")
+				if remaining == "" {
+					break
+				}
+			}
+			firstChunk = false
+			if ansi.StringWidth(remaining) <= width {
+				lines = append(lines, remaining)
+				break
+			}
+			cut := ansi.Cut(remaining, 0, width)
+			if cut == "" {
+				// A zero-width escape sequence or grapheme should never make the
+				// loop spin forever.
+				cut = string([]rune(remaining)[:1])
+			}
+			breakAt := strings.LastIndexAny(cut, " \t")
+			if breakAt > 0 {
+				candidate := strings.TrimRight(cut[:breakAt], " \t")
+				if candidate != "" {
+					lines = append(lines, candidate)
+					remaining = strings.TrimLeft(remaining[breakAt:], " \t")
+					continue
+				}
+			}
+			lines = append(lines, cut)
+			remaining = remaining[len(cut):]
 		}
-		lines = append(lines, current)
-		current = word
 	}
-	if current != "" {
-		lines = append(lines, current)
-	}
-	return strings.Join(lines, "\n")
+	return lines
 }
 
 func overlayCenter(background, overlay string, width, height int) string {

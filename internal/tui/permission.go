@@ -247,11 +247,11 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 		titleStyle = errorStyle
 		border = accentError
 	}
-	maxWidth := maxInt(32, m.width-8)
+	maxWidth := maxInt(1, m.width-8)
 	rows := make([]string, 0, 8)
 	rows = append(rows, titleStyle.Render(title))
 	rows = append(rows, fmt.Sprintf("%s (%s)", request.ToolName, request.ToolKind))
-	rows = append(rows, mutedStyle.Render(wrapWords("Target: "+request.Detail, maxWidth-6)))
+	rows = append(rows, mutedStyle.Render(wrapWords("Target: "+request.Detail, maxInt(1, maxWidth-6))))
 	rows = append(rows, "")
 	for i, option := range permissionOptions {
 		marker := "  "
@@ -266,11 +266,11 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 	if v.parked {
 		rows = append(rows, mutedStyle.Render("tab return   y/s/n still work   pgup/pgdn scroll"))
 	} else {
-		rows = append(rows, mutedStyle.Render("j/k move   1-3 select   y once   s session   n deny   esc read"))
+		rows = append(rows, mutedStyle.Render("j/k move   1-3 select   y once   s session   n deny   esc park"))
 	}
 	return modalStyle.
 		BorderForeground(border).
-		MaxWidth(maxInt(24, m.width-4)).
+		MaxWidth(maxInt(1, m.width-4)).
 		Render(strings.Join(rows, "\n"))
 }
 
