@@ -17,14 +17,14 @@ const maxBubbleScrollback = 1000
 // Block remains as a derived compatibility snapshot for the existing package
 // tests while the TUI migrates to HistoryCell. Runtime rendering no longer uses
 // Block as its source of truth.
-type blockKind uint8
+type blockKind = HistoryCellKind
 
 const (
-	blockUser blockKind = iota
-	blockAssistant
-	blockTool
-	blockSystem
-	blockError
+	blockUser      = HistoryCellUser
+	blockAssistant = HistoryCellAssistant
+	blockTool      = HistoryCellTool
+	blockSystem    = HistoryCellSystem
+	blockError     = HistoryCellError
 )
 
 type Block struct {
@@ -32,7 +32,7 @@ type Block struct {
 	Title   string
 	Body    string
 	Running bool
-	Code    string
+	Code    tool.ErrorCode
 }
 
 func (m *bubbleModel) ensureHistoryState() *HistoryState {
@@ -188,7 +188,7 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 		errorCell := &ErrorCell{Title: name, Text: err.Error()}
 		if result.Failure != nil {
 			errorCell.Text = fmt.Sprintf("[%s]: %s", result.Failure.Code, result.Failure.Message)
-			errorCell.Code = string(result.Failure.Code)
+			errorCell.Code = result.Failure.Code
 		}
 		state.CompleteToolCall(result.CallID, name, errorCell)
 		m.syncLegacyBlocks()
@@ -204,9 +204,9 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 }
 
 func (m *bubbleModel) completedToolCell(callID string, name string, body string, result tool.Result) HistoryCell {
-	failureCode := ""
+	var failureCode tool.ErrorCode
 	if result.Failure != nil {
-		failureCode = string(result.Failure.Code)
+		failureCode = result.Failure.Code
 	}
 	if running := m.runningToolCell(callID, name); running != nil {
 		switch typed := running.(type) {
