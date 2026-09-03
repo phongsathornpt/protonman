@@ -218,6 +218,23 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.drainQueue()
 	case turnDeltaMsg:
 		m.applyTurnEvent(message.event)
+		for {
+			select {
+			case next, ok := <-m.turnEvents:
+				if !ok {
+					m.refreshViewport()
+					return m, nil
+				}
+				if delta, isDelta := next.(turnDeltaMsg); isDelta {
+					m.applyTurnEvent(delta.event)
+					continue
+				}
+				m.refreshViewport()
+				return m.Update(next)
+			default:
+			}
+			break
+		}
 		m.refreshViewport()
 		return m, waitTurnCh(m.turnEvents)
 	case turnDoneMsg:
