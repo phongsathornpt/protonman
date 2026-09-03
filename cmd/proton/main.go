@@ -186,7 +186,7 @@ func run(ctx context.Context, args []string) error {
 		registry,
 		loadTodoItems(workDir),
 		tui.WithWorkDir(workDir),
-		tui.WithInitialMessages(state.Messages),
+		tui.WithInitialMessages(session.ToModelMessages(state.Messages)),
 	)
 	if uiErr != nil {
 		return fmt.Errorf("create Bubble Tea UI: %w", uiErr)
@@ -194,7 +194,7 @@ func run(ctx context.Context, args []string) error {
 	runErr := bubbleUI.Run(ctx)
 	saveErr := stateStore.Save(ctx, sessionID, session.State{
 		PermissionMode: service.Mode().String(),
-		Messages:       bubbleUI.SessionState(),
+		Messages:       session.FromModelMessages(bubbleUI.SessionState()),
 	})
 	if runErr != nil && saveErr != nil {
 		return fmt.Errorf("run terminal UI: %v; save session: %w", runErr, saveErr)
