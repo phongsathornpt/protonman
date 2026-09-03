@@ -35,6 +35,18 @@ test-race:
 test-e2e:
 	go test -v ./test/e2e/...
 
+## bench: Run all benchmarks with memory allocation profiling
+bench:
+	go test -run=^$$ -bench=. -benchmem ./...
+
+## bench-cpu: Run benchmarks with CPU profiling to cpu.pprof
+bench-cpu:
+	go test -run=^$$ -bench=. -benchmem -cpuprofile=cpu.pprof ./internal/domain/permission/...
+
+## bench-mem: Run benchmarks with memory profiling to mem.pprof
+bench-mem:
+	go test -run=^$$ -bench=. -benchmem -memprofile=mem.pprof ./internal/domain/permission/...
+
 ## fmt: Format all Go source files
 fmt:
 	gofmt -w .
