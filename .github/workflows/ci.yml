@@ -84,4 +84,4 @@ jobs:
       - name: Run sandbox integration tests
         env:
           PROTON_REQUIRE_SANDBOX_INTEGRATION: "1"
-        run: go test ./internal/adapters/sandbox -run '^TestSandboxIntegration' -count=1 -timeout=60s -v
+        run: go test ./internal/sandbox -run '^TestSandboxIntegration' -count=1 -timeout=60s -v

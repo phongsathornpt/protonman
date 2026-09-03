@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/domain/permission"
-	"github.com/projectTHORN/proton/internal/domain/sandbox"
+	"github.com/projectTHORN/proton/internal/sandbox"
 )
 
 func TestLoadLayeredConfigRequiresProjectTrust(t *testing.T) {

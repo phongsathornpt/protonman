@@ -9,9 +9,9 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/adapters/sandbox"
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
 	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/sandbox"
 )
 
 type bashHandler struct {

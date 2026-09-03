@@ -8,8 +8,6 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
-
-	domainsandbox "github.com/projectTHORN/proton/internal/domain/sandbox"
 )
 
 // ErrUnavailable indicates that a requested profile cannot be enforced here.
@@ -22,12 +20,12 @@ type Launcher interface {
 
 // OSLauncher wraps bash/sh with sandbox-exec (macOS) or bwrap/unshare (Linux).
 type OSLauncher struct {
-	Profile  domainsandbox.Profile
+	Profile  Profile
 	LookPath func(string) (string, error)
 }
 
 // NewOSLauncher returns a launcher for the profile. Profile Off runs bare.
-func NewOSLauncher(profile domainsandbox.Profile) *OSLauncher {
+func NewOSLauncher(profile Profile) *OSLauncher {
 	return &OSLauncher{Profile: profile, LookPath: exec.LookPath}
 }
 
@@ -85,7 +83,7 @@ func bareShell(ctx context.Context, dir string, command string) *exec.Cmd {
 	return cmd
 }
 
-func bwrapCommand(ctx context.Context, bwrap string, profile domainsandbox.Profile, dir string, command string) *exec.Cmd {
+func bwrapCommand(ctx context.Context, bwrap string, profile Profile, dir string, command string) *exec.Cmd {
 	// Bubblewrap starts with an empty mount namespace. Expose the host root
 	// read-only so the shell, dynamic loader, git, compilers, and normal system
 	// tools remain usable, then over-mount only the workspace as writable when
@@ -111,7 +109,7 @@ func bwrapCommand(ctx context.Context, bwrap string, profile domainsandbox.Profi
 	return cmd
 }
 
-func seatbeltProfile(profile domainsandbox.Profile, dir string) string {
+func seatbeltProfile(profile Profile, dir string) string {
 	var builder strings.Builder
 	builder.WriteString("(version 1)\n(allow default)\n")
 	builder.WriteString("(allow file-read*)\n")
