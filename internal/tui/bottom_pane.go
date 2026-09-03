@@ -308,10 +308,10 @@ func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, te
 			v.index = num
 		}
 		return true, nil
-	case "esc", "enter", "q", "ctrl+s":
+	case "esc", "enter", "q", "ctrl+s", "ctrl+c":
 		m.bottom.remove(skillsViewID)
 		return true, nil
 	default:
-		return true, nil
+		return false, nil
 	}
 }
