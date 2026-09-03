@@ -141,3 +141,161 @@ func TestNewPolicyRejectsInvalidRule(t *testing.T) {
 		t.Fatal("NewPolicy() error = nil, want invalid config error")
 	}
 }
+
+func TestNewPolicyDefaultsEmptyToolToAny(t *testing.T) {
+	policy, err := NewPolicy(Config{
+		Rules: []Rule{{Action: ActionAllow, Tool: ""}},
+	})
+	if err != nil {
+		t.Fatalf("NewPolicy() error = %v", err)
+	}
+	dec := policy.Evaluate(Request{ToolName: "bash", ToolKind: ToolBash})
+	if dec.Action != ActionAllow {
+		t.Fatalf("Evaluate().Action = %s, want allow", dec.Action)
+	}
+}
+
+func TestActionEnumAndTextMarshaling(t *testing.T) {
+	actions := []Action{ActionAllow, ActionDeny, ActionAsk}
+	for _, a := range actions {
+		if !a.Valid() {
+			t.Fatalf("expected action %s to be valid", a)
+		}
+		text, err := a.MarshalText()
+		if err != nil {
+			t.Fatalf("MarshalText() error = %v", err)
+		}
+		var decoded Action
+		if err := decoded.UnmarshalText(text); err != nil {
+			t.Fatalf("UnmarshalText() error = %v", err)
+		}
+		if decoded != a {
+			t.Fatalf("round-trip failed: got %s, want %s", decoded, a)
+		}
+	}
+	if ActionUnknown.Valid() {
+		t.Fatal("ActionUnknown should not be valid")
+	}
+	if Action(99).Valid() {
+		t.Fatal("Action(99) should not be valid")
+	}
+	var invalid Action
+	if err := invalid.UnmarshalText([]byte("invalid")); err == nil {
+		t.Fatal("UnmarshalText(invalid) error = nil, want error")
+	}
+}
+
+func TestModeEnumAndTextMarshaling(t *testing.T) {
+	modes := []Mode{ModeAsk, ModeAuto, ModeAlwaysApprove, ModeDeny}
+	for _, m := range modes {
+		if !m.Valid() {
+			t.Fatalf("expected mode %s to be valid", m)
+		}
+		text, err := m.MarshalText()
+		if err != nil {
+			t.Fatalf("MarshalText() error = %v", err)
+		}
+		var decoded Mode
+		if err := decoded.UnmarshalText(text); err != nil {
+			t.Fatalf("UnmarshalText() error = %v", err)
+		}
+		if decoded != m {
+			t.Fatalf("round-trip failed: got %s, want %s", decoded, m)
+		}
+	}
+	if ModeUnknown.Valid() {
+		t.Fatal("ModeUnknown should not be valid")
+	}
+	if Mode(99).Valid() {
+		t.Fatal("Mode(99) should not be valid")
+	}
+	var invalid Mode
+	if err := invalid.UnmarshalText([]byte("invalid")); err == nil {
+		t.Fatal("UnmarshalText(invalid) error = nil, want error")
+	}
+}
+
+func TestPatternModeEnumAndTextMarshaling(t *testing.T) {
+	patternModes := []PatternMode{PatternModeGlob, PatternModeDomain}
+	for _, pm := range patternModes {
+		if !pm.Valid() {
+			t.Fatalf("expected pattern mode %s to be valid", pm)
+		}
+		text, err := pm.MarshalText()
+		if err != nil {
+			t.Fatalf("MarshalText() error = %v", err)
+		}
+		var decoded PatternMode
+		if err := decoded.UnmarshalText(text); err != nil {
+			t.Fatalf("UnmarshalText() error = %v", err)
+		}
+		if decoded != pm {
+			t.Fatalf("round-trip failed: got %s, want %s", decoded, pm)
+		}
+	}
+	if PatternModeUnknown.Valid() {
+		t.Fatal("PatternModeUnknown should not be valid")
+	}
+	if PatternMode(99).Valid() {
+		t.Fatal("PatternMode(99) should not be valid")
+	}
+	var invalid PatternMode
+	if err := invalid.UnmarshalText([]byte("invalid")); err == nil {
+		t.Fatal("UnmarshalText(invalid) error = nil, want error")
+	}
+}
+
+func TestGrantScopeEnumAndTextMarshaling(t *testing.T) {
+	scopes := []GrantScope{GrantScopeOnce, GrantScopeSession}
+	for _, s := range scopes {
+		if !s.Valid() {
+			t.Fatalf("expected grant scope %s to be valid", s)
+		}
+		text, err := s.MarshalText()
+		if err != nil {
+			t.Fatalf("MarshalText() error = %v", err)
+		}
+		var decoded GrantScope
+		if err := decoded.UnmarshalText(text); err != nil {
+			t.Fatalf("UnmarshalText() error = %v", err)
+		}
+		if decoded != s {
+			t.Fatalf("round-trip failed: got %s, want %s", decoded, s)
+		}
+	}
+	if GrantScopeUnknown.Valid() {
+		t.Fatal("GrantScopeUnknown should not be valid")
+	}
+	if GrantScope(99).Valid() {
+		t.Fatal("GrantScope(99) should not be valid")
+	}
+	var invalid GrantScope
+	if err := invalid.UnmarshalText([]byte("invalid")); err == nil {
+		t.Fatal("UnmarshalText(invalid) error = nil, want error")
+	}
+}
+
+func TestToolKindValidationAndParsing(t *testing.T) {
+	kinds := []ToolKind{
+		ToolAny, ToolRead, ToolEdit, ToolBash,
+		ToolGrep, ToolMCP, ToolWebFetch, ToolWebSearch,
+	}
+	for _, k := range kinds {
+		if !ValidToolKind(k) {
+			t.Fatalf("expected tool kind %q to be valid", k)
+		}
+		parsed, err := ParseToolKind(string(k))
+		if err != nil {
+			t.Fatalf("ParseToolKind(%q) error = %v", k, err)
+		}
+		if parsed != k {
+			t.Fatalf("parsed = %q, want %q", parsed, k)
+		}
+	}
+	if ValidToolKind("unsupported") {
+		t.Fatal("expected unsupported tool kind to be invalid")
+	}
+	if _, err := ParseToolKind("unsupported"); err == nil {
+		t.Fatal("ParseToolKind(unsupported) error = nil, want error")
+	}
+}
