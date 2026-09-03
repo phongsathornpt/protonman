@@ -297,10 +297,10 @@ func (m *bubbleModel) moveSlash(delta int) {
 	}
 	view.index += delta
 	if view.index < 0 {
-		view.index = 0
+		view.index = len(matches) - 1
 	}
 	if view.index >= len(matches) {
-		view.index = len(matches) - 1
+		view.index = 0
 	}
 }
 
@@ -362,7 +362,7 @@ func (m bubbleModel) renderSlash(index int) string {
 	}
 	sc, _ := m.parseSlashContext()
 	isSkill := sc.kind == slashKindSkill
-	lines := make([]string, 0, len(visible))
+	lines := make([]string, 0, len(visible)+1)
 	for i, command := range visible {
 		selected := offset+i == index
 		label := "/" + command.name
@@ -376,6 +376,9 @@ func (m bubbleModel) renderSlash(index int) string {
 		}
 		row := fmt.Sprintf("  %-16s %s", label, command.description)
 		lines = append(lines, mutedStyle.Render(row))
+	}
+	if len(matches) > maxSlashRows {
+		lines = append(lines, mutedStyle.Render(fmt.Sprintf("  (item %d of %d)", index+1, len(matches))))
 	}
 	return strings.Join(lines, "\n")
 }
