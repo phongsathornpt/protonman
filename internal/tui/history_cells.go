@@ -93,13 +93,18 @@ type ToolCell struct {
 	Truncated   bool
 	Denied      bool
 	FailureCode tool.ErrorCode
+	Spinner     string
 }
 
 func (ToolCell) Kind() HistoryCellKind { return HistoryCellTool }
 func (c ToolCell) Render() []string {
 	header := glyphTool + c.Name
 	if c.Running {
-		header += " …"
+		indicator := " …"
+		if c.Spinner != "" {
+			indicator = " " + c.Spinner
+		}
+		header += indicator
 	}
 	out := []string{toolStyle.Render(header)}
 	for _, line := range c.bodyLines() {
@@ -131,6 +136,7 @@ type ExecCell struct {
 	Truncated   bool
 	Denied      bool
 	FailureCode tool.ErrorCode
+	Spinner     string
 }
 
 func (ExecCell) Kind() HistoryCellKind { return HistoryCellTool }
@@ -141,7 +147,11 @@ func (c ExecCell) Render() []string {
 	}
 	header := "$ " + sanitizeBubbleText(command)
 	if c.Running {
-		header += " …"
+		indicator := " …"
+		if c.Spinner != "" {
+			indicator = " " + c.Spinner
+		}
+		header += indicator
 	}
 	out := []string{commandStyle.Render(header)}
 	for _, line := range resultBodyLines(c.Body, c.ExitCode, c.Truncated, c.Denied, c.FailureCode) {
@@ -176,6 +186,7 @@ type PatchCell struct {
 	Truncated   bool
 	Denied      bool
 	FailureCode tool.ErrorCode
+	Spinner     string
 }
 
 func (PatchCell) Kind() HistoryCellKind { return HistoryCellTool }
@@ -185,7 +196,11 @@ func (c PatchCell) Render() []string {
 		title += " · " + c.Summary
 	}
 	if c.Running {
-		title += " …"
+		indicator := " …"
+		if c.Spinner != "" {
+			indicator = " " + c.Spinner
+		}
+		title += indicator
 	}
 	out := []string{planStyle.Render("Δ " + sanitizeBubbleText(title))}
 	for _, path := range c.Paths {
@@ -268,6 +283,23 @@ func (c ErrorCell) RawLines() []string {
 }
 func (c ErrorCell) LineCount() int { return len(c.RawLines()) }
 
+// ThinkingCell represents an in-flight thought state in the transcript before
+// any tokens stream from the model.
+type ThinkingCell struct {
+	Spinner string
+}
+
+func (ThinkingCell) Kind() HistoryCellKind { return HistoryCellAssistant }
+func (c ThinkingCell) Render() []string {
+	indicator := "…"
+	if c.Spinner != "" {
+		indicator = c.Spinner
+	}
+	return []string{assistantStyle.Render(indicator + " Thinking…")}
+}
+func (ThinkingCell) RawLines() []string { return []string{"Thinking…"} }
+func (ThinkingCell) LineCount() int     { return 1 }
+
 type runningHistoryTool interface {
 	HistoryCell
 	historyToolID() string
@@ -284,6 +316,7 @@ type HistoryState struct {
 	cachedRender []string
 	cachedRaw    []string
 	cacheValid   bool
+	spinnerFrame string
 }
 
 func NewHistoryState(maxLines int) *HistoryState {
@@ -291,6 +324,42 @@ func NewHistoryState(maxLines int) *HistoryState {
 		maxLines = maxBubbleScrollback
 	}
 	return &HistoryState{committed: make([]HistoryCell, 0), maxLines: maxLines}
+}
+
+func (s *HistoryState) SetSpinnerFrame(frame string) {
+	if s == nil {
+		return
+	}
+	s.spinnerFrame = frame
+	if s.active != nil {
+		setCellSpinner(s.active, frame)
+	}
+	for _, cell := range s.committed {
+		if r, ok := cell.(runningHistoryTool); ok && r.historyToolRunning() {
+			setCellSpinner(cell, frame)
+			s.cacheValid = false
+		}
+	}
+}
+
+func (s *HistoryState) SpinnerFrame() string {
+	if s == nil {
+		return ""
+	}
+	return s.spinnerFrame
+}
+
+func setCellSpinner(cell HistoryCell, frame string) {
+	switch typed := cell.(type) {
+	case *ToolCell:
+		typed.Spinner = frame
+	case *ExecCell:
+		typed.Spinner = frame
+	case *PatchCell:
+		typed.Spinner = frame
+	case *ThinkingCell:
+		typed.Spinner = frame
+	}
 }
 
 func (s *HistoryState) Cells() []HistoryCell {
@@ -317,8 +386,17 @@ func (s *HistoryState) Append(cell HistoryCell) {
 	s.trim()
 }
 
+func (s *HistoryState) StartThinking() {
+	s.CommitActive()
+	s.active = &ThinkingCell{Spinner: s.spinnerFrame}
+}
+
 func (s *HistoryState) AppendAssistantDelta(delta string) {
 	if delta == "" {
+		return
+	}
+	if _, ok := s.active.(*ThinkingCell); ok {
+		s.active = &AssistantCell{Text: delta}
 		return
 	}
 	if assistant, ok := s.active.(*AssistantCell); ok {
@@ -342,6 +420,9 @@ func (s *HistoryState) StartToolCell(cell HistoryCell) {
 		return
 	}
 	s.CommitActive()
+	if s.spinnerFrame != "" {
+		setCellSpinner(cell, s.spinnerFrame)
+	}
 	s.active = cell
 }
 
@@ -391,6 +472,10 @@ func runningToolMatches(cell HistoryCell, callID string, name string) bool {
 
 func (s *HistoryState) CommitActive() {
 	if s.active == nil {
+		return
+	}
+	if _, ok := s.active.(*ThinkingCell); ok {
+		s.active = nil
 		return
 	}
 	s.committed = append(s.committed, s.active)
