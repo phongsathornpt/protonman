@@ -34,12 +34,20 @@ type State struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// ToolCall is the redacted identity of an assistant-requested tool call.
+// Arguments are intentionally omitted from persisted session state.
+type ToolCall struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 // Message is one persisted conversation turn without tool arguments.
 type Message struct {
 	Role       model.Role `json:"role"`
 	Content    string     `json:"content,omitempty"`
 	ToolName   string     `json:"tool_name,omitempty"`
 	ToolCallID string     `json:"tool_call_id,omitempty"`
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
 }
 
 // ToModelMessages converts persisted session messages to provider-neutral model messages.
@@ -51,6 +59,7 @@ func ToModelMessages(stored []Message) []model.Message {
 			Content:    message.Content,
 			ToolName:   message.ToolName,
 			ToolCallID: message.ToolCallID,
+			ToolCalls:  toModelToolCalls(message.ToolCalls),
 		})
 	}
 	return messages
@@ -65,6 +74,7 @@ func FromModelMessages(messages []model.Message) []Message {
 			Content:    message.Content,
 			ToolName:   message.ToolName,
 			ToolCallID: message.ToolCallID,
+			ToolCalls:  fromModelToolCalls(message.ToolCalls),
 		})
 	}
 	return out
@@ -223,11 +233,38 @@ func validateMessages(messages []Message) error {
 			Content:    message.Content,
 			ToolName:   message.ToolName,
 			ToolCallID: message.ToolCallID,
+			ToolCalls:  toModelToolCalls(message.ToolCalls),
 		}).Validate(); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func toModelToolCalls(calls []ToolCall) []model.ToolCall {
+	if len(calls) == 0 {
+		return nil
+	}
+	converted := make([]model.ToolCall, 0, len(calls))
+	for _, call := range calls {
+		converted = append(converted, model.ToolCall{
+			ID:        call.ID,
+			Name:      call.Name,
+			Arguments: []byte(`{}`),
+		})
+	}
+	return converted
+}
+
+func fromModelToolCalls(calls []model.ToolCall) []ToolCall {
+	if len(calls) == 0 {
+		return nil
+	}
+	redacted := make([]ToolCall, 0, len(calls))
+	for _, call := range calls {
+		redacted = append(redacted, ToolCall{ID: call.ID, Name: call.Name})
+	}
+	return redacted
 }
 
 func validateSessionID(sessionID string) error {
