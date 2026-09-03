@@ -8,12 +8,12 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/projectTHORN/proton/internal/toolcall"
-	applicationturn "github.com/projectTHORN/proton/internal/turn"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
-	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/skill"
+	"github.com/projectTHORN/proton/internal/tool"
+	"github.com/projectTHORN/proton/internal/toolcall"
+	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
 
 // BubbleTeaOption configures the Bubble Tea fullscreen adapter.

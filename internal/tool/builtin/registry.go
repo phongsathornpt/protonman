@@ -7,11 +7,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/projectTHORN/proton/internal/workspace"
 	"github.com/projectTHORN/proton/internal/checkpoint"
-	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/sandbox"
 	"github.com/projectTHORN/proton/internal/skill"
+	"github.com/projectTHORN/proton/internal/tool"
+	"github.com/projectTHORN/proton/internal/workspace"
 )
 
 // ErrDuplicateTool indicates that a name is already registered.

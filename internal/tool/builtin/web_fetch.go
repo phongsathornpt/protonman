@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/sandbox"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 const maxFetchBytes = 256 * 1024

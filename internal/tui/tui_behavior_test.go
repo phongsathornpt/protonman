@@ -9,11 +9,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/projectTHORN/proton/internal/toolcall"
-	applicationturn "github.com/projectTHORN/proton/internal/turn"
 	domainmodel "github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
+	"github.com/projectTHORN/proton/internal/toolcall"
+	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
 
 func TestPlanModeBlocksBashBeforeAlwaysApprove(t *testing.T) {

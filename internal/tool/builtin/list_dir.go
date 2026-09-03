@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/workspace"
 	"github.com/projectTHORN/proton/internal/tool"
+	"github.com/projectTHORN/proton/internal/workspace"
 )
 
 const maxDirectoryEntries = 1000
