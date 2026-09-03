@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -162,4 +165,82 @@ func (p *bottomPane) renderTop(m *bubbleModel) string {
 func (p *bottomPane) composerVisible() bool {
 	top := p.top()
 	return top == nil || !top.ReplacesComposer()
+}
+
+const skillsViewID = "skills"
+
+type skillsPaneView struct {
+	index int
+}
+
+func (*skillsPaneView) ID() string             { return skillsViewID }
+func (*skillsPaneView) ReplacesComposer() bool { return true }
+
+func (v *skillsPaneView) Render(m *bubbleModel) string {
+	if m == nil || m.skills == nil || len(m.skills.List()) == 0 {
+		return modalStyle.
+			BorderForeground(accentAssistant).
+			Render("No agent skills discovered.\n\nesc close")
+	}
+	skills := m.skills.List()
+	if v.index >= len(skills) {
+		v.index = len(skills) - 1
+	}
+	if v.index < 0 {
+		v.index = 0
+	}
+
+	maxWidth := maxInt(32, m.width-8)
+	rows := make([]string, 0, len(skills)+4)
+	activeCount := len(m.skills.ActivatedList())
+	title := fmt.Sprintf("Agent Skills (%d/%d active)", activeCount, len(skills))
+	rows = append(rows, brandStyle.Render(title), "")
+
+	for i, s := range skills {
+		box := "[ ]"
+		if m.skills.IsActivated(s.Name) {
+			box = "[x]"
+		}
+		prefix := "  "
+		line := fmt.Sprintf("%s %s [%s]: %s", box, s.Name, s.Scope, s.Description)
+		if i == v.index {
+			prefix = glyphPrompt
+			row := brandStyle.Render(prefix + wrapWords(line, maxWidth))
+			rows = append(rows, row)
+		} else {
+			row := mutedStyle.Render(prefix + wrapWords(line, maxWidth))
+			rows = append(rows, row)
+		}
+	}
+	rows = append(rows, "", mutedStyle.Render("j/k move · space toggle · esc/enter close"))
+	return modalStyle.
+		BorderForeground(accentAssistant).
+		MaxWidth(maxInt(24, m.width-4)).
+		Render(strings.Join(rows, "\n"))
+}
+
+func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+	skills := m.skills.List()
+	switch message.String() {
+	case "up", "k":
+		if v.index > 0 {
+			v.index--
+		}
+		return true, nil
+	case "down", "j":
+		if v.index < len(skills)-1 {
+			v.index++
+		}
+		return true, nil
+	case " ":
+		if len(skills) > 0 && v.index >= 0 && v.index < len(skills) {
+			_, _ = m.skills.Toggle(skills[v.index].Name)
+		}
+		return true, nil
+	case "esc", "enter", "q", "ctrl+s":
+		m.bottom.remove(skillsViewID)
+		return true, nil
+	default:
+		return true, nil
+	}
 }

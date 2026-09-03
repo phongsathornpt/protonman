@@ -129,34 +129,110 @@ func fuzzyContains(target, query string) bool {
 	return true
 }
 
-func (m bubbleModel) slashQuery() (prefix string, query string, ok bool) {
-	if m.bottom == nil || m.bottom.bashMode() || m.bottom.has(permissionViewID) {
-		return "", "", false
+type slashContextKind int
+
+const (
+	slashKindCommand slashContextKind = iota
+	slashKindSkill
+)
+
+type slashContext struct {
+	kind   slashContextKind
+	prefix string
+	lead   string
+	query  string
+}
+
+func (m bubbleModel) parseSlashContext() (slashContext, bool) {
+	if m.bottom == nil || m.bottom.bashMode() || m.bottom.has(permissionViewID) || m.bottom.has(skillsViewID) {
+		return slashContext{}, false
 	}
 	prompt := m.bottom.prompt()
 	if prompt == nil {
-		return "", "", false
+		return slashContext{}, false
 	}
 	value := prompt.Value()
 	if !strings.HasPrefix(value, "/") && !strings.HasPrefix(value, ":") {
+		return slashContext{}, false
+	}
+	prefix := value[:1]
+	body := value[1:]
+
+	for _, cmd := range []string{"skill", "skills"} {
+		if strings.HasPrefix(body, cmd+" ") {
+			rest := strings.TrimPrefix(body, cmd+" ")
+			lead := prefix + cmd + " "
+			for _, verb := range []string{"toggle", "deactivate", "disable", "remove", "off", "activate", "enable", "on"} {
+				if strings.HasPrefix(rest, verb+" ") {
+					query := strings.TrimPrefix(rest, verb+" ")
+					return slashContext{
+						kind:   slashKindSkill,
+						prefix: prefix,
+						lead:   lead + verb + " ",
+						query:  query,
+					}, true
+				}
+				if rest == verb {
+					return slashContext{}, false
+				}
+			}
+			return slashContext{
+				kind:   slashKindSkill,
+				prefix: prefix,
+				lead:   lead,
+				query:  rest,
+			}, true
+		}
+	}
+
+	if strings.Contains(body, " ") {
+		return slashContext{}, false
+	}
+	return slashContext{
+		kind:   slashKindCommand,
+		prefix: prefix,
+		lead:   prefix,
+		query:  body,
+	}, true
+}
+
+func (m bubbleModel) slashQuery() (prefix string, query string, ok bool) {
+	sc, ok := m.parseSlashContext()
+	if !ok {
 		return "", "", false
 	}
-	prefix = value[:1]
-	rest := value[1:]
-	if strings.Contains(rest, " ") {
-		return prefix, "", false
-	}
-	return prefix, rest, true
+	return sc.prefix, sc.query, true
 }
 
 func (m bubbleModel) slashMatches() []slashCommand {
-	_, query, ok := m.slashQuery()
+	sc, ok := m.parseSlashContext()
 	if !ok {
 		return nil
 	}
+	if sc.kind == slashKindSkill {
+		if m.skills == nil {
+			return nil
+		}
+		matches := make([]slashCommand, 0)
+		for _, s := range m.skills.List() {
+			if sc.query == "" || fuzzyContains(s.Name, sc.query) || fuzzyContains(s.Description, sc.query) {
+				box := "[ ]"
+				if m.skills.IsActivated(s.Name) {
+					box = "[x]"
+				}
+				matches = append(matches, slashCommand{
+					name:        s.Name,
+					description: fmt.Sprintf("%s [%s] %s", box, s.Scope, s.Description),
+					takesArgs:   false,
+				})
+			}
+		}
+		return matches
+	}
+
 	matches := make([]slashCommand, 0)
 	for _, command := range slashCatalog {
-		if command.matches(query) {
+		if command.matches(sc.query) {
 			matches = append(matches, command)
 		}
 	}
@@ -237,16 +313,23 @@ func (m *bubbleModel) acceptSlash(run bool) (applied bool, command tea.Cmd) {
 	}
 	m.clampSlashIndex()
 	selected := matches[view.index]
-	prefix, _, _ := m.slashQuery()
-	insertion := prefix + selected.name
+	sc, _ := m.parseSlashContext()
+
 	prompt := m.bottom.prompt()
-	if selected.takesArgs {
-		insertion += " "
-		prompt.SetValue(insertion)
-		prompt.CursorEnd()
-		m.bottom.remove(slashViewID)
-		return true, nil
+	var insertion string
+	if sc.kind == slashKindSkill {
+		insertion = sc.lead + selected.name
+	} else {
+		insertion = sc.prefix + selected.name
+		if selected.takesArgs {
+			insertion += " "
+			prompt.SetValue(insertion)
+			prompt.CursorEnd()
+			m.bottom.remove(slashViewID)
+			return true, nil
+		}
 	}
+
 	if !run {
 		prompt.SetValue(insertion)
 		prompt.CursorEnd()
@@ -277,10 +360,15 @@ func (m bubbleModel) renderSlash(index int) string {
 		}
 		visible = matches[offset : offset+maxSlashRows]
 	}
+	sc, _ := m.parseSlashContext()
+	isSkill := sc.kind == slashKindSkill
 	lines := make([]string, 0, len(visible))
 	for i, command := range visible {
 		selected := offset+i == index
 		label := "/" + command.name
+		if isSkill {
+			label = command.name
+		}
 		if selected {
 			row := glyphPrompt + fmt.Sprintf("%-16s %s", label, command.description)
 			lines = append(lines, lipgloss.NewStyle().Bold(true).Foreground(accentAssistant).Render(row))
@@ -450,7 +538,8 @@ func (m *bubbleModel) handleSkillsCommand(isSkillSingle bool, argument string, p
 			}
 			m.appendLine(fmt.Sprintf("  %s %s [%s]: %s", box, s.Name, s.Scope, s.Description))
 		}
-		m.refreshViewport()
+		m.bottom.push(&skillsPaneView{})
+		m.relayout()
 		return nil
 	}
 
