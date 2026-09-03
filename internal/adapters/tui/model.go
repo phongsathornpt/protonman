@@ -477,6 +477,9 @@ func (m *bubbleModel) resize(width int, height int) {
 	prompt.SetHeight(promptRows)
 	m.transcriptViewport.Width = maxInt(20, width-10)
 	m.transcriptViewport.Height = maxInt(3, height-10)
+	if m.historyState != nil {
+		m.historyState.InvalidateCache()
+	}
 	m.relayout()
 	m.refreshTranscriptViewport(false)
 }
