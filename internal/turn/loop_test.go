@@ -662,3 +662,31 @@ func TestLoopAugmentsSystemPromptWithSkillCatalog(t *testing.T) {
 		t.Errorf("system message missing skill catalog: %s", reqMessages[0].Content)
 	}
 }
+
+func TestLoopDoesNotDuplicateSkillCatalogMarker(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{{
+		events: []model.Event{{Kind: model.EventDone}},
+	}}}
+	catalog := []skill.CatalogItem{{
+		Name:        "pdf-processing",
+		Description: "Handle PDFs",
+		Location:    "/path/to/SKILL.md",
+		Scope:       skill.ScopeUser,
+	}}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithSkillCatalog(catalog))
+	priorSystem := skillPromptMarker + "\n" + skill.SystemPromptSection(catalog)
+	_, err := loop.Run(context.Background(), []model.Message{
+		{Role: model.RoleSystem, Content: priorSystem},
+		{Role: model.RoleUser, Content: "help with pdf"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	content := client.requests[0].Messages[0].Content
+	if got := strings.Count(content, skillPromptMarker); got != 1 {
+		t.Fatalf("skill marker count = %d, want 1: %q", got, content)
+	}
+	if got := strings.Count(content, "<available_skills>"); got != 1 {
+		t.Fatalf("skill catalog count = %d, want 1: %q", got, content)
+	}
+}
