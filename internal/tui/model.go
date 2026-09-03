@@ -98,7 +98,7 @@ func newBubbleModel(
 ) *bubbleModel {
 	spin := spinner.New()
 	spin.Spinner = spinner.Dot
-	spin.Style = statusStyle
+	spin.Style = brandStyle
 
 	pane := viewport.New(defaultBubbleWidth, defaultBubbleHeight-6)
 	disableViewportKeys(&pane)
@@ -190,11 +190,11 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.followTail = m.viewport.AtBottom()
 		return m, command
 	case spinner.TickMsg:
+		if !m.busy {
+			return m, nil
+		}
 		var command tea.Cmd
 		m.spinner, command = m.spinner.Update(message)
-		if m.busy {
-			return m, tea.Batch(command, m.spinner.Tick)
-		}
 		return m, command
 	case cursor.BlinkMsg:
 		prompt := m.bottom.prompt()
