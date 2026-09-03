@@ -199,6 +199,35 @@ func TestFailedToolReplacesRunningBlock(t *testing.T) {
 	}
 }
 
+func TestModelToolFailureRendersReason(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAlwaysApprove, emptyTodoItems())
+	call, err := tool.NewCall("denied-tool", "read_file", []byte(`{"path":".env"}`))
+	if err != nil {
+		t.Fatalf("NewCall() error = %v", err)
+	}
+	model.appendToolCall(call)
+	model.applyTurnEvent(applicationturn.Event{
+		Kind: applicationturn.EventToolResult,
+		Call: call,
+		Result: tool.Result{
+			CallID:   call.ID,
+			ToolName: call.Name,
+			Denied:   true,
+			Failure: &tool.Failure{
+				Code:    tool.ErrorCodePermissionDenied,
+				Message: "blocked by workspace policy",
+			},
+		},
+		Err: toolcall.ErrPermissionDenied,
+	})
+
+	plain := plainTranscript(model)
+	if !strings.Contains(plain, "blocked by workspace policy") {
+		t.Fatalf("tool failure reason missing from transcript: %q", plain)
+	}
+	assertNoRunningTool(t, model)
+}
+
 func assertNoRunningTool(t *testing.T, model *bubbleModel) {
 	t.Helper()
 	for _, block := range model.blocks {
