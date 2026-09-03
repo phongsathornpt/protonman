@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/projectTHORN/proton/internal/model"
+	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/skill"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
@@ -221,6 +222,13 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		*prompt = updated
 		return m, command
 	case permissionRequestMsg:
+		if !m.busy {
+			message.request.response <- permissionResponse{
+				resolution: permission.Resolution{Action: permission.ActionDeny, Reason: "turn is no longer active"},
+				err:        context.Canceled,
+			}
+			return m, m.bridge.Next()
+		}
 		m.openPermission(message.request)
 		m.relayout()
 		return m, m.bridge.Next()
