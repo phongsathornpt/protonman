@@ -37,7 +37,7 @@ type Option func(*Service) error
 // WithMode sets the initial permission mode.
 func WithMode(mode permission.Mode) Option {
 	return func(service *Service) error {
-		if !validMode(mode) {
+		if !mode.Valid() {
 			return fmt.Errorf("%w: invalid permission mode %q", ErrInvalidService, mode)
 		}
 		service.mode = mode
@@ -112,7 +112,7 @@ func (s *Service) Mode() permission.Mode {
 
 // SetMode changes the permission mode for subsequent calls.
 func (s *Service) SetMode(mode permission.Mode) error {
-	if !validMode(mode) {
+	if !mode.Valid() {
 		return fmt.Errorf("invalid permission mode %q", mode)
 	}
 	s.mu.Lock()
@@ -180,11 +180,11 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		return result, unknownErr
 	}
 	definition := handler.Definition()
-	telemetry.toolKind = permission.ToolKind(definition.Kind)
+	telemetry.toolKind = definition.Kind
 	request := permission.Request{
 		CallID:    call.ID,
 		ToolName:  definition.Name,
-		ToolKind:  permission.ToolKind(definition.Kind),
+		ToolKind:  definition.Kind,
 		Detail:    permissionDetail(definition, call.Arguments),
 		Arguments: append(json.RawMessage(nil), call.Arguments...),
 	}
@@ -352,13 +352,4 @@ func permissionDetail(definition tool.Definition, arguments json.RawMessage) str
 		return value
 	}
 	return string(field)
-}
-
-func validMode(mode permission.Mode) bool {
-	switch mode {
-	case permission.ModeAsk, permission.ModeAuto, permission.ModeAlwaysApprove, permission.ModeDeny:
-		return true
-	default:
-		return false
-	}
 }

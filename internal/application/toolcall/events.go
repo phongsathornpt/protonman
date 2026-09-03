@@ -28,17 +28,17 @@ const (
 // handler output, and error messages. Observers can use ArgumentBytes to understand
 // request size without receiving commands, paths, URLs, or other sensitive values.
 type Event struct {
-	Kind          EventKind           `json:"kind"`
-	Time          time.Time           `json:"time"`
-	CallID        string              `json:"call_id,omitempty"`
-	ToolName      string              `json:"tool_name,omitempty"`
-	ToolKind      permission.ToolKind `json:"tool_kind,omitempty"`
-	Mode          string              `json:"mode,omitempty"`
-	Decision      string              `json:"decision,omitempty"`
-	GrantScope    string              `json:"grant_scope,omitempty"`
-	ArgumentBytes int                 `json:"argument_bytes,omitempty"`
-	DurationMS    int64               `json:"duration_ms,omitempty"`
-	ErrorCode     tool.ErrorCode      `json:"error_code,omitempty"`
+	Kind          EventKind             `json:"kind"`
+	Time          time.Time             `json:"time"`
+	CallID        string                `json:"call_id,omitempty"`
+	ToolName      string                `json:"tool_name,omitempty"`
+	ToolKind      permission.ToolKind   `json:"tool_kind,omitempty"`
+	Mode          permission.Mode       `json:"mode,omitempty"`
+	Decision      permission.Action     `json:"decision,omitempty"`
+	GrantScope    permission.GrantScope `json:"grant_scope,omitempty"`
+	ArgumentBytes int                   `json:"argument_bytes,omitempty"`
+	DurationMS    int64                 `json:"duration_ms,omitempty"`
+	ErrorCode     tool.ErrorCode        `json:"error_code,omitempty"`
 }
 
 // Observer receives redacted events and must be safe for concurrent calls.
@@ -81,9 +81,9 @@ func (s *Service) observePermission(
 		CallID:        telemetry.call.ID,
 		ToolName:      telemetry.call.Name,
 		ToolKind:      telemetry.toolKind,
-		Mode:          s.Mode().String(),
-		Decision:      resolution.Action.String(),
-		GrantScope:    grantScopeName(resolution.Scope),
+		Mode:          s.Mode(),
+		Decision:      resolution.Action,
+		GrantScope:    resolution.Scope,
 		ArgumentBytes: len(telemetry.call.Arguments),
 	})
 }
@@ -111,15 +111,4 @@ func (s *Service) observeCallResult(
 		event.ErrorCode = result.Failure.Code
 	}
 	s.observe(ctx, event)
-}
-
-func grantScopeName(scope permission.GrantScope) string {
-	switch scope {
-	case permission.GrantScopeOnce:
-		return "once"
-	case permission.GrantScopeSession:
-		return "session"
-	default:
-		return ""
-	}
 }
