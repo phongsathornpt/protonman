@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/application/toolcall"
+	"github.com/projectTHORN/proton/internal/toolcall"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"

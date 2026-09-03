@@ -16,10 +16,10 @@ import (
 	"github.com/projectTHORN/proton/internal/adapters/headless"
 	"github.com/projectTHORN/proton/internal/session"
 	"github.com/projectTHORN/proton/internal/telemetry"
-	"github.com/projectTHORN/proton/internal/adapters/tools"
+	"github.com/projectTHORN/proton/internal/tool/builtin"
 	"github.com/projectTHORN/proton/internal/adapters/tui"
 	"github.com/projectTHORN/proton/internal/workspace"
-	"github.com/projectTHORN/proton/internal/application/toolcall"
+	"github.com/projectTHORN/proton/internal/toolcall"
 	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -118,11 +118,11 @@ func run(ctx context.Context, args []string) error {
 	}
 	skillRegistry := skill.NewRegistry(skillsResult.Skills...)
 
-	registry, err := tools.NewDefaultRegistry(
+	registry, err := builtin.NewDefaultRegistry(
 		workspaceRoot,
-		tools.WithCheckpointStore(checkpointStore),
-		tools.WithSandbox(launcher, sandboxProfile.Network),
-		tools.WithSkillRegistry(skillRegistry),
+		builtin.WithCheckpointStore(checkpointStore),
+		builtin.WithSandbox(launcher, sandboxProfile.Network),
+		builtin.WithSkillRegistry(skillRegistry),
 	)
 	if err != nil {
 		return fmt.Errorf("create tool registry: %w", err)

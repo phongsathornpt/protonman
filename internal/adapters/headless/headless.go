@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/projectTHORN/proton/internal/session"
-	"github.com/projectTHORN/proton/internal/application/toolcall"
-	applicationturn "github.com/projectTHORN/proton/internal/application/turn"
+	"github.com/projectTHORN/proton/internal/toolcall"
+	applicationturn "github.com/projectTHORN/proton/internal/turn"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"

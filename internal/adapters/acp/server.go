@@ -13,8 +13,8 @@ import (
 	"sync"
 
 	"github.com/projectTHORN/proton/internal/adapters/headless"
-	"github.com/projectTHORN/proton/internal/application/toolcall"
-	applicationturn "github.com/projectTHORN/proton/internal/application/turn"
+	"github.com/projectTHORN/proton/internal/toolcall"
+	applicationturn "github.com/projectTHORN/proton/internal/turn"
 	"github.com/projectTHORN/proton/internal/tool"
 )
 
