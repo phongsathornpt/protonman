@@ -310,13 +310,14 @@ type runningHistoryTool interface {
 // HistoryState separates finalized transcript cells from one mutable in-flight
 // cell. Renderers always see committed cells plus the live active tail.
 type HistoryState struct {
-	committed    []HistoryCell
-	active       HistoryCell
-	maxLines     int
-	cachedRender []string
-	cachedRaw    []string
-	cacheValid   bool
-	spinnerFrame string
+	committed      []HistoryCell
+	active         HistoryCell
+	maxLines       int
+	cachedRender   []string
+	cachedRaw      []string
+	cacheValid     bool
+	spinnerFrame   string
+	committedLines int
 }
 
 func NewHistoryState(maxLines int) *HistoryState {
@@ -382,6 +383,7 @@ func (s *HistoryState) Append(cell HistoryCell) {
 	}
 	s.CommitActive()
 	s.committed = append(s.committed, cell)
+	s.committedLines += cell.LineCount()
 	s.cacheValid = false
 	s.trim()
 }
@@ -451,7 +453,9 @@ func (s *HistoryState) CompleteToolCall(callID string, name string, completed Hi
 		if !runningToolMatches(s.committed[i], callID, name) {
 			continue
 		}
+		s.committedLines -= s.committed[i].LineCount()
 		s.committed[i] = completed
+		s.committedLines += completed.LineCount()
 		s.cacheValid = false
 		s.trim()
 		return
@@ -479,6 +483,7 @@ func (s *HistoryState) CommitActive() {
 		return
 	}
 	s.committed = append(s.committed, s.active)
+	s.committedLines += s.active.LineCount()
 	s.active = nil
 	s.cacheValid = false
 	s.trim()
@@ -490,6 +495,7 @@ func (s *HistoryState) Reset() {
 	s.cacheValid = false
 	s.cachedRender = nil
 	s.cachedRaw = nil
+	s.committedLines = 0
 }
 
 func (s *HistoryState) InvalidateCache() {
@@ -533,17 +539,23 @@ func (s *HistoryState) Raw() string {
 }
 
 func (s *HistoryState) trim() {
-	for s.lineCount() > s.maxLines && len(s.committed) > 1 {
+	activeCount := 0
+	if s.active != nil {
+		activeCount = s.active.LineCount()
+	}
+	for s.committedLines+activeCount > s.maxLines && len(s.committed) > 1 {
+		popped := s.committed[0]
 		s.committed = s.committed[1:]
+		s.committedLines -= popped.LineCount()
 		s.cacheValid = false
+	}
+	if s.committedLines < 0 {
+		s.committedLines = 0
 	}
 }
 
 func (s *HistoryState) lineCount() int {
-	total := 0
-	for _, cell := range s.committed {
-		total += cell.LineCount()
-	}
+	total := s.committedLines
 	if s.active != nil {
 		total += s.active.LineCount()
 	}

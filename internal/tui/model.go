@@ -188,6 +188,20 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.transcriptViewport, command = m.transcriptViewport.Update(message)
 			return m, command
 		}
+		if m.bottom.has(skillsViewID) {
+			if view, ok := m.bottom.find(skillsViewID).(*skillsPaneView); ok {
+				switch message.Button {
+				case tea.MouseButtonWheelUp:
+					view.HandleKey(m, tea.KeyMsg{Type: tea.KeyUp})
+					m.relayout()
+					return m, nil
+				case tea.MouseButtonWheelDown:
+					view.HandleKey(m, tea.KeyMsg{Type: tea.KeyDown})
+					m.relayout()
+					return m, nil
+				}
+			}
+		}
 		m.viewport, command = m.viewport.Update(message)
 		m.followTail = m.viewport.AtBottom()
 		return m, command
@@ -509,6 +523,24 @@ func waitTurnCh(events <-chan tea.Msg) tea.Cmd {
 	}
 }
 
+func (m *bubbleModel) syncPromptHeight() {
+	if m.bottom == nil {
+		return
+	}
+	prompt := m.bottom.prompt()
+	if prompt == nil {
+		return
+	}
+	lines := strings.Count(prompt.Value(), "\n") + 1
+	if lines < 1 {
+		lines = 1
+	}
+	if lines > 4 {
+		lines = 4
+	}
+	prompt.SetHeight(lines)
+}
+
 func (m *bubbleModel) resize(width int, height int) {
 	if width <= 0 {
 		width = defaultBubbleWidth
@@ -520,7 +552,7 @@ func (m *bubbleModel) resize(width int, height int) {
 	m.height = height
 	prompt := m.bottom.prompt()
 	prompt.SetWidth(maxInt(1, width-4))
-	prompt.SetHeight(promptRows)
+	m.syncPromptHeight()
 	m.transcriptViewport.Width = maxInt(20, width-10)
 	m.transcriptViewport.Height = maxInt(3, height-10)
 	if m.historyState != nil {
@@ -533,6 +565,7 @@ func (m *bubbleModel) resize(width int, height int) {
 func (m *bubbleModel) relayoutIfSlashChanged(bool) { m.relayout() }
 
 func (m *bubbleModel) relayout() {
+	m.syncPromptHeight()
 	chrome := m.chromeHeight()
 	viewportHeight := m.height - chrome
 	if viewportHeight < 1 {
