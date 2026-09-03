@@ -115,11 +115,11 @@ func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool
 			m.followTail = m.viewport.AtBottom()
 			return true, nil
 		case "up", "k":
-			m.viewport.LineUp(1)
+			m.viewport.ScrollUp(1)
 			m.followTail = m.viewport.AtBottom()
 			return true, nil
 		case "down", "j":
-			m.viewport.LineDown(1)
+			m.viewport.ScrollDown(1)
 			m.followTail = m.viewport.AtBottom()
 			return true, nil
 		case "y", "s", "n", "ctrl+c", "1", "2", "3", "enter":

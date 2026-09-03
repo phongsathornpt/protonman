@@ -58,10 +58,10 @@ func (m *bubbleModel) updateTranscriptKey(message tea.KeyMsg) (tea.Model, tea.Cm
 		m.transcriptViewport.PageDown()
 		return m, nil
 	case "up", "k":
-		m.transcriptViewport.LineUp(1)
+		m.transcriptViewport.ScrollUp(1)
 		return m, nil
 	case "down", "j":
-		m.transcriptViewport.LineDown(1)
+		m.transcriptViewport.ScrollDown(1)
 		return m, nil
 	case "home", "g":
 		m.transcriptViewport.GotoTop()

@@ -60,8 +60,7 @@ func (w *Workspace) OpenParentNoSymlinks(ctx context.Context, path string, creat
 		return current, base, nil
 	}
 
-	components := strings.Split(parent, string(filepath.Separator))
-	for _, component := range components {
+	for component := range strings.SplitSeq(parent, string(filepath.Separator)) {
 		if component == "" || component == "." {
 			continue
 		}
