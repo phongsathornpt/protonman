@@ -116,4 +116,19 @@ func TestSlashSkills(t *testing.T) {
 			t.Fatalf("expected skill to be activated again")
 		}
 	})
+
+	t.Run("status bar info view shows active skills chip", func(t *testing.T) {
+		// pdf-processing is currently active
+		info := model.infoView()
+		if !strings.Contains(info, "1 skill active") {
+			t.Fatalf("expected '1 skill active' in infoView(), got: %s", info)
+		}
+
+		// Deactivate
+		model.skills.Deactivate("pdf-processing")
+		info = model.infoView()
+		if strings.Contains(info, "skill active") {
+			t.Fatalf("expected no active skill chip when 0 skills active, got: %s", info)
+		}
+	})
 }
