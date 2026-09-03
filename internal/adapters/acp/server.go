@@ -15,7 +15,7 @@ import (
 	"github.com/projectTHORN/proton/internal/adapters/headless"
 	"github.com/projectTHORN/proton/internal/application/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/application/turn"
-	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 const protocolVersion = 1

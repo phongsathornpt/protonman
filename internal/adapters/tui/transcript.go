@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	applicationturn "github.com/projectTHORN/proton/internal/application/turn"
-	"github.com/projectTHORN/proton/internal/domain/model"
-	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/model"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 const maxBubbleScrollback = 1000

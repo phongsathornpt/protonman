@@ -8,7 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/projectTHORN/proton/internal/domain/permission"
+	"github.com/projectTHORN/proton/internal/permission"
 )
 
 func (m bubbleModel) statusView() string {

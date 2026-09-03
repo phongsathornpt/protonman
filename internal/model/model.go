@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 // Role identifies the author of a message in a model conversation.

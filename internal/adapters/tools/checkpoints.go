@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/projectTHORN/proton/internal/checkpoint"
-	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 type noCheckpointStore struct{}

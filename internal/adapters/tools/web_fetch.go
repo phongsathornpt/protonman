@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/sandbox"
 )
 

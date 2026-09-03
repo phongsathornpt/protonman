@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 // HistoryCellKind identifies the semantic role of one transcript cell.

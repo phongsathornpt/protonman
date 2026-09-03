@@ -9,7 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/projectTHORN/proton/internal/domain/permission"
+	"github.com/projectTHORN/proton/internal/permission"
 )
 
 const permissionViewID = "permission"

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/adapters/workspace"
+	"github.com/projectTHORN/proton/internal/workspace"
 )
 
 func TestFileStoreCapturesAndRestoresDurably(t *testing.T) {

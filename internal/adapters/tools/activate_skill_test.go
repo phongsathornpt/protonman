@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/adapters/tools"
-	"github.com/projectTHORN/proton/internal/domain/tool"
+	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/skill"
 )
 
