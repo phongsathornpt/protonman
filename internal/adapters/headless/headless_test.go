@@ -222,3 +222,33 @@ func newTestService(t *testing.T, registry tool.Registry, mode permission.Mode) 
 	}
 	return service
 }
+
+func TestFormatEnumAndTextMarshaling(t *testing.T) {
+	formats := []Format{FormatText, FormatJSON}
+	for _, f := range formats {
+		if !f.Valid() {
+			t.Fatalf("expected format %s to be valid", f)
+		}
+		text, err := f.MarshalText()
+		if err != nil {
+			t.Fatalf("MarshalText() error = %v", err)
+		}
+		var decoded Format
+		if err := decoded.UnmarshalText(text); err != nil {
+			t.Fatalf("UnmarshalText() error = %v", err)
+		}
+		if decoded != f {
+			t.Fatalf("round-trip failed: got %s, want %s", decoded, f)
+		}
+	}
+	if FormatUnknown.Valid() {
+		t.Fatal("FormatUnknown should not be valid")
+	}
+	if Format(99).Valid() {
+		t.Fatal("Format(99) should not be valid")
+	}
+	var invalid Format
+	if err := invalid.UnmarshalText([]byte("invalid")); err == nil {
+		t.Fatal("UnmarshalText(invalid) error = nil, want error")
+	}
+}
