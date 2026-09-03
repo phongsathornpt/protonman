@@ -37,7 +37,7 @@ func (activateSkillHandler) Definition() tool.Definition {
 					"description": "Name of the skill to activate (e.g. 'pdf-processing')",
 				},
 			},
-			"required": []any{"name"},
+			"required": []string{"name"},
 		},
 	}
 }
@@ -87,6 +87,8 @@ func (h activateSkillHandler) Execute(ctx context.Context, call tool.Call) (tool
 	b.WriteString("</skill_content>")
 
 	return tool.Result{
-		Output: b.String(),
+		CallID:   call.ID,
+		ToolName: call.Name,
+		Output:   b.String(),
 	}, nil
 }
