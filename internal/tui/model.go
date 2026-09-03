@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -231,6 +232,9 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activity = "ready"
 		m.turnCancel = nil
 		m.appendToolResult(message.result, message.err)
+		if message.call.ID != "" {
+			m.appendModelToolResult(message.call, message.result)
+		}
 		m.relayout()
 		return m, m.withSpinner(m.drainQueue())
 	case turnDeltaMsg:
@@ -262,8 +266,14 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.turnEvents = nil
 		m.historyState.CommitActive()
 		m.syncLegacyBlocks()
-		if message.result.Message.Content != "" {
-			m.messages = append(m.messages, message.result.Message)
+		if message.err == nil {
+			if len(message.result.Messages) > 0 {
+				m.messages = append(m.messages, model.CloneMessages(message.result.Messages)...)
+			} else if message.result.Message.Content != "" {
+				// Keep compatibility with older/injected runners that only populate
+				// Result.Message.
+				m.messages = append(m.messages, message.result.Message)
+			}
 		} else if message.err != nil && len(m.messages) > 0 && m.messages[len(m.messages)-1].Role == model.RoleUser {
 			m.messages = m.messages[:len(m.messages)-1]
 		}
@@ -460,6 +470,14 @@ func (m *bubbleModel) dispatchBang(command string) tea.Cmd {
 }
 
 func (m *bubbleModel) startTool(call tool.Call) tea.Cmd {
+	m.messages = append(m.messages, model.Message{
+		Role: model.RoleAssistant,
+		ToolCalls: []model.ToolCall{{
+			ID:        call.ID,
+			Name:      call.Name,
+			Arguments: append([]byte(nil), call.Arguments...),
+		}},
+	})
 	m.busy = true
 	m.busyStarted = time.Now()
 	m.activity = "running " + call.Name
@@ -472,8 +490,27 @@ func (m *bubbleModel) startTool(call tool.Call) tea.Cmd {
 	return func() tea.Msg {
 		defer cancel()
 		result, callErr := m.service.Call(ctx, call)
-		return toolResultMsg{result: result, err: callErr}
+		return toolResultMsg{call: call, result: result, err: callErr}
 	}
+}
+
+func (m *bubbleModel) appendModelToolResult(call tool.Call, result tool.Result) {
+	if result.CallID == "" {
+		result.CallID = call.ID
+	}
+	if result.ToolName == "" {
+		result.ToolName = call.Name
+	}
+	content, err := json.Marshal(result)
+	if err != nil {
+		content = []byte(fmt.Sprintf(`{"call_id":%q,"tool_name":%q,"error":{"code":"execution_error","message":%q}}`, call.ID, call.Name, err.Error()))
+	}
+	m.messages = append(m.messages, model.Message{
+		Role:       model.RoleTool,
+		Content:    string(content),
+		ToolCallID: result.CallID,
+		ToolName:   result.ToolName,
+	})
 }
 
 func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
@@ -704,6 +741,7 @@ func (m *bubbleModel) syncComponentsToLegacy() {
 }
 
 type toolResultMsg struct {
+	call   tool.Call
 	result tool.Result
 	err    error
 }

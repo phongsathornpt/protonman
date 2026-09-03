@@ -640,6 +640,31 @@ func TestStartTurnStreamsSinkEvents(t *testing.T) {
 	}
 }
 
+func TestTurnDoneAppendsProducedToolHistory(t *testing.T) {
+	runner := &scriptedRunner{result: applicationturn.Result{
+		Message: domainmodel.Message{Role: domainmodel.RoleAssistant, Content: "done"},
+		Messages: []domainmodel.Message{
+			{Role: domainmodel.RoleAssistant, ToolCalls: []domainmodel.ToolCall{{ID: "call-1", Name: "read_file", Arguments: []byte(`{"path":"README.md"}`)}}},
+			{Role: domainmodel.RoleTool, ToolCallID: "call-1", ToolName: "read_file", Content: `{"output":"ok"}`},
+			{Role: domainmodel.RoleAssistant, Content: "done"},
+		},
+	}}
+	registry, _ := newBubbleTestRegistry()
+	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
+	m := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), runner, newPermissionBridge(), "")
+
+	message := m.startTurn("inspect")()
+	updated, _ := m.Update(message)
+	m = updated.(*bubbleModel)
+
+	if got, want := len(m.messages), 4; got != want {
+		t.Fatalf("provider history length = %d, want %d", got, want)
+	}
+	if m.messages[1].Role != domainmodel.RoleAssistant || m.messages[2].Role != domainmodel.RoleTool {
+		t.Fatalf("provider history = %#v, want assistant/tool exchange", m.messages)
+	}
+}
+
 type scriptedRunner struct {
 	events []applicationturn.Event
 	result applicationturn.Result

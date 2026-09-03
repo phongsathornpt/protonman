@@ -70,6 +70,9 @@ type Runner interface {
 type Result struct {
 	Message model.Message
 	Rounds  int
+	// Messages contains the assistant/tool messages produced during this run.
+	// It excludes caller-supplied history and generated system prompt material.
+	Messages []model.Message
 }
 
 // Option configures a Loop.
@@ -178,6 +181,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	}
 
 	history := model.CloneMessages(messages)
+	turnMessages := make([]model.Message, 0, 4)
 	if len(l.skills) > 0 {
 		section := skill.SystemPromptSection(l.skills)
 		if len(history) > 0 && history[0].Role == model.RoleSystem {
@@ -203,10 +207,12 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			return Result{}, err
 		}
 		history = append(history, assistant)
+		turnMessages = append(turnMessages, assistant)
 		if len(executions) == 0 {
 			result := Result{
-				Message: assistant,
-				Rounds:  round,
+				Message:  assistant,
+				Rounds:   round,
+				Messages: model.CloneMessages(turnMessages),
 			}
 			if err := emit(ctx, sink, Event{
 				Kind:    EventCompleted,
@@ -229,12 +235,14 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 					fmt.Errorf("encode tool result %q: %w", execution.call.Name, err),
 				)
 			}
-			history = append(history, model.Message{
+			toolMessage := model.Message{
 				Role:       model.RoleTool,
 				Content:    string(content),
 				ToolCallID: execution.call.ID,
 				ToolName:   execution.call.Name,
-			})
+			}
+			history = append(history, toolMessage)
+			turnMessages = append(turnMessages, toolMessage)
 		}
 	}
 
