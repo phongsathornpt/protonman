@@ -6,8 +6,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/adapters/tools"
-	"github.com/projectTHORN/proton/internal/application/toolcall"
+	"github.com/projectTHORN/proton/internal/tool/builtin"
+	"github.com/projectTHORN/proton/internal/toolcall"
 	"github.com/projectTHORN/proton/internal/permission"
 	domaintool "github.com/projectTHORN/proton/internal/tool"
 )
@@ -58,7 +58,7 @@ func TestDiscoverRegistersNamespacedToolsAndDispatches(t *testing.T) {
 			"search": {Output: "found 3 issues"},
 		},
 	}
-	registry, err := tools.NewRegistry()
+	registry, err := builtin.NewRegistry()
 	if err != nil {
 		t.Fatalf("NewRegistry() error = %v", err)
 	}
@@ -106,7 +106,7 @@ func TestDiscoverKeepsMCPCallsBehindPermission(t *testing.T) {
 			"read": {Output: "secret"},
 		},
 	}
-	registry, err := tools.NewRegistry()
+	registry, err := builtin.NewRegistry()
 	if err != nil {
 		t.Fatalf("NewRegistry() error = %v", err)
 	}
@@ -138,7 +138,7 @@ func TestDiscoverDoesNotPartiallyRegisterInvalidResults(t *testing.T) {
 			{Name: "bad tool", Description: "invalid namespace"},
 		},
 	}
-	registry, err := tools.NewRegistry()
+	registry, err := builtin.NewRegistry()
 	if err != nil {
 		t.Fatalf("NewRegistry() error = %v", err)
 	}
@@ -159,7 +159,7 @@ func TestDiscoverRejectsDuplicateToolsAndServers(t *testing.T) {
 		name:  "github",
 		tools: []Tool{{Name: "issues", Description: "issues"}},
 	}
-	registry, err := tools.NewRegistry()
+	registry, err := builtin.NewRegistry()
 	if err != nil {
 		t.Fatalf("NewRegistry() error = %v", err)
 	}
@@ -182,7 +182,7 @@ func TestMCPServerErrorBecomesStructuredToolFailure(t *testing.T) {
 			"fail": {Output: "remote failure", IsError: true},
 		},
 	}
-	registry, err := tools.NewRegistry()
+	registry, err := builtin.NewRegistry()
 	if err != nil {
 		t.Fatalf("NewRegistry() error = %v", err)
 	}
