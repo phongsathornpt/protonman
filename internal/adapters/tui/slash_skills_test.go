@@ -28,7 +28,7 @@ func TestSlashSkills(t *testing.T) {
 		}
 	})
 
-	t.Run("skills registered", func(t *testing.T) {
+	t.Run("skills registered with checkbox", func(t *testing.T) {
 		s := domainskill.Skill{
 			Name:         "pdf-processing",
 			Description:  "Extract PDF text",
@@ -42,8 +42,8 @@ func TestSlashSkills(t *testing.T) {
 
 		model.executeCommand("/skills")
 		content := model.viewport.View()
-		if !strings.Contains(content, "Available Agent Skills:") || !strings.Contains(content, "pdf-processing") {
-			t.Fatalf("expected skill list in viewport, got: %s", content)
+		if !strings.Contains(content, "Agent Skills (0/1 active):") || !strings.Contains(content, "[ ] pdf-processing") {
+			t.Fatalf("expected unchecked skill in viewport, got: %s", content)
 		}
 	})
 
@@ -63,7 +63,7 @@ func TestSlashSkills(t *testing.T) {
 		// Valid skill activation
 		model.executeCommand("/skill pdf-processing")
 		content := model.viewport.View()
-		if !strings.Contains(content, "Activated skill pdf-processing [user]:") {
+		if !strings.Contains(content, "[x] Activated skill pdf-processing [user]:") {
 			t.Fatalf("expected activation message in viewport, got: %s", content)
 		}
 		if !strings.Contains(content, "scripts/extract.py") {
@@ -72,8 +72,63 @@ func TestSlashSkills(t *testing.T) {
 		if !model.skills.IsActivated("pdf-processing") {
 			t.Fatalf("expected skill to be marked activated")
 		}
-		if len(model.messages) == 0 || !strings.Contains(model.messages[len(model.messages)-1].Content, "Activated skill pdf-processing") {
-			t.Fatalf("expected skill instruction message to be appended to messages")
+
+		// Verify /skills now shows [x]
+		model.executeCommand("/skills")
+		content = model.viewport.View()
+		if !strings.Contains(content, "Agent Skills (1/1 active):") || !strings.Contains(content, "[x] pdf-processing") {
+			t.Fatalf("expected checked skill in /skills, got: %s", content)
+		}
+
+		// Verify /skills active
+		model.executeCommand("/skills active")
+		content = model.viewport.View()
+		if !strings.Contains(content, "Active Agent Skills (1):") || !strings.Contains(content, "[x] pdf-processing") {
+			t.Fatalf("expected active skills list, got: %s", content)
+		}
+	})
+
+	t.Run("skill toggle", func(t *testing.T) {
+		// Toggle to inactive
+		model.executeCommand("/skill toggle pdf-processing")
+		content := model.viewport.View()
+		if !strings.Contains(content, "[ ] Skill \"pdf-processing\" deactivated.") {
+			t.Fatalf("expected deactivated message, got: %s", content)
+		}
+		if model.skills.IsActivated("pdf-processing") {
+			t.Fatalf("expected skill to be deactivated")
+		}
+
+		// Verify /skills active shows no active skills
+		model.executeCommand("/skills active")
+		content = model.viewport.View()
+		if !strings.Contains(content, "No active agent skills in this session.") {
+			t.Fatalf("expected no active skills message, got: %s", content)
+		}
+
+		// Toggle back to active
+		model.executeCommand("/skill toggle pdf-processing")
+		content = model.viewport.View()
+		if !strings.Contains(content, "[x] Skill \"pdf-processing\" activated.") {
+			t.Fatalf("expected activated message, got: %s", content)
+		}
+		if !model.skills.IsActivated("pdf-processing") {
+			t.Fatalf("expected skill to be activated again")
+		}
+	})
+
+	t.Run("status bar info view shows active skills chip", func(t *testing.T) {
+		// pdf-processing is currently active
+		info := model.infoView()
+		if !strings.Contains(info, "1 skill active") {
+			t.Fatalf("expected '1 skill active' in infoView(), got: %s", info)
+		}
+
+		// Deactivate
+		model.skills.Deactivate("pdf-processing")
+		info = model.infoView()
+		if strings.Contains(info, "skill active") {
+			t.Fatalf("expected no active skill chip when 0 skills active, got: %s", info)
 		}
 	})
 }

@@ -68,4 +68,24 @@ func TestRegistry(t *testing.T) {
 	if len(activated) != 1 || activated[0] != "pdf-tool" {
 		t.Errorf("expected [pdf-tool], got %v", activated)
 	}
+
+	// Test Deactivate
+	reg.Deactivate("pdf-tool")
+	if reg.IsActivated("pdf-tool") {
+		t.Errorf("skill should be deactivated")
+	}
+
+	// Test Toggle
+	active, err := reg.Toggle("csv-tool")
+	if err != nil || !active {
+		t.Fatalf("expected csv-tool to be toggled active, err = %v", err)
+	}
+	active, err = reg.Toggle("csv-tool")
+	if err != nil || active {
+		t.Fatalf("expected csv-tool to be toggled inactive, err = %v", err)
+	}
+	_, err = reg.Toggle("nonexistent")
+	if err == nil {
+		t.Fatalf("expected error toggling nonexistent skill")
+	}
 }
