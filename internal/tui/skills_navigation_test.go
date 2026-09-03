@@ -311,6 +311,79 @@ func TestQueueClearedOnTurnCancel(t *testing.T) {
 	}
 }
 
+func TestMultilineTextareaDynamicExpansion(t *testing.T) {
+	model := newTestSkillsModel(t, 1)
+	model.resize(80, 24)
+
+	// Single line -> height 1
+	model.bottom.prompt().SetValue("hello")
+	model.relayout()
+	if model.bottom.prompt().Height() != 1 {
+		t.Fatalf("expected height 1 for single line, got %d", model.bottom.prompt().Height())
+	}
+
+	// 3 lines -> height 3
+	model.bottom.prompt().SetValue("line 1\nline 2\nline 3")
+	model.relayout()
+	if model.bottom.prompt().Height() != 3 {
+		t.Fatalf("expected height 3 for 3 lines, got %d", model.bottom.prompt().Height())
+	}
+
+	// 6 lines -> capped at 4
+	model.bottom.prompt().SetValue("1\n2\n3\n4\n5\n6")
+	model.relayout()
+	if model.bottom.prompt().Height() != 4 {
+		t.Fatalf("expected height 4 for 6 lines, got %d", model.bottom.prompt().Height())
+	}
+}
+
+func TestSkillsPickerMouseWheelNavigation(t *testing.T) {
+	model := newTestSkillsModel(t, 10)
+	// Open picker
+	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	model = updated.(*bubbleModel)
+
+	// Scroll mouse wheel down -> should advance selection to item 2
+	updated, _ = model.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
+	model = updated.(*bubbleModel)
+	render := model.bottom.renderTop(model)
+	if !strings.Contains(render, "item 2 of 10") {
+		t.Fatalf("expected item 2 after wheel down, got: %s", render)
+	}
+
+	// Scroll mouse wheel up -> should return to item 1
+	updated, _ = model.Update(tea.MouseMsg{Button: tea.MouseButtonWheelUp})
+	model = updated.(*bubbleModel)
+	render = model.bottom.renderTop(model)
+	if !strings.Contains(render, "item 1 of 10") {
+		t.Fatalf("expected item 1 after wheel up, got: %s", render)
+	}
+}
+
+func TestHistoryStateTrimO1(t *testing.T) {
+	state := NewHistoryState(10)
+
+	// Append 15 single-line cells
+	for i := 1; i <= 15; i++ {
+		state.Append(&UserCell{Text: fmt.Sprintf("msg %d", i)})
+	}
+
+	if state.lineCount() > 10 {
+		t.Fatalf("expected state.lineCount() <= 10, got %d", state.lineCount())
+	}
+	if len(state.Committed()) > 10 {
+		t.Fatalf("expected committed <= 10, got %d", len(state.Committed()))
+	}
+	// Verify lineCount matches calculated total
+	total := 0
+	for _, c := range state.Committed() {
+		total += c.LineCount()
+	}
+	if state.lineCount() != total {
+		t.Fatalf("cached line count %d != calculated %d", state.lineCount(), total)
+	}
+}
+
 func TestStatusBarNeverWrapsOn80Columns(t *testing.T) {
 	model := newTestSkillsModel(t, 5)
 	model.resize(80, 24)
@@ -327,5 +400,3 @@ func TestStatusBarNeverWrapsOn80Columns(t *testing.T) {
 		t.Fatalf("expected infoView width <= 80, got %d: %s", visualWidth, info)
 	}
 }
-
-
