@@ -1,27 +1,24 @@
-package skill_test
+package skill
 
 import (
 	"testing"
-
-	applicationskill "github.com/projectTHORN/proton/internal/application/skill"
-	domainskill "github.com/projectTHORN/proton/internal/domain/skill"
 )
 
 func TestRegistry(t *testing.T) {
-	s1 := domainskill.Skill{
+	s1 := Skill{
 		Name:        "pdf-tool",
 		Description: "Process PDFs",
 		Location:    "/path/to/pdf/SKILL.md",
-		Scope:       domainskill.ScopeUser,
+		Scope:       ScopeUser,
 	}
-	s2 := domainskill.Skill{
+	s2 := Skill{
 		Name:        "csv-tool",
 		Description: "Process CSVs",
 		Location:    "/path/to/csv/SKILL.md",
-		Scope:       domainskill.ScopeProject,
+		Scope:       ScopeProject,
 	}
 
-	reg := applicationskill.NewRegistry(s1)
+	reg := NewRegistry(s1)
 
 	// Test Lookup
 	if found, ok := reg.Lookup("pdf-tool"); !ok || found.Name != "pdf-tool" {

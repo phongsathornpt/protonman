@@ -15,17 +15,16 @@ import (
 	"github.com/projectTHORN/proton/internal/adapters/config"
 	"github.com/projectTHORN/proton/internal/adapters/headless"
 	"github.com/projectTHORN/proton/internal/adapters/session"
-	"github.com/projectTHORN/proton/internal/adapters/skills"
 	"github.com/projectTHORN/proton/internal/adapters/telemetry"
 	"github.com/projectTHORN/proton/internal/adapters/tools"
 	"github.com/projectTHORN/proton/internal/adapters/tui"
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
-	applicationskill "github.com/projectTHORN/proton/internal/application/skill"
 	"github.com/projectTHORN/proton/internal/application/toolcall"
 	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/domain/permission"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 	"github.com/projectTHORN/proton/internal/sandbox"
+	"github.com/projectTHORN/proton/internal/skill"
 )
 
 func main() {
@@ -106,7 +105,7 @@ func run(ctx context.Context, args []string) error {
 		launcher = sandbox.NewOSLauncher(sandboxProfile)
 	}
 
-	skillsResult, err := skills.Discover(ctx, skills.Options{
+	skillsResult, err := skill.Discover(ctx, skill.Options{
 		HomeDir:        homeDir,
 		WorkDir:        workDir,
 		ProjectTrusted: truthy(os.Getenv("PROTON_TRUST_PROJECT")),
@@ -117,7 +116,7 @@ func run(ctx context.Context, args []string) error {
 	for _, warning := range skillsResult.Warnings {
 		fmt.Fprintln(os.Stderr, "warning:", warning)
 	}
-	skillRegistry := applicationskill.NewRegistry(skillsResult.Skills...)
+	skillRegistry := skill.NewRegistry(skillsResult.Skills...)
 
 	registry, err := tools.NewDefaultRegistry(
 		workspaceRoot,

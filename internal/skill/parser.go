@@ -1,5 +1,4 @@
-// Package skills implements discovery, parsing, and loading of Agent Skills.
-package skills
+package skill
 
 import (
 	"bufio"
@@ -13,8 +12,6 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
-
-	"github.com/projectTHORN/proton/internal/domain/skill"
 )
 
 var (
@@ -34,10 +31,10 @@ type rawFrontmatter struct {
 }
 
 // ParseSkillFile reads a SKILL.md file and constructs a domain Skill.
-func ParseSkillFile(filePath string, scope skill.Scope) (skill.Skill, error) {
+func ParseSkillFile(filePath string, scope Scope) (Skill, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return skill.Skill{}, fmt.Errorf("read skill file %q: %w", filePath, err)
+		return Skill{}, fmt.Errorf("read skill file %q: %w", filePath, err)
 	}
 
 	absPath, err := filepath.Abs(filePath)
@@ -48,7 +45,7 @@ func ParseSkillFile(filePath string, scope skill.Scope) (skill.Skill, error) {
 
 	fm, body, err := extractFrontmatterAndBody(data)
 	if err != nil {
-		return skill.Skill{}, fmt.Errorf("parse %q: %w", filePath, err)
+		return Skill{}, fmt.Errorf("parse %q: %w", filePath, err)
 	}
 
 	var raw rawFrontmatter
@@ -56,7 +53,7 @@ func ParseSkillFile(filePath string, scope skill.Scope) (skill.Skill, error) {
 		// Attempt lenient fix for unquoted colons
 		fixedFm := fixLenientYAML(fm)
 		if retryErr := yaml.Unmarshal(fixedFm, &raw); retryErr != nil {
-			return skill.Skill{}, fmt.Errorf("decode YAML frontmatter in %q: %w", filePath, err)
+			return Skill{}, fmt.Errorf("decode YAML frontmatter in %q: %w", filePath, err)
 		}
 	}
 
@@ -65,19 +62,19 @@ func ParseSkillFile(filePath string, scope skill.Scope) (skill.Skill, error) {
 		// Fallback to directory name if name was omitted
 		name = filepath.Base(baseDir)
 	}
-	if err := skill.ValidateName(name); err != nil {
-		return skill.Skill{}, fmt.Errorf("invalid skill name in %q: %w", filePath, err)
+	if err := ValidateName(name); err != nil {
+		return Skill{}, fmt.Errorf("invalid skill name in %q: %w", filePath, err)
 	}
 
 	desc := strings.TrimSpace(raw.Description)
-	if err := skill.ValidateDescription(desc); err != nil {
-		return skill.Skill{}, fmt.Errorf("invalid skill description in %q: %w", filePath, err)
+	if err := ValidateDescription(desc); err != nil {
+		return Skill{}, fmt.Errorf("invalid skill description in %q: %w", filePath, err)
 	}
 
 	allowedTools := parseAllowedTools(raw.AllowedTools)
 	resources := scanResources(baseDir)
 
-	s := skill.Skill{
+	s := Skill{
 		Name:          name,
 		Description:   desc,
 		Location:      absPath,
@@ -92,7 +89,7 @@ func ParseSkillFile(filePath string, scope skill.Scope) (skill.Skill, error) {
 	}
 
 	if err := s.Validate(); err != nil {
-		return skill.Skill{}, fmt.Errorf("validate skill in %q: %w", filePath, err)
+		return Skill{}, fmt.Errorf("validate skill in %q: %w", filePath, err)
 	}
 
 	return s, nil

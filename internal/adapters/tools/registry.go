@@ -8,10 +8,10 @@ import (
 	"sync"
 
 	"github.com/projectTHORN/proton/internal/adapters/workspace"
-	applicationskill "github.com/projectTHORN/proton/internal/application/skill"
 	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/domain/tool"
 	"github.com/projectTHORN/proton/internal/sandbox"
+	"github.com/projectTHORN/proton/internal/skill"
 )
 
 // ErrDuplicateTool indicates that a name is already registered.
@@ -45,7 +45,7 @@ type registryOptions struct {
 	stores   []checkpoint.Store
 	launcher sandbox.Launcher
 	network  sandbox.NetworkPolicy
-	skills   *applicationskill.Registry
+	skills   *skill.Registry
 }
 
 // WithCheckpointStore attaches durable edit checkpoints.
@@ -69,7 +69,7 @@ func WithSandbox(launcher sandbox.Launcher, network sandbox.NetworkPolicy) Regis
 }
 
 // WithSkillRegistry attaches an Agent Skill registry and registers activate_skill.
-func WithSkillRegistry(registry *applicationskill.Registry) RegistryOption {
+func WithSkillRegistry(registry *skill.Registry) RegistryOption {
 	return func(options *registryOptions) error {
 		options.skills = registry
 		return nil

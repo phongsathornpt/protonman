@@ -1,4 +1,4 @@
-package skills
+package skill
 
 import (
 	"context"
@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"github.com/projectTHORN/proton/internal/domain/skill"
 )
 
 // Options specifies directories and trust flags for skill discovery.
@@ -20,7 +18,7 @@ type Options struct {
 
 // DiscoveryResult contains discovered skills and any non-fatal diagnostic warnings.
 type DiscoveryResult struct {
-	Skills   []skill.Skill
+	Skills   []Skill
 	Warnings []string
 }
 
@@ -45,14 +43,14 @@ func Discover(ctx context.Context, opts Options) (DiscoveryResult, error) {
 	}
 
 	result := DiscoveryResult{
-		Skills:   make([]skill.Skill, 0),
+		Skills:   make([]Skill, 0),
 		Warnings: make([]string, 0),
 	}
 
 	// Map of skill name -> skill, for deduplication.
 	// Project skills override user skills.
-	userSkills := make(map[string]skill.Skill)
-	projectSkills := make(map[string]skill.Skill)
+	userSkills := make(map[string]Skill)
+	projectSkills := make(map[string]Skill)
 
 	// 1. User-level scopes
 	userPaths := []string{
@@ -63,7 +61,7 @@ func Discover(ctx context.Context, opts Options) (DiscoveryResult, error) {
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
-		scanDirectory(dir, skill.ScopeUser, userSkills, &result.Warnings)
+		scanDirectory(dir, ScopeUser, userSkills, &result.Warnings)
 	}
 
 	// 2. Project-level scopes
@@ -94,11 +92,11 @@ func Discover(ctx context.Context, opts Options) (DiscoveryResult, error) {
 			continue
 		}
 
-		scanDirectory(dir, skill.ScopeProject, projectSkills, &result.Warnings)
+		scanDirectory(dir, ScopeProject, projectSkills, &result.Warnings)
 	}
 
 	// Merge: user skills first, then project skills override
-	effective := make(map[string]skill.Skill, len(userSkills)+len(projectSkills))
+	effective := make(map[string]Skill, len(userSkills)+len(projectSkills))
 	for name, s := range userSkills {
 		effective[name] = s
 	}
@@ -125,8 +123,8 @@ func Discover(ctx context.Context, opts Options) (DiscoveryResult, error) {
 
 func scanDirectory(
 	rootDir string,
-	scope skill.Scope,
-	target map[string]skill.Skill,
+	scope Scope,
+	target map[string]Skill,
 	warnings *[]string,
 ) {
 	entries, err := os.ReadDir(rootDir)
