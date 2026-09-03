@@ -160,6 +160,24 @@ func TestTurnCancellationRendersNeutralTerminalState(t *testing.T) {
 	}
 }
 
+func TestTurnFailureFinalizesRunningToolCells(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAlwaysApprove, emptyTodoItems())
+	call, err := tool.NewCall("cancel-tool", "read_file", []byte(`{"path":"README.md"}`))
+	if err != nil {
+		t.Fatalf("NewCall() error = %v", err)
+	}
+	model.appendToolCall(call)
+	model.busy = true
+
+	updated, _ := model.Update(turnDoneMsg{err: context.Canceled})
+	model = updated.(*bubbleModel)
+
+	assertNoRunningTool(t, model)
+	if !strings.Contains(plainTranscript(model), "cancelled") {
+		t.Fatalf("cancelled tool missing terminal state: %q", plainTranscript(model))
+	}
+}
+
 func TestFailedToolReplacesRunningBlock(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.appendToolRunning("bash")
