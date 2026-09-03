@@ -20,54 +20,105 @@ small terminal UI for inspecting and exercising the boundary.
 ## Run
 
 ```sh
-go run ./cmd/proton
+make tui                      # Start interactive fullscreen TUI (default make target)
+go run ./cmd/proton           # Direct go run
 go run ./cmd/proton -p '/call read_file {"path":"README.md"}'
 go run ./cmd/proton -y -p '/call bash {"command":"pwd"}' --output json
 go run ./cmd/proton --acp
 go run ./cmd/proton --sandbox strict
 ```
 
-Proton uses the Bubble Tea full-screen event loop with textarea prompt
-editing, viewport scrollback, modal permission prompts, plan mode, and a TODO
-pane. The adapter is composed from Bubble Tea, Bubbles (`textarea`,
-`viewport`, `spinner`, and `key`), and Lip Gloss layout styles. Run the
-TUI from an interactive terminal; without a TTY Proton refuses to start
-the fullscreen UI and requires `-p` or `--headless`. Bubble Tea owns raw
-input and terminal restore. Headless runs share the same permission
-service and fail closed in `ask` mode — pass `-y` or
-`--permission-mode always-approve` for non-interactive writes. Session
-files under `~/.proton/sessions/` now keep a redacted transcript
-(roles, text, tool names) in addition to the permission mode.
-The live-region layout follows Grok Build's minimal pager design: a welcome
-card, typed transcript blocks, a TODO panel, activity/status, prompt, and a
-compact mode/info row. Type `/` for the command menu. Shift+Tab cycles
-ask → plan → always-approve. Rendered tool and model text is sanitized before
-it reaches the terminal.
-Set `PROTON_TELEMETRY=stderr` to emit opt-in JSON lifecycle events for tool
-calls and permission decisions. Telemetry contains metadata and argument byte
-counts, never raw commands, paths, URLs, arguments, output, or error details.
+Run the TUI from an interactive terminal. Without a TTY, Proton refuses to start the fullscreen UI and requires `-p` or `--headless`. Headless runs share the same permission service and fail closed in `ask` mode — pass `-y` or `--permission-mode always-approve` for non-interactive writes.
 
-Inside Proton:
+Set `PROTON_TELEMETRY=stderr` to emit opt-in JSON lifecycle events for tool calls and permission decisions. Telemetry contains metadata and argument byte counts, never raw commands, paths, URLs, arguments, output, or error details.
+
+## Terminal User Interface (TUI)
+
+Proton features a fullscreen terminal user interface built on [Bubble Tea](https://github.com/charmbracelet/bubbletea), [Bubbles](https://github.com/charmbracelet/bubbles), and [Lip Gloss](https://github.com/charmbracelet/lipgloss).
+
+### Layout Overview
 
 ```text
-/help
-/tools
-/call read_file {"path":"README.md"}
-/call bash {"command":"pwd"}
-/call git_status {}
-/call checkpoint_restore {"checkpoint_id":"checkpoint-..."}
-/mode always-approve
-/always-approve
-/mode ask
-/quit
+┌────────────────────────────────────────────────────────────────────────┐
+│  Proton ── Go Coding Agent                               [mode: ask]  │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  > User prompt goes here...                                            │
+│                                                                        │
+│  ● Assistant response streaming with sanitized ANSI formatting...      │
+│                                                                        │
+│  ⚙ Tool Call: read_file (README.md)                          [SUCCESS] │
+│                                                                        │
+│  ┌─ [Ctrl+O] TODO Checklist ────────────────────────────────────────┐  │
+│  │ [x] 1. Set up project workspace                                  │  │
+│  │ [ ] 2. Run test suite                                            │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                        │
+├────────────────────────────────────────────────────────────────────────┤
+│ ⚠️  Permission Request: bash "rm -rf ./cache"                           │
+│    [1] (y) Allow Once                                                  │
+│    [2] (s) Allow for Session                                           │
+│    [3] (n) Deny                                                        │
+├────────────────────────────────────────────────────────────────────────┤
+│ > Type a message or '/' for commands...                                │
+├────────────────────────────────────────────────────────────────────────┤
+│ [Enter] send  [Shift+Tab] mode  [^O] todos  [^T] transcript  [^C] quit │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-Colon prefixes (`:help`) remain aliases. `!` on an empty prompt runs `bash`
-through the same permission service. The default mode is `ask`. A permission
-prompt is an option list (`j`/`k`, `1`–`3`, Enter) with `y` for one call, `s`
-for an exact-request grant lasting for the session, and `n` to deny. Explicit
-policy denies remain effective even in always-approve mode. Session grants do
-not mutate the static policy.
+The live-region layout follows Grok Build's minimal pager design:
+- **Header & Mode Row**: Displays current execution mode (`ask`, `plan`, `always-approve`) and active status.
+- **Scrollback Viewport**: Streams typed transcript cells (`UserCell`, `AssistantCell`, `ToolCell`, `ErrorCell`, and `SystemCell`). Committed cells are cached for instantaneous redraws.
+- **TODO Panel**: Collapsible task checklist toggled via `Ctrl+O`.
+- **Permission Modal**: Modal prompt appearing above the composer whenever tool execution requires confirmation.
+- **Composer**: Full-featured textarea for composing prompts, running commands, and selecting actions.
+- **Footer**: Dynamic status hints and active keybindings.
+
+### Keybindings
+
+| Key | Action |
+| :--- | :--- |
+| `Enter` | Submit prompt / execute command |
+| `Shift+Tab` | Cycle permission mode (`ask` → `plan` → `always-approve`) |
+| `Ctrl+O` | Toggle TODO checklist pane |
+| `Ctrl+T` | Toggle full raw transcript overlay |
+| `Ctrl+L` | Clear screen & reset scrollback |
+| `PgUp` / `PgDn` | Scroll viewport history up/down |
+| `Ctrl+C` | Cancel active operation or exit |
+
+### In-TUI Slash Commands
+
+Type `/` at the prompt to open the autocomplete command menu, or use colon prefixes (`:help`):
+
+| Command | Description | Example |
+| :--- | :--- | :--- |
+| `/help`, `:help` | Show available commands and keybindings | `/help` |
+| `/tools` | List registered tools and their schemas | `/tools` |
+| `/call <tool> <args>` | Execute a tool directly with JSON arguments | `/call read_file {"path":"README.md"}` |
+| `/mode <mode>` | Change mode (`ask`, `plan`, `always-approve`) | `/mode always-approve` |
+| `/ask` | Switch directly to `ask` mode | `/ask` |
+| `/plan` | Switch directly to `plan` mode | `/plan` |
+| `/always-approve` | Switch directly to `always-approve` mode | `/always-approve` |
+| `!<command>` | Execute shell command directly via `bash` tool | `!git status` |
+| `/quit`, `:quit` | Exit Proton cleanly | `/quit` |
+
+### Permission Modes & Modal Controls
+
+Proton enforces security policy boundaries before any tool runs:
+
+- **`ask` (Default)**: Prompts interactively whenever a tool is not explicitly allowed by policy rules.
+- **`plan`**: Restricts tool execution to read-only tools and suppresses mutating actions.
+- **`always-approve`**: Automatically approves allowed and ask-level tool calls. Explicit policy `deny` rules remain strictly enforced.
+
+When a permission prompt appears in `ask` mode:
+
+| Key / Selection | Action | Scope |
+| :--- | :--- | :--- |
+| `y` or `1` | Allow Once | Authorizes only this single tool call |
+| `s` or `2` | Allow for Session | Authorizes matching calls for the current session without re-prompting |
+| `n`, `3`, or `Esc` | Deny | Rejects tool execution (fail-closed) |
+| `j` / `k` or `↑` / `↓` | Navigate | Moves selection between options |
+| `Enter` | Confirm | Resolves permission with selected option |
 
 ## Configuration
 
