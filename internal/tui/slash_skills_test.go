@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/permission"
-	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/skill"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 func TestSlashSkills(t *testing.T) {

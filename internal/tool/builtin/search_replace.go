@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/workspace"
 	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/tool"
+	"github.com/projectTHORN/proton/internal/workspace"
 )
 
 type searchReplaceHandler struct {
