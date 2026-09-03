@@ -203,6 +203,35 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 	m.syncLegacyBlocks()
 }
 
+func (m *bubbleModel) finalizeRunningTools(err error) {
+	if err == nil {
+		return
+	}
+	failure := tool.FailureFromError(err)
+	if failure == nil {
+		failure = &tool.Failure{Code: tool.ErrorCodeExecution, Message: err.Error()}
+	}
+	body := "aborted"
+	switch failure.Code {
+	case tool.ErrorCodeCanceled:
+		body = "cancelled"
+	case tool.ErrorCodeDeadlineExceeded:
+		body = "timed out"
+	}
+	for _, cell := range m.ensureHistoryState().Cells() {
+		running, ok := cell.(runningHistoryTool)
+		if !ok || !running.historyToolRunning() {
+			continue
+		}
+		m.applyToolResult(running.historyToolName(), tool.Result{
+			CallID:   running.historyToolID(),
+			ToolName: running.historyToolName(),
+			Output:   body,
+			Failure:  failure,
+		}, nil)
+	}
+}
+
 func (m *bubbleModel) completedToolCell(callID string, name string, body string, result tool.Result) HistoryCell {
 	var failureCode tool.ErrorCode
 	if result.Failure != nil {

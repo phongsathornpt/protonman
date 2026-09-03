@@ -264,6 +264,9 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activity = "ready"
 		m.turnCancel = nil
 		m.turnEvents = nil
+		if message.err != nil {
+			m.finalizeRunningTools(message.err)
+		}
 		m.historyState.CommitActive()
 		m.syncLegacyBlocks()
 		if message.err == nil {
