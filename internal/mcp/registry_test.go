@@ -21,10 +21,14 @@ func TestNamespacedName(t *testing.T) {
 		wantErr    error
 	}{
 		{name: "valid", serverName: "github", toolName: "search", want: "mcp.github.search"},
+		{name: "tool with dots", serverName: "gopls", toolName: "go.diagnostics", want: "mcp.gopls.go.diagnostics"},
 		{name: "empty server", toolName: "search", wantErr: ErrInvalidNamespace},
 		{name: "empty tool", serverName: "github", wantErr: ErrInvalidNamespace},
 		{name: "server dot", serverName: "github.cloud", toolName: "search", wantErr: ErrInvalidNamespace},
 		{name: "tool whitespace", serverName: "github", toolName: "search now", wantErr: ErrInvalidNamespace},
+		{name: "tool leading dot", serverName: "gopls", toolName: ".diagnostics", wantErr: ErrInvalidNamespace},
+		{name: "tool trailing dot", serverName: "gopls", toolName: "diagnostics.", wantErr: ErrInvalidNamespace},
+		{name: "tool double dot", serverName: "gopls", toolName: "go..diagnostics", wantErr: ErrInvalidNamespace},
 	}
 
 	for _, test := range tests {
@@ -43,6 +47,85 @@ func TestNamespacedName(t *testing.T) {
 				t.Fatalf("NamespacedName() error = %v, want errors.Is(..., %v)", err, test.wantErr)
 			}
 		})
+	}
+}
+
+func TestToolValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		tool    Tool
+		wantErr bool
+	}{
+		{name: "valid", tool: Tool{Name: "search"}},
+		{name: "valid with dots", tool: Tool{Name: "go.diagnostics"}},
+		{name: "empty", tool: Tool{Name: ""}, wantErr: true},
+		{name: "untrimmed", tool: Tool{Name: " search "}, wantErr: true},
+		{name: "leading dot", tool: Tool{Name: ".search"}, wantErr: true},
+		{name: "trailing dot", tool: Tool{Name: "search."}, wantErr: true},
+		{name: "double dot", tool: Tool{Name: "search..all"}, wantErr: true},
+		{name: "control char", tool: Tool{Name: "search\nall"}, wantErr: true},
+		{name: "whitespace", tool: Tool{Name: "search all"}, wantErr: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := test.tool.Validate()
+			if test.wantErr {
+				if err == nil {
+					t.Fatal("Validate() error = nil, want error")
+				}
+				if !errors.Is(err, ErrInvalidTool) {
+					t.Fatalf("Validate() error = %v, want ErrInvalidTool", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Validate() unexpected error = %v", err)
+			}
+		})
+	}
+}
+
+func TestDeepCloneSchemaProtectsNestedManifest(t *testing.T) {
+	manifest := Tool{
+		Name: "query",
+		InputSchema: map[string]any{
+			"properties": map[string]any{
+				"filter": map[string]any{
+					"type": "string",
+				},
+			},
+		},
+	}
+	server := &fakeServer{
+		name:  "db",
+		tools: []Tool{manifest},
+	}
+	registry, err := builtin.NewRegistry()
+	if err != nil {
+		t.Fatalf("NewRegistry() error = %v", err)
+	}
+	if err := Discover(context.Background(), registry, server); err != nil {
+		t.Fatalf("Discover() error = %v", err)
+	}
+	defs := registry.Definitions()
+	if len(defs) != 1 {
+		t.Fatalf("len(defs) = %d, want 1", len(defs))
+	}
+	// Mutate the definition schema
+	props, ok := defs[0].InputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties is not a map[string]any: %#v", defs[0].InputSchema["properties"])
+	}
+	props["mutated"] = true
+
+	// Verify original manifest remains untouched
+	origProps, ok := manifest.InputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("orig properties is not a map[string]any: %#v", manifest.InputSchema["properties"])
+	}
+	if _, exists := origProps["mutated"]; exists {
+		t.Fatal("manifest properties were mutated through definition copy")
 	}
 }
 

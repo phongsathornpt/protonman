@@ -3,6 +3,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -22,11 +23,11 @@ var (
 
 // NamespacedName returns the registry name for one discovered MCP tool.
 func NamespacedName(serverName string, toolName string) (string, error) {
-	serverName, err := validSegment("server", serverName)
+	serverName, err := validServerName(serverName)
 	if err != nil {
 		return "", err
 	}
-	toolName, err = validSegment("tool", toolName)
+	toolName, err = validToolName(toolName)
 	if err != nil {
 		return "", err
 	}
@@ -51,7 +52,7 @@ func Discover(ctx context.Context, registry tool.Registrar, servers ...Server) e
 			return fmt.Errorf("discover MCP tools: server is required")
 		}
 		serverName := strings.TrimSpace(server.Name())
-		if _, err := validSegment("server", serverName); err != nil {
+		if _, err := validServerName(serverName); err != nil {
 			return fmt.Errorf("validate MCP server name: %w", err)
 		}
 		if _, exists := seenServers[serverName]; exists {
@@ -121,7 +122,7 @@ func newHandler(
 			Name:        name,
 			Description: description,
 			Kind:        tool.KindMCP,
-			InputSchema: cloneSchema(manifest.InputSchema),
+			InputSchema: deepCloneSchema(manifest.InputSchema),
 		},
 	}
 }
@@ -151,26 +152,54 @@ func (h serverToolHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 	return toolResult, nil
 }
 
-func validSegment(label string, value string) (string, error) {
+func validServerName(value string) (string, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" || trimmed != value {
-		return "", fmt.Errorf("%w: %s name must be non-empty and trimmed", ErrInvalidNamespace, label)
+		return "", fmt.Errorf("%w: server name must be non-empty and trimmed", ErrInvalidNamespace)
 	}
 	for _, character := range trimmed {
-		if character == '.' || character == 0 || unicode.IsSpace(character) {
-			return "", fmt.Errorf("%w: %s name %q contains a reserved character", ErrInvalidNamespace, label, value)
+		if character == '.' || character == 0 || unicode.IsSpace(character) || unicode.IsControl(character) {
+			return "", fmt.Errorf("%w: server name %q contains a reserved character", ErrInvalidNamespace, value)
 		}
 	}
 	return trimmed, nil
 }
 
-func cloneSchema(schema map[string]any) map[string]any {
+func validToolName(value string) (string, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || trimmed != value {
+		return "", fmt.Errorf("%w: tool name must be non-empty and trimmed", ErrInvalidNamespace)
+	}
+	if strings.HasPrefix(trimmed, ".") || strings.HasSuffix(trimmed, ".") || strings.Contains(trimmed, "..") {
+		return "", fmt.Errorf("%w: tool name %q contains invalid dot sequence", ErrInvalidNamespace, value)
+	}
+	for _, character := range trimmed {
+		if character == 0 || unicode.IsSpace(character) || unicode.IsControl(character) {
+			return "", fmt.Errorf("%w: tool name %q contains a reserved character", ErrInvalidNamespace, value)
+		}
+	}
+	return trimmed, nil
+}
+
+func deepCloneSchema(schema map[string]any) map[string]any {
 	if schema == nil {
 		return map[string]any{}
 	}
-	clone := make(map[string]any, len(schema))
-	for key, value := range schema {
-		clone[key] = value
+	data, err := json.Marshal(schema)
+	if err != nil {
+		clone := make(map[string]any, len(schema))
+		for key, value := range schema {
+			clone[key] = value
+		}
+		return clone
+	}
+	var clone map[string]any
+	if err := json.Unmarshal(data, &clone); err != nil {
+		clone := make(map[string]any, len(schema))
+		for key, value := range schema {
+			clone[key] = value
+		}
+		return clone
 	}
 	return clone
 }
