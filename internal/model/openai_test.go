@@ -589,5 +589,224 @@ func TestLiveOpenCodeMultiTurn(t *testing.T) {
 	t.Logf("Turn 2 assistant response successfully received: %q", turn2Text)
 }
 
+func TestOpenAIClientResponsesStreamText(t *testing.T) {
+	var requestedPath string
+	var capturedPayload []byte
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestedPath = r.URL.Path
+		var err error
+		capturedPayload, err = io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed to read body: %v", err)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher := w.(http.Flusher)
+
+		fmt.Fprintf(w, "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hello from \"}\n\n")
+		flusher.Flush()
+		fmt.Fprintf(w, "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Muse Spark!\"}\n\n")
+		flusher.Flush()
+		fmt.Fprintf(w, "data: {\"type\":\"response.completed\"}\n\n")
+		flusher.Flush()
+	}))
+	defer ts.Close()
+
+	// Using modelID muse-spark-1.3-contributor-free should automatically route to /responses
+	client := NewOpenAIClient(ts.URL, "key", "muse-spark-1.3-contributor-free")
+	stream, err := client.Stream(context.Background(), Request{
+		Messages: []Message{
+			{Role: RoleSystem, Content: "You are an assistant"},
+			{Role: RoleUser, Content: "Hello"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+	defer stream.Close()
+
+	// Verify route target
+	if requestedPath != "/responses" {
+		t.Errorf("expected requestedPath /responses, got %q", requestedPath)
+	}
+
+	// Verify request payload uses "input" array instead of "messages"
+	var parsedReq struct {
+		Model string `json:"model"`
+		Input []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"input"`
+	}
+	if err := json.Unmarshal(capturedPayload, &parsedReq); err != nil {
+		t.Fatalf("failed to unmarshal request payload: %v\nPayload: %s", err, string(capturedPayload))
+	}
+	if len(parsedReq.Input) != 2 {
+		t.Fatalf("expected 2 items in input, got %d", len(parsedReq.Input))
+	}
+	if parsedReq.Input[0].Role != "system" || parsedReq.Input[0].Content != "You are an assistant" {
+		t.Errorf("unexpected input[0]: %+v", parsedReq.Input[0])
+	}
+	if parsedReq.Input[1].Role != "user" || parsedReq.Input[1].Content != "Hello" {
+		t.Errorf("unexpected input[1]: %+v", parsedReq.Input[1])
+	}
+
+	// Read events
+	ev1, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next() 1 error: %v", err)
+	}
+	if ev1.Kind != EventTextDelta || ev1.Text != "Hello from " {
+		t.Errorf("unexpected ev1: %+v", ev1)
+	}
+
+	ev2, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next() 2 error: %v", err)
+	}
+	if ev2.Kind != EventTextDelta || ev2.Text != "Muse Spark!" {
+		t.Errorf("unexpected ev2: %+v", ev2)
+	}
+
+	ev3, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next() 3 error: %v", err)
+	}
+	if ev3.Kind != EventDone {
+		t.Errorf("expected EventDone, got %s", ev3.Kind)
+	}
+}
+
+func TestOpenAIClientResponsesStreamToolCalls(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher := w.(http.Flusher)
+
+		// 1. Output item added (function call declaration)
+		fmt.Fprintf(w, "data: {\"type\":\"response.output_item.added\",\"item\":{\"id\":\"fc_100\",\"type\":\"function_call\",\"name\":\"list_dir\",\"call_id\":\"call_100\",\"arguments\":\"\"}}\n\n")
+		flusher.Flush()
+		// 2. Arguments delta
+		fmt.Fprintf(w, "data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"fc_100\",\"delta\":\"{\\\"path\\\":\\\"/tmp\\\"}\"}\n\n")
+		flusher.Flush()
+		// 3. Output item done
+		fmt.Fprintf(w, "data: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"fc_100\",\"type\":\"function_call\",\"name\":\"list_dir\",\"call_id\":\"call_100\",\"arguments\":\"{\\\"path\\\":\\\"/tmp\\\"}\"}}\n\n")
+		flusher.Flush()
+		// 4. Completed
+		fmt.Fprintf(w, "data: {\"type\":\"response.completed\"}\n\n")
+		flusher.Flush()
+	}))
+	defer ts.Close()
+
+	client := NewOpenAIClient(ts.URL, "key", "muse-spark-1.3-contributor-free")
+	stream, err := client.Stream(context.Background(), Request{
+		Messages: []Message{{Role: RoleUser, Content: "list"}},
+		Tools: []tool.Definition{
+			{Name: "list_dir", Description: "list files", Kind: tool.KindRead},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+	defer stream.Close()
+
+	ev1, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next() 1 error: %v", err)
+	}
+	if ev1.Kind != EventToolCall {
+		t.Fatalf("expected EventToolCall, got %s", ev1.Kind)
+	}
+	if ev1.ToolCall.ID != "call_100" || ev1.ToolCall.Name != "list_dir" {
+		t.Errorf("unexpected tool call: %+v", ev1.ToolCall)
+	}
+	if string(ev1.ToolCall.Arguments) != `{"path":"/tmp"}` {
+		t.Errorf("unexpected tool call arguments: %s", string(ev1.ToolCall.Arguments))
+	}
+
+	ev2, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next() 2 error: %v", err)
+	}
+	if ev2.Kind != EventDone {
+		t.Errorf("expected EventDone, got %s", ev2.Kind)
+	}
+}
+
+func TestLiveOpenCodeResponsesMuseSpark(t *testing.T) {
+	if os.Getenv("RUN_LIVE_TESTS") != "1" {
+		t.Skip("skipping live network test without RUN_LIVE_TESTS=1")
+	}
+
+	client := NewOpenAIClient(
+		"https://opencode.ai/zen/v1",
+		"",
+		"muse-spark-1.3-contributor-free",
+		WithSessionID("sess-test-live-muse"),
+		WithClientName("proton"),
+	)
+
+	tools := []tool.Definition{
+		{
+			Name:        "list_dir",
+			Description: "List files in directory",
+			Kind:        tool.KindRead,
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"path": map[string]any{"type": "string"},
+				},
+			},
+		},
+	}
+
+	req := Request{
+		Messages: []Message{
+			{
+				Role:    RoleSystem,
+				Content: "You are a helpful coding assistant with function call capabilities.",
+			},
+			{
+				Role:    RoleUser,
+				Content: "Please list the files in directory / using the list_dir tool.",
+			},
+		},
+		Tools: tools,
+	}
+
+	stream, err := client.Stream(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Stream() failed for muse-spark on Responses endpoint: %v", err)
+	}
+	defer stream.Close()
+
+	var textDelta string
+	var toolCalls []ToolCall
+
+	for {
+		ev, err := stream.Next(context.Background())
+		if err != nil {
+			t.Fatalf("stream.Next() error: %v", err)
+		}
+		if ev.Kind == EventDone {
+			break
+		}
+		if ev.Kind == EventTextDelta {
+			textDelta += ev.Text
+		}
+		if ev.Kind == EventToolCall {
+			toolCalls = append(toolCalls, ev.ToolCall)
+		}
+	}
+
+	t.Logf("Muse Spark response text: %q", textDelta)
+	t.Logf("Muse Spark tool calls received: %d", len(toolCalls))
+	if len(toolCalls) > 0 {
+		t.Logf("Tool call: %+v", toolCalls[0])
+	}
+}
+
+
 
 
