@@ -163,7 +163,37 @@ func (c ToolCell) historyToolID() string    { return c.CallID }
 func (c ToolCell) historyToolName() string  { return c.Name }
 func (c ToolCell) historyToolRunning() bool { return c.Running }
 func (c ToolCell) bodyLines() []string {
+	if c.Name == "activate_skill" {
+		return formatSkillToolBody(c.Body, c.ExitCode, c.Truncated, c.Denied, c.FailureCode)
+	}
 	return resultBodyLines(c.Body, c.ExitCode, c.Truncated, c.Denied, c.FailureCode)
+}
+
+func formatSkillToolBody(body string, exitCode *int, truncated bool, denied bool, failureCode tool.ErrorCode) []string {
+	if denied {
+		return []string{"denied"}
+	}
+	if failureCode != "" {
+		return []string{"failure: " + string(failureCode)}
+	}
+	if skillName := extractSkillContentName(body); skillName != "" {
+		return []string{fmt.Sprintf("[x] Activated skill %q", skillName)}
+	}
+	return resultBodyLines(body, exitCode, truncated, denied, failureCode)
+}
+
+func extractSkillContentName(body string) string {
+	for _, quote := range []string{`name="`, `name='`} {
+		idx := strings.Index(body, quote)
+		if idx != -1 {
+			rest := body[idx+len(quote):]
+			end := strings.IndexAny(rest, `"'`)
+			if end != -1 {
+				return rest[:end]
+			}
+		}
+	}
+	return ""
 }
 
 // ExecCell gives shell execution a compact, command-oriented presentation.

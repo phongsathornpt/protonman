@@ -454,7 +454,12 @@ func (m *bubbleModel) loadInitialMessages(messages []model.Message) {
 		switch message.Role {
 		case model.RoleUser:
 			if text != "" {
-				state.Append(&UserCell{Text: message.Content})
+				if strings.HasPrefix(text, "Activated skill ") {
+					if idx := strings.Index(text, "\n"); idx != -1 {
+						text = text[:idx]
+					}
+				}
+				state.Append(&UserCell{Text: text})
 			}
 		case model.RoleAssistant:
 			if text != "" {
