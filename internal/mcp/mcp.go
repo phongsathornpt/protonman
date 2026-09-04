@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 // ErrInvalidTool indicates that an MCP tool manifest cannot be registered.
@@ -21,11 +22,17 @@ type Tool struct {
 
 // Validate checks the stable fields required for namespaced registration.
 func (t Tool) Validate() error {
-	if strings.TrimSpace(t.Name) == "" {
-		return fmt.Errorf("%w: tool name is required", ErrInvalidTool)
+	trimmed := strings.TrimSpace(t.Name)
+	if trimmed == "" || trimmed != t.Name {
+		return fmt.Errorf("%w: tool name must be non-empty and trimmed", ErrInvalidTool)
 	}
-	if strings.ContainsAny(t.Name, "\x00\r\n\t") {
-		return fmt.Errorf("%w: tool name contains control characters", ErrInvalidTool)
+	if strings.HasPrefix(trimmed, ".") || strings.HasSuffix(trimmed, ".") || strings.Contains(trimmed, "..") {
+		return fmt.Errorf("%w: tool name %q contains invalid dot sequence", ErrInvalidTool, t.Name)
+	}
+	for _, character := range trimmed {
+		if character == 0 || unicode.IsSpace(character) || unicode.IsControl(character) {
+			return fmt.Errorf("%w: tool name %q contains invalid characters", ErrInvalidTool, t.Name)
+		}
 	}
 	return nil
 }
