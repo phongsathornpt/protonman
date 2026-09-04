@@ -173,4 +173,35 @@ func TestSystemPromptSection(t *testing.T) {
 	if !strings.Contains(got, "<name>testing</name>") {
 		t.Errorf("expected catalog inclusion: %s", got)
 	}
+
+	// Test with active skills
+	activeSkills := []Skill{
+		{
+			Name:         "golang-style",
+			Description:  "Go style guide",
+			Scope:        ScopeUser,
+			Location:     "/path/to/SKILL.md",
+			BaseDir:      "/path/to",
+			Instructions: "# Go Style Rules",
+			Resources:    []string{"references/details.md"},
+		},
+	}
+	activeXML := FormatActiveSkillsXML(activeSkills)
+	if !strings.Contains(activeXML, "<active_skills>") {
+		t.Errorf("missing <active_skills> tag: %s", activeXML)
+	}
+	if !strings.Contains(activeXML, "<file>references/details.md</file>") {
+		t.Errorf("missing resource tag: %s", activeXML)
+	}
+	if !strings.Contains(activeXML, "# Go Style Rules") {
+		t.Errorf("missing instructions in active skills XML: %s", activeXML)
+	}
+
+	combined := SystemPromptSection(items, activeSkills)
+	if !strings.Contains(combined, "<available_skills>") || !strings.Contains(combined, "<active_skills>") {
+		t.Errorf("expected both available and active sections in combined prompt: %s", combined)
+	}
+	if !strings.Contains(combined, "ACTIVE in this session") {
+		t.Errorf("expected active skills guidance heading: %s", combined)
+	}
 }
