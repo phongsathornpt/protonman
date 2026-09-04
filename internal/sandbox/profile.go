@@ -206,15 +206,14 @@ func ParseOrigin(raw string) (Origin, error) {
 
 // NetworkPolicy evaluates child website egress.
 type NetworkPolicy struct {
-	Mode    NetworkMode
-	Allowed []Origin
+	Mode           NetworkMode
+	Allowed        []Origin
+	AllowLocalhost bool
 }
 
 // AllowURL reports whether a URL may be fetched under this policy.
 func (p NetworkPolicy) AllowURL(raw string) error {
 	switch p.Mode {
-	case NetworkUnrestricted:
-		return nil
 	case NetworkBlocked:
 		return fmt.Errorf("%w: child network is blocked", ErrNetworkDenied)
 	case NetworkAllowlist:
@@ -226,9 +225,58 @@ func (p NetworkPolicy) AllowURL(raw string) error {
 			return nil
 		}
 		return fmt.Errorf("%w: origin %s is not allowlisted", ErrNetworkDenied, origin)
+	case NetworkUnrestricted:
+		if len(p.Allowed) > 0 {
+			if origin, err := ParseOrigin(originOf(raw)); err == nil && slices.Contains(p.Allowed, origin) {
+				return nil
+			}
+		}
+		return isBlockedTarget(raw, p.AllowLocalhost)
 	default:
 		return fmt.Errorf("%w: invalid network mode", ErrNetworkDenied)
 	}
+}
+
+func isBlockedTarget(raw string, allowLocalhost bool) error {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return err
+	}
+	hostname := strings.ToLower(parsed.Hostname())
+	if hostname == "" {
+		return fmt.Errorf("%w: missing host in URL", ErrNetworkDenied)
+	}
+
+	if hostname == "metadata.google.internal" || hostname == "instance-data" {
+		return fmt.Errorf("%w: cloud metadata endpoint %s is blocked", ErrNetworkDenied, hostname)
+	}
+
+	if hostname == "localhost" || strings.HasSuffix(hostname, ".localhost") || strings.HasSuffix(hostname, ".local") {
+		if !allowLocalhost {
+			return fmt.Errorf("%w: local address %s is blocked", ErrNetworkDenied, hostname)
+		}
+		return nil
+	}
+
+	ip := net.ParseIP(hostname)
+	if ip != nil {
+		if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+			return fmt.Errorf("%w: link-local/metadata address %s is blocked", ErrNetworkDenied, hostname)
+		}
+		if ip.IsLoopback() {
+			if !allowLocalhost {
+				return fmt.Errorf("%w: loopback address %s is blocked", ErrNetworkDenied, hostname)
+			}
+			return nil
+		}
+		if ip.IsUnspecified() {
+			return fmt.Errorf("%w: unspecified address %s is blocked", ErrNetworkDenied, hostname)
+		}
+		if ip.IsPrivate() {
+			return fmt.Errorf("%w: private network address %s is blocked", ErrNetworkDenied, hostname)
+		}
+	}
+	return nil
 }
 
 func originOf(raw string) string {
