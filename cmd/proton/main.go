@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/projectTHORN/proton/internal/acp"
+	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/headless"
@@ -118,20 +119,25 @@ func run(ctx context.Context, args []string) error {
 	}
 	skillRegistry := skill.NewRegistry(skillsResult.Skills...)
 
+	policy, err := permission.NewPolicy(loadedConfig.Permission)
+	if err != nil {
+		return fmt.Errorf("create permission policy: %w", err)
+	}
+
+	coordinator := agent.NewCoordinator(nil, nil, workspaceRoot, policy)
+	defer func() { _ = coordinator.Close() }()
+
 	registry, err := builtin.NewDefaultRegistry(
 		workspaceRoot,
 		builtin.WithCheckpointStore(checkpointStore),
 		builtin.WithSandbox(launcher, sandboxProfile.Network),
 		builtin.WithSkillRegistry(skillRegistry),
+		builtin.WithAgentCoordinator(coordinator),
 	)
 	if err != nil {
 		return fmt.Errorf("create tool registry: %w", err)
 	}
-
-	policy, err := permission.NewPolicy(loadedConfig.Permission)
-	if err != nil {
-		return fmt.Errorf("create permission policy: %w", err)
-	}
+	coordinator.SetParentRegistry(registry)
 
 	sessionID := resolveSessionID(workDir)
 	stateStore, err := session.NewFileStore(filepath.Join(homeDir, ".proton", "sessions"))
