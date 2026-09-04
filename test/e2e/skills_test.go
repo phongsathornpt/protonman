@@ -150,3 +150,93 @@ func TestE2EMultiSkillDiscoveryAndActivation(t *testing.T) {
 		t.Fatalf("expected available skills list in error response, got stdout: %s, stderr: %s", result.stdout, result.stderr)
 	}
 }
+
+func TestE2ESkillSessionPersistenceAndHeadlessParity(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+
+	// Create user skill in PROTON_HOME
+	skillDir := filepath.Join(home, ".proton", "skills", "code-reviewer")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := `---
+name: code-reviewer
+description: Automated code review guide
+---
+# Code Reviewer Instructions
+Review code thoroughly.
+`
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Check initial headless /skills list (unchecked)
+	res := runProton(t, runOptions{
+		args: []string{"-y", "-p", "/skills"},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr = %s", res.exitCode, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "Agent Skills (0/1 active):") || !strings.Contains(res.stdout, "[ ] code-reviewer") {
+		t.Fatalf("stdout missing unchecked skill list: %s", res.stdout)
+	}
+
+	// 2. Activate skill using mixed case (case-insensitivity test)
+	res = runProton(t, runOptions{
+		args: []string{"-y", "-p", "/skill Code-Reviewer"},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr = %s", res.exitCode, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "[x] Activated skill code-reviewer [user]: Automated code review guide") {
+		t.Fatalf("stdout missing activation confirmation: %s", res.stdout)
+	}
+	// Verify raw instructions are not flooded into stdout
+	if strings.Contains(res.stdout, "Review code thoroughly.") {
+		t.Fatalf("expected stdout not to flood raw instructions, got: %s", res.stdout)
+	}
+
+	// 3. New process run in same workspace: verify skill activation persisted across CLI runs
+	res = runProton(t, runOptions{
+		args: []string{"-y", "-p", "/skills active"},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr = %s", res.exitCode, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "Active Agent Skills (1):") || !strings.Contains(res.stdout, "[x] code-reviewer") {
+		t.Fatalf("expected active skill to persist across CLI sessions, got: %s", res.stdout)
+	}
+
+	// 4. Toggle skill to inactive
+	res = runProton(t, runOptions{
+		args: []string{"-y", "-p", "/skill toggle code-reviewer"},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr = %s", res.exitCode, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "[ ] Skill \"code-reviewer\" deactivated.") {
+		t.Fatalf("expected deactivated message: %s", res.stdout)
+	}
+
+	// 5. Verify deactivation persisted across CLI runs
+	res = runProton(t, runOptions{
+		args: []string{"-y", "-p", "/skills active"},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr = %s", res.exitCode, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "No active agent skills in this session.") {
+		t.Fatalf("expected no active skills after deactivation persistence, got: %s", res.stdout)
+	}
+}
