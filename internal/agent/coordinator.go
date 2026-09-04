@@ -306,6 +306,20 @@ func (c *Coordinator) Close() error {
 	return nil
 }
 
+// SetParentRegistry sets or updates the parent tool registry for scoping subagent tools.
+func (c *Coordinator) SetParentRegistry(registry tool.Registry) {
+	c.activeMu.Lock()
+	defer c.activeMu.Unlock()
+	c.parentRegistry = registry
+}
+
+// SetClient sets or updates the model client for running subagents.
+func (c *Coordinator) SetClient(client model.Client) {
+	c.activeMu.Lock()
+	defer c.activeMu.Unlock()
+	c.client = client
+}
+
 func (c *Coordinator) emit(ctx context.Context, ev Event) {
 	if c.eventSink != nil {
 		_ = c.eventSink(ctx, ev)
