@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/permission"
@@ -286,6 +287,9 @@ func TestMCPServerErrorBecomesStructuredToolFailure(t *testing.T) {
 	}
 	if result.Failure == nil || result.Failure.Code != domaintool.ErrorCodeExecution {
 		t.Fatalf("MCP error failure = %#v, want execution_error", result.Failure)
+	}
+	if !strings.Contains(result.Failure.Message, "remote failure") {
+		t.Fatalf("MCP error message = %q, want it to contain %q", result.Failure.Message, "remote failure")
 	}
 }
 

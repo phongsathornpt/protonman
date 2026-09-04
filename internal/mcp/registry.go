@@ -142,10 +142,21 @@ func (h serverToolHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 		return toolResult, fmt.Errorf("call MCP tool %s.%s: %w", h.serverName, h.manifest.Name, err)
 	}
 	if result.IsError {
-		failure := tool.NewToolError(
-			tool.ErrorCodeExecution,
-			fmt.Sprintf("MCP tool %s.%s returned an error", h.serverName, h.manifest.Name),
-		)
+		message := fmt.Sprintf("MCP tool %s.%s returned an error", h.serverName, h.manifest.Name)
+		outputSummary := strings.TrimSpace(result.Output)
+		if outputSummary != "" {
+			firstLine := outputSummary
+			if idx := strings.IndexAny(outputSummary, "\r\n"); idx != -1 {
+				firstLine = strings.TrimSpace(outputSummary[:idx])
+			}
+			if len(firstLine) > 120 {
+				firstLine = firstLine[:120] + "..."
+			}
+			if firstLine != "" {
+				message = fmt.Sprintf("MCP tool %s.%s returned an error: %s", h.serverName, h.manifest.Name, firstLine)
+			}
+		}
+		failure := tool.NewToolError(tool.ErrorCodeExecution, message)
 		toolResult.Failure = tool.FailureFromError(failure)
 		return toolResult, failure
 	}
