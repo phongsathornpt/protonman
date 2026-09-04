@@ -1,6 +1,10 @@
 package permission
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/projectTHORN/proton/internal/glob"
+)
 
 func BenchmarkGlobMatch_Wildcard(b *testing.B) {
 	pattern := "*"
@@ -8,7 +12,7 @@ func BenchmarkGlobMatch_Wildcard(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for b.Loop() {
-		_ = globMatch(pattern, value)
+		_ = glob.Match(pattern, value)
 	}
 }
 
@@ -18,7 +22,7 @@ func BenchmarkGlobMatch_Prefix(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for b.Loop() {
-		_ = globMatch(pattern, value)
+		_ = glob.Match(pattern, value)
 	}
 }
 
@@ -28,7 +32,7 @@ func BenchmarkGlobMatch_Suffix(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for b.Loop() {
-		_ = globMatch(pattern, value)
+		_ = glob.Match(pattern, value)
 	}
 }
 
@@ -38,7 +42,7 @@ func BenchmarkGlobMatch_Complex(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for b.Loop() {
-		_ = globMatch(pattern, value)
+		_ = glob.Match(pattern, value)
 	}
 }
 
