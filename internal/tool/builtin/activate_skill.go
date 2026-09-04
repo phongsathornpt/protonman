@@ -8,10 +8,12 @@ import (
 
 	"github.com/projectTHORN/proton/internal/skill"
 	"github.com/projectTHORN/proton/internal/tool"
+	"github.com/projectTHORN/proton/internal/workspace"
 )
 
 type activateSkillHandler struct {
-	registry *skill.Registry
+	registry  *skill.Registry
+	workspace *workspace.Workspace
 }
 
 type activateSkillInput struct {
@@ -19,8 +21,15 @@ type activateSkillInput struct {
 }
 
 // NewActivateSkill creates a tool.Handler that activates an Agent Skill.
-func NewActivateSkill(registry *skill.Registry) tool.Handler {
-	return activateSkillHandler{registry: registry}
+func NewActivateSkill(registry *skill.Registry, workspaceRoots ...*workspace.Workspace) tool.Handler {
+	var ws *workspace.Workspace
+	if len(workspaceRoots) > 0 {
+		ws = workspaceRoots[0]
+	}
+	return activateSkillHandler{
+		registry:  registry,
+		workspace: ws,
+	}
 }
 
 func (activateSkillHandler) Definition() tool.Definition {
@@ -69,6 +78,10 @@ func (h activateSkillHandler) Execute(ctx context.Context, call tool.Call) (tool
 	}
 
 	h.registry.MarkActivated(name)
+
+	if h.workspace != nil && s.BaseDir != "" {
+		_ = h.workspace.AddReadRoot(s.BaseDir)
+	}
 
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("<skill_content name=%q>\n", s.Name))

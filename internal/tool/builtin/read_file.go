@@ -58,7 +58,7 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	if input.Path == "" {
 		return tool.Result{}, fmt.Errorf("read_file path is required")
 	}
-	path, err := h.workspace.Resolve(ctx, input.Path)
+	path, err := h.workspace.ResolveRead(ctx, input.Path)
 	if err != nil {
 		return tool.Result{}, err
 	}
