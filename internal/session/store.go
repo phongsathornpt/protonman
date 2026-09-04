@@ -27,6 +27,8 @@ type State struct {
 	Version int `json:"version"`
 	// PermissionMode is the configured mode spelling, not an enum number.
 	PermissionMode string `json:"permission_mode"`
+	// ActiveSkills records skills activated in this session.
+	ActiveSkills []string `json:"active_skills,omitempty"`
 	// Messages is the redacted conversation transcript. Tool arguments are
 	// never stored.
 	Messages []Message `json:"messages,omitempty"`

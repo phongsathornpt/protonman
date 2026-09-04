@@ -42,6 +42,30 @@ func TestFileStoreRoundTrip(t *testing.T) {
 	}
 }
 
+func TestFileStorePersistsActiveSkills(t *testing.T) {
+	store, err := NewFileStore(filepath.Join(t.TempDir(), "sessions"))
+	if err != nil {
+		t.Fatalf("NewFileStore() error = %v", err)
+	}
+	want := State{
+		PermissionMode: permission.ModeAsk.String(),
+		ActiveSkills:   []string{"skill-a", "skill-b"},
+	}
+	if err := store.Save(context.Background(), "skills-session", want); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	got, found, err := store.Load(context.Background(), "skills-session")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !found {
+		t.Fatal("Load() found = false")
+	}
+	if len(got.ActiveSkills) != 2 || got.ActiveSkills[0] != "skill-a" || got.ActiveSkills[1] != "skill-b" {
+		t.Fatalf("ActiveSkills = %v, want %v", got.ActiveSkills, want.ActiveSkills)
+	}
+}
+
 func TestFileStorePersistsMessagesWithoutArguments(t *testing.T) {
 	store, err := NewFileStore(filepath.Join(t.TempDir(), "sessions"))
 	if err != nil {
