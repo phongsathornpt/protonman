@@ -727,15 +727,13 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 				if m.skills.IsActivated(s.Name) {
 					box = "[x]"
 				}
-				cleanDesc := truncateWithEllipsis(s.Description, maxInt(20, m.width-len(s.Name)-20))
-				m.appendLine(fmt.Sprintf("  %s %s [%s]: %s", box, s.Name, s.Scope, cleanDesc))
+				m.appendLine(fmt.Sprintf("  %s %s", box, s.Name))
 			}
 		} else {
 			printed := 0
 			for _, s := range skillsList {
 				if m.skills.IsActivated(s.Name) {
-					cleanDesc := truncateWithEllipsis(s.Description, maxInt(20, m.width-len(s.Name)-20))
-					m.appendLine(fmt.Sprintf("  [x] %s [%s]: %s", s.Name, s.Scope, cleanDesc))
+					m.appendLine(fmt.Sprintf("  [x] %s", s.Name))
 					printed++
 				}
 			}
@@ -744,14 +742,13 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 					break
 				}
 				if !m.skills.IsActivated(s.Name) {
-					cleanDesc := truncateWithEllipsis(s.Description, maxInt(20, m.width-len(s.Name)-20))
-					m.appendLine(fmt.Sprintf("  [ ] %s [%s]: %s", s.Name, s.Scope, cleanDesc))
+					m.appendLine(fmt.Sprintf("  [ ] %s", s.Name))
 					printed++
 				}
 			}
 			remaining := len(skillsList) - printed
 			if remaining > 0 {
-				m.appendLine(fmt.Sprintf("  … and %d more skills. (Browse all in picker below, or use /skill <name>)", remaining))
+				m.appendLine(fmt.Sprintf("  … and %d more skills. (Browse all in picker below, or use /skills <name>)", remaining))
 			}
 		}
 		m.bottom.push(&skillsPaneView{})
@@ -763,14 +760,11 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 		active := m.skills.ActivatedList()
 		if len(active) == 0 {
 			m.appendLine("No active agent skills in this session.")
-			m.appendLine("Activate skills using /skill <name> or the activate_skill tool.")
+			m.appendLine("Activate skills using /skills <name> or the activate_skill tool.")
 		} else {
 			m.appendLine(fmt.Sprintf("Active Agent Skills (%d):", len(active)))
 			for _, name := range active {
-				if s, ok := m.skills.Lookup(name); ok {
-					cleanDesc := truncateWithEllipsis(s.Description, maxInt(20, m.width-len(s.Name)-20))
-					m.appendLine(fmt.Sprintf("  [x] %s [%s]: %s", s.Name, s.Scope, cleanDesc))
-				}
+				m.appendLine(fmt.Sprintf("  [x] %s", name))
 			}
 		}
 		m.refreshViewport()
