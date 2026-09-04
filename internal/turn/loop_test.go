@@ -694,3 +694,70 @@ func TestLoopDoesNotDuplicateSkillCatalogMarker(t *testing.T) {
 		t.Fatalf("skill catalog count = %d, want 1: %q", got, content)
 	}
 }
+
+func TestLoopDynamicActiveSkillsWithRegistry(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{events: []model.Event{{Kind: model.EventDone}}},
+		{events: []model.Event{{Kind: model.EventDone}}},
+	}}
+
+	s1 := skill.Skill{
+		Name:         "active-skill",
+		Description:  "An active skill",
+		Location:     "/loc/active/SKILL.md",
+		BaseDir:      "/loc/active",
+		Scope:        skill.ScopeUser,
+		Instructions: "# Active Instructions\nDo active stuff.",
+	}
+	s2 := skill.Skill{
+		Name:         "available-skill",
+		Description:  "An available skill",
+		Location:     "/loc/avail/SKILL.md",
+		BaseDir:      "/loc/avail",
+		Scope:        skill.ScopeProject,
+		Instructions: "# Avail Instructions",
+	}
+
+	reg := skill.NewRegistry(s1, s2)
+	reg.MarkActivated("active-skill")
+
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithSkillRegistry(reg))
+
+	// Turn 1: active-skill is active, available-skill is available
+	_, err := loop.Run(context.Background(), []model.Message{
+		{Role: model.RoleUser, Content: "turn 1"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("Run turn 1 error = %v", err)
+	}
+
+	req1 := client.requests[0]
+	sys1 := req1.Messages[0].Content
+	if !strings.Contains(sys1, "<active_skills>") || !strings.Contains(sys1, "Do active stuff") {
+		t.Fatalf("expected active skill instructions in sys1, got: %s", sys1)
+	}
+	if !strings.Contains(sys1, "<available_skills>") || !strings.Contains(sys1, "available-skill") {
+		t.Fatalf("expected available-skill in catalog in sys1, got: %s", sys1)
+	}
+	if strings.Contains(sys1, "<available_skills>") && strings.Contains(sys1, "<name>active-skill</name>") {
+		t.Fatalf("active-skill should not be listed as available in sys1")
+	}
+
+	// Turn 2: deactivate active-skill -> moves to available
+	reg.Deactivate("active-skill")
+	_, err = loop.Run(context.Background(), []model.Message{
+		{Role: model.RoleUser, Content: "turn 2"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("Run turn 2 error = %v", err)
+	}
+
+	req2 := client.requests[1]
+	sys2 := req2.Messages[0].Content
+	if strings.Contains(sys2, "<active_skills>") {
+		t.Fatalf("expected no active_skills in sys2 after deactivation, got: %s", sys2)
+	}
+	if !strings.Contains(sys2, "<name>active-skill</name>") {
+		t.Fatalf("expected active-skill back in available catalog in sys2, got: %s", sys2)
+	}
+}
