@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/projectTHORN/proton/internal/glob"
 	"github.com/projectTHORN/proton/internal/tool"
 )
 
@@ -201,14 +202,14 @@ func (w *Workspace) isProtected(path string) bool {
 			relative, err := filepath.Rel(w.root, path)
 			if err == nil {
 				relative = filepath.ToSlash(relative)
-				if globMatch(entry.pattern, relative) {
+				if glob.Match(entry.pattern, relative) {
 					return true
 				}
 				// In glob syntax, a leading **/ means zero or more directory
 				// components. The generic matcher already handles one or more;
 				// this explicit zero-directory case protects root-level matches
 				// such as server.pem for **/*.pem.
-				if strings.HasPrefix(entry.pattern, "**/") && globMatch(strings.TrimPrefix(entry.pattern, "**/"), relative) {
+				if strings.HasPrefix(entry.pattern, "**/") && glob.Match(strings.TrimPrefix(entry.pattern, "**/"), relative) {
 					return true
 				}
 			}
@@ -280,31 +281,3 @@ func isWithin(root string, path string) bool {
 	return relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)))
 }
 
-func globMatch(pattern string, value string) bool {
-	p := []rune(pattern)
-	v := []rune(value)
-	previous := make([]bool, len(v)+1)
-	previous[0] = true
-	for _, patternRune := range p {
-		current := make([]bool, len(v)+1)
-		switch patternRune {
-		case '*':
-			current[0] = previous[0]
-			for valueIndex := 1; valueIndex <= len(v); valueIndex++ {
-				current[valueIndex] = current[valueIndex-1] || previous[valueIndex]
-			}
-		case '?':
-			for valueIndex := 1; valueIndex <= len(v); valueIndex++ {
-				current[valueIndex] = previous[valueIndex-1]
-			}
-		default:
-			for valueIndex, valueRune := range v {
-				if valueRune == patternRune {
-					current[valueIndex+1] = previous[valueIndex]
-				}
-			}
-		}
-		previous = current
-	}
-	return previous[len(v)]
-}
