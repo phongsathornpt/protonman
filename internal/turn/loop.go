@@ -131,6 +131,14 @@ func WithSkillCatalog(skills []skill.CatalogItem) Option {
 	}
 }
 
+// WithSkillRegistry supplies a skill registry for dynamic progressive disclosure and active skill injection.
+func WithSkillRegistry(registry *skill.Registry) Option {
+	return func(loop *Loop) error {
+		loop.skillRegistry = registry
+		return nil
+	}
+}
+
 // Loop coordinates model streaming and permission-aware tool dispatch.
 type Loop struct {
 	client           model.Client
@@ -140,6 +148,7 @@ type Loop struct {
 	toolTimeout      time.Duration
 	maxParallelReads int
 	skills           []skill.CatalogItem
+	skillRegistry    *skill.Registry
 }
 
 var _ Runner = (*Loop)(nil)
@@ -183,8 +192,29 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 
 	history := model.CloneMessages(messages)
 	turnMessages := make([]model.Message, 0, 4)
-	if len(l.skills) > 0 {
-		section := skill.SystemPromptSection(l.skills)
+
+	var catalogItems []skill.CatalogItem
+	var activeSkills []skill.Skill
+
+	if l.skillRegistry != nil {
+		allSkills := l.skillRegistry.List()
+		activeMap := make(map[string]bool)
+		for _, name := range l.skillRegistry.ActivatedList() {
+			activeMap[name] = true
+		}
+		for _, s := range allSkills {
+			if activeMap[s.Name] {
+				activeSkills = append(activeSkills, s)
+			} else {
+				catalogItems = append(catalogItems, s.ToCatalogItem())
+			}
+		}
+	} else if len(l.skills) > 0 {
+		catalogItems = l.skills
+	}
+
+	if len(catalogItems) > 0 || len(activeSkills) > 0 {
+		section := skill.SystemPromptSection(catalogItems, activeSkills)
 		if len(history) > 0 && history[0].Role == model.RoleSystem {
 			base := history[0].Content
 			if marker := strings.Index(base, skillPromptMarker); marker >= 0 {
