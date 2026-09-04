@@ -254,4 +254,32 @@ func TestSlashSkills(t *testing.T) {
 			t.Fatal("second ctrl+s did not close skills picker")
 		}
 	})
+
+	t.Run("new command resets active skills", func(t *testing.T) {
+		model.skills.MarkActivated("pdf-processing")
+		if !model.skills.IsActivated("pdf-processing") {
+			t.Fatal("expected skill to be active")
+		}
+		model.executeCommand("/new")
+		if model.skills.IsActivated("pdf-processing") {
+			t.Fatal("expected /new to clear active skills")
+		}
+	})
+
+	t.Run("skill activation does not append user message and does not flood instructions", func(t *testing.T) {
+		model.messages = nil
+		model.skills.Deactivate("pdf-processing")
+		model.executeCommand("/skill pdf-processing")
+		content := model.viewport.View()
+		if !strings.Contains(content, "[x] Activated skill pdf-processing [user]: Extract PDF text") {
+			t.Fatalf("expected activation message with description, got: %s", content)
+		}
+		if strings.Contains(content, "# PDF Processing Guide") {
+			t.Fatalf("did not expect raw instructions markdown in viewport")
+		}
+		if len(model.messages) != 0 {
+			t.Fatalf("expected 0 messages appended to model.messages, got %d", len(model.messages))
+		}
+	})
 }
+
