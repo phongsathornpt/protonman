@@ -7,7 +7,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
 )
@@ -734,18 +733,13 @@ func (m *bubbleModel) handleSkillsCommand(isSkillSingle bool, argument string, p
 	}
 
 	m.skills.MarkActivated(s.Name)
-	m.appendLine(fmt.Sprintf("[x] Activated skill %s [%s]:", s.Name, s.Scope))
-	m.appendLine(s.Instructions)
+	m.appendLine(fmt.Sprintf("[x] Activated skill %s [%s]: %s", s.Name, s.Scope, s.Description))
 	if len(s.Resources) > 0 {
 		m.appendLine("Bundled resources:")
 		for _, r := range s.Resources {
 			m.appendLine("  - " + r)
 		}
 	}
-	m.messages = append(m.messages, model.Message{
-		Role:    model.RoleUser,
-		Content: fmt.Sprintf("Activated skill %s [%s]:\n%s", s.Name, s.Scope, s.Instructions),
-	})
 	m.refreshViewport()
 	return nil
 }
