@@ -60,7 +60,7 @@ func NewOpenAIClient(baseURL string, apiKey string, modelID string, opts ...Open
 	client := &OpenAIClient{
 		baseURL:    baseURL,
 		apiKey:     apiKey,
-		modelID:    modelID,
+		modelID:    NormalizeModelID(baseURL, modelID),
 		clientName: "proton",
 		userAgent:  "Proton/1.0",
 		httpClient: &http.Client{
