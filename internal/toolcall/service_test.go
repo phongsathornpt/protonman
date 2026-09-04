@@ -253,3 +253,72 @@ func TestCallPropagatesStructuredHandlerFailure(t *testing.T) {
 		t.Fatalf("Call() failure = %#v, want not_found", result.Failure)
 	}
 }
+
+type fakeDetailedHandler struct {
+	fakeHandler
+	customDetail string
+}
+
+func (h *fakeDetailedHandler) PermissionDetail(_ json.RawMessage) string {
+	return h.customDetail
+}
+
+func TestCallUsesDetailProvider(t *testing.T) {
+	handler := &fakeDetailedHandler{
+		fakeHandler: fakeHandler{
+			definition: tool.Definition{
+				Name:                "apply_patch",
+				Description:         "fake patch",
+				Kind:                tool.KindEdit,
+				PermissionDetailKey: "patch",
+			},
+		},
+		customDetail: "main.go",
+	}
+	policyConfig := permission.Config{
+		Rules: []permission.Rule{{
+			Action:  permission.ActionAllow,
+			Tool:    permission.ToolEdit,
+			Pattern: "*.go",
+		}},
+	}
+	policy, err := permission.NewPolicy(policyConfig)
+	if err != nil {
+		t.Fatalf("NewPolicy() error = %v", err)
+	}
+
+	// Supply handler via a registry that returns fakeDetailedHandler
+	call, err := tool.NewCall("call-patch", "apply_patch", json.RawMessage(`{"patch":"*** Begin Patch\n*** End Patch"}`))
+	if err != nil {
+		t.Fatalf("NewCall() error = %v", err)
+	}
+
+	customRegistry := &customHandlerRegistry{handler: handler}
+	serviceWithCustom, err := NewService(customRegistry, policy)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	result, err := serviceWithCustom.Call(context.Background(), call)
+	if err != nil {
+		t.Fatalf("Call() error = %v, want allow from custom detail matching *.go", err)
+	}
+	if result.Output != "executed" {
+		t.Fatalf("result output = %q, want executed", result.Output)
+	}
+}
+
+type customHandlerRegistry struct {
+	handler tool.Handler
+}
+
+func (r *customHandlerRegistry) Lookup(name string) (tool.Handler, bool) {
+	if r.handler.Definition().Name != name {
+		return nil, false
+	}
+	return r.handler, true
+}
+
+func (r *customHandlerRegistry) Definitions() []tool.Definition {
+	return []tool.Definition{r.handler.Definition()}
+}

@@ -94,6 +94,34 @@ func (applyPatchHandler) Definition() tool.Definition {
 	}
 }
 
+func (h applyPatchHandler) PermissionDetail(arguments json.RawMessage) string {
+	var input applyPatchInput
+	if err := json.Unmarshal(arguments, &input); err != nil {
+		return ""
+	}
+	operations, err := parsePatch(input.Patch)
+	if err != nil || len(operations) == 0 {
+		return ""
+	}
+	paths := make([]string, 0, len(operations))
+	seen := make(map[string]struct{}, len(operations))
+	for _, op := range operations {
+		if op.path != "" {
+			if _, ok := seen[op.path]; !ok {
+				seen[op.path] = struct{}{}
+				paths = append(paths, op.path)
+			}
+		}
+		if op.movePath != "" {
+			if _, ok := seen[op.movePath]; !ok {
+				seen[op.movePath] = struct{}{}
+				paths = append(paths, op.movePath)
+			}
+		}
+	}
+	return strings.Join(paths, ", ")
+}
+
 func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	if h.workspace == nil {
 		return tool.Result{}, fmt.Errorf("apply_patch workspace is required")

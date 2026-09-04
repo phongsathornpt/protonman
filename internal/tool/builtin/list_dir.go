@@ -56,6 +56,24 @@ func (listDirHandler) Definition() tool.Definition {
 	}
 }
 
+func (h listDirHandler) PermissionDetail(arguments json.RawMessage) string {
+	var input listDirInput
+	if err := json.Unmarshal(arguments, &input); err != nil {
+		return "."
+	}
+	targetPath := strings.TrimSpace(input.Path)
+	if targetPath == "" {
+		targetPath = strings.TrimSpace(input.DirPath)
+	}
+	if targetPath == "" {
+		targetPath = strings.TrimSpace(input.Directory)
+	}
+	if targetPath == "" {
+		return "."
+	}
+	return targetPath
+}
+
 func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	if h.workspace == nil {
 		return tool.Result{}, fmt.Errorf("list_dir workspace is required")

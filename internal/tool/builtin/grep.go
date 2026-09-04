@@ -69,6 +69,18 @@ func (grepHandler) Definition() tool.Definition {
 	}
 }
 
+func (h grepHandler) PermissionDetail(arguments json.RawMessage) string {
+	var input grepInput
+	if err := json.Unmarshal(arguments, &input); err != nil {
+		return "."
+	}
+	targetPath := strings.TrimSpace(input.Path)
+	if targetPath == "" {
+		return "."
+	}
+	return targetPath
+}
+
 func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	if h.workspace == nil {
 		return tool.Result{}, fmt.Errorf("grep workspace is required")

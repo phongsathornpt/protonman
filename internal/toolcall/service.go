@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -181,11 +182,17 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 	}
 	definition := handler.Definition()
 	telemetry.toolKind = definition.Kind
+	detail := permissionDetail(definition, call.Arguments)
+	if provider, ok := handler.(tool.DetailProvider); ok {
+		if custom := strings.TrimSpace(provider.PermissionDetail(call.Arguments)); custom != "" {
+			detail = custom
+		}
+	}
 	request := permission.Request{
 		CallID:    call.ID,
 		ToolName:  definition.Name,
 		ToolKind:  definition.Kind,
-		Detail:    permissionDetail(definition, call.Arguments),
+		Detail:    detail,
 		Arguments: append(json.RawMessage(nil), call.Arguments...),
 	}
 
