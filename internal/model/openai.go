@@ -121,84 +121,204 @@ type openAIChatRequest struct {
 	Tools    []openAIToolDef     `json:"tools,omitempty"`
 }
 
+type openAIResponsesToolDef struct {
+	Type        string         `json:"type"`
+	Name        string         `json:"name"`
+	Description string         `json:"description,omitempty"`
+	Parameters  map[string]any `json:"parameters,omitempty"`
+}
+
+type openAIResponsesRequest struct {
+	Model  string                   `json:"model"`
+	Stream bool                     `json:"stream"`
+	Input  []any                    `json:"input"`
+	Tools  []openAIResponsesToolDef `json:"tools,omitempty"`
+}
+
+type openAIResponsesChunk struct {
+	Type      string               `json:"type"`
+	Delta     string               `json:"delta,omitempty"`
+	Item      *openAIResponsesItem `json:"item,omitempty"`
+	ItemID    string               `json:"item_id,omitempty"`
+	Arguments string               `json:"arguments,omitempty"`
+	Response  *struct {
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	} `json:"response,omitempty"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error,omitempty"`
+}
+
+type openAIResponsesItem struct {
+	ID        string `json:"id"`
+	Type      string `json:"type"` // "message", "function_call", "reasoning"
+	Role      string `json:"role,omitempty"`
+	Name      string `json:"name,omitempty"`
+	CallID    string `json:"call_id,omitempty"`
+	Arguments string `json:"arguments,omitempty"`
+}
+
+func isResponsesModel(modelID string) bool {
+	id := strings.ToLower(strings.TrimSpace(modelID))
+	return strings.HasPrefix(id, "muse-spark") || strings.Contains(id, "responses")
+}
+
 // Stream initiates a server-sent events stream for the conversation request.
 func (c *OpenAIClient) Stream(ctx context.Context, request Request) (Stream, error) {
 	if err := request.Validate(); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
 	}
 
-	messages := make([]openAIChatMessage, 0, len(request.Messages))
-	for _, m := range request.Messages {
-		if m.Role == RoleAssistant && len(m.ToolCalls) > 0 {
-			// If conversational text was emitted alongside tool calls, separate into two messages.
-			// Upstream providers (such as Ling/01.AI via OpenCode/OpenRouter) reject assistant messages
-			// combining both non-empty content and tool_calls with 503 "Upstream request failed".
-			if strings.TrimSpace(m.Content) != "" {
-				text := m.Content
-				messages = append(messages, openAIChatMessage{
-					Role:    "assistant",
-					Content: &text,
-				})
-			}
-			toolCalls := make([]openAIToolCallReq, 0, len(m.ToolCalls))
-			for _, tc := range m.ToolCalls {
-				toolCalls = append(toolCalls, openAIToolCallReq{
-					ID:   tc.ID,
-					Type: "function",
-					Function: openAIFunctionCallReq{
-						Name:      tc.Name,
-						Arguments: string(tc.Arguments),
-					},
-				})
-			}
-			messages = append(messages, openAIChatMessage{
-				Role:      "assistant",
-				ToolCalls: toolCalls,
-			})
-			continue
+	var endpoint string
+	var encoded []byte
+
+	if isResponsesModel(c.modelID) || strings.HasSuffix(c.baseURL, "/responses") {
+		endpoint = c.baseURL
+		if strings.HasSuffix(endpoint, "/chat/completions") {
+			endpoint = strings.TrimSuffix(endpoint, "/chat/completions") + "/responses"
+		} else if !strings.HasSuffix(endpoint, "/responses") {
+			endpoint += "/responses"
 		}
 
-		content := m.Content
-		msg := openAIChatMessage{
-			Role:    string(m.Role),
-			Content: &content,
+		input := make([]any, 0, len(request.Messages))
+		for _, m := range request.Messages {
+			switch m.Role {
+			case RoleUser:
+				input = append(input, map[string]any{
+					"role":    "user",
+					"content": m.Content,
+				})
+			case RoleSystem:
+				input = append(input, map[string]any{
+					"role":    "system",
+					"content": m.Content,
+				})
+			case RoleAssistant:
+				if strings.TrimSpace(m.Content) != "" {
+					input = append(input, map[string]any{
+						"role":    "assistant",
+						"content": m.Content,
+					})
+				}
+				for _, tc := range m.ToolCalls {
+					input = append(input, map[string]any{
+						"type":      "function_call",
+						"name":      tc.Name,
+						"call_id":   tc.ID,
+						"arguments": string(tc.Arguments),
+					})
+				}
+			case RoleTool:
+				input = append(input, map[string]any{
+					"type":    "function_call_output",
+					"call_id": m.ToolCallID,
+					"output":  m.Content,
+				})
+			}
 		}
-		if m.Role == RoleTool {
-			msg.ToolCallID = m.ToolCallID
-		}
-		messages = append(messages, msg)
-	}
 
-	var tools []openAIToolDef
-	if len(request.Tools) > 0 {
-		tools = make([]openAIToolDef, 0, len(request.Tools))
-		for _, t := range request.Tools {
-			tools = append(tools, openAIToolDef{
-				Type: "function",
-				Function: openAIFunctionDef{
+		var tools []openAIResponsesToolDef
+		if len(request.Tools) > 0 {
+			tools = make([]openAIResponsesToolDef, 0, len(request.Tools))
+			for _, t := range request.Tools {
+				tools = append(tools, openAIResponsesToolDef{
+					Type:        "function",
 					Name:        t.Name,
 					Description: t.Description,
 					Parameters:  t.InputSchema,
-				},
-			})
+				})
+			}
 		}
-	}
 
-	reqBody := openAIChatRequest{
-		Model:    c.modelID,
-		Messages: messages,
-		Stream:   true,
-		Tools:    tools,
-	}
+		reqBody := openAIResponsesRequest{
+			Model:  c.modelID,
+			Stream: true,
+			Input:  input,
+			Tools:  tools,
+		}
 
-	encoded, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("marshal chat request: %w", err)
-	}
+		var err error
+		encoded, err = json.Marshal(reqBody)
+		if err != nil {
+			return nil, fmt.Errorf("marshal responses request: %w", err)
+		}
+	} else {
+		endpoint = c.baseURL
+		if !strings.HasSuffix(endpoint, "/chat/completions") {
+			endpoint += "/chat/completions"
+		}
 
-	endpoint := c.baseURL
-	if !strings.HasSuffix(endpoint, "/chat/completions") {
-		endpoint += "/chat/completions"
+		messages := make([]openAIChatMessage, 0, len(request.Messages))
+		for _, m := range request.Messages {
+			if m.Role == RoleAssistant && len(m.ToolCalls) > 0 {
+				// If conversational text was emitted alongside tool calls, separate into two messages.
+				// Upstream providers (such as Ling/01.AI via OpenCode/OpenRouter) reject assistant messages
+				// combining both non-empty content and tool_calls with 503 "Upstream request failed".
+				if strings.TrimSpace(m.Content) != "" {
+					text := m.Content
+					messages = append(messages, openAIChatMessage{
+						Role:    "assistant",
+						Content: &text,
+					})
+				}
+				toolCalls := make([]openAIToolCallReq, 0, len(m.ToolCalls))
+				for _, tc := range m.ToolCalls {
+					toolCalls = append(toolCalls, openAIToolCallReq{
+						ID:   tc.ID,
+						Type: "function",
+						Function: openAIFunctionCallReq{
+							Name:      tc.Name,
+							Arguments: string(tc.Arguments),
+						},
+					})
+				}
+				messages = append(messages, openAIChatMessage{
+					Role:      "assistant",
+					ToolCalls: toolCalls,
+				})
+				continue
+			}
+
+			content := m.Content
+			msg := openAIChatMessage{
+				Role:    string(m.Role),
+				Content: &content,
+			}
+			if m.Role == RoleTool {
+				msg.ToolCallID = m.ToolCallID
+			}
+			messages = append(messages, msg)
+		}
+
+		var tools []openAIToolDef
+		if len(request.Tools) > 0 {
+			tools = make([]openAIToolDef, 0, len(request.Tools))
+			for _, t := range request.Tools {
+				tools = append(tools, openAIToolDef{
+					Type: "function",
+					Function: openAIFunctionDef{
+						Name:        t.Name,
+						Description: t.Description,
+						Parameters:  t.InputSchema,
+					},
+				})
+			}
+		}
+
+		reqBody := openAIChatRequest{
+			Model:    c.modelID,
+			Messages: messages,
+			Stream:   true,
+			Tools:    tools,
+		}
+
+		var err error
+		encoded, err = json.Marshal(reqBody)
+		if err != nil {
+			return nil, fmt.Errorf("marshal chat request: %w", err)
+		}
 	}
 
 	maxRetries := 2
@@ -282,19 +402,21 @@ type accumulatedToolCall struct {
 }
 
 type openAIStream struct {
-	reader    *bufio.Reader
-	closer    io.Closer
-	toolCalls map[int]*accumulatedToolCall
-	queue     []Event
-	done      bool
+	reader        *bufio.Reader
+	closer        io.Closer
+	toolCalls     map[int]*accumulatedToolCall
+	respToolCalls map[string]*accumulatedToolCall
+	queue         []Event
+	done          bool
 }
 
 func newOpenAIStream(r io.ReadCloser) *openAIStream {
 	return &openAIStream{
-		reader:    bufio.NewReader(r),
-		closer:    r,
-		toolCalls: make(map[int]*accumulatedToolCall),
-		queue:     make([]Event, 0),
+		reader:        bufio.NewReader(r),
+		closer:        r,
+		toolCalls:     make(map[int]*accumulatedToolCall),
+		respToolCalls: make(map[string]*accumulatedToolCall),
+		queue:         make([]Event, 0),
 	}
 }
 
@@ -376,79 +498,187 @@ func (s *openAIStream) Next(ctx context.Context) (Event, error) {
 		}
 
 		var chunk openAIChunk
-		if unmarshalErr := json.Unmarshal([]byte(payload), &chunk); unmarshalErr != nil {
+		if unmarshalErr := json.Unmarshal([]byte(payload), &chunk); unmarshalErr == nil {
+			if chunk.Error != nil {
+				return Event{}, fmt.Errorf("model error: %s", chunk.Error.Message)
+			}
+
+			if len(chunk.Choices) > 0 {
+				for _, choice := range chunk.Choices {
+					if choice.Delta.Content != "" {
+						s.queue = append(s.queue, Event{
+							Kind: EventTextDelta,
+							Text: choice.Delta.Content,
+						})
+					}
+
+					for _, tc := range choice.Delta.ToolCalls {
+						acc, exists := s.toolCalls[tc.Index]
+						if !exists {
+							acc = &accumulatedToolCall{}
+							s.toolCalls[tc.Index] = acc
+						}
+						if tc.ID != "" {
+							acc.id = tc.ID
+						}
+						if tc.Function.Name != "" {
+							acc.name = tc.Function.Name
+						}
+						if tc.Function.Arguments != "" {
+							acc.arguments.WriteString(tc.Function.Arguments)
+						}
+					}
+				}
+
+				if len(s.queue) > 0 {
+					ev := s.queue[0]
+					s.queue = s.queue[1:]
+					return ev, nil
+				}
+				continue
+			}
+		}
+
+		// Check OpenAI Responses API SSE chunk
+		var respChunk openAIResponsesChunk
+		if unmarshalErr := json.Unmarshal([]byte(payload), &respChunk); unmarshalErr == nil && respChunk.Type != "" {
+			if respChunk.Error != nil {
+				return Event{}, fmt.Errorf("model error: %s", respChunk.Error.Message)
+			}
+			if respChunk.Response != nil && respChunk.Response.Error != nil {
+				return Event{}, fmt.Errorf("model error: %s", respChunk.Response.Error.Message)
+			}
+
+			switch respChunk.Type {
+			case "response.output_text.delta":
+				if respChunk.Delta != "" {
+					s.queue = append(s.queue, Event{
+						Kind: EventTextDelta,
+						Text: respChunk.Delta,
+					})
+				}
+			case "response.output_item.added":
+				if respChunk.Item != nil && respChunk.Item.Type == "function_call" {
+					callID := respChunk.Item.CallID
+					if callID == "" {
+						callID = respChunk.Item.ID
+					}
+					s.respToolCalls[respChunk.Item.ID] = &accumulatedToolCall{
+						id:   callID,
+						name: respChunk.Item.Name,
+					}
+				}
+			case "response.function_call_arguments.delta":
+				if respChunk.ItemID != "" && respChunk.Delta != "" {
+					if acc, exists := s.respToolCalls[respChunk.ItemID]; exists {
+						acc.arguments.WriteString(respChunk.Delta)
+					}
+				}
+			case "response.output_item.done":
+				if respChunk.Item != nil && respChunk.Item.Type == "function_call" {
+					callID := respChunk.Item.CallID
+					if callID == "" {
+						callID = respChunk.Item.ID
+					}
+					name := respChunk.Item.Name
+					argsStr := strings.TrimSpace(respChunk.Item.Arguments)
+					if acc, exists := s.respToolCalls[respChunk.Item.ID]; exists {
+						if name == "" {
+							name = acc.name
+						}
+						if callID == "" {
+							callID = acc.id
+						}
+						if argsStr == "" {
+							argsStr = strings.TrimSpace(acc.arguments.String())
+						}
+						delete(s.respToolCalls, respChunk.Item.ID)
+					}
+					if callID == "" {
+						callID = fmt.Sprintf("call_%d", time.Now().UnixNano())
+					}
+					if argsStr == "" {
+						argsStr = "{}"
+					}
+					s.queue = append(s.queue, Event{
+						Kind: EventToolCall,
+						ToolCall: ToolCall{
+							ID:        callID,
+							Name:      name,
+							Arguments: json.RawMessage(argsStr),
+						},
+					})
+				}
+			case "response.completed":
+				s.flushToolCalls()
+				s.queue = append(s.queue, Event{Kind: EventDone})
+				s.done = true
+			}
+
+			if len(s.queue) > 0 {
+				ev := s.queue[0]
+				s.queue = s.queue[1:]
+				return ev, nil
+			}
 			continue
-		}
-
-		if chunk.Error != nil {
-			return Event{}, fmt.Errorf("model error: %s", chunk.Error.Message)
-		}
-
-		for _, choice := range chunk.Choices {
-			if choice.Delta.Content != "" {
-				s.queue = append(s.queue, Event{
-					Kind: EventTextDelta,
-					Text: choice.Delta.Content,
-				})
-			}
-
-			for _, tc := range choice.Delta.ToolCalls {
-				acc, exists := s.toolCalls[tc.Index]
-				if !exists {
-					acc = &accumulatedToolCall{}
-					s.toolCalls[tc.Index] = acc
-				}
-				if tc.ID != "" {
-					acc.id = tc.ID
-				}
-				if tc.Function.Name != "" {
-					acc.name = tc.Function.Name
-				}
-				if tc.Function.Arguments != "" {
-					acc.arguments.WriteString(tc.Function.Arguments)
-				}
-			}
-		}
-
-		if len(s.queue) > 0 {
-			ev := s.queue[0]
-			s.queue = s.queue[1:]
-			return ev, nil
 		}
 	}
 }
 
 func (s *openAIStream) flushToolCalls() {
-	if len(s.toolCalls) == 0 {
-		return
+	if len(s.toolCalls) > 0 {
+		indices := make([]int, 0, len(s.toolCalls))
+		for idx := range s.toolCalls {
+			indices = append(indices, idx)
+		}
+		sort.Ints(indices)
+
+		for _, idx := range indices {
+			acc := s.toolCalls[idx]
+			argsStr := strings.TrimSpace(acc.arguments.String())
+			if argsStr == "" {
+				argsStr = "{}"
+			}
+			callID := acc.id
+			if callID == "" {
+				callID = fmt.Sprintf("call_%d_%d", time.Now().UnixNano(), idx)
+			}
+			s.queue = append(s.queue, Event{
+				Kind: EventToolCall,
+				ToolCall: ToolCall{
+					ID:        callID,
+					Name:      acc.name,
+					Arguments: json.RawMessage(argsStr),
+				},
+			})
+		}
+		s.toolCalls = make(map[int]*accumulatedToolCall)
 	}
 
-	indices := make([]int, 0, len(s.toolCalls))
-	for idx := range s.toolCalls {
-		indices = append(indices, idx)
-	}
-	sort.Ints(indices)
-
-	for _, idx := range indices {
-		acc := s.toolCalls[idx]
-		argsStr := strings.TrimSpace(acc.arguments.String())
-		if argsStr == "" {
-			argsStr = "{}"
+	if len(s.respToolCalls) > 0 {
+		for itemID, acc := range s.respToolCalls {
+			argsStr := strings.TrimSpace(acc.arguments.String())
+			if argsStr == "" {
+				argsStr = "{}"
+			}
+			callID := acc.id
+			if callID == "" {
+				callID = itemID
+			}
+			if callID == "" {
+				callID = fmt.Sprintf("call_%d", time.Now().UnixNano())
+			}
+			s.queue = append(s.queue, Event{
+				Kind: EventToolCall,
+				ToolCall: ToolCall{
+					ID:        callID,
+					Name:      acc.name,
+					Arguments: json.RawMessage(argsStr),
+				},
+			})
 		}
-		callID := acc.id
-		if callID == "" {
-			callID = fmt.Sprintf("call_%d_%d", time.Now().UnixNano(), idx)
-		}
-		s.queue = append(s.queue, Event{
-			Kind: EventToolCall,
-			ToolCall: ToolCall{
-				ID:        callID,
-				Name:      acc.name,
-				Arguments: json.RawMessage(argsStr),
-			},
-		})
+		s.respToolCalls = make(map[string]*accumulatedToolCall)
 	}
-	s.toolCalls = make(map[int]*accumulatedToolCall)
 }
 
 func (s *openAIStream) Close() error {
