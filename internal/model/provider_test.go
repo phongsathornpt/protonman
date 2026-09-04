@@ -193,4 +193,32 @@ func TestSupportedPresetsAndLookup(t *testing.T) {
 	}
 }
 
+func TestNormalizeModelID(t *testing.T) {
+	tests := []struct {
+		provider string
+		modelID  string
+		expected string
+	}{
+		// Typo correction
+		{"opencode", "muse-spark-1.3-contributer", "muse-spark-1.3-contributor-free"},
+		{"opencode", "muse-spark-1.3-contributor", "muse-spark-1.3-contributor-free"},
+		{"opencode", "muse-spark-1.3-contributor-free", "muse-spark-1.3-contributor-free"},
+		{"opencode", "ling-3.0-flash-fin", "ling-3.0-flash-fin-free"},
+		{"https://opencode.ai/zen/v1", "nemotron-3.5-lightning", "nemotron-3.5-lightning-free"},
+		{"https://opencode.ai/zen/v1", "big-pickle", "big-pickle"},
+		// Non-opencode provider preserves original name (only fixes typo if present)
+		{"protonman", "muse-spark-1.3-contributer", "muse-spark-1.3-contributor"},
+		{"openai", "gpt-4o", "gpt-4o"},
+		{"", "", ""},
+	}
+
+	for _, tc := range tests {
+		got := NormalizeModelID(tc.provider, tc.modelID)
+		if got != tc.expected {
+			t.Errorf("NormalizeModelID(%q, %q) = %q, want %q", tc.provider, tc.modelID, got, tc.expected)
+		}
+	}
+}
+
+
 

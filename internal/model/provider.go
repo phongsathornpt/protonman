@@ -118,6 +118,44 @@ func IsFreeModel(id string) bool {
 	return strings.HasSuffix(idLower, "-free") || idLower == "big-pickle"
 }
 
+// NormalizeModelID cleans and harmonizes known model ID typos and provider-specific suffixes.
+func NormalizeModelID(endpointOrProvider string, modelID string) string {
+	raw := strings.TrimSpace(modelID)
+	if raw == "" {
+		return raw
+	}
+
+	lower := strings.ToLower(raw)
+	// Fix common typo: contributer -> contributor
+	if strings.Contains(lower, "contributer") {
+		raw = strings.ReplaceAll(raw, "contributer", "contributor")
+		raw = strings.ReplaceAll(raw, "Contributer", "Contributor")
+		lower = strings.ToLower(raw)
+	}
+
+	// For OpenCode: ensure free-tier models have the -free suffix
+	isOpencode := strings.Contains(strings.ToLower(endpointOrProvider), "opencode")
+	if isOpencode && !strings.HasSuffix(lower, "-free") && lower != "big-pickle" {
+		knownFreeBases := []string{
+			"nemotron-3.5-lightning",
+			"nemotron-3-ultra",
+			"mimo-v2.5",
+			"deepseek-v4-flash",
+			"muse-spark-1.3-contributor",
+			"muse-spark-1.2-contributor",
+			"ling-3.0-flash-fin",
+			"laguna-s-2.1",
+		}
+		for _, base := range knownFreeBases {
+			if strings.EqualFold(raw, base) {
+				return base + "-free"
+			}
+		}
+	}
+
+	return raw
+}
+
 // FetchProviderModels queries a provider's model endpoint to list available models.
 func FetchProviderModels(ctx context.Context, baseURL string, apiKey string) ([]RemoteModel, error) {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
