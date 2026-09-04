@@ -74,6 +74,15 @@ func WithSessionID(sessionID string) BubbleTeaOption {
 	}
 }
 
+// WithAgentConfig attaches agent execution settings (e.g. max rounds) to the TUI.
+func WithAgentConfig(agentCfg config.AgentConfig) BubbleTeaOption {
+	return func(ui *BubbleTeaUI) error {
+		ui.agentConfig = agentCfg
+		ui.hasAgentConfig = true
+		return nil
+	}
+}
+
 // BubbleTeaUI is the Bubble Tea terminal adapter over Proton services.
 type BubbleTeaUI struct {
 	service         *toolcall.Service
@@ -86,6 +95,8 @@ type BubbleTeaUI struct {
 	initialMessages []model.Message
 	finalMessages   []model.Message
 	modelConfig     config.ModelConfig
+	agentConfig     config.AgentConfig
+	hasAgentConfig  bool
 	providers       map[string]config.ProviderConfig
 	sessionID       string
 }
@@ -164,6 +175,9 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 	bModel.activeProvider = ui.modelConfig.Provider
 	bModel.providers = ui.providers
 	bModel.sessionID = ui.sessionID
+	if ui.hasAgentConfig {
+		bModel.maxRounds = ui.agentConfig.MaxRounds
+	}
 	bModel.reconfigureRunner()
 
 	program := tea.NewProgram(

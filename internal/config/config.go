@@ -19,6 +19,9 @@ import (
 const (
 	userConfigRelativePath    = ".proton/config.toml"
 	projectConfigRelativePath = ".proton/config.toml"
+
+	// DefaultMaxRounds is the fallback maximum rounds per turn when unspecified.
+	DefaultMaxRounds = 20
 )
 
 // Options controls which configuration layers are considered.
@@ -48,6 +51,11 @@ type ModelConfig struct {
 	Provider string `toml:"provider"`
 }
 
+// AgentConfig specifies autonomous agent execution settings.
+type AgentConfig struct {
+	MaxRounds int `toml:"max_rounds"`
+}
+
 // Snapshot is the effective configuration after layered loading.
 type Snapshot struct {
 	// Permission is the static permission policy configuration.
@@ -62,6 +70,8 @@ type Snapshot struct {
 	Providers map[string]ProviderConfig
 	// Model defines default active model preferences.
 	Model ModelConfig
+	// Agent defines execution bounds such as max rounds.
+	Agent AgentConfig
 	// Sources lists files that were loaded successfully.
 	Sources []string
 	// Warnings reports safe skips, such as an untrusted project config.
@@ -75,6 +85,11 @@ type fileDocument struct {
 	Sandbox    fileSandbox               `toml:"sandbox"`
 	Providers  map[string]ProviderConfig `toml:"providers,omitempty"`
 	Model      ModelConfig               `toml:"model,omitempty"`
+	Agent      fileAgent                 `toml:"agent,omitempty"`
+}
+
+type fileAgent struct {
+	MaxRounds *int `toml:"max_rounds,omitempty"`
 }
 
 type fileSandbox struct {
@@ -136,6 +151,9 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 		ProtectedPaths: make([]string, 0),
 		Sandbox:        sandbox.NameOff,
 		Providers:      make(map[string]ProviderConfig),
+		Agent: AgentConfig{
+			MaxRounds: DefaultMaxRounds,
+		},
 		Sources:        make([]string, 0, 2),
 		Warnings:       make([]string, 0),
 	}
@@ -244,6 +262,9 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 	}
 	if document.Model.Provider != "" {
 		snapshot.Model.Provider = document.Model.Provider
+	}
+	if document.Agent.MaxRounds != nil {
+		snapshot.Agent.MaxRounds = *document.Agent.MaxRounds
 	}
 	return nil
 }
@@ -399,6 +420,46 @@ func DeleteUserProviderConfig(homeDir string, providerName string) error {
 	}
 	return nil
 }
+
+// SaveUserMaxRounds updates the max rounds limit in ~/.proton/config.toml.
+func SaveUserMaxRounds(homeDir string, maxRounds int) error {
+	if homeDir == "" {
+		resolvedHome, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("resolve home directory: %w", err)
+		}
+		homeDir = resolvedHome
+	}
+	userDir := filepath.Join(homeDir, ".proton")
+	if err := os.MkdirAll(userDir, 0o700); err != nil {
+		return fmt.Errorf("create config directory: %w", err)
+	}
+	userPath := filepath.Join(homeDir, userConfigRelativePath)
+
+	var doc fileDocument
+	data, err := os.ReadFile(userPath)
+	if err == nil {
+		_ = toml.Unmarshal(data, &doc)
+	}
+
+	doc.Agent.MaxRounds = &maxRounds
+
+	encoded, err := toml.Marshal(doc)
+	if err != nil {
+		return fmt.Errorf("encode config toml: %w", err)
+	}
+
+	tempPath := fmt.Sprintf("%s.tmp.%d", userPath, os.Getpid())
+	if err := os.WriteFile(tempPath, encoded, 0o600); err != nil {
+		return fmt.Errorf("write temporary config: %w", err)
+	}
+	if err := os.Rename(tempPath, userPath); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("persist config: %w", err)
+	}
+	return nil
+}
+
 
 func decodeRule(raw fileRule) (permission.Rule, error) {
 	// Grok defaults omitted rule actions to deny. Keeping that default avoids

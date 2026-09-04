@@ -20,10 +20,25 @@ import (
 )
 
 const (
-	defaultMaxRounds       = 8
+	// DefaultMaxRounds is the default maximum number of rounds per turn.
+	DefaultMaxRounds       = 20
+	defaultMaxRounds       = DefaultMaxRounds
 	defaultMaxParallelRead = 4
 	skillPromptMarker      = "<!-- proton:skill-catalog -->"
 )
+
+// MaxRoundsPrompt is injected when the turn reaches max rounds to compel a final synthesis response without tools.
+const MaxRoundsPrompt = `CRITICAL - MAXIMUM TOOL ROUNDS REACHED
+
+The maximum number of tool execution rounds allowed for this turn has been reached. Tools are disabled until next user input. Respond with text only.
+
+STRICT REQUIREMENTS:
+1. Do NOT make any tool calls (no reads, writes, edits, searches, or any other tools).
+2. MUST provide a clear text response summarizing what was accomplished so far.
+3. List any remaining tasks that were not completed.
+4. Provide recommendations for what the user or next step should do.
+
+Respond with text ONLY.`
 
 var (
 	// ErrInvalidLoop indicates that the loop cannot be constructed or started.
@@ -80,10 +95,11 @@ type Result struct {
 type Option func(*Loop) error
 
 // WithMaxRounds bounds model responses that can request more tools.
+// A value of 0 indicates unbounded execution.
 func WithMaxRounds(rounds int) Option {
 	return func(loop *Loop) error {
-		if rounds <= 0 {
-			return fmt.Errorf("%w: max rounds must be positive", ErrInvalidLoop)
+		if rounds < 0 {
+			return fmt.Errorf("%w: max rounds cannot be negative", ErrInvalidLoop)
 		}
 		loop.maxRounds = rounds
 		return nil
@@ -229,10 +245,25 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			history = append([]model.Message{systemMsg}, history...)
 		}
 	}
-	for round := 1; round <= l.maxRounds; round++ {
+	for round := 1; ; round++ {
+		isMaxRound := l.maxRounds > 0 && round >= l.maxRounds
+
+		var tools []tool.Definition
+		reqMessages := model.CloneMessages(history)
+
+		if isMaxRound {
+			tools = nil
+			reqMessages = append(reqMessages, model.Message{
+				Role:    model.RoleSystem,
+				Content: MaxRoundsPrompt,
+			})
+		} else {
+			tools = l.tools.Definitions()
+		}
+
 		request := model.Request{
-			Messages: model.CloneMessages(history),
-			Tools:    l.tools.Definitions(),
+			Messages: reqMessages,
+			Tools:    tools,
 		}
 		if err := request.Validate(); err != nil {
 			return l.fail(ctx, sink, round, err)
@@ -243,7 +274,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		}
 		history = append(history, assistant)
 		turnMessages = append(turnMessages, assistant)
-		if len(executions) == 0 {
+		if len(executions) == 0 || isMaxRound {
 			result := Result{
 				Message:  assistant,
 				Rounds:   round,
@@ -280,8 +311,6 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			turnMessages = append(turnMessages, toolMessage)
 		}
 	}
-
-	return l.fail(ctx, sink, l.maxRounds, fmt.Errorf("%w: %d rounds", ErrMaxRounds, l.maxRounds))
 }
 
 type executedCall struct {
@@ -303,7 +332,7 @@ func (l *Loop) runRound(
 	if err != nil {
 		return model.Message{}, nil, err
 	}
-	if len(requestedCalls) == 0 {
+	if len(requestedCalls) == 0 || len(request.Tools) == 0 {
 		return assistant, []executedCall{}, nil
 	}
 
