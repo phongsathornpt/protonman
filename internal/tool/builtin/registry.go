@@ -110,7 +110,7 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 		NewWebFetch(cfg.network),
 	}
 	if cfg.skills != nil {
-		handlers = append(handlers, NewActivateSkill(cfg.skills))
+		handlers = append(handlers, NewActivateSkill(cfg.skills, workspaceRoot))
 	}
 	return NewRegistry(handlers...)
 }
