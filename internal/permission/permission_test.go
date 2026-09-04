@@ -299,3 +299,43 @@ func TestToolKindValidationAndParsing(t *testing.T) {
 		t.Fatal("ParseToolKind(unsupported) error = nil, want error")
 	}
 }
+
+func TestMCPToolPatternMatching(t *testing.T) {
+	policy, err := NewPolicy(Config{
+		Default: ActionAsk,
+		Rules: []Rule{
+			{Action: ActionAllow, Tool: ToolMCP, Pattern: "mcp.github.*"},
+			{Action: ActionDeny, Tool: ToolMCP, Pattern: "filesystem.*"},
+			{Action: ActionAllow, Tool: ToolMCP, Pattern: "*secret*"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewPolicy() error = %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		toolName string
+		detail   string
+		want     Action
+	}{
+		{name: "allow full prefix", toolName: "mcp.github.get_repo", detail: "{}", want: ActionAllow},
+		{name: "deny stripped prefix", toolName: "mcp.filesystem.read", detail: "{}", want: ActionDeny},
+		{name: "allow argument match", toolName: "mcp.custom.query", detail: "has secret data", want: ActionAllow},
+		{name: "default ask unmatched", toolName: "mcp.slack.post", detail: "{}", want: ActionAsk},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			decision := policy.Evaluate(Request{
+				ToolName: tt.toolName,
+				ToolKind: ToolMCP,
+				Detail:   tt.detail,
+			})
+			if decision.Action != tt.want {
+				t.Fatalf("Evaluate() = %v, want %v", decision.Action, tt.want)
+			}
+		})
+	}
+}
+
