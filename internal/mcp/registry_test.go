@@ -214,6 +214,68 @@ func TestDiscoverKeepsMCPCallsBehindPermission(t *testing.T) {
 	}
 }
 
+func TestDiscoverGranularPermissionMatching(t *testing.T) {
+	server := &fakeServer{
+		name: "github",
+		tools: []Tool{
+			{Name: "search", Description: "search issues"},
+			{Name: "delete", Description: "delete repo"},
+		},
+		results: map[string]Result{
+			"search": {Output: "found"},
+			"delete": {Output: "deleted"},
+		},
+	}
+	registry, err := builtin.NewRegistry()
+	if err != nil {
+		t.Fatalf("NewRegistry() error = %v", err)
+	}
+	if err := Discover(context.Background(), registry, server); err != nil {
+		t.Fatalf("Discover() error = %v", err)
+	}
+
+	policy, err := permission.NewPolicy(permission.Config{
+		Default: permission.ActionAsk,
+		Rules: []permission.Rule{
+			{Action: permission.ActionAllow, Tool: permission.ToolMCP, Pattern: "github.search"},
+			{Action: permission.ActionDeny, Tool: permission.ToolMCP, Pattern: "mcp.github.delete"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewPolicy() error = %v", err)
+	}
+	service, err := toolcall.NewService(registry, policy)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	// 1. Allowed call with stripped prefix pattern "github.search"
+	callAllowed, err := domaintool.NewCall("call-1", "mcp.github.search", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("NewCall() error = %v", err)
+	}
+	resAllowed, err := service.Call(context.Background(), callAllowed)
+	if err != nil {
+		t.Fatalf("Call() unexpected error = %v", err)
+	}
+	if resAllowed.Output != "found" {
+		t.Fatalf("output = %q, want found", resAllowed.Output)
+	}
+
+	// 2. Denied call with full prefix pattern "mcp.github.delete"
+	callDenied, err := domaintool.NewCall("call-2", "mcp.github.delete", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("NewCall() error = %v", err)
+	}
+	resDenied, err := service.Call(context.Background(), callDenied)
+	if !errors.Is(err, toolcall.ErrPermissionDenied) {
+		t.Fatalf("Call() error = %v, want permission denied", err)
+	}
+	if !resDenied.Denied {
+		t.Fatal("resDenied.Denied = false, want true")
+	}
+}
+
 func TestDiscoverDoesNotPartiallyRegisterInvalidResults(t *testing.T) {
 	server := &fakeServer{
 		name: "broken",

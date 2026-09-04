@@ -481,7 +481,18 @@ func ruleMatches(rule Rule, request Request) bool {
 		}
 		detail = strings.ToLower(parsed.Hostname())
 	}
-	return glob.Match(rule.Pattern, detail)
+	if glob.Match(rule.Pattern, detail) {
+		return true
+	}
+	if request.ToolKind == ToolMCP {
+		if glob.Match(rule.Pattern, request.ToolName) {
+			return true
+		}
+		if strings.HasPrefix(request.ToolName, "mcp.") && glob.Match(rule.Pattern, strings.TrimPrefix(request.ToolName, "mcp.")) {
+			return true
+		}
+	}
+	return false
 }
 
 func ruleReason(action string, rule Rule, request Request) string {
