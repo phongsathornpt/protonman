@@ -203,7 +203,7 @@ Review code thoroughly.
 
 	// 3. New process run in same workspace: verify skill activation persisted across CLI runs
 	res = runProton(t, runOptions{
-		args: []string{"-y", "-p", "/skills active"},
+		args: []string{"-y", "--resume", "-p", "/skills active"},
 		dir:  ws,
 		env:  []string{"PROTON_HOME=" + home},
 	})
@@ -216,7 +216,7 @@ Review code thoroughly.
 
 	// 4. Toggle skill to inactive
 	res = runProton(t, runOptions{
-		args: []string{"-y", "-p", "/skill toggle code-reviewer"},
+		args: []string{"-y", "--resume", "-p", "/skill toggle code-reviewer"},
 		dir:  ws,
 		env:  []string{"PROTON_HOME=" + home},
 	})
@@ -229,7 +229,7 @@ Review code thoroughly.
 
 	// 5. Verify deactivation persisted across CLI runs
 	res = runProton(t, runOptions{
-		args: []string{"-y", "-p", "/skills active"},
+		args: []string{"-y", "--resume", "-p", "/skills active"},
 		dir:  ws,
 		env:  []string{"PROTON_HOME=" + home},
 	})

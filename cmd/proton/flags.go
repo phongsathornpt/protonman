@@ -10,14 +10,17 @@ import (
 )
 
 type cliOptions struct {
-	prompt   string
-	output   string
-	mode     string
-	sandbox  string
-	yolo     bool
-	headless bool
-	acp      bool
-	help     bool
+	prompt     string
+	output     string
+	mode       string
+	sandbox    string
+	yolo       bool
+	headless   bool
+	acp        bool
+	help       bool
+	resume     bool
+	newSession bool
+	sessionID  string
 }
 
 func parseArgs(args []string) (cliOptions, error) {
@@ -32,6 +35,15 @@ func parseArgs(args []string) (cliOptions, error) {
 	flags.BoolVar(&options.headless, "headless", false, "read the prompt from stdin")
 	flags.BoolVar(&options.acp, "acp", false, "serve Agent Client Protocol JSON-RPC on stdio")
 	flags.StringVar(&options.sandbox, "sandbox", "", "sandbox profile: off, workspace, read-only, strict")
+	flags.BoolVar(&options.resume, "r", false, "resume the previous session")
+	flags.BoolVar(&options.resume, "resume", false, "resume the previous session")
+	flags.BoolVar(&options.resume, "continue", false, "resume the previous session")
+	flags.BoolVar(&options.resume, "c", false, "resume the previous session")
+	flags.BoolVar(&options.newSession, "n", false, "start a new session (default)")
+	flags.BoolVar(&options.newSession, "new-session", false, "start a new session (default)")
+	flags.BoolVar(&options.newSession, "new", false, "start a new session (default)")
+	flags.StringVar(&options.sessionID, "s", "", "session id to load or create")
+	flags.StringVar(&options.sessionID, "session", "", "session id to load or create")
 	flags.BoolVar(&options.help, "help", false, "show usage")
 	flags.BoolVar(&options.help, "h", false, "show usage")
 	if err := flags.Parse(args); err != nil {
@@ -43,6 +55,9 @@ func parseArgs(args []string) (cliOptions, error) {
 	if options.help {
 		return options, nil
 	}
+	if options.resume && options.newSession {
+		return cliOptions{}, errors.New("cannot specify both --resume and --new-session")
+	}
 	if options.prompt == "" && flags.NArg() > 0 {
 		options.prompt = strings.Join(flags.Args(), " ")
 	}
@@ -52,9 +67,15 @@ func parseArgs(args []string) (cliOptions, error) {
 func usage() string {
 	return strings.TrimSpace(`
 Usage:
-  proton                      start the fullscreen TUI
+  proton                      start the fullscreen TUI (new session)
+  proton --resume             resume the previous session
   proton -p "<prompt>"        run one headless prompt
   proton --headless           read the headless prompt from stdin
+
+Session flags:
+  -r, --resume, --continue    resume the previous session
+  -s, --session string        session id to load or create
+  -n, --new-session, --new    start a new session (default)
 
 Headless flags:
   -p, --prompt string         prompt text
