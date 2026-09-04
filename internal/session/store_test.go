@@ -182,3 +182,87 @@ func TestFileStoreUsesPrivateStateFile(t *testing.T) {
 		t.Fatalf("state file mode = %#o, want %#o", got, 0o600)
 	}
 }
+
+func TestFileStoreLatestSession(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewFileStore(filepath.Join(root, "sessions"))
+	if err != nil {
+		t.Fatalf("NewFileStore() error = %v", err)
+	}
+
+	ctx := context.Background()
+
+	// 1. Missing directory returns found = false
+	id, _, found, err := store.LatestSession(ctx, "workspace-abc")
+	if err != nil {
+		t.Fatalf("LatestSession() error = %v", err)
+	}
+	if found || id != "" {
+		t.Fatalf("found = %v, id = %q, want false and empty", found, id)
+	}
+
+	// 2. Save an older session for workspace-abc
+	state1 := State{
+		PermissionMode: permission.ModeAsk.String(),
+		Messages: []Message{
+			{Role: model.RoleUser, Content: "turn 1"},
+		},
+	}
+	if err := store.Save(ctx, "workspace-abc-100", state1); err != nil {
+		t.Fatalf("Save(workspace-abc-100) error = %v", err)
+	}
+
+	// 3. Save a session for a different workspace
+	stateOther := State{
+		PermissionMode: permission.ModeAlwaysApprove.String(),
+		Messages: []Message{
+			{Role: model.RoleUser, Content: "other workspace"},
+		},
+	}
+	if err := store.Save(ctx, "workspace-xyz-999", stateOther); err != nil {
+		t.Fatalf("Save(workspace-xyz-999) error = %v", err)
+	}
+
+	// 4. Save a newer session for workspace-abc
+	state2 := State{
+		PermissionMode: permission.ModeAlwaysApprove.String(),
+		Messages: []Message{
+			{Role: model.RoleUser, Content: "turn 2"},
+		},
+	}
+	if err := store.Save(ctx, "workspace-abc-200", state2); err != nil {
+		t.Fatalf("Save(workspace-abc-200) error = %v", err)
+	}
+
+	// Test latest session for workspace-abc
+	id, got, found, err := store.LatestSession(ctx, "workspace-abc")
+	if err != nil {
+		t.Fatalf("LatestSession() error = %v", err)
+	}
+	if !found {
+		t.Fatal("LatestSession() found = false, want true")
+	}
+	if id != "workspace-abc-200" {
+		t.Fatalf("LatestSession() id = %q, want workspace-abc-200", id)
+	}
+	if got.PermissionMode != state2.PermissionMode {
+		t.Fatalf("PermissionMode = %q, want %q", got.PermissionMode, state2.PermissionMode)
+	}
+
+	// Test latest session with exact prefix match (legacy session format)
+	if err := store.Save(ctx, "workspace-legacy", State{
+		PermissionMode: permission.ModeDeny.String(),
+	}); err != nil {
+		t.Fatalf("Save(workspace-legacy) error = %v", err)
+	}
+	id, got, found, err = store.LatestSession(ctx, "workspace-legacy")
+	if err != nil {
+		t.Fatalf("LatestSession() error = %v", err)
+	}
+	if !found || id != "workspace-legacy" {
+		t.Fatalf("LatestSession() id = %q, want workspace-legacy", id)
+	}
+	if got.PermissionMode != permission.ModeDeny.String() {
+		t.Fatalf("PermissionMode = %q, want deny", got.PermissionMode)
+	}
+}

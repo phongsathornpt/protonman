@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -134,6 +135,71 @@ func (s *FileStore) Load(ctx context.Context, sessionID string) (State, bool, er
 		return State{}, false, fmt.Errorf("session messages: %w", err)
 	}
 	return state, true, nil
+}
+
+// LatestSession finds the most recently updated session matching prefix.
+// If prefix is empty, all valid session files in the store are considered.
+// It returns the session ID, state, found, and any error encountered.
+func (s *FileStore) LatestSession(ctx context.Context, prefix string) (string, State, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return "", State{}, false, fmt.Errorf("before finding latest session: %w", err)
+	}
+	entries, err := os.ReadDir(s.root)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", State{}, false, nil
+	}
+	if err != nil {
+		return "", State{}, false, fmt.Errorf("read session directory: %w", err)
+	}
+
+	type candidate struct {
+		id      string
+		modTime time.Time
+	}
+	var candidates []candidate
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		id := strings.TrimSuffix(entry.Name(), ".json")
+		if err := validateSessionID(id); err != nil {
+			continue
+		}
+		if prefix != "" {
+			if id != prefix && !strings.HasPrefix(id, prefix+"-") {
+				continue
+			}
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		candidates = append(candidates, candidate{id: id, modTime: info.ModTime()})
+	}
+
+	if len(candidates) == 0 {
+		return "", State{}, false, nil
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].modTime.Equal(candidates[j].modTime) {
+			return candidates[i].id > candidates[j].id
+		}
+		return candidates[i].modTime.After(candidates[j].modTime)
+	})
+
+	for _, cand := range candidates {
+		state, found, err := s.Load(ctx, cand.id)
+		if err != nil {
+			continue
+		}
+		if found {
+			return cand.id, state, true, nil
+		}
+	}
+
+	return "", State{}, false, nil
 }
 
 // Save atomically writes the current session state with private file modes.
