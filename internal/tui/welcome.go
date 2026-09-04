@@ -38,6 +38,9 @@ func (m *bubbleModel) resetConversation() {
 	m.queue = nil
 	m.followTail = true
 	m.showWelcome = true
+	if m.skills != nil {
+		m.skills.ResetActivated()
+	}
 	m.refreshTranscriptViewport(true)
 }
 
