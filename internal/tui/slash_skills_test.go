@@ -45,6 +45,18 @@ func TestSlashSkills(t *testing.T) {
 		if !strings.Contains(content, "Agent Skills (0/1 active):") || !strings.Contains(content, "[ ] pdf-processing") {
 			t.Fatalf("expected unchecked skill in viewport, got: %s", content)
 		}
+		if strings.Contains(content, "Extract PDF text") || strings.Contains(content, "[user]") {
+			t.Fatalf("expected viewport skill list to show skill name only, got: %s", content)
+		}
+
+		// Verify bottom pane skills picker also displays skill name only
+		pickerRender := model.bottom.renderTop(model)
+		if !strings.Contains(pickerRender, "pdf-processing") {
+			t.Fatalf("expected picker to contain pdf-processing, got: %s", pickerRender)
+		}
+		if strings.Contains(pickerRender, "Extract PDF text") || strings.Contains(pickerRender, "[user]") {
+			t.Fatalf("expected bottom pane picker to show skill name only without scope or description, got: %s", pickerRender)
+		}
 	})
 
 	t.Run("skill activation", func(t *testing.T) {

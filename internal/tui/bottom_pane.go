@@ -259,10 +259,7 @@ func (v *skillsPaneView) Render(m *bubbleModel) string {
 			nameStr = assistantStyle.Render(s.Name)
 		}
 
-		scopeStr := mutedStyle.Render("[" + string(s.Scope) + "]")
-		descStr := mutedStyle.Render(s.Description)
-
-		line := fmt.Sprintf("%s%s %s %s: %s", cursor, box, nameStr, scopeStr, descStr)
+		line := fmt.Sprintf("%s%s %s", cursor, box, nameStr)
 		rows = append(rows, wrapWords(line, maxWidth))
 	}
 
