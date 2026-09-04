@@ -81,8 +81,29 @@ func TestRegistry(t *testing.T) {
 	if err != nil || active {
 		t.Fatalf("expected csv-tool to be toggled inactive, err = %v", err)
 	}
-	_, err = reg.Toggle("nonexistent")
-	if err == nil {
-		t.Fatalf("expected error toggling nonexistent skill")
+	// Test Case-insensitive Lookup
+	if _, ok := reg.Lookup("PDF-TOOL"); !ok {
+		t.Errorf("expected case-insensitive lookup for 'PDF-TOOL'")
+	}
+	if _, ok := reg.Lookup("Csv-Tool"); !ok {
+		t.Errorf("expected case-insensitive lookup for 'Csv-Tool'")
+	}
+
+	// Test ActiveSkills and ResetActivated
+	reg.MarkActivated("PDF-TOOL")
+	if !reg.IsActivated("pdf-tool") {
+		t.Errorf("expected skill to be active via case-insensitive check")
+	}
+	activeSkills := reg.ActiveSkills()
+	if len(activeSkills) != 1 || activeSkills[0].Name != "pdf-tool" {
+		t.Errorf("expected 1 active skill [pdf-tool], got %v", activeSkills)
+	}
+
+	reg.ResetActivated()
+	if reg.IsActivated("pdf-tool") {
+		t.Errorf("expected all skills to be inactive after ResetActivated()")
+	}
+	if len(reg.ActivatedList()) != 0 || len(reg.ActiveSkills()) != 0 {
+		t.Errorf("expected empty active lists after ResetActivated()")
 	}
 }

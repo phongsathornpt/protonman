@@ -157,17 +157,62 @@ func FormatCatalogXML(items []CatalogItem) string {
 	return b.String()
 }
 
-// SystemPromptSection renders both the behavioral instructions and the catalog block.
-func SystemPromptSection(items []CatalogItem) string {
-	if len(items) == 0 {
+// FormatActiveSkillsXML renders the instructions and resources of all currently activated skills.
+func FormatActiveSkillsXML(active []Skill) string {
+	if len(active) == 0 {
 		return ""
 	}
-	catalog := FormatCatalogXML(items)
-	return fmt.Sprintf(`The following skills provide specialized instructions for specific tasks.
+	var b strings.Builder
+	b.WriteString("<active_skills>\n")
+	for _, s := range active {
+		fmt.Fprintf(&b, "  <skill name=\"%s\" scope=\"%s\">\n", escapeXML(s.Name), escapeXML(string(s.Scope)))
+		fmt.Fprintf(&b, "    <location>%s</location>\n", escapeXML(s.Location))
+		fmt.Fprintf(&b, "    <base_dir>%s</base_dir>\n", escapeXML(s.BaseDir))
+		if len(s.Resources) > 0 {
+			b.WriteString("    <resources>\n")
+			for _, r := range s.Resources {
+				fmt.Fprintf(&b, "      <file>%s</file>\n", escapeXML(r))
+			}
+			b.WriteString("    </resources>\n")
+		}
+		b.WriteString("    <instructions>\n")
+		b.WriteString(s.Instructions)
+		b.WriteString("\n    </instructions>\n")
+		b.WriteString("  </skill>\n")
+	}
+	b.WriteString("</active_skills>")
+	return b.String()
+}
+
+// SystemPromptSection renders behavioral instructions, available catalog, and active skills.
+func SystemPromptSection(items []CatalogItem, activeSkills ...[]Skill) string {
+	var active []Skill
+	if len(activeSkills) > 0 {
+		active = activeSkills[0]
+	}
+
+	if len(items) == 0 && len(active) == 0 {
+		return ""
+	}
+
+	var parts []string
+	if len(items) > 0 {
+		catalog := FormatCatalogXML(items)
+		parts = append(parts, fmt.Sprintf(`The following skills provide specialized instructions for specific tasks.
 When a task matches a skill's description, call the activate_skill tool with the skill's name to load its full instructions.
 When a skill references relative paths, resolve them against the skill's directory and use absolute paths in tool calls.
 
-%s`, catalog)
+%s`, catalog))
+	}
+
+	if len(active) > 0 {
+		activeBlock := FormatActiveSkillsXML(active)
+		parts = append(parts, fmt.Sprintf(`The following skills are currently ACTIVE in this session. Follow their instructions and apply their guidelines:
+
+%s`, activeBlock))
+	}
+
+	return strings.Join(parts, "\n\n")
 }
 
 func escapeXML(s string) string {
