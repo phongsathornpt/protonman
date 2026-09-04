@@ -16,6 +16,7 @@ import (
 	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/headless"
+	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/sandbox"
 	"github.com/projectTHORN/proton/internal/session"
@@ -25,6 +26,7 @@ import (
 	"github.com/projectTHORN/proton/internal/tool/builtin"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	"github.com/projectTHORN/proton/internal/tui"
+	"github.com/projectTHORN/proton/internal/turn"
 	"github.com/projectTHORN/proton/internal/workspace"
 )
 
@@ -186,8 +188,32 @@ func run(ctx context.Context, args []string) error {
 		return fmt.Errorf("create tool-call service: %w", err)
 	}
 
+	var initialRunner turn.Runner
+	if loadedConfig.Model.Default != "" {
+		provKey := strings.ToLower(loadedConfig.Model.Provider)
+		if provKey == "" {
+			provKey = model.DefaultProtonmanName
+		}
+		if prov, ok := loadedConfig.Providers[provKey]; ok && strings.TrimSpace(prov.APIKey) != "" {
+			baseURL := prov.BaseURL
+			if baseURL == "" {
+				baseURL = model.DefaultProtonmanEndpoint
+			}
+			client := model.NewOpenAIClient(baseURL, prov.APIKey, loadedConfig.Model.Default, model.WithSessionID(sessionID))
+			coordinator.SetClient(client)
+			var loopOpts []turn.Option
+			if skillRegistry != nil {
+				loopOpts = append(loopOpts, turn.WithSkillRegistry(skillRegistry))
+			}
+			loop, loopErr := turn.NewLoop(client, service, loopOpts...)
+			if loopErr == nil {
+				initialRunner = loop
+			}
+		}
+	}
+
 	if options.acp {
-		server, serverErr := acp.New(service, registry, nil)
+		server, serverErr := acp.New(service, registry, initialRunner)
 		if serverErr != nil {
 			return fmt.Errorf("create ACP server: %w", serverErr)
 		}
@@ -201,7 +227,7 @@ func run(ctx context.Context, args []string) error {
 		}
 	}
 	if headlessPrompt != "" {
-		return runHeadless(ctx, service, registry, skillRegistry, stateStore, sessionID, state, headlessPrompt, options.output)
+		return runHeadless(ctx, service, registry, skillRegistry, stateStore, sessionID, state, headlessPrompt, options.output, initialRunner)
 	}
 	if !stdinIsTerminal() || !stdoutIsTerminal() {
 		return fmt.Errorf("refusing to start the TUI without a terminal; use -p, --headless, or --acp")
@@ -212,8 +238,11 @@ func run(ctx context.Context, args []string) error {
 		registry,
 		loadTodoItems(workDir),
 		tui.WithWorkDir(workDir),
+		tui.WithSessionID(sessionID),
 		tui.WithInitialMessages(session.ToModelMessages(state.Messages)),
 		tui.WithSkills(skillRegistry),
+		tui.WithModelConfig(loadedConfig.Model, loadedConfig.Providers),
+		tui.WithBubbleTeaRunner(initialRunner),
 	)
 	if uiErr != nil {
 		return fmt.Errorf("create Bubble Tea UI: %w", uiErr)
@@ -250,12 +279,13 @@ func runHeadless(
 	state session.State,
 	prompt string,
 	outputFormat string,
+	turnRunner turn.Runner,
 ) error {
 	format, err := headless.ParseFormat(outputFormat)
 	if err != nil {
 		return err
 	}
-	runner, err := headless.New(service, registry, nil, headless.WithSkills(skillRegistry))
+	runner, err := headless.New(service, registry, turnRunner, headless.WithSkills(skillRegistry))
 	if err != nil {
 		return fmt.Errorf("create headless runner: %w", err)
 	}

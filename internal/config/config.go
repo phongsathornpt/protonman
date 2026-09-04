@@ -299,6 +299,107 @@ func SaveUserProviderConfig(homeDir string, provider ProviderConfig, defaultMode
 	return nil
 }
 
+// SaveUserDefaultProvider updates the active provider in ~/.proton/config.toml.
+func SaveUserDefaultProvider(homeDir string, provider string) error {
+	return SaveUserDefaultModel(homeDir, provider, "")
+}
+
+// SaveUserDefaultModel updates the default active model and optionally provider in ~/.proton/config.toml.
+func SaveUserDefaultModel(homeDir string, provider string, modelID string) error {
+	if homeDir == "" {
+		resolvedHome, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("resolve home directory: %w", err)
+		}
+		homeDir = resolvedHome
+	}
+	userDir := filepath.Join(homeDir, ".proton")
+	if err := os.MkdirAll(userDir, 0o700); err != nil {
+		return fmt.Errorf("create config directory: %w", err)
+	}
+	userPath := filepath.Join(homeDir, userConfigRelativePath)
+
+	var doc fileDocument
+	data, err := os.ReadFile(userPath)
+	if err == nil {
+		_ = toml.Unmarshal(data, &doc)
+	}
+
+	if modelID != "" {
+		doc.Model.Default = modelID
+	}
+	if provider != "" {
+		doc.Model.Provider = strings.ToLower(strings.TrimSpace(provider))
+	}
+
+	encoded, err := toml.Marshal(doc)
+	if err != nil {
+		return fmt.Errorf("encode config toml: %w", err)
+	}
+
+	tempPath := fmt.Sprintf("%s.tmp.%d", userPath, os.Getpid())
+	if err := os.WriteFile(tempPath, encoded, 0o600); err != nil {
+		return fmt.Errorf("write temporary config: %w", err)
+	}
+	if err := os.Rename(tempPath, userPath); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("persist config: %w", err)
+	}
+	return nil
+}
+
+// DeleteUserProviderConfig removes a provider configuration from ~/.proton/config.toml.
+func DeleteUserProviderConfig(homeDir string, providerName string) error {
+	if homeDir == "" {
+		resolvedHome, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("resolve home directory: %w", err)
+		}
+		homeDir = resolvedHome
+	}
+	userPath := filepath.Join(homeDir, userConfigRelativePath)
+
+	var doc fileDocument
+	data, err := os.ReadFile(userPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read config file: %w", err)
+	}
+	if err := toml.Unmarshal(data, &doc); err != nil {
+		return fmt.Errorf("unmarshal config: %w", err)
+	}
+
+	providerKey := strings.ToLower(strings.TrimSpace(providerName))
+	if doc.Providers != nil {
+		delete(doc.Providers, providerKey)
+	}
+
+	if strings.EqualFold(doc.Model.Provider, providerKey) {
+		doc.Model.Provider = ""
+		for remaining := range doc.Providers {
+			doc.Model.Provider = remaining
+			break
+		}
+	}
+
+	encoded, err := toml.Marshal(doc)
+	if err != nil {
+		return fmt.Errorf("encode config toml: %w", err)
+	}
+
+	tempPath := fmt.Sprintf("%s.tmp.%d", userPath, os.Getpid())
+	if err := os.WriteFile(tempPath, encoded, 0o600); err != nil {
+		return fmt.Errorf("write temporary config: %w", err)
+	}
+	if err := os.Rename(tempPath, userPath); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("persist config: %w", err)
+	}
+	return nil
+}
+
 func decodeRule(raw fileRule) (permission.Rule, error) {
 	// Grok defaults omitted rule actions to deny. Keeping that default avoids
 	// turning a partially written rule into an accidental allow.

@@ -175,3 +175,100 @@ func TestSaveAndLoadUserProviderConfig(t *testing.T) {
 		t.Fatalf("unexpected model config: %+v", snapshot.Model)
 	}
 }
+
+func TestSaveUserDefaultModel(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+
+	// 1. Initial provider save
+	provider := ProviderConfig{
+		Name:    "protonman",
+		Type:    "openai",
+		BaseURL: "https://protonman.dev/api/v1",
+		APIKey:  "plk_test_12345",
+	}
+	if err := SaveUserProviderConfig(homeDir, provider, "deepseek-v4-flash-vision-exp"); err != nil {
+		t.Fatalf("SaveUserProviderConfig() error = %v", err)
+	}
+
+	// 2. Switch default model without altering provider credentials
+	if err := SaveUserDefaultModel(homeDir, "protonman", "MiniMax-M3"); err != nil {
+		t.Fatalf("SaveUserDefaultModel() error = %v", err)
+	}
+
+	snapshot, err := Load(context.Background(), Options{
+		HomeDir: homeDir,
+		WorkDir: workDir,
+	})
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	savedProv, ok := snapshot.Providers["protonman"]
+	if !ok || savedProv.APIKey != "plk_test_12345" {
+		t.Fatalf("provider credentials should be preserved: %+v", savedProv)
+	}
+	if snapshot.Model.Default != "MiniMax-M3" || snapshot.Model.Provider != "protonman" {
+		t.Fatalf("model was not updated, got: %+v", snapshot.Model)
+	}
+}
+
+func TestDeleteUserProviderConfig(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+
+	p1 := ProviderConfig{
+		Name:    "protonman",
+		Type:    "openai",
+		BaseURL: "https://protonman.dev/api/v1",
+		APIKey:  "plk_test_12345",
+	}
+	p2 := ProviderConfig{
+		Name:    "opencode",
+		Type:    "openai",
+		BaseURL: "https://opencode.ai/zen/v1",
+	}
+	if err := SaveUserProviderConfig(homeDir, p1, "deepseek"); err != nil {
+		t.Fatalf("SaveUserProviderConfig p1: %v", err)
+	}
+	if err := SaveUserProviderConfig(homeDir, p2, "nemotron"); err != nil {
+		t.Fatalf("SaveUserProviderConfig p2: %v", err)
+	}
+	if err := SaveUserDefaultProvider(homeDir, "protonman"); err != nil {
+		t.Fatalf("SaveUserDefaultProvider: %v", err)
+	}
+
+	// Delete protonman
+	if err := DeleteUserProviderConfig(homeDir, "protonman"); err != nil {
+		t.Fatalf("DeleteUserProviderConfig error: %v", err)
+	}
+
+	snapshot, err := Load(context.Background(), Options{
+		HomeDir: homeDir,
+		WorkDir: workDir,
+	})
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if _, exists := snapshot.Providers["protonman"]; exists {
+		t.Fatal("expected protonman to be deleted")
+	}
+	if _, exists := snapshot.Providers["opencode"]; !exists {
+		t.Fatal("expected opencode to be preserved")
+	}
+	if snapshot.Model.Provider != "opencode" {
+		t.Fatalf("expected default provider to fall back to opencode, got: %q", snapshot.Model.Provider)
+	}
+
+	// Verify permissions
+	configFile := filepath.Join(homeDir, ".proton", "config.toml")
+	info, err := os.Stat(configFile)
+	if err != nil {
+		t.Fatalf("stat config file: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Fatalf("permissions = %o, want 0600", perm)
+	}
+}
+

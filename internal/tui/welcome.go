@@ -7,9 +7,20 @@ func (m bubbleModel) welcomeCard() string {
 	if cwd := strings.TrimSpace(m.workDir); cwd != "" {
 		title += mutedStyle.Render("  " + cwd)
 	}
+	if m.activeModel != "" {
+		prov := m.activeProvider
+		if prov == "" {
+			prov = "default"
+		}
+		title += brandStyle.Render("  [" + m.activeModel + " · " + prov + "]")
+	}
 	hint := mutedStyle.Render("Ask anything · /help · ctrl+t transcript")
 	if m.runner == nil {
-		hint = mutedStyle.Render("No model configured · /help · /call <tool> <json>")
+		if m.activeModel != "" {
+			hint = mutedStyle.Render("Model selected: " + m.activeModel + " · /model · /call <tool> <json>")
+		} else {
+			hint = mutedStyle.Render("No model configured · /model · /call <tool> <json>")
+		}
 	}
 	return title + "\n" + hint
 }

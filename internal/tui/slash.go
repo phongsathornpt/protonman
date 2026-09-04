@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
 )
@@ -36,7 +37,8 @@ var slashCatalog = []slashCommand{
 	{name: "todo", description: "show the TODO pane"},
 	{name: "clear", description: "clear the visible transcript"},
 	{name: "new", description: "start a new conversation"},
-	{name: "provider", aliases: []string{"model", "providers"}, description: "configure model providers (e.g. /provider add)", takesArgs: true},
+	{name: "model", aliases: []string{"models"}, description: "select active model (/model, /model <id>, /model free, /model add)", takesArgs: true},
+	{name: "provider", aliases: []string{"providers"}, description: "select or configure model providers (/provider, /provider <name>, /provider add, /provider list)", takesArgs: true},
 	{name: "call", description: "run a registered tool", takesArgs: true},
 	{name: "quit", aliases: []string{"exit"}, description: "leave Proton"},
 }
@@ -512,15 +514,101 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		m.resetConversation()
 		m.refreshViewport()
 		return nil
-	case "provider", "model", "providers":
-		if argument == "add" || argument == "" {
+	case "model", "models":
+		arg := strings.TrimSpace(argument)
+		if arg == "add" {
 			if !m.bottom.has(providerViewID) {
 				m.bottom.push(newProviderPaneView())
 				m.relayout()
 			}
 			return nil
 		}
-		m.appendLine(mutedStyle.Render("Usage: /provider add  (configures AI model provider, e.g. protonman)"))
+		if arg == "free" {
+			if !m.bottom.has(providerViewID) {
+				m.bottom.push(newProviderPaneViewWithPreset(model.DefaultOpenCodeName))
+				m.relayout()
+			}
+			return nil
+		}
+		if arg == "" || arg == "select" {
+			if !m.bottom.has(modelSelectViewID) {
+				m.bottom.push(newModelSelectPaneView(m))
+				m.relayout()
+			}
+			return nil
+		}
+		return m.selectModelDirect(arg)
+	case "provider", "providers":
+		cmdLine := strings.TrimSpace(strings.TrimPrefix(line, "/"))
+		cmdLine = strings.TrimSpace(strings.TrimPrefix(cmdLine, name))
+		fields := strings.Fields(cmdLine)
+		subCmd := ""
+		preset := ""
+		if len(fields) > 0 {
+			subCmd = fields[0]
+		}
+		if len(fields) > 1 {
+			preset = fields[1]
+		}
+
+		if subCmd == "add" {
+			if !m.bottom.has(providerViewID) {
+				if preset != "" {
+					m.bottom.push(newProviderPaneViewWithPreset(preset))
+				} else {
+					m.bottom.push(newProviderPaneView())
+				}
+				m.relayout()
+			}
+			return nil
+		}
+		if subCmd == "" || subCmd == "select" {
+			if !m.bottom.has(providerSelectViewID) {
+				m.bottom.push(newProviderSelectPaneView(m))
+				m.relayout()
+			}
+			return nil
+		}
+		if subCmd == "list" {
+			if len(m.providers) == 0 {
+				m.appendLine(mutedStyle.Render("No providers configured yet. Use /provider to see supported providers."))
+			} else {
+				m.appendLine(brandStyle.Render("Configured Providers:"))
+				for name, p := range m.providers {
+					activeTag := ""
+					if strings.EqualFold(name, m.activeProvider) {
+						activeTag = " " + successStyle.Render("[active]")
+					}
+					m.appendLine(fmt.Sprintf("  • %s: %s%s", name, p.BaseURL, activeTag))
+				}
+				if m.activeModel != "" {
+					m.appendLine(mutedStyle.Render(fmt.Sprintf("Active model: %s", m.activeModel)))
+				}
+			}
+			m.refreshViewport()
+			return nil
+		}
+
+		target := ""
+		for name := range m.providers {
+			if strings.EqualFold(name, subCmd) {
+				target = name
+				break
+			}
+		}
+		if target != "" {
+			return saveActiveProviderCmd(target)
+		}
+
+		if p := model.LookupPreset(subCmd); p != nil {
+			if !m.bottom.has(providerViewID) {
+				m.bottom.push(newProviderPaneViewWithPreset(p.ID))
+				m.relayout()
+			}
+			return nil
+		}
+
+		m.appendLine(mutedStyle.Render(fmt.Sprintf("unknown provider %q; try /provider, /provider list, or /provider add", subCmd)))
 		m.refreshViewport()
 		return nil
 	case "call":
@@ -742,4 +830,19 @@ func (m *bubbleModel) handleSkillsCommand(isSkillSingle bool, argument string, p
 	}
 	m.refreshViewport()
 	return nil
+}
+
+func (m *bubbleModel) selectModelDirect(modelID string) tea.Cmd {
+	prov := m.activeProvider
+	if prov == "" {
+		if len(m.providers) > 0 {
+			for name := range m.providers {
+				prov = name
+				break
+			}
+		} else {
+			prov = model.DefaultProtonmanName
+		}
+	}
+	return saveDefaultModelCmd(prov, modelID)
 }

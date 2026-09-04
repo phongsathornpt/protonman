@@ -16,7 +16,70 @@ const (
 	DefaultProtonmanName = "protonman"
 	// DefaultProtonmanEndpoint is the public API Gateway base URL.
 	DefaultProtonmanEndpoint = "https://protonman.dev/api/v1"
+
+	// DefaultOpenCodeName is the canonical provider label for OpenCode Zen.
+	DefaultOpenCodeName = "opencode"
+	// DefaultOpenCodeEndpoint is the base URL for OpenCode Zen API.
+	DefaultOpenCodeEndpoint = "https://opencode.ai/zen/v1"
 )
+
+// SupportedProviderPreset describes an out-of-the-box model provider preset.
+type SupportedProviderPreset struct {
+	ID           string
+	Name         string
+	BaseURL      string
+	RequiresKey  bool
+	Description  string
+	DefaultModel string
+}
+
+// SupportedPresets lists available provider presets for discovery and quick setup.
+var SupportedPresets = []SupportedProviderPreset{
+	{
+		ID:           DefaultOpenCodeName,
+		Name:         "OpenCode (Free)",
+		BaseURL:      DefaultOpenCodeEndpoint,
+		RequiresKey:  false,
+		Description:  "Free tier models, zero API key required",
+		DefaultModel: "nemotron-3.5-lightning-free",
+	},
+	{
+		ID:           DefaultProtonmanName,
+		Name:         "Protonman",
+		BaseURL:      DefaultProtonmanEndpoint,
+		RequiresKey:  true,
+		Description:  "High-speed AI models gateway (plk_...)",
+		DefaultModel: "deepseek-v4-flash-vision-exp",
+	},
+	{
+		ID:           "ollama",
+		Name:         "Ollama (Local)",
+		BaseURL:      "http://localhost:11434/v1",
+		RequiresKey:  false,
+		Description:  "Local LLM inference, zero cloud cost",
+		DefaultModel: "llama3.2",
+	},
+	{
+		ID:           "openai",
+		Name:         "OpenAI Official",
+		BaseURL:      "https://api.openai.com/v1",
+		RequiresKey:  true,
+		Description:  "Direct OpenAI API access (sk-...)",
+		DefaultModel: "gpt-4o",
+	},
+}
+
+// LookupPreset returns the supported provider preset by ID or name, or nil if not matched.
+func LookupPreset(idOrName string) *SupportedProviderPreset {
+	clean := strings.ToLower(strings.TrimSpace(idOrName))
+	for i := range SupportedPresets {
+		p := &SupportedPresets[i]
+		if strings.EqualFold(p.ID, clean) || strings.EqualFold(p.Name, clean) {
+			return p
+		}
+	}
+	return nil
+}
 
 // RemoteModel describes a model discovered from an OpenAI or protonman endpoint.
 type RemoteModel struct {
@@ -36,6 +99,25 @@ var DefaultProtonmanModels = []RemoteModel{
 	{ID: "MiniMax-M3", Name: "MiniMax M3", ContextWindow: 1000000, Provider: "MiniMax", Features: []string{"text"}},
 }
 
+// DefaultOpenCodeFreeModels provides the standard free-tier catalog when offline or fallback.
+var DefaultOpenCodeFreeModels = []RemoteModel{
+	{ID: "nemotron-3.5-lightning-free", Name: "Nemotron 3.5 Lightning (Free)", ContextWindow: 128000, Provider: "NVIDIA", Features: []string{"free", "tools"}},
+	{ID: "big-pickle", Name: "Big Pickle (Free)", ContextWindow: 128000, Provider: "OpenCode", Features: []string{"free"}},
+	{ID: "mimo-v2.5-free", Name: "MiMo V2.5 (Free)", ContextWindow: 128000, Provider: "MiMo", Features: []string{"free"}},
+	{ID: "nemotron-3-ultra-free", Name: "Nemotron 3 Ultra (Free)", ContextWindow: 128000, Provider: "NVIDIA", Features: []string{"free"}},
+	{ID: "deepseek-v4-flash-free", Name: "DeepSeek V4 Flash (Free)", ContextWindow: 128000, Provider: "DeepSeek", Features: []string{"free"}},
+	{ID: "muse-spark-1.3-contributor-free", Name: "Muse Spark 1.3 Contributor (Free)", ContextWindow: 128000, Provider: "Meta", Features: []string{"free"}},
+	{ID: "muse-spark-1.2-contributor-free", Name: "Muse Spark 1.2 Contributor (Free)", ContextWindow: 128000, Provider: "Meta", Features: []string{"free"}},
+	{ID: "ling-3.0-flash-fin-free", Name: "Ling 3.0 Flash Fin (Free)", ContextWindow: 128000, Provider: "Ling", Features: []string{"free"}},
+	{ID: "laguna-s-2.1-free", Name: "Laguna S 2.1 (Free)", ContextWindow: 128000, Provider: "Laguna", Features: []string{"free"}},
+}
+
+// IsFreeModel reports whether a given model ID represents an OpenCode free-tier model.
+func IsFreeModel(id string) bool {
+	idLower := strings.ToLower(strings.TrimSpace(id))
+	return strings.HasSuffix(idLower, "-free") || idLower == "big-pickle"
+}
+
 // FetchProviderModels queries a provider's model endpoint to list available models.
 func FetchProviderModels(ctx context.Context, baseURL string, apiKey string) ([]RemoteModel, error) {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
@@ -45,7 +127,7 @@ func FetchProviderModels(ctx context.Context, baseURL string, apiKey string) ([]
 
 	client := &http.Client{Timeout: 10 * time.Second}
 
-	// 1. Try standard /models endpoint with Bearer auth
+	// 1. Try standard /models endpoint with Bearer auth (or without auth if apiKey is empty)
 	modelsEndpoint := baseURL + "/models"
 	models, err := fetchModelsFromURL(ctx, client, modelsEndpoint, apiKey)
 	if err == nil && len(models) > 0 {
@@ -64,9 +146,12 @@ func FetchProviderModels(ctx context.Context, baseURL string, apiKey string) ([]
 		return publicModels, nil
 	}
 
-	// 3. If baseURL is protonman and remote request failed, return default catalog
+	// 3. Check domain fallbacks if remote request failed
 	if strings.Contains(baseURL, "protonman.dev") {
 		return append([]RemoteModel{}, DefaultProtonmanModels...), nil
+	}
+	if strings.Contains(baseURL, "opencode.ai") {
+		return append([]RemoteModel{}, DefaultOpenCodeFreeModels...), nil
 	}
 
 	if err != nil {
