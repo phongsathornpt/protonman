@@ -148,6 +148,11 @@ func run(ctx context.Context, args []string) error {
 		if err != nil {
 			return fmt.Errorf("restore session %q: %w", sessionID, err)
 		}
+		if skillRegistry != nil {
+			for _, name := range state.ActiveSkills {
+				skillRegistry.MarkActivated(name)
+			}
+		}
 	}
 	if options.yolo {
 		initialMode = permission.ModeAlwaysApprove
@@ -190,7 +195,7 @@ func run(ctx context.Context, args []string) error {
 		}
 	}
 	if headlessPrompt != "" {
-		return runHeadless(ctx, service, registry, stateStore, sessionID, state, headlessPrompt, options.output)
+		return runHeadless(ctx, service, registry, skillRegistry, stateStore, sessionID, state, headlessPrompt, options.output)
 	}
 	if !stdinIsTerminal() || !stdoutIsTerminal() {
 		return fmt.Errorf("refusing to start the TUI without a terminal; use -p, --headless, or --acp")
@@ -208,8 +213,13 @@ func run(ctx context.Context, args []string) error {
 		return fmt.Errorf("create Bubble Tea UI: %w", uiErr)
 	}
 	runErr := bubbleUI.Run(ctx)
+	var activeSkills []string
+	if skillRegistry != nil {
+		activeSkills = skillRegistry.ActivatedList()
+	}
 	saveErr := stateStore.Save(ctx, sessionID, session.State{
 		PermissionMode: service.Mode().String(),
+		ActiveSkills:   activeSkills,
 		Messages:       session.FromModelMessages(bubbleUI.SessionState()),
 	})
 	if runErr != nil && saveErr != nil {
@@ -228,6 +238,7 @@ func runHeadless(
 	ctx context.Context,
 	service *toolcall.Service,
 	registry tool.Registry,
+	skillRegistry *skill.Registry,
 	stateStore *session.FileStore,
 	sessionID string,
 	state session.State,
@@ -246,8 +257,13 @@ func runHeadless(
 		return fmt.Errorf("restore session transcript: %w", err)
 	}
 	runErr := runner.Run(ctx, prompt, os.Stdout, format)
+	var activeSkills []string
+	if skillRegistry != nil {
+		activeSkills = skillRegistry.ActivatedList()
+	}
 	saveErr := stateStore.Save(ctx, sessionID, session.State{
 		PermissionMode: service.Mode().String(),
+		ActiveSkills:   activeSkills,
 		Messages:       runner.SessionState(),
 	})
 	if runErr != nil && saveErr != nil {
