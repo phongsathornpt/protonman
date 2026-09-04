@@ -88,7 +88,11 @@ func (m bubbleModel) modeChip() string {
 	if m.planMode {
 		return planStyle.Render("plan · read-only")
 	}
-	switch m.service.Mode() {
+	mode := permission.ModeAsk
+	if m.service != nil {
+		mode = m.service.Mode()
+	}
+	switch mode {
 	case permission.ModeAlwaysApprove:
 		return warningStyle.Render("always-approve")
 	case permission.ModeDeny:

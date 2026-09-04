@@ -1,8 +1,11 @@
 package tui
 
 import (
+	"context"
 	"strings"
 	"testing"
+
+	"github.com/projectTHORN/proton/internal/model"
 )
 
 func TestHistoryStateStreamsAssistantIntoActiveCell(t *testing.T) {
@@ -200,4 +203,59 @@ func TestHistoryStateThinkingCellLifecycle(t *testing.T) {
 			t.Fatalf("cells length = %d, want 0 (thinking cell should not be committed)", len(state.Cells()))
 		}
 	})
+}
+
+func TestActivateSkillToolCellCompactRendering(t *testing.T) {
+	xmlBody := `<skill_content name="golang-performance">
+**Persona:** You are a Go performance engineer.
+# Go Performance Optimization
+1. Profile before optimizing...
+</skill_content>`
+
+	cell := ToolCell{
+		Name: "activate_skill",
+		Body: xmlBody,
+	}
+
+	raw := cell.RawLines()
+	for _, line := range raw {
+		if strings.Contains(line, "Profile before optimizing") {
+			t.Fatalf("RawLines should not contain raw instruction markdown, got: %v", raw)
+		}
+	}
+
+	rendered := cell.Render()
+	joined := strings.Join(rendered, "\n")
+	if !strings.Contains(joined, `Activated skill "golang-performance"`) {
+		t.Fatalf("expected compact activation badge in render, got: %s", joined)
+	}
+	if strings.Contains(joined, "Profile before optimizing") {
+		t.Fatalf("rendered output contains full skill instructions: %s", joined)
+	}
+}
+
+func TestLoadInitialMessagesCompactsSkillDetail(t *testing.T) {
+	bm := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "")
+	bm.loadInitialMessages([]model.Message{
+		{
+			Role:     model.RoleTool,
+			ToolName: "activate_skill",
+			Content:  `<skill_content name="golang-code-style">\n# Full instructions...\n</skill_content>`,
+		},
+		{
+			Role:    model.RoleUser,
+			Content: "Activated skill pdf-tool [user]:\n# PDF Guide\nLong content here...",
+		},
+	})
+
+	rendered := strings.Join(bm.historyState.RenderLines(), "\n")
+	if strings.Contains(rendered, "Full instructions") {
+		t.Fatalf("history rendered full skill instructions from tool message: %s", rendered)
+	}
+	if strings.Contains(rendered, "Long content here") {
+		t.Fatalf("history rendered full skill instructions from user message: %s", rendered)
+	}
+	if !strings.Contains(rendered, `Activated skill "golang-code-style"`) {
+		t.Fatalf("history missing compact badge: %s", rendered)
+	}
 }
