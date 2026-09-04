@@ -22,12 +22,12 @@ var (
 )
 
 type rawFrontmatter struct {
-	Name          string            `yaml:"name"`
-	Description   string            `yaml:"description"`
-	License       string            `yaml:"license"`
-	Compatibility string            `yaml:"compatibility"`
-	Metadata      map[string]string `yaml:"metadata"`
-	AllowedTools  any               `yaml:"allowed-tools"`
+	Name          string `yaml:"name"`
+	Description   string `yaml:"description"`
+	License       string `yaml:"license"`
+	Compatibility string `yaml:"compatibility"`
+	Metadata      any    `yaml:"metadata"`
+	AllowedTools  any    `yaml:"allowed-tools"`
 }
 
 // ParseSkillFile reads a SKILL.md file and constructs a domain Skill.
@@ -82,7 +82,7 @@ func ParseSkillFile(filePath string, scope Scope) (Skill, error) {
 		Scope:         scope,
 		License:       strings.TrimSpace(raw.License),
 		Compatibility: strings.TrimSpace(raw.Compatibility),
-		Metadata:      raw.Metadata,
+		Metadata:      parseMetadata(raw.Metadata),
 		AllowedTools:  allowedTools,
 		Instructions:  strings.TrimSpace(body),
 		Resources:     resources,
@@ -209,4 +209,28 @@ func scanResources(baseDir string) []string {
 
 	sort.Strings(resources)
 	return resources
+}
+
+func parseMetadata(raw any) map[string]any {
+	if raw == nil {
+		return nil
+	}
+	switch v := raw.(type) {
+	case map[string]any:
+		return v
+	case map[string]string:
+		res := make(map[string]any, len(v))
+		for k, val := range v {
+			res[k] = val
+		}
+		return res
+	case map[any]any:
+		res := make(map[string]any, len(v))
+		for k, val := range v {
+			res[fmt.Sprint(k)] = val
+		}
+		return res
+	default:
+		return nil
+	}
 }

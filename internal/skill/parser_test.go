@@ -143,3 +143,55 @@ func TestParseSkillFile_Errors(t *testing.T) {
 		}
 	})
 }
+
+func TestParseSkillFile_NestedMetadata(t *testing.T) {
+	tempDir := t.TempDir()
+	skillDir := filepath.Join(tempDir, "golang-code-style")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	skillContent := `---
+name: golang-code-style
+description: "Golang code style conventions — line length, flow clarity, etc."
+user-invocable: true
+license: MIT
+compatibility: Designed for Claude Code or similar AI coding agents.
+metadata:
+  author: samber
+  version: "1.2.0"
+  openclaw:
+    emoji: "🎨"
+    homepage: https://github.com/samber/cc-skills-golang
+    requires:
+      bins:
+        - go
+    install: []
+allowed-tools: Read Edit Write Glob Grep
+---
+# Go Code Style
+Style rules that require human judgment.
+`
+	skillFile := filepath.Join(skillDir, "SKILL.md")
+	if err := os.WriteFile(skillFile, []byte(skillContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	parsed, err := ParseSkillFile(skillFile, ScopeUser)
+	if err != nil {
+		t.Fatalf("ParseSkillFile() unexpected error: %v", err)
+	}
+	if parsed.Name != "golang-code-style" {
+		t.Errorf("got name %q, want golang-code-style", parsed.Name)
+	}
+	if parsed.Metadata["author"] != "samber" {
+		t.Errorf("got metadata author %q", parsed.Metadata["author"])
+	}
+	openclaw, ok := parsed.Metadata["openclaw"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected openclaw to be map[string]any, got %T", parsed.Metadata["openclaw"])
+	}
+	if openclaw["emoji"] != "🎨" {
+		t.Errorf("got emoji %v, want 🎨", openclaw["emoji"])
+	}
+}
