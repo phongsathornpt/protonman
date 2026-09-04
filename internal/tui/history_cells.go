@@ -129,32 +129,79 @@ type ToolCell struct {
 	Denied      bool
 	FailureCode tool.ErrorCode
 	Spinner     string
+	Target      string
+	ToolKind    tool.Kind
+	Summary     string
 }
 
 func (ToolCell) Kind() HistoryCellKind { return HistoryCellTool }
 func (c ToolCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
 func (c ToolCell) RenderWidth(width int) []string {
-	header := glyphTool + c.Name
+	var header string
+	var headerStyle lipgloss.Style
+
+	target := sanitizeBubbleText(strings.TrimSpace(c.Target))
+	if target != "" {
+		target = " " + target
+	}
+
 	if c.Running {
+		glyph := toolKindGlyph(c.ToolKind, c.Name)
 		indicator := " …"
 		if c.Spinner != "" {
 			indicator = " " + c.Spinner
 		}
-		header += indicator
+		header = glyph + sanitizeBubbleText(c.Name) + target + indicator
+		headerStyle = toolStyle
+	} else if c.Denied {
+		header = glyphToolDenied + sanitizeBubbleText(c.Name) + target + glyphSep + "denied"
+		headerStyle = warningStyle
+	} else if c.FailureCode != "" {
+		header = glyphToolError + sanitizeBubbleText(c.Name) + target + glyphSep + string(c.FailureCode)
+		headerStyle = errorStyle
+	} else if c.Name == "activate_skill" {
+		if skillName := extractSkillContentName(c.Body); skillName != "" {
+			header = glyphToolSuccess + fmt.Sprintf("Activated skill %q", skillName)
+		} else {
+			header = glyphToolSuccess + "activate_skill"
+		}
+		headerStyle = successStyle
+	} else {
+		summary := c.Summary
+		if summary == "" && c.Body != "" {
+			summary = summarizeToolOutput(c.Name, c.ToolKind, c.Target, c.Body, c.ExitCode, c.Truncated)
+		}
+		header = glyphToolSuccess + sanitizeBubbleText(c.Name) + target
+		if summary != "" {
+			header += glyphSep + summary
+		}
+		headerStyle = successStyle
 	}
+
 	out := make([]string, 0, 1)
 	for _, line := range safeWrappedLines(header, maxInt(1, width)) {
-		out = append(out, toolStyle.Render(line))
+		out = append(out, headerStyle.Render(line))
 	}
-	for _, line := range c.bodyLines() {
-		for _, wrapped := range safeWrappedLines(line, maxInt(1, width-2)) {
-			out = append(out, bodyStyle.Render("  "+wrapped))
+
+	if !c.Running && !shouldSuppressBody(c.ToolKind, c.Name) {
+		bodyLines := c.bodyLines()
+		if len(bodyLines) > 0 {
+			folded := formatOutputFold(bodyLines, 3)
+			for _, line := range folded {
+				for _, wrapped := range safeWrappedLines(line, maxInt(1, width-2)) {
+					out = append(out, bodyStyle.Render("  "+wrapped))
+				}
+			}
 		}
 	}
 	return out
 }
 func (c ToolCell) RawLines() []string {
-	out := []string{sanitizeBubbleText(c.Name)}
+	header := sanitizeBubbleText(c.Name)
+	if c.Target != "" {
+		header += " " + sanitizeBubbleText(c.Target)
+	}
+	out := []string{header}
 	out = append(out, c.bodyLines()...)
 	return out
 }
@@ -217,21 +264,48 @@ func (c ExecCell) RenderWidth(width int) []string {
 	if command == "" {
 		command = c.Name
 	}
-	header := "$ " + sanitizeBubbleText(command)
+	var header string
+	var headerStyle lipgloss.Style
 	if c.Running {
 		indicator := " …"
 		if c.Spinner != "" {
 			indicator = " " + c.Spinner
 		}
-		header += indicator
+		header = "$ " + sanitizeBubbleText(command) + indicator
+		headerStyle = commandStyle
+	} else if c.Denied {
+		header = glyphToolDenied + "$ " + sanitizeBubbleText(command) + glyphSep + "denied"
+		headerStyle = warningStyle
+	} else if c.FailureCode != "" || (c.ExitCode != nil && *c.ExitCode != 0) {
+		status := "failed"
+		if c.ExitCode != nil {
+			status = fmt.Sprintf("exit %d", *c.ExitCode)
+		} else if c.FailureCode != "" {
+			status = string(c.FailureCode)
+		}
+		header = glyphToolError + "$ " + sanitizeBubbleText(command) + glyphSep + status
+		headerStyle = errorStyle
+	} else {
+		header = glyphToolSuccess + "$ " + sanitizeBubbleText(command)
+		if c.ExitCode != nil {
+			header += " (exit 0)"
+		}
+		headerStyle = successStyle
 	}
+
 	out := make([]string, 0, 1)
 	for _, line := range safeWrappedLines(header, maxInt(1, width)) {
-		out = append(out, commandStyle.Render(line))
+		out = append(out, headerStyle.Render(line))
 	}
-	for _, line := range resultBodyLines(c.Body, c.ExitCode, c.Truncated, c.Denied, c.FailureCode) {
-		for _, wrapped := range safeWrappedLines(line, maxInt(1, width-2)) {
-			out = append(out, bodyStyle.Render("  "+wrapped))
+	if !c.Running {
+		bodyLines := resultBodyLines(c.Body, nil, c.Truncated, false, "")
+		if len(bodyLines) > 0 {
+			folded := formatOutputFold(bodyLines, 3)
+			for _, line := range folded {
+				for _, wrapped := range safeWrappedLines(line, maxInt(1, width-2)) {
+					out = append(out, bodyStyle.Render("  "+wrapped))
+				}
+			}
 		}
 	}
 	return out
@@ -273,25 +347,43 @@ func (c PatchCell) RenderWidth(width int) []string {
 	if strings.TrimSpace(c.Summary) != "" {
 		title += " · " + c.Summary
 	}
+	var header string
+	var headerStyle lipgloss.Style
 	if c.Running {
 		indicator := " …"
 		if c.Spinner != "" {
 			indicator = " " + c.Spinner
 		}
-		title += indicator
+		header = glyphEdit + title + indicator
+		headerStyle = planStyle
+	} else if c.Denied {
+		header = glyphToolDenied + glyphEdit + title + glyphSep + "denied"
+		headerStyle = warningStyle
+	} else if c.FailureCode != "" {
+		header = glyphToolError + glyphEdit + title + glyphSep + string(c.FailureCode)
+		headerStyle = errorStyle
+	} else {
+		header = glyphToolSuccess + glyphEdit + title
+		headerStyle = successStyle
 	}
 	out := make([]string, 0, 1)
-	for _, line := range safeWrappedLines("Δ "+title, maxInt(1, width)) {
-		out = append(out, planStyle.Render(line))
+	for _, line := range safeWrappedLines(header, maxInt(1, width)) {
+		out = append(out, headerStyle.Render(line))
 	}
 	for _, path := range c.Paths {
 		for _, wrapped := range safeWrappedLines(path, maxInt(1, width-2)) {
 			out = append(out, mutedStyle.Render("  "+wrapped))
 		}
 	}
-	for _, line := range resultBodyLines(c.Body, nil, c.Truncated, c.Denied, c.FailureCode) {
-		for _, wrapped := range safeWrappedLines(line, maxInt(1, width-2)) {
-			out = append(out, bodyStyle.Render("  "+wrapped))
+	if !c.Running && c.Body != "" {
+		bodyLines := resultBodyLines(c.Body, nil, c.Truncated, c.Denied, c.FailureCode)
+		if len(bodyLines) > 0 {
+			folded := formatOutputFold(bodyLines, 3)
+			for _, line := range folded {
+				for _, wrapped := range safeWrappedLines(line, maxInt(1, width-2)) {
+					out = append(out, bodyStyle.Render("  "+wrapped))
+				}
+			}
 		}
 	}
 	return out

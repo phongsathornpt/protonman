@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/model"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 func TestHistoryStateStreamsAssistantIntoActiveCell(t *testing.T) {
@@ -257,5 +258,118 @@ func TestLoadInitialMessagesCompactsSkillDetail(t *testing.T) {
 	}
 	if !strings.Contains(rendered, `Activated skill "golang-code-style"`) {
 		t.Fatalf("history missing compact badge: %s", rendered)
+	}
+}
+
+func TestToolCellRefinedRenderingWebFetch(t *testing.T) {
+	htmlPayload := `<!DOCTYPE html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>รวม AI ราคาถูกใน API เดียว | protonmanAI</title>
+  </head>
+  <body><h1>Protonman</h1><p>Many lines of HTML...</p></body>
+</html>`
+
+	state := NewHistoryState(100)
+	state.SetSpinnerFrame("⠋")
+
+	// Running state
+	runningCell := &ToolCell{
+		CallID:   "call-web-1",
+		Name:     "web_fetch",
+		Target:   "https://protonman.dev",
+		ToolKind: tool.KindWebFetch,
+		Running:  true,
+	}
+	state.StartToolCell(runningCell)
+
+	rendered := state.RenderLines()
+	joinedRunning := strings.Join(rendered, "\n")
+	if !strings.Contains(joinedRunning, "⚡") || !strings.Contains(joinedRunning, "web_fetch") || !strings.Contains(joinedRunning, "https://protonman.dev") {
+		t.Fatalf("expected running cell to show category icon and target, got: %s", joinedRunning)
+	}
+
+	// Completed state
+	completedCell := &ToolCell{
+		CallID:   "call-web-1",
+		Name:     "web_fetch",
+		Target:   "https://protonman.dev",
+		ToolKind: tool.KindWebFetch,
+		Body:     htmlPayload,
+		Summary:  summarizeToolOutput("web_fetch", tool.KindWebFetch, "https://protonman.dev", htmlPayload, nil, false),
+	}
+	state.CompleteToolCall("call-web-1", "web_fetch", completedCell)
+
+	rendered = state.RenderLines()
+	joinedCompleted := strings.Join(rendered, "\n")
+
+	// 1. Must contain success glyph, tool name, target, and parsed page title
+	if !strings.Contains(joinedCompleted, "✓") || !strings.Contains(joinedCompleted, "https://protonman.dev") {
+		t.Fatalf("expected completed summary header, got: %s", joinedCompleted)
+	}
+	if !strings.Contains(joinedCompleted, "รวม AI ราคาถูกใน API เดียว | protonmanAI") {
+		t.Fatalf("expected page title in summary, got: %s", joinedCompleted)
+	}
+
+	// 2. Must SUPPRESS raw HTML tags from the chat viewport
+	if strings.Contains(joinedCompleted, "<!DOCTYPE html>") || strings.Contains(joinedCompleted, "<body>") {
+		t.Fatalf("raw HTML was not suppressed from rendered viewport lines: %s", joinedCompleted)
+	}
+
+	// 3. Must PRESERVE raw HTML in raw transcript for ctrl+t and exports
+	raw := state.Raw()
+	if !strings.Contains(raw, "<!DOCTYPE html>") || !strings.Contains(raw, "Protonman") {
+		t.Fatalf("raw transcript failed to preserve complete HTML payload: %s", raw)
+	}
+}
+
+func TestToolCellRefinedRenderingReadFile(t *testing.T) {
+	fileContent := strings.Repeat("fmt.Println(\"code\")\n", 50)
+	cell := &ToolCell{
+		Name:     "read_file",
+		Target:   "internal/tui/theme.go",
+		ToolKind: tool.KindRead,
+		Body:     fileContent,
+		Summary:  summarizeToolOutput("read_file", tool.KindRead, "internal/tui/theme.go", fileContent, nil, false),
+	}
+
+	rendered := strings.Join(cell.Render(), "\n")
+	if !strings.Contains(rendered, "50 lines") || !strings.Contains(rendered, "internal/tui/theme.go") {
+		t.Fatalf("expected summary with line count and target, got: %s", rendered)
+	}
+	// Raw code should not flood the rendered viewport
+	if strings.Contains(rendered, "fmt.Println") {
+		t.Fatalf("raw file contents should be suppressed from viewport, got: %s", rendered)
+	}
+
+	// Raw lines should retain full content
+	raw := strings.Join(cell.RawLines(), "\n")
+	if !strings.Contains(raw, "fmt.Println") {
+		t.Fatalf("raw transcript missing file content: %s", raw)
+	}
+}
+
+func TestExecCellFolding(t *testing.T) {
+	exit0 := 0
+	longOutput := "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\n"
+	cell := &ExecCell{
+		Command:  "npm test",
+		Body:     longOutput,
+		ExitCode: &exit0,
+	}
+
+	rendered := strings.Join(cell.Render(), "\n")
+	if !strings.Contains(rendered, "npm test") || !strings.Contains(rendered, "exit 0") {
+		t.Fatalf("expected command and exit code, got: %s", rendered)
+	}
+	if !strings.Contains(rendered, "lines hidden") || !strings.Contains(rendered, "ctrl+t") {
+		t.Fatalf("expected fold indicator in long exec output, got: %s", rendered)
+	}
+
+	raw := strings.Join(cell.RawLines(), "\n")
+	if !strings.Contains(raw, "line 1") || !strings.Contains(raw, "line 8") {
+		t.Fatalf("raw lines should not be folded, got: %s", raw)
 	}
 }

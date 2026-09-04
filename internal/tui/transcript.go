@@ -142,18 +142,28 @@ func (m *bubbleModel) appendToolRunning(name string) {
 
 func (m *bubbleModel) appendToolCall(call tool.Call) {
 	state := m.ensureHistoryState()
-	handler, ok := m.registry.Lookup(call.Name)
-	if !ok {
-		state.StartToolCall(call.ID, call.Name)
-		m.syncLegacyBlocks()
-		return
+	var kind tool.Kind
+	if handler, ok := m.registry.Lookup(call.Name); ok {
+		kind = handler.Definition().Kind
 	}
-	switch handler.Definition().Kind {
+	target, resolvedKind := extractToolTarget(call.Name, kind, call.Arguments)
+
+	if target != "" {
+		m.activity = "calling " + call.Name + " " + target
+	} else {
+		m.activity = "calling " + call.Name
+	}
+
+	switch resolvedKind {
 	case tool.KindBash:
+		cmd := target
+		if cmd == "" {
+			cmd = extractStringArg(call.Arguments, "command")
+		}
 		state.StartToolCell(&ExecCell{
 			CallID:  call.ID,
 			Name:    call.Name,
-			Command: extractStringArg(call.Arguments, "command"),
+			Command: cmd,
 			Running: true,
 		})
 	case tool.KindEdit:
@@ -166,7 +176,13 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 			Running: true,
 		})
 	default:
-		state.StartToolCall(call.ID, call.Name)
+		state.StartToolCell(&ToolCell{
+			CallID:   call.ID,
+			Name:     call.Name,
+			Target:   target,
+			ToolKind: resolvedKind,
+			Running:  true,
+		})
 	}
 	m.syncLegacyBlocks()
 }
@@ -248,6 +264,8 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 	if result.Failure != nil {
 		failureCode = result.Failure.Code
 	}
+	var target string
+	var toolKind tool.Kind
 	if running := m.runningToolCell(callID, name); running != nil {
 		switch typed := running.(type) {
 		case *ExecCell:
@@ -275,12 +293,25 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 		case *ToolCell:
 			callID = typed.CallID
 			name = typed.Name
+			target = typed.Target
+			toolKind = typed.ToolKind
 		}
 	}
+	if toolKind == "" {
+		if handler, ok := m.registry.Lookup(name); ok {
+			toolKind = handler.Definition().Kind
+		} else {
+			toolKind = guessToolKind(name)
+		}
+	}
+	summary := summarizeToolOutput(name, toolKind, target, body, result.ExitCode, result.Truncated)
 	return &ToolCell{
 		CallID:      callID,
 		Name:        name,
 		Body:        body,
+		Target:      target,
+		ToolKind:    toolKind,
+		Summary:     summary,
 		ExitCode:    result.ExitCode,
 		Truncated:   result.Truncated,
 		Denied:      result.Denied,
@@ -350,6 +381,7 @@ func (m *bubbleModel) applyTurnEvent(event applicationturn.Event) {
 			result.ToolName = event.Call.Name
 		}
 		m.applyToolResult(event.Call.Name, result, event.Err)
+		m.activity = "thinking"
 	case applicationturn.EventCompleted:
 		m.ensureHistoryState().CommitActive()
 		m.syncLegacyBlocks()
@@ -467,7 +499,9 @@ func (m *bubbleModel) loadInitialMessages(messages []model.Message) {
 			}
 		case model.RoleTool:
 			if text != "" || message.ToolName != "" {
-				state.Append(&ToolCell{Name: message.ToolName, Body: message.Content})
+				kind := guessToolKind(message.ToolName)
+				summary := summarizeToolOutput(message.ToolName, kind, "", message.Content, nil, false)
+				state.Append(&ToolCell{Name: message.ToolName, Body: message.Content, ToolKind: kind, Summary: summary})
 			}
 		case model.RoleSystem:
 			if text != "" {
