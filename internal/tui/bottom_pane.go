@@ -109,6 +109,13 @@ func (p *bottomPane) setBashMode(on bool) {
 	applyPromptChrome(&p.composer.input, on)
 }
 
+func (p *bottomPane) setHasRunner(hasRunner bool) {
+	if p == nil {
+		return
+	}
+	p.composer.input.Placeholder = promptPlaceholder(hasRunner)
+}
+
 func (p *bottomPane) bashMode() bool {
 	return p != nil && p.composer.bashMode
 }

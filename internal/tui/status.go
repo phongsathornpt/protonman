@@ -43,6 +43,10 @@ func (m bubbleModel) infoView() string {
 	}
 
 	parts := []string{m.modeChip()}
+	if m.activeModel != "" {
+		cleanModel := truncateWithEllipsis(m.activeModel, maxInt(16, targetWidth/4))
+		parts = append(parts, brandStyle.Render("model: "+cleanModel))
+	}
 	if n := len(m.queue); n > 0 {
 		parts = append(parts, mutedStyle.Render(fmt.Sprintf("%d queued", n)))
 	}
@@ -56,7 +60,7 @@ func (m bubbleModel) infoView() string {
 		}
 	}
 
-	candidates := []string{"shift+tab mode"}
+	candidates := []string{"shift+tab mode", "ctrl+p model"}
 	if m.skills != nil && len(m.skills.List()) > 0 {
 		candidates = append(candidates, "ctrl+s skills")
 	}

@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/skill"
@@ -23,6 +24,20 @@ type BubbleTeaOption func(*BubbleTeaUI) error
 func WithBubbleTeaRunner(runner applicationturn.Runner) BubbleTeaOption {
 	return func(ui *BubbleTeaUI) error {
 		ui.runner = runner
+		return nil
+	}
+}
+
+// WithModelConfig attaches model preferences and provider configurations to the TUI.
+func WithModelConfig(modelCfg config.ModelConfig, providers map[string]config.ProviderConfig) BubbleTeaOption {
+	return func(ui *BubbleTeaUI) error {
+		ui.modelConfig = modelCfg
+		if providers != nil {
+			ui.providers = make(map[string]config.ProviderConfig, len(providers))
+			for k, v := range providers {
+				ui.providers[k] = v
+			}
+		}
 		return nil
 	}
 }
@@ -51,6 +66,14 @@ func WithInitialMessages(messages []model.Message) BubbleTeaOption {
 	}
 }
 
+// WithSessionID configures the active conversation session identifier.
+func WithSessionID(sessionID string) BubbleTeaOption {
+	return func(ui *BubbleTeaUI) error {
+		ui.sessionID = sessionID
+		return nil
+	}
+}
+
 // BubbleTeaUI is the Bubble Tea terminal adapter over Proton services.
 type BubbleTeaUI struct {
 	service         *toolcall.Service
@@ -62,6 +85,9 @@ type BubbleTeaUI struct {
 	workDir         string
 	initialMessages []model.Message
 	finalMessages   []model.Message
+	modelConfig     config.ModelConfig
+	providers       map[string]config.ProviderConfig
+	sessionID       string
 }
 
 // NewBubbleTea creates the component-based fullscreen TUI.
@@ -134,6 +160,11 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		ui.initialMessages,
 	)
 	bModel.skills = ui.skills
+	bModel.activeModel = ui.modelConfig.Default
+	bModel.activeProvider = ui.modelConfig.Provider
+	bModel.providers = ui.providers
+	bModel.sessionID = ui.sessionID
+	bModel.reconfigureRunner()
 
 	program := tea.NewProgram(
 		bModel,
