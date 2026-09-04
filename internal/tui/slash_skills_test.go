@@ -48,11 +48,13 @@ func TestSlashSkills(t *testing.T) {
 	})
 
 	t.Run("skill activation", func(t *testing.T) {
-		// Missing arg
+		// /skill without args opens skills picker
+		model.bottom.remove(skillsViewID)
 		model.executeCommand("/skill")
-		if !strings.Contains(model.viewport.View(), "usage: /skill <name>") {
-			t.Fatalf("expected usage error")
+		if !model.bottom.has(skillsViewID) {
+			t.Fatalf("expected /skill without args to open skills picker")
 		}
+		model.bottom.remove(skillsViewID)
 
 		// Unknown skill
 		model.executeCommand("/skill nonexistent")
@@ -279,6 +281,45 @@ func TestSlashSkills(t *testing.T) {
 		}
 		if len(model.messages) != 0 {
 			t.Fatalf("expected 0 messages appended to model.messages, got %d", len(model.messages))
+		}
+	})
+
+	t.Run("t shortcut toggles skill in bottom-pane picker", func(t *testing.T) {
+		model.bottom.remove(skillsViewID)
+		model.executeCommand("/skills")
+		wasActive := model.skills.IsActivated("pdf-processing")
+		updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+		model = updated.(*bubbleModel)
+		if model.skills.IsActivated("pdf-processing") == wasActive {
+			t.Fatalf("'t' key did not toggle skill active status")
+		}
+		model.bottom.remove(skillsViewID)
+	})
+
+	t.Run("slashCatalog contains single unified skills command with skill alias", func(t *testing.T) {
+		var foundSkills *slashCommand
+		count := 0
+		for i, cmd := range slashCatalog {
+			if cmd.name == "skills" || cmd.name == "skill" {
+				foundSkills = &slashCatalog[i]
+				count++
+			}
+		}
+		if count != 1 {
+			t.Fatalf("expected exactly 1 catalog entry for skills, found %d", count)
+		}
+		if foundSkills == nil || foundSkills.name != "skills" {
+			t.Fatalf("expected primary command name to be 'skills', got %v", foundSkills)
+		}
+		hasAlias := false
+		for _, a := range foundSkills.aliases {
+			if a == "skill" {
+				hasAlias = true
+				break
+			}
+		}
+		if !hasAlias {
+			t.Fatalf("expected 'skill' alias in skills command, got %v", foundSkills.aliases)
 		}
 	})
 }

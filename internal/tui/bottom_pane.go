@@ -195,7 +195,7 @@ func (v *skillsPaneView) Render(m *bubbleModel) string {
 	if m == nil || m.skills == nil || len(m.skills.List()) == 0 {
 		return modalStyle.
 			BorderForeground(accentAssistant).
-			Render("No agent skills discovered.\n\nesc close")
+			Render("No agent skills discovered.\n\nPlace skills in ~/.proton/skills/ or .proton/skills/ (with PROTON_TRUST_PROJECT=1).\n\nesc close")
 	}
 	skills := m.skills.List()
 	if v.index >= len(skills) {
@@ -237,27 +237,40 @@ func (v *skillsPaneView) Render(m *bubbleModel) string {
 
 	for i, s := range visible {
 		idx := v.offset + i
-		box := "[ ]"
-		if m.skills.IsActivated(s.Name) {
-			box = "[x]"
+		isCurrent := idx == v.index
+		isActive := m.skills.IsActivated(s.Name)
+
+		cursor := "  "
+		if isCurrent {
+			cursor = glyphPrompt
 		}
-		prefix := "  "
-		line := fmt.Sprintf("%s %s [%s]: %s", box, s.Name, s.Scope, s.Description)
-		if idx == v.index {
-			prefix = glyphPrompt
-			row := brandStyle.Render(prefix + wrapWords(line, maxWidth))
-			rows = append(rows, row)
+
+		box := mutedStyle.Render("[ ]")
+		if isActive {
+			box = successStyle.Render("[x]")
+		}
+
+		nameStr := s.Name
+		if isCurrent {
+			nameStr = brandStyle.Bold(true).Render(s.Name)
+		} else if isActive {
+			nameStr = assistantStyle.Bold(true).Render(s.Name)
 		} else {
-			row := mutedStyle.Render(prefix + wrapWords(line, maxWidth))
-			rows = append(rows, row)
+			nameStr = assistantStyle.Render(s.Name)
 		}
+
+		scopeStr := mutedStyle.Render("[" + string(s.Scope) + "]")
+		descStr := mutedStyle.Render(s.Description)
+
+		line := fmt.Sprintf("%s%s %s %s: %s", cursor, box, nameStr, scopeStr, descStr)
+		rows = append(rows, wrapWords(line, maxWidth))
 	}
 
 	if visibleEnd < len(skills) {
 		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ▼ %d more below", len(skills)-visibleEnd)))
 	}
 
-	rows = append(rows, "", mutedStyle.Render("j/k move · space toggle · 1-9 jump · esc/enter close"))
+	rows = append(rows, "", mutedStyle.Render("j/k move · space/t toggle · 1-9 jump · esc/enter close"))
 	return modalStyle.
 		BorderForeground(accentAssistant).
 		MaxWidth(maxInt(1, m.width-4)).
@@ -304,7 +317,7 @@ func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, te
 	case "end", "G":
 		v.index = len(skills) - 1
 		return true, nil
-	case " ":
+	case " ", "t":
 		if v.index >= 0 && v.index < len(skills) {
 			_, _ = m.skills.Toggle(skills[v.index].Name)
 		}

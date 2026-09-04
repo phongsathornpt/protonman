@@ -28,8 +28,7 @@ type slashCommand struct {
 var slashCatalog = []slashCommand{
 	{name: "help", description: "list commands"},
 	{name: "tools", description: "list tools"},
-	{name: "skills", description: "list agent skills (or /skills active)", takesArgs: true},
-	{name: "skill", description: "show, activate, or toggle an agent skill", takesArgs: true},
+	{name: "skills", aliases: []string{"skill"}, description: "browse, activate, or toggle agent skills (/skills [name|active|toggle])", takesArgs: true},
 	{name: "mode", description: "show or set permission mode", takesArgs: true},
 	{name: "ask", description: "switch to ask permission mode"},
 	{name: "always-approve", aliases: []string{"yolo"}, description: "allow non-denied calls"},
@@ -458,10 +457,8 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		for _, definition := range m.registry.Definitions() {
 			m.appendLine(fmt.Sprintf("- %s [%s]: %s", definition.Name, definition.Kind, definition.Description))
 		}
-	case "skills":
-		return m.handleSkillsCommand(false, argument, parts)
-	case "skill":
-		return m.handleSkillsCommand(true, argument, parts)
+	case "skills", "skill":
+		return m.handleSkillsCommand(argument, parts)
 	case "mode":
 		if argument == "" {
 			m.appendLine("permission mode: " + m.service.Mode().String())
@@ -709,13 +706,8 @@ func (m *bubbleModel) startBash(command string) tea.Cmd {
 	return m.startTool(call)
 }
 
-func (m *bubbleModel) handleSkillsCommand(isSkillSingle bool, argument string, parts []string) tea.Cmd {
+func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.Cmd {
 	trimmedArg := strings.TrimSpace(argument)
-	if isSkillSingle && trimmedArg == "" {
-		m.appendError("usage: /skill <name> or /skill toggle <name>")
-		m.refreshViewport()
-		return nil
-	}
 
 	if m.skills == nil || len(m.skills.List()) == 0 {
 		m.appendLine("No agent skills discovered.")
