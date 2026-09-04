@@ -177,38 +177,174 @@ func TestLoopKeepsPermissionDenialInsideToolConversation(t *testing.T) {
 	}
 }
 
-func TestLoopStopsAtMaxRounds(t *testing.T) {
+func TestLoopGracefulMaxRoundsSynthesis(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{
+			events: []model.Event{
+				{
+					Kind: model.EventToolCall,
+					ToolCall: model.ToolCall{
+						ID:        "call-1",
+						Name:      "read_file",
+						Arguments: json.RawMessage(`{"path":"README.md"}`),
+					},
+				},
+				{Kind: model.EventDone},
+			},
+		},
+		{
+			events: []model.Event{
+				{Kind: model.EventTextDelta, Text: "Reached max rounds. Accomplished: read README. Remaining: none."},
+				{Kind: model.EventDone},
+			},
+		},
+	}}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithMaxRounds(2))
+	events := make([]Event, 0)
+
+	result, err := loop.Run(
+		context.Background(),
+		[]model.Message{{Role: model.RoleUser, Content: "keep going"}},
+		collectEvents(&events),
+	)
+	if err != nil {
+		t.Fatalf("Run() error = %v, want nil", err)
+	}
+	if got, want := result.Rounds, 2; got != want {
+		t.Fatalf("result.Rounds = %d, want %d", got, want)
+	}
+	if got, want := len(client.requests), 2; got != want {
+		t.Fatalf("model requests = %d, want %d", got, want)
+	}
+	// First round had tools available.
+	if got, want := len(client.requests[0].Tools), 1; got != want {
+		t.Fatalf("round 1 tools = %d, want %d", got, want)
+	}
+	// Second round reached maxRounds: tools stripped, MaxRoundsPrompt injected.
+	if got, want := len(client.requests[1].Tools), 0; got != want {
+		t.Fatalf("round 2 tools = %d, want %d", got, want)
+	}
+	round2Msgs := client.requests[1].Messages
+	lastMsg := round2Msgs[len(round2Msgs)-1]
+	if lastMsg.Role != model.RoleSystem || lastMsg.Content != MaxRoundsPrompt {
+		t.Fatalf("round 2 last message = %#v, want system MaxRoundsPrompt", lastMsg)
+	}
+	if !strings.Contains(result.Message.Content, "Accomplished: read README") {
+		t.Fatalf("result content = %q, want summary text", result.Message.Content)
+	}
+	if got := events[len(events)-1].Kind; got != EventCompleted {
+		t.Fatalf("last event kind = %q, want %q", got, EventCompleted)
+	}
+}
+
+func TestLoopStopsAtMaxRoundsWhenOne(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
 		events: []model.Event{
-			{
-				Kind: model.EventToolCall,
-				ToolCall: model.ToolCall{
-					ID:        "call-loop",
-					Name:      "read_file",
-					Arguments: json.RawMessage(`{"path":"README.md"}`),
-				},
-			},
+			{Kind: model.EventTextDelta, Text: "Single round synthesis: all set."},
 			{Kind: model.EventDone},
 		},
 	}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithMaxRounds(1))
 	events := make([]Event, 0)
 
-	_, err := loop.Run(
+	result, err := loop.Run(
 		context.Background(),
-		[]model.Message{{Role: model.RoleUser, Content: "keep going"}},
+		[]model.Message{{Role: model.RoleUser, Content: "quick answer"}},
 		collectEvents(&events),
 	)
-	if !errors.Is(err, ErrMaxRounds) {
-		t.Fatalf("Run() error = %v, want ErrMaxRounds", err)
+	if err != nil {
+		t.Fatalf("Run() error = %v, want nil", err)
 	}
-	if got, want := len(client.requests), 1; got != want {
-		t.Fatalf("model requests = %d, want %d", got, want)
+	if got, want := result.Rounds, 1; got != want {
+		t.Fatalf("rounds = %d, want %d", got, want)
 	}
-	if got := events[len(events)-1].Kind; got != EventFailed {
-		t.Fatalf("last event kind = %q, want %q", got, EventFailed)
+	if got, want := len(client.requests[0].Tools), 0; got != want {
+		t.Fatalf("round 1 tools = %d, want %d", got, want)
+	}
+	reqMsgs := client.requests[0].Messages
+	lastMsg := reqMsgs[len(reqMsgs)-1]
+	if lastMsg.Role != model.RoleSystem || lastMsg.Content != MaxRoundsPrompt {
+		t.Fatalf("round 1 last message = %#v, want system MaxRoundsPrompt", lastMsg)
+	}
+	if got := events[len(events)-1].Kind; got != EventCompleted {
+		t.Fatalf("last event kind = %q, want %q", got, EventCompleted)
 	}
 }
+
+func TestLoopUnboundedWhenZero(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{
+			events: []model.Event{
+				{
+					Kind: model.EventToolCall,
+					ToolCall: model.ToolCall{
+						ID:        "call-1",
+						Name:      "read_file",
+						Arguments: json.RawMessage(`{"path":"a.txt"}`),
+					},
+				},
+				{Kind: model.EventDone},
+			},
+		},
+		{
+			events: []model.Event{
+				{
+					Kind: model.EventToolCall,
+					ToolCall: model.ToolCall{
+						ID:        "call-2",
+						Name:      "read_file",
+						Arguments: json.RawMessage(`{"path":"b.txt"}`),
+					},
+				},
+				{Kind: model.EventDone},
+			},
+		},
+		{
+			events: []model.Event{
+				{
+					Kind: model.EventToolCall,
+					ToolCall: model.ToolCall{
+						ID:        "call-3",
+						Name:      "read_file",
+						Arguments: json.RawMessage(`{"path":"c.txt"}`),
+					},
+				},
+				{Kind: model.EventDone},
+			},
+		},
+		{
+			events: []model.Event{
+				{Kind: model.EventTextDelta, Text: "Processed all 3 files unbounded."},
+				{Kind: model.EventDone},
+			},
+		},
+	}}
+	// WithMaxRounds(0) indicates unbounded.
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithMaxRounds(0))
+	events := make([]Event, 0)
+
+	result, err := loop.Run(
+		context.Background(),
+		[]model.Message{{Role: model.RoleUser, Content: "process files"}},
+		collectEvents(&events),
+	)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got, want := result.Rounds, 4; got != want {
+		t.Fatalf("result.Rounds = %d, want %d", got, want)
+	}
+	// Verify tools were provided on round 1, 2, 3 and round 4
+	for i := 0; i < 4; i++ {
+		if got, want := len(client.requests[i].Tools), 1; got != want {
+			t.Fatalf("round %d tools = %d, want %d", i+1, got, want)
+		}
+	}
+	if got := events[len(events)-1].Kind; got != EventCompleted {
+		t.Fatalf("last event kind = %q, want %q", got, EventCompleted)
+	}
+}
+
 
 func TestLoopTimesOutIndividualToolCall(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{

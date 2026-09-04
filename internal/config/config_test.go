@@ -272,3 +272,76 @@ func TestDeleteUserProviderConfig(t *testing.T) {
 	}
 }
 
+func TestAgentMaxRoundsConfig(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+
+	// 1. Default should be DefaultMaxRounds (20) when no config exists.
+	snapshot, err := Load(context.Background(), Options{
+		HomeDir: homeDir,
+		WorkDir: workDir,
+	})
+	if err != nil {
+		t.Fatalf("Load() default error = %v", err)
+	}
+	if got, want := snapshot.Agent.MaxRounds, DefaultMaxRounds; got != want {
+		t.Fatalf("default max_rounds = %d, want %d", got, want)
+	}
+
+	// 2. Load explicitly configured max_rounds = 35.
+	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent]
+max_rounds = 35
+`)
+	snapshot, err = Load(context.Background(), Options{
+		HomeDir: homeDir,
+		WorkDir: workDir,
+	})
+	if err != nil {
+		t.Fatalf("Load() custom error = %v", err)
+	}
+	if got, want := snapshot.Agent.MaxRounds, 35; got != want {
+		t.Fatalf("configured max_rounds = %d, want %d", got, want)
+	}
+
+	// 3. SaveUserMaxRounds updates the value to 50.
+	if err := SaveUserMaxRounds(homeDir, 50); err != nil {
+		t.Fatalf("SaveUserMaxRounds(50) error = %v", err)
+	}
+	snapshot, err = Load(context.Background(), Options{
+		HomeDir: homeDir,
+		WorkDir: workDir,
+	})
+	if err != nil {
+		t.Fatalf("Load() updated error = %v", err)
+	}
+	if got, want := snapshot.Agent.MaxRounds, 50; got != want {
+		t.Fatalf("persisted max_rounds = %d, want %d", got, want)
+	}
+
+	// 4. SaveUserMaxRounds updates to 0 (unbounded).
+	if err := SaveUserMaxRounds(homeDir, 0); err != nil {
+		t.Fatalf("SaveUserMaxRounds(0) error = %v", err)
+	}
+	snapshot, err = Load(context.Background(), Options{
+		HomeDir: homeDir,
+		WorkDir: workDir,
+	})
+	if err != nil {
+		t.Fatalf("Load() unbounded error = %v", err)
+	}
+	if got, want := snapshot.Agent.MaxRounds, 0; got != want {
+		t.Fatalf("unbounded max_rounds = %d, want %d", got, want)
+	}
+
+	// 5. Verify permissions
+	configFile := filepath.Join(homeDir, ".proton", "config.toml")
+	info, err := os.Stat(configFile)
+	if err != nil {
+		t.Fatalf("stat config file: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Fatalf("permissions = %o, want 0600", perm)
+	}
+}
+
+
