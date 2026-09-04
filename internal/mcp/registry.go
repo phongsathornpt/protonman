@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/projectTHORN/proton/internal/tool"
@@ -34,7 +35,7 @@ func NamespacedName(serverName string, toolName string) (string, error) {
 	return "mcp." + serverName + "." + toolName, nil
 }
 
-// Discover queries every server, registers each discovered tool under its
+// Discover queries every server concurrently, registers each discovered tool under its
 // namespaced name, and wires invocations through tool.Handler.
 func Discover(ctx context.Context, registry tool.Registrar, servers ...Server) error {
 	if registry == nil {
@@ -44,10 +45,13 @@ func Discover(ctx context.Context, registry tool.Registrar, servers ...Server) e
 		return fmt.Errorf("discover MCP tools: %w", err)
 	}
 
-	handlers := make([]tool.Handler, 0)
+	if len(servers) == 0 {
+		return nil
+	}
+
+	serverNames := make([]string, len(servers))
 	seenServers := make(map[string]struct{}, len(servers))
-	seenNames := make(map[string]struct{})
-	for _, server := range servers {
+	for i, server := range servers {
 		if server == nil {
 			return fmt.Errorf("discover MCP tools: server is required")
 		}
@@ -59,11 +63,50 @@ func Discover(ctx context.Context, registry tool.Registrar, servers ...Server) e
 			return fmt.Errorf("%w: %s", ErrDuplicateServer, serverName)
 		}
 		seenServers[serverName] = struct{}{}
-		manifests, err := server.ListTools(ctx)
-		if err != nil {
-			return fmt.Errorf("list MCP tools from %q: %w", serverName, err)
+		serverNames[i] = serverName
+	}
+
+	type serverResult struct {
+		manifests []Tool
+		err       error
+	}
+
+	queryCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	results := make([]serverResult, len(servers))
+	var wg sync.WaitGroup
+	wg.Add(len(servers))
+	for i, server := range servers {
+		go func(idx int, s Server) {
+			defer wg.Done()
+			manifests, err := s.ListTools(queryCtx)
+			if err != nil {
+				cancel()
+				results[idx] = serverResult{err: err}
+				return
+			}
+			results[idx] = serverResult{manifests: manifests}
+		}(i, server)
+	}
+	wg.Wait()
+
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("discover MCP tools: %w", err)
+	}
+
+	// Check per-server errors deterministically
+	for i, res := range results {
+		if res.err != nil {
+			return fmt.Errorf("list MCP tools from %q: %w", serverNames[i], res.err)
 		}
-		for _, manifest := range manifests {
+	}
+
+	handlers := make([]tool.Handler, 0)
+	seenNames := make(map[string]struct{})
+	for i, server := range servers {
+		serverName := serverNames[i]
+		for _, manifest := range results[i].manifests {
 			if err := manifest.Validate(); err != nil {
 				return fmt.Errorf("validate MCP tool from %q: %w", serverName, err)
 			}
