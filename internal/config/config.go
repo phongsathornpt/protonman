@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,6 +34,20 @@ type Options struct {
 	ProjectTrusted bool
 }
 
+// ProviderConfig specifies an AI model provider connection.
+type ProviderConfig struct {
+	Name    string `toml:"name"`
+	Type    string `toml:"type"`
+	BaseURL string `toml:"base_url"`
+	APIKey  string `toml:"api_key"`
+}
+
+// ModelConfig specifies default model settings.
+type ModelConfig struct {
+	Default  string `toml:"default"`
+	Provider string `toml:"provider"`
+}
+
 // Snapshot is the effective configuration after layered loading.
 type Snapshot struct {
 	// Permission is the static permission policy configuration.
@@ -43,6 +58,10 @@ type Snapshot struct {
 	ProtectedPaths []string
 	// Sandbox is the requested OS confinement profile. Off is the default.
 	Sandbox sandbox.Name
+	// Providers are configured AI model providers (e.g. protonman, openai).
+	Providers map[string]ProviderConfig
+	// Model defines default active model preferences.
+	Model ModelConfig
 	// Sources lists files that were loaded successfully.
 	Sources []string
 	// Warnings reports safe skips, such as an untrusted project config.
@@ -50,10 +69,12 @@ type Snapshot struct {
 }
 
 type fileDocument struct {
-	Permission filePermission `toml:"permission"`
-	Workspace  fileWorkspace  `toml:"workspace"`
-	UI         fileUI         `toml:"ui"`
-	Sandbox    fileSandbox    `toml:"sandbox"`
+	Permission filePermission            `toml:"permission"`
+	Workspace  fileWorkspace             `toml:"workspace"`
+	UI         fileUI                    `toml:"ui"`
+	Sandbox    fileSandbox               `toml:"sandbox"`
+	Providers  map[string]ProviderConfig `toml:"providers,omitempty"`
+	Model      ModelConfig               `toml:"model,omitempty"`
 }
 
 type fileSandbox struct {
@@ -114,6 +135,7 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 		Mode:           permission.ModeAsk,
 		ProtectedPaths: make([]string, 0),
 		Sandbox:        sandbox.NameOff,
+		Providers:      make(map[string]ProviderConfig),
 		Sources:        make([]string, 0, 2),
 		Warnings:       make([]string, 0),
 	}
@@ -210,6 +232,69 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 			return fmt.Errorf("sandbox.profile: %w", err)
 		}
 		snapshot.Sandbox = name
+	}
+	if len(document.Providers) > 0 {
+		if snapshot.Providers == nil {
+			snapshot.Providers = make(map[string]ProviderConfig)
+		}
+		maps.Copy(snapshot.Providers, document.Providers)
+	}
+	if document.Model.Default != "" {
+		snapshot.Model.Default = document.Model.Default
+	}
+	if document.Model.Provider != "" {
+		snapshot.Model.Provider = document.Model.Provider
+	}
+	return nil
+}
+
+// SaveUserProviderConfig persists or updates a provider configuration in ~/.proton/config.toml.
+func SaveUserProviderConfig(homeDir string, provider ProviderConfig, defaultModel string) error {
+	if homeDir == "" {
+		resolvedHome, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("resolve home directory: %w", err)
+		}
+		homeDir = resolvedHome
+	}
+	userDir := filepath.Join(homeDir, ".proton")
+	if err := os.MkdirAll(userDir, 0o700); err != nil {
+		return fmt.Errorf("create config directory: %w", err)
+	}
+	userPath := filepath.Join(homeDir, userConfigRelativePath)
+
+	var doc fileDocument
+	data, err := os.ReadFile(userPath)
+	if err == nil {
+		_ = toml.Unmarshal(data, &doc)
+	}
+
+	if doc.Providers == nil {
+		doc.Providers = make(map[string]ProviderConfig)
+	}
+	providerKey := strings.ToLower(strings.TrimSpace(provider.Name))
+	if providerKey == "" {
+		providerKey = "default"
+	}
+	doc.Providers[providerKey] = provider
+
+	if defaultModel != "" {
+		doc.Model.Default = defaultModel
+		doc.Model.Provider = providerKey
+	}
+
+	encoded, err := toml.Marshal(doc)
+	if err != nil {
+		return fmt.Errorf("encode config toml: %w", err)
+	}
+
+	tempPath := fmt.Sprintf("%s.tmp.%d", userPath, os.Getpid())
+	if err := os.WriteFile(tempPath, encoded, 0o600); err != nil {
+		return fmt.Errorf("write temporary config: %w", err)
+	}
+	if err := os.Rename(tempPath, userPath); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("persist config: %w", err)
 	}
 	return nil
 }

@@ -245,6 +245,33 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.relayout()
 		return m, m.withSpinner(m.drainQueue())
+	case modelsFetchedMsg:
+		if pane := m.bottom.find(providerViewID); pane != nil {
+			if pv, ok := pane.(*providerPaneView); ok {
+				if message.err != nil {
+					pv.state = providerStateError
+					pv.errorMessage = message.err.Error()
+				} else {
+					pv.state = providerStateSelectModel
+					pv.models = message.models
+					pv.selectedIndex = 0
+				}
+				m.relayout()
+			}
+		}
+		return m, nil
+	case providerSavedMsg:
+		if message.err != nil {
+			m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to save provider: %v", message.err)))
+		} else {
+			m.appendLine(successStyle.Render(fmt.Sprintf("✓ Configured provider %s", message.providerName)))
+			m.appendLine(mutedStyle.Render(fmt.Sprintf("  Endpoint: %s", message.baseURL)))
+			m.appendLine(mutedStyle.Render(fmt.Sprintf("  Default Model: %s", message.modelID)))
+			m.appendLine(mutedStyle.Render("  Saved to ~/.proton/config.toml"))
+		}
+		m.bottom.remove(providerViewID)
+		m.relayout()
+		return m, nil
 	case turnDeltaMsg:
 		m.applyTurnEvent(message.event)
 		for {
