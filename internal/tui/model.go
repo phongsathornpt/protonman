@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/skill"
@@ -63,6 +65,11 @@ type bubbleModel struct {
 	turnCancel      context.CancelFunc
 	turnEvents      <-chan tea.Msg
 	messages        []model.Message
+	activeModel     string
+	activeProvider  string
+	providers       map[string]config.ProviderConfig
+	sessionID       string
+	modelsCatalog   []model.RemoteModel
 
 	// Compatibility snapshots for existing in-package tests during the
 	// migration. Runtime ownership lives in bottom/historyState.
@@ -87,6 +94,7 @@ type bubbleKeyMap struct {
 	Transcript   key.Binding
 	CycleMode    key.Binding
 	ToggleSkills key.Binding
+	ToggleModel  key.Binding
 }
 
 func newBubbleModel(
@@ -164,6 +172,7 @@ func newBubbleKeyMap() bubbleKeyMap {
 		Transcript:   key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "transcript")),
 		CycleMode:    key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "mode")),
 		ToggleSkills: key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "skills")),
+		ToggleModel:  key.NewBinding(key.WithKeys("ctrl+p", "alt+m"), key.WithHelp("ctrl+p", "model")),
 	}
 }
 
@@ -246,6 +255,9 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.relayout()
 		return m, m.withSpinner(m.drainQueue())
 	case modelsFetchedMsg:
+		if message.err == nil && len(message.models) > 0 {
+			m.modelsCatalog = message.models
+		}
 		if pane := m.bottom.find(providerViewID); pane != nil {
 			if pv, ok := pane.(*providerPaneView); ok {
 				if message.err != nil {
@@ -253,10 +265,17 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					pv.errorMessage = message.err.Error()
 				} else {
 					pv.state = providerStateSelectModel
-					pv.models = message.models
-					pv.selectedIndex = 0
+					pv.setFetchedModels(message.models)
 				}
 				m.relayout()
+			}
+		}
+		if pane := m.bottom.find(modelSelectViewID); pane != nil {
+			if mv, ok := pane.(*modelSelectPaneView); ok {
+				if message.err == nil && len(message.models) > 0 {
+					mv.models = message.models
+					m.relayout()
+				}
 			}
 		}
 		return m, nil
@@ -264,12 +283,81 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if message.err != nil {
 			m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to save provider: %v", message.err)))
 		} else {
+			m.activeModel = message.modelID
+			m.activeProvider = message.providerName
+			if m.providers == nil {
+				m.providers = make(map[string]config.ProviderConfig)
+			}
+			m.providers[strings.ToLower(message.providerName)] = config.ProviderConfig{
+				Name:    message.providerName,
+				Type:    "openai",
+				BaseURL: message.baseURL,
+				APIKey:  message.apiKey,
+			}
+			m.reconfigureRunner()
 			m.appendLine(successStyle.Render(fmt.Sprintf("✓ Configured provider %s", message.providerName)))
 			m.appendLine(mutedStyle.Render(fmt.Sprintf("  Endpoint: %s", message.baseURL)))
 			m.appendLine(mutedStyle.Render(fmt.Sprintf("  Default Model: %s", message.modelID)))
 			m.appendLine(mutedStyle.Render("  Saved to ~/.proton/config.toml"))
 		}
 		m.bottom.remove(providerViewID)
+		m.relayout()
+		return m, nil
+	case modelSelectedMsg:
+		if message.err != nil {
+			m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to set active model: %v", message.err)))
+		} else {
+			m.activeModel = message.modelID
+			if message.providerName != "" {
+				m.activeProvider = message.providerName
+			}
+			m.reconfigureRunner()
+			m.appendLine(successStyle.Render(fmt.Sprintf("✓ Active model set to %s (%s)", message.modelID, m.activeProvider)))
+			m.appendLine(mutedStyle.Render("  Saved to ~/.proton/config.toml"))
+		}
+		m.bottom.remove(modelSelectViewID)
+		m.relayout()
+		return m, nil
+	case providerActiveSelectedMsg:
+		if message.err != nil {
+			m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to switch provider: %v", message.err)))
+		} else {
+			m.activeProvider = message.providerName
+			m.reconfigureRunner()
+			m.appendLine(successStyle.Render(fmt.Sprintf("✓ Switched active provider to %s", message.providerName)))
+			if p, ok := m.providers[strings.ToLower(message.providerName)]; ok && p.BaseURL != "" {
+				m.appendLine(mutedStyle.Render(fmt.Sprintf("  Endpoint: %s", p.BaseURL)))
+			}
+			if m.activeModel != "" {
+				m.appendLine(mutedStyle.Render(fmt.Sprintf("  Active model: %s", m.activeModel)))
+			} else {
+				m.appendLine(mutedStyle.Render("  Use /model to choose a model for this provider"))
+			}
+			m.appendLine(mutedStyle.Render("  Saved to ~/.proton/config.toml"))
+		}
+		m.bottom.remove(providerSelectViewID)
+		m.relayout()
+		return m, nil
+	case providerDeletedMsg:
+		if message.err != nil {
+			m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to remove provider %s: %v", message.providerName, message.err)))
+		} else {
+			delete(m.providers, strings.ToLower(message.providerName))
+			if strings.EqualFold(m.activeProvider, message.providerName) {
+				m.activeProvider = ""
+				for remaining := range m.providers {
+					m.activeProvider = remaining
+					break
+				}
+				m.reconfigureRunner()
+			}
+			m.appendLine(successStyle.Render(fmt.Sprintf("✓ Removed provider %s", message.providerName)))
+			if m.activeProvider != "" {
+				m.appendLine(mutedStyle.Render(fmt.Sprintf("  Active provider is now %s", m.activeProvider)))
+			}
+			m.appendLine(mutedStyle.Render("  Updated ~/.proton/config.toml"))
+		}
+		m.bottom.remove(providerSelectViewID)
 		m.relayout()
 		return m, nil
 	case turnDeltaMsg:
@@ -354,6 +442,16 @@ func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.executeCommand("/skills")
+		return m, nil
+	}
+	if message.Type == tea.KeyCtrlP || key.Matches(message, m.keys.ToggleModel) {
+		if m.bottom.has(modelSelectViewID) {
+			m.bottom.remove(modelSelectViewID)
+			m.relayout()
+			return m, nil
+		}
+		m.bottom.push(newModelSelectPaneView(m))
+		m.relayout()
 		return m, nil
 	}
 	if message.String() == "ctrl+c" {
@@ -551,9 +649,74 @@ func (m *bubbleModel) appendModelToolResult(call tool.Call, result tool.Result) 
 	})
 }
 
+func (m *bubbleModel) reconfigureRunner() {
+	if m.activeModel == "" || m.service == nil {
+		return
+	}
+	provName := m.activeProvider
+	if provName == "" {
+		provName = model.DefaultProtonmanName
+	}
+	prov, ok := m.providers[strings.ToLower(provName)]
+	hasValidAuth := ok && (strings.TrimSpace(prov.APIKey) != "" || strings.Contains(strings.ToLower(prov.BaseURL), "opencode.ai") || strings.EqualFold(prov.Name, model.DefaultOpenCodeName))
+	if !hasValidAuth {
+		// Reload from disk in case config was written or updated
+		homeDir := strings.TrimSpace(os.Getenv("PROTON_HOME"))
+		if homeDir == "" {
+			if h, err := os.UserHomeDir(); err == nil {
+				homeDir = h
+			}
+		}
+		loaded, err := config.Load(context.Background(), config.Options{
+			HomeDir: homeDir,
+			WorkDir: m.workDir,
+		})
+		if err == nil {
+			if m.providers == nil {
+				m.providers = make(map[string]config.ProviderConfig)
+			}
+			for k, v := range loaded.Providers {
+				m.providers[k] = v
+			}
+			prov, ok = m.providers[strings.ToLower(provName)]
+			hasValidAuth = ok && (strings.TrimSpace(prov.APIKey) != "" || strings.Contains(strings.ToLower(prov.BaseURL), "opencode.ai") || strings.EqualFold(prov.Name, model.DefaultOpenCodeName))
+		}
+	}
+	if !hasValidAuth {
+		return
+	}
+	baseURL := prov.BaseURL
+	if baseURL == "" {
+		baseURL = model.DefaultProtonmanEndpoint
+	}
+	sessID := m.sessionID
+	if sessID == "" && m.workDir != "" {
+		sessID = "workspace-" + m.workDir
+	}
+	var clientOpts []model.OpenAIOption
+	if sessID != "" {
+		clientOpts = append(clientOpts, model.WithSessionID(sessID))
+	}
+	client := model.NewOpenAIClient(baseURL, prov.APIKey, m.activeModel, clientOpts...)
+	var opts []applicationturn.Option
+	if m.skills != nil {
+		opts = append(opts, applicationturn.WithSkillRegistry(m.skills))
+	}
+	loop, err := applicationturn.NewLoop(client, m.service, opts...)
+	if err == nil {
+		m.runner = loop
+		if m.bottom != nil {
+			m.bottom.setHasRunner(true)
+		}
+	}
+}
+
 func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 	if m.runner == nil {
-		m.appendError("model client is not configured; use /help or /call")
+		m.reconfigureRunner()
+	}
+	if m.runner == nil {
+		m.appendError("model client is not configured; use /model or /provider add to configure")
 		m.relayout()
 		return nil
 	}

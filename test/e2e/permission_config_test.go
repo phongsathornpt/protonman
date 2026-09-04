@@ -1,12 +1,14 @@
 package e2e_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/config"
+	"github.com/projectTHORN/proton/internal/model"
 )
 
 func TestE2EHeadlessAskModeFailsClosedWithoutPrompt(t *testing.T) {
@@ -194,3 +196,201 @@ func TestE2EProviderConfigSaveAndReload(t *testing.T) {
 		t.Fatalf("proton binary failed to boot with saved config: code %d, out: %s, err: %s", res.exitCode, res.stdout, res.stderr)
 	}
 }
+
+func TestE2EOpenCodeFreeProviderConfig(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+
+	// Step 1: Save OpenCode provider with zero API key
+	prov := config.ProviderConfig{
+		Name:    model.DefaultOpenCodeName,
+		Type:    "openai",
+		BaseURL: model.DefaultOpenCodeEndpoint,
+		APIKey:  "",
+	}
+	defaultModel := "nemotron-3.5-lightning-free"
+	err := config.SaveUserProviderConfig(home, prov, defaultModel)
+	if err != nil {
+		t.Fatalf("SaveUserProviderConfig for OpenCode error = %v", err)
+	}
+
+	// Step 2: Verify file existence and 0600 permissions
+	configFile := filepath.Join(home, ".proton", "config.toml")
+	info, err := os.Stat(configFile)
+	if err != nil {
+		t.Fatalf("stat config file error = %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Fatalf("config file permissions = %o, want 0600", perm)
+	}
+
+	content, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Fatalf("read config file: %v", err)
+	}
+	fileStr := string(content)
+	if !strings.Contains(fileStr, "https://opencode.ai/zen/v1") {
+		t.Fatalf("config missing OpenCode endpoint, got:\n%s", fileStr)
+	}
+	if !strings.Contains(fileStr, defaultModel) {
+		t.Fatalf("config missing default free model, got:\n%s", fileStr)
+	}
+
+	// Step 3: Load config via config.Load and verify parsed struct
+	loaded, err := config.Load(context.Background(), config.Options{
+		HomeDir: home,
+		WorkDir: ws,
+	})
+	if err != nil {
+		t.Fatalf("config.Load error = %v", err)
+	}
+	opencodeProv, ok := loaded.Providers["opencode"]
+	if !ok {
+		t.Fatalf("loaded config missing 'opencode' provider: %+v", loaded.Providers)
+	}
+	if opencodeProv.BaseURL != model.DefaultOpenCodeEndpoint {
+		t.Fatalf("loaded endpoint %q, want %q", opencodeProv.BaseURL, model.DefaultOpenCodeEndpoint)
+	}
+	if loaded.Model.Default != defaultModel {
+		t.Fatalf("loaded default model %q, want %q", loaded.Model.Default, defaultModel)
+	}
+	if !model.IsFreeModel(loaded.Model.Default) {
+		t.Fatalf("expected IsFreeModel(%q) to be true", loaded.Model.Default)
+	}
+
+	// Step 4: Boot proton CLI binary with OpenCode config
+	res := runProton(t, runOptions{
+		args: []string{"-y", "-p", `/call bash {"command":"echo opencode-e2e-ok"}`},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 || !strings.Contains(res.stdout, "opencode-e2e-ok") {
+		t.Fatalf("proton binary failed with OpenCode config: code %d, out: %s, err: %s", res.exitCode, res.stdout, res.stderr)
+	}
+}
+
+func TestE2EProviderSwitchAndSelect(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+
+	// Step 1: Save two providers (protonman and opencode)
+	pmProv := config.ProviderConfig{
+		Name:    "protonman",
+		Type:    "openai",
+		BaseURL: "https://api.protonman.dev/v1",
+		APIKey:  "pm_key_123",
+	}
+	if err := config.SaveUserProviderConfig(home, pmProv, "deepseek-v4-flash-vision-exp"); err != nil {
+		t.Fatalf("SaveUserProviderConfig(protonman) error: %v", err)
+	}
+
+	ocProv := config.ProviderConfig{
+		Name:    "opencode",
+		Type:    "openai",
+		BaseURL: "https://opencode.ai/zen/v1",
+		APIKey:  "",
+	}
+	if err := config.SaveUserProviderConfig(home, ocProv, "nemotron-3.5-lightning-free"); err != nil {
+		t.Fatalf("SaveUserProviderConfig(opencode) error: %v", err)
+	}
+
+	// Step 2: Switch active provider to opencode via SaveUserDefaultProvider
+	if err := config.SaveUserDefaultProvider(home, "opencode"); err != nil {
+		t.Fatalf("SaveUserDefaultProvider(opencode) error: %v", err)
+	}
+
+	// Step 3: Check permissions on ~/.proton/config.toml (must be 0600)
+	configFile := filepath.Join(home, ".proton", "config.toml")
+	info, err := os.Stat(configFile)
+	if err != nil {
+		t.Fatalf("stat config file error: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Fatalf("config file permissions = %o, want 0600", perm)
+	}
+
+	// Step 4: Verify snapshot reflects active provider opencode and preserves both providers
+	snap, err := config.Load(context.Background(), config.Options{
+		HomeDir: home,
+		WorkDir: ws,
+	})
+	if err != nil {
+		t.Fatalf("config.Load error: %v", err)
+	}
+	if snap.Model.Provider != "opencode" {
+		t.Fatalf("active provider = %q, want 'opencode'", snap.Model.Provider)
+	}
+	if len(snap.Providers) != 2 {
+		t.Fatalf("expected 2 providers in snapshot, got %d", len(snap.Providers))
+	}
+
+	// Step 5: Switch active provider back to protonman
+	if err := config.SaveUserDefaultProvider(home, "protonman"); err != nil {
+		t.Fatalf("SaveUserDefaultProvider(protonman) error: %v", err)
+	}
+
+	snap2, err := config.Load(context.Background(), config.Options{
+		HomeDir: home,
+		WorkDir: ws,
+	})
+	if err != nil {
+		t.Fatalf("config.Load error: %v", err)
+	}
+	if snap2.Model.Provider != "protonman" {
+		t.Fatalf("active provider = %q, want 'protonman'", snap2.Model.Provider)
+	}
+
+	// Step 6: Verify Proton boots cleanly with updated config
+	res := runProton(t, runOptions{
+		args: []string{"-y", "-p", `/call bash {"command":"echo provider-switch-verified"}`},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 || !strings.Contains(res.stdout, "provider-switch-verified") {
+		t.Fatalf("proton binary failed after provider switch: code %d, out: %s, err: %s", res.exitCode, res.stdout, res.stderr)
+	}
+
+	// Step 7: Edit provider details and verify update
+	updatedPM := config.ProviderConfig{
+		Name:    "protonman",
+		Type:    "openai",
+		BaseURL: "https://api-v2.protonman.dev/v1",
+		APIKey:  "pm_key_updated_456",
+	}
+	if err := config.SaveUserProviderConfig(home, updatedPM, "glm-5.3-flash"); err != nil {
+		t.Fatalf("edit SaveUserProviderConfig error: %v", err)
+	}
+	snap3, err := config.Load(context.Background(), config.Options{HomeDir: home, WorkDir: ws})
+	if err != nil {
+		t.Fatalf("config.Load error: %v", err)
+	}
+	if snap3.Providers["protonman"].BaseURL != "https://api-v2.protonman.dev/v1" {
+		t.Fatalf("expected updated endpoint, got %s", snap3.Providers["protonman"].BaseURL)
+	}
+
+	// Step 8: Delete provider and verify fallback
+	if err := config.DeleteUserProviderConfig(home, "protonman"); err != nil {
+		t.Fatalf("DeleteUserProviderConfig error: %v", err)
+	}
+	snap4, err := config.Load(context.Background(), config.Options{HomeDir: home, WorkDir: ws})
+	if err != nil {
+		t.Fatalf("config.Load error: %v", err)
+	}
+	if _, exists := snap4.Providers["protonman"]; exists {
+		t.Fatal("expected protonman removed")
+	}
+	if snap4.Model.Provider != "opencode" {
+		t.Fatalf("expected fallback active provider 'opencode', got %s", snap4.Model.Provider)
+	}
+
+	// Verify permissions remain 0600
+	infoAfter, err := os.Stat(configFile)
+	if err != nil {
+		t.Fatalf("stat config file error: %v", err)
+	}
+	if perm := infoAfter.Mode().Perm(); perm != 0o600 {
+		t.Fatalf("config file permissions = %o, want 0600", perm)
+	}
+}
+
+

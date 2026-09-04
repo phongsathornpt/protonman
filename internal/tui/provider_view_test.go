@@ -176,3 +176,170 @@ func TestProviderViewErrorDisplayAndRetry(t *testing.T) {
 		t.Fatalf("expected returned to providerStateInput, got %v", view.state)
 	}
 }
+
+func TestProviderViewOpenCodePresetLaunch(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+
+	// Launch via /provider add opencode
+	bModel.executeCommand("/provider add opencode")
+	if !bModel.bottom.has(providerViewID) {
+		t.Fatal("expected provider modal open after /provider add opencode")
+	}
+
+	view := bModel.bottom.find(providerViewID).(*providerPaneView)
+	if view.nameInput.Value() != "opencode" {
+		t.Fatalf("expected prefilled provider 'opencode', got: %s", view.nameInput.Value())
+	}
+	if view.endpointInput.Value() != "https://opencode.ai/zen/v1" {
+		t.Fatalf("expected prefilled endpoint 'https://opencode.ai/zen/v1', got: %s", view.endpointInput.Value())
+	}
+	if !strings.Contains(view.apiKeyInput.Placeholder, "Optional") {
+		t.Fatalf("expected placeholder with 'Optional', got: %s", view.apiKeyInput.Placeholder)
+	}
+
+	rendered := bModel.View()
+	if !strings.Contains(rendered, "opencode") || !strings.Contains(rendered, "https://opencode.ai/zen/v1") {
+		t.Fatalf("expected opencode in rendered view, got:\n%s", rendered)
+	}
+}
+
+func TestProviderViewEmptyKeyAllowedForOpenCode(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/provider add opencode")
+	view := bModel.bottom.find(providerViewID).(*providerPaneView)
+
+	// Ensure API key is empty
+	view.apiKeyInput.SetValue("")
+
+	// Press Enter -> should proceed to fetch even without API key
+	updated, cmd := bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	bModel = updated.(*bubbleModel)
+	view = bModel.bottom.find(providerViewID).(*providerPaneView)
+
+	if view.state != providerStateFetching {
+		t.Fatalf("expected state providerStateFetching for empty key on opencode, got %v", view.state)
+	}
+	if cmd == nil {
+		t.Fatal("expected fetchModelsCmd command returned on Enter")
+	}
+}
+
+func TestProviderViewFreeBadgeAndFiltering(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/provider add opencode")
+
+	sampleModels := []model.RemoteModel{
+		{ID: "nemotron-3.5-lightning-free", Name: "Nemotron 3.5 Lightning (Free)"},
+		{ID: "big-pickle", Name: "Big Pickle (Free)"},
+		{ID: "claude-sonnet-5", Name: "Claude Sonnet 5"},
+		{ID: "gpt-5.5", Name: "GPT 5.5"},
+	}
+
+	updated, _ := bModel.Update(modelsFetchedMsg{
+		providerName: "opencode",
+		baseURL:      "https://opencode.ai/zen/v1",
+		apiKey:       "",
+		models:       sampleModels,
+	})
+	bModel = updated.(*bubbleModel)
+	view := bModel.bottom.find(providerViewID).(*providerPaneView)
+
+	if view.state != providerStateSelectModel {
+		t.Fatalf("expected providerStateSelectModel, got %v", view.state)
+	}
+	// For opencode, filterFreeOnly defaults to true
+	if !view.filterFreeOnly {
+		t.Fatal("expected filterFreeOnly true by default for opencode")
+	}
+
+	rendered := bModel.View()
+	if !strings.Contains(rendered, "[FREE]") {
+		t.Fatalf("expected [FREE] badge in view, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "nemotron-3.5-lightning-free") || !strings.Contains(rendered, "big-pickle") {
+		t.Fatalf("expected free models in view, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "claude-sonnet-5") {
+		t.Fatalf("expected paid models filtered out when filterFreeOnly is true, got:\n%s", rendered)
+	}
+
+	// Press 'f' to toggle filter
+	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	bModel = updated.(*bubbleModel)
+	view = bModel.bottom.find(providerViewID).(*providerPaneView)
+	if view.filterFreeOnly {
+		t.Fatal("expected filterFreeOnly toggled to false after 'f'")
+	}
+
+	renderedAll := bModel.View()
+	if !strings.Contains(renderedAll, "claude-sonnet-5") || !strings.Contains(renderedAll, "gpt-5.5") {
+		t.Fatalf("expected all models shown after 'f' toggle, got:\n%s", renderedAll)
+	}
+
+	// Free models should still have [FREE] badge
+	if !strings.Contains(renderedAll, "[FREE]") {
+		t.Fatalf("expected [FREE] badge in full view, got:\n%s", renderedAll)
+	}
+}
+
+func TestProviderViewWindowingWithManyModels(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/provider add")
+
+	// 15 models
+	manyModels := make([]model.RemoteModel, 15)
+	for i := 0; i < 15; i++ {
+		manyModels[i] = model.RemoteModel{ID: strings.Repeat("a", i+1)}
+	}
+
+	updated, _ := bModel.Update(modelsFetchedMsg{
+		providerName: "custom",
+		baseURL:      "https://api.custom.com/v1",
+		apiKey:       "key",
+		models:       manyModels,
+	})
+	bModel = updated.(*bubbleModel)
+	view := bModel.bottom.find(providerViewID).(*providerPaneView)
+
+	if len(view.models) != 15 {
+		t.Fatalf("expected 15 models, got %d", len(view.models))
+	}
+
+	rendered := bModel.View()
+	if !strings.Contains(rendered, "more below") {
+		t.Fatalf("expected 'more below' indicator for 15 models, got:\n%s", rendered)
+	}
+
+	// Scroll down 8 times
+	for i := 0; i < 8; i++ {
+		updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyDown})
+		bModel = updated.(*bubbleModel)
+	}
+	view = bModel.bottom.find(providerViewID).(*providerPaneView)
+	if view.selectedIndex != 8 {
+		t.Fatalf("expected selectedIndex 8, got %d", view.selectedIndex)
+	}
+	if view.scrollOffset == 0 {
+		t.Fatalf("expected scrollOffset > 0 after scrolling down past 8 rows, got %d", view.scrollOffset)
+	}
+
+	scrolledView := bModel.View()
+	if !strings.Contains(scrolledView, "more above") {
+		t.Fatalf("expected 'more above' indicator after scrolling down, got:\n%s", scrolledView)
+	}
+}
+
+func TestSlashCommandModelFree(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+
+	bModel.executeCommand("/model free")
+	if !bModel.bottom.has(providerViewID) {
+		t.Fatal("expected provider modal open after /model free")
+	}
+
+	view := bModel.bottom.find(providerViewID).(*providerPaneView)
+	if view.nameInput.Value() != "opencode" {
+		t.Fatalf("expected opencode preset from /model free, got: %s", view.nameInput.Value())
+	}
+}
+
