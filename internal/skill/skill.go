@@ -48,17 +48,17 @@ var (
 
 // Skill represents an agent skill conforming to the Agent Skills specification.
 type Skill struct {
-	Name          string            `json:"name"`
-	Description   string            `json:"description"`
-	Location      string            `json:"location"`
-	BaseDir       string            `json:"base_dir"`
-	Scope         Scope             `json:"scope"`
-	License       string            `json:"license,omitempty"`
-	Compatibility string            `json:"compatibility,omitempty"`
-	Metadata      map[string]string `json:"metadata,omitempty"`
-	AllowedTools  []string          `json:"allowed_tools,omitempty"`
-	Instructions  string            `json:"instructions"`
-	Resources     []string          `json:"resources,omitempty"`
+	Name          string         `json:"name"`
+	Description   string         `json:"description"`
+	Location      string         `json:"location"`
+	BaseDir       string         `json:"base_dir"`
+	Scope         Scope          `json:"scope"`
+	License       string         `json:"license,omitempty"`
+	Compatibility string         `json:"compatibility,omitempty"`
+	Metadata      map[string]any `json:"metadata,omitempty"`
+	AllowedTools  []string       `json:"allowed_tools,omitempty"`
+	Instructions  string         `json:"instructions"`
+	Resources     []string       `json:"resources,omitempty"`
 }
 
 // Validate checks that the skill satisfies specification constraints.
