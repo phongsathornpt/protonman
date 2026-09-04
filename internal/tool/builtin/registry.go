@@ -105,7 +105,7 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 		NewApplyPatch(workspaceRoot, checkpointStore),
 		NewGrep(workspaceRoot),
 		NewListDir(workspaceRoot),
-		NewGitStatus(workspaceRoot),
+		NewGitStatus(workspaceRoot, cfg.launcher),
 		NewCheckpointRestore(checkpointStore),
 		NewWebFetch(cfg.network),
 	}

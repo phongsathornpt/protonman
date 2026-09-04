@@ -296,6 +296,41 @@ func TestGitStatusRejectsNonRepository(t *testing.T) {
 	}
 }
 
+type mockGitLauncher struct {
+	lastDir     string
+	lastCommand string
+}
+
+func (m *mockGitLauncher) Command(_ context.Context, dir string, command string) (*exec.Cmd, error) {
+	m.lastDir = dir
+	m.lastCommand = command
+	return exec.Command("echo", "## main"), nil
+}
+
+func TestGitStatusUsesLauncher(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	launcher := &mockGitLauncher{}
+	result, err := NewGitStatus(workspaceRoot, launcher).Execute(
+		context.Background(),
+		newJSONCall(t, "status-launcher", "git_status", map[string]any{"path": "sub"}),
+	)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(result.Output, "## main") {
+		t.Fatalf("output = %q, want ## main", result.Output)
+	}
+	if launcher.lastDir != workspaceRoot.Root() {
+		t.Fatalf("launcher dir = %q, want %q", launcher.lastDir, workspaceRoot.Root())
+	}
+	if !strings.Contains(launcher.lastCommand, "core.hooksPath=/dev/null") {
+		t.Fatalf("command = %q, want core.hooksPath=/dev/null", launcher.lastCommand)
+	}
+	if !strings.Contains(launcher.lastCommand, "--no-optional-locks") {
+		t.Fatalf("command = %q, want --no-optional-locks", launcher.lastCommand)
+	}
+}
+
 func newTestWorkspace(t *testing.T, protected []string) *workspace.Workspace {
 	t.Helper()
 	root := t.TempDir()
