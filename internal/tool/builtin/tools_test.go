@@ -169,6 +169,22 @@ func TestReadFileReportsTruncation(t *testing.T) {
 	}
 }
 
+func TestReadFileRejectsDirectory(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	writeTestFile(t, workspaceRoot.Root(), "sub/file.txt", "content")
+
+	_, err := NewReadFile(workspaceRoot).Execute(
+		context.Background(),
+		newJSONCall(t, "read-dir", "read_file", map[string]any{"path": "sub"}),
+	)
+	if err == nil {
+		t.Fatal("expected error reading directory, got nil")
+	}
+	if !strings.Contains(err.Error(), "is a directory; use list_dir instead") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
 func TestApplyPatchSupportsFileOperationsAndPlansBeforeWriting(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	writeTestFile(t, workspaceRoot.Root(), "before.txt", "one\ntwo\n")

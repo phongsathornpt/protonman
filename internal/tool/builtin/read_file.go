@@ -72,6 +72,20 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 		_ = file.Close()
 		return tool.Result{}, fmt.Errorf("stat %q: %w", input.Path, err)
 	}
+	if fileInfo.IsDir() {
+		_ = file.Close()
+		return tool.Result{}, tool.NewToolError(
+			tool.ErrorCodeInvalidArguments,
+			fmt.Sprintf("%q is a directory; use list_dir instead", input.Path),
+		)
+	}
+	if !fileInfo.Mode().IsRegular() {
+		_ = file.Close()
+		return tool.Result{}, tool.NewToolError(
+			tool.ErrorCodeInvalidArguments,
+			fmt.Sprintf("%q is not a regular file", input.Path),
+		)
+	}
 
 	size := fileInfo.Size()
 	var contents []byte
