@@ -371,4 +371,3 @@ func TestHeadlessSkillsCommands(t *testing.T) {
 		}
 	})
 }
-
