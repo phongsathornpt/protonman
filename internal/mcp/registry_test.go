@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/projectTHORN/proton/internal/permission"
 	domaintool "github.com/projectTHORN/proton/internal/tool"
@@ -403,4 +404,94 @@ func sameStrings(left []string, right []string) bool {
 		}
 	}
 	return true
+}
+
+type slowServer struct {
+	name    string
+	tools   []Tool
+	delay   time.Duration
+	started chan struct{}
+}
+
+func (s *slowServer) Name() string {
+	return s.name
+}
+
+func (s *slowServer) ListTools(ctx context.Context) ([]Tool, error) {
+	if s.started != nil {
+		close(s.started)
+	}
+	select {
+	case <-time.After(s.delay):
+		return append([]Tool{}, s.tools...), nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (s *slowServer) CallTool(_ context.Context, name string, _ json.RawMessage) (Result, error) {
+	return Result{}, nil
+}
+
+func TestDiscoverConcurrentExecution(t *testing.T) {
+	s1 := &slowServer{
+		name:  "server1",
+		tools: []Tool{{Name: "t1"}},
+		delay: 50 * time.Millisecond,
+	}
+	s2 := &slowServer{
+		name:  "server2",
+		tools: []Tool{{Name: "t2"}},
+		delay: 50 * time.Millisecond,
+	}
+	registry, err := builtin.NewRegistry()
+	if err != nil {
+		t.Fatalf("NewRegistry() error = %v", err)
+	}
+	start := time.Now()
+	if err := Discover(context.Background(), registry, s1, s2); err != nil {
+		t.Fatalf("Discover() error = %v", err)
+	}
+	elapsed := time.Since(start)
+	if elapsed >= 95*time.Millisecond {
+		t.Logf("Warning: elapsed time = %v (expected concurrent execution < 95ms)", elapsed)
+	}
+	defs := registry.Definitions()
+	if len(defs) != 2 {
+		t.Fatalf("len(defs) = %d, want 2", len(defs))
+	}
+	if defs[0].Name != "mcp.server1.t1" || defs[1].Name != "mcp.server2.t2" {
+		t.Fatalf("defs = [%q, %q], want [mcp.server1.t1, mcp.server2.t2]", defs[0].Name, defs[1].Name)
+	}
+}
+
+func TestDiscoverContextCancellation(t *testing.T) {
+	started := make(chan struct{})
+	server := &slowServer{
+		name:    "slow",
+		tools:   []Tool{{Name: "t1"}},
+		delay:   5 * time.Second,
+		started: started,
+	}
+	registry, err := builtin.NewRegistry()
+	if err != nil {
+		t.Fatalf("NewRegistry() error = %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Discover(ctx, registry, server)
+	}()
+
+	<-started
+	cancel()
+
+	err = <-errCh
+	if err == nil {
+		t.Fatal("Discover() error = nil, want context error")
+	}
+	if !strings.Contains(err.Error(), context.Canceled.Error()) {
+		t.Fatalf("Discover() error = %v, want context canceled", err)
+	}
 }
