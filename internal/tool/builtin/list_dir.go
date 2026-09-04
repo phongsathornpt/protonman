@@ -94,7 +94,7 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 		targetPath = "."
 	}
 
-	resolvedPath, err := h.workspace.Resolve(ctx, targetPath)
+	resolvedPath, err := h.workspace.ResolveRead(ctx, targetPath)
 	if err != nil {
 		return tool.Result{}, err
 	}
@@ -130,7 +130,7 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 
 		// Symlink handling with destination and directory indicator
 		if entryType&os.ModeSymlink != 0 {
-			if err := h.workspace.CheckAbsolute(ctx, childPath); err != nil {
+			if err := h.workspace.CheckAbsoluteRead(ctx, childPath); err != nil {
 				continue
 			}
 			target, readlinkErr := os.Readlink(childPath)

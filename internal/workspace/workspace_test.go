@@ -69,3 +69,74 @@ func TestWorkspaceAllowsNewPathInsideRoot(t *testing.T) {
 		t.Fatalf("resolved path %q escaped root %q", path, workspace.Root())
 	}
 }
+
+func TestWorkspaceReadRoots(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	skillDir := t.TempDir()
+	outsideDir := t.TempDir()
+
+	ws, err := New(root, nil)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	skillFile := filepath.Join(skillDir, "prompt.txt")
+	if err := os.WriteFile(skillFile, []byte("skill prompt content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Before adding read root, access is denied
+	if _, err := ws.ResolveRead(ctx, skillFile); !errors.Is(err, ErrOutsideWorkspace) {
+		t.Fatalf("ResolveRead() before AddReadRoot error = %v, want outside workspace", err)
+	}
+
+	// Add read root
+	if err := ws.AddReadRoot(skillDir); err != nil {
+		t.Fatalf("AddReadRoot() error = %v", err)
+	}
+
+	// ResolveRead should now succeed for absolute path in read root
+	resolved, err := ws.ResolveRead(ctx, skillFile)
+	if err != nil {
+		t.Fatalf("ResolveRead() error = %v", err)
+	}
+	if resolved != skillFile {
+		t.Fatalf("ResolveRead() = %q, want %q", resolved, skillFile)
+	}
+
+	// ResolveRead should fall back to read root for relative path not present in primary root
+	resolvedRel, err := ws.ResolveRead(ctx, "prompt.txt")
+	if err != nil {
+		t.Fatalf("ResolveRead(prompt.txt) error = %v", err)
+	}
+	if resolvedRel != skillFile {
+		t.Fatalf("ResolveRead(prompt.txt) = %q, want %q", resolvedRel, skillFile)
+	}
+
+	// Mutating Resolve must STILL reject the skill path (strict write isolation)
+	if _, err := ws.Resolve(ctx, skillFile); !errors.Is(err, ErrOutsideWorkspace) {
+		t.Fatalf("Resolve() on readRoot path error = %v, want ErrOutsideWorkspace", err)
+	}
+
+	// RelRead returns relative path to read root
+	rel, err := ws.RelRead(skillFile)
+	if err != nil {
+		t.Fatalf("RelRead() error = %v", err)
+	}
+	if rel != "prompt.txt" {
+		t.Fatalf("RelRead() = %q, want %q", rel, "prompt.txt")
+	}
+
+	// Symlink escape within read root must be rejected
+	secretFile := filepath.Join(outsideDir, "secret.txt")
+	if err := os.WriteFile(secretFile, []byte("secret"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	linkPath := filepath.Join(skillDir, "leak_link")
+	if err := os.Symlink(secretFile, linkPath); err == nil {
+		if _, err := ws.ResolveRead(ctx, linkPath); !errors.Is(err, ErrOutsideWorkspace) {
+			t.Fatalf("ResolveRead() symlink escape error = %v, want ErrOutsideWorkspace", err)
+		}
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/projectTHORN/proton/internal/glob"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -31,8 +32,11 @@ type protectedPath struct {
 
 // Workspace is the shared path policy and root for local file tools.
 type Workspace struct {
+	mu        sync.RWMutex
 	root      string
+	rawRoot   string
 	protected []protectedPath
+	readRoots []string
 }
 
 // New validates a workspace root and compiles protected path entries.
@@ -66,13 +70,58 @@ func New(root string, protectedPaths []string) (*Workspace, error) {
 	}
 	return &Workspace{
 		root:      filepath.Clean(resolvedRoot),
+		rawRoot:   filepath.Clean(absoluteRoot),
 		protected: compiledProtected,
+		readRoots: make([]string, 0),
 	}, nil
 }
 
 // Root returns the canonical workspace root.
 func (w *Workspace) Root() string {
 	return w.root
+}
+
+// AddReadRoot authorizes an additional external directory for read-only tools
+// (e.g. an activated skill directory).
+func (w *Workspace) AddReadRoot(dir string) error {
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		return nil
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(abs)
+	if err != nil || !info.IsDir() {
+		return fmt.Errorf("read root must be an existing directory")
+	}
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return err
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	cleanAbs := filepath.Clean(abs)
+	cleanResolved := filepath.Clean(resolved)
+	w.addReadRootLocked(cleanAbs)
+	if cleanResolved != cleanAbs {
+		w.addReadRootLocked(cleanResolved)
+	}
+	return nil
+}
+
+func (w *Workspace) addReadRootLocked(dir string) {
+	for _, r := range w.readRoots {
+		if r == dir {
+			return
+		}
+	}
+	w.readRoots = append(w.readRoots, dir)
+}
+
+func (w *Workspace) isWithinPrimary(path string) bool {
+	return isWithin(w.root, path) || (w.rawRoot != "" && isWithin(w.rawRoot, path))
 }
 
 // Resolve converts a model-provided path to a checked absolute path.
@@ -115,6 +164,105 @@ func (w *Workspace) CheckAbsolute(ctx context.Context, path string) error {
 	return w.checkAbsolute(ctx, filepath.Clean(path))
 }
 
+// ResolveRead converts a model-provided path to a checked absolute path,
+// permitting paths within the primary workspace root or any authorized read roots.
+func (w *Workspace) ResolveRead(ctx context.Context, input string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("resolve workspace path: %w", err)
+	}
+	if strings.TrimSpace(input) == "" {
+		return "", newBoundaryError(
+			tool.ErrorCodeOutsideWorkspace,
+			"path is required",
+			ErrOutsideWorkspace,
+		)
+	}
+	path := input
+	if !filepath.IsAbs(path) {
+		candidate := filepath.Join(w.root, path)
+		if _, err := os.Stat(candidate); err != nil {
+			w.mu.RLock()
+			for _, rr := range w.readRoots {
+				rcand := filepath.Join(rr, path)
+				if _, rerr := os.Stat(rcand); rerr == nil {
+					candidate = rcand
+					break
+				}
+			}
+			w.mu.RUnlock()
+		}
+		path = candidate
+	}
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve path %q: %w", input, err)
+	}
+	path = filepath.Clean(path)
+	if err := w.CheckAbsoluteRead(ctx, path); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// CheckAbsoluteRead validates an absolute path discovered or requested for read operations.
+// It allows paths inside the workspace root or inside any authorized read roots,
+// while checking for protected paths and symlink boundary escapes.
+func (w *Workspace) CheckAbsoluteRead(ctx context.Context, path string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("check workspace read path: %w", err)
+	}
+	if !filepath.IsAbs(path) {
+		return newBoundaryError(
+			tool.ErrorCodeOutsideWorkspace,
+			"path must be absolute",
+			ErrOutsideWorkspace,
+		)
+	}
+	clean := filepath.Clean(path)
+	if w.isWithinPrimary(clean) {
+		return w.checkAbsolute(ctx, clean)
+	}
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	for _, rr := range w.readRoots {
+		if isWithin(rr, clean) {
+			if w.isProtected(clean) {
+				return newBoundaryError(
+					tool.ErrorCodeProtectedPath,
+					fmt.Sprintf("path is protected: %q", clean),
+					ErrProtectedPath,
+				)
+			}
+			return w.checkSymlinkBoundaryWithRoot(clean, rr)
+		}
+	}
+	return newBoundaryError(
+		tool.ErrorCodeOutsideWorkspace,
+		fmt.Sprintf("path is outside workspace: %q", clean),
+		ErrOutsideWorkspace,
+	)
+}
+
+// RelRead returns the path relative to the workspace root if it is within it,
+// or relative to the matching read root if within a read root, or path unchanged.
+func (w *Workspace) RelRead(path string) (string, error) {
+	clean := filepath.Clean(path)
+	if isWithin(w.root, clean) {
+		return filepath.Rel(w.root, clean)
+	}
+	if w.rawRoot != "" && isWithin(w.rawRoot, clean) {
+		return filepath.Rel(w.rawRoot, clean)
+	}
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	for _, rr := range w.readRoots {
+		if isWithin(rr, clean) {
+			return filepath.Rel(rr, clean)
+		}
+	}
+	return filepath.Rel(w.root, clean)
+}
+
 // IsProtected reports whether an absolute workspace path is protected.
 func (w *Workspace) IsProtected(path string) bool {
 	return w.isProtected(filepath.Clean(path))
@@ -124,7 +272,8 @@ func (w *Workspace) checkAbsolute(ctx context.Context, path string) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("check workspace path: %w", err)
 	}
-	if !isWithin(w.root, path) {
+	clean := filepath.Clean(path)
+	if !w.isWithinPrimary(clean) {
 		return newBoundaryError(
 			tool.ErrorCodeOutsideWorkspace,
 			fmt.Sprintf("path is outside workspace: %q", path),
@@ -144,6 +293,15 @@ func (w *Workspace) checkAbsolute(ctx context.Context, path string) error {
 	return nil
 }
 
+func (w *Workspace) isWithinAnyReadRoot(path string) bool {
+	for _, rr := range w.readRoots {
+		if isWithin(rr, path) {
+			return true
+		}
+	}
+	return false
+}
+
 func (w *Workspace) checkSymlinkBoundary(path string) error {
 	ancestor, err := nearestExistingAncestor(path)
 	if err != nil {
@@ -153,7 +311,33 @@ func (w *Workspace) checkSymlinkBoundary(path string) error {
 	if err != nil {
 		return fmt.Errorf("resolve path symlinks: %w", err)
 	}
-	if !isWithin(w.root, resolvedAncestor) {
+	if !w.isWithinPrimary(resolvedAncestor) {
+		return newBoundaryError(
+			tool.ErrorCodeOutsideWorkspace,
+			fmt.Sprintf("symlink target is outside workspace: %q", resolvedAncestor),
+			ErrOutsideWorkspace,
+		)
+	}
+	if w.isProtected(resolvedAncestor) {
+		return newBoundaryError(
+			tool.ErrorCodeProtectedPath,
+			fmt.Sprintf("symlink target is protected: %q", resolvedAncestor),
+			ErrProtectedPath,
+		)
+	}
+	return nil
+}
+
+func (w *Workspace) checkSymlinkBoundaryWithRoot(path string, root string) error {
+	ancestor, err := nearestExistingAncestor(path)
+	if err != nil {
+		return fmt.Errorf("resolve path ancestor: %w", err)
+	}
+	resolvedAncestor, err := filepath.EvalSymlinks(ancestor)
+	if err != nil {
+		return fmt.Errorf("resolve path symlinks: %w", err)
+	}
+	if !isWithin(root, resolvedAncestor) && !w.isWithinPrimary(resolvedAncestor) && !w.isWithinAnyReadRoot(resolvedAncestor) {
 		return newBoundaryError(
 			tool.ErrorCodeOutsideWorkspace,
 			fmt.Sprintf("symlink target is outside workspace: %q", resolvedAncestor),
@@ -197,9 +381,13 @@ func (e boundaryError) FailureCode() tool.ErrorCode {
 }
 
 func (w *Workspace) isProtected(path string) bool {
+	clean := filepath.Clean(path)
 	for _, entry := range w.protected {
 		if entry.glob {
-			relative, err := filepath.Rel(w.root, path)
+			relative, err := filepath.Rel(w.root, clean)
+			if err != nil && w.rawRoot != "" {
+				relative, err = filepath.Rel(w.rawRoot, clean)
+			}
 			if err == nil {
 				relative = filepath.ToSlash(relative)
 				if glob.Match(entry.pattern, relative) {
@@ -215,7 +403,7 @@ func (w *Workspace) isProtected(path string) bool {
 			}
 			continue
 		}
-		if isWithin(entry.absolute, path) {
+		if isWithin(entry.absolute, clean) {
 			return true
 		}
 	}

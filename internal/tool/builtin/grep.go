@@ -106,7 +106,7 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	if strings.TrimSpace(searchPath) == "" {
 		searchPath = "."
 	}
-	resolvedPath, err := h.workspace.Resolve(ctx, searchPath)
+	resolvedPath, err := h.workspace.ResolveRead(ctx, searchPath)
 	if err != nil {
 		return tool.Result{}, err
 	}
@@ -184,7 +184,7 @@ func scanGrepFile(
 	output *strings.Builder,
 	matchCount *int,
 ) (matchedFile bool, returnErr error) {
-	if err := workspaceRoot.CheckAbsolute(ctx, path); err != nil {
+	if err := workspaceRoot.CheckAbsoluteRead(ctx, path); err != nil {
 		if errors.Is(err, workspace.ErrProtectedPath) || errors.Is(err, workspace.ErrOutsideWorkspace) {
 			return false, nil
 		}
@@ -200,7 +200,7 @@ func scanGrepFile(
 		}
 	}()
 
-	relative, err := filepath.Rel(workspaceRoot.Root(), path)
+	relative, err := workspaceRoot.RelRead(path)
 	if err != nil {
 		return false, fmt.Errorf("relative grep path: %w", err)
 	}
