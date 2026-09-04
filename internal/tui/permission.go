@@ -251,7 +251,13 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 	rows := make([]string, 0, 8)
 	rows = append(rows, titleStyle.Render(title))
 	rows = append(rows, fmt.Sprintf("%s (%s)", request.ToolName, request.ToolKind))
-	rows = append(rows, mutedStyle.Render(wrapWords("Target: "+request.Detail, maxInt(1, maxWidth-6))))
+	detailLines := wrapLines("Target: "+request.Detail, maxInt(1, maxWidth-6))
+	const maxDetailLines = 6
+	if len(detailLines) > maxDetailLines {
+		omitted := len(detailLines) - maxDetailLines
+		detailLines = append(detailLines[:maxDetailLines], fmt.Sprintf("... (%d more lines truncated)", omitted))
+	}
+	rows = append(rows, mutedStyle.Render(strings.Join(detailLines, "\n")))
 	rows = append(rows, "")
 	for i, option := range permissionOptions {
 		marker := "  "
