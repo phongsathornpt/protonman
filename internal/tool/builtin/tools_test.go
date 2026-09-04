@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/workspace"
 )
@@ -255,6 +256,19 @@ func TestDefaultRegistryContainsCodingTools(t *testing.T) {
 	definitions := registry.Definitions()
 	if got, want := len(definitions), 10; got != want {
 		t.Fatalf("definition count = %d, want %d", got, want)
+	}
+
+	coord := agent.NewCoordinator(nil, nil, nil, nil)
+	defer coord.Close()
+	regWithCoord, err := NewDefaultRegistry(workspaceRoot, WithAgentCoordinator(coord))
+	if err != nil {
+		t.Fatalf("NewDefaultRegistry(WithAgentCoordinator) error = %v", err)
+	}
+	if got, want := len(regWithCoord.Definitions()), 11; got != want {
+		t.Fatalf("definition count with coordinator = %d, want %d", got, want)
+	}
+	if _, ok := regWithCoord.Lookup("delegate_task"); !ok {
+		t.Fatalf("delegate_task not found in registry")
 	}
 }
 

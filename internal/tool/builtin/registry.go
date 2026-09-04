@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/sandbox"
 	"github.com/projectTHORN/proton/internal/skill"
@@ -42,10 +43,11 @@ func NewRegistry(handlers ...tool.Handler) (*Registry, error) {
 type RegistryOption func(*registryOptions) error
 
 type registryOptions struct {
-	stores   []checkpoint.Store
-	launcher sandbox.Launcher
-	network  sandbox.NetworkPolicy
-	skills   *skill.Registry
+	stores      []checkpoint.Store
+	launcher    sandbox.Launcher
+	network     sandbox.NetworkPolicy
+	skills      *skill.Registry
+	coordinator *agent.Coordinator
 }
 
 // WithCheckpointStore attaches durable edit checkpoints.
@@ -72,6 +74,14 @@ func WithSandbox(launcher sandbox.Launcher, network sandbox.NetworkPolicy) Regis
 func WithSkillRegistry(registry *skill.Registry) RegistryOption {
 	return func(options *registryOptions) error {
 		options.skills = registry
+		return nil
+	}
+}
+
+// WithAgentCoordinator attaches a subagent Coordinator and registers delegate_task.
+func WithAgentCoordinator(coordinator *agent.Coordinator) RegistryOption {
+	return func(options *registryOptions) error {
+		options.coordinator = coordinator
 		return nil
 	}
 }
@@ -111,6 +121,9 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 	}
 	if cfg.skills != nil {
 		handlers = append(handlers, NewActivateSkill(cfg.skills, workspaceRoot))
+	}
+	if cfg.coordinator != nil {
+		handlers = append(handlers, NewDelegateTask(cfg.coordinator))
 	}
 	return NewRegistry(handlers...)
 }
