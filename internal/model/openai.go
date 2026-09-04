@@ -98,7 +98,7 @@ type openAIFunctionCallReq struct {
 
 type openAIChatMessage struct {
 	Role       string              `json:"role"`
-	Content    string              `json:"content,omitempty"`
+	Content    *string             `json:"content,omitempty"`
 	ToolCallID string              `json:"tool_call_id,omitempty"`
 	ToolCalls  []openAIToolCallReq `json:"tool_calls,omitempty"`
 }
@@ -129,17 +129,20 @@ func (c *OpenAIClient) Stream(ctx context.Context, request Request) (Stream, err
 
 	messages := make([]openAIChatMessage, 0, len(request.Messages))
 	for _, m := range request.Messages {
-		msg := openAIChatMessage{
-			Role:    string(m.Role),
-			Content: m.Content,
-		}
-		if m.Role == RoleTool {
-			msg.ToolCallID = m.ToolCallID
-		}
-		if len(m.ToolCalls) > 0 {
-			msg.ToolCalls = make([]openAIToolCallReq, 0, len(m.ToolCalls))
+		if m.Role == RoleAssistant && len(m.ToolCalls) > 0 {
+			// If conversational text was emitted alongside tool calls, separate into two messages.
+			// Upstream providers (such as Ling/01.AI via OpenCode/OpenRouter) reject assistant messages
+			// combining both non-empty content and tool_calls with 503 "Upstream request failed".
+			if strings.TrimSpace(m.Content) != "" {
+				text := m.Content
+				messages = append(messages, openAIChatMessage{
+					Role:    "assistant",
+					Content: &text,
+				})
+			}
+			toolCalls := make([]openAIToolCallReq, 0, len(m.ToolCalls))
 			for _, tc := range m.ToolCalls {
-				msg.ToolCalls = append(msg.ToolCalls, openAIToolCallReq{
+				toolCalls = append(toolCalls, openAIToolCallReq{
 					ID:   tc.ID,
 					Type: "function",
 					Function: openAIFunctionCallReq{
@@ -148,6 +151,20 @@ func (c *OpenAIClient) Stream(ctx context.Context, request Request) (Stream, err
 					},
 				})
 			}
+			messages = append(messages, openAIChatMessage{
+				Role:      "assistant",
+				ToolCalls: toolCalls,
+			})
+			continue
+		}
+
+		content := m.Content
+		msg := openAIChatMessage{
+			Role:    string(m.Role),
+			Content: &content,
+		}
+		if m.Role == RoleTool {
+			msg.ToolCallID = m.ToolCallID
 		}
 		messages = append(messages, msg)
 	}
@@ -184,49 +201,78 @@ func (c *OpenAIClient) Stream(ctx context.Context, request Request) (Stream, err
 		endpoint += "/chat/completions"
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
-	if err != nil {
-		return nil, fmt.Errorf("create chat http request: %w", err)
-	}
+	maxRetries := 2
+	var lastErr error
 
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "text/event-stream")
-	if c.apiKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
-	}
-
-	ua := c.userAgent
-	if ua == "" {
-		ua = "Proton/1.0"
-	}
-	httpReq.Header.Set("User-Agent", ua)
-
-	if c.sessionID != "" {
-		httpReq.Header.Set("x-session-affinity", c.sessionID)
-		httpReq.Header.Set("X-Session-Id", c.sessionID)
-
-		if strings.Contains(strings.ToLower(c.baseURL), "opencode.ai") {
-			httpReq.Header.Set("x-opencode-session", c.sessionID)
-			clientName := c.clientName
-			if clientName == "" {
-				clientName = "proton"
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(attempt*500) * time.Millisecond
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoff):
 			}
-			httpReq.Header.Set("x-opencode-client", clientName)
 		}
-	}
 
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("execute chat http request: %w", err)
-	}
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
+		if err != nil {
+			return nil, fmt.Errorf("create chat http request: %w", err)
+		}
 
-	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("Accept", "text/event-stream")
+		if c.apiKey != "" {
+			httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+		}
+
+		ua := c.userAgent
+		if ua == "" {
+			ua = "Proton/1.0"
+		}
+		httpReq.Header.Set("User-Agent", ua)
+
+		if c.sessionID != "" {
+			httpReq.Header.Set("x-session-affinity", c.sessionID)
+			httpReq.Header.Set("X-Session-Id", c.sessionID)
+
+			if strings.Contains(strings.ToLower(c.baseURL), "opencode.ai") {
+				httpReq.Header.Set("x-opencode-session", c.sessionID)
+				clientName := c.clientName
+				if clientName == "" {
+					clientName = "proton"
+				}
+				httpReq.Header.Set("x-opencode-client", clientName)
+			}
+		}
+
+		resp, err := c.httpClient.Do(httpReq)
+		if err != nil {
+			lastErr = fmt.Errorf("execute chat http request: %w", err)
+			continue
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			return newOpenAIStream(resp.Body), nil
+		}
+
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
-		return nil, fmt.Errorf("provider returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		resp.Body.Close()
+
+		lastErr = fmt.Errorf("provider returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+
+		// Retry only on transient upstream errors
+		if resp.StatusCode == http.StatusBadGateway ||
+			resp.StatusCode == http.StatusServiceUnavailable ||
+			resp.StatusCode == http.StatusGatewayTimeout ||
+			resp.StatusCode == http.StatusTooManyRequests ||
+			resp.StatusCode == http.StatusInternalServerError {
+			continue
+		}
+
+		return nil, lastErr
 	}
 
-	return newOpenAIStream(resp.Body), nil
+	return nil, lastErr
 }
 
 type accumulatedToolCall struct {
@@ -389,10 +435,14 @@ func (s *openAIStream) flushToolCalls() {
 		if argsStr == "" {
 			argsStr = "{}"
 		}
+		callID := acc.id
+		if callID == "" {
+			callID = fmt.Sprintf("call_%d_%d", time.Now().UnixNano(), idx)
+		}
 		s.queue = append(s.queue, Event{
 			Kind: EventToolCall,
 			ToolCall: ToolCall{
-				ID:        acc.id,
+				ID:        callID,
 				Name:      acc.name,
 				Arguments: json.RawMessage(argsStr),
 			},
