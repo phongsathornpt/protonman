@@ -37,6 +37,7 @@ var slashCatalog = []slashCommand{
 	{name: "todo", description: "show the TODO pane"},
 	{name: "clear", description: "clear the visible transcript"},
 	{name: "new", description: "start a new conversation"},
+	{name: "provider", aliases: []string{"model", "providers"}, description: "configure model providers (e.g. /provider add)", takesArgs: true},
 	{name: "call", description: "run a registered tool", takesArgs: true},
 	{name: "quit", aliases: []string{"exit"}, description: "leave Proton"},
 }
@@ -510,6 +511,17 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		return nil
 	case "new":
 		m.resetConversation()
+		m.refreshViewport()
+		return nil
+	case "provider", "model", "providers":
+		if argument == "add" || argument == "" {
+			if !m.bottom.has(providerViewID) {
+				m.bottom.push(newProviderPaneView())
+				m.relayout()
+			}
+			return nil
+		}
+		m.appendLine(mutedStyle.Render("Usage: /provider add  (configures AI model provider, e.g. protonman)"))
 		m.refreshViewport()
 		return nil
 	case "call":
