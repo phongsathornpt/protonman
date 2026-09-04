@@ -139,3 +139,39 @@ func writeConfig(t *testing.T, path string, content string) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 }
+
+func TestSaveAndLoadUserProviderConfig(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+
+	provider := ProviderConfig{
+		Name:    "protonman",
+		Type:    "openai",
+		BaseURL: "https://protonman.dev/api/v1",
+		APIKey:  "plk_test_12345",
+	}
+
+	err := SaveUserProviderConfig(homeDir, provider, "deepseek-v4-flash-vision-exp")
+	if err != nil {
+		t.Fatalf("SaveUserProviderConfig() error = %v", err)
+	}
+
+	snapshot, err := Load(context.Background(), Options{
+		HomeDir: homeDir,
+		WorkDir: workDir,
+	})
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	savedProv, ok := snapshot.Providers["protonman"]
+	if !ok {
+		t.Fatalf("expected provider 'protonman' in snapshot, got: %v", snapshot.Providers)
+	}
+	if savedProv.BaseURL != "https://protonman.dev/api/v1" || savedProv.APIKey != "plk_test_12345" {
+		t.Fatalf("unexpected provider config: %+v", savedProv)
+	}
+	if snapshot.Model.Default != "deepseek-v4-flash-vision-exp" || snapshot.Model.Provider != "protonman" {
+		t.Fatalf("unexpected model config: %+v", snapshot.Model)
+	}
+}
