@@ -12,10 +12,21 @@ import (
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/session"
+	"github.com/projectTHORN/proton/internal/skill"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
+
+// Option configures the headless runner.
+type Option func(*Runner)
+
+// WithSkills configures the skill registry for the headless runner.
+func WithSkills(skills *skill.Registry) Option {
+	return func(r *Runner) {
+		r.skills = skills
+	}
+}
 
 // Format is the headless output encoding.
 type Format uint8
@@ -67,6 +78,7 @@ var ErrInvalidRunner = errors.New("invalid headless runner")
 type Runner struct {
 	service  *toolcall.Service
 	registry tool.Registry
+	skills   *skill.Registry
 	runner   applicationturn.Runner
 	messages []model.Message
 	nextID   uint64
@@ -74,19 +86,25 @@ type Runner struct {
 
 // New creates a fail-closed headless runner. Ask-mode calls stay denied
 // because no permission prompt is installed.
-func New(service *toolcall.Service, registry tool.Registry, runner applicationturn.Runner) (*Runner, error) {
+func New(service *toolcall.Service, registry tool.Registry, runner applicationturn.Runner, options ...Option) (*Runner, error) {
 	if service == nil {
 		return nil, fmt.Errorf("%w: service is required", ErrInvalidRunner)
 	}
 	if registry == nil {
 		return nil, fmt.Errorf("%w: registry is required", ErrInvalidRunner)
 	}
-	return &Runner{
+	r := &Runner{
 		service:  service,
 		registry: registry,
 		runner:   runner,
 		messages: make([]model.Message, 0),
-	}, nil
+	}
+	for _, opt := range options {
+		if opt != nil {
+			opt(r)
+		}
+	}
+	return r, nil
 }
 
 // Messages returns a copy of the in-memory transcript.
@@ -188,9 +206,132 @@ func (r *Runner) runCommand(
 		return writeEvent(output, format, Event{Kind: "text", Text: "permission mode: " + mode.String()})
 	case "call":
 		return r.runCall(ctx, parts, output, format)
+	case "skills":
+		return r.handleSkillsCommand(false, argument, parts, output, format)
+	case "skill":
+		return r.handleSkillsCommand(true, argument, parts, output, format)
 	default:
 		return fmt.Errorf("unknown command %q; try /help", name)
 	}
+}
+
+func (r *Runner) handleSkillsCommand(isSkillSingle bool, argument string, parts []string, output io.Writer, format Format) error {
+	trimmedArg := strings.TrimSpace(argument)
+	if isSkillSingle && trimmedArg == "" {
+		return fmt.Errorf("usage: /skill <name> or /skill toggle <name>")
+	}
+
+	if r.skills == nil || len(r.skills.List()) == 0 {
+		return writeEvent(output, format, Event{
+			Kind: EventKindText,
+			Text: "No agent skills discovered.\nPlace skills in ~/.proton/skills/ or .proton/skills/ (with PROTON_TRUST_PROJECT=1).",
+		})
+	}
+
+	if trimmedArg == "" {
+		skillsList := r.skills.List()
+		activeCount := len(r.skills.ActivatedList())
+		var builder strings.Builder
+		fmt.Fprintf(&builder, "Agent Skills (%d/%d active):", activeCount, len(skillsList))
+		for _, s := range skillsList {
+			box := "[ ]"
+			if r.skills.IsActivated(s.Name) {
+				box = "[x]"
+			}
+			fmt.Fprintf(&builder, "\n  %s %s [%s]: %s", box, s.Name, s.Scope, s.Description)
+		}
+		return writeEvent(output, format, Event{Kind: EventKindText, Text: builder.String()})
+	}
+
+	if trimmedArg == "active" {
+		active := r.skills.ActivatedList()
+		if len(active) == 0 {
+			return writeEvent(output, format, Event{
+				Kind: EventKindText,
+				Text: "No active agent skills in this session.\nActivate skills using /skill <name> or the activate_skill tool.",
+			})
+		}
+		var builder strings.Builder
+		fmt.Fprintf(&builder, "Active Agent Skills (%d):", len(active))
+		for _, name := range active {
+			if s, ok := r.skills.Lookup(name); ok {
+				fmt.Fprintf(&builder, "\n  [x] %s [%s]: %s", s.Name, s.Scope, s.Description)
+			}
+		}
+		return writeEvent(output, format, Event{Kind: EventKindText, Text: builder.String()})
+	}
+
+	if trimmedArg == "toggle" {
+		if len(parts) < 3 || strings.TrimSpace(parts[2]) == "" {
+			return fmt.Errorf("usage: /skill toggle <name>")
+		}
+		target := strings.TrimSpace(parts[2])
+		active, err := r.skills.Toggle(target)
+		if err != nil {
+			return err
+		}
+		state := "deactivated"
+		box := "[ ]"
+		if active {
+			state = "activated"
+			box = "[x]"
+		}
+		return writeEvent(output, format, Event{
+			Kind: EventKindText,
+			Text: fmt.Sprintf("%s Skill %q %s.", box, target, state),
+		})
+	}
+
+	if trimmedArg == "deactivate" || trimmedArg == "disable" || trimmedArg == "remove" || trimmedArg == "off" {
+		if len(parts) < 3 || strings.TrimSpace(parts[2]) == "" {
+			return fmt.Errorf("usage: /skill %s <name>", trimmedArg)
+		}
+		target := strings.TrimSpace(parts[2])
+		if _, ok := r.skills.Lookup(target); !ok {
+			return fmt.Errorf("skill %q not found; try /skills to list available skills", target)
+		}
+		if !r.skills.IsActivated(target) {
+			return writeEvent(output, format, Event{
+				Kind: EventKindText,
+				Text: fmt.Sprintf("[ ] Skill %q is not active.", target),
+			})
+		}
+		r.skills.Deactivate(target)
+		return writeEvent(output, format, Event{
+			Kind: EventKindText,
+			Text: fmt.Sprintf("[ ] Skill %q deactivated.", target),
+		})
+	}
+
+	target := trimmedArg
+	if (trimmedArg == "activate" || trimmedArg == "enable" || trimmedArg == "on") && len(parts) >= 3 {
+		target = strings.TrimSpace(parts[2])
+	}
+
+	s, ok := r.skills.Lookup(target)
+	if !ok {
+		return fmt.Errorf("skill %q not found; try /skills to list available skills", target)
+	}
+	if r.skills.IsActivated(s.Name) {
+		return writeEvent(output, format, Event{
+			Kind: EventKindText,
+			Text: fmt.Sprintf("[x] Skill %q is already active. Use /skill toggle %s to deactivate.", s.Name, s.Name),
+		})
+	}
+
+	r.skills.MarkActivated(s.Name)
+	var builder strings.Builder
+	fmt.Fprintf(&builder, "[x] Activated skill %s [%s]: %s", s.Name, s.Scope, s.Description)
+	if len(s.Resources) > 0 {
+		builder.WriteString("\nBundled resources:")
+		for _, res := range s.Resources {
+			fmt.Fprintf(&builder, "\n  - %s", res)
+		}
+	}
+	return writeEvent(output, format, Event{
+		Kind: EventKindText,
+		Text: builder.String(),
+	})
 }
 
 func (r *Runner) runCall(
@@ -362,6 +503,8 @@ func commandHelp() string {
 	return strings.Join([]string{
 		"/call <tool> <json>   run a registered tool",
 		"/tools                list tools",
+		"/skills [active]      list available or active skills",
+		"/skill <name>         activate a skill",
 		"/mode [ask|always-approve|deny]",
 		"/help                 list commands",
 	}, "\n")

@@ -9,6 +9,7 @@ import (
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/session"
+	"github.com/projectTHORN/proton/internal/skill"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/turn"
@@ -252,3 +253,122 @@ func TestFormatEnumAndTextMarshaling(t *testing.T) {
 		t.Fatal("UnmarshalText(invalid) error = nil, want error")
 	}
 }
+
+func TestHeadlessSkillsCommands(t *testing.T) {
+	registry, _ := newTestRegistry()
+	service := newTestService(t, registry, permission.ModeAlwaysApprove)
+
+	t.Run("no skills configured", func(t *testing.T) {
+		runner, err := New(service, registry, nil)
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+		var out bytes.Buffer
+		if err := runner.Run(context.Background(), "/skills", &out, FormatText); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		if !strings.Contains(out.String(), "No agent skills discovered.") {
+			t.Fatalf("output = %q, want no skills discovered", out.String())
+		}
+	})
+
+	t.Run("list and activate skills", func(t *testing.T) {
+		skills := skill.NewRegistry(
+			skill.Skill{
+				Name:        "pdf-processing",
+				Description: "Extract PDF text",
+				Scope:       skill.ScopeUser,
+				Resources:   []string{"scripts/extract.py"},
+			},
+			skill.Skill{
+				Name:        "git-helper",
+				Description: "Git helper tools",
+				Scope:       skill.ScopeProject,
+			},
+		)
+		runner, err := New(service, registry, nil, WithSkills(skills))
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+
+		// Initial list: 0/2 active
+		var out bytes.Buffer
+		if err := runner.Run(context.Background(), "/skills", &out, FormatText); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		if !strings.Contains(out.String(), "Agent Skills (0/2 active):") ||
+			!strings.Contains(out.String(), "[ ] pdf-processing [user]: Extract PDF text") ||
+			!strings.Contains(out.String(), "[ ] git-helper [project]: Git helper tools") {
+			t.Fatalf("output = %q, want skills checklist", out.String())
+		}
+
+		// List active: none
+		out.Reset()
+		if err := runner.Run(context.Background(), "/skills active", &out, FormatText); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		if !strings.Contains(out.String(), "No active agent skills in this session.") {
+			t.Fatalf("output = %q, want no active skills", out.String())
+		}
+
+		// Activate pdf-processing (case-insensitive)
+		out.Reset()
+		if err := runner.Run(context.Background(), "/skill PDF-Processing", &out, FormatText); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		if !strings.Contains(out.String(), "[x] Activated skill pdf-processing [user]: Extract PDF text") ||
+			!strings.Contains(out.String(), "scripts/extract.py") {
+			t.Fatalf("output = %q, want activated skill notification card", out.String())
+		}
+		if !skills.IsActivated("pdf-processing") {
+			t.Fatal("expected pdf-processing to be activated in registry")
+		}
+
+		// Active list now shows 1
+		out.Reset()
+		if err := runner.Run(context.Background(), "/skills active", &out, FormatText); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		if !strings.Contains(out.String(), "Active Agent Skills (1):") ||
+			!strings.Contains(out.String(), "[x] pdf-processing") {
+			t.Fatalf("output = %q, want active list with 1 skill", out.String())
+		}
+
+		// Toggle off
+		out.Reset()
+		if err := runner.Run(context.Background(), "/skill toggle pdf-processing", &out, FormatText); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		if !strings.Contains(out.String(), "[ ] Skill \"pdf-processing\" deactivated.") {
+			t.Fatalf("output = %q, want deactivated message", out.String())
+		}
+		if skills.IsActivated("pdf-processing") {
+			t.Fatal("expected pdf-processing to be deactivated")
+		}
+
+		// Deactivate already inactive skill
+		out.Reset()
+		if err := runner.Run(context.Background(), "/skill deactivate pdf-processing", &out, FormatText); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		if !strings.Contains(out.String(), "[ ] Skill \"pdf-processing\" is not active.") {
+			t.Fatalf("output = %q, want not active message", out.String())
+		}
+	})
+
+	t.Run("help lists skill commands", func(t *testing.T) {
+		runner, err := New(service, registry, nil)
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+		var out bytes.Buffer
+		if err := runner.Run(context.Background(), "/help", &out, FormatText); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		if !strings.Contains(out.String(), "/skills [active]") ||
+			!strings.Contains(out.String(), "/skill <name>") {
+			t.Fatalf("help output missing skill commands: %q", out.String())
+		}
+	})
+}
+
