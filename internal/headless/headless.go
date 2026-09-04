@@ -206,20 +206,15 @@ func (r *Runner) runCommand(
 		return writeEvent(output, format, Event{Kind: "text", Text: "permission mode: " + mode.String()})
 	case "call":
 		return r.runCall(ctx, parts, output, format)
-	case "skills":
-		return r.handleSkillsCommand(false, argument, parts, output, format)
-	case "skill":
-		return r.handleSkillsCommand(true, argument, parts, output, format)
+	case "skills", "skill":
+		return r.handleSkillsCommand(argument, parts, output, format)
 	default:
 		return fmt.Errorf("unknown command %q; try /help", name)
 	}
 }
 
-func (r *Runner) handleSkillsCommand(isSkillSingle bool, argument string, parts []string, output io.Writer, format Format) error {
+func (r *Runner) handleSkillsCommand(argument string, parts []string, output io.Writer, format Format) error {
 	trimmedArg := strings.TrimSpace(argument)
-	if isSkillSingle && trimmedArg == "" {
-		return fmt.Errorf("usage: /skill <name> or /skill toggle <name>")
-	}
 
 	if r.skills == nil || len(r.skills.List()) == 0 {
 		return writeEvent(output, format, Event{
@@ -315,7 +310,7 @@ func (r *Runner) handleSkillsCommand(isSkillSingle bool, argument string, parts 
 	if r.skills.IsActivated(s.Name) {
 		return writeEvent(output, format, Event{
 			Kind: EventKindText,
-			Text: fmt.Sprintf("[x] Skill %q is already active. Use /skill toggle %s to deactivate.", s.Name, s.Name),
+			Text: fmt.Sprintf("[x] Skill %q is already active. Use /skills toggle %s to deactivate.", s.Name, s.Name),
 		})
 	}
 
@@ -503,8 +498,7 @@ func commandHelp() string {
 	return strings.Join([]string{
 		"/call <tool> <json>   run a registered tool",
 		"/tools                list tools",
-		"/skills [active]      list available or active skills",
-		"/skill <name>         activate a skill",
+		"/skills [name]        browse, activate, or toggle skills (alias: /skill)",
 		"/mode [ask|always-approve|deny]",
 		"/help                 list commands",
 	}, "\n")

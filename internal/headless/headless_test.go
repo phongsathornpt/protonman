@@ -291,7 +291,7 @@ func TestHeadlessSkillsCommands(t *testing.T) {
 			t.Fatalf("New() error = %v", err)
 		}
 
-		// Initial list: 0/2 active
+		// Initial list via /skills: 0/2 active
 		var out bytes.Buffer
 		if err := runner.Run(context.Background(), "/skills", &out, FormatText); err != nil {
 			t.Fatalf("Run() error = %v", err)
@@ -300,6 +300,16 @@ func TestHeadlessSkillsCommands(t *testing.T) {
 			!strings.Contains(out.String(), "[ ] pdf-processing [user]: Extract PDF text") ||
 			!strings.Contains(out.String(), "[ ] git-helper [project]: Git helper tools") {
 			t.Fatalf("output = %q, want skills checklist", out.String())
+		}
+
+		// Initial list via /skill (alias): also 0/2 active
+		out.Reset()
+		if err := runner.Run(context.Background(), "/skill", &out, FormatText); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		if !strings.Contains(out.String(), "Agent Skills (0/2 active):") ||
+			!strings.Contains(out.String(), "[ ] pdf-processing [user]: Extract PDF text") {
+			t.Fatalf("output = %q, want skills checklist via /skill alias", out.String())
 		}
 
 		// List active: none
@@ -334,9 +344,9 @@ func TestHeadlessSkillsCommands(t *testing.T) {
 			t.Fatalf("output = %q, want active list with 1 skill", out.String())
 		}
 
-		// Toggle off
+		// Toggle off using /skills toggle
 		out.Reset()
-		if err := runner.Run(context.Background(), "/skill toggle pdf-processing", &out, FormatText); err != nil {
+		if err := runner.Run(context.Background(), "/skills toggle pdf-processing", &out, FormatText); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
 		if !strings.Contains(out.String(), "[ ] Skill \"pdf-processing\" deactivated.") {
@@ -365,9 +375,9 @@ func TestHeadlessSkillsCommands(t *testing.T) {
 		if err := runner.Run(context.Background(), "/help", &out, FormatText); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
-		if !strings.Contains(out.String(), "/skills [active]") ||
-			!strings.Contains(out.String(), "/skill <name>") {
-			t.Fatalf("help output missing skill commands: %q", out.String())
+		if !strings.Contains(out.String(), "/skills [name]") ||
+			!strings.Contains(out.String(), "(alias: /skill)") {
+			t.Fatalf("help output missing unified skill command: %q", out.String())
 		}
 	})
 }
