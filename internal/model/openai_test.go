@@ -468,7 +468,7 @@ func TestLiveOpenCodeMultiTurn(t *testing.T) {
 	client := NewOpenAIClient(
 		"https://opencode.ai/zen/v1",
 		"",
-		"ling-3.0-flash-fin-free",
+		"nemotron-3.5-lightning-free",
 		WithSessionID("sess-test-live-1"),
 		WithClientName("proton"),
 	)
@@ -504,6 +504,9 @@ func TestLiveOpenCodeMultiTurn(t *testing.T) {
 
 	stream1, err := client.Stream(context.Background(), req1)
 	if err != nil {
+		if strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "502") {
+			t.Skipf("upstream opencode gateway is temporarily unavailable: %v", err)
+		}
 		t.Fatalf("Stream 1 failed: %v", err)
 	}
 
