@@ -205,6 +205,7 @@ func run(ctx context.Context, args []string) error {
 			if skillRegistry != nil {
 				loopOpts = append(loopOpts, turn.WithSkillRegistry(skillRegistry))
 			}
+			loopOpts = append(loopOpts, turn.WithMaxRounds(loadedConfig.Agent.MaxRounds))
 			loop, loopErr := turn.NewLoop(client, service, loopOpts...)
 			if loopErr == nil {
 				initialRunner = loop
@@ -242,6 +243,7 @@ func run(ctx context.Context, args []string) error {
 		tui.WithInitialMessages(session.ToModelMessages(state.Messages)),
 		tui.WithSkills(skillRegistry),
 		tui.WithModelConfig(loadedConfig.Model, loadedConfig.Providers),
+		tui.WithAgentConfig(loadedConfig.Agent),
 		tui.WithBubbleTeaRunner(initialRunner),
 	)
 	if uiErr != nil {
