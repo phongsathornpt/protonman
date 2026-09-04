@@ -240,3 +240,63 @@ Review code thoroughly.
 		t.Fatalf("expected no active skills after deactivation persistence, got: %s", res.stdout)
 	}
 }
+
+func TestE2EUnifiedSkillSlashCommand(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+
+	// Create a user skill in PROTON_HOME
+	skillDir := filepath.Join(home, ".proton", "skills", "linter")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := `---
+name: linter
+description: Linting tools
+---
+# Linter Instructions
+Lint cleanly.
+`
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. /skill without arguments lists skills (unified alias)
+	res := runProton(t, runOptions{
+		args: []string{"-y", "-p", "/skill"},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr = %s", res.exitCode, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "Agent Skills (0/1 active):") || !strings.Contains(res.stdout, "[ ] linter") {
+		t.Fatalf("expected /skill without args to list skills, got: %s", res.stdout)
+	}
+
+	// 2. /skills <name> activates the skill
+	res = runProton(t, runOptions{
+		args: []string{"-y", "-p", "/skills linter"},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr = %s", res.exitCode, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "[x] Activated skill linter") {
+		t.Fatalf("expected /skills linter to activate skill, got: %s", res.stdout)
+	}
+
+	// 3. /skills toggle <name> in resumed session deactivates the skill
+	res = runProton(t, runOptions{
+		args: []string{"-y", "--resume", "-p", "/skills toggle linter"},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr = %s", res.exitCode, res.stderr)
+	}
+	if !strings.Contains(res.stdout, `[ ] Skill "linter" deactivated.`) {
+		t.Fatalf("expected /skills toggle to deactivate, got: %s", res.stdout)
+	}
+}
