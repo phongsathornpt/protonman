@@ -242,6 +242,12 @@ type Handler interface {
 	Execute(ctx context.Context, call Call) (Result, error)
 }
 
+// DetailProvider allows a handler to produce a customized detail string
+// for permission evaluation and user prompts (e.g. summarizing affected files).
+type DetailProvider interface {
+	PermissionDetail(arguments json.RawMessage) string
+}
+
 // Registry resolves tool names and publishes their definitions.
 type Registry interface {
 	// Lookup returns the handler registered under name.

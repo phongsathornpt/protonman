@@ -398,3 +398,52 @@ func newJSONCall(t *testing.T, id string, name string, input map[string]any) too
 	}
 	return call
 }
+
+func TestPermissionDetailProviders(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+
+	// Test apply_patch detail extraction
+	patchTool := NewApplyPatch(workspaceRoot)
+	detailedPatch, ok := patchTool.(tool.DetailProvider)
+	if !ok {
+		t.Fatal("apply_patch does not implement tool.DetailProvider")
+	}
+	patchPayload := `*** Begin Patch
+*** Add File: pkg/math.go
++package pkg
+*** End Patch`
+	args, _ := json.Marshal(map[string]any{"patch": patchPayload})
+	if detail := detailedPatch.PermissionDetail(args); detail != "pkg/math.go" {
+		t.Fatalf("apply_patch PermissionDetail = %q, want pkg/math.go", detail)
+	}
+
+	// Test list_dir detail extraction with aliases and default
+	listTool := NewListDir(workspaceRoot)
+	detailedList, ok := listTool.(tool.DetailProvider)
+	if !ok {
+		t.Fatal("list_dir does not implement tool.DetailProvider")
+	}
+	argsDir, _ := json.Marshal(map[string]any{"dir_path": "src/lib"})
+	if detail := detailedList.PermissionDetail(argsDir); detail != "src/lib" {
+		t.Fatalf("list_dir with dir_path PermissionDetail = %q, want src/lib", detail)
+	}
+	argsEmpty, _ := json.Marshal(map[string]any{})
+	if detail := detailedList.PermissionDetail(argsEmpty); detail != "." {
+		t.Fatalf("list_dir empty PermissionDetail = %q, want .", detail)
+	}
+
+	// Test grep detail extraction default
+	grepTool := NewGrep(workspaceRoot)
+	detailedGrep, ok := grepTool.(tool.DetailProvider)
+	if !ok {
+		t.Fatal("grep does not implement tool.DetailProvider")
+	}
+	argsGrep, _ := json.Marshal(map[string]any{"pattern": "TODO"})
+	if detail := detailedGrep.PermissionDetail(argsGrep); detail != "." {
+		t.Fatalf("grep empty path PermissionDetail = %q, want .", detail)
+	}
+	argsGrepPath, _ := json.Marshal(map[string]any{"pattern": "TODO", "path": "docs"})
+	if detail := detailedGrep.PermissionDetail(argsGrepPath); detail != "docs" {
+		t.Fatalf("grep with path PermissionDetail = %q, want docs", detail)
+	}
+}
