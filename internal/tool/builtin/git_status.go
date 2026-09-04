@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/projectTHORN/proton/internal/sandbox"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/workspace"
 )
@@ -19,6 +20,7 @@ var errGitStatusOutputLimit = errors.New("git status output exceeded configured 
 
 type gitStatusHandler struct {
 	workspace *workspace.Workspace
+	launcher  sandbox.Launcher
 }
 
 type gitStatusInput struct {
@@ -26,8 +28,12 @@ type gitStatusInput struct {
 }
 
 // NewGitStatus returns the bounded read-only git status adapter.
-func NewGitStatus(workspaceRoot *workspace.Workspace) tool.Handler {
-	return gitStatusHandler{workspace: workspaceRoot}
+func NewGitStatus(workspaceRoot *workspace.Workspace, launchers ...sandbox.Launcher) tool.Handler {
+	var launcher sandbox.Launcher
+	if len(launchers) > 0 {
+		launcher = launchers[0]
+	}
+	return gitStatusHandler{workspace: workspaceRoot, launcher: launcher}
 }
 
 func (gitStatusHandler) Definition() tool.Definition {
@@ -74,6 +80,8 @@ func (h gitStatusHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	}
 
 	arguments := []string{
+		"-c", "core.hooksPath=/dev/null",
+		"--no-optional-locks",
 		"status",
 		"--short",
 		"--branch",
@@ -82,8 +90,19 @@ func (h gitStatusHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	if relativePath != "" {
 		arguments = append(arguments, "--", relativePath)
 	}
-	command := exec.CommandContext(ctx, "git", arguments...)
-	command.Dir = h.workspace.Root()
+
+	var command *exec.Cmd
+	if h.launcher != nil {
+		shellCmd := "git " + quoteGitArgs(arguments)
+		var err error
+		command, err = h.launcher.Command(ctx, h.workspace.Root(), shellCmd)
+		if err != nil {
+			return tool.Result{}, err
+		}
+	} else {
+		command = exec.CommandContext(ctx, "git", arguments...)
+		command.Dir = h.workspace.Root()
+	}
 	output, err := command.Output()
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
@@ -108,4 +127,12 @@ func (h gitStatusHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		ToolName: call.Name,
 		Output:   string(output),
 	}, nil
+}
+
+func quoteGitArgs(args []string) string {
+	quoted := make([]string, len(args))
+	for i, arg := range args {
+		quoted[i] = "'" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
+	}
+	return strings.Join(quoted, " ")
 }
