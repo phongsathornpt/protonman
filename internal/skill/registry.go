@@ -38,7 +38,7 @@ func (r *Registry) Register(s Skill) error {
 	if err := s.Validate(); err != nil {
 		return fmt.Errorf("register skill: %w", err)
 	}
-	name := strings.TrimSpace(s.Name)
+	name := strings.ToLower(strings.TrimSpace(s.Name))
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -51,12 +51,12 @@ func (r *Registry) Register(s Skill) error {
 	return nil
 }
 
-// Lookup finds a skill by name.
+// Lookup finds a skill by name (case-insensitive).
 func (r *Registry) Lookup(name string) (Skill, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	s, ok := r.skills[strings.TrimSpace(name)]
+	s, ok := r.skills[strings.ToLower(strings.TrimSpace(name))]
 	return s, ok
 }
 
@@ -90,15 +90,15 @@ func (r *Registry) MarkActivated(name string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.activated[strings.TrimSpace(name)] = true
+	r.activated[strings.ToLower(strings.TrimSpace(name))] = true
 }
 
-// IsActivated checks if a skill has been loaded in the current session.
+// IsActivated checks if a skill has been loaded in the current session (case-insensitive).
 func (r *Registry) IsActivated(name string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	return r.activated[strings.TrimSpace(name)]
+	return r.activated[strings.ToLower(strings.TrimSpace(name))]
 }
 
 // ActivatedList returns the names of all skills activated in the current session.
@@ -116,17 +116,44 @@ func (r *Registry) ActivatedList() []string {
 	return result
 }
 
-// Deactivate unmarks a skill as active in the current session.
+// ActiveSkills returns all currently activated skills sorted by name.
+func (r *Registry) ActiveSkills() []Skill {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	result := make([]Skill, 0, len(r.activated))
+	for name, active := range r.activated {
+		if active {
+			if s, ok := r.skills[name]; ok {
+				result = append(result, s)
+			}
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Name < result[j].Name
+	})
+	return result
+}
+
+// Deactivate unmarks a skill as active in the current session (case-insensitive).
 func (r *Registry) Deactivate(name string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	delete(r.activated, strings.TrimSpace(name))
+	delete(r.activated, strings.ToLower(strings.TrimSpace(name)))
+}
+
+// ResetActivated clears all active skills in the registry.
+func (r *Registry) ResetActivated() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.activated = make(map[string]bool)
 }
 
 // Toggle flips a skill's active status. Returns new active state or error if skill not found.
 func (r *Registry) Toggle(name string) (bool, error) {
-	cleanName := strings.TrimSpace(name)
+	cleanName := strings.ToLower(strings.TrimSpace(name))
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
