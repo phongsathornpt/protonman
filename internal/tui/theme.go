@@ -3,11 +3,23 @@ package tui
 import "github.com/charmbracelet/lipgloss"
 
 const (
-	glyphPrompt = "❯ "
-	glyphMark   = "◆ "
-	glyphTool   = "$ "
-	glyphSep    = " · "
-	appVersion  = "dev"
+	glyphPrompt      = "❯ "
+	glyphMark        = "◆ "
+	glyphTool        = "$ "
+	glyphSep         = " · "
+	glyphToolSuccess = "✓ "
+	glyphToolError   = "✗ "
+	glyphToolDenied  = "⊘ "
+	glyphWeb         = "⚡ "
+	glyphRead        = "📖 "
+	glyphDir         = "📁 "
+	glyphSearch      = "🔍 "
+	glyphExec        = "$ "
+	glyphEdit        = "Δ "
+	glyphSkill       = "✦ "
+	glyphAgent       = "⚑ "
+	glyphGeneric     = "⚙ "
+	appVersion       = "dev"
 )
 
 // Prefer terminal-native ANSI colors so Proton remains readable across light,
@@ -38,8 +50,11 @@ var (
 	successStyle   = lipgloss.NewStyle().Foreground(accentSuccess)
 	errorStyle     = lipgloss.NewStyle().Foreground(accentError)
 	planStyle      = lipgloss.NewStyle().Foreground(accentPlan)
-	commandStyle   = lipgloss.NewStyle().Foreground(commandColor)
-	bodyStyle      = lipgloss.NewStyle()
+	commandStyle     = lipgloss.NewStyle().Foreground(commandColor)
+	toolTargetStyle  = lipgloss.NewStyle().Foreground(accentUser)
+	toolSummaryStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "240", Dark: "8"})
+	toolFoldStyle    = lipgloss.NewStyle().Italic(true).Foreground(lipgloss.AdaptiveColor{Light: "244", Dark: "8"})
+	bodyStyle        = lipgloss.NewStyle()
 	modalStyle     = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(warningColor).

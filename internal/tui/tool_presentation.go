@@ -1,0 +1,445 @@
+package tui
+
+import (
+	"encoding/json"
+	"fmt"
+	"html"
+	"regexp"
+	"strings"
+
+	"github.com/projectTHORN/proton/internal/tool"
+)
+
+var titleRegex = regexp.MustCompile(`(?i)<title[^>]*>([\s\S]*?)</title>`)
+
+// extractToolTarget inspects tool arguments and returns a human-facing target
+// string (e.g. URL, filepath, pattern, command) and the normalized tool.Kind.
+func extractToolTarget(name string, kind tool.Kind, args json.RawMessage) (string, tool.Kind) {
+	if kind == "" {
+		kind = guessToolKind(name)
+	}
+
+	var values map[string]any
+	if len(args) > 0 {
+		_ = json.Unmarshal(args, &values)
+	}
+
+	switch kind {
+	case tool.KindWebFetch:
+		if urlStr, ok := values["url"].(string); ok && strings.TrimSpace(urlStr) != "" {
+			return strings.TrimSpace(urlStr), kind
+		}
+	case tool.KindWebSearch:
+		if query, ok := values["query"].(string); ok && strings.TrimSpace(query) != "" {
+			return fmt.Sprintf("%q", strings.TrimSpace(query)), kind
+		}
+	case tool.KindRead:
+		if name == "list_dir" {
+			for _, key := range []string{"path", "dir_path", "directory"} {
+				if path, ok := values[key].(string); ok && strings.TrimSpace(path) != "" {
+					return strings.TrimSpace(path), kind
+				}
+			}
+			return ".", kind
+		}
+		if name == "git_status" {
+			if path, ok := values["path"].(string); ok && strings.TrimSpace(path) != "" {
+				return strings.TrimSpace(path), kind
+			}
+			return "", kind
+		}
+		if path, ok := values["path"].(string); ok && strings.TrimSpace(path) != "" {
+			return strings.TrimSpace(path), kind
+		}
+	case tool.KindGrep:
+		pattern, _ := values["pattern"].(string)
+		path, _ := values["path"].(string)
+		pattern = strings.TrimSpace(pattern)
+		path = strings.TrimSpace(path)
+		if pattern != "" && path != "" && path != "." {
+			return fmt.Sprintf("%q in %s", pattern, path), kind
+		}
+		if pattern != "" {
+			return fmt.Sprintf("%q", pattern), kind
+		}
+	case tool.KindBash:
+		if cmd, ok := values["command"].(string); ok && strings.TrimSpace(cmd) != "" {
+			return strings.TrimSpace(cmd), kind
+		}
+	case tool.KindEdit:
+		for _, key := range []string{"path", "file", "filename", "target"} {
+			if path, ok := values[key].(string); ok && strings.TrimSpace(path) != "" {
+				return strings.TrimSpace(path), kind
+			}
+		}
+	}
+
+	if name == "activate_skill" {
+		if skillName, ok := values["name"].(string); ok && strings.TrimSpace(skillName) != "" {
+			return fmt.Sprintf("%q", strings.TrimSpace(skillName)), kind
+		}
+	}
+
+	if name == "delegate_task" {
+		task, _ := values["task"].(string)
+		profile, _ := values["profile"].(string)
+		task = strings.TrimSpace(task)
+		profile = strings.TrimSpace(profile)
+		if profile != "" && task != "" {
+			return fmt.Sprintf("[%s] %s", profile, truncateWithEllipsis(task, 40)), kind
+		}
+		if task != "" {
+			return truncateWithEllipsis(task, 40), kind
+		}
+	}
+
+	if name == "checkpoint_restore" {
+		if id, ok := values["checkpoint_id"].(string); ok && strings.TrimSpace(id) != "" {
+			return strings.TrimSpace(id), kind
+		}
+	}
+
+	// Heuristic fallback for arbitrary MCP and custom tools:
+	for _, key := range []string{"url", "path", "file", "query", "pattern", "command", "target", "task", "name"} {
+		if val, ok := values[key].(string); ok && strings.TrimSpace(val) != "" {
+			return strings.TrimSpace(val), kind
+		}
+	}
+
+	return "", kind
+}
+
+func guessToolKind(name string) tool.Kind {
+	switch name {
+	case "web_fetch":
+		return tool.KindWebFetch
+	case "web_search":
+		return tool.KindWebSearch
+	case "read_file", "list_dir", "git_status":
+		return tool.KindRead
+	case "grep":
+		return tool.KindGrep
+	case "bash":
+		return tool.KindBash
+	case "write_file", "search_replace", "apply_patch":
+		return tool.KindEdit
+	default:
+		return ""
+	}
+}
+
+// toolKindGlyph returns the appropriate category glyph for a tool.
+func toolKindGlyph(kind tool.Kind, name string) string {
+	switch kind {
+	case tool.KindWebFetch, tool.KindWebSearch:
+		return glyphWeb
+	case tool.KindRead:
+		if name == "list_dir" {
+			return glyphDir
+		}
+		if name == "git_status" {
+			return "⌥ "
+		}
+		return glyphRead
+	case tool.KindGrep:
+		return glyphSearch
+	case tool.KindBash:
+		return glyphExec
+	case tool.KindEdit:
+		return glyphEdit
+	}
+
+	switch name {
+	case "activate_skill":
+		return glyphSkill
+	case "delegate_task":
+		return glyphAgent
+	default:
+		return glyphGeneric
+	}
+}
+
+// summarizeToolOutput produces a concise, high-signal semantic analysis summary
+// from a tool's output body rather than dumping raw payloads into the TUI.
+func summarizeToolOutput(name string, kind tool.Kind, target string, body string, exitCode *int, truncated bool) string {
+	bodyTrimmed := strings.TrimSpace(body)
+
+	switch kind {
+	case tool.KindWebFetch:
+		return summarizeWebFetch(bodyTrimmed, truncated)
+	case tool.KindWebSearch:
+		return summarizeWebSearch(bodyTrimmed)
+	case tool.KindRead:
+		if name == "list_dir" {
+			return summarizeListDir(bodyTrimmed)
+		}
+		if name == "git_status" {
+			return summarizeGitStatus(bodyTrimmed)
+		}
+		return summarizeReadFile(bodyTrimmed, truncated)
+	case tool.KindGrep:
+		return summarizeGrep(bodyTrimmed, truncated)
+	case tool.KindEdit:
+		return summarizeEdit(name, bodyTrimmed)
+	case tool.KindBash:
+		if exitCode != nil {
+			return fmt.Sprintf("exit %d", *exitCode)
+		}
+	}
+
+	if name == "activate_skill" {
+		if skillName := extractSkillContentName(body); skillName != "" {
+			return fmt.Sprintf("Activated skill %q", skillName)
+		}
+		return "activated"
+	}
+
+	if name == "delegate_task" {
+		return "task completed"
+	}
+
+	if name == "checkpoint_restore" {
+		return "restored checkpoint"
+	}
+
+	// Fallback for MCP or generic tools
+	if bodyTrimmed == "" {
+		return "completed"
+	}
+	lines := strings.Count(bodyTrimmed, "\n") + 1
+	if lines > 1 {
+		return fmt.Sprintf("%d lines (%s)", lines, formatByteSize(len(bodyTrimmed)))
+	}
+	return formatByteSize(len(bodyTrimmed))
+}
+
+func summarizeWebFetch(body string, truncated bool) string {
+	if body == "" {
+		return "0 B"
+	}
+	if strings.HasPrefix(body, "[binary content omitted") {
+		return body
+	}
+
+	sizeStr := formatByteSize(len(body))
+	if truncated {
+		sizeStr += "+ truncated"
+	}
+
+	// Try extracting HTML title
+	if matches := titleRegex.FindStringSubmatch(body); len(matches) > 1 {
+		rawTitle := html.UnescapeString(strings.TrimSpace(matches[1]))
+		rawTitle = strings.Join(strings.Fields(rawTitle), " ")
+		if rawTitle != "" {
+			return fmt.Sprintf("%q (%s)", truncateWithEllipsis(rawTitle, 45), sizeStr)
+		}
+	}
+
+	// Check if JSON
+	if (strings.HasPrefix(body, "{") && strings.HasSuffix(body, "}")) ||
+		(strings.HasPrefix(body, "[") && strings.HasSuffix(body, "]")) {
+		var anyVal any
+		if json.Unmarshal([]byte(body), &anyVal) == nil {
+			switch val := anyVal.(type) {
+			case []any:
+				return fmt.Sprintf("JSON array (%d items, %s)", len(val), sizeStr)
+			case map[string]any:
+				return fmt.Sprintf("JSON object (%d keys, %s)", len(val), sizeStr)
+			}
+		}
+	}
+
+	lines := strings.Count(body, "\n") + 1
+	return fmt.Sprintf("%d lines (%s)", lines, sizeStr)
+}
+
+func summarizeWebSearch(body string) string {
+	if body == "" {
+		return "0 results"
+	}
+	lines := strings.Split(body, "\n")
+	nonEmpty := 0
+	for _, l := range lines {
+		if strings.TrimSpace(l) != "" {
+			nonEmpty++
+		}
+	}
+	if nonEmpty == 1 {
+		return "1 result found"
+	}
+	return fmt.Sprintf("%d results found", nonEmpty)
+}
+
+func summarizeReadFile(body string, truncated bool) string {
+	if body == "" {
+		return "0 B (empty file)"
+	}
+	sizeStr := formatByteSize(len(body))
+	if truncated {
+		sizeStr += "+ truncated"
+	}
+	lines := strings.Count(body, "\n") + 1
+	if lines == 1 {
+		return fmt.Sprintf("1 line (%s)", sizeStr)
+	}
+	return fmt.Sprintf("%d lines (%s)", lines, sizeStr)
+}
+
+func summarizeListDir(body string) string {
+	if body == "" {
+		return "empty directory"
+	}
+	lines := strings.Split(body, "\n")
+	dirs, files := 0, 0
+	for _, l := range lines {
+		trimmed := strings.TrimSpace(l)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "dir ") {
+			dirs++
+		} else {
+			files++
+		}
+	}
+	total := dirs + files
+	if total == 0 {
+		return "empty directory"
+	}
+	return fmt.Sprintf("%d items (%d dirs, %d files)", total, dirs, files)
+}
+
+func summarizeGrep(body string, truncated bool) string {
+	if body == "" {
+		return "no matches found"
+	}
+	lines := strings.Split(body, "\n")
+	matchCount := 0
+	files := make(map[string]struct{})
+	for _, l := range lines {
+		trimmed := strings.TrimSpace(l)
+		if trimmed == "" {
+			continue
+		}
+		matchCount++
+		if idx := strings.Index(trimmed, ":"); idx != -1 {
+			files[trimmed[:idx]] = struct{}{}
+		}
+	}
+	if matchCount == 0 {
+		return "no matches found"
+	}
+	fileCount := len(files)
+	matchWord := "matches"
+	if matchCount == 1 {
+		matchWord = "match"
+	}
+	fileWord := "files"
+	if fileCount == 1 {
+		fileWord = "file"
+	}
+	suffix := ""
+	if truncated {
+		suffix = " (truncated)"
+	}
+	return fmt.Sprintf("%d %s across %d %s%s", matchCount, matchWord, fileCount, fileWord, suffix)
+}
+
+func summarizeGitStatus(body string) string {
+	if body == "" || strings.Contains(body, "nothing to commit") || strings.Contains(body, "working tree clean") {
+		return "working tree clean"
+	}
+	lines := strings.Split(body, "\n")
+	modified, untracked, staged := 0, 0, 0
+	for _, l := range lines {
+		if len(l) < 3 {
+			continue
+		}
+		x := l[0]
+		y := l[1]
+		if x == '?' && y == '?' {
+			untracked++
+			continue
+		}
+		if x == 'M' || x == 'A' || x == 'D' || x == 'R' || x == 'C' {
+			staged++
+		}
+		if y == 'M' || y == 'D' {
+			modified++
+		}
+	}
+	parts := make([]string, 0, 3)
+	if staged > 0 {
+		parts = append(parts, fmt.Sprintf("%d staged", staged))
+	}
+	if modified > 0 {
+		parts = append(parts, fmt.Sprintf("%d modified", modified))
+	}
+	if untracked > 0 {
+		parts = append(parts, fmt.Sprintf("%d untracked", untracked))
+	}
+	if len(parts) == 0 {
+		return "status updated"
+	}
+	return strings.Join(parts, ", ")
+}
+
+func summarizeEdit(name string, body string) string {
+	if body == "" {
+		return "updated"
+	}
+	switch name {
+	case "write_file":
+		lines := strings.Count(body, "\n") + 1
+		return fmt.Sprintf("%d lines written (%s)", lines, formatByteSize(len(body)))
+	case "search_replace":
+		return "1 replacement applied"
+	case "apply_patch":
+		return "patch applied"
+	default:
+		return "file updated"
+	}
+}
+
+// shouldSuppressBody returns true if raw tool body dumping should be suppressed
+// in the primary conversation viewport because the semantic header already summarizes it.
+func shouldSuppressBody(kind tool.Kind, name string) bool {
+	switch kind {
+	case tool.KindWebFetch, tool.KindWebSearch, tool.KindRead:
+		return true
+	}
+	switch name {
+	case "activate_skill", "delegate_task", "checkpoint_restore":
+		return true
+	default:
+		return false
+	}
+}
+
+// formatOutputFold folds long text outputs with a fold hint.
+func formatOutputFold(lines []string, maxVisible int) []string {
+	if len(lines) <= maxVisible {
+		return lines
+	}
+	if maxVisible < 2 {
+		maxVisible = 2
+	}
+	headCount := maxVisible - 1
+	hidden := len(lines) - maxVisible
+	out := make([]string, 0, maxVisible+1)
+	out = append(out, lines[:headCount]...)
+	foldMsg := toolFoldStyle.Render(fmt.Sprintf("… (%d lines hidden · ctrl+t for full output)", hidden))
+	out = append(out, foldMsg)
+	out = append(out, lines[len(lines)-1])
+	return out
+}
+
+func formatByteSize(bytes int) string {
+	if bytes < 1024 {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	if bytes < 1024*1024 {
+		return fmt.Sprintf("%.1f KB", float64(bytes)/1024.0)
+	}
+	return fmt.Sprintf("%.1f MB", float64(bytes)/(1024.0*1024.0))
+}
