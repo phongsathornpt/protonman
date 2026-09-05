@@ -47,7 +47,7 @@ func (delegateTaskHandler) Definition() tool.Definition {
 				"profile": map[string]any{
 					"type":        "string",
 					"enum":        []string{"explorer", "reviewer", "worker", "pow", "dex", "int"},
-					"description": "The subagent profile: 'explorer' (read-only search & inspection), 'reviewer' (read-only code & security review), 'worker' (code modifications and commands), 'pow' (high-velocity minimal-boilerplate implementation), 'dex' (defensive, zero-regression TDD implementation), or 'int' (deep architectural reasoning and YAGNI analysis).",
+					"description": "The subagent profile: 'explorer' (read-only search & inspection), 'reviewer' (read-only code & security review), 'worker' (code modifications and commands), 'pow' (high-velocity pragmatic execution with capacity-limited 1-line re-encoding), 'dex' (defensive zero-regression engineering with empirical escape & named verifiers), or 'int' (deep architectural reasoning with broadcast hub & bridge-before-conclusion).",
 				},
 				"context": map[string]any{
 					"type":        "string",
