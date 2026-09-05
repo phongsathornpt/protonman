@@ -200,6 +200,86 @@ func TestLoopReportsToolCallWhenNoToolsAreAvailable(t *testing.T) {
 	}
 }
 
+func TestLoopStopsWhenToolCallBatchExceedsCumulativeLimit(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{{
+		events: []model.Event{
+			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+				ID:        "over-budget-1",
+				Name:      "read_file",
+				Arguments: json.RawMessage(`{"path":"a.txt"}`),
+			}},
+			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+				ID:        "over-budget-2",
+				Name:      "read_file",
+				Arguments: json.RawMessage(`{"path":"b.txt"}`),
+			}},
+			{Kind: model.EventDone},
+		},
+	}}}
+	loop, handler := newTestLoop(t, client, permission.ActionAllow, WithMaxToolCalls(1))
+
+	result, err := loop.Run(
+		context.Background(),
+		[]model.Message{{Role: model.RoleUser, Content: "read both files"}},
+		func(context.Context, Event) error { return nil },
+	)
+	if err != nil {
+		t.Fatalf("Run() error = %v, want graceful max-tool-call fallback", err)
+	}
+	if len(handler.calls) != 0 {
+		t.Fatalf("handler calls = %d, want 0 when batch exceeds budget", len(handler.calls))
+	}
+	if len(result.Message.ToolCalls) != 0 {
+		t.Fatalf("result tool calls = %#v, want none", result.Message.ToolCalls)
+	}
+	if !strings.Contains(result.Message.Content, MaxToolCallsFallback) {
+		t.Fatalf("result content = %q, want max-tool-call fallback", result.Message.Content)
+	}
+}
+
+func TestLoopAppliesCumulativeToolCallLimitAcrossRounds(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{events: []model.Event{
+			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+				ID:        "budgeted-call",
+				Name:      "read_file",
+				Arguments: json.RawMessage(`{"path":"a.txt"}`),
+			}},
+			{Kind: model.EventDone},
+		}},
+		{events: []model.Event{
+			{Kind: model.EventTextDelta, Text: "The budgeted read completed."},
+			{Kind: model.EventDone},
+		}},
+	}}
+	loop, handler := newTestLoop(t, client, permission.ActionAllow, WithMaxToolCalls(1))
+
+	result, err := loop.Run(
+		context.Background(),
+		[]model.Message{{Role: model.RoleUser, Content: "read a file"}},
+		func(context.Context, Event) error { return nil },
+	)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got, want := len(handler.calls), 1; got != want {
+		t.Fatalf("handler calls = %d, want %d", got, want)
+	}
+	if got, want := result.Rounds, 2; got != want {
+		t.Fatalf("rounds = %d, want %d", got, want)
+	}
+	if got, want := len(client.requests[1].Tools), 0; got != want {
+		t.Fatalf("second request published tools = %d, want %d", got, want)
+	}
+	lastMessage := client.requests[1].Messages[len(client.requests[1].Messages)-1]
+	if lastMessage.Role != model.RoleSystem || lastMessage.Content != MaxToolCallsPrompt {
+		t.Fatalf("second request last message = %#v, want max-tool-call prompt", lastMessage)
+	}
+	if got, want := result.Message.Content, "The budgeted read completed."; got != want {
+		t.Fatalf("final content = %q, want %q", got, want)
+	}
+}
+
 func TestLoopPreservesTextWhenMaxRoundToolCallIsIgnored(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
 		events: []model.Event{
