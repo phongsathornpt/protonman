@@ -152,6 +152,33 @@ func TestACPSessionModes(t *testing.T) {
 	}
 }
 
+func TestACPSessionsHaveIndependentPermissionState(t *testing.T) {
+	server := newTestServer(t, permission.ModeAsk)
+	var output bytes.Buffer
+	input := strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"session/new","params":{}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"session/new","params":{}}`,
+	}, "\n") + "\n"
+	if err := server.Serve(context.Background(), strings.NewReader(input), &output); err != nil {
+		t.Fatalf("Serve() error = %v", err)
+	}
+
+	first := server.sessions["acp-1"]
+	second := server.sessions["acp-2"]
+	if first == nil || second == nil {
+		t.Fatalf("sessions = %#v, want two sessions", server.sessions)
+	}
+	if first.service == second.service {
+		t.Fatal("sessions share the same tool-call service")
+	}
+	if err := first.service.SetMode(permission.ModeDeny); err != nil {
+		t.Fatalf("SetMode() error = %v", err)
+	}
+	if got := second.service.Mode(); got != permission.ModeAsk {
+		t.Fatalf("second session mode = %s, want ask", got)
+	}
+}
+
 func TestACPSessionListAndDelete(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "acp-store-*")
 	if err != nil {
@@ -459,7 +486,13 @@ func newTestServerWithRunner(t *testing.T, mode permission.Mode, runner applicat
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	server, err := New(service, registry, runner)
+	options := []Option(nil)
+	if runner != nil {
+		options = append(options, WithRunnerFactory(func(*toolcall.Service) (applicationturn.Runner, error) {
+			return runner, nil
+		}))
+	}
+	server, err := New(service, registry, runner, options...)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

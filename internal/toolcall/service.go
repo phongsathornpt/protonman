@@ -104,6 +104,25 @@ func NewService(registry tool.Registry, policy *permission.Policy, options ...Op
 	return service, nil
 }
 
+// Clone creates an independent permission state over the same immutable
+// registry and policy. Session grants are intentionally not copied.
+func (s *Service) Clone() *Service {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return &Service{
+		registry: s.registry,
+		policy:   s.policy,
+		observer: s.observer,
+		mode:     s.mode,
+		prompt:   s.prompt,
+		guard:    s.guard,
+		grants:   make(map[permission.GrantKey]struct{}),
+	}
+}
+
 // Mode returns the current permission mode.
 func (s *Service) Mode() permission.Mode {
 	s.mu.RLock()
