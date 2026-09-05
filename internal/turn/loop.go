@@ -70,6 +70,24 @@ Respond with text ONLY.`
 // requests more calls than the remaining budget.
 const MaxToolCallsFallback = "I reached the maximum number of tool calls before producing a final response. The last tool request was not executed. Review the work so far or start a new turn."
 
+// NoProgressPrompt is injected when deterministic tool calls repeatedly return
+// the same result without any intervening workspace mutation.
+const NoProgressPrompt = `CRITICAL - TOOL LOOP DETECTED
+
+Repeated deterministic tool calls produced the same result without making progress. Tools are disabled until next user input. Respond with text only.
+
+STRICT REQUIREMENTS:
+1. Do NOT repeat the same tool call or make any other tool calls.
+2. Summarize what was learned from the existing tool results.
+3. Explain any blocker or missing capability that prevented progress.
+4. Provide the best final answer possible from the information already gathered.
+
+Respond with text ONLY.`
+
+// NoProgressFallback is used when a provider ignores NoProgressPrompt and still
+// requests another tool call after a semantic loop was detected.
+const NoProgressFallback = "I stopped a repeated tool loop because the same deterministic call kept producing the same result without progress. The last tool request was not executed."
+
 var (
 	// ErrInvalidLoop indicates that the loop cannot be constructed or started.
 	ErrInvalidLoop = errors.New("invalid model/tool loop")
@@ -89,10 +107,11 @@ var (
 type toolDispatchReason string
 
 const (
-	toolDispatchEnabled           toolDispatchReason = "enabled"
-	toolDispatchDisabledMaxRounds toolDispatchReason = "max_rounds"
-	toolDispatchDisabledMaxCalls  toolDispatchReason = "max_tool_calls"
-	toolDispatchDisabledNoTools   toolDispatchReason = "no_tools"
+	toolDispatchEnabled            toolDispatchReason = "enabled"
+	toolDispatchDisabledMaxRounds  toolDispatchReason = "max_rounds"
+	toolDispatchDisabledMaxCalls   toolDispatchReason = "max_tool_calls"
+	toolDispatchDisabledNoProgress toolDispatchReason = "no_progress"
+	toolDispatchDisabledNoTools    toolDispatchReason = "no_tools"
 )
 
 type toolDispatchState struct {
@@ -181,6 +200,19 @@ func WithMaxToolCalls(calls int) Option {
 	}
 }
 
+// WithMaxIdenticalNoProgressResults bounds repeated identical deterministic
+// tool results before Proton forces a text-only synthesis round. Zero disables
+// semantic no-progress detection.
+func WithMaxIdenticalNoProgressResults(limit int) Option {
+	return func(loop *Loop) error {
+		if limit < 0 {
+			return fmt.Errorf("%w: max identical no-progress results cannot be negative", ErrInvalidLoop)
+		}
+		loop.maxIdenticalNoProgressResults = limit
+		return nil
+	}
+}
+
 // WithRoundTimeout bounds one model response and its tool calls.
 func WithRoundTimeout(timeout time.Duration) Option {
 	return func(loop *Loop) error {
@@ -232,15 +264,16 @@ func WithSkillRegistry(registry *skill.Registry) Option {
 
 // Loop coordinates model streaming and permission-aware tool dispatch.
 type Loop struct {
-	client           model.Client
-	tools            *toolcall.Service
-	maxRounds        int
-	maxToolCalls     int
-	roundTimeout     time.Duration
-	toolTimeout      time.Duration
-	maxParallelReads int
-	skills           []skill.CatalogItem
-	skillRegistry    *skill.Registry
+	client                        model.Client
+	tools                         *toolcall.Service
+	maxRounds                     int
+	maxToolCalls                  int
+	maxIdenticalNoProgressResults int
+	roundTimeout                  time.Duration
+	toolTimeout                   time.Duration
+	maxParallelReads              int
+	skills                        []skill.CatalogItem
+	skillRegistry                 *skill.Registry
 }
 
 var _ Runner = (*Loop)(nil)
@@ -254,12 +287,13 @@ func NewLoop(client model.Client, tools *toolcall.Service, options ...Option) (*
 		return nil, fmt.Errorf("%w: tool-call service is required", ErrInvalidLoop)
 	}
 	loop := &Loop{
-		client:           client,
-		tools:            tools,
-		maxRounds:        defaultMaxRounds,
-		maxToolCalls:     defaultMaxToolCalls,
-		roundTimeout:     DefaultRoundTimeout,
-		maxParallelReads: defaultMaxParallelRead,
+		client:                        client,
+		tools:                         tools,
+		maxRounds:                     defaultMaxRounds,
+		maxToolCalls:                  defaultMaxToolCalls,
+		maxIdenticalNoProgressResults: defaultMaxIdenticalNoProgressResults,
+		roundTimeout:                  DefaultRoundTimeout,
+		maxParallelReads:              defaultMaxParallelRead,
 	}
 	for _, option := range options {
 		if option == nil {
@@ -328,6 +362,8 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	history := model.CloneMessages(messages)
 	turnMessages := make([]model.Message, 0, 4)
 	toolCallsUsed := 0
+	progress := newProgressGuard(l.tools.Definitions(), l.maxIdenticalNoProgressResults)
+	forceNoProgressSynthesis := false
 
 	var catalogItems []skill.CatalogItem
 	var activeSkills []skill.Skill
@@ -378,7 +414,14 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		reqMessages := model.CloneMessages(history)
 		dispatch := toolDispatchState{reason: toolDispatchDisabledNoTools}
 
-		if isMaxRound {
+		if forceNoProgressSynthesis {
+			tools = nil
+			dispatch.reason = toolDispatchDisabledNoProgress
+			reqMessages = append(reqMessages, model.Message{
+				Role:    model.RoleSystem,
+				Content: NoProgressPrompt,
+			})
+		} else if isMaxRound {
 			tools = nil
 			dispatch.reason = toolDispatchDisabledMaxRounds
 			reqMessages = append(reqMessages, model.Message{
@@ -430,6 +473,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		executions := outcome.executions
 		maxRoundFallback := false
 		maxToolCallsFallback := false
+		noProgressFallback := false
 		if len(assistant.ToolCalls) > 0 && !outcome.dispatch.enabled() {
 			switch outcome.dispatch.reason {
 			case toolDispatchDisabledMaxRounds:
@@ -447,6 +491,14 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				}
 				maxToolCallsFallback = true
 				terminalReason = "max_tool_calls_fallback"
+			case toolDispatchDisabledNoProgress:
+				assistant, err = finalizeNoProgressToolCallResponse(ctx, sink, round, assistant)
+				if err != nil {
+					terminalReason = "no_progress_fallback_failed"
+					return l.fail(ctx, sink, round, err)
+				}
+				noProgressFallback = true
+				terminalReason = "no_progress_fallback"
 			case toolDispatchDisabledNoTools:
 				err := fmt.Errorf("%w: model requested %d tool calls while no tools were available", ErrToolDispatchUnavailable, len(assistant.ToolCalls))
 				terminalReason = "tool_dispatch_unavailable"
@@ -458,6 +510,16 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			return l.fail(ctx, sink, round, err)
 		}
 		toolCallsUsed += len(executions)
+		if stalled, observeErr := progress.observeRound(executions); observeErr != nil {
+			terminalReason = "progress_guard_failed"
+			return l.fail(ctx, sink, round, observeErr)
+		} else if stalled {
+			forceNoProgressSynthesis = true
+			slog.DebugContext(ctx, "turn semantic tool loop detected",
+				"round", round,
+				"tool_calls", len(executions),
+			)
+		}
 		history = append(history, assistant)
 		turnMessages = append(turnMessages, assistant)
 		if len(executions) == 0 || isMaxRound {
@@ -466,6 +528,8 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				terminalReason = "max_rounds_fallback"
 			} else if maxToolCallsFallback {
 				terminalReason = "max_tool_calls_fallback"
+			} else if noProgressFallback {
+				terminalReason = "no_progress_fallback"
 			}
 			slog.DebugContext(ctx, "turn completed",
 				"round", round,
@@ -536,6 +600,18 @@ func finalizeMaxToolCallResponse(
 		"round", round,
 	)
 	return finalizeDisabledToolCallResponse(ctx, sink, round, assistant, MaxToolCallsFallback, "max-tool-calls")
+}
+
+func finalizeNoProgressToolCallResponse(
+	ctx context.Context,
+	sink Sink,
+	round int,
+	assistant model.Message,
+) (model.Message, error) {
+	slog.DebugContext(ctx, "turn ignored tool calls after no-progress detection",
+		"round", round,
+	)
+	return finalizeDisabledToolCallResponse(ctx, sink, round, assistant, NoProgressFallback, "no-progress")
 }
 
 func finalizeDisabledToolCallResponse(
