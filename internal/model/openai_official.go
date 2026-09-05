@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"sort"
 	"strings"
 
 	openai "github.com/openai/openai-go/v3"
@@ -281,6 +282,9 @@ func (s *officialResponsesStream) processEvent(event responses.ResponseStreamEve
 	case "response.output_item.done":
 		return s.finishToolCall(event.Item)
 	case "response.completed":
+		if err := s.flushPendingToolCalls(); err != nil {
+			return err
+		}
 		s.done = true
 		s.queue = append(s.queue, Event{Kind: EventDone})
 	case "response.failed", "response.incomplete":
@@ -315,6 +319,35 @@ func (s *officialResponsesStream) addToolCall(item responses.ResponseOutputItemU
 	}
 	if item.Arguments.OfString != "" {
 		call.arguments.WriteString(item.Arguments.OfString)
+	}
+	return nil
+}
+
+func (s *officialResponsesStream) flushPendingToolCalls() error {
+	if len(s.toolCalls) == 0 {
+		return nil
+	}
+	itemIDs := make([]string, 0, len(s.toolCalls))
+	for itemID := range s.toolCalls {
+		itemIDs = append(itemIDs, itemID)
+	}
+	sort.Strings(itemIDs)
+	for _, itemID := range itemIDs {
+		call := s.toolCalls[itemID]
+		if call == nil || call.id == "" || call.name == "" {
+			return fmt.Errorf("%w: pending function call %q is missing ID or name", ErrInvalidEvent, itemID)
+		}
+		arguments := strings.TrimSpace(call.arguments.String())
+		if arguments == "" {
+			arguments = "{}"
+		}
+		s.queue = append(s.queue, Event{
+			Kind: EventToolCall,
+			ToolCall: ToolCall{
+				ID: call.id, Name: call.name, Arguments: []byte(arguments),
+			},
+		})
+		delete(s.toolCalls, itemID)
 	}
 	return nil
 }
