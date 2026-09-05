@@ -390,9 +390,13 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (
 			if !m.bottom.has(providerViewID) {
 				if item.isConfigured {
 					if cfg, ok := m.providers[strings.ToLower(item.name)]; ok {
-						m.bottom.push(newProviderPaneViewWithConfig(cfg))
+						pv := newProviderPaneViewWithConfig(cfg)
+						pv.activateOnSave = item.isActive
+						m.bottom.push(pv)
 					} else {
-						m.bottom.push(newProviderPaneViewWithPreset(item.name))
+						pv := newProviderPaneViewWithPreset(item.name)
+						pv.activateOnSave = item.isActive
+						m.bottom.push(pv)
 					}
 				} else if item.kind == providerItemPreset {
 					m.bottom.push(newProviderPaneViewWithPreset(item.presetID))
