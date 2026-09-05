@@ -597,3 +597,21 @@ func TestReadFileRejectsOffsetInsideUTF8CodePoint(t *testing.T) {
 		t.Fatalf("Execute() error = %v, want UTF-8 boundary rejection", err)
 	}
 }
+
+func TestReadFileContinuationRejectsChangedFile(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	writeTestFile(t, workspaceRoot.Root(), "snapshot.txt", "abcdefghij")
+	handler := NewReadFile(workspaceRoot)
+	first := executeJSON(t, handler, "snapshot-1", map[string]any{"path": "snapshot.txt", "limit": 4})
+	if first.Continuation == "" || first.NextOffset == nil {
+		t.Fatalf("first continuation = %q next=%v", first.Continuation, first.NextOffset)
+	}
+	writeTestFile(t, workspaceRoot.Root(), "snapshot.txt", "abcdefghij changed")
+	_, err := handler.Execute(context.Background(), newJSONCall(t, "snapshot-2", "read_file", map[string]any{
+		"path": "snapshot.txt", "offset": *first.NextOffset, "limit": 4, "continuation": first.Continuation,
+	}))
+	var toolErr *tool.ToolError
+	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeStaleContinuation {
+		t.Fatalf("Execute() error = %v, want stale continuation", err)
+	}
+}

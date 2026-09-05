@@ -74,6 +74,8 @@ const (
 	ErrorCodeOutsideWorkspace ErrorCode = "outside_workspace"
 	// ErrorCodeNoProgress indicates that loop protection suppressed a repeated call.
 	ErrorCodeNoProgress ErrorCode = "no_progress"
+	// ErrorCodeStaleContinuation indicates that pageable state changed since the previous page.
+	ErrorCodeStaleContinuation ErrorCode = "stale_continuation"
 	// ErrorCodeExecution is the safe fallback for handler failures.
 	ErrorCodeExecution ErrorCode = "execution_error"
 )
@@ -257,6 +259,8 @@ type Result struct {
 	Truncated bool `json:"truncated,omitempty"`
 	// NextOffset is the continuation offset for pageable tools when Truncated is true.
 	NextOffset *int64 `json:"next_offset,omitempty"`
+	// Continuation binds a truncated page to its query and filesystem snapshot.
+	Continuation string `json:"continuation,omitempty"`
 	// Failure is populated when a tool call fails or is denied.
 	Failure *Failure `json:"error,omitempty"`
 	// CheckpointID identifies the pre-edit snapshot created by a mutating tool.

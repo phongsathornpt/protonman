@@ -212,6 +212,7 @@ func semanticResultHash(result tool.Result) ([sha256.Size]byte, error) {
 		Denied       bool          `json:"denied,omitempty"`
 		Truncated    bool          `json:"truncated,omitempty"`
 		NextOffset   *int64        `json:"next_offset,omitempty"`
+		Continuation string        `json:"continuation,omitempty"`
 		Failure      *tool.Failure `json:"error,omitempty"`
 		CheckpointID string        `json:"checkpoint_id,omitempty"`
 	}{
@@ -221,6 +222,7 @@ func semanticResultHash(result tool.Result) ([sha256.Size]byte, error) {
 		Denied:       result.Denied,
 		Truncated:    result.Truncated,
 		NextOffset:   result.NextOffset,
+		Continuation: result.Continuation,
 		Failure:      result.Failure,
 		CheckpointID: result.CheckpointID,
 	})
