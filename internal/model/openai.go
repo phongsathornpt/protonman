@@ -98,7 +98,7 @@ type openAIFunctionCallReq struct {
 
 type openAIChatMessage struct {
 	Role       string              `json:"role"`
-	Content    *string             `json:"content,omitempty"`
+	Content    any                 `json:"content,omitempty"`
 	ToolCallID string              `json:"tool_call_id,omitempty"`
 	ToolCalls  []openAIToolCallReq `json:"tool_calls,omitempty"`
 }
@@ -281,10 +281,37 @@ func (c *OpenAIClient) Stream(ctx context.Context, request Request) (Stream, err
 				continue
 			}
 
-			content := m.Content
 			msg := openAIChatMessage{
-				Role:    string(m.Role),
-				Content: &content,
+				Role: string(m.Role),
+			}
+			if len(m.Parts) > 0 {
+				parts := make([]map[string]any, 0, len(m.Parts))
+				for _, part := range m.Parts {
+					switch part.Type {
+					case ContentPartText:
+						if part.Text != "" {
+							parts = append(parts, map[string]any{
+								"type": "text",
+								"text": part.Text,
+							})
+						}
+					case ContentPartImage:
+						mime := part.MIMEType
+						if mime == "" {
+							mime = "image/png"
+						}
+						parts = append(parts, map[string]any{
+							"type": "image_url",
+							"image_url": map[string]any{
+								"url": fmt.Sprintf("data:%s;base64,%s", mime, part.Data),
+							},
+						})
+					}
+				}
+				msg.Content = parts
+			} else {
+				content := m.Content
+				msg.Content = &content
 			}
 			if m.Role == RoleTool {
 				msg.ToolCallID = m.ToolCallID

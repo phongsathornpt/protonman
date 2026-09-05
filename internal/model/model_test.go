@@ -120,3 +120,31 @@ func TestEventValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestContentPartsAndTextContent(t *testing.T) {
+	msg1 := Message{Role: RoleUser, Content: "direct content"}
+	if msg1.TextContent() != "direct content" {
+		t.Fatalf("TextContent() = %q, want %q", msg1.TextContent(), "direct content")
+	}
+
+	msg2 := Message{
+		Role: RoleUser,
+		Parts: []ContentPart{
+			{Type: ContentPartText, Text: "part 1"},
+			{Type: ContentPartImage, MIMEType: "image/png", Data: "iVBORw0KGgo="},
+			{Type: ContentPartText, Text: "part 2"},
+		},
+	}
+	if msg2.TextContent() != "part 1\npart 2" {
+		t.Fatalf("TextContent() = %q, want %q", msg2.TextContent(), "part 1\npart 2")
+	}
+
+	cloned := CloneMessages([]Message{msg2})
+	if len(cloned[0].Parts) != 3 {
+		t.Fatalf("cloned Parts len = %d, want 3", len(cloned[0].Parts))
+	}
+	if cloned[0].Parts[1].Data != "iVBORw0KGgo=" {
+		t.Fatalf("cloned Part[1].Data = %q, want %q", cloned[0].Parts[1].Data, "iVBORw0KGgo=")
+	}
+}
+
