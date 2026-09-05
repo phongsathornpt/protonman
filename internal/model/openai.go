@@ -466,6 +466,7 @@ type openAIStream struct {
 	respToolCalls map[string]*accumulatedToolCall
 	queue         []Event
 	done          bool
+	terminalErr   error
 	startedAt     time.Time
 	linesRead     int
 	bytesRead     int
@@ -523,6 +524,10 @@ func (s *openAIStream) Next(ctx context.Context) (Event, error) {
 			return ev, nil
 		}
 
+		if s.terminalErr != nil {
+			return Event{}, s.terminalErr
+		}
+
 		if s.done {
 			return Event{}, io.EOF
 		}
@@ -542,19 +547,23 @@ func (s *openAIStream) Next(ctx context.Context) (Event, error) {
 						return Event{}, parseErr
 					}
 				}
-				s.flushToolCalls()
-				s.queue = append(s.queue, Event{Kind: EventDone})
-				s.done = true
-				slog.DebugContext(ctx, "model stream completed",
-					s.streamArgs(
-						"reason", "eof_fallback",
-						"duration_ms", time.Since(s.startedAt).Milliseconds(),
-					)...,
-				)
+				if !s.done {
+					s.done = true
+					s.terminalErr = fmt.Errorf("%w: provider closed before terminal event", ErrIncompleteStream)
+					slog.DebugContext(ctx, "model stream incomplete",
+						s.streamArgs(
+							"reason", "eof_before_terminal_event",
+							"duration_ms", time.Since(s.startedAt).Milliseconds(),
+						)...,
+					)
+				}
 				if len(s.queue) > 0 {
 					ev := s.queue[0]
 					s.queue = s.queue[1:]
 					return ev, nil
+				}
+				if s.terminalErr != nil {
+					return Event{}, s.terminalErr
 				}
 				return Event{}, io.EOF
 			}
@@ -597,13 +606,7 @@ func (s *openAIStream) processLine(line string) error {
 
 	payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 	if payload == "[DONE]" {
-		s.flushToolCalls()
-		s.queue = append(s.queue, Event{Kind: EventDone})
-		s.done = true
-		slog.Debug("model stream completed", s.streamArgs(
-			"reason", "sse_done",
-			"duration_ms", time.Since(s.startedAt).Milliseconds(),
-		)...)
+		s.finish("sse_done")
 		return nil
 	}
 
@@ -638,6 +641,12 @@ func (s *openAIStream) processLine(line string) error {
 					if tc.Function.Arguments != "" {
 						acc.arguments.WriteString(tc.Function.Arguments)
 					}
+				}
+			}
+			for _, choice := range chunk.Choices {
+				if choice.FinishReason != nil {
+					s.finish("chat_finish_reason")
+					break
 				}
 			}
 			return nil
@@ -717,17 +726,24 @@ func (s *openAIStream) processLine(line string) error {
 				})
 			}
 		case "response.completed":
-			s.flushToolCalls()
-			s.queue = append(s.queue, Event{Kind: EventDone})
-			s.done = true
-			slog.Debug("model stream completed", s.streamArgs(
-				"reason", "responses_completed",
-				"duration_ms", time.Since(s.startedAt).Milliseconds(),
-			)...)
+			s.finish("responses_completed")
 		}
 		return nil
 	}
 	return nil
+}
+
+func (s *openAIStream) finish(reason string) {
+	if s.done {
+		return
+	}
+	s.flushToolCalls()
+	s.queue = append(s.queue, Event{Kind: EventDone})
+	s.done = true
+	slog.Debug("model stream completed", s.streamArgs(
+		"reason", reason,
+		"duration_ms", time.Since(s.startedAt).Milliseconds(),
+	)...)
 }
 
 func (s *openAIStream) streamAttrs() []any {

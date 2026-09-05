@@ -812,8 +812,9 @@ func TestLiveOpenCodeResponsesMuseSpark(t *testing.T) {
 }
 
 func TestOpenAIStream_EOFAfterContentWithoutTrailingNewline(t *testing.T) {
-	// Chunk line without a trailing newline, directly followed by EOF
-	payload := `data: {"choices":[{"delta":{"content":"Final chunk without newline"}}]}`
+	// The terminal marker can be the final line without a trailing newline.
+	payload := "data: {\"choices\":[{\"delta\":{\"content\":\"Final chunk without newline\"}}]}\n" +
+		"data: [DONE]"
 	stream := newOpenAIStream(io.NopCloser(strings.NewReader(payload)))
 	defer stream.Close()
 
@@ -841,5 +842,24 @@ func TestOpenAIStream_EOFAfterContentWithoutTrailingNewline(t *testing.T) {
 	}
 	if !gotDone {
 		t.Fatal("expected EventDone before EOF")
+	}
+}
+
+func TestOpenAIStream_ReportsIncompleteEOF(t *testing.T) {
+	payload := `data: {"choices":[{"delta":{"content":"truncated response"}}]}`
+	stream := newOpenAIStream(io.NopCloser(strings.NewReader(payload)))
+	defer stream.Close()
+
+	for {
+		_, err := stream.Next(context.Background())
+		if errors.Is(err, ErrIncompleteStream) {
+			return
+		}
+		if errors.Is(err, io.EOF) {
+			t.Fatal("stream returned EOF without reporting incomplete response")
+		}
+		if err != nil {
+			t.Fatalf("unexpected stream error: %v", err)
+		}
 	}
 }
