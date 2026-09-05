@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -396,9 +395,8 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	guard := c.guard
 	c.activeMu.RUnlock()
 
-	// 1. Build profile-scoped tool registry with fine-grained workspace locking
+	// 1. Build profile-scoped tool registry
 	scopedRegistry := FilterRegistryForProfile(parentRegistry, req.Profile, req.Depth)
-	lockedReg := newLockedRegistry(scopedRegistry, &c.wsLock)
 
 	// 2. Build scoped tool service
 	// For workers: if parent mode is always-approve, inherit always-approve.
@@ -430,7 +428,7 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	}
 
 	service, err := toolcall.NewService(
-		lockedReg,
+		scopedRegistry,
 		policy,
 		serviceOpts...,
 	)
@@ -513,63 +511,3 @@ func formatUserPrompt(req Request) string {
 	return b.String()
 }
 
-type lockedRegistry struct {
-	inner  tool.Registry
-	wsLock *sync.RWMutex
-}
-
-var _ tool.Registry = (*lockedRegistry)(nil)
-
-func newLockedRegistry(inner tool.Registry, wsLock *sync.RWMutex) tool.Registry {
-	return &lockedRegistry{
-		inner:  inner,
-		wsLock: wsLock,
-	}
-}
-
-func (r *lockedRegistry) Lookup(name string) (tool.Handler, bool) {
-	h, ok := r.inner.Lookup(name)
-	if !ok {
-		return nil, false
-	}
-	return lockedHandler{
-		inner:  h,
-		wsLock: r.wsLock,
-	}, true
-}
-
-func (r *lockedRegistry) Definitions() []tool.Definition {
-	return r.inner.Definitions()
-}
-
-type lockedHandler struct {
-	inner  tool.Handler
-	wsLock *sync.RWMutex
-}
-
-var _ tool.Handler = lockedHandler{}
-var _ tool.DetailProvider = lockedHandler{}
-
-func (h lockedHandler) Definition() tool.Definition {
-	return h.inner.Definition()
-}
-
-func (h lockedHandler) PermissionDetail(arguments json.RawMessage) string {
-	if pd, ok := h.inner.(tool.DetailProvider); ok {
-		return pd.PermissionDetail(arguments)
-	}
-	return ""
-}
-
-func (h lockedHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
-	def := h.inner.Definition()
-	switch def.Kind {
-	case tool.KindEdit, tool.KindBash:
-		h.wsLock.Lock()
-		defer h.wsLock.Unlock()
-	case tool.KindRead, tool.KindGrep:
-		h.wsLock.RLock()
-		defer h.wsLock.RUnlock()
-	}
-	return h.inner.Execute(ctx, call)
-}
