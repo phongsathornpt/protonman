@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -197,14 +198,38 @@ func NewLoop(client model.Client, tools *toolcall.Service, options ...Option) (*
 // Run executes model responses until one has no tool calls or the round bound is reached.
 func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Result, error) {
 	if l == nil {
+		slog.DebugContext(ctx, "turn rejected", "reason", "nil_loop")
 		return Result{}, fmt.Errorf("%w: loop is required", ErrInvalidLoop)
 	}
 	if err := ctx.Err(); err != nil {
+		slog.DebugContext(ctx, "turn rejected",
+			"reason", "context_already_done",
+			"error_type", fmt.Sprintf("%T", err),
+		)
 		return Result{}, fmt.Errorf("start model/tool loop: %w", err)
 	}
 	if sink == nil {
 		sink = func(context.Context, Event) error { return nil }
 	}
+	startedAt := time.Now()
+	terminalReason := "unknown"
+	roundsCompleted := 0
+	defer func() {
+		slog.DebugContext(ctx, "turn finished",
+			"duration_ms", time.Since(startedAt).Milliseconds(),
+			"rounds", roundsCompleted,
+			"terminal_reason", terminalReason,
+		)
+	}()
+	toolCount := 0
+	if l.tools != nil {
+		toolCount = len(l.tools.Definitions())
+	}
+	slog.DebugContext(ctx, "turn started",
+		"message_count", len(messages),
+		"tool_count", toolCount,
+		"max_rounds", l.maxRounds,
+	)
 
 	history := model.CloneMessages(messages)
 	turnMessages := make([]model.Message, 0, 4)
@@ -246,7 +271,13 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		}
 	}
 	for round := 1; ; round++ {
+		roundsCompleted = round
 		isMaxRound := l.maxRounds > 0 && round >= l.maxRounds
+		slog.DebugContext(ctx, "turn round started",
+			"round", round,
+			"max_round", isMaxRound,
+			"history_messages", len(history),
+		)
 
 		var tools []tool.Definition
 		reqMessages := model.CloneMessages(history)
@@ -266,15 +297,24 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			Tools:    tools,
 		}
 		if err := request.Validate(); err != nil {
+			terminalReason = "request_validation_failed"
 			return l.fail(ctx, sink, round, err)
 		}
 		assistant, executions, err := l.runRound(ctx, round, request, sink)
 		if err != nil {
+			terminalReason = "round_failed"
 			return l.fail(ctx, sink, round, err)
 		}
 		history = append(history, assistant)
 		turnMessages = append(turnMessages, assistant)
 		if len(executions) == 0 || isMaxRound {
+			terminalReason = "completed"
+			slog.DebugContext(ctx, "turn completed",
+				"round", round,
+				"assistant_bytes", len(assistant.Content),
+				"tool_calls", len(executions),
+				"max_round", isMaxRound,
+			)
 			result := Result{
 				Message:  assistant,
 				Rounds:   round,
@@ -285,6 +325,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				Round:   round,
 				Message: assistant,
 			}); err != nil {
+				terminalReason = "completion_sink_failed"
 				return Result{}, err
 			}
 			return result, nil
@@ -294,6 +335,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			toolResult := execution.result
 			content, err := json.Marshal(toolResult)
 			if err != nil {
+				terminalReason = "tool_result_encoding_failed"
 				return l.fail(
 					ctx,
 					sink,
@@ -330,9 +372,23 @@ func (l *Loop) runRound(
 
 	assistant, requestedCalls, err := l.streamRound(roundContext, round, request, sink)
 	if err != nil {
+		slog.DebugContext(parent, "turn round model failed",
+			"round", round,
+			"error_type", fmt.Sprintf("%T", err),
+		)
 		return model.Message{}, nil, err
 	}
+	slog.DebugContext(parent, "turn round model completed",
+		"round", round,
+		"assistant_bytes", len(assistant.Content),
+		"tool_calls", len(requestedCalls),
+	)
 	if len(requestedCalls) == 0 || len(request.Tools) == 0 {
+		slog.DebugContext(parent, "turn round has no tool dispatch",
+			"round", round,
+			"requested_tool_calls", len(requestedCalls),
+			"published_tools", len(request.Tools),
+		)
 		return assistant, []executedCall{}, nil
 	}
 
@@ -344,6 +400,10 @@ func (l *Loop) runRound(
 			requestedCall.Arguments,
 		)
 		if err != nil {
+			slog.DebugContext(roundContext, "turn tool-call translation failed",
+				"round", round,
+				"error_type", fmt.Sprintf("%T", err),
+			)
 			return model.Message{}, nil, fmt.Errorf("translate model tool call: %w", err)
 		}
 		if err := emit(roundContext, sink, Event{
@@ -351,13 +411,28 @@ func (l *Loop) runRound(
 			Round: round,
 			Call:  call,
 		}); err != nil {
+			slog.DebugContext(roundContext, "turn tool-call event failed",
+				"round", round,
+				"error_type", fmt.Sprintf("%T", err),
+			)
 			return model.Message{}, nil, err
 		}
 		calls = append(calls, call)
 	}
 
+	concurrent := l.canRunConcurrently(calls)
+	slog.DebugContext(roundContext, "turn tool dispatch started",
+		"round", round,
+		"call_count", len(calls),
+		"concurrent", concurrent,
+	)
 	executions := l.executeCalls(roundContext, calls)
+	logExecutionSummary(roundContext, round, executions)
 	if err := roundContext.Err(); err != nil {
+		slog.DebugContext(parent, "turn round cancelled",
+			"round", round,
+			"error_type", fmt.Sprintf("%T", err),
+		)
 		emitContext := context.WithoutCancel(roundContext)
 		for _, execution := range executions {
 			if emitErr := emit(emitContext, sink, Event{
@@ -367,6 +442,10 @@ func (l *Loop) runRound(
 				Result: execution.result,
 				Err:    execution.err,
 			}); emitErr != nil {
+				slog.DebugContext(emitContext, "turn cancelled result event failed",
+					"round", round,
+					"error_type", fmt.Sprintf("%T", emitErr),
+				)
 				return model.Message{}, nil, emitErr
 			}
 		}
@@ -380,6 +459,10 @@ func (l *Loop) runRound(
 			Result: execution.result,
 			Err:    execution.err,
 		}); err != nil {
+			slog.DebugContext(roundContext, "turn tool-result event failed",
+				"round", round,
+				"error_type", fmt.Sprintf("%T", err),
+			)
 			return model.Message{}, nil, err
 		}
 	}
@@ -394,12 +477,26 @@ func (l *Loop) newRoundContext(parent context.Context) (context.Context, context
 }
 
 func (l *Loop) executeCalls(ctx context.Context, calls []tool.Call) []executedCall {
-	if l.canRunConcurrently(calls) {
+	concurrent := l.canRunConcurrently(calls)
+	if concurrent {
+		slog.DebugContext(ctx, "tool dispatch mode",
+			"call_count", len(calls),
+			"mode", "concurrent",
+		)
 		return l.executeConcurrent(ctx, calls)
 	}
+	slog.DebugContext(ctx, "tool dispatch mode",
+		"call_count", len(calls),
+		"mode", "serial",
+	)
 	results := make([]executedCall, 0, len(calls))
 	for _, call := range calls {
 		if err := ctx.Err(); err != nil {
+			slog.DebugContext(ctx, "tool dispatch skipped",
+				"call_id", call.ID,
+				"tool_name", call.Name,
+				"error_type", fmt.Sprintf("%T", err),
+			)
 			results = append(results, canceledCall(call, err))
 			continue
 		}
@@ -435,6 +532,10 @@ func readOnlyKind(kind tool.Kind) bool {
 
 func (l *Loop) executeConcurrent(ctx context.Context, calls []tool.Call) []executedCall {
 	workerCount := min(l.maxParallelReads, len(calls))
+	slog.DebugContext(ctx, "tool dispatch workers",
+		"call_count", len(calls),
+		"worker_count", workerCount,
+	)
 
 	type indexedCall struct {
 		index int
@@ -497,6 +598,12 @@ sending:
 }
 
 func (l *Loop) executeOne(ctx context.Context, call tool.Call) executedCall {
+	startedAt := time.Now()
+	slog.DebugContext(ctx, "tool execution started",
+		"call_id", call.ID,
+		"tool_name", call.Name,
+		"argument_bytes", len(call.Arguments),
+	)
 	callContext := ctx
 	cancel := func() {}
 	if l.toolTimeout > 0 {
@@ -507,6 +614,16 @@ func (l *Loop) executeOne(ctx context.Context, call tool.Call) executedCall {
 	if err != nil && result.Failure == nil {
 		result.Failure = tool.FailureFromError(err)
 	}
+	attrs := []any{
+		"call_id", call.ID,
+		"tool_name", call.Name,
+		"duration_ms", time.Since(startedAt).Milliseconds(),
+		"success", err == nil,
+	}
+	if result.Failure != nil {
+		attrs = append(attrs, "error_code", result.Failure.Code)
+	}
+	slog.DebugContext(ctx, "tool execution finished", attrs...)
 	return executedCall{
 		call:   call,
 		result: result,
@@ -526,26 +643,73 @@ func canceledCall(call tool.Call, err error) executedCall {
 	}
 }
 
+func logExecutionSummary(ctx context.Context, round int, executions []executedCall) {
+	failed := 0
+	denied := 0
+	for _, execution := range executions {
+		if execution.err != nil {
+			failed++
+		}
+		if execution.result.Denied {
+			denied++
+		}
+	}
+	slog.DebugContext(ctx, "tool dispatch finished",
+		"round", round,
+		"call_count", len(executions),
+		"failed_count", failed,
+		"denied_count", denied,
+	)
+}
+
 func (l *Loop) streamRound(
 	ctx context.Context,
 	round int,
 	request model.Request,
 	sink Sink,
 ) (model.Message, []model.ToolCall, error) {
+	startedAt := time.Now()
+	slog.DebugContext(ctx, "model round stream opening",
+		"round", round,
+		"message_count", len(request.Messages),
+		"tool_count", len(request.Tools),
+	)
 	stream, err := l.client.Stream(ctx, request)
 	if err != nil {
+		slog.DebugContext(ctx, "model round stream open failed",
+			"round", round,
+			"error_type", fmt.Sprintf("%T", err),
+		)
 		return model.Message{}, nil, fmt.Errorf("stream model round %d: %w", round, err)
 	}
 	if stream == nil {
+		slog.DebugContext(ctx, "model round stream open failed",
+			"round", round,
+			"reason", "nil_stream",
+		)
 		return model.Message{}, nil, fmt.Errorf("stream model round %d: nil stream", round)
 	}
 	defer func() {
-		_ = stream.Close()
+		closeErr := stream.Close()
+		slog.DebugContext(ctx, "model round stream closed",
+			"round", round,
+			"duration_ms", time.Since(startedAt).Milliseconds(),
+			"close_error", closeErr != nil,
+		)
 	}()
 	assistant, calls, streamErr := consumeStream(ctx, round, stream, sink)
 	if streamErr != nil {
+		slog.DebugContext(ctx, "model round stream consumed with error",
+			"round", round,
+			"error_type", fmt.Sprintf("%T", streamErr),
+		)
 		return model.Message{}, nil, streamErr
 	}
+	slog.DebugContext(ctx, "model round stream consumed",
+		"round", round,
+		"assistant_bytes", len(assistant.Content),
+		"tool_calls", len(calls),
+	)
 	return assistant, calls, nil
 }
 
@@ -557,15 +721,25 @@ func consumeStream(
 ) (model.Message, []model.ToolCall, error) {
 	var text strings.Builder
 	calls := make([]model.ToolCall, 0)
+	termination := "eof"
 	for {
 		event, err := stream.Next(ctx)
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
+			slog.DebugContext(ctx, "model stream next failed",
+				"round", round,
+				"error_type", fmt.Sprintf("%T", err),
+			)
 			return model.Message{}, nil, fmt.Errorf("read model stream round %d: %w", round, err)
 		}
 		if err := event.Validate(); err != nil {
+			slog.DebugContext(ctx, "model stream event invalid",
+				"round", round,
+				"event_kind", event.Kind,
+				"error_type", fmt.Sprintf("%T", err),
+			)
 			return model.Message{}, nil, fmt.Errorf("validate model stream round %d: %w", round, err)
 		}
 		switch event.Kind {
@@ -583,6 +757,13 @@ func consumeStream(
 			call.Arguments = append(json.RawMessage{}, call.Arguments...)
 			calls = append(calls, call)
 		case model.EventDone:
+			termination = "event_done"
+			slog.DebugContext(ctx, "model stream terminal event",
+				"round", round,
+				"termination", termination,
+				"text_bytes", text.Len(),
+				"tool_calls", len(calls),
+			)
 			return model.Message{
 				Role:      model.RoleAssistant,
 				Content:   text.String(),
@@ -590,6 +771,12 @@ func consumeStream(
 			}, calls, nil
 		}
 	}
+	slog.DebugContext(ctx, "model stream ended without terminal event",
+		"round", round,
+		"termination", termination,
+		"text_bytes", text.Len(),
+		"tool_calls", len(calls),
+	)
 	return model.Message{
 		Role:      model.RoleAssistant,
 		Content:   text.String(),
@@ -598,6 +785,11 @@ func consumeStream(
 }
 
 func (l *Loop) fail(ctx context.Context, sink Sink, round int, err error) (Result, error) {
+	slog.DebugContext(ctx, "turn failed",
+		"round", round,
+		"error_type", fmt.Sprintf("%T", err),
+		"context_error", ctx.Err() != nil,
+	)
 	emitContext := ctx
 	if ctx.Err() != nil {
 		// A terminal failure still needs to reach adapters after cancellation;
@@ -609,6 +801,10 @@ func (l *Loop) fail(ctx context.Context, sink Sink, round int, err error) (Resul
 		Round: round,
 		Err:   err,
 	}); emitErr != nil {
+		slog.DebugContext(emitContext, "turn failure event failed",
+			"round", round,
+			"error_type", fmt.Sprintf("%T", emitErr),
+		)
 		return Result{}, emitErr
 	}
 	return Result{}, err
@@ -616,9 +812,19 @@ func (l *Loop) fail(ctx context.Context, sink Sink, round int, err error) (Resul
 
 func emit(ctx context.Context, sink Sink, event Event) error {
 	if err := ctx.Err(); err != nil {
+		slog.DebugContext(ctx, "turn event emission cancelled",
+			"event_kind", event.Kind,
+			"round", event.Round,
+			"error_type", fmt.Sprintf("%T", err),
+		)
 		return fmt.Errorf("emit model/tool event: %w", err)
 	}
 	if err := sink(ctx, event); err != nil {
+		slog.DebugContext(ctx, "turn event sink failed",
+			"event_kind", event.Kind,
+			"round", event.Round,
+			"error_type", fmt.Sprintf("%T", err),
+		)
 		return fmt.Errorf("emit model/tool event: %w", err)
 	}
 	return nil
