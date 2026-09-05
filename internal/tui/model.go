@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -249,6 +250,12 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case permissionBridgeClosedMsg:
 		return m, nil
 	case toolResultMsg:
+		slog.DebugContext(m.ctx, "tui direct tool completed",
+			"call_id", message.call.ID,
+			"tool_name", message.call.Name,
+			"success", message.err == nil,
+			"error_type", errorType(message.err),
+		)
 		m.busy = false
 		m.busyStarted = time.Time{}
 		m.activity = "ready"
@@ -400,6 +407,9 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			select {
 			case next, ok := <-m.turnEvents:
 				if !ok {
+					slog.DebugContext(m.ctx, "tui turn event channel closed before terminal message",
+						"busy", m.busy,
+					)
 					m.refreshViewport()
 					return m, nil
 				}
@@ -416,6 +426,13 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refreshViewport()
 		return m, m.withSpinner(waitTurnCh(m.turnEvents))
 	case turnDoneMsg:
+		slog.DebugContext(m.ctx, "tui turn terminal message received",
+			"success", message.err == nil,
+			"error_type", errorType(message.err),
+			"rounds", message.result.Rounds,
+			"message_count", len(message.result.Messages),
+			"assistant_bytes", len(message.result.Message.Content),
+		)
 		m.busy = false
 		m.busyStarted = time.Time{}
 		m.activity = "ready"
@@ -634,12 +651,18 @@ func (m *bubbleModel) dispatch(line string) tea.Cmd {
 }
 
 func (m *bubbleModel) dispatchBang(command string) tea.Cmd {
+	slog.DebugContext(m.ctx, "tui direct bash submitted", "command_bytes", len(command))
 	m.bottom.recordHistory("!" + command)
 	m.appendUser("!" + command)
 	return m.startBash(command)
 }
 
 func (m *bubbleModel) startTool(call tool.Call) tea.Cmd {
+	slog.DebugContext(m.ctx, "tui direct tool started",
+		"call_id", call.ID,
+		"tool_name", call.Name,
+		"argument_bytes", len(call.Arguments),
+	)
 	m.messages = append(m.messages, model.Message{
 		Role: model.RoleAssistant,
 		ToolCalls: []model.ToolCall{{
@@ -659,7 +682,19 @@ func (m *bubbleModel) startTool(call tool.Call) tea.Cmd {
 	m.turnCancel = cancel
 	return func() tea.Msg {
 		defer cancel()
+		startedAt := time.Now()
 		result, callErr := m.service.Call(ctx, call)
+		attrs := []any{
+			"call_id", call.ID,
+			"tool_name", call.Name,
+			"duration_ms", time.Since(startedAt).Milliseconds(),
+			"success", callErr == nil,
+			"error_type", errorType(callErr),
+		}
+		if result.Failure != nil {
+			attrs = append(attrs, "error_code", result.Failure.Code)
+		}
+		slog.DebugContext(ctx, "tui direct tool worker returned", attrs...)
 		return toolResultMsg{call: call, result: result, err: callErr}
 	}
 }
@@ -764,6 +799,7 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 		m.reconfigureRunner()
 	}
 	if m.runner == nil {
+		slog.DebugContext(m.ctx, "tui turn rejected", "reason", "runner_unavailable")
 		m.appendError("model client is not configured; use /model or /provider add to configure")
 		m.relayout()
 		return nil
@@ -780,8 +816,18 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 	m.turnCancel = cancel
 	events := make(chan tea.Msg, 32)
 	history := model.CloneMessages(m.messages)
+	startedAt := time.Now()
+	slog.DebugContext(ctx, "tui turn started",
+		"prompt_bytes", len(prompt),
+		"history_messages", len(history),
+	)
 	go func() {
-		defer close(events)
+		defer func() {
+			close(events)
+			slog.DebugContext(ctx, "tui turn event channel closed",
+				"duration_ms", time.Since(startedAt).Milliseconds(),
+			)
+		}()
 		result, err := m.runner.Run(
 			ctx,
 			history,
@@ -794,9 +840,20 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 				}
 			},
 		)
+		slog.DebugContext(ctx, "tui turn runner returned",
+			"duration_ms", time.Since(startedAt).Milliseconds(),
+			"success", err == nil,
+			"error_type", errorType(err),
+			"rounds", result.Rounds,
+			"message_count", len(result.Messages),
+		)
 		select {
 		case events <- turnDoneMsg{result: result, err: err}:
+			slog.DebugContext(ctx, "tui turn terminal message queued")
 		case <-m.ctx.Done():
+			slog.DebugContext(ctx, "tui turn terminal message dropped",
+				"reason", "ui_context_done",
+			)
 		}
 	}()
 	m.turnEvents = events
@@ -817,10 +874,18 @@ func waitTurnCh(events <-chan tea.Msg) tea.Cmd {
 	return func() tea.Msg {
 		msg, ok := <-events
 		if !ok {
+			slog.Debug("tui turn wait observed closed event channel")
 			return nil
 		}
 		return msg
 	}
+}
+
+func errorType(err error) string {
+	if err == nil {
+		return ""
+	}
+	return fmt.Sprintf("%T", err)
 }
 
 func (m *bubbleModel) syncPromptHeight() {
