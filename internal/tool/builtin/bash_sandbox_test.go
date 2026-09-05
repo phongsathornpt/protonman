@@ -41,3 +41,21 @@ func TestBashUsesSandboxLauncher(t *testing.T) {
 }
 
 var _ sandbox.Launcher = (*recordingLauncher)(nil)
+
+func TestBashTruncatesLargeOutput(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	handler := NewBash(workspaceRoot)
+	// Output ~2.5 MiB of data which exceeds maxBashOutputBytes (2 MiB)
+	result, err := handler.Execute(context.Background(), newJSONCall(t, "bash-trunc", "bash", map[string]any{
+		"command": "python3 -c 'print(\"A\" * (2 * 1024 * 1024 + 1024))' || head -c 2100000 /dev/zero | tr '\\0' 'A'",
+	}))
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !result.Truncated {
+		t.Fatalf("result.Truncated = false, want true")
+	}
+	if len(result.Output) > maxBashOutputBytes+100 {
+		t.Fatalf("output length = %d exceeds max bound", len(result.Output))
+	}
+}

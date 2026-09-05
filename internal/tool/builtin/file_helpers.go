@@ -157,3 +157,33 @@ func createRootTemp(root *os.Root, prefix string) (*os.File, string, error) {
 	}
 	return nil, "", fmt.Errorf("could not allocate a unique temporary file")
 }
+
+func removeWorkspaceFile(ctx context.Context, workspaceRoot *workspace.Workspace, path string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("before removing file: %w", err)
+	}
+	parentRoot, base, err := workspaceRoot.OpenParentNoSymlinks(ctx, path, false)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer parentRoot.Close()
+
+	info, err := parentRoot.Lstat(base)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("stat removal target: %w", err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("removal target %q is a directory", path)
+	}
+
+	if err := parentRoot.Remove(base); err != nil {
+		return fmt.Errorf("remove target: %w", err)
+	}
+	return nil
+}
