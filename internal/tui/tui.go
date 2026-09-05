@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"runtime/debug"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -164,8 +166,17 @@ func (ui *BubbleTeaUI) SessionState() []model.Message {
 // cell motion. Bubble Tea owns terminal restoration even on program failure.
 func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
+		slog.DebugContext(ctx, "tui run rejected",
+			"reason", "context_already_done",
+			"error_type", fmt.Sprintf("%T", err),
+		)
 		return fmt.Errorf("start Bubble Tea UI: %w", err)
 	}
+	startedAt := time.Now()
+	slog.DebugContext(ctx, "tui run started",
+		"initial_messages", len(ui.initialMessages),
+		"has_runner", ui.runner != nil,
+	)
 	ui.service.SetPrompt(ui.PermissionPrompt)
 	defer ui.service.SetCallGuard(nil)
 	if ui.coordinator != nil {
@@ -225,6 +236,10 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		}()
 
 		if panicVal != nil {
+			slog.DebugContext(ctx, "tui program panicked",
+				"error_type", fmt.Sprintf("%T", panicVal),
+				"duration_ms", time.Since(startedAt).Milliseconds(),
+			)
 			crash := NewCrashModel(panicVal, panicStack)
 			crashProg := tea.NewProgram(
 				crash,
@@ -233,21 +248,39 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 			)
 			finalCrash, _ := crashProg.Run()
 			if cm, ok := finalCrash.(*CrashModel); ok && cm.restart {
+				slog.DebugContext(ctx, "tui crash screen requested restart")
 				continue
 			}
+			slog.DebugContext(ctx, "tui run stopped after panic")
 			return fmt.Errorf("proton crashed: %v", panicVal)
 		}
 
 		if modelState, ok := finalModel.(*bubbleModel); ok {
 			ui.finalMessages = model.CloneMessages(modelState.messages)
 			currentMessages = model.CloneMessages(modelState.messages)
+			slog.DebugContext(ctx, "tui program returned",
+				"duration_ms", time.Since(startedAt).Milliseconds(),
+				"message_count", len(modelState.messages),
+				"busy", modelState.busy,
+			)
+		} else {
+			slog.DebugContext(ctx, "tui program returned without bubble model")
 		}
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
+				slog.DebugContext(ctx, "tui run stopped by context",
+					"error_type", fmt.Sprintf("%T", ctxErr),
+				)
 				return fmt.Errorf("run Bubble Tea UI: %w", ctxErr)
 			}
+			slog.DebugContext(ctx, "tui run failed",
+				"error_type", fmt.Sprintf("%T", err),
+			)
 			return fmt.Errorf("run Bubble Tea UI: %w", err)
 		}
+		slog.DebugContext(ctx, "tui run completed",
+			"duration_ms", time.Since(startedAt).Milliseconds(),
+		)
 		return nil
 	}
 }
