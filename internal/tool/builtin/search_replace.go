@@ -84,14 +84,18 @@ func (h searchReplaceHandler) Execute(ctx context.Context, call tool.Call) (tool
 		if err != nil {
 			return tool.Result{}, fmt.Errorf("checkpoint %q: %w", input.FilePath, err)
 		}
-		if err := atomicWrite(ctx, h.workspace, resolvedPath, []byte(input.NewString)); err != nil {
+		displayPath := input.FilePath
+		if rel, relErr := h.workspace.RelRead(resolvedPath); relErr == nil && rel != "" {
+			displayPath = rel
+		}
+		if err := atomicWriteResolved(ctx, h.workspace, resolvedPath, []byte(input.NewString)); err != nil {
 			return tool.Result{
 				CallID:       call.ID,
 				ToolName:     call.Name,
 				CheckpointID: checkpointID,
 			}, fmt.Errorf("create %q: %w", input.FilePath, err)
 		}
-		return editResult(call, resolvedPath, "created", checkpointID)
+		return editResult(call, displayPath, "created", checkpointID)
 	}
 	if !exists {
 		return tool.Result{}, fmt.Errorf("edit target %q does not exist", input.FilePath)
@@ -113,14 +117,18 @@ func (h searchReplaceHandler) Execute(ctx context.Context, call tool.Call) (tool
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("checkpoint %q: %w", input.FilePath, err)
 	}
-	if err := atomicWrite(ctx, h.workspace, resolvedPath, []byte(updated)); err != nil {
+	displayPath := input.FilePath
+	if rel, relErr := h.workspace.RelRead(resolvedPath); relErr == nil && rel != "" {
+		displayPath = rel
+	}
+	if err := atomicWriteResolved(ctx, h.workspace, resolvedPath, []byte(updated)); err != nil {
 		return tool.Result{
 			CallID:       call.ID,
 			ToolName:     call.Name,
 			CheckpointID: checkpointID,
 		}, fmt.Errorf("update %q: %w", input.FilePath, err)
 	}
-	return editResult(call, resolvedPath, "updated", checkpointID)
+	return editResult(call, displayPath, "updated", checkpointID)
 }
 
 func editResult(call tool.Call, path string, action string, checkpointID string) (tool.Result, error) {

@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,11 +9,14 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/projectTHORN/proton/internal/sandbox"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/workspace"
 )
+
+const maxBashOutputBytes = 2 * 1024 * 1024
 
 type bashHandler struct {
 	workspace *workspace.Workspace
@@ -71,11 +75,24 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	if err != nil {
 		return tool.Result{}, err
 	}
-	output, err := command.CombinedOutput()
+
+	var buf boundedBuffer
+	buf.limit = maxBashOutputBytes
+	command.Stdout = &buf
+	command.Stderr = &buf
+
+	err = command.Run()
+	outputStr := buf.String()
+	truncated := buf.IsTruncated()
+	if truncated {
+		outputStr += "\n[output truncated at 2 MiB]"
+	}
+
 	result := tool.Result{
-		CallID:   call.ID,
-		ToolName: call.Name,
-		Output:   string(output),
+		CallID:    call.ID,
+		ToolName:  call.Name,
+		Output:    outputStr,
+		Truncated: truncated,
 	}
 	if err == nil {
 		code := 0
@@ -108,4 +125,39 @@ func shellCommand(ctx context.Context, dir string, command string) *exec.Cmd {
 	}
 	cmd.Dir = dir
 	return cmd
+}
+
+type boundedBuffer struct {
+	mu        sync.Mutex
+	buf       bytes.Buffer
+	limit     int
+	truncated bool
+}
+
+func (b *boundedBuffer) Write(p []byte) (n int, err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.buf.Len() >= b.limit {
+		b.truncated = true
+		return len(p), nil
+	}
+	remaining := b.limit - b.buf.Len()
+	if len(p) > remaining {
+		b.buf.Write(p[:remaining])
+		b.truncated = true
+		return len(p), nil
+	}
+	return b.buf.Write(p)
+}
+
+func (b *boundedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func (b *boundedBuffer) IsTruncated() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.truncated
 }

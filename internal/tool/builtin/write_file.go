@@ -66,7 +66,11 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("checkpoint %q: %w", input.FilePath, err)
 	}
-	if err := atomicWrite(ctx, h.workspace, resolvedPath, []byte(input.Content)); err != nil {
+	displayPath := input.FilePath
+	if rel, relErr := h.workspace.RelRead(resolvedPath); relErr == nil && rel != "" {
+		displayPath = rel
+	}
+	if err := atomicWriteResolved(ctx, h.workspace, resolvedPath, []byte(input.Content)); err != nil {
 		return tool.Result{
 			CallID:       call.ID,
 			ToolName:     call.Name,
@@ -76,7 +80,7 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	return tool.Result{
 		CallID:       call.ID,
 		ToolName:     call.Name,
-		Output:       fmt.Sprintf("Wrote file successfully to %s.", resolvedPath),
+		Output:       fmt.Sprintf("Wrote file successfully to %s.", displayPath),
 		CheckpointID: checkpointID,
 	}, nil
 }
