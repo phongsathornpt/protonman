@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -22,7 +23,17 @@ const (
 	providerStateInput providerPaneState = iota
 	providerStateFetching
 	providerStateSelectModel
+	providerStateConfirmOverwrite
 	providerStateError
+)
+
+type providerField int
+
+const (
+	providerFieldName providerField = iota
+	providerFieldEndpoint
+	providerFieldAPIKey
+	providerFieldCount
 )
 
 type modelsFetchedMsg struct {
@@ -47,6 +58,9 @@ type providerPaneView struct {
 	state          providerPaneState
 	focusIndex     int
 	isEditing      bool
+	originalName   string
+	presetID       string
+	requiresAPIKey bool
 	nameInput      textinput.Model
 	endpointInput  textinput.Model
 	apiKeyInput    textinput.Model
@@ -55,15 +69,17 @@ type providerPaneView struct {
 	scrollOffset   int
 	filterFreeOnly bool
 	errorMessage   string
+	fieldErrors    [providerFieldCount]string
 }
 
 func newProviderPaneView() *providerPaneView {
-	return newProviderPaneViewWithPreset(model.DefaultProtonmanName)
+	return newProviderPaneViewWithPreset("")
 }
 
 func newProviderPaneViewWithConfig(cfg config.ProviderConfig) *providerPaneView {
 	pv := newProviderPaneViewWithPreset(cfg.Name)
 	pv.isEditing = true
+	pv.originalName = strings.TrimSpace(cfg.Name)
 	if cfg.Name != "" {
 		pv.nameInput.SetValue(cfg.Name)
 	}
@@ -78,39 +94,46 @@ func newProviderPaneViewWithConfig(cfg config.ProviderConfig) *providerPaneView 
 
 func newProviderPaneViewWithPreset(preset string) *providerPaneView {
 	preset = strings.ToLower(strings.TrimSpace(preset))
-	name := model.DefaultProtonmanName
-	endpoint := model.DefaultProtonmanEndpoint
-	keyPlaceholder := "plk_live_..."
+	name := ""
+	endpoint := ""
+	keyPlaceholder := "API key (optional)…"
+	presetID := ""
+	requiresAPIKey := false
 	filterFree := false
 
 	if p := model.LookupPreset(preset); p != nil {
+		presetID = p.ID
 		name = p.ID
 		endpoint = p.BaseURL
-		if !p.RequiresKey {
-			keyPlaceholder = "(Optional for " + p.Name + ")"
-		} else if p.ID == "openai" {
-			keyPlaceholder = "sk-..."
-		}
+		requiresAPIKey = p.RequiresKey
+		keyPlaceholder = providerKeyPlaceholder(*p)
 		if p.ID == model.DefaultOpenCodeName {
 			filterFree = true
 		}
 	} else if preset == "opencode-free" || preset == "free" {
+		presetID = model.DefaultOpenCodeName
 		name = model.DefaultOpenCodeName
 		endpoint = model.DefaultOpenCodeEndpoint
-		keyPlaceholder = "(Optional for free models)"
+		keyPlaceholder = "API key (optional)…"
 		filterFree = true
+	} else if preset != "" {
+		name = preset
 	}
 
 	nameIn := textinput.New()
 	nameIn.Prompt = glyphPrompt
-	nameIn.Placeholder = name
-	nameIn.SetValue(name)
+	nameIn.Placeholder = "provider name…"
+	if name != "" {
+		nameIn.SetValue(name)
+	}
 	nameIn.CharLimit = 64
 
 	endpointIn := textinput.New()
 	endpointIn.Prompt = glyphPrompt
-	endpointIn.Placeholder = endpoint
-	endpointIn.SetValue(endpoint)
+	endpointIn.Placeholder = "https://api.example.com/v1"
+	if endpoint != "" {
+		endpointIn.SetValue(endpoint)
+	}
 	endpointIn.CharLimit = 256
 
 	keyIn := textinput.New()
@@ -119,30 +142,37 @@ func newProviderPaneViewWithPreset(preset string) *providerPaneView {
 	keyIn.EchoMode = textinput.EchoPassword
 	keyIn.EchoCharacter = '•'
 	keyIn.CharLimit = 256
-	keyIn.Focus()
 
-	return &providerPaneView{
+	focusIndex := providerFieldName
+	if name != "" && endpoint != "" {
+		focusIndex = providerFieldAPIKey
+	}
+
+	pv := &providerPaneView{
 		state:          providerStateInput,
-		focusIndex:     2, // Start with focus on API key
+		focusIndex:     int(focusIndex),
+		presetID:       presetID,
+		requiresAPIKey: requiresAPIKey,
 		nameInput:      nameIn,
 		endpointInput:  endpointIn,
 		apiKeyInput:    keyIn,
 		filterFreeOnly: filterFree,
 	}
+	pv.syncInputFocus()
+	return pv
 }
 
 func (*providerPaneView) ID() string             { return providerViewID }
 func (*providerPaneView) ReplacesComposer() bool { return true }
 
-func (v *providerPaneView) isZeroKeyAllowed() bool {
-	ep := strings.ToLower(v.endpointInput.Value())
-	name := strings.ToLower(strings.TrimSpace(v.nameInput.Value()))
-	return strings.Contains(ep, "opencode.ai") ||
-		strings.Contains(ep, "localhost") ||
-		strings.Contains(ep, "127.0.0.1") ||
-		name == model.DefaultOpenCodeName ||
-		name == "ollama" ||
-		name == "local"
+func providerKeyPlaceholder(p model.SupportedProviderPreset) string {
+	if !p.RequiresKey {
+		return "API key (optional)…"
+	}
+	if p.ID == "openai" {
+		return "sk_…"
+	}
+	return "plk_live_…"
 }
 
 func (v *providerPaneView) isOpenCode() bool {
@@ -163,17 +193,103 @@ func (v *providerPaneView) applyPreset(preset string) {
 	}
 
 	if p := model.LookupPreset(preset); p != nil {
+		previousName := strings.TrimSpace(v.nameInput.Value())
 		v.nameInput.SetValue(p.ID)
 		v.endpointInput.SetValue(p.BaseURL)
-		if !p.RequiresKey {
-			v.apiKeyInput.Placeholder = "(Optional for " + p.Name + ")"
-		} else if p.ID == "openai" {
-			v.apiKeyInput.Placeholder = "sk-..."
-		} else {
-			v.apiKeyInput.Placeholder = "plk_live_..."
+		if !strings.EqualFold(previousName, p.ID) {
+			v.apiKeyInput.SetValue("")
 		}
+		v.apiKeyInput.Placeholder = providerKeyPlaceholder(*p)
+		v.presetID = p.ID
+		v.requiresAPIKey = p.RequiresKey
 		v.filterFreeOnly = (p.ID == model.DefaultOpenCodeName)
+		v.clearValidation()
+		v.focusIndex = int(providerFieldAPIKey)
+		v.syncInputFocus()
 	}
+}
+
+func (v *providerPaneView) clearValidation() {
+	v.fieldErrors = [providerFieldCount]string{}
+	v.errorMessage = ""
+}
+
+func (v *providerPaneView) clearFieldError(field providerField) {
+	if field >= 0 && field < providerFieldCount {
+		v.fieldErrors[field] = ""
+	}
+}
+
+func (v *providerPaneView) validateDraft() bool {
+	v.clearValidation()
+	firstInvalid := providerFieldCount
+
+	name := strings.TrimSpace(v.nameInput.Value())
+	if name == "" {
+		v.fieldErrors[providerFieldName] = "required"
+		firstInvalid = providerFieldName
+	}
+
+	endpoint := strings.TrimSpace(v.endpointInput.Value())
+	if endpoint == "" {
+		v.fieldErrors[providerFieldEndpoint] = "required"
+		if firstInvalid == providerFieldCount {
+			firstInvalid = providerFieldEndpoint
+		}
+	} else if !isValidProviderEndpoint(endpoint) {
+		v.fieldErrors[providerFieldEndpoint] = "use an HTTP(S) URL"
+		if firstInvalid == providerFieldCount {
+			firstInvalid = providerFieldEndpoint
+		}
+	}
+
+	key := strings.TrimSpace(v.apiKeyInput.Value())
+	if v.requiresAPIKey && key == "" {
+		v.fieldErrors[providerFieldAPIKey] = "required for this provider"
+		if firstInvalid == providerFieldCount {
+			firstInvalid = providerFieldAPIKey
+		}
+	}
+
+	if firstInvalid != providerFieldCount {
+		v.focusIndex = int(firstInvalid)
+		v.syncInputFocus()
+		return false
+	}
+
+	v.nameInput.SetValue(name)
+	v.endpointInput.SetValue(strings.TrimRight(endpoint, "/"))
+	v.apiKeyInput.SetValue(key)
+	return true
+}
+
+func isValidProviderEndpoint(raw string) bool {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Hostname() == "" {
+		return false
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	return scheme == "http" || scheme == "https"
+}
+
+func (v *providerPaneView) hasNameConflict(m *bubbleModel) bool {
+	if m == nil {
+		return false
+	}
+
+	name := strings.TrimSpace(v.nameInput.Value())
+	original := strings.TrimSpace(v.originalName)
+	for providerKey, cfg := range m.providers {
+		existingName := strings.TrimSpace(cfg.Name)
+		if existingName == "" {
+			existingName = providerKey
+		}
+		if strings.EqualFold(existingName, name) && !strings.EqualFold(existingName, original) {
+			return true
+		}
+	}
+	return false
 }
 
 func (v *providerPaneView) setFetchedModels(models []model.RemoteModel) {
@@ -221,8 +337,8 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 		rows := []string{
 			brandStyle.Render("◆ Connecting to " + v.nameInput.Value()),
 			"",
-			fmt.Sprintf("  %s Querying %s/models...", m.spinner.View(), v.endpointInput.Value()),
-			mutedStyle.Render("  Validating proxy key & discovering model catalog"),
+			fmt.Sprintf("  %s Querying %s/models…", m.spinner.View(), v.endpointInput.Value()),
+			mutedStyle.Render("  Checking endpoint & discovering model catalog"),
 			"",
 			mutedStyle.Render("esc cancel"),
 		}
@@ -337,6 +453,20 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 			MaxWidth(maxWidth).
 			Render(strings.Join(rows, "\n"))
 
+	case providerStateConfirmOverwrite:
+		rows := []string{
+			warningStyle.Render("Provider Already Exists"),
+			"",
+			fmt.Sprintf("  %q is already configured.", strings.TrimSpace(v.nameInput.Value())),
+			mutedStyle.Render("  Continuing will replace its endpoint and API key."),
+			"",
+			mutedStyle.Render("enter overwrite · esc back · ctrl+c cancel"),
+		}
+		return modalStyle.
+			BorderForeground(warningColor).
+			MaxWidth(maxWidth).
+			Render(strings.Join(rows, "\n"))
+
 	case providerStateError:
 		rows := []string{
 			errorStyle.Render("✕ Connection Failed"),
@@ -353,8 +483,8 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 	case providerStateInput:
 		fallthrough
 	default:
-		keyLabel := "API Key (shown masked):"
-		if v.isZeroKeyAllowed() {
+		keyLabel := "API Key:"
+		if !v.requiresAPIKey {
 			keyLabel = "API Key (optional):"
 		}
 
@@ -366,15 +496,15 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 		rows := []string{
 			brandStyle.Render(title),
 			"",
-			mutedStyle.Render("Presets: [alt+1] Protonman · [alt+2] OpenCode (Free) · [alt+3] Ollama (Local) · [alt+4] OpenAI"),
+			mutedStyle.Render("Presets: alt+1 Protonman · alt+2 OpenCode · alt+3 Ollama · alt+4 OpenAI"),
 			"",
-			mutedStyle.Render("Provider Name:"),
+			renderProviderFieldLabel("Provider Name:", v.fieldErrors[providerFieldName]),
 			v.nameInput.View(),
 			"",
-			mutedStyle.Render("Endpoint (Base URL):"),
+			renderProviderFieldLabel("Endpoint (Base URL):", v.fieldErrors[providerFieldEndpoint]),
 			v.endpointInput.View(),
 			"",
-			mutedStyle.Render(keyLabel),
+			renderProviderFieldLabel(keyLabel, v.fieldErrors[providerFieldAPIKey]),
 			v.apiKeyInput.View(),
 			"",
 			mutedStyle.Render("tab/shift+tab cycle · enter connect & fetch · esc cancel"),
@@ -384,6 +514,13 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 			MaxWidth(maxWidth).
 			Render(strings.Join(rows, "\n"))
 	}
+}
+
+func renderProviderFieldLabel(label, fieldError string) string {
+	if fieldError == "" {
+		return mutedStyle.Render(label)
+	}
+	return mutedStyle.Render(label+" ") + errorStyle.Render("("+fieldError+")")
 }
 
 func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
@@ -443,12 +580,34 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 			return true, nil
 		}
 
+	case providerStateConfirmOverwrite:
+		switch message.String() {
+		case "enter":
+			v.state = providerStateFetching
+			return true, fetchModelsCmd(
+				strings.TrimSpace(v.nameInput.Value()),
+				strings.TrimSpace(v.endpointInput.Value()),
+				strings.TrimSpace(v.apiKeyInput.Value()),
+			)
+		case "esc":
+			v.state = providerStateInput
+			v.focusIndex = int(providerFieldName)
+			v.syncInputFocus()
+			return true, nil
+		case "ctrl+c":
+			m.bottom.remove(providerViewID)
+			return true, nil
+		default:
+			return true, nil
+		}
+
 	case providerStateError:
 		switch message.String() {
 		case "enter", "esc":
 			v.state = providerStateInput
-			v.focusIndex = 2
-			v.apiKeyInput.Focus()
+			v.clearValidation()
+			v.focusIndex = int(providerFieldAPIKey)
+			v.syncInputFocus()
 			return true, nil
 		default:
 			return true, nil
@@ -482,26 +641,30 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 			v.syncInputFocus()
 			return true, nil
 		case "enter":
-			key := strings.TrimSpace(v.apiKeyInput.Value())
-			if key == "" && !v.isZeroKeyAllowed() {
-				v.focusIndex = 2
-				v.syncInputFocus()
+			if !v.validateDraft() {
+				return true, nil
+			}
+			if v.hasNameConflict(m) {
+				v.state = providerStateConfirmOverwrite
 				return true, nil
 			}
 			v.state = providerStateFetching
 			return true, fetchModelsCmd(
 				strings.TrimSpace(v.nameInput.Value()),
 				strings.TrimSpace(v.endpointInput.Value()),
-				key,
+				strings.TrimSpace(v.apiKeyInput.Value()),
 			)
 		default:
 			var cmd tea.Cmd
 			switch v.focusIndex {
 			case 0:
+				v.clearFieldError(providerFieldName)
 				v.nameInput, cmd = v.nameInput.Update(message)
 			case 1:
+				v.clearFieldError(providerFieldEndpoint)
 				v.endpointInput, cmd = v.endpointInput.Update(message)
 			case 2:
+				v.clearFieldError(providerFieldAPIKey)
 				v.apiKeyInput, cmd = v.apiKeyInput.Update(message)
 			}
 			return true, cmd
