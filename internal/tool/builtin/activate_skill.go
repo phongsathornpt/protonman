@@ -37,6 +37,7 @@ func (activateSkillHandler) Definition() tool.Definition {
 		Name:                "activate_skill",
 		Description:         "Load full instructions and bundled resource locations for a specialized skill.",
 		Kind:                tool.KindRead,
+		Mutability:          tool.MutabilityMutating,
 		PermissionDetailKey: "name",
 		InputSchema: map[string]any{
 			"type": "object",

@@ -114,3 +114,26 @@ func TestResultContinuationHasStableJSONShape(t *testing.T) {
 		t.Fatalf("JSON = %s, want %s", got, want)
 	}
 }
+
+func TestDefinitionValidateRejectsUnknownMutability(t *testing.T) {
+	err := (Definition{
+		Name:        "broken",
+		Description: "bad mutability",
+		Kind:        KindRead,
+		Mutability:  Mutability("sometimes"),
+	}).Validate()
+	if err == nil {
+		t.Fatal("Definition.Validate() error = nil, want mutability error")
+	}
+}
+
+func TestEffectiveMutabilityPrefersExplicitMetadata(t *testing.T) {
+	definition := Definition{Kind: KindBash, Mutability: MutabilityReadOnly}
+	if got := EffectiveMutability(definition); got != MutabilityReadOnly {
+		t.Fatalf("EffectiveMutability() = %q, want read_only", got)
+	}
+	legacy := Definition{Kind: KindRead}
+	if got := EffectiveMutability(legacy); got != MutabilityReadOnly {
+		t.Fatalf("legacy read mutability = %q, want read_only", got)
+	}
+}

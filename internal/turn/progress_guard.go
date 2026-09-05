@@ -171,12 +171,7 @@ func shouldTrackNoProgress(definition tool.Definition, result tool.Result) bool 
 }
 
 func potentiallyMutating(definition tool.Definition) bool {
-	switch definition.Kind {
-	case tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch:
-		return false
-	default:
-		return true
-	}
+	return tool.EffectiveMutability(definition) != tool.MutabilityReadOnly
 }
 
 func semanticCallHash(call tool.Call) ([sha256.Size]byte, error) {

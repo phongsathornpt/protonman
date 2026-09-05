@@ -893,15 +893,15 @@ func (l *Loop) canRunConcurrently(calls []tool.Call) bool {
 	}
 	for _, call := range calls {
 		definition, ok := definitions[call.Name]
-		if !ok || !readOnlyKind(definition.Kind) {
+		if !ok || !readOnlyDefinition(definition) {
 			return false
 		}
 	}
 	return true
 }
 
-func readOnlyKind(kind tool.Kind) bool {
-	return kind == tool.KindRead || kind == tool.KindGrep
+func readOnlyDefinition(definition tool.Definition) bool {
+	return tool.EffectiveMutability(definition) == tool.MutabilityReadOnly
 }
 
 func (l *Loop) executeConcurrent(ctx context.Context, calls []tool.Call) []executedCall {

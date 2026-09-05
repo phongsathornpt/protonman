@@ -34,6 +34,7 @@ func (writeFileHandler) Definition() tool.Definition {
 		Name:                "write_file",
 		Description:         "Create or replace a UTF-8 text file atomically.",
 		Kind:                tool.KindEdit,
+		Mutability:          tool.MutabilityMutating,
 		PermissionDetailKey: "file_path",
 		InputSchema: map[string]any{
 			"type": "object",

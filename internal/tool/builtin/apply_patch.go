@@ -80,6 +80,7 @@ func (applyPatchHandler) Definition() tool.Definition {
 		Name:                "apply_patch",
 		Description:         "Apply a bounded multi-file patch to the workspace.",
 		Kind:                tool.KindEdit,
+		Mutability:          tool.MutabilityMutating,
 		PermissionDetailKey: "patch",
 		InputSchema: map[string]any{
 			"type": "object",

@@ -313,3 +313,28 @@ func TestProgressGuardSuppressesOnlyStalledCall(t *testing.T) {
 		t.Fatalf("live call unexpectedly suppressed: %#v", allowed)
 	}
 }
+
+func TestProgressGuardExplicitReadOnlyToolDoesNotResetEpoch(t *testing.T) {
+	guard := newProgressGuard([]tool.Definition{
+		{Name: "read_file", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly},
+		{Name: "inspect_command", Kind: tool.KindBash, Mutability: tool.MutabilityReadOnly},
+	}, 2)
+	read := executedCall{
+		call:   tool.Call{ID: "r1", Name: "read_file", Arguments: json.RawMessage(`{"path":"a.txt"}`)},
+		result: tool.Result{CallID: "r1", ToolName: "read_file", Output: "same"},
+	}
+	if stalled, err := guard.observeRound([]executedCall{read}); err != nil || stalled {
+		t.Fatalf("first read stalled=%v err=%v", stalled, err)
+	}
+	inspect := executedCall{
+		call:   tool.Call{ID: "i1", Name: "inspect_command", Arguments: json.RawMessage(`{"command":"pwd"}`)},
+		result: tool.Result{CallID: "i1", ToolName: "inspect_command", Output: "/tmp"},
+	}
+	if stalled, err := guard.observeRound([]executedCall{inspect}); err != nil || stalled {
+		t.Fatalf("inspect stalled=%v err=%v", stalled, err)
+	}
+	read.call.ID = "r2"
+	if stalled, err := guard.observeRound([]executedCall{read}); err != nil || !stalled {
+		t.Fatalf("second read stalled=%v err=%v, want stalled without epoch reset", stalled, err)
+	}
+}
