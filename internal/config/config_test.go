@@ -343,3 +343,25 @@ max_rounds = 35
 		t.Fatalf("permissions = %o, want 0600", perm)
 	}
 }
+
+func TestSaveUserConfigRejectsCorruptExistingFile(t *testing.T) {
+	homeDir := t.TempDir()
+	configPath := filepath.Join(homeDir, ".proton", "config.toml")
+	corruptContent := "this is [not valid toml ::::"
+	writeConfig(t, configPath, corruptContent)
+
+	// Attempt to save default model should fail and not overwrite corrupt file
+	err := SaveUserDefaultModel(homeDir, "anthropic", "claude-3-5-sonnet")
+	if err == nil {
+		t.Fatal("expected error saving to corrupt config file, got nil")
+	}
+
+	// Verify content was not modified
+	data, readErr := os.ReadFile(configPath)
+	if readErr != nil {
+		t.Fatalf("failed to read config file: %v", readErr)
+	}
+	if string(data) != corruptContent {
+		t.Fatalf("corrupt config was overwritten; got %q, want %q", string(data), corruptContent)
+	}
+}

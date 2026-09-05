@@ -77,11 +77,13 @@ func (h activateSkillHandler) Execute(ctx context.Context, call tool.Call) (tool
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeNotFound, msg)
 	}
 
-	h.registry.MarkActivated(name)
-
 	if h.workspace != nil && s.BaseDir != "" {
-		_ = h.workspace.AddReadRoot(s.BaseDir)
+		if err := h.workspace.AddReadRoot(s.BaseDir); err != nil {
+			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "authorize skill directory", err)
+		}
 	}
+
+	h.registry.MarkActivated(name)
 
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("<skill_content name=%q>\n", s.Name))
