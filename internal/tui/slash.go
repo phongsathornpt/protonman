@@ -471,7 +471,7 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 			m.refreshViewport()
 			return nil
 		}
-		if err := m.service.SetMode(mode); err != nil {
+		if err := m.setPermissionMode(mode); err != nil {
 			m.appendError(err.Error())
 			m.refreshViewport()
 			return nil
@@ -481,7 +481,7 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		}
 		m.appendLine("permission mode: " + mode.String())
 	case "ask":
-		if err := m.service.SetMode(permission.ModeAsk); err != nil {
+		if err := m.setPermissionMode(permission.ModeAsk); err != nil {
 			m.appendError(err.Error())
 			m.refreshViewport()
 			return nil
@@ -489,7 +489,7 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		m.setPlanEnabled(false)
 		m.appendLine("permission mode: " + permission.ModeAsk.String())
 	case "always-approve", "yolo":
-		if err := m.service.SetMode(permission.ModeAlwaysApprove); err != nil {
+		if err := m.setPermissionMode(permission.ModeAlwaysApprove); err != nil {
 			m.appendError(err.Error())
 			m.refreshViewport()
 			return nil

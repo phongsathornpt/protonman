@@ -16,6 +16,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
@@ -32,13 +33,14 @@ const (
 )
 
 type bubbleModel struct {
-	ctx      context.Context
-	service  *toolcall.Service
-	registry tool.Registry
-	skills   *skill.Registry
-	runner   applicationturn.Runner
-	bridge   *permissionBridge
-	workDir  string
+	ctx         context.Context
+	service     *toolcall.Service
+	registry    tool.Registry
+	skills      *skill.Registry
+	runner      applicationturn.Runner
+	bridge      *permissionBridge
+	coordinator *agent.Coordinator
+	workDir     string
 
 	viewport           viewport.Model
 	transcriptViewport viewport.Model
@@ -708,10 +710,23 @@ func (m *bubbleModel) reconfigureRunner() {
 	loop, err := applicationturn.NewLoop(client, m.service, opts...)
 	if err == nil {
 		m.runner = loop
+		if m.coordinator != nil {
+			m.coordinator.SetClient(client)
+		}
 		if m.bottom != nil {
 			m.bottom.setHasRunner(true)
 		}
 	}
+}
+
+func (m *bubbleModel) setPermissionMode(mode permission.Mode) error {
+	if err := m.service.SetMode(mode); err != nil {
+		return err
+	}
+	if m.coordinator != nil {
+		m.coordinator.SetPermissionMode(mode)
+	}
+	return nil
 }
 
 func (m *bubbleModel) startTurn(prompt string) tea.Cmd {

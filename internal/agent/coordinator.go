@@ -346,11 +346,18 @@ func (c *Coordinator) SetParentRegistry(registry tool.Registry) {
 	c.parentRegistry = registry
 }
 
-// SetClient sets or updates the model client for running subagents.
+// SetClient dynamically updates the model client used by child subagents.
 func (c *Coordinator) SetClient(client model.Client) {
 	c.activeMu.Lock()
 	defer c.activeMu.Unlock()
 	c.client = client
+}
+
+// Client returns the current model client used by child subagents.
+func (c *Coordinator) Client() model.Client {
+	c.activeMu.RLock()
+	defer c.activeMu.RUnlock()
+	return c.client
 }
 
 // SetPermissionMode dynamically updates the permission mode for subagents.
@@ -360,6 +367,13 @@ func (c *Coordinator) SetPermissionMode(mode permission.Mode) {
 	if mode.Valid() {
 		c.permissionMode = mode
 	}
+}
+
+// PermissionMode returns the active permission mode configured for subagents.
+func (c *Coordinator) PermissionMode() permission.Mode {
+	c.activeMu.RLock()
+	defer c.activeMu.RUnlock()
+	return c.permissionMode
 }
 
 // SetPrompt dynamically updates the interactive permission prompt resolver for subagents.
@@ -374,6 +388,13 @@ func (c *Coordinator) SetCallGuard(guard toolcall.CallGuard) {
 	c.activeMu.Lock()
 	defer c.activeMu.Unlock()
 	c.guard = guard
+}
+
+// CallGuard returns the active call guard for subagents.
+func (c *Coordinator) CallGuard() toolcall.CallGuard {
+	c.activeMu.RLock()
+	defer c.activeMu.RUnlock()
+	return c.guard
 }
 
 func (c *Coordinator) emit(ctx context.Context, ev Event) {
@@ -510,4 +531,3 @@ func formatUserPrompt(req Request) string {
 	}
 	return b.String()
 }
-
