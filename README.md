@@ -249,7 +249,7 @@ Proton registers a suite of workspace-safe tools:
 
 | Tool | Category | Description |
 | :--- | :--- | :--- |
-| `read_file` | File System | Read workspace files with byte `offset`/`limit` pagination and `next_offset` continuation |
+| `read_file` | File System | Read UTF-8 workspace files with boundary-safe byte `offset`/`limit` pagination and `next_offset` continuation |
 | `write_file` | File System | Write file contents with automatic pre-edit checkpointing |
 | `search_replace` | File System | Exact block replacement in files with pre-edit checkpointing |
 | `apply_patch` | File System | Apply unified diff patches with pre-edit checkpointing |

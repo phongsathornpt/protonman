@@ -558,3 +558,42 @@ func TestPermissionDetailProviders(t *testing.T) {
 		t.Fatalf("grep with path PermissionDetail = %q, want docs", detail)
 	}
 }
+
+func TestReadFilePaginationPreservesUTF8Boundaries(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	writeTestFile(t, workspaceRoot.Root(), "utf8.txt", "A界B")
+	handler := NewReadFile(workspaceRoot)
+
+	first := executeJSON(t, handler, "utf8-page-1", map[string]any{"path": "utf8.txt", "limit": 2})
+	if !first.Truncated || first.NextOffset == nil || *first.NextOffset != 1 {
+		t.Fatalf("first continuation = truncated:%v next:%v", first.Truncated, first.NextOffset)
+	}
+	if !strings.HasPrefix(first.Output, "A\n[output truncated") {
+		t.Fatalf("first page = %q", first.Output)
+	}
+
+	second := executeJSON(t, handler, "utf8-page-2", map[string]any{"path": "utf8.txt", "offset": 1, "limit": 2})
+	if !second.Truncated || second.NextOffset == nil || *second.NextOffset != 4 {
+		t.Fatalf("second continuation = truncated:%v next:%v", second.Truncated, second.NextOffset)
+	}
+	if !strings.HasPrefix(second.Output, "界\n[output truncated") {
+		t.Fatalf("second page = %q", second.Output)
+	}
+
+	third := executeJSON(t, handler, "utf8-page-3", map[string]any{"path": "utf8.txt", "offset": 4, "limit": 2})
+	if third.Truncated || third.NextOffset != nil || third.Output != "B" {
+		t.Fatalf("third page = %+v", third)
+	}
+}
+
+func TestReadFileRejectsOffsetInsideUTF8CodePoint(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	writeTestFile(t, workspaceRoot.Root(), "utf8.txt", "A界B")
+	_, err := NewReadFile(workspaceRoot).Execute(
+		context.Background(),
+		newJSONCall(t, "utf8-split", "read_file", map[string]any{"path": "utf8.txt", "offset": 2, "limit": 2}),
+	)
+	if err == nil || !strings.Contains(err.Error(), "splits a UTF-8 code point") {
+		t.Fatalf("Execute() error = %v, want UTF-8 boundary rejection", err)
+	}
+}
