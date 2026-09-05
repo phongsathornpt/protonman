@@ -42,6 +42,16 @@ type grepInput struct {
 	Pattern string `json:"pattern"`
 	Path    string `json:"path"`
 	Include string `json:"include"`
+	Offset  int    `json:"offset,omitempty"`
+	Limit   int    `json:"limit,omitempty"`
+}
+
+type grepPageState struct {
+	offset  int
+	limit   int
+	seen    int
+	emitted int
+	output  *strings.Builder
 }
 
 // NewGrep returns the bounded regular-expression search adapter.
@@ -63,6 +73,17 @@ func (grepHandler) Definition() tool.Definition {
 				"include": map[string]any{
 					"type":        "string",
 					"description": "Optional filename glob, such as *.go",
+				},
+				"offset": map[string]any{
+					"type":        "integer",
+					"minimum":     0,
+					"description": "Match offset to skip; use next_offset from a truncated result",
+				},
+				"limit": map[string]any{
+					"type":        "integer",
+					"minimum":     1,
+					"maximum":     maxGrepResults,
+					"description": "Maximum matches to return; defaults to 100",
 				},
 			},
 			"required": []string{"pattern"},
@@ -103,6 +124,15 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 			return tool.Result{}, fmt.Errorf("invalid grep include glob: %w", err)
 		}
 	}
+	if input.Offset < 0 {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "grep offset must be non-negative")
+	}
+	if input.Limit < 0 || input.Limit > maxGrepResults {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "grep limit must be between 1 and 100")
+	}
+	if input.Limit == 0 {
+		input.Limit = maxGrepResults
+	}
 	searchPath := input.Path
 	if strings.TrimSpace(searchPath) == "" {
 		searchPath = "."
@@ -113,7 +143,11 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	}
 
 	var output strings.Builder
-	matchCount := 0
+	page := grepPageState{
+		offset: input.Offset,
+		limit:  input.Limit,
+		output: &output,
+	}
 	truncated := false
 	walkErr := filepath.WalkDir(resolvedPath, func(path string, entry os.DirEntry, walkErr error) error {
 		if err := ctx.Err(); err != nil {
@@ -144,17 +178,13 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 				return nil
 			}
 		}
-		fileMatches, scanErr := scanGrepFile(ctx, h.workspace, path, matcher, &output, &matchCount)
+		scanErr := scanGrepFile(ctx, h.workspace, path, matcher, &page)
 		if scanErr != nil {
 			if errors.Is(scanErr, errGrepLimit) {
 				truncated = true
 				return errGrepLimit
 			}
 			return scanErr
-		}
-		if fileMatches && (matchCount >= maxGrepResults || output.Len() >= maxGrepOutputBytes) {
-			truncated = true
-			return errGrepLimit
 		}
 		return nil
 	})
@@ -164,14 +194,19 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	if walkErr != nil {
 		return tool.Result{}, fmt.Errorf("grep workspace: %w", walkErr)
 	}
+
+	var nextOffset *int64
 	if truncated {
-		output.WriteString("[grep output truncated at configured limit]\n")
+		next := int64(input.Offset + page.emitted)
+		nextOffset = &next
+		output.WriteString(fmt.Sprintf("[grep output truncated; continue with offset=%d]\n", next))
 	}
 	return tool.Result{
-		CallID:    call.ID,
-		ToolName:  call.Name,
-		Output:    output.String(),
-		Truncated: truncated,
+		CallID:     call.ID,
+		ToolName:   call.Name,
+		Output:     output.String(),
+		Truncated:  truncated,
+		NextOffset: nextOffset,
 	}, nil
 }
 
@@ -180,18 +215,17 @@ func scanGrepFile(
 	workspaceRoot *workspace.Workspace,
 	path string,
 	matcher *regexp.Regexp,
-	output *strings.Builder,
-	matchCount *int,
-) (matchedFile bool, returnErr error) {
+	page *grepPageState,
+) (returnErr error) {
 	if err := workspaceRoot.CheckAbsoluteRead(ctx, path); err != nil {
 		if errors.Is(err, workspace.ErrProtectedPath) || errors.Is(err, workspace.ErrOutsideWorkspace) {
-			return false, nil
+			return nil
 		}
-		return false, err
+		return err
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		return false, fmt.Errorf("open %q: %w", path, err)
+		return fmt.Errorf("open %q: %w", path, err)
 	}
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil && returnErr == nil {
@@ -201,7 +235,7 @@ func scanGrepFile(
 
 	relative, err := workspaceRoot.RelRead(path)
 	if err != nil {
-		return false, fmt.Errorf("relative grep path: %w", err)
+		return fmt.Errorf("relative grep path: %w", err)
 	}
 	relative = filepath.ToSlash(relative)
 	scanner := bufio.NewScanner(io.LimitReader(file, maxEditFileBytes+1))
@@ -209,33 +243,34 @@ func scanGrepFile(
 	defer grepBufferPool.Put(bufPtr)
 	scanner.Buffer(*bufPtr, maxEditFileBytes)
 	lineNumber := 0
-	matchedFile = false
 	for scanner.Scan() {
 		if err := ctx.Err(); err != nil {
-			return false, fmt.Errorf("grep %q: %w", relative, err)
+			return fmt.Errorf("grep %q: %w", relative, err)
 		}
 		lineNumber++
 		lineBytes := scanner.Bytes()
 		if !matcher.Match(lineBytes) {
 			continue
 		}
-		matchedFile = true
-		*matchCount = *matchCount + 1
+		page.seen++
+		if page.seen <= page.offset {
+			continue
+		}
+		if page.emitted >= page.limit {
+			return errGrepLimit
+		}
 		line := truncateGrepLine(string(lineBytes))
 		entry := fmt.Sprintf("%s:%d:%s\n", relative, lineNumber, line)
-		if output.Len()+len(entry) > maxGrepOutputBytes {
-			return true, errGrepLimit
+		if page.output.Len()+len(entry) > maxGrepOutputBytes {
+			return errGrepLimit
 		}
-		output.WriteString(entry)
-		if *matchCount >= maxGrepResults {
-			return true, errGrepLimit
-		}
+		page.output.WriteString(entry)
+		page.emitted++
 	}
-	scanErr := scanner.Err()
-	if scanErr != nil {
-		return false, fmt.Errorf("scan %q: %w", relative, scanErr)
+	if scanErr := scanner.Err(); scanErr != nil {
+		return fmt.Errorf("scan %q: %w", relative, scanErr)
 	}
-	return matchedFile, nil
+	return nil
 }
 
 func truncateGrepLine(line string) string {

@@ -175,3 +175,54 @@ func TestGrepTool(t *testing.T) {
 		}
 	})
 }
+
+func TestGrepSupportsContinuationOffset(t *testing.T) {
+	wsDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(wsDir, "many.txt"), []byte("needle 1\nneedle 2\nneedle 3\nneedle 4\nneedle 5\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ws, err := workspace.New(wsDir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGrep(ws)
+
+	firstArgs, _ := json.Marshal(map[string]any{"pattern": "needle", "limit": 2})
+	firstCall, _ := tool.NewCall("grep-page-1", "grep", firstArgs)
+	first, err := handler.Execute(context.Background(), firstCall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !first.Truncated || first.NextOffset == nil || *first.NextOffset != 2 {
+		t.Fatalf("first continuation = truncated:%v next:%v", first.Truncated, first.NextOffset)
+	}
+	if !strings.Contains(first.Output, "many.txt:1:needle 1") || !strings.Contains(first.Output, "many.txt:2:needle 2") {
+		t.Fatalf("first output = %q", first.Output)
+	}
+	if strings.Contains(first.Output, "needle 3") {
+		t.Fatalf("first output leaked next page: %q", first.Output)
+	}
+
+	secondArgs, _ := json.Marshal(map[string]any{"pattern": "needle", "offset": 2, "limit": 2})
+	secondCall, _ := tool.NewCall("grep-page-2", "grep", secondArgs)
+	second, err := handler.Execute(context.Background(), secondCall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !second.Truncated || second.NextOffset == nil || *second.NextOffset != 4 {
+		t.Fatalf("second continuation = truncated:%v next:%v", second.Truncated, second.NextOffset)
+	}
+	if !strings.Contains(second.Output, "many.txt:3:needle 3") || !strings.Contains(second.Output, "many.txt:4:needle 4") {
+		t.Fatalf("second output = %q", second.Output)
+	}
+
+	thirdArgs, _ := json.Marshal(map[string]any{"pattern": "needle", "offset": 4, "limit": 2})
+	thirdCall, _ := tool.NewCall("grep-page-3", "grep", thirdArgs)
+	third, err := handler.Execute(context.Background(), thirdCall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if third.Truncated || third.NextOffset != nil || !strings.Contains(third.Output, "many.txt:5:needle 5") {
+		t.Fatalf("third page = %+v", third)
+	}
+}

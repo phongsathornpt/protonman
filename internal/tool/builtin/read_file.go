@@ -19,7 +19,9 @@ type readFileHandler struct {
 }
 
 type readFileInput struct {
-	Path string `json:"path"`
+	Path   string `json:"path"`
+	Offset int64  `json:"offset,omitempty"`
+	Limit  int    `json:"limit,omitempty"`
 }
 
 // NewReadFile returns the filesystem read adapter.
@@ -40,6 +42,17 @@ func (readFileHandler) Definition() tool.Definition {
 					"type":        "string",
 					"description": "Path to the file to read",
 				},
+				"offset": map[string]any{
+					"type":        "integer",
+					"minimum":     0,
+					"description": "Byte offset to start reading from; use next_offset from a truncated result",
+				},
+				"limit": map[string]any{
+					"type":        "integer",
+					"minimum":     1,
+					"maximum":     maxReadFileBytes,
+					"description": "Maximum bytes to return; defaults to 2 MiB",
+				},
 			},
 			"required": []string{"path"},
 		},
@@ -57,6 +70,15 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	input.Path = strings.TrimSpace(input.Path)
 	if input.Path == "" {
 		return tool.Result{}, fmt.Errorf("read_file path is required")
+	}
+	if input.Offset < 0 {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file offset must be non-negative")
+	}
+	if input.Limit < 0 || input.Limit > maxReadFileBytes {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file limit must be between 1 byte and 2 MiB")
+	}
+	if input.Limit == 0 {
+		input.Limit = maxReadFileBytes
 	}
 	path, err := h.workspace.ResolveRead(ctx, input.Path)
 	if err != nil {
@@ -88,42 +110,47 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	}
 
 	size := fileInfo.Size()
-	var contents []byte
-	var truncated bool
+	if input.Offset > 0 {
+		if _, err := file.Seek(input.Offset, io.SeekStart); err != nil {
+			_ = file.Close()
+			return tool.Result{}, fmt.Errorf("seek %q to byte %d: %w", input.Path, input.Offset, err)
+		}
+	}
 
-	if size > 0 && size <= maxReadFileBytes {
-		contents = make([]byte, size)
-		_, readErr := io.ReadFull(file, contents)
-		closeErr := file.Close()
-		if readErr != nil && readErr != io.EOF && readErr != io.ErrUnexpectedEOF {
-			return tool.Result{}, fmt.Errorf("read %q: %w", input.Path, readErr)
-		}
-		if closeErr != nil {
-			return tool.Result{}, fmt.Errorf("close %q: %w", input.Path, closeErr)
-		}
-	} else {
-		contents, err = io.ReadAll(io.LimitReader(file, maxReadFileBytes+1))
-		closeErr := file.Close()
-		if err != nil {
-			return tool.Result{}, fmt.Errorf("read %q: %w", input.Path, err)
-		}
-		if closeErr != nil {
-			return tool.Result{}, fmt.Errorf("close %q: %w", input.Path, closeErr)
-		}
-		if len(contents) > maxReadFileBytes {
-			truncated = true
-			contents = contents[:maxReadFileBytes]
-		}
+	remaining := size - input.Offset
+	if remaining < 0 {
+		remaining = 0
+	}
+	readBytes := remaining
+	if readBytes > int64(input.Limit) {
+		readBytes = int64(input.Limit)
+	}
+	contents := make([]byte, int(readBytes))
+	_, readErr := io.ReadFull(file, contents)
+	closeErr := file.Close()
+	if readErr != nil && readErr != io.EOF && readErr != io.ErrUnexpectedEOF {
+		return tool.Result{}, fmt.Errorf("read %q: %w", input.Path, readErr)
+	}
+	if closeErr != nil {
+		return tool.Result{}, fmt.Errorf("close %q: %w", input.Path, closeErr)
+	}
+
+	truncated := remaining > int64(input.Limit)
+	var nextOffset *int64
+	if truncated {
+		next := input.Offset + int64(len(contents))
+		nextOffset = &next
 	}
 	output := string(contents)
 	if truncated {
-		output += "\n[output truncated at 2 MiB]"
+		output += fmt.Sprintf("\n[output truncated; continue with offset=%d]", *nextOffset)
 	}
 
 	return tool.Result{
-		CallID:    call.ID,
-		ToolName:  call.Name,
-		Output:    output,
-		Truncated: truncated,
+		CallID:     call.ID,
+		ToolName:   call.Name,
+		Output:     output,
+		Truncated:  truncated,
+		NextOffset: nextOffset,
 	}, nil
 }

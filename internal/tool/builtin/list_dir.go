@@ -23,6 +23,8 @@ type listDirInput struct {
 	Path      string `json:"path"`
 	DirPath   string `json:"dir_path"`
 	Directory string `json:"directory"`
+	Offset    int    `json:"offset,omitempty"`
+	Limit     int    `json:"limit,omitempty"`
 }
 
 // NewListDir returns the protected-aware directory listing adapter.
@@ -50,6 +52,17 @@ func (listDirHandler) Definition() tool.Definition {
 				"directory": map[string]any{
 					"type":        "string",
 					"description": "Alias for path",
+				},
+				"offset": map[string]any{
+					"type":        "integer",
+					"minimum":     0,
+					"description": "Visible entry offset; use next_offset from a truncated result",
+				},
+				"limit": map[string]any{
+					"type":        "integer",
+					"minimum":     1,
+					"maximum":     maxDirectoryEntries,
+					"description": "Maximum visible entries to return; defaults to 1000",
 				},
 			},
 		},
@@ -93,6 +106,15 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 	if targetPath == "" {
 		targetPath = "."
 	}
+	if input.Offset < 0 {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "list_dir offset must be non-negative")
+	}
+	if input.Limit < 0 || input.Limit > maxDirectoryEntries {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "list_dir limit must be between 1 and 1000")
+	}
+	if input.Limit == 0 {
+		input.Limit = maxDirectoryEntries
+	}
 
 	resolvedPath, err := h.workspace.ResolveRead(ctx, targetPath)
 	if err != nil {
@@ -104,22 +126,19 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 	}
 
 	allocHint := len(entries)
-	if allocHint > maxDirectoryEntries {
-		allocHint = maxDirectoryEntries
+	if allocHint > input.Limit {
+		allocHint = input.Limit
 	}
 	var output strings.Builder
 	output.Grow(allocHint * 48)
 
 	emitted := 0
+	visibleSeen := 0
 	truncated := false
 
 	for _, entry := range entries {
 		if err := ctx.Err(); err != nil {
 			return tool.Result{}, fmt.Errorf("list %q: %w", targetPath, err)
-		}
-		if emitted >= maxDirectoryEntries {
-			truncated = true
-			break
 		}
 		childPath := filepath.Join(resolvedPath, entry.Name())
 		if h.workspace.IsProtected(childPath) {
@@ -127,12 +146,23 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 		}
 
 		entryType := entry.Type()
-
-		// Symlink handling with destination and directory indicator
 		if entryType&os.ModeSymlink != 0 {
 			if err := h.workspace.CheckAbsoluteRead(ctx, childPath); err != nil {
 				continue
 			}
+		}
+		if visibleSeen < input.Offset {
+			visibleSeen++
+			continue
+		}
+		if emitted >= input.Limit {
+			truncated = true
+			break
+		}
+		visibleSeen++
+
+		// Symlink handling with destination and directory indicator
+		if entryType&os.ModeSymlink != 0 {
 			target, readlinkErr := os.Readlink(childPath)
 			targetInfo, statErr := os.Stat(childPath)
 			isDir := statErr == nil && targetInfo.IsDir()
@@ -208,15 +238,21 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 
 	if emitted == 0 && !truncated {
 		output.WriteString("(empty directory)\n")
-	} else if truncated {
-		output.WriteString(fmt.Sprintf("[directory output truncated at %d entries]\n", maxDirectoryEntries))
+	}
+
+	var nextOffset *int64
+	if truncated {
+		next := int64(input.Offset + emitted)
+		nextOffset = &next
+		output.WriteString(fmt.Sprintf("[directory output truncated; continue with offset=%d]\n", next))
 	}
 
 	return tool.Result{
-		CallID:    call.ID,
-		ToolName:  call.Name,
-		Output:    output.String(),
-		Truncated: truncated,
+		CallID:     call.ID,
+		ToolName:   call.Name,
+		Output:     output.String(),
+		Truncated:  truncated,
+		NextOffset: nextOffset,
 	}, nil
 }
 
