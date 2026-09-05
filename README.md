@@ -342,6 +342,7 @@ api_key = ""
 | `PROTON_SESSION_ID` | Explicit session identifier to resume or create |
 | `PROTON_SANDBOX` | Override sandbox profile (`off`, `workspace`, `read-only`, `strict`) |
 | `PROTON_TELEMETRY` | Set to `stderr` for JSON lifecycle telemetry (redacts paths, commands, and arguments) |
+| `PROTON_DEBUG_LOG` | Set to a file path or `stderr` for opt-in JSON development diagnostics; disabled by default |
 
 ---
 
