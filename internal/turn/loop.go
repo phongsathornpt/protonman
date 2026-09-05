@@ -57,9 +57,34 @@ var (
 	ErrEmptyResponse = errors.New("model returned an empty response")
 	// ErrDuplicateToolCall indicates that one model response reused a call ID.
 	ErrDuplicateToolCall = errors.New("duplicate model tool call")
+	// ErrToolDispatchUnavailable indicates that a model requested tools when no
+	// tools were available for the current round.
+	ErrToolDispatchUnavailable = errors.New("tool dispatch unavailable")
 	// ErrUnresolvedToolCall indicates that a requested call had no execution result.
 	ErrUnresolvedToolCall = errors.New("unresolved model tool call")
 )
+
+type toolDispatchReason string
+
+const (
+	toolDispatchEnabled           toolDispatchReason = "enabled"
+	toolDispatchDisabledMaxRounds toolDispatchReason = "max_rounds"
+	toolDispatchDisabledNoTools   toolDispatchReason = "no_tools"
+)
+
+type toolDispatchState struct {
+	reason toolDispatchReason
+}
+
+func (s toolDispatchState) enabled() bool {
+	return s.reason == toolDispatchEnabled
+}
+
+type roundOutcome struct {
+	assistant  model.Message
+	executions []executedCall
+	dispatch   toolDispatchState
+}
 
 // EventKind identifies progress emitted by the application loop.
 type EventKind string
@@ -311,16 +336,27 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 
 		var tools []tool.Definition
 		reqMessages := model.CloneMessages(history)
+		dispatch := toolDispatchState{reason: toolDispatchDisabledNoTools}
 
 		if isMaxRound {
 			tools = nil
+			dispatch.reason = toolDispatchDisabledMaxRounds
 			reqMessages = append(reqMessages, model.Message{
 				Role:    model.RoleSystem,
 				Content: MaxRoundsPrompt,
 			})
 		} else {
 			tools = l.tools.Definitions()
+			if len(tools) > 0 {
+				dispatch.reason = toolDispatchEnabled
+			}
 		}
+		slog.DebugContext(ctx, "turn tool dispatch state",
+			"round", round,
+			"enabled", dispatch.enabled(),
+			"reason", dispatch.reason,
+			"published_tools", len(tools),
+		)
 
 		request := model.Request{
 			Messages: reqMessages,
@@ -330,24 +366,32 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			terminalReason = "request_validation_failed"
 			return l.fail(ctx, sink, round, err)
 		}
-		assistant, executions, err := l.runRound(ctx, round, request, sink)
+		outcome, err := l.runRound(ctx, round, request, dispatch, sink)
 		if err != nil {
 			terminalReason = "round_failed"
 			return l.fail(ctx, sink, round, err)
 		}
+		assistant := outcome.assistant
+		executions := outcome.executions
 		maxRoundFallback := false
-		if len(assistant.ToolCalls) > 0 && len(executions) == 0 {
-			if !isMaxRound {
-				err := fmt.Errorf("%w: model requested %d tool calls after dispatch was disabled", ErrUnresolvedToolCall, len(assistant.ToolCalls))
-				terminalReason = "unresolved_tool_call"
+		if len(assistant.ToolCalls) > 0 && !outcome.dispatch.enabled() {
+			switch outcome.dispatch.reason {
+			case toolDispatchDisabledMaxRounds:
+				assistant, err = finalizeMaxRoundToolCallResponse(ctx, sink, round, assistant)
+				if err != nil {
+					terminalReason = "max_round_fallback_failed"
+					return l.fail(ctx, sink, round, err)
+				}
+				maxRoundFallback = true
+			case toolDispatchDisabledNoTools:
+				err := fmt.Errorf("%w: model requested %d tool calls while no tools were available", ErrToolDispatchUnavailable, len(assistant.ToolCalls))
+				terminalReason = "tool_dispatch_unavailable"
 				return l.fail(ctx, sink, round, err)
 			}
-			assistant, err = finalizeMaxRoundToolCallResponse(ctx, sink, round, assistant)
-			if err != nil {
-				terminalReason = "max_round_fallback_failed"
-				return l.fail(ctx, sink, round, err)
-			}
-			maxRoundFallback = true
+		} else if len(assistant.ToolCalls) > 0 && len(executions) == 0 {
+			err := fmt.Errorf("%w: model requested %d tool calls after dispatch completed", ErrUnresolvedToolCall, len(assistant.ToolCalls))
+			terminalReason = "unresolved_tool_call"
+			return l.fail(ctx, sink, round, err)
 		}
 		history = append(history, assistant)
 		turnMessages = append(turnMessages, assistant)
@@ -439,8 +483,9 @@ func (l *Loop) runRound(
 	parent context.Context,
 	round int,
 	request model.Request,
+	dispatch toolDispatchState,
 	sink Sink,
-) (model.Message, []executedCall, error) {
+) (roundOutcome, error) {
 	roundContext, cancel := l.newRoundContext(parent)
 	defer cancel()
 
@@ -450,12 +495,12 @@ func (l *Loop) runRound(
 			"round", round,
 			"error_type", fmt.Sprintf("%T", err),
 		)
-		return model.Message{}, nil, err
+		return roundOutcome{}, err
 	}
 	seenIDs := make(map[string]struct{}, len(requestedCalls))
 	for _, requestedCall := range requestedCalls {
 		if _, exists := seenIDs[requestedCall.ID]; exists {
-			return model.Message{}, nil, fmt.Errorf("%w: %q", ErrDuplicateToolCall, requestedCall.ID)
+			return roundOutcome{}, fmt.Errorf("%w: %q", ErrDuplicateToolCall, requestedCall.ID)
 		}
 		seenIDs[requestedCall.ID] = struct{}{}
 	}
@@ -464,13 +509,22 @@ func (l *Loop) runRound(
 		"assistant_bytes", len(assistant.Content),
 		"tool_calls", len(requestedCalls),
 	)
-	if len(requestedCalls) == 0 || len(request.Tools) == 0 {
+	if len(requestedCalls) == 0 || !dispatch.enabled() {
 		slog.DebugContext(parent, "turn round has no tool dispatch",
 			"round", round,
 			"requested_tool_calls", len(requestedCalls),
 			"published_tools", len(request.Tools),
+			"dispatch_enabled", dispatch.enabled(),
+			"dispatch_disabled_reason", dispatch.reason,
 		)
-		return assistant, []executedCall{}, nil
+		return roundOutcome{
+			assistant:  assistant,
+			executions: []executedCall{},
+			dispatch:   dispatch,
+		}, nil
+	}
+	if len(request.Tools) == 0 {
+		return roundOutcome{}, fmt.Errorf("%w: dispatch enabled without published tools", ErrInvalidLoop)
 	}
 
 	calls := make([]tool.Call, 0, len(requestedCalls))
@@ -485,7 +539,7 @@ func (l *Loop) runRound(
 				"round", round,
 				"error_type", fmt.Sprintf("%T", err),
 			)
-			return model.Message{}, nil, fmt.Errorf("translate model tool call: %w", err)
+			return roundOutcome{}, fmt.Errorf("translate model tool call: %w", err)
 		}
 		if err := emit(roundContext, sink, Event{
 			Kind:  EventToolCall,
@@ -496,7 +550,7 @@ func (l *Loop) runRound(
 				"round", round,
 				"error_type", fmt.Sprintf("%T", err),
 			)
-			return model.Message{}, nil, err
+			return roundOutcome{}, err
 		}
 		calls = append(calls, call)
 	}
@@ -527,10 +581,10 @@ func (l *Loop) runRound(
 					"round", round,
 					"error_type", fmt.Sprintf("%T", emitErr),
 				)
-				return model.Message{}, nil, emitErr
+				return roundOutcome{}, emitErr
 			}
 		}
-		return model.Message{}, nil, fmt.Errorf("execute model round %d: %w", round, err)
+		return roundOutcome{}, fmt.Errorf("execute model round %d: %w", round, err)
 	}
 	for _, execution := range executions {
 		if err := emit(roundContext, sink, Event{
@@ -544,10 +598,14 @@ func (l *Loop) runRound(
 				"round", round,
 				"error_type", fmt.Sprintf("%T", err),
 			)
-			return model.Message{}, nil, err
+			return roundOutcome{}, err
 		}
 	}
-	return assistant, executions, nil
+	return roundOutcome{
+		assistant:  assistant,
+		executions: executions,
+		dispatch:   dispatch,
+	}, nil
 }
 
 func (l *Loop) newRoundContext(parent context.Context) (context.Context, context.CancelFunc) {
