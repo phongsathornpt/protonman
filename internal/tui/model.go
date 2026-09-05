@@ -71,6 +71,7 @@ type bubbleModel struct {
 	activeProvider  string
 	providers       map[string]config.ProviderConfig
 	maxRounds       int
+	agentProfile    string
 	sessionID       string
 	modelsCatalog   []model.RemoteModel
 

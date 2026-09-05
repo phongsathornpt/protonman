@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
@@ -29,6 +30,7 @@ var slashCatalog = []slashCommand{
 	{name: "help", description: "list commands"},
 	{name: "tools", description: "list tools"},
 	{name: "skills", aliases: []string{"skill"}, description: "browse, activate, or toggle agent skills (/skills [name|active|toggle])", takesArgs: true},
+	{name: "agent", aliases: []string{"profile"}, description: "show or set agent profile (/agent [pow|dex|int|worker|explorer|reviewer])", takesArgs: true},
 	{name: "mode", description: "show or set permission mode", takesArgs: true},
 	{name: "ask", description: "switch to ask permission mode"},
 	{name: "always-approve", aliases: []string{"yolo"}, description: "allow non-denied calls"},
@@ -637,6 +639,8 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		}
 		m.refreshViewport()
 		return nil
+	case "agent", "profile":
+		return m.handleAgentCommand(argument)
 	case "call":
 		return m.startCall(parts)
 	case "quit", "exit":
@@ -860,4 +864,51 @@ func (m *bubbleModel) selectModelDirect(modelID string) tea.Cmd {
 		}
 	}
 	return saveDefaultModelCmd(prov, modelID)
+}
+
+func (m *bubbleModel) handleAgentCommand(argument string) tea.Cmd {
+	arg := strings.TrimSpace(argument)
+	if arg == "" {
+		current := m.agentProfile
+		if current == "" {
+			current = "default"
+		}
+		m.appendLine(fmt.Sprintf("Active agent profile: %s", commandStyle.Render(current)))
+		m.appendLine("Available profiles:")
+		m.appendLine("  pow      - High-velocity, direct execution (action-first, minimal code)")
+		m.appendLine("  dex      - Defensive engineering, zero regression (TDD, thorough checks)")
+		m.appendLine("  int      - Deep reasoning & systems architect (YAGNI, root cause analysis)")
+		m.appendLine("  worker   - General-purpose mutating coding worker")
+		m.appendLine("  explorer - Read-only codebase and web search")
+		m.appendLine("  reviewer - Code, security, and architecture review")
+		m.appendLine("Switch profile: /agent <pow|dex|int|worker|explorer|reviewer>")
+		m.refreshViewport()
+		return nil
+	}
+
+	prof, err := agent.ParseProfile(arg)
+	if err != nil {
+		m.appendError(err.Error())
+		m.refreshViewport()
+		return nil
+	}
+
+	m.agentProfile = string(prof)
+	promptContent := agent.SystemPromptForProfile(prof)
+
+	if len(m.messages) == 0 {
+		m.messages = []model.Message{
+			{Role: model.RoleSystem, Content: promptContent},
+		}
+	} else if m.messages[0].Role == model.RoleSystem {
+		m.messages[0].Content = promptContent
+	} else {
+		m.messages = append([]model.Message{
+			{Role: model.RoleSystem, Content: promptContent},
+		}, m.messages...)
+	}
+
+	m.appendLine(successStyle.Render(fmt.Sprintf("Agent profile switched to %s.", prof)))
+	m.refreshViewport()
+	return nil
 }
