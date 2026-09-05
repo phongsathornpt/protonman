@@ -10,6 +10,7 @@ import (
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
+	"github.com/projectTHORN/proton/internal/toolcall"
 )
 
 func TestLoopForcesSynthesisAfterRepeatedNoProgressRead(t *testing.T) {
@@ -231,5 +232,84 @@ func TestSemanticCallHashCanonicalizesJSONObjectOrder(t *testing.T) {
 	}
 	if left != right {
 		t.Fatal("semantic hashes differ for equivalent JSON objects")
+	}
+}
+
+func TestLoopSuppressesRepeatedPermissionPrompt(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{events: repeatedReadEvents("deny-1")},
+		{events: repeatedReadEvents("deny-2")},
+		{events: []model.Event{{Kind: model.EventTextDelta, Text: "The read was denied."}, {Kind: model.EventDone}}},
+	}}
+	handler := &recordingHandler{definition: readFileDefinition()}
+	policy, err := permission.NewPolicy(permission.Config{Default: permission.ActionAsk})
+	if err != nil {
+		t.Fatalf("NewPolicy() error = %v", err)
+	}
+	promptCalls := 0
+	service, err := toolcall.NewService(
+		&recordingRegistry{handler: handler},
+		policy,
+		toolcall.WithMode(permission.ModeAsk),
+		toolcall.WithPrompt(func(context.Context, permission.Request) (permission.Resolution, error) {
+			promptCalls++
+			return permission.Resolution{Action: permission.ActionDeny}, nil
+		}),
+	)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	loop, err := NewLoop(client, service)
+	if err != nil {
+		t.Fatalf("NewLoop() error = %v", err)
+	}
+
+	result, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "read README"}}, nil)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if promptCalls != 1 {
+		t.Fatalf("permission prompts = %d, want 1", promptCalls)
+	}
+	if len(handler.calls) != 0 {
+		t.Fatalf("handler calls = %d, want 0", len(handler.calls))
+	}
+	if result.Rounds != 3 {
+		t.Fatalf("rounds = %d, want 3", result.Rounds)
+	}
+	if len(client.requests[2].Tools) != 0 {
+		t.Fatalf("synthesis tools = %d, want 0", len(client.requests[2].Tools))
+	}
+}
+
+func TestProgressGuardSuppressesOnlyStalledCall(t *testing.T) {
+	guard := newProgressGuard([]tool.Definition{
+		{Name: "read_file", Kind: tool.KindRead},
+		{Name: "grep", Kind: tool.KindGrep},
+	}, 2)
+	dead := tool.Call{ID: "dead-1", Name: "read_file", Arguments: json.RawMessage(`{"path":"a.txt"}`)}
+	for i := 0; i < 2; i++ {
+		dead.ID = fmt.Sprintf("dead-%d", i+1)
+		execution := executedCall{call: dead, result: tool.Result{CallID: dead.ID, ToolName: dead.Name, Output: "same"}}
+		_, _, err := guard.observe(execution)
+		if err != nil {
+			t.Fatalf("observe dead call: %v", err)
+		}
+	}
+	dead.ID = "dead-3"
+	suppressed, err := guard.suppress(dead)
+	if err != nil || suppressed == nil {
+		t.Fatalf("dead suppress = %#v, err = %v", suppressed, err)
+	}
+	if suppressed.result.Failure == nil || suppressed.result.Failure.Code != tool.ErrorCodeNoProgress {
+		t.Fatalf("suppressed failure = %#v", suppressed.result.Failure)
+	}
+	live := tool.Call{ID: "live-1", Name: "grep", Arguments: json.RawMessage(`{"pattern":"TODO"}`)}
+	allowed, err := guard.suppress(live)
+	if err != nil {
+		t.Fatalf("live suppress error = %v", err)
+	}
+	if allowed != nil {
+		t.Fatalf("live call unexpectedly suppressed: %#v", allowed)
 	}
 }

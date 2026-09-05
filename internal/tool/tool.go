@@ -52,6 +52,8 @@ const (
 	ErrorCodeProtectedPath ErrorCode = "protected_path"
 	// ErrorCodeOutsideWorkspace indicates that a path escaped the workspace.
 	ErrorCodeOutsideWorkspace ErrorCode = "outside_workspace"
+	// ErrorCodeNoProgress indicates that loop protection suppressed a repeated call.
+	ErrorCodeNoProgress ErrorCode = "no_progress"
 	// ErrorCodeExecution is the safe fallback for handler failures.
 	ErrorCodeExecution ErrorCode = "execution_error"
 )

@@ -14,9 +14,12 @@ const (
 )
 
 type progressObservation struct {
-	epoch      uint64
-	resultHash [sha256.Size]byte
-	count      int
+	epoch       uint64
+	resultHash  [sha256.Size]byte
+	count       int
+	failure     bool
+	retryable   bool
+	failureCode tool.ErrorCode
 }
 
 type progressGuard struct {
@@ -48,6 +51,10 @@ func (g *progressGuard) observeRound(executions []executedCall) (bool, error) {
 	allStalled := true
 	tracked := false
 	for _, execution := range executions {
+		if execution.suppressed {
+			tracked = true
+			continue
+		}
 		stalled, isTracked, err := g.observe(execution)
 		if err != nil {
 			return false, err
@@ -87,11 +94,17 @@ func (g *progressGuard) observe(execution executedCall) (stalled bool, tracked b
 
 	observation, exists := g.observations[callHash]
 	if !exists || observation.epoch != g.epoch || observation.resultHash != resultHash {
-		g.observations[callHash] = progressObservation{
+		observation := progressObservation{
 			epoch:      g.epoch,
 			resultHash: resultHash,
 			count:      1,
 		}
+		if execution.result.Failure != nil {
+			observation.failure = true
+			observation.retryable = execution.result.Failure.Retryable
+			observation.failureCode = execution.result.Failure.Code
+		}
+		g.observations[callHash] = observation
 		return false, true, nil
 	}
 
@@ -102,6 +115,52 @@ func (g *progressGuard) observe(execution executedCall) (stalled bool, tracked b
 		limit = g.maxRetryableFailures
 	}
 	return limit > 0 && observation.count >= limit, true, nil
+}
+
+func (g *progressGuard) suppress(call tool.Call) (*executedCall, error) {
+	if g == nil || g.maxIdenticalResults <= 0 {
+		return nil, nil
+	}
+	callHash, err := semanticCallHash(call)
+	if err != nil {
+		return nil, err
+	}
+	observation, ok := g.observations[callHash]
+	if !ok || observation.epoch != g.epoch {
+		return nil, nil
+	}
+
+	suppress := false
+	switch {
+	case observation.failure && !observation.retryable:
+		suppress = observation.count >= 1
+	case observation.failure && observation.retryable:
+		suppress = g.maxRetryableFailures > 0 && observation.count >= g.maxRetryableFailures
+	default:
+		suppress = observation.count >= g.maxIdenticalResults
+	}
+	if !suppress {
+		return nil, nil
+	}
+
+	code := tool.ErrorCodeNoProgress
+	message := "identical tool call was suppressed after repeated no-progress results"
+	denied := false
+	if observation.failure && !observation.retryable {
+		code = observation.failureCode
+		message = "identical tool call was suppressed after a previous non-retryable failure"
+		denied = code == tool.ErrorCodePermissionDenied
+	}
+	result := tool.Result{
+		CallID:   call.ID,
+		ToolName: call.Name,
+		Denied:   denied,
+		Failure: &tool.Failure{
+			Code:    code,
+			Message: message,
+		},
+	}
+	return &executedCall{call: call, result: result, suppressed: true}, nil
 }
 
 func shouldTrackNoProgress(definition tool.Definition, result tool.Result) bool {
