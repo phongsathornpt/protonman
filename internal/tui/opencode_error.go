@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/projectTHORN/proton/internal/model"
+	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
 
 // OpenCodeErrorKind classifies errors matching the OpenCode error taxonomy.
@@ -31,6 +32,7 @@ const (
 	ErrorKindConfigInvalid    OpenCodeErrorKind = "config_invalid"
 	ErrorKindConfigTypo       OpenCodeErrorKind = "config_typo"
 	ErrorKindToolFailed       OpenCodeErrorKind = "tool_failed"
+	ErrorKindMaxRounds        OpenCodeErrorKind = "max_rounds"
 	ErrorKindPermissionDenied OpenCodeErrorKind = "permission_denied"
 	ErrorKindCancelled        OpenCodeErrorKind = "cancelled"
 	ErrorKindGeneric          OpenCodeErrorKind = "generic"
@@ -280,7 +282,24 @@ func ClassifyOpenCodeError(err error, activeProvider string, activeModel string)
 
 	raw := err.Error()
 
-	// 2. Permission Denials
+	// 2. Maximum tool rounds / provider ignored the no-tools synthesis request.
+	if errors.Is(err, applicationturn.ErrUnresolvedToolCall) {
+		return ClassifiedError{
+			Kind:    ErrorKindMaxRounds,
+			Title:   "Maximum Tool Rounds Reached",
+			Badge:   "MAX_ROUNDS",
+			Message: "The model requested another tool after tool execution was disabled.",
+			Suggestions: []string{
+				"Run /new to start a fresh turn",
+				"Increase agent.max_rounds if this task needs more tool rounds",
+				"Ask the model to summarize its progress before continuing",
+			},
+			RawDetails: raw,
+			Retryable:  true,
+		}
+	}
+
+	// 3. Permission Denials
 	if strings.Contains(raw, "permission denied") || strings.Contains(raw, "QuestionRejectedError") || strings.Contains(raw, "specified a rule") {
 		return ClassifiedError{
 			Kind:        ErrorKindPermissionDenied,

@@ -3,8 +3,11 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+
+	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
 
 func TestClassifyOpenCodeError_Cancellation(t *testing.T) {
@@ -15,6 +18,23 @@ func TestClassifyOpenCodeError_Cancellation(t *testing.T) {
 	}
 	if !classified.Retryable {
 		t.Fatal("expected cancellation to be retryable")
+	}
+}
+
+func TestClassifyOpenCodeError_UnresolvedToolCall(t *testing.T) {
+	err := fmt.Errorf("turn failed: %w: model requested another tool", applicationturn.ErrUnresolvedToolCall)
+	classified := ClassifyOpenCodeError(err, "opencode", "model")
+	if classified.Kind != ErrorKindMaxRounds {
+		t.Fatalf("expected ErrorKindMaxRounds, got %v", classified.Kind)
+	}
+	if classified.Badge != "MAX_ROUNDS" {
+		t.Fatalf("badge = %q, want MAX_ROUNDS", classified.Badge)
+	}
+	if !strings.Contains(strings.Join(classified.Suggestions, "\n"), "agent.max_rounds") {
+		t.Fatalf("suggestions = %v, want agent.max_rounds guidance", classified.Suggestions)
+	}
+	if !strings.Contains(classified.RawDetails, "unresolved model tool call") {
+		t.Fatalf("raw details = %q, want sentinel details", classified.RawDetails)
 	}
 }
 
