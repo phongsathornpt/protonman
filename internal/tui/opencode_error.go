@@ -32,6 +32,7 @@ const (
 	ErrorKindConfigInvalid    OpenCodeErrorKind = "config_invalid"
 	ErrorKindConfigTypo       OpenCodeErrorKind = "config_typo"
 	ErrorKindToolFailed       OpenCodeErrorKind = "tool_failed"
+	ErrorKindToolDispatch     OpenCodeErrorKind = "tool_dispatch"
 	ErrorKindMaxRounds        OpenCodeErrorKind = "max_rounds"
 	ErrorKindPermissionDenied OpenCodeErrorKind = "permission_denied"
 	ErrorKindCancelled        OpenCodeErrorKind = "cancelled"
@@ -283,7 +284,7 @@ func ClassifyOpenCodeError(err error, activeProvider string, activeModel string)
 	raw := err.Error()
 
 	// 2. Maximum tool rounds / provider ignored the no-tools synthesis request.
-	if errors.Is(err, applicationturn.ErrUnresolvedToolCall) {
+	if errors.Is(err, applicationturn.ErrMaxRounds) {
 		return ClassifiedError{
 			Kind:    ErrorKindMaxRounds,
 			Title:   "Maximum Tool Rounds Reached",
@@ -293,6 +294,37 @@ func ClassifyOpenCodeError(err error, activeProvider string, activeModel string)
 				"Run /new to start a fresh turn",
 				"Increase agent.max_rounds if this task needs more tool rounds",
 				"Ask the model to summarize its progress before continuing",
+			},
+			RawDetails: raw,
+			Retryable:  true,
+		}
+	}
+
+	if errors.Is(err, applicationturn.ErrToolDispatchUnavailable) {
+		return ClassifiedError{
+			Kind:    ErrorKindToolDispatch,
+			Title:   "Tool Dispatch Unavailable",
+			Badge:   "TOOL_DISPATCH",
+			Message: "The model requested a tool, but no tools were available for this turn.",
+			Suggestions: []string{
+				"Check that the active runner has a registered tool set",
+				"Verify the selected provider/model supports the configured tools",
+				"Run /new after correcting the tool configuration",
+			},
+			RawDetails: raw,
+			Retryable:  true,
+		}
+	}
+
+	if errors.Is(err, applicationturn.ErrUnresolvedToolCall) {
+		return ClassifiedError{
+			Kind:    ErrorKindToolDispatch,
+			Title:   "Unresolved Tool Call",
+			Badge:   "TOOL_PROTOCOL",
+			Message: "The model returned a tool call that the turn loop could not resolve.",
+			Suggestions: []string{
+				"Run /new to start a fresh turn",
+				"Retry with a model that supports the configured tool protocol",
 			},
 			RawDetails: raw,
 			Retryable:  true,
