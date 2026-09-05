@@ -79,6 +79,7 @@ func (l *OSLauncher) Command(ctx context.Context, dir string, command string) (*
 		profile := seatbeltProfile(l.Profile, dir)
 		cmd := exec.CommandContext(ctx, "sandbox-exec", "-p", profile, "sh", "-c", command)
 		cmd.Dir = dir
+		configureCommand(cmd)
 		logSandboxSelected(ctx, startedAt, "sandbox-exec", cmd.Path)
 		return cmd, nil
 	case "linux":
@@ -124,6 +125,7 @@ func bareShell(ctx context.Context, dir string, command string) *exec.Cmd {
 		cmd = exec.CommandContext(ctx, "cmd.exe", "/C", command)
 	}
 	cmd.Dir = dir
+	configureCommand(cmd)
 	return cmd
 }
 
@@ -150,6 +152,7 @@ func bwrapCommand(ctx context.Context, bwrap string, profile Profile, dir string
 	args = append(args, "--", "sh", "-c", command)
 	cmd := exec.CommandContext(ctx, bwrap, args...)
 	cmd.Dir = dir
+	configureCommand(cmd)
 	return cmd
 }
 

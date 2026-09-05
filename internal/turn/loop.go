@@ -22,7 +22,10 @@ import (
 
 const (
 	// DefaultMaxRounds is the default maximum number of rounds per turn.
-	DefaultMaxRounds       = 20
+	DefaultMaxRounds = 20
+	// DefaultRoundTimeout bounds a turn round when callers do not provide a
+	// stricter timeout.
+	DefaultRoundTimeout    = 5 * time.Minute
 	defaultMaxRounds       = DefaultMaxRounds
 	defaultMaxParallelRead = 4
 	skillPromptMarker      = "<!-- proton:skill-catalog -->"
@@ -188,6 +191,7 @@ func NewLoop(client model.Client, tools *toolcall.Service, options ...Option) (*
 		client:           client,
 		tools:            tools,
 		maxRounds:        defaultMaxRounds,
+		roundTimeout:     DefaultRoundTimeout,
 		maxParallelReads: defaultMaxParallelRead,
 	}
 	for _, option := range options {

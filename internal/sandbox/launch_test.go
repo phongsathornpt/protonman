@@ -24,6 +24,23 @@ func TestOffProfileUsesBareShell(t *testing.T) {
 	}
 }
 
+func TestCommandsConfigureCancellationContainment(t *testing.T) {
+	profile, err := NewProfile(NameOff, "")
+	if err != nil {
+		t.Fatalf("NewProfile() error = %v", err)
+	}
+	cmd, err := NewOSLauncher(profile).Command(context.Background(), t.TempDir(), "true")
+	if err != nil {
+		t.Fatalf("Command() error = %v", err)
+	}
+	if cmd.WaitDelay != commandWaitDelay {
+		t.Fatalf("WaitDelay = %s, want %s", cmd.WaitDelay, commandWaitDelay)
+	}
+	if cmd.Cancel == nil {
+		t.Fatal("Cancel = nil, want process cancellation hook")
+	}
+}
+
 func TestConfiningProfileFailsClosedWhenToolsMissing(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("windows launcher is fail-closed by design")

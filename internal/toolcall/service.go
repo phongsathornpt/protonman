@@ -35,6 +35,12 @@ var ErrPermissionDenied = errors.New("permission denied")
 // Option configures a Service during construction.
 type Option func(*Service) error
 
+const (
+	// DefaultExecutionTimeout bounds one permission-approved tool call when the
+	// caller does not provide a stricter context.
+	DefaultExecutionTimeout = 2 * time.Minute
+)
+
 // WithMode sets the initial permission mode.
 func WithMode(mode permission.Mode) Option {
 	return func(service *Service) error {
@@ -65,6 +71,19 @@ func WithPrompt(prompt PermissionPrompt) Option {
 	}
 }
 
+// WithExecutionTimeout bounds permission resolution and handler execution.
+// Zero disables the service-level bound; callers should normally keep the
+// non-zero default for process-backed tools.
+func WithExecutionTimeout(timeout time.Duration) Option {
+	return func(service *Service) error {
+		if timeout < 0 {
+			return fmt.Errorf("%w: execution timeout cannot be negative", ErrInvalidService)
+		}
+		service.executionTimeout = timeout
+		return nil
+	}
+}
+
 // Service is the application boundary for every tool call.
 type Service struct {
 	registry tool.Registry
@@ -76,6 +95,8 @@ type Service struct {
 	prompt PermissionPrompt
 	guard  CallGuard
 	grants map[permission.GrantKey]struct{}
+
+	executionTimeout time.Duration
 }
 
 // NewService builds a permission-aware tool-call service.
@@ -88,10 +109,11 @@ func NewService(registry tool.Registry, policy *permission.Policy, options ...Op
 	}
 
 	service := &Service{
-		registry: registry,
-		policy:   policy,
-		mode:     permission.ModeAsk,
-		grants:   make(map[permission.GrantKey]struct{}),
+		registry:         registry,
+		policy:           policy,
+		mode:             permission.ModeAsk,
+		grants:           make(map[permission.GrantKey]struct{}),
+		executionTimeout: DefaultExecutionTimeout,
 	}
 	for _, option := range options {
 		if option == nil {
@@ -113,13 +135,14 @@ func (s *Service) Clone() *Service {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return &Service{
-		registry: s.registry,
-		policy:   s.policy,
-		observer: s.observer,
-		mode:     s.mode,
-		prompt:   s.prompt,
-		guard:    s.guard,
-		grants:   make(map[permission.GrantKey]struct{}),
+		registry:         s.registry,
+		policy:           s.policy,
+		observer:         s.observer,
+		mode:             s.mode,
+		prompt:           s.prompt,
+		guard:            s.guard,
+		grants:           make(map[permission.GrantKey]struct{}),
+		executionTimeout: s.executionTimeout,
 	}
 }
 
@@ -187,6 +210,8 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		s.observeCallResult(ctx, telemetry, result, wrappedErr)
 		return result, wrappedErr
 	}
+	executionCtx, cancel := s.executionContext(ctx)
+	defer cancel()
 
 	handler, ok := s.registry.Lookup(call.Name)
 	if !ok {
@@ -215,7 +240,7 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		Arguments: append(json.RawMessage(nil), call.Arguments...),
 	}
 
-	if guardErr := s.guardCall(ctx, request); guardErr != nil {
+	if guardErr := s.guardCall(executionCtx, request); guardErr != nil {
 		resolution := permission.Resolution{
 			Action: permission.ActionDeny,
 			Reason: guardErr.Error(),
@@ -232,7 +257,7 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		return result, permissionErr
 	}
 
-	resolution, authorizeErr := s.authorize(ctx, request)
+	resolution, authorizeErr := s.authorize(executionCtx, request)
 	s.observePermission(ctx, telemetry, resolution)
 	if authorizeErr != nil {
 		result := tool.Result{
@@ -259,7 +284,7 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		s.rememberGrant(request.Key())
 	}
 
-	result, err := handler.Execute(ctx, call)
+	result, err := executeHandler(executionCtx, handler, call)
 	if result.CallID == "" {
 		result.CallID = call.ID
 	}
@@ -276,6 +301,26 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 	}
 	s.observeCallResult(ctx, telemetry, result, nil)
 	return result, nil
+}
+
+func (s *Service) executionContext(parent context.Context) (context.Context, context.CancelFunc) {
+	s.mu.RLock()
+	timeout := s.executionTimeout
+	s.mu.RUnlock()
+	if timeout <= 0 {
+		return parent, func() {}
+	}
+	return context.WithTimeout(parent, timeout)
+}
+
+func executeHandler(ctx context.Context, handler tool.Handler, call tool.Call) (result tool.Result, err error) {
+	defer func() {
+		if recover() != nil {
+			result = tool.Result{}
+			err = errors.New("tool handler panicked")
+		}
+	}()
+	return handler.Execute(ctx, call)
 }
 
 func (s *Service) guardCall(ctx context.Context, request permission.Request) error {
