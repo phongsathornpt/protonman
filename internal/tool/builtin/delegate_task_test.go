@@ -160,4 +160,39 @@ func TestDelegateTask_Execute(t *testing.T) {
 			t.Fatal("expected cancellation error")
 		}
 	})
+
+	t.Run("parentID propagation", func(t *testing.T) {
+		var receivedParentID string
+		parentCoord := agent.NewCoordinator(
+			nil,
+			nil,
+			nil,
+			nil,
+			agent.WithEventSink(func(ctx context.Context, ev agent.Event) error {
+				if ev.Kind == agent.EventAgentStarted {
+					receivedParentID = ev.ParentID
+				}
+				return nil
+			}),
+			agent.WithRunnerFactory(func(p agent.Profile, tools *toolcall.Service) (turn.Runner, error) {
+				return mockSubagentRunner{content: "ok"}, nil
+			}),
+		)
+		defer parentCoord.Close()
+
+		pHandler := NewDelegateTask(parentCoord, "session-xyz")
+		args, _ := json.Marshal(map[string]any{
+			"profile": "explorer",
+			"task":    "test task",
+		})
+		call, _ := tool.NewCall("call-parent", "delegate_task", args)
+		_, err := pHandler.Execute(ctx, call)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if receivedParentID != "session-xyz" {
+			t.Errorf("receivedParentID = %q, want 'session-xyz'", receivedParentID)
+		}
+	})
 }
+

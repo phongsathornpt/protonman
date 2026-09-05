@@ -51,6 +51,10 @@ type Coordinator struct {
 	workspace      *workspace.Workspace
 	policy         *permission.Policy
 
+	permissionMode permission.Mode
+	prompt         toolcall.PermissionPrompt
+	guard          toolcall.CallGuard
+
 	sem      chan struct{}
 	wsLock   sync.RWMutex
 	activeMu sync.RWMutex
@@ -117,6 +121,29 @@ func WithEventSink(sink EventSink) Option {
 func WithRunnerFactory(factory RunnerFactory) Option {
 	return func(c *Coordinator) {
 		c.runnerFactory = factory
+	}
+}
+
+// WithPermissionMode sets the baseline permission mode for subagents.
+func WithPermissionMode(mode permission.Mode) Option {
+	return func(c *Coordinator) {
+		if mode.Valid() {
+			c.permissionMode = mode
+		}
+	}
+}
+
+// WithPermissionPrompt attaches an interactive prompt resolver for subagent tool calls.
+func WithPermissionPrompt(prompt toolcall.PermissionPrompt) Option {
+	return func(c *Coordinator) {
+		c.prompt = prompt
+	}
+}
+
+// WithCallGuard attaches an execution guard (e.g. read-only plan mode) to subagents.
+func WithCallGuard(guard toolcall.CallGuard) Option {
+	return func(c *Coordinator) {
+		c.guard = guard
 	}
 }
 
@@ -327,6 +354,29 @@ func (c *Coordinator) SetClient(client model.Client) {
 	c.client = client
 }
 
+// SetPermissionMode dynamically updates the permission mode for subagents.
+func (c *Coordinator) SetPermissionMode(mode permission.Mode) {
+	c.activeMu.Lock()
+	defer c.activeMu.Unlock()
+	if mode.Valid() {
+		c.permissionMode = mode
+	}
+}
+
+// SetPrompt dynamically updates the interactive permission prompt resolver for subagents.
+func (c *Coordinator) SetPrompt(prompt toolcall.PermissionPrompt) {
+	c.activeMu.Lock()
+	defer c.activeMu.Unlock()
+	c.prompt = prompt
+}
+
+// SetCallGuard dynamically updates the execution guard (e.g. plan mode) for subagents.
+func (c *Coordinator) SetCallGuard(guard toolcall.CallGuard) {
+	c.activeMu.Lock()
+	defer c.activeMu.Unlock()
+	c.guard = guard
+}
+
 func (c *Coordinator) emit(ctx context.Context, ev Event) {
 	if c.eventSink != nil {
 		_ = c.eventSink(ctx, ev)
@@ -341,6 +391,9 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	c.activeMu.RLock()
 	parentRegistry := c.parentRegistry
 	client := c.client
+	permMode := c.permissionMode
+	prompt := c.prompt
+	guard := c.guard
 	c.activeMu.RUnlock()
 
 	// 1. Build profile-scoped tool registry with fine-grained workspace locking
@@ -348,11 +401,18 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	lockedReg := newLockedRegistry(scopedRegistry, &c.wsLock)
 
 	// 2. Build scoped tool service
-	// For workers: uses existing permission policy in auto or ask mode
-	// For read-only: uses always-approve mode since tools are already restricted to safe reads
+	// For workers: if parent mode is always-approve, inherit always-approve.
+	// Otherwise, run in parent mode (or ModeAuto by default) and attach prompt.
+	// For read-only: uses always-approve mode since tools are already restricted to safe reads.
 	serviceMode := permission.ModeAlwaysApprove
 	if req.Profile.IsMutating() {
-		serviceMode = permission.ModeAuto
+		if permMode == permission.ModeAlwaysApprove {
+			serviceMode = permission.ModeAlwaysApprove
+		} else if permMode.Valid() {
+			serviceMode = permMode
+		} else {
+			serviceMode = permission.ModeAuto
+		}
 	}
 
 	policy := c.policy
@@ -364,13 +424,21 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 		policy = p
 	}
 
+	serviceOpts := []toolcall.Option{toolcall.WithMode(serviceMode)}
+	if prompt != nil {
+		serviceOpts = append(serviceOpts, toolcall.WithPrompt(prompt))
+	}
+
 	service, err := toolcall.NewService(
 		lockedReg,
 		policy,
-		toolcall.WithMode(serviceMode),
+		serviceOpts...,
 	)
 	if err != nil {
 		return Result{AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create scoped tool service: %w", err)
+	}
+	if guard != nil {
+		service.SetCallGuard(guard)
 	}
 
 	// 3. Resolve turn runner

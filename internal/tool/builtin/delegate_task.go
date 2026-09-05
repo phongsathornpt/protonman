@@ -13,6 +13,7 @@ import (
 
 type delegateTaskHandler struct {
 	coordinator *agent.Coordinator
+	parentID    string
 }
 
 type delegateTaskInput struct {
@@ -22,8 +23,12 @@ type delegateTaskInput struct {
 }
 
 // NewDelegateTask creates a tool.Handler that delegates a task to a specialized subagent.
-func NewDelegateTask(coordinator *agent.Coordinator) tool.Handler {
-	return delegateTaskHandler{coordinator: coordinator}
+func NewDelegateTask(coordinator *agent.Coordinator, parentIDs ...string) tool.Handler {
+	var parentID string
+	if len(parentIDs) > 0 {
+		parentID = parentIDs[0]
+	}
+	return delegateTaskHandler{coordinator: coordinator, parentID: parentID}
 }
 
 func (delegateTaskHandler) Definition() tool.Definition {
@@ -96,10 +101,11 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 	}
 
 	req := agent.Request{
-		Profile: profile,
-		Task:    task,
-		Context: strings.TrimSpace(input.Context),
-		Depth:   0,
+		ParentID: h.parentID,
+		Profile:  profile,
+		Task:     task,
+		Context:  strings.TrimSpace(input.Context),
+		Depth:    0,
 	}
 
 	res, err := h.coordinator.Run(ctx, req)
