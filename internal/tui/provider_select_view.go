@@ -47,9 +47,10 @@ type providerSelectItem struct {
 }
 
 type providerSelectPaneView struct {
-	index  int
-	offset int
-	items  []providerSelectItem
+	index         int
+	offset        int
+	items         []providerSelectItem
+	deleteConfirm bool
 }
 
 func newProviderSelectPaneView(m *bubbleModel) *providerSelectPaneView {
@@ -155,6 +156,24 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 	}
 	if v.index < 0 {
 		v.index = 0
+	}
+	if v.deleteConfirm {
+		item := v.items[v.index]
+		if item.isConfigured {
+			rows := []string{
+				warningStyle.Render("Remove Provider?"),
+				"",
+				fmt.Sprintf("  %s", item.displayName),
+				mutedStyle.Render("  " + item.baseURL),
+			}
+			if item.isActive {
+				rows = append(rows, warningStyle.Render("  This is the active provider."))
+				rows = append(rows, mutedStyle.Render("  Proton will select another saved provider."))
+			}
+			rows = append(rows, "", mutedStyle.Render("enter remove permanently · esc cancel"))
+			return renderProviderModal(m, warningColor, rows)
+		}
+		v.deleteConfirm = false
 	}
 
 	// Dynamic scroll windowing
@@ -310,6 +329,25 @@ func providerSelectVisibleRows(height int) int {
 }
 
 func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+	if v.deleteConfirm {
+		switch message.String() {
+		case "enter":
+			v.deleteConfirm = false
+			item := v.items[v.index]
+			m.bottom.remove(providerSelectViewID)
+			return true, deleteProviderCmd(item.name)
+		case "esc":
+			v.deleteConfirm = false
+			return true, nil
+		case "ctrl+c":
+			v.deleteConfirm = false
+			m.bottom.remove(providerSelectViewID)
+			return true, nil
+		default:
+			return true, nil
+		}
+	}
+
 	switch message.String() {
 	case "esc", "ctrl+c", "q":
 		m.bottom.remove(providerSelectViewID)
@@ -370,8 +408,7 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (
 		if len(v.items) > 0 && v.index >= 0 && v.index < len(v.items) {
 			item := v.items[v.index]
 			if item.isConfigured {
-				m.bottom.remove(providerSelectViewID)
-				return true, deleteProviderCmd(item.name)
+				v.deleteConfirm = true
 			}
 		}
 		return true, nil
