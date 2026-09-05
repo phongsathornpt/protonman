@@ -2,14 +2,20 @@ package builtin
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -121,10 +127,6 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	if input.Pattern == "" {
 		return tool.Result{}, fmt.Errorf("grep pattern is required")
 	}
-	matcher, err := regexp.Compile(input.Pattern)
-	if err != nil {
-		return tool.Result{}, fmt.Errorf("compile grep pattern: %w", err)
-	}
 	if input.Include != "" {
 		if _, err := filepath.Match(input.Include, "probe"); err != nil {
 			return tool.Result{}, fmt.Errorf("invalid grep include glob: %w", err)
@@ -148,16 +150,9 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		return tool.Result{}, err
 	}
 
-	snapshot, err := treeSnapshot(ctx, h.workspace, resolvedPath)
-	if err != nil {
-		return tool.Result{}, fmt.Errorf("snapshot grep workspace: %w", err)
-	}
-	continuation, err := continuationToken("grep", struct{ Pattern, Path, Include string }{input.Pattern, searchPath, input.Include}, snapshot)
+	grepMatcher, err := newGrepMatcher(input.Pattern)
 	if err != nil {
 		return tool.Result{}, err
-	}
-	if input.Continuation != "" && input.Continuation != continuation {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "grep continuation is stale; restart from offset 0")
 	}
 
 	var output strings.Builder
@@ -167,6 +162,8 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		output: &output,
 	}
 	truncated := false
+	scanEnabled := true
+	snapshotHash := sha256.New()
 	walkErr := filepath.WalkDir(resolvedPath, func(path string, entry os.DirEntry, walkErr error) error {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -181,10 +178,10 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 			return nil
 		}
 		if entry.IsDir() {
-			if entry.Name() == ".git" {
+			if entry.Name() == ".git" && path != resolvedPath {
 				return filepath.SkipDir
 			}
-			return nil
+			return hashGrepSnapshotEntry(snapshotHash, resolvedPath, path, entry)
 		}
 		if entry.Type()&os.ModeSymlink != 0 {
 			return nil
@@ -196,21 +193,33 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 				return nil
 			}
 		}
-		scanErr := scanGrepFile(ctx, h.workspace, path, matcher, &page)
+		if err := hashGrepSnapshotEntry(snapshotHash, resolvedPath, path, entry); err != nil {
+			return err
+		}
+		if !scanEnabled {
+			return nil
+		}
+		scanErr := scanGrepFile(ctx, h.workspace, path, grepMatcher, &page)
 		if scanErr != nil {
 			if errors.Is(scanErr, errGrepLimit) {
 				truncated = true
-				return errGrepLimit
+				scanEnabled = false
+				return nil
 			}
 			return scanErr
 		}
 		return nil
 	})
-	if errors.Is(walkErr, errGrepLimit) {
-		walkErr = nil
-	}
 	if walkErr != nil {
 		return tool.Result{}, fmt.Errorf("grep workspace: %w", walkErr)
+	}
+	snapshot := hex.EncodeToString(snapshotHash.Sum(nil))
+	continuation, err := continuationToken("grep", struct{ Pattern, Path, Include string }{input.Pattern, searchPath, input.Include}, snapshot)
+	if err != nil {
+		return tool.Result{}, err
+	}
+	if input.Continuation != "" && input.Continuation != continuation {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "grep continuation is stale; restart from offset 0")
 	}
 
 	var nextOffset *int64
@@ -234,11 +243,61 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	}, nil
 }
 
+type grepMatcher struct {
+	regexp   *regexp.Regexp
+	literal  []byte
+	prefix   []byte
+	complete bool
+}
+
+func newGrepMatcher(pattern string) (grepMatcher, error) {
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return grepMatcher{}, fmt.Errorf("compile grep pattern: %w", err)
+	}
+	prefix, complete := re.LiteralPrefix()
+	m := grepMatcher{regexp: re, complete: complete}
+	if complete && prefix != "" {
+		m.literal = []byte(prefix)
+	} else if len(prefix) >= 3 {
+		m.prefix = []byte(prefix)
+	}
+	return m, nil
+}
+
+func (m grepMatcher) Match(line []byte) bool {
+	if m.complete && len(m.literal) > 0 {
+		return bytes.Contains(line, m.literal)
+	}
+	if len(m.prefix) > 0 && !bytes.Contains(line, m.prefix) {
+		return false
+	}
+	return m.regexp.Match(line)
+}
+
+func hashGrepSnapshotEntry(h hash.Hash, root, path string, entry os.DirEntry) error {
+	info, err := entry.Info()
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return err
+	}
+	_, _ = h.Write([]byte(filepath.ToSlash(rel)))
+	var encoded [24]byte
+	binary.LittleEndian.PutUint64(encoded[0:8], uint64(info.Size()))
+	binary.LittleEndian.PutUint64(encoded[8:16], uint64(info.ModTime().UnixNano()))
+	binary.LittleEndian.PutUint64(encoded[16:24], uint64(info.Mode()))
+	_, _ = h.Write(encoded[:])
+	return nil
+}
+
 func scanGrepFile(
 	ctx context.Context,
 	workspaceRoot *workspace.Workspace,
 	path string,
-	matcher *regexp.Regexp,
+	matcher grepMatcher,
 	page *grepPageState,
 ) (returnErr error) {
 	if err := workspaceRoot.CheckAbsoluteRead(ctx, path); err != nil {
@@ -283,12 +342,25 @@ func scanGrepFile(
 		if page.emitted >= page.limit {
 			return errGrepLimit
 		}
-		line := truncateGrepLine(string(lineBytes))
-		entry := fmt.Sprintf("%s:%d:%s\n", relative, lineNumber, line)
-		if page.output.Len()+len(entry) > maxGrepOutputBytes {
+		cut, shortened := grepLineCut(lineBytes)
+		var lineNumberBuf [20]byte
+		lineNumberText := strconv.AppendInt(lineNumberBuf[:0], int64(lineNumber), 10)
+		entryBytes := len(relative) + 1 + len(lineNumberText) + 1 + cut + 1
+		if shortened {
+			entryBytes += len("…")
+		}
+		if page.output.Len()+entryBytes > maxGrepOutputBytes {
 			return errGrepLimit
 		}
-		page.output.WriteString(entry)
+		page.output.WriteString(relative)
+		page.output.WriteByte(':')
+		_, _ = page.output.Write(lineNumberText)
+		page.output.WriteByte(':')
+		_, _ = page.output.Write(lineBytes[:cut])
+		if shortened {
+			page.output.WriteString("…")
+		}
+		page.output.WriteByte('\n')
 		page.emitted++
 	}
 	if scanErr := scanner.Err(); scanErr != nil {
@@ -297,21 +369,19 @@ func scanGrepFile(
 	return nil
 }
 
-func truncateGrepLine(line string) string {
+func grepLineCut(line []byte) (int, bool) {
 	if len(line) <= maxGrepLineLength {
-		return line
+		return len(line), false
 	}
-	if utf8.RuneCountInString(line) <= maxGrepLineLength {
-		return line
-	}
-	count := 0
-	for i := range line {
+	position := 0
+	for count := 0; position < len(line); count++ {
 		if count == maxGrepLineLength {
-			return line[:i] + "…"
+			return position, true
 		}
-		count++
+		_, size := utf8.DecodeRune(line[position:])
+		position += size
 	}
-	return line + "…"
+	return len(line), false
 }
 
 func matchGrepInclude(pattern string, name string, relPaths ...string) bool {
