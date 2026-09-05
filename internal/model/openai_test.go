@@ -83,6 +83,49 @@ func TestOpenAIClientStreamText(t *testing.T) {
 	}
 }
 
+func TestOpenAIClientDisablesToolsWhenRequestHasNone(t *testing.T) {
+	tests := []struct {
+		name  string
+		model string
+	}{
+		{name: "chat completions", model: "chat-model"},
+		{name: "responses", model: "responses-model"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var requestBody map[string]any
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+					t.Fatalf("decode request body: %v", err)
+				}
+				w.Header().Set("Content-Type", "text/event-stream")
+				fmt.Fprint(w, "data: [DONE]\n\n")
+				w.(http.Flusher).Flush()
+			}))
+			defer ts.Close()
+
+			client := NewOpenAIClient(ts.URL, "key", test.model)
+			stream, err := client.Stream(context.Background(), Request{
+				Messages: []Message{{Role: RoleUser, Content: "summarize"}},
+			})
+			if err != nil {
+				t.Fatalf("Stream() error = %v", err)
+			}
+			defer stream.Close()
+			if _, err := stream.Next(context.Background()); err != nil {
+				t.Fatalf("Next() error = %v", err)
+			}
+
+			if got, want := requestBody["tool_choice"], "none"; got != want {
+				t.Fatalf("tool_choice = %#v, want %q", got, want)
+			}
+			if _, ok := requestBody["tools"]; ok {
+				t.Fatalf("request unexpectedly contains tools: %#v", requestBody["tools"])
+			}
+		})
+	}
+}
+
 func TestOpenAIClientStreamToolCalls(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")

@@ -116,10 +116,11 @@ type openAIFunctionDef struct {
 }
 
 type openAIChatRequest struct {
-	Model    string              `json:"model"`
-	Messages []openAIChatMessage `json:"messages"`
-	Stream   bool                `json:"stream"`
-	Tools    []openAIToolDef     `json:"tools,omitempty"`
+	Model      string              `json:"model"`
+	Messages   []openAIChatMessage `json:"messages"`
+	Stream     bool                `json:"stream"`
+	Tools      []openAIToolDef     `json:"tools,omitempty"`
+	ToolChoice string              `json:"tool_choice,omitempty"`
 }
 
 type openAIResponsesToolDef struct {
@@ -130,10 +131,11 @@ type openAIResponsesToolDef struct {
 }
 
 type openAIResponsesRequest struct {
-	Model  string                   `json:"model"`
-	Stream bool                     `json:"stream"`
-	Input  []any                    `json:"input"`
-	Tools  []openAIResponsesToolDef `json:"tools,omitempty"`
+	Model      string                   `json:"model"`
+	Stream     bool                     `json:"stream"`
+	Input      []any                    `json:"input"`
+	Tools      []openAIResponsesToolDef `json:"tools,omitempty"`
+	ToolChoice string                   `json:"tool_choice,omitempty"`
 }
 
 type openAIResponsesChunk struct {
@@ -234,10 +236,11 @@ func (c *OpenAIClient) Stream(ctx context.Context, request Request) (Stream, err
 		}
 
 		reqBody := openAIResponsesRequest{
-			Model:  c.modelID,
-			Stream: true,
-			Input:  input,
-			Tools:  tools,
+			Model:      c.modelID,
+			Stream:     true,
+			Input:      input,
+			Tools:      tools,
+			ToolChoice: noToolChoice(len(request.Tools)),
 		}
 
 		var err error
@@ -336,10 +339,11 @@ func (c *OpenAIClient) Stream(ctx context.Context, request Request) (Stream, err
 		}
 
 		reqBody := openAIChatRequest{
-			Model:    c.modelID,
-			Messages: messages,
-			Stream:   true,
-			Tools:    tools,
+			Model:      c.modelID,
+			Messages:   messages,
+			Stream:     true,
+			Tools:      tools,
+			ToolChoice: noToolChoice(len(request.Tools)),
 		}
 
 		var err error
@@ -451,6 +455,13 @@ func (c *OpenAIClient) Stream(ctx context.Context, request Request) (Stream, err
 		"error_type", fmt.Sprintf("%T", lastErr),
 	)
 	return nil, lastErr
+}
+
+func noToolChoice(toolCount int) string {
+	if toolCount == 0 {
+		return "none"
+	}
+	return ""
 }
 
 type accumulatedToolCall struct {
