@@ -156,6 +156,50 @@ func TestLoopCompletesWhenModelRequestsToolAtMaxRounds(t *testing.T) {
 	}
 }
 
+func TestLoopReportsToolCallWhenNoToolsAreAvailable(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{{
+		events: []model.Event{
+			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+				ID:        "unavailable-call",
+				Name:      "read_file",
+				Arguments: json.RawMessage(`{"path":"a.txt"}`),
+			}},
+			{Kind: model.EventDone},
+		},
+	}}}
+	policy, err := permission.NewPolicy(permission.Config{})
+	if err != nil {
+		t.Fatalf("NewPolicy() error = %v", err)
+	}
+	service, err := toolcall.NewService(emptyRegistry{}, policy)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	loop, err := NewLoop(client, service)
+	if err != nil {
+		t.Fatalf("NewLoop() error = %v", err)
+	}
+	events := make([]Event, 0)
+
+	_, err = loop.Run(
+		context.Background(),
+		[]model.Message{{Role: model.RoleUser, Content: "read a file"}},
+		collectEvents(&events),
+	)
+	if !errors.Is(err, ErrToolDispatchUnavailable) {
+		t.Fatalf("Run() error = %v, want unavailable tool dispatch", err)
+	}
+	if errors.Is(err, ErrUnresolvedToolCall) {
+		t.Fatalf("Run() error = %v, must not be classified as unresolved dispatch", err)
+	}
+	if got := events[len(events)-1].Kind; got != EventFailed {
+		t.Fatalf("last event kind = %q, want %q", got, EventFailed)
+	}
+	if got := len(client.requests[0].Tools); got != 0 {
+		t.Fatalf("published tools = %d, want none", got)
+	}
+}
+
 func TestLoopPreservesTextWhenMaxRoundToolCallIsIgnored(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
 		events: []model.Event{
@@ -719,6 +763,16 @@ func (h *recordingHandler) Execute(_ context.Context, call tool.Call) (tool.Resu
 
 type recordingRegistry struct {
 	handler tool.Handler
+}
+
+type emptyRegistry struct{}
+
+func (emptyRegistry) Lookup(string) (tool.Handler, bool) {
+	return nil, false
+}
+
+func (emptyRegistry) Definitions() []tool.Definition {
+	return []tool.Definition{}
 }
 
 func (r *recordingRegistry) Lookup(name string) (tool.Handler, bool) {
