@@ -277,3 +277,53 @@ func requestMessagesContain(request map[string]any, needle string) bool {
 	}
 	return false
 }
+
+func TestE2ETurnLoopSuppressesDeadCallInsideProductiveBatch(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+	if err := os.WriteFile(filepath.Join(ws, "second.txt"), []byte("second file\n"), 0o644); err != nil {
+		t.Fatalf("write second.txt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(ws, "third.txt"), []byte("third file\n"), 0o644); err != nil {
+		t.Fatalf("write third.txt: %v", err)
+	}
+
+	server := newMockLLMServer(t)
+	server.SetupWorkspaceConfig(t, home)
+	server.AddToolCallsResponse(
+		mockToolCall{ID: "dead-1", Name: "read_file", Args: `{"path":"hello.txt"}`},
+		mockToolCall{ID: "live-1", Name: "read_file", Args: `{"path":"second.txt"}`},
+	)
+	server.AddToolCallsResponse(
+		mockToolCall{ID: "dead-2", Name: "read_file", Args: `{"path":"hello.txt"}`},
+		mockToolCall{ID: "live-2", Name: "read_file", Args: `{"path":"third.txt"}`},
+	)
+	server.AddToolCallsResponse(
+		mockToolCall{ID: "dead-3", Name: "read_file", Args: `{"path":"hello.txt"}`},
+		mockToolCall{ID: "live-3", Name: "read_file", Args: `{"path":"second.txt","offset":1}`},
+	)
+	server.AddTextResponse("The productive branch completed while the repeated read was suppressed.")
+
+	res := runProton(t, runOptions{
+		args: []string{"-y", "-p", "Inspect several files without repeating dead work"},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 {
+		t.Fatalf("mixed batch loop failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "productive branch completed") {
+		t.Fatalf("stdout missing final response: %s", res.stdout)
+	}
+
+	requests := server.Requests()
+	if got, want := len(requests), 4; got != want {
+		t.Fatalf("model requests = %d, want %d", got, want)
+	}
+	if !requestMessagesContain(requests[3], `"code":"no_progress"`) {
+		t.Fatalf("final request missing suppressed no-progress result: %#v", requests[3]["messages"])
+	}
+	if !requestMessagesContain(requests[3], "econd file") {
+		t.Fatalf("final request missing productive live result: %#v", requests[3]["messages"])
+	}
+}

@@ -116,6 +116,39 @@ func (m *mockLLMServer) AddToolCallResponse(id, name, args string) {
 	})
 }
 
+type mockToolCall struct {
+	ID   string
+	Name string
+	Args string
+}
+
+func (m *mockLLMServer) AddToolCallsResponse(calls ...mockToolCall) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	toolCalls := make([]map[string]any, 0, len(calls))
+	for index, call := range calls {
+		toolCalls = append(toolCalls, map[string]any{
+			"index": index,
+			"id":    call.ID,
+			"type":  "function",
+			"function": map[string]any{
+				"name":      call.Name,
+				"arguments": call.Args,
+			},
+		})
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"choices": []any{map[string]any{
+			"delta": map[string]any{"tool_calls": toolCalls},
+		}},
+	})
+	m.responses = append(m.responses, mockLLMResponse{
+		status:    http.StatusOK,
+		sseChunks: []string{string(payload)},
+	})
+}
+
 func (m *mockLLMServer) AddErrorResponse(status int, body string, contentType string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
