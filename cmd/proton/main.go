@@ -183,6 +183,30 @@ func run(ctx context.Context, args []string) error {
 		}
 	}
 
+	effectiveProfile := strings.TrimSpace(options.agentProfile)
+	if effectiveProfile == "" {
+		effectiveProfile = loadedConfig.Agent.Profile
+	}
+	if effectiveProfile != "" {
+		prof, profErr := agent.ParseProfile(effectiveProfile)
+		if profErr != nil {
+			return profErr
+		}
+		loadedConfig.Agent.Profile = string(prof)
+		promptContent := agent.SystemPromptForProfile(prof)
+		if len(state.Messages) == 0 {
+			state.Messages = []session.Message{
+				{Role: model.RoleSystem, Content: promptContent},
+			}
+		} else if state.Messages[0].Role != model.RoleSystem {
+			state.Messages = append([]session.Message{
+				{Role: model.RoleSystem, Content: promptContent},
+			}, state.Messages...)
+		} else if len(state.Messages) == 1 && state.Messages[0].Role == model.RoleSystem {
+			state.Messages[0].Content = promptContent
+		}
+	}
+
 	serviceOptions := []toolcall.Option{toolcall.WithMode(initialMode)}
 	observer, observerErr := configuredTelemetryObserver()
 	if observerErr != nil {
