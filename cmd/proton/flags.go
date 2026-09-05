@@ -10,17 +10,18 @@ import (
 )
 
 type cliOptions struct {
-	prompt     string
-	output     string
-	mode       string
-	sandbox    string
-	yolo       bool
-	headless   bool
-	acp        bool
-	help       bool
-	resume     bool
-	newSession bool
-	sessionID  string
+	prompt       string
+	output       string
+	mode         string
+	agentProfile string
+	sandbox      string
+	yolo         bool
+	headless     bool
+	acp          bool
+	help         bool
+	resume       bool
+	newSession   bool
+	sessionID    string
 }
 
 func parseArgs(args []string) (cliOptions, error) {
@@ -31,6 +32,9 @@ func parseArgs(args []string) (cliOptions, error) {
 	flags.StringVar(&options.prompt, "prompt", "", "run one headless prompt and exit")
 	flags.StringVar(&options.output, "output", "text", "headless output format: text or json")
 	flags.StringVar(&options.mode, "permission-mode", "", "override permission mode")
+	flags.StringVar(&options.agentProfile, "agent", "", "default agent profile: pow, dex, int, worker, explorer, reviewer")
+	flags.StringVar(&options.agentProfile, "profile", "", "default agent profile: pow, dex, int, worker, explorer, reviewer")
+	flags.StringVar(&options.agentProfile, "a", "", "default agent profile: pow, dex, int, worker, explorer, reviewer")
 	flags.BoolVar(&options.yolo, "y", false, "set permission mode to always-approve")
 	flags.BoolVar(&options.headless, "headless", false, "read the prompt from stdin")
 	flags.BoolVar(&options.acp, "acp", false, "serve Agent Client Protocol JSON-RPC on stdio")
@@ -76,6 +80,9 @@ Session flags:
   -r, --resume, --continue    resume the previous session
   -s, --session string        session id to load or create
   -n, --new-session, --new    start a new session (default)
+
+Agent flags:
+  -a, --agent, --profile string  agent profile: pow | dex | int | worker | explorer | reviewer
 
 Headless flags:
   -p, --prompt string         prompt text

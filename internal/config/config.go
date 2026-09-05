@@ -53,7 +53,8 @@ type ModelConfig struct {
 
 // AgentConfig specifies autonomous agent execution settings.
 type AgentConfig struct {
-	MaxRounds int `toml:"max_rounds"`
+	MaxRounds int    `toml:"max_rounds"`
+	Profile   string `toml:"profile"`
 }
 
 // Snapshot is the effective configuration after layered loading.
@@ -89,7 +90,8 @@ type fileDocument struct {
 }
 
 type fileAgent struct {
-	MaxRounds *int `toml:"max_rounds,omitempty"`
+	MaxRounds *int    `toml:"max_rounds,omitempty"`
+	Profile   *string `toml:"profile,omitempty"`
 }
 
 type fileSandbox struct {
@@ -265,6 +267,9 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 	}
 	if document.Agent.MaxRounds != nil {
 		snapshot.Agent.MaxRounds = *document.Agent.MaxRounds
+	}
+	if document.Agent.Profile != nil {
+		snapshot.Agent.Profile = strings.TrimSpace(*document.Agent.Profile)
 	}
 	return nil
 }
