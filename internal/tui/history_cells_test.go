@@ -373,3 +373,49 @@ func TestExecCellFolding(t *testing.T) {
 		t.Fatalf("raw lines should not be folded, got: %s", raw)
 	}
 }
+
+func TestErrorCellCardRendering(t *testing.T) {
+	cell := &ErrorCell{
+		ErrorKind:   ErrorKindModelNotFound,
+		Title:       "Model Not Supported",
+		Badge:       "MODEL_NOT_FOUND",
+		Text:        "Model 'gpt-nonexistent' is not supported by provider 'opencode'.",
+		Suggestions: []string{"Did you mean: nemotron-3.5-lightning-free", "Run /provider to configure an available model"},
+	}
+
+	rendered := strings.Join(cell.RenderWidth(80), "\n")
+	if !strings.Contains(rendered, "MODEL_NOT_FOUND") {
+		t.Fatalf("expected rendered card to contain badge, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "Model Not Supported") {
+		t.Fatalf("expected rendered card to contain title, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "Suggestions:") {
+		t.Fatalf("expected rendered card to contain Suggestions header, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "Did you mean: nemotron-3.5-lightning-free") {
+		t.Fatalf("expected rendered card to contain model suggestions, got:\n%s", rendered)
+	}
+
+	raw := strings.Join(cell.RawLines(), "\n")
+	if !strings.Contains(raw, "[MODEL_NOT_FOUND] Model Not Supported") {
+		t.Fatalf("raw lines missing formatted header, got:\n%s", raw)
+	}
+}
+
+func TestErrorCellFallbackRendering(t *testing.T) {
+	cell := &ErrorCell{
+		Title: "read_file",
+		Text:  "file not found",
+	}
+
+	rendered := strings.Join(cell.RenderWidth(80), "\n")
+	if !strings.Contains(rendered, "read_file: file not found") {
+		t.Fatalf("expected simple fallback error line, got:\n%s", rendered)
+	}
+
+	raw := strings.Join(cell.RawLines(), "\n")
+	if raw != "read_file: file not found" {
+		t.Fatalf("expected raw text to match, got %q", raw)
+	}
+}

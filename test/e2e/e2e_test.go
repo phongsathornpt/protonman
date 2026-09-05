@@ -12,7 +12,10 @@ import (
 	"time"
 )
 
-var protonBin string
+var (
+	protonBin string
+	coverDir  string
+)
 
 func TestMain(m *testing.M) {
 	tempDir, err := os.MkdirTemp("", "proton-e2e-bin-*")
@@ -30,7 +33,13 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	buildCmd := exec.Command("go", "build", "-o", binPath, "./cmd/proton")
+	coverDir = os.Getenv("PROTON_COVERDIR")
+	if coverDir == "" {
+		coverDir = filepath.Join(tempDir, "coverdata")
+	}
+	_ = os.MkdirAll(coverDir, 0o755)
+
+	buildCmd := exec.Command("go", "build", "-cover", "-o", binPath, "./cmd/proton")
 	buildCmd.Dir = repoRoot
 	buildCmd.Env = os.Environ()
 	output, err := buildCmd.CombinedOutput()
@@ -40,7 +49,17 @@ func TestMain(m *testing.M) {
 	}
 
 	protonBin = binPath
-	os.Exit(m.Run())
+	code := m.Run()
+
+	if os.Getenv("PROTON_E2E_COVERAGE") == "1" {
+		percentCmd := exec.Command("go", "tool", "covdata", "percent", "-i="+coverDir)
+		if out, err := percentCmd.CombinedOutput(); err == nil && len(out) > 0 {
+			fmt.Println("\n=== E2E Subprocess Coverage Summary ===")
+			fmt.Print(string(out))
+		}
+	}
+
+	os.Exit(code)
 }
 
 type runOptions struct {
@@ -75,6 +94,9 @@ func runProton(t *testing.T, opts runOptions) runResult {
 	}
 
 	cmd.Env = os.Environ()
+	if coverDir != "" {
+		cmd.Env = append(cmd.Env, "GOCOVERDIR="+coverDir)
+	}
 	if len(opts.env) > 0 {
 		cmd.Env = append(cmd.Env, opts.env...)
 	}
