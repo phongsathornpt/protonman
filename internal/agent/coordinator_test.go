@@ -371,3 +371,90 @@ func TestCoordinator_EmitsLifecycleEvents(t *testing.T) {
 		t.Errorf("last event = %v, want EventAgentCompleted", events[len(events)-1].Kind)
 	}
 }
+
+func TestCoordinator_ConcurrentCloseAndRun(t *testing.T) {
+	coord := NewCoordinator(
+		nil,
+		emptyRegistry{},
+		nil,
+		nil,
+		WithRunnerFactory(func(p Profile, tools *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{
+				runFunc: func(ctx context.Context, messages []model.Message, sink turn.Sink) (turn.Result, error) {
+					select {
+					case <-ctx.Done():
+						return turn.Result{}, ctx.Err()
+					case <-time.After(10 * time.Millisecond):
+						return turn.Result{
+							Message: model.Message{Role: model.RoleAssistant, Content: "done"},
+						}, nil
+					}
+				},
+			}, nil
+		}),
+	)
+
+	var wg sync.WaitGroup
+	numCallers := 50
+	wg.Add(numCallers)
+
+	for i := 0; i < numCallers; i++ {
+		go func() {
+			defer wg.Done()
+			_, _ = coord.Run(context.Background(), Request{
+				Profile: ProfileExplorer,
+				Task:    "race task",
+			})
+		}()
+	}
+
+	// Concurrently close the coordinator while callers are in flight
+	time.Sleep(2 * time.Millisecond)
+	_ = coord.Close()
+
+	wg.Wait()
+}
+
+func TestCoordinator_ResilientEmitOnCancel(t *testing.T) {
+	var failedEmitted atomic.Bool
+	coord := NewCoordinator(
+		nil,
+		emptyRegistry{},
+		nil,
+		nil,
+		WithEventSink(func(ctx context.Context, ev Event) error {
+			if ev.Kind == EventAgentFailed {
+				// Even if childCtx was canceled, ctx passed to emit must remain usable
+				if ctx.Err() == nil {
+					failedEmitted.Store(true)
+				}
+			}
+			return nil
+		}),
+		WithRunnerFactory(func(p Profile, tools *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{
+				runFunc: func(ctx context.Context, messages []model.Message, sink turn.Sink) (turn.Result, error) {
+					<-ctx.Done()
+					return turn.Result{}, ctx.Err()
+				},
+			}, nil
+		}),
+	)
+	defer coord.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(5 * time.Millisecond)
+		cancel()
+	}()
+
+	_, _ = coord.Run(ctx, Request{
+		Profile: ProfileExplorer,
+		Task:    "cancel task",
+	})
+
+	time.Sleep(20 * time.Millisecond)
+	if !failedEmitted.Load() {
+		t.Errorf("expected resilient emit of EventAgentFailed with valid context on cancellation")
+	}
+}

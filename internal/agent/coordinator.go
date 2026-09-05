@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -149,13 +150,17 @@ func NewCoordinator(
 // Run dispatches a subagent execution into a goroutine and blocks until completion,
 // timeout, or parent context cancellation.
 func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
+	c.activeMu.Lock()
 	if c.closed.Load() {
+		c.activeMu.Unlock()
 		return Result{}, errors.New("coordinator is closed")
 	}
 	if err := req.Validate(); err != nil {
+		c.activeMu.Unlock()
 		return Result{}, fmt.Errorf("invalid subagent request: %w", err)
 	}
 	if req.Depth > c.maxDepth {
+		c.activeMu.Unlock()
 		return Result{}, fmt.Errorf("delegation depth %d exceeds maximum depth %d", req.Depth, c.maxDepth)
 	}
 
@@ -171,7 +176,6 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 	}
 
 	childCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
 
 	status := AgentStatus{
 		ID:        id,
@@ -182,7 +186,7 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 		Depth:     req.Depth,
 	}
 
-	c.activeMu.Lock()
+	c.wg.Add(1)
 	c.active[id] = &activeEntry{
 		status: status,
 		cancel: cancel,
@@ -190,6 +194,7 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 	c.activeMu.Unlock()
 
 	defer func() {
+		cancel()
 		c.activeMu.Lock()
 		delete(c.active, id)
 		c.activeMu.Unlock()
@@ -199,7 +204,6 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 	// the parent context was canceled or timed out early.
 	resultCh := make(chan Result, 1)
 
-	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
 
@@ -242,7 +246,8 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 
 		if err != nil {
 			res.Err = err
-			c.emit(childCtx, Event{
+			emitCtx, emitCancel := context.WithTimeout(context.WithoutCancel(childCtx), 5*time.Second)
+			c.emit(emitCtx, Event{
 				Kind:     EventAgentFailed,
 				AgentID:  id,
 				ParentID: req.ParentID,
@@ -250,6 +255,7 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 				Duration: res.Duration,
 				Err:      err,
 			})
+			emitCancel()
 		} else {
 			c.emit(childCtx, Event{
 				Kind:     EventAgentCompleted,
@@ -292,11 +298,12 @@ func (c *Coordinator) Active() []AgentStatus {
 
 // Close cancels all active subagents and waits for all goroutines to exit.
 func (c *Coordinator) Close() error {
+	c.activeMu.Lock()
 	if !c.closed.CompareAndSwap(false, true) {
+		c.activeMu.Unlock()
 		return nil
 	}
 
-	c.activeMu.Lock()
 	for _, entry := range c.active {
 		entry.cancel()
 	}
@@ -336,8 +343,9 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	client := c.client
 	c.activeMu.RUnlock()
 
-	// 1. Build profile-scoped tool registry
+	// 1. Build profile-scoped tool registry with fine-grained workspace locking
 	scopedRegistry := FilterRegistryForProfile(parentRegistry, req.Profile, req.Depth)
+	lockedReg := newLockedRegistry(scopedRegistry, &c.wsLock)
 
 	// 2. Build scoped tool service
 	// For workers: uses existing permission policy in auto or ask mode
@@ -357,7 +365,7 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	}
 
 	service, err := toolcall.NewService(
-		scopedRegistry,
+		lockedReg,
 		policy,
 		toolcall.WithMode(serviceMode),
 	)
@@ -435,4 +443,65 @@ func formatUserPrompt(req Request) string {
 		b.WriteString(fmt.Sprintf("\nContext:\n%s\n", req.Context))
 	}
 	return b.String()
+}
+
+type lockedRegistry struct {
+	inner  tool.Registry
+	wsLock *sync.RWMutex
+}
+
+var _ tool.Registry = (*lockedRegistry)(nil)
+
+func newLockedRegistry(inner tool.Registry, wsLock *sync.RWMutex) tool.Registry {
+	return &lockedRegistry{
+		inner:  inner,
+		wsLock: wsLock,
+	}
+}
+
+func (r *lockedRegistry) Lookup(name string) (tool.Handler, bool) {
+	h, ok := r.inner.Lookup(name)
+	if !ok {
+		return nil, false
+	}
+	return lockedHandler{
+		inner:  h,
+		wsLock: r.wsLock,
+	}, true
+}
+
+func (r *lockedRegistry) Definitions() []tool.Definition {
+	return r.inner.Definitions()
+}
+
+type lockedHandler struct {
+	inner  tool.Handler
+	wsLock *sync.RWMutex
+}
+
+var _ tool.Handler = lockedHandler{}
+var _ tool.DetailProvider = lockedHandler{}
+
+func (h lockedHandler) Definition() tool.Definition {
+	return h.inner.Definition()
+}
+
+func (h lockedHandler) PermissionDetail(arguments json.RawMessage) string {
+	if pd, ok := h.inner.(tool.DetailProvider); ok {
+		return pd.PermissionDetail(arguments)
+	}
+	return ""
+}
+
+func (h lockedHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
+	def := h.inner.Definition()
+	switch def.Kind {
+	case tool.KindEdit, tool.KindBash:
+		h.wsLock.Lock()
+		defer h.wsLock.Unlock()
+	case tool.KindRead, tool.KindGrep:
+		h.wsLock.RLock()
+		defer h.wsLock.RUnlock()
+	}
+	return h.inner.Execute(ctx, call)
 }
