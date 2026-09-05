@@ -395,7 +395,7 @@ max_tool_calls = 42
 		t.Fatalf("persisted max_tool_calls = %d, want %d", got, want)
 	}
 
-	// 4. SaveUserMaxRounds updates to 0 (unbounded).
+	// 4. SaveUserMaxRounds updates to 0 (round-count bound disabled).
 	if err := SaveUserMaxRounds(homeDir, 0); err != nil {
 		t.Fatalf("SaveUserMaxRounds(0) error = %v", err)
 	}
