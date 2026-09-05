@@ -926,7 +926,10 @@ func (m *bubbleModel) liveView() string {
 }
 
 func (m *bubbleModel) footerView() string {
-	if m.bottom.top() != nil {
+	if top := m.bottom.top(); top != nil {
+		if top.ReplacesComposer() {
+			return ""
+		}
 		return m.shortcutHint()
 	}
 	return m.infoView()

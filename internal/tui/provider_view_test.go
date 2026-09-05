@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 )
@@ -33,6 +34,38 @@ func TestProviderViewLaunchViaSlashCommand(t *testing.T) {
 	}
 	if !strings.Contains(rendered, "https://api.example.com/v1") {
 		t.Fatalf("expected endpoint placeholder in rendered view, got:\n%s", rendered)
+	}
+}
+
+func TestProviderModalsFitSmallTerminals(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/provider add")
+
+	view := bModel.bottom.find(providerViewID).(*providerPaneView)
+	for _, size := range [][2]int{{80, 24}, {60, 18}, {40, 14}, {24, 12}} {
+		bModel.resize(size[0], size[1])
+		rendered := view.Render(bModel)
+		if got := lipgloss.Width(rendered); got > size[0] {
+			t.Errorf("provider form width %d exceeds terminal width %d at %dx%d", got, size[0], size[0], size[1])
+		}
+		if got := lipgloss.Height(rendered); got > size[1] {
+			t.Errorf("provider form height %d exceeds terminal height %d at %dx%d", got, size[1], size[0], size[1])
+		}
+		if strings.Contains(bModel.View(), "enter send") {
+			t.Errorf("provider modal still shows the composer footer at %dx%d", size[0], size[1])
+		}
+	}
+
+	bModel.bottom.remove(providerViewID)
+	bModel.executeCommand("/provider")
+	viewHub := bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView)
+	bModel.resize(40, 14)
+	rendered := viewHub.Render(bModel)
+	if got := lipgloss.Width(rendered); got > 40 {
+		t.Fatalf("provider hub width %d exceeds terminal width 40", got)
+	}
+	if got := lipgloss.Height(rendered); got > 14 {
+		t.Fatalf("provider hub height %d exceeds terminal height 14", got)
 	}
 }
 
