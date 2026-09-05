@@ -36,6 +36,24 @@ type emptyRegistry struct{}
 func (emptyRegistry) Lookup(_ string) (tool.Handler, bool) { return nil, false }
 func (emptyRegistry) Definitions() []tool.Definition       { return nil }
 
+func TestCoordinatorMaxToolCallsOption(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil, WithMaxToolCalls(7))
+	if got, want := coord.maxToolCalls, 7; got != want {
+		t.Fatalf("max tool calls = %d, want %d", got, want)
+	}
+
+	defaultCoord := NewCoordinator(nil, emptyRegistry{}, nil, nil)
+	if got, want := defaultCoord.maxToolCalls, defaultMaxToolCalls; got != want {
+		t.Fatalf("default max tool calls = %d, want %d", got, want)
+	}
+	if err := defaultCoord.Close(); err != nil {
+		t.Fatalf("default coordinator Close() error = %v", err)
+	}
+	if err := coord.Close(); err != nil {
+		t.Fatalf("configured coordinator Close() error = %v", err)
+	}
+}
+
 func TestCoordinator_RunsSubagentInGoroutine(t *testing.T) {
 	coord := NewCoordinator(
 		nil,

@@ -135,6 +135,7 @@ func run(ctx context.Context, args []string) error {
 	}
 
 	coordinator := agent.NewCoordinator(nil, nil, workspaceRoot, policy,
+		agent.WithMaxToolCalls(loadedConfig.Agent.MaxToolCalls),
 		agent.WithEventSink(func(ctx context.Context, ev agent.Event) error {
 			slog.Debug("subagent lifecycle event",
 				"kind", ev.Kind,
