@@ -230,8 +230,12 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		if entry.Type()&os.ModeSymlink != 0 {
 			return nil
 		}
+		relWork, relErr := h.workspace.RelRead(path)
+		if relErr != nil {
+			return relErr
+		}
+		relWork = filepath.ToSlash(relWork)
 		if input.Include != "" {
-			relWork, _ := h.workspace.RelRead(path)
 			if !matchGrepInclude(input.Include, entry.Name(), relSearch, relWork) {
 				return nil
 			}
@@ -251,7 +255,7 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 				startLine = resume.Line
 			}
 		}
-		scanErr := scanGrepFile(ctx, h.workspace, path, relSearch, startLine, grepMatcher, &page)
+		scanErr := scanGrepFile(ctx, path, relWork, relSearch, startLine, grepMatcher, &page)
 		if scanErr != nil {
 			if errors.Is(scanErr, errGrepLimit) {
 				truncated = true
@@ -378,19 +382,17 @@ func hashGrepSnapshotEntry(h hash.Hash, relative string, entry os.DirEntry) erro
 
 func scanGrepFile(
 	ctx context.Context,
-	workspaceRoot *workspace.Workspace,
 	path string,
+	relative string,
 	cursorFile string,
 	startLine int,
 	matcher grepMatcher,
 	page *grepPageState,
 ) (returnErr error) {
-	if err := workspaceRoot.CheckAbsoluteRead(ctx, path); err != nil {
-		if errors.Is(err, workspace.ErrProtectedPath) || errors.Is(err, workspace.ErrOutsideWorkspace) {
-			return nil
-		}
-		return err
-	}
+	// path is a non-symlink candidate produced by WalkDir from a root already
+	// validated by ResolveRead. The walk filters protected paths and never
+	// descends through symlink entries, so repeating CheckAbsoluteRead here
+	// would re-run EvalSymlinks for every file without strengthening the boundary.
 	file, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("open %q: %w", path, err)
@@ -401,11 +403,6 @@ func scanGrepFile(
 		}
 	}()
 
-	relative, err := workspaceRoot.RelRead(path)
-	if err != nil {
-		return fmt.Errorf("relative grep path: %w", err)
-	}
-	relative = filepath.ToSlash(relative)
 	scanner := bufio.NewScanner(io.LimitReader(file, maxEditFileBytes+1))
 	bufPtr := grepBufferPool.Get().(*[]byte)
 	defer grepBufferPool.Put(bufPtr)
