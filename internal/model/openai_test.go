@@ -3,6 +3,7 @@ package model
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -807,5 +808,38 @@ func TestLiveOpenCodeResponsesMuseSpark(t *testing.T) {
 	t.Logf("Muse Spark tool calls received: %d", len(toolCalls))
 	if len(toolCalls) > 0 {
 		t.Logf("Tool call: %+v", toolCalls[0])
+	}
+}
+
+func TestOpenAIStream_EOFAfterContentWithoutTrailingNewline(t *testing.T) {
+	// Chunk line without a trailing newline, directly followed by EOF
+	payload := `data: {"choices":[{"delta":{"content":"Final chunk without newline"}}]}`
+	stream := newOpenAIStream(io.NopCloser(strings.NewReader(payload)))
+	defer stream.Close()
+
+	var receivedText string
+	gotDone := false
+
+	for {
+		ev, err := stream.Next(context.Background())
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatalf("unexpected stream error: %v", err)
+		}
+		if ev.Kind == EventTextDelta {
+			receivedText += ev.Text
+		}
+		if ev.Kind == EventDone {
+			gotDone = true
+		}
+	}
+
+	if receivedText != "Final chunk without newline" {
+		t.Fatalf("receivedText = %q, want %q", receivedText, "Final chunk without newline")
+	}
+	if !gotDone {
+		t.Fatal("expected EventDone before EOF")
 	}
 }

@@ -462,6 +462,11 @@ func (s *openAIStream) Next(ctx context.Context) (Event, error) {
 		line, err := s.reader.ReadString('\n')
 		if err != nil {
 			if errors.Is(err, io.EOF) {
+				if len(strings.TrimSpace(line)) > 0 {
+					if parseErr := s.processLine(line); parseErr != nil {
+						return Event{}, parseErr
+					}
+				}
 				s.flushToolCalls()
 				s.queue = append(s.queue, Event{Kind: EventDone})
 				s.done = true
@@ -475,154 +480,150 @@ func (s *openAIStream) Next(ctx context.Context) (Event, error) {
 			return Event{}, fmt.Errorf("read stream: %w", err)
 		}
 
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, ":") {
-			continue
+		if parseErr := s.processLine(line); parseErr != nil {
+			return Event{}, parseErr
 		}
 
-		if !strings.HasPrefix(line, "data:") {
-			continue
+		if len(s.queue) > 0 {
+			ev := s.queue[0]
+			s.queue = s.queue[1:]
+			return ev, nil
+		}
+	}
+}
+
+func (s *openAIStream) processLine(line string) error {
+	line = strings.TrimSpace(line)
+	if line == "" || strings.HasPrefix(line, ":") {
+		return nil
+	}
+
+	if !strings.HasPrefix(line, "data:") {
+		return nil
+	}
+
+	payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+	if payload == "[DONE]" {
+		s.flushToolCalls()
+		s.queue = append(s.queue, Event{Kind: EventDone})
+		s.done = true
+		return nil
+	}
+
+	var chunk openAIChunk
+	if unmarshalErr := json.Unmarshal([]byte(payload), &chunk); unmarshalErr == nil {
+		if chunk.Error != nil {
+			return fmt.Errorf("model error: %s", chunk.Error.Message)
 		}
 
-		payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-		if payload == "[DONE]" {
+		if len(chunk.Choices) > 0 {
+			for _, choice := range chunk.Choices {
+				if choice.Delta.Content != "" {
+					s.queue = append(s.queue, Event{
+						Kind: EventTextDelta,
+						Text: choice.Delta.Content,
+					})
+				}
+
+				for _, tc := range choice.Delta.ToolCalls {
+					acc, exists := s.toolCalls[tc.Index]
+					if !exists {
+						acc = &accumulatedToolCall{}
+						s.toolCalls[tc.Index] = acc
+					}
+					if tc.ID != "" {
+						acc.id = tc.ID
+					}
+					if tc.Function.Name != "" {
+						acc.name = tc.Function.Name
+					}
+					if tc.Function.Arguments != "" {
+						acc.arguments.WriteString(tc.Function.Arguments)
+					}
+				}
+			}
+			return nil
+		}
+	}
+
+	// Check OpenAI Responses API SSE chunk
+	var respChunk openAIResponsesChunk
+	if unmarshalErr := json.Unmarshal([]byte(payload), &respChunk); unmarshalErr == nil && respChunk.Type != "" {
+		if respChunk.Error != nil {
+			return fmt.Errorf("model error: %s", respChunk.Error.Message)
+		}
+		if respChunk.Response != nil && respChunk.Response.Error != nil {
+			return fmt.Errorf("model error: %s", respChunk.Response.Error.Message)
+		}
+
+		switch respChunk.Type {
+		case "response.output_text.delta":
+			if respChunk.Delta != "" {
+				s.queue = append(s.queue, Event{
+					Kind: EventTextDelta,
+					Text: respChunk.Delta,
+				})
+			}
+		case "response.output_item.added":
+			if respChunk.Item != nil && respChunk.Item.Type == "function_call" {
+				callID := respChunk.Item.CallID
+				if callID == "" {
+					callID = respChunk.Item.ID
+				}
+				s.respToolCalls[respChunk.Item.ID] = &accumulatedToolCall{
+					id:   callID,
+					name: respChunk.Item.Name,
+				}
+			}
+		case "response.function_call_arguments.delta":
+			if respChunk.ItemID != "" && respChunk.Delta != "" {
+				if acc, exists := s.respToolCalls[respChunk.ItemID]; exists {
+					acc.arguments.WriteString(respChunk.Delta)
+				}
+			}
+		case "response.output_item.done":
+			if respChunk.Item != nil && respChunk.Item.Type == "function_call" {
+				callID := respChunk.Item.CallID
+				if callID == "" {
+					callID = respChunk.Item.ID
+				}
+				name := respChunk.Item.Name
+				argsStr := strings.TrimSpace(respChunk.Item.Arguments)
+				if acc, exists := s.respToolCalls[respChunk.Item.ID]; exists {
+					if name == "" {
+						name = acc.name
+					}
+					if callID == "" {
+						callID = acc.id
+					}
+					if argsStr == "" {
+						argsStr = strings.TrimSpace(acc.arguments.String())
+					}
+					delete(s.respToolCalls, respChunk.Item.ID)
+				}
+				if callID == "" {
+					callID = fmt.Sprintf("call_%d", time.Now().UnixNano())
+				}
+				if argsStr == "" {
+					argsStr = "{}"
+				}
+				s.queue = append(s.queue, Event{
+					Kind: EventToolCall,
+					ToolCall: ToolCall{
+						ID:        callID,
+						Name:      name,
+						Arguments: json.RawMessage(argsStr),
+					},
+				})
+			}
+		case "response.completed":
 			s.flushToolCalls()
 			s.queue = append(s.queue, Event{Kind: EventDone})
 			s.done = true
-			if len(s.queue) > 0 {
-				ev := s.queue[0]
-				s.queue = s.queue[1:]
-				return ev, nil
-			}
-			return Event{Kind: EventDone}, nil
 		}
-
-		var chunk openAIChunk
-		if unmarshalErr := json.Unmarshal([]byte(payload), &chunk); unmarshalErr == nil {
-			if chunk.Error != nil {
-				return Event{}, fmt.Errorf("model error: %s", chunk.Error.Message)
-			}
-
-			if len(chunk.Choices) > 0 {
-				for _, choice := range chunk.Choices {
-					if choice.Delta.Content != "" {
-						s.queue = append(s.queue, Event{
-							Kind: EventTextDelta,
-							Text: choice.Delta.Content,
-						})
-					}
-
-					for _, tc := range choice.Delta.ToolCalls {
-						acc, exists := s.toolCalls[tc.Index]
-						if !exists {
-							acc = &accumulatedToolCall{}
-							s.toolCalls[tc.Index] = acc
-						}
-						if tc.ID != "" {
-							acc.id = tc.ID
-						}
-						if tc.Function.Name != "" {
-							acc.name = tc.Function.Name
-						}
-						if tc.Function.Arguments != "" {
-							acc.arguments.WriteString(tc.Function.Arguments)
-						}
-					}
-				}
-
-				if len(s.queue) > 0 {
-					ev := s.queue[0]
-					s.queue = s.queue[1:]
-					return ev, nil
-				}
-				continue
-			}
-		}
-
-		// Check OpenAI Responses API SSE chunk
-		var respChunk openAIResponsesChunk
-		if unmarshalErr := json.Unmarshal([]byte(payload), &respChunk); unmarshalErr == nil && respChunk.Type != "" {
-			if respChunk.Error != nil {
-				return Event{}, fmt.Errorf("model error: %s", respChunk.Error.Message)
-			}
-			if respChunk.Response != nil && respChunk.Response.Error != nil {
-				return Event{}, fmt.Errorf("model error: %s", respChunk.Response.Error.Message)
-			}
-
-			switch respChunk.Type {
-			case "response.output_text.delta":
-				if respChunk.Delta != "" {
-					s.queue = append(s.queue, Event{
-						Kind: EventTextDelta,
-						Text: respChunk.Delta,
-					})
-				}
-			case "response.output_item.added":
-				if respChunk.Item != nil && respChunk.Item.Type == "function_call" {
-					callID := respChunk.Item.CallID
-					if callID == "" {
-						callID = respChunk.Item.ID
-					}
-					s.respToolCalls[respChunk.Item.ID] = &accumulatedToolCall{
-						id:   callID,
-						name: respChunk.Item.Name,
-					}
-				}
-			case "response.function_call_arguments.delta":
-				if respChunk.ItemID != "" && respChunk.Delta != "" {
-					if acc, exists := s.respToolCalls[respChunk.ItemID]; exists {
-						acc.arguments.WriteString(respChunk.Delta)
-					}
-				}
-			case "response.output_item.done":
-				if respChunk.Item != nil && respChunk.Item.Type == "function_call" {
-					callID := respChunk.Item.CallID
-					if callID == "" {
-						callID = respChunk.Item.ID
-					}
-					name := respChunk.Item.Name
-					argsStr := strings.TrimSpace(respChunk.Item.Arguments)
-					if acc, exists := s.respToolCalls[respChunk.Item.ID]; exists {
-						if name == "" {
-							name = acc.name
-						}
-						if callID == "" {
-							callID = acc.id
-						}
-						if argsStr == "" {
-							argsStr = strings.TrimSpace(acc.arguments.String())
-						}
-						delete(s.respToolCalls, respChunk.Item.ID)
-					}
-					if callID == "" {
-						callID = fmt.Sprintf("call_%d", time.Now().UnixNano())
-					}
-					if argsStr == "" {
-						argsStr = "{}"
-					}
-					s.queue = append(s.queue, Event{
-						Kind: EventToolCall,
-						ToolCall: ToolCall{
-							ID:        callID,
-							Name:      name,
-							Arguments: json.RawMessage(argsStr),
-						},
-					})
-				}
-			case "response.completed":
-				s.flushToolCalls()
-				s.queue = append(s.queue, Event{Kind: EventDone})
-				s.done = true
-			}
-
-			if len(s.queue) > 0 {
-				ev := s.queue[0]
-				s.queue = s.queue[1:]
-				return ev, nil
-			}
-			continue
-		}
+		return nil
 	}
+	return nil
 }
 
 func (s *openAIStream) flushToolCalls() {

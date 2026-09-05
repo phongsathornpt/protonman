@@ -539,13 +539,12 @@ func (l *Loop) streamRound(
 	if stream == nil {
 		return model.Message{}, nil, fmt.Errorf("stream model round %d: nil stream", round)
 	}
+	defer func() {
+		_ = stream.Close()
+	}()
 	assistant, calls, streamErr := consumeStream(ctx, round, stream, sink)
-	closeErr := stream.Close()
 	if streamErr != nil {
 		return model.Message{}, nil, streamErr
-	}
-	if closeErr != nil {
-		return model.Message{}, nil, fmt.Errorf("close model stream round %d: %w", round, closeErr)
 	}
 	return assistant, calls, nil
 }
