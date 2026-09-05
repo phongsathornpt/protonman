@@ -350,7 +350,12 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if err != nil {
 			return nil, nil, fmt.Errorf("invalid mode %q: %w", params.ModeID, err)
 		}
-		sess.service.SetMode(mode)
+		if err := sess.service.SetMode(mode); err != nil {
+			return nil, nil, fmt.Errorf("set session mode: %w", err)
+		}
+		if err := sess.saveState(context.WithoutCancel(ctx)); err != nil {
+			return nil, nil, fmt.Errorf("save session %q: %w", params.SessionID, err)
+		}
 
 		notify := &RPCNotification{
 			JSONRPC: "2.0",
@@ -386,7 +391,10 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if len(request.Params) > 0 {
 			_ = json.Unmarshal(request.Params, &params)
 		}
-		sessions := s.listSessions(ctx, params.Cwd)
+		sessions, err := s.listSessions(ctx, params.Cwd)
+		if err != nil {
+			return nil, nil, err
+		}
 		return SessionListResult{Sessions: sessions}, nil, nil
 
 	case "session/delete":
@@ -398,7 +406,9 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if params.SessionID == "" {
 			return nil, nil, errors.New("sessionId is required")
 		}
-		s.deleteSession(ctx, params.SessionID)
+		if err := s.deleteSession(ctx, params.SessionID); err != nil {
+			return nil, nil, err
+		}
 		return nil, nil, nil
 
 	default:
@@ -432,8 +442,12 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 		}
 		if found {
 			sess.SetMessages(session.ToModelMessages(state.Messages))
-			if mode, err := permission.ParseMode(state.PermissionMode); err == nil {
-				sess.service.SetMode(mode)
+			mode, err := permission.ParseMode(state.PermissionMode)
+			if err != nil {
+				return nil, fmt.Errorf("session permission mode %q: %w", sessionID, err)
+			}
+			if err := sess.service.SetMode(mode); err != nil {
+				return nil, fmt.Errorf("restore session mode %q: %w", sessionID, err)
 			}
 		}
 	}
@@ -460,7 +474,7 @@ func (s *Server) newSession(sessionID string, cwd string) (*Session, error) {
 	return NewSession(sessionID, cwd, service, s.registry, runner, s.store), nil
 }
 
-func (s *Server) listSessions(ctx context.Context, cwd string) []SessionInfo {
+func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, error) {
 	s.mu.Lock()
 	seen := make(map[string]bool)
 	list := make([]SessionInfo, 0, len(s.sessions))
@@ -479,29 +493,32 @@ func (s *Server) listSessions(ctx context.Context, cwd string) []SessionInfo {
 
 	if s.store != nil {
 		storedIDs, err := s.store.List(ctx, "")
-		if err == nil {
-			for _, id := range storedIDs {
-				if seen[id] {
-					continue
-				}
-				list = append(list, SessionInfo{
-					SessionID: id,
-					Cwd:       cwd,
-					Title:     "Session " + id,
-				})
+		if err != nil {
+			return nil, fmt.Errorf("list session state: %w", err)
+		}
+		for _, id := range storedIDs {
+			if seen[id] {
+				continue
 			}
+			list = append(list, SessionInfo{
+				SessionID: id,
+				Cwd:       cwd,
+				Title:     "Session " + id,
+			})
 		}
 	}
 
-	return list
+	return list, nil
 }
 
-func (s *Server) deleteSession(ctx context.Context, sessionID string) {
+func (s *Server) deleteSession(ctx context.Context, sessionID string) error {
+	if s.store != nil {
+		if err := s.store.Delete(ctx, sessionID); err != nil {
+			return fmt.Errorf("delete session state %q: %w", sessionID, err)
+		}
+	}
 	s.mu.Lock()
 	delete(s.sessions, sessionID)
 	s.mu.Unlock()
-
-	if s.store != nil {
-		_ = s.store.Delete(ctx, sessionID)
-	}
+	return nil
 }

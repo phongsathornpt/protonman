@@ -3,6 +3,7 @@ package acp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
@@ -233,15 +234,22 @@ func (s *Session) ExecutePrompt(
 	}
 	s.mu.Unlock()
 
+	saveErr := s.saveState(context.WithoutCancel(promptCtx))
 	if wasCancelled {
+		if saveErr != nil {
+			return SessionPromptResult{}, fmt.Errorf("save canceled session %q: %w", s.id, saveErr)
+		}
 		return SessionPromptResult{StopReason: StopReasonCancelled}, nil
 	}
 	if err != nil {
+		if saveErr != nil {
+			return SessionPromptResult{}, errors.Join(err, fmt.Errorf("save session %q: %w", s.id, saveErr))
+		}
 		return SessionPromptResult{}, err
 	}
-
-	// Persist session if file store configured
-	s.saveState()
+	if saveErr != nil {
+		return SessionPromptResult{}, fmt.Errorf("save session %q: %w", s.id, saveErr)
+	}
 
 	return SessionPromptResult{StopReason: StopReasonEndTurn}, nil
 }
@@ -315,7 +323,9 @@ func (s *Session) handleSlashCommand(
 		s.mu.Lock()
 		s.messages = nil
 		s.mu.Unlock()
-		s.saveState()
+		if err := s.saveState(context.WithoutCancel(ctx)); err != nil {
+			return true, SessionPromptResult{}, fmt.Errorf("save session %q: %w", s.id, err)
+		}
 		_ = notifier(RPCNotification{
 			JSONRPC: "2.0",
 			Method:  "session/update",
@@ -573,7 +583,9 @@ func (s *Session) handleSlashCommand(
 			},
 		)
 		s.mu.Unlock()
-		s.saveState()
+		if err := s.saveState(context.WithoutCancel(ctx)); err != nil {
+			return true, SessionPromptResult{}, fmt.Errorf("save session %q: %w", s.id, err)
+		}
 
 		if callErr != nil {
 			return true, SessionPromptResult{}, callErr
@@ -625,15 +637,15 @@ func notifyToolCallUpdate(
 	})
 }
 
-func (s *Session) saveState() {
+func (s *Session) saveState(ctx context.Context) error {
 	if s.store == nil {
-		return
+		return nil
 	}
 	s.mu.Lock()
 	messages := model.CloneMessages(s.messages)
 	s.mu.Unlock()
 
-	_ = s.store.Save(context.Background(), s.id, session.State{
+	return s.store.Save(ctx, s.id, session.State{
 		PermissionMode: s.service.Mode().String(),
 		Messages:       session.FromModelMessages(messages),
 		UpdatedAt:      time.Now().UTC(),

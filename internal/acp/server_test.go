@@ -273,6 +273,54 @@ func TestACPSessionLoadAndReplay(t *testing.T) {
 	}
 }
 
+func TestACPPromptSurfacesPersistenceFailure(t *testing.T) {
+	store := invalidSessionStore(t)
+	server := newTestServerWithRunner(t, permission.ModeAlwaysApprove, &streamingACPRunner{})
+	server.store = store
+	created, _, err := server.dispatch(context.Background(), RPCRequest{Method: "session/new"}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("session/new error = %v", err)
+	}
+	sessionID := created.(SessionNewResult).SessionID
+	sess, ok := server.lookupSession(sessionID)
+	if !ok {
+		t.Fatalf("session %q not found", sessionID)
+	}
+
+	_, err = sess.ExecutePrompt(context.Background(), []ContentBlock{{Type: BlockTypeText, Text: "read"}}, func(RPCNotification) error {
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "save session") {
+		t.Fatalf("ExecutePrompt() error = %v, want persistence error", err)
+	}
+}
+
+func TestACPStorageOperationFailuresSurface(t *testing.T) {
+	store := invalidSessionStore(t)
+	server := newTestServer(t, permission.ModeAsk)
+	server.store = store
+	created, _, err := server.dispatch(context.Background(), RPCRequest{Method: "session/new"}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("session/new error = %v", err)
+	}
+	sessionID := created.(SessionNewResult).SessionID
+
+	_, _, err = server.dispatch(context.Background(), RPCRequest{Method: "session/list"}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "list session state") {
+		t.Fatalf("session/list error = %v, want storage error", err)
+	}
+	_, _, err = server.dispatch(context.Background(), RPCRequest{
+		Method: "session/delete",
+		Params: json.RawMessage(`{"sessionId":"` + sessionID + `"}`),
+	}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "delete session state") {
+		t.Fatalf("session/delete error = %v, want storage error", err)
+	}
+	if _, ok := server.lookupSession(sessionID); !ok {
+		t.Fatal("session was removed after persistent delete failure")
+	}
+}
+
 func TestACPCancelStopsInFlightPrompt(t *testing.T) {
 	runner := &blockingACPRunner{
 		started:  make(chan struct{}),
@@ -428,6 +476,19 @@ func extractSessionID(t *testing.T, raw []byte) string {
 	}
 	t.Fatalf("session id not found in %s", raw)
 	return ""
+}
+
+func invalidSessionStore(t *testing.T) *session.FileStore {
+	t.Helper()
+	root := t.TempDir() + "/not-a-directory"
+	if err := os.WriteFile(root, []byte("occupied"), 0o600); err != nil {
+		t.Fatalf("create invalid store root: %v", err)
+	}
+	store, err := session.NewFileStore(root)
+	if err != nil {
+		t.Fatalf("NewFileStore() error = %v", err)
+	}
+	return store
 }
 
 type acpHandler struct {
