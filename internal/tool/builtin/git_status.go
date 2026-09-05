@@ -58,6 +58,9 @@ func (h gitStatusHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	if h.workspace == nil {
 		return tool.Result{}, fmt.Errorf("git_status workspace is required")
 	}
+	if h.launcher == nil {
+		return tool.Result{}, fmt.Errorf("git_status sandbox launcher is required: configure an explicit sandbox profile (use --sandbox off to opt out)")
+	}
 	var input gitStatusInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
 		return tool.Result{}, fmt.Errorf("decode git_status arguments: %w", err)
@@ -92,16 +95,11 @@ func (h gitStatusHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	}
 
 	var command *exec.Cmd
-	if h.launcher != nil {
-		shellCmd := "git " + quoteGitArgs(arguments)
-		var err error
-		command, err = h.launcher.Command(ctx, h.workspace.Root(), shellCmd)
-		if err != nil {
-			return tool.Result{}, err
-		}
-	} else {
-		command = exec.CommandContext(ctx, "git", arguments...)
-		command.Dir = h.workspace.Root()
+	shellCmd := "git " + quoteGitArgs(arguments)
+	var err error
+	command, err = h.launcher.Command(ctx, h.workspace.Root(), shellCmd)
+	if err != nil {
+		return tool.Result{}, err
 	}
 	output, err := command.Output()
 	if err != nil {

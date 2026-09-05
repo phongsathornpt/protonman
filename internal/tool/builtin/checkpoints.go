@@ -12,8 +12,10 @@ import (
 
 type noCheckpointStore struct{}
 
+var errNoCheckpointStore = fmt.Errorf("checkpoint store is not configured")
+
 func (noCheckpointStore) Capture(context.Context, []string) (string, error) {
-	return "", nil
+	return "", errNoCheckpointStore
 }
 
 func (noCheckpointStore) Restore(context.Context, string) error {
