@@ -238,11 +238,8 @@ func run(ctx context.Context, args []string) error {
 			provKey = model.DefaultProtonmanName
 		}
 		if prov, ok := loadedConfig.Providers[provKey]; ok && strings.TrimSpace(prov.APIKey) != "" {
-			baseURL := prov.BaseURL
-			if baseURL == "" {
-				baseURL = model.DefaultProtonmanEndpoint
-			}
-			client := model.NewOpenAIClient(baseURL, prov.APIKey, loadedConfig.Model.Default, model.WithSessionID(sessionID))
+			baseURL := model.ResolveProviderBaseURL(provKey, prov.BaseURL)
+			client := model.NewProviderClient(provKey, baseURL, prov.APIKey, loadedConfig.Model.Default, model.WithSessionID(sessionID))
 			coordinator.SetClient(client)
 			var loopOpts []turn.Option
 			if skillRegistry != nil {
