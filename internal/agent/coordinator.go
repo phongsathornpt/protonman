@@ -50,11 +50,11 @@ type Coordinator struct {
 	workspace      *workspace.Workspace
 	policy         *permission.Policy
 
-	sem            chan struct{}
-	wsLock         sync.RWMutex
-	activeMu       sync.RWMutex
-	active         map[string]*activeEntry
-	wg             sync.WaitGroup
+	sem      chan struct{}
+	wsLock   sync.RWMutex
+	activeMu sync.RWMutex
+	active   map[string]*activeEntry
+	wg       sync.WaitGroup
 
 	maxDepth       int
 	maxRounds      int
@@ -62,8 +62,8 @@ type Coordinator struct {
 	eventSink      EventSink
 	runnerFactory  RunnerFactory
 
-	seq            uint64
-	closed         atomic.Bool
+	seq    uint64
+	closed atomic.Bool
 }
 
 // Option configures a Coordinator.

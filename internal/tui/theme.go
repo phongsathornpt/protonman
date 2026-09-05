@@ -39,24 +39,24 @@ var (
 )
 
 var (
-	brandStyle     = lipgloss.NewStyle().Bold(true).Foreground(accentAssistant)
-	userStyle      = lipgloss.NewStyle().Foreground(accentUser)
-	assistantStyle = lipgloss.NewStyle()
-	toolStyle      = lipgloss.NewStyle().Foreground(accentTool)
-	systemStyle    = lipgloss.NewStyle().Foreground(accentSystem)
-	mutedStyle     = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "238", Dark: "7"})
-	statusStyle    = lipgloss.NewStyle().Foreground(accentSystem)
-	warningStyle   = lipgloss.NewStyle().Foreground(warningColor)
-	successStyle   = lipgloss.NewStyle().Foreground(accentSuccess)
-	errorStyle     = lipgloss.NewStyle().Foreground(accentError)
-	planStyle      = lipgloss.NewStyle().Foreground(accentPlan)
+	brandStyle       = lipgloss.NewStyle().Bold(true).Foreground(accentAssistant)
+	userStyle        = lipgloss.NewStyle().Foreground(accentUser)
+	assistantStyle   = lipgloss.NewStyle()
+	toolStyle        = lipgloss.NewStyle().Foreground(accentTool)
+	systemStyle      = lipgloss.NewStyle().Foreground(accentSystem)
+	mutedStyle       = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "238", Dark: "7"})
+	statusStyle      = lipgloss.NewStyle().Foreground(accentSystem)
+	warningStyle     = lipgloss.NewStyle().Foreground(warningColor)
+	successStyle     = lipgloss.NewStyle().Foreground(accentSuccess)
+	errorStyle       = lipgloss.NewStyle().Foreground(accentError)
+	planStyle        = lipgloss.NewStyle().Foreground(accentPlan)
 	commandStyle     = lipgloss.NewStyle().Foreground(commandColor)
 	toolTargetStyle  = lipgloss.NewStyle().Foreground(accentUser)
 	toolSummaryStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "240", Dark: "8"})
 	toolFoldStyle    = lipgloss.NewStyle().Italic(true).Foreground(lipgloss.AdaptiveColor{Light: "244", Dark: "8"})
 	bodyStyle        = lipgloss.NewStyle()
-	modalStyle     = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(warningColor).
-			Padding(1, 2)
+	modalStyle       = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(warningColor).
+				Padding(1, 2)
 )

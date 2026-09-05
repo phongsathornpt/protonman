@@ -809,7 +809,3 @@ func TestLiveOpenCodeResponsesMuseSpark(t *testing.T) {
 		t.Logf("Tool call: %+v", toolCalls[0])
 	}
 }
-
-
-
-

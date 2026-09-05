@@ -342,4 +342,3 @@ func TestSlashCommandModelFree(t *testing.T) {
 		t.Fatalf("expected opencode preset from /model free, got: %s", view.nameInput.Value())
 	}
 }
-

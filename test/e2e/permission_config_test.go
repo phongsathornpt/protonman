@@ -392,5 +392,3 @@ func TestE2EProviderSwitchAndSelect(t *testing.T) {
 		t.Fatalf("config file permissions = %o, want 0600", perm)
 	}
 }
-
-

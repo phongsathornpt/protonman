@@ -338,4 +338,3 @@ func TestMCPToolPatternMatching(t *testing.T) {
 		})
 	}
 }
-

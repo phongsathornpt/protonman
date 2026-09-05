@@ -83,4 +83,3 @@ func TestParseArgsSessionFlagsMutualExclusion(t *testing.T) {
 		t.Fatalf("unexpected error message: %v", err)
 	}
 }
-

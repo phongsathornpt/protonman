@@ -242,4 +242,3 @@ func TestE2ENewSessionByDefaultAndResume(t *testing.T) {
 		t.Fatalf("expected custom session file %s to exist: %v", customFile, err)
 	}
 }
-
