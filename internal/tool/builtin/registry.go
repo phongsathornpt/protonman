@@ -43,11 +43,12 @@ func NewRegistry(handlers ...tool.Handler) (*Registry, error) {
 type RegistryOption func(*registryOptions) error
 
 type registryOptions struct {
-	stores      []checkpoint.Store
-	launcher    sandbox.Launcher
-	network     sandbox.NetworkPolicy
-	skills      *skill.Registry
-	coordinator *agent.Coordinator
+	stores            []checkpoint.Store
+	launcher          sandbox.Launcher
+	network           sandbox.NetworkPolicy
+	sandboxConfigured bool
+	skills            *skill.Registry
+	coordinator       *agent.Coordinator
 }
 
 // WithCheckpointStore attaches durable edit checkpoints.
@@ -62,10 +63,19 @@ func WithCheckpointStore(store checkpoint.Store) RegistryOption {
 }
 
 // WithSandbox confines bash and web_fetch under the resolved profile.
+// The launcher must be non-nil; use an Off-profile OSLauncher for explicit
+// opt-out rather than omitting this option.
 func WithSandbox(launcher sandbox.Launcher, network sandbox.NetworkPolicy) RegistryOption {
 	return func(options *registryOptions) error {
+		if launcher == nil {
+			return fmt.Errorf("sandbox launcher is required (use an explicit off-profile launcher to opt out)")
+		}
+		if !network.Mode.Valid() {
+			return fmt.Errorf("sandbox network policy is required")
+		}
 		options.launcher = launcher
 		options.network = network
+		options.sandboxConfigured = true
 		return nil
 	}
 }
@@ -87,6 +97,9 @@ func WithAgentCoordinator(coordinator *agent.Coordinator) RegistryOption {
 }
 
 // NewDefaultRegistry creates the default workspace-aware coding tool set.
+// WithSandbox (explicit launcher, even for Off) and WithCheckpointStore are
+// required; omitting them fails closed instead of silently running unconfined
+// or without backups.
 func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryOption) (*Registry, error) {
 	if workspaceRoot == nil {
 		return nil, fmt.Errorf("create default registry: workspace is required")
@@ -94,7 +107,7 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 	cfg := registryOptions{
 		stores: make([]checkpoint.Store, 0),
 		network: sandbox.NetworkPolicy{
-			Mode:    sandbox.NetworkUnrestricted,
+			Mode:    sandbox.NetworkBlocked,
 			Allowed: []sandbox.Origin{},
 		},
 	}
@@ -105,6 +118,12 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 		if err := option(&cfg); err != nil {
 			return nil, fmt.Errorf("create default registry: %w", err)
 		}
+	}
+	if !cfg.sandboxConfigured || cfg.launcher == nil {
+		return nil, fmt.Errorf("create default registry: WithSandbox with an explicit launcher is required (use an off-profile launcher to opt out)")
+	}
+	if len(cfg.stores) == 0 {
+		return nil, fmt.Errorf("create default registry: WithCheckpointStore is required")
 	}
 	checkpointStore := selectCheckpointStore(cfg.stores)
 	handlers := []tool.Handler{

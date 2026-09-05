@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"runtime"
 	"strings"
 	"sync"
 
@@ -58,6 +57,9 @@ func (bashHandler) Definition() tool.Definition {
 func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	if h.workspace == nil {
 		return tool.Result{}, fmt.Errorf("bash workspace is required")
+	}
+	if h.launcher == nil {
+		return tool.Result{}, fmt.Errorf("bash sandbox launcher is required: configure an explicit sandbox profile (use --sandbox off to opt out)")
 	}
 	var input bashInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
@@ -112,19 +114,10 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 }
 
 func (h bashHandler) command(ctx context.Context, command string) (*exec.Cmd, error) {
-	if h.launcher != nil {
-		return h.launcher.Command(ctx, h.workspace.Root(), command)
+	if h.launcher == nil {
+		return nil, fmt.Errorf("bash sandbox launcher is required: configure an explicit sandbox profile (use --sandbox off to opt out)")
 	}
-	return shellCommand(ctx, h.workspace.Root(), command), nil
-}
-
-func shellCommand(ctx context.Context, dir string, command string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, "sh", "-c", command)
-	if runtime.GOOS == "windows" {
-		cmd = exec.CommandContext(ctx, "cmd.exe", "/C", command)
-	}
-	cmd.Dir = dir
-	return cmd
+	return h.launcher.Command(ctx, h.workspace.Root(), command)
 }
 
 type boundedBuffer struct {

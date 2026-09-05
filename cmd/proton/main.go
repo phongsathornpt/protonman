@@ -104,10 +104,10 @@ func run(ctx context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("create sandbox profile: %w", err)
 	}
-	var launcher sandbox.Launcher
-	if sandboxProfile.Confines() {
-		launcher = sandbox.NewOSLauncher(sandboxProfile)
-	}
+	// Always build an explicit launcher, even for the Off profile.
+	// Off yields a bare shell via OSLauncher (explicit opt-out), never a nil
+	// launcher, so bash/git_status fail-closed guards stay satisfied.
+	launcher := sandbox.NewOSLauncher(sandboxProfile)
 
 	skillsResult, err := skill.Discover(ctx, skill.Options{
 		HomeDir:        homeDir,

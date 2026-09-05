@@ -73,10 +73,10 @@ func (n *Name) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// ParseName parses built-in profile names. Unknown names fail closed.
+// ParseName parses built-in profile names. Unknown names and empty strings fail closed.
 func ParseName(value string) (Name, error) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "", "off", "none":
+	case "off", "none":
 		return NameOff, nil
 	case "workspace":
 		return NameWorkspace, nil
