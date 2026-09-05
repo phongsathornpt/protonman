@@ -14,6 +14,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
+	"github.com/projectTHORN/proton/internal/glob"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/workspace"
 )
@@ -137,11 +138,9 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 			return nil
 		}
 		if input.Include != "" {
-			matched, matchErr := filepath.Match(input.Include, entry.Name())
-			if matchErr != nil {
-				return fmt.Errorf("match grep include glob: %w", matchErr)
-			}
-			if !matched {
+			relSearch, _ := filepath.Rel(resolvedPath, path)
+			relWork, _ := h.workspace.RelRead(path)
+			if !matchGrepInclude(input.Include, entry.Name(), relSearch, relWork) {
 				return nil
 			}
 		}
@@ -254,4 +253,24 @@ func truncateGrepLine(line string) string {
 		count++
 	}
 	return line + "…"
+}
+
+func matchGrepInclude(pattern string, name string, relPaths ...string) bool {
+	pattern = strings.TrimPrefix(filepath.ToSlash(pattern), "/")
+	if glob.Match(pattern, name) {
+		return true
+	}
+	for _, rel := range relPaths {
+		if rel == "" || rel == "." {
+			continue
+		}
+		rel = strings.TrimPrefix(filepath.ToSlash(rel), "/")
+		if glob.Match(pattern, rel) {
+			return true
+		}
+		if strings.HasPrefix(pattern, "**/") && glob.Match(strings.TrimPrefix(pattern, "**/"), rel) {
+			return true
+		}
+	}
+	return false
 }

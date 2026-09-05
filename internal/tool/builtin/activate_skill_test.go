@@ -171,3 +171,35 @@ func TestActivateSkill_AuthorizesReadRootsForFileTools(t *testing.T) {
 		t.Errorf("expected ErrOutsideWorkspace, got: %v", err)
 	}
 }
+
+func TestActivateSkill_FailsIfSkillDirNotFound(t *testing.T) {
+	ctx := context.Background()
+	wsRoot := t.TempDir()
+	ws, err := workspace.New(wsRoot, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	nonExistentDir := filepath.Join(t.TempDir(), "nonexistent-skill-dir")
+	s := skill.Skill{
+		Name:         "ghost-skill",
+		Description:  "Skill with nonexistent directory",
+		Location:     filepath.Join(nonExistentDir, "SKILL.md"),
+		BaseDir:      nonExistentDir,
+		Scope:        skill.ScopeUser,
+		Instructions: "Should not activate.",
+	}
+	skillReg := skill.NewRegistry(s)
+	activateHandler := NewActivateSkill(skillReg, ws)
+
+	activateArgs, _ := json.Marshal(map[string]any{"name": "ghost-skill"})
+	activateCall, _ := tool.NewCall("act-ghost", "activate_skill", activateArgs)
+	_, err = activateHandler.Execute(ctx, activateCall)
+	if err == nil {
+		t.Fatal("expected activate_skill to fail for nonexistent BaseDir, got nil")
+	}
+
+	if skillReg.IsActivated("ghost-skill") {
+		t.Error("expected skill not to be marked activated after failed AddReadRoot")
+	}
+}
