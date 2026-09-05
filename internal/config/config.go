@@ -22,6 +22,8 @@ const (
 
 	// DefaultMaxRounds is the fallback maximum rounds per turn when unspecified.
 	DefaultMaxRounds = 20
+	// DefaultMaxToolCalls is the fallback cumulative tool-call limit per turn.
+	DefaultMaxToolCalls = 100
 )
 
 // Options controls which configuration layers are considered.
@@ -63,8 +65,9 @@ type ModelConfig struct {
 
 // AgentConfig specifies autonomous agent execution settings.
 type AgentConfig struct {
-	MaxRounds int    `toml:"max_rounds"`
-	Profile   string `toml:"profile"`
+	MaxRounds    int    `toml:"max_rounds"`
+	MaxToolCalls int    `toml:"max_tool_calls"`
+	Profile      string `toml:"profile"`
 }
 
 // Snapshot is the effective configuration after layered loading.
@@ -100,8 +103,9 @@ type fileDocument struct {
 }
 
 type fileAgent struct {
-	MaxRounds *int    `toml:"max_rounds,omitempty"`
-	Profile   *string `toml:"profile,omitempty"`
+	MaxRounds    *int    `toml:"max_rounds,omitempty"`
+	MaxToolCalls *int    `toml:"max_tool_calls,omitempty"`
+	Profile      *string `toml:"profile,omitempty"`
 }
 
 type fileSandbox struct {
@@ -164,7 +168,8 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 		Sandbox:        sandbox.NameOff,
 		Providers:      make(map[string]ProviderConfig),
 		Agent: AgentConfig{
-			MaxRounds: DefaultMaxRounds,
+			MaxRounds:    DefaultMaxRounds,
+			MaxToolCalls: DefaultMaxToolCalls,
 		},
 		Sources:  make([]string, 0, 2),
 		Warnings: make([]string, 0),
@@ -278,6 +283,9 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 	if document.Agent.MaxRounds != nil {
 		snapshot.Agent.MaxRounds = *document.Agent.MaxRounds
 	}
+	if document.Agent.MaxToolCalls != nil {
+		snapshot.Agent.MaxToolCalls = *document.Agent.MaxToolCalls
+	}
 	if document.Agent.Profile != nil {
 		snapshot.Agent.Profile = strings.TrimSpace(*document.Agent.Profile)
 	}
@@ -356,6 +364,13 @@ func DeleteUserProviderConfig(homeDir string, providerName string) error {
 func SaveUserMaxRounds(homeDir string, maxRounds int) error {
 	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
 		doc.Agent.MaxRounds = &maxRounds
+	})
+}
+
+// SaveUserMaxToolCalls updates the cumulative tool-call limit in ~/.proton/config.toml.
+func SaveUserMaxToolCalls(homeDir string, maxToolCalls int) error {
+	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
+		doc.Agent.MaxToolCalls = &maxToolCalls
 	})
 }
 

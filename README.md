@@ -307,6 +307,7 @@ profile = "off"
 # Agent execution boundaries
 [agent]
 max_rounds = 20
+max_tool_calls = 100
 
 # Active model preferences
 [model]
