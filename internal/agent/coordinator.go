@@ -21,6 +21,7 @@ const (
 	defaultMaxConcurrency = 4
 	defaultMaxDepth       = 1
 	defaultMaxRounds      = 10
+	defaultMaxToolCalls   = turn.DefaultMaxToolCalls
 	defaultTimeout        = 5 * time.Minute
 	maxSummaryBytes       = 32 * 1024 // 32KB bound for child summaries returned to parent
 )
@@ -62,6 +63,7 @@ type Coordinator struct {
 
 	maxDepth       int
 	maxRounds      int
+	maxToolCalls   int
 	defaultTimeout time.Duration
 	eventSink      EventSink
 	runnerFactory  RunnerFactory
@@ -96,6 +98,15 @@ func WithMaxRounds(rounds int) Option {
 	return func(c *Coordinator) {
 		if rounds > 0 {
 			c.maxRounds = rounds
+		}
+	}
+}
+
+// WithMaxToolCalls sets the cumulative tool-call limit per subagent.
+func WithMaxToolCalls(calls int) Option {
+	return func(c *Coordinator) {
+		if calls >= 0 {
+			c.maxToolCalls = calls
 		}
 	}
 }
@@ -163,6 +174,7 @@ func NewCoordinator(
 		active:         make(map[string]*activeEntry),
 		maxDepth:       defaultMaxDepth,
 		maxRounds:      defaultMaxRounds,
+		maxToolCalls:   defaultMaxToolCalls,
 		defaultTimeout: defaultTimeout,
 	}
 	for _, opt := range options {
@@ -476,6 +488,7 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 			client,
 			service,
 			turn.WithMaxRounds(c.maxRounds),
+			turn.WithMaxToolCalls(c.maxToolCalls),
 		)
 		if lerr != nil {
 			return Result{AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create turn loop: %w", lerr)
