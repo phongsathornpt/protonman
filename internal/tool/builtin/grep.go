@@ -161,6 +161,11 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	if err != nil {
 		return tool.Result{}, err
 	}
+	searchOutputBase, err := h.workspace.RelRead(resolvedPath)
+	if err != nil {
+		return tool.Result{}, fmt.Errorf("relative grep root: %w", err)
+	}
+	searchOutputBase = filepath.ToSlash(searchOutputBase)
 
 	grepMatcher, err := newGrepMatcher(input.Pattern)
 	if err != nil {
@@ -225,23 +230,29 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 			if entry.Name() == ".git" && path != resolvedPath {
 				return filepath.SkipDir
 			}
-			return hashGrepSnapshotEntry(snapshotHash, relSearch, entry)
+			if path != resolvedPath {
+				if err := h.workspace.CheckAbsoluteRead(ctx, path); err != nil {
+					return err
+				}
+			}
+			_, err := hashGrepSnapshotEntry(snapshotHash, relSearch, entry)
+			return err
 		}
 		if entry.Type()&os.ModeSymlink != 0 {
 			return nil
 		}
-		relWork, relErr := h.workspace.RelRead(path)
-		if relErr != nil {
-			return relErr
-		}
-		relWork = filepath.ToSlash(relWork)
+		relWork := joinGrepRelative(searchOutputBase, relSearch)
 		if input.Include != "" {
 			if !matchGrepInclude(input.Include, entry.Name(), relSearch, relWork) {
 				return nil
 			}
 		}
-		if err := hashGrepSnapshotEntry(snapshotHash, relSearch, entry); err != nil {
+		info, err := hashGrepSnapshotEntry(snapshotHash, relSearch, entry)
+		if err != nil {
 			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return nil
 		}
 		if !scanEnabled {
 			return nil
@@ -366,10 +377,10 @@ func (m grepMatcher) Match(line []byte) bool {
 	return m.regexp.Match(line)
 }
 
-func hashGrepSnapshotEntry(h hash.Hash, relative string, entry os.DirEntry) error {
+func hashGrepSnapshotEntry(h hash.Hash, relative string, entry os.DirEntry) (os.FileInfo, error) {
 	info, err := entry.Info()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	_, _ = h.Write([]byte(relative))
 	var encoded [24]byte
@@ -377,7 +388,7 @@ func hashGrepSnapshotEntry(h hash.Hash, relative string, entry os.DirEntry) erro
 	binary.LittleEndian.PutUint64(encoded[8:16], uint64(info.ModTime().UnixNano()))
 	binary.LittleEndian.PutUint64(encoded[16:24], uint64(info.Mode()))
 	_, _ = h.Write(encoded[:])
-	return nil
+	return info, nil
 }
 
 func scanGrepFile(
@@ -469,6 +480,16 @@ func grepLineCut(line []byte) (int, bool) {
 		position += size
 	}
 	return len(line), false
+}
+
+func joinGrepRelative(base, relative string) string {
+	if relative == "" || relative == "." {
+		return base
+	}
+	if base == "" || base == "." {
+		return relative
+	}
+	return strings.TrimSuffix(base, "/") + "/" + strings.TrimPrefix(relative, "/")
 }
 
 func matchGrepInclude(pattern string, name string, relPaths ...string) bool {
