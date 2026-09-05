@@ -96,6 +96,9 @@ Headless flags:
 }
 
 func stdinIsTerminal() bool {
+	if truthy(os.Getenv("PROTON_FORCE_TTY")) {
+		return true
+	}
 	info, err := os.Stdin.Stat()
 	if err != nil {
 		return false
@@ -104,6 +107,9 @@ func stdinIsTerminal() bool {
 }
 
 func stdoutIsTerminal() bool {
+	if truthy(os.Getenv("PROTON_FORCE_TTY")) {
+		return true
+	}
 	info, err := os.Stdout.Stat()
 	if err != nil {
 		return false

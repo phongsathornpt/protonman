@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -176,43 +177,77 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 	defer cancel()
 	defer ui.bridge.Close()
 
-	bModel := newBubbleModel(
-		runCtx,
-		ui.service,
-		ui.registry,
-		ui.todo,
-		ui.runner,
-		ui.bridge,
-		ui.workDir,
-		ui.initialMessages,
-	)
-	bModel.coordinator = ui.coordinator
-	bModel.skills = ui.skills
-	bModel.activeModel = ui.modelConfig.Default
-	bModel.activeProvider = ui.modelConfig.Provider
-	bModel.providers = ui.providers
-	bModel.sessionID = ui.sessionID
-	if ui.hasAgentConfig {
-		bModel.maxRounds = ui.agentConfig.MaxRounds
-		bModel.agentProfile = ui.agentConfig.Profile
-	}
-	bModel.reconfigureRunner()
+	currentMessages := model.CloneMessages(ui.initialMessages)
 
-	program := tea.NewProgram(
-		bModel,
-		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
-		tea.WithContext(runCtx),
-	)
-	finalModel, err := program.Run()
-	if modelState, ok := finalModel.(*bubbleModel); ok {
-		ui.finalMessages = model.CloneMessages(modelState.messages)
-	}
-	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return fmt.Errorf("run Bubble Tea UI: %w", ctxErr)
+	for {
+		bModel := newBubbleModel(
+			runCtx,
+			ui.service,
+			ui.registry,
+			ui.todo,
+			ui.runner,
+			ui.bridge,
+			ui.workDir,
+			currentMessages,
+		)
+		bModel.coordinator = ui.coordinator
+		bModel.skills = ui.skills
+		bModel.activeModel = ui.modelConfig.Default
+		bModel.activeProvider = ui.modelConfig.Provider
+		bModel.providers = ui.providers
+		bModel.sessionID = ui.sessionID
+		if ui.hasAgentConfig {
+			bModel.maxRounds = ui.agentConfig.MaxRounds
+			bModel.agentProfile = ui.agentConfig.Profile
 		}
-		return fmt.Errorf("run Bubble Tea UI: %w", err)
+		bModel.reconfigureRunner()
+
+		program := tea.NewProgram(
+			bModel,
+			tea.WithAltScreen(),
+			tea.WithMouseCellMotion(),
+			tea.WithContext(runCtx),
+		)
+
+		var finalModel tea.Model
+		var err error
+		var panicVal any
+		var panicStack []byte
+
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					panicVal = r
+					panicStack = debug.Stack()
+				}
+			}()
+			finalModel, err = program.Run()
+		}()
+
+		if panicVal != nil {
+			crash := NewCrashModel(panicVal, panicStack)
+			crashProg := tea.NewProgram(
+				crash,
+				tea.WithAltScreen(),
+				tea.WithContext(runCtx),
+			)
+			finalCrash, _ := crashProg.Run()
+			if cm, ok := finalCrash.(*CrashModel); ok && cm.restart {
+				continue
+			}
+			return fmt.Errorf("proton crashed: %v", panicVal)
+		}
+
+		if modelState, ok := finalModel.(*bubbleModel); ok {
+			ui.finalMessages = model.CloneMessages(modelState.messages)
+			currentMessages = model.CloneMessages(modelState.messages)
+		}
+		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return fmt.Errorf("run Bubble Tea UI: %w", ctxErr)
+			}
+			return fmt.Errorf("run Bubble Tea UI: %w", err)
+		}
+		return nil
 	}
-	return nil
 }
