@@ -484,18 +484,19 @@ type accumulatedToolCall struct {
 }
 
 type openAIStream struct {
-	reader        *bufio.Reader
-	closer        io.Closer
-	toolCalls     map[int]*accumulatedToolCall
-	respToolCalls map[string]*accumulatedToolCall
-	queue         []Event
-	done          bool
-	terminalErr   error
-	startedAt     time.Time
-	linesRead     int
-	bytesRead     int
-	dataLines     int
-	ignoredLines  int
+	reader           *bufio.Reader
+	closer           io.Closer
+	toolCalls        map[int]*accumulatedToolCall
+	respToolCalls    map[string]*accumulatedToolCall
+	queue            []Event
+	done             bool
+	terminalErr      error
+	startedAt        time.Time
+	linesRead        int
+	bytesRead        int
+	dataLines        int
+	ignoredLines     int
+	generatedCallSeq uint64
 }
 
 func newOpenAIStream(r io.ReadCloser) *openAIStream {
@@ -754,7 +755,7 @@ func (s *openAIStream) processLine(line string) error {
 					delete(s.respToolCalls, respChunk.Item.ID)
 				}
 				if callID == "" {
-					callID = fmt.Sprintf("call_%d", time.Now().UnixNano())
+					callID = s.nextGeneratedCallID()
 				}
 				if argsStr == "" {
 					argsStr = "{}"
@@ -802,6 +803,11 @@ func (s *openAIStream) streamArgs(args ...any) []any {
 	return append(args, s.streamAttrs()...)
 }
 
+func (s *openAIStream) nextGeneratedCallID() string {
+	s.generatedCallSeq++
+	return fmt.Sprintf("generated_call_%d", s.generatedCallSeq)
+}
+
 func (s *openAIStream) flushToolCalls() {
 	if len(s.toolCalls) > 0 {
 		indices := make([]int, 0, len(s.toolCalls))
@@ -818,7 +824,7 @@ func (s *openAIStream) flushToolCalls() {
 			}
 			callID := acc.id
 			if callID == "" {
-				callID = fmt.Sprintf("call_%d_%d", time.Now().UnixNano(), idx)
+				callID = s.nextGeneratedCallID()
 			}
 			s.queue = append(s.queue, Event{
 				Kind: EventToolCall,
@@ -849,7 +855,7 @@ func (s *openAIStream) flushToolCalls() {
 				callID = itemID
 			}
 			if callID == "" {
-				callID = fmt.Sprintf("call_%d", time.Now().UnixNano())
+				callID = s.nextGeneratedCallID()
 			}
 			s.queue = append(s.queue, Event{
 				Kind: EventToolCall,
