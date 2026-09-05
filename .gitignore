@@ -1,0 +1,58 @@
+# Binaries & build artifacts
+/bin/
+/proton
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test & coverage artifacts
+*.test
+*.out
+coverage.html
+coverage.txt
+
+# Profiling & benchmark outputs (Makefile: bench-cpu, bench-mem)
+*.prof
+*.pprof
+cpu.pprof
+mem.pprof
+
+# Go workspace & dependencies
+go.work
+go.work.sum
+vendor/
+
+# Proton runtime & atomic write temporary files
+.proton-write-*
+
+# Environment & credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Operating system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+
+# IDE & editor configurations
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs & scratch
+*.log
+scratch/
+
+# Local datasets
+data/

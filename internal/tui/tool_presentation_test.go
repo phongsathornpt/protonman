@@ -10,12 +10,12 @@ import (
 
 func TestExtractToolTarget(t *testing.T) {
 	tests := []struct {
-		name         string
-		toolName     string
-		kind         tool.Kind
-		args         string
-		wantTarget   string
-		wantKind     tool.Kind
+		name       string
+		toolName   string
+		kind       tool.Kind
+		args       string
+		wantTarget string
+		wantKind   tool.Kind
 	}{
 		{
 			name:       "web_fetch url",

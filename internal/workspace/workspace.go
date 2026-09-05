@@ -468,4 +468,3 @@ func isWithin(root string, path string) bool {
 	}
 	return relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)))
 }
-
