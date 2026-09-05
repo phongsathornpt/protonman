@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/projectTHORN/proton/internal/tool"
 )
@@ -45,13 +46,49 @@ func (c ToolCall) Validate() error {
 	return nil
 }
 
+// ContentPartType distinguishes text from visual or binary content parts.
+type ContentPartType string
+
+const (
+	// ContentPartText contains plain text.
+	ContentPartText ContentPartType = "text"
+	// ContentPartImage contains an image payload (base64 encoded).
+	ContentPartImage ContentPartType = "image"
+)
+
+// ContentPart represents one typed block within a multi-modal message.
+type ContentPart struct {
+	Type     ContentPartType `json:"type"`
+	Text     string          `json:"text,omitempty"`
+	MIMEType string          `json:"mime_type,omitempty"`
+	Data     string          `json:"data,omitempty"` // Base64-encoded
+}
+
 // Message is one provider-neutral conversation message.
 type Message struct {
 	Role       Role
 	Content    string
+	Parts      []ContentPart
 	ToolCallID string
 	ToolName   string
 	ToolCalls  []ToolCall
+}
+
+// TextContent returns the message text, extracting from Parts if Content is empty.
+func (m Message) TextContent() string {
+	if m.Content != "" {
+		return m.Content
+	}
+	var builder strings.Builder
+	for _, part := range m.Parts {
+		if part.Type == ContentPartText && part.Text != "" {
+			if builder.Len() > 0 {
+				builder.WriteString("\n")
+			}
+			builder.WriteString(part.Text)
+		}
+	}
+	return builder.String()
 }
 
 // Validate checks message roles and embedded tool calls.
@@ -99,6 +136,9 @@ func CloneMessages(messages []Message) []Message {
 	cloned := make([]Message, 0, len(messages))
 	for _, message := range messages {
 		clone := message
+		if len(message.Parts) > 0 {
+			clone.Parts = append([]ContentPart{}, message.Parts...)
+		}
 		clone.ToolCalls = make([]ToolCall, 0, len(message.ToolCalls))
 		for _, call := range message.ToolCalls {
 			call.Arguments = append(json.RawMessage{}, call.Arguments...)
