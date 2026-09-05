@@ -238,11 +238,16 @@ func (m bubbleModel) permissionCard() string {
 
 func (v *permissionPaneView) card(m *bubbleModel) string {
 	request := v.pending.request
+	isRead := request.ToolKind == permission.ToolRead || request.ToolKind == permission.ToolGrep
 	destructive := request.ToolKind == permission.ToolBash || request.ToolKind == permission.ToolEdit
 	title := "Permission required"
 	titleStyle := warningStyle
 	border := warningColor
-	if destructive {
+	if isRead {
+		title = "Permission request — read only"
+		titleStyle = userStyle
+		border = accentUser
+	} else if destructive {
 		title = "Permission required — " + string(request.ToolKind)
 		titleStyle = errorStyle
 		border = accentError

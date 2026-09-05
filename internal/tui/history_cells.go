@@ -137,13 +137,7 @@ type ToolCell struct {
 func (ToolCell) Kind() HistoryCellKind { return HistoryCellTool }
 func (c ToolCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
 func (c ToolCell) RenderWidth(width int) []string {
-	var header string
-	var headerStyle lipgloss.Style
-
-	target := sanitizeBubbleText(strings.TrimSpace(c.Target))
-	if target != "" {
-		target = " " + target
-	}
+	var headerLine string
 
 	if c.Running {
 		glyph := toolKindGlyph(c.ToolKind, c.Name)
@@ -151,36 +145,55 @@ func (c ToolCell) RenderWidth(width int) []string {
 		if c.Spinner != "" {
 			indicator = " " + c.Spinner
 		}
-		header = glyph + sanitizeBubbleText(c.Name) + target + indicator
-		headerStyle = toolStyle
+		targetStr := ""
+		if strings.TrimSpace(c.Target) != "" {
+			targetStr = " " + formatPathSegmentsStyled(c.Target)
+		}
+		headerLine = toolStyle.Render(glyph) + mutedStyle.Render(sanitizeBubbleText(c.Name)) + targetStr + toolStyle.Render(indicator)
 	} else if c.Denied {
-		header = glyphToolDenied + sanitizeBubbleText(c.Name) + target + glyphSep + "denied"
-		headerStyle = warningStyle
+		targetStr := ""
+		if strings.TrimSpace(c.Target) != "" {
+			targetStr = " " + formatPathSegmentsStyled(c.Target)
+		}
+		headerLine = warningStyle.Render(glyphToolDenied) + mutedStyle.Render(sanitizeBubbleText(c.Name)) + targetStr + warningStyle.Render(glyphSep+"denied")
 	} else if c.FailureCode != "" {
-		header = glyphToolError + sanitizeBubbleText(c.Name) + target + glyphSep + string(c.FailureCode)
-		headerStyle = errorStyle
+		targetStr := ""
+		if strings.TrimSpace(c.Target) != "" {
+			targetStr = " " + formatPathSegmentsStyled(c.Target)
+		}
+		headerLine = errorStyle.Render(glyphToolError) + mutedStyle.Render(sanitizeBubbleText(c.Name)) + targetStr + errorStyle.Render(glyphSep+string(c.FailureCode))
 	} else if c.Name == "activate_skill" {
 		if skillName := extractSkillContentName(c.Body); skillName != "" {
-			header = glyphToolSuccess + fmt.Sprintf("Activated skill %q", skillName)
+			headerLine = successStyle.Render(glyphToolSuccess) + mutedStyle.Render("Activated skill ") + toolTargetStyle.Render(fmt.Sprintf("%q", skillName))
 		} else {
-			header = glyphToolSuccess + "activate_skill"
+			headerLine = successStyle.Render(glyphToolSuccess) + mutedStyle.Render("activate_skill")
 		}
-		headerStyle = successStyle
 	} else {
 		summary := c.Summary
 		if summary == "" && c.Body != "" {
 			summary = summarizeToolOutput(c.Name, c.ToolKind, c.Target, c.Body, c.ExitCode, c.Truncated)
 		}
-		header = glyphToolSuccess + sanitizeBubbleText(c.Name) + target
-		if summary != "" {
-			header += glyphSep + summary
+		targetStr := ""
+		if strings.TrimSpace(c.Target) != "" {
+			targetStr = " " + formatPathSegmentsStyled(c.Target)
 		}
-		headerStyle = successStyle
+		summaryStr := ""
+		if summary != "" {
+			summaryStr = toolSummaryStyle.Render(glyphSep + summary)
+		}
+		headerLine = successStyle.Render(glyphToolSuccess) + mutedStyle.Render(sanitizeBubbleText(c.Name)) + targetStr + summaryStr
 	}
 
 	out := make([]string, 0, 1)
-	for _, line := range safeWrappedLines(header, maxInt(1, width)) {
-		out = append(out, headerStyle.Render(line))
+	for _, line := range wrapStyledLines(headerLine, maxInt(1, width)) {
+		out = append(out, line)
+	}
+
+	// Read file excerpt preview
+	if !c.Running && c.Name == "read_file" && !c.Denied && c.FailureCode == "" && c.Body != "" {
+		if excerpt := extractReadFileExcerpt(c.Body); excerpt != "" {
+			out = append(out, toolExcerptStyle.Render("  ↳ "+excerpt))
+		}
 	}
 
 	if !c.Running && !shouldSuppressBody(c.ToolKind, c.Name) {
@@ -188,7 +201,7 @@ func (c ToolCell) RenderWidth(width int) []string {
 		if len(bodyLines) > 0 {
 			folded := formatOutputFold(bodyLines, 3)
 			for _, line := range folded {
-				for _, wrapped := range safeWrappedLines(line, maxInt(1, width-2)) {
+				for _, wrapped := range wrapStyledLines(line, maxInt(1, width-2)) {
 					out = append(out, bodyStyle.Render("  "+wrapped))
 				}
 			}
@@ -264,6 +277,7 @@ func (c ExecCell) RenderWidth(width int) []string {
 	if command == "" {
 		command = c.Name
 	}
+	var out []string
 	var header string
 	var headerStyle lipgloss.Style
 	if c.Running {
@@ -286,16 +300,21 @@ func (c ExecCell) RenderWidth(width int) []string {
 		header = glyphToolError + "$ " + sanitizeBubbleText(command) + glyphSep + status
 		headerStyle = errorStyle
 	} else {
-		header = glyphToolSuccess + "$ " + sanitizeBubbleText(command)
+		header := successStyle.Render(glyphToolSuccess) + commandStyle.Render("$ "+sanitizeBubbleText(command))
 		if c.ExitCode != nil {
-			header += " (exit 0)"
+			header += toolSummaryStyle.Render(" (exit 0)")
 		}
-		headerStyle = successStyle
+		out = make([]string, 0, 1)
+		for _, line := range wrapStyledLines(header, maxInt(1, width)) {
+			out = append(out, line)
+		}
 	}
 
-	out := make([]string, 0, 1)
-	for _, line := range safeWrappedLines(header, maxInt(1, width)) {
-		out = append(out, headerStyle.Render(line))
+	if c.Running || c.Denied || c.FailureCode != "" || (c.ExitCode != nil && *c.ExitCode != 0) {
+		out = make([]string, 0, 1)
+		for _, line := range safeWrappedLines(header, maxInt(1, width)) {
+			out = append(out, headerStyle.Render(line))
+		}
 	}
 	if !c.Running {
 		bodyLines := resultBodyLines(c.Body, nil, c.Truncated, false, "")
@@ -371,8 +390,9 @@ func (c PatchCell) RenderWidth(width int) []string {
 		out = append(out, headerStyle.Render(line))
 	}
 	for _, path := range c.Paths {
-		for _, wrapped := range safeWrappedLines(path, maxInt(1, width-2)) {
-			out = append(out, mutedStyle.Render("  "+wrapped))
+		styledPath := formatPathSegmentsStyled(path)
+		for _, wrapped := range wrapStyledLines(styledPath, maxInt(1, width-2)) {
+			out = append(out, "  "+wrapped)
 		}
 	}
 	if !c.Running && c.Body != "" {
@@ -915,6 +935,18 @@ func safeWrappedLines(text string, width int) []string {
 	lines := make([]string, 0, strings.Count(text, "\n")+1)
 	for _, line := range strings.Split(text, "\n") {
 		lines = append(lines, wrapLines(sanitizeBubbleText(line), width)...)
+	}
+	return lines
+}
+
+func wrapStyledLines(styledText string, width int) []string {
+	styledText = strings.TrimRight(strings.ReplaceAll(styledText, "\r\n", "\n"), "\n")
+	if styledText == "" {
+		return nil
+	}
+	lines := make([]string, 0, strings.Count(styledText, "\n")+1)
+	for _, line := range strings.Split(styledText, "\n") {
+		lines = append(lines, wrapLines(line, width)...)
 	}
 	return lines
 }

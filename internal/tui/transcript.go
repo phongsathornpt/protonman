@@ -140,6 +140,23 @@ func (m *bubbleModel) appendToolRunning(name string) {
 	m.syncLegacyBlocks()
 }
 
+func toolFailureSuggestions(toolName string, code tool.ErrorCode) []string {
+	var suggestions []string
+	switch code {
+	case tool.ErrorCodeNotFound:
+		if toolName == "read_file" {
+			suggestions = append(suggestions, "Verify workspace relative path spelling", "Use list_dir to inspect directory contents", "Use grep to locate the symbol or filename across the project")
+		}
+	case tool.ErrorCodeProtectedPath:
+		suggestions = append(suggestions, "This path is shielded by workspace protection rules (.proton/config.toml)")
+	case tool.ErrorCodeOutsideWorkspace:
+		suggestions = append(suggestions, "Tool operations are confined to the workspace root directory")
+	case tool.ErrorCodePermissionDenied:
+		suggestions = append(suggestions, "Use shift+tab to cycle permission mode or allow the request")
+	}
+	return suggestions
+}
+
 func (m *bubbleModel) appendToolCall(call tool.Call) {
 	state := m.ensureHistoryState()
 	var kind tool.Kind
@@ -201,12 +218,14 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 	}
 
 	if result.Failure != nil && result.Failure.Message != "" && result.Failure.Code != tool.ErrorCodeCanceled {
+		suggestions := toolFailureSuggestions(name, result.Failure.Code)
 		errorCell := &ErrorCell{
-			ErrorKind: ErrorKindToolFailed,
-			Title:     name,
-			Badge:     string(result.Failure.Code),
-			Text:      result.Failure.Message,
-			Code:      result.Failure.Code,
+			ErrorKind:   ErrorKindToolFailed,
+			Title:       name,
+			Badge:       string(result.Failure.Code),
+			Text:        result.Failure.Message,
+			Code:        result.Failure.Code,
+			Suggestions: suggestions,
 		}
 		state.CompleteToolCall(result.CallID, name, errorCell)
 		m.syncLegacyBlocks()

@@ -51,8 +51,11 @@ var (
 	errorStyle       = lipgloss.NewStyle().Foreground(accentError)
 	planStyle        = lipgloss.NewStyle().Foreground(accentPlan)
 	commandStyle     = lipgloss.NewStyle().Foreground(commandColor)
-	toolTargetStyle  = lipgloss.NewStyle().Foreground(accentUser)
+	toolTargetStyle  = lipgloss.NewStyle().Bold(true).Foreground(accentUser)
+	toolDirStyle     = lipgloss.NewStyle().Foreground(accentTool)
 	toolSummaryStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "240", Dark: "8"})
+	fileBadgeStyle   = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "244", Dark: "8"})
+	toolExcerptStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "244", Dark: "8"}).Italic(true)
 	toolFoldStyle    = lipgloss.NewStyle().Italic(true).Foreground(lipgloss.AdaptiveColor{Light: "244", Dark: "8"})
 	bodyStyle        = lipgloss.NewStyle()
 	modalStyle       = lipgloss.NewStyle().
