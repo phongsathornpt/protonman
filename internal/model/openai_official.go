@@ -44,28 +44,28 @@ func NewOfficialOpenAIClient(
 	return client
 }
 
-// Stream starts an official Responses API stream for a Responses model.
+// Stream starts an official Responses or Chat Completions stream.
 func (c *OfficialOpenAIClient) Stream(ctx context.Context, request Request) (Stream, error) {
 	if err := request.Validate(); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
 	}
-	if !isResponsesModel(c.modelID) && !strings.HasSuffix(c.baseURL, "/responses") {
-		return nil, fmt.Errorf("official openai client: model %q requires the Chat Completions adapter", c.modelID)
+	if isResponsesModel(c.modelID) || strings.HasSuffix(c.baseURL, "/responses") {
+		params, err := newOfficialResponsesParams(c.modelID, request)
+		if err != nil {
+			return nil, err
+		}
+
+		slog.DebugContext(ctx, "official model stream request started",
+			"api", "responses",
+			"model", c.modelID,
+			"message_count", len(request.Messages),
+			"tool_count", len(request.Tools),
+		)
+		stream := c.sdk.Responses.NewStreaming(ctx, params)
+		return newOfficialResponsesStream(stream), nil
 	}
 
-	params, err := newOfficialResponsesParams(c.modelID, request)
-	if err != nil {
-		return nil, err
-	}
-
-	slog.DebugContext(ctx, "official model stream request started",
-		"api", "responses",
-		"model", c.modelID,
-		"message_count", len(request.Messages),
-		"tool_count", len(request.Tools),
-	)
-	stream := c.sdk.Responses.NewStreaming(ctx, params)
-	return newOfficialResponsesStream(stream), nil
+	return c.streamOfficialChat(ctx, request)
 }
 
 func newOfficialResponsesParams(modelID string, request Request) (responses.ResponseNewParams, error) {
@@ -369,7 +369,7 @@ func (s *officialResponsesStream) Close() error {
 func officialOpenAIOptions(config openAIClientConfig) []option.RequestOption {
 	requestOptions := []option.RequestOption{
 		option.WithAPIKey(config.apiKey),
-		option.WithBaseURL(config.baseURL),
+		option.WithBaseURL(officialOpenAIBaseURL(config.baseURL)),
 		option.WithMaxRetries(2),
 	}
 	if config.httpClient != nil {
@@ -388,6 +388,15 @@ func officialOpenAIOptions(config openAIClientConfig) []option.RequestOption {
 		)
 	}
 	return requestOptions
+}
+
+func officialOpenAIBaseURL(baseURL string) string {
+	for _, suffix := range []string{"/chat/completions", "/responses"} {
+		if strings.HasSuffix(baseURL, suffix) {
+			return strings.TrimSuffix(baseURL, suffix)
+		}
+	}
+	return baseURL
 }
 
 // SessionID returns the configured session identifier.
