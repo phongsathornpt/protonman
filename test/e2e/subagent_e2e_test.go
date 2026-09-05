@@ -1,0 +1,58 @@
+package e2e_test
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestE2ESubagentDelegationSuccess(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+
+	server := newMockLLMServer(t)
+	server.SetupWorkspaceConfig(t, home)
+
+	// Round 1: main agent delegates task to subagent
+	server.AddToolCallResponse("call_del_1", "delegate_task", `{"task":"Explore repository structure","profile":"explorer"}`)
+	// Subagent response
+	server.AddTextResponse("Exploration complete: found hello.txt")
+	// Main agent final response
+	server.AddTextResponse("Subagent reported that repository contains hello.txt")
+
+	res := runProton(t, runOptions{
+		args: []string{"-y", "-p", "Delegate repository exploration"},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 {
+		t.Fatalf("delegation failed: %s %s", res.stdout, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "Subagent reported") {
+		t.Fatalf("missing main agent final confirmation: %s", res.stdout)
+	}
+}
+
+func TestE2ESubagentDelegationInvalidArguments(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+
+	// 1. Missing task
+	resMissing := runProton(t, runOptions{
+		args: []string{"-y", "-p", `/call delegate_task {"profile":"explorer"}`},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if resMissing.exitCode == 0 || !strings.Contains(resMissing.stdout+resMissing.stderr, "task is required") {
+		t.Fatalf("expected task required error, got: %s %s", resMissing.stdout, resMissing.stderr)
+	}
+
+	// 2. Unknown profile
+	resProfile := runProton(t, runOptions{
+		args: []string{"-y", "-p", `/call delegate_task {"task":"Do work","profile":"unknown_profile_xyz"}`},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if resProfile.exitCode == 0 || !strings.Contains(resProfile.stdout+resProfile.stderr, "unknown agent profile") {
+		t.Fatalf("expected unknown profile error, got: %s %s", resProfile.stdout, resProfile.stderr)
+	}
+}

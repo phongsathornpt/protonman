@@ -202,9 +202,11 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 
 	if result.Failure != nil && result.Failure.Message != "" && result.Failure.Code != tool.ErrorCodeCanceled {
 		errorCell := &ErrorCell{
-			Title: name,
-			Text:  fmt.Sprintf("[%s]: %s", result.Failure.Code, result.Failure.Message),
-			Code:  result.Failure.Code,
+			ErrorKind: ErrorKindToolFailed,
+			Title:     name,
+			Badge:     string(result.Failure.Code),
+			Text:      result.Failure.Message,
+			Code:      result.Failure.Code,
 		}
 		state.CompleteToolCall(result.CallID, name, errorCell)
 		m.syncLegacyBlocks()
@@ -212,8 +214,13 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 	}
 
 	if err != nil && !errors.Is(err, context.Canceled) && failureCode(result) != tool.ErrorCodeCanceled {
-		errorCell := &ErrorCell{Title: name, Text: err.Error()}
+		errorCell := &ErrorCell{
+			ErrorKind: ErrorKindToolFailed,
+			Title:     name,
+			Text:      err.Error(),
+		}
 		if result.Failure != nil {
+			errorCell.Badge = string(result.Failure.Code)
 			errorCell.Text = fmt.Sprintf("[%s]: %s", result.Failure.Code, result.Failure.Message)
 			errorCell.Code = result.Failure.Code
 		}
@@ -394,9 +401,9 @@ func (m *bubbleModel) appendTurnFailure(err error) {
 	if err == nil {
 		return
 	}
-	text := "turn failed: " + err.Error()
-	if errors.Is(err, context.Canceled) {
-		text = "turn cancelled"
+	classified := ClassifyOpenCodeError(err, m.activeProvider, m.activeModel)
+	if classified.Kind == ErrorKindCancelled {
+		text := "turn cancelled"
 		cells := m.ensureHistoryState().Cells()
 		if n := len(cells); n > 0 {
 			if last, ok := cells[n-1].(*SystemCell); ok && last.Text == text {
@@ -407,13 +414,22 @@ func (m *bubbleModel) appendTurnFailure(err error) {
 		m.syncLegacyBlocks()
 		return
 	}
+
 	cells := m.ensureHistoryState().Cells()
 	if n := len(cells); n > 0 {
-		if last, ok := cells[n-1].(*ErrorCell); ok && last.Text == text {
+		if last, ok := cells[n-1].(*ErrorCell); ok && last.Text == classified.Message && last.Title == classified.Title {
 			return
 		}
 	}
-	m.ensureHistoryState().Append(&ErrorCell{Text: text})
+	m.ensureHistoryState().Append(&ErrorCell{
+		ErrorKind:   classified.Kind,
+		Title:       classified.Title,
+		Badge:       classified.Badge,
+		Text:        classified.Message,
+		Suggestions: classified.Suggestions,
+		RawDetails:  classified.RawDetails,
+		Retryable:   classified.Retryable,
+	})
 	m.syncLegacyBlocks()
 }
 
