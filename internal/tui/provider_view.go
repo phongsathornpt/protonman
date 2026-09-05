@@ -24,6 +24,8 @@ const (
 	providerStateFetching
 	providerStateSelectModel
 	providerStateConfirmOverwrite
+	providerStateSaving
+	providerStateSaveError
 	providerStateError
 )
 
@@ -41,6 +43,7 @@ type modelsFetchedMsg struct {
 	baseURL      string
 	apiKey       string
 	models       []model.RemoteModel
+	requestID    uint64
 	err          error
 }
 
@@ -70,6 +73,9 @@ type providerPaneView struct {
 	filterFreeOnly bool
 	errorMessage   string
 	fieldErrors    [providerFieldCount]string
+	fetchRequestID uint64
+	fetchCancel    context.CancelFunc
+	selectedModel  string
 }
 
 func newProviderPaneView() *providerPaneView {
@@ -453,6 +459,31 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 			MaxWidth(maxWidth).
 			Render(strings.Join(rows, "\n"))
 
+	case providerStateSaving:
+		rows := []string{
+			brandStyle.Render("◆ Saving Provider…"),
+			"",
+			fmt.Sprintf("  Writing %s to ~/.proton/config.toml", v.nameInput.Value()),
+			mutedStyle.Render("  Applying the selected model as active"),
+		}
+		return modalStyle.
+			BorderForeground(accentAssistant).
+			MaxWidth(maxWidth).
+			Render(strings.Join(rows, "\n"))
+
+	case providerStateSaveError:
+		rows := []string{
+			errorStyle.Render("✕ Provider Save Failed"),
+			"",
+			"  " + v.errorMessage,
+			"",
+			mutedStyle.Render("enter retry save · esc back to models · ctrl+c cancel"),
+		}
+		return modalStyle.
+			BorderForeground(accentError).
+			MaxWidth(maxWidth).
+			Render(strings.Join(rows, "\n"))
+
 	case providerStateConfirmOverwrite:
 		rows := []string{
 			warningStyle.Render("Provider Already Exists"),
@@ -527,6 +558,7 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 	switch v.state {
 	case providerStateFetching:
 		if message.String() == "esc" || message.String() == "ctrl+c" {
+			v.cancelFetch()
 			m.bottom.remove(providerViewID)
 			return true, nil
 		}
@@ -566,15 +598,39 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 		case "enter":
 			if len(models) > 0 && v.selectedIndex >= 0 && v.selectedIndex < len(models) {
 				selected := models[v.selectedIndex]
-				cmd := saveProviderCmd(
+				v.selectedModel = selected.ID
+				v.state = providerStateSaving
+				return true, saveProviderCmd(
 					v.nameInput.Value(),
 					v.endpointInput.Value(),
 					v.apiKeyInput.Value(),
 					selected.ID,
 				)
-				m.bottom.remove(providerViewID)
-				return true, cmd
 			}
+			return true, nil
+		default:
+			return true, nil
+		}
+
+	case providerStateSaving:
+		return true, nil
+
+	case providerStateSaveError:
+		switch message.String() {
+		case "enter":
+			v.state = providerStateSaving
+			return true, saveProviderCmd(
+				v.nameInput.Value(),
+				v.endpointInput.Value(),
+				v.apiKeyInput.Value(),
+				v.selectedModel,
+			)
+		case "esc":
+			v.state = providerStateSelectModel
+			v.errorMessage = ""
+			return true, nil
+		case "ctrl+c":
+			m.bottom.remove(providerViewID)
 			return true, nil
 		default:
 			return true, nil
@@ -583,12 +639,7 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 	case providerStateConfirmOverwrite:
 		switch message.String() {
 		case "enter":
-			v.state = providerStateFetching
-			return true, fetchModelsCmd(
-				strings.TrimSpace(v.nameInput.Value()),
-				strings.TrimSpace(v.endpointInput.Value()),
-				strings.TrimSpace(v.apiKeyInput.Value()),
-			)
+			return true, v.beginFetch()
 		case "esc":
 			v.state = providerStateInput
 			v.focusIndex = int(providerFieldName)
@@ -648,12 +699,7 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 				v.state = providerStateConfirmOverwrite
 				return true, nil
 			}
-			v.state = providerStateFetching
-			return true, fetchModelsCmd(
-				strings.TrimSpace(v.nameInput.Value()),
-				strings.TrimSpace(v.endpointInput.Value()),
-				strings.TrimSpace(v.apiKeyInput.Value()),
-			)
+			return true, v.beginFetch()
 		default:
 			var cmd tea.Cmd
 			switch v.focusIndex {
@@ -686,17 +732,65 @@ func (v *providerPaneView) syncInputFocus() {
 	}
 }
 
+type providerFetchRequest struct {
+	ctx          context.Context
+	requestID    uint64
+	providerName string
+	baseURL      string
+	apiKey       string
+}
+
+func (v *providerPaneView) beginFetch() tea.Cmd {
+	if v.fetchCancel != nil {
+		v.fetchCancel()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	v.fetchCancel = cancel
+	v.fetchRequestID++
+	v.state = providerStateFetching
+
+	return fetchProviderModelsCmd(providerFetchRequest{
+		ctx:          ctx,
+		requestID:    v.fetchRequestID,
+		providerName: strings.TrimSpace(v.nameInput.Value()),
+		baseURL:      strings.TrimSpace(v.endpointInput.Value()),
+		apiKey:       strings.TrimSpace(v.apiKeyInput.Value()),
+	})
+}
+
+func (v *providerPaneView) cancelFetch() {
+	if v.fetchCancel == nil {
+		return
+	}
+	v.fetchCancel()
+	v.fetchCancel = nil
+}
+
 func fetchModelsCmd(providerName, baseURL, apiKey string) tea.Cmd {
+	return fetchProviderModelsCmd(providerFetchRequest{
+		providerName: providerName,
+		baseURL:      baseURL,
+		apiKey:       apiKey,
+	})
+}
+
+func fetchProviderModelsCmd(request providerFetchRequest) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		parent := request.ctx
+		if parent == nil {
+			parent = context.Background()
+		}
+		ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 		defer cancel()
 
-		models, err := model.FetchProviderModels(ctx, baseURL, apiKey)
+		models, err := model.FetchProviderModels(ctx, request.baseURL, request.apiKey)
 		return modelsFetchedMsg{
-			providerName: providerName,
-			baseURL:      baseURL,
-			apiKey:       apiKey,
+			providerName: request.providerName,
+			baseURL:      request.baseURL,
+			apiKey:       request.apiKey,
 			models:       models,
+			requestID:    request.requestID,
 			err:          err,
 		}
 	}
