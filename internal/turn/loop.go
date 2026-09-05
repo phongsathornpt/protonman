@@ -23,10 +23,14 @@ import (
 const (
 	// DefaultMaxRounds is the default maximum number of rounds per turn.
 	DefaultMaxRounds = 20
+	// DefaultMaxToolCalls is the default cumulative maximum number of tool
+	// calls per turn.
+	DefaultMaxToolCalls = 100
 	// DefaultRoundTimeout bounds a turn round when callers do not provide a
 	// stricter timeout.
 	DefaultRoundTimeout    = 5 * time.Minute
 	defaultMaxRounds       = DefaultMaxRounds
+	defaultMaxToolCalls    = DefaultMaxToolCalls
 	defaultMaxParallelRead = 4
 	skillPromptMarker      = "<!-- proton:skill-catalog -->"
 )
@@ -47,6 +51,24 @@ Respond with text ONLY.`
 // MaxRoundsFallback is used when a provider ignores MaxRoundsPrompt and still
 // returns a tool call after dispatch has been disabled.
 const MaxRoundsFallback = "I reached the maximum number of tool rounds before producing a final response. The last tool request was not executed. Review the work so far or start a new turn."
+
+// MaxToolCallsPrompt is injected when the turn reaches the cumulative tool
+// call limit to compel a final synthesis response without tools.
+const MaxToolCallsPrompt = `CRITICAL - MAXIMUM TOOL CALLS REACHED
+
+The maximum cumulative number of tool calls allowed for this turn has been reached. Tools are disabled until next user input. Respond with text only.
+
+STRICT REQUIREMENTS:
+1. Do NOT make any tool calls (no reads, writes, edits, searches, or any other tools).
+2. MUST provide a clear text response summarizing what was accomplished so far.
+3. List any remaining tasks that were not completed.
+4. Provide recommendations for what the user or next step should do.
+
+Respond with text ONLY.`
+
+// MaxToolCallsFallback is used when a provider ignores MaxToolCallsPrompt or
+// requests more calls than the remaining budget.
+const MaxToolCallsFallback = "I reached the maximum number of tool calls before producing a final response. The last tool request was not executed. Review the work so far or start a new turn."
 
 var (
 	// ErrInvalidLoop indicates that the loop cannot be constructed or started.
@@ -69,11 +91,13 @@ type toolDispatchReason string
 const (
 	toolDispatchEnabled           toolDispatchReason = "enabled"
 	toolDispatchDisabledMaxRounds toolDispatchReason = "max_rounds"
+	toolDispatchDisabledMaxCalls  toolDispatchReason = "max_tool_calls"
 	toolDispatchDisabledNoTools   toolDispatchReason = "no_tools"
 )
 
 type toolDispatchState struct {
-	reason toolDispatchReason
+	reason             toolDispatchReason
+	remainingToolCalls int
 }
 
 func (s toolDispatchState) enabled() bool {
@@ -145,6 +169,18 @@ func WithMaxRounds(rounds int) Option {
 	}
 }
 
+// WithMaxToolCalls bounds the cumulative number of tool calls per turn.
+// A value of 0 indicates unbounded execution.
+func WithMaxToolCalls(calls int) Option {
+	return func(loop *Loop) error {
+		if calls < 0 {
+			return fmt.Errorf("%w: max tool calls cannot be negative", ErrInvalidLoop)
+		}
+		loop.maxToolCalls = calls
+		return nil
+	}
+}
+
 // WithRoundTimeout bounds one model response and its tool calls.
 func WithRoundTimeout(timeout time.Duration) Option {
 	return func(loop *Loop) error {
@@ -199,6 +235,7 @@ type Loop struct {
 	client           model.Client
 	tools            *toolcall.Service
 	maxRounds        int
+	maxToolCalls     int
 	roundTimeout     time.Duration
 	toolTimeout      time.Duration
 	maxParallelReads int
@@ -220,6 +257,7 @@ func NewLoop(client model.Client, tools *toolcall.Service, options ...Option) (*
 		client:           client,
 		tools:            tools,
 		maxRounds:        defaultMaxRounds,
+		maxToolCalls:     defaultMaxToolCalls,
 		roundTimeout:     DefaultRoundTimeout,
 		maxParallelReads: defaultMaxParallelRead,
 	}
@@ -284,10 +322,12 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		"message_count", len(messages),
 		"tool_count", toolCount,
 		"max_rounds", l.maxRounds,
+		"max_tool_calls", l.maxToolCalls,
 	)
 
 	history := model.CloneMessages(messages)
 	turnMessages := make([]model.Message, 0, 4)
+	toolCallsUsed := 0
 
 	var catalogItems []skill.CatalogItem
 	var activeSkills []skill.Skill
@@ -347,8 +387,21 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			})
 		} else {
 			tools = l.tools.Definitions()
-			if len(tools) > 0 {
+			switch {
+			case len(tools) == 0:
+				dispatch.reason = toolDispatchDisabledNoTools
+			case l.maxToolCalls > 0 && toolCallsUsed >= l.maxToolCalls:
+				tools = nil
+				dispatch.reason = toolDispatchDisabledMaxCalls
+				reqMessages = append(reqMessages, model.Message{
+					Role:    model.RoleSystem,
+					Content: MaxToolCallsPrompt,
+				})
+			default:
 				dispatch.reason = toolDispatchEnabled
+				if l.maxToolCalls > 0 {
+					dispatch.remainingToolCalls = l.maxToolCalls - toolCallsUsed
+				}
 			}
 		}
 		slog.DebugContext(ctx, "turn tool dispatch state",
@@ -356,6 +409,8 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			"enabled", dispatch.enabled(),
 			"reason", dispatch.reason,
 			"published_tools", len(tools),
+			"tool_calls_used", toolCallsUsed,
+			"remaining_tool_calls", dispatch.remainingToolCalls,
 		)
 
 		request := model.Request{
@@ -374,6 +429,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		assistant := outcome.assistant
 		executions := outcome.executions
 		maxRoundFallback := false
+		maxToolCallsFallback := false
 		if len(assistant.ToolCalls) > 0 && !outcome.dispatch.enabled() {
 			switch outcome.dispatch.reason {
 			case toolDispatchDisabledMaxRounds:
@@ -383,6 +439,14 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 					return l.fail(ctx, sink, round, err)
 				}
 				maxRoundFallback = true
+			case toolDispatchDisabledMaxCalls:
+				assistant, err = finalizeMaxToolCallResponse(ctx, sink, round, assistant)
+				if err != nil {
+					terminalReason = "max_tool_calls_fallback_failed"
+					return l.fail(ctx, sink, round, err)
+				}
+				maxToolCallsFallback = true
+				terminalReason = "max_tool_calls_fallback"
 			case toolDispatchDisabledNoTools:
 				err := fmt.Errorf("%w: model requested %d tool calls while no tools were available", ErrToolDispatchUnavailable, len(assistant.ToolCalls))
 				terminalReason = "tool_dispatch_unavailable"
@@ -393,17 +457,21 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			terminalReason = "unresolved_tool_call"
 			return l.fail(ctx, sink, round, err)
 		}
+		toolCallsUsed += len(executions)
 		history = append(history, assistant)
 		turnMessages = append(turnMessages, assistant)
 		if len(executions) == 0 || isMaxRound {
 			terminalReason = "completed"
 			if maxRoundFallback {
 				terminalReason = "max_rounds_fallback"
+			} else if maxToolCallsFallback {
+				terminalReason = "max_tool_calls_fallback"
 			}
 			slog.DebugContext(ctx, "turn completed",
 				"round", round,
 				"assistant_bytes", len(assistant.Content),
 				"tool_calls", len(executions),
+				"tool_calls_used", toolCallsUsed,
 				"max_round", isMaxRound,
 			)
 			result := Result{
@@ -452,23 +520,49 @@ func finalizeMaxRoundToolCallResponse(
 	round int,
 	assistant model.Message,
 ) (model.Message, error) {
+	slog.DebugContext(ctx, "turn ignored tool calls after max rounds",
+		"round", round,
+	)
+	return finalizeDisabledToolCallResponse(ctx, sink, round, assistant, MaxRoundsFallback, "max-round")
+}
+
+func finalizeMaxToolCallResponse(
+	ctx context.Context,
+	sink Sink,
+	round int,
+	assistant model.Message,
+) (model.Message, error) {
+	slog.DebugContext(ctx, "turn ignored tool calls after max tool calls",
+		"round", round,
+	)
+	return finalizeDisabledToolCallResponse(ctx, sink, round, assistant, MaxToolCallsFallback, "max-tool-calls")
+}
+
+func finalizeDisabledToolCallResponse(
+	ctx context.Context,
+	sink Sink,
+	round int,
+	assistant model.Message,
+	addition string,
+	label string,
+) (model.Message, error) {
 	ignoredToolCalls := len(assistant.ToolCalls)
 	assistant.ToolCalls = nil
-	addition := MaxRoundsFallback
 	if strings.TrimSpace(assistant.Content) != "" {
 		addition = "\n\n" + addition
 	}
 	assistant.Content += addition
-	slog.DebugContext(ctx, "turn ignored tool calls after max rounds",
+	slog.DebugContext(ctx, "turn appended disabled-tool fallback",
 		"round", round,
 		"ignored_tool_calls", ignoredToolCalls,
+		"fallback", label,
 	)
 	if err := emit(ctx, sink, Event{
 		Kind:  EventTextDelta,
 		Round: round,
 		Text:  addition,
 	}); err != nil {
-		return model.Message{}, fmt.Errorf("emit max-round fallback: %w", err)
+		return model.Message{}, fmt.Errorf("emit %s fallback: %w", label, err)
 	}
 	return assistant, nil
 }
@@ -521,6 +615,20 @@ func (l *Loop) runRound(
 			assistant:  assistant,
 			executions: []executedCall{},
 			dispatch:   dispatch,
+		}, nil
+	}
+	if dispatch.remainingToolCalls > 0 && len(requestedCalls) > dispatch.remainingToolCalls {
+		slog.DebugContext(parent, "turn tool call budget exceeded",
+			"round", round,
+			"requested_tool_calls", len(requestedCalls),
+			"remaining_tool_calls", dispatch.remainingToolCalls,
+		)
+		return roundOutcome{
+			assistant:  assistant,
+			executions: []executedCall{},
+			dispatch: toolDispatchState{
+				reason: toolDispatchDisabledMaxCalls,
+			},
 		}, nil
 	}
 	if len(request.Tools) == 0 {
