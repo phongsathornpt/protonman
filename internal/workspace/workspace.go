@@ -265,7 +265,10 @@ func (w *Workspace) RelRead(path string) (string, error) {
 
 // IsProtected reports whether an absolute workspace path is protected.
 func (w *Workspace) IsProtected(path string) bool {
-	return w.isProtected(filepath.Clean(path))
+	if len(w.protected) == 0 {
+		return false
+	}
+	return w.isProtected(path)
 }
 
 func (w *Workspace) checkAbsolute(ctx context.Context, path string) error {
