@@ -269,3 +269,31 @@ func TestGrepContinuationRejectsChangedQueryAndWorkspace(t *testing.T) {
 		t.Fatalf("changed workspace error = %v", err)
 	}
 }
+
+func TestGrepWalkDoesNotFollowSymlinkEscapes(t *testing.T) {
+	wsDir := t.TempDir()
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("needle outside\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "secret.txt"), filepath.Join(wsDir, "secret-link.txt")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(wsDir, "outside-dir")); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(wsDir, "visible.txt"), []byte("needle inside\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ws, err := workspace.New(wsDir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := executeJSON(t, NewGrep(ws), "grep-symlink", map[string]any{"pattern": "needle"})
+	if !strings.Contains(result.Output, "visible.txt:1:needle inside") {
+		t.Fatalf("grep output missing visible file: %q", result.Output)
+	}
+	if strings.Contains(result.Output, "outside") || strings.Contains(result.Output, "secret-link") {
+		t.Fatalf("grep followed symlink escape: %q", result.Output)
+	}
+}
