@@ -137,7 +137,8 @@ func (*providerSelectPaneView) ID() string             { return providerSelectVi
 func (*providerSelectPaneView) ReplacesComposer() bool { return true }
 
 func (v *providerSelectPaneView) Render(m *bubbleModel) string {
-	maxWidth := maxInt(1, m.width-4)
+	compact := m.height <= 20
+	visibleRows := providerSelectVisibleRows(m.height)
 	if len(v.items) == 0 {
 		rows := []string{
 			brandStyle.Render("✓ Model Providers"),
@@ -146,10 +147,7 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 			"",
 			mutedStyle.Render("a add provider · esc close"),
 		}
-		return modalStyle.
-			BorderForeground(accentAssistant).
-			MaxWidth(maxWidth).
-			Render(strings.Join(rows, "\n"))
+		return renderProviderModal(m, accentAssistant, rows)
 	}
 
 	if v.index >= len(v.items) {
@@ -163,17 +161,17 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 	if v.index < v.offset {
 		v.offset = v.index
 	}
-	if v.index >= v.offset+maxProviderListRows {
-		v.offset = v.index - maxProviderListRows + 1
+	if v.index >= v.offset+visibleRows {
+		v.offset = v.index - visibleRows + 1
 	}
-	if v.offset > len(v.items)-maxProviderListRows {
-		v.offset = len(v.items) - maxProviderListRows
+	if v.offset > len(v.items)-visibleRows {
+		v.offset = len(v.items) - visibleRows
 	}
 	if v.offset < 0 {
 		v.offset = 0
 	}
 
-	visibleEnd := v.offset + maxProviderListRows
+	visibleEnd := v.offset + visibleRows
 	if visibleEnd > len(v.items) {
 		visibleEnd = len(v.items)
 	}
@@ -196,6 +194,12 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 
 	title := fmt.Sprintf("✓ Model Providers (%d configured · %d available · active: %s) [%d/%d]",
 		numConfigured, numAvailable, activeName, v.index+1, len(v.items))
+	if compact {
+		title = truncateWithEllipsis(
+			fmt.Sprintf("✓ Providers · active: %s · %d/%d", activeName, v.index+1, len(v.items)),
+			providerModalContentWidth(m),
+		)
+	}
 
 	rows := make([]string, 0, len(visible)*2+6)
 	rows = append(rows, brandStyle.Render(title), "")
@@ -244,6 +248,30 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 			line2 = fmt.Sprintf("      %s · %s", mutedStyle.Render(item.baseURL), mutedStyle.Render(item.description))
 		}
 
+		if compact {
+			status := ""
+			switch {
+			case item.isActive:
+				status = " · active"
+			case item.isConfigured:
+				status = " · saved"
+			case item.kind == providerItemPreset:
+				status = " · preset"
+			case item.kind == providerItemCustom:
+				status = " · custom"
+			}
+			line := truncateWithEllipsis(
+				fmt.Sprintf("%s %d. %s%s", radio, idx+1, item.displayName, status),
+				maxInt(1, providerModalContentWidth(m)-4),
+			)
+			if idx == v.index {
+				rows = append(rows, brandStyle.Render("  ❯ "+line))
+			} else {
+				rows = append(rows, "    "+mutedStyle.Render(line))
+			}
+			continue
+		}
+
 		if idx == v.index {
 			rows = append(rows, brandStyle.Render("  ❯ ")+brandStyle.Render(line1))
 			rows = append(rows, line2)
@@ -257,11 +285,28 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ▼ %d more below", len(v.items)-visibleEnd)))
 	}
 
-	rows = append(rows, "", mutedStyle.Render("↑/↓ move · 1-9 jump · enter switch/setup · e edit/create details · m models · d remove · esc close"))
-	return modalStyle.
-		BorderForeground(accentAssistant).
-		MaxWidth(maxWidth).
-		Render(strings.Join(rows, "\n"))
+	footer := "↑/↓ move · 1-9 jump · enter switch/setup · e edit/create details · m models · d remove · esc close"
+	if compact {
+		footer = "↑/↓ move · enter setup · e edit · d remove · esc close"
+		if m.width <= 30 {
+			footer = "↑/↓ · enter · esc close"
+		}
+	}
+	rows = append(rows, "", mutedStyle.Render(footer))
+	return renderProviderModal(m, accentAssistant, rows)
+}
+
+func providerSelectVisibleRows(height int) int {
+	switch {
+	case height <= 12:
+		return 2
+	case height <= 14:
+		return 3
+	case height <= 20:
+		return 4
+	default:
+		return maxProviderListRows
+	}
 }
 
 func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
