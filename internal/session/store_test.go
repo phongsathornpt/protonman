@@ -2,10 +2,13 @@ package session
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
@@ -66,7 +69,7 @@ func TestFileStorePersistsActiveSkills(t *testing.T) {
 	}
 }
 
-func TestFileStorePersistsMessagesWithoutArguments(t *testing.T) {
+func TestFileStoreCompactsToolProtocolWithoutArguments(t *testing.T) {
 	store, err := NewFileStore(filepath.Join(t.TempDir(), "sessions"))
 	if err != nil {
 		t.Fatalf("NewFileStore() error = %v", err)
@@ -83,44 +86,172 @@ func TestFileStorePersistsMessagesWithoutArguments(t *testing.T) {
 		t.Fatalf("Save() error = %v", err)
 	}
 	got, found, err := store.Load(context.Background(), "chat-1")
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-	if !found {
-		t.Fatal("Load() found = false")
+	if err != nil || !found {
+		t.Fatalf("Load() = found %v, err %v", found, err)
 	}
 	if len(got.Messages) != 3 {
 		t.Fatalf("messages = %d, want 3", len(got.Messages))
 	}
-	if got.Messages[2].ToolName != "read_file" || got.Messages[2].Content != "ok" {
-		t.Fatalf("tool message = %+v", got.Messages[2])
+	if got.Messages[1].Role != model.RoleAssistant || got.Messages[1].Content != "use /tools" {
+		t.Fatalf("assistant context = %+v", got.Messages[1])
 	}
-	if len(got.Messages[1].ToolCalls) != 1 || got.Messages[1].ToolCalls[0].Name != "read_file" {
-		t.Fatalf("assistant tool calls = %+v", got.Messages[1].ToolCalls)
+	if got.Messages[2].Role != model.RoleAssistant || !strings.Contains(got.Messages[2].Content, "Historical tool read_file result") {
+		t.Fatalf("compacted tool history = %+v", got.Messages[2])
+	}
+	for _, message := range got.Messages {
+		if message.Role == model.RoleTool || len(message.ToolCalls) > 0 {
+			t.Fatalf("persisted protocol message = %+v", message)
+		}
 	}
 }
 
-func TestToolCallArgumentsAreNotPersisted(t *testing.T) {
+func TestToolCallArgumentsAreNotPersistedOrFabricatedOnResume(t *testing.T) {
 	store, err := NewFileStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewFileStore() error = %v", err)
 	}
+	stored := FromModelMessages([]model.Message{{
+		Role: model.RoleAssistant,
+		ToolCalls: []model.ToolCall{{
+			ID: "c1", Name: "bash", Arguments: []byte(`{"command":"printf super-secret"}`),
+		}},
+	}})
 	if err := store.Save(context.Background(), "redacted", State{
 		PermissionMode: permission.ModeAsk.String(),
-		Messages: []Message{{
-			Role:      model.RoleAssistant,
-			ToolCalls: []ToolCall{{ID: "c1", Name: "bash"}},
-		}},
+		Messages:       stored,
 	}); err != nil {
 		t.Fatalf("Save() error = %v", err)
+	}
+	raw, err := os.ReadFile(store.path("redacted"))
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if strings.Contains(string(raw), "super-secret") {
+		t.Fatalf("persisted state leaked tool arguments: %s", raw)
 	}
 	loaded, found, err := store.Load(context.Background(), "redacted")
 	if err != nil || !found {
 		t.Fatalf("Load() = found %v, err %v", found, err)
 	}
 	modelMessages := ToModelMessages(loaded.Messages)
-	if got := string(modelMessages[0].ToolCalls[0].Arguments); got != "{}" {
-		t.Fatalf("restored tool arguments = %q, want redacted empty object", got)
+	if len(modelMessages) != 1 || modelMessages[0].Role != model.RoleAssistant {
+		t.Fatalf("restored messages = %+v", modelMessages)
+	}
+	if len(modelMessages[0].ToolCalls) != 0 {
+		t.Fatalf("restored tool calls = %+v, want none", modelMessages[0].ToolCalls)
+	}
+	if !strings.Contains(modelMessages[0].Content, "Historical tool bash was requested") {
+		t.Fatalf("restored content = %q", modelMessages[0].Content)
+	}
+}
+
+func TestFileStoreCompactsStructuredToolResultBeforeTruncation(t *testing.T) {
+	store, err := NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewFileStore() error = %v", err)
+	}
+	resultJSON, err := json.Marshal(struct {
+		CallID   string `json:"call_id"`
+		ToolName string `json:"tool_name"`
+		Output   string `json:"output"`
+	}{
+		CallID: "c1", ToolName: "read_file", Output: strings.Repeat("界", maxStoredContent),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := State{
+		PermissionMode: permission.ModeAsk.String(),
+		Messages: []Message{
+			{Role: model.RoleAssistant, ToolCalls: []ToolCall{{ID: "c1", Name: "read_file"}}},
+			{Role: model.RoleTool, ToolCallID: "c1", ToolName: "read_file", Content: string(resultJSON)},
+		},
+	}
+	if err := store.Save(context.Background(), "large-result", state); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	loaded, found, err := store.Load(context.Background(), "large-result")
+	if err != nil || !found {
+		t.Fatalf("Load() = found %v, err %v", found, err)
+	}
+	if len(loaded.Messages) != 1 {
+		t.Fatalf("messages = %d, want 1", len(loaded.Messages))
+	}
+	message := loaded.Messages[0]
+	if message.Role != model.RoleAssistant || len(message.ToolCalls) != 0 {
+		t.Fatalf("message = %+v", message)
+	}
+	if len(message.Content) > maxStoredContent || !utf8.ValidString(message.Content) {
+		t.Fatalf("content bytes=%d valid_utf8=%v", len(message.Content), utf8.ValidString(message.Content))
+	}
+	if !strings.HasPrefix(message.Content, "Historical tool read_file result:") {
+		t.Fatalf("content prefix = %q", message.Content[:min(40, len(message.Content))])
+	}
+}
+
+func TestFileStoreMessageLimitCannotSplitToolProtocol(t *testing.T) {
+	store, err := NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewFileStore() error = %v", err)
+	}
+	messages := make([]Message, 0, maxStoredMessages+3)
+	for i := 0; i < maxStoredMessages-1; i++ {
+		messages = append(messages, Message{Role: model.RoleUser, Content: "history"})
+	}
+	messages = append(messages,
+		Message{Role: model.RoleAssistant, ToolCalls: []ToolCall{{ID: "c1", Name: "grep"}}},
+		Message{Role: model.RoleTool, ToolCallID: "c1", ToolName: "grep", Content: "match"},
+		Message{Role: model.RoleAssistant, Content: "final"},
+	)
+	if err := store.Save(context.Background(), "bounded", State{PermissionMode: permission.ModeAsk.String(), Messages: messages}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	loaded, found, err := store.Load(context.Background(), "bounded")
+	if err != nil || !found {
+		t.Fatalf("Load() = found %v, err %v", found, err)
+	}
+	if len(loaded.Messages) != maxStoredMessages {
+		t.Fatalf("messages = %d, want %d", len(loaded.Messages), maxStoredMessages)
+	}
+	for _, message := range loaded.Messages {
+		if message.Role == model.RoleTool || len(message.ToolCalls) > 0 {
+			t.Fatalf("message limit split tool protocol: %+v", message)
+		}
+	}
+}
+
+func TestLoadCompactsLegacyToolProtocol(t *testing.T) {
+	store, err := NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewFileStore() error = %v", err)
+	}
+	legacy := State{
+		Version:        currentStateVersion,
+		PermissionMode: permission.ModeAsk.String(),
+		Messages: []Message{
+			{Role: model.RoleAssistant, ToolCalls: []ToolCall{{ID: "legacy-1", Name: "read_file"}}},
+			{Role: model.RoleTool, ToolCallID: "legacy-1", ToolName: "read_file", Content: "legacy output"},
+		},
+	}
+	if err := os.MkdirAll(store.root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(store.path("legacy"), payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, found, err := store.Load(context.Background(), "legacy")
+	if err != nil || !found {
+		t.Fatalf("Load() = found %v, err %v", found, err)
+	}
+	if len(loaded.Messages) != 1 || loaded.Messages[0].Role != model.RoleAssistant {
+		t.Fatalf("legacy messages = %+v", loaded.Messages)
+	}
+	if len(loaded.Messages[0].ToolCalls) != 0 || !strings.Contains(loaded.Messages[0].Content, "legacy output") {
+		t.Fatalf("legacy compacted message = %+v", loaded.Messages[0])
 	}
 }
 

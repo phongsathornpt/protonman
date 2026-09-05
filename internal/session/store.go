@@ -11,9 +11,11 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 const (
@@ -54,21 +56,23 @@ type Message struct {
 }
 
 // ToModelMessages converts persisted session messages to provider-neutral model messages.
+// Legacy redacted tool protocol groups are compacted to plain assistant history
+// so resume never fabricates empty tool arguments.
 func ToModelMessages(stored []Message) []model.Message {
+	stored = compactToolHistory(stored)
 	messages := make([]model.Message, 0, len(stored))
 	for _, message := range stored {
 		messages = append(messages, model.Message{
-			Role:       message.Role,
-			Content:    message.Content,
-			ToolName:   message.ToolName,
-			ToolCallID: message.ToolCallID,
-			ToolCalls:  toModelToolCalls(message.ToolCalls),
+			Role:    message.Role,
+			Content: message.Content,
 		})
 	}
 	return messages
 }
 
 // FromModelMessages converts provider-neutral model messages to persisted session messages.
+// Tool arguments are never copied into the stored representation. Tool protocol
+// groups are compacted to plain text before they leave process memory.
 func FromModelMessages(messages []model.Message) []Message {
 	out := make([]Message, 0, len(messages))
 	for _, message := range messages {
@@ -80,7 +84,7 @@ func FromModelMessages(messages []model.Message) []Message {
 			ToolCalls:  fromModelToolCalls(message.ToolCalls),
 		})
 	}
-	return out
+	return compactToolHistory(out)
 }
 
 // ErrInvalidSessionID indicates that an ID could escape the session store
@@ -131,6 +135,10 @@ func (s *FileStore) Load(ctx context.Context, sessionID string) (State, bool, er
 	if _, err := permission.ParseMode(state.PermissionMode); err != nil {
 		return State{}, false, fmt.Errorf("session permission mode: %w", err)
 	}
+	if err := validateMessages(state.Messages); err != nil {
+		return State{}, false, fmt.Errorf("session messages: %w", err)
+	}
+	state.Messages = sanitizeMessages(state.Messages)
 	if err := validateMessages(state.Messages); err != nil {
 		return State{}, false, fmt.Errorf("session messages: %w", err)
 	}
@@ -218,6 +226,9 @@ func (s *FileStore) Save(ctx context.Context, sessionID string, state State) (sa
 	}
 	if _, err := permission.ParseMode(state.PermissionMode); err != nil {
 		return fmt.Errorf("session permission mode: %w", err)
+	}
+	if err := validateMessages(state.Messages); err != nil {
+		return fmt.Errorf("session messages: %w", err)
 	}
 	state.Messages = sanitizeMessages(state.Messages)
 	if err := validateMessages(state.Messages); err != nil {
@@ -345,7 +356,98 @@ func (s *FileStore) path(sessionID string) string {
 	return filepath.Join(s.root, sessionID+".json")
 }
 
+func compactToolHistory(messages []Message) []Message {
+	if len(messages) == 0 {
+		return []Message{}
+	}
+
+	compacted := make([]Message, 0, len(messages))
+	for index := 0; index < len(messages); {
+		message := messages[index]
+		if message.Role == model.RoleAssistant && len(message.ToolCalls) > 0 {
+			if text := strings.TrimSpace(message.Content); text != "" {
+				compacted = append(compacted, Message{Role: model.RoleAssistant, Content: text})
+			}
+
+			results := make(map[string]Message, len(message.ToolCalls))
+			next := index + 1
+			for next < len(messages) && messages[next].Role == model.RoleTool {
+				results[messages[next].ToolCallID] = messages[next]
+				next++
+			}
+			for _, call := range message.ToolCalls {
+				result, ok := results[call.ID]
+				compacted = append(compacted, Message{
+					Role:    model.RoleAssistant,
+					Content: compactToolResult(call.Name, result, ok),
+				})
+				delete(results, call.ID)
+			}
+			for _, result := range results {
+				compacted = append(compacted, Message{
+					Role:    model.RoleAssistant,
+					Content: compactToolResult(result.ToolName, result, true),
+				})
+			}
+			index = next
+			continue
+		}
+		if message.Role == model.RoleTool {
+			compacted = append(compacted, Message{
+				Role:    model.RoleAssistant,
+				Content: compactToolResult(message.ToolName, message, true),
+			})
+			index++
+			continue
+		}
+		message.ToolCalls = nil
+		message.ToolName = ""
+		message.ToolCallID = ""
+		compacted = append(compacted, message)
+		index++
+	}
+	return compacted
+}
+
+func compactToolResult(toolName string, message Message, found bool) string {
+	toolName = strings.TrimSpace(toolName)
+	if toolName == "" {
+		toolName = "unknown"
+	}
+	if !found {
+		return fmt.Sprintf("Historical tool %s was requested, but its result was not persisted.", toolName)
+	}
+
+	var result tool.Result
+	if err := json.Unmarshal([]byte(message.Content), &result); err == nil && (result.ToolName != "" || result.CallID != "" || result.Failure != nil) {
+		if result.ToolName != "" {
+			toolName = result.ToolName
+		}
+		if result.Failure != nil {
+			return fmt.Sprintf("Historical tool %s failed [%s]: %s", toolName, result.Failure.Code, result.Failure.Message)
+		}
+		output := strings.TrimSpace(result.Output)
+		if output == "" {
+			return fmt.Sprintf("Historical tool %s completed with no text output.", toolName)
+		}
+		if result.Truncated && result.NextOffset != nil {
+			return fmt.Sprintf("Historical tool %s result (truncated, next_offset=%d):\n%s", toolName, *result.NextOffset, output)
+		}
+		if result.Truncated {
+			return fmt.Sprintf("Historical tool %s result (truncated):\n%s", toolName, output)
+		}
+		return fmt.Sprintf("Historical tool %s result:\n%s", toolName, output)
+	}
+
+	content := strings.TrimSpace(message.Content)
+	if content == "" {
+		return fmt.Sprintf("Historical tool %s completed with no text output.", toolName)
+	}
+	return fmt.Sprintf("Historical tool %s result:\n%s", toolName, content)
+}
+
 func sanitizeMessages(messages []Message) []Message {
+	messages = compactToolHistory(messages)
 	if len(messages) == 0 {
 		return []Message{}
 	}
@@ -354,12 +456,21 @@ func sanitizeMessages(messages []Message) []Message {
 	}
 	cleaned := make([]Message, 0, len(messages))
 	for _, message := range messages {
-		if len(message.Content) > maxStoredContent {
-			message.Content = message.Content[:maxStoredContent]
-		}
+		message.Content = truncateStoredContent(message.Content)
 		cleaned = append(cleaned, message)
 	}
 	return cleaned
+}
+
+func truncateStoredContent(content string) string {
+	if len(content) <= maxStoredContent {
+		return content
+	}
+	content = content[:maxStoredContent]
+	for len(content) > 0 && !utf8.ValidString(content) {
+		content = content[:len(content)-1]
+	}
+	return content
 }
 
 func validateMessages(messages []Message) error {
