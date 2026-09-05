@@ -374,3 +374,57 @@ func TestProgressGuardMutatingBashResetsEpoch(t *testing.T) {
 		t.Fatalf("read after mutation stalled=%v err=%v", stalled, err)
 	}
 }
+
+type recordingProtectionObserver struct {
+	events []toolcall.ProtectionEvent
+}
+
+func (o *recordingProtectionObserver) Observe(context.Context, toolcall.Event) {}
+func (o *recordingProtectionObserver) ObserveProtection(_ context.Context, event toolcall.ProtectionEvent) {
+	o.events = append(o.events, event)
+}
+
+func TestLoopEmitsPermissionRetrySuppressionTelemetry(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{events: repeatedReadEvents("deny-1")},
+		{events: repeatedReadEvents("deny-2")},
+		{events: []model.Event{{Kind: model.EventTextDelta, Text: "permission remained denied"}, {Kind: model.EventDone}}},
+	}}
+	handler := &recordingHandler{definition: readFileDefinition()}
+	policy, err := permission.NewPolicy(permission.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	observer := &recordingProtectionObserver{}
+	service, err := toolcall.NewService(&recordingRegistry{handler: handler}, policy,
+		toolcall.WithMode(permission.ModeAsk),
+		toolcall.WithPrompt(func(context.Context, permission.Request) (permission.Resolution, error) {
+			return permission.Resolution{Action: permission.ActionDeny, Reason: "test deny"}, nil
+		}),
+		toolcall.WithObserver(observer),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loop, err := NewLoop(client, service)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "read"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[toolcall.ProtectionEventKind]toolcall.ProtectionEvent{}
+	for _, event := range observer.events {
+		kinds[event.Kind] = event
+	}
+	if _, ok := kinds[toolcall.ProtectionCallSuppressed]; !ok {
+		t.Fatalf("events = %#v, missing call suppression", observer.events)
+	}
+	permissionEvent, ok := kinds[toolcall.ProtectionPermissionSuppressed]
+	if !ok {
+		t.Fatalf("events = %#v, missing permission suppression", observer.events)
+	}
+	if permissionEvent.Fingerprint == "" || permissionEvent.ToolName != "read_file" || permissionEvent.Reason != "permission_retry" {
+		t.Fatalf("permission event = %#v", permissionEvent)
+	}
+}

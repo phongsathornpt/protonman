@@ -22,6 +22,38 @@ const (
 	EventCallFailed EventKind = "tool_call_failed"
 )
 
+// ProtectionEventKind identifies one redacted loop-safety event.
+type ProtectionEventKind string
+
+const (
+	ProtectionLoopDetected         ProtectionEventKind = "tool_loop_detected"
+	ProtectionCallSuppressed       ProtectionEventKind = "tool_call_suppressed"
+	ProtectionPermissionSuppressed ProtectionEventKind = "tool_permission_retry_suppressed"
+	ProtectionRetryBudgetExhausted ProtectionEventKind = "tool_retry_budget_exhausted"
+	ProtectionNoProgressSynthesis  ProtectionEventKind = "tool_no_progress_synthesis"
+	ProtectionTurnDeadlineExceeded ProtectionEventKind = "turn_deadline_exceeded"
+)
+
+// ProtectionEvent contains only redacted metadata. Fingerprint is a short hash
+// of canonical call semantics and never contains raw arguments.
+type ProtectionEvent struct {
+	Kind        ProtectionEventKind
+	Time        time.Time
+	Round       int
+	ToolName    string
+	ToolKind    permission.ToolKind
+	Reason      string
+	Fingerprint string
+	RepeatCount int
+	Retryable   bool
+	ErrorCode   tool.ErrorCode
+}
+
+// ProtectionObserver optionally extends a tool-call observer with loop safety events.
+type ProtectionObserver interface {
+	ObserveProtection(context.Context, ProtectionEvent)
+}
+
 // Event is the redacted metadata emitted around a tool call.
 //
 // Event deliberately excludes permission.Request.Detail, permission.Request.Arguments,
@@ -44,6 +76,19 @@ type Event struct {
 // Observer receives redacted events and must be safe for concurrent calls.
 type Observer interface {
 	Observe(context.Context, Event)
+}
+
+// ObserveProtection forwards one redacted loop-safety event when the configured
+// observer supports protection telemetry.
+func (s *Service) ObserveProtection(ctx context.Context, event ProtectionEvent) {
+	if s == nil || s.observer == nil {
+		return
+	}
+	observer, ok := s.observer.(ProtectionObserver)
+	if !ok {
+		return
+	}
+	observer.ObserveProtection(ctx, event)
 }
 
 type callTelemetry struct {
