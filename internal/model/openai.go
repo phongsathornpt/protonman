@@ -610,52 +610,71 @@ func (s *openAIStream) processLine(line string) error {
 		return nil
 	}
 
-	var chunk openAIChunk
-	if unmarshalErr := json.Unmarshal([]byte(payload), &chunk); unmarshalErr == nil {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(payload), &fields); err != nil {
+		return fmt.Errorf("%w: decode SSE data: %w", ErrInvalidEvent, err)
+	}
+
+	if _, hasChoices := fields["choices"]; hasChoices {
+		var chunk openAIChunk
+		if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
+			return fmt.Errorf("%w: decode chat completion event: %w", ErrInvalidEvent, err)
+		}
 		if chunk.Error != nil {
 			slog.Debug("model stream provider error", "format", "chat_completions")
 			return fmt.Errorf("model error: %s", chunk.Error.Message)
 		}
 
-		if len(chunk.Choices) > 0 {
-			for _, choice := range chunk.Choices {
-				if choice.Delta.Content != "" {
-					s.queue = append(s.queue, Event{
-						Kind: EventTextDelta,
-						Text: choice.Delta.Content,
-					})
-				}
+		for _, choice := range chunk.Choices {
+			if choice.Delta.Content != "" {
+				s.queue = append(s.queue, Event{
+					Kind: EventTextDelta,
+					Text: choice.Delta.Content,
+				})
+			}
 
-				for _, tc := range choice.Delta.ToolCalls {
-					acc, exists := s.toolCalls[tc.Index]
-					if !exists {
-						acc = &accumulatedToolCall{}
-						s.toolCalls[tc.Index] = acc
-					}
-					if tc.ID != "" {
-						acc.id = tc.ID
-					}
-					if tc.Function.Name != "" {
-						acc.name = tc.Function.Name
-					}
-					if tc.Function.Arguments != "" {
-						acc.arguments.WriteString(tc.Function.Arguments)
-					}
+			for _, tc := range choice.Delta.ToolCalls {
+				acc, exists := s.toolCalls[tc.Index]
+				if !exists {
+					acc = &accumulatedToolCall{}
+					s.toolCalls[tc.Index] = acc
+				}
+				if tc.ID != "" {
+					acc.id = tc.ID
+				}
+				if tc.Function.Name != "" {
+					acc.name = tc.Function.Name
+				}
+				if tc.Function.Arguments != "" {
+					acc.arguments.WriteString(tc.Function.Arguments)
 				}
 			}
-			for _, choice := range chunk.Choices {
-				if choice.FinishReason != nil {
-					s.finish("chat_finish_reason")
-					break
-				}
+		}
+		for _, choice := range chunk.Choices {
+			if choice.FinishReason != nil {
+				s.finish("chat_finish_reason")
+				break
 			}
-			return nil
+		}
+		return nil
+	}
+	if _, hasError := fields["error"]; hasError {
+		var chunk openAIChunk
+		if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
+			return fmt.Errorf("%w: decode provider error event: %w", ErrInvalidEvent, err)
+		}
+		if chunk.Error != nil {
+			slog.Debug("model stream provider error", "format", "chat_completions")
+			return fmt.Errorf("model error: %s", chunk.Error.Message)
 		}
 	}
 
 	// Check OpenAI Responses API SSE chunk
 	var respChunk openAIResponsesChunk
-	if unmarshalErr := json.Unmarshal([]byte(payload), &respChunk); unmarshalErr == nil && respChunk.Type != "" {
+	if _, hasType := fields["type"]; hasType {
+		if err := json.Unmarshal([]byte(payload), &respChunk); err != nil {
+			return fmt.Errorf("%w: decode responses event: %w", ErrInvalidEvent, err)
+		}
 		if respChunk.Error != nil {
 			slog.Debug("model stream provider error", "format", "responses")
 			return fmt.Errorf("model error: %s", respChunk.Error.Message)
@@ -730,7 +749,7 @@ func (s *openAIStream) processLine(line string) error {
 		}
 		return nil
 	}
-	return nil
+	return fmt.Errorf("%w: unsupported SSE data payload", ErrInvalidEvent)
 }
 
 func (s *openAIStream) finish(reason string) {

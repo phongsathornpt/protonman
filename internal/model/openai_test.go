@@ -863,3 +863,13 @@ func TestOpenAIStream_ReportsIncompleteEOF(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenAIStreamRejectsMalformedSSEData(t *testing.T) {
+	stream := newOpenAIStream(io.NopCloser(strings.NewReader("data: {not-json}\n\ndata: [DONE]\n")))
+	defer stream.Close()
+
+	_, err := stream.Next(context.Background())
+	if !errors.Is(err, ErrInvalidEvent) {
+		t.Fatalf("Next() error = %v, want invalid model event", err)
+	}
+}
