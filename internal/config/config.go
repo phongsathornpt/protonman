@@ -271,53 +271,21 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 
 // SaveUserProviderConfig persists or updates a provider configuration in ~/.proton/config.toml.
 func SaveUserProviderConfig(homeDir string, provider ProviderConfig, defaultModel string) error {
-	if homeDir == "" {
-		resolvedHome, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("resolve home directory: %w", err)
+	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
+		if doc.Providers == nil {
+			doc.Providers = make(map[string]ProviderConfig)
 		}
-		homeDir = resolvedHome
-	}
-	userDir := filepath.Join(homeDir, ".proton")
-	if err := os.MkdirAll(userDir, 0o700); err != nil {
-		return fmt.Errorf("create config directory: %w", err)
-	}
-	userPath := filepath.Join(homeDir, userConfigRelativePath)
+		providerKey := strings.ToLower(strings.TrimSpace(provider.Name))
+		if providerKey == "" {
+			providerKey = "default"
+		}
+		doc.Providers[providerKey] = provider
 
-	var doc fileDocument
-	data, err := os.ReadFile(userPath)
-	if err == nil {
-		_ = toml.Unmarshal(data, &doc)
-	}
-
-	if doc.Providers == nil {
-		doc.Providers = make(map[string]ProviderConfig)
-	}
-	providerKey := strings.ToLower(strings.TrimSpace(provider.Name))
-	if providerKey == "" {
-		providerKey = "default"
-	}
-	doc.Providers[providerKey] = provider
-
-	if defaultModel != "" {
-		doc.Model.Default = defaultModel
-		doc.Model.Provider = providerKey
-	}
-
-	encoded, err := toml.Marshal(doc)
-	if err != nil {
-		return fmt.Errorf("encode config toml: %w", err)
-	}
-
-	tempPath := fmt.Sprintf("%s.tmp.%d", userPath, os.Getpid())
-	if err := os.WriteFile(tempPath, encoded, 0o600); err != nil {
-		return fmt.Errorf("write temporary config: %w", err)
-	}
-	if err := os.Rename(tempPath, userPath); err != nil {
-		_ = os.Remove(tempPath)
-		return fmt.Errorf("persist config: %w", err)
-	}
-	return nil
+		if defaultModel != "" {
+			doc.Model.Default = defaultModel
+			doc.Model.Provider = providerKey
+		}
+	})
 }
 
 // SaveUserDefaultProvider updates the active provider in ~/.proton/config.toml.
@@ -327,102 +295,42 @@ func SaveUserDefaultProvider(homeDir string, provider string) error {
 
 // SaveUserDefaultModel updates the default active model and optionally provider in ~/.proton/config.toml.
 func SaveUserDefaultModel(homeDir string, provider string, modelID string) error {
-	if homeDir == "" {
-		resolvedHome, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("resolve home directory: %w", err)
+	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
+		if modelID != "" {
+			doc.Model.Default = modelID
 		}
-		homeDir = resolvedHome
-	}
-	userDir := filepath.Join(homeDir, ".proton")
-	if err := os.MkdirAll(userDir, 0o700); err != nil {
-		return fmt.Errorf("create config directory: %w", err)
-	}
-	userPath := filepath.Join(homeDir, userConfigRelativePath)
-
-	var doc fileDocument
-	data, err := os.ReadFile(userPath)
-	if err == nil {
-		_ = toml.Unmarshal(data, &doc)
-	}
-
-	if modelID != "" {
-		doc.Model.Default = modelID
-	}
-	if provider != "" {
-		doc.Model.Provider = strings.ToLower(strings.TrimSpace(provider))
-	}
-
-	encoded, err := toml.Marshal(doc)
-	if err != nil {
-		return fmt.Errorf("encode config toml: %w", err)
-	}
-
-	tempPath := fmt.Sprintf("%s.tmp.%d", userPath, os.Getpid())
-	if err := os.WriteFile(tempPath, encoded, 0o600); err != nil {
-		return fmt.Errorf("write temporary config: %w", err)
-	}
-	if err := os.Rename(tempPath, userPath); err != nil {
-		_ = os.Remove(tempPath)
-		return fmt.Errorf("persist config: %w", err)
-	}
-	return nil
+		if provider != "" {
+			doc.Model.Provider = strings.ToLower(strings.TrimSpace(provider))
+		}
+	})
 }
 
 // DeleteUserProviderConfig removes a provider configuration from ~/.proton/config.toml.
 func DeleteUserProviderConfig(homeDir string, providerName string) error {
-	if homeDir == "" {
-		resolvedHome, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("resolve home directory: %w", err)
+	return modifyUserConfigFile(homeDir, true, func(doc *fileDocument) {
+		providerKey := strings.ToLower(strings.TrimSpace(providerName))
+		if doc.Providers != nil {
+			delete(doc.Providers, providerKey)
 		}
-		homeDir = resolvedHome
-	}
-	userPath := filepath.Join(homeDir, userConfigRelativePath)
 
-	var doc fileDocument
-	data, err := os.ReadFile(userPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
+		if strings.EqualFold(doc.Model.Provider, providerKey) {
+			doc.Model.Provider = ""
+			for remaining := range doc.Providers {
+				doc.Model.Provider = remaining
+				break
+			}
 		}
-		return fmt.Errorf("read config file: %w", err)
-	}
-	if err := toml.Unmarshal(data, &doc); err != nil {
-		return fmt.Errorf("unmarshal config: %w", err)
-	}
-
-	providerKey := strings.ToLower(strings.TrimSpace(providerName))
-	if doc.Providers != nil {
-		delete(doc.Providers, providerKey)
-	}
-
-	if strings.EqualFold(doc.Model.Provider, providerKey) {
-		doc.Model.Provider = ""
-		for remaining := range doc.Providers {
-			doc.Model.Provider = remaining
-			break
-		}
-	}
-
-	encoded, err := toml.Marshal(doc)
-	if err != nil {
-		return fmt.Errorf("encode config toml: %w", err)
-	}
-
-	tempPath := fmt.Sprintf("%s.tmp.%d", userPath, os.Getpid())
-	if err := os.WriteFile(tempPath, encoded, 0o600); err != nil {
-		return fmt.Errorf("write temporary config: %w", err)
-	}
-	if err := os.Rename(tempPath, userPath); err != nil {
-		_ = os.Remove(tempPath)
-		return fmt.Errorf("persist config: %w", err)
-	}
-	return nil
+	})
 }
 
 // SaveUserMaxRounds updates the max rounds limit in ~/.proton/config.toml.
 func SaveUserMaxRounds(homeDir string, maxRounds int) error {
+	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
+		doc.Agent.MaxRounds = &maxRounds
+	})
+}
+
+func modifyUserConfigFile(homeDir string, returnIfNotExist bool, mutate func(*fileDocument)) error {
 	if homeDir == "" {
 		resolvedHome, err := os.UserHomeDir()
 		if err != nil {
@@ -439,22 +347,46 @@ func SaveUserMaxRounds(homeDir string, maxRounds int) error {
 	var doc fileDocument
 	data, err := os.ReadFile(userPath)
 	if err == nil {
-		_ = toml.Unmarshal(data, &doc)
+		if err := toml.Unmarshal(data, &doc); err != nil {
+			return fmt.Errorf("decode existing config %q: %w", userPath, err)
+		}
+	} else if errors.Is(err, os.ErrNotExist) {
+		if returnIfNotExist {
+			return nil
+		}
+	} else {
+		return fmt.Errorf("read config file %q: %w", userPath, err)
 	}
 
-	doc.Agent.MaxRounds = &maxRounds
+	mutate(&doc)
 
 	encoded, err := toml.Marshal(doc)
 	if err != nil {
 		return fmt.Errorf("encode config toml: %w", err)
 	}
 
-	tempPath := fmt.Sprintf("%s.tmp.%d", userPath, os.Getpid())
-	if err := os.WriteFile(tempPath, encoded, 0o600); err != nil {
+	tempFile, err := os.CreateTemp(userDir, ".config-*.tmp")
+	if err != nil {
+		return fmt.Errorf("create temporary config: %w", err)
+	}
+	tempPath := tempFile.Name()
+	defer func() {
+		_ = os.Remove(tempPath)
+	}()
+
+	if _, err := tempFile.Write(encoded); err != nil {
+		_ = tempFile.Close()
 		return fmt.Errorf("write temporary config: %w", err)
 	}
+	if err := tempFile.Chmod(0o600); err != nil {
+		_ = tempFile.Close()
+		return fmt.Errorf("protect temporary config: %w", err)
+	}
+	if err := tempFile.Close(); err != nil {
+		return fmt.Errorf("close temporary config: %w", err)
+	}
+
 	if err := os.Rename(tempPath, userPath); err != nil {
-		_ = os.Remove(tempPath)
 		return fmt.Errorf("persist config: %w", err)
 	}
 	return nil
