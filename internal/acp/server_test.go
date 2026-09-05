@@ -330,6 +330,56 @@ func TestACPCancelStopsInFlightPrompt(t *testing.T) {
 	}
 }
 
+func TestACPCancelEmitsTerminalToolUpdate(t *testing.T) {
+	runner := &cancelAfterToolCallRunner{started: make(chan struct{})}
+	server := newTestServerWithRunner(t, permission.ModeAlwaysApprove, runner)
+	created, _, err := server.dispatch(context.Background(), RPCRequest{Method: "session/new"}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("session/new error = %v", err)
+	}
+	sessionID := created.(SessionNewResult).SessionID
+	sess, ok := server.lookupSession(sessionID)
+	if !ok {
+		t.Fatalf("session %q not found", sessionID)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var notifications []RPCNotification
+	resultCh := make(chan error, 1)
+	go func() {
+		_, runErr := sess.ExecutePrompt(ctx, []ContentBlock{{Type: BlockTypeText, Text: "wait"}}, func(notification RPCNotification) error {
+			notifications = append(notifications, notification)
+			return nil
+		})
+		resultCh <- runErr
+	}()
+
+	select {
+	case <-runner.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("runner did not start prompt")
+	}
+	cancel()
+	select {
+	case runErr := <-resultCh:
+		if runErr != nil {
+			t.Fatalf("ExecutePrompt() error = %v, want nil cancellation result", runErr)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("ExecutePrompt() did not finish after cancellation")
+	}
+
+	raw, err := json.Marshal(notifications)
+	if err != nil {
+		t.Fatalf("marshal notifications: %v", err)
+	}
+	text := string(raw)
+	if !strings.Contains(text, `"toolCallId":"call-cancel"`) || !strings.Contains(text, `"status":"failed"`) {
+		t.Fatalf("notifications missing terminal failed tool update: %s", text)
+	}
+}
+
 func TestACPUnknownMethod(t *testing.T) {
 	server := newTestServer(t, permission.ModeAsk)
 	var output bytes.Buffer
@@ -408,6 +458,28 @@ func (r acpRegistry) Definitions() []tool.Definition {
 type blockingACPRunner struct {
 	started  chan struct{}
 	canceled chan struct{}
+}
+
+type cancelAfterToolCallRunner struct {
+	started chan struct{}
+}
+
+func (r *cancelAfterToolCallRunner) Run(ctx context.Context, _ []model.Message, sink applicationturn.Sink) (applicationturn.Result, error) {
+	call := tool.Call{
+		ID:        "call-cancel",
+		Name:      "read_file",
+		Arguments: json.RawMessage(`{"path":"test.go"}`),
+	}
+	if err := sink(ctx, applicationturn.Event{Kind: applicationturn.EventToolCall, Call: call}); err != nil {
+		return applicationturn.Result{}, err
+	}
+	close(r.started)
+	<-ctx.Done()
+	_ = sink(context.WithoutCancel(ctx), applicationturn.Event{
+		Kind: applicationturn.EventFailed,
+		Err:  ctx.Err(),
+	})
+	return applicationturn.Result{}, ctx.Err()
 }
 
 func (r *blockingACPRunner) Run(ctx context.Context, _ []model.Message, _ applicationturn.Sink) (applicationturn.Result, error) {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -126,14 +127,17 @@ func (s *Session) ExecutePrompt(
 	var assistantText strings.Builder
 	var assistantCalls []tool.Call
 	var turnMessages []model.Message
+	pendingToolCalls := make(map[string]tool.Call)
 
 	sink := func(sinkCtx context.Context, event applicationturn.Event) error {
-		select {
-		case <-sinkCtx.Done():
-			return sinkCtx.Err()
-		case <-promptCtx.Done():
-			return promptCtx.Err()
-		default:
+		if event.Kind != applicationturn.EventToolResult && event.Kind != applicationturn.EventFailed {
+			select {
+			case <-sinkCtx.Done():
+				return sinkCtx.Err()
+			case <-promptCtx.Done():
+				return promptCtx.Err()
+			default:
+			}
 		}
 
 		switch event.Kind {
@@ -156,6 +160,7 @@ func (s *Session) ExecutePrompt(
 
 		case applicationturn.EventToolCall:
 			assistantCalls = append(assistantCalls, event.Call)
+			pendingToolCalls[event.Call.ID] = event.Call
 			locations := LocationsForToolCall(event.Call)
 			payload := map[string]any{
 				"sessionUpdate": "tool_call",
@@ -177,31 +182,31 @@ func (s *Session) ExecutePrompt(
 			})
 
 		case applicationturn.EventToolResult:
-			status := ToolCallStatusCompleted
-			if event.Result.Failure != nil || event.Result.Denied || event.Err != nil {
-				status = ToolCallStatusFailed
+			callID := event.Result.CallID
+			if callID == "" {
+				callID = event.Call.ID
 			}
-			return notifier(RPCNotification{
-				JSONRPC: "2.0",
-				Method:  "session/update",
-				Params: map[string]any{
-					"sessionId": s.id,
-					"update": map[string]any{
-						"sessionUpdate": "tool_call_update",
-						"toolCallId":    event.Result.CallID,
-						"status":        string(status),
-						"content": []map[string]any{
-							{
-								"type": "content",
-								"content": map[string]any{
-									"type": string(BlockTypeText),
-									"text": event.Result.Output,
-								},
-							},
-						},
-					},
-				},
-			})
+			delete(pendingToolCalls, callID)
+			return notifyToolCallUpdate(notifier, s.id, callID, event.Result, event.Err)
+
+		case applicationturn.EventFailed:
+			ids := make([]string, 0, len(pendingToolCalls))
+			for callID := range pendingToolCalls {
+				ids = append(ids, callID)
+			}
+			sort.Strings(ids)
+			for _, callID := range ids {
+				call := pendingToolCalls[callID]
+				result := tool.Result{
+					CallID:   callID,
+					ToolName: call.Name,
+					Failure:  tool.FailureFromError(event.Err),
+				}
+				if err := notifyToolCallUpdate(notifier, s.id, callID, result, event.Err); err != nil {
+					return err
+				}
+				delete(pendingToolCalls, callID)
+			}
 
 		case applicationturn.EventCompleted:
 			if event.Message.ToolCalls != nil || event.Text != "" {
@@ -503,16 +508,21 @@ func (s *Session) handleSlashCommand(
 		if len(locations) > 0 {
 			payload["locations"] = locations
 		}
-		_ = notifier(RPCNotification{
+		if err := notifier(RPCNotification{
 			JSONRPC: "2.0",
 			Method:  "session/update",
 			Params: map[string]any{
 				"sessionId": s.id,
 				"update":    payload,
 			},
-		})
+		}); err != nil {
+			return true, SessionPromptResult{}, fmt.Errorf("notify tool call %q: %w", call.ID, err)
+		}
 
 		result, callErr := s.service.Call(ctx, call)
+		if err := notifyToolCallUpdate(notifier, s.id, call.ID, result, callErr); err != nil {
+			return true, SessionPromptResult{}, err
+		}
 
 		s.mu.Lock()
 		wasCancelled := s.cancelled || ctx.Err() != nil
@@ -520,32 +530,6 @@ func (s *Session) handleSlashCommand(
 		if wasCancelled {
 			return true, SessionPromptResult{StopReason: StopReasonCancelled}, nil
 		}
-
-		status := ToolCallStatusCompleted
-		if result.Failure != nil || result.Denied || callErr != nil {
-			status = ToolCallStatusFailed
-		}
-		_ = notifier(RPCNotification{
-			JSONRPC: "2.0",
-			Method:  "session/update",
-			Params: map[string]any{
-				"sessionId": s.id,
-				"update": map[string]any{
-					"sessionUpdate": "tool_call_update",
-					"toolCallId":    call.ID,
-					"status":        string(status),
-					"content": []map[string]any{
-						{
-							"type": "content",
-							"content": map[string]any{
-								"type": string(BlockTypeText),
-								"text": result.Output,
-							},
-						},
-					},
-				},
-			},
-		})
 
 		output := result.Output
 		if output == "" && callErr != nil {
@@ -598,6 +582,47 @@ func (s *Session) handleSlashCommand(
 	}
 
 	return false, SessionPromptResult{}, nil
+}
+
+func notifyToolCallUpdate(
+	notifier func(RPCNotification) error,
+	sessionID string,
+	callID string,
+	result tool.Result,
+	callErr error,
+) error {
+	status := ToolCallStatusCompleted
+	if result.Failure != nil || result.Denied || callErr != nil {
+		status = ToolCallStatusFailed
+	}
+	text := result.Output
+	if text == "" && result.Failure != nil {
+		text = result.Failure.Message
+	}
+	if text == "" && callErr != nil {
+		text = callErr.Error()
+	}
+	return notifier(RPCNotification{
+		JSONRPC: "2.0",
+		Method:  "session/update",
+		Params: map[string]any{
+			"sessionId": sessionID,
+			"update": map[string]any{
+				"sessionUpdate": "tool_call_update",
+				"toolCallId":    callID,
+				"status":        string(status),
+				"content": []map[string]any{
+					{
+						"type": "content",
+						"content": map[string]any{
+							"type": string(BlockTypeText),
+							"text": text,
+						},
+					},
+				},
+			},
+		},
+	})
 }
 
 func (s *Session) saveState() {
