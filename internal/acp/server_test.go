@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -426,6 +427,33 @@ func TestACPCancelEmitsTerminalToolUpdate(t *testing.T) {
 	if !strings.Contains(text, `"toolCallId":"call-cancel"`) || !strings.Contains(text, `"status":"failed"`) {
 		t.Fatalf("notifications missing terminal failed tool update: %s", text)
 	}
+	if messages := sess.Messages(); len(messages) != 0 {
+		t.Fatalf("canceled prompt persisted partial transcript: %+v", messages)
+	}
+}
+
+func TestACPFailedPromptRollsBackPartialToolTranscript(t *testing.T) {
+	runner := &failingAfterToolCallRunner{}
+	server := newTestServerWithRunner(t, permission.ModeAlwaysApprove, runner)
+	created, _, err := server.dispatch(context.Background(), RPCRequest{Method: "session/new"}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("session/new error = %v", err)
+	}
+	sessionID := created.(SessionNewResult).SessionID
+	sess, ok := server.lookupSession(sessionID)
+	if !ok {
+		t.Fatalf("session %q not found", sessionID)
+	}
+
+	_, err = sess.ExecutePrompt(context.Background(), []ContentBlock{{Type: BlockTypeText, Text: "fail"}}, func(RPCNotification) error {
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "runner failed") {
+		t.Fatalf("ExecutePrompt() error = %v, want runner failure", err)
+	}
+	if messages := sess.Messages(); len(messages) != 0 {
+		t.Fatalf("failed prompt persisted partial transcript: %+v", messages)
+	}
 }
 
 func TestACPUnknownMethod(t *testing.T) {
@@ -523,6 +551,27 @@ type blockingACPRunner struct {
 
 type cancelAfterToolCallRunner struct {
 	started chan struct{}
+}
+
+type failingAfterToolCallRunner struct{}
+
+func (r *failingAfterToolCallRunner) Run(ctx context.Context, _ []model.Message, sink applicationturn.Sink) (applicationturn.Result, error) {
+	call := tool.Call{
+		ID:        "call-fail",
+		Name:      "read_file",
+		Arguments: json.RawMessage(`{"path":"test.go"}`),
+	}
+	if err := sink(ctx, applicationturn.Event{Kind: applicationturn.EventToolCall, Call: call}); err != nil {
+		return applicationturn.Result{}, err
+	}
+	return applicationturn.Result{
+		Messages: []model.Message{{
+			Role: model.RoleAssistant,
+			ToolCalls: []model.ToolCall{{
+				ID: call.ID, Name: call.Name, Arguments: call.Arguments,
+			}},
+		}},
+	}, errors.New("runner failed")
 }
 
 func (r *cancelAfterToolCallRunner) Run(ctx context.Context, _ []model.Message, sink applicationturn.Sink) (applicationturn.Result, error) {

@@ -568,3 +568,13 @@ func TestCoordinator_SubagentInheritsCallGuard(t *testing.T) {
 		t.Errorf("callErr = %v, want 'guard: plan mode is read-only'", callErr)
 	}
 }
+
+func TestCoordinatorMaxRoundsOptionAllowsUnbounded(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil, WithMaxRounds(0))
+	if got := coord.maxRounds; got != 0 {
+		t.Fatalf("max rounds = %d, want 0", got)
+	}
+	if err := coord.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}

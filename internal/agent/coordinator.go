@@ -96,7 +96,7 @@ func WithMaxDepth(depth int) Option {
 // WithMaxRounds sets the maximum model/tool rounds per subagent.
 func WithMaxRounds(rounds int) Option {
 	return func(c *Coordinator) {
-		if rounds > 0 {
+		if rounds >= 0 {
 			c.maxRounds = rounds
 		}
 	}
