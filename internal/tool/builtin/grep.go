@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -54,11 +55,22 @@ type grepInput struct {
 }
 
 type grepPageState struct {
-	offset  int
-	limit   int
-	seen    int
-	emitted int
-	output  *strings.Builder
+	offset   int
+	limit    int
+	seen     int
+	emitted  int
+	output   *strings.Builder
+	lastFile string
+	lastLine int
+}
+
+type grepContinuation struct {
+	Version  int    `json:"v"`
+	Query    string `json:"q"`
+	Snapshot string `json:"s"`
+	File     string `json:"f"`
+	Line     int    `json:"l"`
+	Matches  int    `json:"m"`
 }
 
 // NewGrep returns the bounded regular-expression search adapter.
@@ -154,10 +166,37 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	if err != nil {
 		return tool.Result{}, err
 	}
+	query := struct{ Pattern, Path, Include string }{input.Pattern, searchPath, input.Include}
+	queryHash, err := continuationToken("grep-query", query, "")
+	if err != nil {
+		return tool.Result{}, err
+	}
+	var resume grepContinuation
+	resumeActive := false
+	legacyContinuation := ""
+	if input.Continuation != "" {
+		decoded, isCursor, decodeErr := decodeGrepContinuation(input.Continuation)
+		if decodeErr != nil {
+			return tool.Result{}, decodeErr
+		}
+		if isCursor {
+			if decoded.Query != queryHash || decoded.Matches != input.Offset {
+				return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "grep continuation does not match this query or offset; restart from offset 0")
+			}
+			resume = decoded
+			resumeActive = true
+		} else {
+			legacyContinuation = input.Continuation
+		}
+	}
 
 	var output strings.Builder
+	pageOffset := input.Offset
+	if resumeActive {
+		pageOffset = 0
+	}
 	page := grepPageState{
-		offset: input.Offset,
+		offset: pageOffset,
 		limit:  input.Limit,
 		output: &output,
 	}
@@ -177,29 +216,42 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 			}
 			return nil
 		}
+		relSearch, err := filepath.Rel(resolvedPath, path)
+		if err != nil {
+			return err
+		}
+		relSearch = filepath.ToSlash(relSearch)
 		if entry.IsDir() {
 			if entry.Name() == ".git" && path != resolvedPath {
 				return filepath.SkipDir
 			}
-			return hashGrepSnapshotEntry(snapshotHash, resolvedPath, path, entry)
+			return hashGrepSnapshotEntry(snapshotHash, relSearch, entry)
 		}
 		if entry.Type()&os.ModeSymlink != 0 {
 			return nil
 		}
 		if input.Include != "" {
-			relSearch, _ := filepath.Rel(resolvedPath, path)
 			relWork, _ := h.workspace.RelRead(path)
 			if !matchGrepInclude(input.Include, entry.Name(), relSearch, relWork) {
 				return nil
 			}
 		}
-		if err := hashGrepSnapshotEntry(snapshotHash, resolvedPath, path, entry); err != nil {
+		if err := hashGrepSnapshotEntry(snapshotHash, relSearch, entry); err != nil {
 			return err
 		}
 		if !scanEnabled {
 			return nil
 		}
-		scanErr := scanGrepFile(ctx, h.workspace, path, grepMatcher, &page)
+		startLine := 0
+		if resumeActive {
+			switch strings.Compare(relSearch, resume.File) {
+			case -1:
+				return nil
+			case 0:
+				startLine = resume.Line
+			}
+		}
+		scanErr := scanGrepFile(ctx, h.workspace, path, relSearch, startLine, grepMatcher, &page)
 		if scanErr != nil {
 			if errors.Is(scanErr, errGrepLimit) {
 				truncated = true
@@ -214,33 +266,68 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		return tool.Result{}, fmt.Errorf("grep workspace: %w", walkErr)
 	}
 	snapshot := hex.EncodeToString(snapshotHash.Sum(nil))
-	continuation, err := continuationToken("grep", struct{ Pattern, Path, Include string }{input.Pattern, searchPath, input.Include}, snapshot)
-	if err != nil {
-		return tool.Result{}, err
-	}
-	if input.Continuation != "" && input.Continuation != continuation {
+	if resumeActive && resume.Snapshot != snapshot {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "grep continuation is stale; restart from offset 0")
+	}
+	if legacyContinuation != "" {
+		legacyToken, tokenErr := continuationToken("grep", query, snapshot)
+		if tokenErr != nil {
+			return tool.Result{}, tokenErr
+		}
+		if legacyContinuation != legacyToken {
+			return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "grep continuation is stale; restart from offset 0")
+		}
 	}
 
 	var nextOffset *int64
+	continuation := ""
 	if truncated {
 		next := int64(input.Offset + page.emitted)
 		nextOffset = &next
+		continuation, err = encodeGrepContinuation(grepContinuation{
+			Version:  1,
+			Query:    queryHash,
+			Snapshot: snapshot,
+			File:     page.lastFile,
+			Line:     page.lastLine,
+			Matches:  int(next),
+		})
+		if err != nil {
+			return tool.Result{}, err
+		}
 		output.WriteString(fmt.Sprintf("[grep output truncated; continue with offset=%d]\n", next))
 	}
 	return tool.Result{
-		CallID:     call.ID,
-		ToolName:   call.Name,
-		Output:     output.String(),
-		Truncated:  truncated,
-		NextOffset: nextOffset,
-		Continuation: func() string {
-			if truncated {
-				return continuation
-			}
-			return ""
-		}(),
+		CallID:       call.ID,
+		ToolName:     call.Name,
+		Output:       output.String(),
+		Truncated:    truncated,
+		NextOffset:   nextOffset,
+		Continuation: continuation,
 	}, nil
+}
+
+func encodeGrepContinuation(value grepContinuation) (string, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return "", fmt.Errorf("encode grep continuation: %w", err)
+	}
+	return "g1." + base64.RawURLEncoding.EncodeToString(encoded), nil
+}
+
+func decodeGrepContinuation(value string) (grepContinuation, bool, error) {
+	if !strings.HasPrefix(value, "g1.") {
+		return grepContinuation{}, false, nil
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(value, "g1."))
+	if err != nil {
+		return grepContinuation{}, true, tool.NewToolError(tool.ErrorCodeStaleContinuation, "grep continuation is malformed; restart from offset 0")
+	}
+	var decoded grepContinuation
+	if err := json.Unmarshal(raw, &decoded); err != nil || decoded.Version != 1 || decoded.Query == "" || decoded.Snapshot == "" || decoded.File == "" || decoded.Line <= 0 || decoded.Matches <= 0 {
+		return grepContinuation{}, true, tool.NewToolError(tool.ErrorCodeStaleContinuation, "grep continuation is malformed; restart from offset 0")
+	}
+	return decoded, true, nil
 }
 
 type grepMatcher struct {
@@ -275,16 +362,12 @@ func (m grepMatcher) Match(line []byte) bool {
 	return m.regexp.Match(line)
 }
 
-func hashGrepSnapshotEntry(h hash.Hash, root, path string, entry os.DirEntry) error {
+func hashGrepSnapshotEntry(h hash.Hash, relative string, entry os.DirEntry) error {
 	info, err := entry.Info()
 	if err != nil {
 		return err
 	}
-	rel, err := filepath.Rel(root, path)
-	if err != nil {
-		return err
-	}
-	_, _ = h.Write([]byte(filepath.ToSlash(rel)))
+	_, _ = h.Write([]byte(relative))
 	var encoded [24]byte
 	binary.LittleEndian.PutUint64(encoded[0:8], uint64(info.Size()))
 	binary.LittleEndian.PutUint64(encoded[8:16], uint64(info.ModTime().UnixNano()))
@@ -297,6 +380,8 @@ func scanGrepFile(
 	ctx context.Context,
 	workspaceRoot *workspace.Workspace,
 	path string,
+	cursorFile string,
+	startLine int,
 	matcher grepMatcher,
 	page *grepPageState,
 ) (returnErr error) {
@@ -331,6 +416,9 @@ func scanGrepFile(
 			return fmt.Errorf("grep %q: %w", relative, err)
 		}
 		lineNumber++
+		if lineNumber <= startLine {
+			continue
+		}
 		lineBytes := scanner.Bytes()
 		if !matcher.Match(lineBytes) {
 			continue
@@ -362,6 +450,8 @@ func scanGrepFile(
 		}
 		page.output.WriteByte('\n')
 		page.emitted++
+		page.lastFile = cursorFile
+		page.lastLine = lineNumber
 	}
 	if scanErr := scanner.Err(); scanErr != nil {
 		return fmt.Errorf("scan %q: %w", relative, scanErr)
