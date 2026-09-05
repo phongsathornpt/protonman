@@ -249,12 +249,12 @@ Proton registers a suite of workspace-safe tools:
 
 | Tool | Category | Description |
 | :--- | :--- | :--- |
-| `read_file` | File System | Read UTF-8 workspace files with boundary-safe byte `offset`/`limit` pagination and `next_offset` continuation |
+| `read_file` | File System | Read UTF-8 workspace files with boundary-safe byte `offset`/`limit` pagination plus snapshot-bound `next_offset`/`continuation` |
 | `write_file` | File System | Write file contents with automatic pre-edit checkpointing |
 | `search_replace` | File System | Exact block replacement in files with pre-edit checkpointing |
 | `apply_patch` | File System | Apply unified diff patches with pre-edit checkpointing |
-| `grep` | Search | Regex search with include globs plus match-offset pagination and `next_offset` continuation |
-| `list_dir` | Search | List visible directory entries with protected-path filtering and `next_offset` pagination |
+| `grep` | Search | Regex search with include globs plus snapshot-bound match-offset pagination and continuation tokens |
+| `list_dir` | Search | List visible directory entries with protected-path filtering and snapshot-bound pagination |
 | `git_status` | Version Control | Inspect Git working tree state and uncommitted changes |
 | `bash` | Execution | Run shell commands inside workspace and sandbox boundaries |
 | `web_fetch` | Network | Retrieve remote web pages conforming to sandbox network policy |
@@ -349,7 +349,7 @@ Execution safety notes:
 - `max_rounds = 0` disables only the round-count bound; `max_tool_calls = 0` disables only the cumulative tool-call-count bound.
 - A complete model/tool turn still has a default 10-minute deadline, and the loop refuses construction if every global termination bound is disabled.
 - Repeating the same deterministic tool call with the same semantic arguments and result twice without an intervening mutation triggers a text-only synthesis round instead of continuing the tool loop; identical retryable failures are capped at three attempts.
-- Truncated `read_file`, `grep`, and `list_dir` results include `next_offset`; pass that value back as `offset` to continue instead of repeating the same page.
+- Truncated `read_file`, `grep`, and `list_dir` results include `next_offset` plus a snapshot-bound `continuation`; send both on the next page to detect stale file, query, or directory state. Plain `offset` remains supported for compatibility.
 
 ### Environment Variables
 
@@ -359,7 +359,7 @@ Execution safety notes:
 | `PROTON_TRUST_PROJECT` | Set to `1`, `true`, or `on` to trust and load project-local `.proton/` configs and skills |
 | `PROTON_SESSION_ID` | Explicit session identifier to resume or create |
 | `PROTON_SANDBOX` | Override sandbox profile (`off`, `workspace`, `read-only`, `strict`) |
-| `PROTON_TELEMETRY` | Set to `stderr` for JSON lifecycle telemetry (redacts paths, commands, and arguments) |
+| `PROTON_TELEMETRY` | Set to `stderr` for redacted JSON tool lifecycle and loop-protection telemetry, including suppression, retry-budget, stale-continuation, and turn-deadline counters |
 | `PROTON_DEBUG_LOG` | Set to a file path or `stderr` for opt-in JSON development diagnostics; disabled by default |
 
 ---

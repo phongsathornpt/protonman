@@ -537,6 +537,8 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			return l.fail(ctx, sink, round, observeErr)
 		} else if stalled {
 			forceNoProgressSynthesis = true
+			l.observeProtection(ctx, toolcall.ProtectionEvent{Kind: toolcall.ProtectionLoopDetected, Time: time.Now(), Round: round, Reason: "semantic_no_progress"})
+			l.observeProtection(ctx, toolcall.ProtectionEvent{Kind: toolcall.ProtectionNoProgressSynthesis, Time: time.Now(), Round: round + 1, Reason: "semantic_no_progress"})
 			slog.DebugContext(ctx, "turn semantic tool loop detected",
 				"round", round,
 				"tool_calls", len(executions),
@@ -666,10 +668,14 @@ func finalizeDisabledToolCallResponse(
 }
 
 type executedCall struct {
-	call       tool.Call
-	result     tool.Result
-	err        error
-	suppressed bool
+	call                tool.Call
+	result              tool.Result
+	err                 error
+	suppressed          bool
+	suppressionReason   string
+	semanticFingerprint string
+	repeatCount         int
+	retryable           bool
 }
 
 func (l *Loop) runRound(
@@ -779,6 +785,7 @@ func (l *Loop) runRound(
 		}
 		if suppressed != nil {
 			executions[index] = *suppressed
+			l.observeSuppression(roundContext, round, *suppressed)
 			continue
 		}
 		pendingCalls = append(pendingCalls, call)
@@ -1160,7 +1167,46 @@ func consumeStream(
 	return model.Message{}, nil, err
 }
 
+func (l *Loop) observeSuppression(ctx context.Context, round int, execution executedCall) {
+	event := toolcall.ProtectionEvent{
+		Kind: toolcall.ProtectionCallSuppressed, Time: time.Now(), Round: round,
+		ToolName: execution.call.Name, Reason: execution.suppressionReason,
+		Fingerprint: execution.semanticFingerprint, RepeatCount: execution.repeatCount,
+		Retryable: execution.retryable,
+	}
+	if execution.result.Failure != nil {
+		event.ErrorCode = execution.result.Failure.Code
+	}
+	for _, definition := range l.tools.Definitions() {
+		if definition.Name == execution.call.Name {
+			event.ToolKind = permission.ToolKind(definition.Kind)
+			break
+		}
+	}
+	l.observeProtection(ctx, event)
+	specific := event
+	switch execution.suppressionReason {
+	case "permission_retry":
+		specific.Kind = toolcall.ProtectionPermissionSuppressed
+	case "retry_budget_exhausted":
+		specific.Kind = toolcall.ProtectionRetryBudgetExhausted
+	default:
+		return
+	}
+	l.observeProtection(ctx, specific)
+}
+
+func (l *Loop) observeProtection(ctx context.Context, event toolcall.ProtectionEvent) {
+	if l == nil || l.tools == nil {
+		return
+	}
+	l.tools.ObserveProtection(ctx, event)
+}
+
 func (l *Loop) fail(ctx context.Context, sink Sink, round int, err error) (Result, error) {
+	if errors.Is(err, context.DeadlineExceeded) && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		l.observeProtection(context.WithoutCancel(ctx), toolcall.ProtectionEvent{Kind: toolcall.ProtectionTurnDeadlineExceeded, Time: time.Now(), Round: round, Reason: "turn_deadline"})
+	}
 	slog.DebugContext(ctx, "turn failed",
 		"round", round,
 		"error_type", fmt.Sprintf("%T", err),

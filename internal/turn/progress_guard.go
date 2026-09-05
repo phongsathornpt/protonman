@@ -2,6 +2,7 @@ package turn
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
@@ -160,7 +161,23 @@ func (g *progressGuard) suppress(call tool.Call) (*executedCall, error) {
 			Message: message,
 		},
 	}
-	return &executedCall{call: call, result: result, suppressed: true}, nil
+	reason := "no_progress"
+	if observation.failure && !observation.retryable {
+		if observation.failureCode == tool.ErrorCodePermissionDenied {
+			reason = "permission_retry"
+		} else {
+			reason = "terminal_failure"
+		}
+	} else if observation.failure && observation.retryable {
+		reason = "retry_budget_exhausted"
+	}
+	return &executedCall{
+		call: call, result: result, suppressed: true,
+		suppressionReason:   reason,
+		semanticFingerprint: hex.EncodeToString(callHash[:8]),
+		repeatCount:         observation.count,
+		retryable:           observation.retryable,
+	}, nil
 }
 
 func shouldTrackNoProgress(definition tool.Definition, result tool.Result) bool {
