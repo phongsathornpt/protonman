@@ -96,3 +96,21 @@ func TestResultFailureHasStableJSONShape(t *testing.T) {
 		t.Fatalf("JSON = %s, want %s", got, want)
 	}
 }
+
+func TestResultContinuationHasStableJSONShape(t *testing.T) {
+	next := int64(42)
+	result := Result{
+		CallID:     "call-1",
+		ToolName:   "read_file",
+		Output:     "page",
+		Truncated:  true,
+		NextOffset: &next,
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	if got, want := string(encoded), `{"call_id":"call-1","tool_name":"read_file","output":"page","truncated":true,"next_offset":42}`; got != want {
+		t.Fatalf("JSON = %s, want %s", got, want)
+	}
+}

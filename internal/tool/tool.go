@@ -227,6 +227,8 @@ type Result struct {
 	Denied bool `json:"denied,omitempty"`
 	// Truncated reports that an output limit shortened the result.
 	Truncated bool `json:"truncated,omitempty"`
+	// NextOffset is the continuation offset for pageable tools when Truncated is true.
+	NextOffset *int64 `json:"next_offset,omitempty"`
 	// Failure is populated when a tool call fails or is denied.
 	Failure *Failure `json:"error,omitempty"`
 	// CheckpointID identifies the pre-edit snapshot created by a mutating tool.

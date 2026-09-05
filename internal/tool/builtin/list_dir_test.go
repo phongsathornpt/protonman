@@ -117,3 +117,27 @@ func TestListDirAccurateTruncationWithProtectedEntries(t *testing.T) {
 		}
 	}
 }
+
+func TestListDirSupportsContinuationOffset(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	for _, name := range []string{"a.txt", "b.txt", "c.txt"} {
+		writeTestFile(t, ws.Root(), name, name)
+	}
+	handler := NewListDir(ws)
+
+	first := executeJSON(t, handler, "list-page-1", map[string]any{"path": ".", "limit": 2})
+	if !first.Truncated || first.NextOffset == nil || *first.NextOffset != 2 {
+		t.Fatalf("first continuation = truncated:%v next:%v", first.Truncated, first.NextOffset)
+	}
+	if !strings.Contains(first.Output, "a.txt") || !strings.Contains(first.Output, "b.txt") || strings.Contains(first.Output, "c.txt") {
+		t.Fatalf("first output = %q", first.Output)
+	}
+
+	second := executeJSON(t, handler, "list-page-2", map[string]any{"path": ".", "offset": 2, "limit": 2})
+	if second.Truncated || second.NextOffset != nil {
+		t.Fatalf("second continuation = truncated:%v next:%v", second.Truncated, second.NextOffset)
+	}
+	if !strings.Contains(second.Output, "c.txt") || strings.Contains(second.Output, "a.txt") {
+		t.Fatalf("second output = %q", second.Output)
+	}
+}

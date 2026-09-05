@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -174,8 +175,39 @@ func TestReadFileReportsTruncation(t *testing.T) {
 	if !strings.Contains(result.Output, "output truncated") {
 		t.Fatalf("read output does not contain truncation marker")
 	}
-	if got, want := len(result.Output), maxReadFileBytes+len("\n[output truncated at 2 MiB]"); got != want {
+	if result.NextOffset == nil || *result.NextOffset != int64(maxReadFileBytes) {
+		t.Fatalf("read next_offset = %v, want %d", result.NextOffset, maxReadFileBytes)
+	}
+	marker := fmt.Sprintf("\n[output truncated; continue with offset=%d]", maxReadFileBytes)
+	if got, want := len(result.Output), maxReadFileBytes+len(marker); got != want {
 		t.Fatalf("read output length = %d, want %d", got, want)
+	}
+}
+
+func TestReadFileSupportsContinuationOffset(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	writeTestFile(t, workspaceRoot.Root(), "paged.txt", "abcdefghij")
+	handler := NewReadFile(workspaceRoot)
+
+	first := executeJSON(t, handler, "read-page-1", map[string]any{"path": "paged.txt", "limit": 4})
+	if !first.Truncated || first.NextOffset == nil || *first.NextOffset != 4 {
+		t.Fatalf("first page continuation = truncated:%v next:%v", first.Truncated, first.NextOffset)
+	}
+	if !strings.HasPrefix(first.Output, "abcd") {
+		t.Fatalf("first page output = %q", first.Output)
+	}
+
+	second := executeJSON(t, handler, "read-page-2", map[string]any{"path": "paged.txt", "offset": 4, "limit": 4})
+	if !second.Truncated || second.NextOffset == nil || *second.NextOffset != 8 {
+		t.Fatalf("second page continuation = truncated:%v next:%v", second.Truncated, second.NextOffset)
+	}
+	if !strings.HasPrefix(second.Output, "efgh") {
+		t.Fatalf("second page output = %q", second.Output)
+	}
+
+	third := executeJSON(t, handler, "read-page-3", map[string]any{"path": "paged.txt", "offset": 8, "limit": 4})
+	if third.Truncated || third.NextOffset != nil || third.Output != "ij" {
+		t.Fatalf("third page = %+v", third)
 	}
 }
 
