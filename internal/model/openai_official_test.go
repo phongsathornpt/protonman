@@ -374,3 +374,41 @@ func (s *officialResponsesSourceStub) Err() error {
 func (s *officialResponsesSourceStub) Close() error {
 	return nil
 }
+
+func TestOfficialResponsesStreamFlushesPendingToolCallOnCompleted(t *testing.T) {
+	stream := newOfficialResponsesStream(&officialResponsesSourceStub{
+		events: []responses.ResponseStreamEventUnion{
+			{
+				Type: "response.output_item.added",
+				Item: responses.ResponseOutputItemUnion{
+					ID: "item-pending", Type: "function_call", Name: "read_file", CallID: "call-pending",
+				},
+			},
+			{
+				Type: "response.function_call_arguments.delta", ItemID: "item-pending", Delta: `{"path":"README.md"}`,
+			},
+			{Type: "response.completed"},
+		},
+	})
+
+	call, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next() call error = %v", err)
+	}
+	if call.Kind != EventToolCall {
+		t.Fatalf("event kind = %s, want tool_call", call.Kind)
+	}
+	if call.ToolCall.ID != "call-pending" || call.ToolCall.Name != "read_file" {
+		t.Fatalf("tool call = %+v", call.ToolCall)
+	}
+	if got, want := string(call.ToolCall.Arguments), `{"path":"README.md"}`; got != want {
+		t.Fatalf("arguments = %s, want %s", got, want)
+	}
+	done, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next() done error = %v", err)
+	}
+	if done.Kind != EventDone {
+		t.Fatalf("done = %+v", done)
+	}
+}
