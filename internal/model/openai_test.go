@@ -459,8 +459,8 @@ func TestOpenAIClientFallbackToolCallID(t *testing.T) {
 	if ev.ToolCall.ID == "" {
 		t.Fatalf("expected generated fallback tool call ID, got empty string")
 	}
-	if !strings.HasPrefix(ev.ToolCall.ID, "call_") {
-		t.Errorf("expected fallback ID to start with 'call_', got %q", ev.ToolCall.ID)
+	if ev.ToolCall.ID != "generated_call_1" {
+		t.Errorf("fallback ID = %q, want generated_call_1", ev.ToolCall.ID)
 	}
 }
 
@@ -936,5 +936,56 @@ func TestOpenAIStreamRejectsMalformedSSEData(t *testing.T) {
 	_, err := stream.Next(context.Background())
 	if !errors.Is(err, ErrInvalidEvent) {
 		t.Fatalf("Next() error = %v, want invalid model event", err)
+	}
+}
+
+func TestOpenAIResponsesFlushesPendingCallOnCompleted(t *testing.T) {
+	payload := strings.Join([]string{
+		`data: {"type":"response.output_item.added","item":{"id":"fc_pending","type":"function_call","name":"read_file","call_id":"call_pending"}}`,
+		`data: {"type":"response.function_call_arguments.delta","item_id":"fc_pending","delta":"{\"path\":\"README.md\"}"}`,
+		`data: {"type":"response.completed"}`,
+	}, "\n")
+	stream := newOpenAIStream(io.NopCloser(strings.NewReader(payload)))
+	defer stream.Close()
+
+	call, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next() call error = %v", err)
+	}
+	if call.Kind != EventToolCall {
+		t.Fatalf("event kind = %s, want tool_call", call.Kind)
+	}
+	if call.ToolCall.ID != "call_pending" || call.ToolCall.Name != "read_file" {
+		t.Fatalf("tool call = %+v", call.ToolCall)
+	}
+	if got, want := string(call.ToolCall.Arguments), `{"path":"README.md"}`; got != want {
+		t.Fatalf("arguments = %s, want %s", got, want)
+	}
+	done, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next() done error = %v", err)
+	}
+	if done.Kind != EventDone {
+		t.Fatalf("done = %+v", done)
+	}
+}
+
+func TestOpenAIStreamGeneratesDeterministicFallbackCallIDs(t *testing.T) {
+	payload := strings.Join([]string{
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"type":"function","function":{"name":"read_file","arguments":"{}"}},{"index":1,"type":"function","function":{"name":"grep","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}`,
+	}, "\n")
+	stream := newOpenAIStream(io.NopCloser(strings.NewReader(payload)))
+	defer stream.Close()
+
+	first, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next() first error = %v", err)
+	}
+	second, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next() second error = %v", err)
+	}
+	if first.ToolCall.ID != "generated_call_1" || second.ToolCall.ID != "generated_call_2" {
+		t.Fatalf("generated ids = %q, %q", first.ToolCall.ID, second.ToolCall.ID)
 	}
 }
