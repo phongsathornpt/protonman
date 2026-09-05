@@ -24,6 +24,48 @@ func BenchmarkGrepIncludeMedium(b *testing.B) {
 	benchmarkGrep(b, "needle", "*.go", 5000, 20)
 }
 
+func BenchmarkGrepCursorDeepPageMedium(b *testing.B) {
+	root := benchmarkWorkspace(b, 5000, 20)
+	ws, err := workspace.New(root, nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+	handler := NewGrep(ws)
+	continuation := ""
+	offset := int64(0)
+	for page := 0; page < 9; page++ {
+		input := map[string]any{"pattern": "needle", "offset": offset, "limit": 10}
+		if continuation != "" {
+			input["continuation"] = continuation
+		}
+		args, _ := json.Marshal(input)
+		call, _ := tool.NewCall("prepare", "grep", args)
+		result, runErr := handler.Execute(context.Background(), call)
+		if runErr != nil {
+			b.Fatal(runErr)
+		}
+		if result.NextOffset == nil || result.Continuation == "" {
+			b.Fatalf("prepare page %d did not return continuation", page+1)
+		}
+		offset = *result.NextOffset
+		continuation = result.Continuation
+	}
+	args, _ := json.Marshal(map[string]any{
+		"pattern":      "needle",
+		"offset":       offset,
+		"limit":        10,
+		"continuation": continuation,
+	})
+	call, _ := tool.NewCall("bench", "grep", args)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := handler.Execute(context.Background(), call); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func BenchmarkGrepDeepPageMedium(b *testing.B) {
 	root := benchmarkWorkspace(b, 5000, 20)
 	ws, err := workspace.New(root, nil)

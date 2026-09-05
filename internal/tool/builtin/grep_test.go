@@ -204,7 +204,7 @@ func TestGrepSupportsContinuationOffset(t *testing.T) {
 		t.Fatalf("first output leaked next page: %q", first.Output)
 	}
 
-	secondArgs, _ := json.Marshal(map[string]any{"pattern": "needle", "offset": 2, "limit": 2})
+	secondArgs, _ := json.Marshal(map[string]any{"pattern": "needle", "offset": 2, "limit": 2, "continuation": first.Continuation})
 	secondCall, _ := tool.NewCall("grep-page-2", "grep", secondArgs)
 	second, err := handler.Execute(context.Background(), secondCall)
 	if err != nil {
@@ -213,11 +213,14 @@ func TestGrepSupportsContinuationOffset(t *testing.T) {
 	if !second.Truncated || second.NextOffset == nil || *second.NextOffset != 4 {
 		t.Fatalf("second continuation = truncated:%v next:%v", second.Truncated, second.NextOffset)
 	}
+	if second.Continuation == "" || second.Continuation == first.Continuation {
+		t.Fatalf("second cursor continuation = %q", second.Continuation)
+	}
 	if !strings.Contains(second.Output, "many.txt:3:needle 3") || !strings.Contains(second.Output, "many.txt:4:needle 4") {
 		t.Fatalf("second output = %q", second.Output)
 	}
 
-	thirdArgs, _ := json.Marshal(map[string]any{"pattern": "needle", "offset": 4, "limit": 2})
+	thirdArgs, _ := json.Marshal(map[string]any{"pattern": "needle", "offset": 4, "limit": 2, "continuation": second.Continuation})
 	thirdCall, _ := tool.NewCall("grep-page-3", "grep", thirdArgs)
 	third, err := handler.Execute(context.Background(), thirdCall)
 	if err != nil {
