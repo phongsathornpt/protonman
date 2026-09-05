@@ -302,21 +302,36 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to save provider: %v", message.err)))
 		} else {
-			m.activeModel = message.modelID
-			m.activeProvider = message.providerName
+			providerName := strings.TrimSpace(message.providerName)
+			providerKey := strings.ToLower(providerName)
+			previousKey := strings.ToLower(strings.TrimSpace(message.previousName))
+			if previousKey != "" && previousKey != providerKey {
+				delete(m.providers, previousKey)
+			}
 			if m.providers == nil {
 				m.providers = make(map[string]config.ProviderConfig)
 			}
-			m.providers[strings.ToLower(message.providerName)] = config.ProviderConfig{
-				Name:    message.providerName,
+			m.providers[providerKey] = config.ProviderConfig{
+				Name:    providerName,
 				Type:    "openai",
 				BaseURL: message.baseURL,
 				APIKey:  message.apiKey,
 			}
-			m.reconfigureRunner()
-			m.appendLine(successStyle.Render(fmt.Sprintf("✓ Configured provider %s", message.providerName)))
+			if message.activated {
+				m.activeModel = message.modelID
+				m.activeProvider = providerName
+				m.reconfigureRunner()
+				m.appendLine(successStyle.Render(fmt.Sprintf("✓ Configured provider %s", providerName)))
+			} else {
+				m.appendLine(successStyle.Render(fmt.Sprintf("✓ Updated provider %s", providerName)))
+				if m.activeProvider != "" {
+					m.appendLine(mutedStyle.Render(fmt.Sprintf("  Active provider remains %s", m.activeProvider)))
+				}
+			}
 			m.appendLine(mutedStyle.Render(fmt.Sprintf("  Endpoint: %s", message.baseURL)))
-			m.appendLine(mutedStyle.Render(fmt.Sprintf("  Default Model: %s", message.modelID)))
+			if message.activated && message.modelID != "" {
+				m.appendLine(mutedStyle.Render(fmt.Sprintf("  Default Model: %s", message.modelID)))
+			}
 			m.appendLine(mutedStyle.Render("  Saved to ~/.proton/config.toml"))
 		}
 		m.bottom.remove(providerViewID)
