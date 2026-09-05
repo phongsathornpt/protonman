@@ -50,9 +50,11 @@ type modelsFetchedMsg struct {
 
 type providerSavedMsg struct {
 	providerName string
+	previousName string
 	baseURL      string
 	apiKey       string
 	modelID      string
+	activated    bool
 	err          error
 }
 
@@ -77,6 +79,7 @@ type providerPaneView struct {
 	fetchRequestID uint64
 	fetchCancel    context.CancelFunc
 	selectedModel  string
+	activateOnSave bool
 }
 
 func newProviderPaneView() *providerPaneView {
@@ -164,6 +167,7 @@ func newProviderPaneViewWithPreset(preset string) *providerPaneView {
 		endpointInput:  endpointIn,
 		apiKeyInput:    keyIn,
 		filterFreeOnly: filterFree,
+		activateOnSave: true,
 	}
 	pv.syncInputFocus()
 	return pv
@@ -361,12 +365,16 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 			}
 		}
 
-		title := fmt.Sprintf("✓ Select Active Model (%d discovered) [Step 2/2]", len(models))
+		titlePrefix := "✓ Select Active Model"
+		if v.isEditing && !v.activateOnSave {
+			titlePrefix = "✓ Select Model · active provider unchanged"
+		}
+		title := fmt.Sprintf("%s (%d discovered) [Step 2/2]", titlePrefix, len(models))
 		if hasFreeModels {
 			if v.filterFreeOnly {
-				title = fmt.Sprintf("✓ Select Active Model (%d free models · [f] show all %d) [Step 2/2]", len(models), len(v.models))
+				title = fmt.Sprintf("%s (%d free models · [f] show all %d) [Step 2/2]", titlePrefix, len(models), len(v.models))
 			} else {
-				title = fmt.Sprintf("✓ Select Active Model (%d discovered · [f] show free only) [Step 2/2]", len(v.models))
+				title = fmt.Sprintf("%s (%d discovered · [f] show free only) [Step 2/2]", titlePrefix, len(v.models))
 			}
 		}
 
@@ -445,18 +453,28 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 		}
 
 		footer := "↑/↓ or j/k move · 1-9 select · enter confirm & save · esc back"
+		if v.isEditing && !v.activateOnSave {
+			footer = "↑/↓ move · 1-9 select · enter save details · esc back"
+		}
 		if hasFreeModels {
 			footer = "↑/↓ move · 1-9 select · f toggle free only · enter confirm · esc back"
+			if v.isEditing && !v.activateOnSave {
+				footer = "↑/↓ move · 1-9 select · f free only · enter save · esc back"
+			}
 		}
 		rows = append(rows, "", mutedStyle.Render(footer))
 		return renderProviderModal(m, accentUser, rows)
 
 	case providerStateSaving:
+		savingDescription := "  Applying the selected model as active"
+		if v.isEditing && !v.activateOnSave {
+			savingDescription = "  Keeping the current active provider and model"
+		}
 		rows := []string{
 			brandStyle.Render("◆ Saving Provider…"),
 			"",
 			fmt.Sprintf("  Writing %s to ~/.proton/config.toml", v.nameInput.Value()),
-			mutedStyle.Render("  Applying the selected model as active"),
+			mutedStyle.Render(savingDescription),
 		}
 		return renderProviderModal(m, accentAssistant, rows)
 
@@ -558,9 +576,17 @@ func renderProviderInput(m *bubbleModel) string {
 	rows = append(rows, view.inputFieldRows(compact)...)
 	rows = append(rows, "")
 	if compact {
-		rows = append(rows, mutedStyle.Render("tab fields · enter connect · esc cancel"))
+		footer := "tab fields · enter connect · esc cancel"
+		if view.isEditing && !view.activateOnSave {
+			footer = "enter save · active stays · esc cancel"
+		}
+		rows = append(rows, mutedStyle.Render(footer))
 	} else {
-		rows = append(rows, mutedStyle.Render("tab/shift+tab cycle · enter connect & fetch · esc cancel"))
+		footer := "tab/shift+tab cycle · enter connect & fetch · esc cancel"
+		if view.isEditing && !view.activateOnSave {
+			footer = "tab/shift+tab cycle · enter save · active provider stays · esc cancel"
+		}
+		rows = append(rows, mutedStyle.Render(footer))
 	}
 	return renderProviderModal(m, accentAssistant, rows)
 }
@@ -659,12 +685,14 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 				selected := models[v.selectedIndex]
 				v.selectedModel = selected.ID
 				v.state = providerStateSaving
-				return true, saveProviderCmd(
-					v.nameInput.Value(),
-					v.endpointInput.Value(),
-					v.apiKeyInput.Value(),
-					selected.ID,
-				)
+				return true, saveProviderCmd(providerSaveRequest{
+					providerName: strings.TrimSpace(v.nameInput.Value()),
+					previousName: v.originalName,
+					baseURL:      strings.TrimSpace(v.endpointInput.Value()),
+					apiKey:       strings.TrimSpace(v.apiKeyInput.Value()),
+					defaultModel: selected.ID,
+					activate:     v.activateOnSave,
+				})
 			}
 			return true, nil
 		default:
@@ -678,12 +706,14 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 		switch message.String() {
 		case "enter":
 			v.state = providerStateSaving
-			return true, saveProviderCmd(
-				v.nameInput.Value(),
-				v.endpointInput.Value(),
-				v.apiKeyInput.Value(),
-				v.selectedModel,
-			)
+			return true, saveProviderCmd(providerSaveRequest{
+				providerName: strings.TrimSpace(v.nameInput.Value()),
+				previousName: v.originalName,
+				baseURL:      strings.TrimSpace(v.endpointInput.Value()),
+				apiKey:       strings.TrimSpace(v.apiKeyInput.Value()),
+				defaultModel: v.selectedModel,
+				activate:     v.activateOnSave,
+			})
 		case "esc":
 			v.state = providerStateSelectModel
 			v.errorMessage = ""
@@ -855,7 +885,16 @@ func fetchProviderModelsCmd(request providerFetchRequest) tea.Cmd {
 	}
 }
 
-func saveProviderCmd(providerName, baseURL, apiKey, defaultModel string) tea.Cmd {
+type providerSaveRequest struct {
+	providerName string
+	previousName string
+	baseURL      string
+	apiKey       string
+	defaultModel string
+	activate     bool
+}
+
+func saveProviderCmd(request providerSaveRequest) tea.Cmd {
 	return func() tea.Msg {
 		homeDir := strings.TrimSpace(os.Getenv("PROTON_HOME"))
 		if homeDir == "" {
@@ -865,18 +904,24 @@ func saveProviderCmd(providerName, baseURL, apiKey, defaultModel string) tea.Cmd
 		}
 
 		prov := config.ProviderConfig{
-			Name:    providerName,
+			Name:    request.providerName,
 			Type:    "openai",
-			BaseURL: baseURL,
-			APIKey:  apiKey,
+			BaseURL: request.baseURL,
+			APIKey:  request.apiKey,
 		}
 
-		err := config.SaveUserProviderConfig(homeDir, prov, defaultModel)
+		err := config.SaveUserProviderConfigWithOptions(homeDir, prov, config.ProviderSaveOptions{
+			DefaultModel: request.defaultModel,
+			PreviousName: request.previousName,
+			Activate:     request.activate,
+		})
 		return providerSavedMsg{
-			providerName: providerName,
-			baseURL:      baseURL,
-			apiKey:       apiKey,
-			modelID:      defaultModel,
+			providerName: request.providerName,
+			previousName: request.previousName,
+			baseURL:      request.baseURL,
+			apiKey:       request.apiKey,
+			modelID:      request.defaultModel,
+			activated:    request.activate,
 			err:          err,
 		}
 	}
