@@ -486,7 +486,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			terminalReason = "request_validation_failed"
 			return l.fail(ctx, sink, round, err)
 		}
-		outcome, err := l.runRound(ctx, round, request, dispatch, sink)
+		outcome, err := l.runRound(ctx, round, request, dispatch, progress, sink)
 		if err != nil {
 			terminalReason = "round_failed"
 			return l.fail(ctx, sink, round, err)
@@ -666,9 +666,10 @@ func finalizeDisabledToolCallResponse(
 }
 
 type executedCall struct {
-	call   tool.Call
-	result tool.Result
-	err    error
+	call       tool.Call
+	result     tool.Result
+	err        error
+	suppressed bool
 }
 
 func (l *Loop) runRound(
@@ -676,6 +677,7 @@ func (l *Loop) runRound(
 	round int,
 	request model.Request,
 	dispatch toolDispatchState,
+	progress *progressGuard,
 	sink Sink,
 ) (roundOutcome, error) {
 	roundContext, cancel := l.newRoundContext(parent)
@@ -767,7 +769,27 @@ func (l *Loop) runRound(
 		"call_count", len(calls),
 		"concurrent", concurrent,
 	)
-	executions := l.executeCalls(roundContext, calls)
+	executions := make([]executedCall, len(calls))
+	pendingCalls := make([]tool.Call, 0, len(calls))
+	pendingIndexes := make([]int, 0, len(calls))
+	for index, call := range calls {
+		suppressed, suppressErr := progress.suppress(call)
+		if suppressErr != nil {
+			return roundOutcome{}, suppressErr
+		}
+		if suppressed != nil {
+			executions[index] = *suppressed
+			continue
+		}
+		pendingCalls = append(pendingCalls, call)
+		pendingIndexes = append(pendingIndexes, index)
+	}
+	if len(pendingCalls) > 0 {
+		dispatched := l.executeCalls(roundContext, pendingCalls)
+		for index, execution := range dispatched {
+			executions[pendingIndexes[index]] = execution
+		}
+	}
 	logExecutionSummary(roundContext, round, executions)
 	if err := roundContext.Err(); err != nil {
 		slog.DebugContext(parent, "turn round cancelled",
