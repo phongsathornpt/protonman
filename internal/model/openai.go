@@ -17,6 +17,14 @@ import (
 
 // OpenAIClient streams chat completions from an OpenAI-compatible endpoint.
 type OpenAIClient struct {
+	openAIClientConfig
+}
+
+var _ Client = (*OpenAIClient)(nil)
+
+// openAIClientConfig contains settings shared by the legacy compatible client
+// and the official openai-go adapter.
+type openAIClientConfig struct {
 	baseURL    string
 	apiKey     string
 	modelID    string
@@ -26,39 +34,37 @@ type OpenAIClient struct {
 	httpClient *http.Client
 }
 
-var _ Client = (*OpenAIClient)(nil)
-
-// OpenAIOption configures an OpenAIClient.
-type OpenAIOption func(*OpenAIClient)
+// OpenAIOption configures an OpenAI-compatible client.
+type OpenAIOption func(*openAIClientConfig)
 
 // WithSessionID sets the session identifier for sticky routing and prompt cache optimization.
 func WithSessionID(sessionID string) OpenAIOption {
-	return func(c *OpenAIClient) {
+	return func(c *openAIClientConfig) {
 		c.sessionID = sessionID
 	}
 }
 
 // WithClientName sets the client identifier (e.g. "proton").
 func WithClientName(clientName string) OpenAIOption {
-	return func(c *OpenAIClient) {
+	return func(c *openAIClientConfig) {
 		c.clientName = clientName
 	}
 }
 
 // WithUserAgent sets a custom User-Agent header (defaults to "Proton/1.0").
 func WithUserAgent(userAgent string) OpenAIOption {
-	return func(c *OpenAIClient) {
+	return func(c *openAIClientConfig) {
 		c.userAgent = userAgent
 	}
 }
 
-// NewOpenAIClient creates a client targeting an OpenAI, OpenCode, or Protonman chat API.
-func NewOpenAIClient(baseURL string, apiKey string, modelID string, opts ...OpenAIOption) *OpenAIClient {
+func newOpenAIClientConfig(baseURL string, apiKey string, modelID string) openAIClientConfig {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if baseURL == "" {
 		baseURL = DefaultProtonmanEndpoint
 	}
-	client := &OpenAIClient{
+
+	return openAIClientConfig{
 		baseURL:    baseURL,
 		apiKey:     apiKey,
 		modelID:    NormalizeModelID(baseURL, modelID),
@@ -68,9 +74,16 @@ func NewOpenAIClient(baseURL string, apiKey string, modelID string, opts ...Open
 			Timeout: 5 * time.Minute,
 		},
 	}
+}
+
+// NewOpenAIClient creates a client targeting an OpenAI, OpenCode, or Protonman chat API.
+func NewOpenAIClient(baseURL string, apiKey string, modelID string, opts ...OpenAIOption) *OpenAIClient {
+	client := &OpenAIClient{
+		openAIClientConfig: newOpenAIClientConfig(baseURL, apiKey, modelID),
+	}
 	for _, opt := range opts {
 		if opt != nil {
-			opt(client)
+			opt(&client.openAIClientConfig)
 		}
 	}
 	return client
