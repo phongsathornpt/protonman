@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
@@ -336,7 +337,7 @@ func (v *providerPaneView) currentModels() []model.RemoteModel {
 }
 
 func (v *providerPaneView) Render(m *bubbleModel) string {
-	maxWidth := maxInt(1, m.width-4)
+	v.resizeInputs(m.width)
 
 	switch v.state {
 	case providerStateFetching:
@@ -348,10 +349,7 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 			"",
 			mutedStyle.Render("esc cancel"),
 		}
-		return modalStyle.
-			BorderForeground(accentAssistant).
-			MaxWidth(maxWidth).
-			Render(strings.Join(rows, "\n"))
+		return renderProviderModal(m, accentAssistant, rows)
 
 	case providerStateSelectModel:
 		models := v.currentModels()
@@ -380,10 +378,7 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 				"",
 				mutedStyle.Render("f toggle filter · esc back"),
 			}
-			return modalStyle.
-				BorderForeground(accentUser).
-				MaxWidth(maxWidth).
-				Render(strings.Join(rows, "\n"))
+			return renderProviderModal(m, accentUser, rows)
 		}
 
 		if v.selectedIndex >= len(models) {
@@ -428,7 +423,7 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 			if idx == v.selectedIndex {
 				prefix = brandStyle.Render("  ❯ ")
 			}
-			line := fmt.Sprintf("%d. %s", idx+1, md.ID)
+			line := fmt.Sprintf("%d. %s", idx+1, providerModelLabel(md))
 			if model.IsFreeModel(md.ID) {
 				line += " " + successStyle.Render("[FREE]")
 			}
@@ -454,10 +449,7 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 			footer = "↑/↓ move · 1-9 select · f toggle free only · enter confirm · esc back"
 		}
 		rows = append(rows, "", mutedStyle.Render(footer))
-		return modalStyle.
-			BorderForeground(accentUser).
-			MaxWidth(maxWidth).
-			Render(strings.Join(rows, "\n"))
+		return renderProviderModal(m, accentUser, rows)
 
 	case providerStateSaving:
 		rows := []string{
@@ -466,10 +458,7 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 			fmt.Sprintf("  Writing %s to ~/.proton/config.toml", v.nameInput.Value()),
 			mutedStyle.Render("  Applying the selected model as active"),
 		}
-		return modalStyle.
-			BorderForeground(accentAssistant).
-			MaxWidth(maxWidth).
-			Render(strings.Join(rows, "\n"))
+		return renderProviderModal(m, accentAssistant, rows)
 
 	case providerStateSaveError:
 		rows := []string{
@@ -479,10 +468,7 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 			"",
 			mutedStyle.Render("enter retry save · esc back to models · ctrl+c cancel"),
 		}
-		return modalStyle.
-			BorderForeground(accentError).
-			MaxWidth(maxWidth).
-			Render(strings.Join(rows, "\n"))
+		return renderProviderModal(m, accentError, rows)
 
 	case providerStateConfirmOverwrite:
 		rows := []string{
@@ -493,10 +479,7 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 			"",
 			mutedStyle.Render("enter overwrite · esc back · ctrl+c cancel"),
 		}
-		return modalStyle.
-			BorderForeground(warningColor).
-			MaxWidth(maxWidth).
-			Render(strings.Join(rows, "\n"))
+		return renderProviderModal(m, warningColor, rows)
 
 	case providerStateError:
 		rows := []string{
@@ -506,45 +489,121 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 			"",
 			mutedStyle.Render("enter / esc return to credentials"),
 		}
-		return modalStyle.
-			BorderForeground(accentError).
-			MaxWidth(maxWidth).
-			Render(strings.Join(rows, "\n"))
+		return renderProviderModal(m, accentError, rows)
 
 	case providerStateInput:
 		fallthrough
 	default:
-		keyLabel := "API Key:"
-		if !v.requiresAPIKey {
-			keyLabel = "API Key (optional):"
-		}
+		return renderProviderInput(m)
+	}
+}
 
-		title := "◆ Add Model Provider [Step 1/2: Credentials]"
-		if v.isEditing {
-			title = fmt.Sprintf("✓ Edit Provider: %s [Step 1/2: Credentials]", v.nameInput.Value())
-		}
+func (v *providerPaneView) resizeInputs(width int) {
+	inputWidth := maxInt(8, width-18)
+	v.nameInput.Width = inputWidth
+	v.endpointInput.Width = inputWidth
+	v.apiKeyInput.Width = inputWidth
+}
 
-		rows := []string{
-			brandStyle.Render(title),
+func (v *providerPaneView) inputTitle(compact bool) string {
+	if v.isEditing {
+		if compact {
+			return fmt.Sprintf("✓ Edit %s", v.nameInput.Value())
+		}
+		return fmt.Sprintf("✓ Edit Provider: %s [Step 1/2: Connection]", v.nameInput.Value())
+	}
+	if compact {
+		return "◆ Add Provider"
+	}
+	return "◆ Add Model Provider [Step 1/2: Connection]"
+}
+
+func (v *providerPaneView) inputFieldRows(compact bool) []string {
+	keyLabel := "API Key:"
+	if !v.requiresAPIKey {
+		keyLabel = "API Key (optional):"
+	}
+
+	if compact {
+		return []string{
+			renderProviderInlineField("N:", v.nameInput.View(), v.fieldErrors[providerFieldName]),
+			renderProviderInlineField("URL:", v.endpointInput.View(), v.fieldErrors[providerFieldEndpoint]),
+			renderProviderInlineField("K:", v.apiKeyInput.View(), v.fieldErrors[providerFieldAPIKey]),
+		}
+	}
+
+	return []string{
+		renderProviderFieldLabel("Provider Name:", v.fieldErrors[providerFieldName]),
+		v.nameInput.View(),
+		"",
+		renderProviderFieldLabel("Endpoint (Base URL):", v.fieldErrors[providerFieldEndpoint]),
+		v.endpointInput.View(),
+		"",
+		renderProviderFieldLabel(keyLabel, v.fieldErrors[providerFieldAPIKey]),
+		v.apiKeyInput.View(),
+	}
+}
+
+func renderProviderInput(m *bubbleModel) string {
+	view := m.bottom.find(providerViewID).(*providerPaneView)
+	compact := m.height <= 20
+	rows := []string{brandStyle.Render(view.inputTitle(compact))}
+	if !compact {
+		rows = append(rows,
 			"",
 			mutedStyle.Render("Presets: alt+1 Protonman · alt+2 OpenCode · alt+3 Ollama · alt+4 OpenAI"),
 			"",
-			renderProviderFieldLabel("Provider Name:", v.fieldErrors[providerFieldName]),
-			v.nameInput.View(),
-			"",
-			renderProviderFieldLabel("Endpoint (Base URL):", v.fieldErrors[providerFieldEndpoint]),
-			v.endpointInput.View(),
-			"",
-			renderProviderFieldLabel(keyLabel, v.fieldErrors[providerFieldAPIKey]),
-			v.apiKeyInput.View(),
-			"",
-			mutedStyle.Render("tab/shift+tab cycle · enter connect & fetch · esc cancel"),
-		}
-		return modalStyle.
-			BorderForeground(accentAssistant).
-			MaxWidth(maxWidth).
-			Render(strings.Join(rows, "\n"))
+		)
 	}
+	rows = append(rows, view.inputFieldRows(compact)...)
+	rows = append(rows, "")
+	if compact {
+		rows = append(rows, mutedStyle.Render("tab fields · enter connect · esc cancel"))
+	} else {
+		rows = append(rows, mutedStyle.Render("tab/shift+tab cycle · enter connect & fetch · esc cancel"))
+	}
+	return renderProviderModal(m, accentAssistant, rows)
+}
+
+func renderProviderInlineField(label, input, fieldError string) string {
+	row := label + " " + input
+	if fieldError != "" {
+		row += " " + errorStyle.Render("("+fieldError+")")
+	}
+	return row
+}
+
+func providerModelLabel(md model.RemoteModel) string {
+	id := strings.TrimSpace(md.ID)
+	name := strings.TrimSpace(md.Name)
+	if name == "" || strings.EqualFold(name, id) {
+		return id
+	}
+	if id == "" {
+		return name
+	}
+	return fmt.Sprintf("%s (%s)", name, id)
+}
+
+func renderProviderModal(m *bubbleModel, border lipgloss.TerminalColor, rows []string) string {
+	maxWidth := maxInt(1, m.width-4)
+	contentWidth := providerModalContentWidth(m)
+	wrappedRows := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if row == "" || lipgloss.Width(row) <= contentWidth {
+			wrappedRows = append(wrappedRows, row)
+			continue
+		}
+		wrappedRows = append(wrappedRows, strings.Split(wrapWords(row, contentWidth), "\n")...)
+	}
+	return modalStyle.
+		BorderForeground(border).
+		MaxWidth(maxWidth).
+		Render(strings.Join(wrappedRows, "\n"))
+}
+
+func providerModalContentWidth(m *bubbleModel) int {
+	return maxInt(1, maxInt(1, m.width-4)-6)
 }
 
 func renderProviderFieldLabel(label, fieldError string) string {
