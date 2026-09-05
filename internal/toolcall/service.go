@@ -213,8 +213,18 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		return result, permissionErr
 	}
 
-	resolution := s.authorize(ctx, request)
+	resolution, authorizeErr := s.authorize(ctx, request)
 	s.observePermission(ctx, telemetry, resolution)
+	if authorizeErr != nil {
+		result := tool.Result{
+			CallID:   call.ID,
+			ToolName: call.Name,
+			Denied:   true,
+			Failure:  tool.FailureFromError(authorizeErr),
+		}
+		s.observeCallResult(ctx, telemetry, result, authorizeErr)
+		return result, authorizeErr
+	}
 	if resolution.Action != permission.ActionAllow {
 		permissionErr := fmt.Errorf("%w: %s", ErrPermissionDenied, resolution.Reason)
 		result := tool.Result{
@@ -259,19 +269,19 @@ func (s *Service) guardCall(ctx context.Context, request permission.Request) err
 	return guard(ctx, request)
 }
 
-func (s *Service) authorize(ctx context.Context, request permission.Request) permission.Resolution {
+func (s *Service) authorize(ctx context.Context, request permission.Request) (permission.Resolution, error) {
 	staticDecision := s.policy.Evaluate(request)
 	switch staticDecision.Action {
 	case permission.ActionDeny:
 		return permission.Resolution{
 			Action: permission.ActionDeny,
 			Reason: staticDecision.Reason,
-		}
+		}, nil
 	case permission.ActionAllow:
 		return permission.Resolution{
 			Action: permission.ActionAllow,
 			Reason: staticDecision.Reason,
-		}
+		}, nil
 	}
 
 	s.mu.RLock()
@@ -279,11 +289,17 @@ func (s *Service) authorize(ctx context.Context, request permission.Request) per
 	mode := s.mode
 	prompt := s.prompt
 	s.mu.RUnlock()
+	if mode == permission.ModeDeny {
+		return permission.Resolution{
+			Action: permission.ActionDeny,
+			Reason: "deny mode",
+		}, nil
+	}
 	if granted {
 		return permission.Resolution{
 			Action: permission.ActionAllow,
 			Reason: "allowed by session grant",
-		}
+		}, nil
 	}
 
 	switch mode {
@@ -291,31 +307,26 @@ func (s *Service) authorize(ctx context.Context, request permission.Request) per
 		return permission.Resolution{
 			Action: permission.ActionAllow,
 			Reason: "always-approve mode",
-		}
-	case permission.ModeDeny:
-		return permission.Resolution{
-			Action: permission.ActionDeny,
-			Reason: "deny mode",
-		}
+		}, nil
 	case permission.ModeAsk, permission.ModeAuto:
 		if prompt == nil {
 			return permission.Resolution{
 				Action: permission.ActionDeny,
 				Reason: "no permission prompt is configured",
-			}
+			}, nil
 		}
 		resolution, err := prompt(ctx, request)
 		if err != nil {
 			return permission.Resolution{
 				Action: permission.ActionDeny,
 				Reason: "permission prompt failed: " + err.Error(),
-			}
+			}, fmt.Errorf("permission prompt: %w", err)
 		}
 		if resolution.Action != permission.ActionAllow && resolution.Action != permission.ActionDeny {
 			return permission.Resolution{
 				Action: permission.ActionDeny,
 				Reason: "permission prompt returned an invalid decision",
-			}
+			}, nil
 		}
 		if resolution.Reason == "" {
 			resolution.Reason = "interactive permission decision"
@@ -326,12 +337,12 @@ func (s *Service) authorize(ctx context.Context, request permission.Request) per
 		if resolution.Scope != permission.GrantScopeOnce && resolution.Scope != permission.GrantScopeSession {
 			resolution.Scope = permission.GrantScopeOnce
 		}
-		return resolution
+		return resolution, nil
 	default:
 		return permission.Resolution{
 			Action: permission.ActionDeny,
 			Reason: "invalid permission mode",
-		}
+		}, nil
 	}
 }
 

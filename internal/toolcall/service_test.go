@@ -191,6 +191,65 @@ func TestCallSessionGrantDoesNotChangeMode(t *testing.T) {
 	}
 }
 
+func TestCallDenyModeOverridesSessionGrant(t *testing.T) {
+	handler := &fakeHandler{
+		definition: tool.Definition{
+			Name:                "bash",
+			Description:         "fake shell",
+			Kind:                tool.KindBash,
+			PermissionDetailKey: "command",
+		},
+	}
+	service := newTestService(t, handler, permission.Config{}, WithPrompt(func(context.Context, permission.Request) (permission.Resolution, error) {
+		return permission.Resolution{
+			Action: permission.ActionAllow,
+			Scope:  permission.GrantScopeSession,
+		}, nil
+	}))
+
+	if _, err := service.Call(context.Background(), testCall(t)); err != nil {
+		t.Fatalf("first Call() error = %v", err)
+	}
+	if err := service.SetMode(permission.ModeDeny); err != nil {
+		t.Fatalf("SetMode() error = %v", err)
+	}
+	result, err := service.Call(context.Background(), testCall(t))
+	if !errors.Is(err, ErrPermissionDenied) {
+		t.Fatalf("Call() error = %v, want permission denied", err)
+	}
+	if !result.Denied {
+		t.Fatal("Call() result.Denied = false, want true")
+	}
+	if handler.calls != 1 {
+		t.Fatalf("handler calls = %d, want 1", handler.calls)
+	}
+}
+
+func TestCallPropagatesPermissionPromptCancellation(t *testing.T) {
+	handler := &fakeHandler{
+		definition: tool.Definition{
+			Name:                "bash",
+			Description:         "fake shell",
+			Kind:                tool.KindBash,
+			PermissionDetailKey: "command",
+		},
+	}
+	service := newTestService(t, handler, permission.Config{}, WithPrompt(func(context.Context, permission.Request) (permission.Resolution, error) {
+		return permission.Resolution{}, context.Canceled
+	}))
+
+	result, err := service.Call(context.Background(), testCall(t))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Call() error = %v, want context canceled", err)
+	}
+	if result.Failure == nil || result.Failure.Code != tool.ErrorCodeCanceled {
+		t.Fatalf("Call() failure = %#v, want canceled", result.Failure)
+	}
+	if handler.calls != 0 {
+		t.Fatalf("handler calls = %d, want 0", handler.calls)
+	}
+}
+
 func TestCallSessionGrantIsNarrowToExactRequest(t *testing.T) {
 	handler := &fakeHandler{
 		definition: tool.Definition{
