@@ -24,17 +24,31 @@ func TestClassifyOpenCodeError_Cancellation(t *testing.T) {
 func TestClassifyOpenCodeError_UnresolvedToolCall(t *testing.T) {
 	err := fmt.Errorf("turn failed: %w: model requested another tool", applicationturn.ErrUnresolvedToolCall)
 	classified := ClassifyOpenCodeError(err, "opencode", "model")
-	if classified.Kind != ErrorKindMaxRounds {
-		t.Fatalf("expected ErrorKindMaxRounds, got %v", classified.Kind)
+	if classified.Kind != ErrorKindToolDispatch {
+		t.Fatalf("expected ErrorKindToolDispatch, got %v", classified.Kind)
 	}
-	if classified.Badge != "MAX_ROUNDS" {
-		t.Fatalf("badge = %q, want MAX_ROUNDS", classified.Badge)
+	if classified.Badge != "TOOL_PROTOCOL" {
+		t.Fatalf("badge = %q, want TOOL_PROTOCOL", classified.Badge)
 	}
-	if !strings.Contains(strings.Join(classified.Suggestions, "\n"), "agent.max_rounds") {
-		t.Fatalf("suggestions = %v, want agent.max_rounds guidance", classified.Suggestions)
+	if strings.Contains(strings.Join(classified.Suggestions, "\n"), "agent.max_rounds") {
+		t.Fatalf("suggestions = %v, must not present max-round guidance", classified.Suggestions)
 	}
 	if !strings.Contains(classified.RawDetails, "unresolved model tool call") {
 		t.Fatalf("raw details = %q, want sentinel details", classified.RawDetails)
+	}
+}
+
+func TestClassifyOpenCodeError_ToolDispatchUnavailable(t *testing.T) {
+	err := fmt.Errorf("turn failed: %w: model requested 1 tool call while no tools were available", applicationturn.ErrToolDispatchUnavailable)
+	classified := ClassifyOpenCodeError(err, "opencode", "model")
+	if classified.Kind != ErrorKindToolDispatch {
+		t.Fatalf("expected ErrorKindToolDispatch, got %v", classified.Kind)
+	}
+	if classified.Badge != "TOOL_DISPATCH" {
+		t.Fatalf("badge = %q, want TOOL_DISPATCH", classified.Badge)
+	}
+	if !strings.Contains(classified.Message, "no tools were available") {
+		t.Fatalf("message = %q, want unavailable-tool detail", classified.Message)
 	}
 }
 
