@@ -12,14 +12,26 @@ func TestE2EFullBuiltinTools(t *testing.T) {
 	home := newTestHome(t)
 	env := []string{"PROTON_HOME=" + home}
 
-	// 1. read_file with offset and limit
+	// 1. read_file byte pagination returns a usable continuation offset.
 	res := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call read_file {"path":"hello.txt","offset":2,"limit":1}`},
+		args: []string{"-y", "-p", `/call read_file {"path":"hello.txt","limit":17}`},
 		dir:  ws,
 		env:  env,
 	})
-	if res.exitCode != 0 || !strings.Contains(res.stdout, "Line 2") {
-		t.Fatalf("read_file with offset/limit failed: %s %s", res.stdout, res.stderr)
+	if res.exitCode != 0 || !strings.Contains(res.stdout, "Hello Proton E2E") || strings.Contains(res.stdout, "Line 2") {
+		t.Fatalf("read_file first page failed: %s %s", res.stdout, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "continue with offset=17") {
+		t.Fatalf("read_file first page missing continuation: %s", res.stdout)
+	}
+
+	res = runProton(t, runOptions{
+		args: []string{"-y", "-p", `/call read_file {"path":"hello.txt","offset":17,"limit":7}`},
+		dir:  ws,
+		env:  env,
+	})
+	if res.exitCode != 0 || !strings.Contains(res.stdout, "Line 2") || strings.Contains(res.stdout, "Hello Proton E2E") {
+		t.Fatalf("read_file continuation failed: %s %s", res.stdout, res.stderr)
 	}
 
 	// 2. read_file non-existent file

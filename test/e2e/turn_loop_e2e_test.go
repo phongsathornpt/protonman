@@ -119,3 +119,161 @@ func TestE2ETurnLoopSessionResumption(t *testing.T) {
 		t.Fatalf("turn 2 resume failed: %s %s", res2.stdout, res2.stderr)
 	}
 }
+
+func TestE2ETurnLoopForcesSynthesisAfterRepeatedRead(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+
+	server := newMockLLMServer(t)
+	server.SetupWorkspaceConfig(t, home)
+	server.AddToolCallResponse("call_read_loop_1", "read_file", `{"path":"hello.txt"}`)
+	server.AddToolCallResponse("call_read_loop_2", "read_file", `{"path":"hello.txt"}`)
+	server.AddTextResponse("I already have enough information from the repeated read.")
+
+	res := runProton(t, runOptions{
+		args: []string{"-y", "-p", "Read hello.txt until you can answer"},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 {
+		t.Fatalf("semantic loop synthesis failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "I already have enough information") {
+		t.Fatalf("stdout missing forced synthesis: %s", res.stdout)
+	}
+
+	requests := server.Requests()
+	if got, want := len(requests), 3; got != want {
+		t.Fatalf("model requests = %d, want %d", got, want)
+	}
+	if requestToolCount(requests[0]) == 0 || requestToolCount(requests[1]) == 0 {
+		t.Fatalf("tool-enabled requests unexpectedly omitted tools: %#v", requests)
+	}
+	if got := requestToolCount(requests[2]); got != 0 {
+		t.Fatalf("forced synthesis request tools = %d, want 0", got)
+	}
+	if !requestMessagesContain(requests[2], "TOOL LOOP DETECTED") {
+		t.Fatalf("forced synthesis request missing no-progress prompt: %#v", requests[2]["messages"])
+	}
+}
+
+func TestE2ETurnLoopIgnoresRepeatedToolAfterLoopDetected(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+
+	server := newMockLLMServer(t)
+	server.SetupWorkspaceConfig(t, home)
+	server.AddToolCallResponse("call_read_ignore_1", "read_file", `{"path":"hello.txt"}`)
+	server.AddToolCallResponse("call_read_ignore_2", "read_file", `{"path":"hello.txt"}`)
+	server.AddToolCallResponse("call_read_ignore_3", "read_file", `{"path":"hello.txt"}`)
+
+	res := runProton(t, runOptions{
+		args: []string{"-y", "-p", "Keep reading hello.txt"},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 {
+		t.Fatalf("ignored loop call failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "stopped a repeated tool loop") {
+		t.Fatalf("stdout missing loop fallback: %s", res.stdout)
+	}
+	requests := server.Requests()
+	if got, want := len(requests), 3; got != want {
+		t.Fatalf("model requests = %d, want %d; provider should not receive a fourth retry", got, want)
+	}
+	if got := requestToolCount(requests[2]); got != 0 {
+		t.Fatalf("no-progress request tools = %d, want 0", got)
+	}
+}
+
+func TestE2EResumeCompactsHistoricalToolProtocol(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+
+	server := newMockLLMServer(t)
+	server.SetupWorkspaceConfig(t, home)
+	server.AddToolCallResponse("call_resume_read", "read_file", `{"path":"hello.txt"}`)
+	server.AddTextResponse("I inspected hello.txt.")
+
+	res1 := runProton(t, runOptions{
+		args: []string{"-y", "-p", "Inspect hello.txt"},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res1.exitCode != 0 {
+		t.Fatalf("initial tool turn failed: %s %s", res1.stdout, res1.stderr)
+	}
+
+	server.AddTextResponse("The resumed history is structurally safe.")
+	res2 := runProton(t, runOptions{
+		args: []string{"-y", "-r", "-p", "What did you inspect?"},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res2.exitCode != 0 {
+		t.Fatalf("resumed tool turn failed: %s %s", res2.stdout, res2.stderr)
+	}
+
+	requests := server.Requests()
+	if got, want := len(requests), 3; got != want {
+		t.Fatalf("model requests = %d, want %d", got, want)
+	}
+	messages := requestMessages(t, requests[2])
+	for _, message := range messages {
+		if role, _ := message["role"].(string); role == "tool" {
+			t.Fatalf("resumed request contains orphan tool role: %#v", message)
+		}
+		if calls, exists := message["tool_calls"]; exists && calls != nil {
+			if list, ok := calls.([]any); !ok || len(list) > 0 {
+				t.Fatalf("resumed request contains fabricated tool calls: %#v", message)
+			}
+		}
+	}
+	if !requestMessagesContain(requests[2], "Historical tool read_file result") {
+		t.Fatalf("resumed request missing compacted historical result: %#v", requests[2]["messages"])
+	}
+}
+
+func requestToolCount(request map[string]any) int {
+	tools, ok := request["tools"].([]any)
+	if !ok {
+		return 0
+	}
+	return len(tools)
+}
+
+func requestMessages(t *testing.T, request map[string]any) []map[string]any {
+	t.Helper()
+	rawMessages, ok := request["messages"].([]any)
+	if !ok {
+		t.Fatalf("request messages = %#v, want array", request["messages"])
+	}
+	messages := make([]map[string]any, 0, len(rawMessages))
+	for _, raw := range rawMessages {
+		message, ok := raw.(map[string]any)
+		if !ok {
+			t.Fatalf("request message = %#v, want object", raw)
+		}
+		messages = append(messages, message)
+	}
+	return messages
+}
+
+func requestMessagesContain(request map[string]any, needle string) bool {
+	rawMessages, ok := request["messages"].([]any)
+	if !ok {
+		return false
+	}
+	for _, raw := range rawMessages {
+		message, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		content, _ := message["content"].(string)
+		if strings.Contains(content, needle) {
+			return true
+		}
+	}
+	return false
+}
