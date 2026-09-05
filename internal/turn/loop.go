@@ -76,7 +76,7 @@ const MaxToolCallsFallback = "I reached the maximum number of tool calls before 
 // the same result without any intervening workspace mutation.
 const NoProgressPrompt = `CRITICAL - TOOL LOOP DETECTED
 
-Repeated deterministic tool calls produced the same result without making progress. Tools are disabled until next user input. Respond with text only.
+Repeated tool calls produced the same result or retryable failure without making progress. Tools are disabled until next user input. Respond with text only.
 
 STRICT REQUIREMENTS:
 1. Do NOT repeat the same tool call or make any other tool calls.
@@ -88,7 +88,7 @@ Respond with text ONLY.`
 
 // NoProgressFallback is used when a provider ignores NoProgressPrompt and still
 // requests another tool call after a semantic loop was detected.
-const NoProgressFallback = "I stopped a repeated tool loop because the same deterministic call kept producing the same result without progress. The last tool request was not executed."
+const NoProgressFallback = "I stopped a repeated tool loop because the same call kept producing the same result or failure without progress. The last tool request was not executed."
 
 var (
 	// ErrInvalidLoop indicates that the loop cannot be constructed or started.

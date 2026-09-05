@@ -348,7 +348,7 @@ Execution safety notes:
 
 - `max_rounds = 0` disables only the round-count bound; `max_tool_calls = 0` disables only the cumulative tool-call-count bound.
 - A complete model/tool turn still has a default 10-minute deadline, and the loop refuses construction if every global termination bound is disabled.
-- Repeating the same deterministic tool call with the same semantic arguments and result twice without an intervening mutation triggers a text-only synthesis round instead of continuing the tool loop.
+- Repeating the same deterministic tool call with the same semantic arguments and result twice without an intervening mutation triggers a text-only synthesis round instead of continuing the tool loop; identical retryable failures are capped at three attempts.
 - Truncated `read_file`, `grep`, and `list_dir` results include `next_offset`; pass that value back as `offset` to continue instead of repeating the same page.
 
 ### Environment Variables

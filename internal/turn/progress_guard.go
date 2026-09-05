@@ -8,7 +8,10 @@ import (
 	"github.com/projectTHORN/proton/internal/tool"
 )
 
-const defaultMaxIdenticalNoProgressResults = 2
+const (
+	defaultMaxIdenticalNoProgressResults = 2
+	defaultMaxIdenticalRetryableFailures = 3
+)
 
 type progressObservation struct {
 	epoch      uint64
@@ -17,10 +20,11 @@ type progressObservation struct {
 }
 
 type progressGuard struct {
-	maxIdenticalResults int
-	epoch               uint64
-	observations        map[[sha256.Size]byte]progressObservation
-	definitions         map[string]tool.Definition
+	maxIdenticalResults  int
+	maxRetryableFailures int
+	epoch                uint64
+	observations         map[[sha256.Size]byte]progressObservation
+	definitions          map[string]tool.Definition
 }
 
 func newProgressGuard(definitions []tool.Definition, maxIdenticalResults int) *progressGuard {
@@ -29,9 +33,10 @@ func newProgressGuard(definitions []tool.Definition, maxIdenticalResults int) *p
 		byName[definition.Name] = definition
 	}
 	return &progressGuard{
-		maxIdenticalResults: maxIdenticalResults,
-		observations:        make(map[[sha256.Size]byte]progressObservation),
-		definitions:         byName,
+		maxIdenticalResults:  maxIdenticalResults,
+		maxRetryableFailures: defaultMaxIdenticalRetryableFailures,
+		observations:         make(map[[sha256.Size]byte]progressObservation),
+		definitions:          byName,
 	}
 }
 
@@ -75,7 +80,7 @@ func (g *progressGuard) observe(execution executedCall) (stalled bool, tracked b
 	if err != nil {
 		return false, false, err
 	}
-	resultHash, err := semanticResultHash(execution.result)
+	resultHash, err := noProgressResultHash(execution.result)
 	if err != nil {
 		return false, false, err
 	}
@@ -92,12 +97,16 @@ func (g *progressGuard) observe(execution executedCall) (stalled bool, tracked b
 
 	observation.count++
 	g.observations[callHash] = observation
-	return observation.count >= g.maxIdenticalResults, true, nil
+	limit := g.maxIdenticalResults
+	if execution.result.Failure != nil && execution.result.Failure.Retryable {
+		limit = g.maxRetryableFailures
+	}
+	return limit > 0 && observation.count >= limit, true, nil
 }
 
 func shouldTrackNoProgress(definition tool.Definition, result tool.Result) bool {
 	if result.Failure != nil {
-		return !result.Failure.Retryable
+		return true
 	}
 	return definition.Kind == tool.KindRead || definition.Kind == tool.KindGrep
 }
@@ -122,6 +131,23 @@ func semanticCallHash(call tool.Call) ([sha256.Size]byte, error) {
 	}
 	payload := append([]byte(call.Name+"\x00"), canonical...)
 	return sha256.Sum256(payload), nil
+}
+
+func noProgressResultHash(result tool.Result) ([sha256.Size]byte, error) {
+	if result.Failure != nil {
+		payload, err := json.Marshal(struct {
+			Code      tool.ErrorCode `json:"code"`
+			Retryable bool           `json:"retryable"`
+		}{
+			Code:      result.Failure.Code,
+			Retryable: result.Failure.Retryable,
+		})
+		if err != nil {
+			return [sha256.Size]byte{}, fmt.Errorf("encode semantic tool failure: %w", err)
+		}
+		return sha256.Sum256(payload), nil
+	}
+	return semanticResultHash(result)
 }
 
 func semanticResultHash(result tool.Result) ([sha256.Size]byte, error) {
