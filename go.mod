@@ -1,6 +1,6 @@
 module github.com/projectTHORN/proton
 
-go 1.26
+go 1.27
 
 require (
 	github.com/charmbracelet/bubbles v0.21.1
