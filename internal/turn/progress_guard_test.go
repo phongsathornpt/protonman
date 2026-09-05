@@ -3,6 +3,7 @@ package turn
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -148,16 +149,75 @@ func TestProgressGuardTracksRepeatedNonRetryableFailure(t *testing.T) {
 	}
 }
 
-func TestProgressGuardDoesNotTrackRetryableFailure(t *testing.T) {
+func TestProgressGuardBoundsRetryableFailure(t *testing.T) {
 	guard := newProgressGuard([]tool.Definition{{Name: "read_file", Kind: tool.KindRead}}, 2)
-	failure := &tool.Failure{Code: tool.ErrorCodeDeadlineExceeded, Message: "timeout", Retryable: true}
-	for i := 0; i < 3; i++ {
-		call := tool.Call{ID: "retry", Name: "read_file", Arguments: json.RawMessage(`{"path":"slow.txt"}`)}
+	for i := 1; i <= defaultMaxIdenticalRetryableFailures; i++ {
+		call := tool.Call{ID: fmt.Sprintf("retry-%d", i), Name: "read_file", Arguments: json.RawMessage(`{"path":"slow.txt"}`)}
+		failure := &tool.Failure{
+			Code:      tool.ErrorCodeDeadlineExceeded,
+			Message:   fmt.Sprintf("timeout attempt %d", i),
+			Retryable: true,
+		}
 		execution := executedCall{call: call, result: tool.Result{CallID: call.ID, ToolName: call.Name, Failure: failure}}
-		if stalled, err := guard.observeRound([]executedCall{execution}); err != nil || stalled {
-			t.Fatalf("retryable failure %d stalled=%v err=%v", i+1, stalled, err)
+		stalled, err := guard.observeRound([]executedCall{execution})
+		if err != nil {
+			t.Fatalf("retryable failure %d error = %v", i, err)
+		}
+		wantStalled := i == defaultMaxIdenticalRetryableFailures
+		if stalled != wantStalled {
+			t.Fatalf("retryable failure %d stalled=%v, want %v", i, stalled, wantStalled)
 		}
 	}
+}
+
+func TestLoopForcesSynthesisAfterRetryableFailureBudget(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{events: repeatedReadEvents("retry-1")},
+		{events: repeatedReadEvents("retry-2")},
+		{events: repeatedReadEvents("retry-3")},
+		{events: []model.Event{
+			{Kind: model.EventTextDelta, Text: "The repeated read timed out, so I stopped retrying."},
+			{Kind: model.EventDone},
+		}},
+	}}
+	handler := &retryableFailureHandler{definition: readFileDefinition()}
+	loop := newLoopForHandler(
+		t,
+		client,
+		handler,
+		permission.ActionAllow,
+		permission.ModeAlwaysApprove,
+	)
+
+	result, err := loop.Run(context.Background(), []model.Message{{
+		Role: model.RoleUser, Content: "read the slow file",
+	}}, nil)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got, want := handler.calls, defaultMaxIdenticalRetryableFailures; got != want {
+		t.Fatalf("handler calls = %d, want %d", got, want)
+	}
+	if got, want := result.Rounds, defaultMaxIdenticalRetryableFailures+1; got != want {
+		t.Fatalf("rounds = %d, want %d", got, want)
+	}
+	if got := len(client.requests[len(client.requests)-1].Tools); got != 0 {
+		t.Fatalf("synthesis request tools = %d, want 0", got)
+	}
+}
+
+type retryableFailureHandler struct {
+	definition tool.Definition
+	calls      int
+}
+
+func (h *retryableFailureHandler) Definition() tool.Definition {
+	return h.definition
+}
+
+func (h *retryableFailureHandler) Execute(context.Context, tool.Call) (tool.Result, error) {
+	h.calls++
+	return tool.Result{}, context.DeadlineExceeded
 }
 
 func TestSemanticCallHashCanonicalizesJSONObjectOrder(t *testing.T) {
