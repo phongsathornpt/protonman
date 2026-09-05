@@ -463,3 +463,30 @@ profile = "dex"
 		t.Errorf("Agent.Profile = %q, want 'dex'", snapshot.Agent.Profile)
 	}
 }
+
+func TestAgentLimitsRejectNegativeValues(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		field string
+	}{
+		{name: "rounds", field: "max_rounds"},
+		{name: "tool calls", field: "max_tool_calls"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			homeDir := t.TempDir()
+			writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), "[agent]\n"+test.field+" = -1\n")
+
+			_, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: t.TempDir()})
+			if err == nil {
+				t.Fatalf("Load() error = nil, want negative %s rejection", test.field)
+			}
+		})
+	}
+
+	if err := SaveUserMaxRounds(t.TempDir(), -1); err == nil {
+		t.Fatal("SaveUserMaxRounds(-1) error = nil, want rejection")
+	}
+	if err := SaveUserMaxToolCalls(t.TempDir(), -1); err == nil {
+		t.Fatal("SaveUserMaxToolCalls(-1) error = nil, want rejection")
+	}
+}
