@@ -75,7 +75,7 @@ func (g *progressGuard) observe(execution executedCall) (stalled bool, tracked b
 		return false, false, nil
 	}
 
-	if execution.err == nil && potentiallyMutating(definition) {
+	if execution.err == nil && potentiallyMutating(definition, execution.call) {
 		g.epoch++
 		return false, false, nil
 	}
@@ -170,8 +170,8 @@ func shouldTrackNoProgress(definition tool.Definition, result tool.Result) bool 
 	return definition.Kind == tool.KindRead || definition.Kind == tool.KindGrep
 }
 
-func potentiallyMutating(definition tool.Definition) bool {
-	return tool.EffectiveMutability(definition) != tool.MutabilityReadOnly
+func potentiallyMutating(definition tool.Definition, call tool.Call) bool {
+	return tool.EffectiveCallMutability(definition, call.Arguments) != tool.MutabilityReadOnly
 }
 
 func semanticCallHash(call tool.Call) ([sha256.Size]byte, error) {
