@@ -167,19 +167,34 @@ func TestSystemPromptForProfile(t *testing.T) {
 		}
 	}
 
-	// Verify principles in pow, dex, int
+	// Verify principles and J-Space cognitive architecture markers in pow, dex, int
 	powPrompt := SystemPromptForProfile(ProfilePOW)
 	if !strings.Contains(powPrompt, "POW Mode") || !strings.Contains(powPrompt, "High Velocity") {
 		t.Errorf("pow prompt missing POW Mode marker: %s", powPrompt)
+	}
+	for _, marker := range []string{"Capacity Limit", "1-Line", "Action-First"} {
+		if !strings.Contains(powPrompt, marker) {
+			t.Errorf("pow prompt missing cognitive marker %q: %s", marker, powPrompt)
+		}
 	}
 
 	dexPrompt := SystemPromptForProfile(ProfileDEX)
 	if !strings.Contains(dexPrompt, "DEX Mode") || !strings.Contains(dexPrompt, "Defensive Engineering") {
 		t.Errorf("dex prompt missing DEX Mode marker: %s", dexPrompt)
 	}
+	for _, marker := range []string{"Empirical Escape", "Named Verifier", "Metacognitive"} {
+		if !strings.Contains(dexPrompt, marker) {
+			t.Errorf("dex prompt missing cognitive marker %q: %s", marker, dexPrompt)
+		}
+	}
 
 	intPrompt := SystemPromptForProfile(ProfileINT)
 	if !strings.Contains(intPrompt, "INT Mode") || !strings.Contains(intPrompt, "YAGNI") {
 		t.Errorf("int prompt missing YAGNI or INT Mode marker: %s", intPrompt)
+	}
+	for _, marker := range []string{"Broadcast Hub", "Bridge-Before-Conclusion", "Architectural De-escalation"} {
+		if !strings.Contains(intPrompt, marker) {
+			t.Errorf("int prompt missing cognitive marker %q: %s", marker, intPrompt)
+		}
 	}
 }
