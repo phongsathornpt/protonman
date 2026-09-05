@@ -119,7 +119,7 @@ func TestActivateSkill_AuthorizesReadRootsForFileTools(t *testing.T) {
 	skillReg := skill.NewRegistry(s)
 	activateHandler := NewActivateSkill(skillReg, ws)
 	readHandler := NewReadFile(ws)
-	writeHandler := NewWriteFile(ws)
+	writeHandler := NewWriteFile(ws, &recordingCheckpointStore{id: "skill-test"})
 
 	// 1. Before activation, reading reference.txt fails with outside workspace
 	readArgs, _ := json.Marshal(map[string]any{"path": skillFilePath})

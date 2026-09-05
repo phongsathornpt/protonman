@@ -180,7 +180,6 @@ func (m *CrashModel) View() string {
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, mainContent)
 }
 
-
 func copyToClipboard(text string) error {
 	// 1. Terminal standard OSC 52 escape sequence
 	encoded := base64.StdEncoding.EncodeToString([]byte(text))

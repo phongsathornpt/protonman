@@ -4,7 +4,6 @@ import "testing"
 
 func TestParseNameAliases(t *testing.T) {
 	cases := map[string]Name{
-		"":          NameOff,
 		"off":       NameOff,
 		"workspace": NameWorkspace,
 		"read-only": NameReadOnly,
@@ -22,6 +21,10 @@ func TestParseNameAliases(t *testing.T) {
 	}
 	if _, err := ParseName("custom"); err == nil {
 		t.Fatal("ParseName(custom) error = nil, want invalid")
+	}
+	// Empty string must fail closed: operators opt out explicitly with "off".
+	if _, err := ParseName(""); err == nil {
+		t.Fatal("ParseName(\"\") error = nil, want invalid")
 	}
 }
 

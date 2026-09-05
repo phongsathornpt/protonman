@@ -147,4 +147,3 @@ func TestContentPartsAndTextContent(t *testing.T) {
 		t.Fatalf("cloned Part[1].Data = %q, want %q", cloned[0].Parts[1].Data, "iVBORw0KGgo=")
 	}
 }
-

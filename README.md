@@ -52,7 +52,7 @@ Proton isolates external effects behind strict application boundaries. External 
 ## Quick Start
 
 ### Prerequisites
-- Go 1.22+ installed
+- Go 1.27+ installed (macOS 13+ required per Go 1.27)
 - Git
 
 ### Running Proton
