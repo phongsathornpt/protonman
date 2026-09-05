@@ -21,6 +21,10 @@ const (
 	DefaultOpenCodeName = "opencode"
 	// DefaultOpenCodeEndpoint is the base URL for OpenCode Zen API.
 	DefaultOpenCodeEndpoint = "https://opencode.ai/zen/v1"
+	// DefaultOpenAIName is the canonical provider label for OpenAI.
+	DefaultOpenAIName = "openai"
+	// DefaultOpenAIEndpoint is the base URL for the official OpenAI API.
+	DefaultOpenAIEndpoint = "https://api.openai.com/v1"
 )
 
 // SupportedProviderPreset describes an out-of-the-box model provider preset.
@@ -60,7 +64,7 @@ var SupportedPresets = []SupportedProviderPreset{
 		DefaultModel: "llama3.2",
 	},
 	{
-		ID:           "openai",
+		ID:           DefaultOpenAIName,
 		Name:         "OpenAI Official",
 		BaseURL:      "https://api.openai.com/v1",
 		RequiresKey:  true,
@@ -79,6 +83,23 @@ func LookupPreset(idOrName string) *SupportedProviderPreset {
 		}
 	}
 	return nil
+}
+
+// ResolveProviderBaseURL returns the configured endpoint or the preset default
+// for a known provider.
+func ResolveProviderBaseURL(providerName string, configuredURL string) string {
+	if baseURL := strings.TrimSpace(configuredURL); baseURL != "" {
+		return strings.TrimRight(baseURL, "/")
+	}
+
+	switch strings.ToLower(strings.TrimSpace(providerName)) {
+	case DefaultOpenAIName:
+		return DefaultOpenAIEndpoint
+	case DefaultOpenCodeName:
+		return DefaultOpenCodeEndpoint
+	default:
+		return DefaultProtonmanEndpoint
+	}
 }
 
 // RemoteModel describes a model discovered from an OpenAI or protonman endpoint.

@@ -770,10 +770,7 @@ func (m *bubbleModel) reconfigureRunner() {
 	if !hasValidAuth {
 		return
 	}
-	baseURL := prov.BaseURL
-	if baseURL == "" {
-		baseURL = model.DefaultProtonmanEndpoint
-	}
+	baseURL := model.ResolveProviderBaseURL(provName, prov.BaseURL)
 	sessID := m.sessionID
 	if sessID == "" && m.workDir != "" {
 		sessID = "workspace-" + m.workDir
@@ -782,7 +779,7 @@ func (m *bubbleModel) reconfigureRunner() {
 	if sessID != "" {
 		clientOpts = append(clientOpts, model.WithSessionID(sessID))
 	}
-	client := model.NewOpenAIClient(baseURL, prov.APIKey, m.activeModel, clientOpts...)
+	client := model.NewProviderClient(provName, baseURL, prov.APIKey, m.activeModel, clientOpts...)
 	var opts []applicationturn.Option
 	if m.skills != nil {
 		opts = append(opts, applicationturn.WithSkillRegistry(m.skills))
