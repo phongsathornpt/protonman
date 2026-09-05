@@ -26,6 +26,8 @@ const (
 	// DefaultMaxToolCalls is the default cumulative maximum number of tool
 	// calls per turn.
 	DefaultMaxToolCalls = 100
+	// DefaultTurnTimeout bounds one complete model/tool turn.
+	DefaultTurnTimeout = 10 * time.Minute
 	// DefaultRoundTimeout bounds a turn round when callers do not provide a
 	// stricter timeout.
 	DefaultRoundTimeout    = 5 * time.Minute
@@ -213,6 +215,18 @@ func WithMaxIdenticalNoProgressResults(limit int) Option {
 	}
 }
 
+// WithTurnTimeout bounds one complete model/tool turn. Zero disables this
+// bound, which is only valid when another global execution limit remains set.
+func WithTurnTimeout(timeout time.Duration) Option {
+	return func(loop *Loop) error {
+		if timeout < 0 {
+			return fmt.Errorf("%w: turn timeout cannot be negative", ErrInvalidLoop)
+		}
+		loop.turnTimeout = timeout
+		return nil
+	}
+}
+
 // WithRoundTimeout bounds one model response and its tool calls.
 func WithRoundTimeout(timeout time.Duration) Option {
 	return func(loop *Loop) error {
@@ -269,6 +283,7 @@ type Loop struct {
 	maxRounds                     int
 	maxToolCalls                  int
 	maxIdenticalNoProgressResults int
+	turnTimeout                   time.Duration
 	roundTimeout                  time.Duration
 	toolTimeout                   time.Duration
 	maxParallelReads              int
@@ -292,6 +307,7 @@ func NewLoop(client model.Client, tools *toolcall.Service, options ...Option) (*
 		maxRounds:                     defaultMaxRounds,
 		maxToolCalls:                  defaultMaxToolCalls,
 		maxIdenticalNoProgressResults: defaultMaxIdenticalNoProgressResults,
+		turnTimeout:                   DefaultTurnTimeout,
 		roundTimeout:                  DefaultRoundTimeout,
 		maxParallelReads:              defaultMaxParallelRead,
 	}
@@ -302,6 +318,9 @@ func NewLoop(client model.Client, tools *toolcall.Service, options ...Option) (*
 		if err := option(loop); err != nil {
 			return nil, err
 		}
+	}
+	if loop.maxRounds == 0 && loop.maxToolCalls == 0 && loop.turnTimeout == 0 {
+		return nil, fmt.Errorf("%w: at least one of max rounds, max tool calls, or turn timeout must be bounded", ErrInvalidLoop)
 	}
 	return loop, nil
 }
@@ -335,6 +354,9 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		)
 		return Result{}, fmt.Errorf("start model/tool loop: %w", err)
 	}
+	turnContext, cancelTurn := l.newTurnContext(ctx)
+	defer cancelTurn()
+	ctx = turnContext
 	if sink == nil {
 		sink = func(context.Context, Event) error { return nil }
 	}
@@ -790,6 +812,13 @@ func (l *Loop) runRound(
 		executions: executions,
 		dispatch:   dispatch,
 	}, nil
+}
+
+func (l *Loop) newTurnContext(parent context.Context) (context.Context, context.CancelFunc) {
+	if l.turnTimeout > 0 {
+		return context.WithTimeout(parent, l.turnTimeout)
+	}
+	return context.WithCancel(parent)
 }
 
 func (l *Loop) newRoundContext(parent context.Context) (context.Context, context.CancelFunc) {

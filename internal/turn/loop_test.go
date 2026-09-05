@@ -1172,3 +1172,76 @@ func TestLoopDynamicActiveSkillsWithRegistry(t *testing.T) {
 		t.Fatalf("expected active-skill back in available catalog in sys2, got: %s", sys2)
 	}
 }
+
+func TestNewLoopRejectsAllGlobalBoundsDisabled(t *testing.T) {
+	policy, err := permission.NewPolicy(permission.Config{})
+	if err != nil {
+		t.Fatalf("NewPolicy() error = %v", err)
+	}
+	service, err := toolcall.NewService(emptyRegistry{}, policy)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	client := &scriptedClient{streams: []scriptedStreamSpec{{
+		events: []model.Event{{Kind: model.EventTextDelta, Text: "done"}, {Kind: model.EventDone}},
+	}}}
+	_, err = NewLoop(
+		client,
+		service,
+		WithMaxRounds(0),
+		WithMaxToolCalls(0),
+		WithTurnTimeout(0),
+	)
+	if !errors.Is(err, ErrInvalidLoop) {
+		t.Fatalf("NewLoop() error = %v, want ErrInvalidLoop", err)
+	}
+}
+
+func TestLoopWholeTurnTimeoutStopsBlockingModel(t *testing.T) {
+	client := &blockingModelClient{started: make(chan struct{})}
+	loop, _ := newTestLoop(
+		t,
+		client,
+		permission.ActionAllow,
+		WithTurnTimeout(20*time.Millisecond),
+		WithRoundTimeout(0),
+	)
+	events := make([]Event, 0)
+
+	_, err := loop.Run(
+		context.Background(),
+		[]model.Message{{Role: model.RoleUser, Content: "wait forever"}},
+		collectEvents(&events),
+	)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Run() error = %v, want context.DeadlineExceeded", err)
+	}
+	if len(events) == 0 || events[len(events)-1].Kind != EventFailed {
+		t.Fatalf("events = %#v, want terminal failed event", eventKinds(events))
+	}
+}
+
+func TestLoopAllowsUnboundedCountsWithFiniteTurnTimeout(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{{
+		events: []model.Event{{Kind: model.EventTextDelta, Text: "bounded by time"}, {Kind: model.EventDone}},
+	}}}
+	loop, _ := newTestLoop(
+		t,
+		client,
+		permission.ActionAllow,
+		WithMaxRounds(0),
+		WithMaxToolCalls(0),
+		WithTurnTimeout(time.Second),
+	)
+	result, err := loop.Run(
+		context.Background(),
+		[]model.Message{{Role: model.RoleUser, Content: "answer"}},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if result.Message.Content != "bounded by time" {
+		t.Fatalf("content = %q", result.Message.Content)
+	}
+}
