@@ -46,6 +46,8 @@ var (
 	ErrInvalidLoop = errors.New("invalid model/tool loop")
 	// ErrMaxRounds indicates that a model kept requesting tools without a final response.
 	ErrMaxRounds = errors.New("model/tool round limit exceeded")
+	// ErrEmptyResponse indicates that the provider completed without text or tool calls.
+	ErrEmptyResponse = errors.New("model returned an empty response")
 )
 
 // EventKind identifies progress emitted by the application loop.
@@ -737,7 +739,6 @@ func consumeStream(
 ) (model.Message, []model.ToolCall, error) {
 	var text strings.Builder
 	calls := make([]model.ToolCall, 0)
-	termination := "eof"
 	for {
 		event, err := stream.Next(ctx)
 		if errors.Is(err, io.EOF) {
@@ -773,10 +774,17 @@ func consumeStream(
 			call.Arguments = append(json.RawMessage{}, call.Arguments...)
 			calls = append(calls, call)
 		case model.EventDone:
-			termination = "event_done"
+			if text.Len() == 0 && len(calls) == 0 {
+				err := fmt.Errorf("model stream round %d: %w", round, ErrEmptyResponse)
+				slog.DebugContext(ctx, "model stream completed without content",
+					"round", round,
+					"termination", "event_done",
+				)
+				return model.Message{}, nil, err
+			}
 			slog.DebugContext(ctx, "model stream terminal event",
 				"round", round,
-				"termination", termination,
+				"termination", "event_done",
 				"text_bytes", text.Len(),
 				"tool_calls", len(calls),
 			)
@@ -787,17 +795,13 @@ func consumeStream(
 			}, calls, nil
 		}
 	}
-	slog.DebugContext(ctx, "model stream ended without terminal event",
+	err := fmt.Errorf("read model stream round %d: %w", round, model.ErrIncompleteStream)
+	slog.DebugContext(ctx, "model stream incomplete",
 		"round", round,
-		"termination", termination,
 		"text_bytes", text.Len(),
 		"tool_calls", len(calls),
 	)
-	return model.Message{
-		Role:      model.RoleAssistant,
-		Content:   text.String(),
-		ToolCalls: calls,
-	}, calls, nil
+	return model.Message{}, nil, err
 }
 
 func (l *Loop) fail(ctx context.Context, sink Sink, round int, err error) (Result, error) {

@@ -56,6 +56,42 @@ func TestLoopStreamsTextAndCompletes(t *testing.T) {
 	}
 }
 
+func TestLoopRejectsIncompleteModelStream(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{{
+		events: []model.Event{{Kind: model.EventTextDelta, Text: "partial"}},
+	}}}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow)
+	events := make([]Event, 0)
+
+	_, err := loop.Run(
+		context.Background(),
+		[]model.Message{{Role: model.RoleUser, Content: "hello"}},
+		collectEvents(&events),
+	)
+	if !errors.Is(err, model.ErrIncompleteStream) {
+		t.Fatalf("Run() error = %v, want incomplete stream", err)
+	}
+	if got := events[len(events)-1].Kind; got != EventFailed {
+		t.Fatalf("last event kind = %q, want failed", got)
+	}
+}
+
+func TestLoopRejectsEmptyModelResponse(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{{
+		events: []model.Event{{Kind: model.EventDone}},
+	}}}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow)
+
+	_, err := loop.Run(
+		context.Background(),
+		[]model.Message{{Role: model.RoleUser, Content: "hello"}},
+		func(context.Context, Event) error { return nil },
+	)
+	if !errors.Is(err, ErrEmptyResponse) {
+		t.Fatalf("Run() error = %v, want empty response", err)
+	}
+}
+
 func TestLoopTranslatesToolCallsAndFeedsResultsBack(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: []model.Event{
@@ -804,7 +840,10 @@ func TestLoopAugmentsSystemPromptWithSkillCatalog(t *testing.T) {
 
 func TestLoopDoesNotDuplicateSkillCatalogMarker(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []model.Event{{Kind: model.EventDone}},
+		events: []model.Event{
+			{Kind: model.EventTextDelta, Text: "ok"},
+			{Kind: model.EventDone},
+		},
 	}}}
 	catalog := []skill.CatalogItem{{
 		Name:        "pdf-processing",
@@ -832,8 +871,14 @@ func TestLoopDoesNotDuplicateSkillCatalogMarker(t *testing.T) {
 
 func TestLoopDynamicActiveSkillsWithRegistry(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []model.Event{{Kind: model.EventDone}}},
-		{events: []model.Event{{Kind: model.EventDone}}},
+		{events: []model.Event{
+			{Kind: model.EventTextDelta, Text: "ok"},
+			{Kind: model.EventDone},
+		}},
+		{events: []model.Event{
+			{Kind: model.EventTextDelta, Text: "ok"},
+			{Kind: model.EventDone},
+		}},
 	}}
 
 	s1 := skill.Skill{
