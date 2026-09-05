@@ -167,3 +167,18 @@ base_url = "%s"
 		t.Fatalf("write config.toml in home: %v", err)
 	}
 }
+
+func (m *mockLLMServer) Requests() []map[string]any {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	requests := make([]map[string]any, 0, len(m.receivedRequests))
+	for _, request := range m.receivedRequests {
+		copyRequest := make(map[string]any, len(request))
+		for key, value := range request {
+			copyRequest[key] = value
+		}
+		requests = append(requests, copyRequest)
+	}
+	return requests
+}
