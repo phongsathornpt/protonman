@@ -194,5 +194,45 @@ func TestDelegateTask_Execute(t *testing.T) {
 			t.Errorf("receivedParentID = %q, want 'session-xyz'", receivedParentID)
 		}
 	})
+
+	t.Run("pow dex int delegation and schema", func(t *testing.T) {
+		def := handler.Definition()
+		props, ok := def.InputSchema["properties"].(map[string]any)
+		if !ok {
+			t.Fatal("expected properties in InputSchema")
+		}
+		profileProp, ok := props["profile"].(map[string]any)
+		if !ok {
+			t.Fatal("expected profile in properties")
+		}
+		enums, ok := profileProp["enum"].([]string)
+		if !ok {
+			t.Fatal("expected enum slice in profile property")
+		}
+		enumMap := make(map[string]bool)
+		for _, e := range enums {
+			enumMap[e] = true
+		}
+		for _, expected := range []string{"pow", "dex", "int"} {
+			if !enumMap[expected] {
+				t.Errorf("delegate_task enum missing %q", expected)
+			}
+		}
+
+		for _, prof := range []string{"pow", "dex", "int"} {
+			args, _ := json.Marshal(map[string]any{
+				"profile": prof,
+				"task":    "task for " + prof,
+			})
+			call, _ := tool.NewCall("call-"+prof, "delegate_task", args)
+			res, err := handler.Execute(ctx, call)
+			if err != nil {
+				t.Fatalf("unexpected error for profile %s: %v", prof, err)
+			}
+			if res.Failure != nil {
+				t.Fatalf("unexpected failure for profile %s: %+v", prof, res.Failure)
+			}
+		}
+	})
 }
 
