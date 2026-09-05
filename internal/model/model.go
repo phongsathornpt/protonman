@@ -31,6 +31,10 @@ var ErrInvalidRequest = errors.New("invalid model request")
 // ErrInvalidEvent indicates that a provider emitted an invalid stream event.
 var ErrInvalidEvent = errors.New("invalid model event")
 
+// ErrIncompleteStream indicates that a provider closed a response before its
+// protocol-specific terminal event.
+var ErrIncompleteStream = errors.New("incomplete model stream")
+
 // ToolCall is the model-facing representation of a requested tool call.
 type ToolCall struct {
 	ID        string
