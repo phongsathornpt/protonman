@@ -20,9 +20,10 @@ type readFileHandler struct {
 }
 
 type readFileInput struct {
-	Path   string `json:"path"`
-	Offset int64  `json:"offset,omitempty"`
-	Limit  int    `json:"limit,omitempty"`
+	Path         string `json:"path"`
+	Offset       int64  `json:"offset,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+	Continuation string `json:"continuation,omitempty"`
 }
 
 // NewReadFile returns the filesystem read adapter.
@@ -48,6 +49,10 @@ func (readFileHandler) Definition() tool.Definition {
 					"type":        "integer",
 					"minimum":     0,
 					"description": "Byte offset to start reading from; use next_offset from a truncated result",
+				},
+				"continuation": map[string]any{
+					"type":        "string",
+					"description": "Snapshot token from a truncated result; send it with next_offset to detect file changes",
 				},
 				"limit": map[string]any{
 					"type":        "integer",
@@ -112,6 +117,17 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	}
 
 	size := fileInfo.Size()
+	continuation, err := continuationToken("read_file", struct {
+		Path string `json:"path"`
+	}{Path: input.Path}, fileSnapshot(fileInfo))
+	if err != nil {
+		_ = file.Close()
+		return tool.Result{}, err
+	}
+	if input.Continuation != "" && input.Continuation != continuation {
+		_ = file.Close()
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "read_file continuation is stale; restart from offset 0")
+	}
 	if input.Offset > size {
 		input.Offset = size
 	}
@@ -181,6 +197,12 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 		Output:     output,
 		Truncated:  truncated,
 		NextOffset: nextOffset,
+		Continuation: func() string {
+			if truncated {
+				return continuation
+			}
+			return ""
+		}(),
 	}, nil
 }
 func utf8PageCut(data []byte, target int) (int, error) {

@@ -20,11 +20,12 @@ type listDirHandler struct {
 }
 
 type listDirInput struct {
-	Path      string `json:"path"`
-	DirPath   string `json:"dir_path"`
-	Directory string `json:"directory"`
-	Offset    int    `json:"offset,omitempty"`
-	Limit     int    `json:"limit,omitempty"`
+	Path         string `json:"path"`
+	DirPath      string `json:"dir_path"`
+	Directory    string `json:"directory"`
+	Offset       int    `json:"offset,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+	Continuation string `json:"continuation,omitempty"`
 }
 
 // NewListDir returns the protected-aware directory listing adapter.
@@ -58,6 +59,10 @@ func (listDirHandler) Definition() tool.Definition {
 					"type":        "integer",
 					"minimum":     0,
 					"description": "Visible entry offset; use next_offset from a truncated result",
+				},
+				"continuation": map[string]any{
+					"type":        "string",
+					"description": "Snapshot token from a truncated result; send it with next_offset to detect directory changes",
 				},
 				"limit": map[string]any{
 					"type":        "integer",
@@ -124,6 +129,20 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 	entries, err := os.ReadDir(resolvedPath)
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("list %q: %w", targetPath, err)
+	}
+
+	snapshot, err := directorySnapshot(ctx, resolvedPath, entries)
+	if err != nil {
+		return tool.Result{}, fmt.Errorf("snapshot directory %q: %w", targetPath, err)
+	}
+	continuation, err := continuationToken("list_dir", struct {
+		Path string `json:"path"`
+	}{Path: targetPath}, snapshot)
+	if err != nil {
+		return tool.Result{}, err
+	}
+	if input.Continuation != "" && input.Continuation != continuation {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "list_dir continuation is stale; restart from offset 0")
 	}
 
 	allocHint := len(entries)
@@ -254,6 +273,12 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 		Output:     output.String(),
 		Truncated:  truncated,
 		NextOffset: nextOffset,
+		Continuation: func() string {
+			if truncated {
+				return continuation
+			}
+			return ""
+		}(),
 	}, nil
 }
 

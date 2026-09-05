@@ -39,11 +39,12 @@ type grepHandler struct {
 }
 
 type grepInput struct {
-	Pattern string `json:"pattern"`
-	Path    string `json:"path"`
-	Include string `json:"include"`
-	Offset  int    `json:"offset,omitempty"`
-	Limit   int    `json:"limit,omitempty"`
+	Pattern      string `json:"pattern"`
+	Path         string `json:"path"`
+	Include      string `json:"include"`
+	Offset       int    `json:"offset,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+	Continuation string `json:"continuation,omitempty"`
 }
 
 type grepPageState struct {
@@ -79,6 +80,10 @@ func (grepHandler) Definition() tool.Definition {
 					"type":        "integer",
 					"minimum":     0,
 					"description": "Match offset to skip; use next_offset from a truncated result",
+				},
+				"continuation": map[string]any{
+					"type":        "string",
+					"description": "Snapshot token from a truncated result; send it with next_offset to detect workspace changes",
 				},
 				"limit": map[string]any{
 					"type":        "integer",
@@ -141,6 +146,18 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	resolvedPath, err := h.workspace.ResolveRead(ctx, searchPath)
 	if err != nil {
 		return tool.Result{}, err
+	}
+
+	snapshot, err := treeSnapshot(ctx, h.workspace, resolvedPath)
+	if err != nil {
+		return tool.Result{}, fmt.Errorf("snapshot grep workspace: %w", err)
+	}
+	continuation, err := continuationToken("grep", struct{ Pattern, Path, Include string }{input.Pattern, searchPath, input.Include}, snapshot)
+	if err != nil {
+		return tool.Result{}, err
+	}
+	if input.Continuation != "" && input.Continuation != continuation {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "grep continuation is stale; restart from offset 0")
 	}
 
 	var output strings.Builder
@@ -208,6 +225,12 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		Output:     output.String(),
 		Truncated:  truncated,
 		NextOffset: nextOffset,
+		Continuation: func() string {
+			if truncated {
+				return continuation
+			}
+			return ""
+		}(),
 	}, nil
 }
 

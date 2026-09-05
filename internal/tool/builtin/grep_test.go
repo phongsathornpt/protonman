@@ -3,6 +3,7 @@ package builtin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -224,5 +225,44 @@ func TestGrepSupportsContinuationOffset(t *testing.T) {
 	}
 	if third.Truncated || third.NextOffset != nil || !strings.Contains(third.Output, "many.txt:5:needle 5") {
 		t.Fatalf("third page = %+v", third)
+	}
+}
+
+func TestGrepContinuationRejectsChangedQueryAndWorkspace(t *testing.T) {
+	wsDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(wsDir, "many.txt"), []byte("needle 1\nneedle 2\nneedle 3\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ws, err := workspace.New(wsDir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGrep(ws)
+	firstArgs, _ := json.Marshal(map[string]any{"pattern": "needle", "limit": 1})
+	firstCall, _ := tool.NewCall("grep-token-1", "grep", firstArgs)
+	first, err := handler.Execute(context.Background(), firstCall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Continuation == "" || first.NextOffset == nil {
+		t.Fatalf("continuation = %q next=%v", first.Continuation, first.NextOffset)
+	}
+
+	changedQuery, _ := json.Marshal(map[string]any{"pattern": "needle 2", "offset": *first.NextOffset, "limit": 1, "continuation": first.Continuation})
+	changedCall, _ := tool.NewCall("grep-token-2", "grep", changedQuery)
+	_, err = handler.Execute(context.Background(), changedCall)
+	var toolErr *tool.ToolError
+	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeStaleContinuation {
+		t.Fatalf("changed query error = %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(wsDir, "many.txt"), []byte("needle 1\nneedle 2\nneedle 3\nneedle 4\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	changedState, _ := json.Marshal(map[string]any{"pattern": "needle", "offset": *first.NextOffset, "limit": 1, "continuation": first.Continuation})
+	stateCall, _ := tool.NewCall("grep-token-3", "grep", changedState)
+	_, err = handler.Execute(context.Background(), stateCall)
+	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeStaleContinuation {
+		t.Fatalf("changed workspace error = %v", err)
 	}
 }
