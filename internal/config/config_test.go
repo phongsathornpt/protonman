@@ -365,3 +365,24 @@ func TestSaveUserConfigRejectsCorruptExistingFile(t *testing.T) {
 		t.Fatalf("corrupt config was overwritten; got %q, want %q", string(data), corruptContent)
 	}
 }
+
+func TestLoadAgentProfileConfig(t *testing.T) {
+	homeDir := t.TempDir()
+	configPath := filepath.Join(homeDir, ".proton", "config.toml")
+	writeConfig(t, configPath, `[agent]
+max_rounds = 30
+profile = "dex"
+`)
+
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if snapshot.Agent.MaxRounds != 30 {
+		t.Errorf("Agent.MaxRounds = %d, want 30", snapshot.Agent.MaxRounds)
+	}
+	if snapshot.Agent.Profile != "dex" {
+		t.Errorf("Agent.Profile = %q, want 'dex'", snapshot.Agent.Profile)
+	}
+}

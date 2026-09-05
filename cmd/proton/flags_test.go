@@ -35,9 +35,21 @@ func TestParseArgsPositionalPrompt(t *testing.T) {
 
 func TestUsageMentionsHeadless(t *testing.T) {
 	text := usage()
-	for _, expected := range []string{"-p", "--headless", "--output", "--acp", "--sandbox", "--resume", "--new-session", "--session"} {
+	for _, expected := range []string{"-p", "--headless", "--output", "--acp", "--sandbox", "--resume", "--new-session", "--session", "--agent"} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("usage missing %q: %s", expected, text)
+		}
+	}
+}
+
+func TestParseArgsAgentFlags(t *testing.T) {
+	for _, flag := range []string{"-a", "--agent", "--profile"} {
+		opts, err := parseArgs([]string{flag, "dex"})
+		if err != nil {
+			t.Fatalf("parseArgs(%q) error = %v", flag, err)
+		}
+		if opts.agentProfile != "dex" {
+			t.Errorf("parseArgs(%q) agentProfile = %q, want 'dex'", flag, opts.agentProfile)
 		}
 	}
 }
