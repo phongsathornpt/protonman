@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 // ErrInvalidTool indicates that an MCP tool manifest cannot be registered.
@@ -18,6 +20,9 @@ type Tool struct {
 	Name        string
 	Description string
 	InputSchema map[string]any
+	// Mutability optionally declares whether successful execution can change state.
+	// Unspecified remains conservative for MCP tools.
+	Mutability tool.Mutability
 }
 
 // Validate checks the stable fields required for namespaced registration.
@@ -33,6 +38,11 @@ func (t Tool) Validate() error {
 		if character == 0 || unicode.IsSpace(character) || unicode.IsControl(character) {
 			return fmt.Errorf("%w: tool name %q contains invalid characters", ErrInvalidTool, t.Name)
 		}
+	}
+	switch t.Mutability {
+	case tool.MutabilityUnspecified, tool.MutabilityReadOnly, tool.MutabilityMutating:
+	default:
+		return fmt.Errorf("%w: unsupported mutability %q", ErrInvalidTool, t.Mutability)
 	}
 	return nil
 }
