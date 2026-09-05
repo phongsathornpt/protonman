@@ -2,6 +2,7 @@ package e2e_test
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -34,12 +35,18 @@ func TestE2EACPServerSessionFlow(t *testing.T) {
 		t.Fatalf("stdout pipe: %v", err)
 	}
 
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
+
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start proton --acp: %v", err)
 	}
 	defer func() {
 		_ = stdinPipe.Close()
 		_ = cmd.Wait()
+		if t.Failed() {
+			t.Logf("proton stderr:\n%s", stderrBuf.String())
+		}
 	}()
 
 	reader := bufio.NewReader(stdoutPipe)

@@ -273,6 +273,74 @@ func (s *FileStore) Save(ctx context.Context, sessionID string, state State) (sa
 	return nil
 }
 
+// Delete removes a session state file.
+func (s *FileStore) Delete(ctx context.Context, sessionID string) error {
+	if err := validateSessionID(sessionID); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("before deleting session: %w", err)
+	}
+	err := os.Remove(s.path(sessionID))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("delete session state: %w", err)
+	}
+	return nil
+}
+
+// List returns all valid session IDs matching the prefix, sorted newest first.
+func (s *FileStore) List(ctx context.Context, prefix string) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("before listing sessions: %w", err)
+	}
+	entries, err := os.ReadDir(s.root)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read session directory: %w", err)
+	}
+
+	type candidate struct {
+		id      string
+		modTime time.Time
+	}
+	var candidates []candidate
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		id := strings.TrimSuffix(entry.Name(), ".json")
+		if err := validateSessionID(id); err != nil {
+			continue
+		}
+		if prefix != "" {
+			if id != prefix && !strings.HasPrefix(id, prefix+"-") {
+				continue
+			}
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		candidates = append(candidates, candidate{id: id, modTime: info.ModTime()})
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].modTime.Equal(candidates[j].modTime) {
+			return candidates[i].id > candidates[j].id
+		}
+		return candidates[i].modTime.After(candidates[j].modTime)
+	})
+
+	ids := make([]string, 0, len(candidates))
+	for _, c := range candidates {
+		ids = append(ids, c.id)
+	}
+	return ids, nil
+}
+
 func (s *FileStore) path(sessionID string) string {
 	return filepath.Join(s.root, sessionID+".json")
 }

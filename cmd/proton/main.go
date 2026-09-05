@@ -226,7 +226,7 @@ func run(ctx context.Context, args []string) error {
 	}
 
 	if options.acp {
-		server, serverErr := acp.New(service, registry, initialRunner)
+		server, serverErr := acp.New(service, registry, initialRunner, acp.WithStore(stateStore))
 		if serverErr != nil {
 			return fmt.Errorf("create ACP server: %w", serverErr)
 		}

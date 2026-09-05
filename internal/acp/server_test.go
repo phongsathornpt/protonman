@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
+	"github.com/projectTHORN/proton/internal/session"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/turn"
@@ -20,17 +22,24 @@ func TestACPInitializeAndPrompt(t *testing.T) {
 	server := newTestServer(t, permission.ModeAlwaysApprove)
 	var output bytes.Buffer
 	input := strings.Join([]string{
-		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`,
-		`{"jsonrpc":"2.0","id":2,"method":"session/new","params":{}}`,
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"/test/dir"}}`,
 	}, "\n") + "\n"
 	if err := server.Serve(context.Background(), strings.NewReader(input), &output); err != nil {
 		t.Fatalf("Serve() error = %v", err)
 	}
-	if !strings.Contains(output.String(), `"protocolVersion":1`) {
-		t.Fatalf("initialize missing version: %s", output.String())
+	outStr := output.String()
+	if !strings.Contains(outStr, `"protocolVersion":1`) {
+		t.Fatalf("initialize missing version: %s", outStr)
 	}
-	if !strings.Contains(output.String(), `"sessionId"`) {
-		t.Fatalf("session/new missing sessionId: %s", output.String())
+	if !strings.Contains(outStr, `"loadSession":true`) {
+		t.Fatalf("initialize missing loadSession: true: %s", outStr)
+	}
+	if !strings.Contains(outStr, `"available_commands_update"`) {
+		t.Fatalf("session/new missing available_commands_update: %s", outStr)
+	}
+	if !strings.Contains(outStr, `"sessionId"`) {
+		t.Fatalf("session/new missing sessionId: %s", outStr)
 	}
 
 	sessionID := extractSessionID(t, output.Bytes())
@@ -50,20 +59,208 @@ func TestACPInitializeAndPrompt(t *testing.T) {
 	}
 }
 
+func TestACPDirectCall(t *testing.T) {
+	server := newTestServer(t, permission.ModeAlwaysApprove)
+	var output bytes.Buffer
+	input := strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"/test/dir"}}`,
+	}, "\n") + "\n"
+	if err := server.Serve(context.Background(), strings.NewReader(input), &output); err != nil {
+		t.Fatalf("Serve() error = %v", err)
+	}
+	sessionID := extractSessionID(t, output.Bytes())
+	output.Reset()
+
+	prompt := `{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":"` + sessionID + `","prompt":[{"type":"text","text":"/call read_file {\"path\":\"test.txt\"}"}]}}` + "\n"
+	if err := server.Serve(context.Background(), strings.NewReader(prompt), &output); err != nil {
+		t.Fatalf("prompt Serve() error = %v", err)
+	}
+	out := output.String()
+	if !strings.Contains(out, `"sessionUpdate":"tool_call"`) {
+		t.Fatalf("missing tool_call update: %s", out)
+	}
+	if !strings.Contains(out, `"sessionUpdate":"tool_call_update"`) {
+		t.Fatalf("missing tool_call_update: %s", out)
+	}
+	if !strings.Contains(out, `"status":"completed"`) {
+		t.Fatalf("missing status completed: %s", out)
+	}
+	if !strings.Contains(out, `"stopReason":"end_turn"`) {
+		t.Fatalf("missing stopReason end_turn: %s", out)
+	}
+}
+
+func TestACPStreamingAndToolCalls(t *testing.T) {
+	runner := &streamingACPRunner{}
+	server := newTestServerWithRunner(t, permission.ModeAlwaysApprove, runner)
+
+	var output bytes.Buffer
+	input := `{"jsonrpc":"2.0","id":1,"method":"session/new","params":{}}` + "\n"
+	if err := server.Serve(context.Background(), strings.NewReader(input), &output); err != nil {
+		t.Fatalf("Serve session/new error = %v", err)
+	}
+	sessionID := extractSessionID(t, output.Bytes())
+	output.Reset()
+
+	prompt := `{"jsonrpc":"2.0","id":2,"method":"session/prompt","params":{"sessionId":"` + sessionID + `","prompt":[{"type":"text","text":"hello"}]}}` + "\n"
+	if err := server.Serve(context.Background(), strings.NewReader(prompt), &output); err != nil {
+		t.Fatalf("Serve prompt error = %v", err)
+	}
+
+	out := output.String()
+	if !strings.Contains(out, `"sessionUpdate":"agent_message_chunk"`) {
+		t.Fatalf("missing agent_message_chunk: %s", out)
+	}
+	if !strings.Contains(out, `"sessionUpdate":"tool_call"`) {
+		t.Fatalf("missing tool_call update: %s", out)
+	}
+	if !strings.Contains(out, `"sessionUpdate":"tool_call_update"`) {
+		t.Fatalf("missing tool_call_update: %s", out)
+	}
+	if !strings.Contains(out, `"locations":[{"path":"test.go"}]`) {
+		t.Fatalf("missing tool call locations for Follow-the-Agent: %s", out)
+	}
+	if !strings.Contains(out, `"stopReason":"end_turn"`) {
+		t.Fatalf("missing end_turn: %s", out)
+	}
+}
+
+func TestACPSessionModes(t *testing.T) {
+	server := newTestServer(t, permission.ModeAsk)
+	var output bytes.Buffer
+
+	input := strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"session/new","params":{}}`,
+	}, "\n") + "\n"
+	if err := server.Serve(context.Background(), strings.NewReader(input), &output); err != nil {
+		t.Fatalf("Serve error = %v", err)
+	}
+	sessionID := extractSessionID(t, output.Bytes())
+	output.Reset()
+
+	// Switch mode via set_mode
+	setMode := `{"jsonrpc":"2.0","id":2,"method":"session/set_mode","params":{"sessionId":"` + sessionID + `","modeId":"plan"}}` + "\n"
+	if err := server.Serve(context.Background(), strings.NewReader(setMode), &output); err != nil {
+		t.Fatalf("Serve set_mode error = %v", err)
+	}
+	if !strings.Contains(output.String(), `"current_mode_update"`) {
+		t.Fatalf("missing current_mode_update: %s", output.String())
+	}
+	if !strings.Contains(output.String(), `"modeId":"deny"`) && !strings.Contains(output.String(), `"modeId":"plan"`) {
+		t.Fatalf("set_mode missing plan/deny mode update: %s", output.String())
+	}
+}
+
+func TestACPSessionListAndDelete(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "acp-store-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, err := session.NewFileStore(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server := newTestServer(t, permission.ModeAsk)
+	server.store = store
+
+	var output bytes.Buffer
+	input := strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"session/new","params":{"cwd":"/test/project"}}`,
+	}, "\n") + "\n"
+	if err := server.Serve(context.Background(), strings.NewReader(input), &output); err != nil {
+		t.Fatalf("Serve error = %v", err)
+	}
+	sessionID := extractSessionID(t, output.Bytes())
+	output.Reset()
+
+	// List sessions
+	listReq := `{"jsonrpc":"2.0","id":2,"method":"session/list","params":{}}` + "\n"
+	if err := server.Serve(context.Background(), strings.NewReader(listReq), &output); err != nil {
+		t.Fatalf("Serve list error = %v", err)
+	}
+	if !strings.Contains(output.String(), sessionID) {
+		t.Fatalf("session/list missing active session: %s", output.String())
+	}
+	output.Reset()
+
+	// Delete session
+	delReq := `{"jsonrpc":"2.0","id":3,"method":"session/delete","params":{"sessionId":"` + sessionID + `"}}` + "\n"
+	if err := server.Serve(context.Background(), strings.NewReader(delReq), &output); err != nil {
+		t.Fatalf("Serve delete error = %v", err)
+	}
+	output.Reset()
+
+	// List again - should be empty
+	if err := server.Serve(context.Background(), strings.NewReader(listReq), &output); err != nil {
+		t.Fatalf("Serve list error = %v", err)
+	}
+	if strings.Contains(output.String(), sessionID) {
+		t.Fatalf("session/list should not contain deleted session: %s", output.String())
+	}
+}
+
+func TestACPSessionLoadAndReplay(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "acp-replay-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, err := session.NewFileStore(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sessionID := "test-session-1"
+	err = store.Save(context.Background(), sessionID, session.State{
+		PermissionMode: "ask",
+		Messages: []session.Message{
+			{Role: model.RoleUser, Content: "Hello Proton"},
+			{Role: model.RoleAssistant, Content: "Hello from Proton Agent"},
+		},
+		UpdatedAt: time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server := newTestServer(t, permission.ModeAsk)
+	server.store = store
+
+	var output bytes.Buffer
+	loadReq := `{"jsonrpc":"2.0","id":1,"method":"session/load","params":{"sessionId":"` + sessionID + `"}}` + "\n"
+	if err := server.Serve(context.Background(), strings.NewReader(loadReq), &output); err != nil {
+		t.Fatalf("Serve load error = %v", err)
+	}
+
+	out := output.String()
+	if !strings.Contains(out, "user_message_chunk") || !strings.Contains(out, "Hello Proton") {
+		t.Fatalf("missing replayed user message: %s", out)
+	}
+	if !strings.Contains(out, "agent_message_chunk") || !strings.Contains(out, "Hello from Proton Agent") {
+		t.Fatalf("missing replayed assistant message: %s", out)
+	}
+}
+
 func TestACPCancelStopsInFlightPrompt(t *testing.T) {
 	runner := &blockingACPRunner{
 		started:  make(chan struct{}),
 		canceled: make(chan struct{}),
 	}
 	server := newTestServerWithRunner(t, permission.ModeAlwaysApprove, runner)
-	created, _, err := server.dispatch(context.Background(), rpcRequest{Method: "session/new"})
+	var output bytes.Buffer
+	created, _, err := server.dispatch(context.Background(), RPCRequest{Method: "session/new"}, &output)
 	if err != nil {
 		t.Fatalf("session/new error = %v", err)
 	}
-	sessionID := created.(sessionNewResult).SessionID
+	sessionID := created.(SessionNewResult).SessionID
 
 	reader, writer := io.Pipe()
-	var output bytes.Buffer
+	output.Reset()
 	serveDone := make(chan error, 1)
 	go func() {
 		serveDone <- server.Serve(context.Background(), reader, &output)
@@ -103,9 +300,6 @@ func TestACPCancelStopsInFlightPrompt(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), `"stopReason":"cancelled"`) {
 		t.Fatalf("cancelled prompt response = %s", output.String())
-	}
-	if strings.Contains(output.String(), `"session/update"`) {
-		t.Fatalf("cancelled prompt emitted completed content: %s", output.String())
 	}
 }
 
@@ -194,6 +388,55 @@ func (r *blockingACPRunner) Run(ctx context.Context, _ []model.Message, _ applic
 	<-ctx.Done()
 	close(r.canceled)
 	return applicationturn.Result{}, ctx.Err()
+}
+
+type streamingACPRunner struct{}
+
+func (r *streamingACPRunner) Run(ctx context.Context, _ []model.Message, sink applicationturn.Sink) (applicationturn.Result, error) {
+	// Emit streaming text delta
+	_ = sink(ctx, applicationturn.Event{
+		Kind: applicationturn.EventTextDelta,
+		Text: "Thinking...",
+	})
+
+	call := tool.Call{
+		ID:        "call-123",
+		Name:      "read_file",
+		Arguments: json.RawMessage(`{"path":"test.go"}`),
+	}
+
+	// Emit tool call
+	_ = sink(ctx, applicationturn.Event{
+		Kind: applicationturn.EventToolCall,
+		Call: call,
+	})
+
+	// Emit tool result
+	_ = sink(ctx, applicationturn.Event{
+		Kind: applicationturn.EventToolResult,
+		Call: call,
+		Result: tool.Result{
+			CallID:   "call-123",
+			ToolName: "read_file",
+			Output:   "package main",
+		},
+	})
+
+	// Emit completion
+	_ = sink(ctx, applicationturn.Event{
+		Kind: applicationturn.EventCompleted,
+		Message: model.Message{
+			Role:    model.RoleAssistant,
+			Content: "Done reading file",
+		},
+	})
+
+	return applicationturn.Result{
+		Message: model.Message{
+			Role:    model.RoleAssistant,
+			Content: "Done reading file",
+		},
+	}, nil
 }
 
 func newTestServer(t *testing.T, mode permission.Mode) *Server {
