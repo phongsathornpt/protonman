@@ -121,6 +121,7 @@ func (s *Session) ExecutePrompt(
 	}
 
 	s.mu.Lock()
+	baseMessageCount := len(s.messages)
 	s.messages = append(s.messages, userMsg)
 	history := model.CloneMessages(s.messages)
 	s.mu.Unlock()
@@ -221,7 +222,11 @@ func (s *Session) ExecutePrompt(
 
 	s.mu.Lock()
 	wasCancelled := s.cancelled || promptCtx.Err() != nil
-	if len(result.Messages) > 0 {
+	if err != nil || wasCancelled {
+		if baseMessageCount <= len(s.messages) {
+			s.messages = s.messages[:baseMessageCount]
+		}
+	} else if len(result.Messages) > 0 {
 		s.messages = append(s.messages, result.Messages...)
 	} else if len(turnMessages) > 0 {
 		s.messages = append(s.messages, turnMessages...)
