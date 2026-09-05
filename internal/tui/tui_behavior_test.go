@@ -160,6 +160,35 @@ func TestTurnCancellationRendersNeutralTerminalState(t *testing.T) {
 	}
 }
 
+func TestTurnWorkerPanicRendersTerminalFailure(t *testing.T) {
+	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{
+		Name:        "read_file",
+		Description: "read file",
+		Kind:        tool.KindRead,
+	}}}
+	service := newBehaviorService(t, registry, permission.ModeAsk)
+	model := newBubbleModel(
+		context.Background(),
+		service,
+		registry,
+		nil,
+		panicRunner{},
+		newPermissionBridge(),
+		"",
+	)
+
+	message := model.startTurn("panic")()
+	updated, _ := model.Update(message)
+	model = updated.(*bubbleModel)
+
+	if model.busy {
+		t.Fatal("model remained busy after turn worker panic")
+	}
+	if !strings.Contains(plainTranscript(model), "turn worker panicked") {
+		t.Fatalf("panic reason missing from transcript: %q", plainTranscript(model))
+	}
+}
+
 func TestTurnFailureFinalizesRunningToolCells(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAlwaysApprove, emptyTodoItems())
 	call, err := tool.NewCall("cancel-tool", "read_file", []byte(`{"path":"README.md"}`))
@@ -282,6 +311,12 @@ func (h *blockingHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 
 type blockingRunner struct {
 	started chan struct{}
+}
+
+type panicRunner struct{}
+
+func (panicRunner) Run(context.Context, []domainmodel.Message, applicationturn.Sink) (applicationturn.Result, error) {
+	panic("test runner panic")
 }
 
 func (r *blockingRunner) Run(
