@@ -338,3 +338,39 @@ func TestProgressGuardExplicitReadOnlyToolDoesNotResetEpoch(t *testing.T) {
 		t.Fatalf("second read stalled=%v err=%v, want stalled without epoch reset", stalled, err)
 	}
 }
+
+func TestProgressGuardReadOnlyBashDoesNotResetEpoch(t *testing.T) {
+	guard := newProgressGuard([]tool.Definition{
+		{Name: "read_file", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly},
+		{Name: "bash", Kind: tool.KindBash, Mutability: tool.MutabilityMutating},
+	}, 2)
+	read := executedCall{call: tool.Call{ID: "r1", Name: "read_file", Arguments: json.RawMessage(`{"path":"a.txt"}`)}, result: tool.Result{CallID: "r1", ToolName: "read_file", Output: "same"}}
+	if stalled, err := guard.observeRound([]executedCall{read}); err != nil || stalled {
+		t.Fatalf("first read stalled=%v err=%v", stalled, err)
+	}
+	inspect := executedCall{call: tool.Call{ID: "b1", Name: "bash", Arguments: json.RawMessage(`{"command":"git status --short"}`)}, result: tool.Result{CallID: "b1", ToolName: "bash", Output: ""}}
+	if stalled, err := guard.observeRound([]executedCall{inspect}); err != nil || stalled {
+		t.Fatalf("bash stalled=%v err=%v", stalled, err)
+	}
+	read.call.ID = "r2"
+	if stalled, err := guard.observeRound([]executedCall{read}); err != nil || !stalled {
+		t.Fatalf("second read stalled=%v err=%v, want stalled", stalled, err)
+	}
+}
+
+func TestProgressGuardMutatingBashResetsEpoch(t *testing.T) {
+	guard := newProgressGuard([]tool.Definition{
+		{Name: "read_file", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly},
+		{Name: "bash", Kind: tool.KindBash, Mutability: tool.MutabilityMutating},
+	}, 2)
+	read := executedCall{call: tool.Call{ID: "r1", Name: "read_file", Arguments: json.RawMessage(`{"path":"a.txt"}`)}, result: tool.Result{CallID: "r1", ToolName: "read_file", Output: "same"}}
+	_, _ = guard.observeRound([]executedCall{read})
+	mutate := executedCall{call: tool.Call{ID: "b1", Name: "bash", Arguments: json.RawMessage(`{"command":"touch a.txt"}`)}, result: tool.Result{CallID: "b1", ToolName: "bash"}}
+	if stalled, err := guard.observeRound([]executedCall{mutate}); err != nil || stalled {
+		t.Fatalf("mutating bash stalled=%v err=%v", stalled, err)
+	}
+	read.call.ID = "r2"
+	if stalled, err := guard.observeRound([]executedCall{read}); err != nil || stalled {
+		t.Fatalf("read after mutation stalled=%v err=%v", stalled, err)
+	}
+}

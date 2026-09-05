@@ -137,3 +137,32 @@ func TestEffectiveMutabilityPrefersExplicitMetadata(t *testing.T) {
 		t.Fatalf("legacy read mutability = %q, want read_only", got)
 	}
 }
+
+func TestClassifyCommandEffect(t *testing.T) {
+	tests := map[string]CommandEffect{
+		"pwd":                     CommandEffectReadOnly,
+		"git status --short":      CommandEffectReadOnly,
+		"git diff -- README.md":   CommandEffectReadOnly,
+		"find . -name '*.go'":     CommandEffectReadOnly,
+		"rm -rf tmp":              CommandEffectMutating,
+		"git clean -fdx":          CommandEffectMutating,
+		"cat README.md > copy.md": CommandEffectUnknown,
+		"pwd && rm x":             CommandEffectUnknown,
+		"find . -delete":          CommandEffectUnknown,
+	}
+	for command, want := range tests {
+		if got := ClassifyCommandEffect(command); got != want {
+			t.Fatalf("ClassifyCommandEffect(%q) = %q, want %q", command, got, want)
+		}
+	}
+}
+
+func TestEffectiveCallMutabilityRefinesBash(t *testing.T) {
+	definition := Definition{Kind: KindBash, Mutability: MutabilityMutating}
+	if got := EffectiveCallMutability(definition, json.RawMessage(`{"command":"git status"}`)); got != MutabilityReadOnly {
+		t.Fatalf("read-only bash mutability = %q", got)
+	}
+	if got := EffectiveCallMutability(definition, json.RawMessage(`{"command":"git clean -fdx"}`)); got != MutabilityMutating {
+		t.Fatalf("mutating bash mutability = %q", got)
+	}
+}

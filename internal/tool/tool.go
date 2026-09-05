@@ -17,10 +17,19 @@ type Kind string
 // kind-based inference for third-party tools.
 type Mutability string
 
+// CommandEffect classifies the observable state impact of a shell command.
+type CommandEffect string
+
 const (
 	MutabilityUnspecified Mutability = ""
 	MutabilityReadOnly    Mutability = "read_only"
 	MutabilityMutating    Mutability = "mutating"
+)
+
+const (
+	CommandEffectUnknown  CommandEffect = "unknown"
+	CommandEffectReadOnly CommandEffect = "read_only"
+	CommandEffectMutating CommandEffect = "mutating"
 )
 
 const (
@@ -309,6 +318,85 @@ func EffectiveMutability(definition Definition) Mutability {
 	}
 	switch definition.Kind {
 	case KindRead, KindGrep, KindWebFetch, KindWebSearch:
+		return MutabilityReadOnly
+	default:
+		return MutabilityMutating
+	}
+}
+
+// ClassifyCommandEffect returns a conservative state-impact classification for
+// simple shell commands. Shell composition and ambiguous commands remain
+// unknown so callers preserve mutation safety.
+func ClassifyCommandEffect(command string) CommandEffect {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return CommandEffectUnknown
+	}
+	if strings.ContainsAny(command, "\n;|&><`$(){}") {
+		return CommandEffectUnknown
+	}
+	fields := strings.Fields(command)
+	if len(fields) == 0 {
+		return CommandEffectUnknown
+	}
+	name := strings.TrimPrefix(fields[0], "./")
+	switch name {
+	case "pwd", "ls", "cat", "head", "tail", "grep", "rg", "wc", "stat", "file", "realpath", "readlink", "which", "whereis", "env", "printenv":
+		return CommandEffectReadOnly
+	case "find":
+		for _, arg := range fields[1:] {
+			if arg == "-delete" || arg == "-exec" || arg == "-execdir" || arg == "-ok" || arg == "-okdir" {
+				return CommandEffectUnknown
+			}
+		}
+		return CommandEffectReadOnly
+	case "git":
+		return classifyGitCommand(fields[1:])
+	case "rm", "mv", "cp", "mkdir", "rmdir", "touch", "ln", "chmod", "chown", "truncate", "install":
+		return CommandEffectMutating
+	default:
+		return CommandEffectUnknown
+	}
+}
+
+func classifyGitCommand(args []string) CommandEffect {
+	for len(args) > 0 && strings.HasPrefix(args[0], "-") {
+		if args[0] == "-C" || args[0] == "-c" || args[0] == "--git-dir" || args[0] == "--work-tree" {
+			if len(args) < 2 {
+				return CommandEffectUnknown
+			}
+			args = args[2:]
+			continue
+		}
+		args = args[1:]
+	}
+	if len(args) == 0 {
+		return CommandEffectUnknown
+	}
+	switch args[0] {
+	case "status", "diff", "log", "show", "branch", "rev-parse", "rev-list", "ls-files", "ls-tree", "grep", "describe":
+		return CommandEffectReadOnly
+	case "add", "apply", "checkout", "switch", "restore", "reset", "clean", "commit", "merge", "rebase", "cherry-pick", "revert", "stash", "tag", "fetch", "pull", "push":
+		return CommandEffectMutating
+	default:
+		return CommandEffectUnknown
+	}
+}
+
+// EffectiveCallMutability refines a definition's static metadata with safe
+// per-call knowledge when available. Unknown shell effects remain mutating.
+func EffectiveCallMutability(definition Definition, arguments json.RawMessage) Mutability {
+	if definition.Kind != KindBash {
+		return EffectiveMutability(definition)
+	}
+	var input struct {
+		Command string `json:"command"`
+	}
+	if err := json.Unmarshal(arguments, &input); err != nil {
+		return MutabilityMutating
+	}
+	switch ClassifyCommandEffect(input.Command) {
+	case CommandEffectReadOnly:
 		return MutabilityReadOnly
 	default:
 		return MutabilityMutating
