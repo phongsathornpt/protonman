@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strings"
@@ -350,12 +351,23 @@ func (c *OpenAIClient) Stream(ctx context.Context, request Request) (Stream, err
 
 	maxRetries := 2
 	var lastErr error
+	slog.DebugContext(ctx, "model stream request started",
+		"model", c.modelID,
+		"message_count", len(request.Messages),
+		"tool_count", len(request.Tools),
+		"request_bytes", len(encoded),
+	)
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
+		slog.DebugContext(ctx, "model stream request attempt",
+			"attempt", attempt+1,
+			"max_attempts", maxRetries+1,
+		)
 		if attempt > 0 {
 			backoff := time.Duration(attempt*500) * time.Millisecond
 			select {
 			case <-ctx.Done():
+				slog.DebugContext(ctx, "model stream retry cancelled", "attempt", attempt+1)
 				return nil, ctx.Err()
 			case <-time.After(backoff):
 			}
@@ -394,11 +406,19 @@ func (c *OpenAIClient) Stream(ctx context.Context, request Request) (Stream, err
 
 		resp, err := c.httpClient.Do(httpReq)
 		if err != nil {
+			slog.DebugContext(ctx, "model stream request failed",
+				"attempt", attempt+1,
+				"error_type", fmt.Sprintf("%T", err),
+			)
 			lastErr = fmt.Errorf("execute chat http request: %w", err)
 			continue
 		}
 
 		if resp.StatusCode == http.StatusOK {
+			slog.DebugContext(ctx, "model stream response opened",
+				"attempt", attempt+1,
+				"status", resp.StatusCode,
+			)
 			return newOpenAIStream(resp.Body), nil
 		}
 
@@ -408,17 +428,28 @@ func (c *OpenAIClient) Stream(ctx context.Context, request Request) (Stream, err
 		lastErr = fmt.Errorf("provider returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 
 		// Retry only on transient upstream errors
-		if resp.StatusCode == http.StatusBadGateway ||
+		retryable := resp.StatusCode == http.StatusBadGateway ||
 			resp.StatusCode == http.StatusServiceUnavailable ||
 			resp.StatusCode == http.StatusGatewayTimeout ||
 			resp.StatusCode == http.StatusTooManyRequests ||
-			resp.StatusCode == http.StatusInternalServerError {
+			resp.StatusCode == http.StatusInternalServerError
+		slog.DebugContext(ctx, "model stream response rejected",
+			"attempt", attempt+1,
+			"status", resp.StatusCode,
+			"body_bytes", len(body),
+			"retryable", retryable,
+		)
+		if retryable {
 			continue
 		}
 
 		return nil, lastErr
 	}
 
+	slog.DebugContext(ctx, "model stream request exhausted",
+		"attempts", maxRetries+1,
+		"error_type", fmt.Sprintf("%T", lastErr),
+	)
 	return nil, lastErr
 }
 
@@ -435,6 +466,11 @@ type openAIStream struct {
 	respToolCalls map[string]*accumulatedToolCall
 	queue         []Event
 	done          bool
+	startedAt     time.Time
+	linesRead     int
+	bytesRead     int
+	dataLines     int
+	ignoredLines  int
 }
 
 func newOpenAIStream(r io.ReadCloser) *openAIStream {
@@ -444,6 +480,7 @@ func newOpenAIStream(r io.ReadCloser) *openAIStream {
 		toolCalls:     make(map[int]*accumulatedToolCall),
 		respToolCalls: make(map[string]*accumulatedToolCall),
 		queue:         make([]Event, 0),
+		startedAt:     time.Now(),
 	}
 }
 
@@ -473,6 +510,10 @@ type openAIChunk struct {
 func (s *openAIStream) Next(ctx context.Context) (Event, error) {
 	for {
 		if err := ctx.Err(); err != nil {
+			slog.DebugContext(ctx, "model stream cancelled",
+				"error_type", fmt.Sprintf("%T", err),
+				"duration_ms", time.Since(s.startedAt).Milliseconds(),
+			)
 			return Event{}, err
 		}
 
@@ -489,14 +530,27 @@ func (s *openAIStream) Next(ctx context.Context) (Event, error) {
 		line, err := s.reader.ReadString('\n')
 		if err != nil {
 			if errors.Is(err, io.EOF) {
+				slog.DebugContext(ctx, "model stream reached EOF",
+					"partial_line_bytes", len(line),
+					"has_partial_data", len(strings.TrimSpace(line)) > 0,
+				)
 				if len(strings.TrimSpace(line)) > 0 {
 					if parseErr := s.processLine(line); parseErr != nil {
+						slog.DebugContext(ctx, "model stream parse failed",
+							"error_type", fmt.Sprintf("%T", parseErr),
+						)
 						return Event{}, parseErr
 					}
 				}
 				s.flushToolCalls()
 				s.queue = append(s.queue, Event{Kind: EventDone})
 				s.done = true
+				slog.DebugContext(ctx, "model stream completed",
+					s.streamArgs(
+						"reason", "eof_fallback",
+						"duration_ms", time.Since(s.startedAt).Milliseconds(),
+					)...,
+				)
 				if len(s.queue) > 0 {
 					ev := s.queue[0]
 					s.queue = s.queue[1:]
@@ -504,10 +558,17 @@ func (s *openAIStream) Next(ctx context.Context) (Event, error) {
 				}
 				return Event{}, io.EOF
 			}
+			slog.DebugContext(ctx, "model stream read failed",
+				"error_type", fmt.Sprintf("%T", err),
+				"duration_ms", time.Since(s.startedAt).Milliseconds(),
+			)
 			return Event{}, fmt.Errorf("read stream: %w", err)
 		}
 
 		if parseErr := s.processLine(line); parseErr != nil {
+			slog.DebugContext(ctx, "model stream parse failed",
+				"error_type", fmt.Sprintf("%T", parseErr),
+			)
 			return Event{}, parseErr
 		}
 
@@ -520,26 +581,36 @@ func (s *openAIStream) Next(ctx context.Context) (Event, error) {
 }
 
 func (s *openAIStream) processLine(line string) error {
+	s.linesRead++
+	s.bytesRead += len(line)
 	line = strings.TrimSpace(line)
 	if line == "" || strings.HasPrefix(line, ":") {
+		s.ignoredLines++
 		return nil
 	}
 
 	if !strings.HasPrefix(line, "data:") {
+		s.ignoredLines++
 		return nil
 	}
+	s.dataLines++
 
 	payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 	if payload == "[DONE]" {
 		s.flushToolCalls()
 		s.queue = append(s.queue, Event{Kind: EventDone})
 		s.done = true
+		slog.Debug("model stream completed", s.streamArgs(
+			"reason", "sse_done",
+			"duration_ms", time.Since(s.startedAt).Milliseconds(),
+		)...)
 		return nil
 	}
 
 	var chunk openAIChunk
 	if unmarshalErr := json.Unmarshal([]byte(payload), &chunk); unmarshalErr == nil {
 		if chunk.Error != nil {
+			slog.Debug("model stream provider error", "format", "chat_completions")
 			return fmt.Errorf("model error: %s", chunk.Error.Message)
 		}
 
@@ -577,9 +648,11 @@ func (s *openAIStream) processLine(line string) error {
 	var respChunk openAIResponsesChunk
 	if unmarshalErr := json.Unmarshal([]byte(payload), &respChunk); unmarshalErr == nil && respChunk.Type != "" {
 		if respChunk.Error != nil {
+			slog.Debug("model stream provider error", "format", "responses")
 			return fmt.Errorf("model error: %s", respChunk.Error.Message)
 		}
 		if respChunk.Response != nil && respChunk.Response.Error != nil {
+			slog.Debug("model stream provider error", "format", "responses")
 			return fmt.Errorf("model error: %s", respChunk.Response.Error.Message)
 		}
 
@@ -647,10 +720,27 @@ func (s *openAIStream) processLine(line string) error {
 			s.flushToolCalls()
 			s.queue = append(s.queue, Event{Kind: EventDone})
 			s.done = true
+			slog.Debug("model stream completed", s.streamArgs(
+				"reason", "responses_completed",
+				"duration_ms", time.Since(s.startedAt).Milliseconds(),
+			)...)
 		}
 		return nil
 	}
 	return nil
+}
+
+func (s *openAIStream) streamAttrs() []any {
+	return []any{
+		"lines_read", s.linesRead,
+		"bytes_read", s.bytesRead,
+		"data_lines", s.dataLines,
+		"ignored_lines", s.ignoredLines,
+	}
+}
+
+func (s *openAIStream) streamArgs(args ...any) []any {
+	return append(args, s.streamAttrs()...)
 }
 
 func (s *openAIStream) flushToolCalls() {
@@ -711,7 +801,17 @@ func (s *openAIStream) flushToolCalls() {
 
 func (s *openAIStream) Close() error {
 	if s.closer != nil {
-		return s.closer.Close()
+		err := s.closer.Close()
+		slog.Debug("model stream closed",
+			s.streamArgs(
+				"duration_ms", time.Since(s.startedAt).Milliseconds(),
+				"close_error", err != nil,
+			)...,
+		)
+		return err
 	}
+	slog.Debug("model stream closed", s.streamArgs(
+		"duration_ms", time.Since(s.startedAt).Milliseconds(),
+	)...)
 	return nil
 }
