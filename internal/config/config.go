@@ -45,6 +45,16 @@ type ProviderConfig struct {
 	APIKey  string `toml:"api_key"`
 }
 
+// ProviderSaveOptions controls how a provider update affects model defaults.
+type ProviderSaveOptions struct {
+	// DefaultModel is persisted as the active model when Activate is true.
+	DefaultModel string
+	// PreviousName removes the old provider key when a provider is renamed.
+	PreviousName string
+	// Activate makes the saved provider and model the active defaults.
+	Activate bool
+}
+
 // ModelConfig specifies default model settings.
 type ModelConfig struct {
 	Default  string `toml:"default"`
@@ -276,18 +286,32 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 
 // SaveUserProviderConfig persists or updates a provider configuration in ~/.proton/config.toml.
 func SaveUserProviderConfig(homeDir string, provider ProviderConfig, defaultModel string) error {
+	return SaveUserProviderConfigWithOptions(homeDir, provider, ProviderSaveOptions{
+		DefaultModel: defaultModel,
+		Activate:     true,
+	})
+}
+
+// SaveUserProviderConfigWithOptions persists a provider and optionally changes the active defaults.
+func SaveUserProviderConfigWithOptions(homeDir string, provider ProviderConfig, options ProviderSaveOptions) error {
 	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
 		if doc.Providers == nil {
 			doc.Providers = make(map[string]ProviderConfig)
 		}
+		previousKey := strings.ToLower(strings.TrimSpace(options.PreviousName))
 		providerKey := strings.ToLower(strings.TrimSpace(provider.Name))
 		if providerKey == "" {
 			providerKey = "default"
 		}
+		if previousKey != "" && previousKey != providerKey {
+			delete(doc.Providers, previousKey)
+		}
 		doc.Providers[providerKey] = provider
 
-		if defaultModel != "" {
-			doc.Model.Default = defaultModel
+		if options.Activate {
+			if options.DefaultModel != "" {
+				doc.Model.Default = options.DefaultModel
+			}
 			doc.Model.Provider = providerKey
 		}
 	})
