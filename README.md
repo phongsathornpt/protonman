@@ -207,6 +207,15 @@ Configure the sandbox globally via config or per-run:
 proton --sandbox strict -p "Analyze local files"
 ```
 
+### Tool Deadlines
+
+Permission resolution and approved tool execution have separate two-minute
+deadlines by default. A shorter parent turn or tool context still wins. Bash
+commands receive context cancellation, preserve partial output, and terminate
+their process tree where the platform supports it. Set `PROTON_DEBUG_LOG` to
+`stderr` or a file path to inspect timeout cause, error type, and process
+termination diagnostics without logging command contents.
+
 ---
 
 ## Model Providers & Catalog

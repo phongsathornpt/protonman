@@ -18,7 +18,9 @@ import (
 // ErrUnavailable indicates that a requested profile cannot be enforced here.
 var ErrUnavailable = errors.New("sandbox unavailable")
 
-// Launcher starts a workspace command under the resolved profile.
+// Launcher starts a workspace command under the resolved profile. Implementations
+// must bind the returned command to ctx and configure cancellation so the
+// command tree stops when ctx is canceled or reaches its deadline.
 type Launcher interface {
 	Command(ctx context.Context, dir string, command string) (*exec.Cmd, error)
 }
