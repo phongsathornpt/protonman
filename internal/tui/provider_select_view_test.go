@@ -285,12 +285,34 @@ func TestProviderSelectViewDelete(t *testing.T) {
 	bModel.activeProvider = "protonman"
 	bModel.executeCommand("/provider")
 
-	// Focus is on protonman (index 1)
-	// Press 'd' to delete protonman
+	// Focus is on protonman (index 1). Press 'd' to open the confirmation.
 	updated, cmd := bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
 	bModel = updated.(*bubbleModel)
+	if cmd != nil {
+		t.Fatal("expected delete confirmation before running a command")
+	}
+	view := bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView)
+	if !view.deleteConfirm {
+		t.Fatal("expected delete confirmation state after 'd'")
+	}
+	if !strings.Contains(bModel.View(), "Remove Provider?") || !strings.Contains(bModel.View(), "protonman") {
+		t.Fatalf("expected provider delete confirmation in view, got:\n%s", bModel.View())
+	}
+
+	// Esc cancels without changing the provider list.
+	updated, cmd = bModel.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	bModel = updated.(*bubbleModel)
+	if cmd != nil || bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView).deleteConfirm {
+		t.Fatal("expected Esc to cancel delete confirmation")
+	}
+
+	// Open it again, then press Enter to perform the deletion.
+	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	bModel = updated.(*bubbleModel)
+	updated, cmd = bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	bModel = updated.(*bubbleModel)
 	if cmd == nil {
-		t.Fatal("expected delete cmd on 'd'")
+		t.Fatal("expected delete cmd after confirming with Enter")
 	}
 
 	msg := cmd()
