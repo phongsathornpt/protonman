@@ -3,7 +3,10 @@
 package sandbox
 
 import (
+	"errors"
+	"os"
 	"os/exec"
+	"strconv"
 	"time"
 )
 
@@ -15,6 +18,15 @@ func configureCommand(cmd *exec.Cmd) {
 		if cmd.Process == nil {
 			return nil
 		}
-		return cmd.Process.Kill()
+		pid := strconv.Itoa(cmd.Process.Pid)
+		taskkillErr := exec.Command("taskkill", "/T", "/F", "/PID", pid).Run()
+		if taskkillErr == nil {
+			return nil
+		}
+		killErr := cmd.Process.Kill()
+		if killErr == nil || errors.Is(killErr, os.ErrProcessDone) {
+			return nil
+		}
+		return errors.Join(taskkillErr, killErr)
 	}
 }
