@@ -640,6 +640,24 @@ func TestStartTurnStreamsSinkEvents(t *testing.T) {
 	}
 }
 
+func TestClosedTurnEventsRenderTerminalFailure(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.busy = true
+	events := make(chan tea.Msg)
+	close(events)
+	model.turnEvents = events
+
+	updated, _ := model.Update(turnEventsClosedMsg{})
+	model = updated.(*bubbleModel)
+
+	if model.busy {
+		t.Fatal("model remained busy after turn event channel closed")
+	}
+	if !strings.Contains(plainTranscript(model), "turn event stream closed before completion") {
+		t.Fatalf("closed turn channel missing terminal failure: %q", plainTranscript(model))
+	}
+}
+
 func TestTurnDoneAppendsProducedToolHistory(t *testing.T) {
 	runner := &scriptedRunner{result: applicationturn.Result{
 		Message: domainmodel.Message{Role: domainmodel.RoleAssistant, Content: "done"},

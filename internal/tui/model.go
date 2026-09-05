@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -32,6 +33,8 @@ const (
 	defaultBubbleHeight = 24
 	promptRows          = 1
 )
+
+var errTurnEventsClosed = errors.New("turn event stream closed before completion")
 
 type bubbleModel struct {
 	ctx         context.Context
@@ -410,6 +413,9 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					slog.DebugContext(m.ctx, "tui turn event channel closed before terminal message",
 						"busy", m.busy,
 					)
+					if m.busy && m.ctx.Err() == nil {
+						return m.Update(turnEventsClosedMsg{})
+					}
 					m.refreshViewport()
 					return m, nil
 				}
@@ -425,6 +431,15 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.refreshViewport()
 		return m, m.withSpinner(waitTurnCh(m.turnEvents))
+	case turnEventsClosedMsg:
+		slog.DebugContext(m.ctx, "tui turn event channel closed unexpectedly",
+			"busy", m.busy,
+			"context_error", m.ctx.Err() != nil,
+		)
+		if !m.busy || m.ctx.Err() != nil {
+			return m, nil
+		}
+		return m.Update(turnDoneMsg{err: errTurnEventsClosed})
 	case turnDoneMsg:
 		slog.DebugContext(m.ctx, "tui turn terminal message received",
 			"success", message.err == nil,
@@ -875,7 +890,7 @@ func waitTurnCh(events <-chan tea.Msg) tea.Cmd {
 		msg, ok := <-events
 		if !ok {
 			slog.Debug("tui turn wait observed closed event channel")
-			return nil
+			return turnEventsClosedMsg{}
 		}
 		return msg
 	}
@@ -1064,6 +1079,8 @@ type toolResultMsg struct {
 }
 
 type turnDeltaMsg struct{ event applicationturn.Event }
+
+type turnEventsClosedMsg struct{}
 
 type turnDoneMsg struct {
 	result applicationturn.Result
