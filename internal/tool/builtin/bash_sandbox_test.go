@@ -118,7 +118,7 @@ func TestBashPreservesDeadlineExceeded(t *testing.T) {
 
 	startedAt := time.Now()
 	result, err := handler.Execute(ctx, newJSONCall(t, "bash-deadline", "bash", map[string]any{
-		"command": "printf before-timeout; sleep 5",
+		"command": "printf before-timeout; sleep 5 & wait",
 	}))
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Execute() error = %v, want deadline exceeded", err)
