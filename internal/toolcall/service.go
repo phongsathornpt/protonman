@@ -36,6 +36,9 @@ var ErrPermissionDenied = errors.New("permission denied")
 type Option func(*Service) error
 
 const (
+	// DefaultPermissionTimeout bounds policy evaluation and interactive
+	// permission resolution when callers do not provide a stricter timeout.
+	DefaultPermissionTimeout = 2 * time.Minute
 	// DefaultExecutionTimeout bounds one permission-approved tool call when the
 	// caller does not provide a stricter context.
 	DefaultExecutionTimeout = 2 * time.Minute
@@ -71,7 +74,19 @@ func WithPrompt(prompt PermissionPrompt) Option {
 	}
 }
 
-// WithExecutionTimeout bounds permission resolution and handler execution.
+// WithPermissionTimeout bounds policy evaluation and interactive permission
+// resolution. Zero disables this service-level bound.
+func WithPermissionTimeout(timeout time.Duration) Option {
+	return func(service *Service) error {
+		if timeout < 0 {
+			return fmt.Errorf("%w: permission timeout cannot be negative", ErrInvalidService)
+		}
+		service.permissionTimeout = timeout
+		return nil
+	}
+}
+
+// WithExecutionTimeout bounds approved handler execution.
 // Zero disables the service-level bound; callers should normally keep the
 // non-zero default for process-backed tools.
 func WithExecutionTimeout(timeout time.Duration) Option {
@@ -96,7 +111,8 @@ type Service struct {
 	guard  CallGuard
 	grants map[permission.GrantKey]struct{}
 
-	executionTimeout time.Duration
+	permissionTimeout time.Duration
+	executionTimeout  time.Duration
 }
 
 // NewService builds a permission-aware tool-call service.
@@ -109,11 +125,12 @@ func NewService(registry tool.Registry, policy *permission.Policy, options ...Op
 	}
 
 	service := &Service{
-		registry:         registry,
-		policy:           policy,
-		mode:             permission.ModeAsk,
-		grants:           make(map[permission.GrantKey]struct{}),
-		executionTimeout: DefaultExecutionTimeout,
+		registry:          registry,
+		policy:            policy,
+		mode:              permission.ModeAsk,
+		grants:            make(map[permission.GrantKey]struct{}),
+		permissionTimeout: DefaultPermissionTimeout,
+		executionTimeout:  DefaultExecutionTimeout,
 	}
 	for _, option := range options {
 		if option == nil {
@@ -135,14 +152,15 @@ func (s *Service) Clone() *Service {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return &Service{
-		registry:         s.registry,
-		policy:           s.policy,
-		observer:         s.observer,
-		mode:             s.mode,
-		prompt:           s.prompt,
-		guard:            s.guard,
-		grants:           make(map[permission.GrantKey]struct{}),
-		executionTimeout: s.executionTimeout,
+		registry:          s.registry,
+		policy:            s.policy,
+		observer:          s.observer,
+		mode:              s.mode,
+		prompt:            s.prompt,
+		guard:             s.guard,
+		grants:            make(map[permission.GrantKey]struct{}),
+		permissionTimeout: s.permissionTimeout,
+		executionTimeout:  s.executionTimeout,
 	}
 }
 
@@ -210,9 +228,6 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		s.observeCallResult(ctx, telemetry, result, wrappedErr)
 		return result, wrappedErr
 	}
-	executionCtx, cancel := s.executionContext(ctx)
-	defer cancel()
-
 	handler, ok := s.registry.Lookup(call.Name)
 	if !ok {
 		unknownErr := fmt.Errorf("%w: %s", ErrUnknownTool, call.Name)
@@ -239,8 +254,10 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		Detail:    detail,
 		Arguments: append(json.RawMessage(nil), call.Arguments...),
 	}
+	permissionCtx, permissionCancel := s.permissionContext(ctx)
+	defer permissionCancel()
 
-	if guardErr := s.guardCall(executionCtx, request); guardErr != nil {
+	if guardErr := s.guardCall(permissionCtx, request); guardErr != nil {
 		resolution := permission.Resolution{
 			Action: permission.ActionDeny,
 			Reason: guardErr.Error(),
@@ -257,7 +274,7 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		return result, permissionErr
 	}
 
-	resolution, authorizeErr := s.authorize(executionCtx, request)
+	resolution, authorizeErr := s.authorize(permissionCtx, request)
 	s.observePermission(ctx, telemetry, resolution)
 	if authorizeErr != nil {
 		result := tool.Result{
@@ -284,6 +301,8 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		s.rememberGrant(request.Key())
 	}
 
+	executionCtx, executionCancel := s.executionContext(ctx)
+	defer executionCancel()
 	result, err := executeHandler(executionCtx, handler, call)
 	if result.CallID == "" {
 		result.CallID = call.ID
@@ -307,6 +326,17 @@ func (s *Service) executionContext(parent context.Context) (context.Context, con
 	s.mu.RLock()
 	timeout := s.executionTimeout
 	s.mu.RUnlock()
+	return boundedContext(parent, timeout)
+}
+
+func (s *Service) permissionContext(parent context.Context) (context.Context, context.CancelFunc) {
+	s.mu.RLock()
+	timeout := s.permissionTimeout
+	s.mu.RUnlock()
+	return boundedContext(parent, timeout)
+}
+
+func boundedContext(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
 	if timeout <= 0 {
 		return parent, func() {}
 	}

@@ -286,6 +286,75 @@ func TestCallAppliesExecutionTimeout(t *testing.T) {
 	}
 }
 
+func TestCallStartsExecutionTimeoutAfterPermission(t *testing.T) {
+	handler := &fakeHandler{
+		definition: tool.Definition{
+			Name:                "bash",
+			Description:         "fake shell",
+			Kind:                tool.KindBash,
+			PermissionDetailKey: "command",
+		},
+		waitForContext: true,
+	}
+	permissionDelay := 30 * time.Millisecond
+	service := newTestService(t, handler, permission.Config{},
+		WithPermissionTimeout(200*time.Millisecond),
+		WithExecutionTimeout(20*time.Millisecond),
+		WithPrompt(func(ctx context.Context, _ permission.Request) (permission.Resolution, error) {
+			select {
+			case <-time.After(permissionDelay):
+				return permission.Resolution{Action: permission.ActionAllow}, nil
+			case <-ctx.Done():
+				return permission.Resolution{}, ctx.Err()
+			}
+		}),
+	)
+
+	startedAt := time.Now()
+	result, err := service.Call(context.Background(), testCall(t))
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Call() error = %v, want execution deadline exceeded", err)
+	}
+	if result.Failure == nil || result.Failure.Code != tool.ErrorCodeDeadlineExceeded {
+		t.Fatalf("Call() failure = %#v, want deadline_exceeded", result.Failure)
+	}
+	if handler.calls != 1 {
+		t.Fatalf("handler calls = %d, want 1 after permission", handler.calls)
+	}
+	if elapsed := time.Since(startedAt); elapsed < permissionDelay {
+		t.Fatalf("Call() completed in %s, want permission delay to elapse", elapsed)
+	}
+}
+
+func TestCallAppliesPermissionTimeoutBeforeHandler(t *testing.T) {
+	handler := &fakeHandler{
+		definition: tool.Definition{
+			Name:                "bash",
+			Description:         "fake shell",
+			Kind:                tool.KindBash,
+			PermissionDetailKey: "command",
+		},
+	}
+	service := newTestService(t, handler, permission.Config{},
+		WithPermissionTimeout(20*time.Millisecond),
+		WithPrompt(func(ctx context.Context, _ permission.Request) (permission.Resolution, error) {
+			<-ctx.Done()
+			return permission.Resolution{}, ctx.Err()
+		}),
+	)
+
+	result, err := service.Call(context.Background(), testCall(t))
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Call() error = %v, want permission deadline exceeded", err)
+	}
+	if result.Failure == nil || result.Failure.Code != tool.ErrorCodeDeadlineExceeded {
+		t.Fatalf("Call() failure = %#v, want deadline_exceeded", result.Failure)
+	}
+	if handler.calls != 0 {
+		t.Fatalf("handler calls = %d, want 0 before permission completes", handler.calls)
+	}
+}
+
 func TestCallRecoversHandlerPanic(t *testing.T) {
 	handler := &fakeHandler{
 		definition: tool.Definition{
