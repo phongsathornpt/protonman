@@ -246,6 +246,7 @@ func run(ctx context.Context, args []string) error {
 				loopOpts = append(loopOpts, turn.WithSkillRegistry(skillRegistry))
 			}
 			loopOpts = append(loopOpts, turn.WithMaxRounds(loadedConfig.Agent.MaxRounds))
+			loopOpts = append(loopOpts, turn.WithMaxToolCalls(loadedConfig.Agent.MaxToolCalls))
 			loop, loopErr := turn.NewLoop(client, service, loopOpts...)
 			if loopErr == nil {
 				initialRunner = loop

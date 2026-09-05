@@ -333,7 +333,7 @@ func TestAgentMaxRoundsConfig(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
 
-	// 1. Default should be DefaultMaxRounds (20) when no config exists.
+	// 1. Defaults should apply when no config exists.
 	snapshot, err := Load(context.Background(), Options{
 		HomeDir: homeDir,
 		WorkDir: workDir,
@@ -344,10 +344,14 @@ func TestAgentMaxRoundsConfig(t *testing.T) {
 	if got, want := snapshot.Agent.MaxRounds, DefaultMaxRounds; got != want {
 		t.Fatalf("default max_rounds = %d, want %d", got, want)
 	}
+	if got, want := snapshot.Agent.MaxToolCalls, DefaultMaxToolCalls; got != want {
+		t.Fatalf("default max_tool_calls = %d, want %d", got, want)
+	}
 
-	// 2. Load explicitly configured max_rounds = 35.
+	// 2. Load explicitly configured execution limits.
 	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent]
 max_rounds = 35
+max_tool_calls = 42
 `)
 	snapshot, err = Load(context.Background(), Options{
 		HomeDir: homeDir,
@@ -358,6 +362,9 @@ max_rounds = 35
 	}
 	if got, want := snapshot.Agent.MaxRounds, 35; got != want {
 		t.Fatalf("configured max_rounds = %d, want %d", got, want)
+	}
+	if got, want := snapshot.Agent.MaxToolCalls, 42; got != want {
+		t.Fatalf("configured max_tool_calls = %d, want %d", got, want)
 	}
 
 	// 3. SaveUserMaxRounds updates the value to 50.
@@ -373,6 +380,19 @@ max_rounds = 35
 	}
 	if got, want := snapshot.Agent.MaxRounds, 50; got != want {
 		t.Fatalf("persisted max_rounds = %d, want %d", got, want)
+	}
+	if err := SaveUserMaxToolCalls(homeDir, 75); err != nil {
+		t.Fatalf("SaveUserMaxToolCalls(75) error = %v", err)
+	}
+	snapshot, err = Load(context.Background(), Options{
+		HomeDir: homeDir,
+		WorkDir: workDir,
+	})
+	if err != nil {
+		t.Fatalf("Load() updated tool-call limit error = %v", err)
+	}
+	if got, want := snapshot.Agent.MaxToolCalls, 75; got != want {
+		t.Fatalf("persisted max_tool_calls = %d, want %d", got, want)
 	}
 
 	// 4. SaveUserMaxRounds updates to 0 (unbounded).

@@ -209,6 +209,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		bModel.sessionID = ui.sessionID
 		if ui.hasAgentConfig {
 			bModel.maxRounds = ui.agentConfig.MaxRounds
+			bModel.maxToolCalls = ui.agentConfig.MaxToolCalls
 			bModel.agentProfile = ui.agentConfig.Profile
 		}
 		bModel.reconfigureRunner()

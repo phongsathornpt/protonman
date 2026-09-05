@@ -76,6 +76,7 @@ type bubbleModel struct {
 	activeProvider  string
 	providers       map[string]config.ProviderConfig
 	maxRounds       int
+	maxToolCalls    int
 	agentProfile    string
 	sessionID       string
 	modelsCatalog   []model.RemoteModel
@@ -152,6 +153,7 @@ func newBubbleModel(
 		height:             defaultBubbleHeight,
 		messages:           messages,
 		maxRounds:          config.DefaultMaxRounds,
+		maxToolCalls:       config.DefaultMaxToolCalls,
 	}
 	ui.prompt = bottom.prompt()
 	ui.loadInitialMessages(messages)
@@ -785,6 +787,7 @@ func (m *bubbleModel) reconfigureRunner() {
 		opts = append(opts, applicationturn.WithSkillRegistry(m.skills))
 	}
 	opts = append(opts, applicationturn.WithMaxRounds(m.maxRounds))
+	opts = append(opts, applicationturn.WithMaxToolCalls(m.maxToolCalls))
 	loop, err := applicationturn.NewLoop(client, m.service, opts...)
 	if err == nil {
 		m.runner = loop
