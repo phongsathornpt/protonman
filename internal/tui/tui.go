@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
@@ -83,6 +84,15 @@ func WithAgentConfig(agentCfg config.AgentConfig) BubbleTeaOption {
 	}
 }
 
+// WithCoordinator attaches the subagent coordinator to the TUI so permission
+// mode, interactive prompts, and model client changes are synchronized.
+func WithCoordinator(coordinator *agent.Coordinator) BubbleTeaOption {
+	return func(ui *BubbleTeaUI) error {
+		ui.coordinator = coordinator
+		return nil
+	}
+}
+
 // BubbleTeaUI is the Bubble Tea terminal adapter over Proton services.
 type BubbleTeaUI struct {
 	service         *toolcall.Service
@@ -91,6 +101,7 @@ type BubbleTeaUI struct {
 	todo            []TodoItem
 	runner          applicationturn.Runner
 	bridge          *permissionBridge
+	coordinator     *agent.Coordinator
 	workDir         string
 	initialMessages []model.Message
 	finalMessages   []model.Message
@@ -156,6 +167,11 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 	}
 	ui.service.SetPrompt(ui.PermissionPrompt)
 	defer ui.service.SetCallGuard(nil)
+	if ui.coordinator != nil {
+		ui.coordinator.SetPrompt(ui.PermissionPrompt)
+		ui.coordinator.SetPermissionMode(ui.service.Mode())
+		defer ui.coordinator.SetCallGuard(nil)
+	}
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	defer ui.bridge.Close()
@@ -170,6 +186,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		ui.workDir,
 		ui.initialMessages,
 	)
+	bModel.coordinator = ui.coordinator
 	bModel.skills = ui.skills
 	bModel.activeModel = ui.modelConfig.Default
 	bModel.activeProvider = ui.modelConfig.Provider

@@ -121,12 +121,12 @@ func (m *bubbleModel) cycleMode() {
 	switch {
 	case m.planMode:
 		m.setPlanEnabled(false)
-		_ = m.service.SetMode(permission.ModeAlwaysApprove)
+		_ = m.setPermissionMode(permission.ModeAlwaysApprove)
 	case mode == permission.ModeAlwaysApprove:
-		_ = m.service.SetMode(permission.ModeAsk)
+		_ = m.setPermissionMode(permission.ModeAsk)
 	default:
 		if mode != permission.ModeAsk && mode != permission.ModeAuto {
-			_ = m.service.SetMode(permission.ModeAsk)
+			_ = m.setPermissionMode(permission.ModeAsk)
 		}
 		m.setPlanEnabled(true)
 	}
@@ -146,7 +146,7 @@ func (m *bubbleModel) setPlanMode(argument string) {
 		return
 	}
 	if enabled && m.service.Mode() != permission.ModeAsk && m.service.Mode() != permission.ModeAuto {
-		_ = m.service.SetMode(permission.ModeAsk)
+		_ = m.setPermissionMode(permission.ModeAsk)
 	}
 	m.setPlanEnabled(enabled)
 	state := "off"
@@ -160,9 +160,12 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 	m.planMode = enabled
 	if !enabled {
 		m.service.SetCallGuard(nil)
+		if m.coordinator != nil {
+			m.coordinator.SetCallGuard(nil)
+		}
 		return
 	}
-	m.service.SetCallGuard(func(_ context.Context, request permission.Request) error {
+	guard := func(_ context.Context, request permission.Request) error {
 		if !m.planMode {
 			return nil
 		}
@@ -172,7 +175,11 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 		default:
 			return fmt.Errorf("plan mode is read-only; %s tool %q is blocked", request.ToolKind, request.ToolName)
 		}
-	})
+	}
+	m.service.SetCallGuard(guard)
+	if m.coordinator != nil {
+		m.coordinator.SetCallGuard(guard)
+	}
 }
 
 func formatElapsed(duration time.Duration) string {
