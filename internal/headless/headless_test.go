@@ -88,14 +88,23 @@ func TestHeadlessPersistsTranscriptWithoutToolArguments(t *testing.T) {
 		t.Fatalf("Run() error = %v", err)
 	}
 	stored := runner.SessionState()
-	if len(stored) != 1 {
-		t.Fatalf("session messages = %d, want 1", len(stored))
+	if len(stored) != 3 {
+		t.Fatalf("session messages = %d, want 3", len(stored))
 	}
-	if strings.Contains(stored[0].Content, "secret") {
-		t.Fatalf("persisted tool arguments: %+v", stored[0])
+	if stored[0].Role != model.RoleUser || !strings.Contains(stored[0].Content, "/call read_file") {
+		t.Fatalf("user message = %+v", stored[0])
 	}
-	if stored[0].ToolName != "read_file" {
-		t.Fatalf("tool name = %q", stored[0].ToolName)
+	if stored[1].Role != model.RoleAssistant || len(stored[1].ToolCalls) != 1 {
+		t.Fatalf("assistant tool calls = %+v", stored[1])
+	}
+	if stored[1].ToolCalls[0].Name != "read_file" || stored[1].ToolCalls[0].ID == "" {
+		t.Fatalf("assistant tool call = %+v", stored[1].ToolCalls[0])
+	}
+	if stored[2].Role != model.RoleTool || stored[2].ToolName != "read_file" || stored[2].ToolCallID == "" {
+		t.Fatalf("tool message = %+v", stored[2])
+	}
+	if strings.Contains(stored[1].Content, "secret") || strings.Contains(stored[2].Content, "secret") {
+		t.Fatalf("persisted tool arguments: %+v", stored)
 	}
 
 	next, err := New(service, registry, nil)
@@ -105,8 +114,15 @@ func TestHeadlessPersistsTranscriptWithoutToolArguments(t *testing.T) {
 	if err := next.LoadSession(session.State{Messages: stored}); err != nil {
 		t.Fatalf("LoadSession() error = %v", err)
 	}
-	if len(next.Messages()) != 1 {
-		t.Fatalf("restored messages = %d, want 1", len(next.Messages()))
+	restored := next.Messages()
+	if len(restored) != 3 {
+		t.Fatalf("restored messages = %d, want 3", len(restored))
+	}
+	if restored[1].Role != model.RoleAssistant || len(restored[1].ToolCalls) != 1 {
+		t.Fatalf("restored assistant tool calls = %+v", restored[1])
+	}
+	if got := string(restored[1].ToolCalls[0].Arguments); got != "{}" {
+		t.Fatalf("restored tool arguments = %q, want redacted empty object", got)
 	}
 }
 

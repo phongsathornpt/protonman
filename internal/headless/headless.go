@@ -125,30 +125,12 @@ func (r *Runner) SetMessages(messages []model.Message) error {
 
 // LoadSession restores a persisted transcript.
 func (r *Runner) LoadSession(state session.State) error {
-	messages := make([]model.Message, 0, len(state.Messages))
-	for _, stored := range state.Messages {
-		messages = append(messages, model.Message{
-			Role:       stored.Role,
-			Content:    stored.Content,
-			ToolName:   stored.ToolName,
-			ToolCallID: stored.ToolCallID,
-		})
-	}
-	return r.SetMessages(messages)
+	return r.SetMessages(session.ToModelMessages(state.Messages))
 }
 
 // SessionState returns the redacted transcript for persistence.
 func (r *Runner) SessionState() []session.Message {
-	out := make([]session.Message, 0, len(r.messages))
-	for _, message := range r.messages {
-		out = append(out, session.Message{
-			Role:       message.Role,
-			Content:    message.Content,
-			ToolName:   message.ToolName,
-			ToolCallID: message.ToolCallID,
-		})
-	}
-	return out
+	return session.FromModelMessages(r.messages)
 }
 
 // Run executes one headless prompt through the shared tool-call service.
@@ -355,9 +337,23 @@ func (r *Runner) runCall(
 		return err
 	}
 	result, callErr := r.service.Call(ctx, call)
+	resultContent, marshalErr := json.Marshal(result)
+	if marshalErr != nil {
+		marshalErr = fmt.Errorf("encode headless tool result: %w", marshalErr)
+	}
 	r.messages = append(r.messages, model.Message{
+		Role:    model.RoleUser,
+		Content: fmt.Sprintf("/call %s", call.Name),
+	}, model.Message{
+		Role: model.RoleAssistant,
+		ToolCalls: []model.ToolCall{{
+			ID:        call.ID,
+			Name:      call.Name,
+			Arguments: append(json.RawMessage(nil), call.Arguments...),
+		}},
+	}, model.Message{
 		Role:       model.RoleTool,
-		Content:    result.Output,
+		Content:    string(resultContent),
 		ToolName:   call.Name,
 		ToolCallID: call.ID,
 	})
@@ -370,7 +366,16 @@ func (r *Runner) runCall(
 		}
 	}
 	if err := writeEvent(output, format, event); err != nil {
+		if callErr != nil {
+			return errors.Join(callErr, err)
+		}
 		return err
+	}
+	if marshalErr != nil {
+		if callErr != nil {
+			return errors.Join(callErr, marshalErr)
+		}
+		return marshalErr
 	}
 	return callErr
 }
@@ -409,7 +414,12 @@ func (r *Runner) runTurn(
 		}
 	}
 	if err != nil {
-		_ = writeEvent(output, format, Event{Kind: EventKindFailed, Error: err.Error()})
+		if len(r.messages) > 0 && r.messages[len(r.messages)-1].Role == model.RoleUser && r.messages[len(r.messages)-1].Content == prompt {
+			r.messages = r.messages[:len(r.messages)-1]
+		}
+		if writeErr := writeEvent(output, format, Event{Kind: EventKindFailed, Error: err.Error()}); writeErr != nil {
+			return errors.Join(err, writeErr)
+		}
 		return err
 	}
 	return writeEvent(output, format, Event{Kind: EventKindDone})
