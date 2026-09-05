@@ -331,8 +331,13 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 		return Result{AgentID: req.ID, Profile: req.Profile}, err
 	}
 
+	c.activeMu.RLock()
+	parentRegistry := c.parentRegistry
+	client := c.client
+	c.activeMu.RUnlock()
+
 	// 1. Build profile-scoped tool registry
-	scopedRegistry := FilterRegistryForProfile(c.parentRegistry, req.Profile, req.Depth)
+	scopedRegistry := FilterRegistryForProfile(parentRegistry, req.Profile, req.Depth)
 
 	// 2. Build scoped tool service
 	// For workers: uses existing permission policy in auto or ask mode
@@ -369,11 +374,11 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 		}
 		runner = r
 	} else {
-		if c.client == nil {
+		if client == nil {
 			return Result{AgentID: req.ID, Profile: req.Profile}, errors.New("model client is required for subagent execution")
 		}
 		loop, lerr := turn.NewLoop(
-			c.client,
+			client,
 			service,
 			turn.WithMaxRounds(c.maxRounds),
 		)
