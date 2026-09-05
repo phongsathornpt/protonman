@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -837,7 +838,28 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 		"history_messages", len(history),
 	)
 	go func() {
+		queueTerminal := func(result applicationturn.Result, err error) {
+			select {
+			case events <- turnDoneMsg{result: result, err: err}:
+				slog.DebugContext(ctx, "tui turn terminal message queued")
+			case <-m.ctx.Done():
+				slog.DebugContext(ctx, "tui turn terminal message dropped",
+					"reason", "ui_context_done",
+				)
+			}
+		}
 		defer func() {
+			if panicValue := recover(); panicValue != nil {
+				stack := debug.Stack()
+				slog.DebugContext(ctx, "tui turn worker panicked",
+					"panic_type", fmt.Sprintf("%T", panicValue),
+					"stack_bytes", len(stack),
+				)
+				queueTerminal(
+					applicationturn.Result{},
+					fmt.Errorf("turn worker panicked: %v", panicValue),
+				)
+			}
 			close(events)
 			slog.DebugContext(ctx, "tui turn event channel closed",
 				"duration_ms", time.Since(startedAt).Milliseconds(),
@@ -862,14 +884,7 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 			"rounds", result.Rounds,
 			"message_count", len(result.Messages),
 		)
-		select {
-		case events <- turnDoneMsg{result: result, err: err}:
-			slog.DebugContext(ctx, "tui turn terminal message queued")
-		case <-m.ctx.Done():
-			slog.DebugContext(ctx, "tui turn terminal message dropped",
-				"reason", "ui_context_done",
-			)
-		}
+		queueTerminal(result, err)
 	}()
 	m.turnEvents = events
 	return waitTurnCh(events)
