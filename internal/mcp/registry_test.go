@@ -495,3 +495,43 @@ func TestDiscoverContextCancellation(t *testing.T) {
 		t.Fatalf("Discover() error = %v, want context canceled", err)
 	}
 }
+
+func TestMCPToolValidateRejectsInvalidMutability(t *testing.T) {
+	manifest := Tool{Name: "query", Mutability: domaintool.Mutability("sometimes")}
+	if err := manifest.Validate(); !errors.Is(err, ErrInvalidTool) {
+		t.Fatalf("Validate() error = %v, want invalid MCP tool", err)
+	}
+}
+
+func TestDiscoverPropagatesMCPMutability(t *testing.T) {
+	server := &fakeServer{name: "db", tools: []Tool{
+		{Name: "query", Mutability: domaintool.MutabilityReadOnly},
+		{Name: "update", Mutability: domaintool.MutabilityMutating},
+		{Name: "legacy"},
+	}}
+	registry, err := builtin.NewRegistry()
+	if err != nil {
+		t.Fatalf("NewRegistry() error = %v", err)
+	}
+	if err := Discover(context.Background(), registry, server); err != nil {
+		t.Fatalf("Discover() error = %v", err)
+	}
+	definitions := registry.Definitions()
+	got := map[string]domaintool.Mutability{}
+	for _, definition := range definitions {
+		got[definition.Name] = definition.Mutability
+	}
+	if got["mcp.db.query"] != domaintool.MutabilityReadOnly {
+		t.Fatalf("query mutability = %q", got["mcp.db.query"])
+	}
+	if got["mcp.db.update"] != domaintool.MutabilityMutating {
+		t.Fatalf("update mutability = %q", got["mcp.db.update"])
+	}
+	if got["mcp.db.legacy"] != domaintool.MutabilityUnspecified {
+		t.Fatalf("legacy mutability = %q", got["mcp.db.legacy"])
+	}
+	legacy := domaintool.Definition{Name: "mcp.db.legacy", Kind: domaintool.KindMCP}
+	if domaintool.EffectiveMutability(legacy) != domaintool.MutabilityMutating {
+		t.Fatal("legacy MCP tool must remain conservative")
+	}
+}

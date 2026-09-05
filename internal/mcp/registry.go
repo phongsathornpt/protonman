@@ -165,6 +165,7 @@ func newHandler(
 			Name:        name,
 			Description: description,
 			Kind:        tool.KindMCP,
+			Mutability:  manifest.Mutability,
 			InputSchema: deepCloneSchema(manifest.InputSchema),
 		},
 	}
