@@ -809,7 +809,13 @@ func (s *openAIStream) flushToolCalls() {
 	}
 
 	if len(s.respToolCalls) > 0 {
-		for itemID, acc := range s.respToolCalls {
+		itemIDs := make([]string, 0, len(s.respToolCalls))
+		for itemID := range s.respToolCalls {
+			itemIDs = append(itemIDs, itemID)
+		}
+		sort.Strings(itemIDs)
+		for _, itemID := range itemIDs {
+			acc := s.respToolCalls[itemID]
 			argsStr := strings.TrimSpace(acc.arguments.String())
 			if argsStr == "" {
 				argsStr = "{}"

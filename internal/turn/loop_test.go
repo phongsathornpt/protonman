@@ -92,6 +92,60 @@ func TestLoopRejectsEmptyModelResponse(t *testing.T) {
 	}
 }
 
+func TestLoopRejectsDuplicateToolCallIDs(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{{
+		events: []model.Event{
+			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+				ID:        "duplicate",
+				Name:      "read_file",
+				Arguments: json.RawMessage(`{"path":"a.txt"}`),
+			}},
+			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+				ID:        "duplicate",
+				Name:      "read_file",
+				Arguments: json.RawMessage(`{"path":"b.txt"}`),
+			}},
+			{Kind: model.EventDone},
+		},
+	}}}
+	loop, handler := newTestLoop(t, client, permission.ActionAllow)
+
+	_, err := loop.Run(
+		context.Background(),
+		[]model.Message{{Role: model.RoleUser, Content: "read both"}},
+		func(context.Context, Event) error { return nil },
+	)
+	if !errors.Is(err, ErrDuplicateToolCall) {
+		t.Fatalf("Run() error = %v, want duplicate tool call", err)
+	}
+	if len(handler.calls) != 0 {
+		t.Fatalf("handler calls = %d, want 0", len(handler.calls))
+	}
+}
+
+func TestLoopRejectsToolCallWhenToolsAreDisabled(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{{
+		events: []model.Event{
+			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+				ID:        "late-call",
+				Name:      "read_file",
+				Arguments: json.RawMessage(`{"path":"a.txt"}`),
+			}},
+			{Kind: model.EventDone},
+		},
+	}}}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithMaxRounds(1))
+
+	_, err := loop.Run(
+		context.Background(),
+		[]model.Message{{Role: model.RoleUser, Content: "read a file"}},
+		func(context.Context, Event) error { return nil },
+	)
+	if !errors.Is(err, ErrUnresolvedToolCall) {
+		t.Fatalf("Run() error = %v, want unresolved tool call", err)
+	}
+}
+
 func TestLoopTranslatesToolCallsAndFeedsResultsBack(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: []model.Event{

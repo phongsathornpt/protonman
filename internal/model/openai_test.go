@@ -738,6 +738,28 @@ func TestOpenAIClientResponsesStreamToolCalls(t *testing.T) {
 	}
 }
 
+func TestOpenAIStreamOrdersPendingResponsesToolCalls(t *testing.T) {
+	payload := strings.Join([]string{
+		`data: {"type":"response.output_item.added","item":{"id":"fc_b","type":"function_call","name":"read_file","call_id":"call_b"}}`,
+		`data: {"type":"response.output_item.added","item":{"id":"fc_a","type":"function_call","name":"read_file","call_id":"call_a"}}`,
+		`data: {"type":"response.completed"}`,
+	}, "\n")
+	stream := newOpenAIStream(io.NopCloser(strings.NewReader(payload)))
+	defer stream.Close()
+
+	first, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next() first error = %v", err)
+	}
+	second, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next() second error = %v", err)
+	}
+	if first.ToolCall.ID != "call_a" || second.ToolCall.ID != "call_b" {
+		t.Fatalf("tool call order = %q, %q; want call_a, call_b", first.ToolCall.ID, second.ToolCall.ID)
+	}
+}
+
 func TestLiveOpenCodeResponsesMuseSpark(t *testing.T) {
 	if os.Getenv("RUN_LIVE_TESTS") != "1" {
 		t.Skip("skipping live network test without RUN_LIVE_TESTS=1")
