@@ -229,3 +229,94 @@ func TestFormatOutputFold(t *testing.T) {
 		t.Fatalf("expected fold indicator with hidden count, got: %s", folded[2])
 	}
 }
+
+func TestDetectFileType(t *testing.T) {
+	cases := []struct {
+		path string
+		want string
+	}{
+		{"main.go", "Go"},
+		{"config.json", "JSON"},
+		{"config.toml", "TOML"},
+		{"ci.yaml", "YAML"},
+		{"ci.yml", "YAML"},
+		{"README.md", "Markdown"},
+		{"index.ts", "TypeScript"},
+		{"app.jsx", "JavaScript"},
+		{"script.py", "Python"},
+		{"lib.rs", "Rust"},
+		{"run.sh", "Shell"},
+		{"schema.sql", "SQL"},
+		{"Dockerfile", "Dockerfile"},
+		{"Makefile", "Makefile"},
+		{"unknown.xyz", ""},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			got := detectFileType(tc.path)
+			if got != tc.want {
+				t.Errorf("detectFileType(%q) = %q, want %q", tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFormatPathSegmentsStyled(t *testing.T) {
+	// Nested path contains dir and file
+	nested := formatPathSegmentsStyled("internal/tui/theme.go")
+	if !strings.Contains(nested, "internal/tui/") || !strings.Contains(nested, "theme.go") {
+		t.Fatalf("expected nested path to contain dir and base, got: %s", nested)
+	}
+
+	// Root file
+	rootFile := formatPathSegmentsStyled("README.md")
+	if !strings.Contains(rootFile, "README.md") {
+		t.Fatalf("expected root file to contain name, got: %s", rootFile)
+	}
+
+	// Grep pattern query
+	grepQuery := formatPathSegmentsStyled(`"glyphMark" in internal/tui`)
+	if !strings.Contains(grepQuery, `"glyphMark"`) || !strings.Contains(grepQuery, "internal/") {
+		t.Fatalf("expected grep pattern query to contain pattern and path, got: %s", grepQuery)
+	}
+}
+
+func TestExtractReadFileExcerpt(t *testing.T) {
+	// Go package
+	goCode := "// Package foo\npackage foo\n\nfunc main() {}\n"
+	if got := extractReadFileExcerpt(goCode); got != "package foo" {
+		t.Fatalf("expected package foo excerpt, got: %q", got)
+	}
+
+	// Markdown title
+	mdText := "# Proton Coding Agent\n\nHigh performance..."
+	if got := extractReadFileExcerpt(mdText); got != "# Proton Coding Agent" {
+		t.Fatalf("expected markdown title excerpt, got: %q", got)
+	}
+
+	// Shell script
+	shText := "#!/usr/bin/env bash\nset -euo pipefail\n"
+	if got := extractReadFileExcerpt(shText); got != "#!/usr/bin/env bash" {
+		t.Fatalf("expected shebang excerpt, got: %q", got)
+	}
+
+	// Plain statements should not be extracted
+	plainCode := "x := 1\ny := 2\n"
+	if got := extractReadFileExcerpt(plainCode); got != "" {
+		t.Fatalf("expected empty excerpt for non-structural code, got: %q", got)
+	}
+}
+
+func TestSummarizeReadFileTarget(t *testing.T) {
+	content := "line 1\nline 2\nline 3\n"
+	summary := summarizeReadFileTarget("internal/tui/theme.go", content, false)
+	if !strings.Contains(summary, "4 lines") || !strings.Contains(summary, "Go") {
+		t.Fatalf("expected line count and Go badge in summary, got: %s", summary)
+	}
+
+	emptySummary := summarizeReadFileTarget("empty.txt", "", false)
+	if !strings.Contains(emptySummary, "0 B (empty file)") {
+		t.Fatalf("expected empty file summary, got: %s", emptySummary)
+	}
+}

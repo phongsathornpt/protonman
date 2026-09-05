@@ -419,3 +419,35 @@ func TestErrorCellFallbackRendering(t *testing.T) {
 		t.Fatalf("expected raw text to match, got %q", raw)
 	}
 }
+
+func TestToolCellRenderReadFileExcerpt(t *testing.T) {
+	cell := &ToolCell{
+		Name:     "read_file",
+		Target:   "internal/tui/theme.go",
+		ToolKind: tool.KindRead,
+		Body:     "// Package tui\npackage tui\n\nimport \"fmt\"\n",
+		Summary:  "4 lines (45 B)",
+	}
+
+	rendered := strings.Join(cell.RenderWidth(80), "\n")
+	if !strings.Contains(rendered, "package tui") || !strings.Contains(rendered, "↳") {
+		t.Fatalf("expected rendered cell to contain excerpt '↳ package tui', got:\n%s", rendered)
+	}
+}
+
+func TestToolFailureSuggestions(t *testing.T) {
+	notFoundSugg := toolFailureSuggestions("read_file", tool.ErrorCodeNotFound)
+	if len(notFoundSugg) == 0 {
+		t.Fatalf("expected suggestions for read_file not found error")
+	}
+
+	protectedSugg := toolFailureSuggestions("read_file", tool.ErrorCodeProtectedPath)
+	if len(protectedSugg) == 0 || !strings.Contains(protectedSugg[0], "workspace protection rules") {
+		t.Fatalf("expected suggestions for protected path error")
+	}
+
+	escapeSugg := toolFailureSuggestions("read_file", tool.ErrorCodeOutsideWorkspace)
+	if len(escapeSugg) == 0 || !strings.Contains(escapeSugg[0], "workspace root") {
+		t.Fatalf("expected suggestions for outside workspace error")
+	}
+}
