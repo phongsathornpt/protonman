@@ -141,7 +141,7 @@ func ParseMode(value string) (Mode, error) {
 		return ModeAuto, nil
 	case "always-approve", "always_approve", "yolo":
 		return ModeAlwaysApprove, nil
-	case "deny", "dont-ask", "dont_ask":
+	case "deny", "dont-ask", "dont_ask", "plan":
 		return ModeDeny, nil
 	default:
 		return ModeUnknown, fmt.Errorf("unknown permission mode %q", value)
