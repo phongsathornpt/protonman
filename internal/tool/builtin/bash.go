@@ -6,11 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/projectTHORN/proton/internal/sandbox"
+	"github.com/projectTHORN/proton/internal/telemetry"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/workspace"
 )
@@ -55,28 +59,51 @@ func (bashHandler) Definition() tool.Definition {
 }
 
 func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
+	startedAt := time.Now()
+	slog.DebugContext(ctx, "bash execution started",
+		"call_id", call.ID,
+		"tool_name", call.Name,
+		"argument_bytes", len(call.Arguments),
+	)
 	if h.workspace == nil {
+		logBashFailure(ctx, call, startedAt, "workspace", errors.New("workspace_missing"))
 		return tool.Result{}, fmt.Errorf("bash workspace is required")
 	}
 	if h.launcher == nil {
+		logBashFailure(ctx, call, startedAt, "launcher", errors.New("launcher_missing"))
 		return tool.Result{}, fmt.Errorf("bash sandbox launcher is required: configure an explicit sandbox profile (use --sandbox off to opt out)")
 	}
 	var input bashInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
+		logBashFailure(ctx, call, startedAt, "arguments", err)
 		return tool.Result{}, fmt.Errorf("decode bash arguments: %w", err)
 	}
 	input.Command = strings.TrimSpace(input.Command)
 	if input.Command == "" {
+		logBashFailure(ctx, call, startedAt, "arguments", errors.New("command_missing"))
 		return tool.Result{}, fmt.Errorf("bash command is required")
 	}
+	slog.DebugContext(ctx, "bash command decoded",
+		"call_id", call.ID,
+		"command_bytes", len(input.Command),
+		"command_fingerprint", telemetry.Fingerprint(input.Command),
+	)
 	if err := ctx.Err(); err != nil {
+		logBashFailure(ctx, call, startedAt, "before_run", err)
 		return tool.Result{}, fmt.Errorf("before bash command: %w", err)
 	}
 
 	command, err := h.command(ctx, input.Command)
 	if err != nil {
+		logBashFailure(ctx, call, startedAt, "launcher", err)
 		return tool.Result{}, err
 	}
+	slog.DebugContext(ctx, "bash process starting",
+		"call_id", call.ID,
+		"executable", filepath.Base(command.Path),
+		"argument_count", len(command.Args),
+		"workspace_fingerprint", telemetry.Fingerprint(h.workspace.Root()),
+	)
 
 	var buf boundedBuffer
 	buf.limit = maxBashOutputBytes
@@ -96,13 +123,25 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		Output:    outputStr,
 		Truncated: truncated,
 	}
+	attrs := []any{
+		"call_id", call.ID,
+		"duration_ms", time.Since(startedAt).Milliseconds(),
+		"success", err == nil,
+		"output_bytes", len(outputStr),
+		"truncated", truncated,
+		"context_error", ctx.Err() != nil,
+	}
+	var exitError *exec.ExitError
+	if errors.As(err, &exitError) {
+		attrs = append(attrs, "exit_code", exitError.ExitCode())
+	}
+	slog.DebugContext(ctx, "bash process finished", attrs...)
 	if err == nil {
 		code := 0
 		result.ExitCode = &code
 		return result, nil
 	}
 
-	var exitError *exec.ExitError
 	if errors.As(err, &exitError) {
 		code := exitError.ExitCode()
 		result.ExitCode = &code
@@ -111,6 +150,17 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		return result, fmt.Errorf("bash command canceled: %w", ctxErr)
 	}
 	return result, fmt.Errorf("bash command failed: %w", err)
+}
+
+func logBashFailure(ctx context.Context, call tool.Call, startedAt time.Time, phase string, err error) {
+	slog.DebugContext(ctx, "bash execution stopped",
+		"call_id", call.ID,
+		"tool_name", call.Name,
+		"phase", phase,
+		"duration_ms", time.Since(startedAt).Milliseconds(),
+		"error_type", fmt.Sprintf("%T", err),
+		"context_error", ctx.Err() != nil,
+	)
 }
 
 func (h bashHandler) command(ctx context.Context, command string) (*exec.Cmd, error) {

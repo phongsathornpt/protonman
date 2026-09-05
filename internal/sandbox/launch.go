@@ -5,9 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
+
+	"github.com/projectTHORN/proton/internal/telemetry"
 )
 
 // ErrUnavailable indicates that a requested profile cannot be enforced here.
@@ -32,17 +37,31 @@ func NewOSLauncher(profile Profile) *OSLauncher {
 // Command builds a confined child. Fail-closed when confinement is required
 // but the host cannot apply it.
 func (l *OSLauncher) Command(ctx context.Context, dir string, command string) (*exec.Cmd, error) {
+	startedAt := time.Now()
+	trimmedCommand := strings.TrimSpace(command)
+	slog.DebugContext(ctx, "sandbox command requested",
+		"profile", l.Profile.Name.String(),
+		"confined", l.Profile.Confines(),
+		"workspace_fingerprint", telemetry.Fingerprint(dir),
+		"command_bytes", len(trimmedCommand),
+		"command_fingerprint", telemetry.Fingerprint(trimmedCommand),
+	)
 	if err := ctx.Err(); err != nil {
+		logSandboxFailure(ctx, startedAt, "before_launch", err)
 		return nil, fmt.Errorf("before sandbox launch: %w", err)
 	}
-	command = strings.TrimSpace(command)
+	command = trimmedCommand
 	if command == "" {
+		logSandboxFailure(ctx, startedAt, "arguments", errors.New("command_missing"))
 		return nil, fmt.Errorf("sandbox command is required")
 	}
 	if !l.Profile.Confines() {
-		return bareShell(ctx, dir, command), nil
+		cmd := bareShell(ctx, dir, command)
+		logSandboxSelected(ctx, startedAt, "shell", cmd.Path)
+		return cmd, nil
 	}
 	if strings.TrimSpace(dir) == "" {
+		logSandboxFailure(ctx, startedAt, "workspace", errors.New("workspace_missing"))
 		return nil, fmt.Errorf("%w: workspace directory is required", ErrUnavailable)
 	}
 
@@ -54,24 +73,49 @@ func (l *OSLauncher) Command(ctx context.Context, dir string, command string) (*
 	switch runtime.GOOS {
 	case "darwin":
 		if _, err := lookPath("sandbox-exec"); err != nil {
+			logSandboxFailure(ctx, startedAt, "launcher_lookup", err)
 			return nil, fmt.Errorf("%w: sandbox-exec not found", ErrUnavailable)
 		}
 		profile := seatbeltProfile(l.Profile, dir)
 		cmd := exec.CommandContext(ctx, "sandbox-exec", "-p", profile, "sh", "-c", command)
 		cmd.Dir = dir
+		logSandboxSelected(ctx, startedAt, "sandbox-exec", cmd.Path)
 		return cmd, nil
 	case "linux":
 		if path, err := lookPath("bwrap"); err == nil {
-			return bwrapCommand(ctx, path, l.Profile, dir, command), nil
+			cmd := bwrapCommand(ctx, path, l.Profile, dir, command)
+			logSandboxSelected(ctx, startedAt, "bwrap", cmd.Path)
+			return cmd, nil
 		}
 		// unshare can isolate networking, but it cannot enforce the filesystem
 		// boundary required by every confining Proton profile. Never silently
 		// downgrade a requested workspace/read-only/strict sandbox to a bare
 		// shell.
-		return nil, fmt.Errorf("%w: bwrap is required for filesystem confinement", ErrUnavailable)
+		err := fmt.Errorf("%w: bwrap is required for filesystem confinement", ErrUnavailable)
+		logSandboxFailure(ctx, startedAt, "launcher_lookup", err)
+		return nil, err
 	default:
-		return nil, fmt.Errorf("%w: %s is not supported", ErrUnavailable, runtime.GOOS)
+		err := fmt.Errorf("%w: %s is not supported", ErrUnavailable, runtime.GOOS)
+		logSandboxFailure(ctx, startedAt, "platform", err)
+		return nil, err
 	}
+}
+
+func logSandboxSelected(ctx context.Context, startedAt time.Time, launcher string, path string) {
+	slog.DebugContext(ctx, "sandbox command selected",
+		"launcher", launcher,
+		"executable", filepath.Base(path),
+		"duration_ms", time.Since(startedAt).Milliseconds(),
+	)
+}
+
+func logSandboxFailure(ctx context.Context, startedAt time.Time, phase string, err error) {
+	slog.DebugContext(ctx, "sandbox command rejected",
+		"phase", phase,
+		"duration_ms", time.Since(startedAt).Milliseconds(),
+		"error_type", fmt.Sprintf("%T", err),
+		"context_error", ctx.Err() != nil,
+	)
 }
 
 func bareShell(ctx context.Context, dir string, command string) *exec.Cmd {
