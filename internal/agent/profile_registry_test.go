@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/tool"
@@ -106,4 +107,79 @@ func TestFilterRegistryForProfile(t *testing.T) {
 			t.Error("worker at depth 1 should not have delegate_task")
 		}
 	})
+
+	t.Run("pow profile scoping", func(t *testing.T) {
+		scoped := FilterRegistryForProfile(baseReg, ProfilePOW, 1)
+		for _, allowed := range []string{"read_file", "write_file", "apply_patch", "bash"} {
+			if _, ok := scoped.Lookup(allowed); !ok {
+				t.Errorf("pow missing tool: %s", allowed)
+			}
+		}
+		if _, ok := scoped.Lookup("delegate_task"); ok {
+			t.Error("pow at depth 1 should not have delegate_task")
+		}
+	})
+
+	t.Run("dex profile scoping", func(t *testing.T) {
+		scoped := FilterRegistryForProfile(baseReg, ProfileDEX, 1)
+		for _, allowed := range []string{"read_file", "write_file", "apply_patch", "bash"} {
+			if _, ok := scoped.Lookup(allowed); !ok {
+				t.Errorf("dex missing tool: %s", allowed)
+			}
+		}
+		if _, ok := scoped.Lookup("delegate_task"); ok {
+			t.Error("dex at depth 1 should not have delegate_task")
+		}
+	})
+
+	t.Run("int profile scoping", func(t *testing.T) {
+		scoped := FilterRegistryForProfile(baseReg, ProfileINT, 0)
+		for _, allowed := range []string{"read_file", "list_dir", "grep", "git_status", "web_fetch"} {
+			if _, ok := scoped.Lookup(allowed); !ok {
+				t.Errorf("int missing tool: %s", allowed)
+			}
+		}
+		for _, blocked := range []string{"write_file", "apply_patch", "bash", "delegate_task"} {
+			if _, ok := scoped.Lookup(blocked); ok {
+				t.Errorf("int lookup for %q succeeded, want blocked", blocked)
+			}
+		}
+	})
+}
+
+func TestSystemPromptForProfile(t *testing.T) {
+	profiles := []Profile{
+		ProfileExplorer,
+		ProfileReviewer,
+		ProfileWorker,
+		ProfilePOW,
+		ProfileDEX,
+		ProfileINT,
+	}
+
+	for _, p := range profiles {
+		prompt := SystemPromptForProfile(p)
+		if len(prompt) == 0 {
+			t.Errorf("SystemPromptForProfile(%q) returned empty prompt", p)
+		}
+		if prompt == "You are a helpful assistant." {
+			t.Errorf("SystemPromptForProfile(%q) fell back to default prompt", p)
+		}
+	}
+
+	// Verify principles in pow, dex, int
+	powPrompt := SystemPromptForProfile(ProfilePOW)
+	if !strings.Contains(powPrompt, "POW Mode") || !strings.Contains(powPrompt, "High Velocity") {
+		t.Errorf("pow prompt missing POW Mode marker: %s", powPrompt)
+	}
+
+	dexPrompt := SystemPromptForProfile(ProfileDEX)
+	if !strings.Contains(dexPrompt, "DEX Mode") || !strings.Contains(dexPrompt, "Defensive Engineering") {
+		t.Errorf("dex prompt missing DEX Mode marker: %s", dexPrompt)
+	}
+
+	intPrompt := SystemPromptForProfile(ProfileINT)
+	if !strings.Contains(intPrompt, "INT Mode") || !strings.Contains(intPrompt, "YAGNI") {
+		t.Errorf("int prompt missing YAGNI or INT Mode marker: %s", intPrompt)
+	}
 }
