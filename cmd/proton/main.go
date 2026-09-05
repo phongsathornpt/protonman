@@ -48,6 +48,13 @@ func run(ctx context.Context, args []string) error {
 		return nil
 	}
 
+	restoreDebugLogger, err := telemetry.ConfigureDebugLogger(os.Getenv("PROTON_DEBUG_LOG"))
+	if err != nil {
+		return fmt.Errorf("configure debug logging: %w", err)
+	}
+	defer restoreDebugLogger()
+	slog.DebugContext(ctx, "proton debug logging enabled")
+
 	homeDir := strings.TrimSpace(os.Getenv("PROTON_HOME"))
 	if homeDir == "" {
 		resolvedHome, err := os.UserHomeDir()
