@@ -3,6 +3,7 @@ package builtin
 import (
 	"context"
 	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/sandbox"
@@ -70,5 +71,35 @@ func TestBashTruncatesLargeOutput(t *testing.T) {
 	}
 	if len(result.Output) > maxBashOutputBytes+100 {
 		t.Fatalf("output length = %d exceeds max bound", len(result.Output))
+	}
+}
+
+func TestBashRejectsOversizedCommand(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	launcher := &recordingLauncher{}
+	handler := NewBash(workspaceRoot, launcher)
+	_, err := handler.Execute(context.Background(), newJSONCall(t, "bash-large", "bash", map[string]any{
+		"command": strings.Repeat("x", maxBashCommandBytes+1),
+	}))
+	if err == nil {
+		t.Fatal("Execute() error = nil, want oversized command error")
+	}
+	if launcher.command != "" {
+		t.Fatalf("launcher command = %q, want no process launch", launcher.command)
+	}
+}
+
+func TestBashRejectsOversizedArguments(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	launcher := &recordingLauncher{}
+	handler := NewBash(workspaceRoot, launcher)
+	_, err := handler.Execute(context.Background(), newJSONCall(t, "bash-large-args", "bash", map[string]any{
+		"command": strings.Repeat("x", maxBashArgumentBytes),
+	}))
+	if err == nil {
+		t.Fatal("Execute() error = nil, want oversized argument error")
+	}
+	if launcher.command != "" {
+		t.Fatalf("launcher command = %q, want no process launch", launcher.command)
 	}
 }

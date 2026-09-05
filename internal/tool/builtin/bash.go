@@ -19,7 +19,11 @@ import (
 	"github.com/projectTHORN/proton/internal/workspace"
 )
 
-const maxBashOutputBytes = 2 * 1024 * 1024
+const (
+	maxBashArgumentBytes = 512 * 1024
+	maxBashCommandBytes  = 256 * 1024
+	maxBashOutputBytes   = 2 * 1024 * 1024
+)
 
 type bashHandler struct {
 	workspace *workspace.Workspace
@@ -73,6 +77,11 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		logBashFailure(ctx, call, startedAt, "launcher", errors.New("launcher_missing"))
 		return tool.Result{}, fmt.Errorf("bash sandbox launcher is required: configure an explicit sandbox profile (use --sandbox off to opt out)")
 	}
+	if len(call.Arguments) > maxBashArgumentBytes {
+		err := tool.NewToolError(tool.ErrorCodeInvalidArguments, "bash arguments exceed the 512 KiB limit")
+		logBashFailure(ctx, call, startedAt, "arguments", err)
+		return tool.Result{}, err
+	}
 	var input bashInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
 		logBashFailure(ctx, call, startedAt, "arguments", err)
@@ -82,6 +91,11 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	if input.Command == "" {
 		logBashFailure(ctx, call, startedAt, "arguments", errors.New("command_missing"))
 		return tool.Result{}, fmt.Errorf("bash command is required")
+	}
+	if len(input.Command) > maxBashCommandBytes {
+		err := tool.NewToolError(tool.ErrorCodeInvalidArguments, "bash command exceeds the 256 KiB limit")
+		logBashFailure(ctx, call, startedAt, "arguments", err)
+		return tool.Result{}, err
 	}
 	slog.DebugContext(ctx, "bash command decoded",
 		"call_id", call.ID,

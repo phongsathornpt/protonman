@@ -5,27 +5,37 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
 )
 
 type fakeHandler struct {
-	definition tool.Definition
-	calls      int
-	err        error
+	definition     tool.Definition
+	calls          int
+	err            error
+	waitForContext bool
+	shouldPanic    bool
 }
 
 func (h *fakeHandler) Definition() tool.Definition {
 	return h.definition
 }
 
-func (h *fakeHandler) Execute(_ context.Context, call tool.Call) (tool.Result, error) {
+func (h *fakeHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	h.calls++
 	result := tool.Result{
 		CallID:   call.ID,
 		ToolName: call.Name,
 		Output:   "executed",
+	}
+	if h.shouldPanic {
+		panic("handler secret")
+	}
+	if h.waitForContext {
+		<-ctx.Done()
+		return result, ctx.Err()
 	}
 	return result, h.err
 }
@@ -247,6 +257,60 @@ func TestCallPropagatesPermissionPromptCancellation(t *testing.T) {
 	}
 	if handler.calls != 0 {
 		t.Fatalf("handler calls = %d, want 0", handler.calls)
+	}
+}
+
+func TestCallAppliesExecutionTimeout(t *testing.T) {
+	handler := &fakeHandler{
+		definition: tool.Definition{
+			Name:                "bash",
+			Description:         "fake shell",
+			Kind:                tool.KindBash,
+			PermissionDetailKey: "command",
+		},
+		waitForContext: true,
+	}
+	service := newTestService(t, handler, permission.Config{
+		Rules: []permission.Rule{{
+			Action: permission.ActionAllow,
+			Tool:   permission.ToolBash,
+		}},
+	}, WithExecutionTimeout(20*time.Millisecond))
+
+	result, err := service.Call(context.Background(), testCall(t))
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Call() error = %v, want deadline exceeded", err)
+	}
+	if result.Failure == nil || result.Failure.Code != tool.ErrorCodeDeadlineExceeded {
+		t.Fatalf("Call() failure = %#v, want deadline_exceeded", result.Failure)
+	}
+}
+
+func TestCallRecoversHandlerPanic(t *testing.T) {
+	handler := &fakeHandler{
+		definition: tool.Definition{
+			Name:        "bash",
+			Description: "fake shell",
+			Kind:        tool.KindBash,
+		},
+		shouldPanic: true,
+	}
+	service := newTestService(t, handler, permission.Config{
+		Rules: []permission.Rule{{
+			Action: permission.ActionAllow,
+			Tool:   permission.ToolBash,
+		}},
+	})
+
+	result, err := service.Call(context.Background(), testCall(t))
+	if err == nil {
+		t.Fatal("Call() error = nil, want recovered handler failure")
+	}
+	if got, want := err.Error(), "execute bash: tool handler panicked"; got != want {
+		t.Fatalf("Call() error = %q, want %q", got, want)
+	}
+	if result.Failure == nil || result.Failure.Code != tool.ErrorCodeExecution {
+		t.Fatalf("Call() failure = %#v, want execution_error", result.Failure)
 	}
 }
 
