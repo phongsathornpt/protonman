@@ -249,12 +249,12 @@ Proton registers a suite of workspace-safe tools:
 
 | Tool | Category | Description |
 | :--- | :--- | :--- |
-| `read_file` | File System | Read workspace files with line range and byte offset pagination |
+| `read_file` | File System | Read workspace files with byte `offset`/`limit` pagination and `next_offset` continuation |
 | `write_file` | File System | Write file contents with automatic pre-edit checkpointing |
 | `search_replace` | File System | Exact block replacement in files with pre-edit checkpointing |
 | `apply_patch` | File System | Apply unified diff patches with pre-edit checkpointing |
-| `grep` | Search | Workspace regex and literal searches with include/exclude globs |
-| `list_dir` | Search | List directory trees while filtering protected and ignored paths |
+| `grep` | Search | Regex search with include globs plus match-offset pagination and `next_offset` continuation |
+| `list_dir` | Search | List visible directory entries with protected-path filtering and `next_offset` pagination |
 | `git_status` | Version Control | Inspect Git working tree state and uncommitted changes |
 | `bash` | Execution | Run shell commands inside workspace and sandbox boundaries |
 | `web_fetch` | Network | Retrieve remote web pages conforming to sandbox network policy |
@@ -342,6 +342,14 @@ type = "openai"
 base_url = "http://localhost:11434/v1"
 api_key = ""
 ```
+
+
+Execution safety notes:
+
+- `max_rounds = 0` disables only the round-count bound; `max_tool_calls = 0` disables only the cumulative tool-call-count bound.
+- A complete model/tool turn still has a default 10-minute deadline, and the loop refuses construction if every global termination bound is disabled.
+- Repeating the same deterministic tool call with the same semantic arguments and result twice without an intervening mutation triggers a text-only synthesis round instead of continuing the tool loop.
+- Truncated `read_file`, `grep`, and `list_dir` results include `next_offset`; pass that value back as `offset` to continue instead of repeating the same page.
 
 ### Environment Variables
 

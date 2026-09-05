@@ -179,7 +179,7 @@ type Result struct {
 type Option func(*Loop) error
 
 // WithMaxRounds bounds model responses that can request more tools.
-// A value of 0 indicates unbounded execution.
+// A value of 0 disables this count bound; other turn bounds still apply.
 func WithMaxRounds(rounds int) Option {
 	return func(loop *Loop) error {
 		if rounds < 0 {
@@ -191,7 +191,7 @@ func WithMaxRounds(rounds int) Option {
 }
 
 // WithMaxToolCalls bounds the cumulative number of tool calls per turn.
-// A value of 0 indicates unbounded execution.
+// A value of 0 disables this count bound; other turn bounds still apply.
 func WithMaxToolCalls(calls int) Option {
 	return func(loop *Loop) error {
 		if calls < 0 {
