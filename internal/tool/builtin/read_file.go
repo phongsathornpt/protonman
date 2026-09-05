@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/workspace"
@@ -51,7 +52,7 @@ func (readFileHandler) Definition() tool.Definition {
 					"type":        "integer",
 					"minimum":     1,
 					"maximum":     maxReadFileBytes,
-					"description": "Maximum bytes to return; defaults to 2 MiB",
+					"description": "Target page size in bytes; defaults to 2 MiB and may extend to finish one UTF-8 code point",
 				},
 			},
 			"required": []string{"path"},
@@ -110,6 +111,23 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	}
 
 	size := fileInfo.Size()
+	if input.Offset > size {
+		input.Offset = size
+	}
+	if input.Offset > 0 && input.Offset < size {
+		var boundary [1]byte
+		if _, err := file.ReadAt(boundary[:], input.Offset); err != nil {
+			_ = file.Close()
+			return tool.Result{}, fmt.Errorf("inspect %q at byte %d: %w", input.Path, input.Offset, err)
+		}
+		if !utf8.RuneStart(boundary[0]) {
+			_ = file.Close()
+			return tool.Result{}, tool.NewToolError(
+				tool.ErrorCodeInvalidArguments,
+				fmt.Sprintf("read_file offset %d splits a UTF-8 code point; use next_offset from the previous page", input.Offset),
+			)
+		}
+	}
 	if input.Offset > 0 {
 		if _, err := file.Seek(input.Offset, io.SeekStart); err != nil {
 			_ = file.Close()
@@ -118,12 +136,13 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	}
 
 	remaining := size - input.Offset
-	if remaining < 0 {
-		remaining = 0
-	}
+	truncated := remaining > int64(input.Limit)
 	readBytes := remaining
-	if readBytes > int64(input.Limit) {
-		readBytes = int64(input.Limit)
+	if truncated {
+		readBytes = int64(input.Limit + utf8.UTFMax - 1)
+		if readBytes > remaining {
+			readBytes = remaining
+		}
 	}
 	contents := make([]byte, int(readBytes))
 	_, readErr := io.ReadFull(file, contents)
@@ -135,7 +154,16 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 		return tool.Result{}, fmt.Errorf("close %q: %w", input.Path, closeErr)
 	}
 
-	truncated := remaining > int64(input.Limit)
+	if truncated {
+		cut, err := utf8PageCut(contents, input.Limit)
+		if err != nil {
+			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, fmt.Sprintf("%q is not valid UTF-8 near byte %d", input.Path, input.Offset))
+		}
+		contents = contents[:cut]
+	} else if !utf8.Valid(contents) {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, fmt.Sprintf("%q is not valid UTF-8", input.Path))
+	}
+
 	var nextOffset *int64
 	if truncated {
 		next := input.Offset + int64(len(contents))
@@ -153,4 +181,28 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 		Truncated:  truncated,
 		NextOffset: nextOffset,
 	}, nil
+}
+func utf8PageCut(data []byte, target int) (int, error) {
+	if target <= 0 || len(data) == 0 {
+		return 0, nil
+	}
+	position := 0
+	for position < len(data) {
+		_, size := utf8.DecodeRune(data[position:])
+		if size == 1 && data[position] >= utf8.RuneSelf {
+			return 0, fmt.Errorf("invalid UTF-8 at page byte %d", position)
+		}
+		next := position + size
+		if next > target {
+			if position == 0 {
+				return next, nil
+			}
+			return position, nil
+		}
+		position = next
+		if position == target {
+			return position, nil
+		}
+	}
+	return position, nil
 }
