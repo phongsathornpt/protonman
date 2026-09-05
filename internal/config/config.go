@@ -281,9 +281,15 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 		snapshot.Model.Provider = document.Model.Provider
 	}
 	if document.Agent.MaxRounds != nil {
+		if *document.Agent.MaxRounds < 0 {
+			return fmt.Errorf("agent.max_rounds must be non-negative")
+		}
 		snapshot.Agent.MaxRounds = *document.Agent.MaxRounds
 	}
 	if document.Agent.MaxToolCalls != nil {
+		if *document.Agent.MaxToolCalls < 0 {
+			return fmt.Errorf("agent.max_tool_calls must be non-negative")
+		}
 		snapshot.Agent.MaxToolCalls = *document.Agent.MaxToolCalls
 	}
 	if document.Agent.Profile != nil {
@@ -362,6 +368,9 @@ func DeleteUserProviderConfig(homeDir string, providerName string) error {
 
 // SaveUserMaxRounds updates the max rounds limit in ~/.proton/config.toml.
 func SaveUserMaxRounds(homeDir string, maxRounds int) error {
+	if maxRounds < 0 {
+		return fmt.Errorf("max rounds cannot be negative")
+	}
 	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
 		doc.Agent.MaxRounds = &maxRounds
 	})
@@ -369,6 +378,9 @@ func SaveUserMaxRounds(homeDir string, maxRounds int) error {
 
 // SaveUserMaxToolCalls updates the cumulative tool-call limit in ~/.proton/config.toml.
 func SaveUserMaxToolCalls(homeDir string, maxToolCalls int) error {
+	if maxToolCalls < 0 {
+		return fmt.Errorf("max tool calls cannot be negative")
+	}
 	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
 		doc.Agent.MaxToolCalls = &maxToolCalls
 	})
