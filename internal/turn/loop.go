@@ -44,6 +44,10 @@ STRICT REQUIREMENTS:
 
 Respond with text ONLY.`
 
+// MaxRoundsFallback is used when a provider ignores MaxRoundsPrompt and still
+// returns a tool call after dispatch has been disabled.
+const MaxRoundsFallback = "I reached the maximum number of tool rounds before producing a final response. The last tool request was not executed. Review the work so far or start a new turn."
+
 var (
 	// ErrInvalidLoop indicates that the loop cannot be constructed or started.
 	ErrInvalidLoop = errors.New("invalid model/tool loop")
@@ -331,15 +335,27 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			terminalReason = "round_failed"
 			return l.fail(ctx, sink, round, err)
 		}
+		maxRoundFallback := false
 		if len(assistant.ToolCalls) > 0 && len(executions) == 0 {
-			err := fmt.Errorf("%w: model requested %d tool calls after dispatch was disabled", ErrUnresolvedToolCall, len(assistant.ToolCalls))
-			terminalReason = "unresolved_tool_call"
-			return l.fail(ctx, sink, round, err)
+			if !isMaxRound {
+				err := fmt.Errorf("%w: model requested %d tool calls after dispatch was disabled", ErrUnresolvedToolCall, len(assistant.ToolCalls))
+				terminalReason = "unresolved_tool_call"
+				return l.fail(ctx, sink, round, err)
+			}
+			assistant, err = finalizeMaxRoundToolCallResponse(ctx, sink, round, assistant)
+			if err != nil {
+				terminalReason = "max_round_fallback_failed"
+				return l.fail(ctx, sink, round, err)
+			}
+			maxRoundFallback = true
 		}
 		history = append(history, assistant)
 		turnMessages = append(turnMessages, assistant)
 		if len(executions) == 0 || isMaxRound {
 			terminalReason = "completed"
+			if maxRoundFallback {
+				terminalReason = "max_rounds_fallback"
+			}
 			slog.DebugContext(ctx, "turn completed",
 				"round", round,
 				"assistant_bytes", len(assistant.Content),
@@ -384,6 +400,33 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			turnMessages = append(turnMessages, toolMessage)
 		}
 	}
+}
+
+func finalizeMaxRoundToolCallResponse(
+	ctx context.Context,
+	sink Sink,
+	round int,
+	assistant model.Message,
+) (model.Message, error) {
+	ignoredToolCalls := len(assistant.ToolCalls)
+	assistant.ToolCalls = nil
+	addition := MaxRoundsFallback
+	if strings.TrimSpace(assistant.Content) != "" {
+		addition = "\n\n" + addition
+	}
+	assistant.Content += addition
+	slog.DebugContext(ctx, "turn ignored tool calls after max rounds",
+		"round", round,
+		"ignored_tool_calls", ignoredToolCalls,
+	)
+	if err := emit(ctx, sink, Event{
+		Kind:  EventTextDelta,
+		Round: round,
+		Text:  addition,
+	}); err != nil {
+		return model.Message{}, fmt.Errorf("emit max-round fallback: %w", err)
+	}
+	return assistant, nil
 }
 
 type executedCall struct {

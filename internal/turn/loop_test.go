@@ -123,7 +123,7 @@ func TestLoopRejectsDuplicateToolCallIDs(t *testing.T) {
 	}
 }
 
-func TestLoopRejectsToolCallWhenToolsAreDisabled(t *testing.T) {
+func TestLoopCompletesWhenModelRequestsToolAtMaxRounds(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
 		events: []model.Event{
 			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
@@ -135,14 +135,57 @@ func TestLoopRejectsToolCallWhenToolsAreDisabled(t *testing.T) {
 		},
 	}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithMaxRounds(1))
+	events := make([]Event, 0)
 
-	_, err := loop.Run(
+	result, err := loop.Run(
+		context.Background(),
+		[]model.Message{{Role: model.RoleUser, Content: "read a file"}},
+		collectEvents(&events),
+	)
+	if err != nil {
+		t.Fatalf("Run() error = %v, want graceful max-round fallback", err)
+	}
+	if len(result.Message.ToolCalls) != 0 {
+		t.Fatalf("result tool calls = %#v, want none", result.Message.ToolCalls)
+	}
+	if !strings.Contains(result.Message.Content, MaxRoundsFallback) {
+		t.Fatalf("result content = %q, want max-round fallback", result.Message.Content)
+	}
+	if got := events[len(events)-1].Kind; got != EventCompleted {
+		t.Fatalf("last event kind = %q, want %q", got, EventCompleted)
+	}
+}
+
+func TestLoopPreservesTextWhenMaxRoundToolCallIsIgnored(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{{
+		events: []model.Event{
+			{Kind: model.EventTextDelta, Text: "partial answer"},
+			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+				ID:        "late-call",
+				Name:      "read_file",
+				Arguments: json.RawMessage(`{"path":"a.txt"}`),
+			}},
+			{Kind: model.EventDone},
+		},
+	}}}
+	loop, handler := newTestLoop(t, client, permission.ActionAllow, WithMaxRounds(1))
+
+	result, err := loop.Run(
 		context.Background(),
 		[]model.Message{{Role: model.RoleUser, Content: "read a file"}},
 		func(context.Context, Event) error { return nil },
 	)
-	if !errors.Is(err, ErrUnresolvedToolCall) {
-		t.Fatalf("Run() error = %v, want unresolved tool call", err)
+	if err != nil {
+		t.Fatalf("Run() error = %v, want graceful max-round fallback", err)
+	}
+	if !strings.Contains(result.Message.Content, "partial answer") || !strings.Contains(result.Message.Content, MaxRoundsFallback) {
+		t.Fatalf("result content = %q, want preserved text and fallback", result.Message.Content)
+	}
+	if len(result.Message.ToolCalls) != 0 {
+		t.Fatalf("result tool calls = %#v, want none", result.Message.ToolCalls)
+	}
+	if len(handler.calls) != 0 {
+		t.Fatalf("handler calls = %d, want 0", len(handler.calls))
 	}
 }
 
