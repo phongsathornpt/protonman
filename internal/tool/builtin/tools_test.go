@@ -11,14 +11,23 @@ import (
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/agent"
+	"github.com/projectTHORN/proton/internal/sandbox"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/workspace"
 )
 
+func testSandboxOption() RegistryOption {
+	return WithSandbox(&recordingLauncher{}, sandbox.NetworkPolicy{Mode: sandbox.NetworkBlocked})
+}
+
+func testCheckpointOption() RegistryOption {
+	return WithCheckpointStore(&recordingCheckpointStore{id: "test"})
+}
+
 func TestWriteFileAndSearchReplace(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
-	writeHandler := NewWriteFile(workspaceRoot)
-	replaceHandler := NewSearchReplace(workspaceRoot)
+	writeHandler := NewWriteFile(workspaceRoot, &recordingCheckpointStore{id: "test"})
+	replaceHandler := NewSearchReplace(workspaceRoot, &recordingCheckpointStore{id: "test"})
 
 	result := executeJSON(t, writeHandler, "write-1", map[string]any{
 		"file_path": "notes.txt",
@@ -69,11 +78,11 @@ func TestFileToolsRejectTraversalAndProtectedPaths(t *testing.T) {
 		path    string
 		wantErr error
 	}{
-		{name: "write protected", handler: NewWriteFile(workspaceRoot), path: ".env", wantErr: workspace.ErrProtectedPath},
+		{name: "write protected", handler: NewWriteFile(workspaceRoot, &recordingCheckpointStore{id: "x"}), path: ".env", wantErr: workspace.ErrProtectedPath},
 		{name: "read protected", handler: NewReadFile(workspaceRoot), path: ".env", wantErr: workspace.ErrProtectedPath},
 		{
 			name:    "write traversal",
-			handler: NewWriteFile(workspaceRoot),
+			handler: NewWriteFile(workspaceRoot, &recordingCheckpointStore{id: "x"}),
 			path:    "../outside.txt",
 			wantErr: workspace.ErrOutsideWorkspace,
 		},
@@ -190,7 +199,7 @@ func TestApplyPatchSupportsFileOperationsAndPlansBeforeWriting(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	writeTestFile(t, workspaceRoot.Root(), "before.txt", "one\ntwo\n")
 	writeTestFile(t, workspaceRoot.Root(), "remove.txt", "remove me\n")
-	handler := NewApplyPatch(workspaceRoot)
+	handler := NewApplyPatch(workspaceRoot, &recordingCheckpointStore{id: "test"})
 
 	patch := "*** Begin Patch\n" +
 		"*** Add File: added.txt\n" +
@@ -249,7 +258,7 @@ func TestApplyPatchSupportsFileOperationsAndPlansBeforeWriting(t *testing.T) {
 
 func TestDefaultRegistryContainsCodingTools(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
-	registry, err := NewDefaultRegistry(workspaceRoot)
+	registry, err := NewDefaultRegistry(workspaceRoot, testSandboxOption(), testCheckpointOption())
 	if err != nil {
 		t.Fatalf("NewDefaultRegistry() error = %v", err)
 	}
@@ -260,7 +269,7 @@ func TestDefaultRegistryContainsCodingTools(t *testing.T) {
 
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
 	defer coord.Close()
-	regWithCoord, err := NewDefaultRegistry(workspaceRoot, WithAgentCoordinator(coord))
+	regWithCoord, err := NewDefaultRegistry(workspaceRoot, testSandboxOption(), testCheckpointOption(), WithAgentCoordinator(coord))
 	if err != nil {
 		t.Fatalf("NewDefaultRegistry(WithAgentCoordinator) error = %v", err)
 	}
@@ -306,7 +315,7 @@ func TestGitStatusReportsWorkspaceRepository(t *testing.T) {
 	}
 	writeTestFile(t, workspaceRoot.Root(), "status.txt", "changed\n")
 
-	result := executeJSON(t, NewGitStatus(workspaceRoot), "status-1", map[string]any{})
+	result := executeJSON(t, NewGitStatus(workspaceRoot, &recordingLauncher{}), "status-1", map[string]any{})
 	if !strings.Contains(result.Output, "status.txt") {
 		t.Fatalf("git status output = %q, want status.txt", result.Output)
 	}
@@ -317,12 +326,50 @@ func TestGitStatusReportsWorkspaceRepository(t *testing.T) {
 
 func TestGitStatusRejectsNonRepository(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
-	_, err := NewGitStatus(workspaceRoot).Execute(
+	_, err := NewGitStatus(workspaceRoot, &recordingLauncher{}).Execute(
 		context.Background(),
 		newJSONCall(t, "status-2", "git_status", map[string]any{}),
 	)
 	if err == nil {
 		t.Fatal("git_status error = nil, want non-repository error")
+	}
+}
+
+func TestGitStatusRequiresLauncherFailClosed(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	_, err := NewGitStatus(workspaceRoot).Execute(
+		context.Background(),
+		newJSONCall(t, "status-nil", "git_status", map[string]any{}),
+	)
+	if err == nil {
+		t.Fatal("git_status error = nil, want launcher-required error")
+	}
+}
+
+func TestDefaultRegistryRequiresSandboxAndCheckpointFailClosed(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	if _, err := NewDefaultRegistry(workspaceRoot); err == nil {
+		t.Fatal("NewDefaultRegistry() error = nil, want sandbox+checkpoint required error")
+	}
+	if _, err := NewDefaultRegistry(workspaceRoot, testCheckpointOption()); err == nil {
+		t.Fatal("NewDefaultRegistry(checkpoint only) error = nil, want sandbox required error")
+	}
+	if _, err := NewDefaultRegistry(workspaceRoot, testSandboxOption()); err == nil {
+		t.Fatal("NewDefaultRegistry(sandbox only) error = nil, want checkpoint required error")
+	}
+}
+
+func TestWriteWithoutCheckpointFailsClosed(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	_, err := NewWriteFile(workspaceRoot).Execute(
+		context.Background(),
+		newJSONCall(t, "write-nostore", "write_file", map[string]any{
+			"file_path": "nostore.txt",
+			"content":   "should not be written",
+		}),
+	)
+	if err == nil {
+		t.Fatal("write_file without store error = nil, want checkpoint error")
 	}
 }
 
@@ -334,7 +381,9 @@ type mockGitLauncher struct {
 func (m *mockGitLauncher) Command(_ context.Context, dir string, command string) (*exec.Cmd, error) {
 	m.lastDir = dir
 	m.lastCommand = command
-	return exec.Command("echo", "## main"), nil
+	cmd := exec.Command("echo", "## main")
+	cmd.Dir = dir
+	return cmd, nil
 }
 
 func TestGitStatusUsesLauncher(t *testing.T) {
@@ -433,7 +482,7 @@ func TestPermissionDetailProviders(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 
 	// Test apply_patch detail extraction
-	patchTool := NewApplyPatch(workspaceRoot)
+	patchTool := NewApplyPatch(workspaceRoot, &recordingCheckpointStore{id: "detail"})
 	detailedPatch, ok := patchTool.(tool.DetailProvider)
 	if !ok {
 		t.Fatal("apply_patch does not implement tool.DetailProvider")

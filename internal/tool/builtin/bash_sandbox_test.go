@@ -16,7 +16,9 @@ type recordingLauncher struct {
 func (l *recordingLauncher) Command(ctx context.Context, dir string, command string) (*exec.Cmd, error) {
 	l.dir = dir
 	l.command = command
-	return exec.CommandContext(ctx, "sh", "-c", command), nil
+	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	cmd.Dir = dir
+	return cmd, nil
 }
 
 func TestBashUsesSandboxLauncher(t *testing.T) {
@@ -42,9 +44,20 @@ func TestBashUsesSandboxLauncher(t *testing.T) {
 
 var _ sandbox.Launcher = (*recordingLauncher)(nil)
 
-func TestBashTruncatesLargeOutput(t *testing.T) {
+func TestBashRequiresLauncherFailClosed(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	handler := NewBash(workspaceRoot)
+	_, err := handler.Execute(context.Background(), newJSONCall(t, "bash-nil", "bash", map[string]any{
+		"command": "echo should-not-run",
+	}))
+	if err == nil {
+		t.Fatal("Execute() error = nil, want launcher-required error")
+	}
+}
+
+func TestBashTruncatesLargeOutput(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	handler := NewBash(workspaceRoot, &recordingLauncher{})
 	// Output ~2.5 MiB of data which exceeds maxBashOutputBytes (2 MiB)
 	result, err := handler.Execute(context.Background(), newJSONCall(t, "bash-trunc", "bash", map[string]any{
 		"command": "python3 -c 'print(\"A\" * (2 * 1024 * 1024 + 1024))' || head -c 2100000 /dev/zero | tr '\\0' 'A'",
