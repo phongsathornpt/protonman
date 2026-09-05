@@ -12,6 +12,17 @@ import (
 // Kind classifies a tool for permission policy matching.
 type Kind string
 
+// Mutability declares whether successful execution can change state that may
+// invalidate prior no-progress observations. The zero value preserves legacy
+// kind-based inference for third-party tools.
+type Mutability string
+
+const (
+	MutabilityUnspecified Mutability = ""
+	MutabilityReadOnly    Mutability = "read_only"
+	MutabilityMutating    Mutability = "mutating"
+)
+
 const (
 	// KindRead identifies tools that read local project state.
 	KindRead Kind = "read"
@@ -194,6 +205,9 @@ type Definition struct {
 	Description string
 	// Kind is the permission category for this tool.
 	Kind Kind
+	// Mutability declares whether successful execution can invalidate prior
+	// read observations. Unspecified preserves legacy kind-based inference.
+	Mutability Mutability
 	// PermissionDetailKey names the JSON argument shown to a permission
 	// prompt and matched by path, command, or domain rules.
 	PermissionDetailKey string
@@ -211,6 +225,9 @@ func (d Definition) Validate() error {
 	}
 	if !validKind(d.Kind) {
 		return fmt.Errorf("%w: unsupported kind %q for %q", ErrInvalidCall, d.Kind, d.Name)
+	}
+	if !validMutability(d.Mutability) {
+		return fmt.Errorf("%w: unsupported mutability %q for %q", ErrInvalidCall, d.Mutability, d.Name)
 	}
 	return nil
 }
@@ -272,5 +289,28 @@ func validKind(kind Kind) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func validMutability(mutability Mutability) bool {
+	switch mutability {
+	case MutabilityUnspecified, MutabilityReadOnly, MutabilityMutating:
+		return true
+	default:
+		return false
+	}
+}
+
+// EffectiveMutability resolves explicit metadata while preserving behavior for
+// tools compiled before mutability metadata existed.
+func EffectiveMutability(definition Definition) Mutability {
+	if definition.Mutability != MutabilityUnspecified {
+		return definition.Mutability
+	}
+	switch definition.Kind {
+	case KindRead, KindGrep, KindWebFetch, KindWebSearch:
+		return MutabilityReadOnly
+	default:
+		return MutabilityMutating
 	}
 }

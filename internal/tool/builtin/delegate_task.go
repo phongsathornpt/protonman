@@ -36,6 +36,7 @@ func (delegateTaskHandler) Definition() tool.Definition {
 		Name:                "delegate_task",
 		Description:         "Delegate an investigation, code review, or targeted task to a specialized subagent running in the background.",
 		Kind:                tool.KindRead,
+		Mutability:          tool.MutabilityMutating,
 		PermissionDetailKey: "task",
 		InputSchema: map[string]any{
 			"type": "object",

@@ -47,6 +47,7 @@ func (restoreCheckpointHandler) Definition() tool.Definition {
 		Name:                "checkpoint_restore",
 		Description:         "Restore files from a previous Proton edit checkpoint.",
 		Kind:                tool.KindEdit,
+		Mutability:          tool.MutabilityMutating,
 		PermissionDetailKey: "checkpoint_id",
 		InputSchema: map[string]any{
 			"type": "object",
