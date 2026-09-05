@@ -127,7 +127,19 @@ func run(ctx context.Context, args []string) error {
 		return fmt.Errorf("create permission policy: %w", err)
 	}
 
-	coordinator := agent.NewCoordinator(nil, nil, workspaceRoot, policy)
+	coordinator := agent.NewCoordinator(nil, nil, workspaceRoot, policy,
+		agent.WithEventSink(func(ctx context.Context, ev agent.Event) error {
+			slog.Debug("subagent lifecycle event",
+				"kind", ev.Kind,
+				"agent_id", ev.AgentID,
+				"parent_id", ev.ParentID,
+				"profile", ev.Profile,
+				"duration", ev.Duration,
+				"err", ev.Err,
+			)
+			return nil
+		}),
+	)
 	defer func() { _ = coordinator.Close() }()
 
 	registry, err := builtin.NewDefaultRegistry(
@@ -245,6 +257,7 @@ func run(ctx context.Context, args []string) error {
 		tui.WithModelConfig(loadedConfig.Model, loadedConfig.Providers),
 		tui.WithAgentConfig(loadedConfig.Agent),
 		tui.WithBubbleTeaRunner(initialRunner),
+		tui.WithCoordinator(coordinator),
 	)
 	if uiErr != nil {
 		return fmt.Errorf("create Bubble Tea UI: %w", uiErr)
