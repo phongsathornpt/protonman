@@ -145,6 +145,16 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		"truncated", truncated,
 		"context_error", ctx.Err() != nil,
 	}
+	if err != nil {
+		attrs = append(attrs, "error_type", fmt.Sprintf("%T", err))
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		attrs = append(attrs,
+			"context_error_type", fmt.Sprintf("%T", ctxErr),
+			"deadline_exceeded", errors.Is(ctxErr, context.DeadlineExceeded),
+			"canceled", errors.Is(ctxErr, context.Canceled),
+		)
+	}
 	var exitError *exec.ExitError
 	if errors.As(err, &exitError) {
 		attrs = append(attrs, "exit_code", exitError.ExitCode())
@@ -161,6 +171,9 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		result.ExitCode = &code
 	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
+		if errors.Is(ctxErr, context.DeadlineExceeded) {
+			return result, fmt.Errorf("bash command deadline exceeded: %w", ctxErr)
+		}
 		return result, fmt.Errorf("bash command canceled: %w", ctxErr)
 	}
 	return result, fmt.Errorf("bash command failed: %w", err)

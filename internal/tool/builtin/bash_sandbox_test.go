@@ -2,9 +2,11 @@ package builtin
 
 import (
 	"context"
+	"errors"
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/projectTHORN/proton/internal/sandbox"
 )
@@ -101,5 +103,33 @@ func TestBashRejectsOversizedArguments(t *testing.T) {
 	}
 	if launcher.command != "" {
 		t.Fatalf("launcher command = %q, want no process launch", launcher.command)
+	}
+}
+
+func TestBashPreservesDeadlineExceeded(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	profile, err := sandbox.NewProfile(sandbox.NameOff, workspaceRoot.Root())
+	if err != nil {
+		t.Fatalf("NewProfile() error = %v", err)
+	}
+	handler := NewBash(workspaceRoot, sandbox.NewOSLauncher(profile))
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	startedAt := time.Now()
+	result, err := handler.Execute(ctx, newJSONCall(t, "bash-deadline", "bash", map[string]any{
+		"command": "printf before-timeout; sleep 5",
+	}))
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Execute() error = %v, want deadline exceeded", err)
+	}
+	if !strings.Contains(err.Error(), "bash command deadline exceeded") {
+		t.Fatalf("Execute() error = %q, want deadline-specific context", err)
+	}
+	if !strings.Contains(result.Output, "before-timeout") {
+		t.Fatalf("output = %q, want partial output before deadline", result.Output)
+	}
+	if elapsed := time.Since(startedAt); elapsed > 2*time.Second {
+		t.Fatalf("deadline execution took %s, want under 2s", elapsed)
 	}
 }
