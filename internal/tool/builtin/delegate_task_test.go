@@ -235,4 +235,3 @@ func TestDelegateTask_Execute(t *testing.T) {
 		}
 	})
 }
-

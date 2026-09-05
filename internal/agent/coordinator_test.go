@@ -550,4 +550,3 @@ func TestCoordinator_SubagentInheritsCallGuard(t *testing.T) {
 		t.Errorf("callErr = %v, want 'guard: plan mode is read-only'", callErr)
 	}
 }
-
