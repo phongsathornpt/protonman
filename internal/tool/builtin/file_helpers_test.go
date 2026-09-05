@@ -72,3 +72,52 @@ func TestAtomicWriteResolvedRejectsParentSymlinkInsideWorkspace(t *testing.T) {
 		t.Fatalf("linked target was written or stat failed unexpectedly: %v", err)
 	}
 }
+
+func TestRemoveWorkspaceFileRejectsParentSymlinkSwap(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	outside := t.TempDir()
+	workspaceRoot, err := workspace.New(root, nil)
+	if err != nil {
+		t.Fatalf("workspace.New() error = %v", err)
+	}
+
+	outsideFile := filepath.Join(outside, "victim.txt")
+	if err := os.WriteFile(outsideFile, []byte("preserve me"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	parent := filepath.Join(root, "target_dir")
+	if err := os.Mkdir(parent, 0o755); err != nil {
+		t.Fatalf("Mkdir() error = %v", err)
+	}
+	targetFile := filepath.Join(parent, "victim.txt")
+	if err := os.WriteFile(targetFile, []byte("delete me"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	resolved, err := workspaceRoot.Resolve(ctx, "target_dir/victim.txt")
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+
+	// Swap directory with symlink to outside
+	if err := os.RemoveAll(parent); err != nil {
+		t.Fatalf("RemoveAll() error = %v", err)
+	}
+	if err := os.Symlink(outside, parent); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	// removeWorkspaceFile must reject the symlink swap and not delete the outside file
+	err = removeWorkspaceFile(ctx, workspaceRoot, resolved)
+	if err == nil {
+		t.Fatal("removeWorkspaceFile() error = nil, want symlink rejection")
+	}
+
+	// Outside file must still exist
+	data, err := os.ReadFile(outsideFile)
+	if err != nil || string(data) != "preserve me" {
+		t.Fatalf("outside victim file was deleted or modified: %v", err)
+	}
+}

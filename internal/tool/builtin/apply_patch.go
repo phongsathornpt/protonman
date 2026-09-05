@@ -168,7 +168,7 @@ func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 				}
 			}
 		case patchDelete:
-			if err := os.Remove(change.path); err != nil {
+			if err := removeWorkspaceFile(ctx, h.workspace, change.path); err != nil {
 				return patchFailureResult(call, checkpointID, fmt.Errorf("delete patched file %q: %w", change.path, err))
 			}
 		default:
@@ -182,7 +182,7 @@ func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 			if err := atomicWrite(ctx, h.workspace, change.destination, []byte(change.content)); err != nil {
 				return patchFailureResult(call, checkpointID, fmt.Errorf("write moved file %q: %w", change.destination, err))
 			}
-			if err := os.Remove(change.path); err != nil {
+			if err := removeWorkspaceFile(ctx, h.workspace, change.path); err != nil {
 				return patchFailureResult(call, checkpointID, fmt.Errorf("remove moved source %q: %w", change.path, err))
 			}
 		}
