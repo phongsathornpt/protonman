@@ -260,11 +260,15 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.relayout()
 		return m, m.withSpinner(m.drainQueue())
 	case modelsFetchedMsg:
-		if message.err == nil && len(message.models) > 0 {
-			m.modelsCatalog = message.models
-		}
 		if pane := m.bottom.find(providerViewID); pane != nil {
 			if pv, ok := pane.(*providerPaneView); ok {
+				if pv.fetchRequestID != 0 && message.requestID != pv.fetchRequestID {
+					return m, nil
+				}
+				pv.fetchCancel = nil
+				if message.err == nil && len(message.models) > 0 {
+					m.modelsCatalog = message.models
+				}
 				if message.err != nil {
 					pv.state = providerStateError
 					pv.errorMessage = message.err.Error()
@@ -274,10 +278,12 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.relayout()
 			}
+			return m, nil
 		}
 		if pane := m.bottom.find(modelSelectViewID); pane != nil {
 			if mv, ok := pane.(*modelSelectPaneView); ok {
-				if message.err == nil && len(message.models) > 0 {
+				if message.requestID == 0 && message.err == nil && len(message.models) > 0 {
+					m.modelsCatalog = message.models
 					mv.models = message.models
 					m.relayout()
 				}
@@ -286,6 +292,14 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case providerSavedMsg:
 		if message.err != nil {
+			if pane := m.bottom.find(providerViewID); pane != nil {
+				if pv, ok := pane.(*providerPaneView); ok {
+					pv.state = providerStateSaveError
+					pv.errorMessage = message.err.Error()
+					m.relayout()
+					return m, nil
+				}
+			}
 			m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to save provider: %v", message.err)))
 		} else {
 			m.activeModel = message.modelID

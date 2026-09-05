@@ -188,6 +188,7 @@ func TestProviderViewFetchAndModelSelectionFlow(t *testing.T) {
 		baseURL:      "https://protonman.dev/api/v1",
 		apiKey:       "plk_test_mock_key",
 		models:       sampleModels,
+		requestID:    view.fetchRequestID,
 	})
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerViewID).(*providerPaneView)
@@ -218,8 +219,9 @@ func TestProviderViewFetchAndModelSelectionFlow(t *testing.T) {
 	if saveCmd == nil {
 		t.Fatal("expected saveProviderCmd on selection Enter")
 	}
-	if bModel.bottom.has(providerViewID) {
-		t.Fatal("expected modal closed on selection Enter")
+	view = bModel.bottom.find(providerViewID).(*providerPaneView)
+	if view.state != providerStateSaving {
+		t.Fatalf("expected saving state on selection Enter, got %v", view.state)
 	}
 
 	// Deliver providerSavedMsg
@@ -233,6 +235,77 @@ func TestProviderViewFetchAndModelSelectionFlow(t *testing.T) {
 	transcript := bModel.viewport.View()
 	if !strings.Contains(transcript, "Configured provider protonman") || !strings.Contains(transcript, "glm-5.3-flash") {
 		t.Fatalf("expected confirmation in transcript, got:\n%s", transcript)
+	}
+}
+
+func TestProviderViewSaveFailureKeepsPane(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/provider add")
+	view := bModel.bottom.find(providerViewID).(*providerPaneView)
+	view.state = providerStateSaving
+	view.selectedModel = "gpt-5"
+	view.nameInput.SetValue("custom")
+	view.endpointInput.SetValue("https://api.example.com/v1")
+	view.apiKeyInput.SetValue("key")
+
+	updated, _ := bModel.Update(providerSavedMsg{err: errors.New("permission denied")})
+	bModel = updated.(*bubbleModel)
+	view = bModel.bottom.find(providerViewID).(*providerPaneView)
+	if view.state != providerStateSaveError {
+		t.Fatalf("expected save error state, got %v", view.state)
+	}
+	if view.nameInput.Value() != "custom" || view.apiKeyInput.Value() != "key" {
+		t.Fatal("expected provider draft to remain after save failure")
+	}
+	if !strings.Contains(bModel.View(), "permission denied") {
+		t.Fatalf("expected save error in view, got:\n%s", bModel.View())
+	}
+
+	updated, cmd := bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	bModel = updated.(*bubbleModel)
+	view = bModel.bottom.find(providerViewID).(*providerPaneView)
+	if cmd == nil || view.state != providerStateSaving {
+		t.Fatalf("expected retry to enter saving state, got state=%v cmd=%v", view.state, cmd != nil)
+	}
+}
+
+func TestProviderViewIgnoresStaleFetchResults(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/provider add")
+	view := bModel.bottom.find(providerViewID).(*providerPaneView)
+	view.nameInput.SetValue("custom")
+	view.endpointInput.SetValue("https://api.example.com/v1")
+
+	view.beginFetch()
+	firstRequestID := view.fetchRequestID
+	view.beginFetch()
+	secondRequestID := view.fetchRequestID
+	if secondRequestID <= firstRequestID {
+		t.Fatalf("expected fetch request ID to advance, got %d then %d", firstRequestID, secondRequestID)
+	}
+
+	updated, _ := bModel.Update(modelsFetchedMsg{
+		providerName: "custom",
+		baseURL:      "https://api.example.com/v1",
+		models:       []model.RemoteModel{{ID: "stale-model"}},
+		requestID:    firstRequestID,
+	})
+	bModel = updated.(*bubbleModel)
+	view = bModel.bottom.find(providerViewID).(*providerPaneView)
+	if view.state != providerStateFetching || len(view.models) != 0 {
+		t.Fatalf("stale fetch result changed pane: state=%v models=%v", view.state, view.models)
+	}
+
+	updated, _ = bModel.Update(modelsFetchedMsg{
+		providerName: "custom",
+		baseURL:      "https://api.example.com/v1",
+		models:       []model.RemoteModel{{ID: "current-model"}},
+		requestID:    secondRequestID,
+	})
+	bModel = updated.(*bubbleModel)
+	view = bModel.bottom.find(providerViewID).(*providerPaneView)
+	if view.state != providerStateSelectModel || len(view.models) != 1 || view.models[0].ID != "current-model" {
+		t.Fatalf("current fetch result was not applied: state=%v models=%v", view.state, view.models)
 	}
 }
 
