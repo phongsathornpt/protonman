@@ -86,9 +86,9 @@ func (c *OpenAIClient) SetSessionID(sessionID string) {
 }
 
 type openAIToolCallReq struct {
-	ID       string                 `json:"id"`
-	Type     string                 `json:"type"`
-	Function openAIFunctionCallReq  `json:"function"`
+	ID       string                `json:"id"`
+	Type     string                `json:"type"`
+	Function openAIFunctionCallReq `json:"function"`
 }
 
 type openAIFunctionCallReq struct {

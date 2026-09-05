@@ -219,6 +219,3 @@ func TestNormalizeModelID(t *testing.T) {
 		}
 	}
 }
-
-
-

@@ -154,8 +154,8 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 		Agent: AgentConfig{
 			MaxRounds: DefaultMaxRounds,
 		},
-		Sources:        make([]string, 0, 2),
-		Warnings:       make([]string, 0),
+		Sources:  make([]string, 0, 2),
+		Warnings: make([]string, 0),
 	}
 
 	userPath := filepath.Join(homeDir, userConfigRelativePath)
@@ -459,7 +459,6 @@ func SaveUserMaxRounds(homeDir string, maxRounds int) error {
 	}
 	return nil
 }
-
 
 func decodeRule(raw fileRule) (permission.Rule, error) {
 	// Grok defaults omitted rule actions to deny. Keeping that default avoids

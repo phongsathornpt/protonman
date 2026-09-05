@@ -343,5 +343,3 @@ max_rounds = 35
 		t.Fatalf("permissions = %o, want 0600", perm)
 	}
 }
-
-

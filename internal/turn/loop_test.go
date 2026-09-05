@@ -345,7 +345,6 @@ func TestLoopUnboundedWhenZero(t *testing.T) {
 	}
 }
 
-
 func TestLoopTimesOutIndividualToolCall(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: []model.Event{
