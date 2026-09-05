@@ -283,6 +283,39 @@ func TestCallSessionGrantIsNarrowToExactRequest(t *testing.T) {
 	}
 }
 
+func TestCloneDoesNotCopySessionGrants(t *testing.T) {
+	handler := &fakeHandler{
+		definition: tool.Definition{
+			Name:                "bash",
+			Description:         "fake shell",
+			Kind:                tool.KindBash,
+			PermissionDetailKey: "command",
+		},
+	}
+	promptCalls := 0
+	service := newTestService(t, handler, permission.Config{}, WithPrompt(func(context.Context, permission.Request) (permission.Resolution, error) {
+		promptCalls++
+		return permission.Resolution{
+			Action: permission.ActionAllow,
+			Scope:  permission.GrantScopeSession,
+		}, nil
+	}))
+
+	if _, err := service.Call(context.Background(), testCall(t)); err != nil {
+		t.Fatalf("Call() error = %v", err)
+	}
+	clone := service.Clone()
+	if clone == nil {
+		t.Fatal("Clone() returned nil")
+	}
+	if _, err := clone.Call(context.Background(), testCall(t)); err != nil {
+		t.Fatalf("clone Call() error = %v", err)
+	}
+	if promptCalls != 2 {
+		t.Fatalf("prompt calls = %d, want 2", promptCalls)
+	}
+}
+
 func TestCallPropagatesStructuredHandlerFailure(t *testing.T) {
 	handler := &fakeHandler{
 		definition: tool.Definition{

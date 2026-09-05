@@ -195,6 +195,22 @@ func NewLoop(client model.Client, tools *toolcall.Service, options ...Option) (*
 	return loop, nil
 }
 
+// CloneWithTools creates a loop with the same model and execution settings but
+// an independent tool-call service. It is used by session-oriented adapters
+// that share a model client while keeping permission state isolated.
+func (l *Loop) CloneWithTools(tools *toolcall.Service) (*Loop, error) {
+	if l == nil {
+		return nil, fmt.Errorf("%w: loop is required", ErrInvalidLoop)
+	}
+	if tools == nil {
+		return nil, fmt.Errorf("%w: tool-call service is required", ErrInvalidLoop)
+	}
+	clone := *l
+	clone.tools = tools
+	clone.skills = append([]skill.CatalogItem(nil), l.skills...)
+	return &clone, nil
+}
+
 // Run executes model responses until one has no tool calls or the round bound is reached.
 func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Result, error) {
 	if l == nil {

@@ -28,6 +28,9 @@ var ErrInvalidRequest = errors.New("invalid request")
 // Option configures an ACP Server.
 type Option func(*Server)
 
+// RunnerFactory creates a model/tool runner bound to one session's service.
+type RunnerFactory func(*toolcall.Service) (applicationturn.Runner, error)
+
 // WithStore sets the session store for loading, resuming, and listing sessions.
 func WithStore(store *session.FileStore) Option {
 	return func(s *Server) {
@@ -35,12 +38,21 @@ func WithStore(store *session.FileStore) Option {
 	}
 }
 
+// WithRunnerFactory supplies isolated runners for ACP sessions. The factory
+// receives the session-local tool-call service so model-driven calls do not
+// share permission state with other sessions.
+func WithRunnerFactory(factory RunnerFactory) Option {
+	return func(s *Server) {
+		s.runnerFactory = factory
+	}
+}
+
 // Server is a full-duplex JSON-RPC 2.0 ACP agent server.
 type Server struct {
-	service  *toolcall.Service
-	registry tool.Registry
-	runner   applicationturn.Runner
-	store    *session.FileStore
+	service       *toolcall.Service
+	registry      tool.Registry
+	runnerFactory RunnerFactory
+	store         *session.FileStore
 
 	mu       sync.Mutex
 	writeMu  sync.Mutex
@@ -59,12 +71,20 @@ func New(service *toolcall.Service, registry tool.Registry, runner applicationtu
 	s := &Server{
 		service:  service,
 		registry: registry,
-		runner:   runner,
 		sessions: make(map[string]*Session),
 	}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(s)
+		}
+	}
+	if s.runnerFactory == nil && runner != nil {
+		if loop, ok := runner.(*applicationturn.Loop); ok {
+			s.runnerFactory = func(service *toolcall.Service) (applicationturn.Runner, error) {
+				return loop.CloneWithTools(service)
+			}
+		} else {
+			return nil, fmt.Errorf("%w: runner factory is required for a configured custom runner", ErrInvalidServer)
 		}
 	}
 	return s, nil
@@ -248,7 +268,12 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		s.mu.Lock()
 		s.nextID++
 		sessionID := fmt.Sprintf("acp-%d", s.nextID)
-		sess := NewSession(sessionID, params.Cwd, s.service, s.registry, s.runner, s.store)
+		s.mu.Unlock()
+		sess, err := s.newSession(sessionID, params.Cwd)
+		if err != nil {
+			return nil, nil, err
+		}
+		s.mu.Lock()
 		s.sessions[sessionID] = sess
 		s.mu.Unlock()
 
@@ -264,7 +289,7 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 			},
 		}
 
-		currentMode := s.service.Mode().String()
+		currentMode := sess.service.Mode().String()
 		return SessionNewResult{
 			SessionID: sessionID,
 			Modes:     DefaultSessionModes(currentMode),
@@ -396,7 +421,10 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 		return existing, nil
 	}
 
-	sess := NewSession(sessionID, cwd, s.service, s.registry, s.runner, s.store)
+	sess, err := s.newSession(sessionID, cwd)
+	if err != nil {
+		return nil, err
+	}
 	if s.store != nil {
 		state, found, err := s.store.Load(ctx, sessionID)
 		if err != nil {
@@ -414,6 +442,22 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 	s.sessions[sessionID] = sess
 	s.mu.Unlock()
 	return sess, nil
+}
+
+func (s *Server) newSession(sessionID string, cwd string) (*Session, error) {
+	service := s.service.Clone()
+	if service == nil {
+		return nil, fmt.Errorf("%w: clone session tool-call service", ErrInvalidServer)
+	}
+	var runner applicationturn.Runner
+	if s.runnerFactory != nil {
+		created, err := s.runnerFactory(service)
+		if err != nil {
+			return nil, fmt.Errorf("create runner for session %q: %w", sessionID, err)
+		}
+		runner = created
+	}
+	return NewSession(sessionID, cwd, service, s.registry, runner, s.store), nil
 }
 
 func (s *Server) listSessions(ctx context.Context, cwd string) []SessionInfo {
