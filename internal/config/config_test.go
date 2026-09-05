@@ -213,6 +213,63 @@ func TestSaveUserDefaultModel(t *testing.T) {
 	}
 }
 
+func TestSaveUserProviderConfigWithOptionsPreservesActiveProvider(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+
+	active := ProviderConfig{
+		Name:    "protonman",
+		Type:    "openai",
+		BaseURL: "https://protonman.dev/api/v1",
+		APIKey:  "active-key",
+	}
+	if err := SaveUserProviderConfig(homeDir, active, "active-model"); err != nil {
+		t.Fatalf("save active provider: %v", err)
+	}
+
+	secondary := ProviderConfig{
+		Name:    "custom-gateway",
+		Type:    "openai",
+		BaseURL: "https://custom.example.com/v1",
+		APIKey:  "secondary-key",
+	}
+	if err := SaveUserProviderConfigWithOptions(homeDir, secondary, ProviderSaveOptions{
+		DefaultModel: "secondary-model",
+	}); err != nil {
+		t.Fatalf("save inactive provider: %v", err)
+	}
+
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatalf("load after inactive provider save: %v", err)
+	}
+	if snapshot.Model.Provider != "protonman" || snapshot.Model.Default != "active-model" {
+		t.Fatalf("inactive provider save changed active defaults: %+v", snapshot.Model)
+	}
+
+	renamed := secondary
+	renamed.Name = "custom-renamed"
+	if err := SaveUserProviderConfigWithOptions(homeDir, renamed, ProviderSaveOptions{
+		PreviousName: secondary.Name,
+	}); err != nil {
+		t.Fatalf("rename inactive provider: %v", err)
+	}
+
+	snapshot, err = Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatalf("load after provider rename: %v", err)
+	}
+	if _, exists := snapshot.Providers["custom-gateway"]; exists {
+		t.Fatal("expected old provider key to be removed after rename")
+	}
+	if got := snapshot.Providers["custom-renamed"]; got.BaseURL != renamed.BaseURL {
+		t.Fatalf("expected renamed provider to be saved, got %+v", got)
+	}
+	if snapshot.Model.Provider != "protonman" {
+		t.Fatalf("provider rename changed active provider: %q", snapshot.Model.Provider)
+	}
+}
+
 func TestDeleteUserProviderConfig(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
