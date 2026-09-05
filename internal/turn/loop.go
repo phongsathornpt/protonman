@@ -48,6 +48,10 @@ var (
 	ErrMaxRounds = errors.New("model/tool round limit exceeded")
 	// ErrEmptyResponse indicates that the provider completed without text or tool calls.
 	ErrEmptyResponse = errors.New("model returned an empty response")
+	// ErrDuplicateToolCall indicates that one model response reused a call ID.
+	ErrDuplicateToolCall = errors.New("duplicate model tool call")
+	// ErrUnresolvedToolCall indicates that a requested call had no execution result.
+	ErrUnresolvedToolCall = errors.New("unresolved model tool call")
 )
 
 // EventKind identifies progress emitted by the application loop.
@@ -323,6 +327,11 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			terminalReason = "round_failed"
 			return l.fail(ctx, sink, round, err)
 		}
+		if len(assistant.ToolCalls) > 0 && len(executions) == 0 {
+			err := fmt.Errorf("%w: model requested %d tool calls after dispatch was disabled", ErrUnresolvedToolCall, len(assistant.ToolCalls))
+			terminalReason = "unresolved_tool_call"
+			return l.fail(ctx, sink, round, err)
+		}
 		history = append(history, assistant)
 		turnMessages = append(turnMessages, assistant)
 		if len(executions) == 0 || isMaxRound {
@@ -395,6 +404,13 @@ func (l *Loop) runRound(
 			"error_type", fmt.Sprintf("%T", err),
 		)
 		return model.Message{}, nil, err
+	}
+	seenIDs := make(map[string]struct{}, len(requestedCalls))
+	for _, requestedCall := range requestedCalls {
+		if _, exists := seenIDs[requestedCall.ID]; exists {
+			return model.Message{}, nil, fmt.Errorf("%w: %q", ErrDuplicateToolCall, requestedCall.ID)
+		}
+		seenIDs[requestedCall.ID] = struct{}{}
 	}
 	slog.DebugContext(parent, "turn round model completed",
 		"round", round,
