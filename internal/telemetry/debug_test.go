@@ -52,3 +52,19 @@ func TestConfigureDebugLoggerDisabled(t *testing.T) {
 		}
 	}
 }
+
+func TestFingerprintIsStableAndShort(t *testing.T) {
+	first := Fingerprint("private command")
+	second := Fingerprint("private command")
+	other := Fingerprint("another command")
+
+	if first != second {
+		t.Fatalf("Fingerprint() is not stable: %q != %q", first, second)
+	}
+	if first == other {
+		t.Fatalf("Fingerprint() collision for test values: %q", first)
+	}
+	if len(first) != 16 {
+		t.Fatalf("Fingerprint() length = %d, want 16", len(first))
+	}
+}
