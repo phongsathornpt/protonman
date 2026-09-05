@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/projectTHORN/proton/internal/model"
+	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	"github.com/projectTHORN/proton/internal/turn"
@@ -458,3 +460,94 @@ func TestCoordinator_ResilientEmitOnCancel(t *testing.T) {
 		t.Errorf("expected resilient emit of EventAgentFailed with valid context on cancellation")
 	}
 }
+
+func TestCoordinator_WorkerInheritsAlwaysApproveMode(t *testing.T) {
+	baseReg := staticRegistry{
+		handlers: map[string]tool.Handler{
+			"write_file": dummyHandler{def: tool.Definition{Name: "write_file", Kind: tool.KindEdit}},
+		},
+	}
+
+	var callErr error
+	coord := NewCoordinator(
+		nil,
+		baseReg,
+		nil,
+		nil,
+		WithPermissionMode(permission.ModeAlwaysApprove),
+		WithRunnerFactory(func(p Profile, tools *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{
+				runFunc: func(ctx context.Context, messages []model.Message, sink turn.Sink) (turn.Result, error) {
+					call, _ := tool.NewCall("c-1", "write_file", []byte(`{}`))
+					_, callErr = tools.Call(ctx, call)
+					return turn.Result{Message: model.Message{Content: "wrote file"}}, nil
+				},
+			}, nil
+		}),
+	)
+	defer coord.Close()
+
+	res, err := coord.Run(context.Background(), Request{
+		Profile: ProfileWorker,
+		Task:    "write file task",
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if callErr != nil {
+		t.Fatalf("expected tool call to succeed in ModeAlwaysApprove, got error: %v", callErr)
+	}
+	if res.Summary != "wrote file" {
+		t.Errorf("summary = %q, want 'wrote file'", res.Summary)
+	}
+}
+
+func TestCoordinator_SubagentInheritsCallGuard(t *testing.T) {
+	baseReg := staticRegistry{
+		handlers: map[string]tool.Handler{
+			"write_file": dummyHandler{def: tool.Definition{Name: "write_file", Kind: tool.KindEdit}},
+		},
+	}
+
+	readOnlyGuard := func(_ context.Context, req permission.Request) error {
+		if req.ToolKind != permission.ToolRead {
+			return errors.New("guard: plan mode is read-only")
+		}
+		return nil
+	}
+
+	var callErr error
+	coord := NewCoordinator(
+		nil,
+		baseReg,
+		nil,
+		nil,
+		WithPermissionMode(permission.ModeAlwaysApprove),
+		WithCallGuard(readOnlyGuard),
+		WithRunnerFactory(func(p Profile, tools *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{
+				runFunc: func(ctx context.Context, messages []model.Message, sink turn.Sink) (turn.Result, error) {
+					call, _ := tool.NewCall("c-1", "write_file", []byte(`{}`))
+					_, callErr = tools.Call(ctx, call)
+					return turn.Result{Message: model.Message{Content: "done"}}, nil
+				},
+			}, nil
+		}),
+	)
+	defer coord.Close()
+
+	_, err := coord.Run(context.Background(), Request{
+		Profile: ProfileWorker,
+		Task:    "write file task",
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if callErr == nil {
+		t.Fatal("expected tool call to be blocked by CallGuard, but it succeeded")
+	}
+	if !strings.Contains(callErr.Error(), "guard: plan mode is read-only") {
+		t.Errorf("callErr = %v, want 'guard: plan mode is read-only'", callErr)
+	}
+}
+
