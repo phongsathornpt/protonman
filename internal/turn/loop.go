@@ -513,10 +513,11 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		sdkTools := make([]sdk.Tool, 0, len(tools))
 		for _, definition := range tools {
 			sdkTools = append(sdkTools, sdk.Tool{
-				Name:        definition.Name,
-				Description: definition.Description,
-				InputSchema: definition.InputSchema,
-				Dynamic:     definition.Kind == tool.KindMCP,
+				Name:         definition.Name,
+				Description:  definition.Description,
+				InputSchema:  definition.InputSchema,
+				OutputSchema: definition.OutputSchema,
+				Dynamic:      definition.Kind == tool.KindMCP,
 			})
 		}
 		request := sdk.Request{

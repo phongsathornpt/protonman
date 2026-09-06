@@ -159,11 +159,12 @@ func newHandler(
 		serverName: serverName,
 		manifest:   manifest,
 		definition: tool.Definition{
-			Name:        name,
-			Description: description,
-			Kind:        tool.KindMCP,
-			Mutability:  manifest.Mutability,
-			InputSchema: deepCloneSchema(manifest.InputSchema),
+			Name:         name,
+			Description:  description,
+			Kind:         tool.KindMCP,
+			Mutability:   manifest.Mutability,
+			InputSchema:  deepCloneSchema(manifest.InputSchema),
+			OutputSchema: deepCloneSchema(manifest.OutputSchema),
 		},
 	}
 }
@@ -175,9 +176,10 @@ func (h serverToolHandler) Definition() tool.Definition {
 func (h serverToolHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	result, err := h.server.CallTool(ctx, h.manifest.Name, call.Arguments)
 	toolResult := tool.Result{
-		CallID:   call.ID,
-		ToolName: call.Name,
-		Output:   result.Output,
+		CallID:           call.ID,
+		ToolName:         call.Name,
+		Output:           result.Output,
+		StructuredOutput: append(json.RawMessage(nil), result.StructuredOutput...),
 	}
 	if err != nil {
 		return toolResult, fmt.Errorf("call MCP tool %s.%s: %w", h.serverName, h.manifest.Name, err)

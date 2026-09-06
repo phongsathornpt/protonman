@@ -13,6 +13,7 @@ import (
 
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 // PermissionPrompt resolves an interactive permission request.
@@ -318,6 +319,15 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		}
 		s.observeCallResult(ctx, telemetry, result, wrappedErr)
 		return result, wrappedErr
+	}
+	if len(definition.OutputSchema) > 0 {
+		validationErr := sdk.ValidateToolOutput(sdk.Tool{Name: definition.Name, OutputSchema: definition.OutputSchema}, result.StructuredOutput)
+		if validationErr != nil {
+			outputErr := tool.NewToolError(tool.ErrorCodeInvalidOutput, fmt.Sprintf("tool %q returned structured output that does not match its schema", call.Name))
+			result.Failure = tool.FailureFromError(outputErr)
+			s.observeCallResult(ctx, telemetry, result, outputErr)
+			return result, outputErr
+		}
 	}
 	s.observeCallResult(ctx, telemetry, result, nil)
 	return result, nil

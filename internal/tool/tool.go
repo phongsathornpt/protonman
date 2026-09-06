@@ -72,6 +72,8 @@ type ErrorCode string
 const (
 	// ErrorCodeInvalidArguments indicates that a call cannot be decoded or validated.
 	ErrorCodeInvalidArguments ErrorCode = "invalid_arguments"
+	// ErrorCodeInvalidOutput indicates that a successful handler returned structured output outside its declared schema.
+	ErrorCodeInvalidOutput ErrorCode = "invalid_output"
 	// ErrorCodeCanceled indicates that the caller canceled execution.
 	ErrorCodeCanceled ErrorCode = "canceled"
 	// ErrorCodeDeadlineExceeded indicates that the call exceeded its deadline.
@@ -246,6 +248,8 @@ type Definition struct {
 	PermissionDetailKey string
 	// InputSchema is the JSON-schema-like manifest exposed to callers.
 	InputSchema map[string]any
+	// OutputSchema optionally validates structured output returned by the tool.
+	OutputSchema map[string]any
 }
 
 // Validate checks the invariants required for safe registry insertion.
@@ -276,6 +280,8 @@ type Result struct {
 	ToolName string `json:"tool_name"`
 	// Output is the compatibility view presented to existing model/UI adapters.
 	Output string `json:"output,omitempty"`
+	// StructuredOutput preserves machine-readable JSON returned by tools such as MCP.
+	StructuredOutput json.RawMessage `json:"structured_output,omitempty"`
 	// Stdout and Stderr preserve process streams separately when available.
 	Stdout string `json:"stdout,omitempty"`
 	Stderr string `json:"stderr,omitempty"`

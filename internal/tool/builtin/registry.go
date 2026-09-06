@@ -2,6 +2,7 @@
 package builtin
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -228,6 +229,7 @@ func (r *Registry) Definitions() []tool.Definition {
 	for _, name := range r.order {
 		definition := r.handlers[name].Definition()
 		definition.InputSchema = cloneSchema(definition.InputSchema)
+		definition.OutputSchema = cloneSchema(definition.OutputSchema)
 		definitions = append(definitions, definition)
 	}
 	return definitions
@@ -236,6 +238,13 @@ func (r *Registry) Definitions() []tool.Definition {
 func cloneSchema(schema map[string]any) map[string]any {
 	if schema == nil {
 		return map[string]any{}
+	}
+	data, err := json.Marshal(schema)
+	if err == nil {
+		var clone map[string]any
+		if json.Unmarshal(data, &clone) == nil {
+			return clone
+		}
 	}
 	clone := make(map[string]any, len(schema))
 	for key, value := range schema {
