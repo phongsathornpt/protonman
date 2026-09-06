@@ -285,18 +285,22 @@ func (c *AssistantCell) LineCount() int     { return len(c.RawLines()) }
 // ToolCell is the generic representation for a tool that has no specialized
 // presentation model.
 type ToolCell struct {
-	CallID      string
-	Name        string
-	Body        string
-	Running     bool
-	ExitCode    *int
-	Truncated   bool
-	Denied      bool
-	FailureCode tool.ErrorCode
-	Spinner     string
-	Target      string
-	ToolKind    tool.Kind
-	Summary     string
+	CallID          string
+	Name            string
+	Body            string
+	Stdout          string
+	Stderr          string
+	Running         bool
+	ExitCode        *int
+	Truncated       bool
+	StdoutTruncated bool
+	StderrTruncated bool
+	Denied          bool
+	FailureCode     tool.ErrorCode
+	Spinner         string
+	Target          string
+	ToolKind        tool.Kind
+	Summary         string
 }
 
 func (ToolCell) Kind() HistoryCellKind { return HistoryCellTool }
@@ -423,16 +427,20 @@ func extractSkillContentName(body string) string {
 
 // ExecCell gives shell execution a compact, command-oriented presentation.
 type ExecCell struct {
-	CallID      string
-	Name        string
-	Command     string
-	Body        string
-	Running     bool
-	ExitCode    *int
-	Truncated   bool
-	Denied      bool
-	FailureCode tool.ErrorCode
-	Spinner     string
+	CallID          string
+	Name            string
+	Command         string
+	Body            string
+	Stdout          string
+	Stderr          string
+	Running         bool
+	ExitCode        *int
+	Truncated       bool
+	StdoutTruncated bool
+	StderrTruncated bool
+	Denied          bool
+	FailureCode     tool.ErrorCode
+	Spinner         string
 }
 
 func (ExecCell) Kind() HistoryCellKind { return HistoryCellTool }
@@ -482,13 +490,13 @@ func (c ExecCell) RenderWidth(width int) []string {
 		}
 	}
 	if !c.Running {
-		bodyLines := resultBodyLines(c.Body, nil, c.Truncated, false, "")
-		if len(bodyLines) > 0 {
-			folded := formatOutputFold(bodyLines, 3)
-			for _, line := range folded {
-				for _, wrapped := range safeWrappedLines(line, maxInt(1, width-2)) {
-					out = append(out, bodyStyle.Render("  "+wrapped))
-				}
+		for _, line := range c.renderOutputLines() {
+			style := bodyStyle
+			if strings.TrimSpace(line) == "stderr:" {
+				style = warningStyle
+			}
+			for _, wrapped := range safeWrappedLines(line, maxInt(1, width-2)) {
+				out = append(out, style.Render("  "+wrapped))
 			}
 		}
 	}
@@ -500,9 +508,78 @@ func (c ExecCell) RawLines() []string {
 		command = c.Name
 	}
 	out := []string{"$ " + sanitizeBubbleText(command)}
-	out = append(out, resultBodyLines(c.Body, c.ExitCode, c.Truncated, c.Denied, c.FailureCode)...)
+	out = append(out, c.outputLines(true)...)
 	return out
 }
+func (c ExecCell) renderOutputLines() []string {
+	structured := c.Stdout != "" || c.Stderr != "" || c.StdoutTruncated || c.StderrTruncated
+	if !structured {
+		return formatOutputFold(resultBodyLines(c.Body, nil, c.Truncated, false, ""), 3)
+	}
+	out := make([]string, 0, 8)
+	stdoutLines := rawTextLines(strings.TrimRight(c.Stdout, "\n"))
+	if c.StdoutTruncated {
+		stdoutLines = append(stdoutLines, "stdout truncated")
+	}
+	out = append(out, formatOutputFold(stdoutLines, 3)...)
+	if c.Stderr != "" || c.StderrTruncated {
+		out = append(out, "stderr:")
+		stderrLines := rawTextLines(strings.TrimRight(c.Stderr, "\n"))
+		if c.StderrTruncated {
+			stderrLines = append(stderrLines, "stderr truncated")
+		}
+		out = append(out, formatOutputFold(stderrLines, 3)...)
+	}
+	if c.Truncated && !c.StdoutTruncated && !c.StderrTruncated {
+		out = append(out, "output truncated")
+	}
+	return out
+}
+
+func (c ExecCell) outputLines(includeStatus bool) []string {
+	structured := c.Stdout != "" || c.Stderr != "" || c.StdoutTruncated || c.StderrTruncated
+	if !structured {
+		exitCode := c.ExitCode
+		denied := c.Denied
+		failureCode := c.FailureCode
+		if !includeStatus {
+			exitCode, denied, failureCode = nil, false, ""
+		}
+		return resultBodyLines(c.Body, exitCode, c.Truncated, denied, failureCode)
+	}
+	lines := make([]string, 0, strings.Count(c.Stdout, "\n")+strings.Count(c.Stderr, "\n")+6)
+	if stdout := strings.TrimRight(c.Stdout, "\n"); stdout != "" {
+		lines = append(lines, rawTextLines(stdout)...)
+	}
+	if c.StdoutTruncated {
+		lines = append(lines, "stdout truncated")
+	}
+	if stderr := strings.TrimRight(c.Stderr, "\n"); stderr != "" {
+		lines = append(lines, "stderr:")
+		for _, line := range rawTextLines(stderr) {
+			lines = append(lines, "  "+line)
+		}
+	}
+	if c.StderrTruncated {
+		lines = append(lines, "stderr truncated")
+	}
+	if c.Truncated && !c.StdoutTruncated && !c.StderrTruncated {
+		lines = append(lines, "output truncated")
+	}
+	if includeStatus {
+		if c.ExitCode != nil {
+			lines = append(lines, fmt.Sprintf("exit %d", *c.ExitCode))
+		}
+		if c.Denied {
+			lines = append(lines, "denied")
+		}
+		if c.FailureCode != "" {
+			lines = append(lines, "failure: "+string(c.FailureCode))
+		}
+	}
+	return lines
+}
+
 func (c ExecCell) LineCount() int           { return len(c.RawLines()) }
 func (c ExecCell) historyToolID() string    { return c.CallID }
 func (c ExecCell) historyToolName() string  { return c.Name }
