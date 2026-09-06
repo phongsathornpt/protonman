@@ -147,16 +147,28 @@ func ProviderHasUsableAuth(providerName, baseURL, apiKey string) bool {
 }
 
 // ResolveProviderBaseURL returns the configured endpoint or the preset default
-// for a known provider.
+// for a known provider. Unknown providers retain the historical Protonman default.
 func ResolveProviderBaseURL(providerName string, configuredURL string) string {
+	return ResolveProviderBaseURLForProtocol(providerName, "", configuredURL)
+}
+
+// ResolveProviderBaseURLForProtocol resolves defaults using explicit protocol
+// when a custom provider name does not match a built-in preset.
+func ResolveProviderBaseURLForProtocol(providerName, providerType, configuredURL string) string {
 	if baseURL := strings.TrimSpace(configuredURL); baseURL != "" {
 		return strings.TrimRight(baseURL, "/")
 	}
-
 	if preset := LookupPreset(providerName); preset != nil {
 		return preset.BaseURL
 	}
-	return DefaultProtonmanEndpoint
+	switch ProviderProtocol(strings.ToLower(strings.TrimSpace(providerType))) {
+	case ProviderProtocolAnthropic:
+		return DefaultAnthropicEndpoint
+	case ProviderProtocolOpenAI:
+		return DefaultOpenAIEndpoint
+	default:
+		return DefaultProtonmanEndpoint
+	}
 }
 
 // RemoteModel describes a model discovered from an OpenAI or protonman endpoint.

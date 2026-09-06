@@ -17,6 +17,7 @@ func NewProviderClient(
 			protocol = preset.Protocol
 		}
 	}
+	baseURL = ResolveProviderBaseURLForProtocol(providerName, string(protocol), baseURL)
 	switch protocol {
 	case ProviderProtocolAnthropic:
 		return newSDKAnthropicClient(baseURL, apiKey, modelID, opts...)
