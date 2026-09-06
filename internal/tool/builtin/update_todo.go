@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	tododomain "github.com/projectTHORN/proton/internal/todo"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -59,7 +60,18 @@ func (h updateTodoHandler) PermissionDetail(arguments json.RawMessage) string {
 	if err := json.Unmarshal(arguments, &input); err != nil {
 		return "task plan"
 	}
-	return fmt.Sprintf("%d tasks", len(input.Items))
+	if h.store == nil {
+		return fmt.Sprintf("%d tasks", len(input.Items))
+	}
+	current := h.store.Snapshot()
+	if input.ExpectedRevision == nil || *input.ExpectedRevision != current.Revision {
+		return fmt.Sprintf("stale task plan · %d tasks", len(input.Items))
+	}
+	changes := todoChanges(current.Items, input.Items)
+	if detail := summarizeTodoChanges(changes); detail != "" {
+		return detail
+	}
+	return fmt.Sprintf("%d tasks · no changes", len(input.Items))
 }
 
 func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
@@ -141,4 +153,19 @@ func todoChanges(before, after []tododomain.Item) todoChangeSummary {
 		}
 	}
 	return out
+}
+
+func summarizeTodoChanges(changes todoChangeSummary) string {
+	parts := make([]string, 0, 5)
+	appendChange := func(count int, label string) {
+		if count > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", count, label))
+		}
+	}
+	appendChange(changes.Completed, "completed")
+	appendChange(changes.Started, "started")
+	appendChange(changes.Reopened, "reopened")
+	appendChange(changes.Added, "added")
+	appendChange(changes.Removed, "removed")
+	return strings.Join(parts, " · ")
 }
