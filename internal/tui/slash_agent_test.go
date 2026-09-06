@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
 )
@@ -39,11 +38,8 @@ func TestSlashAgent(t *testing.T) {
 		if !strings.Contains(content, "Agent profile switched to dex") {
 			t.Fatalf("expected switch confirmation, got: %s", content)
 		}
-		if len(bModel.messages) == 0 || bModel.messages[0].Role != model.RoleSystem {
-			t.Fatalf("expected system message to be set in transcript, got: %+v", bModel.messages)
-		}
-		if !strings.Contains(bModel.messages[0].Content, "DEX Mode") {
-			t.Fatalf("expected DEX Mode prompt, got: %s", bModel.messages[0].Content)
+		if len(bModel.messages) != 0 {
+			t.Fatalf("profile switch mutated transcript: %+v", bModel.messages)
 		}
 	})
 
@@ -52,8 +48,8 @@ func TestSlashAgent(t *testing.T) {
 		if got, want := bModel.agentProfile, "pow"; got != want {
 			t.Fatalf("bModel.agentProfile = %q, want %q", got, want)
 		}
-		if !strings.Contains(bModel.messages[0].Content, "POW Mode") {
-			t.Fatalf("expected POW Mode prompt, got: %s", bModel.messages[0].Content)
+		if len(bModel.messages) != 0 {
+			t.Fatalf("profile switch mutated transcript: %+v", bModel.messages)
 		}
 	})
 

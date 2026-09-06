@@ -108,23 +108,24 @@ func WithCoordinator(coordinator *agent.Coordinator) BubbleTeaOption {
 
 // BubbleTeaUI is the Bubble Tea terminal adapter over Proton services.
 type BubbleTeaUI struct {
-	service          *toolcall.Service
-	registry         tool.Registry
-	skills           *skill.Registry
-	todoStore        tododomain.Repository
-	runner           applicationturn.Runner
-	bridge           *permissionBridge
-	coordinator      *agent.Coordinator
-	workDir          string
-	initialMessages  []model.Message
-	finalMessages    []model.Message
-	modelConfig      config.ModelConfig
-	agentConfig      config.AgentConfig
-	hasAgentConfig   bool
-	runtimeConfig    config.RuntimeConfig
-	hasRuntimeConfig bool
-	providers        map[string]config.ProviderConfig
-	sessionID        string
+	service           *toolcall.Service
+	registry          tool.Registry
+	skills            *skill.Registry
+	todoStore         tododomain.Repository
+	runner            applicationturn.Runner
+	bridge            *permissionBridge
+	coordinator       *agent.Coordinator
+	workDir           string
+	initialMessages   []model.Message
+	finalMessages     []model.Message
+	finalAgentProfile string
+	modelConfig       config.ModelConfig
+	agentConfig       config.AgentConfig
+	hasAgentConfig    bool
+	runtimeConfig     config.RuntimeConfig
+	hasRuntimeConfig  bool
+	providers         map[string]config.ProviderConfig
+	sessionID         string
 }
 
 // NewBubbleTea creates the component-based fullscreen TUI.
@@ -155,6 +156,7 @@ func NewBubbleTea(
 		}
 	}
 	ui.finalMessages = model.CloneMessages(ui.initialMessages)
+	ui.finalAgentProfile = ui.agentConfig.Profile
 	return ui, nil
 }
 
@@ -172,6 +174,11 @@ func (ui *BubbleTeaUI) PermissionPrompt(
 // storage with the live Bubble Tea model.
 func (ui *BubbleTeaUI) SessionState() []model.Message {
 	return model.CloneMessages(ui.finalMessages)
+}
+
+// AgentProfile returns the latest named profile selected by the TUI.
+func (ui *BubbleTeaUI) AgentProfile() string {
+	return ui.finalAgentProfile
 }
 
 // Run starts Bubble Tea with raw input, alternate-screen rendering, and mouse
@@ -286,6 +293,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 
 		if modelState, ok := finalModel.(*bubbleModel); ok {
 			ui.finalMessages = model.CloneMessages(modelState.messages)
+			ui.finalAgentProfile = modelState.agentProfile
 			currentMessages = model.CloneMessages(modelState.messages)
 			slog.DebugContext(ctx, "tui program returned",
 				"duration_ms", time.Since(startedAt).Milliseconds(),

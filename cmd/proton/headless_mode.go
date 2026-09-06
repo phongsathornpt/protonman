@@ -44,6 +44,7 @@ func runHeadless(
 	saveErr := stateStore.Save(ctx, sessionID, session.State{
 		PermissionMode: service.Mode().String(),
 		ActiveSkills:   activeSkills,
+		AgentProfile:   state.AgentProfile,
 		Messages:       runner.SessionState(),
 	})
 	if runErr != nil && saveErr != nil {

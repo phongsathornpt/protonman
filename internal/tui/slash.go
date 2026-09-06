@@ -915,20 +915,6 @@ func (m *bubbleModel) handleAgentCommand(argument string) tea.Cmd {
 	}
 
 	m.agentProfile = string(prof)
-	promptContent := agent.SystemPromptForProfile(prof)
-
-	if len(m.messages) == 0 {
-		m.messages = []model.Message{
-			{Role: model.RoleSystem, Content: promptContent},
-		}
-	} else if m.messages[0].Role == model.RoleSystem {
-		m.messages[0].Content = promptContent
-	} else {
-		m.messages = append([]model.Message{
-			{Role: model.RoleSystem, Content: promptContent},
-		}, m.messages...)
-	}
-
 	m.reconfigureRunner()
 	m.appendLine(successStyle.Render(fmt.Sprintf("Agent profile switched to %s.", prof)))
 	m.refreshViewport()

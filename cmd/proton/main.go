@@ -97,6 +97,7 @@ func run(ctx context.Context, args []string) error {
 	saveErr := runtimeState.stateStore.Save(ctx, runtimeState.sessionID, session.State{
 		PermissionMode: runtimeState.service.Mode().String(),
 		ActiveSkills:   activeSkills,
+		AgentProfile:   bubbleUI.AgentProfile(),
 		Messages:       session.FromModelMessages(bubbleUI.SessionState()),
 	})
 	if runErr != nil && saveErr != nil {

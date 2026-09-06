@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/projectTHORN/proton/internal/agentprompt"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -32,6 +33,8 @@ type State struct {
 	PermissionMode string `json:"permission_mode"`
 	// ActiveSkills records skills activated in this session.
 	ActiveSkills []string `json:"active_skills,omitempty"`
+	// AgentProfile records the active named coding profile without persisting a generated system prompt.
+	AgentProfile string `json:"agent_profile,omitempty"`
 	// Messages is the redacted conversation transcript. Tool arguments are
 	// never stored.
 	Messages []Message `json:"messages,omitempty"`
@@ -62,6 +65,9 @@ func ToModelMessages(stored []Message) []model.Message {
 	stored = compactToolHistory(stored)
 	messages := make([]model.Message, 0, len(stored))
 	for _, message := range stored {
+		if message.Role == model.RoleSystem && agentprompt.IsManaged(message.Content) {
+			continue
+		}
 		messages = append(messages, model.Message{
 			Role:    message.Role,
 			Content: message.Content,
@@ -76,6 +82,9 @@ func ToModelMessages(stored []Message) []model.Message {
 func FromModelMessages(messages []model.Message) []Message {
 	out := make([]Message, 0, len(messages))
 	for _, message := range messages {
+		if message.Role == model.RoleSystem && agentprompt.IsManaged(message.Content) {
+			continue
+		}
 		out = append(out, Message{
 			Role:       message.Role,
 			Content:    message.Content,
