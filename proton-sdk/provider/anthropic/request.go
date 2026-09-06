@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/projectTHORN/proton/proton-sdk/internal/providerutil"
 )
 
 type requestBody struct {
@@ -41,9 +42,19 @@ type imageSource struct {
 }
 
 type toolDef struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description,omitempty"`
-	InputSchema map[string]any `json:"input_schema"`
+	Name            string          `json:"name"`
+	Description     string          `json:"description,omitempty"`
+	InputSchema     map[string]any  `json:"input_schema"`
+	ProviderOptions json.RawMessage `json:"-"`
+}
+
+func (t toolDef) MarshalJSON() ([]byte, error) {
+	base := struct {
+		Name        string         `json:"name"`
+		Description string         `json:"description,omitempty"`
+		InputSchema map[string]any `json:"input_schema"`
+	}{t.Name, t.Description, t.InputSchema}
+	return providerutil.MarshalWithOptions(base, t.ProviderOptions, "name", "description", "input_schema")
 }
 
 func buildRequest(modelID string, request sdk.Request, defaultMaxTokens int) (requestBody, error) {
@@ -82,7 +93,7 @@ func buildRequest(modelID string, request sdk.Request, defaultMaxTokens int) (re
 		if schema == nil {
 			schema = map[string]any{"type": "object", "properties": map[string]any{}}
 		}
-		body.Tools = append(body.Tools, toolDef{Name: tool.Name, Description: tool.Description, InputSchema: schema})
+		body.Tools = append(body.Tools, toolDef{Name: tool.Name, Description: tool.Description, InputSchema: schema, ProviderOptions: tool.ProviderOptions["anthropic"]})
 	}
 	return body, nil
 }

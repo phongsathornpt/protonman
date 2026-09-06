@@ -58,11 +58,12 @@ func (c ToolCall) Validate() error {
 }
 
 type Tool struct {
-	Name         string
-	Description  string
-	InputSchema  map[string]any
-	OutputSchema map[string]any
-	Dynamic      bool
+	Name            string
+	Description     string
+	InputSchema     map[string]any
+	OutputSchema    map[string]any
+	ProviderOptions ProviderOptions
+	Dynamic         bool
 }
 
 // ToolResult is the provider-neutral result returned to a model after an agent
