@@ -42,10 +42,11 @@ func runHeadless(
 		activeSkills = skillRegistry.ActivatedList()
 	}
 	saveErr := stateStore.Save(ctx, sessionID, session.State{
-		PermissionMode: service.Mode().String(),
-		ActiveSkills:   activeSkills,
-		AgentProfile:   state.AgentProfile,
-		Messages:       runner.SessionState(),
+		PermissionMode:  service.Mode().String(),
+		ActiveSkills:    activeSkills,
+		AgentProfile:    state.AgentProfile,
+		ReasoningEffort: state.ReasoningEffort,
+		Messages:        runner.SessionState(),
 	})
 	if runErr != nil && saveErr != nil {
 		return fmt.Errorf("run headless: %v; save session: %w", runErr, saveErr)

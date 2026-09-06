@@ -8,8 +8,18 @@ import (
 )
 
 func WithRemoteModelProfile(providerName string, remote RemoteModel) ClientOption {
-	resolved := modelprofile.ResolveBuiltin(providerName, remote.ID, remote.ProfileMetadata())
-	return withResolvedModelProfile(resolved)
+	return withResolvedModelProfile(ResolveModelProfile(providerName, remote.ID, &remote))
+}
+
+func ResolveModelProfile(providerName, modelID string, remote *RemoteModel) modelprofile.Resolved {
+	metadata := modelprofile.CatalogMetadata{}
+	if remote != nil {
+		metadata = remote.ProfileMetadata()
+		if remote.ID != "" {
+			modelID = remote.ID
+		}
+	}
+	return modelprofile.ResolveBuiltin(providerName, modelID, metadata)
 }
 
 func (m RemoteModel) ProfileMetadata() modelprofile.CatalogMetadata {

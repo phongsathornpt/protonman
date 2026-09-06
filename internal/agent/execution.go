@@ -26,6 +26,7 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	permMode := c.permissionMode
 	prompt := c.prompt
 	guard := c.guard
+	reasoningEffort := c.reasoningEffort
 	c.agentsMu.RUnlock()
 
 	// 1. Build profile-scoped tool registry
@@ -94,8 +95,8 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 		if spec, ok := SpecForProfile(req.Profile); ok {
 			loopOptions = append(loopOptions, turn.WithReasoningEffort(spec.Reasoning))
 		}
-		if c.reasoningEffort != sdk.ReasoningDefault {
-			loopOptions = append(loopOptions, turn.WithExplicitReasoningEffort(c.reasoningEffort))
+		if reasoningEffort != sdk.ReasoningDefault {
+			loopOptions = append(loopOptions, turn.WithExplicitReasoningEffort(reasoningEffort))
 		}
 		loop, lerr := turn.NewLoop(languageModel, service, loopOptions...)
 		if lerr != nil {

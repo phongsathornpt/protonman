@@ -17,6 +17,7 @@ import (
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 const (
@@ -35,6 +36,8 @@ type State struct {
 	ActiveSkills []string `json:"active_skills,omitempty"`
 	// AgentProfile records the active named coding profile without persisting a generated system prompt.
 	AgentProfile string `json:"agent_profile,omitempty"`
+	// ReasoningEffort records the session reasoning override ("auto" preserves provider/profile defaults).
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 	// Messages is the redacted conversation transcript. Tool arguments are
 	// never stored.
 	Messages []Message `json:"messages,omitempty"`
@@ -144,6 +147,9 @@ func (s *FileStore) Load(ctx context.Context, sessionID string) (State, bool, er
 	if _, err := permission.ParseMode(state.PermissionMode); err != nil {
 		return State{}, false, fmt.Errorf("session permission mode: %w", err)
 	}
+	if err := validateReasoningSetting(state.ReasoningEffort); err != nil {
+		return State{}, false, fmt.Errorf("session reasoning effort: %w", err)
+	}
 	if err := validateMessages(state.Messages); err != nil {
 		return State{}, false, fmt.Errorf("session messages: %w", err)
 	}
@@ -235,6 +241,9 @@ func (s *FileStore) Save(ctx context.Context, sessionID string, state State) (sa
 	}
 	if _, err := permission.ParseMode(state.PermissionMode); err != nil {
 		return fmt.Errorf("session permission mode: %w", err)
+	}
+	if err := validateReasoningSetting(state.ReasoningEffort); err != nil {
+		return fmt.Errorf("session reasoning effort: %w", err)
 	}
 	if err := validateMessages(state.Messages); err != nil {
 		return fmt.Errorf("session messages: %w", err)
@@ -480,6 +489,14 @@ func truncateStoredContent(content string) string {
 		content = content[:len(content)-1]
 	}
 	return content
+}
+
+func validateReasoningSetting(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	_, err := sdk.ParseReasoningEffort(value)
+	return err
 }
 
 func validateMessages(messages []Message) error {

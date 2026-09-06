@@ -32,6 +32,7 @@ var slashCatalog = []slashCommand{
 	{name: "tools", description: "list tools"},
 	{name: "skills", aliases: []string{"skill"}, description: "browse, activate, or toggle agent skills (/skills [name|active|toggle])", takesArgs: true},
 	{name: "agent", aliases: []string{"profile"}, description: "show or set agent profile (/agent [" + agent.ProfileList("|") + "])", takesArgs: true},
+	{name: "reasoning", aliases: []string{"thinking"}, description: "show or set session reasoning effort (/reasoning [auto|none|low|medium|high|xhigh|max])", takesArgs: true},
 	{name: "mode", description: "show or set permission mode", takesArgs: true},
 	{name: "ask", description: "switch to ask permission mode"},
 	{name: "always-approve", aliases: []string{"yolo"}, description: "allow non-denied calls"},
@@ -662,6 +663,8 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		return nil
 	case "agent", "profile":
 		return m.handleAgentCommand(argument)
+	case "reasoning", "thinking":
+		return m.handleReasoningCommand(argument)
 	case "call":
 		return m.startCall(parts)
 	case "quit", "exit":

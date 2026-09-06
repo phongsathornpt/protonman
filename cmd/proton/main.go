@@ -16,6 +16,7 @@ import (
 	"github.com/projectTHORN/proton/internal/telemetry"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	"github.com/projectTHORN/proton/internal/tui"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 func main() {
@@ -95,10 +96,11 @@ func run(ctx context.Context, args []string) error {
 		activeSkills = runtimeState.skills.ActivatedList()
 	}
 	saveErr := runtimeState.stateStore.Save(ctx, runtimeState.sessionID, session.State{
-		PermissionMode: runtimeState.service.Mode().String(),
-		ActiveSkills:   activeSkills,
-		AgentProfile:   bubbleUI.AgentProfile(),
-		Messages:       session.FromModelMessages(bubbleUI.SessionState()),
+		PermissionMode:  runtimeState.service.Mode().String(),
+		ActiveSkills:    activeSkills,
+		AgentProfile:    bubbleUI.AgentProfile(),
+		ReasoningEffort: reasoningSetting(bubbleUI.ReasoningEffort()),
+		Messages:        session.FromModelMessages(bubbleUI.SessionState()),
 	})
 	if runErr != nil && saveErr != nil {
 		return fmt.Errorf("run terminal UI: %v; save session: %w", runErr, saveErr)
@@ -130,4 +132,11 @@ func configuredTelemetryObserver() (toolcall.Observer, error) {
 	default:
 		return nil, fmt.Errorf("unsupported PROTON_TELEMETRY value %q", envconfig.Value(envconfig.Telemetry))
 	}
+}
+
+func reasoningSetting(effort sdk.ReasoningEffort) string {
+	if effort == sdk.ReasoningDefault {
+		return "auto"
+	}
+	return string(effort)
 }

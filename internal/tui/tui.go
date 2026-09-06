@@ -20,6 +20,7 @@ import (
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/turn"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 // BubbleTeaOption configures the Bubble Tea fullscreen adapter.
@@ -108,24 +109,25 @@ func WithCoordinator(coordinator *agent.Coordinator) BubbleTeaOption {
 
 // BubbleTeaUI is the Bubble Tea terminal adapter over Proton services.
 type BubbleTeaUI struct {
-	service           *toolcall.Service
-	registry          tool.Registry
-	skills            *skill.Registry
-	todoStore         tododomain.Repository
-	runner            applicationturn.Runner
-	bridge            *permissionBridge
-	coordinator       *agent.Coordinator
-	workDir           string
-	initialMessages   []model.Message
-	finalMessages     []model.Message
-	finalAgentProfile string
-	modelConfig       config.ModelConfig
-	agentConfig       config.AgentConfig
-	hasAgentConfig    bool
-	runtimeConfig     config.RuntimeConfig
-	hasRuntimeConfig  bool
-	providers         map[string]config.ProviderConfig
-	sessionID         string
+	service              *toolcall.Service
+	registry             tool.Registry
+	skills               *skill.Registry
+	todoStore            tododomain.Repository
+	runner               applicationturn.Runner
+	bridge               *permissionBridge
+	coordinator          *agent.Coordinator
+	workDir              string
+	initialMessages      []model.Message
+	finalMessages        []model.Message
+	finalAgentProfile    string
+	finalReasoningEffort sdk.ReasoningEffort
+	modelConfig          config.ModelConfig
+	agentConfig          config.AgentConfig
+	hasAgentConfig       bool
+	runtimeConfig        config.RuntimeConfig
+	hasRuntimeConfig     bool
+	providers            map[string]config.ProviderConfig
+	sessionID            string
 }
 
 // NewBubbleTea creates the component-based fullscreen TUI.
@@ -157,6 +159,7 @@ func NewBubbleTea(
 	}
 	ui.finalMessages = model.CloneMessages(ui.initialMessages)
 	ui.finalAgentProfile = ui.agentConfig.Profile
+	ui.finalReasoningEffort = ui.agentConfig.ReasoningEffort
 	return ui, nil
 }
 
@@ -179,6 +182,11 @@ func (ui *BubbleTeaUI) SessionState() []model.Message {
 // AgentProfile returns the latest named profile selected by the TUI.
 func (ui *BubbleTeaUI) AgentProfile() string {
 	return ui.finalAgentProfile
+}
+
+// ReasoningEffort returns the latest explicit session reasoning override.
+func (ui *BubbleTeaUI) ReasoningEffort() sdk.ReasoningEffort {
+	return ui.finalReasoningEffort
 }
 
 // Run starts Bubble Tea with raw input, alternate-screen rendering, and mouse
@@ -295,6 +303,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		if modelState, ok := finalModel.(*bubbleModel); ok {
 			ui.finalMessages = model.CloneMessages(modelState.messages)
 			ui.finalAgentProfile = modelState.agentProfile
+			ui.finalReasoningEffort = modelState.reasoningEffort
 			currentMessages = model.CloneMessages(modelState.messages)
 			slog.DebugContext(ctx, "tui program returned",
 				"duration_ms", time.Since(startedAt).Milliseconds(),
