@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type ProviderProtocol string
@@ -159,14 +160,31 @@ func IsFreeModel(id string) bool {
 	return strings.HasSuffix(idLower, "-free") || idLower == "big-pickle"
 }
 
+// FetchModelsOption configures provider model discovery.
+type FetchModelsOption func(*http.Client)
+
+// WithDiscoveryTimeout overrides the model-discovery HTTP timeout.
+func WithDiscoveryTimeout(timeout time.Duration) FetchModelsOption {
+	return func(client *http.Client) {
+		if timeout > 0 {
+			client.Timeout = timeout
+		}
+	}
+}
+
 // FetchProviderModels queries a provider's model endpoint to list available models.
-func FetchProviderModels(ctx context.Context, baseURL string, apiKey string) ([]RemoteModel, error) {
+func FetchProviderModels(ctx context.Context, baseURL string, apiKey string, options ...FetchModelsOption) ([]RemoteModel, error) {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if baseURL == "" {
 		baseURL = DefaultProtonmanEndpoint
 	}
 
 	client := &http.Client{Timeout: runtimepolicy.ModelDiscoveryTimeout}
+	for _, option := range options {
+		if option != nil {
+			option(client)
+		}
+	}
 
 	// 1. Try standard /models endpoint with Bearer auth (or without auth if apiKey is empty)
 	modelsEndpoint := baseURL + "/models"

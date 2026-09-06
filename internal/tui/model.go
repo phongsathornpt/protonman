@@ -79,6 +79,7 @@ type bubbleModel struct {
 	agentProfile     string
 	sessionID        string
 	modelCatalogs    modelCatalogState
+	runtimeConfig    config.RuntimeConfig
 
 	// Compatibility snapshots for existing in-package tests during the
 	// migration. Runtime ownership lives in bottom/historyState.
@@ -153,6 +154,7 @@ func newBubbleModel(
 		messages:           messages,
 		maxRounds:          config.DefaultMaxRounds,
 		maxToolCalls:       config.DefaultMaxToolCalls,
+		runtimeConfig:      config.DefaultRuntimeConfig(),
 	}
 	ui.prompt = bottom.prompt()
 	ui.loadInitialMessages(messages)

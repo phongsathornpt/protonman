@@ -127,6 +127,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		builtin.WithSkillRegistry(skillRegistry),
 		builtin.WithAgentCoordinator(coordinator),
 		builtin.WithTodoStore(todoStore),
+		builtin.WithDefaultWebFetchTimeout(loadedConfig.Runtime.WebFetchTimeout),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create tool registry: %w", err)
@@ -161,7 +162,11 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	if err := applyAgentProfile(&loadedConfig, &state, options.agentProfile); err != nil {
 		return nil, err
 	}
-	serviceOptions := []toolcall.Option{toolcall.WithMode(initialMode)}
+	serviceOptions := []toolcall.Option{
+		toolcall.WithMode(initialMode),
+		toolcall.WithPermissionTimeout(loadedConfig.Runtime.ToolPermissionTimeout),
+		toolcall.WithExecutionTimeout(loadedConfig.Runtime.ToolExecutionTimeout),
+	}
 	observer, err := configuredTelemetryObserver()
 	if err != nil {
 		return nil, err
@@ -214,9 +219,14 @@ func buildInitialRunner(cfg config.Snapshot, sessionID string, skills *skill.Reg
 	if !ok || strings.TrimSpace(provider.APIKey) == "" {
 		return nil
 	}
-	client := model.NewProviderClient(providerKey, model.ResolveProviderBaseURL(providerKey, provider.BaseURL), provider.APIKey, cfg.Model.Default, model.WithSessionID(sessionID))
+	client := model.NewProviderClient(providerKey, model.ResolveProviderBaseURL(providerKey, provider.BaseURL), provider.APIKey, cfg.Model.Default, model.WithSessionID(sessionID), model.WithRequestTimeout(cfg.Runtime.ModelRequestTimeout))
 	coordinator.SetClient(client)
-	loopOptions := []turn.Option{turn.WithMaxRounds(cfg.Agent.MaxRounds), turn.WithMaxToolCalls(cfg.Agent.MaxToolCalls)}
+	loopOptions := []turn.Option{
+		turn.WithMaxRounds(cfg.Agent.MaxRounds),
+		turn.WithMaxToolCalls(cfg.Agent.MaxToolCalls),
+		turn.WithTurnTimeout(cfg.Runtime.TurnTimeout),
+		turn.WithRoundTimeout(cfg.Runtime.RoundTimeout),
+	}
 	if skills != nil {
 		loopOptions = append(loopOptions, turn.WithSkillRegistry(skills))
 	}

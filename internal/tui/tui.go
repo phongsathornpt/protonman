@@ -88,6 +88,15 @@ func WithAgentConfig(agentCfg config.AgentConfig) BubbleTeaOption {
 	}
 }
 
+// WithRuntimeConfig attaches shared execution and network policy to the TUI.
+func WithRuntimeConfig(runtimeCfg config.RuntimeConfig) BubbleTeaOption {
+	return func(ui *BubbleTeaUI) error {
+		ui.runtimeConfig = runtimeCfg
+		ui.hasRuntimeConfig = true
+		return nil
+	}
+}
+
 // WithCoordinator attaches the subagent coordinator to the TUI so permission
 // mode, interactive prompts, and model client changes are synchronized.
 func WithCoordinator(coordinator *agent.Coordinator) BubbleTeaOption {
@@ -99,21 +108,23 @@ func WithCoordinator(coordinator *agent.Coordinator) BubbleTeaOption {
 
 // BubbleTeaUI is the Bubble Tea terminal adapter over Proton services.
 type BubbleTeaUI struct {
-	service         *toolcall.Service
-	registry        tool.Registry
-	skills          *skill.Registry
-	todoStore       tododomain.Repository
-	runner          applicationturn.Runner
-	bridge          *permissionBridge
-	coordinator     *agent.Coordinator
-	workDir         string
-	initialMessages []model.Message
-	finalMessages   []model.Message
-	modelConfig     config.ModelConfig
-	agentConfig     config.AgentConfig
-	hasAgentConfig  bool
-	providers       map[string]config.ProviderConfig
-	sessionID       string
+	service          *toolcall.Service
+	registry         tool.Registry
+	skills           *skill.Registry
+	todoStore        tododomain.Repository
+	runner           applicationturn.Runner
+	bridge           *permissionBridge
+	coordinator      *agent.Coordinator
+	workDir          string
+	initialMessages  []model.Message
+	finalMessages    []model.Message
+	modelConfig      config.ModelConfig
+	agentConfig      config.AgentConfig
+	hasAgentConfig   bool
+	runtimeConfig    config.RuntimeConfig
+	hasRuntimeConfig bool
+	providers        map[string]config.ProviderConfig
+	sessionID        string
 }
 
 // NewBubbleTea creates the component-based fullscreen TUI.
@@ -220,6 +231,9 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		bModel.activeProvider = ui.modelConfig.Provider
 		bModel.providers = ui.providers
 		bModel.sessionID = ui.sessionID
+		if ui.hasRuntimeConfig {
+			bModel.runtimeConfig = ui.runtimeConfig
+		}
 		if ui.hasAgentConfig {
 			bModel.maxRounds = ui.agentConfig.MaxRounds
 			bModel.maxToolCalls = ui.agentConfig.MaxToolCalls
