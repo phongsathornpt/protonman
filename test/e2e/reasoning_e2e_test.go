@@ -23,7 +23,10 @@ func TestE2EReasoningGeminiProfileReachesWire(t *testing.T) {
 	if len(requests) < 1 || requests[0]["reasoning_effort"] != "high" {
 		t.Fatalf("Gemini request reasoning = %#v", requests)
 	}
-	if !requestMessagesContain(requests[0], "reasoning_effective=high") || !requestMessagesContain(requests[0], "reasoning_source=agent_profile") {
+	if !requestMessagesContain(requests[0], "reasoning_effective=high") ||
+		!requestMessagesContain(requests[0], "reasoning_source=agent_profile") ||
+		!requestMessagesContain(requests[0], "model_profile=gemini-3.8-flash") ||
+		!requestMessagesContain(requests[0], "model_profile_match=exact") {
 		t.Fatalf("Gemini prompt missing reasoning provenance: %#v", requests[0]["messages"])
 	}
 	assertNoSamplingControls(t, requests)

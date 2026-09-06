@@ -9,24 +9,27 @@ import (
 const Version = "2"
 
 type Spec struct {
-	Role                string
-	Profile             string
-	Provider            string
-	ModelID             string
-	Workspace           string
-	ToolNames           []string
-	MaxRounds           int
-	MaxToolCalls        int
-	ReasoningRequested  string
-	ReasoningEffective  string
-	ReasoningSource     string
-	ReasoningClamped    bool
-	TaskPlanEnabled     bool
-	DelegationEnabled   bool
-	MutationEnabled     bool
-	Skills              string
-	ProjectInstructions string
-	ExtraInstructions   []string
+	Role                 string
+	Profile              string
+	Provider             string
+	ModelID              string
+	ModelProfile         string
+	ModelProfileMatch    string
+	ModelCatalogOverride bool
+	Workspace            string
+	ToolNames            []string
+	MaxRounds            int
+	MaxToolCalls         int
+	ReasoningRequested   string
+	ReasoningEffective   string
+	ReasoningSource      string
+	ReasoningClamped     bool
+	TaskPlanEnabled      bool
+	DelegationEnabled    bool
+	MutationEnabled      bool
+	Skills               string
+	ProjectInstructions  string
+	ExtraInstructions    []string
 }
 
 func Render(spec Spec) string {
@@ -179,6 +182,15 @@ func runtimeSection(spec Spec) string {
 	}
 	if modelID := strings.TrimSpace(spec.ModelID); modelID != "" {
 		lines = append(lines, "model="+modelID)
+	}
+	if modelProfile := strings.TrimSpace(spec.ModelProfile); modelProfile != "" {
+		lines = append(lines, "model_profile="+modelProfile)
+	}
+	if match := strings.TrimSpace(spec.ModelProfileMatch); match != "" {
+		lines = append(lines, "model_profile_match="+match)
+	}
+	if spec.ModelCatalogOverride {
+		lines = append(lines, "model_catalog_override=true")
 	}
 	if profile := strings.TrimSpace(spec.Profile); profile != "" {
 		lines = append(lines, "profile="+profile)

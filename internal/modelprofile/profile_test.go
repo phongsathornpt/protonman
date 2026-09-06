@@ -148,3 +148,23 @@ func TestResolveReasoningRecordsExplicitProvenance(t *testing.T) {
 		t.Fatalf("resolution = %+v", got)
 	}
 }
+
+func TestResolvedProfileTracksMatchAndCatalogProvenance(t *testing.T) {
+	exact := ResolveBuiltin("gateway", "gemini-3.8-flash", CatalogMetadata{})
+	if exact.ProfileMatch != MatchExact || exact.CatalogOverride {
+		t.Fatalf("exact provenance = %+v", exact)
+	}
+	family := ResolveBuiltin("gateway", "gpt-5.6-sol", CatalogMetadata{})
+	if family.ProfileMatch != MatchFamily || family.CatalogOverride {
+		t.Fatalf("family provenance = %+v", family)
+	}
+	yes := true
+	withCatalog := ResolveBuiltin("gateway", "gemini-3.8-flash", CatalogMetadata{Tools: &yes})
+	if withCatalog.ProfileMatch != MatchExact || !withCatalog.CatalogOverride {
+		t.Fatalf("catalog provenance = %+v", withCatalog)
+	}
+	unknown := ResolveBuiltin("gateway", "future-model", CatalogMetadata{})
+	if unknown.ProfileMatch != MatchNone || unknown.CatalogOverride {
+		t.Fatalf("unknown provenance = %+v", unknown)
+	}
+}

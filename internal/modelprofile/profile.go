@@ -27,6 +27,16 @@ func (s Support) Bool() (bool, bool) {
 	}
 }
 
+type MatchKind string
+
+const (
+	MatchNone     MatchKind = ""
+	MatchFallback MatchKind = "fallback"
+	MatchProvider MatchKind = "provider"
+	MatchFamily   MatchKind = "family"
+	MatchExact    MatchKind = "exact"
+)
+
 func supportFromPointer(value *bool) Support {
 	if value == nil {
 		return SupportUnknown
@@ -85,14 +95,16 @@ type CatalogMetadata struct {
 }
 
 type Resolved struct {
-	ProfileName   string
-	Provider      string
-	ModelID       string
-	Capabilities  Capabilities
-	Reasoning     Reasoning
-	Sampling      Sampling
-	ContextWindow int
-	PromptHints   []string
+	ProfileName     string
+	ProfileMatch    MatchKind
+	CatalogOverride bool
+	Provider        string
+	ModelID         string
+	Capabilities    Capabilities
+	Reasoning       Reasoning
+	Sampling        Sampling
+	ContextWindow   int
+	PromptHints     []string
 }
 
 type Registry struct {
@@ -136,10 +148,35 @@ func (r *Registry) Resolve(provider, modelID string, catalog CatalogMetadata) Re
 		sort.SliceStable(matches, func(i, j int) bool { return matches[i].score < matches[j].score })
 		for _, matched := range matches {
 			mergeProfile(&resolved, matched.profile)
+			resolved.ProfileMatch = matched.profile.Match.kind(provider, modelID)
 		}
 	}
+	resolved.CatalogOverride = catalogHasMetadata(catalog)
 	mergeCatalog(&resolved, catalog)
 	return resolved
+}
+
+func (m Matcher) kind(provider, modelID string) MatchKind {
+	modelID = strings.ToLower(strings.TrimSpace(modelID))
+	for _, exact := range m.ExactIDs {
+		if strings.EqualFold(strings.TrimSpace(exact), modelID) {
+			return MatchExact
+		}
+	}
+	for _, prefix := range m.Prefixes {
+		prefix = strings.ToLower(strings.TrimSpace(prefix))
+		if prefix != "" && strings.HasPrefix(modelID, prefix) {
+			return MatchFamily
+		}
+	}
+	if strings.TrimSpace(m.Provider) != "" {
+		return MatchProvider
+	}
+	return MatchFallback
+}
+
+func catalogHasMetadata(c CatalogMetadata) bool {
+	return c.Tools != nil || c.Vision != nil || c.ContextWindow > 0 || c.Reasoning != nil
 }
 
 func (m Matcher) score(provider, modelID string) (int, bool) {
