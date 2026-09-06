@@ -63,7 +63,14 @@ func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
 		modelsList = m.modelCatalogs.models(providers[providerIdx])
 	}
 	if len(modelsList) == 0 {
-		modelsList = append([]model.RemoteModel{}, model.DefaultProtonmanModels...)
+		providerName := providers[providerIdx]
+		baseURL := ""
+		if m != nil {
+			if cfg, ok := m.providers[normalizeProviderKey(providerName)]; ok {
+				baseURL = cfg.BaseURL
+			}
+		}
+		modelsList = model.FallbackModelsForProvider(providerName, baseURL)
 	}
 
 	// Focus currently active model if present

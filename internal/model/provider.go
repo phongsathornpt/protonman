@@ -139,6 +139,22 @@ func IsFreeModel(id string) bool {
 	return strings.HasSuffix(idLower, "-free") || idLower == "big-pickle"
 }
 
+// FallbackModelsForProvider returns a defensive copy of a built-in catalog only
+// when the configured connection is a known provider. Custom providers never
+// inherit another provider's model list.
+func FallbackModelsForProvider(providerName, baseURL string) []RemoteModel {
+	name := strings.ToLower(strings.TrimSpace(providerName))
+	endpoint := strings.ToLower(strings.TrimSpace(baseURL))
+	switch {
+	case name == DefaultProtonmanName || strings.Contains(endpoint, "protonman.dev"):
+		return append([]RemoteModel(nil), DefaultProtonmanModels...)
+	case name == DefaultOpenCodeName || strings.Contains(endpoint, "opencode.ai"):
+		return append([]RemoteModel(nil), DefaultOpenCodeFreeModels...)
+	default:
+		return nil
+	}
+}
+
 // NormalizeModelID cleans and harmonizes known model ID typos and provider-specific suffixes.
 func NormalizeModelID(endpointOrProvider string, modelID string) string {
 	raw := strings.TrimSpace(modelID)

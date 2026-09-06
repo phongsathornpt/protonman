@@ -167,3 +167,15 @@ func TestModelPickerCloseCancelsFetch(t *testing.T) {
 		t.Fatal("model picker remained open after escape")
 	}
 }
+
+func TestModelPickerCustomProviderDoesNotUseProtonmanFallback(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.providers = map[string]config.ProviderConfig{
+		"custom": {Name: "custom", BaseURL: "https://api.example.com/v1", APIKey: "key"},
+	}
+	m.activeProvider = "custom"
+	view := newModelSelectPaneView(m)
+	if len(view.models) != 0 {
+		t.Fatalf("custom provider inherited fallback models: %#v", view.models)
+	}
+}

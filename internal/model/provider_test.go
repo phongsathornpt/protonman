@@ -219,3 +219,38 @@ func TestNormalizeModelID(t *testing.T) {
 		}
 	}
 }
+
+func TestFallbackModelsForProvider(t *testing.T) {
+	tests := []struct {
+		name     string
+		provider string
+		baseURL  string
+		wantID   string
+		wantLen  int
+	}{
+		{name: "protonman by name", provider: DefaultProtonmanName, wantID: DefaultProtonmanModels[0].ID, wantLen: len(DefaultProtonmanModels)},
+		{name: "protonman by endpoint", provider: "custom", baseURL: "https://protonman.dev/api/v1", wantID: DefaultProtonmanModels[0].ID, wantLen: len(DefaultProtonmanModels)},
+		{name: "opencode by name", provider: DefaultOpenCodeName, wantID: DefaultOpenCodeFreeModels[0].ID, wantLen: len(DefaultOpenCodeFreeModels)},
+		{name: "opencode by endpoint", provider: "custom", baseURL: "https://opencode.ai/zen/v1", wantID: DefaultOpenCodeFreeModels[0].ID, wantLen: len(DefaultOpenCodeFreeModels)},
+		{name: "custom", provider: "custom", baseURL: "https://api.example.com/v1", wantLen: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FallbackModelsForProvider(tt.provider, tt.baseURL)
+			if len(got) != tt.wantLen {
+				t.Fatalf("len = %d, want %d: %#v", len(got), tt.wantLen, got)
+			}
+			if tt.wantID != "" && got[0].ID != tt.wantID {
+				t.Fatalf("first model = %q, want %q", got[0].ID, tt.wantID)
+			}
+		})
+	}
+}
+
+func TestFallbackModelsForProviderReturnsCopy(t *testing.T) {
+	got := FallbackModelsForProvider(DefaultProtonmanName, "")
+	got[0].ID = "mutated"
+	if DefaultProtonmanModels[0].ID == "mutated" {
+		t.Fatal("fallback catalog shares backing storage with defaults")
+	}
+}
