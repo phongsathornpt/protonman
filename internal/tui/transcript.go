@@ -396,10 +396,15 @@ func (m *bubbleModel) replaceRunningTool(name string, replacement Block) bool {
 }
 
 func (m *bubbleModel) applyTurnEvent(event applicationturn.Event) {
+	if event.Round > 0 {
+		m.turnProgress.Round = event.Round
+	}
 	switch event.Kind {
 	case applicationturn.EventTextDelta:
+		m.activity = "synthesizing"
 		m.appendAssistantDelta(event.Text)
 	case applicationturn.EventToolCall:
+		m.turnProgress.ToolCalls++
 		m.appendToolCall(event.Call)
 	case applicationturn.EventToolResult:
 		result := event.Result
@@ -412,7 +417,7 @@ func (m *bubbleModel) applyTurnEvent(event applicationturn.Event) {
 		m.applyToolResult(event.Call.Name, result, event.Err)
 		m.reloadTodoAfterExternalTool(event.Call, event.Result, event.Err)
 		m.syncTodoSnapshot()
-		m.activity = "thinking"
+		m.activity = "analyzing"
 	case applicationturn.EventCompleted:
 		m.ensureHistoryState().CommitActive()
 		m.syncLegacyBlocks()

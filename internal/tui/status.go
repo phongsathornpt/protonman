@@ -21,30 +21,46 @@ func (m bubbleModel) statusView() string {
 	if m.hasPermissionView() {
 		return warningStyle.Render(truncateWithEllipsis("action required · permission", maxInt(1, m.width-2)))
 	}
-	if m.busy {
-		activeAgents, runningAgents, queuedAgents, cancelingAgents := agentActivityCounts(m.agentSnapshot)
-		if m.activeTranscriptShowsToolProgress() && activeAgents == 0 {
-			return ""
-		}
-		activity := m.activity
-		if activeAgents > 0 {
-			activity = "coordinating"
-			activity += fmt.Sprintf(" · %d agent", activeAgents)
-			if activeAgents != 1 {
-				activity += "s"
-			}
-			if cancelingAgents > 0 {
-				activity += fmt.Sprintf(" · %d canceling", cancelingAgents)
-			} else if runningAgents == 0 && queuedAgents > 0 {
-				activity += " · queued"
-			}
-		}
-		if !m.busyStarted.IsZero() {
-			activity += " · " + formatElapsed(time.Since(m.busyStarted))
-		}
-		return statusStyle.Render(truncateWithEllipsis("• "+activity, maxInt(1, m.width-2)))
+	if !m.busy {
+		return ""
 	}
-	return ""
+
+	activeAgents, runningAgents, queuedAgents, cancelingAgents := agentActivityCounts(m.agentSnapshot)
+	parts := make([]string, 0, 6)
+	activity := m.activity
+	if activeAgents > 0 {
+		activity = "coordinating"
+	}
+	if activity == "" {
+		activity = "analyzing"
+	}
+	parts = append(parts, activity)
+	if m.turnProgress.Round > 0 {
+		if m.maxRounds > 0 {
+			parts = append(parts, fmt.Sprintf("round %d/%d", m.turnProgress.Round, m.maxRounds))
+		} else {
+			parts = append(parts, fmt.Sprintf("round %d", m.turnProgress.Round))
+		}
+	}
+	if m.turnProgress.ToolCalls > 0 {
+		parts = append(parts, fmt.Sprintf("%d tools", m.turnProgress.ToolCalls))
+	}
+	if activeAgents > 0 {
+		agents := fmt.Sprintf("%d agent", activeAgents)
+		if activeAgents != 1 {
+			agents += "s"
+		}
+		parts = append(parts, agents)
+		if cancelingAgents > 0 {
+			parts = append(parts, fmt.Sprintf("%d canceling", cancelingAgents))
+		} else if runningAgents == 0 && queuedAgents > 0 {
+			parts = append(parts, "queued")
+		}
+	}
+	if !m.busyStarted.IsZero() {
+		parts = append(parts, formatElapsed(time.Since(m.busyStarted)))
+	}
+	return statusStyle.Render(truncateWithEllipsis("• "+strings.Join(parts, " · "), maxInt(1, m.width-2)))
 }
 
 func agentActivityCounts(snapshot []agent.AgentStatus) (active, running, queued, canceling int) {

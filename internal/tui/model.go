@@ -31,6 +31,11 @@ var errTurnEventsClosed = errors.New("turn event stream closed before completion
 
 type agentLifecycleMsg struct{ event agent.Event }
 
+type turnProgress struct {
+	Round     int
+	ToolCalls int
+}
+
 type bubbleModel struct {
 	ctx           context.Context
 	service       *toolcall.Service
@@ -42,6 +47,7 @@ type bubbleModel struct {
 	agentEvents   <-chan agent.Event
 	agentSnapshot []agent.AgentStatus
 	agentActivity map[string]string
+	turnProgress  turnProgress
 	workDir       string
 
 	viewport           viewport.Model
