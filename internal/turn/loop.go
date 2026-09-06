@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/agentprompt"
 	"github.com/projectTHORN/proton/internal/contextutil"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
@@ -193,6 +194,19 @@ type Result struct {
 // Option configures a Loop.
 type Option func(*Loop) error
 
+// WithSystemPromptSpec enables deterministic runtime prompt composition.
+// The loop fills model, tool, skill, and execution-limit sections from the
+// actual request environment on every round.
+func WithSystemPromptSpec(spec agentprompt.Spec) Option {
+	return func(loop *Loop) error {
+		clone := spec
+		clone.ToolNames = append([]string(nil), spec.ToolNames...)
+		clone.ExtraInstructions = append([]string(nil), spec.ExtraInstructions...)
+		loop.promptSpec = &clone
+		return nil
+	}
+}
+
 // WithMaxRounds bounds model responses that can request more tools.
 // A value of 0 disables this count bound; other turn bounds still apply.
 func WithMaxRounds(rounds int) Option {
@@ -332,6 +346,7 @@ type Loop struct {
 	maxToolResultBytesPerRound    int
 	maxToolResultBytesPerTurn     int
 	requireInitialToolUse         bool
+	promptSpec                    *agentprompt.Spec
 	skills                        []skill.CatalogItem
 	skillRegistry                 *skill.Registry
 }
@@ -387,8 +402,62 @@ func (l *Loop) CloneWithTools(tools *toolcall.Service) (*Loop, error) {
 	}
 	clone := *l
 	clone.tools = tools
+	if l.promptSpec != nil {
+		spec := *l.promptSpec
+		spec.ToolNames = append([]string(nil), l.promptSpec.ToolNames...)
+		spec.ExtraInstructions = append([]string(nil), l.promptSpec.ExtraInstructions...)
+		clone.promptSpec = &spec
+	}
 	clone.skills = append([]skill.CatalogItem(nil), l.skills...)
 	return &clone, nil
+}
+
+func (l *Loop) currentSkillPromptSection() string {
+	var catalogItems []skill.CatalogItem
+	var activeSkills []skill.Skill
+	if l.skillRegistry != nil {
+		allSkills := l.skillRegistry.List()
+		activeMap := make(map[string]bool)
+		for _, name := range l.skillRegistry.ActivatedList() {
+			activeMap[name] = true
+		}
+		for _, candidate := range allSkills {
+			if activeMap[candidate.Name] {
+				activeSkills = append(activeSkills, candidate)
+			} else {
+				catalogItems = append(catalogItems, candidate.ToCatalogItem())
+			}
+		}
+	} else if len(l.skills) > 0 {
+		catalogItems = append(catalogItems, l.skills...)
+	}
+	return skill.SystemPromptSection(catalogItems, activeSkills)
+}
+
+func (l *Loop) effectivePromptSpec(definitions []tool.Definition, extras []string) agentprompt.Spec {
+	spec := *l.promptSpec
+	spec.Provider = l.languageModel.Provider()
+	spec.ModelID = l.languageModel.ModelID()
+	spec.MaxRounds = l.maxRounds
+	spec.MaxToolCalls = l.maxToolCalls
+	spec.ToolNames = make([]string, 0, len(definitions))
+	spec.TaskPlanEnabled = false
+	spec.DelegationEnabled = false
+	spec.MutationEnabled = false
+	for _, definition := range definitions {
+		spec.ToolNames = append(spec.ToolNames, definition.Name)
+		switch definition.Name {
+		case "get_todo", "update_todo":
+			spec.TaskPlanEnabled = true
+		case "delegate_task":
+			spec.DelegationEnabled = true
+		}
+		if tool.EffectiveMutability(definition) == tool.MutabilityMutating {
+			spec.MutationEnabled = true
+		}
+	}
+	spec.ExtraInstructions = append(append([]string(nil), l.promptSpec.ExtraInstructions...), extras...)
+	return spec
 }
 
 func messagesContainImages(messages []model.Message) bool {
@@ -449,6 +518,20 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	}
 
 	history := model.CloneMessages(messages)
+	var promptExtras []string
+	if l.promptSpec != nil {
+		filtered := make([]model.Message, 0, len(history))
+		for _, message := range history {
+			if message.Role == model.RoleSystem {
+				if text := strings.TrimSpace(message.Content); text != "" && !agentprompt.IsManaged(text) {
+					promptExtras = append(promptExtras, text)
+				}
+				continue
+			}
+			filtered = append(filtered, message)
+		}
+		history = filtered
+	}
 	turnMessages := make([]model.Message, 0, 4)
 	toolCallsUsed := 0
 	definitions := l.tools.Definitions()
@@ -457,40 +540,17 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	verification := VerificationState{}
 	forceNoProgressSynthesis := false
 
-	var catalogItems []skill.CatalogItem
-	var activeSkills []skill.Skill
-
-	if l.skillRegistry != nil {
-		allSkills := l.skillRegistry.List()
-		activeMap := make(map[string]bool)
-		for _, name := range l.skillRegistry.ActivatedList() {
-			activeMap[name] = true
-		}
-		for _, s := range allSkills {
-			if activeMap[s.Name] {
-				activeSkills = append(activeSkills, s)
+	if l.promptSpec == nil {
+		if section := l.currentSkillPromptSection(); section != "" {
+			if len(history) > 0 && history[0].Role == model.RoleSystem {
+				base := history[0].Content
+				if marker := strings.Index(base, skillPromptMarker); marker >= 0 {
+					base = base[:marker]
+				}
+				history[0].Content = strings.TrimSpace(base + "\n\n" + skillPromptMarker + "\n" + section)
 			} else {
-				catalogItems = append(catalogItems, s.ToCatalogItem())
+				history = append([]model.Message{{Role: model.RoleSystem, Content: skillPromptMarker + "\n" + section}}, history...)
 			}
-		}
-	} else if len(l.skills) > 0 {
-		catalogItems = l.skills
-	}
-
-	if len(catalogItems) > 0 || len(activeSkills) > 0 {
-		section := skill.SystemPromptSection(catalogItems, activeSkills)
-		if len(history) > 0 && history[0].Role == model.RoleSystem {
-			base := history[0].Content
-			if marker := strings.Index(base, skillPromptMarker); marker >= 0 {
-				base = base[:marker]
-			}
-			history[0].Content = strings.TrimSpace(base + "\n\n" + skillPromptMarker + "\n" + section)
-		} else {
-			systemMsg := model.Message{
-				Role:    model.RoleSystem,
-				Content: skillPromptMarker + "\n" + section,
-			}
-			history = append([]model.Message{systemMsg}, history...)
 		}
 	}
 	for round := 1; ; round++ {
@@ -542,6 +602,18 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				}
 			}
 		}
+		if l.promptSpec != nil {
+			spec := l.effectivePromptSpec(tools, promptExtras)
+			spec.Skills = l.currentSkillPromptSection()
+			systemPrompt := agentprompt.Render(spec)
+			reqMessages = append([]model.Message{{Role: model.RoleSystem, Content: systemPrompt}}, reqMessages...)
+			slog.DebugContext(ctx, "turn system prompt prepared",
+				"prompt_version", agentprompt.Version,
+				"prompt_bytes", len(systemPrompt),
+				"tool_count", len(tools),
+			)
+		}
+
 		slog.DebugContext(ctx, "turn tool dispatch state",
 			"round", round,
 			"enabled", dispatch.enabled(),

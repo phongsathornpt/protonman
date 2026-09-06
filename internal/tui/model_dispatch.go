@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/projectTHORN/proton/internal/agent"
+	"github.com/projectTHORN/proton/internal/agentprompt"
 	"log/slog"
 	"strings"
 	"time"
@@ -201,7 +203,15 @@ func (m *bubbleModel) reconfigureRunner() {
 		clientOpts = append(clientOpts, model.WithSessionID(sessID))
 	}
 	languageModel := model.NewProviderLanguageModel(provName, prov.Type, baseURL, prov.APIKey, m.activeModel, clientOpts...)
+	promptSpec := agentprompt.Spec{Workspace: m.workDir}
+	if profileName := strings.TrimSpace(m.agentProfile); profileName != "" {
+		if profile, err := agent.ParseProfile(profileName); err == nil {
+			promptSpec.Profile = string(profile)
+			promptSpec.Role = agent.RolePromptForProfile(profile)
+		}
+	}
 	var opts []applicationturn.Option
+	opts = append(opts, applicationturn.WithSystemPromptSpec(promptSpec))
 	if m.skills != nil {
 		opts = append(opts, applicationturn.WithSkillRegistry(m.skills))
 	}

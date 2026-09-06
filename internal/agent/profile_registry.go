@@ -3,6 +3,7 @@ package agent
 import (
 	"strings"
 
+	"github.com/projectTHORN/proton/internal/agentprompt"
 	"github.com/projectTHORN/proton/internal/tool"
 )
 
@@ -72,22 +73,8 @@ func (r *scopedRegistry) Definitions() []tool.Definition {
 	return defs
 }
 
-const codingToolContract = `Tool use contract:
-- Use the provided tools whenever the request depends on the current workspace, repository state, files, commands, tests, or external facts.
-- Never guess workspace contents or repository state when a tool can establish the fact.
-- Inspect relevant code before making claims about existing implementation.
-- For requested implementation, perform the edits instead of only describing them, then verify the result.
-- Tool names are exact identifiers: call only names present in the provided tool definitions. Never prefix, qualify, rename, or invent a tool name.
-- Do not call tools when the request can be answered completely without workspace or external state.`
-
-// DefaultSystemPrompt returns the root coding-agent instructions used when no named profile is selected.
-func DefaultSystemPrompt() string {
-	return strings.TrimSpace(`You are Proton, an autonomous coding agent operating inside a real workspace.
-Work from empirical repository state, keep changes focused, preserve unrelated user work, and report what was actually verified.` + "\n\n" + codingToolContract)
-}
-
-// SystemPromptForProfile returns tailored role instructions plus the shared tool-use contract.
-func SystemPromptForProfile(profile Profile) string {
+// RolePromptForProfile returns only the specialization instructions for a named profile.
+func RolePromptForProfile(profile Profile) string {
 	var rolePrompt string
 	switch profile {
 	case ProfileExplorer:
@@ -174,7 +161,17 @@ Rules of Engagement:
 4. Structured Evaluation: Lay out clear trade-offs and decisions before any mutating actions are taken.
 `)
 	default:
-		return DefaultSystemPrompt()
+		return ""
 	}
-	return strings.TrimSpace(rolePrompt + "\n\n" + codingToolContract)
+	return strings.TrimSpace(rolePrompt)
+}
+
+// DefaultSystemPrompt returns the provider-neutral base prompt without runtime-specific sections.
+func DefaultSystemPrompt() string {
+	return agentprompt.Render(agentprompt.Spec{})
+}
+
+// SystemPromptForProfile returns a compatibility rendering for callers without runtime context.
+func SystemPromptForProfile(profile Profile) string {
+	return agentprompt.Render(agentprompt.Spec{Role: RolePromptForProfile(profile), Profile: string(profile)})
 }

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/agentprompt"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/skill"
@@ -18,6 +19,41 @@ import (
 	"github.com/projectTHORN/proton/internal/toolcall"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
+
+func TestLoopBuildsEffectiveSystemPromptFromRuntime(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{{events: []sdk.Event{
+		{Kind: sdk.EventTextDelta, Text: "done"},
+		{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+	}}}}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithSystemPromptSpec(agentprompt.Spec{
+		Role: "Inspect the assigned code carefully.", Profile: "reviewer", Workspace: "/repo",
+	}))
+	_, err := loop.Run(context.Background(), []model.Message{
+		{Role: model.RoleSystem, Content: "custom project instruction"},
+		{Role: model.RoleUser, Content: "inspect"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(client.requests) != 1 || len(client.requests[0].Messages) < 2 {
+		t.Fatalf("requests = %#v", client.requests)
+	}
+	system := client.requests[0].Messages[0]
+	if system.Role != model.RoleSystem {
+		t.Fatalf("first role = %q, want system", system.Role)
+	}
+	for _, want := range []string{
+		`<proton-system-prompt version="2">`, "provider=test", "model=scripted", "profile=reviewer",
+		"Workspace root: /repo", "Available tools: read_file.", "custom project instruction", "Inspect the assigned code carefully.",
+	} {
+		if !strings.Contains(system.Content, want) {
+			t.Fatalf("system prompt missing %q:\n%s", want, system.Content)
+		}
+	}
+	if strings.Contains(system.Content, skillPromptMarker) {
+		t.Fatalf("managed prompt used legacy skill marker: %s", system.Content)
+	}
+}
 
 func TestLoopStreamsTextAndCompletes(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{

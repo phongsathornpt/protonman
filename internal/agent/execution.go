@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/projectTHORN/proton/internal/agentprompt"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/toolcall"
@@ -79,9 +80,14 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 		if languageModel == nil {
 			return Result{AgentID: req.ID, Profile: req.Profile}, errors.New("language model is required for subagent execution")
 		}
+		promptSpec := agentprompt.Spec{Profile: string(req.Profile), Role: RolePromptForProfile(req.Profile)}
+		if c.workspace != nil {
+			promptSpec.Workspace = c.workspace.Root()
+		}
 		loop, lerr := turn.NewLoop(
 			languageModel,
 			service,
+			turn.WithSystemPromptSpec(promptSpec),
 			turn.WithMaxRounds(c.maxRounds),
 			turn.WithMaxToolCalls(c.maxToolCalls),
 			turn.WithRequireInitialToolUse(true),
