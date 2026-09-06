@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/contextutil"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/session"
@@ -18,6 +19,8 @@ import (
 	"github.com/projectTHORN/proton/internal/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
+
+const sessionPersistenceTimeout = 5 * time.Second
 
 // Session represents an active ACP conversation thread.
 type Session struct {
@@ -239,7 +242,7 @@ func (s *Session) ExecutePrompt(
 	}
 	s.mu.Unlock()
 
-	saveErr := s.saveState(context.WithoutCancel(promptCtx))
+	saveErr := s.saveStateDetached(promptCtx)
 	if wasCancelled {
 		if saveErr != nil {
 			return SessionPromptResult{}, fmt.Errorf("save canceled session %q: %w", s.id, saveErr)
@@ -328,7 +331,7 @@ func (s *Session) handleSlashCommand(
 		s.mu.Lock()
 		s.messages = nil
 		s.mu.Unlock()
-		if err := s.saveState(context.WithoutCancel(ctx)); err != nil {
+		if err := s.saveStateDetached(ctx); err != nil {
 			return true, SessionPromptResult{}, fmt.Errorf("save session %q: %w", s.id, err)
 		}
 		_ = notifier(RPCNotification{
@@ -588,7 +591,7 @@ func (s *Session) handleSlashCommand(
 			},
 		)
 		s.mu.Unlock()
-		if err := s.saveState(context.WithoutCancel(ctx)); err != nil {
+		if err := s.saveStateDetached(ctx); err != nil {
 			return true, SessionPromptResult{}, fmt.Errorf("save session %q: %w", s.id, err)
 		}
 
@@ -640,6 +643,12 @@ func notifyToolCallUpdate(
 			},
 		},
 	})
+}
+
+func (s *Session) saveStateDetached(parent context.Context) error {
+	ctx, cancel := contextutil.DetachedTimeout(parent, sessionPersistenceTimeout)
+	defer cancel()
+	return s.saveState(ctx)
 }
 
 func (s *Session) saveState(ctx context.Context) error {

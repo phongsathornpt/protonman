@@ -353,7 +353,7 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if err := sess.service.SetMode(mode); err != nil {
 			return nil, nil, fmt.Errorf("set session mode: %w", err)
 		}
-		if err := sess.saveState(context.WithoutCancel(ctx)); err != nil {
+		if err := sess.saveStateDetached(ctx); err != nil {
 			return nil, nil, fmt.Errorf("save session %q: %w", params.SessionID, err)
 		}
 
