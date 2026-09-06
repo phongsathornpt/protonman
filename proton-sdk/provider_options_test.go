@@ -24,3 +24,19 @@ func TestCollectStepCopiesProviderMetadata(t *testing.T) {
 		t.Fatalf("source metadata mutated: %s", metadata["anthropic"])
 	}
 }
+
+func TestRequestValidatesReasoningEffort(t *testing.T) {
+	for _, effort := range []ReasoningEffort{
+		ReasoningDefault, ReasoningNone, ReasoningLow, ReasoningMedium,
+		ReasoningHigh, ReasoningXHigh, ReasoningMax,
+	} {
+		req := Request{Messages: []Message{{Role: RoleUser, Content: "hi"}}, Options: ModelOptions{ReasoningEffort: effort}}
+		if err := req.Validate(); err != nil {
+			t.Fatalf("Validate(%q) error = %v", effort, err)
+		}
+	}
+	req := Request{Messages: []Message{{Role: RoleUser, Content: "hi"}}, Options: ModelOptions{ReasoningEffort: "turbo"}}
+	if err := req.Validate(); err == nil {
+		t.Fatal("Validate(turbo) error = nil")
+	}
+}
