@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -230,5 +231,44 @@ func TestTodoExpandedViewShowsStableIDs(t *testing.T) {
 	got := m.todoView()
 	if !strings.Contains(got, "Fix router race") || !strings.Contains(got, "router-race") {
 		t.Fatalf("expanded todo missing stable id: %q", got)
+	}
+}
+
+func TestTodoToggleShowsCompactHeightFeedback(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
+	m.resize(24, 12)
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
+	m = updated.(*bubbleModel)
+	got := m.todoView()
+	if !m.todoExpanded || !strings.Contains(got, "details") {
+		t.Fatalf("compact todo toggle=%q expanded=%v, want visible height feedback", got, m.todoExpanded)
+	}
+}
+
+func TestFreshCompletedTodoRetiresOnNextTurnButCanReopen(t *testing.T) {
+	store, err := tododomain.NewStore([]tododomain.Item{{ID: "ship", Text: "ship", Status: tododomain.StatusPending}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := newTestBubbleModel(t, permission.ModeAsk, store.Snapshot().Items)
+	m.todoStore = store
+	m.todoRevision = store.Snapshot().Revision
+	if _, err := store.CompareAndReplace(context.Background(), m.todoRevision, []tododomain.Item{{ID: "ship", Text: "ship", Status: tododomain.StatusCompleted}}); err != nil {
+		t.Fatal(err)
+	}
+	if !m.syncTodoSnapshot() || !m.todoCompletionFresh {
+		t.Fatalf("completion state fresh=%v todo=%#v", m.todoCompletionFresh, m.todo)
+	}
+	if got := m.todoView(); !strings.Contains(got, "Tasks 1/1") {
+		t.Fatalf("fresh completion feedback missing: %q", got)
+	}
+
+	m.retireCompletedTodoForNextTurn()
+	if got := m.todoView(); got != "" {
+		t.Fatalf("completed task chrome not retired on next turn: %q", got)
+	}
+	m.todoExpanded = true
+	if got := m.todoView(); !strings.Contains(got, "ship") {
+		t.Fatalf("retired completed todo could not be reopened: %q", got)
 	}
 }

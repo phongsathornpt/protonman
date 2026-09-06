@@ -21,9 +21,18 @@ func (m *bubbleModel) syncTodoSnapshot() bool {
 	if snapshot.Revision == m.todoRevision {
 		return false
 	}
+	wasComplete := allTodoCompleted(m.todo)
 	m.todo = tododomain.CloneItems(snapshot.Items)
 	m.todoRevision = snapshot.Revision
 	m.todoWarning = ""
+	isComplete := allTodoCompleted(m.todo)
+	if isComplete && !wasComplete {
+		m.todoCompletionFresh = true
+		m.todoCompletionDismissed = false
+	} else if !isComplete {
+		m.todoCompletionFresh = false
+		m.todoCompletionDismissed = false
+	}
 	return true
 }
 
@@ -78,4 +87,24 @@ func todoCallMayAffectFile(call tool.Call, result tool.Result, workDir string) b
 	default:
 		return false
 	}
+}
+
+func allTodoCompleted(items []TodoItem) bool {
+	if len(items) == 0 {
+		return false
+	}
+	for _, item := range items {
+		if item.Status != tododomain.StatusCompleted {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *bubbleModel) retireCompletedTodoForNextTurn() {
+	if m == nil || !m.todoCompletionFresh || !allTodoCompleted(m.todo) || m.todoExpanded {
+		return
+	}
+	m.todoCompletionFresh = false
+	m.todoCompletionDismissed = true
 }
