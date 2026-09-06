@@ -108,7 +108,7 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 			continue
 		}
 		if resp.StatusCode == http.StatusOK {
-			return newStream(resp.Body), nil
+			return newStream(resp.Body, openAIResponseMetadata(resp.Header)), nil
 		}
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 		resp.Body.Close()
@@ -118,6 +118,28 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 		}
 	}
 	return nil, lastErr
+}
+
+func openAIResponseMetadata(headers http.Header) sdk.ProviderMetadata {
+	values := map[string]string{}
+	for key, header := range map[string]string{
+		"request_id":    "x-request-id",
+		"organization":  "openai-organization",
+		"project":       "openai-project",
+		"processing_ms": "openai-processing-ms",
+	} {
+		if value := strings.TrimSpace(headers.Get(header)); value != "" {
+			values[key] = value
+		}
+	}
+	if len(values) == 0 {
+		return nil
+	}
+	raw, err := json.Marshal(values)
+	if err != nil {
+		return nil
+	}
+	return sdk.ProviderMetadata{"openai": raw}
 }
 
 func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, error) {
