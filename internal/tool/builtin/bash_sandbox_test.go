@@ -133,3 +133,17 @@ func TestBashPreservesDeadlineExceeded(t *testing.T) {
 		t.Fatalf("deadline execution took %s, want under 2s", elapsed)
 	}
 }
+
+func TestBashReportsProvenAffectedPaths(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	handler := NewBash(workspaceRoot, &recordingLauncher{})
+	result, err := handler.Execute(context.Background(), newJSONCall(t, "bash-path", "bash", map[string]any{
+		"command": "printf changed > TODO.md",
+	}))
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if len(result.AffectedPaths) != 1 || result.AffectedPaths[0] != "TODO.md" {
+		t.Fatalf("AffectedPaths = %#v, want [TODO.md]", result.AffectedPaths)
+	}
+}
