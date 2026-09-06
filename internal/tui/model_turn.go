@@ -5,12 +5,16 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime/debug"
+	"sync/atomic"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/model"
 	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
+
+var tuiTurnOwnerSeq atomic.Uint64
 
 func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 	if m.runner == nil {
@@ -26,12 +30,14 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 	m.busy = true
 	m.busyStarted = time.Now()
 	m.turnProgress = turnProgress{}
+	m.activeTurnOwner = fmt.Sprintf("tui-turn-%d", tuiTurnOwnerSeq.Add(1))
 	m.activity = "analyzing"
 	m.historyState.SetSpinnerFrame(m.spinner.View())
 	m.historyState.StartThinking()
 	m.relayout()
 
 	ctx, cancel := context.WithCancel(m.ctx)
+	ctx = agent.WithParentID(ctx, m.activeTurnOwner)
 	m.turnCancel = cancel
 	events := make(chan tea.Msg, 32)
 	history := model.CloneMessages(m.messages)
@@ -119,4 +125,19 @@ func errorType(err error) string {
 		return ""
 	}
 	return fmt.Sprintf("%T", err)
+}
+
+func (m *bubbleModel) cancelActiveTurn() int {
+	if !m.busy || m.turnCancel == nil {
+		return 0
+	}
+	m.activity = "canceling"
+	stopping := 0
+	if m.coordinator != nil && m.activeTurnOwner != "" {
+		stopping = m.coordinator.CancelByParent(m.activeTurnOwner)
+		m.syncAgentSnapshot()
+	}
+	m.turnCancel()
+	m.relayout()
+	return stopping
 }

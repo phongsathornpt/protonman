@@ -319,6 +319,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activity = "ready"
 		m.turnCancel = nil
 		m.turnEvents = nil
+		m.activeTurnOwner = ""
 		if message.err != nil {
 			m.finalizeRunningTools(message.err)
 		}
@@ -386,7 +387,7 @@ func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if message.String() == "ctrl+c" {
 		if m.busy && m.turnCancel != nil {
-			m.turnCancel()
+			m.cancelActiveTurn()
 			m.queue = nil
 			return m, nil
 		}

@@ -25,10 +25,11 @@ func (m bubbleModel) statusView() string {
 		return ""
 	}
 
-	activeAgents, runningAgents, queuedAgents, cancelingAgents := agentActivityCounts(m.agentSnapshot)
+	turnAgents := m.turnAgentSnapshot()
+	activeAgents, runningAgents, queuedAgents, cancelingAgents := agentActivityCounts(turnAgents)
 	parts := make([]string, 0, 6)
 	activity := m.activity
-	if activeAgents > 0 {
+	if activity != "canceling" && activeAgents > 0 {
 		activity = "coordinating"
 	}
 	if activity == "" {
@@ -46,29 +47,33 @@ func (m bubbleModel) statusView() string {
 		parts = append(parts, fmt.Sprintf("%d tools", m.turnProgress.ToolCalls))
 	}
 	if activeAgents > 0 {
-		agents := fmt.Sprintf("%d agent", activeAgents)
-		if activeAgents != 1 {
-			agents += "s"
-		}
-		parts = append(parts, agents)
-		if runningAgents > 0 {
-			parts = append(parts, fmt.Sprintf("%d running", runningAgents))
-		}
-		if queuedAgents > 0 {
-			parts = append(parts, fmt.Sprintf("%d queued", queuedAgents))
-		}
-		if cancelingAgents > 0 {
-			parts = append(parts, fmt.Sprintf("%d canceling", cancelingAgents))
-		}
-		if activeAgents == 1 {
-			for _, st := range m.agentSnapshot {
-				if st.State.Terminal() {
-					continue
+		if activity == "canceling" {
+			parts = append(parts, fmt.Sprintf("stopping %d agents", activeAgents))
+		} else {
+			agents := fmt.Sprintf("%d agent", activeAgents)
+			if activeAgents != 1 {
+				agents += "s"
+			}
+			parts = append(parts, agents)
+			if runningAgents > 0 {
+				parts = append(parts, fmt.Sprintf("%d running", runningAgents))
+			}
+			if queuedAgents > 0 {
+				parts = append(parts, fmt.Sprintf("%d queued", queuedAgents))
+			}
+			if cancelingAgents > 0 {
+				parts = append(parts, fmt.Sprintf("%d canceling", cancelingAgents))
+			}
+			if activeAgents == 1 {
+				for _, st := range turnAgents {
+					if st.State.Terminal() {
+						continue
+					}
+					if activity := strings.TrimSpace(m.agentActivity[st.ID]); activity != "" {
+						parts = append(parts, activity)
+					}
+					break
 				}
-				if activity := strings.TrimSpace(m.agentActivity[st.ID]); activity != "" {
-					parts = append(parts, activity)
-				}
-				break
 			}
 		}
 	}
@@ -76,6 +81,19 @@ func (m bubbleModel) statusView() string {
 		parts = append(parts, formatElapsed(time.Since(m.busyStarted)))
 	}
 	return statusStyle.Render(truncateWithEllipsis("• "+strings.Join(parts, " · "), maxInt(1, m.width-2)))
+}
+
+func (m bubbleModel) turnAgentSnapshot() []agent.AgentStatus {
+	if m.activeTurnOwner == "" {
+		return m.agentSnapshot
+	}
+	out := make([]agent.AgentStatus, 0, len(m.agentSnapshot))
+	for _, st := range m.agentSnapshot {
+		if st.ParentID == m.activeTurnOwner {
+			out = append(out, st)
+		}
+	}
+	return out
 }
 
 func agentActivityCounts(snapshot []agent.AgentStatus) (active, running, queued, canceling int) {
@@ -275,11 +293,15 @@ func formatElapsed(duration time.Duration) string {
 }
 
 func (m bubbleModel) agentsView() string {
-	if layoutModeForHeight(m.height) == layoutTiny || len(m.agentSnapshot) == 0 {
+	snapshot := m.agentSnapshot
+	if m.busy && m.activeTurnOwner != "" {
+		snapshot = m.turnAgentSnapshot()
+	}
+	if layoutModeForHeight(m.height) == layoutTiny || len(snapshot) == 0 {
 		return ""
 	}
 	queued, running, canceling, completed := 0, 0, 0, 0
-	for _, st := range m.agentSnapshot {
+	for _, st := range snapshot {
 		switch st.State {
 		case agent.StateQueued:
 			queued++
@@ -309,7 +331,7 @@ func (m bubbleModel) agentsView() string {
 		return brandStyle.Render(summary)
 	}
 
-	visible := append([]agent.AgentStatus(nil), m.agentSnapshot...)
+	visible := append([]agent.AgentStatus(nil), snapshot...)
 	sort.SliceStable(visible, func(i, j int) bool {
 		return agentDisplayPriority(visible[i].State) < agentDisplayPriority(visible[j].State)
 	})
@@ -341,7 +363,7 @@ func (m bubbleModel) agentsView() string {
 		line := fmt.Sprintf("  %s%s · %s · %s", stateGlyph, st.ID, elapsed, truncateWithEllipsis(detail, maxInt(12, m.width-30)))
 		lines = append(lines, style.Render(truncateWithEllipsis(line, maxInt(1, m.width-2))))
 	}
-	if more := len(m.agentSnapshot) - len(visible); more > 0 {
+	if more := len(snapshot) - len(visible); more > 0 {
 		lines = append(lines, mutedStyle.Render(fmt.Sprintf("  … %d older", more)))
 	}
 	return strings.Join(lines, "\n")

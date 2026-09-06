@@ -263,3 +263,31 @@ func TestDelegateTaskRejectsExcessiveTimeoutSeconds(t *testing.T) {
 		t.Fatalf("Execute() error = %v, want timeout validation error", err)
 	}
 }
+
+func TestDelegateTaskPrefersContextParentID(t *testing.T) {
+	coord := agent.NewCoordinator(nil, nil, nil, nil,
+		agent.WithRunnerFactory(func(agent.Profile, *toolcall.Service) (turn.Runner, error) {
+			return mockSubagentRunner{content: "ok"}, nil
+		}),
+	)
+	defer coord.Close()
+
+	handler := NewDelegateTask(coord, "fallback-parent")
+	ctx := agent.WithParentID(context.Background(), "turn-7")
+	args, _ := json.Marshal(map[string]any{"profile": "explorer", "task": "inspect"})
+	call, _ := tool.NewCall("call-context-parent", "delegate_task", args)
+	res, err := handler.Execute(ctx, call)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spawned struct {
+		AgentID string `json:"agent_id"`
+	}
+	if err := json.Unmarshal([]byte(res.Output), &spawned); err != nil {
+		t.Fatal(err)
+	}
+	status, ok := coord.Get(spawned.AgentID)
+	if !ok || status.ParentID != "turn-7" {
+		t.Fatalf("status=%+v, want parent turn-7", status)
+	}
+}
