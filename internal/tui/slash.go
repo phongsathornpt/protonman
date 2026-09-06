@@ -31,7 +31,7 @@ var slashCatalog = []slashCommand{
 	{name: "help", description: "list commands"},
 	{name: "tools", description: "list tools"},
 	{name: "skills", aliases: []string{"skill"}, description: "browse, activate, or toggle agent skills (/skills [name|active|toggle])", takesArgs: true},
-	{name: "agent", aliases: []string{"profile"}, description: "show or set agent profile (/agent [pow|dex|int|worker|explorer|reviewer])", takesArgs: true},
+	{name: "agent", aliases: []string{"profile"}, description: "show or set agent profile (/agent [" + agent.ProfileList("|") + "])", takesArgs: true},
 	{name: "mode", description: "show or set permission mode", takesArgs: true},
 	{name: "ask", description: "switch to ask permission mode"},
 	{name: "always-approve", aliases: []string{"yolo"}, description: "allow non-denied calls"},
@@ -902,7 +902,7 @@ func (m *bubbleModel) handleAgentCommand(argument string) tea.Cmd {
 		m.appendLine("  worker   - General-purpose mutating coding worker")
 		m.appendLine("  explorer - Read-only codebase and web search")
 		m.appendLine("  reviewer - Code, security, and architecture review")
-		m.appendLine("Switch profile: /agent <pow|dex|int|worker|explorer|reviewer>")
+		m.appendLine("Switch profile: /agent <" + agent.ProfileList("|") + ">")
 		m.refreshViewport()
 		return nil
 	}

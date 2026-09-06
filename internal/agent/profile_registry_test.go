@@ -207,3 +207,26 @@ func TestSystemPromptForProfile(t *testing.T) {
 		}
 	}
 }
+
+func TestProfileSpecsAreCanonicalAndComplete(t *testing.T) {
+	seen := map[Profile]bool{}
+	for _, profile := range SupportedProfiles() {
+		if seen[profile] {
+			t.Fatalf("duplicate profile spec for %q", profile)
+		}
+		seen[profile] = true
+		spec, ok := SpecForProfile(profile)
+		if !ok || spec.Profile != profile {
+			t.Fatalf("SpecForProfile(%q) = %+v, %v", profile, spec, ok)
+		}
+		if strings.TrimSpace(spec.Description) == "" {
+			t.Fatalf("profile %q has empty description", profile)
+		}
+		if strings.TrimSpace(SystemPromptForProfile(profile)) == "" {
+			t.Fatalf("profile %q has empty system prompt", profile)
+		}
+	}
+	if got, want := len(seen), 6; got != want {
+		t.Fatalf("profile spec count = %d, want %d", got, want)
+	}
+}

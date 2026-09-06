@@ -37,54 +37,11 @@ func FilterRegistryForProfile(base tool.Registry, profile Profile) tool.Registry
 }
 
 func isToolAllowed(profile Profile, def tool.Definition) bool {
-	// Parent-owned orchestration/task state never crosses into subagents.
-	// Keep this fail-closed so future agent/task tools do not silently escape
-	// into child capability scopes.
 	if def.Kind == tool.KindAgent || def.Kind == tool.KindTask {
 		return false
 	}
-
-	switch profile {
-	case ProfileExplorer:
-		// Explorer is strictly read-only for codebase & web research.
-		switch def.Kind {
-		case tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch:
-			return true
-		default:
-			return false
-		}
-
-	case ProfileReviewer:
-		// Reviewer is strictly read-only for local code and git inspection.
-		switch def.Kind {
-		case tool.KindRead, tool.KindGrep:
-			return true
-		default:
-			return false
-		}
-
-	case ProfileWorker, ProfilePOW, ProfileDEX:
-		// Mutating profiles are still an explicit allowlist. New tool kinds are
-		// denied until consciously added here rather than inheriting authority.
-		switch def.Kind {
-		case tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch, tool.KindEdit, tool.KindBash:
-			return true
-		default:
-			return false
-		}
-
-	case ProfileINT:
-		// INT is an architecture & deep reasoning profile with read and search capabilities.
-		switch def.Kind {
-		case tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch:
-			return true
-		default:
-			return false
-		}
-
-	default:
-		return false
-	}
+	spec, ok := SpecForProfile(profile)
+	return ok && spec.Allows(def.Kind)
 }
 
 type scopedRegistry struct {

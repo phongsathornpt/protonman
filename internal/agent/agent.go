@@ -30,25 +30,21 @@ const (
 
 // Valid reports whether the profile is recognized.
 func (p Profile) Valid() bool {
-	switch p {
-	case ProfileExplorer, ProfileReviewer, ProfileWorker, ProfilePOW, ProfileDEX, ProfileINT:
-		return true
-	default:
-		return false
-	}
+	_, ok := SpecForProfile(p)
+	return ok
 }
 
 // IsMutating reports whether the profile is allowed to mutate workspace files or run shell commands.
 func (p Profile) IsMutating() bool {
-	return p == ProfileWorker || p == ProfilePOW || p == ProfileDEX
+	spec, ok := SpecForProfile(p)
+	return ok && spec.Mutating
 }
 
 // ParseProfile converts a raw string into a validated Profile.
 func ParseProfile(raw string) (Profile, error) {
 	p := Profile(strings.TrimSpace(strings.ToLower(raw)))
 	if !p.Valid() {
-		return "", fmt.Errorf("unknown agent profile %q: supported profiles are %q, %q, %q, %q, %q, %q",
-			raw, ProfileExplorer, ProfileReviewer, ProfileWorker, ProfilePOW, ProfileDEX, ProfileINT)
+		return "", fmt.Errorf("unknown agent profile %q: supported profiles are %s", raw, ProfileList(", "))
 	}
 	return p, nil
 }
