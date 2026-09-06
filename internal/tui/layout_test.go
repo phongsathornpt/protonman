@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/projectTHORN/proton/internal/permission"
+	tododomain "github.com/projectTHORN/proton/internal/todo"
 )
 
 func TestPickerVisibleRows(t *testing.T) {
@@ -130,5 +131,45 @@ func TestWelcomeCardUsesVerticalHierarchyAndTruncates(t *testing.T) {
 		if got := lipgloss.Width(line); got > 30 {
 			t.Fatalf("welcome line width = %d, want <= 30: %q", got, line)
 		}
+	}
+}
+
+func TestTodoAllCompletedStillShowsSummaryAndDetails(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{
+		{ID: "one", Text: "one", Status: tododomain.StatusCompleted},
+		{ID: "two", Text: "two", Status: tododomain.StatusCompleted},
+	})
+	m.resize(80, 24)
+	if got := m.todoView(); !strings.Contains(got, "Tasks 2/2 ✓") {
+		t.Fatalf("completed summary = %q", got)
+	}
+	m.todoExpanded = true
+	if got := m.todoView(); !strings.Contains(got, "one") || !strings.Contains(got, "two") {
+		t.Fatalf("completed details = %q", got)
+	}
+}
+
+func TestTodoViewOrdersActivePendingCompletedAndFitsWidth(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{
+		{ID: "done", Text: "completed task", Status: tododomain.StatusCompleted},
+		{ID: "pending", Text: "pending task", Status: tododomain.StatusPending},
+		{ID: "active", Text: "active task with a deliberately long description that should wrap safely on narrow terminals", Status: tododomain.StatusInProgress},
+	})
+	m.resize(32, 24)
+	m.todoExpanded = true
+	got := m.todoView()
+	if !(strings.Index(got, "active task") < strings.Index(got, "pending task") && strings.Index(got, "pending task") < strings.Index(got, "completed task")) {
+		t.Fatalf("todo order = %q", got)
+	}
+	for _, line := range strings.Split(got, "\n") {
+		if width := lipgloss.Width(line); width > 30 {
+			t.Fatalf("todo line width = %d: %q", width, line)
+		}
+	}
+}
+
+func TestTodoVisibleRowsGrowWithTerminalHeight(t *testing.T) {
+	if small, large := todoVisibleRows(20), todoVisibleRows(30); large <= small {
+		t.Fatalf("rows did not grow: %d -> %d", small, large)
 	}
 }

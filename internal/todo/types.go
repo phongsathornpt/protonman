@@ -30,7 +30,14 @@ func (s Status) Valid() bool {
 	return s == StatusPending || s == StatusInProgress || s == StatusCompleted
 }
 
-func (i Item) Done() bool { return i.Status == StatusCompleted }
+func (i Item) EffectiveStatus() Status {
+	if i.Status == "" {
+		return StatusPending
+	}
+	return i.Status
+}
+
+func (i Item) Done() bool { return i.EffectiveStatus() == StatusCompleted }
 
 func ValidateItems(items []Item) error {
 	seen := make(map[string]struct{}, len(items))

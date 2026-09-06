@@ -19,6 +19,8 @@ const (
 	glyphSkill       = "* "
 	glyphAgent       = "→ "
 	glyphGeneric     = "· "
+	glyphTodoPending = "○ "
+	glyphTodoActive  = "● "
 	appVersion       = "dev"
 )
 

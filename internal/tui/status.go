@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/projectTHORN/proton/internal/permission"
+	tododomain "github.com/projectTHORN/proton/internal/todo"
 )
 
 func (m bubbleModel) statusView() string {
@@ -212,55 +213,86 @@ func (m bubbleModel) todoView() string {
 	if len(m.todo) == 0 {
 		return ""
 	}
-	completed := 0
-	for _, item := range m.todo {
-		if item.Done() {
-			completed++
-		}
+	completed, active := todoCounts(m.todo)
+	summary := fmt.Sprintf("Tasks %d/%d", completed, len(m.todo))
+	if active > 0 {
+		summary += fmt.Sprintf(" · %d active", active)
 	}
 	if completed == len(m.todo) {
-		return ""
+		summary += " ✓"
 	}
 	switch layoutModeForHeight(m.height) {
 	case layoutTiny:
 		return ""
 	case layoutCompact:
-		return brandStyle.Render(fmt.Sprintf("Tasks %d/%d", completed, len(m.todo)))
+		return brandStyle.Render(summary)
 	}
 	if !m.todoExpanded {
-		return brandStyle.Render(fmt.Sprintf("Tasks %d/%d · ctrl+o details", completed, len(m.todo)))
+		return brandStyle.Render(summary + " · ctrl+o details")
 	}
-	visible, more := pendingFirst(m.todo, 4)
-	lines := []string{brandStyle.Render(fmt.Sprintf("TODO %d/%d complete", completed, len(m.todo)))}
-	for _, item := range visible {
-		if item.Done() {
-			lines = append(lines, successStyle.Render("  ✓ "+item.Text))
-			continue
+
+	limit := todoVisibleRows(m.height)
+	lines := []string{brandStyle.Render(summary)}
+	shown := 0
+	for _, status := range []tododomain.Status{tododomain.StatusInProgress, tododomain.StatusPending, tododomain.StatusCompleted} {
+		for _, item := range m.todo {
+			if item.EffectiveStatus() != status || shown >= limit {
+				continue
+			}
+			lines = append(lines, renderTodoItem(item, maxInt(8, m.width-6))...)
+			shown++
 		}
-		lines = append(lines, mutedStyle.Render("  □ "+item.Text))
 	}
-	if more > 0 {
+	if more := len(m.todo) - shown; more > 0 {
 		lines = append(lines, mutedStyle.Render(fmt.Sprintf("  … %d more", more)))
 	}
 	return strings.Join(lines, "\n")
 }
 
-func pendingFirst(items []TodoItem, limit int) ([]TodoItem, int) {
-	ordered := make([]TodoItem, 0, len(items))
+func todoCounts(items []TodoItem) (completed, active int) {
 	for _, item := range items {
-		if !item.Done() {
-			ordered = append(ordered, item)
+		switch item.EffectiveStatus() {
+		case tododomain.StatusCompleted:
+			completed++
+		case tododomain.StatusInProgress:
+			active++
 		}
 	}
-	for _, item := range items {
-		if item.Done() {
-			ordered = append(ordered, item)
+	return completed, active
+}
+
+func todoVisibleRows(height int) int {
+	rows := height - 18
+	if rows < 4 {
+		rows = 4
+	}
+	if rows > 10 {
+		rows = 10
+	}
+	return rows
+}
+
+func renderTodoItem(item TodoItem, width int) []string {
+	prefix := glyphTodoPending
+	style := mutedStyle
+	switch item.EffectiveStatus() {
+	case tododomain.StatusInProgress:
+		prefix = glyphTodoActive
+		style = brandStyle
+	case tododomain.StatusCompleted:
+		prefix = glyphToolSuccess
+		style = successStyle
+	}
+	wrapped := wrapLines(item.Text, maxInt(1, width-2))
+	out := make([]string, 0, len(wrapped))
+	for i, line := range wrapped {
+		if i == 0 {
+			out = append(out, style.Render("  "+prefix+line))
+		} else {
+			out = append(out, style.Render("    "+line))
 		}
 	}
-	if len(ordered) <= limit {
-		return ordered, 0
-	}
-	return ordered[:limit], len(ordered) - limit
+	return out
 }
 
 func (m *bubbleModel) appendTodo() {
@@ -271,7 +303,10 @@ func (m *bubbleModel) appendTodo() {
 	m.appendLine("TODO:")
 	for _, item := range m.todo {
 		mark := " "
-		if item.Done() {
+		if item.EffectiveStatus() == tododomain.StatusInProgress {
+			mark = "~"
+		}
+		if item.EffectiveStatus() == tododomain.StatusCompleted {
 			mark = "x"
 		}
 		m.appendLine(fmt.Sprintf("[%s] %s", mark, item.Text))
