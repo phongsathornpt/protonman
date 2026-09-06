@@ -305,6 +305,8 @@ type Result struct {
 	Continuation string `json:"continuation,omitempty"`
 	// Failure is populated when a tool call fails or is denied.
 	Failure *Failure `json:"error,omitempty"`
+	// SHA256 identifies the complete file content when a tool can prove a full-file snapshot.
+	SHA256 string `json:"sha256,omitempty"`
 	// CheckpointID identifies the pre-edit snapshot created by a mutating tool.
 	CheckpointID string `json:"checkpoint_id,omitempty"`
 	// AffectedPaths lists workspace-relative paths successfully mutated by the tool.

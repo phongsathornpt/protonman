@@ -2,7 +2,9 @@ package builtin
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,8 +45,10 @@ func TestContextualEditClaimsDirtyPathForLaterOverwrite(t *testing.T) {
 		t.Fatalf("contextual edit failed: %v", err)
 	}
 	write := NewWriteFile(ws, &recordingCheckpointStore{id: "write"})
+	current := readTestFile(t, ws.Root(), "tracked.txt")
+	digest := sha256.Sum256(current)
 	if _, err := write.Execute(ctx, newJSONCall(t, "write-owned", "write_file", map[string]any{
-		"file_path": "tracked.txt", "content": "owned overwrite\n",
+		"file_path": "tracked.txt", "content": "owned overwrite\n", "expected_sha256": fmt.Sprintf("%x", digest[:]),
 	})); err != nil {
 		t.Fatalf("owned overwrite blocked: %v", err)
 	}
