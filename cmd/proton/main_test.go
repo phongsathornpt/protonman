@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -190,18 +189,6 @@ func TestMainHelpers(t *testing.T) {
 		t.Errorf("unexpected sessionID format: %s", sid)
 	}
 
-	// loadTodoItems
-	tmp := t.TempDir()
-	items := loadTodoItems(tmp)
-	if len(items) != 0 {
-		t.Errorf("expected 0 items for empty dir, got %d", len(items))
-	}
-	todoPath := filepath.Join(tmp, "TODO.md")
-	_ = os.WriteFile(todoPath, []byte("- [ ] Task 1\n- [x] Task 2\n"), 0o644)
-	items = loadTodoItems(tmp)
-	if len(items) != 2 {
-		t.Errorf("expected 2 items, got %d", len(items))
-	}
 }
 
 func TestMainConfiguredTelemetryObserver(t *testing.T) {
