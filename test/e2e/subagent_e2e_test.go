@@ -13,7 +13,7 @@ func TestE2ESubagentDelegationSuccess(t *testing.T) {
 	server.SetupWorkspaceConfig(t, home)
 
 	// Round 1: main agent delegates task to subagent
-	server.AddToolCallResponse("call_del_1", "delegate_task", `{"task":"Explore repository structure","profile":"explorer"}`)
+	server.AddToolCallResponse("call_del_1", "delegate_task", `{"task":"Explore repository structure","profile":"explorer","timeout_seconds":30}`)
 	// Subagent response
 	server.AddTextResponse("Exploration complete: found hello.txt")
 	// Main agent final response
@@ -54,5 +54,18 @@ func TestE2ESubagentDelegationInvalidArguments(t *testing.T) {
 	})
 	if resProfile.exitCode == 0 || !strings.Contains(resProfile.stdout+resProfile.stderr, "unknown agent profile") {
 		t.Fatalf("expected unknown profile error, got: %s %s", resProfile.stdout, resProfile.stderr)
+	}
+}
+
+func TestE2ESubagentDelegationRejectsExcessiveTimeout(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+	res := runProton(t, runOptions{
+		args: []string{"-y", "-p", `/call delegate_task {"task":"Do work","profile":"explorer","timeout_seconds":86401}`},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode == 0 || !strings.Contains(res.stdout+res.stderr, "timeout_seconds") {
+		t.Fatalf("expected timeout validation error, got: %s %s", res.stdout, res.stderr)
 	}
 }
