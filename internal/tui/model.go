@@ -58,37 +58,39 @@ type bubbleModel struct {
 	bottom             *bottomPane
 	historyState       *HistoryState
 
-	queue            []string
-	todo             []TodoItem
-	todoStore        tododomain.Repository
-	todoRevision     uint64
-	todoExpanded     bool
-	todoWarning      string
-	busy             bool
-	activity         string
-	pendingActivity  string
-	planMode         bool
-	followTail       bool
-	showWelcome      bool
-	showTranscript   bool
-	rawTranscript    bool
-	viewportTailOnly bool
-	nextID           uint64
-	width            int
-	height           int
-	busyStarted      time.Time
-	turnCancel       context.CancelFunc
-	turnEvents       <-chan tea.Msg
-	messages         []model.Message
-	activeModel      string
-	activeProvider   string
-	providers        map[string]config.ProviderConfig
-	maxRounds        int
-	maxToolCalls     int
-	agentProfile     string
-	sessionID        string
-	modelCatalogs    modelCatalogState
-	runtimeConfig    config.RuntimeConfig
+	queue                   []string
+	todo                    []TodoItem
+	todoStore               tododomain.Repository
+	todoRevision            uint64
+	todoExpanded            bool
+	todoWarning             string
+	todoCompletionFresh     bool
+	todoCompletionDismissed bool
+	busy                    bool
+	activity                string
+	pendingActivity         string
+	planMode                bool
+	followTail              bool
+	showWelcome             bool
+	showTranscript          bool
+	rawTranscript           bool
+	viewportTailOnly        bool
+	nextID                  uint64
+	width                   int
+	height                  int
+	busyStarted             time.Time
+	turnCancel              context.CancelFunc
+	turnEvents              <-chan tea.Msg
+	messages                []model.Message
+	activeModel             string
+	activeProvider          string
+	providers               map[string]config.ProviderConfig
+	maxRounds               int
+	maxToolCalls            int
+	agentProfile            string
+	sessionID               string
+	modelCatalogs           modelCatalogState
+	runtimeConfig           config.RuntimeConfig
 
 	// Compatibility snapshots for existing in-package tests during the
 	// migration. Runtime ownership lives in bottom/historyState.

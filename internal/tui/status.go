@@ -407,6 +407,9 @@ func (m bubbleModel) todoView() string {
 	if len(m.todo) == 0 {
 		return ""
 	}
+	if m.todoCompletionDismissed && !m.todoExpanded && m.todoWarning == "" {
+		return ""
+	}
 	completed, active, pending := todoCounts(m.todo)
 	summary := fmt.Sprintf("Tasks %d/%d", completed, len(m.todo))
 	if active > 0 {
@@ -426,6 +429,9 @@ func (m bubbleModel) todoView() string {
 	}
 	switch layoutModeForHeight(m.height) {
 	case layoutTiny, layoutCompact:
+		if m.todoExpanded {
+			return renderSummary("TODO details need taller terminal · " + summary)
+		}
 		return renderSummary(summary)
 	}
 	if m.busy || !m.todoExpanded {
