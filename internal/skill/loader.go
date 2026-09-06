@@ -3,6 +3,7 @@ package skill
 import (
 	"context"
 	"fmt"
+	"github.com/projectTHORN/proton/internal/appdirs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -43,6 +44,11 @@ func Discover(ctx context.Context, opts Options) (DiscoveryResult, error) {
 		workDir = resolvedWork
 	}
 
+	userDirs, err := appdirs.Resolve(homeDir)
+	if err != nil {
+		return DiscoveryResult{}, err
+	}
+
 	result := DiscoveryResult{
 		Skills:   make([]Skill, 0),
 		Warnings: make([]string, 0),
@@ -55,7 +61,7 @@ func Discover(ctx context.Context, opts Options) (DiscoveryResult, error) {
 
 	// 1. User-level scopes
 	userPaths := []string{
-		filepath.Join(homeDir, ".proton", "skills"),
+		userDirs.Skills,
 		filepath.Join(homeDir, ".agents", "skills"),
 	}
 	for _, dir := range userPaths {
@@ -67,7 +73,7 @@ func Discover(ctx context.Context, opts Options) (DiscoveryResult, error) {
 
 	// 2. Project-level scopes
 	projectPaths := []string{
-		filepath.Join(workDir, ".proton", "skills"),
+		appdirs.ProjectSkills(workDir),
 		filepath.Join(workDir, ".agents", "skills"),
 	}
 

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/projectTHORN/proton/internal/agent"
+	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
@@ -45,14 +46,11 @@ func (r *appRuntime) Close() {
 }
 
 func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) {
-	homeDir := strings.TrimSpace(os.Getenv("PROTON_HOME"))
-	if homeDir == "" {
-		resolvedHome, err := os.UserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("resolve home directory: %w", err)
-		}
-		homeDir = resolvedHome
+	dirs, err := appdirs.Resolve("")
+	if err != nil {
+		return nil, err
 	}
+	homeDir := dirs.Home
 	workDir, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("resolve work directory: %w", err)
@@ -68,7 +66,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	if err != nil {
 		return nil, fmt.Errorf("create workspace policy: %w", err)
 	}
-	checkpointStore, err := checkpoint.NewFileStore(filepath.Join(homeDir, ".proton", "checkpoints", "workspace-"+workspaceKey(workDir)), workspaceRoot)
+	checkpointStore, err := checkpoint.NewFileStore(filepath.Join(dirs.Checkpoints, "workspace-"+workspaceKey(workDir)), workspaceRoot)
 	if err != nil {
 		return nil, fmt.Errorf("create checkpoint store: %w", err)
 	}
@@ -134,7 +132,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		return nil, fmt.Errorf("create tool registry: %w", err)
 	}
 	coordinator.SetParentRegistry(registry)
-	stateStore, err := session.NewFileStore(filepath.Join(homeDir, ".proton", "sessions"))
+	stateStore, err := session.NewFileStore(dirs.Sessions)
 	if err != nil {
 		return nil, fmt.Errorf("create session store: %w", err)
 	}

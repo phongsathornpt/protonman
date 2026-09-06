@@ -7,20 +7,17 @@ import (
 	"fmt"
 	"maps"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/sandbox"
 )
 
 const (
-	userConfigRelativePath    = ".proton/config.toml"
-	projectConfigRelativePath = ".proton/config.toml"
-
 	// DefaultMaxRounds is the fallback maximum rounds per turn when unspecified.
 	DefaultMaxRounds = 20
 	// DefaultMaxToolCalls is the fallback cumulative tool-call limit per turn.
@@ -207,12 +204,16 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 		Warnings: make([]string, 0),
 	}
 
-	userPath := filepath.Join(homeDir, userConfigRelativePath)
+	dirs, err := appdirs.Resolve(homeDir)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	userPath := dirs.Config
 	if err := loadFile(ctx, userPath, &snapshot, false); err != nil {
 		return Snapshot{}, err
 	}
 
-	projectPath := filepath.Join(workDir, projectConfigRelativePath)
+	projectPath := appdirs.ProjectConfig(workDir)
 	if !options.ProjectTrusted {
 		exists, err := fileExists(projectPath)
 		if err != nil {
@@ -488,11 +489,15 @@ func modifyUserConfigFile(homeDir string, returnIfNotExist bool, mutate func(*fi
 		}
 		homeDir = resolvedHome
 	}
-	userDir := filepath.Join(homeDir, ".proton")
+	dirs, err := appdirs.Resolve(homeDir)
+	if err != nil {
+		return err
+	}
+	userDir := dirs.Root
 	if err := os.MkdirAll(userDir, 0o700); err != nil {
 		return fmt.Errorf("create config directory: %w", err)
 	}
-	userPath := filepath.Join(homeDir, userConfigRelativePath)
+	userPath := dirs.Config
 
 	var doc fileDocument
 	data, err := os.ReadFile(userPath)
