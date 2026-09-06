@@ -20,6 +20,7 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	c.agentsMu.RLock()
 	parentRegistry := c.parentRegistry
 	client := c.client
+	languageModel := c.languageModel
 	permMode := c.permissionMode
 	prompt := c.prompt
 	guard := c.guard
@@ -78,15 +79,26 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 		}
 		runner = r
 	} else {
-		if client == nil {
-			return Result{AgentID: req.ID, Profile: req.Profile}, errors.New("model client is required for subagent execution")
+		var loop *turn.Loop
+		var lerr error
+		if languageModel != nil {
+			loop, lerr = turn.NewLanguageModelLoop(
+				languageModel,
+				service,
+				turn.WithMaxRounds(c.maxRounds),
+				turn.WithMaxToolCalls(c.maxToolCalls),
+			)
+		} else {
+			if client == nil {
+				return Result{AgentID: req.ID, Profile: req.Profile}, errors.New("language model is required for subagent execution")
+			}
+			loop, lerr = turn.NewLoop(
+				client,
+				service,
+				turn.WithMaxRounds(c.maxRounds),
+				turn.WithMaxToolCalls(c.maxToolCalls),
+			)
 		}
-		loop, lerr := turn.NewLoop(
-			client,
-			service,
-			turn.WithMaxRounds(c.maxRounds),
-			turn.WithMaxToolCalls(c.maxToolCalls),
-		)
 		if lerr != nil {
 			return Result{AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create turn loop: %w", lerr)
 		}

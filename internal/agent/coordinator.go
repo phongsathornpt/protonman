@@ -13,6 +13,7 @@ import (
 	"github.com/projectTHORN/proton/internal/toolcall"
 	"github.com/projectTHORN/proton/internal/turn"
 	"github.com/projectTHORN/proton/internal/workspace"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 const (
@@ -60,6 +61,7 @@ type agentEntry struct {
 // Coordinator manages subagent execution in bounded, cancellable goroutines.
 type Coordinator struct {
 	client         model.Client
+	languageModel  sdk.LanguageModel
 	parentRegistry tool.Registry
 	workspace      *workspace.Workspace
 	policy         *permission.Policy
