@@ -153,20 +153,45 @@ func CloneMessages(messages []Message) []Message {
 type EventKind string
 
 const (
-	EventTextDelta EventKind = "text_delta"
-	EventToolCall  EventKind = "tool_call"
-	EventDone      EventKind = "done"
+	EventTextStart     EventKind = "text_start"
+	EventTextDelta     EventKind = "text_delta"
+	EventTextEnd       EventKind = "text_end"
+	EventToolCallStart EventKind = "tool_call_start"
+	EventToolCallDelta EventKind = "tool_call_delta"
+	EventToolCallEnd   EventKind = "tool_call_end"
+	// EventToolCall carries a complete tool call for agent runtimes that do not
+	// need incremental argument rendering. Providers may emit both lifecycle
+	// events and this normalized complete event.
+	EventToolCall EventKind = "tool_call"
+	EventDone     EventKind = "done"
 )
 
 type Event struct {
-	Kind     EventKind
-	Text     string
-	ToolCall ToolCall
+	Kind EventKind
+	Text string
+
+	ToolCall       ToolCall
+	ToolCallID     string
+	ToolName       string
+	ArgumentsDelta string
 }
 
 func (e Event) Validate() error {
 	switch e.Kind {
-	case EventTextDelta, EventDone:
+	case EventTextStart, EventTextDelta, EventTextEnd, EventDone:
+		return nil
+	case EventToolCallStart:
+		if strings.TrimSpace(e.ToolCallID) == "" {
+			return fmt.Errorf("%w: tool call start id is required", ErrInvalidEvent)
+		}
+		if strings.TrimSpace(e.ToolName) == "" {
+			return fmt.Errorf("%w: tool call start name is required", ErrInvalidEvent)
+		}
+		return nil
+	case EventToolCallDelta, EventToolCallEnd:
+		if strings.TrimSpace(e.ToolCallID) == "" {
+			return fmt.Errorf("%w: tool call id is required", ErrInvalidEvent)
+		}
 		return nil
 	case EventToolCall:
 		return e.ToolCall.Validate()
