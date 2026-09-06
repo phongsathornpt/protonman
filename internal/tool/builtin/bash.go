@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -20,9 +21,10 @@ import (
 )
 
 const (
-	maxBashArgumentBytes = 512 * 1024
-	maxBashCommandBytes  = 256 * 1024
-	maxBashOutputBytes   = 2 * 1024 * 1024
+	maxBashArgumentBytes  = 512 * 1024
+	maxBashCommandBytes   = 256 * 1024
+	maxBashOutputBytes    = 2 * 1024 * 1024
+	maxBashTimeoutSeconds = 120
 )
 
 type bashHandler struct {
@@ -31,7 +33,9 @@ type bashHandler struct {
 }
 
 type bashInput struct {
-	Command string `json:"command"`
+	Command        string `json:"command"`
+	Cwd            string `json:"cwd,omitempty"`
+	TimeoutSeconds int64  `json:"timeout_seconds,omitempty"`
 }
 
 // NewBash returns the permission-gated shell command adapter.
@@ -56,6 +60,14 @@ func (bashHandler) Definition() tool.Definition {
 				"command": map[string]any{
 					"type":        "string",
 					"description": "Shell command to execute",
+				},
+				"cwd": map[string]any{
+					"type":        "string",
+					"description": "Optional workspace-relative working directory",
+				},
+				"timeout_seconds": map[string]any{
+					"type": "integer", "minimum": 1, "maximum": maxBashTimeoutSeconds,
+					"description": "Optional shorter execution timeout; cannot extend the caller deadline",
 				},
 			},
 			"required": []string{"command"},
@@ -98,21 +110,38 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		logBashFailure(ctx, call, startedAt, "arguments", err)
 		return tool.Result{}, err
 	}
+	if input.TimeoutSeconds < 0 || input.TimeoutSeconds > maxBashTimeoutSeconds {
+		err := tool.NewToolError(tool.ErrorCodeInvalidArguments, "bash timeout_seconds must be between 1 and 120 when provided")
+		logBashFailure(ctx, call, startedAt, "arguments", err)
+		return tool.Result{}, err
+	}
+	cwd, cwdRel, err := h.resolveCwd(ctx, input.Cwd)
+	if err != nil {
+		logBashFailure(ctx, call, startedAt, "cwd", err)
+		return tool.Result{}, err
+	}
+	if input.TimeoutSeconds > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(input.TimeoutSeconds)*time.Second)
+		defer cancel()
+	}
 	analysis := tool.AnalyzeCommand(input.Command)
+	affectedPaths := bashAffectedPaths(cwdRel, analysis.AffectedPaths)
 	slog.DebugContext(ctx, "bash command decoded",
 		"call_id", call.ID,
 		"command_bytes", len(input.Command),
 		"command_fingerprint", telemetry.Fingerprint(input.Command),
 		"effect", analysis.Effect,
 		"effect_confidence", analysis.Confidence,
-		"affected_path_count", len(analysis.AffectedPaths),
+		"affected_path_count", len(affectedPaths),
+		"cwd_fingerprint", telemetry.Fingerprint(cwdRel),
 	)
 	if err := ctx.Err(); err != nil {
 		logBashFailure(ctx, call, startedAt, "before_run", err)
 		return tool.Result{}, fmt.Errorf("before bash command: %w", err)
 	}
 
-	command, err := h.command(ctx, input.Command)
+	command, err := h.command(ctx, cwd, input.Command)
 	if err != nil {
 		logBashFailure(ctx, call, startedAt, "launcher", err)
 		return tool.Result{}, err
@@ -141,7 +170,7 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		ToolName:      call.Name,
 		Output:        outputStr,
 		Truncated:     truncated,
-		AffectedPaths: append([]string(nil), analysis.AffectedPaths...),
+		AffectedPaths: append([]string(nil), affectedPaths...),
 	}
 	attrs := []any{
 		"call_id", call.ID,
@@ -196,11 +225,64 @@ func logBashFailure(ctx context.Context, call tool.Call, startedAt time.Time, ph
 	)
 }
 
-func (h bashHandler) command(ctx context.Context, command string) (*exec.Cmd, error) {
+func (h bashHandler) command(ctx context.Context, cwd string, command string) (*exec.Cmd, error) {
 	if h.launcher == nil {
 		return nil, fmt.Errorf("bash sandbox launcher is required: configure an explicit sandbox profile (use --sandbox off to opt out)")
 	}
+	if directoryLauncher, ok := h.launcher.(sandbox.DirectoryLauncher); ok {
+		return directoryLauncher.CommandInDir(ctx, h.workspace.Root(), cwd, command)
+	}
+	if filepath.Clean(cwd) != filepath.Clean(h.workspace.Root()) {
+		return nil, fmt.Errorf("bash launcher does not support a custom working directory")
+	}
 	return h.launcher.Command(ctx, h.workspace.Root(), command)
+}
+
+func (h bashHandler) resolveCwd(ctx context.Context, input string) (string, string, error) {
+	input = strings.TrimSpace(input)
+	if input == "" || input == "." {
+		return h.workspace.Root(), ".", nil
+	}
+	resolved, err := h.workspace.Resolve(ctx, input)
+	if err != nil {
+		return "", "", err
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", "", tool.WrapToolError(tool.ErrorCodeNotFound, "bash cwd does not exist", err)
+	}
+	if !info.IsDir() {
+		return "", "", tool.NewToolError(tool.ErrorCodeInvalidArguments, "bash cwd must be a directory")
+	}
+	rel, err := filepath.Rel(h.workspace.Root(), resolved)
+	if err != nil {
+		return "", "", fmt.Errorf("resolve bash cwd: %w", err)
+	}
+	return resolved, filepath.Clean(rel), nil
+}
+
+func bashAffectedPaths(cwd string, paths []string) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if cwd != "" && cwd != "." {
+			path = filepath.Join(cwd, path)
+		}
+		path = filepath.Clean(path)
+		seen := false
+		for _, existing := range out {
+			if existing == path {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			out = append(out, path)
+		}
+	}
+	return out
 }
 
 type boundedBuffer struct {

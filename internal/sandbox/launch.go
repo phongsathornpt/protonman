@@ -25,6 +25,13 @@ type Launcher interface {
 	Command(ctx context.Context, dir string, command string) (*exec.Cmd, error)
 }
 
+// DirectoryLauncher preserves the workspace confinement root while selecting a
+// validated working directory inside it.
+type DirectoryLauncher interface {
+	Launcher
+	CommandInDir(ctx context.Context, workspaceRoot string, cwd string, command string) (*exec.Cmd, error)
+}
+
 // OSLauncher wraps bash/sh with sandbox-exec (macOS) or bwrap/unshare (Linux).
 type OSLauncher struct {
 	Profile  Profile
@@ -39,7 +46,17 @@ func NewOSLauncher(profile Profile) *OSLauncher {
 // Command builds a confined child. Fail-closed when confinement is required
 // but the host cannot apply it.
 func (l *OSLauncher) Command(ctx context.Context, dir string, command string) (*exec.Cmd, error) {
+	return l.CommandInDir(ctx, dir, dir, command)
+}
+
+// CommandInDir builds a confined child rooted at workspaceRoot and starts it in cwd.
+func (l *OSLauncher) CommandInDir(ctx context.Context, workspaceRoot string, cwd string, command string) (*exec.Cmd, error) {
 	startedAt := time.Now()
+	dir := filepath.Clean(workspaceRoot)
+	cwd = filepath.Clean(cwd)
+	if rel, err := filepath.Rel(dir, cwd); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return nil, fmt.Errorf("%w: working directory escapes workspace", ErrUnavailable)
+	}
 	trimmedCommand := strings.TrimSpace(command)
 	slog.DebugContext(ctx, "sandbox command requested",
 		"profile", l.Profile.Name.String(),
@@ -58,7 +75,7 @@ func (l *OSLauncher) Command(ctx context.Context, dir string, command string) (*
 		return nil, fmt.Errorf("sandbox command is required")
 	}
 	if !l.Profile.Confines() {
-		cmd := bareShell(ctx, dir, command)
+		cmd := bareShell(ctx, cwd, command)
 		logSandboxSelected(ctx, startedAt, "shell", cmd.Path)
 		return cmd, nil
 	}
@@ -80,13 +97,13 @@ func (l *OSLauncher) Command(ctx context.Context, dir string, command string) (*
 		}
 		profile := seatbeltProfile(l.Profile, dir)
 		cmd := exec.CommandContext(ctx, "sandbox-exec", "-p", profile, "sh", "-c", command)
-		cmd.Dir = dir
+		cmd.Dir = cwd
 		configureCommand(cmd)
 		logSandboxSelected(ctx, startedAt, "sandbox-exec", cmd.Path)
 		return cmd, nil
 	case "linux":
 		if path, err := lookPath("bwrap"); err == nil {
-			cmd := bwrapCommand(ctx, path, l.Profile, dir, command)
+			cmd := bwrapCommand(ctx, path, l.Profile, dir, cwd, command)
 			logSandboxSelected(ctx, startedAt, "bwrap", cmd.Path)
 			return cmd, nil
 		}
@@ -131,7 +148,7 @@ func bareShell(ctx context.Context, dir string, command string) *exec.Cmd {
 	return cmd
 }
 
-func bwrapCommand(ctx context.Context, bwrap string, profile Profile, dir string, command string) *exec.Cmd {
+func bwrapCommand(ctx context.Context, bwrap string, profile Profile, dir string, cwd string, command string) *exec.Cmd {
 	// Bubblewrap starts with an empty mount namespace. Expose the host root
 	// read-only so the shell, dynamic loader, git, compilers, and normal system
 	// tools remain usable, then over-mount only the workspace as writable when
@@ -147,13 +164,13 @@ func bwrapCommand(ctx context.Context, bwrap string, profile Profile, dir string
 	} else {
 		args = append(args, "--bind", dir, dir)
 	}
-	args = append(args, "--chdir", dir)
+	args = append(args, "--chdir", cwd)
 	if profile.RestrictNetwork {
 		args = append(args, "--unshare-net")
 	}
 	args = append(args, "--", "sh", "-c", command)
 	cmd := exec.CommandContext(ctx, bwrap, args...)
-	cmd.Dir = dir
+	cmd.Dir = cwd
 	configureCommand(cmd)
 	return cmd
 }
