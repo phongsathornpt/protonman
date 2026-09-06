@@ -1,6 +1,10 @@
 package model
 
-import "testing"
+import (
+	"testing"
+
+	sdk "github.com/projectTHORN/proton/proton-sdk"
+)
 
 func TestResolveProviderBaseURL(t *testing.T) {
 	tests := []struct {
@@ -62,5 +66,16 @@ func TestNewProviderLanguageModelOverridesToolsCapability(t *testing.T) {
 	withTools := NewProviderLanguageModel(DefaultOpenAIName, string(ProviderProtocolOpenAI), DefaultOpenAIEndpoint, "key", "tool-model", WithToolsSupport(true))
 	if !withTools.Capabilities().Tools {
 		t.Fatalf("Capabilities().Tools = false, want true")
+	}
+}
+
+func TestNewProviderLanguageModelPreservesContextWindowMetadata(t *testing.T) {
+	m := NewProviderLanguageModel(DefaultOpenAIName, string(ProviderProtocolOpenAI), DefaultOpenAIEndpoint, "key", "catalog-model",
+		WithVisionSupport(false), WithToolsSupport(false), WithContextWindow(12345))
+	if got := sdk.ModelContextWindow(m); got != 12345 {
+		t.Fatalf("ModelContextWindow() = %d, want 12345", got)
+	}
+	if m.Capabilities().Vision || m.Capabilities().Tools {
+		t.Fatalf("capability overrides were lost: %+v", m.Capabilities())
 	}
 }

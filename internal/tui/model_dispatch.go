@@ -191,6 +191,9 @@ func (m *bubbleModel) reconfigureRunner() {
 			model.WithVisionSupport(remoteModelSupportsVision(remoteModel)),
 			model.WithToolsSupport(remoteModelSupportsTools(remoteModel)),
 		)
+		if remoteModel.ContextWindow > 0 {
+			clientOpts = append(clientOpts, model.WithContextWindow(remoteModel.ContextWindow))
+		}
 	}
 	if sessID != "" {
 		clientOpts = append(clientOpts, model.WithSessionID(sessID))
