@@ -93,15 +93,6 @@ func agentActivityCounts(snapshot []agent.AgentStatus) (active, running, queued,
 	return active, running, queued, canceling
 }
 
-func (m bubbleModel) activeTranscriptShowsToolProgress() bool {
-	if m.historyState == nil {
-		return false
-	}
-	active := m.historyState.Active()
-	running, ok := active.(runningHistoryTool)
-	return ok && running.historyToolRunning()
-}
-
 func (m bubbleModel) infoView() string {
 	if view := m.permissionView(); view != nil {
 		if view.parked {
