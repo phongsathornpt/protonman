@@ -535,3 +535,21 @@ func TestHistoryStateSpinnerFrameReportsVisualChanges(t *testing.T) {
 		t.Fatal("running tool did not report spinner change")
 	}
 }
+
+func TestHistoryStateRenderContentMatchesRenderLines(t *testing.T) {
+	state := NewHistoryState(50000)
+	state.Append(&UserCell{Text: "question"})
+	state.Append(&AssistantCell{Text: "## answer\n\n- one\n- two"})
+	state.AppendAssistantDelta("streaming **tail**")
+
+	want := strings.Join(state.RenderLines(), "\n")
+	if got := state.RenderContent(); got != want {
+		t.Fatalf("RenderContent mismatch\nwant: %q\n got: %q", want, got)
+	}
+
+	state.CommitActive()
+	want = strings.Join(state.RenderLines(), "\n")
+	if got := state.RenderContent(); got != want {
+		t.Fatalf("committed RenderContent mismatch\nwant: %q\n got: %q", want, got)
+	}
+}

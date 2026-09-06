@@ -661,21 +661,23 @@ type runningHistoryTool interface {
 // HistoryState separates finalized transcript cells from one mutable in-flight
 // cell. Renderers always see committed cells plus the live active tail.
 type HistoryState struct {
-	committed      []HistoryCell
-	active         HistoryCell
-	maxLines       int
-	renderWidth    int
-	cachedRender   []string
-	cachedRaw      []string
-	cachedRawText  string
-	rawTextValid   bool
-	cacheValid     bool
-	cachedWidth    int
-	altRender      []string
-	altRenderValid bool
-	altRenderWidth int
-	spinnerFrame   string
-	committedLines int
+	committed        []HistoryCell
+	active           HistoryCell
+	maxLines         int
+	renderWidth      int
+	cachedRender     []string
+	cachedRenderText string
+	renderTextValid  bool
+	cachedRaw        []string
+	cachedRawText    string
+	rawTextValid     bool
+	cacheValid       bool
+	cachedWidth      int
+	altRender        []string
+	altRenderValid   bool
+	altRenderWidth   int
+	spinnerFrame     string
+	committedLines   int
 }
 
 func NewHistoryState(maxLines int) *HistoryState {
@@ -892,6 +894,8 @@ func (s *HistoryState) Reset() {
 	s.cacheValid = false
 	s.altRenderValid = false
 	s.cachedRender = nil
+	s.cachedRenderText = ""
+	s.renderTextValid = false
 	s.altRender = nil
 	s.cachedRaw = nil
 	s.cachedRawText = ""
@@ -922,6 +926,8 @@ func (s *HistoryState) buildCommittedCache() {
 	}
 	s.committedLines = committedLines
 	s.cachedRender = render
+	s.cachedRenderText = ""
+	s.renderTextValid = false
 	s.cachedRaw = raw
 	s.cachedRawText = ""
 	s.rawTextValid = false
@@ -941,6 +947,53 @@ func (s *HistoryState) RenderLines() []string {
 		out = append(out, "")
 	}
 	return append(out, activeLines...)
+}
+
+// RenderContent renders the main transcript directly as viewport content.
+// The finalized prefix is cached so streaming updates only rebuild the active tail.
+func (s *HistoryState) RenderContent() string {
+	if s == nil {
+		return ""
+	}
+	s.buildCommittedCache()
+	committed := s.committedRenderText()
+	if s.active == nil {
+		return committed
+	}
+	activeLines := renderHistoryCell(s.active, s.renderWidth)
+	if len(activeLines) == 0 {
+		return committed
+	}
+	activeBytes := len(activeLines) - 1
+	for _, line := range activeLines {
+		activeBytes += len(line)
+	}
+	separatorBytes := 0
+	if committed != "" {
+		separatorBytes = 2
+	}
+	var out strings.Builder
+	out.Grow(len(committed) + separatorBytes + activeBytes)
+	if committed != "" {
+		out.WriteString(committed)
+		out.WriteString("\n\n")
+	}
+	for index, line := range activeLines {
+		if index > 0 {
+			out.WriteByte('\n')
+		}
+		out.WriteString(line)
+	}
+	return out.String()
+}
+
+func (s *HistoryState) committedRenderText() string {
+	if s.renderTextValid {
+		return s.cachedRenderText
+	}
+	s.cachedRenderText = strings.Join(s.cachedRender, "\n")
+	s.renderTextValid = true
+	return s.cachedRenderText
 }
 
 // RenderLinesAt renders rich content at a temporary width, useful for the

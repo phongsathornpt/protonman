@@ -98,3 +98,30 @@ func BenchmarkHistoryStateRaw_100Cells(b *testing.B) {
 		_ = state.Raw()
 	}
 }
+
+func BenchmarkHistoryStateRenderContent_ActiveMarkdown20KB(b *testing.B) {
+	state := NewHistoryState(50000)
+	for i := 0; i < 100; i++ {
+		state.Append(&AssistantCell{Text: fmt.Sprintf("Committed response %d with **bold** and `code`.", i)})
+	}
+	state.AppendAssistantDelta(strings.Repeat("A paragraph with **bold text**, `inline code`, and [a link](https://example.com).\n", 250))
+	_ = state.RenderContent()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = state.RenderContent()
+	}
+}
+
+func BenchmarkHistoryStateRenderJoined_ActiveMarkdown20KB(b *testing.B) {
+	state := NewHistoryState(50000)
+	for i := 0; i < 100; i++ {
+		state.Append(&AssistantCell{Text: fmt.Sprintf("Committed response %d with **bold** and `code`.", i)})
+	}
+	state.AppendAssistantDelta(strings.Repeat("A paragraph with **bold text**, `inline code`, and [a link](https://example.com).\n", 250))
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = strings.Join(state.RenderLines(), "\n")
+	}
+}

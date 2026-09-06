@@ -991,12 +991,15 @@ func (m *bubbleModel) chromeHeight() int {
 }
 
 func (m *bubbleModel) refreshViewport() {
-	parts := make([]string, 0)
+	content := m.historyState.RenderContent()
 	if m.showWelcome {
-		parts = append(parts, m.welcomeCard())
+		welcome := m.welcomeCard()
+		if content == "" {
+			content = welcome
+		} else {
+			content = welcome + "\n" + content
+		}
 	}
-	parts = append(parts, m.renderBlocks()...)
-	content := strings.Join(parts, "\n")
 	follow := m.followTail || m.viewport.AtBottom()
 	m.viewport.SetContent(content)
 	if follow {
