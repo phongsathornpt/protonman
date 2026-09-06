@@ -191,6 +191,12 @@ func applyAgentProfile(loadedConfig *config.Snapshot, state *session.State, requ
 		effectiveProfile = loadedConfig.Agent.Profile
 	}
 	if effectiveProfile == "" {
+		promptContent := agent.DefaultSystemPrompt()
+		if len(state.Messages) == 0 {
+			state.Messages = []session.Message{{Role: model.RoleSystem, Content: promptContent}}
+		} else if state.Messages[0].Role != model.RoleSystem {
+			state.Messages = append([]session.Message{{Role: model.RoleSystem, Content: promptContent}}, state.Messages...)
+		}
 		return nil
 	}
 	prof, err := agent.ParseProfile(effectiveProfile)

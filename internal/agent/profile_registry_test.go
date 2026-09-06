@@ -230,3 +230,29 @@ func TestProfileSpecsAreCanonicalAndComplete(t *testing.T) {
 		t.Fatalf("profile spec count = %d, want %d", got, want)
 	}
 }
+
+func TestDefaultSystemPromptGroundsCodingToolUse(t *testing.T) {
+	prompt := DefaultSystemPrompt()
+	for _, marker := range []string{
+		"autonomous coding agent",
+		"Never guess workspace contents",
+		"Inspect relevant code",
+		"perform the edits",
+		"Tool names are exact identifiers",
+		"Never prefix, qualify, rename, or invent",
+		"verify the result",
+	} {
+		if !strings.Contains(prompt, marker) {
+			t.Fatalf("default system prompt missing %q:\n%s", marker, prompt)
+		}
+	}
+}
+
+func TestProfilePromptsIncludeSharedToolContract(t *testing.T) {
+	for _, profile := range SupportedProfiles() {
+		prompt := SystemPromptForProfile(profile)
+		if !strings.Contains(prompt, "Tool names are exact identifiers") {
+			t.Fatalf("profile %q missing shared tool contract", profile)
+		}
+	}
+}
