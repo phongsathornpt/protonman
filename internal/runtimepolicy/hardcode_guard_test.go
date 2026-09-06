@@ -34,6 +34,7 @@ func TestMutableProductLiteralsStayCentralized(t *testing.T) {
 		"https://protonman.dev/api/v1": "internal/model/provider.go",
 		"https://opencode.ai/zen/v1":   "internal/model/provider.go",
 		"https://api.openai.com/v1":    "internal/model/provider.go",
+		"https://api.anthropic.com":    "internal/model/provider.go",
 	}
 
 	for _, dir := range []string{"cmd", "internal"} {
