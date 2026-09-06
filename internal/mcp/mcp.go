@@ -17,9 +17,10 @@ var ErrInvalidTool = errors.New("invalid MCP tool")
 
 // Tool is the discovered manifest of one MCP server tool.
 type Tool struct {
-	Name        string
-	Description string
-	InputSchema map[string]any
+	Name         string
+	Description  string
+	InputSchema  map[string]any
+	OutputSchema map[string]any
 	// Mutability optionally declares whether successful execution can change state.
 	// Unspecified remains conservative for MCP tools.
 	Mutability tool.Mutability
@@ -49,8 +50,9 @@ func (t Tool) Validate() error {
 
 // Result is the provider-neutral result returned by an MCP tool call.
 type Result struct {
-	Output  string
-	IsError bool
+	Output           string
+	StructuredOutput json.RawMessage
+	IsError          bool
 }
 
 // Server is an injectable MCP discovery and invocation endpoint. Implementations

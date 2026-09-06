@@ -135,12 +135,13 @@ func TestDiscoverRegistersNamespacedToolsAndDispatches(t *testing.T) {
 	server := &fakeServer{
 		name: "github",
 		tools: []Tool{{
-			Name:        "search",
-			Description: "search issues",
-			InputSchema: map[string]any{"type": "object"},
+			Name:         "search",
+			Description:  "search issues",
+			InputSchema:  map[string]any{"type": "object"},
+			OutputSchema: map[string]any{"type": "object", "properties": map[string]any{"count": map[string]any{"type": "number"}}, "required": []any{"count"}},
 		}},
 		results: map[string]Result{
-			"search": {Output: "found 3 issues"},
+			"search": {Output: "found 3 issues", StructuredOutput: json.RawMessage(`{"count":3}`)},
 		},
 	}
 	registry, err := builtin.NewRegistry()
@@ -161,6 +162,9 @@ func TestDiscoverRegistersNamespacedToolsAndDispatches(t *testing.T) {
 	if definition.Kind != domaintool.KindMCP {
 		t.Fatalf("definition kind = %q, want %q", definition.Kind, domaintool.KindMCP)
 	}
+	if definition.OutputSchema["type"] != "object" {
+		t.Fatalf("output schema = %#v", definition.OutputSchema)
+	}
 
 	service := newMCPService(t, registry, permission.ActionAllow)
 	call, err := domaintool.NewCall(
@@ -177,6 +181,9 @@ func TestDiscoverRegistersNamespacedToolsAndDispatches(t *testing.T) {
 	}
 	if got, want := result.Output, "found 3 issues"; got != want {
 		t.Fatalf("MCP output = %q, want %q", got, want)
+	}
+	if got := string(result.StructuredOutput); got != `{"count":3}` {
+		t.Fatalf("MCP structured output = %q", got)
 	}
 	if got, want := server.calls, []string{"search"}; !sameStrings(got, want) {
 		t.Fatalf("server calls = %#v, want %#v", got, want)

@@ -12,11 +12,12 @@ import (
 )
 
 type fakeHandler struct {
-	definition     tool.Definition
-	calls          int
-	err            error
-	waitForContext bool
-	shouldPanic    bool
+	definition       tool.Definition
+	calls            int
+	err              error
+	waitForContext   bool
+	shouldPanic      bool
+	structuredOutput json.RawMessage
 }
 
 func (h *fakeHandler) Definition() tool.Definition {
@@ -26,9 +27,10 @@ func (h *fakeHandler) Definition() tool.Definition {
 func (h *fakeHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	h.calls++
 	result := tool.Result{
-		CallID:   call.ID,
-		ToolName: call.Name,
-		Output:   "executed",
+		CallID:           call.ID,
+		ToolName:         call.Name,
+		Output:           "executed",
+		StructuredOutput: append(json.RawMessage(nil), h.structuredOutput...),
 	}
 	if h.shouldPanic {
 		panic("handler secret")
@@ -630,5 +632,36 @@ func TestCallerBoundedToolBypassesGenericExecutionTimeout(t *testing.T) {
 	}
 	if elapsed := time.Since(started); elapsed < 25*time.Millisecond {
 		t.Fatalf("Call() elapsed = %v, test did not exceed generic timeout", elapsed)
+	}
+}
+
+func TestServiceValidatesStructuredOutputSchema(t *testing.T) {
+	handler := &fakeHandler{
+		definition: tool.Definition{
+			Name: "structured", Description: "structured output", Kind: tool.KindRead,
+			OutputSchema: map[string]any{
+				"type":       "object",
+				"properties": map[string]any{"count": map[string]any{"type": "number"}},
+				"required":   []any{"count"},
+			},
+		},
+		structuredOutput: json.RawMessage(`{"count":3}`),
+	}
+	service := newTestService(t, handler, permission.Config{Rules: []permission.Rule{{Action: permission.ActionAllow, Tool: permission.ToolRead}}})
+	call, err := tool.NewCall("call-structured", "structured", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Call(context.Background(), call); err != nil {
+		t.Fatalf("Call() error = %v", err)
+	}
+
+	handler.structuredOutput = json.RawMessage(`{"count":"three"}`)
+	result, err := service.Call(context.Background(), call)
+	if err == nil {
+		t.Fatal("Call() error = nil, want output schema failure")
+	}
+	if result.Failure == nil || result.Failure.Code != tool.ErrorCodeInvalidOutput {
+		t.Fatalf("failure = %#v, want invalid_output", result.Failure)
 	}
 }
