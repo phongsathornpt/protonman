@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/agent"
+	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
@@ -77,5 +78,15 @@ func TestSlashReasoningSyncsCoordinator(t *testing.T) {
 	m.executeCommand("/reasoning auto")
 	if got := coord.ReasoningEffort(); got != sdk.ReasoningDefault {
 		t.Fatalf("coordinator reasoning = %q, want auto/default", got)
+	}
+}
+
+func TestRemoteModelReasoningSummaryUsesResolvedProfile(t *testing.T) {
+	md := model.RemoteModel{ID: "gemini-3.8-flash"}
+	if got := remoteModelReasoningSummary("protonman", md, true); got != "reasoning low/medium/high (default medium)" {
+		t.Fatalf("summary = %q", got)
+	}
+	if got := remoteModelReasoningSummary("custom", model.RemoteModel{ID: "future-model"}, true); got != "" {
+		t.Fatalf("unknown summary = %q, want empty", got)
 	}
 }

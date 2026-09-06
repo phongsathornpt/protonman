@@ -337,6 +337,9 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 			if len(md.Features) > 0 {
 				details = append(details, strings.Join(md.Features, " · "))
 			}
+			if reasoning := remoteModelReasoningSummary(v.activeProviderName(), md, true); reasoning != "" {
+				details = append(details, reasoning)
+			}
 			if len(details) > 0 {
 				rows = append(rows, mutedStyle.Render("    "+truncateWithEllipsis(strings.Join(details, " · "), maxInt(4, contentWidth-4))))
 			}
