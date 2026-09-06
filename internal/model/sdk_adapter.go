@@ -19,7 +19,7 @@ type sdkModelClient struct {
 var _ Client = (*sdkModelClient)(nil)
 
 func newSDKOpenAIClient(providerName, baseURL, apiKey, modelID string, opts ...OpenAIOption) Client {
-	cfg := newOpenAIClientConfig(baseURL, apiKey, modelID)
+	cfg := newClientConfig(baseURL, apiKey, modelID)
 	for _, opt := range opts {
 		if opt != nil {
 			opt(&cfg)
@@ -48,14 +48,14 @@ func newSDKOpenAIClient(providerName, baseURL, apiKey, modelID string, opts ...O
 		RetryBackoff: runtimepolicy.ModelRetryBackoffStep,
 	})
 	modelOptions := make([]sdkopenai.ModelOption, 0, 1)
-	if isResponsesModel(cfg.modelID) || strings.HasSuffix(strings.TrimSpace(cfg.baseURL), "/responses") {
+	if usesResponsesAPI(cfg.modelID, cfg.baseURL) {
 		modelOptions = append(modelOptions, sdkopenai.WithResponsesAPI())
 	}
 	return &sdkModelClient{model: provider.Model(cfg.modelID, modelOptions...)}
 }
 
 func newSDKAnthropicClient(baseURL, apiKey, modelID string, opts ...OpenAIOption) Client {
-	cfg := newOpenAIClientConfig(baseURL, apiKey, modelID)
+	cfg := newClientConfig(baseURL, apiKey, modelID)
 	for _, opt := range opts {
 		if opt != nil {
 			opt(&cfg)
@@ -138,3 +138,8 @@ func (s *sdkStreamAdapter) Next(ctx context.Context) (Event, error) {
 }
 
 func (s *sdkStreamAdapter) Close() error { return s.stream.Close() }
+
+func usesResponsesAPI(modelID, baseURL string) bool {
+	id := strings.ToLower(strings.TrimSpace(modelID))
+	return strings.HasPrefix(id, "muse-spark") || strings.Contains(id, "responses") || strings.HasSuffix(strings.TrimSpace(baseURL), "/responses")
+}
