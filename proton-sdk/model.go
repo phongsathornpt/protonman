@@ -135,12 +135,24 @@ func (m Message) Validate() error {
 	return nil
 }
 
+type ProviderOptions map[string]json.RawMessage
+type ProviderMetadata map[string]json.RawMessage
+
+type ModelOptions struct {
+	MaxOutputTokens int
+	ProviderOptions ProviderOptions
+}
+
 type Request struct {
 	Messages []Message
 	Tools    []Tool
+	Options  ModelOptions
 }
 
 func (r Request) Validate() error {
+	if r.Options.MaxOutputTokens < 0 {
+		return fmt.Errorf("%w: max output tokens cannot be negative", ErrInvalidRequest)
+	}
 	if len(r.Messages) == 0 {
 		return fmt.Errorf("%w: at least one message is required", ErrInvalidRequest)
 	}
@@ -220,12 +232,13 @@ type Event struct {
 	Kind EventKind
 	Text string
 
-	ToolCall       ToolCall
-	ToolCallID     string
-	ToolName       string
-	ArgumentsDelta string
-	Usage          Usage
-	FinishReason   FinishReason
+	ToolCall         ToolCall
+	ToolCallID       string
+	ToolName         string
+	ArgumentsDelta   string
+	Usage            Usage
+	FinishReason     FinishReason
+	ProviderMetadata ProviderMetadata
 }
 
 func (e Event) Validate() error {
