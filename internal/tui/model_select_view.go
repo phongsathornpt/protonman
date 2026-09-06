@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -59,10 +60,11 @@ func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
 
 	// Resolve the catalog for the selected provider only.
 	var modelsList []model.RemoteModel
+	hasFreshCatalog := false
 	if m != nil {
-		modelsList = m.modelCatalogs.models(providers[providerIdx])
+		modelsList, hasFreshCatalog = m.modelCatalogs.freshModels(providers[providerIdx], time.Now(), modelCatalogTTL)
 	}
-	if len(modelsList) == 0 {
+	if !hasFreshCatalog {
 		providerName := providers[providerIdx]
 		baseURL := ""
 		if m != nil {
@@ -136,6 +138,48 @@ func (v *modelSelectPaneView) cancelFetch() {
 	}
 	v.fetchCancel()
 	v.fetchCancel = nil
+}
+
+func (v *modelSelectPaneView) loadProvider(m *bubbleModel, force bool) tea.Cmd {
+	if v == nil || m == nil {
+		return nil
+	}
+	providerName := v.activeProviderName()
+	v.cancelFetch()
+	v.loading = false
+	v.err = nil
+	if !force {
+		if models, ok := m.modelCatalogs.freshModels(providerName, time.Now(), modelCatalogTTL); ok {
+			v.models = models
+			v.resetSelection(m.activeModel)
+			return nil
+		}
+	}
+
+	cfg, configured := m.providers[normalizeProviderKey(providerName)]
+	if configured {
+		isOpenCode := strings.Contains(strings.ToLower(cfg.BaseURL), "opencode.ai") || strings.EqualFold(providerName, model.DefaultOpenCodeName)
+		if strings.TrimSpace(cfg.APIKey) != "" || isOpenCode {
+			return v.beginFetch(m.ctx, providerName, cfg)
+		}
+	}
+	baseURL := ""
+	if configured {
+		baseURL = cfg.BaseURL
+	}
+	v.models = model.FallbackModelsForProvider(providerName, baseURL)
+	v.resetSelection(m.activeModel)
+	return nil
+}
+
+func (m *bubbleModel) openModelSelectPane() tea.Cmd {
+	if m == nil || m.bottom.has(modelSelectViewID) {
+		return nil
+	}
+	view := newModelSelectPaneView(m)
+	m.bottom.push(view)
+	m.relayout()
+	return view.loadProvider(m, false)
 }
 
 func (v *modelSelectPaneView) Render(m *bubbleModel) string {
@@ -300,27 +344,12 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 		return true, nil
 
 	case "r":
-		currentProv := v.activeProviderName()
-		if cfg, ok := m.providers[normalizeProviderKey(currentProv)]; ok {
-			return true, v.beginFetch(m.ctx, currentProv, cfg)
-		}
-		return true, nil
+		return true, v.loadProvider(m, true)
 
 	case "tab":
 		if len(v.providerNames) > 1 {
 			v.providerIndex = (v.providerIndex + 1) % len(v.providerNames)
-			currentProv := v.providerNames[v.providerIndex]
-			v.loading = false
-			v.err = nil
-			v.models = m.modelCatalogs.models(currentProv)
-			v.index = 0
-			v.offset = 0
-			if cfg, ok := m.providers[normalizeProviderKey(currentProv)]; ok {
-				isOpenCode := strings.Contains(strings.ToLower(cfg.BaseURL), "opencode.ai") || strings.EqualFold(currentProv, model.DefaultOpenCodeName)
-				if cfg.APIKey != "" || isOpenCode {
-					return true, v.beginFetch(m.ctx, currentProv, cfg)
-				}
-			}
+			return true, v.loadProvider(m, false)
 		}
 		return true, nil
 

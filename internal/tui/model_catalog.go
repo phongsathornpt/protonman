@@ -2,12 +2,20 @@ package tui
 
 import (
 	"strings"
+	"time"
 
 	"github.com/projectTHORN/proton/internal/model"
 )
 
+const modelCatalogTTL = 2 * time.Minute
+
+type providerModelCatalog struct {
+	models    []model.RemoteModel
+	fetchedAt time.Time
+}
+
 type modelCatalogState struct {
-	entries map[string][]model.RemoteModel
+	entries map[string]providerModelCatalog
 }
 
 func normalizeProviderKey(name string) string {
@@ -15,19 +23,41 @@ func normalizeProviderKey(name string) string {
 }
 
 func (s *modelCatalogState) set(provider string, models []model.RemoteModel) {
+	s.setAt(provider, models, time.Now())
+}
+
+func (s *modelCatalogState) setAt(provider string, models []model.RemoteModel, fetchedAt time.Time) {
 	key := normalizeProviderKey(provider)
 	if key == "" {
 		return
 	}
 	if s.entries == nil {
-		s.entries = make(map[string][]model.RemoteModel)
+		s.entries = make(map[string]providerModelCatalog)
 	}
-	s.entries[key] = append([]model.RemoteModel(nil), models...)
+	s.entries[key] = providerModelCatalog{
+		models:    append([]model.RemoteModel(nil), models...),
+		fetchedAt: fetchedAt,
+	}
 }
 
 func (s *modelCatalogState) models(provider string) []model.RemoteModel {
 	if s == nil || s.entries == nil {
 		return nil
 	}
-	return append([]model.RemoteModel(nil), s.entries[normalizeProviderKey(provider)]...)
+	entry, ok := s.entries[normalizeProviderKey(provider)]
+	if !ok {
+		return nil
+	}
+	return append([]model.RemoteModel(nil), entry.models...)
+}
+
+func (s *modelCatalogState) freshModels(provider string, now time.Time, ttl time.Duration) ([]model.RemoteModel, bool) {
+	if s == nil || s.entries == nil {
+		return nil, false
+	}
+	entry, ok := s.entries[normalizeProviderKey(provider)]
+	if !ok || entry.fetchedAt.IsZero() || ttl <= 0 || now.Sub(entry.fetchedAt) >= ttl {
+		return nil, false
+	}
+	return append([]model.RemoteModel(nil), entry.models...), true
 }

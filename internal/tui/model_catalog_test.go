@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -198,4 +199,49 @@ func TestModelPickerResetSelectionFallsBackToFirstModel(t *testing.T) {
 	if view.index != 0 || view.offset != 0 {
 		t.Fatalf("selection = index:%d offset:%d, want 0/0", view.index, view.offset)
 	}
+}
+
+func TestModelCatalogFreshness(t *testing.T) {
+	var state modelCatalogState
+	now := time.Now()
+	state.setAt("provider", []model.RemoteModel{{ID: "fresh"}}, now.Add(-time.Minute))
+	if got, ok := state.freshModels("provider", now, 2*time.Minute); !ok || len(got) != 1 || got[0].ID != "fresh" {
+		t.Fatalf("fresh catalog = %#v, %t", got, ok)
+	}
+	if got, ok := state.freshModels("provider", now.Add(2*time.Minute), 2*time.Minute); ok || got != nil {
+		t.Fatalf("stale catalog reported fresh: %#v, %t", got, ok)
+	}
+}
+
+func TestModelPickerUsesFreshCacheWithoutFetch(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.providers = map[string]config.ProviderConfig{
+		"custom": {Name: "custom", BaseURL: "https://api.example.com/v1", APIKey: "key"},
+	}
+	m.activeProvider = "custom"
+	m.modelCatalogs.set("custom", []model.RemoteModel{{ID: "cached"}})
+	view := newModelSelectPaneView(m)
+	if cmd := view.loadProvider(m, false); cmd != nil {
+		t.Fatal("fresh catalog triggered a network fetch")
+	}
+	if len(view.models) != 1 || view.models[0].ID != "cached" {
+		t.Fatalf("fresh cache not used: %#v", view.models)
+	}
+}
+
+func TestModelPickerRefreshBypassesFreshCache(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.providers = map[string]config.ProviderConfig{
+		"custom": {Name: "custom", BaseURL: "https://api.example.com/v1", APIKey: "key"},
+	}
+	m.activeProvider = "custom"
+	m.modelCatalogs.set("custom", []model.RemoteModel{{ID: "cached"}})
+	view := newModelSelectPaneView(m)
+	if cmd := view.loadProvider(m, true); cmd == nil {
+		t.Fatal("forced refresh did not start a network fetch")
+	}
+	if !view.loading {
+		t.Fatal("forced refresh did not enter loading state")
+	}
+	view.cancelFetch()
 }
