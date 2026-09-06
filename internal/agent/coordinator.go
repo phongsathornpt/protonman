@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/contextutil"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -288,7 +289,7 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 
 		if err != nil {
 			res.Err = err
-			emitCtx, emitCancel := context.WithTimeout(context.WithoutCancel(childCtx), 5*time.Second)
+			emitCtx, emitCancel := contextutil.DetachedTimeout(childCtx, 5*time.Second)
 			c.emit(emitCtx, Event{
 				Kind:     EventAgentFailed,
 				AgentID:  id,
