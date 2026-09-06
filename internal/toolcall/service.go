@@ -301,7 +301,7 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		s.rememberGrant(request.Key())
 	}
 
-	executionCtx, executionCancel := s.executionContext(ctx)
+	executionCtx, executionCancel := s.executionContext(ctx, definition)
 	defer executionCancel()
 	result, err := executeHandler(executionCtx, handler, call)
 	if result.CallID == "" {
@@ -322,7 +322,10 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 	return result, nil
 }
 
-func (s *Service) executionContext(parent context.Context) (context.Context, context.CancelFunc) {
+func (s *Service) executionContext(parent context.Context, definition tool.Definition) (context.Context, context.CancelFunc) {
+	if definition.ExecutionTimeoutPolicy == tool.ExecutionTimeoutCallerBounded {
+		return context.WithCancel(parent)
+	}
 	s.mu.RLock()
 	timeout := s.executionTimeout
 	s.mu.RUnlock()

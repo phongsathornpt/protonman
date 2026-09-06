@@ -235,3 +235,10 @@ func TestDelegateTask_Execute(t *testing.T) {
 		}
 	})
 }
+
+func TestDelegateTaskUsesCallerBoundedExecutionTimeout(t *testing.T) {
+	definition := NewDelegateTask(nil).Definition()
+	if definition.ExecutionTimeoutPolicy != tool.ExecutionTimeoutCallerBounded {
+		t.Fatalf("execution timeout policy = %q, want caller bounded", definition.ExecutionTimeoutPolicy)
+	}
+}

@@ -575,3 +575,60 @@ func TestTaskMetadataAutoAllowedInAskButDeniedInDenyMode(t *testing.T) {
 		t.Fatalf("deny mode error = %v", err)
 	}
 }
+
+type slowCallerBoundedHandler struct{}
+
+func (slowCallerBoundedHandler) Definition() tool.Definition {
+	return tool.Definition{
+		Name:                   "delegate_task",
+		Description:            "long-running orchestration",
+		Kind:                   tool.KindRead,
+		Mutability:             tool.MutabilityMutating,
+		ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded,
+	}
+}
+
+func (slowCallerBoundedHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
+	select {
+	case <-time.After(30 * time.Millisecond):
+		return tool.Result{CallID: call.ID, ToolName: call.Name, Output: "done"}, nil
+	case <-ctx.Done():
+		return tool.Result{}, ctx.Err()
+	}
+}
+
+type singleHandlerRegistry struct{ handler tool.Handler }
+
+func (r singleHandlerRegistry) Lookup(name string) (tool.Handler, bool) {
+	if r.handler == nil || r.handler.Definition().Name != name {
+		return nil, false
+	}
+	return r.handler, true
+}
+func (r singleHandlerRegistry) Definitions() []tool.Definition {
+	return []tool.Definition{r.handler.Definition()}
+}
+
+func TestCallerBoundedToolBypassesGenericExecutionTimeout(t *testing.T) {
+	policy, err := permission.NewPolicy(permission.Config{Default: permission.ActionAllow})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewService(singleHandlerRegistry{handler: slowCallerBoundedHandler{}}, policy, WithExecutionTimeout(10*time.Millisecond))
+	if err != nil {
+		t.Fatal(err)
+	}
+	call, err := tool.NewCall("delegate-1", "delegate_task", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	if _, err := service.Call(ctx, call); err != nil {
+		t.Fatalf("Call() error = %v, caller-bounded tool should not use service timeout", err)
+	}
+	if elapsed := time.Since(started); elapsed < 25*time.Millisecond {
+		t.Fatalf("Call() elapsed = %v, test did not exceed generic timeout", elapsed)
+	}
+}

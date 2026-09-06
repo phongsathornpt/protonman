@@ -17,6 +17,16 @@ type Kind string
 // kind-based inference for third-party tools.
 type Mutability string
 
+// ExecutionTimeoutPolicy controls whether the tool-call service adds its own
+// execution deadline around a handler. The zero value keeps the service
+// default; caller-bound tools rely on the caller/coordinator deadline instead.
+type ExecutionTimeoutPolicy string
+
+const (
+	ExecutionTimeoutServiceDefault ExecutionTimeoutPolicy = ""
+	ExecutionTimeoutCallerBounded  ExecutionTimeoutPolicy = "caller"
+)
+
 // CommandEffect classifies the observable state impact of a shell command.
 type CommandEffect string
 
@@ -221,6 +231,10 @@ type Definition struct {
 	// Mutability declares whether successful execution can invalidate prior
 	// read observations. Unspecified preserves legacy kind-based inference.
 	Mutability Mutability
+	// ExecutionTimeoutPolicy controls whether the service applies its generic
+	// per-tool execution timeout. Orchestration tools may instead rely on a
+	// stricter caller/coordinator deadline.
+	ExecutionTimeoutPolicy ExecutionTimeoutPolicy
 	// PermissionDetailKey names the JSON argument shown to a permission
 	// prompt and matched by path, command, or domain rules.
 	PermissionDetailKey string
@@ -241,6 +255,9 @@ func (d Definition) Validate() error {
 	}
 	if !validMutability(d.Mutability) {
 		return fmt.Errorf("%w: unsupported mutability %q for %q", ErrInvalidCall, d.Mutability, d.Name)
+	}
+	if !validExecutionTimeoutPolicy(d.ExecutionTimeoutPolicy) {
+		return fmt.Errorf("%w: unsupported execution timeout policy %q for %q", ErrInvalidCall, d.ExecutionTimeoutPolicy, d.Name)
 	}
 	return nil
 }
@@ -301,6 +318,15 @@ type Registrar interface {
 func validKind(kind Kind) bool {
 	switch kind {
 	case KindRead, KindEdit, KindBash, KindGrep, KindMCP, KindWebFetch, KindWebSearch, KindTask:
+		return true
+	default:
+		return false
+	}
+}
+
+func validExecutionTimeoutPolicy(policy ExecutionTimeoutPolicy) bool {
+	switch policy {
+	case ExecutionTimeoutServiceDefault, ExecutionTimeoutCallerBounded:
 		return true
 	default:
 		return false
