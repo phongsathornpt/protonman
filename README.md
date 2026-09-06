@@ -259,7 +259,7 @@ Proton registers a suite of workspace-safe tools:
 | `bash` | Execution | Run shell commands inside workspace and sandbox boundaries |
 | `web_fetch` | Network | Retrieve remote web pages conforming to sandbox network policy |
 | `activate_skill` | Skills | Dynamically load an Agent Skill's full context into the session |
-| `delegate_task` | Multi-Agent | Spawn isolated subagents to execute specialized subtasks |
+| `delegate_task` | Multi-Agent | Spawn isolated subagents with bounded queue/execution budgets; optional `timeout_seconds` can shorten a task deadline |
 | `checkpoint_restore` | Recovery | Rollback a file to a recorded pre-edit checkpoint ID |
 
 ---
@@ -317,6 +317,8 @@ profile = "off"
 [agent]
 max_rounds = 20
 max_tool_calls = 100
+subagent_timeout = "5m"
+subagent_queue_timeout = "30s"
 
 # Active model preferences
 [model]
@@ -347,6 +349,8 @@ api_key = ""
 Execution safety notes:
 
 - `max_rounds = 0` disables only the round-count bound; `max_tool_calls = 0` disables only the cumulative tool-call-count bound.
+- `subagent_queue_timeout` bounds only the wait for concurrency/workspace capacity. `subagent_timeout` starts after that capacity is acquired, so queueing does not consume execution time.
+- `delegate_task` may request a shorter `timeout_seconds`; requests above the configured `subagent_timeout` are clamped to that maximum, and the parent turn deadline always wins when it is stricter.
 - A complete model/tool turn still has a default 10-minute deadline, and the loop refuses construction if every global termination bound is disabled.
 - Repeating the same deterministic tool call with the same semantic arguments and result twice without an intervening mutation triggers a text-only synthesis round instead of continuing the tool loop; identical retryable failures are capped at three attempts.
 - Truncated `read_file`, `grep`, and `list_dir` results include `next_offset` plus a snapshot-bound `continuation`; send both on the next page to detect stale file, query, or directory state. `grep` continuations also carry a validated cursor so deep pages resume near the prior match instead of rescanning earlier files. Plain `offset` remains supported for compatibility.
