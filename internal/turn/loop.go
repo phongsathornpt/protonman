@@ -113,6 +113,8 @@ var (
 	ErrUnresolvedToolCall = errors.New("unresolved model tool call")
 	// ErrUnsupportedModelCapability indicates that the active model cannot satisfy a turn requirement.
 	ErrUnsupportedModelCapability = errors.New("unsupported model capability")
+	// ErrContextBudgetExceeded indicates that the request cannot fit the active model context safely.
+	ErrContextBudgetExceeded = errors.New("model context budget exceeded")
 )
 
 type toolDispatchReason string
@@ -530,6 +532,10 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		}
 		if err := request.Validate(); err != nil {
 			terminalReason = "request_validation_failed"
+			return l.fail(ctx, sink, round, err)
+		}
+		if err := validateContextBudget(l.languageModel, request); err != nil {
+			terminalReason = "context_budget_exceeded"
 			return l.fail(ctx, sink, round, err)
 		}
 		outcome, err := l.runRound(ctx, round, request, dispatch, progress, sink)

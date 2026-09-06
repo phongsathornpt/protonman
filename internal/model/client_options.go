@@ -11,15 +11,16 @@ import (
 
 // clientConfig contains CLI-owned settings used to construct proton-sdk provider models.
 type clientConfig struct {
-	baseURL    string
-	apiKey     string
-	modelID    string
-	sessionID  string
-	clientName string
-	userAgent  string
-	httpClient *http.Client
-	vision     *bool
-	tools      *bool
+	baseURL       string
+	apiKey        string
+	modelID       string
+	sessionID     string
+	clientName    string
+	userAgent     string
+	httpClient    *http.Client
+	vision        *bool
+	tools         *bool
+	contextWindow *int
 }
 
 // ClientOption configures provider model construction.
@@ -43,6 +44,14 @@ func WithVisionSupport(supported bool) ClientOption {
 
 func WithToolsSupport(supported bool) ClientOption {
 	return func(c *clientConfig) { c.tools = &supported }
+}
+
+func WithContextWindow(tokens int) ClientOption {
+	return func(c *clientConfig) {
+		if tokens > 0 {
+			c.contextWindow = &tokens
+		}
+	}
 }
 
 func WithRequestTimeout(timeout time.Duration) ClientOption {

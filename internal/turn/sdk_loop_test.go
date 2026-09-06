@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/model"
@@ -14,12 +15,14 @@ import (
 )
 
 type sdkTestModel struct {
-	requests     []sdk.Request
-	capabilities sdk.ModelCapabilities
+	requests      []sdk.Request
+	capabilities  sdk.ModelCapabilities
+	contextWindow int
 }
 
-func (*sdkTestModel) Provider() string { return "test" }
-func (*sdkTestModel) ModelID() string  { return "test-model" }
+func (*sdkTestModel) Provider() string     { return "test" }
+func (*sdkTestModel) ModelID() string      { return "test-model" }
+func (m *sdkTestModel) ContextWindow() int { return m.contextWindow }
 func (m *sdkTestModel) Capabilities() sdk.ModelCapabilities {
 	if m.capabilities == (sdk.ModelCapabilities{}) {
 		return sdk.ModelCapabilities{Streaming: true, Tools: true}
@@ -183,5 +186,28 @@ func TestLoopRejectsImageForProviderModelCapabilityOverride(t *testing.T) {
 	_, err = loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Parts: []model.ContentPart{{Type: model.ContentPartImage, MIMEType: "image/png", Data: "abc"}}}}, nil)
 	if !errors.Is(err, ErrUnsupportedModelCapability) {
 		t.Fatalf("Run() error = %v, want ErrUnsupportedModelCapability", err)
+	}
+}
+
+func TestLoopRejectsOversizedContextBeforeProviderDispatch(t *testing.T) {
+	policy, err := permission.NewPolicy(permission.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := toolcall.NewService(emptyRegistry{}, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	languageModel := &sdkTestModel{contextWindow: 512}
+	loop, err := NewLoop(languageModel, service)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: strings.Repeat("x", 3000)}}, nil)
+	if !errors.Is(err, ErrContextBudgetExceeded) {
+		t.Fatalf("Run() error = %v, want ErrContextBudgetExceeded", err)
+	}
+	if len(languageModel.requests) != 0 {
+		t.Fatalf("model received %d requests, want 0", len(languageModel.requests))
 	}
 }
