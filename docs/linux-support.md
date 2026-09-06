@@ -8,7 +8,9 @@ Linux filesystem confinement currently uses `bwrap`. Profiles that require confi
 
 ## Native Go migration
 
-The native Linux backend is being introduced in layers: capability probing, Landlock filesystem rules, network namespaces, and native PTY integration tests. Bubble Tea remains the TUI framework; no TUI rewrite is required.
+The first native layer is implemented: Proton probes the Linux Landlock ABI and user-namespace configuration directly with Go and `golang.org/x/sys/unix`. Sandbox errors include those capabilities when `bwrap` is unavailable.
+
+The remaining native backend is being introduced in layers: Landlock filesystem rules, network namespaces, and native PTY integration tests. Bubble Tea remains the TUI framework; no TUI rewrite is required.
 
 ## Compatibility testing
 

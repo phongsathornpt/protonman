@@ -111,7 +111,11 @@ func (l *OSLauncher) CommandInDir(ctx context.Context, workspaceRoot string, cwd
 		// boundary required by every confining Proton profile. Never silently
 		// downgrade a requested workspace/read-only/strict sandbox to a bare
 		// shell.
-		err := fmt.Errorf("%w: bwrap is required for filesystem confinement", ErrUnavailable)
+		caps := ProbeCapabilities()
+		err := fmt.Errorf(
+			"%w: bwrap is required for filesystem confinement (native probe: landlock_abi=%d user_namespaces=%t)",
+			ErrUnavailable, caps.LandlockABI, caps.UserNamespaces,
+		)
 		logSandboxFailure(ctx, startedAt, "launcher_lookup", err)
 		return nil, err
 	default:
