@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/buildinfo"
 	"github.com/projectTHORN/proton/internal/sandbox"
 	"github.com/projectTHORN/proton/internal/tool"
 )
@@ -94,7 +95,7 @@ func (h webFetchHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("build web_fetch request: %w", err)
 	}
-	request.Header.Set("User-Agent", "Proton/1.0 (+https://github.com/projectTHORN/proton)")
+	request.Header.Set("User-Agent", buildinfo.WebUserAgent())
 	request.Header.Set("Accept", "text/html,application/xhtml+xml,application/json,text/plain;q=0.9,*/*;q=0.8")
 
 	response, err := h.client.Do(request)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/projectTHORN/proton/internal/buildinfo"
 	"io"
 	"log/slog"
 	"net/http"
@@ -316,7 +317,7 @@ func (c *OpenAIClient) Stream(ctx context.Context, request Request) (Stream, err
 
 		ua := c.userAgent
 		if ua == "" {
-			ua = "Proton/1.0"
+			ua = buildinfo.UserAgent()
 		}
 		httpReq.Header.Set("User-Agent", ua)
 

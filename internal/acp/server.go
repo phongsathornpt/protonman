@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/projectTHORN/proton/internal/buildinfo"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/session"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -276,7 +277,7 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 			AgentInfo: ImplementationInfo{
 				Name:    "proton",
 				Title:   "Proton AI Coding Agent",
-				Version: "0.1.0",
+				Version: buildinfo.Version(),
 			},
 			AuthMethods: []any{},
 		}

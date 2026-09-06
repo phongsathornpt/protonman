@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectTHORN/proton/internal/buildinfo"
 	"github.com/projectTHORN/proton/internal/sandbox"
 )
 
@@ -103,8 +104,8 @@ func TestWebFetchSendsDefaultHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if !strings.HasPrefix(receivedUA, "Proton/1.0") {
-		t.Errorf("expected User-Agent starting with Proton/1.0, got: %q", receivedUA)
+	if receivedUA != buildinfo.WebUserAgent() {
+		t.Errorf("expected User-Agent %q, got %q", buildinfo.WebUserAgent(), receivedUA)
 	}
 	if !strings.Contains(receivedAccept, "text/html") {
 		t.Errorf("expected Accept containing text/html, got: %q", receivedAccept)
