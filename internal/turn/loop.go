@@ -575,6 +575,17 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	resultBudget := newToolResultBudget(l.maxToolResultBytesPerRound, l.maxToolResultBytesPerTurn)
 	verification := VerificationState{}
 	forceNoProgressSynthesis := false
+	reasoningResolution, reasoningErr := l.resolveReasoningPolicy()
+	if reasoningErr != nil {
+		terminalReason = "reasoning_effort_unsupported"
+		return l.fail(ctx, sink, 0, fmt.Errorf("%w: %v", ErrUnsupportedModelCapability, reasoningErr))
+	}
+	slog.DebugContext(ctx, "turn reasoning policy resolved",
+		"requested", reasoningRequestedLabel(reasoningResolution),
+		"effective", reasoningEffectiveLabel(reasoningResolution),
+		"source", reasoningResolution.Source,
+		"clamped", reasoningResolution.Clamped,
+	)
 
 	if l.promptSpec == nil {
 		if section := l.currentSkillPromptSection(); section != "" {
@@ -640,6 +651,10 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		}
 		if l.promptSpec != nil {
 			spec := l.effectivePromptSpec(tools, promptExtras)
+			spec.ReasoningRequested = reasoningRequestedLabel(reasoningResolution)
+			spec.ReasoningEffective = reasoningEffectiveLabel(reasoningResolution)
+			spec.ReasoningSource = string(reasoningResolution.Source)
+			spec.ReasoningClamped = reasoningResolution.Clamped
 			if projectInstructions != "" {
 				if base := strings.TrimSpace(spec.ProjectInstructions); base != "" {
 					spec.ProjectInstructions = base + "\n\n" + projectInstructions
@@ -683,22 +698,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		if round == 1 && l.requireInitialToolUse && dispatch.enabled() && len(sdkTools) > 0 {
 			request.Options.ToolChoice = sdk.ToolChoiceRequired
 		}
-		if l.reasoningEffort != sdk.ReasoningDefault {
-			if profile, ok := model.ResolvedModelProfile(l.languageModel); ok {
-				if l.reasoningExplicit {
-					effective, resolveErr := profile.ResolveExplicitReasoning(l.reasoningEffort)
-					if resolveErr != nil {
-						terminalReason = "reasoning_effort_unsupported"
-						return l.fail(ctx, sink, round, fmt.Errorf("%w: %v", ErrUnsupportedModelCapability, resolveErr))
-					}
-					request.Options.ReasoningEffort = effective
-				} else if effective, supported := profile.ResolveProfileReasoning(l.reasoningEffort); supported {
-					request.Options.ReasoningEffort = effective
-				}
-			} else if l.reasoningExplicit {
-				request.Options.ReasoningEffort = l.reasoningEffort
-			}
-		}
+		request.Options.ReasoningEffort = reasoningResolution.Effective
 		if err := request.Validate(); err != nil {
 			terminalReason = "request_validation_failed"
 			return l.fail(ctx, sink, round, err)
