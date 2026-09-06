@@ -104,3 +104,23 @@ func TestResolveProfileReasoningPreservesUnknownProviderDefault(t *testing.T) {
 		t.Fatalf("ResolveProfileReasoning() = %q, %v", got, ok)
 	}
 }
+
+func TestResolveExplicitReasoningNeverClamps(t *testing.T) {
+	profile := Resolved{ModelID: "limited", Reasoning: Reasoning{
+		Support: SupportYes,
+		Levels:  []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningMedium},
+	}}
+	if _, err := profile.ResolveExplicitReasoning(sdk.ReasoningHigh); err == nil {
+		t.Fatal("ResolveExplicitReasoning(high) error = nil")
+	}
+	if got, err := profile.ResolveExplicitReasoning(sdk.ReasoningMedium); err != nil || got != sdk.ReasoningMedium {
+		t.Fatalf("ResolveExplicitReasoning(medium) = %q, %v", got, err)
+	}
+}
+
+func TestResolveExplicitReasoningAllowsUnknownMetadata(t *testing.T) {
+	profile := Resolved{ModelID: "future", Reasoning: Reasoning{Support: SupportUnknown}}
+	if got, err := profile.ResolveExplicitReasoning(sdk.ReasoningXHigh); err != nil || got != sdk.ReasoningXHigh {
+		t.Fatalf("ResolveExplicitReasoning(xhigh) = %q, %v", got, err)
+	}
+}

@@ -1,6 +1,11 @@
 package modelprofile
 
-import sdk "github.com/projectTHORN/proton/proton-sdk"
+import (
+	"fmt"
+	"strings"
+
+	sdk "github.com/projectTHORN/proton/proton-sdk"
+)
 
 // ResolveProfileReasoning maps a portable agent-profile preference onto the
 // levels known to be supported by this model. Unknown/unsupported profiles
@@ -60,4 +65,38 @@ func reasoningRank(effort sdk.ReasoningEffort) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// ResolveExplicitReasoning validates a user-selected effort. Unlike portable
+// profile preferences, explicit selections are never silently clamped.
+func (r Resolved) ResolveExplicitReasoning(requested sdk.ReasoningEffort) (sdk.ReasoningEffort, error) {
+	if requested == sdk.ReasoningDefault {
+		return sdk.ReasoningDefault, nil
+	}
+	if !requested.Valid() {
+		return sdk.ReasoningDefault, fmt.Errorf("invalid reasoning effort %q", requested)
+	}
+	switch r.Reasoning.Support {
+	case SupportNo:
+		return sdk.ReasoningDefault, fmt.Errorf("model %q does not support reasoning effort", r.ModelID)
+	case SupportUnknown:
+		return requested, nil
+	}
+	if len(r.Reasoning.Levels) == 0 {
+		return requested, nil
+	}
+	for _, level := range r.Reasoning.Levels {
+		if level == requested {
+			return requested, nil
+		}
+	}
+	return sdk.ReasoningDefault, fmt.Errorf("model %q does not support reasoning effort %q; supported levels: %s", r.ModelID, requested, formatReasoningLevels(r.Reasoning.Levels))
+}
+
+func formatReasoningLevels(levels []sdk.ReasoningEffort) string {
+	parts := make([]string, 0, len(levels))
+	for _, level := range levels {
+		parts = append(parts, string(level))
+	}
+	return strings.Join(parts, ", ")
 }

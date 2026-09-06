@@ -10,6 +10,7 @@ import (
 
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/sandbox"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 func TestLoadLayeredConfigRequiresProjectTrust(t *testing.T) {
@@ -598,5 +599,41 @@ model_catalog_ttl = "75s"
 		if check.got != check.want {
 			t.Errorf("%s = %v, want %v", name, check.got, check.want)
 		}
+	}
+}
+
+func TestAgentReasoningEffortConfig(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent]
+reasoning_effort = "high"
+`)
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh {
+		t.Fatalf("reasoning_effort = %q, want high", snapshot.Agent.ReasoningEffort)
+	}
+	if err := SaveUserReasoningEffort(homeDir, sdk.ReasoningDefault); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Agent.ReasoningEffort != sdk.ReasoningDefault {
+		t.Fatalf("saved auto reasoning_effort = %q", snapshot.Agent.ReasoningEffort)
+	}
+}
+
+func TestAgentReasoningEffortConfigRejectsUnknownLevel(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent]
+reasoning_effort = "turbo"
+`)
+	if _, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir}); err == nil {
+		t.Fatal("Load() error = nil")
 	}
 }

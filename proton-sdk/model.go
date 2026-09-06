@@ -164,6 +164,18 @@ const (
 	ReasoningMax     ReasoningEffort = "max"
 )
 
+func ParseReasoningEffort(value string) (ReasoningEffort, error) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "auto" || value == "default" {
+		return ReasoningDefault, nil
+	}
+	effort := ReasoningEffort(value)
+	if !effort.Valid() {
+		return ReasoningDefault, fmt.Errorf("%w: unsupported reasoning effort %q", ErrInvalidRequest, value)
+	}
+	return effort, nil
+}
+
 func (e ReasoningEffort) Valid() bool {
 	switch e {
 	case ReasoningDefault, ReasoningNone, ReasoningLow, ReasoningMedium, ReasoningHigh, ReasoningXHigh, ReasoningMax:

@@ -1440,3 +1440,32 @@ func TestLoopRequiresToolUseOnlyOnInitialGroundingRound(t *testing.T) {
 		t.Fatalf("second tool choice = %q, want auto", client.requests[1].Options.ToolChoice)
 	}
 }
+
+func TestLoopExplicitReasoningRejectsKnownUnsupportedLevel(t *testing.T) {
+	client := &scriptedClient{
+		profile: modelprofile.Resolved{ModelID: "limited", Reasoning: modelprofile.Reasoning{Support: modelprofile.SupportYes, Levels: []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningMedium}}},
+		streams: []scriptedStreamSpec{{events: []sdk.Event{{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}}},
+	}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithExplicitReasoningEffort(sdk.ReasoningHigh))
+	_, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect"}}, nil)
+	if !errors.Is(err, ErrUnsupportedModelCapability) {
+		t.Fatalf("Run() error = %v, want unsupported model capability", err)
+	}
+	if len(client.requests) != 0 {
+		t.Fatalf("provider requests = %d, want 0", len(client.requests))
+	}
+}
+
+func TestLoopExplicitReasoningPassesThroughUnknownProfile(t *testing.T) {
+	client := &scriptedClient{
+		profile: modelprofile.Resolved{ModelID: "future", Reasoning: modelprofile.Reasoning{Support: modelprofile.SupportUnknown}},
+		streams: []scriptedStreamSpec{{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}}},
+	}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithExplicitReasoningEffort(sdk.ReasoningXHigh))
+	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := client.requests[0].Options.ReasoningEffort; got != sdk.ReasoningXHigh {
+		t.Fatalf("ReasoningEffort = %q, want xhigh", got)
+	}
+}

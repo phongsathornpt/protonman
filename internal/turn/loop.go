@@ -207,6 +207,19 @@ func WithSystemPromptSpec(spec agentprompt.Spec) Option {
 	}
 }
 
+// WithExplicitReasoningEffort sets a user-selected reasoning level. Known
+// unsupported levels fail locally rather than being silently clamped.
+func WithExplicitReasoningEffort(effort sdk.ReasoningEffort) Option {
+	return func(loop *Loop) error {
+		if !effort.Valid() {
+			return fmt.Errorf("%w: unsupported reasoning effort %q", ErrInvalidLoop, effort)
+		}
+		loop.reasoningEffort = effort
+		loop.reasoningExplicit = true
+		return nil
+	}
+}
+
 // WithReasoningEffort sets a portable reasoning preference. The loop only
 // forwards it when the resolved model profile confirms reasoning support.
 func WithReasoningEffort(effort sdk.ReasoningEffort) Option {
@@ -359,6 +372,7 @@ type Loop struct {
 	maxToolResultBytesPerTurn     int
 	requireInitialToolUse         bool
 	reasoningEffort               sdk.ReasoningEffort
+	reasoningExplicit             bool
 	promptSpec                    *agentprompt.Spec
 	skills                        []skill.CatalogItem
 	skillRegistry                 *skill.Registry
@@ -671,9 +685,18 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		}
 		if l.reasoningEffort != sdk.ReasoningDefault {
 			if profile, ok := model.ResolvedModelProfile(l.languageModel); ok {
-				if effective, supported := profile.ResolveProfileReasoning(l.reasoningEffort); supported {
+				if l.reasoningExplicit {
+					effective, resolveErr := profile.ResolveExplicitReasoning(l.reasoningEffort)
+					if resolveErr != nil {
+						terminalReason = "reasoning_effort_unsupported"
+						return l.fail(ctx, sink, round, fmt.Errorf("%w: %v", ErrUnsupportedModelCapability, resolveErr))
+					}
+					request.Options.ReasoningEffort = effective
+				} else if effective, supported := profile.ResolveProfileReasoning(l.reasoningEffort); supported {
 					request.Options.ReasoningEffort = effective
 				}
+			} else if l.reasoningExplicit {
+				request.Options.ReasoningEffort = l.reasoningEffort
 			}
 		}
 		if err := request.Validate(); err != nil {

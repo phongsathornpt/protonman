@@ -17,6 +17,7 @@ import (
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
 	applicationturn "github.com/projectTHORN/proton/internal/turn"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 func (m *bubbleModel) submit() tea.Cmd {
@@ -218,6 +219,9 @@ func (m *bubbleModel) reconfigureRunner() {
 				opts = append(opts, applicationturn.WithReasoningEffort(spec.Reasoning))
 			}
 		}
+	}
+	if m.reasoningEffort != sdk.ReasoningDefault {
+		opts = append(opts, applicationturn.WithExplicitReasoningEffort(m.reasoningEffort))
 	}
 	loop, err := applicationturn.NewLoop(languageModel, m.service, opts...)
 	if err == nil {

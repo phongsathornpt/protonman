@@ -40,3 +40,18 @@ func TestRequestValidatesReasoningEffort(t *testing.T) {
 		t.Fatal("Validate(turbo) error = nil")
 	}
 }
+
+func TestParseReasoningEffort(t *testing.T) {
+	for input, want := range map[string]ReasoningEffort{
+		"auto": ReasoningDefault, "DEFAULT": ReasoningDefault, "low": ReasoningLow,
+		"medium": ReasoningMedium, "high": ReasoningHigh, "xhigh": ReasoningXHigh, "max": ReasoningMax,
+	} {
+		got, err := ParseReasoningEffort(input)
+		if err != nil || got != want {
+			t.Fatalf("ParseReasoningEffort(%q) = %q, %v; want %q", input, got, err, want)
+		}
+	}
+	if _, err := ParseReasoningEffort("turbo"); err == nil {
+		t.Fatal("ParseReasoningEffort(turbo) error = nil")
+	}
+}
