@@ -113,6 +113,11 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 
 	startedAt := time.Now()
 	c.agentsMu.Lock()
+	if entry.status.State == StateCanceling || runCtx.Err() != nil {
+		c.agentsMu.Unlock()
+		c.finishEntry(entry, req, queuedAt, time.Time{}, context.Canceled)
+		return
+	}
 	entry.status.State = StateRunning
 	entry.status.StartedAt = startedAt
 	close(entry.started)
