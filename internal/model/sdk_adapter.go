@@ -18,7 +18,7 @@ type sdkModelClient struct {
 
 var _ Client = (*sdkModelClient)(nil)
 
-func newSDKOpenAIClient(providerName, baseURL, apiKey, modelID string, opts ...OpenAIOption) Client {
+func newSDKOpenAIClient(providerName, baseURL, apiKey, modelID string, opts ...ClientOption) Client {
 	cfg := newClientConfig(baseURL, apiKey, modelID)
 	for _, opt := range opts {
 		if opt != nil {
@@ -54,7 +54,7 @@ func newSDKOpenAIClient(providerName, baseURL, apiKey, modelID string, opts ...O
 	return &sdkModelClient{model: provider.Model(cfg.modelID, modelOptions...)}
 }
 
-func newSDKAnthropicClient(baseURL, apiKey, modelID string, opts ...OpenAIOption) Client {
+func newSDKAnthropicClient(baseURL, apiKey, modelID string, opts ...ClientOption) Client {
 	cfg := newClientConfig(baseURL, apiKey, modelID)
 	for _, opt := range opts {
 		if opt != nil {

@@ -21,23 +21,25 @@ type clientConfig struct {
 	httpClient *http.Client
 }
 
-// OpenAIOption is retained as a compatibility name while callers migrate to
-// provider-neutral SDK construction options.
-type OpenAIOption func(*clientConfig)
+// ClientOption configures the CLI-to-SDK provider bridge.
+type ClientOption func(*clientConfig)
 
-func WithSessionID(sessionID string) OpenAIOption {
+// OpenAIOption is retained as a compatibility alias for callers compiled against the old bridge name.
+type OpenAIOption = ClientOption
+
+func WithSessionID(sessionID string) ClientOption {
 	return func(c *clientConfig) { c.sessionID = sessionID }
 }
 
-func WithClientName(clientName string) OpenAIOption {
+func WithClientName(clientName string) ClientOption {
 	return func(c *clientConfig) { c.clientName = clientName }
 }
 
-func WithUserAgent(userAgent string) OpenAIOption {
+func WithUserAgent(userAgent string) ClientOption {
 	return func(c *clientConfig) { c.userAgent = userAgent }
 }
 
-func WithRequestTimeout(timeout time.Duration) OpenAIOption {
+func WithRequestTimeout(timeout time.Duration) ClientOption {
 	return func(c *clientConfig) {
 		if timeout > 0 && c.httpClient != nil {
 			c.httpClient.Timeout = timeout

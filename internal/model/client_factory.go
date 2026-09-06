@@ -9,7 +9,7 @@ func NewProviderClient(
 	baseURL string,
 	apiKey string,
 	modelID string,
-	opts ...OpenAIOption,
+	opts ...ClientOption,
 ) Client {
 	protocol := ProviderProtocol(strings.ToLower(strings.TrimSpace(providerType)))
 	if protocol == "" {
