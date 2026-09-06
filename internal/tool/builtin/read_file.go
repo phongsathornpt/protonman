@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -191,10 +192,16 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 		output += fmt.Sprintf("\n[output truncated; continue with offset=%d]", *nextOffset)
 	}
 
+	var contentSHA256 string
+	if input.Offset == 0 && !truncated {
+		digest := sha256.Sum256(contents)
+		contentSHA256 = fmt.Sprintf("%x", digest[:])
+	}
 	return tool.Result{
 		CallID:     call.ID,
 		ToolName:   call.Name,
 		Output:     output,
+		SHA256:     contentSHA256,
 		Truncated:  truncated,
 		NextOffset: nextOffset,
 		Continuation: func() string {

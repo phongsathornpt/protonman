@@ -2,6 +2,8 @@ package builtin
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -17,8 +19,9 @@ type writeFileHandler struct {
 }
 
 type writeFileInput struct {
-	FilePath string `json:"file_path"`
-	Content  string `json:"content"`
+	FilePath       string `json:"file_path"`
+	Content        string `json:"content"`
+	ExpectedSHA256 string `json:"expected_sha256,omitempty"`
 }
 
 // NewWriteFile returns the atomic whole-file write adapter.
@@ -41,6 +44,10 @@ func (writeFileHandler) Definition() tool.Definition {
 			"properties": map[string]any{
 				"file_path": map[string]any{"type": "string"},
 				"content":   map[string]any{"type": "string"},
+				"expected_sha256": map[string]any{
+					"type":        "string",
+					"description": "SHA-256 from a complete read_file result; required when overwriting an existing file",
+				},
 			},
 			"required": []string{"file_path", "content"},
 		},
@@ -66,6 +73,24 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	if err := h.workspace.GuardWholeFileMutation(ctx, resolvedPath); err != nil {
 		return tool.Result{}, err
 	}
+	existing, exists, err := readEditFile(ctx, h.workspace, resolvedPath)
+	if err != nil {
+		return tool.Result{}, err
+	}
+	if exists {
+		expected := strings.ToLower(strings.TrimSpace(input.ExpectedSHA256))
+		decoded, decodeErr := hex.DecodeString(expected)
+		if expected == "" {
+			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_sha256 is required when overwriting an existing file; call read_file first")
+		}
+		if decodeErr != nil || len(decoded) != sha256.Size {
+			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_sha256 must be a 64-character SHA-256 hex digest")
+		}
+		current := sha256.Sum256(existing)
+		if expected != fmt.Sprintf("%x", current[:]) {
+			return tool.Result{}, tool.NewToolError(tool.ErrorCodeConflict, "write_file target changed since it was read; refresh the file and retry")
+		}
+	}
 	checkpointID, err := h.checkpoints.Capture(ctx, []string{resolvedPath})
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("checkpoint %q: %w", input.FilePath, err)
@@ -82,10 +107,12 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		}, fmt.Errorf("write %q: %w", input.FilePath, err)
 	}
 	h.workspace.MarkMutationOwned(ctx, resolvedPath)
+	newDigest := sha256.Sum256([]byte(input.Content))
 	return tool.Result{
 		CallID:        call.ID,
 		ToolName:      call.Name,
 		Output:        fmt.Sprintf("Wrote file successfully to %s.", displayPath),
+		SHA256:        fmt.Sprintf("%x", newDigest[:]),
 		CheckpointID:  checkpointID,
 		AffectedPaths: []string{displayPath},
 	}, nil
