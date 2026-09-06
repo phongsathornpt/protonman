@@ -88,7 +88,6 @@ type Request struct {
 	Profile      Profile       `json:"profile"`
 	Task         string        `json:"task"`
 	Context      string        `json:"context,omitempty"`
-	Depth        int           `json:"depth"`
 	Timeout      time.Duration `json:"timeout,omitempty"`
 	QueueTimeout time.Duration `json:"queue_timeout,omitempty"`
 }
@@ -100,9 +99,6 @@ func (r Request) Validate() error {
 	}
 	if strings.TrimSpace(r.Task) == "" {
 		return errors.New("subagent task is required")
-	}
-	if r.Depth < 0 {
-		return errors.New("subagent depth cannot be negative")
 	}
 	if r.Timeout < 0 {
 		return errors.New("subagent timeout cannot be negative")

@@ -22,10 +22,6 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	if err := req.Validate(); err != nil {
 		return Handle{}, fmt.Errorf("invalid subagent request: %w", err)
 	}
-	if req.Depth > c.maxDepth {
-		return Handle{}, fmt.Errorf("delegation depth %d exceeds maximum depth %d", req.Depth, c.maxDepth)
-	}
-
 	c.agentsMu.Lock()
 	if c.closed.Load() {
 		c.agentsMu.Unlock()
@@ -56,7 +52,7 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	entry := &agentEntry{
 		status: AgentStatus{
 			ID: id, ParentID: req.ParentID, Profile: req.Profile, Task: req.Task,
-			State: StateQueued, StartTime: queuedAt, Depth: req.Depth,
+			State: StateQueued, StartTime: queuedAt,
 		},
 		cancel:  runCancel,
 		done:    make(chan struct{}),

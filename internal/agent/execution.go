@@ -27,7 +27,7 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	c.agentsMu.RUnlock()
 
 	// 1. Build profile-scoped tool registry
-	scopedRegistry := FilterRegistryForProfile(parentRegistry, req.Profile, req.Depth)
+	scopedRegistry := FilterRegistryForProfile(parentRegistry, req.Profile)
 
 	// 2. Build scoped tool service. Child agents inherit the parent permission
 	// mode regardless of profile. Capability scoping limits which tools a

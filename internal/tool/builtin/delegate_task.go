@@ -118,7 +118,6 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 		Profile:  profile,
 		Task:     task,
 		Context:  strings.TrimSpace(input.Context),
-		Depth:    0,
 	}
 	if input.TimeoutSeconds > 0 {
 		req.Timeout = time.Duration(input.TimeoutSeconds) * time.Second

@@ -55,7 +55,7 @@ func TestFilterRegistryForProfile(t *testing.T) {
 	baseReg := staticRegistry{handlers: baseHandlers}
 
 	t.Run("explorer profile scoping", func(t *testing.T) {
-		scoped := FilterRegistryForProfile(baseReg, ProfileExplorer, 0)
+		scoped := FilterRegistryForProfile(baseReg, ProfileExplorer)
 		defs := scoped.Definitions()
 
 		// Explorer should have read_file, list_dir, grep, git_status, web_fetch (5 tools)
@@ -80,7 +80,7 @@ func TestFilterRegistryForProfile(t *testing.T) {
 	})
 
 	t.Run("reviewer profile scoping", func(t *testing.T) {
-		scoped := FilterRegistryForProfile(baseReg, ProfileReviewer, 0)
+		scoped := FilterRegistryForProfile(baseReg, ProfileReviewer)
 
 		// Reviewer must NOT have web_fetch (no network access), mutating tools, or delegate_task
 		for _, blocked := range []string{"web_fetch", "write_file", "apply_patch", "bash", "delegate_task", "wait_agent", "update_todo"} {
@@ -97,7 +97,7 @@ func TestFilterRegistryForProfile(t *testing.T) {
 	})
 
 	t.Run("worker profile scoping", func(t *testing.T) {
-		scoped := FilterRegistryForProfile(baseReg, ProfileWorker, 1)
+		scoped := FilterRegistryForProfile(baseReg, ProfileWorker)
 
 		// Worker can edit, read, and run bash
 		for _, allowed := range []string{"read_file", "write_file", "apply_patch", "bash"} {
@@ -114,7 +114,7 @@ func TestFilterRegistryForProfile(t *testing.T) {
 	})
 
 	t.Run("pow profile scoping", func(t *testing.T) {
-		scoped := FilterRegistryForProfile(baseReg, ProfilePOW, 1)
+		scoped := FilterRegistryForProfile(baseReg, ProfilePOW)
 		for _, allowed := range []string{"read_file", "write_file", "apply_patch", "bash"} {
 			if _, ok := scoped.Lookup(allowed); !ok {
 				t.Errorf("pow missing tool: %s", allowed)
@@ -128,7 +128,7 @@ func TestFilterRegistryForProfile(t *testing.T) {
 	})
 
 	t.Run("dex profile scoping", func(t *testing.T) {
-		scoped := FilterRegistryForProfile(baseReg, ProfileDEX, 1)
+		scoped := FilterRegistryForProfile(baseReg, ProfileDEX)
 		for _, allowed := range []string{"read_file", "write_file", "apply_patch", "bash"} {
 			if _, ok := scoped.Lookup(allowed); !ok {
 				t.Errorf("dex missing tool: %s", allowed)
@@ -142,7 +142,7 @@ func TestFilterRegistryForProfile(t *testing.T) {
 	})
 
 	t.Run("int profile scoping", func(t *testing.T) {
-		scoped := FilterRegistryForProfile(baseReg, ProfileINT, 0)
+		scoped := FilterRegistryForProfile(baseReg, ProfileINT)
 		for _, allowed := range []string{"read_file", "list_dir", "grep", "git_status", "web_fetch"} {
 			if _, ok := scoped.Lookup(allowed); !ok {
 				t.Errorf("int missing tool: %s", allowed)

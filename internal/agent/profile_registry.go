@@ -7,8 +7,8 @@ import (
 )
 
 // FilterRegistryForProfile returns a scoped tool.Registry exposing only the tools
-// authorized for the given subagent profile and delegation depth.
-func FilterRegistryForProfile(base tool.Registry, profile Profile, _ int) tool.Registry {
+// authorized for the given subagent profile.
+func FilterRegistryForProfile(base tool.Registry, profile Profile) tool.Registry {
 	if base == nil {
 		return &scopedRegistry{
 			handlers: make(map[string]tool.Handler),
