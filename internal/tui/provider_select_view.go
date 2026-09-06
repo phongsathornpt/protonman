@@ -328,7 +328,7 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (
 					}
 					m.bottom.push(mv)
 					if cfg, ok := m.providers[strings.ToLower(item.name)]; ok {
-						return true, fetchModelsCmd(item.name, cfg.BaseURL, cfg.APIKey)
+						return true, mv.beginFetch(item.name, cfg)
 					}
 				}
 				return true, nil

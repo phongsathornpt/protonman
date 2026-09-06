@@ -22,11 +22,12 @@ type modelSelectedMsg struct {
 }
 
 type modelSelectPaneView struct {
-	index         int
-	offset        int
-	models        []model.RemoteModel
-	providerNames []string
-	providerIndex int
+	index          int
+	offset         int
+	models         []model.RemoteModel
+	providerNames  []string
+	providerIndex  int
+	fetchRequestID uint64
 }
 
 func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
@@ -83,6 +84,23 @@ func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
 
 func (*modelSelectPaneView) ID() string             { return modelSelectViewID }
 func (*modelSelectPaneView) ReplacesComposer() bool { return true }
+
+func (v *modelSelectPaneView) activeProviderName() string {
+	if v == nil || v.providerIndex < 0 || v.providerIndex >= len(v.providerNames) {
+		return model.DefaultProtonmanName
+	}
+	return v.providerNames[v.providerIndex]
+}
+
+func (v *modelSelectPaneView) beginFetch(providerName string, cfg config.ProviderConfig) tea.Cmd {
+	v.fetchRequestID++
+	return fetchProviderModelsCmd(providerFetchRequest{
+		requestID:    v.fetchRequestID,
+		providerName: providerName,
+		baseURL:      cfg.BaseURL,
+		apiKey:       cfg.APIKey,
+	})
+}
 
 func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 	maxWidth := maxInt(1, m.width-4)
@@ -233,7 +251,7 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 				isOpenCode := strings.Contains(strings.ToLower(cfg.BaseURL), "opencode.ai") || strings.EqualFold(currentProv, model.DefaultOpenCodeName)
 				if cfg.APIKey != "" || isOpenCode {
 					// Fetch models for newly focused provider
-					return true, fetchModelsCmd(currentProv, cfg.BaseURL, cfg.APIKey)
+					return true, v.beginFetch(currentProv, cfg)
 				}
 			}
 		}

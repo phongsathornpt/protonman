@@ -129,9 +129,13 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if pane := m.bottom.find(modelSelectViewID); pane != nil {
 			if mv, ok := pane.(*modelSelectPaneView); ok {
-				if message.requestID == 0 && message.err == nil && len(message.models) > 0 {
+				currentProvider := mv.activeProviderName()
+				if message.requestID != mv.fetchRequestID || !strings.EqualFold(message.providerName, currentProvider) {
+					return m, nil
+				}
+				if message.err == nil && len(message.models) > 0 {
 					m.modelCatalogs.set(message.providerName, message.models)
-					mv.models = message.models
+					mv.models = m.modelCatalogs.models(message.providerName)
 					m.relayout()
 				}
 			}
