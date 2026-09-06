@@ -225,7 +225,7 @@ termination diagnostics without logging command contents.
 
 ## Model Providers & Catalog
 
-Proton connects to OpenAI-compatible endpoints with support for custom gateways and local inference:
+Proton routes agent model calls through `proton-sdk`, with native OpenAI-compatible and Anthropic Messages protocol support. Custom gateways and local inference remain supported through provider configuration:
 
 ### Built-in Provider Presets
 
@@ -234,7 +234,8 @@ Proton connects to OpenAI-compatible endpoints with support for custom gateways 
 | **OpenCode** | `https://opencode.ai/zen/v1` | No (Free) | Free-tier models with zero API key required |
 | **Protonman** | `https://protonman.dev/api/v1` | Yes (`plk_...`) | High-speed AI model gateway |
 | **Ollama** | `http://localhost:11434/v1` | No | Local LLM inference |
-| **OpenAI** | `https://api.openai.com/v1` | Yes (`sk-...`) | Official OpenAI API |
+| **OpenAI** | `https://api.openai.com/v1` | Yes (`sk-...`) | OpenAI-compatible API through `proton-sdk` |
+| **Anthropic** | `https://api.anthropic.com` | Yes | Anthropic Messages API through `proton-sdk` |
 
 ### Available Models (Protonman Gateway)
 
@@ -245,6 +246,8 @@ Proton connects to OpenAI-compatible endpoints with support for custom gateways 
 - `MiniMax-M3` (1M context)
 
 Configure providers directly inside the TUI with `/provider` or via `~/.proton/config.toml`.
+
+`proton-sdk` owns provider-neutral agent messages, tools, streaming events, usage/finish metadata, model registry, middleware, and provider wire adapters. The Proton CLI keeps permission policy, tool execution, sessions, and turn orchestration outside the SDK.
 
 ---
 
@@ -369,6 +372,12 @@ name = "ollama"
 type = "openai"
 base_url = "http://localhost:11434/v1"
 api_key = ""
+
+[providers.anthropic]
+name = "anthropic"
+type = "anthropic"
+base_url = "https://api.anthropic.com"
+api_key = "your_anthropic_api_key"
 ```
 
 
