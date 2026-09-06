@@ -10,6 +10,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/envconfig"
 )
 
@@ -36,9 +37,10 @@ func parseArgs(args []string) (cliOptions, error) {
 	flags.StringVar(&options.prompt, "prompt", "", "run one headless prompt and exit")
 	flags.StringVar(&options.output, "output", "text", "headless output format: text or json")
 	flags.StringVar(&options.mode, "permission-mode", "", "override permission mode")
-	flags.StringVar(&options.agentProfile, "agent", "", "default agent profile: pow, dex, int, worker, explorer, reviewer")
-	flags.StringVar(&options.agentProfile, "profile", "", "default agent profile: pow, dex, int, worker, explorer, reviewer")
-	flags.StringVar(&options.agentProfile, "a", "", "default agent profile: pow, dex, int, worker, explorer, reviewer")
+	profileHelp := "default agent profile: " + agent.ProfileList(", ")
+	flags.StringVar(&options.agentProfile, "agent", "", profileHelp)
+	flags.StringVar(&options.agentProfile, "profile", "", profileHelp)
+	flags.StringVar(&options.agentProfile, "a", "", profileHelp)
 	flags.BoolVar(&options.yolo, "y", false, "set permission mode to always-approve")
 	flags.BoolVar(&options.headless, "headless", false, "read the prompt from stdin")
 	flags.BoolVar(&options.acp, "acp", false, "serve Agent Client Protocol JSON-RPC on stdio")
