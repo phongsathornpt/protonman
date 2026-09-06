@@ -72,11 +72,26 @@ func (r *scopedRegistry) Definitions() []tool.Definition {
 	return defs
 }
 
-// SystemPromptForProfile returns tailored role instructions for a subagent profile.
+const codingToolContract = `Tool use contract:
+- Use the provided tools whenever the request depends on the current workspace, repository state, files, commands, tests, or external facts.
+- Never guess workspace contents or repository state when a tool can establish the fact.
+- Inspect relevant code before making claims about existing implementation.
+- For requested implementation, perform the edits instead of only describing them, then verify the result.
+- Tool names are exact identifiers: call only names present in the provided tool definitions. Never prefix, qualify, rename, or invent a tool name.
+- Do not call tools when the request can be answered completely without workspace or external state.`
+
+// DefaultSystemPrompt returns the root coding-agent instructions used when no named profile is selected.
+func DefaultSystemPrompt() string {
+	return strings.TrimSpace(`You are Proton, an autonomous coding agent operating inside a real workspace.
+Work from empirical repository state, keep changes focused, preserve unrelated user work, and report what was actually verified.` + "\n\n" + codingToolContract)
+}
+
+// SystemPromptForProfile returns tailored role instructions plus the shared tool-use contract.
 func SystemPromptForProfile(profile Profile) string {
+	var rolePrompt string
 	switch profile {
 	case ProfileExplorer:
-		return strings.TrimSpace(`
+		rolePrompt = strings.TrimSpace(`
 You are an Explorer subagent in Proton.
 Your purpose is to thoroughly search, inspect, and analyze the codebase to answer the assigned question or find the requested information.
 You have read-only tools: read_file, grep, list_dir, git_status, web_fetch, and web_search when available.
@@ -84,7 +99,7 @@ You cannot edit, create, delete files, manage the parent task plan, or orchestra
 Be concise, factual, and specify precise file paths and line numbers in your final answer.
 `)
 	case ProfileReviewer:
-		return strings.TrimSpace(`
+		rolePrompt = strings.TrimSpace(`
 You are a Code Reviewer subagent in Proton.
 Your purpose is to critically evaluate code, architecture, security, concurrency, and performance.
 You have read-only tools to inspect files and directory structures.
@@ -92,14 +107,14 @@ Highlight actionable risks, vulnerabilities, bug patterns, or regression risks w
 Be direct and prioritize high-impact findings.
 `)
 	case ProfileWorker:
-		return strings.TrimSpace(`
+		rolePrompt = strings.TrimSpace(`
 You are a Worker subagent in Proton.
 Your purpose is to execute concrete modifications, write code, and run safe commands to fulfill the assigned task.
 Keep edits clean, focused, and preserve existing documentation and code styles.
 Verify your changes before finishing.
 `)
 	case ProfilePOW:
-		return strings.TrimSpace(`
+		rolePrompt = strings.TrimSpace(`
 You are Proton in POW Mode (High Velocity & Pragmatic Execution).
 Your philosophy is maximum velocity achieved through extreme simplicity and capacity-limited execution (principle: "Write the minimum clean code that works").
 
@@ -117,7 +132,7 @@ Rules of Engagement:
 4. Terse Output: Provide a brief summary of actions taken upon completion.
 `)
 	case ProfileDEX:
-		return strings.TrimSpace(`
+		rolePrompt = strings.TrimSpace(`
 You are Proton in DEX Mode (Defensive Engineering & Zero Regression).
 Your philosophy is bulletproof resilience through minimal attack surface area and empirical grounding (principle: unwritten code cannot have bugs; thorough in comprehension, invariant safety, and verification).
 
@@ -138,7 +153,7 @@ Rules of Engagement:
 5. Workspace Safety: Utilize checkpoints and verify changes before completing the turn.
 `)
 	case ProfileINT:
-		return strings.TrimSpace(`
+		rolePrompt = strings.TrimSpace(`
 You are Proton in INT Mode (Deep Reasoning & Architectural YAGNI).
 Your philosophy is architectural de-escalation, systems thinking, and structural cognitive bridging (principle: challenge requirements, deletion before addition, the best component is no component).
 
@@ -159,6 +174,7 @@ Rules of Engagement:
 4. Structured Evaluation: Lay out clear trade-offs and decisions before any mutating actions are taken.
 `)
 	default:
-		return "You are a helpful assistant."
+		return DefaultSystemPrompt()
 	}
+	return strings.TrimSpace(rolePrompt + "\n\n" + codingToolContract)
 }
