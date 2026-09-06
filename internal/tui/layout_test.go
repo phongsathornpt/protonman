@@ -173,3 +173,26 @@ func TestTodoVisibleRowsGrowWithTerminalHeight(t *testing.T) {
 		t.Fatalf("rows did not grow: %d -> %d", small, large)
 	}
 }
+
+func TestTodoSlashCommandTogglesAndSupportsShowHide(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
+	if m.todoExpanded {
+		t.Fatal("todo unexpectedly expanded")
+	}
+	m.executeCommand("/todo")
+	if !m.todoExpanded {
+		t.Fatal("/todo did not toggle open")
+	}
+	m.executeCommand("/todo")
+	if m.todoExpanded {
+		t.Fatal("/todo did not toggle closed")
+	}
+	m.executeCommand("/todo show")
+	if !m.todoExpanded {
+		t.Fatal("/todo show did not expand")
+	}
+	m.executeCommand("/todo hide")
+	if m.todoExpanded {
+		t.Fatal("/todo hide did not collapse")
+	}
+}
