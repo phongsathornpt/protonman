@@ -56,7 +56,8 @@ type Coordinator struct {
 	guard          toolcall.CallGuard
 
 	sem      chan struct{}
-	wsLock   sync.RWMutex
+	wsGate   chan struct{}
+	wsWriter chan struct{}
 	activeMu sync.RWMutex
 	active   map[string]*activeEntry
 	wg       sync.WaitGroup
@@ -80,6 +81,8 @@ func WithMaxConcurrency(n int) Option {
 	return func(c *Coordinator) {
 		if n > 0 {
 			c.sem = make(chan struct{}, n)
+			c.wsGate = make(chan struct{}, n)
+			c.wsWriter = make(chan struct{}, 1)
 		}
 	}
 }
@@ -171,6 +174,8 @@ func NewCoordinator(
 		workspace:      ws,
 		policy:         policy,
 		sem:            make(chan struct{}, defaultMaxConcurrency),
+		wsGate:         make(chan struct{}, defaultMaxConcurrency),
+		wsWriter:       make(chan struct{}, 1),
 		active:         make(map[string]*activeEntry),
 		maxDepth:       defaultMaxDepth,
 		maxRounds:      defaultMaxRounds,
@@ -258,15 +263,14 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 			return
 		}
 
-		// 2. Acquire workspace lock: read-only profiles take shared lock,
-		// mutating worker takes exclusive lock to prevent file write collisions.
-		if req.Profile.IsMutating() {
-			c.wsLock.Lock()
-			defer c.wsLock.Unlock()
-		} else {
-			c.wsLock.RLock()
-			defer c.wsLock.RUnlock()
+		// 2. Acquire the cancellation-aware workspace gate. Read-only profiles
+		// hold one token; mutating workers hold the full gate exclusively.
+		releaseWorkspace, acquireErr := c.acquireWorkspace(childCtx, req.Profile.IsMutating())
+		if acquireErr != nil {
+			resultCh <- Result{AgentID: id, Profile: req.Profile, Err: acquireErr}
+			return
 		}
+		defer releaseWorkspace()
 
 		// 3. Emit started event
 		start := time.Now()
@@ -320,6 +324,44 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 	case res := <-resultCh:
 		return res, res.Err
 	}
+}
+
+func (c *Coordinator) acquireWorkspace(ctx context.Context, exclusive bool) (func(), error) {
+	count := 1
+	writerHeld := false
+	if exclusive {
+		select {
+		case c.wsWriter <- struct{}{}:
+			writerHeld = true
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		count = cap(c.wsGate)
+	}
+	acquired := 0
+	for acquired < count {
+		select {
+		case c.wsGate <- struct{}{}:
+			acquired++
+		case <-ctx.Done():
+			for acquired > 0 {
+				<-c.wsGate
+				acquired--
+			}
+			if writerHeld {
+				<-c.wsWriter
+			}
+			return nil, ctx.Err()
+		}
+	}
+	return func() {
+		for released := 0; released < count; released++ {
+			<-c.wsGate
+		}
+		if writerHeld {
+			<-c.wsWriter
+		}
+	}, nil
 }
 
 // Active returns a snapshot of currently running subagents.

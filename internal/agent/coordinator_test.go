@@ -578,3 +578,43 @@ func TestCoordinatorMaxRoundsOptionAllowsUnbounded(t *testing.T) {
 		t.Fatalf("Close() error = %v", err)
 	}
 }
+
+func TestCoordinatorWorkspaceGateCancelsExclusiveWait(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil, WithMaxConcurrency(2))
+	releaseReader, err := coord.acquireWorkspace(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer releaseReader()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := coord.acquireWorkspace(ctx, true)
+		done <- err
+	}()
+	time.Sleep(5 * time.Millisecond)
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("workspace acquire error = %v, want context canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("exclusive workspace wait ignored cancellation")
+	}
+}
+
+func TestCoordinatorWorkspaceGateAllowsConcurrentReaders(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil, WithMaxConcurrency(2))
+	releaseA, err := coord.acquireWorkspace(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer releaseA()
+	releaseB, err := coord.acquireWorkspace(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	releaseB()
+}
