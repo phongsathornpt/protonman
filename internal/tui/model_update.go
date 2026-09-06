@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbletea"
+	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
@@ -186,7 +187,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if message.activated && message.modelID != "" {
 				m.appendLine(mutedStyle.Render(fmt.Sprintf("  Default Model: %s", message.modelID)))
 			}
-			m.appendLine(mutedStyle.Render("  Saved to ~/.proton/config.toml"))
+			m.appendLine(mutedStyle.Render("  Saved to " + appdirs.UserConfigDisplay()))
 		}
 		m.bottom.remove(providerViewID)
 		m.relayout()
@@ -204,7 +205,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if message.unverified {
 				m.appendLine(mutedStyle.Render("  Model ID was not present in the discovered catalog; using it as a custom model."))
 			}
-			m.appendLine(mutedStyle.Render("  Saved to ~/.proton/config.toml"))
+			m.appendLine(mutedStyle.Render("  Saved to " + appdirs.UserConfigDisplay()))
 		}
 		m.bottom.remove(modelSelectViewID)
 		m.relayout()
@@ -224,7 +225,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.appendLine(mutedStyle.Render("  Use /model to choose a model for this provider"))
 			}
-			m.appendLine(mutedStyle.Render("  Saved to ~/.proton/config.toml"))
+			m.appendLine(mutedStyle.Render("  Saved to " + appdirs.UserConfigDisplay()))
 		}
 		m.bottom.remove(providerSelectViewID)
 		m.relayout()
@@ -246,7 +247,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.activeProvider != "" {
 				m.appendLine(mutedStyle.Render(fmt.Sprintf("  Active provider is now %s", m.activeProvider)))
 			}
-			m.appendLine(mutedStyle.Render("  Updated ~/.proton/config.toml"))
+			m.appendLine(mutedStyle.Render("  Updated " + appdirs.UserConfigDisplay()))
 		}
 		m.bottom.remove(providerSelectViewID)
 		m.relayout()

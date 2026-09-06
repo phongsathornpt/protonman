@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/projectTHORN/proton/internal/agent"
+	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
@@ -735,7 +736,7 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 
 	if m.skills == nil || len(m.skills.List()) == 0 {
 		m.appendLine("No agent skills discovered.")
-		m.appendLine("Place skills in ~/.proton/skills/ or .proton/skills/ (with PROTON_TRUST_PROJECT=1).")
+		m.appendLine(fmt.Sprintf("Place skills in %s or .proton/skills/ (with PROTON_TRUST_PROJECT=1).", appdirs.UserSkillsDisplay()))
 		m.refreshViewport()
 		return nil
 	}

@@ -118,7 +118,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 			_ = coordinator.Close()
 		}
 	}()
-	todoStore, err := tododomain.OpenMarkdownStore(ctx, filepath.Join(workDir, "TODO.md"))
+	todoStore, err := tododomain.OpenMarkdownStore(ctx, filepath.Join(workDir, tododomain.DefaultFilename))
 	if err != nil {
 		return nil, fmt.Errorf("open todo store: %w", err)
 	}

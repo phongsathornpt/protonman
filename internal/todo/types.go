@@ -9,6 +9,9 @@ import (
 	"strings"
 )
 
+// DefaultFilename is the workspace task file managed by Proton.
+const DefaultFilename = "TODO.md"
+
 type Status string
 
 var (

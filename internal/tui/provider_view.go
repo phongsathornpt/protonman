@@ -473,7 +473,7 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 		rows := []string{
 			brandStyle.Render("Saving Provider…"),
 			"",
-			fmt.Sprintf("  Writing %s to ~/.proton/config.toml", v.nameInput.Value()),
+			fmt.Sprintf("  Writing %s to %s", v.nameInput.Value(), appdirs.UserConfigDisplay()),
 			mutedStyle.Render(savingDescription),
 		}
 		return renderProviderModal(m, accentAssistant, rows)

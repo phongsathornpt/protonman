@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/projectTHORN/proton/internal/appdirs"
 	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
 
@@ -528,7 +529,7 @@ func ClassifyOpenCodeError(err error, activeProvider string, activeModel string)
 			Badge:   "MCP_ERROR",
 			Message: fmt.Sprintf("MCP server %q encountered a fatal failure. Note: MCP authentication is not supported yet.", serverName),
 			Suggestions: []string{
-				"Check MCP server configuration and process logs in ~/.proton/logs/mcp/",
+				"Check MCP server configuration and process logs in " + appdirs.UserMCPLogsDisplay(),
 				"Verify that all required environment variables for the MCP server are set",
 			},
 			RawDetails: raw,
