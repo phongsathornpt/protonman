@@ -832,12 +832,13 @@ func (s *HistoryState) RenderLines() []string {
 	if s.active == nil {
 		return append([]string(nil), s.cachedRender...)
 	}
-	out := make([]string, len(s.cachedRender), len(s.cachedRender)+historyCellLineCount(s.active, s.renderWidth)+1)
+	activeLines := renderHistoryCell(s.active, s.renderWidth)
+	out := make([]string, len(s.cachedRender), len(s.cachedRender)+len(activeLines)+1)
 	copy(out, s.cachedRender)
 	if len(out) > 0 {
 		out = append(out, "")
 	}
-	return append(out, renderHistoryCell(s.active, s.renderWidth)...)
+	return append(out, activeLines...)
 }
 
 // RenderLinesAt renders rich content at a temporary width, useful for the

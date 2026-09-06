@@ -108,3 +108,15 @@ func TestSpinnerStopsSchedulingWhenIdle(t *testing.T) {
 // spinnerTickMessage keeps this regression test independent of spinner frame
 // values while still exercising the Bubble Tea message path.
 func spinnerTickMessage() tea.Msg { return spinner.TickMsg{} }
+
+func TestRefreshViewportDoesNotRenderHiddenTranscriptOverlay(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.transcriptViewport.SetContent("overlay sentinel")
+	m.showTranscript = false
+	m.appendAssistant("new visible transcript content")
+	m.refreshViewport()
+	if got := m.transcriptViewport.View(); !strings.Contains(got, "overlay sentinel") {
+		t.Fatalf("hidden transcript overlay was refreshed: %q", got)
+	}
+}

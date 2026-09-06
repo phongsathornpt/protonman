@@ -1003,7 +1003,9 @@ func (m *bubbleModel) refreshViewport() {
 		m.viewport.GotoBottom()
 		m.followTail = true
 	}
-	m.refreshTranscriptViewport(false)
+	if m.showTranscript {
+		m.refreshTranscriptViewport(false)
+	}
 }
 
 func (m *bubbleModel) View() string {
@@ -1084,7 +1086,6 @@ func (m *bubbleModel) syncComponentsToLegacy() {
 		m.modalParked = false
 		m.permIndex = 0
 	}
-	m.syncLegacyBlocks()
 }
 
 type toolResultMsg struct {
