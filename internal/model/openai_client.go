@@ -14,8 +14,8 @@ type OpenAIClient struct {
 
 var _ Client = (*OpenAIClient)(nil)
 
-// openAIClientConfig contains settings shared by the legacy compatible client
-// and the official openai-go adapter.
+// openAIClientConfig contains compatibility settings shared while Proton CLI
+// migrates provider construction to proton-sdk.
 type openAIClientConfig struct {
 	baseURL    string
 	apiKey     string
