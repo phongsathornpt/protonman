@@ -18,7 +18,7 @@ type sdkModelClient struct {
 
 var _ Client = (*sdkModelClient)(nil)
 
-func newSDKOpenAIClient(providerName, baseURL, apiKey, modelID string, opts ...ClientOption) Client {
+func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, opts ...ClientOption) sdk.LanguageModel {
 	cfg := newClientConfig(baseURL, apiKey, modelID)
 	for _, opt := range opts {
 		if opt != nil {
@@ -51,10 +51,10 @@ func newSDKOpenAIClient(providerName, baseURL, apiKey, modelID string, opts ...C
 	if usesResponsesAPI(cfg.modelID, cfg.baseURL) {
 		modelOptions = append(modelOptions, sdkopenai.WithResponsesAPI())
 	}
-	return &sdkModelClient{model: provider.Model(cfg.modelID, modelOptions...)}
+	return provider.Model(cfg.modelID, modelOptions...)
 }
 
-func newSDKAnthropicClient(baseURL, apiKey, modelID string, opts ...ClientOption) Client {
+func newSDKAnthropicLanguageModel(baseURL, apiKey, modelID string, opts ...ClientOption) sdk.LanguageModel {
 	cfg := newClientConfig(baseURL, apiKey, modelID)
 	for _, opt := range opts {
 		if opt != nil {
@@ -69,7 +69,14 @@ func newSDKAnthropicClient(baseURL, apiKey, modelID string, opts ...ClientOption
 		MaxRetries:   2,
 		RetryBackoff: runtimepolicy.ModelRetryBackoffStep,
 	})
-	return &sdkModelClient{model: provider.Model(cfg.modelID)}
+	return provider.Model(cfg.modelID)
+}
+
+func WrapLanguageModel(languageModel sdk.LanguageModel) Client {
+	if languageModel == nil {
+		return nil
+	}
+	return &sdkModelClient{model: languageModel}
 }
 
 func (c *sdkModelClient) Stream(ctx context.Context, request Request) (Stream, error) {

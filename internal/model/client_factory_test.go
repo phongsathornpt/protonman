@@ -55,3 +55,14 @@ func TestResolveProviderBaseURLForProtocolUsesCustomProviderProtocol(t *testing.
 		t.Fatalf("OpenAI default = %q, want %q", got, DefaultOpenAIEndpoint)
 	}
 }
+
+func TestNewProviderLanguageModelSelectsProtocol(t *testing.T) {
+	openAIModel := NewProviderLanguageModel(DefaultOpenAIName, string(ProviderProtocolOpenAI), DefaultOpenAIEndpoint, "key", "test-model")
+	if openAIModel.Provider() != string(ProviderProtocolOpenAI) {
+		t.Fatalf("OpenAI language model provider = %q", openAIModel.Provider())
+	}
+	anthropicModel := NewProviderLanguageModel(DefaultAnthropicName, string(ProviderProtocolAnthropic), DefaultAnthropicEndpoint, "key", "claude-test")
+	if anthropicModel.Provider() != string(ProviderProtocolAnthropic) {
+		t.Fatalf("Anthropic language model provider = %q", anthropicModel.Provider())
+	}
+}
