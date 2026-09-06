@@ -126,7 +126,7 @@ func TestBwrapExposesHostRuntimeReadOnlyAndWorkspaceWritable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewProfile() error = %v", err)
 	}
-	cmd := bwrapCommand(context.Background(), "bwrap", profile, "/tmp/ws", "true")
+	cmd := bwrapCommand(context.Background(), "bwrap", profile, "/tmp/ws", "/tmp/ws", "true")
 	joined := strings.Join(cmd.Args, " ")
 	if !strings.Contains(joined, "--ro-bind / /") {
 		t.Fatalf("bwrap args missing read-only host root: %s", joined)
@@ -141,7 +141,7 @@ func TestBwrapUsesUnshareNetWhenRestricted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewProfile() error = %v", err)
 	}
-	cmd := bwrapCommand(context.Background(), "bwrap", profile, "/tmp/ws", "true")
+	cmd := bwrapCommand(context.Background(), "bwrap", profile, "/tmp/ws", "/tmp/ws", "true")
 	joined := strings.Join(cmd.Args, " ")
 	if !strings.Contains(joined, "--unshare-net") {
 		t.Fatalf("bwrap args missing --unshare-net: %s", joined)
