@@ -76,8 +76,8 @@ func TestCompactLayoutReducesChrome(t *testing.T) {
 	}
 
 	m.resize(24, 12)
-	if got := m.todoView(); got != "" {
-		t.Fatalf("tiny todo = %q, want hidden", got)
+	if got := m.todoView(); !strings.Contains(got, "Tasks 0/2") || strings.Contains(got, "one") {
+		t.Fatalf("tiny todo = %q, want summary only", got)
 	}
 	if strings.Contains(m.promptView(), "╭") || strings.Contains(m.promptView(), "╰") {
 		t.Fatalf("tiny prompt still renders box chrome: %q", m.promptView())
@@ -116,6 +116,30 @@ func TestTodoDefaultsToSummaryAndCtrlOExpands(t *testing.T) {
 	m = updated.(*bubbleModel)
 	if got := m.todoView(); !strings.Contains(got, "first") || !strings.Contains(got, "second") {
 		t.Fatalf("expanded todo missing details: %q", got)
+	}
+}
+
+func TestTodoExpandedAutoCollapsesWhileBusyWithoutLosingPreference(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{
+		{ID: "active", Text: "active task", Status: tododomain.StatusInProgress},
+		{ID: "pending", Text: "pending task", Status: tododomain.StatusPending},
+		{ID: "done", Text: "done task", Status: tododomain.StatusCompleted},
+	})
+	m.resize(80, 24)
+	m.todoExpanded = true
+	if got := m.todoView(); !strings.Contains(got, "active task") {
+		t.Fatalf("idle expanded todo missing details: %q", got)
+	}
+	m.busy = true
+	if got := m.todoView(); strings.Contains(got, "active task") || !strings.Contains(got, "1 active") || !strings.Contains(got, "1 pending") {
+		t.Fatalf("busy todo=%q, want compact progress summary", got)
+	}
+	if !m.todoExpanded {
+		t.Fatal("busy auto-collapse mutated expansion preference")
+	}
+	m.busy = false
+	if got := m.todoView(); !strings.Contains(got, "active task") {
+		t.Fatalf("idle todo did not restore expanded details: %q", got)
 	}
 }
 
