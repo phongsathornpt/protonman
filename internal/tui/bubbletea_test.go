@@ -14,6 +14,7 @@ import (
 
 	domainmodel "github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
+	tododomain "github.com/projectTHORN/proton/internal/todo"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/turn"
@@ -21,8 +22,8 @@ import (
 
 func TestCompletedTodoPaneIsHidden(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{
-		{Text: "done", Done: true},
-		{Text: "also done", Done: true},
+		{ID: "done", Text: "done", Status: tododomain.StatusCompleted},
+		{ID: "also-done", Text: "also done", Status: tododomain.StatusCompleted},
 	})
 	model.resize(80, 24)
 	if strings.Contains(model.View(), "TODO") {
@@ -45,9 +46,9 @@ func TestWelcomeSitsAtTopWithoutFloatingBox(t *testing.T) {
 
 func TestTodoPaneShowsPendingBeforeCompleted(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{
-		{Text: "already done", Done: true},
-		{Text: "still open", Done: false},
-		{Text: "also done", Done: true},
+		{ID: "already-done", Text: "already done", Status: tododomain.StatusCompleted},
+		{ID: "still-open", Text: "still open", Status: tododomain.StatusPending},
+		{ID: "also-done", Text: "also done", Status: tododomain.StatusCompleted},
 	})
 	model.resize(80, 24)
 	model.todoExpanded = true
@@ -74,7 +75,7 @@ func TestPromptIsSingleRow(t *testing.T) {
 }
 
 func TestLiveViewFitsTerminal(t *testing.T) {
-	model := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{Text: "one", Done: false}})
+	model := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
 	model.resize(80, 24)
 	height := lipgloss.Height(model.View())
 	if height > 24 {
@@ -105,7 +106,7 @@ func TestBubbleModelRendersComponentLayout(t *testing.T) {
 		context.Background(),
 		service,
 		registry,
-		[]TodoItem{{Text: "ship Bubble Tea", Done: false}},
+		[]TodoItem{{ID: "ship", Text: "ship Bubble Tea", Status: tododomain.StatusPending}},
 		nil,
 		newPermissionBridge(),
 		"/tmp/proton",

@@ -214,7 +214,7 @@ func (m bubbleModel) todoView() string {
 	}
 	completed := 0
 	for _, item := range m.todo {
-		if item.Done {
+		if item.Done() {
 			completed++
 		}
 	}
@@ -233,7 +233,7 @@ func (m bubbleModel) todoView() string {
 	visible, more := pendingFirst(m.todo, 4)
 	lines := []string{brandStyle.Render(fmt.Sprintf("TODO %d/%d complete", completed, len(m.todo)))}
 	for _, item := range visible {
-		if item.Done {
+		if item.Done() {
 			lines = append(lines, successStyle.Render("  ✓ "+item.Text))
 			continue
 		}
@@ -248,12 +248,12 @@ func (m bubbleModel) todoView() string {
 func pendingFirst(items []TodoItem, limit int) ([]TodoItem, int) {
 	ordered := make([]TodoItem, 0, len(items))
 	for _, item := range items {
-		if !item.Done {
+		if !item.Done() {
 			ordered = append(ordered, item)
 		}
 	}
 	for _, item := range items {
-		if item.Done {
+		if item.Done() {
 			ordered = append(ordered, item)
 		}
 	}
@@ -271,7 +271,7 @@ func (m *bubbleModel) appendTodo() {
 	m.appendLine("TODO:")
 	for _, item := range m.todo {
 		mark := " "
-		if item.Done {
+		if item.Done() {
 			mark = "x"
 		}
 		m.appendLine(fmt.Sprintf("[%s] %s", mark, item.Text))

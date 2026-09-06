@@ -1,31 +1,13 @@
 package tui
 
-import "strings"
+import tododomain "github.com/projectTHORN/proton/internal/todo"
 
-// TodoItem is one entry shown in the fullscreen TODO panel.
-type TodoItem struct {
-	Text string
-	Done bool
-}
+// TodoItem is kept as a compatibility alias while TODO ownership lives in the
+// domain package rather than the terminal adapter.
+type TodoItem = tododomain.Item
 
-// ParseTODO extracts checkbox items from a Markdown TODO file.
+// ParseTODO preserves the existing TUI-facing parser entry point while using
+// the provider-neutral TODO domain parser.
 func ParseTODO(markdown string) []TodoItem {
-	items := make([]TodoItem, 0)
-	for _, line := range strings.Split(markdown, "\n") {
-		trimmed := strings.TrimSpace(line)
-		done := false
-		switch {
-		case strings.HasPrefix(trimmed, "- [x] "), strings.HasPrefix(trimmed, "- [X] "):
-			done = true
-			trimmed = strings.TrimSpace(trimmed[6:])
-		case strings.HasPrefix(trimmed, "- [ ] "):
-			trimmed = strings.TrimSpace(trimmed[6:])
-		default:
-			continue
-		}
-		if trimmed != "" {
-			items = append(items, TodoItem{Text: trimmed, Done: done})
-		}
-	}
-	return items
+	return tododomain.ParseMarkdown(markdown)
 }
