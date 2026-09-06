@@ -221,8 +221,6 @@ func buildInitialRunner(cfg config.Snapshot, sessionID string, skills *skill.Reg
 		return nil
 	}
 	languageModel := model.NewProviderLanguageModel(providerKey, provider.Type, provider.BaseURL, provider.APIKey, cfg.Model.Default, model.WithSessionID(sessionID), model.WithRequestTimeout(cfg.Runtime.ModelRequestTimeout))
-	client := model.WrapLanguageModel(languageModel)
-	coordinator.SetClient(client)
 	coordinator.SetLanguageModel(languageModel)
 	loopOptions := []turn.Option{
 		turn.WithMaxRounds(cfg.Agent.MaxRounds),
