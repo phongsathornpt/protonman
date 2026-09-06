@@ -833,6 +833,7 @@ type providerFetchRequest struct {
 	ctx              context.Context
 	requestID        uint64
 	providerName     string
+	providerType     string
 	baseURL          string
 	apiKey           string
 	discoveryTimeout time.Duration
@@ -859,6 +860,7 @@ func (v *providerPaneView) beginFetch(parent context.Context, timeouts ...time.D
 		ctx:              ctx,
 		requestID:        v.fetchRequestID,
 		providerName:     strings.TrimSpace(v.nameInput.Value()),
+		providerType:     v.providerType,
 		baseURL:          strings.TrimSpace(v.endpointInput.Value()),
 		apiKey:           strings.TrimSpace(v.apiKeyInput.Value()),
 		discoveryTimeout: discoveryTimeout,
@@ -886,7 +888,13 @@ func fetchProviderModelsCmd(request providerFetchRequest) tea.Cmd {
 		ctx, cancel := context.WithTimeout(parent, timeout)
 		defer cancel()
 
-		models, err := model.FetchProviderModels(ctx, request.baseURL, request.apiKey, model.WithDiscoveryTimeout(timeout))
+		protocol := model.ProviderProtocol(strings.ToLower(strings.TrimSpace(request.providerType)))
+		if protocol == "" {
+			if preset := model.MatchProviderPreset(request.providerName, request.baseURL); preset != nil {
+				protocol = preset.Protocol
+			}
+		}
+		models, err := model.FetchProviderModelsForProtocol(ctx, protocol, request.baseURL, request.apiKey, model.WithDiscoveryTimeout(timeout))
 		return modelsFetchedMsg{
 			providerName: request.providerName,
 			baseURL:      request.baseURL,

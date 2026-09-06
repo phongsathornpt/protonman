@@ -186,11 +186,20 @@ func WithDiscoveryTimeout(timeout time.Duration) FetchModelsOption {
 	}
 }
 
-// FetchProviderModels queries a provider's model endpoint to list available models.
+// FetchProviderModels queries an OpenAI-compatible provider model endpoint.
 func FetchProviderModels(ctx context.Context, baseURL string, apiKey string, options ...FetchModelsOption) ([]RemoteModel, error) {
+	return FetchProviderModelsForProtocol(ctx, ProviderProtocolOpenAI, baseURL, apiKey, options...)
+}
+
+// FetchProviderModelsForProtocol queries the model catalog using protocol-specific authentication and response mapping.
+func FetchProviderModelsForProtocol(ctx context.Context, protocol ProviderProtocol, baseURL string, apiKey string, options ...FetchModelsOption) ([]RemoteModel, error) {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if baseURL == "" {
-		baseURL = DefaultProtonmanEndpoint
+		if protocol == ProviderProtocolAnthropic {
+			baseURL = DefaultAnthropicEndpoint
+		} else {
+			baseURL = DefaultProtonmanEndpoint
+		}
 	}
 
 	client := &http.Client{Timeout: runtimepolicy.ModelDiscoveryTimeout}
@@ -198,6 +207,10 @@ func FetchProviderModels(ctx context.Context, baseURL string, apiKey string, opt
 		if option != nil {
 			option(client)
 		}
+	}
+
+	if protocol == ProviderProtocolAnthropic {
+		return fetchAnthropicModels(ctx, client, baseURL, apiKey)
 	}
 
 	// 1. Try standard /models endpoint with Bearer auth (or without auth if apiKey is empty)
@@ -307,4 +320,59 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 	}
 
 	return nil, errors.New("unrecognized models response format")
+}
+
+func fetchAnthropicModels(ctx context.Context, client *http.Client, baseURL string, apiKey string) ([]RemoteModel, error) {
+	endpoint := strings.TrimRight(baseURL, "/")
+	if strings.HasSuffix(endpoint, "/v1") {
+		endpoint += "/models"
+	} else {
+		endpoint += "/v1/models"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create anthropic models request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("anthropic-version", "2023-06-01")
+	if strings.TrimSpace(apiKey) != "" {
+		req.Header.Set("x-api-key", apiKey)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch anthropic models: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024))
+	if err != nil {
+		return nil, fmt.Errorf("read anthropic models response: %w", err)
+	}
+	if resp.StatusCode == http.StatusUnauthorized {
+		return nil, fmt.Errorf("authentication failed (401): invalid or missing API key")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("endpoint returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var payload struct {
+		Data []struct {
+			ID             string `json:"id"`
+			DisplayName    string `json:"display_name"`
+			MaxInputTokens int    `json:"max_input_tokens"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("decode anthropic models response: %w", err)
+	}
+	if len(payload.Data) == 0 {
+		return nil, errors.New("no models returned by endpoint")
+	}
+	models := make([]RemoteModel, 0, len(payload.Data))
+	for _, item := range payload.Data {
+		name := item.DisplayName
+		if strings.TrimSpace(name) == "" {
+			name = item.ID
+		}
+		models = append(models, RemoteModel{ID: item.ID, Name: name, ContextWindow: item.MaxInputTokens, Provider: DefaultAnthropicName})
+	}
+	return models, nil
 }

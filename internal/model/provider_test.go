@@ -217,3 +217,28 @@ func TestProviderHasUsableAuth(t *testing.T) {
 		t.Fatal("unknown provider without API key should not be usable")
 	}
 }
+
+func TestFetchAnthropicProviderModels(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		if r.Header.Get("x-api-key") != "anthropic-key" {
+			t.Fatalf("x-api-key = %q", r.Header.Get("x-api-key"))
+		}
+		if r.Header.Get("anthropic-version") != "2023-06-01" {
+			t.Fatalf("anthropic-version = %q", r.Header.Get("anthropic-version"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"claude-sonnet-test","display_name":"Claude Sonnet Test","max_input_tokens":200000}]}`))
+	}))
+	defer ts.Close()
+
+	models, err := FetchProviderModelsForProtocol(context.Background(), ProviderProtocolAnthropic, ts.URL, "anthropic-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 1 || models[0].ID != "claude-sonnet-test" || models[0].Name != "Claude Sonnet Test" || models[0].ContextWindow != 200000 || models[0].Provider != DefaultAnthropicName {
+		t.Fatalf("models = %#v", models)
+	}
+}
