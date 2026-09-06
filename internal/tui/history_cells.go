@@ -104,24 +104,53 @@ type assistantRenderCache struct {
 	processed   int
 	processedAt string
 	lines       []string
+	decorated   []string
 	state       markdownRenderState
 }
 
 func (*AssistantCell) Kind() HistoryCellKind { return HistoryCellAssistant }
 func (c *AssistantCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
 func (c *AssistantCell) RenderWidth(width int) []string {
-	text := strings.TrimRight(c.Text, "\n")
+	text := assistantIncrementalText(c.Text)
 	if text == "" {
 		return nil
 	}
-	lines := c.renderMarkdownIncremental(text, maxInt(8, width-2))
-	out := make([]string, 0, len(lines))
-	for index, line := range lines {
-		prefix := "  "
-		if index == 0 {
-			prefix = "● "
+	return c.renderAssistantIncremental(text, maxInt(8, width-2))
+}
+
+func assistantIncrementalText(text string) string {
+	if !strings.HasSuffix(text, "\n") {
+		return text
+	}
+	end := len(text) - 1
+	for end > 0 && text[end-1] == '\n' {
+		end--
+	}
+	return text[:end+1]
+}
+
+func (c *AssistantCell) renderAssistantIncremental(text string, width int) []string {
+	if strings.ContainsRune(text, '\r') {
+		c.renderCache = assistantRenderCache{}
+		return decorateAssistantLines(renderMarkdownLines(text, width), 0)
+	}
+	cache, completeEnd := c.updateAssistantRenderCache(text, width)
+	stableLen := len(cache.decorated)
+	state := cache.state
+	tail := text[completeEnd:]
+	if tail == "" && !state.inFence {
+		for stableLen > 0 && cache.lines[stableLen-1] == "" {
+			stableLen--
 		}
-		out = append(out, prefix+line)
+	}
+	out := append([]string(nil), cache.decorated[:stableLen]...)
+	if tail != "" {
+		tailLines := renderMarkdownLine(tail, width, &state)
+		out = append(out, decorateAssistantLines(tailLines, stableLen)...)
+	}
+	if state.inFence {
+		marker := markdownCodeStyle.Render("  └─ code (unterminated)")
+		out = append(out, assistantDecoratedLine(marker, len(out)))
 	}
 	return out
 }
@@ -131,6 +160,19 @@ func (c *AssistantCell) renderMarkdownIncremental(text string, width int) []stri
 		c.renderCache = assistantRenderCache{}
 		return renderMarkdownLines(text, width)
 	}
+	cache, completeEnd := c.updateAssistantRenderCache(text, width)
+	out := append([]string(nil), cache.lines...)
+	state := cache.state
+	if tail := text[completeEnd:]; tail != "" {
+		out = append(out, renderMarkdownLine(tail, width, &state)...)
+	}
+	if state.inFence {
+		out = append(out, markdownCodeStyle.Render("  └─ code (unterminated)"))
+	}
+	return trimTrailingBlankLines(out)
+}
+
+func (c *AssistantCell) updateAssistantRenderCache(text string, width int) (*assistantRenderCache, int) {
 	cache := &c.renderCache
 	if cache.width != width || cache.processed > len(text) || !assistantCachePrefixMatches(text, cache) {
 		*cache = assistantRenderCache{width: width}
@@ -143,20 +185,33 @@ func (c *AssistantCell) renderMarkdownIncremental(text string, width int) []stri
 		segment := text[cache.processed:completeEnd]
 		parts := strings.Split(segment, "\n")
 		for _, raw := range parts[:len(parts)-1] {
-			cache.lines = append(cache.lines, renderMarkdownLine(raw, width, &cache.state)...)
+			lines := renderMarkdownLine(raw, width, &cache.state)
+			start := len(cache.lines)
+			cache.lines = append(cache.lines, lines...)
+			cache.decorated = append(cache.decorated, decorateAssistantLines(lines, start)...)
 		}
 		cache.processed = completeEnd
 		cache.processedAt = assistantCacheTail(text[:completeEnd])
 	}
-	out := append([]string(nil), cache.lines...)
-	state := cache.state
-	if tail := text[completeEnd:]; tail != "" {
-		out = append(out, renderMarkdownLine(tail, width, &state)...)
+	return cache, completeEnd
+}
+
+func decorateAssistantLines(lines []string, start int) []string {
+	if len(lines) == 0 {
+		return nil
 	}
-	if state.inFence {
-		out = append(out, markdownCodeStyle.Render("  └─ code (unterminated)"))
+	out := make([]string, len(lines))
+	for index, line := range lines {
+		out[index] = assistantDecoratedLine(line, start+index)
 	}
-	return trimTrailingBlankLines(out)
+	return out
+}
+
+func assistantDecoratedLine(line string, index int) string {
+	if index == 0 {
+		return "● " + line
+	}
+	return "  " + line
 }
 
 func assistantCachePrefixMatches(text string, cache *assistantRenderCache) bool {

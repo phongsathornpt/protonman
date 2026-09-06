@@ -504,6 +504,25 @@ func TestAssistantIncrementalMarkdownMatchesFullRenderer(t *testing.T) {
 	}
 }
 
+func TestAssistantIncrementalMarkdownPreservesTrailingNewlineSemantics(t *testing.T) {
+	for _, text := range []string{
+		"line",
+		"line\n",
+		"line\n\n",
+		"line\n\n\n",
+		"```go\nfmt.Println(1)\n",
+	} {
+		cell := &AssistantCell{Text: text}
+		got := cell.RenderWidth(48)
+		trimmed := strings.TrimRight(text, "\n")
+		wantMarkdown := renderMarkdownLines(trimmed, 46)
+		want := decorateAssistantLines(wantMarkdown, 0)
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("trailing newline render mismatch for %q\ngot:  %#v\nwant: %#v", text, got, want)
+		}
+	}
+}
+
 func TestAssistantIncrementalMarkdownResetsForWidthAndMutation(t *testing.T) {
 	cell := &AssistantCell{Text: "first line\nsecond line with **bold**"}
 	_ = cell.RenderWidth(60)
