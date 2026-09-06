@@ -68,7 +68,7 @@ func TestPromptIsSingleRow(t *testing.T) {
 	if model.prompt.Height() != 1 {
 		t.Fatalf("prompt height = %d, want 1", model.prompt.Height())
 	}
-	if strings.Count(model.promptView(), "❯") != 1 {
+	if strings.Count(model.promptView(), "›") != 1 {
 		t.Fatalf("prompt chrome repeated:\n%s", model.promptView())
 	}
 }
@@ -120,7 +120,7 @@ func TestBubbleModelRendersComponentLayout(t *testing.T) {
 		"assistant: ready",
 		"Tasks 0/1",
 		"ask",
-		"❯",
+		"›",
 		"/help",
 	} {
 		if !strings.Contains(view, expected) {

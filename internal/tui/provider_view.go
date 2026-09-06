@@ -346,7 +346,7 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 	switch v.state {
 	case providerStateFetching:
 		rows := []string{
-			brandStyle.Render("◆ Connecting to " + v.nameInput.Value()),
+			brandStyle.Render("Connecting to " + v.nameInput.Value()),
 			"",
 			fmt.Sprintf("  %s Querying %s/models…", m.spinner.View(), v.endpointInput.Value()),
 			mutedStyle.Render("  Checking endpoint & discovering model catalog"),
@@ -471,7 +471,7 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 			savingDescription = "  Keeping the current active provider and model"
 		}
 		rows := []string{
-			brandStyle.Render("◆ Saving Provider…"),
+			brandStyle.Render("Saving Provider…"),
 			"",
 			fmt.Sprintf("  Writing %s to ~/.proton/config.toml", v.nameInput.Value()),
 			mutedStyle.Render(savingDescription),
@@ -531,9 +531,9 @@ func (v *providerPaneView) inputTitle(compact bool) string {
 		return fmt.Sprintf("✓ Edit Provider: %s [Step 1/2: Connection]", v.nameInput.Value())
 	}
 	if compact {
-		return "◆ Add Provider"
+		return "+ Add Provider"
 	}
-	return "◆ Add Model Provider [Step 1/2: Connection]"
+	return "+ Add Model Provider [Step 1/2: Connection]"
 }
 
 func (v *providerPaneView) inputFieldRows(compact bool) []string {

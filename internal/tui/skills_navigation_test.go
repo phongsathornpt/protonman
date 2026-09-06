@@ -214,8 +214,8 @@ func TestSlashAutocompleteAlignedColumns(t *testing.T) {
 
 	rendered := model.renderSlash(0)
 	// Check that checkboxes are consistently placed before names and descriptions use ellipsis
-	if !strings.Contains(rendered, "❯ [ ] skill-01") {
-		t.Fatalf("expected aligned cursor and checkbox '❯ [ ] skill-01', got:\n%s", rendered)
+	if !strings.Contains(rendered, "› [ ] skill-01") {
+		t.Fatalf("expected aligned cursor and checkbox '› [ ] skill-01', got:\n%s", rendered)
 	}
 	if !strings.Contains(rendered, "  [ ] skill-02") {
 		t.Fatalf("expected aligned unselected row '  [ ] skill-02', got:\n%s", rendered)
