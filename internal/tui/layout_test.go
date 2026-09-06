@@ -1,9 +1,11 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/projectTHORN/proton/internal/permission"
 )
 
 func TestPickerVisibleRows(t *testing.T) {
@@ -57,5 +59,28 @@ func TestPickersFitResponsiveTerminalHeights(t *testing.T) {
 		if got := lipgloss.Width(skillsView); got > size[0] {
 			t.Fatalf("skills picker width %d exceeds %d at %dx%d", got, size[0], size[0], size[1])
 		}
+	}
+}
+
+func TestCompactLayoutReducesChrome(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{Text: "one"}, {Text: "two"}})
+	m.activeModel = "provider/a-very-long-model-name"
+	m.resize(60, 18)
+	if got := m.todoView(); !strings.Contains(got, "Tasks 0/2") || strings.Contains(got, "one") {
+		t.Fatalf("compact todo = %q, want summary only", got)
+	}
+	if got := m.infoView(); strings.Contains(got, "ctrl+t transcript") || !strings.Contains(got, "ctrl+p model") {
+		t.Fatalf("compact info = %q", got)
+	}
+
+	m.resize(24, 12)
+	if got := m.todoView(); got != "" {
+		t.Fatalf("tiny todo = %q, want hidden", got)
+	}
+	if strings.Contains(m.promptView(), "╭") || strings.Contains(m.promptView(), "╰") {
+		t.Fatalf("tiny prompt still renders box chrome: %q", m.promptView())
+	}
+	if got := lipgloss.Height(m.View()); got > 12 {
+		t.Fatalf("tiny live view height = %d, want <= 12", got)
 	}
 }

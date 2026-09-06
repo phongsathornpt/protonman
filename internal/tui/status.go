@@ -32,25 +32,26 @@ func (m bubbleModel) statusView() string {
 func (m bubbleModel) infoView() string {
 	if view := m.permissionView(); view != nil {
 		if view.parked {
-			return mutedStyle.Render("tab return · y allow · s session · n deny · pgup scroll")
+			return mutedStyle.Render("tab review · y once · s session · n deny")
 		}
-		return mutedStyle.Render("j/k move · 1-3 select · y once · s session · n deny · esc park")
+		return mutedStyle.Render("y once · s session · n deny · esc review")
 	}
 
 	targetWidth := m.width - 2
 	if targetWidth <= 0 {
 		targetWidth = 80
 	}
+	mode := layoutModeForHeight(m.height)
 
 	parts := []string{m.modeChip()}
 	if m.activeModel != "" {
-		cleanModel := truncateWithEllipsis(m.activeModel, maxInt(16, targetWidth/4))
+		cleanModel := truncateWithEllipsis(m.activeModel, maxInt(8, targetWidth/3))
 		parts = append(parts, brandStyle.Render("model: "+cleanModel))
 	}
 	if n := len(m.queue); n > 0 {
 		parts = append(parts, mutedStyle.Render(fmt.Sprintf("%d queued", n)))
 	}
-	if m.skills != nil {
+	if mode == layoutNormal && m.skills != nil {
 		active := m.skills.ActivatedList()
 		if len(active) == 1 {
 			cleanSkill := truncateWithEllipsis(active[0], maxInt(14, targetWidth/3))
@@ -60,11 +61,17 @@ func (m bubbleModel) infoView() string {
 		}
 	}
 
-	candidates := []string{"shift+tab mode", "ctrl+p model"}
-	if m.skills != nil && len(m.skills.List()) > 0 {
-		candidates = append(candidates, "ctrl+s skills")
+	candidates := make([]string, 0, 4)
+	switch mode {
+	case layoutNormal:
+		candidates = append(candidates, "shift+tab mode", "ctrl+p model")
+		if m.skills != nil && len(m.skills.List()) > 0 {
+			candidates = append(candidates, "ctrl+s skills")
+		}
+		candidates = append(candidates, "ctrl+t transcript", "ctrl+l clear")
+	case layoutCompact:
+		candidates = append(candidates, "ctrl+p model")
 	}
-	candidates = append(candidates, "ctrl+t transcript", "ctrl+l clear")
 
 	sepStr := glyphSep
 	sepWidth := ansi.StringWidth(sepStr)
@@ -113,7 +120,14 @@ func (m bubbleModel) shortcutHint() string {
 	if m.slashOpen() {
 		return mutedStyle.Render("tab accept · enter run · esc close · ↑↓ move")
 	}
-	return mutedStyle.Render("enter send · ctrl+j newline · shift+tab mode · ctrl+t transcript · ctrl+c quit")
+	switch layoutModeForHeight(m.height) {
+	case layoutTiny:
+		return mutedStyle.Render("enter send · ctrl+c")
+	case layoutCompact:
+		return mutedStyle.Render("enter send · ctrl+p model · ctrl+c")
+	default:
+		return mutedStyle.Render("enter send · ctrl+j newline · shift+tab mode · ctrl+t transcript · ctrl+c quit")
+	}
 }
 
 func (m *bubbleModel) cycleMode() {
@@ -202,6 +216,12 @@ func (m bubbleModel) todoView() string {
 	if completed == len(m.todo) {
 		return ""
 	}
+	switch layoutModeForHeight(m.height) {
+	case layoutTiny:
+		return ""
+	case layoutCompact:
+		return brandStyle.Render(fmt.Sprintf("Tasks %d/%d", completed, len(m.todo)))
+	}
 	visible, more := pendingFirst(m.todo, 4)
 	lines := []string{brandStyle.Render(fmt.Sprintf("TODO %d/%d complete", completed, len(m.todo)))}
 	for _, item := range visible {
@@ -253,6 +273,9 @@ func (m *bubbleModel) appendTodo() {
 func (m bubbleModel) promptView() string {
 	if m.bottom == nil || m.bottom.prompt() == nil {
 		return ""
+	}
+	if layoutModeForHeight(m.height) == layoutTiny {
+		return m.bottom.prompt().View()
 	}
 	width := maxInt(1, m.width-2)
 	border := promptBorder
