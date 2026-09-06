@@ -417,6 +417,34 @@ func NewLoop(languageModel sdk.LanguageModel, tools *toolcall.Service, options .
 	return loop, nil
 }
 
+// ReasoningPolicy returns the configured reasoning preference and whether it is an explicit override.
+func (l *Loop) ReasoningPolicy() (sdk.ReasoningEffort, bool) {
+	if l == nil {
+		return sdk.ReasoningDefault, false
+	}
+	return l.reasoningEffort, l.reasoningExplicit
+}
+
+// CloneWithReasoningEffort creates an independent loop with a session-local reasoning policy.
+func (l *Loop) CloneWithReasoningEffort(effort sdk.ReasoningEffort, explicit bool) (*Loop, error) {
+	if l == nil {
+		return nil, fmt.Errorf("%w: loop is required", ErrInvalidLoop)
+	}
+	if !effort.Valid() {
+		return nil, fmt.Errorf("%w: unsupported reasoning effort %q", ErrInvalidLoop, effort)
+	}
+	clone, err := l.CloneWithTools(l.tools)
+	if err != nil {
+		return nil, err
+	}
+	clone.reasoningEffort = effort
+	clone.reasoningExplicit = explicit && effort != sdk.ReasoningDefault
+	if _, err := clone.resolveReasoningPolicy(); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrUnsupportedModelCapability, err)
+	}
+	return clone, nil
+}
+
 // CloneWithTools creates a loop with the same model and execution settings but
 // an independent tool-call service. It is used by session-oriented adapters
 // that share a model client while keeping permission state isolated.

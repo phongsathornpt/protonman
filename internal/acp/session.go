@@ -20,18 +20,20 @@ import (
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/turn"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 const sessionPersistenceTimeout = runtimepolicy.SessionPersistenceTimeout
 
 // Session represents an active ACP conversation thread.
 type Session struct {
-	id       string
-	cwd      string
-	service  *toolcall.Service
-	registry tool.Registry
-	runner   applicationturn.Runner
-	store    *session.FileStore
+	id              string
+	cwd             string
+	service         *toolcall.Service
+	registry        tool.Registry
+	runner          applicationturn.Runner
+	store           *session.FileStore
+	reasoningEffort sdk.ReasoningEffort
 
 	mu        sync.Mutex
 	messages  []model.Message
@@ -50,15 +52,43 @@ func NewSession(
 	runner applicationturn.Runner,
 	store *session.FileStore,
 ) *Session {
-	return &Session{
-		id:       id,
-		cwd:      cwd,
-		service:  service,
-		registry: registry,
-		runner:   runner,
-		store:    store,
-		messages: make([]model.Message, 0),
+	reasoningEffort := sdk.ReasoningDefault
+	if loop, ok := runner.(*applicationturn.Loop); ok {
+		if effort, explicit := loop.ReasoningPolicy(); explicit {
+			reasoningEffort = effort
+		}
 	}
+	return &Session{
+		id: id, cwd: cwd, service: service, registry: registry, runner: runner, store: store,
+		reasoningEffort: reasoningEffort, messages: make([]model.Message, 0),
+	}
+}
+
+// ReasoningEffort returns the explicit session-local reasoning override.
+func (s *Session) ReasoningEffort() sdk.ReasoningEffort {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.reasoningEffort
+}
+
+// SetReasoningEffort replaces the session-local Proton loop with an independently configured clone.
+func (s *Session) SetReasoningEffort(effort sdk.ReasoningEffort) error {
+	if !effort.Valid() {
+		return fmt.Errorf("invalid reasoning effort %q", effort)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	loop, ok := s.runner.(*applicationturn.Loop)
+	if !ok {
+		return errors.New("reasoning override requires Proton turn loop runner")
+	}
+	clone, err := loop.CloneWithReasoningEffort(effort, effort != sdk.ReasoningDefault)
+	if err != nil {
+		return err
+	}
+	s.runner = clone
+	s.reasoningEffort = effort
+	return nil
 }
 
 // ID returns the unique session ID.
@@ -472,6 +502,32 @@ func (s *Session) handleSlashCommand(
 		})
 		return true, SessionPromptResult{StopReason: StopReasonEndTurn}, nil
 
+	case "/reasoning", "/thinking":
+		if len(parts) == 1 {
+			label := "auto"
+			if effort := s.ReasoningEffort(); effort != sdk.ReasoningDefault {
+				label = string(effort)
+			}
+			_ = notifier(agentMessageNotification(s.id, "Reasoning override: **"+label+"**."))
+			return true, SessionPromptResult{StopReason: StopReasonEndTurn}, nil
+		}
+		effort, err := sdk.ParseReasoningEffort(parts[1])
+		if err != nil {
+			return true, SessionPromptResult{}, fmt.Errorf("invalid reasoning effort: use auto, none, low, medium, high, xhigh, or max")
+		}
+		if err := s.SetReasoningEffort(effort); err != nil {
+			return true, SessionPromptResult{}, err
+		}
+		if err := s.saveStateDetached(ctx); err != nil {
+			return true, SessionPromptResult{}, fmt.Errorf("save session %q: %w", s.id, err)
+		}
+		label := "auto"
+		if effort != sdk.ReasoningDefault {
+			label = string(effort)
+		}
+		_ = notifier(agentMessageNotification(s.id, "Reasoning override set to **"+label+"**."))
+		return true, SessionPromptResult{StopReason: StopReasonEndTurn}, nil
+
 	case "/tools":
 		var b strings.Builder
 		b.WriteString("### Registered Tools\n\n")
@@ -606,6 +662,19 @@ func (s *Session) handleSlashCommand(
 	return false, SessionPromptResult{}, nil
 }
 
+func agentMessageNotification(sessionID, text string) RPCNotification {
+	return RPCNotification{
+		JSONRPC: "2.0", Method: "session/update",
+		Params: map[string]any{
+			"sessionId": sessionID,
+			"update": map[string]any{
+				"sessionUpdate": "agent_message_chunk",
+				"content":       map[string]any{"type": string(BlockTypeText), "text": text},
+			},
+		},
+	}
+}
+
 func notifyToolCallUpdate(
 	notifier func(RPCNotification) error,
 	sessionID string,
@@ -659,12 +728,18 @@ func (s *Session) saveState(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	messages := model.CloneMessages(s.messages)
+	reasoningEffort := s.reasoningEffort
 	s.mu.Unlock()
+	reasoningSetting := "auto"
+	if reasoningEffort != sdk.ReasoningDefault {
+		reasoningSetting = string(reasoningEffort)
+	}
 
 	return s.store.Save(ctx, s.id, session.State{
-		PermissionMode: s.service.Mode().String(),
-		Messages:       session.FromModelMessages(messages),
-		UpdatedAt:      time.Now().UTC(),
+		PermissionMode:  s.service.Mode().String(),
+		ReasoningEffort: reasoningSetting,
+		Messages:        session.FromModelMessages(messages),
+		UpdatedAt:       time.Now().UTC(),
 	})
 }
 

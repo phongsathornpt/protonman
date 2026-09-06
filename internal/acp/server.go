@@ -18,6 +18,7 @@ import (
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/turn"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 // ErrInvalidServer indicates that the ACP server cannot start.
@@ -471,6 +472,15 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 			}
 			if err := sess.service.SetMode(mode); err != nil {
 				return nil, fmt.Errorf("restore session mode %q: %w", sessionID, err)
+			}
+			if strings.TrimSpace(state.ReasoningEffort) != "" {
+				effort, parseErr := sdk.ParseReasoningEffort(state.ReasoningEffort)
+				if parseErr != nil {
+					return nil, fmt.Errorf("restore session reasoning %q: %w", sessionID, parseErr)
+				}
+				if err := sess.SetReasoningEffort(effort); err != nil {
+					return nil, fmt.Errorf("restore session reasoning %q: %w", sessionID, err)
+				}
 			}
 		}
 	}

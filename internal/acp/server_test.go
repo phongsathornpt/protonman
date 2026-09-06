@@ -17,6 +17,7 @@ import (
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/turn"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 func TestACPInitializeAndPrompt(t *testing.T) {
@@ -38,6 +39,9 @@ func TestACPInitializeAndPrompt(t *testing.T) {
 	}
 	if !strings.Contains(outStr, `"available_commands_update"`) {
 		t.Fatalf("session/new missing available_commands_update: %s", outStr)
+	}
+	if !strings.Contains(outStr, `"name":"reasoning"`) {
+		t.Fatalf("session/new missing reasoning command advertisement: %s", outStr)
 	}
 	if !strings.Contains(outStr, `"sessionId"`) {
 		t.Fatalf("session/new missing sessionId: %s", outStr)
@@ -697,4 +701,80 @@ func TestServeCancellationInterruptsClosableInput(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("Serve did not return after context cancellation")
 	}
+}
+
+func TestACPReasoningSlashPersistsAndValidatesModelProfile(t *testing.T) {
+	loop := newACPReasoningLoop(t, "gemini-3.8-flash")
+	server := newTestServerWithRunner(t, permission.ModeAsk, loop)
+	store, err := session.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.store = store
+	sess, err := server.newSession("reasoning-session", "/tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	notify := func(RPCNotification) error { return nil }
+	if handled, _, err := sess.handleSlashCommand(context.Background(), model.Message{}, "/reasoning high", notify); !handled || err != nil {
+		t.Fatalf("/reasoning high = handled %v, err %v", handled, err)
+	}
+	if got := sess.ReasoningEffort(); got != sdk.ReasoningHigh {
+		t.Fatalf("reasoning effort = %q, want high", got)
+	}
+	loaded, found, err := store.Load(context.Background(), "reasoning-session")
+	if err != nil || !found || loaded.ReasoningEffort != "high" {
+		t.Fatalf("persisted reasoning = %#v, found %v, err %v", loaded.ReasoningEffort, found, err)
+	}
+	if handled, _, err := sess.handleSlashCommand(context.Background(), model.Message{}, "/reasoning xhigh", notify); !handled || err == nil {
+		t.Fatalf("/reasoning xhigh = handled %v, err %v", handled, err)
+	}
+	if got := sess.ReasoningEffort(); got != sdk.ReasoningHigh {
+		t.Fatalf("unsupported override changed effort to %q", got)
+	}
+	if handled, _, err := sess.handleSlashCommand(context.Background(), model.Message{}, "/reasoning auto", notify); !handled || err != nil {
+		t.Fatalf("/reasoning auto = handled %v, err %v", handled, err)
+	}
+	if got := sess.ReasoningEffort(); got != sdk.ReasoningDefault {
+		t.Fatalf("reasoning effort = %q, want auto", got)
+	}
+}
+
+func TestACPSessionLoadRestoresReasoningEffort(t *testing.T) {
+	loop := newACPReasoningLoop(t, "gemini-3.8-flash")
+	server := newTestServerWithRunner(t, permission.ModeAsk, loop)
+	store, err := session.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.store = store
+	if err := store.Save(context.Background(), "resume-reasoning", session.State{PermissionMode: "ask", ReasoningEffort: "high"}); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := server.loadOrCreateSession(context.Background(), "resume-reasoning", "/tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sess.ReasoningEffort(); got != sdk.ReasoningHigh {
+		t.Fatalf("restored reasoning = %q, want high", got)
+	}
+}
+
+func newACPReasoningLoop(t *testing.T, modelID string) *applicationturn.Loop {
+	t.Helper()
+	registry := acpRegistry{handler: acpHandler{definition: tool.Definition{Name: "read_file", Description: "read", Kind: tool.KindRead}}}
+	policy, err := permission.NewPolicy(permission.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := toolcall.NewService(registry, policy, toolcall.WithMode(permission.ModeAsk))
+	if err != nil {
+		t.Fatal(err)
+	}
+	languageModel := model.NewProviderLanguageModel(model.DefaultProtonmanName, string(model.ProviderProtocolOpenAI), "http://127.0.0.1", "", modelID)
+	loop, err := applicationturn.NewLoop(languageModel, service)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return loop
 }
