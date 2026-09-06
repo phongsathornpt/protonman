@@ -605,10 +605,11 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				)
 			}
 			toolMessage := model.Message{
-				Role:       model.RoleTool,
-				Content:    string(content),
-				ToolCallID: execution.call.ID,
-				ToolName:   execution.call.Name,
+				Role:              model.RoleTool,
+				Content:           string(content),
+				ToolCallID:        execution.call.ID,
+				ToolName:          execution.call.Name,
+				ToolResultIsError: execution.err != nil || toolResult.Denied || toolResult.Failure != nil,
 			}
 			history = append(history, toolMessage)
 			turnMessages = append(turnMessages, toolMessage)

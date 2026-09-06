@@ -72,7 +72,7 @@ func buildRequest(modelID string, request sdk.Request, defaultMaxTokens int) (re
 			body.Messages = append(body.Messages, message{Role: "assistant", Content: assistantContent(source)})
 		case sdk.RoleTool:
 			body.Messages = append(body.Messages, message{Role: "user", Content: []contentBlock{{
-				Type: "tool_result", ToolUseID: source.ToolCallID, Content: source.TextContent(),
+				Type: "tool_result", ToolUseID: source.ToolCallID, Content: source.TextContent(), IsError: source.ToolResultIsError,
 			}}})
 		}
 	}

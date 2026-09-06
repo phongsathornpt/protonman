@@ -433,6 +433,9 @@ func TestLoopKeepsPermissionDenialInsideToolConversation(t *testing.T) {
 	if got := client.requests[1].Messages[2].Content; !contains(got, string(tool.ErrorCodePermissionDenied)) {
 		t.Fatalf("follow-up denial content = %q, want permission code", got)
 	}
+	if !client.requests[1].Messages[2].ToolResultIsError {
+		t.Fatal("follow-up denial tool message should be marked as an error")
+	}
 }
 
 func TestLoopGracefulMaxRoundsSynthesis(t *testing.T) {

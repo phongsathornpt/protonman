@@ -96,12 +96,13 @@ func (t Tool) Validate() error {
 }
 
 type Message struct {
-	Role       Role
-	Content    string
-	Parts      []ContentPart
-	ToolCallID string
-	ToolName   string
-	ToolCalls  []ToolCall
+	Role              Role
+	Content           string
+	Parts             []ContentPart
+	ToolCallID        string
+	ToolName          string
+	ToolResultIsError bool
+	ToolCalls         []ToolCall
 }
 
 func (m Message) TextContent() string {
@@ -126,6 +127,9 @@ func (m Message) Validate() error {
 	}
 	if m.Role != RoleAssistant && len(m.ToolCalls) > 0 {
 		return fmt.Errorf("%w: only assistant messages can contain tool calls", ErrInvalidRequest)
+	}
+	if m.Role != RoleTool && m.ToolResultIsError {
+		return fmt.Errorf("%w: only tool messages can be marked as tool errors", ErrInvalidRequest)
 	}
 	for _, call := range m.ToolCalls {
 		if err := call.Validate(); err != nil {

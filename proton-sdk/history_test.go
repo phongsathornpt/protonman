@@ -19,11 +19,11 @@ func TestAppendAssistantStepCopiesToolCalls(t *testing.T) {
 }
 
 func TestAppendToolResults(t *testing.T) {
-	got, err := AppendToolResults(nil, []ToolResult{{ToolCallID: "call-1", ToolName: "read_file", Content: "ok"}})
+	got, err := AppendToolResults(nil, []ToolResult{{ToolCallID: "call-1", ToolName: "read_file", Content: "failed", IsError: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].Role != RoleTool || got[0].ToolCallID != "call-1" || got[0].ToolName != "read_file" || got[0].Content != "ok" {
+	if len(got) != 1 || got[0].Role != RoleTool || got[0].ToolCallID != "call-1" || got[0].ToolName != "read_file" || got[0].Content != "failed" || !got[0].ToolResultIsError {
 		t.Fatalf("unexpected history: %#v", got)
 	}
 }
