@@ -53,7 +53,8 @@ type Result struct {
 	IsError bool
 }
 
-// Server is an injectable MCP discovery and invocation endpoint.
+// Server is an injectable MCP discovery and invocation endpoint. Implementations
+// must honor context cancellation for in-flight transport operations.
 type Server interface {
 	Name() string
 	ListTools(ctx context.Context) ([]Tool, error)

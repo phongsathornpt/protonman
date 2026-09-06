@@ -535,3 +535,41 @@ func TestDiscoverPropagatesMCPMutability(t *testing.T) {
 		t.Fatal("legacy MCP tool must remain conservative")
 	}
 }
+
+type stubbornServer struct {
+	name    string
+	started chan struct{}
+	release chan struct{}
+}
+
+func (s *stubbornServer) Name() string { return s.name }
+func (s *stubbornServer) ListTools(context.Context) ([]Tool, error) {
+	close(s.started)
+	<-s.release
+	return nil, nil
+}
+func (s *stubbornServer) CallTool(context.Context, string, json.RawMessage) (Result, error) {
+	return Result{}, nil
+}
+
+func TestDiscoverReturnsWhenContextCanceledEvenIfServerIgnoresIt(t *testing.T) {
+	server := &stubbornServer{name: "stubborn", started: make(chan struct{}), release: make(chan struct{})}
+	defer close(server.release)
+	registry, err := builtin.NewRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- Discover(ctx, registry, server) }()
+	<-server.started
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Discover error = %v, want context canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Discover waited for a server that ignored cancellation")
+	}
+}

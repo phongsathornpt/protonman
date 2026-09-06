@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"unicode"
 
 	"github.com/projectTHORN/proton/internal/tool"
@@ -74,31 +73,29 @@ func Discover(ctx context.Context, registry tool.Registrar, servers ...Server) e
 	queryCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	results := make([]serverResult, len(servers))
-	var wg sync.WaitGroup
-	wg.Add(len(servers))
+	type indexedResult struct {
+		index int
+		serverResult
+	}
+	resultCh := make(chan indexedResult, len(servers))
 	for i, server := range servers {
 		go func(idx int, s Server) {
-			defer wg.Done()
 			manifests, err := s.ListTools(queryCtx)
-			if err != nil {
-				cancel()
-				results[idx] = serverResult{err: err}
-				return
-			}
-			results[idx] = serverResult{manifests: manifests}
+			resultCh <- indexedResult{index: idx, serverResult: serverResult{manifests: manifests, err: err}}
 		}(i, server)
 	}
-	wg.Wait()
 
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("discover MCP tools: %w", err)
-	}
-
-	// Check per-server errors deterministically
-	for i, res := range results {
-		if res.err != nil {
-			return fmt.Errorf("list MCP tools from %q: %w", serverNames[i], res.err)
+	results := make([]serverResult, len(servers))
+	for received := 0; received < len(servers); received++ {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("discover MCP tools: %w", ctx.Err())
+		case result := <-resultCh:
+			results[result.index] = result.serverResult
+			if result.err != nil {
+				cancel()
+				return fmt.Errorf("list MCP tools from %q: %w", serverNames[result.index], result.err)
+			}
 		}
 	}
 
