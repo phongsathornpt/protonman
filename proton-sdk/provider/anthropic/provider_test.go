@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	sdk "github.com/projectTHORN/proton/proton-sdk"
@@ -146,5 +147,40 @@ func TestAnthropicStreamErrorIsNormalized(t *testing.T) {
 	var providerErr *sdk.ProviderError
 	if !errors.As(err, &providerErr) || providerErr.Kind != sdk.ErrorOverloaded || providerErr.Code != "overloaded_error" || !providerErr.Retryable {
 		t.Fatalf("stream error = %#v (%v)", providerErr, err)
+	}
+}
+func TestAnthropicAppliesProviderOptions(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body["max_tokens"] != float64(222) || body["service_tier"] != "auto" {
+			t.Fatalf("body = %#v", body)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"type\":\"message_stop\"}\n\n"))
+	}))
+	defer server.Close()
+
+	model := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("claude-test")
+	stream, err := model.Stream(context.Background(), sdk.Request{
+		Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}},
+		Options:  sdk.ModelOptions{MaxOutputTokens: 222, ProviderOptions: sdk.ProviderOptions{"anthropic": json.RawMessage(`{"service_tier":"auto"}`)}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+}
+
+func TestAnthropicProviderOptionsCannotOverrideCanonicalFields(t *testing.T) {
+	model := NewProvider(ProviderOptions{BaseURL: "http://127.0.0.1"}).Model("claude-test")
+	_, err := model.Stream(context.Background(), sdk.Request{
+		Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}},
+		Options:  sdk.ModelOptions{ProviderOptions: sdk.ProviderOptions{"anthropic": json.RawMessage(`{"max_tokens":1}`)}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "cannot override canonical request field") {
+		t.Fatalf("error = %v", err)
 	}
 }

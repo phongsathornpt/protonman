@@ -11,6 +11,7 @@ import (
 	"time"
 
 	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/projectTHORN/proton/proton-sdk/internal/providerutil"
 )
 
 type chatToolCall struct {
@@ -43,6 +44,7 @@ type chatRequest struct {
 	Stream     bool          `json:"stream"`
 	Tools      []chatTool    `json:"tools,omitempty"`
 	ToolChoice string        `json:"tool_choice,omitempty"`
+	MaxTokens  int           `json:"max_tokens,omitempty"`
 }
 type responsesTool struct {
 	Type        string         `json:"type"`
@@ -51,11 +53,12 @@ type responsesTool struct {
 	Parameters  map[string]any `json:"parameters,omitempty"`
 }
 type responsesRequest struct {
-	Model      string          `json:"model"`
-	Stream     bool            `json:"stream"`
-	Input      []any           `json:"input"`
-	Tools      []responsesTool `json:"tools,omitempty"`
-	ToolChoice string          `json:"tool_choice,omitempty"`
+	Model           string          `json:"model"`
+	Stream          bool            `json:"stream"`
+	Input           []any           `json:"input"`
+	Tools           []responsesTool `json:"tools,omitempty"`
+	ToolChoice      string          `json:"tool_choice,omitempty"`
+	MaxOutputTokens int             `json:"max_output_tokens,omitempty"`
 }
 
 func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
@@ -145,7 +148,7 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 		for _, tool := range request.Tools {
 			tools = append(tools, responsesTool{Type: "function", Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema})
 		}
-		encoded, err := json.Marshal(responsesRequest{Model: m.modelID, Stream: true, Input: input, Tools: tools, ToolChoice: toolChoice(len(tools))})
+		encoded, err := providerutil.MarshalWithOptions(responsesRequest{Model: m.modelID, Stream: true, Input: input, Tools: tools, ToolChoice: toolChoice(len(tools)), MaxOutputTokens: request.Options.MaxOutputTokens}, request.Options.ProviderOptions["openai"], "model", "stream", "input", "tools", "tool_choice", "max_output_tokens")
 		if err != nil {
 			return "", nil, fmt.Errorf("marshal responses request: %w", err)
 		}
@@ -186,7 +189,7 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 	for _, tool := range request.Tools {
 		tools = append(tools, chatTool{Type: "function", Function: chatFunction{Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema}})
 	}
-	encoded, err := json.Marshal(chatRequest{Model: m.modelID, Messages: messages, Stream: true, Tools: tools, ToolChoice: toolChoice(len(tools))})
+	encoded, err := providerutil.MarshalWithOptions(chatRequest{Model: m.modelID, Messages: messages, Stream: true, Tools: tools, ToolChoice: toolChoice(len(tools)), MaxTokens: request.Options.MaxOutputTokens}, request.Options.ProviderOptions["openai"], "model", "messages", "stream", "tools", "tool_choice", "max_tokens")
 	if err != nil {
 		return "", nil, fmt.Errorf("marshal chat request: %w", err)
 	}
