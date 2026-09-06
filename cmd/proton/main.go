@@ -25,6 +25,7 @@ import (
 	"github.com/projectTHORN/proton/internal/session"
 	"github.com/projectTHORN/proton/internal/skill"
 	"github.com/projectTHORN/proton/internal/telemetry"
+	tododomain "github.com/projectTHORN/proton/internal/todo"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/tool/builtin"
 	"github.com/projectTHORN/proton/internal/toolcall"
@@ -156,12 +157,18 @@ func run(ctx context.Context, args []string) error {
 	)
 	defer func() { _ = coordinator.Close() }()
 
+	todoStore, err := tododomain.OpenMarkdownStore(ctx, filepath.Join(workDir, "TODO.md"))
+	if err != nil {
+		return fmt.Errorf("open todo store: %w", err)
+	}
+
 	registry, err := builtin.NewDefaultRegistry(
 		workspaceRoot,
 		builtin.WithCheckpointStore(checkpointStore),
 		builtin.WithSandbox(launcher, sandboxProfile.Network),
 		builtin.WithSkillRegistry(skillRegistry),
 		builtin.WithAgentCoordinator(coordinator),
+		builtin.WithTodoStore(todoStore),
 	)
 	if err != nil {
 		return fmt.Errorf("create tool registry: %w", err)
@@ -285,7 +292,7 @@ func run(ctx context.Context, args []string) error {
 	bubbleUI, uiErr := tui.NewBubbleTea(
 		service,
 		registry,
-		loadTodoItems(workDir),
+		todoStore,
 		tui.WithWorkDir(workDir),
 		tui.WithSessionID(sessionID),
 		tui.WithInitialMessages(session.ToModelMessages(state.Messages)),

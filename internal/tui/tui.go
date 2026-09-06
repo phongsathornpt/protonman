@@ -16,6 +16,7 @@ import (
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/skill"
+	tododomain "github.com/projectTHORN/proton/internal/todo"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/turn"
@@ -101,7 +102,7 @@ type BubbleTeaUI struct {
 	service         *toolcall.Service
 	registry        tool.Registry
 	skills          *skill.Registry
-	todo            []TodoItem
+	todoStore       tododomain.Repository
 	runner          applicationturn.Runner
 	bridge          *permissionBridge
 	coordinator     *agent.Coordinator
@@ -119,7 +120,7 @@ type BubbleTeaUI struct {
 func NewBubbleTea(
 	service *toolcall.Service,
 	registry tool.Registry,
-	todo []TodoItem,
+	todoStore tododomain.Repository,
 	options ...BubbleTeaOption,
 ) (*BubbleTeaUI, error) {
 	if service == nil {
@@ -129,10 +130,10 @@ func NewBubbleTea(
 		return nil, errors.New("Bubble Tea UI registry is required")
 	}
 	ui := &BubbleTeaUI{
-		service:  service,
-		registry: registry,
-		todo:     append([]TodoItem{}, todo...),
-		bridge:   newPermissionBridge(),
+		service:   service,
+		registry:  registry,
+		todoStore: todoStore,
+		bridge:    newPermissionBridge(),
 	}
 	for _, option := range options {
 		if option == nil {
@@ -191,11 +192,15 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 	currentMessages := model.CloneMessages(ui.initialMessages)
 
 	for {
+		todoItems := []TodoItem(nil)
+		if ui.todoStore != nil {
+			todoItems = ui.todoStore.Snapshot().Items
+		}
 		bModel := newBubbleModel(
 			runCtx,
 			ui.service,
 			ui.registry,
-			ui.todo,
+			todoItems,
 			ui.runner,
 			ui.bridge,
 			ui.workDir,

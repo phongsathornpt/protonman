@@ -11,6 +11,7 @@ import (
 	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/sandbox"
 	"github.com/projectTHORN/proton/internal/skill"
+	tododomain "github.com/projectTHORN/proton/internal/todo"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/workspace"
 )
@@ -49,6 +50,7 @@ type registryOptions struct {
 	sandboxConfigured bool
 	skills            *skill.Registry
 	coordinator       *agent.Coordinator
+	todoStore         tododomain.Repository
 }
 
 // WithCheckpointStore attaches durable edit checkpoints.
@@ -89,6 +91,17 @@ func WithSkillRegistry(registry *skill.Registry) RegistryOption {
 }
 
 // WithAgentCoordinator attaches a subagent Coordinator and registers delegate_task.
+// WithTodoStore attaches shared structured task state to the default tool registry.
+func WithTodoStore(store tododomain.Repository) RegistryOption {
+	return func(options *registryOptions) error {
+		if store == nil {
+			return fmt.Errorf("todo store is required")
+		}
+		options.todoStore = store
+		return nil
+	}
+}
+
 func WithAgentCoordinator(coordinator *agent.Coordinator) RegistryOption {
 	return func(options *registryOptions) error {
 		options.coordinator = coordinator
