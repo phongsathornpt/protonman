@@ -42,10 +42,12 @@ Proton isolates external effects behind strict application boundaries. External 
 │                      Tool Registry & Capabilities                      │
 │     - Workspace boundary confinement & symlink escape prevention       │
 │     - Automatic pre-edit checkpoints & rollback store                  │
-│     - OS sandbox confinement (macOS sandbox-exec / Linux bwrap)        │
+│     - OS sandbox confinement (macOS Seatbelt / Linux native Landlock) │
 │     - Builtin tools: read, write, patch, grep, list, bash, fetch, etc. │
 └────────────────────────────────────────────────────────────────────────┘
 ```
+
+See [`docs/architecture.md`](docs/architecture.md) for the package responsibility map and refactoring boundaries.
 
 ---
 
