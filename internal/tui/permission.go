@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/projectTHORN/proton/internal/permission"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 const permissionViewID = "permission"
@@ -122,8 +124,10 @@ func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool
 			m.viewport.ScrollDown(1)
 			m.followTail = m.viewport.AtBottom()
 			return true, nil
-		case "y", "s", "n", "ctrl+c", "1", "2", "3", "enter":
-			// Decisions remain available while parked.
+		case "y", "s", "n", "1", "2", "3", "enter":
+			// Decisions remain available while reviewing the transcript.
+		case "ctrl+c":
+			return false, nil
 		default:
 			return true, nil
 		}
@@ -132,7 +136,7 @@ func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool
 	switch message.String() {
 	case "esc":
 		v.parked = true
-		m.activity = "permission — tab to return"
+		m.activity = "permission pending — tab to review"
 		return true, nil
 	case "up", "k":
 		if v.index > 0 {
@@ -154,8 +158,10 @@ func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool
 		return true, m.resolvePermission(optionAllowOnce)
 	case "s":
 		return true, m.resolvePermission(optionAllowSession)
-	case "n", "ctrl+c":
+	case "n":
 		return true, m.resolvePermission(optionDeny)
+	case "ctrl+c":
+		return false, nil
 	case "enter":
 		return true, m.resolvePermission(permissionOptions[v.index].option)
 	default:
@@ -238,19 +244,38 @@ func (m bubbleModel) permissionCard() string {
 
 func (v *permissionPaneView) card(m *bubbleModel) string {
 	request := v.pending.request
-	isRead := request.ToolKind == permission.ToolRead || request.ToolKind == permission.ToolGrep
-	destructive := request.ToolKind == permission.ToolBash || request.ToolKind == permission.ToolEdit
+	if v.parked {
+		return mutedStyle.Render(fmt.Sprintf("! Permission pending · %s · tab review · y once · s session · n deny · pgup/pgdn scroll", request.ToolName))
+	}
 	title := "Permission required"
 	titleStyle := warningStyle
 	border := warningColor
-	if isRead {
+	switch request.ToolKind {
+	case permission.ToolRead, permission.ToolGrep:
 		title = "Permission request — read only"
 		titleStyle = userStyle
 		border = accentUser
-	} else if destructive {
-		title = "Permission required — " + string(request.ToolKind)
+	case permission.ToolEdit:
+		title = "Permission required — modifies workspace"
 		titleStyle = errorStyle
 		border = accentError
+	case permission.ToolBash:
+		var input struct {
+			Command string `json:"command"`
+		}
+		_ = json.Unmarshal(request.Arguments, &input)
+		switch tool.ClassifyCommandEffect(input.Command) {
+		case tool.CommandEffectReadOnly:
+			title = "Permission request — shell read only"
+			titleStyle = userStyle
+			border = accentUser
+		case tool.CommandEffectMutating:
+			title = "Permission required — shell modifies state"
+			titleStyle = errorStyle
+			border = accentError
+		default:
+			title = "Permission required — shell effects unknown"
+		}
 	}
 	maxWidth := maxInt(1, m.width-8)
 	rows := make([]string, 0, 8)
@@ -275,9 +300,9 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 	}
 	rows = append(rows, "")
 	if v.parked {
-		rows = append(rows, mutedStyle.Render("tab return   y/s/n still work   pgup/pgdn scroll"))
+		rows = append(rows, mutedStyle.Render("tab review approval   y/s/n decide   pgup/pgdn scroll"))
 	} else {
-		rows = append(rows, mutedStyle.Render("j/k move   1-3 select   y once   s session   n deny   esc park"))
+		rows = append(rows, mutedStyle.Render("j/k move   1-3 select   y once   s session   n deny   esc review transcript"))
 	}
 	return modalStyle.
 		BorderForeground(border).

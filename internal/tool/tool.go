@@ -378,13 +378,32 @@ func classifyGitCommand(args []string) CommandEffect {
 		return CommandEffectUnknown
 	}
 	switch args[0] {
-	case "status", "diff", "log", "show", "branch", "rev-parse", "rev-list", "ls-files", "ls-tree", "grep", "describe":
+	case "status", "diff", "log", "show", "rev-parse", "rev-list", "ls-files", "ls-tree", "grep", "describe":
 		return CommandEffectReadOnly
+	case "branch":
+		return classifyGitBranchCommand(args[1:])
 	case "add", "apply", "checkout", "switch", "restore", "reset", "clean", "commit", "merge", "rebase", "cherry-pick", "revert", "stash", "tag", "fetch", "pull", "push":
 		return CommandEffectMutating
 	default:
 		return CommandEffectUnknown
 	}
+}
+
+func classifyGitBranchCommand(args []string) CommandEffect {
+	if len(args) == 0 {
+		return CommandEffectReadOnly
+	}
+	for _, arg := range args {
+		switch {
+		case arg == "--list", arg == "-l", arg == "--show-current", arg == "--contains", arg == "--no-contains", arg == "--merged", arg == "--no-merged", strings.HasPrefix(arg, "--format="):
+			continue
+		case strings.HasPrefix(arg, "-"):
+			return CommandEffectMutating
+		default:
+			return CommandEffectMutating
+		}
+	}
+	return CommandEffectReadOnly
 }
 
 // EffectiveCallMutability refines a definition's static metadata with safe

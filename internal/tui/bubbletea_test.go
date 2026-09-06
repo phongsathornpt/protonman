@@ -2,6 +2,8 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -335,9 +337,10 @@ func TestPermissionCardOverlaysTranscript(t *testing.T) {
 	model.refreshViewport()
 	model.modal = &permissionRequest{
 		request: permission.Request{
-			ToolName: "bash",
-			ToolKind: permission.ToolBash,
-			Detail:   "rm -rf tmp",
+			ToolName:  "bash",
+			ToolKind:  permission.ToolBash,
+			Detail:    "rm -rf tmp",
+			Arguments: json.RawMessage(`{"command":"rm -rf tmp"}`),
 		},
 		response: make(chan permissionResponse, 1),
 	}
@@ -347,10 +350,10 @@ func TestPermissionCardOverlaysTranscript(t *testing.T) {
 	}
 	view := model.View()
 	for _, expected := range []string{
-		"Permission required",
+		"Permission required — shell modifies state",
 		"bash",
 		"Allow for this request this session",
-		"esc park",
+		"esc review",
 	} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("overlay view does not contain %q: %s", expected, view)
@@ -373,17 +376,17 @@ func TestPermissionEscParksForScroll(t *testing.T) {
 
 	updated, command := model.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if command != nil {
-		t.Fatalf("esc park command = %v, want nil", command)
+		t.Fatalf("esc review command = %v, want nil", command)
 	}
 	model = updated.(*bubbleModel)
 	if model.modal == nil {
 		t.Fatal("esc dismissed the permission card")
 	}
 	if !model.modalParked {
-		t.Fatal("esc did not park the permission card")
+		t.Fatal("esc did not enter transcript review mode")
 	}
-	if !strings.Contains(model.View(), "tab return") {
-		t.Fatalf("parked view missing return hint: %s", model.View())
+	if !strings.Contains(model.View(), "tab review") {
+		t.Fatalf("review view missing approval hint: %s", model.View())
 	}
 
 	updated, command = model.Update(tea.KeyMsg{Type: tea.KeyTab})
@@ -410,6 +413,64 @@ func TestPermissionEscParksForScroll(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("deny did not send a response")
+	}
+}
+
+func TestPermissionCtrlCCancelsTurnInsteadOfDenying(t *testing.T) {
+	response := make(chan permissionResponse, 1)
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.busy = true
+	canceled := false
+	model.turnCancel = func() { canceled = true }
+	model.modal = &permissionRequest{
+		request:  permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "pwd", Arguments: json.RawMessage(`{"command":"pwd"}`)},
+		response: response,
+	}
+
+	updated, command := model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	model = updated.(*bubbleModel)
+	if command != nil {
+		t.Fatalf("ctrl+c command = %v, want nil while canceling active turn", command)
+	}
+	if !canceled {
+		t.Fatal("ctrl+c did not cancel active turn")
+	}
+	select {
+	case got := <-response:
+		t.Fatalf("ctrl+c resolved permission unexpectedly: %+v", got)
+	default:
+	}
+}
+
+func TestPermissionBashRiskPresentationUsesCommandEffect(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+	tests := []struct {
+		name    string
+		command string
+		want    string
+	}{
+		{name: "read only", command: "pwd", want: "Permission request — shell read only"},
+		{name: "mutating", command: "rm -rf tmp", want: "Permission required — shell modifies state"},
+		{name: "unknown", command: "echo hi", want: "Permission required — shell effects unknown"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			model.bottom.remove(permissionViewID)
+			model.modal = &permissionRequest{
+				request: permission.Request{
+					ToolName:  "bash",
+					ToolKind:  permission.ToolBash,
+					Detail:    tc.command,
+					Arguments: json.RawMessage(fmt.Sprintf(`{"command":%q}`, tc.command)),
+				},
+				response: make(chan permissionResponse, 1),
+			}
+			view := model.View()
+			if !strings.Contains(view, tc.want) {
+				t.Fatalf("view missing %q:\n%s", tc.want, view)
+			}
+		})
 	}
 }
 
