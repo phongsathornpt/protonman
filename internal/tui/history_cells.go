@@ -95,8 +95,11 @@ func (c UserCell) LineCount() int     { return len(c.RawLines()) }
 
 // AssistantCell is mutable while assistant output is streaming.
 type AssistantCell struct {
-	Text        string
-	renderCache assistantRenderCache
+	Text          string
+	renderCache   assistantRenderCache
+	streamBuilder strings.Builder
+	streamText    string
+	streamActive  bool
 }
 
 type assistantRenderCache struct {
@@ -106,6 +109,34 @@ type assistantRenderCache struct {
 	lines       []string
 	decorated   []string
 	state       markdownRenderState
+}
+
+func (c *AssistantCell) appendDelta(delta string) {
+	if delta == "" {
+		return
+	}
+	if !c.streamActive || c.Text != c.streamText {
+		c.streamBuilder.Reset()
+		c.streamBuilder.Grow(len(c.Text) + len(delta))
+		c.streamBuilder.WriteString(c.Text)
+		c.streamActive = true
+	}
+	c.streamBuilder.WriteString(delta)
+	c.Text = c.streamBuilder.String()
+	c.streamText = c.Text
+}
+
+func (c *AssistantCell) sealStream() {
+	if !c.streamActive {
+		return
+	}
+	c.Text = strings.Clone(c.Text)
+	c.streamBuilder.Reset()
+	c.streamText = ""
+	c.streamActive = false
+	if c.renderCache.processed > 0 && c.renderCache.processed <= len(c.Text) {
+		c.renderCache.processedAt = assistantCacheTail(c.Text[:c.renderCache.processed])
+	}
 }
 
 func (*AssistantCell) Kind() HistoryCellKind { return HistoryCellAssistant }
@@ -142,6 +173,9 @@ func (c *AssistantCell) renderAssistantIncremental(text string, width int) []str
 		for stableLen > 0 && cache.lines[stableLen-1] == "" {
 			stableLen--
 		}
+	}
+	if tail == "" && !state.inFence {
+		return cache.decorated[:stableLen]
 	}
 	out := append([]string(nil), cache.decorated[:stableLen]...)
 	if tail != "" {
@@ -183,17 +217,29 @@ func (c *AssistantCell) updateAssistantRenderCache(text string, width int) (*ass
 	}
 	if cache.processed < completeEnd {
 		segment := text[cache.processed:completeEnd]
-		parts := strings.Split(segment, "\n")
-		for _, raw := range parts[:len(parts)-1] {
-			lines := renderMarkdownLine(raw, width, &cache.state)
+		for offset := 0; offset < len(segment); {
+			relativeEnd := strings.IndexByte(segment[offset:], '\n')
+			if relativeEnd < 0 {
+				break
+			}
+			end := offset + relativeEnd
+			lines := renderMarkdownLine(segment[offset:end], width, &cache.state)
 			start := len(cache.lines)
 			cache.lines = append(cache.lines, lines...)
-			cache.decorated = append(cache.decorated, decorateAssistantLines(lines, start)...)
+			cache.decorated = appendAssistantDecoratedLines(cache.decorated, lines, start)
+			offset = end + 1
 		}
 		cache.processed = completeEnd
 		cache.processedAt = assistantCacheTail(text[:completeEnd])
 	}
 	return cache, completeEnd
+}
+
+func appendAssistantDecoratedLines(dst []string, lines []string, start int) []string {
+	for index, line := range lines {
+		dst = append(dst, assistantDecoratedLine(line, start+index))
+	}
+	return dst
 }
 
 func decorateAssistantLines(lines []string, start int) []string {
@@ -850,15 +896,19 @@ func (s *HistoryState) AppendAssistantDelta(delta string) {
 		return
 	}
 	if _, ok := s.active.(*ThinkingCell); ok {
-		s.active = &AssistantCell{Text: delta}
+		cell := &AssistantCell{}
+		cell.appendDelta(delta)
+		s.active = cell
 		return
 	}
 	if assistant, ok := s.active.(*AssistantCell); ok {
-		assistant.Text += delta
+		assistant.appendDelta(delta)
 		return
 	}
 	s.CommitActive()
-	s.active = &AssistantCell{Text: delta}
+	cell := &AssistantCell{}
+	cell.appendDelta(delta)
+	s.active = cell
 }
 
 func (s *HistoryState) StartTool(name string) {
@@ -930,6 +980,9 @@ func runningToolMatches(cell HistoryCell, callID string, name string) bool {
 func (s *HistoryState) CommitActive() {
 	if s.active == nil {
 		return
+	}
+	if assistant, ok := s.active.(*AssistantCell); ok {
+		assistant.sealStream()
 	}
 	if _, ok := s.active.(*ThinkingCell); ok {
 		s.active = nil

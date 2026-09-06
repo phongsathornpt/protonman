@@ -504,6 +504,34 @@ func TestAssistantIncrementalMarkdownMatchesFullRenderer(t *testing.T) {
 	}
 }
 
+func TestAssistantStreamingBufferRecoversFromDirectTextReplacement(t *testing.T) {
+	state := NewHistoryState(1000)
+	state.AppendAssistantDelta("hello")
+	assistant := state.Active().(*AssistantCell)
+	assistant.Text = "replacement"
+	state.AppendAssistantDelta(" tail")
+	if assistant.Text != "replacement tail" {
+		t.Fatalf("assistant text = %q, want replacement tail", assistant.Text)
+	}
+}
+
+func TestCommitActiveSealsAssistantStreamingBuffer(t *testing.T) {
+	state := NewHistoryState(1000)
+	state.AppendAssistantDelta("hello")
+	state.AppendAssistantDelta(" world")
+	assistant := state.Active().(*AssistantCell)
+	if !assistant.streamActive {
+		t.Fatal("assistant stream buffer was not active before commit")
+	}
+	state.CommitActive()
+	if assistant.Text != "hello world" {
+		t.Fatalf("assistant text = %q, want hello world", assistant.Text)
+	}
+	if assistant.streamActive || assistant.streamBuilder.Len() != 0 {
+		t.Fatal("assistant stream buffer remained active after commit")
+	}
+}
+
 func TestAssistantIncrementalMarkdownPreservesTrailingNewlineSemantics(t *testing.T) {
 	for _, text := range []string{
 		"line",
