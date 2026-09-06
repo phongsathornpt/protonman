@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectTHORN/proton/internal/permission"
+	"github.com/projectTHORN/proton/internal/turn"
+
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/tool"
 )
@@ -648,5 +651,24 @@ func TestAgentToolCellRendersOrchestrationSemantics(t *testing.T) {
 	completed := (&AgentToolCell{Name: "wait_agent", Target: "explorer-7", Summary: "explorer-7 · completed · found routing issue"}).RenderWidth(80)
 	if got := strings.Join(completed, "\n"); !strings.Contains(got, "found routing issue") {
 		t.Fatalf("completed agent cell=%q", got)
+	}
+}
+
+func TestApplyTurnEventsCoalescesContiguousText(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.applyTurnEvents([]turn.Event{
+		{Kind: turn.EventTextDelta, Round: 2, Text: "alpha"},
+		{Kind: turn.EventTextDelta, Round: 2, Text: " beta"},
+		{Kind: turn.EventTextDelta, Round: 2, Text: " gamma"},
+	})
+	active, ok := m.historyState.Active().(*AssistantCell)
+	if !ok {
+		t.Fatalf("active cell=%T, want assistant", m.historyState.Active())
+	}
+	if active.Text != "alpha beta gamma" {
+		t.Fatalf("assistant text=%q", active.Text)
+	}
+	if m.turnProgress.Round != 2 {
+		t.Fatalf("round=%d, want 2", m.turnProgress.Round)
 	}
 }
