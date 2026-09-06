@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -133,5 +134,12 @@ func nativeLandlockCommand(ctx context.Context, profile Profile, dir, cwd, comma
 	cmd.Dir = cwd
 	cmd.Env = append(os.Environ(), sandboxBootstrapEnv+"="+base64.RawURLEncoding.EncodeToString(body))
 	configureCommand(cmd)
+	if profile.RestrictNetwork {
+		uid, gid := os.Getuid(), os.Getgid()
+		cmd.SysProcAttr.Cloneflags |= unix.CLONE_NEWUSER | unix.CLONE_NEWNET
+		cmd.SysProcAttr.UidMappings = []syscall.SysProcIDMap{{ContainerID: 0, HostID: uid, Size: 1}}
+		cmd.SysProcAttr.GidMappingsEnableSetgroups = false
+		cmd.SysProcAttr.GidMappings = []syscall.SysProcIDMap{{ContainerID: 0, HostID: gid, Size: 1}}
+	}
 	return cmd, nil
 }

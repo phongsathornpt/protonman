@@ -103,7 +103,7 @@ func (l *OSLauncher) CommandInDir(ctx context.Context, workspaceRoot string, cwd
 		return cmd, nil
 	case "linux":
 		caps := ProbeCapabilities()
-		if !l.Profile.RestrictNetwork && caps.LandlockABI > 0 {
+		if caps.LandlockABI > 0 && (!l.Profile.RestrictNetwork || caps.UserNamespaces) {
 			cmd, err := nativeLandlockCommand(ctx, l.Profile, dir, cwd, command)
 			if err != nil {
 				logSandboxFailure(ctx, startedAt, "native_landlock", err)
