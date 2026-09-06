@@ -68,7 +68,7 @@ func newProviderSelectPaneView(m *bubbleModel) *providerSelectPaneView {
 		for _, name := range names {
 			cfg := m.providers[name]
 			isActive := strings.EqualFold(name, m.activeProvider)
-			isFree := strings.EqualFold(name, model.DefaultOpenCodeName) || strings.Contains(strings.ToLower(cfg.BaseURL), "opencode.ai")
+			isFree := model.IsProvider(model.DefaultOpenCodeName, name, cfg.BaseURL)
 			dispName := cfg.Name
 			if dispName == "" {
 				dispName = name

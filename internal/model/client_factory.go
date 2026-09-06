@@ -1,7 +1,5 @@
 package model
 
-import "strings"
-
 // NewProviderClient creates the model client for a configured provider.
 //
 // The official SDK is intentionally selected only for the explicit OpenAI
@@ -21,12 +19,5 @@ func NewProviderClient(
 }
 
 func isOfficialOpenAIProvider(providerName string, baseURL string) bool {
-	provider := strings.ToLower(strings.TrimSpace(providerName))
-	endpoint := strings.ToLower(strings.TrimSpace(baseURL))
-	knownCompatibleProvider := strings.Contains(endpoint, "opencode.ai") ||
-		strings.Contains(endpoint, "protonman.dev")
-	if knownCompatibleProvider {
-		return false
-	}
-	return provider == DefaultOpenAIName || strings.Contains(endpoint, "api.openai.com")
+	return IsProvider(DefaultOpenAIName, providerName, baseURL)
 }

@@ -180,15 +180,14 @@ func providerKeyPlaceholder(p model.SupportedProviderPreset) string {
 	if !p.RequiresKey {
 		return "API key (optional)…"
 	}
-	if p.ID == "openai" {
+	if p.ID == model.DefaultOpenAIName {
 		return "sk_…"
 	}
 	return "plk_live_…"
 }
 
 func (v *providerPaneView) isOpenCode() bool {
-	return strings.Contains(strings.ToLower(v.endpointInput.Value()), "opencode.ai") ||
-		strings.EqualFold(strings.TrimSpace(v.nameInput.Value()), model.DefaultOpenCodeName)
+	return model.IsProvider(model.DefaultOpenCodeName, v.nameInput.Value(), v.endpointInput.Value())
 }
 
 func (v *providerPaneView) applyPreset(preset string) {
@@ -198,9 +197,9 @@ func (v *providerPaneView) applyPreset(preset string) {
 	} else if preset == "2" {
 		preset = model.DefaultOpenCodeName
 	} else if preset == "3" {
-		preset = "ollama"
+		preset = model.DefaultOllamaName
 	} else if preset == "4" {
-		preset = "openai"
+		preset = model.DefaultOpenAIName
 	}
 
 	if p := model.LookupPreset(preset); p != nil {
@@ -763,10 +762,10 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 			v.applyPreset(model.DefaultOpenCodeName)
 			return true, nil
 		case "alt+3", "alt+l":
-			v.applyPreset("ollama")
+			v.applyPreset(model.DefaultOllamaName)
 			return true, nil
 		case "alt+4":
-			v.applyPreset("openai")
+			v.applyPreset(model.DefaultOpenAIName)
 			return true, nil
 		case "tab", "down":
 			v.focusIndex = (v.focusIndex + 1) % 3
@@ -895,7 +894,7 @@ func saveProviderCmd(request providerSaveRequest) tea.Cmd {
 
 		prov := config.ProviderConfig{
 			Name:    request.providerName,
-			Type:    "openai",
+			Type:    string(model.ProviderProtocolOpenAI),
 			BaseURL: request.baseURL,
 			APIKey:  request.apiKey,
 		}
