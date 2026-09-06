@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -28,6 +29,7 @@ type modelSelectPaneView struct {
 	providerNames  []string
 	providerIndex  int
 	fetchRequestID uint64
+	fetchCancel    context.CancelFunc
 	loading        bool
 	err            error
 }
@@ -94,7 +96,13 @@ func (v *modelSelectPaneView) activeProviderName() string {
 	return v.providerNames[v.providerIndex]
 }
 
-func (v *modelSelectPaneView) beginFetch(providerName string, cfg config.ProviderConfig) tea.Cmd {
+func (v *modelSelectPaneView) beginFetch(parent context.Context, providerName string, cfg config.ProviderConfig) tea.Cmd {
+	v.cancelFetch()
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithCancel(parent)
+	v.fetchCancel = cancel
 	v.fetchRequestID++
 	v.loading = true
 	v.err = nil
@@ -102,11 +110,20 @@ func (v *modelSelectPaneView) beginFetch(providerName string, cfg config.Provide
 	v.index = 0
 	v.offset = 0
 	return fetchProviderModelsCmd(providerFetchRequest{
+		ctx:          ctx,
 		requestID:    v.fetchRequestID,
 		providerName: providerName,
 		baseURL:      cfg.BaseURL,
 		apiKey:       cfg.APIKey,
 	})
+}
+
+func (v *modelSelectPaneView) cancelFetch() {
+	if v == nil || v.fetchCancel == nil {
+		return
+	}
+	v.fetchCancel()
+	v.fetchCancel = nil
 }
 
 func (v *modelSelectPaneView) Render(m *bubbleModel) string {
@@ -248,11 +265,13 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
 	switch message.String() {
 	case "esc", "ctrl+c", "ctrl+p", "alt+m", "q":
+		v.cancelFetch()
 		m.bottom.remove(modelSelectViewID)
 		return true, nil
 
 	case "p":
 		// Switch to provider select view
+		v.cancelFetch()
 		m.bottom.remove(modelSelectViewID)
 		if !m.bottom.has(providerSelectViewID) {
 			m.bottom.push(newProviderSelectPaneView(m))
@@ -261,6 +280,7 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 
 	case "a":
 		// Switch to add provider view
+		v.cancelFetch()
 		m.bottom.remove(modelSelectViewID)
 		if !m.bottom.has(providerViewID) {
 			m.bottom.push(newProviderPaneView())
@@ -270,7 +290,7 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 	case "r":
 		currentProv := v.activeProviderName()
 		if cfg, ok := m.providers[normalizeProviderKey(currentProv)]; ok {
-			return true, v.beginFetch(currentProv, cfg)
+			return true, v.beginFetch(m.ctx, currentProv, cfg)
 		}
 		return true, nil
 
@@ -286,7 +306,7 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 			if cfg, ok := m.providers[normalizeProviderKey(currentProv)]; ok {
 				isOpenCode := strings.Contains(strings.ToLower(cfg.BaseURL), "opencode.ai") || strings.EqualFold(currentProv, model.DefaultOpenCodeName)
 				if cfg.APIKey != "" || isOpenCode {
-					return true, v.beginFetch(currentProv, cfg)
+					return true, v.beginFetch(m.ctx, currentProv, cfg)
 				}
 			}
 		}
