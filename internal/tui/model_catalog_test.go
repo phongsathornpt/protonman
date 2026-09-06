@@ -179,3 +179,23 @@ func TestModelPickerCustomProviderDoesNotUseProtonmanFallback(t *testing.T) {
 		t.Fatalf("custom provider inherited fallback models: %#v", view.models)
 	}
 }
+
+func TestModelPickerResetSelectionAnchorsActiveModel(t *testing.T) {
+	view := &modelSelectPaneView{models: []model.RemoteModel{{ID: "one"}, {ID: "two"}, {ID: "three"}}}
+	view.index = 2
+	view.offset = 2
+	view.resetSelection("two")
+	if view.index != 1 || view.offset != 0 {
+		t.Fatalf("selection = index:%d offset:%d, want 1/0", view.index, view.offset)
+	}
+}
+
+func TestModelPickerResetSelectionFallsBackToFirstModel(t *testing.T) {
+	view := &modelSelectPaneView{models: []model.RemoteModel{{ID: "one"}, {ID: "two"}}}
+	view.index = 1
+	view.offset = 1
+	view.resetSelection("missing")
+	if view.index != 0 || view.offset != 0 {
+		t.Fatalf("selection = index:%d offset:%d, want 0/0", view.index, view.offset)
+	}
+}

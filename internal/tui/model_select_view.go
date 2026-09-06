@@ -73,28 +73,33 @@ func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
 		modelsList = model.FallbackModelsForProvider(providerName, baseURL)
 	}
 
-	// Focus currently active model if present
-	selectedIndex := 0
-	if m != nil && m.activeModel != "" {
-		for i, md := range modelsList {
-			if strings.EqualFold(md.ID, m.activeModel) {
-				selectedIndex = i
-				break
-			}
-		}
-	}
-
-	return &modelSelectPaneView{
-		index:         selectedIndex,
-		offset:        0,
+	view := &modelSelectPaneView{
 		models:        modelsList,
 		providerNames: providers,
 		providerIndex: providerIdx,
 	}
+	if m != nil {
+		view.resetSelection(m.activeModel)
+	}
+	return view
 }
 
 func (*modelSelectPaneView) ID() string             { return modelSelectViewID }
 func (*modelSelectPaneView) ReplacesComposer() bool { return true }
+
+func (v *modelSelectPaneView) resetSelection(activeModel string) {
+	if v == nil {
+		return
+	}
+	v.index = 0
+	v.offset = 0
+	for i, md := range v.models {
+		if strings.EqualFold(md.ID, activeModel) {
+			v.index = i
+			return
+		}
+	}
+}
 
 func (v *modelSelectPaneView) activeProviderName() string {
 	if v == nil || v.providerIndex < 0 || v.providerIndex >= len(v.providerNames) {
