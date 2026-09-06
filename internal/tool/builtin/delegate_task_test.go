@@ -229,7 +229,7 @@ func TestDelegateTaskUsesCallerBoundedExecutionTimeout(t *testing.T) {
 func TestDelegateTaskAppliesRequestedShorterTimeout(t *testing.T) {
 	deadlineCh := make(chan time.Duration, 1)
 	coord := agent.NewCoordinator(nil, nil, nil, nil,
-		agent.WithDefaultTimeout(5*time.Second),
+		agent.WithMaxRuntime(5*time.Second),
 		agent.WithEventSink(func(ctx context.Context, ev agent.Event) error {
 			if ev.Kind == agent.EventAgentStarted {
 				if deadline, ok := ctx.Deadline(); ok {

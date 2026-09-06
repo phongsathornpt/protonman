@@ -769,7 +769,7 @@ func TestCoordinatorWorkspaceGateAllowsConcurrentReaders(t *testing.T) {
 func TestCoordinatorExecutionTimeoutReturnsForNonCooperativeRunner(t *testing.T) {
 	release := make(chan struct{})
 	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
-		WithDefaultTimeout(20*time.Millisecond),
+		WithMaxRuntime(20*time.Millisecond),
 		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
 			return &mockRunner{runFunc: func(context.Context, []model.Message, turn.Sink) (turn.Result, error) {
 				<-release
@@ -800,7 +800,7 @@ func TestCoordinatorQueueWaitDoesNotConsumeExecutionTimeout(t *testing.T) {
 	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
 		WithMaxConcurrency(1),
 		WithDefaultQueueTimeout(time.Second),
-		WithDefaultTimeout(500*time.Millisecond),
+		WithMaxRuntime(500*time.Millisecond),
 		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
 			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
 				if calls.Add(1) == 1 {
@@ -848,7 +848,7 @@ func TestCoordinatorQueueWaitDoesNotConsumeExecutionTimeout(t *testing.T) {
 
 func TestCoordinatorParentDeadlineStillBoundsExecution(t *testing.T) {
 	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
-		WithDefaultTimeout(time.Second),
+		WithMaxRuntime(time.Second),
 		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
 			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
 				<-ctx.Done()
@@ -883,7 +883,7 @@ func TestRequestRejectsNegativeTimeouts(t *testing.T) {
 func TestCoordinatorClampsRequestedTimeoutToConfiguredMaximum(t *testing.T) {
 	release := make(chan struct{})
 	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
-		WithDefaultTimeout(20*time.Millisecond),
+		WithMaxRuntime(20*time.Millisecond),
 		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
 			return &mockRunner{runFunc: func(context.Context, []model.Message, turn.Sink) (turn.Result, error) {
 				<-release
@@ -906,7 +906,7 @@ func TestCoordinatorClampsRequestedTimeoutToConfiguredMaximum(t *testing.T) {
 func TestCoordinatorBlockedEventSinkDoesNotHoldExecution(t *testing.T) {
 	releaseSink := make(chan struct{})
 	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
-		WithDefaultTimeout(30*time.Millisecond),
+		WithMaxRuntime(30*time.Millisecond),
 		WithEventSink(func(context.Context, Event) error {
 			<-releaseSink
 			return nil
@@ -935,7 +935,7 @@ func TestCoordinatorBlockedEventSinkDoesNotHoldExecution(t *testing.T) {
 func TestCoordinatorCloseIsBoundedForNonCooperativeRunner(t *testing.T) {
 	release := make(chan struct{})
 	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
-		WithDefaultTimeout(20*time.Millisecond),
+		WithMaxRuntime(20*time.Millisecond),
 		WithCloseTimeout(30*time.Millisecond),
 		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
 			return &mockRunner{runFunc: func(context.Context, []model.Message, turn.Sink) (turn.Result, error) {
@@ -975,7 +975,7 @@ func TestCoordinatorQueueTimeoutReportsLifecycleMetrics(t *testing.T) {
 	events := make(chan Event, 8)
 	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
 		WithMaxConcurrency(1),
-		WithDefaultTimeout(time.Second),
+		WithMaxRuntime(time.Second),
 		WithDefaultQueueTimeout(20*time.Millisecond),
 		WithEventSink(func(_ context.Context, ev Event) error { events <- ev; return nil }),
 		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
@@ -1029,7 +1029,7 @@ func TestCoordinatorQueueTimeoutReportsLifecycleMetrics(t *testing.T) {
 func TestCoordinatorRepeatedCloseStillReportsActiveWorker(t *testing.T) {
 	release := make(chan struct{})
 	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
-		WithDefaultTimeout(10*time.Millisecond),
+		WithMaxRuntime(10*time.Millisecond),
 		WithCloseTimeout(15*time.Millisecond),
 		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
 			return &mockRunner{runFunc: func(context.Context, []model.Message, turn.Sink) (turn.Result, error) {
@@ -1058,7 +1058,7 @@ func TestCoordinatorRepeatedCloseStillReportsActiveWorker(t *testing.T) {
 func TestCoordinatorWaitTimeoutDoesNotCancelSpawnedAgent(t *testing.T) {
 	release := make(chan struct{})
 	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
-		WithDefaultTimeout(time.Second),
+		WithMaxRuntime(time.Second),
 		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
 			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
 				select {
