@@ -249,15 +249,15 @@ func summarizeAgentTool(name, body string) string {
 	}
 	if name == "list_agents" {
 		agents, _ := payload["agents"].([]any)
-		running := 0
+		active := 0
 		for _, raw := range agents {
 			if m, ok := raw.(map[string]any); ok {
-				if st, _ := m["state"].(string); st == "queued" || st == "running" {
-					running++
+				if st, _ := m["state"].(string); st == "queued" || st == "running" || st == "canceling" {
+					active++
 				}
 			}
 		}
-		return fmt.Sprintf("%d agents · %d active", len(agents), running)
+		return fmt.Sprintf("%d agents · %d active", len(agents), active)
 	}
 	id, _ := payload["agent_id"].(string)
 	status, _ := payload["status"].(string)
@@ -269,6 +269,7 @@ func summarizeAgentTool(name, body string) string {
 			status, _ = agentObj["state"].(string)
 		}
 	}
+	resultSummary := agentResultSummary(payload)
 	switch name {
 	case "delegate_task":
 		if id != "" {
@@ -276,10 +277,12 @@ func summarizeAgentTool(name, body string) string {
 		}
 		return "subagent spawned"
 	case "wait_agent":
-		if status == "queued" || status == "running" {
-			return fmt.Sprintf("%s still %s", id, status)
+		if status == "queued" || status == "running" || status == "canceling" {
+			return fmt.Sprintf("waiting for %s · %s", id, status)
 		}
-		return fmt.Sprintf("%s · %s", id, status)
+		return joinAgentCompletionSummary(id, status, resultSummary)
+	case "get_agent":
+		return joinAgentCompletionSummary(id, status, resultSummary)
 	case "cancel_agent":
 		return fmt.Sprintf("cancel requested · %s", id)
 	default:
@@ -288,6 +291,26 @@ func summarizeAgentTool(name, body string) string {
 		}
 	}
 	return "agent updated"
+}
+
+func agentResultSummary(payload map[string]any) string {
+	result, _ := payload["result"].(map[string]any)
+	if result == nil {
+		return ""
+	}
+	summary, _ := result["summary"].(string)
+	return truncateWithEllipsis(strings.TrimSpace(summary), 96)
+}
+
+func joinAgentCompletionSummary(id, status, summary string) string {
+	base := strings.TrimSpace(strings.Join([]string{id, status}, " · "))
+	if summary == "" {
+		return base
+	}
+	if base == "" {
+		return summary
+	}
+	return base + " · " + summary
 }
 
 func summarizeTodoSnapshot(body string) string {
