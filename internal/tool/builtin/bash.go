@@ -98,10 +98,14 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		logBashFailure(ctx, call, startedAt, "arguments", err)
 		return tool.Result{}, err
 	}
+	analysis := tool.AnalyzeCommand(input.Command)
 	slog.DebugContext(ctx, "bash command decoded",
 		"call_id", call.ID,
 		"command_bytes", len(input.Command),
 		"command_fingerprint", telemetry.Fingerprint(input.Command),
+		"effect", analysis.Effect,
+		"effect_confidence", analysis.Confidence,
+		"affected_path_count", len(analysis.AffectedPaths),
 	)
 	if err := ctx.Err(); err != nil {
 		logBashFailure(ctx, call, startedAt, "before_run", err)
@@ -133,10 +137,11 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	}
 
 	result := tool.Result{
-		CallID:    call.ID,
-		ToolName:  call.Name,
-		Output:    outputStr,
-		Truncated: truncated,
+		CallID:        call.ID,
+		ToolName:      call.Name,
+		Output:        outputStr,
+		Truncated:     truncated,
+		AffectedPaths: append([]string(nil), analysis.AffectedPaths...),
 	}
 	attrs := []any{
 		"call_id", call.ID,

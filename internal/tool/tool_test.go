@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"testing"
 )
 
@@ -150,13 +151,37 @@ func TestClassifyCommandEffect(t *testing.T) {
 		"find . -name '*.go'":     CommandEffectReadOnly,
 		"rm -rf tmp":              CommandEffectMutating,
 		"git clean -fdx":          CommandEffectMutating,
-		"cat README.md > copy.md": CommandEffectUnknown,
-		"pwd && rm x":             CommandEffectUnknown,
-		"find . -delete":          CommandEffectUnknown,
+		"cat README.md > copy.md": CommandEffectMutating,
+		"pwd && rm x":             CommandEffectMutating,
+		"find . -delete":          CommandEffectMutating,
 	}
 	for command, want := range tests {
 		if got := ClassifyCommandEffect(command); got != want {
 			t.Fatalf("ClassifyCommandEffect(%q) = %q, want %q", command, got, want)
+		}
+	}
+}
+
+func TestAnalyzeCommandCompositionAndAffectedPaths(t *testing.T) {
+	tests := []struct {
+		command string
+		effect  CommandEffect
+		paths   []string
+	}{
+		{"pwd && git status --short", CommandEffectReadOnly, nil},
+		{"pwd && rm tmp.txt", CommandEffectMutating, []string{"tmp.txt"}},
+		{"cat README.md > copy.md", CommandEffectMutating, []string{"copy.md"}},
+		{"cp source.txt dest.txt", CommandEffectMutating, []string{"dest.txt"}},
+		{"mv old.txt new.txt", CommandEffectMutating, []string{"old.txt", "new.txt"}},
+		{`echo x > "$TARGET"`, CommandEffectMutating, nil},
+	}
+	for _, tt := range tests {
+		got := AnalyzeCommand(tt.command)
+		if got.Effect != tt.effect {
+			t.Fatalf("AnalyzeCommand(%q).Effect = %q, want %q (reason=%s)", tt.command, got.Effect, tt.effect, got.Reason)
+		}
+		if !slices.Equal(got.AffectedPaths, tt.paths) {
+			t.Fatalf("AnalyzeCommand(%q).AffectedPaths = %#v, want %#v", tt.command, got.AffectedPaths, tt.paths)
 		}
 	}
 }
