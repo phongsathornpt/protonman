@@ -42,7 +42,6 @@ type SupportedProviderPreset struct {
 	EndpointHosts []string
 	RequiresKey   bool
 	Description   string
-	DefaultModel  string
 }
 
 // SupportedPresets lists available provider presets for discovery and quick setup.
@@ -55,7 +54,6 @@ var SupportedPresets = []SupportedProviderPreset{
 		EndpointHosts: []string{"opencode.ai"},
 		RequiresKey:   false,
 		Description:   "Free tier models, zero API key required",
-		DefaultModel:  "nemotron-3.5-lightning-free",
 	},
 	{
 		ID:            DefaultProtonmanName,
@@ -65,7 +63,6 @@ var SupportedPresets = []SupportedProviderPreset{
 		EndpointHosts: []string{"protonman.dev"},
 		RequiresKey:   true,
 		Description:   "High-speed AI models gateway (plk_...)",
-		DefaultModel:  "deepseek-v4-flash-vision-exp",
 	},
 	{
 		ID:            DefaultOllamaName,
@@ -75,7 +72,6 @@ var SupportedPresets = []SupportedProviderPreset{
 		EndpointHosts: []string{"localhost", "127.0.0.1"},
 		RequiresKey:   false,
 		Description:   "Local LLM inference, zero cloud cost",
-		DefaultModel:  "llama3.2",
 	},
 	{
 		ID:            DefaultOpenAIName,
@@ -85,7 +81,6 @@ var SupportedPresets = []SupportedProviderPreset{
 		EndpointHosts: []string{"api.openai.com"},
 		RequiresKey:   true,
 		Description:   "Direct OpenAI API access (sk-...)",
-		DefaultModel:  "gpt-4o",
 	},
 }
 
@@ -162,44 +157,6 @@ type RemoteModel struct {
 func IsFreeModel(id string) bool {
 	idLower := strings.ToLower(strings.TrimSpace(id))
 	return strings.HasSuffix(idLower, "-free") || idLower == "big-pickle"
-}
-
-// NormalizeModelID cleans and harmonizes known model ID typos and provider-specific suffixes.
-func NormalizeModelID(endpointOrProvider string, modelID string) string {
-	raw := strings.TrimSpace(modelID)
-	if raw == "" {
-		return raw
-	}
-
-	lower := strings.ToLower(raw)
-	// Fix common typo: contributer -> contributor
-	if strings.Contains(lower, "contributer") {
-		raw = strings.ReplaceAll(raw, "contributer", "contributor")
-		raw = strings.ReplaceAll(raw, "Contributer", "Contributor")
-		lower = strings.ToLower(raw)
-	}
-
-	// For OpenCode: ensure free-tier models have the -free suffix
-	isOpencode := IsProvider(DefaultOpenCodeName, endpointOrProvider, endpointOrProvider)
-	if isOpencode && !strings.HasSuffix(lower, "-free") && lower != "big-pickle" {
-		knownFreeBases := []string{
-			"nemotron-3.5-lightning",
-			"nemotron-3-ultra",
-			"mimo-v2.5",
-			"deepseek-v4-flash",
-			"muse-spark-1.3-contributor",
-			"muse-spark-1.2-contributor",
-			"ling-3.0-flash-fin",
-			"laguna-s-2.1",
-		}
-		for _, base := range knownFreeBases {
-			if strings.EqualFold(raw, base) {
-				return base + "-free"
-			}
-		}
-	}
-
-	return raw
 }
 
 // FetchProviderModels queries a provider's model endpoint to list available models.
