@@ -518,3 +518,20 @@ func TestAssistantIncrementalMarkdownResetsForWidthAndMutation(t *testing.T) {
 		t.Fatalf("incremental cache survived replacement: %q", joined)
 	}
 }
+
+func TestHistoryStateSpinnerFrameReportsVisualChanges(t *testing.T) {
+	state := NewHistoryState(1000)
+	state.AppendAssistantDelta("streaming")
+	if state.SetSpinnerFrame("a") {
+		t.Fatal("assistant cell reported a visual spinner change")
+	}
+	state.CommitActive()
+	state.StartThinking()
+	if !state.SetSpinnerFrame("b") {
+		t.Fatal("thinking cell did not report spinner change")
+	}
+	state.StartTool("read_file")
+	if !state.SetSpinnerFrame("c") {
+		t.Fatal("running tool did not report spinner change")
+	}
+}

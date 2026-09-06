@@ -85,3 +85,16 @@ func BenchmarkAssistantStreamingMarkdown20KB(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkHistoryStateRaw_100Cells(b *testing.B) {
+	state := NewHistoryState(50000)
+	for i := 0; i < 100; i++ {
+		state.Append(&AssistantCell{Text: fmt.Sprintf("raw transcript line %d", i)})
+	}
+	_ = state.Raw()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = state.Raw()
+	}
+}

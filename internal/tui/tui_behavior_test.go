@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
 	domainmodel "github.com/projectTHORN/proton/internal/model"
@@ -340,4 +341,17 @@ func newBehaviorService(t *testing.T, registry tool.Registry, mode permission.Mo
 		t.Fatalf("NewService() error = %v", err)
 	}
 	return service
+}
+
+func TestSpinnerTickSkipsViewportRefreshForStreamingAssistant(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.resize(80, 24)
+	m.busy = true
+	m.historyState.AppendAssistantDelta("streaming assistant text")
+	m.viewport.SetContent("viewport sentinel")
+	updated, _ := m.Update(spinner.TickMsg{})
+	m = updated.(*bubbleModel)
+	if got := m.viewport.View(); !strings.Contains(got, "viewport sentinel") {
+		t.Fatalf("assistant-only spinner tick refreshed viewport: %q", got)
+	}
 }
