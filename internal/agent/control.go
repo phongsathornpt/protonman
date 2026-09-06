@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
@@ -48,20 +47,6 @@ func (c *Coordinator) SetParentRegistry(registry tool.Registry) {
 	c.agentsMu.Lock()
 	defer c.agentsMu.Unlock()
 	c.parentRegistry = registry
-}
-
-// SetClient dynamically updates the model client used by child subagents.
-func (c *Coordinator) SetClient(client model.Client) {
-	c.agentsMu.Lock()
-	defer c.agentsMu.Unlock()
-	c.client = client
-}
-
-// Client returns the current model client used by child subagents.
-func (c *Coordinator) Client() model.Client {
-	c.agentsMu.RLock()
-	defer c.agentsMu.RUnlock()
-	return c.client
 }
 
 // SetLanguageModel dynamically updates the proton-sdk model used by child subagents.
