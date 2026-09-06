@@ -78,7 +78,7 @@ type bubbleModel struct {
 	maxToolCalls     int
 	agentProfile     string
 	sessionID        string
-	modelsCatalog    []model.RemoteModel
+	modelCatalogs    modelCatalogState
 
 	// Compatibility snapshots for existing in-package tests during the
 	// migration. Runtime ownership lives in bottom/historyState.

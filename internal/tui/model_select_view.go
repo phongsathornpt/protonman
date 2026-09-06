@@ -52,11 +52,12 @@ func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
 		}
 	}
 
-	// Resolve models catalog
+	// Resolve the catalog for the selected provider only.
 	var modelsList []model.RemoteModel
-	if m != nil && len(m.modelsCatalog) > 0 {
-		modelsList = append([]model.RemoteModel{}, m.modelsCatalog...)
-	} else {
+	if m != nil {
+		modelsList = m.modelCatalogs.models(providers[providerIdx])
+	}
+	if len(modelsList) == 0 {
 		modelsList = append([]model.RemoteModel{}, model.DefaultProtonmanModels...)
 	}
 
