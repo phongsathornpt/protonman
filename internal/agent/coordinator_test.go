@@ -1350,3 +1350,14 @@ func TestCoordinatorTerminalStatusIncludesReason(t *testing.T) {
 		t.Fatalf("terminal status=%+v", st)
 	}
 }
+
+func TestTerminalReasonPreservesUTF8Boundary(t *testing.T) {
+	err := errors.New(strings.Repeat("วิเคราะห์", 30))
+	got := terminalReason(err)
+	if !utf8.ValidString(got) {
+		t.Fatalf("terminalReason returned invalid UTF-8: %q", got)
+	}
+	if len(got) > 80 {
+		t.Fatalf("terminalReason bytes=%d, want <=80", len(got))
+	}
+}
