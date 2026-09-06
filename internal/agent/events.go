@@ -35,21 +35,41 @@ func (c *Coordinator) broadcast(ev Event) {
 	c.eventMu.RLock()
 	defer c.eventMu.RUnlock()
 	for _, ch := range c.subscribers {
-		select {
-		case ch <- ev:
-		default:
-		}
+		enqueueLifecycleEvent(ch, ev)
 	}
 }
+
 func (c *Coordinator) emit(_ context.Context, ev Event) {
 	c.broadcast(ev)
 	if c.eventSink == nil {
 		return
 	}
+	enqueueLifecycleEvent(c.eventQueue, ev)
+}
+
+func enqueueLifecycleEvent(ch chan Event, ev Event) {
 	select {
-	case c.eventQueue <- ev:
+	case ch <- ev:
+		return
 	default:
 	}
+	if !terminalLifecycleEvent(ev.Kind) {
+		return
+	}
+	// Terminal transitions are state-significant. If a bounded queue is full,
+	// evict one older wakeup so completion/failure is not silently lost.
+	select {
+	case <-ch:
+	default:
+	}
+	select {
+	case ch <- ev:
+	default:
+	}
+}
+
+func terminalLifecycleEvent(kind EventKind) bool {
+	return kind == EventAgentCompleted || kind == EventAgentFailed
 }
 
 func (c *Coordinator) runEventSink() {
