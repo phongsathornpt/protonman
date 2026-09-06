@@ -192,10 +192,11 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 	currentMessages := model.CloneMessages(ui.initialMessages)
 
 	for {
-		todoItems := []TodoItem(nil)
+		todoSnapshot := tododomain.Snapshot{}
 		if ui.todoStore != nil {
-			todoItems = ui.todoStore.Snapshot().Items
+			todoSnapshot = ui.todoStore.Snapshot()
 		}
+		todoItems := todoSnapshot.Items
 		bModel := newBubbleModel(
 			runCtx,
 			ui.service,
@@ -207,6 +208,8 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 			currentMessages,
 		)
 		bModel.coordinator = ui.coordinator
+		bModel.todoStore = ui.todoStore
+		bModel.todoRevision = todoSnapshot.Revision
 		bModel.skills = ui.skills
 		bModel.activeModel = ui.modelConfig.Default
 		bModel.activeProvider = ui.modelConfig.Provider

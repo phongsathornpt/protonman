@@ -24,6 +24,7 @@ import (
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/skill"
+	tododomain "github.com/projectTHORN/proton/internal/todo"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/turn"
@@ -56,6 +57,8 @@ type bubbleModel struct {
 
 	queue            []string
 	todo             []TodoItem
+	todoStore        tododomain.Repository
+	todoRevision     uint64
 	todoExpanded     bool
 	busy             bool
 	activity         string
@@ -272,6 +275,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activity = "ready"
 		m.turnCancel = nil
 		m.appendToolResult(message.result, message.err)
+		m.syncTodoSnapshot()
 		if message.call.ID != "" {
 			m.appendModelToolResult(message.call, message.result)
 		}

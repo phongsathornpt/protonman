@@ -11,3 +11,16 @@ type TodoItem = tododomain.Item
 func ParseTODO(markdown string) []TodoItem {
 	return tododomain.ParseMarkdown(markdown)
 }
+
+func (m *bubbleModel) syncTodoSnapshot() bool {
+	if m == nil || m.todoStore == nil {
+		return false
+	}
+	snapshot := m.todoStore.Snapshot()
+	if snapshot.Revision == m.todoRevision {
+		return false
+	}
+	m.todo = tododomain.CloneItems(snapshot.Items)
+	m.todoRevision = snapshot.Revision
+	return true
+}
