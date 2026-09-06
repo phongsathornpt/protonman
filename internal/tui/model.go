@@ -760,7 +760,7 @@ func (m *bubbleModel) reconfigureRunner() {
 				homeDir = h
 			}
 		}
-		loaded, err := config.Load(context.Background(), config.Options{
+		loaded, err := config.Load(m.ctx, config.Options{
 			HomeDir: homeDir,
 			WorkDir: m.workDir,
 		})
