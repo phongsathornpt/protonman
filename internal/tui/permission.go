@@ -276,23 +276,49 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 		}
 		_ = json.Unmarshal(request.Arguments, &input)
 		analysis := tool.AnalyzeCommand(input.Command)
-		switch analysis.Effect {
-		case tool.CommandEffectReadOnly:
-			title = "Permission request — shell read only"
-			titleStyle = userStyle
-			border = accentUser
-		case tool.CommandEffectMutating:
-			title = "Permission required — shell modifies state"
+		switch analysis.Scope {
+		case tool.CommandScopePublish:
+			title = "Permission required — publishes package"
+			titleStyle = errorStyle
+			border = accentError
+		case tool.CommandScopeDeployment:
+			if analysis.Risk == tool.CommandRiskRemoteDestructive {
+				title = "Permission required — destructive deployment change"
+			} else {
+				title = "Permission required — changes deployment"
+			}
+			titleStyle = errorStyle
+			border = accentError
+		case tool.CommandScopeRemote:
+			if analysis.Risk == tool.CommandRiskRemoteDestructive {
+				title = "Permission required — destructively modifies remote"
+			} else {
+				title = "Permission required — modifies remote"
+			}
 			titleStyle = errorStyle
 			border = accentError
 		default:
-			title = "Permission required — shell effects unknown"
+			switch analysis.Effect {
+			case tool.CommandEffectReadOnly:
+				title = "Permission request — shell read only"
+				titleStyle = userStyle
+				border = accentUser
+			case tool.CommandEffectMutating:
+				title = "Permission required — shell modifies state"
+				titleStyle = errorStyle
+				border = accentError
+			default:
+				title = "Permission required — shell effects unknown"
+			}
 		}
 		cwd := strings.TrimSpace(input.Cwd)
 		if cwd == "" {
 			cwd = "."
 		}
 		detailExtras = append(detailExtras, "Cwd: "+cwd)
+		if analysis.Scope != tool.CommandScopeUnknown {
+			detailExtras = append(detailExtras, "Scope: "+string(analysis.Scope))
+		}
 		if analysis.Reason != "" {
 			detailExtras = append(detailExtras, fmt.Sprintf("Effect: %s · %s", analysis.Effect, analysis.Reason))
 		}

@@ -457,6 +457,10 @@ func TestPermissionBashRiskPresentationUsesCommandEffect(t *testing.T) {
 		{name: "mutating", command: "rm -rf tmp", want: "Permission required — shell modifies state"},
 		{name: "unknown", command: "make test", want: "Permission required — shell effects unknown"},
 		{name: "composed mutation", command: "pwd && rm tmp", want: "Permission required — shell modifies state"},
+		{name: "remote", command: "git push origin main", want: "Permission required — modifies remote"},
+		{name: "publish", command: "npm publish", want: "Permission required — publishes package"},
+		{name: "deployment", command: "wrangler deploy", want: "Permission required — changes deployment"},
+		{name: "destructive deployment", command: "terraform destroy", want: "Permission required — destructive deployment change"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

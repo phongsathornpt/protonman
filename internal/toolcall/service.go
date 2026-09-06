@@ -271,6 +271,7 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		Arguments: append(json.RawMessage(nil), call.Arguments...),
 		Risk:      tool.EffectiveCallRisk(definition, call.Arguments),
 		Effect:    tool.EffectiveCallEffect(definition, call.Arguments),
+		Scope:     tool.EffectiveCallScope(definition, call.Arguments),
 	}
 	permissionCtx, permissionCancel := s.permissionContext(ctx)
 	defer permissionCancel()

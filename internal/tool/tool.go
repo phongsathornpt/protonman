@@ -33,6 +33,9 @@ type CommandEffect string
 // CommandRisk classifies proven destructive behavior independently from generic mutability.
 type CommandRisk string
 
+// CommandScope classifies where a mutating shell command applies its external effect.
+type CommandScope string
+
 const (
 	MutabilityUnspecified Mutability = ""
 	MutabilityReadOnly    Mutability = "read_only"
@@ -49,6 +52,14 @@ const (
 	CommandRiskNormal            CommandRisk = ""
 	CommandRiskDestructive       CommandRisk = "destructive"
 	CommandRiskRemoteDestructive CommandRisk = "remote_destructive"
+)
+
+const (
+	CommandScopeUnknown    CommandScope = ""
+	CommandScopeLocal      CommandScope = "local"
+	CommandScopeRemote     CommandScope = "remote"
+	CommandScopePublish    CommandScope = "publish"
+	CommandScopeDeployment CommandScope = "deployment"
 )
 
 const (
@@ -414,6 +425,19 @@ func EffectiveCallEffect(definition Definition, arguments json.RawMessage) Comma
 // EffectiveCallRisk reports proven destructive behavior for calls whose arguments can be analyzed safely.
 // Undecodable arguments and unknown shell effects fail closed as destructive,
 // so session grants and one-shot clamps never treat the unknown as safe.
+func EffectiveCallScope(definition Definition, arguments json.RawMessage) CommandScope {
+	if definition.Kind != KindBash {
+		return CommandScopeUnknown
+	}
+	var input struct {
+		Command string `json:"command"`
+	}
+	if err := json.Unmarshal(arguments, &input); err != nil {
+		return CommandScopeUnknown
+	}
+	return AnalyzeCommand(input.Command).Scope
+}
+
 func EffectiveCallRisk(definition Definition, arguments json.RawMessage) CommandRisk {
 	if definition.Kind != KindBash {
 		return CommandRiskNormal

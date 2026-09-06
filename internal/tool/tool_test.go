@@ -271,3 +271,28 @@ func TestAnalyzeCommandRisk(t *testing.T) {
 		}
 	}
 }
+
+func TestAnalyzeCommandScope(t *testing.T) {
+	tests := map[string]CommandScope{
+		"touch file.go":             CommandScopeLocal,
+		"git push origin main":      CommandScopeRemote,
+		"git push --force origin x": CommandScopeRemote,
+		"npm publish":               CommandScopePublish,
+		"pnpm publish":              CommandScopePublish,
+		"yarn npm publish":          CommandScopePublish,
+		"cargo publish":             CommandScopePublish,
+		"wrangler deploy":           CommandScopeDeployment,
+		"terraform apply":           CommandScopeDeployment,
+		"terraform destroy":         CommandScopeDeployment,
+		"kubectl apply -f app.yaml": CommandScopeDeployment,
+		"kubectl delete pod api":    CommandScopeDeployment,
+	}
+	for command, want := range tests {
+		if got := AnalyzeCommand(command).Scope; got != want {
+			t.Fatalf("AnalyzeCommand(%q).Scope = %q, want %q", command, got, want)
+		}
+	}
+	if got := AnalyzeCommand("terraform destroy").Risk; got != CommandRiskRemoteDestructive {
+		t.Fatalf("terraform destroy risk = %q", got)
+	}
+}
