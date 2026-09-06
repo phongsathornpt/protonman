@@ -10,13 +10,23 @@ import (
 )
 
 type requestBody struct {
-	Model      string      `json:"model"`
-	MaxTokens  int         `json:"max_tokens"`
-	System     string      `json:"system,omitempty"`
-	Messages   []message   `json:"messages"`
-	Tools      []toolDef   `json:"tools,omitempty"`
-	ToolChoice *toolChoice `json:"tool_choice,omitempty"`
-	Stream     bool        `json:"stream"`
+	Model        string        `json:"model"`
+	MaxTokens    int           `json:"max_tokens"`
+	System       string        `json:"system,omitempty"`
+	Messages     []message     `json:"messages"`
+	Tools        []toolDef     `json:"tools,omitempty"`
+	ToolChoice   *toolChoice   `json:"tool_choice,omitempty"`
+	Thinking     *thinking     `json:"thinking,omitempty"`
+	OutputConfig *outputConfig `json:"output_config,omitempty"`
+	Stream       bool          `json:"stream"`
+}
+
+type thinking struct {
+	Type string `json:"type"`
+}
+
+type outputConfig struct {
+	Effort sdk.ReasoningEffort `json:"effort"`
 }
 
 type toolChoice struct {
@@ -75,6 +85,13 @@ func buildRequest(modelID string, request sdk.Request, defaultMaxTokens int) (re
 		maxTokens = defaultMaxTokens
 	}
 	body := requestBody{Model: modelID, MaxTokens: maxTokens, Stream: true}
+	if effort := request.Options.ReasoningEffort; effort != sdk.ReasoningDefault {
+		if effort == sdk.ReasoningNone {
+			return requestBody{}, fmt.Errorf("%w: anthropic adaptive thinking does not support reasoning effort %q", sdk.ErrInvalidRequest, effort)
+		}
+		body.Thinking = &thinking{Type: "adaptive"}
+		body.OutputConfig = &outputConfig{Effort: effort}
+	}
 	var systems []string
 	for _, source := range request.Messages {
 		switch source.Role {

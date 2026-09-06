@@ -19,7 +19,7 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 	if err != nil {
 		return nil, err
 	}
-	encoded, err := providerutil.MarshalWithOptions(body, request.Options.ProviderOptions["anthropic"], "model", "messages", "system", "tools", "max_tokens", "stream")
+	encoded, err := providerutil.MarshalWithOptions(body, request.Options.ProviderOptions["anthropic"], "model", "messages", "system", "tools", "max_tokens", "thinking", "output_config", "stream")
 	if err != nil {
 		return nil, fmt.Errorf("marshal anthropic request: %w", err)
 	}

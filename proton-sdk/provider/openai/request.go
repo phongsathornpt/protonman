@@ -50,12 +50,13 @@ func (f chatFunction) MarshalJSON() ([]byte, error) {
 }
 
 type chatRequest struct {
-	Model      string        `json:"model"`
-	Messages   []chatMessage `json:"messages"`
-	Stream     bool          `json:"stream"`
-	Tools      []chatTool    `json:"tools,omitempty"`
-	ToolChoice string        `json:"tool_choice,omitempty"`
-	MaxTokens  int           `json:"max_tokens,omitempty"`
+	Model           string              `json:"model"`
+	Messages        []chatMessage       `json:"messages"`
+	Stream          bool                `json:"stream"`
+	Tools           []chatTool          `json:"tools,omitempty"`
+	ToolChoice      string              `json:"tool_choice,omitempty"`
+	MaxTokens       int                 `json:"max_tokens,omitempty"`
+	ReasoningEffort sdk.ReasoningEffort `json:"reasoning_effort,omitempty"`
 }
 type responsesTool struct {
 	Type            string          `json:"type"`
@@ -75,13 +76,18 @@ func (t responsesTool) MarshalJSON() ([]byte, error) {
 	return providerutil.MarshalWithOptions(base, t.ProviderOptions, "type", "name", "description", "parameters")
 }
 
+type reasoningConfig struct {
+	Effort sdk.ReasoningEffort `json:"effort"`
+}
+
 type responsesRequest struct {
-	Model           string          `json:"model"`
-	Stream          bool            `json:"stream"`
-	Input           []any           `json:"input"`
-	Tools           []responsesTool `json:"tools,omitempty"`
-	ToolChoice      string          `json:"tool_choice,omitempty"`
-	MaxOutputTokens int             `json:"max_output_tokens,omitempty"`
+	Model           string           `json:"model"`
+	Stream          bool             `json:"stream"`
+	Input           []any            `json:"input"`
+	Tools           []responsesTool  `json:"tools,omitempty"`
+	ToolChoice      string           `json:"tool_choice,omitempty"`
+	MaxOutputTokens int              `json:"max_output_tokens,omitempty"`
+	Reasoning       *reasoningConfig `json:"reasoning,omitempty"`
 }
 
 func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
@@ -193,7 +199,7 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 		for _, tool := range request.Tools {
 			tools = append(tools, responsesTool{Type: "function", Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema, ProviderOptions: tool.ProviderOptions["openai"]})
 		}
-		encoded, err := providerutil.MarshalWithOptions(responsesRequest{Model: m.modelID, Stream: true, Input: input, Tools: tools, ToolChoice: toolChoice(len(tools), request.Options.ToolChoice), MaxOutputTokens: request.Options.MaxOutputTokens}, request.Options.ProviderOptions["openai"], "model", "stream", "input", "tools", "tool_choice", "max_output_tokens")
+		encoded, err := providerutil.MarshalWithOptions(responsesRequest{Model: m.modelID, Stream: true, Input: input, Tools: tools, ToolChoice: toolChoice(len(tools), request.Options.ToolChoice), MaxOutputTokens: request.Options.MaxOutputTokens, Reasoning: responseReasoning(request.Options.ReasoningEffort)}, request.Options.ProviderOptions["openai"], "model", "stream", "input", "tools", "tool_choice", "max_output_tokens", "reasoning")
 		if err != nil {
 			return "", nil, fmt.Errorf("marshal responses request: %w", err)
 		}
@@ -234,7 +240,7 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 	for _, tool := range request.Tools {
 		tools = append(tools, chatTool{Type: "function", Function: chatFunction{Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema, ProviderOptions: tool.ProviderOptions["openai"]}})
 	}
-	encoded, err := providerutil.MarshalWithOptions(chatRequest{Model: m.modelID, Messages: messages, Stream: true, Tools: tools, ToolChoice: toolChoice(len(tools), request.Options.ToolChoice), MaxTokens: request.Options.MaxOutputTokens}, request.Options.ProviderOptions["openai"], "model", "messages", "stream", "tools", "tool_choice", "max_tokens")
+	encoded, err := providerutil.MarshalWithOptions(chatRequest{Model: m.modelID, Messages: messages, Stream: true, Tools: tools, ToolChoice: toolChoice(len(tools), request.Options.ToolChoice), MaxTokens: request.Options.MaxOutputTokens, ReasoningEffort: request.Options.ReasoningEffort}, request.Options.ProviderOptions["openai"], "model", "messages", "stream", "tools", "tool_choice", "max_tokens", "reasoning_effort")
 	if err != nil {
 		return "", nil, fmt.Errorf("marshal chat request: %w", err)
 	}
@@ -258,6 +264,13 @@ func chatContentParts(parts []sdk.ContentPart) []map[string]any {
 		}
 	}
 	return content
+}
+
+func responseReasoning(effort sdk.ReasoningEffort) *reasoningConfig {
+	if effort == sdk.ReasoningDefault {
+		return nil
+	}
+	return &reasoningConfig{Effort: effort}
 }
 
 func toolChoice(count int, choice sdk.ToolChoice) string {
