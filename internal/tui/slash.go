@@ -114,6 +114,21 @@ func (c slashCommand) matches(query string) bool {
 	return false
 }
 
+func canonicalSlashName(name string) string {
+	clean := strings.ToLower(strings.TrimSpace(name))
+	for _, command := range slashCatalog {
+		if clean == command.name {
+			return command.name
+		}
+		for _, alias := range command.aliases {
+			if clean == alias {
+				return command.name
+			}
+		}
+	}
+	return clean
+}
+
 func fuzzyContains(target, query string) bool {
 	target = strings.ToLower(target)
 	query = strings.ToLower(query)
@@ -450,7 +465,8 @@ func (m bubbleModel) slashView() string {
 }
 
 func (m *bubbleModel) executeCommand(line string) tea.Cmd {
-	name, argument, parts := splitCommand(line)
+	rawName, argument, parts := splitCommand(line)
+	name := canonicalSlashName(rawName)
 	switch name {
 	case "help":
 		m.appendHelp()
@@ -523,7 +539,7 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		m.resetConversation()
 		m.refreshViewport()
 		return nil
-	case "model", "models":
+	case "model":
 		arg := strings.TrimSpace(argument)
 		if arg == "add" {
 			if !m.bottom.has(providerViewID) {
@@ -545,7 +561,7 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		return m.selectModelDirect(arg)
 	case "provider", "providers":
 		cmdLine := strings.TrimSpace(strings.TrimPrefix(line, "/"))
-		cmdLine = strings.TrimSpace(strings.TrimPrefix(cmdLine, name))
+		cmdLine = strings.TrimSpace(strings.TrimPrefix(cmdLine, rawName))
 		fields := strings.Fields(cmdLine)
 		subCmd := ""
 		preset := ""
