@@ -381,11 +381,14 @@ func TestCoordinator_EmitsLifecycleEvents(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if len(events) < 2 {
-		t.Fatalf("expected at least 2 events, got %d", len(events))
+	if len(events) < 3 {
+		t.Fatalf("expected at least 3 events, got %d", len(events))
 	}
-	if events[0].Kind != EventAgentStarted {
-		t.Errorf("first event = %v, want EventAgentStarted", events[0].Kind)
+	if events[0].Kind != EventAgentQueued {
+		t.Errorf("first event = %v, want EventAgentQueued", events[0].Kind)
+	}
+	if events[1].Kind != EventAgentStarted {
+		t.Errorf("second event = %v, want EventAgentStarted", events[1].Kind)
 	}
 	if events[len(events)-1].Kind != EventAgentCompleted {
 		t.Errorf("last event = %v, want EventAgentCompleted", events[len(events)-1].Kind)
@@ -653,7 +656,7 @@ func TestCoordinatorQueueWaitDoesNotConsumeExecutionTimeout(t *testing.T) {
 	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
 		WithMaxConcurrency(1),
 		WithDefaultQueueTimeout(time.Second),
-		WithDefaultTimeout(80*time.Millisecond),
+		WithDefaultTimeout(500*time.Millisecond),
 		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
 			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
 				if calls.Add(1) == 1 {
@@ -674,7 +677,7 @@ func TestCoordinatorQueueWaitDoesNotConsumeExecutionTimeout(t *testing.T) {
 
 	firstDone := make(chan error, 1)
 	go func() {
-		_, err := coord.Run(context.Background(), Request{Profile: ProfileExplorer, Task: "first"})
+		_, err := coord.Run(context.Background(), Request{Profile: ProfileExplorer, Task: "first", Timeout: 500 * time.Millisecond})
 		firstDone <- err
 	}()
 	time.Sleep(20 * time.Millisecond)
@@ -682,7 +685,7 @@ func TestCoordinatorQueueWaitDoesNotConsumeExecutionTimeout(t *testing.T) {
 	secondDone := make(chan error, 1)
 	queuedAt := time.Now()
 	go func() {
-		_, err := coord.Run(context.Background(), Request{Profile: ProfileExplorer, Task: "second"})
+		_, err := coord.Run(context.Background(), Request{Profile: ProfileExplorer, Task: "second", Timeout: 80 * time.Millisecond})
 		secondDone <- err
 	}()
 	time.Sleep(60 * time.Millisecond)
@@ -754,4 +757,119 @@ func TestCoordinatorClampsRequestedTimeoutToConfiguredMaximum(t *testing.T) {
 	}
 	close(release)
 	_ = coord.Close()
+}
+
+func TestCoordinatorBlockedEventSinkDoesNotHoldExecution(t *testing.T) {
+	releaseSink := make(chan struct{})
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithDefaultTimeout(30*time.Millisecond),
+		WithEventSink(func(context.Context, Event) error {
+			<-releaseSink
+			return nil
+		}),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+				<-ctx.Done()
+				return turn.Result{}, ctx.Err()
+			}}, nil
+		}),
+	)
+	started := time.Now()
+	_, err := coord.Run(context.Background(), Request{Profile: ProfileExplorer, Task: "blocked observer"})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Run() error = %v, want deadline exceeded", err)
+	}
+	if elapsed := time.Since(started); elapsed > 150*time.Millisecond {
+		t.Fatalf("Run() elapsed = %v, blocked event sink held execution", elapsed)
+	}
+	if err := coord.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	close(releaseSink)
+}
+
+func TestCoordinatorCloseIsBoundedForNonCooperativeRunner(t *testing.T) {
+	release := make(chan struct{})
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithDefaultTimeout(20*time.Millisecond),
+		WithCloseTimeout(30*time.Millisecond),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(context.Context, []model.Message, turn.Sink) (turn.Result, error) {
+				<-release
+				return turn.Result{}, nil
+			}}, nil
+		}),
+	)
+	_, err := coord.Run(context.Background(), Request{Profile: ProfileExplorer, Task: "ignore close"})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Run() error = %v, want deadline exceeded", err)
+	}
+	started := time.Now()
+	closeErr := coord.Close()
+	if closeErr == nil || !strings.Contains(closeErr.Error(), "close timed out") {
+		t.Fatalf("Close() error = %v, want bounded timeout error", closeErr)
+	}
+	if elapsed := time.Since(started); elapsed > 150*time.Millisecond {
+		t.Fatalf("Close() elapsed = %v, want bounded shutdown", elapsed)
+	}
+	close(release)
+	deadline := time.Now().Add(time.Second)
+	for len(coord.Active()) != 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if active := coord.Active(); len(active) != 0 {
+		t.Fatalf("active subagents after releasing runner = %d", len(active))
+	}
+}
+
+func TestCoordinatorQueueTimeoutReportsLifecycleMetrics(t *testing.T) {
+	release := make(chan struct{})
+	events := make(chan Event, 8)
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithMaxConcurrency(1),
+		WithDefaultTimeout(time.Second),
+		WithDefaultQueueTimeout(20*time.Millisecond),
+		WithEventSink(func(_ context.Context, ev Event) error { events <- ev; return nil }),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+				select {
+				case <-release:
+					return turn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "done"}}, nil
+				case <-ctx.Done():
+					return turn.Result{}, ctx.Err()
+				}
+			}}, nil
+		}),
+	)
+	defer coord.Close()
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := coord.Run(context.Background(), Request{Profile: ProfileExplorer, Task: "holder", QueueTimeout: time.Second})
+		firstDone <- err
+	}()
+	time.Sleep(10 * time.Millisecond)
+	res, err := coord.Run(context.Background(), Request{Profile: ProfileExplorer, Task: "queued timeout"})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("queued Run() error = %v, want deadline exceeded", err)
+	}
+	if res.QueueDuration <= 0 || res.TotalDuration < res.QueueDuration || res.Duration != 0 {
+		t.Fatalf("queue timeout metrics = %+v", res)
+	}
+	foundFailure := false
+	for len(events) > 0 {
+		ev := <-events
+		if ev.Kind == EventAgentFailed && ev.AgentID == res.AgentID {
+			foundFailure = true
+			if ev.QueueDuration <= 0 || ev.TotalDuration < ev.QueueDuration {
+				t.Fatalf("failure event metrics = %+v", ev)
+			}
+		}
+	}
+	if !foundFailure {
+		t.Fatal("queued timeout did not emit EventAgentFailed")
+	}
+	close(release)
+	if err := <-firstDone; err != nil {
+		t.Fatalf("holder Run() error = %v", err)
+	}
 }

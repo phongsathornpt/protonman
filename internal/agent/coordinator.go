@@ -25,6 +25,8 @@ const (
 	defaultMaxToolCalls   = turn.DefaultMaxToolCalls
 	defaultTimeout        = 5 * time.Minute
 	defaultQueueTimeout   = 30 * time.Second
+	defaultCloseTimeout   = 5 * time.Second
+	eventEmitTimeout      = 10 * time.Millisecond
 	maxSummaryBytes       = 32 * 1024 // 32KB bound for child summaries returned to parent
 )
 
@@ -38,6 +40,7 @@ type AgentStatus struct {
 	Profile   Profile   `json:"profile"`
 	Task      string    `json:"task"`
 	StartTime time.Time `json:"start_time"`
+	StartedAt time.Time `json:"started_at,omitempty"`
 	Depth     int       `json:"depth"`
 }
 
@@ -69,6 +72,7 @@ type Coordinator struct {
 	maxToolCalls        int
 	defaultTimeout      time.Duration
 	defaultQueueTimeout time.Duration
+	closeTimeout        time.Duration
 	eventSink           EventSink
 	runnerFactory       RunnerFactory
 
@@ -136,6 +140,15 @@ func WithDefaultQueueTimeout(d time.Duration) Option {
 	}
 }
 
+// WithCloseTimeout bounds graceful coordinator shutdown after cancellation.
+func WithCloseTimeout(d time.Duration) Option {
+	return func(c *Coordinator) {
+		if d > 0 {
+			c.closeTimeout = d
+		}
+	}
+}
+
 // WithEventSink attaches an observer for subagent lifecycle events.
 func WithEventSink(sink EventSink) Option {
 	return func(c *Coordinator) {
@@ -195,6 +208,7 @@ func NewCoordinator(
 		maxToolCalls:        defaultMaxToolCalls,
 		defaultTimeout:      defaultTimeout,
 		defaultQueueTimeout: defaultQueueTimeout,
+		closeTimeout:        defaultCloseTimeout,
 	}
 	for _, opt := range options {
 		if opt != nil {
@@ -239,16 +253,24 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 	}
 
 	runCtx, runCancel := context.WithCancel(ctx)
+	queuedAt := time.Now()
 	status := AgentStatus{
 		ID:        id,
 		ParentID:  req.ParentID,
 		Profile:   req.Profile,
 		Task:      req.Task,
-		StartTime: time.Now(),
+		StartTime: queuedAt,
 		Depth:     req.Depth,
 	}
 	c.active[id] = &activeEntry{status: status, cancel: runCancel}
 	c.activeMu.Unlock()
+	c.emit(runCtx, Event{
+		Kind:     EventAgentQueued,
+		AgentID:  id,
+		ParentID: req.ParentID,
+		Profile:  req.Profile,
+		Message:  req.Task,
+	})
 
 	removeActive := func() {
 		c.activeMu.Lock()
@@ -265,20 +287,31 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 	select {
 	case c.sem <- struct{}{}:
 	case <-queueCtx.Done():
+		err := queueCtx.Err()
+		queueDuration := time.Since(queuedAt)
+		c.emit(runCtx, Event{Kind: EventAgentFailed, AgentID: id, ParentID: req.ParentID, Profile: req.Profile, QueueDuration: queueDuration, TotalDuration: queueDuration, Err: err})
 		runCancel()
 		removeActive()
-		err := queueCtx.Err()
-		return Result{AgentID: id, Profile: req.Profile, Err: err}, err
+		return Result{AgentID: id, Profile: req.Profile, QueueDuration: queueDuration, TotalDuration: queueDuration, Err: err}, err
 	}
 
 	releaseWorkspace, acquireErr := c.acquireWorkspace(queueCtx, req.Profile.IsMutating())
 	if acquireErr != nil {
 		<-c.sem
+		queueDuration := time.Since(queuedAt)
+		c.emit(runCtx, Event{Kind: EventAgentFailed, AgentID: id, ParentID: req.ParentID, Profile: req.Profile, QueueDuration: queueDuration, TotalDuration: queueDuration, Err: acquireErr})
 		runCancel()
 		removeActive()
-		return Result{AgentID: id, Profile: req.Profile, Err: acquireErr}, acquireErr
+		return Result{AgentID: id, Profile: req.Profile, QueueDuration: queueDuration, TotalDuration: queueDuration, Err: acquireErr}, acquireErr
 	}
 	queueCancel()
+	startedAt := time.Now()
+	queueDuration := startedAt.Sub(queuedAt)
+	c.activeMu.Lock()
+	if entry := c.active[id]; entry != nil {
+		entry.status.StartedAt = startedAt
+	}
+	c.activeMu.Unlock()
 
 	execCtx := runCtx
 	execCancel := func() {}
@@ -296,37 +329,43 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 		defer runCancel()
 		defer removeActive()
 
-		start := time.Now()
 		c.emit(execCtx, Event{
-			Kind:     EventAgentStarted,
-			AgentID:  id,
-			ParentID: req.ParentID,
-			Profile:  req.Profile,
-			Message:  req.Task,
+			Kind:          EventAgentStarted,
+			AgentID:       id,
+			ParentID:      req.ParentID,
+			Profile:       req.Profile,
+			Message:       req.Task,
+			QueueDuration: queueDuration,
 		})
 
 		res, err := c.execute(execCtx, req)
-		res.Duration = time.Since(start)
+		res.QueueDuration = queueDuration
+		res.Duration = time.Since(startedAt)
+		res.TotalDuration = time.Since(queuedAt)
 		if err != nil {
 			res.Err = err
 			emitCtx, emitDone := contextutil.DetachedTimeout(execCtx, 5*time.Second)
 			c.emit(emitCtx, Event{
-				Kind:     EventAgentFailed,
-				AgentID:  id,
-				ParentID: req.ParentID,
-				Profile:  req.Profile,
-				Duration: res.Duration,
-				Err:      err,
+				Kind:          EventAgentFailed,
+				AgentID:       id,
+				ParentID:      req.ParentID,
+				Profile:       req.Profile,
+				QueueDuration: res.QueueDuration,
+				Duration:      res.Duration,
+				TotalDuration: res.TotalDuration,
+				Err:           err,
 			})
 			emitDone()
 		} else {
 			c.emit(execCtx, Event{
-				Kind:     EventAgentCompleted,
-				AgentID:  id,
-				ParentID: req.ParentID,
-				Profile:  req.Profile,
-				Duration: res.Duration,
-				Message:  res.Summary,
+				Kind:          EventAgentCompleted,
+				AgentID:       id,
+				ParentID:      req.ParentID,
+				Profile:       req.Profile,
+				QueueDuration: res.QueueDuration,
+				Duration:      res.Duration,
+				TotalDuration: res.TotalDuration,
+				Message:       res.Summary,
 			})
 		}
 		resultCh <- res
@@ -337,7 +376,8 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 		return res, res.Err
 	case <-execCtx.Done():
 		err := execCtx.Err()
-		return Result{AgentID: id, Profile: req.Profile, Err: err}, err
+		now := time.Now()
+		return Result{AgentID: id, Profile: req.Profile, QueueDuration: queueDuration, Duration: now.Sub(startedAt), TotalDuration: now.Sub(queuedAt), Err: err}, err
 	}
 }
 
@@ -398,14 +438,29 @@ func (c *Coordinator) Close() error {
 		c.activeMu.Unlock()
 		return nil
 	}
-
 	for _, entry := range c.active {
 		entry.cancel()
 	}
 	c.activeMu.Unlock()
 
-	c.wg.Wait()
-	return nil
+	deadline := time.NewTimer(c.closeTimeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		c.activeMu.RLock()
+		remaining := len(c.active)
+		c.activeMu.RUnlock()
+		if remaining == 0 {
+			c.wg.Wait()
+			return nil
+		}
+		select {
+		case <-ticker.C:
+		case <-deadline.C:
+			return fmt.Errorf("coordinator close timed out with %d active subagent(s)", remaining)
+		}
+	}
 }
 
 // SetParentRegistry sets or updates the parent tool registry for scoping subagent tools.
@@ -467,8 +522,19 @@ func (c *Coordinator) CallGuard() toolcall.CallGuard {
 }
 
 func (c *Coordinator) emit(ctx context.Context, ev Event) {
-	if c.eventSink != nil {
-		_ = c.eventSink(ctx, ev)
+	if c.eventSink == nil {
+		return
+	}
+	emitCtx, cancel := context.WithTimeout(ctx, eventEmitTimeout)
+	defer cancel()
+	done := make(chan struct{}, 1)
+	go func() {
+		_ = c.eventSink(emitCtx, ev)
+		done <- struct{}{}
+	}()
+	select {
+	case <-done:
+	case <-emitCtx.Done():
 	}
 }
 

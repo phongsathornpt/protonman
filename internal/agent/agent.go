@@ -87,19 +87,23 @@ func (r Request) Validate() error {
 
 // Result is the bounded final output returned from a subagent to its caller.
 type Result struct {
-	AgentID  string        `json:"agent_id"`
-	Profile  Profile       `json:"profile"`
-	Summary  string        `json:"summary"`
-	Rounds   int           `json:"rounds"`
-	Duration time.Duration `json:"duration"`
-	Err      error         `json:"-"`
+	AgentID       string        `json:"agent_id"`
+	Profile       Profile       `json:"profile"`
+	Summary       string        `json:"summary"`
+	Rounds        int           `json:"rounds"`
+	QueueDuration time.Duration `json:"queue_duration"`
+	Duration      time.Duration `json:"duration"`
+	TotalDuration time.Duration `json:"total_duration"`
+	Err           error         `json:"-"`
 }
 
 // EventKind classifies progress notifications from subagent execution.
 type EventKind string
 
 const (
-	// EventAgentStarted marks the launch of a subagent goroutine.
+	// EventAgentQueued marks a validated subagent waiting for execution capacity.
+	EventAgentQueued EventKind = "agent_queued"
+	// EventAgentStarted marks the launch of a subagent execution.
 	EventAgentStarted EventKind = "agent_started"
 	// EventAgentProgress forwards intermediate text or activity updates.
 	EventAgentProgress EventKind = "agent_progress"
@@ -111,13 +115,15 @@ const (
 
 // Event is one lifecycle progress event emitted by an executing subagent.
 type Event struct {
-	Kind     EventKind     `json:"kind"`
-	AgentID  string        `json:"agent_id"`
-	ParentID string        `json:"parent_id,omitempty"`
-	Profile  Profile       `json:"profile"`
-	Message  string        `json:"message,omitempty"`
-	Duration time.Duration `json:"duration,omitempty"`
-	Err      error         `json:"-"`
+	Kind          EventKind     `json:"kind"`
+	AgentID       string        `json:"agent_id"`
+	ParentID      string        `json:"parent_id,omitempty"`
+	Profile       Profile       `json:"profile"`
+	Message       string        `json:"message,omitempty"`
+	QueueDuration time.Duration `json:"queue_duration,omitempty"`
+	Duration      time.Duration `json:"duration,omitempty"`
+	TotalDuration time.Duration `json:"total_duration,omitempty"`
+	Err           error         `json:"-"`
 }
 
 // EventSink receives lifecycle events emitted during subagent runs.
