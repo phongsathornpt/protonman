@@ -63,6 +63,11 @@ func extractToolTarget(name string, kind tool.Kind, args json.RawMessage) (strin
 		if pattern != "" {
 			return fmt.Sprintf("%q", pattern), kind
 		}
+	case tool.KindTask:
+		if items, ok := values["items"].([]any); ok {
+			return fmt.Sprintf("%d tasks", len(items)), kind
+		}
+		return "task plan", kind
 	case tool.KindBash:
 		if cmd, ok := values["command"].(string); ok && strings.TrimSpace(cmd) != "" {
 			return strings.TrimSpace(cmd), kind
@@ -150,6 +155,8 @@ func toolKindGlyph(kind tool.Kind, name string) string {
 		return glyphExec
 	case tool.KindEdit:
 		return glyphEdit
+	case tool.KindTask:
+		return glyphTodoActive
 	}
 
 	switch name {
@@ -184,6 +191,8 @@ func summarizeToolOutput(name string, kind tool.Kind, target string, body string
 		return summarizeGrep(bodyTrimmed, truncated)
 	case tool.KindEdit:
 		return summarizeEdit(name, bodyTrimmed)
+	case tool.KindTask:
+		return summarizeTodoUpdate(bodyTrimmed)
 	case tool.KindBash:
 		if exitCode != nil {
 			return fmt.Sprintf("exit %d", *exitCode)
@@ -214,6 +223,22 @@ func summarizeToolOutput(name string, kind tool.Kind, target string, body string
 		return fmt.Sprintf("%d lines (%s)", lines, formatByteSize(len(bodyTrimmed)))
 	}
 	return formatByteSize(len(bodyTrimmed))
+}
+
+func summarizeTodoUpdate(body string) string {
+	var payload struct {
+		Total      int `json:"total"`
+		Completed  int `json:"completed"`
+		InProgress int `json:"in_progress"`
+	}
+	if json.Unmarshal([]byte(body), &payload) != nil {
+		return "tasks updated"
+	}
+	summary := fmt.Sprintf("Tasks updated · %d/%d complete", payload.Completed, payload.Total)
+	if payload.InProgress > 0 {
+		summary += fmt.Sprintf(" · %d active", payload.InProgress)
+	}
+	return summary
 }
 
 func summarizeWebFetch(body string, truncated bool) string {

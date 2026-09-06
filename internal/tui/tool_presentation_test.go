@@ -320,3 +320,17 @@ func TestSummarizeReadFileTarget(t *testing.T) {
 		t.Fatalf("expected empty file summary, got: %s", emptySummary)
 	}
 }
+
+func TestTodoToolPresentation(t *testing.T) {
+	target, kind := extractToolTarget("update_todo", "", json.RawMessage(`{"items":[{"id":"a","text":"one","status":"in_progress"},{"id":"b","text":"two","status":"completed"}]}`))
+	if kind != tool.KindTask || target != "2 tasks" {
+		t.Fatalf("target=%q kind=%q", target, kind)
+	}
+	if glyph := toolKindGlyph(kind, "update_todo"); glyph != glyphTodoActive {
+		t.Fatalf("glyph = %q", glyph)
+	}
+	summary := summarizeToolOutput("update_todo", kind, target, `{"total":2,"completed":1,"in_progress":1}`, nil, false)
+	if summary != "Tasks updated · 1/2 complete · 1 active" {
+		t.Fatalf("summary = %q", summary)
+	}
+}
