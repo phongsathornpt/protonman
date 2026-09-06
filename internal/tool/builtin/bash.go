@@ -130,6 +130,21 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	}
 	analysis := tool.AnalyzeCommand(input.Command)
 	affectedPaths := bashAffectedPaths(cwdRel, analysis.AffectedPaths)
+	resolvedMutationPaths := make([]string, 0, len(affectedPaths))
+	if analysis.Effect == tool.CommandEffectMutating {
+		for _, path := range affectedPaths {
+			resolved, resolveErr := h.workspace.Resolve(ctx, path)
+			if resolveErr != nil {
+				logBashFailure(ctx, call, startedAt, "mutation_guard", resolveErr)
+				return tool.Result{}, resolveErr
+			}
+			resolvedMutationPaths = append(resolvedMutationPaths, resolved)
+		}
+		if guardErr := h.workspace.GuardWholeFileMutation(ctx, resolvedMutationPaths...); guardErr != nil {
+			logBashFailure(ctx, call, startedAt, "mutation_guard", guardErr)
+			return tool.Result{}, guardErr
+		}
+	}
 	slog.DebugContext(ctx, "bash command decoded",
 		"call_id", call.ID,
 		"command_bytes", len(input.Command),
@@ -218,6 +233,7 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	if err == nil {
 		code := 0
 		result.ExitCode = &code
+		h.workspace.MarkMutationOwned(ctx, resolvedMutationPaths...)
 		return result, nil
 	}
 

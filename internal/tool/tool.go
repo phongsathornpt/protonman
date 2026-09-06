@@ -94,6 +94,8 @@ const (
 	ErrorCodeStaleContinuation ErrorCode = "stale_continuation"
 	// ErrorCodeConflict indicates an optimistic concurrency/version conflict.
 	ErrorCodeConflict ErrorCode = "conflict"
+	// ErrorCodePreexistingWorkspaceChange prevents destructive replacement of user changes not owned by the current turn.
+	ErrorCodePreexistingWorkspaceChange ErrorCode = "preexisting_workspace_change"
 	// ErrorCodeSandboxUnavailable indicates that requested OS confinement could not be applied.
 	ErrorCodeSandboxUnavailable ErrorCode = "sandbox_unavailable"
 	// ErrorCodeExecution is the safe fallback for handler failures.

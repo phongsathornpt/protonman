@@ -63,6 +63,9 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	if err != nil {
 		return tool.Result{}, err
 	}
+	if err := h.workspace.GuardWholeFileMutation(ctx, resolvedPath); err != nil {
+		return tool.Result{}, err
+	}
 	checkpointID, err := h.checkpoints.Capture(ctx, []string{resolvedPath})
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("checkpoint %q: %w", input.FilePath, err)
@@ -78,6 +81,7 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 			CheckpointID: checkpointID,
 		}, fmt.Errorf("write %q: %w", input.FilePath, err)
 	}
+	h.workspace.MarkMutationOwned(ctx, resolvedPath)
 	return tool.Result{
 		CallID:        call.ID,
 		ToolName:      call.Name,
