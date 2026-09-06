@@ -139,8 +139,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if message.err == nil {
 					m.modelCatalogs.set(message.providerName, message.models)
 					mv.models = m.modelCatalogs.models(message.providerName)
-					mv.index = 0
-					mv.offset = 0
+					mv.resetSelection(m.activeModel)
 				}
 				m.relayout()
 			}
