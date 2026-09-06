@@ -1361,3 +1361,49 @@ func TestTerminalReasonPreservesUTF8Boundary(t *testing.T) {
 		t.Fatalf("terminalReason bytes=%d, want <=80", len(got))
 	}
 }
+
+func TestCoordinatorCancelByParentScopesCancellation(t *testing.T) {
+	release := make(chan struct{})
+	coord := NewCoordinator(nil, nil, nil, nil,
+		WithMaxConcurrency(3),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+				select {
+				case <-release:
+					return turn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "done"}}, nil
+				case <-ctx.Done():
+					return turn.Result{}, ctx.Err()
+				}
+			}}, nil
+		}),
+	)
+	defer func() { close(release); _ = coord.Close() }()
+
+	first, err := coord.Spawn(context.Background(), Request{ParentID: "turn-a", Profile: ProfileExplorer, Task: "first"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := coord.Spawn(context.Background(), Request{ParentID: "turn-b", Profile: ProfileReviewer, Task: "second"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := coord.CancelByParent("turn-a"); got != 1 {
+		t.Fatalf("CancelByParent()=%d, want 1", got)
+	}
+	firstStatus, _ := coord.Get(first.ID)
+	if firstStatus.State != StateCanceling && firstStatus.State != StateCanceled {
+		t.Fatalf("first state=%s", firstStatus.State)
+	}
+	secondStatus, _ := coord.Get(second.ID)
+	if secondStatus.State == StateCanceling || secondStatus.State == StateCanceled {
+		t.Fatalf("second state=%s, want unaffected", secondStatus.State)
+	}
+}
+
+func TestParentIDContextRoundTrip(t *testing.T) {
+	ctx := WithParentID(context.Background(), " turn-42 ")
+	if got := ParentIDFromContext(ctx); got != "turn-42" {
+		t.Fatalf("ParentIDFromContext()=%q", got)
+	}
+}

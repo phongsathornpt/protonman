@@ -113,8 +113,12 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, err.Error())
 	}
 
+	parentID := agent.ParentIDFromContext(ctx)
+	if parentID == "" {
+		parentID = h.parentID
+	}
 	req := agent.Request{
-		ParentID: h.parentID,
+		ParentID: parentID,
 		Profile:  profile,
 		Task:     task,
 		Context:  strings.TrimSpace(input.Context),

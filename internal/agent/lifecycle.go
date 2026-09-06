@@ -194,6 +194,29 @@ func terminalReason(err error) string {
 }
 
 // Cancel explicitly requests cancellation of one subagent.
+// CancelByParent requests cancellation for all non-terminal subagents owned by parentID.
+// It returns the number of cancellation requests issued.
+func (c *Coordinator) CancelByParent(parentID string) int {
+	parentID = strings.TrimSpace(parentID)
+	if parentID == "" {
+		return 0
+	}
+	c.agentsMu.Lock()
+	cancels := make([]context.CancelFunc, 0)
+	for _, entry := range c.agents {
+		if entry.status.ParentID != parentID || entry.status.State.Terminal() || entry.status.State == StateCanceling {
+			continue
+		}
+		entry.status.State = StateCanceling
+		cancels = append(cancels, entry.cancel)
+	}
+	c.agentsMu.Unlock()
+	for _, cancel := range cancels {
+		cancel()
+	}
+	return len(cancels)
+}
+
 func (c *Coordinator) Cancel(id string) error {
 	c.agentsMu.Lock()
 	entry := c.agents[strings.TrimSpace(id)]
