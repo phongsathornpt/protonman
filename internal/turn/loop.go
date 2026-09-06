@@ -284,7 +284,6 @@ func WithSkillRegistry(registry *skill.Registry) Option {
 
 // Loop coordinates model streaming and permission-aware tool dispatch.
 type Loop struct {
-	client                        model.Client
 	languageModel                 sdk.LanguageModel
 	tools                         *toolcall.Service
 	maxRounds                     int
@@ -299,38 +298,6 @@ type Loop struct {
 }
 
 var _ Runner = (*Loop)(nil)
-
-// NewLoop creates a provider-neutral model/tool execution loop.
-func NewLoop(client model.Client, tools *toolcall.Service, options ...Option) (*Loop, error) {
-	if client == nil {
-		return nil, fmt.Errorf("%w: model client is required", ErrInvalidLoop)
-	}
-	if tools == nil {
-		return nil, fmt.Errorf("%w: tool-call service is required", ErrInvalidLoop)
-	}
-	loop := &Loop{
-		client:                        client,
-		tools:                         tools,
-		maxRounds:                     defaultMaxRounds,
-		maxToolCalls:                  defaultMaxToolCalls,
-		maxIdenticalNoProgressResults: defaultMaxIdenticalNoProgressResults,
-		turnTimeout:                   DefaultTurnTimeout,
-		roundTimeout:                  DefaultRoundTimeout,
-		maxParallelReads:              defaultMaxParallelRead,
-	}
-	for _, option := range options {
-		if option == nil {
-			continue
-		}
-		if err := option(loop); err != nil {
-			return nil, err
-		}
-	}
-	if loop.maxRounds == 0 && loop.maxToolCalls == 0 && loop.turnTimeout == 0 {
-		return nil, fmt.Errorf("%w: at least one of max rounds, max tool calls, or turn timeout must be bounded", ErrInvalidLoop)
-	}
-	return loop, nil
-}
 
 // NewLanguageModelLoop creates a model/tool loop that consumes proton-sdk directly.
 func NewLanguageModelLoop(languageModel sdk.LanguageModel, tools *toolcall.Service, options ...Option) (*Loop, error) {
@@ -517,9 +484,17 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			"remaining_tool_calls", dispatch.remainingToolCalls,
 		)
 
-		request := model.Request{
+		sdkTools := make([]sdk.Tool, 0, len(tools))
+		for _, definition := range tools {
+			sdkTools = append(sdkTools, sdk.Tool{
+				Name:        definition.Name,
+				Description: definition.Description,
+				InputSchema: definition.InputSchema,
+			})
+		}
+		request := sdk.Request{
 			Messages: reqMessages,
-			Tools:    tools,
+			Tools:    sdkTools,
 		}
 		if err := request.Validate(); err != nil {
 			terminalReason = "request_validation_failed"
@@ -720,7 +695,7 @@ type executedCall struct {
 func (l *Loop) runRound(
 	parent context.Context,
 	round int,
-	request model.Request,
+	request sdk.Request,
 	dispatch toolDispatchState,
 	progress *progressGuard,
 	sink Sink,
@@ -1086,7 +1061,7 @@ func logExecutionSummary(ctx context.Context, round int, executions []executedCa
 func (l *Loop) streamRound(
 	ctx context.Context,
 	round int,
-	request model.Request,
+	request sdk.Request,
 	sink Sink,
 ) (model.Message, []model.ToolCall, error) {
 	startedAt := time.Now()
@@ -1095,10 +1070,7 @@ func (l *Loop) streamRound(
 		"message_count", len(request.Messages),
 		"tool_count", len(request.Tools),
 	)
-	if l.languageModel != nil {
-		return l.streamSDKRound(ctx, round, request, sink)
-	}
-	stream, err := l.client.Stream(ctx, request)
+	stream, err := l.languageModel.Stream(ctx, request)
 	if err != nil {
 		slog.DebugContext(ctx, "model round stream open failed",
 			"round", round,
@@ -1107,10 +1079,6 @@ func (l *Loop) streamRound(
 		return model.Message{}, nil, fmt.Errorf("stream model round %d: %w", round, err)
 	}
 	if stream == nil {
-		slog.DebugContext(ctx, "model round stream open failed",
-			"round", round,
-			"reason", "nil_stream",
-		)
 		return model.Message{}, nil, fmt.Errorf("stream model round %d: nil stream", round)
 	}
 	defer func() {
@@ -1121,12 +1089,8 @@ func (l *Loop) streamRound(
 			"close_error", closeErr != nil,
 		)
 	}()
-	assistant, calls, streamErr := consumeStream(ctx, round, stream, sink)
+	assistant, calls, streamErr := consumeSDKStream(ctx, round, stream, sink)
 	if streamErr != nil {
-		slog.DebugContext(ctx, "model round stream consumed with error",
-			"round", round,
-			"error_type", fmt.Sprintf("%T", streamErr),
-		)
 		return model.Message{}, nil, streamErr
 	}
 	slog.DebugContext(ctx, "model round stream consumed",
@@ -1135,37 +1099,6 @@ func (l *Loop) streamRound(
 		"tool_calls", len(calls),
 	)
 	return assistant, calls, nil
-}
-
-func (l *Loop) streamSDKRound(
-	ctx context.Context,
-	round int,
-	request model.Request,
-	sink Sink,
-) (model.Message, []model.ToolCall, error) {
-	sdkRequest := sdk.Request{
-		Messages: sdk.CloneMessages(request.Messages),
-		Tools:    make([]sdk.Tool, 0, len(request.Tools)),
-	}
-	for _, definition := range request.Tools {
-		sdkRequest.Tools = append(sdkRequest.Tools, sdk.Tool{
-			Name:        definition.Name,
-			Description: definition.Description,
-			InputSchema: definition.InputSchema,
-		})
-	}
-	if err := sdkRequest.Validate(); err != nil {
-		return model.Message{}, nil, fmt.Errorf("validate sdk model request: %w", err)
-	}
-	stream, err := l.languageModel.Stream(ctx, sdkRequest)
-	if err != nil {
-		return model.Message{}, nil, fmt.Errorf("stream model round %d: %w", round, err)
-	}
-	if stream == nil {
-		return model.Message{}, nil, fmt.Errorf("stream model round %d: nil stream", round)
-	}
-	defer stream.Close()
-	return consumeSDKStream(ctx, round, stream, sink)
 }
 
 func consumeSDKStream(ctx context.Context, round int, stream sdk.Stream, sink Sink) (model.Message, []model.ToolCall, error) {
@@ -1201,80 +1134,6 @@ func consumeSDKStream(ctx context.Context, round int, stream sdk.Stream, sink Si
 	}
 	return model.Message{}, nil, fmt.Errorf("read model stream round %d: %w", round, sdk.ErrIncompleteStream)
 }
-
-func consumeStream(
-	ctx context.Context,
-	round int,
-	stream model.Stream,
-	sink Sink,
-) (model.Message, []model.ToolCall, error) {
-	var text strings.Builder
-	calls := make([]model.ToolCall, 0)
-	for {
-		event, err := stream.Next(ctx)
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			slog.DebugContext(ctx, "model stream next failed",
-				"round", round,
-				"error_type", fmt.Sprintf("%T", err),
-			)
-			return model.Message{}, nil, fmt.Errorf("read model stream round %d: %w", round, err)
-		}
-		if err := event.Validate(); err != nil {
-			slog.DebugContext(ctx, "model stream event invalid",
-				"round", round,
-				"event_kind", event.Kind,
-				"error_type", fmt.Sprintf("%T", err),
-			)
-			return model.Message{}, nil, fmt.Errorf("validate model stream round %d: %w", round, err)
-		}
-		switch event.Kind {
-		case model.EventTextDelta:
-			text.WriteString(event.Text)
-			if err := emit(ctx, sink, Event{
-				Kind:  EventTextDelta,
-				Round: round,
-				Text:  event.Text,
-			}); err != nil {
-				return model.Message{}, nil, err
-			}
-		case model.EventToolCall:
-			call := event.ToolCall
-			call.Arguments = append(json.RawMessage{}, call.Arguments...)
-			calls = append(calls, call)
-		case model.EventDone:
-			if text.Len() == 0 && len(calls) == 0 {
-				err := fmt.Errorf("model stream round %d: %w", round, ErrEmptyResponse)
-				slog.DebugContext(ctx, "model stream completed without content",
-					"round", round,
-					"termination", "event_done",
-				)
-				return model.Message{}, nil, err
-			}
-			slog.DebugContext(ctx, "model stream terminal event",
-				"round", round,
-				"termination", "event_done",
-				"text_bytes", text.Len(),
-				"tool_calls", len(calls),
-			)
-			return model.Message{
-				Role:      model.RoleAssistant,
-				Content:   text.String(),
-				ToolCalls: calls,
-			}, calls, nil
-		}
-	}
-	err := fmt.Errorf("read model stream round %d: %w", round, model.ErrIncompleteStream)
-	slog.DebugContext(ctx, "model stream incomplete",
-		"round", round,
-		"text_bytes", text.Len(),
-		"tool_calls", len(calls),
-	)
-	return model.Message{}, nil, err
-}
-
 func (l *Loop) observeSuppression(ctx context.Context, round int, execution executedCall) {
 	event := toolcall.ProtectionEvent{
 		Kind: toolcall.ProtectionCallSuppressed, Time: time.Now(), Round: round,
