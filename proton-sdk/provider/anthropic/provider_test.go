@@ -130,3 +130,21 @@ func TestAnthropicHTTPError(t *testing.T) {
 		t.Fatalf("provider error = %#v", providerErr)
 	}
 }
+func TestAnthropicStreamErrorIsNormalized(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"busy\"}}\n\n"))
+	}))
+	defer server.Close()
+
+	stream, err := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("claude-test").Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	_, err = stream.Next(context.Background())
+	var providerErr *sdk.ProviderError
+	if !errors.As(err, &providerErr) || providerErr.Kind != sdk.ErrorOverloaded || providerErr.Code != "overloaded_error" || !providerErr.Retryable {
+		t.Fatalf("stream error = %#v (%v)", providerErr, err)
+	}
+}

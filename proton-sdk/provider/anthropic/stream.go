@@ -202,9 +202,9 @@ func (s *stream) processLine(line string) error {
 		s.done = true
 	case "error":
 		if event.Error != nil {
-			return fmt.Errorf("anthropic error %s: %s", event.Error.Type, event.Error.Message)
+			return sdk.NewProviderError("anthropic", 0, event.Error.Type, event.Error.Message)
 		}
-		return fmt.Errorf("anthropic stream error")
+		return sdk.NewProviderError("anthropic", 0, "stream_error", "anthropic stream error")
 	case "ping":
 		return nil
 	default:

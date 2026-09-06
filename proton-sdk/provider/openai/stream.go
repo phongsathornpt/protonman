@@ -57,6 +57,8 @@ type chatChunk struct {
 	} `json:"usage,omitempty"`
 	Error *struct {
 		Message string `json:"message"`
+		Type    string `json:"type,omitempty"`
+		Code    string `json:"code,omitempty"`
 	} `json:"error,omitempty"`
 }
 
@@ -75,6 +77,8 @@ type responsesChunk struct {
 	Response *struct {
 		Error *struct {
 			Message string `json:"message"`
+			Type    string `json:"type,omitempty"`
+			Code    string `json:"code,omitempty"`
 		} `json:"error,omitempty"`
 		Usage *struct {
 			InputTokens  int64 `json:"input_tokens"`
@@ -84,6 +88,8 @@ type responsesChunk struct {
 	} `json:"response,omitempty"`
 	Error *struct {
 		Message string `json:"message"`
+		Type    string `json:"type,omitempty"`
+		Code    string `json:"code,omitempty"`
 	} `json:"error,omitempty"`
 }
 
@@ -160,7 +166,7 @@ func (s *stream) processLine(line string) error {
 			return fmt.Errorf("%w: decode provider error: %w", sdk.ErrInvalidEvent, err)
 		}
 		if chunk.Error != nil {
-			return fmt.Errorf("model error: %s", chunk.Error.Message)
+			return sdk.NewProviderError("openai", 0, firstNonEmpty(chunk.Error.Code, chunk.Error.Type), chunk.Error.Message)
 		}
 	}
 	if _, ok := fields["type"]; ok {
@@ -175,7 +181,7 @@ func (s *stream) processChat(payload string) error {
 		return fmt.Errorf("%w: decode chat completion event: %w", sdk.ErrInvalidEvent, err)
 	}
 	if chunk.Error != nil {
-		return fmt.Errorf("model error: %s", chunk.Error.Message)
+		return sdk.NewProviderError("openai", 0, firstNonEmpty(chunk.Error.Code, chunk.Error.Type), chunk.Error.Message)
 	}
 	if chunk.Usage != nil {
 		s.queue = append(s.queue, sdk.Event{Kind: sdk.EventUsage, Usage: sdk.Usage{InputTokens: chunk.Usage.PromptTokens, OutputTokens: chunk.Usage.CompletionTokens, TotalTokens: chunk.Usage.TotalTokens}})
@@ -220,10 +226,10 @@ func (s *stream) processResponses(payload string) error {
 		return fmt.Errorf("%w: decode responses event: %w", sdk.ErrInvalidEvent, err)
 	}
 	if chunk.Error != nil {
-		return fmt.Errorf("model error: %s", chunk.Error.Message)
+		return sdk.NewProviderError("openai", 0, firstNonEmpty(chunk.Error.Code, chunk.Error.Type), chunk.Error.Message)
 	}
 	if chunk.Response != nil && chunk.Response.Error != nil {
-		return fmt.Errorf("model error: %s", chunk.Response.Error.Message)
+		return sdk.NewProviderError("openai", 0, firstNonEmpty(chunk.Response.Error.Code, chunk.Response.Error.Type), chunk.Response.Error.Message)
 	}
 	switch chunk.Type {
 	case "response.output_text.delta":
@@ -366,4 +372,13 @@ func mapFinishReason(reason string) sdk.FinishReason {
 	default:
 		return sdk.FinishOther
 	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
