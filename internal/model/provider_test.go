@@ -242,3 +242,24 @@ func TestFetchAnthropicProviderModels(t *testing.T) {
 		t.Fatalf("models = %#v", models)
 	}
 }
+
+func TestProviderPresetKeyPlaceholders(t *testing.T) {
+	tests := []struct {
+		id   string
+		want string
+	}{
+		{id: DefaultOpenAIName, want: "sk_…"},
+		{id: DefaultAnthropicName, want: "sk-ant-…"},
+		{id: DefaultProtonmanName, want: "plk_live_…"},
+		{id: DefaultOpenCodeName, want: "API key (optional)…"},
+	}
+	for _, test := range tests {
+		preset := LookupPreset(test.id)
+		if preset == nil {
+			t.Fatalf("LookupPreset(%q) returned nil", test.id)
+		}
+		if preset.KeyPlaceholder != test.want {
+			t.Fatalf("%s KeyPlaceholder = %q, want %q", test.id, preset.KeyPlaceholder, test.want)
+		}
+	}
+}

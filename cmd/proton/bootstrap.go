@@ -217,7 +217,7 @@ func buildInitialRunner(cfg config.Snapshot, sessionID string, skills *skill.Reg
 		providerKey = model.DefaultProtonmanName
 	}
 	provider, ok := cfg.Providers[providerKey]
-	if !ok || strings.TrimSpace(provider.APIKey) == "" {
+	if !ok || !model.ProviderHasUsableAuth(providerKey, provider.BaseURL, provider.APIKey) {
 		return nil
 	}
 	client := model.NewProviderClient(providerKey, provider.Type, provider.BaseURL, provider.APIKey, cfg.Model.Default, model.WithSessionID(sessionID), model.WithRequestTimeout(cfg.Runtime.ModelRequestTimeout))
