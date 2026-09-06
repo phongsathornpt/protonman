@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -38,13 +37,32 @@ func TestE2ETUIStartupAndExitWithRealPTY(t *testing.T) {
 	_ = slave.Close()
 
 	var output bytes.Buffer
+	firstOutput := make(chan struct{})
 	readDone := make(chan struct{})
 	go func() {
-		_, _ = io.Copy(&output, master)
-		close(readDone)
+		defer close(readDone)
+		buf := make([]byte, 4096)
+		signaled := false
+		for {
+			n, err := master.Read(buf)
+			if n > 0 {
+				_, _ = output.Write(buf[:n])
+				if !signaled {
+					close(firstOutput)
+					signaled = true
+				}
+			}
+			if err != nil {
+				return
+			}
+		}
 	}()
 
-	waitForPTYOutput(t, &output, 2*time.Second)
+	select {
+	case <-firstOutput:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for TUI output on PTY")
+	}
 	if _, err := master.Write([]byte{3}); err != nil {
 		t.Fatalf("send Ctrl+C to PTY: %v", err)
 	}
@@ -55,6 +73,7 @@ func TestE2ETUIStartupAndExitWithRealPTY(t *testing.T) {
 	select {
 	case <-readDone:
 	case <-time.After(time.Second):
+		t.Fatal("timed out draining PTY output")
 	}
 
 	view := output.String()
@@ -90,16 +109,4 @@ func openLinuxPTY(t *testing.T, cols, rows uint16) (*os.File, *os.File) {
 		t.Fatalf("set PTY size: %v", err)
 	}
 	return os.NewFile(uintptr(masterFD), "ptmx"), os.NewFile(uintptr(slaveFD), slavePath)
-}
-
-func waitForPTYOutput(t *testing.T, output *bytes.Buffer, timeout time.Duration) {
-	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if output.Len() > 0 {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	t.Fatal("timed out waiting for TUI output on PTY")
 }
