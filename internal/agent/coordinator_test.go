@@ -355,6 +355,36 @@ func TestCoordinator_ZeroGoroutineLeaks(t *testing.T) {
 	}
 }
 
+func TestCoordinatorCloseClosesSubscribers(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil)
+	events, unsubscribe := coord.Subscribe(1)
+
+	if err := coord.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	select {
+	case _, ok := <-events:
+		if ok {
+			t.Fatal("subscriber channel remained open after coordinator close")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("subscriber channel was not closed")
+	}
+	unsubscribe() // must remain safe after coordinator-driven closure
+}
+
+func TestCoordinatorSubscribeAfterCloseReturnsClosedChannel(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil)
+	if err := coord.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	events, unsubscribe := coord.Subscribe(1)
+	defer unsubscribe()
+	if _, ok := <-events; ok {
+		t.Fatal("Subscribe() after close returned an open channel")
+	}
+}
+
 func TestCoordinatorTerminalEventsReplaceDroppedSubscriberWakeups(t *testing.T) {
 	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil)
 	defer coord.Close()

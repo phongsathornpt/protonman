@@ -18,16 +18,32 @@ func (c *Coordinator) Subscribe(buffer int) (<-chan Event, func()) {
 	ch := make(chan Event, buffer)
 	id := atomic.AddUint64(&c.subscriberSeq, 1)
 	c.eventMu.Lock()
+	if c.closed.Load() {
+		close(ch)
+		c.eventMu.Unlock()
+		return ch, func() {}
+	}
 	c.subscribers[id] = ch
 	c.eventMu.Unlock()
 	var once sync.Once
 	return ch, func() {
 		once.Do(func() {
 			c.eventMu.Lock()
-			delete(c.subscribers, id)
-			close(ch)
+			if existing, ok := c.subscribers[id]; ok {
+				delete(c.subscribers, id)
+				close(existing)
+			}
 			c.eventMu.Unlock()
 		})
+	}
+}
+
+func (c *Coordinator) closeSubscribers() {
+	c.eventMu.Lock()
+	defer c.eventMu.Unlock()
+	for id, ch := range c.subscribers {
+		close(ch)
+		delete(c.subscribers, id)
 	}
 }
 

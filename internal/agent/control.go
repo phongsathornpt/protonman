@@ -20,6 +20,7 @@ func (c *Coordinator) Close() error {
 		}
 	}
 	c.agentsMu.Unlock()
+	c.closeSubscribers()
 
 	c.closeOnce.Do(func() {
 		go func() { c.wg.Wait(); close(c.closeDone) }()
