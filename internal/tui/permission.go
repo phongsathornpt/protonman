@@ -253,6 +253,7 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 	title := "Permission required"
 	titleStyle := warningStyle
 	border := warningColor
+	detailExtras := make([]string, 0, 2)
 	switch request.ToolKind {
 	case permission.ToolRead, permission.ToolGrep, permission.ToolTask, permission.ToolAgent:
 		if request.ToolKind == permission.ToolTask {
@@ -271,9 +272,11 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 	case permission.ToolBash:
 		var input struct {
 			Command string `json:"command"`
+			Cwd     string `json:"cwd,omitempty"`
 		}
 		_ = json.Unmarshal(request.Arguments, &input)
-		switch tool.ClassifyCommandEffect(input.Command) {
+		analysis := tool.AnalyzeCommand(input.Command)
+		switch analysis.Effect {
 		case tool.CommandEffectReadOnly:
 			title = "Permission request — shell read only"
 			titleStyle = userStyle
@@ -284,6 +287,14 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 			border = accentError
 		default:
 			title = "Permission required — shell effects unknown"
+		}
+		cwd := strings.TrimSpace(input.Cwd)
+		if cwd == "" {
+			cwd = "."
+		}
+		detailExtras = append(detailExtras, "Cwd: "+cwd)
+		if analysis.Reason != "" {
+			detailExtras = append(detailExtras, fmt.Sprintf("Effect: %s · %s", analysis.Effect, analysis.Reason))
 		}
 	}
 	if layoutModeForHeight(m.height) == layoutTiny {
@@ -303,6 +314,9 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 	rows = append(rows, titleStyle.Render(title))
 	rows = append(rows, fmt.Sprintf("%s (%s)", request.ToolName, request.ToolKind))
 	detailLines := wrapLines("Target: "+request.Detail, maxInt(1, maxWidth-6))
+	for _, extra := range detailExtras {
+		detailLines = append(detailLines, wrapLines(extra, maxInt(1, maxWidth-6))...)
+	}
 	maxDetailLines := 6
 	if layoutModeForHeight(m.height) == layoutCompact {
 		maxDetailLines = 2

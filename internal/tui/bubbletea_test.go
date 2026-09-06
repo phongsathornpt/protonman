@@ -456,6 +456,7 @@ func TestPermissionBashRiskPresentationUsesCommandEffect(t *testing.T) {
 		{name: "read only", command: "pwd", want: "Permission request — shell read only"},
 		{name: "mutating", command: "rm -rf tmp", want: "Permission required — shell modifies state"},
 		{name: "unknown", command: "echo hi", want: "Permission required — shell effects unknown"},
+		{name: "composed mutation", command: "pwd && rm tmp", want: "Permission required — shell modifies state"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1029,5 +1030,23 @@ func TestExternalTodoReloadIgnoresUnrelatedAffectedPath(t *testing.T) {
 	m.reloadTodoAfterExternalTool(call, tool.Result{AffectedPaths: []string{"other.go"}}, nil)
 	if m.todo[0].Status != tododomain.StatusPending {
 		t.Fatalf("unrelated edit reloaded todo: %#v", m.todo)
+	}
+}
+
+func TestPermissionBashPresentationShowsCwdAndEffectReason(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(100, 30)
+	model.modal = &permissionRequest{
+		request: permission.Request{
+			ToolName: "bash", ToolKind: permission.ToolBash, Detail: "git status --short",
+			Arguments: json.RawMessage(`{"command":"git status --short","cwd":"internal/agent"}`),
+		},
+		response: make(chan permissionResponse, 1),
+	}
+	view := model.View()
+	for _, want := range []string{"Cwd: internal/agent", "Effect: read_only", "git status is read only"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("view missing %q:\n%s", want, view)
+		}
 	}
 }
