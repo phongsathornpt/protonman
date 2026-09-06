@@ -7,6 +7,7 @@ import (
 	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/permission"
+	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/workspace"
 )
 
@@ -173,5 +174,34 @@ func TestTUI_ReconfigureRunnerUpdatesCoordinatorClient(t *testing.T) {
 
 	if coordinator.Client() == nil {
 		t.Fatal("expected coordinator client to be updated after reconfigureRunner()")
+	}
+}
+
+func TestPlanModeAllowsTaskMetadataButBlocksWorkspaceEdit(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		kind       tool.Kind
+		wantDenied bool
+	}{
+		{name: "update_todo", kind: tool.KindTask, wantDenied: false},
+		{name: "write_file", kind: tool.KindEdit, wantDenied: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := newNamedTestRegistry(tool.Definition{Name: tc.name, Description: tc.name, Kind: tc.kind, Mutability: tool.MutabilityMutating})
+			service := newBubbleTestService(t, registry, permission.ModeAlwaysApprove, permission.Config{})
+			m := newBubbleModel(context.Background(), service, registry, nil, nil, newPermissionBridge(), "/tmp/proton")
+			m.setPlanEnabled(true)
+			call, err := tool.NewCall("call", tc.name, []byte(`{}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = service.Call(context.Background(), call)
+			if tc.wantDenied && err == nil {
+				t.Fatal("workspace edit was allowed in plan mode")
+			}
+			if !tc.wantDenied && err != nil {
+				t.Fatalf("task metadata blocked in plan mode: %v", err)
+			}
+		})
 	}
 }

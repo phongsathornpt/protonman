@@ -189,7 +189,7 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 			return nil
 		}
 		switch request.ToolKind {
-		case permission.ToolRead, permission.ToolGrep, permission.ToolWebFetch, permission.ToolWebSearch:
+		case permission.ToolRead, permission.ToolGrep, permission.ToolWebFetch, permission.ToolWebSearch, permission.ToolTask:
 			return nil
 		default:
 			return fmt.Errorf("plan mode is read-only; %s tool %q is blocked", request.ToolKind, request.ToolName)

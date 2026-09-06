@@ -124,6 +124,8 @@ func guessToolKind(name string) tool.Kind {
 		return tool.KindBash
 	case "write_file", "search_replace", "apply_patch":
 		return tool.KindEdit
+	case "update_todo":
+		return tool.KindTask
 	default:
 		return ""
 	}

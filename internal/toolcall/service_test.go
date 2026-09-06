@@ -547,3 +547,31 @@ func (r *customHandlerRegistry) Lookup(name string) (tool.Handler, bool) {
 func (r *customHandlerRegistry) Definitions() []tool.Definition {
 	return []tool.Definition{r.handler.Definition()}
 }
+
+func TestTaskMetadataAutoAllowedInAskButDeniedInDenyMode(t *testing.T) {
+	handler := &fakeHandler{definition: tool.Definition{Name: "update_todo", Description: "update tasks", Kind: tool.KindTask, Mutability: tool.MutabilityMutating}}
+	call, err := tool.NewCall("todo-1", "update_todo", json.RawMessage(`{"items":[]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompted := 0
+	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAsk), WithPrompt(func(context.Context, permission.Request) (permission.Resolution, error) {
+		prompted++
+		return permission.Resolution{Action: permission.ActionAllow}, nil
+	}))
+	if _, err := service.Call(context.Background(), call); err != nil {
+		t.Fatalf("ask mode task call: %v", err)
+	}
+	if prompted != 0 {
+		t.Fatalf("task metadata prompted %d times, want 0", prompted)
+	}
+	if handler.calls != 1 {
+		t.Fatalf("handler calls = %d", handler.calls)
+	}
+	if err := service.SetMode(permission.ModeDeny); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Call(context.Background(), call); !errors.Is(err, ErrPermissionDenied) {
+		t.Fatalf("deny mode error = %v", err)
+	}
+}
