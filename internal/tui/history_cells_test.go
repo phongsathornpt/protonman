@@ -618,3 +618,24 @@ func TestHistoryStateRenderTailContentMatchesFullSuffix(t *testing.T) {
 		t.Fatalf("tail mismatch\nwant: %q\n got: %q", want, got)
 	}
 }
+
+func TestExecCellSeparatesStderrAndStreamTruncation(t *testing.T) {
+	exit1 := 1
+	cell := &ExecCell{
+		Command: "go test ./...", Stdout: "package a ok\n", Stderr: "package b failed\n",
+		ExitCode: &exit1, StdoutTruncated: true, Truncated: true,
+		FailureCode: tool.ErrorCodeExecution,
+	}
+	rendered := strings.Join(cell.RenderWidth(80), "\n")
+	for _, want := range []string{"go test ./...", "exit 1", "package a ok", "stderr:", "package b failed", "stdout truncated"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("render missing %q:\n%s", want, rendered)
+		}
+	}
+	raw := strings.Join(cell.RawLines(), "\n")
+	for _, want := range []string{"stderr:", "exit 1", "failure: execution_error"} {
+		if !strings.Contains(raw, want) {
+			t.Fatalf("raw missing %q:\n%s", want, raw)
+		}
+	}
+}

@@ -295,14 +295,18 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 		switch typed := running.(type) {
 		case *ExecCell:
 			return &ExecCell{
-				CallID:      typed.CallID,
-				Name:        typed.Name,
-				Command:     typed.Command,
-				Body:        body,
-				ExitCode:    result.ExitCode,
-				Truncated:   result.Truncated,
-				Denied:      result.Denied,
-				FailureCode: failureCode,
+				CallID:          typed.CallID,
+				Name:            typed.Name,
+				Command:         typed.Command,
+				Body:            body,
+				Stdout:          result.Stdout,
+				Stderr:          result.Stderr,
+				ExitCode:        result.ExitCode,
+				Truncated:       result.Truncated,
+				StdoutTruncated: result.StdoutTruncated,
+				StderrTruncated: result.StderrTruncated,
+				Denied:          result.Denied,
+				FailureCode:     failureCode,
 			}
 		case *PatchCell:
 			return &PatchCell{
