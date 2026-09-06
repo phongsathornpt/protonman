@@ -275,3 +275,46 @@ func TestDirectModelSelectionRecognizesKnownFallbackModel(t *testing.T) {
 		t.Fatal("known fallback model was marked unverified")
 	}
 }
+
+func TestModelPickerFilterMatchesIDNameVendorAndFeatures(t *testing.T) {
+	view := &modelSelectPaneView{}
+	view.setModels([]model.RemoteModel{
+		{ID: "deepseek-v4", Name: "DeepSeek V4", Provider: "DeepSeek", Features: []string{"tools", "vision"}},
+		{ID: "qwen-flash", Name: "Qwen Flash", Provider: "Qwen", Features: []string{"text"}},
+	}, "")
+	for _, query := range []string{"deepseek-v4", "DeepSeek V4", "deepseek", "vision"} {
+		view.filter = query
+		view.applyFilter("")
+		if len(view.models) != 1 || view.models[0].ID != "deepseek-v4" {
+			t.Fatalf("filter %q = %#v", query, view.models)
+		}
+	}
+}
+
+func TestModelPickerFilterCanReturnNoResults(t *testing.T) {
+	view := &modelSelectPaneView{}
+	view.setModels([]model.RemoteModel{{ID: "one"}, {ID: "two"}}, "")
+	view.filter = "missing"
+	view.applyFilter("")
+	if len(view.models) != 0 || len(view.allModels) != 2 {
+		t.Fatalf("filtered/all models = %#v / %#v", view.models, view.allModels)
+	}
+}
+
+func TestModelPickerSearchModeAcceptsReservedLetters(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	view := newModelSelectPaneView(m)
+	m.bottom.push(view)
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = updated.(*bubbleModel)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q', 'w', 'e', 'n'}})
+	m = updated.(*bubbleModel)
+	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if view.filter != "qwen" {
+		t.Fatalf("filter = %q, want qwen", view.filter)
+	}
+	if !m.bottom.has(modelSelectViewID) {
+		t.Fatal("reserved q closed picker while search mode was active")
+	}
+}

@@ -28,6 +28,9 @@ type modelSelectPaneView struct {
 	index          int
 	offset         int
 	models         []model.RemoteModel
+	allModels      []model.RemoteModel
+	filter         string
+	filtering      bool
 	providerNames  []string
 	providerIndex  int
 	fetchRequestID uint64
@@ -77,18 +80,50 @@ func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
 	}
 
 	view := &modelSelectPaneView{
-		models:        modelsList,
 		providerNames: providers,
 		providerIndex: providerIdx,
 	}
+	activeModel := ""
 	if m != nil {
-		view.resetSelection(m.activeModel)
+		activeModel = m.activeModel
 	}
+	view.setModels(modelsList, activeModel)
 	return view
 }
 
 func (*modelSelectPaneView) ID() string             { return modelSelectViewID }
 func (*modelSelectPaneView) ReplacesComposer() bool { return true }
+
+func (v *modelSelectPaneView) setModels(models []model.RemoteModel, activeModel string) {
+	if v == nil {
+		return
+	}
+	v.allModels = append([]model.RemoteModel(nil), models...)
+	v.applyFilter(activeModel)
+}
+
+func (v *modelSelectPaneView) applyFilter(activeModel string) {
+	if v == nil {
+		return
+	}
+	query := strings.ToLower(strings.TrimSpace(v.filter))
+	if query == "" {
+		v.models = append([]model.RemoteModel(nil), v.allModels...)
+		v.resetSelection(activeModel)
+		return
+	}
+	filtered := make([]model.RemoteModel, 0, len(v.allModels))
+	for _, md := range v.allModels {
+		haystack := strings.ToLower(strings.Join([]string{
+			md.ID, md.Name, md.Provider, strings.Join(md.Features, " "),
+		}, " "))
+		if strings.Contains(haystack, query) {
+			filtered = append(filtered, md)
+		}
+	}
+	v.models = filtered
+	v.resetSelection(activeModel)
+}
 
 func (v *modelSelectPaneView) resetSelection(activeModel string) {
 	if v == nil {
@@ -122,6 +157,7 @@ func (v *modelSelectPaneView) beginFetch(parent context.Context, providerName st
 	v.loading = true
 	v.err = nil
 	v.models = nil
+	v.allModels = nil
 	v.index = 0
 	v.offset = 0
 	return fetchProviderModelsCmd(providerFetchRequest{
@@ -151,8 +187,7 @@ func (v *modelSelectPaneView) loadProvider(m *bubbleModel, force bool) tea.Cmd {
 	v.err = nil
 	if !force {
 		if models, ok := m.modelCatalogs.freshModels(providerName, time.Now(), modelCatalogTTL); ok {
-			v.models = models
-			v.resetSelection(m.activeModel)
+			v.setModels(models, m.activeModel)
 			return nil
 		}
 	}
@@ -168,8 +203,7 @@ func (v *modelSelectPaneView) loadProvider(m *bubbleModel, force bool) tea.Cmd {
 	if configured {
 		baseURL = cfg.BaseURL
 	}
-	v.models = model.FallbackModelsForProvider(providerName, baseURL)
-	v.resetSelection(m.activeModel)
+	v.setModels(model.FallbackModelsForProvider(providerName, baseURL), m.activeModel)
 	return nil
 }
 
@@ -252,8 +286,16 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 		title += " · tab provider"
 	}
 
-	rows := make([]string, 0, len(visible)*2+6)
-	rows = append(rows, brandStyle.Render(title), "")
+	rows := make([]string, 0, len(visible)*2+8)
+	rows = append(rows, brandStyle.Render(title))
+	if v.filtering || strings.TrimSpace(v.filter) != "" {
+		search := "Search: " + v.filter
+		if v.filtering {
+			search += "█"
+		}
+		rows = append(rows, mutedStyle.Render(truncateWithEllipsis(search, maxWidth-2)))
+	}
+	rows = append(rows, "")
 
 	if v.offset > 0 {
 		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ↑ %d more", v.offset)))
@@ -310,7 +352,7 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ↓ %d more", len(v.models)-visibleEnd)))
 	}
 
-	footer := "↑/↓ move · pgup/pgdn page · home/end · enter select · p providers · esc close"
+	footer := "↑/↓ move · enter select · / search · ctrl+u clear · p providers · esc close"
 	if layoutModeForHeight(m.height) == layoutTiny {
 		footer = "↑/↓ · enter · esc"
 		rows = compactPickerRows(rows)
@@ -320,7 +362,37 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 }
 
 func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+	if v.filtering {
+		switch message.Type {
+		case tea.KeyEsc:
+			v.filtering = false
+			return true, nil
+		case tea.KeyBackspace, tea.KeyCtrlH, tea.KeyDelete:
+			runes := []rune(v.filter)
+			if len(runes) > 0 {
+				v.filter = string(runes[:len(runes)-1])
+				v.applyFilter(m.activeModel)
+			}
+			return true, nil
+		case tea.KeyEnter:
+			v.filtering = false
+			return true, nil
+		case tea.KeyRunes:
+			v.filter += string(message.Runes)
+			v.applyFilter(m.activeModel)
+			return true, nil
+		}
+	}
+
 	switch message.String() {
+	case "/":
+		v.filtering = true
+		return true, nil
+	case "ctrl+u":
+		v.filter = ""
+		v.filtering = false
+		v.applyFilter(m.activeModel)
+		return true, nil
 	case "esc", "ctrl+c", "ctrl+p", "alt+m", "q":
 		v.cancelFetch()
 		m.bottom.remove(modelSelectViewID)
