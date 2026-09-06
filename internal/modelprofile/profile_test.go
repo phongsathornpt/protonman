@@ -84,3 +84,23 @@ func TestUnknownModelRemainsUnknown(t *testing.T) {
 		t.Fatalf("unknown model = %+v", got)
 	}
 }
+
+func TestResolveProfileReasoningClampsPortablePreference(t *testing.T) {
+	profile := Resolved{Reasoning: Reasoning{
+		Support: SupportYes,
+		Levels:  []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningMedium},
+	}}
+	if got, ok := profile.ResolveProfileReasoning(sdk.ReasoningHigh); !ok || got != sdk.ReasoningMedium {
+		t.Fatalf("ResolveProfileReasoning(high) = %q, %v", got, ok)
+	}
+	if got, ok := profile.ResolveProfileReasoning(sdk.ReasoningLow); !ok || got != sdk.ReasoningLow {
+		t.Fatalf("ResolveProfileReasoning(low) = %q, %v", got, ok)
+	}
+}
+
+func TestResolveProfileReasoningPreservesUnknownProviderDefault(t *testing.T) {
+	profile := Resolved{Reasoning: Reasoning{Support: SupportUnknown}}
+	if got, ok := profile.ResolveProfileReasoning(sdk.ReasoningHigh); ok || got != sdk.ReasoningDefault {
+		t.Fatalf("ResolveProfileReasoning() = %q, %v", got, ok)
+	}
+}

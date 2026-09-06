@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/tool"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 type dummyHandler struct {
@@ -253,6 +254,23 @@ func TestProfilePromptsIncludeSharedToolContract(t *testing.T) {
 		prompt := SystemPromptForProfile(profile)
 		if !strings.Contains(prompt, "Tool names are exact identifiers") {
 			t.Fatalf("profile %q missing shared tool contract", profile)
+		}
+	}
+}
+
+func TestProfileSpecsDeclarePortableReasoningEffort(t *testing.T) {
+	want := map[Profile]sdk.ReasoningEffort{
+		ProfileExplorer: sdk.ReasoningLow,
+		ProfileReviewer: sdk.ReasoningMedium,
+		ProfileWorker:   sdk.ReasoningMedium,
+		ProfilePOW:      sdk.ReasoningLow,
+		ProfileDEX:      sdk.ReasoningHigh,
+		ProfileINT:      sdk.ReasoningHigh,
+	}
+	for profile, effort := range want {
+		spec, ok := SpecForProfile(profile)
+		if !ok || spec.Reasoning != effort {
+			t.Fatalf("SpecForProfile(%q).Reasoning = %q, want %q", profile, spec.Reasoning, effort)
 		}
 	}
 }

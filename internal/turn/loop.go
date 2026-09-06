@@ -207,6 +207,18 @@ func WithSystemPromptSpec(spec agentprompt.Spec) Option {
 	}
 }
 
+// WithReasoningEffort sets a portable reasoning preference. The loop only
+// forwards it when the resolved model profile confirms reasoning support.
+func WithReasoningEffort(effort sdk.ReasoningEffort) Option {
+	return func(loop *Loop) error {
+		if !effort.Valid() {
+			return fmt.Errorf("%w: unsupported reasoning effort %q", ErrInvalidLoop, effort)
+		}
+		loop.reasoningEffort = effort
+		return nil
+	}
+}
+
 // WithMaxRounds bounds model responses that can request more tools.
 // A value of 0 disables this count bound; other turn bounds still apply.
 func WithMaxRounds(rounds int) Option {
@@ -346,6 +358,7 @@ type Loop struct {
 	maxToolResultBytesPerRound    int
 	maxToolResultBytesPerTurn     int
 	requireInitialToolUse         bool
+	reasoningEffort               sdk.ReasoningEffort
 	promptSpec                    *agentprompt.Spec
 	skills                        []skill.CatalogItem
 	skillRegistry                 *skill.Registry
@@ -655,6 +668,13 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		}
 		if round == 1 && l.requireInitialToolUse && dispatch.enabled() && len(sdkTools) > 0 {
 			request.Options.ToolChoice = sdk.ToolChoiceRequired
+		}
+		if l.reasoningEffort != sdk.ReasoningDefault {
+			if profile, ok := model.ResolvedModelProfile(l.languageModel); ok {
+				if effective, supported := profile.ResolveProfileReasoning(l.reasoningEffort); supported {
+					request.Options.ReasoningEffort = effective
+				}
+			}
 		}
 		if err := request.Validate(); err != nil {
 			terminalReason = "request_validation_failed"
