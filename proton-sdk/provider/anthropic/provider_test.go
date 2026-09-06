@@ -199,3 +199,41 @@ func TestAnthropicCapabilities(t *testing.T) {
 		t.Fatalf("Capabilities() = %#v, want tool result errors", caps)
 	}
 }
+
+func TestAnthropicAppliesToolProviderOptions(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		tools, _ := body["tools"].([]any)
+		toolObj, _ := tools[0].(map[string]any)
+		cache, _ := toolObj["cache_control"].(map[string]any)
+		if cache["type"] != "ephemeral" {
+			t.Fatalf("tool = %#v, want cache_control", toolObj)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"type\":\"message_stop\"}\n\n"))
+	}))
+	defer server.Close()
+	model := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("claude-test")
+	stream, err := model.Stream(context.Background(), sdk.Request{
+		Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}},
+		Tools:    []sdk.Tool{{Name: "lookup", Description: "lookup", ProviderOptions: sdk.ProviderOptions{"anthropic": json.RawMessage(`{"cache_control":{"type":"ephemeral"}}`)}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+}
+
+func TestAnthropicToolProviderOptionsCannotOverrideCanonicalFields(t *testing.T) {
+	model := NewProvider(ProviderOptions{BaseURL: "http://127.0.0.1"}).Model("claude-test")
+	_, err := model.Stream(context.Background(), sdk.Request{
+		Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}},
+		Tools:    []sdk.Tool{{Name: "lookup", Description: "lookup", ProviderOptions: sdk.ProviderOptions{"anthropic": json.RawMessage(`{"name":"other"}`)}}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "cannot override canonical") {
+		t.Fatalf("error = %v, want protected tool field error", err)
+	}
+}

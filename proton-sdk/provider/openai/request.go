@@ -34,10 +34,21 @@ type chatTool struct {
 	Function chatFunction `json:"function"`
 }
 type chatFunction struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description,omitempty"`
-	Parameters  map[string]any `json:"parameters,omitempty"`
+	Name            string          `json:"name"`
+	Description     string          `json:"description,omitempty"`
+	Parameters      map[string]any  `json:"parameters,omitempty"`
+	ProviderOptions json.RawMessage `json:"-"`
 }
+
+func (f chatFunction) MarshalJSON() ([]byte, error) {
+	base := struct {
+		Name        string         `json:"name"`
+		Description string         `json:"description,omitempty"`
+		Parameters  map[string]any `json:"parameters,omitempty"`
+	}{f.Name, f.Description, f.Parameters}
+	return providerutil.MarshalWithOptions(base, f.ProviderOptions, "name", "description", "parameters")
+}
+
 type chatRequest struct {
 	Model      string        `json:"model"`
 	Messages   []chatMessage `json:"messages"`
@@ -47,11 +58,23 @@ type chatRequest struct {
 	MaxTokens  int           `json:"max_tokens,omitempty"`
 }
 type responsesTool struct {
-	Type        string         `json:"type"`
-	Name        string         `json:"name"`
-	Description string         `json:"description,omitempty"`
-	Parameters  map[string]any `json:"parameters,omitempty"`
+	Type            string          `json:"type"`
+	Name            string          `json:"name"`
+	Description     string          `json:"description,omitempty"`
+	Parameters      map[string]any  `json:"parameters,omitempty"`
+	ProviderOptions json.RawMessage `json:"-"`
 }
+
+func (t responsesTool) MarshalJSON() ([]byte, error) {
+	base := struct {
+		Type        string         `json:"type"`
+		Name        string         `json:"name"`
+		Description string         `json:"description,omitempty"`
+		Parameters  map[string]any `json:"parameters,omitempty"`
+	}{t.Type, t.Name, t.Description, t.Parameters}
+	return providerutil.MarshalWithOptions(base, t.ProviderOptions, "type", "name", "description", "parameters")
+}
+
 type responsesRequest struct {
 	Model           string          `json:"model"`
 	Stream          bool            `json:"stream"`
@@ -168,7 +191,7 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 		}
 		tools := make([]responsesTool, 0, len(request.Tools))
 		for _, tool := range request.Tools {
-			tools = append(tools, responsesTool{Type: "function", Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema})
+			tools = append(tools, responsesTool{Type: "function", Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema, ProviderOptions: tool.ProviderOptions["openai"]})
 		}
 		encoded, err := providerutil.MarshalWithOptions(responsesRequest{Model: m.modelID, Stream: true, Input: input, Tools: tools, ToolChoice: toolChoice(len(tools)), MaxOutputTokens: request.Options.MaxOutputTokens}, request.Options.ProviderOptions["openai"], "model", "stream", "input", "tools", "tool_choice", "max_output_tokens")
 		if err != nil {
@@ -209,7 +232,7 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 	}
 	tools := make([]chatTool, 0, len(request.Tools))
 	for _, tool := range request.Tools {
-		tools = append(tools, chatTool{Type: "function", Function: chatFunction{Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema}})
+		tools = append(tools, chatTool{Type: "function", Function: chatFunction{Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema, ProviderOptions: tool.ProviderOptions["openai"]}})
 	}
 	encoded, err := providerutil.MarshalWithOptions(chatRequest{Model: m.modelID, Messages: messages, Stream: true, Tools: tools, ToolChoice: toolChoice(len(tools)), MaxTokens: request.Options.MaxOutputTokens}, request.Options.ProviderOptions["openai"], "model", "messages", "stream", "tools", "tool_choice", "max_tokens")
 	if err != nil {
