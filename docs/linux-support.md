@@ -4,13 +4,13 @@ Proton supports Linux as a first-class CLI target. The TUI uses terminal detecti
 
 ## Current sandbox backend
 
-Linux filesystem confinement currently uses `bwrap`. Profiles that require confinement fail closed when `bwrap` is unavailable or blocked by the host kernel/security policy. `--sandbox off` does not require `bwrap`.
+Linux now uses a native Landlock backend for the `workspace` profile when the kernel exposes Landlock. The policy keeps the host filesystem readable, grants writes only inside the workspace, and preserves the standard writable character devices required by shells. Network-restricted profiles (`read-only` and `strict`) still use `bwrap` until native network namespace isolation lands. `--sandbox off` requires neither backend.
 
 ## Native Go migration
 
-The first native layer is implemented: Proton probes the Linux Landlock ABI and user-namespace configuration directly with Go and `golang.org/x/sys/unix`. Sandbox errors include those capabilities when `bwrap` is unavailable.
+Proton probes the Linux Landlock ABI and user-namespace configuration directly with Go and `golang.org/x/sys/unix`. The native child bootstrap applies Landlock before executing the shell, so the parent Proton/TUI process remains unrestricted. Sandbox errors include detected capabilities when a required backend is unavailable.
 
-The remaining native backend is being introduced in layers: Landlock filesystem rules, network namespaces, and native PTY integration tests. Bubble Tea remains the TUI framework; no TUI rewrite is required.
+The remaining native backend is being introduced in layers: network namespaces and native PTY integration tests. Bubble Tea remains the TUI framework; no TUI rewrite is required.
 
 ## Compatibility testing
 
