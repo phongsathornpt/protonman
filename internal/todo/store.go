@@ -1,0 +1,50 @@
+package todo
+
+import (
+	"context"
+	"slices"
+	"sync"
+)
+
+// Store owns the current task snapshot and serializes task mutations.
+type Store struct {
+	mu       sync.RWMutex
+	revision uint64
+	items    []Item
+}
+
+func NewStore(initial []Item) (*Store, error) {
+	if err := ValidateItems(initial); err != nil {
+		return nil, err
+	}
+	return &Store{items: CloneItems(initial)}, nil
+}
+
+func (s *Store) Snapshot() Snapshot {
+	if s == nil {
+		return Snapshot{}
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return Snapshot{Revision: s.revision, Items: CloneItems(s.items)}
+}
+
+func (s *Store) Replace(ctx context.Context, items []Item) (Snapshot, error) {
+	if err := ctx.Err(); err != nil {
+		return Snapshot{}, err
+	}
+	if err := ValidateItems(items); err != nil {
+		return Snapshot{}, err
+	}
+	next := CloneItems(items)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return Snapshot{}, err
+	}
+	if !slices.Equal(s.items, next) {
+		s.items = next
+		s.revision++
+	}
+	return Snapshot{Revision: s.revision, Items: CloneItems(s.items)}, nil
+}
