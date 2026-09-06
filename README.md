@@ -247,7 +247,7 @@ Proton routes agent model calls through `proton-sdk`, with native OpenAI-compati
 
 Configure providers directly inside the TUI with `/provider` or via `~/.proton/config.toml`.
 
-`proton-sdk` owns provider-neutral agent messages, tools, streaming events, usage/finish metadata, model registry, middleware, and provider wire adapters. The Proton CLI keeps permission policy, tool execution, sessions, and turn orchestration outside the SDK.
+`proton-sdk` owns provider-neutral agent messages, tools, streaming events, usage/finish metadata, model registry, middleware, and provider wire adapters. The Proton CLI keeps permission policy, tool execution, sessions, and turn orchestration outside the SDK. See [`docs/proton-sdk.md`](docs/proton-sdk.md) for the agent-first SDK contract and provider extension boundaries.
 
 ---
 
