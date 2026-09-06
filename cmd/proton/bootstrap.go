@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/projectTHORN/proton/internal/agent"
+	"github.com/projectTHORN/proton/internal/agentprompt"
 	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/config"
@@ -180,7 +181,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	if err != nil {
 		return nil, fmt.Errorf("create tool-call service: %w", err)
 	}
-	initialRunner := buildInitialRunner(loadedConfig, sessionID, skillRegistry, coordinator, service)
+	initialRunner := buildInitialRunner(loadedConfig, sessionID, workDir, skillRegistry, coordinator, service)
 	failed = false
 	return &appRuntime{workDir: workDir, config: loadedConfig, coordinator: coordinator, todoStore: todoStore, registry: registry, stateStore: stateStore, sessionID: sessionID, state: state, service: service, skills: skillRegistry, runner: initialRunner}, nil
 }
@@ -215,7 +216,7 @@ func applyAgentProfile(loadedConfig *config.Snapshot, state *session.State, requ
 	return nil
 }
 
-func buildInitialRunner(cfg config.Snapshot, sessionID string, skills *skill.Registry, coordinator *agent.Coordinator, service *toolcall.Service) turn.Runner {
+func buildInitialRunner(cfg config.Snapshot, sessionID, workDir string, skills *skill.Registry, coordinator *agent.Coordinator, service *toolcall.Service) turn.Runner {
 	if cfg.Model.Default == "" {
 		return nil
 	}
@@ -229,7 +230,15 @@ func buildInitialRunner(cfg config.Snapshot, sessionID string, skills *skill.Reg
 	}
 	languageModel := model.NewProviderLanguageModel(providerKey, provider.Type, provider.BaseURL, provider.APIKey, cfg.Model.Default, model.WithSessionID(sessionID), model.WithRequestTimeout(cfg.Runtime.ModelRequestTimeout))
 	coordinator.SetLanguageModel(languageModel)
+	promptSpec := agentprompt.Spec{Workspace: workDir}
+	if profileName := strings.TrimSpace(cfg.Agent.Profile); profileName != "" {
+		if profile, err := agent.ParseProfile(profileName); err == nil {
+			promptSpec.Profile = string(profile)
+			promptSpec.Role = agent.RolePromptForProfile(profile)
+		}
+	}
 	loopOptions := []turn.Option{
+		turn.WithSystemPromptSpec(promptSpec),
 		turn.WithMaxRounds(cfg.Agent.MaxRounds),
 		turn.WithMaxToolCalls(cfg.Agent.MaxToolCalls),
 		turn.WithTurnTimeout(cfg.Runtime.TurnTimeout),
