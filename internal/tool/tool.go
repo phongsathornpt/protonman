@@ -392,9 +392,28 @@ func EffectiveMutability(definition Definition) Mutability {
 	}
 }
 
-// EffectiveCallMutability refines a definition's static metadata with safe
-// per-call knowledge when available. Unknown shell effects remain mutating.
+// EffectiveCallEffect reports the per-call shell effect for grant scoping.
+// Unknown shell effects stay unknown so callers fail closed. Non-bash tools
+// map read-only mutability to read-only, everything else to mutating.
+func EffectiveCallEffect(definition Definition, arguments json.RawMessage) CommandEffect {
+	if definition.Kind != KindBash {
+		if EffectiveMutability(definition) == MutabilityReadOnly {
+			return CommandEffectReadOnly
+		}
+		return CommandEffectMutating
+	}
+	var input struct {
+		Command string `json:"command"`
+	}
+	if err := json.Unmarshal(arguments, &input); err != nil {
+		return CommandEffectUnknown
+	}
+	return AnalyzeCommand(input.Command).Effect
+}
+
 // EffectiveCallRisk reports proven destructive behavior for calls whose arguments can be analyzed safely.
+// Undecodable arguments and unknown shell effects fail closed as destructive,
+// so session grants and one-shot clamps never treat the unknown as safe.
 func EffectiveCallRisk(definition Definition, arguments json.RawMessage) CommandRisk {
 	if definition.Kind != KindBash {
 		return CommandRiskNormal
@@ -403,9 +422,13 @@ func EffectiveCallRisk(definition Definition, arguments json.RawMessage) Command
 		Command string `json:"command"`
 	}
 	if err := json.Unmarshal(arguments, &input); err != nil {
-		return CommandRiskNormal
+		return CommandRiskDestructive
 	}
-	return AnalyzeCommand(input.Command).Risk
+	analysis := AnalyzeCommand(input.Command)
+	if analysis.Effect == CommandEffectUnknown {
+		return CommandRiskDestructive
+	}
+	return analysis.Risk
 }
 
 func EffectiveCallMutability(definition Definition, arguments json.RawMessage) Mutability {
