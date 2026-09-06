@@ -50,3 +50,33 @@ func TestApplyPatchPermissionDetailShowsManagedPaths(t *testing.T) {
 		t.Fatalf("PermissionDetail() = %q, want regular path", got)
 	}
 }
+
+func TestApplyPatchPermissionDetailSummarizesOperations(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	h := NewApplyPatch(ws, &recordingCheckpointStore{id: "summary"})
+	provider := h.(tool.DetailProvider)
+	patch := `*** Begin Patch
+*** Add File: add.go
++package test
+*** Update File: modify.go
+@@
+-old
++new
+*** Update File: move.go
+*** Move to: moved.go
+@@
+-old
++new
+*** Delete File: delete.go
+*** End Patch`
+	args, _ := json.Marshal(map[string]any{"patch": patch})
+	got := provider.PermissionDetail(args)
+	for _, want := range []string{"add 1", "modify 1", "move 1", "delete 1"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("PermissionDetail() = %q, missing %q", got, want)
+		}
+	}
+	if strings.Count(got, "move.go") != 1 || strings.Count(got, "moved.go") != 1 {
+		t.Fatalf("PermissionDetail() duplicated move paths: %q", got)
+	}
+}

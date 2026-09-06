@@ -104,23 +104,60 @@ func (h applyPatchHandler) PermissionDetail(arguments json.RawMessage) string {
 	if err != nil || len(operations) == 0 {
 		return ""
 	}
-	details := make([]string, 0, len(operations))
-	seen := make(map[string]struct{}, len(operations))
+	counts := summarizePatchOperations(operations)
+	details := []string{counts.String()}
+	seen := make(map[string]struct{}, len(operations)*2)
 	for _, op := range operations {
-		if op.path != "" {
-			if _, ok := seen[op.path]; !ok {
-				seen[op.path] = struct{}{}
-				details = append(details, managedFileDetail(op.path, nil))
+		for _, path := range []string{op.path, op.movePath} {
+			if path == "" {
+				continue
 			}
-		}
-		if op.movePath != "" {
-			if _, ok := seen[op.movePath]; !ok {
-				seen[op.movePath] = struct{}{}
-				details = append(details, managedFileDetail(op.movePath, nil))
+			if _, ok := seen[path]; ok {
+				continue
 			}
+			seen[path] = struct{}{}
+			details = append(details, managedFileDetail(path, nil))
 		}
 	}
-	return strings.Join(details, ", ")
+	return strings.Join(details, " · ")
+}
+
+type patchOperationSummary struct {
+	adds, deletes, modifies, moves int
+}
+
+func summarizePatchOperations(operations []patchOperation) patchOperationSummary {
+	var summary patchOperationSummary
+	for _, op := range operations {
+		switch {
+		case op.kind == patchAdd:
+			summary.adds++
+		case op.kind == patchDelete:
+			summary.deletes++
+		case op.kind == patchUpdate && op.movePath != "":
+			summary.moves++
+		case op.kind == patchUpdate:
+			summary.modifies++
+		}
+	}
+	return summary
+}
+
+func (s patchOperationSummary) String() string {
+	parts := make([]string, 0, 4)
+	if s.adds > 0 {
+		parts = append(parts, fmt.Sprintf("add %d", s.adds))
+	}
+	if s.modifies > 0 {
+		parts = append(parts, fmt.Sprintf("modify %d", s.modifies))
+	}
+	if s.moves > 0 {
+		parts = append(parts, fmt.Sprintf("move %d", s.moves))
+	}
+	if s.deletes > 0 {
+		parts = append(parts, fmt.Sprintf("delete %d", s.deletes))
+	}
+	return strings.Join(parts, " · ")
 }
 
 func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {

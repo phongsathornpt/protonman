@@ -529,8 +529,8 @@ func TestPermissionDetailProviders(t *testing.T) {
 +package pkg
 *** End Patch`
 	args, _ := json.Marshal(map[string]any{"patch": patchPayload})
-	if detail := detailedPatch.PermissionDetail(args); detail != "pkg/math.go" {
-		t.Fatalf("apply_patch PermissionDetail = %q, want pkg/math.go", detail)
+	if detail := detailedPatch.PermissionDetail(args); detail != "add 1 · pkg/math.go" {
+		t.Fatalf("apply_patch PermissionDetail = %q, want add summary", detail)
 	}
 
 	// Test list_dir detail extraction with aliases and default
