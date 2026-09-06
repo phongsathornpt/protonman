@@ -52,7 +52,7 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 		}
 		resp, err := m.provider.options.HTTPClient.Do(req)
 		if err != nil {
-			lastErr = fmt.Errorf("execute anthropic request: %w", err)
+			lastErr = sdk.NewTransportError("anthropic", err)
 			continue
 		}
 		if resp.StatusCode == http.StatusOK {
@@ -60,7 +60,7 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 		}
 		data, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 		resp.Body.Close()
-		lastErr = fmt.Errorf("anthropic returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+		lastErr = anthropicHTTPError(resp.StatusCode, data)
 		if !retryableStatus(resp.StatusCode) {
 			return nil, lastErr
 		}
@@ -81,4 +81,21 @@ func messagesEndpoint(baseURL string) string {
 
 func retryableStatus(status int) bool {
 	return status == http.StatusTooManyRequests || status == http.StatusInternalServerError || status == http.StatusBadGateway || status == http.StatusServiceUnavailable || status == http.StatusGatewayTimeout
+}
+func anthropicHTTPError(status int, body []byte) error {
+	var payload struct {
+		Error struct {
+			Type    string `json:"type"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	message := strings.TrimSpace(string(body))
+	code := ""
+	if json.Unmarshal(body, &payload) == nil {
+		code = payload.Error.Type
+		if strings.TrimSpace(payload.Error.Message) != "" {
+			message = payload.Error.Message
+		}
+	}
+	return sdk.NewProviderError("anthropic", status, code, message)
 }

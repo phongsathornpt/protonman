@@ -203,3 +203,23 @@ func TestOpenAIGeneratesFallbackToolCallID(t *testing.T) {
 	}
 	t.Fatal("missing tool call event")
 }
+func TestOpenAIHTTPErrorIsNormalized(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":{"message":"slow down","type":"rate_limit_error","code":"rate_limit_exceeded"}}`))
+	}))
+	defer server.Close()
+
+	model := NewProvider(ProviderOptions{BaseURL: server.URL, MaxRetries: 0}).Model("test-model")
+	_, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var providerErr *sdk.ProviderError
+	if !errors.As(err, &providerErr) {
+		t.Fatalf("error = %T, want *sdk.ProviderError", err)
+	}
+	if providerErr.Kind != sdk.ErrorRateLimit || providerErr.StatusCode != http.StatusTooManyRequests || !providerErr.Retryable {
+		t.Fatalf("provider error = %#v", providerErr)
+	}
+}
