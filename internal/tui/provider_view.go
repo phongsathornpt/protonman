@@ -475,6 +475,9 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 			if len(md.Features) > 0 {
 				line += fmt.Sprintf(" (%s)", strings.Join(md.Features, ", "))
 			}
+			if reasoning := remoteModelReasoningSummary(strings.TrimSpace(v.nameInput.Value()), md, false); reasoning != "" {
+				line += " [" + reasoning + "]"
+			}
 			if idx == v.selectedIndex {
 				rows = append(rows, prefix+brandStyle.Render(line))
 			} else {
