@@ -8,6 +8,7 @@ import (
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 func (c *Coordinator) Close() error {
@@ -61,6 +62,20 @@ func (c *Coordinator) Client() model.Client {
 	c.agentsMu.RLock()
 	defer c.agentsMu.RUnlock()
 	return c.client
+}
+
+// SetLanguageModel dynamically updates the proton-sdk model used by child subagents.
+func (c *Coordinator) SetLanguageModel(languageModel sdk.LanguageModel) {
+	c.agentsMu.Lock()
+	defer c.agentsMu.Unlock()
+	c.languageModel = languageModel
+}
+
+// LanguageModel returns the proton-sdk model used by child subagents.
+func (c *Coordinator) LanguageModel() sdk.LanguageModel {
+	c.agentsMu.RLock()
+	defer c.agentsMu.RUnlock()
+	return c.languageModel
 }
 
 // SetPermissionMode dynamically updates the permission mode for subagents.

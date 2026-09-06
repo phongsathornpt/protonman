@@ -204,6 +204,7 @@ func (m *bubbleModel) reconfigureRunner() {
 		m.runner = loop
 		if m.coordinator != nil {
 			m.coordinator.SetClient(client)
+			m.coordinator.SetLanguageModel(languageModel)
 		}
 		if m.bottom != nil {
 			m.bottom.setHasRunner(true)
