@@ -680,3 +680,21 @@ func newTestServerWithRunner(t *testing.T, mode permission.Mode, runner applicat
 	}
 	return server
 }
+
+func TestServeCancellationInterruptsClosableInput(t *testing.T) {
+	server := newTestServer(t, permission.ModeAlwaysApprove)
+	reader, writer := io.Pipe()
+	defer writer.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- server.Serve(ctx, reader, io.Discard) }()
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Serve error = %v, want context canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Serve did not return after context cancellation")
+	}
+}
