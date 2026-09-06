@@ -10,6 +10,7 @@ import (
 
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
+	"github.com/projectTHORN/proton/internal/permission"
 )
 
 func TestModelCatalogStateScopesByProvider(t *testing.T) {
@@ -326,5 +327,25 @@ func TestCanonicalSlashNameNormalizesModelAlias(t *testing.T) {
 	}
 	if got := canonicalSlashName("MODEL"); got != "model" {
 		t.Fatalf("canonical uppercase name = %q, want model", got)
+	}
+}
+
+func TestRemoteModelSupportsVisionUsesCatalogFeatures(t *testing.T) {
+	if remoteModelSupportsVision(model.RemoteModel{ID: "text-only", Features: []string{"tools", "coding"}}) {
+		t.Fatal("text-only catalog model unexpectedly supports vision")
+	}
+	if !remoteModelSupportsVision(model.RemoteModel{ID: "vision", Features: []string{"tools", "Vision"}}) {
+		t.Fatal("vision feature was not detected case-insensitively")
+	}
+}
+
+func TestActiveRemoteModelFindsSelectedCatalogModel(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeProvider = "protonman"
+	m.activeModel = "TEXT-ONLY"
+	m.modelCatalogs.set("ProtonMan", []model.RemoteModel{{ID: "text-only", Features: []string{"tools"}}})
+	got, ok := m.activeRemoteModel()
+	if !ok || got.ID != "text-only" {
+		t.Fatalf("activeRemoteModel() = %#v, %v", got, ok)
 	}
 }

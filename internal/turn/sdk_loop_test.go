@@ -158,3 +158,30 @@ func TestLoopMarksMCPToolsDynamic(t *testing.T) {
 		t.Fatalf("tools = %#v, want one dynamic MCP tool", languageModel.requests)
 	}
 }
+
+func TestLoopRejectsImageForProviderModelCapabilityOverride(t *testing.T) {
+	policy, err := permission.NewPolicy(permission.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := toolcall.NewService(emptyRegistry{}, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	languageModel := model.NewProviderLanguageModel(
+		model.DefaultOpenAIName,
+		string(model.ProviderProtocolOpenAI),
+		"http://127.0.0.1:1/v1",
+		"key",
+		"text-only",
+		model.WithVisionSupport(false),
+	)
+	loop, err := NewLoop(languageModel, service)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Parts: []model.ContentPart{{Type: model.ContentPartImage, MIMEType: "image/png", Data: "abc"}}}}, nil)
+	if !errors.Is(err, ErrUnsupportedModelCapability) {
+		t.Fatalf("Run() error = %v, want ErrUnsupportedModelCapability", err)
+	}
+}

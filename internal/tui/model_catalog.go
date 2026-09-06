@@ -72,3 +72,24 @@ func (m *bubbleModel) modelIDKnown(provider, modelID string) bool {
 	}
 	return false
 }
+
+func (m *bubbleModel) activeRemoteModel() (model.RemoteModel, bool) {
+	if m == nil {
+		return model.RemoteModel{}, false
+	}
+	for _, candidate := range m.modelCatalogs.models(m.activeProvider) {
+		if strings.EqualFold(strings.TrimSpace(candidate.ID), strings.TrimSpace(m.activeModel)) {
+			return candidate, true
+		}
+	}
+	return model.RemoteModel{}, false
+}
+
+func remoteModelSupportsVision(md model.RemoteModel) bool {
+	for _, feature := range md.Features {
+		if strings.EqualFold(strings.TrimSpace(feature), "vision") {
+			return true
+		}
+	}
+	return false
+}
