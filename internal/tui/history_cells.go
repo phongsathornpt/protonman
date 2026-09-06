@@ -996,6 +996,83 @@ func (s *HistoryState) committedRenderText() string {
 	return s.cachedRenderText
 }
 
+// RenderTailContent renders only the newest rich transcript lines. It reports
+// whether older lines were omitted so callers can hydrate full scrollback on demand.
+func (s *HistoryState) RenderTailContent(maxLines int) (string, bool) {
+	if s == nil || maxLines <= 0 {
+		return s.RenderContent(), false
+	}
+	s.buildCommittedCache()
+	var activeLines []string
+	if s.active != nil {
+		activeLines = renderHistoryCell(s.active, s.renderWidth)
+	}
+	separator := len(s.cachedRender) > 0 && len(activeLines) > 0
+	totalLines := len(s.cachedRender) + len(activeLines)
+	if separator {
+		totalLines++
+	}
+	if totalLines <= maxLines {
+		return s.RenderContent(), false
+	}
+
+	remaining := maxLines
+	activeStart := len(activeLines)
+	if remaining > 0 && len(activeLines) > 0 {
+		take := minInt(remaining, len(activeLines))
+		activeStart -= take
+		remaining -= take
+	}
+	includeSeparator := false
+	if remaining > 0 && separator && activeStart == 0 {
+		includeSeparator = true
+		remaining--
+	}
+	committedStart := len(s.cachedRender)
+	if remaining > 0 {
+		take := minInt(remaining, len(s.cachedRender))
+		committedStart -= take
+	}
+	return joinRenderedTail(s.cachedRender[committedStart:], includeSeparator, activeLines[activeStart:]), true
+}
+
+func joinRenderedTail(committed []string, blankSeparator bool, active []string) string {
+	bytes := 0
+	for _, line := range committed {
+		bytes += len(line)
+	}
+	for _, line := range active {
+		bytes += len(line)
+	}
+	if len(committed) > 1 {
+		bytes += len(committed) - 1
+	}
+	if len(active) > 1 {
+		bytes += len(active) - 1
+	}
+	if blankSeparator {
+		bytes += 2
+	}
+	var out strings.Builder
+	out.Grow(bytes)
+	for index, line := range committed {
+		if index > 0 {
+			out.WriteByte('\n')
+		}
+		out.WriteString(line)
+	}
+	if blankSeparator {
+		out.WriteString("\n\n")
+	}
+	for index, line := range active {
+		if index > 0 {
+			out.WriteByte('\n')
+		}
+		out.WriteString(line)
+	}
+	return out.String()
+}
+
 // RenderLinesAt renders rich content at a temporary width, useful for the
 // narrower transcript overlay without changing the main viewport's cache.
 func (s *HistoryState) RenderLinesAt(width int) []string {

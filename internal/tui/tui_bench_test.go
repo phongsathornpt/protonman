@@ -125,3 +125,21 @@ func BenchmarkHistoryStateRenderJoined_ActiveMarkdown20KB(b *testing.B) {
 		_ = strings.Join(state.RenderLines(), "\n")
 	}
 }
+
+func BenchmarkRefreshViewportStreamingLongHistory(b *testing.B) {
+	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
+	m.resize(100, 30)
+	m.showWelcome = false
+	m.busy = true
+	m.followTail = true
+	for i := 0; i < 500; i++ {
+		m.historyState.Append(&UserCell{Text: fmt.Sprintf("Question %d with enough text to represent a realistic long session", i)})
+		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("Answer %d with **markdown**, `code`, and a second line.\nMore detail here.", i)})
+	}
+	m.historyState.AppendAssistantDelta(strings.Repeat("streaming **tail** with `code` and details\n", 250))
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		m.refreshViewport()
+	}
+}
