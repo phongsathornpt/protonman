@@ -25,10 +25,16 @@ const (
 	DefaultMaxRounds = 20
 	// DefaultMaxToolCalls is the fallback cumulative tool-call limit per turn.
 	DefaultMaxToolCalls = 100
-	// DefaultSubagentTimeout bounds one subagent after it acquires execution capacity.
-	DefaultSubagentTimeout = 5 * time.Minute
+	// DefaultSubagentMaxRuntime is the hard safety ceiling for one spawned subagent.
+	DefaultSubagentMaxRuntime = 30 * time.Minute
+	// DefaultSubagentWaitTimeout bounds one parent wait without canceling the child.
+	DefaultSubagentWaitTimeout = 30 * time.Second
 	// DefaultSubagentQueueTimeout bounds waiting for concurrency/workspace capacity.
 	DefaultSubagentQueueTimeout = 30 * time.Second
+	// DefaultMaxLiveSubagents bounds queued and running retained subagents.
+	DefaultMaxLiveSubagents = 16
+	// DefaultCompletedResultTTL retains terminal results for later turns.
+	DefaultCompletedResultTTL = 10 * time.Minute
 )
 
 // Options controls which configuration layers are considered.
@@ -73,8 +79,11 @@ type AgentConfig struct {
 	MaxRounds            int           `toml:"max_rounds"`
 	MaxToolCalls         int           `toml:"max_tool_calls"`
 	Profile              string        `toml:"profile"`
-	SubagentTimeout      time.Duration `toml:"-"`
+	MaxLiveSubagents     int           `toml:"max_live_subagents"`
+	SubagentMaxRuntime   time.Duration `toml:"-"`
+	SubagentWaitTimeout  time.Duration `toml:"-"`
 	SubagentQueueTimeout time.Duration `toml:"-"`
+	CompletedResultTTL   time.Duration `toml:"-"`
 }
 
 // Snapshot is the effective configuration after layered loading.
@@ -113,8 +122,12 @@ type fileAgent struct {
 	MaxRounds            *int    `toml:"max_rounds,omitempty"`
 	MaxToolCalls         *int    `toml:"max_tool_calls,omitempty"`
 	Profile              *string `toml:"profile,omitempty"`
-	SubagentTimeout      *string `toml:"subagent_timeout,omitempty"`
+	MaxLiveSubagents     *int    `toml:"max_live_subagents,omitempty"`
+	SubagentMaxRuntime   *string `toml:"subagent_max_runtime,omitempty"`
+	SubagentWaitTimeout  *string `toml:"subagent_wait_timeout,omitempty"`
 	SubagentQueueTimeout *string `toml:"subagent_queue_timeout,omitempty"`
+	CompletedResultTTL   *string `toml:"completed_result_ttl,omitempty"`
+	SubagentTimeout      *string `toml:"subagent_timeout,omitempty"` // legacy
 }
 
 type fileSandbox struct {
@@ -179,8 +192,11 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 		Agent: AgentConfig{
 			MaxRounds:            DefaultMaxRounds,
 			MaxToolCalls:         DefaultMaxToolCalls,
-			SubagentTimeout:      DefaultSubagentTimeout,
+			MaxLiveSubagents:     DefaultMaxLiveSubagents,
+			SubagentMaxRuntime:   DefaultSubagentMaxRuntime,
+			SubagentWaitTimeout:  DefaultSubagentWaitTimeout,
 			SubagentQueueTimeout: DefaultSubagentQueueTimeout,
+			CompletedResultTTL:   DefaultCompletedResultTTL,
 		},
 		Sources:  make([]string, 0, 2),
 		Warnings: make([]string, 0),
@@ -306,12 +322,32 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 	if document.Agent.Profile != nil {
 		snapshot.Agent.Profile = strings.TrimSpace(*document.Agent.Profile)
 	}
-	if document.Agent.SubagentTimeout != nil {
+	if document.Agent.MaxLiveSubagents != nil {
+		if *document.Agent.MaxLiveSubagents <= 0 {
+			return fmt.Errorf("agent.max_live_subagents must be positive")
+		}
+		snapshot.Agent.MaxLiveSubagents = *document.Agent.MaxLiveSubagents
+	}
+	if document.Agent.SubagentMaxRuntime != nil {
+		d, err := parsePositiveDuration("agent.subagent_max_runtime", *document.Agent.SubagentMaxRuntime)
+		if err != nil {
+			return err
+		}
+		snapshot.Agent.SubagentMaxRuntime = d
+	} else if document.Agent.SubagentTimeout != nil {
 		d, err := parsePositiveDuration("agent.subagent_timeout", *document.Agent.SubagentTimeout)
 		if err != nil {
 			return err
 		}
-		snapshot.Agent.SubagentTimeout = d
+		snapshot.Agent.SubagentMaxRuntime = d
+		snapshot.Warnings = append(snapshot.Warnings, "agent.subagent_timeout is deprecated; use agent.subagent_max_runtime")
+	}
+	if document.Agent.SubagentWaitTimeout != nil {
+		d, err := parsePositiveDuration("agent.subagent_wait_timeout", *document.Agent.SubagentWaitTimeout)
+		if err != nil {
+			return err
+		}
+		snapshot.Agent.SubagentWaitTimeout = d
 	}
 	if document.Agent.SubagentQueueTimeout != nil {
 		d, err := parsePositiveDuration("agent.subagent_queue_timeout", *document.Agent.SubagentQueueTimeout)
@@ -319,6 +355,13 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 			return err
 		}
 		snapshot.Agent.SubagentQueueTimeout = d
+	}
+	if document.Agent.CompletedResultTTL != nil {
+		d, err := parsePositiveDuration("agent.completed_result_ttl", *document.Agent.CompletedResultTTL)
+		if err != nil {
+			return err
+		}
+		snapshot.Agent.CompletedResultTTL = d
 	}
 	return nil
 }

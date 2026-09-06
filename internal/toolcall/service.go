@@ -392,11 +392,12 @@ func (s *Service) authorize(ctx context.Context, request permission.Request) (pe
 			Reason: "deny mode",
 		}, nil
 	}
-	if request.ToolKind == permission.ToolTask && (mode == permission.ModeAsk || mode == permission.ModeAuto) {
-		return permission.Resolution{
-			Action: permission.ActionAllow,
-			Reason: "structured task metadata is allowed",
-		}, nil
+	if (request.ToolKind == permission.ToolTask || request.ToolKind == permission.ToolAgent) && (mode == permission.ModeAsk || mode == permission.ModeAuto) {
+		reason := "structured task metadata is allowed"
+		if request.ToolKind == permission.ToolAgent {
+			reason = "subagent orchestration is allowed"
+		}
+		return permission.Resolution{Action: permission.ActionAllow, Reason: reason}, nil
 	}
 	if granted {
 		return permission.Resolution{

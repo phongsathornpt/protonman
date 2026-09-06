@@ -1000,3 +1000,88 @@ type mockSubagentRunnerCompat string
 func (m mockSubagentRunnerCompat) Run(context.Context, []model.Message, turn.Sink) (turn.Result, error) {
 	return turn.Result{Message: model.Message{Role: model.RoleAssistant, Content: string(m)}, Rounds: 1}, nil
 }
+
+func TestCoordinatorDefaultWaitTimeoutDoesNotCancel(t *testing.T) {
+	release := make(chan struct{})
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithDefaultWaitTimeout(20*time.Millisecond),
+		WithMaxRuntime(time.Second),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+				select {
+				case <-release:
+					return turn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "done"}}, nil
+				case <-ctx.Done():
+					return turn.Result{}, ctx.Err()
+				}
+			}}, nil
+		}),
+	)
+	defer coord.Close()
+	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileExplorer, Task: "wait default"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	wr, err := coord.Wait(context.Background(), h.ID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if time.Since(start) < 15*time.Millisecond {
+		t.Fatalf("default wait returned too early")
+	}
+	if wr.State != StateQueued && wr.State != StateRunning {
+		t.Fatalf("state=%q", wr.State)
+	}
+	close(release)
+	_, _ = coord.Wait(context.Background(), h.ID, time.Second)
+}
+
+func TestCoordinatorMaxLiveAgents(t *testing.T) {
+	release := make(chan struct{})
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithMaxLiveAgents(1),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+				select {
+				case <-release:
+					return turn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "done"}}, nil
+				case <-ctx.Done():
+					return turn.Result{}, ctx.Err()
+				}
+			}}, nil
+		}),
+	)
+	defer coord.Close()
+	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileExplorer, Task: "one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := coord.Spawn(context.Background(), Request{Profile: ProfileExplorer, Task: "two"}); err == nil || !strings.Contains(err.Error(), "maximum live subagents") {
+		t.Fatalf("second Spawn error=%v", err)
+	}
+	close(release)
+	_, _ = coord.Wait(context.Background(), h.ID, time.Second)
+	if _, err := coord.Spawn(context.Background(), Request{Profile: ProfileExplorer, Task: "three"}); err != nil {
+		t.Fatalf("spawn after completion: %v", err)
+	}
+}
+
+func TestCoordinatorCompletedResultTTL(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithResultTTL(20*time.Millisecond),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) { return mockSubagentRunnerCompat("ttl"), nil }),
+	)
+	defer coord.Close()
+	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileExplorer, Task: "ttl"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := coord.Wait(context.Background(), h.ID, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(30 * time.Millisecond)
+	if _, ok := coord.Get(h.ID); ok {
+		t.Fatal("expired terminal result still retained")
+	}
+}

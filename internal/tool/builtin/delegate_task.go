@@ -3,7 +3,6 @@ package builtin
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -37,7 +36,7 @@ func (delegateTaskHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                   "delegate_task",
 		Description:            "Delegate an investigation, code review, or targeted task to a specialized subagent running in the background.",
-		Kind:                   tool.KindRead,
+		Kind:                   tool.KindAgent,
 		Mutability:             tool.MutabilityMutating,
 		ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded,
 		PermissionDetailKey:    "task",
@@ -125,25 +124,17 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 		req.Timeout = time.Duration(input.TimeoutSeconds) * time.Second
 	}
 
-	res, err := h.coordinator.Run(ctx, req)
+	handle, err := h.coordinator.Spawn(ctx, req)
 	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return tool.Result{}, tool.NewToolError(tool.ErrorCodeCanceled, "subagent execution canceled")
-		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			return tool.Result{}, tool.NewToolError(tool.ErrorCodeDeadlineExceeded, "subagent execution timed out")
-		}
-		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "subagent execution failed", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "spawn subagent", err)
 	}
-
-	var b strings.Builder
-	b.WriteString(fmt.Sprintf("<subagent_result id=%q profile=%q rounds=%d>\n", res.AgentID, res.Profile, res.Rounds))
-	b.WriteString(res.Summary)
-	b.WriteString("\n</subagent_result>")
-
-	return tool.Result{
-		CallID:   call.ID,
-		ToolName: call.Name,
-		Output:   b.String(),
-	}, nil
+	payload, err := json.Marshal(map[string]any{
+		"agent_id": handle.ID,
+		"profile":  handle.Profile,
+		"status":   agent.StateQueued,
+	})
+	if err != nil {
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "encode subagent handle", err)
+	}
+	return tool.Result{CallID: call.ID, ToolName: call.Name, Output: string(payload)}, nil
 }

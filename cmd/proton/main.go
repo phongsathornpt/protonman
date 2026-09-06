@@ -143,8 +143,11 @@ func run(ctx context.Context, args []string) error {
 	coordinator := agent.NewCoordinator(nil, nil, workspaceRoot, policy,
 		agent.WithMaxRounds(loadedConfig.Agent.MaxRounds),
 		agent.WithMaxToolCalls(loadedConfig.Agent.MaxToolCalls),
-		agent.WithDefaultTimeout(loadedConfig.Agent.SubagentTimeout),
+		agent.WithMaxRuntime(loadedConfig.Agent.SubagentMaxRuntime),
+		agent.WithDefaultWaitTimeout(loadedConfig.Agent.SubagentWaitTimeout),
 		agent.WithDefaultQueueTimeout(loadedConfig.Agent.SubagentQueueTimeout),
+		agent.WithMaxLiveAgents(loadedConfig.Agent.MaxLiveSubagents),
+		agent.WithResultTTL(loadedConfig.Agent.CompletedResultTTL),
 		agent.WithEventSink(func(ctx context.Context, ev agent.Event) error {
 			slog.Debug("subagent lifecycle event",
 				"kind", ev.Kind,

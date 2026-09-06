@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -23,8 +24,11 @@ const (
 	defaultMaxDepth       = 1
 	defaultMaxRounds      = 10
 	defaultMaxToolCalls   = turn.DefaultMaxToolCalls
-	defaultTimeout        = 5 * time.Minute
+	defaultMaxRuntime     = 30 * time.Minute
+	defaultWaitTimeout    = 30 * time.Second
 	defaultQueueTimeout   = 30 * time.Second
+	defaultMaxLiveAgents  = 16
+	defaultResultTTL      = 10 * time.Minute
 	defaultCloseTimeout   = 5 * time.Second
 	eventEmitTimeout      = 100 * time.Millisecond
 	maxSummaryBytes       = 32 * 1024 // 32KB bound for child summaries returned to parent
@@ -78,8 +82,11 @@ type Coordinator struct {
 	maxDepth            int
 	maxRounds           int
 	maxToolCalls        int
-	defaultTimeout      time.Duration
+	maxLiveAgents       int
+	maxRuntime          time.Duration
+	waitTimeout         time.Duration
 	defaultQueueTimeout time.Duration
+	resultTTL           time.Duration
 	closeTimeout        time.Duration
 	eventSink           EventSink
 	runnerFactory       RunnerFactory
@@ -129,11 +136,41 @@ func WithMaxToolCalls(calls int) Option {
 	}
 }
 
-// WithDefaultTimeout sets the default execution deadline for a subagent.
-func WithDefaultTimeout(d time.Duration) Option {
+// WithMaxRuntime sets the hard safety ceiling for one spawned subagent.
+func WithMaxRuntime(d time.Duration) Option {
 	return func(c *Coordinator) {
 		if d > 0 {
-			c.defaultTimeout = d
+			c.maxRuntime = d
+		}
+	}
+}
+
+// WithDefaultTimeout is a compatibility alias for WithMaxRuntime.
+func WithDefaultTimeout(d time.Duration) Option { return WithMaxRuntime(d) }
+
+// WithDefaultWaitTimeout sets the default non-destructive wait duration.
+func WithDefaultWaitTimeout(d time.Duration) Option {
+	return func(c *Coordinator) {
+		if d > 0 {
+			c.waitTimeout = d
+		}
+	}
+}
+
+// WithMaxLiveAgents bounds queued and running subagents.
+func WithMaxLiveAgents(n int) Option {
+	return func(c *Coordinator) {
+		if n > 0 {
+			c.maxLiveAgents = n
+		}
+	}
+}
+
+// WithResultTTL controls how long terminal results remain queryable.
+func WithResultTTL(d time.Duration) Option {
+	return func(c *Coordinator) {
+		if d > 0 {
+			c.resultTTL = d
 		}
 	}
 }
@@ -217,8 +254,11 @@ func NewCoordinator(
 		maxDepth:            defaultMaxDepth,
 		maxRounds:           defaultMaxRounds,
 		maxToolCalls:        defaultMaxToolCalls,
-		defaultTimeout:      defaultTimeout,
+		maxLiveAgents:       defaultMaxLiveAgents,
+		maxRuntime:          defaultMaxRuntime,
+		waitTimeout:         defaultWaitTimeout,
 		defaultQueueTimeout: defaultQueueTimeout,
+		resultTTL:           defaultResultTTL,
 		closeTimeout:        defaultCloseTimeout,
 	}
 	for _, opt := range options {
@@ -250,6 +290,17 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	if c.closed.Load() {
 		c.activeMu.Unlock()
 		return Handle{}, errors.New("coordinator is closed")
+	}
+	c.pruneExpiredLocked(time.Now())
+	live := 0
+	for _, existing := range c.active {
+		if !existing.status.State.Terminal() {
+			live++
+		}
+	}
+	if c.maxLiveAgents > 0 && live >= c.maxLiveAgents {
+		c.activeMu.Unlock()
+		return Handle{}, fmt.Errorf("maximum live subagents reached (%d)", c.maxLiveAgents)
 	}
 	id := strings.TrimSpace(req.ID)
 	if id == "" {
@@ -286,8 +337,8 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *activeEntry, req R
 	defer close(entry.done)
 
 	executionTimeout := req.Timeout
-	if executionTimeout == 0 || (c.defaultTimeout > 0 && executionTimeout > c.defaultTimeout) {
-		executionTimeout = c.defaultTimeout
+	if executionTimeout == 0 || (c.maxRuntime > 0 && executionTimeout > c.maxRuntime) {
+		executionTimeout = c.maxRuntime
 	}
 	queueTimeout := req.QueueTimeout
 	if queueTimeout == 0 {
@@ -398,6 +449,9 @@ func (c *Coordinator) Wait(ctx context.Context, id string, timeout time.Duration
 		return c.waitSnapshot(id)
 	}
 
+	if timeout <= 0 {
+		timeout = c.waitTimeout
+	}
 	waitCtx := ctx
 	cancel := func() {}
 	if timeout > 0 {
@@ -430,8 +484,29 @@ func (c *Coordinator) waitSnapshot(id string) (WaitResult, error) {
 	return wr, nil
 }
 
+func (c *Coordinator) pruneExpired() {
+	if c.resultTTL <= 0 {
+		return
+	}
+	c.activeMu.Lock()
+	c.pruneExpiredLocked(time.Now())
+	c.activeMu.Unlock()
+}
+
+func (c *Coordinator) pruneExpiredLocked(now time.Time) {
+	if c.resultTTL <= 0 {
+		return
+	}
+	for id, entry := range c.active {
+		if entry.status.State.Terminal() && !entry.status.FinishedAt.IsZero() && now.Sub(entry.status.FinishedAt) >= c.resultTTL {
+			delete(c.active, id)
+		}
+	}
+}
+
 // Get returns one retained subagent status.
 func (c *Coordinator) Get(id string) (AgentStatus, bool) {
+	c.pruneExpired()
 	c.activeMu.RLock()
 	defer c.activeMu.RUnlock()
 	entry, ok := c.active[strings.TrimSpace(id)]
@@ -441,8 +516,26 @@ func (c *Coordinator) Get(id string) (AgentStatus, bool) {
 	return entry.status, true
 }
 
+// Lookup returns one retained status and, when terminal, its result.
+func (c *Coordinator) Lookup(id string) (AgentStatus, *Result, bool) {
+	c.pruneExpired()
+	c.activeMu.RLock()
+	defer c.activeMu.RUnlock()
+	entry, ok := c.active[strings.TrimSpace(id)]
+	if !ok {
+		return AgentStatus{}, nil, false
+	}
+	status := entry.status
+	if !status.State.Terminal() {
+		return status, nil, true
+	}
+	res := entry.result
+	return status, &res, true
+}
+
 // Active returns queued or running subagents only.
 func (c *Coordinator) Active() []AgentStatus {
+	c.pruneExpired()
 	c.activeMu.RLock()
 	defer c.activeMu.RUnlock()
 	out := make([]AgentStatus, 0, len(c.active))
@@ -456,12 +549,19 @@ func (c *Coordinator) Active() []AgentStatus {
 
 // List returns all retained subagents, including terminal results.
 func (c *Coordinator) List() []AgentStatus {
+	c.pruneExpired()
 	c.activeMu.RLock()
 	defer c.activeMu.RUnlock()
 	out := make([]AgentStatus, 0, len(c.active))
 	for _, entry := range c.active {
 		out = append(out, entry.status)
 	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].StartTime.Equal(out[j].StartTime) {
+			return out[i].ID < out[j].ID
+		}
+		return out[i].StartTime.Before(out[j].StartTime)
+	})
 	return out
 }
 
@@ -511,8 +611,8 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 		return c.blockingResult(h.ID, h.Profile)
 	}
 	t := req.Timeout
-	if t == 0 || (c.defaultTimeout > 0 && t > c.defaultTimeout) {
-		t = c.defaultTimeout
+	if t == 0 || (c.maxRuntime > 0 && t > c.maxRuntime) {
+		t = c.maxRuntime
 	}
 	wctx, cancel := boundedWaitContext(ctx, t)
 	defer cancel()
