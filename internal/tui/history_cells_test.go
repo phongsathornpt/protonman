@@ -451,3 +451,27 @@ func TestToolFailureSuggestions(t *testing.T) {
 		t.Fatalf("expected suggestions for outside workspace error")
 	}
 }
+
+func TestHistoryStateAlternateRenderCacheInvalidatesOnCommit(t *testing.T) {
+	state := NewHistoryState(1000)
+	state.Append(&AssistantCell{Text: "first"})
+	before := strings.Join(state.RenderLinesAt(40), "\n")
+	if !strings.Contains(before, "first") {
+		t.Fatalf("initial alternate render missing content: %q", before)
+	}
+	state.Append(&AssistantCell{Text: "second"})
+	after := strings.Join(state.RenderLinesAt(40), "\n")
+	if !strings.Contains(after, "second") {
+		t.Fatalf("alternate render cache was stale after commit: %q", after)
+	}
+}
+
+func TestHistoryStateAlternateRenderCacheTracksWidth(t *testing.T) {
+	state := NewHistoryState(1000)
+	state.Append(&AssistantCell{Text: "a long assistant response that wraps differently by width"})
+	wide := state.RenderLinesAt(60)
+	narrow := state.RenderLinesAt(20)
+	if len(narrow) <= len(wide) {
+		t.Fatalf("narrow alternate render lines = %d, want more than wide %d", len(narrow), len(wide))
+	}
+}
