@@ -142,6 +142,18 @@ func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("plan apply_patch: %w", err)
 	}
+	riskyPaths := make([]string, 0, len(changes)*2)
+	for _, change := range changes {
+		if change.kind == patchDelete || change.destination != "" {
+			riskyPaths = append(riskyPaths, change.path)
+		}
+		if change.destination != "" {
+			riskyPaths = append(riskyPaths, change.destination)
+		}
+	}
+	if err := h.workspace.GuardWholeFileMutation(ctx, riskyPaths...); err != nil {
+		return tool.Result{}, err
+	}
 	checkpointPaths := make([]string, 0, len(changes)*2)
 	for _, change := range changes {
 		checkpointPaths = append(checkpointPaths, change.path)
@@ -208,6 +220,7 @@ func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 			affectedPaths = append(affectedPaths, operation.movePath)
 		}
 	}
+	h.workspace.MarkMutationOwned(ctx, checkpointPaths...)
 	return tool.Result{
 		CallID:        call.ID,
 		ToolName:      call.Name,

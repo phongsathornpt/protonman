@@ -20,6 +20,7 @@ import (
 	"github.com/projectTHORN/proton/internal/skill"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
+	"github.com/projectTHORN/proton/internal/workspace"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -379,7 +380,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	}
 	turnContext, cancelTurn := l.newTurnContext(ctx)
 	defer cancelTurn()
-	ctx = turnContext
+	ctx = workspace.WithMutationSession(turnContext)
 	if sink == nil {
 		sink = func(context.Context, Event) error { return nil }
 	}

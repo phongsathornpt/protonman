@@ -96,6 +96,7 @@ func (h searchReplaceHandler) Execute(ctx context.Context, call tool.Call) (tool
 				CheckpointID: checkpointID,
 			}, fmt.Errorf("create %q: %w", input.FilePath, err)
 		}
+		h.workspace.MarkMutationOwned(ctx, resolvedPath)
 		return editResult(call, displayPath, "created", checkpointID)
 	}
 	if !exists {
@@ -129,6 +130,7 @@ func (h searchReplaceHandler) Execute(ctx context.Context, call tool.Call) (tool
 			CheckpointID: checkpointID,
 		}, fmt.Errorf("update %q: %w", input.FilePath, err)
 	}
+	h.workspace.MarkMutationOwned(ctx, resolvedPath)
 	return editResult(call, displayPath, "updated", checkpointID)
 }
 
