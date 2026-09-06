@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
 
 func BenchmarkHistoryStateRenderLines_50Cells(b *testing.B) {
@@ -154,5 +156,19 @@ func BenchmarkAssistantStreamingTailContent20KB(b *testing.B) {
 			state.AppendAssistantDelta(chunk)
 			_, _ = state.RenderTailContent(24)
 		}
+	}
+}
+
+func BenchmarkApplyTurnTextDeltaLongHistory(b *testing.B) {
+	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
+	for i := 0; i < 500; i++ {
+		m.historyState.Append(&UserCell{Text: fmt.Sprintf("question %d", i)})
+		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("answer %d", i)})
+	}
+	m.syncLegacyBlocks()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		m.applyTurnEvent(applicationturn.Event{Kind: applicationturn.EventTextDelta, Text: "x"})
 	}
 }
