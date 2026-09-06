@@ -140,9 +140,6 @@ func WithMaxRuntime(d time.Duration) Option {
 	}
 }
 
-// WithDefaultTimeout is a compatibility alias for WithMaxRuntime.
-func WithDefaultTimeout(d time.Duration) Option { return WithMaxRuntime(d) }
-
 // WithDefaultWaitTimeout sets the default non-destructive wait duration.
 func WithDefaultWaitTimeout(d time.Duration) Option {
 	return func(c *Coordinator) {
