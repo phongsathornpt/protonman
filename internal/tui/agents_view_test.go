@@ -210,3 +210,26 @@ func TestAgentsViewShowsTerminalFailureReason(t *testing.T) {
 		t.Fatalf("agents view=%q", got)
 	}
 }
+
+func TestStatusViewShowsAgentBreakdownAndSingleActivity(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.resize(140, 30)
+	m.busy = true
+	m.agentSnapshot = []agent.AgentStatus{
+		{ID: "explorer-1", State: agent.StateRunning},
+		{ID: "reviewer-2", State: agent.StateQueued},
+	}
+	got := m.statusView()
+	for _, want := range []string{"2 agents", "1 running", "1 queued"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("status=%q, want %q", got, want)
+		}
+	}
+
+	m.agentSnapshot = m.agentSnapshot[:1]
+	m.agentActivity["explorer-1"] = "using grep"
+	got = m.statusView()
+	if !strings.Contains(got, "using grep") {
+		t.Fatalf("single-agent status=%q, want live activity", got)
+	}
+}
