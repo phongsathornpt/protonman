@@ -185,13 +185,13 @@ func (*providerPaneView) ID() string             { return providerViewID }
 func (*providerPaneView) ReplacesComposer() bool { return true }
 
 func providerKeyPlaceholder(p model.SupportedProviderPreset) string {
+	if strings.TrimSpace(p.KeyPlaceholder) != "" {
+		return p.KeyPlaceholder
+	}
 	if !p.RequiresKey {
 		return "API key (optional)…"
 	}
-	if p.ID == model.DefaultOpenAIName {
-		return "sk_…"
-	}
-	return "plk_live_…"
+	return "API key…"
 }
 
 func (v *providerPaneView) isOpenCode() bool {

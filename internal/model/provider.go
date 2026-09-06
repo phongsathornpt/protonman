@@ -41,61 +41,67 @@ const (
 
 // SupportedProviderPreset describes an out-of-the-box model provider preset.
 type SupportedProviderPreset struct {
-	ID            string
-	Name          string
-	Protocol      ProviderProtocol
-	BaseURL       string
-	EndpointHosts []string
-	RequiresKey   bool
-	Description   string
+	ID             string
+	Name           string
+	Protocol       ProviderProtocol
+	BaseURL        string
+	EndpointHosts  []string
+	RequiresKey    bool
+	KeyPlaceholder string
+	Description    string
 }
 
 // SupportedPresets lists available provider presets for discovery and quick setup.
 var SupportedPresets = []SupportedProviderPreset{
 	{
-		ID:            DefaultOpenCodeName,
-		Name:          "OpenCode (Free)",
-		Protocol:      ProviderProtocolOpenAI,
-		BaseURL:       DefaultOpenCodeEndpoint,
-		EndpointHosts: []string{"opencode.ai"},
-		RequiresKey:   false,
-		Description:   "Free tier models, zero API key required",
+		ID:             DefaultOpenCodeName,
+		Name:           "OpenCode (Free)",
+		Protocol:       ProviderProtocolOpenAI,
+		BaseURL:        DefaultOpenCodeEndpoint,
+		EndpointHosts:  []string{"opencode.ai"},
+		RequiresKey:    false,
+		KeyPlaceholder: "API key (optional)…",
+		Description:    "Free tier models, zero API key required",
 	},
 	{
-		ID:            DefaultProtonmanName,
-		Name:          "Protonman",
-		Protocol:      ProviderProtocolOpenAI,
-		BaseURL:       DefaultProtonmanEndpoint,
-		EndpointHosts: []string{"protonman.dev"},
-		RequiresKey:   true,
-		Description:   "High-speed AI models gateway (plk_...)",
+		ID:             DefaultProtonmanName,
+		Name:           "Protonman",
+		Protocol:       ProviderProtocolOpenAI,
+		BaseURL:        DefaultProtonmanEndpoint,
+		EndpointHosts:  []string{"protonman.dev"},
+		RequiresKey:    true,
+		KeyPlaceholder: "plk_live_…",
+		Description:    "High-speed AI models gateway (plk_...)",
 	},
 	{
-		ID:            DefaultOllamaName,
-		Name:          "Ollama (Local)",
-		Protocol:      ProviderProtocolOpenAI,
-		BaseURL:       DefaultOllamaEndpoint,
-		EndpointHosts: []string{"localhost", "127.0.0.1"},
-		RequiresKey:   false,
-		Description:   "Local LLM inference, zero cloud cost",
+		ID:             DefaultOllamaName,
+		Name:           "Ollama (Local)",
+		Protocol:       ProviderProtocolOpenAI,
+		BaseURL:        DefaultOllamaEndpoint,
+		EndpointHosts:  []string{"localhost", "127.0.0.1"},
+		RequiresKey:    false,
+		KeyPlaceholder: "API key (optional)…",
+		Description:    "Local LLM inference, zero cloud cost",
 	},
 	{
-		ID:            DefaultOpenAIName,
-		Name:          "OpenAI Official",
-		Protocol:      ProviderProtocolOpenAI,
-		BaseURL:       DefaultOpenAIEndpoint,
-		EndpointHosts: []string{"api.openai.com"},
-		RequiresKey:   true,
-		Description:   "Direct OpenAI API access (sk-...)",
+		ID:             DefaultOpenAIName,
+		Name:           "OpenAI Official",
+		Protocol:       ProviderProtocolOpenAI,
+		BaseURL:        DefaultOpenAIEndpoint,
+		EndpointHosts:  []string{"api.openai.com"},
+		RequiresKey:    true,
+		KeyPlaceholder: "sk_…",
+		Description:    "Direct OpenAI API access (sk-...)",
 	},
 	{
-		ID:            DefaultAnthropicName,
-		Name:          "Anthropic",
-		Protocol:      ProviderProtocolAnthropic,
-		BaseURL:       DefaultAnthropicEndpoint,
-		EndpointHosts: []string{"api.anthropic.com"},
-		RequiresKey:   true,
-		Description:   "Direct Anthropic Messages API access",
+		ID:             DefaultAnthropicName,
+		Name:           "Anthropic",
+		Protocol:       ProviderProtocolAnthropic,
+		BaseURL:        DefaultAnthropicEndpoint,
+		EndpointHosts:  []string{"api.anthropic.com"},
+		RequiresKey:    true,
+		KeyPlaceholder: "sk-ant-…",
+		Description:    "Direct Anthropic Messages API access",
 	},
 }
 

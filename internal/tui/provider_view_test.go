@@ -655,3 +655,10 @@ func TestAnthropicProviderPanePreservesProtocol(t *testing.T) {
 		t.Fatalf("configured providerType = %q, want anthropic", configured.providerType)
 	}
 }
+
+func TestAnthropicProviderKeyPlaceholder(t *testing.T) {
+	view := newProviderPaneViewWithPreset(model.DefaultAnthropicName)
+	if got := view.apiKeyInput.Placeholder; got != "sk-ant-…" {
+		t.Fatalf("Anthropic API key placeholder = %q, want %q", got, "sk-ant-…")
+	}
+}
