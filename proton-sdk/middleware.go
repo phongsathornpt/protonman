@@ -35,8 +35,9 @@ type middlewareModel struct {
 	stream StreamFunc
 }
 
-func (m *middlewareModel) Provider() string { return m.base.Provider() }
-func (m *middlewareModel) ModelID() string  { return m.base.ModelID() }
+func (m *middlewareModel) Provider() string                { return m.base.Provider() }
+func (m *middlewareModel) ModelID() string                 { return m.base.ModelID() }
+func (m *middlewareModel) Capabilities() ModelCapabilities { return m.base.Capabilities() }
 func (m *middlewareModel) Stream(ctx context.Context, request Request) (Stream, error) {
 	return m.stream(ctx, request)
 }

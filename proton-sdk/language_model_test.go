@@ -13,6 +13,9 @@ type languageModelStub struct {
 
 func (m languageModelStub) Provider() string { return m.provider }
 func (m languageModelStub) ModelID() string  { return m.modelID }
+func (m languageModelStub) Capabilities() ModelCapabilities {
+	return ModelCapabilities{Streaming: true}
+}
 func (m languageModelStub) Stream(context.Context, Request) (Stream, error) {
 	return emptyStream{}, nil
 }
@@ -29,6 +32,9 @@ func TestLanguageModelContract(t *testing.T) {
 	}
 	if model.ModelID() != "test-model" {
 		t.Fatalf("ModelID() = %q", model.ModelID())
+	}
+	if caps := model.Capabilities(); !caps.Streaming {
+		t.Fatalf("Capabilities() = %#v, want streaming", caps)
 	}
 	stream, err := model.Stream(context.Background(), Request{Messages: []Message{{Role: RoleUser, Content: "hi"}}})
 	if err != nil {

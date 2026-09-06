@@ -8,5 +8,6 @@ import "context"
 type LanguageModel interface {
 	Provider() string
 	ModelID() string
+	Capabilities() ModelCapabilities
 	Stream(ctx context.Context, request Request) (Stream, error)
 }

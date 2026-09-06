@@ -882,6 +882,9 @@ type scriptedClient struct {
 
 func (*scriptedClient) Provider() string { return "test" }
 func (*scriptedClient) ModelID() string  { return "scripted" }
+func (*scriptedClient) Capabilities() sdk.ModelCapabilities {
+	return sdk.ModelCapabilities{Streaming: true, Tools: true}
+}
 
 func (c *scriptedClient) Stream(_ context.Context, request sdk.Request) (sdk.Stream, error) {
 	if len(c.streams) == 0 {
@@ -977,6 +980,9 @@ type blockingModelClient struct {
 
 func (*blockingModelClient) Provider() string { return "test" }
 func (*blockingModelClient) ModelID() string  { return "blocking" }
+func (*blockingModelClient) Capabilities() sdk.ModelCapabilities {
+	return sdk.ModelCapabilities{Streaming: true}
+}
 
 func (c *blockingModelClient) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
 	c.once.Do(func() { close(c.started) })
