@@ -293,6 +293,8 @@ type Request struct {
 	// Arguments preserves the original JSON for future classifier-backed
 	// decisions and richer prompts.
 	Arguments json.RawMessage
+	// Risk records proven destructive command behavior independently from generic mutability.
+	Risk tool.CommandRisk
 }
 
 // Decision is the result of evaluating a static policy.

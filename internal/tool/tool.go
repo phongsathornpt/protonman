@@ -394,6 +394,20 @@ func EffectiveMutability(definition Definition) Mutability {
 
 // EffectiveCallMutability refines a definition's static metadata with safe
 // per-call knowledge when available. Unknown shell effects remain mutating.
+// EffectiveCallRisk reports proven destructive behavior for calls whose arguments can be analyzed safely.
+func EffectiveCallRisk(definition Definition, arguments json.RawMessage) CommandRisk {
+	if definition.Kind != KindBash {
+		return CommandRiskNormal
+	}
+	var input struct {
+		Command string `json:"command"`
+	}
+	if err := json.Unmarshal(arguments, &input); err != nil {
+		return CommandRiskNormal
+	}
+	return AnalyzeCommand(input.Command).Risk
+}
+
 func EffectiveCallMutability(definition Definition, arguments json.RawMessage) Mutability {
 	if definition.Kind != KindBash {
 		return EffectiveMutability(definition)

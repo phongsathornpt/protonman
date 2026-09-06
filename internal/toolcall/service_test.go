@@ -665,3 +665,46 @@ func TestServiceValidatesStructuredOutputSchema(t *testing.T) {
 		t.Fatalf("failure = %#v, want invalid_output", result.Failure)
 	}
 }
+
+func TestDestructiveBashSessionGrantIsOneShot(t *testing.T) {
+	handler := &fakeHandler{definition: tool.Definition{Name: "bash", Description: "fake shell", Kind: tool.KindBash, PermissionDetailKey: "command"}}
+	promptCalls := 0
+	service := newTestService(t, handler, permission.Config{}, WithPrompt(func(_ context.Context, req permission.Request) (permission.Resolution, error) {
+		promptCalls++
+		if req.Risk != tool.CommandRiskDestructive {
+			t.Fatalf("request risk = %q, want destructive", req.Risk)
+		}
+		return permission.Resolution{Action: permission.ActionAllow, Scope: permission.GrantScopeSession}, nil
+	}))
+	call, err := tool.NewCall("danger-1", "bash", json.RawMessage(`{"command":"git reset --hard HEAD"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Call(context.Background(), call); err != nil {
+		t.Fatal(err)
+	}
+	call.ID = "danger-2"
+	if _, err := service.Call(context.Background(), call); err != nil {
+		t.Fatal(err)
+	}
+	if promptCalls != 2 {
+		t.Fatalf("prompt calls = %d, want 2 for destructive one-shot approvals", promptCalls)
+	}
+}
+
+func TestRemoteDestructiveRiskReachesPermissionPrompt(t *testing.T) {
+	handler := &fakeHandler{definition: tool.Definition{Name: "bash", Description: "fake shell", Kind: tool.KindBash, PermissionDetailKey: "command"}}
+	service := newTestService(t, handler, permission.Config{}, WithPrompt(func(_ context.Context, req permission.Request) (permission.Resolution, error) {
+		if req.Risk != tool.CommandRiskRemoteDestructive {
+			t.Fatalf("request risk = %q, want remote destructive", req.Risk)
+		}
+		return permission.Resolution{Action: permission.ActionAllow, Scope: permission.GrantScopeOnce}, nil
+	}))
+	call, err := tool.NewCall("force-push", "bash", json.RawMessage(`{"command":"git push --force origin main"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Call(context.Background(), call); err != nil {
+		t.Fatal(err)
+	}
+}
