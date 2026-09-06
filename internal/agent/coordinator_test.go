@@ -873,3 +873,32 @@ func TestCoordinatorQueueTimeoutReportsLifecycleMetrics(t *testing.T) {
 		t.Fatalf("holder Run() error = %v", err)
 	}
 }
+
+func TestCoordinatorRepeatedCloseStillReportsActiveWorker(t *testing.T) {
+	release := make(chan struct{})
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithDefaultTimeout(10*time.Millisecond),
+		WithCloseTimeout(15*time.Millisecond),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(context.Context, []model.Message, turn.Sink) (turn.Result, error) {
+				<-release
+				return turn.Result{}, nil
+			}}, nil
+		}),
+	)
+	_, _ = coord.Run(context.Background(), Request{Profile: ProfileExplorer, Task: "repeat close"})
+	if err := coord.Close(); err == nil {
+		t.Fatal("first Close() error = nil, want active-worker timeout")
+	}
+	if err := coord.Close(); err == nil {
+		t.Fatal("second Close() error = nil while worker is still active")
+	}
+	close(release)
+	deadline := time.Now().Add(time.Second)
+	for len(coord.Active()) != 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if err := coord.Close(); err != nil {
+		t.Fatalf("Close() after worker exit = %v", err)
+	}
+}

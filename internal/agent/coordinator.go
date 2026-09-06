@@ -434,10 +434,7 @@ func (c *Coordinator) Active() []AgentStatus {
 // Close cancels all active subagents and waits for all goroutines to exit.
 func (c *Coordinator) Close() error {
 	c.activeMu.Lock()
-	if !c.closed.CompareAndSwap(false, true) {
-		c.activeMu.Unlock()
-		return nil
-	}
+	c.closed.Store(true)
 	for _, entry := range c.active {
 		entry.cancel()
 	}
