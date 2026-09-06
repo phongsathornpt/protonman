@@ -51,6 +51,7 @@ type modelsFetchedMsg struct {
 
 type providerSavedMsg struct {
 	providerName string
+	providerType string
 	previousName string
 	baseURL      string
 	apiKey       string
@@ -227,6 +228,29 @@ func (v *providerPaneView) applyPreset(preset string) {
 		v.clearValidation()
 		v.focusIndex = int(providerFieldAPIKey)
 		v.syncInputFocus()
+	}
+}
+
+func (v *providerPaneView) protocolLabel() string {
+	label := strings.ToLower(strings.TrimSpace(v.providerType))
+	if label == "" {
+		label = string(model.ProviderProtocolOpenAI)
+	}
+	if v.presetID == "" {
+		return label + " · ctrl+t to switch"
+	}
+	return label
+}
+
+func (v *providerPaneView) toggleProtocol() {
+	if v.presetID != "" {
+		return
+	}
+	switch model.ProviderProtocol(strings.ToLower(strings.TrimSpace(v.providerType))) {
+	case model.ProviderProtocolAnthropic:
+		v.providerType = string(model.ProviderProtocolOpenAI)
+	default:
+		v.providerType = string(model.ProviderProtocolAnthropic)
 	}
 }
 
@@ -561,6 +585,8 @@ func (v *providerPaneView) inputFieldRows(compact bool) []string {
 	}
 
 	return []string{
+		mutedStyle.Render("Protocol: ") + v.protocolLabel(),
+		"",
 		renderProviderFieldLabel("Provider Name:", v.fieldErrors[providerFieldName]),
 		v.nameInput.View(),
 		"",
@@ -579,20 +605,20 @@ func renderProviderInput(m *bubbleModel) string {
 	if !compact {
 		rows = append(rows,
 			"",
-			mutedStyle.Render("Presets: alt+1 Protonman · alt+2 OpenCode · alt+3 Ollama · alt+4 OpenAI"),
+			mutedStyle.Render("Presets: alt+1 Protonman · alt+2 OpenCode · alt+3 Ollama · alt+4 OpenAI · alt+5 Anthropic"),
 			"",
 		)
 	}
 	rows = append(rows, view.inputFieldRows(compact)...)
 	rows = append(rows, "")
 	if compact {
-		footer := "tab fields · enter connect · esc cancel"
+		footer := fmt.Sprintf("%s · ctrl+t · tab fields · enter connect · esc", strings.ToLower(strings.TrimSpace(view.providerType)))
 		if view.isEditing && !view.activateOnSave {
 			footer = "enter save · active stays · esc cancel"
 		}
 		rows = append(rows, mutedStyle.Render(footer))
 	} else {
-		footer := "tab/shift+tab cycle · enter connect & fetch · esc cancel"
+		footer := "tab/shift+tab cycle · ctrl+t protocol · enter connect & fetch · esc cancel"
 		if view.isEditing && !view.activateOnSave {
 			footer = "tab/shift+tab cycle · enter save · active provider stays · esc cancel"
 		}
@@ -780,6 +806,12 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 		case "alt+4":
 			v.applyPreset(model.DefaultOpenAIName)
 			return true, nil
+		case "alt+5":
+			v.applyPreset(model.DefaultAnthropicName)
+			return true, nil
+		case "ctrl+t":
+			v.toggleProtocol()
+			return true, nil
 		case "tab", "down":
 			v.focusIndex = (v.focusIndex + 1) % 3
 			v.syncInputFocus()
@@ -920,7 +952,7 @@ func saveProviderCmd(request providerSaveRequest) tea.Cmd {
 	return func() tea.Msg {
 		dirs, resolveErr := appdirs.Resolve("")
 		if resolveErr != nil {
-			return providerSavedMsg{providerName: request.providerName, previousName: request.previousName, baseURL: request.baseURL, apiKey: request.apiKey, modelID: request.defaultModel, activated: request.activate, err: resolveErr}
+			return providerSavedMsg{providerName: request.providerName, providerType: request.providerType, previousName: request.previousName, baseURL: request.baseURL, apiKey: request.apiKey, modelID: request.defaultModel, activated: request.activate, err: resolveErr}
 		}
 		homeDir := dirs.Home
 
@@ -938,6 +970,7 @@ func saveProviderCmd(request providerSaveRequest) tea.Cmd {
 		})
 		return providerSavedMsg{
 			providerName: request.providerName,
+			providerType: request.providerType,
 			previousName: request.previousName,
 			baseURL:      request.baseURL,
 			apiKey:       request.apiKey,
