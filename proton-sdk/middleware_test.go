@@ -12,7 +12,7 @@ func (*middlewareTestModel) Provider() string { return "test" }
 func (*middlewareTestModel) ModelID() string  { return "model" }
 func (m *middlewareTestModel) Stream(context.Context, Request) (Stream, error) {
 	*m.calls = append(*m.calls, "model")
-	return &eventStream{events: []Event{{Kind: EventDone}}}, nil
+	return &eventStream{events: []Event{{Kind: EventFinish, FinishReason: FinishStop}}}, nil
 }
 
 func TestWrapLanguageModelOrder(t *testing.T) {

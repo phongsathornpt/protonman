@@ -24,7 +24,7 @@ func TestLoopStreamsTextAndCompletes(t *testing.T) {
 		events: []sdk.Event{
 			{Kind: sdk.EventTextDelta, Text: "hello"},
 			{Kind: sdk.EventTextDelta, Text: " world"},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		},
 	}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow)
@@ -79,7 +79,7 @@ func TestLoopRejectsIncompleteModelStream(t *testing.T) {
 
 func TestLoopRejectsEmptyModelResponse(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []sdk.Event{{Kind: sdk.EventDone}},
+		events: []sdk.Event{{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}},
 	}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow)
 
@@ -106,7 +106,7 @@ func TestLoopRejectsDuplicateToolCallIDs(t *testing.T) {
 				Name:      "read_file",
 				Arguments: json.RawMessage(`{"path":"b.txt"}`),
 			}},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		},
 	}}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow)
@@ -132,7 +132,7 @@ func TestLoopCompletesWhenModelRequestsToolAtMaxRounds(t *testing.T) {
 				Name:      "read_file",
 				Arguments: json.RawMessage(`{"path":"a.txt"}`),
 			}},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		},
 	}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithMaxRounds(1))
@@ -165,7 +165,7 @@ func TestLoopReportsToolCallWhenNoToolsAreAvailable(t *testing.T) {
 				Name:      "read_file",
 				Arguments: json.RawMessage(`{"path":"a.txt"}`),
 			}},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		},
 	}}}
 	policy, err := permission.NewPolicy(permission.Config{})
@@ -214,7 +214,7 @@ func TestLoopStopsWhenToolCallBatchExceedsCumulativeLimit(t *testing.T) {
 				Name:      "read_file",
 				Arguments: json.RawMessage(`{"path":"b.txt"}`),
 			}},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		},
 	}}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow, WithMaxToolCalls(1))
@@ -246,11 +246,11 @@ func TestLoopAppliesCumulativeToolCallLimitAcrossRounds(t *testing.T) {
 				Name:      "read_file",
 				Arguments: json.RawMessage(`{"path":"a.txt"}`),
 			}},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 		{events: []sdk.Event{
 			{Kind: sdk.EventTextDelta, Text: "The budgeted read completed."},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 	}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow, WithMaxToolCalls(1))
@@ -290,7 +290,7 @@ func TestLoopPreservesTextWhenMaxRoundToolCallIsIgnored(t *testing.T) {
 				Name:      "read_file",
 				Arguments: json.RawMessage(`{"path":"a.txt"}`),
 			}},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		},
 	}}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow, WithMaxRounds(1))
@@ -325,11 +325,11 @@ func TestLoopTranslatesToolCallsAndFeedsResultsBack(t *testing.T) {
 					Arguments: json.RawMessage(`{"path":"README.md"}`),
 				},
 			},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 		{events: []sdk.Event{
 			{Kind: sdk.EventTextDelta, Text: "I found it."},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 	}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow)
@@ -399,11 +399,11 @@ func TestLoopKeepsPermissionDenialInsideToolConversation(t *testing.T) {
 					Arguments: json.RawMessage(`{"path":".env"}`),
 				},
 			},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 		{events: []sdk.Event{
 			{Kind: sdk.EventTextDelta, Text: "I cannot access that file."},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 	}}
 	loop, handler := newTestLoop(t, client, permission.ActionDeny)
@@ -447,13 +447,13 @@ func TestLoopGracefulMaxRoundsSynthesis(t *testing.T) {
 						Arguments: json.RawMessage(`{"path":"README.md"}`),
 					},
 				},
-				{Kind: sdk.EventDone},
+				{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 			},
 		},
 		{
 			events: []sdk.Event{
 				{Kind: sdk.EventTextDelta, Text: "Reached max rounds. Accomplished: read README. Remaining: none."},
-				{Kind: sdk.EventDone},
+				{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 			},
 		},
 	}}
@@ -499,7 +499,7 @@ func TestLoopStopsAtMaxRoundsWhenOne(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
 		events: []sdk.Event{
 			{Kind: sdk.EventTextDelta, Text: "Single round synthesis: all set."},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		},
 	}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithMaxRounds(1))
@@ -541,7 +541,7 @@ func TestLoopUnboundedWhenZero(t *testing.T) {
 						Arguments: json.RawMessage(`{"path":"a.txt"}`),
 					},
 				},
-				{Kind: sdk.EventDone},
+				{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 			},
 		},
 		{
@@ -554,7 +554,7 @@ func TestLoopUnboundedWhenZero(t *testing.T) {
 						Arguments: json.RawMessage(`{"path":"b.txt"}`),
 					},
 				},
-				{Kind: sdk.EventDone},
+				{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 			},
 		},
 		{
@@ -567,13 +567,13 @@ func TestLoopUnboundedWhenZero(t *testing.T) {
 						Arguments: json.RawMessage(`{"path":"c.txt"}`),
 					},
 				},
-				{Kind: sdk.EventDone},
+				{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 			},
 		},
 		{
 			events: []sdk.Event{
 				{Kind: sdk.EventTextDelta, Text: "Processed all 3 files unbounded."},
-				{Kind: sdk.EventDone},
+				{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 			},
 		},
 	}}
@@ -614,11 +614,11 @@ func TestLoopTimesOutIndividualToolCall(t *testing.T) {
 					Arguments: json.RawMessage(`{"path":"slow.txt"}`),
 				},
 			},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 		{events: []sdk.Event{
 			{Kind: sdk.EventTextDelta, Text: "timed out safely"},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 	}}
 	handler := &contextBlockingHandler{
@@ -704,11 +704,11 @@ func TestLoopRunsApprovedReadCallsWithBoundedConcurrency(t *testing.T) {
 					Arguments: json.RawMessage(`{"path":"two.txt"}`),
 				},
 			},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 		{events: []sdk.Event{
 			{Kind: sdk.EventTextDelta, Text: "both read"},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 	}}
 	handler := &parallelHandler{
@@ -1035,7 +1035,7 @@ func TestLoopAugmentsSystemPromptWithSkillCatalog(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
 		events: []sdk.Event{
 			{Kind: sdk.EventTextDelta, Text: "I see the skills"},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		},
 	}}}
 	catalog := []skill.CatalogItem{
@@ -1080,7 +1080,7 @@ func TestLoopDoesNotDuplicateSkillCatalogMarker(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
 		events: []sdk.Event{
 			{Kind: sdk.EventTextDelta, Text: "ok"},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		},
 	}}}
 	catalog := []skill.CatalogItem{{
@@ -1111,11 +1111,11 @@ func TestLoopDynamicActiveSkillsWithRegistry(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: []sdk.Event{
 			{Kind: sdk.EventTextDelta, Text: "ok"},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 		{events: []sdk.Event{
 			{Kind: sdk.EventTextDelta, Text: "ok"},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 	}}
 
@@ -1190,7 +1190,7 @@ func TestNewLoopRejectsAllGlobalBoundsDisabled(t *testing.T) {
 		t.Fatalf("NewService() error = %v", err)
 	}
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventDone}},
+		events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}},
 	}}}
 	_, err = NewLoop(
 		client,
@@ -1230,7 +1230,7 @@ func TestLoopWholeTurnTimeoutStopsBlockingModel(t *testing.T) {
 
 func TestLoopAllowsUnboundedCountsWithFiniteTurnTimeout(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "bounded by time"}, {Kind: sdk.EventDone}},
+		events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "bounded by time"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}},
 	}}}
 	loop, _ := newTestLoop(
 		t,

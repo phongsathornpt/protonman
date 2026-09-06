@@ -223,9 +223,6 @@ const (
 	EventToolCall EventKind = "tool_call"
 	EventUsage    EventKind = "usage"
 	EventFinish   EventKind = "finish"
-	// EventDone is retained as the compatibility terminal event while existing
-	// Proton providers migrate to EventFinish.
-	EventDone EventKind = "done"
 )
 
 type Event struct {
@@ -243,7 +240,7 @@ type Event struct {
 
 func (e Event) Validate() error {
 	switch e.Kind {
-	case EventTextStart, EventTextDelta, EventTextEnd, EventDone:
+	case EventTextStart, EventTextDelta, EventTextEnd:
 		return nil
 	case EventUsage:
 		return e.Usage.Validate()

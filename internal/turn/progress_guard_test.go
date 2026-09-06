@@ -20,17 +20,17 @@ func TestLoopForcesSynthesisAfterRepeatedNoProgressRead(t *testing.T) {
 			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 				ID: "read-1", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`),
 			}},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 		{events: []sdk.Event{
 			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 				ID: "read-2", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`),
 			}},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 		{events: []sdk.Event{
 			{Kind: sdk.EventTextDelta, Text: "I already have the file contents."},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 	}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow)
@@ -132,7 +132,7 @@ func repeatedReadEvents(id string) []sdk.Event {
 		{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 			ID: id, Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`),
 		}},
-		{Kind: sdk.EventDone},
+		{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 	}
 }
 
@@ -179,7 +179,7 @@ func TestLoopForcesSynthesisAfterRetryableFailureBudget(t *testing.T) {
 		{events: repeatedReadEvents("retry-3")},
 		{events: []sdk.Event{
 			{Kind: sdk.EventTextDelta, Text: "The repeated read timed out, so I stopped retrying."},
-			{Kind: sdk.EventDone},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 	}}
 	handler := &retryableFailureHandler{definition: readFileDefinition()}
@@ -240,7 +240,7 @@ func TestLoopSuppressesRepeatedPermissionPrompt(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: repeatedReadEvents("deny-1")},
 		{events: repeatedReadEvents("deny-2")},
-		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "The read was denied."}, {Kind: sdk.EventDone}}},
+		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "The read was denied."}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
 	}}
 	handler := &recordingHandler{definition: readFileDefinition()}
 	policy, err := permission.NewPolicy(permission.Config{Default: permission.ActionAsk})
@@ -389,7 +389,7 @@ func TestLoopEmitsPermissionRetrySuppressionTelemetry(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: repeatedReadEvents("deny-1")},
 		{events: repeatedReadEvents("deny-2")},
-		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "permission remained denied"}, {Kind: sdk.EventDone}}},
+		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "permission remained denied"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
 	}}
 	handler := &recordingHandler{definition: readFileDefinition()}
 	policy, err := permission.NewPolicy(permission.Config{})

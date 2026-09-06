@@ -1125,7 +1125,7 @@ func consumeSDKStream(ctx context.Context, round int, stream sdk.Stream, sink Si
 			call := event.ToolCall
 			call.Arguments = append(json.RawMessage(nil), call.Arguments...)
 			calls = append(calls, call)
-		case sdk.EventFinish, sdk.EventDone:
+		case sdk.EventFinish:
 			if text.Len() == 0 && len(calls) == 0 {
 				return model.Message{}, nil, fmt.Errorf("model stream round %d: %w", round, ErrEmptyResponse)
 			}

@@ -29,7 +29,7 @@ func TestCollectStep(t *testing.T) {
 		{Kind: EventTextDelta, Text: "hello "},
 		{Kind: EventTextDelta, Text: "world"},
 		{Kind: EventToolCall, ToolCall: ToolCall{ID: "call-1", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
-		{Kind: EventDone},
+		{Kind: EventFinish, FinishReason: FinishStop},
 	}}
 	result, err := CollectStep(context.Background(), stream)
 	if err != nil {
