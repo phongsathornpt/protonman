@@ -84,11 +84,3 @@ func (m *bubbleModel) activeRemoteModel() (model.RemoteModel, bool) {
 	}
 	return model.RemoteModel{}, false
 }
-
-func remoteModelVisionSupport(md model.RemoteModel) *bool {
-	return md.VisionSupport
-}
-
-func remoteModelToolsSupport(md model.RemoteModel) *bool {
-	return md.ToolSupport
-}

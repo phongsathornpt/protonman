@@ -330,22 +330,6 @@ func TestCanonicalSlashNameNormalizesModelAlias(t *testing.T) {
 	}
 }
 
-func TestRemoteModelCapabilitySupportPreservesUnknown(t *testing.T) {
-	if got := remoteModelVisionSupport(model.RemoteModel{ID: "unknown", Features: []string{"coding"}}); got != nil {
-		t.Fatalf("vision support = %v, want unknown", *got)
-	}
-	if got := remoteModelToolsSupport(model.RemoteModel{ID: "unknown", Features: []string{"coding"}}); got != nil {
-		t.Fatalf("tool support = %v, want unknown", *got)
-	}
-	yes, no := true, false
-	if got := remoteModelVisionSupport(model.RemoteModel{VisionSupport: &yes}); got == nil || !*got {
-		t.Fatal("explicit vision support was not preserved")
-	}
-	if got := remoteModelToolsSupport(model.RemoteModel{ToolSupport: &no}); got == nil || *got {
-		t.Fatal("explicit tool denial was not preserved")
-	}
-}
-
 func TestActiveRemoteModelFindsSelectedCatalogModel(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeProvider = "protonman"
