@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/projectTHORN/proton/internal/turn"
 )
 
 // Profile classifies the role and capability scope of a subagent.
@@ -105,16 +107,21 @@ func (r Request) Validate() error {
 	return nil
 }
 
+// ErrUnverifiedChanges indicates that a strict mutating profile reached a
+// successful model completion without empirical verification after its final mutation.
+var ErrUnverifiedChanges = errors.New("subagent completed with unverified changes")
+
 // Result is the bounded final output returned from a subagent to its caller.
 type Result struct {
-	AgentID       string        `json:"agent_id"`
-	Profile       Profile       `json:"profile"`
-	Summary       string        `json:"summary"`
-	Rounds        int           `json:"rounds"`
-	QueueDuration time.Duration `json:"queue_duration"`
-	Duration      time.Duration `json:"duration"`
-	TotalDuration time.Duration `json:"total_duration"`
-	Err           error         `json:"-"`
+	AgentID       string                 `json:"agent_id"`
+	Profile       Profile                `json:"profile"`
+	Summary       string                 `json:"summary"`
+	Rounds        int                    `json:"rounds"`
+	Verification  turn.VerificationState `json:"verification"`
+	QueueDuration time.Duration          `json:"queue_duration"`
+	Duration      time.Duration          `json:"duration"`
+	TotalDuration time.Duration          `json:"total_duration"`
+	Err           error                  `json:"-"`
 }
 
 // EventKind classifies progress notifications from subagent execution.

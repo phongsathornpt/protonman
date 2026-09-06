@@ -185,6 +185,8 @@ func terminalReason(err error) string {
 		return "canceled"
 	case errors.Is(err, turn.ErrMaxRounds):
 		return "max rounds reached"
+	case errors.Is(err, ErrUnverifiedChanges):
+		return "unverified changes"
 	case errors.Is(err, toolcall.ErrPermissionDenied):
 		return "permission denied"
 	}
