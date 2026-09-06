@@ -254,8 +254,12 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 	titleStyle := warningStyle
 	border := warningColor
 	switch request.ToolKind {
-	case permission.ToolRead, permission.ToolGrep:
-		title = "Permission request — read only"
+	case permission.ToolRead, permission.ToolGrep, permission.ToolTask:
+		if request.ToolKind == permission.ToolTask {
+			title = "Task state update"
+		} else {
+			title = "Permission request — read only"
+		}
 		titleStyle = userStyle
 		border = accentUser
 	case permission.ToolEdit:

@@ -389,6 +389,12 @@ func (s *Service) authorize(ctx context.Context, request permission.Request) (pe
 			Reason: "deny mode",
 		}, nil
 	}
+	if request.ToolKind == permission.ToolTask && (mode == permission.ModeAsk || mode == permission.ModeAuto) {
+		return permission.Resolution{
+			Action: permission.ActionAllow,
+			Reason: "structured task metadata is allowed",
+		}, nil
+	}
 	if granted {
 		return permission.Resolution{
 			Action: permission.ActionAllow,

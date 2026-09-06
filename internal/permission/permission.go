@@ -168,6 +168,8 @@ const (
 	ToolWebFetch ToolKind = tool.KindWebFetch
 	// ToolWebSearch matches web-search tools.
 	ToolWebSearch ToolKind = tool.KindWebSearch
+	// ToolTask matches structured planning/task metadata tools.
+	ToolTask ToolKind = tool.KindTask
 )
 
 // PatternMode controls what part of a request a rule pattern matches.
@@ -234,6 +236,8 @@ func ParseToolKind(value string) (ToolKind, error) {
 		return ToolWebFetch, nil
 	case "web_search", "web-search", "websearch":
 		return ToolWebSearch, nil
+	case "task", "todo":
+		return ToolTask, nil
 	default:
 		return "", fmt.Errorf("unknown permission tool %q", value)
 	}
@@ -514,7 +518,7 @@ func ValidToolKind(kind ToolKind) bool {
 
 func validToolKind(kind ToolKind) bool {
 	switch kind {
-	case ToolAny, ToolRead, ToolEdit, ToolBash, ToolGrep, ToolMCP, ToolWebFetch, ToolWebSearch:
+	case ToolAny, ToolRead, ToolEdit, ToolBash, ToolGrep, ToolMCP, ToolWebFetch, ToolWebSearch, ToolTask:
 		return true
 	default:
 		return false
