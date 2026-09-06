@@ -99,6 +99,9 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 		return fmt.Errorf("%w: input and output are required", ErrInvalidServer)
 	}
 
+	stopInputWatch := watchInputCancellation(ctx, input)
+	defer stopInputWatch()
+
 	scanner := bufio.NewScanner(input)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 	var prompts sync.WaitGroup
@@ -169,6 +172,9 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 
 	scanErr := scanner.Err()
 	prompts.Wait()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	select {
 	case err := <-asyncErrors:
 		return err
@@ -178,6 +184,22 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 		return fmt.Errorf("read ACP input: %w", scanErr)
 	}
 	return nil
+}
+
+func watchInputCancellation(ctx context.Context, input io.Reader) func() {
+	closer, ok := input.(io.Closer)
+	if !ok {
+		return func() {}
+	}
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = closer.Close()
+		case <-done:
+		}
+	}()
+	return func() { close(done) }
 }
 
 func decodeRequest(line []byte) (RPCRequest, *RPCResponse) {
