@@ -160,6 +160,7 @@ func (c *Coordinator) storeTerminal(entry *agentEntry, res Result, err error) {
 	entry.result = res
 	entry.err = err
 	entry.status.FinishedAt = time.Now()
+	entry.status.Reason = terminalReason(err)
 	switch {
 	case err == nil:
 		entry.status.State = StateCompleted
@@ -167,6 +168,23 @@ func (c *Coordinator) storeTerminal(entry *agentEntry, res Result, err error) {
 		entry.status.State = StateCanceled
 	default:
 		entry.status.State = StateFailed
+	}
+}
+
+func terminalReason(err error) string {
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timed out"
+	case errors.Is(err, context.Canceled):
+		return "canceled"
+	default:
+		msg := strings.TrimSpace(err.Error())
+		if len(msg) > 80 {
+			msg = msg[:77] + "..."
+		}
+		return msg
 	}
 }
 

@@ -44,6 +44,7 @@ type AgentStatus struct {
 	StartTime  time.Time `json:"start_time"`
 	StartedAt  time.Time `json:"started_at,omitempty"`
 	FinishedAt time.Time `json:"finished_at,omitempty"`
+	Reason     string    `json:"reason,omitempty"`
 }
 
 type agentEntry struct {

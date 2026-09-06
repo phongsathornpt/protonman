@@ -1320,3 +1320,33 @@ func TestTruncateSummaryPreservesUTF8AndByteLimit(t *testing.T) {
 		t.Fatal("truncateSummary() missing truncation suffix")
 	}
 }
+
+func TestCoordinatorTerminalStatusIncludesReason(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithMaxRuntime(20*time.Millisecond),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+				<-ctx.Done()
+				return turn.Result{}, ctx.Err()
+			}}, nil
+		}),
+	)
+	defer coord.Close()
+	res, err := coord.Run(context.Background(), Request{Profile: ProfileExplorer, Task: "slow review"})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Run() error=%v", err)
+	}
+	deadline := time.Now().Add(time.Second)
+	var st AgentStatus
+	var ok bool
+	for time.Now().Before(deadline) {
+		st, _, ok = coord.Lookup(res.AgentID)
+		if ok && st.State.Terminal() {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !ok || !st.State.Terminal() || st.Reason == "" {
+		t.Fatalf("terminal status=%+v", st)
+	}
+}

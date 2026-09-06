@@ -197,3 +197,16 @@ func TestApplyTurnEventTracksRoundAndToolCount(t *testing.T) {
 		t.Fatalf("turn progress=%+v, want round 2 and 1 tool", m.turnProgress)
 	}
 }
+
+func TestAgentsViewShowsTerminalFailureReason(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.resize(100, 30)
+	m.agentSnapshot = []agent.AgentStatus{{
+		ID: "reviewer-2", Task: "review security", State: agent.StateFailed,
+		StartedAt: time.Now().Add(-10 * time.Second), FinishedAt: time.Now(), Reason: "timed out",
+	}}
+	got := m.agentsView()
+	if !strings.Contains(got, "timed out") || strings.Contains(got, "review security") {
+		t.Fatalf("agents view=%q", got)
+	}
+}
