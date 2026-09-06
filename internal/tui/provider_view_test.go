@@ -386,6 +386,22 @@ func TestProviderViewSaveFailureKeepsPane(t *testing.T) {
 	}
 }
 
+func TestProviderFetchInheritsParentCancellation(t *testing.T) {
+	view := newProviderPaneView()
+	view.nameInput.SetValue("custom")
+	view.endpointInput.SetValue("http://127.0.0.1:1")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	msg := view.beginFetch(ctx)()
+	fetched, ok := msg.(modelsFetchedMsg)
+	if !ok {
+		t.Fatalf("fetch message = %T, want modelsFetchedMsg", msg)
+	}
+	if fetched.err == nil || !errors.Is(fetched.err, context.Canceled) {
+		t.Fatalf("fetch error = %v, want context canceled", fetched.err)
+	}
+}
+
 func TestProviderViewIgnoresStaleFetchResults(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.executeCommand("/provider add")
@@ -393,9 +409,9 @@ func TestProviderViewIgnoresStaleFetchResults(t *testing.T) {
 	view.nameInput.SetValue("custom")
 	view.endpointInput.SetValue("https://api.example.com/v1")
 
-	view.beginFetch()
+	view.beginFetch(context.Background())
 	firstRequestID := view.fetchRequestID
-	view.beginFetch()
+	view.beginFetch(context.Background())
 	secondRequestID := view.fetchRequestID
 	if secondRequestID <= firstRequestID {
 		t.Fatalf("expected fetch request ID to advance, got %d then %d", firstRequestID, secondRequestID)
