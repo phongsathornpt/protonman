@@ -139,7 +139,7 @@ func (*providerSelectPaneView) ReplacesComposer() bool { return true }
 
 func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 	compact := m.height <= 20
-	visibleRows := providerSelectVisibleRows(m.height)
+	visibleRows := pickerVisibleRows(m.height, maxProviderListRows)
 	if len(v.items) == 0 {
 		rows := []string{
 			brandStyle.Render("✓ Model Providers"),
@@ -313,19 +313,6 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 	}
 	rows = append(rows, "", mutedStyle.Render(footer))
 	return renderProviderModal(m, accentAssistant, rows)
-}
-
-func providerSelectVisibleRows(height int) int {
-	switch {
-	case height <= 12:
-		return 2
-	case height <= 14:
-		return 3
-	case height <= 20:
-		return 4
-	default:
-		return maxProviderListRows
-	}
 }
 
 func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
