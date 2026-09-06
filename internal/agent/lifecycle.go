@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/projectTHORN/proton/internal/contextutil"
 )
@@ -180,11 +181,15 @@ func terminalReason(err error) string {
 	case errors.Is(err, context.Canceled):
 		return "canceled"
 	default:
-		msg := strings.TrimSpace(err.Error())
-		if len(msg) > 80 {
-			msg = msg[:77] + "..."
+		msg := strings.ToValidUTF8(strings.TrimSpace(err.Error()), "�")
+		if len(msg) <= 80 {
+			return msg
 		}
-		return msg
+		cut := 77
+		for cut > 0 && !utf8.ValidString(msg[:cut]) {
+			cut--
+		}
+		return msg[:cut] + "..."
 	}
 }
 
