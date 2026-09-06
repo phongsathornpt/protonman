@@ -318,3 +318,12 @@ func TestModelPickerSearchModeAcceptsReservedLetters(t *testing.T) {
 		t.Fatal("reserved q closed picker while search mode was active")
 	}
 }
+
+func TestCanonicalSlashNameNormalizesModelAlias(t *testing.T) {
+	if got := canonicalSlashName("models"); got != "model" {
+		t.Fatalf("canonical name = %q, want model", got)
+	}
+	if got := canonicalSlashName("MODEL"); got != "model" {
+		t.Fatalf("canonical uppercase name = %q, want model", got)
+	}
+}
