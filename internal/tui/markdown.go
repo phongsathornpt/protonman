@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -12,6 +13,7 @@ var (
 	markdownCodeStyle    = lipgloss.NewStyle().Foreground(accentSystem)
 	markdownQuoteStyle   = lipgloss.NewStyle().Foreground(accentTool)
 	markdownBulletStyle  = lipgloss.NewStyle().Foreground(accentAssistant)
+	markdownBoldStyle    = lipgloss.NewStyle().Bold(true)
 )
 
 // renderMarkdownLines provides a deliberately small, terminal-safe Markdown
@@ -143,7 +145,7 @@ func styleInlineMarkdown(text string) string {
 		case strings.HasPrefix(text[index:], "**"):
 			if end := strings.Index(text[index+2:], "**"); end >= 0 {
 				end += index + 2
-				out.WriteString(lipgloss.NewStyle().Bold(true).Render(text[index+2 : end]))
+				out.WriteString(markdownBoldStyle.Render(text[index+2 : end]))
 				index = end + 2
 				continue
 			}
@@ -167,10 +169,10 @@ func styleInlineMarkdown(text string) string {
 }
 
 func decodeRune(text string) (rune, int) {
-	for _, value := range text {
-		return value, len(string(value))
+	if text == "" {
+		return 0, 0
 	}
-	return 0, 0
+	return utf8.DecodeRuneInString(text)
 }
 
 func trimTrailingBlankLines(lines []string) []string {

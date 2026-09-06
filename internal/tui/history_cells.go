@@ -632,8 +632,8 @@ func (s *HistoryState) SetWidth(width int) {
 		return
 	}
 	s.renderWidth = width
-	s.recountCommitted()
 	s.cacheValid = false
+	s.buildCommittedCache()
 }
 
 func (s *HistoryState) SetSpinnerFrame(frame string) {
@@ -824,13 +824,17 @@ func (s *HistoryState) buildCommittedCache() {
 	}
 	render := make([]string, 0, len(s.committed)*4)
 	raw := make([]string, 0, len(s.committed)*2)
+	committedLines := 0
 	for index, cell := range s.committed {
 		if index > 0 {
 			render = append(render, "")
 		}
-		render = append(render, renderHistoryCell(cell, s.renderWidth)...)
+		cellLines := renderHistoryCell(cell, s.renderWidth)
+		committedLines += len(cellLines)
+		render = append(render, cellLines...)
 		raw = append(raw, cell.RawLines()...)
 	}
+	s.committedLines = committedLines
 	s.cachedRender = render
 	s.cachedRaw = raw
 	s.cachedWidth = s.renderWidth
@@ -917,13 +921,6 @@ func (s *HistoryState) trim() {
 	}
 	if s.committedLines < 0 {
 		s.committedLines = 0
-	}
-}
-
-func (s *HistoryState) recountCommitted() {
-	s.committedLines = 0
-	for _, cell := range s.committed {
-		s.committedLines += historyCellLineCount(cell, s.renderWidth)
 	}
 }
 
