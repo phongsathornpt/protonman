@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -21,12 +23,16 @@ import (
 )
 
 func TestLoopBuildsEffectiveSystemPromptFromRuntime(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "AGENTS.md"), []byte("follow project rules"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	client := &scriptedClient{streams: []scriptedStreamSpec{{events: []sdk.Event{
 		{Kind: sdk.EventTextDelta, Text: "done"},
 		{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 	}}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithSystemPromptSpec(agentprompt.Spec{
-		Role: "Inspect the assigned code carefully.", Profile: "reviewer", Workspace: "/repo",
+		Role: "Inspect the assigned code carefully.", Profile: "reviewer", Workspace: workspace,
 	}))
 	_, err := loop.Run(context.Background(), []model.Message{
 		{Role: model.RoleSystem, Content: "custom project instruction"},
@@ -44,7 +50,7 @@ func TestLoopBuildsEffectiveSystemPromptFromRuntime(t *testing.T) {
 	}
 	for _, want := range []string{
 		`<proton-system-prompt version="2">`, "provider=test", "model=scripted", "profile=reviewer",
-		"Workspace root: /repo", "Available tools: read_file.", "custom project instruction", "Inspect the assigned code carefully.",
+		"Workspace root: " + workspace, "Available tools: read_file.", "custom project instruction", "Inspect the assigned code carefully.", "follow project rules",
 	} {
 		if !strings.Contains(system.Content, want) {
 			t.Fatalf("system prompt missing %q:\n%s", want, system.Content)

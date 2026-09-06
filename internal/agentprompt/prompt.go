@@ -9,19 +9,20 @@ import (
 const Version = "2"
 
 type Spec struct {
-	Role              string
-	Profile           string
-	Provider          string
-	ModelID           string
-	Workspace         string
-	ToolNames         []string
-	MaxRounds         int
-	MaxToolCalls      int
-	TaskPlanEnabled   bool
-	DelegationEnabled bool
-	MutationEnabled   bool
-	Skills            string
-	ExtraInstructions []string
+	Role                string
+	Profile             string
+	Provider            string
+	ModelID             string
+	Workspace           string
+	ToolNames           []string
+	MaxRounds           int
+	MaxToolCalls        int
+	TaskPlanEnabled     bool
+	DelegationEnabled   bool
+	MutationEnabled     bool
+	Skills              string
+	ProjectInstructions string
+	ExtraInstructions   []string
 }
 
 func Render(spec Spec) string {
@@ -48,6 +49,9 @@ func Render(spec Spec) string {
 	}
 	if role := strings.TrimSpace(spec.Role); role != "" {
 		sections = append(sections, "# Profile\n"+role)
+	}
+	if project := strings.TrimSpace(spec.ProjectInstructions); project != "" {
+		sections = append(sections, "# Project Instructions\n"+project)
 	}
 	for _, extra := range spec.ExtraInstructions {
 		if text := strings.TrimSpace(extra); text != "" {
