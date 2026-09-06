@@ -230,7 +230,7 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 		req.ID = id
 	}
 	executionTimeout := req.Timeout
-	if executionTimeout == 0 {
+	if executionTimeout == 0 || (c.defaultTimeout > 0 && executionTimeout > c.defaultTimeout) {
 		executionTimeout = c.defaultTimeout
 	}
 	queueTimeout := req.QueueTimeout

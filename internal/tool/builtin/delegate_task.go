@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -17,9 +18,10 @@ type delegateTaskHandler struct {
 }
 
 type delegateTaskInput struct {
-	Task    string `json:"task"`
-	Profile string `json:"profile"`
-	Context string `json:"context,omitempty"`
+	Task           string `json:"task"`
+	Profile        string `json:"profile"`
+	Context        string `json:"context,omitempty"`
+	TimeoutSeconds int64  `json:"timeout_seconds,omitempty"`
 }
 
 // NewDelegateTask creates a tool.Handler that delegates a task to a specialized subagent.
@@ -54,6 +56,12 @@ func (delegateTaskHandler) Definition() tool.Definition {
 				"context": map[string]any{
 					"type":        "string",
 					"description": "Optional background information, hints, or specific file paths to focus on.",
+				},
+				"timeout_seconds": map[string]any{
+					"type":        "integer",
+					"minimum":     1,
+					"maximum":     86400,
+					"description": "Optional shorter execution timeout in seconds. Requests above the configured subagent maximum are clamped.",
 				},
 			},
 			"required": []string{"task", "profile"},
@@ -97,6 +105,10 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "task is required")
 	}
 
+	if input.TimeoutSeconds < 0 || input.TimeoutSeconds > 86400 {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "timeout_seconds must be between 1 and 86400 when provided")
+	}
+
 	profile, err := agent.ParseProfile(input.Profile)
 	if err != nil {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, err.Error())
@@ -108,6 +120,9 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 		Task:     task,
 		Context:  strings.TrimSpace(input.Context),
 		Depth:    0,
+	}
+	if input.TimeoutSeconds > 0 {
+		req.Timeout = time.Duration(input.TimeoutSeconds) * time.Second
 	}
 
 	res, err := h.coordinator.Run(ctx, req)

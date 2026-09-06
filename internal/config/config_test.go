@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/sandbox"
@@ -488,5 +489,39 @@ func TestAgentLimitsRejectNegativeValues(t *testing.T) {
 	}
 	if err := SaveUserMaxToolCalls(t.TempDir(), -1); err == nil {
 		t.Fatal("SaveUserMaxToolCalls(-1) error = nil, want rejection")
+	}
+}
+
+func TestAgentSubagentTimeoutConfig(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent]
+subagent_timeout = "45s"
+subagent_queue_timeout = "7s"
+`)
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if snapshot.Agent.SubagentTimeout != 45*time.Second {
+		t.Fatalf("subagent timeout = %v, want 45s", snapshot.Agent.SubagentTimeout)
+	}
+	if snapshot.Agent.SubagentQueueTimeout != 7*time.Second {
+		t.Fatalf("subagent queue timeout = %v, want 7s", snapshot.Agent.SubagentQueueTimeout)
+	}
+}
+
+func TestAgentSubagentTimeoutConfigRejectsInvalidValues(t *testing.T) {
+	for _, body := range []string{
+		"[agent]\nsubagent_timeout = \"nope\"\n",
+		"[agent]\nsubagent_timeout = \"0s\"\n",
+		"[agent]\nsubagent_queue_timeout = \"-1s\"\n",
+	} {
+		homeDir := t.TempDir()
+		workDir := t.TempDir()
+		writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), body)
+		if _, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir}); err == nil {
+			t.Fatalf("Load(%q) error = nil, want invalid duration", body)
+		}
 	}
 }

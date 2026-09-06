@@ -242,3 +242,41 @@ func TestDelegateTaskUsesCallerBoundedExecutionTimeout(t *testing.T) {
 		t.Fatalf("execution timeout policy = %q, want caller bounded", definition.ExecutionTimeoutPolicy)
 	}
 }
+
+func TestDelegateTaskAppliesRequestedShorterTimeout(t *testing.T) {
+	deadlineCh := make(chan time.Duration, 1)
+	coord := agent.NewCoordinator(nil, nil, nil, nil,
+		agent.WithDefaultTimeout(5*time.Second),
+		agent.WithEventSink(func(ctx context.Context, ev agent.Event) error {
+			if ev.Kind == agent.EventAgentStarted {
+				if deadline, ok := ctx.Deadline(); ok {
+					deadlineCh <- time.Until(deadline)
+				}
+			}
+			return nil
+		}),
+		agent.WithRunnerFactory(func(agent.Profile, *toolcall.Service) (turn.Runner, error) {
+			return mockSubagentRunner{content: "ok"}, nil
+		}),
+	)
+	defer coord.Close()
+	handler := NewDelegateTask(coord)
+	args, _ := json.Marshal(map[string]any{"profile": "explorer", "task": "short", "timeout_seconds": 1})
+	call, _ := tool.NewCall("short-timeout", "delegate_task", args)
+	if _, err := handler.Execute(context.Background(), call); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	remaining := <-deadlineCh
+	if remaining <= 0 || remaining > 1500*time.Millisecond {
+		t.Fatalf("execution deadline remaining = %v, want about 1s", remaining)
+	}
+}
+
+func TestDelegateTaskRejectsExcessiveTimeoutSeconds(t *testing.T) {
+	handler := NewDelegateTask(agent.NewCoordinator(nil, nil, nil, nil))
+	args, _ := json.Marshal(map[string]any{"profile": "explorer", "task": "too long", "timeout_seconds": 86401})
+	call, _ := tool.NewCall("bad-timeout", "delegate_task", args)
+	if _, err := handler.Execute(context.Background(), call); err == nil || !strings.Contains(err.Error(), "timeout_seconds") {
+		t.Fatalf("Execute() error = %v, want timeout validation error", err)
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/pelletier/go-toml/v2"
 
@@ -24,6 +25,10 @@ const (
 	DefaultMaxRounds = 20
 	// DefaultMaxToolCalls is the fallback cumulative tool-call limit per turn.
 	DefaultMaxToolCalls = 100
+	// DefaultSubagentTimeout bounds one subagent after it acquires execution capacity.
+	DefaultSubagentTimeout = 5 * time.Minute
+	// DefaultSubagentQueueTimeout bounds waiting for concurrency/workspace capacity.
+	DefaultSubagentQueueTimeout = 30 * time.Second
 )
 
 // Options controls which configuration layers are considered.
@@ -65,9 +70,11 @@ type ModelConfig struct {
 
 // AgentConfig specifies autonomous agent execution settings.
 type AgentConfig struct {
-	MaxRounds    int    `toml:"max_rounds"`
-	MaxToolCalls int    `toml:"max_tool_calls"`
-	Profile      string `toml:"profile"`
+	MaxRounds            int           `toml:"max_rounds"`
+	MaxToolCalls         int           `toml:"max_tool_calls"`
+	Profile              string        `toml:"profile"`
+	SubagentTimeout      time.Duration `toml:"-"`
+	SubagentQueueTimeout time.Duration `toml:"-"`
 }
 
 // Snapshot is the effective configuration after layered loading.
@@ -103,9 +110,11 @@ type fileDocument struct {
 }
 
 type fileAgent struct {
-	MaxRounds    *int    `toml:"max_rounds,omitempty"`
-	MaxToolCalls *int    `toml:"max_tool_calls,omitempty"`
-	Profile      *string `toml:"profile,omitempty"`
+	MaxRounds            *int    `toml:"max_rounds,omitempty"`
+	MaxToolCalls         *int    `toml:"max_tool_calls,omitempty"`
+	Profile              *string `toml:"profile,omitempty"`
+	SubagentTimeout      *string `toml:"subagent_timeout,omitempty"`
+	SubagentQueueTimeout *string `toml:"subagent_queue_timeout,omitempty"`
 }
 
 type fileSandbox struct {
@@ -168,8 +177,10 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 		Sandbox:        sandbox.NameOff,
 		Providers:      make(map[string]ProviderConfig),
 		Agent: AgentConfig{
-			MaxRounds:    DefaultMaxRounds,
-			MaxToolCalls: DefaultMaxToolCalls,
+			MaxRounds:            DefaultMaxRounds,
+			MaxToolCalls:         DefaultMaxToolCalls,
+			SubagentTimeout:      DefaultSubagentTimeout,
+			SubagentQueueTimeout: DefaultSubagentQueueTimeout,
 		},
 		Sources:  make([]string, 0, 2),
 		Warnings: make([]string, 0),
@@ -295,7 +306,36 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 	if document.Agent.Profile != nil {
 		snapshot.Agent.Profile = strings.TrimSpace(*document.Agent.Profile)
 	}
+	if document.Agent.SubagentTimeout != nil {
+		d, err := parsePositiveDuration("agent.subagent_timeout", *document.Agent.SubagentTimeout)
+		if err != nil {
+			return err
+		}
+		snapshot.Agent.SubagentTimeout = d
+	}
+	if document.Agent.SubagentQueueTimeout != nil {
+		d, err := parsePositiveDuration("agent.subagent_queue_timeout", *document.Agent.SubagentQueueTimeout)
+		if err != nil {
+			return err
+		}
+		snapshot.Agent.SubagentQueueTimeout = d
+	}
 	return nil
+}
+
+func parsePositiveDuration(field, raw string) (time.Duration, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, fmt.Errorf("%s must not be empty", field)
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", field, err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("%s must be greater than zero", field)
+	}
+	return d, nil
 }
 
 // SaveUserProviderConfig persists or updates a provider configuration in ~/.proton/config.toml.
