@@ -9,6 +9,7 @@ import (
 
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
+	"github.com/projectTHORN/proton/internal/workspace"
 )
 
 type fakeHandler struct {
@@ -706,5 +707,49 @@ func TestRemoteDestructiveRiskReachesPermissionPrompt(t *testing.T) {
 	}
 	if _, err := service.Call(context.Background(), call); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestServiceWorkspaceMutationGateBlocksMutatingHandler(t *testing.T) {
+	ws, err := workspace.New(t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release, err := ws.AcquireMutation(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	handler := &fakeHandler{definition: tool.Definition{Name: "bash", Description: "fake shell", Kind: tool.KindBash, Mutability: tool.MutabilityMutating, PermissionDetailKey: "command"}}
+	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAlwaysApprove), WithWorkspaceMutationGate(ws))
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	call, _ := tool.NewCall("gate-mut", "bash", json.RawMessage(`{"command":"touch file.txt"}`))
+	if _, err := service.Call(ctx, call); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Call() error = %v, want mutation gate deadline", err)
+	}
+	if handler.calls != 0 {
+		t.Fatalf("handler calls = %d, want 0 while gate is held", handler.calls)
+	}
+}
+
+func TestServiceWorkspaceMutationGateDoesNotBlockReadOnlyCall(t *testing.T) {
+	ws, err := workspace.New(t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release, err := ws.AcquireMutation(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	handler := &fakeHandler{definition: tool.Definition{Name: "read_file", Description: "fake read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly, PermissionDetailKey: "path"}}
+	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAlwaysApprove), WithWorkspaceMutationGate(ws))
+	call, _ := tool.NewCall("gate-read", "read_file", json.RawMessage(`{"path":"file.txt"}`))
+	if _, err := service.Call(context.Background(), call); err != nil {
+		t.Fatalf("read-only call blocked by mutation gate: %v", err)
+	}
+	if handler.calls != 1 {
+		t.Fatalf("handler calls = %d, want 1", handler.calls)
 	}
 }

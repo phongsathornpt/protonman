@@ -13,6 +13,7 @@ import (
 
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
+	"github.com/projectTHORN/proton/internal/workspace"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -91,6 +92,17 @@ func WithPermissionTimeout(timeout time.Duration) Option {
 // WithExecutionTimeout bounds approved handler execution.
 // Zero disables the service-level bound; callers should normally keep the
 // non-zero default for process-backed tools.
+// WithWorkspaceMutationGate serializes mutating calls that target the same workspace instance.
+func WithWorkspaceMutationGate(ws *workspace.Workspace) Option {
+	return func(service *Service) error {
+		if ws == nil {
+			return fmt.Errorf("%w: workspace mutation gate requires a workspace", ErrInvalidService)
+		}
+		service.mutationWorkspace = ws
+		return nil
+	}
+}
+
 func WithExecutionTimeout(timeout time.Duration) Option {
 	return func(service *Service) error {
 		if timeout < 0 {
@@ -115,6 +127,7 @@ type Service struct {
 
 	permissionTimeout time.Duration
 	executionTimeout  time.Duration
+	mutationWorkspace *workspace.Workspace
 }
 
 // NewService builds a permission-aware tool-call service.
@@ -163,6 +176,7 @@ func (s *Service) Clone() *Service {
 		grants:            make(map[permission.GrantKey]struct{}),
 		permissionTimeout: s.permissionTimeout,
 		executionTimeout:  s.executionTimeout,
+		mutationWorkspace: s.mutationWorkspace,
 	}
 }
 
@@ -302,6 +316,18 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 	}
 	if resolution.Scope == permission.GrantScopeSession {
 		s.rememberGrant(request.Key())
+	}
+
+	releaseMutation := func() {}
+	if s.mutationWorkspace != nil && tool.EffectiveCallMutability(definition, call.Arguments) == tool.MutabilityMutating {
+		var gateErr error
+		releaseMutation, gateErr = s.mutationWorkspace.AcquireMutation(ctx)
+		if gateErr != nil {
+			result := tool.Result{CallID: call.ID, ToolName: call.Name, Failure: tool.FailureFromError(gateErr)}
+			s.observeCallResult(ctx, telemetry, result, gateErr)
+			return result, gateErr
+		}
+		defer releaseMutation()
 	}
 
 	executionCtx, executionCancel := s.executionContext(ctx, definition)

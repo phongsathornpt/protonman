@@ -167,6 +167,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		toolcall.WithMode(initialMode),
 		toolcall.WithPermissionTimeout(loadedConfig.Runtime.ToolPermissionTimeout),
 		toolcall.WithExecutionTimeout(loadedConfig.Runtime.ToolExecutionTimeout),
+		toolcall.WithWorkspaceMutationGate(workspaceRoot),
 	}
 	observer, err := configuredTelemetryObserver()
 	if err != nil {

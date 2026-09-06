@@ -48,6 +48,9 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	}
 
 	serviceOpts := []toolcall.Option{toolcall.WithMode(serviceMode)}
+	if c.workspace != nil {
+		serviceOpts = append(serviceOpts, toolcall.WithWorkspaceMutationGate(c.workspace))
+	}
 	if prompt != nil {
 		serviceOpts = append(serviceOpts, toolcall.WithPrompt(prompt))
 	}
