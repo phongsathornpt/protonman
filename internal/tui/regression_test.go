@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/projectTHORN/proton/internal/model"
@@ -71,6 +72,36 @@ func TestAssistantMarkdownAndWrapping(t *testing.T) {
 		if width := ansi.StringWidth(line); width > 28 {
 			t.Fatalf("rendered line width = %d, want <= 28: %q", width, line)
 		}
+	}
+}
+
+func TestSimpleANSIStyleMatchesLipglossRender(t *testing.T) {
+	styles := []struct {
+		name  string
+		style lipgloss.Style
+	}{
+		{name: "code", style: markdownCodeStyle},
+		{name: "bold", style: markdownBoldStyle},
+		{name: "link", style: commandStyle},
+	}
+	for _, test := range styles {
+		t.Run(test.name, func(t *testing.T) {
+			var fast simpleANSIStyle
+			var out strings.Builder
+			fast.writeTo(&out, test.style, "alpha β")
+			if got, want := out.String(), test.style.Render("alpha β"); got != want {
+				t.Fatalf("fast style mismatch\nwant: %q\n got: %q", want, got)
+			}
+		})
+	}
+}
+
+func TestMarkdownBodyFastPathMatchesLipglossBodyRender(t *testing.T) {
+	text := "plain **bold** `code` [link](https://example.com) trailing text"
+	got := strings.Join(renderMarkdownBodyWrapped(text, 24), "\n")
+	want := strings.Join(renderMarkdownWrapped(text, 24, bodyStyle), "\n")
+	if got != want {
+		t.Fatalf("markdown body fast path mismatch\nwant: %q\n got: %q", want, got)
 	}
 }
 

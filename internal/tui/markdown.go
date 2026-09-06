@@ -2,6 +2,7 @@ package tui
 
 import (
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/charmbracelet/lipgloss"
@@ -13,7 +14,38 @@ var (
 	markdownQuoteStyle   = lipgloss.NewStyle().Foreground(accentTool)
 	markdownBulletStyle  = lipgloss.NewStyle().Foreground(accentAssistant)
 	markdownBoldStyle    = lipgloss.NewStyle().Bold(true)
+	markdownCodeInline   simpleANSIStyle
+	markdownBoldInline   simpleANSIStyle
+	markdownLinkInline   simpleANSIStyle
 )
+
+type simpleANSIStyle struct {
+	once     sync.Once
+	prefix   string
+	suffix   string
+	fallback bool
+}
+
+func (s *simpleANSIStyle) writeTo(out *strings.Builder, style lipgloss.Style, text string) {
+	s.once.Do(func() {
+		const marker = "__proton_style_probe__"
+		rendered := style.Render(marker)
+		index := strings.Index(rendered, marker)
+		if index < 0 {
+			s.fallback = true
+			return
+		}
+		s.prefix = rendered[:index]
+		s.suffix = rendered[index+len(marker):]
+	})
+	if s.fallback {
+		out.WriteString(style.Render(text))
+		return
+	}
+	out.WriteString(s.prefix)
+	out.WriteString(text)
+	out.WriteString(s.suffix)
+}
 
 // renderMarkdownLines provides a deliberately small, terminal-safe Markdown
 // renderer for transcript cells. It covers the constructs that make model
@@ -90,7 +122,15 @@ func renderMarkdownLine(raw string, width int, state *markdownRenderState) []str
 		}
 		return out
 	}
-	return renderMarkdownWrapped(line, width, bodyStyle)
+	return renderMarkdownBodyWrapped(line, width)
+}
+
+func renderMarkdownBodyWrapped(text string, width int) []string {
+	wrapped := wrapLines(text, width)
+	for index := range wrapped {
+		wrapped[index] = styleInlineMarkdown(wrapped[index])
+	}
+	return wrapped
 }
 
 func renderMarkdownWrapped(text string, width int, style lipgloss.Style) []string {
@@ -153,14 +193,14 @@ func styleInlineMarkdown(text string) string {
 		case text[index] == '`':
 			if end := strings.IndexByte(text[index+1:], '`'); end >= 0 {
 				end += index + 1
-				out.WriteString(markdownCodeStyle.Render(text[index+1 : end]))
+				markdownCodeInline.writeTo(&out, markdownCodeStyle, text[index+1:end])
 				index = end + 1
 				continue
 			}
 		case strings.HasPrefix(text[index:], "**"):
 			if end := strings.Index(text[index+2:], "**"); end >= 0 {
 				end += index + 2
-				out.WriteString(markdownBoldStyle.Render(text[index+2 : end]))
+				markdownBoldInline.writeTo(&out, markdownBoldStyle, text[index+2:end])
 				index = end + 2
 				continue
 			}
@@ -169,7 +209,7 @@ func styleInlineMarkdown(text string) string {
 				close += index + 1
 				if close+1 < len(text) && text[close+1] == '(' {
 					if end := strings.IndexByte(text[close+2:], ')'); end >= 0 {
-						out.WriteString(commandStyle.Render(text[index+1 : close]))
+						markdownLinkInline.writeTo(&out, commandStyle, text[index+1:close])
 						index = close + 2 + end + 1
 						continue
 					}
