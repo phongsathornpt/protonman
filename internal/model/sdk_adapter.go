@@ -38,7 +38,11 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 	if usesResponsesAPI(cfg.modelID, cfg.baseURL) {
 		modelOptions = append(modelOptions, sdkopenai.WithResponsesAPI())
 	}
-	return provider.Model(cfg.modelID, modelOptions...)
+	model := provider.Model(cfg.modelID, modelOptions...)
+	if cfg.vision != nil {
+		return withVisionCapability(model, *cfg.vision)
+	}
+	return model
 }
 
 func newSDKAnthropicLanguageModel(baseURL, apiKey, modelID string, opts ...ClientOption) sdk.LanguageModel {
@@ -52,7 +56,11 @@ func newSDKAnthropicLanguageModel(baseURL, apiKey, modelID string, opts ...Clien
 		BaseURL: cfg.baseURL, APIKey: cfg.apiKey, HTTPClient: cfg.httpClient,
 		UserAgent: cfg.userAgent, MaxRetries: 2, RetryBackoff: runtimepolicy.ModelRetryBackoffStep,
 	})
-	return provider.Model(cfg.modelID)
+	model := provider.Model(cfg.modelID)
+	if cfg.vision != nil {
+		return withVisionCapability(model, *cfg.vision)
+	}
+	return model
 }
 
 func usesResponsesAPI(modelID, baseURL string) bool {

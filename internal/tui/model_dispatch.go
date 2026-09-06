@@ -186,6 +186,9 @@ func (m *bubbleModel) reconfigureRunner() {
 	}
 	var clientOpts []model.ClientOption
 	clientOpts = append(clientOpts, model.WithRequestTimeout(m.runtimeConfig.ModelRequestTimeout))
+	if remoteModel, ok := m.activeRemoteModel(); ok {
+		clientOpts = append(clientOpts, model.WithVisionSupport(remoteModelSupportsVision(remoteModel)))
+	}
 	if sessID != "" {
 		clientOpts = append(clientOpts, model.WithSessionID(sessID))
 	}

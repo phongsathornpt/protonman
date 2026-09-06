@@ -42,3 +42,14 @@ func TestNewProviderLanguageModelSelectsProtocol(t *testing.T) {
 		t.Fatalf("Anthropic language model provider = %q", anthropicModel.Provider())
 	}
 }
+
+func TestNewProviderLanguageModelOverridesVisionCapability(t *testing.T) {
+	withoutVision := NewProviderLanguageModel(DefaultOpenAIName, string(ProviderProtocolOpenAI), DefaultOpenAIEndpoint, "key", "text-only", WithVisionSupport(false))
+	if withoutVision.Capabilities().Vision {
+		t.Fatalf("Capabilities().Vision = true, want false")
+	}
+	withVision := NewProviderLanguageModel(DefaultOpenAIName, string(ProviderProtocolOpenAI), DefaultOpenAIEndpoint, "key", "vision-model", WithVisionSupport(true))
+	if !withVision.Capabilities().Vision {
+		t.Fatalf("Capabilities().Vision = false, want true")
+	}
+}
