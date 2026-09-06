@@ -15,6 +15,7 @@ import (
 
 	"github.com/projectTHORN/proton/internal/agentprompt"
 	"github.com/projectTHORN/proton/internal/model"
+	"github.com/projectTHORN/proton/internal/modelprofile"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/skill"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -917,6 +918,47 @@ func (r *recordingRegistry) Definitions() []tool.Definition {
 	return []tool.Definition{r.handler.Definition()}
 }
 
+func TestLoopAppliesReasoningEffortFromKnownModelProfile(t *testing.T) {
+	client := &scriptedClient{
+		profile: modelprofile.ResolveBuiltin("gateway", "gemini-3.8-flash", modelprofile.CatalogMetadata{}),
+		streams: []scriptedStreamSpec{{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}}},
+	}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithReasoningEffort(sdk.ReasoningHigh))
+	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := client.requests[0].Options.ReasoningEffort; got != sdk.ReasoningHigh {
+		t.Fatalf("ReasoningEffort = %q, want high", got)
+	}
+}
+
+func TestLoopClampsPortableReasoningEffortToKnownLevels(t *testing.T) {
+	client := &scriptedClient{
+		profile: modelprofile.Resolved{Reasoning: modelprofile.Reasoning{Support: modelprofile.SupportYes, Levels: []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningMedium}}},
+		streams: []scriptedStreamSpec{{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}}},
+	}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithReasoningEffort(sdk.ReasoningHigh))
+	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := client.requests[0].Options.ReasoningEffort; got != sdk.ReasoningMedium {
+		t.Fatalf("ReasoningEffort = %q, want medium", got)
+	}
+}
+
+func TestLoopOmitsReasoningForUnknownModelProfile(t *testing.T) {
+	client := &scriptedClient{
+		streams: []scriptedStreamSpec{{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}}},
+	}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithReasoningEffort(sdk.ReasoningHigh))
+	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := client.requests[0].Options.ReasoningEffort; got != sdk.ReasoningDefault {
+		t.Fatalf("ReasoningEffort = %q, want provider default", got)
+	}
+}
+
 type scriptedStreamSpec struct {
 	events   []sdk.Event
 	closeErr error
@@ -925,10 +967,12 @@ type scriptedStreamSpec struct {
 type scriptedClient struct {
 	streams  []scriptedStreamSpec
 	requests []sdk.Request
+	profile  modelprofile.Resolved
 }
 
-func (*scriptedClient) Provider() string { return "test" }
-func (*scriptedClient) ModelID() string  { return "scripted" }
+func (*scriptedClient) Provider() string                              { return "test" }
+func (*scriptedClient) ModelID() string                               { return "scripted" }
+func (c *scriptedClient) ResolvedModelProfile() modelprofile.Resolved { return c.profile }
 func (*scriptedClient) Capabilities() sdk.ModelCapabilities {
 	return sdk.ModelCapabilities{Streaming: true, Tools: true}
 }

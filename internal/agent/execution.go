@@ -84,14 +84,16 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 		if c.workspace != nil {
 			promptSpec.Workspace = c.workspace.Root()
 		}
-		loop, lerr := turn.NewLoop(
-			languageModel,
-			service,
+		loopOptions := []turn.Option{
 			turn.WithSystemPromptSpec(promptSpec),
 			turn.WithMaxRounds(c.maxRounds),
 			turn.WithMaxToolCalls(c.maxToolCalls),
 			turn.WithRequireInitialToolUse(true),
-		)
+		}
+		if spec, ok := SpecForProfile(req.Profile); ok {
+			loopOptions = append(loopOptions, turn.WithReasoningEffort(spec.Reasoning))
+		}
+		loop, lerr := turn.NewLoop(languageModel, service, loopOptions...)
 		if lerr != nil {
 			return Result{AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create turn loop: %w", lerr)
 		}
