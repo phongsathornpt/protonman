@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"io"
 	"sort"
 	"strings"
@@ -20,7 +21,7 @@ import (
 	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
 
-const sessionPersistenceTimeout = 5 * time.Second
+const sessionPersistenceTimeout = runtimepolicy.SessionPersistenceTimeout
 
 // Session represents an active ACP conversation thread.
 type Session struct {

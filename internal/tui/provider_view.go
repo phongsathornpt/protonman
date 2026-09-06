@@ -3,9 +3,9 @@ package tui
 import (
 	"context"
 	"fmt"
+	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -860,7 +860,7 @@ func fetchProviderModelsCmd(request providerFetchRequest) tea.Cmd {
 		if parent == nil {
 			parent = context.Background()
 		}
-		ctx, cancel := context.WithTimeout(parent, 10*time.Second)
+		ctx, cancel := context.WithTimeout(parent, runtimepolicy.ModelDiscoveryTimeout)
 		defer cancel()
 
 		models, err := model.FetchProviderModels(ctx, request.baseURL, request.apiKey)

@@ -27,8 +27,8 @@ const (
 	defaultMaxRetainedAgents = runtimepolicy.AgentMaxRetained
 	defaultResultTTL         = runtimepolicy.AgentResultTTL
 	defaultEventQueueSize    = 64
-	defaultCloseTimeout      = 5 * time.Second
-	eventEmitTimeout         = 100 * time.Millisecond
+	defaultCloseTimeout      = runtimepolicy.AgentCloseTimeout
+	eventEmitTimeout         = runtimepolicy.AgentEventEmitTimeout
 	maxSummaryBytes          = 32 * 1024 // 32KB bound for child summaries returned to parent
 )
 

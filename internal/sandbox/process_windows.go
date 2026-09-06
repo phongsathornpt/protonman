@@ -4,13 +4,13 @@ package sandbox
 
 import (
 	"errors"
+	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"os"
 	"os/exec"
 	"strconv"
-	"time"
 )
 
-const commandWaitDelay = 2 * time.Second
+const commandWaitDelay = runtimepolicy.SandboxCommandWaitDelay
 
 func configureCommand(cmd *exec.Cmd) {
 	cmd.WaitDelay = commandWaitDelay

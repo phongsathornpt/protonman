@@ -20,3 +20,14 @@ const (
 	WebFetchTimeout       = 10 * time.Second
 	ModelCatalogTTL       = 2 * time.Minute
 )
+
+const (
+	SessionPersistenceTimeout = 5 * time.Second
+	AgentCloseTimeout         = 5 * time.Second
+	AgentEventEmitTimeout     = 100 * time.Millisecond
+	AgentLifecycleEmitTimeout = 5 * time.Second
+	SandboxCommandWaitDelay   = 2 * time.Second
+	TerminalEmitTimeout       = 5 * time.Second
+	ProtectionObserverTimeout = time.Second
+	ModelRetryBackoffStep     = 500 * time.Millisecond
+)
