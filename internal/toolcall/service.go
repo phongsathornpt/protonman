@@ -270,6 +270,7 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		Detail:    detail,
 		Arguments: append(json.RawMessage(nil), call.Arguments...),
 		Risk:      tool.EffectiveCallRisk(definition, call.Arguments),
+		Effect:    tool.EffectiveCallEffect(definition, call.Arguments),
 	}
 	permissionCtx, permissionCancel := s.permissionContext(ctx)
 	defer permissionCancel()
@@ -437,7 +438,7 @@ func (s *Service) authorize(ctx context.Context, request permission.Request) (pe
 		}
 		return permission.Resolution{Action: permission.ActionAllow, Reason: reason}, nil
 	}
-	if granted && request.Risk == tool.CommandRiskNormal {
+	if granted && request.Effect == tool.CommandEffectReadOnly && request.Risk == tool.CommandRiskNormal {
 		return permission.Resolution{
 			Action: permission.ActionAllow,
 			Reason: "allowed by session grant",

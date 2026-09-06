@@ -295,6 +295,9 @@ type Request struct {
 	Arguments json.RawMessage
 	// Risk records proven destructive command behavior independently from generic mutability.
 	Risk tool.CommandRisk
+	// Effect records the per-call shell effect. Unknown fails closed:
+	// session-grant reuse requires Effect == read_only.
+	Effect tool.CommandEffect
 }
 
 // Decision is the result of evaluating a static policy.
