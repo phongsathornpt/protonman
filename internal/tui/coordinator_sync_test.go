@@ -156,8 +156,8 @@ func TestTUI_ReconfigureRunnerUpdatesCoordinatorClient(t *testing.T) {
 	defer func() { _ = coordinator.Close() }()
 	model.coordinator = coordinator
 
-	if coordinator.Client() != nil {
-		t.Fatal("expected coordinator client initially nil")
+	if coordinator.LanguageModel() != nil {
+		t.Fatal("expected coordinator language model initially nil")
 	}
 
 	model.activeModel = "test-model"
@@ -172,8 +172,8 @@ func TestTUI_ReconfigureRunnerUpdatesCoordinatorClient(t *testing.T) {
 
 	model.reconfigureRunner()
 
-	if coordinator.Client() == nil {
-		t.Fatal("expected coordinator client to be updated after reconfigureRunner()")
+	if coordinator.LanguageModel() == nil {
+		t.Fatal("expected coordinator language model to be updated after reconfigureRunner()")
 	}
 }
 

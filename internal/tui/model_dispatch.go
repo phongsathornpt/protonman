@@ -190,7 +190,6 @@ func (m *bubbleModel) reconfigureRunner() {
 		clientOpts = append(clientOpts, model.WithSessionID(sessID))
 	}
 	languageModel := model.NewProviderLanguageModel(provName, prov.Type, baseURL, prov.APIKey, m.activeModel, clientOpts...)
-	client := model.WrapLanguageModel(languageModel)
 	var opts []applicationturn.Option
 	if m.skills != nil {
 		opts = append(opts, applicationturn.WithSkillRegistry(m.skills))
@@ -203,7 +202,6 @@ func (m *bubbleModel) reconfigureRunner() {
 	if err == nil {
 		m.runner = loop
 		if m.coordinator != nil {
-			m.coordinator.SetClient(client)
 			m.coordinator.SetLanguageModel(languageModel)
 		}
 		if m.bottom != nil {
