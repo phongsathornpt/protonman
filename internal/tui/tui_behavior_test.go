@@ -434,3 +434,19 @@ func TestPlanModeBlocksUnknownBash(t *testing.T) {
 		t.Fatalf("handler calls = %d, want 0", handler.calls)
 	}
 }
+
+func TestTodoConflictRendersTaskSpecificGuidance(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	call, _ := tool.NewCall("todo-conflict", "update_todo", []byte(`{"expected_revision":1,"items":[]}`))
+	m.appendToolCall(call)
+	m.applyToolResult("update_todo", tool.Result{
+		CallID: "todo-conflict", ToolName: "update_todo",
+		Failure: &tool.Failure{Code: tool.ErrorCodeConflict, Message: "todo snapshot is stale"},
+	}, nil)
+	plain := plainTranscript(m)
+	for _, want := range []string{"Task plan changed", "task plan changed while this update was being prepared", "get_todo"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("transcript=%q missing %q", plain, want)
+		}
+	}
+}

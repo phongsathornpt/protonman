@@ -224,11 +224,20 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 
 	if result.Failure != nil && result.Failure.Message != "" && result.Failure.Code != tool.ErrorCodeCanceled {
 		suggestions := toolFailureSuggestions(name, result.Failure.Code)
+		title := name
+		badge := string(result.Failure.Code)
+		text := result.Failure.Message
+		if name == "update_todo" && result.Failure.Code == tool.ErrorCodeConflict {
+			title = "Task plan changed"
+			badge = "stale"
+			text = "The task plan changed while this update was being prepared."
+			suggestions = []string{"Refresh tasks with get_todo, then retry the update."}
+		}
 		errorCell := &ErrorCell{
 			ErrorKind:   ErrorKindToolFailed,
-			Title:       name,
-			Badge:       string(result.Failure.Code),
-			Text:        result.Failure.Message,
+			Title:       title,
+			Badge:       badge,
+			Text:        text,
 			Code:        result.Failure.Code,
 			Suggestions: suggestions,
 		}
