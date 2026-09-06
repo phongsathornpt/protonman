@@ -245,3 +245,33 @@ func TestModelPickerRefreshBypassesFreshCache(t *testing.T) {
 	}
 	view.cancelFetch()
 }
+
+func TestDirectModelSelectionMarksUnknownModelUnverified(t *testing.T) {
+	t.Setenv("PROTON_HOME", t.TempDir())
+	m := newTestSkillsModel(t, 1)
+	m.activeProvider = model.DefaultProtonmanName
+
+	cmd := m.selectModelDirect("custom-unlisted-model")
+	if cmd == nil {
+		t.Fatal("direct model selection returned nil command")
+	}
+	msg, ok := cmd().(modelSelectedMsg)
+	if !ok {
+		t.Fatalf("expected modelSelectedMsg")
+	}
+	if !msg.unverified {
+		t.Fatal("unknown model was not marked unverified")
+	}
+}
+
+func TestDirectModelSelectionRecognizesKnownFallbackModel(t *testing.T) {
+	t.Setenv("PROTON_HOME", t.TempDir())
+	m := newTestSkillsModel(t, 1)
+	m.activeProvider = model.DefaultProtonmanName
+
+	cmd := m.selectModelDirect("glm-5.3-flash")
+	msg := cmd().(modelSelectedMsg)
+	if msg.unverified {
+		t.Fatal("known fallback model was marked unverified")
+	}
+}

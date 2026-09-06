@@ -20,6 +20,7 @@ const maxModelSelectRows = 6
 type modelSelectedMsg struct {
 	providerName string
 	modelID      string
+	unverified   bool
 	err          error
 }
 
@@ -418,6 +419,10 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 }
 
 func saveDefaultModelCmd(providerName, modelID string) tea.Cmd {
+	return saveModelSelectionCmd(providerName, modelID, false)
+}
+
+func saveModelSelectionCmd(providerName, modelID string, unverified bool) tea.Cmd {
 	return func() tea.Msg {
 		homeDir := strings.TrimSpace(os.Getenv("PROTON_HOME"))
 		if homeDir == "" {
@@ -430,6 +435,7 @@ func saveDefaultModelCmd(providerName, modelID string) tea.Cmd {
 		return modelSelectedMsg{
 			providerName: providerName,
 			modelID:      modelID,
+			unverified:   unverified,
 			err:          err,
 		}
 	}

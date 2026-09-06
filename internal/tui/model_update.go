@@ -202,6 +202,9 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.reconfigureRunner()
 			m.appendLine(successStyle.Render(fmt.Sprintf("✓ Active model set to %s (%s)", message.modelID, m.activeProvider)))
+			if message.unverified {
+				m.appendLine(mutedStyle.Render("  Model ID was not present in the discovered catalog; using it as a custom model."))
+			}
 			m.appendLine(mutedStyle.Render("  Saved to ~/.proton/config.toml"))
 		}
 		m.bottom.remove(modelSelectViewID)

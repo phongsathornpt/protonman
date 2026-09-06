@@ -61,3 +61,23 @@ func (s *modelCatalogState) freshModels(provider string, now time.Time, ttl time
 	}
 	return append([]model.RemoteModel(nil), entry.models...), true
 }
+
+func (m *bubbleModel) modelIDKnown(provider, modelID string) bool {
+	if m == nil {
+		return false
+	}
+	models := m.modelCatalogs.models(provider)
+	if len(models) == 0 {
+		baseURL := ""
+		if cfg, ok := m.providers[normalizeProviderKey(provider)]; ok {
+			baseURL = cfg.BaseURL
+		}
+		models = model.FallbackModelsForProvider(provider, baseURL)
+	}
+	for _, candidate := range models {
+		if strings.EqualFold(strings.TrimSpace(candidate.ID), strings.TrimSpace(modelID)) {
+			return true
+		}
+	}
+	return false
+}
