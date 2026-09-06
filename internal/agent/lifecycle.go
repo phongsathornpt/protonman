@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -135,7 +136,7 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 	if runErr != nil {
 		eventKind = EventAgentFailed
 	}
-	emitCtx, emitDone := contextutil.DetachedTimeout(execCtx, 5*time.Second)
+	emitCtx, emitDone := contextutil.DetachedTimeout(execCtx, runtimepolicy.AgentLifecycleEmitTimeout)
 	c.emit(emitCtx, Event{Kind: eventKind, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: res.Summary, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: runErr})
 	emitDone()
 }

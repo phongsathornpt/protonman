@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/projectTHORN/proton/internal/buildinfo"
+	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"io"
 	"log/slog"
 	"net/http"
@@ -295,7 +296,7 @@ func (c *OpenAIClient) Stream(ctx context.Context, request Request) (Stream, err
 			"max_attempts", maxRetries+1,
 		)
 		if attempt > 0 {
-			backoff := time.Duration(attempt*500) * time.Millisecond
+			backoff := time.Duration(attempt) * runtimepolicy.ModelRetryBackoffStep
 			select {
 			case <-ctx.Done():
 				slog.DebugContext(ctx, "model stream retry cancelled", "attempt", attempt+1)

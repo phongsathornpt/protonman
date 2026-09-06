@@ -4,14 +4,14 @@ package sandbox
 
 import (
 	"errors"
+	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"os/exec"
 	"syscall"
 
 	"golang.org/x/sys/unix"
-	"time"
 )
 
-const commandWaitDelay = 2 * time.Second
+const commandWaitDelay = runtimepolicy.SandboxCommandWaitDelay
 
 func configureCommand(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

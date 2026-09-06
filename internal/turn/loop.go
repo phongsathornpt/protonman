@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	terminalEmitTimeout       = 5 * time.Second
-	protectionObserverTimeout = time.Second
+	terminalEmitTimeout       = runtimepolicy.TerminalEmitTimeout
+	protectionObserverTimeout = runtimepolicy.ProtectionObserverTimeout
 
 	// DefaultMaxRounds is the default maximum number of rounds per turn.
 	DefaultMaxRounds = runtimepolicy.TurnMaxRounds
