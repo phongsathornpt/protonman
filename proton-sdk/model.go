@@ -150,9 +150,33 @@ const (
 	ToolChoiceRequired ToolChoice = "required"
 )
 
+// ReasoningEffort is the provider-neutral reasoning intensity requested from a model.
+// The empty value preserves the model/provider default.
+type ReasoningEffort string
+
+const (
+	ReasoningDefault ReasoningEffort = ""
+	ReasoningNone    ReasoningEffort = "none"
+	ReasoningLow     ReasoningEffort = "low"
+	ReasoningMedium  ReasoningEffort = "medium"
+	ReasoningHigh    ReasoningEffort = "high"
+	ReasoningXHigh   ReasoningEffort = "xhigh"
+	ReasoningMax     ReasoningEffort = "max"
+)
+
+func (e ReasoningEffort) Valid() bool {
+	switch e {
+	case ReasoningDefault, ReasoningNone, ReasoningLow, ReasoningMedium, ReasoningHigh, ReasoningXHigh, ReasoningMax:
+		return true
+	default:
+		return false
+	}
+}
+
 type ModelOptions struct {
 	MaxOutputTokens  int
 	ToolChoice       ToolChoice
+	ReasoningEffort  ReasoningEffort
 	ProviderOptions  ProviderOptions
 	IncludeRawChunks bool
 }
@@ -169,6 +193,9 @@ func (r Request) Validate() error {
 	}
 	if r.Options.ToolChoice != ToolChoiceAuto && r.Options.ToolChoice != ToolChoiceRequired {
 		return fmt.Errorf("%w: unsupported tool choice %q", ErrInvalidRequest, r.Options.ToolChoice)
+	}
+	if !r.Options.ReasoningEffort.Valid() {
+		return fmt.Errorf("%w: unsupported reasoning effort %q", ErrInvalidRequest, r.Options.ReasoningEffort)
 	}
 	if r.Options.ToolChoice == ToolChoiceRequired && len(r.Tools) == 0 {
 		return fmt.Errorf("%w: required tool choice needs at least one tool", ErrInvalidRequest)
