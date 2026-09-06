@@ -172,6 +172,30 @@ func CloneMessages(messages []Message) []Message {
 	return cloned
 }
 
+type FinishReason string
+
+const (
+	FinishStop      FinishReason = "stop"
+	FinishLength    FinishReason = "length"
+	FinishToolCalls FinishReason = "tool_calls"
+	FinishError     FinishReason = "error"
+	FinishOther     FinishReason = "other"
+)
+
+type Usage struct {
+	InputTokens       int64
+	OutputTokens      int64
+	TotalTokens       int64
+	CachedInputTokens int64
+}
+
+func (u Usage) Validate() error {
+	if u.InputTokens < 0 || u.OutputTokens < 0 || u.TotalTokens < 0 || u.CachedInputTokens < 0 {
+		return fmt.Errorf("%w: token usage cannot be negative", ErrInvalidEvent)
+	}
+	return nil
+}
+
 type EventKind string
 
 const (
@@ -185,7 +209,11 @@ const (
 	// need incremental argument rendering. Providers may emit both lifecycle
 	// events and this normalized complete event.
 	EventToolCall EventKind = "tool_call"
-	EventDone     EventKind = "done"
+	EventUsage    EventKind = "usage"
+	EventFinish   EventKind = "finish"
+	// EventDone is retained as the compatibility terminal event while existing
+	// Proton providers migrate to EventFinish.
+	EventDone EventKind = "done"
 )
 
 type Event struct {
@@ -196,11 +224,20 @@ type Event struct {
 	ToolCallID     string
 	ToolName       string
 	ArgumentsDelta string
+	Usage          Usage
+	FinishReason   FinishReason
 }
 
 func (e Event) Validate() error {
 	switch e.Kind {
 	case EventTextStart, EventTextDelta, EventTextEnd, EventDone:
+		return nil
+	case EventUsage:
+		return e.Usage.Validate()
+	case EventFinish:
+		if !validFinishReason(e.FinishReason) {
+			return fmt.Errorf("%w: unsupported finish reason %q", ErrInvalidEvent, e.FinishReason)
+		}
 		return nil
 	case EventToolCallStart:
 		if strings.TrimSpace(e.ToolCallID) == "" {
@@ -225,6 +262,15 @@ func (e Event) Validate() error {
 type Stream interface {
 	Next(ctx context.Context) (Event, error)
 	Close() error
+}
+
+func validFinishReason(reason FinishReason) bool {
+	switch reason {
+	case FinishStop, FinishLength, FinishToolCalls, FinishError, FinishOther:
+		return true
+	default:
+		return false
+	}
 }
 
 func validRole(role Role) bool {
