@@ -12,6 +12,7 @@ import (
 	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/config"
+	"github.com/projectTHORN/proton/internal/envconfig"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/sandbox"
@@ -55,7 +56,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	if err != nil {
 		return nil, fmt.Errorf("resolve work directory: %w", err)
 	}
-	loadedConfig, err := config.Load(ctx, config.Options{HomeDir: homeDir, WorkDir: workDir, ProjectTrusted: truthy(os.Getenv("PROTON_TRUST_PROJECT"))})
+	loadedConfig, err := config.Load(ctx, config.Options{HomeDir: homeDir, WorkDir: workDir, ProjectTrusted: envconfig.Bool(envconfig.TrustProject)})
 	if err != nil {
 		return nil, fmt.Errorf("load configuration: %w", err)
 	}
@@ -73,7 +74,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	sandboxName := loadedConfig.Sandbox
 	if configured := strings.TrimSpace(options.sandbox); configured != "" {
 		sandboxName, err = sandbox.ParseName(configured)
-	} else if configured := strings.TrimSpace(os.Getenv("PROTON_SANDBOX")); configured != "" {
+	} else if configured := envconfig.Value(envconfig.Sandbox); configured != "" {
 		sandboxName, err = sandbox.ParseName(configured)
 	}
 	if err != nil {
@@ -85,7 +86,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	}
 	launcher := sandbox.NewOSLauncher(sandboxProfile)
 
-	skillsResult, err := skill.Discover(ctx, skill.Options{HomeDir: homeDir, WorkDir: workDir, ProjectTrusted: truthy(os.Getenv("PROTON_TRUST_PROJECT"))})
+	skillsResult, err := skill.Discover(ctx, skill.Options{HomeDir: homeDir, WorkDir: workDir, ProjectTrusted: envconfig.Bool(envconfig.TrustProject)})
 	if err != nil {
 		return nil, fmt.Errorf("discover agent skills: %w", err)
 	}

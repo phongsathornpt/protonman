@@ -3,11 +3,13 @@ package appdirs
 import (
 	"path/filepath"
 	"testing"
+
+	"github.com/projectTHORN/proton/internal/envconfig"
 )
 
 func TestResolveExplicitHome(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv(EnvHome, filepath.Join(t.TempDir(), "ignored"))
+	t.Setenv(envconfig.Home, filepath.Join(t.TempDir(), "ignored"))
 
 	dirs, err := Resolve(home)
 	if err != nil {
@@ -26,7 +28,7 @@ func TestResolveExplicitHome(t *testing.T) {
 
 func TestResolveUsesProtonHome(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv(EnvHome, home)
+	t.Setenv(envconfig.Home, home)
 
 	dirs, err := Resolve("")
 	if err != nil {
