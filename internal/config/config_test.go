@@ -566,3 +566,37 @@ func TestAgentSubagentTimeoutConfigRejectsInvalidValues(t *testing.T) {
 		}
 	}
 }
+
+func TestRuntimeConfigOverridesDefaults(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[runtime]
+turn_timeout = "3m"
+round_timeout = "45s"
+tool_permission_timeout = "30s"
+tool_execution_timeout = "90s"
+model_request_timeout = "4m"
+model_discovery_timeout = "8s"
+web_fetch_timeout = "12s"
+model_catalog_ttl = "75s"
+`)
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	checks := map[string]struct{ got, want time.Duration }{
+		"turn":            {snapshot.Runtime.TurnTimeout, 3 * time.Minute},
+		"round":           {snapshot.Runtime.RoundTimeout, 45 * time.Second},
+		"permission":      {snapshot.Runtime.ToolPermissionTimeout, 30 * time.Second},
+		"execution":       {snapshot.Runtime.ToolExecutionTimeout, 90 * time.Second},
+		"model request":   {snapshot.Runtime.ModelRequestTimeout, 4 * time.Minute},
+		"model discovery": {snapshot.Runtime.ModelDiscoveryTimeout, 8 * time.Second},
+		"web fetch":       {snapshot.Runtime.WebFetchTimeout, 12 * time.Second},
+		"catalog ttl":     {snapshot.Runtime.ModelCatalogTTL, 75 * time.Second},
+	}
+	for name, check := range checks {
+		if check.got != check.want {
+			t.Errorf("%s = %v, want %v", name, check.got, check.want)
+		}
+	}
+}

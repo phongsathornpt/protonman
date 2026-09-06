@@ -87,6 +87,32 @@ type AgentConfig struct {
 	CompletedResultTTL   time.Duration `toml:"-"`
 }
 
+// RuntimeConfig specifies execution and network time bounds.
+type RuntimeConfig struct {
+	TurnTimeout           time.Duration `toml:"-"`
+	RoundTimeout          time.Duration `toml:"-"`
+	ToolPermissionTimeout time.Duration `toml:"-"`
+	ToolExecutionTimeout  time.Duration `toml:"-"`
+	ModelRequestTimeout   time.Duration `toml:"-"`
+	ModelDiscoveryTimeout time.Duration `toml:"-"`
+	WebFetchTimeout       time.Duration `toml:"-"`
+	ModelCatalogTTL       time.Duration `toml:"-"`
+}
+
+// DefaultRuntimeConfig returns the default shared runtime policy.
+func DefaultRuntimeConfig() RuntimeConfig {
+	return RuntimeConfig{
+		TurnTimeout:           runtimepolicy.TurnTimeout,
+		RoundTimeout:          runtimepolicy.RoundTimeout,
+		ToolPermissionTimeout: runtimepolicy.ToolPermissionTimeout,
+		ToolExecutionTimeout:  runtimepolicy.ToolExecutionTimeout,
+		ModelRequestTimeout:   runtimepolicy.ModelRequestTimeout,
+		ModelDiscoveryTimeout: runtimepolicy.ModelDiscoveryTimeout,
+		WebFetchTimeout:       runtimepolicy.WebFetchTimeout,
+		ModelCatalogTTL:       runtimepolicy.ModelCatalogTTL,
+	}
+}
+
 // Snapshot is the effective configuration after layered loading.
 type Snapshot struct {
 	// Permission is the static permission policy configuration.
@@ -103,6 +129,8 @@ type Snapshot struct {
 	Model ModelConfig
 	// Agent defines execution bounds such as max rounds.
 	Agent AgentConfig
+	// Runtime defines shared execution and network policies.
+	Runtime RuntimeConfig
 	// Sources lists files that were loaded successfully.
 	Sources []string
 	// Warnings reports safe skips, such as an untrusted project config.
@@ -117,6 +145,7 @@ type fileDocument struct {
 	Providers  map[string]ProviderConfig `toml:"providers,omitempty"`
 	Model      ModelConfig               `toml:"model,omitempty"`
 	Agent      fileAgent                 `toml:"agent,omitempty"`
+	Runtime    fileRuntime               `toml:"runtime,omitempty"`
 }
 
 type fileAgent struct {
@@ -130,6 +159,17 @@ type fileAgent struct {
 	SubagentQueueTimeout *string `toml:"subagent_queue_timeout,omitempty"`
 	CompletedResultTTL   *string `toml:"completed_result_ttl,omitempty"`
 	SubagentTimeout      *string `toml:"subagent_timeout,omitempty"` // legacy
+}
+
+type fileRuntime struct {
+	TurnTimeout           *string `toml:"turn_timeout,omitempty"`
+	RoundTimeout          *string `toml:"round_timeout,omitempty"`
+	ToolPermissionTimeout *string `toml:"tool_permission_timeout,omitempty"`
+	ToolExecutionTimeout  *string `toml:"tool_execution_timeout,omitempty"`
+	ModelRequestTimeout   *string `toml:"model_request_timeout,omitempty"`
+	ModelDiscoveryTimeout *string `toml:"model_discovery_timeout,omitempty"`
+	WebFetchTimeout       *string `toml:"web_fetch_timeout,omitempty"`
+	ModelCatalogTTL       *string `toml:"model_catalog_ttl,omitempty"`
 }
 
 type fileSandbox struct {
@@ -201,6 +241,7 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 			SubagentQueueTimeout: DefaultSubagentQueueTimeout,
 			CompletedResultTTL:   DefaultCompletedResultTTL,
 		},
+		Runtime:  DefaultRuntimeConfig(),
 		Sources:  make([]string, 0, 2),
 		Warnings: make([]string, 0),
 	}
@@ -375,6 +416,29 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 			return err
 		}
 		snapshot.Agent.CompletedResultTTL = d
+	}
+
+	for field, target := range map[string]struct {
+		raw *string
+		set func(time.Duration)
+	}{
+		"runtime.turn_timeout":            {document.Runtime.TurnTimeout, func(d time.Duration) { snapshot.Runtime.TurnTimeout = d }},
+		"runtime.round_timeout":           {document.Runtime.RoundTimeout, func(d time.Duration) { snapshot.Runtime.RoundTimeout = d }},
+		"runtime.tool_permission_timeout": {document.Runtime.ToolPermissionTimeout, func(d time.Duration) { snapshot.Runtime.ToolPermissionTimeout = d }},
+		"runtime.tool_execution_timeout":  {document.Runtime.ToolExecutionTimeout, func(d time.Duration) { snapshot.Runtime.ToolExecutionTimeout = d }},
+		"runtime.model_request_timeout":   {document.Runtime.ModelRequestTimeout, func(d time.Duration) { snapshot.Runtime.ModelRequestTimeout = d }},
+		"runtime.model_discovery_timeout": {document.Runtime.ModelDiscoveryTimeout, func(d time.Duration) { snapshot.Runtime.ModelDiscoveryTimeout = d }},
+		"runtime.web_fetch_timeout":       {document.Runtime.WebFetchTimeout, func(d time.Duration) { snapshot.Runtime.WebFetchTimeout = d }},
+		"runtime.model_catalog_ttl":       {document.Runtime.ModelCatalogTTL, func(d time.Duration) { snapshot.Runtime.ModelCatalogTTL = d }},
+	} {
+		if target.raw == nil {
+			continue
+		}
+		d, err := parsePositiveDuration(field, *target.raw)
+		if err != nil {
+			return err
+		}
+		target.set(d)
 	}
 	return nil
 }

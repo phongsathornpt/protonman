@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/projectTHORN/proton/internal/buildinfo"
 	"github.com/projectTHORN/proton/internal/sandbox"
@@ -17,6 +18,16 @@ import (
 )
 
 const maxFetchBytes = 256 * 1024
+
+type WebFetchOption func(*webFetchHandler)
+
+func WithWebFetchTimeout(timeout time.Duration) WebFetchOption {
+	return func(handler *webFetchHandler) {
+		if timeout > 0 && handler.client != nil {
+			handler.client.Timeout = timeout
+		}
+	}
+}
 
 type webFetchHandler struct {
 	policy sandbox.NetworkPolicy
@@ -28,11 +39,11 @@ type webFetchInput struct {
 }
 
 // NewWebFetch returns a permission-gated URL fetch adapter.
-func NewWebFetch(policy sandbox.NetworkPolicy) tool.Handler {
+func NewWebFetch(policy sandbox.NetworkPolicy, options ...WebFetchOption) tool.Handler {
 	if policy.Allowed == nil {
 		policy.Allowed = []sandbox.Origin{}
 	}
-	return webFetchHandler{
+	handler := webFetchHandler{
 		policy: policy,
 		client: &http.Client{
 			Timeout: runtimepolicy.WebFetchTimeout,
@@ -47,6 +58,12 @@ func NewWebFetch(policy sandbox.NetworkPolicy) tool.Handler {
 			},
 		},
 	}
+	for _, option := range options {
+		if option != nil {
+			option(&handler)
+		}
+	}
+	return handler
 }
 
 func (webFetchHandler) Definition() tool.Definition {

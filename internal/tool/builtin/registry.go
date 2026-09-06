@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/checkpoint"
+	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"github.com/projectTHORN/proton/internal/sandbox"
 	"github.com/projectTHORN/proton/internal/skill"
 	tododomain "github.com/projectTHORN/proton/internal/todo"
@@ -51,6 +53,7 @@ type registryOptions struct {
 	skills            *skill.Registry
 	coordinator       *agent.Coordinator
 	todoStore         tododomain.Repository
+	webFetchTimeout   time.Duration
 }
 
 // WithCheckpointStore attaches durable edit checkpoints.
@@ -78,6 +81,17 @@ func WithSandbox(launcher sandbox.Launcher, network sandbox.NetworkPolicy) Regis
 		options.launcher = launcher
 		options.network = network
 		options.sandboxConfigured = true
+		return nil
+	}
+}
+
+// WithWebFetchTimeout overrides the web_fetch HTTP timeout.
+func WithDefaultWebFetchTimeout(timeout time.Duration) RegistryOption {
+	return func(options *registryOptions) error {
+		if timeout <= 0 {
+			return fmt.Errorf("web fetch timeout must be positive")
+		}
+		options.webFetchTimeout = timeout
 		return nil
 	}
 }
@@ -118,7 +132,8 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 		return nil, fmt.Errorf("create default registry: workspace is required")
 	}
 	cfg := registryOptions{
-		stores: make([]checkpoint.Store, 0),
+		stores:          make([]checkpoint.Store, 0),
+		webFetchTimeout: runtimepolicy.WebFetchTimeout,
 		network: sandbox.NetworkPolicy{
 			Mode:    sandbox.NetworkBlocked,
 			Allowed: []sandbox.Origin{},
@@ -149,7 +164,7 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 		NewListDir(workspaceRoot),
 		NewGitStatus(workspaceRoot, cfg.launcher),
 		NewCheckpointRestore(checkpointStore),
-		NewWebFetch(cfg.network),
+		NewWebFetch(cfg.network, WithWebFetchTimeout(cfg.webFetchTimeout)),
 	}
 	if cfg.todoStore != nil {
 		handlers = append(handlers, NewGetTodo(cfg.todoStore), NewUpdateTodo(cfg.todoStore))

@@ -6,6 +6,7 @@ import (
 	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -723,7 +724,7 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 	case providerStateConfirmOverwrite:
 		switch message.String() {
 		case "enter":
-			return true, v.beginFetch(m.ctx)
+			return true, v.beginFetch(m.ctx, m.runtimeConfig.ModelDiscoveryTimeout)
 		case "esc":
 			v.state = providerStateInput
 			v.focusIndex = int(providerFieldName)
@@ -783,7 +784,7 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 				v.state = providerStateConfirmOverwrite
 				return true, nil
 			}
-			return true, v.beginFetch(m.ctx)
+			return true, v.beginFetch(m.ctx, m.runtimeConfig.ModelDiscoveryTimeout)
 		default:
 			var cmd tea.Cmd
 			switch v.focusIndex {
@@ -817,14 +818,19 @@ func (v *providerPaneView) syncInputFocus() {
 }
 
 type providerFetchRequest struct {
-	ctx          context.Context
-	requestID    uint64
-	providerName string
-	baseURL      string
-	apiKey       string
+	ctx              context.Context
+	requestID        uint64
+	providerName     string
+	baseURL          string
+	apiKey           string
+	discoveryTimeout time.Duration
 }
 
-func (v *providerPaneView) beginFetch(parent context.Context) tea.Cmd {
+func (v *providerPaneView) beginFetch(parent context.Context, timeouts ...time.Duration) tea.Cmd {
+	discoveryTimeout := runtimepolicy.ModelDiscoveryTimeout
+	if len(timeouts) > 0 && timeouts[0] > 0 {
+		discoveryTimeout = timeouts[0]
+	}
 	if v.fetchCancel != nil {
 		v.fetchCancel()
 	}
@@ -838,11 +844,12 @@ func (v *providerPaneView) beginFetch(parent context.Context) tea.Cmd {
 	v.state = providerStateFetching
 
 	return fetchProviderModelsCmd(providerFetchRequest{
-		ctx:          ctx,
-		requestID:    v.fetchRequestID,
-		providerName: strings.TrimSpace(v.nameInput.Value()),
-		baseURL:      strings.TrimSpace(v.endpointInput.Value()),
-		apiKey:       strings.TrimSpace(v.apiKeyInput.Value()),
+		ctx:              ctx,
+		requestID:        v.fetchRequestID,
+		providerName:     strings.TrimSpace(v.nameInput.Value()),
+		baseURL:          strings.TrimSpace(v.endpointInput.Value()),
+		apiKey:           strings.TrimSpace(v.apiKeyInput.Value()),
+		discoveryTimeout: discoveryTimeout,
 	})
 }
 
@@ -860,10 +867,14 @@ func fetchProviderModelsCmd(request providerFetchRequest) tea.Cmd {
 		if parent == nil {
 			parent = context.Background()
 		}
-		ctx, cancel := context.WithTimeout(parent, runtimepolicy.ModelDiscoveryTimeout)
+		timeout := request.discoveryTimeout
+		if timeout <= 0 {
+			timeout = runtimepolicy.ModelDiscoveryTimeout
+		}
+		ctx, cancel := context.WithTimeout(parent, timeout)
 		defer cancel()
 
-		models, err := model.FetchProviderModels(ctx, request.baseURL, request.apiKey)
+		models, err := model.FetchProviderModels(ctx, request.baseURL, request.apiKey, model.WithDiscoveryTimeout(timeout))
 		return modelsFetchedMsg{
 			providerName: request.providerName,
 			baseURL:      request.baseURL,

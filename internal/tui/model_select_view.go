@@ -12,6 +12,7 @@ import (
 	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
+	"github.com/projectTHORN/proton/internal/runtimepolicy"
 )
 
 const modelSelectViewID = "model_select"
@@ -66,7 +67,7 @@ func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
 	var modelsList []model.RemoteModel
 	hasFreshCatalog := false
 	if m != nil {
-		modelsList, hasFreshCatalog = m.modelCatalogs.freshModels(providers[providerIdx], time.Now(), modelCatalogTTL)
+		modelsList, hasFreshCatalog = m.modelCatalogs.freshModels(providers[providerIdx], time.Now(), m.runtimeConfig.ModelCatalogTTL)
 	}
 	if !hasFreshCatalog {
 		modelsList = nil
@@ -139,7 +140,11 @@ func (v *modelSelectPaneView) activeProviderName() string {
 	return v.providerNames[v.providerIndex]
 }
 
-func (v *modelSelectPaneView) beginFetch(parent context.Context, providerName string, cfg config.ProviderConfig) tea.Cmd {
+func (v *modelSelectPaneView) beginFetch(parent context.Context, providerName string, cfg config.ProviderConfig, timeouts ...time.Duration) tea.Cmd {
+	discoveryTimeout := runtimepolicy.ModelDiscoveryTimeout
+	if len(timeouts) > 0 && timeouts[0] > 0 {
+		discoveryTimeout = timeouts[0]
+	}
 	v.cancelFetch()
 	if parent == nil {
 		parent = context.Background()
@@ -154,11 +159,12 @@ func (v *modelSelectPaneView) beginFetch(parent context.Context, providerName st
 	v.index = 0
 	v.offset = 0
 	return fetchProviderModelsCmd(providerFetchRequest{
-		ctx:          ctx,
-		requestID:    v.fetchRequestID,
-		providerName: providerName,
-		baseURL:      cfg.BaseURL,
-		apiKey:       cfg.APIKey,
+		ctx:              ctx,
+		requestID:        v.fetchRequestID,
+		providerName:     providerName,
+		baseURL:          cfg.BaseURL,
+		apiKey:           cfg.APIKey,
+		discoveryTimeout: discoveryTimeout,
 	})
 }
 
@@ -179,7 +185,7 @@ func (v *modelSelectPaneView) loadProvider(m *bubbleModel, force bool) tea.Cmd {
 	v.loading = false
 	v.err = nil
 	if !force {
-		if models, ok := m.modelCatalogs.freshModels(providerName, time.Now(), modelCatalogTTL); ok {
+		if models, ok := m.modelCatalogs.freshModels(providerName, time.Now(), m.runtimeConfig.ModelCatalogTTL); ok {
 			v.setModels(models, m.activeModel)
 			return nil
 		}
@@ -189,7 +195,7 @@ func (v *modelSelectPaneView) loadProvider(m *bubbleModel, force bool) tea.Cmd {
 	if configured {
 		isOpenCode := model.IsProvider(model.DefaultOpenCodeName, providerName, cfg.BaseURL)
 		if strings.TrimSpace(cfg.APIKey) != "" || isOpenCode {
-			return v.beginFetch(m.ctx, providerName, cfg)
+			return v.beginFetch(m.ctx, providerName, cfg, m.runtimeConfig.ModelDiscoveryTimeout)
 		}
 	}
 	v.setModels(nil, m.activeModel)

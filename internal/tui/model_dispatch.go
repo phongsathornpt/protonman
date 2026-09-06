@@ -185,6 +185,7 @@ func (m *bubbleModel) reconfigureRunner() {
 		sessID = "workspace-" + m.workDir
 	}
 	var clientOpts []model.OpenAIOption
+	clientOpts = append(clientOpts, model.WithRequestTimeout(m.runtimeConfig.ModelRequestTimeout))
 	if sessID != "" {
 		clientOpts = append(clientOpts, model.WithSessionID(sessID))
 	}
@@ -195,6 +196,8 @@ func (m *bubbleModel) reconfigureRunner() {
 	}
 	opts = append(opts, applicationturn.WithMaxRounds(m.maxRounds))
 	opts = append(opts, applicationturn.WithMaxToolCalls(m.maxToolCalls))
+	opts = append(opts, applicationturn.WithTurnTimeout(m.runtimeConfig.TurnTimeout))
+	opts = append(opts, applicationturn.WithRoundTimeout(m.runtimeConfig.RoundTimeout))
 	loop, err := applicationturn.NewLoop(client, m.service, opts...)
 	if err == nil {
 		m.runner = loop

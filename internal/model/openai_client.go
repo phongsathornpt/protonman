@@ -5,6 +5,7 @@ import (
 	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type OpenAIClient struct {
@@ -64,6 +65,15 @@ func newOpenAIClientConfig(baseURL string, apiKey string, modelID string) openAI
 		httpClient: &http.Client{
 			Timeout: runtimepolicy.ModelRequestTimeout,
 		},
+	}
+}
+
+// WithRequestTimeout overrides the HTTP request timeout for model calls.
+func WithRequestTimeout(timeout time.Duration) OpenAIOption {
+	return func(c *openAIClientConfig) {
+		if timeout > 0 && c.httpClient != nil {
+			c.httpClient.Timeout = timeout
+		}
 	}
 }
 
