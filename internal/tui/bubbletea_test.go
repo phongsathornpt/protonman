@@ -455,7 +455,7 @@ func TestPermissionBashRiskPresentationUsesCommandEffect(t *testing.T) {
 	}{
 		{name: "read only", command: "pwd", want: "Permission request — shell read only"},
 		{name: "mutating", command: "rm -rf tmp", want: "Permission required — shell modifies state"},
-		{name: "unknown", command: "echo hi", want: "Permission required — shell effects unknown"},
+		{name: "unknown", command: "make test", want: "Permission required — shell effects unknown"},
 		{name: "composed mutation", command: "pwd && rm tmp", want: "Permission required — shell modifies state"},
 	}
 	for _, tc := range tests {
