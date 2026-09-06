@@ -132,7 +132,7 @@ func (c *Coordinator) Lookup(id string) (AgentStatus, *Result, bool) {
 	return status, &res, true
 }
 
-// Active returns queued or running subagents only.
+// Active returns queued, running, or canceling subagents only.
 func (c *Coordinator) Active() []AgentStatus {
 	c.pruneExpired()
 	c.agentsMu.RLock()

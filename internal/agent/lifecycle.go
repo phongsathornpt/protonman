@@ -106,6 +106,10 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 	}
 	defer releaseWorkspace()
 	queueCancel()
+	if err := runCtx.Err(); err != nil {
+		c.finishEntry(entry, req, queuedAt, time.Time{}, err)
+		return
+	}
 
 	startedAt := time.Now()
 	c.agentsMu.Lock()
@@ -172,18 +176,19 @@ func (c *Coordinator) storeTerminal(entry *agentEntry, res Result, err error) {
 
 // Cancel explicitly requests cancellation of one subagent.
 func (c *Coordinator) Cancel(id string) error {
-	c.agentsMu.RLock()
+	c.agentsMu.Lock()
 	entry := c.agents[strings.TrimSpace(id)]
 	if entry == nil {
-		c.agentsMu.RUnlock()
+		c.agentsMu.Unlock()
 		return fmt.Errorf("subagent %q not found", id)
 	}
-	terminal := entry.status.State.Terminal()
-	cancel := entry.cancel
-	c.agentsMu.RUnlock()
-	if terminal {
+	if entry.status.State.Terminal() {
+		c.agentsMu.Unlock()
 		return nil
 	}
+	entry.status.State = StateCanceling
+	cancel := entry.cancel
+	c.agentsMu.Unlock()
 	cancel()
 	return nil
 }

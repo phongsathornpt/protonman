@@ -1065,6 +1065,42 @@ func TestCoordinatorWaitTimeoutDoesNotCancelSpawnedAgent(t *testing.T) {
 	}
 }
 
+func TestCoordinatorCancelExposesCancelingUntilRunnerStops(t *testing.T) {
+	release := make(chan struct{})
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(context.Context, []model.Message, turn.Sink) (turn.Result, error) {
+				<-release
+				return turn.Result{}, context.Canceled
+			}}, nil
+		}),
+	)
+	defer coord.Close()
+	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileExplorer, Task: "cancel state"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForTest(t, time.Second, func() bool {
+		st, ok := coord.Get(h.ID)
+		return ok && st.State == StateRunning
+	})
+	if err := coord.Cancel(h.ID); err != nil {
+		t.Fatal(err)
+	}
+	st, ok := coord.Get(h.ID)
+	if !ok || st.State != StateCanceling {
+		t.Fatalf("status after Cancel() = %+v, ok=%v; want canceling", st, ok)
+	}
+	close(release)
+	wr, err := coord.Wait(context.Background(), h.ID, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wr.State != StateCanceled {
+		t.Fatalf("terminal state = %s, want canceled", wr.State)
+	}
+}
+
 func TestCoordinatorCancelSpawnedAgent(t *testing.T) {
 	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
 		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
