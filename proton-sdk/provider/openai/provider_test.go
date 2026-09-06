@@ -276,3 +276,14 @@ func TestOpenAIProviderOptionsCannotOverrideCanonicalFields(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestOpenAICapabilities(t *testing.T) {
+	model := NewProvider(ProviderOptions{}).Model("test-model")
+	caps := model.Capabilities()
+	if !caps.Streaming || !caps.Tools || !caps.Vision || !caps.ProviderOptions {
+		t.Fatalf("Capabilities() = %#v", caps)
+	}
+	if caps.ToolResultErrors {
+		t.Fatalf("Capabilities() = %#v, unexpected tool result errors", caps)
+	}
+}

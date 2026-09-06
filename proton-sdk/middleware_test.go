@@ -10,6 +10,9 @@ type middlewareTestModel struct{ calls *[]string }
 
 func (*middlewareTestModel) Provider() string { return "test" }
 func (*middlewareTestModel) ModelID() string  { return "model" }
+func (*middlewareTestModel) Capabilities() ModelCapabilities {
+	return ModelCapabilities{Streaming: true, Tools: true}
+}
 func (m *middlewareTestModel) Stream(context.Context, Request) (Stream, error) {
 	*m.calls = append(*m.calls, "model")
 	return &eventStream{events: []Event{{Kind: EventFinish, FinishReason: FinishStop}}}, nil
@@ -30,6 +33,9 @@ func TestWrapLanguageModelOrder(t *testing.T) {
 	model := WrapLanguageModel(&middlewareTestModel{calls: &calls}, makeMiddleware("first"), makeMiddleware("second"))
 	if model.Provider() != "test" || model.ModelID() != "model" {
 		t.Fatalf("identity changed: %q/%q", model.Provider(), model.ModelID())
+	}
+	if caps := model.Capabilities(); !caps.Streaming || !caps.Tools {
+		t.Fatalf("capabilities changed: %#v", caps)
 	}
 	if _, err := model.Stream(context.Background(), Request{}); err != nil {
 		t.Fatal(err)

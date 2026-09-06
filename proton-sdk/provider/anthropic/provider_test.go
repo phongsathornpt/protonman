@@ -184,3 +184,14 @@ func TestAnthropicProviderOptionsCannotOverrideCanonicalFields(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestAnthropicCapabilities(t *testing.T) {
+	model := NewProvider(ProviderOptions{}).Model("claude-test")
+	caps := model.Capabilities()
+	if !caps.Streaming || !caps.Tools || !caps.Vision || !caps.ProviderOptions {
+		t.Fatalf("Capabilities() = %#v", caps)
+	}
+	if !caps.ToolResultErrors {
+		t.Fatalf("Capabilities() = %#v, want tool result errors", caps)
+	}
+}

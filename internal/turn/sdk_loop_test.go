@@ -17,6 +17,9 @@ type sdkTestModel struct {
 
 func (*sdkTestModel) Provider() string { return "test" }
 func (*sdkTestModel) ModelID() string  { return "test-model" }
+func (*sdkTestModel) Capabilities() sdk.ModelCapabilities {
+	return sdk.ModelCapabilities{Streaming: true, Tools: true}
+}
 func (m *sdkTestModel) Stream(_ context.Context, request sdk.Request) (sdk.Stream, error) {
 	m.requests = append(m.requests, request)
 	return &sdkTestStream{events: []sdk.Event{
