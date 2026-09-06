@@ -37,18 +37,19 @@ type turnProgress struct {
 }
 
 type bubbleModel struct {
-	ctx           context.Context
-	service       *toolcall.Service
-	registry      tool.Registry
-	skills        *skill.Registry
-	runner        applicationturn.Runner
-	bridge        *permissionBridge
-	coordinator   *agent.Coordinator
-	agentEvents   <-chan agent.Event
-	agentSnapshot []agent.AgentStatus
-	agentActivity map[string]string
-	turnProgress  turnProgress
-	workDir       string
+	ctx             context.Context
+	service         *toolcall.Service
+	registry        tool.Registry
+	skills          *skill.Registry
+	runner          applicationturn.Runner
+	bridge          *permissionBridge
+	coordinator     *agent.Coordinator
+	agentEvents     <-chan agent.Event
+	agentSnapshot   []agent.AgentStatus
+	agentActivity   map[string]string
+	turnProgress    turnProgress
+	activeTurnOwner string
+	workDir         string
 
 	viewport           viewport.Model
 	transcriptViewport viewport.Model

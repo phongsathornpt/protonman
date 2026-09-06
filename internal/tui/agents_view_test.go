@@ -233,3 +233,68 @@ func TestStatusViewShowsAgentBreakdownAndSingleActivity(t *testing.T) {
 		t.Fatalf("single-agent status=%q, want live activity", got)
 	}
 }
+
+func TestCancelActiveTurnCancelsOnlyOwnedSubagents(t *testing.T) {
+	release := make(chan struct{})
+	coord := agent.NewCoordinator(nil, nil, nil, nil,
+		agent.WithMaxConcurrency(2),
+		agent.WithRunnerFactory(func(agent.Profile, *toolcall.Service) (turn.Runner, error) {
+			return blockingAgentViewRunner{release: release}, nil
+		}),
+	)
+	defer func() { close(release); _ = coord.Close() }()
+
+	owned, err := coord.Spawn(context.Background(), agent.Request{ParentID: "turn-owned", Profile: agent.ProfileExplorer, Task: "owned"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := coord.Spawn(context.Background(), agent.Request{ParentID: "turn-other", Profile: agent.ProfileReviewer, Task: "other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.coordinator = coord
+	m.agentSnapshot = coord.List()
+	m.activeTurnOwner = "turn-owned"
+	m.busy = true
+	m.busyStarted = time.Now()
+	cancelled := false
+	m.turnCancel = func() { cancelled = true }
+
+	if got := m.cancelActiveTurn(); got != 1 {
+		t.Fatalf("cancelActiveTurn()=%d, want 1", got)
+	}
+	if !cancelled {
+		t.Fatal("root turn cancel was not invoked")
+	}
+	if m.activity != "canceling" {
+		t.Fatalf("activity=%q, want canceling", m.activity)
+	}
+	ownedStatus, _ := coord.Get(owned.ID)
+	if ownedStatus.State != agent.StateCanceling && ownedStatus.State != agent.StateCanceled {
+		t.Fatalf("owned state=%s", ownedStatus.State)
+	}
+	otherStatus, _ := coord.Get(other.ID)
+	if otherStatus.State == agent.StateCanceling || otherStatus.State == agent.StateCanceled {
+		t.Fatalf("other state=%s, want unaffected", otherStatus.State)
+	}
+	if got := m.statusView(); !strings.Contains(got, "canceling") || !strings.Contains(got, "stopping 1 agents") {
+		t.Fatalf("status=%q", got)
+	}
+}
+
+func TestBusyAgentPanelScopesToActiveTurnOwner(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.resize(100, 30)
+	m.busy = true
+	m.activeTurnOwner = "turn-current"
+	m.agentSnapshot = []agent.AgentStatus{
+		{ID: "current", ParentID: "turn-current", Task: "current task", State: agent.StateRunning},
+		{ID: "old", ParentID: "turn-old", Task: "old task", State: agent.StateRunning},
+	}
+	got := m.agentsView()
+	if !strings.Contains(got, "Agents 1 active") || strings.Contains(got, "old task") {
+		t.Fatalf("agents view=%q", got)
+	}
+}
