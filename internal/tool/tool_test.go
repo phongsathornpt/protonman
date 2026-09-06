@@ -245,3 +245,29 @@ func TestAnalyzeCommandMultipleMoveSources(t *testing.T) {
 		t.Fatalf("AffectedPaths = %#v, want %#v", got.AffectedPaths, want)
 	}
 }
+
+func TestAnalyzeCommandRisk(t *testing.T) {
+	tests := map[string]CommandRisk{
+		"git add file.go":                         CommandRiskNormal,
+		"git commit -am fix":                      CommandRiskNormal,
+		"touch file.go":                           CommandRiskNormal,
+		"rm file.go":                              CommandRiskDestructive,
+		"truncate -s 0 file.go":                   CommandRiskDestructive,
+		"find . -delete":                          CommandRiskDestructive,
+		"git reset --hard HEAD":                   CommandRiskDestructive,
+		"git clean -fdx":                          CommandRiskDestructive,
+		"git checkout -- file.go":                 CommandRiskDestructive,
+		"git restore file.go":                     CommandRiskDestructive,
+		"git branch -D old":                       CommandRiskDestructive,
+		"git stash drop":                          CommandRiskDestructive,
+		"git push --force origin main":            CommandRiskRemoteDestructive,
+		"git push --force-with-lease origin main": CommandRiskRemoteDestructive,
+		"pwd && git reset --hard HEAD":            CommandRiskDestructive,
+		"git push origin main":                    CommandRiskNormal,
+	}
+	for command, want := range tests {
+		if got := AnalyzeCommand(command).Risk; got != want {
+			t.Fatalf("AnalyzeCommand(%q).Risk = %q, want %q", command, got, want)
+		}
+	}
+}
