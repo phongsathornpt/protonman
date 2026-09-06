@@ -11,7 +11,7 @@ Proton-specific permission, session, and tool execution policy outside the SDK.
 - `LanguageModel` and streaming model requests
 - model messages, multimodal content, tool calls, and tool results
 - normalized usage and finish reasons
-- provider options and provider metadata
+- model capabilities, provider options, provider metadata, and optional raw chunks
 - structured provider errors
 - model registry and language-model middleware
 - OpenAI-compatible and Anthropic Messages wire adapters
@@ -26,6 +26,7 @@ Providers implement:
 type LanguageModel interface {
     Provider() string
     ModelID() string
+    Capabilities() ModelCapabilities
     Stream(context.Context, Request) (Stream, error)
 }
 ```
@@ -37,8 +38,23 @@ complete `EventToolCall` is emitted.
 `Request.Options.MaxOutputTokens` is mapped to the provider wire format.
 `ProviderOptions["openai"]` and `ProviderOptions["anthropic"]` can add
 provider-specific top-level options, but cannot override canonical request
-fields such as model, messages/input, tools, stream, or token limits.
+fields such as model, messages/input, tools, stream, or token limits. Tool-level
+provider options are also supported, for example Anthropic cache-control metadata.
+
+`ModelCapabilities` lets the agent runtime reject unsupported vision input and
+avoid publishing tools to models that do not support tool calling. MCP tools are
+marked dynamic when they cross the SDK boundary.
+
+Set `Request.Options.IncludeRawChunks` to receive `EventRaw` before normalized
+stream events. Raw chunks are disabled by default and are intended for debugging,
+telemetry, and provider-specific integrations.
 ## Tool Results and Errors
+
+Tools may declare an optional `OutputSchema`. Structured tool output is validated
+against JSON Schema before it is returned to the model. External schema loading
+is disabled, so untrusted `$ref` values cannot trigger filesystem or network
+fetches. MCP output schemas and structured output are preserved through the tool
+boundary.
 
 Tool execution remains in Proton CLI. The live model history records whether a
 tool result is an error so Anthropic can emit `tool_result.is_error`; OpenAI
