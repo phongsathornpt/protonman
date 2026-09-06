@@ -2,9 +2,9 @@ package model
 
 import (
 	"github.com/projectTHORN/proton/internal/buildinfo"
+	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"net/http"
 	"strings"
-	"time"
 )
 
 type OpenAIClient struct {
@@ -62,7 +62,7 @@ func newOpenAIClientConfig(baseURL string, apiKey string, modelID string) openAI
 		clientName: "proton",
 		userAgent:  buildinfo.UserAgent(),
 		httpClient: &http.Client{
-			Timeout: 5 * time.Minute,
+			Timeout: runtimepolicy.ModelRequestTimeout,
 		},
 	}
 }

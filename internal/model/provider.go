@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"io"
 	"net/http"
 	"strings"
-	"time"
 )
 
 type ProviderProtocol string
@@ -166,7 +166,7 @@ func FetchProviderModels(ctx context.Context, baseURL string, apiKey string) ([]
 		baseURL = DefaultProtonmanEndpoint
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: runtimepolicy.ModelDiscoveryTimeout}
 
 	// 1. Try standard /models endpoint with Bearer auth (or without auth if apiKey is empty)
 	modelsEndpoint := baseURL + "/models"

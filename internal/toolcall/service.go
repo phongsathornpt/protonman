@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"strings"
 	"sync"
 	"time"
@@ -38,10 +39,10 @@ type Option func(*Service) error
 const (
 	// DefaultPermissionTimeout bounds policy evaluation and interactive
 	// permission resolution when callers do not provide a stricter timeout.
-	DefaultPermissionTimeout = 2 * time.Minute
+	DefaultPermissionTimeout = runtimepolicy.ToolPermissionTimeout
 	// DefaultExecutionTimeout bounds one permission-approved tool call when the
 	// caller does not provide a stricter context.
-	DefaultExecutionTimeout = 2 * time.Minute
+	DefaultExecutionTimeout = runtimepolicy.ToolExecutionTimeout
 )
 
 // WithMode sets the initial permission mode.
