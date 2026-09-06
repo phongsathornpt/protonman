@@ -286,3 +286,41 @@ func TestBuildRequestRequiresInitialToolUse(t *testing.T) {
 		t.Fatalf("tool choice = %#v, want any", body.ToolChoice)
 	}
 }
+
+func TestAnthropicEncodesAdaptiveReasoningEffort(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		thinking, _ := body["thinking"].(map[string]any)
+		output, _ := body["output_config"].(map[string]any)
+		if thinking["type"] != "adaptive" || output["effort"] != "high" {
+			t.Fatalf("body = %#v", body)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"type\":\"message_stop\"}\n\n"))
+	}))
+	defer server.Close()
+
+	model := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("claude-opus-5")
+	stream, err := model.Stream(context.Background(), sdk.Request{
+		Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}},
+		Options:  sdk.ModelOptions{ReasoningEffort: sdk.ReasoningHigh},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+}
+
+func TestAnthropicRejectsReasoningNone(t *testing.T) {
+	model := NewProvider(ProviderOptions{BaseURL: "http://127.0.0.1"}).Model("claude-opus-5")
+	_, err := model.Stream(context.Background(), sdk.Request{
+		Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}},
+		Options:  sdk.ModelOptions{ReasoningEffort: sdk.ReasoningNone},
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not support reasoning effort") {
+		t.Fatalf("error = %v", err)
+	}
+}
