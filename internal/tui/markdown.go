@@ -3,7 +3,6 @@ package tui
 import (
 	"strings"
 	"unicode"
-	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -137,7 +136,19 @@ func markdownListItem(line string) (marker, item string, ok bool) {
 
 func styleInlineMarkdown(text string) string {
 	var out strings.Builder
+	out.Grow(len(text))
 	for index := 0; index < len(text); {
+		plainStart := index
+		for index < len(text) && text[index] != '`' && text[index] != '*' && text[index] != '[' {
+			index++
+		}
+		if index > plainStart {
+			out.WriteString(text[plainStart:index])
+			if index == len(text) {
+				break
+			}
+		}
+
 		switch {
 		case text[index] == '`':
 			if end := strings.IndexByte(text[index+1:], '`'); end >= 0 {
@@ -165,18 +176,11 @@ func styleInlineMarkdown(text string) string {
 				}
 			}
 		}
-		runeValue, size := decodeRune(text[index:])
-		out.WriteRune(runeValue)
-		index += size
+
+		out.WriteByte(text[index])
+		index++
 	}
 	return out.String()
-}
-
-func decodeRune(text string) (rune, int) {
-	if text == "" {
-		return 0, 0
-	}
-	return utf8.DecodeRuneInString(text)
 }
 
 func trimTrailingBlankLines(lines []string) []string {

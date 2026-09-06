@@ -143,3 +143,16 @@ func BenchmarkRefreshViewportStreamingLongHistory(b *testing.B) {
 		m.refreshViewport()
 	}
 }
+
+func BenchmarkAssistantStreamingTailContent20KB(b *testing.B) {
+	chunk := "A paragraph with **bold text**, `inline code`, and [a link](https://example.com).\n"
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		state := NewHistoryState(50000)
+		state.SetWidth(100)
+		for j := 0; j < 250; j++ {
+			state.AppendAssistantDelta(chunk)
+			_, _ = state.RenderTailContent(24)
+		}
+	}
+}
