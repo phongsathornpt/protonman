@@ -69,11 +69,19 @@ func TestDelegateTask_Execute(t *testing.T) {
 		if res.Failure != nil {
 			t.Fatalf("expected success, got failure: %+v", res.Failure)
 		}
-		if !strings.Contains(res.Output, "found 2 occurrences of auth middleware") {
-			t.Errorf("output = %q, want 'found 2 occurrences of auth middleware'", res.Output)
+		var spawned struct {
+			AgentID string      `json:"agent_id"`
+			Status  agent.State `json:"status"`
 		}
-		if !strings.Contains(res.Output, `<subagent_result id=`) {
-			t.Errorf("missing subagent_result tag in output: %s", res.Output)
+		if err := json.Unmarshal([]byte(res.Output), &spawned); err != nil {
+			t.Fatalf("decode spawn output: %v", err)
+		}
+		if spawned.AgentID == "" || (spawned.Status != agent.StateQueued && spawned.Status != agent.StateRunning) {
+			t.Fatalf("spawn output = %s", res.Output)
+		}
+		wr, err := coord.Wait(context.Background(), spawned.AgentID, time.Second)
+		if err != nil || wr.Result == nil || !strings.Contains(wr.Result.Summary, "found 2 occurrences of auth middleware") {
+			t.Fatalf("wait result = %+v err=%v", wr, err)
 		}
 	})
 
@@ -125,39 +133,13 @@ func TestDelegateTask_Execute(t *testing.T) {
 	})
 
 	t.Run("context cancellation", func(t *testing.T) {
-		cancelingCoord := agent.NewCoordinator(
-			nil,
-			nil,
-			nil,
-			nil,
-			agent.WithRunnerFactory(func(p agent.Profile, tools *toolcall.Service) (turn.Runner, error) {
-				return &mockDelegateRunner{
-					runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
-						<-ctx.Done()
-						return turn.Result{}, ctx.Err()
-					},
-				}, nil
-			}),
-		)
-		defer cancelingCoord.Close()
-
-		cHandler := NewDelegateTask(cancelingCoord)
+		cHandler := NewDelegateTask(coord)
 		cancelCtx, cancel := context.WithCancel(context.Background())
-
-		args, _ := json.Marshal(map[string]any{
-			"profile": "explorer",
-			"task":    "hang task",
-		})
+		cancel()
+		args, _ := json.Marshal(map[string]any{"profile": "explorer", "task": "hang task"})
 		call, _ := tool.NewCall("call-4", "delegate_task", args)
-
-		go func() {
-			time.Sleep(20 * time.Millisecond)
-			cancel()
-		}()
-
-		_, err := cHandler.Execute(cancelCtx, call)
-		if err == nil {
-			t.Fatal("expected cancellation error")
+		if _, err := cHandler.Execute(cancelCtx, call); err == nil {
+			t.Fatal("expected canceled submission error")
 		}
 	})
 
@@ -186,13 +168,22 @@ func TestDelegateTask_Execute(t *testing.T) {
 			"task":    "test task",
 		})
 		call, _ := tool.NewCall("call-parent", "delegate_task", args)
-		_, err := pHandler.Execute(ctx, call)
+		res, err := pHandler.Execute(ctx, call)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if receivedParentID != "session-xyz" {
-			t.Errorf("receivedParentID = %q, want 'session-xyz'", receivedParentID)
+		var spawned struct {
+			AgentID string `json:"agent_id"`
 		}
+		if err := json.Unmarshal([]byte(res.Output), &spawned); err != nil {
+			t.Fatal(err)
+		}
+		status, ok := parentCoord.Get(spawned.AgentID)
+		if !ok || status.ParentID != "session-xyz" {
+			t.Fatalf("status = %+v, want parent session-xyz", status)
+		}
+		_, _ = parentCoord.Wait(context.Background(), spawned.AgentID, time.Second)
+		_ = receivedParentID
 	})
 
 	t.Run("pow dex int delegation and schema", func(t *testing.T) {

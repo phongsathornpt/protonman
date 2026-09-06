@@ -158,7 +158,13 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 		handlers = append(handlers, NewActivateSkill(cfg.skills, workspaceRoot))
 	}
 	if cfg.coordinator != nil {
-		handlers = append(handlers, NewDelegateTask(cfg.coordinator))
+		handlers = append(handlers,
+			NewDelegateTask(cfg.coordinator),
+			NewWaitAgent(cfg.coordinator),
+			NewGetAgent(cfg.coordinator),
+			NewListAgents(cfg.coordinator),
+			NewCancelAgent(cfg.coordinator),
+		)
 	}
 	return NewRegistry(handlers...)
 }

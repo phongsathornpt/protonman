@@ -305,11 +305,13 @@ func TestDefaultRegistryContainsCodingTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDefaultRegistry(WithAgentCoordinator) error = %v", err)
 	}
-	if got, want := len(regWithCoord.Definitions()), 11; got != want {
+	if got, want := len(regWithCoord.Definitions()), 15; got != want {
 		t.Fatalf("definition count with coordinator = %d, want %d", got, want)
 	}
-	if _, ok := regWithCoord.Lookup("delegate_task"); !ok {
-		t.Fatalf("delegate_task not found in registry")
+	for _, name := range []string{"delegate_task", "wait_agent", "get_agent", "list_agents", "cancel_agent"} {
+		if _, ok := regWithCoord.Lookup(name); !ok {
+			t.Fatalf("%s not found in registry", name)
+		}
 	}
 }
 

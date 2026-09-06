@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -496,26 +497,61 @@ func TestAgentSubagentTimeoutConfig(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
 	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent]
-subagent_timeout = "45s"
+subagent_max_runtime = "45s"
+subagent_wait_timeout = "9s"
 subagent_queue_timeout = "7s"
+max_live_subagents = 8
+completed_result_ttl = "2m"
 `)
 	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if snapshot.Agent.SubagentTimeout != 45*time.Second {
-		t.Fatalf("subagent timeout = %v, want 45s", snapshot.Agent.SubagentTimeout)
+	if snapshot.Agent.SubagentMaxRuntime != 45*time.Second {
+		t.Fatalf("max runtime = %v", snapshot.Agent.SubagentMaxRuntime)
+	}
+	if snapshot.Agent.SubagentWaitTimeout != 9*time.Second {
+		t.Fatalf("wait timeout = %v", snapshot.Agent.SubagentWaitTimeout)
 	}
 	if snapshot.Agent.SubagentQueueTimeout != 7*time.Second {
-		t.Fatalf("subagent queue timeout = %v, want 7s", snapshot.Agent.SubagentQueueTimeout)
+		t.Fatalf("queue timeout = %v", snapshot.Agent.SubagentQueueTimeout)
+	}
+	if snapshot.Agent.MaxLiveSubagents != 8 {
+		t.Fatalf("max live = %d", snapshot.Agent.MaxLiveSubagents)
+	}
+	if snapshot.Agent.CompletedResultTTL != 2*time.Minute {
+		t.Fatalf("result ttl = %v", snapshot.Agent.CompletedResultTTL)
+	}
+}
+
+func TestAgentLegacySubagentTimeoutMigratesToMaxRuntime(t *testing.T) {
+	homeDir := t.TempDir()
+	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), "[agent]\nsubagent_timeout = \"45s\"\n")
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Agent.SubagentMaxRuntime != 45*time.Second {
+		t.Fatalf("max runtime = %v", snapshot.Agent.SubagentMaxRuntime)
+	}
+	found := false
+	for _, warning := range snapshot.Warnings {
+		if strings.Contains(warning, "subagent_timeout is deprecated") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("missing legacy timeout deprecation warning")
 	}
 }
 
 func TestAgentSubagentTimeoutConfigRejectsInvalidValues(t *testing.T) {
 	for _, body := range []string{
-		"[agent]\nsubagent_timeout = \"nope\"\n",
-		"[agent]\nsubagent_timeout = \"0s\"\n",
+		"[agent]\nsubagent_max_runtime = \"nope\"\n",
+		"[agent]\nsubagent_wait_timeout = \"0s\"\n",
 		"[agent]\nsubagent_queue_timeout = \"-1s\"\n",
+		"[agent]\ncompleted_result_ttl = \"0s\"\n",
+		"[agent]\nmax_live_subagents = 0\n",
 	} {
 		homeDir := t.TempDir()
 		workDir := t.TempDir()

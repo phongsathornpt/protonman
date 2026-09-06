@@ -170,6 +170,8 @@ const (
 	ToolWebSearch ToolKind = tool.KindWebSearch
 	// ToolTask matches structured planning/task metadata tools.
 	ToolTask ToolKind = tool.KindTask
+	// ToolAgent matches subagent orchestration tools.
+	ToolAgent ToolKind = tool.KindAgent
 )
 
 // PatternMode controls what part of a request a rule pattern matches.
@@ -238,6 +240,8 @@ func ParseToolKind(value string) (ToolKind, error) {
 		return ToolWebSearch, nil
 	case "task", "todo":
 		return ToolTask, nil
+	case "agent", "subagent":
+		return ToolAgent, nil
 	default:
 		return "", fmt.Errorf("unknown permission tool %q", value)
 	}
@@ -518,7 +522,7 @@ func ValidToolKind(kind ToolKind) bool {
 
 func validToolKind(kind ToolKind) bool {
 	switch kind {
-	case ToolAny, ToolRead, ToolEdit, ToolBash, ToolGrep, ToolMCP, ToolWebFetch, ToolWebSearch, ToolTask:
+	case ToolAny, ToolRead, ToolEdit, ToolBash, ToolGrep, ToolMCP, ToolWebFetch, ToolWebSearch, ToolTask, ToolAgent:
 		return true
 	default:
 		return false

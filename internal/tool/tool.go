@@ -59,6 +59,8 @@ const (
 	KindWebSearch Kind = "web_search"
 	// KindTask identifies structured planning/task metadata mutations.
 	KindTask Kind = "task"
+	// KindAgent identifies subagent orchestration and lifecycle tools.
+	KindAgent Kind = "agent"
 )
 
 // ErrInvalidCall indicates that a call envelope cannot be dispatched safely.
@@ -317,7 +319,7 @@ type Registrar interface {
 
 func validKind(kind Kind) bool {
 	switch kind {
-	case KindRead, KindEdit, KindBash, KindGrep, KindMCP, KindWebFetch, KindWebSearch, KindTask:
+	case KindRead, KindEdit, KindBash, KindGrep, KindMCP, KindWebFetch, KindWebSearch, KindTask, KindAgent:
 		return true
 	default:
 		return false
