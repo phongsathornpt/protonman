@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
@@ -115,9 +116,7 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	if summary == "" {
 		summary = "Task completed with no final text response."
 	}
-	if len(summary) > maxSummaryBytes {
-		summary = summary[:maxSummaryBytes] + "\n... [output truncated]"
-	}
+	summary = truncateSummary(summary, maxSummaryBytes)
 
 	return Result{
 		AgentID: req.ID,
@@ -134,4 +133,23 @@ func formatUserPrompt(req Request) string {
 		b.WriteString(fmt.Sprintf("\nContext:\n%s\n", req.Context))
 	}
 	return b.String()
+}
+
+func truncateSummary(summary string, maxBytes int) string {
+	const suffix = "\n... [output truncated]"
+	if maxBytes <= 0 {
+		return ""
+	}
+	summary = strings.ToValidUTF8(summary, "�")
+	if len(summary) <= maxBytes {
+		return summary
+	}
+	if maxBytes <= len(suffix) {
+		return suffix[:maxBytes]
+	}
+	cut := maxBytes - len(suffix)
+	for cut > 0 && !utf8.ValidString(summary[:cut]) {
+		cut--
+	}
+	return summary[:cut] + suffix
 }

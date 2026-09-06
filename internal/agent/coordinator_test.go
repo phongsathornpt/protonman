@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
@@ -1277,5 +1278,19 @@ func TestCoordinatorBoundsRetainedTerminalRecords(t *testing.T) {
 		if !st.State.Terminal() {
 			t.Fatalf("unexpected live state: %#v", st)
 		}
+	}
+}
+
+func TestTruncateSummaryPreservesUTF8AndByteLimit(t *testing.T) {
+	input := strings.Repeat("ภาษาไทย🙂", 5000)
+	got := truncateSummary(input, maxSummaryBytes)
+	if !utf8.ValidString(got) {
+		t.Fatal("truncateSummary() returned invalid UTF-8")
+	}
+	if len(got) > maxSummaryBytes {
+		t.Fatalf("truncateSummary() bytes = %d, want <= %d", len(got), maxSummaryBytes)
+	}
+	if !strings.HasSuffix(got, "\n... [output truncated]") {
+		t.Fatal("truncateSummary() missing truncation suffix")
 	}
 }
