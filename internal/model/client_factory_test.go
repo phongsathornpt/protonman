@@ -23,14 +23,19 @@ func TestResolveProviderBaseURL(t *testing.T) {
 	}
 }
 
-func TestNewProviderClientSelectsOfficialOnlyForOpenAI(t *testing.T) {
-	official := NewProviderClient("openai", DefaultOpenAIEndpoint, "key", "gpt-4o")
-	if _, ok := official.(*OfficialOpenAIClient); !ok {
-		t.Fatalf("OpenAI client type = %T, want *OfficialOpenAIClient", official)
+func TestNewProviderClientRoutesThroughProtonSDK(t *testing.T) {
+	providers := []struct {
+		name string
+		url  string
+	}{
+		{name: DefaultOpenAIName, url: DefaultOpenAIEndpoint},
+		{name: DefaultOpenCodeName, url: DefaultOpenCodeEndpoint},
+		{name: DefaultProtonmanName, url: DefaultProtonmanEndpoint},
 	}
-
-	compatible := NewProviderClient(DefaultOpenCodeName, DefaultOpenCodeEndpoint, "", "muse-spark-1.3-contributor-free")
-	if _, ok := compatible.(*OpenAIClient); !ok {
-		t.Fatalf("OpenCode client type = %T, want *OpenAIClient", compatible)
+	for _, provider := range providers {
+		client := NewProviderClient(provider.name, provider.url, "key", "test-model")
+		if _, ok := client.(*sdkModelClient); !ok {
+			t.Fatalf("%s client type = %T, want *sdkModelClient", provider.name, client)
+		}
 	}
 }
