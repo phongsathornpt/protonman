@@ -127,6 +127,15 @@ func extractToolTarget(name string, kind tool.Kind, args json.RawMessage) (strin
 	return "", kind
 }
 
+func isAgentLifecycleTool(name string) bool {
+	switch name {
+	case "wait_agent", "get_agent", "list_agents", "cancel_agent":
+		return true
+	default:
+		return false
+	}
+}
+
 func guessToolKind(name string) tool.Kind {
 	switch name {
 	case "web_fetch":
