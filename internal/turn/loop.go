@@ -110,6 +110,8 @@ var (
 	ErrToolDispatchUnavailable = errors.New("tool dispatch unavailable")
 	// ErrUnresolvedToolCall indicates that a requested call had no execution result.
 	ErrUnresolvedToolCall = errors.New("unresolved model tool call")
+	// ErrUnsupportedModelCapability indicates that the active model cannot satisfy a turn requirement.
+	ErrUnsupportedModelCapability = errors.New("unsupported model capability")
 )
 
 type toolDispatchReason string
@@ -120,6 +122,7 @@ const (
 	toolDispatchDisabledMaxCalls   toolDispatchReason = "max_tool_calls"
 	toolDispatchDisabledNoProgress toolDispatchReason = "no_progress"
 	toolDispatchDisabledNoTools    toolDispatchReason = "no_tools"
+	toolDispatchDisabledModelTools toolDispatchReason = "model_tools_unsupported"
 )
 
 type toolDispatchState struct {
@@ -304,6 +307,9 @@ func NewLoop(languageModel sdk.LanguageModel, tools *toolcall.Service, options .
 	if languageModel == nil {
 		return nil, fmt.Errorf("%w: language model is required", ErrInvalidLoop)
 	}
+	if !languageModel.Capabilities().Streaming {
+		return nil, fmt.Errorf("%w: streaming is required", ErrUnsupportedModelCapability)
+	}
 	if tools == nil {
 		return nil, fmt.Errorf("%w: tool-call service is required", ErrInvalidLoop)
 	}
@@ -347,6 +353,17 @@ func (l *Loop) CloneWithTools(tools *toolcall.Service) (*Loop, error) {
 	return &clone, nil
 }
 
+func messagesContainImages(messages []model.Message) bool {
+	for _, message := range messages {
+		for _, part := range message.Parts {
+			if part.Type == model.ContentPartImage {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Run executes model responses until one has no tool calls or the round bound is reached.
 func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Result, error) {
 	if l == nil {
@@ -386,6 +403,12 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		"max_rounds", l.maxRounds,
 		"max_tool_calls", l.maxToolCalls,
 	)
+
+	caps := l.languageModel.Capabilities()
+	if !caps.Vision && messagesContainImages(messages) {
+		terminalReason = "vision_unsupported"
+		return l.fail(ctx, sink, 0, fmt.Errorf("%w: model %q does not support vision input", ErrUnsupportedModelCapability, l.languageModel.ModelID()))
+	}
 
 	history := model.CloneMessages(messages)
 	turnMessages := make([]model.Message, 0, 4)
@@ -459,6 +482,9 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		} else {
 			tools = l.tools.Definitions()
 			switch {
+			case len(tools) > 0 && !caps.Tools:
+				tools = nil
+				dispatch.reason = toolDispatchDisabledModelTools
 			case len(tools) == 0:
 				dispatch.reason = toolDispatchDisabledNoTools
 			case l.maxToolCalls > 0 && toolCallsUsed >= l.maxToolCalls:
@@ -490,6 +516,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				Name:        definition.Name,
 				Description: definition.Description,
 				InputSchema: definition.InputSchema,
+				Dynamic:     definition.Kind == tool.KindMCP,
 			})
 		}
 		request := sdk.Request{
@@ -538,6 +565,10 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			case toolDispatchDisabledNoTools:
 				err := fmt.Errorf("%w: model requested %d tool calls while no tools were available", ErrToolDispatchUnavailable, len(assistant.ToolCalls))
 				terminalReason = "tool_dispatch_unavailable"
+				return l.fail(ctx, sink, round, err)
+			case toolDispatchDisabledModelTools:
+				err := fmt.Errorf("%w: model %q requested tool calls despite declaring tools unsupported", ErrUnsupportedModelCapability, l.languageModel.ModelID())
+				terminalReason = "model_tools_unsupported"
 				return l.fail(ctx, sink, round, err)
 			}
 		} else if len(assistant.ToolCalls) > 0 && len(executions) == 0 {
