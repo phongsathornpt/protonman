@@ -46,3 +46,12 @@ func TestNewProviderClientRoutesAnthropicThroughProtonSDK(t *testing.T) {
 		t.Fatalf("Anthropic client type = %T, want *sdkModelClient", client)
 	}
 }
+
+func TestResolveProviderBaseURLForProtocolUsesCustomProviderProtocol(t *testing.T) {
+	if got := ResolveProviderBaseURLForProtocol("custom-claude", string(ProviderProtocolAnthropic), ""); got != DefaultAnthropicEndpoint {
+		t.Fatalf("Anthropic default = %q, want %q", got, DefaultAnthropicEndpoint)
+	}
+	if got := ResolveProviderBaseURLForProtocol("custom-openai", string(ProviderProtocolOpenAI), ""); got != DefaultOpenAIEndpoint {
+		t.Fatalf("OpenAI default = %q, want %q", got, DefaultOpenAIEndpoint)
+	}
+}

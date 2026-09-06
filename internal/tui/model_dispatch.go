@@ -179,7 +179,7 @@ func (m *bubbleModel) reconfigureRunner() {
 	if !hasValidAuth {
 		return
 	}
-	baseURL := model.ResolveProviderBaseURL(provName, prov.BaseURL)
+	baseURL := model.ResolveProviderBaseURLForProtocol(provName, prov.Type, prov.BaseURL)
 	sessID := m.sessionID
 	if sessID == "" && m.workDir != "" {
 		sessID = "workspace-" + m.workDir

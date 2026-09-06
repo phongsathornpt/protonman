@@ -220,7 +220,7 @@ func buildInitialRunner(cfg config.Snapshot, sessionID string, skills *skill.Reg
 	if !ok || strings.TrimSpace(provider.APIKey) == "" {
 		return nil
 	}
-	client := model.NewProviderClient(providerKey, provider.Type, model.ResolveProviderBaseURL(providerKey, provider.BaseURL), provider.APIKey, cfg.Model.Default, model.WithSessionID(sessionID), model.WithRequestTimeout(cfg.Runtime.ModelRequestTimeout))
+	client := model.NewProviderClient(providerKey, provider.Type, provider.BaseURL, provider.APIKey, cfg.Model.Default, model.WithSessionID(sessionID), model.WithRequestTimeout(cfg.Runtime.ModelRequestTimeout))
 	coordinator.SetClient(client)
 	loopOptions := []turn.Option{
 		turn.WithMaxRounds(cfg.Agent.MaxRounds),
