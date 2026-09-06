@@ -495,6 +495,46 @@ func TestCoordinator_ResilientEmitOnCancel(t *testing.T) {
 	}
 }
 
+func TestCoordinator_ReadOnlyProfileInheritsAskModeForNetworkTools(t *testing.T) {
+	baseReg := staticRegistry{
+		handlers: map[string]tool.Handler{
+			"web_fetch": dummyHandler{def: tool.Definition{Name: "web_fetch", Kind: tool.KindWebFetch, Description: "fetch"}},
+		},
+	}
+
+	promptCalls := 0
+	var callErr error
+	coord := NewCoordinator(
+		nil,
+		baseReg,
+		nil,
+		nil,
+		WithPermissionMode(permission.ModeAsk),
+		WithPermissionPrompt(func(context.Context, permission.Request) (permission.Resolution, error) {
+			promptCalls++
+			return permission.Resolution{Action: permission.ActionDeny, Reason: "network not approved"}, nil
+		}),
+		WithRunnerFactory(func(_ Profile, tools *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+				call, _ := tool.NewCall("fetch-1", "web_fetch", []byte(`{"url":"https://example.com"}`))
+				_, callErr = tools.Call(ctx, call)
+				return turn.Result{Message: model.Message{Content: "done"}}, nil
+			}}, nil
+		}),
+	)
+	defer coord.Close()
+
+	if _, err := coord.Run(context.Background(), Request{Profile: ProfileExplorer, Task: "inspect web"}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if promptCalls != 1 {
+		t.Fatalf("permission prompt calls = %d, want 1", promptCalls)
+	}
+	if !errors.Is(callErr, toolcall.ErrPermissionDenied) {
+		t.Fatalf("web_fetch error = %v, want permission denied", callErr)
+	}
+}
+
 func TestCoordinator_WorkerInheritsAlwaysApproveMode(t *testing.T) {
 	baseReg := staticRegistry{
 		handlers: map[string]tool.Handler{

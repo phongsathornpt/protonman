@@ -28,19 +28,13 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	// 1. Build profile-scoped tool registry
 	scopedRegistry := FilterRegistryForProfile(parentRegistry, req.Profile, req.Depth)
 
-	// 2. Build scoped tool service
-	// For workers: if parent mode is always-approve, inherit always-approve.
-	// Otherwise, run in parent mode (or ModeAuto by default) and attach prompt.
-	// For read-only: uses always-approve mode since tools are already restricted to safe reads.
-	serviceMode := permission.ModeAlwaysApprove
-	if req.Profile.IsMutating() {
-		if permMode == permission.ModeAlwaysApprove {
-			serviceMode = permission.ModeAlwaysApprove
-		} else if permMode.Valid() {
-			serviceMode = permMode
-		} else {
-			serviceMode = permission.ModeAuto
-		}
+	// 2. Build scoped tool service. Child agents inherit the parent permission
+	// mode regardless of profile. Capability scoping limits which tools a
+	// profile can see, but it must not silently upgrade ask/auto to
+	// always-approve for network or other policy-sensitive reads.
+	serviceMode := permMode
+	if !serviceMode.Valid() {
+		serviceMode = permission.ModeAuto
 	}
 
 	policy := c.policy
