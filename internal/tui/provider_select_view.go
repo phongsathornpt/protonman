@@ -211,104 +211,70 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 		activeName = m.activeProvider
 	}
 
-	title := fmt.Sprintf("✓ Model Providers (%d configured · %d available · active: %s) [%d/%d]",
-		numConfigured, numAvailable, activeName, v.index+1, len(v.items))
-	if compact {
-		title = truncateWithEllipsis(
-			fmt.Sprintf("✓ Providers · active: %s · %d/%d", activeName, v.index+1, len(v.items)),
-			providerModalContentWidth(m),
-		)
-	}
+	title := fmt.Sprintf("Providers · active: %s · %d/%d", activeName, v.index+1, len(v.items))
+	title = truncateWithEllipsis(title, providerModalContentWidth(m))
 
 	rows := make([]string, 0, len(visible)*2+6)
 	rows = append(rows, brandStyle.Render(title), "")
 
 	if v.offset > 0 {
-		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ▲ %d more above", v.offset)))
+		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ↑ %d more", v.offset)))
 	}
 
+	contentWidth := maxInt(8, providerModalContentWidth(m)-2)
+	showDetails := layoutModeForHeight(m.height) == layoutNormal
 	for i, item := range visible {
 		idx := v.offset + i
-		radio := "( )"
-		if item.isActive {
-			radio = "(●)"
-		}
-
-		statusBadge := ""
-		if item.isActive {
-			statusBadge = " " + successStyle.Render("[active]")
-		} else if item.isConfigured {
-			statusBadge = " " + mutedStyle.Render("[configured]")
-		} else if item.kind == providerItemPreset {
-			statusBadge = " " + brandStyle.Render("[available preset]")
-		} else if item.kind == providerItemCustom {
-			statusBadge = " " + mutedStyle.Render("[custom]")
-		}
-
-		freeBadge := ""
-		if item.isFree {
-			freeBadge = " " + successStyle.Render("[free models]")
-		}
-
-		var line1 string
-		var line2 string
-		if item.kind == providerItemCustom {
-			line1 = fmt.Sprintf("%s %d. %s%s", radio, idx+1, item.displayName, statusBadge)
-			line2 = fmt.Sprintf("      %s", mutedStyle.Render(item.description))
-		} else if item.isConfigured {
-			keyStr := "Key: [masked]"
-			if strings.TrimSpace(item.apiKey) == "" {
-				keyStr = "Key: [none required]"
-			}
-			line1 = fmt.Sprintf("%s %d. %s%s%s", radio, idx+1, item.displayName, statusBadge, freeBadge)
-			line2 = fmt.Sprintf("      %s · %s", mutedStyle.Render(item.baseURL), mutedStyle.Render(keyStr))
-		} else {
-			line1 = fmt.Sprintf("%s %d. %s%s%s", radio, idx+1, item.displayName, statusBadge, freeBadge)
-			line2 = fmt.Sprintf("      %s · %s", mutedStyle.Render(item.baseURL), mutedStyle.Render(item.description))
-		}
-
-		if compact {
-			status := ""
-			switch {
-			case item.isActive:
-				status = " · active"
-			case item.isConfigured:
-				status = " · saved"
-			case item.kind == providerItemPreset:
-				status = " · preset"
-			case item.kind == providerItemCustom:
-				status = " · custom"
-			}
-			line := truncateWithEllipsis(
-				fmt.Sprintf("%s %d. %s%s", radio, idx+1, item.displayName, status),
-				maxInt(1, providerModalContentWidth(m)-4),
-			)
-			if idx == v.index {
-				rows = append(rows, brandStyle.Render("  ❯ "+line))
-			} else {
-				rows = append(rows, "    "+mutedStyle.Render(line))
-			}
-			continue
-		}
-
+		focus := "  "
 		if idx == v.index {
-			rows = append(rows, brandStyle.Render("  ❯ ")+brandStyle.Render(line1))
-			rows = append(rows, line2)
+			focus = "❯ "
+		}
+		active := " "
+		if item.isActive {
+			active = "✓"
+		}
+		status := "setup"
+		switch {
+		case item.isActive:
+			status = "active"
+		case item.isConfigured:
+			status = "saved"
+		case item.kind == providerItemCustom:
+			status = "custom"
+		}
+		line := fmt.Sprintf("%s%s %s · %s", focus, active, item.displayName, status)
+		if item.isFree {
+			line += " · free"
+		}
+		line = truncateWithEllipsis(line, contentWidth)
+		if idx == v.index {
+			rows = append(rows, brandStyle.Render(line))
+		} else if item.isActive {
+			rows = append(rows, successStyle.Render(line))
 		} else {
-			rows = append(rows, "    "+mutedStyle.Render(line1))
-			rows = append(rows, line2)
+			rows = append(rows, mutedStyle.Render(line))
+		}
+
+		if showDetails {
+			detail := item.baseURL
+			if item.kind == providerItemCustom || detail == "" {
+				detail = item.description
+			}
+			if detail != "" {
+				rows = append(rows, mutedStyle.Render("    "+truncateWithEllipsis(detail, maxInt(4, contentWidth-4))))
+			}
 		}
 	}
 
 	if visibleEnd < len(v.items) {
-		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ▼ %d more below", len(v.items)-visibleEnd)))
+		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ↓ %d more", len(v.items)-visibleEnd)))
 	}
 
-	footer := "↑/↓ move · 1-9 jump · enter switch/setup · e edit/create details · m models · d remove · esc close"
+	footer := "↑/↓ move · enter activate/setup · e edit · m models · d remove · esc"
 	if compact {
-		footer = "↑/↓ move · enter setup · e edit · d remove · esc close"
+		footer = "↑/↓ move · enter activate/setup · e edit · esc"
 		if m.width <= 30 {
-			footer = "↑/↓ · enter · esc close"
+			footer = "↑/↓ · enter · esc"
 		}
 	}
 	rows = append(rows, "", mutedStyle.Render(footer))
@@ -405,22 +371,42 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (
 		return true, nil
 
 	case "up", "k":
-		if len(v.items) > 0 {
-			v.index = (v.index - 1 + len(v.items)) % len(v.items)
+		if v.index > 0 {
+			v.index--
 		}
 		return true, nil
 
 	case "down", "j":
+		if v.index < len(v.items)-1 {
+			v.index++
+		}
+		return true, nil
+
+	case "pgup":
+		v.index -= pickerVisibleRows(m.height, maxProviderListRows)
+		if v.index < 0 {
+			v.index = 0
+		}
+		return true, nil
+
+	case "pgdown":
+		v.index += pickerVisibleRows(m.height, maxProviderListRows)
+		if v.index >= len(v.items) {
+			v.index = len(v.items) - 1
+		}
+		return true, nil
+
+	case "home", "g":
+		v.index = 0
+		return true, nil
+
+	case "end", "G":
 		if len(v.items) > 0 {
-			v.index = (v.index + 1) % len(v.items)
+			v.index = len(v.items) - 1
 		}
 		return true, nil
 
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		num := int(message.Runes[0] - '1')
-		if num >= 0 && num < len(v.items) {
-			v.index = num
-		}
 		return true, nil
 
 	case "enter":
