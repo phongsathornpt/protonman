@@ -932,3 +932,27 @@ func TestFormatElapsed(t *testing.T) {
 		}
 	}
 }
+
+func TestTodoStoreRevisionSyncsAfterToolResult(t *testing.T) {
+	initial := []TodoItem{{ID: "a", Text: "inspect", Status: tododomain.StatusPending}}
+	store, err := tododomain.NewStore(initial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := newTestBubbleModel(t, permission.ModeAsk, initial)
+	m.todoStore = store
+	m.todoRevision = store.Snapshot().Revision
+	if _, err := store.Replace(context.Background(), []tododomain.Item{{ID: "a", Text: "inspect", Status: tododomain.StatusCompleted}}); err != nil {
+		t.Fatal(err)
+	}
+	m.applyTurnEvent(applicationturn.Event{Kind: applicationturn.EventToolResult, Call: tool.Call{ID: "todo-1", Name: "update_todo"}, Result: tool.Result{CallID: "todo-1", ToolName: "update_todo"}})
+	if len(m.todo) != 1 || m.todo[0].Status != tododomain.StatusCompleted {
+		t.Fatalf("todo = %#v", m.todo)
+	}
+	if m.todoRevision != store.Snapshot().Revision {
+		t.Fatalf("revision = %d", m.todoRevision)
+	}
+	if m.syncTodoSnapshot() {
+		t.Fatal("unchanged revision reported a sync")
+	}
+}
