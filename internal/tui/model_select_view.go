@@ -121,7 +121,7 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 		v.offset = v.index - visibleRows + 1
 	}
 	if v.offset > len(v.models)-visibleRows {
-		v.offset = len(v.models) - maxModelSelectRows
+		v.offset = len(v.models) - visibleRows
 	}
 	if v.offset < 0 {
 		v.offset = 0
@@ -133,52 +133,70 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 	}
 	visible := v.models[v.offset:visibleEnd]
 
-	title := fmt.Sprintf("✓ Select Model (%d available · provider: %s) [%d/%d]",
-		len(v.models), activeProv, v.index+1, len(v.models))
+	title := fmt.Sprintf("Select Model · %s · %d/%d", activeProv, v.index+1, len(v.models))
 	if len(v.providerNames) > 1 {
-		title += " · tab cycle provider"
+		title += " · tab provider"
 	}
 
-	rows := make([]string, 0, len(visible)+6)
+	rows := make([]string, 0, len(visible)*2+6)
 	rows = append(rows, brandStyle.Render(title), "")
 
 	if v.offset > 0 {
-		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ▲ %d more above", v.offset)))
+		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ↑ %d more", v.offset)))
 	}
 
+	contentWidth := maxInt(8, maxWidth-6)
+	showDetails := layoutModeForHeight(m.height) == layoutNormal
 	for i, md := range visible {
 		idx := v.offset + i
 		isCurrent := m != nil && strings.EqualFold(md.ID, m.activeModel)
-		radio := "( )"
-		if isCurrent {
-			radio = "(●)"
-		}
-
-		line := fmt.Sprintf("%s %d. %s", radio, idx+1, md.ID)
-		if model.IsFreeModel(md.ID) {
-			line += " " + successStyle.Render("[FREE]")
-		}
-		if md.ContextWindow > 0 {
-			line += fmt.Sprintf(" [%s ctx]", formatContextTokens(md.ContextWindow))
-		}
-		if len(md.Features) > 0 {
-			line += fmt.Sprintf(" (%s)", strings.Join(md.Features, ", "))
-		}
-
-		prefix := "    "
+		focus := "  "
 		if idx == v.index {
-			prefix = brandStyle.Render("  ❯ ")
-			rows = append(rows, prefix+brandStyle.Render(line))
+			focus = "❯ "
+		}
+		active := " "
+		if isCurrent {
+			active = "✓"
+		}
+		label := strings.TrimSpace(md.Name)
+		if label == "" {
+			label = md.ID
+		}
+		line := fmt.Sprintf("%s%s %s", focus, active, label)
+		if model.IsFreeModel(md.ID) {
+			line += " · FREE"
+		}
+		line = truncateWithEllipsis(line, contentWidth)
+		if idx == v.index {
+			rows = append(rows, brandStyle.Render(line))
+		} else if isCurrent {
+			rows = append(rows, successStyle.Render(line))
 		} else {
-			rows = append(rows, prefix+mutedStyle.Render(line))
+			rows = append(rows, mutedStyle.Render(line))
+		}
+
+		if showDetails {
+			details := make([]string, 0, 3)
+			if label != md.ID && strings.TrimSpace(md.ID) != "" {
+				details = append(details, md.ID)
+			}
+			if md.ContextWindow > 0 {
+				details = append(details, formatContextTokens(md.ContextWindow)+" context")
+			}
+			if len(md.Features) > 0 {
+				details = append(details, strings.Join(md.Features, " · "))
+			}
+			if len(details) > 0 {
+				rows = append(rows, mutedStyle.Render("    "+truncateWithEllipsis(strings.Join(details, " · "), maxInt(4, contentWidth-4))))
+			}
 		}
 	}
 
 	if visibleEnd < len(v.models) {
-		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ▼ %d more below", len(v.models)-visibleEnd)))
+		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ↓ %d more", len(v.models)-visibleEnd)))
 	}
 
-	rows = append(rows, "", mutedStyle.Render("↑/↓ move · 1-9 select · enter confirm · p providers · a add · esc close"))
+	rows = append(rows, "", mutedStyle.Render("↑/↓ move · pgup/pgdn page · home/end · enter select · p providers · esc close"))
 	return modalStyle.
 		BorderForeground(accentAssistant).
 		MaxWidth(maxWidth).
@@ -222,22 +240,42 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 		return true, nil
 
 	case "up", "k":
-		if len(v.models) > 0 {
-			v.index = (v.index - 1 + len(v.models)) % len(v.models)
+		if v.index > 0 {
+			v.index--
 		}
 		return true, nil
 
 	case "down", "j":
+		if v.index < len(v.models)-1 {
+			v.index++
+		}
+		return true, nil
+
+	case "pgup":
+		v.index -= pickerVisibleRows(m.height, maxModelSelectRows)
+		if v.index < 0 {
+			v.index = 0
+		}
+		return true, nil
+
+	case "pgdown":
+		v.index += pickerVisibleRows(m.height, maxModelSelectRows)
+		if v.index >= len(v.models) {
+			v.index = len(v.models) - 1
+		}
+		return true, nil
+
+	case "home", "g":
+		v.index = 0
+		return true, nil
+
+	case "end", "G":
 		if len(v.models) > 0 {
-			v.index = (v.index + 1) % len(v.models)
+			v.index = len(v.models) - 1
 		}
 		return true, nil
 
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		num := int(message.Runes[0] - '1')
-		if num >= 0 && num < len(v.models) {
-			v.index = num
-		}
 		return true, nil
 
 	case "enter":

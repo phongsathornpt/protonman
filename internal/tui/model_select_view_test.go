@@ -34,8 +34,8 @@ func TestModelSelectViewLaunchViaSlashCommand(t *testing.T) {
 	if !strings.Contains(rendered, "Select Model") {
 		t.Fatalf("expected 'Select Model' in view, got:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "(●)") {
-		t.Fatalf("expected '(●)' active radio in view, got:\n%s", rendered)
+	if !strings.Contains(rendered, "✓") {
+		t.Fatalf("expected active model checkmark in view, got:\n%s", rendered)
 	}
 	if !strings.Contains(rendered, "MiniMax-M3") {
 		t.Fatalf("expected 'MiniMax-M3' in view, got:\n%s", rendered)
@@ -114,12 +114,14 @@ func TestModelSelectViewNavigationAndConfirm(t *testing.T) {
 		t.Fatalf("expected index 0 after 'k', got %d", view.index)
 	}
 
-	// Quick select item 3 ('3') -> index 2 (Qwen3.8-Flash)
-	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	// Move to item 3 with deterministic navigation.
+	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyDown})
+	bModel = updated.(*bubbleModel)
+	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyDown})
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
 	if view.index != 2 {
-		t.Fatalf("expected index 2 after pressing '3', got %d", view.index)
+		t.Fatalf("expected index 2 after moving down twice, got %d", view.index)
 	}
 	if view.models[view.index].ID != "Qwen3.8-Flash" {
 		t.Fatalf("expected Qwen3.8-Flash at index 2, got %s", view.models[view.index].ID)
@@ -245,5 +247,34 @@ func TestProviderListSlashCommand(t *testing.T) {
 	}
 	if !strings.Contains(rendered, "[active]") {
 		t.Fatalf("expected '[active]' in view, got:\n%s", rendered)
+	}
+}
+
+func TestModelSelectPagedNavigation(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.resize(40, 14)
+	m.executeCommand("/model")
+	view := m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	view.index = 0
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	m = updated.(*bubbleModel)
+	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if view.index != pickerVisibleRows(m.height, maxModelSelectRows) {
+		t.Fatalf("pgdown index = %d", view.index)
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	m = updated.(*bubbleModel)
+	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if view.index != len(view.models)-1 {
+		t.Fatalf("end index = %d, want %d", view.index, len(view.models)-1)
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyHome})
+	m = updated.(*bubbleModel)
+	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if view.index != 0 {
+		t.Fatalf("home index = %d, want 0", view.index)
 	}
 }
