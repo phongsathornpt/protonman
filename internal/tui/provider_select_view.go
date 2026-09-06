@@ -2,12 +2,12 @@ package tui
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 )
@@ -437,12 +437,11 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (
 
 func saveActiveProviderCmd(providerName string) tea.Cmd {
 	return func() tea.Msg {
-		homeDir := strings.TrimSpace(os.Getenv("PROTON_HOME"))
-		if homeDir == "" {
-			if h, err := os.UserHomeDir(); err == nil {
-				homeDir = h
-			}
+		dirs, resolveErr := appdirs.Resolve("")
+		if resolveErr != nil {
+			return providerActiveSelectedMsg{providerName: providerName, err: resolveErr}
 		}
+		homeDir := dirs.Home
 
 		err := config.SaveUserDefaultProvider(homeDir, providerName)
 		return providerActiveSelectedMsg{
@@ -454,12 +453,11 @@ func saveActiveProviderCmd(providerName string) tea.Cmd {
 
 func deleteProviderCmd(providerName string) tea.Cmd {
 	return func() tea.Msg {
-		homeDir := strings.TrimSpace(os.Getenv("PROTON_HOME"))
-		if homeDir == "" {
-			if h, err := os.UserHomeDir(); err == nil {
-				homeDir = h
-			}
+		dirs, resolveErr := appdirs.Resolve("")
+		if resolveErr != nil {
+			return providerDeletedMsg{providerName: providerName, err: resolveErr}
 		}
+		homeDir := dirs.Home
 
 		err := config.DeleteUserProviderConfig(homeDir, providerName)
 		return providerDeletedMsg{

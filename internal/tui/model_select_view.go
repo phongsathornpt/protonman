@@ -3,13 +3,13 @@ package tui
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 )
@@ -496,12 +496,11 @@ func saveDefaultModelCmd(providerName, modelID string) tea.Cmd {
 
 func saveModelSelectionCmd(providerName, modelID string, unverified bool) tea.Cmd {
 	return func() tea.Msg {
-		homeDir := strings.TrimSpace(os.Getenv("PROTON_HOME"))
-		if homeDir == "" {
-			if h, err := os.UserHomeDir(); err == nil {
-				homeDir = h
-			}
+		dirs, resolveErr := appdirs.Resolve("")
+		if resolveErr != nil {
+			return modelSelectedMsg{providerName: providerName, modelID: modelID, unverified: unverified, err: resolveErr}
 		}
+		homeDir := dirs.Home
 
 		err := config.SaveUserDefaultModel(homeDir, providerName, modelID)
 		return modelSelectedMsg{

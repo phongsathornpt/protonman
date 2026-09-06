@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 )
@@ -887,12 +887,11 @@ type providerSaveRequest struct {
 
 func saveProviderCmd(request providerSaveRequest) tea.Cmd {
 	return func() tea.Msg {
-		homeDir := strings.TrimSpace(os.Getenv("PROTON_HOME"))
-		if homeDir == "" {
-			if h, err := os.UserHomeDir(); err == nil {
-				homeDir = h
-			}
+		dirs, resolveErr := appdirs.Resolve("")
+		if resolveErr != nil {
+			return providerSavedMsg{providerName: request.providerName, previousName: request.previousName, baseURL: request.baseURL, apiKey: request.apiKey, modelID: request.defaultModel, activated: request.activate, err: resolveErr}
 		}
+		homeDir := dirs.Home
 
 		prov := config.ProviderConfig{
 			Name:    request.providerName,

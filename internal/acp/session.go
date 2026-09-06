@@ -120,7 +120,7 @@ func (s *Session) ExecutePrompt(
 	}
 
 	if s.runner == nil {
-		return SessionPromptResult{}, fmt.Errorf("no model runner configured; please configure an LLM provider in ~/.proton/config.json")
+		return SessionPromptResult{}, fmt.Errorf("no model runner configured; please configure an LLM provider in ~/.proton/config.toml")
 	}
 
 	s.mu.Lock()
