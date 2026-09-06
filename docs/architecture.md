@@ -18,6 +18,10 @@ Proton keeps orchestration thin and moves domain behavior into focused package f
 
 `internal/tui/model.go` owns Bubble Tea state and construction. Event routing, command dispatch, model turns, and layout/view behavior are split across `model_update.go`, `model_dispatch.go`, `model_turn.go`, and `model_layout.go`.
 
+## Model catalogs
+
+`internal/tui/model_catalog.go` owns provider-scoped model catalogs, freshness checks, and model identity lookup. The model picker owns fetch generation IDs and cancellation so late responses from an older provider selection cannot mutate the active catalog.
+
 ## Model adapters
 
 The OpenAI-compatible adapter separates client configuration, request construction/HTTP dispatch, and streaming decode state into `openai_client.go`, `openai_request.go`, and `openai_stream.go`.

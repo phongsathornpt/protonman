@@ -148,7 +148,7 @@ Type `/` at the prompt to trigger autocomplete, or prefix with a colon (`:help`)
 | Command | Description | Example |
 | :--- | :--- | :--- |
 | `/help`, `:help` | Display available commands and keybindings | `/help` |
-| `/model [name]` | Open model selector or switch active model | `/model glm-5.3-flash` |
+| `/model [name]` | Open model selector or switch active model (`/models` is an alias) | `/model glm-5.3-flash` |
 | `/provider [cmd]` | Manage and configure AI model providers | `/provider list`, `/provider opencode` |
 | `/tools` | List registered tools and parameter schemas | `/tools` |
 | `/skills` | List discovered Agent Skills | `/skills` |
@@ -161,6 +161,8 @@ Type `/` at the prompt to trigger autocomplete, or prefix with a colon (`:help`)
 | `/new` | Clear conversation history and start a fresh session | `/new` |
 | `!<command>` | Execute a shell command directly through the `bash` tool | `!git status` |
 | `/quit`, `:quit` | Exit Proton cleanly | `/quit` |
+
+The model picker keeps catalogs scoped per configured provider. Fresh catalogs are cached briefly, stale or missing catalogs are refreshed, obsolete requests are canceled, and late responses from an older provider selection are ignored. Press `/` inside the model picker to filter by model ID, name, vendor, or feature; `r` forces a refresh. Direct `/model <id>` selection still permits custom/unlisted model IDs and marks them as unverified instead of rejecting them.
 
 ---
 
