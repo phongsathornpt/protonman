@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -353,5 +354,36 @@ func TestSpinnerTickSkipsViewportRefreshForStreamingAssistant(t *testing.T) {
 	m = updated.(*bubbleModel)
 	if got := m.viewport.View(); !strings.Contains(got, "viewport sentinel") {
 		t.Fatalf("assistant-only spinner tick refreshed viewport: %q", got)
+	}
+}
+
+func TestViewportTailOnlyHydratesBeforePageUp(t *testing.T) {
+	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
+	m.resize(80, 18)
+	m.showWelcome = false
+	m.busy = true
+	m.followTail = true
+	for i := 0; i < 40; i++ {
+		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nmore detail", i)})
+	}
+	m.historyState.AppendAssistantDelta("live one\nlive two\nlive three")
+	m.refreshViewport()
+	if !m.viewportTailOnly {
+		t.Fatal("expected streaming follow-tail viewport to use bounded tail content")
+	}
+	tailLines := m.viewport.TotalLineCount()
+	if tailLines > m.viewport.Height {
+		t.Fatalf("tail viewport has %d lines, height %d", tailLines, m.viewport.Height)
+	}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	m = updated.(*bubbleModel)
+	if m.viewportTailOnly {
+		t.Fatal("page up should hydrate full scrollback")
+	}
+	if m.viewport.TotalLineCount() <= tailLines {
+		t.Fatalf("expected hydrated viewport to restore scrollback: tail=%d full=%d", tailLines, m.viewport.TotalLineCount())
+	}
+	if m.viewport.AtBottom() {
+		t.Fatal("page up should leave the viewport above the tail")
 	}
 }

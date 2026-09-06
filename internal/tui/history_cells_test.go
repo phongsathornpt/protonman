@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -551,5 +552,22 @@ func TestHistoryStateRenderContentMatchesRenderLines(t *testing.T) {
 	want = strings.Join(state.RenderLines(), "\n")
 	if got := state.RenderContent(); got != want {
 		t.Fatalf("committed RenderContent mismatch\nwant: %q\n got: %q", want, got)
+	}
+}
+
+func TestHistoryStateRenderTailContentMatchesFullSuffix(t *testing.T) {
+	state := NewHistoryState(50000)
+	for i := 0; i < 8; i++ {
+		state.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nsecond line", i)})
+	}
+	state.AppendAssistantDelta("stream one\nstream two\nstream three")
+	full := strings.Split(state.RenderContent(), "\n")
+	got, truncated := state.RenderTailContent(5)
+	if !truncated {
+		t.Fatal("expected tail render to truncate older content")
+	}
+	want := strings.Join(full[len(full)-5:], "\n")
+	if got != want {
+		t.Fatalf("tail mismatch\nwant: %q\n got: %q", want, got)
 	}
 }

@@ -54,32 +54,33 @@ type bubbleModel struct {
 	bottom             *bottomPane
 	historyState       *HistoryState
 
-	queue           []string
-	todo            []TodoItem
-	todoExpanded    bool
-	busy            bool
-	activity        string
-	pendingActivity string
-	planMode        bool
-	followTail      bool
-	showWelcome     bool
-	showTranscript  bool
-	rawTranscript   bool
-	nextID          uint64
-	width           int
-	height          int
-	busyStarted     time.Time
-	turnCancel      context.CancelFunc
-	turnEvents      <-chan tea.Msg
-	messages        []model.Message
-	activeModel     string
-	activeProvider  string
-	providers       map[string]config.ProviderConfig
-	maxRounds       int
-	maxToolCalls    int
-	agentProfile    string
-	sessionID       string
-	modelsCatalog   []model.RemoteModel
+	queue            []string
+	todo             []TodoItem
+	todoExpanded     bool
+	busy             bool
+	activity         string
+	pendingActivity  string
+	planMode         bool
+	followTail       bool
+	showWelcome      bool
+	showTranscript   bool
+	rawTranscript    bool
+	viewportTailOnly bool
+	nextID           uint64
+	width            int
+	height           int
+	busyStarted      time.Time
+	turnCancel       context.CancelFunc
+	turnEvents       <-chan tea.Msg
+	messages         []model.Message
+	activeModel      string
+	activeProvider   string
+	providers        map[string]config.ProviderConfig
+	maxRounds        int
+	maxToolCalls     int
+	agentProfile     string
+	sessionID        string
+	modelsCatalog    []model.RemoteModel
 
 	// Compatibility snapshots for existing in-package tests during the
 	// migration. Runtime ownership lives in bottom/historyState.
@@ -224,6 +225,9 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 			}
+		}
+		if m.viewportTailOnly && message.Button == tea.MouseButtonWheelUp {
+			m.hydrateViewportForScroll()
 		}
 		m.viewport, command = m.viewport.Update(message)
 		m.followTail = m.viewport.AtBottom()
@@ -550,6 +554,7 @@ func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if key.Matches(message, m.keys.PageUp) {
+		m.hydrateViewportForScroll()
 		m.viewport.PageUp()
 		m.followTail = m.viewport.AtBottom()
 		return m, nil
@@ -991,17 +996,17 @@ func (m *bubbleModel) chromeHeight() int {
 }
 
 func (m *bubbleModel) refreshViewport() {
-	content := m.historyState.RenderContent()
-	if m.showWelcome {
-		welcome := m.welcomeCard()
-		if content == "" {
-			content = welcome
-		} else {
-			content = welcome + "\n" + content
-		}
-	}
 	follow := m.followTail || m.viewport.AtBottom()
+	content := ""
+	tailOnly := false
+	if follow && m.busy && m.historyState.Active() != nil {
+		content, tailOnly = m.historyState.RenderTailContent(maxInt(1, m.viewport.Height))
+	}
+	if !tailOnly {
+		content = m.fullViewportContent()
+	}
 	m.viewport.SetContent(content)
+	m.viewportTailOnly = tailOnly
 	if follow {
 		m.viewport.GotoBottom()
 		m.followTail = true
@@ -1009,6 +1014,27 @@ func (m *bubbleModel) refreshViewport() {
 	if m.showTranscript {
 		m.refreshTranscriptViewport(false)
 	}
+}
+
+func (m *bubbleModel) fullViewportContent() string {
+	content := m.historyState.RenderContent()
+	if !m.showWelcome {
+		return content
+	}
+	welcome := m.welcomeCard()
+	if content == "" {
+		return welcome
+	}
+	return welcome + "\n" + content
+}
+
+func (m *bubbleModel) hydrateViewportForScroll() {
+	if !m.viewportTailOnly {
+		return
+	}
+	m.viewport.SetContent(m.fullViewportContent())
+	m.viewport.GotoBottom()
+	m.viewportTailOnly = false
 }
 
 func (m *bubbleModel) View() string {
