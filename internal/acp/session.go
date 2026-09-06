@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/contextutil"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
@@ -121,7 +122,7 @@ func (s *Session) ExecutePrompt(
 	}
 
 	if s.runner == nil {
-		return SessionPromptResult{}, fmt.Errorf("no model runner configured; please configure an LLM provider in ~/.proton/config.toml")
+		return SessionPromptResult{}, fmt.Errorf("no model runner configured; please configure an LLM provider in %s", appdirs.UserConfigDisplay())
 	}
 
 	s.mu.Lock()

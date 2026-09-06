@@ -9,6 +9,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/session"
@@ -201,7 +202,7 @@ func (r *Runner) handleSkillsCommand(argument string, parts []string, output io.
 	if r.skills == nil || len(r.skills.List()) == 0 {
 		return writeEvent(output, format, Event{
 			Kind: EventKindText,
-			Text: "No agent skills discovered.\nPlace skills in ~/.proton/skills/ or .proton/skills/ (with PROTON_TRUST_PROJECT=1).",
+			Text: fmt.Sprintf("No agent skills discovered.\nPlace skills in %s or .proton/skills/ (with PROTON_TRUST_PROJECT=1).", appdirs.UserSkillsDisplay()),
 		})
 	}
 

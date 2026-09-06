@@ -35,7 +35,7 @@ func (m *bubbleModel) reloadTodoAfterExternalTool(call tool.Call, result tool.Re
 		return
 	}
 	if _, err := reloader.Reload(m.ctx); err != nil {
-		m.appendError("reload TODO.md: " + err.Error())
+		m.appendError("reload " + tododomain.DefaultFilename + ": " + err.Error())
 		return
 	}
 	m.syncTodoSnapshot()
@@ -45,10 +45,10 @@ func todoCallMayAffectFile(call tool.Call, result tool.Result, workDir string) b
 	for _, affected := range result.AffectedPaths {
 		path := filepath.Clean(strings.TrimSpace(affected))
 		if filepath.IsAbs(path) {
-			if path == filepath.Join(filepath.Clean(workDir), "TODO.md") {
+			if path == filepath.Join(filepath.Clean(workDir), tododomain.DefaultFilename) {
 				return true
 			}
-		} else if path == "TODO.md" {
+		} else if path == tododomain.DefaultFilename {
 			return true
 		}
 	}
@@ -70,7 +70,7 @@ func todoCallMayAffectFile(call tool.Call, result tool.Result, workDir string) b
 		if analysis.Effect == tool.CommandEffectReadOnly {
 			return false
 		}
-		return strings.Contains(input.Command, "TODO.md")
+		return strings.Contains(input.Command, tododomain.DefaultFilename)
 	case "checkpoint_restore":
 		return true
 	default:

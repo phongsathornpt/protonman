@@ -5,6 +5,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/projectTHORN/proton/internal/appdirs"
 )
 
 // bottomPaneView is a transient interaction surface that can replace or augment
@@ -192,7 +194,7 @@ func (*skillsPaneView) ReplacesComposer() bool { return true }
 
 func (v *skillsPaneView) Render(m *bubbleModel) string {
 	if m == nil || m.skills == nil || len(m.skills.List()) == 0 {
-		return renderModalRows(m, accentAssistant, []string{"No agent skills discovered.", "", "Place skills in ~/.proton/skills/ or .proton/skills/.", "", "esc close"})
+		return renderModalRows(m, accentAssistant, []string{"No agent skills discovered.", "", fmt.Sprintf("Place skills in %s or .proton/skills/.", appdirs.UserSkillsDisplay()), "", "esc close"})
 	}
 	skills := m.skills.List()
 	if v.index >= len(skills) {

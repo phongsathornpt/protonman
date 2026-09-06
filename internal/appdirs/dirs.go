@@ -54,6 +54,42 @@ func Resolve(explicitHome string) (Dirs, error) {
 	}, nil
 }
 
+// UserConfigDisplay returns the config path shown to users, honoring PROTON_HOME.
+func UserConfigDisplay() string {
+	if envconfig.Value(envconfig.Home) == "" {
+		return "~/.proton/config.toml"
+	}
+	dirs, err := Resolve("")
+	if err != nil {
+		return "~/.proton/config.toml"
+	}
+	return dirs.Config
+}
+
+// UserSkillsDisplay returns the user skill directory shown to users, honoring PROTON_HOME.
+func UserSkillsDisplay() string {
+	if envconfig.Value(envconfig.Home) == "" {
+		return "~/.proton/skills/"
+	}
+	dirs, err := Resolve("")
+	if err != nil {
+		return "~/.proton/skills/"
+	}
+	return dirs.Skills + string(filepath.Separator)
+}
+
+// UserMCPLogsDisplay returns the MCP log directory shown to users.
+func UserMCPLogsDisplay() string {
+	if envconfig.Value(envconfig.Home) == "" {
+		return "~/.proton/logs/mcp/"
+	}
+	dirs, err := Resolve("")
+	if err != nil {
+		return "~/.proton/logs/mcp/"
+	}
+	return filepath.Join(dirs.Logs, "mcp") + string(filepath.Separator)
+}
+
 // ProjectRoot returns the project-local Proton directory.
 func ProjectRoot(workDir string) string { return filepath.Join(workDir, RootDirName) }
 
