@@ -54,7 +54,7 @@ Proton isolates external effects behind strict application boundaries. External 
 ### Prerequisites
 - Go 1.27+ installed
 - Git
-- Linux `workspace` sandbox uses native Landlock when available; network-isolated profiles currently require `bwrap`
+- Linux sandboxing uses native Landlock and network namespaces when supported; `bwrap` is an optional fallback
 
 ### Running Proton
 
@@ -194,14 +194,14 @@ When prompted in `ask` mode:
 
 Proton can confine sub-processes via OS-level sandboxing:
 - **macOS**: Evaluates seatbelt confinement profiles via `sandbox-exec`.
-- **Linux**: Uses native Landlock for workspace filesystem confinement when available; network-isolated profiles currently fall back to bubblewrap (`bwrap`). The CLI already performs native Landlock/user-namespace capability probing to improve diagnostics.
+- **Linux**: Uses native Landlock for filesystem confinement and a user/network namespace for blocked-network profiles when supported. Bubblewrap (`bwrap`) is retained only as a fallback for hosts missing native prerequisites. The CLI probes Landlock and user-namespace capabilities before backend selection.
 
 | Profile | Workspace Files | Host Filesystem | Network Access |
 | :--- | :--- | :--- | :--- |
 | `off` | Unrestricted | Unrestricted | Allowed |
 | `workspace` | Read-Write | Blocked / Temp only | Allowed |
 | `read-only` | Read-Only | Blocked / Temp only | Blocked |
-| `strict` | Read-Only | Blocked | Blocked |
+| `strict` | Read-Write | Blocked | Blocked |
 
 Configure the sandbox globally via config or per-run:
 ```sh
