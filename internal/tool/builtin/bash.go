@@ -24,6 +24,7 @@ const (
 	maxBashArgumentBytes  = 512 * 1024
 	maxBashCommandBytes   = 256 * 1024
 	maxBashOutputBytes    = 2 * 1024 * 1024
+	maxBashStreamBytes    = maxBashOutputBytes / 2
 	maxBashTimeoutSeconds = 120
 )
 
@@ -87,8 +88,9 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		return tool.Result{}, fmt.Errorf("bash workspace is required")
 	}
 	if h.launcher == nil {
-		logBashFailure(ctx, call, startedAt, "launcher", errors.New("launcher_missing"))
-		return tool.Result{}, fmt.Errorf("bash sandbox launcher is required: configure an explicit sandbox profile (use --sandbox off to opt out)")
+		err := tool.NewToolError(tool.ErrorCodeSandboxUnavailable, "bash sandbox launcher is required: configure an explicit sandbox profile (use --sandbox off to opt out)")
+		logBashFailure(ctx, call, startedAt, "launcher", err)
+		return tool.Result{}, err
 	}
 	if len(call.Arguments) > maxBashArgumentBytes {
 		err := tool.NewToolError(tool.ErrorCodeInvalidArguments, "bash arguments exceed the 512 KiB limit")
@@ -98,12 +100,13 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	var input bashInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
 		logBashFailure(ctx, call, startedAt, "arguments", err)
-		return tool.Result{}, fmt.Errorf("decode bash arguments: %w", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode bash arguments", err)
 	}
 	input.Command = strings.TrimSpace(input.Command)
 	if input.Command == "" {
-		logBashFailure(ctx, call, startedAt, "arguments", errors.New("command_missing"))
-		return tool.Result{}, fmt.Errorf("bash command is required")
+		err := tool.NewToolError(tool.ErrorCodeInvalidArguments, "bash command is required")
+		logBashFailure(ctx, call, startedAt, "arguments", err)
+		return tool.Result{}, err
 	}
 	if len(input.Command) > maxBashCommandBytes {
 		err := tool.NewToolError(tool.ErrorCodeInvalidArguments, "bash command exceeds the 256 KiB limit")
@@ -138,13 +141,19 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	)
 	if err := ctx.Err(); err != nil {
 		logBashFailure(ctx, call, startedAt, "before_run", err)
-		return tool.Result{}, fmt.Errorf("before bash command: %w", err)
+		if errors.Is(err, context.DeadlineExceeded) {
+			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeDeadlineExceeded, "before bash command", err)
+		}
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeCanceled, "before bash command", err)
 	}
 
 	command, err := h.command(ctx, cwd, input.Command)
 	if err != nil {
 		logBashFailure(ctx, call, startedAt, "launcher", err)
-		return tool.Result{}, err
+		if errors.Is(err, sandbox.ErrUnavailable) {
+			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeSandboxUnavailable, "bash sandbox unavailable", err)
+		}
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "prepare bash command", err)
 	}
 	slog.DebugContext(ctx, "bash process starting",
 		"call_id", call.ID,
@@ -153,30 +162,41 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		"workspace_fingerprint", telemetry.Fingerprint(h.workspace.Root()),
 	)
 
-	var buf boundedBuffer
-	buf.limit = maxBashOutputBytes
-	command.Stdout = &buf
-	command.Stderr = &buf
+	stdoutBuf := boundedBuffer{limit: maxBashStreamBytes}
+	stderrBuf := boundedBuffer{limit: maxBashStreamBytes}
+	command.Stdout = &stdoutBuf
+	command.Stderr = &stderrBuf
 
 	err = command.Run()
-	outputStr := buf.String()
-	truncated := buf.IsTruncated()
-	if truncated {
-		outputStr += "\n[output truncated at 2 MiB]"
-	}
+	stdoutStr := stdoutBuf.String()
+	stderrStr := stderrBuf.String()
+	stdoutTruncated := stdoutBuf.IsTruncated()
+	stderrTruncated := stderrBuf.IsTruncated()
+	outputStr := combineBashOutput(stdoutStr, stderrStr)
+	truncated := stdoutTruncated || stderrTruncated
 
 	result := tool.Result{
-		CallID:        call.ID,
-		ToolName:      call.Name,
-		Output:        outputStr,
-		Truncated:     truncated,
-		AffectedPaths: append([]string(nil), affectedPaths...),
+		CallID:          call.ID,
+		ToolName:        call.Name,
+		Output:          outputStr,
+		Stdout:          stdoutStr,
+		Stderr:          stderrStr,
+		StdoutBytes:     stdoutBuf.BytesSeen(),
+		StderrBytes:     stderrBuf.BytesSeen(),
+		StdoutTruncated: stdoutTruncated,
+		StderrTruncated: stderrTruncated,
+		Truncated:       truncated,
+		AffectedPaths:   append([]string(nil), affectedPaths...),
 	}
 	attrs := []any{
 		"call_id", call.ID,
 		"duration_ms", time.Since(startedAt).Milliseconds(),
 		"success", err == nil,
 		"output_bytes", len(outputStr),
+		"stdout_bytes", result.StdoutBytes,
+		"stderr_bytes", result.StderrBytes,
+		"stdout_truncated", stdoutTruncated,
+		"stderr_truncated", stderrTruncated,
 		"truncated", truncated,
 		"context_error", ctx.Err() != nil,
 	}
@@ -207,11 +227,11 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		if errors.Is(ctxErr, context.DeadlineExceeded) {
-			return result, fmt.Errorf("bash command deadline exceeded: %w", ctxErr)
+			return result, tool.WrapToolError(tool.ErrorCodeDeadlineExceeded, "bash command deadline exceeded", ctxErr)
 		}
-		return result, fmt.Errorf("bash command canceled: %w", ctxErr)
+		return result, tool.WrapToolError(tool.ErrorCodeCanceled, "bash command canceled", ctxErr)
 	}
-	return result, fmt.Errorf("bash command failed: %w", err)
+	return result, tool.WrapToolError(tool.ErrorCodeExecution, "bash command failed", err)
 }
 
 func logBashFailure(ctx context.Context, call tool.Call, startedAt time.Time, phase string, err error) {
@@ -289,12 +309,14 @@ type boundedBuffer struct {
 	mu        sync.Mutex
 	buf       bytes.Buffer
 	limit     int
+	total     int64
 	truncated bool
 }
 
 func (b *boundedBuffer) Write(p []byte) (n int, err error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.total += int64(len(p))
 	if b.buf.Len() >= b.limit {
 		b.truncated = true
 		return len(p), nil
@@ -318,4 +340,23 @@ func (b *boundedBuffer) IsTruncated() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.truncated
+}
+
+func (b *boundedBuffer) BytesSeen() int64 {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.total
+}
+
+func combineBashOutput(stdout, stderr string) string {
+	if stdout == "" {
+		return stderr
+	}
+	if stderr == "" {
+		return stdout
+	}
+	if strings.HasSuffix(stdout, "\n") {
+		return stdout + stderr
+	}
+	return stdout + "\n" + stderr
 }
