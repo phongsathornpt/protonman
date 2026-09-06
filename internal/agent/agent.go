@@ -55,13 +55,14 @@ func ParseProfile(raw string) (Profile, error) {
 
 // Request is the invocation payload for a delegated subagent.
 type Request struct {
-	ID       string        `json:"id,omitempty"`
-	ParentID string        `json:"parent_id,omitempty"`
-	Profile  Profile       `json:"profile"`
-	Task     string        `json:"task"`
-	Context  string        `json:"context,omitempty"`
-	Depth    int           `json:"depth"`
-	Timeout  time.Duration `json:"timeout,omitempty"`
+	ID           string        `json:"id,omitempty"`
+	ParentID     string        `json:"parent_id,omitempty"`
+	Profile      Profile       `json:"profile"`
+	Task         string        `json:"task"`
+	Context      string        `json:"context,omitempty"`
+	Depth        int           `json:"depth"`
+	Timeout      time.Duration `json:"timeout,omitempty"`
+	QueueTimeout time.Duration `json:"queue_timeout,omitempty"`
 }
 
 // Validate checks request invariants before dispatch.
@@ -74,6 +75,12 @@ func (r Request) Validate() error {
 	}
 	if r.Depth < 0 {
 		return errors.New("subagent depth cannot be negative")
+	}
+	if r.Timeout < 0 {
+		return errors.New("subagent timeout cannot be negative")
+	}
+	if r.QueueTimeout < 0 {
+		return errors.New("subagent queue timeout cannot be negative")
 	}
 	return nil
 }
