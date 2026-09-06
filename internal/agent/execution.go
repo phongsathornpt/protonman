@@ -81,7 +81,7 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 		if languageModel == nil {
 			return Result{AgentID: req.ID, Profile: req.Profile}, errors.New("language model is required for subagent execution")
 		}
-		loop, lerr := turn.NewLanguageModelLoop(
+		loop, lerr := turn.NewLoop(
 			languageModel,
 			service,
 			turn.WithMaxRounds(c.maxRounds),

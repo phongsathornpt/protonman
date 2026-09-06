@@ -50,7 +50,7 @@ func TestLanguageModelLoopConsumesProtonSDKDirectly(t *testing.T) {
 		t.Fatal(err)
 	}
 	languageModel := &sdkTestModel{}
-	loop, err := NewLanguageModelLoop(languageModel, service)
+	loop, err := NewLoop(languageModel, service)
 	if err != nil {
 		t.Fatal(err)
 	}
