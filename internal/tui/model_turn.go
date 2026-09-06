@@ -25,7 +25,8 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 	m.messages = append(m.messages, model.Message{Role: model.RoleUser, Content: prompt})
 	m.busy = true
 	m.busyStarted = time.Now()
-	m.activity = "thinking"
+	m.turnProgress = turnProgress{}
+	m.activity = "analyzing"
 	m.historyState.SetSpinnerFrame(m.spinner.View())
 	m.historyState.StartThinking()
 	m.relayout()

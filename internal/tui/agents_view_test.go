@@ -9,6 +9,7 @@ import (
 	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
+	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	"github.com/projectTHORN/proton/internal/turn"
 )
@@ -170,5 +171,29 @@ func TestAgentsViewCollapsesDuringBusyRootTurn(t *testing.T) {
 	}
 	if strings.Contains(got, "inspect router") || strings.Contains(got, "review risks") {
 		t.Fatalf("busy agents view should be collapsed: %q", got)
+	}
+}
+
+func TestStatusViewCombinesRootAndSubagentProgress(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.resize(120, 30)
+	m.busy = true
+	m.busyStarted = time.Now().Add(-8 * time.Second)
+	m.maxRounds = 10
+	m.turnProgress = turnProgress{Round: 3, ToolCalls: 8}
+	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", State: agent.StateRunning}}
+	got := m.statusView()
+	for _, want := range []string{"coordinating", "round 3/10", "8 tools", "1 agent"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("status view=%q, want %q", got, want)
+		}
+	}
+}
+
+func TestApplyTurnEventTracksRoundAndToolCount(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Round: 2, Call: tool.Call{ID: "c1", Name: "read_file"}})
+	if m.turnProgress.Round != 2 || m.turnProgress.ToolCalls != 1 {
+		t.Fatalf("turn progress=%+v, want round 2 and 1 tool", m.turnProgress)
 	}
 }

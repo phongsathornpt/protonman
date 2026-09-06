@@ -110,6 +110,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 		m.busy = false
 		m.busyStarted = time.Time{}
+		m.turnProgress = turnProgress{}
 		m.activity = "ready"
 		m.turnCancel = nil
 		m.appendToolResult(message.result, message.err)
