@@ -618,3 +618,117 @@ func TestCoordinatorWorkspaceGateAllowsConcurrentReaders(t *testing.T) {
 	}
 	releaseB()
 }
+
+func TestCoordinatorExecutionTimeoutReturnsForNonCooperativeRunner(t *testing.T) {
+	release := make(chan struct{})
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithDefaultTimeout(20*time.Millisecond),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(context.Context, []model.Message, turn.Sink) (turn.Result, error) {
+				<-release
+				return turn.Result{}, nil
+			}}, nil
+		}),
+	)
+
+	started := time.Now()
+	_, err := coord.Run(context.Background(), Request{Profile: ProfileExplorer, Task: "ignore cancellation"})
+	elapsed := time.Since(started)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Run() error = %v, want deadline exceeded", err)
+	}
+	if elapsed > 150*time.Millisecond {
+		t.Fatalf("Run() elapsed = %v, hard timeout did not return promptly", elapsed)
+	}
+	close(release)
+	if err := coord.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestCoordinatorQueueWaitDoesNotConsumeExecutionTimeout(t *testing.T) {
+	firstRelease := make(chan struct{})
+	secondStarted := make(chan time.Time, 1)
+	var calls atomic.Int32
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithMaxConcurrency(1),
+		WithDefaultQueueTimeout(time.Second),
+		WithDefaultTimeout(80*time.Millisecond),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+				if calls.Add(1) == 1 {
+					<-firstRelease
+					return turn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "first"}}, nil
+				}
+				secondStarted <- time.Now()
+				select {
+				case <-time.After(50 * time.Millisecond):
+					return turn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "second"}}, nil
+				case <-ctx.Done():
+					return turn.Result{}, ctx.Err()
+				}
+			}}, nil
+		}),
+	)
+	defer coord.Close()
+
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := coord.Run(context.Background(), Request{Profile: ProfileExplorer, Task: "first"})
+		firstDone <- err
+	}()
+	time.Sleep(20 * time.Millisecond)
+
+	secondDone := make(chan error, 1)
+	queuedAt := time.Now()
+	go func() {
+		_, err := coord.Run(context.Background(), Request{Profile: ProfileExplorer, Task: "second"})
+		secondDone <- err
+	}()
+	time.Sleep(60 * time.Millisecond)
+	close(firstRelease)
+	if err := <-firstDone; err != nil {
+		t.Fatalf("first Run() error = %v", err)
+	}
+	startAt := <-secondStarted
+	if wait := startAt.Sub(queuedAt); wait < 50*time.Millisecond {
+		t.Fatalf("second queue wait = %v, want meaningful queue delay", wait)
+	}
+	if err := <-secondDone; err != nil {
+		t.Fatalf("second Run() error = %v; queue wait consumed execution budget", err)
+	}
+}
+
+func TestCoordinatorParentDeadlineStillBoundsExecution(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithDefaultTimeout(time.Second),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+				<-ctx.Done()
+				return turn.Result{}, ctx.Err()
+			}}, nil
+		}),
+	)
+	defer coord.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	_, err := coord.Run(ctx, Request{Profile: ProfileExplorer, Task: "parent deadline"})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Run() error = %v, want deadline exceeded", err)
+	}
+	if elapsed := time.Since(started); elapsed > 150*time.Millisecond {
+		t.Fatalf("Run() elapsed = %v, parent deadline did not bound execution", elapsed)
+	}
+}
+
+func TestRequestRejectsNegativeTimeouts(t *testing.T) {
+	for _, req := range []Request{
+		{Profile: ProfileExplorer, Task: "bad execution timeout", Timeout: -time.Second},
+		{Profile: ProfileExplorer, Task: "bad queue timeout", QueueTimeout: -time.Second},
+	} {
+		if err := req.Validate(); err == nil {
+			t.Fatalf("Validate(%+v) error = nil, want validation error", req)
+		}
+	}
+}

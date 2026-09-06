@@ -24,6 +24,7 @@ const (
 	defaultMaxRounds      = 10
 	defaultMaxToolCalls   = turn.DefaultMaxToolCalls
 	defaultTimeout        = 5 * time.Minute
+	defaultQueueTimeout   = 30 * time.Second
 	maxSummaryBytes       = 32 * 1024 // 32KB bound for child summaries returned to parent
 )
 
@@ -63,12 +64,13 @@ type Coordinator struct {
 	active   map[string]*activeEntry
 	wg       sync.WaitGroup
 
-	maxDepth       int
-	maxRounds      int
-	maxToolCalls   int
-	defaultTimeout time.Duration
-	eventSink      EventSink
-	runnerFactory  RunnerFactory
+	maxDepth            int
+	maxRounds           int
+	maxToolCalls        int
+	defaultTimeout      time.Duration
+	defaultQueueTimeout time.Duration
+	eventSink           EventSink
+	runnerFactory       RunnerFactory
 
 	seq    uint64
 	closed atomic.Bool
@@ -124,6 +126,16 @@ func WithDefaultTimeout(d time.Duration) Option {
 	}
 }
 
+// WithDefaultQueueTimeout sets the maximum time a subagent may wait for
+// concurrency and workspace capacity before execution starts.
+func WithDefaultQueueTimeout(d time.Duration) Option {
+	return func(c *Coordinator) {
+		if d >= 0 {
+			c.defaultQueueTimeout = d
+		}
+	}
+}
+
 // WithEventSink attaches an observer for subagent lifecycle events.
 func WithEventSink(sink EventSink) Option {
 	return func(c *Coordinator) {
@@ -170,18 +182,19 @@ func NewCoordinator(
 	options ...Option,
 ) *Coordinator {
 	c := &Coordinator{
-		client:         client,
-		parentRegistry: parentRegistry,
-		workspace:      ws,
-		policy:         policy,
-		sem:            make(chan struct{}, defaultMaxConcurrency),
-		wsGate:         make(chan struct{}, defaultMaxConcurrency),
-		wsWriter:       make(chan struct{}, 1),
-		active:         make(map[string]*activeEntry),
-		maxDepth:       defaultMaxDepth,
-		maxRounds:      defaultMaxRounds,
-		maxToolCalls:   defaultMaxToolCalls,
-		defaultTimeout: defaultTimeout,
+		client:              client,
+		parentRegistry:      parentRegistry,
+		workspace:           ws,
+		policy:              policy,
+		sem:                 make(chan struct{}, defaultMaxConcurrency),
+		wsGate:              make(chan struct{}, defaultMaxConcurrency),
+		wsWriter:            make(chan struct{}, 1),
+		active:              make(map[string]*activeEntry),
+		maxDepth:            defaultMaxDepth,
+		maxRounds:           defaultMaxRounds,
+		maxToolCalls:        defaultMaxToolCalls,
+		defaultTimeout:      defaultTimeout,
+		defaultQueueTimeout: defaultQueueTimeout,
 	}
 	for _, opt := range options {
 		if opt != nil {
@@ -194,6 +207,9 @@ func NewCoordinator(
 // Run dispatches a subagent execution into a goroutine and blocks until completion,
 // timeout, or parent context cancellation.
 func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	c.activeMu.Lock()
 	if c.closed.Load() {
 		c.activeMu.Unlock()
@@ -213,14 +229,16 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 		id = fmt.Sprintf("%s-%d", req.Profile, atomic.AddUint64(&c.seq, 1))
 		req.ID = id
 	}
-
-	timeout := req.Timeout
-	if timeout <= 0 {
-		timeout = c.defaultTimeout
+	executionTimeout := req.Timeout
+	if executionTimeout == 0 {
+		executionTimeout = c.defaultTimeout
+	}
+	queueTimeout := req.QueueTimeout
+	if queueTimeout == 0 {
+		queueTimeout = c.defaultQueueTimeout
 	}
 
-	childCtx, cancel := context.WithTimeout(ctx, timeout)
-
+	runCtx, runCancel := context.WithCancel(ctx)
 	status := AgentStatus{
 		ID:        id,
 		ParentID:  req.ParentID,
@@ -229,53 +247,57 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 		StartTime: time.Now(),
 		Depth:     req.Depth,
 	}
-
-	c.wg.Add(1)
-	c.active[id] = &activeEntry{
-		status: status,
-		cancel: cancel,
-	}
+	c.active[id] = &activeEntry{status: status, cancel: runCancel}
 	c.activeMu.Unlock()
 
-	defer func() {
-		cancel()
+	removeActive := func() {
 		c.activeMu.Lock()
 		delete(c.active, id)
 		c.activeMu.Unlock()
-	}()
+	}
+	queueCtx := runCtx
+	queueCancel := func() {}
+	if queueTimeout > 0 {
+		queueCtx, queueCancel = context.WithTimeout(runCtx, queueTimeout)
+	}
+	defer queueCancel()
 
-	// Buffer size 1 guarantees the child goroutine never blocks on send even if
-	// the parent context was canceled or timed out early.
+	select {
+	case c.sem <- struct{}{}:
+	case <-queueCtx.Done():
+		runCancel()
+		removeActive()
+		err := queueCtx.Err()
+		return Result{AgentID: id, Profile: req.Profile, Err: err}, err
+	}
+
+	releaseWorkspace, acquireErr := c.acquireWorkspace(queueCtx, req.Profile.IsMutating())
+	if acquireErr != nil {
+		<-c.sem
+		runCancel()
+		removeActive()
+		return Result{AgentID: id, Profile: req.Profile, Err: acquireErr}, acquireErr
+	}
+	queueCancel()
+
+	execCtx := runCtx
+	execCancel := func() {}
+	if executionTimeout > 0 {
+		execCtx, execCancel = context.WithTimeout(runCtx, executionTimeout)
+	}
+
 	resultCh := make(chan Result, 1)
-
+	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
-
-		// 1. Acquire concurrency semaphore
-		select {
-		case c.sem <- struct{}{}:
-			defer func() { <-c.sem }()
-		case <-childCtx.Done():
-			resultCh <- Result{
-				AgentID: id,
-				Profile: req.Profile,
-				Err:     childCtx.Err(),
-			}
-			return
-		}
-
-		// 2. Acquire the cancellation-aware workspace gate. Read-only profiles
-		// hold one token; mutating workers hold the full gate exclusively.
-		releaseWorkspace, acquireErr := c.acquireWorkspace(childCtx, req.Profile.IsMutating())
-		if acquireErr != nil {
-			resultCh <- Result{AgentID: id, Profile: req.Profile, Err: acquireErr}
-			return
-		}
+		defer func() { <-c.sem }()
 		defer releaseWorkspace()
+		defer execCancel()
+		defer runCancel()
+		defer removeActive()
 
-		// 3. Emit started event
 		start := time.Now()
-		c.emit(childCtx, Event{
+		c.emit(execCtx, Event{
 			Kind:     EventAgentStarted,
 			AgentID:  id,
 			ParentID: req.ParentID,
@@ -283,13 +305,11 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 			Message:  req.Task,
 		})
 
-		// 4. Run subagent
-		res, err := c.execute(childCtx, req)
+		res, err := c.execute(execCtx, req)
 		res.Duration = time.Since(start)
-
 		if err != nil {
 			res.Err = err
-			emitCtx, emitCancel := contextutil.DetachedTimeout(childCtx, 5*time.Second)
+			emitCtx, emitDone := contextutil.DetachedTimeout(execCtx, 5*time.Second)
 			c.emit(emitCtx, Event{
 				Kind:     EventAgentFailed,
 				AgentID:  id,
@@ -298,9 +318,9 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 				Duration: res.Duration,
 				Err:      err,
 			})
-			emitCancel()
+			emitDone()
 		} else {
-			c.emit(childCtx, Event{
+			c.emit(execCtx, Event{
 				Kind:     EventAgentCompleted,
 				AgentID:  id,
 				ParentID: req.ParentID,
@@ -309,21 +329,15 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 				Message:  res.Summary,
 			})
 		}
-
 		resultCh <- res
 	}()
 
 	select {
-	case <-ctx.Done():
-		// Parent canceled (e.g. user Ctrl+C or turn timeout).
-		// Child goroutine will be cancelled via childCtx defer cancel().
-		return Result{
-			AgentID: id,
-			Profile: req.Profile,
-			Err:     ctx.Err(),
-		}, ctx.Err()
 	case res := <-resultCh:
 		return res, res.Err
+	case <-execCtx.Done():
+		err := execCtx.Err()
+		return Result{AgentID: id, Profile: req.Profile, Err: err}, err
 	}
 }
 
