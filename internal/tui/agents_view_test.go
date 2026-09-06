@@ -106,3 +106,33 @@ func TestAgentDisplayDurationUsesExecutionDurationForTerminalState(t *testing.T)
 		t.Fatalf("terminal display duration=%v, want 7s", got)
 	}
 }
+
+func TestStatusViewShowsSubagentCoordinationDuringBusyTurn(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.resize(80, 24)
+	m.busy = true
+	m.busyStarted = time.Now().Add(-4 * time.Second)
+	m.activity = "thinking"
+	m.agentSnapshot = []agent.AgentStatus{
+		{ID: "explorer-1", State: agent.StateRunning},
+		{ID: "reviewer-2", State: agent.StateQueued},
+	}
+	got := m.statusView()
+	if !strings.Contains(got, "coordinating") || !strings.Contains(got, "2 agents") {
+		t.Fatalf("status view=%q", got)
+	}
+}
+
+func TestStatusViewKeepsAgentCoordinationVisibleInTinyLayout(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.resize(24, 12)
+	m.busy = true
+	m.busyStarted = time.Now()
+	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", State: agent.StateRunning}}
+	if got := m.agentsView(); got != "" {
+		t.Fatalf("tiny agents view=%q, want hidden panel", got)
+	}
+	if got := m.statusView(); !strings.Contains(got, "coordinating") {
+		t.Fatalf("tiny status view=%q, want coordination state", got)
+	}
+}
