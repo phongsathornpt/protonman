@@ -8,7 +8,7 @@ import (
 
 // FilterRegistryForProfile returns a scoped tool.Registry exposing only the tools
 // authorized for the given subagent profile and delegation depth.
-func FilterRegistryForProfile(base tool.Registry, profile Profile, depth int) tool.Registry {
+func FilterRegistryForProfile(base tool.Registry, profile Profile, _ int) tool.Registry {
 	if base == nil {
 		return &scopedRegistry{
 			handlers: make(map[string]tool.Handler),
@@ -21,7 +21,7 @@ func FilterRegistryForProfile(base tool.Registry, profile Profile, depth int) to
 
 	for _, def := range base.Definitions() {
 		name := def.Name
-		if !isToolAllowed(profile, def, depth) {
+		if !isToolAllowed(profile, def) {
 			continue
 		}
 		if handler, ok := base.Lookup(name); ok {
@@ -36,43 +36,50 @@ func FilterRegistryForProfile(base tool.Registry, profile Profile, depth int) to
 	}
 }
 
-func isToolAllowed(profile Profile, def tool.Definition, depth int) bool {
-	// delegate_task is never allowed for subagents at depth >= 1 to prevent runaway recursion
-	if def.Name == "delegate_task" {
+func isToolAllowed(profile Profile, def tool.Definition) bool {
+	// Parent-owned orchestration/task state never crosses into subagents.
+	// Keep this fail-closed so future agent/task tools do not silently escape
+	// into child capability scopes.
+	if def.Kind == tool.KindAgent || def.Kind == tool.KindTask {
 		return false
 	}
 
 	switch profile {
 	case ProfileExplorer:
-		// Explorer is strictly read-only for codebase & web research
+		// Explorer is strictly read-only for codebase & web research.
 		switch def.Kind {
 		case tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch:
 			return true
 		default:
-			// Allow git_status explicitly if marked differently
-			return def.Name == "git_status"
+			return false
 		}
 
 	case ProfileReviewer:
-		// Reviewer is strictly read-only for local code and git inspection
+		// Reviewer is strictly read-only for local code and git inspection.
 		switch def.Kind {
 		case tool.KindRead, tool.KindGrep:
 			return true
 		default:
-			return def.Name == "git_status"
+			return false
 		}
 
 	case ProfileWorker, ProfilePOW, ProfileDEX:
-		// Worker, POW, and DEX have full coding tools but cannot delegate
-		return true
+		// Mutating profiles are still an explicit allowlist. New tool kinds are
+		// denied until consciously added here rather than inheriting authority.
+		switch def.Kind {
+		case tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch, tool.KindEdit, tool.KindBash:
+			return true
+		default:
+			return false
+		}
 
 	case ProfileINT:
-		// INT is an architecture & deep reasoning profile with read and search capabilities
+		// INT is an architecture & deep reasoning profile with read and search capabilities.
 		switch def.Kind {
 		case tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch:
 			return true
 		default:
-			return def.Name == "git_status"
+			return false
 		}
 
 	default:
@@ -115,8 +122,8 @@ func SystemPromptForProfile(profile Profile) string {
 		return strings.TrimSpace(`
 You are an Explorer subagent in Proton.
 Your purpose is to thoroughly search, inspect, and analyze the codebase to answer the assigned question or find the requested information.
-You have read-only tools: read_file, grep, list_dir, git_status, and web_fetch.
-You cannot edit, create, or delete files.
+You have read-only tools: read_file, grep, list_dir, git_status, web_fetch, and web_search when available.
+You cannot edit, create, delete files, manage the parent task plan, or orchestrate other subagents.
 Be concise, factual, and specify precise file paths and line numbers in your final answer.
 `)
 	case ProfileReviewer:

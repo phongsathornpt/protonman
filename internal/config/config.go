@@ -31,8 +31,10 @@ const (
 	DefaultSubagentWaitTimeout = 30 * time.Second
 	// DefaultSubagentQueueTimeout bounds waiting for concurrency/workspace capacity.
 	DefaultSubagentQueueTimeout = 30 * time.Second
-	// DefaultMaxLiveSubagents bounds queued and running retained subagents.
+	// DefaultMaxLiveSubagents bounds queued and running subagents.
 	DefaultMaxLiveSubagents = 16
+	// DefaultMaxRetainedSubagents bounds terminal lifecycle records kept for later turns.
+	DefaultMaxRetainedSubagents = 64
 	// DefaultCompletedResultTTL retains terminal results for later turns.
 	DefaultCompletedResultTTL = 10 * time.Minute
 )
@@ -80,6 +82,7 @@ type AgentConfig struct {
 	MaxToolCalls         int           `toml:"max_tool_calls"`
 	Profile              string        `toml:"profile"`
 	MaxLiveSubagents     int           `toml:"max_live_subagents"`
+	MaxRetainedSubagents int           `toml:"max_retained_subagents"`
 	SubagentMaxRuntime   time.Duration `toml:"-"`
 	SubagentWaitTimeout  time.Duration `toml:"-"`
 	SubagentQueueTimeout time.Duration `toml:"-"`
@@ -123,6 +126,7 @@ type fileAgent struct {
 	MaxToolCalls         *int    `toml:"max_tool_calls,omitempty"`
 	Profile              *string `toml:"profile,omitempty"`
 	MaxLiveSubagents     *int    `toml:"max_live_subagents,omitempty"`
+	MaxRetainedSubagents *int    `toml:"max_retained_subagents,omitempty"`
 	SubagentMaxRuntime   *string `toml:"subagent_max_runtime,omitempty"`
 	SubagentWaitTimeout  *string `toml:"subagent_wait_timeout,omitempty"`
 	SubagentQueueTimeout *string `toml:"subagent_queue_timeout,omitempty"`
@@ -193,6 +197,7 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 			MaxRounds:            DefaultMaxRounds,
 			MaxToolCalls:         DefaultMaxToolCalls,
 			MaxLiveSubagents:     DefaultMaxLiveSubagents,
+			MaxRetainedSubagents: DefaultMaxRetainedSubagents,
 			SubagentMaxRuntime:   DefaultSubagentMaxRuntime,
 			SubagentWaitTimeout:  DefaultSubagentWaitTimeout,
 			SubagentQueueTimeout: DefaultSubagentQueueTimeout,
@@ -327,6 +332,12 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 			return fmt.Errorf("agent.max_live_subagents must be positive")
 		}
 		snapshot.Agent.MaxLiveSubagents = *document.Agent.MaxLiveSubagents
+	}
+	if document.Agent.MaxRetainedSubagents != nil {
+		if *document.Agent.MaxRetainedSubagents <= 0 {
+			return fmt.Errorf("agent.max_retained_subagents must be positive")
+		}
+		snapshot.Agent.MaxRetainedSubagents = *document.Agent.MaxRetainedSubagents
 	}
 	if document.Agent.SubagentMaxRuntime != nil {
 		d, err := parsePositiveDuration("agent.subagent_max_runtime", *document.Agent.SubagentMaxRuntime)

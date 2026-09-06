@@ -32,3 +32,16 @@ func TestValidateItems(t *testing.T) {
 		t.Fatal("expected duplicate id error")
 	}
 }
+
+func TestValidateItemsRejectsUnsafeMarkdownFields(t *testing.T) {
+	tests := []Item{
+		{ID: "bad]id", Text: "safe", Status: StatusPending},
+		{ID: "safe", Text: "line one\nline two", Status: StatusPending},
+		{ID: "safe", Text: managedEnd, Status: StatusPending},
+	}
+	for _, item := range tests {
+		if err := ValidateItems([]Item{item}); err == nil {
+			t.Fatalf("ValidateItems(%#v) error=nil", item)
+		}
+	}
+}

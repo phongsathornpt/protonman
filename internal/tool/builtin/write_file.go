@@ -79,9 +79,10 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		}, fmt.Errorf("write %q: %w", input.FilePath, err)
 	}
 	return tool.Result{
-		CallID:       call.ID,
-		ToolName:     call.Name,
-		Output:       fmt.Sprintf("Wrote file successfully to %s.", displayPath),
-		CheckpointID: checkpointID,
+		CallID:        call.ID,
+		ToolName:      call.Name,
+		Output:        fmt.Sprintf("Wrote file successfully to %s.", displayPath),
+		CheckpointID:  checkpointID,
+		AffectedPaths: []string{displayPath},
 	}, nil
 }

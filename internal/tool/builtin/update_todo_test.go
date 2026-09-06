@@ -3,6 +3,7 @@ package builtin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -16,7 +17,7 @@ func TestUpdateTodoReplacesSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := NewUpdateTodo(store)
-	args, _ := json.Marshal(map[string]any{"items": []map[string]any{
+	args, _ := json.Marshal(map[string]any{"expected_revision": uint64(0), "items": []map[string]any{
 		{"id": "a", "text": "inspect", "status": "completed"},
 		{"id": "b", "text": "fix", "status": "in_progress"},
 	}})
@@ -40,7 +41,7 @@ func TestUpdateTodoReplacesSnapshot(t *testing.T) {
 func TestUpdateTodoRejectsDuplicateIDs(t *testing.T) {
 	store, _ := tododomain.NewStore(nil)
 	h := NewUpdateTodo(store)
-	args := json.RawMessage(`{"items":[{"id":"a","text":"one","status":"pending"},{"id":"a","text":"two","status":"pending"}]}`)
+	args := json.RawMessage(`{"expected_revision":0,"items":[{"id":"a","text":"one","status":"pending"},{"id":"a","text":"two","status":"pending"}]}`)
 	call, _ := tool.NewCall("todo-1", "update_todo", args)
 	if _, err := h.Execute(context.Background(), call); err == nil {
 		t.Fatal("expected duplicate id error")
@@ -57,5 +58,38 @@ func TestUpdateTodoDefinition(t *testing.T) {
 	}
 	if err := def.Validate(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestUpdateTodoRejectsStaleRevision(t *testing.T) {
+	store, _ := tododomain.NewStore(nil)
+	h := NewUpdateTodo(store)
+	first, _ := json.Marshal(map[string]any{"expected_revision": uint64(0), "items": []map[string]any{{"id": "a", "text": "one", "status": "pending"}}})
+	call, _ := tool.NewCall("todo-first", "update_todo", first)
+	if _, err := h.Execute(context.Background(), call); err != nil {
+		t.Fatal(err)
+	}
+	stale, _ := json.Marshal(map[string]any{"expected_revision": uint64(0), "items": []map[string]any{{"id": "b", "text": "two", "status": "pending"}}})
+	call, _ = tool.NewCall("todo-stale", "update_todo", stale)
+	_, err := h.Execute(context.Background(), call)
+	var toolErr *tool.ToolError
+	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeConflict {
+		t.Fatalf("error = %v, want conflict", err)
+	}
+	got := store.Snapshot()
+	if got.Revision != 1 || len(got.Items) != 1 || got.Items[0].ID != "a" {
+		t.Fatalf("stale update mutated store: %#v", got)
+	}
+}
+
+func TestUpdateTodoRequiresExpectedRevision(t *testing.T) {
+	store, _ := tododomain.NewStore(nil)
+	h := NewUpdateTodo(store)
+	args := json.RawMessage(`{"items":[]}`)
+	call, _ := tool.NewCall("todo-missing-revision", "update_todo", args)
+	_, err := h.Execute(context.Background(), call)
+	var toolErr *tool.ToolError
+	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeInvalidArguments {
+		t.Fatalf("error=%v, want invalid arguments", err)
 	}
 }

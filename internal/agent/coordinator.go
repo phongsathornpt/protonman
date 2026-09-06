@@ -20,18 +20,20 @@ import (
 )
 
 const (
-	defaultMaxConcurrency = 4
-	defaultMaxDepth       = 1
-	defaultMaxRounds      = 10
-	defaultMaxToolCalls   = turn.DefaultMaxToolCalls
-	defaultMaxRuntime     = 30 * time.Minute
-	defaultWaitTimeout    = 30 * time.Second
-	defaultQueueTimeout   = 30 * time.Second
-	defaultMaxLiveAgents  = 16
-	defaultResultTTL      = 10 * time.Minute
-	defaultCloseTimeout   = 5 * time.Second
-	eventEmitTimeout      = 100 * time.Millisecond
-	maxSummaryBytes       = 32 * 1024 // 32KB bound for child summaries returned to parent
+	defaultMaxConcurrency    = 4
+	defaultMaxDepth          = 1
+	defaultMaxRounds         = 10
+	defaultMaxToolCalls      = turn.DefaultMaxToolCalls
+	defaultMaxRuntime        = 30 * time.Minute
+	defaultWaitTimeout       = 30 * time.Second
+	defaultQueueTimeout      = 30 * time.Second
+	defaultMaxLiveAgents     = 16
+	defaultMaxRetainedAgents = 64
+	defaultResultTTL         = 10 * time.Minute
+	defaultEventQueueSize    = 64
+	defaultCloseTimeout      = 5 * time.Second
+	eventEmitTimeout         = 100 * time.Millisecond
+	maxSummaryBytes          = 32 * 1024 // 32KB bound for child summaries returned to parent
 )
 
 // RunnerFactory builds an injectable turn.Runner for a specific subagent run.
@@ -50,7 +52,7 @@ type AgentStatus struct {
 	Depth      int       `json:"depth"`
 }
 
-type activeEntry struct {
+type agentEntry struct {
 	status  AgentStatus
 	cancel  context.CancelFunc
 	done    chan struct{}
@@ -73,8 +75,8 @@ type Coordinator struct {
 	sem      chan struct{}
 	wsGate   chan struct{}
 	wsWriter chan struct{}
-	activeMu sync.RWMutex
-	active   map[string]*activeEntry
+	agentsMu sync.RWMutex
+	agents   map[string]*agentEntry
 	wg       sync.WaitGroup
 	rootCtx  context.Context
 	rootStop context.CancelFunc
@@ -83,6 +85,7 @@ type Coordinator struct {
 	maxRounds           int
 	maxToolCalls        int
 	maxLiveAgents       int
+	maxRetainedAgents   int
 	maxRuntime          time.Duration
 	waitTimeout         time.Duration
 	defaultQueueTimeout time.Duration
@@ -90,6 +93,12 @@ type Coordinator struct {
 	closeTimeout        time.Duration
 	eventSink           EventSink
 	runnerFactory       RunnerFactory
+	eventQueue          chan Event
+	closeOnce           sync.Once
+	closeDone           chan struct{}
+	eventMu             sync.RWMutex
+	subscribers         map[uint64]chan Event
+	subscriberSeq       uint64
 
 	seq    uint64
 	closed atomic.Bool
@@ -162,6 +171,15 @@ func WithMaxLiveAgents(n int) Option {
 	return func(c *Coordinator) {
 		if n > 0 {
 			c.maxLiveAgents = n
+		}
+	}
+}
+
+// WithMaxRetainedAgents bounds terminal lifecycle records retained for lookup.
+func WithMaxRetainedAgents(n int) Option {
+	return func(c *Coordinator) {
+		if n > 0 {
+			c.maxRetainedAgents = n
 		}
 	}
 }
@@ -248,23 +266,30 @@ func NewCoordinator(
 		sem:                 make(chan struct{}, defaultMaxConcurrency),
 		wsGate:              make(chan struct{}, defaultMaxConcurrency),
 		wsWriter:            make(chan struct{}, 1),
-		active:              make(map[string]*activeEntry),
+		agents:              make(map[string]*agentEntry),
 		rootCtx:             rootCtx,
 		rootStop:            rootStop,
 		maxDepth:            defaultMaxDepth,
 		maxRounds:           defaultMaxRounds,
 		maxToolCalls:        defaultMaxToolCalls,
 		maxLiveAgents:       defaultMaxLiveAgents,
+		maxRetainedAgents:   defaultMaxRetainedAgents,
 		maxRuntime:          defaultMaxRuntime,
 		waitTimeout:         defaultWaitTimeout,
 		defaultQueueTimeout: defaultQueueTimeout,
 		resultTTL:           defaultResultTTL,
 		closeTimeout:        defaultCloseTimeout,
+		subscribers:         make(map[uint64]chan Event),
+		eventQueue:          make(chan Event, defaultEventQueueSize),
+		closeDone:           make(chan struct{}),
 	}
 	for _, opt := range options {
 		if opt != nil {
 			opt(c)
 		}
+	}
+	if c.eventSink != nil {
+		go c.runEventSink()
 	}
 	return c
 }
@@ -286,34 +311,34 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 		return Handle{}, fmt.Errorf("delegation depth %d exceeds maximum depth %d", req.Depth, c.maxDepth)
 	}
 
-	c.activeMu.Lock()
+	c.agentsMu.Lock()
 	if c.closed.Load() {
-		c.activeMu.Unlock()
+		c.agentsMu.Unlock()
 		return Handle{}, errors.New("coordinator is closed")
 	}
 	c.pruneExpiredLocked(time.Now())
 	live := 0
-	for _, existing := range c.active {
+	for _, existing := range c.agents {
 		if !existing.status.State.Terminal() {
 			live++
 		}
 	}
 	if c.maxLiveAgents > 0 && live >= c.maxLiveAgents {
-		c.activeMu.Unlock()
+		c.agentsMu.Unlock()
 		return Handle{}, fmt.Errorf("maximum live subagents reached (%d)", c.maxLiveAgents)
 	}
 	id := strings.TrimSpace(req.ID)
 	if id == "" {
 		id = fmt.Sprintf("%s-%d", req.Profile, atomic.AddUint64(&c.seq, 1))
 		req.ID = id
-	} else if _, exists := c.active[id]; exists {
-		c.activeMu.Unlock()
+	} else if _, exists := c.agents[id]; exists {
+		c.agentsMu.Unlock()
 		return Handle{}, fmt.Errorf("subagent %q already exists", id)
 	}
 
 	queuedAt := time.Now()
 	runCtx, runCancel := context.WithCancel(c.rootCtx)
-	entry := &activeEntry{
+	entry := &agentEntry{
 		status: AgentStatus{
 			ID: id, ParentID: req.ParentID, Profile: req.Profile, Task: req.Task,
 			State: StateQueued, StartTime: queuedAt, Depth: req.Depth,
@@ -322,8 +347,8 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 		done:    make(chan struct{}),
 		started: make(chan struct{}),
 	}
-	c.active[id] = entry
-	c.activeMu.Unlock()
+	c.agents[id] = entry
+	c.agentsMu.Unlock()
 
 	c.emit(runCtx, Event{Kind: EventAgentQueued, AgentID: id, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task})
 	c.wg.Add(1)
@@ -331,7 +356,7 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	return Handle{ID: id, Profile: req.Profile}, nil
 }
 
-func (c *Coordinator) runEntry(runCtx context.Context, entry *activeEntry, req Request, queuedAt time.Time) {
+func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Request, queuedAt time.Time) {
 	defer c.wg.Done()
 	defer entry.cancel()
 	defer close(entry.done)
@@ -368,11 +393,11 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *activeEntry, req R
 	queueCancel()
 
 	startedAt := time.Now()
-	c.activeMu.Lock()
+	c.agentsMu.Lock()
 	entry.status.State = StateRunning
 	entry.status.StartedAt = startedAt
 	close(entry.started)
-	c.activeMu.Unlock()
+	c.agentsMu.Unlock()
 	queueDuration := startedAt.Sub(queuedAt)
 
 	execCtx := runCtx
@@ -401,7 +426,7 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *activeEntry, req R
 	emitDone()
 }
 
-func (c *Coordinator) finishEntry(entry *activeEntry, req Request, queuedAt, startedAt time.Time, err error) {
+func (c *Coordinator) finishEntry(entry *agentEntry, req Request, queuedAt, startedAt time.Time, err error) {
 	now := time.Now()
 	res := Result{AgentID: req.ID, Profile: req.Profile, QueueDuration: now.Sub(queuedAt), TotalDuration: now.Sub(queuedAt), Err: err}
 	if !startedAt.IsZero() {
@@ -414,9 +439,9 @@ func (c *Coordinator) finishEntry(entry *activeEntry, req Request, queuedAt, sta
 	}
 }
 
-func (c *Coordinator) storeTerminal(entry *activeEntry, res Result, err error) {
-	c.activeMu.Lock()
-	defer c.activeMu.Unlock()
+func (c *Coordinator) storeTerminal(entry *agentEntry, res Result, err error) {
+	c.agentsMu.Lock()
+	defer c.agentsMu.Unlock()
 	entry.result = res
 	entry.err = err
 	entry.status.FinishedAt = time.Now()
@@ -436,15 +461,15 @@ func (c *Coordinator) Wait(ctx context.Context, id string, timeout time.Duration
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	c.activeMu.RLock()
-	entry := c.active[strings.TrimSpace(id)]
+	c.agentsMu.RLock()
+	entry := c.agents[strings.TrimSpace(id)]
 	if entry == nil {
-		c.activeMu.RUnlock()
+		c.agentsMu.RUnlock()
 		return WaitResult{}, fmt.Errorf("subagent %q not found", id)
 	}
 	done := entry.done
 	state := entry.status.State
-	c.activeMu.RUnlock()
+	c.agentsMu.RUnlock()
 	if state.Terminal() {
 		return c.waitSnapshot(id)
 	}
@@ -470,9 +495,9 @@ func (c *Coordinator) Wait(ctx context.Context, id string, timeout time.Duration
 }
 
 func (c *Coordinator) waitSnapshot(id string) (WaitResult, error) {
-	c.activeMu.RLock()
-	defer c.activeMu.RUnlock()
-	entry := c.active[id]
+	c.agentsMu.RLock()
+	defer c.agentsMu.RUnlock()
+	entry := c.agents[id]
 	if entry == nil {
 		return WaitResult{}, fmt.Errorf("subagent %q not found", id)
 	}
@@ -488,28 +513,48 @@ func (c *Coordinator) pruneExpired() {
 	if c.resultTTL <= 0 {
 		return
 	}
-	c.activeMu.Lock()
+	c.agentsMu.Lock()
 	c.pruneExpiredLocked(time.Now())
-	c.activeMu.Unlock()
+	c.agentsMu.Unlock()
 }
 
 func (c *Coordinator) pruneExpiredLocked(now time.Time) {
 	if c.resultTTL <= 0 {
 		return
 	}
-	for id, entry := range c.active {
+	for id, entry := range c.agents {
 		if entry.status.State.Terminal() && !entry.status.FinishedAt.IsZero() && now.Sub(entry.status.FinishedAt) >= c.resultTTL {
-			delete(c.active, id)
+			delete(c.agents, id)
 		}
+	}
+	if c.maxRetainedAgents <= 0 {
+		return
+	}
+	type retained struct {
+		id       string
+		finished time.Time
+	}
+	terminal := make([]retained, 0)
+	for id, entry := range c.agents {
+		if entry.status.State.Terminal() {
+			terminal = append(terminal, retained{id: id, finished: entry.status.FinishedAt})
+		}
+	}
+	if len(terminal) <= c.maxRetainedAgents {
+		return
+	}
+	sort.Slice(terminal, func(i, j int) bool { return terminal[i].finished.Before(terminal[j].finished) })
+	for _, item := range terminal[:len(terminal)-c.maxRetainedAgents] {
+		delete(c.agents, item.id)
 	}
 }
 
 // Get returns one retained subagent status.
 func (c *Coordinator) Get(id string) (AgentStatus, bool) {
 	c.pruneExpired()
-	c.activeMu.RLock()
-	defer c.activeMu.RUnlock()
-	entry, ok := c.active[strings.TrimSpace(id)]
+	c.agentsMu.RLock()
+	defer c.agentsMu.RUnlock()
+	entry, ok := c.agents[strings.TrimSpace(id)]
 	if !ok {
 		return AgentStatus{}, false
 	}
@@ -519,9 +564,9 @@ func (c *Coordinator) Get(id string) (AgentStatus, bool) {
 // Lookup returns one retained status and, when terminal, its result.
 func (c *Coordinator) Lookup(id string) (AgentStatus, *Result, bool) {
 	c.pruneExpired()
-	c.activeMu.RLock()
-	defer c.activeMu.RUnlock()
-	entry, ok := c.active[strings.TrimSpace(id)]
+	c.agentsMu.RLock()
+	defer c.agentsMu.RUnlock()
+	entry, ok := c.agents[strings.TrimSpace(id)]
 	if !ok {
 		return AgentStatus{}, nil, false
 	}
@@ -536,24 +581,30 @@ func (c *Coordinator) Lookup(id string) (AgentStatus, *Result, bool) {
 // Active returns queued or running subagents only.
 func (c *Coordinator) Active() []AgentStatus {
 	c.pruneExpired()
-	c.activeMu.RLock()
-	defer c.activeMu.RUnlock()
-	out := make([]AgentStatus, 0, len(c.active))
-	for _, entry := range c.active {
+	c.agentsMu.RLock()
+	defer c.agentsMu.RUnlock()
+	out := make([]AgentStatus, 0, len(c.agents))
+	for _, entry := range c.agents {
 		if !entry.status.State.Terminal() {
 			out = append(out, entry.status)
 		}
 	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].StartTime.Equal(out[j].StartTime) {
+			return out[i].ID < out[j].ID
+		}
+		return out[i].StartTime.Before(out[j].StartTime)
+	})
 	return out
 }
 
 // List returns all retained subagents, including terminal results.
 func (c *Coordinator) List() []AgentStatus {
 	c.pruneExpired()
-	c.activeMu.RLock()
-	defer c.activeMu.RUnlock()
-	out := make([]AgentStatus, 0, len(c.active))
-	for _, entry := range c.active {
+	c.agentsMu.RLock()
+	defer c.agentsMu.RUnlock()
+	out := make([]AgentStatus, 0, len(c.agents))
+	for _, entry := range c.agents {
 		out = append(out, entry.status)
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -567,15 +618,15 @@ func (c *Coordinator) List() []AgentStatus {
 
 // Cancel explicitly requests cancellation of one subagent.
 func (c *Coordinator) Cancel(id string) error {
-	c.activeMu.RLock()
-	entry := c.active[strings.TrimSpace(id)]
+	c.agentsMu.RLock()
+	entry := c.agents[strings.TrimSpace(id)]
 	if entry == nil {
-		c.activeMu.RUnlock()
+		c.agentsMu.RUnlock()
 		return fmt.Errorf("subagent %q not found", id)
 	}
 	terminal := entry.status.State.Terminal()
 	cancel := entry.cancel
-	c.activeMu.RUnlock()
+	c.agentsMu.RUnlock()
 	if terminal {
 		return nil
 	}
@@ -592,10 +643,10 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	c.activeMu.RLock()
-	e := c.active[h.ID]
+	c.agentsMu.RLock()
+	e := c.agents[h.ID]
 	started, done := e.started, e.done
-	c.activeMu.RUnlock()
+	c.agentsMu.RUnlock()
 	select {
 	case <-done:
 		return c.blockingResult(h.ID, h.Profile)
@@ -604,9 +655,9 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 		_ = c.Cancel(h.ID)
 		return Result{AgentID: h.ID, Profile: h.Profile, Err: ctx.Err()}, ctx.Err()
 	}
-	c.activeMu.RLock()
+	c.agentsMu.RLock()
 	terminal := e.status.State.Terminal()
-	c.activeMu.RUnlock()
+	c.agentsMu.RUnlock()
 	if terminal {
 		return c.blockingResult(h.ID, h.Profile)
 	}
@@ -681,61 +732,62 @@ func (c *Coordinator) acquireWorkspace(ctx context.Context, exclusive bool) (fun
 
 // Close cancels all non-terminal subagents and waits for workers to exit.
 func (c *Coordinator) Close() error {
-	c.activeMu.Lock()
+	c.agentsMu.Lock()
 	c.closed.Store(true)
 	c.rootStop()
-	for _, entry := range c.active {
+	for _, entry := range c.agents {
 		if !entry.status.State.Terminal() {
 			entry.cancel()
 		}
 	}
-	c.activeMu.Unlock()
+	c.agentsMu.Unlock()
 
+	c.closeOnce.Do(func() {
+		go func() { c.wg.Wait(); close(c.closeDone) }()
+	})
 	deadline := time.NewTimer(c.closeTimeout)
 	defer deadline.Stop()
-	done := make(chan struct{})
-	go func() { c.wg.Wait(); close(done) }()
 	select {
-	case <-done:
+	case <-c.closeDone:
 		return nil
 	case <-deadline.C:
-		c.activeMu.RLock()
+		c.agentsMu.RLock()
 		remaining := 0
-		for _, entry := range c.active {
+		for _, entry := range c.agents {
 			if !entry.status.State.Terminal() {
 				remaining++
 			}
 		}
-		c.activeMu.RUnlock()
+		c.agentsMu.RUnlock()
 		return fmt.Errorf("coordinator close timed out with %d active subagent(s)", remaining)
 	}
 }
 
 // SetParentRegistry sets or updates the parent tool registry for scoping subagent tools.
 func (c *Coordinator) SetParentRegistry(registry tool.Registry) {
-	c.activeMu.Lock()
-	defer c.activeMu.Unlock()
+	c.agentsMu.Lock()
+	defer c.agentsMu.Unlock()
 	c.parentRegistry = registry
 }
 
 // SetClient dynamically updates the model client used by child subagents.
 func (c *Coordinator) SetClient(client model.Client) {
-	c.activeMu.Lock()
-	defer c.activeMu.Unlock()
+	c.agentsMu.Lock()
+	defer c.agentsMu.Unlock()
 	c.client = client
 }
 
 // Client returns the current model client used by child subagents.
 func (c *Coordinator) Client() model.Client {
-	c.activeMu.RLock()
-	defer c.activeMu.RUnlock()
+	c.agentsMu.RLock()
+	defer c.agentsMu.RUnlock()
 	return c.client
 }
 
 // SetPermissionMode dynamically updates the permission mode for subagents.
 func (c *Coordinator) SetPermissionMode(mode permission.Mode) {
-	c.activeMu.Lock()
-	defer c.activeMu.Unlock()
+	c.agentsMu.Lock()
+	defer c.agentsMu.Unlock()
 	if mode.Valid() {
 		c.permissionMode = mode
 	}
@@ -743,46 +795,86 @@ func (c *Coordinator) SetPermissionMode(mode permission.Mode) {
 
 // PermissionMode returns the active permission mode configured for subagents.
 func (c *Coordinator) PermissionMode() permission.Mode {
-	c.activeMu.RLock()
-	defer c.activeMu.RUnlock()
+	c.agentsMu.RLock()
+	defer c.agentsMu.RUnlock()
 	return c.permissionMode
 }
 
 // SetPrompt dynamically updates the interactive permission prompt resolver for subagents.
 func (c *Coordinator) SetPrompt(prompt toolcall.PermissionPrompt) {
-	c.activeMu.Lock()
-	defer c.activeMu.Unlock()
+	c.agentsMu.Lock()
+	defer c.agentsMu.Unlock()
 	c.prompt = prompt
 }
 
 // SetCallGuard dynamically updates the execution guard (e.g. plan mode) for subagents.
 func (c *Coordinator) SetCallGuard(guard toolcall.CallGuard) {
-	c.activeMu.Lock()
-	defer c.activeMu.Unlock()
+	c.agentsMu.Lock()
+	defer c.agentsMu.Unlock()
 	c.guard = guard
 }
 
 // CallGuard returns the active call guard for subagents.
 func (c *Coordinator) CallGuard() toolcall.CallGuard {
-	c.activeMu.RLock()
-	defer c.activeMu.RUnlock()
+	c.agentsMu.RLock()
+	defer c.agentsMu.RUnlock()
 	return c.guard
 }
 
-func (c *Coordinator) emit(ctx context.Context, ev Event) {
+// Subscribe returns a bounded lifecycle stream. Slow subscribers drop events
+// rather than blocking agent execution; callers resnapshot coordinator state on
+// every delivered event, so events are wakeups rather than the source of truth.
+func (c *Coordinator) Subscribe(buffer int) (<-chan Event, func()) {
+	if buffer < 1 {
+		buffer = 1
+	}
+	ch := make(chan Event, buffer)
+	id := atomic.AddUint64(&c.subscriberSeq, 1)
+	c.eventMu.Lock()
+	c.subscribers[id] = ch
+	c.eventMu.Unlock()
+	var once sync.Once
+	return ch, func() {
+		once.Do(func() {
+			c.eventMu.Lock()
+			delete(c.subscribers, id)
+			close(ch)
+			c.eventMu.Unlock()
+		})
+	}
+}
+
+func (c *Coordinator) broadcast(ev Event) {
+	c.eventMu.RLock()
+	defer c.eventMu.RUnlock()
+	for _, ch := range c.subscribers {
+		select {
+		case ch <- ev:
+		default:
+		}
+	}
+}
+func (c *Coordinator) emit(_ context.Context, ev Event) {
+	c.broadcast(ev)
 	if c.eventSink == nil {
 		return
 	}
-	emitCtx, cancel := context.WithTimeout(ctx, eventEmitTimeout)
-	defer cancel()
-	done := make(chan struct{}, 1)
-	go func() {
-		_ = c.eventSink(emitCtx, ev)
-		done <- struct{}{}
-	}()
 	select {
-	case <-done:
-	case <-emitCtx.Done():
+	case c.eventQueue <- ev:
+	default:
+	}
+}
+
+func (c *Coordinator) runEventSink() {
+	for {
+		select {
+		case ev := <-c.eventQueue:
+			emitCtx, done := contextutil.DetachedTimeout(c.rootCtx, eventEmitTimeout)
+			_ = c.eventSink(emitCtx, ev)
+			done()
+		case <-c.rootCtx.Done():
+			return
+		}
 	}
 }
 
@@ -791,13 +883,13 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 		return Result{AgentID: req.ID, Profile: req.Profile}, err
 	}
 
-	c.activeMu.RLock()
+	c.agentsMu.RLock()
 	parentRegistry := c.parentRegistry
 	client := c.client
 	permMode := c.permissionMode
 	prompt := c.prompt
 	guard := c.guard
-	c.activeMu.RUnlock()
+	c.agentsMu.RUnlock()
 
 	// 1. Build profile-scoped tool registry
 	scopedRegistry := FilterRegistryForProfile(parentRegistry, req.Profile, req.Depth)

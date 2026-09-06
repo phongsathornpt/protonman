@@ -40,7 +40,7 @@ func TestE2ETodoToolPersistsAcrossRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	args, _ := json.Marshal(map[string]any{"items": []map[string]any{
+	args, _ := json.Marshal(map[string]any{"expected_revision": uint64(0), "items": []map[string]any{
 		{"id": "inspect", "text": "Inspect router", "status": "completed"},
 		{"id": "fix", "text": "Fix cache invalidation", "status": "in_progress"},
 		{"id": "test", "text": "Add integration tests", "status": "pending"},
@@ -85,7 +85,7 @@ func TestE2ETodoToolPersistsAcrossRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	args2, _ := json.Marshal(map[string]any{"items": []map[string]any{
+	args2, _ := json.Marshal(map[string]any{"expected_revision": restarted.Snapshot().Revision, "items": []map[string]any{
 		{"id": "inspect", "text": "Inspect router", "status": "completed"},
 		{"id": "fix", "text": "Fix cache invalidation", "status": "completed"},
 		{"id": "test", "text": "Add integration tests", "status": "in_progress"},

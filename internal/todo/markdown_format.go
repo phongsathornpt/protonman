@@ -6,11 +6,16 @@ import (
 )
 
 func parseDocument(content string) ([]Item, error) {
-	start := strings.Index(content, managedStart)
-	end := strings.Index(content, managedEnd)
-	if start < 0 && end < 0 {
+	startCount := strings.Count(content, managedStart)
+	endCount := strings.Count(content, managedEnd)
+	if startCount == 0 && endCount == 0 {
 		return ParseMarkdown(content), nil
 	}
+	if startCount != 1 || endCount != 1 {
+		return nil, fmt.Errorf("invalid proton todo managed section count")
+	}
+	start := strings.Index(content, managedStart)
+	end := strings.Index(content, managedEnd)
 	if start < 0 || end < 0 || end < start {
 		return nil, fmt.Errorf("invalid proton todo managed section")
 	}

@@ -147,6 +147,7 @@ func run(ctx context.Context, args []string) error {
 		agent.WithDefaultWaitTimeout(loadedConfig.Agent.SubagentWaitTimeout),
 		agent.WithDefaultQueueTimeout(loadedConfig.Agent.SubagentQueueTimeout),
 		agent.WithMaxLiveAgents(loadedConfig.Agent.MaxLiveSubagents),
+		agent.WithMaxRetainedAgents(loadedConfig.Agent.MaxRetainedSubagents),
 		agent.WithResultTTL(loadedConfig.Agent.CompletedResultTTL),
 		agent.WithEventSink(func(ctx context.Context, ev agent.Event) error {
 			slog.Debug("subagent lifecycle event",

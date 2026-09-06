@@ -26,8 +26,8 @@ func (m *bubbleModel) syncTodoSnapshot() bool {
 	return true
 }
 
-func (m *bubbleModel) reloadTodoAfterExternalTool(call tool.Call, callErr error) {
-	if m == nil || callErr != nil || m.todoStore == nil || !todoCallMayAffectFile(call, m.workDir) {
+func (m *bubbleModel) reloadTodoAfterExternalTool(call tool.Call, result tool.Result, callErr error) {
+	if m == nil || callErr != nil || m.todoStore == nil || !todoCallMayAffectFile(call, result, m.workDir) {
 		return
 	}
 	reloader, ok := m.todoStore.(tododomain.ReloadableRepository)
@@ -41,22 +41,21 @@ func (m *bubbleModel) reloadTodoAfterExternalTool(call tool.Call, callErr error)
 	m.syncTodoSnapshot()
 }
 
-func todoCallMayAffectFile(call tool.Call, workDir string) bool {
-	switch call.Name {
-	case "write_file", "search_replace":
-		var input struct {
-			FilePath string `json:"file_path"`
-		}
-		if json.Unmarshal(call.Arguments, &input) != nil {
-			return false
-		}
-		path := filepath.Clean(strings.TrimSpace(input.FilePath))
+func todoCallMayAffectFile(call tool.Call, result tool.Result, workDir string) bool {
+	for _, affected := range result.AffectedPaths {
+		path := filepath.Clean(strings.TrimSpace(affected))
 		if filepath.IsAbs(path) {
-			return filepath.Clean(path) == filepath.Join(filepath.Clean(workDir), "TODO.md")
+			if path == filepath.Join(filepath.Clean(workDir), "TODO.md") {
+				return true
+			}
+		} else if path == "TODO.md" {
+			return true
 		}
-		return path == "TODO.md"
-	case "apply_patch":
-		return strings.Contains(string(call.Arguments), "TODO.md")
+	}
+	switch call.Name {
+	case "write_file", "search_replace", "apply_patch":
+		// Built-in file mutators publish AffectedPaths; no path means no successful mutation.
+		return false
 	case "bash":
 		var input struct {
 			Command string `json:"command"`

@@ -38,15 +38,19 @@ const (
 
 var errTurnEventsClosed = errors.New("turn event stream closed before completion")
 
+type agentLifecycleMsg struct{ event agent.Event }
+
 type bubbleModel struct {
-	ctx         context.Context
-	service     *toolcall.Service
-	registry    tool.Registry
-	skills      *skill.Registry
-	runner      applicationturn.Runner
-	bridge      *permissionBridge
-	coordinator *agent.Coordinator
-	workDir     string
+	ctx           context.Context
+	service       *toolcall.Service
+	registry      tool.Registry
+	skills        *skill.Registry
+	runner        applicationturn.Runner
+	bridge        *permissionBridge
+	coordinator   *agent.Coordinator
+	agentEvents   <-chan agent.Event
+	agentSnapshot []agent.AgentStatus
+	workDir       string
 
 	viewport           viewport.Model
 	transcriptViewport viewport.Model
@@ -193,7 +197,29 @@ func newBubbleKeyMap() bubbleKeyMap {
 }
 
 func (m *bubbleModel) Init() tea.Cmd {
-	return tea.Batch(m.bridge.Next(), textarea.Blink)
+	return tea.Batch(m.bridge.Next(), textarea.Blink, m.nextAgentEvent())
+}
+
+func (m *bubbleModel) nextAgentEvent() tea.Cmd {
+	if m.agentEvents == nil {
+		return nil
+	}
+	events := m.agentEvents
+	return func() tea.Msg {
+		ev, ok := <-events
+		if !ok {
+			return nil
+		}
+		return agentLifecycleMsg{event: ev}
+	}
+}
+
+func (m *bubbleModel) syncAgentSnapshot() {
+	if m.coordinator == nil {
+		m.agentSnapshot = nil
+		return
+	}
+	m.agentSnapshot = m.coordinator.List()
 }
 
 func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -201,6 +227,10 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	defer m.syncComponentsToLegacy()
 
 	switch message := msg.(type) {
+	case agentLifecycleMsg:
+		m.syncAgentSnapshot()
+		m.relayout()
+		return m, m.nextAgentEvent()
 	case tea.WindowSizeMsg:
 		m.resize(message.Width, message.Height)
 		return m, nil
@@ -275,7 +305,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activity = "ready"
 		m.turnCancel = nil
 		m.appendToolResult(message.result, message.err)
-		m.reloadTodoAfterExternalTool(message.call, message.err)
+		m.reloadTodoAfterExternalTool(message.call, message.result, message.err)
 		m.syncTodoSnapshot()
 		if message.call.ID != "" {
 			m.appendModelToolResult(message.call, message.result)
@@ -987,6 +1017,9 @@ func (m *bubbleModel) chromeHeight() int {
 	if todo := m.todoView(); todo != "" {
 		height += lipgloss.Height(todo)
 	}
+	if agents := m.agentsView(); agents != "" {
+		height += lipgloss.Height(agents)
+	}
 	if status := m.statusView(); status != "" {
 		height += lipgloss.Height(status)
 	}
@@ -1057,6 +1090,9 @@ func (m *bubbleModel) liveView() string {
 	parts := []string{m.viewport.View()}
 	if todo := m.todoView(); todo != "" {
 		parts = append(parts, todo)
+	}
+	if agents := m.agentsView(); agents != "" {
+		parts = append(parts, agents)
 	}
 	if status := m.statusView(); status != "" {
 		parts = append(parts, status)

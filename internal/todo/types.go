@@ -3,11 +3,18 @@ package todo
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
 type Status string
+
+var (
+	ErrRevisionConflict = errors.New("todo revision conflict")
+	validIDPattern      = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
+)
 
 const (
 	StatusPending    Status = "pending"
@@ -30,15 +37,6 @@ func (s Status) Valid() bool {
 	return s == StatusPending || s == StatusInProgress || s == StatusCompleted
 }
 
-func (i Item) EffectiveStatus() Status {
-	if i.Status == "" {
-		return StatusPending
-	}
-	return i.Status
-}
-
-func (i Item) Done() bool { return i.EffectiveStatus() == StatusCompleted }
-
 func ValidateItems(items []Item) error {
 	seen := make(map[string]struct{}, len(items))
 	for idx, item := range items {
@@ -46,12 +44,19 @@ func ValidateItems(items []Item) error {
 		if id == "" {
 			return fmt.Errorf("todo item %d: id is required", idx)
 		}
+		if !validIDPattern.MatchString(id) {
+			return fmt.Errorf("todo item %d: id %q must match %s", idx, id, validIDPattern.String())
+		}
 		if _, ok := seen[id]; ok {
 			return fmt.Errorf("todo item %d: duplicate id %q", idx, id)
 		}
 		seen[id] = struct{}{}
-		if strings.TrimSpace(item.Text) == "" {
+		text := strings.TrimSpace(item.Text)
+		if text == "" {
 			return fmt.Errorf("todo item %q: text is required", id)
+		}
+		if strings.ContainsAny(item.Text, "\r\n") || strings.Contains(item.Text, managedStart) || strings.Contains(item.Text, managedEnd) {
+			return fmt.Errorf("todo item %q: text must be a single safe markdown line", id)
 		}
 		if !item.Status.Valid() {
 			return fmt.Errorf("todo item %q: invalid status %q", id, item.Status)

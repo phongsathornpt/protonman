@@ -144,18 +144,11 @@ func TestDelegateTask_Execute(t *testing.T) {
 	})
 
 	t.Run("parentID propagation", func(t *testing.T) {
-		var receivedParentID string
 		parentCoord := agent.NewCoordinator(
 			nil,
 			nil,
 			nil,
 			nil,
-			agent.WithEventSink(func(ctx context.Context, ev agent.Event) error {
-				if ev.Kind == agent.EventAgentStarted {
-					receivedParentID = ev.ParentID
-				}
-				return nil
-			}),
 			agent.WithRunnerFactory(func(p agent.Profile, tools *toolcall.Service) (turn.Runner, error) {
 				return mockSubagentRunner{content: "ok"}, nil
 			}),
@@ -183,7 +176,6 @@ func TestDelegateTask_Execute(t *testing.T) {
 			t.Fatalf("status = %+v, want parent session-xyz", status)
 		}
 		_, _ = parentCoord.Wait(context.Background(), spawned.AgentID, time.Second)
-		_ = receivedParentID
 	})
 
 	t.Run("pow dex int delegation and schema", func(t *testing.T) {

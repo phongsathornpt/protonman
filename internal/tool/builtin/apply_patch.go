@@ -189,6 +189,7 @@ func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 		}
 	}
 
+	affectedPaths := make([]string, 0, len(operations)*2)
 	var output strings.Builder
 	output.WriteString("Success. Updated the following files:\n")
 	for _, operation := range operations {
@@ -202,12 +203,17 @@ func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 		}
 		output.WriteString(operation.path)
 		output.WriteByte('\n')
+		affectedPaths = append(affectedPaths, operation.path)
+		if operation.movePath != "" {
+			affectedPaths = append(affectedPaths, operation.movePath)
+		}
 	}
 	return tool.Result{
-		CallID:       call.ID,
-		ToolName:     call.Name,
-		Output:       output.String(),
-		CheckpointID: checkpointID,
+		CallID:        call.ID,
+		ToolName:      call.Name,
+		Output:        output.String(),
+		CheckpointID:  checkpointID,
+		AffectedPaths: affectedPaths,
 	}, nil
 }
 
