@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/projectTHORN/proton/internal/sandbox"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 type recordingLauncher struct {
@@ -229,5 +230,72 @@ func TestBashPerCallTimeoutCannotRunPastRequestedBudget(t *testing.T) {
 	}
 	if elapsed := time.Since(started); elapsed > 2*time.Second {
 		t.Fatalf("elapsed = %v, want bounded near 1s", elapsed)
+	}
+}
+
+func TestBashSeparatesStdoutAndStderr(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	handler := NewBash(workspaceRoot, &recordingLauncher{})
+	result, err := handler.Execute(context.Background(), newJSONCall(t, "bash-streams", "bash", map[string]any{
+		"command": "printf stdout; printf stderr >&2",
+	}))
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result.Stdout != "stdout" || result.Stderr != "stderr" {
+		t.Fatalf("stdout=%q stderr=%q", result.Stdout, result.Stderr)
+	}
+	if result.Output != "stdout\nstderr" {
+		t.Fatalf("compat output = %q", result.Output)
+	}
+	if result.StdoutBytes != 6 || result.StderrBytes != 6 {
+		t.Fatalf("stream bytes stdout=%d stderr=%d", result.StdoutBytes, result.StderrBytes)
+	}
+}
+
+func TestBashTruncationIdentifiesStream(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	handler := NewBash(workspaceRoot, &recordingLauncher{})
+	result, err := handler.Execute(context.Background(), newJSONCall(t, "bash-stream-trunc", "bash", map[string]any{
+		"command": "python3 -c 'import sys; sys.stdout.write(\"A\" * 1200000); sys.stderr.write(\"err\")'",
+	}))
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !result.Truncated || !result.StdoutTruncated || result.StderrTruncated {
+		t.Fatalf("truncation flags aggregate=%v stdout=%v stderr=%v", result.Truncated, result.StdoutTruncated, result.StderrTruncated)
+	}
+	if result.StdoutBytes != 1200000 || result.StderrBytes != 3 {
+		t.Fatalf("observed bytes stdout=%d stderr=%d", result.StdoutBytes, result.StderrBytes)
+	}
+	if len(result.Stdout) != maxBashStreamBytes {
+		t.Fatalf("captured stdout=%d, want %d", len(result.Stdout), maxBashStreamBytes)
+	}
+}
+
+func TestBashFailureCodesAreStructured(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	handler := NewBash(workspaceRoot, &recordingLauncher{})
+	result, err := handler.Execute(context.Background(), newJSONCall(t, "bash-exit", "bash", map[string]any{"command": "exit 7"}))
+	if err == nil {
+		t.Fatal("Execute() error = nil")
+	}
+	if result.ExitCode == nil || *result.ExitCode != 7 {
+		t.Fatalf("exit code = %#v", result.ExitCode)
+	}
+	if failure := tool.FailureFromError(err); failure.Code != tool.ErrorCodeExecution {
+		t.Fatalf("failure code = %q, want execution_error", failure.Code)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = handler.Execute(ctx, newJSONCall(t, "bash-cancel", "bash", map[string]any{"command": "true"}))
+	if failure := tool.FailureFromError(err); failure.Code != tool.ErrorCodeCanceled {
+		t.Fatalf("cancel failure code = %q", failure.Code)
+	}
+
+	_, err = NewBash(workspaceRoot).Execute(context.Background(), newJSONCall(t, "bash-nosandbox", "bash", map[string]any{"command": "true"}))
+	if failure := tool.FailureFromError(err); failure.Code != tool.ErrorCodeSandboxUnavailable {
+		t.Fatalf("sandbox failure code = %q", failure.Code)
 	}
 }

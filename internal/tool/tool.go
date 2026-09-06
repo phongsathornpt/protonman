@@ -92,6 +92,8 @@ const (
 	ErrorCodeStaleContinuation ErrorCode = "stale_continuation"
 	// ErrorCodeConflict indicates an optimistic concurrency/version conflict.
 	ErrorCodeConflict ErrorCode = "conflict"
+	// ErrorCodeSandboxUnavailable indicates that requested OS confinement could not be applied.
+	ErrorCodeSandboxUnavailable ErrorCode = "sandbox_unavailable"
 	// ErrorCodeExecution is the safe fallback for handler failures.
 	ErrorCodeExecution ErrorCode = "execution_error"
 )
@@ -272,8 +274,17 @@ type Result struct {
 	CallID string `json:"call_id"`
 	// ToolName identifies the handler that produced the result.
 	ToolName string `json:"tool_name"`
-	// Output is human- and model-readable text for this initial port slice.
+	// Output is the compatibility view presented to existing model/UI adapters.
 	Output string `json:"output,omitempty"`
+	// Stdout and Stderr preserve process streams separately when available.
+	Stdout string `json:"stdout,omitempty"`
+	Stderr string `json:"stderr,omitempty"`
+	// StdoutBytes and StderrBytes count bytes observed before truncation.
+	StdoutBytes int64 `json:"stdout_bytes,omitempty"`
+	StderrBytes int64 `json:"stderr_bytes,omitempty"`
+	// Stream-specific truncation flags preserve which channel exceeded its cap.
+	StdoutTruncated bool `json:"stdout_truncated,omitempty"`
+	StderrTruncated bool `json:"stderr_truncated,omitempty"`
 	// ExitCode is populated by process-backed tools when a process exits.
 	ExitCode *int `json:"exit_code,omitempty"`
 	// Denied reports that execution was blocked before the handler ran.
