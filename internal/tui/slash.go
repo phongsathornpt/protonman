@@ -540,11 +540,7 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 			return nil
 		}
 		if arg == "" || arg == "select" {
-			if !m.bottom.has(modelSelectViewID) {
-				m.bottom.push(newModelSelectPaneView(m))
-				m.relayout()
-			}
-			return nil
+			return m.openModelSelectPane()
 		}
 		return m.selectModelDirect(arg)
 	case "provider", "providers":

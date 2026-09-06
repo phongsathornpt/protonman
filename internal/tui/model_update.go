@@ -361,9 +361,7 @@ func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.relayout()
 			return m, nil
 		}
-		m.bottom.push(newModelSelectPaneView(m))
-		m.relayout()
-		return m, nil
+		return m, m.openModelSelectPane()
 	}
 	if message.String() == "ctrl+c" {
 		if m.busy && m.turnCancel != nil {
