@@ -372,14 +372,6 @@ func runHeadless(
 	return nil
 }
 
-func loadTodoItems(workDir string) []tui.TodoItem {
-	contents, err := os.ReadFile(filepath.Join(workDir, "TODO.md"))
-	if err != nil {
-		return []tui.TodoItem{}
-	}
-	return tui.ParseTODO(string(contents))
-}
-
 func generateSessionID(workDir string) string {
 	now := time.Now().UTC()
 	return fmt.Sprintf("workspace-%s-%s-%03d",
