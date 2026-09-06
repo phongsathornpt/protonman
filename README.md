@@ -335,6 +335,17 @@ subagent_wait_timeout = "30s"
 subagent_max_runtime = "30m"
 completed_result_ttl = "10m"
 
+# Shared runtime and network policies
+[runtime]
+turn_timeout = "10m"
+round_timeout = "5m"
+tool_permission_timeout = "2m"
+tool_execution_timeout = "2m"
+model_request_timeout = "5m"
+model_discovery_timeout = "10s"
+web_fetch_timeout = "10s"
+model_catalog_ttl = "2m"
+
 # Active model preferences
 [model]
 default = "deepseek-v4-flash-vision-exp"
@@ -373,7 +384,7 @@ Execution safety notes:
 - `subagent_max_runtime` is the hard child-lifetime safety ceiling after execution starts. `delegate_task.timeout_seconds` may request a shorter ceiling but cannot extend the configured maximum.
 - `max_live_subagents` prevents unbounded queued/running work; `max_retained_subagents` caps terminal records even inside the TTL window, while `completed_result_ttl` bounds how long results remain queryable.
 - Legacy `subagent_timeout` is accepted as an alias for `subagent_max_runtime` with a deprecation warning.
-- A complete model/tool turn still has a default 10-minute deadline, and the loop refuses construction if every global termination bound is disabled.
+- `[runtime]` centralizes model, tool, discovery, web-fetch, and catalog-cache time bounds. The loop refuses construction if every global termination bound is disabled.
 - Repeating the same deterministic tool call with the same semantic arguments and result twice without an intervening mutation triggers a text-only synthesis round instead of continuing the tool loop; identical retryable failures are capped at three attempts.
 - Truncated `read_file`, `grep`, and `list_dir` results include `next_offset` plus a snapshot-bound `continuation`; send both on the next page to detect stale file, query, or directory state. `grep` continuations also carry a validated cursor so deep pages resume near the prior match instead of rescanning earlier files. Plain `offset` remains supported for compatibility.
 
