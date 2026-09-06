@@ -223,3 +223,21 @@ func TestOpenAIHTTPErrorIsNormalized(t *testing.T) {
 		t.Fatalf("provider error = %#v", providerErr)
 	}
 }
+func TestOpenAIStreamErrorIsNormalized(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"error\":{\"message\":\"slow down\",\"type\":\"rate_limit_error\",\"code\":\"rate_limit_exceeded\"}}\n\n")
+	}))
+	defer server.Close()
+
+	stream, err := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("test-model").Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	_, err = stream.Next(context.Background())
+	var providerErr *sdk.ProviderError
+	if !errors.As(err, &providerErr) || providerErr.Kind != sdk.ErrorRateLimit || providerErr.Code != "rate_limit_exceeded" {
+		t.Fatalf("stream error = %#v (%v)", providerErr, err)
+	}
+}
