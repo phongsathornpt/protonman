@@ -119,3 +119,43 @@ func TestUpdateTodoRequiresExpectedRevision(t *testing.T) {
 		t.Fatalf("error=%v, want invalid arguments", err)
 	}
 }
+
+func TestUpdateTodoPermissionDetailSummarizesChanges(t *testing.T) {
+	store, _ := tododomain.NewStore([]tododomain.Item{
+		{ID: "done", Text: "done", Status: tododomain.StatusInProgress},
+		{ID: "remove", Text: "remove", Status: tododomain.StatusPending},
+	})
+	h := NewUpdateTodo(store).(updateTodoHandler)
+	args, _ := json.Marshal(map[string]any{"expected_revision": uint64(0), "items": []map[string]any{
+		{"id": "done", "text": "done", "status": "completed"},
+		{"id": "add", "text": "add", "status": "pending"},
+	}})
+	got := h.PermissionDetail(args)
+	for _, want := range []string{"1 completed", "1 added", "1 removed"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("permission detail=%q missing %q", got, want)
+		}
+	}
+}
+
+func TestUpdateTodoPermissionDetailFlagsStaleRevision(t *testing.T) {
+	store, _ := tododomain.NewStore([]tododomain.Item{{ID: "a", Text: "a", Status: tododomain.StatusPending}})
+	if _, err := store.CompareAndReplace(context.Background(), 0, []tododomain.Item{{ID: "a", Text: "a", Status: tododomain.StatusInProgress}}); err != nil {
+		t.Fatal(err)
+	}
+	h := NewUpdateTodo(store).(updateTodoHandler)
+	args := json.RawMessage(`{"expected_revision":0,"items":[{"id":"a","text":"a","status":"completed"}]}`)
+	if got := h.PermissionDetail(args); !strings.Contains(got, "stale task plan") {
+		t.Fatalf("permission detail=%q, want stale task plan", got)
+	}
+}
+
+func TestUpdateTodoPermissionDetailShowsNoChanges(t *testing.T) {
+	items := []tododomain.Item{{ID: "a", Text: "a", Status: tododomain.StatusPending}}
+	store, _ := tododomain.NewStore(items)
+	h := NewUpdateTodo(store).(updateTodoHandler)
+	args, _ := json.Marshal(map[string]any{"expected_revision": uint64(0), "items": items})
+	if got := h.PermissionDetail(args); !strings.Contains(got, "no changes") {
+		t.Fatalf("permission detail=%q, want no changes", got)
+	}
+}
