@@ -902,3 +902,101 @@ func TestCoordinatorRepeatedCloseStillReportsActiveWorker(t *testing.T) {
 		t.Fatalf("Close() after worker exit = %v", err)
 	}
 }
+
+func TestCoordinatorWaitTimeoutDoesNotCancelSpawnedAgent(t *testing.T) {
+	release := make(chan struct{})
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithDefaultTimeout(time.Second),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+				select {
+				case <-release:
+					return turn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "done"}}, nil
+				case <-ctx.Done():
+					return turn.Result{}, ctx.Err()
+				}
+			}}, nil
+		}),
+	)
+	defer coord.Close()
+	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileExplorer, Task: "background"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wr, err := coord.Wait(context.Background(), h.ID, 20*time.Millisecond)
+	if err != nil {
+		t.Fatalf("Wait() error = %v", err)
+	}
+	if wr.State != StateQueued && wr.State != StateRunning {
+		t.Fatalf("wait state = %q", wr.State)
+	}
+	if _, ok := coord.Get(h.ID); !ok {
+		t.Fatal("spawned agent disappeared after wait timeout")
+	}
+	close(release)
+	wr, err = coord.Wait(context.Background(), h.ID, time.Second)
+	if err != nil || wr.State != StateCompleted || wr.Result == nil {
+		t.Fatalf("completion = %+v err=%v", wr, err)
+	}
+}
+
+func TestCoordinatorCancelSpawnedAgent(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+				<-ctx.Done()
+				return turn.Result{}, ctx.Err()
+			}}, nil
+		}),
+	)
+	defer coord.Close()
+	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileExplorer, Task: "cancel me"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := coord.Cancel(h.ID); err != nil {
+		t.Fatal(err)
+	}
+	wr, err := coord.Wait(context.Background(), h.ID, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wr.State != StateCanceled || wr.Result == nil || !errors.Is(wr.Result.Err, context.Canceled) {
+		t.Fatalf("canceled wait result = %+v", wr)
+	}
+}
+
+func TestCoordinatorRetainsTerminalResultsOutsideActive(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return mockSubagentRunnerCompat("retained"), nil
+		}),
+	)
+	defer coord.Close()
+	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileExplorer, Task: "finish"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wr, err := coord.Wait(context.Background(), h.ID, time.Second)
+	if err != nil || wr.State != StateCompleted {
+		t.Fatalf("wait = %+v err=%v", wr, err)
+	}
+	if got := len(coord.Active()); got != 0 {
+		t.Fatalf("Active() = %d, want 0", got)
+	}
+	found := false
+	for _, st := range coord.List() {
+		if st.ID == h.ID && st.State == StateCompleted {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("completed agent not retained in List()")
+	}
+}
+
+type mockSubagentRunnerCompat string
+
+func (m mockSubagentRunnerCompat) Run(context.Context, []model.Message, turn.Sink) (turn.Result, error) {
+	return turn.Result{Message: model.Message{Role: model.RoleAssistant, Content: string(m)}, Rounds: 1}, nil
+}

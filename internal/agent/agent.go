@@ -53,6 +53,33 @@ func ParseProfile(raw string) (Profile, error) {
 	return p, nil
 }
 
+// State describes the lifecycle of a persistent subagent.
+type State string
+
+const (
+	StateQueued    State = "queued"
+	StateRunning   State = "running"
+	StateCompleted State = "completed"
+	StateFailed    State = "failed"
+	StateCanceled  State = "canceled"
+)
+
+func (s State) Terminal() bool {
+	return s == StateCompleted || s == StateFailed || s == StateCanceled
+}
+
+// Handle identifies a spawned subagent without coupling its lifetime to a caller wait.
+type Handle struct {
+	ID      string  `json:"agent_id"`
+	Profile Profile `json:"profile"`
+}
+
+// WaitResult reports the current state after a bounded wait.
+type WaitResult struct {
+	State  State   `json:"state"`
+	Result *Result `json:"result,omitempty"`
+}
+
 // Request is the invocation payload for a delegated subagent.
 type Request struct {
 	ID           string        `json:"id,omitempty"`
