@@ -3,6 +3,7 @@ package model
 import (
 	"strings"
 
+	"github.com/projectTHORN/proton/internal/modelprofile"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -22,6 +23,8 @@ func NewProviderLanguageModel(
 		}
 	}
 	baseURL = ResolveProviderBaseURLForProtocol(providerName, string(protocol), baseURL)
+	builtinProfile := modelprofile.ResolveBuiltin(providerName, modelID, modelprofile.CatalogMetadata{})
+	opts = append([]ClientOption{withResolvedModelProfile(builtinProfile)}, opts...)
 	switch protocol {
 	case ProviderProtocolAnthropic:
 		return newSDKAnthropicLanguageModel(baseURL, apiKey, modelID, opts...)

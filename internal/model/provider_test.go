@@ -301,3 +301,22 @@ func TestFetchProviderModelsFeaturesOnlyProvidePositiveCapabilityEvidence(t *tes
 		t.Fatalf("positive features were not recognized: %+v", models[1])
 	}
 }
+
+func TestFetchProviderModelsParsesReasoningProfile(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"models":[{"slug":"gemini-3.8-flash","capabilities":{"reasoning":true},"reasoning":{"supported":true,"levels":["low","medium","high"],"default":"medium"}}]}`))
+	}))
+	defer ts.Close()
+
+	models, err := FetchProviderModels(context.Background(), ts.URL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 1 || models[0].Reasoning == nil || models[0].Reasoning.Supported == nil || !*models[0].Reasoning.Supported {
+		t.Fatalf("reasoning metadata = %+v", models)
+	}
+	if got := models[0].Reasoning.Levels; len(got) != 3 || got[1] != "medium" || models[0].Reasoning.Default != "medium" {
+		t.Fatalf("reasoning profile = %+v", models[0].Reasoning)
+	}
+}

@@ -79,3 +79,35 @@ func TestNewProviderLanguageModelPreservesContextWindowMetadata(t *testing.T) {
 		t.Fatalf("capability overrides were lost: %+v", m.Capabilities())
 	}
 }
+
+func TestNewProviderLanguageModelAppliesBuiltinModelProfile(t *testing.T) {
+	m := NewProviderLanguageModel(DefaultOpenAIName, string(ProviderProtocolOpenAI), DefaultOpenAIEndpoint, "key", "gemini-3.8-flash")
+	if got := sdk.ModelContextWindow(m); got != 1_048_576 {
+		t.Fatalf("ModelContextWindow() = %d, want 1048576", got)
+	}
+	profile, ok := ResolvedModelProfile(m)
+	if !ok || profile.ProfileName != "gemini-3.8-flash" || len(profile.Reasoning.Levels) != 3 {
+		t.Fatalf("ResolvedModelProfile() = %+v, %v", profile, ok)
+	}
+}
+
+func TestRemoteModelProfileOverridesBuiltinMetadata(t *testing.T) {
+	no := false
+	remote := RemoteModel{
+		ID:            "gemini-3.8-flash",
+		ContextWindow: 2048,
+		ToolSupport:   &no,
+		VisionSupport: &no,
+	}
+	m := NewProviderLanguageModel(DefaultOpenAIName, string(ProviderProtocolOpenAI), DefaultOpenAIEndpoint, "key", remote.ID, WithRemoteModelProfile(DefaultOpenAIName, remote))
+	if m.Capabilities().Tools || m.Capabilities().Vision {
+		t.Fatalf("catalog capability overrides were lost: %+v", m.Capabilities())
+	}
+	if got := sdk.ModelContextWindow(m); got != 2048 {
+		t.Fatalf("ModelContextWindow() = %d, want 2048", got)
+	}
+	profile, ok := ResolvedModelProfile(m)
+	if !ok || profile.ContextWindow != 2048 {
+		t.Fatalf("ResolvedModelProfile() = %+v, %v", profile, ok)
+	}
+}

@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/projectTHORN/proton/internal/modelprofile"
+	"github.com/projectTHORN/proton/internal/runtimepolicy"
 )
 
 type ProviderProtocol string
@@ -186,8 +188,9 @@ type RemoteModel struct {
 	Features      []string `json:"features,omitempty"`
 	// ToolSupport and VisionSupport are tri-state capability metadata. Nil means
 	// the catalog did not provide authoritative support information.
-	ToolSupport   *bool `json:"tool_support,omitempty"`
-	VisionSupport *bool `json:"vision_support,omitempty"`
+	ToolSupport   *bool                          `json:"tool_support,omitempty"`
+	VisionSupport *bool                          `json:"vision_support,omitempty"`
+	Reasoning     *modelprofile.CatalogReasoning `json:"reasoning,omitempty"`
 }
 
 // IsFreeModel reports whether a given model ID represents an OpenCode free-tier model.
@@ -294,9 +297,11 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 			ID           string `json:"id"`
 			Name         string `json:"name"`
 			Capabilities struct {
-				Tools  *bool `json:"tools"`
-				Vision *bool `json:"vision"`
+				Tools     *bool `json:"tools"`
+				Vision    *bool `json:"vision"`
+				Reasoning *bool `json:"reasoning"`
 			} `json:"capabilities"`
+			Reasoning *modelprofile.CatalogReasoning `json:"reasoning"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &openAIResp); err == nil && len(openAIResp.Data) > 0 {
@@ -306,11 +311,16 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 			if name == "" {
 				name = item.ID
 			}
+			reasoning := item.Reasoning
+			if reasoning == nil && item.Capabilities.Reasoning != nil {
+				reasoning = &modelprofile.CatalogReasoning{Supported: item.Capabilities.Reasoning}
+			}
 			results = append(results, RemoteModel{
 				ID:            item.ID,
 				Name:          name,
 				ToolSupport:   item.Capabilities.Tools,
 				VisionSupport: item.Capabilities.Vision,
+				Reasoning:     reasoning,
 			})
 		}
 		return results, nil
@@ -327,10 +337,12 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 			SupportsTools  *bool    `json:"supportsTools"`
 			SupportsVision *bool    `json:"supportsVision"`
 			Capabilities   struct {
-				Tools  *bool `json:"tools"`
-				Vision *bool `json:"vision"`
+				Tools     *bool `json:"tools"`
+				Vision    *bool `json:"vision"`
+				Reasoning *bool `json:"reasoning"`
 			} `json:"capabilities"`
-			Provider struct {
+			Reasoning *modelprofile.CatalogReasoning `json:"reasoning"`
+			Provider  struct {
 				Name string `json:"name"`
 			} `json:"provider"`
 		} `json:"models"`
@@ -350,6 +362,10 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 			if visionSupport == nil && hasModelFeature(item.Features, "vision") {
 				visionSupport = boolPointer(true)
 			}
+			reasoning := item.Reasoning
+			if reasoning == nil && item.Capabilities.Reasoning != nil {
+				reasoning = &modelprofile.CatalogReasoning{Supported: item.Capabilities.Reasoning}
+			}
 			results = append(results, RemoteModel{
 				ID:            id,
 				Name:          item.Name,
@@ -358,6 +374,7 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 				Features:      item.Features,
 				ToolSupport:   toolSupport,
 				VisionSupport: visionSupport,
+				Reasoning:     reasoning,
 			})
 		}
 		return results, nil

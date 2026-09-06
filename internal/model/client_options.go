@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/projectTHORN/proton/internal/buildinfo"
+	"github.com/projectTHORN/proton/internal/modelprofile"
 	"github.com/projectTHORN/proton/internal/runtimepolicy"
 )
 
@@ -21,6 +22,7 @@ type clientConfig struct {
 	vision        *bool
 	tools         *bool
 	contextWindow *int
+	profile       *modelprofile.Resolved
 }
 
 // ClientOption configures provider model construction.
