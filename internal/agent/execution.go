@@ -112,20 +112,27 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 		return nil
 	})
 	if err != nil {
-		return Result{AgentID: req.ID, Profile: req.Profile, Rounds: turnResult.Rounds}, err
+		return Result{AgentID: req.ID, Profile: req.Profile, Rounds: turnResult.Rounds, Verification: turnResult.Verification}, err
+	}
+	if req.Profile == ProfileDEX && turnResult.Verification.Mutated && !turnResult.Verification.Verified {
+		return Result{AgentID: req.ID, Profile: req.Profile, Rounds: turnResult.Rounds, Verification: turnResult.Verification}, ErrUnverifiedChanges
 	}
 
 	summary := strings.TrimSpace(turnResult.Message.Content)
 	if summary == "" {
 		summary = "Task completed with no final text response."
 	}
+	if (req.Profile == ProfileWorker || req.Profile == ProfilePOW) && turnResult.Verification.Mutated && !turnResult.Verification.Verified {
+		summary += "\n\nWarning: changes were not verified after the final mutation."
+	}
 	summary = truncateSummary(summary, maxSummaryBytes)
 
 	return Result{
-		AgentID: req.ID,
-		Profile: req.Profile,
-		Summary: summary,
-		Rounds:  turnResult.Rounds,
+		AgentID:      req.ID,
+		Profile:      req.Profile,
+		Summary:      summary,
+		Rounds:       turnResult.Rounds,
+		Verification: turnResult.Verification,
 	}, nil
 }
 

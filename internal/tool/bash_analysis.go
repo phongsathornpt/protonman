@@ -59,6 +59,61 @@ func AnalyzeCommand(command string) BashAnalysis {
 	return combined
 }
 
+// VerificationCommand reports whether a shell command is a conservative empirical
+// verifier for source changes. It intentionally recognizes only well-known test,
+// build, lint, typecheck, and diff-check invocations.
+func VerificationCommand(command string) (string, bool) {
+	segments, _, ok := splitSimpleShell(strings.TrimSpace(command))
+	if !ok || len(segments) == 0 {
+		return "", false
+	}
+	labels := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		words, redirects, ok := shellWords(segment)
+		if !ok || len(words) == 0 || len(redirects) > 0 {
+			return "", false
+		}
+		label, ok := verificationWords(words)
+		if !ok {
+			return "", false
+		}
+		labels = append(labels, label)
+	}
+	return strings.Join(labels, " + "), true
+}
+
+func verificationWords(words []string) (string, bool) {
+	name := strings.TrimPrefix(words[0], "./")
+	args := words[1:]
+	switch name {
+	case "go":
+		if len(args) > 0 && (args[0] == "test" || args[0] == "vet") {
+			return "go " + args[0], true
+		}
+	case "cargo":
+		if len(args) > 0 && (args[0] == "test" || args[0] == "check" || args[0] == "clippy") {
+			return "cargo " + args[0], true
+		}
+	case "pytest", "py.test":
+		return "pytest", true
+	case "npm", "pnpm", "yarn", "bun":
+		if len(args) > 0 {
+			script := args[0]
+			if script == "run" && len(args) > 1 {
+				script = args[1]
+			}
+			if script == "test" || script == "lint" || script == "typecheck" || script == "check" || script == "build" {
+				return name + " " + script, true
+			}
+		}
+	case "git":
+		if len(args) >= 2 && args[0] == "diff" && args[1] == "--check" {
+			return "git diff --check", true
+		}
+	}
+	return "", false
+}
+
 // ClassifyCommandEffect preserves the existing API while delegating to the
 // richer analyzer.
 func ClassifyCommandEffect(command string) CommandEffect { return AnalyzeCommand(command).Effect }

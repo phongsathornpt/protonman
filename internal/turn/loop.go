@@ -178,8 +178,9 @@ type Runner interface {
 
 // Result is the final assistant response from a completed turn.
 type Result struct {
-	Message model.Message
-	Rounds  int
+	Message      model.Message
+	Rounds       int
+	Verification VerificationState
 	// Messages contains the assistant/tool messages produced during this run.
 	// It excludes caller-supplied history and generated system prompt material.
 	Messages []model.Message
@@ -414,7 +415,9 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	history := model.CloneMessages(messages)
 	turnMessages := make([]model.Message, 0, 4)
 	toolCallsUsed := 0
-	progress := newProgressGuard(l.tools.Definitions(), l.maxIdenticalNoProgressResults)
+	definitions := l.tools.Definitions()
+	progress := newProgressGuard(definitions, l.maxIdenticalNoProgressResults)
+	verification := VerificationState{}
 	forceNoProgressSynthesis := false
 
 	var catalogItems []skill.CatalogItem
@@ -579,6 +582,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			return l.fail(ctx, sink, round, err)
 		}
 		toolCallsUsed += len(executions)
+		verification.observe(executions, definitions)
 		if stalled, observeErr := progress.observeRound(executions); observeErr != nil {
 			terminalReason = "progress_guard_failed"
 			return l.fail(ctx, sink, round, observeErr)
@@ -610,9 +614,10 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				"max_round", isMaxRound,
 			)
 			result := Result{
-				Message:  assistant,
-				Rounds:   round,
-				Messages: model.CloneMessages(turnMessages),
+				Message:      assistant,
+				Rounds:       round,
+				Verification: verification,
+				Messages:     model.CloneMessages(turnMessages),
 			}
 			if err := emit(ctx, sink, Event{
 				Kind:    EventCompleted,
