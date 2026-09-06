@@ -68,6 +68,18 @@ func extractToolTarget(name string, kind tool.Kind, args json.RawMessage) (strin
 			return fmt.Sprintf("%d tasks", len(items)), kind
 		}
 		return "task plan", kind
+	case tool.KindAgent:
+		if name == "delegate_task" {
+			task, _ := values["task"].(string)
+			profile, _ := values["profile"].(string)
+			if strings.TrimSpace(profile) != "" {
+				return fmt.Sprintf("[%s] %s", strings.TrimSpace(profile), truncateWithEllipsis(strings.TrimSpace(task), 40)), kind
+			}
+		}
+		if id, ok := values["agent_id"].(string); ok && strings.TrimSpace(id) != "" {
+			return strings.TrimSpace(id), kind
+		}
+		return "subagents", kind
 	case tool.KindBash:
 		if cmd, ok := values["command"].(string); ok && strings.TrimSpace(cmd) != "" {
 			return strings.TrimSpace(cmd), kind
@@ -129,8 +141,10 @@ func guessToolKind(name string) tool.Kind {
 		return tool.KindBash
 	case "write_file", "search_replace", "apply_patch":
 		return tool.KindEdit
-	case "update_todo":
+	case "get_todo", "update_todo":
 		return tool.KindTask
+	case "delegate_task", "wait_agent", "get_agent", "list_agents", "cancel_agent":
+		return tool.KindAgent
 	default:
 		return ""
 	}
@@ -157,6 +171,8 @@ func toolKindGlyph(kind tool.Kind, name string) string {
 		return glyphEdit
 	case tool.KindTask:
 		return glyphTodoActive
+	case tool.KindAgent:
+		return glyphAgent
 	}
 
 	switch name {
@@ -192,7 +208,12 @@ func summarizeToolOutput(name string, kind tool.Kind, target string, body string
 	case tool.KindEdit:
 		return summarizeEdit(name, bodyTrimmed)
 	case tool.KindTask:
+		if name == "get_todo" {
+			return summarizeTodoSnapshot(bodyTrimmed)
+		}
 		return summarizeTodoUpdate(bodyTrimmed)
+	case tool.KindAgent:
+		return summarizeAgentTool(name, bodyTrimmed)
 	case tool.KindBash:
 		if exitCode != nil {
 			return fmt.Sprintf("exit %d", *exitCode)
@@ -204,10 +225,6 @@ func summarizeToolOutput(name string, kind tool.Kind, target string, body string
 			return fmt.Sprintf("Activated skill %q", skillName)
 		}
 		return "activated"
-	}
-
-	if name == "delegate_task" {
-		return "task completed"
 	}
 
 	if name == "checkpoint_restore" {
@@ -223,6 +240,65 @@ func summarizeToolOutput(name string, kind tool.Kind, target string, body string
 		return fmt.Sprintf("%d lines (%s)", lines, formatByteSize(len(bodyTrimmed)))
 	}
 	return formatByteSize(len(bodyTrimmed))
+}
+
+func summarizeAgentTool(name, body string) string {
+	var payload map[string]any
+	if json.Unmarshal([]byte(body), &payload) != nil {
+		return "agent updated"
+	}
+	if name == "list_agents" {
+		agents, _ := payload["agents"].([]any)
+		running := 0
+		for _, raw := range agents {
+			if m, ok := raw.(map[string]any); ok {
+				if st, _ := m["state"].(string); st == "queued" || st == "running" {
+					running++
+				}
+			}
+		}
+		return fmt.Sprintf("%d agents · %d active", len(agents), running)
+	}
+	id, _ := payload["agent_id"].(string)
+	status, _ := payload["status"].(string)
+	if agentObj, ok := payload["agent"].(map[string]any); ok {
+		if id == "" {
+			id, _ = agentObj["id"].(string)
+		}
+		if status == "" {
+			status, _ = agentObj["state"].(string)
+		}
+	}
+	switch name {
+	case "delegate_task":
+		if id != "" {
+			return fmt.Sprintf("spawned %s · %s", id, status)
+		}
+		return "subagent spawned"
+	case "wait_agent":
+		if status == "queued" || status == "running" {
+			return fmt.Sprintf("%s still %s", id, status)
+		}
+		return fmt.Sprintf("%s · %s", id, status)
+	case "cancel_agent":
+		return fmt.Sprintf("cancel requested · %s", id)
+	default:
+		if id != "" {
+			return fmt.Sprintf("%s · %s", id, status)
+		}
+	}
+	return "agent updated"
+}
+
+func summarizeTodoSnapshot(body string) string {
+	var payload struct {
+		Revision uint64            `json:"revision"`
+		Items    []json.RawMessage `json:"items"`
+	}
+	if json.Unmarshal([]byte(body), &payload) != nil {
+		return "task snapshot"
+	}
+	return fmt.Sprintf("Tasks %d · revision %d", len(payload.Items), payload.Revision)
 }
 
 func summarizeTodoUpdate(body string) string {
@@ -557,7 +633,7 @@ func summarizeEdit(name string, body string) string {
 // in the primary conversation viewport because the semantic header already summarizes it.
 func shouldSuppressBody(kind tool.Kind, name string) bool {
 	switch kind {
-	case tool.KindWebFetch, tool.KindWebSearch, tool.KindRead:
+	case tool.KindWebFetch, tool.KindWebSearch, tool.KindRead, tool.KindAgent:
 		return true
 	}
 	switch name {

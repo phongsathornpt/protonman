@@ -134,9 +134,10 @@ func (h searchReplaceHandler) Execute(ctx context.Context, call tool.Call) (tool
 
 func editResult(call tool.Call, path string, action string, checkpointID string) (tool.Result, error) {
 	return tool.Result{
-		CallID:       call.ID,
-		ToolName:     call.Name,
-		Output:       fmt.Sprintf("The file %s has been %s.", path, action),
-		CheckpointID: checkpointID,
+		CallID:        call.ID,
+		ToolName:      call.Name,
+		Output:        fmt.Sprintf("The file %s has been %s.", path, action),
+		CheckpointID:  checkpointID,
+		AffectedPaths: []string{path},
 	}, nil
 }

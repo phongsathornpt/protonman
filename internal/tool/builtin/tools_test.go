@@ -325,6 +325,9 @@ func TestWriteFilePublishesCheckpointID(t *testing.T) {
 	if result.CheckpointID != checkpointStore.id {
 		t.Fatalf("checkpoint ID = %q, want %q", result.CheckpointID, checkpointStore.id)
 	}
+	if len(result.AffectedPaths) != 1 || result.AffectedPaths[0] != "checkpointed.txt" {
+		t.Fatalf("affected paths = %#v, want checkpointed.txt", result.AffectedPaths)
+	}
 	wantPath := filepath.Join(workspaceRoot.Root(), "checkpointed.txt")
 	if len(checkpointStore.paths) != 1 || checkpointStore.paths[0] != wantPath {
 		t.Fatalf("checkpoint paths = %#v, want target path", checkpointStore.paths)

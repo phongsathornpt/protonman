@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
 	"strings"
 	"sync"
@@ -29,6 +30,17 @@ func (m *mockRunner) Run(ctx context.Context, messages []model.Message, sink tur
 		Message: model.Message{Role: model.RoleAssistant, Content: "mock output"},
 		Rounds:  1,
 	}, nil
+}
+
+func waitForTest(t *testing.T, timeout time.Duration, ready func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for !ready() {
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for asynchronous condition")
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 type emptyRegistry struct{}
@@ -378,12 +390,13 @@ func TestCoordinator_EmitsLifecycleEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	waitForTest(t, 250*time.Millisecond, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(events) >= 3
+	})
 	mu.Lock()
 	defer mu.Unlock()
-
-	if len(events) < 3 {
-		t.Fatalf("expected at least 3 events, got %d", len(events))
-	}
 	if events[0].Kind != EventAgentQueued {
 		t.Errorf("first event = %v, want EventAgentQueued", events[0].Kind)
 	}
@@ -855,18 +868,22 @@ func TestCoordinatorQueueTimeoutReportsLifecycleMetrics(t *testing.T) {
 	if res.QueueDuration <= 0 || res.TotalDuration < res.QueueDuration || res.Duration != 0 {
 		t.Fatalf("queue timeout metrics = %+v", res)
 	}
-	foundFailure := false
-	for len(events) > 0 {
-		ev := <-events
-		if ev.Kind == EventAgentFailed && ev.AgentID == res.AgentID {
-			foundFailure = true
-			if ev.QueueDuration <= 0 || ev.TotalDuration < ev.QueueDuration {
-				t.Fatalf("failure event metrics = %+v", ev)
+	var failure Event
+	waitForTest(t, 250*time.Millisecond, func() bool {
+		for {
+			select {
+			case ev := <-events:
+				if ev.Kind == EventAgentFailed && ev.AgentID == res.AgentID {
+					failure = ev
+					return true
+				}
+			default:
+				return false
 			}
 		}
-	}
-	if !foundFailure {
-		t.Fatal("queued timeout did not emit EventAgentFailed")
+	})
+	if failure.QueueDuration <= 0 || failure.TotalDuration < failure.QueueDuration {
+		t.Fatalf("failure event metrics = %+v", failure)
 	}
 	close(release)
 	if err := <-firstDone; err != nil {
@@ -1083,5 +1100,27 @@ func TestCoordinatorCompletedResultTTL(t *testing.T) {
 	time.Sleep(30 * time.Millisecond)
 	if _, ok := coord.Get(h.ID); ok {
 		t.Fatal("expired terminal result still retained")
+	}
+}
+
+func TestCoordinatorBoundsRetainedTerminalRecords(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithMaxRetainedAgents(2),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) { return &mockRunner{}, nil }),
+	)
+	defer coord.Close()
+	for i := 0; i < 4; i++ {
+		if _, err := coord.Run(context.Background(), Request{Profile: ProfileExplorer, Task: fmt.Sprintf("task-%d", i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := coord.List()
+	if len(got) != 2 {
+		t.Fatalf("retained=%d, want 2: %#v", len(got), got)
+	}
+	for _, st := range got {
+		if !st.State.Terminal() {
+			t.Fatalf("unexpected live state: %#v", st)
+		}
 	}
 }

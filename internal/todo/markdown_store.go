@@ -99,3 +99,30 @@ func itemsEqual(a, b []Item) bool {
 	}
 	return true
 }
+
+func (s *MarkdownStore) CompareAndReplace(ctx context.Context, expectedRevision uint64, items []Item) (Snapshot, error) {
+	if err := ctx.Err(); err != nil {
+		return Snapshot{}, err
+	}
+	if err := ValidateItems(items); err != nil {
+		return Snapshot{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current := s.mem.Snapshot()
+	if current.Revision != expectedRevision {
+		return current, fmt.Errorf("%w: expected %d, current %d", ErrRevisionConflict, expectedRevision, current.Revision)
+	}
+	if itemsEqual(current.Items, items) {
+		return current, nil
+	}
+	content, err := os.ReadFile(s.path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return Snapshot{}, fmt.Errorf("read todo markdown: %w", err)
+	}
+	next := renderDocument(string(content), items)
+	if err := writeAtomic(ctx, s.path, []byte(next)); err != nil {
+		return Snapshot{}, err
+	}
+	return s.mem.CompareAndReplace(ctx, expectedRevision, items)
+}

@@ -84,3 +84,20 @@ func TestStoreConcurrentSnapshotAndReplace(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestStoreCompareAndReplaceRejectsStaleRevision(t *testing.T) {
+	store, err := NewStore(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CompareAndReplace(context.Background(), 0, []Item{{ID: "a", Text: "one", Status: StatusPending}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CompareAndReplace(context.Background(), 0, []Item{{ID: "b", Text: "two", Status: StatusPending}}); !errors.Is(err, ErrRevisionConflict) {
+		t.Fatalf("error=%v, want revision conflict", err)
+	}
+	got := store.Snapshot()
+	if got.Revision != 1 || len(got.Items) != 1 || got.Items[0].ID != "a" {
+		t.Fatalf("snapshot=%#v", got)
+	}
+}

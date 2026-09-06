@@ -90,6 +90,8 @@ const (
 	ErrorCodeNoProgress ErrorCode = "no_progress"
 	// ErrorCodeStaleContinuation indicates that pageable state changed since the previous page.
 	ErrorCodeStaleContinuation ErrorCode = "stale_continuation"
+	// ErrorCodeConflict indicates an optimistic concurrency/version conflict.
+	ErrorCodeConflict ErrorCode = "conflict"
 	// ErrorCodeExecution is the safe fallback for handler failures.
 	ErrorCodeExecution ErrorCode = "execution_error"
 )
@@ -286,6 +288,8 @@ type Result struct {
 	Failure *Failure `json:"error,omitempty"`
 	// CheckpointID identifies the pre-edit snapshot created by a mutating tool.
 	CheckpointID string `json:"checkpoint_id,omitempty"`
+	// AffectedPaths lists workspace-relative paths successfully mutated by the tool.
+	AffectedPaths []string `json:"affected_paths,omitempty"`
 }
 
 // Handler executes one registered tool call.

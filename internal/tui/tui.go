@@ -208,6 +208,11 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 			currentMessages,
 		)
 		bModel.coordinator = ui.coordinator
+		cancelAgentEvents := func() {}
+		if ui.coordinator != nil {
+			bModel.agentEvents, cancelAgentEvents = ui.coordinator.Subscribe(32)
+			bModel.agentSnapshot = ui.coordinator.List()
+		}
 		bModel.todoStore = ui.todoStore
 		bModel.todoRevision = todoSnapshot.Revision
 		bModel.skills = ui.skills
@@ -243,6 +248,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 			}()
 			finalModel, err = program.Run()
 		}()
+		cancelAgentEvents()
 
 		if panicVal != nil {
 			slog.DebugContext(ctx, "tui program panicked",

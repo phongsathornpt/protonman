@@ -12,23 +12,16 @@ func TestE2ESubagentDelegationSuccess(t *testing.T) {
 	server := newMockLLMServer(t)
 	server.SetupWorkspaceConfig(t, home)
 
-	// Round 1: main agent delegates task to subagent
-	server.AddToolCallResponse("call_del_1", "delegate_task", `{"task":"Explore repository structure","profile":"explorer","timeout_seconds":30}`)
-	// Subagent response
-	server.AddTextResponse("Exploration complete: found hello.txt")
-	// Main agent final response
-	server.AddTextResponse("Subagent reported that repository contains hello.txt")
-
 	res := runProton(t, runOptions{
-		args: []string{"-y", "-p", "Delegate repository exploration"},
+		args: []string{"-y", "-p", `/call delegate_task {"task":"Explore repository structure","profile":"explorer","timeout_seconds":30}`},
 		dir:  ws,
 		env:  []string{"PROTON_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("delegation failed: %s %s", res.stdout, res.stderr)
 	}
-	if !strings.Contains(res.stdout, "Subagent reported") {
-		t.Fatalf("missing main agent final confirmation: %s", res.stdout)
+	if !strings.Contains(res.stdout, `"agent_id":"explorer-`) || !strings.Contains(res.stdout, `"status":"queued"`) {
+		t.Fatalf("missing async subagent handle: %s", res.stdout)
 	}
 }
 

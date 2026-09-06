@@ -47,7 +47,10 @@ func TestFilterRegistryForProfile(t *testing.T) {
 		"write_file":    dummyHandler{def: tool.Definition{Name: "write_file", Kind: tool.KindEdit, Description: "write"}},
 		"apply_patch":   dummyHandler{def: tool.Definition{Name: "apply_patch", Kind: tool.KindEdit, Description: "patch"}},
 		"bash":          dummyHandler{def: tool.Definition{Name: "bash", Kind: tool.KindBash, Description: "bash"}},
-		"delegate_task": dummyHandler{def: tool.Definition{Name: "delegate_task", Kind: tool.KindRead, Description: "delegate"}},
+		"delegate_task": dummyHandler{def: tool.Definition{Name: "delegate_task", Kind: tool.KindAgent, Description: "delegate"}},
+		"wait_agent":    dummyHandler{def: tool.Definition{Name: "wait_agent", Kind: tool.KindAgent, Description: "wait"}},
+		"update_todo":   dummyHandler{def: tool.Definition{Name: "update_todo", Kind: tool.KindTask, Description: "todo"}},
+		"future_admin":  dummyHandler{def: tool.Definition{Name: "future_admin", Kind: tool.KindMCP, Description: "future"}},
 	}
 	baseReg := staticRegistry{handlers: baseHandlers}
 
@@ -69,7 +72,7 @@ func TestFilterRegistryForProfile(t *testing.T) {
 			}
 		}
 		// Must not have mutating tools or delegate_task
-		for _, blocked := range []string{"write_file", "apply_patch", "bash", "delegate_task"} {
+		for _, blocked := range []string{"write_file", "apply_patch", "bash", "delegate_task", "wait_agent", "update_todo"} {
 			if _, ok := scoped.Lookup(blocked); ok {
 				t.Errorf("explorer lookup for %q succeeded, want blocked", blocked)
 			}
@@ -80,7 +83,7 @@ func TestFilterRegistryForProfile(t *testing.T) {
 		scoped := FilterRegistryForProfile(baseReg, ProfileReviewer, 0)
 
 		// Reviewer must NOT have web_fetch (no network access), mutating tools, or delegate_task
-		for _, blocked := range []string{"web_fetch", "write_file", "apply_patch", "bash", "delegate_task"} {
+		for _, blocked := range []string{"web_fetch", "write_file", "apply_patch", "bash", "delegate_task", "wait_agent", "update_todo"} {
 			if _, ok := scoped.Lookup(blocked); ok {
 				t.Errorf("reviewer lookup for %q succeeded, want blocked", blocked)
 			}
@@ -103,8 +106,10 @@ func TestFilterRegistryForProfile(t *testing.T) {
 			}
 		}
 		// Worker at depth 1 MUST NOT have delegate_task
-		if _, ok := scoped.Lookup("delegate_task"); ok {
-			t.Error("worker at depth 1 should not have delegate_task")
+		for _, name := range []string{"delegate_task", "wait_agent", "update_todo", "future_admin"} {
+			if _, ok := scoped.Lookup(name); ok {
+				t.Errorf("worker should not have %s", name)
+			}
 		}
 	})
 
@@ -115,8 +120,10 @@ func TestFilterRegistryForProfile(t *testing.T) {
 				t.Errorf("pow missing tool: %s", allowed)
 			}
 		}
-		if _, ok := scoped.Lookup("delegate_task"); ok {
-			t.Error("pow at depth 1 should not have delegate_task")
+		for _, name := range []string{"delegate_task", "wait_agent", "update_todo", "future_admin"} {
+			if _, ok := scoped.Lookup(name); ok {
+				t.Errorf("pow should not have %s", name)
+			}
 		}
 	})
 
@@ -127,8 +134,10 @@ func TestFilterRegistryForProfile(t *testing.T) {
 				t.Errorf("dex missing tool: %s", allowed)
 			}
 		}
-		if _, ok := scoped.Lookup("delegate_task"); ok {
-			t.Error("dex at depth 1 should not have delegate_task")
+		for _, name := range []string{"delegate_task", "wait_agent", "update_todo", "future_admin"} {
+			if _, ok := scoped.Lookup(name); ok {
+				t.Errorf("dex should not have %s", name)
+			}
 		}
 	})
 
@@ -139,7 +148,7 @@ func TestFilterRegistryForProfile(t *testing.T) {
 				t.Errorf("int missing tool: %s", allowed)
 			}
 		}
-		for _, blocked := range []string{"write_file", "apply_patch", "bash", "delegate_task"} {
+		for _, blocked := range []string{"write_file", "apply_patch", "bash", "delegate_task", "wait_agent", "update_todo"} {
 			if _, ok := scoped.Lookup(blocked); ok {
 				t.Errorf("int lookup for %q succeeded, want blocked", blocked)
 			}

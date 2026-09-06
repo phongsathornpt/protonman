@@ -65,7 +65,7 @@ func TestPickersFitResponsiveTerminalHeights(t *testing.T) {
 }
 
 func TestCompactLayoutReducesChrome(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{Text: "one"}, {Text: "two"}})
+	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "one", Text: "one", Status: tododomain.StatusPending}, {ID: "two", Text: "two", Status: tododomain.StatusPending}})
 	m.activeModel = "provider/a-very-long-model-name"
 	m.resize(60, 18)
 	if got := m.todoView(); !strings.Contains(got, "Tasks 0/2") || strings.Contains(got, "one") {
@@ -105,7 +105,7 @@ func TestRunningToolUsesTranscriptAsProgressSurface(t *testing.T) {
 }
 
 func TestTodoDefaultsToSummaryAndCtrlOExpands(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{Text: "first"}, {Text: "second"}})
+	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "first", Text: "first", Status: tododomain.StatusPending}, {ID: "second", Text: "second", Status: tododomain.StatusPending}})
 	m.resize(80, 24)
 	if got := m.todoView(); !strings.Contains(got, "Tasks 0/2") || strings.Contains(got, "first") {
 		t.Fatalf("default todo = %q, want summary", got)

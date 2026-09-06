@@ -406,7 +406,7 @@ func (m *bubbleModel) applyTurnEvent(event applicationturn.Event) {
 			result.ToolName = event.Call.Name
 		}
 		m.applyToolResult(event.Call.Name, result, event.Err)
-		m.reloadTodoAfterExternalTool(event.Call, event.Err)
+		m.reloadTodoAfterExternalTool(event.Call, event.Result, event.Err)
 		m.syncTodoSnapshot()
 		m.activity = "thinking"
 	case applicationturn.EventCompleted:

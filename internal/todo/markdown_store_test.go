@@ -103,3 +103,56 @@ func TestMarkdownStoreWriteFailureKeepsMemory(t *testing.T) {
 		t.Fatalf("memory changed after persistence failure: %#v", got)
 	}
 }
+
+func TestMarkdownStoreRejectsDuplicateManagedSections(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "TODO.md")
+	body := managedStart + "\n- [ ] [a] one\n" + managedEnd + "\n" + managedStart + "\n- [ ] [b] two\n" + managedEnd + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := OpenMarkdownStore(context.Background(), path); err == nil {
+		t.Fatal("expected duplicate managed section error")
+	}
+}
+
+func TestMarkdownStorePreservesFileMode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "TODO.md")
+	if err := os.WriteFile(path, []byte("# todo\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	store, err := OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CompareAndReplace(context.Background(), 0, []Item{{ID: "a", Text: "one", Status: StatusPending}}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o640 {
+		t.Fatalf("mode=%#o, want 0640", got)
+	}
+}
+
+func TestMarkdownStoreCompareAndReplaceRejectsStaleRevision(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "TODO.md")
+	store, err := OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CompareAndReplace(context.Background(), 0, []Item{{ID: "a", Text: "one", Status: StatusPending}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CompareAndReplace(context.Background(), 0, []Item{{ID: "b", Text: "two", Status: StatusPending}}); !errors.Is(err, ErrRevisionConflict) {
+		t.Fatalf("error=%v", err)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(content), "[b]") {
+		t.Fatalf("stale update reached disk: %s", content)
+	}
+}

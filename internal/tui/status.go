@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/permission"
 	tododomain "github.com/projectTHORN/proton/internal/todo"
 )
@@ -192,9 +193,13 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 		switch request.ToolKind {
 		case permission.ToolRead, permission.ToolGrep, permission.ToolWebFetch, permission.ToolWebSearch, permission.ToolTask:
 			return nil
-		default:
-			return fmt.Errorf("plan mode is read-only; %s tool %q is blocked", request.ToolKind, request.ToolName)
+		case permission.ToolAgent:
+			switch request.ToolName {
+			case "wait_agent", "get_agent", "list_agents":
+				return nil
+			}
 		}
+		return fmt.Errorf("plan mode is read-only; %s tool %q is blocked", request.ToolKind, request.ToolName)
 	}
 	m.service.SetCallGuard(guard)
 	if m.coordinator != nil {
@@ -207,6 +212,69 @@ func formatElapsed(duration time.Duration) string {
 		return "0s"
 	}
 	return duration.Truncate(time.Second).String()
+}
+
+func (m bubbleModel) agentsView() string {
+	if layoutModeForHeight(m.height) == layoutTiny || len(m.agentSnapshot) == 0 {
+		return ""
+	}
+	queued, running, completed := 0, 0, 0
+	for _, st := range m.agentSnapshot {
+		switch st.State {
+		case agent.StateQueued:
+			queued++
+		case agent.StateRunning:
+			running++
+		case agent.StateCompleted:
+			completed++
+		}
+	}
+	active := queued + running
+	summary := fmt.Sprintf("Agents %d active", active)
+	if running > 0 {
+		summary += fmt.Sprintf(" · %d running", running)
+	}
+	if queued > 0 {
+		summary += fmt.Sprintf(" · %d queued", queued)
+	}
+	if completed > 0 {
+		summary += fmt.Sprintf(" · %d done", completed)
+	}
+	if layoutModeForHeight(m.height) == layoutCompact {
+		return brandStyle.Render(summary)
+	}
+	lines := []string{brandStyle.Render(summary)}
+	start := 0
+	if len(m.agentSnapshot) > 3 {
+		start = len(m.agentSnapshot) - 3
+	}
+	visible := m.agentSnapshot[start:]
+	for _, st := range visible {
+		stateGlyph := glyphAgent
+		style := mutedStyle
+		switch st.State {
+		case agent.StateCompleted:
+			stateGlyph = glyphToolSuccess
+			style = successStyle
+		case agent.StateFailed, agent.StateCanceled:
+			stateGlyph = glyphToolError
+			style = errorStyle
+		}
+		when := st.StartTime
+		if !st.StartedAt.IsZero() {
+			when = st.StartedAt
+		}
+		if st.State.Terminal() && !st.FinishedAt.IsZero() {
+			when = st.FinishedAt
+		}
+		elapsed := formatElapsed(time.Since(when))
+		line := fmt.Sprintf("  %s%s · %s · %s", stateGlyph, st.ID, elapsed, truncateWithEllipsis(st.Task, maxInt(12, m.width-30)))
+		lines = append(lines, style.Render(truncateWithEllipsis(line, maxInt(1, m.width-2))))
+	}
+	if more := len(m.agentSnapshot) - len(visible); more > 0 {
+		lines = append(lines, mutedStyle.Render(fmt.Sprintf("  … %d older", more)))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m bubbleModel) todoView() string {
@@ -236,7 +304,7 @@ func (m bubbleModel) todoView() string {
 	shown := 0
 	for _, status := range []tododomain.Status{tododomain.StatusInProgress, tododomain.StatusPending, tododomain.StatusCompleted} {
 		for _, item := range m.todo {
-			if item.EffectiveStatus() != status || shown >= limit {
+			if item.Status != status || shown >= limit {
 				continue
 			}
 			lines = append(lines, renderTodoItem(item, maxInt(8, m.width-6))...)
@@ -251,7 +319,7 @@ func (m bubbleModel) todoView() string {
 
 func todoCounts(items []TodoItem) (completed, active int) {
 	for _, item := range items {
-		switch item.EffectiveStatus() {
+		switch item.Status {
 		case tododomain.StatusCompleted:
 			completed++
 		case tododomain.StatusInProgress:
@@ -275,7 +343,7 @@ func todoVisibleRows(height int) int {
 func renderTodoItem(item TodoItem, width int) []string {
 	prefix := glyphTodoPending
 	style := mutedStyle
-	switch item.EffectiveStatus() {
+	switch item.Status {
 	case tododomain.StatusInProgress:
 		prefix = glyphTodoActive
 		style = brandStyle
@@ -303,10 +371,10 @@ func (m *bubbleModel) appendTodo() {
 	m.appendLine("TODO:")
 	for _, item := range m.todo {
 		mark := " "
-		if item.EffectiveStatus() == tododomain.StatusInProgress {
+		if item.Status == tododomain.StatusInProgress {
 			mark = "~"
 		}
-		if item.EffectiveStatus() == tododomain.StatusCompleted {
+		if item.Status == tododomain.StatusCompleted {
 			mark = "x"
 		}
 		m.appendLine(fmt.Sprintf("[%s] %s", mark, item.Text))

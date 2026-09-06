@@ -152,7 +152,7 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 		NewWebFetch(cfg.network),
 	}
 	if cfg.todoStore != nil {
-		handlers = append(handlers, NewUpdateTodo(cfg.todoStore))
+		handlers = append(handlers, NewGetTodo(cfg.todoStore), NewUpdateTodo(cfg.todoStore))
 	}
 	if cfg.skills != nil {
 		handlers = append(handlers, NewActivateSkill(cfg.skills, workspaceRoot))

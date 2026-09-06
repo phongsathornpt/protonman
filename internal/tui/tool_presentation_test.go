@@ -334,3 +334,22 @@ func TestTodoToolPresentation(t *testing.T) {
 		t.Fatalf("summary = %q", summary)
 	}
 }
+
+func TestAgentToolPresentation(t *testing.T) {
+	target, kind := extractToolTarget("delegate_task", "", json.RawMessage(`{"profile":"explorer","task":"inspect router behavior"}`))
+	if kind != tool.KindAgent || !strings.Contains(target, "[explorer]") {
+		t.Fatalf("target=%q kind=%q", target, kind)
+	}
+	if glyph := toolKindGlyph(kind, "delegate_task"); glyph != glyphAgent {
+		t.Fatalf("glyph=%q", glyph)
+	}
+	if got := summarizeToolOutput("delegate_task", kind, target, `{"agent_id":"explorer-7","status":"queued"}`, nil, false); got != "spawned explorer-7 · queued" {
+		t.Fatalf("spawn summary=%q", got)
+	}
+	if got := summarizeToolOutput("wait_agent", kind, "explorer-7", `{"agent_id":"explorer-7","status":"running","result":null}`, nil, false); got != "explorer-7 still running" {
+		t.Fatalf("wait summary=%q", got)
+	}
+	if got := summarizeToolOutput("list_agents", kind, "subagents", `{"agents":[{"id":"a","state":"running"},{"id":"b","state":"completed"}]}`, nil, false); got != "2 agents · 1 active" {
+		t.Fatalf("list summary=%q", got)
+	}
+}

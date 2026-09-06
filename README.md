@@ -259,7 +259,13 @@ Proton registers a suite of workspace-safe tools:
 | `bash` | Execution | Run shell commands inside workspace and sandbox boundaries |
 | `web_fetch` | Network | Retrieve remote web pages conforming to sandbox network policy |
 | `activate_skill` | Skills | Dynamically load an Agent Skill's full context into the session |
-| `delegate_task` | Multi-Agent | Spawn isolated subagents with bounded queue/execution budgets; optional `timeout_seconds` can shorten a task deadline |
+| `get_todo` | Tasks | Read the current parent-owned task snapshot and revision |
+| `update_todo` | Tasks | Atomically replace parent-owned task state using `expected_revision` from `get_todo` to reject stale updates |
+| `delegate_task` | Multi-Agent | Spawn a persistent background subagent and return its `agent_id` immediately |
+| `wait_agent` | Multi-Agent | Wait briefly for a subagent; wait timeout leaves the child running |
+| `get_agent` | Multi-Agent | Inspect one retained subagent and terminal result |
+| `list_agents` | Multi-Agent | List queued, running, and retained terminal subagents |
+| `cancel_agent` | Multi-Agent | Explicitly cancel a queued or running subagent |
 | `checkpoint_restore` | Recovery | Rollback a file to a recorded pre-edit checkpoint ID |
 
 ---
@@ -317,8 +323,12 @@ profile = "off"
 [agent]
 max_rounds = 20
 max_tool_calls = 100
-subagent_timeout = "5m"
+max_live_subagents = 16
+max_retained_subagents = 64
 subagent_queue_timeout = "30s"
+subagent_wait_timeout = "30s"
+subagent_max_runtime = "30m"
+completed_result_ttl = "10m"
 
 # Active model preferences
 [model]
@@ -349,8 +359,12 @@ api_key = ""
 Execution safety notes:
 
 - `max_rounds = 0` disables only the round-count bound; `max_tool_calls = 0` disables only the cumulative tool-call-count bound.
-- `subagent_queue_timeout` bounds only the wait for concurrency/workspace capacity. `subagent_timeout` starts after that capacity is acquired, so queueing does not consume execution time.
-- `delegate_task` may request a shorter `timeout_seconds`; requests above the configured `subagent_timeout` are clamped to that maximum, and the parent turn deadline always wins when it is stricter.
+- `delegate_task` starts work asynchronously. The returned `agent_id` can be used with `wait_agent`, `get_agent`, or `cancel_agent` in the same Proton session.
+- `subagent_queue_timeout` bounds only admission to concurrency/workspace capacity; queueing never consumes the child runtime budget.
+- `subagent_wait_timeout` bounds one `wait_agent` call. Reaching it returns the current `queued`/`running` state and does **not** cancel the child.
+- `subagent_max_runtime` is the hard child-lifetime safety ceiling after execution starts. `delegate_task.timeout_seconds` may request a shorter ceiling but cannot extend the configured maximum.
+- `max_live_subagents` prevents unbounded queued/running work; `max_retained_subagents` caps terminal records even inside the TTL window, while `completed_result_ttl` bounds how long results remain queryable.
+- Legacy `subagent_timeout` is accepted as an alias for `subagent_max_runtime` with a deprecation warning.
 - A complete model/tool turn still has a default 10-minute deadline, and the loop refuses construction if every global termination bound is disabled.
 - Repeating the same deterministic tool call with the same semantic arguments and result twice without an intervening mutation triggers a text-only synthesis round instead of continuing the tool loop; identical retryable failures are capped at three attempts.
 - Truncated `read_file`, `grep`, and `list_dir` results include `next_offset` plus a snapshot-bound `continuation`; send both on the next page to detect stale file, query, or directory state. `grep` continuations also carry a validated cursor so deep pages resume near the prior match instead of rescanning earlier files. Plain `offset` remains supported for compatibility.

@@ -3,6 +3,7 @@ package builtin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	tododomain "github.com/projectTHORN/proton/internal/todo"
@@ -14,7 +15,8 @@ type updateTodoHandler struct {
 }
 
 type updateTodoInput struct {
-	Items []tododomain.Item `json:"items"`
+	ExpectedRevision *uint64           `json:"expected_revision"`
+	Items            []tododomain.Item `json:"items"`
 }
 
 func NewUpdateTodo(store tododomain.Repository) tool.Handler {
@@ -30,6 +32,10 @@ func (updateTodoHandler) Definition() tool.Definition {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
+				"expected_revision": map[string]any{
+					"type": "integer", "minimum": 0,
+					"description": "Revision from the latest task snapshot; stale revisions are rejected.",
+				},
 				"items": map[string]any{
 					"type": "array",
 					"items": map[string]any{
@@ -43,7 +49,7 @@ func (updateTodoHandler) Definition() tool.Definition {
 					},
 				},
 			},
-			"required": []string{"items"},
+			"required": []string{"expected_revision", "items"},
 		},
 	}
 }
@@ -64,11 +70,17 @@ func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode update_todo arguments", err)
 	}
+	if input.ExpectedRevision == nil {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_revision is required; call get_todo first")
+	}
 	if err := tododomain.ValidateItems(input.Items); err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "validate todo items", err)
 	}
-	snapshot, err := h.store.Replace(ctx, input.Items)
+	snapshot, err := h.store.CompareAndReplace(ctx, *input.ExpectedRevision, input.Items)
 	if err != nil {
+		if errors.Is(err, tododomain.ErrRevisionConflict) {
+			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeConflict, "todo snapshot is stale; refresh tasks and retry", err)
+		}
 		return tool.Result{}, err
 	}
 	counts := map[tododomain.Status]int{}

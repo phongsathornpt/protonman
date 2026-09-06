@@ -501,6 +501,7 @@ subagent_max_runtime = "45s"
 subagent_wait_timeout = "9s"
 subagent_queue_timeout = "7s"
 max_live_subagents = 8
+max_retained_subagents = 24
 completed_result_ttl = "2m"
 `)
 	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
@@ -518,6 +519,9 @@ completed_result_ttl = "2m"
 	}
 	if snapshot.Agent.MaxLiveSubagents != 8 {
 		t.Fatalf("max live = %d", snapshot.Agent.MaxLiveSubagents)
+	}
+	if snapshot.Agent.MaxRetainedSubagents != 24 {
+		t.Fatalf("max retained = %d", snapshot.Agent.MaxRetainedSubagents)
 	}
 	if snapshot.Agent.CompletedResultTTL != 2*time.Minute {
 		t.Fatalf("result ttl = %v", snapshot.Agent.CompletedResultTTL)
@@ -552,6 +556,7 @@ func TestAgentSubagentTimeoutConfigRejectsInvalidValues(t *testing.T) {
 		"[agent]\nsubagent_queue_timeout = \"-1s\"\n",
 		"[agent]\ncompleted_result_ttl = \"0s\"\n",
 		"[agent]\nmax_live_subagents = 0\n",
+		"[agent]\nmax_retained_subagents = 0\n",
 	} {
 		homeDir := t.TempDir()
 		workDir := t.TempDir()

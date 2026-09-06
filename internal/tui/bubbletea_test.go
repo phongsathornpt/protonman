@@ -976,7 +976,7 @@ func TestExternalTodoFileEditReloadsSharedStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	call, _ := tool.NewCall("write-1", "write_file", json.RawMessage(`{"file_path":"TODO.md","content":"- [x] inspect\\n"}`))
-	m.applyTurnEvent(applicationturn.Event{Kind: applicationturn.EventToolResult, Call: call, Result: tool.Result{CallID: "write-1", ToolName: "write_file"}})
+	m.applyTurnEvent(applicationturn.Event{Kind: applicationturn.EventToolResult, Call: call, Result: tool.Result{CallID: "write-1", ToolName: "write_file", AffectedPaths: []string{"TODO.md"}}})
 	if len(m.todo) != 1 || m.todo[0].Status != tododomain.StatusCompleted {
 		t.Fatalf("todo after reload = %#v", m.todo)
 	}
@@ -1000,11 +1000,34 @@ func TestMalformedExternalTodoEditKeepsLastValidSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	call, _ := tool.NewCall("write-1", "write_file", json.RawMessage(`{"file_path":"TODO.md"}`))
-	m.reloadTodoAfterExternalTool(call, nil)
+	m.reloadTodoAfterExternalTool(call, tool.Result{AffectedPaths: []string{"TODO.md"}}, nil)
 	if len(m.todo) != 1 || m.todo[0].Status != tododomain.StatusPending {
 		t.Fatalf("todo changed after invalid reload = %#v", m.todo)
 	}
 	if got := store.Snapshot(); len(got.Items) != 1 || got.Items[0].Status != tododomain.StatusPending {
 		t.Fatalf("store changed after invalid reload = %#v", got)
+	}
+}
+
+func TestExternalTodoReloadIgnoresUnrelatedAffectedPath(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "TODO.md")
+	if err := os.WriteFile(path, []byte("- [ ] inspect\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	store, err := tododomain.OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := store.Snapshot()
+	m := newTestBubbleModel(t, permission.ModeAsk, snapshot.Items)
+	m.todoStore, m.todoRevision, m.workDir = store, snapshot.Revision, dir
+	if err := os.WriteFile(path, []byte("- [x] inspect\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	call, _ := tool.NewCall("write-2", "write_file", json.RawMessage(`{"file_path":"other.go"}`))
+	m.reloadTodoAfterExternalTool(call, tool.Result{AffectedPaths: []string{"other.go"}}, nil)
+	if m.todo[0].Status != tododomain.StatusPending {
+		t.Fatalf("unrelated edit reloaded todo: %#v", m.todo)
 	}
 }

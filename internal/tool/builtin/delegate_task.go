@@ -35,7 +35,7 @@ func NewDelegateTask(coordinator *agent.Coordinator, parentIDs ...string) tool.H
 func (delegateTaskHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                   "delegate_task",
-		Description:            "Delegate an investigation, code review, or targeted task to a specialized subagent running in the background.",
+		Description:            "Spawn a specialized subagent asynchronously and return its agent_id immediately. Use wait_agent when its result is needed; a wait timeout does not cancel the child.",
 		Kind:                   tool.KindAgent,
 		Mutability:             tool.MutabilityMutating,
 		ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded,
