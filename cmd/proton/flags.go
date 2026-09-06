@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"golang.org/x/term"
 )
 
 type cliOptions struct {
@@ -99,22 +101,14 @@ func stdinIsTerminal() bool {
 	if truthy(os.Getenv("PROTON_FORCE_TTY")) {
 		return true
 	}
-	info, err := os.Stdin.Stat()
-	if err != nil {
-		return false
-	}
-	return info.Mode()&os.ModeCharDevice != 0
+	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
 func stdoutIsTerminal() bool {
 	if truthy(os.Getenv("PROTON_FORCE_TTY")) {
 		return true
 	}
-	info, err := os.Stdout.Stat()
-	if err != nil {
-		return false
-	}
-	return info.Mode()&os.ModeCharDevice != 0
+	return term.IsTerminal(int(os.Stdout.Fd()))
 }
 
 func readStdinPrompt() (string, error) {
