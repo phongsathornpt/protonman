@@ -11,6 +11,7 @@ import (
 	"time"
 
 	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/projectTHORN/proton/proton-sdk/internal/providerutil"
 )
 
 func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
@@ -18,7 +19,7 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 	if err != nil {
 		return nil, err
 	}
-	encoded, err := json.Marshal(body)
+	encoded, err := providerutil.MarshalWithOptions(body, request.Options.ProviderOptions["anthropic"], "model", "messages", "system", "tools", "max_tokens", "stream")
 	if err != nil {
 		return nil, fmt.Errorf("marshal anthropic request: %w", err)
 	}
