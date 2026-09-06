@@ -136,3 +136,20 @@ func TestStatusViewKeepsAgentCoordinationVisibleInTinyLayout(t *testing.T) {
 		t.Fatalf("tiny status view=%q, want coordination state", got)
 	}
 }
+
+func TestAgentLifecycleProgressShowsCurrentActivity(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", Task: "inspect router", State: agent.StateRunning, StartedAt: time.Now()}}
+	m.resize(100, 30)
+	updated, _ := m.Update(agentLifecycleMsg{event: agent.Event{Kind: agent.EventAgentProgress, AgentID: "explorer-1", Message: "using grep"}})
+	m = updated.(*bubbleModel)
+	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", Task: "inspect router", State: agent.StateRunning, StartedAt: time.Now()}}
+	if got := m.agentsView(); !strings.Contains(got, "using grep") {
+		t.Fatalf("agents view=%q, want current activity", got)
+	}
+	updated, _ = m.Update(agentLifecycleMsg{event: agent.Event{Kind: agent.EventAgentCompleted, AgentID: "explorer-1"}})
+	m = updated.(*bubbleModel)
+	if _, ok := m.agentActivity["explorer-1"]; ok {
+		t.Fatal("terminal lifecycle event did not clear transient activity")
+	}
+}
