@@ -103,12 +103,12 @@ func TestAnthropicStreamToolCall(t *testing.T) {
 func TestAnthropicMapsToolResultToUserBlock(t *testing.T) {
 	body, err := buildRequest("claude-test", sdk.Request{Messages: []sdk.Message{
 		{Role: sdk.RoleAssistant, ToolCalls: []sdk.ToolCall{{ID: "toolu_1", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`)}}},
-		{Role: sdk.RoleTool, ToolCallID: "toolu_1", ToolName: "read_file", Content: "contents"},
+		{Role: sdk.RoleTool, ToolCallID: "toolu_1", ToolName: "read_file", Content: "failed", ToolResultIsError: true},
 	}}, DefaultMaxTokens)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(body.Messages) != 2 || body.Messages[0].Content[0].Type != "tool_use" || body.Messages[1].Role != "user" || body.Messages[1].Content[0].Type != "tool_result" || body.Messages[1].Content[0].ToolUseID != "toolu_1" {
+	if len(body.Messages) != 2 || body.Messages[0].Content[0].Type != "tool_use" || body.Messages[1].Role != "user" || body.Messages[1].Content[0].Type != "tool_result" || body.Messages[1].Content[0].ToolUseID != "toolu_1" || !body.Messages[1].Content[0].IsError {
 		t.Fatalf("unexpected messages: %#v", body.Messages)
 	}
 }

@@ -27,11 +27,12 @@ func AppendToolResults(messages []Message, results []ToolResult) ([]Message, err
 			return nil, err
 		}
 		next = append(next, Message{
-			Role:       RoleTool,
-			Content:    result.Content,
-			Parts:      append([]ContentPart(nil), result.Parts...),
-			ToolCallID: result.ToolCallID,
-			ToolName:   result.ToolName,
+			Role:              RoleTool,
+			Content:           result.Content,
+			Parts:             append([]ContentPart(nil), result.Parts...),
+			ToolCallID:        result.ToolCallID,
+			ToolName:          result.ToolName,
+			ToolResultIsError: result.IsError,
 		})
 	}
 	return next, nil
