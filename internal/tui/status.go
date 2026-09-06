@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -227,18 +228,20 @@ func (m bubbleModel) agentsView() string {
 	if layoutModeForHeight(m.height) == layoutTiny || len(m.agentSnapshot) == 0 {
 		return ""
 	}
-	queued, running, completed := 0, 0, 0
+	queued, running, canceling, completed := 0, 0, 0, 0
 	for _, st := range m.agentSnapshot {
 		switch st.State {
 		case agent.StateQueued:
 			queued++
 		case agent.StateRunning:
 			running++
+		case agent.StateCanceling:
+			canceling++
 		case agent.StateCompleted:
 			completed++
 		}
 	}
-	active := queued + running
+	active := queued + running + canceling
 	summary := fmt.Sprintf("Agents %d active", active)
 	if running > 0 {
 		summary += fmt.Sprintf(" · %d running", running)
@@ -246,18 +249,25 @@ func (m bubbleModel) agentsView() string {
 	if queued > 0 {
 		summary += fmt.Sprintf(" · %d queued", queued)
 	}
+	if canceling > 0 {
+		summary += fmt.Sprintf(" · %d canceling", canceling)
+	}
 	if completed > 0 {
 		summary += fmt.Sprintf(" · %d done", completed)
 	}
 	if layoutModeForHeight(m.height) == layoutCompact {
 		return brandStyle.Render(summary)
 	}
-	lines := []string{brandStyle.Render(summary)}
-	start := 0
-	if len(m.agentSnapshot) > 3 {
-		start = len(m.agentSnapshot) - 3
+
+	visible := append([]agent.AgentStatus(nil), m.agentSnapshot...)
+	sort.SliceStable(visible, func(i, j int) bool {
+		return agentDisplayPriority(visible[i].State) < agentDisplayPriority(visible[j].State)
+	})
+	if len(visible) > 3 {
+		visible = visible[:3]
 	}
-	visible := m.agentSnapshot[start:]
+
+	lines := []string{brandStyle.Render(summary)}
 	for _, st := range visible {
 		stateGlyph := glyphAgent
 		style := mutedStyle
@@ -268,15 +278,10 @@ func (m bubbleModel) agentsView() string {
 		case agent.StateFailed, agent.StateCanceled:
 			stateGlyph = glyphToolError
 			style = errorStyle
+		case agent.StateCanceling:
+			style = warningStyle
 		}
-		when := st.StartTime
-		if !st.StartedAt.IsZero() {
-			when = st.StartedAt
-		}
-		if st.State.Terminal() && !st.FinishedAt.IsZero() {
-			when = st.FinishedAt
-		}
-		elapsed := formatElapsed(time.Since(when))
+		elapsed := formatElapsed(agentDisplayDuration(st, time.Now()))
 		line := fmt.Sprintf("  %s%s · %s · %s", stateGlyph, st.ID, elapsed, truncateWithEllipsis(st.Task, maxInt(12, m.width-30)))
 		lines = append(lines, style.Render(truncateWithEllipsis(line, maxInt(1, m.width-2))))
 	}
@@ -284,6 +289,40 @@ func (m bubbleModel) agentsView() string {
 		lines = append(lines, mutedStyle.Render(fmt.Sprintf("  … %d older", more)))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func agentDisplayPriority(state agent.State) int {
+	switch state {
+	case agent.StateCanceling:
+		return 0
+	case agent.StateRunning:
+		return 1
+	case agent.StateQueued:
+		return 2
+	case agent.StateFailed, agent.StateCanceled:
+		return 3
+	case agent.StateCompleted:
+		return 4
+	default:
+		return 5
+	}
+}
+
+func agentDisplayDuration(st agent.AgentStatus, now time.Time) time.Duration {
+	start := st.StartTime
+	if !st.StartedAt.IsZero() {
+		start = st.StartedAt
+	}
+	if st.State.Terminal() && !st.FinishedAt.IsZero() {
+		if st.StartedAt.IsZero() {
+			return 0
+		}
+		return st.FinishedAt.Sub(st.StartedAt)
+	}
+	if start.IsZero() || now.Before(start) {
+		return 0
+	}
+	return now.Sub(start)
 }
 
 func (m bubbleModel) todoView() string {
