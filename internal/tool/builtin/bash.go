@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/sandbox"
 	"github.com/projectTHORN/proton/internal/telemetry"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -29,8 +30,9 @@ const (
 )
 
 type bashHandler struct {
-	workspace *workspace.Workspace
-	launcher  sandbox.Launcher
+	workspace   *workspace.Workspace
+	launcher    sandbox.Launcher
+	checkpoints checkpoint.Store
 }
 
 type bashInput struct {
@@ -46,6 +48,11 @@ func NewBash(workspaceRoot *workspace.Workspace, launchers ...sandbox.Launcher) 
 		launcher = launchers[0]
 	}
 	return bashHandler{workspace: workspaceRoot, launcher: launcher}
+}
+
+// NewBashWithCheckpoint returns a shell adapter that checkpoints proven file mutations before execution.
+func NewBashWithCheckpoint(workspaceRoot *workspace.Workspace, launcher sandbox.Launcher, store checkpoint.Store) tool.Handler {
+	return bashHandler{workspace: workspaceRoot, launcher: launcher, checkpoints: store}
 }
 
 func (bashHandler) Definition() tool.Definition {
@@ -131,6 +138,7 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	analysis := tool.AnalyzeCommand(input.Command)
 	affectedPaths := bashAffectedPaths(cwdRel, analysis.AffectedPaths)
 	resolvedMutationPaths := make([]string, 0, len(affectedPaths))
+	checkpointID := ""
 	if analysis.Effect == tool.CommandEffectMutating {
 		for _, path := range affectedPaths {
 			resolved, resolveErr := h.workspace.Resolve(ctx, path)
@@ -143,6 +151,14 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		if guardErr := h.workspace.GuardWholeFileMutation(ctx, resolvedMutationPaths...); guardErr != nil {
 			logBashFailure(ctx, call, startedAt, "mutation_guard", guardErr)
 			return tool.Result{}, guardErr
+		}
+		if len(resolvedMutationPaths) > 0 && h.checkpoints != nil {
+			checkpointID, err = h.checkpoints.Capture(ctx, resolvedMutationPaths)
+			if err != nil {
+				checkpointErr := fmt.Errorf("checkpoint bash mutation: %w", err)
+				logBashFailure(ctx, call, startedAt, "checkpoint", checkpointErr)
+				return tool.Result{}, checkpointErr
+			}
 		}
 	}
 	slog.DebugContext(ctx, "bash command decoded",
@@ -194,6 +210,7 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		CallID:          call.ID,
 		ToolName:        call.Name,
 		Output:          outputStr,
+		CheckpointID:    checkpointID,
 		Stdout:          stdoutStr,
 		Stderr:          stderrStr,
 		StdoutBytes:     stdoutBuf.BytesSeen(),
