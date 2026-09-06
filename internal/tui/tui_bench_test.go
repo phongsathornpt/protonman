@@ -73,3 +73,15 @@ func BenchmarkRefreshViewport_100Cells(b *testing.B) {
 		m.refreshViewport()
 	}
 }
+
+func BenchmarkAssistantStreamingMarkdown20KB(b *testing.B) {
+	chunk := "A paragraph with **bold text**, `inline code`, and [a link](https://example.com).\n"
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		state := NewHistoryState(50000)
+		for j := 0; j < 250; j++ {
+			state.AppendAssistantDelta(chunk)
+			_ = state.RenderLines()
+		}
+	}
+}

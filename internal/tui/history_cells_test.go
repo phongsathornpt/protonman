@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -473,5 +474,47 @@ func TestHistoryStateAlternateRenderCacheTracksWidth(t *testing.T) {
 	narrow := state.RenderLinesAt(20)
 	if len(narrow) <= len(wide) {
 		t.Fatalf("narrow alternate render lines = %d, want more than wide %d", len(narrow), len(wide))
+	}
+}
+
+func TestAssistantIncrementalMarkdownMatchesFullRenderer(t *testing.T) {
+	chunks := []string{
+		"# Heading\n",
+		"\nParagraph with **bold",
+		" text** and `code`.\n",
+		"- first item\n- second item\n",
+		"> quote\n",
+		"```go\n",
+		"fmt.Println(\"hello\")\n",
+		"```\n",
+		"[link](https://example.com)",
+	}
+	cell := &AssistantCell{}
+	var text string
+	for i, chunk := range chunks {
+		text += chunk
+		cell.Text = text
+		trimmed := strings.TrimRight(text, "\n")
+		got := cell.renderMarkdownIncremental(trimmed, 48)
+		want := renderMarkdownLines(trimmed, 48)
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("chunk %d incremental render mismatch\ngot:  %#v\nwant: %#v", i, got, want)
+		}
+	}
+}
+
+func TestAssistantIncrementalMarkdownResetsForWidthAndMutation(t *testing.T) {
+	cell := &AssistantCell{Text: "first line\nsecond line with **bold**"}
+	_ = cell.RenderWidth(60)
+	cell.Text += "\nthird line"
+	wide := cell.RenderWidth(60)
+	cell.Text = "replacement text\nwith a different prefix"
+	narrow := cell.RenderWidth(24)
+	if len(wide) == 0 || len(narrow) == 0 {
+		t.Fatal("incremental assistant renderer returned no lines")
+	}
+	joined := strings.Join(narrow, "\n")
+	if strings.Contains(joined, "first line") || !strings.Contains(joined, "replacement") {
+		t.Fatalf("incremental cache survived replacement: %q", joined)
 	}
 }

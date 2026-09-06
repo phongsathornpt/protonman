@@ -26,68 +26,72 @@ func renderMarkdownLines(markdown string, width int) []string {
 	}
 	markdown = strings.ReplaceAll(markdown, "\r\n", "\n")
 	lines := make([]string, 0, strings.Count(markdown, "\n")+1)
-	inFence := false
-	fenceLabel := ""
-
+	state := markdownRenderState{}
 	for _, raw := range strings.Split(markdown, "\n") {
-		line := sanitizeBubbleText(raw)
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
-			if inFence {
-				lines = append(lines, markdownCodeStyle.Render("  └─ code"))
-				inFence = false
-				fenceLabel = ""
-				continue
-			}
-			inFence = true
-			fenceLabel = strings.TrimSpace(strings.TrimLeft(trimmed[3:], "`~"))
-			label := "code"
-			if fenceLabel != "" {
-				label += " · " + fenceLabel
-			}
-			lines = append(lines, markdownCodeStyle.Render("  ┌─ "+label))
-			continue
-		}
-		if inFence {
-			for _, wrapped := range wrapLines(line, maxInt(1, width-4)) {
-				lines = append(lines, markdownCodeStyle.Render("  │ "+wrapped))
-			}
-			continue
-		}
-		if trimmed == "" {
-			lines = append(lines, "")
-			continue
-		}
-
-		if heading, ok := markdownHeading(trimmed); ok {
-			lines = append(lines, renderMarkdownWrapped(heading, width, markdownHeadingStyle)...)
-			continue
-		}
-		if quote, ok := markdownQuote(trimmed); ok {
-			for _, wrapped := range wrapLines(quote, maxInt(1, width-4)) {
-				lines = append(lines, markdownQuoteStyle.Render("  │ "+wrapped))
-			}
-			continue
-		}
-		if marker, item, ok := markdownListItem(trimmed); ok {
-			itemWidth := maxInt(1, width-lipgloss.Width(marker)-2)
-			wrapped := wrapLines(item, itemWidth)
-			for index, part := range wrapped {
-				prefix := "    "
-				if index == 0 {
-					prefix = markdownBulletStyle.Render("  "+marker) + " "
-				}
-				lines = append(lines, prefix+styleInlineMarkdown(part))
-			}
-			continue
-		}
-		lines = append(lines, renderMarkdownWrapped(line, width, bodyStyle)...)
+		lines = append(lines, renderMarkdownLine(raw, width, &state)...)
 	}
-
-	if inFence {
+	if state.inFence {
 		lines = append(lines, markdownCodeStyle.Render("  └─ code (unterminated)"))
 	}
 	return trimTrailingBlankLines(lines)
+}
+
+type markdownRenderState struct {
+	inFence bool
+}
+
+func renderMarkdownLine(raw string, width int, state *markdownRenderState) []string {
+	line := sanitizeBubbleText(raw)
+	trimmed := strings.TrimSpace(line)
+	if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
+		if state.inFence {
+			state.inFence = false
+			return []string{markdownCodeStyle.Render("  └─ code")}
+		}
+		state.inFence = true
+		fenceLabel := strings.TrimSpace(strings.TrimLeft(trimmed[3:], "`~"))
+		label := "code"
+		if fenceLabel != "" {
+			label += " · " + fenceLabel
+		}
+		return []string{markdownCodeStyle.Render("  ┌─ " + label)}
+	}
+	if state.inFence {
+		wrapped := wrapLines(line, maxInt(1, width-4))
+		out := make([]string, 0, len(wrapped))
+		for _, part := range wrapped {
+			out = append(out, markdownCodeStyle.Render("  │ "+part))
+		}
+		return out
+	}
+	if trimmed == "" {
+		return []string{""}
+	}
+	if heading, ok := markdownHeading(trimmed); ok {
+		return renderMarkdownWrapped(heading, width, markdownHeadingStyle)
+	}
+	if quote, ok := markdownQuote(trimmed); ok {
+		wrapped := wrapLines(quote, maxInt(1, width-4))
+		out := make([]string, 0, len(wrapped))
+		for _, part := range wrapped {
+			out = append(out, markdownQuoteStyle.Render("  │ "+part))
+		}
+		return out
+	}
+	if marker, item, ok := markdownListItem(trimmed); ok {
+		itemWidth := maxInt(1, width-lipgloss.Width(marker)-2)
+		wrapped := wrapLines(item, itemWidth)
+		out := make([]string, 0, len(wrapped))
+		for index, part := range wrapped {
+			prefix := "    "
+			if index == 0 {
+				prefix = markdownBulletStyle.Render("  "+marker) + " "
+			}
+			out = append(out, prefix+styleInlineMarkdown(part))
+		}
+		return out
+	}
+	return renderMarkdownWrapped(line, width, bodyStyle)
 }
 
 func renderMarkdownWrapped(text string, width int, style lipgloss.Style) []string {
