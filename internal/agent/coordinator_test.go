@@ -355,6 +355,44 @@ func TestCoordinator_ZeroGoroutineLeaks(t *testing.T) {
 	}
 }
 
+func TestCoordinatorTerminalEventsReplaceDroppedSubscriberWakeups(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil)
+	defer coord.Close()
+	events, unsubscribe := coord.Subscribe(1)
+	defer unsubscribe()
+
+	coord.broadcast(Event{Kind: EventAgentProgress, AgentID: "a-1"})
+	coord.broadcast(Event{Kind: EventAgentCompleted, AgentID: "a-1"})
+
+	select {
+	case ev := <-events:
+		if ev.Kind != EventAgentCompleted {
+			t.Fatalf("subscriber event = %s, want terminal completion", ev.Kind)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("terminal subscriber event was dropped")
+	}
+}
+
+func TestCoordinatorTerminalEventsReplaceDroppedSinkWakeups(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil)
+	defer coord.Close()
+	coord.eventSink = func(context.Context, Event) error { return nil }
+	coord.eventQueue = make(chan Event, 1)
+
+	coord.emit(context.Background(), Event{Kind: EventAgentProgress, AgentID: "a-1"})
+	coord.emit(context.Background(), Event{Kind: EventAgentFailed, AgentID: "a-1"})
+
+	select {
+	case ev := <-coord.eventQueue:
+		if ev.Kind != EventAgentFailed {
+			t.Fatalf("sink event = %s, want terminal failure", ev.Kind)
+		}
+	default:
+		t.Fatal("terminal sink event was dropped")
+	}
+}
+
 func TestCoordinator_EmitsLifecycleEvents(t *testing.T) {
 	var events []Event
 	var mu sync.Mutex
