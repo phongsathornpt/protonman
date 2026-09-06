@@ -94,16 +94,27 @@ func (c UserCell) RawLines() []string { return rawTextLines(c.Text) }
 func (c UserCell) LineCount() int     { return len(c.RawLines()) }
 
 // AssistantCell is mutable while assistant output is streaming.
-type AssistantCell struct{ Text string }
+type AssistantCell struct {
+	Text        string
+	renderCache assistantRenderCache
+}
 
-func (AssistantCell) Kind() HistoryCellKind { return HistoryCellAssistant }
-func (c AssistantCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
-func (c AssistantCell) RenderWidth(width int) []string {
+type assistantRenderCache struct {
+	width       int
+	processed   int
+	processedAt string
+	lines       []string
+	state       markdownRenderState
+}
+
+func (*AssistantCell) Kind() HistoryCellKind { return HistoryCellAssistant }
+func (c *AssistantCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c *AssistantCell) RenderWidth(width int) []string {
 	text := strings.TrimRight(c.Text, "\n")
 	if text == "" {
 		return nil
 	}
-	lines := renderMarkdownLines(text, maxInt(8, width-2))
+	lines := c.renderMarkdownIncremental(text, maxInt(8, width-2))
 	out := make([]string, 0, len(lines))
 	for index, line := range lines {
 		prefix := "  "
@@ -114,8 +125,61 @@ func (c AssistantCell) RenderWidth(width int) []string {
 	}
 	return out
 }
-func (c AssistantCell) RawLines() []string { return rawTextLines(c.Text) }
-func (c AssistantCell) LineCount() int     { return len(c.RawLines()) }
+
+func (c *AssistantCell) renderMarkdownIncremental(text string, width int) []string {
+	if strings.ContainsRune(text, '\r') {
+		c.renderCache = assistantRenderCache{}
+		return renderMarkdownLines(text, width)
+	}
+	cache := &c.renderCache
+	if cache.width != width || cache.processed > len(text) || !assistantCachePrefixMatches(text, cache) {
+		*cache = assistantRenderCache{width: width}
+	}
+	completeEnd := strings.LastIndexByte(text, '\n') + 1
+	if completeEnd < cache.processed {
+		*cache = assistantRenderCache{width: width}
+	}
+	if cache.processed < completeEnd {
+		segment := text[cache.processed:completeEnd]
+		parts := strings.Split(segment, "\n")
+		for _, raw := range parts[:len(parts)-1] {
+			cache.lines = append(cache.lines, renderMarkdownLine(raw, width, &cache.state)...)
+		}
+		cache.processed = completeEnd
+		cache.processedAt = assistantCacheTail(text[:completeEnd])
+	}
+	out := append([]string(nil), cache.lines...)
+	state := cache.state
+	if tail := text[completeEnd:]; tail != "" {
+		out = append(out, renderMarkdownLine(tail, width, &state)...)
+	}
+	if state.inFence {
+		out = append(out, markdownCodeStyle.Render("  └─ code (unterminated)"))
+	}
+	return trimTrailingBlankLines(out)
+}
+
+func assistantCachePrefixMatches(text string, cache *assistantRenderCache) bool {
+	if cache.processed == 0 || cache.processedAt == "" {
+		return true
+	}
+	if cache.processed > len(text) || len(cache.processedAt) > cache.processed {
+		return false
+	}
+	start := cache.processed - len(cache.processedAt)
+	return text[start:cache.processed] == cache.processedAt
+}
+
+func assistantCacheTail(text string) string {
+	const tailBytes = 64
+	if len(text) <= tailBytes {
+		return text
+	}
+	return text[len(text)-tailBytes:]
+}
+
+func (c *AssistantCell) RawLines() []string { return rawTextLines(c.Text) }
+func (c *AssistantCell) LineCount() int     { return len(c.RawLines()) }
 
 // ToolCell is the generic representation for a tool that has no specialized
 // presentation model.
