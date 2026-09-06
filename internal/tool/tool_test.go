@@ -207,3 +207,41 @@ func TestResultSnapshotContinuationHasStableJSONShape(t *testing.T) {
 		t.Fatalf("JSON = %s, want %s", got, want)
 	}
 }
+
+func TestAnalyzeCommandRedirectionAndExpansionSafety(t *testing.T) {
+	tests := []struct {
+		command string
+		effect  CommandEffect
+		paths   []string
+	}{
+		{`git status >/dev/null 2>&1`, CommandEffectReadOnly, nil},
+		{`printf x &> out.log`, CommandEffectMutating, []string{"out.log"}},
+		{`printf x >| out.log`, CommandEffectMutating, []string{"out.log"}},
+		{`printf x 2> err.log`, CommandEffectMutating, []string{"err.log"}},
+		{`tee TODO.md`, CommandEffectMutating, []string{"TODO.md"}},
+		{`tee`, CommandEffectReadOnly, nil},
+		{`cat "$(rm -f x)"`, CommandEffectUnknown, nil},
+		{`echo hello`, CommandEffectReadOnly, nil},
+		{`printf hello`, CommandEffectReadOnly, nil},
+	}
+	for _, tt := range tests {
+		got := AnalyzeCommand(tt.command)
+		if got.Effect != tt.effect {
+			t.Fatalf("AnalyzeCommand(%q).Effect = %q, want %q (reason=%s)", tt.command, got.Effect, tt.effect, got.Reason)
+		}
+		if !slices.Equal(got.AffectedPaths, tt.paths) {
+			t.Fatalf("AnalyzeCommand(%q).AffectedPaths = %#v, want %#v", tt.command, got.AffectedPaths, tt.paths)
+		}
+	}
+}
+
+func TestAnalyzeCommandMultipleMoveSources(t *testing.T) {
+	got := AnalyzeCommand(`mv a.txt b.txt archive/`)
+	if got.Effect != CommandEffectMutating {
+		t.Fatalf("effect = %q", got.Effect)
+	}
+	want := []string{"a.txt", "b.txt", "archive"}
+	if !slices.Equal(got.AffectedPaths, want) {
+		t.Fatalf("AffectedPaths = %#v, want %#v", got.AffectedPaths, want)
+	}
+}
