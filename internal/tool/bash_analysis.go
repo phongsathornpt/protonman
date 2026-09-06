@@ -19,6 +19,7 @@ const (
 type BashAnalysis struct {
 	Effect        CommandEffect
 	Risk          CommandRisk
+	Scope         CommandScope
 	Confidence    CommandConfidence
 	Reason        string
 	AffectedPaths []string
@@ -36,14 +37,17 @@ func AnalyzeCommand(command string) BashAnalysis {
 		return unknownBashAnalysis("unsupported shell syntax")
 	}
 	if len(segments) == 1 {
-		return analyzeSimpleSegment(segments[0])
+		return normalizeCommandScope(analyzeSimpleSegment(segments[0]))
 	}
 	combined := BashAnalysis{Effect: CommandEffectReadOnly, Confidence: CommandConfidenceCertain, Reason: "all command segments are read only"}
 	for i, segment := range segments {
-		analysis := analyzeSimpleSegment(segment)
+		analysis := normalizeCommandScope(analyzeSimpleSegment(segment))
 		combined.AffectedPaths = appendUniquePaths(combined.AffectedPaths, analysis.AffectedPaths...)
 		if commandRiskRank(analysis.Risk) > commandRiskRank(combined.Risk) {
 			combined.Risk = analysis.Risk
+		}
+		if commandScopeRank(analysis.Scope) > commandScopeRank(combined.Scope) {
+			combined.Scope = analysis.Scope
 		}
 		if analysis.Effect == CommandEffectMutating {
 			combined.Effect = CommandEffectMutating
@@ -129,6 +133,28 @@ func commandRiskRank(risk CommandRisk) int {
 	}
 }
 
+func normalizeCommandScope(analysis BashAnalysis) BashAnalysis {
+	if analysis.Effect == CommandEffectMutating && analysis.Scope == CommandScopeUnknown {
+		analysis.Scope = CommandScopeLocal
+	}
+	return analysis
+}
+
+func commandScopeRank(scope CommandScope) int {
+	switch scope {
+	case CommandScopeDeployment:
+		return 4
+	case CommandScopePublish:
+		return 3
+	case CommandScopeRemote:
+		return 2
+	case CommandScopeLocal:
+		return 1
+	default:
+		return 0
+	}
+}
+
 func unknownBashAnalysis(reason string) BashAnalysis {
 	return BashAnalysis{Effect: CommandEffectUnknown, Confidence: CommandConfidenceUnknown, Reason: reason}
 }
@@ -185,9 +211,40 @@ func analyzeSimpleSegment(segment string) BashAnalysis {
 			return BashAnalysis{Effect: CommandEffectReadOnly, Confidence: CommandConfidenceCertain, Reason: "tee without file operands only writes stdout"}
 		}
 		return BashAnalysis{Effect: CommandEffectMutating, Confidence: CommandConfidenceCertain, Reason: "tee writes file operands", AffectedPaths: paths}
+	case "npm", "pnpm":
+		if len(args) > 0 && args[0] == "publish" {
+			return BashAnalysis{Effect: CommandEffectMutating, Scope: CommandScopePublish, Confidence: CommandConfidenceCertain, Reason: name + " publish publishes a package"}
+		}
+	case "yarn":
+		if len(args) > 0 && args[0] == "publish" || len(args) > 1 && args[0] == "npm" && args[1] == "publish" {
+			return BashAnalysis{Effect: CommandEffectMutating, Scope: CommandScopePublish, Confidence: CommandConfidenceCertain, Reason: "yarn publishes a package"}
+		}
+	case "cargo":
+		if len(args) > 0 && args[0] == "publish" {
+			return BashAnalysis{Effect: CommandEffectMutating, Scope: CommandScopePublish, Confidence: CommandConfidenceCertain, Reason: "cargo publish publishes a crate"}
+		}
+	case "wrangler":
+		if len(args) > 0 && args[0] == "deploy" {
+			return BashAnalysis{Effect: CommandEffectMutating, Scope: CommandScopeDeployment, Confidence: CommandConfidenceCertain, Reason: "wrangler deploy changes a remote deployment"}
+		}
+	case "terraform":
+		if len(args) > 0 && args[0] == "apply" {
+			return BashAnalysis{Effect: CommandEffectMutating, Scope: CommandScopeDeployment, Confidence: CommandConfidenceCertain, Reason: "terraform apply changes remote infrastructure"}
+		}
+		if len(args) > 0 && args[0] == "destroy" {
+			return BashAnalysis{Effect: CommandEffectMutating, Risk: CommandRiskRemoteDestructive, Scope: CommandScopeDeployment, Confidence: CommandConfidenceCertain, Reason: "terraform destroy destructively changes remote infrastructure"}
+		}
+	case "kubectl":
+		if len(args) > 0 && args[0] == "apply" {
+			return BashAnalysis{Effect: CommandEffectMutating, Scope: CommandScopeDeployment, Confidence: CommandConfidenceCertain, Reason: "kubectl apply changes a remote deployment"}
+		}
+		if len(args) > 0 && args[0] == "delete" {
+			return BashAnalysis{Effect: CommandEffectMutating, Risk: CommandRiskRemoteDestructive, Scope: CommandScopeDeployment, Confidence: CommandConfidenceCertain, Reason: "kubectl delete destructively changes a remote deployment"}
+		}
 	default:
 		return unknownBashAnalysis("command effect is not proven")
 	}
+	return unknownBashAnalysis(name + " subcommand effect is not proven")
 }
 
 func analyzeGitCommand(args []string) BashAnalysis {
@@ -213,7 +270,11 @@ func analyzeGitCommand(args []string) BashAnalysis {
 		}
 		return BashAnalysis{Effect: CommandEffectMutating, Risk: gitCommandRisk(args[0], args[1:]), Confidence: CommandConfidenceCertain, Reason: "git branch invocation modifies repository state"}
 	case "add", "apply", "checkout", "switch", "restore", "reset", "clean", "commit", "merge", "rebase", "cherry-pick", "revert", "stash", "tag", "fetch", "pull", "push":
-		return BashAnalysis{Effect: CommandEffectMutating, Risk: gitCommandRisk(args[0], args[1:]), Confidence: CommandConfidenceCertain, Reason: "git " + args[0] + " modifies repository or remote state"}
+		scope := CommandScopeLocal
+		if args[0] == "push" {
+			scope = CommandScopeRemote
+		}
+		return BashAnalysis{Effect: CommandEffectMutating, Risk: gitCommandRisk(args[0], args[1:]), Scope: scope, Confidence: CommandConfidenceCertain, Reason: "git " + args[0] + " modifies repository or remote state"}
 	default:
 		return unknownBashAnalysis("git subcommand effect is not proven")
 	}

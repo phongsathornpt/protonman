@@ -298,6 +298,8 @@ type Request struct {
 	// Effect records the per-call shell effect. Unknown fails closed:
 	// session-grant reuse requires Effect == read_only.
 	Effect tool.CommandEffect
+	// Scope distinguishes local edits from remote, publish, and deployment mutations.
+	Scope tool.CommandScope
 }
 
 // Decision is the result of evaluating a static policy.

@@ -699,6 +699,9 @@ func TestRemoteDestructiveRiskReachesPermissionPrompt(t *testing.T) {
 		if req.Risk != tool.CommandRiskRemoteDestructive {
 			t.Fatalf("request risk = %q, want remote destructive", req.Risk)
 		}
+		if req.Scope != tool.CommandScopeRemote {
+			t.Fatalf("request scope = %q, want remote", req.Scope)
+		}
 		return permission.Resolution{Action: permission.ActionAllow, Scope: permission.GrantScopeOnce}, nil
 	}))
 	call, err := tool.NewCall("force-push", "bash", json.RawMessage(`{"command":"git push --force origin main"}`))
