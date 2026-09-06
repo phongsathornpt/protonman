@@ -57,7 +57,7 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 			continue
 		}
 		if resp.StatusCode == http.StatusOK {
-			return newStream(resp.Body), nil
+			return newStream(resp.Body, anthropicResponseMetadata(resp.Header)), nil
 		}
 		data, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 		resp.Body.Close()
@@ -67,6 +67,21 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 		}
 	}
 	return nil, lastErr
+}
+
+func anthropicResponseMetadata(headers http.Header) sdk.ProviderMetadata {
+	requestID := strings.TrimSpace(headers.Get("request-id"))
+	if requestID == "" {
+		requestID = strings.TrimSpace(headers.Get("x-request-id"))
+	}
+	if requestID == "" {
+		return nil
+	}
+	raw, err := json.Marshal(map[string]string{"request_id": requestID})
+	if err != nil {
+		return nil
+	}
+	return sdk.ProviderMetadata{"anthropic": raw}
 }
 
 func messagesEndpoint(baseURL string) string {

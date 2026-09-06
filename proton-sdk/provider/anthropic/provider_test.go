@@ -40,6 +40,7 @@ func TestAnthropicStreamTextAndRequestMapping(t *testing.T) {
 			t.Fatalf("unexpected tools: %#v", body.Tools)
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Request-Id", "req-anthropic-1")
 		_, _ = w.Write([]byte("data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":10,\"output_tokens\":0,\"cache_read_input_tokens\":2}}}\n\n"))
 		_, _ = w.Write([]byte("data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n"))
 		_, _ = w.Write([]byte("data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hello\"}}\n\n"))
@@ -65,6 +66,9 @@ func TestAnthropicStreamTextAndRequestMapping(t *testing.T) {
 	}
 	if result.Text != "hello" || result.FinishReason != sdk.FinishStop || result.Usage.InputTokens != 10 || result.Usage.OutputTokens != 3 || result.Usage.CachedInputTokens != 2 {
 		t.Fatalf("unexpected result: %#v", result)
+	}
+	if got := string(result.ProviderMetadata["anthropic"]); !strings.Contains(got, `"request_id":"req-anthropic-1"`) {
+		t.Fatalf("provider metadata = %s", got)
 	}
 }
 

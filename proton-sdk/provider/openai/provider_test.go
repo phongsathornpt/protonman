@@ -45,6 +45,7 @@ func TestChatStreamTextAndHeaders(t *testing.T) {
 			t.Fatalf("User-Agent = %q", got)
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("X-Request-Id", "req-openai-1")
 		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"hello\"},\"finish_reason\":null}]}\n\n")
 		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
 	}))
@@ -58,6 +59,9 @@ func TestChatStreamTextAndHeaders(t *testing.T) {
 	events := collectEvents(t, stream)
 	if len(events) != 2 || events[0].Kind != sdk.EventTextDelta || events[0].Text != "hello" || events[1].Kind != sdk.EventFinish || events[1].FinishReason != sdk.FinishStop {
 		t.Fatalf("events = %#v", events)
+	}
+	if got := string(events[1].ProviderMetadata["openai"]); !strings.Contains(got, `"request_id":"req-openai-1"`) {
+		t.Fatalf("provider metadata = %s", got)
 	}
 }
 

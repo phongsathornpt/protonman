@@ -28,10 +28,11 @@ type stream struct {
 	finish   sdk.FinishReason
 	done     bool
 	terminal error
+	metadata sdk.ProviderMetadata
 }
 
-func newStream(body io.ReadCloser) *stream {
-	return &stream{reader: bufio.NewReader(body), closer: body, tools: make(map[int]*toolAccumulator)}
+func newStream(body io.ReadCloser, metadata sdk.ProviderMetadata) *stream {
+	return &stream{reader: bufio.NewReader(body), closer: body, tools: make(map[int]*toolAccumulator), metadata: metadata}
 }
 
 func (s *stream) Next(ctx context.Context) (sdk.Event, error) {
@@ -198,7 +199,7 @@ func (s *stream) processLine(line string) error {
 		if s.finish == "" {
 			s.finish = sdk.FinishStop
 		}
-		s.queue = append(s.queue, sdk.Event{Kind: sdk.EventFinish, FinishReason: s.finish})
+		s.queue = append(s.queue, sdk.Event{Kind: sdk.EventFinish, FinishReason: s.finish, ProviderMetadata: s.metadata})
 		s.done = true
 	case "error":
 		if event.Error != nil {

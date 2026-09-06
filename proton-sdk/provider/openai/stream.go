@@ -29,10 +29,11 @@ type stream struct {
 	done          bool
 	terminalErr   error
 	generatedSeq  uint64
+	metadata      sdk.ProviderMetadata
 }
 
-func newStream(body io.ReadCloser) *stream {
-	return &stream{reader: bufio.NewReader(body), closer: body, chatCalls: map[int]*accumulatedToolCall{}, responseCalls: map[string]*accumulatedToolCall{}}
+func newStream(body io.ReadCloser, metadata sdk.ProviderMetadata) *stream {
+	return &stream{reader: bufio.NewReader(body), closer: body, chatCalls: map[int]*accumulatedToolCall{}, responseCalls: map[string]*accumulatedToolCall{}, metadata: metadata}
 }
 
 type chatChunk struct {
@@ -302,7 +303,7 @@ func (s *stream) finish(reason sdk.FinishReason) {
 		return
 	}
 	s.flushCalls()
-	s.queue = append(s.queue, sdk.Event{Kind: sdk.EventFinish, FinishReason: reason})
+	s.queue = append(s.queue, sdk.Event{Kind: sdk.EventFinish, FinishReason: reason, ProviderMetadata: s.metadata})
 	s.done = true
 }
 
