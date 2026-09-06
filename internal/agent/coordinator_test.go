@@ -732,3 +732,26 @@ func TestRequestRejectsNegativeTimeouts(t *testing.T) {
 		}
 	}
 }
+
+func TestCoordinatorClampsRequestedTimeoutToConfiguredMaximum(t *testing.T) {
+	release := make(chan struct{})
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithDefaultTimeout(20*time.Millisecond),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(context.Context, []model.Message, turn.Sink) (turn.Result, error) {
+				<-release
+				return turn.Result{}, nil
+			}}, nil
+		}),
+	)
+	started := time.Now()
+	_, err := coord.Run(context.Background(), Request{Profile: ProfileExplorer, Task: "clamp", Timeout: time.Second})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Run() error = %v, want configured maximum deadline", err)
+	}
+	if elapsed := time.Since(started); elapsed > 150*time.Millisecond {
+		t.Fatalf("Run() elapsed = %v, requested timeout escaped configured maximum", elapsed)
+	}
+	close(release)
+	_ = coord.Close()
+}
