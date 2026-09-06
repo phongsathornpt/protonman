@@ -46,11 +46,11 @@ func TestProviderSelectViewLaunchViaSlashCommand(t *testing.T) {
 
 	// 2. Render checks
 	rendered := bModel.View()
-	if !strings.Contains(rendered, "Model Providers") {
-		t.Fatalf("expected 'Model Providers' in view, got:\n%s", rendered)
+	if !strings.Contains(rendered, "Providers") {
+		t.Fatalf("expected provider title in view, got:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "(●)") {
-		t.Fatalf("expected '(●)' active radio in view, got:\n%s", rendered)
+	if !strings.Contains(rendered, "✓ Protonman · active") {
+		t.Fatalf("expected active provider marker in view, got:\n%s", rendered)
 	}
 	if !strings.Contains(rendered, "https://api.protonman.dev/v1") {
 		t.Fatalf("expected endpoint in view, got:\n%s", rendered)
@@ -132,13 +132,15 @@ func TestProviderSelectViewNavigationAndConfirm(t *testing.T) {
 		t.Fatalf("expected index 1 after Down, got %d", view.index)
 	}
 
-	// Number key '1' -> jumps to index 0 ("opencode")
+	// Number shortcuts are intentionally ignored so list navigation stays positional.
 	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView)
-	if view.index != 0 {
-		t.Fatalf("expected index 0 after pressing '1', got %d", view.index)
+	if view.index != 1 {
+		t.Fatalf("number shortcut changed provider index to %d", view.index)
 	}
+	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyUp})
+	bModel = updated.(*bubbleModel)
 
 	// Press Enter to confirm switch to "opencode"
 	updated, cmd := bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -488,7 +490,7 @@ func TestProviderSelectWindowing(t *testing.T) {
 	bModel.executeCommand("/provider")
 
 	rendered := bModel.View()
-	if !strings.Contains(rendered, "▼") || !strings.Contains(rendered, "more below") {
+	if !strings.Contains(rendered, "↓") || !strings.Contains(rendered, "more") {
 		t.Fatalf("expected downward scroll indicator for 10 providers, got:\n%s", rendered)
 	}
 
@@ -499,7 +501,39 @@ func TestProviderSelectWindowing(t *testing.T) {
 	}
 
 	rendered = bModel.View()
-	if !strings.Contains(rendered, "▲") || !strings.Contains(rendered, "more above") {
+	if !strings.Contains(rendered, "↑") || !strings.Contains(rendered, "more") {
 		t.Fatalf("expected upward scroll indicator after scrolling down, got:\n%s", rendered)
+	}
+}
+
+func TestProviderSelectPagedNavigation(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	providers := make(map[string]config.ProviderConfig)
+	for i := 0; i < 10; i++ {
+		name := fmt.Sprintf("provider-%02d", i)
+		providers[name] = config.ProviderConfig{Name: name, BaseURL: "https://example.com"}
+	}
+	m.providers = providers
+	m.activeProvider = "provider-00"
+	m.resize(40, 14)
+	m.executeCommand("/provider")
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	m = updated.(*bubbleModel)
+	view := m.bottom.find(providerSelectViewID).(*providerSelectPaneView)
+	if view.index != pickerVisibleRows(m.height, maxProviderListRows) {
+		t.Fatalf("pgdown index = %d", view.index)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	m = updated.(*bubbleModel)
+	view = m.bottom.find(providerSelectViewID).(*providerSelectPaneView)
+	if view.index != len(view.items)-1 {
+		t.Fatalf("end index = %d, want %d", view.index, len(view.items)-1)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyHome})
+	m = updated.(*bubbleModel)
+	view = m.bottom.find(providerSelectViewID).(*providerSelectPaneView)
+	if view.index != 0 {
+		t.Fatalf("home index = %d, want 0", view.index)
 	}
 }
