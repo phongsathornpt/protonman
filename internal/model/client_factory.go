@@ -29,15 +29,3 @@ func NewProviderLanguageModel(
 		return newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID, opts...)
 	}
 }
-
-// NewProviderClient keeps the legacy CLI client boundary available while subagent callers migrate to proton-sdk.
-func NewProviderClient(
-	providerName string,
-	providerType string,
-	baseURL string,
-	apiKey string,
-	modelID string,
-	opts ...ClientOption,
-) Client {
-	return WrapLanguageModel(NewProviderLanguageModel(providerName, providerType, baseURL, apiKey, modelID, opts...))
-}

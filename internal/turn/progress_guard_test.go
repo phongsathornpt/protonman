@@ -11,25 +11,26 @@ import (
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 func TestLoopForcesSynthesisAfterRepeatedNoProgressRead(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []model.Event{
-			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+		{events: []sdk.Event{
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 				ID: "read-1", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`),
 			}},
-			{Kind: model.EventDone},
+			{Kind: sdk.EventDone},
 		}},
-		{events: []model.Event{
-			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+		{events: []sdk.Event{
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 				ID: "read-2", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`),
 			}},
-			{Kind: model.EventDone},
+			{Kind: sdk.EventDone},
 		}},
-		{events: []model.Event{
-			{Kind: model.EventTextDelta, Text: "I already have the file contents."},
-			{Kind: model.EventDone},
+		{events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "I already have the file contents."},
+			{Kind: sdk.EventDone},
 		}},
 	}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow)
@@ -126,12 +127,12 @@ func TestProgressGuardChangedResultIsProgress(t *testing.T) {
 	}
 }
 
-func repeatedReadEvents(id string) []model.Event {
-	return []model.Event{
-		{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+func repeatedReadEvents(id string) []sdk.Event {
+	return []sdk.Event{
+		{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 			ID: id, Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`),
 		}},
-		{Kind: model.EventDone},
+		{Kind: sdk.EventDone},
 	}
 }
 
@@ -176,9 +177,9 @@ func TestLoopForcesSynthesisAfterRetryableFailureBudget(t *testing.T) {
 		{events: repeatedReadEvents("retry-1")},
 		{events: repeatedReadEvents("retry-2")},
 		{events: repeatedReadEvents("retry-3")},
-		{events: []model.Event{
-			{Kind: model.EventTextDelta, Text: "The repeated read timed out, so I stopped retrying."},
-			{Kind: model.EventDone},
+		{events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "The repeated read timed out, so I stopped retrying."},
+			{Kind: sdk.EventDone},
 		}},
 	}}
 	handler := &retryableFailureHandler{definition: readFileDefinition()}
@@ -239,7 +240,7 @@ func TestLoopSuppressesRepeatedPermissionPrompt(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: repeatedReadEvents("deny-1")},
 		{events: repeatedReadEvents("deny-2")},
-		{events: []model.Event{{Kind: model.EventTextDelta, Text: "The read was denied."}, {Kind: model.EventDone}}},
+		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "The read was denied."}, {Kind: sdk.EventDone}}},
 	}}
 	handler := &recordingHandler{definition: readFileDefinition()}
 	policy, err := permission.NewPolicy(permission.Config{Default: permission.ActionAsk})
@@ -259,9 +260,9 @@ func TestLoopSuppressesRepeatedPermissionPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	loop, err := NewLoop(client, service)
+	loop, err := NewLanguageModelLoop(client, service)
 	if err != nil {
-		t.Fatalf("NewLoop() error = %v", err)
+		t.Fatalf("NewLanguageModelLoop() error = %v", err)
 	}
 
 	result, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "read README"}}, nil)
@@ -388,7 +389,7 @@ func TestLoopEmitsPermissionRetrySuppressionTelemetry(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: repeatedReadEvents("deny-1")},
 		{events: repeatedReadEvents("deny-2")},
-		{events: []model.Event{{Kind: model.EventTextDelta, Text: "permission remained denied"}, {Kind: model.EventDone}}},
+		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "permission remained denied"}, {Kind: sdk.EventDone}}},
 	}}
 	handler := &recordingHandler{definition: readFileDefinition()}
 	policy, err := permission.NewPolicy(permission.Config{})
@@ -406,7 +407,7 @@ func TestLoopEmitsPermissionRetrySuppressionTelemetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	loop, err := NewLoop(client, service)
+	loop, err := NewLanguageModelLoop(client, service)
 	if err != nil {
 		t.Fatal(err)
 	}

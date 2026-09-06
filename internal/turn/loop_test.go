@@ -16,14 +16,15 @@ import (
 	"github.com/projectTHORN/proton/internal/skill"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 func TestLoopStreamsTextAndCompletes(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []model.Event{
-			{Kind: model.EventTextDelta, Text: "hello"},
-			{Kind: model.EventTextDelta, Text: " world"},
-			{Kind: model.EventDone},
+		events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "hello"},
+			{Kind: sdk.EventTextDelta, Text: " world"},
+			{Kind: sdk.EventDone},
 		},
 	}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow)
@@ -58,7 +59,7 @@ func TestLoopStreamsTextAndCompletes(t *testing.T) {
 
 func TestLoopRejectsIncompleteModelStream(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []model.Event{{Kind: model.EventTextDelta, Text: "partial"}},
+		events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "partial"}},
 	}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow)
 	events := make([]Event, 0)
@@ -68,7 +69,7 @@ func TestLoopRejectsIncompleteModelStream(t *testing.T) {
 		[]model.Message{{Role: model.RoleUser, Content: "hello"}},
 		collectEvents(&events),
 	)
-	if !errors.Is(err, model.ErrIncompleteStream) {
+	if !errors.Is(err, sdk.ErrIncompleteStream) {
 		t.Fatalf("Run() error = %v, want incomplete stream", err)
 	}
 	if got := events[len(events)-1].Kind; got != EventFailed {
@@ -78,7 +79,7 @@ func TestLoopRejectsIncompleteModelStream(t *testing.T) {
 
 func TestLoopRejectsEmptyModelResponse(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []model.Event{{Kind: model.EventDone}},
+		events: []sdk.Event{{Kind: sdk.EventDone}},
 	}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow)
 
@@ -94,18 +95,18 @@ func TestLoopRejectsEmptyModelResponse(t *testing.T) {
 
 func TestLoopRejectsDuplicateToolCallIDs(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []model.Event{
-			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+		events: []sdk.Event{
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "duplicate",
 				Name:      "read_file",
 				Arguments: json.RawMessage(`{"path":"a.txt"}`),
 			}},
-			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "duplicate",
 				Name:      "read_file",
 				Arguments: json.RawMessage(`{"path":"b.txt"}`),
 			}},
-			{Kind: model.EventDone},
+			{Kind: sdk.EventDone},
 		},
 	}}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow)
@@ -125,13 +126,13 @@ func TestLoopRejectsDuplicateToolCallIDs(t *testing.T) {
 
 func TestLoopCompletesWhenModelRequestsToolAtMaxRounds(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []model.Event{
-			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+		events: []sdk.Event{
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "late-call",
 				Name:      "read_file",
 				Arguments: json.RawMessage(`{"path":"a.txt"}`),
 			}},
-			{Kind: model.EventDone},
+			{Kind: sdk.EventDone},
 		},
 	}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithMaxRounds(1))
@@ -158,13 +159,13 @@ func TestLoopCompletesWhenModelRequestsToolAtMaxRounds(t *testing.T) {
 
 func TestLoopReportsToolCallWhenNoToolsAreAvailable(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []model.Event{
-			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+		events: []sdk.Event{
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "unavailable-call",
 				Name:      "read_file",
 				Arguments: json.RawMessage(`{"path":"a.txt"}`),
 			}},
-			{Kind: model.EventDone},
+			{Kind: sdk.EventDone},
 		},
 	}}}
 	policy, err := permission.NewPolicy(permission.Config{})
@@ -175,9 +176,9 @@ func TestLoopReportsToolCallWhenNoToolsAreAvailable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	loop, err := NewLoop(client, service)
+	loop, err := NewLanguageModelLoop(client, service)
 	if err != nil {
-		t.Fatalf("NewLoop() error = %v", err)
+		t.Fatalf("NewLanguageModelLoop() error = %v", err)
 	}
 	events := make([]Event, 0)
 
@@ -202,18 +203,18 @@ func TestLoopReportsToolCallWhenNoToolsAreAvailable(t *testing.T) {
 
 func TestLoopStopsWhenToolCallBatchExceedsCumulativeLimit(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []model.Event{
-			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+		events: []sdk.Event{
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "over-budget-1",
 				Name:      "read_file",
 				Arguments: json.RawMessage(`{"path":"a.txt"}`),
 			}},
-			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "over-budget-2",
 				Name:      "read_file",
 				Arguments: json.RawMessage(`{"path":"b.txt"}`),
 			}},
-			{Kind: model.EventDone},
+			{Kind: sdk.EventDone},
 		},
 	}}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow, WithMaxToolCalls(1))
@@ -239,17 +240,17 @@ func TestLoopStopsWhenToolCallBatchExceedsCumulativeLimit(t *testing.T) {
 
 func TestLoopAppliesCumulativeToolCallLimitAcrossRounds(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []model.Event{
-			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+		{events: []sdk.Event{
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "budgeted-call",
 				Name:      "read_file",
 				Arguments: json.RawMessage(`{"path":"a.txt"}`),
 			}},
-			{Kind: model.EventDone},
+			{Kind: sdk.EventDone},
 		}},
-		{events: []model.Event{
-			{Kind: model.EventTextDelta, Text: "The budgeted read completed."},
-			{Kind: model.EventDone},
+		{events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "The budgeted read completed."},
+			{Kind: sdk.EventDone},
 		}},
 	}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow, WithMaxToolCalls(1))
@@ -282,14 +283,14 @@ func TestLoopAppliesCumulativeToolCallLimitAcrossRounds(t *testing.T) {
 
 func TestLoopPreservesTextWhenMaxRoundToolCallIsIgnored(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []model.Event{
-			{Kind: model.EventTextDelta, Text: "partial answer"},
-			{Kind: model.EventToolCall, ToolCall: model.ToolCall{
+		events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "partial answer"},
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "late-call",
 				Name:      "read_file",
 				Arguments: json.RawMessage(`{"path":"a.txt"}`),
 			}},
-			{Kind: model.EventDone},
+			{Kind: sdk.EventDone},
 		},
 	}}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow, WithMaxRounds(1))
@@ -315,20 +316,20 @@ func TestLoopPreservesTextWhenMaxRoundToolCallIsIgnored(t *testing.T) {
 
 func TestLoopTranslatesToolCallsAndFeedsResultsBack(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []model.Event{
+		{events: []sdk.Event{
 			{
-				Kind: model.EventToolCall,
+				Kind: sdk.EventToolCall,
 				ToolCall: model.ToolCall{
 					ID:        "call-1",
 					Name:      "read_file",
 					Arguments: json.RawMessage(`{"path":"README.md"}`),
 				},
 			},
-			{Kind: model.EventDone},
+			{Kind: sdk.EventDone},
 		}},
-		{events: []model.Event{
-			{Kind: model.EventTextDelta, Text: "I found it."},
-			{Kind: model.EventDone},
+		{events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "I found it."},
+			{Kind: sdk.EventDone},
 		}},
 	}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow)
@@ -389,20 +390,20 @@ func TestLoopTranslatesToolCallsAndFeedsResultsBack(t *testing.T) {
 
 func TestLoopKeepsPermissionDenialInsideToolConversation(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []model.Event{
+		{events: []sdk.Event{
 			{
-				Kind: model.EventToolCall,
+				Kind: sdk.EventToolCall,
 				ToolCall: model.ToolCall{
 					ID:        "call-denied",
 					Name:      "read_file",
 					Arguments: json.RawMessage(`{"path":".env"}`),
 				},
 			},
-			{Kind: model.EventDone},
+			{Kind: sdk.EventDone},
 		}},
-		{events: []model.Event{
-			{Kind: model.EventTextDelta, Text: "I cannot access that file."},
-			{Kind: model.EventDone},
+		{events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "I cannot access that file."},
+			{Kind: sdk.EventDone},
 		}},
 	}}
 	loop, handler := newTestLoop(t, client, permission.ActionDeny)
@@ -437,22 +438,22 @@ func TestLoopKeepsPermissionDenialInsideToolConversation(t *testing.T) {
 func TestLoopGracefulMaxRoundsSynthesis(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{
-			events: []model.Event{
+			events: []sdk.Event{
 				{
-					Kind: model.EventToolCall,
+					Kind: sdk.EventToolCall,
 					ToolCall: model.ToolCall{
 						ID:        "call-1",
 						Name:      "read_file",
 						Arguments: json.RawMessage(`{"path":"README.md"}`),
 					},
 				},
-				{Kind: model.EventDone},
+				{Kind: sdk.EventDone},
 			},
 		},
 		{
-			events: []model.Event{
-				{Kind: model.EventTextDelta, Text: "Reached max rounds. Accomplished: read README. Remaining: none."},
-				{Kind: model.EventDone},
+			events: []sdk.Event{
+				{Kind: sdk.EventTextDelta, Text: "Reached max rounds. Accomplished: read README. Remaining: none."},
+				{Kind: sdk.EventDone},
 			},
 		},
 	}}
@@ -496,9 +497,9 @@ func TestLoopGracefulMaxRoundsSynthesis(t *testing.T) {
 
 func TestLoopStopsAtMaxRoundsWhenOne(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []model.Event{
-			{Kind: model.EventTextDelta, Text: "Single round synthesis: all set."},
-			{Kind: model.EventDone},
+		events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "Single round synthesis: all set."},
+			{Kind: sdk.EventDone},
 		},
 	}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithMaxRounds(1))
@@ -531,48 +532,48 @@ func TestLoopStopsAtMaxRoundsWhenOne(t *testing.T) {
 func TestLoopUnboundedWhenZero(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{
-			events: []model.Event{
+			events: []sdk.Event{
 				{
-					Kind: model.EventToolCall,
+					Kind: sdk.EventToolCall,
 					ToolCall: model.ToolCall{
 						ID:        "call-1",
 						Name:      "read_file",
 						Arguments: json.RawMessage(`{"path":"a.txt"}`),
 					},
 				},
-				{Kind: model.EventDone},
+				{Kind: sdk.EventDone},
 			},
 		},
 		{
-			events: []model.Event{
+			events: []sdk.Event{
 				{
-					Kind: model.EventToolCall,
+					Kind: sdk.EventToolCall,
 					ToolCall: model.ToolCall{
 						ID:        "call-2",
 						Name:      "read_file",
 						Arguments: json.RawMessage(`{"path":"b.txt"}`),
 					},
 				},
-				{Kind: model.EventDone},
+				{Kind: sdk.EventDone},
 			},
 		},
 		{
-			events: []model.Event{
+			events: []sdk.Event{
 				{
-					Kind: model.EventToolCall,
+					Kind: sdk.EventToolCall,
 					ToolCall: model.ToolCall{
 						ID:        "call-3",
 						Name:      "read_file",
 						Arguments: json.RawMessage(`{"path":"c.txt"}`),
 					},
 				},
-				{Kind: model.EventDone},
+				{Kind: sdk.EventDone},
 			},
 		},
 		{
-			events: []model.Event{
-				{Kind: model.EventTextDelta, Text: "Processed all 3 files unbounded."},
-				{Kind: model.EventDone},
+			events: []sdk.Event{
+				{Kind: sdk.EventTextDelta, Text: "Processed all 3 files unbounded."},
+				{Kind: sdk.EventDone},
 			},
 		},
 	}}
@@ -604,20 +605,20 @@ func TestLoopUnboundedWhenZero(t *testing.T) {
 
 func TestLoopTimesOutIndividualToolCall(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []model.Event{
+		{events: []sdk.Event{
 			{
-				Kind: model.EventToolCall,
+				Kind: sdk.EventToolCall,
 				ToolCall: model.ToolCall{
 					ID:        "call-timeout",
 					Name:      "read_file",
 					Arguments: json.RawMessage(`{"path":"slow.txt"}`),
 				},
 			},
-			{Kind: model.EventDone},
+			{Kind: sdk.EventDone},
 		}},
-		{events: []model.Event{
-			{Kind: model.EventTextDelta, Text: "timed out safely"},
-			{Kind: model.EventDone},
+		{events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "timed out safely"},
+			{Kind: sdk.EventDone},
 		}},
 	}}
 	handler := &contextBlockingHandler{
@@ -686,9 +687,9 @@ func TestLoopCancelsModelStreamWithParentContext(t *testing.T) {
 
 func TestLoopRunsApprovedReadCallsWithBoundedConcurrency(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []model.Event{
+		{events: []sdk.Event{
 			{
-				Kind: model.EventToolCall,
+				Kind: sdk.EventToolCall,
 				ToolCall: model.ToolCall{
 					ID:        "call-read-1",
 					Name:      "read_file",
@@ -696,18 +697,18 @@ func TestLoopRunsApprovedReadCallsWithBoundedConcurrency(t *testing.T) {
 				},
 			},
 			{
-				Kind: model.EventToolCall,
+				Kind: sdk.EventToolCall,
 				ToolCall: model.ToolCall{
 					ID:        "call-read-2",
 					Name:      "read_file",
 					Arguments: json.RawMessage(`{"path":"two.txt"}`),
 				},
 			},
-			{Kind: model.EventDone},
+			{Kind: sdk.EventDone},
 		}},
-		{events: []model.Event{
-			{Kind: model.EventTextDelta, Text: "both read"},
-			{Kind: model.EventDone},
+		{events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "both read"},
+			{Kind: sdk.EventDone},
 		}},
 	}}
 	handler := &parallelHandler{
@@ -867,22 +868,25 @@ func (r *recordingRegistry) Definitions() []tool.Definition {
 }
 
 type scriptedStreamSpec struct {
-	events   []model.Event
+	events   []sdk.Event
 	closeErr error
 }
 
 type scriptedClient struct {
 	streams  []scriptedStreamSpec
-	requests []model.Request
+	requests []sdk.Request
 }
 
-func (c *scriptedClient) Stream(_ context.Context, request model.Request) (model.Stream, error) {
+func (*scriptedClient) Provider() string { return "test" }
+func (*scriptedClient) ModelID() string  { return "scripted" }
+
+func (c *scriptedClient) Stream(_ context.Context, request sdk.Request) (sdk.Stream, error) {
 	if len(c.streams) == 0 {
 		return nil, errors.New("no scripted model stream remains")
 	}
-	c.requests = append(c.requests, model.Request{
-		Messages: model.CloneMessages(request.Messages),
-		Tools:    append([]tool.Definition{}, request.Tools...),
+	c.requests = append(c.requests, sdk.Request{
+		Messages: sdk.CloneMessages(request.Messages),
+		Tools:    append([]sdk.Tool(nil), request.Tools...),
 	})
 	spec := c.streams[0]
 	c.streams = c.streams[1:]
@@ -890,17 +894,17 @@ func (c *scriptedClient) Stream(_ context.Context, request model.Request) (model
 }
 
 type scriptedStream struct {
-	events   []model.Event
+	events   []sdk.Event
 	index    int
 	closeErr error
 }
 
-func (s *scriptedStream) Next(ctx context.Context) (model.Event, error) {
+func (s *scriptedStream) Next(ctx context.Context) (sdk.Event, error) {
 	if err := ctx.Err(); err != nil {
-		return model.Event{}, err
+		return sdk.Event{}, err
 	}
 	if s.index >= len(s.events) {
-		return model.Event{}, io.EOF
+		return sdk.Event{}, io.EOF
 	}
 	event := s.events[s.index]
 	s.index++
@@ -913,7 +917,7 @@ func (s *scriptedStream) Close() error {
 
 func newTestLoop(
 	t *testing.T,
-	client model.Client,
+	client sdk.LanguageModel,
 	action permission.Action,
 	options ...Option,
 ) (*Loop, *recordingHandler) {
@@ -932,7 +936,7 @@ func newTestLoop(
 
 func newLoopForHandler(
 	t *testing.T,
-	client model.Client,
+	client sdk.LanguageModel,
 	handler tool.Handler,
 	action permission.Action,
 	mode permission.Mode,
@@ -956,9 +960,9 @@ func newLoopForHandler(
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	loop, err := NewLoop(client, service, options...)
+	loop, err := NewLanguageModelLoop(client, service, options...)
 	if err != nil {
-		t.Fatalf("NewLoop() error = %v", err)
+		t.Fatalf("NewLanguageModelLoop() error = %v", err)
 	}
 	return loop
 }
@@ -968,16 +972,19 @@ type blockingModelClient struct {
 	once    sync.Once
 }
 
-func (c *blockingModelClient) Stream(context.Context, model.Request) (model.Stream, error) {
+func (*blockingModelClient) Provider() string { return "test" }
+func (*blockingModelClient) ModelID() string  { return "blocking" }
+
+func (c *blockingModelClient) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
 	c.once.Do(func() { close(c.started) })
 	return blockingModelStream{}, nil
 }
 
 type blockingModelStream struct{}
 
-func (blockingModelStream) Next(ctx context.Context) (model.Event, error) {
+func (blockingModelStream) Next(ctx context.Context) (sdk.Event, error) {
 	<-ctx.Done()
-	return model.Event{}, ctx.Err()
+	return sdk.Event{}, ctx.Err()
 }
 
 func (blockingModelStream) Close() error {
@@ -1026,9 +1033,9 @@ func contains(value string, target string) bool {
 
 func TestLoopAugmentsSystemPromptWithSkillCatalog(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []model.Event{
-			{Kind: model.EventTextDelta, Text: "I see the skills"},
-			{Kind: model.EventDone},
+		events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "I see the skills"},
+			{Kind: sdk.EventDone},
 		},
 	}}}
 	catalog := []skill.CatalogItem{
@@ -1071,9 +1078,9 @@ func TestLoopAugmentsSystemPromptWithSkillCatalog(t *testing.T) {
 
 func TestLoopDoesNotDuplicateSkillCatalogMarker(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []model.Event{
-			{Kind: model.EventTextDelta, Text: "ok"},
-			{Kind: model.EventDone},
+		events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "ok"},
+			{Kind: sdk.EventDone},
 		},
 	}}}
 	catalog := []skill.CatalogItem{{
@@ -1102,13 +1109,13 @@ func TestLoopDoesNotDuplicateSkillCatalogMarker(t *testing.T) {
 
 func TestLoopDynamicActiveSkillsWithRegistry(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []model.Event{
-			{Kind: model.EventTextDelta, Text: "ok"},
-			{Kind: model.EventDone},
+		{events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "ok"},
+			{Kind: sdk.EventDone},
 		}},
-		{events: []model.Event{
-			{Kind: model.EventTextDelta, Text: "ok"},
-			{Kind: model.EventDone},
+		{events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "ok"},
+			{Kind: sdk.EventDone},
 		}},
 	}}
 
@@ -1183,9 +1190,9 @@ func TestNewLoopRejectsAllGlobalBoundsDisabled(t *testing.T) {
 		t.Fatalf("NewService() error = %v", err)
 	}
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []model.Event{{Kind: model.EventTextDelta, Text: "done"}, {Kind: model.EventDone}},
+		events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventDone}},
 	}}}
-	_, err = NewLoop(
+	_, err = NewLanguageModelLoop(
 		client,
 		service,
 		WithMaxRounds(0),
@@ -1193,7 +1200,7 @@ func TestNewLoopRejectsAllGlobalBoundsDisabled(t *testing.T) {
 		WithTurnTimeout(0),
 	)
 	if !errors.Is(err, ErrInvalidLoop) {
-		t.Fatalf("NewLoop() error = %v, want ErrInvalidLoop", err)
+		t.Fatalf("NewLanguageModelLoop() error = %v, want ErrInvalidLoop", err)
 	}
 }
 
@@ -1223,7 +1230,7 @@ func TestLoopWholeTurnTimeoutStopsBlockingModel(t *testing.T) {
 
 func TestLoopAllowsUnboundedCountsWithFiniteTurnTimeout(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []model.Event{{Kind: model.EventTextDelta, Text: "bounded by time"}, {Kind: model.EventDone}},
+		events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "bounded by time"}, {Kind: sdk.EventDone}},
 	}}}
 	loop, _ := newTestLoop(
 		t,
