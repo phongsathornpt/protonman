@@ -51,10 +51,25 @@ func (m bubbleModel) statusView() string {
 			agents += "s"
 		}
 		parts = append(parts, agents)
+		if runningAgents > 0 {
+			parts = append(parts, fmt.Sprintf("%d running", runningAgents))
+		}
+		if queuedAgents > 0 {
+			parts = append(parts, fmt.Sprintf("%d queued", queuedAgents))
+		}
 		if cancelingAgents > 0 {
 			parts = append(parts, fmt.Sprintf("%d canceling", cancelingAgents))
-		} else if runningAgents == 0 && queuedAgents > 0 {
-			parts = append(parts, "queued")
+		}
+		if activeAgents == 1 {
+			for _, st := range m.agentSnapshot {
+				if st.State.Terminal() {
+					continue
+				}
+				if activity := strings.TrimSpace(m.agentActivity[st.ID]); activity != "" {
+					parts = append(parts, activity)
+				}
+				break
+			}
 		}
 	}
 	if !m.busyStarted.IsZero() {
