@@ -605,6 +605,9 @@ type HistoryState struct {
 	cachedRaw      []string
 	cacheValid     bool
 	cachedWidth    int
+	altRender      []string
+	altRenderValid bool
+	altRenderWidth int
 	spinnerFrame   string
 	committedLines int
 }
@@ -645,6 +648,7 @@ func (s *HistoryState) SetSpinnerFrame(frame string) {
 		if r, ok := cell.(runningHistoryTool); ok && r.historyToolRunning() {
 			setCellSpinner(cell, frame)
 			s.cacheValid = false
+			s.altRenderValid = false
 		}
 	}
 }
@@ -691,6 +695,7 @@ func (s *HistoryState) Append(cell HistoryCell) {
 	s.committed = append(s.committed, cell)
 	s.committedLines += historyCellLineCount(cell, s.renderWidth)
 	s.cacheValid = false
+	s.altRenderValid = false
 	s.trim()
 }
 
@@ -763,6 +768,7 @@ func (s *HistoryState) CompleteToolCall(callID string, name string, completed Hi
 		s.committed[i] = completed
 		s.committedLines += historyCellLineCount(completed, s.renderWidth)
 		s.cacheValid = false
+		s.altRenderValid = false
 		s.trim()
 		return
 	}
@@ -792,6 +798,7 @@ func (s *HistoryState) CommitActive() {
 	s.committedLines += historyCellLineCount(s.active, s.renderWidth)
 	s.active = nil
 	s.cacheValid = false
+	s.altRenderValid = false
 	s.trim()
 }
 
@@ -799,13 +806,16 @@ func (s *HistoryState) Reset() {
 	s.committed = s.committed[:0]
 	s.active = nil
 	s.cacheValid = false
+	s.altRenderValid = false
 	s.cachedRender = nil
+	s.altRender = nil
 	s.cachedRaw = nil
 	s.committedLines = 0
 }
 
 func (s *HistoryState) InvalidateCache() {
 	s.cacheValid = false
+	s.altRenderValid = false
 }
 
 func (s *HistoryState) buildCommittedCache() {
@@ -850,20 +860,36 @@ func (s *HistoryState) RenderLinesAt(width int) []string {
 	if width <= 0 {
 		width = s.renderWidth
 	}
-	lines := make([]string, 0, len(s.committed)*4)
+	if width == s.renderWidth {
+		return s.RenderLines()
+	}
+	s.buildAlternateRenderCache(width)
+	if s.active == nil {
+		return append([]string(nil), s.altRender...)
+	}
+	activeLines := renderHistoryCell(s.active, width)
+	out := make([]string, len(s.altRender), len(s.altRender)+len(activeLines)+1)
+	copy(out, s.altRender)
+	if len(out) > 0 {
+		out = append(out, "")
+	}
+	return append(out, activeLines...)
+}
+
+func (s *HistoryState) buildAlternateRenderCache(width int) {
+	if s.altRenderValid && s.altRenderWidth == width {
+		return
+	}
+	render := make([]string, 0, len(s.committed)*4)
 	for index, cell := range s.committed {
 		if index > 0 {
-			lines = append(lines, "")
+			render = append(render, "")
 		}
-		lines = append(lines, renderHistoryCell(cell, width)...)
+		render = append(render, renderHistoryCell(cell, width)...)
 	}
-	if s.active != nil {
-		if len(lines) > 0 {
-			lines = append(lines, "")
-		}
-		lines = append(lines, renderHistoryCell(s.active, width)...)
-	}
-	return lines
+	s.altRender = render
+	s.altRenderWidth = width
+	s.altRenderValid = true
 }
 
 func (s *HistoryState) Raw() string {
@@ -887,6 +913,7 @@ func (s *HistoryState) trim() {
 		s.committed = s.committed[1:]
 		s.committedLines -= historyCellLineCount(popped, s.renderWidth)
 		s.cacheValid = false
+		s.altRenderValid = false
 	}
 	if s.committedLines < 0 {
 		s.committedLines = 0
