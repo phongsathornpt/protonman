@@ -1256,8 +1256,8 @@ func TestCoordinatorMaxLiveAgents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := coord.Spawn(context.Background(), Request{Profile: ProfileExplorer, Task: "two"}); err == nil || !strings.Contains(err.Error(), "maximum live subagents") {
-		t.Fatalf("second Spawn error=%v", err)
+	if _, err := coord.Spawn(context.Background(), Request{Profile: ProfileExplorer, Task: "two"}); !errors.Is(err, ErrLiveLimit) {
+		t.Fatalf("second Spawn error=%v, want ErrLiveLimit", err)
 	}
 	close(release)
 	_, _ = coord.Wait(context.Background(), h.ID, time.Second)
