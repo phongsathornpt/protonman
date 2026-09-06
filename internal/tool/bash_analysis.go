@@ -18,6 +18,7 @@ const (
 // execution metadata, and UI. Unknown constructs always fail closed.
 type BashAnalysis struct {
 	Effect        CommandEffect
+	Risk          CommandRisk
 	Confidence    CommandConfidence
 	Reason        string
 	AffectedPaths []string
@@ -41,6 +42,9 @@ func AnalyzeCommand(command string) BashAnalysis {
 	for i, segment := range segments {
 		analysis := analyzeSimpleSegment(segment)
 		combined.AffectedPaths = appendUniquePaths(combined.AffectedPaths, analysis.AffectedPaths...)
+		if commandRiskRank(analysis.Risk) > commandRiskRank(combined.Risk) {
+			combined.Risk = analysis.Risk
+		}
 		if analysis.Effect == CommandEffectMutating {
 			combined.Effect = CommandEffectMutating
 			combined.Confidence = analysis.Confidence
@@ -58,6 +62,17 @@ func AnalyzeCommand(command string) BashAnalysis {
 // ClassifyCommandEffect preserves the existing API while delegating to the
 // richer analyzer.
 func ClassifyCommandEffect(command string) CommandEffect { return AnalyzeCommand(command).Effect }
+
+func commandRiskRank(risk CommandRisk) int {
+	switch risk {
+	case CommandRiskRemoteDestructive:
+		return 2
+	case CommandRiskDestructive:
+		return 1
+	default:
+		return 0
+	}
+}
 
 func unknownBashAnalysis(reason string) BashAnalysis {
 	return BashAnalysis{Effect: CommandEffectUnknown, Confidence: CommandConfidenceUnknown, Reason: reason}
@@ -92,7 +107,7 @@ func analyzeSimpleSegment(segment string) BashAnalysis {
 	case "find":
 		for _, arg := range args {
 			if arg == "-delete" {
-				return BashAnalysis{Effect: CommandEffectMutating, Confidence: CommandConfidenceCertain, Reason: "find -delete modifies filesystem state"}
+				return BashAnalysis{Effect: CommandEffectMutating, Risk: CommandRiskDestructive, Confidence: CommandConfidenceCertain, Reason: "find -delete modifies filesystem state"}
 			}
 			if arg == "-exec" || arg == "-execdir" || arg == "-ok" || arg == "-okdir" {
 				return unknownBashAnalysis("find executes an arbitrary command")
@@ -101,7 +116,9 @@ func analyzeSimpleSegment(segment string) BashAnalysis {
 		return BashAnalysis{Effect: CommandEffectReadOnly, Confidence: CommandConfidenceCertain, Reason: "find without execution/delete is read only"}
 	case "git":
 		return analyzeGitCommand(args)
-	case "rm", "rmdir", "touch", "mkdir", "chmod", "chown", "truncate", "install", "ln":
+	case "rm", "rmdir", "truncate":
+		return BashAnalysis{Effect: CommandEffectMutating, Risk: CommandRiskDestructive, Confidence: CommandConfidenceCertain, Reason: name + " destructively modifies filesystem state", AffectedPaths: literalMutationPaths(name, args)}
+	case "touch", "mkdir", "chmod", "chown", "install", "ln":
 		return BashAnalysis{Effect: CommandEffectMutating, Confidence: CommandConfidenceCertain, Reason: name + " modifies filesystem state", AffectedPaths: literalMutationPaths(name, args)}
 	case "cp":
 		return BashAnalysis{Effect: CommandEffectMutating, Confidence: CommandConfidenceCertain, Reason: "cp modifies filesystem state", AffectedPaths: copyMovePaths(args, false)}
@@ -139,12 +156,62 @@ func analyzeGitCommand(args []string) BashAnalysis {
 		if classifyGitBranchCommand(args[1:]) == CommandEffectReadOnly {
 			return BashAnalysis{Effect: CommandEffectReadOnly, Confidence: CommandConfidenceCertain, Reason: "git branch invocation is read only"}
 		}
-		return BashAnalysis{Effect: CommandEffectMutating, Confidence: CommandConfidenceCertain, Reason: "git branch invocation modifies repository state"}
+		return BashAnalysis{Effect: CommandEffectMutating, Risk: gitCommandRisk(args[0], args[1:]), Confidence: CommandConfidenceCertain, Reason: "git branch invocation modifies repository state"}
 	case "add", "apply", "checkout", "switch", "restore", "reset", "clean", "commit", "merge", "rebase", "cherry-pick", "revert", "stash", "tag", "fetch", "pull", "push":
-		return BashAnalysis{Effect: CommandEffectMutating, Confidence: CommandConfidenceCertain, Reason: "git " + args[0] + " modifies repository or remote state"}
+		return BashAnalysis{Effect: CommandEffectMutating, Risk: gitCommandRisk(args[0], args[1:]), Confidence: CommandConfidenceCertain, Reason: "git " + args[0] + " modifies repository or remote state"}
 	default:
 		return unknownBashAnalysis("git subcommand effect is not proven")
 	}
+}
+
+func gitCommandRisk(subcommand string, args []string) CommandRisk {
+	hasShortFlag := func(flag byte) bool {
+		for _, arg := range args {
+			if len(arg) > 1 && strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") && strings.ContainsRune(arg[1:], rune(flag)) {
+				return true
+			}
+		}
+		return false
+	}
+	hasArg := func(want string) bool {
+		for _, arg := range args {
+			if arg == want || strings.HasPrefix(arg, want+"=") {
+				return true
+			}
+		}
+		return false
+	}
+	switch subcommand {
+	case "reset":
+		if hasArg("--hard") {
+			return CommandRiskDestructive
+		}
+	case "clean":
+		if hasArg("--force") || hasShortFlag('f') {
+			return CommandRiskDestructive
+		}
+	case "checkout", "switch":
+		if hasArg("--force") || hasShortFlag('f') || hasArg("--") {
+			return CommandRiskDestructive
+		}
+	case "restore":
+		return CommandRiskDestructive
+	case "branch":
+		if hasArg("--delete") || hasShortFlag('d') || hasShortFlag('D') {
+			return CommandRiskDestructive
+		}
+	case "stash":
+		for _, arg := range args {
+			if arg == "drop" || arg == "clear" {
+				return CommandRiskDestructive
+			}
+		}
+	case "push":
+		if hasArg("--force") || hasArg("--force-with-lease") || hasShortFlag('f') {
+			return CommandRiskRemoteDestructive
+		}
+	}
+	return CommandRiskNormal
 }
 
 func classifyGitBranchCommand(args []string) CommandEffect {

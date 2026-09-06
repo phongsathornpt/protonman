@@ -30,6 +30,9 @@ const (
 // CommandEffect classifies the observable state impact of a shell command.
 type CommandEffect string
 
+// CommandRisk classifies proven destructive behavior independently from generic mutability.
+type CommandRisk string
+
 const (
 	MutabilityUnspecified Mutability = ""
 	MutabilityReadOnly    Mutability = "read_only"
@@ -40,6 +43,12 @@ const (
 	CommandEffectUnknown  CommandEffect = "unknown"
 	CommandEffectReadOnly CommandEffect = "read_only"
 	CommandEffectMutating CommandEffect = "mutating"
+)
+
+const (
+	CommandRiskNormal            CommandRisk = ""
+	CommandRiskDestructive       CommandRisk = "destructive"
+	CommandRiskRemoteDestructive CommandRisk = "remote_destructive"
 )
 
 const (
