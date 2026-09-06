@@ -124,3 +124,27 @@ func TestResolveExplicitReasoningAllowsUnknownMetadata(t *testing.T) {
 		t.Fatalf("ResolveExplicitReasoning(xhigh) = %q, %v", got, err)
 	}
 }
+
+func TestResolveReasoningRecordsPortableClampProvenance(t *testing.T) {
+	profile := Resolved{Reasoning: Reasoning{
+		Support: SupportYes, Levels: []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningMedium},
+	}}
+	got, err := profile.ResolveReasoning(sdk.ReasoningHigh, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Requested != sdk.ReasoningHigh || got.Effective != sdk.ReasoningMedium || got.Source != ReasoningSourceAgentProfile || !got.Clamped {
+		t.Fatalf("resolution = %+v", got)
+	}
+}
+
+func TestResolveReasoningRecordsExplicitProvenance(t *testing.T) {
+	profile := Resolved{Reasoning: Reasoning{Support: SupportUnknown}}
+	got, err := profile.ResolveReasoning(sdk.ReasoningXHigh, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Effective != sdk.ReasoningXHigh || got.Source != ReasoningSourceExplicit || got.Clamped {
+		t.Fatalf("resolution = %+v", got)
+	}
+}

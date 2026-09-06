@@ -10,11 +10,13 @@ func TestRenderComposesRuntimeContracts(t *testing.T) {
 		Role: "You inspect code.", Profile: "reviewer", Provider: "google", ModelID: "gemini-3.8-flash",
 		Workspace: "/repo", ToolNames: []string{"grep", "get_todo", "delegate_task", "grep"}, MaxRounds: 10, MaxToolCalls: 64,
 		TaskPlanEnabled: true, DelegationEnabled: true, MutationEnabled: true, Skills: "skill instructions",
+		ReasoningRequested: "high", ReasoningEffective: "medium", ReasoningSource: "agent_profile", ReasoningClamped: true,
 	})
 	for _, want := range []string{
 		`<proton-system-prompt version="2">`, "# Execution Contract", "# Tool Protocol", "# Task Plan Protocol",
 		"# Delegation Protocol", "Gemini guidance", "# Editing And Verification", "provider=google", "model=gemini-3.8-flash",
 		"Workspace root: /repo", "skill instructions", "Available tools: delegate_task, get_todo, grep.",
+		"reasoning_requested=high", "reasoning_effective=medium", "reasoning_source=agent_profile", "reasoning_clamped=true",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("prompt missing %q:\n%s", want, got)

@@ -7,6 +7,48 @@ import (
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
+// ReasoningSource identifies the policy layer that selected the effective effort.
+type ReasoningSource string
+
+const (
+	ReasoningSourceProviderDefault ReasoningSource = "provider_default"
+	ReasoningSourceAgentProfile    ReasoningSource = "agent_profile"
+	ReasoningSourceExplicit        ReasoningSource = "explicit"
+)
+
+// ReasoningResolution records the requested and effective effort plus provenance.
+type ReasoningResolution struct {
+	Requested sdk.ReasoningEffort
+	Effective sdk.ReasoningEffort
+	Source    ReasoningSource
+	Clamped   bool
+}
+
+// ResolveReasoning applies explicit or portable profile semantics in one place.
+func (r Resolved) ResolveReasoning(requested sdk.ReasoningEffort, explicit bool) (ReasoningResolution, error) {
+	resolution := ReasoningResolution{Requested: requested, Source: ReasoningSourceProviderDefault}
+	if requested == sdk.ReasoningDefault {
+		return resolution, nil
+	}
+	if explicit {
+		effective, err := r.ResolveExplicitReasoning(requested)
+		if err != nil {
+			return resolution, err
+		}
+		resolution.Effective = effective
+		resolution.Source = ReasoningSourceExplicit
+		return resolution, nil
+	}
+	effective, ok := r.ResolveProfileReasoning(requested)
+	if !ok {
+		return resolution, nil
+	}
+	resolution.Effective = effective
+	resolution.Source = ReasoningSourceAgentProfile
+	resolution.Clamped = effective != requested
+	return resolution, nil
+}
+
 // ResolveProfileReasoning maps a portable agent-profile preference onto the
 // levels known to be supported by this model. Unknown/unsupported profiles
 // preserve the provider default by returning ok=false.

@@ -17,6 +17,10 @@ type Spec struct {
 	ToolNames           []string
 	MaxRounds           int
 	MaxToolCalls        int
+	ReasoningRequested  string
+	ReasoningEffective  string
+	ReasoningSource     string
+	ReasoningClamped    bool
 	TaskPlanEnabled     bool
 	DelegationEnabled   bool
 	MutationEnabled     bool
@@ -184,6 +188,18 @@ func runtimeSection(spec Spec) string {
 	}
 	if spec.MaxToolCalls > 0 {
 		lines = append(lines, fmt.Sprintf("max_tool_calls=%d", spec.MaxToolCalls))
+	}
+	if requested := strings.TrimSpace(spec.ReasoningRequested); requested != "" {
+		lines = append(lines, "reasoning_requested="+requested)
+	}
+	if effective := strings.TrimSpace(spec.ReasoningEffective); effective != "" {
+		lines = append(lines, "reasoning_effective="+effective)
+	}
+	if source := strings.TrimSpace(spec.ReasoningSource); source != "" {
+		lines = append(lines, "reasoning_source="+source)
+	}
+	if spec.ReasoningClamped {
+		lines = append(lines, "reasoning_clamped=true")
 	}
 	if len(lines) == 0 {
 		return ""
