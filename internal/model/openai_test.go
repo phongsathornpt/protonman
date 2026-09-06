@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/buildinfo"
 	"github.com/projectTHORN/proton/internal/tool"
 )
 
@@ -254,8 +255,8 @@ func TestOpenAIClientHeaders(t *testing.T) {
 	defer stream.Close()
 	_, _ = stream.Next(context.Background())
 
-	if receivedHeaders.Get("User-Agent") != "Proton/1.0" {
-		t.Errorf("expected User-Agent Proton/1.0, got %q", receivedHeaders.Get("User-Agent"))
+	if receivedHeaders.Get("User-Agent") != buildinfo.UserAgent() {
+		t.Errorf("expected User-Agent %q, got %q", buildinfo.UserAgent(), receivedHeaders.Get("User-Agent"))
 	}
 	if receivedHeaders.Get("x-session-affinity") != "sess-standard" {
 		t.Errorf("expected x-session-affinity sess-standard, got %q", receivedHeaders.Get("x-session-affinity"))
@@ -312,8 +313,8 @@ func TestOpenAIClientHeaders(t *testing.T) {
 	if receivedHeaders.Get("x-session-affinity") != "sess-opencode-123" {
 		t.Errorf("expected x-session-affinity 'sess-opencode-123', got %q", receivedHeaders.Get("x-session-affinity"))
 	}
-	if receivedHeaders.Get("User-Agent") != "Proton/1.0" {
-		t.Errorf("expected User-Agent 'Proton/1.0', got %q", receivedHeaders.Get("User-Agent"))
+	if receivedHeaders.Get("User-Agent") != buildinfo.UserAgent() {
+		t.Errorf("expected User-Agent %q, got %q", buildinfo.UserAgent(), receivedHeaders.Get("User-Agent"))
 	}
 	if receivedHeaders.Get("Authorization") != "" {
 		t.Errorf("expected empty Authorization header for free opencode tier, got %q", receivedHeaders.Get("Authorization"))

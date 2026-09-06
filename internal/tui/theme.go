@@ -1,6 +1,9 @@
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"github.com/charmbracelet/lipgloss"
+	"github.com/projectTHORN/proton/internal/buildinfo"
+)
 
 const (
 	glyphPrompt      = "› "
@@ -21,13 +24,13 @@ const (
 	glyphGeneric     = "· "
 	glyphTodoPending = "○ "
 	glyphTodoActive  = "● "
-	appVersion       = "dev"
 )
 
 // Prefer terminal-native ANSI colors so Proton remains readable across light,
 // dark and customized terminal themes. Primary body text intentionally uses
 // the terminal's default foreground.
 var (
+	appVersion      = buildinfo.Version()
 	accentAssistant = lipgloss.Color("5")                             // magenta: Proton identity
 	accentUser      = lipgloss.Color("6")                             // cyan: input/selection
 	accentTool      = lipgloss.AdaptiveColor{Light: "240", Dark: "8"} // dim tool chrome

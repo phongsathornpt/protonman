@@ -1,6 +1,7 @@
 package model
 
 import (
+	"github.com/projectTHORN/proton/internal/buildinfo"
 	"net/http"
 	"strings"
 	"time"
@@ -41,7 +42,7 @@ func WithClientName(clientName string) OpenAIOption {
 	}
 }
 
-// WithUserAgent sets a custom User-Agent header (defaults to "Proton/1.0").
+// WithUserAgent sets a custom User-Agent header.
 func WithUserAgent(userAgent string) OpenAIOption {
 	return func(c *openAIClientConfig) {
 		c.userAgent = userAgent
@@ -59,7 +60,7 @@ func newOpenAIClientConfig(baseURL string, apiKey string, modelID string) openAI
 		apiKey:     apiKey,
 		modelID:    strings.TrimSpace(modelID),
 		clientName: "proton",
-		userAgent:  "Proton/1.0",
+		userAgent:  buildinfo.UserAgent(),
 		httpClient: &http.Client{
 			Timeout: 5 * time.Minute,
 		},
