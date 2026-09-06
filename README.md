@@ -52,8 +52,9 @@ Proton isolates external effects behind strict application boundaries. External 
 ## Quick Start
 
 ### Prerequisites
-- Go 1.27+ installed (macOS 13+ required per Go 1.27)
+- Go 1.27+ installed
 - Git
+- Linux sandbox profiles currently require `bwrap`; `--sandbox off` does not
 
 ### Running Proton
 
@@ -193,7 +194,7 @@ When prompted in `ask` mode:
 
 Proton can confine sub-processes via OS-level sandboxing:
 - **macOS**: Evaluates seatbelt confinement profiles via `sandbox-exec`.
-- **Linux**: Uses bubblewrap (`bwrap`) or kernel unshare namespaces.
+- **Linux**: Uses bubblewrap (`bwrap`) for filesystem confinement today; native Go/Linux confinement is being introduced incrementally.
 
 | Profile | Workspace Files | Host Filesystem | Network Access |
 | :--- | :--- | :--- | :--- |

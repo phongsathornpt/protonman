@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os/exec"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 	"time"
 )
 
@@ -18,8 +20,8 @@ func configureCommand(cmd *exec.Cmd) {
 		if cmd.Process == nil {
 			return nil
 		}
-		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		if errors.Is(err, syscall.ESRCH) {
+		err := unix.Kill(-cmd.Process.Pid, unix.SIGKILL)
+		if errors.Is(err, unix.ESRCH) {
 			return nil
 		}
 		return err
