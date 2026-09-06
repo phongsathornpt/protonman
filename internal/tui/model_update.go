@@ -114,7 +114,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				pv.fetchCancel = nil
 				if message.err == nil && len(message.models) > 0 {
-					m.modelsCatalog = message.models
+					m.modelCatalogs.set(message.providerName, message.models)
 				}
 				if message.err != nil {
 					pv.state = providerStateError
@@ -130,7 +130,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if pane := m.bottom.find(modelSelectViewID); pane != nil {
 			if mv, ok := pane.(*modelSelectPaneView); ok {
 				if message.requestID == 0 && message.err == nil && len(message.models) > 0 {
-					m.modelsCatalog = message.models
+					m.modelCatalogs.set(message.providerName, message.models)
 					mv.models = message.models
 					m.relayout()
 				}
