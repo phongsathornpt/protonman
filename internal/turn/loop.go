@@ -37,11 +37,13 @@ const (
 	DefaultTurnTimeout = runtimepolicy.TurnTimeout
 	// DefaultRoundTimeout bounds a turn round when callers do not provide a
 	// stricter timeout.
-	DefaultRoundTimeout    = runtimepolicy.RoundTimeout
-	defaultMaxRounds       = DefaultMaxRounds
-	defaultMaxToolCalls    = DefaultMaxToolCalls
-	defaultMaxParallelRead = 4
-	skillPromptMarker      = "<!-- proton:skill-catalog -->"
+	DefaultRoundTimeout               = runtimepolicy.RoundTimeout
+	DefaultMaxToolResultBytesPerRound = runtimepolicy.TurnToolResultBytesPerRound
+	DefaultMaxToolResultBytesPerTurn  = runtimepolicy.TurnToolResultBytesPerTurn
+	defaultMaxRounds                  = DefaultMaxRounds
+	defaultMaxToolCalls               = DefaultMaxToolCalls
+	defaultMaxParallelRead            = 4
+	skillPromptMarker                 = "<!-- proton:skill-catalog -->"
 )
 
 // MaxRoundsPrompt is injected when the turn reaches max rounds to compel a final synthesis response without tools.
@@ -228,6 +230,26 @@ func WithMaxIdenticalNoProgressResults(limit int) Option {
 	}
 }
 
+func WithMaxToolResultBytesPerRound(limit int) Option {
+	return func(loop *Loop) error {
+		if limit < 0 {
+			return fmt.Errorf("%w: max tool-result bytes per round cannot be negative", ErrInvalidLoop)
+		}
+		loop.maxToolResultBytesPerRound = limit
+		return nil
+	}
+}
+
+func WithMaxToolResultBytesPerTurn(limit int) Option {
+	return func(loop *Loop) error {
+		if limit < 0 {
+			return fmt.Errorf("%w: max tool-result bytes per turn cannot be negative", ErrInvalidLoop)
+		}
+		loop.maxToolResultBytesPerTurn = limit
+		return nil
+	}
+}
+
 // WithTurnTimeout bounds one complete model/tool turn. Zero disables this
 // bound, which is only valid when another global execution limit remains set.
 func WithTurnTimeout(timeout time.Duration) Option {
@@ -300,6 +322,8 @@ type Loop struct {
 	roundTimeout                  time.Duration
 	toolTimeout                   time.Duration
 	maxParallelReads              int
+	maxToolResultBytesPerRound    int
+	maxToolResultBytesPerTurn     int
 	skills                        []skill.CatalogItem
 	skillRegistry                 *skill.Registry
 }
@@ -326,6 +350,8 @@ func NewLoop(languageModel sdk.LanguageModel, tools *toolcall.Service, options .
 		turnTimeout:                   DefaultTurnTimeout,
 		roundTimeout:                  DefaultRoundTimeout,
 		maxParallelReads:              defaultMaxParallelRead,
+		maxToolResultBytesPerRound:    DefaultMaxToolResultBytesPerRound,
+		maxToolResultBytesPerTurn:     DefaultMaxToolResultBytesPerTurn,
 	}
 	for _, option := range options {
 		if option == nil {
@@ -419,6 +445,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	toolCallsUsed := 0
 	definitions := l.tools.Definitions()
 	progress := newProgressGuard(definitions, l.maxIdenticalNoProgressResults)
+	resultBudget := newToolResultBudget(l.maxToolResultBytesPerRound, l.maxToolResultBytesPerTurn)
 	verification := VerificationState{}
 	forceNoProgressSynthesis := false
 
@@ -538,7 +565,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			terminalReason = "context_budget_exceeded"
 			return l.fail(ctx, sink, round, err)
 		}
-		outcome, err := l.runRound(ctx, round, request, dispatch, progress, sink)
+		outcome, err := l.runRound(ctx, round, request, dispatch, progress, resultBudget, sink)
 		if err != nil {
 			terminalReason = "round_failed"
 			return l.fail(ctx, sink, round, err)
@@ -743,6 +770,7 @@ func (l *Loop) runRound(
 	request sdk.Request,
 	dispatch toolDispatchState,
 	progress *progressGuard,
+	resultBudget *toolResultBudget,
 	sink Sink,
 ) (roundOutcome, error) {
 	roundContext, cancel := l.newRoundContext(parent)
@@ -855,6 +883,9 @@ func (l *Loop) runRound(
 		for index, execution := range dispatched {
 			executions[pendingIndexes[index]] = execution
 		}
+	}
+	if resultBudget != nil {
+		executions = resultBudget.applyRound(executions)
 	}
 	logExecutionSummary(roundContext, round, executions)
 	if err := roundContext.Err(); err != nil {
