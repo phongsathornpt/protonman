@@ -724,7 +724,7 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 	case providerStateConfirmOverwrite:
 		switch message.String() {
 		case "enter":
-			return true, v.beginFetch()
+			return true, v.beginFetch(m.ctx)
 		case "esc":
 			v.state = providerStateInput
 			v.focusIndex = int(providerFieldName)
@@ -784,7 +784,7 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 				v.state = providerStateConfirmOverwrite
 				return true, nil
 			}
-			return true, v.beginFetch()
+			return true, v.beginFetch(m.ctx)
 		default:
 			var cmd tea.Cmd
 			switch v.focusIndex {
@@ -825,12 +825,15 @@ type providerFetchRequest struct {
 	apiKey       string
 }
 
-func (v *providerPaneView) beginFetch() tea.Cmd {
+func (v *providerPaneView) beginFetch(parent context.Context) tea.Cmd {
 	if v.fetchCancel != nil {
 		v.fetchCancel()
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithCancel(parent)
 	v.fetchCancel = cancel
 	v.fetchRequestID++
 	v.state = providerStateFetching
