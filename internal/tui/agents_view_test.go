@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/model"
@@ -76,4 +77,32 @@ func TestAgentLifecycleMessageRefreshesSnapshot(t *testing.T) {
 		t.Fatalf("agent snapshot=%#v", m.agentSnapshot)
 	}
 	close(release)
+}
+
+func TestAgentsViewPrioritizesActiveAndShowsCanceling(t *testing.T) {
+	now := time.Now()
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.agentSnapshot = []agent.AgentStatus{
+		{ID: "done-1", Task: "old result", State: agent.StateCompleted, StartedAt: now.Add(-20 * time.Second), FinishedAt: now.Add(-15 * time.Second)},
+		{ID: "done-2", Task: "new result", State: agent.StateCompleted, StartedAt: now.Add(-10 * time.Second), FinishedAt: now.Add(-9 * time.Second)},
+		{ID: "run-1", Task: "inspect active", State: agent.StateRunning, StartedAt: now.Add(-3 * time.Second)},
+		{ID: "cancel-1", Task: "stop active", State: agent.StateCanceling, StartedAt: now.Add(-4 * time.Second)},
+	}
+	m.resize(100, 30)
+	got := m.agentsView()
+	if !strings.Contains(got, "Agents 2 active") || !strings.Contains(got, "1 running") || !strings.Contains(got, "1 canceling") {
+		t.Fatalf("agents view summary=%q", got)
+	}
+	if !strings.Contains(got, "run-1") || !strings.Contains(got, "cancel-1") {
+		t.Fatalf("active agents were hidden by terminal rows: %q", got)
+	}
+}
+
+func TestAgentDisplayDurationUsesExecutionDurationForTerminalState(t *testing.T) {
+	started := time.Unix(100, 0)
+	finished := started.Add(7 * time.Second)
+	st := agent.AgentStatus{State: agent.StateCompleted, StartedAt: started, FinishedAt: finished}
+	if got := agentDisplayDuration(st, finished.Add(time.Hour)); got != 7*time.Second {
+		t.Fatalf("terminal display duration=%v, want 7s", got)
+	}
 }
