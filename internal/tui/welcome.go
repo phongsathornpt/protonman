@@ -3,26 +3,33 @@ package tui
 import "strings"
 
 func (m bubbleModel) welcomeCard() string {
-	title := brandStyle.Render("Proton") + mutedStyle.Render("  "+appVersion)
+	width := maxInt(8, m.width-2)
+	rows := []string{brandStyle.Render("Proton") + mutedStyle.Render("  "+appVersion)}
 	if cwd := strings.TrimSpace(m.workDir); cwd != "" {
-		title += mutedStyle.Render("  " + cwd)
+		rows = append(rows, mutedStyle.Render(truncateWithEllipsis(cwd, width)))
 	}
+
 	if m.activeModel != "" {
-		prov := m.activeProvider
-		if prov == "" {
-			prov = "default"
+		provider := strings.TrimSpace(m.activeProvider)
+		rows = append(rows, brandStyle.Render(truncateWithEllipsis(m.activeModel, width)))
+		if provider != "" {
+			rows = append(rows, mutedStyle.Render(truncateWithEllipsis("provider: "+provider, width)))
 		}
-		title += brandStyle.Render("  [" + m.activeModel + " · " + prov + "]")
+		if m.runner != nil {
+			rows = append(rows, mutedStyle.Render("Ask anything · /help"))
+		}
+		return strings.Join(rows, "\n")
 	}
-	hint := mutedStyle.Render("Ask anything · /help · ctrl+t transcript")
+
 	if m.runner == nil {
-		if m.activeModel != "" {
-			hint = mutedStyle.Render("Model selected: " + m.activeModel + " · /model · /call <tool> <json>")
-		} else {
-			hint = mutedStyle.Render("No model configured · /model · /call <tool> <json>")
-		}
+		rows = append(rows,
+			warningStyle.Render("No model selected"),
+			mutedStyle.Render("Ctrl+P choose a model"),
+		)
+		return strings.Join(rows, "\n")
 	}
-	return title + "\n" + hint
+	rows = append(rows, mutedStyle.Render("Ask anything · /help"))
+	return strings.Join(rows, "\n")
 }
 
 func promptPlaceholder(hasRunner bool) string {
