@@ -13,20 +13,29 @@ import (
 )
 
 func (m bubbleModel) statusView() string {
+	if m.hasPermissionView() {
+		return warningStyle.Render("action required · permission")
+	}
 	if m.busy {
+		if m.activeTranscriptShowsToolProgress() {
+			return ""
+		}
 		activity := m.activity
 		if !m.busyStarted.IsZero() {
 			activity += " " + formatElapsed(time.Since(m.busyStarted))
 		}
-		// The animated frame lives in the active transcript cell. Keeping the
-		// status row static avoids two competing motion signals and reduces
-		// redraw noise while still exposing the operation and elapsed time.
 		return statusStyle.Render("• " + activity)
 	}
-	if m.hasPermissionView() {
-		return warningStyle.Render("action required · permission")
-	}
 	return ""
+}
+
+func (m bubbleModel) activeTranscriptShowsToolProgress() bool {
+	if m.historyState == nil {
+		return false
+	}
+	active := m.historyState.Active()
+	running, ok := active.(runningHistoryTool)
+	return ok && running.historyToolRunning()
 }
 
 func (m bubbleModel) infoView() string {
@@ -61,14 +70,10 @@ func (m bubbleModel) infoView() string {
 		}
 	}
 
-	candidates := make([]string, 0, 4)
+	candidates := make([]string, 0, 2)
 	switch mode {
 	case layoutNormal:
-		candidates = append(candidates, "shift+tab mode", "ctrl+p model")
-		if m.skills != nil && len(m.skills.List()) > 0 {
-			candidates = append(candidates, "ctrl+s skills")
-		}
-		candidates = append(candidates, "ctrl+t transcript", "ctrl+l clear")
+		candidates = append(candidates, "ctrl+p model", "/help")
 	case layoutCompact:
 		candidates = append(candidates, "ctrl+p model")
 	}
@@ -126,7 +131,7 @@ func (m bubbleModel) shortcutHint() string {
 	case layoutCompact:
 		return mutedStyle.Render("enter send · ctrl+p model · ctrl+c")
 	default:
-		return mutedStyle.Render("enter send · ctrl+j newline · shift+tab mode · ctrl+t transcript · ctrl+c quit")
+		return mutedStyle.Render("enter send · ctrl+j newline · /help")
 	}
 }
 

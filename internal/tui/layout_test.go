@@ -84,3 +84,20 @@ func TestCompactLayoutReducesChrome(t *testing.T) {
 		t.Fatalf("tiny live view height = %d, want <= 12", got)
 	}
 }
+
+func TestRunningToolUsesTranscriptAsProgressSurface(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.busy = true
+	m.activity = "running read_file"
+	m.historyState.StartTool("read_file")
+	if got := m.statusView(); got != "" {
+		t.Fatalf("running tool status duplicates transcript progress: %q", got)
+	}
+
+	m.historyState.CommitActive()
+	m.historyState.StartThinking()
+	if got := m.statusView(); got == "" {
+		t.Fatal("thinking state should retain the global status row")
+	}
+}

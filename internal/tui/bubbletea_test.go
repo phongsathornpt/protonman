@@ -121,7 +121,7 @@ func TestBubbleModelRendersComponentLayout(t *testing.T) {
 		"ship Bubble Tea",
 		"ask",
 		"❯",
-		"ctrl+l",
+		"/help",
 	} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("Bubble Tea view does not contain %q: %s", expected, view)
