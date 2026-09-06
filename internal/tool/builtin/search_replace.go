@@ -31,6 +31,14 @@ func NewSearchReplace(workspaceRoot *workspace.Workspace, stores ...checkpoint.S
 	}
 }
 
+func (h searchReplaceHandler) PermissionDetail(arguments json.RawMessage) string {
+	var input searchReplaceInput
+	if err := json.Unmarshal(arguments, &input); err != nil {
+		return ""
+	}
+	return managedFileDetail(input.FilePath, nil)
+}
+
 func (searchReplaceHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                "search_replace",

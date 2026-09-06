@@ -32,6 +32,14 @@ func NewWriteFile(workspaceRoot *workspace.Workspace, stores ...checkpoint.Store
 	}
 }
 
+func (h writeFileHandler) PermissionDetail(arguments json.RawMessage) string {
+	var input writeFileInput
+	if err := json.Unmarshal(arguments, &input); err != nil {
+		return ""
+	}
+	return managedFileDetail(input.FilePath, []byte(input.Content))
+}
+
 func (writeFileHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                "write_file",
