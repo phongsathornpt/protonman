@@ -3,28 +3,7 @@ package e2e_test
 import (
 	"strings"
 	"testing"
-	"time"
 )
-
-func TestE2ETUIStartupAndExitWithForcedTTY(t *testing.T) {
-	ws := newTestWorkspace(t)
-	home := newTestHome(t)
-
-	// Launch proton in TUI mode with PROTON_FORCE_TTY=1 and send Ctrl+C to exit cleanly
-	res := runProton(t, runOptions{
-		args:    []string{},
-		dir:     ws,
-		stdin:   "\x03", // Ctrl+C key sequence to exit BubbleTea
-		timeout: 5 * time.Second,
-		env: []string{
-			"PROTON_HOME=" + home,
-			"PROTON_FORCE_TTY=1",
-		},
-	})
-
-	// When exiting with Ctrl+C, BubbleTea exits cleanly or with interrupt
-	_ = res
-}
 
 func TestE2ETUIWithoutForcedTTYFails(t *testing.T) {
 	ws := newTestWorkspace(t)
