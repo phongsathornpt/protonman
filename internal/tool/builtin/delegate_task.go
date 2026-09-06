@@ -33,11 +33,12 @@ func NewDelegateTask(coordinator *agent.Coordinator, parentIDs ...string) tool.H
 
 func (delegateTaskHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "delegate_task",
-		Description:         "Delegate an investigation, code review, or targeted task to a specialized subagent running in the background.",
-		Kind:                tool.KindRead,
-		Mutability:          tool.MutabilityMutating,
-		PermissionDetailKey: "task",
+		Name:                   "delegate_task",
+		Description:            "Delegate an investigation, code review, or targeted task to a specialized subagent running in the background.",
+		Kind:                   tool.KindRead,
+		Mutability:             tool.MutabilityMutating,
+		ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded,
+		PermissionDetailKey:    "task",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
