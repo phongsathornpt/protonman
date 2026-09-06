@@ -35,9 +35,9 @@ func TestProviderSelectViewLaunchViaSlashCommand(t *testing.T) {
 	}
 
 	view := bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView)
-	// 2 configured + 2 remaining presets (ollama, openai) + 1 custom = 5 items
-	if len(view.items) != 5 {
-		t.Fatalf("expected 5 items in hub, got %d", len(view.items))
+	// 2 configured + 3 remaining presets (ollama, openai, anthropic) + 1 custom = 6 items
+	if len(view.items) != 6 {
+		t.Fatalf("expected 6 items in hub, got %d", len(view.items))
 	}
 	// Protonman should be selected because it is the active provider
 	if view.items[view.index].name != "protonman" {

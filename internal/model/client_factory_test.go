@@ -33,9 +33,16 @@ func TestNewProviderClientRoutesThroughProtonSDK(t *testing.T) {
 		{name: DefaultProtonmanName, url: DefaultProtonmanEndpoint},
 	}
 	for _, provider := range providers {
-		client := NewProviderClient(provider.name, provider.url, "key", "test-model")
+		client := NewProviderClient(provider.name, string(ProviderProtocolOpenAI), provider.url, "key", "test-model")
 		if _, ok := client.(*sdkModelClient); !ok {
 			t.Fatalf("%s client type = %T, want *sdkModelClient", provider.name, client)
 		}
+	}
+}
+
+func TestNewProviderClientRoutesAnthropicThroughProtonSDK(t *testing.T) {
+	client := NewProviderClient(DefaultAnthropicName, string(ProviderProtocolAnthropic), DefaultAnthropicEndpoint, "key", "claude-test")
+	if _, ok := client.(*sdkModelClient); !ok {
+		t.Fatalf("Anthropic client type = %T, want *sdkModelClient", client)
 	}
 }
