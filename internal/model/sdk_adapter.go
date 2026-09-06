@@ -8,6 +8,7 @@ import (
 	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"github.com/projectTHORN/proton/internal/tool"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
+	sdkanthropic "github.com/projectTHORN/proton/proton-sdk/provider/anthropic"
 	sdkopenai "github.com/projectTHORN/proton/proton-sdk/provider/openai"
 )
 
@@ -51,6 +52,24 @@ func newSDKOpenAIClient(providerName, baseURL, apiKey, modelID string, opts ...O
 		modelOptions = append(modelOptions, sdkopenai.WithResponsesAPI())
 	}
 	return &sdkModelClient{model: provider.Model(cfg.modelID, modelOptions...)}
+}
+
+func newSDKAnthropicClient(baseURL, apiKey, modelID string, opts ...OpenAIOption) Client {
+	cfg := newOpenAIClientConfig(baseURL, apiKey, modelID)
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&cfg)
+		}
+	}
+	provider := sdkanthropic.NewProvider(sdkanthropic.ProviderOptions{
+		BaseURL:      cfg.baseURL,
+		APIKey:       cfg.apiKey,
+		HTTPClient:   cfg.httpClient,
+		UserAgent:    cfg.userAgent,
+		MaxRetries:   2,
+		RetryBackoff: runtimepolicy.ModelRetryBackoffStep,
+	})
+	return &sdkModelClient{model: provider.Model(cfg.modelID)}
 }
 
 func (c *sdkModelClient) Stream(ctx context.Context, request Request) (Stream, error) {

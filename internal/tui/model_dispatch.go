@@ -189,7 +189,7 @@ func (m *bubbleModel) reconfigureRunner() {
 	if sessID != "" {
 		clientOpts = append(clientOpts, model.WithSessionID(sessID))
 	}
-	client := model.NewProviderClient(provName, baseURL, prov.APIKey, m.activeModel, clientOpts...)
+	client := model.NewProviderClient(provName, prov.Type, baseURL, prov.APIKey, m.activeModel, clientOpts...)
 	var opts []applicationturn.Option
 	if m.skills != nil {
 		opts = append(opts, applicationturn.WithSkillRegistry(m.skills))

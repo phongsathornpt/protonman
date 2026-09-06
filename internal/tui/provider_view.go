@@ -63,6 +63,7 @@ const maxProviderSelectRows = 8
 
 type providerPaneView struct {
 	state          providerPaneState
+	providerType   string
 	focusIndex     int
 	isEditing      bool
 	originalName   string
@@ -91,6 +92,9 @@ func newProviderPaneViewWithConfig(cfg config.ProviderConfig) *providerPaneView 
 	pv := newProviderPaneViewWithPreset(cfg.Name)
 	pv.isEditing = true
 	pv.originalName = strings.TrimSpace(cfg.Name)
+	if strings.TrimSpace(cfg.Type) != "" {
+		pv.providerType = strings.ToLower(strings.TrimSpace(cfg.Type))
+	}
 	if cfg.Name != "" {
 		pv.nameInput.SetValue(cfg.Name)
 	}
@@ -111,12 +115,14 @@ func newProviderPaneViewWithPreset(preset string) *providerPaneView {
 	presetID := ""
 	requiresAPIKey := false
 	filterFree := false
+	providerType := string(model.ProviderProtocolOpenAI)
 
 	if p := model.LookupPreset(preset); p != nil {
 		presetID = p.ID
 		name = p.ID
 		endpoint = p.BaseURL
 		requiresAPIKey = p.RequiresKey
+		providerType = string(p.Protocol)
 		keyPlaceholder = providerKeyPlaceholder(*p)
 		if p.ID == model.DefaultOpenCodeName {
 			filterFree = true
@@ -163,6 +169,7 @@ func newProviderPaneViewWithPreset(preset string) *providerPaneView {
 		state:          providerStateInput,
 		focusIndex:     int(focusIndex),
 		presetID:       presetID,
+		providerType:   providerType,
 		requiresAPIKey: requiresAPIKey,
 		nameInput:      nameIn,
 		endpointInput:  endpointIn,
@@ -201,6 +208,8 @@ func (v *providerPaneView) applyPreset(preset string) {
 		preset = model.DefaultOllamaName
 	} else if preset == "4" {
 		preset = model.DefaultOpenAIName
+	} else if preset == "5" {
+		preset = model.DefaultAnthropicName
 	}
 
 	if p := model.LookupPreset(preset); p != nil {
@@ -213,6 +222,7 @@ func (v *providerPaneView) applyPreset(preset string) {
 		v.apiKeyInput.Placeholder = providerKeyPlaceholder(*p)
 		v.presetID = p.ID
 		v.requiresAPIKey = p.RequiresKey
+		v.providerType = string(p.Protocol)
 		v.filterFreeOnly = (p.ID == model.DefaultOpenCodeName)
 		v.clearValidation()
 		v.focusIndex = int(providerFieldAPIKey)
@@ -683,6 +693,7 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 				v.state = providerStateSaving
 				return true, saveProviderCmd(providerSaveRequest{
 					providerName: strings.TrimSpace(v.nameInput.Value()),
+					providerType: v.providerType,
 					previousName: v.originalName,
 					baseURL:      strings.TrimSpace(v.endpointInput.Value()),
 					apiKey:       strings.TrimSpace(v.apiKeyInput.Value()),
@@ -704,6 +715,7 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 			v.state = providerStateSaving
 			return true, saveProviderCmd(providerSaveRequest{
 				providerName: strings.TrimSpace(v.nameInput.Value()),
+				providerType: v.providerType,
 				previousName: v.originalName,
 				baseURL:      strings.TrimSpace(v.endpointInput.Value()),
 				apiKey:       strings.TrimSpace(v.apiKeyInput.Value()),
@@ -888,6 +900,7 @@ func fetchProviderModelsCmd(request providerFetchRequest) tea.Cmd {
 
 type providerSaveRequest struct {
 	providerName string
+	providerType string
 	previousName string
 	baseURL      string
 	apiKey       string
@@ -905,7 +918,7 @@ func saveProviderCmd(request providerSaveRequest) tea.Cmd {
 
 		prov := config.ProviderConfig{
 			Name:    request.providerName,
-			Type:    string(model.ProviderProtocolOpenAI),
+			Type:    request.providerType,
 			BaseURL: request.baseURL,
 			APIKey:  request.apiKey,
 		}

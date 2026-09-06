@@ -638,3 +638,20 @@ func TestSlashCommandModelFree(t *testing.T) {
 		t.Fatalf("expected opencode preset from /model free, got: %s", view.nameInput.Value())
 	}
 }
+
+func TestAnthropicProviderPanePreservesProtocol(t *testing.T) {
+	view := newProviderPaneViewWithPreset(model.DefaultAnthropicName)
+	if view.providerType != string(model.ProviderProtocolAnthropic) {
+		t.Fatalf("providerType = %q, want anthropic", view.providerType)
+	}
+
+	configured := newProviderPaneViewWithConfig(config.ProviderConfig{
+		Name:    "custom-claude",
+		Type:    string(model.ProviderProtocolAnthropic),
+		BaseURL: "https://anthropic.example",
+		APIKey:  "key",
+	})
+	if configured.providerType != string(model.ProviderProtocolAnthropic) {
+		t.Fatalf("configured providerType = %q, want anthropic", configured.providerType)
+	}
+}

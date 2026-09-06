@@ -15,7 +15,8 @@ import (
 type ProviderProtocol string
 
 const (
-	ProviderProtocolOpenAI ProviderProtocol = "openai"
+	ProviderProtocolOpenAI    ProviderProtocol = "openai"
+	ProviderProtocolAnthropic ProviderProtocol = "anthropic"
 
 	// DefaultProtonmanName is the canonical provider label for Protonman.
 	DefaultProtonmanName     = "protonman"
@@ -32,6 +33,10 @@ const (
 	// DefaultOpenAIName is the canonical provider label for OpenAI.
 	DefaultOpenAIName     = "openai"
 	DefaultOpenAIEndpoint = "https://api.openai.com/v1"
+
+	// DefaultAnthropicName is the canonical provider label for Anthropic.
+	DefaultAnthropicName     = "anthropic"
+	DefaultAnthropicEndpoint = "https://api.anthropic.com"
 )
 
 // SupportedProviderPreset describes an out-of-the-box model provider preset.
@@ -82,6 +87,15 @@ var SupportedPresets = []SupportedProviderPreset{
 		EndpointHosts: []string{"api.openai.com"},
 		RequiresKey:   true,
 		Description:   "Direct OpenAI API access (sk-...)",
+	},
+	{
+		ID:            DefaultAnthropicName,
+		Name:          "Anthropic",
+		Protocol:      ProviderProtocolAnthropic,
+		BaseURL:       DefaultAnthropicEndpoint,
+		EndpointHosts: []string{"api.anthropic.com"},
+		RequiresKey:   true,
+		Description:   "Direct Anthropic Messages API access",
 	},
 }
 
