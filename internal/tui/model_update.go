@@ -133,6 +133,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if message.requestID != mv.fetchRequestID || !strings.EqualFold(message.providerName, currentProvider) {
 					return m, nil
 				}
+				mv.fetchCancel = nil
 				mv.loading = false
 				mv.err = message.err
 				if message.err == nil {

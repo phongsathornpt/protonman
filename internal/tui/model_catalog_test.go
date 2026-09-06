@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 )
@@ -94,7 +96,7 @@ func TestModelPickerLoadingHidesPreviousProviderModels(t *testing.T) {
 	view := newModelSelectPaneView(m)
 	m.bottom.push(view)
 	view.providerIndex = 1
-	_ = view.beginFetch("beta", m.providers["beta"])
+	_ = view.beginFetch(m.ctx, "beta", m.providers["beta"])
 
 	rendered := view.Render(m)
 	if !strings.Contains(rendered, "Loading models") {
@@ -131,5 +133,37 @@ func TestModelPickerAcceptsEmptyCurrentCatalog(t *testing.T) {
 	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
 	if view.loading || view.err != nil || len(view.models) != 0 {
 		t.Fatalf("empty current catalog state = loading:%t err:%v models:%#v", view.loading, view.err, view.models)
+	}
+}
+
+func TestModelPickerBeginFetchCancelsPreviousRequest(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	view := newModelSelectPaneView(m)
+	canceled := false
+	view.fetchCancel = func() { canceled = true }
+
+	_ = view.beginFetch(m.ctx, "protonman", config.ProviderConfig{Name: "protonman", APIKey: "key"})
+	if !canceled {
+		t.Fatal("previous model fetch was not canceled")
+	}
+	if view.fetchCancel == nil {
+		t.Fatal("new model fetch cancel function was not installed")
+	}
+}
+
+func TestModelPickerCloseCancelsFetch(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	view := newModelSelectPaneView(m)
+	m.bottom.push(view)
+	canceled := false
+	view.fetchCancel = func() { canceled = true }
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(*bubbleModel)
+	if !canceled {
+		t.Fatal("closing model picker did not cancel fetch")
+	}
+	if m.bottom.has(modelSelectViewID) {
+		t.Fatal("model picker remained open after escape")
 	}
 }
