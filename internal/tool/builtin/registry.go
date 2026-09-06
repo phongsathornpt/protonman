@@ -157,7 +157,7 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 	checkpointStore := selectCheckpointStore(cfg.stores)
 	handlers := []tool.Handler{
 		NewReadFile(workspaceRoot),
-		NewBash(workspaceRoot, cfg.launcher),
+		NewBashWithCheckpoint(workspaceRoot, cfg.launcher, checkpointStore),
 		NewWriteFile(workspaceRoot, checkpointStore),
 		NewSearchReplace(workspaceRoot, checkpointStore),
 		NewApplyPatch(workspaceRoot, checkpointStore),
