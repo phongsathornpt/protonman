@@ -14,7 +14,7 @@ import (
 
 func (m bubbleModel) statusView() string {
 	if m.hasPermissionView() {
-		return warningStyle.Render("action required · permission")
+		return warningStyle.Render(truncateWithEllipsis("action required · permission", maxInt(1, m.width-2)))
 	}
 	if m.busy {
 		if m.activeTranscriptShowsToolProgress() {
@@ -24,7 +24,7 @@ func (m bubbleModel) statusView() string {
 		if !m.busyStarted.IsZero() {
 			activity += " " + formatElapsed(time.Since(m.busyStarted))
 		}
-		return statusStyle.Render("• " + activity)
+		return statusStyle.Render(truncateWithEllipsis("• "+activity, maxInt(1, m.width-2)))
 	}
 	return ""
 }

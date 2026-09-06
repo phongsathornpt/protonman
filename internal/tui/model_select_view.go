@@ -93,10 +93,7 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 			"",
 			mutedStyle.Render("a add provider credentials · esc close"),
 		}
-		return modalStyle.
-			BorderForeground(accentAssistant).
-			MaxWidth(maxWidth).
-			Render(strings.Join(rows, "\n"))
+		return renderModalRows(m, accentAssistant, rows)
 	}
 
 	activeProv := "default"
@@ -196,11 +193,13 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ↓ %d more", len(v.models)-visibleEnd)))
 	}
 
-	rows = append(rows, "", mutedStyle.Render("↑/↓ move · pgup/pgdn page · home/end · enter select · p providers · esc close"))
-	return modalStyle.
-		BorderForeground(accentAssistant).
-		MaxWidth(maxWidth).
-		Render(strings.Join(rows, "\n"))
+	footer := "↑/↓ move · pgup/pgdn page · home/end · enter select · p providers · esc close"
+	if layoutModeForHeight(m.height) == layoutTiny {
+		footer = "↑/↓ · enter · esc"
+		rows = compactPickerRows(rows)
+	}
+	rows = append(rows, "", mutedStyle.Render(footer))
+	return renderModalRows(m, accentAssistant, rows)
 }
 
 func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {

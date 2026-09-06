@@ -245,7 +245,8 @@ func (m bubbleModel) permissionCard() string {
 func (v *permissionPaneView) card(m *bubbleModel) string {
 	request := v.pending.request
 	if v.parked {
-		return mutedStyle.Render(fmt.Sprintf("! Permission pending · %s · tab review · y once · s session · n deny · pgup/pgdn scroll", request.ToolName))
+		line := fmt.Sprintf("! Permission pending · %s · tab review · y once · s session · n deny", request.ToolName)
+		return mutedStyle.Render(truncateWithEllipsis(line, maxInt(1, m.width-2)))
 	}
 	title := "Permission required"
 	titleStyle := warningStyle
@@ -277,12 +278,27 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 			title = "Permission required — shell effects unknown"
 		}
 	}
+	if layoutModeForHeight(m.height) == layoutTiny {
+		contentWidth := maxInt(8, m.width-8)
+		selected := permissionOptions[v.index].label
+		rows := []string{
+			titleStyle.Render(truncateWithEllipsis(title, contentWidth)),
+			mutedStyle.Render(truncateWithEllipsis(request.ToolName+" · "+request.Detail, contentWidth)),
+			brandStyle.Render(glyphPrompt + selected),
+			mutedStyle.Render("y once · s session · n deny"),
+			mutedStyle.Render("esc review"),
+		}
+		return renderModalRows(m, border, rows)
+	}
 	maxWidth := maxInt(1, m.width-8)
 	rows := make([]string, 0, 8)
 	rows = append(rows, titleStyle.Render(title))
 	rows = append(rows, fmt.Sprintf("%s (%s)", request.ToolName, request.ToolKind))
 	detailLines := wrapLines("Target: "+request.Detail, maxInt(1, maxWidth-6))
-	const maxDetailLines = 6
+	maxDetailLines := 6
+	if layoutModeForHeight(m.height) == layoutCompact {
+		maxDetailLines = 2
+	}
 	if len(detailLines) > maxDetailLines {
 		omitted := len(detailLines) - maxDetailLines
 		detailLines = append(detailLines[:maxDetailLines], fmt.Sprintf("... (%d more lines truncated)", omitted))
@@ -304,10 +320,10 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 	} else {
 		rows = append(rows, mutedStyle.Render("j/k move   1-3 select   y once   s session   n deny   esc review transcript"))
 	}
-	return modalStyle.
-		BorderForeground(border).
-		MaxWidth(maxInt(1, m.width-4)).
-		Render(strings.Join(rows, "\n"))
+	if layoutModeForHeight(m.height) == layoutCompact {
+		rows = compactPickerRows(rows)
+	}
+	return renderModalRows(m, border, rows)
 }
 
 type permissionRequestMsg struct{ request permissionRequest }

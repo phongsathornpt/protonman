@@ -612,7 +612,6 @@ func providerModelLabel(md model.RemoteModel) string {
 }
 
 func renderProviderModal(m *bubbleModel, border lipgloss.TerminalColor, rows []string) string {
-	maxWidth := maxInt(1, m.width-4)
 	contentWidth := providerModalContentWidth(m)
 	wrappedRows := make([]string, 0, len(rows))
 	for _, row := range rows {
@@ -622,10 +621,7 @@ func renderProviderModal(m *bubbleModel, border lipgloss.TerminalColor, rows []s
 		}
 		wrappedRows = append(wrappedRows, strings.Split(wrapWords(row, contentWidth), "\n")...)
 	}
-	return modalStyle.
-		BorderForeground(border).
-		MaxWidth(maxWidth).
-		Render(strings.Join(wrappedRows, "\n"))
+	return renderModalRows(m, border, wrappedRows)
 }
 
 func providerModalContentWidth(m *bubbleModel) int {
