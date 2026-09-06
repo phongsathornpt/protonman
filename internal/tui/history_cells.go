@@ -667,6 +667,8 @@ type HistoryState struct {
 	renderWidth    int
 	cachedRender   []string
 	cachedRaw      []string
+	cachedRawText  string
+	rawTextValid   bool
 	cacheValid     bool
 	cachedWidth    int
 	altRender      []string
@@ -700,12 +702,13 @@ func (s *HistoryState) SetWidth(width int) {
 	s.buildCommittedCache()
 }
 
-func (s *HistoryState) SetSpinnerFrame(frame string) {
+func (s *HistoryState) SetSpinnerFrame(frame string) bool {
 	if s == nil {
-		return
+		return false
 	}
 	s.spinnerFrame = frame
-	if s.active != nil {
+	changed := cellUsesSpinner(s.active)
+	if changed {
 		setCellSpinner(s.active, frame)
 	}
 	for _, cell := range s.committed {
@@ -713,7 +716,24 @@ func (s *HistoryState) SetSpinnerFrame(frame string) {
 			setCellSpinner(cell, frame)
 			s.cacheValid = false
 			s.altRenderValid = false
+			changed = true
 		}
+	}
+	return changed
+}
+
+func cellUsesSpinner(cell HistoryCell) bool {
+	switch typed := cell.(type) {
+	case *ToolCell:
+		return typed.Running
+	case *ExecCell:
+		return typed.Running
+	case *PatchCell:
+		return typed.Running
+	case *ThinkingCell:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -874,6 +894,8 @@ func (s *HistoryState) Reset() {
 	s.cachedRender = nil
 	s.altRender = nil
 	s.cachedRaw = nil
+	s.cachedRawText = ""
+	s.rawTextValid = false
 	s.committedLines = 0
 }
 
@@ -901,6 +923,8 @@ func (s *HistoryState) buildCommittedCache() {
 	s.committedLines = committedLines
 	s.cachedRender = render
 	s.cachedRaw = raw
+	s.cachedRawText = ""
+	s.rawTextValid = false
 	s.cachedWidth = s.renderWidth
 	s.cacheValid = true
 }
@@ -962,13 +986,32 @@ func (s *HistoryState) buildAlternateRenderCache(width int) {
 
 func (s *HistoryState) Raw() string {
 	s.buildCommittedCache()
+	committedRaw := s.committedRawText()
 	if s.active == nil {
-		return strings.Join(s.cachedRaw, "\n")
+		return committedRaw
 	}
-	out := make([]string, len(s.cachedRaw), len(s.cachedRaw)+len(s.active.RawLines()))
-	copy(out, s.cachedRaw)
-	out = append(out, s.active.RawLines()...)
-	return strings.Join(out, "\n")
+	activeRaw := strings.Join(s.active.RawLines(), "\n")
+	if committedRaw == "" {
+		return activeRaw
+	}
+	if activeRaw == "" {
+		return committedRaw
+	}
+	var out strings.Builder
+	out.Grow(len(committedRaw) + 1 + len(activeRaw))
+	out.WriteString(committedRaw)
+	out.WriteByte('\n')
+	out.WriteString(activeRaw)
+	return out.String()
+}
+
+func (s *HistoryState) committedRawText() string {
+	if s.rawTextValid {
+		return s.cachedRawText
+	}
+	s.cachedRawText = strings.Join(s.cachedRaw, "\n")
+	s.rawTextValid = true
+	return s.cachedRawText
 }
 
 func (s *HistoryState) trim() {

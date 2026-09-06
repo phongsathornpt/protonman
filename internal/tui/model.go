@@ -234,8 +234,9 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.busy {
 			return m, nil
 		}
-		m.historyState.SetSpinnerFrame(m.spinner.View())
-		m.refreshViewport()
+		if m.historyState.SetSpinnerFrame(m.spinner.View()) {
+			m.refreshViewport()
+		}
 		return m, command
 	case cursor.BlinkMsg:
 		prompt := m.bottom.prompt()
