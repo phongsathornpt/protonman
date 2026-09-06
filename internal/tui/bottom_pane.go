@@ -205,21 +205,23 @@ func (v *skillsPaneView) Render(m *bubbleModel) string {
 		v.index = 0
 	}
 
+	visibleRows := pickerVisibleRows(m.height, maxSkillsRows)
+
 	// Dynamic windowing
 	if v.index < v.offset {
 		v.offset = v.index
 	}
-	if v.index >= v.offset+maxSkillsRows {
-		v.offset = v.index - maxSkillsRows + 1
+	if v.index >= v.offset+visibleRows {
+		v.offset = v.index - visibleRows + 1
 	}
-	if v.offset > len(skills)-maxSkillsRows {
+	if v.offset > len(skills)-visibleRows {
 		v.offset = len(skills) - maxSkillsRows
 	}
 	if v.offset < 0 {
 		v.offset = 0
 	}
 
-	visibleEnd := v.offset + maxSkillsRows
+	visibleEnd := v.offset + visibleRows
 	if visibleEnd > len(skills) {
 		visibleEnd = len(skills)
 	}

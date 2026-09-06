@@ -111,21 +111,23 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 		v.index = 0
 	}
 
+	visibleRows := pickerVisibleRows(m.height, maxModelSelectRows)
+
 	// Dynamic scroll windowing
 	if v.index < v.offset {
 		v.offset = v.index
 	}
-	if v.index >= v.offset+maxModelSelectRows {
-		v.offset = v.index - maxModelSelectRows + 1
+	if v.index >= v.offset+visibleRows {
+		v.offset = v.index - visibleRows + 1
 	}
-	if v.offset > len(v.models)-maxModelSelectRows {
+	if v.offset > len(v.models)-visibleRows {
 		v.offset = len(v.models) - maxModelSelectRows
 	}
 	if v.offset < 0 {
 		v.offset = 0
 	}
 
-	visibleEnd := v.offset + maxModelSelectRows
+	visibleEnd := v.offset + visibleRows
 	if visibleEnd > len(v.models) {
 		visibleEnd = len(v.models)
 	}
