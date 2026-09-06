@@ -11,6 +11,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/projectTHORN/proton/internal/contextutil"
+	"github.com/projectTHORN/proton/internal/toolcall"
+	"github.com/projectTHORN/proton/internal/turn"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
@@ -180,17 +183,45 @@ func terminalReason(err error) string {
 		return "timed out"
 	case errors.Is(err, context.Canceled):
 		return "canceled"
-	default:
-		msg := strings.ToValidUTF8(strings.TrimSpace(err.Error()), "�")
-		if len(msg) <= 80 {
-			return msg
-		}
-		cut := 77
-		for cut > 0 && !utf8.ValidString(msg[:cut]) {
-			cut--
-		}
-		return msg[:cut] + "..."
+	case errors.Is(err, turn.ErrMaxRounds):
+		return "max rounds reached"
+	case errors.Is(err, toolcall.ErrPermissionDenied):
+		return "permission denied"
 	}
+	var providerErr *sdk.ProviderError
+	if errors.As(err, &providerErr) {
+		switch providerErr.Kind {
+		case sdk.ErrorAuthentication:
+			return "authentication failed"
+		case sdk.ErrorPermission:
+			return "permission denied"
+		case sdk.ErrorRateLimit:
+			return "rate limited"
+		case sdk.ErrorModelNotFound:
+			return "model unavailable"
+		case sdk.ErrorContextLength:
+			return "context limit exceeded"
+		case sdk.ErrorOverloaded:
+			return "provider overloaded"
+		case sdk.ErrorTransport:
+			return "network error"
+		case sdk.ErrorProtocol:
+			return "provider protocol error"
+		case sdk.ErrorInvalidRequest:
+			return "invalid model request"
+		default:
+			return "model error"
+		}
+	}
+	msg := strings.ToValidUTF8(strings.TrimSpace(err.Error()), "�")
+	if len(msg) <= 80 {
+		return msg
+	}
+	cut := 77
+	for cut > 0 && !utf8.ValidString(msg[:cut]) {
+		cut--
+	}
+	return msg[:cut] + "..."
 }
 
 // Cancel explicitly requests cancellation of one subagent.

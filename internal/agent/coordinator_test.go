@@ -17,6 +17,7 @@ import (
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	"github.com/projectTHORN/proton/internal/turn"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 type mockRunner struct {
@@ -1405,5 +1406,25 @@ func TestParentIDContextRoundTrip(t *testing.T) {
 	ctx := WithParentID(context.Background(), " turn-42 ")
 	if got := ParentIDFromContext(ctx); got != "turn-42" {
 		t.Fatalf("ParentIDFromContext()=%q", got)
+	}
+}
+
+func TestTerminalReasonClassifiesKnownFailures(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "max rounds", err: fmt.Errorf("wrapped: %w", turn.ErrMaxRounds), want: "max rounds reached"},
+		{name: "permission", err: fmt.Errorf("wrapped: %w", toolcall.ErrPermissionDenied), want: "permission denied"},
+		{name: "model unavailable", err: sdk.NewProviderError("openai", 404, "model_not_found", "missing"), want: "model unavailable"},
+		{name: "rate limit", err: sdk.NewProviderError("openai", 429, "rate_limit", "slow down"), want: "rate limited"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := terminalReason(tt.err); got != tt.want {
+				t.Fatalf("terminalReason()=%q, want %q", got, tt.want)
+			}
+		})
 	}
 }
