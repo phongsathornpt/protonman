@@ -160,7 +160,7 @@ func invalidArgs(message string, err error) error {
 }
 
 func classifyAgentError(message string, err error) error {
-	if strings.Contains(err.Error(), "not found") {
+	if errors.Is(err, agent.ErrNotFound) {
 		return tool.WrapToolError(tool.ErrorCodeNotFound, message, err)
 	}
 	if errors.Is(err, context.Canceled) {

@@ -1065,6 +1065,17 @@ func TestCoordinatorWaitTimeoutDoesNotCancelSpawnedAgent(t *testing.T) {
 	}
 }
 
+func TestCoordinatorMissingAgentUsesTypedError(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil)
+	defer coord.Close()
+	if err := coord.Cancel("missing"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Cancel() error = %v, want ErrNotFound", err)
+	}
+	if _, err := coord.Wait(context.Background(), "missing", time.Millisecond); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Wait() error = %v, want ErrNotFound", err)
+	}
+}
+
 func TestCoordinatorCancelExposesCancelingUntilRunnerStops(t *testing.T) {
 	release := make(chan struct{})
 	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
