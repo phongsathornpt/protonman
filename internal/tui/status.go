@@ -483,7 +483,11 @@ func renderTodoItem(item TodoItem, width int) []string {
 		prefix = glyphToolSuccess
 		style = successStyle
 	}
-	wrapped := wrapLines(item.Text, maxInt(1, width-2))
+	label := item.Text
+	if id := strings.TrimSpace(item.ID); id != "" {
+		label += " · " + id
+	}
+	wrapped := wrapLines(label, maxInt(1, width-2))
 	out := make([]string, 0, len(wrapped))
 	for i, line := range wrapped {
 		if i == 0 {

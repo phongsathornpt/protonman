@@ -222,3 +222,13 @@ func TestTodoSlashCommandTogglesAndSupportsShowHide(t *testing.T) {
 		t.Fatal("/todo hide did not collapse")
 	}
 }
+
+func TestTodoExpandedViewShowsStableIDs(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "router-race", Text: "Fix router race", Status: tododomain.StatusInProgress}})
+	m.resize(80, 24)
+	m.todoExpanded = true
+	got := m.todoView()
+	if !strings.Contains(got, "Fix router race") || !strings.Contains(got, "router-race") {
+		t.Fatalf("expanded todo missing stable id: %q", got)
+	}
+}
