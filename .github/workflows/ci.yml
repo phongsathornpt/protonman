@@ -68,12 +68,10 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Install and enable Bubblewrap
+      - name: Enable native Linux user namespaces
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y bubblewrap
           if [[ -e /proc/sys/kernel/unprivileged_userns_clone ]]; then
             sudo sysctl -w kernel.unprivileged_userns_clone=1
           fi
