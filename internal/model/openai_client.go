@@ -57,7 +57,7 @@ func newOpenAIClientConfig(baseURL string, apiKey string, modelID string) openAI
 	return openAIClientConfig{
 		baseURL:    baseURL,
 		apiKey:     apiKey,
-		modelID:    NormalizeModelID(baseURL, modelID),
+		modelID:    strings.TrimSpace(modelID),
 		clientName: "proton",
 		userAgent:  "Proton/1.0",
 		httpClient: &http.Client{
