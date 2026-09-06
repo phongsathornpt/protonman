@@ -29,7 +29,7 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	c.agentsMu.Lock()
 	if c.closed.Load() {
 		c.agentsMu.Unlock()
-		return Handle{}, errors.New("coordinator is closed")
+		return Handle{}, ErrCoordinatorClosed
 	}
 	c.pruneExpiredLocked(time.Now())
 	live := 0
@@ -40,7 +40,7 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	}
 	if c.maxLiveAgents > 0 && live >= c.maxLiveAgents {
 		c.agentsMu.Unlock()
-		return Handle{}, fmt.Errorf("maximum live subagents reached (%d)", c.maxLiveAgents)
+		return Handle{}, fmt.Errorf("%w (%d)", ErrLiveLimit, c.maxLiveAgents)
 	}
 	id := strings.TrimSpace(req.ID)
 	if id == "" {
@@ -180,7 +180,7 @@ func (c *Coordinator) Cancel(id string) error {
 	entry := c.agents[strings.TrimSpace(id)]
 	if entry == nil {
 		c.agentsMu.Unlock()
-		return fmt.Errorf("subagent %q not found", id)
+		return fmt.Errorf("%w: %q", ErrNotFound, id)
 	}
 	if entry.status.State.Terminal() {
 		c.agentsMu.Unlock()

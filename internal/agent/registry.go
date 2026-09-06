@@ -19,7 +19,7 @@ func (c *Coordinator) Wait(ctx context.Context, id string, timeout time.Duration
 	entry := c.agents[strings.TrimSpace(id)]
 	if entry == nil {
 		c.agentsMu.RUnlock()
-		return WaitResult{}, fmt.Errorf("subagent %q not found", id)
+		return WaitResult{}, fmt.Errorf("%w: %q", ErrNotFound, id)
 	}
 	done := entry.done
 	state := entry.status.State
@@ -53,7 +53,7 @@ func (c *Coordinator) waitSnapshot(id string) (WaitResult, error) {
 	defer c.agentsMu.RUnlock()
 	entry := c.agents[id]
 	if entry == nil {
-		return WaitResult{}, fmt.Errorf("subagent %q not found", id)
+		return WaitResult{}, fmt.Errorf("%w: %q", ErrNotFound, id)
 	}
 	wr := WaitResult{State: entry.status.State}
 	if entry.status.State.Terminal() {
