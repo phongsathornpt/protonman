@@ -532,6 +532,15 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		}
 		history = filtered
 	}
+	projectInstructions := ""
+	if l.promptSpec != nil {
+		loaded, err := agentprompt.LoadProjectInstructions(l.promptSpec.Workspace)
+		if err != nil {
+			slog.WarnContext(ctx, "project instructions unavailable", "error", err)
+		} else {
+			projectInstructions = loaded
+		}
+	}
 	turnMessages := make([]model.Message, 0, 4)
 	toolCallsUsed := 0
 	definitions := l.tools.Definitions()
@@ -604,6 +613,13 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		}
 		if l.promptSpec != nil {
 			spec := l.effectivePromptSpec(tools, promptExtras)
+			if projectInstructions != "" {
+				if base := strings.TrimSpace(spec.ProjectInstructions); base != "" {
+					spec.ProjectInstructions = base + "\n\n" + projectInstructions
+				} else {
+					spec.ProjectInstructions = projectInstructions
+				}
+			}
 			spec.Skills = l.currentSkillPromptSection()
 			systemPrompt := agentprompt.Render(spec)
 			reqMessages = append([]model.Message{{Role: model.RoleSystem, Content: systemPrompt}}, reqMessages...)
