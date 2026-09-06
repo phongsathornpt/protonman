@@ -51,6 +51,32 @@ func TestUpdateTodoRejectsDuplicateIDs(t *testing.T) {
 	}
 }
 
+func TestUpdateTodoReportsStructuredChanges(t *testing.T) {
+	store, _ := tododomain.NewStore([]tododomain.Item{
+		{ID: "start", Text: "start", Status: tododomain.StatusPending},
+		{ID: "complete", Text: "complete", Status: tododomain.StatusInProgress},
+		{ID: "reopen", Text: "reopen", Status: tododomain.StatusCompleted},
+		{ID: "remove", Text: "remove", Status: tododomain.StatusPending},
+	})
+	h := NewUpdateTodo(store)
+	args, _ := json.Marshal(map[string]any{"expected_revision": uint64(0), "items": []map[string]any{
+		{"id": "start", "text": "start", "status": "in_progress"},
+		{"id": "complete", "text": "complete", "status": "completed"},
+		{"id": "reopen", "text": "reopen", "status": "pending"},
+		{"id": "add", "text": "add", "status": "pending"},
+	}})
+	call, _ := tool.NewCall("todo-diff", "update_todo", args)
+	result, err := h.Execute(context.Background(), call)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"added":1`, `"removed":1`, `"started":1`, `"completed":1`, `"reopened":1`} {
+		if !strings.Contains(result.Output, want) {
+			t.Fatalf("output=%s missing %s", result.Output, want)
+		}
+	}
+}
+
 func TestUpdateTodoDefinition(t *testing.T) {
 	def := NewUpdateTodo(nil).Definition()
 	if def.Kind != tool.KindTask || def.Mutability != tool.MutabilityMutating {

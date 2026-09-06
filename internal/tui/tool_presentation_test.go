@@ -330,6 +330,9 @@ func TestTodoToolPresentation(t *testing.T) {
 		t.Fatalf("glyph = %q", glyph)
 	}
 	summary := summarizeToolOutput("update_todo", kind, target, `{"total":2,"completed":1,"in_progress":1}`, nil, false)
+	if got := summarizeTodoUpdate(`{"total":3,"completed":1,"in_progress":1,"changes":{"completed":1,"started":1,"removed":1}}`); got != "Tasks updated · 1 completed · 1 started · 1 removed" {
+		t.Fatalf("todo diff summary=%q", got)
+	}
 	if summary != "Tasks updated · 1/2 complete · 1 active" {
 		t.Fatalf("summary = %q", summary)
 	}
