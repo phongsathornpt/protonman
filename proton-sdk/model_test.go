@@ -74,3 +74,22 @@ func TestAgentStreamEventLifecycle(t *testing.T) {
 		})
 	}
 }
+
+func TestAgentToolContracts(t *testing.T) {
+	tool := Tool{
+		Name:        "mcp_lookup",
+		Description: "look up a runtime resource",
+		InputSchema: map[string]any{"type": "object"},
+		Dynamic:     true,
+	}
+	if err := tool.Validate(); err != nil {
+		t.Fatalf("Tool.Validate() error = %v", err)
+	}
+	result := ToolResult{ToolCallID: "call-1", ToolName: tool.Name, Content: "ok"}
+	if err := result.Validate(); err != nil {
+		t.Fatalf("ToolResult.Validate() error = %v", err)
+	}
+	if err := (ToolResult{ToolName: tool.Name}).Validate(); !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("missing call id error = %v", err)
+	}
+}
