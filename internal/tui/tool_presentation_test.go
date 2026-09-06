@@ -346,8 +346,14 @@ func TestAgentToolPresentation(t *testing.T) {
 	if got := summarizeToolOutput("delegate_task", kind, target, `{"agent_id":"explorer-7","status":"queued"}`, nil, false); got != "spawned explorer-7 · queued" {
 		t.Fatalf("spawn summary=%q", got)
 	}
-	if got := summarizeToolOutput("wait_agent", kind, "explorer-7", `{"agent_id":"explorer-7","status":"running","result":null}`, nil, false); got != "explorer-7 still running" {
+	if got := summarizeToolOutput("wait_agent", kind, "explorer-7", `{"agent_id":"explorer-7","status":"running","result":null}`, nil, false); got != "waiting for explorer-7 · running" {
 		t.Fatalf("wait summary=%q", got)
+	}
+	if got := summarizeToolOutput("wait_agent", kind, "explorer-7", `{"agent_id":"explorer-7","status":"completed","result":{"summary":"Found duplicate router branches in provider.go"}}`, nil, false); !strings.Contains(got, "Found duplicate router branches") {
+		t.Fatalf("completed wait summary=%q", got)
+	}
+	if got := summarizeToolOutput("list_agents", kind, "subagents", `{"agents":[{"id":"a","state":"canceling"},{"id":"b","state":"completed"}]}`, nil, false); got != "2 agents · 1 active" {
+		t.Fatalf("canceling list summary=%q", got)
 	}
 	if got := summarizeToolOutput("list_agents", kind, "subagents", `{"agents":[{"id":"a","state":"running"},{"id":"b","state":"completed"}]}`, nil, false); got != "2 agents · 1 active" {
 		t.Fatalf("list summary=%q", got)
