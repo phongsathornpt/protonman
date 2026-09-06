@@ -215,3 +215,31 @@ func (m *mockLLMServer) Requests() []map[string]any {
 	}
 	return requests
 }
+
+func (m *mockLLMServer) AddResponsesTextResponse(text string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.responses = append(m.responses, mockLLMResponse{
+		status: http.StatusOK,
+		sseChunks: []string{
+			fmt.Sprintf(`{"type":"response.output_text.delta","delta":%q}`, text),
+			`{"type":"response.completed","response":{"usage":{"input_tokens":3,"output_tokens":1,"total_tokens":4}}}`,
+		},
+	})
+}
+
+func (m *mockLLMServer) AddAnthropicTextResponse(text string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.responses = append(m.responses, mockLLMResponse{
+		status: http.StatusOK,
+		sseChunks: []string{
+			`{"type":"message_start","message":{"usage":{"input_tokens":3,"output_tokens":0}}}`,
+			`{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+			fmt.Sprintf(`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":%q}}`, text),
+			`{"type":"content_block_stop","index":0}`,
+			`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":1}}`,
+			`{"type":"message_stop"}`,
+		},
+	})
+}
