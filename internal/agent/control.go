@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/projectTHORN/proton/internal/permission"
@@ -39,7 +38,7 @@ func (c *Coordinator) Close() error {
 			}
 		}
 		c.agentsMu.RUnlock()
-		return fmt.Errorf("coordinator close timed out with %d active subagent(s)", remaining)
+		return &ShutdownTimeoutError{ActiveAgents: remaining}
 	}
 }
 

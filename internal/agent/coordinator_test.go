@@ -950,8 +950,12 @@ func TestCoordinatorCloseIsBoundedForNonCooperativeRunner(t *testing.T) {
 	}
 	started := time.Now()
 	closeErr := coord.Close()
-	if closeErr == nil || !strings.Contains(closeErr.Error(), "close timed out") {
-		t.Fatalf("Close() error = %v, want bounded timeout error", closeErr)
+	if !errors.Is(closeErr, ErrShutdownTimeout) {
+		t.Fatalf("Close() error = %v, want ErrShutdownTimeout", closeErr)
+	}
+	var timeoutErr *ShutdownTimeoutError
+	if !errors.As(closeErr, &timeoutErr) || timeoutErr.ActiveAgents != 1 {
+		t.Fatalf("Close() error = %#v, want one active agent", closeErr)
 	}
 	if elapsed := time.Since(started); elapsed > 150*time.Millisecond {
 		t.Fatalf("Close() elapsed = %v, want bounded shutdown", elapsed)
