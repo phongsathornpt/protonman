@@ -867,7 +867,7 @@ func (m *bubbleModel) selectModelDirect(modelID string) tea.Cmd {
 			prov = model.DefaultProtonmanName
 		}
 	}
-	return saveDefaultModelCmd(prov, modelID)
+	return saveModelSelectionCmd(prov, modelID, !m.modelIDKnown(prov, modelID))
 }
 
 func (m *bubbleModel) handleAgentCommand(argument string) tea.Cmd {
