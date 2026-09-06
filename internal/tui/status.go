@@ -327,7 +327,9 @@ func (m bubbleModel) agentsView() string {
 		}
 		elapsed := formatElapsed(agentDisplayDuration(st, time.Now()))
 		detail := st.Task
-		if activity := strings.TrimSpace(m.agentActivity[st.ID]); activity != "" && !st.State.Terminal() {
+		if st.State.Terminal() && strings.TrimSpace(st.Reason) != "" {
+			detail = st.Reason
+		} else if activity := strings.TrimSpace(m.agentActivity[st.ID]); activity != "" && !st.State.Terminal() {
 			detail = activity
 		}
 		line := fmt.Sprintf("  %s%s · %s · %s", stateGlyph, st.ID, elapsed, truncateWithEllipsis(detail, maxInt(12, m.width-30)))
