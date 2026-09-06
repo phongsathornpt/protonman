@@ -53,7 +53,7 @@ func TestSlashReasoningShowsProfileLevelsAndDefault(t *testing.T) {
 	got := plainTranscript(m)
 	for _, want := range []string{
 		"Reasoning override: auto",
-		"Model profile: gemini-3.8-flash",
+		"Model profile: gemini-3.8-flash (exact)",
 		"Supported reasoning: low, medium, high",
 		"Model default: medium",
 		"Agent profile preference: high",
@@ -88,5 +88,18 @@ func TestRemoteModelReasoningSummaryUsesResolvedProfile(t *testing.T) {
 	}
 	if got := remoteModelReasoningSummary("custom", model.RemoteModel{ID: "future-model"}, true); got != "" {
 		t.Fatalf("unknown summary = %q, want empty", got)
+	}
+}
+
+func TestSlashReasoningShowsCatalogOverrideProvenance(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeProvider = "protonman"
+	m.activeModel = "gemini-3.8-flash"
+	yes := true
+	m.modelCatalogs.set("protonman", []model.RemoteModel{{ID: "gemini-3.8-flash", ToolSupport: &yes}})
+
+	m.executeCommand("/reasoning")
+	if got := plainTranscript(m); !strings.Contains(got, "Model profile: gemini-3.8-flash (exact · catalog override)") {
+		t.Fatalf("transcript missing catalog provenance: %q", got)
 	}
 }

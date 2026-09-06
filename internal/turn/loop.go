@@ -493,6 +493,11 @@ func (l *Loop) effectivePromptSpec(definitions []tool.Definition, extras []strin
 	spec := *l.promptSpec
 	spec.Provider = l.languageModel.Provider()
 	spec.ModelID = l.languageModel.ModelID()
+	if profile, ok := model.ResolvedModelProfile(l.languageModel); ok {
+		spec.ModelProfile = profile.ProfileName
+		spec.ModelProfileMatch = string(profile.ProfileMatch)
+		spec.ModelCatalogOverride = profile.CatalogOverride
+	}
 	spec.MaxRounds = l.maxRounds
 	spec.MaxToolCalls = l.maxToolCalls
 	spec.ToolNames = make([]string, 0, len(definitions))
@@ -608,11 +613,22 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		terminalReason = "reasoning_effort_unsupported"
 		return l.fail(ctx, sink, 0, fmt.Errorf("%w: %v", ErrUnsupportedModelCapability, reasoningErr))
 	}
+	modelProfileName := ""
+	modelProfileMatch := ""
+	modelCatalogOverride := false
+	if profile, ok := model.ResolvedModelProfile(l.languageModel); ok {
+		modelProfileName = profile.ProfileName
+		modelProfileMatch = string(profile.ProfileMatch)
+		modelCatalogOverride = profile.CatalogOverride
+	}
 	slog.DebugContext(ctx, "turn reasoning policy resolved",
 		"requested", reasoningRequestedLabel(reasoningResolution),
 		"effective", reasoningEffectiveLabel(reasoningResolution),
 		"source", reasoningResolution.Source,
 		"clamped", reasoningResolution.Clamped,
+		"model_profile", modelProfileName,
+		"model_profile_match", modelProfileMatch,
+		"model_catalog_override", modelCatalogOverride,
 	)
 
 	if l.promptSpec == nil {

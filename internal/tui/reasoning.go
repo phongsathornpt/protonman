@@ -48,7 +48,19 @@ func (m *bubbleModel) showReasoningState() {
 	profile := m.activeResolvedModelProfile()
 	m.appendLine(brandStyle.Render("Reasoning override: ") + reasoningEffortLabel(m.reasoningEffort))
 	if profileName := strings.TrimSpace(profile.ProfileName); profileName != "" {
-		m.appendLine(mutedStyle.Render("Model profile: " + profileName))
+		detail := profileName
+		if profile.ProfileMatch != modelprofile.MatchNone {
+			detail += " (" + string(profile.ProfileMatch)
+			if profile.CatalogOverride {
+				detail += " · catalog override"
+			}
+			detail += ")"
+		} else if profile.CatalogOverride {
+			detail += " (catalog override)"
+		}
+		m.appendLine(mutedStyle.Render("Model profile: " + detail))
+	} else if profile.CatalogOverride {
+		m.appendLine(mutedStyle.Render("Model profile: catalog metadata only"))
 	}
 	if len(profile.Reasoning.Levels) > 0 {
 		levels := make([]string, 0, len(profile.Reasoning.Levels))
