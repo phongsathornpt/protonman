@@ -93,3 +93,18 @@ func TestAgentToolContracts(t *testing.T) {
 		t.Fatalf("missing call id error = %v", err)
 	}
 }
+
+func TestUsageAndFinishEvents(t *testing.T) {
+	if err := (Event{Kind: EventUsage, Usage: Usage{InputTokens: 10, OutputTokens: 2, TotalTokens: 12}}).Validate(); err != nil {
+		t.Fatalf("usage event error = %v", err)
+	}
+	if err := (Event{Kind: EventUsage, Usage: Usage{InputTokens: -1}}).Validate(); !errors.Is(err, ErrInvalidEvent) {
+		t.Fatalf("negative usage error = %v", err)
+	}
+	if err := (Event{Kind: EventFinish, FinishReason: FinishToolCalls}).Validate(); err != nil {
+		t.Fatalf("finish event error = %v", err)
+	}
+	if err := (Event{Kind: EventFinish, FinishReason: "provider_magic"}).Validate(); !errors.Is(err, ErrInvalidEvent) {
+		t.Fatalf("unknown finish error = %v", err)
+	}
+}

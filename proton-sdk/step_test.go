@@ -49,3 +49,21 @@ func TestCollectStepRejectsIncompleteStream(t *testing.T) {
 		t.Fatalf("error = %v, want ErrIncompleteStream", err)
 	}
 }
+
+func TestCollectStepIncludesUsageAndFinishReason(t *testing.T) {
+	stream := &eventStream{events: []Event{
+		{Kind: EventTextDelta, Text: "done"},
+		{Kind: EventUsage, Usage: Usage{InputTokens: 4, OutputTokens: 1, TotalTokens: 5}},
+		{Kind: EventFinish, FinishReason: FinishStop},
+	}}
+	result, err := CollectStep(context.Background(), stream)
+	if err != nil {
+		t.Fatalf("CollectStep() error = %v", err)
+	}
+	if result.FinishReason != FinishStop {
+		t.Fatalf("FinishReason = %q", result.FinishReason)
+	}
+	if result.Usage.TotalTokens != 5 {
+		t.Fatalf("Usage = %#v", result.Usage)
+	}
+}

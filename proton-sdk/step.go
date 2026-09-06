@@ -10,8 +10,10 @@ import (
 
 // StepResult is the normalized output of one model step in an agent loop.
 type StepResult struct {
-	Text      string
-	ToolCalls []ToolCall
+	Text         string
+	ToolCalls    []ToolCall
+	Usage        Usage
+	FinishReason FinishReason
 }
 
 // CollectStep consumes one model stream until its terminal event and builds the
@@ -38,6 +40,12 @@ func CollectStep(ctx context.Context, stream Stream) (StepResult, error) {
 			text.WriteString(event.Text)
 		case EventToolCall:
 			result.ToolCalls = append(result.ToolCalls, cloneToolCall(event.ToolCall))
+		case EventUsage:
+			result.Usage = event.Usage
+		case EventFinish:
+			result.Text = text.String()
+			result.FinishReason = event.FinishReason
+			return result, nil
 		case EventDone:
 			result.Text = text.String()
 			return result, nil
