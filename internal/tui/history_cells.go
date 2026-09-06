@@ -296,6 +296,10 @@ type AgentToolCell struct {
 func (AgentToolCell) Kind() HistoryCellKind { return HistoryCellTool }
 func (c AgentToolCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
 func (c AgentToolCell) RenderWidth(width int) []string {
+	label := c.presentationLabel(true)
+	return wrapStyledLines(toolStyle.Render(glyphAgent)+mutedStyle.Render(sanitizeBubbleText(label)), maxInt(1, width))
+}
+func (c AgentToolCell) presentationLabel(includeSpinner bool) string {
 	label := c.Summary
 	if c.Running {
 		switch c.Name {
@@ -310,16 +314,18 @@ func (c AgentToolCell) RenderWidth(width int) []string {
 		default:
 			label = "Coordinating subagents"
 		}
-		if c.Spinner != "" {
+		if includeSpinner && c.Spinner != "" {
 			label = c.Spinner + " " + label
 		}
 	}
 	if label == "" {
 		label = c.Name
 	}
-	return wrapStyledLines(toolStyle.Render(glyphAgent)+mutedStyle.Render(sanitizeBubbleText(label)), maxInt(1, width))
+	return label
 }
-func (c AgentToolCell) RawLines() []string       { return []string{sanitizeBubbleText(c.Summary)} }
+func (c AgentToolCell) RawLines() []string {
+	return []string{sanitizeBubbleText(c.presentationLabel(false))}
+}
 func (c AgentToolCell) LineCount() int           { return 1 }
 func (c AgentToolCell) historyToolID() string    { return c.CallID }
 func (c AgentToolCell) historyToolName() string  { return c.Name }

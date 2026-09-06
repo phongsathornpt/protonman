@@ -672,3 +672,11 @@ func TestApplyTurnEventsCoalescesContiguousText(t *testing.T) {
 		t.Fatalf("round=%d, want 2", m.turnProgress.Round)
 	}
 }
+
+func TestAgentToolCellRawLinesUseOrchestrationLabel(t *testing.T) {
+	cell := AgentToolCell{Name: "wait_agent", Target: "explorer-7", Running: true, Spinner: "⠋"}
+	got := strings.Join(cell.RawLines(), "\n")
+	if got != "Waiting for explorer-7" {
+		t.Fatalf("RawLines()=%q", got)
+	}
+}
