@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"maps"
 	"os"
 	"strings"
@@ -19,21 +20,21 @@ import (
 
 const (
 	// DefaultMaxRounds is the fallback maximum rounds per turn when unspecified.
-	DefaultMaxRounds = 20
+	DefaultMaxRounds = runtimepolicy.TurnMaxRounds
 	// DefaultMaxToolCalls is the fallback cumulative tool-call limit per turn.
-	DefaultMaxToolCalls = 100
+	DefaultMaxToolCalls = runtimepolicy.TurnMaxToolCalls
 	// DefaultSubagentMaxRuntime is the hard safety ceiling for one spawned subagent.
-	DefaultSubagentMaxRuntime = 30 * time.Minute
+	DefaultSubagentMaxRuntime = runtimepolicy.AgentMaxRuntime
 	// DefaultSubagentWaitTimeout bounds one parent wait without canceling the child.
-	DefaultSubagentWaitTimeout = 30 * time.Second
+	DefaultSubagentWaitTimeout = runtimepolicy.AgentWaitTimeout
 	// DefaultSubagentQueueTimeout bounds waiting for concurrency/workspace capacity.
-	DefaultSubagentQueueTimeout = 30 * time.Second
+	DefaultSubagentQueueTimeout = runtimepolicy.AgentQueueTimeout
 	// DefaultMaxLiveSubagents bounds queued and running subagents.
-	DefaultMaxLiveSubagents = 16
+	DefaultMaxLiveSubagents = runtimepolicy.AgentMaxLive
 	// DefaultMaxRetainedSubagents bounds terminal lifecycle records kept for later turns.
-	DefaultMaxRetainedSubagents = 64
+	DefaultMaxRetainedSubagents = runtimepolicy.AgentMaxRetained
 	// DefaultCompletedResultTTL retains terminal results for later turns.
-	DefaultCompletedResultTTL = 10 * time.Minute
+	DefaultCompletedResultTTL = runtimepolicy.AgentResultTTL
 )
 
 // Options controls which configuration layers are considered.

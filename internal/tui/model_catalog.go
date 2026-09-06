@@ -1,13 +1,14 @@
 package tui
 
 import (
+	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"strings"
 	"time"
 
 	"github.com/projectTHORN/proton/internal/model"
 )
 
-const modelCatalogTTL = 2 * time.Minute
+const modelCatalogTTL = runtimepolicy.ModelCatalogTTL
 
 type providerModelCatalog struct {
 	models    []model.RemoteModel

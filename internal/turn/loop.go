@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"io"
 	"log/slog"
 	"strings"
@@ -26,15 +27,15 @@ const (
 	protectionObserverTimeout = time.Second
 
 	// DefaultMaxRounds is the default maximum number of rounds per turn.
-	DefaultMaxRounds = 20
+	DefaultMaxRounds = runtimepolicy.TurnMaxRounds
 	// DefaultMaxToolCalls is the default cumulative maximum number of tool
 	// calls per turn.
-	DefaultMaxToolCalls = 100
+	DefaultMaxToolCalls = runtimepolicy.TurnMaxToolCalls
 	// DefaultTurnTimeout bounds one complete model/tool turn.
-	DefaultTurnTimeout = 10 * time.Minute
+	DefaultTurnTimeout = runtimepolicy.TurnTimeout
 	// DefaultRoundTimeout bounds a turn round when callers do not provide a
 	// stricter timeout.
-	DefaultRoundTimeout    = 5 * time.Minute
+	DefaultRoundTimeout    = runtimepolicy.RoundTimeout
 	defaultMaxRounds       = DefaultMaxRounds
 	defaultMaxToolCalls    = DefaultMaxToolCalls
 	defaultMaxParallelRead = 4

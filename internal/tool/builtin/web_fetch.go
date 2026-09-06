@@ -5,11 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/projectTHORN/proton/internal/buildinfo"
 	"github.com/projectTHORN/proton/internal/sandbox"
@@ -35,7 +35,7 @@ func NewWebFetch(policy sandbox.NetworkPolicy) tool.Handler {
 	return webFetchHandler{
 		policy: policy,
 		client: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: runtimepolicy.WebFetchTimeout,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if len(via) >= 10 {
 					return fmt.Errorf("stopped after 10 redirects")

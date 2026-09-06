@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,13 +19,13 @@ const (
 	defaultMaxConcurrency    = 4
 	defaultMaxDepth          = 1
 	defaultMaxRounds         = 10
-	defaultMaxToolCalls      = turn.DefaultMaxToolCalls
-	defaultMaxRuntime        = 30 * time.Minute
-	defaultWaitTimeout       = 30 * time.Second
-	defaultQueueTimeout      = 30 * time.Second
-	defaultMaxLiveAgents     = 16
-	defaultMaxRetainedAgents = 64
-	defaultResultTTL         = 10 * time.Minute
+	defaultMaxToolCalls      = runtimepolicy.TurnMaxToolCalls
+	defaultMaxRuntime        = runtimepolicy.AgentMaxRuntime
+	defaultWaitTimeout       = runtimepolicy.AgentWaitTimeout
+	defaultQueueTimeout      = runtimepolicy.AgentQueueTimeout
+	defaultMaxLiveAgents     = runtimepolicy.AgentMaxLive
+	defaultMaxRetainedAgents = runtimepolicy.AgentMaxRetained
+	defaultResultTTL         = runtimepolicy.AgentResultTTL
 	defaultEventQueueSize    = 64
 	defaultCloseTimeout      = 5 * time.Second
 	eventEmitTimeout         = 100 * time.Millisecond
