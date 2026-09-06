@@ -769,6 +769,7 @@ func TestLoopRunsApprovedReadCallsWithBoundedConcurrency(t *testing.T) {
 type recordingHandler struct {
 	definition tool.Definition
 	calls      []tool.Call
+	output     string
 }
 
 func readFileDefinition() tool.Definition {
@@ -838,10 +839,14 @@ func (h *recordingHandler) Definition() tool.Definition {
 
 func (h *recordingHandler) Execute(_ context.Context, call tool.Call) (tool.Result, error) {
 	h.calls = append(h.calls, call)
+	output := h.output
+	if output == "" {
+		output = "file contents"
+	}
 	return tool.Result{
 		CallID:   call.ID,
 		ToolName: call.Name,
-		Output:   "file contents",
+		Output:   output,
 	}, nil
 }
 
@@ -1290,5 +1295,35 @@ func TestFailUsesBoundedDetachedContextForTerminalEvent(t *testing.T) {
 	}
 	if !sawEvent {
 		t.Fatal("terminal event was not emitted")
+	}
+}
+
+func TestLoopAppliesAggregateToolResultBudgetBeforeHistory(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{events: []sdk.Event{
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "read-big", Name: "read_file", Arguments: json.RawMessage(`{"path":"big.txt"}`)}},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
+		}},
+		{events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "done"},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		}},
+	}}
+	loop, handler := newTestLoop(t, client, permission.ActionAllow,
+		WithMaxToolResultBytesPerRound(64), WithMaxToolResultBytesPerTurn(64))
+	handler.output = strings.Repeat("x", 512)
+	events := make([]Event, 0)
+	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "read big"}}, collectEvents(&events)); err != nil {
+		t.Fatal(err)
+	}
+	toolEvent := findEvent(events, EventToolResult)
+	if !toolEvent.Result.Truncated || !strings.Contains(toolEvent.Result.Output, toolBudgetMarker) {
+		t.Fatalf("tool event result = %+v", toolEvent.Result)
+	}
+	if len(client.requests) != 2 || len(client.requests[1].Messages) < 3 {
+		t.Fatalf("requests = %#v", client.requests)
+	}
+	if got := client.requests[1].Messages[len(client.requests[1].Messages)-1].Content; !strings.Contains(got, toolBudgetMarker) {
+		t.Fatalf("model tool history missing budget marker: %q", got)
 	}
 }
