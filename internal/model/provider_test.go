@@ -81,16 +81,18 @@ func TestFetchProviderModelsUnauthorized(t *testing.T) {
 	}
 }
 
-func TestFetchProviderModelsFallbackDefaultProtonman(t *testing.T) {
-	models, err := FetchProviderModels(context.Background(), "https://invalid-nonexistent.protonman.dev/api/v1", "key")
-	if err != nil {
-		t.Fatalf("expected fallback default catalog, got error: %v", err)
+func TestFetchProviderModelsDoesNotFabricateFallback(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "upstream unavailable", http.StatusBadGateway)
+	}))
+	defer ts.Close()
+
+	models, err := FetchProviderModels(context.Background(), ts.URL, "key")
+	if err == nil {
+		t.Fatal("expected discovery error")
 	}
-	if len(models) == 0 {
-		t.Fatal("expected default models catalog")
-	}
-	if models[0].ID != "deepseek-v4-flash-vision-exp" {
-		t.Fatalf("unexpected first model: %+v", models[0])
+	if len(models) != 0 {
+		t.Fatalf("expected no fabricated models, got %#v", models)
 	}
 }
 
@@ -141,19 +143,6 @@ func TestFetchProviderModelsOpenCodeNoAuth(t *testing.T) {
 	}
 	if models[0].ID != "nemotron-3.5-lightning-free" || models[1].ID != "big-pickle" {
 		t.Fatalf("unexpected models: %+v", models)
-	}
-}
-
-func TestFetchProviderModelsFallbackDefaultOpenCode(t *testing.T) {
-	models, err := FetchProviderModels(context.Background(), "https://invalid-nonexistent.opencode.ai/zen/v1", "")
-	if err != nil {
-		t.Fatalf("expected fallback default catalog, got error: %v", err)
-	}
-	if len(models) == 0 {
-		t.Fatal("expected default models catalog")
-	}
-	if models[0].ID != "nemotron-3.5-lightning-free" {
-		t.Fatalf("unexpected first model: %+v", models[0])
 	}
 }
 
@@ -217,41 +206,6 @@ func TestNormalizeModelID(t *testing.T) {
 		if got != tc.expected {
 			t.Errorf("NormalizeModelID(%q, %q) = %q, want %q", tc.provider, tc.modelID, got, tc.expected)
 		}
-	}
-}
-
-func TestFallbackModelsForProvider(t *testing.T) {
-	tests := []struct {
-		name     string
-		provider string
-		baseURL  string
-		wantID   string
-		wantLen  int
-	}{
-		{name: "protonman by name", provider: DefaultProtonmanName, wantID: DefaultProtonmanModels[0].ID, wantLen: len(DefaultProtonmanModels)},
-		{name: "protonman by endpoint", provider: "custom", baseURL: "https://protonman.dev/api/v1", wantID: DefaultProtonmanModels[0].ID, wantLen: len(DefaultProtonmanModels)},
-		{name: "opencode by name", provider: DefaultOpenCodeName, wantID: DefaultOpenCodeFreeModels[0].ID, wantLen: len(DefaultOpenCodeFreeModels)},
-		{name: "opencode by endpoint", provider: "custom", baseURL: "https://opencode.ai/zen/v1", wantID: DefaultOpenCodeFreeModels[0].ID, wantLen: len(DefaultOpenCodeFreeModels)},
-		{name: "custom", provider: "custom", baseURL: "https://api.example.com/v1", wantLen: 0},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := FallbackModelsForProvider(tt.provider, tt.baseURL)
-			if len(got) != tt.wantLen {
-				t.Fatalf("len = %d, want %d: %#v", len(got), tt.wantLen, got)
-			}
-			if tt.wantID != "" && got[0].ID != tt.wantID {
-				t.Fatalf("first model = %q, want %q", got[0].ID, tt.wantID)
-			}
-		})
-	}
-}
-
-func TestFallbackModelsForProviderReturnsCopy(t *testing.T) {
-	got := FallbackModelsForProvider(DefaultProtonmanName, "")
-	got[0].ID = "mutated"
-	if DefaultProtonmanModels[0].ID == "mutated" {
-		t.Fatal("fallback catalog shares backing storage with defaults")
 	}
 }
 

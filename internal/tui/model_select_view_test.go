@@ -7,10 +7,23 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/projectTHORN/proton/internal/config"
+	"github.com/projectTHORN/proton/internal/model"
 )
+
+func seedModelSelectCatalog(m *bubbleModel) {
+	m.modelCatalogs.set(model.DefaultProtonmanName, []model.RemoteModel{
+		{ID: "deepseek-v4-flash-vision-exp", Name: "DeepSeek V4 Flash Vision"},
+		{ID: "glm-5.3-flash", Name: "GLM 5.3 Flash"},
+		{ID: "Qwen3.8-Flash", Name: "Qwen 3.8 Flash"},
+		{ID: "muse-spark", Name: "Muse Spark"},
+		{ID: "MiniMax-M3", Name: "MiniMax M3"},
+		{ID: "fixture-six", Name: "Fixture Six"},
+	})
+}
 
 func TestModelSelectViewLaunchViaSlashCommand(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
+	seedModelSelectCatalog(bModel)
 	bModel.activeModel = "MiniMax-M3"
 	bModel.activeProvider = "protonman"
 
@@ -89,6 +102,7 @@ func TestModelSelectViewToggleKeybinding(t *testing.T) {
 
 func TestModelSelectViewNavigationAndConfirm(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
+	seedModelSelectCatalog(bModel)
 	bModel.activeModel = "deepseek-v4-flash-vision-exp"
 	bModel.activeProvider = "protonman"
 	bModel.executeCommand("/model")
@@ -252,6 +266,7 @@ func TestProviderListSlashCommand(t *testing.T) {
 
 func TestModelSelectPagedNavigation(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
+	seedModelSelectCatalog(m)
 	m.resize(40, 14)
 	m.executeCommand("/model")
 	view := m.bottom.find(modelSelectViewID).(*modelSelectPaneView)

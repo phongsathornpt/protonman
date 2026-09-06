@@ -7,11 +7,9 @@ import (
 	"fmt"
 	"math"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/model"
 	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
 
@@ -178,59 +176,6 @@ func isContextOverflow(msg string) bool {
 }
 
 // FindModelSuggestions finds nearest matching model names from known catalogs using Levenshtein distance.
-func FindModelSuggestions(target string, maxResults int) []string {
-	clean := strings.ToLower(strings.TrimSpace(target))
-	if clean == "" {
-		return nil
-	}
-
-	type match struct {
-		id       string
-		distance int
-	}
-
-	var candidates []string
-	for _, m := range model.DefaultOpenCodeFreeModels {
-		candidates = append(candidates, m.ID)
-	}
-	for _, m := range model.DefaultProtonmanModels {
-		candidates = append(candidates, m.ID)
-	}
-
-	seen := make(map[string]bool)
-	var matches []match
-
-	for _, cand := range candidates {
-		if seen[cand] {
-			continue
-		}
-		seen[cand] = true
-
-		candLower := strings.ToLower(cand)
-		dist := levenshteinDistance(clean, candLower)
-
-		// Extra bonus for prefix/substring matches
-		if strings.Contains(candLower, clean) || strings.Contains(clean, candLower) {
-			dist = dist / 2
-		}
-
-		matches = append(matches, match{id: cand, distance: dist})
-	}
-
-	sort.Slice(matches, func(i, j int) bool {
-		return matches[i].distance < matches[j].distance
-	})
-
-	results := make([]string, 0, maxResults)
-	for i := 0; i < len(matches) && i < maxResults; i++ {
-		// Only suggest reasonable candidates (distance threshold)
-		if matches[i].distance <= 12 || len(results) == 0 {
-			results = append(results, matches[i].id)
-		}
-	}
-	return results
-}
-
 func levenshteinDistance(s1, s2 string) int {
 	r1, r2 := []rune(s1), []rune(s2)
 	l1, l2 := len(r1), len(r2)
@@ -420,14 +365,8 @@ func ClassifyOpenCodeError(err error, activeProvider string, activeModel string)
 		}
 
 		suggestions := []string{
-			"Run /provider to select an available free model",
-			"Check free models: nemotron-3.5-lightning-free, deepseek-v4-flash-free",
-		}
-
-		closest := FindModelSuggestions(missingModel, 3)
-		if len(closest) > 0 {
-			didYouMean := fmt.Sprintf("Did you mean: %s", strings.Join(closest, ", "))
-			suggestions = append([]string{didYouMean}, suggestions...)
+			"Run /model to refresh the provider model catalog",
+			"Run /provider to select or reconfigure the active provider",
 		}
 
 		cleanMsg := fmt.Sprintf("Model %q is not supported by provider %q.", missingModel, activeProvider)
