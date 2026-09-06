@@ -3,13 +3,13 @@ package appdirs
 
 import (
 	"fmt"
+	"github.com/projectTHORN/proton/internal/envconfig"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
 const (
-	EnvHome        = "PROTON_HOME"
 	RootDirName    = ".proton"
 	ConfigFileName = "config.toml"
 	SessionsDir    = "sessions"
@@ -33,7 +33,7 @@ type Dirs struct {
 func Resolve(explicitHome string) (Dirs, error) {
 	home := strings.TrimSpace(explicitHome)
 	if home == "" {
-		home = strings.TrimSpace(os.Getenv(EnvHome))
+		home = envconfig.Value(envconfig.Home)
 	}
 	if home == "" {
 		resolved, err := os.UserHomeDir()

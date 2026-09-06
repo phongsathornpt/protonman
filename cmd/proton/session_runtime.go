@@ -5,10 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/envconfig"
 	"github.com/projectTHORN/proton/internal/session"
 )
 
@@ -32,7 +32,7 @@ func resolveSession(
 
 	explicitID := strings.TrimSpace(options.sessionID)
 	if explicitID == "" {
-		explicitID = strings.TrimSpace(os.Getenv("PROTON_SESSION_ID"))
+		explicitID = envconfig.Value(envconfig.SessionID)
 	}
 
 	if options.resume {

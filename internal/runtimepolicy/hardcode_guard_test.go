@@ -19,7 +19,7 @@ func TestMutableProductLiteralsStayCentralized(t *testing.T) {
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
 	allowed := map[string]string{
-		"PROTON_HOME":                  "internal/appdirs/dirs.go",
+		"PROTON_HOME":                  "internal/envconfig/env.go",
 		".proton":                      "internal/appdirs/dirs.go",
 		"https://protonman.dev/api/v1": "internal/model/provider.go",
 		"https://opencode.ai/zen/v1":   "internal/model/provider.go",

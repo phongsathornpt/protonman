@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/projectTHORN/proton/internal/acp"
+	"github.com/projectTHORN/proton/internal/envconfig"
 	"github.com/projectTHORN/proton/internal/session"
 	"github.com/projectTHORN/proton/internal/telemetry"
 	"github.com/projectTHORN/proton/internal/toolcall"
@@ -37,7 +38,7 @@ func run(ctx context.Context, args []string) error {
 		return nil
 	}
 
-	restoreDebugLogger, err := telemetry.ConfigureDebugLogger(os.Getenv("PROTON_DEBUG_LOG"))
+	restoreDebugLogger, err := telemetry.ConfigureDebugLogger(envconfig.Value(envconfig.DebugLog))
 	if err != nil {
 		return fmt.Errorf("configure debug logging: %w", err)
 	}
@@ -110,17 +111,10 @@ func run(ctx context.Context, args []string) error {
 	return nil
 }
 
-func truthy(value string) bool {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "1", "true", "yes", "on":
-		return true
-	default:
-		return false
-	}
-}
+func truthy(value string) bool { return envconfig.Truthy(value) }
 
 func configuredTelemetryObserver() (toolcall.Observer, error) {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("PROTON_TELEMETRY"))) {
+	switch strings.ToLower(envconfig.Value(envconfig.Telemetry)) {
 	case "", "off", "false", "0":
 		return nil, nil
 	case "stderr":
@@ -133,6 +127,6 @@ func configuredTelemetryObserver() (toolcall.Observer, error) {
 		}
 		return observer, nil
 	default:
-		return nil, fmt.Errorf("unsupported PROTON_TELEMETRY value %q", os.Getenv("PROTON_TELEMETRY"))
+		return nil, fmt.Errorf("unsupported PROTON_TELEMETRY value %q", envconfig.Value(envconfig.Telemetry))
 	}
 }

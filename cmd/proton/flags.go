@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"golang.org/x/term"
+
+	"github.com/projectTHORN/proton/internal/envconfig"
 )
 
 type cliOptions struct {
@@ -98,14 +100,14 @@ Headless flags:
 }
 
 func stdinIsTerminal() bool {
-	if truthy(os.Getenv("PROTON_FORCE_TTY")) {
+	if envconfig.Bool(envconfig.ForceTTY) {
 		return true
 	}
 	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
 func stdoutIsTerminal() bool {
-	if truthy(os.Getenv("PROTON_FORCE_TTY")) {
+	if envconfig.Bool(envconfig.ForceTTY) {
 		return true
 	}
 	return term.IsTerminal(int(os.Stdout.Fd()))
