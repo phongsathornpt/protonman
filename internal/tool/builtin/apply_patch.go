@@ -104,23 +104,23 @@ func (h applyPatchHandler) PermissionDetail(arguments json.RawMessage) string {
 	if err != nil || len(operations) == 0 {
 		return ""
 	}
-	paths := make([]string, 0, len(operations))
+	details := make([]string, 0, len(operations))
 	seen := make(map[string]struct{}, len(operations))
 	for _, op := range operations {
 		if op.path != "" {
 			if _, ok := seen[op.path]; !ok {
 				seen[op.path] = struct{}{}
-				paths = append(paths, op.path)
+				details = append(details, managedFileDetail(op.path, nil))
 			}
 		}
 		if op.movePath != "" {
 			if _, ok := seen[op.movePath]; !ok {
 				seen[op.movePath] = struct{}{}
-				paths = append(paths, op.movePath)
+				details = append(details, managedFileDetail(op.movePath, nil))
 			}
 		}
 	}
-	return strings.Join(paths, ", ")
+	return strings.Join(details, ", ")
 }
 
 func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
