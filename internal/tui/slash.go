@@ -504,8 +504,7 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		m.showTranscript = true
 		m.refreshTranscriptViewport(true)
 	case "todo":
-		m.todoHidden = false
-		m.appendTodo()
+		m.todoExpanded = true
 		m.resize(m.width, m.height)
 	case "clear":
 		m.resetTranscript()

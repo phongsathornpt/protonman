@@ -56,7 +56,7 @@ type bubbleModel struct {
 
 	queue           []string
 	todo            []TodoItem
-	todoHidden      bool
+	todoExpanded    bool
 	busy            bool
 	activity        string
 	pendingActivity string
@@ -544,7 +544,7 @@ func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if key.Matches(message, m.keys.ToggleTodo) {
-		m.todoHidden = !m.todoHidden
+		m.todoExpanded = !m.todoExpanded
 		m.relayout()
 		return m, nil
 	}

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/projectTHORN/proton/internal/permission"
 )
@@ -99,5 +100,35 @@ func TestRunningToolUsesTranscriptAsProgressSurface(t *testing.T) {
 	m.historyState.StartThinking()
 	if got := m.statusView(); got == "" {
 		t.Fatal("thinking state should retain the global status row")
+	}
+}
+
+func TestTodoDefaultsToSummaryAndCtrlOExpands(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{Text: "first"}, {Text: "second"}})
+	m.resize(80, 24)
+	if got := m.todoView(); !strings.Contains(got, "Tasks 0/2") || strings.Contains(got, "first") {
+		t.Fatalf("default todo = %q, want summary", got)
+	}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
+	m = updated.(*bubbleModel)
+	if got := m.todoView(); !strings.Contains(got, "first") || !strings.Contains(got, "second") {
+		t.Fatalf("expanded todo missing details: %q", got)
+	}
+}
+
+func TestWelcomeCardUsesVerticalHierarchyAndTruncates(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.workDir = "/a/very/long/workspace/path/that/does/not/fit/in/a/narrow/terminal"
+	m.activeModel = "provider/a-very-long-model-name-that-does-not-fit"
+	m.activeProvider = "provider-name"
+	m.resize(32, 14)
+	card := m.welcomeCard()
+	if !strings.Contains(card, "Proton") || !strings.Contains(card, "provider-name") {
+		t.Fatalf("welcome card missing hierarchy: %q", card)
+	}
+	for _, line := range strings.Split(card, "\n") {
+		if got := lipgloss.Width(line); got > 30 {
+			t.Fatalf("welcome line width = %d, want <= 30: %q", got, line)
+		}
 	}
 }

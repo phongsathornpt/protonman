@@ -209,7 +209,7 @@ func formatElapsed(duration time.Duration) string {
 }
 
 func (m bubbleModel) todoView() string {
-	if m.todoHidden || len(m.todo) == 0 {
+	if len(m.todo) == 0 {
 		return ""
 	}
 	completed := 0
@@ -226,6 +226,9 @@ func (m bubbleModel) todoView() string {
 		return ""
 	case layoutCompact:
 		return brandStyle.Render(fmt.Sprintf("Tasks %d/%d", completed, len(m.todo)))
+	}
+	if !m.todoExpanded {
+		return brandStyle.Render(fmt.Sprintf("Tasks %d/%d · ctrl+o details", completed, len(m.todo)))
 	}
 	visible, more := pendingFirst(m.todo, 4)
 	lines := []string{brandStyle.Render(fmt.Sprintf("TODO %d/%d complete", completed, len(m.todo)))}

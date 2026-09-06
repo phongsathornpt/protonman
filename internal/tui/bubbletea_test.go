@@ -50,6 +50,7 @@ func TestTodoPaneShowsPendingBeforeCompleted(t *testing.T) {
 		{Text: "also done", Done: true},
 	})
 	model.resize(80, 24)
+	model.todoExpanded = true
 	view := model.View()
 	if !strings.Contains(view, "still open") {
 		t.Fatalf("todo pane hid the pending item: %s", view)
@@ -117,8 +118,7 @@ func TestBubbleModelRendersComponentLayout(t *testing.T) {
 	for _, expected := range []string{
 		"Proton",
 		"assistant: ready",
-		"TODO 0/1 complete",
-		"ship Bubble Tea",
+		"Tasks 0/1",
 		"ask",
 		"❯",
 		"/help",
@@ -286,7 +286,7 @@ func TestEmptyStateWithoutRunnerGuidesSlashCommands(t *testing.T) {
 
 	view := model.View()
 	for _, expected := range []string{
-		"No model configured",
+		"No model selected",
 		"Type a message or /command",
 		"Proton",
 	} {
@@ -653,7 +653,7 @@ func TestWelcomeCardReprintsAfterClear(t *testing.T) {
 	if strings.Contains(plainTranscript(model), "gone") {
 		t.Fatal("clear left transcript body")
 	}
-	if !strings.Contains(view, "Proton") || !strings.Contains(view, "No model configured") {
+	if !strings.Contains(view, "Proton") || !strings.Contains(view, "No model selected") {
 		t.Fatalf("clear did not reprint welcome: %s", view)
 	}
 }
