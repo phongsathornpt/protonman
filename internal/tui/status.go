@@ -22,16 +22,44 @@ func (m bubbleModel) statusView() string {
 		return warningStyle.Render(truncateWithEllipsis("action required · permission", maxInt(1, m.width-2)))
 	}
 	if m.busy {
-		if m.activeTranscriptShowsToolProgress() {
+		activeAgents, runningAgents, queuedAgents, cancelingAgents := agentActivityCounts(m.agentSnapshot)
+		if m.activeTranscriptShowsToolProgress() && activeAgents == 0 {
 			return ""
 		}
 		activity := m.activity
+		if activeAgents > 0 {
+			activity = "coordinating"
+			activity += fmt.Sprintf(" · %d agent", activeAgents)
+			if activeAgents != 1 {
+				activity += "s"
+			}
+			if cancelingAgents > 0 {
+				activity += fmt.Sprintf(" · %d canceling", cancelingAgents)
+			} else if runningAgents == 0 && queuedAgents > 0 {
+				activity += " · queued"
+			}
+		}
 		if !m.busyStarted.IsZero() {
-			activity += " " + formatElapsed(time.Since(m.busyStarted))
+			activity += " · " + formatElapsed(time.Since(m.busyStarted))
 		}
 		return statusStyle.Render(truncateWithEllipsis("• "+activity, maxInt(1, m.width-2)))
 	}
 	return ""
+}
+
+func agentActivityCounts(snapshot []agent.AgentStatus) (active, running, queued, canceling int) {
+	for _, st := range snapshot {
+		switch st.State {
+		case agent.StateRunning:
+			running++
+		case agent.StateQueued:
+			queued++
+		case agent.StateCanceling:
+			canceling++
+		}
+	}
+	active = running + queued + canceling
+	return active, running, queued, canceling
 }
 
 func (m bubbleModel) activeTranscriptShowsToolProgress() bool {
