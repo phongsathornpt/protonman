@@ -194,7 +194,7 @@ When prompted in `ask` mode:
 
 Proton can confine sub-processes via OS-level sandboxing:
 - **macOS**: Evaluates seatbelt confinement profiles via `sandbox-exec`.
-- **Linux**: Uses bubblewrap (`bwrap`) for filesystem confinement today; native Go/Linux confinement is being introduced incrementally.
+- **Linux**: Uses bubblewrap (`bwrap`) for filesystem confinement today; native Go/Linux confinement is being introduced incrementally. The CLI already performs native Landlock/user-namespace capability probing to improve diagnostics.
 
 | Profile | Workspace Files | Host Filesystem | Network Access |
 | :--- | :--- | :--- | :--- |
