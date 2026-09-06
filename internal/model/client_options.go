@@ -9,8 +9,7 @@ import (
 	"github.com/projectTHORN/proton/internal/runtimepolicy"
 )
 
-// clientConfig is the temporary CLI compatibility configuration applied when
-// constructing proton-sdk provider models.
+// clientConfig contains CLI-owned settings used to construct proton-sdk provider models.
 type clientConfig struct {
 	baseURL    string
 	apiKey     string
@@ -21,11 +20,8 @@ type clientConfig struct {
 	httpClient *http.Client
 }
 
-// ClientOption configures the CLI-to-SDK provider bridge.
+// ClientOption configures provider model construction.
 type ClientOption func(*clientConfig)
-
-// OpenAIOption is retained as a compatibility alias for callers compiled against the old bridge name.
-type OpenAIOption = ClientOption
 
 func WithSessionID(sessionID string) ClientOption {
 	return func(c *clientConfig) { c.sessionID = sessionID }
