@@ -45,10 +45,9 @@ func TestConfiningProfileFailsClosedWhenToolsMissing(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("windows launcher is fail-closed by design")
 	}
-	profiles := []Name{
-		NameWorkspace,
-		NameReadOnly,
-		NameStrict,
+	profiles := []Name{NameReadOnly, NameStrict}
+	if runtime.GOOS != "linux" || ProbeCapabilities().LandlockABI == 0 {
+		profiles = append([]Name{NameWorkspace}, profiles...)
 	}
 	for _, name := range profiles {
 		t.Run(name.String(), func(t *testing.T) {

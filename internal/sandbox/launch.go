@@ -102,6 +102,16 @@ func (l *OSLauncher) CommandInDir(ctx context.Context, workspaceRoot string, cwd
 		logSandboxSelected(ctx, startedAt, "sandbox-exec", cmd.Path)
 		return cmd, nil
 	case "linux":
+		caps := ProbeCapabilities()
+		if !l.Profile.RestrictNetwork && caps.LandlockABI > 0 {
+			cmd, err := nativeLandlockCommand(ctx, l.Profile, dir, cwd, command)
+			if err != nil {
+				logSandboxFailure(ctx, startedAt, "native_landlock", err)
+				return nil, err
+			}
+			logSandboxSelected(ctx, startedAt, "landlock", cmd.Path)
+			return cmd, nil
+		}
 		if path, err := lookPath("bwrap"); err == nil {
 			cmd := bwrapCommand(ctx, path, l.Profile, dir, cwd, command)
 			logSandboxSelected(ctx, startedAt, "bwrap", cmd.Path)
@@ -111,7 +121,6 @@ func (l *OSLauncher) CommandInDir(ctx context.Context, workspaceRoot string, cwd
 		// boundary required by every confining Proton profile. Never silently
 		// downgrade a requested workspace/read-only/strict sandbox to a bare
 		// shell.
-		caps := ProbeCapabilities()
 		err := fmt.Errorf(
 			"%w: bwrap is required for filesystem confinement (native probe: landlock_abi=%d user_namespaces=%t)",
 			ErrUnavailable, caps.LandlockABI, caps.UserNamespaces,
