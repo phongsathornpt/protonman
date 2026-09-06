@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"context"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -28,5 +30,46 @@ func BenchmarkSanitizeBubbleText(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		_ = sanitizeBubbleText(input)
+	}
+}
+
+func BenchmarkHistoryStateRenderLines_ActiveMarkdown20KB(b *testing.B) {
+	state := NewHistoryState(50000)
+	for i := 0; i < 100; i++ {
+		state.Append(&AssistantCell{Text: fmt.Sprintf("Committed response %d with **bold** and `code`.", i)})
+	}
+	state.AppendAssistantDelta(strings.Repeat("A paragraph with **bold text**, `inline code`, and [a link](https://example.com).\n", 250))
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = state.RenderLines()
+	}
+}
+
+func BenchmarkHistoryStateRenderLinesAt_100Cells(b *testing.B) {
+	state := NewHistoryState(50000)
+	for i := 0; i < 50; i++ {
+		state.Append(&UserCell{Text: fmt.Sprintf("Question %d", i)})
+		state.Append(&AssistantCell{Text: fmt.Sprintf("## Answer %d\n\n- item one\n- item two with `code`", i)})
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = state.RenderLinesAt(68)
+	}
+}
+
+func BenchmarkRefreshViewport_100Cells(b *testing.B) {
+	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
+	m.resize(80, 24)
+	m.showWelcome = false
+	for i := 0; i < 50; i++ {
+		m.historyState.Append(&UserCell{Text: fmt.Sprintf("Question %d", i)})
+		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("Answer %d with **markdown** and `code`.", i)})
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		m.refreshViewport()
 	}
 }
