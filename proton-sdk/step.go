@@ -49,9 +49,6 @@ func CollectStep(ctx context.Context, stream Stream) (StepResult, error) {
 			result.ProviderMetadata = cloneProviderMetadata(event.ProviderMetadata)
 			result.FinishReason = event.FinishReason
 			return result, nil
-		case EventDone:
-			result.Text = text.String()
-			return result, nil
 		}
 	}
 }
