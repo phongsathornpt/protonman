@@ -16,6 +16,7 @@ import (
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
+	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
 
 func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -267,11 +268,12 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.relayout()
 		return m, nil
 	case turnDeltaMsg:
-		m.applyTurnEvent(message.event)
+		batch := []applicationturn.Event{message.event}
 		for {
 			select {
 			case next, ok := <-m.turnEvents:
 				if !ok {
+					m.applyTurnEvents(batch)
 					slog.DebugContext(m.ctx, "tui turn event channel closed before terminal message",
 						"busy", m.busy,
 					)
@@ -282,15 +284,17 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				if delta, isDelta := next.(turnDeltaMsg); isDelta {
-					m.applyTurnEvent(delta.event)
+					batch = append(batch, delta.event)
 					continue
 				}
+				m.applyTurnEvents(batch)
 				m.refreshViewport()
 				return m.Update(next)
 			default:
 			}
 			break
 		}
+		m.applyTurnEvents(batch)
 		m.refreshViewport()
 		return m, m.withSpinner(waitTurnCh(m.turnEvents))
 	case turnEventsClosedMsg:

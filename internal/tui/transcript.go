@@ -403,6 +403,34 @@ func (m *bubbleModel) replaceRunningTool(name string, replacement Block) bool {
 	return true
 }
 
+func (m *bubbleModel) applyTurnEvents(events []applicationturn.Event) {
+	if len(events) == 0 {
+		return
+	}
+	var pending strings.Builder
+	pendingRound := 0
+	flushText := func() {
+		if pending.Len() == 0 {
+			return
+		}
+		m.applyTurnEvent(applicationturn.Event{Kind: applicationturn.EventTextDelta, Round: pendingRound, Text: pending.String()})
+		pending.Reset()
+		pendingRound = 0
+	}
+	for _, event := range events {
+		if event.Kind == applicationturn.EventTextDelta {
+			pending.WriteString(event.Text)
+			if event.Round > pendingRound {
+				pendingRound = event.Round
+			}
+			continue
+		}
+		flushText()
+		m.applyTurnEvent(event)
+	}
+	flushText()
+}
+
 func (m *bubbleModel) applyTurnEvent(event applicationturn.Event) {
 	if event.Round > 0 {
 		m.turnProgress.Round = event.Round
