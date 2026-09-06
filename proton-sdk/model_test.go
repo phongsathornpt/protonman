@@ -46,3 +46,31 @@ func TestMessageTextContent(t *testing.T) {
 		t.Fatalf("TextContent() = %q", got)
 	}
 }
+
+func TestAgentStreamEventLifecycle(t *testing.T) {
+	tests := []struct {
+		name    string
+		event   Event
+		wantErr bool
+	}{
+		{name: "text start", event: Event{Kind: EventTextStart}},
+		{name: "text delta", event: Event{Kind: EventTextDelta, Text: "hi"}},
+		{name: "text end", event: Event{Kind: EventTextEnd}},
+		{name: "tool start", event: Event{Kind: EventToolCallStart, ToolCallID: "call-1", ToolName: "read_file"}},
+		{name: "tool delta", event: Event{Kind: EventToolCallDelta, ToolCallID: "call-1", ArgumentsDelta: `{"path"`}},
+		{name: "tool end", event: Event{Kind: EventToolCallEnd, ToolCallID: "call-1"}},
+		{name: "complete tool call", event: Event{Kind: EventToolCall, ToolCall: ToolCall{ID: "call-1", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`)}}},
+		{name: "missing tool id", event: Event{Kind: EventToolCallDelta}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.event.Validate()
+			if tt.wantErr && err == nil {
+				t.Fatal("Validate() error = nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("Validate() error = %v", err)
+			}
+		})
+	}
+}
