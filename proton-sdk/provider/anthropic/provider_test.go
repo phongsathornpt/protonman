@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -192,7 +193,7 @@ func TestAnthropicProviderOptionsCannotOverrideCanonicalFields(t *testing.T) {
 func TestAnthropicCapabilities(t *testing.T) {
 	model := NewProvider(ProviderOptions{}).Model("claude-test")
 	caps := model.Capabilities()
-	if !caps.Streaming || !caps.Tools || !caps.Vision || !caps.ProviderOptions {
+	if !caps.Streaming || !caps.Tools || !caps.Vision || !caps.ProviderOptions || !caps.RawChunks {
 		t.Fatalf("Capabilities() = %#v", caps)
 	}
 	if !caps.ToolResultErrors {
@@ -235,5 +236,39 @@ func TestAnthropicToolProviderOptionsCannotOverrideCanonicalFields(t *testing.T)
 	})
 	if err == nil || !strings.Contains(err.Error(), "cannot override canonical") {
 		t.Fatalf("error = %v, want protected tool field error", err)
+	}
+}
+
+func TestAnthropicIncludesRawChunksOnRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":1,\"output_tokens\":0}}}\n\n"))
+		_, _ = w.Write([]byte("data: {\"type\":\"message_stop\"}\n\n"))
+	}))
+	defer server.Close()
+	stream, err := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("claude-test").Stream(context.Background(), sdk.Request{
+		Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}},
+		Options:  sdk.ModelOptions{IncludeRawChunks: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	var events []sdk.Event
+	for {
+		event, err := stream.Next(context.Background())
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		events = append(events, event)
+	}
+	if len(events) != 4 || events[0].Kind != sdk.EventRaw || events[1].Kind != sdk.EventUsage || events[2].Kind != sdk.EventRaw || events[3].Kind != sdk.EventFinish {
+		t.Fatalf("events = %#v", events)
+	}
+	if !strings.Contains(string(events[0].RawData), `"message_start"`) {
+		t.Fatalf("raw = %q", events[0].RawData)
 	}
 }

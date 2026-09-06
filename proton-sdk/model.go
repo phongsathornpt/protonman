@@ -144,8 +144,9 @@ type ProviderOptions map[string]json.RawMessage
 type ProviderMetadata map[string]json.RawMessage
 
 type ModelOptions struct {
-	MaxOutputTokens int
-	ProviderOptions ProviderOptions
+	MaxOutputTokens  int
+	ProviderOptions  ProviderOptions
+	IncludeRawChunks bool
 }
 
 type Request struct {
@@ -227,6 +228,7 @@ const (
 	// events and this normalized complete event.
 	EventToolCall EventKind = "tool_call"
 	EventUsage    EventKind = "usage"
+	EventRaw      EventKind = "raw"
 	EventFinish   EventKind = "finish"
 )
 
@@ -241,11 +243,17 @@ type Event struct {
 	Usage            Usage
 	FinishReason     FinishReason
 	ProviderMetadata ProviderMetadata
+	RawData          []byte
 }
 
 func (e Event) Validate() error {
 	switch e.Kind {
 	case EventTextStart, EventTextDelta, EventTextEnd:
+		return nil
+	case EventRaw:
+		if len(e.RawData) == 0 {
+			return fmt.Errorf("%w: raw event data is required", ErrInvalidEvent)
+		}
 		return nil
 	case EventUsage:
 		return e.Usage.Validate()

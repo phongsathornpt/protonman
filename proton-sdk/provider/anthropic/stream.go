@@ -20,19 +20,20 @@ type toolAccumulator struct {
 }
 
 type stream struct {
-	reader   *bufio.Reader
-	closer   io.Closer
-	queue    []sdk.Event
-	tools    map[int]*toolAccumulator
-	usage    sdk.Usage
-	finish   sdk.FinishReason
-	done     bool
-	terminal error
-	metadata sdk.ProviderMetadata
+	reader     *bufio.Reader
+	closer     io.Closer
+	queue      []sdk.Event
+	tools      map[int]*toolAccumulator
+	usage      sdk.Usage
+	finish     sdk.FinishReason
+	done       bool
+	terminal   error
+	metadata   sdk.ProviderMetadata
+	includeRaw bool
 }
 
-func newStream(body io.ReadCloser, metadata sdk.ProviderMetadata) *stream {
-	return &stream{reader: bufio.NewReader(body), closer: body, tools: make(map[int]*toolAccumulator), metadata: metadata}
+func newStream(body io.ReadCloser, metadata sdk.ProviderMetadata, includeRaw bool) *stream {
+	return &stream{reader: bufio.NewReader(body), closer: body, tools: make(map[int]*toolAccumulator), metadata: metadata, includeRaw: includeRaw}
 }
 
 func (s *stream) Next(ctx context.Context) (sdk.Event, error) {
@@ -68,6 +69,12 @@ func (s *stream) Next(ctx context.Context) (sdk.Event, error) {
 			return sdk.Event{}, fmt.Errorf("read anthropic stream: %w", err)
 		}
 		if err := s.processLine(line); err != nil {
+			if len(s.queue) > 0 {
+				s.terminal = err
+				event := s.queue[0]
+				s.queue = s.queue[1:]
+				return event, nil
+			}
 			return sdk.Event{}, err
 		}
 	}
@@ -107,6 +114,9 @@ func (s *stream) processLine(line string) error {
 		return nil
 	}
 	payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+	if s.includeRaw && payload != "" {
+		s.queue = append(s.queue, sdk.Event{Kind: sdk.EventRaw, RawData: append([]byte(nil), payload...)})
+	}
 	var event wireEvent
 	if err := json.Unmarshal([]byte(payload), &event); err != nil {
 		return fmt.Errorf("%w: decode anthropic event: %w", sdk.ErrInvalidEvent, err)

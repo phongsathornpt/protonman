@@ -30,10 +30,11 @@ type stream struct {
 	terminalErr   error
 	generatedSeq  uint64
 	metadata      sdk.ProviderMetadata
+	includeRaw    bool
 }
 
-func newStream(body io.ReadCloser, metadata sdk.ProviderMetadata) *stream {
-	return &stream{reader: bufio.NewReader(body), closer: body, chatCalls: map[int]*accumulatedToolCall{}, responseCalls: map[string]*accumulatedToolCall{}, metadata: metadata}
+func newStream(body io.ReadCloser, metadata sdk.ProviderMetadata, includeRaw bool) *stream {
+	return &stream{reader: bufio.NewReader(body), closer: body, chatCalls: map[int]*accumulatedToolCall{}, responseCalls: map[string]*accumulatedToolCall{}, metadata: metadata, includeRaw: includeRaw}
 }
 
 type chatChunk struct {
@@ -135,6 +136,12 @@ func (s *stream) Next(ctx context.Context) (sdk.Event, error) {
 			return sdk.Event{}, fmt.Errorf("read stream: %w", err)
 		}
 		if err := s.processLine(line); err != nil {
+			if len(s.queue) > 0 {
+				s.terminalErr = err
+				event := s.queue[0]
+				s.queue = s.queue[1:]
+				return event, nil
+			}
 			return sdk.Event{}, err
 		}
 	}
@@ -149,6 +156,9 @@ func (s *stream) processLine(line string) error {
 		return nil
 	}
 	payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+	if s.includeRaw && payload != "" {
+		s.queue = append(s.queue, sdk.Event{Kind: sdk.EventRaw, RawData: append([]byte(nil), payload...)})
+	}
 	if payload == "[DONE]" {
 		s.finish(sdk.FinishStop)
 		return nil

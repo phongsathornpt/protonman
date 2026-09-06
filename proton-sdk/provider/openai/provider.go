@@ -70,5 +70,5 @@ var _ sdk.LanguageModel = (*LanguageModel)(nil)
 func (m *LanguageModel) Provider() string { return "openai" }
 func (m *LanguageModel) ModelID() string  { return m.modelID }
 func (m *LanguageModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true, Tools: true, Vision: true, ProviderOptions: true}
+	return sdk.ModelCapabilities{Streaming: true, Tools: true, Vision: true, ProviderOptions: true, RawChunks: true}
 }

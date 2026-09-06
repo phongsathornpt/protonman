@@ -57,7 +57,7 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 			continue
 		}
 		if resp.StatusCode == http.StatusOK {
-			return newStream(resp.Body, anthropicResponseMetadata(resp.Header)), nil
+			return newStream(resp.Body, anthropicResponseMetadata(resp.Header), request.Options.IncludeRawChunks), nil
 		}
 		data, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 		resp.Body.Close()
