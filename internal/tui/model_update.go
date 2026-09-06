@@ -133,11 +133,15 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if message.requestID != mv.fetchRequestID || !strings.EqualFold(message.providerName, currentProvider) {
 					return m, nil
 				}
-				if message.err == nil && len(message.models) > 0 {
+				mv.loading = false
+				mv.err = message.err
+				if message.err == nil {
 					m.modelCatalogs.set(message.providerName, message.models)
 					mv.models = m.modelCatalogs.models(message.providerName)
-					m.relayout()
+					mv.index = 0
+					mv.offset = 0
 				}
+				m.relayout()
 			}
 		}
 		return m, nil
