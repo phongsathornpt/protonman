@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/config"
@@ -78,5 +80,56 @@ func TestModelPickerAcceptsCurrentProviderResponse(t *testing.T) {
 	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
 	if len(view.models) != 1 || view.models[0].ID != "beta-model" {
 		t.Fatalf("current response not applied: %#v", view.models)
+	}
+}
+
+func TestModelPickerLoadingHidesPreviousProviderModels(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.providers = map[string]config.ProviderConfig{
+		"alpha": {Name: "alpha", APIKey: "a"},
+		"beta":  {Name: "beta", APIKey: "b"},
+	}
+	m.activeProvider = "alpha"
+	m.modelCatalogs.set("alpha", []model.RemoteModel{{ID: "alpha-only", Name: "Alpha Only"}})
+	view := newModelSelectPaneView(m)
+	m.bottom.push(view)
+	view.providerIndex = 1
+	_ = view.beginFetch("beta", m.providers["beta"])
+
+	rendered := view.Render(m)
+	if !strings.Contains(rendered, "Loading models") {
+		t.Fatalf("loading state not rendered: %q", rendered)
+	}
+	if strings.Contains(rendered, "Alpha Only") {
+		t.Fatalf("previous provider model leaked into loading state: %q", rendered)
+	}
+}
+
+func TestModelPickerRendersFetchError(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	view := newModelSelectPaneView(m)
+	view.loading = false
+	view.err = errors.New("authentication failed (401)")
+
+	rendered := view.Render(m)
+	if !strings.Contains(rendered, "Failed to load models") || !strings.Contains(rendered, "authentication failed") {
+		t.Fatalf("error state not rendered: %q", rendered)
+	}
+}
+
+func TestModelPickerAcceptsEmptyCurrentCatalog(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.providers = map[string]config.ProviderConfig{"alpha": {Name: "alpha", APIKey: "a"}}
+	m.activeProvider = "alpha"
+	view := newModelSelectPaneView(m)
+	m.bottom.push(view)
+	view.fetchRequestID = 4
+	view.loading = true
+
+	updated, _ := m.Update(modelsFetchedMsg{providerName: "alpha", requestID: 4})
+	m = updated.(*bubbleModel)
+	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if view.loading || view.err != nil || len(view.models) != 0 {
+		t.Fatalf("empty current catalog state = loading:%t err:%v models:%#v", view.loading, view.err, view.models)
 	}
 }

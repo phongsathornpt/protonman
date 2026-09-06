@@ -28,6 +28,8 @@ type modelSelectPaneView struct {
 	providerNames  []string
 	providerIndex  int
 	fetchRequestID uint64
+	loading        bool
+	err            error
 }
 
 func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
@@ -94,6 +96,11 @@ func (v *modelSelectPaneView) activeProviderName() string {
 
 func (v *modelSelectPaneView) beginFetch(providerName string, cfg config.ProviderConfig) tea.Cmd {
 	v.fetchRequestID++
+	v.loading = true
+	v.err = nil
+	v.models = nil
+	v.index = 0
+	v.offset = 0
 	return fetchProviderModelsCmd(providerFetchRequest{
 		requestID:    v.fetchRequestID,
 		providerName: providerName,
@@ -104,6 +111,28 @@ func (v *modelSelectPaneView) beginFetch(providerName string, cfg config.Provide
 
 func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 	maxWidth := maxInt(1, m.width-4)
+	activeProv := v.activeProviderName()
+	if v.loading {
+		rows := []string{
+			brandStyle.Render("Select Model · " + activeProv),
+			"",
+			mutedStyle.Render("Loading models..."),
+			"",
+			mutedStyle.Render("esc close"),
+		}
+		return renderModalRows(m, accentAssistant, rows)
+	}
+	if v.err != nil {
+		rows := []string{
+			brandStyle.Render("Select Model · " + activeProv),
+			"",
+			errorStyle.Render("Failed to load models"),
+			mutedStyle.Render(truncateWithEllipsis(v.err.Error(), maxInt(8, maxWidth-4))),
+			"",
+			mutedStyle.Render("r retry · p providers · esc close"),
+		}
+		return renderModalRows(m, accentAssistant, rows)
+	}
 	if len(v.models) == 0 {
 		rows := []string{
 			brandStyle.Render("✓ Select Model"),
@@ -113,11 +142,6 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 			mutedStyle.Render("a add provider credentials · esc close"),
 		}
 		return renderModalRows(m, accentAssistant, rows)
-	}
-
-	activeProv := "default"
-	if v.providerIndex >= 0 && v.providerIndex < len(v.providerNames) {
-		activeProv = v.providerNames[v.providerIndex]
 	}
 
 	if v.index >= len(v.models) {
@@ -243,14 +267,25 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 		}
 		return true, nil
 
+	case "r":
+		currentProv := v.activeProviderName()
+		if cfg, ok := m.providers[normalizeProviderKey(currentProv)]; ok {
+			return true, v.beginFetch(currentProv, cfg)
+		}
+		return true, nil
+
 	case "tab":
 		if len(v.providerNames) > 1 {
 			v.providerIndex = (v.providerIndex + 1) % len(v.providerNames)
 			currentProv := v.providerNames[v.providerIndex]
-			if cfg, ok := m.providers[currentProv]; ok {
+			v.loading = false
+			v.err = nil
+			v.models = m.modelCatalogs.models(currentProv)
+			v.index = 0
+			v.offset = 0
+			if cfg, ok := m.providers[normalizeProviderKey(currentProv)]; ok {
 				isOpenCode := strings.Contains(strings.ToLower(cfg.BaseURL), "opencode.ai") || strings.EqualFold(currentProv, model.DefaultOpenCodeName)
 				if cfg.APIKey != "" || isOpenCode {
-					// Fetch models for newly focused provider
 					return true, v.beginFetch(currentProv, cfg)
 				}
 			}
