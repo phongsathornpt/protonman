@@ -202,38 +202,6 @@ func TestCoordinator_CancelsChildWhenParentContextCancels(t *testing.T) {
 	}
 }
 
-func TestCoordinator_EnforcesMaxDepth(t *testing.T) {
-	coord := NewCoordinator(
-		nil,
-		emptyRegistry{},
-		nil,
-		nil,
-		WithMaxDepth(1),
-	)
-	defer coord.Close()
-
-	// Depth 1 is allowed
-	_, err := coord.Run(context.Background(), Request{
-		Profile: ProfileExplorer,
-		Task:    "allowed depth",
-		Depth:   1,
-	})
-	// Will fail because no runner factory / client, but NOT on depth validation
-	if err != nil && err.Error() == "delegation depth 1 exceeds maximum depth 1" {
-		t.Fatalf("unexpected depth error: %v", err)
-	}
-
-	// Depth 2 exceeds max depth 1
-	_, err = coord.Run(context.Background(), Request{
-		Profile: ProfileExplorer,
-		Task:    "excessive depth",
-		Depth:   2,
-	})
-	if err == nil || err.Error() != "delegation depth 2 exceeds maximum depth 1" {
-		t.Fatalf("expected depth exceed error, got: %v", err)
-	}
-}
-
 func TestCoordinator_SerializesMutatingWorkers(t *testing.T) {
 	var currentWorkers atomic.Int32
 	var peakWorkers atomic.Int32

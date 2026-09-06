@@ -17,7 +17,6 @@ import (
 
 const (
 	defaultMaxConcurrency    = 4
-	defaultMaxDepth          = 1
 	defaultMaxRounds         = 10
 	defaultMaxToolCalls      = runtimepolicy.TurnMaxToolCalls
 	defaultMaxRuntime        = runtimepolicy.AgentMaxRuntime
@@ -45,7 +44,6 @@ type AgentStatus struct {
 	StartTime  time.Time `json:"start_time"`
 	StartedAt  time.Time `json:"started_at,omitempty"`
 	FinishedAt time.Time `json:"finished_at,omitempty"`
-	Depth      int       `json:"depth"`
 }
 
 type agentEntry struct {
@@ -78,7 +76,6 @@ type Coordinator struct {
 	rootCtx     context.Context
 	rootStop    context.CancelFunc
 
-	maxDepth            int
 	maxRounds           int
 	maxToolCalls        int
 	maxLiveAgents       int
@@ -112,15 +109,6 @@ func WithMaxConcurrency(n int) Option {
 			c.wsGate = make(chan struct{}, n)
 			c.wsWriter = make(chan struct{}, 1)
 			c.wsAdmission = make(chan struct{}, 1)
-		}
-	}
-}
-
-// WithMaxDepth sets the maximum delegation nesting depth.
-func WithMaxDepth(depth int) Option {
-	return func(c *Coordinator) {
-		if depth >= 0 {
-			c.maxDepth = depth
 		}
 	}
 }
@@ -268,7 +256,6 @@ func NewCoordinator(
 		agents:              make(map[string]*agentEntry),
 		rootCtx:             rootCtx,
 		rootStop:            rootStop,
-		maxDepth:            defaultMaxDepth,
 		maxRounds:           defaultMaxRounds,
 		maxToolCalls:        defaultMaxToolCalls,
 		maxLiveAgents:       defaultMaxLiveAgents,
