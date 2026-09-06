@@ -153,3 +153,20 @@ func TestAgentLifecycleProgressShowsCurrentActivity(t *testing.T) {
 		t.Fatal("terminal lifecycle event did not clear transient activity")
 	}
 }
+
+func TestAgentsViewCollapsesDuringBusyRootTurn(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.resize(100, 30)
+	m.busy = true
+	m.agentSnapshot = []agent.AgentStatus{
+		{ID: "explorer-1", Task: "inspect router", State: agent.StateRunning, StartedAt: time.Now()},
+		{ID: "reviewer-2", Task: "review risks", State: agent.StateQueued},
+	}
+	got := m.agentsView()
+	if !strings.Contains(got, "Agents 2 active") {
+		t.Fatalf("busy agents view=%q", got)
+	}
+	if strings.Contains(got, "inspect router") || strings.Contains(got, "review risks") {
+		t.Fatalf("busy agents view should be collapsed: %q", got)
+	}
+}

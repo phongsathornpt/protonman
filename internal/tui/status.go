@@ -283,7 +283,7 @@ func (m bubbleModel) agentsView() string {
 	if completed > 0 {
 		summary += fmt.Sprintf(" · %d done", completed)
 	}
-	if layoutModeForHeight(m.height) == layoutCompact {
+	if layoutModeForHeight(m.height) == layoutCompact || m.busy {
 		return brandStyle.Render(summary)
 	}
 
