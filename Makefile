@@ -1,27 +1,33 @@
 .DEFAULT_GOAL := tui
 
-.PHONY: all tui run build clean test test-race test-e2e fmt vet lint help
+.PHONY: all tui run dev build run-bin clean test test-race test-e2e bench bench-cpu bench-mem fmt vet lint help
 
 # Binary configuration
 BIN_DIR := bin
 BIN_NAME := proton
 BINARY := $(BIN_DIR)/$(BIN_NAME)
+GO_SOURCES := $(shell find cmd internal -type f -name '*.go' ! -name '*_test.go')
 
-## tui: Run Proton TUI (default)
-tui:
+## tui: Run Proton TUI from the cached binary (default)
+tui: run
+
+## run: Build Proton only when sources changed, then run it
+run: $(BINARY)
+	./$(BINARY)
+
+## dev: Run Proton through go run (always invokes the Go toolchain)
+dev:
 	go run ./cmd/proton
 
-## run: Alias for tui
-run: tui
+## build: Build the proton binary only when sources changed
+build: $(BINARY)
 
-## build: Build the proton binary
-build:
+$(BINARY): $(GO_SOURCES) go.mod go.sum
 	@mkdir -p $(BIN_DIR)
 	go build -o $(BINARY) ./cmd/proton
 
-## run-bin: Run the built binary
-run-bin: build
-	./$(BINARY)
+## run-bin: Alias for run
+run-bin: run
 
 ## test: Run unit and adapter tests
 test:
