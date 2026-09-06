@@ -76,6 +76,7 @@ func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 	if err := tododomain.ValidateItems(input.Items); err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "validate todo items", err)
 	}
+	before := h.store.Snapshot()
 	snapshot, err := h.store.CompareAndReplace(ctx, *input.ExpectedRevision, input.Items)
 	if err != nil {
 		if errors.Is(err, tododomain.ErrRevisionConflict) {
@@ -87,15 +88,57 @@ func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 	for _, item := range snapshot.Items {
 		counts[item.Status]++
 	}
+	changes := todoChanges(before.Items, snapshot.Items)
 	payload, err := json.Marshal(map[string]any{
 		"revision":    snapshot.Revision,
 		"total":       len(snapshot.Items),
 		"pending":     counts[tododomain.StatusPending],
 		"in_progress": counts[tododomain.StatusInProgress],
 		"completed":   counts[tododomain.StatusCompleted],
+		"changes":     changes,
 	})
 	if err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "encode todo result", err)
 	}
 	return tool.Result{CallID: call.ID, ToolName: call.Name, Output: string(payload)}, nil
+}
+
+type todoChangeSummary struct {
+	Added     int `json:"added"`
+	Removed   int `json:"removed"`
+	Started   int `json:"started"`
+	Completed int `json:"completed"`
+	Reopened  int `json:"reopened"`
+}
+
+func todoChanges(before, after []tododomain.Item) todoChangeSummary {
+	old := make(map[string]tododomain.Item, len(before))
+	for _, item := range before {
+		old[item.ID] = item
+	}
+	next := make(map[string]tododomain.Item, len(after))
+	var out todoChangeSummary
+	for _, item := range after {
+		next[item.ID] = item
+		prev, ok := old[item.ID]
+		if !ok {
+			out.Added++
+			continue
+		}
+		if prev.Status != tododomain.StatusInProgress && item.Status == tododomain.StatusInProgress {
+			out.Started++
+		}
+		if prev.Status != tododomain.StatusCompleted && item.Status == tododomain.StatusCompleted {
+			out.Completed++
+		}
+		if prev.Status == tododomain.StatusCompleted && item.Status != tododomain.StatusCompleted {
+			out.Reopened++
+		}
+	}
+	for _, item := range before {
+		if _, ok := next[item.ID]; !ok {
+			out.Removed++
+		}
+	}
+	return out
 }
