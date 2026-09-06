@@ -855,14 +855,6 @@ func (v *providerPaneView) cancelFetch() {
 	v.fetchCancel = nil
 }
 
-func fetchModelsCmd(providerName, baseURL, apiKey string) tea.Cmd {
-	return fetchProviderModelsCmd(providerFetchRequest{
-		providerName: providerName,
-		baseURL:      baseURL,
-		apiKey:       apiKey,
-	})
-}
-
 func fetchProviderModelsCmd(request providerFetchRequest) tea.Cmd {
 	return func() tea.Msg {
 		parent := request.ctx
