@@ -167,7 +167,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.providers[providerKey] = config.ProviderConfig{
 				Name:    providerName,
-				Type:    "openai",
+				Type:    string(model.ProviderProtocolOpenAI),
 				BaseURL: message.baseURL,
 				APIKey:  message.apiKey,
 			}

@@ -324,7 +324,7 @@ func (c *OpenAIClient) Stream(ctx context.Context, request Request) (Stream, err
 			httpReq.Header.Set("x-session-affinity", c.sessionID)
 			httpReq.Header.Set("X-Session-Id", c.sessionID)
 
-			if strings.Contains(strings.ToLower(c.baseURL), "opencode.ai") {
+			if IsProvider(DefaultOpenCodeName, "", c.baseURL) {
 				httpReq.Header.Set("x-opencode-session", c.sessionID)
 				clientName := c.clientName
 				if clientName == "" {

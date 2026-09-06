@@ -11,65 +11,81 @@ import (
 	"time"
 )
 
+type ProviderProtocol string
+
 const (
-	// DefaultProtonmanName is the canonical provider label for protonmanAI.
-	DefaultProtonmanName = "protonman"
-	// DefaultProtonmanEndpoint is the public API Gateway base URL.
+	ProviderProtocolOpenAI ProviderProtocol = "openai"
+
+	// DefaultProtonmanName is the canonical provider label for Protonman.
+	DefaultProtonmanName     = "protonman"
 	DefaultProtonmanEndpoint = "https://protonman.dev/api/v1"
 
 	// DefaultOpenCodeName is the canonical provider label for OpenCode Zen.
-	DefaultOpenCodeName = "opencode"
-	// DefaultOpenCodeEndpoint is the base URL for OpenCode Zen API.
+	DefaultOpenCodeName     = "opencode"
 	DefaultOpenCodeEndpoint = "https://opencode.ai/zen/v1"
+
+	// DefaultOllamaName is the canonical provider label for local Ollama.
+	DefaultOllamaName     = "ollama"
+	DefaultOllamaEndpoint = "http://localhost:11434/v1"
+
 	// DefaultOpenAIName is the canonical provider label for OpenAI.
-	DefaultOpenAIName = "openai"
-	// DefaultOpenAIEndpoint is the base URL for the official OpenAI API.
+	DefaultOpenAIName     = "openai"
 	DefaultOpenAIEndpoint = "https://api.openai.com/v1"
 )
 
 // SupportedProviderPreset describes an out-of-the-box model provider preset.
 type SupportedProviderPreset struct {
-	ID           string
-	Name         string
-	BaseURL      string
-	RequiresKey  bool
-	Description  string
-	DefaultModel string
+	ID            string
+	Name          string
+	Protocol      ProviderProtocol
+	BaseURL       string
+	EndpointHosts []string
+	RequiresKey   bool
+	Description   string
+	DefaultModel  string
 }
 
 // SupportedPresets lists available provider presets for discovery and quick setup.
 var SupportedPresets = []SupportedProviderPreset{
 	{
-		ID:           DefaultOpenCodeName,
-		Name:         "OpenCode (Free)",
-		BaseURL:      DefaultOpenCodeEndpoint,
-		RequiresKey:  false,
-		Description:  "Free tier models, zero API key required",
-		DefaultModel: "nemotron-3.5-lightning-free",
+		ID:            DefaultOpenCodeName,
+		Name:          "OpenCode (Free)",
+		Protocol:      ProviderProtocolOpenAI,
+		BaseURL:       DefaultOpenCodeEndpoint,
+		EndpointHosts: []string{"opencode.ai"},
+		RequiresKey:   false,
+		Description:   "Free tier models, zero API key required",
+		DefaultModel:  "nemotron-3.5-lightning-free",
 	},
 	{
-		ID:           DefaultProtonmanName,
-		Name:         "Protonman",
-		BaseURL:      DefaultProtonmanEndpoint,
-		RequiresKey:  true,
-		Description:  "High-speed AI models gateway (plk_...)",
-		DefaultModel: "deepseek-v4-flash-vision-exp",
+		ID:            DefaultProtonmanName,
+		Name:          "Protonman",
+		Protocol:      ProviderProtocolOpenAI,
+		BaseURL:       DefaultProtonmanEndpoint,
+		EndpointHosts: []string{"protonman.dev"},
+		RequiresKey:   true,
+		Description:   "High-speed AI models gateway (plk_...)",
+		DefaultModel:  "deepseek-v4-flash-vision-exp",
 	},
 	{
-		ID:           "ollama",
-		Name:         "Ollama (Local)",
-		BaseURL:      "http://localhost:11434/v1",
-		RequiresKey:  false,
-		Description:  "Local LLM inference, zero cloud cost",
-		DefaultModel: "llama3.2",
+		ID:            DefaultOllamaName,
+		Name:          "Ollama (Local)",
+		Protocol:      ProviderProtocolOpenAI,
+		BaseURL:       DefaultOllamaEndpoint,
+		EndpointHosts: []string{"localhost", "127.0.0.1"},
+		RequiresKey:   false,
+		Description:   "Local LLM inference, zero cloud cost",
+		DefaultModel:  "llama3.2",
 	},
 	{
-		ID:           DefaultOpenAIName,
-		Name:         "OpenAI Official",
-		BaseURL:      "https://api.openai.com/v1",
-		RequiresKey:  true,
-		Description:  "Direct OpenAI API access (sk-...)",
-		DefaultModel: "gpt-4o",
+		ID:            DefaultOpenAIName,
+		Name:          "OpenAI Official",
+		Protocol:      ProviderProtocolOpenAI,
+		BaseURL:       DefaultOpenAIEndpoint,
+		EndpointHosts: []string{"api.openai.com"},
+		RequiresKey:   true,
+		Description:   "Direct OpenAI API access (sk-...)",
+		DefaultModel:  "gpt-4o",
 	},
 }
 
@@ -85,6 +101,41 @@ func LookupPreset(idOrName string) *SupportedProviderPreset {
 	return nil
 }
 
+// MatchProviderPreset resolves a known provider by configured name or endpoint.
+func MatchProviderPreset(providerName, baseURL string) *SupportedProviderPreset {
+	if preset := LookupPreset(providerName); preset != nil {
+		return preset
+	}
+	endpoint := strings.ToLower(strings.TrimSpace(baseURL))
+	if endpoint == "" {
+		return nil
+	}
+	for i := range SupportedPresets {
+		preset := &SupportedPresets[i]
+		for _, host := range preset.EndpointHosts {
+			if strings.Contains(endpoint, strings.ToLower(host)) {
+				return preset
+			}
+		}
+	}
+	return nil
+}
+
+// IsProvider reports whether provider identity or endpoint maps to providerID.
+func IsProvider(providerID, providerName, baseURL string) bool {
+	preset := MatchProviderPreset(providerName, baseURL)
+	return preset != nil && strings.EqualFold(preset.ID, providerID)
+}
+
+// ProviderHasUsableAuth reports whether a provider can be used with the supplied key.
+func ProviderHasUsableAuth(providerName, baseURL, apiKey string) bool {
+	if strings.TrimSpace(apiKey) != "" {
+		return true
+	}
+	preset := MatchProviderPreset(providerName, baseURL)
+	return preset != nil && !preset.RequiresKey
+}
+
 // ResolveProviderBaseURL returns the configured endpoint or the preset default
 // for a known provider.
 func ResolveProviderBaseURL(providerName string, configuredURL string) string {
@@ -92,14 +143,10 @@ func ResolveProviderBaseURL(providerName string, configuredURL string) string {
 		return strings.TrimRight(baseURL, "/")
 	}
 
-	switch strings.ToLower(strings.TrimSpace(providerName)) {
-	case DefaultOpenAIName:
-		return DefaultOpenAIEndpoint
-	case DefaultOpenCodeName:
-		return DefaultOpenCodeEndpoint
-	default:
-		return DefaultProtonmanEndpoint
+	if preset := LookupPreset(providerName); preset != nil {
+		return preset.BaseURL
 	}
+	return DefaultProtonmanEndpoint
 }
 
 // RemoteModel describes a model discovered from an OpenAI or protonman endpoint.
@@ -143,12 +190,14 @@ func IsFreeModel(id string) bool {
 // when the configured connection is a known provider. Custom providers never
 // inherit another provider's model list.
 func FallbackModelsForProvider(providerName, baseURL string) []RemoteModel {
-	name := strings.ToLower(strings.TrimSpace(providerName))
-	endpoint := strings.ToLower(strings.TrimSpace(baseURL))
-	switch {
-	case name == DefaultProtonmanName || strings.Contains(endpoint, "protonman.dev"):
+	preset := MatchProviderPreset(providerName, baseURL)
+	if preset == nil {
+		return nil
+	}
+	switch preset.ID {
+	case DefaultProtonmanName:
 		return append([]RemoteModel(nil), DefaultProtonmanModels...)
-	case name == DefaultOpenCodeName || strings.Contains(endpoint, "opencode.ai"):
+	case DefaultOpenCodeName:
 		return append([]RemoteModel(nil), DefaultOpenCodeFreeModels...)
 	default:
 		return nil
@@ -171,7 +220,7 @@ func NormalizeModelID(endpointOrProvider string, modelID string) string {
 	}
 
 	// For OpenCode: ensure free-tier models have the -free suffix
-	isOpencode := strings.Contains(strings.ToLower(endpointOrProvider), "opencode")
+	isOpencode := IsProvider(DefaultOpenCodeName, endpointOrProvider, endpointOrProvider)
 	if isOpencode && !strings.HasSuffix(lower, "-free") && lower != "big-pickle" {
 		knownFreeBases := []string{
 			"nemotron-3.5-lightning",
@@ -221,12 +270,14 @@ func FetchProviderModels(ctx context.Context, baseURL string, apiKey string) ([]
 		return publicModels, nil
 	}
 
-	// 3. Check domain fallbacks if remote request failed
-	if strings.Contains(baseURL, "protonman.dev") {
-		return append([]RemoteModel{}, DefaultProtonmanModels...), nil
-	}
-	if strings.Contains(baseURL, "opencode.ai") {
-		return append([]RemoteModel{}, DefaultOpenCodeFreeModels...), nil
+	// 3. Check known-provider fallbacks if remote request failed.
+	if preset := MatchProviderPreset("", baseURL); preset != nil {
+		switch preset.ID {
+		case DefaultProtonmanName:
+			return append([]RemoteModel{}, DefaultProtonmanModels...), nil
+		case DefaultOpenCodeName:
+			return append([]RemoteModel{}, DefaultOpenCodeFreeModels...), nil
+		}
 	}
 
 	if err != nil {

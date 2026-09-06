@@ -254,3 +254,39 @@ func TestFallbackModelsForProviderReturnsCopy(t *testing.T) {
 		t.Fatal("fallback catalog shares backing storage with defaults")
 	}
 }
+
+func TestMatchProviderPreset(t *testing.T) {
+	tests := []struct {
+		name     string
+		provider string
+		baseURL  string
+		wantID   string
+	}{
+		{name: "by name", provider: DefaultOpenCodeName, wantID: DefaultOpenCodeName},
+		{name: "by endpoint", provider: "custom", baseURL: DefaultProtonmanEndpoint, wantID: DefaultProtonmanName},
+		{name: "openai endpoint", baseURL: DefaultOpenAIEndpoint, wantID: DefaultOpenAIName},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			preset := MatchProviderPreset(test.provider, test.baseURL)
+			if preset == nil || preset.ID != test.wantID {
+				t.Fatalf("MatchProviderPreset(%q, %q) = %#v, want %q", test.provider, test.baseURL, preset, test.wantID)
+			}
+		})
+	}
+}
+
+func TestProviderHasUsableAuth(t *testing.T) {
+	if !ProviderHasUsableAuth(DefaultOpenCodeName, DefaultOpenCodeEndpoint, "") {
+		t.Fatal("OpenCode preset should allow empty API key")
+	}
+	if ProviderHasUsableAuth(DefaultProtonmanName, DefaultProtonmanEndpoint, "") {
+		t.Fatal("Protonman preset should require an API key")
+	}
+	if !ProviderHasUsableAuth("custom", "https://example.test/v1", "key") {
+		t.Fatal("custom provider with API key should be usable")
+	}
+	if ProviderHasUsableAuth("custom", "https://example.test/v1", "") {
+		t.Fatal("unknown provider without API key should not be usable")
+	}
+}

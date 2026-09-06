@@ -153,7 +153,7 @@ func (m *bubbleModel) reconfigureRunner() {
 		provName = model.DefaultProtonmanName
 	}
 	prov, ok := m.providers[strings.ToLower(provName)]
-	hasValidAuth := ok && (strings.TrimSpace(prov.APIKey) != "" || strings.Contains(strings.ToLower(prov.BaseURL), "opencode.ai") || strings.EqualFold(prov.Name, model.DefaultOpenCodeName))
+	hasValidAuth := ok && model.ProviderHasUsableAuth(provName, prov.BaseURL, prov.APIKey)
 	if !hasValidAuth {
 		// Reload from disk in case config was written or updated
 		dirs, resolveErr := appdirs.Resolve("")
@@ -173,7 +173,7 @@ func (m *bubbleModel) reconfigureRunner() {
 				m.providers[k] = v
 			}
 			prov, ok = m.providers[strings.ToLower(provName)]
-			hasValidAuth = ok && (strings.TrimSpace(prov.APIKey) != "" || strings.Contains(strings.ToLower(prov.BaseURL), "opencode.ai") || strings.EqualFold(prov.Name, model.DefaultOpenCodeName))
+			hasValidAuth = ok && model.ProviderHasUsableAuth(provName, prov.BaseURL, prov.APIKey)
 		}
 	}
 	if !hasValidAuth {

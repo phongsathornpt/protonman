@@ -194,7 +194,7 @@ func (v *modelSelectPaneView) loadProvider(m *bubbleModel, force bool) tea.Cmd {
 
 	cfg, configured := m.providers[normalizeProviderKey(providerName)]
 	if configured {
-		isOpenCode := strings.Contains(strings.ToLower(cfg.BaseURL), "opencode.ai") || strings.EqualFold(providerName, model.DefaultOpenCodeName)
+		isOpenCode := model.IsProvider(model.DefaultOpenCodeName, providerName, cfg.BaseURL)
 		if strings.TrimSpace(cfg.APIKey) != "" || isOpenCode {
 			return v.beginFetch(m.ctx, providerName, cfg)
 		}
