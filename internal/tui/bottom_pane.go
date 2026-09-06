@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
@@ -193,9 +192,7 @@ func (*skillsPaneView) ReplacesComposer() bool { return true }
 
 func (v *skillsPaneView) Render(m *bubbleModel) string {
 	if m == nil || m.skills == nil || len(m.skills.List()) == 0 {
-		return modalStyle.
-			BorderForeground(accentAssistant).
-			Render("No agent skills discovered.\n\nPlace skills in ~/.proton/skills/ or .proton/skills/ (with PROTON_TRUST_PROJECT=1).\n\nesc close")
+		return renderModalRows(m, accentAssistant, []string{"No agent skills discovered.", "", "Place skills in ~/.proton/skills/ or .proton/skills/.", "", "esc close"})
 	}
 	skills := m.skills.List()
 	if v.index >= len(skills) {
@@ -269,11 +266,13 @@ func (v *skillsPaneView) Render(m *bubbleModel) string {
 		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ▼ %d more below", len(skills)-visibleEnd)))
 	}
 
-	rows = append(rows, "", mutedStyle.Render("j/k move · space/t toggle · 1-9 jump · esc/enter close"))
-	return modalStyle.
-		BorderForeground(accentAssistant).
-		MaxWidth(maxInt(1, m.width-4)).
-		Render(strings.Join(rows, "\n"))
+	footer := "j/k move · space toggle · pgup/pgdn · esc/enter close"
+	if layoutModeForHeight(m.height) == layoutTiny {
+		footer = "↑/↓ · space · esc"
+		rows = compactPickerRows(rows)
+	}
+	rows = append(rows, "", mutedStyle.Render(footer))
+	return renderModalRows(m, accentAssistant, rows)
 }
 
 func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
