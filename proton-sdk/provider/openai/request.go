@@ -193,7 +193,7 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 		for _, tool := range request.Tools {
 			tools = append(tools, responsesTool{Type: "function", Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema, ProviderOptions: tool.ProviderOptions["openai"]})
 		}
-		encoded, err := providerutil.MarshalWithOptions(responsesRequest{Model: m.modelID, Stream: true, Input: input, Tools: tools, ToolChoice: toolChoice(len(tools)), MaxOutputTokens: request.Options.MaxOutputTokens}, request.Options.ProviderOptions["openai"], "model", "stream", "input", "tools", "tool_choice", "max_output_tokens")
+		encoded, err := providerutil.MarshalWithOptions(responsesRequest{Model: m.modelID, Stream: true, Input: input, Tools: tools, ToolChoice: toolChoice(len(tools), request.Options.ToolChoice), MaxOutputTokens: request.Options.MaxOutputTokens}, request.Options.ProviderOptions["openai"], "model", "stream", "input", "tools", "tool_choice", "max_output_tokens")
 		if err != nil {
 			return "", nil, fmt.Errorf("marshal responses request: %w", err)
 		}
@@ -234,7 +234,7 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 	for _, tool := range request.Tools {
 		tools = append(tools, chatTool{Type: "function", Function: chatFunction{Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema, ProviderOptions: tool.ProviderOptions["openai"]}})
 	}
-	encoded, err := providerutil.MarshalWithOptions(chatRequest{Model: m.modelID, Messages: messages, Stream: true, Tools: tools, ToolChoice: toolChoice(len(tools)), MaxTokens: request.Options.MaxOutputTokens}, request.Options.ProviderOptions["openai"], "model", "messages", "stream", "tools", "tool_choice", "max_tokens")
+	encoded, err := providerutil.MarshalWithOptions(chatRequest{Model: m.modelID, Messages: messages, Stream: true, Tools: tools, ToolChoice: toolChoice(len(tools), request.Options.ToolChoice), MaxTokens: request.Options.MaxOutputTokens}, request.Options.ProviderOptions["openai"], "model", "messages", "stream", "tools", "tool_choice", "max_tokens")
 	if err != nil {
 		return "", nil, fmt.Errorf("marshal chat request: %w", err)
 	}
@@ -260,9 +260,12 @@ func chatContentParts(parts []sdk.ContentPart) []map[string]any {
 	return content
 }
 
-func toolChoice(count int) string {
+func toolChoice(count int, choice sdk.ToolChoice) string {
 	if count == 0 {
 		return "none"
+	}
+	if choice == sdk.ToolChoiceRequired {
+		return "required"
 	}
 	return ""
 }

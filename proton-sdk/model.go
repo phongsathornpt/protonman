@@ -143,8 +143,16 @@ func (m Message) Validate() error {
 type ProviderOptions map[string]json.RawMessage
 type ProviderMetadata map[string]json.RawMessage
 
+type ToolChoice string
+
+const (
+	ToolChoiceAuto     ToolChoice = ""
+	ToolChoiceRequired ToolChoice = "required"
+)
+
 type ModelOptions struct {
 	MaxOutputTokens  int
+	ToolChoice       ToolChoice
 	ProviderOptions  ProviderOptions
 	IncludeRawChunks bool
 }
@@ -158,6 +166,12 @@ type Request struct {
 func (r Request) Validate() error {
 	if r.Options.MaxOutputTokens < 0 {
 		return fmt.Errorf("%w: max output tokens cannot be negative", ErrInvalidRequest)
+	}
+	if r.Options.ToolChoice != ToolChoiceAuto && r.Options.ToolChoice != ToolChoiceRequired {
+		return fmt.Errorf("%w: unsupported tool choice %q", ErrInvalidRequest, r.Options.ToolChoice)
+	}
+	if r.Options.ToolChoice == ToolChoiceRequired && len(r.Tools) == 0 {
+		return fmt.Errorf("%w: required tool choice needs at least one tool", ErrInvalidRequest)
 	}
 	if len(r.Messages) == 0 {
 		return fmt.Errorf("%w: at least one message is required", ErrInvalidRequest)

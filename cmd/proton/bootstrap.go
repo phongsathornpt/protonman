@@ -235,6 +235,9 @@ func buildInitialRunner(cfg config.Snapshot, sessionID string, skills *skill.Reg
 		turn.WithTurnTimeout(cfg.Runtime.TurnTimeout),
 		turn.WithRoundTimeout(cfg.Runtime.RoundTimeout),
 	}
+	if strings.TrimSpace(cfg.Agent.Profile) != "" {
+		loopOptions = append(loopOptions, turn.WithRequireInitialToolUse(true))
+	}
 	if skills != nil {
 		loopOptions = append(loopOptions, turn.WithSkillRegistry(skills))
 	}

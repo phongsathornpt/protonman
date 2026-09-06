@@ -272,3 +272,17 @@ func TestAnthropicIncludesRawChunksOnRequest(t *testing.T) {
 		t.Fatalf("raw = %q", events[0].RawData)
 	}
 }
+
+func TestBuildRequestRequiresInitialToolUse(t *testing.T) {
+	body, err := buildRequest("claude-test", sdk.Request{
+		Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "inspect"}},
+		Tools:    []sdk.Tool{{Name: "read_file", Description: "read file", InputSchema: map[string]any{"type": "object"}}},
+		Options:  sdk.ModelOptions{ToolChoice: sdk.ToolChoiceRequired},
+	}, 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body.ToolChoice == nil || body.ToolChoice.Type != "any" {
+		t.Fatalf("tool choice = %#v, want any", body.ToolChoice)
+	}
+}
