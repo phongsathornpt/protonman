@@ -114,7 +114,7 @@ func newProviderSelectPaneView(m *bubbleModel) *providerSelectPaneView {
 		kind:         providerItemCustom,
 		name:         "custom",
 		displayName:  "+ Custom Gateway / Proxy",
-		description:  "Any OpenAI-compatible base URL",
+		description:  "Any OpenAI-compatible or Anthropic Messages base URL",
 		isConfigured: false,
 		isActive:     false,
 	})

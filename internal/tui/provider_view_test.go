@@ -662,3 +662,43 @@ func TestAnthropicProviderKeyPlaceholder(t *testing.T) {
 		t.Fatalf("Anthropic API key placeholder = %q, want %q", got, "sk-ant-…")
 	}
 }
+
+func TestCustomProviderCanToggleProtocol(t *testing.T) {
+	view := newProviderPaneView()
+	if view.providerType != string(model.ProviderProtocolOpenAI) {
+		t.Fatalf("initial providerType = %q", view.providerType)
+	}
+	view.toggleProtocol()
+	if view.providerType != string(model.ProviderProtocolAnthropic) {
+		t.Fatalf("toggled providerType = %q, want anthropic", view.providerType)
+	}
+	view.toggleProtocol()
+	if view.providerType != string(model.ProviderProtocolOpenAI) {
+		t.Fatalf("second toggle providerType = %q, want openai", view.providerType)
+	}
+}
+
+func TestPresetProviderProtocolCannotToggle(t *testing.T) {
+	view := newProviderPaneViewWithPreset(model.DefaultAnthropicName)
+	view.toggleProtocol()
+	if view.providerType != string(model.ProviderProtocolAnthropic) {
+		t.Fatalf("preset providerType = %q, want anthropic", view.providerType)
+	}
+}
+
+func TestProviderSavedMessagePreservesAnthropicTypeInMemory(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.providers = map[string]config.ProviderConfig{}
+	updated, _ := bModel.Update(providerSavedMsg{
+		providerName: "custom-claude",
+		providerType: string(model.ProviderProtocolAnthropic),
+		baseURL:      "https://anthropic.example",
+		apiKey:       "key",
+		modelID:      "claude-test",
+	})
+	bModel = updated.(*bubbleModel)
+	got := bModel.providers["custom-claude"]
+	if got.Type != string(model.ProviderProtocolAnthropic) {
+		t.Fatalf("in-memory provider type = %q, want anthropic", got.Type)
+	}
+}
