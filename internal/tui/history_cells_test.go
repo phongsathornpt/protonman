@@ -287,7 +287,7 @@ func TestToolCellRefinedRenderingWebFetch(t *testing.T) {
 
 	rendered := state.RenderLines()
 	joinedRunning := strings.Join(rendered, "\n")
-	if !strings.Contains(joinedRunning, "⚡") || !strings.Contains(joinedRunning, "web_fetch") || !strings.Contains(joinedRunning, "https://protonman.dev") {
+	if !strings.Contains(joinedRunning, "↗") || !strings.Contains(joinedRunning, "web_fetch") || !strings.Contains(joinedRunning, "https://protonman.dev") {
 		t.Fatalf("expected running cell to show category icon and target, got: %s", joinedRunning)
 	}
 

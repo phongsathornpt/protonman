@@ -108,7 +108,7 @@ func (c AssistantCell) RenderWidth(width int) []string {
 	for index, line := range lines {
 		prefix := "  "
 		if index == 0 {
-			prefix = "◉ "
+			prefix = "● "
 		}
 		out = append(out, prefix+line)
 	}
@@ -413,7 +413,7 @@ func (c PatchCell) RawLines() []string {
 	if strings.TrimSpace(c.Summary) != "" {
 		title += " · " + c.Summary
 	}
-	out := []string{"Δ " + sanitizeBubbleText(title)}
+	out := []string{glyphEdit + sanitizeBubbleText(title)}
 	for _, path := range c.Paths {
 		out = append(out, sanitizeBubbleText(path))
 	}
