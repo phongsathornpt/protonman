@@ -220,7 +220,8 @@ func buildInitialRunner(cfg config.Snapshot, sessionID string, skills *skill.Reg
 	if !ok || !model.ProviderHasUsableAuth(providerKey, provider.BaseURL, provider.APIKey) {
 		return nil
 	}
-	client := model.NewProviderClient(providerKey, provider.Type, provider.BaseURL, provider.APIKey, cfg.Model.Default, model.WithSessionID(sessionID), model.WithRequestTimeout(cfg.Runtime.ModelRequestTimeout))
+	languageModel := model.NewProviderLanguageModel(providerKey, provider.Type, provider.BaseURL, provider.APIKey, cfg.Model.Default, model.WithSessionID(sessionID), model.WithRequestTimeout(cfg.Runtime.ModelRequestTimeout))
+	client := model.WrapLanguageModel(languageModel)
 	coordinator.SetClient(client)
 	loopOptions := []turn.Option{
 		turn.WithMaxRounds(cfg.Agent.MaxRounds),
@@ -231,7 +232,7 @@ func buildInitialRunner(cfg config.Snapshot, sessionID string, skills *skill.Reg
 	if skills != nil {
 		loopOptions = append(loopOptions, turn.WithSkillRegistry(skills))
 	}
-	loop, err := turn.NewLoop(client, service, loopOptions...)
+	loop, err := turn.NewLanguageModelLoop(languageModel, service, loopOptions...)
 	if err != nil {
 		return nil
 	}
