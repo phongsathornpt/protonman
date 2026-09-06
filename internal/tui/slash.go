@@ -504,7 +504,16 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		m.showTranscript = true
 		m.refreshTranscriptViewport(true)
 	case "todo":
-		m.todoExpanded = true
+		switch strings.ToLower(strings.TrimSpace(argument)) {
+		case "":
+			m.todoExpanded = !m.todoExpanded
+		case "show":
+			m.todoExpanded = true
+		case "hide":
+			m.todoExpanded = false
+		default:
+			m.appendError("usage: /todo [show|hide]")
+		}
 		m.resize(m.width, m.height)
 	case "clear":
 		m.resetTranscript()
