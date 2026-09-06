@@ -158,50 +158,10 @@ type RemoteModel struct {
 	Features      []string `json:"features,omitempty"`
 }
 
-// DefaultProtonmanModels provides the standard catalog when offline or fallback.
-var DefaultProtonmanModels = []RemoteModel{
-	{ID: "deepseek-v4-flash-vision-exp", Name: "DeepSeek V4 Flash Vision (exp)", ContextWindow: 1000000, Provider: "DeepSeek", Features: []string{"json", "tools", "vision"}},
-	{ID: "glm-5.3-flash", Name: "GLM-5.3 Flash", ContextWindow: 1048576, Provider: "GLM", Features: []string{"tools", "vision"}},
-	{ID: "Qwen3.8-Flash", Name: "Qwen 3.8 Flash", ContextWindow: 1000000, Provider: "Qwen", Features: []string{"text", "vision"}},
-	{ID: "muse-spark-1.3-contributor", Name: "Muse Spark 1.3 Contributor", ContextWindow: 1048576, Provider: "Meta", Features: []string{"tools", "vision"}},
-	{ID: "MiniMax-M3", Name: "MiniMax M3", ContextWindow: 1000000, Provider: "MiniMax", Features: []string{"text"}},
-}
-
-// DefaultOpenCodeFreeModels provides the standard free-tier catalog when offline or fallback.
-var DefaultOpenCodeFreeModels = []RemoteModel{
-	{ID: "nemotron-3.5-lightning-free", Name: "Nemotron 3.5 Lightning (Free)", ContextWindow: 128000, Provider: "NVIDIA", Features: []string{"free", "tools"}},
-	{ID: "big-pickle", Name: "Big Pickle (Free)", ContextWindow: 128000, Provider: "OpenCode", Features: []string{"free"}},
-	{ID: "mimo-v2.5-free", Name: "MiMo V2.5 (Free)", ContextWindow: 128000, Provider: "MiMo", Features: []string{"free"}},
-	{ID: "nemotron-3-ultra-free", Name: "Nemotron 3 Ultra (Free)", ContextWindow: 128000, Provider: "NVIDIA", Features: []string{"free"}},
-	{ID: "deepseek-v4-flash-free", Name: "DeepSeek V4 Flash (Free)", ContextWindow: 128000, Provider: "DeepSeek", Features: []string{"free"}},
-	{ID: "muse-spark-1.3-contributor-free", Name: "Muse Spark 1.3 Contributor (Free)", ContextWindow: 128000, Provider: "Meta", Features: []string{"free"}},
-	{ID: "muse-spark-1.2-contributor-free", Name: "Muse Spark 1.2 Contributor (Free)", ContextWindow: 128000, Provider: "Meta", Features: []string{"free"}},
-	{ID: "ling-3.0-flash-fin-free", Name: "Ling 3.0 Flash Fin (Free)", ContextWindow: 128000, Provider: "Ling", Features: []string{"free"}},
-	{ID: "laguna-s-2.1-free", Name: "Laguna S 2.1 (Free)", ContextWindow: 128000, Provider: "Laguna", Features: []string{"free"}},
-}
-
 // IsFreeModel reports whether a given model ID represents an OpenCode free-tier model.
 func IsFreeModel(id string) bool {
 	idLower := strings.ToLower(strings.TrimSpace(id))
 	return strings.HasSuffix(idLower, "-free") || idLower == "big-pickle"
-}
-
-// FallbackModelsForProvider returns a defensive copy of a built-in catalog only
-// when the configured connection is a known provider. Custom providers never
-// inherit another provider's model list.
-func FallbackModelsForProvider(providerName, baseURL string) []RemoteModel {
-	preset := MatchProviderPreset(providerName, baseURL)
-	if preset == nil {
-		return nil
-	}
-	switch preset.ID {
-	case DefaultProtonmanName:
-		return append([]RemoteModel(nil), DefaultProtonmanModels...)
-	case DefaultOpenCodeName:
-		return append([]RemoteModel(nil), DefaultOpenCodeFreeModels...)
-	default:
-		return nil
-	}
 }
 
 // NormalizeModelID cleans and harmonizes known model ID typos and provider-specific suffixes.
@@ -268,16 +228,6 @@ func FetchProviderModels(ctx context.Context, baseURL string, apiKey string) ([]
 	publicModels, publicErr := fetchModelsFromURL(ctx, client, publicEndpoint, "")
 	if publicErr == nil && len(publicModels) > 0 {
 		return publicModels, nil
-	}
-
-	// 3. Check known-provider fallbacks if remote request failed.
-	if preset := MatchProviderPreset("", baseURL); preset != nil {
-		switch preset.ID {
-		case DefaultProtonmanName:
-			return append([]RemoteModel{}, DefaultProtonmanModels...), nil
-		case DefaultOpenCodeName:
-			return append([]RemoteModel{}, DefaultOpenCodeFreeModels...), nil
-		}
 	}
 
 	if err != nil {

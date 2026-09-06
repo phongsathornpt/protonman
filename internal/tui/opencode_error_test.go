@@ -65,25 +65,8 @@ func TestClassifyOpenCodeError_OpenCodeModelError(t *testing.T) {
 	if len(classified.Suggestions) == 0 {
 		t.Fatal("expected suggestions to be populated")
 	}
-	if !strings.HasPrefix(classified.Suggestions[0], "Did you mean:") {
-		t.Fatalf("expected first suggestion to be 'Did you mean...', got %q", classified.Suggestions[0])
-	}
-}
-
-func TestClassifyOpenCodeError_FuzzyModelMatching(t *testing.T) {
-	suggestions := FindModelSuggestions("nemotron-3.5", 3)
-	if len(suggestions) == 0 {
-		t.Fatal("expected model suggestions for nemotron-3.5")
-	}
-	found := false
-	for _, s := range suggestions {
-		if strings.Contains(s, "nemotron-3.5-lightning-free") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("expected suggestions to contain nemotron-3.5-lightning-free, got %v", suggestions)
+	if !strings.Contains(classified.Suggestions[0], "/model") {
+		t.Fatalf("expected catalog refresh suggestion, got %q", classified.Suggestions[0])
 	}
 }
 

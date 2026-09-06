@@ -69,14 +69,7 @@ func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
 		modelsList, hasFreshCatalog = m.modelCatalogs.freshModels(providers[providerIdx], time.Now(), modelCatalogTTL)
 	}
 	if !hasFreshCatalog {
-		providerName := providers[providerIdx]
-		baseURL := ""
-		if m != nil {
-			if cfg, ok := m.providers[normalizeProviderKey(providerName)]; ok {
-				baseURL = cfg.BaseURL
-			}
-		}
-		modelsList = model.FallbackModelsForProvider(providerName, baseURL)
+		modelsList = nil
 	}
 
 	view := &modelSelectPaneView{
@@ -199,11 +192,7 @@ func (v *modelSelectPaneView) loadProvider(m *bubbleModel, force bool) tea.Cmd {
 			return v.beginFetch(m.ctx, providerName, cfg)
 		}
 	}
-	baseURL := ""
-	if configured {
-		baseURL = cfg.BaseURL
-	}
-	v.setModels(model.FallbackModelsForProvider(providerName, baseURL), m.activeModel)
+	v.setModels(nil, m.activeModel)
 	return nil
 }
 

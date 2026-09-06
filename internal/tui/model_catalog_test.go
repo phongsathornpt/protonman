@@ -264,15 +264,16 @@ func TestDirectModelSelectionMarksUnknownModelUnverified(t *testing.T) {
 	}
 }
 
-func TestDirectModelSelectionRecognizesKnownFallbackModel(t *testing.T) {
+func TestDirectModelSelectionRecognizesDiscoveredModel(t *testing.T) {
 	t.Setenv("PROTON_HOME", t.TempDir())
 	m := newTestSkillsModel(t, 1)
 	m.activeProvider = model.DefaultProtonmanName
+	m.modelCatalogs.set(model.DefaultProtonmanName, []model.RemoteModel{{ID: "glm-5.3-flash"}})
 
 	cmd := m.selectModelDirect("glm-5.3-flash")
 	msg := cmd().(modelSelectedMsg)
 	if msg.unverified {
-		t.Fatal("known fallback model was marked unverified")
+		t.Fatal("discovered model was marked unverified")
 	}
 }
 
