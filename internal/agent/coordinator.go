@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
@@ -60,7 +59,6 @@ type agentEntry struct {
 
 // Coordinator manages subagent execution in bounded, cancellable goroutines.
 type Coordinator struct {
-	client         model.Client
 	languageModel  sdk.LanguageModel
 	parentRegistry tool.Registry
 	workspace      *workspace.Workspace
@@ -249,7 +247,7 @@ func WithCallGuard(guard toolcall.CallGuard) Option {
 
 // NewCoordinator creates an agent coordinator for managing subagent goroutines.
 func NewCoordinator(
-	client model.Client,
+	languageModel sdk.LanguageModel,
 	parentRegistry tool.Registry,
 	ws *workspace.Workspace,
 	policy *permission.Policy,
@@ -257,7 +255,7 @@ func NewCoordinator(
 ) *Coordinator {
 	rootCtx, rootStop := context.WithCancel(context.Background())
 	c := &Coordinator{
-		client:              client,
+		languageModel:       languageModel,
 		parentRegistry:      parentRegistry,
 		workspace:           ws,
 		policy:              policy,
