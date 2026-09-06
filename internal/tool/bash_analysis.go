@@ -70,17 +70,24 @@ func analyzeSimpleSegment(segment string) BashAnalysis {
 	}
 	if len(redirects) > 0 {
 		paths := make([]string, 0, len(redirects))
+		mutatesFile := false
 		for _, path := range redirects {
+			if isStreamOnlyRedirect(path) {
+				continue
+			}
+			mutatesFile = true
 			if isLiteralWorkspacePath(path) {
 				paths = appendUniquePaths(paths, path)
 			}
 		}
-		return BashAnalysis{Effect: CommandEffectMutating, Confidence: CommandConfidenceCertain, Reason: "shell output redirection modifies state", AffectedPaths: paths}
+		if mutatesFile {
+			return BashAnalysis{Effect: CommandEffectMutating, Confidence: CommandConfidenceCertain, Reason: "shell output redirection modifies state", AffectedPaths: paths}
+		}
 	}
 	name := strings.TrimPrefix(words[0], "./")
 	args := words[1:]
 	switch name {
-	case "pwd", "ls", "cat", "head", "tail", "grep", "rg", "wc", "stat", "file", "realpath", "readlink", "which", "whereis", "env", "printenv":
+	case "pwd", "ls", "cat", "head", "tail", "grep", "rg", "wc", "stat", "file", "realpath", "readlink", "which", "whereis", "env", "printenv", "echo", "printf", "true", "false", "test", "[":
 		return BashAnalysis{Effect: CommandEffectReadOnly, Confidence: CommandConfidenceCertain, Reason: name + " is a known read-only command"}
 	case "find":
 		for _, arg := range args {
@@ -100,6 +107,12 @@ func analyzeSimpleSegment(segment string) BashAnalysis {
 		return BashAnalysis{Effect: CommandEffectMutating, Confidence: CommandConfidenceCertain, Reason: "cp modifies filesystem state", AffectedPaths: copyMovePaths(args, false)}
 	case "mv":
 		return BashAnalysis{Effect: CommandEffectMutating, Confidence: CommandConfidenceCertain, Reason: "mv modifies filesystem state", AffectedPaths: copyMovePaths(args, true)}
+	case "tee":
+		paths, hasTarget := teePaths(args)
+		if !hasTarget {
+			return BashAnalysis{Effect: CommandEffectReadOnly, Confidence: CommandConfidenceCertain, Reason: "tee without file operands only writes stdout"}
+		}
+		return BashAnalysis{Effect: CommandEffectMutating, Confidence: CommandConfidenceCertain, Reason: "tee writes file operands", AffectedPaths: paths}
 	default:
 		return unknownBashAnalysis("command effect is not proven")
 	}
@@ -156,6 +169,9 @@ func splitSimpleShell(command string) ([]string, []string, bool) {
 	for i := 0; i < len(command); i++ {
 		c := rune(command[i])
 		if quote != 0 {
+			if quote == '"' && (c == '`' || (c == '$' && i+1 < len(command) && command[i+1] == '(')) {
+				return nil, nil, false
+			}
 			b.WriteByte(command[i])
 			if c == quote {
 				quote = 0
@@ -174,6 +190,14 @@ func splitSimpleShell(command string) ([]string, []string, bool) {
 			return nil, nil, false
 		}
 		if c == '&' {
+			if i > 0 && command[i-1] == '>' {
+				b.WriteByte(command[i])
+				continue
+			}
+			if i+1 < len(command) && command[i+1] == '>' {
+				b.WriteByte(command[i])
+				continue
+			}
 			if i+1 >= len(command) || command[i+1] != '&' {
 				return nil, nil, false
 			}
@@ -184,10 +208,21 @@ func splitSimpleShell(command string) ([]string, []string, bool) {
 			continue
 		}
 		if c == '|' {
+			if i > 0 && command[i-1] == '>' {
+				b.WriteByte(command[i])
+				continue
+			}
 			if i+1 < len(command) && command[i+1] == '|' {
 				segments = append(segments, strings.TrimSpace(b.String()))
 				b.Reset()
 				operators = append(operators, "||")
+				i++
+				continue
+			}
+			if i+1 < len(command) && command[i+1] == '&' {
+				segments = append(segments, strings.TrimSpace(b.String()))
+				b.Reset()
+				operators = append(operators, "|&")
 				i++
 				continue
 			}
@@ -238,9 +273,16 @@ func shellWords(segment string) ([]string, []string, bool) {
 			flush()
 			continue
 		}
+		if c == '&' && i+1 < len(segment) && segment[i+1] == '>' {
+			continue
+		}
 		if c == '>' {
-			flush()
-			if i+1 < len(segment) && segment[i+1] == '>' {
+			if b.Len() > 0 && allDigits(b.String()) {
+				b.Reset()
+			} else {
+				flush()
+			}
+			if i+1 < len(segment) && (segment[i+1] == '>' || segment[i+1] == '|') {
 				i++
 			}
 			for i+1 < len(segment) && unicode.IsSpace(rune(segment[i+1])) {
@@ -296,9 +338,51 @@ func copyMovePaths(args []string, includeSource bool) []string {
 		return nil
 	}
 	if includeSource {
-		return appendUniquePaths(nil, pos[len(pos)-2], pos[len(pos)-1])
+		return appendUniquePaths(nil, pos...)
 	}
 	return appendUniquePaths(nil, pos[len(pos)-1])
+}
+
+func isStreamOnlyRedirect(target string) bool {
+	target = strings.TrimSpace(target)
+	if strings.HasPrefix(target, "&") {
+		if len(target) > 1 && allDigits(target[1:]) {
+			return true
+		}
+	}
+	switch target {
+	case "/dev/null", "/dev/stdout", "/dev/stderr":
+		return true
+	default:
+		return false
+	}
+}
+
+func allDigits(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func teePaths(args []string) ([]string, bool) {
+	paths := make([]string, 0, len(args))
+	hasTarget := false
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			continue
+		}
+		hasTarget = true
+		if isLiteralWorkspacePath(arg) {
+			paths = appendUniquePaths(paths, arg)
+		}
+	}
+	return paths, hasTarget
 }
 
 func isLiteralWorkspacePath(path string) bool {
