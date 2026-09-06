@@ -352,3 +352,15 @@ func TestOpenAIIncludesRawChunksOnRequest(t *testing.T) {
 		t.Fatalf("raw = %q", events[0].RawData)
 	}
 }
+
+func TestToolChoiceRequired(t *testing.T) {
+	if got := toolChoice(1, sdk.ToolChoiceRequired); got != "required" {
+		t.Fatalf("toolChoice required = %q", got)
+	}
+	if got := toolChoice(1, sdk.ToolChoiceAuto); got != "" {
+		t.Fatalf("toolChoice auto = %q", got)
+	}
+	if got := toolChoice(0, sdk.ToolChoiceRequired); got != "none" {
+		t.Fatalf("toolChoice without tools = %q", got)
+	}
+}

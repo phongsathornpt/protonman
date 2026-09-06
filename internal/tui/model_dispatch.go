@@ -209,6 +209,9 @@ func (m *bubbleModel) reconfigureRunner() {
 	opts = append(opts, applicationturn.WithMaxToolCalls(m.maxToolCalls))
 	opts = append(opts, applicationturn.WithTurnTimeout(m.runtimeConfig.TurnTimeout))
 	opts = append(opts, applicationturn.WithRoundTimeout(m.runtimeConfig.RoundTimeout))
+	if strings.TrimSpace(m.agentProfile) != "" {
+		opts = append(opts, applicationturn.WithRequireInitialToolUse(true))
+	}
 	loop, err := applicationturn.NewLoop(languageModel, m.service, opts...)
 	if err == nil {
 		m.runner = loop

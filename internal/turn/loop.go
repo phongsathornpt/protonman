@@ -207,6 +207,13 @@ func WithMaxRounds(rounds int) Option {
 
 // WithMaxToolCalls bounds the cumulative number of tool calls per turn.
 // A value of 0 disables this count bound; other turn bounds still apply.
+func WithRequireInitialToolUse(required bool) Option {
+	return func(loop *Loop) error {
+		loop.requireInitialToolUse = required
+		return nil
+	}
+}
+
 func WithMaxToolCalls(calls int) Option {
 	return func(loop *Loop) error {
 		if calls < 0 {
@@ -324,6 +331,7 @@ type Loop struct {
 	maxParallelReads              int
 	maxToolResultBytesPerRound    int
 	maxToolResultBytesPerTurn     int
+	requireInitialToolUse         bool
 	skills                        []skill.CatalogItem
 	skillRegistry                 *skill.Registry
 }
@@ -556,6 +564,9 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		request := sdk.Request{
 			Messages: reqMessages,
 			Tools:    sdkTools,
+		}
+		if round == 1 && l.requireInitialToolUse && dispatch.enabled() && len(sdkTools) > 0 {
+			request.Options.ToolChoice = sdk.ToolChoiceRequired
 		}
 		if err := request.Validate(); err != nil {
 			terminalReason = "request_validation_failed"

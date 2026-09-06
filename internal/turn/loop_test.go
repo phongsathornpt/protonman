@@ -898,6 +898,7 @@ func (c *scriptedClient) Stream(_ context.Context, request sdk.Request) (sdk.Str
 	c.requests = append(c.requests, sdk.Request{
 		Messages: sdk.CloneMessages(request.Messages),
 		Tools:    append([]sdk.Tool(nil), request.Tools...),
+		Options:  request.Options,
 	})
 	spec := c.streams[0]
 	c.streams = c.streams[1:]
@@ -1325,5 +1326,31 @@ func TestLoopAppliesAggregateToolResultBudgetBeforeHistory(t *testing.T) {
 	}
 	if got := client.requests[1].Messages[len(client.requests[1].Messages)-1].Content; !strings.Contains(got, toolBudgetMarker) {
 		t.Fatalf("model tool history missing budget marker: %q", got)
+	}
+}
+
+func TestLoopRequiresToolUseOnlyOnInitialGroundingRound(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{events: []sdk.Event{
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "ground", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
+		}},
+		{events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "grounded"},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		}},
+	}}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithRequireInitialToolUse(true))
+	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect repo"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(client.requests) != 2 {
+		t.Fatalf("requests = %d, want 2", len(client.requests))
+	}
+	if client.requests[0].Options.ToolChoice != sdk.ToolChoiceRequired {
+		t.Fatalf("first tool choice = %q, want required", client.requests[0].Options.ToolChoice)
+	}
+	if client.requests[1].Options.ToolChoice != sdk.ToolChoiceAuto {
+		t.Fatalf("second tool choice = %q, want auto", client.requests[1].Options.ToolChoice)
 	}
 }

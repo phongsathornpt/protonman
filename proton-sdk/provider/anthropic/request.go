@@ -10,12 +10,17 @@ import (
 )
 
 type requestBody struct {
-	Model     string    `json:"model"`
-	MaxTokens int       `json:"max_tokens"`
-	System    string    `json:"system,omitempty"`
-	Messages  []message `json:"messages"`
-	Tools     []toolDef `json:"tools,omitempty"`
-	Stream    bool      `json:"stream"`
+	Model      string      `json:"model"`
+	MaxTokens  int         `json:"max_tokens"`
+	System     string      `json:"system,omitempty"`
+	Messages   []message   `json:"messages"`
+	Tools      []toolDef   `json:"tools,omitempty"`
+	ToolChoice *toolChoice `json:"tool_choice,omitempty"`
+	Stream     bool        `json:"stream"`
+}
+
+type toolChoice struct {
+	Type string `json:"type"`
 }
 
 type message struct {
@@ -88,6 +93,9 @@ func buildRequest(modelID string, request sdk.Request, defaultMaxTokens int) (re
 		}
 	}
 	body.System = strings.Join(systems, "\n\n")
+	if len(request.Tools) > 0 && request.Options.ToolChoice == sdk.ToolChoiceRequired {
+		body.ToolChoice = &toolChoice{Type: "any"}
+	}
 	for _, tool := range request.Tools {
 		schema := tool.InputSchema
 		if schema == nil {

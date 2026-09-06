@@ -84,6 +84,7 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 			service,
 			turn.WithMaxRounds(c.maxRounds),
 			turn.WithMaxToolCalls(c.maxToolCalls),
+			turn.WithRequireInitialToolUse(true),
 		)
 		if lerr != nil {
 			return Result{AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create turn loop: %w", lerr)

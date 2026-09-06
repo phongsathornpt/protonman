@@ -929,6 +929,7 @@ func (m *bubbleModel) handleAgentCommand(argument string) tea.Cmd {
 		}, m.messages...)
 	}
 
+	m.reconfigureRunner()
 	m.appendLine(successStyle.Render(fmt.Sprintf("Agent profile switched to %s.", prof)))
 	m.refreshViewport()
 	return nil
