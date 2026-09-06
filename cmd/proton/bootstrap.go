@@ -166,6 +166,14 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	if err := applyAgentProfile(&loadedConfig, &state, options.agentProfile); err != nil {
 		return nil, err
 	}
+	if found && strings.TrimSpace(state.ReasoningEffort) != "" {
+		effort, parseErr := sdk.ParseReasoningEffort(state.ReasoningEffort)
+		if parseErr != nil {
+			return nil, fmt.Errorf("restore session %q reasoning effort: %w", sessionID, parseErr)
+		}
+		loadedConfig.Agent.ReasoningEffort = effort
+	}
+	coordinator.SetReasoningEffort(loadedConfig.Agent.ReasoningEffort)
 	serviceOptions := []toolcall.Option{
 		toolcall.WithMode(initialMode),
 		toolcall.WithPermissionTimeout(loadedConfig.Runtime.ToolPermissionTimeout),

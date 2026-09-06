@@ -436,3 +436,37 @@ func TestFileStoreRoundTripsAgentProfile(t *testing.T) {
 		t.Fatalf("AgentProfile = %q, want dex", loaded.AgentProfile)
 	}
 }
+
+func TestFileStoreRoundTripsReasoningEffort(t *testing.T) {
+	store, err := NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(context.Background(), "reasoning", State{
+		PermissionMode:  permission.ModeAsk.String(),
+		ReasoningEffort: "high",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	loaded, found, err := store.Load(context.Background(), "reasoning")
+	if err != nil || !found {
+		t.Fatalf("Load() = found %v, err %v", found, err)
+	}
+	if loaded.ReasoningEffort != "high" {
+		t.Fatalf("ReasoningEffort = %q, want high", loaded.ReasoningEffort)
+	}
+}
+
+func TestFileStoreRejectsInvalidReasoningEffort(t *testing.T) {
+	store, err := NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = store.Save(context.Background(), "reasoning-invalid", State{
+		PermissionMode:  permission.ModeAsk.String(),
+		ReasoningEffort: "turbo",
+	})
+	if err == nil || !strings.Contains(err.Error(), "session reasoning effort") {
+		t.Fatalf("Save() error = %v", err)
+	}
+}

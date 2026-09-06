@@ -99,3 +99,20 @@ func (c *Coordinator) CallGuard() toolcall.CallGuard {
 	defer c.agentsMu.RUnlock()
 	return c.guard
 }
+
+// SetReasoningEffort updates the explicit reasoning override inherited by new subagent turns.
+func (c *Coordinator) SetReasoningEffort(effort sdk.ReasoningEffort) {
+	if !effort.Valid() {
+		return
+	}
+	c.agentsMu.Lock()
+	c.reasoningEffort = effort
+	c.agentsMu.Unlock()
+}
+
+// ReasoningEffort returns the explicit reasoning override inherited by new subagents.
+func (c *Coordinator) ReasoningEffort() sdk.ReasoningEffort {
+	c.agentsMu.RLock()
+	defer c.agentsMu.RUnlock()
+	return c.reasoningEffort
+}
