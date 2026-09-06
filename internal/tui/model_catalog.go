@@ -93,3 +93,12 @@ func remoteModelSupportsVision(md model.RemoteModel) bool {
 	}
 	return false
 }
+
+func remoteModelSupportsTools(md model.RemoteModel) bool {
+	for _, feature := range md.Features {
+		if strings.EqualFold(strings.TrimSpace(feature), "tools") {
+			return true
+		}
+	}
+	return false
+}

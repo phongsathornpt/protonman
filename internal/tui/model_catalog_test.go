@@ -349,3 +349,12 @@ func TestActiveRemoteModelFindsSelectedCatalogModel(t *testing.T) {
 		t.Fatalf("activeRemoteModel() = %#v, %v", got, ok)
 	}
 }
+
+func TestRemoteModelSupportsToolsUsesCatalogFeatures(t *testing.T) {
+	if remoteModelSupportsTools(model.RemoteModel{ID: "text-only", Features: []string{"vision", "coding"}}) {
+		t.Fatal("text-only model unexpectedly supports tools")
+	}
+	if !remoteModelSupportsTools(model.RemoteModel{ID: "tool-model", Features: []string{"coding", "Tools"}}) {
+		t.Fatal("tool feature was not detected case-insensitively")
+	}
+}

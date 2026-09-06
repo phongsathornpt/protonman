@@ -38,9 +38,12 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 	if usesResponsesAPI(cfg.modelID, cfg.baseURL) {
 		modelOptions = append(modelOptions, sdkopenai.WithResponsesAPI())
 	}
-	model := provider.Model(cfg.modelID, modelOptions...)
+	var model sdk.LanguageModel = provider.Model(cfg.modelID, modelOptions...)
 	if cfg.vision != nil {
-		return withVisionCapability(model, *cfg.vision)
+		model = withVisionCapability(model, *cfg.vision)
+	}
+	if cfg.tools != nil {
+		model = withToolsCapability(model, *cfg.tools)
 	}
 	return model
 }
@@ -56,9 +59,12 @@ func newSDKAnthropicLanguageModel(baseURL, apiKey, modelID string, opts ...Clien
 		BaseURL: cfg.baseURL, APIKey: cfg.apiKey, HTTPClient: cfg.httpClient,
 		UserAgent: cfg.userAgent, MaxRetries: 2, RetryBackoff: runtimepolicy.ModelRetryBackoffStep,
 	})
-	model := provider.Model(cfg.modelID)
+	var model sdk.LanguageModel = provider.Model(cfg.modelID)
 	if cfg.vision != nil {
-		return withVisionCapability(model, *cfg.vision)
+		model = withVisionCapability(model, *cfg.vision)
+	}
+	if cfg.tools != nil {
+		model = withToolsCapability(model, *cfg.tools)
 	}
 	return model
 }

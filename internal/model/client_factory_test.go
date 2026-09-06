@@ -53,3 +53,14 @@ func TestNewProviderLanguageModelOverridesVisionCapability(t *testing.T) {
 		t.Fatalf("Capabilities().Vision = false, want true")
 	}
 }
+
+func TestNewProviderLanguageModelOverridesToolsCapability(t *testing.T) {
+	withoutTools := NewProviderLanguageModel(DefaultOpenAIName, string(ProviderProtocolOpenAI), DefaultOpenAIEndpoint, "key", "text-model", WithToolsSupport(false))
+	if withoutTools.Capabilities().Tools {
+		t.Fatalf("Capabilities().Tools = true, want false")
+	}
+	withTools := NewProviderLanguageModel(DefaultOpenAIName, string(ProviderProtocolOpenAI), DefaultOpenAIEndpoint, "key", "tool-model", WithToolsSupport(true))
+	if !withTools.Capabilities().Tools {
+		t.Fatalf("Capabilities().Tools = false, want true")
+	}
+}

@@ -19,6 +19,7 @@ type clientConfig struct {
 	userAgent  string
 	httpClient *http.Client
 	vision     *bool
+	tools      *bool
 }
 
 // ClientOption configures provider model construction.
@@ -38,6 +39,10 @@ func WithUserAgent(userAgent string) ClientOption {
 
 func WithVisionSupport(supported bool) ClientOption {
 	return func(c *clientConfig) { c.vision = &supported }
+}
+
+func WithToolsSupport(supported bool) ClientOption {
+	return func(c *clientConfig) { c.tools = &supported }
 }
 
 func WithRequestTimeout(timeout time.Duration) ClientOption {
