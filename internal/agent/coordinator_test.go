@@ -730,6 +730,60 @@ func TestCoordinatorWorkspaceGateCancelsExclusiveWait(t *testing.T) {
 	}
 }
 
+func TestCoordinatorWorkspaceWriterBlocksNewReaders(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil, WithMaxConcurrency(2))
+	defer coord.Close()
+
+	releaseReader, err := coord.acquireWorkspace(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	writerAcquired := make(chan func(), 1)
+	go func() {
+		release, err := coord.acquireWorkspace(context.Background(), true)
+		if err == nil {
+			writerAcquired <- release
+		}
+	}()
+	waitForTest(t, time.Second, func() bool { return len(coord.wsWriter) == 1 && len(coord.wsAdmission) == 1 })
+
+	readerAcquired := make(chan func(), 1)
+	go func() {
+		release, err := coord.acquireWorkspace(context.Background(), false)
+		if err == nil {
+			readerAcquired <- release
+		}
+	}()
+	select {
+	case release := <-readerAcquired:
+		release()
+		t.Fatal("reader bypassed queued writer")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	releaseReader()
+	var releaseWriter func()
+	select {
+	case releaseWriter = <-writerAcquired:
+	case <-time.After(time.Second):
+		t.Fatal("writer did not acquire workspace after readers drained")
+	}
+	select {
+	case release := <-readerAcquired:
+		release()
+		t.Fatal("reader acquired workspace while writer was active")
+	case <-time.After(20 * time.Millisecond):
+	}
+	releaseWriter()
+	select {
+	case release := <-readerAcquired:
+		release()
+	case <-time.After(time.Second):
+		t.Fatal("reader did not resume after writer released workspace")
+	}
+}
+
 func TestCoordinatorWorkspaceGateAllowsConcurrentReaders(t *testing.T) {
 	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil, WithMaxConcurrency(2))
 	releaseA, err := coord.acquireWorkspace(context.Background(), false)

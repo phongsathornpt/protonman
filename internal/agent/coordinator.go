@@ -68,14 +68,15 @@ type Coordinator struct {
 	prompt         toolcall.PermissionPrompt
 	guard          toolcall.CallGuard
 
-	sem      chan struct{}
-	wsGate   chan struct{}
-	wsWriter chan struct{}
-	agentsMu sync.RWMutex
-	agents   map[string]*agentEntry
-	wg       sync.WaitGroup
-	rootCtx  context.Context
-	rootStop context.CancelFunc
+	sem         chan struct{}
+	wsGate      chan struct{}
+	wsWriter    chan struct{}
+	wsAdmission chan struct{}
+	agentsMu    sync.RWMutex
+	agents      map[string]*agentEntry
+	wg          sync.WaitGroup
+	rootCtx     context.Context
+	rootStop    context.CancelFunc
 
 	maxDepth            int
 	maxRounds           int
@@ -110,6 +111,7 @@ func WithMaxConcurrency(n int) Option {
 			c.sem = make(chan struct{}, n)
 			c.wsGate = make(chan struct{}, n)
 			c.wsWriter = make(chan struct{}, 1)
+			c.wsAdmission = make(chan struct{}, 1)
 		}
 	}
 }
@@ -262,6 +264,7 @@ func NewCoordinator(
 		sem:                 make(chan struct{}, defaultMaxConcurrency),
 		wsGate:              make(chan struct{}, defaultMaxConcurrency),
 		wsWriter:            make(chan struct{}, 1),
+		wsAdmission:         make(chan struct{}, 1),
 		agents:              make(map[string]*agentEntry),
 		rootCtx:             rootCtx,
 		rootStop:            rootStop,
