@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/contextutil"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/skill"
@@ -21,6 +22,9 @@ import (
 )
 
 const (
+	terminalEmitTimeout       = 5 * time.Second
+	protectionObserverTimeout = time.Second
+
 	// DefaultMaxRounds is the default maximum number of rounds per turn.
 	DefaultMaxRounds = 20
 	// DefaultMaxToolCalls is the default cumulative maximum number of tool
@@ -803,7 +807,8 @@ func (l *Loop) runRound(
 			"round", round,
 			"error_type", fmt.Sprintf("%T", err),
 		)
-		emitContext := context.WithoutCancel(roundContext)
+		emitContext, emitCancel := contextutil.DetachedTimeout(roundContext, terminalEmitTimeout)
+		defer emitCancel()
 		for _, execution := range executions {
 			if emitErr := emit(emitContext, sink, Event{
 				Kind:   EventToolResult,
@@ -1205,7 +1210,9 @@ func (l *Loop) observeProtection(ctx context.Context, event toolcall.ProtectionE
 
 func (l *Loop) fail(ctx context.Context, sink Sink, round int, err error) (Result, error) {
 	if errors.Is(err, context.DeadlineExceeded) && errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		l.observeProtection(context.WithoutCancel(ctx), toolcall.ProtectionEvent{Kind: toolcall.ProtectionTurnDeadlineExceeded, Time: time.Now(), Round: round, Reason: "turn_deadline"})
+		observeCtx, observeCancel := contextutil.DetachedTimeout(ctx, protectionObserverTimeout)
+		l.observeProtection(observeCtx, toolcall.ProtectionEvent{Kind: toolcall.ProtectionTurnDeadlineExceeded, Time: time.Now(), Round: round, Reason: "turn_deadline"})
+		observeCancel()
 	}
 	slog.DebugContext(ctx, "turn failed",
 		"round", round,
@@ -1213,11 +1220,13 @@ func (l *Loop) fail(ctx context.Context, sink Sink, round int, err error) (Resul
 		"context_error", ctx.Err() != nil,
 	)
 	emitContext := ctx
+	emitCancel := func() {}
 	if ctx.Err() != nil {
-		// A terminal failure still needs to reach adapters after cancellation;
-		// preserve context values without inheriting the canceled state.
-		emitContext = context.WithoutCancel(ctx)
+		// A terminal failure still needs to reach adapters after cancellation,
+		// but detached cleanup must remain bounded.
+		emitContext, emitCancel = contextutil.DetachedTimeout(ctx, terminalEmitTimeout)
 	}
+	defer emitCancel()
 	if emitErr := emit(emitContext, sink, Event{
 		Kind:  EventFailed,
 		Round: round,
