@@ -32,11 +32,12 @@ type protectedPath struct {
 
 // Workspace is the shared path policy and root for local file tools.
 type Workspace struct {
-	mu        sync.RWMutex
-	root      string
-	rawRoot   string
-	protected []protectedPath
-	readRoots []string
+	mu           sync.RWMutex
+	root         string
+	rawRoot      string
+	protected    []protectedPath
+	readRoots    []string
+	mutationGate chan struct{}
 }
 
 // New validates a workspace root and compiles protected path entries.
@@ -69,10 +70,11 @@ func New(root string, protectedPaths []string) (*Workspace, error) {
 		compiledProtected = append(compiledProtected, entry)
 	}
 	return &Workspace{
-		root:      filepath.Clean(resolvedRoot),
-		rawRoot:   filepath.Clean(absoluteRoot),
-		protected: compiledProtected,
-		readRoots: make([]string, 0),
+		root:         filepath.Clean(resolvedRoot),
+		rawRoot:      filepath.Clean(absoluteRoot),
+		protected:    compiledProtected,
+		readRoots:    make([]string, 0),
+		mutationGate: make(chan struct{}, 1),
 	}, nil
 }
 
@@ -470,4 +472,23 @@ func isWithin(root string, path string) bool {
 		return false
 	}
 	return relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)))
+}
+
+// AcquireMutation serializes workspace mutations while allowing read-only work to remain concurrent.
+func (w *Workspace) AcquireMutation(ctx context.Context) (func(), error) {
+	if w == nil {
+		return func() {}, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	select {
+	case w.mutationGate <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	var once sync.Once
+	return func() {
+		once.Do(func() { <-w.mutationGate })
+	}, nil
 }
