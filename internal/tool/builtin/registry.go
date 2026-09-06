@@ -151,6 +151,9 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 		NewCheckpointRestore(checkpointStore),
 		NewWebFetch(cfg.network),
 	}
+	if cfg.todoStore != nil {
+		handlers = append(handlers, NewUpdateTodo(cfg.todoStore))
+	}
 	if cfg.skills != nil {
 		handlers = append(handlers, NewActivateSkill(cfg.skills, workspaceRoot))
 	}
