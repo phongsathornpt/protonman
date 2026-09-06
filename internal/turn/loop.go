@@ -299,8 +299,8 @@ type Loop struct {
 
 var _ Runner = (*Loop)(nil)
 
-// NewLanguageModelLoop creates a model/tool loop that consumes proton-sdk directly.
-func NewLanguageModelLoop(languageModel sdk.LanguageModel, tools *toolcall.Service, options ...Option) (*Loop, error) {
+// NewLoop creates a model/tool loop that consumes proton-sdk directly.
+func NewLoop(languageModel sdk.LanguageModel, tools *toolcall.Service, options ...Option) (*Loop, error) {
 	if languageModel == nil {
 		return nil, fmt.Errorf("%w: language model is required", ErrInvalidLoop)
 	}

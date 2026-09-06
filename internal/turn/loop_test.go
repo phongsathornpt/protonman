@@ -176,9 +176,9 @@ func TestLoopReportsToolCallWhenNoToolsAreAvailable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	loop, err := NewLanguageModelLoop(client, service)
+	loop, err := NewLoop(client, service)
 	if err != nil {
-		t.Fatalf("NewLanguageModelLoop() error = %v", err)
+		t.Fatalf("NewLoop() error = %v", err)
 	}
 	events := make([]Event, 0)
 
@@ -960,9 +960,9 @@ func newLoopForHandler(
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	loop, err := NewLanguageModelLoop(client, service, options...)
+	loop, err := NewLoop(client, service, options...)
 	if err != nil {
-		t.Fatalf("NewLanguageModelLoop() error = %v", err)
+		t.Fatalf("NewLoop() error = %v", err)
 	}
 	return loop
 }
@@ -1192,7 +1192,7 @@ func TestNewLoopRejectsAllGlobalBoundsDisabled(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
 		events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventDone}},
 	}}}
-	_, err = NewLanguageModelLoop(
+	_, err = NewLoop(
 		client,
 		service,
 		WithMaxRounds(0),
@@ -1200,7 +1200,7 @@ func TestNewLoopRejectsAllGlobalBoundsDisabled(t *testing.T) {
 		WithTurnTimeout(0),
 	)
 	if !errors.Is(err, ErrInvalidLoop) {
-		t.Fatalf("NewLanguageModelLoop() error = %v, want ErrInvalidLoop", err)
+		t.Fatalf("NewLoop() error = %v, want ErrInvalidLoop", err)
 	}
 }
 

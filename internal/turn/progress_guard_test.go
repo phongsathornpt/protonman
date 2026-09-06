@@ -260,9 +260,9 @@ func TestLoopSuppressesRepeatedPermissionPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	loop, err := NewLanguageModelLoop(client, service)
+	loop, err := NewLoop(client, service)
 	if err != nil {
-		t.Fatalf("NewLanguageModelLoop() error = %v", err)
+		t.Fatalf("NewLoop() error = %v", err)
 	}
 
 	result, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "read README"}}, nil)
@@ -407,7 +407,7 @@ func TestLoopEmitsPermissionRetrySuppressionTelemetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	loop, err := NewLanguageModelLoop(client, service)
+	loop, err := NewLoop(client, service)
 	if err != nil {
 		t.Fatal(err)
 	}

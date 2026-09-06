@@ -231,7 +231,7 @@ func buildInitialRunner(cfg config.Snapshot, sessionID string, skills *skill.Reg
 	if skills != nil {
 		loopOptions = append(loopOptions, turn.WithSkillRegistry(skills))
 	}
-	loop, err := turn.NewLanguageModelLoop(languageModel, service, loopOptions...)
+	loop, err := turn.NewLoop(languageModel, service, loopOptions...)
 	if err != nil {
 		return nil
 	}

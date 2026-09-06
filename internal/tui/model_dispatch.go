@@ -198,7 +198,7 @@ func (m *bubbleModel) reconfigureRunner() {
 	opts = append(opts, applicationturn.WithMaxToolCalls(m.maxToolCalls))
 	opts = append(opts, applicationturn.WithTurnTimeout(m.runtimeConfig.TurnTimeout))
 	opts = append(opts, applicationturn.WithRoundTimeout(m.runtimeConfig.RoundTimeout))
-	loop, err := applicationturn.NewLanguageModelLoop(languageModel, m.service, opts...)
+	loop, err := applicationturn.NewLoop(languageModel, m.service, opts...)
 	if err == nil {
 		m.runner = loop
 		if m.coordinator != nil {
