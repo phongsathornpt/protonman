@@ -1,0 +1,190 @@
+// Package protonsdk defines the provider-neutral model boundary used by Proton agents.
+package protonsdk
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+)
+
+var (
+	ErrInvalidRequest   = errors.New("invalid model request")
+	ErrInvalidEvent     = errors.New("invalid model event")
+	ErrIncompleteStream = errors.New("incomplete model stream")
+)
+
+type Role string
+
+const (
+	RoleSystem    Role = "system"
+	RoleUser      Role = "user"
+	RoleAssistant Role = "assistant"
+	RoleTool      Role = "tool"
+)
+
+type ContentPartType string
+
+const (
+	ContentPartText  ContentPartType = "text"
+	ContentPartImage ContentPartType = "image"
+)
+
+type ContentPart struct {
+	Type     ContentPartType `json:"type"`
+	Text     string          `json:"text,omitempty"`
+	MIMEType string          `json:"mime_type,omitempty"`
+	Data     string          `json:"data,omitempty"`
+}
+
+type ToolCall struct {
+	ID        string
+	Name      string
+	Arguments json.RawMessage
+}
+
+func (c ToolCall) Validate() error {
+	if strings.TrimSpace(c.ID) == "" {
+		return fmt.Errorf("%w: tool call id is required", ErrInvalidEvent)
+	}
+	if strings.TrimSpace(c.Name) == "" {
+		return fmt.Errorf("%w: tool name is required", ErrInvalidEvent)
+	}
+	if len(c.Arguments) > 0 && !json.Valid(c.Arguments) {
+		return fmt.Errorf("%w: tool arguments must be valid JSON", ErrInvalidEvent)
+	}
+	return nil
+}
+
+type Tool struct {
+	Name        string
+	Description string
+	InputSchema map[string]any
+}
+
+func (t Tool) Validate() error {
+	if strings.TrimSpace(t.Name) == "" {
+		return fmt.Errorf("%w: tool name is required", ErrInvalidRequest)
+	}
+	if strings.TrimSpace(t.Description) == "" {
+		return fmt.Errorf("%w: description is required for %q", ErrInvalidRequest, t.Name)
+	}
+	return nil
+}
+
+type Message struct {
+	Role       Role
+	Content    string
+	Parts      []ContentPart
+	ToolCallID string
+	ToolName   string
+	ToolCalls  []ToolCall
+}
+
+func (m Message) TextContent() string {
+	if m.Content != "" {
+		return m.Content
+	}
+	var builder strings.Builder
+	for _, part := range m.Parts {
+		if part.Type == ContentPartText && part.Text != "" {
+			if builder.Len() > 0 {
+				builder.WriteString("\n")
+			}
+			builder.WriteString(part.Text)
+		}
+	}
+	return builder.String()
+}
+
+func (m Message) Validate() error {
+	if !validRole(m.Role) {
+		return fmt.Errorf("%w: unsupported message role %q", ErrInvalidRequest, m.Role)
+	}
+	if m.Role != RoleAssistant && len(m.ToolCalls) > 0 {
+		return fmt.Errorf("%w: only assistant messages can contain tool calls", ErrInvalidRequest)
+	}
+	for _, call := range m.ToolCalls {
+		if err := call.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type Request struct {
+	Messages []Message
+	Tools    []Tool
+}
+
+func (r Request) Validate() error {
+	if len(r.Messages) == 0 {
+		return fmt.Errorf("%w: at least one message is required", ErrInvalidRequest)
+	}
+	for _, message := range r.Messages {
+		if err := message.Validate(); err != nil {
+			return err
+		}
+	}
+	for _, tool := range r.Tools {
+		if err := tool.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func CloneMessages(messages []Message) []Message {
+	cloned := make([]Message, 0, len(messages))
+	for _, message := range messages {
+		clone := message
+		clone.Parts = append([]ContentPart(nil), message.Parts...)
+		clone.ToolCalls = make([]ToolCall, 0, len(message.ToolCalls))
+		for _, call := range message.ToolCalls {
+			call.Arguments = append(json.RawMessage(nil), call.Arguments...)
+			clone.ToolCalls = append(clone.ToolCalls, call)
+		}
+		cloned = append(cloned, clone)
+	}
+	return cloned
+}
+
+type EventKind string
+
+const (
+	EventTextDelta EventKind = "text_delta"
+	EventToolCall  EventKind = "tool_call"
+	EventDone      EventKind = "done"
+)
+
+type Event struct {
+	Kind     EventKind
+	Text     string
+	ToolCall ToolCall
+}
+
+func (e Event) Validate() error {
+	switch e.Kind {
+	case EventTextDelta, EventDone:
+		return nil
+	case EventToolCall:
+		return e.ToolCall.Validate()
+	default:
+		return fmt.Errorf("%w: unsupported event kind %q", ErrInvalidEvent, e.Kind)
+	}
+}
+
+type Stream interface {
+	Next(ctx context.Context) (Event, error)
+	Close() error
+}
+
+func validRole(role Role) bool {
+	switch role {
+	case RoleSystem, RoleUser, RoleAssistant, RoleTool:
+		return true
+	default:
+		return false
+	}
+}
