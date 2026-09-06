@@ -209,6 +209,18 @@ func TestTurnFailureFinalizesRunningToolCells(t *testing.T) {
 	}
 }
 
+func TestCompletedTurnSyncsLegacyAssistantBlock(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.applyTurnEvent(applicationturn.Event{Kind: applicationturn.EventTextDelta, Text: "streamed answer"})
+	model.applyTurnEvent(applicationturn.Event{Kind: applicationturn.EventCompleted})
+	if len(model.blocks) != 1 {
+		t.Fatalf("completed turn legacy blocks = %#v, want one assistant block", model.blocks)
+	}
+	if got := model.blocks[0]; got.Kind != blockAssistant || got.Body != "streamed answer" {
+		t.Fatalf("completed assistant block = %#v", got)
+	}
+}
+
 func TestFailedToolReplacesRunningBlock(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.appendToolRunning("bash")

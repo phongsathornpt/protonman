@@ -122,7 +122,6 @@ func (m *bubbleModel) appendAssistant(text string) {
 
 func (m *bubbleModel) appendAssistantDelta(text string) {
 	m.ensureHistoryState().AppendAssistantDelta(text)
-	m.syncLegacyBlocks()
 }
 
 func (m *bubbleModel) appendError(text string) {
