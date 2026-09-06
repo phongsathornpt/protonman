@@ -1008,6 +1008,12 @@ func TestMalformedExternalTodoEditKeepsLastValidSnapshot(t *testing.T) {
 	if got := store.Snapshot(); len(got.Items) != 1 || got.Items[0].Status != tododomain.StatusPending {
 		t.Fatalf("store changed after invalid reload = %#v", got)
 	}
+	if m.todoWarning == "" || !strings.Contains(m.todoView(), "stale") {
+		t.Fatalf("todo warning not surfaced: warning=%q view=%q", m.todoWarning, m.todoView())
+	}
+	if strings.Contains(plainTranscript(m), "reload TODO.md") {
+		t.Fatalf("todo metadata error leaked into transcript: %q", plainTranscript(m))
+	}
 }
 
 func TestExternalTodoReloadIgnoresUnrelatedAffectedPath(t *testing.T) {
@@ -1048,5 +1054,29 @@ func TestPermissionBashPresentationShowsCwdAndEffectReason(t *testing.T) {
 		if !strings.Contains(view, want) {
 			t.Fatalf("view missing %q:\n%s", want, view)
 		}
+	}
+}
+
+func TestSuccessfulTodoReloadClearsWarning(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "TODO.md")
+	if err := os.WriteFile(path, []byte("- [ ] inspect\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	store, err := tododomain.OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := store.Snapshot()
+	m := newTestBubbleModel(t, permission.ModeAsk, snapshot.Items)
+	m.todoStore, m.todoRevision, m.workDir = store, snapshot.Revision, dir
+	m.todoWarning = "stale"
+	if err := os.WriteFile(path, []byte("- [x] inspect\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	call, _ := tool.NewCall("write-ok", "write_file", json.RawMessage(`{"file_path":"TODO.md"}`))
+	m.reloadTodoAfterExternalTool(call, tool.Result{AffectedPaths: []string{"TODO.md"}}, nil)
+	if m.todoWarning != "" {
+		t.Fatalf("warning=%q, want cleared", m.todoWarning)
 	}
 }

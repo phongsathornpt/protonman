@@ -23,6 +23,7 @@ func (m *bubbleModel) syncTodoSnapshot() bool {
 	}
 	m.todo = tododomain.CloneItems(snapshot.Items)
 	m.todoRevision = snapshot.Revision
+	m.todoWarning = ""
 	return true
 }
 
@@ -35,9 +36,10 @@ func (m *bubbleModel) reloadTodoAfterExternalTool(call tool.Call, result tool.Re
 		return
 	}
 	if _, err := reloader.Reload(m.ctx); err != nil {
-		m.appendError("reload " + tododomain.DefaultFilename + ": " + err.Error())
+		m.todoWarning = tododomain.DefaultFilename + " refresh failed; showing last valid task plan"
 		return
 	}
+	m.todoWarning = ""
 	m.syncTodoSnapshot()
 }
 
