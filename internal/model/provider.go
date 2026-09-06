@@ -184,6 +184,10 @@ type RemoteModel struct {
 	ContextWindow int      `json:"context_window,omitempty"`
 	Provider      string   `json:"provider,omitempty"`
 	Features      []string `json:"features,omitempty"`
+	// ToolSupport and VisionSupport are tri-state capability metadata. Nil means
+	// the catalog did not provide authoritative support information.
+	ToolSupport   *bool `json:"tool_support,omitempty"`
+	VisionSupport *bool `json:"vision_support,omitempty"`
 }
 
 // IsFreeModel reports whether a given model ID represents an OpenCode free-tier model.
@@ -287,8 +291,12 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 	// Attempt parsing OpenAI format: {"data": [{"id": "model-id"}]}
 	var openAIResp struct {
 		Data []struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
+			ID           string `json:"id"`
+			Name         string `json:"name"`
+			Capabilities struct {
+				Tools  *bool `json:"tools"`
+				Vision *bool `json:"vision"`
+			} `json:"capabilities"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &openAIResp); err == nil && len(openAIResp.Data) > 0 {
@@ -299,8 +307,10 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 				name = item.ID
 			}
 			results = append(results, RemoteModel{
-				ID:   item.ID,
-				Name: name,
+				ID:            item.ID,
+				Name:          name,
+				ToolSupport:   item.Capabilities.Tools,
+				VisionSupport: item.Capabilities.Vision,
 			})
 		}
 		return results, nil
@@ -309,12 +319,18 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 	// Attempt parsing protonman format: {"models": [{"slug": "...", "name": "...", "contextWindow": 1000000}]}
 	var protonmanResp struct {
 		Models []struct {
-			ID            string   `json:"id"`
-			Slug          string   `json:"slug"`
-			Name          string   `json:"name"`
-			ContextWindow int      `json:"contextWindow"`
-			Features      []string `json:"features"`
-			Provider      struct {
+			ID             string   `json:"id"`
+			Slug           string   `json:"slug"`
+			Name           string   `json:"name"`
+			ContextWindow  int      `json:"contextWindow"`
+			Features       []string `json:"features"`
+			SupportsTools  *bool    `json:"supportsTools"`
+			SupportsVision *bool    `json:"supportsVision"`
+			Capabilities   struct {
+				Tools  *bool `json:"tools"`
+				Vision *bool `json:"vision"`
+			} `json:"capabilities"`
+			Provider struct {
 				Name string `json:"name"`
 			} `json:"provider"`
 		} `json:"models"`
@@ -326,18 +342,49 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 			if id == "" {
 				id = item.ID
 			}
+			toolSupport := firstKnownBool(item.Capabilities.Tools, item.SupportsTools)
+			visionSupport := firstKnownBool(item.Capabilities.Vision, item.SupportsVision)
+			if toolSupport == nil && hasModelFeature(item.Features, "tools") {
+				toolSupport = boolPointer(true)
+			}
+			if visionSupport == nil && hasModelFeature(item.Features, "vision") {
+				visionSupport = boolPointer(true)
+			}
 			results = append(results, RemoteModel{
 				ID:            id,
 				Name:          item.Name,
 				ContextWindow: item.ContextWindow,
 				Provider:      item.Provider.Name,
 				Features:      item.Features,
+				ToolSupport:   toolSupport,
+				VisionSupport: visionSupport,
 			})
 		}
 		return results, nil
 	}
 
 	return nil, errors.New("unrecognized models response format")
+}
+
+func boolPointer(value bool) *bool { return &value }
+
+func firstKnownBool(values ...*bool) *bool {
+	for _, value := range values {
+		if value != nil {
+			copy := *value
+			return &copy
+		}
+	}
+	return nil
+}
+
+func hasModelFeature(features []string, want string) bool {
+	for _, feature := range features {
+		if strings.EqualFold(strings.TrimSpace(feature), want) {
+			return true
+		}
+	}
+	return false
 }
 
 func fetchAnthropicModels(ctx context.Context, client *http.Client, baseURL string, apiKey string) ([]RemoteModel, error) {

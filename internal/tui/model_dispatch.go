@@ -187,10 +187,12 @@ func (m *bubbleModel) reconfigureRunner() {
 	var clientOpts []model.ClientOption
 	clientOpts = append(clientOpts, model.WithRequestTimeout(m.runtimeConfig.ModelRequestTimeout))
 	if remoteModel, ok := m.activeRemoteModel(); ok {
-		clientOpts = append(clientOpts,
-			model.WithVisionSupport(remoteModelSupportsVision(remoteModel)),
-			model.WithToolsSupport(remoteModelSupportsTools(remoteModel)),
-		)
+		if support := remoteModelVisionSupport(remoteModel); support != nil {
+			clientOpts = append(clientOpts, model.WithVisionSupport(*support))
+		}
+		if support := remoteModelToolsSupport(remoteModel); support != nil {
+			clientOpts = append(clientOpts, model.WithToolsSupport(*support))
+		}
 		if remoteModel.ContextWindow > 0 {
 			clientOpts = append(clientOpts, model.WithContextWindow(remoteModel.ContextWindow))
 		}
