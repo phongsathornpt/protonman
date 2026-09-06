@@ -34,6 +34,9 @@ func AnalyzeCommand(command string) BashAnalysis {
 	if !ok || len(segments) == 0 {
 		return unknownBashAnalysis("unsupported shell syntax")
 	}
+	if len(segments) == 1 {
+		return analyzeSimpleSegment(segments[0])
+	}
 	combined := BashAnalysis{Effect: CommandEffectReadOnly, Confidence: CommandConfidenceCertain, Reason: "all command segments are read only"}
 	for i, segment := range segments {
 		analysis := analyzeSimpleSegment(segment)

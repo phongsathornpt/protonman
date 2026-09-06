@@ -57,10 +57,17 @@ func todoCallMayAffectFile(call tool.Call, result tool.Result, workDir string) b
 		// Built-in file mutators publish AffectedPaths; no path means no successful mutation.
 		return false
 	case "bash":
+		if len(result.AffectedPaths) > 0 {
+			return false
+		}
 		var input struct {
 			Command string `json:"command"`
 		}
 		if json.Unmarshal(call.Arguments, &input) != nil {
+			return false
+		}
+		analysis := tool.AnalyzeCommand(input.Command)
+		if analysis.Effect == tool.CommandEffectReadOnly {
 			return false
 		}
 		return strings.Contains(input.Command, "TODO.md")

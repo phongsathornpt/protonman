@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/permission"
 	tododomain "github.com/projectTHORN/proton/internal/todo"
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 func (m bubbleModel) statusView() string {
@@ -193,6 +195,13 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 		switch request.ToolKind {
 		case permission.ToolRead, permission.ToolGrep, permission.ToolWebFetch, permission.ToolWebSearch, permission.ToolTask:
 			return nil
+		case permission.ToolBash:
+			var input struct {
+				Command string `json:"command"`
+			}
+			if json.Unmarshal(request.Arguments, &input) == nil && tool.AnalyzeCommand(input.Command).Effect == tool.CommandEffectReadOnly {
+				return nil
+			}
 		case permission.ToolAgent:
 			switch request.ToolName {
 			case "wait_agent", "get_agent", "list_agents":

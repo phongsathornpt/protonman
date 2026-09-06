@@ -40,7 +40,7 @@ func TestPlanModeBlocksBashBeforeAlwaysApprove(t *testing.T) {
 		t.Fatalf("plan chip does not communicate read-only behavior: %q", model.modeChip())
 	}
 
-	call, err := tool.NewCall("plan-bash", "bash", []byte(`{"command":"pwd"}`))
+	call, err := tool.NewCall("plan-bash", "bash", []byte(`{"command":"rm -f tmp"}`))
 	if err != nil {
 		t.Fatalf("NewCall() error = %v", err)
 	}
@@ -397,5 +397,40 @@ func TestViewportTailOnlyHydratesBeforePageUp(t *testing.T) {
 	}
 	if m.viewport.AtBottom() {
 		t.Fatal("page up should leave the viewport above the tail")
+	}
+}
+
+func TestPlanModeAllowsProvenReadOnlyBash(t *testing.T) {
+	handler := &countingHandler{definition: tool.Definition{
+		Name: "bash", Description: "run shell command", Kind: tool.KindBash, PermissionDetailKey: "command",
+	}}
+	registry := behaviorRegistry{handler: handler}
+	service := newBehaviorService(t, registry, permission.ModeAlwaysApprove)
+	model := newBubbleModel(context.Background(), service, registry, nil, nil, newPermissionBridge(), "")
+	model.setPlanEnabled(true)
+	call, err := tool.NewCall("plan-read-bash", "bash", []byte(`{"command":"pwd && git status --short"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Call(context.Background(), call); err != nil {
+		t.Fatalf("read-only bash blocked in plan mode: %v", err)
+	}
+	if handler.calls != 1 {
+		t.Fatalf("handler calls = %d, want 1", handler.calls)
+	}
+}
+
+func TestPlanModeBlocksUnknownBash(t *testing.T) {
+	handler := &countingHandler{definition: tool.Definition{Name: "bash", Description: "run shell command", Kind: tool.KindBash, PermissionDetailKey: "command"}}
+	registry := behaviorRegistry{handler: handler}
+	service := newBehaviorService(t, registry, permission.ModeAlwaysApprove)
+	model := newBubbleModel(context.Background(), service, registry, nil, nil, newPermissionBridge(), "")
+	model.setPlanEnabled(true)
+	call, _ := tool.NewCall("plan-unknown-bash", "bash", []byte(`{"command":"go test ./..."}`))
+	if _, err := service.Call(context.Background(), call); !errors.Is(err, toolcall.ErrPermissionDenied) {
+		t.Fatalf("unknown bash error = %v, want permission denied", err)
+	}
+	if handler.calls != 0 {
+		t.Fatalf("handler calls = %d, want 0", handler.calls)
 	}
 }
