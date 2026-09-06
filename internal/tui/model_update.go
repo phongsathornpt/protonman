@@ -27,12 +27,13 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.agentActivity == nil {
 			m.agentActivity = make(map[string]string)
 		}
-		switch message.event.Kind {
-		case agent.EventAgentProgress:
+		if message.event.Kind == agent.EventAgentProgress {
 			if activity := strings.TrimSpace(message.event.Message); activity != "" {
 				m.agentActivity[message.event.AgentID] = activity
 			}
-		case agent.EventAgentCompleted, agent.EventAgentFailed:
+			return m, m.nextAgentEvent()
+		}
+		if message.event.Kind == agent.EventAgentCompleted || message.event.Kind == agent.EventAgentFailed {
 			delete(m.agentActivity, message.event.AgentID)
 		}
 		m.syncAgentSnapshot()

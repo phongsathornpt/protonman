@@ -143,7 +143,9 @@ func TestAgentLifecycleProgressShowsCurrentActivity(t *testing.T) {
 	m.resize(100, 30)
 	updated, _ := m.Update(agentLifecycleMsg{event: agent.Event{Kind: agent.EventAgentProgress, AgentID: "explorer-1", Message: "using grep"}})
 	m = updated.(*bubbleModel)
-	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", Task: "inspect router", State: agent.StateRunning, StartedAt: time.Now()}}
+	if len(m.agentSnapshot) != 1 {
+		t.Fatalf("progress event unexpectedly replaced agent snapshot: %#v", m.agentSnapshot)
+	}
 	if got := m.agentsView(); !strings.Contains(got, "using grep") {
 		t.Fatalf("agents view=%q, want current activity", got)
 	}
