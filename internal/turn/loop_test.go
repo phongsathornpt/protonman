@@ -1245,3 +1245,34 @@ func TestLoopAllowsUnboundedCountsWithFiniteTurnTimeout(t *testing.T) {
 		t.Fatalf("content = %q", result.Message.Content)
 	}
 }
+
+func TestFailUsesBoundedDetachedContextForTerminalEvent(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	loop := &Loop{}
+	var sawEvent bool
+	_, err := loop.fail(ctx, func(eventCtx context.Context, event Event) error {
+		sawEvent = true
+		if event.Kind != EventFailed {
+			t.Fatalf("event kind = %v, want EventFailed", event.Kind)
+		}
+		if eventCtx.Err() != nil {
+			t.Fatalf("terminal event inherited cancellation: %v", eventCtx.Err())
+		}
+		deadline, ok := eventCtx.Deadline()
+		if !ok {
+			t.Fatal("terminal event context has no deadline")
+		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 || remaining > terminalEmitTimeout {
+			t.Fatalf("terminal event deadline remaining = %v", remaining)
+		}
+		return nil
+	}, 1, context.Canceled)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("fail error = %v, want context canceled", err)
+	}
+	if !sawEvent {
+		t.Fatal("terminal event was not emitted")
+	}
+}
