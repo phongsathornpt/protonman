@@ -184,7 +184,7 @@ func (m *bubbleModel) reconfigureRunner() {
 	if sessID == "" && m.workDir != "" {
 		sessID = "workspace-" + m.workDir
 	}
-	var clientOpts []model.OpenAIOption
+	var clientOpts []model.ClientOption
 	clientOpts = append(clientOpts, model.WithRequestTimeout(m.runtimeConfig.ModelRequestTimeout))
 	if sessID != "" {
 		clientOpts = append(clientOpts, model.WithSessionID(sessID))
