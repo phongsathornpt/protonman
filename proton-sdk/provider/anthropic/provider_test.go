@@ -3,6 +3,7 @@ package anthropic
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -117,7 +118,15 @@ func TestAnthropicHTTPError(t *testing.T) {
 	}))
 	defer server.Close()
 	model := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("claude-test")
-	if _, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}}); err == nil {
+	_, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err == nil {
 		t.Fatal("expected error")
+	}
+	var providerErr *sdk.ProviderError
+	if !errors.As(err, &providerErr) {
+		t.Fatalf("error = %T, want *sdk.ProviderError", err)
+	}
+	if providerErr.Kind != sdk.ErrorAuthentication || providerErr.StatusCode != http.StatusUnauthorized || providerErr.Code != "authentication_error" {
+		t.Fatalf("provider error = %#v", providerErr)
 	}
 }
