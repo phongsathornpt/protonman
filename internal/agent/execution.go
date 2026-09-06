@@ -12,6 +12,7 @@ import (
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	"github.com/projectTHORN/proton/internal/turn"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) {
@@ -92,6 +93,9 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 		}
 		if spec, ok := SpecForProfile(req.Profile); ok {
 			loopOptions = append(loopOptions, turn.WithReasoningEffort(spec.Reasoning))
+		}
+		if c.reasoningEffort != sdk.ReasoningDefault {
+			loopOptions = append(loopOptions, turn.WithExplicitReasoningEffort(c.reasoningEffort))
 		}
 		loop, lerr := turn.NewLoop(languageModel, service, loopOptions...)
 		if lerr != nil {

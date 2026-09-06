@@ -25,6 +25,7 @@ import (
 	"github.com/projectTHORN/proton/internal/toolcall"
 	"github.com/projectTHORN/proton/internal/turn"
 	"github.com/projectTHORN/proton/internal/workspace"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 type appRuntime struct {
@@ -102,6 +103,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	coordinator := agent.NewCoordinator(nil, nil, workspaceRoot, policy,
 		agent.WithMaxRounds(loadedConfig.Agent.MaxRounds),
 		agent.WithMaxToolCalls(loadedConfig.Agent.MaxToolCalls),
+		agent.WithReasoningEffort(loadedConfig.Agent.ReasoningEffort),
 		agent.WithMaxRuntime(loadedConfig.Agent.SubagentMaxRuntime),
 		agent.WithDefaultWaitTimeout(loadedConfig.Agent.SubagentWaitTimeout),
 		agent.WithDefaultQueueTimeout(loadedConfig.Agent.SubagentQueueTimeout),
@@ -243,6 +245,9 @@ func buildInitialRunner(cfg config.Snapshot, sessionID, workDir string, skills *
 				loopOptions = append(loopOptions, turn.WithReasoningEffort(spec.Reasoning))
 			}
 		}
+	}
+	if cfg.Agent.ReasoningEffort != sdk.ReasoningDefault {
+		loopOptions = append(loopOptions, turn.WithExplicitReasoningEffort(cfg.Agent.ReasoningEffort))
 	}
 	if skills != nil {
 		loopOptions = append(loopOptions, turn.WithSkillRegistry(skills))

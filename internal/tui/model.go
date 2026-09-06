@@ -19,6 +19,7 @@ import (
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/turn"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 const (
@@ -88,6 +89,7 @@ type bubbleModel struct {
 	maxRounds               int
 	maxToolCalls            int
 	agentProfile            string
+	reasoningEffort         sdk.ReasoningEffort
 	sessionID               string
 	modelCatalogs           modelCatalogState
 	runtimeConfig           config.RuntimeConfig

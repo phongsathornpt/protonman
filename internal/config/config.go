@@ -16,6 +16,7 @@ import (
 	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/sandbox"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 const (
@@ -76,15 +77,16 @@ type ModelConfig struct {
 
 // AgentConfig specifies autonomous agent execution settings.
 type AgentConfig struct {
-	MaxRounds            int           `toml:"max_rounds"`
-	MaxToolCalls         int           `toml:"max_tool_calls"`
-	Profile              string        `toml:"profile"`
-	MaxLiveSubagents     int           `toml:"max_live_subagents"`
-	MaxRetainedSubagents int           `toml:"max_retained_subagents"`
-	SubagentMaxRuntime   time.Duration `toml:"-"`
-	SubagentWaitTimeout  time.Duration `toml:"-"`
-	SubagentQueueTimeout time.Duration `toml:"-"`
-	CompletedResultTTL   time.Duration `toml:"-"`
+	MaxRounds            int                 `toml:"max_rounds"`
+	MaxToolCalls         int                 `toml:"max_tool_calls"`
+	Profile              string              `toml:"profile"`
+	ReasoningEffort      sdk.ReasoningEffort `toml:"reasoning_effort"`
+	MaxLiveSubagents     int                 `toml:"max_live_subagents"`
+	MaxRetainedSubagents int                 `toml:"max_retained_subagents"`
+	SubagentMaxRuntime   time.Duration       `toml:"-"`
+	SubagentWaitTimeout  time.Duration       `toml:"-"`
+	SubagentQueueTimeout time.Duration       `toml:"-"`
+	CompletedResultTTL   time.Duration       `toml:"-"`
 }
 
 // RuntimeConfig specifies execution and network time bounds.
@@ -152,6 +154,7 @@ type fileAgent struct {
 	MaxRounds            *int    `toml:"max_rounds,omitempty"`
 	MaxToolCalls         *int    `toml:"max_tool_calls,omitempty"`
 	Profile              *string `toml:"profile,omitempty"`
+	ReasoningEffort      *string `toml:"reasoning_effort,omitempty"`
 	MaxLiveSubagents     *int    `toml:"max_live_subagents,omitempty"`
 	MaxRetainedSubagents *int    `toml:"max_retained_subagents,omitempty"`
 	SubagentMaxRuntime   *string `toml:"subagent_max_runtime,omitempty"`
@@ -370,6 +373,13 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 	if document.Agent.Profile != nil {
 		snapshot.Agent.Profile = strings.TrimSpace(*document.Agent.Profile)
 	}
+	if document.Agent.ReasoningEffort != nil {
+		effort, err := sdk.ParseReasoningEffort(*document.Agent.ReasoningEffort)
+		if err != nil {
+			return fmt.Errorf("agent.reasoning_effort: %w", err)
+		}
+		snapshot.Agent.ReasoningEffort = effort
+	}
 	if document.Agent.MaxLiveSubagents != nil {
 		if *document.Agent.MaxLiveSubagents <= 0 {
 			return fmt.Errorf("agent.max_live_subagents must be positive")
@@ -523,6 +533,20 @@ func DeleteUserProviderConfig(homeDir string, providerName string) error {
 				break
 			}
 		}
+	})
+}
+
+// SaveUserReasoningEffort updates the portable agent reasoning override in ~/.proton/config.toml.
+func SaveUserReasoningEffort(homeDir string, effort sdk.ReasoningEffort) error {
+	if !effort.Valid() {
+		return fmt.Errorf("invalid reasoning effort %q", effort)
+	}
+	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
+		value := string(effort)
+		if effort == sdk.ReasoningDefault {
+			value = "auto"
+		}
+		doc.Agent.ReasoningEffort = &value
 	})
 }
 

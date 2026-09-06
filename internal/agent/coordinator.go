@@ -79,6 +79,7 @@ type Coordinator struct {
 
 	maxRounds           int
 	maxToolCalls        int
+	reasoningEffort     sdk.ReasoningEffort
 	maxLiveAgents       int
 	maxRetainedAgents   int
 	maxRuntime          time.Duration
@@ -119,6 +120,15 @@ func WithMaxRounds(rounds int) Option {
 	return func(c *Coordinator) {
 		if rounds >= 0 {
 			c.maxRounds = rounds
+		}
+	}
+}
+
+// WithReasoningEffort overrides portable profile reasoning for subagents.
+func WithReasoningEffort(effort sdk.ReasoningEffort) Option {
+	return func(c *Coordinator) {
+		if effort.Valid() {
+			c.reasoningEffort = effort
 		}
 	}
 }
