@@ -275,6 +275,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activity = "ready"
 		m.turnCancel = nil
 		m.appendToolResult(message.result, message.err)
+		m.reloadTodoAfterExternalTool(message.call, message.err)
 		m.syncTodoSnapshot()
 		if message.call.ID != "" {
 			m.appendModelToolResult(message.call, message.result)

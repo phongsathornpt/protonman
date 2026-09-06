@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -954,5 +956,55 @@ func TestTodoStoreRevisionSyncsAfterToolResult(t *testing.T) {
 	}
 	if m.syncTodoSnapshot() {
 		t.Fatal("unchanged revision reported a sync")
+	}
+}
+
+func TestExternalTodoFileEditReloadsSharedStore(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "TODO.md")
+	if err := os.WriteFile(path, []byte("- [ ] inspect\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	store, err := tododomain.OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := store.Snapshot()
+	m := newTestBubbleModel(t, permission.ModeAsk, snapshot.Items)
+	m.todoStore, m.todoRevision, m.workDir = store, snapshot.Revision, dir
+	if err := os.WriteFile(path, []byte("- [x] inspect\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	call, _ := tool.NewCall("write-1", "write_file", json.RawMessage(`{"file_path":"TODO.md","content":"- [x] inspect\\n"}`))
+	m.applyTurnEvent(applicationturn.Event{Kind: applicationturn.EventToolResult, Call: call, Result: tool.Result{CallID: "write-1", ToolName: "write_file"}})
+	if len(m.todo) != 1 || m.todo[0].Status != tododomain.StatusCompleted {
+		t.Fatalf("todo after reload = %#v", m.todo)
+	}
+}
+
+func TestMalformedExternalTodoEditKeepsLastValidSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "TODO.md")
+	if err := os.WriteFile(path, []byte("- [ ] inspect\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	store, err := tododomain.OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := store.Snapshot()
+	m := newTestBubbleModel(t, permission.ModeAsk, snapshot.Items)
+	m.todoStore, m.todoRevision, m.workDir = store, snapshot.Revision, dir
+	bad := "<!-- proton:todos:start -->\n- [ ] missing-id\n<!-- proton:todos:end -->\n"
+	if err := os.WriteFile(path, []byte(bad), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	call, _ := tool.NewCall("write-1", "write_file", json.RawMessage(`{"file_path":"TODO.md"}`))
+	m.reloadTodoAfterExternalTool(call, nil)
+	if len(m.todo) != 1 || m.todo[0].Status != tododomain.StatusPending {
+		t.Fatalf("todo changed after invalid reload = %#v", m.todo)
+	}
+	if got := store.Snapshot(); len(got.Items) != 1 || got.Items[0].Status != tododomain.StatusPending {
+		t.Fatalf("store changed after invalid reload = %#v", got)
 	}
 }
