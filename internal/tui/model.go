@@ -952,7 +952,6 @@ func (m *bubbleModel) resize(width int, height int) {
 	m.transcriptViewport.Height = maxInt(1, height-10)
 	if m.historyState != nil {
 		m.historyState.SetWidth(width)
-		m.historyState.InvalidateCache()
 	}
 	m.relayout()
 	m.refreshTranscriptViewport(false)
