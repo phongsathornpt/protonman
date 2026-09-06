@@ -407,26 +407,30 @@ func (m bubbleModel) todoView() string {
 	if len(m.todo) == 0 {
 		return ""
 	}
-	completed, active := todoCounts(m.todo)
+	completed, active, pending := todoCounts(m.todo)
 	summary := fmt.Sprintf("Tasks %d/%d", completed, len(m.todo))
 	if active > 0 {
 		summary += fmt.Sprintf(" · %d active", active)
 	}
+	if pending > 0 {
+		summary += fmt.Sprintf(" · %d pending", pending)
+	}
 	if completed == len(m.todo) {
 		summary += " ✓"
 	}
-	switch layoutModeForHeight(m.height) {
-	case layoutTiny:
-		return ""
-	case layoutCompact:
-		return brandStyle.Render(summary)
+	renderSummary := func(value string) string {
+		return brandStyle.Render(truncateWithEllipsis(value, maxInt(1, m.width-2)))
 	}
-	if !m.todoExpanded {
-		return brandStyle.Render(summary + " · ctrl+o details")
+	switch layoutModeForHeight(m.height) {
+	case layoutTiny, layoutCompact:
+		return renderSummary(summary)
+	}
+	if m.busy || !m.todoExpanded {
+		return renderSummary(summary + " · ctrl+o details")
 	}
 
 	limit := todoVisibleRows(m.height)
-	lines := []string{brandStyle.Render(summary)}
+	lines := []string{renderSummary(summary)}
 	shown := 0
 	for _, status := range []tododomain.Status{tododomain.StatusInProgress, tododomain.StatusPending, tododomain.StatusCompleted} {
 		for _, item := range m.todo {
@@ -443,16 +447,18 @@ func (m bubbleModel) todoView() string {
 	return strings.Join(lines, "\n")
 }
 
-func todoCounts(items []TodoItem) (completed, active int) {
+func todoCounts(items []TodoItem) (completed, active, pending int) {
 	for _, item := range items {
 		switch item.Status {
 		case tododomain.StatusCompleted:
 			completed++
 		case tododomain.StatusInProgress:
 			active++
+		case tododomain.StatusPending:
+			pending++
 		}
 	}
-	return completed, active
+	return completed, active, pending
 }
 
 func todoVisibleRows(height int) int {
