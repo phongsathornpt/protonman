@@ -10,6 +10,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/projectTHORN/proton/internal/agentprompt"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 )
@@ -395,5 +396,43 @@ func TestFileStoreLatestSession(t *testing.T) {
 	}
 	if got.PermissionMode != permission.ModeDeny.String() {
 		t.Fatalf("PermissionMode = %q, want deny", got.PermissionMode)
+	}
+}
+
+func TestSessionConversionsStripManagedSystemPrompts(t *testing.T) {
+	managed := agentprompt.Render(agentprompt.Spec{Profile: "dex"})
+	custom := "custom project system instruction"
+	stored := FromModelMessages([]model.Message{
+		{Role: model.RoleSystem, Content: managed},
+		{Role: model.RoleSystem, Content: custom},
+		{Role: model.RoleUser, Content: "hello"},
+	})
+	if len(stored) != 2 || stored[0].Role != model.RoleSystem || stored[0].Content != custom {
+		t.Fatalf("stored messages = %+v", stored)
+	}
+	restored := ToModelMessages([]Message{
+		{Role: model.RoleSystem, Content: managed},
+		{Role: model.RoleSystem, Content: custom},
+		{Role: model.RoleUser, Content: "hello"},
+	})
+	if len(restored) != 2 || restored[0].Role != model.RoleSystem || restored[0].Content != custom {
+		t.Fatalf("restored messages = %+v", restored)
+	}
+}
+
+func TestFileStoreRoundTripsAgentProfile(t *testing.T) {
+	store, err := NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(context.Background(), "profile", State{PermissionMode: permission.ModeAsk.String(), AgentProfile: "dex"}); err != nil {
+		t.Fatal(err)
+	}
+	loaded, found, err := store.Load(context.Background(), "profile")
+	if err != nil || !found {
+		t.Fatalf("Load() = found %v, err %v", found, err)
+	}
+	if loaded.AgentProfile != "dex" {
+		t.Fatalf("AgentProfile = %q, want dex", loaded.AgentProfile)
 	}
 }
