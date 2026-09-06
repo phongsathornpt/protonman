@@ -26,7 +26,7 @@ const (
 	defaultTimeout        = 5 * time.Minute
 	defaultQueueTimeout   = 30 * time.Second
 	defaultCloseTimeout   = 5 * time.Second
-	eventEmitTimeout      = 10 * time.Millisecond
+	eventEmitTimeout      = 100 * time.Millisecond
 	maxSummaryBytes       = 32 * 1024 // 32KB bound for child summaries returned to parent
 )
 
@@ -35,18 +35,24 @@ type RunnerFactory func(profile Profile, tools *toolcall.Service) (turn.Runner, 
 
 // AgentStatus describes the live state of an in-flight subagent.
 type AgentStatus struct {
-	ID        string    `json:"id"`
-	ParentID  string    `json:"parent_id,omitempty"`
-	Profile   Profile   `json:"profile"`
-	Task      string    `json:"task"`
-	StartTime time.Time `json:"start_time"`
-	StartedAt time.Time `json:"started_at,omitempty"`
-	Depth     int       `json:"depth"`
+	ID         string    `json:"id"`
+	ParentID   string    `json:"parent_id,omitempty"`
+	Profile    Profile   `json:"profile"`
+	Task       string    `json:"task"`
+	State      State     `json:"state"`
+	StartTime  time.Time `json:"start_time"`
+	StartedAt  time.Time `json:"started_at,omitempty"`
+	FinishedAt time.Time `json:"finished_at,omitempty"`
+	Depth      int       `json:"depth"`
 }
 
 type activeEntry struct {
-	status AgentStatus
-	cancel context.CancelFunc
+	status  AgentStatus
+	cancel  context.CancelFunc
+	done    chan struct{}
+	started chan struct{}
+	result  Result
+	err     error
 }
 
 // Coordinator manages subagent execution in bounded, cancellable goroutines.
@@ -66,6 +72,8 @@ type Coordinator struct {
 	activeMu sync.RWMutex
 	active   map[string]*activeEntry
 	wg       sync.WaitGroup
+	rootCtx  context.Context
+	rootStop context.CancelFunc
 
 	maxDepth            int
 	maxRounds           int
@@ -194,6 +202,7 @@ func NewCoordinator(
 	policy *permission.Policy,
 	options ...Option,
 ) *Coordinator {
+	rootCtx, rootStop := context.WithCancel(context.Background())
 	c := &Coordinator{
 		client:              client,
 		parentRegistry:      parentRegistry,
@@ -203,6 +212,8 @@ func NewCoordinator(
 		wsGate:              make(chan struct{}, defaultMaxConcurrency),
 		wsWriter:            make(chan struct{}, 1),
 		active:              make(map[string]*activeEntry),
+		rootCtx:             rootCtx,
+		rootStop:            rootStop,
 		maxDepth:            defaultMaxDepth,
 		maxRounds:           defaultMaxRounds,
 		maxToolCalls:        defaultMaxToolCalls,
@@ -218,31 +229,62 @@ func NewCoordinator(
 	return c
 }
 
-// Run dispatches a subagent execution into a goroutine and blocks until completion,
-// timeout, or parent context cancellation.
-func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
+// Spawn validates and schedules a subagent whose lifetime is owned by the coordinator.
+// The caller context only bounds submission; canceling it after Spawn returns does not
+// cancel the child. Use Cancel for explicit cancellation.
+func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	if err := ctx.Err(); err != nil {
+		return Handle{}, err
+	}
+	if err := req.Validate(); err != nil {
+		return Handle{}, fmt.Errorf("invalid subagent request: %w", err)
+	}
+	if req.Depth > c.maxDepth {
+		return Handle{}, fmt.Errorf("delegation depth %d exceeds maximum depth %d", req.Depth, c.maxDepth)
+	}
+
 	c.activeMu.Lock()
 	if c.closed.Load() {
 		c.activeMu.Unlock()
-		return Result{}, errors.New("coordinator is closed")
+		return Handle{}, errors.New("coordinator is closed")
 	}
-	if err := req.Validate(); err != nil {
-		c.activeMu.Unlock()
-		return Result{}, fmt.Errorf("invalid subagent request: %w", err)
-	}
-	if req.Depth > c.maxDepth {
-		c.activeMu.Unlock()
-		return Result{}, fmt.Errorf("delegation depth %d exceeds maximum depth %d", req.Depth, c.maxDepth)
-	}
-
-	id := req.ID
-	if strings.TrimSpace(id) == "" {
+	id := strings.TrimSpace(req.ID)
+	if id == "" {
 		id = fmt.Sprintf("%s-%d", req.Profile, atomic.AddUint64(&c.seq, 1))
 		req.ID = id
+	} else if _, exists := c.active[id]; exists {
+		c.activeMu.Unlock()
+		return Handle{}, fmt.Errorf("subagent %q already exists", id)
 	}
+
+	queuedAt := time.Now()
+	runCtx, runCancel := context.WithCancel(c.rootCtx)
+	entry := &activeEntry{
+		status: AgentStatus{
+			ID: id, ParentID: req.ParentID, Profile: req.Profile, Task: req.Task,
+			State: StateQueued, StartTime: queuedAt, Depth: req.Depth,
+		},
+		cancel:  runCancel,
+		done:    make(chan struct{}),
+		started: make(chan struct{}),
+	}
+	c.active[id] = entry
+	c.activeMu.Unlock()
+
+	c.emit(runCtx, Event{Kind: EventAgentQueued, AgentID: id, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task})
+	c.wg.Add(1)
+	go c.runEntry(runCtx, entry, req, queuedAt)
+	return Handle{ID: id, Profile: req.Profile}, nil
+}
+
+func (c *Coordinator) runEntry(runCtx context.Context, entry *activeEntry, req Request, queuedAt time.Time) {
+	defer c.wg.Done()
+	defer entry.cancel()
+	defer close(entry.done)
+
 	executionTimeout := req.Timeout
 	if executionTimeout == 0 || (c.defaultTimeout > 0 && executionTimeout > c.defaultTimeout) {
 		executionTimeout = c.defaultTimeout
@@ -250,32 +292,6 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 	queueTimeout := req.QueueTimeout
 	if queueTimeout == 0 {
 		queueTimeout = c.defaultQueueTimeout
-	}
-
-	runCtx, runCancel := context.WithCancel(ctx)
-	queuedAt := time.Now()
-	status := AgentStatus{
-		ID:        id,
-		ParentID:  req.ParentID,
-		Profile:   req.Profile,
-		Task:      req.Task,
-		StartTime: queuedAt,
-		Depth:     req.Depth,
-	}
-	c.active[id] = &activeEntry{status: status, cancel: runCancel}
-	c.activeMu.Unlock()
-	c.emit(runCtx, Event{
-		Kind:     EventAgentQueued,
-		AgentID:  id,
-		ParentID: req.ParentID,
-		Profile:  req.Profile,
-		Message:  req.Task,
-	})
-
-	removeActive := func() {
-		c.activeMu.Lock()
-		delete(c.active, id)
-		c.activeMu.Unlock()
 	}
 	queueCtx := runCtx
 	queueCancel := func() {}
@@ -287,98 +303,242 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 	select {
 	case c.sem <- struct{}{}:
 	case <-queueCtx.Done():
-		err := queueCtx.Err()
-		queueDuration := time.Since(queuedAt)
-		c.emit(runCtx, Event{Kind: EventAgentFailed, AgentID: id, ParentID: req.ParentID, Profile: req.Profile, QueueDuration: queueDuration, TotalDuration: queueDuration, Err: err})
-		runCancel()
-		removeActive()
-		return Result{AgentID: id, Profile: req.Profile, QueueDuration: queueDuration, TotalDuration: queueDuration, Err: err}, err
+		c.finishEntry(entry, req, queuedAt, time.Time{}, queueCtx.Err())
+		return
 	}
+	defer func() { <-c.sem }()
 
-	releaseWorkspace, acquireErr := c.acquireWorkspace(queueCtx, req.Profile.IsMutating())
-	if acquireErr != nil {
-		<-c.sem
-		queueDuration := time.Since(queuedAt)
-		c.emit(runCtx, Event{Kind: EventAgentFailed, AgentID: id, ParentID: req.ParentID, Profile: req.Profile, QueueDuration: queueDuration, TotalDuration: queueDuration, Err: acquireErr})
-		runCancel()
-		removeActive()
-		return Result{AgentID: id, Profile: req.Profile, QueueDuration: queueDuration, TotalDuration: queueDuration, Err: acquireErr}, acquireErr
+	releaseWorkspace, err := c.acquireWorkspace(queueCtx, req.Profile.IsMutating())
+	if err != nil {
+		c.finishEntry(entry, req, queuedAt, time.Time{}, err)
+		return
 	}
+	defer releaseWorkspace()
 	queueCancel()
+
 	startedAt := time.Now()
-	queueDuration := startedAt.Sub(queuedAt)
 	c.activeMu.Lock()
-	if entry := c.active[id]; entry != nil {
-		entry.status.StartedAt = startedAt
-	}
+	entry.status.State = StateRunning
+	entry.status.StartedAt = startedAt
+	close(entry.started)
 	c.activeMu.Unlock()
+	queueDuration := startedAt.Sub(queuedAt)
 
 	execCtx := runCtx
 	execCancel := func() {}
 	if executionTimeout > 0 {
 		execCtx, execCancel = context.WithTimeout(runCtx, executionTimeout)
 	}
+	defer execCancel()
 
-	resultCh := make(chan Result, 1)
-	c.wg.Add(1)
-	go func() {
-		defer c.wg.Done()
-		defer func() { <-c.sem }()
-		defer releaseWorkspace()
-		defer execCancel()
-		defer runCancel()
-		defer removeActive()
-
-		c.emit(execCtx, Event{
-			Kind:          EventAgentStarted,
-			AgentID:       id,
-			ParentID:      req.ParentID,
-			Profile:       req.Profile,
-			Message:       req.Task,
-			QueueDuration: queueDuration,
-		})
-
-		res, err := c.execute(execCtx, req)
-		res.QueueDuration = queueDuration
-		res.Duration = time.Since(startedAt)
-		res.TotalDuration = time.Since(queuedAt)
-		if err != nil {
-			res.Err = err
-			emitCtx, emitDone := contextutil.DetachedTimeout(execCtx, 5*time.Second)
-			c.emit(emitCtx, Event{
-				Kind:          EventAgentFailed,
-				AgentID:       id,
-				ParentID:      req.ParentID,
-				Profile:       req.Profile,
-				QueueDuration: res.QueueDuration,
-				Duration:      res.Duration,
-				TotalDuration: res.TotalDuration,
-				Err:           err,
-			})
-			emitDone()
-		} else {
-			c.emit(execCtx, Event{
-				Kind:          EventAgentCompleted,
-				AgentID:       id,
-				ParentID:      req.ParentID,
-				Profile:       req.Profile,
-				QueueDuration: res.QueueDuration,
-				Duration:      res.Duration,
-				TotalDuration: res.TotalDuration,
-				Message:       res.Summary,
-			})
-		}
-		resultCh <- res
-	}()
-
-	select {
-	case res := <-resultCh:
-		return res, res.Err
-	case <-execCtx.Done():
-		err := execCtx.Err()
-		now := time.Now()
-		return Result{AgentID: id, Profile: req.Profile, QueueDuration: queueDuration, Duration: now.Sub(startedAt), TotalDuration: now.Sub(queuedAt), Err: err}, err
+	c.emit(execCtx, Event{Kind: EventAgentStarted, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task, QueueDuration: queueDuration})
+	res, runErr := c.execute(execCtx, req)
+	res.QueueDuration = queueDuration
+	res.Duration = time.Since(startedAt)
+	res.TotalDuration = time.Since(queuedAt)
+	if runErr != nil {
+		res.Err = runErr
 	}
+	c.storeTerminal(entry, res, runErr)
+
+	eventKind := EventAgentCompleted
+	if runErr != nil {
+		eventKind = EventAgentFailed
+	}
+	emitCtx, emitDone := contextutil.DetachedTimeout(execCtx, 5*time.Second)
+	c.emit(emitCtx, Event{Kind: eventKind, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: res.Summary, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: runErr})
+	emitDone()
+}
+
+func (c *Coordinator) finishEntry(entry *activeEntry, req Request, queuedAt, startedAt time.Time, err error) {
+	now := time.Now()
+	res := Result{AgentID: req.ID, Profile: req.Profile, QueueDuration: now.Sub(queuedAt), TotalDuration: now.Sub(queuedAt), Err: err}
+	if !startedAt.IsZero() {
+		res.Duration = now.Sub(startedAt)
+	}
+	c.storeTerminal(entry, res, err)
+	c.emit(c.rootCtx, Event{Kind: EventAgentFailed, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: err})
+	if startedAt.IsZero() {
+		close(entry.started)
+	}
+}
+
+func (c *Coordinator) storeTerminal(entry *activeEntry, res Result, err error) {
+	c.activeMu.Lock()
+	defer c.activeMu.Unlock()
+	entry.result = res
+	entry.err = err
+	entry.status.FinishedAt = time.Now()
+	switch {
+	case err == nil:
+		entry.status.State = StateCompleted
+	case errors.Is(err, context.Canceled):
+		entry.status.State = StateCanceled
+	default:
+		entry.status.State = StateFailed
+	}
+}
+
+// Wait waits for a subagent for at most timeout. A wait timeout never cancels
+// the child; it returns the current state so callers can wait again later.
+func (c *Coordinator) Wait(ctx context.Context, id string, timeout time.Duration) (WaitResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	c.activeMu.RLock()
+	entry := c.active[strings.TrimSpace(id)]
+	if entry == nil {
+		c.activeMu.RUnlock()
+		return WaitResult{}, fmt.Errorf("subagent %q not found", id)
+	}
+	done := entry.done
+	state := entry.status.State
+	c.activeMu.RUnlock()
+	if state.Terminal() {
+		return c.waitSnapshot(id)
+	}
+
+	waitCtx := ctx
+	cancel := func() {}
+	if timeout > 0 {
+		waitCtx, cancel = context.WithTimeout(ctx, timeout)
+	}
+	defer cancel()
+	select {
+	case <-done:
+		return c.waitSnapshot(id)
+	case <-waitCtx.Done():
+		if errors.Is(waitCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+			return c.waitSnapshot(id)
+		}
+		return WaitResult{}, waitCtx.Err()
+	}
+}
+
+func (c *Coordinator) waitSnapshot(id string) (WaitResult, error) {
+	c.activeMu.RLock()
+	defer c.activeMu.RUnlock()
+	entry := c.active[id]
+	if entry == nil {
+		return WaitResult{}, fmt.Errorf("subagent %q not found", id)
+	}
+	wr := WaitResult{State: entry.status.State}
+	if entry.status.State.Terminal() {
+		res := entry.result
+		wr.Result = &res
+	}
+	return wr, nil
+}
+
+// Get returns one retained subagent status.
+func (c *Coordinator) Get(id string) (AgentStatus, bool) {
+	c.activeMu.RLock()
+	defer c.activeMu.RUnlock()
+	entry, ok := c.active[strings.TrimSpace(id)]
+	if !ok {
+		return AgentStatus{}, false
+	}
+	return entry.status, true
+}
+
+// Active returns queued or running subagents only.
+func (c *Coordinator) Active() []AgentStatus {
+	c.activeMu.RLock()
+	defer c.activeMu.RUnlock()
+	out := make([]AgentStatus, 0, len(c.active))
+	for _, entry := range c.active {
+		if !entry.status.State.Terminal() {
+			out = append(out, entry.status)
+		}
+	}
+	return out
+}
+
+// List returns all retained subagents, including terminal results.
+func (c *Coordinator) List() []AgentStatus {
+	c.activeMu.RLock()
+	defer c.activeMu.RUnlock()
+	out := make([]AgentStatus, 0, len(c.active))
+	for _, entry := range c.active {
+		out = append(out, entry.status)
+	}
+	return out
+}
+
+// Cancel explicitly requests cancellation of one subagent.
+func (c *Coordinator) Cancel(id string) error {
+	c.activeMu.RLock()
+	entry := c.active[strings.TrimSpace(id)]
+	if entry == nil {
+		c.activeMu.RUnlock()
+		return fmt.Errorf("subagent %q not found", id)
+	}
+	terminal := entry.status.State.Terminal()
+	cancel := entry.cancel
+	c.activeMu.RUnlock()
+	if terminal {
+		return nil
+	}
+	cancel()
+	return nil
+}
+
+// Run preserves blocking compatibility while keeping queue and execution budgets separate.
+func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	h, err := c.Spawn(ctx, req)
+	if err != nil {
+		return Result{}, err
+	}
+	c.activeMu.RLock()
+	e := c.active[h.ID]
+	started, done := e.started, e.done
+	c.activeMu.RUnlock()
+	select {
+	case <-done:
+		return c.blockingResult(h.ID, h.Profile)
+	case <-started:
+	case <-ctx.Done():
+		_ = c.Cancel(h.ID)
+		return Result{AgentID: h.ID, Profile: h.Profile, Err: ctx.Err()}, ctx.Err()
+	}
+	c.activeMu.RLock()
+	terminal := e.status.State.Terminal()
+	c.activeMu.RUnlock()
+	if terminal {
+		return c.blockingResult(h.ID, h.Profile)
+	}
+	t := req.Timeout
+	if t == 0 || (c.defaultTimeout > 0 && t > c.defaultTimeout) {
+		t = c.defaultTimeout
+	}
+	wctx, cancel := boundedWaitContext(ctx, t)
+	defer cancel()
+	select {
+	case <-done:
+		return c.blockingResult(h.ID, h.Profile)
+	case <-wctx.Done():
+		_ = c.Cancel(h.ID)
+		err := wctx.Err()
+		return Result{AgentID: h.ID, Profile: h.Profile, Err: err}, err
+	}
+}
+
+func boundedWaitContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if timeout <= 0 {
+		return context.WithCancel(ctx)
+	}
+	return context.WithTimeout(ctx, timeout)
+}
+
+func (c *Coordinator) blockingResult(id string, profile Profile) (Result, error) {
+	wr, err := c.waitSnapshot(id)
+	if err != nil || wr.Result == nil {
+		return Result{AgentID: id, Profile: profile}, err
+	}
+	return *wr.Result, wr.Result.Err
 }
 
 func (c *Coordinator) acquireWorkspace(ctx context.Context, exclusive bool) (func(), error) {
@@ -419,44 +579,35 @@ func (c *Coordinator) acquireWorkspace(ctx context.Context, exclusive bool) (fun
 	}, nil
 }
 
-// Active returns a snapshot of currently running subagents.
-func (c *Coordinator) Active() []AgentStatus {
-	c.activeMu.RLock()
-	defer c.activeMu.RUnlock()
-
-	out := make([]AgentStatus, 0, len(c.active))
-	for _, entry := range c.active {
-		out = append(out, entry.status)
-	}
-	return out
-}
-
-// Close cancels all active subagents and waits for all goroutines to exit.
+// Close cancels all non-terminal subagents and waits for workers to exit.
 func (c *Coordinator) Close() error {
 	c.activeMu.Lock()
 	c.closed.Store(true)
+	c.rootStop()
 	for _, entry := range c.active {
-		entry.cancel()
+		if !entry.status.State.Terminal() {
+			entry.cancel()
+		}
 	}
 	c.activeMu.Unlock()
 
 	deadline := time.NewTimer(c.closeTimeout)
 	defer deadline.Stop()
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-	for {
+	done := make(chan struct{})
+	go func() { c.wg.Wait(); close(done) }()
+	select {
+	case <-done:
+		return nil
+	case <-deadline.C:
 		c.activeMu.RLock()
-		remaining := len(c.active)
+		remaining := 0
+		for _, entry := range c.active {
+			if !entry.status.State.Terminal() {
+				remaining++
+			}
+		}
 		c.activeMu.RUnlock()
-		if remaining == 0 {
-			c.wg.Wait()
-			return nil
-		}
-		select {
-		case <-ticker.C:
-		case <-deadline.C:
-			return fmt.Errorf("coordinator close timed out with %d active subagent(s)", remaining)
-		}
+		return fmt.Errorf("coordinator close timed out with %d active subagent(s)", remaining)
 	}
 }
 
