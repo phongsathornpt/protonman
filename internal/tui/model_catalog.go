@@ -85,20 +85,10 @@ func (m *bubbleModel) activeRemoteModel() (model.RemoteModel, bool) {
 	return model.RemoteModel{}, false
 }
 
-func remoteModelSupportsVision(md model.RemoteModel) bool {
-	for _, feature := range md.Features {
-		if strings.EqualFold(strings.TrimSpace(feature), "vision") {
-			return true
-		}
-	}
-	return false
+func remoteModelVisionSupport(md model.RemoteModel) *bool {
+	return md.VisionSupport
 }
 
-func remoteModelSupportsTools(md model.RemoteModel) bool {
-	for _, feature := range md.Features {
-		if strings.EqualFold(strings.TrimSpace(feature), "tools") {
-			return true
-		}
-	}
-	return false
+func remoteModelToolsSupport(md model.RemoteModel) *bool {
+	return md.ToolSupport
 }

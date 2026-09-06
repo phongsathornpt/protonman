@@ -263,3 +263,41 @@ func TestProviderPresetKeyPlaceholders(t *testing.T) {
 		}
 	}
 }
+
+func TestFetchProviderModelsOpenAICapabilitiesAreTriState(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"gemini-3.8-flash"},{"id":"text-only","capabilities":{"tools":false,"vision":false}}]}`))
+	}))
+	defer ts.Close()
+
+	models, err := FetchProviderModels(context.Background(), ts.URL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if models[0].ToolSupport != nil || models[0].VisionSupport != nil {
+		t.Fatalf("missing capabilities must remain unknown: %+v", models[0])
+	}
+	if models[1].ToolSupport == nil || *models[1].ToolSupport || models[1].VisionSupport == nil || *models[1].VisionSupport {
+		t.Fatalf("explicit false capabilities were not preserved: %+v", models[1])
+	}
+}
+
+func TestFetchProviderModelsFeaturesOnlyProvidePositiveCapabilityEvidence(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"models":[{"slug":"gemini-3.8-flash","features":["coding"]},{"slug":"vision-tool","features":["Vision","TOOLS"]}]}`))
+	}))
+	defer ts.Close()
+
+	models, err := FetchProviderModels(context.Background(), ts.URL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if models[0].ToolSupport != nil || models[0].VisionSupport != nil {
+		t.Fatalf("feature omission must remain unknown: %+v", models[0])
+	}
+	if models[1].ToolSupport == nil || !*models[1].ToolSupport || models[1].VisionSupport == nil || !*models[1].VisionSupport {
+		t.Fatalf("positive features were not recognized: %+v", models[1])
+	}
+}

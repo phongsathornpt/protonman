@@ -330,12 +330,19 @@ func TestCanonicalSlashNameNormalizesModelAlias(t *testing.T) {
 	}
 }
 
-func TestRemoteModelSupportsVisionUsesCatalogFeatures(t *testing.T) {
-	if remoteModelSupportsVision(model.RemoteModel{ID: "text-only", Features: []string{"tools", "coding"}}) {
-		t.Fatal("text-only catalog model unexpectedly supports vision")
+func TestRemoteModelCapabilitySupportPreservesUnknown(t *testing.T) {
+	if got := remoteModelVisionSupport(model.RemoteModel{ID: "unknown", Features: []string{"coding"}}); got != nil {
+		t.Fatalf("vision support = %v, want unknown", *got)
 	}
-	if !remoteModelSupportsVision(model.RemoteModel{ID: "vision", Features: []string{"tools", "Vision"}}) {
-		t.Fatal("vision feature was not detected case-insensitively")
+	if got := remoteModelToolsSupport(model.RemoteModel{ID: "unknown", Features: []string{"coding"}}); got != nil {
+		t.Fatalf("tool support = %v, want unknown", *got)
+	}
+	yes, no := true, false
+	if got := remoteModelVisionSupport(model.RemoteModel{VisionSupport: &yes}); got == nil || !*got {
+		t.Fatal("explicit vision support was not preserved")
+	}
+	if got := remoteModelToolsSupport(model.RemoteModel{ToolSupport: &no}); got == nil || *got {
+		t.Fatal("explicit tool denial was not preserved")
 	}
 }
 
@@ -347,14 +354,5 @@ func TestActiveRemoteModelFindsSelectedCatalogModel(t *testing.T) {
 	got, ok := m.activeRemoteModel()
 	if !ok || got.ID != "text-only" {
 		t.Fatalf("activeRemoteModel() = %#v, %v", got, ok)
-	}
-}
-
-func TestRemoteModelSupportsToolsUsesCatalogFeatures(t *testing.T) {
-	if remoteModelSupportsTools(model.RemoteModel{ID: "text-only", Features: []string{"vision", "coding"}}) {
-		t.Fatal("text-only model unexpectedly supports tools")
-	}
-	if !remoteModelSupportsTools(model.RemoteModel{ID: "tool-model", Features: []string{"coding", "Tools"}}) {
-		t.Fatal("tool feature was not detected case-insensitively")
 	}
 }
