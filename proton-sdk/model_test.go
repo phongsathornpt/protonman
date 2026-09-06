@@ -108,3 +108,12 @@ func TestUsageAndFinishEvents(t *testing.T) {
 		t.Fatalf("unknown finish error = %v", err)
 	}
 }
+
+func TestRawEventValidation(t *testing.T) {
+	if err := (Event{Kind: EventRaw, RawData: []byte(`{"ok":true}`)}).Validate(); err != nil {
+		t.Fatalf("raw event error = %v", err)
+	}
+	if err := (Event{Kind: EventRaw}).Validate(); !errors.Is(err, ErrInvalidEvent) {
+		t.Fatalf("empty raw event error = %v", err)
+	}
+}

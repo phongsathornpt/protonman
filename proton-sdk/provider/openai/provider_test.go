@@ -284,7 +284,7 @@ func TestOpenAIProviderOptionsCannotOverrideCanonicalFields(t *testing.T) {
 func TestOpenAICapabilities(t *testing.T) {
 	model := NewProvider(ProviderOptions{}).Model("test-model")
 	caps := model.Capabilities()
-	if !caps.Streaming || !caps.Tools || !caps.Vision || !caps.ProviderOptions {
+	if !caps.Streaming || !caps.Tools || !caps.Vision || !caps.ProviderOptions || !caps.RawChunks {
 		t.Fatalf("Capabilities() = %#v", caps)
 	}
 	if caps.ToolResultErrors {
@@ -327,5 +327,28 @@ func TestOpenAIToolProviderOptionsCannotOverrideCanonicalFields(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "cannot override canonical") {
 		t.Fatalf("error = %v, want protected tool field error", err)
+	}
+}
+
+func TestOpenAIIncludesRawChunksOnRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"hello\"},\"finish_reason\":null}]}\n\n")
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
+	}))
+	defer server.Close()
+	stream, err := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("test-model").Stream(context.Background(), sdk.Request{
+		Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}},
+		Options:  sdk.ModelOptions{IncludeRawChunks: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := collectEvents(t, stream)
+	if len(events) != 4 || events[0].Kind != sdk.EventRaw || events[1].Kind != sdk.EventTextDelta || events[2].Kind != sdk.EventRaw || events[3].Kind != sdk.EventFinish {
+		t.Fatalf("events = %#v", events)
+	}
+	if !strings.Contains(string(events[0].RawData), `"content":"hello"`) {
+		t.Fatalf("raw = %q", events[0].RawData)
 	}
 }

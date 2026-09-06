@@ -131,7 +131,7 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 			continue
 		}
 		if resp.StatusCode == http.StatusOK {
-			return newStream(resp.Body, openAIResponseMetadata(resp.Header)), nil
+			return newStream(resp.Body, openAIResponseMetadata(resp.Header), request.Options.IncludeRawChunks), nil
 		}
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 		resp.Body.Close()
