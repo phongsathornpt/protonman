@@ -41,6 +41,7 @@ type bubbleModel struct {
 	coordinator   *agent.Coordinator
 	agentEvents   <-chan agent.Event
 	agentSnapshot []agent.AgentStatus
+	agentActivity map[string]string
 	workDir       string
 
 	viewport           viewport.Model
@@ -155,6 +156,7 @@ func newBubbleModel(
 		maxRounds:          config.DefaultMaxRounds,
 		maxToolCalls:       config.DefaultMaxToolCalls,
 		runtimeConfig:      config.DefaultRuntimeConfig(),
+		agentActivity:      make(map[string]string),
 	}
 	ui.prompt = bottom.prompt()
 	ui.loadInitialMessages(messages)

@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbletea"
+	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
@@ -23,6 +24,17 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch message := msg.(type) {
 	case agentLifecycleMsg:
+		if m.agentActivity == nil {
+			m.agentActivity = make(map[string]string)
+		}
+		switch message.event.Kind {
+		case agent.EventAgentProgress:
+			if activity := strings.TrimSpace(message.event.Message); activity != "" {
+				m.agentActivity[message.event.AgentID] = activity
+			}
+		case agent.EventAgentCompleted, agent.EventAgentFailed:
+			delete(m.agentActivity, message.event.AgentID)
+		}
 		m.syncAgentSnapshot()
 		m.relayout()
 		return m, m.nextAgentEvent()
