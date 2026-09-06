@@ -282,6 +282,49 @@ func assistantCacheTail(text string) string {
 func (c *AssistantCell) RawLines() []string { return rawTextLines(c.Text) }
 func (c *AssistantCell) LineCount() int     { return len(c.RawLines()) }
 
+// AgentToolCell renders subagent lifecycle operations as orchestration rather
+// than generic tool RPCs.
+type AgentToolCell struct {
+	CallID  string
+	Name    string
+	Target  string
+	Summary string
+	Running bool
+	Spinner string
+}
+
+func (AgentToolCell) Kind() HistoryCellKind { return HistoryCellTool }
+func (c AgentToolCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c AgentToolCell) RenderWidth(width int) []string {
+	label := c.Summary
+	if c.Running {
+		switch c.Name {
+		case "wait_agent":
+			label = "Waiting for " + c.Target
+		case "cancel_agent":
+			label = "Canceling " + c.Target
+		case "get_agent":
+			label = "Checking " + c.Target
+		case "list_agents":
+			label = "Checking subagents"
+		default:
+			label = "Coordinating subagents"
+		}
+		if c.Spinner != "" {
+			label = c.Spinner + " " + label
+		}
+	}
+	if label == "" {
+		label = c.Name
+	}
+	return wrapStyledLines(toolStyle.Render(glyphAgent)+mutedStyle.Render(sanitizeBubbleText(label)), maxInt(1, width))
+}
+func (c AgentToolCell) RawLines() []string       { return []string{sanitizeBubbleText(c.Summary)} }
+func (c AgentToolCell) LineCount() int           { return 1 }
+func (c AgentToolCell) historyToolID() string    { return c.CallID }
+func (c AgentToolCell) historyToolName() string  { return c.Name }
+func (c AgentToolCell) historyToolRunning() bool { return c.Running }
+
 // ToolCell is the generic representation for a tool that has no specialized
 // presentation model.
 type ToolCell struct {
@@ -906,6 +949,8 @@ func cellUsesSpinner(cell HistoryCell) bool {
 	switch typed := cell.(type) {
 	case *ToolCell:
 		return typed.Running
+	case *AgentToolCell:
+		return typed.Running
 	case *ExecCell:
 		return typed.Running
 	case *PatchCell:
@@ -927,6 +972,8 @@ func (s *HistoryState) SpinnerFrame() string {
 func setCellSpinner(cell HistoryCell, frame string) {
 	switch typed := cell.(type) {
 	case *ToolCell:
+		typed.Spinner = frame
+	case *AgentToolCell:
 		typed.Spinner = frame
 	case *ExecCell:
 		typed.Spinner = frame

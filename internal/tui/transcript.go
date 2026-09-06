@@ -170,6 +170,12 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 		m.activity = "calling " + call.Name
 	}
 
+	if isAgentLifecycleTool(call.Name) {
+		state.StartToolCell(&AgentToolCell{CallID: call.ID, Name: call.Name, Target: target, Running: true})
+		m.syncLegacyBlocks()
+		return
+	}
+
 	switch resolvedKind {
 	case tool.KindBash:
 		cmd := target
@@ -319,6 +325,8 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 				Denied:      result.Denied,
 				FailureCode: failureCode,
 			}
+		case *AgentToolCell:
+			return &AgentToolCell{CallID: typed.CallID, Name: typed.Name, Target: typed.Target, Summary: summarizeToolOutput(typed.Name, tool.KindAgent, typed.Target, body, result.ExitCode, result.Truncated)}
 		case *ToolCell:
 			callID = typed.CallID
 			name = typed.Name

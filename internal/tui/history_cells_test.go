@@ -639,3 +639,14 @@ func TestExecCellSeparatesStderrAndStreamTruncation(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentToolCellRendersOrchestrationSemantics(t *testing.T) {
+	running := (&AgentToolCell{Name: "wait_agent", Target: "explorer-7", Running: true, Spinner: "⠋"}).RenderWidth(80)
+	if got := strings.Join(running, "\n"); !strings.Contains(got, "Waiting for explorer-7") || strings.Contains(got, "wait_agent") {
+		t.Fatalf("running agent cell=%q", got)
+	}
+	completed := (&AgentToolCell{Name: "wait_agent", Target: "explorer-7", Summary: "explorer-7 · completed · found routing issue"}).RenderWidth(80)
+	if got := strings.Join(completed, "\n"); !strings.Contains(got, "found routing issue") {
+		t.Fatalf("completed agent cell=%q", got)
+	}
+}
