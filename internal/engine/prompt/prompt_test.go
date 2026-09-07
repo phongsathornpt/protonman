@@ -123,3 +123,19 @@ func TestRenderDelegationExplainsAsyncLifecycle(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderMCPTrustBoundary(t *testing.T) {
+	got := Render(Spec{Capabilities: ToolCapabilities{MCP: true}})
+	for _, want := range []string{"# External MCP Tools", "mcp.<server>.<tool>", "external data", "never override", "unspecified state effects", "ambiguous failure"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("MCP contract missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderOmitsMCPContractWhenUnavailable(t *testing.T) {
+	got := Render(Spec{})
+	if strings.Contains(got, "# External MCP Tools") {
+		t.Fatalf("prompt leaked MCP contract without MCP capability:\n%s", got)
+	}
+}
