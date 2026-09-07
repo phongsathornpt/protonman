@@ -47,7 +47,7 @@ type bubbleModel struct {
 	agents           app.Agents
 	agentEvents      <-chan agent.Event
 	agentSnapshot    []agent.AgentStatus
-	agentActivity    map[string]string
+	agentActivity    map[string]AgentActivity
 	pendingAgentRuns map[string]pendingAgentRun
 	pendingAgentOps  map[string]string
 	turnProgress     turnProgress
@@ -169,7 +169,7 @@ func newBubbleModel(
 		messages:           messages,
 		maxToolCalls:       config.DefaultMaxToolCalls,
 		runtimeConfig:      config.DefaultRuntimeConfig(),
-		agentActivity:      make(map[string]string),
+		agentActivity:      make(map[string]AgentActivity),
 	}
 	ui.prompt = bottom.prompt()
 	ui.loadInitialMessages(messages)

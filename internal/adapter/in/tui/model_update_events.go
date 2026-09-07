@@ -18,13 +18,14 @@ import (
 
 func (m *bubbleModel) updateAgentLifecycle(message agentLifecycleMsg) (tea.Model, tea.Cmd) {
 	if m.agentActivity == nil {
-		m.agentActivity = make(map[string]string)
+		m.agentActivity = make(map[string]AgentActivity)
 	}
 	if message.event.Kind == agent.EventAgentProgress {
-		if activity := strings.TrimSpace(message.event.Message); activity != "" {
+		activity := agentActivityFromEvent(message.event)
+		if activity.String() != "" {
 			m.agentActivity[message.event.AgentID] = activity
 			if run := m.ensureHistoryState().AgentRun(message.event.AgentID); run != nil {
-				run.Activity = activity
+				run.Activity = activity.String()
 				m.ensureHistoryState().TouchAgentRun(message.event.AgentID)
 			}
 		}

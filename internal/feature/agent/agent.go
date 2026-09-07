@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/engine/turn"
 )
 
@@ -147,6 +148,7 @@ type Event struct {
 	ParentID      string        `json:"parent_id,omitempty"`
 	Profile       Profile       `json:"profile"`
 	Message       string        `json:"message,omitempty"`
+	Call          *tool.Call    `json:"call,omitempty"`
 	QueueDuration time.Duration `json:"queue_duration,omitempty"`
 	Duration      time.Duration `json:"duration,omitempty"`
 	TotalDuration time.Duration `json:"total_duration,omitempty"`

@@ -22,7 +22,7 @@ func TestLongTurnWithSubagentsKeepsProgressCoherent(t *testing.T) {
 		{ID: "reviewer-2", Task: "review safety", State: agent.StateRunning, StartedAt: time.Now().Add(-9 * time.Second)},
 		{ID: "int-3", Task: "analyze boundaries", State: agent.StateQueued, StartTime: time.Now().Add(-8 * time.Second)},
 	}
-	m.agentActivity["explorer-1"] = "using grep"
+	m.agentActivity["explorer-1"] = AgentActivity{Label: "using grep"}
 
 	delegate, _ := tool.NewCall("d1", "delegate_task", json.RawMessage(`{"profile":"int","task":"inspect router"}`))
 	wait, _ := tool.NewCall("w1", "wait_agent", json.RawMessage(`{"agent_id":"explorer-1"}`))

@@ -210,3 +210,25 @@ func (m *bubbleModel) applyAgentToolFailure(name string, result tool.Result, err
 	m.ensureHistoryState().TouchAgentRun(id)
 	return true
 }
+
+type AgentActivity struct {
+	ToolName string
+	ToolKind tool.Kind
+	Target   string
+	Label    string
+}
+
+func agentActivityFromEvent(ev agent.Event) AgentActivity {
+	if ev.Call == nil {
+		return AgentActivity{Label: strings.TrimSpace(ev.Message)}
+	}
+	target, kind := extractToolTarget(ev.Call.Name, "", ev.Call.Arguments)
+	activity := AgentActivity{ToolName: ev.Call.Name, ToolKind: kind, Target: target}
+	activity.Label = tool.DisplayName(ev.Call.Name)
+	if strings.TrimSpace(target) != "" {
+		activity.Label += " " + strings.TrimSpace(target)
+	}
+	return activity
+}
+
+func (a AgentActivity) String() string { return strings.TrimSpace(a.Label) }
