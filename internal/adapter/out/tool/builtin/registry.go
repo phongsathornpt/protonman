@@ -39,10 +39,8 @@ func NewRegistry(handlers ...tool.Handler) (*Registry, error) {
 		validators: make(map[string]compiledToolValidators),
 		order:      make([]string, 0, len(handlers)),
 	}
-	for _, handler := range handlers {
-		if err := registry.Register(handler); err != nil {
-			return nil, err
-		}
+	if err := registry.RegisterBatch(handlers); err != nil {
+		return nil, err
 	}
 	return registry, nil
 }
@@ -141,27 +139,61 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 
 // Register adds a handler to the registry.
 func (r *Registry) Register(handler tool.Handler) error {
+	return r.RegisterBatch([]tool.Handler{handler})
+}
+
+type preparedRegistration struct {
+	name       string
+	handler    tool.Handler
+	validators compiledToolValidators
+}
+
+func prepareRegistration(handler tool.Handler) (preparedRegistration, error) {
 	if handler == nil {
-		return fmt.Errorf("register tool: handler is required")
+		return preparedRegistration{}, fmt.Errorf("register tool: handler is required")
 	}
 	definition := handler.Definition()
 	if err := definition.Validate(); err != nil {
-		return fmt.Errorf("register %q: %w", definition.Name, err)
+		return preparedRegistration{}, fmt.Errorf("register %q: %w", definition.Name, err)
+	}
+	name := strings.TrimSpace(definition.Name)
+	if definition.Name != name {
+		return preparedRegistration{}, fmt.Errorf("register tool: name %q must not have leading or trailing whitespace", definition.Name)
 	}
 	sdkTool := sdk.Tool{Name: definition.Name, Description: definition.Description, InputSchema: definition.InputSchema, OutputSchema: definition.OutputSchema}
 	inputValidator, err := sdk.CompileToolInputValidator(sdkTool)
 	if err != nil {
-		return fmt.Errorf("register %q input schema: %w", definition.Name, err)
+		return preparedRegistration{}, fmt.Errorf("register %q input schema: %w", definition.Name, err)
 	}
 	outputValidator, err := sdk.CompileToolOutputValidator(sdkTool)
 	if err != nil {
-		return fmt.Errorf("register %q output schema: %w", definition.Name, err)
+		return preparedRegistration{}, fmt.Errorf("register %q output schema: %w", definition.Name, err)
+	}
+	return preparedRegistration{
+		name: name, handler: handler,
+		validators: compiledToolValidators{input: inputValidator, output: outputValidator},
+	}, nil
+}
+
+// RegisterBatch validates and compiles every handler before committing the batch atomically.
+func (r *Registry) RegisterBatch(handlers []tool.Handler) error {
+	if len(handlers) == 0 {
+		return nil
+	}
+	prepared := make([]preparedRegistration, 0, len(handlers))
+	seen := make(map[string]struct{}, len(handlers))
+	for _, handler := range handlers {
+		item, err := prepareRegistration(handler)
+		if err != nil {
+			return err
+		}
+		if _, exists := seen[item.name]; exists {
+			return fmt.Errorf("%w: %s", ErrDuplicateTool, item.name)
+		}
+		seen[item.name] = struct{}{}
+		prepared = append(prepared, item)
 	}
 
-	name := strings.TrimSpace(definition.Name)
-	if definition.Name != name {
-		return fmt.Errorf("register tool: name %q must not have leading or trailing whitespace", definition.Name)
-	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.handlers == nil {
@@ -170,12 +202,16 @@ func (r *Registry) Register(handler tool.Handler) error {
 	if r.validators == nil {
 		r.validators = make(map[string]compiledToolValidators)
 	}
-	if _, exists := r.handlers[name]; exists {
-		return fmt.Errorf("%w: %s", ErrDuplicateTool, name)
+	for _, item := range prepared {
+		if _, exists := r.handlers[item.name]; exists {
+			return fmt.Errorf("%w: %s", ErrDuplicateTool, item.name)
+		}
 	}
-	r.handlers[name] = handler
-	r.validators[name] = compiledToolValidators{input: inputValidator, output: outputValidator}
-	r.order = append(r.order, name)
+	for _, item := range prepared {
+		r.handlers[item.name] = item.handler
+		r.validators[item.name] = item.validators
+		r.order = append(r.order, item.name)
+	}
 	return nil
 }
 
@@ -233,3 +269,4 @@ func cloneSchema(schema map[string]any) map[string]any {
 
 var _ tool.Registry = (*Registry)(nil)
 var _ tool.Registrar = (*Registry)(nil)
+var _ tool.BatchRegistrar = (*Registry)(nil)
