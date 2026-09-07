@@ -51,6 +51,11 @@ func mergeCatalog(dst *Resolved, src CatalogMetadata) {
 		support := supportFromPointer(src.Reasoning.Supported)
 		dst.Capabilities.Reasoning = support
 		dst.Reasoning.Support = support
+		if support == SupportNo {
+			dst.Reasoning.Levels = nil
+			dst.Reasoning.Default = sdk.ReasoningDefault
+			return
+		}
 	}
 	if len(src.Reasoning.Levels) > 0 {
 		dst.Reasoning.Levels = append([]sdk.ReasoningEffort(nil), src.Reasoning.Levels...)

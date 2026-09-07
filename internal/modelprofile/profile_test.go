@@ -54,6 +54,27 @@ func TestCatalogExplicitMetadataOverridesBuiltin(t *testing.T) {
 	}
 }
 
+func TestCatalogToolChoiceRequiredTracksOverrideProvenance(t *testing.T) {
+	yes := true
+	got := ResolveBuiltin("gateway", "future-model", CatalogMetadata{ToolChoiceRequired: &yes})
+	if !got.CatalogOverride || got.Capabilities.ToolChoiceRequired != SupportYes {
+		t.Fatalf("tool choice provenance = %+v", got)
+	}
+}
+
+func TestCatalogReasoningDisabledClearsInheritedLevels(t *testing.T) {
+	no := false
+	got := ResolveBuiltin("gateway", "gemini-3.8-flash", CatalogMetadata{
+		Reasoning: &CatalogReasoning{Supported: &no},
+	})
+	if got.Reasoning.Support != SupportNo || got.Capabilities.Reasoning != SupportNo {
+		t.Fatalf("reasoning support = %+v", got)
+	}
+	if len(got.Reasoning.Levels) != 0 || got.Reasoning.Default != sdk.ReasoningDefault {
+		t.Fatalf("disabled reasoning retained stale metadata = %+v", got.Reasoning)
+	}
+}
+
 func TestCatalogOmissionPreservesBuiltinKnowledge(t *testing.T) {
 	got := ResolveBuiltin("gateway", "gemini-3.8-flash", CatalogMetadata{})
 	if got.Capabilities.Tools != SupportYes || got.Capabilities.Vision != SupportYes || got.ContextWindow != 1_048_576 {
