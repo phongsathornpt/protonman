@@ -233,6 +233,31 @@ func (s *HistoryState) CompleteToolCell(name string, completed HistoryCell) {
 	s.CompleteToolCall("", name, completed)
 }
 
+func (s *HistoryState) DiscardToolCall(callID string, name string) bool {
+	if s == nil {
+		return false
+	}
+	if runningToolMatches(s.active, callID, name) {
+		s.active = nil
+		s.cacheValid = false
+		s.altRenderValid = false
+		return true
+	}
+	for i := len(s.committed) - 1; i >= 0; i-- {
+		if !runningToolMatches(s.committed[i], callID, name) {
+			continue
+		}
+		s.committedLines -= historyCellLineCount(s.committed[i], s.renderWidth)
+		s.committed = append(s.committed[:i], s.committed[i+1:]...)
+		s.cacheValid = false
+		s.altRenderValid = false
+		s.renderTextValid = false
+		s.rawTextValid = false
+		return true
+	}
+	return false
+}
+
 func (s *HistoryState) CompleteToolCall(callID string, name string, completed HistoryCell) {
 	if completed == nil {
 		return

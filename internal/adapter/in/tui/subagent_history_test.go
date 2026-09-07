@@ -102,3 +102,29 @@ func TestTerminalAgentLeavesLivePaneButStaysInTranscript(t *testing.T) {
 		t.Fatalf("terminal run missing from transcript: %q", plain)
 	}
 }
+
+func TestOutOfOrderAgentResultMergesIntoDelegateRun(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	delegate, _ := tool.NewCall("d1", "delegate_task", json.RawMessage(`{"profile":"int","task":"inspect router"}`))
+	get, _ := tool.NewCall("g1", "get_agent", json.RawMessage(`{"agent_id":"int-7"}`))
+
+	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: delegate})
+	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: get})
+	m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: get, Result: tool.Result{
+		CallID: "g1", ToolName: "get_agent",
+		StructuredOutput: json.RawMessage(`{"agent_id":"int-7","status":"running"}`),
+	}})
+	m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: delegate, Result: tool.Result{
+		CallID: "d1", ToolName: "delegate_task",
+		StructuredOutput: json.RawMessage(`{"agent_id":"int-7","status":"running"}`),
+	}})
+
+	cells := m.historyState.Cells()
+	if len(cells) != 1 {
+		t.Fatalf("out-of-order lifecycle created duplicate cells: %#v", cells)
+	}
+	run, ok := cells[0].(*AgentRunCell)
+	if !ok || run.AgentID != "int-7" || run.Profile != agent.ProfileINT || run.Task != "inspect router" {
+		t.Fatalf("merged run=%T %#v", cells[0], cells[0])
+	}
+}
