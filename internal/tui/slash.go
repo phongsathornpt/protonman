@@ -31,6 +31,7 @@ var slashCatalog = []slashCommand{
 	{name: "help", description: "list commands"},
 	{name: "tools", description: "list tools"},
 	{name: "skills", aliases: []string{"skill"}, description: "browse, activate, or toggle agent skills (/skills [name|active|toggle])", takesArgs: true},
+	{name: "project", aliases: []string{"proton"}, description: "inspect project-local .proton settings", takesArgs: true},
 	{name: "agent", aliases: []string{"profile"}, description: "show or set agent profile (/agent [" + agent.ProfileList("|") + "])", takesArgs: true},
 	{name: "reasoning", aliases: []string{"thinking"}, description: "show or set session reasoning effort (/reasoning [auto|none|low|medium|high|xhigh|max])", takesArgs: true},
 	{name: "mode", description: "show or set permission mode", takesArgs: true},
@@ -479,6 +480,16 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		}
 	case "skills", "skill":
 		return m.handleSkillsCommand(argument, parts)
+	case "project":
+		arg := strings.ToLower(strings.TrimSpace(argument))
+		switch arg {
+		case "", "status", "reload":
+			return m.openProjectPane()
+		default:
+			m.appendError("usage: /project [status|reload]")
+			m.refreshViewport()
+			return nil
+		}
 	case "mode":
 		if argument == "" {
 			m.appendLine("permission mode: " + m.service.Mode().String())
