@@ -470,3 +470,61 @@ func TestFileStoreRejectsInvalidReasoningEffort(t *testing.T) {
 		t.Fatalf("Save() error = %v", err)
 	}
 }
+
+func TestFileStorePersistsIdentityAndListsSummaries(t *testing.T) {
+	store, err := NewFileStore(filepath.Join(t.TempDir(), "sessions"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := store.Save(ctx, "workspace-abc-first", State{
+		PermissionMode:  permission.ModeAsk.String(),
+		WorkspaceKey:    "abc",
+		WorkspaceName:   "proton",
+		AgentProfile:    "dex",
+		ReasoningEffort: "high",
+		Messages:        []Message{{Role: model.RoleUser, Content: "  Refactor   the session store safely  "}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	loaded, found, err := store.Load(ctx, "workspace-abc-first")
+	if err != nil || !found {
+		t.Fatalf("Load() = found %v, err %v", found, err)
+	}
+	if loaded.SessionID != "workspace-abc-first" || loaded.WorkspaceKey != "abc" || loaded.CreatedAt.IsZero() || loaded.UpdatedAt.IsZero() {
+		t.Fatalf("identity metadata = %+v", loaded)
+	}
+	summaries, err := store.ListSummaries(ctx, ListOptions{WorkspaceKey: "abc", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summaries) != 1 {
+		t.Fatalf("summaries = %d, want 1", len(summaries))
+	}
+	got := summaries[0]
+	if got.ID != "workspace-abc-first" || got.Preview != "Refactor the session store safely" || got.MessageCount != 1 {
+		t.Fatalf("summary = %+v", got)
+	}
+}
+
+func TestFileStoreLoadsLegacyWorkspaceIdentity(t *testing.T) {
+	store, err := NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := State{Version: currentStateVersion, PermissionMode: permission.ModeAsk.String()}
+	payload, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(store.path("workspace-deadbeef-20260101"), payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, found, err := store.Load(context.Background(), "workspace-deadbeef-20260101")
+	if err != nil || !found {
+		t.Fatalf("Load() = found %v, err %v", found, err)
+	}
+	if loaded.SessionID != "workspace-deadbeef-20260101" || loaded.WorkspaceKey != "deadbeef" {
+		t.Fatalf("legacy identity = %+v", loaded)
+	}
+}
