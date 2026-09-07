@@ -387,7 +387,11 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 	if validators.output != nil {
 		validationErr := validators.output.Validate(result.StructuredOutput)
 		if validationErr != nil {
-			outputErr := tool.WrapToolError(tool.ErrorCodeInvalidOutput, fmt.Sprintf("tool %q returned structured output that does not match its schema", call.Name), validationErr)
+			message := fmt.Sprintf("tool %q returned structured output that does not match its schema", call.Name)
+			if definition.Kind == tool.KindMCP {
+				message = fmt.Sprintf("MCP tool %q violated its declared output schema", call.Name)
+			}
+			outputErr := tool.WrapToolError(tool.ErrorCodeInvalidOutput, message, validationErr)
 			result.Failure = tool.FailureFromError(outputErr)
 			s.observeCallResult(ctx, telemetry, result, outputErr)
 			return result, outputErr
