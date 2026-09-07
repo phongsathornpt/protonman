@@ -185,11 +185,11 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	if input.Continuation != "" {
 		decoded, isCursor, decodeErr := decodeGrepContinuation(input.Continuation)
 		if decodeErr != nil {
-			return tool.Result{}, decodeErr
+			return tool.Result{}, stalePaginationError("grep", decodeErr.Error(), call.Arguments)
 		}
 		if isCursor {
 			if decoded.Query != queryHash || decoded.Matches != input.Offset {
-				return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "grep continuation does not match this query or offset; restart from offset 0")
+				return tool.Result{}, stalePaginationError("grep", "grep continuation does not match this query or offset; restart from offset 0", call.Arguments)
 			}
 			resume = decoded
 			resumeActive = true
@@ -293,7 +293,7 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 			return tool.Result{}, tokenErr
 		}
 		if legacyContinuation != legacyToken {
-			return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "grep continuation is stale; restart from offset 0")
+			return tool.Result{}, stalePaginationError("grep", "grep continuation is stale; restart from offset 0", call.Arguments)
 		}
 	}
 

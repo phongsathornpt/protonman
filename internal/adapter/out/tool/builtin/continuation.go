@@ -50,3 +50,20 @@ func paginationState(truncated bool, kind string, nextOffset *int64, nextLine *i
 	}
 	return &tool.Pagination{Kind: kind, NextOffset: nextOffset, NextLine: nextLine, Continuation: continuation}
 }
+
+func stalePaginationError(toolName, message string, arguments json.RawMessage) *tool.ToolError {
+	err := tool.NewToolError(tool.ErrorCodeStaleContinuation, message)
+	var object map[string]json.RawMessage
+	if json.Unmarshal(arguments, &object) != nil || object == nil {
+		return err
+	}
+	delete(object, "offset")
+	delete(object, "continuation")
+	recoveryArgs, marshalErr := json.Marshal(object)
+	if marshalErr != nil {
+		return err
+	}
+	return err.WithRecovery(tool.Recovery{
+		Action: tool.RecoveryRestartPagination, Tool: toolName, Arguments: recoveryArgs,
+	})
+}

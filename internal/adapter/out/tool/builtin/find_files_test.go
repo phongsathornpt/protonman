@@ -2,10 +2,13 @@ package builtin
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/projectTHORN/proton/internal/core/tool"
 )
 
 func TestFindFilesRecursivelyMatchesGlob(t *testing.T) {
@@ -152,5 +155,32 @@ func TestFindFilesContinuationSurvivesChangedTree(t *testing.T) {
 	}
 	if strings.TrimSpace(page2.Output) == "" {
 		t.Fatalf("page2 output = %q", page2.Output)
+	}
+}
+
+func TestFindFilesContinuationRejectsChangedQueryWithRecovery(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	for _, name := range []string{"a.txt", "b.go"} {
+		if err := os.WriteFile(filepath.Join(ws.Root(), name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h := NewFindFiles(ws)
+	page1, err := h.Execute(context.Background(), newJSONCall(t, "find-query-1", "find_files", map[string]any{"pattern": "*", "limit": 1}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page1.NextOffset == nil || page1.Continuation == "" {
+		t.Fatalf("page1 missing continuation: %+v", page1)
+	}
+	_, err = h.Execute(context.Background(), newJSONCall(t, "find-query-2", "find_files", map[string]any{
+		"pattern": "*.txt", "limit": 1, "offset": *page1.NextOffset, "continuation": page1.Continuation,
+	}))
+	var toolErr *tool.ToolError
+	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeStaleContinuation {
+		t.Fatalf("changed query error = %v", err)
+	}
+	if toolErr.Recovery == nil || toolErr.Recovery.Action != tool.RecoveryRestartPagination || toolErr.Recovery.Tool != "find_files" {
+		t.Fatalf("recovery = %#v", toolErr.Recovery)
 	}
 }

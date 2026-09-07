@@ -258,6 +258,9 @@ func TestGrepContinuationRejectsChangedQueryButSurvivesWorkspaceMutation(t *test
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeStaleContinuation {
 		t.Fatalf("changed query error = %v", err)
 	}
+	if toolErr.Recovery == nil || toolErr.Recovery.Action != tool.RecoveryRestartPagination || toolErr.Recovery.Tool != "grep" {
+		t.Fatalf("changed query recovery = %#v", toolErr.Recovery)
+	}
 
 	if err := os.WriteFile(filepath.Join(wsDir, "many.txt"), []byte("needle 1\nneedle 2\nneedle 3\nneedle 4\n"), 0o644); err != nil {
 		t.Fatal(err)
