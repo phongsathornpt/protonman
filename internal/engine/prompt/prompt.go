@@ -4,6 +4,12 @@ import "strings"
 
 const Version = "6"
 
+type ToolCapabilities struct {
+	Tasks  bool
+	Agents bool
+	MCP    bool
+}
+
 type MutationCapabilities struct {
 	Workspace bool
 	Task      bool
@@ -28,8 +34,7 @@ type Spec struct {
 	ModelPromptHints     []string
 	GroundingRequired    bool
 	GroundingEvidence    string
-	TaskPlanEnabled      bool
-	DelegationEnabled    bool
+	Capabilities         ToolCapabilities
 	Mutations            MutationCapabilities
 	Skills               string
 	ProjectInstructions  string
@@ -55,10 +60,10 @@ func Render(spec Spec) string {
 	if evidence := strings.TrimSpace(spec.GroundingEvidence); evidence != "" && evidence != "none" {
 		sections = append(sections, groundingSection(evidence))
 	}
-	if spec.TaskPlanEnabled {
+	if spec.Capabilities.Tasks {
 		sections = append(sections, taskSection())
 	}
-	if spec.DelegationEnabled {
+	if spec.Capabilities.Agents {
 		sections = append(sections, delegationSection(spec))
 	}
 	if spec.Mutations.Workspace {
@@ -93,7 +98,7 @@ func identitySection(spec Spec) string {
 		return `# Identity
 You are Proton, a specialized coding subagent. Complete only the delegated task and return a useful result to the parent agent.`
 	}
-	if spec.DelegationEnabled {
+	if spec.Capabilities.Agents {
 		return `# Identity
 You are Proton, the primary coding agent. You own the user's task end-to-end: inspect, implement, verify, and delegate bounded work when delegation materially helps. Subagents support your work; they do not own the final result.`
 	}
