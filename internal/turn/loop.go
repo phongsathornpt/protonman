@@ -622,6 +622,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	modelProfileName := ""
 	modelProfileMatch := ""
 	modelCatalogOverride := false
+	modelMetadataProvenance := ""
 	var resolvedModelProfile modelprofile.Resolved
 	hasResolvedModelProfile := false
 	if profile, ok := model.ResolvedModelProfile(l.languageModel); ok {
@@ -630,6 +631,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		modelProfileName = profile.ProfileName
 		modelProfileMatch = string(profile.ProfileMatch)
 		modelCatalogOverride = profile.CatalogOverride
+		modelMetadataProvenance = profile.Provenance.Summary()
 	}
 	slog.DebugContext(ctx, "turn reasoning policy resolved",
 		"requested", reasoningRequestedLabel(reasoningResolution),
@@ -639,6 +641,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		"model_profile", modelProfileName,
 		"model_profile_match", modelProfileMatch,
 		"model_catalog_override", modelCatalogOverride,
+		"model_metadata_provenance", modelMetadataProvenance,
 	)
 
 	if l.promptSpec == nil {

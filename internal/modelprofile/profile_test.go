@@ -227,3 +227,15 @@ func TestCatalogReasoningProvenanceOverridesOnlyPublishedFields(t *testing.T) {
 		t.Fatalf("default provenance = %+v", got.Provenance)
 	}
 }
+
+func TestMetadataProvenanceSummaryIsDeterministic(t *testing.T) {
+	got := (MetadataProvenance{
+		Tools:             MetadataSourceCatalog,
+		ContextWindow:     MetadataSourceBuiltin,
+		ToolSchemaDialect: MetadataSourceBuiltin,
+	}).Summary()
+	want := "tools=catalog,context_window=builtin,tool_schema_dialect=builtin"
+	if got != want {
+		t.Fatalf("Summary() = %q, want %q", got, want)
+	}
+}
