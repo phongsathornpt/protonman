@@ -3,8 +3,8 @@ package agent
 import (
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/engine/prompt"
 	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/projectTHORN/proton/internal/engine/prompt"
 )
 
 // FilterRegistryForProfile returns a scoped tool.Registry exposing only the tools
@@ -40,6 +40,16 @@ func FilterRegistryForProfile(base tool.Registry, profile Profile) tool.Registry
 func isToolAllowed(profile Profile, def tool.Definition) bool {
 	if def.Kind == tool.KindAgent || def.Kind == tool.KindTask {
 		return false
+	}
+	if def.Kind == tool.KindMCP {
+		switch profile {
+		case ProfileINT:
+			return tool.EffectiveMutability(def) == tool.MutabilityReadOnly
+		case ProfilePOW, ProfileDEX:
+			return true
+		default:
+			return false
+		}
 	}
 	spec, ok := SpecForProfile(profile)
 	return ok && spec.Allows(def.Kind)
