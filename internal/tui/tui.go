@@ -266,7 +266,6 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 			bModel.runtimeConfig = ui.runtimeConfig
 		}
 		if ui.hasAgentConfig {
-			bModel.maxRounds = ui.agentConfig.MaxRounds
 			bModel.maxToolCalls = ui.agentConfig.MaxToolCalls
 			bModel.agentProfile = ui.agentConfig.Profile
 			bModel.reasoningEffort = ui.agentConfig.ReasoningEffort

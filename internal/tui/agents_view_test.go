@@ -179,11 +179,10 @@ func TestStatusViewCombinesRootAndSubagentProgress(t *testing.T) {
 	m.resize(120, 30)
 	m.busy = true
 	m.busyStarted = time.Now().Add(-8 * time.Second)
-	m.maxRounds = 10
 	m.turnProgress = turnProgress{Round: 3, ToolCalls: 8}
 	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", State: agent.StateRunning}}
 	got := m.statusView()
-	for _, want := range []string{"coordinating", "round 3/10", "8 tools", "1 agent"} {
+	for _, want := range []string{"coordinating", "round 3", "8 tools", "1 agent"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("status view=%q, want %q", got, want)
 		}

@@ -240,7 +240,6 @@ func (m *bubbleModel) reconfigureRunner() {
 	if m.skills != nil {
 		opts = append(opts, applicationturn.WithSkillRegistry(m.skills))
 	}
-	opts = append(opts, applicationturn.WithMaxRounds(m.maxRounds))
 	opts = append(opts, applicationturn.WithMaxToolCalls(m.maxToolCalls))
 	opts = append(opts, applicationturn.WithTurnTimeout(m.runtimeConfig.TurnTimeout))
 	opts = append(opts, applicationturn.WithRoundTimeout(m.runtimeConfig.RoundTimeout))

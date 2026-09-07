@@ -27,7 +27,7 @@ func (m *bubbleModel) handleProjectSet(argument string) tea.Cmd {
 	}
 	parts := strings.Fields(strings.TrimSpace(argument))
 	if len(parts) < 2 {
-		m.appendError("usage: /project set <agent|thinking|rounds|permission> <value>")
+		m.appendError("usage: /project set <agent|thinking|tool-calls|permission> <value>")
 		m.refreshViewport()
 		return nil
 	}
@@ -57,14 +57,14 @@ func (m *bubbleModel) handleProjectSet(argument string) tea.Cmd {
 			}
 		}
 		return saveProjectReasoningCmd(m.workDir, effort)
-	case "rounds":
-		rounds, err := strconv.Atoi(value)
-		if err != nil || rounds < 0 {
-			m.appendError("project rounds must be a non-negative integer")
+	case "tool-calls", "tools-limit":
+		calls, err := strconv.Atoi(value)
+		if err != nil || calls < 0 {
+			m.appendError("project tool-calls must be a non-negative integer")
 			m.refreshViewport()
 			return nil
 		}
-		return saveProjectRoundsCmd(m.workDir, rounds)
+		return saveProjectToolCallsCmd(m.workDir, calls)
 	case "permission", "mode":
 		mode, err := permission.ParseMode(value)
 		if err != nil {
@@ -93,10 +93,10 @@ func saveProjectReasoningCmd(workDir string, effort sdk.ReasoningEffort) tea.Cmd
 		return projectSettingSavedMsg{field: config.FieldAgentReasoningEffort, value: effort, err: err}
 	}
 }
-func saveProjectRoundsCmd(workDir string, rounds int) tea.Cmd {
+func saveProjectToolCallsCmd(workDir string, calls int) tea.Cmd {
 	return func() tea.Msg {
-		err := config.SaveProjectMaxRounds(workDir, rounds)
-		return projectSettingSavedMsg{field: config.FieldAgentMaxRounds, value: rounds, err: err}
+		err := config.SaveProjectMaxToolCalls(workDir, calls)
+		return projectSettingSavedMsg{field: config.FieldAgentMaxToolCalls, value: calls, err: err}
 	}
 }
 
@@ -127,8 +127,8 @@ func (m *bubbleModel) updateProjectSettingSaved(message projectSettingSavedMsg) 
 			m.coordinator.SetReasoningEffort(m.reasoningEffort)
 		}
 		m.reconfigureRunner()
-	case config.FieldAgentMaxRounds:
-		m.maxRounds = message.value.(int)
+	case config.FieldAgentMaxToolCalls:
+		m.maxToolCalls = message.value.(int)
 		m.reconfigureRunner()
 	case config.FieldUIPermissionMode:
 		if err := m.setPermissionMode(message.value.(permission.Mode)); err != nil {

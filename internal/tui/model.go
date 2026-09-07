@@ -86,7 +86,6 @@ type bubbleModel struct {
 	activeModel             string
 	activeProvider          string
 	providers               map[string]config.ProviderConfig
-	maxRounds               int
 	maxToolCalls            int
 	agentProfile            string
 	reasoningEffort         sdk.ReasoningEffort
@@ -165,7 +164,6 @@ func newBubbleModel(
 		width:              defaultBubbleWidth,
 		height:             defaultBubbleHeight,
 		messages:           messages,
-		maxRounds:          config.DefaultMaxRounds,
 		maxToolCalls:       config.DefaultMaxToolCalls,
 		runtimeConfig:      config.DefaultRuntimeConfig(),
 		agentActivity:      make(map[string]string),

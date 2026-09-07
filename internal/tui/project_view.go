@@ -92,7 +92,7 @@ func (v *projectPaneView) Render(m *bubbleModel) string {
 		projectFactWithSource("Agent", fallbackProjectValue(m.agentProfile, "default"), m.projectSource(config.FieldAgentProfile)),
 		projectFactWithSource("Thinking", reasoningEffortLabel(m.reasoningEffort), m.projectSource(config.FieldAgentReasoningEffort)),
 		projectFactWithSource("Permission", m.service.Mode().String(), m.projectSource(config.FieldUIPermissionMode)),
-		projectFactWithSource("Rounds", formatProjectLimit(m.maxRounds), m.projectSource(config.FieldAgentMaxRounds)),
+		projectFactWithSource("Tool calls", formatProjectLimit(m.maxToolCalls), m.projectSource(config.FieldAgentMaxToolCalls)),
 		"",
 	)
 	if v.notice != "" {
