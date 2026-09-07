@@ -338,3 +338,34 @@ func TestMCPToolPatternMatching(t *testing.T) {
 		})
 	}
 }
+
+func TestMCPRulePatternsAreCanonicalized(t *testing.T) {
+	policy, err := NewPolicy(Config{Default: ActionAsk, Rules: []Rule{
+		{Action: ActionAllow, Tool: ToolMCP, Pattern: "github.search"},
+		{Action: ActionDeny, Tool: ToolMCP, Pattern: "mcp.github.delete"},
+		{Action: ActionAllow, Tool: ToolMCP, Pattern: "github.*"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"mcp.github.search", "mcp.github.delete", "mcp.github.*"}
+	for i, pattern := range want {
+		if policy.rules[i].Pattern != pattern {
+			t.Fatalf("rule %d pattern = %q, want %q", i, policy.rules[i].Pattern, pattern)
+		}
+	}
+	cases := []struct {
+		name string
+		want Action
+	}{
+		{"mcp.github.search", ActionAllow},
+		{"mcp.github.delete", ActionDeny},
+		{"mcp.github.issues", ActionAllow},
+	}
+	for _, tc := range cases {
+		decision := policy.Evaluate(Request{ToolName: tc.name, ToolKind: ToolMCP})
+		if decision.Action != tc.want {
+			t.Fatalf("%s action = %v, want %v", tc.name, decision.Action, tc.want)
+		}
+	}
+}
