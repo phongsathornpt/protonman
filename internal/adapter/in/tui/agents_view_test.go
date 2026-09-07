@@ -295,3 +295,25 @@ func TestBusyAgentPanelScopesToActiveTurnOwner(t *testing.T) {
 		t.Fatalf("agents view=%q", got)
 	}
 }
+
+func TestAgentsCommandOpensFocusedInspectionPane(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.resize(100, 30)
+	m.agentSnapshot = []agent.AgentStatus{
+		{ID: "int-7", Profile: agent.ProfileINT, Task: "inspect router", State: agent.StateRunning, StartedAt: time.Now().Add(-4 * time.Second)},
+		{ID: "dex-8", Profile: agent.ProfileDEX, Task: "review concurrency", State: agent.StateFailed, StartedAt: time.Now().Add(-6 * time.Second), FinishedAt: time.Now(), Reason: "timed out"},
+	}
+	m.agentActivity["int-7"] = AgentActivity{Label: `Search "routeRequest"`}
+
+	_ = m.executeCommand("/agents")
+	pane := m.bottom.find(agentsViewID)
+	if pane == nil {
+		t.Fatal("/agents did not open inspection pane")
+	}
+	got := pane.Render(m)
+	for _, want := range []string{"INT", "inspect router", "int-7", "DEX", "review concurrency", "dex-8", "timed out"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("agents pane=%q, want %q", got, want)
+		}
+	}
+}

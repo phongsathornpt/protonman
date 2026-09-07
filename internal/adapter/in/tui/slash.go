@@ -7,8 +7,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/projectTHORN/proton/internal/feature/agent"
 	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/projectTHORN/proton/internal/feature/agent"
 )
 
 const maxSlashRows = 6
@@ -30,6 +30,7 @@ var slashCatalog = []slashCommand{
 	{name: "project", aliases: []string{"proton"}, description: "inspect or edit project-local Proton settings (/project [status|init|set ...])", takesArgs: true},
 	{name: "session", description: "show the active session"},
 	{name: "sessions", description: "list resumable sessions for this workspace"},
+	{name: "agents", description: "inspect live and retained subagents"},
 	{name: "agent", aliases: []string{"profile"}, description: "show or set agent profile (/agent [" + agent.ProfileList("|") + "])", takesArgs: true},
 	{name: "reasoning", aliases: []string{"thinking"}, description: "show or set session reasoning effort (/reasoning [auto|none|low|medium|high|xhigh|max])", takesArgs: true},
 	{name: "mode", description: "show or set permission mode", takesArgs: true},
