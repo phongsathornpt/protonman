@@ -33,6 +33,19 @@ var permissionOptions = []struct {
 	{optionDeny, "Deny"},
 }
 
+func permissionOptionsFor(request permission.Request) []struct {
+	option permissionOption
+	label  string
+} {
+	if permission.SessionGrantEligible(request) {
+		return permissionOptions
+	}
+	return []struct {
+		option permissionOption
+		label  string
+	}{permissionOptions[0], permissionOptions[2]}
+}
+
 type permissionBridge struct {
 	requests chan permissionRequest
 	done     chan struct{}
@@ -102,6 +115,10 @@ func (v *permissionPaneView) Render(m *bubbleModel) string {
 }
 
 func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+	options := permissionOptionsFor(v.pending.request)
+	if v.index >= len(options) {
+		v.index = len(options) - 1
+	}
 	if v.parked {
 		switch message.String() {
 		case "tab":
@@ -144,24 +161,33 @@ func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool
 		}
 		return true, nil
 	case "down", "j":
-		if v.index < len(permissionOptions)-1 {
+		if v.index < len(options)-1 {
 			v.index++
 		}
 		return true, nil
 	case "1":
-		return true, m.resolvePermission(optionAllowOnce)
+		return true, m.resolvePermission(options[0].option)
 	case "2":
-		return true, m.resolvePermission(optionAllowSession)
+		if len(options) > 1 {
+			return true, m.resolvePermission(options[1].option)
+		}
+		return true, nil
 	case "3":
-		return true, m.resolvePermission(optionDeny)
+		if len(options) > 2 {
+			return true, m.resolvePermission(options[2].option)
+		}
+		return true, nil
 	case "y":
 		return true, m.resolvePermission(optionAllowOnce)
 	case "s":
-		return true, m.resolvePermission(optionAllowSession)
+		if permission.SessionGrantEligible(v.pending.request) {
+			return true, m.resolvePermission(optionAllowSession)
+		}
+		return true, nil
 	case "n":
 		return true, m.resolvePermission(optionDeny)
 	case "enter":
-		return true, m.resolvePermission(permissionOptions[v.index].option)
+		return true, m.resolvePermission(options[v.index].option)
 	default:
 		return !m.matchesGlobalShortcut(message), nil
 	}
@@ -242,8 +268,13 @@ func (m bubbleModel) permissionCard() string {
 
 func (v *permissionPaneView) card(m *bubbleModel) string {
 	request := v.pending.request
+	options := permissionOptionsFor(request)
+	shortcutHint := "y once · n deny"
+	if permission.SessionGrantEligible(request) {
+		shortcutHint = "y once · s session · n deny"
+	}
 	if v.parked {
-		line := fmt.Sprintf("! Permission pending · %s · tab review · y once · s session · n deny", tool.DisplayName(request.ToolName))
+		line := fmt.Sprintf("! Permission pending · %s · tab review · %s", tool.DisplayName(request.ToolName), shortcutHint)
 		return mutedStyle.Render(truncateWithEllipsis(line, maxInt(1, m.width-2)))
 	}
 	title := "Permission required"
@@ -321,12 +352,12 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 	}
 	if layoutModeForHeight(m.height) == layoutTiny {
 		contentWidth := maxInt(8, m.width-8)
-		selected := permissionOptions[v.index].label
+		selected := options[v.index].label
 		rows := []string{
 			titleStyle.Render(truncateWithEllipsis(title, contentWidth)),
 			mutedStyle.Render(truncateWithEllipsis(tool.DisplayName(request.ToolName)+" · "+request.Detail, contentWidth)),
 			brandStyle.Render(glyphPrompt + selected),
-			mutedStyle.Render("y once · s session · n deny"),
+			mutedStyle.Render(shortcutHint),
 			mutedStyle.Render("esc review"),
 		}
 		return renderModalRows(m, border, rows)
@@ -349,7 +380,7 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 	}
 	rows = append(rows, mutedStyle.Render(strings.Join(detailLines, "\n")))
 	rows = append(rows, "")
-	for i, option := range permissionOptions {
+	for i, option := range options {
 		marker := "  "
 		if i == v.index && !v.parked {
 			marker = glyphPrompt
@@ -360,9 +391,9 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 	}
 	rows = append(rows, "")
 	if v.parked {
-		rows = append(rows, mutedStyle.Render("tab review approval   y/s/n decide   pgup/pgdn scroll"))
+		rows = append(rows, mutedStyle.Render("tab review approval   "+shortcutHint+"   pgup/pgdn scroll"))
 	} else {
-		rows = append(rows, mutedStyle.Render("j/k move   1-3 select   y once   s session   n deny   esc review transcript"))
+		rows = append(rows, mutedStyle.Render(fmt.Sprintf("j/k move   1-%d select   %s   esc review transcript", len(options), shortcutHint)))
 	}
 	if layoutModeForHeight(m.height) == layoutCompact {
 		rows = compactPickerRows(rows)

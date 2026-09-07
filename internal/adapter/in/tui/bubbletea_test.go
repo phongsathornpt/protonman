@@ -221,6 +221,8 @@ func TestBubbleModelPermissionModalRespondsToSessionGrant(t *testing.T) {
 			ToolName: "bash",
 			ToolKind: permission.ToolBash,
 			Detail:   "printf safe",
+			Effect:   tool.CommandEffectReadOnly,
+			Risk:     tool.CommandRiskNormal,
 		},
 		response: response,
 	}
@@ -354,12 +356,16 @@ func TestPermissionCardOverlaysTranscript(t *testing.T) {
 	for _, expected := range []string{
 		"Permission required — shell modifies state",
 		"bash",
-		"Allow for this request this session",
+		"Allow once",
+		"Deny",
 		"esc review",
 	} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("overlay view does not contain %q: %s", expected, view)
 		}
+	}
+	if strings.Contains(view, "Allow for this request this session") || strings.Contains(view, "s session") {
+		t.Fatalf("mutating request exposed session grant: %s", view)
 	}
 }
 
@@ -489,6 +495,8 @@ func TestPermissionOptionListEnterAndNumbers(t *testing.T) {
 			ToolName: "bash",
 			ToolKind: permission.ToolBash,
 			Detail:   "ls",
+			Effect:   tool.CommandEffectReadOnly,
+			Risk:     tool.CommandRiskNormal,
 		},
 		response: response,
 	}
@@ -514,7 +522,10 @@ func TestPermissionOptionListEnterAndNumbers(t *testing.T) {
 
 	response = make(chan permissionResponse, 1)
 	model.modal = &permissionRequest{
-		request:  permission.Request{ToolName: "bash", ToolKind: permission.ToolBash},
+		request: permission.Request{
+			ToolName: "bash", ToolKind: permission.ToolBash,
+			Effect: tool.CommandEffectReadOnly, Risk: tool.CommandRiskNormal,
+		},
 		response: response,
 	}
 	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
