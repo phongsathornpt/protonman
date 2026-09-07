@@ -40,6 +40,13 @@ func TestCorePackagesDoNotDependOnOuterLayers(t *testing.T) {
 	}
 }
 
+func TestHeadlessUsesApplicationBoundary(t *testing.T) {
+	packages := listPackages(t)
+	assertNoImports(t, packages, modulePath+"/internal/headless", []string{
+		modulePath + "/internal/turn",
+	})
+}
+
 func TestSDKDoesNotDependOnCLIInternals(t *testing.T) {
 	packages := listPackages(t)
 	for path := range packages {
