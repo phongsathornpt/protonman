@@ -245,63 +245,58 @@ func (c ExecCell) RenderWidth(width int) []string {
 		command = c.Name
 	}
 	presentation := c.presentation(command)
-	title := presentation.Title
-	if title == "" {
-		title = "$ " + command
-	}
 	failed := c.FailureCode != "" || (c.ExitCode != nil && *c.ExitCode != 0)
+	if !failed && !c.Denied && presentation.Summary == "" && presentation.SuccessSummary != "" {
+		presentation.Summary = presentation.SuccessSummary
+	}
 
+	width = maxInt(1, width)
 	var out []string
-	var header string
-	var headerStyle lipgloss.Style
-	summaryParts := make([]string, 0, 2)
-	if presentation.Summary != "" {
-		summaryParts = append(summaryParts, presentation.Summary)
-	}
-	if c.Duration > 0 {
-		summaryParts = append(summaryParts, formatExecDuration(c.Duration))
-	}
-	summaryText := strings.Join(summaryParts, glyphSep)
-	summary := ""
-	if summaryText != "" {
-		summary = glyphSep + summaryText
-	}
 	if c.Running {
 		indicator := " …"
 		if c.Spinner != "" {
 			indicator = " " + c.Spinner
 		}
-		header = sanitizeBubbleText(title) + indicator
-		headerStyle = commandStyle
-	} else if c.Denied {
-		header = glyphToolDenied + sanitizeBubbleText(title) + glyphSep + "denied"
-		headerStyle = warningStyle
-	} else if failed {
-		status := "failed"
-		if c.ExitCode != nil {
-			status = fmt.Sprintf("exit %d", *c.ExitCode)
-		} else if c.FailureCode != "" {
-			status = string(c.FailureCode)
-		}
-		header = glyphToolError + sanitizeBubbleText(title) + summary + glyphSep + status
-		headerStyle = errorStyle
+		header := commandStyle.Render(sanitizeBubbleText(presentation.Title + indicator))
+		out = append(out, wrapStyledLines(header, width)...)
 	} else {
-		header := successStyle.Render(glyphToolSuccess) + commandStyle.Render(sanitizeBubbleText(title))
-		if summaryText != "" {
-			header += toolSummaryStyle.Render(glyphSep + summaryText)
+		title := sanitizeBubbleText(presentation.Title)
+		if title == "" {
+			title = "$ " + sanitizeBubbleText(command)
 		}
-		out = make([]string, 0, 1)
-		for _, line := range wrapStyledLines(header, maxInt(1, width)) {
-			out = append(out, line)
+		var glyph string
+		switch {
+		case c.Denied:
+			glyph = warningStyle.Render(glyphToolDenied)
+		case failed:
+			glyph = errorStyle.Render(glyphToolError)
+		default:
+			glyph = successStyle.Render(glyphToolSuccess)
+		}
+		header := glyph + commandStyle.Render(title)
+		summary := presentation.Summary
+		if c.Denied {
+			summary = "denied"
+		} else if failed && summary == "" {
+			switch {
+			case c.ExitCode != nil:
+				summary = fmt.Sprintf("exit %d", *c.ExitCode)
+			case c.FailureCode != "":
+				summary = string(c.FailureCode)
+			default:
+				summary = "failed"
+			}
+		}
+
+		if summary == "" && c.Duration > 0 {
+			header = alignExecDuration(header, formatExecDuration(c.Duration), width)
+		}
+		out = append(out, wrapStyledLines(header, width)...)
+		if summary != "" {
+			out = append(out, renderExecMetaLine(summary, c.Duration, width))
 		}
 	}
 
-	if c.Running || c.Denied || failed {
-		out = make([]string, 0, 1)
-		for _, line := range safeWrappedLines(header, maxInt(1, width)) {
-			out = append(out, headerStyle.Render(line))
-		}
-	}
 	if !c.Running {
 		contentWidth := maxInt(20, width-4)
 		for _, line := range c.renderOutputLines() {
@@ -326,6 +321,38 @@ func (c ExecCell) RenderWidth(width int) []string {
 		}
 	}
 	return out
+}
+
+func alignExecDuration(header, duration string, width int) string {
+	if duration == "" {
+		return header
+	}
+	gap := width - ansi.StringWidth(header) - ansi.StringWidth(duration)
+	if gap < 2 {
+		return header + toolSummaryStyle.Render(glyphSep+duration)
+	}
+	return header + strings.Repeat(" ", gap) + toolSummaryStyle.Render(duration)
+}
+
+func renderExecMetaLine(summary string, duration time.Duration, width int) string {
+	text := sanitizeBubbleText(strings.TrimSpace(summary))
+	durationText := ""
+	if duration > 0 {
+		durationText = formatExecDuration(duration)
+	}
+	if durationText == "" {
+		return toolSummaryStyle.Render("  " + text)
+	}
+	maxSummaryWidth := maxInt(1, width-2-ansi.StringWidth(durationText)-2)
+	if ansi.StringWidth(text) > maxSummaryWidth {
+		text = truncateWithEllipsis(text, maxSummaryWidth)
+	}
+	left := "  " + text
+	gap := width - ansi.StringWidth(left) - ansi.StringWidth(durationText)
+	if gap < 2 {
+		gap = 2
+	}
+	return toolSummaryStyle.Render(left) + strings.Repeat(" ", gap) + toolSummaryStyle.Render(durationText)
 }
 
 func (c ExecCell) presentation(command string) execPresentation {

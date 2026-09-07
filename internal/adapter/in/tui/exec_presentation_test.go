@@ -38,7 +38,7 @@ func TestExecPresentationBunAndNodeTests(t *testing.T) {
 		t.Fatalf("bun test presentation = %#v", bun)
 	}
 	node := presentExec("node --test", "# tests 9\n# pass 9\n# fail 0\n", "")
-	if node.Title != "Node --test" || node.Summary != "9 passed" || !node.SuppressRaw {
+	if node.Title != "Node test" || node.Summary != "9 passed" || !node.SuppressRaw {
 		t.Fatalf("node test presentation = %#v", node)
 	}
 }
@@ -84,6 +84,84 @@ func TestExecPresentationGitStatusAndStat(t *testing.T) {
 	}
 }
 
+func TestExecPresentationPythonCommands(t *testing.T) {
+	pytest := presentExec("python3 -m pytest tests/", "================ 84 passed, 2 skipped in 1.80s ================\n", "")
+	if pytest.Family != execFamilyPython || pytest.Title != "Python pytest" || pytest.Summary != "84 passed · 2 skipped" || !pytest.SuppressRaw {
+		t.Fatalf("pytest presentation = %#v", pytest)
+	}
+
+	eval := presentExec(`python3 -c "print(1)"`, "1\n", "")
+	if eval.Family != execFamilyPython || eval.Title != "Python eval" || eval.Action != "eval" {
+		t.Fatalf("python eval presentation = %#v", eval)
+	}
+
+	unit := presentExec("python -m unittest", "Ran 36 tests in 0.940s\n\nOK\n", "")
+	if unit.Title != "Python unittest" || unit.Summary != "36 passed" || !unit.SuppressRaw {
+		t.Fatalf("unittest presentation = %#v", unit)
+	}
+}
+
+func TestExecPresentationPythonAndNodeCompactTitles(t *testing.T) {
+	cases := []struct {
+		command string
+		title   string
+		action  string
+	}{
+		{"python3.12 app.py", "Python app.py", "app.py"},
+		{`python -c "print(1)"`, "Python eval", "eval"},
+		{"node --test test/router.test.js", "Node test", "test"},
+		{"node --check src/index.js", "Node check src/index.js", "check"},
+		{`node -e "console.log(1)"`, "Node eval", "eval"},
+		{`node -p "process.version"`, "Node print", "print"},
+	}
+	for _, tc := range cases {
+		p := presentExec(tc.command, "", "")
+		if p.Title != tc.title || p.Action != tc.action {
+			t.Fatalf("presentExec(%q) = %#v", tc.command, p)
+		}
+	}
+}
+
+func TestExecCellGenericSemanticLayout(t *testing.T) {
+	exit0, exit1 := 0, 1
+	cases := []struct {
+		name string
+		cell ExecCell
+		want []string
+	}{
+		{
+			name: "python pytest",
+			cell: ExecCell{Command: "python3 -m pytest", Stdout: "84 passed, 2 skipped in 1.80s\n", ExitCode: &exit0, Duration: 1800 * time.Millisecond},
+			want: []string{"✓ Python pytest", "84 passed · 2 skipped", "1.8s"},
+		},
+		{
+			name: "node test failure",
+			cell: ExecCell{Command: "node --test", Stdout: "# pass 18\n# fail 1\nFAIL test/router.test.js\n", ExitCode: &exit1, Duration: 350 * time.Millisecond},
+			want: []string{"× Node test", "18 passed · 1 failed", "350ms", "FAIL test/router.test.js"},
+		},
+		{
+			name: "python eval",
+			cell: ExecCell{Command: `python3 -c "print(1)"`, ExitCode: &exit0, Duration: 38 * time.Millisecond},
+			want: []string{"✓ Python eval", "38ms"},
+		},
+		{
+			name: "node check",
+			cell: ExecCell{Command: "node --check src/index.js", ExitCode: &exit0, Duration: 42 * time.Millisecond},
+			want: []string{"✓ Node check src/index.js", "valid syntax", "42ms"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rendered := ansi.Strip(strings.Join(tc.cell.RenderWidth(60), "\n"))
+			for _, want := range tc.want {
+				if !strings.Contains(rendered, want) {
+					t.Fatalf("render missing %q:\n%s", want, rendered)
+				}
+			}
+		})
+	}
+}
+
 func TestFormatExecDuration(t *testing.T) {
 	cases := map[time.Duration]string{
 		220 * time.Millisecond:  "220ms",
@@ -126,7 +204,7 @@ func TestExecCellSemanticFamilyHeaders(t *testing.T) {
 		{
 			name:     "node test",
 			cell:     ExecCell{Command: "node --test", Stdout: "# pass 9\n# fail 0\n", ExitCode: &exit0},
-			want:     []string{"Node --test", "9 passed"},
+			want:     []string{"Node test", "9 passed"},
 			unwanted: []string{"$ node", "exit 0"},
 		},
 		{
@@ -216,7 +294,7 @@ func TestBashCommandFailureKeepsExecCellPresentation(t *testing.T) {
 		t.Fatalf("completed cell = %T, want *ExecCell", cells[len(cells)-1])
 	}
 	rendered := strings.Join(cell.RenderWidth(80), "\n")
-	if !strings.Contains(rendered, "Go test ./...") || !strings.Contains(rendered, "exit 1") || !strings.Contains(rendered, "FAIL example/a") {
+	if !strings.Contains(rendered, "Go test ./...") || !strings.Contains(rendered, "1 package failed") || !strings.Contains(rendered, "FAIL example/a") {
 		t.Fatalf("semantic failure render:\n%s", rendered)
 	}
 }
