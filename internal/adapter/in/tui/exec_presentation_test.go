@@ -382,3 +382,18 @@ func TestExecPresentationPHP(t *testing.T) {
 		t.Fatalf("php eval = %#v", eval)
 	}
 }
+
+func TestExecPresentationRuby(t *testing.T) {
+	check := presentExec("ruby -c app.rb", "Syntax OK\n", "")
+	if check.Title != "Ruby check app.rb" || check.Summary != "syntax OK" {
+		t.Fatalf("ruby check = %#v", check)
+	}
+	rspec := presentExec("bundle exec rspec", "48 examples, 1 failure, 2 pending\n", "")
+	if rspec.Title != "RSpec" || rspec.Summary != "48 examples · 1 failure · 2 pending" {
+		t.Fatalf("rspec = %#v", rspec)
+	}
+	eval := presentExec(`ruby -e "puts 1"`, "1\n", "")
+	if eval.Title != "Ruby eval" {
+		t.Fatalf("ruby eval = %#v", eval)
+	}
+}
