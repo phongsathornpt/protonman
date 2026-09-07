@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/app/appdirs"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/permission"
-	projectdomain "github.com/projectTHORN/proton/internal/project"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -141,7 +141,7 @@ func TestProjectPaneShowsConfigurationProvenance(t *testing.T) {
 	m.activeModel = "model-x"
 	m.activeProvider = "provider-x"
 	m.agentProfile = "dex"
-	view := &projectPaneView{state: projectdomain.State{Trusted: true}}
+	view := &projectPaneView{state: app.ProjectState{Trusted: true}}
 	rendered := view.Render(m)
 	for _, want := range []string{
 		"model-x · project",
@@ -216,7 +216,7 @@ func TestProjectSetRejectsUntrustedWorkspace(t *testing.T) {
 func TestProjectPaneDistinguishesDetectedFromLoadedConfig(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.projectTrusted = true
-	view := &projectPaneView{state: projectdomain.State{Trusted: true, ConfigExists: true, ConfigLoaded: false}}
+	view := &projectPaneView{state: app.ProjectState{Trusted: true, ConfigExists: true, ConfigLoaded: false}}
 	if got := view.Render(m); !strings.Contains(got, "detected · restart for full reload") {
 		t.Fatalf("project pane did not distinguish detected config from loaded config: %q", got)
 	}

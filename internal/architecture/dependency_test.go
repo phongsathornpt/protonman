@@ -79,6 +79,13 @@ func TestTUIDoesNotDependOnSessionPersistenceDomain(t *testing.T) {
 	})
 }
 
+func TestTUIDoesNotDependOnProjectDirectly(t *testing.T) {
+	packages := listPackages(t)
+	assertNoImports(t, packages, modulePath+"/internal/tui", []string{
+		modulePath + "/internal/project",
+	})
+}
+
 func TestTUIDoesNotControlAgentCoordinatorDirectly(t *testing.T) {
 	root := repositoryRoot(t)
 	cmd := exec.Command("rg", "(m|ui)\\.coordinator\\.[A-Z]", "internal/tui", "--glob", "*.go", "--glob", "!*_test.go")
@@ -250,6 +257,34 @@ func TestNoDomainIshDirectory(t *testing.T) {
 	path := filepath.Join(root, "internal", "domain-ish")
 	if _, err := os.Stat(path); err == nil {
 		t.Errorf("internal/domain-ish directory must not exist")
+	}
+}
+
+func TestAdapterToolDirectoryStructure(t *testing.T) {
+	root := repositoryRoot(t)
+	entries, err := os.ReadDir(filepath.Join(root, "internal", "adapter", "tool"))
+	if err != nil {
+		t.Fatalf("read internal/adapter/tool: %v", err)
+	}
+	expected := map[string]bool{
+		"agent": true,
+		"skill": true,
+		"todo":  true,
+		"web":   true,
+		"mcp":   true,
+	}
+	for _, entry := range entries {
+		if !expected[entry.Name()] {
+			t.Errorf("unexpected entry in internal/adapter/tool: %s", entry.Name())
+		}
+	}
+}
+
+func TestNoRootMCPDirectory(t *testing.T) {
+	root := repositoryRoot(t)
+	path := filepath.Join(root, "internal", "mcp")
+	if _, err := os.Stat(path); err == nil {
+		t.Errorf("internal/mcp directory must not exist at internal root; moved to internal/adapter/tool/mcp")
 	}
 }
 
