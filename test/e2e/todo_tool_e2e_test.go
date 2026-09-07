@@ -12,7 +12,7 @@ import (
 	"github.com/projectTHORN/proton/internal/permission"
 	tododomain "github.com/projectTHORN/proton/internal/todo"
 	"github.com/projectTHORN/proton/internal/tool"
-	"github.com/projectTHORN/proton/internal/tool/builtin"
+	"github.com/projectTHORN/proton/internal/adapter/tool/builtin"
 	"github.com/projectTHORN/proton/internal/toolcall"
 )
 

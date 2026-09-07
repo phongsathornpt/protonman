@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/projectTHORN/proton/internal/glob"
+	"github.com/projectTHORN/proton/internal/base/glob"
 	"github.com/projectTHORN/proton/internal/tool"
 )
 

@@ -13,7 +13,7 @@ import (
 	"sync"
 
 	"github.com/projectTHORN/proton/internal/app"
-	"github.com/projectTHORN/proton/internal/buildinfo"
+	"github.com/projectTHORN/proton/internal/base/buildinfo"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/session"
 	"github.com/projectTHORN/proton/internal/tool"

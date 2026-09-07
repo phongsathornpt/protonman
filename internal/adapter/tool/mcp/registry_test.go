@@ -10,7 +10,7 @@ import (
 
 	"github.com/projectTHORN/proton/internal/permission"
 	domaintool "github.com/projectTHORN/proton/internal/tool"
-	"github.com/projectTHORN/proton/internal/tool/builtin"
+	"github.com/projectTHORN/proton/internal/adapter/tool/builtin"
 	"github.com/projectTHORN/proton/internal/toolcall"
 )
 

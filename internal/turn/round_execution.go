@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/projectTHORN/proton/internal/contextutil"
+	"github.com/projectTHORN/proton/internal/base/contextutil"
 	"github.com/projectTHORN/proton/internal/tool"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )

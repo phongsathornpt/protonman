@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/buildinfo"
+	"github.com/projectTHORN/proton/internal/base/buildinfo"
 	"github.com/projectTHORN/proton/internal/sandbox"
 	"github.com/projectTHORN/proton/internal/tool"
 )

@@ -2,7 +2,7 @@ package agent
 
 import (
 	"context"
-	"github.com/projectTHORN/proton/internal/runtimepolicy"
+	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
 	"github.com/projectTHORN/proton/internal/skill"
 	"sync"
 	"sync/atomic"

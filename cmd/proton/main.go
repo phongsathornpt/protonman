@@ -12,7 +12,7 @@ import (
 
 	"github.com/projectTHORN/proton/internal/acp"
 	"github.com/projectTHORN/proton/internal/app"
-	"github.com/projectTHORN/proton/internal/envconfig"
+	"github.com/projectTHORN/proton/internal/base/envconfig"
 	"github.com/projectTHORN/proton/internal/session"
 	"github.com/projectTHORN/proton/internal/telemetry"
 	"github.com/projectTHORN/proton/internal/toolcall"

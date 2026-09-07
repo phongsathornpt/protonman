@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/projectTHORN/proton/internal/runtimepolicy"
+	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
 	"strings"
 	"sync"
 	"time"

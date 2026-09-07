@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/buildinfo"
+	"github.com/projectTHORN/proton/internal/base/buildinfo"
 	"github.com/projectTHORN/proton/internal/modelprofile"
-	"github.com/projectTHORN/proton/internal/runtimepolicy"
+	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 

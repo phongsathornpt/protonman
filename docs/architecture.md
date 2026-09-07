@@ -20,10 +20,15 @@ Proton follows **Clean Architecture** (Hexagonal / Ports and Adapters) principle
        |  |  +-------------------------------------------------+  |  |
        |  |     Outbound Adapters (Driven / Infrastructure)       |  |
        |  |  internal/adapter/sessionfs                           |  |
-       |  |  internal/adapter/tool/{agent,skill,todo,web}         |  |
+       |  |  internal/adapter/tool/{agent,builtin,mcp,skill,todo,web}|
        |  |  internal/model                                       |  |
        |  |  internal/config                                      |  |
        |  |  internal/turn (Orchestration Engine)                 |  |
+       |  |  +-------------------------------------------------+  |  |
+       |  |  |          Foundational Group (internal/base)     |  |  |
+       |  |  |  buildinfo/ contextutil/ envconfig/ failure/    |  |  |
+       |  |  |  glob/      runtimepolicy/                      |  |  |
+       |  |  +-------------------------------------------------+  |  |
        |  +-------------------------------------------------------+  |
        +-------------------------------------------------------------+
 ```
@@ -45,7 +50,7 @@ Defines the primary application use cases and boundaries for inbound driving ada
 - `agents.go`: Subagent lifecycle management, subscription, and cancellation use cases.
 - `models.go`: Remote provider model discovery use cases.
 - `providers.go`: User provider settings mutations and persistence use cases.
-- `projects.go`: Project-local configuration mutations.
+- `projects.go`: Project-local configuration mutations and project discovery / initialization.
 - `sessions.go`: Persisted session loading, listing, and deletion use cases.
 - `appdirs/`: Filesystem layout resolution (`.proton/`, `config.toml`, `sessions/`, etc.).
 
@@ -58,7 +63,7 @@ Pure business rules and domain definitions. No `domain-ish` parent folder is cre
 - `internal/modelprofile/`: Model capability schemas, token limit calculations, reasoning profile definitions.
 - `internal/permission/`: Security modes (`ask`, `always-approve`, `deny`), path permission rules, evaluation policies.
 - `internal/session/`: Session entities, state models, message conversions, and repository port `session.Repository`.
-- `internal/tool/`: Tool definitions, parameter metadata, call context, and handler interface `tool.Handler`.
+- `internal/tool/`: Pure domain contracts for tools: `Handler` interface, `Registry`, `Specification`, parameter metadata, call context. Contains zero tool implementations.
 - `internal/workspace/`: Filesystem root isolation, directory safety gates, mutation boundaries.
 
 *Rule*: Core domain packages never import outer layers (`cmd/proton`, `app`, `turn`, `tui`, `acp`, `headless`, or adapters).
@@ -74,8 +79,10 @@ Pure business rules and domain definitions. No `domain-ish` parent folder is cre
 
 ### Outbound (Driven) Infrastructure Adapters
 - `internal/adapter/sessionfs/`: File-backed storage implementation of `session.Repository`.
-- `internal/adapter/tool/`: Feature-specific tool adapters implementing `tool.Handler`:
+- `internal/adapter/tool/`: Unified home for **all tool implementations** satisfying `tool.Handler`:
   - `agent/`: Subagent orchestration tools (`delegate_task`, `wait_agent`, etc.).
+  - `builtin/`: Core developer tools (`read_file`, `write_file`, `edit_file`, `bash`, `glob`, `grep`, `list_dir`).
+  - `mcp/`: External Model Context Protocol server discovery and tool registration.
   - `skill/`: Agent skill activation (`activate_skill`).
   - `todo/`: Work tracking tools (`get_todo`, `update_todo`).
   - `web/`: Network web fetching with sandbox isolation (`web_fetch`).
@@ -91,11 +98,24 @@ Pure business rules and domain definitions. No `domain-ish` parent folder is cre
 
 ---
 
-## 5. Architectural Enforcement
+## 5. Foundational Grouping (`internal/base/`)
+Pure leaf packages with **zero dependencies on any other internal package**:
+- `internal/base/buildinfo`: Application version and User-Agent construction.
+- `internal/base/contextutil`: Detached timeout context helper (`DetachedTimeout`).
+- `internal/base/envconfig`: Environment variable names (`PROTON_*`) and boolean parser.
+- `internal/base/failure`: Domain error classification codes and failure traits.
+- `internal/base/glob`: Pure in-memory string wildcard matching (`*`, `?`).
+- `internal/base/runtimepolicy`: Global runtime defaults, timeout durations, and buffer limits.
+
+---
+
+## 6. Architectural Enforcement
 Architecture boundaries are permanently enforced by automated tests in `internal/architecture/dependency_test.go`:
 1. Core packages do not depend on outer layers.
-2. Inbound adapters (`tui`, `acp`, `headless`) depend on `app.Conversation`, never on `turn`.
-3. Inbound adapters do not perform config persistence or provider discovery directly.
-4. TUI does not depend directly on session persistence.
-5. `internal/app` and `internal/model` file sets conform strictly to the architecture blueprint.
-6. The `proton-sdk` has zero dependencies on internal CLI packages.
+2. Base packages (`internal/base/*`) have zero internal dependencies.
+3. Inbound adapters (`tui`, `acp`, `headless`) depend on `app.Conversation`, never on `turn`.
+4. Inbound adapters do not perform config persistence or provider discovery directly.
+5. TUI does not depend directly on session persistence or project discovery.
+6. All tool implementations reside exclusively in `internal/adapter/tool/`.
+7. `internal/app` and `internal/model` file sets conform strictly to the architecture blueprint.
+8. The `proton-sdk` has zero dependencies on internal CLI packages.

@@ -3,7 +3,7 @@ package permission
 import (
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/glob"
+	"github.com/projectTHORN/proton/internal/base/glob"
 )
 
 func BenchmarkGlobMatch_Wildcard(b *testing.B) {

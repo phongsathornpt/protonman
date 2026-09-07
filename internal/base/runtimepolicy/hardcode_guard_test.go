@@ -17,15 +17,15 @@ func TestMutableProductLiteralsStayCentralized(t *testing.T) {
 	if !ok {
 		t.Fatal("resolve test file")
 	}
-	root := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
+	root := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", ".."))
 	allowed := map[string]string{
-		"PROTON_HOME":                  "internal/envconfig/env.go",
-		"PROTON_TRUST_PROJECT":         "internal/envconfig/env.go",
-		"PROTON_SESSION_ID":            "internal/envconfig/env.go",
-		"PROTON_SANDBOX":               "internal/envconfig/env.go",
-		"PROTON_TELEMETRY":             "internal/envconfig/env.go",
-		"PROTON_DEBUG_LOG":             "internal/envconfig/env.go",
-		"PROTON_FORCE_TTY":             "internal/envconfig/env.go",
+		"PROTON_HOME":                  "internal/base/envconfig/env.go",
+		"PROTON_TRUST_PROJECT":         "internal/base/envconfig/env.go",
+		"PROTON_SESSION_ID":            "internal/base/envconfig/env.go",
+		"PROTON_SANDBOX":               "internal/base/envconfig/env.go",
+		"PROTON_TELEMETRY":             "internal/base/envconfig/env.go",
+		"PROTON_DEBUG_LOG":             "internal/base/envconfig/env.go",
+		"PROTON_FORCE_TTY":             "internal/base/envconfig/env.go",
 		".proton":                      "internal/app/appdirs/dirs.go",
 		"~/.proton/config.toml":        "internal/app/appdirs/dirs.go",
 		"~/.proton/skills/":            "internal/app/appdirs/dirs.go",

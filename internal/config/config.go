@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/projectTHORN/proton/internal/permission"
-	"github.com/projectTHORN/proton/internal/runtimepolicy"
+	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
 	"github.com/projectTHORN/proton/internal/sandbox"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )

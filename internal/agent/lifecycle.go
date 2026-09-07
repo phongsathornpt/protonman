@@ -4,14 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/projectTHORN/proton/internal/runtimepolicy"
+	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
 	"strings"
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
-	"github.com/projectTHORN/proton/internal/contextutil"
-	"github.com/projectTHORN/proton/internal/failure"
+	"github.com/projectTHORN/proton/internal/base/contextutil"
+	"github.com/projectTHORN/proton/internal/base/failure"
 	"github.com/projectTHORN/proton/internal/toolcall"
 )
 

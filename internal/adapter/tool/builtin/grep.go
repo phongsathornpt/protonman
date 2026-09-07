@@ -21,7 +21,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/projectTHORN/proton/internal/glob"
+	"github.com/projectTHORN/proton/internal/base/glob"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/workspace"
 )
