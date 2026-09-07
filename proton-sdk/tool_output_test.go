@@ -54,3 +54,10 @@ func TestToolSchemaValidationRejectsExternalRefs(t *testing.T) {
 		t.Fatalf("external output ref error = %v", err)
 	}
 }
+
+func TestCompileToolSchemaRejectsMalformedSchema(t *testing.T) {
+	tool := Tool{Name: "broken", InputSchema: map[string]any{"type": "object", "required": "path"}}
+	if _, err := CompileToolInputValidator(tool); !errors.Is(err, ErrInvalidToolInput) {
+		t.Fatalf("CompileToolInputValidator() error = %v, want ErrInvalidToolInput", err)
+	}
+}

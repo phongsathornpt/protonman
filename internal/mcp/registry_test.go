@@ -284,6 +284,26 @@ func TestDiscoverGranularPermissionMatching(t *testing.T) {
 	}
 }
 
+func TestDiscoverRejectsMalformedSchemaWithoutPartialRegistration(t *testing.T) {
+	server := &fakeServer{
+		name: "broken-schema",
+		tools: []Tool{
+			{Name: "valid", Description: "valid tool", InputSchema: map[string]any{"type": "object"}},
+			{Name: "invalid", Description: "invalid tool", InputSchema: map[string]any{"type": "object", "required": "path"}},
+		},
+	}
+	registry, err := builtin.NewRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Discover(context.Background(), registry, server); err == nil {
+		t.Fatal("Discover() error = nil, want malformed schema rejection")
+	}
+	if got := len(registry.Definitions()); got != 0 {
+		t.Fatalf("definitions after failed discovery = %d, want 0", got)
+	}
+}
+
 func TestDiscoverDoesNotPartiallyRegisterInvalidResults(t *testing.T) {
 	server := &fakeServer{
 		name: "broken",

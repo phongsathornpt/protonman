@@ -113,6 +113,11 @@ func WithExecutionTimeout(timeout time.Duration) Option {
 	}
 }
 
+type compiledToolValidators struct {
+	input  *sdk.ToolSchemaValidator
+	output *sdk.ToolSchemaValidator
+}
+
 // Service is the application boundary for every tool call.
 type Service struct {
 	registry tool.Registry
@@ -128,6 +133,7 @@ type Service struct {
 	permissionTimeout time.Duration
 	executionTimeout  time.Duration
 	mutationWorkspace *workspace.Workspace
+	validators        map[string]compiledToolValidators
 }
 
 // NewService builds a permission-aware tool-call service.
@@ -146,6 +152,7 @@ func NewService(registry tool.Registry, policy *permission.Policy, options ...Op
 		grants:            make(map[permission.GrantKey]struct{}),
 		permissionTimeout: DefaultPermissionTimeout,
 		executionTimeout:  DefaultExecutionTimeout,
+		validators:        make(map[string]compiledToolValidators),
 	}
 	for _, option := range options {
 		if option == nil {
@@ -154,6 +161,13 @@ func NewService(registry tool.Registry, policy *permission.Policy, options ...Op
 		if err := option(service); err != nil {
 			return nil, err
 		}
+	}
+	for _, definition := range registry.Definitions() {
+		validators, err := compileDefinitionValidators(definition)
+		if err != nil {
+			return nil, fmt.Errorf("%w: compile schema contract for %q: %v", ErrInvalidService, definition.Name, err)
+		}
+		service.validators[definition.Name] = validators
 	}
 	return service, nil
 }
@@ -166,6 +180,10 @@ func (s *Service) Clone() *Service {
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	validators := make(map[string]compiledToolValidators, len(s.validators))
+	for name, compiled := range s.validators {
+		validators[name] = compiled
+	}
 	return &Service{
 		registry:          s.registry,
 		policy:            s.policy,
@@ -177,6 +195,7 @@ func (s *Service) Clone() *Service {
 		permissionTimeout: s.permissionTimeout,
 		executionTimeout:  s.executionTimeout,
 		mutationWorkspace: s.mutationWorkspace,
+		validators:        validators,
 	}
 }
 
@@ -257,8 +276,15 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 	}
 	definition := handler.Definition()
 	telemetry.toolKind = definition.Kind
-	if len(definition.InputSchema) > 0 {
-		validationErr := sdk.ValidateToolInput(sdk.Tool{Name: definition.Name, InputSchema: definition.InputSchema}, call.Arguments)
+	validators, validatorErr := s.validatorsFor(definition)
+	if validatorErr != nil {
+		contractErr := tool.WrapToolError(tool.ErrorCodeExecution, fmt.Sprintf("tool %q has an invalid schema contract", call.Name), validatorErr)
+		result := tool.Result{CallID: call.ID, ToolName: call.Name, Failure: tool.FailureFromError(contractErr)}
+		s.observeCallResult(ctx, telemetry, result, contractErr)
+		return result, contractErr
+	}
+	if validators.input != nil {
+		validationErr := validators.input.Validate(call.Arguments)
 		if validationErr != nil {
 			inputErr := tool.WrapToolError(tool.ErrorCodeInvalidArguments, fmt.Sprintf("tool %q arguments do not match its input schema", call.Name), validationErr)
 			result := tool.Result{CallID: call.ID, ToolName: call.Name, Failure: tool.FailureFromError(inputErr)}
@@ -358,8 +384,8 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		s.observeCallResult(ctx, telemetry, result, wrappedErr)
 		return result, wrappedErr
 	}
-	if len(definition.OutputSchema) > 0 {
-		validationErr := sdk.ValidateToolOutput(sdk.Tool{Name: definition.Name, OutputSchema: definition.OutputSchema}, result.StructuredOutput)
+	if validators.output != nil {
+		validationErr := validators.output.Validate(result.StructuredOutput)
 		if validationErr != nil {
 			outputErr := tool.WrapToolError(tool.ErrorCodeInvalidOutput, fmt.Sprintf("tool %q returned structured output that does not match its schema", call.Name), validationErr)
 			result.Failure = tool.FailureFromError(outputErr)
@@ -369,6 +395,40 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 	}
 	s.observeCallResult(ctx, telemetry, result, nil)
 	return result, nil
+}
+
+func compileDefinitionValidators(definition tool.Definition) (compiledToolValidators, error) {
+	sdkTool := sdk.Tool{Name: definition.Name, Description: definition.Description, InputSchema: definition.InputSchema, OutputSchema: definition.OutputSchema}
+	input, err := sdk.CompileToolInputValidator(sdkTool)
+	if err != nil {
+		return compiledToolValidators{}, err
+	}
+	output, err := sdk.CompileToolOutputValidator(sdkTool)
+	if err != nil {
+		return compiledToolValidators{}, err
+	}
+	return compiledToolValidators{input: input, output: output}, nil
+}
+
+func (s *Service) validatorsFor(definition tool.Definition) (compiledToolValidators, error) {
+	s.mu.RLock()
+	validators, ok := s.validators[definition.Name]
+	s.mu.RUnlock()
+	if ok {
+		return validators, nil
+	}
+	compiled, err := compileDefinitionValidators(definition)
+	if err != nil {
+		return compiledToolValidators{}, err
+	}
+	s.mu.Lock()
+	if existing, exists := s.validators[definition.Name]; exists {
+		compiled = existing
+	} else {
+		s.validators[definition.Name] = compiled
+	}
+	s.mu.Unlock()
+	return compiled, nil
 }
 
 func (s *Service) executionContext(parent context.Context, definition tool.Definition) (context.Context, context.CancelFunc) {

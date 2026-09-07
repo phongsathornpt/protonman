@@ -10,6 +10,7 @@ import (
 	"unicode"
 
 	"github.com/projectTHORN/proton/internal/tool"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 var (
@@ -116,6 +117,20 @@ func Discover(ctx context.Context, registry tool.Registrar, servers ...Server) e
 			}
 			seenNames[name] = struct{}{}
 			handlers = append(handlers, newHandler(server, serverName, manifest, name))
+		}
+	}
+
+	for _, handler := range handlers {
+		definition := handler.Definition()
+		if err := definition.Validate(); err != nil {
+			return fmt.Errorf("validate MCP tool %q contract: %w", definition.Name, err)
+		}
+		sdkTool := sdk.Tool{Name: definition.Name, Description: definition.Description, InputSchema: definition.InputSchema, OutputSchema: definition.OutputSchema}
+		if _, err := sdk.CompileToolInputValidator(sdkTool); err != nil {
+			return fmt.Errorf("validate MCP tool %q input schema: %w", definition.Name, err)
+		}
+		if _, err := sdk.CompileToolOutputValidator(sdkTool); err != nil {
+			return fmt.Errorf("validate MCP tool %q output schema: %w", definition.Name, err)
 		}
 	}
 
