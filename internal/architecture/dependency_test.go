@@ -78,6 +78,19 @@ func TestTUIDoesNotDependOnSessionPersistenceDomain(t *testing.T) {
 	})
 }
 
+func TestTUIDoesNotPerformProviderDiscoveryDirectly(t *testing.T) {
+	root := repositoryRoot(t)
+	cmd := exec.Command("rg", "FetchProviderModels", "internal/tui", "--glob", "*.go")
+	cmd.Dir = root
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("TUI performs provider discovery directly:\n%s", output)
+	}
+	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
+		t.Fatalf("search TUI provider discovery: %v: %s", err, output)
+	}
+}
+
 func TestTUIDoesNotMutateProjectConfigPersistenceDirectly(t *testing.T) {
 	root := repositoryRoot(t)
 	cmd := exec.Command("rg", "config\\.SaveProject", "internal/tui", "--glob", "*.go")
