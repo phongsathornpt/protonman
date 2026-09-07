@@ -15,8 +15,12 @@ func (m *bubbleModel) executeConversationCommand(name, argument string) tea.Cmd 
 		switch strings.ToLower(strings.TrimSpace(argument)) {
 		case "":
 			m.todoViewState.Expanded = !m.todoViewState.Expanded
+			if m.todoViewState.Expanded {
+				m.revealRetiredTodo()
+			}
 		case "show":
 			m.todoViewState.Expanded = true
+			m.revealRetiredTodo()
 		case "hide":
 			m.todoViewState.Expanded = false
 		default:

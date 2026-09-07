@@ -431,7 +431,7 @@ func (m bubbleModel) todoView() string {
 	if len(m.todo) == 0 {
 		return ""
 	}
-	if m.todoLifecycle.CompletionDismissed && !m.todoViewState.Expanded {
+	if m.todoLifecycle.CompletionDismissed && !m.todoViewState.ShowRetired {
 		return ""
 	}
 	completed, active, pending := todoCounts(m.todo)
