@@ -1,6 +1,9 @@
 package todo
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestParseMarkdownStatusesAndStableIDs(t *testing.T) {
 	input := "- [ ] one\n- [~] two\n- [x] three\n- [ ] one\n"
@@ -43,5 +46,19 @@ func TestValidateItemsRejectsUnsafeMarkdownFields(t *testing.T) {
 		if err := ValidateItems([]Item{item}); err == nil {
 			t.Fatalf("ValidateItems(%#v) error=nil", item)
 		}
+	}
+}
+
+func TestCloneItemsPreservesEmptyArrayJSONShape(t *testing.T) {
+	items := CloneItems(nil)
+	if items == nil {
+		t.Fatal("CloneItems(nil) = nil, want non-nil empty slice")
+	}
+	payload, err := json.Marshal(Snapshot{Items: items})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(payload); got != `{"revision":0,"items":[]}` {
+		t.Fatalf("snapshot JSON = %s, want empty items array", got)
 	}
 }

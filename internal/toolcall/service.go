@@ -361,7 +361,7 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 	if len(definition.OutputSchema) > 0 {
 		validationErr := sdk.ValidateToolOutput(sdk.Tool{Name: definition.Name, OutputSchema: definition.OutputSchema}, result.StructuredOutput)
 		if validationErr != nil {
-			outputErr := tool.NewToolError(tool.ErrorCodeInvalidOutput, fmt.Sprintf("tool %q returned structured output that does not match its schema", call.Name))
+			outputErr := tool.WrapToolError(tool.ErrorCodeInvalidOutput, fmt.Sprintf("tool %q returned structured output that does not match its schema", call.Name), validationErr)
 			result.Failure = tool.FailureFromError(outputErr)
 			s.observeCallResult(ctx, telemetry, result, outputErr)
 			return result, outputErr
