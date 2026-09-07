@@ -27,6 +27,7 @@ type ProviderError struct {
 	Code       string
 	Message    string
 	Retryable  bool
+	RateLimit  *RateLimitInfo
 	Cause      error
 }
 
