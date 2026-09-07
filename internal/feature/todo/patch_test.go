@@ -76,3 +76,41 @@ func TestClassifyPatchImpact(t *testing.T) {
 		})
 	}
 }
+
+func TestApplyPatchRejectsConflictingWritesWithinBatch(t *testing.T) {
+	items := []Item{{ID: "a", Text: "old", Status: StatusPending}}
+	cases := [][]Operation{
+		{{Op: PatchSetStatus, ID: "a", Status: StatusInProgress}, {Op: PatchSetStatus, ID: "a", Status: StatusCompleted}},
+		{{Op: PatchSetText, ID: "a", Text: "one"}, {Op: PatchSetText, ID: "a", Text: "two"}},
+		{{Op: PatchRemove, ID: "a"}, {Op: PatchAdd, ID: "a", Text: "new", Status: StatusPending}},
+	}
+	for _, operations := range cases {
+		if _, err := ApplyPatch(items, operations); err == nil {
+			t.Fatalf("operations %#v unexpectedly accepted", operations)
+		}
+	}
+}
+
+func TestApplyPatchAllowsIndependentFieldWritesOnSameTask(t *testing.T) {
+	items := []Item{{ID: "a", Text: "old", Status: StatusPending}}
+	next, err := ApplyPatch(items, []Operation{
+		{Op: PatchSetText, ID: "a", Text: "new"},
+		{Op: PatchSetStatus, ID: "a", Status: StatusInProgress},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next[0].Text != "new" || next[0].Status != StatusInProgress {
+		t.Fatalf("next=%#v", next)
+	}
+}
+
+func TestEffectsOfPatchSeparatesTextStatusAndStructuralWrites(t *testing.T) {
+	effects := EffectsOfPatch([]Operation{{Op: PatchSetText, ID: "a"}, {Op: PatchSetStatus, ID: "a"}})
+	if !effects.Valid || !effects.Text || !effects.Status || effects.Structural {
+		t.Fatalf("effects=%+v", effects)
+	}
+	if got := ClassifyPatch([]Operation{{Op: PatchSetText, ID: "a"}}); got != PatchImpactStructural {
+		t.Fatalf("text patch impact=%q", got)
+	}
+}

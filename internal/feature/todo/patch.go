@@ -28,26 +28,84 @@ type Operation struct {
 	Status Status  `json:"status,omitempty"`
 }
 
-func ClassifyPatch(operations []Operation) PatchImpact {
+type PatchEffects struct {
+	Structural bool
+	Text       bool
+	Status     bool
+	Valid      bool
+}
+
+func EffectsOfPatch(operations []Operation) PatchEffects {
 	if len(operations) == 0 {
-		return PatchImpactUnknown
+		return PatchEffects{}
 	}
+	effects := PatchEffects{Valid: true}
 	for _, operation := range operations {
 		switch operation.Op {
+		case PatchAdd, PatchRemove:
+			effects.Structural = true
+		case PatchSetText:
+			effects.Text = true
 		case PatchSetStatus:
-			continue
-		case PatchAdd, PatchSetText, PatchRemove:
-			return PatchImpactStructural
+			effects.Status = true
 		default:
-			return PatchImpactUnknown
+			return PatchEffects{}
 		}
 	}
-	return PatchImpactStatusOnly
+	return effects
+}
+
+func ClassifyPatch(operations []Operation) PatchImpact {
+	effects := EffectsOfPatch(operations)
+	if !effects.Valid {
+		return PatchImpactUnknown
+	}
+	if effects.Structural || effects.Text {
+		return PatchImpactStructural
+	}
+	if effects.Status {
+		return PatchImpactStatusOnly
+	}
+	return PatchImpactUnknown
+}
+
+func validatePatchWrites(operations []Operation) error {
+	type writes struct{ structural, text, status bool }
+	seen := make(map[string]writes, len(operations))
+	for index, operation := range operations {
+		id := strings.TrimSpace(operation.ID)
+		current := seen[id]
+		if current.structural {
+			return fmt.Errorf("todo operation %d: id %q already has a structural write in this patch", index, id)
+		}
+		switch operation.Op {
+		case PatchAdd, PatchRemove:
+			if current.text || current.status {
+				return fmt.Errorf("todo operation %d: structural write for id %q conflicts with earlier field writes", index, id)
+			}
+			current.structural = true
+		case PatchSetText:
+			if current.text {
+				return fmt.Errorf("todo operation %d: duplicate text write for id %q", index, id)
+			}
+			current.text = true
+		case PatchSetStatus:
+			if current.status {
+				return fmt.Errorf("todo operation %d: duplicate status write for id %q", index, id)
+			}
+			current.status = true
+		}
+		seen[id] = current
+	}
+	return nil
 }
 
 func ApplyPatch(items []Item, operations []Operation) ([]Item, error) {
 	if len(operations) == 0 {
 		return nil, fmt.Errorf("todo patch requires at least one operation")
+	}
+	if err := validatePatchWrites(operations); err != nil {
+		return nil, err
 	}
 	next := CloneItems(items)
 	if err := ValidateItems(next); err != nil {
