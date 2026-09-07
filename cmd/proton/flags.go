@@ -79,6 +79,8 @@ func usage() string {
 Usage:
   proton                      start the fullscreen TUI (new session)
   proton --resume             resume the previous session
+  proton session list         list sessions for the current workspace
+  proton session resume [id]  resume the latest or a specific session
   proton -p "<prompt>"        run one headless prompt
   proton --headless           read the headless prompt from stdin
 

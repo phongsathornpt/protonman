@@ -30,6 +30,9 @@ func main() {
 }
 
 func run(ctx context.Context, args []string) error {
+	if handled, err := runSessionCommand(ctx, args); handled {
+		return err
+	}
 	options, err := parseArgs(args)
 	if err != nil {
 		return fmt.Errorf("%v\n\n%s", err, usage())
