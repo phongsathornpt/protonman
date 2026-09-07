@@ -16,6 +16,48 @@ import (
 // directory validated by policy is the same directory later used for I/O.
 var ErrSymlinkPath = errors.New("symlink path component is not allowed")
 
+// OpenReadFile opens an already resolved read path relative to a pinned authorized
+// root. os.Root keeps symlink traversal confined to that root, closing the race
+// between policy validation and the final open.
+func (w *Workspace) OpenReadFile(ctx context.Context, path string) (*os.File, error) {
+	if err := w.CheckAbsoluteRead(ctx, path); err != nil {
+		return nil, err
+	}
+	clean := filepath.Clean(path)
+	root := ""
+	if isWithin(w.root, clean) {
+		root = w.root
+	} else if w.rawRoot != "" && isWithin(w.rawRoot, clean) {
+		root = w.rawRoot
+	} else {
+		w.mu.RLock()
+		for _, candidate := range w.readRoots {
+			if isWithin(candidate, clean) {
+				root = candidate
+				break
+			}
+		}
+		w.mu.RUnlock()
+	}
+	if root == "" {
+		return nil, newBoundaryError(tool.ErrorCodeOutsideWorkspace, fmt.Sprintf("path is outside workspace: %q", clean), ErrOutsideWorkspace)
+	}
+	relative, err := filepath.Rel(root, clean)
+	if err != nil {
+		return nil, fmt.Errorf("relative read path: %w", err)
+	}
+	pinned, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, fmt.Errorf("open read root: %w", err)
+	}
+	defer pinned.Close()
+	file, err := pinned.Open(relative)
+	if err != nil {
+		return nil, err
+	}
+	return file, nil
+}
+
 // OpenParentNoSymlinks opens and pins the parent directory of an absolute,
 // policy-checked workspace file. Each path component is opened relative to the
 // previously pinned directory and verified with SameFile, closing the
