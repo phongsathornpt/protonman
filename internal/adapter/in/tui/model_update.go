@@ -206,6 +206,10 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyMsg) (bool, tea.Cmd) {
 		m.refreshViewport()
 		return true, nil
 	case key.Matches(message, m.keys.ToggleTodo):
+		if layoutModeForHeight(m.height) != layoutNormal {
+			m.toggleTodoPane()
+			return true, nil
+		}
 		m.todoViewState.Expanded = !m.todoViewState.Expanded
 		if m.todoViewState.Expanded {
 			m.revealRetiredTodo()

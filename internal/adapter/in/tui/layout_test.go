@@ -288,14 +288,21 @@ func TestTodoExpandedViewHidesProtocolIDs(t *testing.T) {
 	}
 }
 
-func TestTodoToggleShowsCompactHeightFeedback(t *testing.T) {
+func TestTodoToggleOpensFocusedPaneInCompactLayout(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
 	m.resize(24, 12)
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
 	m = updated.(*bubbleModel)
-	got := m.todoView()
-	if !m.todoViewState.Expanded || !strings.Contains(got, "details") {
-		t.Fatalf("compact todo toggle=%q expanded=%v, want visible height feedback", got, m.todoViewState.Expanded)
+	view := m.bottom.find(todoInspectViewID)
+	if view == nil {
+		t.Fatal("compact todo toggle did not open focused pane")
+	}
+	got := view.Render(m)
+	if !strings.Contains(got, "one") || !strings.Contains(got, "id: one") {
+		t.Fatalf("focused todo pane=%q", got)
+	}
+	if lipgloss.Height(got) > 12 || lipgloss.Width(got) > 24 {
+		t.Fatalf("focused todo pane exceeds terminal: %dx%d", lipgloss.Width(got), lipgloss.Height(got))
 	}
 }
 

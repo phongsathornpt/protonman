@@ -450,9 +450,6 @@ func (m bubbleModel) todoView() string {
 	}
 	switch layoutModeForHeight(m.height) {
 	case layoutTiny, layoutCompact:
-		if m.todoViewState.Expanded {
-			return renderSummary("TODO details need taller terminal · " + summary)
-		}
 		return renderSummary(summary)
 	}
 	if m.busy {
