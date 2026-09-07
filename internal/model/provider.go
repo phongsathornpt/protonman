@@ -181,11 +181,13 @@ func ResolveProviderBaseURLForProtocol(providerName, providerType, configuredURL
 
 // RemoteModel describes a model discovered from an OpenAI or protonman endpoint.
 type RemoteModel struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	ContextWindow int      `json:"context_window,omitempty"`
-	Provider      string   `json:"provider,omitempty"`
-	Features      []string `json:"features,omitempty"`
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	ContextWindow   int      `json:"context_window,omitempty"`
+	MaxInputTokens  int      `json:"max_input_tokens,omitempty"`
+	MaxOutputTokens int      `json:"max_output_tokens,omitempty"`
+	Provider        string   `json:"provider,omitempty"`
+	Features        []string `json:"features,omitempty"`
 	// ToolSupport and VisionSupport are tri-state capability metadata. Nil means
 	// the catalog did not provide authoritative support information.
 	ToolSupport        *bool                          `json:"tool_support,omitempty"`
@@ -295,14 +297,15 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 	// Attempt parsing OpenAI format: {"data": [{"id": "model-id"}]}
 	var openAIResp struct {
 		Data []struct {
-			ID             string   `json:"id"`
-			Name           string   `json:"name"`
-			ContextWindow  int      `json:"context_window"`
-			ContextWindow2 int      `json:"contextWindow"`
-			MaxInputTokens int      `json:"max_input_tokens"`
-			Provider       string   `json:"provider"`
-			Features       []string `json:"features"`
-			Capabilities   struct {
+			ID              string   `json:"id"`
+			Name            string   `json:"name"`
+			ContextWindow   int      `json:"context_window"`
+			ContextWindow2  int      `json:"contextWindow"`
+			MaxInputTokens  int      `json:"max_input_tokens"`
+			MaxOutputTokens int      `json:"max_output_tokens"`
+			Provider        string   `json:"provider"`
+			Features        []string `json:"features"`
+			Capabilities    struct {
 				Tools              *bool `json:"tools"`
 				Vision             *bool `json:"vision"`
 				Reasoning          *bool `json:"reasoning"`
@@ -333,7 +336,9 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 			results = append(results, RemoteModel{
 				ID:                 item.ID,
 				Name:               name,
-				ContextWindow:      firstPositiveInt(item.ContextWindow, item.ContextWindow2, item.MaxInputTokens),
+				ContextWindow:      firstPositiveInt(item.ContextWindow, item.ContextWindow2),
+				MaxInputTokens:     item.MaxInputTokens,
+				MaxOutputTokens:    item.MaxOutputTokens,
 				Provider:           item.Provider,
 				Features:           item.Features,
 				ToolSupport:        toolSupport,
@@ -352,6 +357,8 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 			Slug                       string   `json:"slug"`
 			Name                       string   `json:"name"`
 			ContextWindow              int      `json:"contextWindow"`
+			MaxInputTokens             int      `json:"maxInputTokens"`
+			MaxOutputTokens            int      `json:"maxOutputTokens"`
 			Features                   []string `json:"features"`
 			SupportsTools              *bool    `json:"supportsTools"`
 			SupportsVision             *bool    `json:"supportsVision"`
@@ -392,6 +399,8 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 				ID:                 id,
 				Name:               item.Name,
 				ContextWindow:      item.ContextWindow,
+				MaxInputTokens:     item.MaxInputTokens,
+				MaxOutputTokens:    item.MaxOutputTokens,
 				Provider:           item.Provider.Name,
 				Features:           item.Features,
 				ToolSupport:        toolSupport,
@@ -486,7 +495,7 @@ func fetchAnthropicModels(ctx context.Context, client *http.Client, baseURL stri
 		if strings.TrimSpace(name) == "" {
 			name = item.ID
 		}
-		models = append(models, RemoteModel{ID: item.ID, Name: name, ContextWindow: item.MaxInputTokens, Provider: DefaultAnthropicName})
+		models = append(models, RemoteModel{ID: item.ID, Name: name, MaxInputTokens: item.MaxInputTokens, Provider: DefaultAnthropicName})
 	}
 	return models, nil
 }

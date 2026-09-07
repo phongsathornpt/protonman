@@ -45,6 +45,9 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 	if cfg.tools != nil {
 		model = withToolsCapability(model, *cfg.tools)
 	}
+	if cfg.tokenLimits != nil {
+		model = withTokenLimits(model, *cfg.tokenLimits)
+	}
 	if cfg.contextWindow != nil {
 		model = withContextWindow(model, *cfg.contextWindow)
 	}
@@ -68,6 +71,9 @@ func newSDKAnthropicLanguageModel(baseURL, apiKey, modelID string, opts ...Clien
 	}
 	if cfg.tools != nil {
 		model = withToolsCapability(model, *cfg.tools)
+	}
+	if cfg.tokenLimits != nil {
+		model = withTokenLimits(model, *cfg.tokenLimits)
 	}
 	if cfg.contextWindow != nil {
 		model = withContextWindow(model, *cfg.contextWindow)

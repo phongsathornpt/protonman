@@ -128,3 +128,12 @@ func TestResolveRemoteMetadataUsesResolvedCapabilitiesForDisplay(t *testing.T) {
 		t.Fatalf("resolved features = %#v", got.Features)
 	}
 }
+
+func TestRemoteModelProfilePreservesIndependentTokenLimits(t *testing.T) {
+	remote := RemoteModel{ID: "future-model", MaxInputTokens: 200000, MaxOutputTokens: 8192}
+	m := NewProviderLanguageModel(DefaultAnthropicName, string(ProviderProtocolAnthropic), DefaultAnthropicEndpoint, "key", remote.ID, WithRemoteModelProfile(DefaultAnthropicName, remote))
+	limits := sdk.ModelTokenLimits(m)
+	if limits.ContextWindow != 0 || limits.MaxInputTokens != 200000 || limits.MaxOutputTokens != 8192 {
+		t.Fatalf("token limits = %+v", limits)
+	}
+}

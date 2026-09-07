@@ -8,6 +8,7 @@ import (
 	"github.com/projectTHORN/proton/internal/buildinfo"
 	"github.com/projectTHORN/proton/internal/modelprofile"
 	"github.com/projectTHORN/proton/internal/runtimepolicy"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 // clientConfig contains CLI-owned settings used to construct proton-sdk provider models.
@@ -22,6 +23,7 @@ type clientConfig struct {
 	vision        *bool
 	tools         *bool
 	contextWindow *int
+	tokenLimits   *sdk.TokenLimits
 	profile       *modelprofile.Resolved
 }
 

@@ -259,7 +259,7 @@ func TestFetchAnthropicProviderModels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(models) != 1 || models[0].ID != "claude-sonnet-test" || models[0].Name != "Claude Sonnet Test" || models[0].ContextWindow != 200000 || models[0].Provider != DefaultAnthropicName {
+	if len(models) != 1 || models[0].ID != "claude-sonnet-test" || models[0].Name != "Claude Sonnet Test" || models[0].ContextWindow != 0 || models[0].MaxInputTokens != 200000 || models[0].Provider != DefaultAnthropicName {
 		t.Fatalf("models = %#v", models)
 	}
 }
