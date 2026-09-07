@@ -259,6 +259,7 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 			}
 			return ""
 		}(),
+		Pagination: paginationState(truncated, "offset", nextOffset, nil, continuation),
 	}, nil
 }
 

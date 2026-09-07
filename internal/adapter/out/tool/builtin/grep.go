@@ -322,6 +322,7 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		Truncated:    truncated,
 		NextOffset:   nextOffset,
 		Continuation: continuation,
+		Pagination:   paginationState(truncated, "offset", nextOffset, nil, continuation),
 	}, nil
 }
 
