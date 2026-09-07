@@ -44,6 +44,9 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resize(message.Width, message.Height)
 		return m, nil
 	case tea.KeyMsg:
+		if key.Matches(message, m.keys.Quit) {
+			return m.handleInterruptKey()
+		}
 		if m.showTranscript {
 			return m.updateTranscriptKey(message)
 		}
@@ -347,6 +350,36 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *bubbleModel) handleInterruptKey() (tea.Model, tea.Cmd) {
+	if m.showTranscript {
+		m.showTranscript = false
+		m.relayout()
+		return m, nil
+	}
+	if top := m.bottom.top(); top != nil && top.ID() != permissionViewID && top.ID() != slashViewID {
+		if provider, ok := top.(*providerPaneView); ok {
+			provider.cancelFetch()
+		}
+		m.bottom.remove(top.ID())
+		m.relayout()
+		return m, nil
+	}
+	if m.busy && m.turnCancel != nil {
+		m.cancelActiveTurn()
+		m.queue = nil
+		return m, nil
+	}
+	prompt := m.bottom.prompt()
+	if prompt.Value() != "" || m.bottom.bashMode() {
+		prompt.Reset()
+		m.setBashMode(false)
+		m.syncSlashView()
+		m.relayout()
+		return m, nil
+	}
+	return m, tea.Quit
+}
+
 func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if top := m.bottom.top(); top != nil {
 		if handled, command := top.HandleKey(m, message); handled {
@@ -384,21 +417,6 @@ func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, m.openModelSelectPane()
-	}
-	if message.String() == "ctrl+c" {
-		if m.busy && m.turnCancel != nil {
-			m.cancelActiveTurn()
-			m.queue = nil
-			return m, nil
-		}
-		prompt := m.bottom.prompt()
-		if prompt.Value() != "" || m.bottom.bashMode() {
-			prompt.Reset()
-			m.setBashMode(false)
-			m.relayout()
-			return m, nil
-		}
-		return m, tea.Quit
 	}
 	if key.Matches(message, m.keys.Clear) {
 		m.resetTranscript()

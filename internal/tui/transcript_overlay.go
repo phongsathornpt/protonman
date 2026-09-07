@@ -44,7 +44,7 @@ func (m *bubbleModel) transcriptOverlayView() string {
 
 func (m *bubbleModel) updateTranscriptKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch message.String() {
-	case "esc", "ctrl+t", "q", "ctrl+c":
+	case "esc", "ctrl+t", "q":
 		m.showTranscript = false
 		return m, nil
 	case "r":

@@ -128,8 +128,6 @@ func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool
 			return true, nil
 		case "y", "s", "n", "1", "2", "3", "enter":
 			// Decisions remain available while reviewing the transcript.
-		case "ctrl+c":
-			return false, nil
 		default:
 			return true, nil
 		}
@@ -162,8 +160,6 @@ func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool
 		return true, m.resolvePermission(optionAllowSession)
 	case "n":
 		return true, m.resolvePermission(optionDeny)
-	case "ctrl+c":
-		return false, nil
 	case "enter":
 		return true, m.resolvePermission(permissionOptions[v.index].option)
 	default:

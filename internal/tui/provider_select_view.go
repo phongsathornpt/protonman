@@ -302,7 +302,7 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (
 	}
 
 	switch message.String() {
-	case "esc", "ctrl+c", "q":
+	case "esc", "q":
 		m.bottom.remove(providerSelectViewID)
 		return true, nil
 
