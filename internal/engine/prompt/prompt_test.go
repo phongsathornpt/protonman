@@ -114,3 +114,12 @@ func TestRenderTaskDelegationOwnershipIsRootOnly(t *testing.T) {
 		t.Fatalf("child prompt leaked parent task ownership:\n%s", child)
 	}
 }
+
+func TestRenderDelegationExplainsAsyncLifecycle(t *testing.T) {
+	got := Render(Spec{Capabilities: ToolCapabilities{Agents: true}})
+	for _, want := range []string{"Delegation is asynchronous", "spawn independent children before waiting", "wait timeout does not cancel", "do not poll agent state", "Cancel delegated work"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("delegation contract missing %q:\n%s", want, got)
+		}
+	}
+}

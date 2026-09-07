@@ -210,15 +210,17 @@ func taskSection(spec Spec) string {
 }
 
 func delegationSection(spec Spec) string {
-	text := `# Delegation Protocol
+	return `# Delegation Protocol
 - Delegate only bounded work with a clear deliverable when it reduces parent context or shortens the critical path.
 - Use INT for read-only investigation, tracing, research, root-cause analysis, and review.
 - Use POW for bounded implementation, fixes, refactors, migrations, and concrete code changes.
 - Use DEX for complex design, difficult debugging, concurrency, compatibility, performance, or other high-risk engineering work.
 - Keep trivial lookups and simple local edits in the parent.
+- Delegation is asynchronous: spawn independent children before waiting when parallelism helps, and continue useful parent work while they run.
+- A wait timeout does not cancel a child. Wait when a child result enters the critical path; do not poll agent state without a reason.
+- Cancel delegated work that is no longer needed.
 - Do not repeat delegated work unless integration or verification requires it.
-- Child results are context, not proof. The primary agent owns final integration and verification.`
-	return text
+- Child findings can guide parent integration without duplicating investigation, but the primary agent owns final user-facing correctness and verification of integrated mutations.`
 }
 
 func verificationSection() string {
