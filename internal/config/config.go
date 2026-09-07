@@ -167,7 +167,6 @@ type fileDocument struct {
 }
 
 type fileAgent struct {
-	MaxRounds            *int    `toml:"max_rounds,omitempty"`
 	MaxToolCalls         *int    `toml:"max_tool_calls,omitempty"`
 	Profile              *string `toml:"profile,omitempty"`
 	ReasoningEffort      *string `toml:"reasoning_effort,omitempty"`
@@ -387,9 +386,6 @@ func mergeDocument(document fileDocument, snapshot *Snapshot, source ValueSource
 	if document.Model.Provider != "" {
 		snapshot.Model.Provider = document.Model.Provider
 		snapshot.Provenance[FieldModelProvider] = source
-	}
-	if document.Agent.MaxRounds != nil {
-		snapshot.Warnings = append(snapshot.Warnings, "agent.max_rounds is deprecated and ignored; turn rounds are unbounded")
 	}
 	if document.Agent.MaxToolCalls != nil {
 		if *document.Agent.MaxToolCalls < 0 {

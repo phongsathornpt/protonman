@@ -80,7 +80,7 @@ func WithSessionID(sessionID string) BubbleTeaOption {
 	}
 }
 
-// WithAgentConfig attaches agent execution settings (e.g. max rounds) to the TUI.
+// WithAgentConfig attaches agent execution settings to the TUI.
 func WithAgentConfig(agentCfg config.AgentConfig) BubbleTeaOption {
 	return func(ui *BubbleTeaUI) error {
 		ui.agentConfig = agentCfg

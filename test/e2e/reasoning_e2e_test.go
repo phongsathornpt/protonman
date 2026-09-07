@@ -28,7 +28,7 @@ func TestE2EReasoningGeminiProfileReachesWire(t *testing.T) {
 		!requestMessagesContain(requests[0], "primary coding agent") {
 		t.Fatalf("Gemini prompt missing stable grounding/model guidance: %#v", requests[0]["messages"])
 	}
-	for _, leaked := range []string{"reasoning_effective=", "reasoning_source=", "model_profile=", "model_profile_match=", "provider=", "max_rounds="} {
+	for _, leaked := range []string{"reasoning_effective=", "reasoning_source=", "model_profile=", "model_profile_match=", "provider="} {
 		if requestMessagesContain(requests[0], leaked) {
 			t.Fatalf("Gemini prompt leaked runtime metadata %q: %#v", leaked, requests[0]["messages"])
 		}

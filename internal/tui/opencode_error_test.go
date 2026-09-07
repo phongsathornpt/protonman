@@ -30,9 +30,6 @@ func TestClassifyOpenCodeError_UnresolvedToolCall(t *testing.T) {
 	if classified.Badge != "TOOL_PROTOCOL" {
 		t.Fatalf("badge = %q, want TOOL_PROTOCOL", classified.Badge)
 	}
-	if strings.Contains(strings.Join(classified.Suggestions, "\n"), "agent.max_rounds") {
-		t.Fatalf("suggestions = %v, must not present max-round guidance", classified.Suggestions)
-	}
 	if !strings.Contains(classified.RawDetails, "unresolved model tool call") {
 		t.Fatalf("raw details = %q, want sentinel details", classified.RawDetails)
 	}
