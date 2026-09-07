@@ -394,6 +394,64 @@ func TestAgentLimitsRejectNegativeValues(t *testing.T) {
 	}
 }
 
+func TestSubagentsEnabledDefaultsAndLayering(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !snapshot.Agent.SubagentsEnabled {
+		t.Fatal("subagents should be enabled by default")
+	}
+	if got := snapshot.Provenance[FieldAgentSubagentsEnabled]; got != SourceDefault {
+		t.Fatalf("default provenance = %q, want %q", got, SourceDefault)
+	}
+
+	if err := SaveUserSubagentsEnabled(homeDir, false); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Agent.SubagentsEnabled {
+		t.Fatal("user config should disable subagents")
+	}
+	if got := snapshot.Provenance[FieldAgentSubagentsEnabled]; got != SourceUser {
+		t.Fatalf("user provenance = %q, want %q", got, SourceUser)
+	}
+
+	if err := SaveProjectSubagentsEnabled(workDir, true); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir, ProjectTrusted: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !snapshot.Agent.SubagentsEnabled {
+		t.Fatal("trusted project config should re-enable subagents")
+	}
+	if got := snapshot.Provenance[FieldAgentSubagentsEnabled]; got != SourceProject {
+		t.Fatalf("project provenance = %q, want %q", got, SourceProject)
+	}
+}
+
+func TestSaveSubagentsEnabledPersistsBoolean(t *testing.T) {
+	homeDir := t.TempDir()
+	if err := SaveUserSubagentsEnabled(homeDir, false); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(homeDir, ".proton", "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "subagents_enabled = false") {
+		t.Fatalf("saved config missing boolean subagent setting:\n%s", data)
+	}
+}
+
 func TestAgentSubagentTimeoutConfig(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()

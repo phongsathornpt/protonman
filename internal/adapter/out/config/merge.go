@@ -62,6 +62,10 @@ func mergeDocument(document fileDocument, snapshot *Snapshot, source ValueSource
 		snapshot.Model.Provider = document.Model.Provider
 		snapshot.Provenance[FieldModelProvider] = source
 	}
+	if document.Agent.SubagentsEnabled != nil {
+		snapshot.Agent.SubagentsEnabled = *document.Agent.SubagentsEnabled
+		snapshot.Provenance[FieldAgentSubagentsEnabled] = source
+	}
 	if document.Agent.MaxToolCalls != nil {
 		if *document.Agent.MaxToolCalls < 0 {
 			return fmt.Errorf("agent.max_tool_calls must be non-negative")

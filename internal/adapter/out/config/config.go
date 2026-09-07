@@ -4,8 +4,8 @@ package config
 import (
 	"time"
 
-	"github.com/projectTHORN/proton/internal/core/permission"
 	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
+	"github.com/projectTHORN/proton/internal/core/permission"
 	"github.com/projectTHORN/proton/internal/platform/sandbox"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
@@ -66,6 +66,7 @@ type ModelConfig struct {
 
 // AgentConfig specifies autonomous agent execution settings.
 type AgentConfig struct {
+	SubagentsEnabled     bool                `toml:"subagents_enabled"`
 	MaxToolCalls         int                 `toml:"max_tool_calls"`
 	Profile              string              `toml:"profile"`
 	ReasoningEffort      sdk.ReasoningEffort `toml:"reasoning_effort"`
@@ -112,12 +113,13 @@ const (
 )
 
 const (
-	FieldModelDefault         = "model.default"
-	FieldModelProvider        = "model.provider"
-	FieldAgentProfile         = "agent.profile"
-	FieldAgentReasoningEffort = "agent.reasoning_effort"
-	FieldAgentMaxToolCalls    = "agent.max_tool_calls"
-	FieldUIPermissionMode     = "ui.permission_mode"
+	FieldModelDefault          = "model.default"
+	FieldModelProvider         = "model.provider"
+	FieldAgentProfile          = "agent.profile"
+	FieldAgentSubagentsEnabled = "agent.subagents_enabled"
+	FieldAgentReasoningEffort  = "agent.reasoning_effort"
+	FieldAgentMaxToolCalls     = "agent.max_tool_calls"
+	FieldUIPermissionMode      = "ui.permission_mode"
 )
 
 // Snapshot is the effective configuration after layered loading.
