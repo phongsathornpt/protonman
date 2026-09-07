@@ -73,7 +73,15 @@ func (c AgentRunCell) detail() string {
 		}
 	}
 	if c.State.Terminal() {
-		return strings.TrimSpace(c.Summary)
+		if summary := strings.TrimSpace(c.Summary); summary != "" {
+			return summary
+		}
+		switch c.State {
+		case agent.StateCanceled:
+			return "canceled"
+		case agent.StateFailed:
+			return "failed"
+		}
 	}
 	return strings.TrimSpace(c.Activity)
 }

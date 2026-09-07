@@ -173,11 +173,16 @@ func (m *bubbleModel) syncAgentRunSnapshot(agentID string) {
 	}
 	cell.State = status.State
 	cell.Reason = status.Reason
-	cell.StartedAt = status.StartedAt
-	if cell.StartedAt.IsZero() {
-		cell.StartedAt = status.StartTime
+	startedAt := status.StartedAt
+	if startedAt.IsZero() {
+		startedAt = status.StartTime
 	}
-	cell.FinishedAt = status.FinishedAt
+	if !startedAt.IsZero() {
+		cell.StartedAt = startedAt
+	}
+	if !status.FinishedAt.IsZero() {
+		cell.FinishedAt = status.FinishedAt
+	}
 	if status.State.Terminal() {
 		cell.Activity = ""
 	}
