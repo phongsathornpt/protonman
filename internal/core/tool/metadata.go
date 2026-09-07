@@ -25,6 +25,7 @@ var builtinMetadata = map[string]callMetadata{
 	"list_dir":           {Metadata: Metadata{Name: "list_dir", Kind: KindRead, DisplayName: "List"}, title: titleListDir, target: targetListDir},
 	"find_files":         {Metadata: Metadata{Name: "find_files", Kind: KindRead, DisplayName: "Find files"}, title: titleFindFiles, target: targetFindFiles},
 	"grep":               {Metadata: Metadata{Name: "grep", Kind: KindGrep, DisplayName: "Search"}, title: titleGrep, target: targetGrep},
+	"inspect_code":       {Metadata: Metadata{Name: "inspect_code", Kind: KindGrep, DisplayName: "Inspect code"}, title: titleInspectCode, target: targetInspectCode},
 	"bash":               {Metadata: Metadata{Name: "bash", Kind: KindBash, DisplayName: "Run"}, title: titleBash, target: targetBash},
 	"web_fetch":          {Metadata: Metadata{Name: "web_fetch", Kind: KindWebFetch, DisplayName: "Fetch"}, title: titleWebFetch, target: targetWebFetch},
 	"web_search":         {Metadata: Metadata{Name: "web_search", Kind: KindWebSearch, DisplayName: "Search web"}, title: titleWebSearch, target: targetWebSearch},
@@ -164,6 +165,28 @@ func targetGrep(args map[string]any) string {
 		return fmt.Sprintf("%q", pattern)
 	}
 	return ""
+}
+func titleInspectCode(args map[string]any) string {
+	query := ExtractString(args, "query", "pattern")
+	path := ExtractString(args, "path")
+	if query == "" {
+		return "Inspect code"
+	}
+	if path != "" && path != "." {
+		return fmt.Sprintf("Inspect %q in %s", TruncateRunes(query, 30), path)
+	}
+	return fmt.Sprintf("Inspect %q", TruncateRunes(query, 40))
+}
+func targetInspectCode(args map[string]any) string {
+	query := ExtractString(args, "query", "pattern")
+	path := ExtractString(args, "path")
+	if path == "" {
+		path = "."
+	}
+	if query == "" {
+		return path
+	}
+	return fmt.Sprintf("%q in %s", query, path)
 }
 func titleBash(args map[string]any) string {
 	if cmd := ExtractString(args, "command", "cmd"); cmd != "" {

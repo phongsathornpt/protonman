@@ -296,7 +296,7 @@ func TestDefaultRegistryContainsCodingTools(t *testing.T) {
 		t.Fatalf("NewDefaultRegistry() error = %v", err)
 	}
 	definitions := registry.Definitions()
-	if got, want := len(definitions), 10; got != want {
+	if got, want := len(definitions), 11; got != want {
 		t.Fatalf("definition count = %d, want %d", got, want)
 	}
 
@@ -306,7 +306,7 @@ func TestDefaultRegistryContainsCodingTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDefaultRegistry(WithAgentCoordinator) error = %v", err)
 	}
-	if got, want := len(regWithCoord.Definitions()), 15; got != want {
+	if got, want := len(regWithCoord.Definitions()), 16; got != want {
 		t.Fatalf("definition count with coordinator = %d, want %d", got, want)
 	}
 	for _, name := range []string{"delegate_task", "wait_agent", "get_agent", "list_agents", "cancel_agent"} {
