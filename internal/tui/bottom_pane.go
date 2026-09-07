@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -278,6 +279,10 @@ func (v *skillsPaneView) Render(m *bubbleModel) string {
 }
 
 func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+	if key.Matches(message, m.keys.ToggleSkills) {
+		m.bottom.remove(skillsViewID)
+		return true, nil
+	}
 	skills := m.skills.List()
 	if len(skills) == 0 {
 		m.bottom.remove(skillsViewID)
@@ -328,7 +333,7 @@ func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, te
 			v.index = num
 		}
 		return true, nil
-	case "esc", "enter", "q", "ctrl+s":
+	case "esc", "enter", "q":
 		m.bottom.remove(skillsViewID)
 		return true, nil
 	default:

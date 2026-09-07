@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/projectTHORN/proton/internal/appdirs"
@@ -360,6 +361,11 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 }
 
 func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+	if key.Matches(message, m.keys.ToggleModel) {
+		v.cancelFetch()
+		m.bottom.remove(modelSelectViewID)
+		return true, nil
+	}
 	if v.filtering {
 		switch message.Type {
 		case tea.KeyEsc:
@@ -391,7 +397,7 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 		v.filtering = false
 		v.applyFilter(m.activeModel)
 		return true, nil
-	case "esc", "ctrl+p", "alt+m", "q":
+	case "esc", "q":
 		v.cancelFetch()
 		m.bottom.remove(modelSelectViewID)
 		return true, nil
