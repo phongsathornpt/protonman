@@ -91,6 +91,22 @@ func TestTUIDoesNotControlAgentCoordinatorDirectly(t *testing.T) {
 	}
 }
 
+func TestInboundAdaptersDoNotPerformConfigPersistence(t *testing.T) {
+	root := repositoryRoot(t)
+	for _, adapter := range []string{"internal/tui", "internal/acp", "internal/headless"} {
+		cmd := exec.Command("rg", "config\\.(Load|Save|Delete)", adapter, "--glob", "*.go", "--glob", "!*_test.go")
+		cmd.Dir = root
+		output, err := cmd.CombinedOutput()
+		if err == nil {
+			t.Errorf("%s performs config persistence directly:\n%s", adapter, output)
+			continue
+		}
+		if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
+			t.Fatalf("search %s config persistence: %v: %s", adapter, err, output)
+		}
+	}
+}
+
 func TestTUIDoesNotPerformProviderDiscoveryDirectly(t *testing.T) {
 	root := repositoryRoot(t)
 	cmd := exec.Command("rg", "FetchProviderModels", "internal/tui", "--glob", "*.go")
