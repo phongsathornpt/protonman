@@ -99,10 +99,11 @@ func WithRuntimeConfig(runtimeCfg config.RuntimeConfig) BubbleTeaOption {
 }
 
 // WithProjectContext attaches workspace trust and loaded config-source metadata.
-func WithProjectContext(trusted bool, sources []string) BubbleTeaOption {
+func WithProjectContext(trusted bool, sources []string, provenance map[string]config.ValueSource) BubbleTeaOption {
 	return func(ui *BubbleTeaUI) error {
 		ui.projectTrusted = trusted
 		ui.projectConfigSources = append([]string(nil), sources...)
+		ui.projectConfigProvenance = cloneProjectProvenance(provenance)
 		return nil
 	}
 }
@@ -118,27 +119,28 @@ func WithCoordinator(coordinator *agent.Coordinator) BubbleTeaOption {
 
 // BubbleTeaUI is the Bubble Tea terminal adapter over Proton services.
 type BubbleTeaUI struct {
-	service              *toolcall.Service
-	registry             tool.Registry
-	skills               *skill.Registry
-	todoStore            tododomain.Repository
-	runner               applicationturn.Runner
-	bridge               *permissionBridge
-	coordinator          *agent.Coordinator
-	workDir              string
-	initialMessages      []model.Message
-	finalMessages        []model.Message
-	finalAgentProfile    string
-	finalReasoningEffort sdk.ReasoningEffort
-	modelConfig          config.ModelConfig
-	agentConfig          config.AgentConfig
-	hasAgentConfig       bool
-	runtimeConfig        config.RuntimeConfig
-	hasRuntimeConfig     bool
-	providers            map[string]config.ProviderConfig
-	sessionID            string
-	projectTrusted       bool
-	projectConfigSources []string
+	service                 *toolcall.Service
+	registry                tool.Registry
+	skills                  *skill.Registry
+	todoStore               tododomain.Repository
+	runner                  applicationturn.Runner
+	bridge                  *permissionBridge
+	coordinator             *agent.Coordinator
+	workDir                 string
+	initialMessages         []model.Message
+	finalMessages           []model.Message
+	finalAgentProfile       string
+	finalReasoningEffort    sdk.ReasoningEffort
+	modelConfig             config.ModelConfig
+	agentConfig             config.AgentConfig
+	hasAgentConfig          bool
+	runtimeConfig           config.RuntimeConfig
+	hasRuntimeConfig        bool
+	providers               map[string]config.ProviderConfig
+	sessionID               string
+	projectTrusted          bool
+	projectConfigSources    []string
+	projectConfigProvenance map[string]config.ValueSource
 }
 
 // NewBubbleTea creates the component-based fullscreen TUI.
@@ -259,6 +261,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		bModel.sessionID = ui.sessionID
 		bModel.projectTrusted = ui.projectTrusted
 		bModel.projectConfigSources = append([]string(nil), ui.projectConfigSources...)
+		bModel.projectConfigProvenance = cloneProjectProvenance(ui.projectConfigProvenance)
 		if ui.hasRuntimeConfig {
 			bModel.runtimeConfig = ui.runtimeConfig
 		}

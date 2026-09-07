@@ -115,6 +115,23 @@ func DefaultRuntimeConfig() RuntimeConfig {
 	}
 }
 
+type ValueSource string
+
+const (
+	SourceDefault ValueSource = "default"
+	SourceUser    ValueSource = "user"
+	SourceProject ValueSource = "project"
+)
+
+const (
+	FieldModelDefault         = "model.default"
+	FieldModelProvider        = "model.provider"
+	FieldAgentProfile         = "agent.profile"
+	FieldAgentReasoningEffort = "agent.reasoning_effort"
+	FieldAgentMaxRounds       = "agent.max_rounds"
+	FieldUIPermissionMode     = "ui.permission_mode"
+)
+
 // Snapshot is the effective configuration after layered loading.
 type Snapshot struct {
 	// Permission is the static permission policy configuration.
@@ -135,6 +152,8 @@ type Snapshot struct {
 	Runtime RuntimeConfig
 	// Sources lists files that were loaded successfully.
 	Sources []string
+	// Provenance records the configuration layer that last set selected fields.
+	Provenance map[string]ValueSource
 	// Warnings reports safe skips, such as an untrusted project config.
 	Warnings []string
 }
@@ -244,7 +263,15 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 			SubagentQueueTimeout: DefaultSubagentQueueTimeout,
 			CompletedResultTTL:   DefaultCompletedResultTTL,
 		},
-		Runtime:  DefaultRuntimeConfig(),
+		Runtime: DefaultRuntimeConfig(),
+		Provenance: map[string]ValueSource{
+			FieldModelDefault:         SourceDefault,
+			FieldModelProvider:        SourceDefault,
+			FieldAgentProfile:         SourceDefault,
+			FieldAgentReasoningEffort: SourceDefault,
+			FieldAgentMaxRounds:       SourceDefault,
+			FieldUIPermissionMode:     SourceDefault,
+		},
 		Sources:  make([]string, 0, 2),
 		Warnings: make([]string, 0),
 	}
@@ -298,7 +325,11 @@ func loadFile(ctx context.Context, path string, snapshot *Snapshot, project bool
 	if err := toml.NewDecoder(file).Decode(&document); err != nil {
 		return fmt.Errorf("decode config %s: %w", path, err)
 	}
-	if err := mergeDocument(document, snapshot); err != nil {
+	source := SourceUser
+	if project {
+		source = SourceProject
+	}
+	if err := mergeDocument(document, snapshot, source); err != nil {
 		return fmt.Errorf("apply config %s: %w", path, err)
 	}
 	snapshot.Sources = append(snapshot.Sources, path)
@@ -310,7 +341,7 @@ func loadFile(ctx context.Context, path string, snapshot *Snapshot, project bool
 	return nil
 }
 
-func mergeDocument(document fileDocument, snapshot *Snapshot) error {
+func mergeDocument(document fileDocument, snapshot *Snapshot, source ValueSource) error {
 	if document.Permission.Default != "" {
 		defaultAction, err := permission.ParseAction(document.Permission.Default)
 		if err != nil {
@@ -338,6 +369,7 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 			return fmt.Errorf("ui.permission_mode: %w", err)
 		}
 		snapshot.Mode = mode
+		snapshot.Provenance[FieldUIPermissionMode] = source
 	}
 	if document.Sandbox.Profile != "" {
 		name, err := sandbox.ParseName(document.Sandbox.Profile)
@@ -354,15 +386,18 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 	}
 	if document.Model.Default != "" {
 		snapshot.Model.Default = document.Model.Default
+		snapshot.Provenance[FieldModelDefault] = source
 	}
 	if document.Model.Provider != "" {
 		snapshot.Model.Provider = document.Model.Provider
+		snapshot.Provenance[FieldModelProvider] = source
 	}
 	if document.Agent.MaxRounds != nil {
 		if *document.Agent.MaxRounds < 0 {
 			return fmt.Errorf("agent.max_rounds must be non-negative")
 		}
 		snapshot.Agent.MaxRounds = *document.Agent.MaxRounds
+		snapshot.Provenance[FieldAgentMaxRounds] = source
 	}
 	if document.Agent.MaxToolCalls != nil {
 		if *document.Agent.MaxToolCalls < 0 {
@@ -372,6 +407,7 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 	}
 	if document.Agent.Profile != nil {
 		snapshot.Agent.Profile = strings.TrimSpace(*document.Agent.Profile)
+		snapshot.Provenance[FieldAgentProfile] = source
 	}
 	if document.Agent.ReasoningEffort != nil {
 		effort, err := sdk.ParseReasoningEffort(*document.Agent.ReasoningEffort)
@@ -379,6 +415,7 @@ func mergeDocument(document fileDocument, snapshot *Snapshot) error {
 			return fmt.Errorf("agent.reasoning_effort: %w", err)
 		}
 		snapshot.Agent.ReasoningEffort = effort
+		snapshot.Provenance[FieldAgentReasoningEffort] = source
 	}
 	if document.Agent.MaxLiveSubagents != nil {
 		if *document.Agent.MaxLiveSubagents <= 0 {

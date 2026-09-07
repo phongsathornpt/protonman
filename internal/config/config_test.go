@@ -637,3 +637,44 @@ reasoning_effort = "turbo"
 		t.Fatal("Load() error = nil")
 	}
 }
+
+func TestLoadTracksSelectedFieldProvenance(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[model]
+default = "user-model"
+provider = "user-provider"
+
+[agent]
+profile = "pow"
+max_rounds = 11
+reasoning_effort = "low"
+
+[ui]
+permission_mode = "ask"
+`)
+	writeConfig(t, filepath.Join(workDir, ".proton", "config.toml"), `[model]
+default = "project-model"
+
+[agent]
+profile = "dex"
+reasoning_effort = "high"
+`)
+
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir, ProjectTrusted: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for field, want := range map[string]ValueSource{
+		FieldModelDefault:         SourceProject,
+		FieldModelProvider:        SourceUser,
+		FieldAgentProfile:         SourceProject,
+		FieldAgentReasoningEffort: SourceProject,
+		FieldAgentMaxRounds:       SourceUser,
+		FieldUIPermissionMode:     SourceUser,
+	} {
+		if got := snapshot.Provenance[field]; got != want {
+			t.Fatalf("provenance[%s] = %q, want %q", field, got, want)
+		}
+	}
+}

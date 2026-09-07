@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/projectTHORN/proton/internal/appdirs"
+	"github.com/projectTHORN/proton/internal/config"
 	projectdomain "github.com/projectTHORN/proton/internal/project"
 )
 
@@ -83,12 +84,12 @@ func (v *projectPaneView) Render(m *bubbleModel) string {
 	rows = append(rows, projectFact("Skills", skillsStatus), "")
 
 	rows = append(rows,
-		projectFact("Model", fallbackProjectValue(m.activeModel, "not selected")),
-		projectFact("Provider", fallbackProjectValue(m.activeProvider, "not selected")),
-		projectFact("Agent", fallbackProjectValue(m.agentProfile, "default")),
-		projectFact("Thinking", reasoningEffortLabel(m.reasoningEffort)),
-		projectFact("Permission", m.service.Mode().String()),
-		projectFact("Rounds", formatProjectLimit(m.maxRounds)),
+		projectFactWithSource("Model", fallbackProjectValue(m.activeModel, "not selected"), m.projectSource(config.FieldModelDefault)),
+		projectFactWithSource("Provider", fallbackProjectValue(m.activeProvider, "not selected"), m.projectSource(config.FieldModelProvider)),
+		projectFactWithSource("Agent", fallbackProjectValue(m.agentProfile, "default"), m.projectSource(config.FieldAgentProfile)),
+		projectFactWithSource("Thinking", reasoningEffortLabel(m.reasoningEffort), m.projectSource(config.FieldAgentReasoningEffort)),
+		projectFactWithSource("Permission", m.service.Mode().String(), m.projectSource(config.FieldUIPermissionMode)),
+		projectFactWithSource("Rounds", formatProjectLimit(m.maxRounds), m.projectSource(config.FieldAgentMaxRounds)),
 		"",
 	)
 	if v.notice != "" {
@@ -209,4 +210,29 @@ func formatProjectLimit(value int) string {
 		return "unbounded"
 	}
 	return fmt.Sprintf("%d", value)
+}
+
+func cloneProjectProvenance(in map[string]config.ValueSource) map[string]config.ValueSource {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]config.ValueSource, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func (m *bubbleModel) projectSource(field string) config.ValueSource {
+	if m == nil || m.projectConfigProvenance == nil {
+		return config.SourceDefault
+	}
+	if source, ok := m.projectConfigProvenance[field]; ok {
+		return source
+	}
+	return config.SourceDefault
+}
+
+func projectFactWithSource(label, value string, source config.ValueSource) string {
+	return projectFact(label, value+" · "+string(source))
 }
