@@ -105,6 +105,8 @@ const (
 	ErrorCodeInvalidArguments ErrorCode = "invalid_arguments"
 	// ErrorCodeInvalidOutput indicates that a successful handler returned structured output outside its declared schema.
 	ErrorCodeInvalidOutput ErrorCode = "invalid_output"
+	// ErrorCodeOutputTooLarge indicates that a valid structured result cannot fit within the remaining turn budget.
+	ErrorCodeOutputTooLarge ErrorCode = "output_too_large"
 	// ErrorCodeCanceled indicates that the caller canceled execution.
 	ErrorCodeCanceled ErrorCode = "canceled"
 	// ErrorCodeDeadlineExceeded indicates that the call exceeded its deadline.
