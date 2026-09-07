@@ -98,7 +98,10 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		}
 		current := sha256.Sum256(existing)
 		if expected != fmt.Sprintf("%x", current[:]) {
-			return tool.Result{}, tool.NewToolError(tool.ErrorCodeConflict, "write_file target changed since it was read; refresh the file and retry")
+			recoveryArgs, _ := json.Marshal(map[string]any{"path": input.FilePath})
+			return tool.Result{}, tool.NewToolError(tool.ErrorCodeConflict, "write_file target changed since it was read; refresh the file and retry").WithRecovery(tool.Recovery{
+				Action: "refresh_resource", Tool: "read_file", Arguments: recoveryArgs,
+			})
 		}
 	}
 	checkpointID, err := prepareWorkspaceMutation(ctx, h.workspace, h.checkpoints, h.Definition().Safety, nil, []string{resolvedPath})
