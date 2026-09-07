@@ -218,6 +218,9 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 	}
 	state := m.ensureHistoryState()
 	body := result.Output
+	if (name == "get_todo" || name == "update_todo") && len(result.StructuredOutput) > 0 {
+		body = string(result.StructuredOutput)
+	}
 	if result.CheckpointID != "" {
 		body = joinBody(body, "checkpoint: "+result.CheckpointID)
 	}

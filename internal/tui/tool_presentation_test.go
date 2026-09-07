@@ -322,8 +322,8 @@ func TestSummarizeReadFileTarget(t *testing.T) {
 }
 
 func TestTodoToolPresentation(t *testing.T) {
-	target, kind := extractToolTarget("update_todo", "", json.RawMessage(`{"items":[{"id":"a","text":"one","status":"in_progress"},{"id":"b","text":"two","status":"completed"}]}`))
-	if kind != tool.KindTask || target != "2 tasks" {
+	target, kind := extractToolTarget("update_todo", "", json.RawMessage(`{"operations":[{"op":"set_status","id":"a","status":"in_progress"},{"op":"set_status","id":"b","status":"completed"}]}`))
+	if kind != tool.KindTask || target != "2 task operations" {
 		t.Fatalf("target=%q kind=%q", target, kind)
 	}
 	if glyph := toolKindGlyph(kind, "update_todo"); glyph != glyphTodoActive {

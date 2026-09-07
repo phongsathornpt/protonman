@@ -146,7 +146,8 @@ func taskSection() string {
 	return `# Task Plan Protocol
 - The task plan is parent-owned coordination metadata, not evidence about code.
 - Call get_todo before changing task state so you have the latest revision.
-- Preserve stable task IDs and existing tasks unless deletion is intentional.
+- Use update_todo operations to patch only the intended tasks; unmentioned tasks are preserved.
+- Preserve stable task IDs. Removing a task requires an explicit remove operation.
 - Mark a task completed only after its work is actually complete; agent process completion alone is not proof of task completion.
 - If update_todo reports a revision conflict, refresh with get_todo and retry from the new snapshot.`
 }

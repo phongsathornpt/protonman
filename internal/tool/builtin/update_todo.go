@@ -1,10 +1,12 @@
 package builtin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	tododomain "github.com/projectTHORN/proton/internal/todo"
@@ -16,8 +18,8 @@ type updateTodoHandler struct {
 }
 
 type updateTodoInput struct {
-	ExpectedRevision *uint64           `json:"expected_revision"`
-	Items            []tododomain.Item `json:"items"`
+	ExpectedRevision *uint64                `json:"expected_revision"`
+	Operations       []tododomain.Operation `json:"operations"`
 }
 
 func NewUpdateTodo(store tododomain.Repository) tool.Handler {
@@ -26,93 +28,114 @@ func NewUpdateTodo(store tododomain.Repository) tool.Handler {
 
 func (updateTodoHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:        "update_todo",
-		Description: "Replace the structured project task plan atomically, preserving stable task IDs and statuses.",
-		Kind:        tool.KindTask,
-		Mutability:  tool.MutabilityMutating,
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"expected_revision": map[string]any{
-					"type": "integer", "minimum": 0,
-					"description": "Revision from the latest task snapshot; stale revisions are rejected.",
-				},
-				"items": map[string]any{
-					"type": "array",
-					"items": map[string]any{
-						"type": "object",
-						"properties": map[string]any{
-							"id":     map[string]any{"type": "string"},
-							"text":   map[string]any{"type": "string"},
-							"status": map[string]any{"type": "string", "enum": []string{"pending", "in_progress", "completed"}},
-						},
-						"required": []string{"id", "text", "status"},
-					},
-				},
-			},
-			"required": []string{"expected_revision", "items"},
-		},
+		Name:         "update_todo",
+		Description:  "Patch the parent-owned task plan atomically using explicit add, set_status, set_text, or remove operations.",
+		Kind:         tool.KindTask,
+		Mutability:   tool.MutabilityMutating,
+		InputSchema:  todoUpdateInputSchema(),
+		OutputSchema: todoUpdateOutputSchema(),
 	}
 }
 
 func (h updateTodoHandler) PermissionDetail(arguments json.RawMessage) string {
 	var input updateTodoInput
 	if err := json.Unmarshal(arguments, &input); err != nil {
-		return "task plan"
+		return "task patch"
 	}
 	if h.store == nil {
-		return fmt.Sprintf("%d tasks", len(input.Items))
+		return fmt.Sprintf("%d task operations", len(input.Operations))
 	}
 	current := h.store.Snapshot()
 	if input.ExpectedRevision == nil || *input.ExpectedRevision != current.Revision {
-		return fmt.Sprintf("stale task plan · %d tasks", len(input.Items))
+		return fmt.Sprintf("stale task patch · %d operations", len(input.Operations))
 	}
-	changes := todoChanges(current.Items, input.Items)
+	next, err := tododomain.ApplyPatch(current.Items, input.Operations)
+	if err != nil {
+		return fmt.Sprintf("invalid task patch · %d operations", len(input.Operations))
+	}
+	changes := todoChanges(current.Items, next)
 	if detail := summarizeTodoChanges(changes); detail != "" {
 		return detail
 	}
-	return fmt.Sprintf("%d tasks · no changes", len(input.Items))
+	return fmt.Sprintf("%d task operations · no changes", len(input.Operations))
 }
 
 func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	if h.store == nil {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeExecution, "todo store is not configured")
 	}
-	var input updateTodoInput
-	if err := json.Unmarshal(call.Arguments, &input); err != nil {
+	input, err := decodeUpdateTodoInput(call.Arguments)
+	if err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode update_todo arguments", err)
 	}
 	if input.ExpectedRevision == nil {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_revision is required; call get_todo first")
 	}
-	if err := tododomain.ValidateItems(input.Items); err != nil {
-		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "validate todo items", err)
+	if len(input.Operations) == 0 {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "operations must contain at least one explicit todo patch")
+	}
+	if len(input.Operations) > 256 {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "operations exceed the 256-operation limit")
 	}
 	before := h.store.Snapshot()
-	snapshot, err := h.store.CompareAndReplace(ctx, *input.ExpectedRevision, input.Items)
+	if before.Revision != *input.ExpectedRevision {
+		err := fmt.Errorf("%w: expected %d, current %d", tododomain.ErrRevisionConflict, *input.ExpectedRevision, before.Revision)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeConflict, "todo snapshot is stale; refresh tasks and retry", err)
+	}
+	next, err := tododomain.ApplyPatch(before.Items, input.Operations)
+	if err != nil {
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "apply todo patch", err)
+	}
+	snapshot, err := h.store.CompareAndReplace(ctx, *input.ExpectedRevision, next)
 	if err != nil {
 		if errors.Is(err, tododomain.ErrRevisionConflict) {
 			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeConflict, "todo snapshot is stale; refresh tasks and retry", err)
 		}
 		return tool.Result{}, err
 	}
+	return encodeTodoUpdateResult(call, before.Items, snapshot)
+}
+
+func decodeUpdateTodoInput(arguments json.RawMessage) (updateTodoInput, error) {
+	decoder := json.NewDecoder(bytes.NewReader(arguments))
+	decoder.DisallowUnknownFields()
+	var input updateTodoInput
+	if err := decoder.Decode(&input); err != nil {
+		return updateTodoInput{}, err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return updateTodoInput{}, errors.New("multiple JSON values are not allowed")
+		}
+		return updateTodoInput{}, err
+	}
+	return input, nil
+}
+
+func encodeTodoUpdateResult(call tool.Call, before []tododomain.Item, snapshot tododomain.Snapshot) (tool.Result, error) {
 	counts := map[tododomain.Status]int{}
 	for _, item := range snapshot.Items {
 		counts[item.Status]++
 	}
-	changes := todoChanges(before.Items, snapshot.Items)
+	changes := todoChanges(before, snapshot.Items)
 	payload, err := json.Marshal(map[string]any{
-		"revision":    snapshot.Revision,
-		"total":       len(snapshot.Items),
-		"pending":     counts[tododomain.StatusPending],
-		"in_progress": counts[tododomain.StatusInProgress],
-		"completed":   counts[tododomain.StatusCompleted],
-		"changes":     changes,
+		"revision": snapshot.Revision, "total": len(snapshot.Items),
+		"pending": counts[tododomain.StatusPending], "in_progress": counts[tododomain.StatusInProgress],
+		"completed": counts[tododomain.StatusCompleted], "changes": changes,
 	})
 	if err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "encode todo result", err)
 	}
-	return tool.Result{CallID: call.ID, ToolName: call.Name, Output: string(payload)}, nil
+	detail := summarizeTodoChanges(changes)
+	if detail == "" {
+		detail = "no changes"
+	}
+	return tool.Result{
+		CallID: call.ID, ToolName: call.Name,
+		Output:           fmt.Sprintf("task plan revision %d · %d tasks · %s", snapshot.Revision, len(snapshot.Items), detail),
+		StructuredOutput: payload,
+	}, nil
 }
 
 type todoChangeSummary struct {

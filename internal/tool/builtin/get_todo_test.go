@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -9,7 +10,7 @@ import (
 	"github.com/projectTHORN/proton/internal/tool"
 )
 
-func TestGetTodoReturnsSnapshotRevision(t *testing.T) {
+func TestGetTodoReturnsStructuredSnapshotRevision(t *testing.T) {
 	store, err := tododomain.NewStore([]tododomain.Item{{ID: "a", Text: "inspect", Status: tododomain.StatusPending}})
 	if err != nil {
 		t.Fatal(err)
@@ -20,11 +21,18 @@ func TestGetTodoReturnsSnapshotRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(res.Output, `"revision":0`) || !strings.Contains(res.Output, `"id":"a"`) {
+	if !strings.Contains(res.Output, "revision 0") || !strings.Contains(res.Output, "1 tasks") {
 		t.Fatalf("output=%s", res.Output)
 	}
+	var snapshot tododomain.Snapshot
+	if err := json.Unmarshal(res.StructuredOutput, &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Revision != 0 || len(snapshot.Items) != 1 || snapshot.Items[0].ID != "a" {
+		t.Fatalf("structured snapshot=%#v", snapshot)
+	}
 	def := h.Definition()
-	if def.Kind != tool.KindTask || def.Mutability != tool.MutabilityReadOnly {
+	if def.Kind != tool.KindTask || def.Mutability != tool.MutabilityReadOnly || len(def.OutputSchema) == 0 {
 		t.Fatalf("definition=%#v", def)
 	}
 }

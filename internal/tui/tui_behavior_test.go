@@ -437,7 +437,7 @@ func TestPlanModeBlocksUnknownBash(t *testing.T) {
 
 func TestTodoConflictRendersTaskSpecificGuidance(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	call, _ := tool.NewCall("todo-conflict", "update_todo", []byte(`{"expected_revision":1,"items":[]}`))
+	call, _ := tool.NewCall("todo-conflict", "update_todo", []byte(`{"expected_revision":1,"operations":[{"op":"set_status","id":"a","status":"completed"}]}`))
 	m.appendToolCall(call)
 	m.applyToolResult("update_todo", tool.Result{
 		CallID: "todo-conflict", ToolName: "update_todo",
