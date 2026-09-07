@@ -65,6 +65,7 @@ func (h agentLifecycleHandler) Definition() tool.Definition {
 		def.PermissionDetailKey = "agent_id"
 		def.InputSchema = agentIDSchema()
 	}
+	def.OutputSchema = agentLifecycleOutputSchema(h.name)
 	return def
 }
 
@@ -112,7 +113,7 @@ func (h agentLifecycleHandler) wait(ctx context.Context, call tool.Call) (tool.R
 	if err != nil {
 		return tool.Result{}, classifyAgentError("wait for subagent", err)
 	}
-	return agentJSONResult(call, map[string]any{"agent_id": id, "status": wr.State, "result": resultPayload(wr.Result)})
+	return agentJSONResult(call, fmt.Sprintf("%s · %s", id, wr.State), map[string]any{"agent_id": id, "status": wr.State, "result": resultPayload(wr.Result)})
 }
 
 func (h agentLifecycleHandler) get(call tool.Call) (tool.Result, error) {
@@ -124,11 +125,12 @@ func (h agentLifecycleHandler) get(call tool.Call) (tool.Result, error) {
 	if !ok {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeNotFound, fmt.Sprintf("subagent %q not found", id))
 	}
-	return agentJSONResult(call, map[string]any{"agent": status, "result": resultPayload(result)})
+	return agentJSONResult(call, fmt.Sprintf("%s · %s", status.ID, status.State), map[string]any{"agent": status, "result": resultPayload(result)})
 }
 
 func (h agentLifecycleHandler) list(call tool.Call) (tool.Result, error) {
-	return agentJSONResult(call, map[string]any{"agents": h.coordinator.List()})
+	agents := h.coordinator.List()
+	return agentJSONResult(call, fmt.Sprintf("%d retained agents", len(agents)), map[string]any{"agents": agents})
 }
 
 func (h agentLifecycleHandler) cancel(call tool.Call) (tool.Result, error) {
@@ -140,7 +142,7 @@ func (h agentLifecycleHandler) cancel(call tool.Call) (tool.Result, error) {
 		return tool.Result{}, classifyAgentError("cancel subagent", err)
 	}
 	status, result, _ := h.coordinator.Lookup(id)
-	return agentJSONResult(call, map[string]any{"agent": status, "result": resultPayload(result)})
+	return agentJSONResult(call, fmt.Sprintf("cancel requested · %s · %s", status.ID, status.State), map[string]any{"agent": status, "result": resultPayload(result)})
 }
 
 func decodeAgentID(call tool.Call) (string, error) {
@@ -183,10 +185,10 @@ func resultPayload(result *agent.Result) any {
 	return payload
 }
 
-func agentJSONResult(call tool.Call, payload any) (tool.Result, error) {
+func agentJSONResult(call tool.Call, summary string, payload any) (tool.Result, error) {
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "encode agent result", err)
 	}
-	return tool.Result{CallID: call.ID, ToolName: call.Name, Output: string(encoded)}, nil
+	return tool.Result{CallID: call.ID, ToolName: call.Name, Output: summary, StructuredOutput: encoded}, nil
 }

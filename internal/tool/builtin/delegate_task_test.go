@@ -73,11 +73,11 @@ func TestDelegateTask_Execute(t *testing.T) {
 			AgentID string      `json:"agent_id"`
 			Status  agent.State `json:"status"`
 		}
-		if err := json.Unmarshal([]byte(res.Output), &spawned); err != nil {
+		if err := json.Unmarshal(res.StructuredOutput, &spawned); err != nil {
 			t.Fatalf("decode spawn output: %v", err)
 		}
 		if spawned.AgentID == "" || (spawned.Status != agent.StateQueued && spawned.Status != agent.StateRunning) {
-			t.Fatalf("spawn output = %s", res.Output)
+			t.Fatalf("spawn output = %s", res.StructuredOutput)
 		}
 		wr, err := coord.Wait(context.Background(), spawned.AgentID, time.Second)
 		if err != nil || wr.Result == nil || !strings.Contains(wr.Result.Summary, "found 2 occurrences of auth middleware") {
@@ -168,7 +168,7 @@ func TestDelegateTask_Execute(t *testing.T) {
 		var spawned struct {
 			AgentID string `json:"agent_id"`
 		}
-		if err := json.Unmarshal([]byte(res.Output), &spawned); err != nil {
+		if err := json.Unmarshal(res.StructuredOutput, &spawned); err != nil {
 			t.Fatal(err)
 		}
 		status, ok := parentCoord.Get(spawned.AgentID)
@@ -283,7 +283,7 @@ func TestDelegateTaskPrefersContextParentID(t *testing.T) {
 	var spawned struct {
 		AgentID string `json:"agent_id"`
 	}
-	if err := json.Unmarshal([]byte(res.Output), &spawned); err != nil {
+	if err := json.Unmarshal(res.StructuredOutput, &spawned); err != nil {
 		t.Fatal(err)
 	}
 	status, ok := coord.Get(spawned.AgentID)

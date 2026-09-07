@@ -83,12 +83,12 @@ func TestE2EAsyncSubagentWaitDoesNotCancel(t *testing.T) {
 	var handle struct {
 		AgentID string `json:"agent_id"`
 	}
-	if err := json.Unmarshal([]byte(spawn.Output), &handle); err != nil || handle.AgentID == "" {
+	if err := json.Unmarshal(spawn.StructuredOutput, &handle); err != nil || handle.AgentID == "" {
 		t.Fatalf("spawn=%s err=%v", spawn.Output, err)
 	}
 
 	wait := callAgentTool(t, service, "wait-1", "wait_agent", map[string]any{"agent_id": handle.AgentID})
-	if !strings.Contains(wait.Output, `"status":"running"`) && !strings.Contains(wait.Output, `"status":"queued"`) {
+	if !strings.Contains(string(wait.StructuredOutput), `"status":"running"`) && !strings.Contains(string(wait.StructuredOutput), `"status":"queued"`) {
 		t.Fatalf("first wait=%s", wait.Output)
 	}
 	if _, ok := coord.Get(handle.AgentID); !ok {
@@ -97,15 +97,15 @@ func TestE2EAsyncSubagentWaitDoesNotCancel(t *testing.T) {
 
 	close(release)
 	wait = callAgentTool(t, service, "wait-2", "wait_agent", map[string]any{"agent_id": handle.AgentID, "timeout_seconds": 1})
-	if !strings.Contains(wait.Output, `"status":"completed"`) || !strings.Contains(wait.Output, "persistent result") {
+	if !strings.Contains(string(wait.StructuredOutput), `"status":"completed"`) || !strings.Contains(string(wait.StructuredOutput), "persistent result") {
 		t.Fatalf("completed wait=%s", wait.Output)
 	}
 	get := callAgentTool(t, service, "get", "get_agent", map[string]any{"agent_id": handle.AgentID})
-	if !strings.Contains(get.Output, `"state":"completed"`) || !strings.Contains(get.Output, "persistent result") {
+	if !strings.Contains(string(get.StructuredOutput), `"state":"completed"`) || !strings.Contains(string(get.StructuredOutput), "persistent result") {
 		t.Fatalf("get=%s", get.Output)
 	}
 	list := callAgentTool(t, service, "list", "list_agents", map[string]any{})
-	if !strings.Contains(list.Output, handle.AgentID) || !strings.Contains(list.Output, `"state":"completed"`) {
+	if !strings.Contains(string(list.StructuredOutput), handle.AgentID) || !strings.Contains(string(list.StructuredOutput), `"state":"completed"`) {
 		t.Fatalf("list=%s", list.Output)
 	}
 }
@@ -122,10 +122,10 @@ func TestE2EAsyncSubagentExplicitCancel(t *testing.T) {
 	var handle struct {
 		AgentID string `json:"agent_id"`
 	}
-	_ = json.Unmarshal([]byte(spawn.Output), &handle)
+	_ = json.Unmarshal(spawn.StructuredOutput, &handle)
 	callAgentTool(t, service, "cancel", "cancel_agent", map[string]any{"agent_id": handle.AgentID})
 	wait := callAgentTool(t, service, "wait", "wait_agent", map[string]any{"agent_id": handle.AgentID, "timeout_seconds": 1})
-	if !strings.Contains(wait.Output, `"status":"canceled"`) {
+	if !strings.Contains(string(wait.StructuredOutput), `"status":"canceled"`) {
 		t.Fatalf("wait after cancel=%s", wait.Output)
 	}
 }
