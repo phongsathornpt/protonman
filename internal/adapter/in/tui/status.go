@@ -455,7 +455,19 @@ func (m bubbleModel) todoView() string {
 		}
 		return renderSummary(summary)
 	}
-	if m.busy || !m.todoViewState.Expanded {
+	if m.busy {
+		lines := []string{renderSummary(summary)}
+		for _, item := range m.todo {
+			if item.Status != tododomain.StatusInProgress {
+				continue
+			}
+			activeLabel := glyphTodoActive + truncateWithEllipsis(item.Text, maxInt(1, m.width-4))
+			lines = append(lines, brandStyle.Render("  "+activeLabel))
+			break
+		}
+		return strings.Join(lines, "\n")
+	}
+	if !m.todoViewState.Expanded {
 		return renderSummary(summary + " · " + shortcutHelp(m.keys.ToggleTodo))
 	}
 
