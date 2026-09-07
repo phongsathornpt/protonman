@@ -41,8 +41,8 @@ var (
 	accentError     = lipgloss.Color("1") // red
 	accentSuccess   = lipgloss.Color("2") // green
 	commandColor    = lipgloss.Color("6")
-	warningColor    = lipgloss.Color("5")
-	promptBorder    = lipgloss.Color("8")
+	warningColor    = lipgloss.Color("3") // yellow: warnings, attention, denied
+	promptBorder    = lipgloss.AdaptiveColor{Light: "242", Dark: "8"}
 )
 
 var (
@@ -65,6 +65,11 @@ var (
 	fileBadgeStyle   = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "244", Dark: "8"})
 	toolExcerptStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "244", Dark: "8"}).Italic(true)
 	toolFoldStyle    = lipgloss.NewStyle().Italic(true).Foreground(lipgloss.AdaptiveColor{Light: "244", Dark: "8"})
+	heroLabelStyle   = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "240", Dark: "8"}).Bold(true)
+	heroKeyStyle     = lipgloss.NewStyle().Foreground(accentUser).Bold(true)
+	diffAddStyle     = lipgloss.NewStyle().Foreground(accentSuccess)
+	diffDeleteStyle  = lipgloss.NewStyle().Foreground(accentError)
+	diffHunkStyle    = lipgloss.NewStyle().Foreground(accentUser)
 	bodyStyle        = lipgloss.NewStyle()
 	modalStyle       = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).

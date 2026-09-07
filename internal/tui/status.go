@@ -82,7 +82,11 @@ func (m bubbleModel) statusView() string {
 	if !m.busyStarted.IsZero() {
 		parts = append(parts, formatElapsed(time.Since(m.busyStarted)))
 	}
-	return statusStyle.Render(truncateWithEllipsis("• "+strings.Join(parts, " · "), maxInt(1, m.width-2)))
+	indicator := "• "
+	if spin := m.spinner.View(); spin != "" {
+		indicator = spin + " "
+	}
+	return statusStyle.Render(truncateWithEllipsis(indicator+strings.Join(parts, " · "), maxInt(1, m.width-2)))
 }
 
 func (m bubbleModel) turnAgentSnapshot() []agent.AgentStatus {
@@ -127,21 +131,41 @@ func (m bubbleModel) infoView() string {
 	}
 	mode := layoutModeForHeight(m.height)
 
-	parts := []string{m.modeChip()}
+	sepStr := glyphSep
+	sepWidth := ansi.StringWidth(sepStr)
+
+	parts := make([]string, 0, 4)
+	currentWidth := 0
+
+	addPart := func(item string) bool {
+		w := ansi.StringWidth(item)
+		needed := w
+		if len(parts) > 0 {
+			needed += sepWidth
+		}
+		if len(parts) == 0 || currentWidth+needed <= targetWidth {
+			parts = append(parts, item)
+			currentWidth += needed
+			return true
+		}
+		return false
+	}
+
+	addPart(m.modeChip())
 	if m.activeModel != "" {
 		cleanModel := truncateWithEllipsis(m.activeModel, maxInt(8, targetWidth/3))
-		parts = append(parts, brandStyle.Render("model: "+cleanModel))
+		addPart(brandStyle.Render("model: " + cleanModel))
 	}
 	if n := len(m.queue); n > 0 {
-		parts = append(parts, mutedStyle.Render(fmt.Sprintf("%d queued", n)))
+		addPart(mutedStyle.Render(fmt.Sprintf("%d queued", n)))
 	}
 	if mode == layoutNormal && m.skills != nil {
 		active := m.skills.ActivatedList()
 		if len(active) == 1 {
 			cleanSkill := truncateWithEllipsis(active[0], maxInt(14, targetWidth/3))
-			parts = append(parts, successStyle.Render("skill: "+cleanSkill))
+			addPart(successStyle.Render("skill: " + cleanSkill))
 		} else if len(active) > 1 {
-			parts = append(parts, successStyle.Render(fmt.Sprintf("%d skills active", len(active))))
+			addPart(successStyle.Render(fmt.Sprintf("%d skills active", len(active))))
 		}
 	}
 
@@ -153,23 +177,8 @@ func (m bubbleModel) infoView() string {
 		candidates = append(candidates, shortcutHelp(m.keys.ToggleModel))
 	}
 
-	sepStr := glyphSep
-	sepWidth := ansi.StringWidth(sepStr)
-	currentWidth := 0
-	for i, p := range parts {
-		if i > 0 {
-			currentWidth += sepWidth
-		}
-		currentWidth += ansi.StringWidth(p)
-	}
-
 	for _, cand := range candidates {
-		rendered := mutedStyle.Render(cand)
-		candWidth := ansi.StringWidth(rendered) + sepWidth
-		if currentWidth+candWidth <= targetWidth {
-			parts = append(parts, rendered)
-			currentWidth += candWidth
-		}
+		addPart(mutedStyle.Render(cand))
 	}
 
 	return strings.Join(parts, mutedStyle.Render(sepStr))
@@ -177,19 +186,29 @@ func (m bubbleModel) infoView() string {
 
 func (m bubbleModel) modeChip() string {
 	if m.planMode {
-		return planStyle.Render("plan · read-only")
+		return planStyle.Render("mode: plan · read-only")
 	}
 	mode := permission.ModeAsk
 	if m.service != nil {
 		mode = m.service.Mode()
 	}
+	if m.width < 40 {
+		switch mode {
+		case permission.ModeAlwaysApprove:
+			return warningStyle.Render("auto")
+		case permission.ModeDeny:
+			return errorStyle.Render("deny")
+		default:
+			return mutedStyle.Render("ask")
+		}
+	}
 	switch mode {
 	case permission.ModeAlwaysApprove:
-		return warningStyle.Render("always-approve")
+		return warningStyle.Render("mode: auto-approve")
 	case permission.ModeDeny:
-		return errorStyle.Render("deny")
+		return errorStyle.Render("mode: deny")
 	default:
-		return mutedStyle.Render("ask")
+		return mutedStyle.Render("mode: ask")
 	}
 }
 
@@ -539,7 +558,7 @@ func (m bubbleModel) promptView() string {
 		return m.bottom.prompt().View()
 	}
 	width := maxInt(1, m.width-2)
-	border := promptBorder
+	var border lipgloss.TerminalColor = promptBorder
 	if m.bottom.bashMode() {
 		border = commandColor
 	}

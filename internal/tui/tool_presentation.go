@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/projectTHORN/proton/internal/tool"
 )
 
@@ -206,7 +207,7 @@ func summarizeToolOutput(name string, kind tool.Kind, target string, body string
 		return summarizeWebSearch(bodyTrimmed)
 	case tool.KindRead:
 		if name == "list_dir" {
-			return summarizeListDir(bodyTrimmed)
+			return summarizeListDir(bodyTrimmed, truncated)
 		}
 		if name == "git_status" {
 			return summarizeGitStatus(bodyTrimmed)
@@ -523,14 +524,26 @@ func formatPathSegmentsStyled(target string) string {
 	// For grep query with " in ":
 	if strings.Contains(target, " in ") {
 		parts := strings.SplitN(target, " in ", 2)
-		return toolTargetStyle.Render(parts[0]) + mutedStyle.Render(" in ") + formatPathSegmentsStyled(parts[1])
+		pattern := strings.Trim(parts[0], `"`)
+		if ansi.StringWidth(pattern) > 30 {
+			pattern = truncateWithEllipsis(pattern, 28)
+		}
+		return toolTargetStyle.Render(fmt.Sprintf("%q", pattern)) + mutedStyle.Render(" in ") + formatPathSegmentsStyled(parts[1])
 	}
-	// For quoted strings (e.g. web search query):
+	// For quoted strings (e.g. web search query or grep pattern):
 	if strings.HasPrefix(target, `"`) && strings.HasSuffix(target, `"`) {
+		inner := strings.Trim(target, `"`)
+		if ansi.StringWidth(inner) > 36 {
+			inner = truncateWithEllipsis(inner, 34)
+			return toolTargetStyle.Render(fmt.Sprintf("%q", inner))
+		}
 		return toolTargetStyle.Render(target)
 	}
 	// Check if URL:
 	if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") {
+		if ansi.StringWidth(target) > 50 {
+			target = truncateWithEllipsis(target, 48)
+		}
 		return toolTargetStyle.Render(target)
 	}
 
@@ -571,7 +584,7 @@ func extractReadFileExcerpt(body string) string {
 	return ""
 }
 
-func summarizeListDir(body string) string {
+func summarizeListDir(body string, truncated bool) string {
 	if body == "" {
 		return "empty directory"
 	}
@@ -592,7 +605,11 @@ func summarizeListDir(body string) string {
 	if total == 0 {
 		return "empty directory"
 	}
-	return fmt.Sprintf("%d items (%d dirs, %d files)", total, dirs, files)
+	suffix := ""
+	if truncated {
+		suffix = " + truncated"
+	}
+	return fmt.Sprintf("%d items (%d dirs, %d files)%s", total, dirs, files, suffix)
 }
 
 func summarizeGrep(body string, truncated bool) string {
@@ -676,12 +693,13 @@ func summarizeEdit(name string, body string) string {
 	}
 	switch name {
 	case "write_file":
-		lines := strings.Count(body, "\n") + 1
-		return fmt.Sprintf("%d lines written (%s)", lines, formatByteSize(len(body)))
+		return "saved"
 	case "search_replace":
 		return "1 replacement applied"
 	case "apply_patch":
 		return "patch applied"
+	case "checkpoint_restore":
+		return "restored checkpoint"
 	default:
 		return "file updated"
 	}
@@ -691,11 +709,11 @@ func summarizeEdit(name string, body string) string {
 // in the primary conversation viewport because the semantic header already summarizes it.
 func shouldSuppressBody(kind tool.Kind, name string) bool {
 	switch kind {
-	case tool.KindWebFetch, tool.KindWebSearch, tool.KindRead, tool.KindAgent:
+	case tool.KindWebFetch, tool.KindWebSearch, tool.KindRead, tool.KindAgent, tool.KindTask, tool.KindEdit:
 		return true
 	}
 	switch name {
-	case "activate_skill", "delegate_task", "checkpoint_restore":
+	case "activate_skill", "delegate_task", "checkpoint_restore", "get_todo", "update_todo":
 		return true
 	default:
 		return false
@@ -714,10 +732,35 @@ func formatOutputFold(lines []string, maxVisible int) []string {
 	hidden := len(lines) - maxVisible
 	out := make([]string, 0, maxVisible+1)
 	out = append(out, lines[:headCount]...)
-	foldMsg := toolFoldStyle.Render(fmt.Sprintf("… (%d lines hidden · ctrl+t for full output)", hidden))
+	lineWord := "lines"
+	if hidden == 1 {
+		lineWord = "line"
+	}
+	foldMsg := toolFoldStyle.Render(fmt.Sprintf("… (%d %s hidden · ctrl+t for full output)", hidden, lineWord))
 	out = append(out, foldMsg)
 	out = append(out, lines[len(lines)-1])
 	return out
+}
+
+// styleDiffLine checks if a line looks like a diff line and applies syntax coloring.
+func styleDiffLine(line string) (string, bool) {
+	trimmed := strings.TrimSpace(line)
+	if strings.HasPrefix(trimmed, "+++ ") || strings.HasPrefix(trimmed, "--- ") {
+		return mutedStyle.Bold(true).Render(line), true
+	}
+	if strings.HasPrefix(trimmed, "+") {
+		return diffAddStyle.Render(line), true
+	}
+	if strings.HasPrefix(trimmed, "-") {
+		return diffDeleteStyle.Render(line), true
+	}
+	if strings.HasPrefix(trimmed, "@@") {
+		return diffHunkStyle.Render(line), true
+	}
+	if strings.HasPrefix(trimmed, "diff --git ") || strings.HasPrefix(trimmed, "index ") {
+		return mutedStyle.Bold(true).Render(line), true
+	}
+	return line, false
 }
 
 func formatByteSize(bytes int) string {
@@ -728,4 +771,85 @@ func formatByteSize(bytes int) string {
 		return fmt.Sprintf("%.1f KB", float64(bytes)/1024.0)
 	}
 	return fmt.Sprintf("%.1f MB", float64(bytes)/(1024.0*1024.0))
+}
+
+// formatGrepToolView formats grep lines with syntax styling, keyword highlighting,
+// and horizontal width clamping to prevent wrapping explosion in the viewport.
+func formatGrepToolView(lines []string, target string, width int) []string {
+	if len(lines) == 0 {
+		return nil
+	}
+
+	terms := extractGrepQueryTerms(target)
+	formatted := make([]string, 0, len(lines))
+	contentWidth := maxInt(20, width-6)
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			formatted = append(formatted, toolFoldStyle.Render(trimmed))
+			continue
+		}
+		parts := strings.SplitN(trimmed, ":", 3)
+		if len(parts) == 3 {
+			file := parts[0]
+			lineNum := parts[1]
+			content := parts[2]
+
+			avail := contentWidth - ansi.StringWidth(file) - len(lineNum) - 4
+			cleanContent := strings.TrimSpace(content)
+			if avail > 10 && ansi.StringWidth(cleanContent) > avail {
+				cleanContent = truncateWithEllipsis(cleanContent, avail)
+			}
+
+			highlightedContent := highlightGrepTerms(cleanContent, terms)
+			lineStr := toolTargetStyle.Render(file) + mutedStyle.Render(":"+lineNum+": ") + highlightedContent
+			formatted = append(formatted, lineStr)
+		} else {
+			if ansi.StringWidth(trimmed) > contentWidth {
+				trimmed = truncateWithEllipsis(trimmed, contentWidth)
+			}
+			formatted = append(formatted, bodyStyle.Render(trimmed))
+		}
+	}
+
+	return formatOutputFold(formatted, 4)
+}
+
+func extractGrepQueryTerms(target string) []string {
+	clean := strings.TrimSpace(target)
+	if strings.Contains(clean, " in ") {
+		clean = strings.SplitN(clean, " in ", 2)[0]
+	}
+	clean = strings.Trim(clean, `"`)
+	if clean == "" {
+		return nil
+	}
+	rawTerms := strings.Split(clean, "|")
+	terms := make([]string, 0, len(rawTerms))
+	for _, t := range rawTerms {
+		t = strings.TrimSpace(t)
+		if len(t) >= 2 {
+			terms = append(terms, t)
+		}
+	}
+	return terms
+}
+
+func highlightGrepTerms(content string, terms []string) string {
+	if len(terms) == 0 || content == "" {
+		return bodyStyle.Render(content)
+	}
+	result := content
+	for _, term := range terms {
+		idx := strings.Index(strings.ToLower(result), strings.ToLower(term))
+		if idx != -1 && idx+len(term) <= len(result) {
+			matched := result[idx : idx+len(term)]
+			return bodyStyle.Render(result[:idx]) + brandStyle.Render(matched) + bodyStyle.Render(result[idx+len(term):])
+		}
+	}
+	return bodyStyle.Render(result)
 }

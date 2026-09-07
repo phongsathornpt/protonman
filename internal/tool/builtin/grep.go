@@ -230,7 +230,7 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		}
 		relSearch = filepath.ToSlash(relSearch)
 		if entry.IsDir() {
-			if entry.Name() == ".git" && path != resolvedPath {
+			if isIgnoredGrepDir(entry.Name()) && path != resolvedPath {
 				return filepath.SkipDir
 			}
 			if path != resolvedPath {
@@ -240,6 +240,9 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 			}
 			_, err := hashGrepSnapshotEntry(snapshotHash, relSearch, entry)
 			return err
+		}
+		if isIgnoredGrepExtension(entry.Name()) {
+			return nil
 		}
 		if entry.Type()&os.ModeSymlink != 0 {
 			return nil
@@ -417,7 +420,17 @@ func scanGrepFile(
 		}
 	}()
 
-	scanner := bufio.NewScanner(io.LimitReader(file, maxEditFileBytes+1))
+	var headBuf [1024]byte
+	n, readErr := io.ReadFull(file, headBuf[:])
+	if readErr != nil && readErr != io.EOF && readErr != io.ErrUnexpectedEOF {
+		return fmt.Errorf("read %q: %w", path, readErr)
+	}
+	if isBinaryData(headBuf[:n]) {
+		return nil
+	}
+
+	reader := io.MultiReader(bytes.NewReader(headBuf[:n]), file)
+	scanner := bufio.NewScanner(io.LimitReader(reader, maxEditFileBytes+1))
 	bufPtr := grepBufferPool.Get().(*[]byte)
 	defer grepBufferPool.Put(bufPtr)
 	scanner.Buffer(*bufPtr, maxEditFileBytes)
@@ -513,4 +526,31 @@ func matchGrepInclude(pattern string, name string, relPaths ...string) bool {
 		}
 	}
 	return false
+}
+
+func isBinaryData(data []byte) bool {
+	return bytes.IndexByte(data, 0) != -1
+}
+
+func isIgnoredGrepDir(name string) bool {
+	switch strings.ToLower(name) {
+	case ".git", "bin", "obj", "dist", "build", "target", "node_modules", ".cache", ".idea", ".vscode":
+		return true
+	default:
+		return false
+	}
+}
+
+func isIgnoredGrepExtension(name string) bool {
+	ext := strings.ToLower(filepath.Ext(name))
+	switch ext {
+	case ".exe", ".bin", ".o", ".a", ".so", ".dylib", ".wasm",
+		".zip", ".tar", ".gz", ".bz2", ".xz", ".7z", ".rar",
+		".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".pdf",
+		".mp4", ".mov", ".avi", ".mp3", ".wav",
+		".ttf", ".otf", ".woff", ".woff2":
+		return true
+	default:
+		return false
+	}
 }

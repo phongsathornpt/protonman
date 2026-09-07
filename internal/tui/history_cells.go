@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/projectTHORN/proton/internal/tool"
 )
@@ -297,7 +298,10 @@ func (AgentToolCell) Kind() HistoryCellKind { return HistoryCellTool }
 func (c AgentToolCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
 func (c AgentToolCell) RenderWidth(width int) []string {
 	label := c.presentationLabel(true)
-	return wrapStyledLines(toolStyle.Render(glyphAgent)+mutedStyle.Render(sanitizeBubbleText(label)), maxInt(1, width))
+	if c.Running {
+		return wrapStyledLines(toolStyle.Render(glyphAgent)+mutedStyle.Render(sanitizeBubbleText(label)), maxInt(1, width))
+	}
+	return wrapStyledLines(successStyle.Render(glyphToolSuccess)+mutedStyle.Render(sanitizeBubbleText(label)), maxInt(1, width))
 }
 func (c AgentToolCell) presentationLabel(includeSpinner bool) string {
 	label := c.Summary
@@ -381,8 +385,14 @@ func (c ToolCell) RenderWidth(width int) []string {
 		}
 		headerLine = errorStyle.Render(glyphToolError) + mutedStyle.Render(sanitizeBubbleText(c.Name)) + targetStr + errorStyle.Render(glyphSep+string(c.FailureCode))
 	} else if c.Name == "activate_skill" {
-		if skillName := extractSkillContentName(c.Body); skillName != "" {
-			headerLine = successStyle.Render(glyphToolSuccess) + mutedStyle.Render("Activated skill ") + toolTargetStyle.Render(fmt.Sprintf("%q", skillName))
+		target := c.Target
+		if target == "" {
+			if skillName := extractSkillContentName(c.Body); skillName != "" {
+				target = fmt.Sprintf("%q", skillName)
+			}
+		}
+		if target != "" {
+			headerLine = successStyle.Render(glyphToolSuccess) + mutedStyle.Render("Activated skill ") + toolTargetStyle.Render(target)
 		} else {
 			headerLine = successStyle.Render(glyphToolSuccess) + mutedStyle.Render("activate_skill")
 		}
@@ -415,12 +425,18 @@ func (c ToolCell) RenderWidth(width int) []string {
 	}
 
 	if !c.Running && !shouldSuppressBody(c.ToolKind, c.Name) {
-		bodyLines := c.bodyLines()
-		if len(bodyLines) > 0 {
-			folded := formatOutputFold(bodyLines, 3)
-			for _, line := range folded {
-				for _, wrapped := range wrapStyledLines(line, maxInt(1, width-2)) {
-					out = append(out, bodyStyle.Render("  "+wrapped))
+		if c.ToolKind == tool.KindGrep || c.Name == "grep" {
+			for _, line := range formatGrepToolView(c.bodyLines(), c.Target, width) {
+				out = append(out, "  "+line)
+			}
+		} else {
+			bodyLines := c.bodyLines()
+			if len(bodyLines) > 0 {
+				folded := formatOutputFold(bodyLines, 3)
+				for _, line := range folded {
+					for _, wrapped := range wrapStyledLines(line, maxInt(1, width-2)) {
+						out = append(out, bodyStyle.Render("  "+wrapped))
+					}
 				}
 			}
 		}
@@ -539,12 +555,24 @@ func (c ExecCell) RenderWidth(width int) []string {
 		}
 	}
 	if !c.Running {
+		contentWidth := maxInt(20, width-4)
 		for _, line := range c.renderOutputLines() {
 			style := bodyStyle
 			if strings.TrimSpace(line) == "stderr:" {
 				style = warningStyle
 			}
-			for _, wrapped := range safeWrappedLines(line, maxInt(1, width-2)) {
+			clean := line
+			isFoldIndicator := strings.HasPrefix(clean, "… (")
+			if !isFoldIndicator && ansi.StringWidth(clean) > contentWidth {
+				clean = truncateWithEllipsis(clean, contentWidth)
+			}
+			if styled, isDiff := styleDiffLine(clean); isDiff {
+				for _, wrapped := range safeWrappedLines(styled, maxInt(1, width-2)) {
+					out = append(out, "  "+wrapped)
+				}
+				continue
+			}
+			for _, wrapped := range safeWrappedLines(clean, maxInt(1, width-2)) {
 				out = append(out, style.Render("  "+wrapped))
 			}
 		}
@@ -667,30 +695,45 @@ func (c PatchCell) RenderWidth(width int) []string {
 		header = glyphEdit + title + indicator
 		headerStyle = planStyle
 	} else if c.Denied {
-		header = glyphToolDenied + glyphEdit + title + glyphSep + "denied"
+		header = glyphToolDenied + title + glyphSep + "denied"
 		headerStyle = warningStyle
 	} else if c.FailureCode != "" {
-		header = glyphToolError + glyphEdit + title + glyphSep + string(c.FailureCode)
+		header = glyphToolError + title + glyphSep + string(c.FailureCode)
 		headerStyle = errorStyle
 	} else {
-		header = glyphToolSuccess + glyphEdit + title
+		header = glyphToolSuccess + title
 		headerStyle = successStyle
 	}
 	out := make([]string, 0, 1)
 	for _, line := range safeWrappedLines(header, maxInt(1, width)) {
 		out = append(out, headerStyle.Render(line))
 	}
-	for _, path := range c.Paths {
+	visiblePaths := c.Paths
+	hiddenPaths := 0
+	if len(visiblePaths) > 4 {
+		hiddenPaths = len(visiblePaths) - 3
+		visiblePaths = visiblePaths[:3]
+	}
+	for _, path := range visiblePaths {
 		styledPath := formatPathSegmentsStyled(path)
 		for _, wrapped := range wrapStyledLines(styledPath, maxInt(1, width-2)) {
 			out = append(out, "  "+wrapped)
 		}
 	}
-	if !c.Running && c.Body != "" {
+	if hiddenPaths > 0 {
+		out = append(out, toolFoldStyle.Render(fmt.Sprintf("  … (+%d more files · ctrl+t for full list)", hiddenPaths)))
+	}
+	if !c.Running && c.Body != "" && (c.Denied || c.FailureCode != "" || len(c.Paths) == 0) {
 		bodyLines := resultBodyLines(c.Body, nil, c.Truncated, c.Denied, c.FailureCode)
 		if len(bodyLines) > 0 {
 			folded := formatOutputFold(bodyLines, 3)
 			for _, line := range folded {
+				if styled, isDiff := styleDiffLine(line); isDiff {
+					for _, wrapped := range safeWrappedLines(styled, maxInt(1, width-2)) {
+						out = append(out, "  "+wrapped)
+					}
+					continue
+				}
 				for _, wrapped := range safeWrappedLines(line, maxInt(1, width-2)) {
 					out = append(out, bodyStyle.Render("  "+wrapped))
 				}

@@ -6,7 +6,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-const minASCIIBrandWidth = 24
+const minASCIIBrandWidth = 28
 
 var asciiBrandLines = [...]string{
 	"█▀█ █▀▄ █▀█ ▀█▀ █▀█ █▄ █",

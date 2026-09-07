@@ -297,3 +297,45 @@ func TestGrepWalkDoesNotFollowSymlinkEscapes(t *testing.T) {
 		t.Fatalf("grep followed symlink escape: %q", result.Output)
 	}
 }
+
+func TestGrepSkipsBinaryAndBuildDirectories(t *testing.T) {
+	wsDir := t.TempDir()
+	// Regular text file
+	if err := os.WriteFile(filepath.Join(wsDir, "code.go"), []byte("match_me := 42\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Binary file with null bytes in root
+	if err := os.WriteFile(filepath.Join(wsDir, "compiled_app"), []byte("\x7fELF\x02\x01\x01\x00match_me binary data"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Ignored build directory
+	binDir := filepath.Join(wsDir, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(binDir, "artifact.go"), []byte("match_me in bin\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Binary extension file
+	if err := os.WriteFile(filepath.Join(wsDir, "image.png"), []byte("match_me in png\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ws, err := workspace.New(wsDir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := executeJSON(t, NewGrep(ws), "grep-skip-bin", map[string]any{"pattern": "match_me"})
+	if !strings.Contains(result.Output, "code.go:1:match_me := 42") {
+		t.Fatalf("grep output missing text file match: %q", result.Output)
+	}
+	if strings.Contains(result.Output, "compiled_app") {
+		t.Fatalf("grep leaked binary file: %q", result.Output)
+	}
+	if strings.Contains(result.Output, "bin/artifact.go") {
+		t.Fatalf("grep traversed into bin/ dir: %q", result.Output)
+	}
+	if strings.Contains(result.Output, "image.png") {
+		t.Fatalf("grep searched binary extension image.png: %q", result.Output)
+	}
+}

@@ -189,6 +189,17 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 			Running: true,
 		})
 	case tool.KindEdit:
+		if call.Name == "checkpoint_restore" {
+			state.StartToolCell(&ToolCell{
+				CallID:   call.ID,
+				Name:     call.Name,
+				Target:   target,
+				ToolKind: resolvedKind,
+				Running:  true,
+			})
+			m.syncLegacyBlocks()
+			return
+		}
 		summary, paths := editPresentation(call)
 		state.StartToolCell(&PatchCell{
 			CallID:  call.ID,
