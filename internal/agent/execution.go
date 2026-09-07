@@ -111,10 +111,9 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 		runner = loop
 	}
 
-	// 4. Build messages
-	systemContent := SystemPromptForProfile(req.Profile)
+	// 4. Build messages. The turn loop owns the managed system prompt via
+	// WithSystemPromptSpec; only user/task content enters history here.
 	messages := []model.Message{
-		{Role: model.RoleSystem, Content: systemContent},
 		{Role: model.RoleUser, Content: formatUserPrompt(req)},
 	}
 

@@ -1408,6 +1408,7 @@ func TestTerminalReasonClassifiesKnownFailures(t *testing.T) {
 		{name: "permission", err: fmt.Errorf("wrapped: %w", toolcall.ErrPermissionDenied), want: "permission denied"},
 		{name: "model unavailable", err: sdk.NewProviderError("openai", 404, "model_not_found", "missing"), want: "model unavailable"},
 		{name: "rate limit", err: sdk.NewProviderError("openai", 429, "rate_limit", "slow down"), want: "rate limited"},
+		{name: "invalid request detail", err: sdk.NewProviderError("openai", 400, "invalid_request", "unsupported tool_choice: required"), want: "invalid model request: unsupported tool_choice: required"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

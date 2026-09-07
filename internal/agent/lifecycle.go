@@ -212,12 +212,20 @@ func terminalReason(err error) string {
 		case sdk.ErrorProtocol:
 			return "provider protocol error"
 		case sdk.ErrorInvalidRequest:
-			return "invalid model request"
+			detail := strings.TrimSpace(providerErr.Message)
+			if detail == "" {
+				return "invalid model request"
+			}
+			return truncateTerminalReason("invalid model request: " + detail)
 		default:
 			return "model error"
 		}
 	}
-	msg := strings.ToValidUTF8(strings.TrimSpace(err.Error()), "�")
+	return truncateTerminalReason(err.Error())
+}
+
+func truncateTerminalReason(value string) string {
+	msg := strings.ToValidUTF8(strings.TrimSpace(value), "�")
 	if len(msg) <= 80 {
 		return msg
 	}
