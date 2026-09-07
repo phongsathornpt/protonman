@@ -1,4 +1,4 @@
-package builtin
+package todotool
 
 func todoUpdateInputSchema() map[string]any {
 	operation := func(op string, required []any, properties map[string]any) map[string]any {

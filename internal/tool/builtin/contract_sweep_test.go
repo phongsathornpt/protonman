@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	skilltool "github.com/projectTHORN/proton/internal/adapter/tool/skill"
+	todotool "github.com/projectTHORN/proton/internal/adapter/tool/todo"
 	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/tool"
 )
@@ -17,7 +19,7 @@ func TestRegisteredBuiltinToolContracts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	auxiliary, err := NewRegistry(NewGetTodo(nil), NewUpdateTodo(nil), NewActivateSkill(nil, workspaceRoot))
+	auxiliary, err := NewRegistry(todotool.NewGetTodo(nil), todotool.NewUpdateTodo(nil), skilltool.NewActivateSkill(nil, workspaceRoot))
 	if err != nil {
 		t.Fatal(err)
 	}

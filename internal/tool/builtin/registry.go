@@ -12,8 +12,6 @@ import (
 	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"github.com/projectTHORN/proton/internal/sandbox"
-	"github.com/projectTHORN/proton/internal/skill"
-	tododomain "github.com/projectTHORN/proton/internal/todo"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/workspace"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
@@ -59,9 +57,7 @@ type registryOptions struct {
 	launcher          sandbox.Launcher
 	network           sandbox.NetworkPolicy
 	sandboxConfigured bool
-	skills            *skill.Registry
 	additional        []tool.Handler
-	todoStore         tododomain.Repository
 	webFetchTimeout   time.Duration
 }
 
@@ -101,25 +97,6 @@ func WithDefaultWebFetchTimeout(timeout time.Duration) RegistryOption {
 			return fmt.Errorf("web fetch timeout must be positive")
 		}
 		options.webFetchTimeout = timeout
-		return nil
-	}
-}
-
-// WithSkillRegistry attaches an Agent Skill registry and registers activate_skill.
-func WithSkillRegistry(registry *skill.Registry) RegistryOption {
-	return func(options *registryOptions) error {
-		options.skills = registry
-		return nil
-	}
-}
-
-// WithTodoStore attaches shared structured task state to the default tool registry.
-func WithTodoStore(store tododomain.Repository) RegistryOption {
-	return func(options *registryOptions) error {
-		if store == nil {
-			return fmt.Errorf("todo store is required")
-		}
-		options.todoStore = store
 		return nil
 	}
 }
@@ -180,12 +157,6 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 		NewGitStatus(workspaceRoot, cfg.launcher),
 		NewCheckpointRestore(checkpointStore),
 		NewWebFetch(cfg.network, WithWebFetchTimeout(cfg.webFetchTimeout)),
-	}
-	if cfg.todoStore != nil {
-		handlers = append(handlers, NewGetTodo(cfg.todoStore), NewUpdateTodo(cfg.todoStore))
-	}
-	if cfg.skills != nil {
-		handlers = append(handlers, NewActivateSkill(cfg.skills, workspaceRoot))
 	}
 	handlers = append(handlers, cfg.additional...)
 	return NewRegistry(handlers...)

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	skilltool "github.com/projectTHORN/proton/internal/adapter/tool/skill"
+	todotool "github.com/projectTHORN/proton/internal/adapter/tool/todo"
 	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/sandbox"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -325,9 +327,9 @@ func TestBuiltinInputSchemasRejectUnknownProperties(t *testing.T) {
 	}
 	definitions := registry.Definitions()
 	definitions = append(definitions,
-		NewGetTodo(nil).Definition(),
-		NewUpdateTodo(nil).Definition(),
-		NewActivateSkill(nil, workspaceRoot).Definition(),
+		todotool.NewGetTodo(nil).Definition(),
+		todotool.NewUpdateTodo(nil).Definition(),
+		skilltool.NewActivateSkill(nil, workspaceRoot).Definition(),
 	)
 	for _, definition := range definitions {
 		if len(definition.InputSchema) == 0 {

@@ -1,4 +1,4 @@
-package builtin
+package skilltool
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 
 	"github.com/projectTHORN/proton/internal/skill"
 	"github.com/projectTHORN/proton/internal/tool"
+	"github.com/projectTHORN/proton/internal/tool/builtin"
 	"github.com/projectTHORN/proton/internal/workspace"
 )
 
@@ -118,8 +119,8 @@ func TestActivateSkill_AuthorizesReadRootsForFileTools(t *testing.T) {
 	}
 	skillReg := skill.NewRegistry(s)
 	activateHandler := NewActivateSkill(skillReg, ws)
-	readHandler := NewReadFile(ws)
-	writeHandler := NewWriteFile(ws, &recordingCheckpointStore{id: "skill-test"})
+	readHandler := builtin.NewReadFile(ws)
+	writeHandler := builtin.NewWriteFile(ws, skillCheckpointStore{})
 
 	// 1. Before activation, reading reference.txt fails with outside workspace
 	readArgs, _ := json.Marshal(map[string]any{"path": skillFilePath})
@@ -212,7 +213,14 @@ func TestActivateSkillCanBindIsolatedChildRegistry(t *testing.T) {
 	parent := skill.NewRegistry(s)
 	child := parent.Fork()
 	handler := NewActivateSkill(parent).(activateSkillHandler).BindSkillRegistry(child)
-	call := newJSONCall(t, "skill-child", "activate_skill", map[string]any{"name": "go-review"})
+	args, err := json.Marshal(map[string]any{"name": "go-review"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	call, err := tool.NewCall("skill-child", "activate_skill", args)
+	if err != nil {
+		t.Fatal(err)
+	}
 	result, err := handler.Execute(context.Background(), call)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -230,3 +238,10 @@ func TestActivateSkillCanBindIsolatedChildRegistry(t *testing.T) {
 		t.Fatalf("compact child activation acknowledgement missing: %q", result.Output)
 	}
 }
+
+type skillCheckpointStore struct{}
+
+func (skillCheckpointStore) Capture(context.Context, []string) (string, error) {
+	return "skill-test", nil
+}
+func (skillCheckpointStore) Restore(context.Context, string) error { return nil }

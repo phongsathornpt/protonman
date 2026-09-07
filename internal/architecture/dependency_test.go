@@ -52,10 +52,12 @@ func TestInboundAdaptersUseApplicationConversationBoundary(t *testing.T) {
 	}
 }
 
-func TestBuiltinToolsDoNotDependOnAgentSubsystem(t *testing.T) {
+func TestBuiltinToolsDoNotDependOnFeatureSubsystems(t *testing.T) {
 	packages := listPackages(t)
 	assertNoImports(t, packages, modulePath+"/internal/tool/builtin", []string{
 		modulePath + "/internal/agent",
+		modulePath + "/internal/skill",
+		modulePath + "/internal/todo",
 	})
 }
 
