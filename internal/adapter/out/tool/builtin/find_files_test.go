@@ -126,7 +126,7 @@ func TestFindFilesSkipsGeneratedAndVCSDirectories(t *testing.T) {
 	}
 }
 
-func TestFindFilesContinuationRejectsChangedTree(t *testing.T) {
+func TestFindFilesContinuationSurvivesChangedTree(t *testing.T) {
 	ws := newTestWorkspace(t, nil)
 	for _, name := range []string{"a.txt", "b.txt"} {
 		if err := os.WriteFile(filepath.Join(ws.Root(), name), []byte("x"), 0o644); err != nil {
@@ -144,10 +144,13 @@ func TestFindFilesContinuationRejectsChangedTree(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(ws.Root(), "0.txt"), []byte("new prefix"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err = h.Execute(context.Background(), newJSONCall(t, "find-stale-2", "find_files", map[string]any{
+	page2, err := h.Execute(context.Background(), newJSONCall(t, "find-stale-2", "find_files", map[string]any{
 		"pattern": "*.txt", "limit": 1, "offset": *page1.NextOffset, "continuation": page1.Continuation,
 	}))
-	if err == nil || !strings.Contains(err.Error(), "continuation is stale") {
-		t.Fatalf("Execute() error = %v, want stale continuation", err)
+	if err != nil {
+		t.Fatalf("Execute() error = %v, want best-effort continuation", err)
+	}
+	if strings.TrimSpace(page2.Output) == "" {
+		t.Fatalf("page2 output = %q", page2.Output)
 	}
 }

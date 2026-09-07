@@ -231,7 +231,7 @@ func TestGrepSupportsContinuationOffset(t *testing.T) {
 	}
 }
 
-func TestGrepContinuationRejectsChangedQueryAndWorkspace(t *testing.T) {
+func TestGrepContinuationRejectsChangedQueryButSurvivesWorkspaceMutation(t *testing.T) {
 	wsDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(wsDir, "many.txt"), []byte("needle 1\nneedle 2\nneedle 3\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -264,9 +264,12 @@ func TestGrepContinuationRejectsChangedQueryAndWorkspace(t *testing.T) {
 	}
 	changedState, _ := json.Marshal(map[string]any{"pattern": "needle", "offset": *first.NextOffset, "limit": 1, "continuation": first.Continuation})
 	stateCall, _ := tool.NewCall("grep-token-3", "grep", changedState)
-	_, err = handler.Execute(context.Background(), stateCall)
-	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeStaleContinuation {
-		t.Fatalf("changed workspace error = %v", err)
+	stateResult, err := handler.Execute(context.Background(), stateCall)
+	if err != nil {
+		t.Fatalf("changed workspace error = %v, want best-effort continuation", err)
+	}
+	if !strings.Contains(stateResult.Output, "needle 2") {
+		t.Fatalf("changed workspace output = %q", stateResult.Output)
 	}
 }
 

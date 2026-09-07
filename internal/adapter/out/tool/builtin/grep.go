@@ -287,9 +287,6 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		return tool.Result{}, fmt.Errorf("grep workspace: %w", walkErr)
 	}
 	snapshot := hex.EncodeToString(snapshotHash.Sum(nil))
-	if resumeActive && resume.Snapshot != snapshot {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "grep continuation is stale; restart from offset 0")
-	}
 	if legacyContinuation != "" {
 		legacyToken, tokenErr := continuationToken("grep", query, snapshot)
 		if tokenErr != nil {
