@@ -12,6 +12,7 @@ import (
 const DefaultBaseURL = "https://api.openai.com/v1"
 
 type ProviderOptions struct {
+	ProviderName string
 	BaseURL      string
 	APIKey       string
 	HTTPClient   *http.Client
@@ -26,6 +27,10 @@ type Provider struct {
 }
 
 func NewProvider(options ProviderOptions) *Provider {
+	options.ProviderName = strings.ToLower(strings.TrimSpace(options.ProviderName))
+	if options.ProviderName == "" {
+		options.ProviderName = "openai"
+	}
 	options.BaseURL = strings.TrimRight(strings.TrimSpace(options.BaseURL), "/")
 	if options.BaseURL == "" {
 		options.BaseURL = DefaultBaseURL
@@ -67,7 +72,7 @@ type LanguageModel struct {
 
 var _ sdk.LanguageModel = (*LanguageModel)(nil)
 
-func (m *LanguageModel) Provider() string { return "openai" }
+func (m *LanguageModel) Provider() string { return m.provider.options.ProviderName }
 func (m *LanguageModel) ModelID() string  { return m.modelID }
 func (m *LanguageModel) Capabilities() sdk.ModelCapabilities {
 	return sdk.ModelCapabilities{Streaming: true, Tools: true, Vision: true, ProviderOptions: true, RawChunks: true}

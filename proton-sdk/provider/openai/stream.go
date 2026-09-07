@@ -31,10 +31,11 @@ type stream struct {
 	generatedSeq  uint64
 	metadata      sdk.ProviderMetadata
 	includeRaw    bool
+	provider      string
 }
 
-func newStream(body io.ReadCloser, metadata sdk.ProviderMetadata, includeRaw bool) *stream {
-	return &stream{reader: bufio.NewReader(body), closer: body, chatCalls: map[int]*accumulatedToolCall{}, responseCalls: map[string]*accumulatedToolCall{}, metadata: metadata, includeRaw: includeRaw}
+func newStream(body io.ReadCloser, metadata sdk.ProviderMetadata, includeRaw bool, provider string) *stream {
+	return &stream{reader: bufio.NewReader(body), closer: body, chatCalls: map[int]*accumulatedToolCall{}, responseCalls: map[string]*accumulatedToolCall{}, metadata: metadata, includeRaw: includeRaw, provider: provider}
 }
 
 type chatChunk struct {
@@ -177,7 +178,7 @@ func (s *stream) processLine(line string) error {
 			return fmt.Errorf("%w: decode provider error: %w", sdk.ErrInvalidEvent, err)
 		}
 		if chunk.Error != nil {
-			return sdk.NewProviderError("openai", 0, firstNonEmpty(chunk.Error.Code, chunk.Error.Type), chunk.Error.Message)
+			return providerStreamError(s.provider, chunk.Error.Code, chunk.Error.Type, chunk.Error.Message, nil)
 		}
 	}
 	if _, ok := fields["type"]; ok {
@@ -192,7 +193,7 @@ func (s *stream) processChat(payload string) error {
 		return fmt.Errorf("%w: decode chat completion event: %w", sdk.ErrInvalidEvent, err)
 	}
 	if chunk.Error != nil {
-		return sdk.NewProviderError("openai", 0, firstNonEmpty(chunk.Error.Code, chunk.Error.Type), chunk.Error.Message)
+		return providerStreamError(s.provider, chunk.Error.Code, chunk.Error.Type, chunk.Error.Message, nil)
 	}
 	if chunk.Usage != nil {
 		s.queue = append(s.queue, sdk.Event{Kind: sdk.EventUsage, Usage: sdk.Usage{InputTokens: chunk.Usage.PromptTokens, OutputTokens: chunk.Usage.CompletionTokens, TotalTokens: chunk.Usage.TotalTokens}})
@@ -237,10 +238,10 @@ func (s *stream) processResponses(payload string) error {
 		return fmt.Errorf("%w: decode responses event: %w", sdk.ErrInvalidEvent, err)
 	}
 	if chunk.Error != nil {
-		return sdk.NewProviderError("openai", 0, firstNonEmpty(chunk.Error.Code, chunk.Error.Type), chunk.Error.Message)
+		return providerStreamError(s.provider, chunk.Error.Code, chunk.Error.Type, chunk.Error.Message, nil)
 	}
 	if chunk.Response != nil && chunk.Response.Error != nil {
-		return sdk.NewProviderError("openai", 0, firstNonEmpty(chunk.Response.Error.Code, chunk.Response.Error.Type), chunk.Response.Error.Message)
+		return providerStreamError(s.provider, chunk.Response.Error.Code, chunk.Response.Error.Type, chunk.Response.Error.Message, nil)
 	}
 	switch chunk.Type {
 	case "response.output_text.delta":

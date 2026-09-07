@@ -133,15 +133,15 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 
 		resp, err := m.provider.options.HTTPClient.Do(httpReq)
 		if err != nil {
-			lastErr = sdk.NewTransportError("openai", err)
+			lastErr = sdk.NewTransportError(m.Provider(), err)
 			continue
 		}
 		if resp.StatusCode == http.StatusOK {
-			return newStream(resp.Body, openAIResponseMetadata(resp.Header), request.Options.IncludeRawChunks), nil
+			return newStream(resp.Body, openAIResponseMetadata(resp.Header), request.Options.IncludeRawChunks, m.Provider()), nil
 		}
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 		resp.Body.Close()
-		lastErr = openAIHTTPError(resp.StatusCode, body)
+		lastErr = providerError(m.Provider(), resp.StatusCode, body, resp.Header)
 		if !retryableStatus(resp.StatusCode) {
 			return nil, lastErr
 		}
@@ -284,26 +284,4 @@ func toolChoice(count int, choice sdk.ToolChoice) string {
 }
 func retryableStatus(status int) bool {
 	return status == 429 || status == 500 || status == 502 || status == 503 || status == 504
-}
-func openAIHTTPError(status int, body []byte) error {
-	var payload struct {
-		Error struct {
-			Message string `json:"message"`
-			Type    string `json:"type"`
-			Code    any    `json:"code"`
-		} `json:"error"`
-	}
-	message := strings.TrimSpace(string(body))
-	code := ""
-	if json.Unmarshal(body, &payload) == nil {
-		if strings.TrimSpace(payload.Error.Message) != "" {
-			message = payload.Error.Message
-		}
-		if payload.Error.Code != nil {
-			code = fmt.Sprint(payload.Error.Code)
-		} else {
-			code = payload.Error.Type
-		}
-	}
-	return sdk.NewProviderError("openai", status, code, message)
 }
