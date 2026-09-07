@@ -526,9 +526,6 @@ func renderTodoItem(item TodoItem, width int) []string {
 		style = successStyle
 	}
 	label := item.Text
-	if id := strings.TrimSpace(item.ID); id != "" {
-		label += " · " + id
-	}
 	wrapped := wrapLines(label, maxInt(1, width-2))
 	out := make([]string, 0, len(wrapped))
 	for i, line := range wrapped {
