@@ -111,7 +111,7 @@ func TestUpdateTodoDefinitionUsesPatchSchema(t *testing.T) {
 	}
 }
 
-func TestUpdateTodoRejectsStaleRevision(t *testing.T) {
+func TestUpdateTodoReplaysStaleRevisionWhenPatchStillApplies(t *testing.T) {
 	store, _ := tododomain.NewStore(nil)
 	h := NewUpdateTodo(store)
 	first, _ := tool.NewCall("todo-first", "update_todo", todoPatchArgs(0, map[string]any{"op": "add", "id": "a", "text": "one", "status": "pending"}))
@@ -119,14 +119,30 @@ func TestUpdateTodoRejectsStaleRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	stale, _ := tool.NewCall("todo-stale", "update_todo", todoPatchArgs(0, map[string]any{"op": "add", "id": "b", "text": "two", "status": "pending"}))
+	if _, err := h.Execute(context.Background(), stale); err != nil {
+		t.Fatalf("stale replay error = %v", err)
+	}
+	got := store.Snapshot()
+	if got.Revision != 2 || len(got.Items) != 2 || got.Items[0].ID != "a" || got.Items[1].ID != "b" {
+		t.Fatalf("replayed snapshot: %#v", got)
+	}
+}
+
+func TestUpdateTodoStaleReplayReturnsStructuredRefreshWhenPatchConflicts(t *testing.T) {
+	store, _ := tododomain.NewStore(nil)
+	h := NewUpdateTodo(store)
+	first, _ := tool.NewCall("todo-first", "update_todo", todoPatchArgs(0, map[string]any{"op": "add", "id": "a", "text": "one", "status": "pending"}))
+	if _, err := h.Execute(context.Background(), first); err != nil {
+		t.Fatal(err)
+	}
+	stale, _ := tool.NewCall("todo-stale", "update_todo", todoPatchArgs(0, map[string]any{"op": "add", "id": "a", "text": "two", "status": "pending"}))
 	_, err := h.Execute(context.Background(), stale)
 	var toolErr *tool.ToolError
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeConflict {
 		t.Fatalf("error = %v, want conflict", err)
 	}
-	got := store.Snapshot()
-	if got.Revision != 1 || len(got.Items) != 1 || got.Items[0].ID != "a" {
-		t.Fatalf("stale update mutated store: %#v", got)
+	if toolErr.Recovery == nil || toolErr.Recovery.Action != "refresh_resource" || toolErr.Recovery.Tool != "get_todo" || string(toolErr.Recovery.Arguments) != `{}` {
+		t.Fatalf("recovery = %#v", toolErr.Recovery)
 	}
 }
 

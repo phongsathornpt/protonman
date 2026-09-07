@@ -90,22 +90,50 @@ func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "reload todo snapshot", err)
 		}
 	}
-	if before.Revision != *input.ExpectedRevision {
-		err := fmt.Errorf("%w: expected %d, current %d", tododomain.ErrRevisionConflict, *input.ExpectedRevision, before.Revision)
-		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeConflict, "todo snapshot is stale; refresh tasks and retry", err)
+	expected := *input.ExpectedRevision
+	if before.Revision != expected {
+		expected = before.Revision
 	}
 	next, err := tododomain.ApplyPatch(before.Items, input.Operations)
 	if err != nil {
+		if before.Revision != *input.ExpectedRevision {
+			return tool.Result{}, todoConflictError(input.Operations, err)
+		}
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "apply todo patch", err)
 	}
-	snapshot, err := h.store.CompareAndReplace(ctx, *input.ExpectedRevision, next)
+	snapshot, err := h.store.CompareAndReplace(ctx, expected, next)
 	if err != nil {
 		if errors.Is(err, tododomain.ErrRevisionConflict) {
-			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeConflict, "todo snapshot is stale; refresh tasks and retry", err)
+			latest := h.store.Snapshot()
+			if reloader, ok := h.store.(tododomain.ReloadableRepository); ok {
+				latest, err = reloader.Reload(ctx)
+				if err != nil {
+					return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "reload todo snapshot for retry", err)
+				}
+			}
+			replayed, replayErr := tododomain.ApplyPatch(latest.Items, input.Operations)
+			if replayErr != nil {
+				return tool.Result{}, todoConflictError(input.Operations, replayErr)
+			}
+			snapshot, err = h.store.CompareAndReplace(ctx, latest.Revision, replayed)
+			if err != nil {
+				if errors.Is(err, tododomain.ErrRevisionConflict) {
+					return tool.Result{}, todoConflictError(input.Operations, err)
+				}
+				return tool.Result{}, err
+			}
+			before = latest
+		} else {
+			return tool.Result{}, err
 		}
-		return tool.Result{}, err
 	}
 	return encodeTodoUpdateResult(call, before.Items, snapshot, h.sessionID)
+}
+
+func todoConflictError(_ []tododomain.Operation, cause error) error {
+	return tool.WrapToolError(tool.ErrorCodeConflict, "todo snapshot changed and the patch can no longer be replayed safely; refresh tasks", cause).WithRecovery(tool.Recovery{
+		Action: "refresh_resource", Tool: "get_todo", Arguments: json.RawMessage(`{}`),
+	})
 }
 
 func decodeUpdateTodoInput(arguments json.RawMessage) (updateTodoInput, error) {
