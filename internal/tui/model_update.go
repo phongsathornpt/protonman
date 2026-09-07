@@ -90,6 +90,9 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case providerDeletedMsg:
 		return m.updateProviderDeleted(message)
 
+	case projectInitializedMsg:
+		return m.updateProjectInitialized(message)
+
 	case projectLoadedMsg:
 		return m.updateProjectLoaded(message)
 

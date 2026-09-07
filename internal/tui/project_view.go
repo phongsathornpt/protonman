@@ -12,6 +12,11 @@ import (
 
 const projectViewID = "project"
 
+type projectInitializedMsg struct {
+	result projectdomain.InitResult
+	err    error
+}
+
 type projectLoadedMsg struct {
 	requestID uint64
 	state     projectdomain.State
@@ -23,6 +28,7 @@ type projectPaneView struct {
 	loading   bool
 	state     projectdomain.State
 	err       error
+	notice    string
 }
 
 func (*projectPaneView) ID() string             { return projectViewID }
@@ -85,6 +91,9 @@ func (v *projectPaneView) Render(m *bubbleModel) string {
 		projectFact("Rounds", formatProjectLimit(m.maxRounds)),
 		"",
 	)
+	if v.notice != "" {
+		rows = append(rows, successStyle.Render(v.notice), "")
+	}
 	if state.ConfigExists && !state.Trusted {
 		rows = append(rows, warningStyle.Render("Project config and skills are present but not trusted."))
 	} else if !state.Exists {
@@ -123,6 +132,41 @@ func (v *projectPaneView) reload(m *bubbleModel) tea.Cmd {
 		})
 		return projectLoadedMsg{requestID: requestID, state: state, err: err}
 	}
+}
+
+func (m *bubbleModel) initProject() tea.Cmd {
+	view, _ := m.bottom.find(projectViewID).(*projectPaneView)
+	if view == nil {
+		view = &projectPaneView{}
+		m.bottom.push(view)
+	}
+	view.loading = true
+	view.err = nil
+	view.notice = ""
+	m.relayout()
+	return func() tea.Msg {
+		result, err := projectdomain.Init(m.ctx, m.workDir)
+		return projectInitializedMsg{result: result, err: err}
+	}
+}
+
+func (m *bubbleModel) updateProjectInitialized(message projectInitializedMsg) (tea.Model, tea.Cmd) {
+	view, _ := m.bottom.find(projectViewID).(*projectPaneView)
+	if view == nil {
+		return m, nil
+	}
+	if message.err != nil {
+		view.loading = false
+		view.err = message.err
+		m.relayout()
+		return m, nil
+	}
+	if message.result.Created {
+		view.notice = "Created " + appdirs.RootDirName + "/" + appdirs.ConfigFileName
+	} else {
+		view.notice = appdirs.RootDirName + "/" + appdirs.ConfigFileName + " already exists"
+	}
+	return m, view.reload(m)
 }
 
 func (m *bubbleModel) openProjectPane() tea.Cmd {
