@@ -136,15 +136,15 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	}
 	var input grepInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, fmt.Errorf("decode grep arguments: %w", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode grep arguments", err)
 	}
 	input.Pattern = strings.TrimSpace(input.Pattern)
 	if input.Pattern == "" {
-		return tool.Result{}, fmt.Errorf("grep pattern is required")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "grep pattern is required")
 	}
 	if input.Include != "" {
 		if _, err := filepath.Match(input.Include, "probe"); err != nil {
-			return tool.Result{}, fmt.Errorf("invalid grep include glob: %w", err)
+			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "invalid grep include glob", err)
 		}
 	}
 	if input.Offset < 0 {

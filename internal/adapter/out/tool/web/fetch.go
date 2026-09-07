@@ -135,16 +135,16 @@ func (webFetchHandler) Definition() tool.Definition {
 func (h webFetchHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	var input webFetchInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, fmt.Errorf("decode web_fetch arguments: %w", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode web_fetch arguments", err)
 	}
 	input.URL = strings.TrimSpace(input.URL)
 	if input.URL == "" {
-		return tool.Result{}, fmt.Errorf("web_fetch url is required")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "web_fetch url is required")
 	}
 
 	parsedURL, err := url.Parse(input.URL)
 	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Hostname() == "" {
-		return tool.Result{}, fmt.Errorf("web_fetch url must be a valid http or https URL")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "web_fetch url must be a valid http or https URL")
 	}
 
 	if err := h.policy.AllowURL(input.URL); err != nil {

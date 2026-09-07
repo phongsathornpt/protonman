@@ -75,7 +75,7 @@ func (h findFilesHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	}
 	var input findFilesInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, fmt.Errorf("decode find_files arguments: %w", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode find_files arguments", err)
 	}
 	if err := normalizeFindFilesInput(&input); err != nil {
 		return tool.Result{}, err

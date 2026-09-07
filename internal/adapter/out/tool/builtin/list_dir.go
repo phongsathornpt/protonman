@@ -102,7 +102,7 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 	}
 	var input listDirInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, fmt.Errorf("decode list_dir arguments: %w", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode list_dir arguments", err)
 	}
 
 	targetPath := strings.TrimSpace(input.Path)

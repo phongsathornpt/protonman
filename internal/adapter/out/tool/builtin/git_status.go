@@ -70,7 +70,7 @@ func (h gitStatusHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	}
 	var input gitStatusInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, fmt.Errorf("decode git_status arguments: %w", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode git_status arguments", err)
 	}
 	statusPath := strings.TrimSpace(input.Path)
 	relativePath := ""

@@ -96,11 +96,11 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	}
 	var input readFileInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, fmt.Errorf("decode read_file arguments: %w", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode read_file arguments", err)
 	}
 	input.Path = strings.TrimSpace(input.Path)
 	if input.Path == "" {
-		return tool.Result{}, fmt.Errorf("read_file path is required")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file path is required")
 	}
 	if input.Offset < 0 {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file offset must be non-negative")
