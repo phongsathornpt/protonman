@@ -330,14 +330,13 @@ func TestInternalTopLevelCleanArchitectureDirectories(t *testing.T) {
 		t.Fatalf("read internal: %v", err)
 	}
 	expected := map[string]bool{
-		"adapter":      true,
-		"app":          true,
-		"architecture": true,
-		"base":         true,
-		"core":         true,
-		"engine":       true,
-		"feature":      true,
-		"platform":     true,
+		"adapter":  true,
+		"app":      true,
+		"base":     true,
+		"core":     true,
+		"engine":   true,
+		"feature":  true,
+		"platform": true,
 	}
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -353,7 +352,7 @@ func TestInternalTopLevelCleanArchitectureDirectories(t *testing.T) {
 func TestNoLingeringRootDirectories(t *testing.T) {
 	root := repositoryRoot(t)
 	formerRootDirs := []string{
-		"acp", "agent", "agentprompt", "checkpoint", "config", "headless", "mcp", "model",
+		"acp", "agent", "agentprompt", "architecture", "checkpoint", "config", "headless", "mcp", "model",
 		"modelprofile", "permission", "project", "sandbox", "session", "skill", "telemetry",
 		"todo", "tool", "toolcall", "tui", "turn", "workspace",
 		"buildinfo", "contextutil", "envconfig", "failure", "glob", "runtimepolicy",
