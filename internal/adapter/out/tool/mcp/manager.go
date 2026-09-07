@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/projectTHORN/proton/internal/core/tool"
 )
@@ -18,13 +19,18 @@ type ManagedServer interface {
 
 // Manager owns a set of MCP server transports for one session.
 type Manager struct {
-	mu          sync.Mutex
-	servers     []ManagedServer
-	closed      bool
-	discovery   DiscoveryOptions
-	registry    tool.DynamicRegistrar
-	generations map[string]uint64
+	mu            sync.Mutex
+	servers       []ManagedServer
+	closed        bool
+	discovery     DiscoveryOptions
+	registry      tool.DynamicRegistrar
+	generations   map[string]uint64
+	changeCh      chan string
+	refreshCancel context.CancelFunc
+	refreshWG     sync.WaitGroup
 }
+
+const toolListChangeDebounce = 50 * time.Millisecond
 
 func NewManager(servers ...ManagedServer) (*Manager, error) {
 	return NewManagerWithDiscoveryOptions(DefaultDiscoveryOptions(), servers...)
@@ -37,6 +43,7 @@ func NewManagerWithDiscoveryOptions(options DiscoveryOptions, servers ...Managed
 	manager := &Manager{
 		servers: make([]ManagedServer, 0, len(servers)), discovery: options,
 		generations: make(map[string]uint64, len(servers)),
+		changeCh:    make(chan string, maxInt(1, len(servers)*2)),
 	}
 	seen := make(map[string]struct{}, len(servers))
 	for _, server := range servers {
@@ -85,8 +92,57 @@ func (m *Manager) Bind(ctx context.Context, registry tool.DynamicRegistrar) erro
 	for _, server := range servers {
 		m.generations[server.Name()] = 1
 	}
+	refreshCtx, refreshCancel := context.WithCancel(context.Background())
+	m.refreshCancel = refreshCancel
+	m.refreshWG.Add(1)
+	go m.watchToolListChanges(refreshCtx)
+	for _, server := range servers {
+		if source, ok := server.(ToolListChangeSource); ok {
+			name := server.Name()
+			source.SetToolListChangedHandler(func() { m.queueToolListChange(name) })
+		}
+	}
 	m.mu.Unlock()
 	return nil
+}
+
+func (m *Manager) queueToolListChange(serverName string) {
+	select {
+	case m.changeCh <- serverName:
+	default:
+	}
+}
+
+func (m *Manager) watchToolListChanges(ctx context.Context) {
+	defer m.refreshWG.Done()
+	pending := make(map[string]struct{})
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case name := <-m.changeCh:
+			pending[name] = struct{}{}
+		}
+		timer := time.NewTimer(toolListChangeDebounce)
+	drain:
+		for {
+			select {
+			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
+				return
+			case name := <-m.changeCh:
+				pending[name] = struct{}{}
+			case <-timer.C:
+				break drain
+			}
+		}
+		for name := range pending {
+			_ = m.Refresh(ctx, name)
+			delete(pending, name)
+		}
+	}
 }
 
 // CatalogGeneration returns the committed catalog generation for one server.
@@ -180,7 +236,13 @@ func (m *Manager) Close() error {
 	}
 	m.closed = true
 	servers := append([]ManagedServer(nil), m.servers...)
+	refreshCancel := m.refreshCancel
+	m.refreshCancel = nil
 	m.mu.Unlock()
+	if refreshCancel != nil {
+		refreshCancel()
+		m.refreshWG.Wait()
+	}
 	var errs []error
 	for i := len(servers) - 1; i >= 0; i-- {
 		if err := servers[i].Close(); err != nil {
@@ -188,4 +250,11 @@ func (m *Manager) Close() error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

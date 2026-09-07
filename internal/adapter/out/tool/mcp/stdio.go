@@ -55,13 +55,15 @@ type StdioServer struct {
 	initMu  sync.Mutex
 	inited  bool
 
-	writeMu   sync.Mutex
-	pendingMu sync.Mutex
-	pending   map[uint64]chan rpcReply
-	nextID    atomic.Uint64
-	done      chan struct{}
-	waitErr   error
-	stderr    limitedBuffer
+	writeMu        sync.Mutex
+	pendingMu      sync.Mutex
+	pending        map[uint64]chan rpcReply
+	nextID         atomic.Uint64
+	done           chan struct{}
+	waitErr        error
+	stderr         limitedBuffer
+	notifyMu       sync.RWMutex
+	onToolsChanged func()
 }
 
 // NewStdioServer creates a lazily-started MCP stdio transport.
@@ -89,6 +91,21 @@ func NewStdioServerWithLimits(name, command string, args, env []string, cwd stri
 }
 
 func (s *StdioServer) Name() string { return s.name }
+
+func (s *StdioServer) SetToolListChangedHandler(handler func()) {
+	s.notifyMu.Lock()
+	s.onToolsChanged = handler
+	s.notifyMu.Unlock()
+}
+
+func (s *StdioServer) notifyToolsChanged() {
+	s.notifyMu.RLock()
+	handler := s.onToolsChanged
+	s.notifyMu.RUnlock()
+	if handler != nil {
+		handler()
+	}
+}
 
 func (s *StdioServer) ListTools(ctx context.Context) ([]Tool, error) {
 	if err := s.ensureInitialized(ctx); err != nil {
@@ -291,6 +308,9 @@ func (s *StdioServer) readLoop(reader io.Reader) {
 			continue
 		}
 		if len(message.ID) == 0 {
+			if message.Method == "notifications/tools/list_changed" {
+				s.notifyToolsChanged()
+			}
 			continue
 		}
 		var id uint64
@@ -406,3 +426,4 @@ func (b *limitedBuffer) String() string {
 }
 
 var _ Server = (*StdioServer)(nil)
+var _ ToolListChangeSource = (*StdioServer)(nil)

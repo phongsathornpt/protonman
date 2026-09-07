@@ -6,6 +6,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/projectTHORN/proton/internal/adapter/out/tool/builtin"
 )
@@ -170,5 +171,77 @@ func TestManagerRefreshFailureRetainsCatalog(t *testing.T) {
 	}
 	if _, ok := registry.Lookup("mcp.db.query"); !ok {
 		t.Fatal("transport failure removed prior catalog")
+	}
+}
+
+type notifyingManagedServer struct {
+	mutableManagedServer
+	notifyMu sync.Mutex
+	onChange func()
+}
+
+func (s *notifyingManagedServer) SetToolListChangedHandler(handler func()) {
+	s.notifyMu.Lock()
+	s.onChange = handler
+	s.notifyMu.Unlock()
+}
+func (s *notifyingManagedServer) emitToolsChanged() {
+	s.notifyMu.Lock()
+	handler := s.onChange
+	s.notifyMu.Unlock()
+	if handler != nil {
+		handler()
+	}
+}
+
+func TestManagerRefreshesDebouncedToolListChanges(t *testing.T) {
+	server := &notifyingManagedServer{mutableManagedServer: mutableManagedServer{name: "db", tools: []Tool{{Name: "old"}}}}
+	manager, err := NewManager(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	registry, _ := builtin.NewRegistry()
+	if err := manager.Bind(context.Background(), registry); err != nil {
+		t.Fatal(err)
+	}
+	server.setTools([]Tool{{Name: "new"}})
+	server.emitToolsChanged()
+	server.emitToolsChanged()
+	server.emitToolsChanged()
+	deadline := time.Now().Add(time.Second)
+	for {
+		if _, ok := registry.Lookup("mcp.db.new"); ok {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("tools/list_changed did not refresh catalog")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, ok := registry.Lookup("mcp.db.old"); ok {
+		t.Fatal("old tool survived list_changed refresh")
+	}
+	if got := manager.CatalogGeneration("db"); got != 2 {
+		t.Fatalf("debounced generation = %d, want 2", got)
+	}
+}
+
+func TestFailedToolListChangedRefreshRetainsOldCatalog(t *testing.T) {
+	server := &notifyingManagedServer{mutableManagedServer: mutableManagedServer{name: "db", tools: []Tool{{Name: "old"}}}}
+	manager, _ := NewManager(server)
+	defer manager.Close()
+	registry, _ := builtin.NewRegistry()
+	if err := manager.Bind(context.Background(), registry); err != nil {
+		t.Fatal(err)
+	}
+	server.setTools([]Tool{{Name: "bad tool"}})
+	server.emitToolsChanged()
+	time.Sleep(2 * toolListChangeDebounce)
+	if _, ok := registry.Lookup("mcp.db.old"); !ok {
+		t.Fatal("failed list_changed refresh removed old catalog")
+	}
+	if got := manager.CatalogGeneration("db"); got != 1 {
+		t.Fatalf("failed refresh generation = %d", got)
 	}
 }
