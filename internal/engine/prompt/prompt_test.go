@@ -11,7 +11,7 @@ func TestRenderComposesStableContracts(t *testing.T) {
 		ModelProfile: "gemini-3.8-flash", ModelProfileMatch: "exact", ModelCatalogOverride: true,
 		Workspace: "/repo", ToolNames: []string{"grep", "get_todo", "delegate_task", "grep"},
 		GroundingRequired: true, GroundingEvidence: "workspace",
-		TaskPlanEnabled: true, DelegationEnabled: true, MutationEnabled: true, Skills: "skill instructions",
+		TaskPlanEnabled: true, DelegationEnabled: true, Mutations: MutationCapabilities{Workspace: true}, Skills: "skill instructions",
 		ProjectInstructions: "follow repository rules",
 		ExtraInstructions:   []string{"custom one", "custom two"},
 		ReasoningRequested:  "high", ReasoningEffective: "medium", ReasoningSource: "agent_profile", ReasoningClamped: true,
@@ -59,7 +59,7 @@ func TestRenderRootIdentityOmitsDelegationWhenUnavailable(t *testing.T) {
 
 func TestRenderIsStableAcrossGroundingStateAndPublishedToolSubset(t *testing.T) {
 	base := Spec{
-		Workspace: "/repo", GroundingEvidence: "workspace", TaskPlanEnabled: true, DelegationEnabled: true, MutationEnabled: true,
+		Workspace: "/repo", GroundingEvidence: "workspace", TaskPlanEnabled: true, DelegationEnabled: true, Mutations: MutationCapabilities{Workspace: true},
 		ToolNames: []string{"read_file", "grep", "delegate_task"},
 	}
 	before := base
