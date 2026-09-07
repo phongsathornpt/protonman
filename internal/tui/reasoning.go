@@ -35,6 +35,10 @@ func (m *bubbleModel) handleReasoningCommand(argument string) tea.Cmd {
 		m.refreshViewport()
 		return nil
 	}
+	return m.setReasoningEffort(effort)
+}
+
+func (m *bubbleModel) setReasoningEffort(effort sdk.ReasoningEffort) tea.Cmd {
 	if effort != sdk.ReasoningDefault {
 		profile := m.activeResolvedModelProfile()
 		if _, err := profile.ResolveExplicitReasoning(effort); err != nil {
@@ -43,11 +47,6 @@ func (m *bubbleModel) handleReasoningCommand(argument string) tea.Cmd {
 			return nil
 		}
 	}
-
-	return m.setReasoningEffort(effort)
-}
-
-func (m *bubbleModel) setReasoningEffort(effort sdk.ReasoningEffort) tea.Cmd {
 	m.reasoningEffort = effort
 	if m.coordinator != nil {
 		m.coordinator.SetReasoningEffort(effort)

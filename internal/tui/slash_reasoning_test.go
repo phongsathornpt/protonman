@@ -141,3 +141,15 @@ func TestSlashReasoningPickerUsesCatalogResolvedProfile(t *testing.T) {
 		}
 	}
 }
+
+func TestSetReasoningEffortValidatesModelProfile(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeProvider = "protonman"
+	m.activeModel = "gemini-3.8-flash"
+	m.reasoningEffort = sdk.ReasoningMedium
+
+	m.setReasoningEffort(sdk.ReasoningXHigh)
+	if got := m.reasoningEffort; got != sdk.ReasoningMedium {
+		t.Fatalf("invalid picker-style selection changed effort to %q", got)
+	}
+}
