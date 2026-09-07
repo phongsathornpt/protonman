@@ -85,3 +85,9 @@ type Server interface {
 	ListTools(ctx context.Context) ([]Tool, error)
 	CallTool(ctx context.Context, name string, arguments json.RawMessage) (Result, error)
 }
+
+// ToolListChangeSource exposes MCP tools/list_changed notifications without
+// coupling the catalog manager to a concrete transport. The callback must not block.
+type ToolListChangeSource interface {
+	SetToolListChangedHandler(func())
+}
