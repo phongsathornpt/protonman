@@ -406,3 +406,47 @@ func TestToolChoiceRequired(t *testing.T) {
 		t.Fatalf("toolChoice without tools = %q", got)
 	}
 }
+
+func TestOpenCodeFreeUsageLimitIsStructuredAndNotRetryable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "3600")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(w, `{"error":{"type":"FreeUsageLimitError","message":"Rate limit exceeded. Please try again later."}}`)
+	}))
+	defer server.Close()
+	model := NewProvider(ProviderOptions{ProviderName: "opencode", BaseURL: server.URL, MaxRetries: 2}).Model("free-model")
+	_, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	var providerErr *sdk.ProviderError
+	if !errors.As(err, &providerErr) || providerErr.RateLimit == nil {
+		t.Fatalf("error = %#v (%v)", providerErr, err)
+	}
+	if providerErr.Provider != "opencode" || providerErr.RateLimit.Kind != sdk.RateLimitFreeUsage || providerErr.Retryable {
+		t.Fatalf("provider error = %#v", providerErr)
+	}
+	if providerErr.RateLimit.RetryAfter != time.Hour {
+		t.Fatalf("retry after = %s", providerErr.RateLimit.RetryAfter)
+	}
+}
+
+func TestOpenCodeGoUsageLimitClassifiesWindow(t *testing.T) {
+	body := []byte(`{"error":{"type":"GoUsageLimitError","message":"usage exhausted"},"metadata":{"limitName":"weekly"}}`)
+	err := providerError("opencode", http.StatusTooManyRequests, body, nil)
+	if err.RateLimit == nil || err.RateLimit.Kind != sdk.RateLimitGoWeekly || err.RateLimit.Scope != sdk.RateLimitScopeAccount || err.Retryable {
+		t.Fatalf("provider error = %#v", err)
+	}
+}
+
+func TestOpenCodeProviderRateLimitRemainsRetryable(t *testing.T) {
+	body := []byte(`{"error":{"type":"rate_limit_error","message":"Provider rate limit exceeded"}}`)
+	err := providerError("opencode", http.StatusTooManyRequests, body, http.Header{"Retry-After": []string{"2"}})
+	if err.RateLimit == nil || err.RateLimit.Kind != sdk.RateLimitProvider || err.RateLimit.Scope != sdk.RateLimitScopeProvider || !err.Retryable {
+		t.Fatalf("provider error = %#v", err)
+	}
+}
+
+func TestOpenCodeProviderIdentityIsPreserved(t *testing.T) {
+	model := NewProvider(ProviderOptions{ProviderName: "opencode", BaseURL: "https://example.test/v1"}).Model("test")
+	if model.Provider() != "opencode" {
+		t.Fatalf("provider = %q", model.Provider())
+	}
+}

@@ -31,7 +31,8 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 		}
 	}
 	provider := sdkopenai.NewProvider(sdkopenai.ProviderOptions{
-		BaseURL: cfg.baseURL, APIKey: cfg.apiKey, HTTPClient: cfg.httpClient,
+		ProviderName: strings.ToLower(strings.TrimSpace(providerName)),
+		BaseURL:      cfg.baseURL, APIKey: cfg.apiKey, HTTPClient: cfg.httpClient,
 		UserAgent: cfg.userAgent, Headers: headers, MaxRetries: 2, RetryBackoff: runtimepolicy.ModelRetryBackoffStep,
 	})
 	modelOptions := make([]sdkopenai.ModelOption, 0, 1)
