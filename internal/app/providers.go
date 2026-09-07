@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/config"
 )
@@ -58,4 +59,17 @@ func userHomeDir() (string, error) {
 		return "", err
 	}
 	return dirs.Home, nil
+}
+
+// LoadConfigured reloads provider configuration for a workspace using the user layer.
+func (Providers) LoadConfigured(ctx context.Context, workDir string) (map[string]config.ProviderConfig, error) {
+	dirs, err := appdirs.Resolve("")
+	if err != nil {
+		return nil, err
+	}
+	snapshot, err := config.Load(ctx, config.Options{HomeDir: dirs.Home, WorkDir: workDir})
+	if err != nil {
+		return nil, err
+	}
+	return snapshot.Providers, nil
 }

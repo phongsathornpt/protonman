@@ -10,7 +10,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/projectTHORN/proton/internal/app"
-	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
@@ -187,16 +186,12 @@ func (m *bubbleModel) reconfigureRunner() {
 	prov, ok := m.providers[strings.ToLower(provName)]
 	hasValidAuth := ok && model.ProviderHasUsableAuth(provName, prov.BaseURL, prov.APIKey)
 	if !hasValidAuth {
-		dirs, resolveErr := appdirs.Resolve("")
-		if resolveErr != nil {
-			return
-		}
-		loaded, err := config.Load(m.ctx, config.Options{HomeDir: dirs.Home, WorkDir: m.workDir})
+		loaded, err := (app.Providers{}).LoadConfigured(m.ctx, m.workDir)
 		if err == nil {
 			if m.providers == nil {
 				m.providers = make(map[string]config.ProviderConfig)
 			}
-			for key, value := range loaded.Providers {
+			for key, value := range loaded {
 				m.providers[key] = value
 			}
 			prov, ok = m.providers[strings.ToLower(provName)]
