@@ -1,6 +1,7 @@
 package skill
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -130,5 +131,26 @@ func TestRegistryForkIsolatesActivationState(t *testing.T) {
 	child.Deactivate("go-review")
 	if !parent.IsActivated("go-review") {
 		t.Fatal("child activation changes leaked to parent")
+	}
+}
+
+func TestRegistryActivationLimits(t *testing.T) {
+	registry := NewRegistry(
+		Skill{Name: "one", Description: "First skill", Scope: ScopeUser, Instructions: "12345"},
+		Skill{Name: "two", Description: "Second skill", Scope: ScopeUser, Instructions: "67890"},
+		Skill{Name: "three", Description: "Third skill", Scope: ScopeUser, Instructions: "abcdef"},
+	)
+	registry.SetActivationLimits(ActivationLimits{MaxSkills: 2, MaxInstructionBytes: 10})
+	if err := registry.Activate("one"); err != nil {
+		t.Fatalf("Activate(one) error = %v", err)
+	}
+	if err := registry.Activate("two"); err != nil {
+		t.Fatalf("Activate(two) error = %v", err)
+	}
+	if err := registry.Activate("three"); !errors.Is(err, ErrActivationLimit) {
+		t.Fatalf("Activate(three) error = %v, want ErrActivationLimit", err)
+	}
+	if registry.IsActivated("three") {
+		t.Fatal("skill exceeding activation limits became active")
 	}
 }

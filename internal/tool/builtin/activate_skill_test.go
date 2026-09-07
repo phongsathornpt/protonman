@@ -213,7 +213,8 @@ func TestActivateSkillCanBindIsolatedChildRegistry(t *testing.T) {
 	child := parent.Fork()
 	handler := NewActivateSkill(parent).(activateSkillHandler).BindSkillRegistry(child)
 	call := newJSONCall(t, "skill-child", "activate_skill", map[string]any{"name": "go-review"})
-	if _, err := handler.Execute(context.Background(), call); err != nil {
+	result, err := handler.Execute(context.Background(), call)
+	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
 	if !child.IsActivated("go-review") {
@@ -221,5 +222,11 @@ func TestActivateSkillCanBindIsolatedChildRegistry(t *testing.T) {
 	}
 	if parent.IsActivated("go-review") {
 		t.Fatal("child skill activation leaked to parent")
+	}
+	if strings.Contains(result.Output, s.Instructions) {
+		t.Fatalf("child activation duplicated full instructions in tool output: %q", result.Output)
+	}
+	if !strings.Contains(result.Output, "full instructions are loaded into the next model context") {
+		t.Fatalf("compact child activation acknowledgement missing: %q", result.Output)
 	}
 }
