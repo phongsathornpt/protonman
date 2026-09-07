@@ -871,3 +871,45 @@ func TestServiceWorkspaceMutationGateDoesNotBlockReadOnlyCall(t *testing.T) {
 		t.Fatalf("handler calls = %d, want 1", handler.calls)
 	}
 }
+
+func TestCallNormalizesZeroArgumentPayloadsBeforeValidation(t *testing.T) {
+	for _, raw := range []string{`{}`, ``, `   `, `null`} {
+		t.Run(fmt.Sprintf("%q", raw), func(t *testing.T) {
+			handler := &fakeHandler{definition: tool.Definition{
+				Name: "zero", Description: "zero args", Kind: tool.KindRead,
+				Mutability: tool.MutabilityReadOnly, InputSchema: tool.NoArgumentsSchema(),
+			}}
+			service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAlwaysApprove))
+			call := tool.Call{ID: "zero-1", Name: "zero", Arguments: json.RawMessage(raw)}
+			if _, err := service.Call(context.Background(), call); err != nil {
+				t.Fatalf("Call(%q) error = %v", raw, err)
+			}
+			if handler.calls != 1 {
+				t.Fatalf("handler calls = %d, want 1", handler.calls)
+			}
+		})
+	}
+}
+
+func TestCallRejectsNonObjectZeroArgumentPayloads(t *testing.T) {
+	for _, raw := range []string{`[]`, `""`, `{"foo":1}`} {
+		t.Run(raw, func(t *testing.T) {
+			handler := &fakeHandler{definition: tool.Definition{
+				Name: "zero", Description: "zero args", Kind: tool.KindRead,
+				Mutability: tool.MutabilityReadOnly, InputSchema: tool.NoArgumentsSchema(),
+			}}
+			service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAlwaysApprove))
+			call, err := tool.NewCall("zero-1", "zero", json.RawMessage(raw))
+			if err != nil {
+				t.Fatalf("NewCall(%q) error = %v", raw, err)
+			}
+			result, err := service.Call(context.Background(), call)
+			if err == nil || result.Failure == nil || result.Failure.Code != tool.ErrorCodeInvalidArguments {
+				t.Fatalf("Call(%q) result=%#v err=%v, want invalid_arguments", raw, result, err)
+			}
+			if handler.calls != 0 {
+				t.Fatalf("handler calls = %d, want 0", handler.calls)
+			}
+		})
+	}
+}

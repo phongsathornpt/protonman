@@ -36,3 +36,23 @@ func TestGetTodoReturnsStructuredSnapshotRevision(t *testing.T) {
 		t.Fatalf("definition=%#v", def)
 	}
 }
+
+func TestGetTodoArgumentContract(t *testing.T) {
+	store, err := tododomain.NewStore(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := NewGetTodo(store)
+	for _, raw := range []string{`{}`, ``, `   `, `null`} {
+		call := tool.Call{ID: "todo-get", Name: "get_todo", Arguments: json.RawMessage(raw)}
+		if _, err := h.Execute(context.Background(), call); err != nil {
+			t.Fatalf("get_todo(%q) error = %v", raw, err)
+		}
+	}
+	for _, raw := range []string{`[]`, `""`, `{"foo":1}`, `{} {}`} {
+		call := tool.Call{ID: "todo-get", Name: "get_todo", Arguments: json.RawMessage(raw)}
+		if _, err := h.Execute(context.Background(), call); err == nil {
+			t.Fatalf("get_todo(%q) error = nil, want invalid arguments", raw)
+		}
+	}
+}

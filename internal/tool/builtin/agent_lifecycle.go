@@ -58,7 +58,7 @@ func (h agentLifecycleHandler) Definition() tool.Definition {
 	case "list_agents":
 		def.Description = "List retained subagents and their lifecycle states."
 		def.Mutability = tool.MutabilityReadOnly
-		def.InputSchema = map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
+		def.InputSchema = tool.NoArgumentsSchema()
 	case "cancel_agent":
 		def.Description = "Explicitly cancel a queued or running subagent."
 		def.Mutability = tool.MutabilityMutating
