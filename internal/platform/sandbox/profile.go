@@ -270,6 +270,13 @@ func (p NetworkPolicy) ValidateResolvedIPs(raw string, ips []net.IP) error {
 	if err := p.AllowURL(raw); err != nil {
 		return err
 	}
+	return p.ValidateResolvedAddresses(ips)
+}
+
+// ValidateResolvedAddresses validates concrete dial targets after DNS resolution.
+// It intentionally does not re-evaluate URL/origin policy; callers must do that
+// against the original request URL before dialing.
+func (p NetworkPolicy) ValidateResolvedAddresses(ips []net.IP) error {
 	if len(ips) == 0 {
 		return fmt.Errorf("%w: host resolved to no addresses", ErrNetworkDenied)
 	}
