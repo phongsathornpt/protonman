@@ -42,7 +42,7 @@ func TestToolKindForName(t *testing.T) {
 		{"list_agents", ToolKindExecute},
 		{"cancel_agent", ToolKindExecute},
 		{"web_fetch", ToolKindFetch},
-		{"activate_skill", ToolKindOther},
+		{"activate_skill", ToolKindRead},
 		{"unknown_tool", ToolKindOther},
 	}
 

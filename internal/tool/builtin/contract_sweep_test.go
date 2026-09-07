@@ -52,6 +52,17 @@ func assertBuiltinContract(t *testing.T, registry *Registry, definition tool.Def
 	if err := definition.Safety.Validate(); err != nil {
 		t.Errorf("%s Safety.Validate() error = %v; contract=%+v", definition.Name, err, definition.Safety)
 	}
+	metadata, ok := tool.MetadataForName(definition.Name)
+	if !ok {
+		t.Errorf("%s canonical metadata missing", definition.Name)
+	} else {
+		if metadata.Kind != definition.Kind {
+			t.Errorf("%s metadata kind = %q, definition kind = %q", definition.Name, metadata.Kind, definition.Kind)
+		}
+		if metadata.DisplayName == "" {
+			t.Errorf("%s metadata display name is empty", definition.Name)
+		}
+	}
 	if tool.EffectiveMutability(definition) == tool.MutabilityReadOnly && definition.Safety.MutationDomain != tool.MutationDomainNone {
 		t.Errorf("%s read-only tool declares mutation domain %q", definition.Name, definition.Safety.MutationDomain)
 	}
