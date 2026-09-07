@@ -243,7 +243,7 @@ func (m *bubbleModel) setPermissionMode(mode permission.Mode) error {
 		return err
 	}
 	if m.coordinator != nil {
-		m.coordinator.SetPermissionMode(mode)
+		m.agents.SetPermissionMode(mode)
 	}
 	return nil
 }

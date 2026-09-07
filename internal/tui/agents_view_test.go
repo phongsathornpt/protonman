@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/projectTHORN/proton/internal/agent"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -39,6 +40,7 @@ func TestAgentsViewShowsActiveAndRespectsLayout(t *testing.T) {
 
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.coordinator = coord
+	m.agents = app.NewAgents(coord)
 	m.agentSnapshot = coord.List()
 	m.resize(80, 24)
 	if got := m.agentsView(); !strings.Contains(got, "Agents 1 active") || !strings.Contains(got, "inspect router") {
@@ -67,6 +69,7 @@ func TestAgentLifecycleMessageRefreshesSnapshot(t *testing.T) {
 	defer cancel()
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.coordinator = coord
+	m.agents = app.NewAgents(coord)
 	m.agentEvents = events
 	if _, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileINT, Task: "inspect router"}); err != nil {
 		t.Fatal(err)
@@ -254,6 +257,7 @@ func TestCancelActiveTurnCancelsOnlyOwnedSubagents(t *testing.T) {
 
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.coordinator = coord
+	m.agents = app.NewAgents(coord)
 	m.agentSnapshot = coord.List()
 	m.activeTurnOwner = "turn-owned"
 	m.busy = true

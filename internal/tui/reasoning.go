@@ -49,7 +49,7 @@ func (m *bubbleModel) setReasoningEffort(effort sdk.ReasoningEffort) tea.Cmd {
 	}
 	m.reasoningEffort = effort
 	if m.coordinator != nil {
-		m.coordinator.SetReasoningEffort(effort)
+		m.agents.SetReasoningEffort(effort)
 	}
 	m.reconfigureRunner()
 	m.appendLine(successStyle.Render("Thinking level set to " + reasoningEffortLabel(effort) + "."))

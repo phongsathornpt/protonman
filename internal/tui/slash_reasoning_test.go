@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/projectTHORN/proton/internal/agent"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
@@ -105,6 +106,7 @@ func TestSlashReasoningSyncsCoordinator(t *testing.T) {
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
 	defer func() { _ = coord.Close() }()
 	m.coordinator = coord
+	m.agents = app.NewAgents(coord)
 
 	m.executeCommand("/reasoning low")
 	if got := coord.ReasoningEffort(); got != sdk.ReasoningLow {
