@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/projectTHORN/proton/internal/core/tool"
 
@@ -221,6 +222,102 @@ func TestWriteWorkspaceFileRejectsParentSymlinkSwap(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(outside, "file.txt")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("outside file exists or stat failed unexpectedly: %v", err)
+	}
+}
+
+func TestFileStorePrunesOldestCheckpointByCount(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	storeRoot := filepath.Join(t.TempDir(), "checkpoints")
+	store, err := NewFileStore(storeRoot, workspaceRoot, WithRetentionPolicy(RetentionPolicy{MaxCount: 2}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(workspaceRoot.Root(), "notes.txt")
+	if err := os.WriteFile(path, []byte("v0"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ids := make([]string, 0, 3)
+	for i := 0; i < 3; i++ {
+		if err := os.WriteFile(path, []byte{byte('0' + i)}, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		id, err := store.Capture(context.Background(), []string{path})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+		time.Sleep(time.Millisecond)
+	}
+	if _, err := os.Stat(filepath.Join(storeRoot, ids[0]+".json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("oldest checkpoint still exists: %v", err)
+	}
+	for _, id := range ids[1:] {
+		if _, err := os.Stat(filepath.Join(storeRoot, id+".json")); err != nil {
+			t.Fatalf("retained checkpoint %s missing: %v", id, err)
+		}
+	}
+}
+
+func TestFileStorePrunesExpiredCheckpointByAge(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	storeRoot := filepath.Join(t.TempDir(), "checkpoints")
+	store, err := NewFileStore(storeRoot, workspaceRoot, WithRetentionPolicy(RetentionPolicy{MaxAge: time.Hour}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(workspaceRoot.Root(), "notes.txt")
+	if err := os.WriteFile(path, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	oldID, err := store.Capture(context.Background(), []string{path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldPath := filepath.Join(storeRoot, oldID+".json")
+	oldTime := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(oldPath, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("new"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Capture(context.Background(), []string{path}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(oldPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expired checkpoint still exists: %v", err)
+	}
+}
+
+func TestFileStorePrunesOldestCheckpointByBytes(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	storeRoot := filepath.Join(t.TempDir(), "checkpoints")
+	store := newTestStore(t, storeRoot, workspaceRoot)
+	path := filepath.Join(workspaceRoot.Root(), "notes.txt")
+	if err := os.WriteFile(path, []byte("first payload"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	firstID, err := store.Capture(context.Background(), []string{path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstInfo, err := os.Stat(filepath.Join(storeRoot, firstID+".json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.retention = RetentionPolicy{MaxBytes: firstInfo.Size() + 64}
+	if err := os.WriteFile(path, []byte("second payload"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	secondID, err := store.Capture(context.Background(), []string{path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(storeRoot, firstID+".json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("oldest byte-quota checkpoint still exists: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(storeRoot, secondID+".json")); err != nil {
+		t.Fatalf("new checkpoint missing: %v", err)
 	}
 }
 
