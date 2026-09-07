@@ -19,6 +19,7 @@ type fakeHandler struct {
 	definition       tool.Definition
 	calls            int
 	err              error
+	firstErr         error
 	waitForContext   bool
 	shouldPanic      bool
 	structuredOutput json.RawMessage
@@ -42,6 +43,9 @@ func (h *fakeHandler) Execute(ctx context.Context, call tool.Call) (tool.Result,
 	if h.waitForContext {
 		<-ctx.Done()
 		return result, ctx.Err()
+	}
+	if h.calls == 1 && h.firstErr != nil {
+		return result, h.firstErr
 	}
 	return result, h.err
 }
@@ -948,5 +952,28 @@ func TestCallRejectsNonObjectZeroArgumentPayloads(t *testing.T) {
 				t.Fatalf("handler calls = %d, want 0", handler.calls)
 			}
 		})
+	}
+}
+
+func TestServiceRecoversReadOnlyPaginationOnce(t *testing.T) {
+	recoveryArgs := json.RawMessage(`{"path":"file.txt"}`)
+	handler := &fakeHandler{definition: tool.Definition{
+		Name: "read_file", Description: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
+		InputSchema: map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}, "required": []string{"path"}, "additionalProperties": false},
+	}, firstErr: tool.NewToolError(tool.ErrorCodeStaleContinuation, "stale").WithRecovery(tool.Recovery{Action: "restart_pagination", Tool: "read_file", Arguments: recoveryArgs})}
+	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAlwaysApprove))
+	call, err := tool.NewCall("read-1", "read_file", json.RawMessage(`{"path":"file.txt"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.Call(context.Background(), call)
+	if err != nil {
+		t.Fatalf("Call() error = %v", err)
+	}
+	if handler.calls != 2 {
+		t.Fatalf("handler calls = %d, want 2", handler.calls)
+	}
+	if result.Failure != nil || result.Output != "executed" {
+		t.Fatalf("result = %#v", result)
 	}
 }
