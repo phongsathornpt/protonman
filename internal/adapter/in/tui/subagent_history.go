@@ -77,6 +77,12 @@ func (m *bubbleModel) rememberAgentRun(call tool.Call) {
 
 func (m *bubbleModel) touchAgentOperation(name string, call tool.Call) {
 	id := extractStringArg(call.Arguments, "agent_id")
+	if m.pendingAgentOps == nil {
+		m.pendingAgentOps = make(map[string]string)
+	}
+	if call.ID != "" && id != "" {
+		m.pendingAgentOps[call.ID] = id
+	}
 	cell := m.ensureHistoryState().AgentRun(id)
 	if cell == nil {
 		return
@@ -98,6 +104,10 @@ func (m *bubbleModel) applyAgentToolResult(name string, result tool.Result, body
 	}
 	parsed := parseAgentToolResult(body)
 	state := m.ensureHistoryState()
+	if parsed.AgentID == "" {
+		parsed.AgentID = m.pendingAgentOps[result.CallID]
+	}
+	delete(m.pendingAgentOps, result.CallID)
 	if name == "list_agents" {
 		return true
 	}
@@ -172,4 +182,31 @@ func (m *bubbleModel) syncAgentRunSnapshot(agentID string) {
 		cell.Activity = ""
 	}
 	m.ensureHistoryState().TouchAgentRun(agentID)
+}
+
+func (m *bubbleModel) applyAgentToolFailure(name string, result tool.Result, err error) bool {
+	if !isAgentLifecycleTool(name) {
+		return false
+	}
+	id := m.pendingAgentOps[result.CallID]
+	delete(m.pendingAgentOps, result.CallID)
+	if id == "" {
+		return true
+	}
+	cell := m.ensureHistoryState().AgentRun(id)
+	if cell == nil {
+		return true
+	}
+	message := "status check failed"
+	if name == "cancel_agent" {
+		message = "cancel failed"
+	}
+	if result.Failure != nil && strings.TrimSpace(result.Failure.Message) != "" {
+		message += ": " + strings.TrimSpace(result.Failure.Message)
+	} else if err != nil && strings.TrimSpace(err.Error()) != "" {
+		message += ": " + strings.TrimSpace(err.Error())
+	}
+	cell.Activity = message
+	m.ensureHistoryState().TouchAgentRun(id)
+	return true
 }

@@ -49,6 +49,7 @@ type bubbleModel struct {
 	agentSnapshot    []agent.AgentStatus
 	agentActivity    map[string]string
 	pendingAgentRuns map[string]pendingAgentRun
+	pendingAgentOps  map[string]string
 	turnProgress     turnProgress
 	activeTurnOwner  string
 	workDir          string
