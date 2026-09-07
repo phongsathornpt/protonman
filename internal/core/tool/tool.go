@@ -576,6 +576,18 @@ type DetailProvider interface {
 	PermissionDetail(arguments json.RawMessage) string
 }
 
+// ContractDiagnostic is non-sensitive metadata for diagnosing dynamic-tool schema drift.
+type ContractDiagnostic struct {
+	Source            string
+	CatalogGeneration uint64
+	SchemaFingerprint string
+}
+
+// ContractDiagnosticProvider exposes registration-time contract metadata to the dispatcher.
+type ContractDiagnosticProvider interface {
+	ContractDiagnostic() ContractDiagnostic
+}
+
 // Registry resolves tool names and publishes their definitions.
 type Registry interface {
 	// Lookup returns the handler registered under name.

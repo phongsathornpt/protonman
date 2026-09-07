@@ -225,6 +225,8 @@ func TestMCPOutputSchemaViolationReportsUpstreamContract(t *testing.T) {
 		t.Fatalf("failure = %#v, want invalid_output", result.Failure)
 	}
 	if !strings.Contains(err.Error(), `MCP tool "mcp.github.search" violated its declared output schema`) ||
+		!strings.Contains(err.Error(), "server=github generation=1 schema=") ||
+		!strings.Contains(err.Error(), "expected=object actual=missing") ||
 		!strings.Contains(err.Error(), "structured output is required") {
 		t.Fatalf("MCP output contract error missing detail: %v", err)
 	}

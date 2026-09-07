@@ -3,6 +3,8 @@ package mcp
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -174,7 +176,7 @@ func DiscoverWithOptions(ctx context.Context, registry tool.BatchRegistrar, opti
 				return fmt.Errorf("%w: %s", ErrDuplicateDiscoveredTool, name)
 			}
 			seenNames[name] = struct{}{}
-			handler, err := newHandler(server, serverName, manifest, name, options.TrustServerSafety, callSlots[i])
+			handler, err := newHandler(server, serverName, manifest, name, options.TrustServerSafety, callSlots[i], 1)
 			if err != nil {
 				return fmt.Errorf("clone MCP tool %q schemas: %w", name, err)
 			}
@@ -213,11 +215,13 @@ func DiscoverWithOptions(ctx context.Context, registry tool.BatchRegistrar, opti
 }
 
 type serverToolHandler struct {
-	server     Server
-	serverName string
-	manifest   Tool
-	definition tool.Definition
-	callSlots  chan struct{}
+	server            Server
+	serverName        string
+	manifest          Tool
+	definition        tool.Definition
+	callSlots         chan struct{}
+	catalogGeneration uint64
+	schemaFingerprint string
 }
 
 func newHandler(
@@ -227,6 +231,7 @@ func newHandler(
 	name string,
 	trustServerSafety bool,
 	callSlots chan struct{},
+	catalogGeneration uint64,
 ) (tool.Handler, error) {
 	description := strings.TrimSpace(manifest.Description)
 	if description == "" {
@@ -240,8 +245,10 @@ func newHandler(
 	if err != nil {
 		return nil, fmt.Errorf("output schema: %w", err)
 	}
+	fingerprint := schemaFingerprint(outputSchema)
 	return serverToolHandler{
 		server: server, serverName: serverName, manifest: manifest, callSlots: callSlots,
+		catalogGeneration: catalogGeneration, schemaFingerprint: fingerprint,
 		definition: tool.Definition{
 			Name: name, Description: description, Kind: tool.KindMCP, Mutability: effectiveMCPMutability(manifest.Mutability, trustServerSafety),
 			InputSchema: inputSchema, OutputSchema: outputSchema,
@@ -251,6 +258,12 @@ func newHandler(
 
 func (h serverToolHandler) Definition() tool.Definition {
 	return h.definition
+}
+
+func (h serverToolHandler) ContractDiagnostic() tool.ContractDiagnostic {
+	return tool.ContractDiagnostic{
+		Source: h.serverName, CatalogGeneration: h.catalogGeneration, SchemaFingerprint: h.schemaFingerprint,
+	}
 }
 
 func (h serverToolHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
@@ -326,6 +339,18 @@ func effectiveMCPMutability(declared tool.Mutability, trusted bool) tool.Mutabil
 	return tool.MutabilityUnspecified
 }
 
+func schemaFingerprint(schema map[string]any) string {
+	if len(schema) == 0 {
+		return "none"
+	}
+	data, err := json.Marshal(schema)
+	if err != nil {
+		return "invalid"
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:6])
+}
+
 func cloneMCPSchema(schema map[string]any) (map[string]any, error) {
 	if schema == nil {
 		return map[string]any{}, nil
@@ -342,3 +367,4 @@ func cloneMCPSchema(schema map[string]any) (map[string]any, error) {
 }
 
 var _ tool.Handler = serverToolHandler{}
+var _ tool.ContractDiagnosticProvider = serverToolHandler{}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/projectTHORN/proton/internal/adapter/out/tool/builtin"
+	domaintool "github.com/projectTHORN/proton/internal/core/tool"
 )
 
 type managedFakeServer struct {
@@ -143,6 +144,11 @@ func TestManagerRefreshReplacesCatalogAtomically(t *testing.T) {
 	}
 	if manager.CatalogGeneration("db") != 2 {
 		t.Fatalf("generation = %d, want 2", manager.CatalogGeneration("db"))
+	}
+	handler, _ := registry.Lookup("mcp.db.new")
+	diagnostics, ok := handler.(domaintool.ContractDiagnosticProvider)
+	if !ok || diagnostics.ContractDiagnostic().CatalogGeneration != 2 {
+		t.Fatalf("refreshed handler diagnostics = %#v", diagnostics)
 	}
 
 	server.setTools([]Tool{{Name: "bad tool"}})
