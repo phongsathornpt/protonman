@@ -17,115 +17,12 @@ var titleRegex = regexp.MustCompile(`(?i)<title[^>]*>([\s\S]*?)</title>`)
 // extractToolTarget inspects tool arguments and returns a human-facing target
 // string (e.g. URL, filepath, pattern, command) and the normalized tool.Kind.
 func extractToolTarget(name string, kind tool.Kind, args json.RawMessage) (string, tool.Kind) {
+	call := tool.Call{Name: name, Arguments: args}
+	target := call.Target()
 	if kind == "" {
 		kind = guessToolKind(name)
 	}
-
-	var values map[string]any
-	if len(args) > 0 {
-		_ = json.Unmarshal(args, &values)
-	}
-
-	switch kind {
-	case tool.KindWebFetch:
-		if urlStr, ok := values["url"].(string); ok && strings.TrimSpace(urlStr) != "" {
-			return strings.TrimSpace(urlStr), kind
-		}
-	case tool.KindWebSearch:
-		if query, ok := values["query"].(string); ok && strings.TrimSpace(query) != "" {
-			return fmt.Sprintf("%q", strings.TrimSpace(query)), kind
-		}
-	case tool.KindRead:
-		if name == "list_dir" {
-			for _, key := range []string{"path", "dir_path", "directory"} {
-				if path, ok := values[key].(string); ok && strings.TrimSpace(path) != "" {
-					return strings.TrimSpace(path), kind
-				}
-			}
-			return ".", kind
-		}
-		if name == "git_status" {
-			if path, ok := values["path"].(string); ok && strings.TrimSpace(path) != "" {
-				return strings.TrimSpace(path), kind
-			}
-			return "", kind
-		}
-		if path, ok := values["path"].(string); ok && strings.TrimSpace(path) != "" {
-			return strings.TrimSpace(path), kind
-		}
-	case tool.KindGrep:
-		pattern, _ := values["pattern"].(string)
-		path, _ := values["path"].(string)
-		pattern = strings.TrimSpace(pattern)
-		path = strings.TrimSpace(path)
-		if pattern != "" && path != "" && path != "." {
-			return fmt.Sprintf("%q in %s", pattern, path), kind
-		}
-		if pattern != "" {
-			return fmt.Sprintf("%q", pattern), kind
-		}
-	case tool.KindTask:
-		if operations, ok := values["operations"].([]any); ok {
-			return fmt.Sprintf("%d task operations", len(operations)), kind
-		}
-		return "task plan", kind
-	case tool.KindAgent:
-		if name == "delegate_task" {
-			task, _ := values["task"].(string)
-			profile, _ := values["profile"].(string)
-			if strings.TrimSpace(profile) != "" {
-				return fmt.Sprintf("[%s] %s", strings.TrimSpace(profile), truncateWithEllipsis(strings.TrimSpace(task), 40)), kind
-			}
-		}
-		if id, ok := values["agent_id"].(string); ok && strings.TrimSpace(id) != "" {
-			return strings.TrimSpace(id), kind
-		}
-		return "subagents", kind
-	case tool.KindBash:
-		if cmd, ok := values["command"].(string); ok && strings.TrimSpace(cmd) != "" {
-			return strings.TrimSpace(cmd), kind
-		}
-	case tool.KindEdit:
-		for _, key := range []string{"path", "file", "filename", "target"} {
-			if path, ok := values[key].(string); ok && strings.TrimSpace(path) != "" {
-				return strings.TrimSpace(path), kind
-			}
-		}
-	}
-
-	if name == "activate_skill" {
-		if skillName, ok := values["name"].(string); ok && strings.TrimSpace(skillName) != "" {
-			return fmt.Sprintf("%q", strings.TrimSpace(skillName)), kind
-		}
-	}
-
-	if name == "delegate_task" {
-		task, _ := values["task"].(string)
-		profile, _ := values["profile"].(string)
-		task = strings.TrimSpace(task)
-		profile = strings.TrimSpace(profile)
-		if profile != "" && task != "" {
-			return fmt.Sprintf("[%s] %s", profile, truncateWithEllipsis(task, 40)), kind
-		}
-		if task != "" {
-			return truncateWithEllipsis(task, 40), kind
-		}
-	}
-
-	if name == "checkpoint_restore" {
-		if id, ok := values["checkpoint_id"].(string); ok && strings.TrimSpace(id) != "" {
-			return strings.TrimSpace(id), kind
-		}
-	}
-
-	// Heuristic fallback for arbitrary MCP and custom tools:
-	for _, key := range []string{"url", "path", "file", "query", "pattern", "command", "target", "task", "name"} {
-		if val, ok := values[key].(string); ok && strings.TrimSpace(val) != "" {
-			return strings.TrimSpace(val), kind
-		}
-	}
-
-	return "", kind
+	return target, kind
 }
 
 func isAgentLifecycleTool(name string) bool {
@@ -138,26 +35,7 @@ func isAgentLifecycleTool(name string) bool {
 }
 
 func guessToolKind(name string) tool.Kind {
-	switch name {
-	case "web_fetch":
-		return tool.KindWebFetch
-	case "web_search":
-		return tool.KindWebSearch
-	case "read_file", "list_dir", "git_status":
-		return tool.KindRead
-	case "grep":
-		return tool.KindGrep
-	case "bash":
-		return tool.KindBash
-	case "write_file", "search_replace", "apply_patch":
-		return tool.KindEdit
-	case "get_todo", "update_todo":
-		return tool.KindTask
-	case "delegate_task", "wait_agent", "get_agent", "list_agents", "cancel_agent":
-		return tool.KindAgent
-	default:
-		return ""
-	}
+	return tool.KindForName(name)
 }
 
 // toolKindGlyph returns the appropriate category glyph for a tool.

@@ -65,7 +65,7 @@ func TestHistoryStateToolRunningToCompleted(t *testing.T) {
 	if toolCell.Running {
 		t.Fatal("completed tool is still marked running")
 	}
-	if got := state.Raw(); !strings.Contains(got, "bash\nok\nexit 0") {
+	if got := state.Raw(); !strings.Contains(got, "Run\nok\nexit 0") {
 		t.Fatalf("raw transcript missing tool result: %q", got)
 	}
 }
@@ -292,8 +292,11 @@ func TestToolCellRefinedRenderingWebFetch(t *testing.T) {
 
 	rendered := state.RenderLines()
 	joinedRunning := strings.Join(rendered, "\n")
-	if !strings.Contains(joinedRunning, "↗") || !strings.Contains(joinedRunning, "web_fetch") || !strings.Contains(joinedRunning, "https://protonman.dev") {
+	if !strings.Contains(joinedRunning, "↗") || !strings.Contains(joinedRunning, "Fetch") || !strings.Contains(joinedRunning, "https://protonman.dev") {
 		t.Fatalf("expected running cell to show category icon and target, got: %s", joinedRunning)
+	}
+	if strings.Contains(joinedRunning, "web_fetch") {
+		t.Fatalf("raw 'web_fetch' should not appear in rendered output: %s", joinedRunning)
 	}
 
 	// Completed state
@@ -344,6 +347,12 @@ func TestToolCellRefinedRenderingReadFile(t *testing.T) {
 	if !strings.Contains(rendered, "50 lines") || !strings.Contains(rendered, "internal/tui/theme.go") {
 		t.Fatalf("expected summary with line count and target, got: %s", rendered)
 	}
+	if !strings.Contains(rendered, "Read") {
+		t.Fatalf("expected action verb 'Read' in header, got: %s", rendered)
+	}
+	if strings.Contains(rendered, "read_file") {
+		t.Fatalf("raw 'read_file' should be replaced by SSOT DisplayName, got: %s", rendered)
+	}
 	// Raw code should not flood the rendered viewport
 	if strings.Contains(rendered, "fmt.Println") {
 		t.Fatalf("raw file contents should be suppressed from viewport, got: %s", rendered)
@@ -353,6 +362,9 @@ func TestToolCellRefinedRenderingReadFile(t *testing.T) {
 	raw := strings.Join(cell.RawLines(), "\n")
 	if !strings.Contains(raw, "fmt.Println") {
 		t.Fatalf("raw transcript missing file content: %s", raw)
+	}
+	if !strings.HasPrefix(raw, "Read") {
+		t.Fatalf("expected RawLines header to start with 'Read', got: %s", raw)
 	}
 }
 
@@ -697,8 +709,11 @@ func TestPatchCellRenderingPolish(t *testing.T) {
 	if strings.Contains(joined, "✓ +") {
 		t.Fatalf("unexpected glyph stutter '✓ +' in patch cell header:\n%s", joined)
 	}
-	if !strings.Contains(joined, "✓") || !strings.Contains(joined, "write_file") {
-		t.Fatalf("expected clean checkmark and tool name in patch cell header:\n%s", joined)
+	if !strings.Contains(joined, "✓") || !strings.Contains(joined, "Write") {
+		t.Fatalf("expected clean checkmark and tool display name 'Write' in patch cell header:\n%s", joined)
+	}
+	if strings.Contains(joined, "write_file") {
+		t.Fatalf("expected raw tool name 'write_file' to NOT appear in patch cell header:\n%s", joined)
 	}
 	// Redundant body should be suppressed when paths are present
 	if strings.Contains(joined, "Wrote file successfully to") {
