@@ -233,10 +233,7 @@ func newHandler(
 	callSlots chan struct{},
 	catalogGeneration uint64,
 ) (tool.Handler, error) {
-	description := strings.TrimSpace(manifest.Description)
-	if description == "" {
-		description = "MCP tool " + name
-	}
+	description := normalizedMCPDescription(serverName, name, manifest)
 	inputSchema, err := cloneMCPSchema(manifest.InputSchema)
 	if err != nil {
 		return nil, fmt.Errorf("input schema: %w", err)
@@ -254,6 +251,25 @@ func newHandler(
 			InputSchema: inputSchema, OutputSchema: outputSchema,
 		},
 	}, nil
+}
+
+func normalizedMCPDescription(serverName, namespacedName string, manifest Tool) string {
+	purpose := strings.Join(strings.Fields(strings.TrimSpace(manifest.Description)), " ")
+	if purpose == "" {
+		purpose = "No purpose was declared by the server."
+	}
+	const maxPurposeBytes = 2048
+	if len(purpose) > maxPurposeBytes {
+		purpose = purpose[:maxPurposeBytes] + "..."
+	}
+	stateEffect := "unspecified; Proton treats this tool as potentially mutating"
+	switch manifest.Mutability {
+	case tool.MutabilityReadOnly:
+		stateEffect = "read-only"
+	case tool.MutabilityMutating:
+		stateEffect = "mutating"
+	}
+	return fmt.Sprintf("External MCP tool from server %q (%s). Declared purpose (external metadata): %s State effect: %s.", serverName, namespacedName, purpose, stateEffect)
 }
 
 func (h serverToolHandler) Definition() tool.Definition {
