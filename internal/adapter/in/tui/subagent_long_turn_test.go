@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/feature/agent"
 	"github.com/projectTHORN/proton/internal/core/permission"
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/engine/turn"
+	"github.com/projectTHORN/proton/internal/feature/agent"
 )
 
 func TestLongTurnWithSubagentsKeepsProgressCoherent(t *testing.T) {
@@ -41,8 +41,11 @@ func TestLongTurnWithSubagentsKeepsProgressCoherent(t *testing.T) {
 	if panel := m.agentsView(); strings.Contains(panel, "\n") {
 		t.Fatalf("busy agent panel should stay collapsed: %q", panel)
 	}
-	if active, ok := m.historyState.Active().(*AgentToolCell); !ok || active.Name != "wait_agent" {
-		t.Fatalf("active orchestration cell=%T %#v", m.historyState.Active(), m.historyState.Active())
+	if active := m.historyState.Active(); active != nil {
+		t.Fatalf("wait_agent leaked an active orchestration cell=%T %#v", active, active)
+	}
+	if run := m.historyState.AgentRun("explorer-1"); run == nil || run.Task != "inspect router" {
+		t.Fatalf("delegated run was not retained as one lifecycle cell: %#v", run)
 	}
 
 	m.busy = false
