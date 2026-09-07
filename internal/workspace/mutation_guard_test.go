@@ -6,7 +6,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 func TestMutationGuardBlocksDirtyUnownedPath(t *testing.T) {
@@ -69,6 +72,26 @@ func TestMutationGuardAllowsNonGitWorkspace(t *testing.T) {
 		t.Fatalf("non-git workspace unexpectedly blocked: %v", err)
 	}
 }
+
+func TestMutationGuardFailsClosedWhenGitStateCannotBeInspected(t *testing.T) {
+	ws := newGitWorkspace(t)
+	configPath := filepath.Join(ws.Root(), ".git", "config")
+	config, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config = []byte(strings.Replace(string(config), "repositoryformatversion = 0", "repositoryformatversion = 999", 1))
+	if err := os.WriteFile(configPath, config, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(ws.Root(), "tracked.txt")
+	err = ws.GuardWholeFileMutation(WithMutationSession(context.Background()), path)
+	var toolErr *tool.ToolError
+	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeWorkspaceStateUnavailable {
+		t.Fatalf("GuardWholeFileMutation() error = %v, want workspace_state_unavailable", err)
+	}
+}
+
 func newGitWorkspace(t *testing.T) *Workspace {
 	t.Helper()
 	root := t.TempDir()
