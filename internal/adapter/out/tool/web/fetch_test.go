@@ -142,6 +142,17 @@ func TestWebFetchRejectsInvalidSchemes(t *testing.T) {
 	}
 }
 
+func TestWebFetchRedirectRejectsPrivateTarget(t *testing.T) {
+	handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted}).(webFetchHandler)
+	request, err := http.NewRequest(http.MethodGet, "http://10.0.0.1/internal", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := handler.client.CheckRedirect(request, []*http.Request{{}}); !errors.Is(err, sandbox.ErrNetworkDenied) {
+		t.Fatalf("CheckRedirect() error = %v, want network denied", err)
+	}
+}
+
 func TestWebFetchHaltsRedirectLoops(t *testing.T) {
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
