@@ -396,7 +396,7 @@ func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.withSpinner(command)
 		}
 	}
-	if message.Type == tea.KeyShiftTab || key.Matches(message, m.keys.CycleMode) {
+	if key.Matches(message, m.keys.CycleMode) {
 		m.cycleMode()
 		return m, nil
 	}
@@ -405,7 +405,7 @@ func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.refreshTranscriptViewport(true)
 		return m, nil
 	}
-	if message.Type == tea.KeyCtrlS || key.Matches(message, m.keys.ToggleSkills) {
+	if key.Matches(message, m.keys.ToggleSkills) {
 		if m.bottom.has(skillsViewID) {
 			m.bottom.remove(skillsViewID)
 			m.relayout()
@@ -419,7 +419,7 @@ func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.executeCommand("/skills")
 		return m, nil
 	}
-	if message.Type == tea.KeyCtrlP || key.Matches(message, m.keys.ToggleModel) {
+	if key.Matches(message, m.keys.ToggleModel) {
 		if m.bottom.has(modelSelectViewID) {
 			m.bottom.remove(modelSelectViewID)
 			m.relayout()

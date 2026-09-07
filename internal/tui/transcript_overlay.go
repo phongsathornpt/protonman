@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -43,8 +44,12 @@ func (m *bubbleModel) transcriptOverlayView() string {
 }
 
 func (m *bubbleModel) updateTranscriptKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if key.Matches(message, m.keys.Transcript) {
+		m.showTranscript = false
+		return m, nil
+	}
 	switch message.String() {
-	case "esc", "ctrl+t", "q":
+	case "esc", "q":
 		m.showTranscript = false
 		return m, nil
 	case "r":
