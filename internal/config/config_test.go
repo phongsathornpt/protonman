@@ -332,95 +332,28 @@ func TestDeleteUserProviderConfig(t *testing.T) {
 	}
 }
 
-func TestAgentMaxRoundsConfig(t *testing.T) {
+func TestAgentMaxRoundsConfigIsDeprecatedAndIgnored(t *testing.T) {
 	homeDir := t.TempDir()
-	workDir := t.TempDir()
-
-	// 1. Defaults should apply when no config exists.
-	snapshot, err := Load(context.Background(), Options{
-		HomeDir: homeDir,
-		WorkDir: workDir,
-	})
-	if err != nil {
-		t.Fatalf("Load() default error = %v", err)
-	}
-	if got, want := snapshot.Agent.MaxRounds, DefaultMaxRounds; got != want {
-		t.Fatalf("default max_rounds = %d, want %d", got, want)
-	}
-	if got, want := snapshot.Agent.MaxToolCalls, DefaultMaxToolCalls; got != want {
-		t.Fatalf("default max_tool_calls = %d, want %d", got, want)
-	}
-
-	// 2. Load explicitly configured execution limits.
 	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent]
 max_rounds = 35
 max_tool_calls = 42
 `)
-	snapshot, err = Load(context.Background(), Options{
-		HomeDir: homeDir,
-		WorkDir: workDir,
-	})
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: t.TempDir()})
 	if err != nil {
-		t.Fatalf("Load() custom error = %v", err)
-	}
-	if got, want := snapshot.Agent.MaxRounds, 35; got != want {
-		t.Fatalf("configured max_rounds = %d, want %d", got, want)
+		t.Fatal(err)
 	}
 	if got, want := snapshot.Agent.MaxToolCalls, 42; got != want {
 		t.Fatalf("configured max_tool_calls = %d, want %d", got, want)
 	}
-
-	// 3. SaveUserMaxRounds updates the value to 50.
-	if err := SaveUserMaxRounds(homeDir, 50); err != nil {
-		t.Fatalf("SaveUserMaxRounds(50) error = %v", err)
+	found := false
+	for _, warning := range snapshot.Warnings {
+		if strings.Contains(warning, "agent.max_rounds is deprecated and ignored") {
+			found = true
+			break
+		}
 	}
-	snapshot, err = Load(context.Background(), Options{
-		HomeDir: homeDir,
-		WorkDir: workDir,
-	})
-	if err != nil {
-		t.Fatalf("Load() updated error = %v", err)
-	}
-	if got, want := snapshot.Agent.MaxRounds, 50; got != want {
-		t.Fatalf("persisted max_rounds = %d, want %d", got, want)
-	}
-	if err := SaveUserMaxToolCalls(homeDir, 75); err != nil {
-		t.Fatalf("SaveUserMaxToolCalls(75) error = %v", err)
-	}
-	snapshot, err = Load(context.Background(), Options{
-		HomeDir: homeDir,
-		WorkDir: workDir,
-	})
-	if err != nil {
-		t.Fatalf("Load() updated tool-call limit error = %v", err)
-	}
-	if got, want := snapshot.Agent.MaxToolCalls, 75; got != want {
-		t.Fatalf("persisted max_tool_calls = %d, want %d", got, want)
-	}
-
-	// 4. SaveUserMaxRounds updates to 0 (round-count bound disabled).
-	if err := SaveUserMaxRounds(homeDir, 0); err != nil {
-		t.Fatalf("SaveUserMaxRounds(0) error = %v", err)
-	}
-	snapshot, err = Load(context.Background(), Options{
-		HomeDir: homeDir,
-		WorkDir: workDir,
-	})
-	if err != nil {
-		t.Fatalf("Load() unbounded error = %v", err)
-	}
-	if got, want := snapshot.Agent.MaxRounds, 0; got != want {
-		t.Fatalf("unbounded max_rounds = %d, want %d", got, want)
-	}
-
-	// 5. Verify permissions
-	configFile := filepath.Join(homeDir, ".proton", "config.toml")
-	info, err := os.Stat(configFile)
-	if err != nil {
-		t.Fatalf("stat config file: %v", err)
-	}
-	if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Fatalf("permissions = %o, want 0600", perm)
+	if !found {
+		t.Fatalf("warnings = %#v, want max_rounds deprecation", snapshot.Warnings)
 	}
 }
 
@@ -459,9 +392,6 @@ profile = "dex"
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	if snapshot.Agent.MaxRounds != 30 {
-		t.Errorf("Agent.MaxRounds = %d, want 30", snapshot.Agent.MaxRounds)
-	}
 	if snapshot.Agent.Profile != "dex" {
 		t.Errorf("Agent.Profile = %q, want 'dex'", snapshot.Agent.Profile)
 	}
@@ -472,7 +402,6 @@ func TestAgentLimitsRejectNegativeValues(t *testing.T) {
 		name  string
 		field string
 	}{
-		{name: "rounds", field: "max_rounds"},
 		{name: "tool calls", field: "max_tool_calls"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -486,9 +415,6 @@ func TestAgentLimitsRejectNegativeValues(t *testing.T) {
 		})
 	}
 
-	if err := SaveUserMaxRounds(t.TempDir(), -1); err == nil {
-		t.Fatal("SaveUserMaxRounds(-1) error = nil, want rejection")
-	}
 	if err := SaveUserMaxToolCalls(t.TempDir(), -1); err == nil {
 		t.Fatal("SaveUserMaxToolCalls(-1) error = nil, want rejection")
 	}
@@ -647,7 +573,7 @@ provider = "user-provider"
 
 [agent]
 profile = "pow"
-max_rounds = 11
+max_tool_calls = 11
 reasoning_effort = "low"
 
 [ui]
@@ -670,7 +596,7 @@ reasoning_effort = "high"
 		FieldModelProvider:        SourceUser,
 		FieldAgentProfile:         SourceProject,
 		FieldAgentReasoningEffort: SourceProject,
-		FieldAgentMaxRounds:       SourceUser,
+		FieldAgentMaxToolCalls:    SourceUser,
 		FieldUIPermissionMode:     SourceUser,
 	} {
 		if got := snapshot.Provenance[field]; got != want {

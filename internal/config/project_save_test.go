@@ -20,7 +20,7 @@ func TestSaveProjectSettingsRoundTrip(t *testing.T) {
 	if err := SaveProjectReasoningEffort(workDir, sdk.ReasoningHigh); err != nil {
 		t.Fatal(err)
 	}
-	if err := SaveProjectMaxRounds(workDir, 44); err != nil {
+	if err := SaveProjectMaxToolCalls(workDir, 44); err != nil {
 		t.Fatal(err)
 	}
 	if err := SaveProjectPermissionMode(workDir, permission.ModeAlwaysApprove); err != nil {
@@ -30,10 +30,10 @@ func TestSaveProjectSettingsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.Agent.Profile != "dex" || snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh || snapshot.Agent.MaxRounds != 44 || snapshot.Mode != permission.ModeAlwaysApprove {
+	if snapshot.Agent.Profile != "dex" || snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh || snapshot.Agent.MaxToolCalls != 44 || snapshot.Mode != permission.ModeAlwaysApprove {
 		t.Fatalf("project settings did not round trip: %#v", snapshot)
 	}
-	for _, field := range []string{FieldAgentProfile, FieldAgentReasoningEffort, FieldAgentMaxRounds, FieldUIPermissionMode} {
+	for _, field := range []string{FieldAgentProfile, FieldAgentReasoningEffort, FieldAgentMaxToolCalls, FieldUIPermissionMode} {
 		if snapshot.Provenance[field] != SourceProject {
 			t.Fatalf("%s source = %q", field, snapshot.Provenance[field])
 		}
@@ -49,7 +49,7 @@ func TestSaveProjectSettingsRejectsSymlinkRoot(t *testing.T) {
 	if err := os.Symlink(target, appdirs.ProjectRoot(workDir)); err != nil {
 		t.Fatal(err)
 	}
-	if err := SaveProjectMaxRounds(workDir, 10); err == nil {
+	if err := SaveProjectMaxToolCalls(workDir, 10); err == nil {
 		t.Fatal("expected symlink project root rejection")
 	}
 }
@@ -63,13 +63,13 @@ func TestSaveProjectSettingsRejectsSymlinkConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	target := filepath.Join(t.TempDir(), "outside.toml")
-	if err := os.WriteFile(target, []byte("[agent]\nmax_rounds = 1\n"), 0o644); err != nil {
+	if err := os.WriteFile(target, []byte("[agent]\nmax_tool_calls = 1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(target, appdirs.ProjectConfig(workDir)); err != nil {
 		t.Fatal(err)
 	}
-	if err := SaveProjectMaxRounds(workDir, 10); err == nil {
+	if err := SaveProjectMaxToolCalls(workDir, 10); err == nil {
 		t.Fatal("expected symlink config rejection")
 	}
 }
