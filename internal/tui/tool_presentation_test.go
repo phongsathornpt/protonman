@@ -101,8 +101,8 @@ func TestExtractToolTarget(t *testing.T) {
 			name:       "delegate_task profile and task",
 			toolName:   "delegate_task",
 			kind:       "",
-			args:       `{"profile":"explorer","task":"find all authentication handlers"}`,
-			wantTarget: "[explorer] find all authentication handlers",
+			args:       `{"profile":"int","task":"find all authentication handlers"}`,
+			wantTarget: "[int] find all authentication handlers",
 			wantKind:   "",
 		},
 		{
@@ -339,8 +339,8 @@ func TestTodoToolPresentation(t *testing.T) {
 }
 
 func TestAgentToolPresentation(t *testing.T) {
-	target, kind := extractToolTarget("delegate_task", "", json.RawMessage(`{"profile":"explorer","task":"inspect router behavior"}`))
-	if kind != tool.KindAgent || !strings.Contains(target, "[explorer]") {
+	target, kind := extractToolTarget("delegate_task", "", json.RawMessage(`{"profile":"int","task":"inspect router behavior"}`))
+	if kind != tool.KindAgent || !strings.Contains(target, "[int]") {
 		t.Fatalf("target=%q kind=%q", target, kind)
 	}
 	if glyph := toolKindGlyph(kind, "delegate_task"); glyph != glyphAgent {

@@ -33,7 +33,7 @@ func TestAgentsViewShowsActiveAndRespectsLayout(t *testing.T) {
 		}),
 	)
 	defer coord.Close()
-	if _, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileExplorer, Task: "inspect router"}); err != nil {
+	if _, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileINT, Task: "inspect router"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -68,7 +68,7 @@ func TestAgentLifecycleMessageRefreshesSnapshot(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.coordinator = coord
 	m.agentEvents = events
-	if _, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileExplorer, Task: "inspect router"}); err != nil {
+	if _, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileINT, Task: "inspect router"}); err != nil {
 		t.Fatal(err)
 	}
 	msg := (<-events)
@@ -244,11 +244,11 @@ func TestCancelActiveTurnCancelsOnlyOwnedSubagents(t *testing.T) {
 	)
 	defer func() { close(release); _ = coord.Close() }()
 
-	owned, err := coord.Spawn(context.Background(), agent.Request{ParentID: "turn-owned", Profile: agent.ProfileExplorer, Task: "owned"})
+	owned, err := coord.Spawn(context.Background(), agent.Request{ParentID: "turn-owned", Profile: agent.ProfileINT, Task: "owned"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, err := coord.Spawn(context.Background(), agent.Request{ParentID: "turn-other", Profile: agent.ProfileReviewer, Task: "other"})
+	other, err := coord.Spawn(context.Background(), agent.Request{ParentID: "turn-other", Profile: agent.ProfileINT, Task: "other"})
 	if err != nil {
 		t.Fatal(err)
 	}

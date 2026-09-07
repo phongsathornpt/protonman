@@ -33,7 +33,7 @@ func TestLoopBuildsEffectiveSystemPromptFromRuntime(t *testing.T) {
 		{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 	}}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithSystemPromptSpec(agentprompt.Spec{
-		Role: "Inspect the assigned code carefully.", Profile: "reviewer", Workspace: workspace,
+		Role: "Inspect the assigned code carefully.", Profile: "int", Workspace: workspace,
 	}))
 	_, err := loop.Run(context.Background(), []model.Message{
 		{Role: model.RoleSystem, Content: "custom project instruction"},
@@ -50,11 +50,16 @@ func TestLoopBuildsEffectiveSystemPromptFromRuntime(t *testing.T) {
 		t.Fatalf("first role = %q, want system", system.Role)
 	}
 	for _, want := range []string{
-		`<proton-system-prompt version="2">`, "provider=test", "model=scripted", "profile=reviewer",
-		"Workspace root: " + workspace, "Available tools: read_file.", "custom project instruction", "Inspect the assigned code carefully.", "follow project rules",
+		`<proton-system-prompt version="4">`, "specialized coding subagent",
+		"Workspace root: " + workspace, "custom project instruction", "Inspect the assigned code carefully.", "follow project rules",
 	} {
 		if !strings.Contains(system.Content, want) {
 			t.Fatalf("system prompt missing %q:\n%s", want, system.Content)
+		}
+	}
+	for _, unwanted := range []string{"provider=test", "model=scripted", "Available tools:"} {
+		if strings.Contains(system.Content, unwanted) {
+			t.Fatalf("system prompt leaked runtime detail %q: %s", unwanted, system.Content)
 		}
 	}
 	if strings.Contains(system.Content, skillPromptMarker) {

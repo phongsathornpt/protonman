@@ -237,7 +237,6 @@ func buildInitialRunner(cfg config.Snapshot, sessionID, workDir string, skills *
 	if profileName := strings.TrimSpace(cfg.Agent.Profile); profileName != "" {
 		if profile, err := agent.ParseProfile(profileName); err == nil {
 			promptSpec.Profile = string(profile)
-			promptSpec.Role = agent.RolePromptForProfile(profile)
 		}
 	}
 	loopOptions := []turn.Option{

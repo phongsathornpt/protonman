@@ -62,6 +62,19 @@ func TestSelectSubagentSkillsEnforcesCatalogLimits(t *testing.T) {
 	}
 }
 
+func TestSkillBudgetForProfile(t *testing.T) {
+	cases := map[Profile]subagentSkillBudget{
+		ProfilePOW: {maxActive: 2, maxInstructionBytes: 8 * 1024},
+		ProfileINT: {maxActive: 3, maxInstructionBytes: 12 * 1024},
+		ProfileDEX: {maxActive: 3, maxInstructionBytes: 16 * 1024},
+	}
+	for profile, want := range cases {
+		if got := skillBudgetForProfile(profile); got != want {
+			t.Fatalf("skillBudgetForProfile(%q) = %+v, want %+v", profile, got, want)
+		}
+	}
+}
+
 func TestSelectSubagentSkillsReturnsEmptyForIrrelevantCatalog(t *testing.T) {
 	catalog := skill.NewRegistry(testSkill("pdf-tools", "Work with PDF documents", skill.ScopeProject, nil))
 	selected := selectSubagentSkills(catalog, Request{Profile: ProfileINT, Task: "inspect Go scheduler code"})

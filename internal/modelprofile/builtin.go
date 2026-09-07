@@ -17,7 +17,9 @@ var builtinRegistry = mustRegistry(
 		ContextWindow:     1_048_576,
 		ToolSchemaDialect: ToolSchemaGeminiSubset,
 		PromptHints: []string{
+			"Prefer explicit tool calls over unsupported assumptions when repository facts are needed.",
 			"Use tool names exactly as provided; do not invent namespaces or prefixes.",
+			"For broad exploration, prefer explicit delegation when available over unsupported prose-only assumptions.",
 		},
 	},
 	Profile{
@@ -46,6 +48,9 @@ var builtinRegistry = mustRegistry(
 			Support: SupportYes,
 			Levels:  []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningHigh, sdk.ReasoningXHigh},
 			Default: sdk.ReasoningHigh,
+		},
+		PromptHints: []string{
+			"Verify tool-dependent claims with the relevant tool result before presenting them as facts.",
 		},
 	},
 	Profile{

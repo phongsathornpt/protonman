@@ -204,6 +204,7 @@ func WithSystemPromptSpec(spec agentprompt.Spec) Option {
 	return func(loop *Loop) error {
 		clone := spec
 		clone.ToolNames = append([]string(nil), spec.ToolNames...)
+		clone.ModelPromptHints = append([]string(nil), spec.ModelPromptHints...)
 		clone.ExtraInstructions = append([]string(nil), spec.ExtraInstructions...)
 		loop.promptSpec = &clone
 		return nil
@@ -479,6 +480,7 @@ func (l *Loop) CloneWithTools(tools *toolcall.Service) (*Loop, error) {
 	if l.promptSpec != nil {
 		spec := *l.promptSpec
 		spec.ToolNames = append([]string(nil), l.promptSpec.ToolNames...)
+		spec.ModelPromptHints = append([]string(nil), l.promptSpec.ModelPromptHints...)
 		spec.ExtraInstructions = append([]string(nil), l.promptSpec.ExtraInstructions...)
 		clone.promptSpec = &spec
 	}
@@ -516,6 +518,7 @@ func (l *Loop) effectivePromptSpec(definitions []tool.Definition, extras []strin
 		spec.ModelProfile = profile.ProfileName
 		spec.ModelProfileMatch = string(profile.ProfileMatch)
 		spec.ModelCatalogOverride = profile.CatalogOverride
+		spec.ModelPromptHints = append([]string(nil), profile.PromptHints...)
 	}
 	spec.MaxRounds = l.maxRounds
 	spec.MaxToolCalls = l.maxToolCalls
@@ -731,7 +734,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			}
 		}
 		if l.promptSpec != nil {
-			spec := l.effectivePromptSpec(tools, promptExtras)
+			spec := l.effectivePromptSpec(definitions, promptExtras)
 			spec.ReasoningRequested = reasoningRequestedLabel(reasoningResolution)
 			spec.ReasoningEffective = reasoningEffectiveLabel(reasoningResolution)
 			spec.ReasoningSource = string(reasoningResolution.Source)

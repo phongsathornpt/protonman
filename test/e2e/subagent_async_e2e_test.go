@@ -79,7 +79,7 @@ func TestE2EAsyncSubagentWaitDoesNotCancel(t *testing.T) {
 	defer coord.Close()
 	service := agentLifecycleService(t, coord)
 
-	spawn := callAgentTool(t, service, "spawn", "delegate_task", map[string]any{"profile": "explorer", "task": "inspect asynchronously"})
+	spawn := callAgentTool(t, service, "spawn", "delegate_task", map[string]any{"profile": "int", "task": "inspect asynchronously"})
 	var handle struct {
 		AgentID string `json:"agent_id"`
 	}
@@ -118,7 +118,7 @@ func TestE2EAsyncSubagentExplicitCancel(t *testing.T) {
 	)
 	defer coord.Close()
 	service := agentLifecycleService(t, coord)
-	spawn := callAgentTool(t, service, "spawn", "delegate_task", map[string]any{"profile": "explorer", "task": "cancel me"})
+	spawn := callAgentTool(t, service, "spawn", "delegate_task", map[string]any{"profile": "int", "task": "cancel me"})
 	var handle struct {
 		AgentID string `json:"agent_id"`
 	}

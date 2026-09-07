@@ -11,9 +11,9 @@ func TestProfile(t *testing.T) {
 		wantErr    bool
 		isMutating bool
 	}{
-		{"explorer", ProfileExplorer, false, false},
-		{"reviewer", ProfileReviewer, false, false},
-		{"worker", ProfileWorker, false, true},
+		{"explorer", ProfileINT, false, false},
+		{"reviewer", ProfileINT, false, false},
+		{"worker", ProfilePOW, false, true},
 		{"pow", ProfilePOW, false, true},
 		{"dex", ProfileDEX, false, true},
 		{"int", ProfileINT, false, false},

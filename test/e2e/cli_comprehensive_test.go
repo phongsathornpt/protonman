@@ -137,7 +137,7 @@ func TestE2ECLIAgentProfiles(t *testing.T) {
 	home := newTestHome(t)
 	env := []string{"PROTON_HOME=" + home}
 
-	profiles := []string{"pow", "dex", "int", "worker", "explorer", "reviewer"}
+	profiles := []string{"pow", "int", "dex"}
 	for _, prof := range profiles {
 		res := runProton(t, runOptions{
 			args: []string{"-y", "-a", prof, "-p", `/call bash {"command":"echo '` + prof + `'"}`},

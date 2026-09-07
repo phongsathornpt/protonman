@@ -13,14 +13,14 @@ func TestE2ESubagentDelegationSuccess(t *testing.T) {
 	server.SetupWorkspaceConfig(t, home)
 
 	res := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call delegate_task {"task":"Explore repository structure","profile":"explorer","timeout_seconds":30}`},
+		args: []string{"-y", "-p", `/call delegate_task {"task":"Explore repository structure","profile":"int","timeout_seconds":30}`},
 		dir:  ws,
 		env:  []string{"PROTON_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("delegation failed: %s %s", res.stdout, res.stderr)
 	}
-	if !strings.Contains(res.stdout, "spawned explorer-") || !strings.Contains(res.stdout, "explorer · queued") {
+	if !strings.Contains(res.stdout, "spawned int-") || !strings.Contains(res.stdout, "int · queued") {
 		t.Fatalf("missing async subagent handle: %s", res.stdout)
 	}
 }
@@ -31,7 +31,7 @@ func TestE2ESubagentDelegationInvalidArguments(t *testing.T) {
 
 	// 1. Missing task
 	resMissing := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call delegate_task {"profile":"explorer"}`},
+		args: []string{"-y", "-p", `/call delegate_task {"profile":"int"}`},
 		dir:  ws,
 		env:  []string{"PROTON_HOME=" + home},
 	})
@@ -54,7 +54,7 @@ func TestE2ESubagentDelegationRejectsExcessiveTimeout(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 	res := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call delegate_task {"task":"Do work","profile":"explorer","timeout_seconds":86401}`},
+		args: []string{"-y", "-p", `/call delegate_task {"task":"Do work","profile":"int","timeout_seconds":86401}`},
 		dir:  ws,
 		env:  []string{"PROTON_HOME=" + home},
 	})
