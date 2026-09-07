@@ -86,6 +86,24 @@ func TestReadFileLineRangeRejectsInvalidUTF8(t *testing.T) {
 	}
 }
 
+func TestReadFileLineRangeBoundsScannedPrefix(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	path := filepath.Join(ws.Root(), "deep-lines.txt")
+	if err := os.WriteFile(path, []byte("aaaa\nbbbb\ncccc\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	file, err := ws.OpenReadFile(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = readFileLinesBounded(context.Background(), file, readFileInput{
+		Path: "deep-lines.txt", StartLine: 3, Limit: maxReadFileBytes,
+	}, newJSONCall(t, "read-lines-budget", "read_file", map[string]any{"path": "deep-lines.txt"}), 8)
+	if err == nil || !strings.Contains(err.Error(), "byte offset pagination") {
+		t.Fatalf("bounded line scan error = %v, want byte pagination guidance", err)
+	}
+}
+
 func TestReadFileLineRangePreservesFinalLineWithoutNewline(t *testing.T) {
 	ws := newTestWorkspace(t, nil)
 	if err := os.WriteFile(filepath.Join(ws.Root(), "lines.txt"), []byte("a\nb"), 0o644); err != nil {
