@@ -18,17 +18,20 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 		}
 	}
 	headers := make(http.Header)
+	isOpenCode := IsProvider(DefaultOpenCodeName, providerName, cfg.baseURL)
 	if cfg.sessionID != "" {
 		headers.Set("x-session-affinity", cfg.sessionID)
 		headers.Set("X-Session-Id", cfg.sessionID)
-		if IsProvider(DefaultOpenCodeName, providerName, cfg.baseURL) {
+		if isOpenCode {
 			headers.Set("x-opencode-session", cfg.sessionID)
-			clientName := cfg.clientName
-			if clientName == "" {
-				clientName = "proton"
-			}
-			headers.Set("x-opencode-client", clientName)
 		}
+	}
+	if isOpenCode {
+		clientName := cfg.clientName
+		if clientName == "" {
+			clientName = "proton"
+		}
+		headers.Set("x-opencode-client", clientName)
 	}
 	provider := sdkopenai.NewProvider(sdkopenai.ProviderOptions{
 		ProviderName: strings.ToLower(strings.TrimSpace(providerName)),
