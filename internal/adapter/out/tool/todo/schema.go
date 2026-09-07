@@ -80,9 +80,9 @@ func todoUpdateOutputSchema() map[string]any {
 			"changes": map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"added": count(), "removed": count(), "started": count(), "completed": count(), "reopened": count(),
+					"added": count(), "removed": count(), "updated": count(), "started": count(), "completed": count(), "reopened": count(),
 				},
-				"required":             []any{"added", "removed", "started", "completed", "reopened"},
+				"required":             []any{"added", "removed", "updated", "started", "completed", "reopened"},
 				"additionalProperties": false,
 			},
 		},
