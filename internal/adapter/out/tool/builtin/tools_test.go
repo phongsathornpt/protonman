@@ -401,6 +401,43 @@ func TestGitStatusRejectsNonRepository(t *testing.T) {
 	}
 }
 
+func TestGitStatusBoundedBufferCapsMemoryAndSignalsLimit(t *testing.T) {
+	limited := false
+	buffer := &boundedBuffer{limit: 8, onLimit: func() { limited = true }}
+	if _, err := buffer.Write([]byte("1234567890")); err != nil {
+		t.Fatal(err)
+	}
+	if got := buffer.String(); got != "12345678" {
+		t.Fatalf("bounded buffer = %q, want first 8 bytes", got)
+	}
+	if !buffer.IsTruncated() || !limited {
+		t.Fatal("bounded buffer did not report output limit")
+	}
+}
+
+func TestGitStatusCancelsWhenStdoutExceedsLimit(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	_, err := NewGitStatus(workspaceRoot, scriptedGitLauncher{script: "yes x | head -c 2097152"}).Execute(
+		context.Background(),
+		newJSONCall(t, "status-large", "git_status", map[string]any{}),
+	)
+	var toolErr *tool.ToolError
+	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeOutputTooLarge {
+		t.Fatalf("git_status large output error = %v, want output_too_large", err)
+	}
+}
+
+func TestGitStatusIncludesBoundedStderrDiagnostic(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	_, err := NewGitStatus(workspaceRoot, scriptedGitLauncher{script: "printf 'not a git repository' >&2; exit 128"}).Execute(
+		context.Background(),
+		newJSONCall(t, "status-stderr", "git_status", map[string]any{}),
+	)
+	if err == nil || !strings.Contains(err.Error(), "not a git repository") {
+		t.Fatalf("git_status stderr diagnostic = %v", err)
+	}
+}
+
 func TestGitStatusRequiresLauncherFailClosed(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	_, err := NewGitStatus(workspaceRoot).Execute(
@@ -442,6 +479,16 @@ func TestWriteWithoutCheckpointFailsClosed(t *testing.T) {
 type mockGitLauncher struct {
 	lastDir     string
 	lastCommand string
+}
+
+type scriptedGitLauncher struct {
+	script string
+}
+
+func (l scriptedGitLauncher) Command(ctx context.Context, dir string, _ string) (*exec.Cmd, error) {
+	cmd := exec.CommandContext(ctx, "sh", "-c", l.script)
+	cmd.Dir = dir
+	return cmd, nil
 }
 
 func (m *mockGitLauncher) Command(_ context.Context, dir string, command string) (*exec.Cmd, error) {
