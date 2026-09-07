@@ -370,6 +370,36 @@ func TestE2ETurnLoopSuppressesDeadCallInsideProductiveBatch(t *testing.T) {
 	}
 }
 
+func TestE2EBashExit128IsCommandFailure(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+	server := newMockLLMServer(t)
+	server.SetupWorkspaceConfig(t, home)
+	server.AddToolCallResponse("bash-exit-128", "bash", `{"command":"printf 'fatal: simulated git failure\n' >&2; exit 128"}`)
+	server.AddTextResponse("I inspected the command failure and stopped retrying it.")
+
+	res := runProton(t, runOptions{
+		args: []string{"-y", "-p", "Run the diagnostic command and explain the failure"},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 {
+		t.Fatalf("bash exit-128 turn failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "inspected the command failure") {
+		t.Fatalf("stdout missing final response: %s", res.stdout)
+	}
+	requests := server.Requests()
+	if got, want := len(requests), 2; got != want {
+		t.Fatalf("model requests = %d, want %d", got, want)
+	}
+	for _, want := range []string{`"code":"command_failed"`, `"exit_code":128`, "fatal: simulated git failure"} {
+		if !requestMessagesContain(requests[1], want) {
+			t.Fatalf("second request missing %q in tool result: %#v", want, requests[1]["messages"])
+		}
+	}
+}
+
 func TestE2EGetTodoAcceptsEmptyProviderArguments(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)

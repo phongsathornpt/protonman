@@ -627,7 +627,7 @@ func TestExecCellSeparatesStderrAndStreamTruncation(t *testing.T) {
 	cell := &ExecCell{
 		Command: "go test ./...", Stdout: "package a ok\n", Stderr: "package b failed\n",
 		ExitCode: &exit1, StdoutTruncated: true, Truncated: true,
-		FailureCode: tool.ErrorCodeExecution,
+		FailureCode: tool.ErrorCodeCommandFailed,
 	}
 	rendered := strings.Join(cell.RenderWidth(80), "\n")
 	for _, want := range []string{"go test ./...", "exit 1", "package a ok", "stderr:", "package b failed", "stdout truncated"} {
@@ -636,10 +636,13 @@ func TestExecCellSeparatesStderrAndStreamTruncation(t *testing.T) {
 		}
 	}
 	raw := strings.Join(cell.RawLines(), "\n")
-	for _, want := range []string{"stderr:", "exit 1", "failure: execution_error"} {
+	for _, want := range []string{"stderr:", "exit 1"} {
 		if !strings.Contains(raw, want) {
 			t.Fatalf("raw missing %q:\n%s", want, raw)
 		}
+	}
+	if strings.Contains(raw, "failure: command_failed") {
+		t.Fatalf("raw redundantly exposes command_failed next to exit code:\n%s", raw)
 	}
 }
 
