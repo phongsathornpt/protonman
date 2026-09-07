@@ -10,6 +10,8 @@ import (
 	"github.com/projectTHORN/proton/internal/agentprompt"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
+	"github.com/projectTHORN/proton/internal/skill"
+	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
 	"github.com/projectTHORN/proton/internal/turn"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
@@ -26,11 +28,14 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	permMode := c.permissionMode
 	prompt := c.prompt
 	guard := c.guard
+	skillCatalog := c.skillRegistry
 	reasoningEffort := c.reasoningEffort
 	c.agentsMu.RUnlock()
 
-	// 1. Build profile-scoped tool registry
+	// 1. Build profile-scoped tools and an isolated skill activation session.
+	childSkills := skillCatalog.Fork()
 	scopedRegistry := FilterRegistryForProfile(parentRegistry, req.Profile)
+	scopedRegistry = bindSkillRegistry(scopedRegistry, childSkills)
 
 	// 2. Build scoped tool service. Child agents inherit the parent permission
 	// mode regardless of profile. Capability scoping limits which tools a
@@ -97,6 +102,9 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 		if reasoningEffort != sdk.ReasoningDefault {
 			loopOptions = append(loopOptions, turn.WithExplicitReasoningEffort(reasoningEffort))
 		}
+		if childSkills != nil {
+			loopOptions = append(loopOptions, turn.WithSkillRegistry(childSkills))
+		}
 		loop, lerr := turn.NewLoop(languageModel, service, loopOptions...)
 		if lerr != nil {
 			return Result{AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create turn loop: %w", lerr)
@@ -147,6 +155,26 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 		Rounds:       turnResult.Rounds,
 		Verification: turnResult.Verification,
 	}, nil
+}
+
+type skillRegistryBinder interface {
+	BindSkillRegistry(*skill.Registry) tool.Handler
+}
+
+func bindSkillRegistry(registry tool.Registry, skills *skill.Registry) tool.Registry {
+	if registry == nil || skills == nil {
+		return registry
+	}
+	scoped, ok := registry.(*scopedRegistry)
+	if !ok {
+		return registry
+	}
+	for name, handler := range scoped.handlers {
+		if binder, ok := handler.(skillRegistryBinder); ok {
+			scoped.handlers[name] = binder.BindSkillRegistry(skills)
+		}
+	}
+	return scoped
 }
 
 func formatUserPrompt(req Request) string {

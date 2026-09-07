@@ -33,6 +33,25 @@ func NewRegistry(skills ...Skill) *Registry {
 	return r
 }
 
+// Fork creates an isolated activation session over the same immutable skill catalog.
+// Skill definitions are copied so child activation state never leaks to the parent.
+func (r *Registry) Fork() *Registry {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	fork := &Registry{
+		skills:    make(map[string]Skill, len(r.skills)),
+		order:     append([]string(nil), r.order...),
+		activated: make(map[string]bool),
+	}
+	for name, item := range r.skills {
+		fork.skills[name] = item
+	}
+	return fork
+}
+
 // Register adds a skill to the registry.
 func (r *Registry) Register(s Skill) error {
 	if err := s.Validate(); err != nil {

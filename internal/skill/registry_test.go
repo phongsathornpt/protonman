@@ -107,3 +107,28 @@ func TestRegistry(t *testing.T) {
 		t.Errorf("expected empty active lists after ResetActivated()")
 	}
 }
+
+func TestRegistryForkIsolatesActivationState(t *testing.T) {
+	parent := NewRegistry(Skill{
+		Name: "go-review", Description: "Review Go code", Scope: ScopeUser,
+		Instructions: "Run focused Go checks.",
+	})
+	parent.MarkActivated("go-review")
+
+	child := parent.Fork()
+	if child == nil {
+		t.Fatal("Fork() = nil")
+	}
+	if child.IsActivated("go-review") {
+		t.Fatal("child inherited parent activation state")
+	}
+	if _, ok := child.Lookup("go-review"); !ok {
+		t.Fatal("child lost shared skill catalog")
+	}
+
+	child.MarkActivated("go-review")
+	child.Deactivate("go-review")
+	if !parent.IsActivated("go-review") {
+		t.Fatal("child activation changes leaked to parent")
+	}
+}
