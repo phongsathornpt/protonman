@@ -458,6 +458,14 @@ func NewPolicy(config Config) (*Policy, error) {
 		}
 		if patternMode == PatternModeDomain {
 			rules[i].Pattern = strings.ToLower(strings.TrimSpace(rule.Pattern))
+		} else if rule.Tool == ToolMCP {
+			pattern := strings.TrimSpace(rule.Pattern)
+			// Dotted MCP patterns are tool namespaces. Plain patterns remain
+			// request-detail matchers for backwards-compatible resource rules.
+			if pattern != "" && strings.Contains(pattern, ".") && !strings.HasPrefix(pattern, "mcp.") {
+				pattern = "mcp." + pattern
+			}
+			rules[i].Pattern = pattern
 		}
 	}
 
@@ -519,13 +527,8 @@ func ruleMatches(rule Rule, request Request) bool {
 	if glob.Match(rule.Pattern, detail) {
 		return true
 	}
-	if request.ToolKind == ToolMCP {
-		if glob.Match(rule.Pattern, request.ToolName) {
-			return true
-		}
-		if strings.HasPrefix(request.ToolName, "mcp.") && glob.Match(rule.Pattern, strings.TrimPrefix(request.ToolName, "mcp.")) {
-			return true
-		}
+	if request.ToolKind == ToolMCP && glob.Match(rule.Pattern, request.ToolName) {
+		return true
 	}
 	return false
 }
