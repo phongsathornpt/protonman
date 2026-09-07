@@ -15,7 +15,6 @@ import (
 
 	"github.com/projectTHORN/proton/internal/agentprompt"
 	"github.com/projectTHORN/proton/internal/model"
-	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
@@ -170,30 +169,9 @@ func (s *FileStore) Load(ctx context.Context, sessionID string) (State, bool, er
 	if closeErr != nil {
 		return State{}, false, fmt.Errorf("close session state: %w", closeErr)
 	}
-	if state.Version != currentStateVersion {
-		return State{}, false, fmt.Errorf("session state version %d is unsupported", state.Version)
-	}
-	if _, err := permission.ParseMode(state.PermissionMode); err != nil {
-		return State{}, false, fmt.Errorf("session permission mode: %w", err)
-	}
-	if err := validateReasoningSetting(state.ReasoningEffort); err != nil {
-		return State{}, false, fmt.Errorf("session reasoning effort: %w", err)
-	}
-	if err := validateMessages(state.Messages); err != nil {
-		return State{}, false, fmt.Errorf("session messages: %w", err)
-	}
-	state.Messages = sanitizeMessages(state.Messages)
-	if err := validateMessages(state.Messages); err != nil {
-		return State{}, false, fmt.Errorf("session messages: %w", err)
-	}
-	if state.SessionID == "" {
-		state.SessionID = sessionID
-	}
-	if state.WorkspaceKey == "" {
-		state.WorkspaceKey = legacyWorkspaceKey(sessionID)
-	}
-	if state.CreatedAt.IsZero() && !state.UpdatedAt.IsZero() {
-		state.CreatedAt = state.UpdatedAt
+	state, err = NormalizeLoadedState(sessionID, state)
+	if err != nil {
+		return State{}, false, err
 	}
 	return state, true, nil
 }
@@ -271,45 +249,14 @@ func (s *FileStore) Save(ctx context.Context, sessionID string, state State) (sa
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("before saving session: %w", err)
 	}
-	if state.Version == 0 {
-		state.Version = currentStateVersion
+	var existing *State
+	if loaded, found, loadErr := s.Load(ctx, sessionID); loadErr == nil && found {
+		existing = &loaded
 	}
-	state.SessionID = sessionID
-	if state.WorkspaceKey == "" {
-		state.WorkspaceKey = legacyWorkspaceKey(sessionID)
+	state, err := PrepareStateForSave(sessionID, state, existing, time.Now().UTC())
+	if err != nil {
+		return err
 	}
-	if existing, found, loadErr := s.Load(ctx, sessionID); loadErr == nil && found {
-		if state.CreatedAt.IsZero() {
-			state.CreatedAt = existing.CreatedAt
-		}
-		if state.WorkspaceKey == "" {
-			state.WorkspaceKey = existing.WorkspaceKey
-		}
-		if state.WorkspaceName == "" {
-			state.WorkspaceName = existing.WorkspaceName
-		}
-	}
-	if state.Version != currentStateVersion {
-		return fmt.Errorf("session state version %d is unsupported", state.Version)
-	}
-	if _, err := permission.ParseMode(state.PermissionMode); err != nil {
-		return fmt.Errorf("session permission mode: %w", err)
-	}
-	if err := validateReasoningSetting(state.ReasoningEffort); err != nil {
-		return fmt.Errorf("session reasoning effort: %w", err)
-	}
-	if err := validateMessages(state.Messages); err != nil {
-		return fmt.Errorf("session messages: %w", err)
-	}
-	state.Messages = sanitizeMessages(state.Messages)
-	if err := validateMessages(state.Messages); err != nil {
-		return fmt.Errorf("session messages: %w", err)
-	}
-	now := time.Now().UTC()
-	if state.CreatedAt.IsZero() {
-		state.CreatedAt = now
-	}
-	state.UpdatedAt = now
 
 	if err := os.MkdirAll(s.root, 0o700); err != nil {
 		return fmt.Errorf("create session store: %w", err)
@@ -443,7 +390,7 @@ func (s *FileStore) ListSummaries(ctx context.Context, options ListOptions) ([]S
 		summaries = append(summaries, Summary{
 			ID: id, WorkspaceKey: state.WorkspaceKey, WorkspaceName: state.WorkspaceName,
 			CreatedAt: state.CreatedAt, UpdatedAt: state.UpdatedAt, AgentProfile: state.AgentProfile,
-			ReasoningEffort: state.ReasoningEffort, MessageCount: len(state.Messages), Preview: sessionPreview(state.Messages),
+			ReasoningEffort: state.ReasoningEffort, MessageCount: len(state.Messages), Preview: Preview(state.Messages),
 		})
 	}
 	sort.Slice(summaries, func(i, j int) bool {
@@ -464,25 +411,6 @@ func (s *FileStore) ListSummaries(ctx context.Context, options ListOptions) ([]S
 		summaries = summaries[:options.Limit]
 	}
 	return summaries, nil
-}
-
-func sessionPreview(messages []Message) string {
-	for _, message := range messages {
-		if message.Role != model.RoleUser {
-			continue
-		}
-		text := strings.Join(strings.Fields(message.Content), " ")
-		if text == "" {
-			continue
-		}
-		const maxRunes = 100
-		runes := []rune(text)
-		if len(runes) > maxRunes {
-			return string(runes[:maxRunes-1]) + "…"
-		}
-		return text
-	}
-	return ""
 }
 
 func legacyWorkspaceKey(sessionID string) string {
