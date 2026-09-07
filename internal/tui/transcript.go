@@ -165,9 +165,9 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 	target, resolvedKind := extractToolTarget(call.Name, kind, call.Arguments)
 
 	if target != "" {
-		m.activity = "calling " + call.Name + " " + target
+		m.activity = "calling " + tool.DisplayName(call.Name) + " " + target
 	} else {
-		m.activity = "calling " + call.Name
+		m.activity = "calling " + tool.DisplayName(call.Name)
 	}
 
 	if isAgentLifecycleTool(call.Name) {
@@ -239,7 +239,7 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 
 	if result.Failure != nil && result.Failure.Message != "" && result.Failure.Code != tool.ErrorCodeCanceled {
 		suggestions := toolFailureSuggestions(name, result.Failure.Code)
-		title := name
+		title := tool.DisplayName(name)
 		badge := string(result.Failure.Code)
 		text := result.Failure.Message
 		if name == "update_todo" && result.Failure.Code == tool.ErrorCodeConflict {
@@ -264,7 +264,7 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 	if err != nil && !errors.Is(err, context.Canceled) && failureCode(result) != tool.ErrorCodeCanceled {
 		errorCell := &ErrorCell{
 			ErrorKind: ErrorKindToolFailed,
-			Title:     name,
+			Title:     tool.DisplayName(name),
 			Text:      err.Error(),
 		}
 		if result.Failure != nil {
@@ -618,31 +618,12 @@ func (m *bubbleModel) loadInitialMessages(messages []model.Message) {
 }
 
 func extractStringArg(raw json.RawMessage, key string) string {
-	var values map[string]any
-	if err := json.Unmarshal(raw, &values); err != nil {
-		return ""
-	}
-	value, _ := values[key].(string)
-	return strings.TrimSpace(value)
+	call := tool.Call{Arguments: raw}
+	return tool.ExtractString(call.ArgumentsMap(), key)
 }
 
 func editPresentation(call tool.Call) (string, []string) {
-	paths := make([]string, 0, 4)
-	var values map[string]any
-	if json.Unmarshal(call.Arguments, &values) == nil {
-		for _, key := range []string{"path", "file", "filename", "target", "destination", "move_path"} {
-			if value, ok := values[key].(string); ok && strings.TrimSpace(value) != "" {
-				paths = appendUnique(paths, strings.TrimSpace(value))
-			}
-		}
-		for _, key := range []string{"patch", "input", "diff"} {
-			if value, ok := values[key].(string); ok {
-				for _, path := range patchPaths(value) {
-					paths = appendUnique(paths, path)
-				}
-			}
-		}
-	}
+	paths := call.AffectedPaths()
 	summary := "editing workspace"
 	if len(paths) == 1 {
 		summary = "1 file"
@@ -650,29 +631,4 @@ func editPresentation(call tool.Call) (string, []string) {
 		summary = fmt.Sprintf("%d files", len(paths))
 	}
 	return summary, paths
-}
-
-func patchPaths(patch string) []string {
-	paths := make([]string, 0)
-	for _, line := range strings.Split(patch, "\n") {
-		trimmed := strings.TrimSpace(line)
-		for _, prefix := range []string{"*** Add File:", "*** Update File:", "*** Delete File:", "*** Move to:"} {
-			if strings.HasPrefix(trimmed, prefix) {
-				path := strings.TrimSpace(strings.TrimPrefix(trimmed, prefix))
-				if path != "" {
-					paths = appendUnique(paths, path)
-				}
-			}
-		}
-	}
-	return paths
-}
-
-func appendUnique(values []string, value string) []string {
-	for _, existing := range values {
-		if existing == value {
-			return values
-		}
-	}
-	return append(values, value)
 }

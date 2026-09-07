@@ -323,7 +323,7 @@ func (c AgentToolCell) presentationLabel(includeSpinner bool) string {
 		}
 	}
 	if label == "" {
-		label = c.Name
+		label = tool.DisplayName(c.Name)
 	}
 	return label
 }
@@ -371,19 +371,19 @@ func (c ToolCell) RenderWidth(width int) []string {
 		if strings.TrimSpace(c.Target) != "" {
 			targetStr = " " + formatPathSegmentsStyled(c.Target)
 		}
-		headerLine = toolStyle.Render(glyph) + mutedStyle.Render(sanitizeBubbleText(c.Name)) + targetStr + toolStyle.Render(indicator)
+		headerLine = toolStyle.Render(glyph) + mutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + toolStyle.Render(indicator)
 	} else if c.Denied {
 		targetStr := ""
 		if strings.TrimSpace(c.Target) != "" {
 			targetStr = " " + formatPathSegmentsStyled(c.Target)
 		}
-		headerLine = warningStyle.Render(glyphToolDenied) + mutedStyle.Render(sanitizeBubbleText(c.Name)) + targetStr + warningStyle.Render(glyphSep+"denied")
+		headerLine = warningStyle.Render(glyphToolDenied) + mutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + warningStyle.Render(glyphSep+"denied")
 	} else if c.FailureCode != "" {
 		targetStr := ""
 		if strings.TrimSpace(c.Target) != "" {
 			targetStr = " " + formatPathSegmentsStyled(c.Target)
 		}
-		headerLine = errorStyle.Render(glyphToolError) + mutedStyle.Render(sanitizeBubbleText(c.Name)) + targetStr + errorStyle.Render(glyphSep+string(c.FailureCode))
+		headerLine = errorStyle.Render(glyphToolError) + mutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + errorStyle.Render(glyphSep+string(c.FailureCode))
 	} else if c.Name == "activate_skill" {
 		target := c.Target
 		if target == "" {
@@ -394,7 +394,7 @@ func (c ToolCell) RenderWidth(width int) []string {
 		if target != "" {
 			headerLine = successStyle.Render(glyphToolSuccess) + mutedStyle.Render("Activated skill ") + toolTargetStyle.Render(target)
 		} else {
-			headerLine = successStyle.Render(glyphToolSuccess) + mutedStyle.Render("activate_skill")
+			headerLine = successStyle.Render(glyphToolSuccess) + mutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name)))
 		}
 	} else {
 		summary := c.Summary
@@ -409,7 +409,7 @@ func (c ToolCell) RenderWidth(width int) []string {
 		if summary != "" {
 			summaryStr = toolSummaryStyle.Render(glyphSep + summary)
 		}
-		headerLine = successStyle.Render(glyphToolSuccess) + mutedStyle.Render(sanitizeBubbleText(c.Name)) + targetStr + summaryStr
+		headerLine = successStyle.Render(glyphToolSuccess) + mutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + summaryStr
 	}
 
 	out := make([]string, 0, 1)
@@ -444,7 +444,7 @@ func (c ToolCell) RenderWidth(width int) []string {
 	return out
 }
 func (c ToolCell) RawLines() []string {
-	header := sanitizeBubbleText(c.Name)
+	header := sanitizeBubbleText(tool.DisplayName(c.Name))
 	if c.Target != "" {
 		header += " " + sanitizeBubbleText(c.Target)
 	}
@@ -681,7 +681,7 @@ type PatchCell struct {
 func (PatchCell) Kind() HistoryCellKind { return HistoryCellTool }
 func (c PatchCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
 func (c PatchCell) RenderWidth(width int) []string {
-	title := c.Name
+	title := tool.DisplayName(c.Name)
 	if strings.TrimSpace(c.Summary) != "" {
 		title += " · " + c.Summary
 	}
@@ -743,7 +743,7 @@ func (c PatchCell) RenderWidth(width int) []string {
 	return out
 }
 func (c PatchCell) RawLines() []string {
-	title := c.Name
+	title := tool.DisplayName(c.Name)
 	if strings.TrimSpace(c.Summary) != "" {
 		title += " · " + c.Summary
 	}

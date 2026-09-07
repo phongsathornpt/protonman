@@ -1,7 +1,6 @@
 package acp
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -11,17 +10,22 @@ import (
 
 // ToolKindForName returns the ACP ToolKind for a Proton tool.
 func ToolKindForName(name string) ToolKind {
-	switch name {
-	case "read_file", "list_dir":
+	switch tool.KindForName(name) {
+	case tool.KindRead:
 		return ToolKindRead
-	case "write_file", "search_replace", "apply_patch":
+	case tool.KindEdit:
 		return ToolKindEdit
-	case "grep":
+	case tool.KindGrep, tool.KindWebSearch:
 		return ToolKindSearch
-	case "bash":
+	case tool.KindBash, tool.KindAgent:
 		return ToolKindExecute
-	case "web_fetch":
+	case tool.KindWebFetch:
 		return ToolKindFetch
+	case tool.KindTask:
+		if name == "get_todo" {
+			return ToolKindRead
+		}
+		return ToolKindEdit
 	default:
 		return ToolKindOther
 	}
@@ -29,92 +33,20 @@ func ToolKindForName(name string) ToolKind {
 
 // TitleForToolCall produces a human-readable title describing what the tool is doing.
 func TitleForToolCall(call tool.Call) string {
-	var args map[string]any
-	_ = json.Unmarshal(call.Arguments, &args)
-
-	switch call.Name {
-	case "read_file":
-		if path, ok := args["path"].(string); ok && path != "" {
-			return fmt.Sprintf("Read %s", path)
-		}
-		return "Read file"
-	case "write_file":
-		if path, ok := args["path"].(string); ok && path != "" {
-			return fmt.Sprintf("Write %s", path)
-		}
-		return "Write file"
-	case "search_replace":
-		if path, ok := args["path"].(string); ok && path != "" {
-			return fmt.Sprintf("Edit %s", path)
-		}
-		return "Search and replace"
-	case "apply_patch":
-		if path, ok := args["path"].(string); ok && path != "" {
-			return fmt.Sprintf("Patch %s", path)
-		}
-		return "Apply patch"
-	case "list_dir":
-		if path, ok := args["path"].(string); ok && path != "" {
-			return fmt.Sprintf("List %s", path)
-		}
-		return "List directory"
-	case "grep":
-		if query, ok := args["query"].(string); ok && query != "" {
-			return fmt.Sprintf("Search %q", query)
-		}
-		return "Search workspace"
-	case "bash":
-		if cmd, ok := args["command"].(string); ok && cmd != "" {
-			trimmed := strings.TrimSpace(cmd)
-			if len(trimmed) > 40 {
-				trimmed = trimmed[:37] + "..."
-			}
-			return fmt.Sprintf("Run: %s", trimmed)
-		}
-		return "Run shell command"
-	case "web_fetch":
-		if url, ok := args["url"].(string); ok && url != "" {
-			return fmt.Sprintf("Fetch %s", url)
-		}
-		return "Fetch URL"
-	case "activate_skill":
-		if name, ok := args["name"].(string); ok && name != "" {
-			return fmt.Sprintf("Activate skill %s", name)
-		}
-		return "Activate skill"
-	case "delegate_task":
-		if task, ok := args["task"].(string); ok && task != "" {
-			trimmed := strings.TrimSpace(task)
-			if len(trimmed) > 30 {
-				trimmed = trimmed[:27] + "..."
-			}
-			return fmt.Sprintf("Delegate: %s", trimmed)
-		}
-		return "Delegate subtask"
-	case "checkpoint_restore":
-		if id, ok := args["checkpoint_id"].(string); ok && id != "" {
-			return fmt.Sprintf("Restore checkpoint %s", id)
-		}
-		return "Restore checkpoint"
-	default:
-		return call.Name
-	}
+	return call.Title()
 }
 
 // LocationsForToolCall returns file paths affected by a tool call for Zed's Follow-the-Agent.
 func LocationsForToolCall(call tool.Call) []ToolCallLocation {
-	var args map[string]any
-	if err := json.Unmarshal(call.Arguments, &args); err != nil {
+	paths := call.AffectedPaths()
+	if len(paths) == 0 {
 		return nil
 	}
-
-	switch call.Name {
-	case "read_file", "write_file", "search_replace", "apply_patch":
-		if path, ok := args["path"].(string); ok && path != "" {
-			return []ToolCallLocation{{Path: path}}
-		}
+	locs := make([]ToolCallLocation, len(paths))
+	for i, p := range paths {
+		locs[i] = ToolCallLocation{Path: p}
 	}
-	return nil
+	return locs
 }
 
 // ContentBlocksToModelMessage converts ACP prompt content blocks into a model.Message.

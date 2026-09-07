@@ -372,17 +372,7 @@ func (m *bubbleModel) acceptSlash(run bool) (applied bool, command tea.Cmd) {
 }
 
 func truncateWithEllipsis(s string, maxLen int) string {
-	if maxLen <= 0 {
-		return ""
-	}
-	runes := []rune(s)
-	if len(runes) <= maxLen {
-		return s
-	}
-	if maxLen <= 1 {
-		return string(runes[:maxLen])
-	}
-	return string(runes[:maxLen-1]) + "…"
+	return tool.TruncateRunes(s, maxLen)
 }
 
 func (m bubbleModel) renderSlash(index int) string {

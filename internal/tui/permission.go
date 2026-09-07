@@ -243,7 +243,7 @@ func (m bubbleModel) permissionCard() string {
 func (v *permissionPaneView) card(m *bubbleModel) string {
 	request := v.pending.request
 	if v.parked {
-		line := fmt.Sprintf("! Permission pending · %s · tab review · y once · s session · n deny", request.ToolName)
+		line := fmt.Sprintf("! Permission pending · %s · tab review · y once · s session · n deny", tool.DisplayName(request.ToolName))
 		return mutedStyle.Render(truncateWithEllipsis(line, maxInt(1, m.width-2)))
 	}
 	title := "Permission required"
@@ -324,7 +324,7 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 		selected := permissionOptions[v.index].label
 		rows := []string{
 			titleStyle.Render(truncateWithEllipsis(title, contentWidth)),
-			mutedStyle.Render(truncateWithEllipsis(request.ToolName+" · "+request.Detail, contentWidth)),
+			mutedStyle.Render(truncateWithEllipsis(tool.DisplayName(request.ToolName)+" · "+request.Detail, contentWidth)),
 			brandStyle.Render(glyphPrompt + selected),
 			mutedStyle.Render("y once · s session · n deny"),
 			mutedStyle.Render("esc review"),
@@ -334,7 +334,7 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 	maxWidth := maxInt(1, m.width-8)
 	rows := make([]string, 0, 8)
 	rows = append(rows, titleStyle.Render(title))
-	rows = append(rows, fmt.Sprintf("%s (%s)", request.ToolName, request.ToolKind))
+	rows = append(rows, fmt.Sprintf("%s (%s)", tool.DisplayName(request.ToolName), request.ToolKind))
 	detailLines := wrapLines("Target: "+request.Detail, maxInt(1, maxWidth-6))
 	for _, extra := range detailExtras {
 		detailLines = append(detailLines, wrapLines(extra, maxInt(1, maxWidth-6))...)
