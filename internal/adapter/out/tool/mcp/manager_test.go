@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/adapter/out/tool/builtin"
@@ -81,5 +82,93 @@ func TestManagerBindFailureCleansUpServers(t *testing.T) {
 	}
 	if first.closed != 1 || second.closed != 1 {
 		t.Fatalf("close counts = %d, %d", first.closed, second.closed)
+	}
+}
+
+type mutableManagedServer struct {
+	mu      sync.Mutex
+	name    string
+	tools   []Tool
+	listErr error
+}
+
+func (s *mutableManagedServer) Name() string { return s.name }
+func (s *mutableManagedServer) ListTools(context.Context) ([]Tool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.listErr != nil {
+		return nil, s.listErr
+	}
+	return append([]Tool(nil), s.tools...), nil
+}
+func (s *mutableManagedServer) CallTool(context.Context, string, json.RawMessage) (Result, error) {
+	return Result{}, nil
+}
+func (s *mutableManagedServer) Close() error { return nil }
+func (s *mutableManagedServer) setTools(tools []Tool) {
+	s.mu.Lock()
+	s.tools = append([]Tool(nil), tools...)
+	s.mu.Unlock()
+}
+func (s *mutableManagedServer) setError(err error) { s.mu.Lock(); s.listErr = err; s.mu.Unlock() }
+
+func TestManagerRefreshReplacesCatalogAtomically(t *testing.T) {
+	server := &mutableManagedServer{name: "db", tools: []Tool{{Name: "old"}}}
+	manager, err := NewManager(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	registry, _ := builtin.NewRegistry()
+	if err := manager.Bind(context.Background(), registry); err != nil {
+		t.Fatal(err)
+	}
+	if manager.CatalogGeneration("db") != 1 {
+		t.Fatalf("initial generation = %d", manager.CatalogGeneration("db"))
+	}
+
+	server.setTools([]Tool{{Name: "new"}, {Name: "second"}})
+	if err := manager.Refresh(context.Background(), "db"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := registry.Lookup("mcp.db.old"); ok {
+		t.Fatal("stale tool survived refresh")
+	}
+	if _, ok := registry.Lookup("mcp.db.new"); !ok {
+		t.Fatal("new tool missing after refresh")
+	}
+	if _, ok := registry.Lookup("mcp.db.second"); !ok {
+		t.Fatal("second tool missing after refresh")
+	}
+	if manager.CatalogGeneration("db") != 2 {
+		t.Fatalf("generation = %d, want 2", manager.CatalogGeneration("db"))
+	}
+
+	server.setTools([]Tool{{Name: "bad tool"}})
+	if err := manager.Refresh(context.Background(), "db"); err == nil {
+		t.Fatal("invalid refresh error = nil")
+	}
+	if _, ok := registry.Lookup("mcp.db.new"); !ok {
+		t.Fatal("failed refresh removed valid prior catalog")
+	}
+	if manager.CatalogGeneration("db") != 2 {
+		t.Fatal("failed refresh advanced generation")
+	}
+}
+
+func TestManagerRefreshFailureRetainsCatalog(t *testing.T) {
+	server := &mutableManagedServer{name: "db", tools: []Tool{{Name: "query"}}}
+	manager, _ := NewManager(server)
+	defer manager.Close()
+	registry, _ := builtin.NewRegistry()
+	if err := manager.Bind(context.Background(), registry); err != nil {
+		t.Fatal(err)
+	}
+	server.setError(errors.New("offline"))
+	if err := manager.Refresh(context.Background(), "db"); err == nil {
+		t.Fatal("refresh error = nil")
+	}
+	if _, ok := registry.Lookup("mcp.db.query"); !ok {
+		t.Fatal("transport failure removed prior catalog")
 	}
 }

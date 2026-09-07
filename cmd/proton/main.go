@@ -67,9 +67,9 @@ func run(ctx context.Context, args []string) error {
 				return runtimeState.registryForSession(sessionID)
 			}),
 			acp.WithMCPRegistryConfigurer(func(ctx context.Context, cwd string, registry tool.Registry, configs []acp.MCPServerConfig) (io.Closer, error) {
-				registrar, ok := registry.(tool.BatchRegistrar)
+				registrar, ok := registry.(tool.DynamicRegistrar)
 				if !ok {
-					return nil, fmt.Errorf("session registry does not support atomic MCP registration")
+					return nil, fmt.Errorf("session registry does not support dynamic MCP registration")
 				}
 				servers := make([]mcpadapter.ManagedServer, 0, len(configs))
 				for _, config := range configs {
