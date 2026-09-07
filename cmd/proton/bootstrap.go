@@ -202,7 +202,17 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	if err != nil {
 		return nil, fmt.Errorf("create tool-call service: %w", err)
 	}
-	initialRunner := buildInitialRunner(loadedConfig, sessionID, workDir, skillRegistry, coordinator, service)
+	providerKey := strings.ToLower(strings.TrimSpace(loadedConfig.Model.Provider))
+	if providerKey == "" {
+		providerKey = model.DefaultProtonmanName
+	}
+	provider := loadedConfig.Providers[providerKey]
+	initialRunner, _ := app.BuildConversation(service, skillRegistry, coordinator, app.ConversationSpec{
+		ProviderName: providerKey, ProviderType: provider.Type, BaseURL: provider.BaseURL, APIKey: provider.APIKey,
+		ModelID: loadedConfig.Model.Default, SessionID: sessionID, Workspace: workDir, AgentProfile: loadedConfig.Agent.Profile,
+		ReasoningEffort: loadedConfig.Agent.ReasoningEffort, MaxToolCalls: loadedConfig.Agent.MaxToolCalls,
+		RequestTimeout: loadedConfig.Runtime.ModelRequestTimeout, TurnTimeout: loadedConfig.Runtime.TurnTimeout, RoundTimeout: loadedConfig.Runtime.RoundTimeout,
+	})
 	failed = false
 	return &appRuntime{workDir: workDir, config: loadedConfig, coordinator: coordinator, todoStore: todoStore, registry: registry, stateStore: stateStore, sessionID: sessionID, state: state, service: service, skills: skillRegistry, runner: initialRunner}, nil
 }
@@ -227,31 +237,4 @@ func applyAgentProfile(loadedConfig *config.Snapshot, state *session.State, requ
 		state.AgentProfile = string(prof)
 	}
 	return nil
-}
-
-func buildInitialRunner(cfg config.Snapshot, sessionID, workDir string, skills *skill.Registry, coordinator *agent.Coordinator, service *toolcall.Service) app.Conversation {
-	providerKey := strings.ToLower(strings.TrimSpace(cfg.Model.Provider))
-	if providerKey == "" {
-		providerKey = model.DefaultProtonmanName
-	}
-	provider := cfg.Providers[providerKey]
-	conversation, err := app.BuildConversation(service, skills, coordinator, app.ConversationSpec{
-		ProviderName:    providerKey,
-		ProviderType:    provider.Type,
-		BaseURL:         provider.BaseURL,
-		APIKey:          provider.APIKey,
-		ModelID:         cfg.Model.Default,
-		SessionID:       sessionID,
-		Workspace:       workDir,
-		AgentProfile:    cfg.Agent.Profile,
-		ReasoningEffort: cfg.Agent.ReasoningEffort,
-		MaxToolCalls:    cfg.Agent.MaxToolCalls,
-		RequestTimeout:  cfg.Runtime.ModelRequestTimeout,
-		TurnTimeout:     cfg.Runtime.TurnTimeout,
-		RoundTimeout:    cfg.Runtime.RoundTimeout,
-	})
-	if err != nil {
-		return nil
-	}
-	return conversation
 }
