@@ -4,7 +4,6 @@ package turn
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/projectTHORN/proton/internal/runtimepolicy"
@@ -672,28 +671,13 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			return result, nil
 		}
 
-		for _, execution := range executions {
-			toolResult := execution.result
-			content, err := json.Marshal(toolResult)
-			if err != nil {
-				terminalReason = "tool_result_encoding_failed"
-				return l.fail(
-					ctx,
-					sink,
-					round,
-					fmt.Errorf("encode tool result %q: %w", execution.call.Name, err),
-				)
-			}
-			toolMessage := model.Message{
-				Role:              model.RoleTool,
-				Content:           string(content),
-				ToolCallID:        execution.call.ID,
-				ToolName:          execution.call.Name,
-				ToolResultIsError: execution.err != nil || toolResult.Denied || toolResult.Failure != nil,
-			}
-			history = append(history, toolMessage)
-			turnMessages = append(turnMessages, toolMessage)
+		toolMessages, err := toolMessagesForExecutions(executions)
+		if err != nil {
+			terminalReason = "tool_result_encoding_failed"
+			return l.fail(ctx, sink, round, err)
 		}
+		history = append(history, toolMessages...)
+		turnMessages = append(turnMessages, toolMessages...)
 	}
 }
 
