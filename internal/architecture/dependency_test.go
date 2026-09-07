@@ -43,11 +43,22 @@ func TestCorePackagesDoNotDependOnOuterLayers(t *testing.T) {
 func TestInboundAdaptersUseApplicationConversationBoundary(t *testing.T) {
 	packages := listPackages(t)
 	for _, adapter := range []string{
+		modulePath + "/internal/acp",
 		modulePath + "/internal/headless",
 		modulePath + "/internal/tui",
 	} {
 		assertNoImports(t, packages, adapter, []string{modulePath + "/internal/turn"})
 	}
+}
+
+func TestApplicationDoesNotDependOnInboundAdapters(t *testing.T) {
+	packages := listPackages(t)
+	assertNoImports(t, packages, modulePath+"/internal/app", []string{
+		modulePath + "/cmd/proton",
+		modulePath + "/internal/acp",
+		modulePath + "/internal/headless",
+		modulePath + "/internal/tui",
+	})
 }
 
 func TestSDKDoesNotDependOnCLIInternals(t *testing.T) {

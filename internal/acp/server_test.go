@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/session"
@@ -674,7 +675,7 @@ func newTestServerWithRunner(t *testing.T, mode permission.Mode, runner applicat
 	}
 	options := []Option(nil)
 	if runner != nil {
-		options = append(options, WithRunnerFactory(func(*toolcall.Service) (applicationturn.Runner, error) {
+		options = append(options, WithRunnerFactory(func(*toolcall.Service) (app.Conversation, error) {
 			return runner, nil
 		}))
 	}
