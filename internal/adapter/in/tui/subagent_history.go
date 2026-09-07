@@ -117,6 +117,26 @@ func (m *bubbleModel) applyAgentToolResult(name string, result tool.Result, body
 		if parsed.AgentID == "" {
 			return false
 		}
+		if existing := state.AgentRun(parsed.AgentID); existing != nil {
+			if intent.Profile.Valid() {
+				existing.Profile = intent.Profile
+			}
+			if intent.Task != "" {
+				existing.Task = intent.Task
+			}
+			if parsed.State != "" {
+				existing.State = parsed.State
+			}
+			if parsed.Summary != "" {
+				existing.Summary = parsed.Summary
+			}
+			if parsed.Reason != "" {
+				existing.Reason = parsed.Reason
+			}
+			state.DiscardToolCall(result.CallID, name)
+			state.TouchAgentRun(parsed.AgentID)
+			return true
+		}
 		cell := &AgentRunCell{AgentID: parsed.AgentID, Profile: intent.Profile, Task: intent.Task, State: parsed.State, Summary: parsed.Summary, Reason: parsed.Reason, StartedAt: time.Now()}
 		if cell.State == "" {
 			cell.State = agent.StateQueued
