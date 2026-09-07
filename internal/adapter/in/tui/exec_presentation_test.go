@@ -311,3 +311,18 @@ func TestExecSummaryPrimitives(t *testing.T) {
 		t.Fatalf("firstFailureLines = %#v", lines)
 	}
 }
+
+func TestExecPresentationRustAndCargo(t *testing.T) {
+	cargo := presentExec("cargo test", "test result: ok. 84 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out\n", "")
+	if cargo.Title != "Cargo test" || cargo.Summary != "84 passed · 3 ignored" || !cargo.SuppressRaw {
+		t.Fatalf("cargo test = %#v", cargo)
+	}
+	check := presentExec("cargo check", "warning: unused import\nerror[E0382]: borrow of moved value\n", "")
+	if check.Title != "Cargo check" || check.Summary != "1 error · 1 warning" || len(check.Details) == 0 {
+		t.Fatalf("cargo check = %#v", check)
+	}
+	rustc := presentExec("rustc src/main.rs", "", "")
+	if rustc.Title != "Rustc src/main.rs" {
+		t.Fatalf("rustc = %#v", rustc)
+	}
+}
