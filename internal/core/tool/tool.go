@@ -215,10 +215,17 @@ const (
 )
 
 // ToolError is an internal error with a stable model-facing classification.
+type Recovery struct {
+	Action    string          `json:"action"`
+	Tool      string          `json:"tool,omitempty"`
+	Arguments json.RawMessage `json:"arguments,omitempty"`
+}
+
 type ToolError struct {
-	Code    ErrorCode
-	Message string
-	Cause   error
+	Code     ErrorCode
+	Message  string
+	Cause    error
+	Recovery *Recovery
 }
 
 // FailureCoder lets adapters classify an error without depending on a concrete
@@ -259,6 +266,14 @@ func (e *ToolError) Error() string {
 }
 
 // Unwrap exposes the underlying cause to errors.Is and errors.As.
+func (e *ToolError) WithRecovery(recovery Recovery) *ToolError {
+	if e == nil {
+		return nil
+	}
+	e.Recovery = &recovery
+	return e
+}
+
 func (e *ToolError) Unwrap() error {
 	if e == nil {
 		return nil
@@ -271,6 +286,7 @@ type Failure struct {
 	Code      ErrorCode `json:"code"`
 	Message   string    `json:"message"`
 	Retryable bool      `json:"retryable,omitempty"`
+	Recovery  *Recovery `json:"recovery,omitempty"`
 }
 
 // FailureFromError converts an internal error into a stable result failure.
@@ -288,6 +304,7 @@ func FailureFromError(err error) *Failure {
 	switch {
 	case errors.As(err, &toolErr):
 		result.Code = toolErr.Code
+		result.Recovery = toolErr.Recovery
 	case errors.As(err, &failureCoder):
 		result.Code = failureCoder.FailureCode()
 	case errors.Is(err, ErrInvalidCall):
