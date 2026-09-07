@@ -1298,6 +1298,23 @@ func TestCoordinatorBoundsRetainedTerminalRecords(t *testing.T) {
 	}
 }
 
+func TestCoordinatorBoundsRetainedTerminalRecordsWhenTTLDisabled(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithMaxRetainedAgents(2),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) { return &mockRunner{}, nil }),
+	)
+	defer coord.Close()
+	coord.resultTTL = 0
+	for i := 0; i < 4; i++ {
+		if _, err := coord.Run(context.Background(), Request{Profile: ProfileINT, Task: fmt.Sprintf("no-ttl-%d", i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := coord.List(); len(got) != 2 {
+		t.Fatalf("retained=%d, want 2 with TTL disabled: %#v", len(got), got)
+	}
+}
+
 func TestTruncateSummaryPreservesUTF8AndByteLimit(t *testing.T) {
 	input := strings.Repeat("ภาษาไทย🙂", 5000)
 	got := truncateSummary(input, maxSummaryBytes)
