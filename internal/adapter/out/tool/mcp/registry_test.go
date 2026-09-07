@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -784,6 +785,106 @@ func TestDiscoverBoundsConcurrentServerDiscovery(t *testing.T) {
 	release <- struct{}{}
 	release <- struct{}{}
 	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
+type gatedCallServer struct {
+	name    string
+	tools   []Tool
+	started chan string
+	release chan struct{}
+}
+
+func (s *gatedCallServer) Name() string { return s.name }
+func (s *gatedCallServer) ListTools(context.Context) ([]Tool, error) {
+	return append([]Tool(nil), s.tools...), nil
+}
+func (s *gatedCallServer) CallTool(ctx context.Context, name string, _ json.RawMessage) (Result, error) {
+	select {
+	case s.started <- name:
+	case <-ctx.Done():
+		return Result{}, ctx.Err()
+	}
+	select {
+	case <-s.release:
+		return Result{Output: name}, nil
+	case <-ctx.Done():
+		return Result{}, ctx.Err()
+	}
+}
+
+func TestMCPBoundsConcurrentCallsPerServer(t *testing.T) {
+	server := &gatedCallServer{
+		name: "limited", tools: []Tool{{Name: "a"}, {Name: "b"}, {Name: "c"}},
+		started: make(chan string, 3), release: make(chan struct{}, 3),
+	}
+	registry, _ := builtin.NewRegistry()
+	limits := DefaultLimits()
+	limits.MaxConcurrentCallsPerServer = 2
+	if err := DiscoverWithLimits(context.Background(), registry, limits, server); err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan error, 3)
+	for i, name := range []string{"a", "b", "c"} {
+		handler, _ := registry.Lookup("mcp.limited." + name)
+		go func(i int, h domaintool.Handler) {
+			_, err := h.Execute(context.Background(), domaintool.Call{ID: fmt.Sprintf("call-%d", i), Name: h.Definition().Name, Arguments: json.RawMessage(`{}`)})
+			done <- err
+		}(i, handler)
+	}
+	for i := 0; i < 2; i++ {
+		select {
+		case <-server.started:
+		case <-time.After(time.Second):
+			t.Fatal("two calls did not start")
+		}
+	}
+	select {
+	case name := <-server.started:
+		t.Fatalf("third call %q started before a slot was released", name)
+	default:
+	}
+	server.release <- struct{}{}
+	select {
+	case <-server.started:
+	case <-time.After(time.Second):
+		t.Fatal("third call did not start after release")
+	}
+	server.release <- struct{}{}
+	server.release <- struct{}{}
+	for i := 0; i < 3; i++ {
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestMCPCallQueueHonorsCancellation(t *testing.T) {
+	server := &gatedCallServer{name: "limited", tools: []Tool{{Name: "a"}, {Name: "b"}}, started: make(chan string, 2), release: make(chan struct{}, 2)}
+	registry, _ := builtin.NewRegistry()
+	limits := DefaultLimits()
+	limits.MaxConcurrentCallsPerServer = 1
+	if err := DiscoverWithLimits(context.Background(), registry, limits, server); err != nil {
+		t.Fatal(err)
+	}
+	first, _ := registry.Lookup("mcp.limited.a")
+	second, _ := registry.Lookup("mcp.limited.b")
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := first.Execute(context.Background(), domaintool.Call{ID: "first", Name: first.Definition().Name, Arguments: json.RawMessage(`{}`)})
+		firstDone <- err
+	}()
+	<-server.started
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := second.Execute(ctx, domaintool.Call{ID: "second", Name: second.Definition().Name, Arguments: json.RawMessage(`{}`)})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("queued call error = %v", err)
+	}
+	server.release <- struct{}{}
+	if err := <-firstDone; err != nil {
 		t.Fatal(err)
 	}
 }
