@@ -117,9 +117,14 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 		{Role: model.RoleUser, Content: formatUserPrompt(req)},
 	}
 
-	// 5. Run turn
+	// 5. Run turn and retain successful execution evidence for the parent.
+	evidence := make([]EvidenceRef, 0)
+	changedTargets := make([]string, 0)
+	seenEvidence := make(map[string]struct{})
+	seenChanges := make(map[string]struct{})
 	turnResult, err := runner.Run(ctx, messages, func(_ context.Context, te turn.Event) error {
-		if te.Kind == turn.EventToolCall {
+		switch te.Kind {
+		case turn.EventToolCall:
 			call := te.Call
 			c.emit(ctx, Event{
 				Kind:     EventAgentProgress,
@@ -128,6 +133,30 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 				Profile:  req.Profile,
 				Call:     &call,
 			})
+		case turn.EventToolResult:
+			if te.Err != nil || te.Result.Denied || te.Result.Failure != nil {
+				break
+			}
+			target := strings.TrimSpace(te.Call.Target())
+			key := te.Call.Name + "\x00" + target
+			if _, exists := seenEvidence[key]; !exists {
+				seenEvidence[key] = struct{}{}
+				evidence = append(evidence, EvidenceRef{Tool: te.Call.Name, Target: target})
+			}
+			if handler, ok := scopedRegistry.Lookup(te.Call.Name); ok {
+				def := handler.Definition()
+				workspaceDomain := def.Safety.MutationDomain == tool.MutationDomainWorkspace || def.Safety.MutationDomain == tool.MutationDomainWorkspacePolicy
+				if workspaceDomain && tool.EffectiveCallMutability(def, te.Call.Arguments) == tool.MutabilityMutating {
+					changed := target
+					if changed == "" {
+						changed = te.Call.Name
+					}
+					if _, exists := seenChanges[changed]; !exists {
+						seenChanges[changed] = struct{}{}
+						changedTargets = append(changedTargets, changed)
+					}
+				}
+			}
 		}
 		return nil
 	})
@@ -148,11 +177,13 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	summary = truncateSummary(summary, maxSummaryBytes)
 
 	return Result{
-		AgentID:      req.ID,
-		Profile:      req.Profile,
-		Summary:      summary,
-		Rounds:       turnResult.Rounds,
-		Verification: turnResult.Verification,
+		AgentID:        req.ID,
+		Profile:        req.Profile,
+		Summary:        summary,
+		Rounds:         turnResult.Rounds,
+		Verification:   turnResult.Verification,
+		Evidence:       evidence,
+		ChangedTargets: changedTargets,
 	}, nil
 }
 

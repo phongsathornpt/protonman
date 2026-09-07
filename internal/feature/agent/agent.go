@@ -112,17 +112,25 @@ func (r Request) Validate() error {
 // successful model completion without empirical verification after its final mutation.
 var ErrUnverifiedChanges = errors.New("subagent completed with unverified changes")
 
+// EvidenceRef identifies a successful tool observation made by a subagent.
+type EvidenceRef struct {
+	Tool   string `json:"tool"`
+	Target string `json:"target,omitempty"`
+}
+
 // Result is the bounded final output returned from a subagent to its caller.
 type Result struct {
-	AgentID       string                 `json:"agent_id"`
-	Profile       Profile                `json:"profile"`
-	Summary       string                 `json:"summary"`
-	Rounds        int                    `json:"rounds"`
-	Verification  turn.VerificationState `json:"verification"`
-	QueueDuration time.Duration          `json:"queue_duration"`
-	Duration      time.Duration          `json:"duration"`
-	TotalDuration time.Duration          `json:"total_duration"`
-	Err           error                  `json:"-"`
+	AgentID        string                 `json:"agent_id"`
+	Profile        Profile                `json:"profile"`
+	Summary        string                 `json:"summary"`
+	Rounds         int                    `json:"rounds"`
+	Verification   turn.VerificationState `json:"verification"`
+	Evidence       []EvidenceRef          `json:"evidence"`
+	ChangedTargets []string               `json:"changed_targets"`
+	QueueDuration  time.Duration          `json:"queue_duration"`
+	Duration       time.Duration          `json:"duration"`
+	TotalDuration  time.Duration          `json:"total_duration"`
+	Err            error                  `json:"-"`
 }
 
 // EventKind classifies progress notifications from subagent execution.

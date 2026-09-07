@@ -9,18 +9,33 @@ func agentStateSchema() map[string]any {
 	}}
 }
 
+func agentEvidenceSchema() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{
+		"tool": map[string]any{"type": "string"}, "target": map[string]any{"type": "string"},
+	}, "required": []any{"tool"}, "additionalProperties": false}
+}
+
+func agentVerificationSchema() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{
+		"mutated": map[string]any{"type": "boolean"}, "verified": map[string]any{"type": "boolean"}, "verifier": map[string]any{"type": "string"},
+	}, "required": []any{"mutated", "verified"}, "additionalProperties": false}
+}
+
 func agentResultSchema() map[string]any {
 	result := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"summary":               map[string]any{"type": "string"},
 			"rounds":                map[string]any{"type": "integer", "minimum": 0},
+			"verification":          agentVerificationSchema(),
+			"evidence":              map[string]any{"type": "array", "items": agentEvidenceSchema()},
+			"changed_targets":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			"queue_duration_ms":     map[string]any{"type": "integer", "minimum": 0},
 			"execution_duration_ms": map[string]any{"type": "integer", "minimum": 0},
 			"total_duration_ms":     map[string]any{"type": "integer", "minimum": 0},
 			"error":                 map[string]any{"type": "string"},
 		},
-		"required":             []any{"summary", "rounds", "queue_duration_ms", "execution_duration_ms", "total_duration_ms"},
+		"required":             []any{"summary", "rounds", "verification", "evidence", "changed_targets", "queue_duration_ms", "execution_duration_ms", "total_duration_ms"},
 		"additionalProperties": false,
 	}
 	return map[string]any{"oneOf": []any{result, map[string]any{"type": "null"}}}

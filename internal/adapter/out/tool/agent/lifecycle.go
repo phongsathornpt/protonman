@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/feature/agent"
 	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/projectTHORN/proton/internal/feature/agent"
 )
 
 type agentIDInput struct {
@@ -182,7 +182,19 @@ func resultPayload(result *agent.Result) any {
 	if result == nil {
 		return nil
 	}
-	payload := map[string]any{"summary": result.Summary, "rounds": result.Rounds, "queue_duration_ms": result.QueueDuration.Milliseconds(), "execution_duration_ms": result.Duration.Milliseconds(), "total_duration_ms": result.TotalDuration.Milliseconds()}
+	evidence := result.Evidence
+	if evidence == nil {
+		evidence = []agent.EvidenceRef{}
+	}
+	changedTargets := result.ChangedTargets
+	if changedTargets == nil {
+		changedTargets = []string{}
+	}
+	payload := map[string]any{
+		"summary": result.Summary, "rounds": result.Rounds,
+		"verification": result.Verification, "evidence": evidence, "changed_targets": changedTargets,
+		"queue_duration_ms": result.QueueDuration.Milliseconds(), "execution_duration_ms": result.Duration.Milliseconds(), "total_duration_ms": result.TotalDuration.Milliseconds(),
+	}
 	if result.Err != nil {
 		payload["error"] = result.Err.Error()
 	}
