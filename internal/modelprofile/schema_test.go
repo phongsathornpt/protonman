@@ -3,6 +3,8 @@ package modelprofile
 import (
 	"reflect"
 	"testing"
+
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 func TestPublishInputSchemaLowersGeminiOneOfToBroadObject(t *testing.T) {
@@ -56,5 +58,25 @@ func TestPublishInputSchemaKeepsCanonicalDialect(t *testing.T) {
 	published["type"] = "string"
 	if canonical["type"] != "object" {
 		t.Fatal("published schema mutated canonical input")
+	}
+}
+
+func TestPublishInputSchemaLowersZeroArgumentToolForGemini(t *testing.T) {
+	canonical := tool.NoArgumentsSchema()
+	published := PublishInputSchema(Resolved{ToolSchemaDialect: ToolSchemaGeminiSubset}, canonical)
+	if published["type"] != "object" {
+		t.Fatalf("published type = %#v, want object", published["type"])
+	}
+	properties, ok := published["properties"].(map[string]any)
+	if !ok || len(properties) != 0 {
+		t.Fatalf("published properties = %#v, want empty object", published["properties"])
+	}
+	for _, forbidden := range []string{"additionalProperties", "oneOf", "const"} {
+		if _, exists := published[forbidden]; exists {
+			t.Fatalf("published zero-arg schema contains %s: %#v", forbidden, published)
+		}
+	}
+	if !tool.IsNoArgumentsSchema(canonical) {
+		t.Fatalf("canonical schema was mutated: %#v", canonical)
 	}
 }

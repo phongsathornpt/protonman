@@ -369,3 +369,28 @@ func TestE2ETurnLoopSuppressesDeadCallInsideProductiveBatch(t *testing.T) {
 		t.Fatalf("final request missing productive live result: %#v", requests[3]["messages"])
 	}
 }
+
+func TestE2EGetTodoAcceptsEmptyProviderArguments(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+	server := newMockLLMServer(t)
+	server.SetupWorkspaceConfig(t, home)
+	server.AddToolCallResponse("todo-empty-args", "get_todo", "")
+	server.AddTextResponse("Task snapshot loaded successfully.")
+
+	res := runProton(t, runOptions{
+		args: []string{"-y", "-p", "Read the current task plan"},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 {
+		t.Fatalf("get_todo empty-argument turn failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "Task snapshot loaded successfully.") {
+		t.Fatalf("stdout missing final response: %s", res.stdout)
+	}
+	requests := server.Requests()
+	if got, want := len(requests), 2; got != want {
+		t.Fatalf("model requests = %d, want %d", got, want)
+	}
+}
