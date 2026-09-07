@@ -128,7 +128,7 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 		return tool.Result{}, err
 	}
 
-	file, err := os.Open(path)
+	file, err := h.workspace.OpenReadFile(ctx, path)
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("open %q: %w", input.Path, err)
 	}
