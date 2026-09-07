@@ -1,3 +1,6 @@
+package protonsdk
+
+import "testing"
 
 type tokenLimitsTestModel struct {
 	LanguageModel
