@@ -23,6 +23,12 @@ func mergeProfile(dst *Resolved, src Profile) {
 	if src.ContextWindow > 0 {
 		dst.ContextWindow = src.ContextWindow
 	}
+	if src.MaxInputTokens > 0 {
+		dst.MaxInputTokens = src.MaxInputTokens
+	}
+	if src.MaxOutputTokens > 0 {
+		dst.MaxOutputTokens = src.MaxOutputTokens
+	}
 	if len(src.PromptHints) > 0 {
 		dst.PromptHints = append([]string(nil), src.PromptHints...)
 	}
@@ -43,6 +49,12 @@ func mergeCatalog(dst *Resolved, src CatalogMetadata) {
 	}
 	if src.ContextWindow > 0 {
 		dst.ContextWindow = src.ContextWindow
+	}
+	if src.MaxInputTokens > 0 {
+		dst.MaxInputTokens = src.MaxInputTokens
+	}
+	if src.MaxOutputTokens > 0 {
+		dst.MaxOutputTokens = src.MaxOutputTokens
 	}
 	if src.Reasoning == nil {
 		return

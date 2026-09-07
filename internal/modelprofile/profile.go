@@ -86,6 +86,8 @@ type Profile struct {
 	Reasoning         Reasoning
 	Sampling          Sampling
 	ContextWindow     int
+	MaxInputTokens    int
+	MaxOutputTokens   int
 	PromptHints       []string
 	ToolSchemaDialect ToolSchemaDialect
 }
@@ -126,6 +128,8 @@ type CatalogMetadata struct {
 	Vision             *bool
 	ToolChoiceRequired *bool
 	ContextWindow      int
+	MaxInputTokens     int
+	MaxOutputTokens    int
 	Reasoning          *CatalogReasoning
 }
 
@@ -139,6 +143,8 @@ type Resolved struct {
 	Reasoning         Reasoning
 	Sampling          Sampling
 	ContextWindow     int
+	MaxInputTokens    int
+	MaxOutputTokens   int
 	PromptHints       []string
 	ToolSchemaDialect ToolSchemaDialect
 }
@@ -212,7 +218,7 @@ func (m Matcher) kind(provider, modelID string) MatchKind {
 }
 
 func catalogHasMetadata(c CatalogMetadata) bool {
-	return c.Tools != nil || c.Vision != nil || c.ToolChoiceRequired != nil || c.ContextWindow > 0 || c.Reasoning != nil
+	return c.Tools != nil || c.Vision != nil || c.ToolChoiceRequired != nil || c.ContextWindow > 0 || c.MaxInputTokens > 0 || c.MaxOutputTokens > 0 || c.Reasoning != nil
 }
 
 func (m Matcher) score(provider, modelID string) (int, bool) {

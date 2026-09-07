@@ -190,3 +190,10 @@ func TestResolvedProfileTracksMatchAndCatalogProvenance(t *testing.T) {
 		t.Fatalf("unknown provenance = %+v", unknown)
 	}
 }
+
+func TestCatalogIndependentTokenLimitsOverrideProfile(t *testing.T) {
+	got := ResolveBuiltin("gateway", "gemini-3.8-flash", CatalogMetadata{MaxInputTokens: 900000, MaxOutputTokens: 32000})
+	if !got.CatalogOverride || got.ContextWindow != 1_048_576 || got.MaxInputTokens != 900000 || got.MaxOutputTokens != 32000 {
+		t.Fatalf("token limit metadata = %+v", got)
+	}
+}

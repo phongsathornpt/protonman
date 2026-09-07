@@ -80,6 +80,8 @@ func (m RemoteModel) ProfileMetadata() modelprofile.CatalogMetadata {
 		Vision:             m.VisionSupport,
 		ToolChoiceRequired: m.ToolChoiceRequired,
 		ContextWindow:      m.ContextWindow,
+		MaxInputTokens:     m.MaxInputTokens,
+		MaxOutputTokens:    m.MaxOutputTokens,
 		Reasoning:          modelprofile.NormalizeCatalogReasoning(m.Reasoning),
 	}
 }
@@ -94,9 +96,13 @@ func withResolvedModelProfile(profile modelprofile.Resolved) ClientOption {
 		if value, known := cloned.Capabilities.Tools.Bool(); known {
 			c.tools = &value
 		}
-		if cloned.ContextWindow > 0 {
-			window := cloned.ContextWindow
-			c.contextWindow = &window
+		limits := sdk.TokenLimits{
+			ContextWindow:   cloned.ContextWindow,
+			MaxInputTokens:  cloned.MaxInputTokens,
+			MaxOutputTokens: cloned.MaxOutputTokens,
+		}
+		if limits.ContextWindow > 0 || limits.MaxInputTokens > 0 || limits.MaxOutputTokens > 0 {
+			c.tokenLimits = &limits
 		}
 	}
 }
@@ -129,7 +135,10 @@ func (m *profiledLanguageModel) Capabilities() sdk.ModelCapabilities {
 	return m.base.Capabilities()
 }
 func (m *profiledLanguageModel) ContextWindow() int {
-	return sdk.ModelContextWindow(m.base)
+	return sdk.ModelTokenLimits(m.base).ContextWindow
+}
+func (m *profiledLanguageModel) TokenLimits() sdk.TokenLimits {
+	return sdk.ModelTokenLimits(m.base)
 }
 func (m *profiledLanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
 	return m.base.Stream(ctx, request)
