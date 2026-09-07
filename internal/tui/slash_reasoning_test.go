@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
@@ -38,29 +39,63 @@ func TestSlashReasoningAutoResetsSessionOverride(t *testing.T) {
 	if got := m.reasoningEffort; got != sdk.ReasoningDefault {
 		t.Fatalf("reasoningEffort = %q, want auto/default", got)
 	}
-	if got := plainTranscript(m); !strings.Contains(got, "Reasoning effort set to auto") {
+	if got := plainTranscript(m); !strings.Contains(got, "Thinking level set to auto") {
 		t.Fatalf("transcript = %q", got)
 	}
 }
 
-func TestSlashReasoningShowsProfileLevelsAndDefault(t *testing.T) {
+func TestSlashReasoningOpensCapabilityAwarePicker(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeProvider = "protonman"
 	m.activeModel = "gemini-3.8-flash"
 	m.agentProfile = "dex"
 
 	m.executeCommand("/reasoning")
-	got := plainTranscript(m)
+	if !m.bottom.has(reasoningViewID) {
+		t.Fatal("/reasoning did not open thinking picker")
+	}
+	got := m.bottom.renderTop(m)
 	for _, want := range []string{
-		"Reasoning override: auto",
-		"Model profile: gemini-3.8-flash (exact)",
-		"Supported reasoning: low, medium, high",
-		"Model default: medium",
-		"Agent profile preference: high",
+		"Thinking level",
+		"gemini-3.8-flash",
+		"auto",
+		"low",
+		"medium",
+		"high",
+		"model default",
 	} {
 		if !strings.Contains(got, want) {
-			t.Fatalf("transcript missing %q: %q", want, got)
+			t.Fatalf("picker missing %q: %q", want, got)
 		}
+	}
+	for _, unsupported := range []string{"xhigh", "max"} {
+		if strings.Contains(got, unsupported) {
+			t.Fatalf("picker exposed unsupported level %q: %q", unsupported, got)
+		}
+	}
+}
+
+func TestReasoningPickerSelectsLevel(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeProvider = "protonman"
+	m.activeModel = "gemini-3.8-flash"
+	m.executeCommand("/reasoning")
+
+	view, ok := m.bottom.find(reasoningViewID).(*reasoningPaneView)
+	if !ok || view == nil {
+		t.Fatal("reasoning picker missing")
+	}
+	// auto, low, medium, high
+	view.index = 3
+	handled, _ := view.HandleKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if !handled {
+		t.Fatal("enter was not handled")
+	}
+	if got := m.reasoningEffort; got != sdk.ReasoningHigh {
+		t.Fatalf("reasoningEffort = %q, want high", got)
+	}
+	if m.bottom.has(reasoningViewID) {
+		t.Fatal("picker stayed open after selection")
 	}
 }
 
@@ -91,7 +126,7 @@ func TestRemoteModelReasoningSummaryUsesResolvedProfile(t *testing.T) {
 	}
 }
 
-func TestSlashReasoningShowsCatalogOverrideProvenance(t *testing.T) {
+func TestSlashReasoningPickerUsesCatalogResolvedProfile(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeProvider = "protonman"
 	m.activeModel = "gemini-3.8-flash"
@@ -99,7 +134,10 @@ func TestSlashReasoningShowsCatalogOverrideProvenance(t *testing.T) {
 	m.modelCatalogs.set("protonman", []model.RemoteModel{{ID: "gemini-3.8-flash", ToolSupport: &yes}})
 
 	m.executeCommand("/reasoning")
-	if got := plainTranscript(m); !strings.Contains(got, "Model profile: gemini-3.8-flash (exact · catalog override)") {
-		t.Fatalf("transcript missing catalog provenance: %q", got)
+	got := m.bottom.renderTop(m)
+	for _, want := range []string{"low", "medium", "high"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("picker missing catalog-resolved level %q: %q", want, got)
+		}
 	}
 }
