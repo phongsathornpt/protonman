@@ -17,13 +17,21 @@ type ManagedServer interface {
 
 // Manager owns a set of MCP server transports for one session.
 type Manager struct {
-	mu      sync.Mutex
-	servers []ManagedServer
-	closed  bool
+	mu        sync.Mutex
+	servers   []ManagedServer
+	closed    bool
+	discovery DiscoveryOptions
 }
 
 func NewManager(servers ...ManagedServer) (*Manager, error) {
-	manager := &Manager{servers: make([]ManagedServer, 0, len(servers))}
+	return NewManagerWithDiscoveryOptions(DefaultDiscoveryOptions(), servers...)
+}
+
+func NewManagerWithDiscoveryOptions(options DiscoveryOptions, servers ...ManagedServer) (*Manager, error) {
+	if err := options.Limits.validate(); err != nil {
+		return nil, fmt.Errorf("create MCP manager: %w", err)
+	}
+	manager := &Manager{servers: make([]ManagedServer, 0, len(servers)), discovery: options}
 	seen := make(map[string]struct{}, len(servers))
 	for _, server := range servers {
 		if server == nil {
@@ -58,7 +66,7 @@ func (m *Manager) Bind(ctx context.Context, registry tool.BatchRegistrar) error 
 	for i, server := range servers {
 		plain[i] = server
 	}
-	if err := Discover(ctx, registry, plain...); err != nil {
+	if err := DiscoverWithOptions(ctx, registry, m.discovery, plain...); err != nil {
 		_ = m.Close()
 		return err
 	}

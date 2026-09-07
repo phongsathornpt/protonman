@@ -35,14 +35,31 @@ func NamespacedName(serverName string, toolName string) (string, error) {
 	return "mcp." + serverName + "." + toolName, nil
 }
 
-// Discover queries every server concurrently, registers each discovered tool under its
-// namespaced name, and wires invocations through tool.Handler.
+// DiscoveryOptions configures trust and resource policy for one MCP catalog snapshot.
+type DiscoveryOptions struct {
+	Limits            Limits
+	TrustServerSafety bool
+}
+
+func DefaultDiscoveryOptions() DiscoveryOptions {
+	return DiscoveryOptions{Limits: DefaultLimits()}
+}
+
+// Discover queries every server concurrently using conservative, untrusted safety semantics.
 func Discover(ctx context.Context, registry tool.BatchRegistrar, servers ...Server) error {
-	return DiscoverWithLimits(ctx, registry, DefaultLimits(), servers...)
+	return DiscoverWithOptions(ctx, registry, DefaultDiscoveryOptions(), servers...)
 }
 
 // DiscoverWithLimits discovers MCP tools while enforcing explicit resource bounds.
 func DiscoverWithLimits(ctx context.Context, registry tool.BatchRegistrar, limits Limits, servers ...Server) error {
+	options := DefaultDiscoveryOptions()
+	options.Limits = limits
+	return DiscoverWithOptions(ctx, registry, options, servers...)
+}
+
+// DiscoverWithOptions discovers MCP tools with an explicit local trust decision.
+func DiscoverWithOptions(ctx context.Context, registry tool.BatchRegistrar, options DiscoveryOptions, servers ...Server) error {
+	limits := options.Limits
 	if registry == nil {
 		return fmt.Errorf("discover MCP tools: registry is required")
 	}
@@ -141,7 +158,7 @@ func DiscoverWithLimits(ctx context.Context, registry tool.BatchRegistrar, limit
 				return fmt.Errorf("%w: %s", ErrDuplicateDiscoveredTool, name)
 			}
 			seenNames[name] = struct{}{}
-			handler, err := newHandler(server, serverName, manifest, name)
+			handler, err := newHandler(server, serverName, manifest, name, options.TrustServerSafety)
 			if err != nil {
 				return fmt.Errorf("clone MCP tool %q schemas: %w", name, err)
 			}
@@ -191,6 +208,7 @@ func newHandler(
 	serverName string,
 	manifest Tool,
 	name string,
+	trustServerSafety bool,
 ) (tool.Handler, error) {
 	description := strings.TrimSpace(manifest.Description)
 	if description == "" {
@@ -207,7 +225,7 @@ func newHandler(
 	return serverToolHandler{
 		server: server, serverName: serverName, manifest: manifest,
 		definition: tool.Definition{
-			Name: name, Description: description, Kind: tool.KindMCP, Mutability: manifest.Mutability,
+			Name: name, Description: description, Kind: tool.KindMCP, Mutability: effectiveMCPMutability(manifest.Mutability, trustServerSafety),
 			InputSchema: inputSchema, OutputSchema: outputSchema,
 		},
 	}, nil
@@ -267,6 +285,19 @@ func validToolName(value string) (string, error) {
 		}
 	}
 	return trimmed, nil
+}
+
+func effectiveMCPMutability(declared tool.Mutability, trusted bool) tool.Mutability {
+	// A mutating declaration can only make policy stricter, so always honor it.
+	if declared == tool.MutabilityMutating {
+		return tool.MutabilityMutating
+	}
+	// Read-only claims can relax permission behavior and therefore require a
+	// local trust decision. Untrusted or unspecified tools stay conservative.
+	if trusted && declared == tool.MutabilityReadOnly {
+		return tool.MutabilityReadOnly
+	}
+	return tool.MutabilityUnspecified
 }
 
 func cloneMCPSchema(schema map[string]any) (map[string]any, error) {
