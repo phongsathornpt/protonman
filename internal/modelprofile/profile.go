@@ -101,17 +101,25 @@ type Sampling struct {
 	TopK        Support
 }
 
-type Profile struct {
-	Name              string
-	Match             Matcher
-	Capabilities      Capabilities
-	Reasoning         Reasoning
-	Sampling          Sampling
-	ContextWindow     int
-	MaxInputTokens    int
-	MaxOutputTokens   int
-	PromptHints       []string
+type CompatibilityPolicy struct {
 	ToolSchemaDialect ToolSchemaDialect
+}
+
+type AgentPolicy struct {
+	PromptHints []string
+}
+
+type Profile struct {
+	Name            string
+	Match           Matcher
+	Capabilities    Capabilities
+	Reasoning       Reasoning
+	Sampling        Sampling
+	ContextWindow   int
+	MaxInputTokens  int
+	MaxOutputTokens int
+	Compatibility   CompatibilityPolicy
+	AgentPolicy     AgentPolicy
 }
 
 type CatalogReasoning struct {
@@ -156,20 +164,20 @@ type CatalogMetadata struct {
 }
 
 type Resolved struct {
-	ProfileName       string
-	ProfileMatch      MatchKind
-	CatalogOverride   bool
-	Provider          string
-	ModelID           string
-	Capabilities      Capabilities
-	Reasoning         Reasoning
-	Sampling          Sampling
-	ContextWindow     int
-	MaxInputTokens    int
-	MaxOutputTokens   int
-	PromptHints       []string
-	ToolSchemaDialect ToolSchemaDialect
-	Provenance        MetadataProvenance
+	ProfileName     string
+	ProfileMatch    MatchKind
+	CatalogOverride bool
+	Provider        string
+	ModelID         string
+	Capabilities    Capabilities
+	Reasoning       Reasoning
+	Sampling        Sampling
+	ContextWindow   int
+	MaxInputTokens  int
+	MaxOutputTokens int
+	Compatibility   CompatibilityPolicy
+	AgentPolicy     AgentPolicy
+	Provenance      MetadataProvenance
 }
 
 type Registry struct {

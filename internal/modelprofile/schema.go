@@ -6,7 +6,7 @@ import "reflect"
 // model family can reliably consume. Runtime validation still uses the
 // canonical schema, so lowering never weakens host-side argument checks.
 func PublishInputSchema(profile Resolved, schema map[string]any) map[string]any {
-	if profile.ToolSchemaDialect != ToolSchemaGeminiSubset {
+	if profile.Compatibility.ToolSchemaDialect != ToolSchemaGeminiSubset {
 		return cloneSchemaValue(schema).(map[string]any)
 	}
 	return lowerGeminiSchema(schema)
