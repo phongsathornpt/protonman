@@ -112,3 +112,52 @@ func TestRegistryRegisterBatchIsAtomic(t *testing.T) {
 		t.Fatalf("definitions = %d, want 1", got)
 	}
 }
+
+func TestRegistryReplaceNamespaceIsAtomic(t *testing.T) {
+	registry, err := NewRegistry(
+		namedSchemaHandler{name: "read_file"},
+		namedSchemaHandler{name: "mcp.db.old"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.ReplaceNamespace("mcp.db.", []tool.Handler{
+		namedSchemaHandler{name: "mcp.db.new"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := registry.Lookup("mcp.db.old"); ok {
+		t.Fatal("old namespace tool still registered")
+	}
+	if _, ok := registry.Lookup("mcp.db.new"); !ok {
+		t.Fatal("new namespace tool missing")
+	}
+	if _, ok := registry.Lookup("read_file"); !ok {
+		t.Fatal("unrelated tool removed")
+	}
+
+	before := registry.Definitions()
+	if err := registry.ReplaceNamespace("mcp.db.", []tool.Handler{
+		namedSchemaHandler{name: "mcp.db.next"},
+		invalidSchemaHandler{},
+	}); err == nil {
+		t.Fatal("invalid replacement error = nil")
+	}
+	after := registry.Definitions()
+	if len(before) != len(after) || before[1].Name != after[1].Name {
+		t.Fatalf("failed replacement mutated registry: before=%#v after=%#v", before, after)
+	}
+}
+
+func TestRegistryReplaceNamespaceCanRemoveAllTools(t *testing.T) {
+	registry, _ := NewRegistry(namedSchemaHandler{name: "mcp.db.old"}, namedSchemaHandler{name: "read_file"})
+	if err := registry.ReplaceNamespace("mcp.db.", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := registry.Lookup("mcp.db.old"); ok {
+		t.Fatal("namespace tool not removed")
+	}
+	if _, ok := registry.Lookup("read_file"); !ok {
+		t.Fatal("unrelated tool removed")
+	}
+}
