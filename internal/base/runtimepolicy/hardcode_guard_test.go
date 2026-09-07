@@ -30,7 +30,7 @@ func TestMutableProductLiteralsStayCentralized(t *testing.T) {
 		"~/.proton/config.toml":        "internal/app/appdirs/dirs.go",
 		"~/.proton/skills/":            "internal/app/appdirs/dirs.go",
 		"~/.proton/logs/mcp/":          "internal/app/appdirs/dirs.go",
-		"TODO.md":                      "internal/feature/todo/types.go",
+		"todo.md":                      "internal/core/session/resources.go",
 		"https://protonman.dev/api/v1": "internal/adapter/out/model/provider_preset.go",
 		"https://opencode.ai/zen/v1":   "internal/adapter/out/model/provider_preset.go",
 		"https://api.openai.com/v1":    "internal/adapter/out/model/provider_preset.go",

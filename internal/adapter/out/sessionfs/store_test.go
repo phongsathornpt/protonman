@@ -10,10 +10,10 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/projectTHORN/proton/internal/engine/prompt"
 	"github.com/projectTHORN/proton/internal/adapter/out/model"
 	"github.com/projectTHORN/proton/internal/core/permission"
 	"github.com/projectTHORN/proton/internal/core/session"
+	"github.com/projectTHORN/proton/internal/engine/prompt"
 )
 
 type Message = session.Message
@@ -255,7 +255,7 @@ func TestLoadCompactsLegacyToolProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(store.path("legacy"), payload, 0o600); err != nil {
+	if err := os.WriteFile(store.legacyPath("legacy"), payload, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	loaded, found, err := store.Load(context.Background(), "legacy")
@@ -320,7 +320,7 @@ func TestFileStoreUsesPrivateStateFile(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
-	info, err := os.Stat(filepath.Join(root, "private.json"))
+	info, err := os.Stat(filepath.Join(root, "private", session.StateFileName))
 	if err != nil {
 		t.Fatalf("Stat() error = %v", err)
 	}
@@ -531,7 +531,7 @@ func TestFileStoreLoadsLegacyWorkspaceIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(store.path("workspace-deadbeef-20260101"), payload, 0o600); err != nil {
+	if err := os.WriteFile(store.legacyPath("workspace-deadbeef-20260101"), payload, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	loaded, found, err := store.Load(context.Background(), "workspace-deadbeef-20260101")
@@ -540,5 +540,110 @@ func TestFileStoreLoadsLegacyWorkspaceIdentity(t *testing.T) {
 	}
 	if loaded.SessionID != "workspace-deadbeef-20260101" || loaded.WorkspaceKey != "deadbeef" {
 		t.Fatalf("legacy identity = %+v", loaded)
+	}
+}
+
+func TestFileStoreUsesSessionAggregateLayout(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	store, err := NewFileStore(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(context.Background(), "aggregate", State{PermissionMode: permission.ModeAsk.String()}); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(root, "aggregate", session.StateFileName)
+	if _, err := os.Stat(statePath); err != nil {
+		t.Fatalf("state path %s: %v", statePath, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "aggregate.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("legacy flat state unexpectedly exists: %v", err)
+	}
+}
+
+func TestFileStoreMigratesLegacyFlatStateOnSave(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	store, err := NewFileStore(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	legacy := State{Version: currentStateVersion, PermissionMode: permission.ModeAsk.String()}
+	payload, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(store.legacyPath("legacy-flat"), payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, found, err := store.Load(context.Background(), "legacy-flat")
+	if err != nil || !found {
+		t.Fatalf("legacy load found=%v err=%v", found, err)
+	}
+	if err := store.Save(context.Background(), "legacy-flat", loaded); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(store.legacyPath("legacy-flat")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("legacy file still exists: %v", err)
+	}
+	if _, err := os.Stat(store.path("legacy-flat")); err != nil {
+		t.Fatalf("aggregate state missing: %v", err)
+	}
+}
+
+func TestFileStoreDeleteRemovesSessionResources(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	store, err := NewFileStore(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(context.Background(), "delete-me", State{PermissionMode: permission.ModeAsk.String()}); err != nil {
+		t.Fatal(err)
+	}
+	resources, err := session.ResolveResources(root, "delete-me")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(resources.Todo, []byte("todo"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Delete(context.Background(), "delete-me"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(resources.Root); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("session aggregate still exists: %v", err)
+	}
+}
+
+func TestFileStoreRejectsStaleConcurrentSessionSave(t *testing.T) {
+	store, err := NewFileStore(filepath.Join(t.TempDir(), "sessions"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := store.Save(ctx, "shared", State{PermissionMode: permission.ModeAsk.String()}); err != nil {
+		t.Fatal(err)
+	}
+	first, found, err := store.Load(ctx, "shared")
+	if err != nil || !found {
+		t.Fatalf("first load found=%v err=%v", found, err)
+	}
+	second := first
+	first.AgentProfile = "dex"
+	if err := store.Save(ctx, "shared", first); err != nil {
+		t.Fatal(err)
+	}
+	second.AgentProfile = "pow"
+	if err := store.Save(ctx, "shared", second); !errors.Is(err, session.ErrRevisionConflict) {
+		t.Fatalf("stale save error=%v, want revision conflict", err)
+	}
+	loaded, _, err := store.Load(ctx, "shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.AgentProfile != "dex" || loaded.Revision != first.Revision+1 {
+		t.Fatalf("loaded after conflict=%+v", loaded)
 	}
 }

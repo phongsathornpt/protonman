@@ -11,12 +11,13 @@ import (
 	"syscall"
 
 	"github.com/projectTHORN/proton/internal/adapter/in/acp"
+	"github.com/projectTHORN/proton/internal/adapter/in/tui"
 	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/base/envconfig"
 	"github.com/projectTHORN/proton/internal/core/session"
-	"github.com/projectTHORN/proton/internal/platform/telemetry"
+	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/engine/toolcall"
-	"github.com/projectTHORN/proton/internal/adapter/in/tui"
+	"github.com/projectTHORN/proton/internal/platform/telemetry"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -57,7 +58,13 @@ func run(ctx context.Context, args []string) error {
 	defer runtimeState.Close()
 
 	if options.acp {
-		server, serverErr := acp.New(runtimeState.service, runtimeState.registry, runtimeState.runner, acp.WithSessions(app.NewSessions(runtimeState.stateStore)))
+		server, serverErr := acp.New(
+			runtimeState.service, runtimeState.registry, runtimeState.runner,
+			acp.WithSessions(app.NewSessions(runtimeState.stateStore)),
+			acp.WithSessionRegistryFactory(func(sessionID, _ string) (tool.Registry, error) {
+				return runtimeState.registryForSession(sessionID)
+			}),
+		)
 		if serverErr != nil {
 			return fmt.Errorf("create ACP server: %w", serverErr)
 		}
@@ -103,6 +110,7 @@ func run(ctx context.Context, args []string) error {
 	}
 	saveErr := runtimeState.stateStore.Save(ctx, runtimeState.sessionID, session.State{
 		SessionID:       runtimeState.sessionID,
+		Revision:        runtimeState.state.Revision,
 		WorkspaceKey:    runtimeState.state.WorkspaceKey,
 		WorkspaceName:   runtimeState.state.WorkspaceName,
 		CreatedAt:       runtimeState.state.CreatedAt,

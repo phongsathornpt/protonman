@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
 	"github.com/projectTHORN/proton/internal/core/tool"
+	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
 )
 
 func TestGetTodoReturnsStructuredSnapshotRevision(t *testing.T) {
@@ -54,5 +54,28 @@ func TestGetTodoArgumentContract(t *testing.T) {
 		if _, err := h.Execute(context.Background(), call); err == nil {
 			t.Fatalf("get_todo(%q) error = nil, want invalid arguments", raw)
 		}
+	}
+}
+
+func TestGetTodoForSessionIncludesSessionIdentity(t *testing.T) {
+	store, err := tododomain.NewStore(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGetTodoForSession(store, "session-123")
+	call, err := tool.NewCall("get-session", "get_todo", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := handler.Execute(context.Background(), call)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(result.StructuredOutput, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["session_id"] != "session-123" {
+		t.Fatalf("session_id=%v", payload["session_id"])
 	}
 }

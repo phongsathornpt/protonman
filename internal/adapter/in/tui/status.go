@@ -12,10 +12,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/projectTHORN/proton/internal/feature/agent"
 	"github.com/projectTHORN/proton/internal/core/permission"
-	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
 	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/projectTHORN/proton/internal/feature/agent"
+	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
 )
 
 func shortcutHelp(binding key.Binding) string {
@@ -424,7 +424,7 @@ func (m bubbleModel) todoView() string {
 	if len(m.todo) == 0 {
 		return ""
 	}
-	if m.todoCompletionDismissed && !m.todoExpanded && m.todoWarning == "" {
+	if m.todoCompletionDismissed && !m.todoExpanded {
 		return ""
 	}
 	completed, active, pending := todoCounts(m.todo)
@@ -437,9 +437,6 @@ func (m bubbleModel) todoView() string {
 	}
 	if completed == len(m.todo) {
 		summary += " ✓"
-	}
-	if m.todoWarning != "" {
-		summary += " · stale"
 	}
 	renderSummary := func(value string) string {
 		return brandStyle.Render(truncateWithEllipsis(value, maxInt(1, m.width-2)))
@@ -457,9 +454,6 @@ func (m bubbleModel) todoView() string {
 
 	limit := todoVisibleRows(m.height)
 	lines := []string{renderSummary(summary)}
-	if m.todoWarning != "" {
-		lines = append(lines, warningStyle.Render(truncateWithEllipsis("  ⚠ "+m.todoWarning, maxInt(1, m.width-2))))
-	}
 	shown := 0
 	for _, status := range []tododomain.Status{tododomain.StatusInProgress, tododomain.StatusPending, tododomain.StatusCompleted} {
 		for _, item := range m.todo {

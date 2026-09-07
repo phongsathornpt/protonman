@@ -26,6 +26,8 @@ type State struct {
 	Version int `json:"version"`
 	// SessionID is the stable identity of this session. Legacy files may omit it.
 	SessionID string `json:"session_id,omitempty"`
+	// Revision is the durable optimistic-concurrency generation for this session state.
+	Revision uint64 `json:"revision,omitempty"`
 	// WorkspaceKey binds the session to the workspace it was created for without persisting an absolute path.
 	WorkspaceKey string `json:"workspace_key,omitempty"`
 	// WorkspaceName is a display-only basename for session discovery.
@@ -137,6 +139,9 @@ type ListOptions struct {
 // ErrInvalidSessionID indicates that an ID could escape the session store
 // directory or otherwise cannot name a state file safely.
 var ErrInvalidSessionID = errors.New("invalid session id")
+
+// ErrRevisionConflict indicates that a stale session snapshot attempted to overwrite newer state.
+var ErrRevisionConflict = errors.New("session revision conflict")
 
 func legacyWorkspaceKey(sessionID string) string {
 	const prefix = "workspace-"

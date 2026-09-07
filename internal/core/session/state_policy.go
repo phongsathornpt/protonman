@@ -59,12 +59,21 @@ func PrepareStateForSave(sessionID string, state State, existing *State, now tim
 		state.WorkspaceKey = legacyWorkspaceKey(sessionID)
 	}
 	if existing != nil {
+		if state.Revision != existing.Revision {
+			return State{}, fmt.Errorf("%w: expected %d, current %d", ErrRevisionConflict, state.Revision, existing.Revision)
+		}
+		state.Revision = existing.Revision + 1
 		if state.CreatedAt.IsZero() {
 			state.CreatedAt = existing.CreatedAt
 		}
 		if state.WorkspaceName == "" {
 			state.WorkspaceName = existing.WorkspaceName
 		}
+	} else {
+		if state.Revision != 0 {
+			return State{}, fmt.Errorf("%w: session does not exist but revision is %d", ErrRevisionConflict, state.Revision)
+		}
+		state.Revision = 1
 	}
 	if state.Version != currentStateVersion {
 		return State{}, fmt.Errorf("session state version %d is unsupported", state.Version)

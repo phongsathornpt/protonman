@@ -7,15 +7,16 @@ import (
 	"fmt"
 	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
 	"io"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/adapter/out/model"
 	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/app/appdirs"
 	"github.com/projectTHORN/proton/internal/base/contextutil"
-	"github.com/projectTHORN/proton/internal/adapter/out/model"
 	"github.com/projectTHORN/proton/internal/core/permission"
 	"github.com/projectTHORN/proton/internal/core/session"
 	"github.com/projectTHORN/proton/internal/core/tool"
@@ -29,6 +30,9 @@ const sessionPersistenceTimeout = runtimepolicy.SessionPersistenceTimeout
 type Session struct {
 	id              string
 	cwd             string
+	workspaceKey    string
+	workspaceName   string
+	stateRevision   uint64
 	service         *toolcall.Service
 	registry        tool.Registry
 	runner          app.Conversation
@@ -56,8 +60,13 @@ func NewSession(
 	if effort, explicit := app.ReasoningPolicy(runner); explicit {
 		reasoningEffort = effort
 	}
+	workspaceName := filepath.Base(filepath.Clean(cwd))
+	if cwd == "" {
+		workspaceName = ""
+	}
 	return &Session{
-		id: id, cwd: cwd, service: service, registry: registry, runner: runner, sessionService: sessionService,
+		id: id, cwd: cwd, workspaceKey: session.WorkspaceKey(cwd), workspaceName: workspaceName,
+		service: service, registry: registry, runner: runner, sessionService: sessionService,
 		reasoningEffort: reasoningEffort, messages: make([]model.Message, 0),
 	}
 }
@@ -723,18 +732,32 @@ func (s *Session) saveState(ctx context.Context) error {
 	s.mu.Lock()
 	messages := model.CloneMessages(s.messages)
 	reasoningEffort := s.reasoningEffort
+	stateRevision := s.stateRevision
 	s.mu.Unlock()
 	reasoningSetting := "auto"
 	if reasoningEffort != sdk.ReasoningDefault {
 		reasoningSetting = string(reasoningEffort)
 	}
 
-	return s.sessionService.Save(ctx, s.id, session.State{
+	err := s.sessionService.Save(ctx, s.id, session.State{
+		SessionID:       s.id,
+		Revision:        stateRevision,
+		WorkspaceKey:    s.workspaceKey,
+		WorkspaceName:   s.workspaceName,
 		PermissionMode:  s.service.Mode().String(),
 		ReasoningEffort: reasoningSetting,
 		Messages:        session.FromModelMessages(messages),
 		UpdatedAt:       time.Now().UTC(),
 	})
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	if s.stateRevision == stateRevision {
+		s.stateRevision = stateRevision + 1
+	}
+	s.mu.Unlock()
+	return nil
 }
 
 func toModelToolCalls(calls []tool.Call) []model.ToolCall {

@@ -9,12 +9,13 @@ import (
 	"io"
 	"strings"
 
-	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
 	"github.com/projectTHORN/proton/internal/core/tool"
+	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
 )
 
 type updateTodoHandler struct {
-	store tododomain.Repository
+	store     tododomain.Repository
+	sessionID string
 }
 
 type updateTodoInput struct {
@@ -24,6 +25,10 @@ type updateTodoInput struct {
 
 func NewUpdateTodo(store tododomain.Repository) tool.Handler {
 	return updateTodoHandler{store: store}
+}
+
+func NewUpdateTodoForSession(store tododomain.Repository, sessionID string) tool.Handler {
+	return updateTodoHandler{store: store, sessionID: sessionID}
 }
 
 func (updateTodoHandler) Definition() tool.Definition {
@@ -79,6 +84,12 @@ func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "operations exceed the 256-operation limit")
 	}
 	before := h.store.Snapshot()
+	if reloader, ok := h.store.(tododomain.ReloadableRepository); ok {
+		before, err = reloader.Reload(ctx)
+		if err != nil {
+			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "reload todo snapshot", err)
+		}
+	}
 	if before.Revision != *input.ExpectedRevision {
 		err := fmt.Errorf("%w: expected %d, current %d", tododomain.ErrRevisionConflict, *input.ExpectedRevision, before.Revision)
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeConflict, "todo snapshot is stale; refresh tasks and retry", err)
@@ -94,7 +105,7 @@ func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 		}
 		return tool.Result{}, err
 	}
-	return encodeTodoUpdateResult(call, before.Items, snapshot)
+	return encodeTodoUpdateResult(call, before.Items, snapshot, h.sessionID)
 }
 
 func decodeUpdateTodoInput(arguments json.RawMessage) (updateTodoInput, error) {
@@ -114,17 +125,21 @@ func decodeUpdateTodoInput(arguments json.RawMessage) (updateTodoInput, error) {
 	return input, nil
 }
 
-func encodeTodoUpdateResult(call tool.Call, before []tododomain.Item, snapshot tododomain.Snapshot) (tool.Result, error) {
+func encodeTodoUpdateResult(call tool.Call, before []tododomain.Item, snapshot tododomain.Snapshot, sessionID string) (tool.Result, error) {
 	counts := map[tododomain.Status]int{}
 	for _, item := range snapshot.Items {
 		counts[item.Status]++
 	}
 	changes := todoChanges(before, snapshot.Items)
-	payload, err := json.Marshal(map[string]any{
+	payloadValue := map[string]any{
 		"revision": snapshot.Revision, "total": len(snapshot.Items),
 		"pending": counts[tododomain.StatusPending], "in_progress": counts[tododomain.StatusInProgress],
 		"completed": counts[tododomain.StatusCompleted], "changes": changes,
-	})
+	}
+	if sessionID != "" {
+		payloadValue["session_id"] = sessionID
+	}
+	payload, err := json.Marshal(payloadValue)
 	if err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "encode todo result", err)
 	}

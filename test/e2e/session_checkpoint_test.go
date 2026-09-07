@@ -28,7 +28,7 @@ func TestE2ESessionPersistenceAndRedaction(t *testing.T) {
 	}
 
 	// Verify session file was saved
-	sessionFile := filepath.Join(home, ".proton", "sessions", sessionID+".json")
+	sessionFile := filepath.Join(home, ".proton", "sessions", sessionID, "state.json")
 	data, err := os.ReadFile(sessionFile)
 	if err != nil {
 		t.Fatalf("session file not found at %s: %v", sessionFile, err)
@@ -170,7 +170,7 @@ func TestE2ENewSessionByDefaultAndResume(t *testing.T) {
 	}
 
 	sessDir := filepath.Join(home, ".proton", "sessions")
-	files1, err := filepath.Glob(filepath.Join(sessDir, "workspace-*.json"))
+	files1, err := filepath.Glob(filepath.Join(sessDir, "workspace-*", "state.json"))
 	if err != nil {
 		t.Fatalf("glob sessions: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestE2ENewSessionByDefaultAndResume(t *testing.T) {
 		t.Fatalf("second run failed (code %d): %s\n%s", res2.exitCode, res2.stdout, res2.stderr)
 	}
 
-	files2, err := filepath.Glob(filepath.Join(sessDir, "workspace-*.json"))
+	files2, err := filepath.Glob(filepath.Join(sessDir, "workspace-*", "state.json"))
 	if err != nil {
 		t.Fatalf("glob sessions: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestE2ENewSessionByDefaultAndResume(t *testing.T) {
 		t.Fatalf("third run with --resume failed (code %d): %s\n%s", res3.exitCode, res3.stdout, res3.stderr)
 	}
 
-	files3, err := filepath.Glob(filepath.Join(sessDir, "workspace-*.json"))
+	files3, err := filepath.Glob(filepath.Join(sessDir, "workspace-*", "state.json"))
 	if err != nil {
 		t.Fatalf("glob sessions: %v", err)
 	}
@@ -237,7 +237,7 @@ func TestE2ENewSessionByDefaultAndResume(t *testing.T) {
 	if res4.exitCode != 0 {
 		t.Fatalf("run with -s failed (code %d): %s\n%s", res4.exitCode, res4.stdout, res4.stderr)
 	}
-	customFile := filepath.Join(sessDir, customSess+".json")
+	customFile := filepath.Join(sessDir, customSess, "state.json")
 	if _, err := os.Stat(customFile); err != nil {
 		t.Fatalf("expected custom session file %s to exist: %v", customFile, err)
 	}

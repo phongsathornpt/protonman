@@ -8,12 +8,12 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/projectTHORN/proton/internal/feature/agent"
-	"github.com/projectTHORN/proton/internal/app"
-	"github.com/projectTHORN/proton/internal/app/appdirs"
 	"github.com/projectTHORN/proton/internal/adapter/out/config"
 	"github.com/projectTHORN/proton/internal/adapter/out/model"
+	"github.com/projectTHORN/proton/internal/app"
+	"github.com/projectTHORN/proton/internal/app/appdirs"
 	"github.com/projectTHORN/proton/internal/core/permission"
+	"github.com/projectTHORN/proton/internal/feature/agent"
 )
 
 func (m *bubbleModel) updateAgentLifecycle(message agentLifecycleMsg) (tea.Model, tea.Cmd) {
@@ -60,7 +60,6 @@ func (m *bubbleModel) updateToolResult(message toolResultMsg) (tea.Model, tea.Cm
 	m.activity = "ready"
 	m.turnCancel = nil
 	m.appendToolResult(message.result, message.err)
-	m.reloadTodoAfterExternalTool(message.call, message.result, message.err)
 	m.syncTodoSnapshot()
 	if message.call.ID != "" {
 		m.appendModelToolResult(message.call, message.result)

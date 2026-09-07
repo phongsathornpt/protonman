@@ -23,15 +23,11 @@ func OpenMarkdownStore(ctx context.Context, path string) (*MarkdownStore, error)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	content, err := os.ReadFile(path)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("read todo markdown: %w", err)
-	}
-	items, err := parseDocument(string(content))
+	revision, items, _, err := readMarkdownSnapshot(path)
 	if err != nil {
 		return nil, err
 	}
-	mem, err := NewStore(items)
+	mem, err := newStoreWithRevision(revision, items)
 	if err != nil {
 		return nil, err
 	}
@@ -54,19 +50,25 @@ func (s *MarkdownStore) Replace(ctx context.Context, items []Item) (Snapshot, er
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	current := s.mem.Snapshot()
-	if itemsEqual(current.Items, items) {
-		return current, nil
-	}
-	content, err := os.ReadFile(s.path)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return Snapshot{}, fmt.Errorf("read todo markdown: %w", err)
-	}
-	next := renderDocument(string(content), items)
-	if err := writeAtomic(ctx, s.path, []byte(next)); err != nil {
-		return Snapshot{}, err
-	}
-	return s.mem.Replace(ctx, items)
+	var out Snapshot
+	err := withFileLock(ctx, s.path, func() error {
+		revision, diskItems, content, err := readMarkdownSnapshot(s.path)
+		if err != nil {
+			return err
+		}
+		if itemsEqual(diskItems, items) {
+			out = s.mem.setSnapshot(revision, diskItems)
+			return nil
+		}
+		nextRevision := revision + 1
+		next := renderDocumentState(content, nextRevision, items)
+		if err := writeAtomic(ctx, s.path, []byte(next)); err != nil {
+			return err
+		}
+		out = s.mem.setSnapshot(nextRevision, items)
+		return nil
+	})
+	return out, err
 }
 
 func (s *MarkdownStore) Reload(ctx context.Context) (Snapshot, error) {
@@ -75,17 +77,59 @@ func (s *MarkdownStore) Reload(ctx context.Context) (Snapshot, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	content, err := os.ReadFile(s.path)
-	if errors.Is(err, os.ErrNotExist) {
-		content = nil
-	} else if err != nil {
-		return Snapshot{}, fmt.Errorf("read todo markdown: %w", err)
-	}
-	items, err := parseDocument(string(content))
+	revision, items, _, err := readMarkdownSnapshot(s.path)
 	if err != nil {
 		return Snapshot{}, err
 	}
-	return s.mem.Replace(ctx, items)
+	return s.mem.setSnapshot(revision, items), nil
+}
+
+func (s *MarkdownStore) CompareAndReplace(ctx context.Context, expectedRevision uint64, items []Item) (Snapshot, error) {
+	if err := ctx.Err(); err != nil {
+		return Snapshot{}, err
+	}
+	if err := ValidateItems(items); err != nil {
+		return Snapshot{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out Snapshot
+	err := withFileLock(ctx, s.path, func() error {
+		revision, diskItems, content, err := readMarkdownSnapshot(s.path)
+		if err != nil {
+			return err
+		}
+		if revision != expectedRevision {
+			out = s.mem.setSnapshot(revision, diskItems)
+			return fmt.Errorf("%w: expected %d, current %d", ErrRevisionConflict, expectedRevision, revision)
+		}
+		if itemsEqual(diskItems, items) {
+			out = s.mem.setSnapshot(revision, diskItems)
+			return nil
+		}
+		nextRevision := revision + 1
+		next := renderDocumentState(content, nextRevision, items)
+		if err := writeAtomic(ctx, s.path, []byte(next)); err != nil {
+			return err
+		}
+		out = s.mem.setSnapshot(nextRevision, items)
+		return nil
+	})
+	return out, err
+}
+
+func readMarkdownSnapshot(path string) (uint64, []Item, string, error) {
+	content, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		content = nil
+	} else if err != nil {
+		return 0, nil, "", fmt.Errorf("read todo markdown: %w", err)
+	}
+	revision, items, err := parseDocumentState(string(content))
+	if err != nil {
+		return 0, nil, "", err
+	}
+	return revision, items, string(content), nil
 }
 
 func itemsEqual(a, b []Item) bool {
@@ -98,31 +142,4 @@ func itemsEqual(a, b []Item) bool {
 		}
 	}
 	return true
-}
-
-func (s *MarkdownStore) CompareAndReplace(ctx context.Context, expectedRevision uint64, items []Item) (Snapshot, error) {
-	if err := ctx.Err(); err != nil {
-		return Snapshot{}, err
-	}
-	if err := ValidateItems(items); err != nil {
-		return Snapshot{}, err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	current := s.mem.Snapshot()
-	if current.Revision != expectedRevision {
-		return current, fmt.Errorf("%w: expected %d, current %d", ErrRevisionConflict, expectedRevision, current.Revision)
-	}
-	if itemsEqual(current.Items, items) {
-		return current, nil
-	}
-	content, err := os.ReadFile(s.path)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return Snapshot{}, fmt.Errorf("read todo markdown: %w", err)
-	}
-	next := renderDocument(string(content), items)
-	if err := writeAtomic(ctx, s.path, []byte(next)); err != nil {
-		return Snapshot{}, err
-	}
-	return s.mem.CompareAndReplace(ctx, expectedRevision, items)
 }

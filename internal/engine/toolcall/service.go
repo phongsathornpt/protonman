@@ -203,6 +203,41 @@ func (s *Service) Clone() *Service {
 	}
 }
 
+// CloneWithRegistry creates independent permission state over a replacement
+// registry while preserving the service policy and runtime options. Stateful
+// session tools use this to bind handlers to one durable session aggregate.
+func (s *Service) CloneWithRegistry(registry tool.Registry) (*Service, error) {
+	if s == nil {
+		return nil, fmt.Errorf("%w: source service is required", ErrInvalidService)
+	}
+	if registry == nil {
+		return nil, fmt.Errorf("%w: registry is required", ErrInvalidService)
+	}
+	s.mu.RLock()
+	policy := s.policy
+	observer := s.observer
+	mode := s.mode
+	prompt := s.prompt
+	guard := s.guard
+	permissionTimeout := s.permissionTimeout
+	executionTimeout := s.executionTimeout
+	mutationWorkspace := s.mutationWorkspace
+	s.mu.RUnlock()
+	clone, err := NewService(registry, policy,
+		WithMode(mode),
+		WithPermissionTimeout(permissionTimeout),
+		WithExecutionTimeout(executionTimeout),
+	)
+	if err != nil {
+		return nil, err
+	}
+	clone.observer = observer
+	clone.prompt = prompt
+	clone.guard = guard
+	clone.mutationWorkspace = mutationWorkspace
+	return clone, nil
+}
+
 // Mode returns the current permission mode.
 func (s *Service) Mode() permission.Mode {
 	s.mu.RLock()

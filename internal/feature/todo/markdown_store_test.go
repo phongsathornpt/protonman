@@ -156,3 +156,78 @@ func TestMarkdownStoreCompareAndReplaceRejectsStaleRevision(t *testing.T) {
 		t.Fatalf("stale update reached disk: %s", content)
 	}
 }
+
+func TestMarkdownStoreRevisionPersistsAcrossRestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session", "todo.md")
+	store, err := OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := store.CompareAndReplace(context.Background(), 0, []Item{{ID: "a", Text: "one", Status: StatusPending}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Revision != 1 {
+		t.Fatalf("revision=%d, want 1", first.Revision)
+	}
+	reopened, err := OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reopened.Snapshot(); got.Revision != 1 || len(got.Items) != 1 {
+		t.Fatalf("reopened=%+v", got)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), "proton:todo version=1 revision=1") {
+		t.Fatalf("missing durable revision marker: %s", content)
+	}
+}
+
+func TestMarkdownStoreRejectsCrossProcessStaleRevision(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session", "todo.md")
+	first, err := OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := first.CompareAndReplace(context.Background(), 0, []Item{{ID: "a", Text: "one", Status: StatusPending}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := second.CompareAndReplace(context.Background(), 0, []Item{{ID: "b", Text: "two", Status: StatusPending}}); !errors.Is(err, ErrRevisionConflict) {
+		t.Fatalf("error=%v, want revision conflict", err)
+	}
+	if got := second.Snapshot(); got.Revision != 1 || len(got.Items) != 1 || got.Items[0].ID != "a" {
+		t.Fatalf("stale store did not refresh authoritative state: %+v", got)
+	}
+}
+
+func TestMarkdownStoreCreatesPrivateSessionFiles(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nested", "session", "todo.md")
+	store, err := OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CompareAndReplace(context.Background(), 0, []Item{{ID: "a", Text: "one", Status: StatusPending}}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("todo mode=%#o, want 0600", got)
+	}
+	dirInfo, err := os.Stat(filepath.Dir(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := dirInfo.Mode().Perm(); got != 0o700 {
+		t.Fatalf("session directory mode=%#o, want 0700", got)
+	}
+}

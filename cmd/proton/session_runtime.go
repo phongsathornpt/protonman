@@ -2,31 +2,15 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/projectTHORN/proton/internal/base/envconfig"
 	"github.com/projectTHORN/proton/internal/core/session"
 )
 
-func generateSessionID(workDir string) string {
-	now := time.Now().UTC()
-	var entropy [4]byte
-	if _, err := rand.Read(entropy[:]); err != nil {
-		binary := sha256.Sum256([]byte(fmt.Sprintf("%s:%d", workDir, now.UnixNano())))
-		copy(entropy[:], binary[:4])
-	}
-	return fmt.Sprintf("workspace-%s-%s-%s",
-		workspaceKey(workDir),
-		now.Format("20060102-150405.000000000"),
-		hex.EncodeToString(entropy[:]),
-	)
-}
+func generateSessionID(workDir string) string { return session.NewID(workDir) }
 
 func resolveSession(
 	ctx context.Context,
@@ -102,7 +86,4 @@ func resolveSession(
 	return newID, session.State{SessionID: newID, WorkspaceKey: wsKey, WorkspaceName: workspaceName}, false, nil
 }
 
-func workspaceKey(workDir string) string {
-	digest := sha256.Sum256([]byte(workDir))
-	return hex.EncodeToString(digest[:8])
-}
+func workspaceKey(workDir string) string { return session.WorkspaceKey(workDir) }

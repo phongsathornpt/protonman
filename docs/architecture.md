@@ -62,7 +62,7 @@ Defines the primary application use cases and boundaries for inbound driving ada
 Pure business rules and domain definitions. No `domain-ish` parent folder is created to maintain idiomatic, flat Go packaging:
 - `internal/modelprofile/`: Model capability schemas, token limit calculations, reasoning profile definitions.
 - `internal/permission/`: Security modes (`ask`, `always-approve`, `deny`), path permission rules, evaluation policies.
-- `internal/session/`: Session entities, state models, message conversions, and repository port `session.Repository`.
+- `internal/core/session/`: Session identity, aggregate resource paths, state models, durable revision policy, message conversions, and repository port `session.Repository`.
 - `internal/tool/`: Pure domain contracts for tools: `Handler` interface, `Registry`, `Specification`, parameter metadata, call context. Contains zero tool implementations.
 - `internal/workspace/`: Filesystem root isolation, directory safety gates, mutation boundaries.
 
@@ -78,13 +78,13 @@ Pure business rules and domain definitions. No `domain-ish` parent folder is cre
 - `internal/headless/`: Non-interactive output adapter for CI/CD and scripts (text/NDJSON stream).
 
 ### Outbound (Driven) Infrastructure Adapters
-- `internal/adapter/sessionfs/`: File-backed storage implementation of `session.Repository`.
+- `internal/adapter/out/sessionfs/`: File-backed storage implementation of `session.Repository`; each session is an aggregate directory containing `state.json` plus session-owned resources such as `todo.md`.
 - `internal/adapter/tool/`: Unified home for **all tool implementations** satisfying `tool.Handler`:
   - `agent/`: Subagent orchestration tools (`delegate_task`, `wait_agent`, etc.).
   - `builtin/`: Core developer tools (`read_file`, `write_file`, `search_replace`, `apply_patch`, `bash`, `grep`, `find_files`, `list_dir`, `git_status`).
   - `mcp/`: External Model Context Protocol server discovery and tool registration.
   - `skill/`: Agent skill activation (`activate_skill`).
-  - `todo/`: Work tracking tools (`get_todo`, `update_todo`).
+  - `todo/`: Session-bound work tracking tools (`get_todo`, `update_todo`) using durable optimistic concurrency.
   - `web/`: Network web fetching with sandbox isolation (`web_fetch`).
 - `internal/model/`: Provider integration and SDK translation:
   - `provider_preset.go`: Endpoint and protocol presets.
@@ -95,6 +95,18 @@ Pure business rules and domain definitions. No `domain-ish` parent folder is cre
   - `sdk_adapter.go`: `proton-sdk` provider model adapter with capability overrides.
 - `internal/config/`: TOML configuration loading, merging (user/project), and persistence (`config.go`, `document.go`, `merge.go`, `load.go`, `user_save.go`, `project_save.go`).
 - `internal/turn/`: Turn orchestration engine and loop state machine driving model streaming, tool execution, grounding, and verification.
+
+### Session Aggregate Ownership
+
+A session ID is the ownership boundary for conversation state and the agent task plan:
+
+```text
+~/.proton/sessions/<session-id>/
+  state.json
+  todo.md
+```
+
+The CLI resolves the session before constructing stateful tools. TUI/headless bind `get_todo` and `update_todo` to that session's repository; ACP creates a registry overlay per ACP session so task state cannot leak between concurrent sessions. Workspace file tools cannot mutate this private task state. Both session saves and todo patches use durable revisions plus filesystem serialization to reject stale writers.
 
 ---
 
