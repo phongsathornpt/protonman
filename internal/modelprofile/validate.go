@@ -17,10 +17,10 @@ func validateProfile(profile Profile) error {
 	if profile.Reasoning.Default != "" && !profile.Reasoning.Default.Valid() {
 		return fmt.Errorf("invalid default reasoning effort %q", profile.Reasoning.Default)
 	}
-	switch profile.ToolSchemaDialect {
+	switch profile.Compatibility.ToolSchemaDialect {
 	case ToolSchemaDefault, ToolSchemaGeminiSubset:
 	default:
-		return fmt.Errorf("invalid tool schema dialect %q", profile.ToolSchemaDialect)
+		return fmt.Errorf("invalid tool schema dialect %q", profile.Compatibility.ToolSchemaDialect)
 	}
 	return nil
 }
@@ -29,6 +29,6 @@ func cloneProfile(profile Profile) Profile {
 	profile.Match.ExactIDs = append([]string(nil), profile.Match.ExactIDs...)
 	profile.Match.Prefixes = append([]string(nil), profile.Match.Prefixes...)
 	profile.Reasoning.Levels = append(profile.Reasoning.Levels[:0:0], profile.Reasoning.Levels...)
-	profile.PromptHints = append([]string(nil), profile.PromptHints...)
+	profile.AgentPolicy.PromptHints = append([]string(nil), profile.AgentPolicy.PromptHints...)
 	return profile
 }

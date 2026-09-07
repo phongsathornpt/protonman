@@ -26,7 +26,7 @@ func TestPublishInputSchemaLowersGeminiOneOfToBroadObject(t *testing.T) {
 		"required":             []any{"operations"},
 		"additionalProperties": false,
 	}
-	published := PublishInputSchema(Resolved{ToolSchemaDialect: ToolSchemaGeminiSubset}, canonical)
+	published := PublishInputSchema(Resolved{Compatibility: CompatibilityPolicy{ToolSchemaDialect: ToolSchemaGeminiSubset}}, canonical)
 	items := published["properties"].(map[string]any)["operations"].(map[string]any)["items"].(map[string]any)
 	if _, exists := items["oneOf"]; exists {
 		t.Fatalf("published schema still contains oneOf: %#v", items)
@@ -63,7 +63,7 @@ func TestPublishInputSchemaKeepsCanonicalDialect(t *testing.T) {
 
 func TestPublishInputSchemaLowersZeroArgumentToolForGemini(t *testing.T) {
 	canonical := tool.NoArgumentsSchema()
-	published := PublishInputSchema(Resolved{ToolSchemaDialect: ToolSchemaGeminiSubset}, canonical)
+	published := PublishInputSchema(Resolved{Compatibility: CompatibilityPolicy{ToolSchemaDialect: ToolSchemaGeminiSubset}}, canonical)
 	if published["type"] != "object" {
 		t.Fatalf("published type = %#v, want object", published["type"])
 	}

@@ -493,7 +493,7 @@ func (l *Loop) effectivePromptSpec(definitions []tool.Definition, extras []strin
 		spec.ModelProfile = profile.ProfileName
 		spec.ModelProfileMatch = string(profile.ProfileMatch)
 		spec.ModelCatalogOverride = profile.CatalogOverride
-		spec.ModelPromptHints = append([]string(nil), profile.PromptHints...)
+		spec.ModelPromptHints = append([]string(nil), profile.AgentPolicy.PromptHints...)
 	}
 	spec.ToolNames = make([]string, 0, len(definitions))
 	spec.TaskPlanEnabled = false

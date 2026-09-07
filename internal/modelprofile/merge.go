@@ -34,12 +34,12 @@ func mergeProfile(dst *Resolved, src Profile) {
 		dst.MaxOutputTokens = src.MaxOutputTokens
 		dst.Provenance.MaxOutputTokens = MetadataSourceBuiltin
 	}
-	if len(src.PromptHints) > 0 {
-		dst.PromptHints = append([]string(nil), src.PromptHints...)
+	if len(src.AgentPolicy.PromptHints) > 0 {
+		dst.AgentPolicy.PromptHints = append([]string(nil), src.AgentPolicy.PromptHints...)
 		dst.Provenance.PromptHints = MetadataSourceBuiltin
 	}
-	if src.ToolSchemaDialect != ToolSchemaDefault {
-		dst.ToolSchemaDialect = src.ToolSchemaDialect
+	if src.Compatibility.ToolSchemaDialect != ToolSchemaDefault {
+		dst.Compatibility.ToolSchemaDialect = src.Compatibility.ToolSchemaDialect
 		dst.Provenance.ToolSchemaDialect = MetadataSourceBuiltin
 	}
 }
