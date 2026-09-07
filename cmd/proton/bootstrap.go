@@ -143,7 +143,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	if err != nil {
 		return nil, fmt.Errorf("open session todo store: %w", err)
 	}
-	registry, err := builtin.NewDefaultRegistry(workspaceRoot,
+	baseRegistry, err := builtin.NewDefaultRegistry(workspaceRoot,
 		builtin.WithCheckpointStore(checkpointStore),
 		builtin.WithSandbox(launcher),
 		builtin.WithAdditionalHandlers(
@@ -161,6 +161,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	if err != nil {
 		return nil, fmt.Errorf("create tool registry: %w", err)
 	}
+	var registry tool.Registry = agenttool.NewCapabilityRegistry(baseRegistry, coordinator)
 	coordinator.SetParentRegistry(registry)
 	initialMode := loadedConfig.Mode
 	if found {
