@@ -237,7 +237,7 @@ func (v *providerPaneView) protocolLabel() string {
 		label = string(model.ProviderProtocolOpenAI)
 	}
 	if v.presetID == "" {
-		return label + " · ctrl+t to switch"
+		return label + " · ctrl+r to switch"
 	}
 	return label
 }
@@ -615,13 +615,13 @@ func renderProviderInput(m *bubbleModel) string {
 	rows = append(rows, view.inputFieldRows(compact)...)
 	rows = append(rows, "")
 	if compact {
-		footer := fmt.Sprintf("%s · ctrl+t · tab fields · enter connect · esc", strings.ToLower(strings.TrimSpace(view.providerType)))
+		footer := fmt.Sprintf("%s · ctrl+r · tab fields · enter connect · esc", strings.ToLower(strings.TrimSpace(view.providerType)))
 		if view.isEditing && !view.activateOnSave {
 			footer = "enter save · active stays · esc cancel"
 		}
 		rows = append(rows, mutedStyle.Render(footer))
 	} else {
-		footer := "tab/shift+tab cycle · ctrl+t protocol · enter connect & fetch · esc cancel"
+		footer := "tab/shift+tab cycle · ctrl+r protocol · enter connect & fetch · esc cancel"
 		if view.isEditing && !view.activateOnSave {
 			footer = "tab/shift+tab cycle · enter save · active provider stays · esc cancel"
 		}
@@ -806,7 +806,7 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 		case "alt+5":
 			v.applyPreset(model.DefaultAnthropicName)
 			return true, nil
-		case "ctrl+t":
+		case "ctrl+r":
 			v.toggleProtocol()
 			return true, nil
 		case "tab", "down":
