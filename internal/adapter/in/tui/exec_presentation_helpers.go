@@ -68,3 +68,69 @@ func formatExecDuration(d time.Duration) string {
 	seconds := int((d % time.Minute) / time.Second)
 	return fmt.Sprintf("%dm %02ds", minutes, seconds)
 }
+
+type testCounts struct {
+	Passed  int
+	Failed  int
+	Skipped int
+	Ignored int
+	Errors  int
+}
+
+type diagnosticCounts struct {
+	Errors   int
+	Warnings int
+}
+
+type changeCounts struct {
+	Added     int
+	Changed   int
+	Destroyed int
+}
+
+func formatTestCounts(c testCounts) string {
+	parts := make([]string, 0, 5)
+	if c.Passed > 0 {
+		parts = append(parts, pluralCount(c.Passed, "passed", "passed"))
+	}
+	if c.Failed > 0 {
+		parts = append(parts, pluralCount(c.Failed, "failed", "failed"))
+	}
+	if c.Errors > 0 {
+		parts = append(parts, pluralCount(c.Errors, "error", "errors"))
+	}
+	if c.Skipped > 0 {
+		parts = append(parts, pluralCount(c.Skipped, "skipped", "skipped"))
+	}
+	if c.Ignored > 0 {
+		parts = append(parts, pluralCount(c.Ignored, "ignored", "ignored"))
+	}
+	return strings.Join(parts, " · ")
+}
+
+func formatDiagnosticCounts(c diagnosticCounts) string {
+	parts := make([]string, 0, 2)
+	if c.Errors > 0 {
+		parts = append(parts, pluralCount(c.Errors, "error", "errors"))
+	}
+	if c.Warnings > 0 {
+		parts = append(parts, pluralCount(c.Warnings, "warning", "warnings"))
+	}
+	return strings.Join(parts, " · ")
+}
+
+func firstFailureLines(output string, limit int) []string {
+	return filterExecLines(output, func(line string) bool {
+		lower := strings.ToLower(strings.TrimSpace(line))
+		return strings.Contains(lower, "fail") || strings.Contains(lower, "error") || strings.HasPrefix(lower, "panic:")
+	}, limit)
+}
+
+func firstNonFlagArg(args []string) string {
+	for _, arg := range args {
+		if arg != "" && !strings.HasPrefix(arg, "-") {
+			return arg
+		}
+	}
+	return ""
+}
