@@ -38,6 +38,7 @@ type Session struct {
 	runner          app.Conversation
 	sessionService  *app.Sessions
 	reasoningEffort sdk.ReasoningEffort
+	mcpServers      []MCPServerConfig
 
 	mu        sync.Mutex
 	messages  []model.Message
@@ -69,6 +70,18 @@ func NewSession(
 		service: service, registry: registry, runner: runner, sessionService: sessionService,
 		reasoningEffort: reasoningEffort, messages: make([]model.Message, 0),
 	}
+}
+
+func (s *Session) matchMCPServers(configs []MCPServerConfig) error {
+	if len(configs) == 0 {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !sameMCPServerConfigs(s.mcpServers, configs) {
+		return fmt.Errorf("session %q MCP server configuration differs from the active session", s.id)
+	}
+	return nil
 }
 
 // ReasoningEffort returns the explicit session-local reasoning override.
