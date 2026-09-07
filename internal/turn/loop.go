@@ -83,6 +83,11 @@ Respond with text ONLY.`
 // requests more calls than the remaining budget.
 const MaxToolCallsFallback = "I reached the maximum number of tool calls before producing a final response. The last tool request was not executed. Review the work so far or start a new turn."
 
+// SoftToolBudgetPrompt nudges the model toward completion before the hard tool-call budget is exhausted.
+const SoftToolBudgetPrompt = `TOOL BUDGET NOTICE
+
+A substantial portion of this turn's tool-call budget has been used. Reassess whether the requested outcome is already complete. Prioritize only required work and verification, avoid optional exploration, and finish as soon as the task is complete.`
+
 // NoProgressPrompt is injected when deterministic tool calls repeatedly return
 // the same result without any intervening workspace mutation.
 const NoProgressPrompt = `CRITICAL - TOOL LOOP DETECTED
@@ -378,6 +383,13 @@ func WithSkillRegistry(registry *skill.Registry) Option {
 }
 
 // Loop coordinates model streaming and permission-aware tool dispatch.
+func shouldWarnSoftToolBudget(used, max int, warned bool) bool {
+	if warned || max <= 0 || used <= 0 {
+		return false
+	}
+	return used*5 >= max*3
+}
+
 type Loop struct {
 	languageModel                 sdk.LanguageModel
 	tools                         *toolcall.Service
@@ -625,6 +637,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	}
 	turnMessages := make([]model.Message, 0, 4)
 	toolCallsUsed := 0
+	softToolBudgetWarned := false
 	definitions := l.tools.Definitions()
 	progress := newProgressGuard(definitions, l.maxIdenticalNoProgressResults)
 	resultBudget := newToolResultBudget(l.maxToolResultBytesPerRound, l.maxToolResultBytesPerTurn)
@@ -732,6 +745,10 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 					dispatch.remainingToolCalls = l.maxToolCalls - toolCallsUsed
 				}
 			}
+		}
+		if shouldWarnSoftToolBudget(toolCallsUsed, l.maxToolCalls, softToolBudgetWarned) && dispatch.enabled() {
+			reqMessages = append(reqMessages, model.Message{Role: model.RoleSystem, Content: SoftToolBudgetPrompt})
+			softToolBudgetWarned = true
 		}
 		if l.promptSpec != nil {
 			spec := l.effectivePromptSpec(definitions, promptExtras)
