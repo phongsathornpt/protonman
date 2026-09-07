@@ -188,9 +188,10 @@ type RemoteModel struct {
 	Features      []string `json:"features,omitempty"`
 	// ToolSupport and VisionSupport are tri-state capability metadata. Nil means
 	// the catalog did not provide authoritative support information.
-	ToolSupport   *bool                          `json:"tool_support,omitempty"`
-	VisionSupport *bool                          `json:"vision_support,omitempty"`
-	Reasoning     *modelprofile.CatalogReasoning `json:"reasoning,omitempty"`
+	ToolSupport        *bool                          `json:"tool_support,omitempty"`
+	VisionSupport      *bool                          `json:"vision_support,omitempty"`
+	ToolChoiceRequired *bool                          `json:"tool_choice_required,omitempty"`
+	Reasoning          *modelprofile.CatalogReasoning `json:"reasoning,omitempty"`
 }
 
 // IsFreeModel reports whether a given model ID represents an OpenCode free-tier model.
@@ -297,9 +298,10 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 			ID           string `json:"id"`
 			Name         string `json:"name"`
 			Capabilities struct {
-				Tools     *bool `json:"tools"`
-				Vision    *bool `json:"vision"`
-				Reasoning *bool `json:"reasoning"`
+				Tools              *bool `json:"tools"`
+				Vision             *bool `json:"vision"`
+				Reasoning          *bool `json:"reasoning"`
+				ToolChoiceRequired *bool `json:"tool_choice_required"`
 			} `json:"capabilities"`
 			Reasoning *modelprofile.CatalogReasoning `json:"reasoning"`
 		} `json:"data"`
@@ -316,11 +318,12 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 				reasoning = &modelprofile.CatalogReasoning{Supported: item.Capabilities.Reasoning}
 			}
 			results = append(results, RemoteModel{
-				ID:            item.ID,
-				Name:          name,
-				ToolSupport:   item.Capabilities.Tools,
-				VisionSupport: item.Capabilities.Vision,
-				Reasoning:     reasoning,
+				ID:                 item.ID,
+				Name:               name,
+				ToolSupport:        item.Capabilities.Tools,
+				VisionSupport:      item.Capabilities.Vision,
+				ToolChoiceRequired: item.Capabilities.ToolChoiceRequired,
+				Reasoning:          reasoning,
 			})
 		}
 		return results, nil
@@ -329,17 +332,19 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 	// Attempt parsing protonman format: {"models": [{"slug": "...", "name": "...", "contextWindow": 1000000}]}
 	var protonmanResp struct {
 		Models []struct {
-			ID             string   `json:"id"`
-			Slug           string   `json:"slug"`
-			Name           string   `json:"name"`
-			ContextWindow  int      `json:"contextWindow"`
-			Features       []string `json:"features"`
-			SupportsTools  *bool    `json:"supportsTools"`
-			SupportsVision *bool    `json:"supportsVision"`
-			Capabilities   struct {
-				Tools     *bool `json:"tools"`
-				Vision    *bool `json:"vision"`
-				Reasoning *bool `json:"reasoning"`
+			ID                         string   `json:"id"`
+			Slug                       string   `json:"slug"`
+			Name                       string   `json:"name"`
+			ContextWindow              int      `json:"contextWindow"`
+			Features                   []string `json:"features"`
+			SupportsTools              *bool    `json:"supportsTools"`
+			SupportsVision             *bool    `json:"supportsVision"`
+			SupportsToolChoiceRequired *bool    `json:"supportsToolChoiceRequired"`
+			Capabilities               struct {
+				Tools              *bool `json:"tools"`
+				Vision             *bool `json:"vision"`
+				Reasoning          *bool `json:"reasoning"`
+				ToolChoiceRequired *bool `json:"tool_choice_required"`
 			} `json:"capabilities"`
 			Reasoning *modelprofile.CatalogReasoning `json:"reasoning"`
 			Provider  struct {
@@ -356,6 +361,7 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 			}
 			toolSupport := firstKnownBool(item.Capabilities.Tools, item.SupportsTools)
 			visionSupport := firstKnownBool(item.Capabilities.Vision, item.SupportsVision)
+			requiredToolChoice := firstKnownBool(item.Capabilities.ToolChoiceRequired, item.SupportsToolChoiceRequired)
 			if toolSupport == nil && hasModelFeature(item.Features, "tools") {
 				toolSupport = boolPointer(true)
 			}
@@ -367,14 +373,15 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 				reasoning = &modelprofile.CatalogReasoning{Supported: item.Capabilities.Reasoning}
 			}
 			results = append(results, RemoteModel{
-				ID:            id,
-				Name:          item.Name,
-				ContextWindow: item.ContextWindow,
-				Provider:      item.Provider.Name,
-				Features:      item.Features,
-				ToolSupport:   toolSupport,
-				VisionSupport: visionSupport,
-				Reasoning:     reasoning,
+				ID:                 id,
+				Name:               item.Name,
+				ContextWindow:      item.ContextWindow,
+				Provider:           item.Provider.Name,
+				Features:           item.Features,
+				ToolSupport:        toolSupport,
+				VisionSupport:      visionSupport,
+				ToolChoiceRequired: requiredToolChoice,
+				Reasoning:          reasoning,
 			})
 		}
 		return results, nil

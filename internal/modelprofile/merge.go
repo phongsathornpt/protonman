@@ -9,6 +9,7 @@ func mergeProfile(dst *Resolved, src Profile) {
 	mergeSupport(&dst.Capabilities.Tools, src.Capabilities.Tools)
 	mergeSupport(&dst.Capabilities.Vision, src.Capabilities.Vision)
 	mergeSupport(&dst.Capabilities.Reasoning, src.Capabilities.Reasoning)
+	mergeSupport(&dst.Capabilities.ToolChoiceRequired, src.Capabilities.ToolChoiceRequired)
 	mergeSupport(&dst.Reasoning.Support, src.Reasoning.Support)
 	if len(src.Reasoning.Levels) > 0 {
 		dst.Reasoning.Levels = append([]sdk.ReasoningEffort(nil), src.Reasoning.Levels...)
@@ -36,6 +37,9 @@ func mergeCatalog(dst *Resolved, src CatalogMetadata) {
 	}
 	if src.Vision != nil {
 		dst.Capabilities.Vision = supportFromPointer(src.Vision)
+	}
+	if src.ToolChoiceRequired != nil {
+		dst.Capabilities.ToolChoiceRequired = supportFromPointer(src.ToolChoiceRequired)
 	}
 	if src.ContextWindow > 0 {
 		dst.ContextWindow = src.ContextWindow

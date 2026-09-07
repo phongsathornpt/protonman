@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/model"
+	"github.com/projectTHORN/proton/internal/modelprofile"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
@@ -68,6 +69,7 @@ func TestGroundingRestrictsToolsUntilSuccessfulWorkspaceEvidence(t *testing.T) {
 		}},
 		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
 	}}
+	client.profile.Capabilities.ToolChoiceRequired = modelprofile.SupportYes
 	loop := newGroundingLoop(t, client, groundingRegistry{
 		"read_file": groundingHandler{definition: tool.Definition{Name: "read_file", Description: "read", Kind: tool.KindRead, Evidence: tool.EvidenceWorkspace}},
 		"get_todo":  groundingHandler{definition: tool.Definition{Name: "get_todo", Description: "tasks", Kind: tool.KindTask}},
@@ -103,6 +105,7 @@ func TestGroundingDefersFinalTextWhenProviderIgnoresRequiredToolChoice(t *testin
 		}},
 		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "grounded answer"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
 	}}
+	client.profile.Capabilities.ToolChoiceRequired = modelprofile.SupportYes
 	loop := newGroundingLoop(t, client, groundingRegistry{
 		"read_file": groundingHandler{definition: tool.Definition{Name: "read_file", Description: "read", Kind: tool.KindRead, Evidence: tool.EvidenceWorkspace}},
 	}, WithGroundingEvidence(tool.EvidenceWorkspace))
@@ -116,6 +119,42 @@ func TestGroundingDefersFinalTextWhenProviderIgnoresRequiredToolChoice(t *testin
 	}
 	if len(client.requests) != 3 || client.requests[0].Options.ToolChoice != sdk.ToolChoiceRequired || client.requests[1].Options.ToolChoice != sdk.ToolChoiceRequired || client.requests[2].Options.ToolChoice != sdk.ToolChoiceAuto {
 		t.Fatalf("tool choices = %#v", client.requests)
+	}
+}
+
+func TestGroundingUsesAutoWhenRequiredToolChoiceIsUnknown(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{events: []sdk.Event{
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "read-auto", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
+		}},
+		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	}}
+	loop := newGroundingLoop(t, client, groundingRegistry{
+		"read_file": groundingHandler{definition: tool.Definition{Name: "read_file", Description: "read", Kind: tool.KindRead, Evidence: tool.EvidenceWorkspace}},
+	}, WithGroundingEvidence(tool.EvidenceWorkspace))
+	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := client.requests[0].Options.ToolChoice; got != sdk.ToolChoiceAuto {
+		t.Fatalf("grounding tool choice = %q, want auto for unknown capability", got)
+	}
+}
+
+func TestGroundingStopsAfterRepeatedUngroundedFinalResponses(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "guess one"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "guess two"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	}}
+	loop := newGroundingLoop(t, client, groundingRegistry{
+		"read_file": groundingHandler{definition: tool.Definition{Name: "read_file", Description: "read", Kind: tool.KindRead, Evidence: tool.EvidenceWorkspace}},
+	}, WithGroundingEvidence(tool.EvidenceWorkspace))
+	_, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect"}}, nil)
+	if !errors.Is(err, ErrGroundingUnavailable) {
+		t.Fatalf("Run() error = %v, want grounding unavailable", err)
+	}
+	if len(client.requests) != 2 {
+		t.Fatalf("requests = %d, want 2", len(client.requests))
 	}
 }
 

@@ -61,9 +61,10 @@ type Matcher struct {
 }
 
 type Capabilities struct {
-	Tools     Support
-	Vision    Support
-	Reasoning Support
+	Tools              Support
+	Vision             Support
+	Reasoning          Support
+	ToolChoiceRequired Support
 }
 
 type Reasoning struct {
@@ -96,10 +97,11 @@ type CatalogReasoning struct {
 }
 
 type CatalogMetadata struct {
-	Tools         *bool
-	Vision        *bool
-	ContextWindow int
-	Reasoning     *CatalogReasoning
+	Tools              *bool
+	Vision             *bool
+	ToolChoiceRequired *bool
+	ContextWindow      int
+	Reasoning          *CatalogReasoning
 }
 
 type Resolved struct {

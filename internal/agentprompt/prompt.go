@@ -144,7 +144,7 @@ func workspaceSection(spec Spec) string {
 func groundingSection(evidence string) string {
 	return `# Grounding Contract
 - Repository-dependent conclusions require successful empirical ` + evidence + ` evidence before final synthesis.
-- Runtime policy may require an eligible tool call before broader work continues.
+- When grounding is pending, call an eligible evidence tool before final synthesis.
 - Failed, denied, planning, orchestration, and status-only calls do not satisfy grounding.`
 }
 
