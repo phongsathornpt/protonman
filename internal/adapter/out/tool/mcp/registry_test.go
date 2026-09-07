@@ -655,3 +655,33 @@ func TestDiscoverRejectsNonJSONSchemaWithoutRegistration(t *testing.T) {
 		t.Fatalf("definitions = %d, want 0", got)
 	}
 }
+
+func TestDiscoverEnforcesResourceLimits(t *testing.T) {
+	registry, _ := builtin.NewRegistry()
+	server := &fakeServer{name: "many", tools: []Tool{{Name: "one"}, {Name: "two"}}}
+	limits := DefaultLimits()
+	limits.MaxToolsPerServer = 1
+	if err := DiscoverWithLimits(context.Background(), registry, limits, server); err == nil || !strings.Contains(err.Error(), "exposed 2 tools") {
+		t.Fatalf("tool limit error = %v", err)
+	}
+	if len(registry.Definitions()) != 0 {
+		t.Fatal("limited discovery partially registered tools")
+	}
+}
+
+func TestDiscoverEnforcesSchemaAndDescriptionLimits(t *testing.T) {
+	limits := DefaultLimits()
+	limits.MaxDescriptionBytes = 3
+	registry, _ := builtin.NewRegistry()
+	server := &fakeServer{name: "large", tools: []Tool{{Name: "one", Description: "large"}}}
+	if err := DiscoverWithLimits(context.Background(), registry, limits, server); err == nil || !strings.Contains(err.Error(), "description") {
+		t.Fatalf("description limit error = %v", err)
+	}
+
+	limits = DefaultLimits()
+	limits.MaxSchemaDepth = 2
+	server.tools = []Tool{{Name: "deep", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"x": map[string]any{"type": "string"}}}}}
+	if err := DiscoverWithLimits(context.Background(), registry, limits, server); err == nil || !strings.Contains(err.Error(), "schema depth") {
+		t.Fatalf("schema depth error = %v", err)
+	}
+}
