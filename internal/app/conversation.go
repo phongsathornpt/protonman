@@ -26,3 +26,8 @@ const (
 	EventCompleted  = turn.EventCompleted
 	EventFailed     = turn.EventFailed
 )
+
+var (
+	ErrToolDispatchUnavailable = turn.ErrToolDispatchUnavailable
+	ErrUnresolvedToolCall      = turn.ErrUnresolvedToolCall
+)

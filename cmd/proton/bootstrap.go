@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/projectTHORN/proton/internal/agent"
-	"github.com/projectTHORN/proton/internal/agentprompt"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/config"
@@ -23,7 +23,6 @@ import (
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/tool/builtin"
 	"github.com/projectTHORN/proton/internal/toolcall"
-	"github.com/projectTHORN/proton/internal/turn"
 	"github.com/projectTHORN/proton/internal/workspace"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
@@ -39,7 +38,7 @@ type appRuntime struct {
 	state       session.State
 	service     *toolcall.Service
 	skills      *skill.Registry
-	runner      turn.Runner
+	runner      app.Conversation
 }
 
 func (r *appRuntime) Close() {
@@ -218,51 +217,29 @@ func applyAgentProfile(loadedConfig *config.Snapshot, state *session.State, requ
 	return nil
 }
 
-func buildInitialRunner(cfg config.Snapshot, sessionID, workDir string, skills *skill.Registry, coordinator *agent.Coordinator, service *toolcall.Service) turn.Runner {
-	if cfg.Model.Default == "" {
-		return nil
-	}
-	providerKey := strings.ToLower(cfg.Model.Provider)
+func buildInitialRunner(cfg config.Snapshot, sessionID, workDir string, skills *skill.Registry, coordinator *agent.Coordinator, service *toolcall.Service) app.Conversation {
+	providerKey := strings.ToLower(strings.TrimSpace(cfg.Model.Provider))
 	if providerKey == "" {
 		providerKey = model.DefaultProtonmanName
 	}
-	provider, ok := cfg.Providers[providerKey]
-	if !ok || !model.ProviderHasUsableAuth(providerKey, provider.BaseURL, provider.APIKey) {
-		return nil
-	}
-	languageModel := model.NewProviderLanguageModel(providerKey, provider.Type, provider.BaseURL, provider.APIKey, cfg.Model.Default, model.WithSessionID(sessionID), model.WithRequestTimeout(cfg.Runtime.ModelRequestTimeout))
-	coordinator.SetLanguageModel(languageModel)
-	promptSpec := agentprompt.Spec{Workspace: workDir}
-	if profileName := strings.TrimSpace(cfg.Agent.Profile); profileName != "" {
-		if profile, err := agent.ParseProfile(profileName); err == nil {
-			promptSpec.Profile = string(profile)
-		}
-	}
-	loopOptions := []turn.Option{
-		turn.WithSystemPromptSpec(promptSpec),
-		turn.WithMaxToolCalls(cfg.Agent.MaxToolCalls),
-		turn.WithTurnTimeout(cfg.Runtime.TurnTimeout),
-		turn.WithRoundTimeout(cfg.Runtime.RoundTimeout),
-	}
-	if profileName := strings.TrimSpace(cfg.Agent.Profile); profileName != "" {
-		if profile, err := agent.ParseProfile(profileName); err == nil {
-			if spec, ok := agent.SpecForProfile(profile); ok {
-				loopOptions = append(loopOptions,
-					turn.WithGroundingEvidence(spec.GroundingEvidence),
-					turn.WithReasoningEffort(spec.Reasoning),
-				)
-			}
-		}
-	}
-	if cfg.Agent.ReasoningEffort != sdk.ReasoningDefault {
-		loopOptions = append(loopOptions, turn.WithExplicitReasoningEffort(cfg.Agent.ReasoningEffort))
-	}
-	if skills != nil {
-		loopOptions = append(loopOptions, turn.WithSkillRegistry(skills))
-	}
-	loop, err := turn.NewLoop(languageModel, service, loopOptions...)
+	provider := cfg.Providers[providerKey]
+	conversation, err := app.BuildConversation(service, skills, coordinator, app.ConversationSpec{
+		ProviderName:    providerKey,
+		ProviderType:    provider.Type,
+		BaseURL:         provider.BaseURL,
+		APIKey:          provider.APIKey,
+		ModelID:         cfg.Model.Default,
+		SessionID:       sessionID,
+		Workspace:       workDir,
+		AgentProfile:    cfg.Agent.Profile,
+		ReasoningEffort: cfg.Agent.ReasoningEffort,
+		MaxToolCalls:    cfg.Agent.MaxToolCalls,
+		RequestTimeout:  cfg.Runtime.ModelRequestTimeout,
+		TurnTimeout:     cfg.Runtime.TurnTimeout,
+		RoundTimeout:    cfg.Runtime.RoundTimeout,
+	})
 	if err != nil {
 		return nil
 	}
-	return loop
+	return conversation
 }

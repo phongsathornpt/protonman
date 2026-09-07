@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/projectTHORN/proton/internal/agent"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
@@ -20,7 +21,6 @@ import (
 	tododomain "github.com/projectTHORN/proton/internal/todo"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
-	applicationturn "github.com/projectTHORN/proton/internal/turn"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -28,7 +28,7 @@ import (
 type BubbleTeaOption func(*BubbleTeaUI) error
 
 // WithBubbleTeaRunner connects ordinary prompt input to the model/tool loop.
-func WithBubbleTeaRunner(runner applicationturn.Runner) BubbleTeaOption {
+func WithBubbleTeaRunner(runner app.Conversation) BubbleTeaOption {
 	return func(ui *BubbleTeaUI) error {
 		ui.runner = runner
 		return nil
@@ -133,7 +133,7 @@ type BubbleTeaUI struct {
 	registry                tool.Registry
 	skills                  *skill.Registry
 	todoStore               tododomain.Repository
-	runner                  applicationturn.Runner
+	runner                  app.Conversation
 	bridge                  *permissionBridge
 	coordinator             *agent.Coordinator
 	workDir                 string

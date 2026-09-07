@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/projectTHORN/proton/internal/app"
 	"math"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/projectTHORN/proton/internal/appdirs"
-	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
 
 // OpenCodeErrorKind classifies errors matching the OpenCode error taxonomy.
@@ -228,7 +228,7 @@ func ClassifyOpenCodeError(err error, activeProvider string, activeModel string)
 
 	raw := err.Error()
 
-	if errors.Is(err, applicationturn.ErrToolDispatchUnavailable) {
+	if errors.Is(err, app.ErrToolDispatchUnavailable) {
 		return ClassifiedError{
 			Kind:    ErrorKindToolDispatch,
 			Title:   "Tool Dispatch Unavailable",
@@ -244,7 +244,7 @@ func ClassifyOpenCodeError(err error, activeProvider string, activeModel string)
 		}
 	}
 
-	if errors.Is(err, applicationturn.ErrUnresolvedToolCall) {
+	if errors.Is(err, app.ErrUnresolvedToolCall) {
 		return ClassifiedError{
 			Kind:    ErrorKindToolDispatch,
 			Title:   "Unresolved Tool Call",

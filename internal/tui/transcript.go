@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/tool"
-	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
 
 const maxBubbleScrollback = 1000
@@ -427,7 +427,7 @@ func (m *bubbleModel) replaceRunningTool(name string, replacement Block) bool {
 	return true
 }
 
-func (m *bubbleModel) applyTurnEvents(events []applicationturn.Event) {
+func (m *bubbleModel) applyTurnEvents(events []app.Event) {
 	if len(events) == 0 {
 		return
 	}
@@ -437,12 +437,12 @@ func (m *bubbleModel) applyTurnEvents(events []applicationturn.Event) {
 		if pending.Len() == 0 {
 			return
 		}
-		m.applyTurnEvent(applicationturn.Event{Kind: applicationturn.EventTextDelta, Round: pendingRound, Text: pending.String()})
+		m.applyTurnEvent(app.Event{Kind: app.EventTextDelta, Round: pendingRound, Text: pending.String()})
 		pending.Reset()
 		pendingRound = 0
 	}
 	for _, event := range events {
-		if event.Kind == applicationturn.EventTextDelta {
+		if event.Kind == app.EventTextDelta {
 			pending.WriteString(event.Text)
 			if event.Round > pendingRound {
 				pendingRound = event.Round
@@ -455,18 +455,18 @@ func (m *bubbleModel) applyTurnEvents(events []applicationturn.Event) {
 	flushText()
 }
 
-func (m *bubbleModel) applyTurnEvent(event applicationturn.Event) {
+func (m *bubbleModel) applyTurnEvent(event app.Event) {
 	if event.Round > 0 {
 		m.turnProgress.Round = event.Round
 	}
 	switch event.Kind {
-	case applicationturn.EventTextDelta:
+	case app.EventTextDelta:
 		m.activity = "synthesizing"
 		m.appendAssistantDelta(event.Text)
-	case applicationturn.EventToolCall:
+	case app.EventToolCall:
 		m.turnProgress.ToolCalls++
 		m.appendToolCall(event.Call)
-	case applicationturn.EventToolResult:
+	case app.EventToolResult:
 		result := event.Result
 		if result.CallID == "" {
 			result.CallID = event.Call.ID
@@ -478,10 +478,10 @@ func (m *bubbleModel) applyTurnEvent(event applicationturn.Event) {
 		m.reloadTodoAfterExternalTool(event.Call, event.Result, event.Err)
 		m.syncTodoSnapshot()
 		m.activity = "analyzing"
-	case applicationturn.EventCompleted:
+	case app.EventCompleted:
 		m.ensureHistoryState().CommitActive()
 		m.syncLegacyBlocks()
-	case applicationturn.EventFailed:
+	case app.EventFailed:
 		m.appendTurnFailure(event.Err)
 	}
 }
@@ -522,10 +522,10 @@ func (m *bubbleModel) appendTurnFailure(err error) {
 	m.syncLegacyBlocks()
 }
 
-func (m *bubbleModel) appendTurnResult(events []applicationturn.Event, result applicationturn.Result, err error) {
+func (m *bubbleModel) appendTurnResult(events []app.Event, result app.Result, err error) {
 	sawAssistant := false
 	for _, event := range events {
-		if event.Kind == applicationturn.EventTextDelta && event.Text != "" {
+		if event.Kind == app.EventTextDelta && event.Text != "" {
 			sawAssistant = true
 		}
 		m.applyTurnEvent(event)

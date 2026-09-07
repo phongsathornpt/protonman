@@ -10,8 +10,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/projectTHORN/proton/internal/agent"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/model"
-	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
 
 var tuiTurnOwnerSeq atomic.Uint64
@@ -48,7 +48,7 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 		"history_messages", len(history),
 	)
 	go func() {
-		queueTerminal := func(result applicationturn.Result, err error) {
+		queueTerminal := func(result app.Result, err error) {
 			select {
 			case events <- turnDoneMsg{result: result, err: err}:
 				slog.DebugContext(ctx, "tui turn terminal message queued")
@@ -66,7 +66,7 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 					"stack_bytes", len(stack),
 				)
 				queueTerminal(
-					applicationturn.Result{},
+					app.Result{},
 					fmt.Errorf("turn worker panicked: %v", panicValue),
 				)
 			}
@@ -78,7 +78,7 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 		result, err := m.runner.Run(
 			ctx,
 			history,
-			func(runCtx context.Context, event applicationturn.Event) error {
+			func(runCtx context.Context, event app.Event) error {
 				select {
 				case events <- turnDeltaMsg{event: event}:
 					return nil
