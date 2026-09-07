@@ -65,6 +65,19 @@ func ValidateItems(items []Item) error {
 	return nil
 }
 
+// ActiveItems returns every task currently marked in progress. Multiple active
+// items are intentional: root and delegated work may execute concurrently.
+// Execution ownership is runtime state and is deliberately not persisted in TODO.md.
+func ActiveItems(items []Item) []Item {
+	out := make([]Item, 0)
+	for _, item := range items {
+		if item.Status == StatusInProgress {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
 func CloneItems(items []Item) []Item {
 	out := make([]Item, len(items))
 	copy(out, items)
