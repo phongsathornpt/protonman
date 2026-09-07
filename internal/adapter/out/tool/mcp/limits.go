@@ -13,18 +13,27 @@ type Limits struct {
 	MaxDescriptionBytes int
 	MaxSchemaBytes      int
 	MaxSchemaDepth      int
+	MaxMessageBytes     int
+	MaxArgumentsBytes   int
+	MaxTextOutputBytes  int
+	MaxStructuredBytes  int
+	MaxStderrBytes      int
 }
 
 func DefaultLimits() Limits {
 	return Limits{
 		MaxServers: 32, MaxToolsPerServer: 256, MaxTotalTools: 512,
 		MaxDescriptionBytes: 16 * 1024, MaxSchemaBytes: 256 * 1024, MaxSchemaDepth: 64,
+		MaxMessageBytes: 4 * 1024 * 1024, MaxArgumentsBytes: 1024 * 1024,
+		MaxTextOutputBytes: 1024 * 1024, MaxStructuredBytes: 2 * 1024 * 1024, MaxStderrBytes: 256 * 1024,
 	}
 }
 
 func (l Limits) validate() error {
 	if l.MaxServers <= 0 || l.MaxToolsPerServer <= 0 || l.MaxTotalTools <= 0 ||
-		l.MaxDescriptionBytes <= 0 || l.MaxSchemaBytes <= 0 || l.MaxSchemaDepth <= 0 {
+		l.MaxDescriptionBytes <= 0 || l.MaxSchemaBytes <= 0 || l.MaxSchemaDepth <= 0 ||
+		l.MaxMessageBytes <= 0 || l.MaxArgumentsBytes <= 0 || l.MaxTextOutputBytes <= 0 ||
+		l.MaxStructuredBytes <= 0 || l.MaxStderrBytes <= 0 {
 		return fmt.Errorf("MCP limits must all be positive")
 	}
 	return nil
