@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/projectTHORN/proton/internal/failure"
 )
 
 // Kind classifies a tool for permission policy matching.
@@ -188,46 +190,28 @@ const (
 // ErrInvalidCall indicates that a call envelope cannot be dispatched safely.
 var ErrInvalidCall = errors.New("invalid tool call")
 
-// ErrorCode classifies failures for model and headless clients.
-type ErrorCode string
+// ErrorCode aliases the centralized stable application failure code.
+type ErrorCode = failure.Code
 
 const (
-	// ErrorCodeInvalidArguments indicates that a call cannot be decoded or validated.
-	ErrorCodeInvalidArguments ErrorCode = "invalid_arguments"
-	// ErrorCodeCommandFailed indicates that a process-backed command ran and exited non-zero.
-	ErrorCodeCommandFailed ErrorCode = "command_failed"
-	// ErrorCodeInvalidOutput indicates that a successful handler returned structured output outside its declared schema.
-	ErrorCodeInvalidOutput ErrorCode = "invalid_output"
-	// ErrorCodeOutputTooLarge indicates that a valid structured result cannot fit within the remaining turn budget.
-	ErrorCodeOutputTooLarge ErrorCode = "output_too_large"
-	// ErrorCodeCanceled indicates that the caller canceled execution.
-	ErrorCodeCanceled ErrorCode = "canceled"
-	// ErrorCodeDeadlineExceeded indicates that the call exceeded its deadline.
-	ErrorCodeDeadlineExceeded ErrorCode = "deadline_exceeded"
-	// ErrorCodePermissionDenied indicates that policy stopped the call.
-	ErrorCodePermissionDenied ErrorCode = "permission_denied"
-	// ErrorCodeUnknownTool indicates that no handler is registered for a call.
-	ErrorCodeUnknownTool ErrorCode = "unknown_tool"
-	// ErrorCodeNotFound indicates that a requested target does not exist.
-	ErrorCodeNotFound ErrorCode = "not_found"
-	// ErrorCodeProtectedPath indicates that a workspace target is protected.
-	ErrorCodeProtectedPath ErrorCode = "protected_path"
-	// ErrorCodeOutsideWorkspace indicates that a path escaped the workspace.
-	ErrorCodeOutsideWorkspace ErrorCode = "outside_workspace"
-	// ErrorCodeNoProgress indicates that loop protection suppressed a repeated call.
-	ErrorCodeNoProgress ErrorCode = "no_progress"
-	// ErrorCodeStaleContinuation indicates that pageable state changed since the previous page.
-	ErrorCodeStaleContinuation ErrorCode = "stale_continuation"
-	// ErrorCodeConflict indicates an optimistic concurrency/version conflict.
-	ErrorCodeConflict ErrorCode = "conflict"
-	// ErrorCodePreexistingWorkspaceChange prevents destructive replacement of user changes not owned by the current turn.
-	ErrorCodePreexistingWorkspaceChange ErrorCode = "preexisting_workspace_change"
-	// ErrorCodeWorkspaceStateUnavailable indicates that mutation safety could not verify workspace state.
-	ErrorCodeWorkspaceStateUnavailable ErrorCode = "workspace_state_unavailable"
-	// ErrorCodeSandboxUnavailable indicates that requested OS confinement could not be applied.
-	ErrorCodeSandboxUnavailable ErrorCode = "sandbox_unavailable"
-	// ErrorCodeExecution is the safe fallback for handler failures.
-	ErrorCodeExecution ErrorCode = "execution_error"
+	ErrorCodeInvalidArguments           = failure.CodeInvalidArguments
+	ErrorCodeCommandFailed              = failure.CodeCommandFailed
+	ErrorCodeInvalidOutput              = failure.CodeInvalidOutput
+	ErrorCodeOutputTooLarge             = failure.CodeOutputTooLarge
+	ErrorCodeCanceled                   = failure.CodeCanceled
+	ErrorCodeDeadlineExceeded           = failure.CodeDeadlineExceeded
+	ErrorCodePermissionDenied           = failure.CodePermissionDenied
+	ErrorCodeUnknownTool                = failure.CodeUnknownTool
+	ErrorCodeNotFound                   = failure.CodeNotFound
+	ErrorCodeProtectedPath              = failure.CodeProtectedPath
+	ErrorCodeOutsideWorkspace           = failure.CodeOutsideWorkspace
+	ErrorCodeNoProgress                 = failure.CodeNoProgress
+	ErrorCodeStaleContinuation          = failure.CodeStaleContinuation
+	ErrorCodeConflict                   = failure.CodeConflict
+	ErrorCodePreexistingWorkspaceChange = failure.CodePreexistingWorkspaceChange
+	ErrorCodeWorkspaceStateUnavailable  = failure.CodeWorkspaceStateUnavailable
+	ErrorCodeSandboxUnavailable         = failure.CodeSandboxUnavailable
+	ErrorCodeExecution                  = failure.CodeExecution
 )
 
 // ToolError is an internal error with a stable model-facing classification.
@@ -295,7 +279,7 @@ func FailureFromError(err error) *Failure {
 		return nil
 	}
 
-	failure := &Failure{
+	result := &Failure{
 		Code:    ErrorCodeExecution,
 		Message: err.Error(),
 	}
@@ -303,19 +287,20 @@ func FailureFromError(err error) *Failure {
 	var failureCoder FailureCoder
 	switch {
 	case errors.As(err, &toolErr):
-		failure.Code = toolErr.Code
+		result.Code = toolErr.Code
 	case errors.As(err, &failureCoder):
-		failure.Code = failureCoder.FailureCode()
+		result.Code = failureCoder.FailureCode()
 	case errors.Is(err, ErrInvalidCall):
-		failure.Code = ErrorCodeInvalidArguments
+		result.Code = ErrorCodeInvalidArguments
 	case errors.Is(err, context.Canceled):
-		failure.Code = ErrorCodeCanceled
-		failure.Retryable = true
+		result.Code = ErrorCodeCanceled
 	case errors.Is(err, context.DeadlineExceeded):
-		failure.Code = ErrorCodeDeadlineExceeded
-		failure.Retryable = true
+		result.Code = ErrorCodeDeadlineExceeded
 	}
-	return failure
+	if traits, ok := failure.TraitsFor(result.Code); ok {
+		result.Retryable = traits.Retryable
+	}
+	return result
 }
 
 // Call is the JSON-typed envelope passed from a model or UI to a tool.
