@@ -378,8 +378,8 @@ func TestExecCellFolding(t *testing.T) {
 	}
 
 	rendered := strings.Join(cell.Render(), "\n")
-	if !strings.Contains(rendered, "npm test") || !strings.Contains(rendered, "exit 0") {
-		t.Fatalf("expected command and exit code, got: %s", rendered)
+	if !strings.Contains(rendered, "Npm test") || strings.Contains(rendered, "exit 0") {
+		t.Fatalf("expected semantic command title without redundant exit 0, got: %s", rendered)
 	}
 	if !strings.Contains(rendered, "lines hidden") || !strings.Contains(rendered, "ctrl+t") {
 		t.Fatalf("expected fold indicator in long exec output, got: %s", rendered)
@@ -642,7 +642,7 @@ func TestExecCellSeparatesStderrAndStreamTruncation(t *testing.T) {
 		FailureCode: tool.ErrorCodeCommandFailed,
 	}
 	rendered := strings.Join(cell.RenderWidth(80), "\n")
-	for _, want := range []string{"go test ./...", "exit 1", "package a ok", "stderr:", "package b failed", "stdout truncated"} {
+	for _, want := range []string{"Go test ./...", "exit 1", "package a ok", "stderr:", "package b failed", "stdout truncated"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("render missing %q:\n%s", want, rendered)
 		}
@@ -802,5 +802,41 @@ func TestTaskBodySuppressionInTranscript(t *testing.T) {
 	}
 	if !shouldSuppressBody(tool.KindEdit, "write_file") {
 		t.Fatal("expected KindEdit to suppress body in transcript")
+	}
+}
+
+func TestEditToolUsesStructuredPatchCell(t *testing.T) {
+	registry := newNamedTestRegistry(tool.Definition{
+		Name:                "apply_patch",
+		Description:         "apply a workspace patch",
+		Kind:                tool.KindEdit,
+		PermissionDetailKey: "patch",
+	})
+	service := newBubbleTestService(t, registry, permission.ModeAlwaysApprove, permission.Config{})
+	m := newBubbleModel(
+		context.Background(),
+		service,
+		registry,
+		emptyTodoItems(),
+		nil,
+		newPermissionBridge(),
+		"",
+	)
+	call, err := tool.NewCall(
+		"edit-1",
+		"apply_patch",
+		[]byte(`{"patch":"*** Begin Patch\n*** Update File: internal/a.go\n*** End Patch"}`),
+	)
+	if err != nil {
+		t.Fatalf("NewCall() error = %v", err)
+	}
+	m.appendToolCall(call)
+
+	cell, ok := m.historyState.Active().(*PatchCell)
+	if !ok {
+		t.Fatalf("active cell = %T, want *PatchCell", m.historyState.Active())
+	}
+	if len(cell.Paths) != 1 || cell.Paths[0] != "internal/a.go" {
+		t.Fatalf("patch paths = %#v, want internal/a.go", cell.Paths)
 	}
 }

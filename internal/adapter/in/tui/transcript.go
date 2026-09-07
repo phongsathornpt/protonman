@@ -6,9 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
-	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/adapter/out/model"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/core/tool"
 )
 
@@ -183,10 +184,11 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 			cmd = extractStringArg(call.Arguments, "command")
 		}
 		state.StartToolCell(&ExecCell{
-			CallID:  call.ID,
-			Name:    call.Name,
-			Command: cmd,
-			Running: true,
+			CallID:    call.ID,
+			Name:      call.Name,
+			Command:   cmd,
+			Running:   true,
+			StartedAt: time.Now(),
 		})
 	case tool.KindEdit:
 		if call.Name == "checkpoint_restore" {
@@ -238,6 +240,12 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 	}
 
 	if result.Failure != nil && result.Failure.Message != "" && result.Failure.Code != tool.ErrorCodeCanceled {
+		if name == "bash" && execFailureUsesExecCell(result.Failure.Code) {
+			completed := m.completedToolCell(result.CallID, name, body, result)
+			state.CompleteToolCall(result.CallID, name, completed)
+			m.syncLegacyBlocks()
+			return
+		}
 		suggestions := toolFailureSuggestions(name, result.Failure.Code)
 		title := tool.DisplayName(name)
 		badge := string(result.Failure.Code)
@@ -285,6 +293,15 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 	m.syncLegacyBlocks()
 }
 
+func execFailureUsesExecCell(code tool.ErrorCode) bool {
+	switch code {
+	case tool.ErrorCodeCommandFailed, tool.ErrorCodeDeadlineExceeded:
+		return true
+	default:
+		return false
+	}
+}
+
 func (m *bubbleModel) finalizeRunningTools(err error) {
 	if err == nil {
 		return
@@ -324,10 +341,16 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 	if running := m.runningToolCell(callID, name); running != nil {
 		switch typed := running.(type) {
 		case *ExecCell:
+			duration := time.Duration(0)
+			if !typed.StartedAt.IsZero() {
+				duration = time.Since(typed.StartedAt)
+			}
 			return &ExecCell{
 				CallID:          typed.CallID,
 				Name:            typed.Name,
 				Command:         typed.Command,
+				StartedAt:       typed.StartedAt,
+				Duration:        duration,
 				Body:            body,
 				Stdout:          result.Stdout,
 				Stderr:          result.Stderr,

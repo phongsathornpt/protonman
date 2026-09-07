@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -232,6 +233,8 @@ type ExecCell struct {
 	Denied          bool
 	FailureCode     tool.ErrorCode
 	Spinner         string
+	StartedAt       time.Time
+	Duration        time.Duration
 }
 
 func (ExecCell) Kind() HistoryCellKind { return HistoryCellTool }
@@ -241,32 +244,51 @@ func (c ExecCell) RenderWidth(width int) []string {
 	if command == "" {
 		command = c.Name
 	}
+	presentation := c.presentation(command)
+	title := presentation.Title
+	if title == "" {
+		title = "$ " + command
+	}
+	failed := c.FailureCode != "" || (c.ExitCode != nil && *c.ExitCode != 0)
+
 	var out []string
 	var header string
 	var headerStyle lipgloss.Style
+	summaryParts := make([]string, 0, 2)
+	if presentation.Summary != "" {
+		summaryParts = append(summaryParts, presentation.Summary)
+	}
+	if c.Duration > 0 {
+		summaryParts = append(summaryParts, formatExecDuration(c.Duration))
+	}
+	summaryText := strings.Join(summaryParts, glyphSep)
+	summary := ""
+	if summaryText != "" {
+		summary = glyphSep + summaryText
+	}
 	if c.Running {
 		indicator := " …"
 		if c.Spinner != "" {
 			indicator = " " + c.Spinner
 		}
-		header = "$ " + sanitizeBubbleText(command) + indicator
+		header = sanitizeBubbleText(title) + indicator
 		headerStyle = commandStyle
 	} else if c.Denied {
-		header = glyphToolDenied + "$ " + sanitizeBubbleText(command) + glyphSep + "denied"
+		header = glyphToolDenied + sanitizeBubbleText(title) + glyphSep + "denied"
 		headerStyle = warningStyle
-	} else if c.FailureCode != "" || (c.ExitCode != nil && *c.ExitCode != 0) {
+	} else if failed {
 		status := "failed"
 		if c.ExitCode != nil {
 			status = fmt.Sprintf("exit %d", *c.ExitCode)
 		} else if c.FailureCode != "" {
 			status = string(c.FailureCode)
 		}
-		header = glyphToolError + "$ " + sanitizeBubbleText(command) + glyphSep + status
+		header = glyphToolError + sanitizeBubbleText(title) + summary + glyphSep + status
 		headerStyle = errorStyle
 	} else {
-		header := successStyle.Render(glyphToolSuccess) + commandStyle.Render("$ "+sanitizeBubbleText(command))
-		if c.ExitCode != nil {
-			header += toolSummaryStyle.Render(" (exit 0)")
+		header := successStyle.Render(glyphToolSuccess) + commandStyle.Render(sanitizeBubbleText(title))
+		if summaryText != "" {
+			header += toolSummaryStyle.Render(glyphSep + summaryText)
 		}
 		out = make([]string, 0, 1)
 		for _, line := range wrapStyledLines(header, maxInt(1, width)) {
@@ -274,7 +296,7 @@ func (c ExecCell) RenderWidth(width int) []string {
 		}
 	}
 
-	if c.Running || c.Denied || c.FailureCode != "" || (c.ExitCode != nil && *c.ExitCode != 0) {
+	if c.Running || c.Denied || failed {
 		out = make([]string, 0, 1)
 		for _, line := range safeWrappedLines(header, maxInt(1, width)) {
 			out = append(out, headerStyle.Render(line))
@@ -305,6 +327,15 @@ func (c ExecCell) RenderWidth(width int) []string {
 	}
 	return out
 }
+
+func (c ExecCell) presentation(command string) execPresentation {
+	stdout, stderr := c.Stdout, c.Stderr
+	if stdout == "" && stderr == "" {
+		stdout = c.Body
+	}
+	return presentExec(command, stdout, stderr)
+}
+
 func (c ExecCell) RawLines() []string {
 	command := strings.TrimSpace(c.Command)
 	if command == "" {
@@ -315,6 +346,15 @@ func (c ExecCell) RawLines() []string {
 	return out
 }
 func (c ExecCell) renderOutputLines() []string {
+	command := strings.TrimSpace(c.Command)
+	if command == "" {
+		command = c.Name
+	}
+	presentation := c.presentation(command)
+	failed := c.Denied || c.FailureCode != "" || (c.ExitCode != nil && *c.ExitCode != 0)
+	if !failed && presentation.SuppressRaw {
+		return append([]string(nil), presentation.Details...)
+	}
 	structured := c.Stdout != "" || c.Stderr != "" || c.StdoutTruncated || c.StderrTruncated
 	if !structured {
 		return formatOutputFold(resultBodyLines(c.Body, nil, c.Truncated, false, ""), 3)
