@@ -101,7 +101,6 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		return nil, fmt.Errorf("create permission policy: %w", err)
 	}
 	coordinator := agent.NewCoordinator(nil, nil, workspaceRoot, policy,
-		agent.WithMaxRounds(loadedConfig.Agent.MaxRounds),
 		agent.WithMaxToolCalls(loadedConfig.Agent.MaxToolCalls),
 		agent.WithReasoningEffort(loadedConfig.Agent.ReasoningEffort),
 		agent.WithSkillRegistry(skillRegistry),
@@ -241,7 +240,6 @@ func buildInitialRunner(cfg config.Snapshot, sessionID, workDir string, skills *
 	}
 	loopOptions := []turn.Option{
 		turn.WithSystemPromptSpec(promptSpec),
-		turn.WithMaxRounds(cfg.Agent.MaxRounds),
 		turn.WithMaxToolCalls(cfg.Agent.MaxToolCalls),
 		turn.WithTurnTimeout(cfg.Runtime.TurnTimeout),
 		turn.WithRoundTimeout(cfg.Runtime.RoundTimeout),

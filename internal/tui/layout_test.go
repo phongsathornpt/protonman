@@ -93,10 +93,9 @@ func TestRunningToolUsesTranscriptAsProgressSurface(t *testing.T) {
 	m.resize(80, 24)
 	m.busy = true
 	m.activity = "running read_file"
-	m.maxRounds = 10
 	m.turnProgress = turnProgress{Round: 2, ToolCalls: 3}
 	m.historyState.StartTool("read_file")
-	if got := m.statusView(); got == "" || !strings.Contains(got, "round 2/10") || !strings.Contains(got, "3 tools") {
+	if got := m.statusView(); got == "" || !strings.Contains(got, "round 2") || !strings.Contains(got, "3 tools") {
 		t.Fatalf("running tool status lost global turn progress: %q", got)
 	}
 

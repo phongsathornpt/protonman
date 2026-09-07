@@ -9,7 +9,6 @@ import (
 
 	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/appdirs"
-	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -45,7 +44,6 @@ var slashCatalog = []slashCommand{
 	{name: "model", aliases: []string{"models"}, description: "select active model (/model, /model <id>, /model free, /model add)", takesArgs: true},
 	{name: "provider", aliases: []string{"providers"}, description: "select or configure model providers (/provider, /provider <name>, /provider add, /provider list)", takesArgs: true},
 	{name: "call", description: "run a registered tool", takesArgs: true},
-	{name: "rounds", aliases: []string{"max-rounds"}, description: "show or set max tool rounds per turn (/rounds [number])", takesArgs: true},
 	{name: "quit", aliases: []string{"exit"}, description: "leave Proton"},
 }
 
@@ -657,35 +655,6 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		}
 
 		m.appendLine(mutedStyle.Render(fmt.Sprintf("unknown provider %q; try /provider, /provider list, or /provider add", subCmd)))
-	case "rounds", "max-rounds":
-		arg := strings.TrimSpace(argument)
-		if arg == "" {
-			if m.maxRounds <= 0 {
-				m.appendLine(brandStyle.Render("Turn round limit: ") + "unbounded (0)")
-			} else {
-				m.appendLine(brandStyle.Render("Turn round limit: ") + fmt.Sprintf("%d rounds per turn", m.maxRounds))
-			}
-			m.refreshViewport()
-			return nil
-		}
-		var rounds int
-		if _, err := fmt.Sscanf(arg, "%d", &rounds); err != nil || rounds < 0 {
-			m.appendError("invalid round limit: must be a non-negative integer (0 for unbounded)")
-			m.refreshViewport()
-			return nil
-		}
-		m.maxRounds = rounds
-		m.reconfigureRunner()
-		if err := config.SaveUserMaxRounds("", rounds); err != nil {
-			m.appendError("failed to save round limit: " + err.Error())
-		}
-		if rounds == 0 {
-			m.appendLine(successStyle.Render("Turn round limit set to unbounded (0)."))
-		} else {
-			m.appendLine(successStyle.Render(fmt.Sprintf("Turn round limit set to %d rounds per turn.", rounds)))
-		}
-		m.refreshViewport()
-		return nil
 	case "agent", "profile":
 		return m.handleAgentCommand(argument)
 	case "reasoning", "thinking":

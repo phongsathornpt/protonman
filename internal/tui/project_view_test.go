@@ -135,7 +135,7 @@ func TestProjectPaneShowsConfigurationProvenance(t *testing.T) {
 		config.FieldModelProvider:        config.SourceUser,
 		config.FieldAgentProfile:         config.SourceProject,
 		config.FieldAgentReasoningEffort: config.SourceUser,
-		config.FieldAgentMaxRounds:       config.SourceDefault,
+		config.FieldAgentMaxToolCalls:    config.SourceDefault,
 		config.FieldUIPermissionMode:     config.SourceUser,
 	}
 	m.activeModel = "model-x"
@@ -170,7 +170,7 @@ func TestProjectSetUpdatesTrustedRuntimeAndConfig(t *testing.T) {
 	}{
 		{"/project set agent dex", config.FieldAgentProfile},
 		{"/project set thinking high", config.FieldAgentReasoningEffort},
-		{"/project set rounds 33", config.FieldAgentMaxRounds},
+		{"/project set tool-calls 33", config.FieldAgentMaxToolCalls},
 		{"/project set permission always-approve", config.FieldUIPermissionMode},
 	} {
 		cmd := m.executeCommand(tc.command)
@@ -187,14 +187,14 @@ func TestProjectSetUpdatesTrustedRuntimeAndConfig(t *testing.T) {
 			t.Fatalf("%s provenance = %q", tc.field, got)
 		}
 	}
-	if m.agentProfile != "dex" || m.reasoningEffort != sdk.ReasoningHigh || m.maxRounds != 33 || m.service.Mode() != permission.ModeAlwaysApprove {
-		t.Fatalf("project settings not applied to runtime: profile=%q reasoning=%q rounds=%d mode=%s", m.agentProfile, m.reasoningEffort, m.maxRounds, m.service.Mode())
+	if m.agentProfile != "dex" || m.reasoningEffort != sdk.ReasoningHigh || m.maxToolCalls != 33 || m.service.Mode() != permission.ModeAlwaysApprove {
+		t.Fatalf("project settings not applied to runtime: profile=%q reasoning=%q tool_calls=%d mode=%s", m.agentProfile, m.reasoningEffort, m.maxToolCalls, m.service.Mode())
 	}
 	snapshot, err := config.Load(context.Background(), config.Options{HomeDir: t.TempDir(), WorkDir: m.workDir, ProjectTrusted: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.Agent.Profile != "dex" || snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh || snapshot.Agent.MaxRounds != 33 || snapshot.Mode != permission.ModeAlwaysApprove {
+	if snapshot.Agent.Profile != "dex" || snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh || snapshot.Agent.MaxToolCalls != 33 || snapshot.Mode != permission.ModeAlwaysApprove {
 		t.Fatalf("project settings not persisted: %#v", snapshot)
 	}
 }
@@ -202,7 +202,7 @@ func TestProjectSetUpdatesTrustedRuntimeAndConfig(t *testing.T) {
 func TestProjectSetRejectsUntrustedWorkspace(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.workDir = t.TempDir()
-	if cmd := m.executeCommand("/project set rounds 20"); cmd != nil {
+	if cmd := m.executeCommand("/project set tool-calls 20"); cmd != nil {
 		t.Fatal("untrusted project write returned command")
 	}
 	if _, err := os.Stat(appdirs.ProjectConfig(m.workDir)); !os.IsNotExist(err) {

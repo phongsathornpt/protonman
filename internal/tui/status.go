@@ -43,11 +43,7 @@ func (m bubbleModel) statusView() string {
 	}
 	parts = append(parts, activity)
 	if m.turnProgress.Round > 0 {
-		if m.maxRounds > 0 {
-			parts = append(parts, fmt.Sprintf("round %d/%d", m.turnProgress.Round, m.maxRounds))
-		} else {
-			parts = append(parts, fmt.Sprintf("round %d", m.turnProgress.Round))
-		}
+		parts = append(parts, fmt.Sprintf("round %d", m.turnProgress.Round))
 	}
 	if m.turnProgress.ToolCalls > 0 {
 		parts = append(parts, fmt.Sprintf("%d tools", m.turnProgress.ToolCalls))

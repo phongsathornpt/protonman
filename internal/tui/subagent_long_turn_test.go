@@ -17,7 +17,6 @@ func TestLongTurnWithSubagentsKeepsProgressCoherent(t *testing.T) {
 	m.resize(110, 30)
 	m.busy = true
 	m.busyStarted = time.Now().Add(-12 * time.Second)
-	m.maxRounds = 10
 	m.agentSnapshot = []agent.AgentStatus{
 		{ID: "explorer-1", Task: "inspect router", State: agent.StateRunning, StartedAt: time.Now().Add(-10 * time.Second)},
 		{ID: "reviewer-2", Task: "review safety", State: agent.StateRunning, StartedAt: time.Now().Add(-9 * time.Second)},
@@ -34,7 +33,7 @@ func TestLongTurnWithSubagentsKeepsProgressCoherent(t *testing.T) {
 	})
 
 	status := m.statusView()
-	for _, want := range []string{"coordinating", "round 2/10", "2 tools", "3 agents"} {
+	for _, want := range []string{"coordinating", "round 2", "2 tools", "3 agents"} {
 		if !strings.Contains(status, want) {
 			t.Fatalf("status=%q, want %q", status, want)
 		}
