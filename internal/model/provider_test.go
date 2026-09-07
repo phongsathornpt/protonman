@@ -69,6 +69,25 @@ func TestFetchProviderModelsProtonmanFormat(t *testing.T) {
 	}
 }
 
+func TestFetchProviderModelsMapsRequiredToolChoiceCapability(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"tool-model","capabilities":{"tools":true,"tool_choice_required":true}}]}`))
+	}))
+	defer ts.Close()
+	models, err := FetchProviderModels(context.Background(), ts.URL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 1 || models[0].ToolChoiceRequired == nil || !*models[0].ToolChoiceRequired {
+		t.Fatalf("models = %+v", models)
+	}
+	profile := models[0].ProfileMetadata()
+	if profile.ToolChoiceRequired == nil || !*profile.ToolChoiceRequired {
+		t.Fatalf("profile metadata = %+v", profile)
+	}
+}
+
 func TestFetchProviderModelsUnauthorized(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid key", http.StatusUnauthorized)

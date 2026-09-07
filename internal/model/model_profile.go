@@ -24,10 +24,11 @@ func ResolveModelProfile(providerName, modelID string, remote *RemoteModel) mode
 
 func (m RemoteModel) ProfileMetadata() modelprofile.CatalogMetadata {
 	return modelprofile.CatalogMetadata{
-		Tools:         m.ToolSupport,
-		Vision:        m.VisionSupport,
-		ContextWindow: m.ContextWindow,
-		Reasoning:     m.Reasoning,
+		Tools:              m.ToolSupport,
+		Vision:             m.VisionSupport,
+		ToolChoiceRequired: m.ToolChoiceRequired,
+		ContextWindow:      m.ContextWindow,
+		Reasoning:          m.Reasoning,
 	}
 }
 

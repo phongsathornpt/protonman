@@ -1299,6 +1299,7 @@ func TestLoopRequiresWorkspaceEvidenceUntilGrounded(t *testing.T) {
 			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 	}}
+	client.profile.Capabilities.ToolChoiceRequired = modelprofile.SupportYes
 	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithGroundingEvidence(tool.EvidenceWorkspace))
 	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect repo"}}, nil); err != nil {
 		t.Fatal(err)

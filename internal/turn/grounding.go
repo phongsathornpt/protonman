@@ -5,6 +5,7 @@ import "github.com/projectTHORN/proton/internal/tool"
 type groundingState struct {
 	evidence tool.EvidenceKind
 	grounded bool
+	misses   int
 }
 
 func newGroundingState(evidence tool.EvidenceKind) groundingState {
@@ -28,6 +29,14 @@ func (s groundingState) filterDefinitions(definitions []tool.Definition) []tool.
 	return filtered
 }
 
+func (s *groundingState) recordMiss() bool {
+	if s == nil || !s.pending() {
+		return false
+	}
+	s.misses++
+	return s.misses >= 2
+}
+
 func (s *groundingState) observe(executions []executedCall, definitions []tool.Definition) bool {
 	if s == nil || !s.pending() {
 		return false
@@ -45,6 +54,7 @@ func (s *groundingState) observe(executions []executedCall, definitions []tool.D
 			continue
 		}
 		s.grounded = true
+		s.misses = 0
 		return true
 	}
 	return false

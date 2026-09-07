@@ -753,7 +753,8 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			Messages: reqMessages,
 			Tools:    sdkTools,
 		}
-		if grounding.pending() && dispatch.enabled() && len(sdkTools) > 0 {
+		if grounding.pending() && dispatch.enabled() && len(sdkTools) > 0 &&
+			hasResolvedModelProfile && resolvedModelProfile.Capabilities.ToolChoiceRequired == modelprofile.SupportYes {
 			request.Options.ToolChoice = sdk.ToolChoiceRequired
 		}
 		request.Options.ReasoningEffort = reasoningResolution.Effective
@@ -826,6 +827,10 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		history = append(history, assistant)
 		turnMessages = append(turnMessages, assistant)
 		if grounding.pending() && len(executions) == 0 && !maxToolCallsFallback && !noProgressFallback {
+			if grounding.recordMiss() {
+				terminalReason = "grounding_not_observed"
+				return l.fail(ctx, sink, round, fmt.Errorf("%w: model %q did not gather required %s evidence", ErrGroundingUnavailable, l.languageModel.ModelID(), grounding.evidence))
+			}
 			slog.DebugContext(ctx, "turn final synthesis deferred for grounding", "round", round, "evidence", grounding.evidence)
 			continue
 		}

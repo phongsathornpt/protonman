@@ -36,16 +36,17 @@ func TestCatalogExplicitMetadataOverridesBuiltin(t *testing.T) {
 	no := false
 	yes := true
 	got := ResolveBuiltin("gateway", "gemini-3.8-flash", CatalogMetadata{
-		Tools:         &no,
-		Vision:        &no,
-		ContextWindow: 1234,
+		Tools:              &no,
+		Vision:             &no,
+		ToolChoiceRequired: &yes,
+		ContextWindow:      1234,
 		Reasoning: &CatalogReasoning{
 			Supported: &yes,
 			Levels:    []sdk.ReasoningEffort{sdk.ReasoningLow},
 			Default:   sdk.ReasoningLow,
 		},
 	})
-	if got.Capabilities.Tools != SupportNo || got.Capabilities.Vision != SupportNo || got.ContextWindow != 1234 {
+	if got.Capabilities.Tools != SupportNo || got.Capabilities.Vision != SupportNo || got.Capabilities.ToolChoiceRequired != SupportYes || got.ContextWindow != 1234 {
 		t.Fatalf("catalog capability override = %+v", got)
 	}
 	if len(got.Reasoning.Levels) != 1 || got.Reasoning.Levels[0] != sdk.ReasoningLow || got.Reasoning.Default != sdk.ReasoningLow {
