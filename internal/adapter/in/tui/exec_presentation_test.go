@@ -438,3 +438,47 @@ func TestExecPresentationKubectl(t *testing.T) {
 		t.Fatalf("kubectl rollout = %#v", rollout)
 	}
 }
+
+func TestExecCellSemanticEcosystemLayouts(t *testing.T) {
+	exit0 := 0
+	cases := []struct {
+		name string
+		cell ExecCell
+		want []string
+	}{
+		{"cargo", ExecCell{Command: "cargo test", Stdout: "test result: ok. 12 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out\n", ExitCode: &exit0, Duration: 4200 * time.Millisecond}, []string{"✓ Cargo test", "12 passed · 1 ignored", "4.2s"}},
+		{"make", ExecCell{Command: "make build", ExitCode: &exit0, Duration: 1100 * time.Millisecond}, []string{"✓ Make build", "completed", "1.1s"}},
+		{"docker", ExecCell{Command: "docker compose up -d", Stdout: "Container api Started\nContainer db Started\n", ExitCode: &exit0, Duration: 2800 * time.Millisecond}, []string{"✓ Docker compose up", "2 services running", "2.8s"}},
+		{"maven", ExecCell{Command: "mvn test", Stdout: "Tests run: 10, Failures: 0, Errors: 0, Skipped: 1\n", ExitCode: &exit0, Duration: 5400 * time.Millisecond}, []string{"✓ Maven test", "9 passed · 1 skipped", "5.4s"}},
+		{"phpunit", ExecCell{Command: "vendor/bin/phpunit", Stdout: "OK (92 tests, 120 assertions)\n", ExitCode: &exit0, Duration: 1400 * time.Millisecond}, []string{"✓ PHPUnit", "92 passed", "1.4s"}},
+		{"rspec", ExecCell{Command: "bundle exec rspec", Stdout: "48 examples, 0 failures\n", ExitCode: &exit0, Duration: 780 * time.Millisecond}, []string{"✓ RSpec", "48 examples · 0 failures", "780ms"}},
+		{"dotnet", ExecCell{Command: "dotnet test", Stdout: "Passed! - Failed: 0, Passed: 126, Skipped: 2, Total: 128\n", ExitCode: &exit0, Duration: 3700 * time.Millisecond}, []string{"✓ Dotnet test", "126 passed · 2 skipped", "3.7s"}},
+		{"terraform", ExecCell{Command: "terraform plan", Stdout: "Plan: 3 to add, 1 to change, 0 to destroy.\n", ExitCode: &exit0, Duration: 920 * time.Millisecond}, []string{"✓ Terraform plan", "+3 ~1 -0", "920ms"}},
+		{"kubectl", ExecCell{Command: "kubectl get pods", Stdout: "NAME READY STATUS\na 1/1 Running\nb 1/1 Running\n", ExitCode: &exit0, Duration: 84 * time.Millisecond}, []string{"✓ Kubectl get pods", "2 resources", "84ms", "NAME READY STATUS"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rendered := ansi.Strip(strings.Join(tc.cell.RenderWidth(90), "\n"))
+			for _, want := range tc.want {
+				if !strings.Contains(rendered, want) {
+					t.Fatalf("render missing %q:\n%s", want, rendered)
+				}
+			}
+		})
+	}
+}
+
+func TestExecProfileWrappersAndEnvPrefixes(t *testing.T) {
+	cases := map[string]string{
+		"env RUST_BACKTRACE=1 cargo test": "Cargo test",
+		"command make -j4 test":           "Make test",
+		"CI=1 ./gradlew test":             "Gradle test",
+		"APP_ENV=test bundle exec rspec":  "RSpec",
+		"TF_IN_AUTOMATION=1 tofu plan":    "OpenTofu plan",
+	}
+	for command, want := range cases {
+		if got := presentExec(command, "", "").Title; got != want {
+			t.Fatalf("presentExec(%q).Title = %q, want %q", command, got, want)
+		}
+	}
+}
