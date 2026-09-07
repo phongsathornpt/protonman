@@ -622,7 +622,7 @@ func (c ExecCell) outputLines(includeStatus bool) []string {
 		if c.Denied {
 			lines = append(lines, "denied")
 		}
-		if c.FailureCode != "" {
+		if c.FailureCode != "" && !(c.ExitCode != nil && c.FailureCode == tool.ErrorCodeCommandFailed) {
 			lines = append(lines, "failure: "+string(c.FailureCode))
 		}
 	}
