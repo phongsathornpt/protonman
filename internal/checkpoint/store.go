@@ -165,6 +165,13 @@ func (s *FileStore) Restore(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	guardPaths := make([]string, 0, len(resolvedEntries))
+	for _, entry := range resolvedEntries {
+		guardPaths = append(guardPaths, entry.path)
+	}
+	if err := s.workspace.GuardWholeFileMutation(ctx, guardPaths...); err != nil {
+		return err
+	}
 	for _, entry := range resolvedEntries {
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("during checkpoint restore: %w", err)
@@ -179,6 +186,7 @@ func (s *FileStore) Restore(ctx context.Context, id string) error {
 			return fmt.Errorf("remove restored %q: %w", entry.snapshot.Path, err)
 		}
 	}
+	s.workspace.MarkMutationOwned(ctx, guardPaths...)
 	return nil
 }
 
