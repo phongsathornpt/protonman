@@ -2,6 +2,7 @@
 package toolcall
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -436,6 +437,15 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 			message := fmt.Sprintf("tool %q returned structured output that does not match its schema", call.Name)
 			if definition.Kind == tool.KindMCP {
 				message = fmt.Sprintf("MCP tool %q violated its declared output schema", call.Name)
+				if provider, ok := handler.(tool.ContractDiagnosticProvider); ok {
+					diagnostic := provider.ContractDiagnostic()
+					expected := "unspecified"
+					if value, ok := definition.OutputSchema["type"].(string); ok && strings.TrimSpace(value) != "" {
+						expected = value
+					}
+					message += fmt.Sprintf(" (server=%s generation=%d schema=%s expected=%s actual=%s)",
+						diagnostic.Source, diagnostic.CatalogGeneration, diagnostic.SchemaFingerprint, expected, structuredJSONType(result.StructuredOutput))
+				}
 			}
 			outputErr := tool.WrapToolError(tool.ErrorCodeInvalidOutput, message, validationErr)
 			result.Failure = tool.FailureFromError(outputErr)
@@ -482,6 +492,30 @@ func validatorsForRegistry(registry tool.Registry, definition tool.Definition) (
 		}
 	}
 	return compileDefinitionValidators(definition)
+}
+
+func structuredJSONType(raw json.RawMessage) string {
+	value := bytes.TrimSpace(raw)
+	if len(value) == 0 {
+		return "missing"
+	}
+	switch value[0] {
+	case '{':
+		return "object"
+	case '[':
+		return "array"
+	case '"':
+		return "string"
+	case 't', 'f':
+		return "boolean"
+	case 'n':
+		return "null"
+	default:
+		if value[0] == '-' || value[0] >= '0' && value[0] <= '9' {
+			return "number"
+		}
+		return "invalid"
+	}
 }
 
 func compileDefinitionValidators(definition tool.Definition) (compiledToolValidators, error) {

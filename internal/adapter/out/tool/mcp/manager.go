@@ -28,6 +28,7 @@ type Manager struct {
 	changeCh      chan string
 	refreshCancel context.CancelFunc
 	refreshWG     sync.WaitGroup
+	refreshMu     sync.Mutex
 }
 
 const toolListChangeDebounce = 50 * time.Millisecond
@@ -155,6 +156,8 @@ func (m *Manager) CatalogGeneration(serverName string) uint64 {
 // Refresh replaces one server namespace from a newly validated tools/list snapshot.
 // A failed refresh leaves the previous catalog intact.
 func (m *Manager) Refresh(ctx context.Context, serverName string) error {
+	m.refreshMu.Lock()
+	defer m.refreshMu.Unlock()
 	m.mu.Lock()
 	if m.closed {
 		m.mu.Unlock()
@@ -162,6 +165,7 @@ func (m *Manager) Refresh(ctx context.Context, serverName string) error {
 	}
 	registry := m.registry
 	options := m.discovery
+	nextGeneration := m.generations[serverName] + 1
 	var server ManagedServer
 	for _, candidate := range m.servers {
 		if candidate.Name() == serverName {
@@ -212,7 +216,7 @@ func (m *Manager) Refresh(ctx context.Context, serverName string) error {
 			return fmt.Errorf("%w: %s", ErrDuplicateDiscoveredTool, name)
 		}
 		seen[name] = struct{}{}
-		handler, err := newHandler(server, serverName, manifest, name, options.TrustServerSafety, callSlots)
+		handler, err := newHandler(server, serverName, manifest, name, options.TrustServerSafety, callSlots, nextGeneration)
 		if err != nil {
 			return fmt.Errorf("clone MCP tool %q schemas: %w", name, err)
 		}
@@ -222,7 +226,7 @@ func (m *Manager) Refresh(ctx context.Context, serverName string) error {
 		return fmt.Errorf("replace MCP catalog for %q: %w", serverName, err)
 	}
 	m.mu.Lock()
-	m.generations[serverName]++
+	m.generations[serverName] = nextGeneration
 	m.mu.Unlock()
 	return nil
 }
