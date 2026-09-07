@@ -215,6 +215,68 @@ func (r *Registry) RegisterBatch(handlers []tool.Handler) error {
 	return nil
 }
 
+// ReplaceNamespace atomically swaps every registered handler whose name starts
+// with prefix. Handlers outside the namespace are preserved unchanged.
+func (r *Registry) ReplaceNamespace(prefix string, handlers []tool.Handler) error {
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		return fmt.Errorf("replace tool namespace: prefix is required")
+	}
+	prepared := make([]preparedRegistration, 0, len(handlers))
+	seen := make(map[string]struct{}, len(handlers))
+	for _, handler := range handlers {
+		item, err := prepareRegistration(handler)
+		if err != nil {
+			return err
+		}
+		if !strings.HasPrefix(item.name, prefix) {
+			return fmt.Errorf("replace tool namespace %q: tool %q is outside namespace", prefix, item.name)
+		}
+		if _, exists := seen[item.name]; exists {
+			return fmt.Errorf("%w: %s", ErrDuplicateTool, item.name)
+		}
+		seen[item.name] = struct{}{}
+		prepared = append(prepared, item)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, item := range prepared {
+		if _, exists := r.handlers[item.name]; exists && !strings.HasPrefix(item.name, prefix) {
+			return fmt.Errorf("%w: %s", ErrDuplicateTool, item.name)
+		}
+	}
+	newHandlers := make(map[string]tool.Handler, len(r.handlers)+len(prepared))
+	newValidators := make(map[string]compiledToolValidators, len(r.validators)+len(prepared))
+	newOrder := make([]string, 0, len(r.order)+len(prepared))
+	insertAt := -1
+	for _, name := range r.order {
+		if strings.HasPrefix(name, prefix) {
+			if insertAt < 0 {
+				insertAt = len(newOrder)
+			}
+			continue
+		}
+		newHandlers[name] = r.handlers[name]
+		newValidators[name] = r.validators[name]
+		newOrder = append(newOrder, name)
+	}
+	if insertAt < 0 {
+		insertAt = len(newOrder)
+	}
+	names := make([]string, 0, len(prepared))
+	for _, item := range prepared {
+		newHandlers[item.name] = item.handler
+		newValidators[item.name] = item.validators
+		names = append(names, item.name)
+	}
+	newOrder = append(newOrder, make([]string, len(names))...)
+	copy(newOrder[insertAt+len(names):], newOrder[insertAt:len(newOrder)-len(names)])
+	copy(newOrder[insertAt:], names)
+	r.handlers, r.validators, r.order = newHandlers, newValidators, newOrder
+	return nil
+}
+
 // Lookup returns a handler without exposing registry internals.
 func (r *Registry) Lookup(name string) (tool.Handler, bool) {
 	r.mu.RLock()
@@ -270,3 +332,5 @@ func cloneSchema(schema map[string]any) map[string]any {
 var _ tool.Registry = (*Registry)(nil)
 var _ tool.Registrar = (*Registry)(nil)
 var _ tool.BatchRegistrar = (*Registry)(nil)
+var _ tool.NamespaceReplacer = (*Registry)(nil)
+var _ tool.DynamicRegistrar = (*Registry)(nil)

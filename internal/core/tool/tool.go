@@ -596,6 +596,18 @@ type BatchRegistrar interface {
 	RegisterBatch([]Handler) error
 }
 
+// NamespaceReplacer atomically replaces all handlers under one canonical name prefix.
+type NamespaceReplacer interface {
+	Registry
+	ReplaceNamespace(prefix string, handlers []Handler) error
+}
+
+// DynamicRegistrar supports atomic discovery and catalog replacement.
+type DynamicRegistrar interface {
+	BatchRegistrar
+	NamespaceReplacer
+}
+
 func validKind(kind Kind) bool {
 	switch kind {
 	case KindRead, KindEdit, KindBash, KindGrep, KindMCP, KindWebFetch, KindWebSearch, KindTask, KindAgent:
