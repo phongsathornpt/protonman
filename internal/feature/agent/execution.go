@@ -7,13 +7,13 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/projectTHORN/proton/internal/engine/prompt"
 	"github.com/projectTHORN/proton/internal/adapter/out/model"
 	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/feature/skill"
 	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/projectTHORN/proton/internal/engine/prompt"
 	"github.com/projectTHORN/proton/internal/engine/toolcall"
 	"github.com/projectTHORN/proton/internal/engine/turn"
+	"github.com/projectTHORN/proton/internal/feature/skill"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -120,12 +120,13 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	// 5. Run turn
 	turnResult, err := runner.Run(ctx, messages, func(_ context.Context, te turn.Event) error {
 		if te.Kind == turn.EventToolCall {
+			call := te.Call
 			c.emit(ctx, Event{
 				Kind:     EventAgentProgress,
 				AgentID:  req.ID,
 				ParentID: req.ParentID,
 				Profile:  req.Profile,
-				Message:  fmt.Sprintf("using %s", te.Call.Name),
+				Call:     &call,
 			})
 		}
 		return nil

@@ -361,7 +361,7 @@ func (m bubbleModel) agentsView() string {
 		if st.State.Terminal() {
 			detail = strings.TrimSpace(st.Reason)
 		} else {
-			detail = strings.TrimSpace(m.agentActivity[st.ID])
+			detail = m.agentActivity[st.ID].String()
 		}
 		if detail != "" && mode == layoutNormal {
 			lines = append(lines, mutedStyle.Render("    "+truncateWithEllipsis(detail, maxInt(8, m.width-6))))
