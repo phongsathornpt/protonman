@@ -321,8 +321,20 @@ func TestFreshCompletedTodoRetiresOnNextTurnButCanReopen(t *testing.T) {
 	if got := m.todoView(); got != "" {
 		t.Fatalf("completed task chrome not retired on next turn: %q", got)
 	}
-	m.todoViewState.Expanded = true
+	m.executeCommand("/todo show")
 	if got := m.todoView(); !strings.Contains(got, "ship") {
 		t.Fatalf("retired completed todo could not be reopened: %q", got)
+	}
+}
+
+func TestInitialCompletedTodoRetiresOnFirstSubmittedTurn(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "ship", Text: "ship", Status: tododomain.StatusCompleted}})
+	m.resize(80, 24)
+	if !m.todoLifecycle.CompletionFresh || !strings.Contains(m.todoView(), "Tasks 1/1") {
+		t.Fatalf("initial completed todo not announced: lifecycle=%+v view=%q", m.todoLifecycle, m.todoView())
+	}
+	m.retireCompletedTodoForNextTurn()
+	if got := m.todoView(); got != "" {
+		t.Fatalf("initial completed todo did not retire: %q", got)
 	}
 }

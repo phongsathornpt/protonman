@@ -207,6 +207,9 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyMsg) (bool, tea.Cmd) {
 		return true, nil
 	case key.Matches(message, m.keys.ToggleTodo):
 		m.todoViewState.Expanded = !m.todoViewState.Expanded
+		if m.todoViewState.Expanded {
+			m.revealRetiredTodo()
+		}
 		m.relayout()
 		return true, nil
 	case key.Matches(message, m.keys.PageUp):

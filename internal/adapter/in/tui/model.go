@@ -170,6 +170,9 @@ func newBubbleModel(
 		runtimeConfig:      config.DefaultRuntimeConfig(),
 		agentActivity:      make(map[string]AgentActivity),
 	}
+	if allTodoCompleted(ui.todo) {
+		ui.todoLifecycle.CompletionFresh = true
+	}
 	ui.prompt = bottom.prompt()
 	ui.loadInitialMessages(messages)
 	ui.syncComponentsToLegacy()

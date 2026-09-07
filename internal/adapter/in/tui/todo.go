@@ -11,7 +11,8 @@ import (
 type TodoItem = tododomain.Item
 
 type todoViewState struct {
-	Expanded bool
+	Expanded    bool
+	ShowRetired bool
 }
 
 type todoLifecycleState struct {
@@ -37,6 +38,7 @@ func (m *bubbleModel) syncTodoSnapshot() bool {
 	} else if !isComplete {
 		m.todoLifecycle.CompletionFresh = false
 		m.todoLifecycle.CompletionDismissed = false
+		m.todoViewState.ShowRetired = false
 	}
 	return true
 }
@@ -54,9 +56,16 @@ func allTodoCompleted(items []TodoItem) bool {
 }
 
 func (m *bubbleModel) retireCompletedTodoForNextTurn() {
-	if m == nil || !m.todoLifecycle.CompletionFresh || !allTodoCompleted(m.todo) || m.todoViewState.Expanded {
+	if m == nil || !m.todoLifecycle.CompletionFresh || !allTodoCompleted(m.todo) {
 		return
 	}
 	m.todoLifecycle.CompletionFresh = false
 	m.todoLifecycle.CompletionDismissed = true
+	m.todoViewState.ShowRetired = false
+}
+
+func (m *bubbleModel) revealRetiredTodo() {
+	if m != nil && m.todoLifecycle.CompletionDismissed {
+		m.todoViewState.ShowRetired = true
+	}
 }
