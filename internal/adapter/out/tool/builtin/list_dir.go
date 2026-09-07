@@ -122,7 +122,7 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 		return tool.Result{}, err
 	}
 	if input.Continuation != "" && input.Continuation != continuation {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "list_dir continuation is stale; restart from offset 0")
+		return tool.Result{}, stalePaginationError("list_dir", "list_dir continuation is stale; restart from offset 0", call.Arguments)
 	}
 
 	allocHint := len(entries)

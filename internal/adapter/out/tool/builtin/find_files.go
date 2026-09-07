@@ -101,7 +101,7 @@ func (h findFilesHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		return tool.Result{}, err
 	}
 	if input.Continuation != "" && input.Continuation != token {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "find_files continuation does not match this query; restart from offset 0")
+		return tool.Result{}, stalePaginationError("find_files", "find_files continuation does not match this query; restart from offset 0", call.Arguments)
 	}
 
 	var output strings.Builder
