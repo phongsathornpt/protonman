@@ -20,11 +20,16 @@ type StepResult struct {
 
 // CollectStep consumes one model stream until its terminal event and builds the
 // provider-neutral result an agent loop needs for its next decision.
-func CollectStep(ctx context.Context, stream Stream) (StepResult, error) {
+func CollectStep(ctx context.Context, stream Stream) (result StepResult, err error) {
 	if stream == nil {
 		return StepResult{}, fmt.Errorf("%w: stream is required", ErrInvalidRequest)
 	}
-	var result StepResult
+	defer func() {
+		if closeErr := stream.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("close model stream: %w", closeErr)
+		}
+	}()
+
 	var text strings.Builder
 	for {
 		event, err := stream.Next(ctx)
