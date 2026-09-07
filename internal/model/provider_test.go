@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 func TestFetchProviderModelsOpenAIFormat(t *testing.T) {
@@ -337,5 +339,41 @@ func TestFetchProviderModelsParsesReasoningProfile(t *testing.T) {
 	}
 	if got := models[0].Reasoning.Levels; len(got) != 3 || got[1] != "medium" || models[0].Reasoning.Default != "medium" {
 		t.Fatalf("reasoning profile = %+v", models[0].Reasoning)
+	}
+}
+
+func TestFetchProviderModelsOpenAIParsesExtendedMetadata(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"model-x","name":"Model X","context_window":131072,"provider":"gateway","features":["tools","vision"]}]}`))
+	}))
+	defer ts.Close()
+
+	models, err := FetchProviderModels(context.Background(), ts.URL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 1 || models[0].ContextWindow != 131072 || models[0].Provider != "gateway" {
+		t.Fatalf("extended metadata = %+v", models)
+	}
+	if models[0].ToolSupport == nil || !*models[0].ToolSupport || models[0].VisionSupport == nil || !*models[0].VisionSupport {
+		t.Fatalf("feature capabilities = %+v", models[0])
+	}
+}
+
+func TestFetchProviderModelsNormalizesInvalidReasoningMetadata(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"model-x","reasoning":{"supported":true,"levels":["low","turbo","low","high"],"default":"turbo"}}]}`))
+	}))
+	defer ts.Close()
+
+	models, err := FetchProviderModels(context.Background(), ts.URL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := models[0].Reasoning
+	if got == nil || len(got.Levels) != 2 || got.Levels[0] != "low" || got.Levels[1] != "high" || got.Default != sdk.ReasoningDefault {
+		t.Fatalf("normalized reasoning = %+v", got)
 	}
 }

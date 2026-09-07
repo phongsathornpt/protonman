@@ -295,9 +295,14 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 	// Attempt parsing OpenAI format: {"data": [{"id": "model-id"}]}
 	var openAIResp struct {
 		Data []struct {
-			ID           string `json:"id"`
-			Name         string `json:"name"`
-			Capabilities struct {
+			ID             string   `json:"id"`
+			Name           string   `json:"name"`
+			ContextWindow  int      `json:"context_window"`
+			ContextWindow2 int      `json:"contextWindow"`
+			MaxInputTokens int      `json:"max_input_tokens"`
+			Provider       string   `json:"provider"`
+			Features       []string `json:"features"`
+			Capabilities   struct {
 				Tools              *bool `json:"tools"`
 				Vision             *bool `json:"vision"`
 				Reasoning          *bool `json:"reasoning"`
@@ -317,13 +322,24 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 			if reasoning == nil && item.Capabilities.Reasoning != nil {
 				reasoning = &modelprofile.CatalogReasoning{Supported: item.Capabilities.Reasoning}
 			}
+			toolSupport := item.Capabilities.Tools
+			visionSupport := item.Capabilities.Vision
+			if toolSupport == nil && hasModelFeature(item.Features, "tools") {
+				toolSupport = boolPointer(true)
+			}
+			if visionSupport == nil && hasModelFeature(item.Features, "vision") {
+				visionSupport = boolPointer(true)
+			}
 			results = append(results, RemoteModel{
 				ID:                 item.ID,
 				Name:               name,
-				ToolSupport:        item.Capabilities.Tools,
-				VisionSupport:      item.Capabilities.Vision,
+				ContextWindow:      firstPositiveInt(item.ContextWindow, item.ContextWindow2, item.MaxInputTokens),
+				Provider:           item.Provider,
+				Features:           item.Features,
+				ToolSupport:        toolSupport,
+				VisionSupport:      visionSupport,
 				ToolChoiceRequired: item.Capabilities.ToolChoiceRequired,
-				Reasoning:          reasoning,
+				Reasoning:          modelprofile.NormalizeCatalogReasoning(reasoning),
 			})
 		}
 		return results, nil
@@ -381,13 +397,22 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 				ToolSupport:        toolSupport,
 				VisionSupport:      visionSupport,
 				ToolChoiceRequired: requiredToolChoice,
-				Reasoning:          reasoning,
+				Reasoning:          modelprofile.NormalizeCatalogReasoning(reasoning),
 			})
 		}
 		return results, nil
 	}
 
 	return nil, errors.New("unrecognized models response format")
+}
+
+func firstPositiveInt(values ...int) int {
+	for _, value := range values {
+		if value > 0 {
+			return value
+		}
+	}
+	return 0
 }
 
 func boolPointer(value bool) *bool { return &value }
