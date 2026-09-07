@@ -724,3 +724,66 @@ func TestMCPAnnotationsDeriveDeclaredMutability(t *testing.T) {
 		}
 	}
 }
+
+type gatedDiscoveryServer struct {
+	name    string
+	started chan<- string
+	release <-chan struct{}
+}
+
+func (s *gatedDiscoveryServer) Name() string { return s.name }
+func (s *gatedDiscoveryServer) ListTools(ctx context.Context) ([]Tool, error) {
+	select {
+	case s.started <- s.name:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	select {
+	case <-s.release:
+		return []Tool{{Name: "tool"}}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+func (s *gatedDiscoveryServer) CallTool(context.Context, string, json.RawMessage) (Result, error) {
+	return Result{}, nil
+}
+
+func TestDiscoverBoundsConcurrentServerDiscovery(t *testing.T) {
+	started := make(chan string, 3)
+	release := make(chan struct{}, 3)
+	servers := []Server{
+		&gatedDiscoveryServer{name: "one", started: started, release: release},
+		&gatedDiscoveryServer{name: "two", started: started, release: release},
+		&gatedDiscoveryServer{name: "three", started: started, release: release},
+	}
+	registry, _ := builtin.NewRegistry()
+	limits := DefaultLimits()
+	limits.MaxConcurrentDiscovery = 2
+	done := make(chan error, 1)
+	go func() { done <- DiscoverWithLimits(context.Background(), registry, limits, servers...) }()
+
+	for i := 0; i < 2; i++ {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("two discovery workers did not start")
+		}
+	}
+	select {
+	case name := <-started:
+		t.Fatalf("third server %q started before a discovery slot was released", name)
+	default:
+	}
+	release <- struct{}{}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("third discovery did not start after slot release")
+	}
+	release <- struct{}{}
+	release <- struct{}{}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}

@@ -107,8 +107,20 @@ func DiscoverWithOptions(ctx context.Context, registry tool.BatchRegistrar, opti
 		serverResult
 	}
 	resultCh := make(chan indexedResult, len(servers))
+	concurrency := limits.MaxConcurrentDiscovery
+	if concurrency > len(servers) {
+		concurrency = len(servers)
+	}
+	semaphore := make(chan struct{}, concurrency)
 	for i, server := range servers {
 		go func(idx int, s Server) {
+			select {
+			case semaphore <- struct{}{}:
+			case <-queryCtx.Done():
+				resultCh <- indexedResult{index: idx, serverResult: serverResult{err: queryCtx.Err()}}
+				return
+			}
+			defer func() { <-semaphore }()
 			manifests, err := s.ListTools(queryCtx)
 			resultCh <- indexedResult{index: idx, serverResult: serverResult{manifests: manifests, err: err}}
 		}(i, server)
