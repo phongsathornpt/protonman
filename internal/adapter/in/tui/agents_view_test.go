@@ -56,6 +56,31 @@ func TestAgentsViewShowsActiveAndRespectsLayout(t *testing.T) {
 	close(release)
 }
 
+func TestDisabledSubagentsAppearInFooterAndAgentsPane(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.resize(100, 30)
+	m.subagentsEnabled = false
+	if got := m.infoView(); !strings.Contains(got, "subagents off") {
+		t.Fatalf("info view=%q, want disabled subagent indicator", got)
+	}
+	rows := agentInspectionRows(m)
+	joined := strings.Join(rows, "\n")
+	if !strings.Contains(joined, "Subagents disabled") || !strings.Contains(joined, "Universal handles work directly") {
+		t.Fatalf("agents pane=%q", joined)
+	}
+}
+
+func TestDisabledSubagentsKeepExistingAgentsManageableInPane(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.resize(100, 30)
+	m.subagentsEnabled = false
+	m.agentSnapshot = []agent.AgentStatus{{ID: "int-1", Profile: agent.ProfileINT, Task: "inspect", State: agent.StateRunning, StartedAt: time.Now()}}
+	joined := strings.Join(agentInspectionRows(m), "\n")
+	if !strings.Contains(joined, "New delegation disabled") || !strings.Contains(joined, "INT") {
+		t.Fatalf("agents pane=%q", joined)
+	}
+}
+
 func TestAgentLifecycleMessageRefreshesSnapshot(t *testing.T) {
 	release := make(chan struct{})
 	coord := agent.NewCoordinator(nil, nil, nil, nil,
