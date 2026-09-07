@@ -60,6 +60,7 @@ func (bashHandler) Definition() tool.Definition {
 		Description:            "Run a shell command in the current workspace.",
 		Kind:                   tool.KindBash,
 		Mutability:             tool.MutabilityMutating,
+		Safety:                 tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyDynamic, CheckpointPolicy: tool.CheckpointPolicyWhenKnown, Boundary: tool.BoundaryPolicySandbox},
 		PermissionDetailKey:    "command",
 		ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded,
 		InputSchema: map[string]any{
