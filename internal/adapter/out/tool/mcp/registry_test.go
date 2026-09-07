@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -186,7 +187,7 @@ func TestDiscoverRegistersNamespacedToolsAndDispatches(t *testing.T) {
 	if got := string(result.StructuredOutput); got != `{"count":3}` {
 		t.Fatalf("MCP structured output = %q", got)
 	}
-	if got, want := server.calls, []string{"search"}; !sameStrings(got, want) {
+	if got, want := server.recordedCalls(), []string{"search"}; !sameStrings(got, want) {
 		t.Fatalf("server calls = %#v, want %#v", got, want)
 	}
 }
@@ -259,8 +260,8 @@ func TestDiscoverKeepsMCPCallsBehindPermission(t *testing.T) {
 	if !result.Denied || result.Failure == nil || result.Failure.Code != domaintool.ErrorCodePermissionDenied {
 		t.Fatalf("denied result = %#v, want structured permission denial", result)
 	}
-	if len(server.calls) != 0 {
-		t.Fatalf("server calls = %#v, want none", server.calls)
+	if len(server.recordedCalls()) != 0 {
+		t.Fatalf("server calls = %#v, want none", server.recordedCalls())
 	}
 }
 
@@ -429,6 +430,7 @@ type fakeServer struct {
 	name    string
 	tools   []Tool
 	results map[string]Result
+	callsMu sync.Mutex
 	calls   []string
 }
 
@@ -441,8 +443,17 @@ func (s *fakeServer) ListTools(context.Context) ([]Tool, error) {
 }
 
 func (s *fakeServer) CallTool(_ context.Context, name string, _ json.RawMessage) (Result, error) {
+	s.callsMu.Lock()
 	s.calls = append(s.calls, name)
-	return s.results[name], nil
+	result := s.results[name]
+	s.callsMu.Unlock()
+	return result, nil
+}
+
+func (s *fakeServer) recordedCalls() []string {
+	s.callsMu.Lock()
+	defer s.callsMu.Unlock()
+	return append([]string(nil), s.calls...)
 }
 
 func newMCPService(t *testing.T, registry domaintool.Registrar, action permission.Action) *toolcall.Service {
@@ -503,34 +514,34 @@ func (s *slowServer) CallTool(_ context.Context, name string, _ json.RawMessage)
 }
 
 func TestDiscoverConcurrentExecution(t *testing.T) {
-	s1 := &slowServer{
-		name:  "server1",
-		tools: []Tool{{Name: "t1"}},
-		delay: 50 * time.Millisecond,
-	}
-	s2 := &slowServer{
-		name:  "server2",
-		tools: []Tool{{Name: "t2"}},
-		delay: 50 * time.Millisecond,
-	}
+	started := make(chan string, 2)
+	release := make(chan struct{}, 2)
+	s1 := &gatedDiscoveryServer{name: "server1", started: started, release: release}
+	s2 := &gatedDiscoveryServer{name: "server2", started: started, release: release}
 	registry, err := builtin.NewRegistry()
 	if err != nil {
-		t.Fatalf("NewRegistry() error = %v", err)
+		t.Fatal(err)
 	}
-	start := time.Now()
-	if err := Discover(context.Background(), registry, s1, s2); err != nil {
-		t.Fatalf("Discover() error = %v", err)
+	done := make(chan error, 1)
+	go func() { done <- Discover(context.Background(), registry, s1, s2) }()
+	for i := 0; i < 2; i++ {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("discovery did not start both servers concurrently")
+		}
 	}
-	elapsed := time.Since(start)
-	if elapsed >= 95*time.Millisecond {
-		t.Logf("Warning: elapsed time = %v (expected concurrent execution < 95ms)", elapsed)
+	release <- struct{}{}
+	release <- struct{}{}
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 	defs := registry.Definitions()
 	if len(defs) != 2 {
 		t.Fatalf("len(defs) = %d, want 2", len(defs))
 	}
-	if defs[0].Name != "mcp.server1.t1" || defs[1].Name != "mcp.server2.t2" {
-		t.Fatalf("defs = [%q, %q], want [mcp.server1.t1, mcp.server2.t2]", defs[0].Name, defs[1].Name)
+	if defs[0].Name != "mcp.server1.tool" || defs[1].Name != "mcp.server2.tool" {
+		t.Fatalf("defs = [%q, %q]", defs[0].Name, defs[1].Name)
 	}
 }
 
