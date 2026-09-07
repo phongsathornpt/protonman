@@ -20,6 +20,7 @@ const (
 	ModelDiscoveryTimeout             = 10 * time.Second
 	WebFetchTimeout                   = 10 * time.Second
 	ModelCatalogTTL                   = 2 * time.Minute
+	ReadFileMaxLineScanBytes          = 64 * 1024 * 1024
 	CheckpointMaxRetained             = 128
 	CheckpointMaxBytes          int64 = 512 * 1024 * 1024
 	CheckpointMaxAge                  = 7 * 24 * time.Hour

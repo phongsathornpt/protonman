@@ -12,6 +12,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/core/workspace"
 )
@@ -251,6 +252,10 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	}, nil
 }
 func readFileLines(ctx context.Context, file *os.File, input readFileInput, call tool.Call) (tool.Result, error) {
+	return readFileLinesBounded(ctx, file, input, call, runtimepolicy.ReadFileMaxLineScanBytes)
+}
+
+func readFileLinesBounded(ctx context.Context, file *os.File, input readFileInput, call tool.Call, maxScanBytes int64) (tool.Result, error) {
 	start := input.StartLine
 	if start <= 0 {
 		start = 1
@@ -262,11 +267,21 @@ func readFileLines(ctx context.Context, file *os.File, input readFileInput, call
 
 	var output strings.Builder
 	lineNumber := 0
+	var scannedBytes int64
 	truncated := false
 	for scanner.Scan() {
 		if err := ctx.Err(); err != nil {
 			_ = file.Close()
 			return tool.Result{}, fmt.Errorf("read %q by line: %w", input.Path, err)
+		}
+		line := scanner.Bytes()
+		scannedBytes += int64(len(line))
+		if maxScanBytes > 0 && scannedBytes > maxScanBytes {
+			_ = file.Close()
+			return tool.Result{}, tool.NewToolError(
+				tool.ErrorCodeExecution,
+				fmt.Sprintf("read_file line selection scanned more than %d bytes; use byte offset pagination for very large files", maxScanBytes),
+			)
 		}
 		lineNumber++
 		if lineNumber < start {
@@ -276,7 +291,6 @@ func readFileLines(ctx context.Context, file *os.File, input readFileInput, call
 			break
 		}
 
-		line := scanner.Bytes()
 		if !utf8.Valid(line) {
 			_ = file.Close()
 			return tool.Result{}, tool.NewToolError(
