@@ -392,7 +392,7 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 		s.observeCallResult(ctx, telemetry, result, permissionErr)
 		return result, permissionErr
 	}
-	if resolution.Scope == permission.GrantScopeSession {
+	if resolution.Scope == permission.GrantScopeSession && permission.SessionGrantEligible(request) {
 		s.rememberGrant(request.Key())
 	}
 
@@ -604,7 +604,7 @@ func (s *Service) authorize(ctx context.Context, request permission.Request) (pe
 		if resolution.Scope != permission.GrantScopeOnce && resolution.Scope != permission.GrantScopeSession {
 			resolution.Scope = permission.GrantScopeOnce
 		}
-		if request.Risk != tool.CommandRiskNormal {
+		if resolution.Scope == permission.GrantScopeSession && !permission.SessionGrantEligible(request) {
 			resolution.Scope = permission.GrantScopeOnce
 		}
 		return resolution, nil

@@ -2,6 +2,7 @@
 package permission
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -372,16 +373,35 @@ type GrantKey struct {
 	ToolName string
 	// ToolKind keeps policy categories explicit in the key.
 	ToolKind ToolKind
-	// Detail is the exact command, path, or URL approved by the user.
+	// Detail is the user-visible target approved by the user.
 	Detail string
+	// ArgumentsSHA256 binds the grant to the normalized argument payload, not
+	// merely its presentation detail.
+	ArgumentsSHA256 [32]byte
+	// Effect, Risk, and Scope prevent authorization reuse if the same visible
+	// target is later classified differently.
+	Effect tool.CommandEffect
+	Risk   tool.CommandRisk
+	Scope  tool.CommandScope
+}
+
+// SessionGrantEligible reports whether a request is safe to remember across
+// later calls in the same process. Unknown, mutating, or destructive requests
+// remain one-shot even when an interactive resolver asks for session scope.
+func SessionGrantEligible(r Request) bool {
+	return r.Effect == tool.CommandEffectReadOnly && r.Risk == tool.CommandRiskNormal
 }
 
 // Key returns the exact session-grant key for a request.
 func (r Request) Key() GrantKey {
 	return GrantKey{
-		ToolName: r.ToolName,
-		ToolKind: r.ToolKind,
-		Detail:   r.Detail,
+		ToolName:        r.ToolName,
+		ToolKind:        r.ToolKind,
+		Detail:          r.Detail,
+		ArgumentsSHA256: sha256.Sum256(r.Arguments),
+		Effect:          r.Effect,
+		Risk:            r.Risk,
+		Scope:           r.Scope,
 	}
 }
 
