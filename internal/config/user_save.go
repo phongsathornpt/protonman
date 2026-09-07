@@ -8,7 +8,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/projectTHORN/proton/internal/appdirs"
+	"github.com/projectTHORN/proton/internal/app/appdirs"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 

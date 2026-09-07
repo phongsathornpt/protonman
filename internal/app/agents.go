@@ -32,6 +32,12 @@ func (a Agents) CancelByParent(parentID string) int {
 	}
 	return a.coordinator.CancelByParent(parentID)
 }
+func (a Agents) SetLanguageModel(languageModel sdk.LanguageModel) {
+	if a.coordinator != nil {
+		a.coordinator.SetLanguageModel(languageModel)
+	}
+}
+
 func (a Agents) SetPermissionMode(mode permission.Mode) {
 	if a.coordinator != nil {
 		a.coordinator.SetPermissionMode(mode)
@@ -52,5 +58,3 @@ func (a Agents) SetCallGuard(guard toolcall.CallGuard) {
 		a.coordinator.SetCallGuard(guard)
 	}
 }
-
-func (a Agents) Coordinator() *agent.Coordinator { return a.coordinator }

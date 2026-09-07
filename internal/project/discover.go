@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/appdirs"
+	"github.com/projectTHORN/proton/internal/app/appdirs"
 )
 
 // Options controls project-local Proton discovery.

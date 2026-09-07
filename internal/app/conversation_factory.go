@@ -35,7 +35,7 @@ type ConversationSpec struct {
 
 // BuildConversation centralizes model, prompt, and turn-loop construction for
 // primary inbound adapters such as TUI, ACP bootstrap, and headless mode.
-func BuildConversation(service *toolcall.Service, skills *skill.Registry, coordinator *agent.Coordinator, spec ConversationSpec) (Conversation, error) {
+func BuildConversation(service *toolcall.Service, skills *skill.Registry, agents Agents, spec ConversationSpec) (Conversation, error) {
 	if service == nil {
 		return nil, fmt.Errorf("build conversation: tool-call service is required")
 	}
@@ -59,9 +59,7 @@ func BuildConversation(service *toolcall.Service, skills *skill.Registry, coordi
 		clientOptions = append(clientOptions, model.WithSessionID(spec.SessionID))
 	}
 	languageModel := model.NewProviderLanguageModel(providerName, spec.ProviderType, baseURL, spec.APIKey, modelID, clientOptions...)
-	if coordinator != nil {
-		coordinator.SetLanguageModel(languageModel)
-	}
+	agents.SetLanguageModel(languageModel)
 	promptSpec, loopOptions, err := primaryConversationPolicy(spec)
 	if err != nil {
 		return nil, err

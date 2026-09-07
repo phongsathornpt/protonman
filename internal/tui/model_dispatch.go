@@ -209,7 +209,7 @@ func (m *bubbleModel) reconfigureRunner() {
 	if resolved, ok := m.activeRemoteModel(); ok {
 		remote = &resolved
 	}
-	conversation, err := app.BuildConversation(m.service, m.skills, m.agents.Coordinator(), app.ConversationSpec{
+	conversation, err := app.BuildConversation(m.service, m.skills, m.agents, app.ConversationSpec{
 		ProviderName:    provName,
 		ProviderType:    prov.Type,
 		BaseURL:         prov.BaseURL,

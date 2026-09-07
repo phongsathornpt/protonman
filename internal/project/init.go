@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/projectTHORN/proton/internal/appdirs"
+	"github.com/projectTHORN/proton/internal/app/appdirs"
 )
 
 // InitResult reports whether project-local Proton configuration was created.

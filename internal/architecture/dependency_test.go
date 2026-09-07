@@ -146,6 +146,19 @@ func TestTUIDoesNotMutateProjectConfigPersistenceDirectly(t *testing.T) {
 	}
 }
 
+func TestApplicationDoesNotExposeAgentCoordinatorEscapeHatch(t *testing.T) {
+	root := repositoryRoot(t)
+	cmd := exec.Command("rg", `func \(.*Agents\) Coordinator\(\)`, "internal/app", "--glob", "*.go")
+	cmd.Dir = root
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("application exposes concrete agent coordinator escape hatch:\n%s", output)
+	}
+	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
+		t.Fatalf("search application coordinator escape hatch: %v: %s", err, output)
+	}
+}
+
 func TestApplicationDoesNotDependOnInboundAdapters(t *testing.T) {
 	packages := listPackages(t)
 	assertNoImports(t, packages, modulePath+"/internal/app", []string{

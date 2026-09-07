@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/projectTHORN/proton/internal/app"
-	"github.com/projectTHORN/proton/internal/appdirs"
+	"github.com/projectTHORN/proton/internal/app/appdirs"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/session"

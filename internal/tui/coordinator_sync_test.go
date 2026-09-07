@@ -35,8 +35,8 @@ func TestTUI_WithCoordinatorOption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBubbleTea() error = %v", err)
 	}
-	if ui.agents.Coordinator() != coordinator {
-		t.Fatalf("expected coordinator to be set on BubbleTeaUI")
+	if !ui.agents.Available() {
+		t.Fatal("expected agent service to be available on BubbleTeaUI")
 	}
 }
 
