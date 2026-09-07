@@ -187,7 +187,7 @@ func (m Matcher) kind(provider, modelID string) MatchKind {
 }
 
 func catalogHasMetadata(c CatalogMetadata) bool {
-	return c.Tools != nil || c.Vision != nil || c.ContextWindow > 0 || c.Reasoning != nil
+	return c.Tools != nil || c.Vision != nil || c.ToolChoiceRequired != nil || c.ContextWindow > 0 || c.Reasoning != nil
 }
 
 func (m Matcher) score(provider, modelID string) (int, bool) {
