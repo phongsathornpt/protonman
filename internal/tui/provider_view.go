@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
@@ -750,13 +751,13 @@ func fetchProviderModelsCmd(request providerFetchRequest) tea.Cmd {
 		ctx, cancel := context.WithTimeout(parent, timeout)
 		defer cancel()
 
-		protocol := model.ProviderProtocol(strings.ToLower(strings.TrimSpace(request.providerType)))
-		if protocol == "" {
-			if preset := model.MatchProviderPreset(request.providerName, request.baseURL); preset != nil {
-				protocol = preset.Protocol
-			}
-		}
-		models, err := model.FetchProviderModelsForProtocol(ctx, protocol, request.baseURL, request.apiKey, model.WithDiscoveryTimeout(timeout))
+		models, err := (app.Models{}).Discover(ctx, app.ModelDiscoveryRequest{
+			ProviderName: request.providerName,
+			ProviderType: request.providerType,
+			BaseURL:      request.baseURL,
+			APIKey:       request.apiKey,
+			Timeout:      timeout,
+		})
 		return modelsFetchedMsg{
 			providerName: request.providerName,
 			baseURL:      request.baseURL,
