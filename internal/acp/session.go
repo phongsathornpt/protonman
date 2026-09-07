@@ -32,7 +32,7 @@ type Session struct {
 	service         *toolcall.Service
 	registry        tool.Registry
 	runner          app.Conversation
-	store           session.Repository
+	sessionService  *app.Sessions
 	reasoningEffort sdk.ReasoningEffort
 
 	mu        sync.Mutex
@@ -50,14 +50,14 @@ func NewSession(
 	service *toolcall.Service,
 	registry tool.Registry,
 	runner app.Conversation,
-	store session.Repository,
+	sessionService *app.Sessions,
 ) *Session {
 	reasoningEffort := sdk.ReasoningDefault
 	if effort, explicit := app.ReasoningPolicy(runner); explicit {
 		reasoningEffort = effort
 	}
 	return &Session{
-		id: id, cwd: cwd, service: service, registry: registry, runner: runner, store: store,
+		id: id, cwd: cwd, service: service, registry: registry, runner: runner, sessionService: sessionService,
 		reasoningEffort: reasoningEffort, messages: make([]model.Message, 0),
 	}
 }
@@ -717,7 +717,7 @@ func (s *Session) saveStateDetached(parent context.Context) error {
 }
 
 func (s *Session) saveState(ctx context.Context) error {
-	if s.store == nil {
+	if s.sessionService == nil {
 		return nil
 	}
 	s.mu.Lock()
@@ -729,7 +729,7 @@ func (s *Session) saveState(ctx context.Context) error {
 		reasoningSetting = string(reasoningEffort)
 	}
 
-	return s.store.Save(ctx, s.id, session.State{
+	return s.sessionService.Save(ctx, s.id, session.State{
 		PermissionMode:  s.service.Mode().String(),
 		ReasoningEffort: reasoningSetting,
 		Messages:        session.FromModelMessages(messages),

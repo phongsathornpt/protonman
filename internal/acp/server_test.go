@@ -199,7 +199,7 @@ func TestACPSessionListAndDelete(t *testing.T) {
 	}
 
 	server := newTestServer(t, permission.ModeAsk)
-	server.store = store
+	server.sessionService = app.NewSessions(store)
 
 	var output bytes.Buffer
 	input := strings.Join([]string{
@@ -263,7 +263,7 @@ func TestACPSessionLoadAndReplay(t *testing.T) {
 	}
 
 	server := newTestServer(t, permission.ModeAsk)
-	server.store = store
+	server.sessionService = app.NewSessions(store)
 
 	var output bytes.Buffer
 	loadReq := `{"jsonrpc":"2.0","id":1,"method":"session/load","params":{"sessionId":"` + sessionID + `"}}` + "\n"
@@ -283,7 +283,7 @@ func TestACPSessionLoadAndReplay(t *testing.T) {
 func TestACPPromptSurfacesPersistenceFailure(t *testing.T) {
 	store := invalidSessionStore(t)
 	server := newTestServerWithRunner(t, permission.ModeAlwaysApprove, &streamingACPRunner{})
-	server.store = store
+	server.sessionService = app.NewSessions(store)
 	created, _, err := server.dispatch(context.Background(), RPCRequest{Method: "session/new"}, &bytes.Buffer{})
 	if err != nil {
 		t.Fatalf("session/new error = %v", err)
@@ -305,7 +305,7 @@ func TestACPPromptSurfacesPersistenceFailure(t *testing.T) {
 func TestACPStorageOperationFailuresSurface(t *testing.T) {
 	store := invalidSessionStore(t)
 	server := newTestServer(t, permission.ModeAsk)
-	server.store = store
+	server.sessionService = app.NewSessions(store)
 	created, _, err := server.dispatch(context.Background(), RPCRequest{Method: "session/new"}, &bytes.Buffer{})
 	if err != nil {
 		t.Fatalf("session/new error = %v", err)
@@ -712,7 +712,7 @@ func TestACPReasoningSlashPersistsAndValidatesModelProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server.store = store
+	server.sessionService = app.NewSessions(store)
 	sess, err := server.newSession("reasoning-session", "/tmp")
 	if err != nil {
 		t.Fatal(err)
@@ -749,7 +749,7 @@ func TestACPSessionLoadRestoresReasoningEffort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server.store = store
+	server.sessionService = app.NewSessions(store)
 	if err := store.Save(context.Background(), "resume-reasoning", session.State{PermissionMode: "ask", ReasoningEffort: "high"}); err != nil {
 		t.Fatal(err)
 	}

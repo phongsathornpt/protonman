@@ -39,3 +39,31 @@ func (s *Sessions) ListSummaries(ctx context.Context, options SessionListOptions
 		Offset:       options.Offset,
 	})
 }
+
+func (s *Sessions) Load(ctx context.Context, id string) (session.State, bool, error) {
+	if s == nil || s.repository == nil {
+		return session.State{}, false, fmt.Errorf("session repository is unavailable")
+	}
+	return s.repository.Load(ctx, id)
+}
+
+func (s *Sessions) Save(ctx context.Context, id string, state session.State) error {
+	if s == nil || s.repository == nil {
+		return fmt.Errorf("session repository is unavailable")
+	}
+	return s.repository.Save(ctx, id, state)
+}
+
+func (s *Sessions) Delete(ctx context.Context, id string) error {
+	if s == nil || s.repository == nil {
+		return fmt.Errorf("session repository is unavailable")
+	}
+	return s.repository.Delete(ctx, id)
+}
+
+func (s *Sessions) List(ctx context.Context, prefix string) ([]string, error) {
+	if s == nil || s.repository == nil {
+		return nil, fmt.Errorf("session repository is unavailable")
+	}
+	return s.repository.List(ctx, prefix)
+}

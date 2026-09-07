@@ -57,7 +57,7 @@ func run(ctx context.Context, args []string) error {
 	defer runtimeState.Close()
 
 	if options.acp {
-		server, serverErr := acp.New(runtimeState.service, runtimeState.registry, runtimeState.runner, acp.WithStore(runtimeState.stateStore))
+		server, serverErr := acp.New(runtimeState.service, runtimeState.registry, runtimeState.runner, acp.WithSessions(app.NewSessions(runtimeState.stateStore)))
 		if serverErr != nil {
 			return fmt.Errorf("create ACP server: %w", serverErr)
 		}

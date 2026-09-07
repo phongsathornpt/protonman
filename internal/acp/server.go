@@ -33,11 +33,9 @@ type Option func(*Server)
 // RunnerFactory creates a model/tool runner bound to one session's service.
 type RunnerFactory func(*toolcall.Service) (app.Conversation, error)
 
-// WithStore sets the session store for loading, resuming, and listing sessions.
-func WithStore(store session.Repository) Option {
-	return func(s *Server) {
-		s.store = store
-	}
+// WithSessions sets the application session service for persistence use cases.
+func WithSessions(sessions *app.Sessions) Option {
+	return func(server *Server) { server.sessionService = sessions }
 }
 
 // WithRunnerFactory supplies isolated runners for ACP sessions. The factory
@@ -51,10 +49,10 @@ func WithRunnerFactory(factory RunnerFactory) Option {
 
 // Server is a full-duplex JSON-RPC 2.0 ACP agent server.
 type Server struct {
-	service       *toolcall.Service
-	registry      tool.Registry
-	runnerFactory RunnerFactory
-	store         session.Repository
+	service        *toolcall.Service
+	registry       tool.Registry
+	runnerFactory  RunnerFactory
+	sessionService *app.Sessions
 
 	mu       sync.Mutex
 	writeMu  sync.Mutex
@@ -458,8 +456,8 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 	if err != nil {
 		return nil, err
 	}
-	if s.store != nil {
-		state, found, err := s.store.Load(ctx, sessionID)
+	if s.sessionService != nil {
+		state, found, err := s.sessionService.Load(ctx, sessionID)
 		if err != nil {
 			return nil, fmt.Errorf("load session state %q: %w", sessionID, err)
 		}
@@ -503,7 +501,7 @@ func (s *Server) newSession(sessionID string, cwd string) (*Session, error) {
 		}
 		runner = created
 	}
-	return NewSession(sessionID, cwd, service, s.registry, runner, s.store), nil
+	return NewSession(sessionID, cwd, service, s.registry, runner, s.sessionService), nil
 }
 
 func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, error) {
@@ -523,8 +521,8 @@ func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, e
 	}
 	s.mu.Unlock()
 
-	if s.store != nil {
-		storedIDs, err := s.store.List(ctx, "")
+	if s.sessionService != nil {
+		storedIDs, err := s.sessionService.List(ctx, "")
 		if err != nil {
 			return nil, fmt.Errorf("list session state: %w", err)
 		}
@@ -544,8 +542,8 @@ func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, e
 }
 
 func (s *Server) deleteSession(ctx context.Context, sessionID string) error {
-	if s.store != nil {
-		if err := s.store.Delete(ctx, sessionID); err != nil {
+	if s.sessionService != nil {
+		if err := s.sessionService.Delete(ctx, sessionID); err != nil {
 			return fmt.Errorf("delete session state %q: %w", sessionID, err)
 		}
 	}
