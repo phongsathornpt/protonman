@@ -685,3 +685,14 @@ func TestDiscoverEnforcesSchemaAndDescriptionLimits(t *testing.T) {
 		t.Fatalf("schema depth error = %v", err)
 	}
 }
+
+func TestDiscoverRejectsUntrimmedServerName(t *testing.T) {
+	registry, _ := builtin.NewRegistry()
+	server := &fakeServer{name: " github ", tools: []Tool{{Name: "search"}}}
+	if err := Discover(context.Background(), registry, server); !errors.Is(err, ErrInvalidNamespace) {
+		t.Fatalf("Discover error = %v, want ErrInvalidNamespace", err)
+	}
+	if len(registry.Definitions()) != 0 {
+		t.Fatal("untrimmed server partially registered tools")
+	}
+}

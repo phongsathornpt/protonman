@@ -66,7 +66,7 @@ func DiscoverWithLimits(ctx context.Context, registry tool.BatchRegistrar, limit
 		if server == nil {
 			return fmt.Errorf("discover MCP tools: server is required")
 		}
-		serverName := strings.TrimSpace(server.Name())
+		serverName := server.Name()
 		if _, err := validServerName(serverName); err != nil {
 			return fmt.Errorf("validate MCP server name: %w", err)
 		}
