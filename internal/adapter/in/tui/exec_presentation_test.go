@@ -367,3 +367,18 @@ func TestExecPresentationJVMTools(t *testing.T) {
 		t.Fatalf("javac = %#v", javac)
 	}
 }
+
+func TestExecPresentationPHP(t *testing.T) {
+	lint := presentExec("php -l src/App.php", "No syntax errors detected in src/App.php\n", "")
+	if lint.Title != "PHP lint src/App.php" || lint.Summary != "valid syntax" {
+		t.Fatalf("php lint = %#v", lint)
+	}
+	unit := presentExec("vendor/bin/phpunit", "Tests: 93, Assertions: 120, Failures: 1, Skipped: 1.\n", "")
+	if unit.Title != "PHPUnit" || unit.Summary != "91 passed · 1 failed · 1 skipped" {
+		t.Fatalf("phpunit = %#v", unit)
+	}
+	eval := presentExec(`php -r "echo 1;"`, "1", "")
+	if eval.Title != "PHP eval" {
+		t.Fatalf("php eval = %#v", eval)
+	}
+}
