@@ -411,6 +411,11 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 	executionCtx, executionCancel := s.executionContext(ctx, definition)
 	defer executionCancel()
 	result, err := executeHandler(executionCtx, handler, call)
+	if err != nil {
+		if recoveredResult, recoveredErr, recovered := recoverReadOnlyCall(executionCtx, handler, definition, validators, call, err); recovered {
+			result, err = recoveredResult, recoveredErr
+		}
+	}
 	if result.CallID == "" {
 		result.CallID = call.ID
 	}
@@ -440,6 +445,26 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 	}
 	s.observeCallResult(ctx, telemetry, result, nil)
 	return result, nil
+}
+
+func recoverReadOnlyCall(ctx context.Context, handler tool.Handler, definition tool.Definition, validators compiledToolValidators, call tool.Call, err error) (tool.Result, error, bool) {
+	failure := tool.FailureFromError(err)
+	if failure == nil || failure.Recovery == nil || failure.Recovery.Action != "restart_pagination" {
+		return tool.Result{}, nil, false
+	}
+	if failure.Recovery.Tool != definition.Name || tool.EffectiveMutability(definition) != tool.MutabilityReadOnly {
+		return tool.Result{}, nil, false
+	}
+	recoveryArgs := tool.NormalizeArguments(definition, failure.Recovery.Arguments)
+	if validators.input != nil {
+		if validationErr := validators.input.Validate(recoveryArgs); validationErr != nil {
+			return tool.Result{}, nil, false
+		}
+	}
+	retry := call
+	retry.Arguments = recoveryArgs
+	result, retryErr := executeHandler(ctx, handler, retry)
+	return result, retryErr, true
 }
 
 func validatorsForRegistry(registry tool.Registry, definition tool.Definition) (compiledToolValidators, error) {
