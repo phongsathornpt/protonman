@@ -39,7 +39,6 @@ func TestAgentsViewShowsActiveAndRespectsLayout(t *testing.T) {
 	}
 
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.coordinator = coord
 	m.agents = app.NewAgents(coord)
 	m.agentSnapshot = coord.List()
 	m.resize(80, 24)
@@ -68,7 +67,6 @@ func TestAgentLifecycleMessageRefreshesSnapshot(t *testing.T) {
 	events, cancel := coord.Subscribe(8)
 	defer cancel()
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.coordinator = coord
 	m.agents = app.NewAgents(coord)
 	m.agentEvents = events
 	if _, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileINT, Task: "inspect router"}); err != nil {
@@ -256,7 +254,6 @@ func TestCancelActiveTurnCancelsOnlyOwnedSubagents(t *testing.T) {
 	}
 
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.coordinator = coord
 	m.agents = app.NewAgents(coord)
 	m.agentSnapshot = coord.List()
 	m.activeTurnOwner = "turn-owned"

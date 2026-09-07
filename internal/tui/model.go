@@ -44,7 +44,6 @@ type bubbleModel struct {
 	skills          *skill.Registry
 	runner          app.Conversation
 	bridge          *permissionBridge
-	coordinator     *agent.Coordinator
 	agents          app.Agents
 	agentEvents     <-chan agent.Event
 	agentSnapshot   []agent.AgentStatus
@@ -223,7 +222,7 @@ func (m *bubbleModel) nextAgentEvent() tea.Cmd {
 }
 
 func (m *bubbleModel) syncAgentSnapshot() {
-	if m.coordinator == nil {
+	if !m.agents.Available() {
 		m.agentSnapshot = nil
 		return
 	}

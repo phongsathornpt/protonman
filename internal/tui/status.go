@@ -273,9 +273,7 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 	m.planMode = enabled
 	if !enabled {
 		m.service.SetCallGuard(nil)
-		if m.coordinator != nil {
-			m.agents.SetCallGuard(nil)
-		}
+		m.agents.SetCallGuard(nil)
 		return
 	}
 	guard := func(_ context.Context, request permission.Request) error {
@@ -301,9 +299,7 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 		return fmt.Errorf("plan mode is read-only; %s tool %q is blocked", request.ToolKind, request.ToolName)
 	}
 	m.service.SetCallGuard(guard)
-	if m.coordinator != nil {
-		m.agents.SetCallGuard(guard)
-	}
+	m.agents.SetCallGuard(guard)
 }
 
 func formatElapsed(duration time.Duration) string {

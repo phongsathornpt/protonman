@@ -214,7 +214,7 @@ func (m *bubbleModel) reconfigureRunner() {
 	if resolved, ok := m.activeRemoteModel(); ok {
 		remote = &resolved
 	}
-	conversation, err := app.BuildConversation(m.service, m.skills, m.coordinator, app.ConversationSpec{
+	conversation, err := app.BuildConversation(m.service, m.skills, m.agents.Coordinator(), app.ConversationSpec{
 		ProviderName:    provName,
 		ProviderType:    prov.Type,
 		BaseURL:         prov.BaseURL,
@@ -242,8 +242,6 @@ func (m *bubbleModel) setPermissionMode(mode permission.Mode) error {
 	if err := m.service.SetMode(mode); err != nil {
 		return err
 	}
-	if m.coordinator != nil {
-		m.agents.SetPermissionMode(mode)
-	}
+	m.agents.SetPermissionMode(mode)
 	return nil
 }

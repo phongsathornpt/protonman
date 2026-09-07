@@ -121,7 +121,6 @@ func WithProjectContext(trusted bool, sources []string, provenance map[string]co
 // mode, interactive prompts, and model client changes are synchronized.
 func WithCoordinator(coordinator *agent.Coordinator) BubbleTeaOption {
 	return func(ui *BubbleTeaUI) error {
-		ui.coordinator = coordinator
 		ui.agents = app.NewAgents(coordinator)
 		return nil
 	}
@@ -135,7 +134,6 @@ type BubbleTeaUI struct {
 	todoStore               tododomain.Repository
 	runner                  app.Conversation
 	bridge                  *permissionBridge
-	coordinator             *agent.Coordinator
 	agents                  app.Agents
 	workDir                 string
 	initialMessages         []model.Message
@@ -232,11 +230,9 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 	)
 	ui.service.SetPrompt(ui.PermissionPrompt)
 	defer ui.service.SetCallGuard(nil)
-	if ui.coordinator != nil {
-		ui.agents.SetPrompt(ui.PermissionPrompt)
-		ui.agents.SetPermissionMode(ui.service.Mode())
-		defer ui.agents.SetCallGuard(nil)
-	}
+	ui.agents.SetPrompt(ui.PermissionPrompt)
+	ui.agents.SetPermissionMode(ui.service.Mode())
+	defer ui.agents.SetCallGuard(nil)
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	defer ui.bridge.Close()
@@ -259,9 +255,9 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 			ui.workDir,
 			currentMessages,
 		)
-		bModel.coordinator = ui.coordinator
+		bModel.agents = ui.agents
 		cancelAgentEvents := func() {}
-		if ui.coordinator != nil {
+		if ui.agents.Available() {
 			bModel.agentEvents, cancelAgentEvents = ui.agents.Subscribe(32)
 			bModel.agentSnapshot = ui.agents.List()
 		}

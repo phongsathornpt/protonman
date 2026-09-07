@@ -52,3 +52,5 @@ func (a Agents) SetCallGuard(guard toolcall.CallGuard) {
 		a.coordinator.SetCallGuard(guard)
 	}
 }
+
+func (a Agents) Coordinator() *agent.Coordinator { return a.coordinator }

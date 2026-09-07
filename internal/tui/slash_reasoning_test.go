@@ -105,7 +105,6 @@ func TestSlashReasoningSyncsCoordinator(t *testing.T) {
 	m.activeModel = "gemini-3.8-flash"
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
 	defer func() { _ = coord.Close() }()
-	m.coordinator = coord
 	m.agents = app.NewAgents(coord)
 
 	m.executeCommand("/reasoning low")

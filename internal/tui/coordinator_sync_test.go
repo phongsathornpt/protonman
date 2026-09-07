@@ -35,7 +35,7 @@ func TestTUI_WithCoordinatorOption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBubbleTea() error = %v", err)
 	}
-	if ui.coordinator != coordinator {
+	if ui.agents.Coordinator() != coordinator {
 		t.Fatalf("expected coordinator to be set on BubbleTeaUI")
 	}
 }
@@ -52,7 +52,6 @@ func TestTUI_CycleModeUpdatesCoordinator(t *testing.T) {
 	}
 	coordinator := agent.NewCoordinator(nil, model.registry, ws, policy)
 	defer func() { _ = coordinator.Close() }()
-	model.coordinator = coordinator
 	model.agents = app.NewAgents(coordinator)
 
 	// Initially in ModeAsk, planMode = false
@@ -111,7 +110,6 @@ func TestTUI_SlashModeUpdatesCoordinator(t *testing.T) {
 	}
 	coordinator := agent.NewCoordinator(nil, model.registry, ws, policy)
 	defer func() { _ = coordinator.Close() }()
-	model.coordinator = coordinator
 	model.agents = app.NewAgents(coordinator)
 
 	// /mode always-approve
@@ -157,7 +155,6 @@ func TestTUI_ReconfigureRunnerUpdatesCoordinatorClient(t *testing.T) {
 	}
 	coordinator := agent.NewCoordinator(nil, model.registry, ws, policy)
 	defer func() { _ = coordinator.Close() }()
-	model.coordinator = coordinator
 	model.agents = app.NewAgents(coordinator)
 
 	if coordinator.LanguageModel() != nil {
