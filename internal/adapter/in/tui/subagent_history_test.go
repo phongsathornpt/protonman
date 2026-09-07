@@ -128,3 +128,44 @@ func TestOutOfOrderAgentResultMergesIntoDelegateRun(t *testing.T) {
 		t.Fatalf("merged run=%T %#v", cells[0], cells[0])
 	}
 }
+
+func TestCancelAgentUpdatesExistingRunWithoutExtraCell(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	delegate, _ := tool.NewCall("d1", "delegate_task", json.RawMessage(`{"profile":"dex","task":"review concurrency"}`))
+	cancel, _ := tool.NewCall("c1", "cancel_agent", json.RawMessage(`{"agent_id":"dex-7"}`))
+	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: delegate})
+	m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: delegate, Result: tool.Result{
+		CallID: "d1", ToolName: "delegate_task",
+		StructuredOutput: json.RawMessage(`{"agent_id":"dex-7","status":"running"}`),
+	}})
+	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: cancel})
+	m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: cancel, Result: tool.Result{
+		CallID: "c1", ToolName: "cancel_agent",
+		StructuredOutput: json.RawMessage(`{"agent_id":"dex-7","status":"canceled"}`),
+	}})
+	cells := m.historyState.Cells()
+	if len(cells) != 1 {
+		t.Fatalf("cancel created extra transcript cells: %#v", cells)
+	}
+	run := m.historyState.AgentRun("dex-7")
+	if run == nil || run.State != agent.StateCanceled {
+		t.Fatalf("canceled run=%#v", run)
+	}
+}
+
+func TestDelegateMissingAgentIDFallsBackWithoutCorruptingHistory(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	delegate, _ := tool.NewCall("d-missing", "delegate_task", json.RawMessage(`{"profile":"int","task":"inspect router"}`))
+	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: delegate})
+	m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: delegate, Result: tool.Result{
+		CallID: "d-missing", ToolName: "delegate_task",
+		StructuredOutput: json.RawMessage(`{"status":"queued"}`),
+	}})
+	cells := m.historyState.Cells()
+	if len(cells) != 1 {
+		t.Fatalf("missing agent id corrupted history: %#v", cells)
+	}
+	if run, ok := cells[0].(*AgentRunCell); ok && run.AgentID == "" {
+		t.Fatalf("malformed response created unaddressable run cell: %#v", run)
+	}
+}
