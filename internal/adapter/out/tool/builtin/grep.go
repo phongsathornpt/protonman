@@ -81,7 +81,7 @@ func NewGrep(workspaceRoot *workspace.Workspace) tool.Handler {
 func (grepHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                "grep",
-		Description:         "Search workspace files with a regular expression.",
+		Description:         "Search workspace file contents with a regular expression. Prefer this over shell grep or rg for repository search.",
 		Kind:                tool.KindForName("grep"),
 		Mutability:          tool.MutabilityReadOnly,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead},
@@ -230,7 +230,7 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		}
 		relSearch = filepath.ToSlash(relSearch)
 		if entry.IsDir() {
-			if isIgnoredGrepDir(entry.Name()) && path != resolvedPath {
+			if isIgnoredSearchDir(entry.Name()) && path != resolvedPath {
 				return filepath.SkipDir
 			}
 			if path != resolvedPath {
@@ -532,7 +532,7 @@ func isBinaryData(data []byte) bool {
 	return bytes.IndexByte(data, 0) != -1
 }
 
-func isIgnoredGrepDir(name string) bool {
+func isIgnoredSearchDir(name string) bool {
 	switch strings.ToLower(name) {
 	case ".git", "bin", "obj", "dist", "build", "target", "node_modules", ".cache", ".idea", ".vscode":
 		return true

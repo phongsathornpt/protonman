@@ -23,6 +23,7 @@ var builtinMetadata = map[string]callMetadata{
 	"search_replace":     {Metadata: Metadata{Name: "search_replace", Kind: KindEdit, DisplayName: "Edit"}, title: titleSearchReplace, target: targetEditPath, affectedPaths: affectedSinglePath("file_path", "path", "file", "filename", "target", "destination", "move_path")},
 	"apply_patch":        {Metadata: Metadata{Name: "apply_patch", Kind: KindEdit, DisplayName: "Patch"}, title: titleApplyPatch, target: targetApplyPatch, affectedPaths: affectedPatch},
 	"list_dir":           {Metadata: Metadata{Name: "list_dir", Kind: KindRead, DisplayName: "List"}, title: titleListDir, target: targetListDir},
+	"find_files":         {Metadata: Metadata{Name: "find_files", Kind: KindRead, DisplayName: "Find files"}, title: titleFindFiles, target: targetFindFiles},
 	"grep":               {Metadata: Metadata{Name: "grep", Kind: KindGrep, DisplayName: "Search"}, title: titleGrep, target: targetGrep},
 	"bash":               {Metadata: Metadata{Name: "bash", Kind: KindBash, DisplayName: "Run"}, title: titleBash, target: targetBash},
 	"web_fetch":          {Metadata: Metadata{Name: "web_fetch", Kind: KindWebFetch, DisplayName: "Fetch"}, title: titleWebFetch, target: targetWebFetch},
@@ -123,6 +124,24 @@ func targetListDir(args map[string]any) string {
 		return path
 	}
 	return "."
+}
+func titleFindFiles(args map[string]any) string {
+	pattern := ExtractString(args, "pattern")
+	if pattern == "" {
+		pattern = "*"
+	}
+	return "Find files " + TruncateRunes(pattern, 40)
+}
+func targetFindFiles(args map[string]any) string {
+	path := ExtractString(args, "path")
+	if path == "" {
+		path = "."
+	}
+	pattern := ExtractString(args, "pattern")
+	if pattern == "" {
+		pattern = "*"
+	}
+	return fmt.Sprintf("%q in %s", pattern, path)
 }
 func titleGrep(args map[string]any) string {
 	pattern := ExtractString(args, "pattern", "query")

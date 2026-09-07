@@ -8,10 +8,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/projectTHORN/proton/internal/platform/checkpoint"
-	"github.com/projectTHORN/proton/internal/platform/sandbox"
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/core/workspace"
+	"github.com/projectTHORN/proton/internal/platform/checkpoint"
+	"github.com/projectTHORN/proton/internal/platform/sandbox"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -129,6 +129,7 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 		NewSearchReplace(workspaceRoot, checkpointStore),
 		NewApplyPatch(workspaceRoot, checkpointStore),
 		NewGrep(workspaceRoot),
+		NewFindFiles(workspaceRoot),
 		NewListDir(workspaceRoot),
 		NewGitStatus(workspaceRoot, cfg.launcher),
 		NewCheckpointRestore(checkpointStore),

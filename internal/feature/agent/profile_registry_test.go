@@ -41,6 +41,7 @@ func (s staticRegistry) Definitions() []tool.Definition {
 func TestFilterRegistryForCanonicalProfiles(t *testing.T) {
 	baseReg := staticRegistry{handlers: map[string]tool.Handler{
 		"read_file":     dummyHandler{def: tool.Definition{Name: "read_file", Kind: tool.KindRead}},
+		"find_files":    dummyHandler{def: tool.Definition{Name: "find_files", Kind: tool.KindRead}},
 		"grep":          dummyHandler{def: tool.Definition{Name: "grep", Kind: tool.KindGrep}},
 		"web_fetch":     dummyHandler{def: tool.Definition{Name: "web_fetch", Kind: tool.KindWebFetch}},
 		"web_search":    dummyHandler{def: tool.Definition{Name: "web_search", Kind: tool.KindWebSearch}},
@@ -52,7 +53,7 @@ func TestFilterRegistryForCanonicalProfiles(t *testing.T) {
 
 	for _, profile := range []Profile{ProfilePOW, ProfileDEX} {
 		scoped := FilterRegistryForProfile(baseReg, profile)
-		for _, name := range []string{"read_file", "grep", "web_fetch", "web_search", "write_file", "bash"} {
+		for _, name := range []string{"read_file", "find_files", "grep", "web_fetch", "web_search", "write_file", "bash"} {
 			if _, ok := scoped.Lookup(name); !ok {
 				t.Errorf("%s missing tool %s", profile, name)
 			}
@@ -65,7 +66,7 @@ func TestFilterRegistryForCanonicalProfiles(t *testing.T) {
 	}
 
 	intScoped := FilterRegistryForProfile(baseReg, ProfileINT)
-	for _, name := range []string{"read_file", "grep", "web_fetch", "web_search"} {
+	for _, name := range []string{"read_file", "find_files", "grep", "web_fetch", "web_search"} {
 		if _, ok := intScoped.Lookup(name); !ok {
 			t.Errorf("int missing tool %s", name)
 		}

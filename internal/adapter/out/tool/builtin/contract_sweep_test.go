@@ -7,9 +7,9 @@ import (
 	skilltool "github.com/projectTHORN/proton/internal/adapter/out/tool/skill"
 	todotool "github.com/projectTHORN/proton/internal/adapter/out/tool/todo"
 	webtool "github.com/projectTHORN/proton/internal/adapter/out/tool/web"
+	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/feature/agent"
 	"github.com/projectTHORN/proton/internal/platform/sandbox"
-	"github.com/projectTHORN/proton/internal/core/tool"
 )
 
 func TestRegisteredBuiltinToolContracts(t *testing.T) {
@@ -27,7 +27,7 @@ func TestRegisteredBuiltinToolContracts(t *testing.T) {
 	}
 	expected := map[string]bool{
 		"read_file": true, "bash": true, "write_file": true, "search_replace": true,
-		"apply_patch": true, "grep": true, "list_dir": true, "git_status": true,
+		"apply_patch": true, "grep": true, "find_files": true, "list_dir": true, "git_status": true,
 		"checkpoint_restore": true, "web_fetch": true, "delegate_task": true,
 		"wait_agent": true, "get_agent": true, "list_agents": true, "cancel_agent": true,
 		"get_todo": true, "update_todo": true, "activate_skill": true,
