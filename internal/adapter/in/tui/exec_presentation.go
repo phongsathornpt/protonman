@@ -19,6 +19,7 @@ const (
 	execFamilyMake    execFamily = "make"
 	execFamilyDocker  execFamily = "docker"
 	execFamilyJVM     execFamily = "jvm"
+	execFamilyPHP     execFamily = "php"
 	execFamilyVite    execFamily = "vite"
 	execFamilyNext    execFamily = "next"
 )
