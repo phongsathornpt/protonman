@@ -1,10 +1,10 @@
 package turn
 
 import (
-	"github.com/projectTHORN/proton/internal/engine/prompt"
 	"github.com/projectTHORN/proton/internal/adapter/out/model"
-	"github.com/projectTHORN/proton/internal/feature/skill"
 	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/projectTHORN/proton/internal/engine/prompt"
+	"github.com/projectTHORN/proton/internal/feature/skill"
 )
 
 func (l *Loop) currentSkillPromptSection() string {
@@ -42,7 +42,7 @@ func (l *Loop) effectivePromptSpec(definitions []tool.Definition, extras []strin
 	spec.ToolNames = make([]string, 0, len(definitions))
 	spec.TaskPlanEnabled = false
 	spec.DelegationEnabled = false
-	spec.MutationEnabled = false
+	spec.Mutations = prompt.MutationCapabilities{}
 	for _, definition := range definitions {
 		spec.ToolNames = append(spec.ToolNames, definition.Name)
 		switch definition.Name {
@@ -52,7 +52,18 @@ func (l *Loop) effectivePromptSpec(definitions []tool.Definition, extras []strin
 			spec.DelegationEnabled = true
 		}
 		if tool.EffectiveMutability(definition) == tool.MutabilityMutating {
-			spec.MutationEnabled = true
+			switch definition.Safety.MutationDomain {
+			case tool.MutationDomainWorkspace, tool.MutationDomainWorkspacePolicy:
+				spec.Mutations.Workspace = true
+			case tool.MutationDomainTaskState:
+				spec.Mutations.Task = true
+			case tool.MutationDomainAgentState:
+				spec.Mutations.Agent = true
+			default:
+				if definition.Kind == tool.KindMCP {
+					spec.Mutations.External = true
+				}
+			}
 		}
 	}
 	spec.ExtraInstructions = append(append([]string(nil), l.promptSpec.ExtraInstructions...), extras...)

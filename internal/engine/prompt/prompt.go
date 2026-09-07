@@ -4,6 +4,13 @@ import "strings"
 
 const Version = "6"
 
+type MutationCapabilities struct {
+	Workspace bool
+	Task      bool
+	Agent     bool
+	External  bool
+}
+
 type Spec struct {
 	Role                 string
 	Profile              string
@@ -23,7 +30,7 @@ type Spec struct {
 	GroundingEvidence    string
 	TaskPlanEnabled      bool
 	DelegationEnabled    bool
-	MutationEnabled      bool
+	Mutations            MutationCapabilities
 	Skills               string
 	ProjectInstructions  string
 	ExtraInstructions    []string
@@ -54,7 +61,7 @@ func Render(spec Spec) string {
 	if spec.DelegationEnabled {
 		sections = append(sections, delegationSection(spec))
 	}
-	if spec.MutationEnabled {
+	if spec.Mutations.Workspace {
 		sections = append(sections, verificationSection())
 	}
 	if section := modelSection(spec); section != "" {
@@ -125,7 +132,7 @@ func toolDisciplineSection(spec Spec) string {
 		"- If repeated attempts are not producing new progress, change strategy or report the blocker instead of looping.",
 		"- Do not continue optional exploration after the user's requested work is complete.",
 	}
-	if spec.MutationEnabled {
+	if spec.Mutations.Workspace {
 		lines = append(lines,
 			"- For implementation work, finish once the requested behavior is implemented, relevant verification passes, and no required work remains.",
 		)
