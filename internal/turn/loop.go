@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/projectTHORN/proton/internal/runtimepolicy"
-	"io"
 	"log/slog"
 	"strings"
 	"sync"
@@ -461,69 +460,6 @@ func (l *Loop) CloneWithTools(tools *toolcall.Service) (*Loop, error) {
 	}
 	clone.skills = append([]skill.CatalogItem(nil), l.skills...)
 	return &clone, nil
-}
-
-func (l *Loop) currentSkillPromptSection() string {
-	var catalogItems []skill.CatalogItem
-	var activeSkills []skill.Skill
-	if l.skillRegistry != nil {
-		allSkills := l.skillRegistry.List()
-		activeMap := make(map[string]bool)
-		for _, name := range l.skillRegistry.ActivatedList() {
-			activeMap[name] = true
-		}
-		for _, candidate := range allSkills {
-			if activeMap[candidate.Name] {
-				activeSkills = append(activeSkills, candidate)
-			} else {
-				catalogItems = append(catalogItems, candidate.ToCatalogItem())
-			}
-		}
-	} else if len(l.skills) > 0 {
-		catalogItems = append(catalogItems, l.skills...)
-	}
-	return skill.SystemPromptSection(catalogItems, activeSkills)
-}
-
-func (l *Loop) effectivePromptSpec(definitions []tool.Definition, extras []string) agentprompt.Spec {
-	spec := *l.promptSpec
-	spec.Provider = l.languageModel.Provider()
-	spec.ModelID = l.languageModel.ModelID()
-	if profile, ok := model.ResolvedModelProfile(l.languageModel); ok {
-		spec.ModelProfile = profile.ProfileName
-		spec.ModelProfileMatch = string(profile.ProfileMatch)
-		spec.ModelCatalogOverride = profile.CatalogOverride
-		spec.ModelPromptHints = append([]string(nil), profile.AgentPolicy.PromptHints...)
-	}
-	spec.ToolNames = make([]string, 0, len(definitions))
-	spec.TaskPlanEnabled = false
-	spec.DelegationEnabled = false
-	spec.MutationEnabled = false
-	for _, definition := range definitions {
-		spec.ToolNames = append(spec.ToolNames, definition.Name)
-		switch definition.Name {
-		case "get_todo", "update_todo":
-			spec.TaskPlanEnabled = true
-		case "delegate_task":
-			spec.DelegationEnabled = true
-		}
-		if tool.EffectiveMutability(definition) == tool.MutabilityMutating {
-			spec.MutationEnabled = true
-		}
-	}
-	spec.ExtraInstructions = append(append([]string(nil), l.promptSpec.ExtraInstructions...), extras...)
-	return spec
-}
-
-func messagesContainImages(messages []model.Message) bool {
-	for _, message := range messages {
-		for _, part := range message.Parts {
-			if part.Type == model.ContentPartImage {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // Run executes model responses until one has no tool calls or another runtime safety bound is reached.
@@ -1326,82 +1262,6 @@ func logExecutionSummary(ctx context.Context, round int, executions []executedCa
 	)
 }
 
-func (l *Loop) streamRound(
-	ctx context.Context,
-	round int,
-	request sdk.Request,
-	sink Sink,
-) (model.Message, []model.ToolCall, error) {
-	startedAt := time.Now()
-	slog.DebugContext(ctx, "model round stream opening",
-		"round", round,
-		"message_count", len(request.Messages),
-		"tool_count", len(request.Tools),
-	)
-	stream, err := l.languageModel.Stream(ctx, request)
-	if err != nil {
-		slog.DebugContext(ctx, "model round stream open failed",
-			"round", round,
-			"error_type", fmt.Sprintf("%T", err),
-		)
-		return model.Message{}, nil, fmt.Errorf("stream model round %d: %w", round, err)
-	}
-	if stream == nil {
-		return model.Message{}, nil, fmt.Errorf("stream model round %d: nil stream", round)
-	}
-	defer func() {
-		closeErr := stream.Close()
-		slog.DebugContext(ctx, "model round stream closed",
-			"round", round,
-			"duration_ms", time.Since(startedAt).Milliseconds(),
-			"close_error", closeErr != nil,
-		)
-	}()
-	assistant, calls, streamErr := consumeSDKStream(ctx, round, stream, sink)
-	if streamErr != nil {
-		return model.Message{}, nil, streamErr
-	}
-	slog.DebugContext(ctx, "model round stream consumed",
-		"round", round,
-		"assistant_bytes", len(assistant.Content),
-		"tool_calls", len(calls),
-	)
-	return assistant, calls, nil
-}
-
-func consumeSDKStream(ctx context.Context, round int, stream sdk.Stream, sink Sink) (model.Message, []model.ToolCall, error) {
-	var text strings.Builder
-	calls := make([]model.ToolCall, 0)
-	for {
-		event, err := stream.Next(ctx)
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return model.Message{}, nil, fmt.Errorf("read model stream round %d: %w", round, err)
-		}
-		if err := event.Validate(); err != nil {
-			return model.Message{}, nil, fmt.Errorf("validate model stream round %d: %w", round, err)
-		}
-		switch event.Kind {
-		case sdk.EventTextDelta:
-			text.WriteString(event.Text)
-			if err := emit(ctx, sink, Event{Kind: EventTextDelta, Round: round, Text: event.Text}); err != nil {
-				return model.Message{}, nil, err
-			}
-		case sdk.EventToolCall:
-			call := event.ToolCall
-			call.Arguments = append(json.RawMessage(nil), call.Arguments...)
-			calls = append(calls, call)
-		case sdk.EventFinish:
-			if text.Len() == 0 && len(calls) == 0 {
-				return model.Message{}, nil, fmt.Errorf("model stream round %d: %w", round, ErrEmptyResponse)
-			}
-			return model.Message{Role: model.RoleAssistant, Content: text.String(), ToolCalls: calls}, calls, nil
-		}
-	}
-	return model.Message{}, nil, fmt.Errorf("read model stream round %d: %w", round, sdk.ErrIncompleteStream)
-}
 func (l *Loop) observeSuppression(ctx context.Context, round int, execution executedCall) {
 	event := toolcall.ProtectionEvent{
 		Kind: toolcall.ProtectionCallSuppressed, Time: time.Now(), Round: round,
