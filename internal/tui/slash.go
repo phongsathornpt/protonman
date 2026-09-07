@@ -31,7 +31,7 @@ var slashCatalog = []slashCommand{
 	{name: "help", description: "list commands"},
 	{name: "tools", description: "list tools"},
 	{name: "skills", aliases: []string{"skill"}, description: "browse, activate, or toggle agent skills (/skills [name|active|toggle])", takesArgs: true},
-	{name: "project", aliases: []string{"proton"}, description: "inspect project-local .proton settings", takesArgs: true},
+	{name: "project", aliases: []string{"proton"}, description: "inspect or initialize project-local Proton settings (/project [status|reload|init])", takesArgs: true},
 	{name: "agent", aliases: []string{"profile"}, description: "show or set agent profile (/agent [" + agent.ProfileList("|") + "])", takesArgs: true},
 	{name: "reasoning", aliases: []string{"thinking"}, description: "show or set session reasoning effort (/reasoning [auto|none|low|medium|high|xhigh|max])", takesArgs: true},
 	{name: "mode", description: "show or set permission mode", takesArgs: true},
@@ -485,8 +485,10 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		switch arg {
 		case "", "status", "reload":
 			return m.openProjectPane()
+		case "init":
+			return m.initProject()
 		default:
-			m.appendError("usage: /project [status|reload]")
+			m.appendError("usage: /project [status|reload|init]")
 			m.refreshViewport()
 			return nil
 		}

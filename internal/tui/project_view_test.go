@@ -95,3 +95,31 @@ func TestProjectReloadIgnoresStaleResult(t *testing.T) {
 		t.Fatal("latest project result did not finish reload")
 	}
 }
+
+func TestProjectInitCreatesConfigAndReloadsPane(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.workDir = t.TempDir()
+
+	initCmd := m.executeCommand("/project init")
+	if initCmd == nil {
+		t.Fatal("/project init returned nil command")
+	}
+	updated, reloadCmd := m.Update(initCmd())
+	m = updated.(*bubbleModel)
+	if reloadCmd == nil {
+		t.Fatal("project init did not schedule workspace reload")
+	}
+	updated, _ = m.Update(reloadCmd())
+	m = updated.(*bubbleModel)
+
+	if _, err := os.Stat(appdirs.ProjectConfig(m.workDir)); err != nil {
+		t.Fatalf("project config not created: %v", err)
+	}
+	view := m.bottom.find(projectViewID).(*projectPaneView)
+	if !view.state.ConfigExists || view.loading {
+		t.Fatalf("project pane not refreshed after init: %#v", view)
+	}
+	if !strings.Contains(view.Render(m), "Created "+appdirs.RootDirName+"/"+appdirs.ConfigFileName) {
+		t.Fatalf("project pane missing init confirmation: %q", view.Render(m))
+	}
+}
