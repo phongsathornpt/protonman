@@ -10,14 +10,14 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/engine/prompt"
-	"github.com/projectTHORN/proton/internal/base/contextutil"
 	"github.com/projectTHORN/proton/internal/adapter/out/model"
+	"github.com/projectTHORN/proton/internal/base/contextutil"
 	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/feature/skill"
 	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/engine/toolcall"
 	"github.com/projectTHORN/proton/internal/core/workspace"
+	"github.com/projectTHORN/proton/internal/engine/prompt"
+	"github.com/projectTHORN/proton/internal/engine/toolcall"
+	"github.com/projectTHORN/proton/internal/feature/skill"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -112,8 +112,20 @@ const (
 )
 
 type toolDispatchState struct {
-	reason             toolDispatchReason
-	remainingToolCalls int
+	reason              toolDispatchReason
+	remainingToolCalls  int
+	providerToCanonical map[string]string
+	canonicalNames      map[string]struct{}
+}
+
+func (s toolDispatchState) canonicalToolName(name string) string {
+	if canonical, ok := s.providerToCanonical[name]; ok {
+		return canonical
+	}
+	if _, ok := s.canonicalNames[name]; ok {
+		return name
+	}
+	return name
 }
 
 func (s toolDispatchState) enabled() bool {
