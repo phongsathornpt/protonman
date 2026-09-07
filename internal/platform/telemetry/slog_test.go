@@ -99,7 +99,7 @@ func TestSlogObserverCountsRecoveryLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, kind := range []toolcall.EventKind{toolcall.EventRecoveryAttempted, toolcall.EventRecoverySucceeded, toolcall.EventRecoveryFailed} {
-		observer.Observe(context.Background(), toolcall.Event{Kind: kind, ToolName: "read_file", RecoveryAction: "restart_pagination"})
+		observer.Observe(context.Background(), toolcall.Event{Kind: kind, ToolName: "read_file", RecoveryAction: tool.RecoveryRestartPagination})
 	}
 	counters := observer.Counters()
 	if counters["tool_recovery_attempt_total"] != 1 || counters["tool_recovery_success_total"] != 1 || counters["tool_recovery_failure_total"] != 1 {

@@ -960,7 +960,7 @@ func TestServiceRecoversReadOnlyPaginationOnce(t *testing.T) {
 	handler := &fakeHandler{definition: tool.Definition{
 		Name: "read_file", Description: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}, "required": []string{"path"}, "additionalProperties": false},
-	}, firstErr: tool.NewToolError(tool.ErrorCodeStaleContinuation, "stale").WithRecovery(tool.Recovery{Action: "restart_pagination", Tool: "read_file", Arguments: recoveryArgs})}
+	}, firstErr: tool.NewToolError(tool.ErrorCodeStaleContinuation, "stale").WithRecovery(tool.Recovery{Action: tool.RecoveryRestartPagination, Tool: "read_file", Arguments: recoveryArgs})}
 	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAlwaysApprove))
 	call, err := tool.NewCall("read-1", "read_file", json.RawMessage(`{"path":"file.txt"}`))
 	if err != nil {
@@ -983,7 +983,7 @@ func TestServiceEmitsRecoveryLifecycleEvents(t *testing.T) {
 	handler := &fakeHandler{definition: tool.Definition{
 		Name: "read_file", Description: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}, "required": []string{"path"}, "additionalProperties": false},
-	}, firstErr: tool.NewToolError(tool.ErrorCodeStaleContinuation, "stale").WithRecovery(tool.Recovery{Action: "restart_pagination", Tool: "read_file", Arguments: recoveryArgs})}
+	}, firstErr: tool.NewToolError(tool.ErrorCodeStaleContinuation, "stale").WithRecovery(tool.Recovery{Action: tool.RecoveryRestartPagination, Tool: "read_file", Arguments: recoveryArgs})}
 	observer := &recordingObserver{}
 	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAlwaysApprove), WithObserver(observer))
 	call, _ := tool.NewCall("read-recovery-events", "read_file", json.RawMessage(`{"path":"file.txt"}`))
@@ -995,9 +995,9 @@ func TestServiceEmitsRecoveryLifecycleEvents(t *testing.T) {
 	for _, event := range events {
 		switch event.Kind {
 		case EventRecoveryAttempted:
-			attempted = event.RecoveryAction == "restart_pagination"
+			attempted = event.RecoveryAction == tool.RecoveryRestartPagination
 		case EventRecoverySucceeded:
-			succeeded = event.RecoveryAction == "restart_pagination"
+			succeeded = event.RecoveryAction == tool.RecoveryRestartPagination
 		}
 	}
 	if !attempted || !succeeded {

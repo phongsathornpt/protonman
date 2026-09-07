@@ -695,7 +695,7 @@ func TestReadFileContinuationRejectsChangedFile(t *testing.T) {
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeStaleContinuation {
 		t.Fatalf("Execute() error = %v, want stale continuation", err)
 	}
-	if toolErr.Recovery == nil || toolErr.Recovery.Action != "restart_pagination" || toolErr.Recovery.Tool != "read_file" || !strings.Contains(string(toolErr.Recovery.Arguments), "snapshot.txt") {
+	if toolErr.Recovery == nil || toolErr.Recovery.Action != tool.RecoveryRestartPagination || toolErr.Recovery.Tool != "read_file" || !strings.Contains(string(toolErr.Recovery.Arguments), "snapshot.txt") {
 		t.Fatalf("recovery = %+v", toolErr.Recovery)
 	}
 }

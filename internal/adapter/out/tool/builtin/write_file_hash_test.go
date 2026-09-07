@@ -53,7 +53,7 @@ func TestWriteFileRejectsStaleExpectedSHA256(t *testing.T) {
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeConflict {
 		t.Fatalf("stale hash error = %v, want conflict", err)
 	}
-	if toolErr.Recovery == nil || toolErr.Recovery.Action != "refresh_resource" || toolErr.Recovery.Tool != "read_file" {
+	if toolErr.Recovery == nil || toolErr.Recovery.Action != tool.RecoveryRefreshResource || toolErr.Recovery.Tool != "read_file" {
 		t.Fatalf("stale hash recovery = %#v", toolErr.Recovery)
 	}
 	var recoveryArgs map[string]any

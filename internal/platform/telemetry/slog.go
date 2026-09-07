@@ -60,7 +60,7 @@ func (o *SlogObserver) Observe(ctx context.Context, event toolcall.Event) {
 		attrs = append(attrs, slog.String("error_code", string(event.ErrorCode)))
 	}
 	if event.RecoveryAction != "" {
-		attrs = append(attrs, slog.String("recovery_action", event.RecoveryAction))
+		attrs = append(attrs, slog.String("recovery_action", string(event.RecoveryAction)))
 	}
 	switch event.Kind {
 	case toolcall.EventRecoveryAttempted:

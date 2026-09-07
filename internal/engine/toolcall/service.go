@@ -449,7 +449,7 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 
 func (s *Service) recoverReadOnlyCall(ctx context.Context, telemetry callTelemetry, handler tool.Handler, definition tool.Definition, validators compiledToolValidators, call tool.Call, err error) (tool.Result, error, bool) {
 	failure := tool.FailureFromError(err)
-	if failure == nil || failure.Recovery == nil || failure.Recovery.Action != "restart_pagination" {
+	if failure == nil || failure.Recovery == nil || failure.Recovery.Action != tool.RecoveryRestartPagination {
 		return tool.Result{}, nil, false
 	}
 	action := failure.Recovery.Action
