@@ -18,7 +18,6 @@ import (
 
 const (
 	defaultMaxConcurrency    = 4
-	defaultMaxRounds         = 10
 	defaultMaxToolCalls      = runtimepolicy.TurnMaxToolCalls
 	defaultMaxRuntime        = runtimepolicy.AgentMaxRuntime
 	defaultWaitTimeout       = runtimepolicy.AgentWaitTimeout
@@ -79,7 +78,6 @@ type Coordinator struct {
 	rootCtx     context.Context
 	rootStop    context.CancelFunc
 
-	maxRounds           int
 	maxToolCalls        int
 	reasoningEffort     sdk.ReasoningEffort
 	maxLiveAgents       int
@@ -113,15 +111,6 @@ func WithMaxConcurrency(n int) Option {
 			c.wsGate = make(chan struct{}, n)
 			c.wsWriter = make(chan struct{}, 1)
 			c.wsAdmission = make(chan struct{}, 1)
-		}
-	}
-}
-
-// WithMaxRounds sets the maximum model/tool rounds per subagent.
-func WithMaxRounds(rounds int) Option {
-	return func(c *Coordinator) {
-		if rounds >= 0 {
-			c.maxRounds = rounds
 		}
 	}
 }
@@ -273,7 +262,6 @@ func NewCoordinator(
 		agents:              make(map[string]*agentEntry),
 		rootCtx:             rootCtx,
 		rootStop:            rootStop,
-		maxRounds:           defaultMaxRounds,
 		maxToolCalls:        defaultMaxToolCalls,
 		maxLiveAgents:       defaultMaxLiveAgents,
 		maxRetainedAgents:   defaultMaxRetainedAgents,
