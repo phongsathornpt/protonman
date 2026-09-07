@@ -38,8 +38,19 @@ func NamespacedName(serverName string, toolName string) (string, error) {
 // Discover queries every server concurrently, registers each discovered tool under its
 // namespaced name, and wires invocations through tool.Handler.
 func Discover(ctx context.Context, registry tool.BatchRegistrar, servers ...Server) error {
+	return DiscoverWithLimits(ctx, registry, DefaultLimits(), servers...)
+}
+
+// DiscoverWithLimits discovers MCP tools while enforcing explicit resource bounds.
+func DiscoverWithLimits(ctx context.Context, registry tool.BatchRegistrar, limits Limits, servers ...Server) error {
 	if registry == nil {
 		return fmt.Errorf("discover MCP tools: registry is required")
+	}
+	if err := limits.validate(); err != nil {
+		return fmt.Errorf("discover MCP tools: %w", err)
+	}
+	if len(servers) > limits.MaxServers {
+		return fmt.Errorf("discover MCP tools: %d servers exceeds limit %d", len(servers), limits.MaxServers)
 	}
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("discover MCP tools: %w", err)
@@ -100,11 +111,25 @@ func Discover(ctx context.Context, registry tool.BatchRegistrar, servers ...Serv
 		}
 	}
 
-	handlers := make([]tool.Handler, 0)
-	seenNames := make(map[string]struct{})
+	totalTools := 0
+	for i, result := range results {
+		if len(result.manifests) > limits.MaxToolsPerServer {
+			return fmt.Errorf("MCP server %q exposed %d tools; limit is %d", serverNames[i], len(result.manifests), limits.MaxToolsPerServer)
+		}
+		totalTools += len(result.manifests)
+	}
+	if totalTools > limits.MaxTotalTools {
+		return fmt.Errorf("MCP servers exposed %d tools; total limit is %d", totalTools, limits.MaxTotalTools)
+	}
+
+	handlers := make([]tool.Handler, 0, totalTools)
+	seenNames := make(map[string]struct{}, totalTools)
 	for i, server := range servers {
 		serverName := serverNames[i]
 		for _, manifest := range results[i].manifests {
+			if err := validateManifestLimits(serverName, manifest, limits); err != nil {
+				return err
+			}
 			if err := manifest.Validate(); err != nil {
 				return fmt.Errorf("validate MCP tool from %q: %w", serverName, err)
 			}
