@@ -36,6 +36,9 @@ type RunnerFactory func(*toolcall.Service) (app.Conversation, error)
 // SessionRegistryFactory creates stateful tool bindings for one ACP session.
 type SessionRegistryFactory func(sessionID string, cwd string) (tool.Registry, error)
 
+// MCPRegistryConfigurer attaches client-provided MCP servers to a session-local registry.
+type MCPRegistryConfigurer func(ctx context.Context, registry tool.Registry, servers []MCPServerConfig) error
+
 // WithSessions sets the application session service for persistence use cases.
 func WithSessions(sessions *app.Sessions) Option {
 	return func(server *Server) { server.sessionService = sessions }
@@ -55,12 +58,18 @@ func WithSessionRegistryFactory(factory SessionRegistryFactory) Option {
 	return func(s *Server) { s.sessionRegistryFactory = factory }
 }
 
+// WithMCPRegistryConfigurer wires ACP mcpServers into each session-local tool registry.
+func WithMCPRegistryConfigurer(configurer MCPRegistryConfigurer) Option {
+	return func(s *Server) { s.mcpRegistryConfigurer = configurer }
+}
+
 // Server is a full-duplex JSON-RPC 2.0 ACP agent server.
 type Server struct {
 	service                *toolcall.Service
 	registry               tool.Registry
 	runnerFactory          RunnerFactory
 	sessionRegistryFactory SessionRegistryFactory
+	mcpRegistryConfigurer  MCPRegistryConfigurer
 	sessionService         *app.Sessions
 
 	mu       sync.Mutex
@@ -293,10 +302,15 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 	case "session/new":
 		var params SessionNewParams
 		if len(request.Params) > 0 {
-			_ = json.Unmarshal(request.Params, &params)
+			if err := json.Unmarshal(request.Params, &params); err != nil {
+				return nil, nil, fmt.Errorf("decode session/new: %w", err)
+			}
+		}
+		if err := validateMCPServerConfigs(params.MCPServers); err != nil {
+			return nil, nil, fmt.Errorf("session/new MCP servers: %w", err)
 		}
 		sessionID := session.NewID(params.Cwd)
-		sess, err := s.newSession(sessionID, params.Cwd)
+		sess, err := s.newSession(ctx, sessionID, params.Cwd, params.MCPServers)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -332,7 +346,10 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 			return nil, nil, errors.New("sessionId is required")
 		}
 
-		sess, err := s.loadOrCreateSession(ctx, params.SessionID, params.Cwd)
+		if err := validateMCPServerConfigs(params.MCPServers); err != nil {
+			return nil, nil, fmt.Errorf("session/load MCP servers: %w", err)
+		}
+		sess, err := s.loadOrCreateSession(ctx, params.SessionID, params.Cwd, params.MCPServers)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -354,7 +371,10 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if params.SessionID == "" {
 			return nil, nil, errors.New("sessionId is required")
 		}
-		_, err := s.loadOrCreateSession(ctx, params.SessionID, params.Cwd)
+		if err := validateMCPServerConfigs(params.MCPServers); err != nil {
+			return nil, nil, fmt.Errorf("session/resume MCP servers: %w", err)
+		}
+		_, err := s.loadOrCreateSession(ctx, params.SessionID, params.Cwd, params.MCPServers)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -450,15 +470,18 @@ func (s *Server) lookupSession(sessionID string) (*Session, bool) {
 	return sess, ok
 }
 
-func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd string) (*Session, error) {
+func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd string, mcpServers []MCPServerConfig) (*Session, error) {
 	s.mu.Lock()
 	existing, ok := s.sessions[sessionID]
 	s.mu.Unlock()
 	if ok {
+		if err := existing.matchMCPServers(mcpServers); err != nil {
+			return nil, err
+		}
 		return existing, nil
 	}
 
-	sess, err := s.newSession(sessionID, cwd)
+	sess, err := s.newSession(ctx, sessionID, cwd, mcpServers)
 	if err != nil {
 		return nil, err
 	}
@@ -504,7 +527,7 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 	return sess, nil
 }
 
-func (s *Server) newSession(sessionID string, cwd string) (*Session, error) {
+func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, mcpServers []MCPServerConfig) (*Session, error) {
 	registry := s.registry
 	if s.sessionRegistryFactory != nil {
 		created, err := s.sessionRegistryFactory(sessionID, cwd)
@@ -512,6 +535,14 @@ func (s *Server) newSession(sessionID string, cwd string) (*Session, error) {
 			return nil, fmt.Errorf("create registry for session %q: %w", sessionID, err)
 		}
 		registry = created
+	}
+	if len(mcpServers) > 0 {
+		if s.mcpRegistryConfigurer == nil {
+			return nil, fmt.Errorf("configure MCP servers for session %q: MCP server configuration is not available", sessionID)
+		}
+		if err := s.mcpRegistryConfigurer(ctx, registry, cloneMCPServerConfigs(mcpServers)); err != nil {
+			return nil, fmt.Errorf("configure MCP servers for session %q: %w", sessionID, err)
+		}
 	}
 	service, err := s.service.CloneWithRegistry(registry)
 	if err != nil {
@@ -525,7 +556,9 @@ func (s *Server) newSession(sessionID string, cwd string) (*Session, error) {
 		}
 		runner = created
 	}
-	return NewSession(sessionID, cwd, service, registry, runner, s.sessionService), nil
+	sess := NewSession(sessionID, cwd, service, registry, runner, s.sessionService)
+	sess.mcpServers = cloneMCPServerConfigs(mcpServers)
+	return sess, nil
 }
 
 func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, error) {

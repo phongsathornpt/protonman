@@ -3,6 +3,9 @@ package acp
 
 import (
 	"encoding/json"
+	"fmt"
+	"slices"
+	"strings"
 )
 
 // ProtocolVersion is the ACP protocol version supported by Proton.
@@ -117,6 +120,48 @@ type MCPServerConfig struct {
 	Command string   `json:"command"`
 	Args    []string `json:"args,omitempty"`
 	Env     []string `json:"env,omitempty"`
+}
+
+func validateMCPServerConfigs(configs []MCPServerConfig) error {
+	seen := make(map[string]struct{}, len(configs))
+	for i, config := range configs {
+		name := strings.TrimSpace(config.Name)
+		if name == "" || name != config.Name {
+			return fmt.Errorf("MCP server %d name must be non-empty and trimmed", i)
+		}
+		command := strings.TrimSpace(config.Command)
+		if command == "" || command != config.Command {
+			return fmt.Errorf("MCP server %q command must be non-empty and trimmed", name)
+		}
+		if _, exists := seen[name]; exists {
+			return fmt.Errorf("duplicate MCP server %q", name)
+		}
+		seen[name] = struct{}{}
+	}
+	return nil
+}
+
+func cloneMCPServerConfigs(configs []MCPServerConfig) []MCPServerConfig {
+	out := make([]MCPServerConfig, len(configs))
+	for i, config := range configs {
+		out[i] = config
+		out[i].Args = append([]string(nil), config.Args...)
+		out[i].Env = append([]string(nil), config.Env...)
+	}
+	return out
+}
+
+func sameMCPServerConfigs(left, right []MCPServerConfig) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i].Name != right[i].Name || left[i].Command != right[i].Command ||
+			!slices.Equal(left[i].Args, right[i].Args) || !slices.Equal(left[i].Env, right[i].Env) {
+			return false
+		}
+	}
+	return true
 }
 
 // SessionNewParams creates a new thread in the given working directory.

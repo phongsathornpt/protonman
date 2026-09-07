@@ -719,7 +719,7 @@ func TestACPReasoningSlashPersistsAndValidatesModelProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	server.sessionService = app.NewSessions(store)
-	sess, err := server.newSession("reasoning-session", "/tmp")
+	sess, err := server.newSession(context.Background(), "reasoning-session", "/tmp", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -759,7 +759,7 @@ func TestACPSessionLoadRestoresReasoningEffort(t *testing.T) {
 	if err := store.Save(context.Background(), "resume-reasoning", session.State{PermissionMode: "ask", ReasoningEffort: "high"}); err != nil {
 		t.Fatal(err)
 	}
-	sess, err := server.loadOrCreateSession(context.Background(), "resume-reasoning", "/tmp")
+	sess, err := server.loadOrCreateSession(context.Background(), "resume-reasoning", "/tmp", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -785,4 +785,53 @@ func newACPReasoningLoop(t *testing.T, modelID string) *applicationturn.Loop {
 		t.Fatal(err)
 	}
 	return loop
+}
+
+func TestACPMCPServerConfigsReachSessionConfigurer(t *testing.T) {
+	server := newTestServer(t, permission.ModeAsk)
+	var configured [][]MCPServerConfig
+	server.mcpRegistryConfigurer = func(_ context.Context, _ tool.Registry, configs []MCPServerConfig) error {
+		configured = append(configured, cloneMCPServerConfigs(configs))
+		return nil
+	}
+	configs := []MCPServerConfig{{Name: "local", Command: "mcp-server", Args: []string{"--stdio"}}}
+	requests := []RPCRequest{
+		{Method: "session/new", Params: mustJSON(t, SessionNewParams{Cwd: "/tmp/a", MCPServers: configs})},
+		{Method: "session/load", Params: mustJSON(t, SessionLoadParams{SessionID: "load-mcp", Cwd: "/tmp/b", MCPServers: configs})},
+		{Method: "session/resume", Params: mustJSON(t, SessionResumeParams{SessionID: "resume-mcp", Cwd: "/tmp/c", MCPServers: configs})},
+	}
+	for _, request := range requests {
+		if _, _, err := server.dispatch(context.Background(), request, io.Discard); err != nil {
+			t.Fatalf("%s error = %v", request.Method, err)
+		}
+	}
+	if len(configured) != len(requests) {
+		t.Fatalf("configured calls = %d, want %d", len(configured), len(requests))
+	}
+	for _, got := range configured {
+		if !sameMCPServerConfigs(got, configs) {
+			t.Fatalf("configured servers = %#v, want %#v", got, configs)
+		}
+	}
+}
+
+func TestACPMCPServerConfigRejectsInvalidAndUnavailable(t *testing.T) {
+	server := newTestServer(t, permission.ModeAsk)
+	invalid := []MCPServerConfig{{Name: "bad", Command: ""}}
+	if _, _, err := server.dispatch(context.Background(), RPCRequest{Method: "session/new", Params: mustJSON(t, SessionNewParams{MCPServers: invalid})}, io.Discard); err == nil {
+		t.Fatal("invalid MCP config error = nil")
+	}
+	valid := []MCPServerConfig{{Name: "local", Command: "mcp-server"}}
+	if _, _, err := server.dispatch(context.Background(), RPCRequest{Method: "session/new", Params: mustJSON(t, SessionNewParams{MCPServers: valid})}, io.Discard); err == nil || !strings.Contains(err.Error(), "not available") {
+		t.Fatalf("missing MCP configurer error = %v", err)
+	}
+}
+
+func mustJSON(t *testing.T, value any) json.RawMessage {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }
