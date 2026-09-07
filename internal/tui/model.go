@@ -91,7 +91,7 @@ type bubbleModel struct {
 	agentProfile            string
 	reasoningEffort         sdk.ReasoningEffort
 	sessionID               string
-	sessionStore            *session.FileStore
+	sessionStore            session.Repository
 	workspaceKey            string
 	modelCatalogs           modelCatalogState
 	runtimeConfig           config.RuntimeConfig
