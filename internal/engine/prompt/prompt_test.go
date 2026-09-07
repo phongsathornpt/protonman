@@ -7,14 +7,11 @@ import (
 
 func TestRenderComposesStableContracts(t *testing.T) {
 	got := Render(Spec{
-		Role: "You inspect code.", Profile: "int", Provider: "google", ModelID: "gemini-3.8-flash",
-		ModelProfile: "gemini-3.8-flash", ModelProfileMatch: "exact", ModelCatalogOverride: true,
-		Workspace: "/repo", ToolNames: []string{"grep", "get_todo", "delegate_task", "grep"},
-		GroundingRequired: true, GroundingEvidence: "workspace",
-		Capabilities: ToolCapabilities{Tasks: true, Agents: true}, Mutations: MutationCapabilities{Workspace: true}, Skills: "skill instructions",
+		Role: "You inspect code.", Profile: "int", Workspace: "/repo",
+		GroundingEvidence: "workspace",
+		Capabilities:      ToolCapabilities{Tasks: true, Agents: true}, Mutations: MutationCapabilities{Workspace: true}, Skills: "skill instructions",
 		ProjectInstructions: "follow repository rules",
 		ExtraInstructions:   []string{"custom one", "custom two"},
-		ReasoningRequested:  "high", ReasoningEffective: "medium", ReasoningSource: "agent_profile", ReasoningClamped: true,
 	})
 	for _, want := range []string{
 		`<proton-system-prompt version="6">`, "specialized coding subagent", "# Execution Contract", "# Tool Protocol",
@@ -57,23 +54,8 @@ func TestRenderRootIdentityOmitsDelegationWhenUnavailable(t *testing.T) {
 	}
 }
 
-func TestRenderIsStableAcrossGroundingStateAndPublishedToolSubset(t *testing.T) {
-	base := Spec{
-		Workspace: "/repo", GroundingEvidence: "workspace", Capabilities: ToolCapabilities{Tasks: true, Agents: true}, Mutations: MutationCapabilities{Workspace: true},
-		ToolNames: []string{"read_file", "grep", "delegate_task"},
-	}
-	before := base
-	before.GroundingRequired = true
-	after := base
-	after.GroundingRequired = false
-	after.ToolNames = []string{"read_file"}
-	if got, want := Render(before), Render(after); got != want {
-		t.Fatalf("prompt changed across runtime-only grounding/tool state:\n--- before ---\n%s\n--- after ---\n%s", got, want)
-	}
-}
-
 func TestRenderOmitsUnavailableContracts(t *testing.T) {
-	got := Render(Spec{Role: "Read only.", ToolNames: []string{"read_file"}})
+	got := Render(Spec{Role: "Read only."})
 	for _, unwanted := range []string{"# Task Coordination", "# Delegation Protocol", "# Editing And Verification", "# Grounding Contract"} {
 		if strings.Contains(got, unwanted) {
 			t.Fatalf("prompt unexpectedly contains %q", unwanted)
