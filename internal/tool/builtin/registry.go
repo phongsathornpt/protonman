@@ -17,6 +17,7 @@ import (
 	tododomain "github.com/projectTHORN/proton/internal/todo"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/workspace"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 // ErrDuplicateTool indicates that a name is already registered.
@@ -193,6 +194,13 @@ func (r *Registry) Register(handler tool.Handler) error {
 	definition := handler.Definition()
 	if err := definition.Validate(); err != nil {
 		return fmt.Errorf("register %q: %w", definition.Name, err)
+	}
+	sdkTool := sdk.Tool{Name: definition.Name, Description: definition.Description, InputSchema: definition.InputSchema, OutputSchema: definition.OutputSchema}
+	if _, err := sdk.CompileToolInputValidator(sdkTool); err != nil {
+		return fmt.Errorf("register %q input schema: %w", definition.Name, err)
+	}
+	if _, err := sdk.CompileToolOutputValidator(sdkTool); err != nil {
+		return fmt.Errorf("register %q output schema: %w", definition.Name, err)
 	}
 
 	name := strings.TrimSpace(definition.Name)
