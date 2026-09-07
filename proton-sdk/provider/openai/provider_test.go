@@ -562,3 +562,76 @@ func TestOpenCodeSuccessfulResponsePublishesRateLimitMetadata(t *testing.T) {
 		t.Fatalf("metadata = %s", raw)
 	}
 }
+
+func TestOpenCodeFreeUsageLimitOverridesHTTP403(t *testing.T) {
+	err := providerError("opencode", http.StatusForbidden, []byte(`{"error":{"type":"FreeUsageLimitError","message":"free quota exhausted"}}`), nil)
+	if err.Kind != sdk.ErrorRateLimit || err.RateLimit == nil || err.RateLimit.Kind != sdk.RateLimitFreeUsage || err.Retryable {
+		t.Fatalf("provider error = %#v", err)
+	}
+}
+
+func TestOpenCodeMalformedRetryAfterFallsBackToBackoff(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts == 1 {
+			w.Header().Set("Retry-After", "eventually")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = io.WriteString(w, `{"error":{"type":"rate_limit_error","message":"slow down"}}`)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
+	}))
+	defer server.Close()
+	model := NewProvider(ProviderOptions{ProviderName: "opencode", BaseURL: server.URL, MaxRetries: 1, RetryBackoff: time.Millisecond}).Model("test")
+	stream, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+}
+
+func TestOpenCodeCancellationInterruptsRateLimitWait(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Reset", "5s")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(w, `{"error":{"type":"rate_limit_error","message":"slow down"}}`)
+	}))
+	defer server.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	model := NewProvider(ProviderOptions{ProviderName: "opencode", BaseURL: server.URL, MaxRetries: 1, MaxRetryAfter: 10 * time.Second}).Model("test")
+	_, err := model.Stream(ctx, sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v, want deadline exceeded", err)
+	}
+}
+
+func TestOpenCodeProviderLimitRetriesWithinHorizon(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts == 1 {
+			w.Header().Set("X-RateLimit-Reset", "2ms")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = io.WriteString(w, `{"error":{"type":"rate_limit_error","message":"Provider rate limit exceeded"}}`)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
+	}))
+	defer server.Close()
+	model := NewProvider(ProviderOptions{ProviderName: "opencode", BaseURL: server.URL, MaxRetries: 1}).Model("test")
+	stream, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+}
