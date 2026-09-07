@@ -663,16 +663,6 @@ func TestCoordinator_SubagentInheritsCallGuard(t *testing.T) {
 	}
 }
 
-func TestCoordinatorMaxRoundsOptionAllowsUnbounded(t *testing.T) {
-	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil, WithMaxRounds(0))
-	if got := coord.maxRounds; got != 0 {
-		t.Fatalf("max rounds = %d, want 0", got)
-	}
-	if err := coord.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
-}
-
 func TestCoordinatorWorkspaceGateCancelsExclusiveWait(t *testing.T) {
 	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil, WithMaxConcurrency(2))
 	releaseReader, err := coord.acquireWorkspace(context.Background(), false)
@@ -1415,7 +1405,6 @@ func TestTerminalReasonClassifiesKnownFailures(t *testing.T) {
 		err  error
 		want string
 	}{
-		{name: "max rounds", err: fmt.Errorf("wrapped: %w", turn.ErrMaxRounds), want: "max rounds reached"},
 		{name: "permission", err: fmt.Errorf("wrapped: %w", toolcall.ErrPermissionDenied), want: "permission denied"},
 		{name: "model unavailable", err: sdk.NewProviderError("openai", 404, "model_not_found", "missing"), want: "model unavailable"},
 		{name: "rate limit", err: sdk.NewProviderError("openai", 429, "rate_limit", "slow down"), want: "rate limited"},

@@ -93,7 +93,6 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 		}
 		loopOptions := []turn.Option{
 			turn.WithSystemPromptSpec(promptSpec),
-			turn.WithMaxRounds(c.maxRounds),
 			turn.WithMaxToolCalls(c.maxToolCalls),
 		}
 		if spec, ok := SpecForProfile(req.Profile); ok {

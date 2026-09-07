@@ -12,7 +12,6 @@ import (
 
 	"github.com/projectTHORN/proton/internal/contextutil"
 	"github.com/projectTHORN/proton/internal/toolcall"
-	"github.com/projectTHORN/proton/internal/turn"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -188,8 +187,6 @@ func terminalReason(err error) string {
 		return "timed out"
 	case errors.Is(err, context.Canceled):
 		return "canceled"
-	case errors.Is(err, turn.ErrMaxRounds):
-		return "max rounds reached"
 	case errors.Is(err, ErrUnverifiedChanges):
 		return "unverified changes"
 	case errors.Is(err, toolcall.ErrPermissionDenied):
