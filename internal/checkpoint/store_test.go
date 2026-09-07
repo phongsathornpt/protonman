@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/projectTHORN/proton/internal/tool"
 
 	"github.com/projectTHORN/proton/internal/workspace"
 )
@@ -67,6 +70,41 @@ func TestFileStoreRestoresFilesCreatedAfterCapture(t *testing.T) {
 	}
 	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("restored created file stat error = %v, want not-exist", err)
+	}
+}
+
+func TestFileStoreRestoreRejectsNewerUnownedWorkspaceChanges(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	path := filepath.Join(workspaceRoot.Root(), "tracked.txt")
+	if err := os.WriteFile(path, []byte("baseline\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRunCheckpoint(t, workspaceRoot.Root(), "init", "--quiet")
+	gitRunCheckpoint(t, workspaceRoot.Root(), "config", "user.email", "proton@test.invalid")
+	gitRunCheckpoint(t, workspaceRoot.Root(), "config", "user.name", "Proton Test")
+	gitRunCheckpoint(t, workspaceRoot.Root(), "add", ".")
+	gitRunCheckpoint(t, workspaceRoot.Root(), "commit", "--quiet", "-m", "baseline")
+
+	store := newTestStore(t, filepath.Join(t.TempDir(), "checkpoints"), workspaceRoot)
+	id, err := store.Capture(context.Background(), []string{path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("newer user change\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := workspace.WithMutationSession(context.Background())
+	err = store.Restore(ctx, id)
+	var toolErr *tool.ToolError
+	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodePreexistingWorkspaceChange {
+		t.Fatalf("Restore() error = %v, want preexisting_workspace_change", err)
+	}
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != "newer user change\n" {
+		t.Fatalf("restore overwrote newer user change: %q", contents)
 	}
 }
 
@@ -183,6 +221,14 @@ func TestWriteWorkspaceFileRejectsParentSymlinkSwap(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(outside, "file.txt")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("outside file exists or stat failed unexpectedly: %v", err)
+	}
+}
+
+func gitRunCheckpoint(t *testing.T, root string, args ...string) {
+	t.Helper()
+	cmdArgs := append([]string{"-C", root}, args...)
+	if output, err := exec.Command("git", cmdArgs...).CombinedOutput(); err != nil {
+		t.Fatalf("git %v failed: %v\n%s", args, err, output)
 	}
 }
 
