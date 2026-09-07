@@ -781,12 +781,6 @@ type providerSaveRequest struct {
 
 func saveProviderCmd(request providerSaveRequest) tea.Cmd {
 	return func() tea.Msg {
-		dirs, resolveErr := appdirs.Resolve("")
-		if resolveErr != nil {
-			return providerSavedMsg{providerName: request.providerName, providerType: request.providerType, previousName: request.previousName, baseURL: request.baseURL, apiKey: request.apiKey, modelID: request.defaultModel, activated: request.activate, err: resolveErr}
-		}
-		homeDir := dirs.Home
-
 		prov := config.ProviderConfig{
 			Name:    request.providerName,
 			Type:    request.providerType,
@@ -794,7 +788,8 @@ func saveProviderCmd(request providerSaveRequest) tea.Cmd {
 			APIKey:  request.apiKey,
 		}
 
-		err := config.SaveUserProviderConfigWithOptions(homeDir, prov, config.ProviderSaveOptions{
+		err := (app.Providers{}).Save(app.ProviderSaveRequest{
+			Provider:     prov,
 			DefaultModel: request.defaultModel,
 			PreviousName: request.previousName,
 			Activate:     request.activate,
