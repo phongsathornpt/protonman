@@ -423,3 +423,18 @@ func TestExecPresentationTerraform(t *testing.T) {
 		t.Fatalf("terraform validate = %#v", valid)
 	}
 }
+
+func TestExecPresentationKubectl(t *testing.T) {
+	apply := presentExec("kubectl apply -f k8s/", "deployment.apps/api configured\nservice/api created\n", "")
+	if apply.Title != "Kubectl apply" || apply.Summary != "1 configured · 1 created" {
+		t.Fatalf("kubectl apply = %#v", apply)
+	}
+	get := presentExec("kubectl get pods", "NAME READY STATUS\na 1/1 Running\nb 1/1 Running\n", "")
+	if get.Title != "Kubectl get pods" || get.Summary != "2 resources" || get.SuppressRaw {
+		t.Fatalf("kubectl get = %#v", get)
+	}
+	rollout := presentExec("kubectl rollout status deployment/api", "deployment \"api\" successfully rolled out\n", "")
+	if rollout.Title != "Kubectl rollout status" || rollout.Summary != "rollout complete" {
+		t.Fatalf("kubectl rollout = %#v", rollout)
+	}
+}

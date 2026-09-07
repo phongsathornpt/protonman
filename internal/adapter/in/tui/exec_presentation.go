@@ -23,6 +23,7 @@ const (
 	execFamilyRuby      execFamily = "ruby"
 	execFamilyDotnet    execFamily = "dotnet"
 	execFamilyTerraform execFamily = "terraform"
+	execFamilyKubectl   execFamily = "kubectl"
 	execFamilyVite      execFamily = "vite"
 	execFamilyNext      execFamily = "next"
 )
