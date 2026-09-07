@@ -203,3 +203,23 @@ func TestActivateSkill_FailsIfSkillDirNotFound(t *testing.T) {
 		t.Error("expected skill not to be marked activated after failed AddReadRoot")
 	}
 }
+
+func TestActivateSkillCanBindIsolatedChildRegistry(t *testing.T) {
+	s := skill.Skill{
+		Name: "go-review", Description: "Review Go code", Scope: skill.ScopeUser,
+		Instructions: "Run focused Go checks.",
+	}
+	parent := skill.NewRegistry(s)
+	child := parent.Fork()
+	handler := NewActivateSkill(parent).(activateSkillHandler).BindSkillRegistry(child)
+	call := newJSONCall(t, "skill-child", "activate_skill", map[string]any{"name": "go-review"})
+	if _, err := handler.Execute(context.Background(), call); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !child.IsActivated("go-review") {
+		t.Fatal("child skill was not activated")
+	}
+	if parent.IsActivated("go-review") {
+		t.Fatal("child skill activation leaked to parent")
+	}
+}

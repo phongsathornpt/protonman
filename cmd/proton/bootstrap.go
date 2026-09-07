@@ -104,6 +104,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		agent.WithMaxRounds(loadedConfig.Agent.MaxRounds),
 		agent.WithMaxToolCalls(loadedConfig.Agent.MaxToolCalls),
 		agent.WithReasoningEffort(loadedConfig.Agent.ReasoningEffort),
+		agent.WithSkillRegistry(skillRegistry),
 		agent.WithMaxRuntime(loadedConfig.Agent.SubagentMaxRuntime),
 		agent.WithDefaultWaitTimeout(loadedConfig.Agent.SubagentWaitTimeout),
 		agent.WithDefaultQueueTimeout(loadedConfig.Agent.SubagentQueueTimeout),

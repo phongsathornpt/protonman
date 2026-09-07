@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"github.com/projectTHORN/proton/internal/runtimepolicy"
+	"github.com/projectTHORN/proton/internal/skill"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -60,6 +61,7 @@ type agentEntry struct {
 type Coordinator struct {
 	languageModel  sdk.LanguageModel
 	parentRegistry tool.Registry
+	skillRegistry  *skill.Registry
 	workspace      *workspace.Workspace
 	policy         *permission.Policy
 
@@ -233,6 +235,13 @@ func WithPermissionMode(mode permission.Mode) Option {
 func WithPermissionPrompt(prompt toolcall.PermissionPrompt) Option {
 	return func(c *Coordinator) {
 		c.prompt = prompt
+	}
+}
+
+// WithSkillRegistry supplies the immutable skill catalog used to create isolated child skill sessions.
+func WithSkillRegistry(registry *skill.Registry) Option {
+	return func(c *Coordinator) {
+		c.skillRegistry = registry
 	}
 }
 

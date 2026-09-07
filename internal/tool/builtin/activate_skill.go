@@ -32,6 +32,12 @@ func NewActivateSkill(registry *skill.Registry, workspaceRoots ...*workspace.Wor
 	}
 }
 
+// BindSkillRegistry clones this handler for an isolated subagent skill session.
+func (h activateSkillHandler) BindSkillRegistry(registry *skill.Registry) tool.Handler {
+	h.registry = registry
+	return h
+}
+
 func (activateSkillHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                "activate_skill",
