@@ -212,3 +212,12 @@ func TestProjectSetRejectsUntrustedWorkspace(t *testing.T) {
 		t.Fatalf("missing trust rejection: %q", got)
 	}
 }
+
+func TestProjectPaneDistinguishesDetectedFromLoadedConfig(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.projectTrusted = true
+	view := &projectPaneView{state: projectdomain.State{Trusted: true, ConfigExists: true, ConfigLoaded: false}}
+	if got := view.Render(m); !strings.Contains(got, "detected · restart for full reload") {
+		t.Fatalf("project pane did not distinguish detected config from loaded config: %q", got)
+	}
+}

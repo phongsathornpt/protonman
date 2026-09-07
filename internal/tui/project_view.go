@@ -70,6 +70,8 @@ func (v *projectPaneView) Render(m *bubbleModel) string {
 		configStatus = "loaded · trusted"
 	case state.ConfigExists && !state.Trusted:
 		configStatus = "ignored · untrusted"
+	case state.ConfigExists && state.Trusted:
+		configStatus = "detected · restart for full reload"
 	case state.ConfigExists:
 		configStatus = "detected"
 	}
