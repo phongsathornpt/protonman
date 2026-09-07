@@ -9,12 +9,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/platform/sandbox"
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/core/workspace"
+	"github.com/projectTHORN/proton/internal/platform/sandbox"
 )
 
-const maxGitStatusBytes = 1 * 1024 * 1024
+const (
+	maxGitStatusBytes       = 1 * 1024 * 1024
+	maxGitStatusStderrBytes = 64 * 1024
+)
 
 var errGitStatusOutputLimit = errors.New("git status output exceeded configured limit")
 
@@ -98,36 +101,47 @@ func (h gitStatusHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		arguments = append(arguments, "--", relativePath)
 	}
 
-	var command *exec.Cmd
+	execCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	shellCmd := "git " + quoteGitArgs(arguments)
-	var err error
-	command, err = h.launcher.Command(ctx, h.workspace.Root(), shellCmd)
+	command, err := h.launcher.Command(execCtx, h.workspace.Root(), shellCmd)
 	if err != nil {
 		return tool.Result{}, err
 	}
-	output, err := command.Output()
+	stdout := &boundedBuffer{limit: maxGitStatusBytes, onLimit: cancel}
+	stderr := &boundedBuffer{limit: maxGitStatusStderrBytes}
+	command.Stdout = stdout
+	command.Stderr = stderr
+	err = command.Run()
+	if stdout.IsTruncated() {
+		return tool.Result{}, tool.WrapToolError(
+			tool.ErrorCodeOutputTooLarge,
+			errGitStatusOutputLimit.Error(),
+			errGitStatusOutputLimit,
+		)
+	}
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return tool.Result{}, fmt.Errorf("git status canceled: %w", ctxErr)
 		}
 		var exitError *exec.ExitError
 		if errors.As(err, &exitError) {
+			message := strings.TrimSpace(stderr.String())
+			if stderr.IsTruncated() {
+				message += " [stderr truncated]"
+			}
+			if message != "" {
+				return tool.Result{}, fmt.Errorf("git status exited with code %d: %s", exitError.ExitCode(), message)
+			}
 			return tool.Result{}, fmt.Errorf("git status exited with code %d", exitError.ExitCode())
 		}
 		return tool.Result{}, fmt.Errorf("run git status: %w", err)
-	}
-	if len(output) > maxGitStatusBytes {
-		return tool.Result{}, tool.WrapToolError(
-			tool.ErrorCodeExecution,
-			errGitStatusOutputLimit.Error(),
-			errGitStatusOutputLimit,
-		)
 	}
 
 	return tool.Result{
 		CallID:   call.ID,
 		ToolName: call.Name,
-		Output:   string(output),
+		Output:   stdout.String(),
 	}, nil
 }
 
