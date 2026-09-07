@@ -106,6 +106,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		return nil, fmt.Errorf("create permission policy: %w", err)
 	}
 	coordinator := agent.NewCoordinator(nil, nil, workspaceRoot, policy,
+		agent.WithEnabled(loadedConfig.Agent.SubagentsEnabled),
 		agent.WithMaxToolCalls(loadedConfig.Agent.MaxToolCalls),
 		agent.WithReasoningEffort(loadedConfig.Agent.ReasoningEffort),
 		agent.WithSkillRegistry(skillRegistry),

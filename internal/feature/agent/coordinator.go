@@ -10,9 +10,9 @@ import (
 
 	"github.com/projectTHORN/proton/internal/core/permission"
 	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/projectTHORN/proton/internal/core/workspace"
 	"github.com/projectTHORN/proton/internal/engine/toolcall"
 	"github.com/projectTHORN/proton/internal/engine/turn"
-	"github.com/projectTHORN/proton/internal/core/workspace"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -96,12 +96,18 @@ type Coordinator struct {
 	subscribers         map[uint64]chan Event
 	subscriberSeq       uint64
 
-	seq    uint64
-	closed atomic.Bool
+	seq     uint64
+	closed  atomic.Bool
+	enabled atomic.Bool
 }
 
 // Option configures a Coordinator.
 type Option func(*Coordinator)
+
+// WithEnabled configures whether new subagents may be spawned. Existing agents remain manageable.
+func WithEnabled(enabled bool) Option {
+	return func(c *Coordinator) { c.enabled.Store(enabled) }
+}
 
 // WithMaxConcurrency sets the maximum number of concurrent subagent goroutines.
 func WithMaxConcurrency(n int) Option {
@@ -274,6 +280,7 @@ func NewCoordinator(
 		eventQueue:          make(chan Event, defaultEventQueueSize),
 		closeDone:           make(chan struct{}),
 	}
+	c.enabled.Store(true)
 	for _, opt := range options {
 		if opt != nil {
 			opt(c)

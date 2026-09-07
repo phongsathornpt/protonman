@@ -68,6 +68,26 @@ func TestCoordinatorMaxToolCallsOption(t *testing.T) {
 	}
 }
 
+func TestCoordinatorSubagentCapabilityToggle(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil, WithEnabled(false))
+	defer coord.Close()
+	if coord.Enabled() {
+		t.Fatal("coordinator should start disabled")
+	}
+	_, err := coord.Spawn(context.Background(), Request{Profile: ProfileINT, Task: "inspect router"})
+	if !errors.Is(err, ErrSubagentsDisabled) {
+		t.Fatalf("Spawn() error = %v, want ErrSubagentsDisabled", err)
+	}
+	coord.SetEnabled(true)
+	if !coord.Enabled() {
+		t.Fatal("coordinator should be enabled after SetEnabled(true)")
+	}
+	coord.SetEnabled(false)
+	if coord.Enabled() {
+		t.Fatal("coordinator should be disabled after SetEnabled(false)")
+	}
+}
+
 func TestCoordinator_RunsSubagentInGoroutine(t *testing.T) {
 	coord := NewCoordinator(
 		nil,

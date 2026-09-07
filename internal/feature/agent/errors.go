@@ -8,6 +8,7 @@ import (
 var (
 	ErrNotFound          = errors.New("subagent not found")
 	ErrCoordinatorClosed = errors.New("subagent coordinator is closed")
+	ErrSubagentsDisabled = errors.New("subagents are disabled")
 	ErrLiveLimit         = errors.New("maximum live subagents reached")
 	ErrShutdownTimeout   = errors.New("subagent coordinator shutdown timed out")
 )
