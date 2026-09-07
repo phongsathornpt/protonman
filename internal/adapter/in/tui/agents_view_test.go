@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/feature/agent"
-	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/adapter/out/model"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/core/permission"
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/engine/toolcall"
 	"github.com/projectTHORN/proton/internal/engine/turn"
+	"github.com/projectTHORN/proton/internal/feature/agent"
 )
 
 type blockingAgentViewRunner struct{ release <-chan struct{} }
@@ -46,7 +46,7 @@ func TestAgentsViewShowsActiveAndRespectsLayout(t *testing.T) {
 		t.Fatalf("agents view=%q", got)
 	}
 	m.resize(60, 18)
-	if got := m.agentsView(); !strings.Contains(got, "Agents 1 active") || strings.Contains(got, "inspect router") {
+	if got := m.agentsView(); !strings.Contains(got, "Agents 1 active") || !strings.Contains(got, "inspect router") {
 		t.Fatalf("compact agents view=%q", got)
 	}
 	m.resize(24, 12)
@@ -158,7 +158,7 @@ func TestAgentLifecycleProgressShowsCurrentActivity(t *testing.T) {
 	}
 }
 
-func TestAgentsViewCollapsesDuringBusyRootTurn(t *testing.T) {
+func TestAgentsViewShowsActiveWorkDuringBusyRootTurn(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.resize(100, 30)
 	m.busy = true
@@ -170,8 +170,8 @@ func TestAgentsViewCollapsesDuringBusyRootTurn(t *testing.T) {
 	if !strings.Contains(got, "Agents 2 active") {
 		t.Fatalf("busy agents view=%q", got)
 	}
-	if strings.Contains(got, "inspect router") || strings.Contains(got, "review risks") {
-		t.Fatalf("busy agents view should be collapsed: %q", got)
+	if !strings.Contains(got, "inspect router") || !strings.Contains(got, "review risks") {
+		t.Fatalf("busy agents view hid delegated work: %q", got)
 	}
 }
 
@@ -206,7 +206,7 @@ func TestAgentsViewShowsTerminalFailureReason(t *testing.T) {
 		StartedAt: time.Now().Add(-10 * time.Second), FinishedAt: time.Now(), Reason: "timed out",
 	}}
 	got := m.agentsView()
-	if !strings.Contains(got, "timed out") || strings.Contains(got, "review security") {
+	if !strings.Contains(got, "timed out") || !strings.Contains(got, "review security") {
 		t.Fatalf("agents view=%q", got)
 	}
 }

@@ -344,16 +344,17 @@ func (m bubbleModel) agentsView() string {
 	if completed > 0 {
 		summary += fmt.Sprintf(" · %d done", completed)
 	}
-	if layoutModeForHeight(m.height) == layoutCompact || m.busy {
-		return brandStyle.Render(summary)
-	}
-
+	mode := layoutModeForHeight(m.height)
 	visible := append([]agent.AgentStatus(nil), snapshot...)
 	sort.SliceStable(visible, func(i, j int) bool {
 		return agentDisplayPriority(visible[i].State) < agentDisplayPriority(visible[j].State)
 	})
-	if len(visible) > 3 {
-		visible = visible[:3]
+	limit := 3
+	if mode == layoutCompact {
+		limit = 1
+	}
+	if len(visible) > limit {
+		visible = visible[:limit]
 	}
 
 	lines := []string{brandStyle.Render(summary)}
@@ -371,14 +372,22 @@ func (m bubbleModel) agentsView() string {
 			style = warningStyle
 		}
 		elapsed := formatElapsed(agentDisplayDuration(st, time.Now()))
-		detail := st.Task
-		if st.State.Terminal() && strings.TrimSpace(st.Reason) != "" {
-			detail = st.Reason
-		} else if activity := strings.TrimSpace(m.agentActivity[st.ID]); activity != "" && !st.State.Terminal() {
-			detail = activity
+		task := strings.TrimSpace(st.Task)
+		if task == "" {
+			task = st.ID
 		}
-		line := fmt.Sprintf("  %s%s · %s · %s", stateGlyph, st.ID, elapsed, truncateWithEllipsis(detail, maxInt(12, m.width-30)))
+		line := fmt.Sprintf("  %s%s · %s · %s", stateGlyph, st.ID, elapsed, truncateWithEllipsis(task, maxInt(12, m.width-30)))
 		lines = append(lines, style.Render(truncateWithEllipsis(line, maxInt(1, m.width-2))))
+
+		detail := ""
+		if st.State.Terminal() {
+			detail = strings.TrimSpace(st.Reason)
+		} else {
+			detail = strings.TrimSpace(m.agentActivity[st.ID])
+		}
+		if detail != "" && mode == layoutNormal {
+			lines = append(lines, mutedStyle.Render("    "+truncateWithEllipsis(detail, maxInt(8, m.width-6))))
+		}
 	}
 	if more := len(snapshot) - len(visible); more > 0 {
 		lines = append(lines, mutedStyle.Render(fmt.Sprintf("  … %d older", more)))
