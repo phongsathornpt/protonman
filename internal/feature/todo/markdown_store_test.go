@@ -231,3 +231,49 @@ func TestMarkdownStoreCreatesPrivateSessionFiles(t *testing.T) {
 		t.Fatalf("session directory mode=%#o, want 0700", got)
 	}
 }
+
+func TestMarkdownStoreConcurrentWritersAllowSingleRevisionWinner(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session", "todo.md")
+	first, err := OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	go func() {
+		<-start
+		_, err := first.CompareAndReplace(context.Background(), 0, []Item{{ID: "a", Text: "one", Status: StatusPending}})
+		errs <- err
+	}()
+	go func() {
+		<-start
+		_, err := second.CompareAndReplace(context.Background(), 0, []Item{{ID: "b", Text: "two", Status: StatusPending}})
+		errs <- err
+	}()
+	close(start)
+	var succeeded, conflicted int
+	for range 2 {
+		err := <-errs
+		if err == nil {
+			succeeded++
+		} else if errors.Is(err, ErrRevisionConflict) {
+			conflicted++
+		} else {
+			t.Fatalf("writer error=%v", err)
+		}
+	}
+	if succeeded != 1 || conflicted != 1 {
+		t.Fatalf("succeeded=%d conflicted=%d", succeeded, conflicted)
+	}
+	store, err := OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := store.Snapshot(); got.Revision != 1 || len(got.Items) != 1 {
+		t.Fatalf("snapshot=%+v", got)
+	}
+}

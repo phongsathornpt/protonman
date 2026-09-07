@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -343,5 +344,26 @@ func TestInitialCompletedTodoRetiresOnFirstSubmittedTurn(t *testing.T) {
 	m.retireCompletedTodoForNextTurn()
 	if got := m.todoView(); got != "" {
 		t.Fatalf("initial completed todo did not retire: %q", got)
+	}
+}
+
+func TestFocusedTodoPaneBoundsAndScrollsLargePlans(t *testing.T) {
+	items := make([]TodoItem, 100)
+	for i := range items {
+		items[i] = TodoItem{ID: fmt.Sprintf("task-%03d", i), Text: fmt.Sprintf("Task %03d with enough text to exercise truncation", i), Status: tododomain.StatusPending}
+	}
+	m := newTestBubbleModel(t, permission.ModeAsk, items)
+	m.resize(32, 14)
+	view := &todoPaneView{}
+	first := view.Render(m)
+	if lipgloss.Height(first) > 14 || lipgloss.Width(first) > 32 {
+		t.Fatalf("pane exceeds terminal: %dx%d", lipgloss.Width(first), lipgloss.Height(first))
+	}
+	for range 5 {
+		_, _ = view.HandleKey(m, tea.KeyMsg{Type: tea.KeyDown})
+	}
+	after := view.Render(m)
+	if first == after || !strings.Contains(after, "task-005") {
+		t.Fatalf("pane did not scroll: %q", after)
 	}
 }
