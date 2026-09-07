@@ -20,6 +20,8 @@ type bottomPaneView interface {
 	ReplacesComposer() bool
 }
 
+const maxCommandHistory = 500
+
 type composerState struct {
 	input      textarea.Model
 	history    []string
@@ -127,6 +129,10 @@ func (p *bottomPane) recordHistory(line string) {
 		return
 	}
 	p.composer.history = append(p.composer.history, line)
+	if overflow := len(p.composer.history) - maxCommandHistory; overflow > 0 {
+		copy(p.composer.history, p.composer.history[overflow:])
+		p.composer.history = p.composer.history[:maxCommandHistory]
+	}
 	p.composer.historyPos = len(p.composer.history)
 	p.composer.draft = ""
 }

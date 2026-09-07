@@ -20,38 +20,70 @@ import (
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
+const (
+	maxQueuedPrompts     = 32
+	maxQueuePreviewRunes = 160
+)
+
 func (m *bubbleModel) submit() tea.Cmd {
 	m.syncLegacyToComponents()
 	prompt := m.bottom.prompt()
 	line := strings.TrimSpace(prompt.Value())
 	if m.bottom.bashMode() {
-		prompt.Reset()
-		m.bottom.remove(slashViewID)
 		if line == "" {
+			prompt.Reset()
+			m.bottom.remove(slashViewID)
 			m.setBashMode(false)
 			return nil
 		}
 		if m.busy || m.hasPermissionView() {
-			m.queue = append(m.queue, "!"+line)
-			m.appendMuted(fmt.Sprintf("queued (%d): !%s", len(m.queue), line))
+			if !m.enqueuePrompt("!" + line) {
+				return nil
+			}
+			prompt.Reset()
+			m.bottom.remove(slashViewID)
 			m.refreshViewport()
 			return nil
 		}
+		prompt.Reset()
+		m.bottom.remove(slashViewID)
 		m.setBashMode(false)
 		return m.dispatchBang(line)
 	}
 	if line == "" {
 		return nil
 	}
-	prompt.Reset()
-	m.bottom.remove(slashViewID)
 	if m.busy || m.hasPermissionView() {
-		m.queue = append(m.queue, line)
-		m.appendMuted(fmt.Sprintf("queued (%d): %s", len(m.queue), line))
+		if !m.enqueuePrompt(line) {
+			return nil
+		}
+		prompt.Reset()
+		m.bottom.remove(slashViewID)
 		m.refreshViewport()
 		return nil
 	}
+	prompt.Reset()
+	m.bottom.remove(slashViewID)
 	return m.dispatch(line)
+}
+
+func (m *bubbleModel) enqueuePrompt(line string) bool {
+	if len(m.queue) >= maxQueuedPrompts {
+		m.appendMuted(fmt.Sprintf("queue full (%d); finish or cancel the active turn before adding more", maxQueuedPrompts))
+		m.refreshViewport()
+		return false
+	}
+	m.queue = append(m.queue, line)
+	m.appendMuted(fmt.Sprintf("queued (%d): %s", len(m.queue), queuePreview(line)))
+	return true
+}
+
+func queuePreview(line string) string {
+	runes := []rune(strings.TrimSpace(line))
+	if len(runes) <= maxQueuePreviewRunes {
+		return string(runes)
+	}
+	return string(runes[:maxQueuePreviewRunes-1]) + "…"
 }
 
 func (m *bubbleModel) drainQueue() tea.Cmd {
