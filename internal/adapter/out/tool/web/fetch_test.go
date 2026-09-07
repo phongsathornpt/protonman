@@ -4,15 +4,35 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/base/buildinfo"
-	"github.com/projectTHORN/proton/internal/platform/sandbox"
 	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/projectTHORN/proton/internal/platform/sandbox"
 )
+
+type staticResolver struct {
+	ips []net.IP
+	err error
+}
+
+func (r staticResolver) LookupIP(context.Context, string, string) ([]net.IP, error) {
+	return r.ips, r.err
+}
+
+type recordingDialer struct {
+	addresses []string
+	err       error
+}
+
+func (d *recordingDialer) DialContext(_ context.Context, _, address string) (net.Conn, error) {
+	d.addresses = append(d.addresses, address)
+	return nil, d.err
+}
 
 func newJSONCall(t *testing.T, id, name string, input map[string]any) tool.Call {
 	t.Helper()
@@ -34,6 +54,42 @@ func TestWebFetchHonorsBlockedNetworkPolicy(t *testing.T) {
 	}))
 	if !errors.Is(err, sandbox.ErrNetworkDenied) {
 		t.Fatalf("Execute() error = %v, want network denied", err)
+	}
+}
+
+func TestWebFetchTransportRejectsPrivateResolvedDestination(t *testing.T) {
+	dialer := &recordingDialer{err: errors.New("dial should not run")}
+	transport := newWebFetchTransport(
+		sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted},
+		staticResolver{ips: []net.IP{net.ParseIP("10.0.0.8")}},
+		dialer,
+	)
+	_, err := transport.DialContext(context.Background(), "tcp", "example.com:443")
+	if !errors.Is(err, sandbox.ErrNetworkDenied) {
+		t.Fatalf("DialContext() error = %v, want network denied", err)
+	}
+	if len(dialer.addresses) != 0 {
+		t.Fatalf("unsafe destination reached dialer: %v", dialer.addresses)
+	}
+}
+
+func TestWebFetchTransportPinsValidatedResolvedIP(t *testing.T) {
+	sentinel := errors.New("stop after recording dial")
+	dialer := &recordingDialer{err: sentinel}
+	transport := newWebFetchTransport(
+		sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted},
+		staticResolver{ips: []net.IP{net.ParseIP("93.184.216.34")}},
+		dialer,
+	)
+	if transport.Proxy != nil {
+		t.Fatal("web_fetch transport must ignore environment HTTP proxies")
+	}
+	_, err := transport.DialContext(context.Background(), "tcp", "example.com:443")
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("DialContext() error = %v, want sentinel", err)
+	}
+	if len(dialer.addresses) != 1 || dialer.addresses[0] != "93.184.216.34:443" {
+		t.Fatalf("dialed addresses = %v, want pinned resolved IP", dialer.addresses)
 	}
 }
 

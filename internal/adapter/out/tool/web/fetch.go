@@ -5,16 +5,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
+
 	"github.com/projectTHORN/proton/internal/base/buildinfo"
-	"github.com/projectTHORN/proton/internal/platform/sandbox"
 	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/projectTHORN/proton/internal/platform/sandbox"
 )
 
 const maxFetchBytes = 256 * 1024
@@ -34,6 +36,14 @@ type webFetchHandler struct {
 	client *http.Client
 }
 
+type ipResolver interface {
+	LookupIP(context.Context, string, string) ([]net.IP, error)
+}
+
+type contextDialer interface {
+	DialContext(context.Context, string, string) (net.Conn, error)
+}
+
 type webFetchInput struct {
 	URL string `json:"url"`
 }
@@ -46,7 +56,8 @@ func NewWebFetch(policy sandbox.NetworkPolicy, options ...WebFetchOption) tool.H
 	handler := webFetchHandler{
 		policy: policy,
 		client: &http.Client{
-			Timeout: runtimepolicy.WebFetchTimeout,
+			Timeout:   runtimepolicy.WebFetchTimeout,
+			Transport: newWebFetchTransport(policy, net.DefaultResolver, &net.Dialer{}),
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if len(via) >= 10 {
 					return fmt.Errorf("stopped after 10 redirects")
@@ -64,6 +75,39 @@ func NewWebFetch(policy sandbox.NetworkPolicy, options ...WebFetchOption) tool.H
 		}
 	}
 	return handler
+}
+
+func newWebFetchTransport(policy sandbox.NetworkPolicy, resolver ipResolver, dialer contextDialer) *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(address)
+		if err != nil {
+			return nil, fmt.Errorf("split web_fetch dial address %q: %w", address, err)
+		}
+		ips := []net.IP(nil)
+		if literal := net.ParseIP(host); literal != nil {
+			ips = []net.IP{literal}
+		} else {
+			ips, err = resolver.LookupIP(ctx, "ip", host)
+			if err != nil {
+				return nil, fmt.Errorf("resolve web_fetch host %q: %w", host, err)
+			}
+		}
+		if err := policy.ValidateResolvedAddresses(ips); err != nil {
+			return nil, err
+		}
+		var lastErr error
+		for _, ip := range ips {
+			conn, dialErr := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+			if dialErr == nil {
+				return conn, nil
+			}
+			lastErr = dialErr
+		}
+		return nil, fmt.Errorf("dial web_fetch destination %q: %w", address, lastErr)
+	}
+	return transport
 }
 
 func (webFetchHandler) Definition() tool.Definition {
