@@ -132,7 +132,7 @@ func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 
 func todoConflictError(_ []tododomain.Operation, cause error) error {
 	return tool.WrapToolError(tool.ErrorCodeConflict, "todo snapshot changed and the patch can no longer be replayed safely; refresh tasks", cause).WithRecovery(tool.Recovery{
-		Action: "refresh_resource", Tool: "get_todo", Arguments: json.RawMessage(`{}`),
+		Action: tool.RecoveryRefreshResource, Tool: "get_todo", Arguments: json.RawMessage(`{}`),
 	})
 }
 

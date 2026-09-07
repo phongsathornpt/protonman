@@ -77,7 +77,7 @@ type Event struct {
 	ArgumentBytes  int                   `json:"argument_bytes,omitempty"`
 	DurationMS     int64                 `json:"duration_ms,omitempty"`
 	ErrorCode      tool.ErrorCode        `json:"error_code,omitempty"`
-	RecoveryAction string                `json:"recovery_action,omitempty"`
+	RecoveryAction tool.RecoveryAction   `json:"recovery_action,omitempty"`
 }
 
 // Observer receives redacted events and must be safe for concurrent calls.
@@ -140,7 +140,7 @@ func (s *Service) observePermission(
 	})
 }
 
-func (s *Service) observeRecovery(ctx context.Context, telemetry callTelemetry, kind EventKind, action string, err error) {
+func (s *Service) observeRecovery(ctx context.Context, telemetry callTelemetry, kind EventKind, action tool.RecoveryAction, err error) {
 	event := Event{
 		Kind: kind, Time: time.Now(), CallID: telemetry.call.ID, ToolName: telemetry.call.Name,
 		ToolKind: telemetry.toolKind, ArgumentBytes: len(telemetry.call.Arguments), RecoveryAction: action,

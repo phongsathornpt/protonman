@@ -141,7 +141,7 @@ func TestUpdateTodoStaleReplayReturnsStructuredRefreshWhenPatchConflicts(t *test
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeConflict {
 		t.Fatalf("error = %v, want conflict", err)
 	}
-	if toolErr.Recovery == nil || toolErr.Recovery.Action != "refresh_resource" || toolErr.Recovery.Tool != "get_todo" || string(toolErr.Recovery.Arguments) != `{}` {
+	if toolErr.Recovery == nil || toolErr.Recovery.Action != tool.RecoveryRefreshResource || toolErr.Recovery.Tool != "get_todo" || string(toolErr.Recovery.Arguments) != `{}` {
 		t.Fatalf("recovery = %#v", toolErr.Recovery)
 	}
 }

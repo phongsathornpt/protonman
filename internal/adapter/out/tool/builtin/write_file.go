@@ -100,7 +100,7 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		if expected != fmt.Sprintf("%x", current[:]) {
 			recoveryArgs, _ := json.Marshal(map[string]any{"path": input.FilePath})
 			return tool.Result{}, tool.NewToolError(tool.ErrorCodeConflict, "write_file target changed since it was read; refresh the file and retry").WithRecovery(tool.Recovery{
-				Action: "refresh_resource", Tool: "read_file", Arguments: recoveryArgs,
+				Action: tool.RecoveryRefreshResource, Tool: "read_file", Arguments: recoveryArgs,
 			})
 		}
 	}

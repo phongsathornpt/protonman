@@ -214,9 +214,17 @@ const (
 	ErrorCodeExecution                  = failure.CodeExecution
 )
 
+// RecoveryAction identifies one host-understood deterministic recovery strategy.
+type RecoveryAction string
+
+const (
+	RecoveryRestartPagination RecoveryAction = "restart_pagination"
+	RecoveryRefreshResource   RecoveryAction = "refresh_resource"
+)
+
 // ToolError is an internal error with a stable model-facing classification.
 type Recovery struct {
-	Action    string          `json:"action"`
+	Action    RecoveryAction  `json:"action"`
 	Tool      string          `json:"tool,omitempty"`
 	Arguments json.RawMessage `json:"arguments,omitempty"`
 }
