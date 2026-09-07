@@ -8,9 +8,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/platform/checkpoint"
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/core/workspace"
+	"github.com/projectTHORN/proton/internal/platform/checkpoint"
 )
 
 type applyPatchHandler struct {
@@ -168,10 +168,10 @@ func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 	}
 	var input applyPatchInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, fmt.Errorf("decode apply_patch arguments: %w", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode apply_patch arguments", err)
 	}
 	if strings.TrimSpace(input.Patch) == "" {
-		return tool.Result{}, fmt.Errorf("apply_patch patch is required")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "apply_patch patch is required")
 	}
 	operations, err := parsePatch(input.Patch)
 	if err != nil {

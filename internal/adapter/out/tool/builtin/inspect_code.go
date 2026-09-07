@@ -139,7 +139,7 @@ func (h inspectCodeHandler) Execute(ctx context.Context, call tool.Call) (tool.R
 	}
 	var input inspectCodeInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, fmt.Errorf("decode inspect_code arguments: %w", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode inspect_code arguments", err)
 	}
 	matcher, err := normalizeInspectCodeInput(&input)
 	if err != nil {

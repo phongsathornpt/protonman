@@ -70,11 +70,11 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	}
 	var input writeFileInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, fmt.Errorf("decode write_file arguments: %w", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode write_file arguments", err)
 	}
 	input.FilePath = strings.TrimSpace(input.FilePath)
 	if input.FilePath == "" {
-		return tool.Result{}, fmt.Errorf("write_file file_path is required")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "write_file file_path is required")
 	}
 	resolvedPath, err := h.workspace.Resolve(ctx, input.FilePath)
 	if err != nil {

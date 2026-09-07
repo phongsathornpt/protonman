@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/platform/checkpoint"
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/core/workspace"
+	"github.com/projectTHORN/proton/internal/platform/checkpoint"
 )
 
 type searchReplaceHandler struct {
@@ -70,11 +70,11 @@ func (h searchReplaceHandler) Execute(ctx context.Context, call tool.Call) (tool
 	}
 	var input searchReplaceInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, fmt.Errorf("decode search_replace arguments: %w", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode search_replace arguments", err)
 	}
 	input.FilePath = strings.TrimSpace(input.FilePath)
 	if input.FilePath == "" {
-		return tool.Result{}, fmt.Errorf("search_replace file_path is required")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "search_replace file_path is required")
 	}
 	if input.OldString == input.NewString {
 		return tool.Result{}, fmt.Errorf("search_replace old_string and new_string must differ")
