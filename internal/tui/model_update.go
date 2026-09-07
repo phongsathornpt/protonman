@@ -350,6 +350,15 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *bubbleModel) matchesGlobalShortcut(message tea.KeyMsg) bool {
+	return key.Matches(message, m.keys.Clear) ||
+		key.Matches(message, m.keys.ToggleTodo) ||
+		key.Matches(message, m.keys.Transcript) ||
+		key.Matches(message, m.keys.CycleMode) ||
+		key.Matches(message, m.keys.ToggleSkills) ||
+		key.Matches(message, m.keys.ToggleModel)
+}
+
 func (m *bubbleModel) handleInterruptKey() (tea.Model, tea.Cmd) {
 	if m.showTranscript {
 		m.showTranscript = false
