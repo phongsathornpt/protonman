@@ -12,6 +12,7 @@ import (
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/workspace"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 type fakeHandler struct {
@@ -58,6 +59,42 @@ func (r *fakeRegistry) Lookup(name string) (tool.Handler, bool) {
 
 func (r *fakeRegistry) Definitions() []tool.Definition {
 	return []tool.Definition{r.handler.definition}
+}
+
+type cachedValidatorRegistry struct {
+	handler *fakeHandler
+}
+
+func (r cachedValidatorRegistry) Lookup(name string) (tool.Handler, bool) {
+	if r.handler == nil || r.handler.definition.Name != name {
+		return nil, false
+	}
+	return r.handler, true
+}
+
+func (r cachedValidatorRegistry) Definitions() []tool.Definition {
+	return []tool.Definition{r.handler.definition}
+}
+
+func (r cachedValidatorRegistry) CompiledValidators(string) (*sdk.ToolSchemaValidator, *sdk.ToolSchemaValidator, bool) {
+	return nil, nil, true
+}
+
+func TestNewServiceReusesRegistryCompiledValidators(t *testing.T) {
+	handler := &fakeHandler{definition: tool.Definition{
+		Name:        "cached",
+		Description: "cached contract",
+		Kind:        tool.KindRead,
+		Mutability:  tool.MutabilityReadOnly,
+		InputSchema: map[string]any{"type": "object", "required": "malformed"},
+	}}
+	policy, err := permission.NewPolicy(permission.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewService(cachedValidatorRegistry{handler: handler}, policy); err != nil {
+		t.Fatalf("NewService() recompiled cached schema: %v", err)
+	}
 }
 
 func newTestService(t *testing.T, handler *fakeHandler, policyConfig permission.Config, options ...Option) *Service {

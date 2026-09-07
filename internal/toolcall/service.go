@@ -118,6 +118,10 @@ type compiledToolValidators struct {
 	output *sdk.ToolSchemaValidator
 }
 
+type compiledValidatorRegistry interface {
+	CompiledValidators(name string) (input, output *sdk.ToolSchemaValidator, ok bool)
+}
+
 // Service is the application boundary for every tool call.
 type Service struct {
 	registry tool.Registry
@@ -163,7 +167,7 @@ func NewService(registry tool.Registry, policy *permission.Policy, options ...Op
 		}
 	}
 	for _, definition := range registry.Definitions() {
-		validators, err := compileDefinitionValidators(definition)
+		validators, err := validatorsForRegistry(registry, definition)
 		if err != nil {
 			return nil, fmt.Errorf("%w: compile schema contract for %q: %v", ErrInvalidService, definition.Name, err)
 		}
@@ -401,6 +405,16 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 	return result, nil
 }
 
+func validatorsForRegistry(registry tool.Registry, definition tool.Definition) (compiledToolValidators, error) {
+	if cached, ok := registry.(compiledValidatorRegistry); ok {
+		input, output, found := cached.CompiledValidators(definition.Name)
+		if found {
+			return compiledToolValidators{input: input, output: output}, nil
+		}
+	}
+	return compileDefinitionValidators(definition)
+}
+
 func compileDefinitionValidators(definition tool.Definition) (compiledToolValidators, error) {
 	sdkTool := sdk.Tool{Name: definition.Name, Description: definition.Description, InputSchema: definition.InputSchema, OutputSchema: definition.OutputSchema}
 	input, err := sdk.CompileToolInputValidator(sdkTool)
@@ -421,7 +435,7 @@ func (s *Service) validatorsFor(definition tool.Definition) (compiledToolValidat
 	if ok {
 		return validators, nil
 	}
-	compiled, err := compileDefinitionValidators(definition)
+	compiled, err := validatorsForRegistry(s.registry, definition)
 	if err != nil {
 		return compiledToolValidators{}, err
 	}
