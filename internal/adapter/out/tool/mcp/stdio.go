@@ -96,10 +96,11 @@ func (s *StdioServer) ListTools(ctx context.Context) ([]Tool, error) {
 	}
 	var response struct {
 		Tools []struct {
-			Name         string         `json:"name"`
-			Description  string         `json:"description"`
-			InputSchema  map[string]any `json:"inputSchema"`
-			OutputSchema map[string]any `json:"outputSchema"`
+			Name         string          `json:"name"`
+			Description  string          `json:"description"`
+			InputSchema  map[string]any  `json:"inputSchema"`
+			OutputSchema map[string]any  `json:"outputSchema"`
+			Annotations  ToolAnnotations `json:"annotations,omitempty"`
 		} `json:"tools"`
 	}
 	if err := s.request(ctx, "tools/list", map[string]any{}, &response); err != nil {
@@ -110,6 +111,7 @@ func (s *StdioServer) ListTools(ctx context.Context) ([]Tool, error) {
 		tools = append(tools, Tool{
 			Name: item.Name, Description: item.Description,
 			InputSchema: item.InputSchema, OutputSchema: item.OutputSchema,
+			Mutability: item.Annotations.declaredMutability(), Annotations: item.Annotations,
 		})
 	}
 	return tools, nil
