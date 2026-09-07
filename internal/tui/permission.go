@@ -257,7 +257,7 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 	switch request.ToolKind {
 	case permission.ToolRead, permission.ToolGrep, permission.ToolTask, permission.ToolAgent:
 		if request.ToolKind == permission.ToolTask {
-			title = "Task state update"
+			title = "Task plan change"
 		} else if request.ToolKind == permission.ToolAgent {
 			title = "Agent orchestration"
 		} else {

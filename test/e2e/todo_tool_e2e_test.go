@@ -35,7 +35,7 @@ func TestE2ETodoToolPersistsAcrossRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := toolcall.NewService(registry, policy, toolcall.WithMode(permission.ModeAsk))
+	service, err := toolcall.NewService(registry, policy, toolcall.WithMode(permission.ModeAlwaysApprove))
 	if err != nil {
 		t.Fatal(err)
 	}
