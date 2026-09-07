@@ -220,7 +220,8 @@ func delegationSection(spec Spec) string {
 - A wait timeout does not cancel a child. Wait when a child result enters the critical path; do not poll agent state without a reason.
 - Cancel delegated work that is no longer needed.
 - Do not repeat delegated work unless integration or verification requires it.
-- Child findings can guide parent integration without duplicating investigation, but the primary agent owns final user-facing correctness and verification of integrated mutations.`
+- Use child findings and evidence references to avoid duplicating investigation unnecessarily.
+- Verify integrated mutations and user-facing correctness at the parent boundary; re-run checks when child execution evidence is insufficient.`
 }
 
 func verificationSection() string {
