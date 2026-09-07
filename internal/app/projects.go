@@ -33,6 +33,10 @@ func (Projects) SaveAgentProfile(workDir, profile string) error {
 	return config.SaveProjectAgentProfile(workDir, profile)
 }
 
+func (Projects) SaveSubagentsEnabled(workDir string, enabled bool) error {
+	return config.SaveProjectSubagentsEnabled(workDir, enabled)
+}
+
 func (Projects) SaveReasoningEffort(workDir string, effort sdk.ReasoningEffort) error {
 	return config.SaveProjectReasoningEffort(workDir, effort)
 }

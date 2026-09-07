@@ -12,6 +12,7 @@ type fileDocument struct {
 }
 
 type fileAgent struct {
+	SubagentsEnabled     *bool   `toml:"subagents_enabled,omitempty"`
 	MaxToolCalls         *int    `toml:"max_tool_calls,omitempty"`
 	Profile              *string `toml:"profile,omitempty"`
 	ReasoningEffort      *string `toml:"reasoning_effort,omitempty"`

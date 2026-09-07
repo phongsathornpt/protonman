@@ -79,6 +79,13 @@ func DeleteUserProviderConfig(homeDir string, providerName string) error {
 	})
 }
 
+// SaveUserSubagentsEnabled updates the portable subagent capability switch in ~/.proton/config.toml.
+func SaveUserSubagentsEnabled(homeDir string, enabled bool) error {
+	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
+		doc.Agent.SubagentsEnabled = &enabled
+	})
+}
+
 // SaveUserReasoningEffort updates the portable agent reasoning override in ~/.proton/config.toml.
 func SaveUserReasoningEffort(homeDir string, effort sdk.ReasoningEffort) error {
 	if !effort.Valid() {

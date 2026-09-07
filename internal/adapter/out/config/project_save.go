@@ -25,6 +25,13 @@ func SaveProjectAgentProfile(workDir, profile string) error {
 	})
 }
 
+// SaveProjectSubagentsEnabled updates the project-local subagent capability switch.
+func SaveProjectSubagentsEnabled(workDir string, enabled bool) error {
+	return modifyProjectConfigFile(workDir, func(doc *fileDocument) {
+		doc.Agent.SubagentsEnabled = &enabled
+	})
+}
+
 // SaveProjectReasoningEffort updates the project-local reasoning preference.
 func SaveProjectReasoningEffort(workDir string, effort sdk.ReasoningEffort) error {
 	if !effort.Valid() {
