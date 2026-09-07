@@ -30,6 +30,8 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		return m.executeProviderCommand(line, rawName)
 	case "agents":
 		return m.openAgentsPane()
+	case "subagents":
+		return m.handleSubagentsCommand(argument)
 	case "agent":
 		return m.handleAgentCommand(argument)
 	case "reasoning":

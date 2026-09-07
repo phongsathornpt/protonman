@@ -279,6 +279,8 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		if ui.hasAgentConfig {
 			bModel.maxToolCalls = ui.agentConfig.MaxToolCalls
 			bModel.agentProfile = ui.agentConfig.Profile
+			bModel.subagentsEnabled = ui.agentConfig.SubagentsEnabled
+			bModel.agents.SetEnabled(bModel.subagentsEnabled)
 			bModel.reasoningEffort = ui.agentConfig.ReasoningEffort
 		}
 		bModel.reconfigureRunner()

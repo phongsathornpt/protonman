@@ -131,12 +131,13 @@ func TestProjectInitCreatesConfigAndReloadsPane(t *testing.T) {
 func TestProjectPaneShowsConfigurationProvenance(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.projectConfigProvenance = map[string]config.ValueSource{
-		config.FieldModelDefault:         config.SourceProject,
-		config.FieldModelProvider:        config.SourceUser,
-		config.FieldAgentProfile:         config.SourceProject,
-		config.FieldAgentReasoningEffort: config.SourceUser,
-		config.FieldAgentMaxToolCalls:    config.SourceDefault,
-		config.FieldUIPermissionMode:     config.SourceUser,
+		config.FieldModelDefault:          config.SourceProject,
+		config.FieldModelProvider:         config.SourceUser,
+		config.FieldAgentProfile:          config.SourceProject,
+		config.FieldAgentReasoningEffort:  config.SourceUser,
+		config.FieldAgentSubagentsEnabled: config.SourceProject,
+		config.FieldAgentMaxToolCalls:     config.SourceDefault,
+		config.FieldUIPermissionMode:      config.SourceUser,
 	}
 	m.activeModel = "model-x"
 	m.activeProvider = "provider-x"
@@ -148,6 +149,7 @@ func TestProjectPaneShowsConfigurationProvenance(t *testing.T) {
 		"provider-x · user",
 		"dex · project",
 		"auto · user",
+		"enabled · project",
 		"ask · user",
 		"default",
 	} {
@@ -170,6 +172,7 @@ func TestProjectSetUpdatesTrustedRuntimeAndConfig(t *testing.T) {
 	}{
 		{"/project set agent dex", config.FieldAgentProfile},
 		{"/project set thinking high", config.FieldAgentReasoningEffort},
+		{"/project set subagents off", config.FieldAgentSubagentsEnabled},
 		{"/project set tool-calls 33", config.FieldAgentMaxToolCalls},
 		{"/project set permission always-approve", config.FieldUIPermissionMode},
 	} {
@@ -187,14 +190,14 @@ func TestProjectSetUpdatesTrustedRuntimeAndConfig(t *testing.T) {
 			t.Fatalf("%s provenance = %q", tc.field, got)
 		}
 	}
-	if m.agentProfile != "dex" || m.reasoningEffort != sdk.ReasoningHigh || m.maxToolCalls != 33 || m.service.Mode() != permission.ModeAlwaysApprove {
-		t.Fatalf("project settings not applied to runtime: profile=%q reasoning=%q tool_calls=%d mode=%s", m.agentProfile, m.reasoningEffort, m.maxToolCalls, m.service.Mode())
+	if m.agentProfile != "dex" || m.reasoningEffort != sdk.ReasoningHigh || m.subagentsEnabled || m.maxToolCalls != 33 || m.service.Mode() != permission.ModeAlwaysApprove {
+		t.Fatalf("project settings not applied to runtime: profile=%q reasoning=%q subagents=%v tool_calls=%d mode=%s", m.agentProfile, m.reasoningEffort, m.subagentsEnabled, m.maxToolCalls, m.service.Mode())
 	}
 	snapshot, err := config.Load(context.Background(), config.Options{HomeDir: t.TempDir(), WorkDir: m.workDir, ProjectTrusted: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.Agent.Profile != "dex" || snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh || snapshot.Agent.MaxToolCalls != 33 || snapshot.Mode != permission.ModeAlwaysApprove {
+	if snapshot.Agent.Profile != "dex" || snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh || snapshot.Agent.SubagentsEnabled || snapshot.Agent.MaxToolCalls != 33 || snapshot.Mode != permission.ModeAlwaysApprove {
 		t.Fatalf("project settings not persisted: %#v", snapshot)
 	}
 }

@@ -28,7 +28,7 @@ func (m *bubbleModel) handleProjectSet(argument string) tea.Cmd {
 	}
 	parts := strings.Fields(strings.TrimSpace(argument))
 	if len(parts) < 2 {
-		m.appendError("usage: /project set <agent|thinking|tool-calls|permission> <value>")
+		m.appendError("usage: /project set <agent|thinking|subagents|tool-calls|permission> <value>")
 		m.refreshViewport()
 		return nil
 	}
@@ -58,6 +58,14 @@ func (m *bubbleModel) handleProjectSet(argument string) tea.Cmd {
 			}
 		}
 		return saveProjectReasoningCmd(m.workDir, effort)
+	case "subagents":
+		enabled, err := parseSubagentsEnabled(value)
+		if err != nil {
+			m.appendError(err.Error())
+			m.refreshViewport()
+			return nil
+		}
+		return saveProjectSubagentsCmd(m.workDir, enabled)
 	case "tool-calls", "tools-limit":
 		calls, err := strconv.Atoi(value)
 		if err != nil || calls < 0 {
@@ -85,6 +93,13 @@ func saveProjectAgentCmd(workDir, profile string) tea.Cmd {
 	return func() tea.Msg {
 		err := (app.Projects{}).SaveAgentProfile(workDir, profile)
 		return projectSettingSavedMsg{field: config.FieldAgentProfile, value: profile, err: err}
+	}
+}
+
+func saveProjectSubagentsCmd(workDir string, enabled bool) tea.Cmd {
+	return func() tea.Msg {
+		err := (app.Projects{}).SaveSubagentsEnabled(workDir, enabled)
+		return projectSettingSavedMsg{field: config.FieldAgentSubagentsEnabled, value: enabled, err: err}
 	}
 }
 
@@ -121,6 +136,10 @@ func (m *bubbleModel) updateProjectSettingSaved(message projectSettingSavedMsg) 
 	switch message.field {
 	case config.FieldAgentProfile:
 		m.agentProfile = message.value.(string)
+		m.reconfigureRunner()
+	case config.FieldAgentSubagentsEnabled:
+		m.subagentsEnabled = message.value.(bool)
+		m.agents.SetEnabled(m.subagentsEnabled)
 		m.reconfigureRunner()
 	case config.FieldAgentReasoningEffort:
 		m.reasoningEffort = message.value.(sdk.ReasoningEffort)
