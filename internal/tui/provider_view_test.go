@@ -235,7 +235,7 @@ func TestProviderViewFetchAndModelSelectionFlow(t *testing.T) {
 	}
 
 	rendered := bModel.View()
-	if !strings.Contains(rendered, "deepseek-v4-flash-vision-exp") || !strings.Contains(rendered, "1.0M ctx") {
+	if !strings.Contains(rendered, "deepseek-v4-flash-vision-exp") || !strings.Contains(rendered, "1.0M context") {
 		t.Fatalf("expected models in view, got:\n%s", rendered)
 	}
 

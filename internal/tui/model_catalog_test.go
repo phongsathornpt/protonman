@@ -340,3 +340,10 @@ func TestActiveRemoteModelFindsSelectedCatalogModel(t *testing.T) {
 		t.Fatalf("activeRemoteModel() = %#v, %v", got, ok)
 	}
 }
+
+func TestFormatModelTokenLimitsRendersIndependentLimits(t *testing.T) {
+	got := formatModelTokenLimits(0, 200000, 8192)
+	if got != "200K input · 8K output" {
+		t.Fatalf("formatModelTokenLimits() = %q", got)
+	}
+}
