@@ -115,13 +115,9 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 		return tool.Result{}, fmt.Errorf("list %q: %w", targetPath, err)
 	}
 
-	snapshot, err := directorySnapshot(ctx, resolvedPath, entries)
-	if err != nil {
-		return tool.Result{}, fmt.Errorf("snapshot directory %q: %w", targetPath, err)
-	}
 	continuation, err := continuationToken("list_dir", struct {
 		Path string `json:"path"`
-	}{Path: targetPath}, snapshot)
+	}{Path: targetPath}, "")
 	if err != nil {
 		return tool.Result{}, err
 	}

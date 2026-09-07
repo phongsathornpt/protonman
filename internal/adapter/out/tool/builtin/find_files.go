@@ -2,11 +2,8 @@ package builtin
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"hash"
 	"os"
 	"path/filepath"
 	"strings"
@@ -99,11 +96,17 @@ func (h findFilesHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		MaxDepth int    `json:"max_depth"`
 	}{input.Pattern, input.Path, input.Type, input.MaxDepth}
 
+	token, err := continuationToken("find_files", query, "")
+	if err != nil {
+		return tool.Result{}, err
+	}
+	if input.Continuation != "" && input.Continuation != token {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "find_files continuation does not match this query; restart from offset 0")
+	}
+
 	var output strings.Builder
-	prefixSnapshot := sha256.New()
 	seen, emitted := 0, 0
 	truncated := false
-	continuationChecked := input.Continuation == ""
 	walkErr := filepath.WalkDir(resolvedRoot, func(path string, entry os.DirEntry, walkErr error) error {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -152,28 +155,13 @@ func (h findFilesHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		}
 		display = filepath.ToSlash(display)
 		if seen < input.Offset {
-			writeFindSnapshot(prefixSnapshot, display, entry)
 			seen++
-			if seen == input.Offset && !continuationChecked {
-				token, tokenErr := continuationToken("find_files", query, hex.EncodeToString(prefixSnapshot.Sum(nil)))
-				if tokenErr != nil {
-					return tokenErr
-				}
-				if token != input.Continuation {
-					return tool.NewToolError(tool.ErrorCodeStaleContinuation, "find_files continuation is stale; restart from offset 0")
-				}
-				continuationChecked = true
-			}
 			return nil
-		}
-		if !continuationChecked {
-			return tool.NewToolError(tool.ErrorCodeStaleContinuation, "find_files continuation is stale; restart from offset 0")
 		}
 		if emitted >= input.Limit {
 			truncated = true
 			return filepath.SkipAll
 		}
-		writeFindSnapshot(prefixSnapshot, display, entry)
 		seen++
 		output.WriteString(findFilesEntryType(entry))
 		output.WriteByte(' ')
@@ -189,13 +177,6 @@ func (h findFilesHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		return tool.Result{}, fmt.Errorf("find files under %q: %w", input.Path, walkErr)
 	}
 
-	if !continuationChecked {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "find_files continuation is stale; restart from offset 0")
-	}
-	token, err := continuationToken("find_files", query, hex.EncodeToString(prefixSnapshot.Sum(nil)))
-	if err != nil {
-		return tool.Result{}, err
-	}
 	var nextOffset *int64
 	if truncated {
 		next := int64(input.Offset + emitted)
@@ -269,11 +250,4 @@ func findFilesEntryType(entry os.DirEntry) string {
 		return "dir"
 	}
 	return "file"
-}
-
-func writeFindSnapshot(h hash.Hash, path string, entry os.DirEntry) {
-	_, _ = h.Write([]byte(findFilesEntryType(entry)))
-	_, _ = h.Write([]byte{0})
-	_, _ = h.Write([]byte(path))
-	_, _ = h.Write([]byte{0})
 }

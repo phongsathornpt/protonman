@@ -2,13 +2,10 @@ package builtin
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/projectTHORN/proton/internal/core/tool"
 )
 
 func TestListDirEmptyDirectory(t *testing.T) {
@@ -163,7 +160,7 @@ func TestListDirSupportsContinuationOffset(t *testing.T) {
 	}
 }
 
-func TestListDirContinuationRejectsDirectoryMutation(t *testing.T) {
+func TestListDirContinuationSurvivesDirectoryMutation(t *testing.T) {
 	ws := newTestWorkspace(t, nil)
 	for _, name := range []string{"a.txt", "b.txt", "c.txt"} {
 		writeTestFile(t, ws.Root(), name, name)
@@ -174,11 +171,13 @@ func TestListDirContinuationRejectsDirectoryMutation(t *testing.T) {
 		t.Fatalf("continuation = %q next=%v", first.Continuation, first.NextOffset)
 	}
 	writeTestFile(t, ws.Root(), "d.txt", "d")
-	_, err := handler.Execute(context.Background(), newJSONCall(t, "list-token-2", "list_dir", map[string]any{
+	second, err := handler.Execute(context.Background(), newJSONCall(t, "list-token-2", "list_dir", map[string]any{
 		"path": ".", "offset": *first.NextOffset, "limit": 1, "continuation": first.Continuation,
 	}))
-	var toolErr *tool.ToolError
-	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeStaleContinuation {
-		t.Fatalf("Execute() error = %v", err)
+	if err != nil {
+		t.Fatalf("Execute() error = %v, want best-effort continuation", err)
+	}
+	if strings.TrimSpace(second.Output) == "" {
+		t.Fatalf("second output = %q", second.Output)
 	}
 }
