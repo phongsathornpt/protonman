@@ -13,7 +13,7 @@ func TestRegisteredBuiltinToolContracts(t *testing.T) {
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
 	defer coord.Close()
 
-	primary, err := NewDefaultRegistry(workspaceRoot, testSandboxOption(), testCheckpointOption(), WithAgentCoordinator(coord))
+	primary, err := NewDefaultRegistry(workspaceRoot, testSandboxOption(), testCheckpointOption(), withAgentTools(coord))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestOptionalZeroNumericArgumentsMatchOmittedSemantics(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
 	defer coord.Close()
-	registry, err := NewDefaultRegistry(workspaceRoot, testSandboxOption(), testCheckpointOption(), WithAgentCoordinator(coord))
+	registry, err := NewDefaultRegistry(workspaceRoot, testSandboxOption(), testCheckpointOption(), withAgentTools(coord))
 	if err != nil {
 		t.Fatal(err)
 	}

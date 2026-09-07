@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/checkpoint"
 	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"github.com/projectTHORN/proton/internal/sandbox"
@@ -61,7 +60,7 @@ type registryOptions struct {
 	network           sandbox.NetworkPolicy
 	sandboxConfigured bool
 	skills            *skill.Registry
-	coordinator       *agent.Coordinator
+	additional        []tool.Handler
 	todoStore         tododomain.Repository
 	webFetchTimeout   time.Duration
 }
@@ -114,7 +113,6 @@ func WithSkillRegistry(registry *skill.Registry) RegistryOption {
 	}
 }
 
-// WithAgentCoordinator attaches a subagent Coordinator and registers delegate_task.
 // WithTodoStore attaches shared structured task state to the default tool registry.
 func WithTodoStore(store tododomain.Repository) RegistryOption {
 	return func(options *registryOptions) error {
@@ -126,9 +124,16 @@ func WithTodoStore(store tododomain.Repository) RegistryOption {
 	}
 }
 
-func WithAgentCoordinator(coordinator *agent.Coordinator) RegistryOption {
+// WithAdditionalHandlers appends feature-specific adapters without coupling the
+// builtin registry to their owning subsystem.
+func WithAdditionalHandlers(handlers ...tool.Handler) RegistryOption {
 	return func(options *registryOptions) error {
-		options.coordinator = coordinator
+		for _, handler := range handlers {
+			if handler == nil {
+				return fmt.Errorf("additional tool handler is required")
+			}
+			options.additional = append(options.additional, handler)
+		}
 		return nil
 	}
 }
@@ -182,15 +187,7 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 	if cfg.skills != nil {
 		handlers = append(handlers, NewActivateSkill(cfg.skills, workspaceRoot))
 	}
-	if cfg.coordinator != nil {
-		handlers = append(handlers,
-			NewDelegateTask(cfg.coordinator),
-			NewWaitAgent(cfg.coordinator),
-			NewGetAgent(cfg.coordinator),
-			NewListAgents(cfg.coordinator),
-			NewCancelAgent(cfg.coordinator),
-		)
-	}
+	handlers = append(handlers, cfg.additional...)
 	return NewRegistry(handlers...)
 }
 
