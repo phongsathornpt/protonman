@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/projectTHORN/proton/internal/agent"
+	"github.com/projectTHORN/proton/internal/feature/agent"
 	"github.com/projectTHORN/proton/internal/base/envconfig"
 )
 

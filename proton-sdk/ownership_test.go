@@ -26,7 +26,7 @@ func TestProviderProtocolOwnership(t *testing.T) {
 	}
 
 	forbiddenTypes := map[string]bool{"Client": true, "Request": true, "Event": true, "Stream": true}
-	modelDir := filepath.Join(root, "internal", "model")
+	modelDir := filepath.Join(root, "internal", "adapter", "out", "model")
 	set := token.NewFileSet()
 	entries, err := os.ReadDir(modelDir)
 	if err != nil {
@@ -54,8 +54,8 @@ func TestProviderProtocolOwnership(t *testing.T) {
 		}
 	}
 	for _, legacy := range []string{"openai_request.go", "openai_stream.go", "openai_official.go", "openai_official_chat.go"} {
-		if _, err := os.Stat(filepath.Join(root, "internal", "model", legacy)); err == nil {
-			t.Fatalf("legacy protocol implementation returned: internal/model/%s", legacy)
+		if _, err := os.Stat(filepath.Join(root, "internal", "adapter", "out", "model", legacy)); err == nil {
+			t.Fatalf("legacy protocol implementation returned: internal/adapter/out/model/%s", legacy)
 		} else if !os.IsNotExist(err) {
 			t.Fatal(err)
 		}

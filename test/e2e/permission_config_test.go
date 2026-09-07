@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/config"
-	"github.com/projectTHORN/proton/internal/model"
+	"github.com/projectTHORN/proton/internal/adapter/out/config"
+	"github.com/projectTHORN/proton/internal/adapter/out/model"
 )
 
 func TestE2EHeadlessAskModeFailsClosedWithoutPrompt(t *testing.T) {

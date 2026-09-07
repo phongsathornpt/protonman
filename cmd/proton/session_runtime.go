@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/projectTHORN/proton/internal/base/envconfig"
-	"github.com/projectTHORN/proton/internal/session"
+	"github.com/projectTHORN/proton/internal/core/session"
 )
 
 func generateSessionID(workDir string) string {

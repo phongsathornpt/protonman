@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	agenttool "github.com/projectTHORN/proton/internal/adapter/tool/agent"
-	"github.com/projectTHORN/proton/internal/agent"
-	"github.com/projectTHORN/proton/internal/model"
-	"github.com/projectTHORN/proton/internal/permission"
-	"github.com/projectTHORN/proton/internal/tool"
-	"github.com/projectTHORN/proton/internal/adapter/tool/builtin"
-	"github.com/projectTHORN/proton/internal/toolcall"
-	"github.com/projectTHORN/proton/internal/turn"
+	agenttool "github.com/projectTHORN/proton/internal/adapter/out/tool/agent"
+	"github.com/projectTHORN/proton/internal/feature/agent"
+	"github.com/projectTHORN/proton/internal/adapter/out/model"
+	"github.com/projectTHORN/proton/internal/core/permission"
+	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/projectTHORN/proton/internal/adapter/out/tool/builtin"
+	"github.com/projectTHORN/proton/internal/engine/toolcall"
+	"github.com/projectTHORN/proton/internal/engine/turn"
 )
 
 type asyncLifecycleRunner struct {

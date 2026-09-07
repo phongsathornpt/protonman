@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/agent"
-	"github.com/projectTHORN/proton/internal/agentprompt"
-	"github.com/projectTHORN/proton/internal/model"
-	"github.com/projectTHORN/proton/internal/skill"
-	"github.com/projectTHORN/proton/internal/toolcall"
-	"github.com/projectTHORN/proton/internal/turn"
+	"github.com/projectTHORN/proton/internal/feature/agent"
+	"github.com/projectTHORN/proton/internal/engine/prompt"
+	"github.com/projectTHORN/proton/internal/adapter/out/model"
+	"github.com/projectTHORN/proton/internal/feature/skill"
+	"github.com/projectTHORN/proton/internal/engine/toolcall"
+	"github.com/projectTHORN/proton/internal/engine/turn"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -127,8 +127,8 @@ func BuildConversation(service *toolcall.Service, skills *skill.Registry, agents
 	return turn.NewLoop(languageModel, service, loopOptions...)
 }
 
-func primaryConversationPolicy(spec ConversationSpec) (agentprompt.Spec, []turn.Option, error) {
-	promptSpec := agentprompt.Spec{Workspace: spec.Workspace}
+func primaryConversationPolicy(spec ConversationSpec) (prompt.Spec, []turn.Option, error) {
+	promptSpec := prompt.Spec{Workspace: spec.Workspace}
 	options := []turn.Option{
 		turn.WithMaxToolCalls(spec.MaxToolCalls),
 		turn.WithTurnTimeout(spec.TurnTimeout),
@@ -137,7 +137,7 @@ func primaryConversationPolicy(spec ConversationSpec) (agentprompt.Spec, []turn.
 	if profileName := strings.TrimSpace(spec.AgentProfile); profileName != "" {
 		profile, err := agent.ParseProfile(profileName)
 		if err != nil {
-			return agentprompt.Spec{}, nil, fmt.Errorf("build conversation profile: %w", err)
+			return prompt.Spec{}, nil, fmt.Errorf("build conversation profile: %w", err)
 		}
 		promptSpec.Profile = string(profile)
 		if profileSpec, ok := agent.SpecForProfile(profile); ok {

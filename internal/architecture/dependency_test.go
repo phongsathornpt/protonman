@@ -22,20 +22,24 @@ func TestCorePackagesDoNotDependOnOuterLayers(t *testing.T) {
 	packages := listPackages(t)
 	outer := []string{
 		modulePath + "/cmd/proton",
-		modulePath + "/internal/acp",
-		modulePath + "/internal/adapter/tool/builtin",
-		modulePath + "/internal/agent",
-		modulePath + "/internal/headless",
-		modulePath + "/internal/toolcall",
-		modulePath + "/internal/tui",
-		modulePath + "/internal/turn",
+		modulePath + "/internal/adapter/in/acp",
+		modulePath + "/internal/adapter/in/headless",
+		modulePath + "/internal/adapter/in/tui",
+		modulePath + "/internal/adapter/out/config",
+		modulePath + "/internal/adapter/out/model",
+		modulePath + "/internal/adapter/out/sessionfs",
+		modulePath + "/internal/adapter/out/tool/builtin",
+		modulePath + "/internal/feature/agent",
+		modulePath + "/internal/engine/prompt",
+		modulePath + "/internal/engine/toolcall",
+		modulePath + "/internal/engine/turn",
 	}
 	for _, core := range []string{
-		modulePath + "/internal/modelprofile",
-		modulePath + "/internal/permission",
-		modulePath + "/internal/session",
-		modulePath + "/internal/tool",
-		modulePath + "/internal/workspace",
+		modulePath + "/internal/core/modelprofile",
+		modulePath + "/internal/core/permission",
+		modulePath + "/internal/core/session",
+		modulePath + "/internal/core/tool",
+		modulePath + "/internal/core/workspace",
 	} {
 		assertNoImports(t, packages, core, outer)
 	}
@@ -44,50 +48,50 @@ func TestCorePackagesDoNotDependOnOuterLayers(t *testing.T) {
 func TestInboundAdaptersUseApplicationConversationBoundary(t *testing.T) {
 	packages := listPackages(t)
 	for _, adapter := range []string{
-		modulePath + "/internal/acp",
-		modulePath + "/internal/headless",
-		modulePath + "/internal/tui",
+		modulePath + "/internal/adapter/in/acp",
+		modulePath + "/internal/adapter/in/headless",
+		modulePath + "/internal/adapter/in/tui",
 	} {
-		assertNoImports(t, packages, adapter, []string{modulePath + "/internal/turn"})
+		assertNoImports(t, packages, adapter, []string{modulePath + "/internal/engine/turn"})
 	}
 }
 
 func TestBuiltinToolsDoNotDependOnFeatureSubsystems(t *testing.T) {
 	packages := listPackages(t)
-	assertNoImports(t, packages, modulePath+"/internal/adapter/tool/builtin", []string{
+	assertNoImports(t, packages, modulePath+"/internal/adapter/out/tool/builtin", []string{
 		"net/http",
-		modulePath + "/internal/agent",
+		modulePath + "/internal/feature/agent",
 		modulePath + "/internal/base/buildinfo",
-		modulePath + "/internal/skill",
-		modulePath + "/internal/todo",
+		modulePath + "/internal/feature/skill",
+		modulePath + "/internal/feature/todo",
 	})
 }
 
 func TestSessionDomainDoesNotOwnFilesystemPersistence(t *testing.T) {
 	packages := listPackages(t)
-	assertNoImports(t, packages, modulePath+"/internal/session", []string{
+	assertNoImports(t, packages, modulePath+"/internal/core/session", []string{
 		"os",
-		modulePath + "/internal/adapter/sessionfs",
+		modulePath + "/internal/adapter/out/sessionfs",
 	})
 }
 
 func TestTUIDoesNotDependOnSessionPersistenceDomain(t *testing.T) {
 	packages := listPackages(t)
-	assertNoImports(t, packages, modulePath+"/internal/tui", []string{
-		modulePath + "/internal/session",
+	assertNoImports(t, packages, modulePath+"/internal/adapter/in/tui", []string{
+		modulePath + "/internal/core/session",
 	})
 }
 
 func TestTUIDoesNotDependOnProjectDirectly(t *testing.T) {
 	packages := listPackages(t)
-	assertNoImports(t, packages, modulePath+"/internal/tui", []string{
-		modulePath + "/internal/project",
+	assertNoImports(t, packages, modulePath+"/internal/adapter/in/tui", []string{
+		modulePath + "/internal/feature/project",
 	})
 }
 
 func TestTUIDoesNotControlAgentCoordinatorDirectly(t *testing.T) {
 	root := repositoryRoot(t)
-	cmd := exec.Command("rg", "(m|ui)\\.coordinator\\.[A-Z]", "internal/tui", "--glob", "*.go", "--glob", "!*_test.go")
+	cmd := exec.Command("rg", "(m|ui)\\.coordinator\\.[A-Z]", "internal/adapter/in/tui", "--glob", "*.go", "--glob", "!*_test.go")
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
 	if err == nil {
@@ -100,7 +104,7 @@ func TestTUIDoesNotControlAgentCoordinatorDirectly(t *testing.T) {
 
 func TestInboundAdaptersDoNotPerformConfigPersistence(t *testing.T) {
 	root := repositoryRoot(t)
-	for _, adapter := range []string{"internal/tui", "internal/acp", "internal/headless"} {
+	for _, adapter := range []string{"internal/adapter/in/tui", "internal/adapter/in/acp", "internal/adapter/in/headless"} {
 		cmd := exec.Command("rg", "config\\.(Load|Save|Delete)", adapter, "--glob", "*.go", "--glob", "!*_test.go")
 		cmd.Dir = root
 		output, err := cmd.CombinedOutput()
@@ -116,7 +120,7 @@ func TestInboundAdaptersDoNotPerformConfigPersistence(t *testing.T) {
 
 func TestTUIDoesNotPerformProviderDiscoveryDirectly(t *testing.T) {
 	root := repositoryRoot(t)
-	cmd := exec.Command("rg", "FetchProviderModels", "internal/tui", "--glob", "*.go")
+	cmd := exec.Command("rg", "FetchProviderModels", "internal/adapter/in/tui", "--glob", "*.go")
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
 	if err == nil {
@@ -129,7 +133,7 @@ func TestTUIDoesNotPerformProviderDiscoveryDirectly(t *testing.T) {
 
 func TestTUIDoesNotMutateUserProviderConfigDirectly(t *testing.T) {
 	root := repositoryRoot(t)
-	cmd := exec.Command("rg", "config\\.(SaveUser|DeleteUser)", "internal/tui", "--glob", "*.go", "--glob", "!*_test.go")
+	cmd := exec.Command("rg", "config\\.(SaveUser|DeleteUser)", "internal/adapter/in/tui", "--glob", "*.go", "--glob", "!*_test.go")
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
 	if err == nil {
@@ -142,7 +146,7 @@ func TestTUIDoesNotMutateUserProviderConfigDirectly(t *testing.T) {
 
 func TestTUIDoesNotMutateProjectConfigPersistenceDirectly(t *testing.T) {
 	root := repositoryRoot(t)
-	cmd := exec.Command("rg", "config\\.SaveProject", "internal/tui", "--glob", "*.go")
+	cmd := exec.Command("rg", "config\\.SaveProject", "internal/adapter/in/tui", "--glob", "*.go")
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
 	if err == nil {
@@ -170,9 +174,9 @@ func TestApplicationDoesNotDependOnInboundAdapters(t *testing.T) {
 	packages := listPackages(t)
 	assertNoImports(t, packages, modulePath+"/internal/app", []string{
 		modulePath + "/cmd/proton",
-		modulePath + "/internal/acp",
-		modulePath + "/internal/headless",
-		modulePath + "/internal/tui",
+		modulePath + "/internal/adapter/in/acp",
+		modulePath + "/internal/adapter/in/headless",
+		modulePath + "/internal/adapter/in/tui",
 	})
 }
 
@@ -192,11 +196,11 @@ func TestSDKDoesNotDependOnCLIInternals(t *testing.T) {
 
 func TestHeadlessModeDoesNotDependOnTurn(t *testing.T) {
 	root := repositoryRoot(t)
-	cmd := exec.Command("rg", `"github\.com/projectTHORN/proton/internal/turn"`, "cmd/proton/headless_mode.go")
+	cmd := exec.Command("rg", `"github\\.com/projectTHORN/proton/internal/engine/turn"`, "cmd/proton/headless_mode.go")
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
 	if err == nil {
-		t.Fatalf("cmd/proton/headless_mode.go imports internal/turn directly:\n%s", output)
+		t.Fatalf("cmd/proton/headless_mode.go imports internal/engine/turn directly:\n%s", output)
 	}
 	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
 		t.Fatalf("search headless_mode.go turn imports: %v: %s", err, output)
@@ -228,9 +232,9 @@ func TestApplicationLayerFileStructure(t *testing.T) {
 
 func TestModelLayerFileStructure(t *testing.T) {
 	root := repositoryRoot(t)
-	entries, err := os.ReadDir(filepath.Join(root, "internal", "model"))
+	entries, err := os.ReadDir(filepath.Join(root, "internal", "adapter", "out", "model"))
 	if err != nil {
-		t.Fatalf("read internal/model: %v", err)
+		t.Fatalf("read internal/adapter/out/model: %v", err)
 	}
 	expected := map[string]bool{
 		"client_factory.go":      true,
@@ -246,7 +250,7 @@ func TestModelLayerFileStructure(t *testing.T) {
 	}
 	for _, entry := range entries {
 		if !expected[entry.Name()] {
-			t.Errorf("unexpected entry in internal/model: %s", entry.Name())
+			t.Errorf("unexpected entry in internal/adapter/out/model: %s", entry.Name())
 		}
 	}
 }
@@ -261,9 +265,9 @@ func TestNoDomainIshDirectory(t *testing.T) {
 
 func TestAdapterToolDirectoryStructure(t *testing.T) {
 	root := repositoryRoot(t)
-	entries, err := os.ReadDir(filepath.Join(root, "internal", "adapter", "tool"))
+	entries, err := os.ReadDir(filepath.Join(root, "internal", "adapter", "out", "tool"))
 	if err != nil {
-		t.Fatalf("read internal/adapter/tool: %v", err)
+		t.Fatalf("read internal/adapter/out/tool: %v", err)
 	}
 	expected := map[string]bool{
 		"agent":   true,
@@ -275,7 +279,7 @@ func TestAdapterToolDirectoryStructure(t *testing.T) {
 	}
 	for _, entry := range entries {
 		if !expected[entry.Name()] {
-			t.Errorf("unexpected entry in internal/adapter/tool: %s", entry.Name())
+			t.Errorf("unexpected entry in internal/adapter/out/tool: %s", entry.Name())
 		}
 	}
 }
@@ -284,7 +288,7 @@ func TestNoToolBuiltinDirectory(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(root, "internal", "tool", "builtin")
 	if _, err := os.Stat(path); err == nil {
-		t.Errorf("internal/tool/builtin directory must not exist; moved to internal/adapter/tool/builtin")
+		t.Errorf("internal/tool/builtin directory must not exist; moved to internal/adapter/out/tool/builtin")
 	}
 }
 
@@ -292,7 +296,7 @@ func TestNoRootMCPDirectory(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(root, "internal", "mcp")
 	if _, err := os.Stat(path); err == nil {
-		t.Errorf("internal/mcp directory must not exist at internal root; moved to internal/adapter/tool/mcp")
+		t.Errorf("internal/mcp directory must not exist at internal root; moved to internal/adapter/out/tool/mcp")
 	}
 }
 
@@ -319,12 +323,45 @@ func TestBasePackagesHaveZeroInternalDependencies(t *testing.T) {
 	}
 }
 
-func TestNoLingeringRootFoundationDirectories(t *testing.T) {
+func TestInternalTopLevelCleanArchitectureDirectories(t *testing.T) {
 	root := repositoryRoot(t)
-	for _, lingering := range []string{"buildinfo", "contextutil", "envconfig", "failure", "glob", "runtimepolicy"} {
+	entries, err := os.ReadDir(filepath.Join(root, "internal"))
+	if err != nil {
+		t.Fatalf("read internal: %v", err)
+	}
+	expected := map[string]bool{
+		"adapter":      true,
+		"app":          true,
+		"architecture": true,
+		"base":         true,
+		"core":         true,
+		"engine":       true,
+		"feature":      true,
+		"platform":     true,
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			t.Errorf("unexpected file at internal root: %s", entry.Name())
+			continue
+		}
+		if !expected[entry.Name()] {
+			t.Errorf("unexpected directory at internal root: %s (should be organized into Clean Architecture groups)", entry.Name())
+		}
+	}
+}
+
+func TestNoLingeringRootDirectories(t *testing.T) {
+	root := repositoryRoot(t)
+	formerRootDirs := []string{
+		"acp", "agent", "agentprompt", "checkpoint", "config", "headless", "mcp", "model",
+		"modelprofile", "permission", "project", "sandbox", "session", "skill", "telemetry",
+		"todo", "tool", "toolcall", "tui", "turn", "workspace",
+		"buildinfo", "contextutil", "envconfig", "failure", "glob", "runtimepolicy",
+	}
+	for _, lingering := range formerRootDirs {
 		path := filepath.Join(root, "internal", lingering)
 		if _, err := os.Stat(path); err == nil {
-			t.Errorf("internal/%s must not exist at internal root; moved to internal/base/%s", lingering, lingering)
+			t.Errorf("internal/%s must not exist at internal root; moved to Clean Architecture subpackages", lingering)
 		}
 	}
 }
@@ -341,7 +378,7 @@ func assertNoImports(t *testing.T, packages map[string]listedPackage, source str
 	}
 	for _, imported := range pkg.Imports {
 		if _, exists := blocked[imported]; exists {
-			t.Errorf("core package %s imports outer-layer package %s", source, imported)
+			t.Errorf("package %s imports forbidden package %s", source, imported)
 		}
 	}
 }

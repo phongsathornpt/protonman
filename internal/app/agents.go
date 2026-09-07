@@ -1,9 +1,9 @@
 package app
 
 import (
-	"github.com/projectTHORN/proton/internal/agent"
-	"github.com/projectTHORN/proton/internal/permission"
-	"github.com/projectTHORN/proton/internal/toolcall"
+	"github.com/projectTHORN/proton/internal/feature/agent"
+	"github.com/projectTHORN/proton/internal/core/permission"
+	"github.com/projectTHORN/proton/internal/engine/toolcall"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
