@@ -696,3 +696,22 @@ func TestDiscoverRejectsUntrimmedServerName(t *testing.T) {
 		t.Fatal("untrimmed server partially registered tools")
 	}
 }
+
+func TestMCPAnnotationsDeriveDeclaredMutability(t *testing.T) {
+	truth, falsity := true, false
+	cases := []struct {
+		name        string
+		annotations ToolAnnotations
+		want        domaintool.Mutability
+	}{
+		{"read only", ToolAnnotations{ReadOnlyHint: &truth}, domaintool.MutabilityReadOnly},
+		{"explicit writable", ToolAnnotations{ReadOnlyHint: &falsity}, domaintool.MutabilityMutating},
+		{"destructive wins", ToolAnnotations{ReadOnlyHint: &truth, DestructiveHint: &truth}, domaintool.MutabilityMutating},
+		{"unspecified", ToolAnnotations{}, domaintool.MutabilityUnspecified},
+	}
+	for _, tc := range cases {
+		if got := tc.annotations.declaredMutability(); got != tc.want {
+			t.Fatalf("%s mutability = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}

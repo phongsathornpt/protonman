@@ -15,6 +15,28 @@ import (
 // ErrInvalidTool indicates that an MCP tool manifest cannot be registered.
 var ErrInvalidTool = errors.New("invalid MCP tool")
 
+// ToolAnnotations carries MCP server-declared behavioral hints. Pointer fields
+// preserve the difference between false and unspecified.
+type ToolAnnotations struct {
+	ReadOnlyHint    *bool `json:"readOnlyHint,omitempty"`
+	DestructiveHint *bool `json:"destructiveHint,omitempty"`
+	IdempotentHint  *bool `json:"idempotentHint,omitempty"`
+	OpenWorldHint   *bool `json:"openWorldHint,omitempty"`
+}
+
+func (a ToolAnnotations) declaredMutability() tool.Mutability {
+	if a.DestructiveHint != nil && *a.DestructiveHint {
+		return tool.MutabilityMutating
+	}
+	if a.ReadOnlyHint != nil && *a.ReadOnlyHint {
+		return tool.MutabilityReadOnly
+	}
+	if a.ReadOnlyHint != nil && !*a.ReadOnlyHint {
+		return tool.MutabilityMutating
+	}
+	return tool.MutabilityUnspecified
+}
+
 // Tool is the discovered manifest of one MCP server tool.
 type Tool struct {
 	Name         string
@@ -23,7 +45,8 @@ type Tool struct {
 	OutputSchema map[string]any
 	// Mutability optionally declares whether successful execution can change state.
 	// Unspecified remains conservative for MCP tools.
-	Mutability tool.Mutability
+	Mutability  tool.Mutability
+	Annotations ToolAnnotations
 }
 
 // Validate checks the stable fields required for namespaced registration.

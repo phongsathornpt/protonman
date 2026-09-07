@@ -8,6 +8,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/projectTHORN/proton/internal/core/tool"
 )
 
 func TestStdioServerListsAndCallsTools(t *testing.T) {
@@ -24,7 +26,7 @@ func TestStdioServerListsAndCallsTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools) != 1 || tools[0].Name != "echo" || tools[0].InputSchema["type"] != "object" {
+	if len(tools) != 1 || tools[0].Name != "echo" || tools[0].InputSchema["type"] != "object" || tools[0].Mutability != tool.MutabilityReadOnly {
 		t.Fatalf("tools = %#v", tools)
 	}
 	result, err := server.CallTool(context.Background(), "echo", json.RawMessage(`{"text":"hi"}`))
@@ -61,7 +63,7 @@ func TestMCPStdioHelperProcess(t *testing.T) {
 		case "initialize":
 			result = map[string]any{"protocolVersion": stdioProtocolVersion, "capabilities": map[string]any{}, "serverInfo": map[string]any{"name": "fixture", "version": "1"}}
 		case "tools/list":
-			result = map[string]any{"tools": []any{map[string]any{"name": "echo", "description": "echo text", "inputSchema": map[string]any{"type": "object"}, "outputSchema": map[string]any{"type": "object"}}}}
+			result = map[string]any{"tools": []any{map[string]any{"name": "echo", "description": "echo text", "inputSchema": map[string]any{"type": "object"}, "outputSchema": map[string]any{"type": "object"}, "annotations": map[string]any{"readOnlyHint": true, "idempotentHint": true}}}}
 		case "tools/call":
 			var params struct {
 				Name      string         `json:"name"`
