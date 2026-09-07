@@ -1,9 +1,9 @@
 package app
 
 import (
-	"github.com/projectTHORN/proton/internal/feature/agent"
 	"github.com/projectTHORN/proton/internal/core/permission"
 	"github.com/projectTHORN/proton/internal/engine/toolcall"
+	"github.com/projectTHORN/proton/internal/feature/agent"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -19,6 +19,12 @@ func (a Agents) Subscribe(buffer int) (<-chan agent.Event, func()) {
 		return ch, func() {}
 	}
 	return a.coordinator.Subscribe(buffer)
+}
+func (a Agents) Enabled() bool { return a.coordinator != nil && a.coordinator.Enabled() }
+func (a Agents) SetEnabled(enabled bool) {
+	if a.coordinator != nil {
+		a.coordinator.SetEnabled(enabled)
+	}
 }
 func (a Agents) List() []agent.AgentStatus {
 	if a.coordinator == nil {

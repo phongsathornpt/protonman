@@ -88,6 +88,7 @@ type bubbleModel struct {
 	providers               map[string]config.ProviderConfig
 	maxToolCalls            int
 	agentProfile            string
+	subagentsEnabled        bool
 	reasoningEffort         sdk.ReasoningEffort
 	sessionID               string
 	sessions                *app.Sessions
@@ -167,6 +168,7 @@ func newBubbleModel(
 		height:             defaultBubbleHeight,
 		messages:           messages,
 		maxToolCalls:       config.DefaultMaxToolCalls,
+		subagentsEnabled:   true,
 		runtimeConfig:      config.DefaultRuntimeConfig(),
 		agentActivity:      make(map[string]AgentActivity),
 	}

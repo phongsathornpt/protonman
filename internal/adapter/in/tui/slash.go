@@ -31,6 +31,7 @@ var slashCatalog = []slashCommand{
 	{name: "session", description: "show the active session"},
 	{name: "sessions", description: "list resumable sessions for this workspace"},
 	{name: "agents", description: "inspect live and retained subagents"},
+	{name: "subagents", description: "show or toggle subagent delegation (/subagents [on|off])", takesArgs: true},
 	{name: "agent", aliases: []string{"profile"}, description: "show or set agent profile (/agent [" + agent.ProfileList("|") + "])", takesArgs: true},
 	{name: "reasoning", aliases: []string{"thinking"}, description: "show or set session reasoning effort (/reasoning [auto|none|low|medium|high|xhigh|max])", takesArgs: true},
 	{name: "mode", description: "show or set permission mode", takesArgs: true},
