@@ -356,7 +356,8 @@ func (m bubbleModel) agentsView() string {
 		if task == "" {
 			task = st.ID
 		}
-		line := fmt.Sprintf("  %s%s · %s · %s", stateGlyph, st.ID, elapsed, truncateWithEllipsis(task, maxInt(12, m.width-30)))
+		identity := agentDisplayProfile(st)
+		line := fmt.Sprintf("  %s%s · %s · %s", stateGlyph, identity, elapsed, truncateWithEllipsis(task, maxInt(12, m.width-30)))
 		lines = append(lines, style.Render(truncateWithEllipsis(line, maxInt(1, m.width-2))))
 
 		detail := ""
@@ -373,6 +374,23 @@ func (m bubbleModel) agentsView() string {
 		lines = append(lines, mutedStyle.Render(fmt.Sprintf("  … %d older", more)))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func agentDisplayProfile(st agent.AgentStatus) string {
+	profile := st.Profile
+	if !profile.Valid() {
+		prefix := st.ID
+		if idx := strings.IndexByte(prefix, '-'); idx >= 0 {
+			prefix = prefix[:idx]
+		}
+		if parsed, err := agent.ParseProfile(prefix); err == nil {
+			profile = parsed
+		}
+	}
+	if !profile.Valid() {
+		return "AGENT"
+	}
+	return strings.ToUpper(string(profile))
 }
 
 func agentDisplayPriority(state agent.State) int {

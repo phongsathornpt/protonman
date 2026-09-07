@@ -87,16 +87,16 @@ func TestAgentsViewPrioritizesActiveAndShowsCanceling(t *testing.T) {
 	m.agentSnapshot = []agent.AgentStatus{
 		{ID: "done-1", Task: "old result", State: agent.StateCompleted, StartedAt: now.Add(-20 * time.Second), FinishedAt: now.Add(-15 * time.Second)},
 		{ID: "done-2", Task: "new result", State: agent.StateCompleted, StartedAt: now.Add(-10 * time.Second), FinishedAt: now.Add(-9 * time.Second)},
-		{ID: "run-1", Task: "inspect active", State: agent.StateRunning, StartedAt: now.Add(-3 * time.Second)},
-		{ID: "cancel-1", Task: "stop active", State: agent.StateCanceling, StartedAt: now.Add(-4 * time.Second)},
+		{ID: "run-1", Profile: agent.ProfileINT, Task: "inspect active", State: agent.StateRunning, StartedAt: now.Add(-3 * time.Second)},
+		{ID: "cancel-1", Profile: agent.ProfileDEX, Task: "stop active", State: agent.StateCanceling, StartedAt: now.Add(-4 * time.Second)},
 	}
 	m.resize(100, 30)
 	got := m.agentsView()
 	if !strings.Contains(got, "Agents 2 active") || !strings.Contains(got, "1 running") || !strings.Contains(got, "1 canceling") {
 		t.Fatalf("agents view summary=%q", got)
 	}
-	if !strings.Contains(got, "run-1") || !strings.Contains(got, "cancel-1") {
-		t.Fatalf("active agents were hidden by terminal rows: %q", got)
+	if !strings.Contains(got, "INT") || !strings.Contains(got, "DEX") || strings.Contains(got, "run-1") || strings.Contains(got, "cancel-1") {
+		t.Fatalf("agent identities were not normalized: %q", got)
 	}
 }
 
