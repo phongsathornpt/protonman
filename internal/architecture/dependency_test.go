@@ -71,6 +71,13 @@ func TestSessionDomainDoesNotOwnFilesystemPersistence(t *testing.T) {
 	})
 }
 
+func TestTUIDoesNotDependOnSessionPersistenceDomain(t *testing.T) {
+	packages := listPackages(t)
+	assertNoImports(t, packages, modulePath+"/internal/tui", []string{
+		modulePath + "/internal/session",
+	})
+}
+
 func TestApplicationDoesNotDependOnInboundAdapters(t *testing.T) {
 	packages := listPackages(t)
 	assertNoImports(t, packages, modulePath+"/internal/app", []string{
