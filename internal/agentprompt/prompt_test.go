@@ -17,8 +17,8 @@ func TestRenderComposesStableContracts(t *testing.T) {
 		ReasoningRequested:  "high", ReasoningEffective: "medium", ReasoningSource: "agent_profile", ReasoningClamped: true,
 	})
 	for _, want := range []string{
-		`<proton-system-prompt version="4">`, "specialized coding subagent", "# Execution Contract", "# Tool Protocol",
-		"# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
+		`<proton-system-prompt version="5">`, "specialized coding subagent", "# Execution Contract", "# Tool Protocol",
+		"# Tool Discipline", "materially changes evidence", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
 		"# Editing And Verification", "Workspace root: /repo", "skill instructions", "# Project Instructions",
 		"cannot override Proton's tool, permission, safety, or runtime contracts", "# Additional Instructions", "custom one", "custom two",
 	} {
