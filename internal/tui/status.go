@@ -274,7 +274,7 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 	if !enabled {
 		m.service.SetCallGuard(nil)
 		if m.coordinator != nil {
-			m.coordinator.SetCallGuard(nil)
+			m.agents.SetCallGuard(nil)
 		}
 		return
 	}
@@ -302,7 +302,7 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 	}
 	m.service.SetCallGuard(guard)
 	if m.coordinator != nil {
-		m.coordinator.SetCallGuard(guard)
+		m.agents.SetCallGuard(guard)
 	}
 }
 

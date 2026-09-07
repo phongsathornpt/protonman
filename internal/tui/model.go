@@ -45,6 +45,7 @@ type bubbleModel struct {
 	runner          app.Conversation
 	bridge          *permissionBridge
 	coordinator     *agent.Coordinator
+	agents          app.Agents
 	agentEvents     <-chan agent.Event
 	agentSnapshot   []agent.AgentStatus
 	agentActivity   map[string]string
@@ -226,5 +227,5 @@ func (m *bubbleModel) syncAgentSnapshot() {
 		m.agentSnapshot = nil
 		return
 	}
-	m.agentSnapshot = m.coordinator.List()
+	m.agentSnapshot = m.agents.List()
 }

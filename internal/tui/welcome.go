@@ -25,7 +25,7 @@ func (m bubbleModel) welcomeCard() string {
 		if branch != "" {
 			branchBadge = " " + mutedStyle.Render("git:(") + systemStyle.Render(branch) + mutedStyle.Render(")")
 		}
-		rows = append(rows, heroLabelStyle.Render("Workspace ") + bodyStyle.Render(ws) + branchBadge, "")
+		rows = append(rows, heroLabelStyle.Render("Workspace ")+bodyStyle.Render(ws)+branchBadge, "")
 	}
 
 	if m.width >= 80 {

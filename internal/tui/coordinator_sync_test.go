@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/agent"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -52,6 +53,7 @@ func TestTUI_CycleModeUpdatesCoordinator(t *testing.T) {
 	coordinator := agent.NewCoordinator(nil, model.registry, ws, policy)
 	defer func() { _ = coordinator.Close() }()
 	model.coordinator = coordinator
+	model.agents = app.NewAgents(coordinator)
 
 	// Initially in ModeAsk, planMode = false
 	if model.planMode {
@@ -110,6 +112,7 @@ func TestTUI_SlashModeUpdatesCoordinator(t *testing.T) {
 	coordinator := agent.NewCoordinator(nil, model.registry, ws, policy)
 	defer func() { _ = coordinator.Close() }()
 	model.coordinator = coordinator
+	model.agents = app.NewAgents(coordinator)
 
 	// /mode always-approve
 	_ = model.executeCommand("/mode always-approve")
@@ -155,6 +158,7 @@ func TestTUI_ReconfigureRunnerUpdatesCoordinatorClient(t *testing.T) {
 	coordinator := agent.NewCoordinator(nil, model.registry, ws, policy)
 	defer func() { _ = coordinator.Close() }()
 	model.coordinator = coordinator
+	model.agents = app.NewAgents(coordinator)
 
 	if coordinator.LanguageModel() != nil {
 		t.Fatal("expected coordinator language model initially nil")

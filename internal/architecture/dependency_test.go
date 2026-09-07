@@ -78,6 +78,19 @@ func TestTUIDoesNotDependOnSessionPersistenceDomain(t *testing.T) {
 	})
 }
 
+func TestTUIDoesNotControlAgentCoordinatorDirectly(t *testing.T) {
+	root := repositoryRoot(t)
+	cmd := exec.Command("rg", "(m|ui)\\.coordinator\\.[A-Z]", "internal/tui", "--glob", "*.go", "--glob", "!*_test.go")
+	cmd.Dir = root
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("TUI controls agent coordinator directly:\n%s", output)
+	}
+	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
+		t.Fatalf("search TUI coordinator controls: %v: %s", err, output)
+	}
+}
+
 func TestTUIDoesNotPerformProviderDiscoveryDirectly(t *testing.T) {
 	root := repositoryRoot(t)
 	cmd := exec.Command("rg", "FetchProviderModels", "internal/tui", "--glob", "*.go")

@@ -125,7 +125,7 @@ func (m *bubbleModel) updateProjectSettingSaved(message projectSettingSavedMsg) 
 	case config.FieldAgentReasoningEffort:
 		m.reasoningEffort = message.value.(sdk.ReasoningEffort)
 		if m.coordinator != nil {
-			m.coordinator.SetReasoningEffort(m.reasoningEffort)
+			m.agents.SetReasoningEffort(m.reasoningEffort)
 		}
 		m.reconfigureRunner()
 	case config.FieldAgentMaxToolCalls:

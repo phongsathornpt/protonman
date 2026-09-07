@@ -135,7 +135,7 @@ func (m *bubbleModel) cancelActiveTurn() int {
 	m.activity = "canceling"
 	stopping := 0
 	if m.coordinator != nil && m.activeTurnOwner != "" {
-		stopping = m.coordinator.CancelByParent(m.activeTurnOwner)
+		stopping = m.agents.CancelByParent(m.activeTurnOwner)
 		m.syncAgentSnapshot()
 	}
 	m.turnCancel()
