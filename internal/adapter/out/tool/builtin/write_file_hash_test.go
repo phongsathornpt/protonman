@@ -3,6 +3,7 @@ package builtin
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -51,6 +52,13 @@ func TestWriteFileRejectsStaleExpectedSHA256(t *testing.T) {
 	var toolErr *tool.ToolError
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeConflict {
 		t.Fatalf("stale hash error = %v, want conflict", err)
+	}
+	if toolErr.Recovery == nil || toolErr.Recovery.Action != "refresh_resource" || toolErr.Recovery.Tool != "read_file" {
+		t.Fatalf("stale hash recovery = %#v", toolErr.Recovery)
+	}
+	var recoveryArgs map[string]any
+	if err := json.Unmarshal(toolErr.Recovery.Arguments, &recoveryArgs); err != nil || recoveryArgs["path"] != "file.txt" {
+		t.Fatalf("stale hash recovery args = %s err=%v", toolErr.Recovery.Arguments, err)
 	}
 	if got := string(readTestFile(t, ws.Root(), "file.txt")); got != "current\n" {
 		t.Fatalf("stale write changed file: %q", got)
