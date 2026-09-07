@@ -18,11 +18,19 @@ type sdkTestModel struct {
 	requests      []sdk.Request
 	capabilities  sdk.ModelCapabilities
 	contextWindow int
+	tokenLimits   sdk.TokenLimits
 }
 
 func (*sdkTestModel) Provider() string     { return "test" }
 func (*sdkTestModel) ModelID() string      { return "test-model" }
 func (m *sdkTestModel) ContextWindow() int { return m.contextWindow }
+func (m *sdkTestModel) TokenLimits() sdk.TokenLimits {
+	limits := m.tokenLimits
+	if limits.ContextWindow == 0 {
+		limits.ContextWindow = m.contextWindow
+	}
+	return limits
+}
 func (m *sdkTestModel) Capabilities() sdk.ModelCapabilities {
 	if m.capabilities == (sdk.ModelCapabilities{}) {
 		return sdk.ModelCapabilities{Streaming: true, Tools: true}
@@ -209,5 +217,59 @@ func TestLoopRejectsOversizedContextBeforeProviderDispatch(t *testing.T) {
 	}
 	if len(languageModel.requests) != 0 {
 		t.Fatalf("model received %d requests, want 0", len(languageModel.requests))
+	}
+}
+
+func TestLoopRejectsInputBeyondPublishedMaxInputTokens(t *testing.T) {
+	policy, err := permission.NewPolicy(permission.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := toolcall.NewService(emptyRegistry{}, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	languageModel := &sdkTestModel{tokenLimits: sdk.TokenLimits{MaxInputTokens: 512}}
+	loop, err := NewLoop(languageModel, service)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: strings.Repeat("x", 3000)}}, nil)
+	if !errors.Is(err, ErrContextBudgetExceeded) {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(languageModel.requests) != 0 {
+		t.Fatalf("model received %d requests, want 0", len(languageModel.requests))
+	}
+}
+
+func TestLoopDoesNotTreatMaxInputTokensAsTotalContext(t *testing.T) {
+	policy, err := permission.NewPolicy(permission.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := toolcall.NewService(emptyRegistry{}, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	languageModel := &sdkTestModel{tokenLimits: sdk.TokenLimits{MaxInputTokens: 2048}}
+	loop, err := NewLoop(languageModel, service)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: strings.Repeat("x", 3000)}}, nil)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(languageModel.requests) != 1 {
+		t.Fatalf("model received %d requests, want 1", len(languageModel.requests))
+	}
+}
+
+func TestLoopRejectsRequestedOutputBeyondPublishedLimit(t *testing.T) {
+	request := sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hello"}}, Options: sdk.ModelOptions{MaxOutputTokens: 1024}}
+	languageModel := &sdkTestModel{tokenLimits: sdk.TokenLimits{MaxOutputTokens: 512}}
+	if err := validateContextBudget(languageModel, request); !errors.Is(err, ErrContextBudgetExceeded) {
+		t.Fatalf("validateContextBudget() error = %v", err)
 	}
 }

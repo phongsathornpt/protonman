@@ -10,19 +10,32 @@ import (
 const estimatedBytesPerToken = 3
 
 func validateContextBudget(languageModel sdk.LanguageModel, request sdk.Request) error {
-	window := sdk.ModelContextWindow(languageModel)
-	if window <= 0 {
+	limits := sdk.ModelTokenLimits(languageModel)
+	if limits.ContextWindow <= 0 && limits.MaxInputTokens <= 0 && limits.MaxOutputTokens <= 0 {
 		return nil
 	}
 	estimated, err := estimateRequestTokens(request)
 	if err != nil {
 		return fmt.Errorf("estimate model context: %w", err)
 	}
-	reserve := contextOutputReserve(window, request.Options.MaxOutputTokens)
-	if estimated+reserve <= window {
+	if limits.MaxInputTokens > 0 && estimated > limits.MaxInputTokens {
+		return fmt.Errorf("%w: model %q estimated input %d tokens exceeds %d-token input limit", ErrContextBudgetExceeded, languageModel.ModelID(), estimated, limits.MaxInputTokens)
+	}
+	requestedOutput := request.Options.MaxOutputTokens
+	if limits.MaxOutputTokens > 0 && requestedOutput > limits.MaxOutputTokens {
+		return fmt.Errorf("%w: model %q requested output %d tokens exceeds %d-token output limit", ErrContextBudgetExceeded, languageModel.ModelID(), requestedOutput, limits.MaxOutputTokens)
+	}
+	if limits.ContextWindow <= 0 {
 		return nil
 	}
-	return fmt.Errorf("%w: model %q estimated input %d tokens plus %d reserved output exceeds %d-token context window", ErrContextBudgetExceeded, languageModel.ModelID(), estimated, reserve, window)
+	reserve := contextOutputReserve(limits.ContextWindow, requestedOutput)
+	if requestedOutput == 0 && limits.MaxOutputTokens > 0 && reserve > limits.MaxOutputTokens {
+		reserve = limits.MaxOutputTokens
+	}
+	if estimated+reserve <= limits.ContextWindow {
+		return nil
+	}
+	return fmt.Errorf("%w: model %q estimated input %d tokens plus %d reserved output exceeds %d-token context window", ErrContextBudgetExceeded, languageModel.ModelID(), estimated, reserve, limits.ContextWindow)
 }
 
 func estimateRequestTokens(request sdk.Request) (int, error) {
