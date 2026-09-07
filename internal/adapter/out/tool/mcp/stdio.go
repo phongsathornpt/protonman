@@ -15,11 +15,7 @@ import (
 	"sync/atomic"
 )
 
-const (
-	stdioProtocolVersion = "2025-06-18"
-	stdioMaxMessageBytes = 10 * 1024 * 1024
-	stdioMaxStderrBytes  = 256 * 1024
-)
+const stdioProtocolVersion = "2025-06-18"
 
 type rpcError struct {
 	Code    int             `json:"code"`
@@ -49,6 +45,7 @@ type StdioServer struct {
 	args    []string
 	env     []string
 	cwd     string
+	limits  Limits
 
 	startMu sync.Mutex
 	cmd     *exec.Cmd
@@ -69,18 +66,25 @@ type StdioServer struct {
 
 // NewStdioServer creates a lazily-started MCP stdio transport.
 func NewStdioServer(name, command string, args, env []string, cwd string) (*StdioServer, error) {
+	return NewStdioServerWithLimits(name, command, args, env, cwd, DefaultLimits())
+}
+
+func NewStdioServerWithLimits(name, command string, args, env []string, cwd string, limits Limits) (*StdioServer, error) {
 	if _, err := validServerName(name); err != nil {
 		return nil, err
+	}
+	if err := limits.validate(); err != nil {
+		return nil, fmt.Errorf("create MCP stdio server %q: %w", name, err)
 	}
 	command = strings.TrimSpace(command)
 	if command == "" {
 		return nil, fmt.Errorf("create MCP stdio server %q: command is required", name)
 	}
 	return &StdioServer{
-		name: name, command: command,
+		name: name, command: command, limits: limits,
 		args: append([]string(nil), args...), env: append([]string(nil), env...), cwd: cwd,
 		pending: make(map[uint64]chan rpcReply), done: make(chan struct{}),
-		stderr: limitedBuffer{limit: stdioMaxStderrBytes},
+		stderr: limitedBuffer{limit: limits.MaxStderrBytes},
 	}, nil
 }
 
@@ -112,6 +116,9 @@ func (s *StdioServer) ListTools(ctx context.Context) ([]Tool, error) {
 }
 
 func (s *StdioServer) CallTool(ctx context.Context, name string, arguments json.RawMessage) (Result, error) {
+	if len(arguments) > s.limits.MaxArgumentsBytes {
+		return Result{}, fmt.Errorf("MCP tool arguments are %d bytes; limit is %d", len(arguments), s.limits.MaxArgumentsBytes)
+	}
 	if err := s.ensureInitialized(ctx); err != nil {
 		return Result{}, err
 	}
@@ -133,10 +140,18 @@ func (s *StdioServer) CallTool(ctx context.Context, name string, arguments json.
 		return Result{}, fmt.Errorf("call MCP tool %s.%s: %w", s.name, name, err)
 	}
 	parts := make([]string, 0, len(response.Content))
+	textBytes := 0
 	for _, item := range response.Content {
 		if item.Type == "text" && item.Text != "" {
+			textBytes += len(item.Text)
+			if textBytes > s.limits.MaxTextOutputBytes {
+				return Result{}, fmt.Errorf("MCP tool text output exceeds %d bytes", s.limits.MaxTextOutputBytes)
+			}
 			parts = append(parts, item.Text)
 		}
+	}
+	if len(response.Structured) > s.limits.MaxStructuredBytes {
+		return Result{}, fmt.Errorf("MCP tool structured output is %d bytes; limit is %d", len(response.Structured), s.limits.MaxStructuredBytes)
 	}
 	return Result{Output: strings.Join(parts, "\n"), StructuredOutput: append(json.RawMessage(nil), response.Structured...), IsError: response.IsError}, nil
 }
@@ -245,6 +260,9 @@ func (s *StdioServer) writeEnvelope(message rpcEnvelope) error {
 	if err != nil {
 		return err
 	}
+	if len(data) > s.limits.MaxMessageBytes {
+		return fmt.Errorf("MCP JSON-RPC message is %d bytes; limit is %d", len(data), s.limits.MaxMessageBytes)
+	}
 	data = append(data, '\n')
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
@@ -257,7 +275,7 @@ func (s *StdioServer) writeEnvelope(message rpcEnvelope) error {
 
 func (s *StdioServer) readLoop(reader io.Reader) {
 	scanner := bufio.NewScanner(reader)
-	scanner.Buffer(make([]byte, 64*1024), stdioMaxMessageBytes)
+	scanner.Buffer(make([]byte, 64*1024), s.limits.MaxMessageBytes)
 	for scanner.Scan() {
 		var message rpcEnvelope
 		if err := json.Unmarshal(scanner.Bytes(), &message); err != nil {

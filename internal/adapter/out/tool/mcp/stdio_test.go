@@ -83,3 +83,27 @@ func TestMCPStdioHelperProcess(t *testing.T) {
 	}
 	os.Exit(0)
 }
+
+func TestStdioServerEnforcesArgumentAndOutputLimits(t *testing.T) {
+	limits := DefaultLimits()
+	limits.MaxArgumentsBytes = 8
+	server, err := NewStdioServerWithLimits("fixture", os.Args[0], []string{"-test.run=TestMCPStdioHelperProcess"}, []string{"GO_WANT_MCP_HELPER=1"}, "", limits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
+	if _, err := server.CallTool(context.Background(), "echo", json.RawMessage(`{"text":"too-large"}`)); err == nil || !strings.Contains(err.Error(), "arguments") {
+		t.Fatalf("argument limit error = %v", err)
+	}
+
+	limits = DefaultLimits()
+	limits.MaxTextOutputBytes = 2
+	server2, err := NewStdioServerWithLimits("fixture2", os.Args[0], []string{"-test.run=TestMCPStdioHelperProcess"}, []string{"GO_WANT_MCP_HELPER=1"}, "", limits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server2.Close()
+	if _, err := server2.CallTool(context.Background(), "echo", json.RawMessage(`{"text":"hello"}`)); err == nil || !strings.Contains(err.Error(), "text output") {
+		t.Fatalf("text limit error = %v", err)
+	}
+}
