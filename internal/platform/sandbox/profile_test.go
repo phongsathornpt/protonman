@@ -1,6 +1,9 @@
 package sandbox
 
-import "testing"
+import (
+	"net"
+	"testing"
+)
 
 func TestParseNameAliases(t *testing.T) {
 	cases := map[string]Name{
@@ -63,6 +66,38 @@ func TestNetworkPolicyAllowURL(t *testing.T) {
 	}
 	if err := allow.AllowURL("https://evil.example"); err == nil {
 		t.Fatal("allowlist accepted a different host")
+	}
+}
+
+func TestNetworkPolicyValidateResolvedIPs(t *testing.T) {
+	policy := NetworkPolicy{Mode: NetworkUnrestricted}
+	if err := policy.ValidateResolvedIPs("https://example.com", []net.IP{net.ParseIP("93.184.216.34")}); err != nil {
+		t.Fatalf("public destination rejected: %v", err)
+	}
+
+	blocked := []string{"127.0.0.1", "10.0.0.1", "169.254.169.254", "::1", "fc00::1", "::"}
+	for _, raw := range blocked {
+		if err := policy.ValidateResolvedIPs("https://example.com", []net.IP{net.ParseIP(raw)}); err == nil {
+			t.Fatalf("resolved destination %s was allowed", raw)
+		}
+	}
+
+	mixed := []net.IP{net.ParseIP("93.184.216.34"), net.ParseIP("10.0.0.8")}
+	if err := policy.ValidateResolvedIPs("https://example.com", mixed); err == nil {
+		t.Fatal("mixed public/private DNS answers were allowed")
+	}
+	if err := policy.ValidateResolvedIPs("https://example.com", nil); err == nil {
+		t.Fatal("empty DNS answer was allowed")
+	}
+}
+
+func TestNetworkPolicyValidateResolvedIPsHonorsLocalhostOptIn(t *testing.T) {
+	policy := NetworkPolicy{Mode: NetworkUnrestricted, AllowLocalhost: true}
+	if err := policy.ValidateResolvedIPs("http://localhost", []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
+		t.Fatalf("explicit localhost opt-in rejected loopback: %v", err)
+	}
+	if err := policy.ValidateResolvedIPs("http://localhost", []net.IP{net.ParseIP("10.0.0.1")}); err == nil {
+		t.Fatal("localhost opt-in widened access to private networks")
 	}
 }
 

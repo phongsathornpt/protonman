@@ -258,23 +258,47 @@ func isBlockedTarget(raw string, allowLocalhost bool) error {
 		return nil
 	}
 
-	ip := net.ParseIP(hostname)
-	if ip != nil {
-		if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
-			return fmt.Errorf("%w: link-local/metadata address %s is blocked", ErrNetworkDenied, hostname)
+	if ip := net.ParseIP(hostname); ip != nil {
+		return validateDestinationIP(ip, allowLocalhost)
+	}
+	return nil
+}
+
+// ValidateResolvedIPs applies the network policy to concrete addresses returned
+// by DNS. Every answer must be safe; mixed public/private results fail closed.
+func (p NetworkPolicy) ValidateResolvedIPs(raw string, ips []net.IP) error {
+	if err := p.AllowURL(raw); err != nil {
+		return err
+	}
+	if len(ips) == 0 {
+		return fmt.Errorf("%w: host resolved to no addresses", ErrNetworkDenied)
+	}
+	for _, ip := range ips {
+		if err := validateDestinationIP(ip, p.AllowLocalhost); err != nil {
+			return err
 		}
-		if ip.IsLoopback() {
-			if !allowLocalhost {
-				return fmt.Errorf("%w: loopback address %s is blocked", ErrNetworkDenied, hostname)
-			}
+	}
+	return nil
+}
+
+func validateDestinationIP(ip net.IP, allowLocalhost bool) error {
+	if ip == nil {
+		return fmt.Errorf("%w: invalid destination address", ErrNetworkDenied)
+	}
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return fmt.Errorf("%w: link-local/metadata address %s is blocked", ErrNetworkDenied, ip)
+	}
+	if ip.IsLoopback() {
+		if allowLocalhost {
 			return nil
 		}
-		if ip.IsUnspecified() {
-			return fmt.Errorf("%w: unspecified address %s is blocked", ErrNetworkDenied, hostname)
-		}
-		if ip.IsPrivate() {
-			return fmt.Errorf("%w: private network address %s is blocked", ErrNetworkDenied, hostname)
-		}
+		return fmt.Errorf("%w: loopback address %s is blocked", ErrNetworkDenied, ip)
+	}
+	if ip.IsUnspecified() {
+		return fmt.Errorf("%w: unspecified address %s is blocked", ErrNetworkDenied, ip)
+	}
+	if ip.IsPrivate() {
+		return fmt.Errorf("%w: private network address %s is blocked", ErrNetworkDenied, ip)
 	}
 	return nil
 }
