@@ -9,6 +9,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
@@ -16,7 +17,6 @@ import (
 	"github.com/projectTHORN/proton/internal/skill"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
-	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
 
 // Option configures the headless runner.
@@ -80,14 +80,14 @@ type Runner struct {
 	service  *toolcall.Service
 	registry tool.Registry
 	skills   *skill.Registry
-	runner   applicationturn.Runner
+	runner   app.Conversation
 	messages []model.Message
 	nextID   uint64
 }
 
 // New creates a fail-closed headless runner. Ask-mode calls stay denied
 // because no permission prompt is installed.
-func New(service *toolcall.Service, registry tool.Registry, runner applicationturn.Runner, options ...Option) (*Runner, error) {
+func New(service *toolcall.Service, registry tool.Registry, runner app.Conversation, options ...Option) (*Runner, error) {
 	if service == nil {
 		return nil, fmt.Errorf("%w: service is required", ErrInvalidRunner)
 	}
@@ -391,13 +391,13 @@ func (r *Runner) runTurn(
 		return fmt.Errorf("model client is not configured; use /help or /call")
 	}
 	r.messages = append(r.messages, model.Message{Role: model.RoleUser, Content: prompt})
-	result, err := r.runner.Run(ctx, r.Messages(), func(_ context.Context, event applicationturn.Event) error {
+	result, err := r.runner.Run(ctx, r.Messages(), func(_ context.Context, event app.Event) error {
 		switch event.Kind {
-		case applicationturn.EventTextDelta:
+		case app.EventTextDelta:
 			return writeEvent(output, format, Event{Kind: EventKindText, Text: event.Text})
-		case applicationturn.EventToolCall:
+		case app.EventToolCall:
 			return writeEvent(output, format, Event{Kind: EventKindToolCall, Tool: event.Call.Name})
-		case applicationturn.EventToolResult:
+		case app.EventToolResult:
 			return writeEvent(output, format, Event{
 				Kind:   EventKindToolResult,
 				Tool:   event.Call.Name,
