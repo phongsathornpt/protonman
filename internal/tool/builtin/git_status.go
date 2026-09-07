@@ -40,7 +40,7 @@ func (gitStatusHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                "git_status",
 		Description:         "Show compact git branch and working-tree status.",
-		Kind:                tool.KindRead,
+		Kind:                tool.KindForName("git_status"),
 		Mutability:          tool.MutabilityReadOnly,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead},
 		Evidence:            tool.EvidenceWorkspace,

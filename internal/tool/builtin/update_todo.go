@@ -30,7 +30,7 @@ func (updateTodoHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:         "update_todo",
 		Description:  "Patch the parent-owned task plan atomically using explicit add, set_status, set_text, or remove operations.",
-		Kind:         tool.KindTask,
+		Kind:         tool.KindForName("update_todo"),
 		Mutability:   tool.MutabilityMutating,
 		Safety:       tool.SafetyContract{MutationDomain: tool.MutationDomainTaskState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
 		InputSchema:  todoUpdateInputSchema(),
