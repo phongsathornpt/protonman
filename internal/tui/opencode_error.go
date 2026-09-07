@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/appdirs"
+	"github.com/projectTHORN/proton/internal/app/appdirs"
 )
 
 // OpenCodeErrorKind classifies errors matching the OpenCode error taxonomy.
