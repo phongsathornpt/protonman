@@ -6,6 +6,13 @@ import (
 )
 
 type PatchOp string
+type PatchImpact string
+
+const (
+	PatchImpactUnknown    PatchImpact = ""
+	PatchImpactStatusOnly PatchImpact = "status_only"
+	PatchImpactStructural PatchImpact = "structural"
+)
 
 const (
 	PatchAdd       PatchOp = "add"
@@ -19,6 +26,23 @@ type Operation struct {
 	ID     string  `json:"id"`
 	Text   string  `json:"text,omitempty"`
 	Status Status  `json:"status,omitempty"`
+}
+
+func ClassifyPatch(operations []Operation) PatchImpact {
+	if len(operations) == 0 {
+		return PatchImpactUnknown
+	}
+	for _, operation := range operations {
+		switch operation.Op {
+		case PatchSetStatus:
+			continue
+		case PatchAdd, PatchSetText, PatchRemove:
+			return PatchImpactStructural
+		default:
+			return PatchImpactUnknown
+		}
+	}
+	return PatchImpactStatusOnly
 }
 
 func ApplyPatch(items []Item, operations []Operation) ([]Item, error) {

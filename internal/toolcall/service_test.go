@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -551,31 +552,67 @@ func (r *customHandlerRegistry) Definitions() []tool.Definition {
 	return []tool.Definition{r.handler.Definition()}
 }
 
-func TestTaskMetadataAutoAllowedInAskButDeniedInDenyMode(t *testing.T) {
+func TestTaskMetadataPermissionDistinguishesStatusFromStructuralChanges(t *testing.T) {
 	handler := &fakeHandler{definition: tool.Definition{Name: "update_todo", Description: "update tasks", Kind: tool.KindTask, Mutability: tool.MutabilityMutating}}
-	call, err := tool.NewCall("todo-1", "update_todo", json.RawMessage(`{"items":[]}`))
+	prompted := 0
+	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAsk), WithPrompt(func(context.Context, permission.Request) (permission.Resolution, error) {
+		prompted++
+		return permission.Resolution{Action: permission.ActionAllow, Scope: permission.GrantScopeSession}, nil
+	}))
+
+	statusCall, err := tool.NewCall("todo-status", "update_todo", json.RawMessage(`{"expected_revision":1,"operations":[{"op":"set_status","id":"a","status":"completed"}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := service.Call(context.Background(), statusCall); err != nil {
+		t.Fatalf("status-only task call: %v", err)
+	}
+	if prompted != 0 {
+		t.Fatalf("status-only task metadata prompted %d times, want 0", prompted)
+	}
+
+	for index, args := range []json.RawMessage{
+		json.RawMessage(`{"expected_revision":1,"operations":[{"op":"add","id":"b","text":"new","status":"pending"}]}`),
+		json.RawMessage(`{"expected_revision":1,"operations":[{"op":"set_text","id":"a","text":"renamed"}]}`),
+		json.RawMessage(`{"expected_revision":1,"operations":[{"op":"remove","id":"a"}]}`),
+		json.RawMessage(`{"expected_revision":1,"operations":[{"op":"set_status","id":"a","status":"completed"},{"op":"remove","id":"b"}]}`),
+	} {
+		call, err := tool.NewCall(fmt.Sprintf("todo-structural-%d", index), "update_todo", args)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := service.Call(context.Background(), call); err != nil {
+			t.Fatalf("structural task call %d: %v", index, err)
+		}
+	}
+	if prompted != 4 {
+		t.Fatalf("structural task metadata prompted %d times, want 4", prompted)
+	}
+	if err := service.SetMode(permission.ModeDeny); err != nil {
+		t.Fatal(err)
+	}
+	statusCall.ID = "todo-status-denied"
+	if _, err := service.Call(context.Background(), statusCall); !errors.Is(err, ErrPermissionDenied) {
+		t.Fatalf("deny mode error = %v", err)
+	}
+}
+
+func TestGetTodoMetadataAutoAllowedInAskMode(t *testing.T) {
+	handler := &fakeHandler{definition: tool.Definition{Name: "get_todo", Description: "read tasks", Kind: tool.KindTask, Mutability: tool.MutabilityReadOnly}}
 	prompted := 0
 	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAsk), WithPrompt(func(context.Context, permission.Request) (permission.Resolution, error) {
 		prompted++
 		return permission.Resolution{Action: permission.ActionAllow}, nil
 	}))
-	if _, err := service.Call(context.Background(), call); err != nil {
-		t.Fatalf("ask mode task call: %v", err)
-	}
-	if prompted != 0 {
-		t.Fatalf("task metadata prompted %d times, want 0", prompted)
-	}
-	if handler.calls != 1 {
-		t.Fatalf("handler calls = %d", handler.calls)
-	}
-	if err := service.SetMode(permission.ModeDeny); err != nil {
+	call, err := tool.NewCall("todo-get", "get_todo", json.RawMessage(`{}`))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Call(context.Background(), call); !errors.Is(err, ErrPermissionDenied) {
-		t.Fatalf("deny mode error = %v", err)
+	if _, err := service.Call(context.Background(), call); err != nil {
+		t.Fatalf("get_todo: %v", err)
+	}
+	if prompted != 0 {
+		t.Fatalf("get_todo prompted %d times, want 0", prompted)
 	}
 }
 

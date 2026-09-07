@@ -52,3 +52,27 @@ func TestApplyPatchRejectsImplicitOrAmbiguousMutations(t *testing.T) {
 		}
 	}
 }
+
+func TestClassifyPatchImpact(t *testing.T) {
+	tests := []struct {
+		name string
+		ops  []Operation
+		want PatchImpact
+	}{
+		{name: "empty", want: PatchImpactUnknown},
+		{name: "status only", ops: []Operation{{Op: PatchSetStatus, ID: "a", Status: StatusCompleted}}, want: PatchImpactStatusOnly},
+		{name: "multiple status", ops: []Operation{{Op: PatchSetStatus, ID: "a", Status: StatusCompleted}, {Op: PatchSetStatus, ID: "b", Status: StatusInProgress}}, want: PatchImpactStatusOnly},
+		{name: "add", ops: []Operation{{Op: PatchAdd, ID: "a", Text: "a", Status: StatusPending}}, want: PatchImpactStructural},
+		{name: "text", ops: []Operation{{Op: PatchSetText, ID: "a", Text: "rename"}}, want: PatchImpactStructural},
+		{name: "remove", ops: []Operation{{Op: PatchRemove, ID: "a"}}, want: PatchImpactStructural},
+		{name: "mixed", ops: []Operation{{Op: PatchSetStatus, ID: "a", Status: StatusCompleted}, {Op: PatchRemove, ID: "b"}}, want: PatchImpactStructural},
+		{name: "unknown", ops: []Operation{{Op: PatchOp("dance"), ID: "a"}}, want: PatchImpactUnknown},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ClassifyPatch(tt.ops); got != tt.want {
+				t.Fatalf("ClassifyPatch() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
