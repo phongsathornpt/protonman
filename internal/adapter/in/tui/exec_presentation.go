@@ -9,21 +9,22 @@ import (
 type execFamily string
 
 const (
-	execFamilyGeneric execFamily = "generic"
-	execFamilyGit     execFamily = "git"
-	execFamilyGo      execFamily = "go"
-	execFamilyBun     execFamily = "bun"
-	execFamilyNode    execFamily = "node"
-	execFamilyPython  execFamily = "python"
-	execFamilyRust    execFamily = "rust"
-	execFamilyMake    execFamily = "make"
-	execFamilyDocker  execFamily = "docker"
-	execFamilyJVM     execFamily = "jvm"
-	execFamilyPHP     execFamily = "php"
-	execFamilyRuby    execFamily = "ruby"
-	execFamilyDotnet  execFamily = "dotnet"
-	execFamilyVite    execFamily = "vite"
-	execFamilyNext    execFamily = "next"
+	execFamilyGeneric   execFamily = "generic"
+	execFamilyGit       execFamily = "git"
+	execFamilyGo        execFamily = "go"
+	execFamilyBun       execFamily = "bun"
+	execFamilyNode      execFamily = "node"
+	execFamilyPython    execFamily = "python"
+	execFamilyRust      execFamily = "rust"
+	execFamilyMake      execFamily = "make"
+	execFamilyDocker    execFamily = "docker"
+	execFamilyJVM       execFamily = "jvm"
+	execFamilyPHP       execFamily = "php"
+	execFamilyRuby      execFamily = "ruby"
+	execFamilyDotnet    execFamily = "dotnet"
+	execFamilyTerraform execFamily = "terraform"
+	execFamilyVite      execFamily = "vite"
+	execFamilyNext      execFamily = "next"
 )
 
 type execPresentation struct {

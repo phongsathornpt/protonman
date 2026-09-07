@@ -32,6 +32,7 @@ var execCommandProfiles = []execCommandProfile{
 	{execFamilyPHP, isPHPExecutable, phpAction, phpExecTitle, summarizePHPExec},
 	{execFamilyRuby, isRubyExecutable, rubyAction, rubyExecTitle, summarizeRubyExec},
 	{execFamilyDotnet, exactExecNames("dotnet"), firstArg, dotnetExecTitle, summarizeDotnetExec},
+	{execFamilyTerraform, exactExecNames("terraform", "tofu"), firstArg, terraformExecTitle, summarizeTerraformExec},
 	{execFamilyVite, exactExecNames("vite"), firstArg, func(_ string, _ []string, action string) string { return execTitle("Vite", action) }, summarizeViteExec},
 	{execFamilyNext, exactExecNames("next"), firstArg, func(_ string, _ []string, action string) string { return execTitle("Next", action) }, summarizeNextExec},
 }
