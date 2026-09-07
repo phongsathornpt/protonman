@@ -48,7 +48,7 @@ func TestWorkerSurfacesUnverifiedMutationWarning(t *testing.T) {
 		Verification: turn.VerificationState{Mutated: true},
 	})
 	defer coord.Close()
-	result, err := coord.execute(context.Background(), Request{ID: "worker-1", Profile: ProfileWorker, Task: "edit"})
+	result, err := coord.execute(context.Background(), Request{ID: "worker-1", Profile: ProfilePOW, Task: "edit"})
 	if err != nil {
 		t.Fatalf("execute() error = %v", err)
 	}

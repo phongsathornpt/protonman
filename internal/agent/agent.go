@@ -16,18 +16,12 @@ import (
 type Profile string
 
 const (
-	// ProfileExplorer searches and inspects codebase/web with read-only tools.
-	ProfileExplorer Profile = "explorer"
-	// ProfileReviewer audits code, architecture, or security with read-only tools.
-	ProfileReviewer Profile = "reviewer"
-	// ProfileWorker performs code modifications and commands with full sandbox & policy checks.
-	ProfileWorker Profile = "worker"
-	// ProfilePOW executes high-velocity, direct, minimal-boilerplate implementation.
+	// ProfilePOW executes concrete implementation, fixes, and refactors.
 	ProfilePOW Profile = "pow"
-	// ProfileDEX executes defensive, zero-regression implementation with strict verification.
-	ProfileDEX Profile = "dex"
-	// ProfileINT performs deep architectural reasoning, root cause analysis, and YAGNI auditing.
+	// ProfileINT investigates, traces, researches, and reviews without mutating the workspace.
 	ProfileINT Profile = "int"
+	// ProfileDEX handles complex design, difficult debugging, and high-risk engineering work.
+	ProfileDEX Profile = "dex"
 )
 
 // Valid reports whether the profile is recognized.
@@ -45,6 +39,12 @@ func (p Profile) IsMutating() bool {
 // ParseProfile converts a raw string into a validated Profile.
 func ParseProfile(raw string) (Profile, error) {
 	p := Profile(strings.TrimSpace(strings.ToLower(raw)))
+	switch p {
+	case "explorer", "reviewer":
+		p = ProfileINT
+	case "worker":
+		p = ProfilePOW
+	}
 	if !p.Valid() {
 		return "", fmt.Errorf("unknown agent profile %q: supported profiles are %s", raw, ProfileList(", "))
 	}

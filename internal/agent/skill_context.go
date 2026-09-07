@@ -9,11 +9,27 @@ import (
 )
 
 const (
-	subagentSkillCatalogMaxItems        = 8
-	subagentSkillCatalogMaxBytes        = 4 * 1024
-	subagentSkillActiveMaxItems         = 3
-	subagentSkillActiveInstructionBytes = 16 * 1024
+	subagentSkillCatalogMaxItems = 8
+	subagentSkillCatalogMaxBytes = 4 * 1024
 )
+
+type subagentSkillBudget struct {
+	maxActive           int
+	maxInstructionBytes int
+}
+
+func skillBudgetForProfile(profile Profile) subagentSkillBudget {
+	switch profile {
+	case ProfilePOW:
+		return subagentSkillBudget{maxActive: 2, maxInstructionBytes: 8 * 1024}
+	case ProfileINT:
+		return subagentSkillBudget{maxActive: 3, maxInstructionBytes: 12 * 1024}
+	case ProfileDEX:
+		return subagentSkillBudget{maxActive: 3, maxInstructionBytes: 16 * 1024}
+	default:
+		return subagentSkillBudget{maxActive: 2, maxInstructionBytes: 8 * 1024}
+	}
+}
 
 type rankedSkill struct {
 	skill skill.Skill
@@ -62,9 +78,10 @@ func selectSubagentSkills(catalog *skill.Registry, req Request) *skill.Registry 
 		usedBytes += size
 	}
 	registry := skill.NewRegistry(selected...)
+	budget := skillBudgetForProfile(req.Profile)
 	registry.SetActivationLimits(skill.ActivationLimits{
-		MaxSkills:           subagentSkillActiveMaxItems,
-		MaxInstructionBytes: subagentSkillActiveInstructionBytes,
+		MaxSkills:           budget.maxActive,
+		MaxInstructionBytes: budget.maxInstructionBytes,
 	})
 	return registry
 }

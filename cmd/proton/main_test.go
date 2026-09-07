@@ -120,7 +120,7 @@ func TestMainRun_HeadlessRefusalAndExecution(t *testing.T) {
 	}
 
 	// Agent profiles (pow, dex, int, worker, explorer, reviewer)
-	for _, profile := range []string{"pow", "dex", "int", "worker", "explorer", "reviewer"} {
+	for _, profile := range []string{"pow", "int", "dex"} {
 		err = run(ctx, []string{"-y", "--agent", profile, "-p", `/call bash {"command":"echo 'profile-ok'"}`})
 		if err != nil {
 			t.Fatalf("run with --agent %s failed: %v", profile, err)

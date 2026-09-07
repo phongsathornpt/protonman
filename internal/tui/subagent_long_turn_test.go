@@ -25,7 +25,7 @@ func TestLongTurnWithSubagentsKeepsProgressCoherent(t *testing.T) {
 	}
 	m.agentActivity["explorer-1"] = "using grep"
 
-	delegate, _ := tool.NewCall("d1", "delegate_task", json.RawMessage(`{"profile":"explorer","task":"inspect router"}`))
+	delegate, _ := tool.NewCall("d1", "delegate_task", json.RawMessage(`{"profile":"int","task":"inspect router"}`))
 	wait, _ := tool.NewCall("w1", "wait_agent", json.RawMessage(`{"agent_id":"explorer-1"}`))
 	m.applyTurnEvents([]turn.Event{
 		{Kind: turn.EventToolCall, Round: 1, Call: delegate},

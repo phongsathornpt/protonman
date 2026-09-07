@@ -143,7 +143,7 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	if summary == "" {
 		summary = "Task completed with no final text response."
 	}
-	if (req.Profile == ProfileWorker || req.Profile == ProfilePOW) && turnResult.Verification.Mutated && !turnResult.Verification.Verified {
+	if req.Profile == ProfilePOW && turnResult.Verification.Mutated && !turnResult.Verification.Verified {
 		summary += "\n\nWarning: changes were not verified after the final mutation."
 	}
 	summary = truncateSummary(summary, maxSummaryBytes)

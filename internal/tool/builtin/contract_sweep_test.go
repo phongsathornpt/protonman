@@ -87,7 +87,7 @@ func TestOptionalZeroNumericArgumentsMatchOmittedSemantics(t *testing.T) {
 		{"list_dir", map[string]any{"limit": 0}, map[string]any{"limit": -1}},
 		{"grep", map[string]any{"pattern": "x", "limit": 0}, map[string]any{"pattern": "x", "limit": -1}},
 		{"bash", map[string]any{"command": "true", "timeout_seconds": 0}, map[string]any{"command": "true", "timeout_seconds": -1}},
-		{"delegate_task", map[string]any{"task": "inspect", "profile": "explorer", "timeout_seconds": 0}, map[string]any{"task": "inspect", "profile": "explorer", "timeout_seconds": -1}},
+		{"delegate_task", map[string]any{"task": "inspect", "profile": "int", "timeout_seconds": 0}, map[string]any{"task": "inspect", "profile": "int", "timeout_seconds": -1}},
 		{"wait_agent", map[string]any{"agent_id": "agent-1", "timeout_seconds": 0}, map[string]any{"agent_id": "agent-1", "timeout_seconds": -1}},
 	}
 	for _, tc := range cases {

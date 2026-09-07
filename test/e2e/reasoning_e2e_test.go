@@ -23,12 +23,15 @@ func TestE2EReasoningGeminiProfileReachesWire(t *testing.T) {
 	if len(requests) < 1 || requests[0]["reasoning_effort"] != "high" {
 		t.Fatalf("Gemini request reasoning = %#v", requests)
 	}
-	if !requestMessagesContain(requests[0], "reasoning_effective=high") ||
-		!requestMessagesContain(requests[0], "reasoning_source=agent_profile") ||
-		!requestMessagesContain(requests[0], "model_profile=gemini-3.8-flash") ||
-		!requestMessagesContain(requests[0], "model_profile_match=exact") ||
-		!requestMessagesContain(requests[0], "# Grounding Contract") {
-		t.Fatalf("Gemini prompt missing reasoning/grounding provenance: %#v", requests[0]["messages"])
+	if !requestMessagesContain(requests[0], "# Grounding Contract") ||
+		!requestMessagesContain(requests[0], "Use tool names exactly as provided") ||
+		!requestMessagesContain(requests[0], "primary coding agent") {
+		t.Fatalf("Gemini prompt missing stable grounding/model guidance: %#v", requests[0]["messages"])
+	}
+	for _, leaked := range []string{"reasoning_effective=", "reasoning_source=", "model_profile=", "model_profile_match=", "provider=", "max_rounds="} {
+		if requestMessagesContain(requests[0], leaked) {
+			t.Fatalf("Gemini prompt leaked runtime metadata %q: %#v", leaked, requests[0]["messages"])
+		}
 	}
 	initialTools := requestToolNames(requests[0])
 	if !containsString(initialTools, "read_file") {
