@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/projectTHORN/proton/internal/agent"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/permission"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
@@ -82,27 +83,27 @@ func (m *bubbleModel) handleProjectSet(argument string) tea.Cmd {
 
 func saveProjectAgentCmd(workDir, profile string) tea.Cmd {
 	return func() tea.Msg {
-		err := config.SaveProjectAgentProfile(workDir, profile)
+		err := (app.Projects{}).SaveAgentProfile(workDir, profile)
 		return projectSettingSavedMsg{field: config.FieldAgentProfile, value: profile, err: err}
 	}
 }
 
 func saveProjectReasoningCmd(workDir string, effort sdk.ReasoningEffort) tea.Cmd {
 	return func() tea.Msg {
-		err := config.SaveProjectReasoningEffort(workDir, effort)
+		err := (app.Projects{}).SaveReasoningEffort(workDir, effort)
 		return projectSettingSavedMsg{field: config.FieldAgentReasoningEffort, value: effort, err: err}
 	}
 }
 func saveProjectToolCallsCmd(workDir string, calls int) tea.Cmd {
 	return func() tea.Msg {
-		err := config.SaveProjectMaxToolCalls(workDir, calls)
+		err := (app.Projects{}).SaveMaxToolCalls(workDir, calls)
 		return projectSettingSavedMsg{field: config.FieldAgentMaxToolCalls, value: calls, err: err}
 	}
 }
 
 func saveProjectPermissionCmd(workDir string, mode permission.Mode) tea.Cmd {
 	return func() tea.Msg {
-		err := config.SaveProjectPermissionMode(workDir, mode)
+		err := (app.Projects{}).SavePermissionMode(workDir, mode)
 		return projectSettingSavedMsg{field: config.FieldUIPermissionMode, value: mode, err: err}
 	}
 }

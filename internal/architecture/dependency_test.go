@@ -78,6 +78,19 @@ func TestTUIDoesNotDependOnSessionPersistenceDomain(t *testing.T) {
 	})
 }
 
+func TestTUIDoesNotMutateProjectConfigPersistenceDirectly(t *testing.T) {
+	root := repositoryRoot(t)
+	cmd := exec.Command("rg", "config\\.SaveProject", "internal/tui", "--glob", "*.go")
+	cmd.Dir = root
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("TUI mutates project config persistence directly:\n%s", output)
+	}
+	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
+		t.Fatalf("search TUI project config mutations: %v: %s", err, output)
+	}
+}
+
 func TestApplicationDoesNotDependOnInboundAdapters(t *testing.T) {
 	packages := listPackages(t)
 	assertNoImports(t, packages, modulePath+"/internal/app", []string{
@@ -121,11 +134,7 @@ func assertNoImports(t *testing.T, packages map[string]listedPackage, source str
 
 func listPackages(t *testing.T) map[string]listedPackage {
 	t.Helper()
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("resolve architecture test path")
-	}
-	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	root := repositoryRoot(t)
 	cmd := exec.Command("go", "list", "-json", "./...")
 	cmd.Dir = root
 	output, err := cmd.Output()
@@ -143,4 +152,13 @@ func listPackages(t *testing.T) map[string]listedPackage {
 		packages[pkg.ImportPath] = pkg
 	}
 	return packages
+}
+
+func repositoryRoot(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve architecture test path")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
 }
