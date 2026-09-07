@@ -30,6 +30,14 @@ const (
 type State struct {
 	// Version allows incompatible state formats to fail closed.
 	Version int `json:"version"`
+	// SessionID is the stable identity of this session. Legacy files may omit it.
+	SessionID string `json:"session_id,omitempty"`
+	// WorkspaceKey binds the session to the workspace it was created for without persisting an absolute path.
+	WorkspaceKey string `json:"workspace_key,omitempty"`
+	// WorkspaceName is a display-only basename for session discovery.
+	WorkspaceName string `json:"workspace_name,omitempty"`
+	// CreatedAt records the first successful save of the session.
+	CreatedAt time.Time `json:"created_at,omitempty"`
 	// PermissionMode is the configured mode spelling, not an enum number.
 	PermissionMode string `json:"permission_mode"`
 	// ActiveSkills records skills activated in this session.
@@ -99,6 +107,27 @@ func FromModelMessages(messages []model.Message) []Message {
 	return compactToolHistory(out)
 }
 
+// Summary is a bounded, display-oriented view of one persisted session.
+type Summary struct {
+	ID              string    `json:"id"`
+	WorkspaceKey    string    `json:"workspace_key,omitempty"`
+	WorkspaceName   string    `json:"workspace_name,omitempty"`
+	CreatedAt       time.Time `json:"created_at,omitempty"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	AgentProfile    string    `json:"agent_profile,omitempty"`
+	ReasoningEffort string    `json:"reasoning_effort,omitempty"`
+	MessageCount    int       `json:"message_count"`
+	Preview         string    `json:"preview,omitempty"`
+}
+
+// ListOptions bounds session discovery and optionally filters by workspace identity.
+type ListOptions struct {
+	WorkspaceKey string
+	Prefix       string
+	Limit        int
+	Offset       int
+}
+
 // ErrInvalidSessionID indicates that an ID could escape the session store
 // directory or otherwise cannot name a state file safely.
 var ErrInvalidSessionID = errors.New("invalid session id")
@@ -156,6 +185,12 @@ func (s *FileStore) Load(ctx context.Context, sessionID string) (State, bool, er
 	state.Messages = sanitizeMessages(state.Messages)
 	if err := validateMessages(state.Messages); err != nil {
 		return State{}, false, fmt.Errorf("session messages: %w", err)
+	}
+	if state.SessionID == "" {
+		state.SessionID = sessionID
+	}
+	if state.WorkspaceKey == "" {
+		state.WorkspaceKey = legacyWorkspaceKey(sessionID)
 	}
 	return state, true, nil
 }
@@ -236,6 +271,21 @@ func (s *FileStore) Save(ctx context.Context, sessionID string, state State) (sa
 	if state.Version == 0 {
 		state.Version = currentStateVersion
 	}
+	state.SessionID = sessionID
+	if state.WorkspaceKey == "" {
+		state.WorkspaceKey = legacyWorkspaceKey(sessionID)
+	}
+	if existing, found, loadErr := s.Load(ctx, sessionID); loadErr == nil && found {
+		if state.CreatedAt.IsZero() {
+			state.CreatedAt = existing.CreatedAt
+		}
+		if state.WorkspaceKey == "" {
+			state.WorkspaceKey = existing.WorkspaceKey
+		}
+		if state.WorkspaceName == "" {
+			state.WorkspaceName = existing.WorkspaceName
+		}
+	}
 	if state.Version != currentStateVersion {
 		return fmt.Errorf("session state version %d is unsupported", state.Version)
 	}
@@ -252,9 +302,11 @@ func (s *FileStore) Save(ctx context.Context, sessionID string, state State) (sa
 	if err := validateMessages(state.Messages); err != nil {
 		return fmt.Errorf("session messages: %w", err)
 	}
-	if state.UpdatedAt.IsZero() {
-		state.UpdatedAt = time.Now().UTC()
+	now := time.Now().UTC()
+	if state.CreatedAt.IsZero() {
+		state.CreatedAt = now
 	}
+	state.UpdatedAt = now
 
 	if err := os.MkdirAll(s.root, 0o700); err != nil {
 		return fmt.Errorf("create session store: %w", err)
@@ -368,6 +420,78 @@ func (s *FileStore) List(ctx context.Context, prefix string) ([]string, error) {
 		ids = append(ids, c.id)
 	}
 	return ids, nil
+}
+
+// ListSummaries returns bounded session metadata sorted by most recently updated.
+func (s *FileStore) ListSummaries(ctx context.Context, options ListOptions) ([]Summary, error) {
+	ids, err := s.List(ctx, options.Prefix)
+	if err != nil {
+		return nil, err
+	}
+	summaries := make([]Summary, 0, len(ids))
+	for _, id := range ids {
+		state, found, loadErr := s.Load(ctx, id)
+		if loadErr != nil || !found {
+			continue
+		}
+		if options.WorkspaceKey != "" && state.WorkspaceKey != options.WorkspaceKey {
+			continue
+		}
+		summaries = append(summaries, Summary{
+			ID: id, WorkspaceKey: state.WorkspaceKey, WorkspaceName: state.WorkspaceName,
+			CreatedAt: state.CreatedAt, UpdatedAt: state.UpdatedAt, AgentProfile: state.AgentProfile,
+			ReasoningEffort: state.ReasoningEffort, MessageCount: len(state.Messages), Preview: sessionPreview(state.Messages),
+		})
+	}
+	sort.Slice(summaries, func(i, j int) bool {
+		if summaries[i].UpdatedAt.Equal(summaries[j].UpdatedAt) {
+			return summaries[i].ID > summaries[j].ID
+		}
+		return summaries[i].UpdatedAt.After(summaries[j].UpdatedAt)
+	})
+	offset := options.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= len(summaries) {
+		return []Summary{}, nil
+	}
+	summaries = summaries[offset:]
+	if options.Limit > 0 && len(summaries) > options.Limit {
+		summaries = summaries[:options.Limit]
+	}
+	return summaries, nil
+}
+
+func sessionPreview(messages []Message) string {
+	for _, message := range messages {
+		if message.Role != model.RoleUser {
+			continue
+		}
+		text := strings.Join(strings.Fields(message.Content), " ")
+		if text == "" {
+			continue
+		}
+		const maxRunes = 100
+		runes := []rune(text)
+		if len(runes) > maxRunes {
+			return string(runes[:maxRunes-1]) + "…"
+		}
+		return text
+	}
+	return ""
+}
+
+func legacyWorkspaceKey(sessionID string) string {
+	const prefix = "workspace-"
+	if !strings.HasPrefix(sessionID, prefix) {
+		return ""
+	}
+	rest := strings.TrimPrefix(sessionID, prefix)
+	if idx := strings.IndexByte(rest, '-'); idx > 0 {
+		return rest[:idx]
+	}
+	return ""
 }
 
 func (s *FileStore) path(sessionID string) string {
