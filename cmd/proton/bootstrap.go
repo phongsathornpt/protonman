@@ -247,10 +247,12 @@ func buildInitialRunner(cfg config.Snapshot, sessionID, workDir string, skills *
 		turn.WithRoundTimeout(cfg.Runtime.RoundTimeout),
 	}
 	if profileName := strings.TrimSpace(cfg.Agent.Profile); profileName != "" {
-		loopOptions = append(loopOptions, turn.WithRequireInitialToolUse(true))
 		if profile, err := agent.ParseProfile(profileName); err == nil {
 			if spec, ok := agent.SpecForProfile(profile); ok {
-				loopOptions = append(loopOptions, turn.WithReasoningEffort(spec.Reasoning))
+				loopOptions = append(loopOptions,
+					turn.WithGroundingEvidence(spec.GroundingEvidence),
+					turn.WithReasoningEffort(spec.Reasoning),
+				)
 			}
 		}
 	}

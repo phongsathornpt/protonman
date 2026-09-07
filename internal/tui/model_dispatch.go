@@ -213,10 +213,12 @@ func (m *bubbleModel) reconfigureRunner() {
 	opts = append(opts, applicationturn.WithTurnTimeout(m.runtimeConfig.TurnTimeout))
 	opts = append(opts, applicationturn.WithRoundTimeout(m.runtimeConfig.RoundTimeout))
 	if profileName := strings.TrimSpace(m.agentProfile); profileName != "" {
-		opts = append(opts, applicationturn.WithRequireInitialToolUse(true))
 		if profile, err := agent.ParseProfile(profileName); err == nil {
 			if spec, ok := agent.SpecForProfile(profile); ok {
-				opts = append(opts, applicationturn.WithReasoningEffort(spec.Reasoning))
+				opts = append(opts,
+					applicationturn.WithGroundingEvidence(spec.GroundingEvidence),
+					applicationturn.WithReasoningEffort(spec.Reasoning),
+				)
 			}
 		}
 	}

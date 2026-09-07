@@ -274,3 +274,15 @@ func TestProfileSpecsDeclarePortableReasoningEffort(t *testing.T) {
 		}
 	}
 }
+
+func TestProfileSpecsRequireWorkspaceGrounding(t *testing.T) {
+	for _, profile := range SupportedProfiles() {
+		spec, ok := SpecForProfile(profile)
+		if !ok {
+			t.Fatalf("missing spec for %q", profile)
+		}
+		if got := spec.GroundingEvidence; got != tool.EvidenceWorkspace {
+			t.Fatalf("profile %q grounding = %q, want workspace", profile, got)
+		}
+	}
+}

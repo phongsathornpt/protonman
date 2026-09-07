@@ -820,6 +820,7 @@ func readFileDefinition() tool.Definition {
 		Name:                "read_file",
 		Description:         "read a file",
 		Kind:                tool.KindRead,
+		Evidence:            tool.EvidenceWorkspace,
 		PermissionDetailKey: "path",
 	}
 }
@@ -1415,7 +1416,7 @@ func TestLoopAppliesAggregateToolResultBudgetBeforeHistory(t *testing.T) {
 	}
 }
 
-func TestLoopRequiresToolUseOnlyOnInitialGroundingRound(t *testing.T) {
+func TestLoopRequiresWorkspaceEvidenceUntilGrounded(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: []sdk.Event{
 			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "ground", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
@@ -1426,7 +1427,7 @@ func TestLoopRequiresToolUseOnlyOnInitialGroundingRound(t *testing.T) {
 			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 	}}
-	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithRequireInitialToolUse(true))
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithGroundingEvidence(tool.EvidenceWorkspace))
 	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect repo"}}, nil); err != nil {
 		t.Fatal(err)
 	}

@@ -8,20 +8,21 @@ import (
 )
 
 type ProfileSpec struct {
-	Profile      Profile
-	Description  string
-	Mutating     bool
-	Reasoning    sdk.ReasoningEffort
-	AllowedKinds []tool.Kind
+	Profile           Profile
+	Description       string
+	Mutating          bool
+	Reasoning         sdk.ReasoningEffort
+	GroundingEvidence tool.EvidenceKind
+	AllowedKinds      []tool.Kind
 }
 
 var profileSpecs = []ProfileSpec{
-	{Profile: ProfileExplorer, Description: "read-only search and inspection", Reasoning: sdk.ReasoningLow, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch}},
-	{Profile: ProfileReviewer, Description: "read-only code and security review", Reasoning: sdk.ReasoningMedium, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep}},
-	{Profile: ProfileWorker, Description: "code modifications and commands", Mutating: true, Reasoning: sdk.ReasoningMedium, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch, tool.KindEdit, tool.KindBash}},
-	{Profile: ProfilePOW, Description: "high-velocity pragmatic execution", Mutating: true, Reasoning: sdk.ReasoningLow, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch, tool.KindEdit, tool.KindBash}},
-	{Profile: ProfileDEX, Description: "defensive zero-regression engineering", Mutating: true, Reasoning: sdk.ReasoningHigh, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch, tool.KindEdit, tool.KindBash}},
-	{Profile: ProfileINT, Description: "deep architectural reasoning", Reasoning: sdk.ReasoningHigh, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch}},
+	{Profile: ProfileExplorer, Description: "read-only search and inspection", Reasoning: sdk.ReasoningLow, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch}},
+	{Profile: ProfileReviewer, Description: "read-only code and security review", Reasoning: sdk.ReasoningMedium, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep}},
+	{Profile: ProfileWorker, Description: "code modifications and commands", Mutating: true, Reasoning: sdk.ReasoningMedium, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch, tool.KindEdit, tool.KindBash}},
+	{Profile: ProfilePOW, Description: "high-velocity pragmatic execution", Mutating: true, Reasoning: sdk.ReasoningLow, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch, tool.KindEdit, tool.KindBash}},
+	{Profile: ProfileDEX, Description: "defensive zero-regression engineering", Mutating: true, Reasoning: sdk.ReasoningHigh, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch, tool.KindEdit, tool.KindBash}},
+	{Profile: ProfileINT, Description: "deep architectural reasoning", Reasoning: sdk.ReasoningHigh, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch}},
 }
 
 func SpecForProfile(profile Profile) (ProfileSpec, bool) {
