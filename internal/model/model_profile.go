@@ -80,7 +80,7 @@ func (m RemoteModel) ProfileMetadata() modelprofile.CatalogMetadata {
 		Vision:             m.VisionSupport,
 		ToolChoiceRequired: m.ToolChoiceRequired,
 		ContextWindow:      m.ContextWindow,
-		Reasoning:          m.Reasoning,
+		Reasoning:          modelprofile.NormalizeCatalogReasoning(m.Reasoning),
 	}
 }
 
