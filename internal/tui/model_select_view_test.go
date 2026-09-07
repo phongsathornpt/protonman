@@ -235,8 +235,8 @@ func TestModelSelectInfoViewAndWelcome(t *testing.T) {
 	}
 
 	welcome := bModel.welcomeCard()
-	if !strings.Contains(welcome, "deepseek-v4-flash-vision-exp") {
-		t.Fatalf("expected model in welcomeCard, got: %s", welcome)
+	if strings.Contains(welcome, "deepseek-v4-flash-vision-exp") {
+		t.Fatalf("welcomeCard duplicated model already shown in status bar: %s", welcome)
 	}
 }
 

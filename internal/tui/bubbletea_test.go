@@ -290,7 +290,6 @@ func TestEmptyStateWithoutRunnerGuidesSlashCommands(t *testing.T) {
 
 	view := model.View()
 	for _, expected := range []string{
-		"No model selected",
 		"Type a message or /command",
 		glyphBrand,
 		"█▀█",
@@ -663,7 +662,7 @@ func TestWelcomeCardReprintsAfterClear(t *testing.T) {
 	if strings.Contains(plainTranscript(model), "gone") {
 		t.Fatal("clear left transcript body")
 	}
-	if !strings.Contains(view, glyphBrand) || !strings.Contains(view, "█▀█") || !strings.Contains(view, "No model selected") {
+	if !strings.Contains(view, glyphBrand) || !strings.Contains(view, "█▀█") {
 		t.Fatalf("clear did not reprint welcome: %s", view)
 	}
 }
