@@ -17,12 +17,9 @@ func (m *bubbleModel) handleAgentCommand(argument string) tea.Cmd {
 		}
 		m.appendLine(fmt.Sprintf("Active agent profile: %s", commandStyle.Render(current)))
 		m.appendLine("Available profiles:")
-		m.appendLine("  pow      - High-velocity, direct execution (action-first, minimal code)")
-		m.appendLine("  dex      - Defensive engineering, zero regression (TDD, thorough checks)")
-		m.appendLine("  int      - Deep reasoning & systems architect (YAGNI, root cause analysis)")
-		m.appendLine("  worker   - General-purpose mutating coding worker")
-		m.appendLine("  explorer - Read-only codebase and web search")
-		m.appendLine("  reviewer - Code, security, and architecture review")
+		m.appendLine("  pow - Fast implementation and concrete execution")
+		m.appendLine("  int - Read-only investigation, tracing, research, and review")
+		m.appendLine("  dex - Defensive engineering for complex or high-risk work")
 		m.appendLine("Switch profile: /agent <" + agent.ProfileList("|") + ">")
 		m.refreshViewport()
 		return nil
