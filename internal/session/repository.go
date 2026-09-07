@@ -12,5 +12,3 @@ type Repository interface {
 	List(context.Context, string) ([]string, error)
 	ListSummaries(context.Context, ListOptions) ([]Summary, error)
 }
-
-var _ Repository = (*FileStore)(nil)

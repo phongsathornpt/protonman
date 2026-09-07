@@ -6,12 +6,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectTHORN/proton/internal/adapter/sessionfs"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/session"
 )
 
 func TestResolveSessionExplicitIdentitySemantics(t *testing.T) {
-	store, err := session.NewFileStore(filepath.Join(t.TempDir(), "sessions"))
+	store, err := sessionfs.NewFileStore(filepath.Join(t.TempDir(), "sessions"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +35,7 @@ func TestResolveSessionExplicitIdentitySemantics(t *testing.T) {
 }
 
 func TestResolveSessionRejectsCrossWorkspaceResume(t *testing.T) {
-	store, err := session.NewFileStore(t.TempDir())
+	store, err := sessionfs.NewFileStore(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}

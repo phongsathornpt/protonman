@@ -33,6 +33,7 @@ func TestCorePackagesDoNotDependOnOuterLayers(t *testing.T) {
 		modulePath + "/internal/modelprofile",
 		modulePath + "/internal/permission",
 		modulePath + "/internal/runtimepolicy",
+		modulePath + "/internal/session",
 		modulePath + "/internal/tool",
 		modulePath + "/internal/workspace",
 	} {
@@ -49,6 +50,14 @@ func TestInboundAdaptersUseApplicationConversationBoundary(t *testing.T) {
 	} {
 		assertNoImports(t, packages, adapter, []string{modulePath + "/internal/turn"})
 	}
+}
+
+func TestSessionDomainDoesNotOwnFilesystemPersistence(t *testing.T) {
+	packages := listPackages(t)
+	assertNoImports(t, packages, modulePath+"/internal/session", []string{
+		"os",
+		modulePath + "/internal/adapter/sessionfs",
+	})
 }
 
 func TestApplicationDoesNotDependOnInboundAdapters(t *testing.T) {

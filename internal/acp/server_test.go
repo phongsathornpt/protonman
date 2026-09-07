@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/adapter/sessionfs"
 	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
@@ -192,7 +193,7 @@ func TestACPSessionListAndDelete(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	store, err := session.NewFileStore(tmpDir)
+	store, err := sessionfs.NewFileStore(tmpDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +244,7 @@ func TestACPSessionLoadAndReplay(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	store, err := session.NewFileStore(tmpDir)
+	store, err := sessionfs.NewFileStore(tmpDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -511,13 +512,13 @@ func extractSessionID(t *testing.T, raw []byte) string {
 	return ""
 }
 
-func invalidSessionStore(t *testing.T) *session.FileStore {
+func invalidSessionStore(t *testing.T) *sessionfs.FileStore {
 	t.Helper()
 	root := t.TempDir() + "/not-a-directory"
 	if err := os.WriteFile(root, []byte("occupied"), 0o600); err != nil {
 		t.Fatalf("create invalid store root: %v", err)
 	}
-	store, err := session.NewFileStore(root)
+	store, err := sessionfs.NewFileStore(root)
 	if err != nil {
 		t.Fatalf("NewFileStore() error = %v", err)
 	}
@@ -707,7 +708,7 @@ func TestServeCancellationInterruptsClosableInput(t *testing.T) {
 func TestACPReasoningSlashPersistsAndValidatesModelProfile(t *testing.T) {
 	loop := newACPReasoningLoop(t, "gemini-3.8-flash")
 	server := newTestServerWithRunner(t, permission.ModeAsk, loop)
-	store, err := session.NewFileStore(t.TempDir())
+	store, err := sessionfs.NewFileStore(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -744,7 +745,7 @@ func TestACPReasoningSlashPersistsAndValidatesModelProfile(t *testing.T) {
 func TestACPSessionLoadRestoresReasoningEffort(t *testing.T) {
 	loop := newACPReasoningLoop(t, "gemini-3.8-flash")
 	server := newTestServerWithRunner(t, permission.ModeAsk, loop)
-	store, err := session.NewFileStore(t.TempDir())
+	store, err := sessionfs.NewFileStore(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/projectTHORN/proton/internal/adapter/sessionfs"
 	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/appdirs"
@@ -136,7 +137,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		return nil, fmt.Errorf("create tool registry: %w", err)
 	}
 	coordinator.SetParentRegistry(registry)
-	stateStore, err := session.NewFileStore(dirs.Sessions)
+	stateStore, err := sessionfs.NewFileStore(dirs.Sessions)
 	if err != nil {
 		return nil, fmt.Errorf("create session store: %w", err)
 	}

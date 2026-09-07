@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectTHORN/proton/internal/adapter/sessionfs"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/session"
@@ -24,7 +25,7 @@ func TestSessionCommandsExposeIdentityAndWorkspaceSessions(t *testing.T) {
 		}
 	}
 
-	store, err := session.NewFileStore(filepath.Join(t.TempDir(), "sessions"))
+	store, err := sessionfs.NewFileStore(filepath.Join(t.TempDir(), "sessions"))
 	if err != nil {
 		t.Fatal(err)
 	}
