@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/projectTHORN/proton/internal/appdirs"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/runtimepolicy"
@@ -490,13 +490,7 @@ func saveDefaultModelCmd(providerName, modelID string) tea.Cmd {
 
 func saveModelSelectionCmd(providerName, modelID string, unverified bool) tea.Cmd {
 	return func() tea.Msg {
-		dirs, resolveErr := appdirs.Resolve("")
-		if resolveErr != nil {
-			return modelSelectedMsg{providerName: providerName, modelID: modelID, unverified: unverified, err: resolveErr}
-		}
-		homeDir := dirs.Home
-
-		err := config.SaveUserDefaultModel(homeDir, providerName, modelID)
+		err := (app.Providers{}).SelectModel(providerName, modelID)
 		return modelSelectedMsg{
 			providerName: providerName,
 			modelID:      modelID,

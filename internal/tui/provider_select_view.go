@@ -7,8 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/projectTHORN/proton/internal/appdirs"
-	"github.com/projectTHORN/proton/internal/config"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/model"
 )
 
@@ -420,13 +419,7 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (
 
 func saveActiveProviderCmd(providerName string) tea.Cmd {
 	return func() tea.Msg {
-		dirs, resolveErr := appdirs.Resolve("")
-		if resolveErr != nil {
-			return providerActiveSelectedMsg{providerName: providerName, err: resolveErr}
-		}
-		homeDir := dirs.Home
-
-		err := config.SaveUserDefaultProvider(homeDir, providerName)
+		err := (app.Providers{}).Select(providerName)
 		return providerActiveSelectedMsg{
 			providerName: providerName,
 			err:          err,
@@ -436,13 +429,7 @@ func saveActiveProviderCmd(providerName string) tea.Cmd {
 
 func deleteProviderCmd(providerName string) tea.Cmd {
 	return func() tea.Msg {
-		dirs, resolveErr := appdirs.Resolve("")
-		if resolveErr != nil {
-			return providerDeletedMsg{providerName: providerName, err: resolveErr}
-		}
-		homeDir := dirs.Home
-
-		err := config.DeleteUserProviderConfig(homeDir, providerName)
+		err := (app.Providers{}).Delete(providerName)
 		return providerDeletedMsg{
 			providerName: providerName,
 			err:          err,

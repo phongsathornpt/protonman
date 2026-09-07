@@ -91,6 +91,19 @@ func TestTUIDoesNotPerformProviderDiscoveryDirectly(t *testing.T) {
 	}
 }
 
+func TestTUIDoesNotMutateUserProviderConfigDirectly(t *testing.T) {
+	root := repositoryRoot(t)
+	cmd := exec.Command("rg", "config\\.(SaveUser|DeleteUser)", "internal/tui", "--glob", "*.go", "--glob", "!*_test.go")
+	cmd.Dir = root
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("TUI mutates user provider config directly:\n%s", output)
+	}
+	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
+		t.Fatalf("search TUI user provider config mutations: %v: %s", err, output)
+	}
+}
+
 func TestTUIDoesNotMutateProjectConfigPersistenceDirectly(t *testing.T) {
 	root := repositoryRoot(t)
 	cmd := exec.Command("rg", "config\\.SaveProject", "internal/tui", "--glob", "*.go")
