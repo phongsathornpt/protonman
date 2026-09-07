@@ -64,7 +64,7 @@ func (c *Coordinator) waitSnapshot(id string) (WaitResult, error) {
 }
 
 func (c *Coordinator) pruneExpired() {
-	if c.resultTTL <= 0 {
+	if c.resultTTL <= 0 && c.maxRetainedAgents <= 0 {
 		return
 	}
 	c.agentsMu.Lock()
@@ -73,12 +73,11 @@ func (c *Coordinator) pruneExpired() {
 }
 
 func (c *Coordinator) pruneExpiredLocked(now time.Time) {
-	if c.resultTTL <= 0 {
-		return
-	}
-	for id, entry := range c.agents {
-		if entry.status.State.Terminal() && !entry.status.FinishedAt.IsZero() && now.Sub(entry.status.FinishedAt) >= c.resultTTL {
-			delete(c.agents, id)
+	if c.resultTTL > 0 {
+		for id, entry := range c.agents {
+			if entry.status.State.Terminal() && !entry.status.FinishedAt.IsZero() && now.Sub(entry.status.FinishedAt) >= c.resultTTL {
+				delete(c.agents, id)
+			}
 		}
 	}
 	if c.maxRetainedAgents <= 0 {
@@ -97,7 +96,12 @@ func (c *Coordinator) pruneExpiredLocked(now time.Time) {
 	if len(terminal) <= c.maxRetainedAgents {
 		return
 	}
-	sort.Slice(terminal, func(i, j int) bool { return terminal[i].finished.Before(terminal[j].finished) })
+	sort.Slice(terminal, func(i, j int) bool {
+		if terminal[i].finished.Equal(terminal[j].finished) {
+			return terminal[i].id < terminal[j].id
+		}
+		return terminal[i].finished.Before(terminal[j].finished)
+	})
 	for _, item := range terminal[:len(terminal)-c.maxRetainedAgents] {
 		delete(c.agents, item.id)
 	}
