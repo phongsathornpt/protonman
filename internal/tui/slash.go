@@ -11,6 +11,7 @@ import (
 	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
+	"github.com/projectTHORN/proton/internal/session"
 	"github.com/projectTHORN/proton/internal/tool"
 )
 
@@ -31,6 +32,8 @@ var slashCatalog = []slashCommand{
 	{name: "tools", description: "list tools"},
 	{name: "skills", aliases: []string{"skill"}, description: "browse, activate, or toggle agent skills (/skills [name|active|toggle])", takesArgs: true},
 	{name: "project", aliases: []string{"proton"}, description: "inspect or edit project-local Proton settings (/project [status|init|set ...])", takesArgs: true},
+	{name: "session", description: "show the active session"},
+	{name: "sessions", description: "list resumable sessions for this workspace"},
 	{name: "agent", aliases: []string{"profile"}, description: "show or set agent profile (/agent [" + agent.ProfileList("|") + "])", takesArgs: true},
 	{name: "reasoning", aliases: []string{"thinking"}, description: "show or set session reasoning effort (/reasoning [auto|none|low|medium|high|xhigh|max])", takesArgs: true},
 	{name: "mode", description: "show or set permission mode", takesArgs: true},
@@ -502,6 +505,43 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 			m.refreshViewport()
 			return nil
 		}
+	case "session":
+		m.appendLine("session: " + m.sessionID)
+		if m.workspaceKey != "" {
+			m.appendLine("workspace: " + m.workspaceKey)
+		}
+		m.appendLine(fmt.Sprintf("messages: %d", len(m.messages)))
+	case "sessions":
+		if m.sessionStore == nil {
+			m.appendError("session store is unavailable")
+			break
+		}
+		summaries, err := m.sessionStore.ListSummaries(m.ctx, session.ListOptions{WorkspaceKey: m.workspaceKey, Limit: 20})
+		if err != nil {
+			m.appendError("list sessions: " + err.Error())
+			break
+		}
+		if len(summaries) == 0 {
+			m.appendLine("No resumable sessions for this workspace.")
+			break
+		}
+		m.appendLine("Recent sessions:")
+		for _, summary := range summaries {
+			marker := " "
+			if summary.ID == m.sessionID {
+				marker = "*"
+			}
+			profile := summary.AgentProfile
+			if profile == "" {
+				profile = "-"
+			}
+			preview := summary.Preview
+			if preview == "" {
+				preview = "(empty session)"
+			}
+			m.appendLine(fmt.Sprintf("%s %s  %s  %s", marker, summary.ID, profile, truncateWithEllipsis(preview, 72)))
+		}
+		m.appendLine("Resume with: proton session resume <session-id>")
 	case "mode":
 		if argument == "" {
 			m.appendLine("permission mode: " + m.service.Mode().String())
