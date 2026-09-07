@@ -64,8 +64,8 @@ func extractToolTarget(name string, kind tool.Kind, args json.RawMessage) (strin
 			return fmt.Sprintf("%q", pattern), kind
 		}
 	case tool.KindTask:
-		if items, ok := values["items"].([]any); ok {
-			return fmt.Sprintf("%d tasks", len(items)), kind
+		if operations, ok := values["operations"].([]any); ok {
+			return fmt.Sprintf("%d task operations", len(operations)), kind
 		}
 		return "task plan", kind
 	case tool.KindAgent:

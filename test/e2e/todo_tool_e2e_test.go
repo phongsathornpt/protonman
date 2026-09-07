@@ -40,10 +40,10 @@ func TestE2ETodoToolPersistsAcrossRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	args, _ := json.Marshal(map[string]any{"expected_revision": uint64(0), "items": []map[string]any{
-		{"id": "inspect", "text": "Inspect router", "status": "completed"},
-		{"id": "fix", "text": "Fix cache invalidation", "status": "in_progress"},
-		{"id": "test", "text": "Add integration tests", "status": "pending"},
+	args, _ := json.Marshal(map[string]any{"expected_revision": uint64(0), "operations": []map[string]any{
+		{"op": "add", "id": "inspect", "text": "Inspect router", "status": "completed"},
+		{"op": "add", "id": "fix", "text": "Fix cache invalidation", "status": "in_progress"},
+		{"op": "add", "id": "test", "text": "Add integration tests", "status": "pending"},
 	}})
 	call, err := tool.NewCall("todo-1", "update_todo", args)
 	if err != nil {
@@ -53,8 +53,12 @@ func TestE2ETodoToolPersistsAcrossRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(result.Output, `"completed":1`) || !strings.Contains(result.Output, `"in_progress":1`) {
-		t.Fatalf("result = %s", result.Output)
+	var updatePayload map[string]any
+	if err := json.Unmarshal(result.StructuredOutput, &updatePayload); err != nil {
+		t.Fatal(err)
+	}
+	if updatePayload["completed"] != float64(1) || updatePayload["in_progress"] != float64(1) {
+		t.Fatalf("structured result = %#v", updatePayload)
 	}
 
 	contents, err := os.ReadFile(path)
@@ -85,10 +89,9 @@ func TestE2ETodoToolPersistsAcrossRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	args2, _ := json.Marshal(map[string]any{"expected_revision": restarted.Snapshot().Revision, "items": []map[string]any{
-		{"id": "inspect", "text": "Inspect router", "status": "completed"},
-		{"id": "fix", "text": "Fix cache invalidation", "status": "completed"},
-		{"id": "test", "text": "Add integration tests", "status": "in_progress"},
+	args2, _ := json.Marshal(map[string]any{"expected_revision": restarted.Snapshot().Revision, "operations": []map[string]any{
+		{"op": "set_status", "id": "fix", "status": "completed"},
+		{"op": "set_status", "id": "test", "status": "in_progress"},
 	}})
 	call2, _ := tool.NewCall("todo-2", "update_todo", args2)
 	if _, err := service2.Call(ctx, call2); err != nil {

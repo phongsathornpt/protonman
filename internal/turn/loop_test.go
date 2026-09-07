@@ -810,9 +810,10 @@ func TestLoopRunsApprovedReadCallsWithBoundedConcurrency(t *testing.T) {
 }
 
 type recordingHandler struct {
-	definition tool.Definition
-	calls      []tool.Call
-	output     string
+	definition       tool.Definition
+	calls            []tool.Call
+	output           string
+	structuredOutput json.RawMessage
 }
 
 func readFileDefinition() tool.Definition {
@@ -888,9 +889,10 @@ func (h *recordingHandler) Execute(_ context.Context, call tool.Call) (tool.Resu
 		output = "file contents"
 	}
 	return tool.Result{
-		CallID:   call.ID,
-		ToolName: call.Name,
-		Output:   output,
+		CallID:           call.ID,
+		ToolName:         call.Name,
+		Output:           output,
+		StructuredOutput: append(json.RawMessage(nil), h.structuredOutput...),
 	}, nil
 }
 
@@ -1383,6 +1385,34 @@ func TestFailUsesBoundedDetachedContextForTerminalEvent(t *testing.T) {
 	}
 	if !sawEvent {
 		t.Fatal("terminal event was not emitted")
+	}
+}
+
+func TestLoopPreservesStructuredToolOutputAsNestedJSON(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{events: []sdk.Event{
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "structured", Name: "read_file", Arguments: json.RawMessage(`{"path":"TODO.md"}`)}},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
+		}},
+		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	}}
+	loop, handler := newTestLoop(t, client, permission.ActionAllow)
+	handler.output = "task snapshot revision 4 · 1 tasks"
+	handler.structuredOutput = json.RawMessage(`{"revision":4,"items":[{"id":"a"}]}`)
+	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect tasks"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(client.requests) != 2 {
+		t.Fatalf("requests = %d, want 2", len(client.requests))
+	}
+	content := client.requests[1].Messages[len(client.requests[1].Messages)-1].Content
+	var envelope map[string]any
+	if err := json.Unmarshal([]byte(content), &envelope); err != nil {
+		t.Fatalf("tool history is not JSON: %v (%s)", err, content)
+	}
+	structured, ok := envelope["structured_output"].(map[string]any)
+	if !ok || structured["revision"] != float64(4) {
+		t.Fatalf("structured_output = %#v, want nested JSON object", envelope["structured_output"])
 	}
 }
 
