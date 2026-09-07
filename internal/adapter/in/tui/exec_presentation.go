@@ -16,6 +16,7 @@ const (
 	execFamilyNode    execFamily = "node"
 	execFamilyPython  execFamily = "python"
 	execFamilyRust    execFamily = "rust"
+	execFamilyMake    execFamily = "make"
 	execFamilyVite    execFamily = "vite"
 	execFamilyNext    execFamily = "next"
 )
