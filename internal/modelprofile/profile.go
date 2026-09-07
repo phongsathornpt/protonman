@@ -56,6 +56,26 @@ type MetadataProvenance struct {
 	ToolSchemaDialect  MetadataSource
 }
 
+func (p MetadataProvenance) Summary() string {
+	fields := []struct {
+		name   string
+		source MetadataSource
+	}{
+		{"tools", p.Tools}, {"vision", p.Vision}, {"reasoning_support", p.ReasoningSupport},
+		{"reasoning_levels", p.ReasoningLevels}, {"reasoning_default", p.ReasoningDefault},
+		{"tool_choice_required", p.ToolChoiceRequired}, {"context_window", p.ContextWindow},
+		{"max_input_tokens", p.MaxInputTokens}, {"max_output_tokens", p.MaxOutputTokens},
+		{"prompt_hints", p.PromptHints}, {"tool_schema_dialect", p.ToolSchemaDialect},
+	}
+	parts := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if field.source != MetadataSourceUnknown {
+			parts = append(parts, field.name+"="+string(field.source))
+		}
+	}
+	return strings.Join(parts, ",")
+}
+
 type MatchKind string
 
 const (
