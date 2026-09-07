@@ -21,6 +21,7 @@ const (
 	execFamilyJVM     execFamily = "jvm"
 	execFamilyPHP     execFamily = "php"
 	execFamilyRuby    execFamily = "ruby"
+	execFamilyDotnet  execFamily = "dotnet"
 	execFamilyVite    execFamily = "vite"
 	execFamilyNext    execFamily = "next"
 )

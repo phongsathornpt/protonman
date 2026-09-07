@@ -397,3 +397,14 @@ func TestExecPresentationRuby(t *testing.T) {
 		t.Fatalf("ruby eval = %#v", eval)
 	}
 }
+
+func TestExecPresentationDotnet(t *testing.T) {
+	test := presentExec("dotnet test", "Passed! - Failed: 0, Passed: 126, Skipped: 2, Total: 128\n", "")
+	if test.Title != "Dotnet test" || test.Summary != "126 passed · 2 skipped" {
+		t.Fatalf("dotnet test = %#v", test)
+	}
+	build := presentExec("dotnet build", "Build succeeded.\n    3 Warning(s)\n    0 Error(s)\n", "")
+	if build.Title != "Dotnet build" || build.Summary != "3 warnings" {
+		t.Fatalf("dotnet build = %#v", build)
+	}
+}
