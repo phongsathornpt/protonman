@@ -18,6 +18,7 @@ const (
 	execFamilyRust    execFamily = "rust"
 	execFamilyMake    execFamily = "make"
 	execFamilyDocker  execFamily = "docker"
+	execFamilyJVM     execFamily = "jvm"
 	execFamilyVite    execFamily = "vite"
 	execFamilyNext    execFamily = "next"
 )

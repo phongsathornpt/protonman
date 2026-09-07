@@ -352,3 +352,18 @@ func TestExecPresentationDocker(t *testing.T) {
 		t.Fatalf("docker-compose = %#v", legacy)
 	}
 }
+
+func TestExecPresentationJVMTools(t *testing.T) {
+	maven := presentExec("mvn test", "Tests run: 100, Failures: 1, Errors: 0, Skipped: 2\n", "")
+	if maven.Title != "Maven test" || maven.Summary != "97 passed · 1 failed · 2 skipped" {
+		t.Fatalf("maven = %#v", maven)
+	}
+	gradle := presentExec("./gradlew test", "100 tests completed, 2 failed\n", "")
+	if gradle.Title != "Gradle test" || gradle.Summary != "98 passed · 2 failed" {
+		t.Fatalf("gradle = %#v", gradle)
+	}
+	javac := presentExec("javac src/Main.java", "", "")
+	if javac.Title != "Javac src/Main.java" {
+		t.Fatalf("javac = %#v", javac)
+	}
+}
