@@ -70,7 +70,7 @@ func (webFetchHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                "web_fetch",
 		Description:         "Fetch a URL subject to the sandbox network policy.",
-		Kind:                tool.KindWebFetch,
+		Kind:                tool.KindForName("web_fetch"),
 		Mutability:          tool.MutabilityReadOnly,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyExternalRead},
 		PermissionDetailKey: "url",

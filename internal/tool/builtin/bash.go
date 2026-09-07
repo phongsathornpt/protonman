@@ -58,7 +58,7 @@ func (bashHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                   "bash",
 		Description:            "Run a shell command in the current workspace.",
-		Kind:                   tool.KindBash,
+		Kind:                   tool.KindForName("bash"),
 		Mutability:             tool.MutabilityMutating,
 		Safety:                 tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyDynamic, CheckpointPolicy: tool.CheckpointPolicyWhenKnown, Boundary: tool.BoundaryPolicySandbox},
 		PermissionDetailKey:    "command",

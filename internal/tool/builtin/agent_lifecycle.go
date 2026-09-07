@@ -40,7 +40,7 @@ func NewCancelAgent(c *agent.Coordinator) tool.Handler {
 }
 
 func (h agentLifecycleHandler) Definition() tool.Definition {
-	def := tool.Definition{Name: h.name, Kind: tool.KindAgent, ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded}
+	def := tool.Definition{Name: h.name, Kind: tool.KindForName(h.name), ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded}
 	switch h.name {
 	case "wait_agent":
 		def.Description = "Wait briefly for a subagent without canceling it when the wait expires."

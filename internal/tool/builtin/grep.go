@@ -82,7 +82,7 @@ func (grepHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                "grep",
 		Description:         "Search workspace files with a regular expression.",
-		Kind:                tool.KindGrep,
+		Kind:                tool.KindForName("grep"),
 		Mutability:          tool.MutabilityReadOnly,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead},
 		Evidence:            tool.EvidenceWorkspace,
