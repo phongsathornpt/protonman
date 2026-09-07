@@ -11,8 +11,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/projectTHORN/proton/internal/contextutil"
+	"github.com/projectTHORN/proton/internal/failure"
 	"github.com/projectTHORN/proton/internal/toolcall"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
@@ -192,34 +192,12 @@ func terminalReason(err error) string {
 	case errors.Is(err, toolcall.ErrPermissionDenied):
 		return "permission denied"
 	}
-	var providerErr *sdk.ProviderError
-	if errors.As(err, &providerErr) {
-		switch providerErr.Kind {
-		case sdk.ErrorAuthentication:
-			return "authentication failed"
-		case sdk.ErrorPermission:
-			return "permission denied"
-		case sdk.ErrorRateLimit:
-			return "rate limited"
-		case sdk.ErrorModelNotFound:
-			return "model unavailable"
-		case sdk.ErrorContextLength:
-			return "context limit exceeded"
-		case sdk.ErrorOverloaded:
-			return "provider overloaded"
-		case sdk.ErrorTransport:
-			return "network error"
-		case sdk.ErrorProtocol:
-			return "provider protocol error"
-		case sdk.ErrorInvalidRequest:
-			detail := strings.TrimSpace(providerErr.Message)
-			if detail == "" {
-				return "invalid model request"
-			}
-			return truncateTerminalReason("invalid model request: " + detail)
-		default:
-			return "model error"
+	if classified, ok := failure.ClassifyProvider(err); ok {
+		message := failure.Summary(classified.Code)
+		if classified.Code == failure.CodeModelInvalidRequest && classified.Message != "" {
+			message += ": " + classified.Message
 		}
+		return truncateTerminalReason(message)
 	}
 	return truncateTerminalReason(err.Error())
 }
