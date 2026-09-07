@@ -27,6 +27,7 @@ var execCommandProfiles = []execCommandProfile{
 	{execFamilyPython, isPythonExecutable, pythonAction, func(_ string, args []string, action string) string { return pythonExecTitle(args, action) }, summarizePythonExec},
 	{execFamilyRust, exactExecNames("cargo", "rustc", "rustfmt"), rustAction, rustExecTitle, summarizeRustExec},
 	{execFamilyMake, exactExecNames("make", "gmake"), makeAction, makeExecTitle, summarizeMakeExec},
+	{execFamilyDocker, exactExecNames("docker", "docker-compose"), dockerAction, dockerExecTitle, summarizeDockerExec},
 	{execFamilyVite, exactExecNames("vite"), firstArg, func(_ string, _ []string, action string) string { return execTitle("Vite", action) }, summarizeViteExec},
 	{execFamilyNext, exactExecNames("next"), firstArg, func(_ string, _ []string, action string) string { return execTitle("Next", action) }, summarizeNextExec},
 }
