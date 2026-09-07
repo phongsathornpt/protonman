@@ -25,6 +25,9 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	if err := req.Validate(); err != nil {
 		return Handle{}, fmt.Errorf("invalid subagent request: %w", err)
 	}
+	if !c.Enabled() {
+		return Handle{}, ErrSubagentsDisabled
+	}
 	c.agentsMu.Lock()
 	if c.closed.Load() {
 		c.agentsMu.Unlock()
