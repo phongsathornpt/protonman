@@ -95,6 +95,7 @@ type bubbleModel struct {
 	runtimeConfig           config.RuntimeConfig
 	projectTrusted          bool
 	projectConfigSources    []string
+	projectConfigProvenance map[string]config.ValueSource
 
 	// Compatibility snapshots for existing in-package tests during the
 	// migration. Runtime ownership lives in bottom/historyState.

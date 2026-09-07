@@ -7,7 +7,9 @@ import (
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/appdirs"
+	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/permission"
+	projectdomain "github.com/projectTHORN/proton/internal/project"
 )
 
 func TestProjectCommandLoadsTrustedWorkspaceState(t *testing.T) {
@@ -121,5 +123,34 @@ func TestProjectInitCreatesConfigAndReloadsPane(t *testing.T) {
 	}
 	if !strings.Contains(view.Render(m), "Created "+appdirs.RootDirName+"/"+appdirs.ConfigFileName) {
 		t.Fatalf("project pane missing init confirmation: %q", view.Render(m))
+	}
+}
+
+func TestProjectPaneShowsConfigurationProvenance(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.projectConfigProvenance = map[string]config.ValueSource{
+		config.FieldModelDefault:         config.SourceProject,
+		config.FieldModelProvider:        config.SourceUser,
+		config.FieldAgentProfile:         config.SourceProject,
+		config.FieldAgentReasoningEffort: config.SourceUser,
+		config.FieldAgentMaxRounds:       config.SourceDefault,
+		config.FieldUIPermissionMode:     config.SourceUser,
+	}
+	m.activeModel = "model-x"
+	m.activeProvider = "provider-x"
+	m.agentProfile = "dex"
+	view := &projectPaneView{state: projectdomain.State{Trusted: true}}
+	rendered := view.Render(m)
+	for _, want := range []string{
+		"model-x · project",
+		"provider-x · user",
+		"dex · project",
+		"auto · user",
+		"ask · user",
+		"default",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("project pane missing provenance %q: %q", want, rendered)
+		}
 	}
 }

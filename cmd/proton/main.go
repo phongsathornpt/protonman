@@ -84,7 +84,7 @@ func run(ctx context.Context, args []string) error {
 		tui.WithModelConfig(runtimeState.config.Model, runtimeState.config.Providers),
 		tui.WithAgentConfig(runtimeState.config.Agent),
 		tui.WithRuntimeConfig(runtimeState.config.Runtime),
-		tui.WithProjectContext(envconfig.Bool(envconfig.TrustProject), runtimeState.config.Sources),
+		tui.WithProjectContext(envconfig.Bool(envconfig.TrustProject), runtimeState.config.Sources, runtimeState.config.Provenance),
 		tui.WithBubbleTeaRunner(runtimeState.runner),
 		tui.WithCoordinator(runtimeState.coordinator),
 	)
