@@ -248,36 +248,11 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 		return renderModalRows(m, accentAssistant, rows)
 	}
 
-	if v.index >= len(v.models) {
-		v.index = len(v.models) - 1
-	}
-	if v.index < 0 {
-		v.index = 0
-	}
-
 	visibleRows := pickerVisibleRows(m.height, maxModelSelectRows)
+	index, offset, visibleEnd := normalizedPickerWindow(v.index, v.offset, len(v.models), visibleRows)
+	visible := v.models[offset:visibleEnd]
 
-	// Dynamic scroll windowing
-	if v.index < v.offset {
-		v.offset = v.index
-	}
-	if v.index >= v.offset+visibleRows {
-		v.offset = v.index - visibleRows + 1
-	}
-	if v.offset > len(v.models)-visibleRows {
-		v.offset = len(v.models) - visibleRows
-	}
-	if v.offset < 0 {
-		v.offset = 0
-	}
-
-	visibleEnd := v.offset + visibleRows
-	if visibleEnd > len(v.models) {
-		visibleEnd = len(v.models)
-	}
-	visible := v.models[v.offset:visibleEnd]
-
-	title := fmt.Sprintf("Select Model · %s · %d/%d", activeProv, v.index+1, len(v.models))
+	title := fmt.Sprintf("Select Model · %s · %d/%d", activeProv, index+1, len(v.models))
 	if len(v.providerNames) > 1 {
 		title += " · tab provider"
 	}
@@ -293,17 +268,17 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 	}
 	rows = append(rows, "")
 
-	if v.offset > 0 {
+	if offset > 0 {
 		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ↑ %d more", v.offset)))
 	}
 
 	contentWidth := maxInt(8, maxWidth-6)
 	showDetails := layoutModeForHeight(m.height) == layoutNormal
 	for i, md := range visible {
-		idx := v.offset + i
+		idx := offset + i
 		isCurrent := m != nil && strings.EqualFold(md.ID, m.activeModel)
 		focus := "  "
-		if idx == v.index {
+		if idx == index {
 			focus = "❯ "
 		}
 		active := " "

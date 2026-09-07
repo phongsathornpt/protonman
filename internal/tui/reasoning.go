@@ -86,9 +86,7 @@ func (v *reasoningPaneView) Render(m *bubbleModel) string {
 	if len(choices) == 0 {
 		choices = []sdk.ReasoningEffort{sdk.ReasoningDefault}
 	}
-	if v.index < 0 || v.index >= len(choices) {
-		v.index = 0
-	}
+	index, _, _ := normalizedPickerWindow(v.index, 0, len(choices), len(choices))
 
 	modelName := strings.TrimSpace(m.activeModel)
 	if modelName == "" {
@@ -101,7 +99,7 @@ func (v *reasoningPaneView) Render(m *bubbleModel) string {
 	}
 	for i, effort := range choices {
 		cursor := "  "
-		if i == v.index {
+		if i == index {
 			cursor = glyphPrompt
 		}
 		label := reasoningEffortLabel(effort)
@@ -117,7 +115,7 @@ func (v *reasoningPaneView) Render(m *bubbleModel) string {
 			detail += " · " + strings.Join(badges, " · ")
 		}
 		line := fmt.Sprintf("%s%-7s %s", cursor, label, mutedStyle.Render(detail))
-		if i == v.index {
+		if i == index {
 			line = fmt.Sprintf("%s%s %s", cursor, brandStyle.Bold(true).Render(label), mutedStyle.Render(detail))
 		}
 		rows = append(rows, line)
@@ -137,6 +135,7 @@ func (v *reasoningPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool,
 	if len(choices) == 0 {
 		choices = []sdk.ReasoningEffort{sdk.ReasoningDefault}
 	}
+	v.index, _, _ = normalizedPickerWindow(v.index, 0, len(choices), len(choices))
 	switch message.String() {
 	case "up", "k":
 		v.index = (v.index - 1 + len(choices)) % len(choices)

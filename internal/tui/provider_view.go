@@ -423,46 +423,22 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 			return renderProviderModal(m, accentUser, rows)
 		}
 
-		if v.selectedIndex >= len(models) {
-			v.selectedIndex = len(models) - 1
-		}
-		if v.selectedIndex < 0 {
-			v.selectedIndex = 0
-		}
-
-		// Dynamic scroll windowing
-		if v.selectedIndex < v.scrollOffset {
-			v.scrollOffset = v.selectedIndex
-		}
-		if v.selectedIndex >= v.scrollOffset+maxProviderSelectRows {
-			v.scrollOffset = v.selectedIndex - maxProviderSelectRows + 1
-		}
-		if v.scrollOffset > len(models)-maxProviderSelectRows {
-			v.scrollOffset = len(models) - maxProviderSelectRows
-		}
-		if v.scrollOffset < 0 {
-			v.scrollOffset = 0
-		}
-
-		visibleEnd := v.scrollOffset + maxProviderSelectRows
-		if visibleEnd > len(models) {
-			visibleEnd = len(models)
-		}
-		visible := models[v.scrollOffset:visibleEnd]
+		selectedIndex, scrollOffset, visibleEnd := normalizedPickerWindow(v.selectedIndex, v.scrollOffset, len(models), maxProviderSelectRows)
+		visible := models[scrollOffset:visibleEnd]
 
 		rows := []string{
 			brandStyle.Render(title),
 			"",
 		}
 
-		if v.scrollOffset > 0 {
-			rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ▲ %d more above", v.scrollOffset)))
+		if scrollOffset > 0 {
+			rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ▲ %d more above", scrollOffset)))
 		}
 
 		for i, md := range visible {
-			idx := v.scrollOffset + i
+			idx := scrollOffset + i
 			prefix := "    "
-			if idx == v.selectedIndex {
+			if idx == selectedIndex {
 				prefix = brandStyle.Render("  ❯ ")
 			}
 			line := fmt.Sprintf("%d. %s", idx+1, providerModelLabel(md))
@@ -681,6 +657,10 @@ func renderProviderFieldLabel(label, fieldError string) string {
 }
 
 func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+	defer func() {
+		models := v.currentModels()
+		v.selectedIndex, v.scrollOffset, _ = normalizedPickerWindow(v.selectedIndex, v.scrollOffset, len(models), maxProviderSelectRows)
+	}()
 	switch v.state {
 	case providerStateFetching:
 		if message.String() == "esc" {

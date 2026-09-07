@@ -204,48 +204,23 @@ func (v *skillsPaneView) Render(m *bubbleModel) string {
 		return renderModalRows(m, accentAssistant, []string{"No agent skills discovered.", "", fmt.Sprintf("Place skills in %s or .proton/skills/.", appdirs.UserSkillsDisplay()), "", "esc close"})
 	}
 	skills := m.skills.List()
-	if v.index >= len(skills) {
-		v.index = len(skills) - 1
-	}
-	if v.index < 0 {
-		v.index = 0
-	}
-
 	visibleRows := pickerVisibleRows(m.height, maxSkillsRows)
-
-	// Dynamic windowing
-	if v.index < v.offset {
-		v.offset = v.index
-	}
-	if v.index >= v.offset+visibleRows {
-		v.offset = v.index - visibleRows + 1
-	}
-	if v.offset > len(skills)-visibleRows {
-		v.offset = len(skills) - maxSkillsRows
-	}
-	if v.offset < 0 {
-		v.offset = 0
-	}
-
-	visibleEnd := v.offset + visibleRows
-	if visibleEnd > len(skills) {
-		visibleEnd = len(skills)
-	}
-	visible := skills[v.offset:visibleEnd]
+	index, offset, visibleEnd := normalizedPickerWindow(v.index, v.offset, len(skills), visibleRows)
+	visible := skills[offset:visibleEnd]
 
 	maxWidth := maxInt(1, m.width-8)
 	rows := make([]string, 0, len(visible)+6)
 	activeCount := len(m.skills.ActivatedList())
-	title := fmt.Sprintf("Agent Skills (%d/%d active · item %d of %d)", activeCount, len(skills), v.index+1, len(skills))
+	title := fmt.Sprintf("Agent Skills (%d/%d active · item %d of %d)", activeCount, len(skills), index+1, len(skills))
 	rows = append(rows, brandStyle.Render(title), "")
 
-	if v.offset > 0 {
-		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ▲ %d more above", v.offset)))
+	if offset > 0 {
+		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ▲ %d more above", offset)))
 	}
 
 	for i, s := range visible {
-		idx := v.offset + i
-		isCurrent := idx == v.index
+		idx := offset + i
+		isCurrent := idx == index
 		isActive := m.skills.IsActivated(s.Name)
 
 		cursor := "  "
@@ -285,6 +260,12 @@ func (v *skillsPaneView) Render(m *bubbleModel) string {
 }
 
 func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+	defer func() {
+		if m != nil && m.skills != nil {
+			visible := pickerVisibleRows(m.height, maxSkillsRows)
+			v.index, v.offset, _ = normalizedPickerWindow(v.index, v.offset, len(m.skills.List()), visible)
+		}
+	}()
 	if key.Matches(message, m.keys.ToggleSkills) {
 		m.bottom.remove(skillsViewID)
 		return true, nil

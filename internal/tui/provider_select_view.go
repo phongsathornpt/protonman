@@ -151,14 +151,9 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 		return renderProviderModal(m, accentAssistant, rows)
 	}
 
-	if v.index >= len(v.items) {
-		v.index = len(v.items) - 1
-	}
-	if v.index < 0 {
-		v.index = 0
-	}
+	index, offset, visibleEnd := normalizedPickerWindow(v.index, v.offset, len(v.items), visibleRows)
 	if v.deleteConfirm {
-		item := v.items[v.index]
+		item := v.items[index]
 		if item.isConfigured {
 			rows := []string{
 				warningStyle.Render("Remove Provider?"),
@@ -173,28 +168,9 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 			rows = append(rows, "", mutedStyle.Render("enter remove permanently · esc cancel"))
 			return renderProviderModal(m, warningColor, rows)
 		}
-		v.deleteConfirm = false
 	}
 
-	// Dynamic scroll windowing
-	if v.index < v.offset {
-		v.offset = v.index
-	}
-	if v.index >= v.offset+visibleRows {
-		v.offset = v.index - visibleRows + 1
-	}
-	if v.offset > len(v.items)-visibleRows {
-		v.offset = len(v.items) - visibleRows
-	}
-	if v.offset < 0 {
-		v.offset = 0
-	}
-
-	visibleEnd := v.offset + visibleRows
-	if visibleEnd > len(v.items) {
-		visibleEnd = len(v.items)
-	}
-	visible := v.items[v.offset:visibleEnd]
+	visible := v.items[offset:visibleEnd]
 
 	numConfigured := 0
 	numAvailable := 0
@@ -217,16 +193,16 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 	rows := make([]string, 0, len(visible)*2+6)
 	rows = append(rows, brandStyle.Render(title), "")
 
-	if v.offset > 0 {
+	if offset > 0 {
 		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ↑ %d more", v.offset)))
 	}
 
 	contentWidth := maxInt(8, providerModalContentWidth(m)-2)
 	showDetails := layoutModeForHeight(m.height) == layoutNormal
 	for i, item := range visible {
-		idx := v.offset + i
+		idx := offset + i
 		focus := "  "
-		if idx == v.index {
+		if idx == index {
 			focus = "❯ "
 		}
 		active := " "
@@ -282,6 +258,13 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 }
 
 func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+	defer func() {
+		visible := pickerVisibleRows(m.height, maxProviderListRows)
+		v.index, v.offset, _ = normalizedPickerWindow(v.index, v.offset, len(v.items), visible)
+		if v.deleteConfirm && (len(v.items) == 0 || !v.items[v.index].isConfigured) {
+			v.deleteConfirm = false
+		}
+	}()
 	if v.deleteConfirm {
 		switch message.String() {
 		case "enter":
