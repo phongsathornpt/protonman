@@ -10,14 +10,24 @@ import (
 )
 
 // ErrDuplicateSkill indicates a skill with the same name is already registered.
-var ErrDuplicateSkill = errors.New("duplicate skill")
+var (
+	ErrDuplicateSkill  = errors.New("duplicate skill")
+	ErrActivationLimit = errors.New("skill activation context limit exceeded")
+)
+
+// ActivationLimits bounds full skill instructions injected into one agent session.
+type ActivationLimits struct {
+	MaxSkills           int
+	MaxInstructionBytes int
+}
 
 // Registry manages discovered and activated skills.
 type Registry struct {
-	mu        sync.RWMutex
-	skills    map[string]Skill
-	order     []string
-	activated map[string]bool
+	mu               sync.RWMutex
+	skills           map[string]Skill
+	order            []string
+	activated        map[string]bool
+	activationLimits ActivationLimits
 }
 
 // NewRegistry creates a registry populated with the provided skills.
@@ -104,12 +114,67 @@ func (r *Registry) Catalog() []CatalogItem {
 	return items
 }
 
-// MarkActivated records that a skill was loaded in the current session.
-func (r *Registry) MarkActivated(name string) {
+// SetActivationLimits configures optional context bounds for this activation session.
+func (r *Registry) SetActivationLimits(limits ActivationLimits) {
+	if r == nil {
+		return
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.activationLimits = limits
+}
 
-	r.activated[strings.ToLower(strings.TrimSpace(name))] = true
+// Activate records a skill as active while enforcing this session's context limits.
+func (r *Registry) Activate(name string) error {
+	if r == nil {
+		return fmt.Errorf("activate skill: registry is required")
+	}
+	cleanName := strings.ToLower(strings.TrimSpace(name))
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	item, exists := r.skills[cleanName]
+	if !exists {
+		return fmt.Errorf("skill %q not found", cleanName)
+	}
+	if r.activated[cleanName] {
+		return nil
+	}
+	if limit := r.activationLimits.MaxSkills; limit > 0 && activeSkillCount(r.activated) >= limit {
+		return fmt.Errorf("%w: at most %d active skills", ErrActivationLimit, limit)
+	}
+	if limit := r.activationLimits.MaxInstructionBytes; limit > 0 {
+		used := activeInstructionBytes(r.skills, r.activated)
+		if used+len(item.Instructions) > limit {
+			return fmt.Errorf("%w: active skill instructions would exceed %d bytes", ErrActivationLimit, limit)
+		}
+	}
+	r.activated[cleanName] = true
+	return nil
+}
+
+// MarkActivated records a skill using legacy unreported activation semantics.
+func (r *Registry) MarkActivated(name string) {
+	_ = r.Activate(name)
+}
+
+func activeSkillCount(active map[string]bool) int {
+	count := 0
+	for _, enabled := range active {
+		if enabled {
+			count++
+		}
+	}
+	return count
+}
+
+func activeInstructionBytes(skills map[string]Skill, active map[string]bool) int {
+	total := 0
+	for name, enabled := range active {
+		if enabled {
+			total += len(skills[name].Instructions)
+		}
+	}
+	return total
 }
 
 // IsActivated checks if a skill has been loaded in the current session (case-insensitive).

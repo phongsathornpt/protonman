@@ -33,7 +33,7 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	c.agentsMu.RUnlock()
 
 	// 1. Build profile-scoped tools and an isolated skill activation session.
-	childSkills := skillCatalog.Fork()
+	childSkills := selectSubagentSkills(skillCatalog, req)
 	scopedRegistry := FilterRegistryForProfile(parentRegistry, req.Profile)
 	scopedRegistry = bindSkillRegistry(scopedRegistry, childSkills)
 

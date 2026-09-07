@@ -12,8 +12,9 @@ import (
 )
 
 type activateSkillHandler struct {
-	registry  *skill.Registry
-	workspace *workspace.Workspace
+	registry      *skill.Registry
+	workspace     *workspace.Workspace
+	compactOutput bool
 }
 
 type activateSkillInput struct {
@@ -35,6 +36,7 @@ func NewActivateSkill(registry *skill.Registry, workspaceRoots ...*workspace.Wor
 // BindSkillRegistry clones this handler for an isolated subagent skill session.
 func (h activateSkillHandler) BindSkillRegistry(registry *skill.Registry) tool.Handler {
 	h.registry = registry
+	h.compactOutput = true
 	return h
 }
 
@@ -91,7 +93,24 @@ func (h activateSkillHandler) Execute(ctx context.Context, call tool.Call) (tool
 		}
 	}
 
-	h.registry.MarkActivated(name)
+	if err := h.registry.Activate(name); err != nil {
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeOutputTooLarge, "activate skill context", err)
+	}
+
+	if h.compactOutput {
+		var b strings.Builder
+		fmt.Fprintf(&b, "Activated skill %q; full instructions are loaded into the next model context.", s.Name)
+		if s.BaseDir != "" {
+			fmt.Fprintf(&b, "\nSkill directory: %s", s.BaseDir)
+		}
+		if len(s.Resources) > 0 {
+			b.WriteString("\nResources:")
+			for _, resource := range s.Resources {
+				fmt.Fprintf(&b, "\n- %s", resource)
+			}
+		}
+		return tool.Result{CallID: call.ID, ToolName: call.Name, Output: b.String()}, nil
+	}
 
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("<skill_content name=%q>\n", s.Name))
