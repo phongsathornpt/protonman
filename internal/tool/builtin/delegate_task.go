@@ -40,6 +40,7 @@ func (delegateTaskHandler) Definition() tool.Definition {
 		Mutability:             tool.MutabilityMutating,
 		ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded,
 		PermissionDetailKey:    "task",
+		OutputSchema:           delegateTaskOutputSchema(),
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -139,5 +140,9 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 	if err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "encode subagent handle", err)
 	}
-	return tool.Result{CallID: call.ID, ToolName: call.Name, Output: string(payload)}, nil
+	return tool.Result{
+		CallID: call.ID, ToolName: call.Name,
+		Output:           fmt.Sprintf("spawned %s · %s · %s", handle.ID, handle.Profile, agent.StateQueued),
+		StructuredOutput: payload,
+	}, nil
 }

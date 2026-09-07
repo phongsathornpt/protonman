@@ -20,7 +20,7 @@ func TestE2ESubagentDelegationSuccess(t *testing.T) {
 	if res.exitCode != 0 {
 		t.Fatalf("delegation failed: %s %s", res.stdout, res.stderr)
 	}
-	if !strings.Contains(res.stdout, `"agent_id":"explorer-`) || !strings.Contains(res.stdout, `"status":"queued"`) {
+	if !strings.Contains(res.stdout, "spawned explorer-") || !strings.Contains(res.stdout, "explorer · queued") {
 		t.Fatalf("missing async subagent handle: %s", res.stdout)
 	}
 }

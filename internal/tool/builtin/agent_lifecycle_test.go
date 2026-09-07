@@ -42,7 +42,7 @@ func TestWaitAgentTimeoutDoesNotCancelChild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(res.Output, `"status":"running"`) && !strings.Contains(res.Output, `"status":"queued"`) {
+	if !strings.Contains(string(res.StructuredOutput), `"status":"running"`) && !strings.Contains(string(res.StructuredOutput), `"status":"queued"`) {
 		t.Fatalf("wait output = %s", res.Output)
 	}
 	if _, ok := coord.Get(h.ID); !ok {
@@ -55,7 +55,7 @@ func TestWaitAgentTimeoutDoesNotCancelChild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(res.Output, `"status":"completed"`) || !strings.Contains(res.Output, "finished") {
+	if !strings.Contains(string(res.StructuredOutput), `"status":"completed"`) || !strings.Contains(string(res.StructuredOutput), "finished") {
 		t.Fatalf("completion output = %s", res.Output)
 	}
 }
@@ -76,11 +76,11 @@ func TestAgentLifecycleGetListCancel(t *testing.T) {
 	}
 
 	getCall, _ := tool.NewCall("get", "get_agent", json.RawMessage(`{"agent_id":"`+h.ID+`"}`))
-	if res, err := NewGetAgent(coord).Execute(context.Background(), getCall); err != nil || !strings.Contains(res.Output, h.ID) {
+	if res, err := NewGetAgent(coord).Execute(context.Background(), getCall); err != nil || !strings.Contains(string(res.StructuredOutput), h.ID) {
 		t.Fatalf("get output=%s err=%v", res.Output, err)
 	}
 	listCall, _ := tool.NewCall("list", "list_agents", json.RawMessage(`{}`))
-	if res, err := NewListAgents(coord).Execute(context.Background(), listCall); err != nil || !strings.Contains(res.Output, h.ID) {
+	if res, err := NewListAgents(coord).Execute(context.Background(), listCall); err != nil || !strings.Contains(string(res.StructuredOutput), h.ID) {
 		t.Fatalf("list output=%s err=%v", res.Output, err)
 	}
 	cancelCall, _ := tool.NewCall("cancel", "cancel_agent", json.RawMessage(`{"agent_id":"`+h.ID+`"}`))
@@ -92,7 +92,7 @@ func TestAgentLifecycleGetListCancel(t *testing.T) {
 		t.Fatalf("wait=%+v err=%v", wr, err)
 	}
 	res, err := NewGetAgent(coord).Execute(context.Background(), getCall)
-	if err != nil || !strings.Contains(res.Output, `"state":"canceled"`) {
+	if err != nil || !strings.Contains(string(res.StructuredOutput), `"state":"canceled"`) {
 		t.Fatalf("terminal get=%s err=%v", res.Output, err)
 	}
 }

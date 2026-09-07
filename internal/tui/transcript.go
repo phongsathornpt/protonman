@@ -218,7 +218,8 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 	}
 	state := m.ensureHistoryState()
 	body := result.Output
-	if (name == "get_todo" || name == "update_todo") && len(result.StructuredOutput) > 0 {
+	if len(result.StructuredOutput) > 0 && (name == "get_todo" || name == "update_todo" ||
+		name == "delegate_task" || name == "wait_agent" || name == "get_agent" || name == "list_agents" || name == "cancel_agent") {
 		body = string(result.StructuredOutput)
 	}
 	if result.CheckpointID != "" {
