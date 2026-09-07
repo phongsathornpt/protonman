@@ -93,6 +93,8 @@ type bubbleModel struct {
 	sessionID               string
 	modelCatalogs           modelCatalogState
 	runtimeConfig           config.RuntimeConfig
+	projectTrusted          bool
+	projectConfigSources    []string
 
 	// Compatibility snapshots for existing in-package tests during the
 	// migration. Runtime ownership lives in bottom/historyState.

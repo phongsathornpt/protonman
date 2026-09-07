@@ -98,6 +98,15 @@ func WithRuntimeConfig(runtimeCfg config.RuntimeConfig) BubbleTeaOption {
 	}
 }
 
+// WithProjectContext attaches workspace trust and loaded config-source metadata.
+func WithProjectContext(trusted bool, sources []string) BubbleTeaOption {
+	return func(ui *BubbleTeaUI) error {
+		ui.projectTrusted = trusted
+		ui.projectConfigSources = append([]string(nil), sources...)
+		return nil
+	}
+}
+
 // WithCoordinator attaches the subagent coordinator to the TUI so permission
 // mode, interactive prompts, and model client changes are synchronized.
 func WithCoordinator(coordinator *agent.Coordinator) BubbleTeaOption {
@@ -128,6 +137,8 @@ type BubbleTeaUI struct {
 	hasRuntimeConfig     bool
 	providers            map[string]config.ProviderConfig
 	sessionID            string
+	projectTrusted       bool
+	projectConfigSources []string
 }
 
 // NewBubbleTea creates the component-based fullscreen TUI.
@@ -246,6 +257,8 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		bModel.activeProvider = ui.modelConfig.Provider
 		bModel.providers = ui.providers
 		bModel.sessionID = ui.sessionID
+		bModel.projectTrusted = ui.projectTrusted
+		bModel.projectConfigSources = append([]string(nil), ui.projectConfigSources...)
 		if ui.hasRuntimeConfig {
 			bModel.runtimeConfig = ui.runtimeConfig
 		}
