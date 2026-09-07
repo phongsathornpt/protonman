@@ -332,31 +332,6 @@ func TestDeleteUserProviderConfig(t *testing.T) {
 	}
 }
 
-func TestAgentMaxRoundsConfigIsDeprecatedAndIgnored(t *testing.T) {
-	homeDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent]
-max_rounds = 35
-max_tool_calls = 42
-`)
-	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := snapshot.Agent.MaxToolCalls, 42; got != want {
-		t.Fatalf("configured max_tool_calls = %d, want %d", got, want)
-	}
-	found := false
-	for _, warning := range snapshot.Warnings {
-		if strings.Contains(warning, "agent.max_rounds is deprecated and ignored") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("warnings = %#v, want max_rounds deprecation", snapshot.Warnings)
-	}
-}
-
 func TestSaveUserConfigRejectsCorruptExistingFile(t *testing.T) {
 	homeDir := t.TempDir()
 	configPath := filepath.Join(homeDir, ".proton", "config.toml")
@@ -383,7 +358,6 @@ func TestLoadAgentProfileConfig(t *testing.T) {
 	homeDir := t.TempDir()
 	configPath := filepath.Join(homeDir, ".proton", "config.toml")
 	writeConfig(t, configPath, `[agent]
-max_rounds = 30
 profile = "dex"
 `)
 

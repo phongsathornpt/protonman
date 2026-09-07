@@ -27,7 +27,7 @@ func TestRenderComposesStableContracts(t *testing.T) {
 		}
 	}
 	for _, unwanted := range []string{
-		"Available tools:", "provider=google", "model_profile_match=", "reasoning_requested=", "max_rounds=",
+		"Available tools:", "provider=google", "model_profile_match=", "reasoning_requested=",
 	} {
 		if strings.Contains(got, unwanted) {
 			t.Fatalf("prompt leaked runtime metadata %q:\n%s", unwanted, got)

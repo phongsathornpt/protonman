@@ -329,7 +329,6 @@ profile = "off"
 
 # Agent execution boundaries
 [agent]
-max_rounds = 20
 max_tool_calls = 100
 max_live_subagents = 16
 max_retained_subagents = 64
@@ -383,7 +382,7 @@ api_key = "your_anthropic_api_key"
 
 Execution safety notes:
 
-- `max_rounds = 0` disables only the round-count bound; `max_tool_calls = 0` disables only the cumulative tool-call-count bound.
+- `max_tool_calls = 0` disables the cumulative tool-call-count bound; turn and tool timeouts still provide independent safety ceilings.
 - `bash` accepts `command`, optional workspace-relative `cwd`, and optional `timeout_seconds` (1-120). A per-call timeout can shorten but never extend the caller/tool-service deadline.
 - Bash effect analysis is conservative: proven read-only shell commands may run in plan mode, while mutating or unknown commands remain blocked. Simple redirections/composition and common filesystem/git commands publish proven `affected_paths`; unknown scripts remain fail-closed.
 - Bash results preserve compatibility `output` while also exposing bounded `stdout`, `stderr`, per-stream byte counts/truncation flags, exit code, and stable failure codes. Cancellation terminates the command process tree through the sandbox launcher.
