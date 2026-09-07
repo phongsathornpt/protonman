@@ -200,16 +200,15 @@ func TestApplyTurnEventTracksRoundAndToolCount(t *testing.T) {
 	}
 }
 
-func TestAgentsViewShowsTerminalFailureReason(t *testing.T) {
+func TestAgentsViewHidesTerminalAgents(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.resize(100, 30)
 	m.agentSnapshot = []agent.AgentStatus{{
 		ID: "reviewer-2", Task: "review security", State: agent.StateFailed,
 		StartedAt: time.Now().Add(-10 * time.Second), FinishedAt: time.Now(), Reason: "timed out",
 	}}
-	got := m.agentsView()
-	if !strings.Contains(got, "timed out") || !strings.Contains(got, "review security") {
-		t.Fatalf("agents view=%q", got)
+	if got := m.agentsView(); got != "" {
+		t.Fatalf("terminal agent leaked into live pane: %q", got)
 	}
 }
 

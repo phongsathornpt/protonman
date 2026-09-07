@@ -292,10 +292,17 @@ func (m bubbleModel) agentsView() string {
 	if m.busy && m.activeTurnOwner != "" {
 		snapshot = m.turnAgentSnapshot()
 	}
+	live := make([]agent.AgentStatus, 0, len(snapshot))
+	for _, st := range snapshot {
+		if !st.State.Terminal() {
+			live = append(live, st)
+		}
+	}
+	snapshot = live
 	if layoutModeForHeight(m.height) == layoutTiny || len(snapshot) == 0 {
 		return ""
 	}
-	queued, running, canceling, completed := 0, 0, 0, 0
+	queued, running, canceling := 0, 0, 0
 	for _, st := range snapshot {
 		switch st.State {
 		case agent.StateQueued:
@@ -304,8 +311,6 @@ func (m bubbleModel) agentsView() string {
 			running++
 		case agent.StateCanceling:
 			canceling++
-		case agent.StateCompleted:
-			completed++
 		}
 	}
 	active := queued + running + canceling
@@ -318,9 +323,6 @@ func (m bubbleModel) agentsView() string {
 	}
 	if canceling > 0 {
 		summary += fmt.Sprintf(" · %d canceling", canceling)
-	}
-	if completed > 0 {
-		summary += fmt.Sprintf(" · %d done", completed)
 	}
 	mode := layoutModeForHeight(m.height)
 	visible := append([]agent.AgentStatus(nil), snapshot...)
