@@ -23,18 +23,26 @@ import (
 // ErrDuplicateTool indicates that a name is already registered.
 var ErrDuplicateTool = errors.New("duplicate tool")
 
+// compiledToolValidators holds immutable schema validators produced at registration.
+type compiledToolValidators struct {
+	input  *sdk.ToolSchemaValidator
+	output *sdk.ToolSchemaValidator
+}
+
 // Registry is a concurrency-safe in-process tool registry.
 type Registry struct {
-	mu       sync.RWMutex
-	handlers map[string]tool.Handler
-	order    []string
+	mu         sync.RWMutex
+	handlers   map[string]tool.Handler
+	validators map[string]compiledToolValidators
+	order      []string
 }
 
 // NewRegistry creates an empty registry and optionally registers handlers.
 func NewRegistry(handlers ...tool.Handler) (*Registry, error) {
 	registry := &Registry{
-		handlers: make(map[string]tool.Handler),
-		order:    make([]string, 0, len(handlers)),
+		handlers:   make(map[string]tool.Handler),
+		validators: make(map[string]compiledToolValidators),
+		order:      make([]string, 0, len(handlers)),
 	}
 	for _, handler := range handlers {
 		if err := registry.Register(handler); err != nil {
@@ -196,10 +204,12 @@ func (r *Registry) Register(handler tool.Handler) error {
 		return fmt.Errorf("register %q: %w", definition.Name, err)
 	}
 	sdkTool := sdk.Tool{Name: definition.Name, Description: definition.Description, InputSchema: definition.InputSchema, OutputSchema: definition.OutputSchema}
-	if _, err := sdk.CompileToolInputValidator(sdkTool); err != nil {
+	inputValidator, err := sdk.CompileToolInputValidator(sdkTool)
+	if err != nil {
 		return fmt.Errorf("register %q input schema: %w", definition.Name, err)
 	}
-	if _, err := sdk.CompileToolOutputValidator(sdkTool); err != nil {
+	outputValidator, err := sdk.CompileToolOutputValidator(sdkTool)
+	if err != nil {
 		return fmt.Errorf("register %q output schema: %w", definition.Name, err)
 	}
 
@@ -212,10 +222,14 @@ func (r *Registry) Register(handler tool.Handler) error {
 	if r.handlers == nil {
 		r.handlers = make(map[string]tool.Handler)
 	}
+	if r.validators == nil {
+		r.validators = make(map[string]compiledToolValidators)
+	}
 	if _, exists := r.handlers[name]; exists {
 		return fmt.Errorf("%w: %s", ErrDuplicateTool, name)
 	}
 	r.handlers[name] = handler
+	r.validators[name] = compiledToolValidators{input: inputValidator, output: outputValidator}
 	r.order = append(r.order, name)
 	return nil
 }
@@ -226,6 +240,17 @@ func (r *Registry) Lookup(name string) (tool.Handler, bool) {
 	defer r.mu.RUnlock()
 	handler, ok := r.handlers[name]
 	return handler, ok
+}
+
+// CompiledValidators returns the immutable validators compiled when the tool was registered.
+func (r *Registry) CompiledValidators(name string) (input, output *sdk.ToolSchemaValidator, ok bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	validators, ok := r.validators[name]
+	if !ok {
+		return nil, nil, false
+	}
+	return validators.input, validators.output, true
 }
 
 // Definitions returns a stable registration-order snapshot.
