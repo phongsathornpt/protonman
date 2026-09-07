@@ -190,6 +190,45 @@ func TestDiscoverRegistersNamespacedToolsAndDispatches(t *testing.T) {
 	}
 }
 
+func TestMCPOutputSchemaViolationReportsUpstreamContract(t *testing.T) {
+	server := &fakeServer{
+		name: "github",
+		tools: []Tool{{
+			Name: "search", Description: "search issues",
+			InputSchema: map[string]any{"type": "object"},
+			OutputSchema: map[string]any{
+				"type":       "object",
+				"properties": map[string]any{"count": map[string]any{"type": "number"}},
+				"required":   []any{"count"},
+			},
+		}},
+		results: map[string]Result{"search": {Output: "found 3 issues"}},
+	}
+	registry, err := builtin.NewRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Discover(context.Background(), registry, server); err != nil {
+		t.Fatal(err)
+	}
+	service := newMCPService(t, registry, permission.ActionAllow)
+	call, err := domaintool.NewCall("call-bad-output", "mcp.github.search", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.Call(context.Background(), call)
+	if err == nil {
+		t.Fatal("Call() error = nil, want MCP output contract violation")
+	}
+	if result.Failure == nil || result.Failure.Code != domaintool.ErrorCodeInvalidOutput {
+		t.Fatalf("failure = %#v, want invalid_output", result.Failure)
+	}
+	if !strings.Contains(err.Error(), `MCP tool "mcp.github.search" violated its declared output schema`) ||
+		!strings.Contains(err.Error(), "structured output is required") {
+		t.Fatalf("MCP output contract error missing detail: %v", err)
+	}
+}
+
 func TestDiscoverKeepsMCPCallsBehindPermission(t *testing.T) {
 	server := &fakeServer{
 		name:  "filesystem",
