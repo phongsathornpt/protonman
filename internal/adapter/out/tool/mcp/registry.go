@@ -153,6 +153,10 @@ func DiscoverWithOptions(ctx context.Context, registry tool.BatchRegistrar, opti
 
 	handlers := make([]tool.Handler, 0, totalTools)
 	seenNames := make(map[string]struct{}, totalTools)
+	callSlots := make([]chan struct{}, len(servers))
+	for i := range callSlots {
+		callSlots[i] = make(chan struct{}, limits.MaxConcurrentCallsPerServer)
+	}
 	for i, server := range servers {
 		serverName := serverNames[i]
 		for _, manifest := range results[i].manifests {
@@ -170,7 +174,7 @@ func DiscoverWithOptions(ctx context.Context, registry tool.BatchRegistrar, opti
 				return fmt.Errorf("%w: %s", ErrDuplicateDiscoveredTool, name)
 			}
 			seenNames[name] = struct{}{}
-			handler, err := newHandler(server, serverName, manifest, name, options.TrustServerSafety)
+			handler, err := newHandler(server, serverName, manifest, name, options.TrustServerSafety, callSlots[i])
 			if err != nil {
 				return fmt.Errorf("clone MCP tool %q schemas: %w", name, err)
 			}
@@ -213,6 +217,7 @@ type serverToolHandler struct {
 	serverName string
 	manifest   Tool
 	definition tool.Definition
+	callSlots  chan struct{}
 }
 
 func newHandler(
@@ -221,6 +226,7 @@ func newHandler(
 	manifest Tool,
 	name string,
 	trustServerSafety bool,
+	callSlots chan struct{},
 ) (tool.Handler, error) {
 	description := strings.TrimSpace(manifest.Description)
 	if description == "" {
@@ -235,7 +241,7 @@ func newHandler(
 		return nil, fmt.Errorf("output schema: %w", err)
 	}
 	return serverToolHandler{
-		server: server, serverName: serverName, manifest: manifest,
+		server: server, serverName: serverName, manifest: manifest, callSlots: callSlots,
 		definition: tool.Definition{
 			Name: name, Description: description, Kind: tool.KindMCP, Mutability: effectiveMCPMutability(manifest.Mutability, trustServerSafety),
 			InputSchema: inputSchema, OutputSchema: outputSchema,
@@ -248,6 +254,14 @@ func (h serverToolHandler) Definition() tool.Definition {
 }
 
 func (h serverToolHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
+	if h.callSlots != nil {
+		select {
+		case h.callSlots <- struct{}{}:
+			defer func() { <-h.callSlots }()
+		case <-ctx.Done():
+			return tool.Result{CallID: call.ID, ToolName: call.Name}, classifyFailure(FailureTransport, h.serverName, h.manifest.Name, "queue", ctx.Err())
+		}
+	}
 	result, err := h.server.CallTool(ctx, h.manifest.Name, call.Arguments)
 	toolResult := tool.Result{
 		CallID:           call.ID,
