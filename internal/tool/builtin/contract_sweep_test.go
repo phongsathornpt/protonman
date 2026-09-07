@@ -49,6 +49,12 @@ func assertBuiltinContract(t *testing.T, registry *Registry, definition tool.Def
 	if err := definition.Validate(); err != nil {
 		t.Errorf("%s Definition.Validate() error = %v", definition.Name, err)
 	}
+	if err := definition.Safety.Validate(); err != nil {
+		t.Errorf("%s Safety.Validate() error = %v; contract=%+v", definition.Name, err, definition.Safety)
+	}
+	if tool.EffectiveMutability(definition) == tool.MutabilityReadOnly && definition.Safety.MutationDomain != tool.MutationDomainNone {
+		t.Errorf("%s read-only tool declares mutation domain %q", definition.Name, definition.Safety.MutationDomain)
+	}
 	input, output, ok := registry.CompiledValidators(definition.Name)
 	if !ok {
 		t.Errorf("%s has no cached compiled validators", definition.Name)

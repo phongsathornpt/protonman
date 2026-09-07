@@ -38,6 +38,7 @@ func (delegateTaskHandler) Definition() tool.Definition {
 		Description:            "Spawn a specialized subagent asynchronously and return its agent_id immediately. Use wait_agent when its result is needed; a wait timeout does not cancel the child.",
 		Kind:                   tool.KindAgent,
 		Mutability:             tool.MutabilityMutating,
+		Safety:                 tool.SafetyContract{MutationDomain: tool.MutationDomainAgentState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
 		ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded,
 		PermissionDetailKey:    "task",
 		OutputSchema:           delegateTaskOutputSchema(),

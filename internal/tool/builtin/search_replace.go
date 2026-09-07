@@ -45,6 +45,7 @@ func (searchReplaceHandler) Definition() tool.Definition {
 		Description:         "Replace an exact string in a workspace file.",
 		Kind:                tool.KindEdit,
 		Mutability:          tool.MutabilityMutating,
+		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyContextual, CheckpointPolicy: tool.CheckpointPolicyRequired, Boundary: tool.BoundaryPolicyWorkspaceWrite},
 		PermissionDetailKey: "file_path",
 		InputSchema: map[string]any{
 			"type": "object",

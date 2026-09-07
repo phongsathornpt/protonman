@@ -81,6 +81,7 @@ func (applyPatchHandler) Definition() tool.Definition {
 		Description:         "Apply a bounded multi-file patch to the workspace.",
 		Kind:                tool.KindEdit,
 		Mutability:          tool.MutabilityMutating,
+		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyDynamic, CheckpointPolicy: tool.CheckpointPolicyRequired, Boundary: tool.BoundaryPolicyWorkspaceWrite},
 		PermissionDetailKey: "patch",
 		InputSchema: map[string]any{
 			"type": "object",

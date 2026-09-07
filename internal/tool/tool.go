@@ -17,6 +17,54 @@ type Kind string
 // kind-based inference for third-party tools.
 type Mutability string
 
+// MutationDomain identifies which state family a tool may mutate.
+type MutationDomain string
+
+// MutationSafety describes how precisely a workspace mutation is scoped.
+type MutationSafety string
+
+// CheckpointPolicy declares whether a workspace mutation must be snapshotted.
+type CheckpointPolicy string
+
+// BoundaryPolicy declares the resource boundary enforced by the tool.
+type BoundaryPolicy string
+
+// SafetyContract makes host-side safety semantics explicit instead of inferring them from tool names.
+type SafetyContract struct {
+	MutationDomain   MutationDomain
+	MutationSafety   MutationSafety
+	CheckpointPolicy CheckpointPolicy
+	Boundary         BoundaryPolicy
+}
+
+// Declared reports whether a tool explicitly published its safety semantics.
+func (s SafetyContract) Declared() bool {
+	return s.MutationDomain != MutationDomainUnspecified &&
+		s.MutationSafety != MutationSafetyUnspecified &&
+		s.CheckpointPolicy != CheckpointPolicyUnspecified &&
+		s.Boundary != BoundaryPolicyUnspecified
+}
+
+// Validate checks cross-field invariants for an explicitly declared safety contract.
+func (s SafetyContract) Validate() error {
+	if !s.Declared() {
+		return fmt.Errorf("safety contract is incomplete")
+	}
+	if s.MutationDomain != MutationDomainWorkspace && s.MutationSafety != MutationSafetyNone {
+		return fmt.Errorf("non-workspace mutation domain cannot declare workspace mutation safety %q", s.MutationSafety)
+	}
+	if s.MutationDomain != MutationDomainWorkspace && s.CheckpointPolicy != CheckpointPolicyNone {
+		return fmt.Errorf("non-workspace mutation domain cannot require checkpoints")
+	}
+	if s.MutationDomain == MutationDomainNone && s.MutationSafety != MutationSafetyNone {
+		return fmt.Errorf("non-mutating tools must use mutation safety none")
+	}
+	if s.CheckpointPolicy == CheckpointPolicyRequired && s.MutationDomain != MutationDomainWorkspace {
+		return fmt.Errorf("required checkpoints are only valid for workspace mutations")
+	}
+	return nil
+}
+
 // ExecutionTimeoutPolicy controls whether the tool-call service adds its own
 // execution deadline around a handler. The zero value keeps the service
 // default; caller-bound tools rely on the caller/coordinator deadline instead.
@@ -51,6 +99,39 @@ const (
 	MutabilityUnspecified Mutability = ""
 	MutabilityReadOnly    Mutability = "read_only"
 	MutabilityMutating    Mutability = "mutating"
+)
+
+const (
+	MutationDomainUnspecified     MutationDomain = ""
+	MutationDomainNone            MutationDomain = "none"
+	MutationDomainWorkspace       MutationDomain = "workspace"
+	MutationDomainTaskState       MutationDomain = "task_state"
+	MutationDomainAgentState      MutationDomain = "agent_state"
+	MutationDomainWorkspacePolicy MutationDomain = "workspace_policy"
+)
+
+const (
+	MutationSafetyUnspecified MutationSafety = ""
+	MutationSafetyNone        MutationSafety = "none"
+	MutationSafetyContextual  MutationSafety = "contextual"
+	MutationSafetyWholeFile   MutationSafety = "whole_file"
+	MutationSafetyDynamic     MutationSafety = "dynamic"
+)
+
+const (
+	CheckpointPolicyUnspecified CheckpointPolicy = ""
+	CheckpointPolicyNone        CheckpointPolicy = "none"
+	CheckpointPolicyRequired    CheckpointPolicy = "required"
+	CheckpointPolicyWhenKnown   CheckpointPolicy = "when_known"
+)
+
+const (
+	BoundaryPolicyUnspecified    BoundaryPolicy = ""
+	BoundaryPolicyNone           BoundaryPolicy = "none"
+	BoundaryPolicyWorkspaceRead  BoundaryPolicy = "workspace_read"
+	BoundaryPolicyWorkspaceWrite BoundaryPolicy = "workspace_write"
+	BoundaryPolicyExternalRead   BoundaryPolicy = "external_read"
+	BoundaryPolicySandbox        BoundaryPolicy = "sandbox"
 )
 
 const (
@@ -319,6 +400,8 @@ type Definition struct {
 	// Mutability declares whether successful execution can invalidate prior
 	// read observations. Unspecified preserves legacy kind-based inference.
 	Mutability Mutability
+	// Safety declares the resource and mutation contract enforced by the host.
+	Safety SafetyContract
 	// ExecutionTimeoutPolicy controls whether the service applies its generic
 	// per-tool execution timeout. Orchestration tools may instead rely on a
 	// stricter caller/coordinator deadline.

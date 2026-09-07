@@ -22,6 +22,7 @@ func (getTodoHandler) Definition() tool.Definition {
 		Description:  "Read the current parent-owned task snapshot and revision before applying update_todo patch operations. This tool takes no arguments; call it with an empty JSON object {}.",
 		Kind:         tool.KindTask,
 		Mutability:   tool.MutabilityReadOnly,
+		Safety:       tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
 		InputSchema:  tool.NoArgumentsSchema(),
 		OutputSchema: todoSnapshotSchema(),
 	}

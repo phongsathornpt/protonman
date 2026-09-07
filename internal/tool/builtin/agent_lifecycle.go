@@ -45,6 +45,7 @@ func (h agentLifecycleHandler) Definition() tool.Definition {
 	case "wait_agent":
 		def.Description = "Wait briefly for a subagent without canceling it when the wait expires."
 		def.Mutability = tool.MutabilityReadOnly
+		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
 		def.PermissionDetailKey = "agent_id"
 		def.InputSchema = map[string]any{"type": "object", "properties": map[string]any{
 			"agent_id":        map[string]any{"type": "string"},
@@ -53,15 +54,18 @@ func (h agentLifecycleHandler) Definition() tool.Definition {
 	case "get_agent":
 		def.Description = "Inspect one retained subagent and its terminal result when available."
 		def.Mutability = tool.MutabilityReadOnly
+		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
 		def.PermissionDetailKey = "agent_id"
 		def.InputSchema = agentIDSchema()
 	case "list_agents":
 		def.Description = "List retained subagents and their lifecycle states."
 		def.Mutability = tool.MutabilityReadOnly
+		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
 		def.InputSchema = tool.NoArgumentsSchema()
 	case "cancel_agent":
 		def.Description = "Explicitly cancel a queued or running subagent."
 		def.Mutability = tool.MutabilityMutating
+		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainAgentState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
 		def.PermissionDetailKey = "agent_id"
 		def.InputSchema = agentIDSchema()
 	}
