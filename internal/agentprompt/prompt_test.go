@@ -9,7 +9,7 @@ func TestRenderComposesStableContracts(t *testing.T) {
 	got := Render(Spec{
 		Role: "You inspect code.", Profile: "int", Provider: "google", ModelID: "gemini-3.8-flash",
 		ModelProfile: "gemini-3.8-flash", ModelProfileMatch: "exact", ModelCatalogOverride: true,
-		Workspace: "/repo", ToolNames: []string{"grep", "get_todo", "delegate_task", "grep"}, MaxRounds: 10, MaxToolCalls: 64,
+		Workspace: "/repo", ToolNames: []string{"grep", "get_todo", "delegate_task", "grep"},
 		GroundingRequired: true, GroundingEvidence: "workspace",
 		TaskPlanEnabled: true, DelegationEnabled: true, MutationEnabled: true, Skills: "skill instructions",
 		ProjectInstructions: "follow repository rules",

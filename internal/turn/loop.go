@@ -495,7 +495,6 @@ func (l *Loop) effectivePromptSpec(definitions []tool.Definition, extras []strin
 		spec.ModelCatalogOverride = profile.CatalogOverride
 		spec.ModelPromptHints = append([]string(nil), profile.PromptHints...)
 	}
-	spec.MaxToolCalls = l.maxToolCalls
 	spec.ToolNames = make([]string, 0, len(definitions))
 	spec.TaskPlanEnabled = false
 	spec.DelegationEnabled = false
