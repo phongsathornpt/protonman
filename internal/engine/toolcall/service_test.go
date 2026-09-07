@@ -425,6 +425,43 @@ func TestCallRecoversHandlerPanic(t *testing.T) {
 	}
 }
 
+func TestAuthorizeDowngradesIneligibleSessionScope(t *testing.T) {
+	handler := &fakeHandler{definition: tool.Definition{Name: "bash", Description: "fake shell", Kind: tool.KindBash, PermissionDetailKey: "command"}}
+	service := newTestService(t, handler, permission.Config{}, WithPrompt(func(context.Context, permission.Request) (permission.Resolution, error) {
+		return permission.Resolution{Action: permission.ActionAllow, Scope: permission.GrantScopeSession}, nil
+	}))
+	resolution, err := service.authorize(context.Background(), permission.Request{
+		ToolName: "bash", ToolKind: permission.ToolBash, Detail: "touch file.go",
+		Effect: tool.CommandEffectMutating, Risk: tool.CommandRiskNormal,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolution.Scope != permission.GrantScopeOnce {
+		t.Fatalf("scope = %s, want once for ineligible session grant", resolution.Scope)
+	}
+}
+
+func TestCallSessionGrantFingerprintIncludesArguments(t *testing.T) {
+	handler := &fakeHandler{definition: tool.Definition{Name: "read_file", Description: "fake reader", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly, PermissionDetailKey: "path"}}
+	promptCalls := 0
+	service := newTestService(t, handler, permission.Config{}, WithPrompt(func(context.Context, permission.Request) (permission.Resolution, error) {
+		promptCalls++
+		return permission.Resolution{Action: permission.ActionAllow, Scope: permission.GrantScopeSession}, nil
+	}))
+	first, _ := tool.NewCall("read-1", "read_file", json.RawMessage(`{"path":"main.go","offset":0}`))
+	second, _ := tool.NewCall("read-2", "read_file", json.RawMessage(`{"path":"main.go","offset":128}`))
+	if _, err := service.Call(context.Background(), first); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Call(context.Background(), second); err != nil {
+		t.Fatal(err)
+	}
+	if promptCalls != 2 {
+		t.Fatalf("prompt calls = %d, want 2 for same detail with different arguments", promptCalls)
+	}
+}
+
 func TestCallSessionGrantIsNarrowToExactRequest(t *testing.T) {
 	handler := &fakeHandler{
 		definition: tool.Definition{
