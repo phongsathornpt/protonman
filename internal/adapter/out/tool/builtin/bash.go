@@ -374,6 +374,7 @@ type boundedBuffer struct {
 	limit     int
 	total     int64
 	truncated bool
+	onLimit   func()
 }
 
 func (b *boundedBuffer) Write(p []byte) (n int, err error) {
@@ -381,16 +382,26 @@ func (b *boundedBuffer) Write(p []byte) (n int, err error) {
 	defer b.mu.Unlock()
 	b.total += int64(len(p))
 	if b.buf.Len() >= b.limit {
-		b.truncated = true
+		b.markTruncatedLocked()
 		return len(p), nil
 	}
 	remaining := b.limit - b.buf.Len()
 	if len(p) > remaining {
 		b.buf.Write(p[:remaining])
-		b.truncated = true
+		b.markTruncatedLocked()
 		return len(p), nil
 	}
 	return b.buf.Write(p)
+}
+
+func (b *boundedBuffer) markTruncatedLocked() {
+	if b.truncated {
+		return
+	}
+	b.truncated = true
+	if b.onLimit != nil {
+		b.onLimit()
+	}
 }
 
 func (b *boundedBuffer) String() string {
