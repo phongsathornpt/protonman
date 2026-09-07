@@ -20,7 +20,7 @@ func extractToolTarget(name string, kind tool.Kind, args json.RawMessage) (strin
 	call := tool.Call{Name: name, Arguments: args}
 	target := call.Target()
 	if kind == "" {
-		kind = guessToolKind(name)
+		kind = tool.KindForName(name)
 	}
 	return target, kind
 }
@@ -32,10 +32,6 @@ func isAgentLifecycleTool(name string) bool {
 	default:
 		return false
 	}
-}
-
-func guessToolKind(name string) tool.Kind {
-	return tool.KindForName(name)
 }
 
 // toolKindGlyph returns the appropriate category glyph for a tool.
