@@ -15,6 +15,7 @@ import (
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
+	"github.com/projectTHORN/proton/internal/session"
 	"github.com/projectTHORN/proton/internal/skill"
 	tododomain "github.com/projectTHORN/proton/internal/todo"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -80,6 +81,15 @@ func WithSessionID(sessionID string) BubbleTeaOption {
 	}
 }
 
+// WithSessionStore attaches session discovery to the TUI without making the UI own persistence.
+func WithSessionStore(store *session.FileStore, workspaceKey string) BubbleTeaOption {
+	return func(ui *BubbleTeaUI) error {
+		ui.sessionStore = store
+		ui.workspaceKey = workspaceKey
+		return nil
+	}
+}
+
 // WithAgentConfig attaches agent execution settings to the TUI.
 func WithAgentConfig(agentCfg config.AgentConfig) BubbleTeaOption {
 	return func(ui *BubbleTeaUI) error {
@@ -138,6 +148,8 @@ type BubbleTeaUI struct {
 	hasRuntimeConfig        bool
 	providers               map[string]config.ProviderConfig
 	sessionID               string
+	sessionStore            *session.FileStore
+	workspaceKey            string
 	projectTrusted          bool
 	projectConfigSources    []string
 	projectConfigProvenance map[string]config.ValueSource
@@ -259,6 +271,8 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		bModel.activeProvider = ui.modelConfig.Provider
 		bModel.providers = ui.providers
 		bModel.sessionID = ui.sessionID
+		bModel.sessionStore = ui.sessionStore
+		bModel.workspaceKey = ui.workspaceKey
 		bModel.projectTrusted = ui.projectTrusted
 		bModel.projectConfigSources = append([]string(nil), ui.projectConfigSources...)
 		bModel.projectConfigProvenance = cloneProjectProvenance(ui.projectConfigProvenance)

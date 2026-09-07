@@ -82,6 +82,7 @@ func run(ctx context.Context, args []string) error {
 		runtimeState.todoStore,
 		tui.WithWorkDir(runtimeState.workDir),
 		tui.WithSessionID(runtimeState.sessionID),
+		tui.WithSessionStore(runtimeState.stateStore, workspaceKey(runtimeState.workDir)),
 		tui.WithInitialMessages(session.ToModelMessages(runtimeState.state.Messages)),
 		tui.WithSkills(runtimeState.skills),
 		tui.WithModelConfig(runtimeState.config.Model, runtimeState.config.Providers),
