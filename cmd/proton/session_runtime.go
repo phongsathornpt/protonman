@@ -30,7 +30,7 @@ func generateSessionID(workDir string) string {
 
 func resolveSession(
 	ctx context.Context,
-	store *session.FileStore,
+	store session.Repository,
 	workDir string,
 	options cliOptions,
 ) (string, session.State, bool, error) {

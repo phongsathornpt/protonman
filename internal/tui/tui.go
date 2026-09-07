@@ -82,7 +82,7 @@ func WithSessionID(sessionID string) BubbleTeaOption {
 }
 
 // WithSessionStore attaches session discovery to the TUI without making the UI own persistence.
-func WithSessionStore(store *session.FileStore, workspaceKey string) BubbleTeaOption {
+func WithSessionStore(store session.Repository, workspaceKey string) BubbleTeaOption {
 	return func(ui *BubbleTeaUI) error {
 		ui.sessionStore = store
 		ui.workspaceKey = workspaceKey
@@ -148,7 +148,7 @@ type BubbleTeaUI struct {
 	hasRuntimeConfig        bool
 	providers               map[string]config.ProviderConfig
 	sessionID               string
-	sessionStore            *session.FileStore
+	sessionStore            session.Repository
 	workspaceKey            string
 	projectTrusted          bool
 	projectConfigSources    []string

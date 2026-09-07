@@ -34,7 +34,7 @@ type appRuntime struct {
 	coordinator *agent.Coordinator
 	todoStore   tododomain.Repository
 	registry    tool.Registry
-	stateStore  *session.FileStore
+	stateStore  session.Repository
 	sessionID   string
 	state       session.State
 	service     *toolcall.Service

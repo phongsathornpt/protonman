@@ -18,7 +18,7 @@ func runHeadless(
 	service *toolcall.Service,
 	registry tool.Registry,
 	skillRegistry *skill.Registry,
-	stateStore *session.FileStore,
+	stateStore session.Repository,
 	sessionID string,
 	state session.State,
 	prompt string,

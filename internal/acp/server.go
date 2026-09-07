@@ -34,7 +34,7 @@ type Option func(*Server)
 type RunnerFactory func(*toolcall.Service) (applicationturn.Runner, error)
 
 // WithStore sets the session store for loading, resuming, and listing sessions.
-func WithStore(store *session.FileStore) Option {
+func WithStore(store session.Repository) Option {
 	return func(s *Server) {
 		s.store = store
 	}
@@ -54,7 +54,7 @@ type Server struct {
 	service       *toolcall.Service
 	registry      tool.Registry
 	runnerFactory RunnerFactory
-	store         *session.FileStore
+	store         session.Repository
 
 	mu       sync.Mutex
 	writeMu  sync.Mutex

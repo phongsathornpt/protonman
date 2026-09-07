@@ -32,7 +32,7 @@ type Session struct {
 	service         *toolcall.Service
 	registry        tool.Registry
 	runner          applicationturn.Runner
-	store           *session.FileStore
+	store           session.Repository
 	reasoningEffort sdk.ReasoningEffort
 
 	mu        sync.Mutex
@@ -50,7 +50,7 @@ func NewSession(
 	service *toolcall.Service,
 	registry tool.Registry,
 	runner applicationturn.Runner,
-	store *session.FileStore,
+	store session.Repository,
 ) *Session {
 	reasoningEffort := sdk.ReasoningDefault
 	if loop, ok := runner.(*applicationturn.Loop); ok {
