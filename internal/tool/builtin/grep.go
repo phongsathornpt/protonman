@@ -111,7 +111,8 @@ func (grepHandler) Definition() tool.Definition {
 					"description": "Maximum matches to return; defaults to 100",
 				},
 			},
-			"required": []string{"pattern"},
+			"required":             []string{"pattern"},
+			"additionalProperties": false,
 		},
 	}
 }

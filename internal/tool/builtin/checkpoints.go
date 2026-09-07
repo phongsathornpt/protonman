@@ -54,7 +54,8 @@ func (restoreCheckpointHandler) Definition() tool.Definition {
 			"properties": map[string]any{
 				"checkpoint_id": map[string]any{"type": "string"},
 			},
-			"required": []string{"checkpoint_id"},
+			"required":             []string{"checkpoint_id"},
+			"additionalProperties": false,
 		},
 	}
 }

@@ -47,7 +47,8 @@ func (activateSkillHandler) Definition() tool.Definition {
 					"description": "Name of the skill to activate (e.g. 'pdf-processing')",
 				},
 			},
-			"required": []string{"name"},
+			"required":             []string{"name"},
+			"additionalProperties": false,
 		},
 	}
 }

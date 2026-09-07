@@ -90,7 +90,8 @@ func (applyPatchHandler) Definition() tool.Definition {
 					"description": "Patch enclosed by *** Begin Patch and *** End Patch",
 				},
 			},
-			"required": []string{"patch"},
+			"required":             []string{"patch"},
+			"additionalProperties": false,
 		},
 	}
 }

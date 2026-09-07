@@ -52,6 +52,7 @@ func (gitStatusHandler) Definition() tool.Definition {
 					"description": "Optional workspace-relative path; status is rooted at the workspace",
 				},
 			},
+			"additionalProperties": false,
 		},
 	}
 }

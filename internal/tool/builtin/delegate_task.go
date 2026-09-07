@@ -64,7 +64,8 @@ func (delegateTaskHandler) Definition() tool.Definition {
 					"description": "Optional shorter execution timeout in seconds. Requests above the configured subagent maximum are clamped.",
 				},
 			},
-			"required": []string{"task", "profile"},
+			"required":             []string{"task", "profile"},
+			"additionalProperties": false,
 		},
 	}
 }

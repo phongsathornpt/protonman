@@ -78,7 +78,8 @@ func (bashHandler) Definition() tool.Definition {
 					"description": "Optional shorter execution timeout; cannot extend the caller deadline",
 				},
 			},
-			"required": []string{"command"},
+			"required":             []string{"command"},
+			"additionalProperties": false,
 		},
 	}
 }

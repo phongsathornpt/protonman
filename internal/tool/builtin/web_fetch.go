@@ -81,7 +81,8 @@ func (webFetchHandler) Definition() tool.Definition {
 					"description": "HTTP or HTTPS URL to fetch",
 				},
 			},
-			"required": []string{"url"},
+			"required":             []string{"url"},
+			"additionalProperties": false,
 		},
 	}
 }

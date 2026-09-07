@@ -57,7 +57,8 @@ func (searchReplaceHandler) Definition() tool.Definition {
 					"default": false,
 				},
 			},
-			"required": []string{"file_path", "old_string", "new_string"},
+			"required":             []string{"file_path", "old_string", "new_string"},
+			"additionalProperties": false,
 		},
 	}
 }

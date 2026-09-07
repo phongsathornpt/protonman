@@ -49,7 +49,7 @@ func (h agentLifecycleHandler) Definition() tool.Definition {
 		def.InputSchema = map[string]any{"type": "object", "properties": map[string]any{
 			"agent_id":        map[string]any{"type": "string"},
 			"timeout_seconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 300},
-		}, "required": []string{"agent_id"}}
+		}, "required": []string{"agent_id"}, "additionalProperties": false}
 	case "get_agent":
 		def.Description = "Inspect one retained subagent and its terminal result when available."
 		def.Mutability = tool.MutabilityReadOnly
@@ -58,7 +58,7 @@ func (h agentLifecycleHandler) Definition() tool.Definition {
 	case "list_agents":
 		def.Description = "List retained subagents and their lifecycle states."
 		def.Mutability = tool.MutabilityReadOnly
-		def.InputSchema = map[string]any{"type": "object", "properties": map[string]any{}}
+		def.InputSchema = map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
 	case "cancel_agent":
 		def.Description = "Explicitly cancel a queued or running subagent."
 		def.Mutability = tool.MutabilityMutating
@@ -72,7 +72,7 @@ func (h agentLifecycleHandler) Definition() tool.Definition {
 func agentIDSchema() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
 		"agent_id": map[string]any{"type": "string"},
-	}, "required": []string{"agent_id"}}
+	}, "required": []string{"agent_id"}, "additionalProperties": false}
 }
 
 func (h agentLifecycleHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
