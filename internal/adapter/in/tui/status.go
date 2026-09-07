@@ -137,6 +137,9 @@ func (m bubbleModel) infoView() string {
 	if n := len(m.queue); n > 0 {
 		addPart(mutedStyle.Render(fmt.Sprintf("%d queued", n)))
 	}
+	if !m.subagentsEnabled {
+		addPart(warningStyle.Render("subagents off"))
+	}
 	if mode == layoutNormal && m.skills != nil {
 		active := m.skills.ActivatedList()
 		if len(active) == 1 {

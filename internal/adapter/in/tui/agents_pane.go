@@ -33,7 +33,13 @@ func (*agentsPaneView) Render(m *bubbleModel) string {
 func agentInspectionRows(m *bubbleModel) []string {
 	snapshot := append([]agent.AgentStatus(nil), m.agentSnapshot...)
 	if len(snapshot) == 0 {
-		return []string{brandStyle.Render("Agents"), mutedStyle.Render("No subagents in this session."), mutedStyle.Render("esc close")}
+		rows := []string{brandStyle.Render("Agents")}
+		if !m.subagentsEnabled {
+			rows = append(rows, warningStyle.Render("Subagents disabled"), mutedStyle.Render("Universal handles work directly."))
+		} else {
+			rows = append(rows, mutedStyle.Render("No subagents in this session."))
+		}
+		return append(rows, mutedStyle.Render("esc close"))
 	}
 	sort.SliceStable(snapshot, func(i, j int) bool {
 		return agentDisplayPriority(snapshot[i].State) < agentDisplayPriority(snapshot[j].State)
@@ -46,6 +52,9 @@ func agentInspectionRows(m *bubbleModel) []string {
 		snapshot = snapshot[:limit]
 	}
 	rows := []string{brandStyle.Render(fmt.Sprintf("Agents · %d retained", len(m.agentSnapshot)))}
+	if !m.subagentsEnabled {
+		rows = append(rows, warningStyle.Render("New delegation disabled · existing agents remain manageable"))
+	}
 	now := time.Now()
 	for _, st := range snapshot {
 		identity := agentDisplayProfile(st)
