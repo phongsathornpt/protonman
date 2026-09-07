@@ -8,6 +8,47 @@ import (
 	"testing"
 )
 
+func TestOpenReadFileRejectsParentSymlinkSwap(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	outside := t.TempDir()
+	workspaceRoot, err := New(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := filepath.Join(root, "safe")
+	if err := os.Mkdir(parent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(parent, "file.txt")
+	if err := os.WriteFile(path, []byte("inside"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := workspaceRoot.ResolveRead(ctx, "safe/file.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(parent); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "file.txt"), []byte("outside"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, parent); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	file, err := workspaceRoot.OpenReadFile(ctx, resolved)
+	if file != nil {
+		_ = file.Close()
+	}
+	if err == nil {
+		t.Fatal("OpenReadFile() allowed swapped parent symlink outside workspace")
+	}
+}
+
 func TestOpenParentNoSymlinksCreatesAndPinsNestedParents(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
