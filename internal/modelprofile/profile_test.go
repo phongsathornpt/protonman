@@ -197,3 +197,33 @@ func TestCatalogIndependentTokenLimitsOverrideProfile(t *testing.T) {
 		t.Fatalf("token limit metadata = %+v", got)
 	}
 }
+
+func TestResolvedProfileTracksFieldProvenance(t *testing.T) {
+	yes := true
+	got := ResolveBuiltin("gateway", "gemini-3.8-flash", CatalogMetadata{
+		Tools:          &yes,
+		MaxInputTokens: 900000,
+	})
+	if got.Provenance.Tools != MetadataSourceCatalog || got.Provenance.MaxInputTokens != MetadataSourceCatalog {
+		t.Fatalf("catalog provenance = %+v", got.Provenance)
+	}
+	if got.Provenance.Vision != MetadataSourceBuiltin || got.Provenance.ContextWindow != MetadataSourceBuiltin {
+		t.Fatalf("builtin provenance = %+v", got.Provenance)
+	}
+	if got.Provenance.ToolSchemaDialect != MetadataSourceBuiltin || got.Provenance.PromptHints != MetadataSourceBuiltin {
+		t.Fatalf("policy provenance = %+v", got.Provenance)
+	}
+}
+
+func TestCatalogReasoningProvenanceOverridesOnlyPublishedFields(t *testing.T) {
+	yes := true
+	got := ResolveBuiltin("gateway", "gemini-3.8-flash", CatalogMetadata{
+		Reasoning: &CatalogReasoning{Supported: &yes, Levels: []sdk.ReasoningEffort{sdk.ReasoningLow}},
+	})
+	if got.Provenance.ReasoningSupport != MetadataSourceCatalog || got.Provenance.ReasoningLevels != MetadataSourceCatalog {
+		t.Fatalf("reasoning provenance = %+v", got.Provenance)
+	}
+	if got.Provenance.ReasoningDefault != MetadataSourceBuiltin {
+		t.Fatalf("default provenance = %+v", got.Provenance)
+	}
+}

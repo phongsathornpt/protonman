@@ -34,6 +34,28 @@ const (
 	ToolSchemaGeminiSubset ToolSchemaDialect = "gemini_openapi_subset"
 )
 
+type MetadataSource string
+
+const (
+	MetadataSourceUnknown MetadataSource = ""
+	MetadataSourceBuiltin MetadataSource = "builtin"
+	MetadataSourceCatalog MetadataSource = "catalog"
+)
+
+type MetadataProvenance struct {
+	Tools              MetadataSource
+	Vision             MetadataSource
+	ReasoningSupport   MetadataSource
+	ReasoningLevels    MetadataSource
+	ReasoningDefault   MetadataSource
+	ToolChoiceRequired MetadataSource
+	ContextWindow      MetadataSource
+	MaxInputTokens     MetadataSource
+	MaxOutputTokens    MetadataSource
+	PromptHints        MetadataSource
+	ToolSchemaDialect  MetadataSource
+}
+
 type MatchKind string
 
 const (
@@ -147,6 +169,7 @@ type Resolved struct {
 	MaxOutputTokens   int
 	PromptHints       []string
 	ToolSchemaDialect ToolSchemaDialect
+	Provenance        MetadataProvenance
 }
 
 type Registry struct {
