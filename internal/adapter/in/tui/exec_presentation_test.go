@@ -408,3 +408,18 @@ func TestExecPresentationDotnet(t *testing.T) {
 		t.Fatalf("dotnet build = %#v", build)
 	}
 }
+
+func TestExecPresentationTerraform(t *testing.T) {
+	plan := presentExec("terraform plan", "Plan: 3 to add, 1 to change, 0 to destroy.\n", "")
+	if plan.Title != "Terraform plan" || plan.Summary != "+3 ~1 -0" {
+		t.Fatalf("terraform plan = %#v", plan)
+	}
+	apply := presentExec("tofu apply", "Apply complete! Resources: 4 added, 1 changed, 0 destroyed.\n", "")
+	if apply.Title != "OpenTofu apply" || apply.Summary != "4 added · 1 changed · 0 destroyed" {
+		t.Fatalf("tofu apply = %#v", apply)
+	}
+	valid := presentExec("terraform validate", "Success! The configuration is valid.\n", "")
+	if valid.Summary != "valid configuration" {
+		t.Fatalf("terraform validate = %#v", valid)
+	}
+}
