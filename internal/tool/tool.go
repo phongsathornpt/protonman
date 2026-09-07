@@ -103,6 +103,8 @@ type ErrorCode string
 const (
 	// ErrorCodeInvalidArguments indicates that a call cannot be decoded or validated.
 	ErrorCodeInvalidArguments ErrorCode = "invalid_arguments"
+	// ErrorCodeCommandFailed indicates that a process-backed command ran and exited non-zero.
+	ErrorCodeCommandFailed ErrorCode = "command_failed"
 	// ErrorCodeInvalidOutput indicates that a successful handler returned structured output outside its declared schema.
 	ErrorCodeInvalidOutput ErrorCode = "invalid_output"
 	// ErrorCodeOutputTooLarge indicates that a valid structured result cannot fit within the remaining turn budget.

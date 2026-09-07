@@ -284,7 +284,14 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		}
 		return result, tool.WrapToolError(tool.ErrorCodeCanceled, "bash command canceled", ctxErr)
 	}
-	return result, tool.WrapToolError(tool.ErrorCodeExecution, "bash command failed", err)
+	if errors.As(err, &exitError) {
+		return result, tool.WrapToolError(
+			tool.ErrorCodeCommandFailed,
+			fmt.Sprintf("command exited with status %d", exitError.ExitCode()),
+			err,
+		)
+	}
+	return result, tool.WrapToolError(tool.ErrorCodeExecution, "execute bash process", err)
 }
 
 func logBashFailure(ctx context.Context, call tool.Call, startedAt time.Time, phase string, err error) {
