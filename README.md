@@ -151,6 +151,9 @@ Type `/` at the prompt to trigger autocomplete, or prefix with a colon (`:help`)
 | `/model [name]` | Open model selector or switch active model (`/models` is an alias) | `/model glm-5.3-flash` |
 | `/provider [cmd]` | Manage and configure AI model providers | `/provider list`, `/provider opencode` |
 | `/tools` | List registered tools and parameter schemas | `/tools` |
+| `/agents` | Inspect live and retained subagents | `/agents` |
+| `/subagents [on|off]` | Toggle new subagent delegation for the current runtime | `/subagents off` |
+| `/project set subagents <on|off>` | Persist the subagent capability for a trusted project | `/project set subagents off` |
 | `/skills` | List discovered Agent Skills | `/skills` |
 | `/skill <name>` | Inspect or activate a specific Agent Skill | `/skill pdf-processing` |
 | `/call <tool> <json>` | Directly execute a tool with JSON arguments | `/call read_file {"path":"README.md"}` |
@@ -340,6 +343,7 @@ profile = "off"
 
 # Agent execution boundaries
 [agent]
+subagents_enabled = true
 max_tool_calls = 100
 max_live_subagents = 16
 max_retained_subagents = 64
@@ -397,6 +401,8 @@ Execution safety notes:
 - `bash` accepts `command`, optional workspace-relative `cwd`, and optional `timeout_seconds` (1-120). A per-call timeout can shorten but never extend the caller/tool-service deadline.
 - Bash effect analysis is conservative: proven read-only shell commands may run in plan mode, while mutating or unknown commands remain blocked. Simple redirections/composition and common filesystem/git commands publish proven `affected_paths`; unknown scripts remain fail-closed.
 - Bash results preserve compatibility `output` while also exposing bounded `stdout`, `stderr`, per-stream byte counts/truncation flags, exit code, and stable failure codes. Cancellation terminates the command process tree through the sandbox launcher.
+- `subagents_enabled = false` disables new delegation by default. The model no longer sees `delegate_task`; existing children remain inspectable/waitable/cancelable until their retained lifecycle records expire.
+- `/subagents off` applies the same rule at runtime without canceling existing children; `/subagents on` re-enables delegation.
 - `delegate_task` starts work asynchronously. The returned `agent_id` can be used with `wait_agent`, `get_agent`, or `cancel_agent` in the same Proton session.
 - `subagent_queue_timeout` bounds only admission to concurrency/workspace capacity; queueing never consumes the child runtime budget.
 - `subagent_wait_timeout` bounds one `wait_agent` call. Reaching it returns the current `queued`/`running` state and does **not** cancel the child.
