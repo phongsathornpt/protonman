@@ -187,9 +187,6 @@ func (m *bubbleModel) syncComponentsToLegacy() {
 		return
 	}
 	m.prompt = m.bottom.prompt()
-	m.history = append(m.history[:0], m.bottom.composer.history...)
-	m.historyPos = m.bottom.composer.historyPos
-	m.bashMode = m.bottom.bashMode()
 	if view := m.slashState(); view != nil {
 		m.slashIndex = view.index
 	} else {

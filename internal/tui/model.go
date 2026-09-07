@@ -98,13 +98,10 @@ type bubbleModel struct {
 	// migration. Runtime ownership lives in bottom/historyState.
 	blocks      []Block
 	prompt      *textarea.Model
-	history     []string
-	historyPos  int
 	modal       *permissionRequest
 	modalParked bool
 	permIndex   int
 	slashIndex  int
-	bashMode    bool
 }
 
 type bubbleKeyMap struct {
