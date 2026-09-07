@@ -3,6 +3,7 @@ package builtin
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -323,20 +324,25 @@ func TestBashTruncationIdentifiesStream(t *testing.T) {
 func TestBashFailureCodesAreStructured(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	handler := NewBash(workspaceRoot, &recordingLauncher{})
-	result, err := handler.Execute(context.Background(), newJSONCall(t, "bash-exit", "bash", map[string]any{"command": "exit 7"}))
-	if err == nil {
-		t.Fatal("Execute() error = nil")
-	}
-	if result.ExitCode == nil || *result.ExitCode != 7 {
-		t.Fatalf("exit code = %#v", result.ExitCode)
-	}
-	if failure := tool.FailureFromError(err); failure.Code != tool.ErrorCodeExecution {
-		t.Fatalf("failure code = %q, want execution_error", failure.Code)
+	for _, exitCode := range []int{1, 7, 128} {
+		result, err := handler.Execute(context.Background(), newJSONCall(t, fmt.Sprintf("bash-exit-%d", exitCode), "bash", map[string]any{"command": fmt.Sprintf("exit %d", exitCode)}))
+		if err == nil {
+			t.Fatalf("exit %d: Execute() error = nil", exitCode)
+		}
+		if result.ExitCode == nil || *result.ExitCode != exitCode {
+			t.Fatalf("exit %d: exit code = %#v", exitCode, result.ExitCode)
+		}
+		if failure := tool.FailureFromError(err); failure.Code != tool.ErrorCodeCommandFailed {
+			t.Fatalf("exit %d: failure code = %q, want command_failed", exitCode, failure.Code)
+		}
+		if !strings.Contains(err.Error(), fmt.Sprintf("command exited with status %d", exitCode)) {
+			t.Fatalf("exit %d: error = %q", exitCode, err)
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err = handler.Execute(ctx, newJSONCall(t, "bash-cancel", "bash", map[string]any{"command": "true"}))
+	_, err := handler.Execute(ctx, newJSONCall(t, "bash-cancel", "bash", map[string]any{"command": "true"}))
 	if failure := tool.FailureFromError(err); failure.Code != tool.ErrorCodeCanceled {
 		t.Fatalf("cancel failure code = %q", failure.Code)
 	}
