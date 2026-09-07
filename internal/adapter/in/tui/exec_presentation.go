@@ -20,6 +20,7 @@ const (
 	execFamilyDocker  execFamily = "docker"
 	execFamilyJVM     execFamily = "jvm"
 	execFamilyPHP     execFamily = "php"
+	execFamilyRuby    execFamily = "ruby"
 	execFamilyVite    execFamily = "vite"
 	execFamilyNext    execFamily = "next"
 )
@@ -119,6 +120,10 @@ func unwrapExec(words []string) (string, []string) {
 		}
 	case "pnpm":
 		if len(args) > 1 && (args[0] == "exec" || args[0] == "dlx") {
+			return strings.TrimPrefix(args[1], "./"), args[2:]
+		}
+	case "bundle":
+		if len(args) > 1 && args[0] == "exec" {
 			return strings.TrimPrefix(args[1], "./"), args[2:]
 		}
 	}
