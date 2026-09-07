@@ -351,6 +351,24 @@ func TestNormalizeArgumentsDropsObjectMetadataForNoArgumentTools(t *testing.T) {
 	}
 }
 
+func TestNormalizeArgumentsCanonicalizesInputAliases(t *testing.T) {
+	definition := Definition{Name: "list_dir", Description: "list", Kind: KindRead, InputSchema: map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}, "additionalProperties": false}, InputAliases: map[string][]string{"path": {"dir_path", "directory"}}}
+	for _, raw := range []string{`{"dir_path":"cmd"}`, `{"directory":"cmd"}`, `{"path":"cmd","dir_path":"cmd"}`} {
+		got := NormalizeArguments(definition, json.RawMessage(raw))
+		var values map[string]any
+		if err := json.Unmarshal(got, &values); err != nil {
+			t.Fatalf("NormalizeArguments(%s) invalid JSON: %v", raw, err)
+		}
+		if values["path"] != "cmd" || len(values) != 1 {
+			t.Fatalf("NormalizeArguments(%s) = %s, want canonical path only", raw, got)
+		}
+	}
+	conflict := `{"path":"cmd","dir_path":"internal"}`
+	if got := string(NormalizeArguments(definition, json.RawMessage(conflict))); got != conflict {
+		t.Fatalf("conflicting aliases normalized to %s, want unchanged for schema rejection", got)
+	}
+}
+
 func TestNewCallNormalizesBlankArguments(t *testing.T) {
 	for _, raw := range []string{"", "   ", "\n\t"} {
 		call, err := NewCall("call-1", "get_todo", []byte(raw))
