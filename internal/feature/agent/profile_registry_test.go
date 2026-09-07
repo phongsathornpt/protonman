@@ -83,7 +83,7 @@ func TestFilterRegistryForCanonicalProfiles(t *testing.T) {
 
 func TestSystemPromptForProfileBehaviorContracts(t *testing.T) {
 	checks := map[Profile][]string{
-		ProfilePOW: {"implementation subagent", "smallest coherent change", "Do not stop after producing a plan", "validation"},
+		ProfilePOW: {"implementation subagent", "smallest coherent change", "project conventions", "validation"},
 		ProfileINT: {"read-only investigation subagent", "Gather evidence before concluding", "Do not modify workspace files", "confidence"},
 		ProfileDEX: {"deep engineering subagent", "invariants and constraints", "Compare viable solutions", "material risks"},
 	}
