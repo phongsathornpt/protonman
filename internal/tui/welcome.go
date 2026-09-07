@@ -1,35 +1,7 @@
 package tui
 
-import "strings"
-
 func (m bubbleModel) welcomeCard() string {
-	width := maxInt(8, m.width-2)
-	rows := []string{brandLockup(m.width)}
-	if cwd := strings.TrimSpace(m.workDir); cwd != "" {
-		rows = append(rows, mutedStyle.Render(truncateWithEllipsis(cwd, width)))
-	}
-
-	if m.activeModel != "" {
-		provider := strings.TrimSpace(m.activeProvider)
-		rows = append(rows, brandStyle.Render(truncateWithEllipsis(m.activeModel, width)))
-		if provider != "" {
-			rows = append(rows, mutedStyle.Render(truncateWithEllipsis("provider: "+provider, width)))
-		}
-		if m.runner != nil {
-			rows = append(rows, mutedStyle.Render("Ask anything · /help"))
-		}
-		return strings.Join(rows, "\n")
-	}
-
-	if m.runner == nil {
-		rows = append(rows,
-			warningStyle.Render("No model selected"),
-			mutedStyle.Render("Ctrl+P choose a model"),
-		)
-		return strings.Join(rows, "\n")
-	}
-	rows = append(rows, mutedStyle.Render("Ask anything · /help"))
-	return strings.Join(rows, "\n")
+	return brandLockup(m.width)
 }
 
 func promptPlaceholder(hasRunner bool) string {
