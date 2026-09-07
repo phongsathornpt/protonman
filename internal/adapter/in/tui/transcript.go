@@ -250,6 +250,11 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 		return
 	}
 
+	if (result.Failure != nil || err != nil) && m.applyAgentToolFailure(name, result, err) {
+		m.syncLegacyBlocks()
+		return
+	}
+
 	if result.Failure != nil && result.Failure.Message != "" && result.Failure.Code != tool.ErrorCodeCanceled {
 		if name == "bash" && execFailureUsesExecCell(result.Failure.Code) {
 			completed := m.completedToolCell(result.CallID, name, body, result)

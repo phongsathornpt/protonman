@@ -55,3 +55,28 @@ func TestSubagentRunsStayDistinctByAgentID(t *testing.T) {
 		t.Fatalf("cells=%d, want 2", len(m.historyState.Cells()))
 	}
 }
+
+func TestAgentPollingFailureDoesNotLeakRPCTranscript(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	delegate, _ := tool.NewCall("d1", "delegate_task", json.RawMessage(`{"profile":"int","task":"inspect router"}`))
+	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: delegate})
+	m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: delegate, Result: tool.Result{CallID: "d1", ToolName: "delegate_task", StructuredOutput: json.RawMessage(`{"agent_id":"int-7","status":"running"}`)}})
+
+	wait, _ := tool.NewCall("w1", "wait_agent", json.RawMessage(`{"agent_id":"int-7"}`))
+	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: wait})
+	m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: wait, Result: tool.Result{
+		CallID: "w1", ToolName: "wait_agent",
+		Failure: &tool.Failure{Code: tool.ErrorCodeDeadlineExceeded, Message: "wait timeout"},
+	}})
+
+	plain := m.historyState.Raw()
+	for _, leaked := range []string{"Wait agent", "wait_agent", "Waiting for int-7", "deadline_exceeded"} {
+		if strings.Contains(plain, leaked) {
+			t.Fatalf("orchestration failure leaked into transcript: %q", plain)
+		}
+	}
+	run := m.historyState.AgentRun("int-7")
+	if run == nil || !strings.Contains(run.Activity, "status check failed") {
+		t.Fatalf("run activity=%#v", run)
+	}
+}
