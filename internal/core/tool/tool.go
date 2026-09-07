@@ -375,12 +375,21 @@ func IsNoArgumentsSchema(schema map[string]any) bool {
 	return true
 }
 
-// NormalizeArguments canonicalizes provider variations for zero-argument tools.
-// Only an omitted/blank payload or JSON null is widened to {}; all other values
-// remain unchanged for canonical schema validation.
+// NormalizeArguments canonicalizes provider variations before schema validation.
+// Zero-argument tools intentionally discard object-shaped metadata emitted by
+// models (for example {"reason":"..."}) because no object field can carry
+// semantic input for these tools. Scalars and arrays remain untouched so the
+// canonical schema validator can reject genuinely malformed calls.
 func NormalizeArguments(definition Definition, arguments json.RawMessage) json.RawMessage {
+	if !IsNoArgumentsSchema(definition.InputSchema) {
+		return append(json.RawMessage(nil), arguments...)
+	}
 	trimmed := strings.TrimSpace(string(arguments))
-	if IsNoArgumentsSchema(definition.InputSchema) && (trimmed == "" || trimmed == "null") {
+	if trimmed == "" || trimmed == "null" {
+		return json.RawMessage(`{}`)
+	}
+	var object map[string]json.RawMessage
+	if json.Unmarshal([]byte(trimmed), &object) == nil && object != nil {
 		return json.RawMessage(`{}`)
 	}
 	return append(json.RawMessage(nil), arguments...)

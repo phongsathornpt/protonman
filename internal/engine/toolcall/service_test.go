@@ -910,7 +910,7 @@ func TestServiceWorkspaceMutationGateDoesNotBlockReadOnlyCall(t *testing.T) {
 }
 
 func TestCallNormalizesZeroArgumentPayloadsBeforeValidation(t *testing.T) {
-	for _, raw := range []string{`{}`, ``, `   `, `null`} {
+	for _, raw := range []string{`{}`, ``, `   `, `null`, `{"reason":"checking tasks"}`, `{"query":"running"}`} {
 		t.Run(fmt.Sprintf("%q", raw), func(t *testing.T) {
 			handler := &fakeHandler{definition: tool.Definition{
 				Name: "zero", Description: "zero args", Kind: tool.KindRead,
@@ -929,7 +929,7 @@ func TestCallNormalizesZeroArgumentPayloadsBeforeValidation(t *testing.T) {
 }
 
 func TestCallRejectsNonObjectZeroArgumentPayloads(t *testing.T) {
-	for _, raw := range []string{`[]`, `""`, `{"foo":1}`} {
+	for _, raw := range []string{`[]`, `""`, `1`, `true`} {
 		t.Run(raw, func(t *testing.T) {
 			handler := &fakeHandler{definition: tool.Definition{
 				Name: "zero", Description: "zero args", Kind: tool.KindRead,

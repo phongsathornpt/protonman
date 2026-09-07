@@ -337,6 +337,20 @@ func TestNoArgumentsSchemaDetection(t *testing.T) {
 	}
 }
 
+func TestNormalizeArgumentsDropsObjectMetadataForNoArgumentTools(t *testing.T) {
+	definition := Definition{Name: "zero", Description: "zero args", Kind: KindRead, InputSchema: NoArgumentsSchema()}
+	for _, raw := range []string{`{}`, `{"reason":"checking tasks"}`, `{"query":"running","description":"inspect"}`} {
+		if got := string(NormalizeArguments(definition, json.RawMessage(raw))); got != `{}` {
+			t.Fatalf("NormalizeArguments(%s) = %s, want {}", raw, got)
+		}
+	}
+	for _, raw := range []string{`[]`, `"metadata"`, `1`, `true`} {
+		if got := string(NormalizeArguments(definition, json.RawMessage(raw))); got != raw {
+			t.Fatalf("NormalizeArguments(%s) = %s, want unchanged", raw, got)
+		}
+	}
+}
+
 func TestNewCallNormalizesBlankArguments(t *testing.T) {
 	for _, raw := range []string{"", "   ", "\n\t"} {
 		call, err := NewCall("call-1", "get_todo", []byte(raw))

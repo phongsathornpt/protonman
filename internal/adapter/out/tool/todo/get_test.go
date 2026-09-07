@@ -43,13 +43,13 @@ func TestGetTodoArgumentContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := NewGetTodo(store)
-	for _, raw := range []string{`{}`, ``, `   `, `null`} {
+	for _, raw := range []string{`{}`, ``, `   `, `null`, `{"reason":"checking tasks"}`, `{"foo":1}`} {
 		call := tool.Call{ID: "todo-get", Name: "get_todo", Arguments: json.RawMessage(raw)}
 		if _, err := h.Execute(context.Background(), call); err != nil {
 			t.Fatalf("get_todo(%q) error = %v", raw, err)
 		}
 	}
-	for _, raw := range []string{`[]`, `""`, `{"foo":1}`, `{} {}`} {
+	for _, raw := range []string{`[]`, `""`, `1`, `true`, `{} {`} {
 		call := tool.Call{ID: "todo-get", Name: "get_todo", Arguments: json.RawMessage(raw)}
 		if _, err := h.Execute(context.Background(), call); err == nil {
 			t.Fatalf("get_todo(%q) error = nil, want invalid arguments", raw)
