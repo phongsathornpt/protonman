@@ -2,7 +2,6 @@ package tool
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 	"unicode/utf8"
 )
@@ -27,272 +26,33 @@ func (c Call) Kind() Kind {
 
 // Title produces a human-readable title describing what the tool call is doing.
 func (c Call) Title() string {
-	args := c.ArgumentsMap()
-
-	switch c.Name {
-	case "read_file":
-		if path := ExtractString(args, "path", "file_path", "file"); path != "" {
-			return fmt.Sprintf("Read %s", path)
-		}
-		return "Read file"
-	case "write_file":
-		if path := ExtractString(args, "file_path", "path", "file"); path != "" {
-			return fmt.Sprintf("Write %s", path)
-		}
-		return "Write file"
-	case "search_replace":
-		if path := ExtractString(args, "file_path", "path", "file"); path != "" {
-			return fmt.Sprintf("Edit %s", path)
-		}
-		return "Search and replace"
-	case "apply_patch":
-		if path := ExtractString(args, "path", "file_path", "file"); path != "" {
-			return fmt.Sprintf("Patch %s", path)
-		}
-		if patch := ExtractString(args, "patch"); patch != "" {
-			paths := ParsePatchPaths(patch)
-			if len(paths) == 1 {
-				return fmt.Sprintf("Patch %s", paths[0])
-			} else if len(paths) > 1 {
-				return fmt.Sprintf("Patch %s (+%d files)", paths[0], len(paths)-1)
-			}
-		}
-		return "Apply patch"
-	case "list_dir":
-		if path := ExtractString(args, "path", "dir_path", "directory", "dir"); path != "" {
-			return fmt.Sprintf("List %s", path)
-		}
-		return "List directory"
-	case "grep":
-		pattern := ExtractString(args, "pattern", "query")
-		path := ExtractString(args, "path", "dir_path", "directory")
-		if pattern != "" {
-			if path != "" && path != "." {
-				return fmt.Sprintf("Search %q in %s", TruncateRunes(pattern, 30), path)
-			}
-			return fmt.Sprintf("Search %q", TruncateRunes(pattern, 40))
-		}
-		return "Search workspace"
-	case "bash":
-		if cmd := ExtractString(args, "command", "cmd"); cmd != "" {
-			return fmt.Sprintf("Run: %s", TruncateRunes(cmd, 40))
-		}
-		return "Run shell command"
-	case "web_fetch":
-		if url := ExtractString(args, "url"); url != "" {
-			return fmt.Sprintf("Fetch %s", TruncateRunes(url, 45))
-		}
-		return "Fetch URL"
-	case "web_search":
-		if query := ExtractString(args, "query", "pattern"); query != "" {
-			return fmt.Sprintf("Search web: %s", TruncateRunes(query, 35))
-		}
-		return "Search web"
-	case "git_status":
-		if path := ExtractString(args, "path"); path != "" && path != "." {
-			return fmt.Sprintf("Git status (%s)", path)
-		}
-		return "Check git status"
-	case "get_todo":
-		return "Check task list"
-	case "update_todo":
-		if ops, ok := args["operations"].([]any); ok && len(ops) > 0 {
-			return fmt.Sprintf("Update tasks (%d changes)", len(ops))
-		}
-		return "Update tasks"
-	case "activate_skill":
-		if name := ExtractString(args, "name", "skill"); name != "" {
-			return fmt.Sprintf("Activate skill %s", name)
-		}
-		return "Activate skill"
-	case "delegate_task":
-		task := ExtractString(args, "task")
-		profile := ExtractString(args, "profile")
-		if profile != "" && task != "" {
-			return fmt.Sprintf("Delegate [%s]: %s", profile, TruncateRunes(task, 30))
-		}
-		if task != "" {
-			return fmt.Sprintf("Delegate: %s", TruncateRunes(task, 30))
-		}
-		return "Delegate subtask"
-	case "wait_agent":
-		if id := ExtractString(args, "agent_id", "id"); id != "" {
-			return fmt.Sprintf("Wait for agent %s", TruncateRunes(id, 20))
-		}
-		return "Wait for agent"
-	case "get_agent":
-		if id := ExtractString(args, "agent_id", "id"); id != "" {
-			return fmt.Sprintf("Get agent status %s", TruncateRunes(id, 20))
-		}
-		return "Get agent status"
-	case "list_agents":
-		return "List subagents"
-	case "cancel_agent":
-		if id := ExtractString(args, "agent_id", "id"); id != "" {
-			return fmt.Sprintf("Cancel agent %s", TruncateRunes(id, 20))
-		}
-		return "Cancel agent"
-	case "checkpoint_restore":
-		if id := ExtractString(args, "checkpoint_id", "id"); id != "" {
-			return fmt.Sprintf("Restore checkpoint %s", id)
-		}
-		return "Restore checkpoint"
-	default:
-		return c.Name
+	if spec, ok := builtinMetadata[c.Name]; ok && spec.title != nil {
+		return spec.title(c.ArgumentsMap())
 	}
+	return c.Name
 }
 
 // Target inspects the tool call and returns a human-facing target
 // string (e.g. URL, filepath, pattern, command, subagent ID).
 func (c Call) Target() string {
 	args := c.ArgumentsMap()
-	kind := c.Kind()
-
-	switch kind {
-	case KindWebFetch:
-		if urlStr := ExtractString(args, "url"); urlStr != "" {
-			return urlStr
-		}
-	case KindWebSearch:
-		if query := ExtractString(args, "query", "pattern"); query != "" {
-			return fmt.Sprintf("%q", query)
-		}
-	case KindRead:
-		if c.Name == "list_dir" {
-			if path := ExtractString(args, "path", "dir_path", "directory", "dir"); path != "" {
-				return path
-			}
-			return "."
-		}
-		if c.Name == "git_status" {
-			if path := ExtractString(args, "path"); path != "" {
-				return path
-			}
-			return ""
-		}
-		if path := ExtractString(args, "path", "file_path", "file"); path != "" {
-			return path
-		}
-	case KindGrep:
-		pattern := ExtractString(args, "pattern", "query")
-		path := ExtractString(args, "path", "dir_path", "directory")
-		if pattern != "" && path != "" && path != "." {
-			return fmt.Sprintf("%q in %s", pattern, path)
-		}
-		if pattern != "" {
-			return fmt.Sprintf("%q", pattern)
-		}
-	case KindBash:
-		if cmd := ExtractString(args, "command", "cmd"); cmd != "" {
-			return cmd
-		}
-	case KindEdit:
-		if path := ExtractString(args, "file_path", "path", "file", "filename", "target"); path != "" {
-			return path
-		}
-		if patch := ExtractString(args, "patch"); patch != "" {
-			paths := ParsePatchPaths(patch)
-			if len(paths) == 1 {
-				return paths[0]
-			} else if len(paths) > 1 {
-				return fmt.Sprintf("%s (+%d files)", paths[0], len(paths)-1)
-			}
-		}
-	case KindTask:
-		if operations, ok := args["operations"].([]any); ok {
-			return fmt.Sprintf("%d task operations", len(operations))
-		}
-		return "task plan"
-	case KindAgent:
-		if c.Name == "delegate_task" {
-			task := ExtractString(args, "task")
-			profile := ExtractString(args, "profile")
-			if profile != "" && task != "" {
-				return fmt.Sprintf("[%s] %s", profile, TruncateRunes(task, 40))
-			}
-			if task != "" {
-				return TruncateRunes(task, 40)
-			}
-		}
-		if id := ExtractString(args, "agent_id", "id"); id != "" {
-			return id
-		}
-		return "subagents"
+	if spec, ok := builtinMetadata[c.Name]; ok && spec.target != nil {
+		return spec.target(args)
 	}
-
-	if c.Name == "activate_skill" {
-		if skillName := ExtractString(args, "name", "skill"); skillName != "" {
-			return fmt.Sprintf("%q", skillName)
-		}
-	}
-	if c.Name == "delegate_task" {
-		task := ExtractString(args, "task")
-		profile := ExtractString(args, "profile")
-		if profile != "" && task != "" {
-			return fmt.Sprintf("[%s] %s", profile, TruncateRunes(task, 40))
-		}
-		if task != "" {
-			return TruncateRunes(task, 40)
-		}
-	}
-	if c.Name == "checkpoint_restore" {
-		if id := ExtractString(args, "checkpoint_id", "id"); id != "" {
-			return id
-		}
-	}
-
-	// Heuristic fallback for arbitrary MCP and custom tools:
+	// Heuristic fallback for arbitrary MCP and custom tools.
 	return ExtractString(args, "url", "file_path", "path", "file", "query", "pattern", "command", "target", "task", "name")
 }
 
 // DisplayName returns a clean, human-readable action label for a tool name.
 func DisplayName(name string) string {
-	switch name {
-	case "read_file":
-		return "Read"
-	case "list_dir":
-		return "List"
-	case "write_file":
-		return "Write"
-	case "search_replace":
-		return "Edit"
-	case "apply_patch":
-		return "Patch"
-	case "grep":
-		return "Search"
-	case "bash":
-		return "Run"
-	case "web_fetch":
-		return "Fetch"
-	case "web_search":
-		return "Search web"
-	case "git_status":
-		return "Git status"
-	case "get_todo":
-		return "Tasks"
-	case "update_todo":
-		return "Update tasks"
-	case "activate_skill":
-		return "Skill"
-	case "delegate_task":
-		return "Delegate"
-	case "wait_agent":
-		return "Wait agent"
-	case "get_agent":
-		return "Agent status"
-	case "list_agents":
-		return "Subagents"
-	case "cancel_agent":
-		return "Cancel agent"
-	case "checkpoint_restore":
-		return "Restore"
-	default:
-		clean := strings.TrimPrefix(name, "mcp.")
-		if idx := strings.LastIndex(clean, "."); idx != -1 {
-			clean = clean[idx+1:]
-		}
-		return clean
+	if metadata, ok := MetadataForName(name); ok {
+		return metadata.DisplayName
 	}
+	clean := strings.TrimPrefix(name, "mcp.")
+	if idx := strings.LastIndex(clean, "."); idx != -1 {
+		clean = clean[idx+1:]
+	}
+	return clean
 }
 
 // DisplayName returns the human-readable action label for the tool call.
@@ -308,35 +68,19 @@ func (d Definition) DisplayName() string {
 // AffectedPaths returns all file paths affected or accessed by the tool call.
 func (c Call) AffectedPaths() []string {
 	args := c.ArgumentsMap()
-
-	switch c.Name {
-	case "read_file", "write_file", "search_replace":
-		if path := ExtractString(args, "file_path", "path", "file", "filename", "target", "destination", "move_path"); path != "" {
+	if spec, ok := builtinMetadata[c.Name]; ok && spec.affectedPaths != nil {
+		return spec.affectedPaths(args)
+	}
+	for _, key := range []string{"patch", "diff", "input"} {
+		if patch := ExtractString(args, key); patch != "" {
+			if paths := ParsePatchPaths(patch); len(paths) > 0 {
+				return paths
+			}
+		}
+	}
+	if path := ExtractString(args, "file_path", "path", "file", "filename", "target", "destination", "move_path"); path != "" {
+		if kind := KindForName(c.Name); kind == KindEdit || kind == KindRead {
 			return []string{path}
-		}
-	case "apply_patch":
-		if path := ExtractString(args, "path", "file_path", "file", "filename", "target"); path != "" {
-			return []string{path}
-		}
-		for _, key := range []string{"patch", "diff", "input"} {
-			if patch := ExtractString(args, key); patch != "" {
-				if paths := ParsePatchPaths(patch); len(paths) > 0 {
-					return paths
-				}
-			}
-		}
-	default:
-		for _, key := range []string{"patch", "diff", "input"} {
-			if patch := ExtractString(args, key); patch != "" {
-				if paths := ParsePatchPaths(patch); len(paths) > 0 {
-					return paths
-				}
-			}
-		}
-		if path := ExtractString(args, "file_path", "path", "file", "filename", "target", "destination", "move_path"); path != "" {
-			if KindForName(c.Name) == KindEdit || KindForName(c.Name) == KindRead {
-				return []string{path}
-			}
 		}
 	}
 	return nil
@@ -344,26 +88,10 @@ func (c Call) AffectedPaths() []string {
 
 // KindForName returns the canonical tool.Kind for a given tool name.
 func KindForName(name string) Kind {
-	switch name {
-	case "read_file", "list_dir", "git_status":
-		return KindRead
-	case "write_file", "search_replace", "apply_patch", "checkpoint_restore":
-		return KindEdit
-	case "grep":
-		return KindGrep
-	case "web_search":
-		return KindWebSearch
-	case "bash":
-		return KindBash
-	case "web_fetch":
-		return KindWebFetch
-	case "get_todo", "update_todo":
-		return KindTask
-	case "delegate_task", "wait_agent", "get_agent", "list_agents", "cancel_agent":
-		return KindAgent
-	default:
-		return ""
+	if metadata, ok := MetadataForName(name); ok {
+		return metadata.Kind
 	}
+	return ""
 }
 
 // ExtractString retrieves the first non-empty string among the given keys from args.

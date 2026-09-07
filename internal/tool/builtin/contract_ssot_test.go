@@ -118,7 +118,7 @@ func TestBuiltinToolSSOTContract(t *testing.T) {
 		{
 			name:            "activate_skill",
 			args:            map[string]any{"name": "git-commit"},
-			wantKind:        "",
+			wantKind:        tool.KindRead,
 			wantDisplayName: "Skill",
 			targetSub:       `"git-commit"`,
 			titlePrefix:     "Activate skill git-commit",
