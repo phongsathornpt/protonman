@@ -795,7 +795,7 @@ func TestBangPrefixSubmitsBashCall(t *testing.T) {
 	if command == nil {
 		t.Fatal("bash submit command = nil")
 	}
-	if model.bashMode {
+	if model.bottom.bashMode() {
 		t.Fatal("bash mode stayed on after submit")
 	}
 	message := command()
