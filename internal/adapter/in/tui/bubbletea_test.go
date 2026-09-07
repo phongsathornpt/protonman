@@ -51,7 +51,7 @@ func TestTodoPaneShowsPendingBeforeCompleted(t *testing.T) {
 		{ID: "also-done", Text: "also done", Status: tododomain.StatusCompleted},
 	})
 	model.resize(80, 24)
-	model.todoExpanded = true
+	model.todoViewState.Expanded = true
 	view := model.View()
 	if !strings.Contains(view, "still open") {
 		t.Fatalf("todo pane hid the pending item: %s", view)

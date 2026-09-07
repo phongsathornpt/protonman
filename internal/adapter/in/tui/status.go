@@ -431,7 +431,7 @@ func (m bubbleModel) todoView() string {
 	if len(m.todo) == 0 {
 		return ""
 	}
-	if m.todoCompletionDismissed && !m.todoExpanded {
+	if m.todoLifecycle.CompletionDismissed && !m.todoViewState.Expanded {
 		return ""
 	}
 	completed, active, pending := todoCounts(m.todo)
@@ -450,12 +450,12 @@ func (m bubbleModel) todoView() string {
 	}
 	switch layoutModeForHeight(m.height) {
 	case layoutTiny, layoutCompact:
-		if m.todoExpanded {
+		if m.todoViewState.Expanded {
 			return renderSummary("TODO details need taller terminal · " + summary)
 		}
 		return renderSummary(summary)
 	}
-	if m.busy || !m.todoExpanded {
+	if m.busy || !m.todoViewState.Expanded {
 		return renderSummary(summary + " · " + shortcutHelp(m.keys.ToggleTodo))
 	}
 

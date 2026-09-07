@@ -128,7 +128,7 @@ func TestTodoExpandedAutoCollapsesWhileBusyWithoutLosingPreference(t *testing.T)
 		{ID: "done", Text: "done task", Status: tododomain.StatusCompleted},
 	})
 	m.resize(80, 24)
-	m.todoExpanded = true
+	m.todoViewState.Expanded = true
 	if got := m.todoView(); !strings.Contains(got, "active task") {
 		t.Fatalf("idle expanded todo missing details: %q", got)
 	}
@@ -136,7 +136,7 @@ func TestTodoExpandedAutoCollapsesWhileBusyWithoutLosingPreference(t *testing.T)
 	if got := m.todoView(); strings.Contains(got, "active task") || !strings.Contains(got, "1 active") || !strings.Contains(got, "1 pending") {
 		t.Fatalf("busy todo=%q, want compact progress summary", got)
 	}
-	if !m.todoExpanded {
+	if !m.todoViewState.Expanded {
 		t.Fatal("busy auto-collapse mutated expansion preference")
 	}
 	m.busy = false
@@ -224,7 +224,7 @@ func TestTodoAllCompletedStillShowsSummaryAndDetails(t *testing.T) {
 	if got := m.todoView(); !strings.Contains(got, "Tasks 2/2 ✓") {
 		t.Fatalf("completed summary = %q", got)
 	}
-	m.todoExpanded = true
+	m.todoViewState.Expanded = true
 	if got := m.todoView(); !strings.Contains(got, "one") || !strings.Contains(got, "two") {
 		t.Fatalf("completed details = %q", got)
 	}
@@ -237,7 +237,7 @@ func TestTodoViewOrdersActivePendingCompletedAndFitsWidth(t *testing.T) {
 		{ID: "active", Text: "active task with a deliberately long description that should wrap safely on narrow terminals", Status: tododomain.StatusInProgress},
 	})
 	m.resize(32, 24)
-	m.todoExpanded = true
+	m.todoViewState.Expanded = true
 	got := m.todoView()
 	if !(strings.Index(got, "active task") < strings.Index(got, "pending task") && strings.Index(got, "pending task") < strings.Index(got, "completed task")) {
 		t.Fatalf("todo order = %q", got)
@@ -257,23 +257,23 @@ func TestTodoVisibleRowsGrowWithTerminalHeight(t *testing.T) {
 
 func TestTodoSlashCommandTogglesAndSupportsShowHide(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
-	if m.todoExpanded {
+	if m.todoViewState.Expanded {
 		t.Fatal("todo unexpectedly expanded")
 	}
 	m.executeCommand("/todo")
-	if !m.todoExpanded {
+	if !m.todoViewState.Expanded {
 		t.Fatal("/todo did not toggle open")
 	}
 	m.executeCommand("/todo")
-	if m.todoExpanded {
+	if m.todoViewState.Expanded {
 		t.Fatal("/todo did not toggle closed")
 	}
 	m.executeCommand("/todo show")
-	if !m.todoExpanded {
+	if !m.todoViewState.Expanded {
 		t.Fatal("/todo show did not expand")
 	}
 	m.executeCommand("/todo hide")
-	if m.todoExpanded {
+	if m.todoViewState.Expanded {
 		t.Fatal("/todo hide did not collapse")
 	}
 }
@@ -281,7 +281,7 @@ func TestTodoSlashCommandTogglesAndSupportsShowHide(t *testing.T) {
 func TestTodoExpandedViewShowsStableIDs(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "router-race", Text: "Fix router race", Status: tododomain.StatusInProgress}})
 	m.resize(80, 24)
-	m.todoExpanded = true
+	m.todoViewState.Expanded = true
 	got := m.todoView()
 	if !strings.Contains(got, "Fix router race") || !strings.Contains(got, "router-race") {
 		t.Fatalf("expanded todo missing stable id: %q", got)
@@ -294,8 +294,8 @@ func TestTodoToggleShowsCompactHeightFeedback(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
 	m = updated.(*bubbleModel)
 	got := m.todoView()
-	if !m.todoExpanded || !strings.Contains(got, "details") {
-		t.Fatalf("compact todo toggle=%q expanded=%v, want visible height feedback", got, m.todoExpanded)
+	if !m.todoViewState.Expanded || !strings.Contains(got, "details") {
+		t.Fatalf("compact todo toggle=%q expanded=%v, want visible height feedback", got, m.todoViewState.Expanded)
 	}
 }
 
@@ -310,8 +310,8 @@ func TestFreshCompletedTodoRetiresOnNextTurnButCanReopen(t *testing.T) {
 	if _, err := store.CompareAndReplace(context.Background(), m.todoRevision, []tododomain.Item{{ID: "ship", Text: "ship", Status: tododomain.StatusCompleted}}); err != nil {
 		t.Fatal(err)
 	}
-	if !m.syncTodoSnapshot() || !m.todoCompletionFresh {
-		t.Fatalf("completion state fresh=%v todo=%#v", m.todoCompletionFresh, m.todo)
+	if !m.syncTodoSnapshot() || !m.todoLifecycle.CompletionFresh {
+		t.Fatalf("completion state fresh=%v todo=%#v", m.todoLifecycle.CompletionFresh, m.todo)
 	}
 	if got := m.todoView(); !strings.Contains(got, "Tasks 1/1") {
 		t.Fatalf("fresh completion feedback missing: %q", got)
@@ -321,7 +321,7 @@ func TestFreshCompletedTodoRetiresOnNextTurnButCanReopen(t *testing.T) {
 	if got := m.todoView(); got != "" {
 		t.Fatalf("completed task chrome not retired on next turn: %q", got)
 	}
-	m.todoExpanded = true
+	m.todoViewState.Expanded = true
 	if got := m.todoView(); !strings.Contains(got, "ship") {
 		t.Fatalf("retired completed todo could not be reopened: %q", got)
 	}
