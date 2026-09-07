@@ -62,3 +62,18 @@ func TestCloneItemsPreservesEmptyArrayJSONShape(t *testing.T) {
 		t.Fatalf("snapshot JSON = %s, want empty items array", got)
 	}
 }
+
+func TestActiveItemsAllowsConcurrentInProgressTasks(t *testing.T) {
+	items := []Item{
+		{ID: "root", Text: "root work", Status: StatusInProgress},
+		{ID: "child", Text: "delegated work", Status: StatusInProgress},
+		{ID: "later", Text: "later", Status: StatusPending},
+	}
+	if err := ValidateItems(items); err != nil {
+		t.Fatalf("concurrent active tasks should be valid: %v", err)
+	}
+	active := ActiveItems(items)
+	if len(active) != 2 || active[0].ID != "root" || active[1].ID != "child" {
+		t.Fatalf("active=%#v", active)
+	}
+}
