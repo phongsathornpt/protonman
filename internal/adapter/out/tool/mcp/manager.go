@@ -43,7 +43,7 @@ func NewManager(servers ...ManagedServer) (*Manager, error) {
 }
 
 // Bind discovers and registers all managed server tools. Failed discovery closes every server.
-func (m *Manager) Bind(ctx context.Context, registry tool.Registrar) error {
+func (m *Manager) Bind(ctx context.Context, registry tool.BatchRegistrar) error {
 	if registry == nil {
 		return errors.New("bind MCP manager: registry is required")
 	}

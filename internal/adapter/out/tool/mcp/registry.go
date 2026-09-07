@@ -37,7 +37,7 @@ func NamespacedName(serverName string, toolName string) (string, error) {
 
 // Discover queries every server concurrently, registers each discovered tool under its
 // namespaced name, and wires invocations through tool.Handler.
-func Discover(ctx context.Context, registry tool.Registrar, servers ...Server) error {
+func Discover(ctx context.Context, registry tool.BatchRegistrar, servers ...Server) error {
 	if registry == nil {
 		return fmt.Errorf("discover MCP tools: registry is required")
 	}
@@ -144,10 +144,8 @@ func Discover(ctx context.Context, registry tool.Registrar, servers ...Server) e
 			return fmt.Errorf("%w: %s", ErrDuplicateDiscoveredTool, name)
 		}
 	}
-	for _, handler := range handlers {
-		if err := registry.Register(handler); err != nil {
-			return fmt.Errorf("register MCP tool %q: %w", handler.Definition().Name, err)
-		}
+	if err := registry.RegisterBatch(handlers); err != nil {
+		return fmt.Errorf("register MCP tools atomically: %w", err)
 	}
 	return nil
 }
