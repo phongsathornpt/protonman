@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -14,10 +16,15 @@ import (
 
 func generateSessionID(workDir string) string {
 	now := time.Now().UTC()
-	return fmt.Sprintf("workspace-%s-%s-%03d",
+	var entropy [4]byte
+	if _, err := rand.Read(entropy[:]); err != nil {
+		binary := sha256.Sum256([]byte(fmt.Sprintf("%s:%d", workDir, now.UnixNano())))
+		copy(entropy[:], binary[:4])
+	}
+	return fmt.Sprintf("workspace-%s-%s-%s",
 		workspaceKey(workDir),
-		now.Format("20060102-150405"),
-		now.Nanosecond()/1e6,
+		now.Format("20060102-150405.000000000"),
+		hex.EncodeToString(entropy[:]),
 	)
 }
 
@@ -29,10 +36,16 @@ func resolveSession(
 ) (string, session.State, bool, error) {
 	wsKey := workspaceKey(workDir)
 	wsPrefix := "workspace-" + wsKey
+	workspaceName := filepath.Base(filepath.Clean(workDir))
 
-	explicitID := strings.TrimSpace(options.sessionID)
+	cliID := strings.TrimSpace(options.sessionID)
+	envID := ""
+	if cliID == "" {
+		envID = envconfig.Value(envconfig.SessionID)
+	}
+	explicitID := cliID
 	if explicitID == "" {
-		explicitID = envconfig.Value(envconfig.SessionID)
+		explicitID = envID
 	}
 
 	if options.resume {
@@ -43,6 +56,9 @@ func resolveSession(
 			}
 			if !found {
 				return "", session.State{}, false, fmt.Errorf("session %q not found to resume", explicitID)
+			}
+			if state.WorkspaceKey != "" && state.WorkspaceKey != wsKey {
+				return "", session.State{}, false, fmt.Errorf("session %q belongs to another workspace", explicitID)
 			}
 			return explicitID, state, true, nil
 		}
@@ -57,16 +73,33 @@ func resolveSession(
 		return latestID, latestState, true, nil
 	}
 
-	if explicitID != "" && !options.newSession {
-		state, found, err := store.Load(ctx, explicitID)
+	if cliID != "" {
+		_, found, err := store.Load(ctx, cliID)
 		if err != nil {
-			return "", session.State{}, false, fmt.Errorf("load session %q: %w", explicitID, err)
+			return "", session.State{}, false, fmt.Errorf("check session %q: %w", cliID, err)
 		}
-		return explicitID, state, found, nil
+		if found {
+			return "", session.State{}, false, fmt.Errorf("session %q already exists; use --resume --session %s", cliID, cliID)
+		}
+		return cliID, session.State{SessionID: cliID, WorkspaceKey: wsKey, WorkspaceName: workspaceName}, false, nil
+	}
+
+	if envID != "" && !options.newSession {
+		state, found, err := store.Load(ctx, envID)
+		if err != nil {
+			return "", session.State{}, false, fmt.Errorf("load session %q: %w", envID, err)
+		}
+		if found {
+			if state.WorkspaceKey != "" && state.WorkspaceKey != wsKey {
+				return "", session.State{}, false, fmt.Errorf("session %q belongs to another workspace", envID)
+			}
+			return envID, state, true, nil
+		}
+		return envID, session.State{SessionID: envID, WorkspaceKey: wsKey, WorkspaceName: workspaceName}, false, nil
 	}
 
 	newID := generateSessionID(workDir)
-	return newID, session.State{}, false, nil
+	return newID, session.State{SessionID: newID, WorkspaceKey: wsKey, WorkspaceName: workspaceName}, false, nil
 }
 
 func workspaceKey(workDir string) string {
