@@ -139,8 +139,8 @@ func TestSlashSkills(t *testing.T) {
 		}
 
 		// Multiple active skills show count
-		_ = model.skills.Register(skill.Skill{Name: "git-helper", Description: "git"})
-		model.skills.MarkActivated("git-helper")
+		_ = model.skills.Register(skill.Skill{Name: "zz-helper", Description: "git", Scope: skill.ScopeUser})
+		model.skills.MarkActivated("zz-helper")
 		info = model.infoView()
 		if !strings.Contains(info, "2 skills active") {
 			t.Fatalf("expected '2 skills active' in infoView(), got: %s", info)
@@ -148,7 +148,7 @@ func TestSlashSkills(t *testing.T) {
 
 		// Deactivate
 		model.skills.Deactivate("pdf-processing")
-		model.skills.Deactivate("git-helper")
+		model.skills.Deactivate("zz-helper")
 		info = model.infoView()
 		if strings.Contains(info, "active") {
 			t.Fatalf("expected no active skill chip when 0 skills active, got: %s", info)

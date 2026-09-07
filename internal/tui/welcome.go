@@ -4,7 +4,7 @@ import "strings"
 
 func (m bubbleModel) welcomeCard() string {
 	width := maxInt(8, m.width-2)
-	rows := []string{brandStyle.Render("Proton") + mutedStyle.Render("  "+appVersion)}
+	rows := []string{brandLockup(m.width)}
 	if cwd := strings.TrimSpace(m.workDir); cwd != "" {
 		rows = append(rows, mutedStyle.Render(truncateWithEllipsis(cwd, width)))
 	}

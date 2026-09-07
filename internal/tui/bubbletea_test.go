@@ -38,7 +38,7 @@ func TestWelcomeSitsAtTopWithoutFloatingBox(t *testing.T) {
 	model.resize(80, 24)
 	view := model.View()
 	plain := sanitizeBubbleText(view)
-	if idx := strings.Index(plain, "Proton"); idx < 0 || idx > 8 {
+	if idx := strings.Index(plain, glyphBrand); idx < 0 || idx > 8 {
 		t.Fatalf("welcome is not at the top of the view: %q", plain[:minInt(80, len(plain))])
 	}
 	if strings.Count(view, "╭") > 1 {
@@ -119,7 +119,8 @@ func TestBubbleModelRendersComponentLayout(t *testing.T) {
 
 	view := model.View()
 	for _, expected := range []string{
-		"Proton",
+		glyphBrand,
+		"█▀█",
 		"assistant: ready",
 		"Tasks 0/1",
 		"ask",
@@ -291,7 +292,8 @@ func TestEmptyStateWithoutRunnerGuidesSlashCommands(t *testing.T) {
 	for _, expected := range []string{
 		"No model selected",
 		"Type a message or /command",
-		"Proton",
+		glyphBrand,
+		"█▀█",
 	} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("empty state view does not contain %q: %s", expected, view)
@@ -661,7 +663,7 @@ func TestWelcomeCardReprintsAfterClear(t *testing.T) {
 	if strings.Contains(plainTranscript(model), "gone") {
 		t.Fatal("clear left transcript body")
 	}
-	if !strings.Contains(view, "Proton") || !strings.Contains(view, "No model selected") {
+	if !strings.Contains(view, glyphBrand) || !strings.Contains(view, "█▀█") || !strings.Contains(view, "No model selected") {
 		t.Fatalf("clear did not reprint welcome: %s", view)
 	}
 }
