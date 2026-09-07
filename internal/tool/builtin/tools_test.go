@@ -301,7 +301,7 @@ func TestDefaultRegistryContainsCodingTools(t *testing.T) {
 
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
 	defer coord.Close()
-	regWithCoord, err := NewDefaultRegistry(workspaceRoot, testSandboxOption(), testCheckpointOption(), WithAgentCoordinator(coord))
+	regWithCoord, err := NewDefaultRegistry(workspaceRoot, testSandboxOption(), testCheckpointOption(), withAgentTools(coord))
 	if err != nil {
 		t.Fatalf("NewDefaultRegistry(WithAgentCoordinator) error = %v", err)
 	}
@@ -319,7 +319,7 @@ func TestBuiltinInputSchemasRejectUnknownProperties(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
 	defer coord.Close()
-	registry, err := NewDefaultRegistry(workspaceRoot, testSandboxOption(), testCheckpointOption(), WithAgentCoordinator(coord))
+	registry, err := NewDefaultRegistry(workspaceRoot, testSandboxOption(), testCheckpointOption(), withAgentTools(coord))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/projectTHORN/proton/internal/adapter/sessionfs"
+	agenttool "github.com/projectTHORN/proton/internal/adapter/tool/agent"
 	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/appdirs"
@@ -129,7 +130,13 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		builtin.WithCheckpointStore(checkpointStore),
 		builtin.WithSandbox(launcher, sandboxProfile.Network),
 		builtin.WithSkillRegistry(skillRegistry),
-		builtin.WithAgentCoordinator(coordinator),
+		builtin.WithAdditionalHandlers(
+			agenttool.NewDelegateTask(coordinator),
+			agenttool.NewWaitAgent(coordinator),
+			agenttool.NewGetAgent(coordinator),
+			agenttool.NewListAgents(coordinator),
+			agenttool.NewCancelAgent(coordinator),
+		),
 		builtin.WithTodoStore(todoStore),
 		builtin.WithDefaultWebFetchTimeout(loadedConfig.Runtime.WebFetchTimeout),
 	)

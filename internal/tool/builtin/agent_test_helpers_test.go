@@ -1,0 +1,16 @@
+package builtin
+
+import (
+	"github.com/projectTHORN/proton/internal/adapter/tool/agent"
+	"github.com/projectTHORN/proton/internal/agent"
+)
+
+func withAgentTools(coordinator *agent.Coordinator) RegistryOption {
+	return WithAdditionalHandlers(
+		agenttool.NewDelegateTask(coordinator),
+		agenttool.NewWaitAgent(coordinator),
+		agenttool.NewGetAgent(coordinator),
+		agenttool.NewListAgents(coordinator),
+		agenttool.NewCancelAgent(coordinator),
+	)
+}

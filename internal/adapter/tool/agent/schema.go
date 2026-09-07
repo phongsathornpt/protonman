@@ -1,4 +1,4 @@
-package builtin
+package agenttool
 
 import "github.com/projectTHORN/proton/internal/agent"
 

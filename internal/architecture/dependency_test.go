@@ -52,6 +52,13 @@ func TestInboundAdaptersUseApplicationConversationBoundary(t *testing.T) {
 	}
 }
 
+func TestBuiltinToolsDoNotDependOnAgentSubsystem(t *testing.T) {
+	packages := listPackages(t)
+	assertNoImports(t, packages, modulePath+"/internal/tool/builtin", []string{
+		modulePath + "/internal/agent",
+	})
+}
+
 func TestSessionDomainDoesNotOwnFilesystemPersistence(t *testing.T) {
 	packages := listPackages(t)
 	assertNoImports(t, packages, modulePath+"/internal/session", []string{
