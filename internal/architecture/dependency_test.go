@@ -2,6 +2,7 @@ package architecture_test
 
 import (
 	"encoding/json"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -180,6 +181,75 @@ func TestSDKDoesNotDependOnCLIInternals(t *testing.T) {
 				t.Errorf("%s imports CLI-owned package %s", path, imported)
 			}
 		}
+	}
+}
+
+func TestHeadlessModeDoesNotDependOnTurn(t *testing.T) {
+	root := repositoryRoot(t)
+	cmd := exec.Command("rg", `"github\.com/projectTHORN/proton/internal/turn"`, "cmd/proton/headless_mode.go")
+	cmd.Dir = root
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("cmd/proton/headless_mode.go imports internal/turn directly:\n%s", output)
+	}
+	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
+		t.Fatalf("search headless_mode.go turn imports: %v: %s", err, output)
+	}
+}
+
+func TestApplicationLayerFileStructure(t *testing.T) {
+	root := repositoryRoot(t)
+	entries, err := os.ReadDir(filepath.Join(root, "internal", "app"))
+	if err != nil {
+		t.Fatalf("read internal/app: %v", err)
+	}
+	expected := map[string]bool{
+		"agents.go":            true,
+		"appdirs":              true,
+		"conversation.go":      true,
+		"conversation_test.go": true,
+		"models.go":            true,
+		"projects.go":          true,
+		"providers.go":         true,
+		"sessions.go":          true,
+	}
+	for _, entry := range entries {
+		if !expected[entry.Name()] {
+			t.Errorf("unexpected entry in internal/app: %s", entry.Name())
+		}
+	}
+}
+
+func TestModelLayerFileStructure(t *testing.T) {
+	root := repositoryRoot(t)
+	entries, err := os.ReadDir(filepath.Join(root, "internal", "model"))
+	if err != nil {
+		t.Fatalf("read internal/model: %v", err)
+	}
+	expected := map[string]bool{
+		"client_factory.go":      true,
+		"client_factory_test.go": true,
+		"model_profile.go":       true,
+		"model_test.go":          true,
+		"provider_catalog.go":    true,
+		"provider_discovery.go":  true,
+		"provider_preset.go":     true,
+		"provider_test.go":       true,
+		"sdk_adapter.go":         true,
+		"sdk_adapter_test.go":    true,
+	}
+	for _, entry := range entries {
+		if !expected[entry.Name()] {
+			t.Errorf("unexpected entry in internal/model: %s", entry.Name())
+		}
+	}
+}
+
+func TestNoDomainIshDirectory(t *testing.T) {
+	root := repositoryRoot(t)
+	path := filepath.Join(root, "internal", "domain-ish")
+	if _, err := os.Stat(path); err == nil {
+		t.Errorf("internal/domain-ish directory must not exist")
 	}
 }
 
