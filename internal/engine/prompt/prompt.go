@@ -61,7 +61,7 @@ func Render(spec Spec) string {
 		sections = append(sections, groundingSection(evidence))
 	}
 	if spec.Capabilities.Tasks {
-		sections = append(sections, taskSection())
+		sections = append(sections, taskSection(spec))
 	}
 	if spec.Capabilities.Agents {
 		sections = append(sections, delegationSection(spec))
@@ -189,14 +189,24 @@ func additionalInstructionsSection(values []string) string {
 	return "# Additional Instructions\n" + strings.Join(parts, "\n\n")
 }
 
-func taskSection() string {
-	return `# Task Coordination
-- Task tools are coordination metadata, not repository evidence.
-- Use task coordination for meaningful multi-step work where persistent progress helps; do not create a task plan for a trivial single-step request.
-- Read the latest task snapshot before changing an existing plan and use the exact revision returned by that snapshot.
-- On a revision conflict, refresh the task snapshot and reconsider the patch; never retry stale operations blindly.
-- Preserve tasks that the requested change does not affect.
-- Mark work in progress or complete only when the underlying execution state actually changes.`
+func taskSection(spec Spec) string {
+	lines := []string{
+		"# Task Coordination",
+		"- Task tools are coordination metadata, not repository evidence.",
+		"- Use task coordination for meaningful multi-step work where persistent progress helps; do not create a task plan for a trivial single-step request.",
+		"- Read the latest task snapshot before changing an existing plan and use the exact revision returned by that snapshot.",
+		"- On a revision conflict, refresh the task snapshot and reconsider the patch; never retry stale operations blindly.",
+		"- Preserve tasks that the requested change does not affect.",
+		"- Mark work in progress or complete only when the underlying execution state actually changes.",
+	}
+	if strings.TrimSpace(spec.Role) == "" && spec.Capabilities.Agents {
+		lines = append(lines,
+			"- The primary agent owns task-plan updates; subagents do not mutate the parent task plan.",
+			"- Keep tracked task status aligned with delegated work from the parent.",
+			"- Independent delegated tasks may be in progress concurrently.",
+		)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func delegationSection(spec Spec) string {

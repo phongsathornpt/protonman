@@ -101,3 +101,16 @@ func TestRenderTaskContractUsesStrictRevisionSemantics(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderTaskDelegationOwnershipIsRootOnly(t *testing.T) {
+	root := Render(Spec{Capabilities: ToolCapabilities{Tasks: true, Agents: true}})
+	for _, want := range []string{"primary agent owns task-plan updates", "subagents do not mutate", "may be in progress concurrently"} {
+		if !strings.Contains(root, want) {
+			t.Fatalf("root task/delegation contract missing %q:\n%s", want, root)
+		}
+	}
+	child := Render(Spec{Role: "bounded child", Capabilities: ToolCapabilities{Tasks: true, Agents: true}})
+	if strings.Contains(child, "primary agent owns task-plan updates") {
+		t.Fatalf("child prompt leaked parent task ownership:\n%s", child)
+	}
+}
