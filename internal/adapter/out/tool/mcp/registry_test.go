@@ -569,7 +569,7 @@ func TestMCPToolValidateRejectsInvalidMutability(t *testing.T) {
 	}
 }
 
-func TestDiscoverPropagatesMCPMutability(t *testing.T) {
+func TestDiscoverEnforcesMCPServerSafetyTrustBoundary(t *testing.T) {
 	server := &fakeServer{name: "db", tools: []Tool{
 		{Name: "query", Mutability: domaintool.MutabilityReadOnly},
 		{Name: "update", Mutability: domaintool.MutabilityMutating},
@@ -577,28 +577,37 @@ func TestDiscoverPropagatesMCPMutability(t *testing.T) {
 	}}
 	registry, err := builtin.NewRegistry()
 	if err != nil {
-		t.Fatalf("NewRegistry() error = %v", err)
+		t.Fatal(err)
 	}
 	if err := Discover(context.Background(), registry, server); err != nil {
-		t.Fatalf("Discover() error = %v", err)
+		t.Fatal(err)
 	}
-	definitions := registry.Definitions()
 	got := map[string]domaintool.Mutability{}
-	for _, definition := range definitions {
+	for _, definition := range registry.Definitions() {
 		got[definition.Name] = definition.Mutability
 	}
-	if got["mcp.db.query"] != domaintool.MutabilityReadOnly {
-		t.Fatalf("query mutability = %q", got["mcp.db.query"])
+	if got["mcp.db.query"] != domaintool.MutabilityUnspecified {
+		t.Fatalf("untrusted read-only claim = %q, want unspecified", got["mcp.db.query"])
 	}
 	if got["mcp.db.update"] != domaintool.MutabilityMutating {
-		t.Fatalf("update mutability = %q", got["mcp.db.update"])
+		t.Fatalf("mutating declaration = %q", got["mcp.db.update"])
 	}
-	if got["mcp.db.legacy"] != domaintool.MutabilityUnspecified {
-		t.Fatalf("legacy mutability = %q", got["mcp.db.legacy"])
+	if domaintool.EffectiveMutability(domaintool.Definition{Name: "mcp.db.query", Kind: domaintool.KindMCP, Mutability: got["mcp.db.query"]}) != domaintool.MutabilityMutating {
+		t.Fatal("untrusted read-only MCP claim must remain conservative")
 	}
-	legacy := domaintool.Definition{Name: "mcp.db.legacy", Kind: domaintool.KindMCP}
-	if domaintool.EffectiveMutability(legacy) != domaintool.MutabilityMutating {
-		t.Fatal("legacy MCP tool must remain conservative")
+
+	trusted, _ := builtin.NewRegistry()
+	options := DefaultDiscoveryOptions()
+	options.TrustServerSafety = true
+	if err := DiscoverWithOptions(context.Background(), trusted, options, server); err != nil {
+		t.Fatal(err)
+	}
+	trustedGot := map[string]domaintool.Mutability{}
+	for _, definition := range trusted.Definitions() {
+		trustedGot[definition.Name] = definition.Mutability
+	}
+	if trustedGot["mcp.db.query"] != domaintool.MutabilityReadOnly {
+		t.Fatalf("trusted read-only claim = %q", trustedGot["mcp.db.query"])
 	}
 }
 
