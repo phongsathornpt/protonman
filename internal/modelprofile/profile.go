@@ -27,6 +27,13 @@ func (s Support) Bool() (bool, bool) {
 	}
 }
 
+type ToolSchemaDialect string
+
+const (
+	ToolSchemaDefault      ToolSchemaDialect = ""
+	ToolSchemaGeminiSubset ToolSchemaDialect = "gemini_openapi_subset"
+)
+
 type MatchKind string
 
 const (
@@ -72,13 +79,14 @@ type Sampling struct {
 }
 
 type Profile struct {
-	Name          string
-	Match         Matcher
-	Capabilities  Capabilities
-	Reasoning     Reasoning
-	Sampling      Sampling
-	ContextWindow int
-	PromptHints   []string
+	Name              string
+	Match             Matcher
+	Capabilities      Capabilities
+	Reasoning         Reasoning
+	Sampling          Sampling
+	ContextWindow     int
+	PromptHints       []string
+	ToolSchemaDialect ToolSchemaDialect
 }
 
 type CatalogReasoning struct {
@@ -95,16 +103,17 @@ type CatalogMetadata struct {
 }
 
 type Resolved struct {
-	ProfileName     string
-	ProfileMatch    MatchKind
-	CatalogOverride bool
-	Provider        string
-	ModelID         string
-	Capabilities    Capabilities
-	Reasoning       Reasoning
-	Sampling        Sampling
-	ContextWindow   int
-	PromptHints     []string
+	ProfileName       string
+	ProfileMatch      MatchKind
+	CatalogOverride   bool
+	Provider          string
+	ModelID           string
+	Capabilities      Capabilities
+	Reasoning         Reasoning
+	Sampling          Sampling
+	ContextWindow     int
+	PromptHints       []string
+	ToolSchemaDialect ToolSchemaDialect
 }
 
 type Registry struct {

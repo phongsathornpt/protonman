@@ -25,6 +25,9 @@ func mergeProfile(dst *Resolved, src Profile) {
 	if len(src.PromptHints) > 0 {
 		dst.PromptHints = append([]string(nil), src.PromptHints...)
 	}
+	if src.ToolSchemaDialect != ToolSchemaDefault {
+		dst.ToolSchemaDialect = src.ToolSchemaDialect
+	}
 }
 
 func mergeCatalog(dst *Resolved, src CatalogMetadata) {

@@ -17,6 +17,7 @@ import (
 	"github.com/projectTHORN/proton/internal/agentprompt"
 	"github.com/projectTHORN/proton/internal/contextutil"
 	"github.com/projectTHORN/proton/internal/model"
+	"github.com/projectTHORN/proton/internal/modelprofile"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/skill"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -645,7 +646,11 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	modelProfileName := ""
 	modelProfileMatch := ""
 	modelCatalogOverride := false
+	var resolvedModelProfile modelprofile.Resolved
+	hasResolvedModelProfile := false
 	if profile, ok := model.ResolvedModelProfile(l.languageModel); ok {
+		resolvedModelProfile = profile
+		hasResolvedModelProfile = true
 		modelProfileName = profile.ProfileName
 		modelProfileMatch = string(profile.ProfileMatch)
 		modelCatalogOverride = profile.CatalogOverride
@@ -761,10 +766,14 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 
 		sdkTools := make([]sdk.Tool, 0, len(tools))
 		for _, definition := range tools {
+			inputSchema := definition.InputSchema
+			if hasResolvedModelProfile {
+				inputSchema = modelprofile.PublishInputSchema(resolvedModelProfile, definition.InputSchema)
+			}
 			sdkTools = append(sdkTools, sdk.Tool{
 				Name:         definition.Name,
 				Description:  definition.Description,
-				InputSchema:  definition.InputSchema,
+				InputSchema:  inputSchema,
 				OutputSchema: definition.OutputSchema,
 				Dynamic:      definition.Kind == tool.KindMCP,
 			})

@@ -14,7 +14,8 @@ var builtinRegistry = mustRegistry(
 			Levels:  []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningHigh},
 			Default: sdk.ReasoningMedium,
 		},
-		ContextWindow: 1_048_576,
+		ContextWindow:     1_048_576,
+		ToolSchemaDialect: ToolSchemaGeminiSubset,
 		PromptHints: []string{
 			"Use tool names exactly as provided; do not invent namespaces or prefixes.",
 		},

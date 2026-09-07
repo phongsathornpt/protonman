@@ -17,6 +17,11 @@ func validateProfile(profile Profile) error {
 	if profile.Reasoning.Default != "" && !profile.Reasoning.Default.Valid() {
 		return fmt.Errorf("invalid default reasoning effort %q", profile.Reasoning.Default)
 	}
+	switch profile.ToolSchemaDialect {
+	case ToolSchemaDefault, ToolSchemaGeminiSubset:
+	default:
+		return fmt.Errorf("invalid tool schema dialect %q", profile.ToolSchemaDialect)
+	}
 	return nil
 }
 
