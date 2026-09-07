@@ -673,6 +673,43 @@ func TestCallerBoundedToolBypassesGenericExecutionTimeout(t *testing.T) {
 	}
 }
 
+func TestServiceValidatesInputSchemaBeforePermissionAndExecution(t *testing.T) {
+	handler := &fakeHandler{definition: tool.Definition{
+		Name: "read_file", Description: "read file", Kind: tool.KindRead,
+		InputSchema: map[string]any{
+			"type":                 "object",
+			"properties":           map[string]any{"path": map[string]any{"type": "string"}},
+			"required":             []string{"path"},
+			"additionalProperties": false,
+		},
+	}}
+	prompted := 0
+	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAsk), WithPrompt(func(context.Context, permission.Request) (permission.Resolution, error) {
+		prompted++
+		return permission.Resolution{Action: permission.ActionAllow}, nil
+	}))
+	invalid, _ := tool.NewCall("bad-input", "read_file", json.RawMessage(`{}`))
+	result, err := service.Call(context.Background(), invalid)
+	var toolErr *tool.ToolError
+	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeInvalidArguments {
+		t.Fatalf("invalid input error = %v", err)
+	}
+	if result.Failure == nil || result.Failure.Code != tool.ErrorCodeInvalidArguments {
+		t.Fatalf("invalid input failure = %#v", result.Failure)
+	}
+	if prompted != 0 || handler.calls != 0 {
+		t.Fatalf("invalid input prompted=%d handler_calls=%d, want both 0", prompted, handler.calls)
+	}
+
+	valid, _ := tool.NewCall("good-input", "read_file", json.RawMessage(`{"path":"README.md"}`))
+	if _, err := service.Call(context.Background(), valid); err != nil {
+		t.Fatalf("valid input call: %v", err)
+	}
+	if prompted != 1 || handler.calls != 1 {
+		t.Fatalf("valid input prompted=%d handler_calls=%d, want both 1", prompted, handler.calls)
+	}
+}
+
 func TestServiceValidatesStructuredOutputSchema(t *testing.T) {
 	handler := &fakeHandler{
 		definition: tool.Definition{

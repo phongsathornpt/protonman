@@ -35,7 +35,7 @@ func TestE2ESubagentDelegationInvalidArguments(t *testing.T) {
 		dir:  ws,
 		env:  []string{"PROTON_HOME=" + home},
 	})
-	if resMissing.exitCode == 0 || !strings.Contains(resMissing.stdout+resMissing.stderr, "task is required") {
+	if resMissing.exitCode == 0 || !strings.Contains(resMissing.stdout+resMissing.stderr, "missing property 'task'") {
 		t.Fatalf("expected task required error, got: %s %s", resMissing.stdout, resMissing.stderr)
 	}
 
@@ -45,7 +45,7 @@ func TestE2ESubagentDelegationInvalidArguments(t *testing.T) {
 		dir:  ws,
 		env:  []string{"PROTON_HOME=" + home},
 	})
-	if resProfile.exitCode == 0 || !strings.Contains(resProfile.stdout+resProfile.stderr, "unknown agent profile") {
+	if resProfile.exitCode == 0 || !strings.Contains(resProfile.stdout+resProfile.stderr, "value must be one of") {
 		t.Fatalf("expected unknown profile error, got: %s %s", resProfile.stdout, resProfile.stderr)
 	}
 }
