@@ -14,8 +14,6 @@ type Spec struct {
 	ModelCatalogOverride bool
 	Workspace            string
 	ToolNames            []string
-	MaxRounds            int
-	MaxToolCalls         int
 	ReasoningRequested   string
 	ReasoningEffective   string
 	ReasoningSource      string
