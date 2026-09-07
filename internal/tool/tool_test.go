@@ -327,3 +327,24 @@ func TestAnalyzeCommandScope(t *testing.T) {
 		t.Fatalf("terraform destroy risk = %q", got)
 	}
 }
+
+func TestNoArgumentsSchemaDetection(t *testing.T) {
+	if !IsNoArgumentsSchema(NoArgumentsSchema()) {
+		t.Fatal("canonical no-arguments schema was not detected")
+	}
+	if IsNoArgumentsSchema(map[string]any{"type": "object", "properties": map[string]any{"x": map[string]any{"type": "string"}}, "additionalProperties": false}) {
+		t.Fatal("schema with properties detected as no-arguments")
+	}
+}
+
+func TestNewCallNormalizesBlankArguments(t *testing.T) {
+	for _, raw := range []string{"", "   ", "\n\t"} {
+		call, err := NewCall("call-1", "get_todo", []byte(raw))
+		if err != nil {
+			t.Fatalf("NewCall(%q) error = %v", raw, err)
+		}
+		if got := string(call.Arguments); got != `{}` {
+			t.Fatalf("NewCall(%q) arguments = %q, want {}", raw, got)
+		}
+	}
+}

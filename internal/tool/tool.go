@@ -243,6 +243,7 @@ func NewCall(id string, name string, arguments json.RawMessage) (Call, error) {
 	if name == "" {
 		return Call{}, fmt.Errorf("%w: tool name is required", ErrInvalidCall)
 	}
+	arguments = json.RawMessage(strings.TrimSpace(string(arguments)))
 	if len(arguments) == 0 {
 		arguments = json.RawMessage(`{}`)
 	}
@@ -261,6 +262,48 @@ func NewCall(id string, name string, arguments json.RawMessage) (Call, error) {
 func (c Call) Validate() error {
 	_, err := NewCall(c.ID, c.Name, c.Arguments)
 	return err
+}
+
+// NoArgumentsSchema returns the canonical contract for tools that accept no arguments.
+func NoArgumentsSchema() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"properties":           map[string]any{},
+		"additionalProperties": false,
+	}
+}
+
+// IsNoArgumentsSchema reports whether schema is the canonical empty-object input contract.
+func IsNoArgumentsSchema(schema map[string]any) bool {
+	if schema == nil || schema["type"] != "object" || schema["additionalProperties"] != false {
+		return false
+	}
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok || len(properties) != 0 {
+		return false
+	}
+	if required, ok := schema["required"]; ok {
+		switch values := required.(type) {
+		case []string:
+			return len(values) == 0
+		case []any:
+			return len(values) == 0
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// NormalizeArguments canonicalizes provider variations for zero-argument tools.
+// Only an omitted/blank payload or JSON null is widened to {}; all other values
+// remain unchanged for canonical schema validation.
+func NormalizeArguments(definition Definition, arguments json.RawMessage) json.RawMessage {
+	trimmed := strings.TrimSpace(string(arguments))
+	if IsNoArgumentsSchema(definition.InputSchema) && (trimmed == "" || trimmed == "null") {
+		return json.RawMessage(`{}`)
+	}
+	return append(json.RawMessage(nil), arguments...)
 }
 
 // Definition describes a registered tool to the model and the UI.
