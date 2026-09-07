@@ -337,3 +337,18 @@ func TestExecPresentationMake(t *testing.T) {
 		t.Fatalf("gmake = %#v", failed)
 	}
 }
+
+func TestExecPresentationDocker(t *testing.T) {
+	build := presentExec("docker build .", "#12 exporting to image\n", "")
+	if build.Title != "Docker build" || build.Summary != "built image" {
+		t.Fatalf("docker build = %#v", build)
+	}
+	compose := presentExec("docker compose up -d", "Container api Started\nContainer db Started\n", "")
+	if compose.Title != "Docker compose up" || compose.Summary != "2 services running" {
+		t.Fatalf("docker compose = %#v", compose)
+	}
+	legacy := presentExec("docker-compose down", "", "")
+	if legacy.Title != "Docker compose down" {
+		t.Fatalf("docker-compose = %#v", legacy)
+	}
+}
