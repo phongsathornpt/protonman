@@ -243,7 +243,7 @@ func (h serverToolHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 				message = fmt.Sprintf("MCP tool %s.%s returned an error: %s", h.serverName, h.manifest.Name, firstLine)
 			}
 		}
-		failure := tool.NewToolError(tool.ErrorCodeExecution, message)
+		failure := classifyFailure(FailureTool, h.serverName, h.manifest.Name, "tools/call", errors.New(message))
 		toolResult.Failure = tool.FailureFromError(failure)
 		return toolResult, failure
 	}

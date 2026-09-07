@@ -233,19 +233,25 @@ func (s *StdioServer) request(ctx context.Context, method string, params any, ou
 	select {
 	case <-ctx.Done():
 		s.removePending(id)
-		return ctx.Err()
+		return classifyFailure(FailureTransport, s.name, "", method, ctx.Err())
 	case reply := <-ch:
 		if reply.err != nil {
 			return reply.err
 		}
 		if reply.rpcErr != nil {
-			return fmt.Errorf("MCP JSON-RPC error %d: %s", reply.rpcErr.Code, reply.rpcErr.Message)
+			toolName := ""
+			if method == "tools/call" {
+				if values, ok := params.(map[string]any); ok {
+					toolName, _ = values["name"].(string)
+				}
+			}
+			return rpcFailure(s.name, toolName, method, reply.rpcErr)
 		}
 		if out == nil || len(reply.result) == 0 {
 			return nil
 		}
 		if err := json.Unmarshal(reply.result, out); err != nil {
-			return fmt.Errorf("decode MCP response for %s: %w", method, err)
+			return classifyFailure(FailureProtocol, s.name, "", method, fmt.Errorf("decode response: %w", err))
 		}
 		return nil
 	}
@@ -279,7 +285,7 @@ func (s *StdioServer) readLoop(reader io.Reader) {
 	for scanner.Scan() {
 		var message rpcEnvelope
 		if err := json.Unmarshal(scanner.Bytes(), &message); err != nil {
-			s.failPending(fmt.Errorf("decode MCP JSON-RPC message: %w", err))
+			s.failPending(classifyFailure(FailureProtocol, s.name, "", "read", fmt.Errorf("decode JSON-RPC message: %w", err)))
 			continue
 		}
 		if len(message.ID) == 0 {
@@ -298,7 +304,7 @@ func (s *StdioServer) readLoop(reader io.Reader) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		s.failPending(fmt.Errorf("read MCP stdio: %w", err))
+		s.failPending(classifyFailure(FailureTransport, s.name, "", "read", err))
 	}
 }
 
@@ -315,7 +321,7 @@ func (s *StdioServer) waitLoop() {
 	if err == nil {
 		err = io.EOF
 	}
-	s.failPending(fmt.Errorf("MCP server %q exited: %w; stderr: %s", s.name, err, strings.TrimSpace(s.stderr.String())))
+	s.failPending(classifyFailure(FailureDisconnected, s.name, "", "wait", fmt.Errorf("%w; stderr: %s", err, strings.TrimSpace(s.stderr.String()))))
 }
 
 func (s *StdioServer) removePending(id uint64) {

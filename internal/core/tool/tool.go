@@ -212,6 +212,7 @@ const (
 	ErrorCodeWorkspaceStateUnavailable  = failure.CodeWorkspaceStateUnavailable
 	ErrorCodeSandboxUnavailable         = failure.CodeSandboxUnavailable
 	ErrorCodeExecution                  = failure.CodeExecution
+	ErrorCodeNetworkUnavailable         = failure.CodeNetworkUnavailable
 )
 
 // RecoveryAction identifies one host-understood deterministic recovery strategy.
