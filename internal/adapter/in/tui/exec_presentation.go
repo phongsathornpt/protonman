@@ -47,21 +47,8 @@ func presentExec(command, stdout, stderr string) execPresentation {
 	}
 
 	p := execPresentation{Family: family, Action: action, Title: title}
-	switch family {
-	case execFamilyGit:
-		summarizeGitExec(&p, combined)
-	case execFamilyGo:
-		summarizeGoExec(&p, combined)
-	case execFamilyBun:
-		summarizeBunExec(&p, combined)
-	case execFamilyNode:
-		summarizeNodeExec(&p, combined)
-	case execFamilyPython:
-		summarizePythonExec(&p, combined)
-	case execFamilyVite:
-		summarizeViteExec(&p, combined)
-	case execFamilyNext:
-		summarizeNextExec(&p, combined)
+	if profile := execProfileForFamily(family); profile != nil && profile.Summarize != nil {
+		profile.Summarize(&p, combined)
 	}
 	return p
 }
@@ -73,33 +60,9 @@ func classifyExecCommand(command string) (execFamily, string, string) {
 			continue
 		}
 		name, args := unwrapExec(words)
-		if isPythonExecutable(name) {
-			action := pythonAction(args)
-			return execFamilyPython, action, pythonExecTitle(args, action)
-		}
-		switch name {
-		case "git":
-			action := gitAction(args)
-			return execFamilyGit, action, execTitle("Git", strings.Join(args, " "))
-		case "go":
-			action := firstArg(args)
-			return execFamilyGo, action, execTitle("Go", strings.Join(args, " "))
-		case "bun":
-			action := packageRunnerAction(args)
-			return execFamilyBun, action, execTitle("Bun", strings.Join(args, " "))
-		case "node":
-			action := nodeAction(args)
-			return execFamilyNode, action, nodeExecTitle(args, action)
-		case "npm", "pnpm", "yarn":
-			action := packageRunnerAction(args)
-			label := strings.ToUpper(name[:1]) + name[1:]
-			return execFamilyNode, action, execTitle(label, strings.Join(args, " "))
-		case "vite":
-			action := frameworkAction(firstArg(args), command, "vite")
-			return execFamilyVite, action, execTitle("Vite", action)
-		case "next":
-			action := frameworkAction(firstArg(args), command, "next")
-			return execFamilyNext, action, execTitle("Next", action)
+		if profile := execProfileForCommand(name); profile != nil {
+			action := profile.Action(args)
+			return profile.Family, action, profile.Title(name, args, action)
 		}
 	}
 	command = strings.TrimSpace(command)
