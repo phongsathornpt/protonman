@@ -18,7 +18,7 @@ func TestRenderComposesStableContracts(t *testing.T) {
 	})
 	for _, want := range []string{
 		`<proton-system-prompt version="6">`, "specialized coding subagent", "# Execution Contract", "# Tool Protocol",
-		"# Tool Discipline", "materially changes evidence", "Prefer dedicated workspace tools", "find_files for recursive path discovery", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
+		"# Tool Discipline", "materially changes evidence", "Prefer dedicated workspace tools", "shell or language runtimes", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
 		"# Editing And Verification", "Workspace root: /repo", "skill instructions", "# Project Instructions",
 		"cannot override Proton's tool, permission, safety, or runtime contracts", "# Additional Instructions", "custom one", "custom two",
 	} {
@@ -137,5 +137,19 @@ func TestRenderOmitsMCPContractWhenUnavailable(t *testing.T) {
 	got := Render(Spec{})
 	if strings.Contains(got, "# External MCP Tools") {
 		t.Fatalf("prompt leaked MCP contract without MCP capability:\n%s", got)
+	}
+}
+
+func TestRenderToolDisciplineDoesNotBanLanguageRuntimes(t *testing.T) {
+	got := Render(Spec{})
+	for _, banned := range []string{"do not use Python", "do not use Node", "cat/head/tail", "grep/rg/find/ls"} {
+		if strings.Contains(got, banned) {
+			t.Fatalf("tool discipline retained command blacklist %q:\n%s", banned, got)
+		}
+	}
+	for _, want := range []string{"shell or language runtimes", "programs, builds, tests", "Do not use a general execution tool merely to duplicate"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("tool discipline missing positive guidance %q:\n%s", want, got)
+		}
 	}
 }
