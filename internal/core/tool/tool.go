@@ -589,6 +589,12 @@ type Registrar interface {
 	Register(Handler) error
 }
 
+// BatchRegistrar atomically registers a set of handlers or leaves the registry unchanged.
+type BatchRegistrar interface {
+	Registrar
+	RegisterBatch([]Handler) error
+}
+
 func validKind(kind Kind) bool {
 	switch kind {
 	case KindRead, KindEdit, KindBash, KindGrep, KindMCP, KindWebFetch, KindWebSearch, KindTask, KindAgent:

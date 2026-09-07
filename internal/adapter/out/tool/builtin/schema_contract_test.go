@@ -83,3 +83,32 @@ func TestRegistryCachesCompiledSchemaValidators(t *testing.T) {
 		t.Fatal("CompiledValidators(missing) ok = true, want false")
 	}
 }
+
+type namedSchemaHandler struct{ name string }
+
+func (h namedSchemaHandler) Definition() tool.Definition {
+	return tool.Definition{Name: h.name, Description: h.name, Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly, InputSchema: tool.NoArgumentsSchema()}
+}
+func (h namedSchemaHandler) Execute(context.Context, tool.Call) (tool.Result, error) {
+	return tool.Result{}, nil
+}
+
+func TestRegistryRegisterBatchIsAtomic(t *testing.T) {
+	registry, err := NewRegistry(namedSchemaHandler{name: "existing"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = registry.RegisterBatch([]tool.Handler{
+		namedSchemaHandler{name: "new-one"},
+		namedSchemaHandler{name: "existing"},
+	})
+	if err == nil {
+		t.Fatal("RegisterBatch() error = nil")
+	}
+	if _, ok := registry.Lookup("new-one"); ok {
+		t.Fatal("new-one was partially registered")
+	}
+	if got := len(registry.Definitions()); got != 1 {
+		t.Fatalf("definitions = %d, want 1", got)
+	}
+}
