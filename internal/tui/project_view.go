@@ -8,6 +8,7 @@ import (
 
 	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/config"
+	"github.com/projectTHORN/proton/internal/envconfig"
 	projectdomain "github.com/projectTHORN/proton/internal/project"
 )
 
@@ -96,11 +97,11 @@ func (v *projectPaneView) Render(m *bubbleModel) string {
 		rows = append(rows, successStyle.Render(v.notice), "")
 	}
 	if state.ConfigExists && !state.Trusted {
-		rows = append(rows, warningStyle.Render("Project config and skills are present but not trusted."))
+		rows = append(rows, warningStyle.Render("Project config and skills are present but not trusted."), mutedStyle.Render("Restart with "+envconfig.TrustProject+"=1 to enable project-local settings."))
 	} else if !state.Exists {
 		rows = append(rows, mutedStyle.Render("No project-local Proton settings are configured."))
 	}
-	rows = append(rows, mutedStyle.Render("r reload · esc close"))
+	rows = append(rows, mutedStyle.Render("/project set <setting> <value> · r reload · esc close"))
 	if layoutModeForHeight(m.height) == layoutTiny {
 		rows = compactPickerRows(rows)
 	}
