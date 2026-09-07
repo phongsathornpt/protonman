@@ -326,3 +326,14 @@ func TestExecPresentationRustAndCargo(t *testing.T) {
 		t.Fatalf("rustc = %#v", rustc)
 	}
 }
+
+func TestExecPresentationMake(t *testing.T) {
+	p := presentExec("make -j8 test", "", "")
+	if p.Title != "Make test" || p.SuccessSummary != "completed" {
+		t.Fatalf("make = %#v", p)
+	}
+	failed := presentExec("gmake build", "make: *** [Makefile:42: build] Error 1\n", "")
+	if failed.Title != "Make build" || len(failed.Details) == 0 {
+		t.Fatalf("gmake = %#v", failed)
+	}
+}
