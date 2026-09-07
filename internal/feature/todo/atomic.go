@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 func writeAtomic(ctx context.Context, path string, content []byte) (writeErr error) {
@@ -61,8 +60,6 @@ func writeAtomic(ctx context.Context, path string, content []byte) (writeErr err
 	return nil
 }
 
-const todoLockStaleAfter = 2 * time.Minute
-
 func withFileLock(ctx context.Context, path string, fn func() error) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create todo lock directory: %w", err)
@@ -70,27 +67,10 @@ func withFileLock(ctx context.Context, path string, fn func() error) error {
 	if err := os.Chmod(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("protect todo lock directory: %w", err)
 	}
-	lockPath := path + ".lock"
-	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		err := os.Mkdir(lockPath, 0o700)
-		if err == nil {
-			defer os.Remove(lockPath)
-			return fn()
-		}
-		if !errors.Is(err, os.ErrExist) {
-			return fmt.Errorf("acquire todo lock: %w", err)
-		}
-		if info, statErr := os.Stat(lockPath); statErr == nil && time.Since(info.ModTime()) > todoLockStaleAfter {
-			_ = os.Remove(lockPath)
-			continue
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(10 * time.Millisecond):
-		}
+	unlock, err := lockFileContext(ctx, path+".lock")
+	if err != nil {
+		return fmt.Errorf("acquire todo lock: %w", err)
 	}
+	defer unlock()
+	return fn()
 }
