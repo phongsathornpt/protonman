@@ -192,6 +192,9 @@ func (s *FileStore) Load(ctx context.Context, sessionID string) (State, bool, er
 	if state.WorkspaceKey == "" {
 		state.WorkspaceKey = legacyWorkspaceKey(sessionID)
 	}
+	if state.CreatedAt.IsZero() && !state.UpdatedAt.IsZero() {
+		state.CreatedAt = state.UpdatedAt
+	}
 	return state, true, nil
 }
 
