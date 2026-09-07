@@ -116,6 +116,18 @@ func TestResultContinuationHasStableJSONShape(t *testing.T) {
 	}
 }
 
+func TestDefinitionValidateRejectsUnknownEvidence(t *testing.T) {
+	err := (Definition{
+		Name:        "broken",
+		Description: "bad evidence",
+		Kind:        KindRead,
+		Evidence:    EvidenceKind("perhaps"),
+	}).Validate()
+	if err == nil {
+		t.Fatal("Definition.Validate() error = nil, want evidence error")
+	}
+}
+
 func TestDefinitionValidateRejectsUnknownMutability(t *testing.T) {
 	err := (Definition{
 		Name:        "broken",
