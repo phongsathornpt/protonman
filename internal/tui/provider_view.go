@@ -602,7 +602,13 @@ func (v *providerPaneView) inputFieldRows(compact bool) []string {
 }
 
 func renderProviderInput(m *bubbleModel) string {
-	view := m.bottom.find(providerViewID).(*providerPaneView)
+	if m == nil || m.bottom == nil {
+		return ""
+	}
+	view, ok := m.bottom.find(providerViewID).(*providerPaneView)
+	if !ok || view == nil {
+		return ""
+	}
 	compact := m.height <= 20
 	rows := []string{brandStyle.Render(view.inputTitle(compact))}
 	if !compact {
