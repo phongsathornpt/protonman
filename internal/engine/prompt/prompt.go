@@ -18,27 +18,16 @@ type MutationCapabilities struct {
 }
 
 type Spec struct {
-	Role                 string
-	Profile              string
-	Provider             string
-	ModelID              string
-	ModelProfile         string
-	ModelProfileMatch    string
-	ModelCatalogOverride bool
-	Workspace            string
-	ToolNames            []string
-	ReasoningRequested   string
-	ReasoningEffective   string
-	ReasoningSource      string
-	ReasoningClamped     bool
-	ModelPromptHints     []string
-	GroundingRequired    bool
-	GroundingEvidence    string
-	Capabilities         ToolCapabilities
-	Mutations            MutationCapabilities
-	Skills               string
-	ProjectInstructions  string
-	ExtraInstructions    []string
+	Role                string
+	Profile             string
+	Workspace           string
+	ModelPromptHints    []string
+	GroundingEvidence   string
+	Capabilities        ToolCapabilities
+	Mutations           MutationCapabilities
+	Skills              string
+	ProjectInstructions string
+	ExtraInstructions   []string
 }
 
 func Render(spec Spec) string {

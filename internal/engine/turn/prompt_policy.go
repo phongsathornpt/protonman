@@ -31,19 +31,12 @@ func (l *Loop) currentSkillPromptSection() string {
 
 func (l *Loop) effectivePromptSpec(definitions []tool.Definition, extras []string) prompt.Spec {
 	spec := *l.promptSpec
-	spec.Provider = l.languageModel.Provider()
-	spec.ModelID = l.languageModel.ModelID()
 	if profile, ok := model.ResolvedModelProfile(l.languageModel); ok {
-		spec.ModelProfile = profile.ProfileName
-		spec.ModelProfileMatch = string(profile.ProfileMatch)
-		spec.ModelCatalogOverride = profile.CatalogOverride
 		spec.ModelPromptHints = append([]string(nil), profile.AgentPolicy.PromptHints...)
 	}
-	spec.ToolNames = make([]string, 0, len(definitions))
 	spec.Capabilities = prompt.ToolCapabilities{}
 	spec.Mutations = prompt.MutationCapabilities{}
 	for _, definition := range definitions {
-		spec.ToolNames = append(spec.ToolNames, definition.Name)
 		switch definition.Kind {
 		case tool.KindTask:
 			spec.Capabilities.Tasks = true

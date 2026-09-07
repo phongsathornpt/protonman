@@ -119,11 +119,6 @@ func (l *Loop) prepareRoundRequest(
 	}
 	if l.promptSpec != nil {
 		spec := l.effectivePromptSpec(definitions, promptExtras)
-		spec.ReasoningRequested = reasoningRequestedLabel(reasoning)
-		spec.ReasoningEffective = reasoningEffectiveLabel(reasoning)
-		spec.ReasoningSource = string(reasoning.Source)
-		spec.ReasoningClamped = reasoning.Clamped
-		spec.GroundingRequired = grounding.pending()
 		spec.GroundingEvidence = string(grounding.evidence)
 		if projectInstructions != "" {
 			if base := strings.TrimSpace(spec.ProjectInstructions); base != "" {
