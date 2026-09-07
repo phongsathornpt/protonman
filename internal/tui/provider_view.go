@@ -437,6 +437,7 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 
 		for i, md := range visible {
 			idx := scrollOffset + i
+			resolved := model.ResolveRemoteMetadata(strings.TrimSpace(v.nameInput.Value()), md)
 			prefix := "    "
 			if idx == selectedIndex {
 				prefix = brandStyle.Render("  ❯ ")
@@ -445,11 +446,11 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 			if model.IsFreeModel(md.ID) {
 				line += " " + successStyle.Render("[FREE]")
 			}
-			if md.ContextWindow > 0 {
-				line += fmt.Sprintf(" [%s ctx]", formatContextTokens(md.ContextWindow))
+			if resolved.Profile.ContextWindow > 0 {
+				line += fmt.Sprintf(" [%s ctx]", formatContextTokens(resolved.Profile.ContextWindow))
 			}
-			if len(md.Features) > 0 {
-				line += fmt.Sprintf(" (%s)", strings.Join(md.Features, ", "))
+			if len(resolved.Features) > 0 {
+				line += fmt.Sprintf(" (%s)", strings.Join(resolved.Features, ", "))
 			}
 			if reasoning := remoteModelReasoningSummary(strings.TrimSpace(v.nameInput.Value()), md, false); reasoning != "" {
 				line += " [" + reasoning + "]"

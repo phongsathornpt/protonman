@@ -303,15 +303,16 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 		}
 
 		if showDetails {
+			resolved := model.ResolveRemoteMetadata(v.activeProviderName(), md)
 			details := make([]string, 0, 3)
 			if label != md.ID && strings.TrimSpace(md.ID) != "" {
 				details = append(details, md.ID)
 			}
-			if md.ContextWindow > 0 {
-				details = append(details, formatContextTokens(md.ContextWindow)+" context")
+			if resolved.Profile.ContextWindow > 0 {
+				details = append(details, formatContextTokens(resolved.Profile.ContextWindow)+" context")
 			}
-			if len(md.Features) > 0 {
-				details = append(details, strings.Join(md.Features, " · "))
+			if len(resolved.Features) > 0 {
+				details = append(details, strings.Join(resolved.Features, " · "))
 			}
 			if reasoning := remoteModelReasoningSummary(v.activeProviderName(), md, true); reasoning != "" {
 				details = append(details, reasoning)
