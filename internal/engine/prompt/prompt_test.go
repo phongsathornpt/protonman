@@ -92,3 +92,12 @@ func TestIsManagedRecognizesCurrentAndLegacyPrompts(t *testing.T) {
 		t.Fatal("custom instruction classified as managed")
 	}
 }
+
+func TestRenderTaskContractUsesStrictRevisionSemantics(t *testing.T) {
+	got := Render(Spec{Capabilities: ToolCapabilities{Tasks: true}})
+	for _, want := range []string{"meaningful multi-step work", "exact revision", "revision conflict", "never retry stale operations blindly", "Preserve tasks"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("task contract missing %q:\n%s", want, got)
+		}
+	}
+}

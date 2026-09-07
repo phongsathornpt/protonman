@@ -192,7 +192,11 @@ func additionalInstructionsSection(values []string) string {
 func taskSection() string {
 	return `# Task Coordination
 - Task tools are coordination metadata, not repository evidence.
-- Mark work complete only when the underlying task is actually complete.`
+- Use task coordination for meaningful multi-step work where persistent progress helps; do not create a task plan for a trivial single-step request.
+- Read the latest task snapshot before changing an existing plan and use the exact revision returned by that snapshot.
+- On a revision conflict, refresh the task snapshot and reconsider the patch; never retry stale operations blindly.
+- Preserve tasks that the requested change does not affect.
+- Mark work in progress or complete only when the underlying execution state actually changes.`
 }
 
 func delegationSection(spec Spec) string {
