@@ -38,8 +38,8 @@ func TestLongTurnWithSubagentsKeepsProgressCoherent(t *testing.T) {
 			t.Fatalf("status=%q, want %q", status, want)
 		}
 	}
-	if panel := m.agentsView(); strings.Contains(panel, "\n") {
-		t.Fatalf("busy agent panel should stay collapsed: %q", panel)
+	if panel := m.agentsView(); !strings.Contains(panel, "inspect router") || !strings.Contains(panel, "using grep") {
+		t.Fatalf("busy agent panel lost active work: %q", panel)
 	}
 	if active := m.historyState.Active(); active != nil {
 		t.Fatalf("wait_agent leaked an active orchestration cell=%T %#v", active, active)
