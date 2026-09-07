@@ -1,6 +1,10 @@
 package tui
 
-import tododomain "github.com/projectTHORN/proton/internal/feature/todo"
+import (
+	"slices"
+
+	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
+)
 
 // TodoItem is kept as a compatibility alias while TODO ownership lives in the
 // domain package rather than the terminal adapter.
@@ -11,7 +15,7 @@ func (m *bubbleModel) syncTodoSnapshot() bool {
 		return false
 	}
 	snapshot := m.todoStore.Snapshot()
-	if snapshot.Revision == m.todoRevision {
+	if snapshot.Revision == m.todoRevision && slices.Equal(snapshot.Items, m.todo) {
 		return false
 	}
 	wasComplete := allTodoCompleted(m.todo)
