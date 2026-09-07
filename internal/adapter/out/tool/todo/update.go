@@ -92,46 +92,24 @@ func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 	}
 	expected := *input.ExpectedRevision
 	if before.Revision != expected {
-		expected = before.Revision
+		return tool.Result{}, todoConflictError(input.Operations, tododomain.ErrRevisionConflict)
 	}
 	next, err := tododomain.ApplyPatch(before.Items, input.Operations)
 	if err != nil {
-		if before.Revision != *input.ExpectedRevision {
-			return tool.Result{}, todoConflictError(input.Operations, err)
-		}
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "apply todo patch", err)
 	}
 	snapshot, err := h.store.CompareAndReplace(ctx, expected, next)
 	if err != nil {
 		if errors.Is(err, tododomain.ErrRevisionConflict) {
-			latest := h.store.Snapshot()
-			if reloader, ok := h.store.(tododomain.ReloadableRepository); ok {
-				latest, err = reloader.Reload(ctx)
-				if err != nil {
-					return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "reload todo snapshot for retry", err)
-				}
-			}
-			replayed, replayErr := tododomain.ApplyPatch(latest.Items, input.Operations)
-			if replayErr != nil {
-				return tool.Result{}, todoConflictError(input.Operations, replayErr)
-			}
-			snapshot, err = h.store.CompareAndReplace(ctx, latest.Revision, replayed)
-			if err != nil {
-				if errors.Is(err, tododomain.ErrRevisionConflict) {
-					return tool.Result{}, todoConflictError(input.Operations, err)
-				}
-				return tool.Result{}, err
-			}
-			before = latest
-		} else {
-			return tool.Result{}, err
+			return tool.Result{}, todoConflictError(input.Operations, err)
 		}
+		return tool.Result{}, err
 	}
 	return encodeTodoUpdateResult(call, before.Items, snapshot, h.sessionID)
 }
 
 func todoConflictError(_ []tododomain.Operation, cause error) error {
-	return tool.WrapToolError(tool.ErrorCodeConflict, "todo snapshot changed and the patch can no longer be replayed safely; refresh tasks", cause).WithRecovery(tool.Recovery{
+	return tool.WrapToolError(tool.ErrorCodeConflict, "todo snapshot changed; refresh tasks before applying this patch", cause).WithRecovery(tool.Recovery{
 		Action: tool.RecoveryRefreshResource, Tool: "get_todo", Arguments: json.RawMessage(`{}`),
 	})
 }
