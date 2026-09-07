@@ -163,6 +163,7 @@ func encodeTodoUpdateResult(call tool.Call, before []tododomain.Item, snapshot t
 type todoChangeSummary struct {
 	Added     int `json:"added"`
 	Removed   int `json:"removed"`
+	Updated   int `json:"updated"`
 	Started   int `json:"started"`
 	Completed int `json:"completed"`
 	Reopened  int `json:"reopened"`
@@ -181,6 +182,9 @@ func todoChanges(before, after []tododomain.Item) todoChangeSummary {
 		if !ok {
 			out.Added++
 			continue
+		}
+		if prev.Text != item.Text {
+			out.Updated++
 		}
 		if prev.Status != tododomain.StatusInProgress && item.Status == tododomain.StatusInProgress {
 			out.Started++
@@ -210,6 +214,7 @@ func summarizeTodoChanges(changes todoChangeSummary) string {
 	appendChange(changes.Completed, "completed")
 	appendChange(changes.Started, "started")
 	appendChange(changes.Reopened, "reopened")
+	appendChange(changes.Updated, "updated")
 	appendChange(changes.Added, "added")
 	appendChange(changes.Removed, "removed")
 	return strings.Join(parts, " · ")

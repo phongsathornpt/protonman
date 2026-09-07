@@ -88,6 +88,22 @@ func TestUpdateTodoReportsStructuredChanges(t *testing.T) {
 	}
 }
 
+func TestUpdateTodoReportsTextUpdates(t *testing.T) {
+	store, _ := tododomain.NewStore([]tododomain.Item{{ID: "a", Text: "old", Status: tododomain.StatusPending}})
+	h := NewUpdateTodo(store)
+	call, _ := tool.NewCall("todo-text", "update_todo", todoPatchArgs(0, map[string]any{"op": "set_text", "id": "a", "text": "new"}))
+	result, err := h.Execute(context.Background(), call)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result.Output, "1 updated") {
+		t.Fatalf("output=%q, want text update summary", result.Output)
+	}
+	if !strings.Contains(string(result.StructuredOutput), `"updated":1`) {
+		t.Fatalf("structured output=%s", result.StructuredOutput)
+	}
+}
+
 func TestUpdateTodoDefinitionUsesPatchSchema(t *testing.T) {
 	def := NewUpdateTodo(nil).Definition()
 	if def.Kind != tool.KindTask || def.Mutability != tool.MutabilityMutating || len(def.OutputSchema) == 0 {
