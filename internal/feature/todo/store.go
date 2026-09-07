@@ -21,6 +21,21 @@ func NewStore(initial []Item) (*Store, error) {
 	return &Store{items: CloneItems(initial)}, nil
 }
 
+func newStoreWithRevision(revision uint64, initial []Item) (*Store, error) {
+	if err := ValidateItems(initial); err != nil {
+		return nil, err
+	}
+	return &Store{revision: revision, items: CloneItems(initial)}, nil
+}
+
+func (s *Store) setSnapshot(revision uint64, items []Item) Snapshot {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.revision = revision
+	s.items = CloneItems(items)
+	return Snapshot{Revision: s.revision, Items: CloneItems(s.items)}
+}
+
 func (s *Store) Snapshot() Snapshot {
 	if s == nil {
 		return Snapshot{}

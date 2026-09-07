@@ -8,42 +8,43 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/projectTHORN/proton/internal/adapter/out/config"
+	"github.com/projectTHORN/proton/internal/adapter/out/model"
 	"github.com/projectTHORN/proton/internal/adapter/out/sessionfs"
 	agenttool "github.com/projectTHORN/proton/internal/adapter/out/tool/agent"
+	"github.com/projectTHORN/proton/internal/adapter/out/tool/builtin"
 	skilltool "github.com/projectTHORN/proton/internal/adapter/out/tool/skill"
 	todotool "github.com/projectTHORN/proton/internal/adapter/out/tool/todo"
 	webtool "github.com/projectTHORN/proton/internal/adapter/out/tool/web"
-	"github.com/projectTHORN/proton/internal/feature/agent"
 	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/app/appdirs"
-	"github.com/projectTHORN/proton/internal/platform/checkpoint"
-	"github.com/projectTHORN/proton/internal/adapter/out/config"
 	"github.com/projectTHORN/proton/internal/base/envconfig"
-	"github.com/projectTHORN/proton/internal/adapter/out/model"
 	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/platform/sandbox"
 	"github.com/projectTHORN/proton/internal/core/session"
+	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/projectTHORN/proton/internal/core/workspace"
+	"github.com/projectTHORN/proton/internal/engine/toolcall"
+	"github.com/projectTHORN/proton/internal/feature/agent"
 	"github.com/projectTHORN/proton/internal/feature/skill"
 	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/adapter/out/tool/builtin"
-	"github.com/projectTHORN/proton/internal/engine/toolcall"
-	"github.com/projectTHORN/proton/internal/core/workspace"
+	"github.com/projectTHORN/proton/internal/platform/checkpoint"
+	"github.com/projectTHORN/proton/internal/platform/sandbox"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 type appRuntime struct {
-	workDir     string
-	config      config.Snapshot
-	coordinator *agent.Coordinator
-	todoStore   tododomain.Repository
-	registry    tool.Registry
-	stateStore  session.Repository
-	sessionID   string
-	state       session.State
-	service     *toolcall.Service
-	skills      *skill.Registry
-	runner      app.Conversation
+	workDir      string
+	config       config.Snapshot
+	coordinator  *agent.Coordinator
+	todoStore    tododomain.Repository
+	registry     tool.Registry
+	stateStore   session.Repository
+	sessionsRoot string
+	sessionID    string
+	state        session.State
+	service      *toolcall.Service
+	skills       *skill.Registry
+	runner       app.Conversation
 }
 
 func (r *appRuntime) Close() {
@@ -125,17 +126,29 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 			_ = coordinator.Close()
 		}
 	}()
-	todoStore, err := tododomain.OpenMarkdownStore(ctx, filepath.Join(workDir, tododomain.DefaultFilename))
+	stateStore, err := sessionfs.NewFileStore(dirs.Sessions)
 	if err != nil {
-		return nil, fmt.Errorf("open todo store: %w", err)
+		return nil, fmt.Errorf("create session store: %w", err)
+	}
+	sessionID, state, found, err := resolveSession(ctx, stateStore, workDir, options)
+	if err != nil {
+		return nil, err
+	}
+	resources, err := session.ResolveResources(dirs.Sessions, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("resolve session resources: %w", err)
+	}
+	todoStore, err := tododomain.OpenMarkdownStore(ctx, resources.Todo)
+	if err != nil {
+		return nil, fmt.Errorf("open session todo store: %w", err)
 	}
 	registry, err := builtin.NewDefaultRegistry(workspaceRoot,
 		builtin.WithCheckpointStore(checkpointStore),
 		builtin.WithSandbox(launcher),
 		builtin.WithAdditionalHandlers(
 			webtool.NewWebFetch(sandboxProfile.Network, webtool.WithWebFetchTimeout(loadedConfig.Runtime.WebFetchTimeout)),
-			todotool.NewGetTodo(todoStore),
-			todotool.NewUpdateTodo(todoStore),
+			todotool.NewGetTodoForSession(todoStore, sessionID),
+			todotool.NewUpdateTodoForSession(todoStore, sessionID),
 			skilltool.NewActivateSkill(skillRegistry, workspaceRoot),
 			agenttool.NewDelegateTask(coordinator),
 			agenttool.NewWaitAgent(coordinator),
@@ -148,14 +161,6 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		return nil, fmt.Errorf("create tool registry: %w", err)
 	}
 	coordinator.SetParentRegistry(registry)
-	stateStore, err := sessionfs.NewFileStore(dirs.Sessions)
-	if err != nil {
-		return nil, fmt.Errorf("create session store: %w", err)
-	}
-	sessionID, state, found, err := resolveSession(ctx, stateStore, workDir, options)
-	if err != nil {
-		return nil, err
-	}
 	initialMode := loadedConfig.Mode
 	if found {
 		initialMode, err = permission.ParseMode(state.PermissionMode)
@@ -214,7 +219,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		RequestTimeout: loadedConfig.Runtime.ModelRequestTimeout, TurnTimeout: loadedConfig.Runtime.TurnTimeout, RoundTimeout: loadedConfig.Runtime.RoundTimeout,
 	})
 	failed = false
-	return &appRuntime{workDir: workDir, config: loadedConfig, coordinator: coordinator, todoStore: todoStore, registry: registry, stateStore: stateStore, sessionID: sessionID, state: state, service: service, skills: skillRegistry, runner: initialRunner}, nil
+	return &appRuntime{workDir: workDir, config: loadedConfig, coordinator: coordinator, todoStore: todoStore, registry: registry, stateStore: stateStore, sessionsRoot: dirs.Sessions, sessionID: sessionID, state: state, service: service, skills: skillRegistry, runner: initialRunner}, nil
 }
 
 func applyAgentProfile(loadedConfig *config.Snapshot, state *session.State, requested string) error {
@@ -237,4 +242,19 @@ func applyAgentProfile(loadedConfig *config.Snapshot, state *session.State, requ
 		state.AgentProfile = string(prof)
 	}
 	return nil
+}
+
+func (r *appRuntime) registryForSession(sessionID string) (tool.Registry, error) {
+	if r == nil || r.registry == nil {
+		return nil, fmt.Errorf("base tool registry is unavailable")
+	}
+	resources, err := session.ResolveResources(r.sessionsRoot, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	store, err := tododomain.OpenMarkdownStore(context.Background(), resources.Todo)
+	if err != nil {
+		return nil, err
+	}
+	return tool.NewOverlayRegistry(r.registry, todotool.NewGetTodoForSession(store, sessionID), todotool.NewUpdateTodoForSession(store, sessionID))
 }

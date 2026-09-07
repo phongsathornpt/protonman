@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
 	"github.com/projectTHORN/proton/internal/core/tool"
+	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
 )
 
 func todoPatchArgs(revision uint64, operations ...map[string]any) json.RawMessage {
@@ -198,5 +198,30 @@ func TestUpdateTodoPermissionDetailShowsNoChanges(t *testing.T) {
 	args := todoPatchArgs(0, map[string]any{"op": "set_status", "id": "a", "status": "pending"})
 	if got := h.PermissionDetail(args); !strings.Contains(got, "no changes") {
 		t.Fatalf("permission detail=%q, want no changes", got)
+	}
+}
+
+func TestUpdateTodoForSessionIncludesSessionIdentity(t *testing.T) {
+	store, err := tododomain.NewStore(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewUpdateTodoForSession(store, "session-123")
+	call, err := tool.NewCall("update-session", "update_todo", todoPatchArgs(0, map[string]any{
+		"op": "add", "id": "a", "text": "one", "status": "pending",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := handler.Execute(context.Background(), call)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(result.StructuredOutput, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["session_id"] != "session-123" {
+		t.Fatalf("session_id=%v", payload["session_id"])
 	}
 }

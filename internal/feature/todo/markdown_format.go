@@ -2,8 +2,11 @@ package todo
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
+
+const revisionMarkerPrefix = "<!-- proton:todo version=1 revision="
 
 func parseDocument(content string) ([]Item, error) {
 	startCount := strings.Count(content, managedStart)
@@ -81,4 +84,56 @@ func renderManaged(items []Item) string {
 	}
 	lines = append(lines, managedEnd)
 	return strings.Join(lines, "\n")
+}
+
+func parseDocumentState(content string) (uint64, []Item, error) {
+	revision, err := parseRevision(content)
+	if err != nil {
+		return 0, nil, err
+	}
+	items, err := parseDocument(content)
+	if err != nil {
+		return 0, nil, err
+	}
+	return revision, items, nil
+}
+
+func parseRevision(content string) (uint64, error) {
+	count := strings.Count(content, revisionMarkerPrefix)
+	if count == 0 {
+		return 0, nil
+	}
+	if count != 1 {
+		return 0, fmt.Errorf("invalid proton todo revision marker count")
+	}
+	start := strings.Index(content, revisionMarkerPrefix)
+	valueStart := start + len(revisionMarkerPrefix)
+	end := strings.Index(content[valueStart:], " -->")
+	if end < 0 {
+		return 0, fmt.Errorf("invalid proton todo revision marker")
+	}
+	value := strings.TrimSpace(content[valueStart : valueStart+end])
+	revision, err := strconv.ParseUint(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid proton todo revision %q: %w", value, err)
+	}
+	return revision, nil
+}
+
+func renderDocumentState(content string, revision uint64, items []Item) string {
+	rendered := renderDocument(content, items)
+	marker := fmt.Sprintf("%s%d -->", revisionMarkerPrefix, revision)
+	if start := strings.Index(rendered, revisionMarkerPrefix); start >= 0 {
+		if end := strings.Index(rendered[start:], "-->"); end >= 0 {
+			end = start + end + len("-->")
+			return rendered[:start] + marker + rendered[end:]
+		}
+	}
+	if start := strings.Index(rendered, managedStart); start >= 0 {
+		return rendered[:start] + marker + "\n" + rendered[start:]
+	}
+	if rendered == "" {
+		return marker + "\n"
+	}
+	return rendered + "\n" + marker + "\n"
 }

@@ -8,13 +8,20 @@ import (
 	"fmt"
 	"io"
 
-	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
 	"github.com/projectTHORN/proton/internal/core/tool"
+	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
 )
 
-type getTodoHandler struct{ store tododomain.Repository }
+type getTodoHandler struct {
+	store     tododomain.Repository
+	sessionID string
+}
 
 func NewGetTodo(store tododomain.Repository) tool.Handler { return getTodoHandler{store: store} }
+
+func NewGetTodoForSession(store tododomain.Repository, sessionID string) tool.Handler {
+	return getTodoHandler{store: store, sessionID: sessionID}
+}
 
 func (getTodoHandler) Definition() tool.Definition {
 	return tool.Definition{
@@ -28,7 +35,7 @@ func (getTodoHandler) Definition() tool.Definition {
 	}
 }
 
-func (h getTodoHandler) Execute(_ context.Context, call tool.Call) (tool.Result, error) {
+func (h getTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	if err := decodeGetTodoInput(call.Arguments); err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode get_todo arguments", err)
 	}
@@ -36,7 +43,20 @@ func (h getTodoHandler) Execute(_ context.Context, call tool.Call) (tool.Result,
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeExecution, "todo store is not configured")
 	}
 	snapshot := h.store.Snapshot()
-	payload, err := json.Marshal(snapshot)
+	if reloader, ok := h.store.(tododomain.ReloadableRepository); ok {
+		var err error
+		snapshot, err = reloader.Reload(ctx)
+		if err != nil {
+			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "reload todo snapshot", err)
+		}
+	}
+	var payload []byte
+	var err error
+	if h.sessionID == "" {
+		payload, err = json.Marshal(snapshot)
+	} else {
+		payload, err = json.Marshal(map[string]any{"session_id": h.sessionID, "revision": snapshot.Revision, "items": snapshot.Items})
+	}
 	if err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "encode todo snapshot", err)
 	}

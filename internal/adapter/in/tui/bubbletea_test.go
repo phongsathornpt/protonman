@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -16,10 +14,10 @@ import (
 
 	domainmodel "github.com/projectTHORN/proton/internal/adapter/out/model"
 	"github.com/projectTHORN/proton/internal/core/permission"
-	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/engine/toolcall"
 	applicationturn "github.com/projectTHORN/proton/internal/engine/turn"
+	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
 )
 
 func TestCompletedTodoPaneIsHidden(t *testing.T) {
@@ -965,85 +963,6 @@ func TestTodoStoreRevisionSyncsAfterToolResult(t *testing.T) {
 	}
 }
 
-func TestExternalTodoFileEditReloadsSharedStore(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "TODO.md")
-	if err := os.WriteFile(path, []byte("- [ ] inspect\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	store, err := tododomain.OpenMarkdownStore(context.Background(), path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	snapshot := store.Snapshot()
-	m := newTestBubbleModel(t, permission.ModeAsk, snapshot.Items)
-	m.todoStore, m.todoRevision, m.workDir = store, snapshot.Revision, dir
-	if err := os.WriteFile(path, []byte("- [x] inspect\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	call, _ := tool.NewCall("write-1", "write_file", json.RawMessage(`{"file_path":"TODO.md","content":"- [x] inspect\\n"}`))
-	m.applyTurnEvent(applicationturn.Event{Kind: applicationturn.EventToolResult, Call: call, Result: tool.Result{CallID: "write-1", ToolName: "write_file", AffectedPaths: []string{"TODO.md"}}})
-	if len(m.todo) != 1 || m.todo[0].Status != tododomain.StatusCompleted {
-		t.Fatalf("todo after reload = %#v", m.todo)
-	}
-}
-
-func TestMalformedExternalTodoEditKeepsLastValidSnapshot(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "TODO.md")
-	if err := os.WriteFile(path, []byte("- [ ] inspect\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	store, err := tododomain.OpenMarkdownStore(context.Background(), path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	snapshot := store.Snapshot()
-	m := newTestBubbleModel(t, permission.ModeAsk, snapshot.Items)
-	m.todoStore, m.todoRevision, m.workDir = store, snapshot.Revision, dir
-	bad := "<!-- proton:todos:start -->\n- [ ] missing-id\n<!-- proton:todos:end -->\n"
-	if err := os.WriteFile(path, []byte(bad), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	call, _ := tool.NewCall("write-1", "write_file", json.RawMessage(`{"file_path":"TODO.md"}`))
-	m.reloadTodoAfterExternalTool(call, tool.Result{AffectedPaths: []string{"TODO.md"}}, nil)
-	if len(m.todo) != 1 || m.todo[0].Status != tododomain.StatusPending {
-		t.Fatalf("todo changed after invalid reload = %#v", m.todo)
-	}
-	if got := store.Snapshot(); len(got.Items) != 1 || got.Items[0].Status != tododomain.StatusPending {
-		t.Fatalf("store changed after invalid reload = %#v", got)
-	}
-	if m.todoWarning == "" || !strings.Contains(m.todoView(), "stale") {
-		t.Fatalf("todo warning not surfaced: warning=%q view=%q", m.todoWarning, m.todoView())
-	}
-	if strings.Contains(plainTranscript(m), "reload TODO.md") {
-		t.Fatalf("todo metadata error leaked into transcript: %q", plainTranscript(m))
-	}
-}
-
-func TestExternalTodoReloadIgnoresUnrelatedAffectedPath(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "TODO.md")
-	if err := os.WriteFile(path, []byte("- [ ] inspect\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	store, err := tododomain.OpenMarkdownStore(context.Background(), path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	snapshot := store.Snapshot()
-	m := newTestBubbleModel(t, permission.ModeAsk, snapshot.Items)
-	m.todoStore, m.todoRevision, m.workDir = store, snapshot.Revision, dir
-	if err := os.WriteFile(path, []byte("- [x] inspect\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	call, _ := tool.NewCall("write-2", "write_file", json.RawMessage(`{"file_path":"other.go"}`))
-	m.reloadTodoAfterExternalTool(call, tool.Result{AffectedPaths: []string{"other.go"}}, nil)
-	if m.todo[0].Status != tododomain.StatusPending {
-		t.Fatalf("unrelated edit reloaded todo: %#v", m.todo)
-	}
-}
-
 func TestPermissionBashPresentationShowsCwdAndEffectReason(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(100, 30)
@@ -1059,29 +978,5 @@ func TestPermissionBashPresentationShowsCwdAndEffectReason(t *testing.T) {
 		if !strings.Contains(view, want) {
 			t.Fatalf("view missing %q:\n%s", want, view)
 		}
-	}
-}
-
-func TestSuccessfulTodoReloadClearsWarning(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "TODO.md")
-	if err := os.WriteFile(path, []byte("- [ ] inspect\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	store, err := tododomain.OpenMarkdownStore(context.Background(), path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	snapshot := store.Snapshot()
-	m := newTestBubbleModel(t, permission.ModeAsk, snapshot.Items)
-	m.todoStore, m.todoRevision, m.workDir = store, snapshot.Revision, dir
-	m.todoWarning = "stale"
-	if err := os.WriteFile(path, []byte("- [x] inspect\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	call, _ := tool.NewCall("write-ok", "write_file", json.RawMessage(`{"file_path":"TODO.md"}`))
-	m.reloadTodoAfterExternalTool(call, tool.Result{AffectedPaths: []string{"TODO.md"}}, nil)
-	if m.todoWarning != "" {
-		t.Fatalf("warning=%q, want cleared", m.todoWarning)
 	}
 }

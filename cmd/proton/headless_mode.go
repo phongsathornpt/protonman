@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/adapter/in/headless"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/core/session"
-	"github.com/projectTHORN/proton/internal/feature/skill"
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/engine/toolcall"
+	"github.com/projectTHORN/proton/internal/feature/skill"
 )
 
 func runHeadless(
@@ -43,6 +43,7 @@ func runHeadless(
 	}
 	saveErr := stateStore.Save(ctx, sessionID, session.State{
 		SessionID:       sessionID,
+		Revision:        state.Revision,
 		WorkspaceKey:    state.WorkspaceKey,
 		WorkspaceName:   state.WorkspaceName,
 		CreatedAt:       state.CreatedAt,

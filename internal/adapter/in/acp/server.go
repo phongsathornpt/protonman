@@ -33,6 +33,9 @@ type Option func(*Server)
 // RunnerFactory creates a model/tool runner bound to one session's service.
 type RunnerFactory func(*toolcall.Service) (app.Conversation, error)
 
+// SessionRegistryFactory creates stateful tool bindings for one ACP session.
+type SessionRegistryFactory func(sessionID string, cwd string) (tool.Registry, error)
+
 // WithSessions sets the application session service for persistence use cases.
 func WithSessions(sessions *app.Sessions) Option {
 	return func(server *Server) { server.sessionService = sessions }
@@ -47,12 +50,18 @@ func WithRunnerFactory(factory RunnerFactory) Option {
 	}
 }
 
+// WithSessionRegistryFactory binds stateful tools such as todo state to each session.
+func WithSessionRegistryFactory(factory SessionRegistryFactory) Option {
+	return func(s *Server) { s.sessionRegistryFactory = factory }
+}
+
 // Server is a full-duplex JSON-RPC 2.0 ACP agent server.
 type Server struct {
-	service        *toolcall.Service
-	registry       tool.Registry
-	runnerFactory  RunnerFactory
-	sessionService *app.Sessions
+	service                *toolcall.Service
+	registry               tool.Registry
+	runnerFactory          RunnerFactory
+	sessionRegistryFactory SessionRegistryFactory
+	sessionService         *app.Sessions
 
 	mu       sync.Mutex
 	writeMu  sync.Mutex
@@ -286,10 +295,7 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if len(request.Params) > 0 {
 			_ = json.Unmarshal(request.Params, &params)
 		}
-		s.mu.Lock()
-		s.nextID++
-		sessionID := fmt.Sprintf("acp-%d", s.nextID)
-		s.mu.Unlock()
+		sessionID := session.NewID(params.Cwd)
 		sess, err := s.newSession(sessionID, params.Cwd)
 		if err != nil {
 			return nil, nil, err
@@ -462,6 +468,16 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 			return nil, fmt.Errorf("load session state %q: %w", sessionID, err)
 		}
 		if found {
+			if cwd != "" && state.WorkspaceKey != "" && state.WorkspaceKey != session.WorkspaceKey(cwd) {
+				return nil, fmt.Errorf("session %q belongs to another workspace", sessionID)
+			}
+			if state.WorkspaceKey != "" {
+				sess.workspaceKey = state.WorkspaceKey
+			}
+			if state.WorkspaceName != "" {
+				sess.workspaceName = state.WorkspaceName
+			}
+			sess.stateRevision = state.Revision
 			sess.SetMessages(session.ToModelMessages(state.Messages))
 			mode, err := permission.ParseMode(state.PermissionMode)
 			if err != nil {
@@ -489,9 +505,17 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 }
 
 func (s *Server) newSession(sessionID string, cwd string) (*Session, error) {
-	service := s.service.Clone()
-	if service == nil {
-		return nil, fmt.Errorf("%w: clone session tool-call service", ErrInvalidServer)
+	registry := s.registry
+	if s.sessionRegistryFactory != nil {
+		created, err := s.sessionRegistryFactory(sessionID, cwd)
+		if err != nil {
+			return nil, fmt.Errorf("create registry for session %q: %w", sessionID, err)
+		}
+		registry = created
+	}
+	service, err := s.service.CloneWithRegistry(registry)
+	if err != nil {
+		return nil, fmt.Errorf("%w: clone session tool-call service: %v", ErrInvalidServer, err)
 	}
 	var runner app.Conversation
 	if s.runnerFactory != nil {
@@ -501,7 +525,7 @@ func (s *Server) newSession(sessionID string, cwd string) (*Session, error) {
 		}
 		runner = created
 	}
-	return NewSession(sessionID, cwd, service, s.registry, runner, s.sessionService), nil
+	return NewSession(sessionID, cwd, service, registry, runner, s.sessionService), nil
 }
 
 func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, error) {
@@ -522,19 +546,23 @@ func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, e
 	s.mu.Unlock()
 
 	if s.sessionService != nil {
-		storedIDs, err := s.sessionService.List(ctx, "")
+		options := app.SessionListOptions{}
+		if cwd != "" {
+			options.WorkspaceKey = session.WorkspaceKey(cwd)
+		}
+		summaries, err := s.sessionService.ListSummaries(ctx, options)
 		if err != nil {
 			return nil, fmt.Errorf("list session state: %w", err)
 		}
-		for _, id := range storedIDs {
-			if seen[id] {
+		for _, summary := range summaries {
+			if seen[summary.ID] {
 				continue
 			}
-			list = append(list, SessionInfo{
-				SessionID: id,
-				Cwd:       cwd,
-				Title:     "Session " + id,
-			})
+			title := "Session " + summary.ID
+			if summary.WorkspaceName != "" {
+				title = summary.WorkspaceName + " · " + summary.ID
+			}
+			list = append(list, SessionInfo{SessionID: summary.ID, Cwd: cwd, Title: title})
 		}
 	}
 

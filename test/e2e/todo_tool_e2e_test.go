@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectTHORN/proton/internal/adapter/out/tool/builtin"
 	todotool "github.com/projectTHORN/proton/internal/adapter/out/tool/todo"
 	"github.com/projectTHORN/proton/internal/core/permission"
-	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
 	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/adapter/out/tool/builtin"
 	"github.com/projectTHORN/proton/internal/engine/toolcall"
+	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
 )
 
 func TestE2ETodoToolPersistsAcrossRestart(t *testing.T) {
@@ -99,7 +99,33 @@ func TestE2ETodoToolPersistsAcrossRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	final := restarted.Snapshot()
-	if final.Revision != 1 || final.Items[1].Status != tododomain.StatusCompleted || final.Items[2].Status != tododomain.StatusInProgress {
+	if final.Revision != 2 || final.Items[1].Status != tododomain.StatusCompleted || final.Items[2].Status != tododomain.StatusInProgress {
 		t.Fatalf("final snapshot = %#v", final)
+	}
+}
+
+func TestE2ETodoLivesInSessionAggregateNotWorkspace(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+	sessionID := "todo-session-scope"
+	args := `{"expected_revision":0,"operations":[{"op":"add","id":"inspect","text":"Inspect session todo","status":"in_progress"}]}`
+	res := runProton(t, runOptions{
+		args: []string{"-y", "-s", sessionID, "-p", "/call update_todo " + args},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 {
+		t.Fatalf("update_todo failed: %s\n%s", res.stdout, res.stderr)
+	}
+	todoPath := filepath.Join(home, ".proton", "sessions", sessionID, "todo.md")
+	contents, err := os.ReadFile(todoPath)
+	if err != nil {
+		t.Fatalf("session todo missing at %s: %v", todoPath, err)
+	}
+	if !strings.Contains(string(contents), "[inspect] Inspect session todo") {
+		t.Fatalf("session todo content missing: %s", contents)
+	}
+	if _, err := os.Stat(filepath.Join(ws, "TODO.md")); !os.IsNotExist(err) {
+		t.Fatalf("workspace TODO.md should remain unmanaged, stat err=%v", err)
 	}
 }

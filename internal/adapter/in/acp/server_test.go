@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/adapter/out/model"
 	"github.com/projectTHORN/proton/internal/adapter/out/sessionfs"
 	"github.com/projectTHORN/proton/internal/app"
-	"github.com/projectTHORN/proton/internal/adapter/out/model"
 	"github.com/projectTHORN/proton/internal/core/permission"
 	"github.com/projectTHORN/proton/internal/core/session"
 	"github.com/projectTHORN/proton/internal/core/tool"
@@ -170,10 +170,16 @@ func TestACPSessionsHaveIndependentPermissionState(t *testing.T) {
 		t.Fatalf("Serve() error = %v", err)
 	}
 
-	first := server.sessions["acp-1"]
-	second := server.sessions["acp-2"]
-	if first == nil || second == nil {
+	if len(server.sessions) != 2 {
 		t.Fatalf("sessions = %#v, want two sessions", server.sessions)
+	}
+	var first, second *Session
+	for _, sess := range server.sessions {
+		if first == nil {
+			first = sess
+		} else {
+			second = sess
+		}
 	}
 	if first.service == second.service {
 		t.Fatal("sessions share the same tool-call service")

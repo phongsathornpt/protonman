@@ -11,14 +11,14 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/projectTHORN/proton/internal/feature/agent"
-	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/adapter/out/config"
 	"github.com/projectTHORN/proton/internal/adapter/out/model"
-	"github.com/projectTHORN/proton/internal/feature/skill"
-	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/engine/toolcall"
+	"github.com/projectTHORN/proton/internal/feature/agent"
+	"github.com/projectTHORN/proton/internal/feature/skill"
+	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -64,7 +64,6 @@ type bubbleModel struct {
 	todoStore               tododomain.Repository
 	todoRevision            uint64
 	todoExpanded            bool
-	todoWarning             string
 	todoCompletionFresh     bool
 	todoCompletionDismissed bool
 	busy                    bool

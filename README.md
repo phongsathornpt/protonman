@@ -158,7 +158,7 @@ Type `/` at the prompt to trigger autocomplete, or prefix with a colon (`:help`)
 | `/ask` | Switch directly to `ask` mode | `/ask` |
 | `/plan` | Switch directly to read-only `plan` mode | `/plan` |
 | `/always-approve` | Switch directly to `always-approve` mode | `/always-approve` |
-| `/new` | Clear conversation history and start a fresh session | `/new` |
+| `/new` | Clear conversation history inside the current persisted session | `/new` |
 | `!<command>` | Execute a shell command directly through the `bash` tool | `!git status` |
 | `/quit`, `:quit` | Exit Proton cleanly | `/quit` |
 
@@ -268,14 +268,24 @@ Proton registers a suite of workspace-safe tools:
 | `bash` | Execution | Run bounded shell commands with workspace-relative `cwd`, optional `timeout_seconds`, effect analysis, and structured stdout/stderr |
 | `web_fetch` | Network | Retrieve remote web pages conforming to sandbox network policy |
 | `activate_skill` | Skills | Dynamically load an Agent Skill's full context into the session |
-| `get_todo` | Tasks | Read the current parent-owned task snapshot and revision |
-| `update_todo` | Tasks | Atomically replace parent-owned task state using `expected_revision` from `get_todo` to reject stale updates |
+| `get_todo` | Tasks | Read the current session-owned task snapshot, durable revision, and session identity |
+| `update_todo` | Tasks | Atomically patch session-owned task state using `expected_revision` from `get_todo`; stale cross-process updates are rejected |
 | `delegate_task` | Multi-Agent | Spawn a persistent background subagent and return its `agent_id` immediately |
 | `wait_agent` | Multi-Agent | Wait briefly for a subagent; wait timeout leaves the child running |
 | `get_agent` | Multi-Agent | Inspect one retained subagent and terminal result |
 | `list_agents` | Multi-Agent | List queued, running, and retained terminal subagents |
 | `cancel_agent` | Multi-Agent | Explicitly cancel a queued or running subagent |
 | `checkpoint_restore` | Recovery | Rollback a file to a recorded pre-edit checkpoint ID |
+
+Session state and task plans are private user data, not workspace files. Each session owns an aggregate under `~/.proton/sessions/<session-id>/` (or the equivalent `PROTON_HOME` root):
+
+```text
+.proton/sessions/<session-id>/
+  state.json
+  todo.md
+```
+
+`state.json` and `todo.md` both use durable revisions. Session saves and task patches reject stale writers instead of silently accepting last-writer-wins updates. Workspace `TODO.md` files are never used as Proton's internal task store. Legacy flat session JSON files remain readable and migrate to the aggregate layout on the next successful save.
 
 ---
 

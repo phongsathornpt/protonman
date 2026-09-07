@@ -58,7 +58,8 @@ func todoSnapshotSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"revision": map[string]any{"type": "integer", "minimum": 0},
+			"session_id": map[string]any{"type": "string"},
+			"revision":   map[string]any{"type": "integer", "minimum": 0},
 			"items": map[string]any{
 				"type":  "array",
 				"items": todoItemSchema(),
@@ -74,7 +75,8 @@ func todoUpdateOutputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"revision": count(), "total": count(), "pending": count(), "in_progress": count(), "completed": count(),
+			"session_id": map[string]any{"type": "string"},
+			"revision":   count(), "total": count(), "pending": count(), "in_progress": count(), "completed": count(),
 			"changes": map[string]any{
 				"type": "object",
 				"properties": map[string]any{
