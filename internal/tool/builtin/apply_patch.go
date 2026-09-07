@@ -190,9 +190,6 @@ func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 			riskyPaths = append(riskyPaths, change.destination)
 		}
 	}
-	if err := h.workspace.GuardWholeFileMutation(ctx, riskyPaths...); err != nil {
-		return tool.Result{}, err
-	}
 	checkpointPaths := make([]string, 0, len(changes)*2)
 	for _, change := range changes {
 		checkpointPaths = append(checkpointPaths, change.path)
@@ -200,9 +197,9 @@ func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 			checkpointPaths = append(checkpointPaths, change.destination)
 		}
 	}
-	checkpointID, err := h.checkpoints.Capture(ctx, checkpointPaths)
+	checkpointID, err := prepareWorkspaceMutation(ctx, h.workspace, h.checkpoints, h.Definition().Safety, riskyPaths, checkpointPaths)
 	if err != nil {
-		return tool.Result{}, fmt.Errorf("checkpoint patch: %w", err)
+		return tool.Result{}, err
 	}
 	for _, change := range changes {
 		if err := ctx.Err(); err != nil {
@@ -261,11 +258,12 @@ func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 	}
 	h.workspace.MarkMutationOwned(ctx, checkpointPaths...)
 	return tool.Result{
-		CallID:        call.ID,
-		ToolName:      call.Name,
-		Output:        output.String(),
-		CheckpointID:  checkpointID,
-		AffectedPaths: affectedPaths,
+		CallID:           call.ID,
+		ToolName:         call.Name,
+		Output:           output.String(),
+		CheckpointID:     checkpointID,
+		MutationCoverage: tool.MutationCoverageFull,
+		AffectedPaths:    affectedPaths,
 	}, nil
 }
 

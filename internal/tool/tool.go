@@ -23,6 +23,9 @@ type MutationDomain string
 // MutationSafety describes how precisely a workspace mutation is scoped.
 type MutationSafety string
 
+// MutationCoverage reports how completely a result identifies workspace paths that may have changed.
+type MutationCoverage string
+
 // CheckpointPolicy declares whether a workspace mutation must be snapshotted.
 type CheckpointPolicy string
 
@@ -116,6 +119,13 @@ const (
 	MutationSafetyContextual  MutationSafety = "contextual"
 	MutationSafetyWholeFile   MutationSafety = "whole_file"
 	MutationSafetyDynamic     MutationSafety = "dynamic"
+)
+
+const (
+	MutationCoverageNone    MutationCoverage = ""
+	MutationCoverageFull    MutationCoverage = "full"
+	MutationCoveragePartial MutationCoverage = "partial"
+	MutationCoverageUnknown MutationCoverage = "unknown"
 )
 
 const (
@@ -479,6 +489,8 @@ type Result struct {
 	SHA256 string `json:"sha256,omitempty"`
 	// CheckpointID identifies the pre-edit snapshot created by a mutating tool.
 	CheckpointID string `json:"checkpoint_id,omitempty"`
+	// MutationCoverage reports whether AffectedPaths fully describes the possible workspace mutation scope.
+	MutationCoverage MutationCoverage `json:"mutation_coverage,omitempty"`
 	// AffectedPaths lists workspace-relative paths successfully mutated by the tool.
 	AffectedPaths []string `json:"affected_paths,omitempty"`
 }

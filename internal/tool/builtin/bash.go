@@ -152,17 +152,10 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 			}
 			resolvedMutationPaths = append(resolvedMutationPaths, resolved)
 		}
-		if guardErr := h.workspace.GuardWholeFileMutation(ctx, resolvedMutationPaths...); guardErr != nil {
-			logBashFailure(ctx, call, startedAt, "mutation_guard", guardErr)
-			return tool.Result{}, guardErr
-		}
-		if len(resolvedMutationPaths) > 0 && h.checkpoints != nil {
-			checkpointID, err = h.checkpoints.Capture(ctx, resolvedMutationPaths)
-			if err != nil {
-				checkpointErr := fmt.Errorf("checkpoint bash mutation: %w", err)
-				logBashFailure(ctx, call, startedAt, "checkpoint", checkpointErr)
-				return tool.Result{}, checkpointErr
-			}
+		checkpointID, err = prepareWorkspaceMutation(ctx, h.workspace, h.checkpoints, h.Definition().Safety, resolvedMutationPaths, resolvedMutationPaths)
+		if err != nil {
+			logBashFailure(ctx, call, startedAt, "mutation_guard", err)
+			return tool.Result{}, err
 		}
 	}
 	slog.DebugContext(ctx, "bash command decoded",
@@ -210,19 +203,27 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	outputStr := combineBashOutput(stdoutStr, stderrStr)
 	truncated := stdoutTruncated || stderrTruncated
 
+	mutationCoverage := tool.MutationCoverageNone
+	if analysis.Effect != tool.CommandEffectReadOnly {
+		mutationCoverage = tool.MutationCoverageUnknown
+		if len(affectedPaths) > 0 {
+			mutationCoverage = tool.MutationCoverageFull
+		}
+	}
 	result := tool.Result{
-		CallID:          call.ID,
-		ToolName:        call.Name,
-		Output:          outputStr,
-		CheckpointID:    checkpointID,
-		Stdout:          stdoutStr,
-		Stderr:          stderrStr,
-		StdoutBytes:     stdoutBuf.BytesSeen(),
-		StderrBytes:     stderrBuf.BytesSeen(),
-		StdoutTruncated: stdoutTruncated,
-		StderrTruncated: stderrTruncated,
-		Truncated:       truncated,
-		AffectedPaths:   append([]string(nil), affectedPaths...),
+		CallID:           call.ID,
+		ToolName:         call.Name,
+		Output:           outputStr,
+		CheckpointID:     checkpointID,
+		Stdout:           stdoutStr,
+		Stderr:           stderrStr,
+		StdoutBytes:      stdoutBuf.BytesSeen(),
+		StderrBytes:      stderrBuf.BytesSeen(),
+		StdoutTruncated:  stdoutTruncated,
+		StderrTruncated:  stderrTruncated,
+		Truncated:        truncated,
+		MutationCoverage: mutationCoverage,
+		AffectedPaths:    append([]string(nil), affectedPaths...),
 	}
 	attrs := []any{
 		"call_id", call.ID,
@@ -235,6 +236,7 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		"stderr_truncated", stderrTruncated,
 		"truncated", truncated,
 		"context_error", ctx.Err() != nil,
+		"mutation_coverage", mutationCoverage,
 	}
 	if err != nil {
 		attrs = append(attrs, "error_type", fmt.Sprintf("%T", err))

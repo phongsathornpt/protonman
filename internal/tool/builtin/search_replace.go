@@ -91,9 +91,9 @@ func (h searchReplaceHandler) Execute(ctx context.Context, call tool.Call) (tool
 		if exists && len(contents) > 0 {
 			return tool.Result{}, fmt.Errorf("empty old_string cannot overwrite a non-empty file")
 		}
-		checkpointID, err := h.checkpoints.Capture(ctx, []string{resolvedPath})
+		checkpointID, err := prepareWorkspaceMutation(ctx, h.workspace, h.checkpoints, h.Definition().Safety, nil, []string{resolvedPath})
 		if err != nil {
-			return tool.Result{}, fmt.Errorf("checkpoint %q: %w", input.FilePath, err)
+			return tool.Result{}, err
 		}
 		displayPath := input.FilePath
 		if rel, relErr := h.workspace.RelRead(resolvedPath); relErr == nil && rel != "" {
@@ -125,9 +125,9 @@ func (h searchReplaceHandler) Execute(ctx context.Context, call tool.Call) (tool
 	if input.ReplaceAll {
 		updated = strings.ReplaceAll(content, input.OldString, input.NewString)
 	}
-	checkpointID, err := h.checkpoints.Capture(ctx, []string{resolvedPath})
+	checkpointID, err := prepareWorkspaceMutation(ctx, h.workspace, h.checkpoints, h.Definition().Safety, nil, []string{resolvedPath})
 	if err != nil {
-		return tool.Result{}, fmt.Errorf("checkpoint %q: %w", input.FilePath, err)
+		return tool.Result{}, err
 	}
 	displayPath := input.FilePath
 	if rel, relErr := h.workspace.RelRead(resolvedPath); relErr == nil && rel != "" {
@@ -146,10 +146,11 @@ func (h searchReplaceHandler) Execute(ctx context.Context, call tool.Call) (tool
 
 func editResult(call tool.Call, path string, action string, checkpointID string) (tool.Result, error) {
 	return tool.Result{
-		CallID:        call.ID,
-		ToolName:      call.Name,
-		Output:        fmt.Sprintf("The file %s has been %s.", path, action),
-		CheckpointID:  checkpointID,
-		AffectedPaths: []string{path},
+		CallID:           call.ID,
+		ToolName:         call.Name,
+		Output:           fmt.Sprintf("The file %s has been %s.", path, action),
+		CheckpointID:     checkpointID,
+		MutationCoverage: tool.MutationCoverageFull,
+		AffectedPaths:    []string{path},
 	}, nil
 }
