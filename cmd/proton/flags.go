@@ -11,7 +11,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/projectTHORN/proton/internal/agent"
-	"github.com/projectTHORN/proton/internal/envconfig"
+	"github.com/projectTHORN/proton/internal/base/envconfig"
 )
 
 type cliOptions struct {

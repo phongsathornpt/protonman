@@ -3,7 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
-	"github.com/projectTHORN/proton/internal/runtimepolicy"
+	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
 	"net/url"
 	"strings"
 	"time"

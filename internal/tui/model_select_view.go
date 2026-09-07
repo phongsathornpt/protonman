@@ -13,7 +13,7 @@ import (
 	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
-	"github.com/projectTHORN/proton/internal/runtimepolicy"
+	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
 )
 
 const modelSelectViewID = "model_select"

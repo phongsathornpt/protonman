@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/projectTHORN/proton/internal/modelprofile"
-	"github.com/projectTHORN/proton/internal/runtimepolicy"
+	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
 )
 
 // RemoteModel describes a model discovered from an OpenAI or protonman endpoint.

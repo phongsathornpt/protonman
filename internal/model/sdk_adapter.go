@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/runtimepolicy"
+	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 	sdkanthropic "github.com/projectTHORN/proton/proton-sdk/provider/anthropic"
 	sdkopenai "github.com/projectTHORN/proton/proton-sdk/provider/openai"

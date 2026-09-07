@@ -9,7 +9,7 @@ import (
 	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/app/appdirs"
 	"github.com/projectTHORN/proton/internal/config"
-	"github.com/projectTHORN/proton/internal/envconfig"
+	"github.com/projectTHORN/proton/internal/base/envconfig"
 )
 
 const projectViewID = "project"

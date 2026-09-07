@@ -23,9 +23,9 @@ func TestCorePackagesDoNotDependOnOuterLayers(t *testing.T) {
 	outer := []string{
 		modulePath + "/cmd/proton",
 		modulePath + "/internal/acp",
+		modulePath + "/internal/adapter/tool/builtin",
 		modulePath + "/internal/agent",
 		modulePath + "/internal/headless",
-		modulePath + "/internal/tool/builtin",
 		modulePath + "/internal/toolcall",
 		modulePath + "/internal/tui",
 		modulePath + "/internal/turn",
@@ -33,7 +33,6 @@ func TestCorePackagesDoNotDependOnOuterLayers(t *testing.T) {
 	for _, core := range []string{
 		modulePath + "/internal/modelprofile",
 		modulePath + "/internal/permission",
-		modulePath + "/internal/runtimepolicy",
 		modulePath + "/internal/session",
 		modulePath + "/internal/tool",
 		modulePath + "/internal/workspace",
@@ -55,10 +54,10 @@ func TestInboundAdaptersUseApplicationConversationBoundary(t *testing.T) {
 
 func TestBuiltinToolsDoNotDependOnFeatureSubsystems(t *testing.T) {
 	packages := listPackages(t)
-	assertNoImports(t, packages, modulePath+"/internal/tool/builtin", []string{
+	assertNoImports(t, packages, modulePath+"/internal/adapter/tool/builtin", []string{
 		"net/http",
 		modulePath + "/internal/agent",
-		modulePath + "/internal/buildinfo",
+		modulePath + "/internal/base/buildinfo",
 		modulePath + "/internal/skill",
 		modulePath + "/internal/todo",
 	})
@@ -267,11 +266,12 @@ func TestAdapterToolDirectoryStructure(t *testing.T) {
 		t.Fatalf("read internal/adapter/tool: %v", err)
 	}
 	expected := map[string]bool{
-		"agent": true,
-		"skill": true,
-		"todo":  true,
-		"web":   true,
-		"mcp":   true,
+		"agent":   true,
+		"builtin": true,
+		"mcp":     true,
+		"skill":   true,
+		"todo":    true,
+		"web":     true,
 	}
 	for _, entry := range entries {
 		if !expected[entry.Name()] {
@@ -280,11 +280,52 @@ func TestAdapterToolDirectoryStructure(t *testing.T) {
 	}
 }
 
+func TestNoToolBuiltinDirectory(t *testing.T) {
+	root := repositoryRoot(t)
+	path := filepath.Join(root, "internal", "tool", "builtin")
+	if _, err := os.Stat(path); err == nil {
+		t.Errorf("internal/tool/builtin directory must not exist; moved to internal/adapter/tool/builtin")
+	}
+}
+
 func TestNoRootMCPDirectory(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(root, "internal", "mcp")
 	if _, err := os.Stat(path); err == nil {
 		t.Errorf("internal/mcp directory must not exist at internal root; moved to internal/adapter/tool/mcp")
+	}
+}
+
+func TestBasePackagesHaveZeroInternalDependencies(t *testing.T) {
+	packages := listPackages(t)
+	basePackages := []string{
+		modulePath + "/internal/base/buildinfo",
+		modulePath + "/internal/base/contextutil",
+		modulePath + "/internal/base/envconfig",
+		modulePath + "/internal/base/failure",
+		modulePath + "/internal/base/glob",
+		modulePath + "/internal/base/runtimepolicy",
+	}
+	for _, basePkg := range basePackages {
+		pkg, ok := packages[basePkg]
+		if !ok {
+			t.Fatalf("base package %s not found", basePkg)
+		}
+		for _, imported := range pkg.Imports {
+			if strings.HasPrefix(imported, modulePath+"/internal/") || strings.HasPrefix(imported, modulePath+"/cmd/") {
+				t.Errorf("base leaf package %s must not import internal package %s", basePkg, imported)
+			}
+		}
+	}
+}
+
+func TestNoLingeringRootFoundationDirectories(t *testing.T) {
+	root := repositoryRoot(t)
+	for _, lingering := range []string{"buildinfo", "contextutil", "envconfig", "failure", "glob", "runtimepolicy"} {
+		path := filepath.Join(root, "internal", lingering)
+		if _, err := os.Stat(path); err == nil {
+			t.Errorf("internal/%s must not exist at internal root; moved to internal/base/%s", lingering, lingering)
+		}
 	}
 }
 

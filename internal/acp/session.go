@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/projectTHORN/proton/internal/runtimepolicy"
+	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
 	"io"
 	"sort"
 	"strings"
@@ -14,7 +14,7 @@ import (
 
 	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/app/appdirs"
-	"github.com/projectTHORN/proton/internal/contextutil"
+	"github.com/projectTHORN/proton/internal/base/contextutil"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/session"

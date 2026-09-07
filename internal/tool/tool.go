@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/failure"
+	"github.com/projectTHORN/proton/internal/base/failure"
 )
 
 // Kind classifies a tool for permission policy matching.

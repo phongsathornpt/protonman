@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/envconfig"
+	"github.com/projectTHORN/proton/internal/base/envconfig"
 	"github.com/projectTHORN/proton/internal/session"
 )
 
