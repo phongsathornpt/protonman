@@ -22,11 +22,10 @@ import (
 )
 
 const (
-	maxBashArgumentBytes  = 512 * 1024
-	maxBashCommandBytes   = 256 * 1024
-	maxBashOutputBytes    = 2 * 1024 * 1024
-	maxBashStreamBytes    = maxBashOutputBytes / 2
-	maxBashTimeoutSeconds = 120
+	maxBashArgumentBytes = 512 * 1024
+	maxBashCommandBytes  = 256 * 1024
+	maxBashOutputBytes   = 2 * 1024 * 1024
+	maxBashStreamBytes   = maxBashOutputBytes / 2
 )
 
 type bashHandler struct {
@@ -57,11 +56,12 @@ func NewBashWithCheckpoint(workspaceRoot *workspace.Workspace, launcher sandbox.
 
 func (bashHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "bash",
-		Description:         "Run a shell command in the current workspace.",
-		Kind:                tool.KindBash,
-		Mutability:          tool.MutabilityMutating,
-		PermissionDetailKey: "command",
+		Name:                   "bash",
+		Description:            "Run a shell command in the current workspace.",
+		Kind:                   tool.KindBash,
+		Mutability:             tool.MutabilityMutating,
+		PermissionDetailKey:    "command",
+		ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded,
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -74,8 +74,8 @@ func (bashHandler) Definition() tool.Definition {
 					"description": "Optional workspace-relative working directory",
 				},
 				"timeout_seconds": map[string]any{
-					"type": "integer", "minimum": 0, "maximum": maxBashTimeoutSeconds,
-					"description": "Optional shorter execution timeout; cannot extend the caller deadline",
+					"type": "integer", "minimum": 0,
+					"description": "Optional shorter execution timeout in seconds; cannot extend the caller deadline",
 				},
 			},
 			"required":             []string{"command"},
@@ -121,8 +121,8 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		logBashFailure(ctx, call, startedAt, "arguments", err)
 		return tool.Result{}, err
 	}
-	if input.TimeoutSeconds < 0 || input.TimeoutSeconds > maxBashTimeoutSeconds {
-		err := tool.NewToolError(tool.ErrorCodeInvalidArguments, "bash timeout_seconds must be between 1 and 120 when provided")
+	if input.TimeoutSeconds < 0 {
+		err := tool.NewToolError(tool.ErrorCodeInvalidArguments, "bash timeout_seconds cannot be negative")
 		logBashFailure(ctx, call, startedAt, "arguments", err)
 		return tool.Result{}, err
 	}
@@ -131,7 +131,9 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		logBashFailure(ctx, call, startedAt, "cwd", err)
 		return tool.Result{}, err
 	}
-	if input.TimeoutSeconds > 0 {
+	parentCtx := ctx
+	requestedTimeout := input.TimeoutSeconds > 0
+	if requestedTimeout {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(input.TimeoutSeconds)*time.Second)
 		defer cancel()
@@ -274,7 +276,11 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		if errors.Is(ctxErr, context.DeadlineExceeded) {
-			return result, tool.WrapToolError(tool.ErrorCodeDeadlineExceeded, "bash command deadline exceeded", ctxErr)
+			message := "bash command deadline exceeded"
+			if requestedTimeout && parentCtx.Err() == nil {
+				message = "bash timeout_seconds exceeded"
+			}
+			return result, tool.WrapToolError(tool.ErrorCodeDeadlineExceeded, message, ctxErr)
 		}
 		return result, tool.WrapToolError(tool.ErrorCodeCanceled, "bash command canceled", ctxErr)
 	}
