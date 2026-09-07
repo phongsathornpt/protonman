@@ -23,6 +23,7 @@ type BashAnalysis struct {
 	Confidence    CommandConfidence
 	Reason        string
 	AffectedPaths []string
+	ConflictProne bool
 }
 
 // AnalyzeCommand classifies simple shell commands without pretending to be a
@@ -43,6 +44,7 @@ func AnalyzeCommand(command string) BashAnalysis {
 	for i, segment := range segments {
 		analysis := normalizeCommandScope(analyzeSimpleSegment(segment))
 		combined.AffectedPaths = appendUniquePaths(combined.AffectedPaths, analysis.AffectedPaths...)
+		combined.ConflictProne = combined.ConflictProne || analysis.ConflictProne
 		if commandRiskRank(analysis.Risk) > commandRiskRank(combined.Risk) {
 			combined.Risk = analysis.Risk
 		}
@@ -54,10 +56,12 @@ func AnalyzeCommand(command string) BashAnalysis {
 			combined.Confidence = analysis.Confidence
 			combined.Reason = analysis.Reason
 		} else if analysis.Effect == CommandEffectUnknown && combined.Effect != CommandEffectMutating {
-			combined = BashAnalysis{Effect: CommandEffectUnknown, Confidence: CommandConfidenceUnknown, Reason: analysis.Reason, AffectedPaths: combined.AffectedPaths}
+			combined = BashAnalysis{Effect: CommandEffectUnknown, Confidence: CommandConfidenceUnknown, Reason: analysis.Reason, AffectedPaths: combined.AffectedPaths, ConflictProne: combined.ConflictProne}
 		}
 		if i < len(operators) && operators[i] == "|" && analysis.Effect != CommandEffectReadOnly && combined.Effect != CommandEffectMutating {
+			conflictProne := combined.ConflictProne
 			combined = unknownBashAnalysis("pipeline contains an unknown command")
+			combined.ConflictProne = conflictProne
 		}
 	}
 	return combined
@@ -274,7 +278,8 @@ func analyzeGitCommand(args []string) BashAnalysis {
 		if args[0] == "push" {
 			scope = CommandScopeRemote
 		}
-		return BashAnalysis{Effect: CommandEffectMutating, Risk: gitCommandRisk(args[0], args[1:]), Scope: scope, Confidence: CommandConfidenceCertain, Reason: "git " + args[0] + " modifies repository or remote state"}
+		conflictProne := args[0] == "apply" || args[0] == "merge" || args[0] == "rebase" || args[0] == "cherry-pick"
+		return BashAnalysis{Effect: CommandEffectMutating, Risk: gitCommandRisk(args[0], args[1:]), Scope: scope, Confidence: CommandConfidenceCertain, Reason: "git " + args[0] + " modifies repository or remote state", ConflictProne: conflictProne}
 	default:
 		return unknownBashAnalysis("git subcommand effect is not proven")
 	}
