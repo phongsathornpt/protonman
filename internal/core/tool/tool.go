@@ -381,18 +381,51 @@ func IsNoArgumentsSchema(schema map[string]any) bool {
 // semantic input for these tools. Scalars and arrays remain untouched so the
 // canonical schema validator can reject genuinely malformed calls.
 func NormalizeArguments(definition Definition, arguments json.RawMessage) json.RawMessage {
-	if !IsNoArgumentsSchema(definition.InputSchema) {
+	trimmed := strings.TrimSpace(string(arguments))
+	if IsNoArgumentsSchema(definition.InputSchema) {
+		if trimmed == "" || trimmed == "null" {
+			return json.RawMessage(`{}`)
+		}
+		var object map[string]json.RawMessage
+		if json.Unmarshal([]byte(trimmed), &object) == nil && object != nil {
+			return json.RawMessage(`{}`)
+		}
 		return append(json.RawMessage(nil), arguments...)
 	}
-	trimmed := strings.TrimSpace(string(arguments))
-	if trimmed == "" || trimmed == "null" {
-		return json.RawMessage(`{}`)
+	if len(definition.InputAliases) == 0 {
+		return append(json.RawMessage(nil), arguments...)
 	}
 	var object map[string]json.RawMessage
-	if json.Unmarshal([]byte(trimmed), &object) == nil && object != nil {
-		return json.RawMessage(`{}`)
+	if json.Unmarshal([]byte(trimmed), &object) != nil || object == nil {
+		return append(json.RawMessage(nil), arguments...)
 	}
-	return append(json.RawMessage(nil), arguments...)
+	changed := false
+	for canonical, aliases := range definition.InputAliases {
+		canonicalValue, hasCanonical := object[canonical]
+		for _, alias := range aliases {
+			aliasValue, ok := object[alias]
+			if !ok {
+				continue
+			}
+			if hasCanonical && string(canonicalValue) != string(aliasValue) {
+				return append(json.RawMessage(nil), arguments...)
+			}
+			if !hasCanonical {
+				object[canonical] = aliasValue
+				canonicalValue, hasCanonical = aliasValue, true
+			}
+			delete(object, alias)
+			changed = true
+		}
+	}
+	if !changed {
+		return append(json.RawMessage(nil), arguments...)
+	}
+	encoded, err := json.Marshal(object)
+	if err != nil {
+		return append(json.RawMessage(nil), arguments...)
+	}
+	return encoded
 }
 
 // Definition describes a registered tool to the model and the UI.
@@ -419,8 +452,11 @@ type Definition struct {
 	// PermissionDetailKey names the JSON argument shown to a permission
 	// prompt and matched by path, command, or domain rules.
 	PermissionDetailKey string
-	// InputSchema is the JSON-schema-like manifest exposed to callers.
+	// InputSchema is the canonical JSON-schema-like manifest exposed to callers.
 	InputSchema map[string]any
+	// InputAliases maps canonical fields to legacy/model compatibility aliases.
+	// Aliases are accepted at ingress but are intentionally not published in InputSchema.
+	InputAliases map[string][]string
 	// OutputSchema optionally validates structured output returned by the tool.
 	OutputSchema map[string]any
 }

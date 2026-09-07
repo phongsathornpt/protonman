@@ -25,6 +25,23 @@ func TestListDirEmptyDirectory(t *testing.T) {
 	}
 }
 
+func TestListDirCanonicalSchemaHidesCompatibilityAliases(t *testing.T) {
+	def := listDirHandler{}.Definition()
+	properties, ok := def.InputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %#v", def.InputSchema["properties"])
+	}
+	for _, alias := range []string{"dir_path", "directory"} {
+		if _, exists := properties[alias]; exists {
+			t.Fatalf("compatibility alias %q leaked into canonical schema", alias)
+		}
+	}
+	aliases := def.InputAliases["path"]
+	if len(aliases) != 2 || aliases[0] != "dir_path" || aliases[1] != "directory" {
+		t.Fatalf("path aliases = %#v", aliases)
+	}
+}
+
 func TestListDirParameterAliases(t *testing.T) {
 	ws := newTestWorkspace(t, nil)
 	subDir := filepath.Join(ws.Root(), "sub")

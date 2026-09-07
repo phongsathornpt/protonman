@@ -21,8 +21,6 @@ type listDirHandler struct {
 
 type listDirInput struct {
 	Path         string `json:"path"`
-	DirPath      string `json:"dir_path"`
-	Directory    string `json:"directory"`
 	Offset       int    `json:"offset,omitempty"`
 	Limit        int    `json:"limit,omitempty"`
 	Continuation string `json:"continuation,omitempty"`
@@ -49,14 +47,6 @@ func (listDirHandler) Definition() tool.Definition {
 					"type":        "string",
 					"description": "Directory path, defaulting to the workspace root",
 				},
-				"dir_path": map[string]any{
-					"type":        "string",
-					"description": "Alias for path",
-				},
-				"directory": map[string]any{
-					"type":        "string",
-					"description": "Alias for path",
-				},
 				"offset": map[string]any{
 					"type":        "integer",
 					"minimum":     0,
@@ -75,21 +65,17 @@ func (listDirHandler) Definition() tool.Definition {
 			},
 			"additionalProperties": false,
 		},
+		InputAliases: map[string][]string{"path": {"dir_path", "directory"}},
 	}
 }
 
 func (h listDirHandler) PermissionDetail(arguments json.RawMessage) string {
+	arguments = tool.NormalizeArguments(h.Definition(), arguments)
 	var input listDirInput
 	if err := json.Unmarshal(arguments, &input); err != nil {
 		return "."
 	}
 	targetPath := strings.TrimSpace(input.Path)
-	if targetPath == "" {
-		targetPath = strings.TrimSpace(input.DirPath)
-	}
-	if targetPath == "" {
-		targetPath = strings.TrimSpace(input.Directory)
-	}
 	if targetPath == "" {
 		return "."
 	}
@@ -100,18 +86,13 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 	if h.workspace == nil {
 		return tool.Result{}, fmt.Errorf("list_dir workspace is required")
 	}
+	call.Arguments = tool.NormalizeArguments(h.Definition(), call.Arguments)
 	var input listDirInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode list_dir arguments", err)
 	}
 
 	targetPath := strings.TrimSpace(input.Path)
-	if targetPath == "" {
-		targetPath = strings.TrimSpace(input.DirPath)
-	}
-	if targetPath == "" {
-		targetPath = strings.TrimSpace(input.Directory)
-	}
 	if targetPath == "" {
 		targetPath = "."
 	}
