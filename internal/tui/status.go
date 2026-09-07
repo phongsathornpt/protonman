@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
@@ -16,6 +17,11 @@ import (
 	tododomain "github.com/projectTHORN/proton/internal/todo"
 	"github.com/projectTHORN/proton/internal/tool"
 )
+
+func shortcutHelp(binding key.Binding) string {
+	help := binding.Help()
+	return strings.TrimSpace(help.Key + " " + help.Desc)
+}
 
 func (m bubbleModel) statusView() string {
 	if m.hasPermissionView() {
@@ -146,9 +152,9 @@ func (m bubbleModel) infoView() string {
 	candidates := make([]string, 0, 2)
 	switch mode {
 	case layoutNormal:
-		candidates = append(candidates, "ctrl+p model", "/help")
+		candidates = append(candidates, shortcutHelp(m.keys.ToggleModel), "/help")
 	case layoutCompact:
-		candidates = append(candidates, "ctrl+p model")
+		candidates = append(candidates, shortcutHelp(m.keys.ToggleModel))
 	}
 
 	sepStr := glyphSep
@@ -200,9 +206,9 @@ func (m bubbleModel) shortcutHint() string {
 	}
 	switch layoutModeForHeight(m.height) {
 	case layoutTiny:
-		return mutedStyle.Render("enter send · ctrl+c")
+		return mutedStyle.Render(shortcutHelp(m.keys.Submit) + " · " + shortcutHelp(m.keys.Quit))
 	case layoutCompact:
-		return mutedStyle.Render("enter send · ctrl+p model · ctrl+c")
+		return mutedStyle.Render(shortcutHelp(m.keys.Submit) + " · " + shortcutHelp(m.keys.ToggleModel) + " · " + shortcutHelp(m.keys.Quit))
 	default:
 		return mutedStyle.Render("enter send · ctrl+j newline · /help")
 	}
@@ -435,7 +441,7 @@ func (m bubbleModel) todoView() string {
 		return renderSummary(summary)
 	}
 	if m.busy || !m.todoExpanded {
-		return renderSummary(summary + " · ctrl+o details")
+		return renderSummary(summary + " · " + shortcutHelp(m.keys.ToggleTodo))
 	}
 
 	limit := todoVisibleRows(m.height)
