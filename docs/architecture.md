@@ -122,7 +122,7 @@ Pure leaf packages with **zero dependencies on any other internal package**:
 ---
 
 ## 6. Architectural Enforcement
-Architecture boundaries are permanently enforced by automated tests in `internal/architecture/dependency_test.go`:
+Architecture boundaries are permanently enforced by automated tests in `test/architecture/dependency_test.go`:
 1. Core packages do not depend on outer layers.
 2. Base packages (`internal/base/*`) have zero internal dependencies.
 3. Inbound adapters (`tui`, `acp`, `headless`) depend on `app.Conversation`, never on `turn`.
@@ -131,3 +131,20 @@ Architecture boundaries are permanently enforced by automated tests in `internal
 6. All tool implementations reside exclusively in `internal/adapter/tool/`.
 7. `internal/app` and `internal/model` file sets conform strictly to the architecture blueprint.
 8. The `proton-sdk` has zero dependencies on internal CLI packages.
+
+---
+
+## 7. Tool Safety and Resource Invariants
+
+Tool limits are enforced at the resource boundary, not after expensive work has already completed:
+
+- `web_fetch` resolves and validates every destination IP, then dials only an approved address. Redirects repeat the same destination check; proxy environment variables cannot bypass it.
+- model streams consumed by `proton-sdk.CollectStep` are closed exactly once on success, cancellation, validation failure, provider failure, or incomplete EOF.
+- subagent terminal retention applies its TTL and hard-count limits independently. Disabling one bound never disables the other.
+- session permission grants are reusable only for normal-risk read-only calls and are fingerprinted by normalized arguments plus their effective risk/effect/scope. Mutating or uncertain calls remain one-shot.
+- checkpoint persistence is bounded per workspace by retained count, total bytes, and age. A new checkpoint is preserved while older records are pruned deterministically.
+- `find_files` pagination stops after the current page boundary and validates continuation state against the matched prefix before the cursor instead of hashing the unread remainder of the tree.
+- `read_file` opens through a pinned authorized root so policy validation and file opening share the same filesystem boundary. Line-range reads also have a scan-byte ceiling independent of their output-byte ceiling.
+- `git_status` bounds stdout and stderr while the subprocess is running. Oversized stdout cancels execution rather than buffering unbounded output and checking its size afterward.
+
+These invariants are covered by package-level regression tests and are expected to remain true even when tool presentation, pagination formats, or sandbox implementations evolve.
