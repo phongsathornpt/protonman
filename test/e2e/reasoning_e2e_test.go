@@ -42,6 +42,20 @@ func TestE2EReasoningGeminiProfileReachesWire(t *testing.T) {
 	if len(requests) < 2 || !containsString(requestToolNames(requests[1]), "get_todo") || !containsString(requestToolNames(requests[1]), "delegate_task") {
 		t.Fatalf("post-grounding request did not restore full tool set: %#v", requests)
 	}
+	updateSchema := requestToolParameters(requests[1], "update_todo")
+	if len(updateSchema) == 0 {
+		t.Fatalf("Gemini request missing update_todo schema: %#v", requests[1]["tools"])
+	}
+	for _, forbidden := range []string{"oneOf", "const", "additionalProperties"} {
+		if schemaContainsKey(updateSchema, forbidden) {
+			t.Fatalf("Gemini update_todo schema contains unsupported %s: %#v", forbidden, updateSchema)
+		}
+	}
+	opSchema := updateSchema["properties"].(map[string]any)["operations"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)["op"].(map[string]any)
+	if !containsAnyString(opSchema["enum"], "add") || !containsAnyString(opSchema["enum"], "set_status") ||
+		!containsAnyString(opSchema["enum"], "set_text") || !containsAnyString(opSchema["enum"], "remove") {
+		t.Fatalf("Gemini update_todo op enum = %#v", opSchema["enum"])
+	}
 	assertNoSamplingControls(t, requests)
 }
 
@@ -196,6 +210,53 @@ func requestToolNames(request map[string]any) []string {
 }
 
 func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func requestToolParameters(request map[string]any, name string) map[string]any {
+	raw, _ := request["tools"].([]any)
+	for _, item := range raw {
+		toolObject, _ := item.(map[string]any)
+		if function, ok := toolObject["function"].(map[string]any); ok {
+			if function["name"] == name {
+				params, _ := function["parameters"].(map[string]any)
+				return params
+			}
+			continue
+		}
+		if toolObject["name"] == name {
+			params, _ := toolObject["parameters"].(map[string]any)
+			return params
+		}
+	}
+	return nil
+}
+
+func schemaContainsKey(value any, want string) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, child := range typed {
+			if key == want || schemaContainsKey(child, want) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if schemaContainsKey(child, want) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func containsAnyString(raw any, want string) bool {
+	values, _ := raw.([]any)
 	for _, value := range values {
 		if value == want {
 			return true
