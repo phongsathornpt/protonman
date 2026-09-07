@@ -284,6 +284,25 @@ func TestAnalyzeCommandRisk(t *testing.T) {
 	}
 }
 
+func TestAnalyzeCommandMarksConflictProneGitOperations(t *testing.T) {
+	for _, command := range []string{
+		"git merge feature",
+		"git rebase main",
+		"git cherry-pick deadbeef",
+		"git apply change.patch",
+		"pwd && git merge feature",
+	} {
+		if !AnalyzeCommand(command).ConflictProne {
+			t.Fatalf("AnalyzeCommand(%q).ConflictProne = false", command)
+		}
+	}
+	for _, command := range []string{"git status", "git add file.go", "git commit -m ok", "git push origin main"} {
+		if AnalyzeCommand(command).ConflictProne {
+			t.Fatalf("AnalyzeCommand(%q).ConflictProne = true", command)
+		}
+	}
+}
+
 func TestAnalyzeCommandScope(t *testing.T) {
 	tests := map[string]CommandScope{
 		"touch file.go":             CommandScopeLocal,

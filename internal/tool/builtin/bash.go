@@ -244,9 +244,26 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	}
 	var exitError *exec.ExitError
 	if errors.As(err, &exitError) {
-		attrs = append(attrs, "exit_code", exitError.ExitCode())
+		code := exitError.ExitCode()
+		result.ExitCode = &code
+		attrs = append(attrs, "exit_code", code)
+	} else if err == nil {
+		code := 0
+		result.ExitCode = &code
 	}
 	slog.DebugContext(ctx, "bash process finished", attrs...)
+	if analysis.ConflictProne && ctx.Err() == nil {
+		conflictPaths, inspectErr := h.gitConflictPaths(ctx, cwd)
+		if inspectErr != nil {
+			slog.DebugContext(ctx, "git conflict postcondition unavailable", "call_id", call.ID, "error_type", fmt.Sprintf("%T", inspectErr))
+			if err == nil {
+				return result, tool.WrapToolError(tool.ErrorCodeExecution, "verify git conflict state", inspectErr)
+			}
+		} else if len(conflictPaths) > 0 {
+			h.markConflictPathsOwned(ctx, cwdRel, conflictPaths)
+			return result, gitConflictError(conflictPaths)
+		}
+	}
 	if err == nil {
 		code := 0
 		result.ExitCode = &code
@@ -254,10 +271,6 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		return result, nil
 	}
 
-	if errors.As(err, &exitError) {
-		code := exitError.ExitCode()
-		result.ExitCode = &code
-	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		if errors.Is(ctxErr, context.DeadlineExceeded) {
 			return result, tool.WrapToolError(tool.ErrorCodeDeadlineExceeded, "bash command deadline exceeded", ctxErr)
