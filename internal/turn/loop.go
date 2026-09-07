@@ -15,7 +15,6 @@ import (
 	"github.com/projectTHORN/proton/internal/agentprompt"
 	"github.com/projectTHORN/proton/internal/contextutil"
 	"github.com/projectTHORN/proton/internal/model"
-	"github.com/projectTHORN/proton/internal/modelprofile"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/skill"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -506,30 +505,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		return l.fail(ctx, sink, 0, fmt.Errorf("%w: model %q does not support vision input", ErrUnsupportedModelCapability, l.languageModel.ModelID()))
 	}
 
-	history := model.CloneMessages(messages)
-	var promptExtras []string
-	if l.promptSpec != nil {
-		filtered := make([]model.Message, 0, len(history))
-		for _, message := range history {
-			if message.Role == model.RoleSystem {
-				if text := strings.TrimSpace(message.Content); text != "" && !agentprompt.IsManaged(text) {
-					promptExtras = append(promptExtras, text)
-				}
-				continue
-			}
-			filtered = append(filtered, message)
-		}
-		history = filtered
-	}
-	projectInstructions := ""
-	if l.promptSpec != nil {
-		loaded, err := agentprompt.LoadProjectInstructions(l.promptSpec.Workspace)
-		if err != nil {
-			slog.WarnContext(ctx, "project instructions unavailable", "error", err)
-		} else {
-			projectInstructions = loaded
-		}
-	}
+	history, promptExtras, projectInstructions := l.prepareTurnInput(ctx, messages)
 	turnMessages := make([]model.Message, 0, 4)
 	toolCallsUsed := 0
 	softToolBudgetWarned := false
@@ -554,20 +530,18 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		terminalReason = "reasoning_effort_unsupported"
 		return l.fail(ctx, sink, 0, fmt.Errorf("%w: %v", ErrUnsupportedModelCapability, reasoningErr))
 	}
+	resolvedModel := resolvedModelStateFor(l.languageModel)
 	modelProfileName := ""
 	modelProfileMatch := ""
 	modelCatalogOverride := false
 	modelMetadataProvenance := ""
-	var resolvedModelProfile modelprofile.Resolved
-	hasResolvedModelProfile := false
-	if profile, ok := model.ResolvedModelProfile(l.languageModel); ok {
-		resolvedModelProfile = profile
-		hasResolvedModelProfile = true
-		modelProfileName = profile.ProfileName
-		modelProfileMatch = string(profile.ProfileMatch)
-		modelCatalogOverride = profile.CatalogOverride
-		modelMetadataProvenance = profile.Provenance.Summary()
+	if resolvedModel.has {
+		modelProfileName = resolvedModel.profile.ProfileName
+		modelProfileMatch = string(resolvedModel.profile.ProfileMatch)
+		modelCatalogOverride = resolvedModel.profile.CatalogOverride
+		modelMetadataProvenance = resolvedModel.profile.Provenance.Summary()
 	}
+
 	slog.DebugContext(ctx, "turn reasoning policy resolved",
 		"requested", reasoningRequestedLabel(reasoningResolution),
 		"effective", reasoningEffectiveLabel(reasoningResolution),
@@ -579,19 +553,6 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		"model_metadata_provenance", modelMetadataProvenance,
 	)
 
-	if l.promptSpec == nil {
-		if section := l.currentSkillPromptSection(); section != "" {
-			if len(history) > 0 && history[0].Role == model.RoleSystem {
-				base := history[0].Content
-				if marker := strings.Index(base, skillPromptMarker); marker >= 0 {
-					base = base[:marker]
-				}
-				history[0].Content = strings.TrimSpace(base + "\n\n" + skillPromptMarker + "\n" + section)
-			} else {
-				history = append([]model.Message{{Role: model.RoleSystem, Content: skillPromptMarker + "\n" + section}}, history...)
-			}
-		}
-	}
 	for round := 1; ; round++ {
 		roundsCompleted = round
 		slog.DebugContext(ctx, "turn round started",
@@ -599,111 +560,21 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			"history_messages", len(history),
 		)
 
-		var tools []tool.Definition
-		reqMessages := model.CloneMessages(history)
-		dispatch := toolDispatchState{reason: toolDispatchDisabledNoTools}
-
-		if forceNoProgressSynthesis {
-			tools = nil
-			dispatch.reason = toolDispatchDisabledNoProgress
-			reqMessages = append(reqMessages, model.Message{
-				Role:    model.RoleSystem,
-				Content: NoProgressPrompt,
-			})
-		} else {
-			tools = l.tools.Definitions()
-			if grounding.pending() {
-				tools = grounding.filterDefinitions(tools)
-			}
-			switch {
-			case len(tools) > 0 && !caps.Tools:
-				tools = nil
-				dispatch.reason = toolDispatchDisabledModelTools
-			case len(tools) == 0:
-				dispatch.reason = toolDispatchDisabledNoTools
-			case l.maxToolCalls > 0 && toolCallsUsed >= l.maxToolCalls:
-				tools = nil
-				dispatch.reason = toolDispatchDisabledMaxCalls
-				reqMessages = append(reqMessages, model.Message{
-					Role:    model.RoleSystem,
-					Content: MaxToolCallsPrompt,
-				})
-			default:
-				dispatch.reason = toolDispatchEnabled
-				if l.maxToolCalls > 0 {
-					dispatch.remainingToolCalls = l.maxToolCalls - toolCallsUsed
-				}
-			}
-		}
-		if shouldWarnSoftToolBudget(toolCallsUsed, l.maxToolCalls, softToolBudgetWarned) && dispatch.enabled() {
-			reqMessages = append(reqMessages, model.Message{Role: model.RoleSystem, Content: SoftToolBudgetPrompt})
-			softToolBudgetWarned = true
-		}
-		if l.promptSpec != nil {
-			spec := l.effectivePromptSpec(definitions, promptExtras)
-			spec.ReasoningRequested = reasoningRequestedLabel(reasoningResolution)
-			spec.ReasoningEffective = reasoningEffectiveLabel(reasoningResolution)
-			spec.ReasoningSource = string(reasoningResolution.Source)
-			spec.ReasoningClamped = reasoningResolution.Clamped
-			spec.GroundingRequired = grounding.pending()
-			spec.GroundingEvidence = string(grounding.evidence)
-			if projectInstructions != "" {
-				if base := strings.TrimSpace(spec.ProjectInstructions); base != "" {
-					spec.ProjectInstructions = base + "\n\n" + projectInstructions
-				} else {
-					spec.ProjectInstructions = projectInstructions
-				}
-			}
-			spec.Skills = l.currentSkillPromptSection()
-			systemPrompt := agentprompt.Render(spec)
-			reqMessages = append([]model.Message{{Role: model.RoleSystem, Content: systemPrompt}}, reqMessages...)
-			slog.DebugContext(ctx, "turn system prompt prepared",
-				"prompt_version", agentprompt.Version,
-				"prompt_bytes", len(systemPrompt),
-				"tool_count", len(tools),
-			)
-		}
-
-		slog.DebugContext(ctx, "turn tool dispatch state",
-			"round", round,
-			"enabled", dispatch.enabled(),
-			"reason", dispatch.reason,
-			"published_tools", len(tools),
-			"tool_calls_used", toolCallsUsed,
-			"remaining_tool_calls", dispatch.remainingToolCalls,
+		request, dispatch, warned, err := l.prepareRoundRequest(
+			ctx, history, definitions, promptExtras, projectInstructions,
+			reasoningResolution, grounding, caps, toolCallsUsed,
+			forceNoProgressSynthesis, softToolBudgetWarned, resolvedModel,
 		)
-
-		sdkTools := make([]sdk.Tool, 0, len(tools))
-		for _, definition := range tools {
-			inputSchema := definition.InputSchema
-			if hasResolvedModelProfile {
-				inputSchema = modelprofile.PublishInputSchema(resolvedModelProfile, definition.InputSchema)
+		softToolBudgetWarned = warned
+		if err != nil {
+			if errors.Is(err, ErrContextBudgetExceeded) {
+				terminalReason = "context_budget_exceeded"
+			} else {
+				terminalReason = "request_validation_failed"
 			}
-			sdkTools = append(sdkTools, sdk.Tool{
-				Name:         definition.Name,
-				Description:  definition.Description,
-				InputSchema:  inputSchema,
-				OutputSchema: definition.OutputSchema,
-				Dynamic:      definition.Kind == tool.KindMCP,
-			})
-		}
-		request := sdk.Request{
-			Messages: reqMessages,
-			Tools:    sdkTools,
-		}
-		if grounding.pending() && dispatch.enabled() && len(sdkTools) > 0 &&
-			hasResolvedModelProfile && resolvedModelProfile.Capabilities.ToolChoiceRequired == modelprofile.SupportYes {
-			request.Options.ToolChoice = sdk.ToolChoiceRequired
-		}
-		request.Options.ReasoningEffort = reasoningResolution.Effective
-		if err := request.Validate(); err != nil {
-			terminalReason = "request_validation_failed"
 			return l.fail(ctx, sink, round, err)
 		}
-		if err := validateContextBudget(l.languageModel, request); err != nil {
-			terminalReason = "context_budget_exceeded"
-			return l.fail(ctx, sink, round, err)
-		}
+
 		outcome, err := l.runRound(ctx, round, request, dispatch, progress, resultBudget, sink)
 		if err != nil {
 			terminalReason = "round_failed"
