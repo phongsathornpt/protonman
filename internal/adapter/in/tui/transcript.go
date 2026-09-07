@@ -171,8 +171,14 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 		m.activity = "calling " + tool.DisplayName(call.Name)
 	}
 
-	if isAgentLifecycleTool(call.Name) {
+	if call.Name == "delegate_task" {
+		m.rememberAgentRun(call)
 		state.StartToolCell(&AgentToolCell{CallID: call.ID, Name: call.Name, Target: target, Running: true})
+		m.syncLegacyBlocks()
+		return
+	}
+	if isAgentLifecycleTool(call.Name) {
+		m.touchAgentOperation(call.Name, call)
 		m.syncLegacyBlocks()
 		return
 	}
@@ -237,6 +243,11 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 	}
 	if result.CheckpointID != "" {
 		body = joinBody(body, "checkpoint: "+result.CheckpointID)
+	}
+
+	if result.Failure == nil && err == nil && m.applyAgentToolResult(name, result, body) {
+		m.syncLegacyBlocks()
+		return
 	}
 
 	if result.Failure != nil && result.Failure.Message != "" && result.Failure.Code != tool.ErrorCodeCanceled {
