@@ -4,20 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/projectTHORN/proton/internal/agent"
-	"github.com/projectTHORN/proton/internal/agentprompt"
 	"log/slog"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/tool"
-	applicationturn "github.com/projectTHORN/proton/internal/turn"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 const (
@@ -190,22 +187,17 @@ func (m *bubbleModel) reconfigureRunner() {
 	prov, ok := m.providers[strings.ToLower(provName)]
 	hasValidAuth := ok && model.ProviderHasUsableAuth(provName, prov.BaseURL, prov.APIKey)
 	if !hasValidAuth {
-		// Reload from disk in case config was written or updated
 		dirs, resolveErr := appdirs.Resolve("")
 		if resolveErr != nil {
 			return
 		}
-		homeDir := dirs.Home
-		loaded, err := config.Load(m.ctx, config.Options{
-			HomeDir: homeDir,
-			WorkDir: m.workDir,
-		})
+		loaded, err := config.Load(m.ctx, config.Options{HomeDir: dirs.Home, WorkDir: m.workDir})
 		if err == nil {
 			if m.providers == nil {
 				m.providers = make(map[string]config.ProviderConfig)
 			}
-			for k, v := range loaded.Providers {
-				m.providers[k] = v
+			for key, value := range loaded.Providers {
+				m.providers[key] = value
 			}
 			prov, ok = m.providers[strings.ToLower(provName)]
 			hasValidAuth = ok && model.ProviderHasUsableAuth(provName, prov.BaseURL, prov.APIKey)
@@ -214,54 +206,32 @@ func (m *bubbleModel) reconfigureRunner() {
 	if !hasValidAuth {
 		return
 	}
-	baseURL := model.ResolveProviderBaseURLForProtocol(provName, prov.Type, prov.BaseURL)
 	sessID := m.sessionID
 	if sessID == "" && m.workDir != "" {
 		sessID = "workspace-" + m.workDir
 	}
-	var clientOpts []model.ClientOption
-	clientOpts = append(clientOpts, model.WithRequestTimeout(m.runtimeConfig.ModelRequestTimeout))
-	if remoteModel, ok := m.activeRemoteModel(); ok {
-		clientOpts = append(clientOpts, model.WithRemoteModelProfile(provName, remoteModel))
+	var remote *model.RemoteModel
+	if resolved, ok := m.activeRemoteModel(); ok {
+		remote = &resolved
 	}
-	if sessID != "" {
-		clientOpts = append(clientOpts, model.WithSessionID(sessID))
-	}
-	languageModel := model.NewProviderLanguageModel(provName, prov.Type, baseURL, prov.APIKey, m.activeModel, clientOpts...)
-	promptSpec := agentprompt.Spec{Workspace: m.workDir}
-	if profileName := strings.TrimSpace(m.agentProfile); profileName != "" {
-		if profile, err := agent.ParseProfile(profileName); err == nil {
-			promptSpec.Profile = string(profile)
-			promptSpec.Role = agent.RolePromptForProfile(profile)
-		}
-	}
-	var opts []applicationturn.Option
-	opts = append(opts, applicationturn.WithSystemPromptSpec(promptSpec))
-	if m.skills != nil {
-		opts = append(opts, applicationturn.WithSkillRegistry(m.skills))
-	}
-	opts = append(opts, applicationturn.WithMaxToolCalls(m.maxToolCalls))
-	opts = append(opts, applicationturn.WithTurnTimeout(m.runtimeConfig.TurnTimeout))
-	opts = append(opts, applicationturn.WithRoundTimeout(m.runtimeConfig.RoundTimeout))
-	if profileName := strings.TrimSpace(m.agentProfile); profileName != "" {
-		if profile, err := agent.ParseProfile(profileName); err == nil {
-			if spec, ok := agent.SpecForProfile(profile); ok {
-				opts = append(opts,
-					applicationturn.WithGroundingEvidence(spec.GroundingEvidence),
-					applicationturn.WithReasoningEffort(spec.Reasoning),
-				)
-			}
-		}
-	}
-	if m.reasoningEffort != sdk.ReasoningDefault {
-		opts = append(opts, applicationturn.WithExplicitReasoningEffort(m.reasoningEffort))
-	}
-	loop, err := applicationturn.NewLoop(languageModel, m.service, opts...)
-	if err == nil {
-		m.runner = loop
-		if m.coordinator != nil {
-			m.coordinator.SetLanguageModel(languageModel)
-		}
+	conversation, err := app.BuildConversation(m.service, m.skills, m.coordinator, app.ConversationSpec{
+		ProviderName:    provName,
+		ProviderType:    prov.Type,
+		BaseURL:         prov.BaseURL,
+		APIKey:          prov.APIKey,
+		ModelID:         m.activeModel,
+		SessionID:       sessID,
+		Workspace:       m.workDir,
+		AgentProfile:    m.agentProfile,
+		ReasoningEffort: m.reasoningEffort,
+		MaxToolCalls:    m.maxToolCalls,
+		RequestTimeout:  m.runtimeConfig.ModelRequestTimeout,
+		TurnTimeout:     m.runtimeConfig.TurnTimeout,
+		RoundTimeout:    m.runtimeConfig.RoundTimeout,
+		RemoteModel:     remote,
+	})
+	if err == nil && conversation != nil {
+		m.runner = conversation
 		if m.bottom != nil {
 			m.bottom.setHasRunner(true)
 		}

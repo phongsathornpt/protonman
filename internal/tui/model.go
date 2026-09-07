@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/projectTHORN/proton/internal/agent"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/session"
@@ -19,7 +20,6 @@ import (
 	tododomain "github.com/projectTHORN/proton/internal/todo"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
-	applicationturn "github.com/projectTHORN/proton/internal/turn"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -43,7 +43,7 @@ type bubbleModel struct {
 	service         *toolcall.Service
 	registry        tool.Registry
 	skills          *skill.Registry
-	runner          applicationturn.Runner
+	runner          app.Conversation
 	bridge          *permissionBridge
 	coordinator     *agent.Coordinator
 	agentEvents     <-chan agent.Event
@@ -127,7 +127,7 @@ func newBubbleModel(
 	service *toolcall.Service,
 	registry tool.Registry,
 	todo []TodoItem,
-	runner applicationturn.Runner,
+	runner app.Conversation,
 	bridge *permissionBridge,
 	workDir string,
 	initialMessages ...[]model.Message,

@@ -1,11 +1,11 @@
 package tui
 
 import (
+	"github.com/projectTHORN/proton/internal/app"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/projectTHORN/proton/internal/tool"
-	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
 
 func (m *bubbleModel) syncPromptHeight() {
@@ -210,11 +210,11 @@ type toolResultMsg struct {
 	err    error
 }
 
-type turnDeltaMsg struct{ event applicationturn.Event }
+type turnDeltaMsg struct{ event app.Event }
 
 type turnEventsClosedMsg struct{}
 
 type turnDoneMsg struct {
-	result applicationturn.Result
+	result app.Result
 	err    error
 }

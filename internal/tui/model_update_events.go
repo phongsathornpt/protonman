@@ -9,11 +9,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/projectTHORN/proton/internal/agent"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
-	applicationturn "github.com/projectTHORN/proton/internal/turn"
 )
 
 func (m *bubbleModel) updateAgentLifecycle(message agentLifecycleMsg) (tea.Model, tea.Cmd) {
@@ -225,7 +225,7 @@ func (m *bubbleModel) updateProviderDeleted(message providerDeletedMsg) (tea.Mod
 }
 
 func (m *bubbleModel) updateTurnDelta(message turnDeltaMsg) (tea.Model, tea.Cmd) {
-	batch := []applicationturn.Event{message.event}
+	batch := []app.Event{message.event}
 	for {
 		select {
 		case next, ok := <-m.turnEvents:
