@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/core/workspace"
 )
@@ -35,10 +36,27 @@ var (
 	ErrUnsupportedCheckpointTarget = errors.New("unsupported checkpoint target")
 )
 
+// RetentionPolicy bounds persistent checkpoint growth per workspace store.
+type RetentionPolicy struct {
+	MaxCount int
+	MaxBytes int64
+	MaxAge   time.Duration
+}
+
+// DefaultRetentionPolicy returns the product defaults for checkpoint retention.
+func DefaultRetentionPolicy() RetentionPolicy {
+	return RetentionPolicy{
+		MaxCount: runtimepolicy.CheckpointMaxRetained,
+		MaxBytes: runtimepolicy.CheckpointMaxBytes,
+		MaxAge:   runtimepolicy.CheckpointMaxAge,
+	}
+}
+
 // FileStore stores checkpoint records as private, atomically written JSON files.
 type FileStore struct {
 	root      string
 	workspace *workspace.Workspace
+	retention RetentionPolicy
 	mu        sync.Mutex
 }
 
@@ -57,8 +75,23 @@ type fileSnapshot struct {
 	Content []byte `json:"content,omitempty"`
 }
 
+// StoreOption configures a checkpoint FileStore.
+type StoreOption func(*FileStore) error
+
+// WithRetentionPolicy overrides the default checkpoint retention bounds. Zero
+// disables that individual bound; negative values are rejected.
+func WithRetentionPolicy(policy RetentionPolicy) StoreOption {
+	return func(store *FileStore) error {
+		if policy.MaxCount < 0 || policy.MaxBytes < 0 || policy.MaxAge < 0 {
+			return fmt.Errorf("checkpoint retention values must be non-negative")
+		}
+		store.retention = policy
+		return nil
+	}
+}
+
 // NewFileStore creates a checkpoint store rooted outside the workspace.
-func NewFileStore(root string, workspaceRoot *workspace.Workspace) (*FileStore, error) {
+func NewFileStore(root string, workspaceRoot *workspace.Workspace, options ...StoreOption) (*FileStore, error) {
 	if strings.TrimSpace(root) == "" {
 		return nil, fmt.Errorf("checkpoint store root is required")
 	}
@@ -76,10 +109,20 @@ func NewFileStore(root string, workspaceRoot *workspace.Workspace) (*FileStore, 
 	if insideWorkspace {
 		return nil, fmt.Errorf("checkpoint store must be outside workspace")
 	}
-	return &FileStore{
+	store := &FileStore{
 		root:      filepath.Clean(absoluteRoot),
 		workspace: workspaceRoot,
-	}, nil
+		retention: DefaultRetentionPolicy(),
+	}
+	for _, option := range options {
+		if option == nil {
+			continue
+		}
+		if err := option(store); err != nil {
+			return nil, err
+		}
+	}
+	return store, nil
 }
 
 // Capture snapshots the supplied regular files before an edit.
@@ -133,7 +176,81 @@ func (s *FileStore) Capture(ctx context.Context, paths []string) (string, error)
 	if err := writePrivateAtomic(ctx, s.root, s.path(id), encoded); err != nil {
 		return "", fmt.Errorf("persist checkpoint: %w", err)
 	}
+	if err := s.pruneRetention(id); err != nil {
+		_ = os.Remove(s.path(id))
+		return "", fmt.Errorf("enforce checkpoint retention: %w", err)
+	}
 	return id, nil
+}
+
+type retainedCheckpoint struct {
+	id      string
+	path    string
+	size    int64
+	modTime time.Time
+}
+
+func (s *FileStore) pruneRetention(preserveID string) error {
+	policy := s.retention
+	if policy.MaxCount == 0 && policy.MaxBytes == 0 && policy.MaxAge == 0 {
+		return nil
+	}
+	entries, err := os.ReadDir(s.root)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read checkpoint store: %w", err)
+	}
+
+	now := time.Now()
+	retained := make([]retainedCheckpoint, 0, len(entries))
+	var totalBytes int64
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasPrefix(name, "checkpoint-") || !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		info, statErr := entry.Info()
+		if statErr != nil {
+			return fmt.Errorf("stat checkpoint %q: %w", name, statErr)
+		}
+		id := strings.TrimSuffix(name, ".json")
+		if policy.MaxAge > 0 && id != preserveID && now.Sub(info.ModTime()) >= policy.MaxAge {
+			if removeErr := os.Remove(filepath.Join(s.root, name)); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+				return fmt.Errorf("remove expired checkpoint %q: %w", id, removeErr)
+			}
+			continue
+		}
+		retained = append(retained, retainedCheckpoint{id: id, path: filepath.Join(s.root, name), size: info.Size(), modTime: info.ModTime()})
+		totalBytes += info.Size()
+	}
+
+	sort.Slice(retained, func(i, j int) bool {
+		if retained[i].modTime.Equal(retained[j].modTime) {
+			return retained[i].id < retained[j].id
+		}
+		return retained[i].modTime.Before(retained[j].modTime)
+	})
+	for (policy.MaxCount > 0 && len(retained) > policy.MaxCount) || (policy.MaxBytes > 0 && totalBytes > policy.MaxBytes) {
+		victim := -1
+		for i := range retained {
+			if retained[i].id != preserveID {
+				victim = i
+				break
+			}
+		}
+		if victim < 0 {
+			return fmt.Errorf("retention limits cannot preserve checkpoint %q", preserveID)
+		}
+		item := retained[victim]
+		if err := os.Remove(item.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove retained checkpoint %q: %w", item.id, err)
+		}
+		totalBytes -= item.size
+		retained = append(retained[:victim], retained[victim+1:]...)
+	}
+	return nil
 }
 
 // Restore replaces or removes the files recorded by a checkpoint.
