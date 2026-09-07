@@ -74,7 +74,7 @@ func (bashHandler) Definition() tool.Definition {
 					"description": "Optional workspace-relative working directory",
 				},
 				"timeout_seconds": map[string]any{
-					"type": "integer", "minimum": 1, "maximum": maxBashTimeoutSeconds,
+					"type": "integer", "minimum": 0, "maximum": maxBashTimeoutSeconds,
 					"description": "Optional shorter execution timeout; cannot extend the caller deadline",
 				},
 			},

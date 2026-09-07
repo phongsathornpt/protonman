@@ -106,7 +106,7 @@ func (grepHandler) Definition() tool.Definition {
 				},
 				"limit": map[string]any{
 					"type":        "integer",
-					"minimum":     1,
+					"minimum":     0,
 					"maximum":     maxGrepResults,
 					"description": "Maximum matches to return; defaults to 100",
 				},

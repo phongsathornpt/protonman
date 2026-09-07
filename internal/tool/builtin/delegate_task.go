@@ -59,7 +59,7 @@ func (delegateTaskHandler) Definition() tool.Definition {
 				},
 				"timeout_seconds": map[string]any{
 					"type":        "integer",
-					"minimum":     1,
+					"minimum":     0,
 					"maximum":     86400,
 					"description": "Optional shorter execution timeout in seconds. Requests above the configured subagent maximum are clamped.",
 				},

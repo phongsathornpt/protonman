@@ -2,15 +2,15 @@
 
 ## P1 — Tool contract correctness
 - [x] Precompile/cache `InputSchema` + `OutputSchema` per registered tool
-- [ ] Preserve `StructuredOutput` across result budgeting
-- [ ] Migrate all agent lifecycle tools to `StructuredOutput` + `OutputSchema`
-- [ ] Add model-specific schema lowering for Gemini/OpenAI compatibility
-- [ ] Add MCP contract-violation diagnostics
+- [x] Preserve `StructuredOutput` across result budgeting
+- [x] Migrate all agent lifecycle tools to `StructuredOutput` + `OutputSchema`
+- [x] Add model-specific schema lowering for Gemini/OpenAI compatibility
+- [x] Add MCP contract-violation diagnostics
 
 ## P2 — Contract hardening
-- [ ] Set `additionalProperties: false` for built-in tool schemas
-- [ ] Normalize optional-zero semantics
-- [ ] Add generic contract tests for every registered built-in tool
+- [x] Set `additionalProperties: false` for built-in tool schemas
+- [x] Normalize optional-zero semantics
+- [x] Add generic contract tests for every registered built-in tool
 
 ## Existing TUI branding work
 - [x] [tui-logo-1] Add brand mark: `glyphBrand` in `theme.go` + `brand.go` with `brandLockup()` renderer
