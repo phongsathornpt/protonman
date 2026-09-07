@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	todotool "github.com/projectTHORN/proton/internal/adapter/tool/todo"
 	"github.com/projectTHORN/proton/internal/permission"
 	tododomain "github.com/projectTHORN/proton/internal/todo"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -27,7 +28,7 @@ func TestE2ETodoToolPersistsAcrossRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	registry, err := builtin.NewRegistry(builtin.NewUpdateTodo(store))
+	registry, err := builtin.NewRegistry(todotool.NewUpdateTodo(store))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +82,7 @@ func TestE2ETodoToolPersistsAcrossRestart(t *testing.T) {
 		t.Fatalf("restart snapshot = %#v", snapshot)
 	}
 
-	registry2, err := builtin.NewRegistry(builtin.NewUpdateTodo(restarted))
+	registry2, err := builtin.NewRegistry(todotool.NewUpdateTodo(restarted))
 	if err != nil {
 		t.Fatal(err)
 	}

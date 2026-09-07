@@ -55,7 +55,9 @@ func TestInboundAdaptersUseApplicationConversationBoundary(t *testing.T) {
 func TestBuiltinToolsDoNotDependOnFeatureSubsystems(t *testing.T) {
 	packages := listPackages(t)
 	assertNoImports(t, packages, modulePath+"/internal/tool/builtin", []string{
+		"net/http",
 		modulePath + "/internal/agent",
+		modulePath + "/internal/buildinfo",
 		modulePath + "/internal/skill",
 		modulePath + "/internal/todo",
 	})

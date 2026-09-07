@@ -14,13 +14,12 @@ import (
 	skilltool "github.com/projectTHORN/proton/internal/adapter/tool/skill"
 	todotool "github.com/projectTHORN/proton/internal/adapter/tool/todo"
 	"github.com/projectTHORN/proton/internal/agent"
-	"github.com/projectTHORN/proton/internal/sandbox"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/workspace"
 )
 
 func testSandboxOption() RegistryOption {
-	return WithSandbox(&recordingLauncher{}, sandbox.NetworkPolicy{Mode: sandbox.NetworkBlocked})
+	return WithSandbox(&recordingLauncher{})
 }
 
 func testCheckpointOption() RegistryOption {
@@ -297,7 +296,7 @@ func TestDefaultRegistryContainsCodingTools(t *testing.T) {
 		t.Fatalf("NewDefaultRegistry() error = %v", err)
 	}
 	definitions := registry.Definitions()
-	if got, want := len(definitions), 10; got != want {
+	if got, want := len(definitions), 9; got != want {
 		t.Fatalf("definition count = %d, want %d", got, want)
 	}
 
@@ -307,7 +306,7 @@ func TestDefaultRegistryContainsCodingTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDefaultRegistry(WithAgentCoordinator) error = %v", err)
 	}
-	if got, want := len(regWithCoord.Definitions()), 15; got != want {
+	if got, want := len(regWithCoord.Definitions()), 14; got != want {
 		t.Fatalf("definition count with coordinator = %d, want %d", got, want)
 	}
 	for _, name := range []string{"delegate_task", "wait_agent", "get_agent", "list_agents", "cancel_agent"} {

@@ -1,4 +1,4 @@
-package builtin
+package webtool
 
 import (
 	"context"
@@ -11,7 +11,21 @@ import (
 
 	"github.com/projectTHORN/proton/internal/buildinfo"
 	"github.com/projectTHORN/proton/internal/sandbox"
+	"github.com/projectTHORN/proton/internal/tool"
 )
+
+func newJSONCall(t *testing.T, id, name string, input map[string]any) tool.Call {
+	t.Helper()
+	arguments, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	call, err := tool.NewCall(id, name, arguments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return call
+}
 
 func TestWebFetchHonorsBlockedNetworkPolicy(t *testing.T) {
 	handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkBlocked})
