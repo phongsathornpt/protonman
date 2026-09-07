@@ -166,7 +166,10 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	}
 	if input.Continuation != "" && input.Continuation != continuation {
 		_ = file.Close()
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "read_file continuation is stale; restart from offset 0")
+		restartArgs, _ := json.Marshal(map[string]any{"path": input.Path})
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "read_file continuation is stale; restart from offset 0").WithRecovery(tool.Recovery{
+			Action: "restart_pagination", Tool: "read_file", Arguments: restartArgs,
+		})
 	}
 	if input.Offset > size {
 		input.Offset = size
