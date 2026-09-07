@@ -65,9 +65,8 @@ type bubbleModel struct {
 	todo                    []TodoItem
 	todoStore               tododomain.Repository
 	todoRevision            uint64
-	todoExpanded            bool
-	todoCompletionFresh     bool
-	todoCompletionDismissed bool
+	todoViewState           todoViewState
+	todoLifecycle           todoLifecycleState
 	busy                    bool
 	activity                string
 	pendingActivity         string

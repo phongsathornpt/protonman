@@ -10,6 +10,15 @@ import (
 // domain package rather than the terminal adapter.
 type TodoItem = tododomain.Item
 
+type todoViewState struct {
+	Expanded bool
+}
+
+type todoLifecycleState struct {
+	CompletionFresh     bool
+	CompletionDismissed bool
+}
+
 func (m *bubbleModel) syncTodoSnapshot() bool {
 	if m == nil || m.todoStore == nil {
 		return false
@@ -23,11 +32,11 @@ func (m *bubbleModel) syncTodoSnapshot() bool {
 	m.todoRevision = snapshot.Revision
 	isComplete := allTodoCompleted(m.todo)
 	if isComplete && !wasComplete {
-		m.todoCompletionFresh = true
-		m.todoCompletionDismissed = false
+		m.todoLifecycle.CompletionFresh = true
+		m.todoLifecycle.CompletionDismissed = false
 	} else if !isComplete {
-		m.todoCompletionFresh = false
-		m.todoCompletionDismissed = false
+		m.todoLifecycle.CompletionFresh = false
+		m.todoLifecycle.CompletionDismissed = false
 	}
 	return true
 }
@@ -45,9 +54,9 @@ func allTodoCompleted(items []TodoItem) bool {
 }
 
 func (m *bubbleModel) retireCompletedTodoForNextTurn() {
-	if m == nil || !m.todoCompletionFresh || !allTodoCompleted(m.todo) || m.todoExpanded {
+	if m == nil || !m.todoLifecycle.CompletionFresh || !allTodoCompleted(m.todo) || m.todoViewState.Expanded {
 		return
 	}
-	m.todoCompletionFresh = false
-	m.todoCompletionDismissed = true
+	m.todoLifecycle.CompletionFresh = false
+	m.todoLifecycle.CompletionDismissed = true
 }

@@ -14,11 +14,11 @@ func (m *bubbleModel) executeConversationCommand(name, argument string) tea.Cmd 
 	case "todo":
 		switch strings.ToLower(strings.TrimSpace(argument)) {
 		case "":
-			m.todoExpanded = !m.todoExpanded
+			m.todoViewState.Expanded = !m.todoViewState.Expanded
 		case "show":
-			m.todoExpanded = true
+			m.todoViewState.Expanded = true
 		case "hide":
-			m.todoExpanded = false
+			m.todoViewState.Expanded = false
 		default:
 			m.appendError("usage: /todo [show|hide]")
 		}

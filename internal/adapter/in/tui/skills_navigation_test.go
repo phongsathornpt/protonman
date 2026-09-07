@@ -10,8 +10,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/projectTHORN/proton/internal/adapter/out/model"
 	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/feature/skill"
 	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/projectTHORN/proton/internal/feature/skill"
 )
 
 func newTestSkillsModel(t *testing.T, count int) *bubbleModel {

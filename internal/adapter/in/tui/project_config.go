@@ -7,10 +7,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/projectTHORN/proton/internal/feature/agent"
-	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/adapter/out/config"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/core/permission"
+	"github.com/projectTHORN/proton/internal/feature/agent"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 

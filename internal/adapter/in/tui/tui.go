@@ -11,15 +11,15 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/projectTHORN/proton/internal/feature/agent"
-	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/adapter/out/config"
 	"github.com/projectTHORN/proton/internal/adapter/out/model"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/feature/skill"
-	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/engine/toolcall"
+	"github.com/projectTHORN/proton/internal/feature/agent"
+	"github.com/projectTHORN/proton/internal/feature/skill"
+	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 

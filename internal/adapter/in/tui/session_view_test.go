@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectTHORN/proton/internal/adapter/out/model"
 	"github.com/projectTHORN/proton/internal/adapter/out/sessionfs"
 	"github.com/projectTHORN/proton/internal/app"
-	"github.com/projectTHORN/proton/internal/adapter/out/model"
 	"github.com/projectTHORN/proton/internal/core/permission"
 	"github.com/projectTHORN/proton/internal/core/session"
 )

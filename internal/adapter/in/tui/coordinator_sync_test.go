@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/feature/agent"
-	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/adapter/out/config"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/core/permission"
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/core/workspace"
+	"github.com/projectTHORN/proton/internal/feature/agent"
 )
 
 func TestTUI_WithCoordinatorOption(t *testing.T) {

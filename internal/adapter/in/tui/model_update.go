@@ -206,7 +206,7 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyMsg) (bool, tea.Cmd) {
 		m.refreshViewport()
 		return true, nil
 	case key.Matches(message, m.keys.ToggleTodo):
-		m.todoExpanded = !m.todoExpanded
+		m.todoViewState.Expanded = !m.todoViewState.Expanded
 		m.relayout()
 		return true, nil
 	case key.Matches(message, m.keys.PageUp):
