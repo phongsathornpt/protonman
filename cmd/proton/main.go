@@ -97,6 +97,10 @@ func run(ctx context.Context, args []string) error {
 		activeSkills = runtimeState.skills.ActivatedList()
 	}
 	saveErr := runtimeState.stateStore.Save(ctx, runtimeState.sessionID, session.State{
+		SessionID:       runtimeState.sessionID,
+		WorkspaceKey:    runtimeState.state.WorkspaceKey,
+		WorkspaceName:   runtimeState.state.WorkspaceName,
+		CreatedAt:       runtimeState.state.CreatedAt,
 		PermissionMode:  runtimeState.service.Mode().String(),
 		ActiveSkills:    activeSkills,
 		AgentProfile:    bubbleUI.AgentProfile(),

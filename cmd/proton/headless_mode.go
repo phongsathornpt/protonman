@@ -42,6 +42,10 @@ func runHeadless(
 		activeSkills = skillRegistry.ActivatedList()
 	}
 	saveErr := stateStore.Save(ctx, sessionID, session.State{
+		SessionID:       sessionID,
+		WorkspaceKey:    state.WorkspaceKey,
+		WorkspaceName:   state.WorkspaceName,
+		CreatedAt:       state.CreatedAt,
 		PermissionMode:  service.Mode().String(),
 		ActiveSkills:    activeSkills,
 		AgentProfile:    state.AgentProfile,
