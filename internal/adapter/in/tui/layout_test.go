@@ -133,8 +133,8 @@ func TestTodoExpandedAutoCollapsesWhileBusyWithoutLosingPreference(t *testing.T)
 		t.Fatalf("idle expanded todo missing details: %q", got)
 	}
 	m.busy = true
-	if got := m.todoView(); strings.Contains(got, "active task") || !strings.Contains(got, "1 active") || !strings.Contains(got, "1 pending") {
-		t.Fatalf("busy todo=%q, want compact progress summary", got)
+	if got := m.todoView(); !strings.Contains(got, "active task") || !strings.Contains(got, "1 active") || !strings.Contains(got, "1 pending") {
+		t.Fatalf("busy todo=%q, want active work plus progress summary", got)
 	}
 	if !m.todoViewState.Expanded {
 		t.Fatal("busy auto-collapse mutated expansion preference")
