@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/projectTHORN/proton/internal/adapter/sessionfs"
 	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/session"
 )
@@ -69,7 +70,7 @@ func runSessionList(ctx context.Context, args []string, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("resolve session store: %w", err)
 	}
-	store, err := session.NewFileStore(dirs.Sessions)
+	store, err := sessionfs.NewFileStore(dirs.Sessions)
 	if err != nil {
 		return fmt.Errorf("create session store: %w", err)
 	}

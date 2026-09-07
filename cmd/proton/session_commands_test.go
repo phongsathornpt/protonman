@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectTHORN/proton/internal/adapter/sessionfs"
 	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/session"
@@ -39,7 +40,7 @@ func TestRunSessionListFiltersCurrentWorkspaceAndSupportsJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := session.NewFileStore(dirs.Sessions)
+	store, err := sessionfs.NewFileStore(dirs.Sessions)
 	if err != nil {
 		t.Fatal(err)
 	}

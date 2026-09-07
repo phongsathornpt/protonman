@@ -1,4 +1,4 @@
-package session
+package sessionfs
 
 import (
 	"context"
@@ -13,6 +13,20 @@ import (
 	"github.com/projectTHORN/proton/internal/agentprompt"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
+	"github.com/projectTHORN/proton/internal/session"
+)
+
+type Message = session.Message
+type ToolCall = session.ToolCall
+
+var ToModelMessages = session.ToModelMessages
+var FromModelMessages = session.FromModelMessages
+var ErrInvalidSessionID = session.ErrInvalidSessionID
+
+const (
+	currentStateVersion = 1
+	maxStoredMessages   = 200
+	maxStoredContent    = 32 * 1024
 )
 
 func TestFileStoreRoundTrip(t *testing.T) {
