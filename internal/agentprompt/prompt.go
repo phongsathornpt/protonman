@@ -2,7 +2,7 @@ package agentprompt
 
 import "strings"
 
-const Version = "4"
+const Version = "5"
 
 type Spec struct {
 	Role                 string
@@ -35,6 +35,7 @@ func Render(spec Spec) string {
 	sections := []string{
 		identitySection(spec),
 		executionSection(),
+		toolDisciplineSection(spec),
 	}
 	if project := strings.TrimSpace(spec.ProjectInstructions); project != "" {
 		sections = append(sections, projectSection(project))
@@ -108,6 +109,26 @@ func toolSection() string {
 - Use only tools exposed in the current request. Tool identifiers are exact; never prefix, rename, qualify, or invent them.
 - Treat tool errors as observations. Correct the call when possible instead of repeating an invalid request.
 - Planning, status, and orchestration metadata are not evidence about source code or runtime behavior.`
+}
+
+func toolDisciplineSection(spec Spec) string {
+	lines := []string{
+		"# Tool Discipline",
+		"- Use a tool only when it materially changes evidence, state, implementation, or verification.",
+		"- Reuse existing evidence. Do not repeat equivalent reads, searches, or commands without new information that justifies the retry.",
+		"- After every tool result, reassess whether the requested outcome is already complete.",
+		"- If repeated attempts are not producing new progress, change strategy or report the blocker instead of looping.",
+		"- Do not continue optional exploration after the user's requested work is complete.",
+	}
+	if spec.MutationEnabled {
+		lines = append(lines,
+			"- For implementation work, finish once the requested behavior is implemented, relevant verification passes, and no required work remains.",
+		)
+	}
+	if strings.TrimSpace(spec.Role) != "" {
+		lines = append(lines, "- As a subagent, stay within the delegated scope and return as soon as the bounded deliverable is complete.")
+	}
+	return strings.Join(lines, "\n")
 }
 
 func workspaceSection(spec Spec) string {
