@@ -32,6 +32,7 @@ func applyPromptChrome(prompt *textarea.Model, bash bool) {
 	prompt.Prompt = prefix
 	prompt.FocusedStyle.Prompt = lipgloss.NewStyle().Foreground(accent)
 	prompt.FocusedStyle.Text = bodyStyle
+	prompt.FocusedStyle.Placeholder = mutedStyle
 	prompt.BlurredStyle = prompt.FocusedStyle
 	prompt.BlurredStyle.CursorLine = lipgloss.NewStyle()
 }

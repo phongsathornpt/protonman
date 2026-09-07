@@ -2,6 +2,8 @@ package tui
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -162,6 +164,54 @@ func TestWelcomeCardContainsBrandOnly(t *testing.T) {
 		if got := lipgloss.Width(line); got > 32 {
 			t.Fatalf("welcome line width = %d, want <= 32: %q", got, line)
 		}
+	}
+}
+
+func TestWelcomeCardNormalModeRendersRichHero(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.workDir = "/tmp/test-workspace"
+	m.activeModel = "provider/some-model"
+	m.activeProvider = "provider-name"
+	m.resize(80, 24)
+	card := m.welcomeCard()
+
+	if !strings.Contains(card, glyphBrand) || !strings.Contains(card, "█▀█") {
+		t.Fatalf("hero missing brand: %q", card)
+	}
+	if !strings.Contains(card, "Workspace") || !strings.Contains(card, "/tmp/test-workspace") {
+		t.Fatalf("hero missing workspace: %q", card)
+	}
+	if !strings.Contains(card, "Quick Actions") || !strings.Contains(card, "/help") || !strings.Contains(card, "/model") {
+		t.Fatalf("hero missing quick actions: %q", card)
+	}
+	if strings.Contains(card, "some-model") {
+		t.Fatalf("hero should not duplicate active model from status bar: %q", card)
+	}
+}
+
+func TestFormatWorkspaceDisplay(t *testing.T) {
+	if got := formatWorkspaceDisplay(""); got != "" {
+		t.Fatalf("expected empty, got %q", got)
+	}
+	home, _ := os.UserHomeDir()
+	if home != "" {
+		subpath := filepath.Join(home, "projects", "proton")
+		if got := formatWorkspaceDisplay(subpath); got != "~/projects/proton" {
+			t.Fatalf("expected ~/projects/proton, got %q", got)
+		}
+	}
+}
+
+func TestDetectGitBranch(t *testing.T) {
+	tmp := t.TempDir()
+	if got := detectGitBranch(tmp); got != "" {
+		t.Fatalf("expected empty branch for non-git dir, got %q", got)
+	}
+	gitDir := filepath.Join(tmp, ".git")
+	_ = os.Mkdir(gitDir, 0o755)
+	_ = os.WriteFile(filepath.Join(gitDir, "HEAD"), []byte("ref: refs/heads/feature-10-out-of-10\n"), 0o644)
+	if got := detectGitBranch(tmp); got != "feature-10-out-of-10" {
+		t.Fatalf("expected feature-10-out-of-10, got %q", got)
 	}
 }
 

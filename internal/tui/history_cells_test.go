@@ -683,3 +683,109 @@ func TestAgentToolCellRawLinesUseOrchestrationLabel(t *testing.T) {
 		t.Fatalf("RawLines()=%q", got)
 	}
 }
+
+func TestPatchCellRenderingPolish(t *testing.T) {
+	// 1. Verify no "✓ + " glyph stutter
+	patch := &PatchCell{
+		Name:    "write_file",
+		Summary: "1 file",
+		Paths:   []string{"cmd/proton/main.go"},
+		Body:    "Wrote file successfully to cmd/proton/main.go.",
+	}
+	rendered := patch.RenderWidth(80)
+	joined := strings.Join(rendered, "\n")
+	if strings.Contains(joined, "✓ +") {
+		t.Fatalf("unexpected glyph stutter '✓ +' in patch cell header:\n%s", joined)
+	}
+	if !strings.Contains(joined, "✓") || !strings.Contains(joined, "write_file") {
+		t.Fatalf("expected clean checkmark and tool name in patch cell header:\n%s", joined)
+	}
+	// Redundant body should be suppressed when paths are present
+	if strings.Contains(joined, "Wrote file successfully to") {
+		t.Fatalf("expected redundant body to be suppressed in patch cell:\n%s", joined)
+	}
+
+	// 2. Multi-file patch capping
+	multiPatch := &PatchCell{
+		Name:    "apply_patch",
+		Summary: "6 files",
+		Paths: []string{
+			"file1.go",
+			"file2.go",
+			"file3.go",
+			"file4.go",
+			"file5.go",
+			"file6.go",
+		},
+	}
+	multiRendered := multiPatch.RenderWidth(80)
+	multiJoined := strings.Join(multiRendered, "\n")
+	if !strings.Contains(multiJoined, "file1.go") || !strings.Contains(multiJoined, "file3.go") {
+		t.Fatalf("expected first 3 files to be visible:\n%s", multiJoined)
+	}
+	if strings.Contains(multiJoined, "file4.go") {
+		t.Fatalf("expected file4.go and beyond to be folded:\n%s", multiJoined)
+	}
+	if !strings.Contains(multiJoined, "+3 more files") {
+		t.Fatalf("expected fold hint for remaining files:\n%s", multiJoined)
+	}
+}
+
+func TestExecCellClampsLongLinesAndHighlightsDiff(t *testing.T) {
+	// 1. Clamp long line
+	longLine := "data: " + strings.Repeat("x", 200)
+	cell := &ExecCell{
+		Name:    "bash",
+		Command: "curl https://api.example.com",
+		Stdout:  longLine,
+	}
+	rendered := cell.RenderWidth(60)
+	joined := strings.Join(rendered, "\n")
+	if strings.Contains(joined, strings.Repeat("x", 200)) {
+		t.Fatalf("expected 200-char line to be clamped horizontally in viewport:\n%s", joined)
+	}
+	if !strings.Contains(joined, "…") {
+		t.Fatalf("expected ellipsis truncation indicator on long line:\n%s", joined)
+	}
+
+	// 2. Diff syntax highlighting
+	diffCell := &ExecCell{
+		Name:    "bash",
+		Command: "git diff",
+		Stdout:  "@@ -1,3 +1,4 @@\n+func New() {}\n-old()\n",
+	}
+	diffRendered := diffCell.RenderWidth(80)
+	diffJoined := strings.Join(diffRendered, "\n")
+	if !strings.Contains(diffJoined, "+func New() {}") || !strings.Contains(diffJoined, "-old()") {
+		t.Fatalf("expected diff lines to be preserved in diff render:\n%s", diffJoined)
+	}
+}
+
+func TestActivateSkillFallbackToTarget(t *testing.T) {
+	cell := &ToolCell{
+		Name:     "activate_skill",
+		Target:   `"pdf-processing"`,
+		Body:     "Loaded skill instructions successfully.",
+		ToolKind: tool.KindRead,
+	}
+	rendered := cell.RenderWidth(80)
+	joined := strings.Join(rendered, "\n")
+	if !strings.Contains(joined, `"pdf-processing"`) {
+		t.Fatalf("expected target skill name to appear in header:\n%s", joined)
+	}
+	if !strings.Contains(joined, "Activated skill") {
+		t.Fatalf("expected 'Activated skill' in header:\n%s", joined)
+	}
+}
+
+func TestTaskBodySuppressionInTranscript(t *testing.T) {
+	if !shouldSuppressBody(tool.KindTask, "update_todo") {
+		t.Fatal("expected KindTask to suppress body in transcript")
+	}
+	if !shouldSuppressBody(tool.KindTask, "get_todo") {
+		t.Fatal("expected get_todo to suppress body in transcript")
+	}
+	if !shouldSuppressBody(tool.KindEdit, "write_file") {
+		t.Fatal("expected KindEdit to suppress body in transcript")
+	}
+}
