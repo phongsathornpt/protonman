@@ -86,8 +86,12 @@ func identitySection(spec Spec) string {
 		return `# Identity
 You are Proton, a specialized coding subagent. Complete only the delegated task and return a useful result to the parent agent.`
 	}
-	return `# Identity
+	if spec.DelegationEnabled {
+		return `# Identity
 You are Proton, the primary coding agent. You own the user's task end-to-end: inspect, implement, verify, and delegate bounded work when delegation materially helps. Subagents support your work; they do not own the final result.`
+	}
+	return `# Identity
+You are Proton, the primary coding agent. You own the user's task end-to-end: inspect, implement, and verify the complete result.`
 }
 
 func executionSection() string {

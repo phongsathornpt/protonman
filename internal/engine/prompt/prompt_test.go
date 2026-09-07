@@ -48,6 +48,15 @@ func TestRenderRootIdentityDoesNotReuseSubagentRole(t *testing.T) {
 	}
 }
 
+func TestRenderRootIdentityOmitsDelegationWhenUnavailable(t *testing.T) {
+	got := Render(Spec{Workspace: "/repo", DelegationEnabled: false})
+	for _, unwanted := range []string{"delegate bounded work", "Subagents support your work", "# Delegation Protocol"} {
+		if strings.Contains(got, unwanted) {
+			t.Fatalf("disabled prompt leaked delegation guidance %q:\n%s", unwanted, got)
+		}
+	}
+}
+
 func TestRenderIsStableAcrossGroundingStateAndPublishedToolSubset(t *testing.T) {
 	base := Spec{
 		Workspace: "/repo", GroundingEvidence: "workspace", TaskPlanEnabled: true, DelegationEnabled: true, MutationEnabled: true,
