@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/adapter/sessionfs"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/session"
@@ -41,7 +42,7 @@ func TestSessionCommandsExposeIdentityAndWorkspaceSessions(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	m.sessionStore = store
+	m.sessions = app.NewSessions(store)
 	m.executeCommand("/sessions")
 	content = m.historyState.RenderContent()
 	for _, want := range []string{"Recent sessions:", "current-session", "resume this work", "proton session resume"} {

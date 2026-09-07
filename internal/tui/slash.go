@@ -8,10 +8,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/projectTHORN/proton/internal/agent"
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
-	"github.com/projectTHORN/proton/internal/session"
 	"github.com/projectTHORN/proton/internal/tool"
 )
 
@@ -502,11 +502,11 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		}
 		m.appendLine(fmt.Sprintf("messages: %d", len(m.messages)))
 	case "sessions":
-		if m.sessionStore == nil {
+		if m.sessions == nil {
 			m.appendError("session store is unavailable")
 			break
 		}
-		summaries, err := m.sessionStore.ListSummaries(m.ctx, session.ListOptions{WorkspaceKey: m.workspaceKey, Limit: 20})
+		summaries, err := m.sessions.ListSummaries(m.ctx, app.SessionListOptions{WorkspaceKey: m.workspaceKey, Limit: 20})
 		if err != nil {
 			m.appendError("list sessions: " + err.Error())
 			break

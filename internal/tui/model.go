@@ -15,7 +15,6 @@ import (
 	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/model"
-	"github.com/projectTHORN/proton/internal/session"
 	"github.com/projectTHORN/proton/internal/skill"
 	tododomain "github.com/projectTHORN/proton/internal/todo"
 	"github.com/projectTHORN/proton/internal/tool"
@@ -91,7 +90,7 @@ type bubbleModel struct {
 	agentProfile            string
 	reasoningEffort         sdk.ReasoningEffort
 	sessionID               string
-	sessionStore            session.Repository
+	sessions                *app.Sessions
 	workspaceKey            string
 	modelCatalogs           modelCatalogState
 	runtimeConfig           config.RuntimeConfig
