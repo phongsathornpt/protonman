@@ -790,9 +790,9 @@ func newACPReasoningLoop(t *testing.T, modelID string) *applicationturn.Loop {
 func TestACPMCPServerConfigsReachSessionConfigurer(t *testing.T) {
 	server := newTestServer(t, permission.ModeAsk)
 	var configured [][]MCPServerConfig
-	server.mcpRegistryConfigurer = func(_ context.Context, _ tool.Registry, configs []MCPServerConfig) error {
+	server.mcpRegistryConfigurer = func(_ context.Context, _ string, _ tool.Registry, configs []MCPServerConfig) (io.Closer, error) {
 		configured = append(configured, cloneMCPServerConfigs(configs))
-		return nil
+		return nil, nil
 	}
 	configs := []MCPServerConfig{{Name: "local", Command: "mcp-server", Args: []string{"--stdio"}}}
 	requests := []RPCRequest{

@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/projectTHORN/proton/internal/adapter/in/acp"
 	"github.com/projectTHORN/proton/internal/adapter/in/tui"
+	mcpadapter "github.com/projectTHORN/proton/internal/adapter/out/tool/mcp"
 	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/base/envconfig"
 	"github.com/projectTHORN/proton/internal/core/session"
@@ -63,6 +65,31 @@ func run(ctx context.Context, args []string) error {
 			acp.WithSessions(app.NewSessions(runtimeState.stateStore)),
 			acp.WithSessionRegistryFactory(func(sessionID, _ string) (tool.Registry, error) {
 				return runtimeState.registryForSession(sessionID)
+			}),
+			acp.WithMCPRegistryConfigurer(func(ctx context.Context, cwd string, registry tool.Registry, configs []acp.MCPServerConfig) (io.Closer, error) {
+				registrar, ok := registry.(tool.Registrar)
+				if !ok {
+					return nil, fmt.Errorf("session registry does not support MCP registration")
+				}
+				servers := make([]mcpadapter.ManagedServer, 0, len(configs))
+				for _, config := range configs {
+					server, err := mcpadapter.NewStdioServer(config.Name, config.Command, config.Args, config.Env, cwd)
+					if err != nil {
+						return nil, err
+					}
+					servers = append(servers, server)
+				}
+				manager, err := mcpadapter.NewManager(servers...)
+				if err != nil {
+					for _, server := range servers {
+						_ = server.Close()
+					}
+					return nil, err
+				}
+				if err := manager.Bind(ctx, registrar); err != nil {
+					return nil, err
+				}
+				return manager, nil
 			}),
 		)
 		if serverErr != nil {
