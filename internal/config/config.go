@@ -20,8 +20,6 @@ import (
 )
 
 const (
-	// DefaultMaxRounds is the fallback maximum rounds per turn when unspecified.
-	DefaultMaxRounds = runtimepolicy.TurnMaxRounds
 	// DefaultMaxToolCalls is the fallback cumulative tool-call limit per turn.
 	DefaultMaxToolCalls = runtimepolicy.TurnMaxToolCalls
 	// DefaultSubagentMaxRuntime is the hard safety ceiling for one spawned subagent.
@@ -77,7 +75,6 @@ type ModelConfig struct {
 
 // AgentConfig specifies autonomous agent execution settings.
 type AgentConfig struct {
-	MaxRounds            int                 `toml:"max_rounds"`
 	MaxToolCalls         int                 `toml:"max_tool_calls"`
 	Profile              string              `toml:"profile"`
 	ReasoningEffort      sdk.ReasoningEffort `toml:"reasoning_effort"`
@@ -128,7 +125,7 @@ const (
 	FieldModelProvider        = "model.provider"
 	FieldAgentProfile         = "agent.profile"
 	FieldAgentReasoningEffort = "agent.reasoning_effort"
-	FieldAgentMaxRounds       = "agent.max_rounds"
+	FieldAgentMaxToolCalls    = "agent.max_tool_calls"
 	FieldUIPermissionMode     = "ui.permission_mode"
 )
 
@@ -146,7 +143,7 @@ type Snapshot struct {
 	Providers map[string]ProviderConfig
 	// Model defines default active model preferences.
 	Model ModelConfig
-	// Agent defines execution bounds such as max rounds.
+	// Agent defines execution bounds and subagent policy.
 	Agent AgentConfig
 	// Runtime defines shared execution and network policies.
 	Runtime RuntimeConfig
@@ -254,7 +251,6 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 		Sandbox:        sandbox.NameOff,
 		Providers:      make(map[string]ProviderConfig),
 		Agent: AgentConfig{
-			MaxRounds:            DefaultMaxRounds,
 			MaxToolCalls:         DefaultMaxToolCalls,
 			MaxLiveSubagents:     DefaultMaxLiveSubagents,
 			MaxRetainedSubagents: DefaultMaxRetainedSubagents,
@@ -269,7 +265,7 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 			FieldModelProvider:        SourceDefault,
 			FieldAgentProfile:         SourceDefault,
 			FieldAgentReasoningEffort: SourceDefault,
-			FieldAgentMaxRounds:       SourceDefault,
+			FieldAgentMaxToolCalls:    SourceDefault,
 			FieldUIPermissionMode:     SourceDefault,
 		},
 		Sources:  make([]string, 0, 2),
@@ -393,17 +389,14 @@ func mergeDocument(document fileDocument, snapshot *Snapshot, source ValueSource
 		snapshot.Provenance[FieldModelProvider] = source
 	}
 	if document.Agent.MaxRounds != nil {
-		if *document.Agent.MaxRounds < 0 {
-			return fmt.Errorf("agent.max_rounds must be non-negative")
-		}
-		snapshot.Agent.MaxRounds = *document.Agent.MaxRounds
-		snapshot.Provenance[FieldAgentMaxRounds] = source
+		snapshot.Warnings = append(snapshot.Warnings, "agent.max_rounds is deprecated and ignored; turn rounds are unbounded")
 	}
 	if document.Agent.MaxToolCalls != nil {
 		if *document.Agent.MaxToolCalls < 0 {
 			return fmt.Errorf("agent.max_tool_calls must be non-negative")
 		}
 		snapshot.Agent.MaxToolCalls = *document.Agent.MaxToolCalls
+		snapshot.Provenance[FieldAgentMaxToolCalls] = source
 	}
 	if document.Agent.Profile != nil {
 		snapshot.Agent.Profile = strings.TrimSpace(*document.Agent.Profile)
@@ -584,16 +577,6 @@ func SaveUserReasoningEffort(homeDir string, effort sdk.ReasoningEffort) error {
 			value = "auto"
 		}
 		doc.Agent.ReasoningEffort = &value
-	})
-}
-
-// SaveUserMaxRounds updates the max rounds limit in ~/.proton/config.toml.
-func SaveUserMaxRounds(homeDir string, maxRounds int) error {
-	if maxRounds < 0 {
-		return fmt.Errorf("max rounds cannot be negative")
-	}
-	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
-		doc.Agent.MaxRounds = &maxRounds
 	})
 }
 

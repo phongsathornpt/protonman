@@ -39,13 +39,13 @@ func SaveProjectReasoningEffort(workDir string, effort sdk.ReasoningEffort) erro
 	})
 }
 
-// SaveProjectMaxRounds updates the project-local turn round limit.
-func SaveProjectMaxRounds(workDir string, maxRounds int) error {
-	if maxRounds < 0 {
-		return fmt.Errorf("max rounds cannot be negative")
+// SaveProjectMaxToolCalls updates the project-local cumulative tool-call limit.
+func SaveProjectMaxToolCalls(workDir string, maxToolCalls int) error {
+	if maxToolCalls < 0 {
+		return fmt.Errorf("max tool calls cannot be negative")
 	}
 	return modifyProjectConfigFile(workDir, func(doc *fileDocument) {
-		doc.Agent.MaxRounds = &maxRounds
+		doc.Agent.MaxToolCalls = &maxToolCalls
 	})
 }
 

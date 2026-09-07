@@ -9,7 +9,6 @@ const (
 	AgentMaxLive                = 16
 	AgentMaxRetained            = 64
 	AgentResultTTL              = 10 * time.Minute
-	TurnMaxRounds               = 20
 	TurnMaxToolCalls            = 100
 	TurnToolResultBytesPerRound = 4 * 1024 * 1024
 	TurnToolResultBytesPerTurn  = 12 * 1024 * 1024
