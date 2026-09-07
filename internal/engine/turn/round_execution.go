@@ -19,6 +19,7 @@ type executedCall struct {
 	semanticFingerprint string
 	repeatCount         int
 	retryable           bool
+	modelToolName       string
 }
 
 func (l *Loop) runRound(
@@ -86,10 +87,12 @@ func (l *Loop) runRound(
 	}
 
 	calls := make([]tool.Call, 0, len(requestedCalls))
+	modelNames := make(map[string]string, len(requestedCalls))
 	for _, requestedCall := range requestedCalls {
+		canonicalName := dispatch.canonicalToolName(requestedCall.Name)
 		call, err := tool.NewCall(
 			requestedCall.ID,
-			requestedCall.Name,
+			canonicalName,
 			requestedCall.Arguments,
 		)
 		if err != nil {
@@ -110,6 +113,7 @@ func (l *Loop) runRound(
 			)
 			return roundOutcome{}, err
 		}
+		modelNames[call.ID] = requestedCall.Name
 		calls = append(calls, call)
 	}
 
@@ -129,6 +133,7 @@ func (l *Loop) runRound(
 		}
 		if suppressed != nil {
 			executions[index] = *suppressed
+			executions[index].modelToolName = modelNames[call.ID]
 			l.observeSuppression(roundContext, round, *suppressed)
 			continue
 		}
@@ -138,6 +143,7 @@ func (l *Loop) runRound(
 	if len(pendingCalls) > 0 {
 		dispatched := l.executeCalls(roundContext, pendingCalls)
 		for index, execution := range dispatched {
+			execution.modelToolName = modelNames[execution.call.ID]
 			executions[pendingIndexes[index]] = execution
 		}
 	}

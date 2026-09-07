@@ -71,11 +71,15 @@ func toolMessagesForExecutions(executions []executedCall) ([]model.Message, erro
 		if err != nil {
 			return nil, fmt.Errorf("encode tool result %q: %w", execution.call.Name, err)
 		}
+		modelToolName := execution.modelToolName
+		if modelToolName == "" {
+			modelToolName = execution.call.Name
+		}
 		messages = append(messages, model.Message{
 			Role:              model.RoleTool,
 			Content:           string(content),
 			ToolCallID:        execution.call.ID,
-			ToolName:          execution.call.Name,
+			ToolName:          modelToolName,
 			ToolResultIsError: execution.err != nil || toolResult.Denied || toolResult.Failure != nil,
 		})
 	}

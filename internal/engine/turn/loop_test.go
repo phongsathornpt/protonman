@@ -1343,3 +1343,53 @@ func TestLoopExplicitReasoningPassesThroughUnknownProfile(t *testing.T) {
 		t.Fatalf("ReasoningEffort = %q, want xhigh", got)
 	}
 }
+
+func TestLoopPublishesProviderSafeMCPAliasAndDispatchesCanonicalName(t *testing.T) {
+	canonical := "mcp.github.issue/search"
+	alias := tool.ProviderSafeName(canonical)
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{events: []sdk.Event{
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "mcp-call", Name: alias, Arguments: json.RawMessage(`{}`)}},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
+		}},
+		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	}}
+	handler := &recordingHandler{definition: tool.Definition{
+		Name: canonical, Description: "search issues", Kind: tool.KindMCP,
+		InputSchema: tool.NoArgumentsSchema(),
+	}}
+	policy, err := permission.NewPolicy(permission.Config{Rules: []permission.Rule{{Action: permission.ActionAllow, Tool: permission.ToolMCP}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := toolcall.NewService(&recordingRegistry{handler: handler}, policy, toolcall.WithMode(permission.ModeAsk))
+	if err != nil {
+		t.Fatal(err)
+	}
+	loop, err := NewLoop(client, service)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "search"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(client.requests) != 2 || client.requests[0].Tools[0].Name != alias {
+		t.Fatalf("published alias = %#v, want %q", client.requests, alias)
+	}
+	if len(handler.calls) != 1 || handler.calls[0].Name != canonical {
+		t.Fatalf("canonical calls = %#v", handler.calls)
+	}
+	followUp := client.requests[1].Messages
+	var assistantName, resultName string
+	for _, message := range followUp {
+		if message.Role == model.RoleAssistant && len(message.ToolCalls) > 0 {
+			assistantName = message.ToolCalls[0].Name
+		}
+		if message.Role == model.RoleTool {
+			resultName = message.ToolName
+		}
+	}
+	if assistantName != alias || resultName != alias {
+		t.Fatalf("model transcript names = assistant %q result %q, want alias %q", assistantName, resultName, alias)
+	}
+}

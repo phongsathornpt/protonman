@@ -2,13 +2,14 @@ package turn
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/engine/prompt"
 	"github.com/projectTHORN/proton/internal/adapter/out/model"
 	"github.com/projectTHORN/proton/internal/core/modelprofile"
 	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/projectTHORN/proton/internal/engine/prompt"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -150,13 +151,28 @@ func (l *Loop) prepareRoundRequest(
 	)
 
 	sdkTools := make([]sdk.Tool, 0, len(tools))
+	if dispatch.enabled() {
+		dispatch.providerToCanonical = make(map[string]string, len(tools))
+		dispatch.canonicalNames = make(map[string]struct{}, len(tools))
+	}
 	for _, definition := range tools {
 		inputSchema := definition.InputSchema
 		if resolved.has {
 			inputSchema = modelprofile.PublishInputSchema(resolved.profile, definition.InputSchema)
 		}
+		publishedName := definition.Name
+		if definition.Kind == tool.KindMCP {
+			publishedName = tool.ProviderSafeName(definition.Name)
+		}
+		if dispatch.enabled() {
+			if existing, exists := dispatch.providerToCanonical[publishedName]; exists && existing != definition.Name {
+				return sdk.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("provider tool alias collision %q for %q and %q", publishedName, existing, definition.Name)
+			}
+			dispatch.providerToCanonical[publishedName] = definition.Name
+			dispatch.canonicalNames[definition.Name] = struct{}{}
+		}
 		sdkTools = append(sdkTools, sdk.Tool{
-			Name: definition.Name, Description: definition.Description,
+			Name: publishedName, Description: definition.Description,
 			InputSchema: inputSchema, OutputSchema: definition.OutputSchema,
 			Dynamic: definition.Kind == tool.KindMCP,
 		})
