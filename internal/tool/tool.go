@@ -212,6 +212,8 @@ const (
 	ErrorCodeConflict ErrorCode = "conflict"
 	// ErrorCodePreexistingWorkspaceChange prevents destructive replacement of user changes not owned by the current turn.
 	ErrorCodePreexistingWorkspaceChange ErrorCode = "preexisting_workspace_change"
+	// ErrorCodeWorkspaceStateUnavailable indicates that mutation safety could not verify workspace state.
+	ErrorCodeWorkspaceStateUnavailable ErrorCode = "workspace_state_unavailable"
 	// ErrorCodeSandboxUnavailable indicates that requested OS confinement could not be applied.
 	ErrorCodeSandboxUnavailable ErrorCode = "sandbox_unavailable"
 	// ErrorCodeExecution is the safe fallback for handler failures.

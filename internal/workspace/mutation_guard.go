@@ -44,7 +44,10 @@ func (w *Workspace) GuardWholeFileMutation(ctx context.Context, paths ...string)
 		return nil
 	}
 	dirty, err := w.gitDirtyPaths(ctx)
-	if err != nil || len(dirty) == 0 {
+	if err != nil {
+		return tool.WrapToolError(tool.ErrorCodeWorkspaceStateUnavailable, "cannot verify pre-existing workspace changes", err)
+	}
+	if len(dirty) == 0 {
 		return nil
 	}
 	root := filepath.Clean(w.root)
@@ -95,10 +98,10 @@ func (w *Workspace) gitDirtyPaths(ctx context.Context) (map[string]struct{}, err
 	output, err := cmd.Output()
 	if err != nil {
 		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if errors.As(err, &exitErr) && strings.Contains(strings.ToLower(string(exitErr.Stderr)), "not a git repository") {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("inspect git working tree: %w", err)
 	}
 	return parseGitPorcelainZ(output), nil
 }
