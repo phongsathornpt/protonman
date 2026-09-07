@@ -52,3 +52,19 @@ func TestAgentRunCellRunningUsesActivityWithoutFakeDuration(t *testing.T) {
 		t.Fatalf("running cell exposed fake duration: %q", got)
 	}
 }
+
+func TestAgentRunCellTerminalFallbacksAreExplicit(t *testing.T) {
+	for _, tc := range []struct {
+		state agent.State
+		want  string
+	}{
+		{state: agent.StateCanceled, want: "canceled"},
+		{state: agent.StateFailed, want: "failed"},
+	} {
+		cell := AgentRunCell{Profile: agent.ProfileDEX, Task: "review concurrency", State: tc.state}
+		got := strings.Join(cell.RenderWidth(80), "\n")
+		if !strings.Contains(got, "review concurrency") || !strings.Contains(got, tc.want) {
+			t.Fatalf("state=%s render=%q", tc.state, got)
+		}
+	}
+}
