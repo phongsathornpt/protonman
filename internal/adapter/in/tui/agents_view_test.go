@@ -183,7 +183,7 @@ func TestStatusViewCombinesRootAndSubagentProgress(t *testing.T) {
 	m.turnProgress = turnProgress{Round: 3, ToolCalls: 8}
 	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", State: agent.StateRunning}}
 	got := m.statusView()
-	for _, want := range []string{"coordinating", "round 3", "8 tools", "1 agent"} {
+	for _, want := range []string{"coordinating", "1 agent"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("status view=%q, want %q", got, want)
 		}
@@ -211,7 +211,7 @@ func TestAgentsViewShowsTerminalFailureReason(t *testing.T) {
 	}
 }
 
-func TestStatusViewShowsAgentBreakdownAndSingleActivity(t *testing.T) {
+func TestStatusViewAvoidsDuplicatingAgentPaneDetail(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.resize(140, 30)
 	m.busy = true
@@ -220,17 +220,13 @@ func TestStatusViewShowsAgentBreakdownAndSingleActivity(t *testing.T) {
 		{ID: "reviewer-2", State: agent.StateQueued},
 	}
 	got := m.statusView()
-	for _, want := range []string{"2 agents", "1 running", "1 queued"} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("status=%q, want %q", got, want)
-		}
+	if !strings.Contains(got, "coordinating 2 agents") {
+		t.Fatalf("status=%q", got)
 	}
-
-	m.agentSnapshot = m.agentSnapshot[:1]
-	m.agentActivity["explorer-1"] = "using grep"
-	got = m.statusView()
-	if !strings.Contains(got, "using grep") {
-		t.Fatalf("single-agent status=%q, want live activity", got)
+	for _, duplicate := range []string{"1 running", "1 queued", "using grep", "round", "tools"} {
+		if strings.Contains(got, duplicate) {
+			t.Fatalf("status duplicated pane detail %q: %q", duplicate, got)
+		}
 	}
 }
 
