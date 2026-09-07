@@ -302,6 +302,3 @@ func toolChoice(count int, choice sdk.ToolChoice) string {
 	}
 	return ""
 }
-func retryableStatus(status int) bool {
-	return status == 429 || status == 500 || status == 502 || status == 503 || status == 504
-}
