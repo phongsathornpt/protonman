@@ -677,7 +677,7 @@ func renderProviderFieldLabel(label, fieldError string) string {
 func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
 	switch v.state {
 	case providerStateFetching:
-		if message.String() == "esc" || message.String() == "ctrl+c" {
+		if message.String() == "esc" {
 			v.cancelFetch()
 			m.bottom.remove(providerViewID)
 			return true, nil
@@ -687,7 +687,7 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 	case providerStateSelectModel:
 		models := v.currentModels()
 		switch message.String() {
-		case "esc", "ctrl+c":
+		case "esc":
 			v.state = providerStateInput
 			v.focusIndex = 2
 			v.apiKeyInput.Focus()
@@ -755,9 +755,6 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 			v.state = providerStateSelectModel
 			v.errorMessage = ""
 			return true, nil
-		case "ctrl+c":
-			m.bottom.remove(providerViewID)
-			return true, nil
 		default:
 			return true, nil
 		}
@@ -770,9 +767,6 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 			v.state = providerStateInput
 			v.focusIndex = int(providerFieldName)
 			v.syncInputFocus()
-			return true, nil
-		case "ctrl+c":
-			m.bottom.remove(providerViewID)
 			return true, nil
 		default:
 			return true, nil
@@ -794,7 +788,7 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 		fallthrough
 	default:
 		switch message.String() {
-		case "esc", "ctrl+c":
+		case "esc":
 			m.bottom.remove(providerViewID)
 			return true, nil
 		case "alt+1", "alt+p":

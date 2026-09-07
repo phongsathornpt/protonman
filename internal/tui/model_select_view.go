@@ -391,7 +391,7 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 		v.filtering = false
 		v.applyFilter(m.activeModel)
 		return true, nil
-	case "esc", "ctrl+c", "ctrl+p", "alt+m", "q":
+	case "esc", "ctrl+p", "alt+m", "q":
 		v.cancelFetch()
 		m.bottom.remove(modelSelectViewID)
 		return true, nil
