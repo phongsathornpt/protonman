@@ -114,6 +114,8 @@ var (
 	ErrToolDispatchUnavailable = errors.New("tool dispatch unavailable")
 	// ErrUnresolvedToolCall indicates that a requested call had no execution result.
 	ErrUnresolvedToolCall = errors.New("unresolved model tool call")
+	// ErrGroundingUnavailable indicates that required empirical evidence cannot be obtained with the available tools.
+	ErrGroundingUnavailable = errors.New("grounding unavailable")
 	// ErrUnsupportedModelCapability indicates that the active model cannot satisfy a turn requirement.
 	ErrUnsupportedModelCapability = errors.New("unsupported model capability")
 	// ErrContextBudgetExceeded indicates that the request cannot fit the active model context safely.
@@ -244,15 +246,31 @@ func WithMaxRounds(rounds int) Option {
 	}
 }
 
-// WithMaxToolCalls bounds the cumulative number of tool calls per turn.
-// A value of 0 disables this count bound; other turn bounds still apply.
-func WithRequireInitialToolUse(required bool) Option {
+// WithGroundingEvidence requires one successful empirical observation of the
+// requested evidence kind before broader tools or final synthesis are allowed.
+func WithGroundingEvidence(evidence tool.EvidenceKind) Option {
 	return func(loop *Loop) error {
-		loop.requireInitialToolUse = required
-		return nil
+		switch evidence {
+		case tool.EvidenceNone, tool.EvidenceWorkspace, tool.EvidenceExternal:
+			loop.groundingEvidence = evidence
+			return nil
+		default:
+			return fmt.Errorf("%w: unsupported grounding evidence %q", ErrInvalidLoop, evidence)
+		}
 	}
 }
 
+// WithRequireInitialToolUse is retained for internal compatibility. Required
+// initial tool use now means successful workspace grounding, not any tool call.
+func WithRequireInitialToolUse(required bool) Option {
+	if required {
+		return WithGroundingEvidence(tool.EvidenceWorkspace)
+	}
+	return WithGroundingEvidence(tool.EvidenceNone)
+}
+
+// WithMaxToolCalls bounds the cumulative number of tool calls per turn.
+// A value of 0 disables this count bound; other turn bounds still apply.
 func WithMaxToolCalls(calls int) Option {
 	return func(loop *Loop) error {
 		if calls < 0 {
@@ -370,7 +388,7 @@ type Loop struct {
 	maxParallelReads              int
 	maxToolResultBytesPerRound    int
 	maxToolResultBytesPerTurn     int
-	requireInitialToolUse         bool
+	groundingEvidence             tool.EvidenceKind
 	reasoningEffort               sdk.ReasoningEffort
 	reasoningExplicit             bool
 	promptSpec                    *agentprompt.Spec
@@ -608,6 +626,17 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	resultBudget := newToolResultBudget(l.maxToolResultBytesPerRound, l.maxToolResultBytesPerTurn)
 	verification := VerificationState{}
 	forceNoProgressSynthesis := false
+	grounding := newGroundingState(l.groundingEvidence)
+	if grounding.pending() {
+		if !caps.Tools {
+			terminalReason = "grounding_model_tools_unsupported"
+			return l.fail(ctx, sink, 0, fmt.Errorf("%w: model %q cannot satisfy required %s grounding without tool support", ErrUnsupportedModelCapability, l.languageModel.ModelID(), grounding.evidence))
+		}
+		if len(grounding.filterDefinitions(definitions)) == 0 {
+			terminalReason = "grounding_tools_unavailable"
+			return l.fail(ctx, sink, 0, fmt.Errorf("%w: no tools provide required %s evidence", ErrGroundingUnavailable, grounding.evidence))
+		}
+	}
 	reasoningResolution, reasoningErr := l.resolveReasoningPolicy()
 	if reasoningErr != nil {
 		terminalReason = "reasoning_effort_unsupported"
@@ -673,6 +702,9 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			})
 		} else {
 			tools = l.tools.Definitions()
+			if grounding.pending() {
+				tools = grounding.filterDefinitions(tools)
+			}
 			switch {
 			case len(tools) > 0 && !caps.Tools:
 				tools = nil
@@ -699,6 +731,8 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			spec.ReasoningEffective = reasoningEffectiveLabel(reasoningResolution)
 			spec.ReasoningSource = string(reasoningResolution.Source)
 			spec.ReasoningClamped = reasoningResolution.Clamped
+			spec.GroundingRequired = grounding.pending()
+			spec.GroundingEvidence = string(grounding.evidence)
 			if projectInstructions != "" {
 				if base := strings.TrimSpace(spec.ProjectInstructions); base != "" {
 					spec.ProjectInstructions = base + "\n\n" + projectInstructions
@@ -739,7 +773,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			Messages: reqMessages,
 			Tools:    sdkTools,
 		}
-		if round == 1 && l.requireInitialToolUse && dispatch.enabled() && len(sdkTools) > 0 {
+		if grounding.pending() && dispatch.enabled() && len(sdkTools) > 0 {
 			request.Options.ToolChoice = sdk.ToolChoiceRequired
 		}
 		request.Options.ReasoningEffort = reasoningResolution.Effective
@@ -801,12 +835,15 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			return l.fail(ctx, sink, round, err)
 		}
 		toolCallsUsed += len(executions)
+		if grounding.observe(executions, definitions) {
+			slog.DebugContext(ctx, "turn workspace grounding satisfied", "round", round, "evidence", grounding.evidence)
+		}
 		verification.observe(executions, definitions)
 		if stalled, observeErr := progress.observeRound(executions); observeErr != nil {
 			terminalReason = "progress_guard_failed"
 			return l.fail(ctx, sink, round, observeErr)
 		} else if stalled {
-			forceNoProgressSynthesis = true
+			forceNoProgressSynthesis = !grounding.pending()
 			l.observeProtection(ctx, toolcall.ProtectionEvent{Kind: toolcall.ProtectionLoopDetected, Time: time.Now(), Round: round, Reason: "semantic_no_progress"})
 			l.observeProtection(ctx, toolcall.ProtectionEvent{Kind: toolcall.ProtectionNoProgressSynthesis, Time: time.Now(), Round: round + 1, Reason: "semantic_no_progress"})
 			slog.DebugContext(ctx, "turn semantic tool loop detected",
@@ -816,6 +853,10 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		}
 		history = append(history, assistant)
 		turnMessages = append(turnMessages, assistant)
+		if grounding.pending() && len(executions) == 0 && !isMaxRound && !maxToolCallsFallback && !noProgressFallback {
+			slog.DebugContext(ctx, "turn final synthesis deferred for grounding", "round", round, "evidence", grounding.evidence)
+			continue
+		}
 		if len(executions) == 0 || isMaxRound {
 			terminalReason = "completed"
 			if maxRoundFallback {

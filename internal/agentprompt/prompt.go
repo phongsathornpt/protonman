@@ -24,6 +24,8 @@ type Spec struct {
 	ReasoningEffective   string
 	ReasoningSource      string
 	ReasoningClamped     bool
+	GroundingRequired    bool
+	GroundingEvidence    string
 	TaskPlanEnabled      bool
 	DelegationEnabled    bool
 	MutationEnabled      bool
@@ -38,6 +40,9 @@ func Render(spec Spec) string {
 		executionSection(),
 		toolSection(spec),
 		workspaceSection(spec),
+	}
+	if spec.GroundingRequired {
+		sections = append(sections, groundingSection(spec))
 	}
 	if spec.TaskPlanEnabled {
 		sections = append(sections, taskSection())
@@ -124,6 +129,17 @@ func workspaceSection(spec Spec) string {
 		"- Read narrowly first, then broaden search only when needed. Prefer targeted repository tools over speculative prose.",
 	)
 	return strings.Join(lines, "\n")
+}
+
+func groundingSection(spec Spec) string {
+	evidence := strings.TrimSpace(spec.GroundingEvidence)
+	if evidence == "" {
+		evidence = "required"
+	}
+	return `# Grounding Contract
+- Obtain successful empirical ` + evidence + ` evidence before making repository-dependent claims, broader actions, or final synthesis.
+- Until grounding succeeds, only tools that can provide the required evidence are exposed.
+- Failed, denied, suppressed, planning, task, orchestration, and status-only metadata calls do not satisfy grounding.`
 }
 
 func taskSection() string {

@@ -90,10 +90,9 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 			turn.WithSystemPromptSpec(promptSpec),
 			turn.WithMaxRounds(c.maxRounds),
 			turn.WithMaxToolCalls(c.maxToolCalls),
-			turn.WithRequireInitialToolUse(true),
 		}
 		if spec, ok := SpecForProfile(req.Profile); ok {
-			loopOptions = append(loopOptions, turn.WithReasoningEffort(spec.Reasoning))
+			loopOptions = append(loopOptions, turn.WithGroundingEvidence(spec.GroundingEvidence), turn.WithReasoningEffort(spec.Reasoning))
 		}
 		if reasoningEffort != sdk.ReasoningDefault {
 			loopOptions = append(loopOptions, turn.WithExplicitReasoningEffort(reasoningEffort))

@@ -12,7 +12,7 @@ func TestE2EReasoningGeminiProfileReachesWire(t *testing.T) {
 	ws, home := newTestWorkspace(t), newTestHome(t)
 	server := newMockLLMServer(t)
 	writeReasoningConfig(t, home, server.URL(), "openai", "gemini-3.8-flash", "dex", "")
-	server.AddToolCallResponse("reason-read", "read_file", `{"file_path":"hello.txt"}`)
+	server.AddToolCallResponse("reason-read", "read_file", `{"path":"hello.txt"}`)
 	server.AddTextResponse("done")
 
 	res := runProton(t, runOptions{args: []string{"-y", "-p", "Inspect hello.txt and answer done"}, dir: ws, env: []string{"PROTON_HOME=" + home}})
@@ -26,8 +26,21 @@ func TestE2EReasoningGeminiProfileReachesWire(t *testing.T) {
 	if !requestMessagesContain(requests[0], "reasoning_effective=high") ||
 		!requestMessagesContain(requests[0], "reasoning_source=agent_profile") ||
 		!requestMessagesContain(requests[0], "model_profile=gemini-3.8-flash") ||
-		!requestMessagesContain(requests[0], "model_profile_match=exact") {
-		t.Fatalf("Gemini prompt missing reasoning provenance: %#v", requests[0]["messages"])
+		!requestMessagesContain(requests[0], "model_profile_match=exact") ||
+		!requestMessagesContain(requests[0], "# Grounding Contract") {
+		t.Fatalf("Gemini prompt missing reasoning/grounding provenance: %#v", requests[0]["messages"])
+	}
+	initialTools := requestToolNames(requests[0])
+	if !containsString(initialTools, "read_file") {
+		t.Fatalf("initial grounding tools missing read_file: %#v", initialTools)
+	}
+	for _, forbidden := range []string{"get_todo", "update_todo", "delegate_task", "bash", "write_file", "apply_patch"} {
+		if containsString(initialTools, forbidden) {
+			t.Fatalf("initial grounding tools unexpectedly include %s: %#v", forbidden, initialTools)
+		}
+	}
+	if len(requests) < 2 || !containsString(requestToolNames(requests[1]), "get_todo") || !containsString(requestToolNames(requests[1]), "delegate_task") {
+		t.Fatalf("post-grounding request did not restore full tool set: %#v", requests)
 	}
 	assertNoSamplingControls(t, requests)
 }
@@ -131,4 +144,37 @@ func assertNoSamplingControls(t *testing.T, requests []map[string]any) {
 			}
 		}
 	}
+}
+
+func requestToolNames(request map[string]any) []string {
+	raw, ok := request["tools"].([]any)
+	if !ok {
+		return nil
+	}
+	names := make([]string, 0, len(raw))
+	for _, item := range raw {
+		toolObject, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if function, ok := toolObject["function"].(map[string]any); ok {
+			if name, ok := function["name"].(string); ok {
+				names = append(names, name)
+			}
+			continue
+		}
+		if name, ok := toolObject["name"].(string); ok {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }

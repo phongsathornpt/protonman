@@ -10,12 +10,13 @@ func TestRenderComposesRuntimeContracts(t *testing.T) {
 		Role: "You inspect code.", Profile: "reviewer", Provider: "google", ModelID: "gemini-3.8-flash",
 		ModelProfile: "gemini-3.8-flash", ModelProfileMatch: "exact", ModelCatalogOverride: true,
 		Workspace: "/repo", ToolNames: []string{"grep", "get_todo", "delegate_task", "grep"}, MaxRounds: 10, MaxToolCalls: 64,
+		GroundingRequired: true, GroundingEvidence: "workspace",
 		TaskPlanEnabled: true, DelegationEnabled: true, MutationEnabled: true, Skills: "skill instructions",
 		ReasoningRequested: "high", ReasoningEffective: "medium", ReasoningSource: "agent_profile", ReasoningClamped: true,
 	})
 	for _, want := range []string{
 		`<proton-system-prompt version="2">`, "# Execution Contract", "# Tool Protocol", "# Task Plan Protocol",
-		"# Delegation Protocol", "Gemini guidance", "# Editing And Verification", "provider=google", "model=gemini-3.8-flash",
+		"# Grounding Contract", "successful empirical workspace evidence", "# Delegation Protocol", "Gemini guidance", "# Editing And Verification", "provider=google", "model=gemini-3.8-flash",
 		"Workspace root: /repo", "skill instructions", "Available tools: delegate_task, get_todo, grep.",
 		"reasoning_requested=high", "reasoning_effective=medium", "reasoning_source=agent_profile", "reasoning_clamped=true",
 		"model_profile=gemini-3.8-flash", "model_profile_match=exact", "model_catalog_override=true",
