@@ -20,6 +20,12 @@ const (
 	EventCallCompleted EventKind = "tool_call_completed"
 	// EventCallFailed marks a call that was denied, canceled, or failed in a handler.
 	EventCallFailed EventKind = "tool_call_failed"
+	// EventRecoveryAttempted marks one bounded host-side deterministic recovery attempt.
+	EventRecoveryAttempted EventKind = "tool_recovery_attempted"
+	// EventRecoverySucceeded marks a recovery that returned a successful tool result.
+	EventRecoverySucceeded EventKind = "tool_recovery_succeeded"
+	// EventRecoveryFailed marks a recovery attempt that still failed.
+	EventRecoveryFailed EventKind = "tool_recovery_failed"
 )
 
 // ProtectionEventKind identifies one redacted loop-safety event.
@@ -60,17 +66,18 @@ type ProtectionObserver interface {
 // handler output, and error messages. Observers can use ArgumentBytes to understand
 // request size without receiving commands, paths, URLs, or other sensitive values.
 type Event struct {
-	Kind          EventKind             `json:"kind"`
-	Time          time.Time             `json:"time"`
-	CallID        string                `json:"call_id,omitempty"`
-	ToolName      string                `json:"tool_name,omitempty"`
-	ToolKind      permission.ToolKind   `json:"tool_kind,omitempty"`
-	Mode          permission.Mode       `json:"mode,omitempty"`
-	Decision      permission.Action     `json:"decision,omitempty"`
-	GrantScope    permission.GrantScope `json:"grant_scope,omitempty"`
-	ArgumentBytes int                   `json:"argument_bytes,omitempty"`
-	DurationMS    int64                 `json:"duration_ms,omitempty"`
-	ErrorCode     tool.ErrorCode        `json:"error_code,omitempty"`
+	Kind           EventKind             `json:"kind"`
+	Time           time.Time             `json:"time"`
+	CallID         string                `json:"call_id,omitempty"`
+	ToolName       string                `json:"tool_name,omitempty"`
+	ToolKind       permission.ToolKind   `json:"tool_kind,omitempty"`
+	Mode           permission.Mode       `json:"mode,omitempty"`
+	Decision       permission.Action     `json:"decision,omitempty"`
+	GrantScope     permission.GrantScope `json:"grant_scope,omitempty"`
+	ArgumentBytes  int                   `json:"argument_bytes,omitempty"`
+	DurationMS     int64                 `json:"duration_ms,omitempty"`
+	ErrorCode      tool.ErrorCode        `json:"error_code,omitempty"`
+	RecoveryAction string                `json:"recovery_action,omitempty"`
 }
 
 // Observer receives redacted events and must be safe for concurrent calls.
@@ -131,6 +138,19 @@ func (s *Service) observePermission(
 		GrantScope:    resolution.Scope,
 		ArgumentBytes: len(telemetry.call.Arguments),
 	})
+}
+
+func (s *Service) observeRecovery(ctx context.Context, telemetry callTelemetry, kind EventKind, action string, err error) {
+	event := Event{
+		Kind: kind, Time: time.Now(), CallID: telemetry.call.ID, ToolName: telemetry.call.Name,
+		ToolKind: telemetry.toolKind, ArgumentBytes: len(telemetry.call.Arguments), RecoveryAction: action,
+	}
+	if err != nil {
+		if failure := tool.FailureFromError(err); failure != nil {
+			event.ErrorCode = failure.Code
+		}
+	}
+	s.observe(ctx, event)
 }
 
 func (s *Service) observeCallResult(

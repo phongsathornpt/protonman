@@ -59,6 +59,17 @@ func (o *SlogObserver) Observe(ctx context.Context, event toolcall.Event) {
 	if event.ErrorCode != "" {
 		attrs = append(attrs, slog.String("error_code", string(event.ErrorCode)))
 	}
+	if event.RecoveryAction != "" {
+		attrs = append(attrs, slog.String("recovery_action", event.RecoveryAction))
+	}
+	switch event.Kind {
+	case toolcall.EventRecoveryAttempted:
+		o.increment("tool_recovery_attempt_total")
+	case toolcall.EventRecoverySucceeded:
+		o.increment("tool_recovery_success_total")
+	case toolcall.EventRecoveryFailed:
+		o.increment("tool_recovery_failure_total")
+	}
 	if event.Kind == toolcall.EventCallFailed && event.ErrorCode == tool.ErrorCodeStaleContinuation {
 		o.increment("tool_continuation_stale_total")
 	}
