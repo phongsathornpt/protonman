@@ -100,9 +100,10 @@ func (h findFilesHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	}{input.Pattern, input.Path, input.Type, input.MaxDepth}
 
 	var output strings.Builder
-	snapshot := sha256.New()
+	prefixSnapshot := sha256.New()
 	seen, emitted := 0, 0
 	truncated := false
+	continuationChecked := input.Continuation == ""
 	walkErr := filepath.WalkDir(resolvedRoot, func(path string, entry os.DirEntry, walkErr error) error {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -150,16 +151,30 @@ func (h findFilesHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 			return err
 		}
 		display = filepath.ToSlash(display)
-		writeFindSnapshot(snapshot, display, entry)
 		if seen < input.Offset {
+			writeFindSnapshot(prefixSnapshot, display, entry)
 			seen++
+			if seen == input.Offset && !continuationChecked {
+				token, tokenErr := continuationToken("find_files", query, hex.EncodeToString(prefixSnapshot.Sum(nil)))
+				if tokenErr != nil {
+					return tokenErr
+				}
+				if token != input.Continuation {
+					return tool.NewToolError(tool.ErrorCodeStaleContinuation, "find_files continuation is stale; restart from offset 0")
+				}
+				continuationChecked = true
+			}
 			return nil
 		}
-		seen++
+		if !continuationChecked {
+			return tool.NewToolError(tool.ErrorCodeStaleContinuation, "find_files continuation is stale; restart from offset 0")
+		}
 		if emitted >= input.Limit {
 			truncated = true
-			return nil
+			return filepath.SkipAll
 		}
+		writeFindSnapshot(prefixSnapshot, display, entry)
+		seen++
 		output.WriteString(findFilesEntryType(entry))
 		output.WriteByte(' ')
 		output.WriteString(display)
@@ -174,12 +189,12 @@ func (h findFilesHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		return tool.Result{}, fmt.Errorf("find files under %q: %w", input.Path, walkErr)
 	}
 
-	token, err := continuationToken("find_files", query, hex.EncodeToString(snapshot.Sum(nil)))
+	if !continuationChecked {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "find_files continuation is stale; restart from offset 0")
+	}
+	token, err := continuationToken("find_files", query, hex.EncodeToString(prefixSnapshot.Sum(nil)))
 	if err != nil {
 		return tool.Result{}, err
-	}
-	if input.Continuation != "" && input.Continuation != token {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeStaleContinuation, "find_files continuation is stale; restart from offset 0")
 	}
 	var nextOffset *int64
 	if truncated {
