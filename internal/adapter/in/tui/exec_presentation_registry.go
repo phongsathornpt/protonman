@@ -31,6 +31,7 @@ var execCommandProfiles = []execCommandProfile{
 	{execFamilyJVM, exactExecNames("java", "javac", "gradle", "gradlew", "mvn", "mvnw"), jvmAction, jvmExecTitle, summarizeJVMExec},
 	{execFamilyPHP, isPHPExecutable, phpAction, phpExecTitle, summarizePHPExec},
 	{execFamilyRuby, isRubyExecutable, rubyAction, rubyExecTitle, summarizeRubyExec},
+	{execFamilyDotnet, exactExecNames("dotnet"), firstArg, dotnetExecTitle, summarizeDotnetExec},
 	{execFamilyVite, exactExecNames("vite"), firstArg, func(_ string, _ []string, action string) string { return execTitle("Vite", action) }, summarizeViteExec},
 	{execFamilyNext, exactExecNames("next"), firstArg, func(_ string, _ []string, action string) string { return execTitle("Next", action) }, summarizeNextExec},
 }
