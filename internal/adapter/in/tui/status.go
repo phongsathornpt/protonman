@@ -32,51 +32,29 @@ func (m bubbleModel) statusView() string {
 	}
 
 	turnAgents := m.turnAgentSnapshot()
-	activeAgents, runningAgents, queuedAgents, cancelingAgents := agentActivityCounts(turnAgents)
-	parts := make([]string, 0, 6)
+	activeAgents, _, _, _ := agentActivityCounts(turnAgents)
+	parts := make([]string, 0, 4)
 	activity := m.activity
-	if activity != "canceling" && activeAgents > 0 {
-		activity = "coordinating"
-	}
-	if activity == "" {
-		activity = "analyzing"
-	}
-	parts = append(parts, activity)
-	if m.turnProgress.Round > 0 {
-		parts = append(parts, fmt.Sprintf("round %d", m.turnProgress.Round))
-	}
-	if m.turnProgress.ToolCalls > 0 {
-		parts = append(parts, fmt.Sprintf("%d tools", m.turnProgress.ToolCalls))
-	}
 	if activeAgents > 0 {
 		if activity == "canceling" {
-			parts = append(parts, fmt.Sprintf("stopping %d agents", activeAgents))
+			parts = append(parts, "canceling", fmt.Sprintf("stopping %d agents", activeAgents))
 		} else {
-			agents := fmt.Sprintf("%d agent", activeAgents)
+			label := fmt.Sprintf("%d agent", activeAgents)
 			if activeAgents != 1 {
-				agents += "s"
+				label += "s"
 			}
-			parts = append(parts, agents)
-			if runningAgents > 0 {
-				parts = append(parts, fmt.Sprintf("%d running", runningAgents))
-			}
-			if queuedAgents > 0 {
-				parts = append(parts, fmt.Sprintf("%d queued", queuedAgents))
-			}
-			if cancelingAgents > 0 {
-				parts = append(parts, fmt.Sprintf("%d canceling", cancelingAgents))
-			}
-			if activeAgents == 1 {
-				for _, st := range turnAgents {
-					if st.State.Terminal() {
-						continue
-					}
-					if activity := strings.TrimSpace(m.agentActivity[st.ID]); activity != "" {
-						parts = append(parts, activity)
-					}
-					break
-				}
-			}
+			parts = append(parts, "coordinating "+label)
+		}
+	} else {
+		if activity == "" {
+			activity = "analyzing"
+		}
+		parts = append(parts, activity)
+		if m.turnProgress.Round > 0 {
+			parts = append(parts, fmt.Sprintf("round %d", m.turnProgress.Round))
+		}
+		if m.turnProgress.ToolCalls > 0 {
+			parts = append(parts, fmt.Sprintf("%d tools", m.turnProgress.ToolCalls))
 		}
 	}
 	if !m.busyStarted.IsZero() {

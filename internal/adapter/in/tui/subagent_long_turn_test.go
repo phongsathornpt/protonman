@@ -33,7 +33,7 @@ func TestLongTurnWithSubagentsKeepsProgressCoherent(t *testing.T) {
 	})
 
 	status := m.statusView()
-	for _, want := range []string{"coordinating", "round 2", "2 tools", "3 agents"} {
+	for _, want := range []string{"coordinating", "3 agents"} {
 		if !strings.Contains(status, want) {
 			t.Fatalf("status=%q, want %q", status, want)
 		}
