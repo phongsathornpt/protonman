@@ -31,10 +31,10 @@ func TestMutableProductLiteralsStayCentralized(t *testing.T) {
 		"~/.proton/skills/":            "internal/appdirs/dirs.go",
 		"~/.proton/logs/mcp/":          "internal/appdirs/dirs.go",
 		"TODO.md":                      "internal/todo/types.go",
-		"https://protonman.dev/api/v1": "internal/model/provider.go",
-		"https://opencode.ai/zen/v1":   "internal/model/provider.go",
-		"https://api.openai.com/v1":    "internal/model/provider.go",
-		"https://api.anthropic.com":    "internal/model/provider.go",
+		"https://protonman.dev/api/v1": "internal/model/provider_preset.go",
+		"https://opencode.ai/zen/v1":   "internal/model/provider_preset.go",
+		"https://api.openai.com/v1":    "internal/model/provider_preset.go",
+		"https://api.anthropic.com":    "internal/model/provider_preset.go",
 	}
 
 	for _, dir := range []string{"cmd", "internal"} {
