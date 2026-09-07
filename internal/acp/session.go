@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/appdirs"
 	"github.com/projectTHORN/proton/internal/contextutil"
 	"github.com/projectTHORN/proton/internal/model"
@@ -19,7 +20,6 @@ import (
 	"github.com/projectTHORN/proton/internal/session"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
-	applicationturn "github.com/projectTHORN/proton/internal/turn"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -31,7 +31,7 @@ type Session struct {
 	cwd             string
 	service         *toolcall.Service
 	registry        tool.Registry
-	runner          applicationturn.Runner
+	runner          app.Conversation
 	store           session.Repository
 	reasoningEffort sdk.ReasoningEffort
 
@@ -49,14 +49,12 @@ func NewSession(
 	cwd string,
 	service *toolcall.Service,
 	registry tool.Registry,
-	runner applicationturn.Runner,
+	runner app.Conversation,
 	store session.Repository,
 ) *Session {
 	reasoningEffort := sdk.ReasoningDefault
-	if loop, ok := runner.(*applicationturn.Loop); ok {
-		if effort, explicit := loop.ReasoningPolicy(); explicit {
-			reasoningEffort = effort
-		}
+	if effort, explicit := app.ReasoningPolicy(runner); explicit {
+		reasoningEffort = effort
 	}
 	return &Session{
 		id: id, cwd: cwd, service: service, registry: registry, runner: runner, store: store,
@@ -78,11 +76,7 @@ func (s *Session) SetReasoningEffort(effort sdk.ReasoningEffort) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	loop, ok := s.runner.(*applicationturn.Loop)
-	if !ok {
-		return errors.New("reasoning override requires Proton turn loop runner")
-	}
-	clone, err := loop.CloneWithReasoningEffort(effort, effort != sdk.ReasoningDefault)
+	clone, err := app.CloneConversationWithReasoning(s.runner, effort, effort != sdk.ReasoningDefault)
 	if err != nil {
 		return err
 	}
@@ -166,8 +160,8 @@ func (s *Session) ExecutePrompt(
 	var turnMessages []model.Message
 	pendingToolCalls := make(map[string]tool.Call)
 
-	sink := func(sinkCtx context.Context, event applicationturn.Event) error {
-		if event.Kind != applicationturn.EventToolResult && event.Kind != applicationturn.EventFailed {
+	sink := func(sinkCtx context.Context, event app.Event) error {
+		if event.Kind != app.EventToolResult && event.Kind != app.EventFailed {
 			select {
 			case <-sinkCtx.Done():
 				return sinkCtx.Err()
@@ -178,7 +172,7 @@ func (s *Session) ExecutePrompt(
 		}
 
 		switch event.Kind {
-		case applicationturn.EventTextDelta:
+		case app.EventTextDelta:
 			assistantText.WriteString(event.Text)
 			return notifier(RPCNotification{
 				JSONRPC: "2.0",
@@ -195,7 +189,7 @@ func (s *Session) ExecutePrompt(
 				},
 			})
 
-		case applicationturn.EventToolCall:
+		case app.EventToolCall:
 			assistantCalls = append(assistantCalls, event.Call)
 			pendingToolCalls[event.Call.ID] = event.Call
 			locations := LocationsForToolCall(event.Call)
@@ -218,7 +212,7 @@ func (s *Session) ExecutePrompt(
 				},
 			})
 
-		case applicationturn.EventToolResult:
+		case app.EventToolResult:
 			callID := event.Result.CallID
 			if callID == "" {
 				callID = event.Call.ID
@@ -226,7 +220,7 @@ func (s *Session) ExecutePrompt(
 			delete(pendingToolCalls, callID)
 			return notifyToolCallUpdate(notifier, s.id, callID, event.Result, event.Err)
 
-		case applicationturn.EventFailed:
+		case app.EventFailed:
 			ids := make([]string, 0, len(pendingToolCalls))
 			for callID := range pendingToolCalls {
 				ids = append(ids, callID)
@@ -245,7 +239,7 @@ func (s *Session) ExecutePrompt(
 				delete(pendingToolCalls, callID)
 			}
 
-		case applicationturn.EventCompleted:
+		case app.EventCompleted:
 			if event.Message.ToolCalls != nil || event.Text != "" {
 				turnMessages = append(turnMessages, event.Message)
 			}

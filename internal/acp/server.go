@@ -12,12 +12,12 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/buildinfo"
 	"github.com/projectTHORN/proton/internal/permission"
 	"github.com/projectTHORN/proton/internal/session"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
-	applicationturn "github.com/projectTHORN/proton/internal/turn"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -31,7 +31,7 @@ var ErrInvalidRequest = errors.New("invalid request")
 type Option func(*Server)
 
 // RunnerFactory creates a model/tool runner bound to one session's service.
-type RunnerFactory func(*toolcall.Service) (applicationturn.Runner, error)
+type RunnerFactory func(*toolcall.Service) (app.Conversation, error)
 
 // WithStore sets the session store for loading, resuming, and listing sessions.
 func WithStore(store session.Repository) Option {
@@ -63,7 +63,7 @@ type Server struct {
 }
 
 // New creates an ACP server over Proton's toolcall service and model runner.
-func New(service *toolcall.Service, registry tool.Registry, runner applicationturn.Runner, opts ...Option) (*Server, error) {
+func New(service *toolcall.Service, registry tool.Registry, runner app.Conversation, opts ...Option) (*Server, error) {
 	if service == nil {
 		return nil, fmt.Errorf("%w: service is required", ErrInvalidServer)
 	}
@@ -81,12 +81,11 @@ func New(service *toolcall.Service, registry tool.Registry, runner applicationtu
 		}
 	}
 	if s.runnerFactory == nil && runner != nil {
-		if loop, ok := runner.(*applicationturn.Loop); ok {
-			s.runnerFactory = func(service *toolcall.Service) (applicationturn.Runner, error) {
-				return loop.CloneWithTools(service)
-			}
-		} else {
-			return nil, fmt.Errorf("%w: runner factory is required for a configured custom runner", ErrInvalidServer)
+		s.runnerFactory = func(service *toolcall.Service) (app.Conversation, error) {
+			return app.CloneConversationWithTools(runner, service)
+		}
+		if _, err := s.runnerFactory(service); err != nil {
+			return nil, fmt.Errorf("%w: runner factory is required for a configured custom runner: %v", ErrInvalidServer, err)
 		}
 	}
 	return s, nil
@@ -496,7 +495,7 @@ func (s *Server) newSession(sessionID string, cwd string) (*Session, error) {
 	if service == nil {
 		return nil, fmt.Errorf("%w: clone session tool-call service", ErrInvalidServer)
 	}
-	var runner applicationturn.Runner
+	var runner app.Conversation
 	if s.runnerFactory != nil {
 		created, err := s.runnerFactory(service)
 		if err != nil {
