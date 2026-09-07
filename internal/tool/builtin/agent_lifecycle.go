@@ -48,7 +48,7 @@ func (h agentLifecycleHandler) Definition() tool.Definition {
 		def.PermissionDetailKey = "agent_id"
 		def.InputSchema = map[string]any{"type": "object", "properties": map[string]any{
 			"agent_id":        map[string]any{"type": "string"},
-			"timeout_seconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 300},
+			"timeout_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 300},
 		}, "required": []string{"agent_id"}, "additionalProperties": false}
 	case "get_agent":
 		def.Description = "Inspect one retained subagent and its terminal result when available."

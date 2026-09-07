@@ -67,7 +67,7 @@ func (listDirHandler) Definition() tool.Definition {
 				},
 				"limit": map[string]any{
 					"type":        "integer",
-					"minimum":     1,
+					"minimum":     0,
 					"maximum":     maxDirectoryEntries,
 					"description": "Maximum visible entries to return; defaults to 1000",
 				},

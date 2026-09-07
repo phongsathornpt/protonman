@@ -58,7 +58,7 @@ func (readFileHandler) Definition() tool.Definition {
 				},
 				"limit": map[string]any{
 					"type":        "integer",
-					"minimum":     1,
+					"minimum":     0,
 					"maximum":     maxReadFileBytes,
 					"description": "Target page size in bytes; defaults to 2 MiB and may extend to finish one UTF-8 code point",
 				},
