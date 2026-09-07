@@ -315,6 +315,31 @@ func TestDefaultRegistryContainsCodingTools(t *testing.T) {
 	}
 }
 
+func TestBuiltinInputSchemasRejectUnknownProperties(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	coord := agent.NewCoordinator(nil, nil, nil, nil)
+	defer coord.Close()
+	registry, err := NewDefaultRegistry(workspaceRoot, testSandboxOption(), testCheckpointOption(), WithAgentCoordinator(coord))
+	if err != nil {
+		t.Fatal(err)
+	}
+	definitions := registry.Definitions()
+	definitions = append(definitions,
+		NewGetTodo(nil).Definition(),
+		NewUpdateTodo(nil).Definition(),
+		NewActivateSkill(nil, workspaceRoot).Definition(),
+	)
+	for _, definition := range definitions {
+		if len(definition.InputSchema) == 0 {
+			continue
+		}
+		got, exists := definition.InputSchema["additionalProperties"]
+		if !exists || got != false {
+			t.Errorf("%s InputSchema additionalProperties = %#v, want false", definition.Name, got)
+		}
+	}
+}
+
 func TestWriteFilePublishesCheckpointID(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	checkpointStore := &recordingCheckpointStore{id: "checkpoint-test"}

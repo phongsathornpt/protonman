@@ -72,6 +72,7 @@ func (listDirHandler) Definition() tool.Definition {
 					"description": "Maximum visible entries to return; defaults to 1000",
 				},
 			},
+			"additionalProperties": false,
 		},
 	}
 }

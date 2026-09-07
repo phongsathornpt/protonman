@@ -63,7 +63,8 @@ func (readFileHandler) Definition() tool.Definition {
 					"description": "Target page size in bytes; defaults to 2 MiB and may extend to finish one UTF-8 code point",
 				},
 			},
-			"required": []string{"path"},
+			"required":             []string{"path"},
+			"additionalProperties": false,
 		},
 	}
 }

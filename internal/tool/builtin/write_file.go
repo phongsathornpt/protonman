@@ -57,7 +57,8 @@ func (writeFileHandler) Definition() tool.Definition {
 					"description": "SHA-256 from a complete read_file result; required when overwriting an existing file",
 				},
 			},
-			"required": []string{"file_path", "content"},
+			"required":             []string{"file_path", "content"},
+			"additionalProperties": false,
 		},
 	}
 }
