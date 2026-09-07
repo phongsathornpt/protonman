@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -87,6 +88,47 @@ func TestE2ETurnLoopMultiRoundChain(t *testing.T) {
 	}
 	if !strings.Contains(res.stdout, "The file contains Hello Proton E2E.") {
 		t.Fatalf("stdout missing final summary: %s", res.stdout)
+	}
+}
+
+func TestE2ETurnLoopContinuesBeyondLegacyRoundLimit(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+
+	server := newMockLLMServer(t)
+	server.SetupWorkspaceConfig(t, home)
+
+	const toolRounds = 25
+	for i := 1; i <= toolRounds; i++ {
+		name := fmt.Sprintf("round-%02d.txt", i)
+		if err := os.WriteFile(filepath.Join(ws, name), []byte(fmt.Sprintf("round %d", i)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		server.AddToolCallResponse(
+			fmt.Sprintf("read-%02d", i),
+			"read_file",
+			fmt.Sprintf(`{"path":%q}`, name),
+		)
+	}
+	server.AddTextResponse("Completed the long multi-round inspection.")
+
+	res := runProton(t, runOptions{
+		args: []string{"-y", "-p", "Inspect every round file and report when complete"},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 {
+		t.Fatalf("long multi-round turn failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "Completed the long multi-round inspection.") {
+		t.Fatalf("stdout missing final response: %s", res.stdout)
+	}
+	requests := server.Requests()
+	if got, want := len(requests), toolRounds+1; got != want {
+		t.Fatalf("model requests = %d, want %d", got, want)
+	}
+	if got := requestToolCount(requests[toolRounds-1]); got == 0 {
+		t.Fatalf("round %d unexpectedly had tools disabled", toolRounds)
 	}
 }
 
