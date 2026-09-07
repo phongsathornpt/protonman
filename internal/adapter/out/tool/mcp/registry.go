@@ -116,7 +116,11 @@ func Discover(ctx context.Context, registry tool.BatchRegistrar, servers ...Serv
 				return fmt.Errorf("%w: %s", ErrDuplicateDiscoveredTool, name)
 			}
 			seenNames[name] = struct{}{}
-			handlers = append(handlers, newHandler(server, serverName, manifest, name))
+			handler, err := newHandler(server, serverName, manifest, name)
+			if err != nil {
+				return fmt.Errorf("clone MCP tool %q schemas: %w", name, err)
+			}
+			handlers = append(handlers, handler)
 		}
 	}
 
@@ -162,24 +166,26 @@ func newHandler(
 	serverName string,
 	manifest Tool,
 	name string,
-) tool.Handler {
+) (tool.Handler, error) {
 	description := strings.TrimSpace(manifest.Description)
 	if description == "" {
 		description = "MCP tool " + name
 	}
-	return serverToolHandler{
-		server:     server,
-		serverName: serverName,
-		manifest:   manifest,
-		definition: tool.Definition{
-			Name:         name,
-			Description:  description,
-			Kind:         tool.KindMCP,
-			Mutability:   manifest.Mutability,
-			InputSchema:  deepCloneSchema(manifest.InputSchema),
-			OutputSchema: deepCloneSchema(manifest.OutputSchema),
-		},
+	inputSchema, err := cloneMCPSchema(manifest.InputSchema)
+	if err != nil {
+		return nil, fmt.Errorf("input schema: %w", err)
 	}
+	outputSchema, err := cloneMCPSchema(manifest.OutputSchema)
+	if err != nil {
+		return nil, fmt.Errorf("output schema: %w", err)
+	}
+	return serverToolHandler{
+		server: server, serverName: serverName, manifest: manifest,
+		definition: tool.Definition{
+			Name: name, Description: description, Kind: tool.KindMCP, Mutability: manifest.Mutability,
+			InputSchema: inputSchema, OutputSchema: outputSchema,
+		},
+	}, nil
 }
 
 func (h serverToolHandler) Definition() tool.Definition {
@@ -248,27 +254,19 @@ func validToolName(value string) (string, error) {
 	return trimmed, nil
 }
 
-func deepCloneSchema(schema map[string]any) map[string]any {
+func cloneMCPSchema(schema map[string]any) (map[string]any, error) {
 	if schema == nil {
-		return map[string]any{}
+		return map[string]any{}, nil
 	}
 	data, err := json.Marshal(schema)
 	if err != nil {
-		clone := make(map[string]any, len(schema))
-		for key, value := range schema {
-			clone[key] = value
-		}
-		return clone
+		return nil, fmt.Errorf("schema is not JSON-compatible: %w", err)
 	}
 	var clone map[string]any
 	if err := json.Unmarshal(data, &clone); err != nil {
-		clone := make(map[string]any, len(schema))
-		for key, value := range schema {
-			clone[key] = value
-		}
-		return clone
+		return nil, fmt.Errorf("decode cloned schema: %w", err)
 	}
-	return clone
+	return clone, nil
 }
 
 var _ tool.Handler = serverToolHandler{}

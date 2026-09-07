@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/adapter/out/tool/builtin"
 	"github.com/projectTHORN/proton/internal/core/permission"
 	domaintool "github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/adapter/out/tool/builtin"
 	"github.com/projectTHORN/proton/internal/engine/toolcall"
 )
 
@@ -637,5 +637,21 @@ func TestDiscoverReturnsWhenContextCanceledEvenIfServerIgnoresIt(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Discover waited for a server that ignored cancellation")
+	}
+}
+
+func TestDiscoverRejectsNonJSONSchemaWithoutRegistration(t *testing.T) {
+	server := &fakeServer{name: "bad-json", tools: []Tool{{
+		Name: "bad", InputSchema: map[string]any{"type": "object", "x-invalid": func() {}},
+	}}}
+	registry, err := builtin.NewRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Discover(context.Background(), registry, server); err == nil || !strings.Contains(err.Error(), "not JSON-compatible") {
+		t.Fatalf("Discover error = %v", err)
+	}
+	if got := len(registry.Definitions()); got != 0 {
+		t.Fatalf("definitions = %d, want 0", got)
 	}
 }
