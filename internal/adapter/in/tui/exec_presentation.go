@@ -14,17 +14,19 @@ const (
 	execFamilyGo      execFamily = "go"
 	execFamilyBun     execFamily = "bun"
 	execFamilyNode    execFamily = "node"
+	execFamilyPython  execFamily = "python"
 	execFamilyVite    execFamily = "vite"
 	execFamilyNext    execFamily = "next"
 )
 
 type execPresentation struct {
-	Family      execFamily
-	Action      string
-	Title       string
-	Summary     string
-	Details     []string
-	SuppressRaw bool
+	Family         execFamily
+	Action         string
+	Title          string
+	Summary        string
+	SuccessSummary string
+	Details        []string
+	SuppressRaw    bool
 }
 
 func presentExec(command, stdout, stderr string) execPresentation {
@@ -54,6 +56,8 @@ func presentExec(command, stdout, stderr string) execPresentation {
 		summarizeBunExec(&p, combined)
 	case execFamilyNode:
 		summarizeNodeExec(&p, combined)
+	case execFamilyPython:
+		summarizePythonExec(&p, combined)
 	case execFamilyVite:
 		summarizeViteExec(&p, combined)
 	case execFamilyNext:
@@ -69,6 +73,10 @@ func classifyExecCommand(command string) (execFamily, string, string) {
 			continue
 		}
 		name, args := unwrapExec(words)
+		if isPythonExecutable(name) {
+			action := pythonAction(args)
+			return execFamilyPython, action, pythonExecTitle(args, action)
+		}
 		switch name {
 		case "git":
 			action := gitAction(args)
@@ -81,7 +89,7 @@ func classifyExecCommand(command string) (execFamily, string, string) {
 			return execFamilyBun, action, execTitle("Bun", strings.Join(args, " "))
 		case "node":
 			action := nodeAction(args)
-			return execFamilyNode, action, execTitle("Node", strings.Join(args, " "))
+			return execFamilyNode, action, nodeExecTitle(args, action)
 		case "npm", "pnpm", "yarn":
 			action := packageRunnerAction(args)
 			label := strings.ToUpper(name[:1]) + name[1:]

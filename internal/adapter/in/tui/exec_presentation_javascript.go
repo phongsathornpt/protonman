@@ -27,17 +27,43 @@ func packageRunnerAction(args []string) string {
 
 func nodeAction(args []string) string {
 	for _, arg := range args {
-		if arg == "--test" || strings.HasPrefix(arg, "--test=") {
+		switch {
+		case arg == "--test" || strings.HasPrefix(arg, "--test="):
 			return "test"
-		}
-		if arg == "--check" {
+		case arg == "--check" || arg == "-c":
 			return "check"
+		case arg == "-e" || arg == "--eval":
+			return "eval"
+		case arg == "-p" || arg == "--print":
+			return "print"
 		}
 	}
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		return args[0]
 	}
 	return ""
+}
+
+func nodeExecTitle(args []string, action string) string {
+	switch action {
+	case "test":
+		return "Node test"
+	case "eval":
+		return "Node eval"
+	case "print":
+		return "Node print"
+	case "check":
+		for i, arg := range args {
+			if (arg == "--check" || arg == "-c") && i+1 < len(args) {
+				return execTitle("Node check", args[i+1])
+			}
+		}
+		return "Node check"
+	}
+	if action != "" {
+		return execTitle("Node", action)
+	}
+	return "Node"
 }
 
 func frameworkAction(action, command, framework string) string {
@@ -87,21 +113,25 @@ func summarizeBunExec(p *execPresentation, output string) {
 }
 
 func summarizeNodeExec(p *execPresentation, output string) {
-	if p.Action != "test" {
-		return
-	}
-	passed := firstRegexpInt(nodePassRE, output)
-	failed := firstRegexpInt(nodeFailRE, output)
-	if passed >= 0 || failed >= 0 {
-		parts := []string{}
-		if passed >= 0 {
-			parts = append(parts, fmt.Sprintf("%d passed", passed))
+	switch p.Action {
+	case "test":
+		passed := firstRegexpInt(nodePassRE, output)
+		failed := firstRegexpInt(nodeFailRE, output)
+		if passed >= 0 || failed >= 0 {
+			parts := []string{}
+			if passed >= 0 {
+				parts = append(parts, fmt.Sprintf("%d passed", passed))
+			}
+			if failed > 0 {
+				parts = append(parts, fmt.Sprintf("%d failed", failed))
+			}
+			p.Summary = strings.Join(parts, " · ")
+			p.SuppressRaw = failed <= 0
 		}
-		if failed > 0 {
-			parts = append(parts, fmt.Sprintf("%d failed", failed))
+	case "check":
+		if strings.TrimSpace(output) == "" {
+			p.SuccessSummary = "valid syntax"
 		}
-		p.Summary = strings.Join(parts, " · ")
-		p.SuppressRaw = failed <= 0
 	}
 }
 
