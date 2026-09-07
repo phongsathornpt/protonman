@@ -1,4 +1,4 @@
-package builtin
+package skilltool
 
 import (
 	"context"

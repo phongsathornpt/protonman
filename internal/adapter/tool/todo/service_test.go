@@ -1,4 +1,4 @@
-package builtin
+package todotool
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"github.com/projectTHORN/proton/internal/permission"
 	tododomain "github.com/projectTHORN/proton/internal/todo"
 	"github.com/projectTHORN/proton/internal/tool"
+	"github.com/projectTHORN/proton/internal/tool/builtin"
 	"github.com/projectTHORN/proton/internal/toolcall"
 )
 
@@ -16,7 +17,7 @@ func TestTodoToolsValidateStructuredOutputThroughService(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	registry, err := NewRegistry(NewGetTodo(store), NewUpdateTodo(store))
+	registry, err := builtin.NewRegistry(NewGetTodo(store), NewUpdateTodo(store))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +56,7 @@ func TestGetTodoEmptySnapshotValidatesStructuredOutputThroughService(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	registry, err := NewRegistry(NewGetTodo(store))
+	registry, err := builtin.NewRegistry(NewGetTodo(store))
 	if err != nil {
 		t.Fatal(err)
 	}
