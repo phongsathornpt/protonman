@@ -450,3 +450,115 @@ func TestOpenCodeProviderIdentityIsPreserved(t *testing.T) {
 		t.Fatalf("provider = %q", model.Provider())
 	}
 }
+
+func TestOpenCodeFreeUsageLimitDoesNotConsumeRetryBudget(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.Header().Set("Retry-After", "3600")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(w, `{"error":{"type":"FreeUsageLimitError","message":"quota exhausted"}}`)
+	}))
+	defer server.Close()
+	model := NewProvider(ProviderOptions{ProviderName: "opencode", BaseURL: server.URL, MaxRetries: 3, RetryBackoff: time.Millisecond}).Model("free")
+	_, _ = model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if attempts != 1 {
+		t.Fatalf("attempts = %d, want 1", attempts)
+	}
+}
+
+func TestOpenCodeTransientRateLimitRespectsShortReset(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts == 1 {
+			w.Header().Set("X-RateLimit-Reset", "5ms")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = io.WriteString(w, `{"error":{"type":"rate_limit_error","message":"slow down"}}`)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
+	}))
+	defer server.Close()
+	model := NewProvider(ProviderOptions{ProviderName: "opencode", BaseURL: server.URL, MaxRetries: 2, RetryBackoff: time.Second}).Model("test")
+	stream, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+}
+
+func TestOpenCodeLongRetryAfterReturnsImmediately(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.Header().Set("Retry-After", "60")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(w, `{"error":{"type":"rate_limit_error","message":"slow down"}}`)
+	}))
+	defer server.Close()
+	model := NewProvider(ProviderOptions{ProviderName: "opencode", BaseURL: server.URL, MaxRetries: 3, MaxRetryAfter: 10 * time.Millisecond}).Model("test")
+	_, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err == nil || attempts != 1 {
+		t.Fatalf("err=%v attempts=%d", err, attempts)
+	}
+}
+
+func TestOpenCodeGoUsageLimitWindows(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		want sdk.RateLimitKind
+	}{
+		{"5 hour", sdk.RateLimitGoFiveHour},
+		{"weekly", sdk.RateLimitGoWeekly},
+		{"monthly", sdk.RateLimitGoMonthly},
+		{"daily", sdk.RateLimitUnknownQuota},
+	} {
+		body := []byte(`{"error":{"type":"GoUsageLimitError","message":"usage exhausted"},"metadata":{"limitName":"` + tc.name + `"}}`)
+		err := providerError("opencode", http.StatusTooManyRequests, body, nil)
+		if err.RateLimit == nil || err.RateLimit.Kind != tc.want || err.Retryable {
+			t.Fatalf("limit %q = %#v", tc.name, err)
+		}
+	}
+}
+
+func TestOpenCodeStreamGoUsageLimitPreservesMetadata(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"error\":{\"type\":\"GoUsageLimitError\",\"message\":\"usage exhausted\",\"metadata\":{\"limitName\":\"monthly\"}}}\n\n")
+	}))
+	defer server.Close()
+	stream, err := NewProvider(ProviderOptions{ProviderName: "opencode", BaseURL: server.URL}).Model("test").Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	_, err = stream.Next(context.Background())
+	var providerErr *sdk.ProviderError
+	if !errors.As(err, &providerErr) || providerErr.RateLimit == nil || providerErr.RateLimit.Kind != sdk.RateLimitGoMonthly {
+		t.Fatalf("stream error = %#v (%v)", providerErr, err)
+	}
+}
+
+func TestOpenCodeSuccessfulResponsePublishesRateLimitMetadata(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Limit", "100")
+		w.Header().Set("X-RateLimit-Remaining", "42")
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
+	}))
+	defer server.Close()
+	stream, err := NewProvider(ProviderOptions{ProviderName: "opencode", BaseURL: server.URL}).Model("test").Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := collectEvents(t, stream)
+	raw := string(events[len(events)-1].ProviderMetadata["opencode"])
+	if !strings.Contains(raw, `"rate_limit"`) || !strings.Contains(raw, `"remaining":42`) {
+		t.Fatalf("metadata = %s", raw)
+	}
+}

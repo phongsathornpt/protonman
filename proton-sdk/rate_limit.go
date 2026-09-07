@@ -32,13 +32,13 @@ const (
 )
 
 type RateLimitInfo struct {
-	Kind       RateLimitKind
-	Scope      RateLimitScope
-	LimitName  string
-	RetryAfter time.Duration
-	ResetAt    time.Time
-	Limit      *int64
-	Remaining  *int64
+	Kind       RateLimitKind  `json:"kind,omitempty"`
+	Scope      RateLimitScope `json:"scope,omitempty"`
+	LimitName  string         `json:"limit_name,omitempty"`
+	RetryAfter time.Duration  `json:"retry_after,omitempty"`
+	ResetAt    time.Time      `json:"reset_at,omitempty"`
+	Limit      *int64         `json:"limit,omitempty"`
+	Remaining  *int64         `json:"remaining,omitempty"`
 }
 
 func ParseRateLimitHeaders(headers http.Header, now time.Time) *RateLimitInfo {
