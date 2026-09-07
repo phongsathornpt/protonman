@@ -249,6 +249,7 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 			}
 			return ""
 		}(),
+		Pagination: paginationState(truncated, "offset", nextOffset, nil, continuation),
 	}, nil
 }
 func readFileLines(ctx context.Context, file *os.File, input readFileInput, call tool.Call) (tool.Result, error) {

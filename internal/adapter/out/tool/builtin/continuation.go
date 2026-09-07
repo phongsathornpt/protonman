@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"github.com/projectTHORN/proton/internal/core/tool"
 )
 
 func continuationToken(toolName string, query any, snapshot string) (string, error) {
@@ -40,4 +42,11 @@ func directorySnapshot(ctx context.Context, root string, entries []os.DirEntry) 
 		_, _ = fmt.Fprintf(hash, "%s\x00%d\x00%d\x00%d\n", entry.Name(), info.Size(), info.ModTime().UnixNano(), uint32(info.Mode()))
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+func paginationState(truncated bool, kind string, nextOffset *int64, nextLine *int, continuation string) *tool.Pagination {
+	if !truncated {
+		return nil
+	}
+	return &tool.Pagination{Kind: kind, NextOffset: nextOffset, NextLine: nextLine, Continuation: continuation}
 }

@@ -484,6 +484,14 @@ func (d Definition) Validate() error {
 	return nil
 }
 
+// Pagination describes machine-readable continuation state for bounded tool output.
+type Pagination struct {
+	Kind         string `json:"kind"`
+	NextOffset   *int64 `json:"next_offset,omitempty"`
+	NextLine     *int   `json:"next_line,omitempty"`
+	Continuation string `json:"continuation,omitempty"`
+}
+
 // Result is the model-facing output of a tool execution.
 type Result struct {
 	// CallID identifies the originating call.
@@ -511,8 +519,10 @@ type Result struct {
 	Truncated bool `json:"truncated,omitempty"`
 	// NextOffset is the continuation offset for pageable tools when Truncated is true.
 	NextOffset *int64 `json:"next_offset,omitempty"`
-	// Continuation binds a truncated page to its query and filesystem snapshot.
+	// Continuation is the legacy flat cursor view retained for compatibility.
 	Continuation string `json:"continuation,omitempty"`
+	// Pagination is the canonical machine-readable continuation state.
+	Pagination *Pagination `json:"pagination,omitempty"`
 	// Failure is populated when a tool call fails or is denied.
 	Failure *Failure `json:"error,omitempty"`
 	// SHA256 identifies the complete file content when a tool can prove a full-file snapshot.
