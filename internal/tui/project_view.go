@@ -6,29 +6,29 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/app/appdirs"
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/envconfig"
-	projectdomain "github.com/projectTHORN/proton/internal/project"
 )
 
 const projectViewID = "project"
 
 type projectInitializedMsg struct {
-	result projectdomain.InitResult
+	result app.ProjectInitResult
 	err    error
 }
 
 type projectLoadedMsg struct {
 	requestID uint64
-	state     projectdomain.State
+	state     app.ProjectState
 	err       error
 }
 
 type projectPaneView struct {
 	requestID uint64
 	loading   bool
-	state     projectdomain.State
+	state     app.ProjectState
 	err       error
 	notice    string
 }
@@ -129,7 +129,7 @@ func (v *projectPaneView) reload(m *bubbleModel) tea.Cmd {
 	requestID := v.requestID
 	sources := append([]string(nil), m.projectConfigSources...)
 	return func() tea.Msg {
-		state, err := projectdomain.Discover(m.ctx, projectdomain.Options{
+		state, err := (app.Projects{}).Discover(m.ctx, app.ProjectDiscoveryOptions{
 			WorkDir:       m.workDir,
 			Trusted:       m.projectTrusted,
 			ConfigSources: sources,
@@ -149,7 +149,7 @@ func (m *bubbleModel) initProject() tea.Cmd {
 	view.notice = ""
 	m.relayout()
 	return func() tea.Msg {
-		result, err := projectdomain.Init(m.ctx, m.workDir)
+		result, err := (app.Projects{}).Init(m.ctx, m.workDir)
 		return projectInitializedMsg{result: result, err: err}
 	}
 }
