@@ -49,3 +49,30 @@ func TestTodoToolsValidateStructuredOutputThroughService(t *testing.T) {
 		t.Fatal("update_todo structured output is empty")
 	}
 }
+
+func TestGetTodoEmptySnapshotValidatesStructuredOutputThroughService(t *testing.T) {
+	store, err := tododomain.NewStore(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := NewRegistry(NewGetTodo(store))
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := permission.NewPolicy(permission.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := toolcall.NewService(registry, policy, toolcall.WithMode(permission.ModeAlwaysApprove))
+	if err != nil {
+		t.Fatal(err)
+	}
+	call, _ := tool.NewCall("todo-empty", "get_todo", json.RawMessage(`{}`))
+	result, err := service.Call(context.Background(), call)
+	if err != nil {
+		t.Fatalf("empty get_todo through service: %v", err)
+	}
+	if got := string(result.StructuredOutput); got != `{"revision":0,"items":[]}` {
+		t.Fatalf("structured output = %s, want empty items array", got)
+	}
+}

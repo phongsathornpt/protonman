@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -738,6 +739,9 @@ func TestServiceValidatesStructuredOutputSchema(t *testing.T) {
 	}
 	if result.Failure == nil || result.Failure.Code != tool.ErrorCodeInvalidOutput {
 		t.Fatalf("failure = %#v, want invalid_output", result.Failure)
+	}
+	if !strings.Contains(err.Error(), "at '/count'") || !strings.Contains(err.Error(), "want number") {
+		t.Fatalf("output schema error missing validation detail: %v", err)
 	}
 }
 

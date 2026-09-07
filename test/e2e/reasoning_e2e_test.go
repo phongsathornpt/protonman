@@ -45,6 +45,31 @@ func TestE2EReasoningGeminiProfileReachesWire(t *testing.T) {
 	assertNoSamplingControls(t, requests)
 }
 
+func TestE2EGeminiOpenAIGetTodoEmptySnapshot(t *testing.T) {
+	ws, home := newTestWorkspace(t), newTestHome(t)
+	server := newMockLLMServer(t)
+	writeReasoningConfig(t, home, server.URL(), "openai", "gemini-3.8-flash", "dex", "")
+	server.AddToolCallResponse("todo-ground", "read_file", `{"path":"hello.txt"}`)
+	server.AddToolCallResponse("todo-empty", "get_todo", `{}`)
+	server.AddTextResponse("done")
+
+	res := runProton(t, runOptions{
+		args: []string{"-y", "-p", "Inspect hello.txt, read the current task plan, then answer done"},
+		dir:  ws,
+		env:  []string{"PROTON_HOME=" + home},
+	})
+	if res.exitCode != 0 {
+		t.Fatalf("Gemini get_todo empty snapshot run failed: %s %s", res.stdout, res.stderr)
+	}
+	requests := server.Requests()
+	if len(requests) != 3 {
+		t.Fatalf("request count = %d, want 3: %#v", len(requests), requests)
+	}
+	if !requestMessagesContain(requests[2], `"items":[]`) {
+		t.Fatalf("follow-up request missing empty todo array structured output: %#v", requests[2]["messages"])
+	}
+}
+
 func TestE2EReasoningGeminiRejectsUnsupportedExplicitLevelBeforeHTTP(t *testing.T) {
 	ws, home := newTestWorkspace(t), newTestHome(t)
 	server := newMockLLMServer(t)

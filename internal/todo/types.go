@@ -69,9 +69,6 @@ func ValidateItems(items []Item) error {
 }
 
 func CloneItems(items []Item) []Item {
-	if len(items) == 0 {
-		return nil
-	}
 	out := make([]Item, len(items))
 	copy(out, items)
 	return out
