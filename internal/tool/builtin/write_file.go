@@ -101,9 +101,9 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 			return tool.Result{}, tool.NewToolError(tool.ErrorCodeConflict, "write_file target changed since it was read; refresh the file and retry")
 		}
 	}
-	checkpointID, err := h.checkpoints.Capture(ctx, []string{resolvedPath})
+	checkpointID, err := prepareWorkspaceMutation(ctx, h.workspace, h.checkpoints, h.Definition().Safety, nil, []string{resolvedPath})
 	if err != nil {
-		return tool.Result{}, fmt.Errorf("checkpoint %q: %w", input.FilePath, err)
+		return tool.Result{}, err
 	}
 	displayPath := input.FilePath
 	if rel, relErr := h.workspace.RelRead(resolvedPath); relErr == nil && rel != "" {
@@ -119,11 +119,12 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	h.workspace.MarkMutationOwned(ctx, resolvedPath)
 	newDigest := sha256.Sum256([]byte(input.Content))
 	return tool.Result{
-		CallID:        call.ID,
-		ToolName:      call.Name,
-		Output:        fmt.Sprintf("Wrote file successfully to %s.", displayPath),
-		SHA256:        fmt.Sprintf("%x", newDigest[:]),
-		CheckpointID:  checkpointID,
-		AffectedPaths: []string{displayPath},
+		CallID:           call.ID,
+		ToolName:         call.Name,
+		Output:           fmt.Sprintf("Wrote file successfully to %s.", displayPath),
+		SHA256:           fmt.Sprintf("%x", newDigest[:]),
+		CheckpointID:     checkpointID,
+		MutationCoverage: tool.MutationCoverageFull,
+		AffectedPaths:    []string{displayPath},
 	}, nil
 }

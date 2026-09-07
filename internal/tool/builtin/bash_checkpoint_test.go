@@ -4,6 +4,8 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+
+	"github.com/projectTHORN/proton/internal/tool"
 )
 
 func TestBashCheckpointsProvenRemoveMutation(t *testing.T) {
@@ -17,6 +19,9 @@ func TestBashCheckpointsProvenRemoveMutation(t *testing.T) {
 	}
 	if result.CheckpointID != store.id {
 		t.Fatalf("checkpoint id = %q, want %q", result.CheckpointID, store.id)
+	}
+	if result.MutationCoverage != tool.MutationCoverageFull {
+		t.Fatalf("mutation coverage = %q, want full", result.MutationCoverage)
 	}
 	want := filepath.Join(ws.Root(), "remove.txt")
 	if len(store.paths) != 1 || store.paths[0] != want {
@@ -60,5 +65,8 @@ func TestBashUnknownMutationDoesNotClaimCheckpointCoverage(t *testing.T) {
 	}
 	if result.CheckpointID != "" || len(store.paths) != 0 {
 		t.Fatalf("unknown mutation claimed checkpoint coverage: id=%q paths=%#v", result.CheckpointID, store.paths)
+	}
+	if result.MutationCoverage != tool.MutationCoverageUnknown {
+		t.Fatalf("mutation coverage = %q, want unknown", result.MutationCoverage)
 	}
 }

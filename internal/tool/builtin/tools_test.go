@@ -350,6 +350,9 @@ func TestWriteFilePublishesCheckpointID(t *testing.T) {
 	if result.CheckpointID != checkpointStore.id {
 		t.Fatalf("checkpoint ID = %q, want %q", result.CheckpointID, checkpointStore.id)
 	}
+	if result.MutationCoverage != tool.MutationCoverageFull {
+		t.Fatalf("mutation coverage = %q, want full", result.MutationCoverage)
+	}
 	if len(result.AffectedPaths) != 1 || result.AffectedPaths[0] != "checkpointed.txt" {
 		t.Fatalf("affected paths = %#v, want checkpointed.txt", result.AffectedPaths)
 	}
