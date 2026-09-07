@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/model"
+	"github.com/projectTHORN/proton/internal/adapter/out/model"
 )
 
 // ModelDiscoveryRequest describes one provider catalog lookup.

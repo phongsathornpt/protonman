@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	todotool "github.com/projectTHORN/proton/internal/adapter/tool/todo"
-	"github.com/projectTHORN/proton/internal/permission"
-	tododomain "github.com/projectTHORN/proton/internal/todo"
-	"github.com/projectTHORN/proton/internal/tool"
-	"github.com/projectTHORN/proton/internal/adapter/tool/builtin"
-	"github.com/projectTHORN/proton/internal/toolcall"
+	todotool "github.com/projectTHORN/proton/internal/adapter/out/tool/todo"
+	"github.com/projectTHORN/proton/internal/core/permission"
+	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
+	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/projectTHORN/proton/internal/adapter/out/tool/builtin"
+	"github.com/projectTHORN/proton/internal/engine/toolcall"
 )
 
 func TestE2ETodoToolPersistsAcrossRestart(t *testing.T) {

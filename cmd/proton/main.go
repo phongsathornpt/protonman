@@ -10,13 +10,13 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/projectTHORN/proton/internal/acp"
+	"github.com/projectTHORN/proton/internal/adapter/in/acp"
 	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/base/envconfig"
-	"github.com/projectTHORN/proton/internal/session"
-	"github.com/projectTHORN/proton/internal/telemetry"
-	"github.com/projectTHORN/proton/internal/toolcall"
-	"github.com/projectTHORN/proton/internal/tui"
+	"github.com/projectTHORN/proton/internal/core/session"
+	"github.com/projectTHORN/proton/internal/platform/telemetry"
+	"github.com/projectTHORN/proton/internal/engine/toolcall"
+	"github.com/projectTHORN/proton/internal/adapter/in/tui"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 

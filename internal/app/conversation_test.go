@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/agent"
+	"github.com/projectTHORN/proton/internal/feature/agent"
 )
 
 func TestPrimaryConversationProfileDoesNotBecomeSubagentRole(t *testing.T) {

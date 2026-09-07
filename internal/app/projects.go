@@ -3,9 +3,9 @@ package app
 import (
 	"context"
 
-	"github.com/projectTHORN/proton/internal/config"
-	"github.com/projectTHORN/proton/internal/permission"
-	"github.com/projectTHORN/proton/internal/project"
+	"github.com/projectTHORN/proton/internal/adapter/out/config"
+	"github.com/projectTHORN/proton/internal/core/permission"
+	"github.com/projectTHORN/proton/internal/feature/project"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
