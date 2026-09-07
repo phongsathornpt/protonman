@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/headless"
 	"github.com/projectTHORN/proton/internal/session"
 	"github.com/projectTHORN/proton/internal/skill"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/toolcall"
-	"github.com/projectTHORN/proton/internal/turn"
 )
 
 func runHeadless(
@@ -23,7 +23,7 @@ func runHeadless(
 	state session.State,
 	prompt string,
 	outputFormat string,
-	turnRunner turn.Runner,
+	turnRunner app.Conversation,
 ) error {
 	format, err := headless.ParseFormat(outputFormat)
 	if err != nil {

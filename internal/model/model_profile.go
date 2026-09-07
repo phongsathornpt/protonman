@@ -8,6 +8,29 @@ import (
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
+// Provider-neutral model types and aliases owned by proton-sdk.
+type Role = sdk.Role
+
+const (
+	RoleSystem    = sdk.RoleSystem
+	RoleUser      = sdk.RoleUser
+	RoleAssistant = sdk.RoleAssistant
+	RoleTool      = sdk.RoleTool
+)
+
+type ContentPartType = sdk.ContentPartType
+
+const (
+	ContentPartText  = sdk.ContentPartText
+	ContentPartImage = sdk.ContentPartImage
+)
+
+type ContentPart = sdk.ContentPart
+type ToolCall = sdk.ToolCall
+type Message = sdk.Message
+
+func CloneMessages(messages []Message) []Message { return sdk.CloneMessages(messages) }
+
 type ResolvedRemoteMetadata struct {
 	ID       string
 	Name     string
