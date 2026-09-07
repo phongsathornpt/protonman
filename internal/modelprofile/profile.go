@@ -96,6 +96,31 @@ type CatalogReasoning struct {
 	Default   sdk.ReasoningEffort   `json:"default,omitempty"`
 }
 
+func NormalizeCatalogReasoning(value *CatalogReasoning) *CatalogReasoning {
+	if value == nil {
+		return nil
+	}
+	normalized := &CatalogReasoning{Supported: value.Supported}
+	if value.Supported != nil && !*value.Supported {
+		return normalized
+	}
+	seen := make(map[sdk.ReasoningEffort]struct{}, len(value.Levels))
+	for _, effort := range value.Levels {
+		if !effort.Valid() || effort == sdk.ReasoningDefault {
+			continue
+		}
+		if _, ok := seen[effort]; ok {
+			continue
+		}
+		seen[effort] = struct{}{}
+		normalized.Levels = append(normalized.Levels, effort)
+	}
+	if value.Default.Valid() && value.Default != sdk.ReasoningDefault {
+		normalized.Default = value.Default
+	}
+	return normalized
+}
+
 type CatalogMetadata struct {
 	Tools              *bool
 	Vision             *bool
