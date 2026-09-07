@@ -49,11 +49,14 @@ func TestFilterRegistryForCanonicalProfiles(t *testing.T) {
 		"bash":          dummyHandler{def: tool.Definition{Name: "bash", Kind: tool.KindBash}},
 		"delegate_task": dummyHandler{def: tool.Definition{Name: "delegate_task", Kind: tool.KindAgent}},
 		"update_todo":   dummyHandler{def: tool.Definition{Name: "update_todo", Kind: tool.KindTask}},
+		"mcp.read":      dummyHandler{def: tool.Definition{Name: "mcp.read", Kind: tool.KindMCP, Mutability: tool.MutabilityReadOnly}},
+		"mcp.write":     dummyHandler{def: tool.Definition{Name: "mcp.write", Kind: tool.KindMCP, Mutability: tool.MutabilityMutating}},
+		"mcp.unknown":   dummyHandler{def: tool.Definition{Name: "mcp.unknown", Kind: tool.KindMCP}},
 	}}
 
 	for _, profile := range []Profile{ProfilePOW, ProfileDEX} {
 		scoped := FilterRegistryForProfile(baseReg, profile)
-		for _, name := range []string{"read_file", "find_files", "grep", "web_fetch", "web_search", "write_file", "bash"} {
+		for _, name := range []string{"read_file", "find_files", "grep", "web_fetch", "web_search", "write_file", "bash", "mcp.read", "mcp.write", "mcp.unknown"} {
 			if _, ok := scoped.Lookup(name); !ok {
 				t.Errorf("%s missing tool %s", profile, name)
 			}
@@ -66,12 +69,12 @@ func TestFilterRegistryForCanonicalProfiles(t *testing.T) {
 	}
 
 	intScoped := FilterRegistryForProfile(baseReg, ProfileINT)
-	for _, name := range []string{"read_file", "find_files", "grep", "web_fetch", "web_search"} {
+	for _, name := range []string{"read_file", "find_files", "grep", "web_fetch", "web_search", "mcp.read"} {
 		if _, ok := intScoped.Lookup(name); !ok {
 			t.Errorf("int missing tool %s", name)
 		}
 	}
-	for _, name := range []string{"write_file", "bash", "delegate_task", "update_todo"} {
+	for _, name := range []string{"write_file", "bash", "delegate_task", "update_todo", "mcp.write", "mcp.unknown"} {
 		if _, ok := intScoped.Lookup(name); ok {
 			t.Errorf("int must not expose %s", name)
 		}
