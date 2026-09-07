@@ -38,6 +38,7 @@ func (readFileHandler) Definition() tool.Definition {
 		Description:         "Read a UTF-8 text file from the current workspace.",
 		Kind:                tool.KindRead,
 		Mutability:          tool.MutabilityReadOnly,
+		Evidence:            tool.EvidenceWorkspace,
 		PermissionDetailKey: "path",
 		InputSchema: map[string]any{
 			"type": "object",

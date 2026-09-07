@@ -620,3 +620,12 @@ func TestReadFileContinuationRejectsChangedFile(t *testing.T) {
 		t.Fatalf("Execute() error = %v, want stale continuation", err)
 	}
 }
+
+func TestWorkspaceObservationToolsDeclareGroundingEvidence(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	for _, handler := range []tool.Handler{NewReadFile(ws), NewListDir(ws), NewGrep(ws)} {
+		if got := handler.Definition().Evidence; got != tool.EvidenceWorkspace {
+			t.Fatalf("%s evidence = %q, want workspace", handler.Definition().Name, got)
+		}
+	}
+}

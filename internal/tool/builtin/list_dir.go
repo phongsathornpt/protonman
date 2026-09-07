@@ -39,6 +39,7 @@ func (listDirHandler) Definition() tool.Definition {
 		Description:         "List entries in a workspace directory.",
 		Kind:                tool.KindRead,
 		Mutability:          tool.MutabilityReadOnly,
+		Evidence:            tool.EvidenceWorkspace,
 		PermissionDetailKey: "path",
 		InputSchema: map[string]any{
 			"type": "object",

@@ -84,6 +84,7 @@ func (grepHandler) Definition() tool.Definition {
 		Description:         "Search workspace files with a regular expression.",
 		Kind:                tool.KindGrep,
 		Mutability:          tool.MutabilityReadOnly,
+		Evidence:            tool.EvidenceWorkspace,
 		PermissionDetailKey: "path",
 		InputSchema: map[string]any{
 			"type": "object",

@@ -22,9 +22,20 @@ type Mutability string
 // default; caller-bound tools rely on the caller/coordinator deadline instead.
 type ExecutionTimeoutPolicy string
 
+// EvidenceKind declares which empirical state a successful tool result can
+// establish for grounding policy. The zero value intentionally means no
+// grounding evidence; evidence must be declared explicitly.
+type EvidenceKind string
+
 const (
 	ExecutionTimeoutServiceDefault ExecutionTimeoutPolicy = ""
 	ExecutionTimeoutCallerBounded  ExecutionTimeoutPolicy = "caller"
+)
+
+const (
+	EvidenceNone      EvidenceKind = ""
+	EvidenceWorkspace EvidenceKind = "workspace"
+	EvidenceExternal  EvidenceKind = "external"
 )
 
 // CommandEffect classifies the observable state impact of a shell command.
@@ -265,6 +276,10 @@ type Definition struct {
 	// per-tool execution timeout. Orchestration tools may instead rely on a
 	// stricter caller/coordinator deadline.
 	ExecutionTimeoutPolicy ExecutionTimeoutPolicy
+	// Evidence declares which empirical state a successful result establishes.
+	// It is intentionally explicit so planning/status tools cannot accidentally
+	// satisfy workspace-grounding requirements merely because they are read-only.
+	Evidence EvidenceKind
 	// PermissionDetailKey names the JSON argument shown to a permission
 	// prompt and matched by path, command, or domain rules.
 	PermissionDetailKey string
@@ -290,6 +305,9 @@ func (d Definition) Validate() error {
 	}
 	if !validExecutionTimeoutPolicy(d.ExecutionTimeoutPolicy) {
 		return fmt.Errorf("%w: unsupported execution timeout policy %q for %q", ErrInvalidCall, d.ExecutionTimeoutPolicy, d.Name)
+	}
+	if !validEvidenceKind(d.Evidence) {
+		return fmt.Errorf("%w: unsupported evidence kind %q for %q", ErrInvalidCall, d.Evidence, d.Name)
 	}
 	return nil
 }
@@ -374,6 +392,15 @@ func validKind(kind Kind) bool {
 func validExecutionTimeoutPolicy(policy ExecutionTimeoutPolicy) bool {
 	switch policy {
 	case ExecutionTimeoutServiceDefault, ExecutionTimeoutCallerBounded:
+		return true
+	default:
+		return false
+	}
+}
+
+func validEvidenceKind(kind EvidenceKind) bool {
+	switch kind {
+	case EvidenceNone, EvidenceWorkspace, EvidenceExternal:
 		return true
 	default:
 		return false
