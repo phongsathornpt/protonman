@@ -412,7 +412,7 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 	defer executionCancel()
 	result, err := executeHandler(executionCtx, handler, call)
 	if err != nil {
-		if recoveredResult, recoveredErr, recovered := recoverReadOnlyCall(executionCtx, handler, definition, validators, call, err); recovered {
+		if recoveredResult, recoveredErr, recovered := s.recoverReadOnlyCall(executionCtx, telemetry, handler, definition, validators, call, err); recovered {
 			result, err = recoveredResult, recoveredErr
 		}
 	}
@@ -447,11 +447,12 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 	return result, nil
 }
 
-func recoverReadOnlyCall(ctx context.Context, handler tool.Handler, definition tool.Definition, validators compiledToolValidators, call tool.Call, err error) (tool.Result, error, bool) {
+func (s *Service) recoverReadOnlyCall(ctx context.Context, telemetry callTelemetry, handler tool.Handler, definition tool.Definition, validators compiledToolValidators, call tool.Call, err error) (tool.Result, error, bool) {
 	failure := tool.FailureFromError(err)
 	if failure == nil || failure.Recovery == nil || failure.Recovery.Action != "restart_pagination" {
 		return tool.Result{}, nil, false
 	}
+	action := failure.Recovery.Action
 	if failure.Recovery.Tool != definition.Name || tool.EffectiveMutability(definition) != tool.MutabilityReadOnly {
 		return tool.Result{}, nil, false
 	}
@@ -461,9 +462,15 @@ func recoverReadOnlyCall(ctx context.Context, handler tool.Handler, definition t
 			return tool.Result{}, nil, false
 		}
 	}
+	s.observeRecovery(ctx, telemetry, EventRecoveryAttempted, action, nil)
 	retry := call
 	retry.Arguments = recoveryArgs
 	result, retryErr := executeHandler(ctx, handler, retry)
+	if retryErr != nil {
+		s.observeRecovery(ctx, telemetry, EventRecoveryFailed, action, retryErr)
+	} else {
+		s.observeRecovery(ctx, telemetry, EventRecoverySucceeded, action, nil)
+	}
 	return result, retryErr, true
 }
 

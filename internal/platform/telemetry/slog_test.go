@@ -91,3 +91,21 @@ func TestSlogObserverProtectionEventsAreRedactedAndCounted(t *testing.T) {
 		}
 	}
 }
+
+func TestSlogObserverCountsRecoveryLifecycle(t *testing.T) {
+	var output bytes.Buffer
+	observer, err := NewSlogObserver(slog.New(slog.NewJSONHandler(&output, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []toolcall.EventKind{toolcall.EventRecoveryAttempted, toolcall.EventRecoverySucceeded, toolcall.EventRecoveryFailed} {
+		observer.Observe(context.Background(), toolcall.Event{Kind: kind, ToolName: "read_file", RecoveryAction: "restart_pagination"})
+	}
+	counters := observer.Counters()
+	if counters["tool_recovery_attempt_total"] != 1 || counters["tool_recovery_success_total"] != 1 || counters["tool_recovery_failure_total"] != 1 {
+		t.Fatalf("recovery counters = %#v", counters)
+	}
+	if logLine := output.String(); !strings.Contains(logLine, `"recovery_action":"restart_pagination"`) {
+		t.Fatalf("recovery action missing from log: %s", logLine)
+	}
+}

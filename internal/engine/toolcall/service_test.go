@@ -977,3 +977,30 @@ func TestServiceRecoversReadOnlyPaginationOnce(t *testing.T) {
 		t.Fatalf("result = %#v", result)
 	}
 }
+
+func TestServiceEmitsRecoveryLifecycleEvents(t *testing.T) {
+	recoveryArgs := json.RawMessage(`{"path":"file.txt"}`)
+	handler := &fakeHandler{definition: tool.Definition{
+		Name: "read_file", Description: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
+		InputSchema: map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}, "required": []string{"path"}, "additionalProperties": false},
+	}, firstErr: tool.NewToolError(tool.ErrorCodeStaleContinuation, "stale").WithRecovery(tool.Recovery{Action: "restart_pagination", Tool: "read_file", Arguments: recoveryArgs})}
+	observer := &recordingObserver{}
+	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAlwaysApprove), WithObserver(observer))
+	call, _ := tool.NewCall("read-recovery-events", "read_file", json.RawMessage(`{"path":"file.txt"}`))
+	if _, err := service.Call(context.Background(), call); err != nil {
+		t.Fatal(err)
+	}
+	events := observer.Events()
+	var attempted, succeeded bool
+	for _, event := range events {
+		switch event.Kind {
+		case EventRecoveryAttempted:
+			attempted = event.RecoveryAction == "restart_pagination"
+		case EventRecoverySucceeded:
+			succeeded = event.RecoveryAction == "restart_pagination"
+		}
+	}
+	if !attempted || !succeeded {
+		t.Fatalf("recovery events = %#v", events)
+	}
+}
