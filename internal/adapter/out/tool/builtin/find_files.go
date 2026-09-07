@@ -195,6 +195,7 @@ func (h findFilesHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 			}
 			return ""
 		}(),
+		Pagination: paginationState(truncated, "offset", nextOffset, nil, token),
 	}, nil
 }
 
