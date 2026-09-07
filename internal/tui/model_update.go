@@ -93,6 +93,9 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case projectInitializedMsg:
 		return m.updateProjectInitialized(message)
 
+	case projectSettingSavedMsg:
+		return m.updateProjectSettingSaved(message)
+
 	case projectLoadedMsg:
 		return m.updateProjectLoaded(message)
 

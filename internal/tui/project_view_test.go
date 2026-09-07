@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/projectTHORN/proton/internal/config"
 	"github.com/projectTHORN/proton/internal/permission"
 	projectdomain "github.com/projectTHORN/proton/internal/project"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 func TestProjectCommandLoadsTrustedWorkspaceState(t *testing.T) {
@@ -152,5 +154,61 @@ func TestProjectPaneShowsConfigurationProvenance(t *testing.T) {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("project pane missing provenance %q: %q", want, rendered)
 		}
+	}
+}
+
+func TestProjectSetUpdatesTrustedRuntimeAndConfig(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.workDir = t.TempDir()
+	m.projectTrusted = true
+	m.activeProvider = "protonman"
+	m.activeModel = "gemini-3.8-flash"
+
+	for _, tc := range []struct {
+		command string
+		field   string
+	}{
+		{"/project set agent dex", config.FieldAgentProfile},
+		{"/project set thinking high", config.FieldAgentReasoningEffort},
+		{"/project set rounds 33", config.FieldAgentMaxRounds},
+		{"/project set permission always-approve", config.FieldUIPermissionMode},
+	} {
+		cmd := m.executeCommand(tc.command)
+		if cmd == nil {
+			t.Fatalf("%s returned nil", tc.command)
+		}
+		updated, follow := m.Update(cmd())
+		m = updated.(*bubbleModel)
+		if follow != nil {
+			updated, _ = m.Update(follow())
+			m = updated.(*bubbleModel)
+		}
+		if got := m.projectConfigProvenance[tc.field]; got != config.SourceProject {
+			t.Fatalf("%s provenance = %q", tc.field, got)
+		}
+	}
+	if m.agentProfile != "dex" || m.reasoningEffort != sdk.ReasoningHigh || m.maxRounds != 33 || m.service.Mode() != permission.ModeAlwaysApprove {
+		t.Fatalf("project settings not applied to runtime: profile=%q reasoning=%q rounds=%d mode=%s", m.agentProfile, m.reasoningEffort, m.maxRounds, m.service.Mode())
+	}
+	snapshot, err := config.Load(context.Background(), config.Options{HomeDir: t.TempDir(), WorkDir: m.workDir, ProjectTrusted: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Agent.Profile != "dex" || snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh || snapshot.Agent.MaxRounds != 33 || snapshot.Mode != permission.ModeAlwaysApprove {
+		t.Fatalf("project settings not persisted: %#v", snapshot)
+	}
+}
+
+func TestProjectSetRejectsUntrustedWorkspace(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.workDir = t.TempDir()
+	if cmd := m.executeCommand("/project set rounds 20"); cmd != nil {
+		t.Fatal("untrusted project write returned command")
+	}
+	if _, err := os.Stat(appdirs.ProjectConfig(m.workDir)); !os.IsNotExist(err) {
+		t.Fatalf("untrusted project write touched config: %v", err)
+	}
+	if got := plainTranscript(m); !strings.Contains(got, "read-only until the workspace is trusted") {
+		t.Fatalf("missing trust rejection: %q", got)
 	}
 }
