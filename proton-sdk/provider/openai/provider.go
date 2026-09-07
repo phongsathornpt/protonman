@@ -12,14 +12,16 @@ import (
 const DefaultBaseURL = "https://api.openai.com/v1"
 
 type ProviderOptions struct {
-	ProviderName string
-	BaseURL      string
-	APIKey       string
-	HTTPClient   *http.Client
-	UserAgent    string
-	Headers      http.Header
-	MaxRetries   int
-	RetryBackoff time.Duration
+	ProviderName    string
+	BaseURL         string
+	APIKey          string
+	HTTPClient      *http.Client
+	UserAgent       string
+	Headers         http.Header
+	MaxRetries      int
+	RetryBackoff    time.Duration
+	MaxRetryBackoff time.Duration
+	MaxRetryAfter   time.Duration
 }
 
 type Provider struct {
@@ -43,6 +45,12 @@ func NewProvider(options ProviderOptions) *Provider {
 	}
 	if options.RetryBackoff <= 0 {
 		options.RetryBackoff = 500 * time.Millisecond
+	}
+	if options.MaxRetryBackoff <= 0 {
+		options.MaxRetryBackoff = 8 * time.Second
+	}
+	if options.MaxRetryAfter <= 0 {
+		options.MaxRetryAfter = 30 * time.Second
 	}
 	options.Headers = options.Headers.Clone()
 	return &Provider{options: options}

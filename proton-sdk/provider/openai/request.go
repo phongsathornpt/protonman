@@ -101,18 +101,12 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 	if err != nil {
 		return nil, err
 	}
-
-	var lastErr error
-	for attempt := 0; attempt <= m.provider.options.MaxRetries; attempt++ {
-		if attempt > 0 {
-			timer := time.NewTimer(time.Duration(attempt) * m.provider.options.RetryBackoff)
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-				return nil, ctx.Err()
-			case <-timer.C:
-			}
-		}
+	policy := sdk.RetryPolicy{
+		BaseBackoff:   m.provider.options.RetryBackoff,
+		MaxBackoff:    m.provider.options.MaxRetryBackoff,
+		MaxRetryAfter: m.provider.options.MaxRetryAfter,
+	}
+	for attempt := 0; ; attempt++ {
 		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
 		if err != nil {
 			return nil, fmt.Errorf("create model request: %w", err)
@@ -131,26 +125,49 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 			}
 		}
 
-		resp, err := m.provider.options.HTTPClient.Do(httpReq)
-		if err != nil {
-			lastErr = sdk.NewTransportError(m.Provider(), err)
-			continue
+		resp, requestErr := m.provider.options.HTTPClient.Do(httpReq)
+		var providerErr error
+		if requestErr != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			providerErr = sdk.NewTransportError(m.Provider(), requestErr)
+		} else if resp.StatusCode == http.StatusOK {
+			return newStream(resp.Body, responseMetadata(m.Provider(), resp.Header), request.Options.IncludeRawChunks, m.Provider()), nil
+		} else {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+			resp.Body.Close()
+			providerErr = providerError(m.Provider(), resp.StatusCode, body, resp.Header)
 		}
-		if resp.StatusCode == http.StatusOK {
-			return newStream(resp.Body, openAIResponseMetadata(resp.Header), request.Options.IncludeRawChunks, m.Provider()), nil
+		if attempt >= m.provider.options.MaxRetries {
+			return nil, providerErr
 		}
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
-		resp.Body.Close()
-		lastErr = providerError(m.Provider(), resp.StatusCode, body, resp.Header)
-		if !retryableStatus(resp.StatusCode) {
-			return nil, lastErr
+		decision := sdk.DecideRetry(providerErr, attempt+1, policy)
+		if !decision.Retry {
+			return nil, providerErr
+		}
+		if err := waitForRetry(ctx, decision.Delay); err != nil {
+			return nil, err
 		}
 	}
-	return nil, lastErr
 }
 
-func openAIResponseMetadata(headers http.Header) sdk.ProviderMetadata {
-	values := map[string]string{}
+func waitForRetry(ctx context.Context, delay time.Duration) error {
+	if delay <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func responseMetadata(provider string, headers http.Header) sdk.ProviderMetadata {
+	values := map[string]any{}
 	for key, header := range map[string]string{
 		"request_id":    "x-request-id",
 		"organization":  "openai-organization",
@@ -161,6 +178,9 @@ func openAIResponseMetadata(headers http.Header) sdk.ProviderMetadata {
 			values[key] = value
 		}
 	}
+	if rateLimit := sdk.ParseRateLimitHeaders(headers, time.Now()); rateLimit != nil {
+		values["rate_limit"] = rateLimit
+	}
 	if len(values) == 0 {
 		return nil
 	}
@@ -168,7 +188,7 @@ func openAIResponseMetadata(headers http.Header) sdk.ProviderMetadata {
 	if err != nil {
 		return nil
 	}
-	return sdk.ProviderMetadata{"openai": raw}
+	return sdk.ProviderMetadata{provider: raw}
 }
 
 func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, error) {
