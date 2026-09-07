@@ -308,8 +308,8 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 			if label != md.ID && strings.TrimSpace(md.ID) != "" {
 				details = append(details, md.ID)
 			}
-			if resolved.Profile.ContextWindow > 0 {
-				details = append(details, formatContextTokens(resolved.Profile.ContextWindow)+" context")
+			if limits := formatModelTokenLimits(resolved.Profile.ContextWindow, resolved.Profile.MaxInputTokens, resolved.Profile.MaxOutputTokens); limits != "" {
+				details = append(details, limits)
 			}
 			if len(resolved.Features) > 0 {
 				details = append(details, strings.Join(resolved.Features, " · "))
@@ -468,6 +468,20 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 	default:
 		return false, nil
 	}
+}
+
+func formatModelTokenLimits(contextWindow, maxInput, maxOutput int) string {
+	parts := make([]string, 0, 3)
+	if contextWindow > 0 {
+		parts = append(parts, formatContextTokens(contextWindow)+" context")
+	}
+	if maxInput > 0 {
+		parts = append(parts, formatContextTokens(maxInput)+" input")
+	}
+	if maxOutput > 0 {
+		parts = append(parts, formatContextTokens(maxOutput)+" output")
+	}
+	return strings.Join(parts, " · ")
 }
 
 func saveDefaultModelCmd(providerName, modelID string) tea.Cmd {
