@@ -362,7 +362,7 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 		if handler, ok := m.registry.Lookup(name); ok {
 			toolKind = handler.Definition().Kind
 		} else {
-			toolKind = guessToolKind(name)
+			toolKind = tool.KindForName(name)
 		}
 	}
 	summary := summarizeToolOutput(name, toolKind, target, body, result.ExitCode, result.Truncated)
@@ -604,7 +604,7 @@ func (m *bubbleModel) loadInitialMessages(messages []model.Message) {
 			}
 		case model.RoleTool:
 			if text != "" || message.ToolName != "" {
-				kind := guessToolKind(message.ToolName)
+				kind := tool.KindForName(message.ToolName)
 				summary := summarizeToolOutput(message.ToolName, kind, "", message.Content, nil, false)
 				state.Append(&ToolCell{Name: message.ToolName, Body: message.Content, ToolKind: kind, Summary: summary})
 			}
