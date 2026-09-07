@@ -111,3 +111,20 @@ func TestRemoteModelProfileOverridesBuiltinMetadata(t *testing.T) {
 		t.Fatalf("ResolvedModelProfile() = %+v, %v", profile, ok)
 	}
 }
+
+func TestResolveRemoteMetadataUsesResolvedCapabilitiesForDisplay(t *testing.T) {
+	no := false
+	remote := RemoteModel{
+		ID:            "gemini-3.8-flash",
+		Features:      []string{"coding", "tools", "vision", "coding"},
+		ToolSupport:   &no,
+		VisionSupport: &no,
+	}
+	got := ResolveRemoteMetadata(DefaultProtonmanName, remote)
+	if got.Profile.ContextWindow != 1_048_576 {
+		t.Fatalf("context window = %d", got.Profile.ContextWindow)
+	}
+	if len(got.Features) != 2 || got.Features[0] != "coding" || got.Features[1] != "reasoning" {
+		t.Fatalf("resolved features = %#v", got.Features)
+	}
+}

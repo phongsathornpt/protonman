@@ -2,10 +2,62 @@ package model
 
 import (
 	"context"
+	"strings"
 
 	"github.com/projectTHORN/proton/internal/modelprofile"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
+
+type ResolvedRemoteMetadata struct {
+	ID       string
+	Name     string
+	Provider string
+	Features []string
+	Profile  modelprofile.Resolved
+}
+
+func ResolveRemoteMetadata(providerName string, remote RemoteModel) ResolvedRemoteMetadata {
+	profile := ResolveModelProfile(providerName, remote.ID, &remote)
+	provider := remote.Provider
+	if provider == "" {
+		provider = providerName
+	}
+	return ResolvedRemoteMetadata{
+		ID: remote.ID, Name: remote.Name, Provider: provider,
+		Features: resolvedFeatureLabels(remote.Features, profile),
+		Profile:  profile,
+	}
+}
+
+func resolvedFeatureLabels(raw []string, profile modelprofile.Resolved) []string {
+	features := make([]string, 0, len(raw)+3)
+	seen := make(map[string]struct{}, len(raw)+3)
+	for _, feature := range raw {
+		key := strings.ToLower(strings.TrimSpace(feature))
+		if key == "" || key == "tools" || key == "vision" || key == "reasoning" || key == "thinking" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		features = append(features, strings.TrimSpace(feature))
+	}
+	appendCapability := func(label string, support modelprofile.Support) {
+		if support != modelprofile.SupportYes {
+			return
+		}
+		if _, ok := seen[label]; ok {
+			return
+		}
+		seen[label] = struct{}{}
+		features = append(features, label)
+	}
+	appendCapability("tools", profile.Capabilities.Tools)
+	appendCapability("vision", profile.Capabilities.Vision)
+	appendCapability("reasoning", profile.Capabilities.Reasoning)
+	return features
+}
 
 func WithRemoteModelProfile(providerName string, remote RemoteModel) ClientOption {
 	return withResolvedModelProfile(ResolveModelProfile(providerName, remote.ID, &remote))
