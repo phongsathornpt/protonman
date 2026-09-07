@@ -6,7 +6,9 @@ import (
 
 	skilltool "github.com/projectTHORN/proton/internal/adapter/tool/skill"
 	todotool "github.com/projectTHORN/proton/internal/adapter/tool/todo"
+	webtool "github.com/projectTHORN/proton/internal/adapter/tool/web"
 	"github.com/projectTHORN/proton/internal/agent"
+	"github.com/projectTHORN/proton/internal/sandbox"
 	"github.com/projectTHORN/proton/internal/tool"
 )
 
@@ -15,7 +17,7 @@ func TestRegisteredBuiltinToolContracts(t *testing.T) {
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
 	defer coord.Close()
 
-	primary, err := NewDefaultRegistry(workspaceRoot, testSandboxOption(), testCheckpointOption(), withAgentTools(coord))
+	primary, err := NewDefaultRegistry(workspaceRoot, testSandboxOption(), testCheckpointOption(), WithAdditionalHandlers(webtool.NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkBlocked})), withAgentTools(coord))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +94,7 @@ func TestOptionalZeroNumericArgumentsMatchOmittedSemantics(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
 	defer coord.Close()
-	registry, err := NewDefaultRegistry(workspaceRoot, testSandboxOption(), testCheckpointOption(), withAgentTools(coord))
+	registry, err := NewDefaultRegistry(workspaceRoot, testSandboxOption(), testCheckpointOption(), WithAdditionalHandlers(webtool.NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkBlocked})), withAgentTools(coord))
 	if err != nil {
 		t.Fatal(err)
 	}

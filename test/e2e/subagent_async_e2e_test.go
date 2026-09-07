@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	agenttool "github.com/projectTHORN/proton/internal/adapter/tool/agent"
 	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/model"
 	"github.com/projectTHORN/proton/internal/permission"
@@ -33,11 +34,11 @@ func (r asyncLifecycleRunner) Run(ctx context.Context, _ []model.Message, _ turn
 func agentLifecycleService(t *testing.T, coord *agent.Coordinator) *toolcall.Service {
 	t.Helper()
 	registry, err := builtin.NewRegistry(
-		builtin.NewDelegateTask(coord),
-		builtin.NewWaitAgent(coord),
-		builtin.NewGetAgent(coord),
-		builtin.NewListAgents(coord),
-		builtin.NewCancelAgent(coord),
+		agenttool.NewDelegateTask(coord),
+		agenttool.NewWaitAgent(coord),
+		agenttool.NewGetAgent(coord),
+		agenttool.NewListAgents(coord),
+		agenttool.NewCancelAgent(coord),
 	)
 	if err != nil {
 		t.Fatal(err)

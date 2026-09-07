@@ -12,6 +12,7 @@ import (
 	agenttool "github.com/projectTHORN/proton/internal/adapter/tool/agent"
 	skilltool "github.com/projectTHORN/proton/internal/adapter/tool/skill"
 	todotool "github.com/projectTHORN/proton/internal/adapter/tool/todo"
+	webtool "github.com/projectTHORN/proton/internal/adapter/tool/web"
 	"github.com/projectTHORN/proton/internal/agent"
 	"github.com/projectTHORN/proton/internal/app"
 	"github.com/projectTHORN/proton/internal/appdirs"
@@ -130,8 +131,9 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	}
 	registry, err := builtin.NewDefaultRegistry(workspaceRoot,
 		builtin.WithCheckpointStore(checkpointStore),
-		builtin.WithSandbox(launcher, sandboxProfile.Network),
+		builtin.WithSandbox(launcher),
 		builtin.WithAdditionalHandlers(
+			webtool.NewWebFetch(sandboxProfile.Network, webtool.WithWebFetchTimeout(loadedConfig.Runtime.WebFetchTimeout)),
 			todotool.NewGetTodo(todoStore),
 			todotool.NewUpdateTodo(todoStore),
 			skilltool.NewActivateSkill(skillRegistry, workspaceRoot),
@@ -141,7 +143,6 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 			agenttool.NewListAgents(coordinator),
 			agenttool.NewCancelAgent(coordinator),
 		),
-		builtin.WithDefaultWebFetchTimeout(loadedConfig.Runtime.WebFetchTimeout),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create tool registry: %w", err)

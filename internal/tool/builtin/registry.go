@@ -7,10 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/projectTHORN/proton/internal/checkpoint"
-	"github.com/projectTHORN/proton/internal/runtimepolicy"
 	"github.com/projectTHORN/proton/internal/sandbox"
 	"github.com/projectTHORN/proton/internal/tool"
 	"github.com/projectTHORN/proton/internal/workspace"
@@ -55,10 +53,8 @@ type RegistryOption func(*registryOptions) error
 type registryOptions struct {
 	stores            []checkpoint.Store
 	launcher          sandbox.Launcher
-	network           sandbox.NetworkPolicy
 	sandboxConfigured bool
 	additional        []tool.Handler
-	webFetchTimeout   time.Duration
 }
 
 // WithCheckpointStore attaches durable edit checkpoints.
@@ -75,28 +71,13 @@ func WithCheckpointStore(store checkpoint.Store) RegistryOption {
 // WithSandbox confines bash and web_fetch under the resolved profile.
 // The launcher must be non-nil; use an Off-profile OSLauncher for explicit
 // opt-out rather than omitting this option.
-func WithSandbox(launcher sandbox.Launcher, network sandbox.NetworkPolicy) RegistryOption {
+func WithSandbox(launcher sandbox.Launcher) RegistryOption {
 	return func(options *registryOptions) error {
 		if launcher == nil {
 			return fmt.Errorf("sandbox launcher is required (use an explicit off-profile launcher to opt out)")
 		}
-		if !network.Mode.Valid() {
-			return fmt.Errorf("sandbox network policy is required")
-		}
 		options.launcher = launcher
-		options.network = network
 		options.sandboxConfigured = true
-		return nil
-	}
-}
-
-// WithWebFetchTimeout overrides the web_fetch HTTP timeout.
-func WithDefaultWebFetchTimeout(timeout time.Duration) RegistryOption {
-	return func(options *registryOptions) error {
-		if timeout <= 0 {
-			return fmt.Errorf("web fetch timeout must be positive")
-		}
-		options.webFetchTimeout = timeout
 		return nil
 	}
 }
@@ -124,12 +105,7 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 		return nil, fmt.Errorf("create default registry: workspace is required")
 	}
 	cfg := registryOptions{
-		stores:          make([]checkpoint.Store, 0),
-		webFetchTimeout: runtimepolicy.WebFetchTimeout,
-		network: sandbox.NetworkPolicy{
-			Mode:    sandbox.NetworkBlocked,
-			Allowed: []sandbox.Origin{},
-		},
+		stores: make([]checkpoint.Store, 0),
 	}
 	for _, option := range options {
 		if option == nil {
@@ -156,7 +132,6 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 		NewListDir(workspaceRoot),
 		NewGitStatus(workspaceRoot, cfg.launcher),
 		NewCheckpointRestore(checkpointStore),
-		NewWebFetch(cfg.network, WithWebFetchTimeout(cfg.webFetchTimeout)),
 	}
 	handlers = append(handlers, cfg.additional...)
 	return NewRegistry(handlers...)
