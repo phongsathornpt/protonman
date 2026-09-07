@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/projectTHORN/proton/internal/core/permission"
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/engine/turn"
+	"github.com/projectTHORN/proton/internal/feature/agent"
 )
 
 func TestSubagentLifecycleCollapsesIntoOneRunCell(t *testing.T) {
@@ -78,5 +80,25 @@ func TestAgentPollingFailureDoesNotLeakRPCTranscript(t *testing.T) {
 	run := m.historyState.AgentRun("int-7")
 	if run == nil || !strings.Contains(run.Activity, "status check failed") {
 		t.Fatalf("run activity=%#v", run)
+	}
+}
+
+func TestTerminalAgentLeavesLivePaneButStaysInTranscript(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.resize(100, 30)
+	started := time.Now().Add(-5 * time.Second)
+	run := &AgentRunCell{AgentID: "dex-9", Profile: agent.ProfileDEX, Task: "review concurrency", State: agent.StateRunning, StartedAt: started}
+	m.historyState.Append(run)
+	m.agentSnapshot = []agent.AgentStatus{{
+		ID: "dex-9", Profile: agent.ProfileDEX, Task: "review concurrency",
+		State: agent.StateFailed, StartedAt: started, FinishedAt: time.Now(), Reason: "timed out",
+	}}
+	m.syncAgentRunSnapshot("dex-9")
+	if got := m.agentsView(); got != "" {
+		t.Fatalf("terminal agent leaked into live pane: %q", got)
+	}
+	plain := m.historyState.Raw()
+	if !strings.Contains(plain, "review concurrency") || !strings.Contains(plain, "timed out") {
+		t.Fatalf("terminal run missing from transcript: %q", plain)
 	}
 }
