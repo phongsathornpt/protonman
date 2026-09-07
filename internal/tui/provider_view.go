@@ -732,7 +732,7 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 			}
 			return true, nil
 		default:
-			return true, nil
+			return !m.matchesGlobalShortcut(message), nil
 		}
 
 	case providerStateSaving:
@@ -756,7 +756,7 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 			v.errorMessage = ""
 			return true, nil
 		default:
-			return true, nil
+			return !m.matchesGlobalShortcut(message), nil
 		}
 
 	case providerStateConfirmOverwrite:
@@ -769,7 +769,7 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 			v.syncInputFocus()
 			return true, nil
 		default:
-			return true, nil
+			return !m.matchesGlobalShortcut(message), nil
 		}
 
 	case providerStateError:
@@ -781,7 +781,7 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 			v.syncInputFocus()
 			return true, nil
 		default:
-			return true, nil
+			return !m.matchesGlobalShortcut(message), nil
 		}
 
 	case providerStateInput:
@@ -827,6 +827,9 @@ func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, 
 			}
 			return true, v.beginFetch(m.ctx, m.runtimeConfig.ModelDiscoveryTimeout)
 		default:
+			if m.matchesGlobalShortcut(message) {
+				return false, nil
+			}
 			var cmd tea.Cmd
 			switch v.focusIndex {
 			case 0:

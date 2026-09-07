@@ -129,7 +129,7 @@ func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool
 		case "y", "s", "n", "1", "2", "3", "enter":
 			// Decisions remain available while reviewing the transcript.
 		default:
-			return true, nil
+			return !m.matchesGlobalShortcut(message), nil
 		}
 	}
 
@@ -163,7 +163,7 @@ func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool
 	case "enter":
 		return true, m.resolvePermission(permissionOptions[v.index].option)
 	default:
-		return true, nil
+		return !m.matchesGlobalShortcut(message), nil
 	}
 }
 

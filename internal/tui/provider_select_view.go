@@ -297,7 +297,7 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (
 			m.bottom.remove(providerSelectViewID)
 			return true, nil
 		default:
-			return true, nil
+			return !m.matchesGlobalShortcut(message), nil
 		}
 	}
 
