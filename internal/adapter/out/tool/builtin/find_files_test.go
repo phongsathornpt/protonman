@@ -141,7 +141,7 @@ func TestFindFilesContinuationRejectsChangedTree(t *testing.T) {
 	if page1.NextOffset == nil || page1.Continuation == "" {
 		t.Fatalf("page1 missing continuation: %+v", page1)
 	}
-	if err := os.WriteFile(filepath.Join(ws.Root(), "c.txt"), []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ws.Root(), "0.txt"), []byte("new prefix"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, err = h.Execute(context.Background(), newJSONCall(t, "find-stale-2", "find_files", map[string]any{
