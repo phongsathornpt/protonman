@@ -40,16 +40,17 @@ func (l *Loop) effectivePromptSpec(definitions []tool.Definition, extras []strin
 		spec.ModelPromptHints = append([]string(nil), profile.AgentPolicy.PromptHints...)
 	}
 	spec.ToolNames = make([]string, 0, len(definitions))
-	spec.TaskPlanEnabled = false
-	spec.DelegationEnabled = false
+	spec.Capabilities = prompt.ToolCapabilities{}
 	spec.Mutations = prompt.MutationCapabilities{}
 	for _, definition := range definitions {
 		spec.ToolNames = append(spec.ToolNames, definition.Name)
-		switch definition.Name {
-		case "get_todo", "update_todo":
-			spec.TaskPlanEnabled = true
-		case "delegate_task":
-			spec.DelegationEnabled = true
+		switch definition.Kind {
+		case tool.KindTask:
+			spec.Capabilities.Tasks = true
+		case tool.KindAgent:
+			spec.Capabilities.Agents = true
+		case tool.KindMCP:
+			spec.Capabilities.MCP = true
 		}
 		if tool.EffectiveMutability(definition) == tool.MutabilityMutating {
 			switch definition.Safety.MutationDomain {

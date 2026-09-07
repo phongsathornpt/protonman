@@ -11,7 +11,7 @@ func TestRenderComposesStableContracts(t *testing.T) {
 		ModelProfile: "gemini-3.8-flash", ModelProfileMatch: "exact", ModelCatalogOverride: true,
 		Workspace: "/repo", ToolNames: []string{"grep", "get_todo", "delegate_task", "grep"},
 		GroundingRequired: true, GroundingEvidence: "workspace",
-		TaskPlanEnabled: true, DelegationEnabled: true, Mutations: MutationCapabilities{Workspace: true}, Skills: "skill instructions",
+		Capabilities: ToolCapabilities{Tasks: true, Agents: true}, Mutations: MutationCapabilities{Workspace: true}, Skills: "skill instructions",
 		ProjectInstructions: "follow repository rules",
 		ExtraInstructions:   []string{"custom one", "custom two"},
 		ReasoningRequested:  "high", ReasoningEffective: "medium", ReasoningSource: "agent_profile", ReasoningClamped: true,
@@ -49,7 +49,7 @@ func TestRenderRootIdentityDoesNotReuseSubagentRole(t *testing.T) {
 }
 
 func TestRenderRootIdentityOmitsDelegationWhenUnavailable(t *testing.T) {
-	got := Render(Spec{Workspace: "/repo", DelegationEnabled: false})
+	got := Render(Spec{Workspace: "/repo"})
 	for _, unwanted := range []string{"delegate bounded work", "Subagents support your work", "# Delegation Protocol"} {
 		if strings.Contains(got, unwanted) {
 			t.Fatalf("disabled prompt leaked delegation guidance %q:\n%s", unwanted, got)
@@ -59,7 +59,7 @@ func TestRenderRootIdentityOmitsDelegationWhenUnavailable(t *testing.T) {
 
 func TestRenderIsStableAcrossGroundingStateAndPublishedToolSubset(t *testing.T) {
 	base := Spec{
-		Workspace: "/repo", GroundingEvidence: "workspace", TaskPlanEnabled: true, DelegationEnabled: true, Mutations: MutationCapabilities{Workspace: true},
+		Workspace: "/repo", GroundingEvidence: "workspace", Capabilities: ToolCapabilities{Tasks: true, Agents: true}, Mutations: MutationCapabilities{Workspace: true},
 		ToolNames: []string{"read_file", "grep", "delegate_task"},
 	}
 	before := base
