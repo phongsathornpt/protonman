@@ -13,13 +13,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/engine/prompt"
 	"github.com/projectTHORN/proton/internal/adapter/out/model"
 	"github.com/projectTHORN/proton/internal/core/modelprofile"
 	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/feature/skill"
 	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/projectTHORN/proton/internal/engine/prompt"
 	"github.com/projectTHORN/proton/internal/engine/toolcall"
+	"github.com/projectTHORN/proton/internal/feature/skill"
 	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
@@ -50,7 +50,7 @@ func TestLoopBuildsEffectiveSystemPromptFromRuntime(t *testing.T) {
 		t.Fatalf("first role = %q, want system", system.Role)
 	}
 	for _, want := range []string{
-		`<proton-system-prompt version="5">`, "specialized coding subagent",
+		`<proton-system-prompt version="6">`, "specialized coding subagent",
 		"Workspace root: " + workspace, "custom project instruction", "Inspect the assigned code carefully.", "follow project rules",
 	} {
 		if !strings.Contains(system.Content, want) {

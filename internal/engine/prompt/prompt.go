@@ -2,7 +2,7 @@ package prompt
 
 import "strings"
 
-const Version = "5"
+const Version = "6"
 
 type Spec struct {
 	Role                 string
@@ -114,6 +114,9 @@ func toolDisciplineSection(spec Spec) string {
 		"# Tool Discipline",
 		"- Use a tool only when it materially changes evidence, state, implementation, or verification.",
 		"- Reuse existing evidence. Do not repeat equivalent reads, searches, or commands without new information that justifies the retry.",
+		"- Prefer dedicated workspace tools over shell equivalents: read_file for file reads, grep for content search, find_files for recursive path discovery, list_dir for directory listing, and write_file/search_replace/apply_patch for file changes.",
+		"- Use bash for executing programs, builds, tests, package managers, and shell behavior that dedicated tools cannot express; do not use cat/head/tail/sed/nl/grep/rg/ls/echo/printf or shell redirection merely to reproduce a dedicated tool.",
+		"- Treat successful dedicated-tool results as evidence; do not invoke bash only to re-read, recount, hash, or otherwise re-prove the same file state unless the result is incomplete or conflicting.",
 		"- After every tool result, reassess whether the requested outcome is already complete.",
 		"- If repeated attempts are not producing new progress, change strategy or report the blocker instead of looping.",
 		"- Do not continue optional exploration after the user's requested work is complete.",

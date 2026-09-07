@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/platform/checkpoint"
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/core/workspace"
+	"github.com/projectTHORN/proton/internal/platform/checkpoint"
 )
 
 type writeFileHandler struct {
@@ -43,7 +43,7 @@ func (h writeFileHandler) PermissionDetail(arguments json.RawMessage) string {
 func (writeFileHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                "write_file",
-		Description:         "Create or replace a UTF-8 text file atomically.",
+		Description:         "Create or replace a UTF-8 text file atomically and return SHA-256 evidence for the written content. Prefer this over shell echo/printf/cat heredocs or output redirection used only to write a file.",
 		Kind:                tool.KindForName("write_file"),
 		Mutability:          tool.MutabilityMutating,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyWholeFile, CheckpointPolicy: tool.CheckpointPolicyRequired, Boundary: tool.BoundaryPolicyWorkspaceWrite},

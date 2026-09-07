@@ -257,11 +257,12 @@ Proton registers a suite of workspace-safe tools:
 
 | Tool | Category | Description |
 | :--- | :--- | :--- |
-| `read_file` | File System | Read UTF-8 workspace files with boundary-safe byte `offset`/`limit` pagination plus snapshot-bound `next_offset`/`continuation` |
+| `read_file` | File System | Read UTF-8 workspace files with byte pagination or bounded 1-based line ranges/line numbers, plus snapshot-bound byte continuations |
 | `write_file` | File System | Write file contents with automatic pre-edit checkpointing |
 | `search_replace` | File System | Exact block replacement in files with pre-edit checkpointing |
 | `apply_patch` | File System | Apply unified diff patches with pre-edit checkpointing |
 | `grep` | Search | Regex search with include globs plus snapshot-bound cursor pagination that resumes from the prior match location |
+| `find_files` | Search | Recursive workspace path discovery by glob with type/depth filters and snapshot-bound pagination |
 | `list_dir` | Search | List visible directory entries with protected-path filtering and snapshot-bound pagination |
 | `git_status` | Version Control | Inspect Git working tree state and uncommitted changes |
 | `bash` | Execution | Run bounded shell commands with workspace-relative `cwd`, optional `timeout_seconds`, effect analysis, and structured stdout/stderr |
@@ -394,7 +395,7 @@ Execution safety notes:
 - Legacy `subagent_timeout` is accepted as an alias for `subagent_max_runtime` with a deprecation warning.
 - `[runtime]` centralizes model, tool, discovery, web-fetch, and catalog-cache time bounds. The loop refuses construction if every global termination bound is disabled.
 - Repeating the same deterministic tool call with the same semantic arguments and result twice without an intervening mutation triggers a text-only synthesis round instead of continuing the tool loop; identical retryable failures are capped at three attempts.
-- Truncated `read_file`, `grep`, and `list_dir` results include `next_offset` plus a snapshot-bound `continuation`; send both on the next page to detect stale file, query, or directory state. `grep` continuations also carry a validated cursor so deep pages resume near the prior match instead of rescanning earlier files. Plain `offset` remains supported for compatibility.
+- Truncated `read_file`, `grep`, `find_files`, and `list_dir` results include `next_offset` plus a snapshot-bound `continuation`; send both on the next page to detect stale file, query, or directory state. `grep` continuations also carry a validated cursor so deep pages resume near the prior match instead of rescanning earlier files. Plain `offset` remains supported for compatibility. `read_file` also supports bounded 1-based `start_line`/`end_line` selection with optional `line_numbers` for source inspection without shell `nl`/`sed`.
 
 ### Environment Variables
 

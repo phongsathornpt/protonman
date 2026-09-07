@@ -13,9 +13,9 @@ import (
 
 	skilltool "github.com/projectTHORN/proton/internal/adapter/out/tool/skill"
 	todotool "github.com/projectTHORN/proton/internal/adapter/out/tool/todo"
-	"github.com/projectTHORN/proton/internal/feature/agent"
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/core/workspace"
+	"github.com/projectTHORN/proton/internal/feature/agent"
 )
 
 func testSandboxOption() RegistryOption {
@@ -296,7 +296,7 @@ func TestDefaultRegistryContainsCodingTools(t *testing.T) {
 		t.Fatalf("NewDefaultRegistry() error = %v", err)
 	}
 	definitions := registry.Definitions()
-	if got, want := len(definitions), 9; got != want {
+	if got, want := len(definitions), 10; got != want {
 		t.Fatalf("definition count = %d, want %d", got, want)
 	}
 
@@ -306,7 +306,7 @@ func TestDefaultRegistryContainsCodingTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDefaultRegistry(WithAgentCoordinator) error = %v", err)
 	}
-	if got, want := len(regWithCoord.Definitions()), 14; got != want {
+	if got, want := len(regWithCoord.Definitions()), 15; got != want {
 		t.Fatalf("definition count with coordinator = %d, want %d", got, want)
 	}
 	for _, name := range []string{"delegate_task", "wait_agent", "get_agent", "list_agents", "cancel_agent"} {

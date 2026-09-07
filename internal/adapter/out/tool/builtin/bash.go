@@ -14,11 +14,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/projectTHORN/proton/internal/core/workspace"
 	"github.com/projectTHORN/proton/internal/platform/checkpoint"
 	"github.com/projectTHORN/proton/internal/platform/sandbox"
 	"github.com/projectTHORN/proton/internal/platform/telemetry"
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/core/workspace"
 )
 
 const (
@@ -57,7 +57,7 @@ func NewBashWithCheckpoint(workspaceRoot *workspace.Workspace, launcher sandbox.
 func (bashHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                   "bash",
-		Description:            "Run a shell command in the current workspace.",
+		Description:            "Execute programs, builds, tests, package managers, or shell behavior not covered by dedicated workspace tools. Prefer read_file, grep, find_files, list_dir, write_file, search_replace, and apply_patch over shell file I/O or search commands such as cat, sed, grep, find, ls, echo/printf redirection, and heredocs.",
 		Kind:                   tool.KindForName("bash"),
 		Mutability:             tool.MutabilityMutating,
 		Safety:                 tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyDynamic, CheckpointPolicy: tool.CheckpointPolicyWhenKnown, Boundary: tool.BoundaryPolicySandbox},

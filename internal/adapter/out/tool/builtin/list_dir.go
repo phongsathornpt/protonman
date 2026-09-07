@@ -36,7 +36,7 @@ func NewListDir(workspaceRoot *workspace.Workspace) tool.Handler {
 func (listDirHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                "list_dir",
-		Description:         "List entries in a workspace directory.",
+		Description:         "List entries in a workspace directory. Prefer this over shell ls for directory inspection.",
 		Kind:                tool.KindForName("list_dir"),
 		Mutability:          tool.MutabilityReadOnly,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead},
