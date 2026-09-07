@@ -37,7 +37,7 @@ type RunnerFactory func(*toolcall.Service) (app.Conversation, error)
 type SessionRegistryFactory func(sessionID string, cwd string) (tool.Registry, error)
 
 // MCPRegistryConfigurer attaches client-provided MCP servers to a session-local registry.
-type MCPRegistryConfigurer func(ctx context.Context, registry tool.Registry, servers []MCPServerConfig) error
+type MCPRegistryConfigurer func(ctx context.Context, cwd string, registry tool.Registry, servers []MCPServerConfig) (io.Closer, error)
 
 // WithSessions sets the application session service for persistence use cases.
 func WithSessions(sessions *app.Sessions) Option {
@@ -118,6 +118,7 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 
 	stopInputWatch := watchInputCancellation(ctx, input)
 	defer stopInputWatch()
+	defer s.closeSessions()
 
 	scanner := bufio.NewScanner(input)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
@@ -529,6 +530,7 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 
 func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, mcpServers []MCPServerConfig) (*Session, error) {
 	registry := s.registry
+	var mcpResource io.Closer
 	if s.sessionRegistryFactory != nil {
 		created, err := s.sessionRegistryFactory(sessionID, cwd)
 		if err != nil {
@@ -540,24 +542,33 @@ func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, m
 		if s.mcpRegistryConfigurer == nil {
 			return nil, fmt.Errorf("configure MCP servers for session %q: MCP server configuration is not available", sessionID)
 		}
-		if err := s.mcpRegistryConfigurer(ctx, registry, cloneMCPServerConfigs(mcpServers)); err != nil {
+		resource, err := s.mcpRegistryConfigurer(ctx, cwd, registry, cloneMCPServerConfigs(mcpServers))
+		if err != nil {
 			return nil, fmt.Errorf("configure MCP servers for session %q: %w", sessionID, err)
 		}
+		mcpResource = resource
 	}
 	service, err := s.service.CloneWithRegistry(registry)
 	if err != nil {
+		if mcpResource != nil {
+			_ = mcpResource.Close()
+		}
 		return nil, fmt.Errorf("%w: clone session tool-call service: %v", ErrInvalidServer, err)
 	}
 	var runner app.Conversation
 	if s.runnerFactory != nil {
 		created, err := s.runnerFactory(service)
 		if err != nil {
+			if mcpResource != nil {
+				_ = mcpResource.Close()
+			}
 			return nil, fmt.Errorf("create runner for session %q: %w", sessionID, err)
 		}
 		runner = created
 	}
 	sess := NewSession(sessionID, cwd, service, registry, runner, s.sessionService)
 	sess.mcpServers = cloneMCPServerConfigs(mcpServers)
+	sess.resource = mcpResource
 	return sess, nil
 }
 
@@ -609,7 +620,25 @@ func (s *Server) deleteSession(ctx context.Context, sessionID string) error {
 		}
 	}
 	s.mu.Lock()
+	sess := s.sessions[sessionID]
 	delete(s.sessions, sessionID)
 	s.mu.Unlock()
+	if sess != nil {
+		if err := sess.Close(); err != nil {
+			return fmt.Errorf("close session %q: %w", sessionID, err)
+		}
+	}
 	return nil
+}
+
+func (s *Server) closeSessions() {
+	s.mu.Lock()
+	sessions := make([]*Session, 0, len(s.sessions))
+	for _, sess := range s.sessions {
+		sessions = append(sessions, sess)
+	}
+	s.mu.Unlock()
+	for _, sess := range sessions {
+		_ = sess.Close()
+	}
 }

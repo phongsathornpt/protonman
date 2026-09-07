@@ -39,6 +39,7 @@ type Session struct {
 	sessionService  *app.Sessions
 	reasoningEffort sdk.ReasoningEffort
 	mcpServers      []MCPServerConfig
+	resource        io.Closer
 
 	mu        sync.Mutex
 	messages  []model.Message
@@ -82,6 +83,18 @@ func (s *Session) matchMCPServers(configs []MCPServerConfig) error {
 		return fmt.Errorf("session %q MCP server configuration differs from the active session", s.id)
 	}
 	return nil
+}
+
+// Close releases session-owned transports and other external resources.
+func (s *Session) Close() error {
+	s.mu.Lock()
+	resource := s.resource
+	s.resource = nil
+	s.mu.Unlock()
+	if resource == nil {
+		return nil
+	}
+	return resource.Close()
 }
 
 // ReasoningEffort returns the explicit session-local reasoning override.
