@@ -257,6 +257,15 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 	}
 	definition := handler.Definition()
 	telemetry.toolKind = definition.Kind
+	if len(definition.InputSchema) > 0 {
+		validationErr := sdk.ValidateToolInput(sdk.Tool{Name: definition.Name, InputSchema: definition.InputSchema}, call.Arguments)
+		if validationErr != nil {
+			inputErr := tool.WrapToolError(tool.ErrorCodeInvalidArguments, fmt.Sprintf("tool %q arguments do not match its input schema", call.Name), validationErr)
+			result := tool.Result{CallID: call.ID, ToolName: call.Name, Failure: tool.FailureFromError(inputErr)}
+			s.observeCallResult(ctx, telemetry, result, inputErr)
+			return result, inputErr
+		}
+	}
 	detail := permissionDetail(definition, call.Arguments)
 	if provider, ok := handler.(tool.DetailProvider); ok {
 		if custom := strings.TrimSpace(provider.PermissionDetail(call.Arguments)); custom != "" {
