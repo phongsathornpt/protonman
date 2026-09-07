@@ -71,6 +71,9 @@ func TestReadFileLineRangeHonorsOutputLimit(t *testing.T) {
 	if !result.Truncated || !strings.Contains(result.Output, "alpha\n") || !strings.Contains(result.Output, "output truncated") {
 		t.Fatalf("limited line read = %+v", result)
 	}
+	if result.Pagination == nil || result.Pagination.Kind != "line" || result.Pagination.NextLine == nil || *result.Pagination.NextLine != 2 {
+		t.Fatalf("line pagination = %+v", result.Pagination)
+	}
 }
 
 func TestReadFileLineRangeRejectsInvalidUTF8(t *testing.T) {

@@ -270,6 +270,7 @@ func readFileLinesBounded(ctx context.Context, file *os.File, input readFileInpu
 	lineNumber := 0
 	var scannedBytes int64
 	truncated := false
+	var nextLine *int
 	for scanner.Scan() {
 		if err := ctx.Err(); err != nil {
 			_ = file.Close()
@@ -305,6 +306,8 @@ func readFileLinesBounded(ctx context.Context, file *os.File, input readFileInpu
 		}
 		if output.Len()+len(prefix)+len(line) > input.Limit {
 			truncated = true
+			next := lineNumber
+			nextLine = &next
 			break
 		}
 		output.WriteString(prefix)
@@ -326,10 +329,11 @@ func readFileLinesBounded(ctx context.Context, file *os.File, input readFileInpu
 		text += "[output truncated; narrow start_line/end_line or increase limit]"
 	}
 	return tool.Result{
-		CallID:    call.ID,
-		ToolName:  call.Name,
-		Output:    text,
-		Truncated: truncated,
+		CallID:     call.ID,
+		ToolName:   call.Name,
+		Output:     text,
+		Truncated:  truncated,
+		Pagination: paginationState(truncated, "line", nil, nextLine, ""),
 	}, nil
 }
 
