@@ -151,7 +151,7 @@ func TestWelcomeCardUsesVerticalHierarchyAndTruncates(t *testing.T) {
 	m.activeProvider = "provider-name"
 	m.resize(32, 14)
 	card := m.welcomeCard()
-	if !strings.Contains(card, "Proton") || !strings.Contains(card, "provider-name") {
+	if !strings.Contains(card, glyphBrand) || !strings.Contains(card, "█▀█") || !strings.Contains(card, "provider-name") {
 		t.Fatalf("welcome card missing hierarchy: %q", card)
 	}
 	for _, line := range strings.Split(card, "\n") {

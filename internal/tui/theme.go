@@ -24,6 +24,8 @@ const (
 	glyphGeneric     = "· "
 	glyphTodoPending = "○ "
 	glyphTodoActive  = "● "
+	// glyphBrand is the compact Proton terminal mark.
+	glyphBrand = "◆"
 )
 
 // Prefer terminal-native ANSI colors so Proton remains readable across light,
@@ -45,6 +47,7 @@ var (
 
 var (
 	brandStyle       = lipgloss.NewStyle().Bold(true).Foreground(accentAssistant)
+	brandMarkStyle   = lipgloss.NewStyle().Foreground(accentAssistant)
 	userStyle        = lipgloss.NewStyle().Foreground(accentUser)
 	assistantStyle   = lipgloss.NewStyle()
 	toolStyle        = lipgloss.NewStyle().Foreground(accentTool)
