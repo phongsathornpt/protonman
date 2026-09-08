@@ -135,6 +135,16 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	if err != nil {
 		return nil, err
 	}
+	subagentModelResolver, err := app.BuildSubagentModelResolver(app.SubagentModelResolverSpec{
+		Providers:      loadedConfig.Providers,
+		Overrides:      loadedConfig.Agent.Subagents,
+		SessionID:      sessionID,
+		RequestTimeout: loadedConfig.Runtime.ModelRequestTimeout,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("configure subagent models: %w", err)
+	}
+	coordinator.SetModelResolver(subagentModelResolver)
 	resources, err := session.ResolveResources(dirs.Sessions, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("resolve session resources: %w", err)

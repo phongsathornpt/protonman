@@ -102,3 +102,36 @@ func TestCoordinatorBindsModelAtAdmission(t *testing.T) {
 		t.Fatalf("strength override = %q, want %q", thirdModel.ModelID(), strength.id)
 	}
 }
+
+func TestCoordinatorModelResolverUpdateAffectsFutureAdmissionsOnly(t *testing.T) {
+	fallback := resolverTestModel{id: "fallback"}
+	override := resolverTestModel{id: "agility-model"}
+	coord := NewCoordinator(fallback, emptyRegistry{}, nil, nil,
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{}, nil
+		}),
+	)
+	defer coord.Close()
+
+	first, err := coord.Spawn(context.Background(), Request{Profile: ProfileAgility, Task: "first"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver, err := NewModelResolver(map[Profile]sdk.LanguageModel{ProfileAgility: override})
+	if err != nil {
+		t.Fatal(err)
+	}
+	coord.SetModelResolver(resolver)
+	second, err := coord.Spawn(context.Background(), Request{Profile: ProfileAgility, Task: "second"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	coord.agentsMu.RLock()
+	firstModel := coord.agents[first.ID].languageModel
+	secondModel := coord.agents[second.ID].languageModel
+	coord.agentsMu.RUnlock()
+	if firstModel.ModelID() != fallback.id || secondModel.ModelID() != override.id {
+		t.Fatalf("bound models = %q, %q; want %q, %q", firstModel.ModelID(), secondModel.ModelID(), fallback.id, override.id)
+	}
+}
