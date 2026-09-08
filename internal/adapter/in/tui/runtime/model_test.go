@@ -1051,4 +1051,3 @@ func TestModelPicker_EnterOnZeroMatchesDoesNotOpenProviderEditor(t *testing.T) {
 		t.Fatal("enter on 0 models should not open providerViewID")
 	}
 }
-
