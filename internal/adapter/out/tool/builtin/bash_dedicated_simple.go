@@ -210,7 +210,7 @@ func dedicatedFindTool(args []string) *dedicatedToolSuggestion {
 		result["max_depth"] = maxDepth
 	}
 	return &dedicatedToolSuggestion{
-		tool: "find_files", args: result,
-		reason: "workspace path discovery is available through find_files",
+		tool: "find", args: result,
+		reason: "workspace path discovery is available through find",
 	}
 }

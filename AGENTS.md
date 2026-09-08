@@ -296,7 +296,7 @@ Built-in workspace tools include:
 - `apply_patch`
 - `grep`
 - `inspect_code`
-- `find_files`
+- `find`
 - `ls`
 - `bash`
 - `git_status`

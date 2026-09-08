@@ -85,7 +85,7 @@ func TestBashRedirectsSimpleInspectionCommands(t *testing.T) {
 		{`ls internal`, "ls", map[string]any{"path": "internal"}},
 		{`rg "TODO" internal`, "grep", map[string]any{"pattern": "TODO", "path": "internal"}},
 		{`grep -R "TODO" internal`, "grep", map[string]any{"pattern": "TODO", "path": "internal"}},
-		{`find internal -name '*.go' -type f -maxdepth 3`, "find_files", map[string]any{
+		{`find internal -name '*.go' -type f -maxdepth 3`, "find", map[string]any{
 			"path": "internal", "pattern": "*.go", "type": "file", "max_depth": 3,
 		}},
 	}
@@ -143,8 +143,8 @@ func TestBashRedirectsRuntimeDiscoveryScripts(t *testing.T) {
 		tool    string
 		path    string
 	}{
-		{`python3 -c 'from pathlib import Path; print(list(Path("internal").rglob("*.go")))'`, "find_files", "internal"},
-		{`python3 -c 'import os; print(list(os.walk("internal")))'`, "find_files", "internal"},
+		{`python3 -c 'from pathlib import Path; print(list(Path("internal").rglob("*.go")))'`, "find", "internal"},
+		{`python3 -c 'import os; print(list(os.walk("internal")))'`, "find", "internal"},
 		{`python3 -c 'from pathlib import Path; print(list(Path("internal").iterdir()))'`, "ls", "internal"},
 		{`node -e 'console.log(fs.readdirSync("internal"))'`, "ls", "internal"},
 	}

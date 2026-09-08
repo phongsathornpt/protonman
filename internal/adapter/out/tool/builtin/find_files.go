@@ -36,9 +36,9 @@ func NewFindFiles(workspaceRoot *workspace.Workspace) tool.Handler {
 
 func (findFilesHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "find_files",
+		Name:                "find",
 		Description:         "Find workspace paths recursively by glob pattern. Prefer this over shell find for repository file discovery.",
-		Kind:                tool.KindForName("find_files"),
+		Kind:                tool.KindForName("find"),
 		Mutability:          tool.MutabilityReadOnly,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead},
 		Evidence:            tool.EvidenceWorkspace,
@@ -69,11 +69,11 @@ func (h findFilesHandler) PermissionDetail(arguments json.RawMessage) string {
 
 func (h findFilesHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	if h.workspace == nil {
-		return tool.Result{}, fmt.Errorf("find_files workspace is required")
+		return tool.Result{}, fmt.Errorf("find workspace is required")
 	}
 	var input findFilesInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode find_files arguments", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode find arguments", err)
 	}
 	if err := normalizeFindFilesInput(&input); err != nil {
 		return tool.Result{}, err
@@ -84,7 +84,7 @@ func (h findFilesHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	}
 	info, err := os.Stat(resolvedRoot)
 	if err != nil {
-		return tool.Result{}, fmt.Errorf("stat find_files root %q: %w", input.Path, err)
+		return tool.Result{}, fmt.Errorf("stat find root %q: %w", input.Path, err)
 	}
 	if !info.IsDir() {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, fmt.Sprintf("%q is not a directory; use read instead", input.Path))
@@ -97,12 +97,12 @@ func (h findFilesHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		MaxDepth int    `json:"max_depth"`
 	}{input.Pattern, input.Path, input.Type, input.MaxDepth}
 
-	token, err := support.ContinuationToken("find_files", query, "")
+	token, err := support.ContinuationToken("find", query, "")
 	if err != nil {
 		return tool.Result{}, err
 	}
 	if input.Continuation != "" && input.Continuation != token {
-		return tool.Result{}, support.StalePaginationError("find_files", "find_files continuation does not match this query; restart from offset 0", call.Arguments)
+		return tool.Result{}, support.StalePaginationError("find", "find continuation does not match this query; restart from offset 0", call.Arguments)
 	}
 
 	var output strings.Builder
@@ -214,10 +214,10 @@ func normalizeFindFilesInput(input *findFilesInput) error {
 		input.Type = "file"
 	}
 	if input.Type != "any" && input.Type != "file" && input.Type != "dir" {
-		return tool.NewToolError(tool.ErrorCodeInvalidArguments, "find_files type must be any, file, or dir")
+		return tool.NewToolError(tool.ErrorCodeInvalidArguments, "find type must be any, file, or dir")
 	}
 	if input.MaxDepth < 0 || input.Offset < 0 || input.Limit < 0 || input.Limit > maxFindFilesResults {
-		return tool.NewToolError(tool.ErrorCodeInvalidArguments, "find_files max_depth/offset must be non-negative and limit must be between 1 and 1000")
+		return tool.NewToolError(tool.ErrorCodeInvalidArguments, "find max_depth/offset must be non-negative and limit must be between 1 and 1000")
 	}
 	if input.Limit == 0 {
 		input.Limit = maxFindFilesResults

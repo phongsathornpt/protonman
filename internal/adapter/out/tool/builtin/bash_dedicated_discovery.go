@@ -22,14 +22,14 @@ func dedicatedPythonDiscoveryTool(command, lower string) *dedicatedToolSuggestio
 			args["max_depth"] = 1
 		}
 		return &dedicatedToolSuggestion{
-			tool: "find_files", args: args,
-			reason: "workspace path discovery is available through find_files",
+			tool: "find", args: args,
+			reason: "workspace path discovery is available through find",
 		}
 	}
 	if path := firstPatternGroup(pythonWalkPathPattern, command); path != "" {
 		return &dedicatedToolSuggestion{
-			tool: "find_files", args: map[string]any{"path": path, "pattern": "*", "type": "any"},
-			reason: "workspace tree discovery is available through find_files",
+			tool: "find", args: map[string]any{"path": path, "pattern": "*", "type": "any"},
+			reason: "workspace tree discovery is available through find",
 		}
 	}
 	if path := firstPatternGroup(pythonIterdirPattern, command); path != "" {

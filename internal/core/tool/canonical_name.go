@@ -3,8 +3,9 @@ package tool
 import "strings"
 
 var legacyToolNames = map[string]string{
-	"read_file": "read",
-	"list_dir":  "ls",
+	"read_file":  "read",
+	"list_dir":   "ls",
+	"find_files": "find",
 }
 
 // CanonicalName maps legacy public tool names to the current model-facing

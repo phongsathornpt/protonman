@@ -19,7 +19,7 @@ func TestReadOnlyToolsClassifyMissingTargets(t *testing.T) {
 	}{
 		{name: "read_file source", handler: readfile.New(ws), args: map[string]any{"path": "missing/src", "view": "source", "query": "main"}},
 		{name: "list_dir", handler: NewListDir(ws), args: map[string]any{"path": "missing/src"}},
-		{name: "find_files", handler: NewFindFiles(ws), args: map[string]any{"path": "missing/src", "pattern": "*.go"}},
+		{name: "find", handler: NewFindFiles(ws), args: map[string]any{"path": "missing/src", "pattern": "*.go"}},
 	}
 
 	for _, tt := range tests {

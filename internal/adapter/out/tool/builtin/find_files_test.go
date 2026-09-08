@@ -23,7 +23,7 @@ func TestFindFilesRecursivelyMatchesGlob(t *testing.T) {
 		}
 	}
 
-	result, err := NewFindFiles(ws).Execute(context.Background(), newJSONCall(t, "find-go", "find_files", map[string]any{
+	result, err := NewFindFiles(ws).Execute(context.Background(), newJSONCall(t, "find-go", "find", map[string]any{
 		"pattern": "*.go",
 	}))
 	if err != nil {
@@ -51,7 +51,7 @@ func TestFindFilesSupportsDepthTypeAndPagination(t *testing.T) {
 		}
 	}
 	h := NewFindFiles(ws)
-	result, err := h.Execute(context.Background(), newJSONCall(t, "find-depth", "find_files", map[string]any{
+	result, err := h.Execute(context.Background(), newJSONCall(t, "find-depth", "find", map[string]any{
 		"pattern": "*", "type": "file", "max_depth": 1, "limit": 1,
 	}))
 	if err != nil {
@@ -64,7 +64,7 @@ func TestFindFilesSupportsDepthTypeAndPagination(t *testing.T) {
 		t.Fatalf("depth filter output = %q", result.Output)
 	}
 
-	page1, err := h.Execute(context.Background(), newJSONCall(t, "find-page1", "find_files", map[string]any{
+	page1, err := h.Execute(context.Background(), newJSONCall(t, "find-page1", "find", map[string]any{
 		"pattern": "*.txt", "limit": 1,
 	}))
 	if err != nil {
@@ -73,7 +73,7 @@ func TestFindFilesSupportsDepthTypeAndPagination(t *testing.T) {
 	if !page1.Truncated || page1.NextOffset == nil || page1.Continuation == "" {
 		t.Fatalf("page1 pagination = %+v", page1)
 	}
-	page2, err := h.Execute(context.Background(), newJSONCall(t, "find-page2", "find_files", map[string]any{
+	page2, err := h.Execute(context.Background(), newJSONCall(t, "find-page2", "find", map[string]any{
 		"pattern": "*.txt", "limit": 1, "offset": *page1.NextOffset, "continuation": page1.Continuation,
 	}))
 	if err != nil {
@@ -95,7 +95,7 @@ func TestFindFilesSkipsProtectedPaths(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(ws.Root(), "visible.txt"), []byte("ok"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	result, err := NewFindFiles(ws).Execute(context.Background(), newJSONCall(t, "find-protected", "find_files", map[string]any{"pattern": "*.txt"}))
+	result, err := NewFindFiles(ws).Execute(context.Background(), newJSONCall(t, "find-protected", "find", map[string]any{"pattern": "*.txt"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestFindFilesSkipsGeneratedAndVCSDirectories(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	result, err := NewFindFiles(ws).Execute(context.Background(), newJSONCall(t, "find-ignore", "find_files", map[string]any{"pattern": "*.go"}))
+	result, err := NewFindFiles(ws).Execute(context.Background(), newJSONCall(t, "find-ignore", "find", map[string]any{"pattern": "*.go"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestFindFilesContinuationSurvivesChangedTree(t *testing.T) {
 		}
 	}
 	h := NewFindFiles(ws)
-	page1, err := h.Execute(context.Background(), newJSONCall(t, "find-stale-1", "find_files", map[string]any{"pattern": "*.txt", "limit": 1}))
+	page1, err := h.Execute(context.Background(), newJSONCall(t, "find-stale-1", "find", map[string]any{"pattern": "*.txt", "limit": 1}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestFindFilesContinuationSurvivesChangedTree(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(ws.Root(), "0.txt"), []byte("new prefix"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	page2, err := h.Execute(context.Background(), newJSONCall(t, "find-stale-2", "find_files", map[string]any{
+	page2, err := h.Execute(context.Background(), newJSONCall(t, "find-stale-2", "find", map[string]any{
 		"pattern": "*.txt", "limit": 1, "offset": *page1.NextOffset, "continuation": page1.Continuation,
 	}))
 	if err != nil {
@@ -166,21 +166,21 @@ func TestFindFilesContinuationRejectsChangedQueryWithRecovery(t *testing.T) {
 		}
 	}
 	h := NewFindFiles(ws)
-	page1, err := h.Execute(context.Background(), newJSONCall(t, "find-query-1", "find_files", map[string]any{"pattern": "*", "limit": 1}))
+	page1, err := h.Execute(context.Background(), newJSONCall(t, "find-query-1", "find", map[string]any{"pattern": "*", "limit": 1}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if page1.NextOffset == nil || page1.Continuation == "" {
 		t.Fatalf("page1 missing continuation: %+v", page1)
 	}
-	_, err = h.Execute(context.Background(), newJSONCall(t, "find-query-2", "find_files", map[string]any{
+	_, err = h.Execute(context.Background(), newJSONCall(t, "find-query-2", "find", map[string]any{
 		"pattern": "*.txt", "limit": 1, "offset": *page1.NextOffset, "continuation": page1.Continuation,
 	}))
 	var toolErr *tool.ToolError
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeStaleContinuation {
 		t.Fatalf("changed query error = %v", err)
 	}
-	if toolErr.Recovery == nil || toolErr.Recovery.Action != tool.RecoveryRestartPagination || toolErr.Recovery.Tool != "find_files" {
+	if toolErr.Recovery == nil || toolErr.Recovery.Action != tool.RecoveryRestartPagination || toolErr.Recovery.Tool != "find" {
 		t.Fatalf("recovery = %#v", toolErr.Recovery)
 	}
 }

@@ -57,7 +57,7 @@ func NewBashWithCheckpoint(workspaceRoot *workspace.Workspace, launcher sandbox.
 func (bashHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                   "bash",
-		Description:            "Execute external programs, builds, tests, package managers, and shell workflows. Use read for known workspace artifacts; use read with view=source, grep, find_files, and ls for repository evidence; use dedicated edit tools for direct file mutations.",
+		Description:            "Execute external programs, builds, tests, package managers, and shell workflows. Use read for known workspace artifacts; use read with view=source, grep, find, and ls for repository evidence; use dedicated edit tools for direct file mutations.",
 		Kind:                   tool.KindForName("bash"),
 		Mutability:             tool.MutabilityMutating,
 		Safety:                 tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyDynamic, CheckpointPolicy: tool.CheckpointPolicyWhenKnown, Boundary: tool.BoundaryPolicySandbox},
