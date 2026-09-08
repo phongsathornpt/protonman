@@ -125,24 +125,11 @@ func UserMCPLogsDisplay() string {
 // ProjectRoot returns the project-local Protonman directory.
 func ProjectRoot(workDir string) string { return filepath.Join(workDir, RootDirName) }
 
-// ResolvedProjectRoot returns the project-local Protonman directory.
-func ResolvedProjectRoot(workDir string) string { return ProjectRoot(workDir) }
-
 // ProjectConfig returns the canonical project-local config path for new data.
 func ProjectConfig(workDir string) string { return filepath.Join(ProjectRoot(workDir), ConfigFileName) }
 
-// ResolvedProjectConfig returns the effective project-local config path.
-func ResolvedProjectConfig(workDir string) string {
-	return filepath.Join(ResolvedProjectRoot(workDir), ConfigFileName)
-}
-
 // ProjectSkills returns the canonical project-local skills directory for new data.
 func ProjectSkills(workDir string) string { return filepath.Join(ProjectRoot(workDir), SkillsDir) }
-
-// ResolvedProjectSkills returns the effective project-local skills directory.
-func ResolvedProjectSkills(workDir string) string {
-	return filepath.Join(ResolvedProjectRoot(workDir), SkillsDir)
-}
 
 // ResolveRuntimeLayout resolves user-global, workspace, and project-local paths once.
 func ResolveRuntimeLayout(explicitHome, workDir string) (RuntimeLayout, error) {
