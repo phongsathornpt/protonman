@@ -526,6 +526,18 @@ func TestAgentSubagentTimeoutConfigRejectsInvalidValues(t *testing.T) {
 	}
 }
 
+func TestRuntimeDefaultTurnTimeoutIsDisabled(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if snapshot.Runtime.TurnTimeout != 0 {
+		t.Fatalf("turn timeout = %v, want disabled", snapshot.Runtime.TurnTimeout)
+	}
+}
+
 func TestRuntimeConfigOverridesDefaults(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
