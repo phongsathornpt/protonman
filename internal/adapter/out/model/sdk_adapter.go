@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/phongsathornpt/proton/internal/base/runtimepolicy"
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
-	sdkanthropic "github.com/phongsathornpt/proton/proton-sdk/provider/anthropic"
-	sdkopenai "github.com/phongsathornpt/proton/proton-sdk/provider/openai"
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	sdkanthropic "github.com/phongsathornpt/protonman/proton-sdk/provider/anthropic"
+	sdkopenai "github.com/phongsathornpt/protonman/proton-sdk/provider/openai"
 )
 
 type capabilityOverrideModel struct {

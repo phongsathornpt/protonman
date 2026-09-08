@@ -64,7 +64,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the package responsibilit
 # Start the interactive fullscreen TUI (default)
 make tui
 # Or run directly with Go
-go run ./cmd/proton
+go run ./cmd/protonman
 
 # Build the standalone binary
 make build

@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/engine/turn"
-	"github.com/phongsathornpt/proton/internal/feature/agent"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/engine/turn"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
 func TestLongTurnWithSubagentsKeepsProgressCoherent(t *testing.T) {

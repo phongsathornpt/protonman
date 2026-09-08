@@ -10,8 +10,8 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/phongsathornpt/proton/internal/base/envconfig"
-	"github.com/phongsathornpt/proton/internal/feature/agent"
+	"github.com/phongsathornpt/protonman/internal/base/envconfig"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
 type cliOptions struct {

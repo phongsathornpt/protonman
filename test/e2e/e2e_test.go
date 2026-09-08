@@ -39,7 +39,7 @@ func TestMain(m *testing.M) {
 	}
 	_ = os.MkdirAll(coverDir, 0o755)
 
-	buildCmd := exec.Command("go", "build", "-cover", "-o", binPath, "./cmd/proton")
+	buildCmd := exec.Command("go", "build", "-cover", "-o", binPath, "./cmd/protonman")
 	buildCmd.Dir = repoRoot
 	buildCmd.Env = os.Environ()
 	output, err := buildCmd.CombinedOutput()

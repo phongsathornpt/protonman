@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/engine/turn"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/engine/turn"
 )
 
 // Profile classifies Proton's primary and specialized engineering attributes.

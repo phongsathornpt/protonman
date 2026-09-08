@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 func TestOpenCodeSDKAdapterAlwaysSendsClientIdentity(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 const estimatedBytesPerToken = 3

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/adapter/out/model"
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 func (l *Loop) streamRound(

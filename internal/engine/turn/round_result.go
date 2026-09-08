@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/phongsathornpt/proton/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 )
 
 func finalizeMaxToolCallResponse(

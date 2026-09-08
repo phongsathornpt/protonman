@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	tododomain "github.com/phongsathornpt/proton/internal/feature/todo"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 )
 
 const todoInspectViewID = "todo-inspect"

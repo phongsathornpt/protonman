@@ -3,9 +3,9 @@ package main
 import (
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/adapter/out/config"
-	"github.com/phongsathornpt/proton/internal/adapter/out/model"
-	"github.com/phongsathornpt/proton/internal/core/session"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/core/session"
 )
 
 func TestApplyAgentProfileLeavesDefaultTranscriptUnmanaged(t *testing.T) {

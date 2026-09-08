@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/base/runtimepolicy"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/core/workspace"
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/core/workspace"
 )
 
 const (

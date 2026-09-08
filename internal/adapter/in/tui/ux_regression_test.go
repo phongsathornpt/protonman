@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/phongsathornpt/proton/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
 func assertBubbleViewFits(t *testing.T, m *bubbleModel, width, height int) {

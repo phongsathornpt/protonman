@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	"github.com/phongsathornpt/proton/internal/platform/sandbox"
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 func mergeDocument(document fileDocument, snapshot *Snapshot, source ValueSource) error {

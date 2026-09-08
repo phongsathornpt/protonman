@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/phongsathornpt/proton/internal/base/runtimepolicy"
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"io"
 	"path/filepath"
 	"sort"
@@ -13,15 +13,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/adapter/out/model"
-	"github.com/phongsathornpt/proton/internal/app"
-	"github.com/phongsathornpt/proton/internal/app/appdirs"
-	"github.com/phongsathornpt/proton/internal/base/contextutil"
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	"github.com/phongsathornpt/proton/internal/core/session"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/engine/toolcall"
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/base/contextutil"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/core/session"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 const sessionPersistenceTimeout = runtimepolicy.SessionPersistenceTimeout

@@ -16,12 +16,12 @@ type listedPackage struct {
 	Imports    []string
 }
 
-const modulePath = "github.com/phongsathornpt/proton"
+const modulePath = "github.com/phongsathornpt/protonman"
 
 func TestCorePackagesDoNotDependOnOuterLayers(t *testing.T) {
 	packages := listPackages(t)
 	outer := []string{
-		modulePath + "/cmd/proton",
+		modulePath + "/cmd/protonman",
 		modulePath + "/internal/adapter/in/acp",
 		modulePath + "/internal/adapter/in/headless",
 		modulePath + "/internal/adapter/in/tui",
@@ -173,7 +173,7 @@ func TestApplicationDoesNotExposeAgentCoordinatorEscapeHatch(t *testing.T) {
 func TestApplicationDoesNotDependOnInboundAdapters(t *testing.T) {
 	packages := listPackages(t)
 	assertNoImports(t, packages, modulePath+"/internal/app", []string{
-		modulePath + "/cmd/proton",
+		modulePath + "/cmd/protonman",
 		modulePath + "/internal/adapter/in/acp",
 		modulePath + "/internal/adapter/in/headless",
 		modulePath + "/internal/adapter/in/tui",
@@ -196,11 +196,11 @@ func TestSDKDoesNotDependOnCLIInternals(t *testing.T) {
 
 func TestHeadlessModeDoesNotDependOnTurn(t *testing.T) {
 	root := repositoryRoot(t)
-	cmd := exec.Command("rg", `"github\\.com/phongsathornpt/proton/internal/engine/turn"`, "cmd/proton/headless_mode.go")
+	cmd := exec.Command("rg", `"github\\.com/phongsathornpt/proton/internal/engine/turn"`, "cmd/protonman/headless_mode.go")
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
 	if err == nil {
-		t.Fatalf("cmd/proton/headless_mode.go imports internal/engine/turn directly:\n%s", output)
+		t.Fatalf("cmd/protonman/headless_mode.go imports internal/engine/turn directly:\n%s", output)
 	}
 	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
 		t.Fatalf("search headless_mode.go turn imports: %v: %s", err, output)

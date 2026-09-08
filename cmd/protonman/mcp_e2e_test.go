@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/adapter/in/acp"
-	"github.com/phongsathornpt/proton/internal/adapter/out/tool/builtin"
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/engine/toolcall"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/acp"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 )
 
 func TestConfigureACPMCPStdioLifecycleEndToEnd(t *testing.T) {

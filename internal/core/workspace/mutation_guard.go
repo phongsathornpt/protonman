@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 var ErrPreexistingWorkspaceChange = errors.New("pre-existing workspace change")

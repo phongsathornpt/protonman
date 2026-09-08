@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/adapter/out/tool/builtin"
-	domaintool "github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin"
+	domaintool "github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 type managedFakeServer struct {

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/phongsathornpt/proton/internal/adapter/in/headless"
-	"github.com/phongsathornpt/proton/internal/app"
-	"github.com/phongsathornpt/proton/internal/core/session"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/engine/toolcall"
-	"github.com/phongsathornpt/proton/internal/feature/skill"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/headless"
+	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/core/session"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
+	"github.com/phongsathornpt/protonman/internal/feature/skill"
 )
 
 func runHeadless(

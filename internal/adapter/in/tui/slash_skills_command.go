@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/phongsathornpt/proton/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 )
 
 func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.Cmd {

@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 func (l *Loop) executeCalls(ctx context.Context, calls []tool.Call) []executedCall {

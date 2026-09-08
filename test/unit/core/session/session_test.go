@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/core/session"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/core/session"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 func TestToModelMessagesAndFromModelMessages(t *testing.T) {

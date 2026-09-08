@@ -4,11 +4,11 @@
 
 # Binary configuration
 BIN_DIR := bin
-BIN_NAME := proton
+BIN_NAME := protonman
 BINARY := $(BIN_DIR)/$(BIN_NAME)
 GO_SOURCES := $(shell find cmd internal proton-sdk -type f -name '*.go' ! -name '*_test.go')
 VERSION ?= $(shell git describe --tags --always --dirty --match 'v[0-9]*' 2>/dev/null || echo dev)
-VERSION_LDFLAGS := -X github.com/phongsathornpt/proton/internal/base/buildinfo.version=$(VERSION)
+VERSION_LDFLAGS := -X github.com/phongsathornpt/protonman/internal/base/buildinfo.version=$(VERSION)
 BUILD_LDFLAGS := $(strip $(LDFLAGS) $(VERSION_LDFLAGS))
 VERSION_KEY := $(subst /,_,$(VERSION))
 VERSION_STAMP := $(BIN_DIR)/.version-$(VERSION_KEY)
@@ -22,9 +22,9 @@ run: $(BINARY)
 
 ## dev: Run Proton through go run (always invokes the Go toolchain)
 dev:
-	go run -ldflags "$(BUILD_LDFLAGS)" ./cmd/proton
+	go run -ldflags "$(BUILD_LDFLAGS)" ./cmd/protonman
 
-## build: Build the proton binary when sources or resolved version changed
+## build: Build the protonman binary when sources or resolved version changed
 build: $(BINARY)
 
 $(VERSION_STAMP):
@@ -34,7 +34,7 @@ $(VERSION_STAMP):
 
 $(BINARY): $(GO_SOURCES) go.mod go.sum Makefile $(VERSION_STAMP)
 	@mkdir -p $(BIN_DIR)
-	go build -trimpath -ldflags "$(BUILD_LDFLAGS)" -o $(BINARY) ./cmd/proton
+	go build -trimpath -ldflags "$(BUILD_LDFLAGS)" -o $(BINARY) ./cmd/protonman
 
 ## run-bin: Alias for run
 run-bin: run

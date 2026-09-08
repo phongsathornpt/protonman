@@ -14,11 +14,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/core/workspace"
-	"github.com/phongsathornpt/proton/internal/platform/checkpoint"
-	"github.com/phongsathornpt/proton/internal/platform/sandbox"
-	"github.com/phongsathornpt/proton/internal/platform/telemetry"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/core/workspace"
+	"github.com/phongsathornpt/protonman/internal/platform/checkpoint"
+	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
+	"github.com/phongsathornpt/protonman/internal/platform/telemetry"
 )
 
 const (

@@ -2,8 +2,8 @@ package app
 
 import (
 	"context"
-	"github.com/phongsathornpt/proton/internal/app/appdirs"
-	"github.com/phongsathornpt/proton/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 )
 
 // ProviderSaveRequest describes a persisted user provider update.

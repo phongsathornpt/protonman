@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/base/runtimepolicy"
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 
-	"github.com/phongsathornpt/proton/internal/base/buildinfo"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/platform/sandbox"
+	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
 )
 
 const maxFetchBytes = 256 * 1024

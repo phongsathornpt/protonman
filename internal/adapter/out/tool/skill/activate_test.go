@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/feature/skill"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/adapter/out/tool/builtin"
-	"github.com/phongsathornpt/proton/internal/core/workspace"
+	"github.com/phongsathornpt/protonman/internal/feature/skill"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin"
+	"github.com/phongsathornpt/protonman/internal/core/workspace"
 )
 
 func TestActivateSkill_Execute(t *testing.T) {

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/adapter/out/sessionfs"
-	"github.com/phongsathornpt/proton/internal/app/appdirs"
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	"github.com/phongsathornpt/proton/internal/core/session"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/sessionfs"
+	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/core/session"
 )
 
 func TestSessionResumeArgs(t *testing.T) {

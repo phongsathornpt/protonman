@@ -4,10 +4,10 @@ package config
 import (
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/base/runtimepolicy"
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	"github.com/phongsathornpt/proton/internal/platform/sandbox"
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 const (

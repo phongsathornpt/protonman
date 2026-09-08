@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/platform/sandbox"
-	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 type recordingLauncher struct {

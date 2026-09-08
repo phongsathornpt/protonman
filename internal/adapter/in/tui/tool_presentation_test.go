@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 func TestExtractToolTarget(t *testing.T) {
@@ -46,8 +46,8 @@ func TestExtractToolTarget(t *testing.T) {
 			name:       "list_dir with path",
 			toolName:   "list_dir",
 			kind:       tool.KindRead,
-			args:       `{"path":"cmd/proton"}`,
-			wantTarget: "cmd/proton",
+			args:       `{"path":"cmd/protonman"}`,
+			wantTarget: "cmd/protonman",
 			wantKind:   tool.KindRead,
 		},
 		{
@@ -213,7 +213,7 @@ func TestSummarizeGitStatus(t *testing.T) {
 		t.Fatalf("expected 'working tree clean', got: %s", got)
 	}
 
-	dirtyStatus := " M internal/tui/theme.go\n?? new_file.go\nM  cmd/proton/main.go\n"
+	dirtyStatus := " M internal/tui/theme.go\n?? new_file.go\nM  cmd/protonman/main.go\n"
 	got := summarizeGitStatus(dirtyStatus)
 	if !strings.Contains(got, "1 staged") || !strings.Contains(got, "1 modified") || !strings.Contains(got, "1 untracked") {
 		t.Fatalf("unexpected git status summary: %s", got)

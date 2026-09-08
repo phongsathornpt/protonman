@@ -11,11 +11,11 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
-	domainmodel "github.com/phongsathornpt/proton/internal/adapter/out/model"
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/engine/toolcall"
-	applicationturn "github.com/phongsathornpt/proton/internal/engine/turn"
+	domainmodel "github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
+	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
 )
 
 func TestPlanModeBlocksBashBeforeAlwaysApprove(t *testing.T) {

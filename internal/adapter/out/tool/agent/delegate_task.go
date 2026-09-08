@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/feature/agent"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
 type delegateTaskHandler struct {

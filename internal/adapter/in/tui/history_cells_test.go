@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	"github.com/phongsathornpt/proton/internal/engine/turn"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/engine/turn"
 
-	"github.com/phongsathornpt/proton/internal/adapter/out/model"
-	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 func TestHistoryStateStreamsAssistantIntoActiveCell(t *testing.T) {
@@ -701,8 +701,8 @@ func TestPatchCellRenderingPolish(t *testing.T) {
 	patch := &PatchCell{
 		Name:    "write_file",
 		Summary: "1 file",
-		Paths:   []string{"cmd/proton/main.go"},
-		Body:    "Wrote file successfully to cmd/proton/main.go.",
+		Paths:   []string{"cmd/protonman/main.go"},
+		Body:    "Wrote file successfully to cmd/protonman/main.go.",
 	}
 	rendered := patch.RenderWidth(80)
 	joined := strings.Join(rendered, "\n")

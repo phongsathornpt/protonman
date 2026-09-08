@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/feature/skill"
+	"github.com/phongsathornpt/protonman/internal/feature/skill"
 )
 
 func TestSelectSubagentSkillsFiltersByTaskAndProfile(t *testing.T) {

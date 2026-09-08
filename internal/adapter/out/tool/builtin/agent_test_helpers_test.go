@@ -1,8 +1,8 @@
 package builtin
 
 import (
-	"github.com/phongsathornpt/proton/internal/adapter/out/tool/agent"
-	"github.com/phongsathornpt/proton/internal/feature/agent"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/agent"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
 func withAgentTools(coordinator *agent.Coordinator) RegistryOption {

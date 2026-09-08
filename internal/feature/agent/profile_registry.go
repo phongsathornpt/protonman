@@ -3,8 +3,8 @@ package agent
 import (
 	"strings"
 
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/engine/prompt"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 )
 
 // FilterRegistryForProfile returns a scoped tool.Registry exposing only the tools

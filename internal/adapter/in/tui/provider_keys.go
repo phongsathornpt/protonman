@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/phongsathornpt/proton/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 )
 
 func (v *providerPaneView) normalizeModelSelection() {

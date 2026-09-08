@@ -3,7 +3,7 @@ package envconfig_test
 import (
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/base/envconfig"
+	"github.com/phongsathornpt/protonman/internal/base/envconfig"
 )
 
 func TestConstants(t *testing.T) {

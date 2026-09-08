@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/adapter/out/tool/builtin"
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	domaintool "github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/engine/toolcall"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	domaintool "github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 )
 
 func TestNamespacedName(t *testing.T) {

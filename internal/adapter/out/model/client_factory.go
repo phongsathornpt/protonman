@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/base/buildinfo"
-	"github.com/phongsathornpt/proton/internal/core/modelprofile"
-	"github.com/phongsathornpt/proton/internal/base/runtimepolicy"
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
+	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 // clientConfig contains CLI-owned settings used to construct proton-sdk provider models.

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 func collectEvents(t *testing.T, stream sdk.Stream) []sdk.Event {

@@ -12,12 +12,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	domainmodel "github.com/phongsathornpt/proton/internal/adapter/out/model"
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/engine/toolcall"
-	applicationturn "github.com/phongsathornpt/proton/internal/engine/turn"
-	tododomain "github.com/phongsathornpt/proton/internal/feature/todo"
+	domainmodel "github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
+	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 )
 
 func TestCompletedTodoPaneIsHidden(t *testing.T) {

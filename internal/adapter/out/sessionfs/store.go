@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/core/session"
+	"github.com/phongsathornpt/protonman/internal/core/session"
 )
 
 type State = session.State

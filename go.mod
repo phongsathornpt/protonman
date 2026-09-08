@@ -1,4 +1,4 @@
-module github.com/phongsathornpt/proton
+module github.com/phongsathornpt/protonman
 
 go 1.27
 

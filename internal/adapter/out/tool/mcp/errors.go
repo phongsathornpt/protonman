@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 type FailureKind string

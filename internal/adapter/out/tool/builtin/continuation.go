@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 func continuationToken(toolName string, query any, snapshot string) (string, error) {

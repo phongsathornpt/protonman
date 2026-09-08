@@ -11,11 +11,11 @@ import (
 	"strings"
 	"testing"
 
-	skilltool "github.com/phongsathornpt/proton/internal/adapter/out/tool/skill"
-	todotool "github.com/phongsathornpt/proton/internal/adapter/out/tool/todo"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/core/workspace"
-	"github.com/phongsathornpt/proton/internal/feature/agent"
+	skilltool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/skill"
+	todotool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/todo"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/core/workspace"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
 func testSandboxOption() RegistryOption {

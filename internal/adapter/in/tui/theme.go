@@ -2,7 +2,7 @@ package tui
 
 import (
 	"github.com/charmbracelet/lipgloss"
-	"github.com/phongsathornpt/proton/internal/base/buildinfo"
+	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
 )
 
 const (

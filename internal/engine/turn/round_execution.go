@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/phongsathornpt/proton/internal/base/contextutil"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/base/contextutil"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 type executedCall struct {
