@@ -70,3 +70,69 @@ func writeSourceTestFile(t *testing.T, root, name, content string) {
 		t.Fatal(err)
 	}
 }
+
+func TestSourceViewSkipsProtectedPaths(t *testing.T) {
+	root := t.TempDir()
+	writeSourceTestFile(t, root, "public/main.go", "needle\n")
+	writeSourceTestFile(t, root, "secrets/token.go", "needle secret\n")
+	ws, err := workspace.New(root, []string{"secrets"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "source-protected", "read_file", map[string]any{
+		"path": ".", "view": "source", "query": "needle",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result.Output, "public/main.go") || strings.Contains(result.Output, "secrets/token.go") || strings.Contains(result.Output, "needle secret") {
+		t.Fatalf("protected source leaked into output: %s", result.Output)
+	}
+}
+
+func TestSourceViewRejectsEscapingRootSymlink(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	writeSourceTestFile(t, outside, "secret.go", "needle outside\n")
+	link := filepath.Join(root, "outside-link")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	ws, err := workspace.New(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = New(ws).Execute(context.Background(), newJSONCall(t, "source-symlink", "read_file", map[string]any{
+		"path": "outside-link", "view": "source", "query": "needle",
+	}))
+	if err == nil {
+		t.Fatal("source view allowed root symlink outside workspace")
+	}
+	failure := tool.FailureFromError(err)
+	if failure == nil || failure.Code != tool.ErrorCodeOutsideWorkspace {
+		t.Fatalf("failure = %#v, want outside_workspace; err=%v", failure, err)
+	}
+}
+
+func TestSourceViewDoesNotTraverseNestedSymlinks(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	writeSourceTestFile(t, root, "inside.go", "needle inside\n")
+	writeSourceTestFile(t, outside, "secret.go", "needle outside\n")
+	if err := os.Symlink(outside, filepath.Join(root, "linked")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	ws, err := workspace.New(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "source-nested-symlink", "read_file", map[string]any{
+		"path": ".", "view": "source", "query": "needle",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result.Output, "inside.go") || strings.Contains(result.Output, "needle outside") || strings.Contains(result.Output, "linked/") {
+		t.Fatalf("nested symlink content leaked: %s", result.Output)
+	}
+}
