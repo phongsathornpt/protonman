@@ -28,6 +28,7 @@ var slashCatalog = []slashCommand{
 	{name: "tools", description: "list tools"},
 	{name: "skills", aliases: []string{"skill"}, description: "browse, activate, or toggle agent skills (/skills [name|active|toggle])", takesArgs: true},
 	{name: "project", aliases: []string{"proton"}, description: "inspect or edit project-local Proton settings (/project [status|init|set ...])", takesArgs: true},
+	{name: "config", description: "edit user-level Proton settings (/config set subagents <on|off>)", takesArgs: true},
 	{name: "session", description: "show the active session"},
 	{name: "sessions", description: "list resumable sessions for this workspace"},
 	{name: "agents", description: "inspect live and retained subagents"},
