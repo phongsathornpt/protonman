@@ -358,8 +358,8 @@ func TestAgentsPaneShowsBoundModelIdentity(t *testing.T) {
 func TestSubagentLifecycleCollapsesIntoOneRunCell(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	delegate, _ := tool.NewCall("d1", "delegate_task", json.RawMessage(`{"profile":"int","task":"inspect router"}`))
-	wait, _ := tool.NewCall("w1", "wait_agent", json.RawMessage(`{"agent_id":"int-7"}`))
-	m.applyTurnEvents([]turn.Event{{Kind: turn.EventToolCall, Call: delegate}, {Kind: turn.EventToolResult, Call: delegate, Result: tool.Result{CallID: "d1", ToolName: "delegate_task", StructuredOutput: json.RawMessage(`{"agent_id":"int-7","status":"queued"}`)}}, {Kind: turn.EventToolCall, Call: wait}, {Kind: turn.EventToolResult, Call: wait, Result: tool.Result{CallID: "w1", ToolName: "wait_agent", StructuredOutput: json.RawMessage(`{"agent_id":"int-7","status":"completed","result":{"summary":"found routing issue"}}`)}}})
+	wait, _ := tool.NewCall("w1", "wait_agent", json.RawMessage(`{}`))
+	m.applyTurnEvents([]turn.Event{{Kind: turn.EventToolCall, Call: delegate}, {Kind: turn.EventToolResult, Call: delegate, Result: tool.Result{CallID: "d1", ToolName: "delegate_task", StructuredOutput: json.RawMessage(`{"agent_id":"int-7","status":"queued"}`)}}, {Kind: turn.EventToolCall, Call: wait}, {Kind: turn.EventToolResult, Call: wait, Result: tool.Result{CallID: "w1", ToolName: "wait_agent", StructuredOutput: json.RawMessage(`{"timed_out":false,"event":{"kind":"agent_completed","agent_id":"int-7","message":"found routing issue"},"agents":[{"id":"int-7","state":"completed"}]}`)}}})
 	cells := m.historyState.Cells()
 	if len(cells) != 1 {
 		t.Fatalf("history cells=%d, want one delegated run: %#v", len(cells), cells)
@@ -391,23 +391,23 @@ func TestSubagentRunsStayDistinctByAgentID(t *testing.T) {
 	}
 }
 
-func TestAgentPollingFailureDoesNotLeakRPCTranscript(t *testing.T) {
+func TestAgentWaitTimeoutDoesNotLeakRPCTranscript(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	delegate, _ := tool.NewCall("d1", "delegate_task", json.RawMessage(`{"profile":"int","task":"inspect router"}`))
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: delegate})
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: delegate, Result: tool.Result{CallID: "d1", ToolName: "delegate_task", StructuredOutput: json.RawMessage(`{"agent_id":"int-7","status":"running"}`)}})
-	wait, _ := tool.NewCall("w1", "wait_agent", json.RawMessage(`{"agent_id":"int-7"}`))
+	wait, _ := tool.NewCall("w1", "wait_agent", json.RawMessage(`{}`))
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: wait})
-	m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: wait, Result: tool.Result{CallID: "w1", ToolName: "wait_agent", Failure: &tool.Failure{Code: tool.ErrorCodeDeadlineExceeded, Message: "wait timeout"}}})
+	m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: wait, Result: tool.Result{CallID: "w1", ToolName: "wait_agent", StructuredOutput: json.RawMessage(`{"timed_out":true,"event":null,"agents":[{"id":"int-7","state":"running"}]}`)}})
 	plain := m.historyState.Raw()
-	for _, leaked := range []string{"Wait agent", "wait_agent", "Waiting for int-7", "deadline_exceeded"} {
+	for _, leaked := range []string{"Wait agent", "wait_agent", "Waiting for int-7", "deadline_exceeded", "wait timed out"} {
 		if strings.Contains(plain, leaked) {
-			t.Fatalf("orchestration failure leaked into transcript: %q", plain)
+			t.Fatalf("orchestration wait leaked into transcript: %q", plain)
 		}
 	}
 	run := m.historyState.AgentRun("int-7")
-	if run == nil || !strings.Contains(run.Activity, "status check failed") {
-		t.Fatalf("run activity=%#v", run)
+	if run == nil || run.Activity != "" || run.State != agent.StateRunning {
+		t.Fatalf("run state=%#v", run)
 	}
 }
 
@@ -431,7 +431,7 @@ func TestTerminalAgentLeavesLivePaneButStaysInTranscript(t *testing.T) {
 func TestOutOfOrderAgentResultMergesIntoDelegateRun(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	delegate, _ := tool.NewCall("d1", "delegate_task", json.RawMessage(`{"profile":"int","task":"inspect router"}`))
-	get, _ := tool.NewCall("g1", "get_agent", json.RawMessage(`{"agent_id":"int-7"}`))
+	get, _ := tool.NewCall("g1", "get_agent", json.RawMessage(`{}`))
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: delegate})
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: get})
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: get, Result: tool.Result{CallID: "g1", ToolName: "get_agent", StructuredOutput: json.RawMessage(`{"agent_id":"int-7","status":"running"}`)}})
@@ -486,7 +486,7 @@ func TestLongTurnWithSubagentsKeepsProgressCoherent(t *testing.T) {
 	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", Task: "inspect router", State: agent.StateRunning, StartedAt: time.Now().Add(-10 * time.Second)}, {ID: "reviewer-2", Task: "review safety", State: agent.StateRunning, StartedAt: time.Now().Add(-9 * time.Second)}, {ID: "int-3", Task: "analyze boundaries", State: agent.StateQueued, StartTime: time.Now().Add(-8 * time.Second)}}
 	m.agentActivity["explorer-1"] = AgentActivity{Label: "using grep"}
 	delegate, _ := tool.NewCall("d1", "delegate_task", json.RawMessage(`{"profile":"int","task":"inspect router"}`))
-	wait, _ := tool.NewCall("w1", "wait_agent", json.RawMessage(`{"agent_id":"explorer-1"}`))
+	wait, _ := tool.NewCall("w1", "wait_agent", json.RawMessage(`{}`))
 	m.applyTurnEvents([]turn.Event{{Kind: turn.EventToolCall, Round: 1, Call: delegate}, {Kind: turn.EventToolResult, Round: 1, Call: delegate, Result: tool.Result{CallID: "d1", ToolName: "delegate_task", Output: `{"agent_id":"explorer-1","status":"queued"}`}}, {Kind: turn.EventToolCall, Round: 2, Call: wait}})
 	status := m.statusView()
 	for _, want := range []string{"coordinating", "3 agents"} {

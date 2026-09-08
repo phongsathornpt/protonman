@@ -178,10 +178,17 @@ func summarizeAgentTool(name, body string) string {
 		}
 		return "subagent spawned"
 	case "wait_agent":
-		if status == "queued" || status == "running" || status == "canceling" {
-			return fmt.Sprintf("waiting for %s · %s", id, status)
+		if timedOut, _ := payload["timed_out"].(bool); timedOut {
+			return "no new agent activity"
 		}
-		return joinAgentCompletionSummary(id, status, resultSummary)
+		if event, ok := payload["event"].(map[string]any); ok {
+			eventID, _ := event["agent_id"].(string)
+			eventKind, _ := event["kind"].(string)
+			if eventID != "" || eventKind != "" {
+				return strings.Trim(strings.Join([]string{eventID, eventKind}, " · "), " ·")
+			}
+		}
+		return "agent activity received"
 	case "get_agent":
 		return joinAgentCompletionSummary(id, status, resultSummary)
 	case "cancel_agent":
