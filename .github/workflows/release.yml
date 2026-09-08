@@ -116,12 +116,28 @@ jobs:
           pattern: protonman-*
           path: dist
           merge-multiple: true
-      - name: Generate checksums and stage installer
+      - name: Verify release assets and generate checksums
         shell: bash
         run: |
           set -euo pipefail
           cd dist
-          sha256sum protonman_* > checksums.txt
+          plain_version="${GITHUB_REF_NAME#v}"
+          expected=(
+            "protonman_${plain_version}_linux_amd64.tar.gz"
+            "protonman_${plain_version}_linux_arm64.tar.gz"
+            "protonman_${plain_version}_darwin_amd64.tar.gz"
+            "protonman_${plain_version}_darwin_arm64.tar.gz"
+            "protonman_${plain_version}_windows_amd64.zip"
+          )
+          for asset in "${expected[@]}"; do
+            if [[ ! -f "$asset" ]]; then
+              echo "missing release artifact: $asset" >&2
+              printf 'downloaded artifacts:\n' >&2
+              find . -maxdepth 1 -type f -printf '  %f\n' | sort >&2
+              exit 1
+            fi
+          done
+          sha256sum "${expected[@]}" > checksums.txt
           cp ../install.sh install.sh
       - name: Publish GitHub Release
         shell: bash
@@ -131,16 +147,26 @@ jobs:
         run: |
           set -euo pipefail
           tag="$GITHUB_REF_NAME"
+          plain_version="${tag#v}"
           title="Protonman $tag"
+          assets=(
+            "dist/protonman_${plain_version}_linux_amd64.tar.gz"
+            "dist/protonman_${plain_version}_linux_arm64.tar.gz"
+            "dist/protonman_${plain_version}_darwin_amd64.tar.gz"
+            "dist/protonman_${plain_version}_darwin_arm64.tar.gz"
+            "dist/protonman_${plain_version}_windows_amd64.zip"
+            "dist/checksums.txt"
+            "dist/install.sh"
+          )
           prerelease=()
           if [[ "$tag" == *-* ]]; then
             prerelease=(--prerelease)
           fi
 
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" dist/* --clobber
+            gh release upload "$tag" "${assets[@]}" --clobber
           else
-            gh release create "$tag" dist/* \
+            gh release create "$tag" "${assets[@]}" \
               --verify-tag \
               --generate-notes \
               --title "$title" \
