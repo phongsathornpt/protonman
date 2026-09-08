@@ -12,17 +12,23 @@ type fileDocument struct {
 }
 
 type fileAgent struct {
-	SubagentsEnabled     *bool   `toml:"subagents_enabled,omitempty"`
-	MaxToolCalls         *int    `toml:"max_tool_calls,omitempty"`
-	Profile              *string `toml:"profile,omitempty"`
-	ReasoningEffort      *string `toml:"reasoning_effort,omitempty"`
-	MaxLiveSubagents     *int    `toml:"max_live_subagents,omitempty"`
-	MaxRetainedSubagents *int    `toml:"max_retained_subagents,omitempty"`
-	SubagentMaxRuntime   *string `toml:"subagent_max_runtime,omitempty"`
-	SubagentWaitTimeout  *string `toml:"subagent_wait_timeout,omitempty"`
-	SubagentQueueTimeout *string `toml:"subagent_queue_timeout,omitempty"`
-	CompletedResultTTL   *string `toml:"completed_result_ttl,omitempty"`
-	SubagentTimeout      *string `toml:"subagent_timeout,omitempty"` // legacy
+	SubagentsEnabled     *bool                   `toml:"subagents_enabled,omitempty"`
+	Subagents            map[string]fileSubagent `toml:"subagents,omitempty"`
+	MaxToolCalls         *int                    `toml:"max_tool_calls,omitempty"`
+	Profile              *string                 `toml:"profile,omitempty"`
+	ReasoningEffort      *string                 `toml:"reasoning_effort,omitempty"`
+	MaxLiveSubagents     *int                    `toml:"max_live_subagents,omitempty"`
+	MaxRetainedSubagents *int                    `toml:"max_retained_subagents,omitempty"`
+	SubagentMaxRuntime   *string                 `toml:"subagent_max_runtime,omitempty"`
+	SubagentWaitTimeout  *string                 `toml:"subagent_wait_timeout,omitempty"`
+	SubagentQueueTimeout *string                 `toml:"subagent_queue_timeout,omitempty"`
+	CompletedResultTTL   *string                 `toml:"completed_result_ttl,omitempty"`
+	SubagentTimeout      *string                 `toml:"subagent_timeout,omitempty"` // legacy
+}
+
+type fileSubagent struct {
+	Provider string `toml:"provider,omitempty"`
+	Model    string `toml:"model,omitempty"`
 }
 
 type fileRuntime struct {

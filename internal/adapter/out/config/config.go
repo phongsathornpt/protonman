@@ -64,18 +64,26 @@ type ModelConfig struct {
 	Provider string `toml:"provider"`
 }
 
+// SubagentModelConfig selects an explicit provider/model pair for one specialized subagent profile.
+// An absent profile entry inherits the current Universal language model dynamically.
+type SubagentModelConfig struct {
+	Provider string `toml:"provider"`
+	Model    string `toml:"model"`
+}
+
 // AgentConfig specifies autonomous agent execution settings.
 type AgentConfig struct {
-	SubagentsEnabled     bool                `toml:"subagents_enabled"`
-	MaxToolCalls         int                 `toml:"max_tool_calls"`
-	Profile              string              `toml:"profile"`
-	ReasoningEffort      sdk.ReasoningEffort `toml:"reasoning_effort"`
-	MaxLiveSubagents     int                 `toml:"max_live_subagents"`
-	MaxRetainedSubagents int                 `toml:"max_retained_subagents"`
-	SubagentMaxRuntime   time.Duration       `toml:"-"`
-	SubagentWaitTimeout  time.Duration       `toml:"-"`
-	SubagentQueueTimeout time.Duration       `toml:"-"`
-	CompletedResultTTL   time.Duration       `toml:"-"`
+	SubagentsEnabled     bool                           `toml:"subagents_enabled"`
+	Subagents            map[string]SubagentModelConfig `toml:"subagents,omitempty"`
+	MaxToolCalls         int                            `toml:"max_tool_calls"`
+	Profile              string                         `toml:"profile"`
+	ReasoningEffort      sdk.ReasoningEffort            `toml:"reasoning_effort"`
+	MaxLiveSubagents     int                            `toml:"max_live_subagents"`
+	MaxRetainedSubagents int                            `toml:"max_retained_subagents"`
+	SubagentMaxRuntime   time.Duration                  `toml:"-"`
+	SubagentWaitTimeout  time.Duration                  `toml:"-"`
+	SubagentQueueTimeout time.Duration                  `toml:"-"`
+	CompletedResultTTL   time.Duration                  `toml:"-"`
 }
 
 // RuntimeConfig specifies execution and network time bounds.
