@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := tui
 
-.PHONY: all tui run dev build run-bin clean test test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint help
+.PHONY: all tui run dev build run-bin clean test test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint tag tag-push help
 
 # Binary configuration
 BIN_DIR := bin
@@ -82,6 +82,21 @@ lint: vet
 ## clean: Remove built binaries
 clean:
 	rm -rf $(BIN_DIR)
+
+## tag: Create an annotated release tag (usage: make tag TAG=v1.2.3)
+tag:
+	@test -n "$(TAG)" || (echo "TAG is required, e.g. make tag TAG=v1.2.3" >&2; exit 1)
+	@printf '%s\n' "$(TAG)" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$$' || (echo "invalid release tag: $(TAG)" >&2; exit 1)
+	@test -z "$$(git status --porcelain)" || (echo "working tree must be clean before tagging" >&2; exit 1)
+	@! git rev-parse -q --verify "refs/tags/$(TAG)" >/dev/null || (echo "tag already exists: $(TAG)" >&2; exit 1)
+	git tag -a "$(TAG)" -m "Protonman $(TAG)"
+	@echo "created tag $(TAG)"
+
+## tag-push: Push an existing release tag to origin (usage: make tag-push TAG=v1.2.3)
+tag-push:
+	@test -n "$(TAG)" || (echo "TAG is required, e.g. make tag-push TAG=v1.2.3" >&2; exit 1)
+	@git rev-parse -q --verify "refs/tags/$(TAG)" >/dev/null || (echo "local tag does not exist: $(TAG)" >&2; exit 1)
+	git push origin "$(TAG)"
 
 ## help: Display this help message
 help:
