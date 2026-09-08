@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
-	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 )
 
 type ModelItem struct {
@@ -43,7 +43,7 @@ func ModelRows(snapshot ModelSnapshot) []string {
 		return []string{
 			tuistyle.BrandStyle.Render("Select Model · " + snapshot.ProviderName), "",
 			tuistyle.ErrorStyle.Render("Failed to load models"),
-			tuistyle.MutedStyle.Render(tool.TruncateRunes(snapshot.ErrorText, max(8, maxWidth-4))), "",
+			tuistyle.MutedStyle.Render(textview.TruncateEllipsis(snapshot.ErrorText, max(8, maxWidth-4))), "",
 			tuistyle.MutedStyle.Render("r retry · p providers · esc close"),
 		}
 	}
@@ -68,7 +68,7 @@ func ModelRows(snapshot ModelSnapshot) []string {
 		if snapshot.Filtering {
 			search += "█"
 		}
-		rows = append(rows, tuistyle.MutedStyle.Render(tool.TruncateRunes(search, maxWidth-2)))
+		rows = append(rows, tuistyle.MutedStyle.Render(textview.TruncateEllipsis(search, maxWidth-2)))
 	}
 	rows = append(rows, "")
 	if offset > 0 {
@@ -94,7 +94,7 @@ func ModelRows(snapshot ModelSnapshot) []string {
 		if item.Free {
 			line += " · FREE"
 		}
-		line = tool.TruncateRunes(line, contentWidth)
+		line = textview.TruncateEllipsis(line, contentWidth)
 		switch {
 		case idx == index:
 			rows = append(rows, tuistyle.BrandStyle.Render(line))
@@ -104,7 +104,7 @@ func ModelRows(snapshot ModelSnapshot) []string {
 			rows = append(rows, tuistyle.MutedStyle.Render(line))
 		}
 		if showDetails && strings.TrimSpace(item.Details) != "" {
-			rows = append(rows, tuistyle.MutedStyle.Render("    "+tool.TruncateRunes(item.Details, max(4, contentWidth-4))))
+			rows = append(rows, tuistyle.MutedStyle.Render("    "+textview.TruncateEllipsis(item.Details, max(4, contentWidth-4))))
 		}
 	}
 	if visibleEnd < len(snapshot.Models) {

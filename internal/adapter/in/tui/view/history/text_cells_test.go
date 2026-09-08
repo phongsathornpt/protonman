@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 )
@@ -94,5 +95,33 @@ func TestAssistantIncrementalMarkdownResetsForWidthAndMutation(t *testing.T) {
 	joined := strings.Join(narrow, "\n")
 	if strings.Contains(joined, "first line") || !strings.Contains(joined, "replacement") {
 		t.Fatalf("incremental cache survived replacement: %q", joined)
+	}
+}
+
+func TestAssistantStreamingThaiMatchesFullRender(t *testing.T) {
+	const text = "กำลังแยกกลุ่ม failure ว่าเป็น TDZ, bun-adapter, หรือ logic จริง"
+	full := (&AssistantCell{Text: text}).RenderWidth(80)
+	streamed := &AssistantCell{}
+	for _, chunk := range []string{"กำลังแยก", "กลุ่ม failure ", "ว่าเป็น TDZ, ", "bun-adapter, หรือ logic จริง"} {
+		streamed.appendDelta(chunk)
+		for _, line := range streamed.RenderWidth(80) {
+			if !utf8.ValidString(line) {
+				t.Fatalf("stream render contains invalid UTF-8: %q", line)
+			}
+		}
+	}
+	if got := streamed.RenderWidth(80); !reflect.DeepEqual(got, full) {
+		t.Fatalf("streamed render=%q full=%q", got, full)
+	}
+}
+
+func TestAssistantCacheTailStartsOnUTF8Boundary(t *testing.T) {
+	text := strings.Repeat("กำลัง", 30)
+	tail := assistantCacheTail(text)
+	if !utf8.ValidString(tail) {
+		t.Fatalf("assistant cache tail is invalid UTF-8: %q", tail)
+	}
+	if len(tail) > 64 {
+		t.Fatalf("assistant cache tail bytes=%d want <=64", len(tail))
 	}
 }

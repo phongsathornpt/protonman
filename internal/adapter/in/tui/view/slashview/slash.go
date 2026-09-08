@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
-	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 )
 
 type Command struct {
@@ -238,18 +238,18 @@ func Render(matches []Command, index, width, maxRows int, kind ContextKind) stri
 			if box == "" {
 				box = "[ ]"
 			}
-			name := tool.TruncateRunes(command.Name, maxName)
+			name := textview.TruncateEllipsis(command.Name, maxName)
 			scope := ""
 			if command.Scope != "" {
-				scope = fmt.Sprintf("[%-7s]", command.Scope)
+				scope = "[" + textview.PadRight(command.Scope, 7) + "]"
 			}
 			consumed := 2 + len(box) + 1 + maxName + 1 + 9 + 1
 			remaining := max(10, width-consumed-2)
-			row = fmt.Sprintf("%s%s %-*s %-9s %s", cursor, box, maxName, name, scope, tool.TruncateRunes(command.Description, remaining))
+			row = cursor + box + " " + textview.PadRight(name, maxName) + " " + textview.PadRight(scope, 9) + " " + textview.TruncateEllipsis(command.Description, remaining)
 		} else {
 			label := "/" + command.Name
 			remaining := max(10, width-20)
-			row = fmt.Sprintf("%s%-16s %s", cursor, label, tool.TruncateRunes(command.Description, remaining))
+			row = cursor + textview.PadRight(label, 16) + " " + textview.TruncateEllipsis(command.Description, remaining)
 		}
 		if selected {
 			lines = append(lines, lipgloss.NewStyle().Bold(true).Foreground(tuistyle.AccentAssistant).Render(row))

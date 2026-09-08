@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
@@ -199,7 +200,7 @@ func agentResultSummary(payload map[string]any) string {
 		return ""
 	}
 	summary, _ := result["summary"].(string)
-	return tool.TruncateRunes(strings.TrimSpace(summary), 96)
+	return textview.TruncateEllipsis(strings.TrimSpace(summary), 96)
 }
 
 func joinAgentCompletionSummary(id, status, summary string) string {
@@ -284,7 +285,7 @@ func summarizeWebFetch(body string, truncated bool) string {
 		rawTitle := html.UnescapeString(strings.TrimSpace(matches[1]))
 		rawTitle = strings.Join(strings.Fields(rawTitle), " ")
 		if rawTitle != "" {
-			return fmt.Sprintf("%q (%s)", tool.TruncateRunes(rawTitle, 45), sizeStr)
+			return fmt.Sprintf("%q (%s)", textview.TruncateEllipsis(rawTitle, 45), sizeStr)
 		}
 	}
 
@@ -416,7 +417,7 @@ func FormatPath(target string) string {
 		parts := strings.SplitN(target, " in ", 2)
 		pattern := strings.Trim(parts[0], `"`)
 		if ansi.StringWidth(pattern) > 30 {
-			pattern = tool.TruncateRunes(pattern, 28)
+			pattern = textview.TruncateEllipsis(pattern, 28)
 		}
 		return tuistyle.ToolTargetStyle.Render(fmt.Sprintf("%q", pattern)) + tuistyle.MutedStyle.Render(" in ") + FormatPath(parts[1])
 	}
@@ -424,7 +425,7 @@ func FormatPath(target string) string {
 	if strings.HasPrefix(target, `"`) && strings.HasSuffix(target, `"`) {
 		inner := strings.Trim(target, `"`)
 		if ansi.StringWidth(inner) > 36 {
-			inner = tool.TruncateRunes(inner, 34)
+			inner = textview.TruncateEllipsis(inner, 34)
 			return tuistyle.ToolTargetStyle.Render(fmt.Sprintf("%q", inner))
 		}
 		return tuistyle.ToolTargetStyle.Render(target)
@@ -432,7 +433,7 @@ func FormatPath(target string) string {
 	// Check if URL:
 	if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") {
 		if ansi.StringWidth(target) > 50 {
-			target = tool.TruncateRunes(target, 48)
+			target = textview.TruncateEllipsis(target, 48)
 		}
 		return tuistyle.ToolTargetStyle.Render(target)
 	}
@@ -468,7 +469,7 @@ func ExtractReadFileExcerpt(body string) string {
 			strings.HasPrefix(trimmed, "# ") ||
 			strings.HasPrefix(trimmed, "## ") ||
 			strings.HasPrefix(trimmed, "module ") {
-			return tool.TruncateRunes(trimmed, 65)
+			return textview.TruncateEllipsis(trimmed, 65)
 		}
 	}
 	return ""
@@ -692,7 +693,7 @@ func FormatGrepView(lines []string, target string, width int) []string {
 			avail := contentWidth - ansi.StringWidth(file) - len(lineNum) - 4
 			cleanContent := strings.TrimSpace(content)
 			if avail > 10 && ansi.StringWidth(cleanContent) > avail {
-				cleanContent = tool.TruncateRunes(cleanContent, avail)
+				cleanContent = textview.TruncateEllipsis(cleanContent, avail)
 			}
 
 			highlightedContent := highlightGrepTerms(cleanContent, terms)
@@ -700,7 +701,7 @@ func FormatGrepView(lines []string, target string, width int) []string {
 			formatted = append(formatted, lineStr)
 		} else {
 			if ansi.StringWidth(trimmed) > contentWidth {
-				trimmed = tool.TruncateRunes(trimmed, contentWidth)
+				trimmed = textview.TruncateEllipsis(trimmed, contentWidth)
 			}
 			formatted = append(formatted, tuistyle.BodyStyle.Render(trimmed))
 		}
