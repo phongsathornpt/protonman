@@ -31,7 +31,7 @@ func NewCalculate() tool.Handler { return calculateHandler{} }
 func (calculateHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:        "math",
-		Description: "Evaluate deterministic numeric expressions locally in pure Go. Use for arithmetic and common math functions instead of shell, Python, Node, or ad-hoc scripts. Supports +, -, *, /, %, ^, parentheses, pi, e, and common functions such as sqrt, abs, min, max, pow, round, floor, ceil, ln, log10, exp, sin, cos, and tan.",
+		Description: "Evaluate deterministic numeric expressions locally in pure Go. Supports +, -, *, /, %, ^, parentheses, pi, e, and common functions such as sqrt, abs, min, max, pow, round, floor, ceil, ln, log10, exp, sin, cos, and tan.",
 		Kind:        tool.KindCompute,
 		Mutability:  tool.MutabilityReadOnly,
 		Safety: tool.SafetyContract{

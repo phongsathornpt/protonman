@@ -82,7 +82,7 @@ func NewGrep(workspaceRoot *workspace.Workspace) tool.Handler {
 func (grepHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                "grep",
-		Description:         "Search workspace file contents with a regular expression. Prefer this over shell grep or rg for repository search.",
+		Description:         "Search workspace file contents with a regular expression and return bounded match evidence.",
 		Kind:                tool.KindForName("grep"),
 		Mutability:          tool.MutabilityReadOnly,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead},

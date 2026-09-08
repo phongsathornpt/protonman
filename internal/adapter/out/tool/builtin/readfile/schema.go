@@ -25,7 +25,7 @@ type readFileInput struct {
 func (readFileHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                "read",
-		Description:         "Read and inspect workspace artifacts through one tool. Text keeps byte/line pagination and SHA-256 evidence; source performs bounded recursive repository search with context; image and structured views provide bounded pure-Go analysis. Prefer this over shell or language-runtime scripts used only to inspect workspace artifacts.",
+		Description:         "Read and inspect workspace artifacts. Text keeps byte/line pagination and SHA-256 evidence; source performs bounded recursive repository search with context; image and structured views provide bounded pure-Go analysis.",
 		Kind:                tool.KindForName("read"),
 		Mutability:          tool.MutabilityReadOnly,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead},
