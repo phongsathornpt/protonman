@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
 	"github.com/projectTHORN/proton/internal/feature/skill"
 	"sync"
@@ -34,6 +35,37 @@ const (
 // RunnerFactory builds an injectable turn.Runner for a specific subagent run.
 type RunnerFactory func(profile Profile, tools *toolcall.Service) (turn.Runner, error)
 
+// ModelResolver holds immutable per-profile language-model overrides.
+// Profiles without an override inherit the current Universal model at admission.
+type ModelResolver struct {
+	overrides map[Profile]sdk.LanguageModel
+}
+
+// NewModelResolver validates and snapshots explicit subagent model overrides.
+func NewModelResolver(overrides map[Profile]sdk.LanguageModel) (*ModelResolver, error) {
+	cloned := make(map[Profile]sdk.LanguageModel, len(overrides))
+	for profile, languageModel := range overrides {
+		if !profile.IsSubagent() {
+			return nil, fmt.Errorf("model override profile %q is not delegable", profile)
+		}
+		if languageModel == nil {
+			return nil, fmt.Errorf("model override for %s is nil", profile)
+		}
+		cloned[profile] = languageModel
+	}
+	return &ModelResolver{overrides: cloned}, nil
+}
+
+// Resolve selects an explicit profile model or the caller-provided fallback.
+func (r *ModelResolver) Resolve(profile Profile, fallback sdk.LanguageModel) sdk.LanguageModel {
+	if r != nil {
+		if languageModel, ok := r.overrides[profile]; ok {
+			return languageModel
+		}
+	}
+	return fallback
+}
+
 // AgentStatus describes the live state of an in-flight subagent.
 type AgentStatus struct {
 	ID         string    `json:"id"`
@@ -48,17 +80,19 @@ type AgentStatus struct {
 }
 
 type agentEntry struct {
-	status  AgentStatus
-	cancel  context.CancelFunc
-	done    chan struct{}
-	started chan struct{}
-	result  Result
-	err     error
+	status        AgentStatus
+	languageModel sdk.LanguageModel
+	cancel        context.CancelFunc
+	done          chan struct{}
+	started       chan struct{}
+	result        Result
+	err           error
 }
 
 // Coordinator manages subagent execution in bounded, cancellable goroutines.
 type Coordinator struct {
 	languageModel  sdk.LanguageModel
+	modelResolver  *ModelResolver
 	parentRegistry tool.Registry
 	skillRegistry  *skill.Registry
 	workspace      *workspace.Workspace
@@ -119,6 +153,11 @@ func WithMaxConcurrency(n int) Option {
 			c.wsAdmission = make(chan struct{}, 1)
 		}
 	}
+}
+
+// WithModelResolver configures optional per-profile model routing for new subagents.
+func WithModelResolver(resolver *ModelResolver) Option {
+	return func(c *Coordinator) { c.modelResolver = resolver }
 }
 
 // WithReasoningEffort overrides portable profile reasoning for subagents.

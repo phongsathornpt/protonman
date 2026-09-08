@@ -18,13 +18,19 @@ import (
 )
 
 func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) {
+	c.agentsMu.RLock()
+	languageModel := c.languageModel
+	c.agentsMu.RUnlock()
+	return c.executeWithModel(ctx, req, languageModel)
+}
+
+func (c *Coordinator) executeWithModel(ctx context.Context, req Request, languageModel sdk.LanguageModel) (Result, error) {
 	if err := ctx.Err(); err != nil {
 		return Result{AgentID: req.ID, Profile: req.Profile}, err
 	}
 
 	c.agentsMu.RLock()
 	parentRegistry := c.parentRegistry
-	languageModel := c.languageModel
 	permMode := c.permissionMode
 	prompter := c.prompt
 	guard := c.guard

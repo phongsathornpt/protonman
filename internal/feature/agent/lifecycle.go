@@ -45,6 +45,11 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 		c.agentsMu.Unlock()
 		return Handle{}, fmt.Errorf("%w (%d)", ErrLiveLimit, c.maxLiveAgents)
 	}
+	boundModel := c.languageModel
+	if c.modelResolver != nil {
+		boundModel = c.modelResolver.Resolve(req.Profile, boundModel)
+	}
+
 	id := strings.TrimSpace(req.ID)
 	if id == "" {
 		id = fmt.Sprintf("%s-%d", req.Profile, atomic.AddUint64(&c.seq, 1))
@@ -57,6 +62,7 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	queuedAt := time.Now()
 	runCtx, runCancel := context.WithCancel(c.rootCtx)
 	entry := &agentEntry{
+		languageModel: boundModel,
 		status: AgentStatus{
 			ID: id, ParentID: req.ParentID, Profile: req.Profile, Task: req.Task,
 			State: StateQueued, StartTime: queuedAt,
@@ -137,7 +143,7 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 	defer execCancel()
 
 	c.emit(execCtx, Event{Kind: EventAgentStarted, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task, QueueDuration: queueDuration})
-	res, runErr := c.execute(execCtx, req)
+	res, runErr := c.executeWithModel(execCtx, req, entry.languageModel)
 	res.QueueDuration = queueDuration
 	res.Duration = time.Since(startedAt)
 	res.TotalDuration = time.Since(queuedAt)
