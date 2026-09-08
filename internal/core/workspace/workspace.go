@@ -130,31 +130,47 @@ func (w *Workspace) addReadRootLocked(dir string) {
 
 // ReserveInternalPath marks Protonman-owned state as inaccessible to model-facing workspace tools.
 func (w *Workspace) ReserveInternalPath(path string) error {
-	canonical, err := pathutil.Canonical(path)
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolve internal workspace path: %w", err)
+	}
+	absolute = filepath.Clean(absolute)
+	canonical, err := pathutil.Canonical(absolute)
 	if err != nil {
 		return fmt.Errorf("resolve internal workspace path: %w", err)
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	for _, existing := range w.internalRoots {
-		if existing == canonical {
-			return nil
+	for _, candidate := range []string{absolute, canonical} {
+		found := false
+		for _, existing := range w.internalRoots {
+			if existing == candidate {
+				found = true
+				break
+			}
+		}
+		if !found {
+			w.internalRoots = append(w.internalRoots, candidate)
 		}
 	}
-	w.internalRoots = append(w.internalRoots, canonical)
 	return nil
 }
 
 // IsInternalPath reports whether path belongs to a reserved Protonman internal subtree.
 func (w *Workspace) IsInternalPath(path string) (bool, error) {
-	canonical, err := pathutil.Canonical(path)
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return false, err
+	}
+	absolute = filepath.Clean(absolute)
+	canonical, err := pathutil.Canonical(absolute)
 	if err != nil {
 		return false, err
 	}
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	for _, root := range w.internalRoots {
-		if isWithin(root, canonical) {
+		if isWithin(root, absolute) || isWithin(root, canonical) {
 			return true, nil
 		}
 	}
@@ -264,8 +280,9 @@ func (w *Workspace) CheckAbsoluteRead(ctx context.Context, path string) error {
 		return w.checkAbsolute(ctx, clean)
 	}
 	w.mu.RLock()
-	defer w.mu.RUnlock()
-	for _, rr := range w.readRoots {
+	readRoots := append([]string(nil), w.readRoots...)
+	w.mu.RUnlock()
+	for _, rr := range readRoots {
 		if isWithin(rr, clean) {
 			if w.isProtected(clean) {
 				return newBoundaryError(
@@ -347,6 +364,8 @@ func (w *Workspace) checkAbsolute(ctx context.Context, path string) error {
 }
 
 func (w *Workspace) isWithinAnyReadRoot(path string) bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 	for _, rr := range w.readRoots {
 		if isWithin(rr, path) {
 			return true
