@@ -11,13 +11,20 @@ func TestConstants(t *testing.T) {
 		got  string
 		want string
 	}{
-		{envconfig.Home, "PROTON_HOME"},
-		{envconfig.TrustProject, "PROTON_TRUST_PROJECT"},
-		{envconfig.SessionID, "PROTON_SESSION_ID"},
-		{envconfig.Sandbox, "PROTON_SANDBOX"},
-		{envconfig.Telemetry, "PROTON_TELEMETRY"},
-		{envconfig.DebugLog, "PROTON_DEBUG_LOG"},
-		{envconfig.ForceTTY, "PROTON_FORCE_TTY"},
+		{envconfig.Home, "PROTONMAN_HOME"},
+		{envconfig.TrustProject, "PROTONMAN_TRUST_PROJECT"},
+		{envconfig.SessionID, "PROTONMAN_SESSION_ID"},
+		{envconfig.Sandbox, "PROTONMAN_SANDBOX"},
+		{envconfig.Telemetry, "PROTONMAN_TELEMETRY"},
+		{envconfig.DebugLog, "PROTONMAN_DEBUG_LOG"},
+		{envconfig.ForceTTY, "PROTONMAN_FORCE_TTY"},
+		{envconfig.LegacyHome, "PROTON_HOME"},
+		{envconfig.LegacyTrustProject, "PROTON_TRUST_PROJECT"},
+		{envconfig.LegacySessionID, "PROTON_SESSION_ID"},
+		{envconfig.LegacySandbox, "PROTON_SANDBOX"},
+		{envconfig.LegacyTelemetry, "PROTON_TELEMETRY"},
+		{envconfig.LegacyDebugLog, "PROTON_DEBUG_LOG"},
+		{envconfig.LegacyForceTTY, "PROTON_FORCE_TTY"},
 	}
 	for _, tc := range tests {
 		if tc.got != tc.want {
@@ -26,8 +33,21 @@ func TestConstants(t *testing.T) {
 	}
 }
 
-func TestValue(t *testing.T) {
-	key := "TEST_PROTON_VALUE_VAR"
+func TestValuePrefersCanonicalAndFallsBackToLegacy(t *testing.T) {
+	t.Setenv(envconfig.Home, "  canonical  ")
+	t.Setenv(envconfig.LegacyHome, "legacy")
+	if got := envconfig.Value(envconfig.Home); got != "canonical" {
+		t.Fatalf("Value(Home) = %q, want canonical", got)
+	}
+
+	t.Setenv(envconfig.Home, "")
+	if got := envconfig.Value(envconfig.Home); got != "legacy" {
+		t.Fatalf("Value(Home) legacy fallback = %q, want legacy", got)
+	}
+}
+
+func TestValueForUnmappedVariableIsDirect(t *testing.T) {
+	key := "TEST_PROTONMAN_VALUE_VAR"
 	t.Setenv(key, "   custom_value   ")
 	if got := envconfig.Value(key); got != "custom_value" {
 		t.Fatalf("Value(%q) = %q, want custom_value", key, got)
@@ -39,16 +59,16 @@ func TestValue(t *testing.T) {
 	}
 }
 
-func TestBool(t *testing.T) {
-	key := "TEST_PROTON_BOOL_VAR"
-	t.Setenv(key, "true")
-	if !envconfig.Bool(key) {
-		t.Fatalf("Bool(%q) = false, want true", key)
+func TestBoolUsesLegacyFallback(t *testing.T) {
+	t.Setenv(envconfig.TrustProject, "")
+	t.Setenv(envconfig.LegacyTrustProject, "true")
+	if !envconfig.Bool(envconfig.TrustProject) {
+		t.Fatal("Bool(TrustProject) = false, want legacy true fallback")
 	}
 
-	t.Setenv(key, "0")
-	if envconfig.Bool(key) {
-		t.Fatalf("Bool(%q) = true, want false", key)
+	t.Setenv(envconfig.TrustProject, "0")
+	if envconfig.Bool(envconfig.TrustProject) {
+		t.Fatal("Bool(TrustProject) ignored canonical false value")
 	}
 }
 

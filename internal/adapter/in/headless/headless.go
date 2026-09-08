@@ -9,14 +9,15 @@ import (
 	"io"
 	"strings"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
-	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/base/envconfig"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
-	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
+	"github.com/phongsathornpt/protonman/internal/feature/skill"
 )
 
 // Option configures the headless runner.
@@ -202,7 +203,7 @@ func (r *Runner) handleSkillsCommand(argument string, parts []string, output io.
 	if r.skills == nil || len(r.skills.List()) == 0 {
 		return writeEvent(output, format, Event{
 			Kind: EventKindText,
-			Text: fmt.Sprintf("No agent skills discovered.\nPlace skills in %s or .proton/skills/ (with PROTON_TRUST_PROJECT=1).", appdirs.UserSkillsDisplay()),
+			Text: fmt.Sprintf("No agent skills discovered.\nPlace skills in %s or .protonman/skills/ (with %s=1).", appdirs.UserSkillsDisplay(), envconfig.TrustProject),
 		})
 	}
 

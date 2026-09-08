@@ -148,7 +148,7 @@ func toolFailureSuggestions(toolName string, code tool.ErrorCode) []string {
 			suggestions = append(suggestions, "Verify workspace relative path spelling", "Use list_dir to inspect directory contents", "Use grep to locate the symbol or filename across the project")
 		}
 	case tool.ErrorCodeProtectedPath:
-		suggestions = append(suggestions, "This path is shielded by workspace protection rules (.proton/config.toml)")
+		suggestions = append(suggestions, "This path is shielded by workspace protection rules (.protonman/config.toml)")
 	case tool.ErrorCodeOutsideWorkspace:
 		suggestions = append(suggestions, "Tool operations are confined to the workspace root directory")
 	case tool.ErrorCodePermissionDenied:

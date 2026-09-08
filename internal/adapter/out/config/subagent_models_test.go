@@ -28,7 +28,7 @@ func TestLoadSubagentModelsDefaultsToInherit(t *testing.T) {
 func TestLoadSubagentModelsMergePerProfile(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent.subagents.strength]
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[agent.subagents.strength]
 provider = "protonman"
 model = "coding-model"
 
@@ -36,7 +36,7 @@ model = "coding-model"
 provider = "opencode"
 model = "fast-model"
 `)
-	writeConfig(t, filepath.Join(workDir, ".proton", "config.toml"), `[agent.subagents.intelligence]
+	writeConfig(t, filepath.Join(workDir, ".protonman", "config.toml"), `[agent.subagents.intelligence]
 provider = "anthropic"
 model = "reasoning-model"
 
@@ -67,7 +67,7 @@ model = "project-coding-model"
 func TestLoadSubagentModelsRejectsIncompleteOverride(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent.subagents.strength]
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[agent.subagents.strength]
 provider = "protonman"
 `)
 
@@ -80,7 +80,7 @@ provider = "protonman"
 func TestLoadSubagentModelsRejectsUnsupportedProfile(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent.subagents.universal]
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[agent.subagents.universal]
 provider = "protonman"
 model = "main-model"
 `)
@@ -94,7 +94,7 @@ model = "main-model"
 func TestLoadSubagentModelsRejectsLegacyAlias(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent.subagents.pow]
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[agent.subagents.pow]
 provider = "protonman"
 model = "legacy-model"
 `)
@@ -108,7 +108,7 @@ model = "legacy-model"
 func TestLoadSubagentReasoningMergesFieldWise(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent.subagents.strength]
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[agent.subagents.strength]
 provider = "protonman"
 model = "coding-model"
 reasoning_effort = "low"
@@ -116,7 +116,7 @@ reasoning_effort = "low"
 [agent.subagents.agility]
 reasoning_effort = "low"
 `)
-	writeConfig(t, filepath.Join(workDir, ".proton", "config.toml"), `[agent.subagents.strength]
+	writeConfig(t, filepath.Join(workDir, ".protonman", "config.toml"), `[agent.subagents.strength]
 reasoning_effort = "high"
 
 [agent.subagents.agility]
@@ -141,7 +141,7 @@ model = "fast-model"
 func TestLoadSubagentReasoningAllowsInheritedModel(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent.subagents.intelligence]
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[agent.subagents.intelligence]
 reasoning_effort = "high"
 `)
 
@@ -158,7 +158,7 @@ reasoning_effort = "high"
 func TestLoadSubagentReasoningRejectsInvalidValue(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent.subagents.agility]
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[agent.subagents.agility]
 reasoning_effort = "turbo"
 `)
 

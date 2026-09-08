@@ -48,3 +48,26 @@ func TestDiscoverUntrustedConfigIsDetectedButNotLoaded(t *testing.T) {
 		t.Fatalf("unexpected state: %#v", state)
 	}
 }
+
+func TestDiscoverFallsBackToLegacyProjectDirectory(t *testing.T) {
+	workDir := t.TempDir()
+	legacyRoot := appdirs.LegacyProjectRoot(workDir)
+	if err := os.MkdirAll(filepath.Join(legacyRoot, "skills", "legacy"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	legacyConfig := filepath.Join(legacyRoot, appdirs.ConfigFileName)
+	if err := os.WriteFile(legacyConfig, []byte("[agent]\nprofile = \"dex\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyRoot, "skills", "legacy", "SKILL.md"), []byte("# Legacy"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	state, err := Discover(context.Background(), Options{WorkDir: workDir, Trusted: true, ConfigSources: []string{legacyConfig}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.ProtonDir != legacyRoot || !state.ConfigLoaded || state.SkillCount != 1 {
+		t.Fatalf("legacy project state = %#v", state)
+	}
+}

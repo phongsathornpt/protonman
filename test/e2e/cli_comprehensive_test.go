@@ -199,7 +199,7 @@ func TestE2ECLISandboxAndTelemetryEnv(t *testing.T) {
 			"PROTON_TELEMETRY=invalid_sink_xyz",
 		},
 	})
-	if res.exitCode == 0 || !strings.Contains(res.stdout+res.stderr, "unsupported PROTON_TELEMETRY") {
+	if res.exitCode == 0 || !strings.Contains(res.stdout+res.stderr, "unsupported PROTONMAN_TELEMETRY") {
 		t.Fatalf("expected telemetry error, got: %s %s", res.stdout, res.stderr)
 	}
 }

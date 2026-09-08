@@ -18,7 +18,7 @@ type InitResult struct {
 }
 
 // Init creates a minimal project-local Protonman configuration without overwriting
-// an existing config file or following an existing .proton symlink.
+// an existing config file or following an existing .protonman symlink.
 func Init(ctx context.Context, workDir string) (InitResult, error) {
 	if err := ctx.Err(); err != nil {
 		return InitResult{}, err
@@ -36,12 +36,12 @@ func Init(ctx context.Context, workDir string) (InitResult, error) {
 			return result, fmt.Errorf("refusing project init through symlink: %s", root)
 		}
 		if !info.IsDir() {
-			return result, fmt.Errorf("project proton path is not a directory: %s", root)
+			return result, fmt.Errorf("project protonman path is not a directory: %s", root)
 		}
 	} else if !errors.Is(statErr, os.ErrNotExist) {
-		return result, fmt.Errorf("inspect project proton directory: %w", statErr)
+		return result, fmt.Errorf("inspect project protonman directory: %w", statErr)
 	} else if mkdirErr := os.Mkdir(root, 0o755); mkdirErr != nil && !errors.Is(mkdirErr, os.ErrExist) {
-		return result, fmt.Errorf("create project proton directory: %w", mkdirErr)
+		return result, fmt.Errorf("create project protonman directory: %w", mkdirErr)
 	}
 
 	if err := ctx.Err(); err != nil {

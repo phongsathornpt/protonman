@@ -19,6 +19,13 @@ func TestMutableProductLiteralsStayCentralized(t *testing.T) {
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", ".."))
 	allowed := map[string]string{
+		"PROTONMAN_HOME":               "internal/base/envconfig/env.go",
+		"PROTONMAN_TRUST_PROJECT":      "internal/base/envconfig/env.go",
+		"PROTONMAN_SESSION_ID":         "internal/base/envconfig/env.go",
+		"PROTONMAN_SANDBOX":            "internal/base/envconfig/env.go",
+		"PROTONMAN_TELEMETRY":          "internal/base/envconfig/env.go",
+		"PROTONMAN_DEBUG_LOG":          "internal/base/envconfig/env.go",
+		"PROTONMAN_FORCE_TTY":          "internal/base/envconfig/env.go",
 		"PROTON_HOME":                  "internal/base/envconfig/env.go",
 		"PROTON_TRUST_PROJECT":         "internal/base/envconfig/env.go",
 		"PROTON_SESSION_ID":            "internal/base/envconfig/env.go",
@@ -26,10 +33,11 @@ func TestMutableProductLiteralsStayCentralized(t *testing.T) {
 		"PROTON_TELEMETRY":             "internal/base/envconfig/env.go",
 		"PROTON_DEBUG_LOG":             "internal/base/envconfig/env.go",
 		"PROTON_FORCE_TTY":             "internal/base/envconfig/env.go",
+		".protonman":                   "internal/app/appdirs/dirs.go",
 		".proton":                      "internal/app/appdirs/dirs.go",
-		"~/.proton/config.toml":        "internal/app/appdirs/dirs.go",
-		"~/.proton/skills/":            "internal/app/appdirs/dirs.go",
-		"~/.proton/logs/mcp/":          "internal/app/appdirs/dirs.go",
+		"~/.protonman/config.toml":     "internal/app/appdirs/dirs.go",
+		"~/.protonman/skills/":         "internal/app/appdirs/dirs.go",
+		"~/.protonman/logs/mcp/":       "internal/app/appdirs/dirs.go",
 		"todo.md":                      "internal/core/session/resources.go",
 		"https://protonman.dev/api/v1": "internal/adapter/out/model/provider_preset.go",
 		"https://opencode.ai/zen/v1":   "internal/adapter/out/model/provider_preset.go",

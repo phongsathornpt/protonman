@@ -33,7 +33,7 @@ type State struct {
 	SkillCount   int
 }
 
-// Discover inspects the project-local .proton directory.
+// Discover inspects the project-local .protonman directory.
 func Discover(ctx context.Context, opts Options) (State, error) {
 	if err := ctx.Err(); err != nil {
 		return State{}, err
@@ -52,13 +52,13 @@ func Discover(ctx context.Context, opts Options) (State, error) {
 	}
 	state := State{
 		WorkDir:    absWorkDir,
-		ProtonDir:  appdirs.ProjectRoot(absWorkDir),
+		ProtonDir:  appdirs.ResolvedProjectRoot(absWorkDir),
 		Trusted:    opts.Trusted,
-		ConfigPath: appdirs.ProjectConfig(absWorkDir),
-		SkillsPath: appdirs.ProjectSkills(absWorkDir),
+		ConfigPath: appdirs.ResolvedProjectConfig(absWorkDir),
+		SkillsPath: appdirs.ResolvedProjectSkills(absWorkDir),
 	}
 	if state.Exists, err = isDir(state.ProtonDir); err != nil {
-		return State{}, fmt.Errorf("inspect project proton directory: %w", err)
+		return State{}, fmt.Errorf("inspect project protonman directory: %w", err)
 	}
 	if state.ConfigExists, err = isFile(state.ConfigPath); err != nil {
 		return State{}, fmt.Errorf("inspect project config: %w", err)

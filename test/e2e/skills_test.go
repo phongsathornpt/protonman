@@ -73,7 +73,7 @@ description: Project specific skill
 		})
 
 		// Should emit warning on stderr
-		if !strings.Contains(result.stderr, "skipping project skills") || !strings.Contains(result.stderr, "PROTON_TRUST_PROJECT=1") {
+		if !strings.Contains(result.stderr, "skipping project skills") || !strings.Contains(result.stderr, "PROTONMAN_TRUST_PROJECT=1") {
 			t.Fatalf("expected trust warning on stderr, got: %s", result.stderr)
 		}
 		// activate_skill should fail since skill is not loaded
@@ -86,7 +86,7 @@ description: Project specific skill
 		result := runProton(t, runOptions{
 			args: []string{"-y", "-p", `/call activate_skill {"name":"project-skill"}`},
 			dir:  ws,
-			env:  []string{"PROTON_HOME=" + home, "PROTON_TRUST_PROJECT=1"},
+			env:  []string{"PROTON_HOME=" + home, "PROTONMAN_TRUST_PROJECT=1"},
 		})
 
 		if result.exitCode != 0 {

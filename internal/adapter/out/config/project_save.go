@@ -72,23 +72,23 @@ func modifyProjectConfigFile(workDir string, mutate func(*fileDocument)) error {
 	if err != nil {
 		return fmt.Errorf("resolve project work directory: %w", err)
 	}
-	root := appdirs.ProjectRoot(absWorkDir)
+	root := appdirs.ResolvedProjectRoot(absWorkDir)
 	if info, statErr := os.Lstat(root); statErr == nil {
 		if info.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("refusing project config write through symlink: %s", root)
 		}
 		if !info.IsDir() {
-			return fmt.Errorf("project proton path is not a directory: %s", root)
+			return fmt.Errorf("project protonman path is not a directory: %s", root)
 		}
 	} else if errors.Is(statErr, os.ErrNotExist) {
 		if err := os.Mkdir(root, 0o755); err != nil && !errors.Is(err, os.ErrExist) {
-			return fmt.Errorf("create project proton directory: %w", err)
+			return fmt.Errorf("create project protonman directory: %w", err)
 		}
 	} else {
-		return fmt.Errorf("inspect project proton directory: %w", statErr)
+		return fmt.Errorf("inspect project protonman directory: %w", statErr)
 	}
 
-	path := appdirs.ProjectConfig(absWorkDir)
+	path := appdirs.ResolvedProjectConfig(absWorkDir)
 	var doc fileDocument
 	if info, statErr := os.Lstat(path); statErr == nil {
 		if info.Mode()&os.ModeSymlink != 0 {

@@ -13,7 +13,7 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 
 	if m.skills == nil || len(m.skills.List()) == 0 {
 		m.appendLine("No agent skills discovered.")
-		m.appendLine(fmt.Sprintf("Place skills in %s or .proton/skills/ (with PROTON_TRUST_PROJECT=1).", appdirs.UserSkillsDisplay()))
+		m.appendLine(fmt.Sprintf("Place skills in %s or .protonman/skills/ (with PROTONMAN_TRUST_PROJECT=1).", appdirs.UserSkillsDisplay()))
 		m.refreshViewport()
 		return nil
 	}
