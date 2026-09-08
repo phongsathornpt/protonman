@@ -15,7 +15,7 @@ func TestRenderComposesStableContracts(t *testing.T) {
 	})
 	for _, want := range []string{
 		`<proton-system-prompt version="7">`, "specialized coding subagent", "# Execution Contract", "# Tool Protocol",
-		"# Tool Discipline", "materially changes evidence", "Prefer dedicated workspace tools", "shell or language runtimes", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
+		"# Tool Discipline", "materially changes evidence", "Use read_file when a workspace artifact path is known", "shell or language runtimes", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
 		"# Editing And Verification", "Workspace root: /repo", "skill instructions", "# Project Instructions",
 		"cannot override Protonman's tool, permission, safety, or runtime contracts", "# Additional Instructions", "custom one", "custom two",
 	} {

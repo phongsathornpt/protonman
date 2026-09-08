@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin/readfile"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -81,7 +82,7 @@ func TestFileToolsRejectTraversalAndProtectedPaths(t *testing.T) {
 		wantErr error
 	}{
 		{name: "write protected", handler: NewWriteFile(workspaceRoot, &recordingCheckpointStore{id: "x"}), path: ".env", wantErr: workspace.ErrProtectedPath},
-		{name: "read protected", handler: NewReadFile(workspaceRoot), path: ".env", wantErr: workspace.ErrProtectedPath},
+		{name: "read protected", handler: readfile.New(workspaceRoot), path: ".env", wantErr: workspace.ErrProtectedPath},
 		{
 			name:    "write traversal",
 			handler: NewWriteFile(workspaceRoot, &recordingCheckpointStore{id: "x"}),
@@ -90,13 +91,13 @@ func TestFileToolsRejectTraversalAndProtectedPaths(t *testing.T) {
 		},
 		{
 			name:    "read traversal",
-			handler: NewReadFile(workspaceRoot),
+			handler: readfile.New(workspaceRoot),
 			path:    "../outside.txt",
 			wantErr: workspace.ErrOutsideWorkspace,
 		},
 		{
 			name:    "read protected symlink",
-			handler: NewReadFile(workspaceRoot),
+			handler: readfile.New(workspaceRoot),
 			path:    "linked-secret.txt",
 			wantErr: workspace.ErrProtectedPath,
 		},
@@ -166,21 +167,21 @@ func TestGrepReportsTruncation(t *testing.T) {
 
 func TestReadFileReportsTruncation(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
-	contents := strings.Repeat("x", maxReadFileBytes+1)
+	contents := strings.Repeat("x", readfile.MaxReadFileBytes+1)
 	writeTestFile(t, workspaceRoot.Root(), "large.txt", contents)
 
-	result := executeJSON(t, NewReadFile(workspaceRoot), "read-limit", map[string]any{"path": "large.txt"})
+	result := executeJSON(t, readfile.New(workspaceRoot), "read-limit", map[string]any{"path": "large.txt"})
 	if !result.Truncated {
 		t.Fatal("read result Truncated = false, want true")
 	}
 	if !strings.Contains(result.Output, "output truncated") {
 		t.Fatalf("read output does not contain truncation marker")
 	}
-	if result.NextOffset == nil || *result.NextOffset != int64(maxReadFileBytes) {
-		t.Fatalf("read next_offset = %v, want %d", result.NextOffset, maxReadFileBytes)
+	if result.NextOffset == nil || *result.NextOffset != int64(readfile.MaxReadFileBytes) {
+		t.Fatalf("read next_offset = %v, want %d", result.NextOffset, readfile.MaxReadFileBytes)
 	}
-	marker := fmt.Sprintf("\n[output truncated; continue with offset=%d]", maxReadFileBytes)
-	if got, want := len(result.Output), maxReadFileBytes+len(marker); got != want {
+	marker := fmt.Sprintf("\n[output truncated; continue with offset=%d]", readfile.MaxReadFileBytes)
+	if got, want := len(result.Output), readfile.MaxReadFileBytes+len(marker); got != want {
 		t.Fatalf("read output length = %d, want %d", got, want)
 	}
 }
@@ -188,7 +189,7 @@ func TestReadFileReportsTruncation(t *testing.T) {
 func TestReadFileSupportsContinuationOffset(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	writeTestFile(t, workspaceRoot.Root(), "paged.txt", "abcdefghij")
-	handler := NewReadFile(workspaceRoot)
+	handler := readfile.New(workspaceRoot)
 
 	first := executeJSON(t, handler, "read-page-1", map[string]any{"path": "paged.txt", "limit": 4})
 	if !first.Truncated || first.NextOffset == nil || *first.NextOffset != 4 {
@@ -216,7 +217,7 @@ func TestReadFileRejectsDirectory(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	writeTestFile(t, workspaceRoot.Root(), "sub/file.txt", "content")
 
-	_, err := NewReadFile(workspaceRoot).Execute(
+	_, err := readfile.New(workspaceRoot).Execute(
 		context.Background(),
 		newJSONCall(t, "read-dir", "read_file", map[string]any{"path": "sub"}),
 	)
@@ -643,7 +644,7 @@ func TestPermissionDetailProviders(t *testing.T) {
 func TestReadFilePaginationPreservesUTF8Boundaries(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	writeTestFile(t, workspaceRoot.Root(), "utf8.txt", "A界B")
-	handler := NewReadFile(workspaceRoot)
+	handler := readfile.New(workspaceRoot)
 
 	first := executeJSON(t, handler, "utf8-page-1", map[string]any{"path": "utf8.txt", "limit": 2})
 	if !first.Truncated || first.NextOffset == nil || *first.NextOffset != 1 {
@@ -670,7 +671,7 @@ func TestReadFilePaginationPreservesUTF8Boundaries(t *testing.T) {
 func TestReadFileRejectsOffsetInsideUTF8CodePoint(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	writeTestFile(t, workspaceRoot.Root(), "utf8.txt", "A界B")
-	_, err := NewReadFile(workspaceRoot).Execute(
+	_, err := readfile.New(workspaceRoot).Execute(
 		context.Background(),
 		newJSONCall(t, "utf8-split", "read_file", map[string]any{"path": "utf8.txt", "offset": 2, "limit": 2}),
 	)
@@ -682,7 +683,7 @@ func TestReadFileRejectsOffsetInsideUTF8CodePoint(t *testing.T) {
 func TestReadFileContinuationRejectsChangedFile(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	writeTestFile(t, workspaceRoot.Root(), "snapshot.txt", "abcdefghij")
-	handler := NewReadFile(workspaceRoot)
+	handler := readfile.New(workspaceRoot)
 	first := executeJSON(t, handler, "snapshot-1", map[string]any{"path": "snapshot.txt", "limit": 4})
 	if first.Continuation == "" || first.NextOffset == nil {
 		t.Fatalf("first continuation = %q next=%v", first.Continuation, first.NextOffset)
@@ -702,7 +703,7 @@ func TestReadFileContinuationRejectsChangedFile(t *testing.T) {
 
 func TestWorkspaceObservationToolsDeclareGroundingEvidence(t *testing.T) {
 	ws := newTestWorkspace(t, nil)
-	for _, handler := range []tool.Handler{NewReadFile(ws), NewListDir(ws), NewGrep(ws)} {
+	for _, handler := range []tool.Handler{readfile.New(ws), NewListDir(ws), NewGrep(ws)} {
 		if got := handler.Definition().Evidence; got != tool.EvidenceWorkspace {
 			t.Fatalf("%s evidence = %q, want workspace", handler.Definition().Name, got)
 		}

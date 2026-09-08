@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin/support"
 	"os"
 	"path/filepath"
 	"strings"
@@ -96,12 +97,12 @@ func (h findFilesHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		MaxDepth int    `json:"max_depth"`
 	}{input.Pattern, input.Path, input.Type, input.MaxDepth}
 
-	token, err := continuationToken("find_files", query, "")
+	token, err := support.ContinuationToken("find_files", query, "")
 	if err != nil {
 		return tool.Result{}, err
 	}
 	if input.Continuation != "" && input.Continuation != token {
-		return tool.Result{}, stalePaginationError("find_files", "find_files continuation does not match this query; restart from offset 0", call.Arguments)
+		return tool.Result{}, support.StalePaginationError("find_files", "find_files continuation does not match this query; restart from offset 0", call.Arguments)
 	}
 
 	var output strings.Builder
@@ -195,7 +196,7 @@ func (h findFilesHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 			}
 			return ""
 		}(),
-		Pagination: paginationState(truncated, "offset", nextOffset, nil, token),
+		Pagination: support.PaginationState(truncated, "offset", nextOffset, nil, token),
 	}, nil
 }
 

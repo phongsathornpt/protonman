@@ -1,0 +1,142 @@
+package readfile
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/core/workspace"
+)
+
+type readFileHandler struct {
+	workspace *workspace.Workspace
+}
+
+func New(workspaceRoot *workspace.Workspace) tool.Handler {
+	return readFileHandler{workspace: workspaceRoot}
+}
+
+func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
+	if h.workspace == nil {
+		return tool.Result{}, fmt.Errorf("read_file workspace is required")
+	}
+	var input readFileInput
+	if err := json.Unmarshal(call.Arguments, &input); err != nil {
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode read_file arguments", err)
+	}
+	input.Path = strings.TrimSpace(input.Path)
+	if input.Path == "" {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file path is required")
+	}
+	input.View = strings.ToLower(strings.TrimSpace(input.View))
+	if input.View == "" {
+		input.View = "auto"
+	}
+	switch input.View {
+	case "auto", "text", "image", "structured", "metadata":
+	default:
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file view must be auto, text, image, structured, or metadata")
+	}
+	if input.Offset < 0 {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file offset must be non-negative")
+	}
+	if input.StartLine < 0 || input.EndLine < 0 {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file start_line and end_line must be non-negative")
+	}
+	lineMode := input.StartLine > 0 || input.EndLine > 0 || input.LineNumbers
+	if lineMode && input.View != "auto" && input.View != "text" {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file line selection requires text view")
+	}
+	if lineMode && (input.Offset != 0 || input.Continuation != "") {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file line selection cannot be combined with offset or continuation")
+	}
+	if input.StartLine == 0 && input.EndLine > 0 {
+		input.StartLine = 1
+	}
+	if input.EndLine > 0 && input.EndLine < input.StartLine {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file end_line must be greater than or equal to start_line")
+	}
+	if input.Limit < 0 || input.Limit > MaxReadFileBytes {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file limit must be between 1 byte and 2 MiB")
+	}
+	if input.Limit == 0 {
+		input.Limit = MaxReadFileBytes
+	}
+	path, err := h.workspace.ResolveRead(ctx, input.Path)
+	if err != nil {
+		return tool.Result{}, err
+	}
+
+	file, err := h.workspace.OpenReadFile(ctx, path)
+	if err != nil {
+		return tool.Result{}, fmt.Errorf("open %q: %w", input.Path, err)
+	}
+	fileInfo, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return tool.Result{}, fmt.Errorf("stat %q: %w", input.Path, err)
+	}
+	if fileInfo.IsDir() {
+		_ = file.Close()
+		return tool.Result{}, tool.NewToolError(
+			tool.ErrorCodeInvalidArguments,
+			fmt.Sprintf("%q is a directory; use list_dir instead", input.Path),
+		)
+	}
+	if !fileInfo.Mode().IsRegular() {
+		_ = file.Close()
+		return tool.Result{}, tool.NewToolError(
+			tool.ErrorCodeInvalidArguments,
+			fmt.Sprintf("%q is not a regular file", input.Path),
+		)
+	}
+	if lineMode {
+		return readFileLines(ctx, file, input, call)
+	}
+
+	artifactView := input.View
+	if artifactView != "auto" && artifactView != "text" && (input.Offset != 0 || input.Continuation != "") {
+		_ = file.Close()
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file artifact views cannot be combined with offset or continuation")
+	}
+	if artifactView != "text" && input.Offset == 0 && input.Continuation == "" {
+		artifact, detectErr := detectArtifact(file, input.Path)
+		if detectErr != nil {
+			_ = file.Close()
+			return tool.Result{}, fmt.Errorf("detect %q: %w", input.Path, detectErr)
+		}
+		switch artifactView {
+		case "image":
+			if artifact.Kind != artifactImage {
+				_ = file.Close()
+				return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, fmt.Sprintf("%q is not a supported image", input.Path))
+			}
+			return readImageArtifact(ctx, file, fileInfo, input, artifact, call)
+		case "structured":
+			if !artifact.Kind.structured() {
+				_ = file.Close()
+				return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, fmt.Sprintf("%q is not supported structured data", input.Path))
+			}
+			return readStructuredArtifact(ctx, file, fileInfo, input, artifact, call)
+		case "metadata":
+			_ = file.Close()
+			return artifactResult(call, artifactEnvelope{
+				Kind: artifact.Kind, Path: input.Path, MIMEType: artifact.MIMEType, SizeBytes: fileInfo.Size(),
+			}, fmt.Sprintf("%s %s · %d bytes", artifact.Kind, artifact.MIMEType, fileInfo.Size()))
+		case "auto":
+			switch {
+			case artifact.Kind == artifactImage:
+				return readImageArtifact(ctx, file, fileInfo, input, artifact, call)
+			case artifact.Kind == artifactBinary:
+				_ = file.Close()
+				return artifactResult(call, artifactEnvelope{
+					Kind: artifact.Kind, Path: input.Path, MIMEType: artifact.MIMEType, SizeBytes: fileInfo.Size(),
+				}, fmt.Sprintf("binary %s · %d bytes", artifact.MIMEType, fileInfo.Size()))
+			}
+		}
+	}
+
+	return readTextBytes(ctx, file, fileInfo, input, call)
+}

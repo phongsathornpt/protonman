@@ -9,10 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/phongsathornpt/protonman/internal/feature/skill"
-	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin/readfile"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
+	"github.com/phongsathornpt/protonman/internal/feature/skill"
 )
 
 func TestActivateSkill_Execute(t *testing.T) {
@@ -119,7 +120,7 @@ func TestActivateSkill_AuthorizesReadRootsForFileTools(t *testing.T) {
 	}
 	skillReg := skill.NewRegistry(s)
 	activateHandler := NewActivateSkill(skillReg, ws)
-	readHandler := builtin.NewReadFile(ws)
+	readHandler := readfile.New(ws)
 	writeHandler := builtin.NewWriteFile(ws, skillCheckpointStore{})
 
 	// 1. Before activation, reading reference.txt fails with outside workspace
