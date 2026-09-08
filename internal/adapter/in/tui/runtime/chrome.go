@@ -25,14 +25,54 @@ import (
 	"time"
 )
 
-func (m bubbleModel) welcomeCard() string {
+type welcomeCardCache struct {
+	workDir     string
+	branch      string
+	branchValid bool
+	width       int
+	height      int
+	rendered    string
+	renderValid bool
+}
+
+func (m *bubbleModel) welcomeCard() string {
+	if m == nil {
+		return ""
+	}
+	cache := &m.welcomeCache
+	if cache.workDir != m.workDir {
+		*cache = welcomeCardCache{workDir: m.workDir}
+	}
+	if !cache.branchValid {
+		cache.branch = detectGitBranch(m.workDir)
+		cache.branchValid = true
+		cache.renderValid = false
+	}
+	if cache.renderValid && cache.width == m.width && cache.height == m.height {
+		return cache.rendered
+	}
+	cache.rendered = m.renderWelcomeCard(cache.branch)
+	cache.width = m.width
+	cache.height = m.height
+	cache.renderValid = true
+	return cache.rendered
+}
+
+func (m *bubbleModel) invalidateWelcomeBranch() {
+	if m == nil {
+		return
+	}
+	m.welcomeCache.branchValid = false
+	m.welcomeCache.renderValid = false
+}
+
+func (m *bubbleModel) renderWelcomeCard(branch string) string {
 	mode := layoutModeForHeight(m.height)
 	if mode != layoutNormal || m.width < 60 {
 		return brandLockup(m.width)
 	}
 	rows := []string{brandLockup(m.width), ""}
 	if ws := formatWorkspaceDisplay(m.workDir); ws != "" {
-		branch := detectGitBranch(m.workDir)
 		branchBadge := ""
 		if branch != "" {
 			branchBadge = " " + mutedStyle.Render("git:(") + systemStyle.Render(branch) + mutedStyle.Render(")")

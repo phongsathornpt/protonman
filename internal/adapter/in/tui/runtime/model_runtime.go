@@ -47,67 +47,71 @@ type turnProgress struct {
 }
 
 type bubbleModel struct {
-	ctx                     context.Context
-	service                 *toolcall.Service
-	registry                tool.Registry
-	skills                  *skill.Registry
-	runner                  app.Conversation
-	bridge                  *permissionBridge
-	agents                  app.Agents
-	agentEvents             <-chan agent.Event
-	agentSnapshot           []agent.AgentStatus
-	agentActivity           map[string]AgentActivity
-	agentHistory            agentui.Tracker
-	turnProgress            turnProgress
-	activeTurnOwner         string
-	workDir                 string
-	viewport                viewport.Model
-	transcriptViewport      viewport.Model
-	spinner                 spinner.Model
-	keys                    bubbleKeyMap
-	bottom                  *bottomPane
-	historyState            *HistoryState
-	queue                   []string
-	todo                    []TodoItem
-	todoStore               tododomain.Repository
-	todoRevision            uint64
-	todoViewState           todoViewState
-	todoLifecycle           todoLifecycleState
-	busy                    bool
-	activity                string
-	pendingActivity         string
-	planMode                bool
-	followTail              bool
-	showWelcome             bool
-	showTranscript          bool
-	rawTranscript           bool
-	viewportTailOnly        bool
-	viewportLineAnchors     []ScrollAnchor
-	nextID                  uint64
-	width                   int
-	height                  int
-	frameChrome             frameChrome
-	layoutGeneration        uint64
-	busyStarted             time.Time
-	turnCancel              context.CancelFunc
-	turnEvents              <-chan tea.Msg
-	messages                []model.Message
-	activeModel             string
-	activeProvider          string
-	providers               map[string]config.ProviderConfig
-	maxToolCalls            int
-	agentProfile            string
-	subagentsEnabled        bool
-	reasoningEffort         sdk.ReasoningEffort
-	sessionID               string
-	sessions                *app.Sessions
-	workspaceKey            string
-	modelCatalogs           modelCatalogState
-	runtimeConfig           config.RuntimeConfig
-	projectTrusted          bool
-	projectConfigSources    []string
-	projectConfigProvenance map[string]config.ValueSource
-	blocks                  []Block // Compatibility snapshots for existing in-package tests during the
+	ctx                       context.Context
+	service                   *toolcall.Service
+	registry                  tool.Registry
+	skills                    *skill.Registry
+	runner                    app.Conversation
+	bridge                    *permissionBridge
+	agents                    app.Agents
+	agentEvents               <-chan agent.Event
+	agentSnapshot             []agent.AgentStatus
+	agentActivity             map[string]AgentActivity
+	agentHistory              agentui.Tracker
+	turnProgress              turnProgress
+	activeTurnOwner           string
+	workDir                   string
+	viewport                  viewport.Model
+	transcriptViewport        viewport.Model
+	spinner                   spinner.Model
+	keys                      bubbleKeyMap
+	bottom                    *bottomPane
+	historyState              *HistoryState
+	queue                     []string
+	todo                      []TodoItem
+	todoStore                 tododomain.Repository
+	todoRevision              uint64
+	todoViewState             todoViewState
+	todoLifecycle             todoLifecycleState
+	busy                      bool
+	activity                  string
+	pendingActivity           string
+	planMode                  bool
+	followTail                bool
+	showWelcome               bool
+	showTranscript            bool
+	rawTranscript             bool
+	viewportTailOnly          bool
+	viewportStaleTail         bool
+	viewportCommittedRevision uint64
+	viewportActiveRevision    uint64
+	viewportLineAnchors       []ScrollAnchor
+	nextID                    uint64
+	width                     int
+	height                    int
+	frameChrome               frameChrome
+	welcomeCache              welcomeCardCache
+	layoutGeneration          uint64
+	busyStarted               time.Time
+	turnCancel                context.CancelFunc
+	turnEvents                <-chan tea.Msg
+	messages                  []model.Message
+	activeModel               string
+	activeProvider            string
+	providers                 map[string]config.ProviderConfig
+	maxToolCalls              int
+	agentProfile              string
+	subagentsEnabled          bool
+	reasoningEffort           sdk.ReasoningEffort
+	sessionID                 string
+	sessions                  *app.Sessions
+	workspaceKey              string
+	modelCatalogs             modelCatalogState
+	runtimeConfig             config.RuntimeConfig
+	projectTrusted            bool
+	projectConfigSources      []string
+	projectConfigProvenance   map[string]config.ValueSource
+	blocks                    []Block // Compatibility snapshots for existing in-package tests during the
 	// migration. Runtime ownership lives in bottom/historyState.
 
 	prompt      *textarea.Model
@@ -547,7 +551,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if message.Y < 0 || message.Y >= m.viewport.Height {
 			return m, nil
 		}
-		if m.viewportTailOnly && message.Button == tea.MouseButtonWheelUp {
+		if (m.viewportTailOnly || m.viewportStaleTail) && (message.Button == tea.MouseButtonWheelUp || message.Button == tea.MouseButtonWheelDown) {
 			m.hydrateViewportForScroll()
 		}
 		m.viewport, command = m.viewport.Update(message)
@@ -710,6 +714,7 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyMsg) (bool, tea.Cmd) {
 		m.followTail = m.viewport.AtBottom()
 		return true, nil
 	case key.Matches(message, m.keys.PageDown):
+		m.hydrateViewportForScroll()
 		m.viewport.PageDown()
 		m.followTail = m.viewport.AtBottom()
 		return true, nil

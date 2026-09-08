@@ -172,3 +172,37 @@ func BenchmarkApplyTurnTextDeltaLongHistory(b *testing.B) {
 		m.applyTurnEvent(applicationturn.Event{Kind: applicationturn.EventTextDelta, Text: "x"})
 	}
 }
+
+func BenchmarkRefreshViewportScrolledLongHistory(b *testing.B) {
+	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
+	m.resize(100, 30)
+	m.showWelcome = false
+	for i := 0; i < 500; i++ {
+		m.historyState.Append(&UserCell{Text: fmt.Sprintf("Question %d with enough text for scrolling", i)})
+		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("Answer %d with **markdown** and `code`.\nMore detail.", i)})
+	}
+	m.refreshViewport()
+	m.followTail = false
+	m.viewport.SetYOffset(maxInt(0, m.viewport.TotalLineCount()/2))
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		m.refreshViewport()
+	}
+}
+
+func BenchmarkViewBusyLongHistory(b *testing.B) {
+	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
+	m.resize(100, 30)
+	m.busy = true
+	m.followTail = true
+	for i := 0; i < 500; i++ {
+		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("Answer %d with **markdown** and `code`.", i)})
+	}
+	m.refreshViewport()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = m.View()
+	}
+}

@@ -74,8 +74,8 @@ func (h bashHandler) dedicatedWorkspacePath(cwd, path string) (string, bool) {
 }
 
 func dedicatedToolForCommand(command string) *dedicatedToolSuggestion {
-	fields := strings.Fields(strings.TrimSpace(command))
-	if len(fields) == 0 {
+	fields, ok := splitSimpleShellWords(strings.TrimSpace(command))
+	if !ok || len(fields) == 0 {
 		return nil
 	}
 	executable := strings.ToLower(filepath.Base(fields[0]))
@@ -84,6 +84,8 @@ func dedicatedToolForCommand(command string) *dedicatedToolSuggestion {
 		return dedicatedPythonTool(command)
 	case executable == "node" || executable == "nodejs":
 		return dedicatedNodeTool(command)
+	case executable == "cat", executable == "ls", executable == "grep", executable == "rg", executable == "find":
+		return dedicatedSimpleShellTool(executable, fields, command)
 	default:
 		return nil
 	}
@@ -110,22 +112,28 @@ func dedicatedPythonTool(command string) *dedicatedToolSuggestion {
 			}
 		}
 	}
-	return nil
+	return dedicatedPythonDiscoveryTool(command, lower)
 }
 
 func dedicatedNodeTool(command string) *dedicatedToolSuggestion {
 	lower := strings.ToLower(command)
-	if !strings.Contains(lower, "readfilesync(") && !strings.Contains(lower, "readfile(") {
-		return nil
+	if strings.Contains(lower, "readfilesync(") || strings.Contains(lower, "readfile(") {
+		if path := firstPatternGroup(nodeFilePathPattern, command); path != "" {
+			return &dedicatedToolSuggestion{
+				tool: "read_file", args: map[string]any{"path": path},
+				reason: "workspace file inspection is available through read_file",
+			}
+		}
 	}
-	path := firstPatternGroup(nodeFilePathPattern, command)
-	if path == "" {
-		return nil
+	if strings.Contains(lower, "readdirsync(") || strings.Contains(lower, "readdir(") {
+		if path := firstPatternGroup(nodeReadDirPattern, command); path != "" {
+			return &dedicatedToolSuggestion{
+				tool: "list_dir", args: map[string]any{"path": path},
+				reason: "directory inspection is available through list_dir",
+			}
+		}
 	}
-	return &dedicatedToolSuggestion{
-		tool: "read_file", args: map[string]any{"path": path},
-		reason: "workspace file inspection is available through read_file",
-	}
+	return nil
 }
 
 func firstPatternGroup(pattern *regexp.Regexp, value string) string {

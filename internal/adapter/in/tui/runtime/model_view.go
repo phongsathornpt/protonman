@@ -241,6 +241,21 @@ func (m *bubbleModel) refreshViewport() {
 }
 
 func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
+	if m.historyState != nil && !scroll.follow && !m.viewportTailOnly {
+		committedRevision, activeRevision := m.historyState.Revisions()
+		if committedRevision == m.viewportCommittedRevision {
+			// The user is reading older content and only the mutable tail changed.
+			// Keep the viewport buffer stable until they scroll again instead of
+			// rebuilding the entire transcript for invisible streaming deltas.
+			m.viewportStaleTail = activeRevision != m.viewportActiveRevision
+			m.followTail = false
+			if m.showTranscript {
+				m.refreshTranscriptViewport(false)
+			}
+			return
+		}
+	}
+
 	content := ""
 	tailOnly := false
 	if scroll.follow && m.busy && m.historyState.Active() != nil {
@@ -259,7 +274,11 @@ func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
 
 func (m *bubbleModel) setViewportContent(content string, fullHistory bool) {
 	m.viewport.SetContent(content)
+	m.viewportStaleTail = false
 	m.viewportLineAnchors = nil
+	if m.historyState != nil {
+		m.viewportCommittedRevision, m.viewportActiveRevision = m.historyState.Revisions()
+	}
 	if !fullHistory || m.historyState == nil {
 		return
 	}
@@ -329,12 +348,13 @@ func (m *bubbleModel) fullViewportContent() string {
 }
 
 func (m *bubbleModel) hydrateViewportForScroll() {
-	if !m.viewportTailOnly {
+	if !m.viewportTailOnly && !m.viewportStaleTail {
 		return
 	}
+	scroll := m.captureViewportScroll()
 	m.setViewportContent(m.fullViewportContent(), true)
-	m.viewport.GotoBottom()
 	m.viewportTailOnly = false
+	m.restoreViewportScroll(scroll)
 }
 
 func (m *bubbleModel) View() string {
