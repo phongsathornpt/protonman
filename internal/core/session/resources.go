@@ -10,17 +10,19 @@ import (
 )
 
 const (
-	StateFileName  = "state.json"
-	TodoFileName   = "todo.md"
-	AgentsFileName = "agents.json"
+	StateFileName       = "state.json"
+	TodoFileName        = "todo.md"
+	AgentsFileName      = "agents.json"
+	AgentEventsFileName = "agent-events.jsonl"
 )
 
 // Resources are the durable files owned by one Protonman session.
 type Resources struct {
-	Root   string
-	State  string
-	Todo   string
-	Agents string
+	Root        string
+	State       string
+	Todo        string
+	Agents      string
+	AgentEvents string
 }
 
 // ResolveResources returns paths below sessionsRoot for a validated session ID.
@@ -31,7 +33,7 @@ func ResolveResources(sessionsRoot, sessionID string) (Resources, error) {
 	root := filepath.Join(sessionsRoot, sessionID)
 	return Resources{
 		Root: root, State: filepath.Join(root, StateFileName), Todo: filepath.Join(root, TodoFileName),
-		Agents: filepath.Join(root, AgentsFileName),
+		Agents: filepath.Join(root, AgentsFileName), AgentEvents: filepath.Join(root, AgentEventsFileName),
 	}, nil
 }
 

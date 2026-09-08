@@ -166,6 +166,7 @@ type Coordinator struct {
 	eventSink           EventSink
 	runnerFactory       RunnerFactory
 	metricObserver      MetricObserver
+	lifecycleStore      LifecycleEventStore
 	eventQueue          chan Event
 	closeOnce           sync.Once
 	closeDone           chan struct{}
@@ -290,6 +291,11 @@ func WithCloseTimeout(d time.Duration) Option {
 			c.closeTimeout = d
 		}
 	}
+}
+
+// WithLifecycleEventStore configures durable session-scoped lifecycle journaling.
+func WithLifecycleEventStore(store LifecycleEventStore) Option {
+	return func(c *Coordinator) { c.lifecycleStore = store }
 }
 
 // WithEventSink attaches an observer for subagent lifecycle events.

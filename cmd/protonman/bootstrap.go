@@ -125,6 +125,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	}
 	var coordinator *agent.Coordinator
 	coordinator = agent.NewCoordinator(nil, nil, workspaceRoot, policy,
+		agent.WithLifecycleEventStore(stateStore),
 		agent.WithEnabled(loadedConfig.Agent.SubagentsEnabled),
 		agent.WithMaxToolCalls(loadedConfig.Agent.MaxToolCalls),
 		agent.WithReasoningEffort(loadedConfig.Agent.ReasoningEffort),

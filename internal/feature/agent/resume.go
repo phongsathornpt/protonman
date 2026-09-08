@@ -37,7 +37,7 @@ func (c *Coordinator) Resume(ctx context.Context, id, parentID string) (Handle, 
 		c.agentsMu.Unlock()
 		return Handle{}, fmt.Errorf("%w: %q is %s", ErrNotResumable, id, state)
 	}
-	if err := applyEntryTransition(entry, LifecycleAgentResumeRequested, time.Now(), "resume requested"); err != nil {
+	if err := c.persistAndApplyTransition(ctx, entry, LifecycleAgentResumeRequested, time.Now(), "resume requested"); err != nil {
 		c.agentsMu.Unlock()
 		return Handle{}, err
 	}
@@ -66,7 +66,7 @@ func (c *Coordinator) Resume(ctx context.Context, id, parentID string) (Handle, 
 	}
 	event := nextLifecycleEvent(source.status, LifecycleAgentResumed, time.Now(), "resumed as "+handle.ID)
 	event.ResumedAs = handle.ID
-	if err := applyEntryLifecycleEvent(source, event); err != nil {
+	if err := c.persistAndApplyEntry(c.rootCtx, source, event); err != nil {
 		c.agentsMu.Unlock()
 		_ = c.Cancel(handle.ID)
 		return Handle{}, err
@@ -97,7 +97,7 @@ func (c *Coordinator) rollbackResume(id string) {
 	if entry == nil || entry.status.State != StateResuming {
 		return
 	}
-	_ = applyEntryTransition(entry, LifecycleAgentInterrupted, time.Now(), "resume admission failed")
+	_ = c.persistAndApplyTransition(c.rootCtx, entry, LifecycleAgentInterrupted, time.Now(), "resume admission failed")
 }
 func (c *Coordinator) handleForIDLocked(id string) (Handle, bool) {
 	entry := c.agents[strings.TrimSpace(id)]
