@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -90,84 +91,29 @@ func TestTUIDoesNotDependOnProjectDirectly(t *testing.T) {
 }
 
 func TestTUIDoesNotControlAgentCoordinatorDirectly(t *testing.T) {
-	root := repositoryRoot(t)
-	cmd := exec.Command("rg", "(m|ui)\\.coordinator\\.[A-Z]", "internal/adapter/in/tui", "--glob", "*.go", "--glob", "!*_test.go")
-	cmd.Dir = root
-	output, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("TUI controls agent coordinator directly:\n%s", output)
-	}
-	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
-		t.Fatalf("search TUI coordinator controls: %v: %s", err, output)
-	}
+	assertNoSourceMatch(t, "internal/adapter/in/tui", `(m|ui)\.coordinator\.[A-Z]`, false, "TUI controls agent coordinator directly")
 }
 
 func TestInboundAdaptersDoNotPerformConfigPersistence(t *testing.T) {
-	root := repositoryRoot(t)
 	for _, adapter := range []string{"internal/adapter/in/tui", "internal/adapter/in/acp", "internal/adapter/in/headless"} {
-		cmd := exec.Command("rg", "config\\.(Load|Save|Delete)", adapter, "--glob", "*.go", "--glob", "!*_test.go")
-		cmd.Dir = root
-		output, err := cmd.CombinedOutput()
-		if err == nil {
-			t.Errorf("%s performs config persistence directly:\n%s", adapter, output)
-			continue
-		}
-		if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
-			t.Fatalf("search %s config persistence: %v: %s", adapter, err, output)
-		}
+		assertNoSourceMatch(t, adapter, `config\.(Load|Save|Delete)`, false, adapter+" performs config persistence directly")
 	}
 }
 
 func TestTUIDoesNotPerformProviderDiscoveryDirectly(t *testing.T) {
-	root := repositoryRoot(t)
-	cmd := exec.Command("rg", "FetchProviderModels", "internal/adapter/in/tui", "--glob", "*.go")
-	cmd.Dir = root
-	output, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("TUI performs provider discovery directly:\n%s", output)
-	}
-	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
-		t.Fatalf("search TUI provider discovery: %v: %s", err, output)
-	}
+	assertNoSourceMatch(t, "internal/adapter/in/tui", `FetchProviderModels`, true, "TUI performs provider discovery directly")
 }
 
 func TestTUIDoesNotMutateUserProviderConfigDirectly(t *testing.T) {
-	root := repositoryRoot(t)
-	cmd := exec.Command("rg", "config\\.(SaveUser|DeleteUser)", "internal/adapter/in/tui", "--glob", "*.go", "--glob", "!*_test.go")
-	cmd.Dir = root
-	output, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("TUI mutates user provider config directly:\n%s", output)
-	}
-	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
-		t.Fatalf("search TUI user provider config mutations: %v: %s", err, output)
-	}
+	assertNoSourceMatch(t, "internal/adapter/in/tui", `config\.(SaveUser|DeleteUser)`, false, "TUI mutates user provider config directly")
 }
 
 func TestTUIDoesNotMutateProjectConfigPersistenceDirectly(t *testing.T) {
-	root := repositoryRoot(t)
-	cmd := exec.Command("rg", "config\\.SaveProject", "internal/adapter/in/tui", "--glob", "*.go")
-	cmd.Dir = root
-	output, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("TUI mutates project config persistence directly:\n%s", output)
-	}
-	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
-		t.Fatalf("search TUI project config mutations: %v: %s", err, output)
-	}
+	assertNoSourceMatch(t, "internal/adapter/in/tui", `config\.SaveProject`, true, "TUI mutates project config persistence directly")
 }
 
 func TestApplicationDoesNotExposeAgentCoordinatorEscapeHatch(t *testing.T) {
-	root := repositoryRoot(t)
-	cmd := exec.Command("rg", `func \(.*Agents\) Coordinator\(\)`, "internal/app", "--glob", "*.go")
-	cmd.Dir = root
-	output, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("application exposes concrete agent coordinator escape hatch:\n%s", output)
-	}
-	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
-		t.Fatalf("search application coordinator escape hatch: %v: %s", err, output)
-	}
+	assertNoSourceMatch(t, "internal/app", `func \(.*Agents\) Coordinator\(\)`, true, "application exposes concrete agent coordinator escape hatch")
 }
 
 func TestApplicationDoesNotDependOnInboundAdapters(t *testing.T) {
@@ -195,16 +141,7 @@ func TestSDKDoesNotDependOnCLIInternals(t *testing.T) {
 }
 
 func TestHeadlessModeDoesNotDependOnTurn(t *testing.T) {
-	root := repositoryRoot(t)
-	cmd := exec.Command("rg", `"github\\.com/phongsathornpt/proton/internal/engine/turn"`, "cmd/protonman/headless_mode.go")
-	cmd.Dir = root
-	output, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("cmd/protonman/headless_mode.go imports internal/engine/turn directly:\n%s", output)
-	}
-	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
-		t.Fatalf("search headless_mode.go turn imports: %v: %s", err, output)
-	}
+	assertNoSourceMatch(t, "cmd/protonman/headless_mode.go", regexp.QuoteMeta(modulePath+"/internal/engine/turn"), true, "cmd/protonman/headless_mode.go imports internal/engine/turn directly")
 }
 
 func TestApplicationLayerFileStructure(t *testing.T) {
@@ -363,6 +300,51 @@ func TestNoLingeringRootDirectories(t *testing.T) {
 		if _, err := os.Stat(path); err == nil {
 			t.Errorf("internal/%s must not exist at internal root; moved to Clean Architecture subpackages", lingering)
 		}
+	}
+}
+
+func assertNoSourceMatch(t *testing.T, relativePath, pattern string, includeTests bool, message string) {
+	t.Helper()
+	root := repositoryRoot(t)
+	target := filepath.Join(root, relativePath)
+	re := regexp.MustCompile(pattern)
+	matches := make([]string, 0)
+
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("inspect %s: %v", relativePath, err)
+	}
+	visit := func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.IsDir() || !strings.HasSuffix(path, ".go") || (!includeTests && strings.HasSuffix(path, "_test.go")) {
+			return nil
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if re.Match(body) {
+			rel, relErr := filepath.Rel(root, path)
+			if relErr != nil {
+				return relErr
+			}
+			matches = append(matches, filepath.ToSlash(rel))
+		}
+		return nil
+	}
+
+	if info.IsDir() {
+		err = filepath.Walk(target, visit)
+	} else {
+		err = visit(target, info, nil)
+	}
+	if err != nil {
+		t.Fatalf("scan %s: %v", relativePath, err)
+	}
+	if len(matches) > 0 {
+		t.Fatalf("%s: %s", message, strings.Join(matches, ", "))
 	}
 }
 
