@@ -426,14 +426,20 @@ type modelSelectPaneView struct {
 
 func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
 	providers := make([]string, 0)
+	seen := make(map[string]bool)
 	if m != nil && len(m.providers) > 0 {
 		for name := range m.providers {
 			providers = append(providers, name)
+			seen[strings.ToLower(name)] = true
 		}
 		sort.Strings(providers)
-	} else if m != nil && m.activeProvider != "" {
-		providers = append(providers, m.activeProvider)
-	} else {
+	}
+	if m != nil && m.activeProvider != "" {
+		if !seen[strings.ToLower(m.activeProvider)] {
+			providers = append([]string{m.activeProvider}, providers...)
+			seen[strings.ToLower(m.activeProvider)] = true
+		}
+	} else if len(providers) == 0 {
 		providers = append(providers, model.DefaultProtonmanName)
 	}
 	providerIdx := 0
@@ -445,10 +451,9 @@ func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
 			}
 		}
 	}
-	var modelsList []model. // Resolve the catalog for the selected provider only.
-				RemoteModel
+	var modelsList []model.RemoteModel
 	hasFreshCatalog := false
-	if m != nil {
+	if m != nil && providerIdx < len(providers) {
 		modelsList, hasFreshCatalog = m.modelCatalogs.freshModels(providers[providerIdx], time.Now(), m.runtimeConfig.ModelCatalogTTL)
 	}
 	if !hasFreshCatalog {
@@ -497,8 +502,14 @@ func (v *modelSelectPaneView) applyFilter(activeModel string) {
 		}
 	}
 	v.models = filtered
-	v.resetSelection(activeModel)
+	if len(filtered) == 0 {
+		v.index = 0
+		v.offset = 0
+	} else if v.index >= len(filtered) {
+		v.index = len(filtered) - 1
+	}
 }
+
 
 func (v *modelSelectPaneView) resetSelection(activeModel string) {
 	if v == nil {
@@ -539,7 +550,7 @@ func (v *modelSelectPaneView) beginFetch(parent context.Context, providerName st
 	v.allModels = nil
 	v.index = 0
 	v.offset = 0
-	return fetchProviderModelsCmd(providerFetchRequest{ctx: ctx, requestID: v.fetchRequestID, providerName: providerName, baseURL: cfg.BaseURL, apiKey: cfg.APIKey, discoveryTimeout: discoveryTimeout})
+	return fetchProviderModelsCmd(providerFetchRequest{ctx: ctx, requestID: v.fetchRequestID, providerName: providerName, providerType: cfg.Type, baseURL: cfg.BaseURL, apiKey: cfg.APIKey, discoveryTimeout: discoveryTimeout})
 }
 
 func (v *modelSelectPaneView) cancelFetch() {
@@ -566,8 +577,7 @@ func (v *modelSelectPaneView) loadProvider(m *bubbleModel, force bool) tea.Cmd {
 	}
 	cfg, configured := m.providers[normalizeProviderKey(providerName)]
 	if configured {
-		isOpenCode := model.IsProvider(model.DefaultOpenCodeName, providerName, cfg.BaseURL)
-		if strings.TrimSpace(cfg.APIKey) != "" || isOpenCode {
+		if model.ProviderHasUsableAuth(providerName, cfg.BaseURL, cfg.APIKey) {
 			return v.beginFetch(m.ctx, providerName, cfg, m.runtimeConfig.ModelDiscoveryTimeout)
 		}
 	}
@@ -607,7 +617,8 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 		if reasoning := remoteModelReasoningSummary(providerName, md, true); reasoning != "" {
 			details = append(details, reasoning)
 		}
-		items = append(items, pane.ModelItem{ID: md.ID, Label: label, Free: model.IsFreeModel(md.ID), Current: m != nil && strings.EqualFold(md.ID, m.activeModel), Details: strings.Join(details, " · ")})
+		isCurrent := m != nil && strings.EqualFold(md.ID, m.activeModel) && strings.EqualFold(providerName, m.activeProvider)
+		items = append(items, pane.ModelItem{ID: md.ID, Label: label, Free: model.IsFreeModel(md.ID), Current: isCurrent, Details: strings.Join(details, " · ")})
 	}
 	errorText := ""
 	if v.err != nil {
@@ -623,9 +634,19 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 		m.bottom.remove(modelSelectViewID)
 		return true, nil
 	}
+	defer func() {
+		visible := pickerVisibleRows(m.height, maxModelSelectRows)
+		v.index, v.offset, _ = normalizedPickerWindow(v.index, v.offset, len(v.models), visible)
+	}()
 	if v.filtering {
 		switch message.Type {
 		case tea.KeyEsc:
+			if v.filter != "" {
+				v.filter = ""
+				v.filtering = false
+				v.applyFilter(m.activeModel)
+				return true, nil
+			}
 			v.filtering = false
 			return true, nil
 		case tea.KeyBackspace, tea.KeyCtrlH, tea.KeyDelete:
@@ -636,6 +657,16 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 			}
 			return true, nil
 		case tea.KeyEnter:
+			if len(v.models) > 0 && v.index >= 0 && v.index < len(v.models) {
+				selected := v.models[v.index]
+				provName := model.DefaultProtonmanName
+				if v.providerIndex >= 0 && v.providerIndex < len(v.providerNames) {
+					provName = v.providerNames[v.providerIndex]
+				}
+				cmd := saveDefaultModelCmd(provName, selected.ID)
+				m.bottom.remove(modelSelectViewID)
+				return true, cmd
+			}
 			v.filtering = false
 			return true, nil
 		case tea.KeyRunes:
@@ -679,6 +710,12 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 			return true, v.loadProvider(m, false)
 		}
 		return true, nil
+	case "shift+tab":
+		if len(v.providerNames) > 1 {
+			v.providerIndex = (v.providerIndex - 1 + len(v.providerNames)) % len(v.providerNames)
+			return true, v.loadProvider(m, false)
+		}
+		return true, nil
 	case "up", "k":
 		if v.index > 0 {
 			v.index--
@@ -710,13 +747,20 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 		}
 		return true, nil
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		targetIdx := int(message.String()[0]-'1') + v.offset
+		if targetIdx >= 0 && targetIdx < len(v.models) {
+			selected := v.models[targetIdx]
+			provName := model.DefaultProtonmanName
+			if v.providerIndex >= 0 && v.providerIndex < len(v.providerNames) {
+				provName = v.providerNames[v.providerIndex]
+			}
+			cmd := saveDefaultModelCmd(provName, selected.ID)
+			m.bottom.remove(modelSelectViewID)
+			return true, cmd
+		}
 		return true, nil
 	case "enter":
 		if len(v.models) == 0 {
-			m.bottom.remove(modelSelectViewID)
-			if !m.bottom.has(providerViewID) {
-				m.bottom.push(newProviderPaneView())
-			}
 			return true, nil
 		}
 		if v.index >= 0 && v.index < len(v.models) {
