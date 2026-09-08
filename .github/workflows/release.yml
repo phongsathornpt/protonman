@@ -41,19 +41,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: proton-linux-amd64
+          - target: protonman-linux-amd64
             goos: linux
             goarch: amd64
-          - target: proton-linux-arm64
+          - target: protonman-linux-arm64
             goos: linux
             goarch: arm64
-          - target: proton-darwin-amd64
+          - target: protonman-darwin-amd64
             goos: darwin
             goarch: amd64
-          - target: proton-darwin-arm64
+          - target: protonman-darwin-arm64
             goos: darwin
             goarch: arm64
-          - target: proton-windows-amd64
+          - target: protonman-windows-amd64
             goos: windows
             goarch: amd64
     steps:
@@ -73,7 +73,7 @@ jobs:
           set -euo pipefail
           version="$GITHUB_REF_NAME"
           plain_version="${version#v}"
-          package="proton_${plain_version}_${GOOS}_${GOARCH}"
+          package="protonman_${plain_version}_${GOOS}_${GOARCH}"
           binary="protonman"
           if [[ "$GOOS" == "windows" ]]; then
             binary="protonman.exe"
@@ -110,7 +110,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: proton-*
+          pattern: protonman-*
           path: dist
           merge-multiple: true
       - name: Generate checksums
@@ -118,7 +118,7 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
-          sha256sum proton_* > checksums.txt
+          sha256sum protonman_* > checksums.txt
       - name: Publish GitHub Release
         shell: bash
         env:
