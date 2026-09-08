@@ -72,6 +72,7 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	queuedEvent := LifecycleEvent{
 		Kind: LifecycleAgentQueued, Version: 1, At: queuedAt, SessionID: req.SessionID, ParentID: req.ParentID,
 		AgentID: id, Profile: req.Profile, Task: req.Task, Provider: providerName, Model: modelID, ResumedFrom: req.ResumedFrom,
+		Request: &req,
 	}
 	if err := c.persistLifecycleEvent(ctx, queuedEvent); err != nil {
 		c.agentsMu.Unlock()
@@ -215,7 +216,14 @@ func (c *Coordinator) storeTerminal(ctx context.Context, entry *agentEntry, res 
 	case errors.Is(err, context.Canceled):
 		kind = LifecycleAgentCanceled
 	}
-	if transitionErr := c.persistAndApplyTransition(ctx, entry, kind, time.Now(), terminalReason(err)); transitionErr != nil {
+	event := nextLifecycleEvent(entry.status, kind, time.Now(), terminalReason(err))
+	resultCopy := cloneResult(res)
+	resultCopy.Err = nil
+	event.Result = &resultCopy
+	if err != nil {
+		event.Error = err.Error()
+	}
+	if transitionErr := c.persistAndApplyEntry(ctx, entry, event); transitionErr != nil {
 		return transitionErr
 	}
 	entry.result = res

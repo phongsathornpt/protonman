@@ -42,6 +42,9 @@ type LifecycleEvent struct {
 	Reason      string             `json:"reason,omitempty"`
 	ResumedFrom string             `json:"resumed_from,omitempty"`
 	ResumedAs   string             `json:"resumed_as,omitempty"`
+	Request     *Request           `json:"request,omitempty"`
+	Result      *Result            `json:"result,omitempty"`
+	Error       string             `json:"error,omitempty"`
 }
 
 func (e LifecycleEvent) targetState() (State, error) {

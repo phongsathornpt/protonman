@@ -157,11 +157,21 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 			return nil
 		}),
 	)
-	if persistedAgents, agentsFound, loadErr := stateStore.LoadAgents(ctx, sessionID); loadErr != nil {
+	persistedAgents, agentsFound, loadErr := stateStore.LoadAgents(ctx, sessionID)
+	if loadErr != nil {
 		return nil, fmt.Errorf("load session subagents: %w", loadErr)
-	} else if agentsFound {
-		if restoreErr := coordinator.RestorePersistentSnapshot(persistedAgents); restoreErr != nil {
-			return nil, fmt.Errorf("restore session subagents: %w", restoreErr)
+	}
+	lifecycleEvents, eventsErr := stateStore.LoadLifecycleEvents(ctx, sessionID)
+	if eventsErr != nil {
+		return nil, fmt.Errorf("load session subagent lifecycle events: %w", eventsErr)
+	}
+	if agentsFound || len(lifecycleEvents) > 0 {
+		var snapshot *agent.PersistentSnapshot
+		if agentsFound {
+			snapshot = &persistedAgents
+		}
+		if recoverErr := coordinator.RecoverLifecycle(ctx, sessionID, snapshot, lifecycleEvents); recoverErr != nil {
+			return nil, fmt.Errorf("recover session subagents: %w", recoverErr)
 		}
 		persistCtx, persistDone := contextutil.DetachedTimeout(ctx, runtimepolicy.SessionPersistenceTimeout)
 		if persistErr := stateStore.SaveAgents(persistCtx, sessionID, coordinator.PersistentSnapshot()); persistErr != nil {
