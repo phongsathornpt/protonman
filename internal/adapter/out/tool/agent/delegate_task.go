@@ -35,7 +35,7 @@ func NewDelegateTask(coordinator *agent.Coordinator, parentIDs ...string) tool.H
 func (delegateTaskHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                   "delegate_task",
-		Description:            "Spawn a specialized subagent asynchronously and return its agent_id immediately. Use wait_agent when its result is needed; a wait timeout does not cancel the child.",
+		Description:            "Spawn a specialized subagent asynchronously and return its agent_id immediately. Use wait_agent when delegated work reaches the critical path; it waits for session agent activity and never cancels children on observation timeout.",
 		Kind:                   tool.KindForName("delegate_task"),
 		Mutability:             tool.MutabilityMutating,
 		Safety:                 tool.SafetyContract{MutationDomain: tool.MutationDomainAgentState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
@@ -116,15 +116,16 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, err.Error())
 	}
 
-	parentID := agent.ParentIDFromContext(ctx)
-	if parentID == "" {
-		parentID = h.parentID
+	turnRef := agent.TurnRefFromContext(ctx)
+	if turnRef.TurnID == "" {
+		turnRef.TurnID = h.parentID
 	}
 	req := agent.Request{
-		ParentID: parentID,
-		Profile:  profile,
-		Task:     task,
-		Context:  strings.TrimSpace(input.Context),
+		SessionID: turnRef.SessionID,
+		ParentID:  turnRef.TurnID,
+		Profile:   profile,
+		Task:      task,
+		Context:   strings.TrimSpace(input.Context),
 	}
 	if input.TimeoutSeconds > 0 {
 		req.Timeout = time.Duration(input.TimeoutSeconds) * time.Second

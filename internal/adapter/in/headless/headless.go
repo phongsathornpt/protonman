@@ -17,6 +17,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
 )
 
@@ -28,6 +29,16 @@ func WithSkills(skills *skill.Registry) Option {
 	return func(r *Runner) {
 		r.skills = skills
 	}
+}
+
+// WithSessionID binds orchestration spawned by this runner to one session.
+func WithSessionID(sessionID string) Option {
+	return func(r *Runner) { r.sessionID = strings.TrimSpace(sessionID) }
+}
+
+// WithAgents supplies session-scoped subagent lifecycle control.
+func WithAgents(agents app.Agents) Option {
+	return func(r *Runner) { r.agents = agents }
 }
 
 // Format is the headless output encoding.
@@ -78,12 +89,15 @@ var ErrInvalidRunner = errors.New("invalid headless runner")
 
 // Runner is the non-interactive adapter over Protonman services.
 type Runner struct {
-	service  *toolcall.Service
-	registry tool.Registry
-	skills   *skill.Registry
-	runner   app.Conversation
-	messages []model.Message
-	nextID   uint64
+	service   *toolcall.Service
+	registry  tool.Registry
+	skills    *skill.Registry
+	runner    app.Conversation
+	messages  []model.Message
+	nextID    uint64
+	turnSeq   uint64
+	sessionID string
+	agents    app.Agents
 }
 
 // New creates a fail-closed headless runner. Ask-mode calls stay denied
@@ -338,7 +352,8 @@ func (r *Runner) runCall(
 	if err := writeEvent(output, format, Event{Kind: "tool_call", Tool: call.Name}); err != nil {
 		return err
 	}
-	result, callErr := r.service.Call(ctx, call)
+	callCtx := agent.WithTurnRef(ctx, agent.TurnRef{SessionID: r.sessionID, TurnID: fmt.Sprintf("headless-call-%d", r.nextID)})
+	result, callErr := r.service.Call(callCtx, call)
 	resultContent, marshalErr := json.Marshal(result)
 	if marshalErr != nil {
 		marshalErr = fmt.Errorf("encode headless tool result: %w", marshalErr)
@@ -392,7 +407,10 @@ func (r *Runner) runTurn(
 		return fmt.Errorf("model client is not configured; use /help or /call")
 	}
 	r.messages = append(r.messages, model.Message{Role: model.RoleUser, Content: prompt})
-	result, err := r.runner.Run(ctx, r.Messages(), func(_ context.Context, event app.Event) error {
+	r.turnSeq++
+	turnID := fmt.Sprintf("headless-turn-%d", r.turnSeq)
+	turnCtx := agent.WithTurnRef(ctx, agent.TurnRef{SessionID: r.sessionID, TurnID: turnID})
+	result, err := r.runner.Run(turnCtx, r.Messages(), func(_ context.Context, event app.Event) error {
 		switch event.Kind {
 		case app.EventTextDelta:
 			return writeEvent(output, format, Event{Kind: EventKindText, Text: event.Text})
@@ -408,6 +426,9 @@ func (r *Runner) runTurn(
 			return nil
 		}
 	})
+	if turnCtx.Err() != nil {
+		r.agents.CancelTurn(turnID, agent.CancelTurnAndChildren)
+	}
 	if err == nil {
 		if len(result.Messages) > 0 {
 			r.messages = append(r.messages, model.CloneMessages(result.Messages)...)

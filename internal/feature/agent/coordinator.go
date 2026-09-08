@@ -101,23 +101,38 @@ func (r *ReasoningResolver) Resolve(profile Profile, fallback sdk.ReasoningEffor
 
 // AgentStatus describes the live state of an in-flight subagent.
 type AgentStatus struct {
-	ID         string    `json:"id"`
-	ParentID   string    `json:"parent_id,omitempty"`
-	Profile    Profile   `json:"profile"`
-	Provider   string    `json:"provider,omitempty"`
-	Model      string    `json:"model,omitempty"`
-	Task       string    `json:"task"`
-	State      State     `json:"state"`
-	StartTime  time.Time `json:"start_time"`
-	StartedAt  time.Time `json:"started_at,omitempty"`
-	FinishedAt time.Time `json:"finished_at,omitempty"`
-	Reason     string    `json:"reason,omitempty"`
+	SessionID   string    `json:"session_id,omitempty"`
+	ID          string    `json:"id"`
+	ParentID    string    `json:"parent_id,omitempty"`
+	Profile     Profile   `json:"profile"`
+	Provider    string    `json:"provider,omitempty"`
+	Model       string    `json:"model,omitempty"`
+	Task        string    `json:"task"`
+	State       State     `json:"state"`
+	Version     uint64    `json:"version"`
+	StartTime   time.Time `json:"start_time"`
+	StartedAt   time.Time `json:"started_at,omitempty"`
+	FinishedAt  time.Time `json:"finished_at,omitempty"`
+	Reason      string    `json:"reason,omitempty"`
+	ResumedFrom string    `json:"resumed_from,omitempty"`
+	ResumedAs   string    `json:"resumed_as,omitempty"`
+}
+
+type childToolRuntime struct {
+	permissionMode    permission.Mode
+	prompt            toolcall.PermissionPrompt
+	guard             toolcall.CallGuard
+	permissionTimeout time.Duration
+	executionTimeout  time.Duration
+	observer          toolcall.Observer
 }
 
 type agentEntry struct {
 	status          AgentStatus
+	request         Request
 	languageModel   sdk.LanguageModel
 	reasoningEffort sdk.ReasoningEffort
+	toolRuntime     childToolRuntime
 	cancel          context.CancelFunc
 	done            chan struct{}
 	started         chan struct{}
@@ -135,9 +150,12 @@ type Coordinator struct {
 	workspace         *workspace.Workspace
 	policy            *permission.Policy
 
-	permissionMode permission.Mode
-	prompt         toolcall.PermissionPrompt
-	guard          toolcall.CallGuard
+	permissionMode        permission.Mode
+	prompt                toolcall.PermissionPrompt
+	guard                 toolcall.CallGuard
+	toolPermissionTimeout time.Duration
+	toolExecutionTimeout  time.Duration
+	toolObserver          toolcall.Observer
 
 	sem         chan struct{}
 	wsGate      chan struct{}
@@ -160,12 +178,16 @@ type Coordinator struct {
 	closeTimeout        time.Duration
 	eventSink           EventSink
 	runnerFactory       RunnerFactory
+	metricObserver      MetricObserver
+	lifecycleStore      LifecycleEventStore
 	eventQueue          chan Event
 	closeOnce           sync.Once
 	closeDone           chan struct{}
 	eventMu             sync.RWMutex
 	subscribers         map[uint64]chan Event
 	subscriberSeq       uint64
+	activityMu          sync.Mutex
+	activityMailboxes   map[string]*activityMailbox
 
 	seq     uint64
 	closed  atomic.Bool
@@ -284,6 +306,25 @@ func WithCloseTimeout(d time.Duration) Option {
 	}
 }
 
+// WithToolRuntimePolicy configures tool-call bounds and telemetry inherited by
+// child services. Values are snapshotted when a child is admitted.
+func WithToolRuntimePolicy(permissionTimeout, executionTimeout time.Duration, observer toolcall.Observer) Option {
+	return func(c *Coordinator) {
+		if permissionTimeout >= 0 {
+			c.toolPermissionTimeout = permissionTimeout
+		}
+		if executionTimeout >= 0 {
+			c.toolExecutionTimeout = executionTimeout
+		}
+		c.toolObserver = observer
+	}
+}
+
+// WithLifecycleEventStore configures durable session-scoped lifecycle journaling.
+func WithLifecycleEventStore(store LifecycleEventStore) Option {
+	return func(c *Coordinator) { c.lifecycleStore = store }
+}
+
 // WithEventSink attaches an observer for subagent lifecycle events.
 func WithEventSink(sink EventSink) Option {
 	return func(c *Coordinator) {
@@ -338,28 +379,31 @@ func NewCoordinator(
 ) *Coordinator {
 	rootCtx, rootStop := context.WithCancel(context.Background())
 	c := &Coordinator{
-		languageModel:       languageModel,
-		parentRegistry:      parentRegistry,
-		workspace:           ws,
-		policy:              policy,
-		sem:                 make(chan struct{}, defaultMaxConcurrency),
-		wsGate:              make(chan struct{}, defaultMaxConcurrency),
-		wsWriter:            make(chan struct{}, 1),
-		wsAdmission:         make(chan struct{}, 1),
-		agents:              make(map[string]*agentEntry),
-		rootCtx:             rootCtx,
-		rootStop:            rootStop,
-		maxToolCalls:        defaultMaxToolCalls,
-		maxLiveAgents:       defaultMaxLiveAgents,
-		maxRetainedAgents:   defaultMaxRetainedAgents,
-		maxRuntime:          defaultMaxRuntime,
-		waitTimeout:         defaultWaitTimeout,
-		defaultQueueTimeout: defaultQueueTimeout,
-		resultTTL:           defaultResultTTL,
-		closeTimeout:        defaultCloseTimeout,
-		subscribers:         make(map[uint64]chan Event),
-		eventQueue:          make(chan Event, defaultEventQueueSize),
-		closeDone:           make(chan struct{}),
+		languageModel:         languageModel,
+		parentRegistry:        parentRegistry,
+		workspace:             ws,
+		policy:                policy,
+		sem:                   make(chan struct{}, defaultMaxConcurrency),
+		wsGate:                make(chan struct{}, defaultMaxConcurrency),
+		wsWriter:              make(chan struct{}, 1),
+		wsAdmission:           make(chan struct{}, 1),
+		agents:                make(map[string]*agentEntry),
+		rootCtx:               rootCtx,
+		rootStop:              rootStop,
+		maxToolCalls:          defaultMaxToolCalls,
+		maxLiveAgents:         defaultMaxLiveAgents,
+		maxRetainedAgents:     defaultMaxRetainedAgents,
+		maxRuntime:            defaultMaxRuntime,
+		waitTimeout:           defaultWaitTimeout,
+		defaultQueueTimeout:   defaultQueueTimeout,
+		resultTTL:             defaultResultTTL,
+		closeTimeout:          defaultCloseTimeout,
+		toolPermissionTimeout: toolcall.DefaultPermissionTimeout,
+		toolExecutionTimeout:  toolcall.DefaultExecutionTimeout,
+		subscribers:           make(map[uint64]chan Event),
+		activityMailboxes:     make(map[string]*activityMailbox),
+		eventQueue:            make(chan Event, defaultEventQueueSize),
+		closeDone:             make(chan struct{}),
 	}
 	c.enabled.Store(true)
 	for _, opt := range options {

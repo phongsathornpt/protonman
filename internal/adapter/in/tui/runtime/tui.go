@@ -121,7 +121,7 @@ func WithProjectContext(trusted bool, sources []string, provenance map[string]co
 // mode, interactive prompts, and model client changes are synchronized.
 func WithCoordinator(coordinator *agent.Coordinator) BubbleTeaOption {
 	return func(ui *BubbleTeaUI) error {
-		ui.agents = app.NewAgents(coordinator)
+		ui.agents = app.NewAgentsForSession(coordinator, ui.sessionID)
 		return nil
 	}
 }

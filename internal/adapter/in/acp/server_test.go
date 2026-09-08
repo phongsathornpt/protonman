@@ -19,6 +19,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -130,6 +131,9 @@ func TestACPStreamingAndToolCalls(t *testing.T) {
 	}
 	if !strings.Contains(out, `"stopReason":"end_turn"`) {
 		t.Fatalf("missing end_turn: %s", out)
+	}
+	if runner.parentID == "" || !strings.HasPrefix(runner.parentID, "acp-"+sessionID+"-turn-") {
+		t.Fatalf("parent id = %q, want ACP turn ownership", runner.parentID)
 	}
 }
 
@@ -611,9 +615,12 @@ func (r *blockingACPRunner) Run(ctx context.Context, _ []model.Message, _ applic
 	return applicationturn.Result{}, ctx.Err()
 }
 
-type streamingACPRunner struct{}
+type streamingACPRunner struct {
+	parentID string
+}
 
 func (r *streamingACPRunner) Run(ctx context.Context, _ []model.Message, sink applicationturn.Sink) (applicationturn.Result, error) {
+	r.parentID = agent.ParentIDFromContext(ctx)
 	// Emit streaming text delta
 	_ = sink(ctx, applicationturn.Event{
 		Kind: applicationturn.EventTextDelta,
@@ -834,4 +841,88 @@ func mustJSON(t *testing.T, value any) json.RawMessage {
 		t.Fatal(err)
 	}
 	return data
+}
+
+func TestACPSessionCancelAlsoCancelsOwnedSubagents(t *testing.T) {
+	started := make(chan struct{})
+	coord := agent.NewCoordinator(nil, nil, nil, nil, agent.WithRunnerFactory(func(agent.Profile, *toolcall.Service) (applicationturn.Runner, error) {
+		return subagentCancelRunner{started: started}, nil
+	}))
+	defer coord.Close()
+	turnID := "acp-session-a-turn-1"
+	h, err := coord.Spawn(context.Background(), agent.Request{SessionID: "session-a", ParentID: turnID, Profile: agent.ProfileAgility, Task: "background"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("subagent did not start")
+	}
+	sess := &Session{id: "session-a", agents: app.NewAgentsForSession(coord, "session-a"), active: true, activeTurnID: turnID, cancel: func() {}}
+	sess.Cancel()
+	wr, err := coord.Wait(context.Background(), h.ID, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wr.State != agent.StateCanceled {
+		t.Fatalf("state=%s, want canceled", wr.State)
+	}
+}
+
+type subagentCancelRunner struct {
+	started chan struct{}
+}
+
+func (r subagentCancelRunner) Run(ctx context.Context, _ []model.Message, _ applicationturn.Sink) (applicationturn.Result, error) {
+	select {
+	case <-r.started:
+	default:
+		close(r.started)
+	}
+	<-ctx.Done()
+	return applicationturn.Result{}, ctx.Err()
+}
+
+func TestACPDeleteSessionCancelsBackgroundSubagents(t *testing.T) {
+	started := make(chan struct{})
+	coord := agent.NewCoordinator(nil, nil, nil, nil, agent.WithRunnerFactory(func(agent.Profile, *toolcall.Service) (applicationturn.Runner, error) {
+		return subagentCancelRunner{started: started}, nil
+	}))
+	defer coord.Close()
+	store, err := sessionfs.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const sessionID = "session-delete"
+	if err := store.Save(context.Background(), sessionID, session.State{SessionID: sessionID, PermissionMode: "ask"}); err != nil {
+		t.Fatal(err)
+	}
+	h, err := coord.Spawn(context.Background(), agent.Request{SessionID: sessionID, ParentID: "old-turn", Profile: agent.ProfileAgility, Task: "background"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("subagent did not start")
+	}
+	sess := &Session{id: sessionID, agents: app.NewAgentsForSession(coord, sessionID)}
+	server := &Server{sessionService: app.NewSessions(store), agents: app.NewAgents(coord), sessions: map[string]*Session{sessionID: sess}}
+	if err := server.deleteSession(context.Background(), sessionID); err != nil {
+		t.Fatal(err)
+	}
+	wr, err := coord.Wait(context.Background(), h.ID, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wr.State != agent.StateCanceled {
+		t.Fatalf("state=%s, want canceled", wr.State)
+	}
+	if _, ok := server.lookupSession(sessionID); ok {
+		t.Fatal("deleted session remains active")
+	}
+	if _, found, err := store.Load(context.Background(), sessionID); err != nil || found {
+		t.Fatalf("persisted session found=%v err=%v", found, err)
+	}
 }

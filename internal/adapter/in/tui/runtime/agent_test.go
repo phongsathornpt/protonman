@@ -3,6 +3,11 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"github.com/charmbracelet/bubbles/spinner"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -11,6 +16,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"strings"
 	"testing"
@@ -352,8 +358,8 @@ func TestAgentsPaneShowsBoundModelIdentity(t *testing.T) {
 func TestSubagentLifecycleCollapsesIntoOneRunCell(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	delegate, _ := tool.NewCall("d1", "delegate_task", json.RawMessage(`{"profile":"int","task":"inspect router"}`))
-	wait, _ := tool.NewCall("w1", "wait_agent", json.RawMessage(`{"agent_id":"int-7"}`))
-	m.applyTurnEvents([]turn.Event{{Kind: turn.EventToolCall, Call: delegate}, {Kind: turn.EventToolResult, Call: delegate, Result: tool.Result{CallID: "d1", ToolName: "delegate_task", StructuredOutput: json.RawMessage(`{"agent_id":"int-7","status":"queued"}`)}}, {Kind: turn.EventToolCall, Call: wait}, {Kind: turn.EventToolResult, Call: wait, Result: tool.Result{CallID: "w1", ToolName: "wait_agent", StructuredOutput: json.RawMessage(`{"agent_id":"int-7","status":"completed","result":{"summary":"found routing issue"}}`)}}})
+	wait, _ := tool.NewCall("w1", "wait_agent", json.RawMessage(`{}`))
+	m.applyTurnEvents([]turn.Event{{Kind: turn.EventToolCall, Call: delegate}, {Kind: turn.EventToolResult, Call: delegate, Result: tool.Result{CallID: "d1", ToolName: "delegate_task", StructuredOutput: json.RawMessage(`{"agent_id":"int-7","status":"queued"}`)}}, {Kind: turn.EventToolCall, Call: wait}, {Kind: turn.EventToolResult, Call: wait, Result: tool.Result{CallID: "w1", ToolName: "wait_agent", StructuredOutput: json.RawMessage(`{"timed_out":false,"event":{"kind":"agent_completed","agent_id":"int-7","message":"found routing issue"},"agents":[{"id":"int-7","state":"completed"}]}`)}}})
 	cells := m.historyState.Cells()
 	if len(cells) != 1 {
 		t.Fatalf("history cells=%d, want one delegated run: %#v", len(cells), cells)
@@ -385,23 +391,23 @@ func TestSubagentRunsStayDistinctByAgentID(t *testing.T) {
 	}
 }
 
-func TestAgentPollingFailureDoesNotLeakRPCTranscript(t *testing.T) {
+func TestAgentWaitTimeoutDoesNotLeakRPCTranscript(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	delegate, _ := tool.NewCall("d1", "delegate_task", json.RawMessage(`{"profile":"int","task":"inspect router"}`))
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: delegate})
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: delegate, Result: tool.Result{CallID: "d1", ToolName: "delegate_task", StructuredOutput: json.RawMessage(`{"agent_id":"int-7","status":"running"}`)}})
-	wait, _ := tool.NewCall("w1", "wait_agent", json.RawMessage(`{"agent_id":"int-7"}`))
+	wait, _ := tool.NewCall("w1", "wait_agent", json.RawMessage(`{}`))
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: wait})
-	m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: wait, Result: tool.Result{CallID: "w1", ToolName: "wait_agent", Failure: &tool.Failure{Code: tool.ErrorCodeDeadlineExceeded, Message: "wait timeout"}}})
+	m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: wait, Result: tool.Result{CallID: "w1", ToolName: "wait_agent", StructuredOutput: json.RawMessage(`{"timed_out":true,"event":null,"agents":[{"id":"int-7","state":"running"}]}`)}})
 	plain := m.historyState.Raw()
-	for _, leaked := range []string{"Wait agent", "wait_agent", "Waiting for int-7", "deadline_exceeded"} {
+	for _, leaked := range []string{"Wait agent", "wait_agent", "Waiting for int-7", "deadline_exceeded", "wait timed out"} {
 		if strings.Contains(plain, leaked) {
-			t.Fatalf("orchestration failure leaked into transcript: %q", plain)
+			t.Fatalf("orchestration wait leaked into transcript: %q", plain)
 		}
 	}
 	run := m.historyState.AgentRun("int-7")
-	if run == nil || !strings.Contains(run.Activity, "status check failed") {
-		t.Fatalf("run activity=%#v", run)
+	if run == nil || run.Activity != "" || run.State != agent.StateRunning {
+		t.Fatalf("run state=%#v", run)
 	}
 }
 
@@ -425,7 +431,7 @@ func TestTerminalAgentLeavesLivePaneButStaysInTranscript(t *testing.T) {
 func TestOutOfOrderAgentResultMergesIntoDelegateRun(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	delegate, _ := tool.NewCall("d1", "delegate_task", json.RawMessage(`{"profile":"int","task":"inspect router"}`))
-	get, _ := tool.NewCall("g1", "get_agent", json.RawMessage(`{"agent_id":"int-7"}`))
+	get, _ := tool.NewCall("g1", "get_agent", json.RawMessage(`{}`))
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: delegate})
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: get})
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: get, Result: tool.Result{CallID: "g1", ToolName: "get_agent", StructuredOutput: json.RawMessage(`{"agent_id":"int-7","status":"running"}`)}})
@@ -480,7 +486,7 @@ func TestLongTurnWithSubagentsKeepsProgressCoherent(t *testing.T) {
 	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", Task: "inspect router", State: agent.StateRunning, StartedAt: time.Now().Add(-10 * time.Second)}, {ID: "reviewer-2", Task: "review safety", State: agent.StateRunning, StartedAt: time.Now().Add(-9 * time.Second)}, {ID: "int-3", Task: "analyze boundaries", State: agent.StateQueued, StartTime: time.Now().Add(-8 * time.Second)}}
 	m.agentActivity["explorer-1"] = AgentActivity{Label: "using grep"}
 	delegate, _ := tool.NewCall("d1", "delegate_task", json.RawMessage(`{"profile":"int","task":"inspect router"}`))
-	wait, _ := tool.NewCall("w1", "wait_agent", json.RawMessage(`{"agent_id":"explorer-1"}`))
+	wait, _ := tool.NewCall("w1", "wait_agent", json.RawMessage(`{}`))
 	m.applyTurnEvents([]turn.Event{{Kind: turn.EventToolCall, Round: 1, Call: delegate}, {Kind: turn.EventToolResult, Round: 1, Call: delegate, Result: tool.Result{CallID: "d1", ToolName: "delegate_task", Output: `{"agent_id":"explorer-1","status":"queued"}`}}, {Kind: turn.EventToolCall, Round: 2, Call: wait}})
 	status := m.statusView()
 	for _, want := range []string{"coordinating", "3 agents"} {
@@ -547,5 +553,147 @@ func TestAgentRunCellTerminalFallbacksAreExplicit(t *testing.T) {
 		if !strings.Contains(got, "review concurrency") || !strings.Contains(got, tc.want) {
 			t.Fatalf("state=%s render=%q", tc.state, got)
 		}
+	}
+}
+
+func TestAgentProgressKeepsFrameWithinTerminal(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.resize(100, 30)
+	m.busy = true
+	m.agentSnapshot = []agent.AgentStatus{{ID: "worker-1", Profile: agent.ProfileStrength, Task: "fix failures", State: agent.StateRunning, StartedAt: time.Now()}}
+	m.relayout()
+	if got := lipgloss.Height(m.View()); got > m.height {
+		t.Fatalf("initial frame height=%d terminal=%d", got, m.height)
+	}
+	call, _ := tool.NewCall("grep-1", "grep", []byte(`{"pattern":"TDZ","path":"."}`))
+	updated, _ := m.Update(agentLifecycleMsg{event: agent.Event{Kind: agent.EventAgentProgress, AgentID: "worker-1", Call: &call}})
+	m = updated.(*bubbleModel)
+	if got := lipgloss.Height(m.View()); got > m.height {
+		t.Fatalf("agent progress frame height=%d terminal=%d", got, m.height)
+	}
+}
+
+func TestRelayoutDoesNotReenableFollowTailAfterUserScroll(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.showWelcome = false
+	m.resize(80, 24)
+	for i := 0; i < 80; i++ {
+		m.appendLine(fmt.Sprintf("line-%02d", i))
+	}
+	m.todo = []TodoItem{{ID: "a", Text: "dynamic chrome", Status: tododomain.StatusInProgress}}
+	m.relayout()
+	m.viewport.GotoBottom()
+	m.viewport.ScrollUp(1)
+	m.followTail = false
+	m.todo = nil
+	m.relayout()
+	if m.followTail {
+		t.Fatal("relayout re-enabled follow tail after explicit user scroll")
+	}
+}
+
+func TestRefreshViewportPreservesLogicalAnchorAcrossCellExpansion(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.showWelcome = false
+	m.resize(80, 16)
+	run := &AgentRunCell{AgentID: "worker-1", Profile: agent.ProfileStrength, Task: "fix failures", State: agent.StateRunning}
+	m.historyState.Append(run)
+	for i := 0; i < 40; i++ {
+		m.appendLine(fmt.Sprintf("line-%02d", i))
+	}
+	m.refreshViewport()
+	m.viewport.SetYOffset(10)
+	m.followTail = false
+	before := strings.Split(ansi.Strip(m.viewport.View()), "\n")[0]
+	run.Activity = "search TDZ"
+	m.historyState.TouchAgentRun("worker-1")
+	m.refreshViewport()
+	after := strings.Split(ansi.Strip(m.viewport.View()), "\n")[0]
+	if after != before {
+		t.Fatalf("logical scroll anchor moved: before=%q after=%q", before, after)
+	}
+	if m.followTail {
+		t.Fatal("content expansion re-enabled follow tail")
+	}
+}
+
+func TestScrolledViewportSurvivesLiveAgentChromeStress(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.showWelcome = false
+	m.resize(90, 24)
+	run := &AgentRunCell{AgentID: "worker-1", Profile: agent.ProfileStrength, Task: "fix TDZ and bun adapter", State: agent.StateRunning, StartedAt: time.Now()}
+	m.historyState.Append(run)
+	for i := 0; i < 80; i++ {
+		m.appendLine(fmt.Sprintf("history-%02d", i))
+	}
+	m.busy = true
+	m.busyStarted = time.Now().Add(-5 * time.Minute)
+	m.agentSnapshot = []agent.AgentStatus{{ID: "worker-1", Profile: agent.ProfileStrength, Task: "fix TDZ and bun adapter", State: agent.StateRunning, StartedAt: time.Now().Add(-5 * time.Minute)}}
+	m.relayout()
+	m.viewport.GotoBottom()
+	m.viewport.ScrollUp(7)
+	m.followTail = false
+	firstSemanticLine := func() string {
+		for _, line := range strings.Split(ansi.Strip(m.viewport.View()), "\n") {
+			if trimmed := strings.TrimSpace(line); trimmed != "" {
+				return trimmed
+			}
+		}
+		return ""
+	}
+	firstVisible := firstSemanticLine()
+
+	assertStable := func(stage string) {
+		t.Helper()
+		view := m.View()
+		if got := lipgloss.Height(view); got > m.height {
+			t.Fatalf("%s frame height=%d terminal=%d", stage, got, m.height)
+		}
+		for _, line := range strings.Split(view, "\n") {
+			if got := ansi.StringWidth(line); got > m.width {
+				t.Fatalf("%s line width=%d terminal=%d: %q", stage, got, m.width, line)
+			}
+		}
+		if m.followTail {
+			t.Fatalf("%s unexpectedly re-enabled follow tail", stage)
+		}
+		if got := firstSemanticLine(); got != firstVisible {
+			t.Fatalf("%s moved logical anchor: before=%q after=%q", stage, firstVisible, got)
+		}
+		if strings.Contains(ansi.Strip(m.historyState.RenderContent()), "coordinating 1 agent") {
+			t.Fatalf("%s persisted ephemeral coordination status into history", stage)
+		}
+	}
+
+	run.Activity = "กำลังแยกกลุ่ม failure ว่าเป็น TDZ, bun-adapter, หรือ logic จริง"
+	m.agentActivity["worker-1"] = AgentActivity{Label: run.Activity}
+	m.historyState.TouchAgentRun("worker-1")
+	m.relayout()
+	assertStable("thai agent progress")
+
+	updated, _ := m.Update(spinner.TickMsg{})
+	m = updated.(*bubbleModel)
+	assertStable("spinner tick")
+
+	m.todo = []TodoItem{{ID: "fix", Text: "ตรวจสอบผลแก้ไข", Status: tododomain.StatusInProgress}}
+	m.relayout()
+	assertStable("todo expanded")
+	m.todo = nil
+	m.relayout()
+	assertStable("todo collapsed")
+
+	m.agentSnapshot = nil
+	run.State = agent.StateCompleted
+	run.FinishedAt = time.Now()
+	m.historyState.TouchAgentRun("worker-1")
+	m.relayout()
+	assertStable("agent completed")
+
+	for !m.viewport.AtBottom() {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+		m = updated.(*bubbleModel)
+	}
+	if !m.followTail {
+		t.Fatal("explicit page down to bottom did not re-enable follow tail")
 	}
 }

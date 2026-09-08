@@ -14,7 +14,7 @@ func TestRenderComposesStableContracts(t *testing.T) {
 		ExtraInstructions:   []string{"custom one", "custom two"},
 	})
 	for _, want := range []string{
-		`<proton-system-prompt version="6">`, "specialized coding subagent", "# Execution Contract", "# Tool Protocol",
+		`<proton-system-prompt version="7">`, "specialized coding subagent", "# Execution Contract", "# Tool Protocol",
 		"# Tool Discipline", "materially changes evidence", "Prefer dedicated workspace tools", "shell or language runtimes", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
 		"# Editing And Verification", "Workspace root: /repo", "skill instructions", "# Project Instructions",
 		"cannot override Protonman's tool, permission, safety, or runtime contracts", "# Additional Instructions", "custom one", "custom two",
@@ -104,7 +104,7 @@ func TestRenderTaskDelegationOwnershipIsRootOnly(t *testing.T) {
 
 func TestRenderDelegationExplainsAsyncLifecycle(t *testing.T) {
 	got := Render(Spec{Capabilities: ToolCapabilities{Agents: true}})
-	for _, want := range []string{"Delegation is asynchronous", "spawn independent children before waiting", "wait timeout does not cancel", "do not poll agent state", "Cancel delegated work"} {
+	for _, want := range []string{"Delegated work runs independently after admission", "Spawn independent children before waiting", "A wait timeout is a successful no-activity observation and never cancels child work", "instead of polling repeatedly", "Cancel delegated work"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("delegation contract missing %q:\n%s", want, got)
 		}

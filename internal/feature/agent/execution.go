@@ -21,22 +21,26 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	c.agentsMu.RLock()
 	languageModel := c.languageModel
 	reasoningEffort := c.reasoningEffort
+	runtimeSpec := childToolRuntime{
+		permissionMode: c.permissionMode, prompt: c.prompt, guard: c.guard,
+		permissionTimeout: c.toolPermissionTimeout, executionTimeout: c.toolExecutionTimeout, observer: c.toolObserver,
+	}
 	c.agentsMu.RUnlock()
-	return c.executeWithRuntime(ctx, req, languageModel, reasoningEffort)
+	return c.executeWithRuntime(ctx, req, languageModel, reasoningEffort, runtimeSpec)
 }
 
-func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, languageModel sdk.LanguageModel, reasoningEffort sdk.ReasoningEffort) (Result, error) {
+func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, languageModel sdk.LanguageModel, reasoningEffort sdk.ReasoningEffort, runtimeSpec childToolRuntime) (Result, error) {
 	if err := ctx.Err(); err != nil {
-		return Result{AgentID: req.ID, Profile: req.Profile}, err
+		return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile}, err
 	}
 
 	c.agentsMu.RLock()
 	parentRegistry := c.parentRegistry
-	permMode := c.permissionMode
-	prompter := c.prompt
-	guard := c.guard
 	skillCatalog := c.skillRegistry
 	c.agentsMu.RUnlock()
+	permMode := runtimeSpec.permissionMode
+	prompter := runtimeSpec.prompt
+	guard := runtimeSpec.guard
 
 	// 1. Build profile-scoped tools and an isolated skill activation session.
 	childSkills := selectSubagentSkills(skillCatalog, req)
@@ -56,12 +60,19 @@ func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, langu
 	if policy == nil {
 		p, err := permission.NewPolicy(permission.Config{})
 		if err != nil {
-			return Result{AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create default policy: %w", err)
+			return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create default policy: %w", err)
 		}
 		policy = p
 	}
 
-	serviceOpts := []toolcall.Option{toolcall.WithMode(serviceMode)}
+	serviceOpts := []toolcall.Option{
+		toolcall.WithMode(serviceMode),
+		toolcall.WithPermissionTimeout(runtimeSpec.permissionTimeout),
+		toolcall.WithExecutionTimeout(runtimeSpec.executionTimeout),
+	}
+	if runtimeSpec.observer != nil {
+		serviceOpts = append(serviceOpts, toolcall.WithObserver(runtimeSpec.observer))
+	}
 	if c.workspace != nil {
 		serviceOpts = append(serviceOpts, toolcall.WithWorkspaceMutationGate(c.workspace))
 	}
@@ -75,7 +86,7 @@ func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, langu
 		serviceOpts...,
 	)
 	if err != nil {
-		return Result{AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create scoped tool service: %w", err)
+		return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create scoped tool service: %w", err)
 	}
 	if guard != nil {
 		service.SetCallGuard(guard)
@@ -86,12 +97,12 @@ func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, langu
 	if c.runnerFactory != nil {
 		r, rerr := c.runnerFactory(req.Profile, service)
 		if rerr != nil {
-			return Result{AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create turn runner: %w", rerr)
+			return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create turn runner: %w", rerr)
 		}
 		runner = r
 	} else {
 		if languageModel == nil {
-			return Result{AgentID: req.ID, Profile: req.Profile}, errors.New("language model is required for subagent execution")
+			return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile}, errors.New("language model is required for subagent execution")
 		}
 		promptSpec := prompt.Spec{Profile: string(req.Profile), Role: RolePromptForProfile(req.Profile)}
 		if c.workspace != nil {
@@ -112,7 +123,7 @@ func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, langu
 		}
 		loop, lerr := turn.NewLoop(languageModel, service, loopOptions...)
 		if lerr != nil {
-			return Result{AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create turn loop: %w", lerr)
+			return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create turn loop: %w", lerr)
 		}
 		runner = loop
 	}
@@ -133,11 +144,12 @@ func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, langu
 		case turn.EventToolCall:
 			call := te.Call
 			c.emit(ctx, Event{
-				Kind:     EventAgentProgress,
-				AgentID:  req.ID,
-				ParentID: req.ParentID,
-				Profile:  req.Profile,
-				Call:     &call,
+				Kind:      EventAgentProgress,
+				SessionID: req.SessionID,
+				AgentID:   req.ID,
+				ParentID:  req.ParentID,
+				Profile:   req.Profile,
+				Call:      &call,
 			})
 		case turn.EventToolResult:
 			if te.Err != nil || te.Result.Denied || te.Result.Failure != nil {
@@ -167,10 +179,10 @@ func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, langu
 		return nil
 	})
 	if err != nil {
-		return Result{AgentID: req.ID, Profile: req.Profile, Rounds: turnResult.Rounds, Verification: turnResult.Verification}, err
+		return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile, Rounds: turnResult.Rounds, Verification: turnResult.Verification}, err
 	}
 	if req.Profile == ProfileIntelligence && turnResult.Verification.Mutated && !turnResult.Verification.Verified {
-		return Result{AgentID: req.ID, Profile: req.Profile, Rounds: turnResult.Rounds, Verification: turnResult.Verification}, ErrUnverifiedChanges
+		return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile, Rounds: turnResult.Rounds, Verification: turnResult.Verification}, ErrUnverifiedChanges
 	}
 
 	summary := strings.TrimSpace(turnResult.Message.Content)
@@ -183,6 +195,7 @@ func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, langu
 	summary = truncateSummary(summary, maxSummaryBytes)
 
 	return Result{
+		SessionID:      req.SessionID,
 		AgentID:        req.ID,
 		Profile:        req.Profile,
 		Summary:        summary,

@@ -2,11 +2,32 @@ package agent
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/phongsathornpt/protonman/internal/base/contextutil"
 )
+
+const (
+	maxActivityMailboxEvents = 128
+	maxActivityMailboxes     = 256
+	activityMailboxTTL       = 30 * time.Minute
+)
+
+type activityRecord struct {
+	seq   uint64
+	event Event
+}
+
+type activityMailbox struct {
+	nextSeq   uint64
+	seen      uint64
+	events    []activityRecord
+	notify    chan struct{}
+	updatedAt time.Time
+}
 
 // Subscribe returns a bounded lifecycle stream. Slow subscribers drop events
 // rather than blocking agent execution; callers resnapshot coordinator state on
@@ -55,12 +76,98 @@ func (c *Coordinator) broadcast(ev Event) {
 	}
 }
 
-func (c *Coordinator) emit(_ context.Context, ev Event) {
+func (c *Coordinator) emit(ctx context.Context, ev Event) {
+	c.recordActivity(ev)
+	switch ev.Kind {
+	case EventAgentCompleted:
+		c.observeMetric(ctx, MetricEvent{Kind: MetricCompleted, SessionID: ev.SessionID, AgentID: ev.AgentID, ParentID: ev.ParentID, Profile: ev.Profile})
+	case EventAgentFailed:
+		kind := MetricFailed
+		if status, ok := c.Get(ev.AgentID); ok && status.State == StateCanceled {
+			kind = MetricCanceled
+		}
+		c.observeMetric(ctx, MetricEvent{Kind: kind, SessionID: ev.SessionID, AgentID: ev.AgentID, ParentID: ev.ParentID, Profile: ev.Profile})
+	}
 	c.broadcast(ev)
-	if c.eventSink == nil {
+	if c.eventSink == nil || ev.Kind == EventAgentProgress {
 		return
 	}
 	enqueueLifecycleEvent(c.eventQueue, ev)
+}
+
+func (c *Coordinator) recordActivity(ev Event) {
+	if !terminalLifecycleEvent(ev.Kind) {
+		return
+	}
+	c.activityMu.Lock()
+	c.recordActivityLocked("", ev)
+	ref := TurnRef{SessionID: ev.SessionID, TurnID: ev.ParentID}.normalized()
+	if ref.SessionID != "" || ref.TurnID != "" {
+		c.recordActivityLocked(activityScopeKey(ref), ev)
+	}
+	c.activityMu.Unlock()
+	c.pruneActivityMailboxes(time.Now())
+}
+
+func (c *Coordinator) recordActivityLocked(scope string, ev Event) {
+	mailbox := c.activityMailboxes[scope]
+	if mailbox == nil {
+		mailbox = &activityMailbox{notify: make(chan struct{})}
+		c.activityMailboxes[scope] = mailbox
+	}
+	mailbox.updatedAt = time.Now()
+	mailbox.nextSeq++
+	mailbox.events = append(mailbox.events, activityRecord{seq: mailbox.nextSeq, event: ev})
+	if len(mailbox.events) > maxActivityMailboxEvents {
+		drop := len(mailbox.events) - maxActivityMailboxEvents
+		mailbox.events = append([]activityRecord(nil), mailbox.events[drop:]...)
+	}
+	close(mailbox.notify)
+	mailbox.notify = make(chan struct{})
+}
+
+func (c *Coordinator) pruneActivityMailboxes(now time.Time) {
+	if c == nil {
+		return
+	}
+	active := make(map[string]struct{})
+	c.agentsMu.RLock()
+	for _, entry := range c.agents {
+		if entry.status.State.Terminal() {
+			continue
+		}
+		active[activityScopeKey(TurnRef{SessionID: entry.status.SessionID, TurnID: entry.status.ParentID})] = struct{}{}
+	}
+	c.agentsMu.RUnlock()
+
+	c.activityMu.Lock()
+	defer c.activityMu.Unlock()
+	type candidate struct {
+		scope string
+		at    time.Time
+	}
+	candidates := make([]candidate, 0, len(c.activityMailboxes))
+	for scope, mailbox := range c.activityMailboxes {
+		if scope == "" {
+			continue
+		}
+		if _, live := active[scope]; live {
+			continue
+		}
+		if !mailbox.updatedAt.IsZero() && now.Sub(mailbox.updatedAt) >= activityMailboxTTL {
+			delete(c.activityMailboxes, scope)
+			continue
+		}
+		candidates = append(candidates, candidate{scope: scope, at: mailbox.updatedAt})
+	}
+	over := len(c.activityMailboxes) - maxActivityMailboxes
+	if over <= 0 {
+		return
+	}
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].at.Before(candidates[j].at) })
+	for i := 0; i < over && i < len(candidates); i++ {
+		delete(c.activityMailboxes, candidates[i].scope)
+	}
 }
 
 func enqueueLifecycleEvent(ch chan Event, ev Event) {

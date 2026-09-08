@@ -17,7 +17,9 @@ import (
 	webtool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/web"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/base/contextutil"
 	"github.com/phongsathornpt/protonman/internal/base/envconfig"
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -105,7 +107,26 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	if err != nil {
 		return nil, fmt.Errorf("create permission policy: %w", err)
 	}
-	coordinator := agent.NewCoordinator(nil, nil, workspaceRoot, policy,
+	stateStore, err := sessionfs.NewFileStore(dirs.Sessions)
+	if err != nil {
+		return nil, fmt.Errorf("create session store: %w", err)
+	}
+	observer, err := configuredTelemetryObserver()
+	if err != nil {
+		return nil, err
+	}
+	type agentTelemetryObserver interface {
+		ObserveAgent(context.Context, string, string, string, string)
+	}
+	agentTelemetry, _ := observer.(agentTelemetryObserver)
+	sessionID, state, found, err := resolveSession(ctx, stateStore, workDir, options)
+	if err != nil {
+		return nil, err
+	}
+	var coordinator *agent.Coordinator
+	coordinator = agent.NewCoordinator(nil, nil, workspaceRoot, policy,
+		agent.WithLifecycleEventStore(stateStore),
+		agent.WithToolRuntimePolicy(loadedConfig.Runtime.ToolPermissionTimeout, loadedConfig.Runtime.ToolExecutionTimeout, observer),
 		agent.WithEnabled(loadedConfig.Agent.SubagentsEnabled),
 		agent.WithMaxToolCalls(loadedConfig.Agent.MaxToolCalls),
 		agent.WithReasoningEffort(loadedConfig.Agent.ReasoningEffort),
@@ -116,25 +137,66 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		agent.WithMaxLiveAgents(loadedConfig.Agent.MaxLiveSubagents),
 		agent.WithMaxRetainedAgents(loadedConfig.Agent.MaxRetainedSubagents),
 		agent.WithResultTTL(loadedConfig.Agent.CompletedResultTTL),
-		agent.WithEventSink(func(ctx context.Context, ev agent.Event) error {
+		agent.WithMetricObserver(func(metricCtx context.Context, ev agent.MetricEvent) {
+			if agentTelemetry != nil {
+				agentTelemetry.ObserveAgent(metricCtx, string(ev.Kind), ev.AgentID, ev.ParentID, string(ev.Profile))
+			}
+		}),
+		agent.WithEventSink(func(eventCtx context.Context, ev agent.Event) error {
 			slog.Debug("subagent lifecycle event", "kind", ev.Kind, "agent_id", ev.AgentID, "parent_id", ev.ParentID, "profile", ev.Profile, "duration", ev.Duration, "err", ev.Err)
+			if ev.Kind == agent.EventAgentProgress || coordinator == nil {
+				return nil
+			}
+			ownerSession := strings.TrimSpace(ev.SessionID)
+			if ownerSession == "" {
+				ownerSession = sessionID
+			}
+			persistCtx, done := contextutil.DetachedTimeout(eventCtx, runtimepolicy.SessionPersistenceTimeout)
+			defer done()
+			var persistErr error
+			if ev.Kind == agent.EventAgentCompleted || ev.Kind == agent.EventAgentFailed {
+				persistErr = coordinator.CompactLifecycleSession(persistCtx, ownerSession)
+			} else {
+				persistErr = stateStore.SaveAgents(persistCtx, ownerSession, coordinator.PersistentSnapshotForSession(ownerSession))
+			}
+			if persistErr != nil {
+				slog.Warn("persist subagent lifecycle state", "session_id", ownerSession, "error", persistErr)
+				if agentTelemetry != nil {
+					agentTelemetry.ObserveAgent(persistCtx, "agent_persistence_failure", ev.AgentID, ev.ParentID, string(ev.Profile))
+				}
+			}
 			return nil
 		}),
 	)
+	persistedAgents, agentsFound, loadErr := stateStore.LoadAgents(ctx, sessionID)
+	if loadErr != nil {
+		return nil, fmt.Errorf("load session subagents: %w", loadErr)
+	}
+	lifecycleEvents, eventsErr := stateStore.LoadLifecycleEvents(ctx, sessionID)
+	if eventsErr != nil {
+		return nil, fmt.Errorf("load session subagent lifecycle events: %w", eventsErr)
+	}
+	if agentsFound || len(lifecycleEvents) > 0 {
+		var snapshot *agent.PersistentSnapshot
+		if agentsFound {
+			snapshot = &persistedAgents
+		}
+		if recoverErr := coordinator.RecoverLifecycle(ctx, sessionID, snapshot, lifecycleEvents); recoverErr != nil {
+			return nil, fmt.Errorf("recover session subagents: %w", recoverErr)
+		}
+		persistCtx, persistDone := contextutil.DetachedTimeout(ctx, runtimepolicy.SessionPersistenceTimeout)
+		if persistErr := coordinator.CompactLifecycleSession(persistCtx, sessionID); persistErr != nil {
+			persistDone()
+			return nil, fmt.Errorf("compact recovered session subagents: %w", persistErr)
+		}
+		persistDone()
+	}
 	failed := true
 	defer func() {
 		if failed {
 			_ = coordinator.Close()
 		}
 	}()
-	stateStore, err := sessionfs.NewFileStore(dirs.Sessions)
-	if err != nil {
-		return nil, fmt.Errorf("create session store: %w", err)
-	}
-	sessionID, state, found, err := resolveSession(ctx, stateStore, workDir, options)
-	if err != nil {
-		return nil, err
-	}
 	subagentModelResolver, err := app.BuildSubagentModelResolver(app.SubagentModelResolverSpec{
 		Providers:      loadedConfig.Providers,
 		Overrides:      loadedConfig.Agent.Subagents,
@@ -171,6 +233,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 			agenttool.NewGetAgent(coordinator),
 			agenttool.NewListAgents(coordinator),
 			agenttool.NewCancelAgent(coordinator),
+			agenttool.NewResumeAgent(coordinator),
 		),
 	)
 	if err != nil {
@@ -196,6 +259,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 			return nil, err
 		}
 	}
+	coordinator.SetPermissionMode(initialMode)
 	if err := applyAgentProfile(&loadedConfig, &state, options.agentProfile); err != nil {
 		return nil, err
 	}
@@ -213,10 +277,6 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		toolcall.WithExecutionTimeout(loadedConfig.Runtime.ToolExecutionTimeout),
 		toolcall.WithWorkspaceMutationGate(workspaceRoot),
 	}
-	observer, err := configuredTelemetryObserver()
-	if err != nil {
-		return nil, err
-	}
 	if observer != nil {
 		serviceOptions = append(serviceOptions, toolcall.WithObserver(observer))
 	}
@@ -229,7 +289,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		providerKey = model.DefaultProtonmanName
 	}
 	provider := loadedConfig.Providers[providerKey]
-	initialRunner, _ := app.BuildConversation(service, skillRegistry, app.NewAgents(coordinator), app.ConversationSpec{
+	initialRunner, _ := app.BuildConversation(service, skillRegistry, app.NewAgentsForSession(coordinator, sessionID), app.ConversationSpec{
 		ProviderName: providerKey, ProviderType: provider.Type, BaseURL: provider.BaseURL, APIKey: provider.APIKey,
 		ModelID: loadedConfig.Model.Default, SessionID: sessionID, Workspace: workDir, AgentProfile: loadedConfig.Agent.Profile,
 		ReasoningEffort: loadedConfig.Agent.ReasoningEffort, MaxToolCalls: loadedConfig.Agent.MaxToolCalls,

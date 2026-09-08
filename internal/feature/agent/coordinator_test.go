@@ -1482,3 +1482,243 @@ func TestSetEnabledLinearizesWithSpawnAdmission(t *testing.T) {
 		t.Fatal("coordinator remained enabled")
 	}
 }
+
+func TestWaitActivityTimeoutIsNonFatal(t *testing.T) {
+	release := make(chan struct{})
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithMaxRuntime(time.Second),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+				select {
+				case <-release:
+					return turn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "done"}}, nil
+				case <-ctx.Done():
+					return turn.Result{}, ctx.Err()
+				}
+			}}, nil
+		}),
+	)
+	defer func() { close(release); _ = coord.Close() }()
+
+	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileAgility, Task: "background"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForTest(t, time.Second, func() bool {
+		status, ok := coord.Get(h.ID)
+		return ok && status.State == StateRunning
+	})
+
+	wr, err := coord.WaitActivity(context.Background(), 20*time.Millisecond)
+	if err != nil {
+		t.Fatalf("WaitActivity() error = %v", err)
+	}
+	if !wr.TimedOut || wr.Event != nil {
+		t.Fatalf("WaitActivity() = %+v, want non-fatal timeout", wr)
+	}
+	status, ok := coord.Get(h.ID)
+	if !ok || status.State != StateRunning {
+		t.Fatalf("child state after wait timeout = %+v, ok=%v", status, ok)
+	}
+}
+
+func TestWaitActivityConsumesCompletionRecordedBeforeWait(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(context.Context, []model.Message, turn.Sink) (turn.Result, error) {
+				return turn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "finished early"}}, nil
+			}}, nil
+		}),
+	)
+	defer coord.Close()
+
+	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileAgility, Task: "finish early"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := coord.Wait(context.Background(), h.ID, time.Second); err != nil {
+		t.Fatal(err)
+	}
+
+	wr, err := coord.WaitActivity(context.Background(), time.Second)
+	if err != nil {
+		t.Fatalf("WaitActivity() error = %v", err)
+	}
+	if wr.TimedOut || wr.Event == nil || wr.Event.AgentID != h.ID || wr.Event.Kind != EventAgentCompleted {
+		t.Fatalf("WaitActivity() = %+v, want retained completion activity", wr)
+	}
+}
+
+func TestWaitActivityCallerCancellationDoesNotCancelChild(t *testing.T) {
+	release := make(chan struct{})
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithMaxRuntime(time.Second),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+				select {
+				case <-release:
+					return turn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "done"}}, nil
+				case <-ctx.Done():
+					return turn.Result{}, ctx.Err()
+				}
+			}}, nil
+		}),
+	)
+	defer func() { close(release); _ = coord.Close() }()
+
+	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileAgility, Task: "survive caller cancel"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForTest(t, time.Second, func() bool {
+		status, ok := coord.Get(h.ID)
+		return ok && status.State == StateRunning
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := coord.WaitActivity(ctx, time.Second); !errors.Is(err, context.Canceled) {
+		t.Fatalf("WaitActivity() error = %v, want context canceled", err)
+	}
+	status, ok := coord.Get(h.ID)
+	if !ok || status.State != StateRunning {
+		t.Fatalf("child state after caller cancellation = %+v, ok=%v", status, ok)
+	}
+}
+
+func TestWaitActivityForParentIgnoresUnrelatedActivity(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil, WithDefaultWaitTimeout(20*time.Millisecond))
+	defer coord.Close()
+
+	coord.recordActivity(Event{Kind: EventAgentCompleted, AgentID: "agent-a", ParentID: "turn-a"})
+	wr, err := coord.WaitActivityForParent(context.Background(), "turn-b", 20*time.Millisecond)
+	if err != nil {
+		t.Fatalf("WaitActivityForParent() error = %v", err)
+	}
+	if !wr.TimedOut || wr.Event != nil {
+		t.Fatalf("unrelated activity woke scoped wait: %+v", wr)
+	}
+
+	wr, err = coord.WaitActivityForParent(context.Background(), "turn-a", time.Second)
+	if err != nil {
+		t.Fatalf("WaitActivityForParent() error = %v", err)
+	}
+	if wr.TimedOut || wr.Event == nil || wr.Event.AgentID != "agent-a" {
+		t.Fatalf("scoped activity = %+v, want agent-a", wr)
+	}
+}
+
+func TestWaitActivityGlobalStillObservesScopedActivity(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil)
+	defer coord.Close()
+
+	coord.recordActivity(Event{Kind: EventAgentFailed, AgentID: "agent-a", ParentID: "turn-a"})
+	wr, err := coord.WaitActivity(context.Background(), time.Second)
+	if err != nil {
+		t.Fatalf("WaitActivity() error = %v", err)
+	}
+	if wr.Event == nil || wr.Event.AgentID != "agent-a" || wr.Event.ParentID != "turn-a" {
+		t.Fatalf("global activity = %+v", wr)
+	}
+}
+
+func TestCancelTurnPolicyCancelsOwnedChildrenOnly(t *testing.T) {
+	started := make(chan struct{})
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil, WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+		return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+			select {
+			case <-started:
+			default:
+				close(started)
+			}
+			<-ctx.Done()
+			return turn.Result{}, ctx.Err()
+		}}, nil
+	}))
+	defer coord.Close()
+	h, err := coord.Spawn(context.Background(), Request{SessionID: "session-a", ParentID: "turn-1", Profile: ProfileAgility, Task: "wait"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("child did not start")
+	}
+	if got := coord.CancelTurn(TurnRef{SessionID: "session-a", TurnID: "turn-1"}, CancelTurnOnly); got != 0 {
+		t.Fatalf("CancelTurn(turn-only)=%d", got)
+	}
+	if got := coord.CancelTurn(TurnRef{SessionID: "session-a", TurnID: "turn-1"}, CancelTurnAndChildren); got != 1 {
+		t.Fatalf("CancelTurn(with-children)=%d", got)
+	}
+	wr, err := coord.Wait(context.Background(), h.ID, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wr.State != StateCanceled {
+		t.Fatalf("state=%s, want canceled", wr.State)
+	}
+}
+
+func TestCancelSessionAndWaitIsSessionScoped(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil, WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+		return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+			<-ctx.Done()
+			return turn.Result{}, ctx.Err()
+		}}, nil
+	}), WithMaxConcurrency(2))
+	defer coord.Close()
+	a, err := coord.Spawn(context.Background(), Request{SessionID: "session-a", ParentID: "turn-a", Profile: ProfileAgility, Task: "a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := coord.Spawn(context.Background(), Request{SessionID: "session-b", ParentID: "turn-b", Profile: ProfileAgility, Task: "b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForTest(t, time.Second, func() bool {
+		sa, oka := coord.Get(a.ID)
+		sb, okb := coord.Get(b.ID)
+		return oka && okb && sa.State == StateRunning && sb.State == StateRunning
+	})
+	count, err := coord.CancelSessionAndWait(context.Background(), "session-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("count=%d", count)
+	}
+	sa, _ := coord.Get(a.ID)
+	sb, _ := coord.Get(b.ID)
+	if sa.State != StateCanceled {
+		t.Fatalf("session-a state=%s", sa.State)
+	}
+	if sb.State != StateRunning {
+		t.Fatalf("session-b state=%s", sb.State)
+	}
+	_ = coord.Cancel(b.ID)
+}
+
+func TestSpawnSnapshotsChildToolRuntimePolicy(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithToolRuntimePolicy(17*time.Millisecond, 23*time.Millisecond, nil),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) { return &mockRunner{}, nil }),
+	)
+	defer coord.Close()
+	coord.SetPermissionMode(permission.ModeAlwaysApprove)
+	h, err := coord.Spawn(context.Background(), Request{SessionID: "session-a", ParentID: "turn-1", Profile: ProfileAgility, Task: "inspect"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	coord.SetPermissionMode(permission.ModeAsk)
+	coord.agentsMu.RLock()
+	entry := coord.agents[h.ID]
+	spec := entry.toolRuntime
+	coord.agentsMu.RUnlock()
+	if spec.permissionMode != permission.ModeAlwaysApprove {
+		t.Fatalf("permission mode=%s, want always-approve admission snapshot", spec.permissionMode)
+	}
+	if spec.permissionTimeout != 17*time.Millisecond || spec.executionTimeout != 23*time.Millisecond {
+		t.Fatalf("runtime timeouts=%s/%s", spec.permissionTimeout, spec.executionTimeout)
+	}
+}
