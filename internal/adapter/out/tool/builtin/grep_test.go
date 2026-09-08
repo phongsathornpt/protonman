@@ -345,3 +345,33 @@ func TestGrepSkipsBinaryAndBuildDirectories(t *testing.T) {
 		t.Fatalf("grep searched binary extension image.png: %q", result.Output)
 	}
 }
+
+func TestGrepMissingPathIsNotFound(t *testing.T) {
+	wsDir := t.TempDir()
+	ws, err := workspace.New(wsDir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args, err := json.Marshal(map[string]any{
+		"pattern": "auth",
+		"path":    "worker/src/utils/auth.rs",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	call, err := tool.NewCall("grep-missing", "grep", args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = NewGrep(ws).Execute(context.Background(), call)
+	if err == nil {
+		t.Fatal("Execute() error = nil, want missing target failure")
+	}
+	failure := tool.FailureFromError(err)
+	if failure == nil || failure.Code != tool.ErrorCodeNotFound {
+		t.Fatalf("failure = %#v, want not_found", failure)
+	}
+	if strings.Contains(failure.Message, "grep workspace") {
+		t.Fatalf("missing path used misleading workspace failure message: %q", failure.Message)
+	}
+}
