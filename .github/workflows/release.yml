@@ -33,6 +33,8 @@ jobs:
           fi
       - name: Test
         run: go test ./...
+      - name: Test installer
+        run: ./test/install/install_test.sh
 
   build:
     needs: verify
@@ -142,3 +144,19 @@ jobs:
               --title "$title" \
               "${prerelease[@]}"
           fi
+
+  install-smoke:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install published release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          install_dir="$RUNNER_TEMP/protonman-bin"
+          ./install.sh --version "$GITHUB_REF_NAME" --bin-dir "$install_dir"
+          expected="Protonman ${GITHUB_REF_NAME#v}"
+          test "$("$install_dir/protonman" --version)" = "$expected"
