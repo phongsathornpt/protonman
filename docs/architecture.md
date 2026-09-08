@@ -56,7 +56,7 @@ Defines the primary application use cases and boundaries for inbound driving ada
 
 *Rule*: Inbound adapters interact exclusively through `internal/app` and never touch concrete turn loops, config persistence, or direct database/filesystem stores.
 
-*Subagent routing*: Universal owns the active primary model. `strength`, `agility`, and `intelligence` may bind explicit provider/model and reasoning overrides from the effective user/trusted-project configuration. Missing model overrides inherit Universal dynamically at child admission; admitted children retain their bound model/reasoning snapshot. Provider credentials and protocol construction stay outside `internal/feature/agent`.
+*Subagent routing*: Universal owns the active primary model. `strength`, `agility`, and `intelligence` may bind explicit provider/model and reasoning overrides from the effective user/trusted-project configuration. Missing model overrides inherit Universal dynamically at child admission; admitted children retain their bound model/reasoning snapshot. Subagent ownership is session + parent-turn scoped. Versioned lifecycle events are durably appended before acknowledged transitions, the in-memory status is a projection of those events, ordered activity streams wake waiters, and restart recovery replays the per-session journal before marking process-owned live states as interrupted. Provider credentials and protocol construction stay outside `internal/feature/agent`.
 
 ---
 
@@ -80,7 +80,7 @@ Pure business rules and domain definitions. No `domain-ish` parent folder is cre
 - `internal/headless/`: Non-interactive output adapter for CI/CD and scripts (text/NDJSON stream).
 
 ### Outbound (Driven) Infrastructure Adapters
-- `internal/adapter/out/sessionfs/`: File-backed storage implementation of `session.Repository`; each session is an aggregate directory containing `state.json` plus session-owned resources such as `todo.md`.
+- `internal/adapter/out/sessionfs/`: File-backed storage implementation of `session.Repository` plus the subagent lifecycle event store; each session is an aggregate directory containing `state.json`, `todo.md`, the compacted agent projection, and the append-only lifecycle journal.
 - `internal/adapter/tool/`: Unified home for **all tool implementations** satisfying `tool.Handler`:
   - `agent/`: Subagent orchestration tools (`delegate_task`, `wait_agent`, etc.).
   - `builtin/`: Core developer tools (`read_file`, `write_file`, `search_replace`, `apply_patch`, `bash`, `grep`, `find_files`, `list_dir`, `git_status`).

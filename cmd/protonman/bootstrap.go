@@ -156,8 +156,6 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 			var persistErr error
 			if ev.Kind == agent.EventAgentCompleted || ev.Kind == agent.EventAgentFailed {
 				persistErr = coordinator.CompactLifecycleSession(persistCtx, ownerSession)
-			} else {
-				persistErr = stateStore.SaveAgents(persistCtx, ownerSession, coordinator.PersistentSnapshotForSession(ownerSession))
 			}
 			if persistErr != nil {
 				slog.Warn("persist subagent lifecycle state", "session_id", ownerSession, "error", persistErr)
