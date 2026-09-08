@@ -1,9 +1,16 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
+
+// LifecycleEventStore durably records and replays lifecycle facts per session.
+type LifecycleEventStore interface {
+	AppendLifecycleEvent(context.Context, LifecycleEvent) error
+	LoadLifecycleEvents(context.Context, string) ([]LifecycleEvent, error)
+}
 
 // LifecycleEventKind identifies one durable lifecycle transition.
 type LifecycleEventKind string
@@ -115,8 +122,4 @@ func applyEntryLifecycleEvent(entry *agentEntry, event LifecycleEvent) error {
 	}
 	entry.status = status
 	return nil
-}
-
-func applyEntryTransition(entry *agentEntry, kind LifecycleEventKind, at time.Time, reason string) error {
-	return applyEntryLifecycleEvent(entry, nextLifecycleEvent(entry.status, kind, at, reason))
 }

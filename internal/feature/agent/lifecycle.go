@@ -73,6 +73,11 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 		Kind: LifecycleAgentQueued, Version: 1, At: queuedAt, SessionID: req.SessionID, ParentID: req.ParentID,
 		AgentID: id, Profile: req.Profile, Task: req.Task, Provider: providerName, Model: modelID, ResumedFrom: req.ResumedFrom,
 	}
+	if err := c.persistLifecycleEvent(ctx, queuedEvent); err != nil {
+		c.agentsMu.Unlock()
+		runCancel()
+		return Handle{}, err
+	}
 	queuedStatus, transitionErr := applyLifecycleEvent(AgentStatus{}, queuedEvent)
 	if transitionErr != nil {
 		c.agentsMu.Unlock()
@@ -141,7 +146,7 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 		c.finishEntry(entry, req, queuedAt, time.Time{}, context.Canceled)
 		return
 	}
-	if transitionErr := applyEntryTransition(entry, LifecycleAgentStarted, startedAt, ""); transitionErr != nil {
+	if transitionErr := c.persistAndApplyTransition(runCtx, entry, LifecycleAgentStarted, startedAt, ""); transitionErr != nil {
 		c.agentsMu.Unlock()
 		c.finishEntry(entry, req, queuedAt, time.Time{}, transitionErr)
 		return
@@ -170,7 +175,7 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 	if runErr != nil {
 		res.Err = runErr
 	}
-	if transitionErr := c.storeTerminal(entry, res, runErr); transitionErr != nil {
+	if transitionErr := c.storeTerminal(c.rootCtx, entry, res, runErr); transitionErr != nil {
 		runErr = transitionErr
 		res.Err = transitionErr
 	}
@@ -190,7 +195,7 @@ func (c *Coordinator) finishEntry(entry *agentEntry, req Request, queuedAt, star
 	if !startedAt.IsZero() {
 		res.Duration = now.Sub(startedAt)
 	}
-	if transitionErr := c.storeTerminal(entry, res, err); transitionErr != nil {
+	if transitionErr := c.storeTerminal(c.rootCtx, entry, res, err); transitionErr != nil {
 		err = transitionErr
 		res.Err = transitionErr
 	}
@@ -200,7 +205,7 @@ func (c *Coordinator) finishEntry(entry *agentEntry, req Request, queuedAt, star
 	}
 }
 
-func (c *Coordinator) storeTerminal(entry *agentEntry, res Result, err error) error {
+func (c *Coordinator) storeTerminal(ctx context.Context, entry *agentEntry, res Result, err error) error {
 	c.agentsMu.Lock()
 	defer c.agentsMu.Unlock()
 	kind := LifecycleAgentFailed
@@ -210,7 +215,7 @@ func (c *Coordinator) storeTerminal(entry *agentEntry, res Result, err error) er
 	case errors.Is(err, context.Canceled):
 		kind = LifecycleAgentCanceled
 	}
-	if transitionErr := applyEntryTransition(entry, kind, time.Now(), terminalReason(err)); transitionErr != nil {
+	if transitionErr := c.persistAndApplyTransition(ctx, entry, kind, time.Now(), terminalReason(err)); transitionErr != nil {
 		return transitionErr
 	}
 	entry.result = res
@@ -274,7 +279,7 @@ func (c *Coordinator) CancelByParent(parentID string) int {
 		if entry.status.ParentID != parentID || entry.status.State.Terminal() || entry.status.State == StateCanceling {
 			continue
 		}
-		if err := applyEntryTransition(entry, LifecycleAgentCancelRequested, time.Now(), "cancel requested"); err != nil {
+		if err := c.persistAndApplyTransition(c.rootCtx, entry, LifecycleAgentCancelRequested, time.Now(), "cancel requested"); err != nil {
 			continue
 		}
 		cancels = append(cancels, entry.cancel)
@@ -297,7 +302,7 @@ func (c *Coordinator) Cancel(id string) error {
 		c.agentsMu.Unlock()
 		return nil
 	}
-	if err := applyEntryTransition(entry, LifecycleAgentCancelRequested, time.Now(), "cancel requested"); err != nil {
+	if err := c.persistAndApplyTransition(c.rootCtx, entry, LifecycleAgentCancelRequested, time.Now(), "cancel requested"); err != nil {
 		c.agentsMu.Unlock()
 		return err
 	}

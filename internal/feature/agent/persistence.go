@@ -90,6 +90,10 @@ func (c *Coordinator) RestorePersistentSnapshot(snapshot PersistentSnapshot) err
 		interrupted := false
 		if !status.State.Terminal() {
 			event := nextLifecycleEvent(status, LifecycleAgentInterrupted, time.Now().UTC(), "interrupted by previous process exit")
+			if err := c.persistLifecycleEvent(c.rootCtx, event); err != nil {
+				c.agentsMu.Unlock()
+				return fmt.Errorf("persist restored subagent %q interruption: %w", status.ID, err)
+			}
 			nextStatus, transitionErr := applyLifecycleEvent(status, event)
 			if transitionErr != nil {
 				c.agentsMu.Unlock()

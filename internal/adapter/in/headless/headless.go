@@ -346,7 +346,8 @@ func (r *Runner) runCall(
 	if err := writeEvent(output, format, Event{Kind: "tool_call", Tool: call.Name}); err != nil {
 		return err
 	}
-	result, callErr := r.service.Call(ctx, call)
+	callCtx := agent.WithTurnRef(ctx, agent.TurnRef{SessionID: r.sessionID, TurnID: fmt.Sprintf("headless-call-%d", r.nextID)})
+	result, callErr := r.service.Call(callCtx, call)
 	resultContent, marshalErr := json.Marshal(result)
 	if marshalErr != nil {
 		marshalErr = fmt.Errorf("encode headless tool result: %w", marshalErr)
