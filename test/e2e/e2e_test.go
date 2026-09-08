@@ -174,7 +174,7 @@ func newTestHome(t *testing.T) string {
 		home = canonicalHome
 	}
 
-	protonDir := filepath.Join(home, ".proton")
+	protonDir := filepath.Join(home, ".protonman")
 	if err := os.MkdirAll(filepath.Join(protonDir, "sessions"), 0o700); err != nil {
 		t.Fatalf("create sessions dir: %v", err)
 	}

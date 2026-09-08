@@ -12,7 +12,7 @@ func TestE2EConfigPrecedenceAndWarnings(t *testing.T) {
 	home := newTestHome(t)
 
 	// 1. Write global config.toml
-	homeProton := filepath.Join(home, ".proton")
+	homeProton := filepath.Join(home, ".protonman")
 	_ = os.MkdirAll(homeProton, 0o755)
 	globalTOML := `
 [model]
@@ -23,8 +23,8 @@ provider = "protonman"
 		t.Fatalf("write global config: %v", err)
 	}
 
-	// 2. Write project local .proton/config.toml (untrusted)
-	projectProton := filepath.Join(ws, ".proton")
+	// 2. Write project local .protonman/config.toml (untrusted)
+	projectProton := filepath.Join(ws, ".protonman")
 	_ = os.MkdirAll(projectProton, 0o755)
 	projectTOML := `
 [model]
@@ -66,7 +66,7 @@ func TestE2EConfigMalformedTOMLHandling(t *testing.T) {
 	home := newTestHome(t)
 
 	// Write invalid/corrupt TOML syntax
-	homeProton := filepath.Join(home, ".proton")
+	homeProton := filepath.Join(home, ".protonman")
 	_ = os.MkdirAll(homeProton, 0o755)
 	_ = os.WriteFile(filepath.Join(homeProton, "config.toml"), []byte("[model\nmalformed = syntax {{{"), 0o644)
 

@@ -149,7 +149,7 @@ func TestE2EReasoningAnthropicAdaptiveEncoding(t *testing.T) {
 
 func writeReasoningConfig(t *testing.T, home, baseURL, providerType, modelID, profile, effort string) {
 	t.Helper()
-	protonDir := filepath.Join(home, ".proton")
+	protonDir := filepath.Join(home, ".protonman")
 	if err := os.MkdirAll(protonDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

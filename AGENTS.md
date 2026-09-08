@@ -394,7 +394,7 @@ User filesystem layout is centralized in `internal/app/appdirs`:
 ```
 
 `PROTONMAN_HOME` may replace the effective user home for Protonman data.
-Project-local resources live under `<workspace>/.protonman/`. Legacy `.proton/` and `PROTON_*` inputs are compatibility read/fallback paths only; canonical `.protonman/` and `PROTONMAN_*` values win when both exist, and new data must use the Protonman namespace.
+Project-local resources live under `<workspace>/.protonman/`. User-global state lives under `~/.protonman/`; filesystem state must use the Protonman namespace exclusively.
 
 Configuration layering is:
 

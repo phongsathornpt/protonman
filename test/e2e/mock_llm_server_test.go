@@ -181,9 +181,9 @@ func (m *mockLLMServer) AddPersistentErrorResponse(status int, body string, cont
 
 func (m *mockLLMServer) SetupWorkspaceConfig(t *testing.T, homeDir string) {
 	t.Helper()
-	protonDir := filepath.Join(homeDir, ".proton")
+	protonDir := filepath.Join(homeDir, ".protonman")
 	if err := os.MkdirAll(protonDir, 0o755); err != nil {
-		t.Fatalf("mkdir .proton in home: %v", err)
+		t.Fatalf("mkdir .protonman in home: %v", err)
 	}
 
 	configTOML := fmt.Sprintf(`

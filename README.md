@@ -325,7 +325,7 @@ Protonman implements the open [Agent Skills Specification](https://agentskills.i
 > [!NOTE]
 > Project-local skills and configuration are only loaded when `PROTONMAN_TRUST_PROJECT=1` is enabled. Untrusted project skills are safely skipped with a diagnostic warning.
 
-Legacy `.proton/` directories and `PROTON_*` environment variables remain supported as compatibility fallbacks. Canonical `.protonman/` data and `PROTONMAN_*` variables take precedence when both exist. New project initialization writes `.protonman/`.
+User-global state lives under `~/.protonman/` and project-local state under `<workspace>/.protonman/`. New and existing runtime data use this namespace exclusively.
 
 ### Progressive Disclosure
 1. **Catalog (Tier 1)**: Available skills are summarized as `<available_skills>` in the system prompt (~50-100 tokens per skill).

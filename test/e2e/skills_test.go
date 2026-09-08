@@ -13,7 +13,7 @@ func TestE2ESkillDiscoveryAndActivation(t *testing.T) {
 	home := newTestHome(t)
 
 	// Create user-level skill
-	skillDir := filepath.Join(home, ".proton", "skills", "sample-skill")
+	skillDir := filepath.Join(home, ".protonman", "skills", "sample-skill")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestE2ESkillProjectTrustGating(t *testing.T) {
 	home := newTestHome(t)
 
 	// Create project-level skill in workspace
-	skillDir := filepath.Join(ws, ".proton", "skills", "project-skill")
+	skillDir := filepath.Join(ws, ".protonman", "skills", "project-skill")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestE2EMultiSkillDiscoveryAndActivation(t *testing.T) {
 
 	// Create 3 user skills in PROTONMAN_HOME
 	for _, name := range []string{"skill-alpha", "skill-beta", "skill-gamma"} {
-		skillDir := filepath.Join(home, ".proton", "skills", name)
+		skillDir := filepath.Join(home, ".protonman", "skills", name)
 		if err := os.MkdirAll(skillDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -156,7 +156,7 @@ func TestE2ESkillSessionPersistenceAndHeadlessParity(t *testing.T) {
 	home := newTestHome(t)
 
 	// Create user skill in PROTONMAN_HOME
-	skillDir := filepath.Join(home, ".proton", "skills", "code-reviewer")
+	skillDir := filepath.Join(home, ".protonman", "skills", "code-reviewer")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +246,7 @@ func TestE2EUnifiedSkillSlashCommand(t *testing.T) {
 	home := newTestHome(t)
 
 	// Create a user skill in PROTONMAN_HOME
-	skillDir := filepath.Join(home, ".proton", "skills", "linter")
+	skillDir := filepath.Join(home, ".protonman", "skills", "linter")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

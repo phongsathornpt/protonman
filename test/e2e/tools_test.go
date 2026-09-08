@@ -157,9 +157,9 @@ func TestE2EProtectedPathsRejection(t *testing.T) {
 	home := newTestHome(t)
 
 	// Create project-local config with protected paths
-	projectProton := filepath.Join(ws, ".proton")
+	projectProton := filepath.Join(ws, ".protonman")
 	if err := os.MkdirAll(projectProton, 0o755); err != nil {
-		t.Fatalf("mkdir .proton: %v", err)
+		t.Fatalf("mkdir .protonman: %v", err)
 	}
 	configContent := `
 [workspace]
