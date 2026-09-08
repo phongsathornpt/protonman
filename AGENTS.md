@@ -385,7 +385,7 @@ created checkpoint while deterministically pruning older records.
 User filesystem layout is centralized in `internal/app/appdirs`:
 
 ```text
-~/.proton/
+~/.protonman/
   config.toml
   sessions/
   checkpoints/
@@ -393,8 +393,8 @@ User filesystem layout is centralized in `internal/app/appdirs`:
   logs/
 ```
 
-`PROTON_HOME` may replace the effective user home for Protonman data.
-Project-local resources live under `<workspace>/.proton/`.
+`PROTONMAN_HOME` may replace the effective user home for Protonman data.
+Project-local resources live under `<workspace>/.protonman/`. Legacy `.proton/` and `PROTON_*` inputs are compatibility read/fallback paths only; canonical `.protonman/` and `PROTONMAN_*` values win when both exist, and new data must use the Protonman namespace.
 
 Configuration layering is:
 
@@ -422,7 +422,7 @@ enablement to startup config.
 A session ID is the durable ownership boundary for conversation state and tasks:
 
 ```text
-~/.proton/sessions/<session-id>/
+~/.protonman/sessions/<session-id>/
   state.json
   todo.md
 ```

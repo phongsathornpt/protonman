@@ -10,7 +10,7 @@ Linux now uses a native Landlock backend for the `workspace` profile when the ke
 
 Protonman probes the Linux Landlock ABI and user-namespace configuration directly with Go and `golang.org/x/sys/unix`. The native child bootstrap applies Landlock before executing the shell, so the parent Protonman/TUI process remains unrestricted. Sandbox errors include detected capabilities when a required backend is unavailable.
 
-The filesystem and network sandbox paths are now native Go/Linux implementations. Linux TUI E2E also uses a real `/dev/ptmx` PTY via `golang.org/x/sys/unix`; `PROTON_FORCE_TTY` is no longer used to pretend a pipe is a terminal. The remaining portability work is compatibility coverage for restricted kernels and older Linux hosts. Bubble Tea remains the TUI framework; no TUI rewrite is required.
+The filesystem and network sandbox paths are now native Go/Linux implementations. Linux TUI E2E also uses a real `/dev/ptmx` PTY via `golang.org/x/sys/unix`; Linux TUI E2E no longer relies on `PROTONMAN_FORCE_TTY` (or legacy `PROTON_FORCE_TTY`) to pretend a pipe is a terminal. The remaining portability work is compatibility coverage for restricted kernels and older Linux hosts. Bubble Tea remains the TUI framework; no TUI rewrite is required.
 
 ## Compatibility testing
 

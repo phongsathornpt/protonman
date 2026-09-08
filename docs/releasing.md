@@ -26,6 +26,7 @@ Override it explicitly when needed:
 make build VERSION=v1.2.3
 ./bin/protonman --version
 ```
+
 ## Publishing a GitHub Release
 
 Push a version tag after the release commit is on the remote:
@@ -38,15 +39,30 @@ git push origin v1.2.3
 `.github/workflows/release.yml` then:
 
 - validates the version tag
-- runs `go test ./...`
+- runs `go test ./...` and the offline installer integration tests
 - builds Linux amd64/arm64, macOS amd64/arm64, and Windows amd64
 - injects the exact Git tag into every binary
 - smoke-tests the native Linux amd64 binary with `--version`
+- packages `protonman_<version>_<os>_<arch>` archives
 - generates SHA-256 checksums
 - creates the GitHub Release with generated release notes
+- installs the published release through `install.sh` and verifies its embedded version
 
 Prerelease tags such as `v1.2.3-rc.1` create a GitHub prerelease. Re-running
 the workflow is safe: existing release assets are uploaded with `--clobber`.
+
+Release assets use these names:
+
+```text
+protonman_1.2.3_linux_amd64.tar.gz
+protonman_1.2.3_linux_arm64.tar.gz
+protonman_1.2.3_darwin_amd64.tar.gz
+protonman_1.2.3_darwin_arm64.tar.gz
+protonman_1.2.3_windows_amd64.zip
+checksums.txt
+```
+
+The executable inside each archive is `protonman` (`protonman.exe` on Windows).
 
 GitHub's latest-release API is intentionally not used to determine the current
 binary version. It may be used separately for update checks, because the latest
