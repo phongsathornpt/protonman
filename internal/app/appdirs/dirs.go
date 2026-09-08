@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/base/envconfig"
+	"github.com/phongsathornpt/protonman/internal/base/pathutil"
 )
 
 const (
@@ -28,6 +29,14 @@ type Dirs struct {
 	Checkpoints string
 	Skills      string
 	Logs        string
+}
+
+// ProjectScope describes the project-local Protonman namespace after alias checks.
+type ProjectScope struct {
+	Root      string
+	Config    string
+	Skills    string
+	Available bool
 }
 
 // Resolve returns Protonman directories using explicitHome, PROTONMAN_HOME, or os.UserHomeDir.
@@ -126,4 +135,28 @@ func ProjectSkills(workDir string) string { return filepath.Join(ProjectRoot(wor
 // ResolvedProjectSkills returns the effective project-local skills directory.
 func ResolvedProjectSkills(workDir string) string {
 	return filepath.Join(ResolvedProjectRoot(workDir), SkillsDir)
+}
+
+// ResolveProjectScope resolves project-local paths and disables the scope when
+// its root aliases the user-global Protonman root.
+func ResolveProjectScope(homeDir, workDir string) (ProjectScope, error) {
+	userDirs, err := Resolve(homeDir)
+	if err != nil {
+		return ProjectScope{}, err
+	}
+	absoluteWorkDir, err := filepath.Abs(strings.TrimSpace(workDir))
+	if err != nil {
+		return ProjectScope{}, fmt.Errorf("resolve project work directory: %w", err)
+	}
+	root := ProjectRoot(absoluteWorkDir)
+	same, err := pathutil.Same(root, userDirs.Root)
+	if err != nil {
+		return ProjectScope{}, fmt.Errorf("compare user and project roots: %w", err)
+	}
+	return ProjectScope{
+		Root:      root,
+		Config:    filepath.Join(root, ConfigFileName),
+		Skills:    filepath.Join(root, SkillsDir),
+		Available: !same,
+	}, nil
 }
