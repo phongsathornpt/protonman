@@ -110,17 +110,19 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           pattern: protonman-*
           path: dist
           merge-multiple: true
-      - name: Generate checksums
+      - name: Generate checksums and stage installer
         shell: bash
         run: |
           set -euo pipefail
           cd dist
           sha256sum protonman_* > checksums.txt
+          cp ../install.sh install.sh
       - name: Publish GitHub Release
         shell: bash
         env:
@@ -150,13 +152,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install published release
+      - name: Install published release asset
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           install_dir="$RUNNER_TEMP/protonman-bin"
-          ./install.sh --version "$GITHUB_REF_NAME" --bin-dir "$install_dir"
+          curl -fsSL "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/install.sh" \
+            | sh -s -- --version "$GITHUB_REF_NAME" --bin-dir "$install_dir"
           expected="Protonman ${GITHUB_REF_NAME#v}"
           test "$("$install_dir/protonman" --version)" = "$expected"
+      - name: Verify latest installer URL
+        if: ${{ !contains(github.ref_name, '-') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/install.sh" >/tmp/protonman-install.sh
+          test -s /tmp/protonman-install.sh
+          grep -q 'Install Protonman from GitHub Releases.' /tmp/protonman-install.sh

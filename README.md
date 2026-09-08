@@ -58,7 +58,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the package responsibilit
 For public releases on Linux or macOS:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/phongsathornpt/protonman/develop/install.sh | sh
+curl -fsSL https://github.com/phongsathornpt/protonman/releases/latest/download/install.sh | sh
 protonman --version
 ```
 

@@ -4,10 +4,10 @@ Protonman release binaries are distributed through GitHub Releases. The supporte
 
 ## Public release install
 
-When the repository and raw installer are publicly accessible:
+For the latest stable public release:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/phongsathornpt/protonman/develop/install.sh | sh
+curl -fsSL https://github.com/phongsathornpt/protonman/releases/latest/download/install.sh | sh
 ```
 
 The installer places `protonman` in `~/.local/bin` by default and verifies the release SHA-256 checksum before executing or installing the downloaded binary.
@@ -23,14 +23,14 @@ If `~/.local/bin` is not on `PATH`, add it through your shell configuration.
 ## Install an exact version
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/phongsathornpt/protonman/develop/install.sh \
+curl -fsSL https://github.com/phongsathornpt/protonman/releases/latest/download/install.sh \
   | sh -s -- --version v1.2.3
 ```
 
 ## Custom install directory
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/phongsathornpt/protonman/develop/install.sh \
+curl -fsSL https://github.com/phongsathornpt/protonman/releases/latest/download/install.sh \
   | sh -s -- --bin-dir "$HOME/bin"
 ```
 
