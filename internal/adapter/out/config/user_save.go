@@ -44,12 +44,12 @@ func SaveUserProviderConfigWithOptions(homeDir string, provider ProviderConfig, 
 	})
 }
 
-// SaveUserDefaultProvider updates the active provider in ~/.proton/config.toml.
+// SaveUserDefaultProvider updates the active provider in ~/.protonman/config.toml.
 func SaveUserDefaultProvider(homeDir string, provider string) error {
 	return SaveUserDefaultModel(homeDir, provider, "")
 }
 
-// SaveUserDefaultModel updates the default active model and optionally provider in ~/.proton/config.toml.
+// SaveUserDefaultModel updates the default active model and optionally provider in ~/.protonman/config.toml.
 func SaveUserDefaultModel(homeDir string, provider string, modelID string) error {
 	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
 		if modelID != "" {
@@ -61,7 +61,7 @@ func SaveUserDefaultModel(homeDir string, provider string, modelID string) error
 	})
 }
 
-// DeleteUserProviderConfig removes a provider configuration from ~/.proton/config.toml.
+// DeleteUserProviderConfig removes a provider configuration from ~/.protonman/config.toml.
 func DeleteUserProviderConfig(homeDir string, providerName string) error {
 	return modifyUserConfigFile(homeDir, true, func(doc *fileDocument) {
 		providerKey := strings.ToLower(strings.TrimSpace(providerName))
@@ -79,14 +79,14 @@ func DeleteUserProviderConfig(homeDir string, providerName string) error {
 	})
 }
 
-// SaveUserSubagentsEnabled updates the portable subagent capability switch in ~/.proton/config.toml.
+// SaveUserSubagentsEnabled updates the portable subagent capability switch in ~/.protonman/config.toml.
 func SaveUserSubagentsEnabled(homeDir string, enabled bool) error {
 	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
 		doc.Agent.SubagentsEnabled = &enabled
 	})
 }
 
-// SaveUserReasoningEffort updates the portable agent reasoning override in ~/.proton/config.toml.
+// SaveUserReasoningEffort updates the portable agent reasoning override in ~/.protonman/config.toml.
 func SaveUserReasoningEffort(homeDir string, effort sdk.ReasoningEffort) error {
 	if !effort.Valid() {
 		return fmt.Errorf("invalid reasoning effort %q", effort)
@@ -100,7 +100,7 @@ func SaveUserReasoningEffort(homeDir string, effort sdk.ReasoningEffort) error {
 	})
 }
 
-// SaveUserMaxToolCalls updates the cumulative tool-call limit in ~/.proton/config.toml.
+// SaveUserMaxToolCalls updates the cumulative tool-call limit in ~/.protonman/config.toml.
 func SaveUserMaxToolCalls(homeDir string, maxToolCalls int) error {
 	if maxToolCalls < 0 {
 		return fmt.Errorf("max tool calls cannot be negative")

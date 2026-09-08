@@ -56,3 +56,25 @@ func TestInitRejectsSymlinkedProjectRoot(t *testing.T) {
 		t.Fatalf("init wrote through symlink, stat err=%v", err)
 	}
 }
+
+func TestInitCreatesCanonicalDirectoryAlongsideLegacyProject(t *testing.T) {
+	workDir := t.TempDir()
+	legacyRoot := appdirs.LegacyProjectRoot(workDir)
+	if err := os.Mkdir(legacyRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyRoot, appdirs.ConfigFileName), []byte("# legacy\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Init(context.Background(), workDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Created || result.ProtonDir != appdirs.ProjectRoot(workDir) {
+		t.Fatalf("Init() result = %#v", result)
+	}
+	if _, err := os.Stat(appdirs.ProjectConfig(workDir)); err != nil {
+		t.Fatalf("canonical project config missing: %v", err)
+	}
+}

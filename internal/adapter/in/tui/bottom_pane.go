@@ -201,7 +201,7 @@ func (*skillsPaneView) ReplacesComposer() bool { return true }
 
 func (v *skillsPaneView) Render(m *bubbleModel) string {
 	if m == nil || m.skills == nil || len(m.skills.List()) == 0 {
-		return renderModalRows(m, accentAssistant, []string{"No agent skills discovered.", "", fmt.Sprintf("Place skills in %s or .proton/skills/.", appdirs.UserSkillsDisplay()), "", "esc close"})
+		return renderModalRows(m, accentAssistant, []string{"No agent skills discovered.", "", fmt.Sprintf("Place skills in %s or .protonman/skills/.", appdirs.UserSkillsDisplay()), "", "esc close"})
 	}
 	skills := m.skills.List()
 	visibleRows := pickerVisibleRows(m.height, maxSkillsRows)

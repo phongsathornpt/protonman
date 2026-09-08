@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/base/envconfig"
 	"maps"
 	"os"
 	"path/filepath"
@@ -73,7 +74,7 @@ func Discover(ctx context.Context, opts Options) (DiscoveryResult, error) {
 
 	// 2. Project-level scopes
 	projectPaths := []string{
-		appdirs.ProjectSkills(workDir),
+		appdirs.ResolvedProjectSkills(workDir),
 		filepath.Join(workDir, ".agents", "skills"),
 	}
 
@@ -93,8 +94,8 @@ func Discover(ctx context.Context, opts Options) (DiscoveryResult, error) {
 
 		if !opts.ProjectTrusted {
 			result.Warnings = append(result.Warnings, fmt.Sprintf(
-				"skipping project skills in %q: project is not trusted (set PROTON_TRUST_PROJECT=1)",
-				dir,
+				"skipping project skills in %q: project is not trusted (set %s=1)",
+				dir, envconfig.TrustProject,
 			))
 			continue
 		}

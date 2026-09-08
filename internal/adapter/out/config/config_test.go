@@ -16,7 +16,7 @@ import (
 func TestLoadLayeredConfigRequiresProjectTrust(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[permission]
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[permission]
 default = "ask"
 
 [[permission.rules]]
@@ -27,7 +27,7 @@ pattern = "*.md"
 [ui]
 permission_mode = "auto"
 `)
-	writeConfig(t, filepath.Join(workDir, ".proton", "config.toml"), `[permission]
+	writeConfig(t, filepath.Join(workDir, ".protonman", "config.toml"), `[permission]
 
 [[permission.rules]]
 tool = "bash"
@@ -69,7 +69,7 @@ pattern = "rm *"
 
 func TestLoadRejectsUnknownRuleFields(t *testing.T) {
 	homeDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[permission]
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[permission]
 
 [[permission.rules]]
 action = "maybe"
@@ -88,10 +88,10 @@ tool = "bash"
 func TestLoadProtectedPathsWithProjectTrust(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[workspace]
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[workspace]
 protected_paths = [".env", "secrets"]
 `)
-	writeConfig(t, filepath.Join(workDir, ".proton", "config.toml"), `[workspace]
+	writeConfig(t, filepath.Join(workDir, ".protonman", "config.toml"), `[workspace]
 protected_paths = ["**/*.pem"]
 `)
 
@@ -118,7 +118,7 @@ protected_paths = ["**/*.pem"]
 
 func TestLoadSandboxProfile(t *testing.T) {
 	homeDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[sandbox]
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[sandbox]
 profile = "strict"
 `)
 	snapshot, err := Load(context.Background(), Options{
@@ -322,7 +322,7 @@ func TestDeleteUserProviderConfig(t *testing.T) {
 	}
 
 	// Verify permissions
-	configFile := filepath.Join(homeDir, ".proton", "config.toml")
+	configFile := filepath.Join(homeDir, ".protonman", "config.toml")
 	info, err := os.Stat(configFile)
 	if err != nil {
 		t.Fatalf("stat config file: %v", err)
@@ -334,7 +334,7 @@ func TestDeleteUserProviderConfig(t *testing.T) {
 
 func TestSaveUserConfigRejectsCorruptExistingFile(t *testing.T) {
 	homeDir := t.TempDir()
-	configPath := filepath.Join(homeDir, ".proton", "config.toml")
+	configPath := filepath.Join(homeDir, ".protonman", "config.toml")
 	corruptContent := "this is [not valid toml ::::"
 	writeConfig(t, configPath, corruptContent)
 
@@ -356,7 +356,7 @@ func TestSaveUserConfigRejectsCorruptExistingFile(t *testing.T) {
 
 func TestLoadAgentProfileConfig(t *testing.T) {
 	homeDir := t.TempDir()
-	configPath := filepath.Join(homeDir, ".proton", "config.toml")
+	configPath := filepath.Join(homeDir, ".protonman", "config.toml")
 	writeConfig(t, configPath, `[agent]
 profile = "dex"
 `)
@@ -380,7 +380,7 @@ func TestAgentLimitsRejectNegativeValues(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			homeDir := t.TempDir()
-			writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), "[agent]\n"+test.field+" = -1\n")
+			writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), "[agent]\n"+test.field+" = -1\n")
 
 			_, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: t.TempDir()})
 			if err == nil {
@@ -443,7 +443,7 @@ func TestSaveSubagentsEnabledPersistsBoolean(t *testing.T) {
 	if err := SaveUserSubagentsEnabled(homeDir, false); err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(filepath.Join(homeDir, ".proton", "config.toml"))
+	data, err := os.ReadFile(filepath.Join(homeDir, ".protonman", "config.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -455,7 +455,7 @@ func TestSaveSubagentsEnabledPersistsBoolean(t *testing.T) {
 func TestAgentSubagentTimeoutConfig(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent]
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[agent]
 subagent_max_runtime = "45s"
 subagent_wait_timeout = "9s"
 subagent_queue_timeout = "7s"
@@ -489,7 +489,7 @@ completed_result_ttl = "2m"
 
 func TestAgentLegacySubagentTimeoutMigratesToMaxRuntime(t *testing.T) {
 	homeDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), "[agent]\nsubagent_timeout = \"45s\"\n")
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), "[agent]\nsubagent_timeout = \"45s\"\n")
 	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
@@ -519,7 +519,7 @@ func TestAgentSubagentTimeoutConfigRejectsInvalidValues(t *testing.T) {
 	} {
 		homeDir := t.TempDir()
 		workDir := t.TempDir()
-		writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), body)
+		writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), body)
 		if _, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir}); err == nil {
 			t.Fatalf("Load(%q) error = nil, want invalid duration", body)
 		}
@@ -529,7 +529,7 @@ func TestAgentSubagentTimeoutConfigRejectsInvalidValues(t *testing.T) {
 func TestRuntimeConfigOverridesDefaults(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[runtime]
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[runtime]
 turn_timeout = "3m"
 round_timeout = "45s"
 tool_permission_timeout = "30s"
@@ -563,7 +563,7 @@ model_catalog_ttl = "75s"
 func TestAgentReasoningEffortConfig(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent]
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[agent]
 reasoning_effort = "high"
 `)
 	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
@@ -588,7 +588,7 @@ reasoning_effort = "high"
 func TestAgentReasoningEffortConfigRejectsUnknownLevel(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent]
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[agent]
 reasoning_effort = "turbo"
 `)
 	if _, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir}); err == nil {
@@ -599,7 +599,7 @@ reasoning_effort = "turbo"
 func TestLoadTracksSelectedFieldProvenance(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[model]
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[model]
 default = "user-model"
 provider = "user-provider"
 
@@ -611,7 +611,7 @@ reasoning_effort = "low"
 [ui]
 permission_mode = "ask"
 `)
-	writeConfig(t, filepath.Join(workDir, ".proton", "config.toml"), `[model]
+	writeConfig(t, filepath.Join(workDir, ".protonman", "config.toml"), `[model]
 default = "project-model"
 
 [agent]

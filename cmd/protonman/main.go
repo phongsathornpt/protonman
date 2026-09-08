@@ -185,7 +185,7 @@ func configuredTelemetryObserver() (toolcall.Observer, error) {
 		}
 		return observer, nil
 	default:
-		return nil, fmt.Errorf("unsupported PROTON_TELEMETRY value %q", envconfig.Value(envconfig.Telemetry))
+		return nil, fmt.Errorf("unsupported %s value %q", envconfig.Telemetry, envconfig.Value(envconfig.Telemetry))
 	}
 }
 

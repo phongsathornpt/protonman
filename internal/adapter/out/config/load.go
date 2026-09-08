@@ -82,7 +82,7 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 		return Snapshot{}, err
 	}
 
-	projectPath := appdirs.ProjectConfig(workDir)
+	projectPath := appdirs.ResolvedProjectConfig(workDir)
 	if !options.ProjectTrusted {
 		exists, err := fileExists(projectPath)
 		if err != nil {

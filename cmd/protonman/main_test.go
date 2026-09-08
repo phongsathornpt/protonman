@@ -77,7 +77,7 @@ func TestMainRun_InvalidConfigurations(t *testing.T) {
 	defer func() { _ = os.Setenv("PROTON_TELEMETRY", origTelem) }()
 	_ = os.Setenv("PROTON_TELEMETRY", "invalid_telemetry_sink")
 	err = run(ctx, []string{"-y", "-p", `/call bash {"command":"echo hi"}`})
-	if err == nil || !strings.Contains(err.Error(), "unsupported PROTON_TELEMETRY") {
+	if err == nil || !strings.Contains(err.Error(), "unsupported PROTONMAN_TELEMETRY") {
 		t.Fatalf("expected unsupported telemetry error, got: %v", err)
 	}
 }
