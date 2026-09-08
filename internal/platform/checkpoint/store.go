@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/phongsathornpt/protonman/internal/base/pathutil"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
@@ -102,7 +103,7 @@ func NewFileStore(root string, workspaceRoot *workspace.Workspace, options ...St
 	if err != nil {
 		return nil, fmt.Errorf("resolve checkpoint store root: %w", err)
 	}
-	insideWorkspace, err := pathResolvesWithin(absoluteRoot, workspaceRoot.Root())
+	insideWorkspace, err := pathutil.Within(absoluteRoot, workspaceRoot.Root())
 	if err != nil {
 		return nil, fmt.Errorf("validate checkpoint store root: %w", err)
 	}
@@ -473,36 +474,6 @@ func (s *FileStore) load(id string) (record, error) {
 
 func (s *FileStore) path(id string) string {
 	return filepath.Join(s.root, id+".json")
-}
-
-func isPathWithin(root string, path string) bool {
-	relative, err := filepath.Rel(root, path)
-	if err != nil {
-		return false
-	}
-	return relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)))
-}
-
-func pathResolvesWithin(path string, root string) (bool, error) {
-	ancestor := filepath.Clean(path)
-	for {
-		_, err := os.Lstat(ancestor)
-		if err == nil {
-			resolved, err := filepath.EvalSymlinks(ancestor)
-			if err != nil {
-				return false, err
-			}
-			return isPathWithin(root, resolved), nil
-		}
-		if !errors.Is(err, os.ErrNotExist) {
-			return false, err
-		}
-		parent := filepath.Dir(ancestor)
-		if parent == ancestor {
-			return false, fmt.Errorf("no existing ancestor for %q", path)
-		}
-		ancestor = parent
-	}
 }
 
 func newCheckpointID() (string, error) {
