@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := tui
 
-.PHONY: all tui run dev build run-bin clean test test-race test-e2e bench bench-cpu bench-mem fmt vet lint help
+.PHONY: all tui run dev build run-bin clean test test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint help
 
 # Binary configuration
 BIN_DIR := bin
@@ -50,6 +50,10 @@ test-race:
 ## test-e2e: Run end-to-end tests
 test-e2e:
 	go test -v ./test/e2e/...
+
+## test-install: Run offline installer integration tests
+test-install:
+	./test/install/install_test.sh
 
 ## bench: Run all benchmarks with memory allocation profiling
 bench:
