@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/rivo/uniseg"
 )
 
 func WrapWords(text string, width int) string {
@@ -46,7 +47,7 @@ func WrapLines(text string, width int) []string {
 			if cut == "" {
 				// A zero-width escape sequence or grapheme should never make the
 				// loop spin forever.
-				cut = string([]rune(remaining)[:1])
+				cut = firstGrapheme(remaining)
 			}
 			breakAt := strings.LastIndexAny(cut, " \t")
 			if breakAt > 0 {
@@ -75,6 +76,18 @@ func SafeWrappedLines(text string, width int) []string {
 		lines = append(lines, WrapLines(Sanitize(line), width)...)
 	}
 	return lines
+}
+
+func firstGrapheme(text string) string {
+	graphemes := uniseg.NewGraphemes(text)
+	if graphemes.Next() {
+		return graphemes.Str()
+	}
+	_, size := utf8.DecodeRuneInString(text)
+	if size <= 0 {
+		return ""
+	}
+	return text[:size]
 }
 
 func isSingleLinePrintableASCII(text string) bool {

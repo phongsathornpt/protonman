@@ -4,6 +4,7 @@ import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
@@ -209,7 +210,7 @@ func (m *bubbleModel) acceptSlash(run bool) (applied bool, command tea.Cmd) {
 }
 
 func truncateWithEllipsis(s string, maxLen int) string {
-	return tool.TruncateRunes(s, maxLen)
+	return textview.TruncateEllipsis(s, maxLen)
 }
 
 func (m bubbleModel) renderSlash(index int) string {
@@ -277,7 +278,7 @@ func (m *bubbleModel) appendHelp() {
 		if len(command.Aliases) > 0 {
 			alias = " (" + strings.Join(prefixNames(command.Aliases), ", ") + ")"
 		}
-		m.appendLine(fmt.Sprintf("/%-16s %s%s", command.Name, command.Description, alias))
+		m.appendLine("/" + textview.PadRight(command.Name, 16) + " " + command.Description + alias)
 	}
 }
 

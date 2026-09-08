@@ -631,3 +631,26 @@ func TestSessionCommandsExposeIdentityAndWorkspaceSessions(t *testing.T) {
 		t.Fatalf("cross-workspace session leaked: %s", content)
 	}
 }
+
+func TestMouseWheelOnlyScrollsInsideTranscriptViewport(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.showWelcome = false
+	m.resize(80, 20)
+	for i := 0; i < 60; i++ {
+		m.appendLine(fmt.Sprintf("line-%02d", i))
+	}
+	m.refreshViewport()
+	m.viewport.GotoBottom()
+	m.followTail = true
+	bottom := m.viewport.YOffset
+	updated, _ := m.Update(tea.MouseMsg{X: 4, Y: m.viewport.Height + 1, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	m = updated.(*bubbleModel)
+	if m.viewport.YOffset != bottom || !m.followTail {
+		t.Fatalf("wheel over chrome changed viewport: offset=%d want=%d follow=%v", m.viewport.YOffset, bottom, m.followTail)
+	}
+	updated, _ = m.Update(tea.MouseMsg{X: 4, Y: maxInt(0, m.viewport.Height-1), Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	m = updated.(*bubbleModel)
+	if m.viewport.YOffset >= bottom || m.followTail {
+		t.Fatalf("wheel inside transcript did not scroll: offset=%d bottom=%d follow=%v", m.viewport.YOffset, bottom, m.followTail)
+	}
+}

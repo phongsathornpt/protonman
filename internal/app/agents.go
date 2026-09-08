@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -14,7 +15,10 @@ import (
 )
 
 // Agents owns inbound lifecycle/control access to the subagent coordinator.
-type Agents struct{ coordinator *agent.Coordinator }
+type Agents struct {
+	coordinator *agent.Coordinator
+	sessionID   string
+}
 
 // SubagentModelResolverSpec contains immutable runtime inputs used to build
 // configured per-profile subagent language models.
@@ -98,7 +102,15 @@ func lookupProvider(providers map[string]config.ProviderConfig, requested string
 }
 
 func NewAgents(coordinator *agent.Coordinator) Agents { return Agents{coordinator: coordinator} }
-func (a Agents) Available() bool                      { return a.coordinator != nil }
+
+func NewAgentsForSession(coordinator *agent.Coordinator, sessionID string) Agents {
+	return Agents{coordinator: coordinator, sessionID: strings.TrimSpace(sessionID)}
+}
+func (a Agents) ForSession(sessionID string) Agents {
+	a.sessionID = strings.TrimSpace(sessionID)
+	return a
+}
+func (a Agents) Available() bool { return a.coordinator != nil }
 func (a Agents) Subscribe(buffer int) (<-chan agent.Event, func()) {
 	if a.coordinator == nil {
 		ch := make(chan agent.Event)
@@ -117,11 +129,29 @@ func (a Agents) List() []agent.AgentStatus {
 	if a.coordinator == nil {
 		return nil
 	}
+	if a.sessionID != "" {
+		return a.coordinator.ListSession(a.sessionID)
+	}
 	return a.coordinator.List()
+}
+func (a Agents) CancelSessionAndWait(ctx context.Context) (int, error) {
+	if a.coordinator == nil {
+		return 0, nil
+	}
+	return a.coordinator.CancelSessionAndWait(ctx, a.sessionID)
+}
+func (a Agents) CancelTurn(parentID string, policy agent.CancelPolicy) int {
+	if a.coordinator == nil {
+		return 0
+	}
+	return a.coordinator.CancelTurn(agent.TurnRef{SessionID: a.sessionID, TurnID: parentID}, policy)
 }
 func (a Agents) CancelByParent(parentID string) int {
 	if a.coordinator == nil {
 		return 0
+	}
+	if a.sessionID != "" {
+		return a.coordinator.CancelByTurn(agent.TurnRef{SessionID: a.sessionID, TurnID: parentID})
 	}
 	return a.coordinator.CancelByParent(parentID)
 }

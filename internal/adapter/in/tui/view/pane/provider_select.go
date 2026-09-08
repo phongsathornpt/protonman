@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
-	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 )
 
 type ProviderItem struct {
@@ -60,7 +60,7 @@ func ProviderRows(snapshot ProviderSnapshot) (rows []string, warning bool) {
 	}
 	contentWidth := max(1, snapshot.ContentWidth)
 	title := fmt.Sprintf("Providers · active: %s · %d/%d", activeName, index+1, len(snapshot.Items))
-	title = tool.TruncateRunes(title, contentWidth)
+	title = textview.TruncateEllipsis(title, contentWidth)
 	rows = make([]string, 0, (visibleEnd-offset)*2+6)
 	rows = append(rows, tuistyle.BrandStyle.Render(title), "")
 	if offset > 0 {
@@ -91,7 +91,7 @@ func ProviderRows(snapshot ProviderSnapshot) (rows []string, warning bool) {
 		if item.Free {
 			line += " · free"
 		}
-		line = tool.TruncateRunes(line, itemWidth)
+		line = textview.TruncateEllipsis(line, itemWidth)
 		switch {
 		case idx == index:
 			rows = append(rows, tuistyle.BrandStyle.Render(line))
@@ -106,7 +106,7 @@ func ProviderRows(snapshot ProviderSnapshot) (rows []string, warning bool) {
 				detail = item.Description
 			}
 			if detail != "" {
-				rows = append(rows, tuistyle.MutedStyle.Render("    "+tool.TruncateRunes(detail, max(4, itemWidth-4))))
+				rows = append(rows, tuistyle.MutedStyle.Render("    "+textview.TruncateEllipsis(detail, max(4, itemWidth-4))))
 			}
 		}
 	}

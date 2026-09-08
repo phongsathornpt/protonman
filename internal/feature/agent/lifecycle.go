@@ -23,6 +23,8 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	if err := ctx.Err(); err != nil {
 		return Handle{}, err
 	}
+	req.SessionID = strings.TrimSpace(req.SessionID)
+	req.ParentID = strings.TrimSpace(req.ParentID)
 	if err := req.Validate(); err != nil {
 		return Handle{}, fmt.Errorf("invalid subagent request: %w", err)
 	}
@@ -67,16 +69,29 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 
 	queuedAt := time.Now()
 	runCtx, runCancel := context.WithCancel(c.rootCtx)
+	queuedEvent := LifecycleEvent{
+		Kind: LifecycleAgentQueued, Version: 1, At: queuedAt, SessionID: req.SessionID, ParentID: req.ParentID,
+		AgentID: id, Profile: req.Profile, Task: req.Task, Provider: providerName, Model: modelID, ResumedFrom: req.ResumedFrom,
+		Request: &req,
+	}
+	if err := c.persistLifecycleEvent(ctx, queuedEvent); err != nil {
+		c.agentsMu.Unlock()
+		runCancel()
+		return Handle{}, err
+	}
+	queuedStatus, transitionErr := applyLifecycleEvent(AgentStatus{}, queuedEvent)
+	if transitionErr != nil {
+		c.agentsMu.Unlock()
+		runCancel()
+		return Handle{}, transitionErr
+	}
+	runtimeSpec := childToolRuntime{
+		permissionMode: c.permissionMode, prompt: c.prompt, guard: c.guard,
+		permissionTimeout: c.toolPermissionTimeout, executionTimeout: c.toolExecutionTimeout, observer: c.toolObserver,
+	}
 	entry := &agentEntry{
-		languageModel:   boundModel,
-		reasoningEffort: boundReasoning,
-		status: AgentStatus{
-			ID: id, ParentID: req.ParentID, Profile: req.Profile, Provider: providerName, Model: modelID, Task: req.Task,
-			State: StateQueued, StartTime: queuedAt,
-		},
-		cancel:  runCancel,
-		done:    make(chan struct{}),
-		started: make(chan struct{}),
+		request: req, languageModel: boundModel, reasoningEffort: boundReasoning, toolRuntime: runtimeSpec, status: queuedStatus,
+		cancel: runCancel, done: make(chan struct{}), started: make(chan struct{}),
 	}
 	c.agents[id] = entry
 	// Add while admission is still serialized with Close so Wait can never
@@ -84,9 +99,9 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	c.wg.Add(1)
 	c.agentsMu.Unlock()
 
-	c.emit(runCtx, Event{Kind: EventAgentQueued, AgentID: id, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task})
+	c.emit(runCtx, Event{Kind: EventAgentQueued, SessionID: req.SessionID, AgentID: id, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task})
 	go c.runEntry(runCtx, entry, req, queuedAt)
-	return Handle{ID: id, Profile: req.Profile}, nil
+	return Handle{SessionID: req.SessionID, ID: id, Profile: req.Profile}, nil
 }
 
 func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Request, queuedAt time.Time) {
@@ -136,8 +151,11 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 		c.finishEntry(entry, req, queuedAt, time.Time{}, context.Canceled)
 		return
 	}
-	entry.status.State = StateRunning
-	entry.status.StartedAt = startedAt
+	if transitionErr := c.persistAndApplyTransition(runCtx, entry, LifecycleAgentStarted, startedAt, ""); transitionErr != nil {
+		c.agentsMu.Unlock()
+		c.finishEntry(entry, req, queuedAt, time.Time{}, transitionErr)
+		return
+	}
 	close(entry.started)
 	c.agentsMu.Unlock()
 	queueDuration := startedAt.Sub(queuedAt)
@@ -149,55 +167,72 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 	}
 	defer execCancel()
 
-	c.emit(execCtx, Event{Kind: EventAgentStarted, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task, QueueDuration: queueDuration})
-	res, runErr := c.executeWithRuntime(execCtx, req, entry.languageModel, entry.reasoningEffort)
-	res.Provider = entry.status.Provider
-	res.Model = entry.status.Model
+	c.emit(execCtx, Event{Kind: EventAgentStarted, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task, QueueDuration: queueDuration})
+	res, runErr := c.executeWithRuntime(execCtx, req, entry.languageModel, entry.reasoningEffort, entry.toolRuntime)
+	c.agentsMu.RLock()
+	provider, modelID := entry.status.Provider, entry.status.Model
+	c.agentsMu.RUnlock()
+	res.Provider = provider
+	res.Model = modelID
 	res.QueueDuration = queueDuration
 	res.Duration = time.Since(startedAt)
 	res.TotalDuration = time.Since(queuedAt)
 	if runErr != nil {
 		res.Err = runErr
 	}
-	c.storeTerminal(entry, res, runErr)
+	if transitionErr := c.storeTerminal(c.rootCtx, entry, res, runErr); transitionErr != nil {
+		runErr = transitionErr
+		res.Err = transitionErr
+	}
 
 	eventKind := EventAgentCompleted
 	if runErr != nil {
 		eventKind = EventAgentFailed
 	}
 	emitCtx, emitDone := contextutil.DetachedTimeout(execCtx, runtimepolicy.AgentLifecycleEmitTimeout)
-	c.emit(emitCtx, Event{Kind: eventKind, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: res.Summary, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: runErr})
+	c.emit(emitCtx, Event{Kind: eventKind, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: res.Summary, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: runErr})
 	emitDone()
 }
 
 func (c *Coordinator) finishEntry(entry *agentEntry, req Request, queuedAt, startedAt time.Time, err error) {
 	now := time.Now()
-	res := Result{AgentID: req.ID, Profile: req.Profile, Provider: entry.status.Provider, Model: entry.status.Model, QueueDuration: now.Sub(queuedAt), TotalDuration: now.Sub(queuedAt), Err: err}
+	res := Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile, Provider: entry.status.Provider, Model: entry.status.Model, QueueDuration: now.Sub(queuedAt), TotalDuration: now.Sub(queuedAt), Err: err}
 	if !startedAt.IsZero() {
 		res.Duration = now.Sub(startedAt)
 	}
-	c.storeTerminal(entry, res, err)
-	c.emit(c.rootCtx, Event{Kind: EventAgentFailed, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: err})
+	if transitionErr := c.storeTerminal(c.rootCtx, entry, res, err); transitionErr != nil {
+		err = transitionErr
+		res.Err = transitionErr
+	}
+	c.emit(c.rootCtx, Event{Kind: EventAgentFailed, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: err})
 	if startedAt.IsZero() {
 		close(entry.started)
 	}
 }
 
-func (c *Coordinator) storeTerminal(entry *agentEntry, res Result, err error) {
+func (c *Coordinator) storeTerminal(ctx context.Context, entry *agentEntry, res Result, err error) error {
 	c.agentsMu.Lock()
 	defer c.agentsMu.Unlock()
-	entry.result = res
-	entry.err = err
-	entry.status.FinishedAt = time.Now()
-	entry.status.Reason = terminalReason(err)
+	kind := LifecycleAgentFailed
 	switch {
 	case err == nil:
-		entry.status.State = StateCompleted
+		kind = LifecycleAgentCompleted
 	case errors.Is(err, context.Canceled):
-		entry.status.State = StateCanceled
-	default:
-		entry.status.State = StateFailed
+		kind = LifecycleAgentCanceled
 	}
+	event := nextLifecycleEvent(entry.status, kind, time.Now(), terminalReason(err))
+	resultCopy := cloneResult(res)
+	resultCopy.Err = nil
+	event.Result = &resultCopy
+	if err != nil {
+		event.Error = err.Error()
+	}
+	if transitionErr := c.persistAndApplyEntry(ctx, entry, event); transitionErr != nil {
+		return transitionErr
+	}
+	entry.result = res
+	entry.err = err
+	return nil
 }
 
 func languageModelIdentity(languageModel sdk.LanguageModel) (provider, modelID string) {
@@ -256,7 +291,9 @@ func (c *Coordinator) CancelByParent(parentID string) int {
 		if entry.status.ParentID != parentID || entry.status.State.Terminal() || entry.status.State == StateCanceling {
 			continue
 		}
-		entry.status.State = StateCanceling
+		if err := c.persistAndApplyTransition(c.rootCtx, entry, LifecycleAgentCancelRequested, time.Now(), "cancel requested"); err != nil {
+			continue
+		}
 		cancels = append(cancels, entry.cancel)
 	}
 	c.agentsMu.Unlock()
@@ -277,7 +314,10 @@ func (c *Coordinator) Cancel(id string) error {
 		c.agentsMu.Unlock()
 		return nil
 	}
-	entry.status.State = StateCanceling
+	if err := c.persistAndApplyTransition(c.rootCtx, entry, LifecycleAgentCancelRequested, time.Now(), "cancel requested"); err != nil {
+		c.agentsMu.Unlock()
+		return err
+	}
 	cancel := entry.cancel
 	c.agentsMu.Unlock()
 	cancel()
@@ -303,7 +343,7 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 	case <-started:
 	case <-ctx.Done():
 		_ = c.Cancel(h.ID)
-		return Result{AgentID: h.ID, Profile: h.Profile, Err: ctx.Err()}, ctx.Err()
+		return Result{SessionID: h.SessionID, AgentID: h.ID, Profile: h.Profile, Err: ctx.Err()}, ctx.Err()
 	}
 	c.agentsMu.RLock()
 	terminal := e.status.State.Terminal()
@@ -323,7 +363,7 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 	case <-wctx.Done():
 		_ = c.Cancel(h.ID)
 		err := wctx.Err()
-		return Result{AgentID: h.ID, Profile: h.Profile, Err: err}, err
+		return Result{SessionID: h.SessionID, AgentID: h.ID, Profile: h.Profile, Err: err}, err
 	}
 }
 

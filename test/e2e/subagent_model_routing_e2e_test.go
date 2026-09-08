@@ -14,7 +14,7 @@ func TestE2ESubagentUsesConfiguredProjectModelRoute(t *testing.T) {
 	child := newMockLLMServer(t)
 
 	primary.AddToolCallResponse("delegate-1", "delegate_task", `{"task":"Inspect hello.txt","profile":"agility","timeout_seconds":30}`)
-	primary.AddToolCallResponse("wait-1", "wait_agent", `{"agent_id":"agility-1","timeout_seconds":30}`)
+	primary.AddToolCallResponse("wait-1", "wait_agent", `{"timeout_seconds":30}`)
 	primary.AddTextResponse("Delegation complete.")
 
 	child.AddToolCallResponse("child-read-1", "read_file", `{"path":"hello.txt"}`)

@@ -42,10 +42,142 @@ func (c *Coordinator) Wait(ctx context.Context, id string, timeout time.Duration
 		return c.waitSnapshot(id)
 	case <-waitCtx.Done():
 		if errors.Is(waitCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
-			return c.waitSnapshot(id)
+			wr, snapshotErr := c.waitSnapshot(id)
+			wr.TimedOut = true
+			if status, ok := c.Get(id); ok {
+				c.observeMetric(ctx, MetricEvent{Kind: MetricWaitTimeout, AgentID: status.ID, ParentID: status.ParentID, Profile: status.Profile})
+			}
+			return wr, snapshotErr
 		}
 		return WaitResult{}, waitCtx.Err()
 	}
+}
+
+// WaitActivity waits for the next terminal subagent lifecycle activity across all parents.
+// Observation timeout is non-fatal and never mutates child state.
+func (c *Coordinator) WaitActivity(ctx context.Context, timeout time.Duration) (ActivityWaitResult, error) {
+	return c.waitActivity(ctx, TurnRef{}, nil, timeout)
+}
+
+// WaitActivityForParent is the compatibility wrapper for turn-only callers.
+func (c *Coordinator) WaitActivityForParent(ctx context.Context, parentID string, timeout time.Duration) (ActivityWaitResult, error) {
+	return c.WaitActivityForTurn(ctx, TurnRef{TurnID: parentID}, timeout)
+}
+
+// WaitActivityForTurn consumes the next ordered activity batch for one turn.
+func (c *Coordinator) WaitActivityForTurn(ctx context.Context, ref TurnRef, timeout time.Duration) (ActivityWaitResult, error) {
+	return c.waitActivity(ctx, ref.normalized(), nil, timeout)
+}
+
+// WaitActivityAfter reads activity after an explicit cursor without advancing the
+// compatibility cursor. Independent waiters can therefore observe the same stream.
+func (c *Coordinator) WaitActivityAfter(ctx context.Context, ref TurnRef, after uint64, timeout time.Duration) (ActivityWaitResult, error) {
+	return c.waitActivity(ctx, ref.normalized(), &after, timeout)
+}
+
+func activityScopeKey(ref TurnRef) string {
+	ref = ref.normalized()
+	if ref.SessionID == "" && ref.TurnID == "" {
+		return ""
+	}
+	return ref.SessionID + "\x00" + ref.TurnID
+}
+
+func (c *Coordinator) waitActivity(ctx context.Context, ref TurnRef, after *uint64, timeout time.Duration) (ActivityWaitResult, error) {
+	defer c.pruneActivityMailboxes(time.Now())
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if timeout <= 0 {
+		timeout = c.waitTimeout
+	}
+
+	consume := func() (ActivityWaitResult, <-chan struct{}) {
+		c.activityMu.Lock()
+		defer c.activityMu.Unlock()
+		scope := activityScopeKey(ref)
+		mailbox := c.activityMailboxes[scope]
+		if mailbox == nil {
+			mailbox = &activityMailbox{notify: make(chan struct{}), updatedAt: time.Now()}
+			c.activityMailboxes[scope] = mailbox
+		}
+		mailbox.updatedAt = time.Now()
+		cursor := mailbox.seen
+		if after != nil {
+			cursor = *after
+		}
+		events, nextCursor, truncated := activityEventsAfter(mailbox, cursor)
+		if len(events) == 0 {
+			return ActivityWaitResult{Events: []Event{}, Cursor: cursor}, mailbox.notify
+		}
+		if after == nil {
+			mailbox.seen = nextCursor
+		}
+		last := events[len(events)-1]
+		return ActivityWaitResult{Event: &last, Events: events, Cursor: nextCursor, Truncated: truncated}, nil
+	}
+
+	if result, notify := consume(); len(result.Events) > 0 {
+		result.Agents = c.activitySnapshot(ref)
+		return result, nil
+	} else {
+		waitCtx := ctx
+		cancel := func() {}
+		if timeout > 0 {
+			waitCtx, cancel = context.WithTimeout(ctx, timeout)
+		}
+		defer cancel()
+		select {
+		case <-notify:
+			result, _ := consume()
+			result.Agents = c.activitySnapshot(ref)
+			return result, nil
+		case <-waitCtx.Done():
+			if errors.Is(waitCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+				c.observeMetric(ctx, MetricEvent{Kind: MetricWaitTimeout, SessionID: ref.SessionID, ParentID: ref.TurnID})
+				result.Agents = c.activitySnapshot(ref)
+				result.TimedOut = true
+				return result, nil
+			}
+			return ActivityWaitResult{}, waitCtx.Err()
+		}
+	}
+}
+
+func activityEventsAfter(mailbox *activityMailbox, after uint64) ([]Event, uint64, bool) {
+	if mailbox == nil || len(mailbox.events) == 0 {
+		return []Event{}, after, false
+	}
+	oldest := mailbox.events[0].seq
+	truncated := after+1 < oldest
+	events := make([]Event, 0, len(mailbox.events))
+	next := after
+	for _, record := range mailbox.events {
+		if record.seq <= after {
+			continue
+		}
+		events = append(events, record.event)
+		next = record.seq
+	}
+	return events, next, truncated
+}
+
+func (c *Coordinator) activitySnapshot(ref TurnRef) []AgentStatus {
+	agents := c.List()
+	if ref.SessionID == "" && ref.TurnID == "" {
+		return agents
+	}
+	filtered := make([]AgentStatus, 0, len(agents))
+	for _, status := range agents {
+		if ref.SessionID != "" && status.SessionID != ref.SessionID {
+			continue
+		}
+		if ref.TurnID != "" && status.ParentID != ref.TurnID {
+			continue
+		}
+		filtered = append(filtered, status)
+	}
+	return filtered
 }
 
 func (c *Coordinator) waitSnapshot(id string) (WaitResult, error) {

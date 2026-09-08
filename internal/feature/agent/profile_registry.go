@@ -97,6 +97,7 @@ Specialization:
 - Make the smallest coherent change that fully satisfies the delegated task.
 - Prefer existing helpers and project conventions over new abstractions.
 - Do not turn bounded implementation into a broad architecture exercise.
+- Do not assume parent or sibling state; rely only on delegated context and observable workspace state.
 
 Deliverable:
 - Return concise status, changed files or components, validation performed, and real blockers if any.`
@@ -110,6 +111,7 @@ Specialization:
 - Gather the minimum evidence needed to locate the relevant path, behavior, or regression source.
 - Keep context narrow, separate confirmed facts from inference, and stop when the bounded question is answered.
 - Do not modify workspace files or expand into broad architecture work.
+- Do not assume parent or sibling state; rely only on delegated context and observable workspace state.
 
 Deliverable:
 - Return finding, evidence, impact, recommendation, and confidence (high, medium, or low).`
@@ -123,6 +125,7 @@ Specialization:
 - Establish invariants and constraints before structural changes.
 - Compare viable solutions across correctness, concurrency, compatibility, performance, maintainability, and operational risk where relevant.
 - Choose the smallest robust design and avoid unrelated redesign.
+- Do not assume parent or sibling state; rely only on delegated context and observable workspace state.
 
 Deliverable:
 - Return the problem model, selected solution, material risks, implementation result when requested, and validation.`

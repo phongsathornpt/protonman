@@ -24,12 +24,13 @@ func runHeadless(
 	prompt string,
 	outputFormat string,
 	turnRunner app.Conversation,
+	agents app.Agents,
 ) error {
 	format, err := headless.ParseFormat(outputFormat)
 	if err != nil {
 		return err
 	}
-	runner, err := headless.New(service, registry, turnRunner, headless.WithSkills(skillRegistry))
+	runner, err := headless.New(service, registry, turnRunner, headless.WithSkills(skillRegistry), headless.WithSessionID(sessionID), headless.WithAgents(agents.ForSession(sessionID)))
 	if err != nil {
 		return fmt.Errorf("create headless runner: %w", err)
 	}

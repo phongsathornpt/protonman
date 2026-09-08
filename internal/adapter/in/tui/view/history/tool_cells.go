@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/execview"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/toolview"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
@@ -296,7 +297,7 @@ func (c ExecCell) RenderWidth(width int) []string {
 			clean := line
 			isFoldIndicator := strings.HasPrefix(clean, "… (")
 			if !isFoldIndicator && ansi.StringWidth(clean) > contentWidth {
-				clean = tool.TruncateRunes(clean, contentWidth)
+				clean = textview.TruncateEllipsis(clean, contentWidth)
 			}
 			if styled, isDiff := toolview.StyleDiffLine(clean); isDiff {
 				for _, wrapped := range safeWrappedLines(styled, max(1, width-2)) {
@@ -334,7 +335,7 @@ func renderExecMetaLine(summary string, duration time.Duration, width int) strin
 	}
 	maxSummaryWidth := max(1, width-2-ansi.StringWidth(durationText)-2)
 	if ansi.StringWidth(text) > maxSummaryWidth {
-		text = tool.TruncateRunes(text, maxSummaryWidth)
+		text = textview.TruncateEllipsis(text, maxSummaryWidth)
 	}
 	left := "  " + text
 	gap := width - ansi.StringWidth(left) - ansi.StringWidth(durationText)

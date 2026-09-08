@@ -98,32 +98,49 @@ func (p Profile) ShortLabel() string {
 type State string
 
 const (
-	StateQueued    State = "queued"
-	StateRunning   State = "running"
-	StateCanceling State = "canceling"
-	StateCompleted State = "completed"
-	StateFailed    State = "failed"
-	StateCanceled  State = "canceled"
+	StateQueued      State = "queued"
+	StateRunning     State = "running"
+	StateCanceling   State = "canceling"
+	StateCompleted   State = "completed"
+	StateFailed      State = "failed"
+	StateCanceled    State = "canceled"
+	StateInterrupted State = "interrupted"
+	StateResuming    State = "resuming"
+	StateResumed     State = "resumed"
 )
 
 func (s State) Terminal() bool {
-	return s == StateCompleted || s == StateFailed || s == StateCanceled
+	return s == StateCompleted || s == StateFailed || s == StateCanceled || s == StateInterrupted || s == StateResumed
 }
 
 // Handle identifies a spawned subagent without coupling its lifetime to a caller wait.
 type Handle struct {
-	ID      string  `json:"agent_id"`
-	Profile Profile `json:"profile"`
+	SessionID string  `json:"session_id,omitempty"`
+	ID        string  `json:"agent_id"`
+	Profile   Profile `json:"profile"`
 }
 
 // WaitResult reports the current state after a bounded wait.
 type WaitResult struct {
-	State  State   `json:"state"`
-	Result *Result `json:"result,omitempty"`
+	State    State   `json:"state"`
+	Result   *Result `json:"result,omitempty"`
+	TimedOut bool    `json:"timed_out"`
+}
+
+// ActivityWaitResult reports the next session-scoped subagent mailbox activity.
+// A timeout is a successful observation with TimedOut=true, not an agent failure.
+type ActivityWaitResult struct {
+	Event     *Event        `json:"event,omitempty"`
+	Events    []Event       `json:"events"`
+	Cursor    uint64        `json:"cursor"`
+	Truncated bool          `json:"truncated"`
+	Agents    []AgentStatus `json:"agents"`
+	TimedOut  bool          `json:"timed_out"`
 }
 
 // Request is the invocation payload for a delegated subagent.
 type Request struct {
+	SessionID    string        `json:"session_id,omitempty"`
 	ID           string        `json:"id,omitempty"`
 	ParentID     string        `json:"parent_id,omitempty"`
 	Profile      Profile       `json:"profile"`
@@ -131,6 +148,7 @@ type Request struct {
 	Context      string        `json:"context,omitempty"`
 	Timeout      time.Duration `json:"timeout,omitempty"`
 	QueueTimeout time.Duration `json:"queue_timeout,omitempty"`
+	ResumedFrom  string        `json:"resumed_from,omitempty"`
 }
 
 // Validate checks request invariants before dispatch.
@@ -162,6 +180,7 @@ type EvidenceRef struct {
 
 // Result is the bounded final output returned from a subagent to its caller.
 type Result struct {
+	SessionID      string                 `json:"session_id,omitempty"`
 	AgentID        string                 `json:"agent_id"`
 	Profile        Profile                `json:"profile"`
 	Provider       string                 `json:"provider,omitempty"`
@@ -196,6 +215,7 @@ const (
 // Event is one lifecycle progress event emitted by an executing subagent.
 type Event struct {
 	Kind          EventKind     `json:"kind"`
+	SessionID     string        `json:"session_id,omitempty"`
 	AgentID       string        `json:"agent_id"`
 	ParentID      string        `json:"parent_id,omitempty"`
 	Profile       Profile       `json:"profile"`

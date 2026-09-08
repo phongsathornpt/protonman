@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
@@ -28,7 +29,7 @@ func ExtractTarget(name string, kind tool.Kind, args json.RawMessage) (string, t
 
 func IsAgentLifecycleTool(name string) bool {
 	switch name {
-	case "wait_agent", "get_agent", "list_agents", "cancel_agent":
+	case "wait_agent", "get_agent", "list_agents", "cancel_agent", "resume_agent":
 		return true
 	default:
 		return false
@@ -177,14 +178,31 @@ func summarizeAgentTool(name, body string) string {
 		}
 		return "subagent spawned"
 	case "wait_agent":
-		if status == "queued" || status == "running" || status == "canceling" {
-			return fmt.Sprintf("waiting for %s · %s", id, status)
+		if timedOut, _ := payload["timed_out"].(bool); timedOut {
+			return "no new agent activity"
 		}
-		return joinAgentCompletionSummary(id, status, resultSummary)
+		events, _ := payload["events"].([]any)
+		if len(events) > 1 {
+			return fmt.Sprintf("%d agent lifecycle events", len(events))
+		}
+		if event, ok := payload["event"].(map[string]any); ok {
+			eventID, _ := event["agent_id"].(string)
+			eventKind, _ := event["kind"].(string)
+			if eventID != "" || eventKind != "" {
+				return strings.Trim(strings.Join([]string{eventID, eventKind}, " · "), " ·")
+			}
+		}
+		return "agent activity received"
 	case "get_agent":
 		return joinAgentCompletionSummary(id, status, resultSummary)
 	case "cancel_agent":
 		return fmt.Sprintf("cancel requested · %s", id)
+	case "resume_agent":
+		from, _ := payload["resumed_from"].(string)
+		if from != "" && id != "" {
+			return fmt.Sprintf("resumed %s as %s · %s", from, id, status)
+		}
+		return joinAgentCompletionSummary(id, status, resultSummary)
 	default:
 		if id != "" {
 			return fmt.Sprintf("%s · %s", id, status)
@@ -199,7 +217,7 @@ func agentResultSummary(payload map[string]any) string {
 		return ""
 	}
 	summary, _ := result["summary"].(string)
-	return tool.TruncateRunes(strings.TrimSpace(summary), 96)
+	return textview.TruncateEllipsis(strings.TrimSpace(summary), 96)
 }
 
 func joinAgentCompletionSummary(id, status, summary string) string {
@@ -284,7 +302,7 @@ func summarizeWebFetch(body string, truncated bool) string {
 		rawTitle := html.UnescapeString(strings.TrimSpace(matches[1]))
 		rawTitle = strings.Join(strings.Fields(rawTitle), " ")
 		if rawTitle != "" {
-			return fmt.Sprintf("%q (%s)", tool.TruncateRunes(rawTitle, 45), sizeStr)
+			return fmt.Sprintf("%q (%s)", textview.TruncateEllipsis(rawTitle, 45), sizeStr)
 		}
 	}
 
@@ -416,7 +434,7 @@ func FormatPath(target string) string {
 		parts := strings.SplitN(target, " in ", 2)
 		pattern := strings.Trim(parts[0], `"`)
 		if ansi.StringWidth(pattern) > 30 {
-			pattern = tool.TruncateRunes(pattern, 28)
+			pattern = textview.TruncateEllipsis(pattern, 28)
 		}
 		return tuistyle.ToolTargetStyle.Render(fmt.Sprintf("%q", pattern)) + tuistyle.MutedStyle.Render(" in ") + FormatPath(parts[1])
 	}
@@ -424,7 +442,7 @@ func FormatPath(target string) string {
 	if strings.HasPrefix(target, `"`) && strings.HasSuffix(target, `"`) {
 		inner := strings.Trim(target, `"`)
 		if ansi.StringWidth(inner) > 36 {
-			inner = tool.TruncateRunes(inner, 34)
+			inner = textview.TruncateEllipsis(inner, 34)
 			return tuistyle.ToolTargetStyle.Render(fmt.Sprintf("%q", inner))
 		}
 		return tuistyle.ToolTargetStyle.Render(target)
@@ -432,7 +450,7 @@ func FormatPath(target string) string {
 	// Check if URL:
 	if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") {
 		if ansi.StringWidth(target) > 50 {
-			target = tool.TruncateRunes(target, 48)
+			target = textview.TruncateEllipsis(target, 48)
 		}
 		return tuistyle.ToolTargetStyle.Render(target)
 	}
@@ -468,7 +486,7 @@ func ExtractReadFileExcerpt(body string) string {
 			strings.HasPrefix(trimmed, "# ") ||
 			strings.HasPrefix(trimmed, "## ") ||
 			strings.HasPrefix(trimmed, "module ") {
-			return tool.TruncateRunes(trimmed, 65)
+			return textview.TruncateEllipsis(trimmed, 65)
 		}
 	}
 	return ""
@@ -692,7 +710,7 @@ func FormatGrepView(lines []string, target string, width int) []string {
 			avail := contentWidth - ansi.StringWidth(file) - len(lineNum) - 4
 			cleanContent := strings.TrimSpace(content)
 			if avail > 10 && ansi.StringWidth(cleanContent) > avail {
-				cleanContent = tool.TruncateRunes(cleanContent, avail)
+				cleanContent = textview.TruncateEllipsis(cleanContent, avail)
 			}
 
 			highlightedContent := highlightGrepTerms(cleanContent, terms)
@@ -700,7 +718,7 @@ func FormatGrepView(lines []string, target string, width int) []string {
 			formatted = append(formatted, lineStr)
 		} else {
 			if ansi.StringWidth(trimmed) > contentWidth {
-				trimmed = tool.TruncateRunes(trimmed, contentWidth)
+				trimmed = textview.TruncateEllipsis(trimmed, contentWidth)
 			}
 			formatted = append(formatted, tuistyle.BodyStyle.Render(trimmed))
 		}

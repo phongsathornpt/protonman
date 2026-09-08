@@ -10,6 +10,8 @@ var (
 	ErrCoordinatorClosed = errors.New("subagent coordinator is closed")
 	ErrSubagentsDisabled = errors.New("subagents are disabled")
 	ErrLiveLimit         = errors.New("maximum live subagents reached")
+	ErrNotResumable      = errors.New("subagent is not resumable")
+	ErrInvalidTransition = errors.New("invalid subagent lifecycle transition")
 	ErrShutdownTimeout   = errors.New("subagent coordinator shutdown timed out")
 )
 

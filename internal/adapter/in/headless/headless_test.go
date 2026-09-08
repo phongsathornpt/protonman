@@ -5,14 +5,17 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
-	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
+	"github.com/phongsathornpt/protonman/internal/feature/skill"
 )
 
 func TestHeadlessCallRunsThroughService(t *testing.T) {
@@ -161,6 +164,9 @@ func TestHeadlessTurnStreamsEvents(t *testing.T) {
 	if len(runner.Messages()) != 2 {
 		t.Fatalf("messages = %d, want 2", len(runner.Messages()))
 	}
+	if loop.parentID == "" || !strings.HasPrefix(loop.parentID, "headless-turn-") {
+		t.Fatalf("parent id = %q, want headless turn ownership", loop.parentID)
+	}
 }
 
 func ioDiscard() *bytes.Buffer {
@@ -168,8 +174,9 @@ func ioDiscard() *bytes.Buffer {
 }
 
 type scriptedTurn struct {
-	events []applicationturn.Event
-	result applicationturn.Result
+	events   []applicationturn.Event
+	result   applicationturn.Result
+	parentID string
 }
 
 func (s *scriptedTurn) Run(
@@ -177,6 +184,7 @@ func (s *scriptedTurn) Run(
 	_ []model.Message,
 	sink applicationturn.Sink,
 ) (applicationturn.Result, error) {
+	s.parentID = agent.ParentIDFromContext(ctx)
 	for _, event := range s.events {
 		if err := sink(ctx, event); err != nil {
 			return applicationturn.Result{}, err
@@ -393,4 +401,73 @@ func TestHeadlessSkillsCommands(t *testing.T) {
 			t.Fatalf("help output missing unified skill command: %q", out.String())
 		}
 	})
+}
+
+func TestHeadlessCancellationCancelsOwnedSubagents(t *testing.T) {
+	childStarted := make(chan struct{})
+	coord := agent.NewCoordinator(nil, nil, nil, nil, agent.WithRunnerFactory(func(agent.Profile, *toolcall.Service) (applicationturn.Runner, error) {
+		return headlessSubagentCancelRunner{started: childStarted}, nil
+	}))
+	defer coord.Close()
+	h, err := coord.Spawn(context.Background(), agent.Request{SessionID: "session-a", ParentID: "headless-turn-1", Profile: agent.ProfileAgility, Task: "background"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-childStarted:
+	case <-time.After(time.Second):
+		t.Fatal("subagent did not start")
+	}
+	registry, _ := newTestRegistry()
+	service := newTestService(t, registry, permission.ModeAlwaysApprove)
+	conversationStarted := make(chan struct{})
+	runner, err := New(service, registry, blockingHeadlessConversation{started: conversationStarted}, WithSessionID("session-a"), WithAgents(app.NewAgentsForSession(coord, "session-a")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- runner.Run(ctx, "wait", &bytes.Buffer{}, FormatText) }()
+	select {
+	case <-conversationStarted:
+	case <-time.After(time.Second):
+		t.Fatal("conversation did not start")
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("headless run did not stop")
+	}
+	wr, err := coord.Wait(context.Background(), h.ID, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wr.State != agent.StateCanceled {
+		t.Fatalf("state=%s, want canceled", wr.State)
+	}
+}
+
+type blockingHeadlessConversation struct{ started chan struct{} }
+
+func (r blockingHeadlessConversation) Run(ctx context.Context, _ []model.Message, _ applicationturn.Sink) (applicationturn.Result, error) {
+	select {
+	case <-r.started:
+	default:
+		close(r.started)
+	}
+	<-ctx.Done()
+	return applicationturn.Result{}, ctx.Err()
+}
+
+type headlessSubagentCancelRunner struct{ started chan struct{} }
+
+func (r headlessSubagentCancelRunner) Run(ctx context.Context, _ []model.Message, _ applicationturn.Sink) (applicationturn.Result, error) {
+	select {
+	case <-r.started:
+	default:
+		close(r.started)
+	}
+	<-ctx.Done()
+	return applicationturn.Result{}, ctx.Err()
 }

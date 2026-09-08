@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
-	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 )
 
@@ -31,7 +31,7 @@ func TodoRows(snapshot TodoSnapshot) []string {
 		if item.Status == tododomain.StatusCompleted {
 			glyph, style = tuistyle.GlyphToolSuccess, tuistyle.SuccessStyle
 		}
-		rows = append(rows, style.Render(glyph+tool.TruncateRunes(item.Text, max(12, snapshot.Width-8))))
+		rows = append(rows, style.Render(glyph+textview.TruncateEllipsis(item.Text, max(12, snapshot.Width-8))))
 		rows = append(rows, tuistyle.MutedStyle.Render("  id: "+strings.TrimSpace(item.ID)))
 	}
 	if len(snapshot.Items) > limit {

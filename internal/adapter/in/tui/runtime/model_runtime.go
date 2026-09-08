@@ -81,9 +81,12 @@ type bubbleModel struct {
 	showTranscript          bool
 	rawTranscript           bool
 	viewportTailOnly        bool
+	viewportLineAnchors     []ScrollAnchor
 	nextID                  uint64
 	width                   int
 	height                  int
+	frameChrome             frameChrome
+	layoutGeneration        uint64
 	busyStarted             time.Time
 	turnCancel              context.CancelFunc
 	turnEvents              <-chan tea.Msg
@@ -401,7 +404,7 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 	m.historyState.StartThinking()
 	m.relayout()
 	ctx, cancel := context.WithCancel(m.ctx)
-	ctx = agent.WithParentID(ctx, m.activeTurnOwner)
+	ctx = agent.WithTurnRef(ctx, agent.TurnRef{SessionID: m.sessionID, TurnID: m.activeTurnOwner})
 	m.turnCancel = cancel
 	events := make(chan tea.Msg, 32)
 	history := model.CloneMessages(m.messages)
@@ -475,7 +478,7 @@ func (m *bubbleModel) cancelActiveTurn() int {
 	m.activity = "canceling"
 	stopping := 0
 	if m.agents.Available() && m.activeTurnOwner != "" {
-		stopping = m.agents.CancelByParent(m.activeTurnOwner)
+		stopping = m.agents.CancelTurn(m.activeTurnOwner, agent.CancelTurnAndChildren)
 		m.syncAgentSnapshot()
 	}
 	m.turnCancel()
@@ -519,6 +522,9 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 			}
+		}
+		if message.Y < 0 || message.Y >= m.viewport.Height {
+			return m, nil
 		}
 		if m.viewportTailOnly && message.Button == tea.MouseButtonWheelUp {
 			m.hydrateViewportForScroll()
@@ -749,6 +755,7 @@ func (m *bubbleModel) updateAgentLifecycle(message agentLifecycleMsg) (tea.Model
 				run.Activity = activity.String()
 				m.ensureHistoryState().TouchAgentRun(message.event.AgentID)
 			}
+			m.relayout()
 		}
 		return m, m.nextAgentEvent()
 	}

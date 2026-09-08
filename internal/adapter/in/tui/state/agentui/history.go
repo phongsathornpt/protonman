@@ -17,10 +17,12 @@ type PendingRun struct {
 }
 
 type ToolResult struct {
-	AgentID string
-	State   agent.State
-	Summary string
-	Reason  string
+	AgentID     string
+	ResumedFrom string
+	Profile     agent.Profile
+	State       agent.State
+	Summary     string
+	Reason      string
 }
 
 type Tracker struct {
@@ -47,11 +49,13 @@ func RunFromCall(call tool.Call) PendingRun {
 
 func ParseToolResult(body string) ToolResult {
 	var payload struct {
-		AgentID string      `json:"agent_id"`
-		Status  agent.State `json:"status"`
-		State   agent.State `json:"state"`
-		Reason  string      `json:"reason"`
-		Agent   *struct {
+		AgentID     string        `json:"agent_id"`
+		ResumedFrom string        `json:"resumed_from"`
+		Profile     agent.Profile `json:"profile"`
+		Status      agent.State   `json:"status"`
+		State       agent.State   `json:"state"`
+		Reason      string        `json:"reason"`
+		Agent       *struct {
 			ID     string      `json:"id"`
 			State  agent.State `json:"state"`
 			Reason string      `json:"reason"`
@@ -59,11 +63,16 @@ func ParseToolResult(body string) ToolResult {
 		Result *struct {
 			Summary string `json:"summary"`
 		} `json:"result"`
+		Event *struct {
+			AgentID string `json:"agent_id"`
+			Message string `json:"message"`
+		} `json:"event"`
+		Agents []agent.AgentStatus `json:"agents"`
 	}
 	if json.Unmarshal([]byte(body), &payload) != nil {
 		return ToolResult{}
 	}
-	out := ToolResult{AgentID: payload.AgentID, State: payload.Status, Reason: strings.TrimSpace(payload.Reason)}
+	out := ToolResult{AgentID: payload.AgentID, ResumedFrom: strings.TrimSpace(payload.ResumedFrom), Profile: payload.Profile, State: payload.Status, Reason: strings.TrimSpace(payload.Reason)}
 	if out.State == "" {
 		out.State = payload.State
 	}
@@ -81,10 +90,35 @@ func ParseToolResult(body string) ToolResult {
 	if payload.Result != nil {
 		out.Summary = strings.TrimSpace(payload.Result.Summary)
 	}
+	if payload.Event != nil {
+		if out.AgentID == "" {
+			out.AgentID = strings.TrimSpace(payload.Event.AgentID)
+		}
+		if out.Summary == "" {
+			out.Summary = strings.TrimSpace(payload.Event.Message)
+		}
+	}
+	if out.AgentID != "" {
+		for _, status := range payload.Agents {
+			if status.ID != out.AgentID {
+				continue
+			}
+			if out.State == "" {
+				out.State = status.State
+			}
+			if out.Reason == "" {
+				out.Reason = strings.TrimSpace(status.Reason)
+			}
+			break
+		}
+	}
 	return out
 }
 
 func (t *Tracker) TouchOperation(name string, call tool.Call, state *history.HistoryState) {
+	if name == "wait_agent" {
+		return
+	}
 	id := extractStringArg(call.Arguments, "agent_id")
 	if t.pendingOps == nil {
 		t.pendingOps = make(map[string]string)
@@ -97,12 +131,12 @@ func (t *Tracker) TouchOperation(name string, call tool.Call, state *history.His
 		return
 	}
 	switch name {
-	case "wait_agent":
-		cell.Activity = "waiting for completion"
 	case "get_agent":
 		cell.Activity = "checking status"
 	case "cancel_agent":
 		cell.State, cell.Activity = agent.StateCanceling, "canceling"
+	case "resume_agent":
+		cell.Activity = "resuming"
 	}
 	state.TouchAgentRun(id)
 }
@@ -117,6 +151,32 @@ func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, 
 	}
 	delete(t.pendingOps, result.CallID)
 	if name == "list_agents" {
+		return true
+	}
+	if name == "resume_agent" {
+		fromID := parsed.ResumedFrom
+		if fromID == "" {
+			fromID = t.pendingOps[result.CallID]
+		}
+		delete(t.pendingOps, result.CallID)
+		if parsed.AgentID == "" {
+			return true
+		}
+		resumed := &history.AgentRunCell{AgentID: parsed.AgentID, Profile: parsed.Profile, State: parsed.State, StartedAt: time.Now()}
+		if prior := state.AgentRun(fromID); prior != nil {
+			if !resumed.Profile.Valid() {
+				resumed.Profile = prior.Profile
+			}
+			resumed.Task = prior.Task
+			prior.Activity = ""
+			state.TouchAgentRun(fromID)
+		}
+		if resumed.State == "" {
+			resumed.State = agent.StateQueued
+		}
+		state.DiscardToolCall(result.CallID, name)
+		state.Append(resumed)
+		state.TouchAgentRun(parsed.AgentID)
 		return true
 	}
 	if name == "delegate_task" {
@@ -232,6 +292,8 @@ func (t *Tracker) ApplyToolFailure(name string, result tool.Result, err error, s
 	message := "status check failed"
 	if name == "cancel_agent" {
 		message = "cancel failed"
+	} else if name == "resume_agent" {
+		message = "resume failed"
 	}
 	if result.Failure != nil && strings.TrimSpace(result.Failure.Message) != "" {
 		message += ": " + strings.TrimSpace(result.Failure.Message)

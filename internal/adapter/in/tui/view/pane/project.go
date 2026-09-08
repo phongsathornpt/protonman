@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
-	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 )
 
 type ProjectFact struct {
@@ -39,7 +39,7 @@ func ProjectRows(snapshot ProjectSnapshot) []string {
 	if root == "" {
 		root = "."
 	}
-	rows = append(rows, tuistyle.MutedStyle.Render(tool.TruncateRunes(root, max(12, snapshot.Width-10))), "")
+	rows = append(rows, tuistyle.MutedStyle.Render(textview.TruncateEllipsis(root, max(12, snapshot.Width-10))), "")
 	if snapshot.Loading {
 		rows = append(rows, tuistyle.MutedStyle.Render("Loading "+snapshot.RootName+" workspace state..."), "", tuistyle.MutedStyle.Render("esc close"))
 		return rows
@@ -47,7 +47,7 @@ func ProjectRows(snapshot ProjectSnapshot) []string {
 	if snapshot.ErrorText != "" {
 		rows = append(rows,
 			tuistyle.ErrorStyle.Render("Failed to inspect "+snapshot.RootName),
-			tuistyle.MutedStyle.Render(tool.TruncateRunes(snapshot.ErrorText, max(12, snapshot.Width-10))),
+			tuistyle.MutedStyle.Render(textview.TruncateEllipsis(snapshot.ErrorText, max(12, snapshot.Width-10))),
 			"",
 			tuistyle.MutedStyle.Render("r retry · esc close"),
 		)
@@ -104,7 +104,7 @@ func ProjectRows(snapshot ProjectSnapshot) []string {
 	return rows
 }
 
-func ProjectFactLine(label, value string) string { return fmt.Sprintf("%-12s %s", label, value) }
+func ProjectFactLine(label, value string) string { return textview.PadRight(label, 12) + " " + value }
 
 func FallbackValue(value, fallback string) string {
 	if strings.TrimSpace(value) == "" {

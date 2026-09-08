@@ -17,8 +17,7 @@ type agentIDInput struct {
 }
 
 type waitAgentInput struct {
-	AgentID        string `json:"agent_id"`
-	TimeoutSeconds int64  `json:"timeout_seconds,omitempty"`
+	TimeoutSeconds int64 `json:"timeout_seconds,omitempty"`
 }
 
 type agentLifecycleHandler struct {
@@ -38,19 +37,20 @@ func NewListAgents(c *agent.Coordinator) tool.Handler {
 func NewCancelAgent(c *agent.Coordinator) tool.Handler {
 	return agentLifecycleHandler{name: "cancel_agent", coordinator: c}
 }
+func NewResumeAgent(c *agent.Coordinator) tool.Handler {
+	return agentLifecycleHandler{name: "resume_agent", coordinator: c}
+}
 
 func (h agentLifecycleHandler) Definition() tool.Definition {
 	def := tool.Definition{Name: h.name, Kind: tool.KindForName(h.name), ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded}
 	switch h.name {
 	case "wait_agent":
-		def.Description = "Wait briefly for a subagent without canceling it when the wait expires."
+		def.Description = "Wait for the next subagent completion/failure activity. A wait timeout is non-fatal and never cancels children."
 		def.Mutability = tool.MutabilityReadOnly
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
-		def.PermissionDetailKey = "agent_id"
 		def.InputSchema = map[string]any{"type": "object", "properties": map[string]any{
-			"agent_id":        map[string]any{"type": "string"},
-			"timeout_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 300},
-		}, "required": []string{"agent_id"}, "additionalProperties": false}
+			"timeout_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 3600},
+		}, "additionalProperties": false}
 	case "get_agent":
 		def.Description = "Inspect one retained subagent and its terminal result when available."
 		def.Mutability = tool.MutabilityReadOnly
@@ -62,6 +62,12 @@ func (h agentLifecycleHandler) Definition() tool.Definition {
 		def.Mutability = tool.MutabilityReadOnly
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
 		def.InputSchema = tool.NoArgumentsSchema()
+	case "resume_agent":
+		def.Description = "Explicitly restart an interrupted retained subagent as a fresh child after re-checking current workspace state."
+		def.Mutability = tool.MutabilityMutating
+		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainAgentState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
+		def.PermissionDetailKey = "agent_id"
+		def.InputSchema = agentIDSchema()
 	case "cancel_agent":
 		def.Description = "Explicitly cancel a queued or running subagent."
 		def.Mutability = tool.MutabilityMutating
@@ -87,11 +93,13 @@ func (h agentLifecycleHandler) Execute(ctx context.Context, call tool.Call) (too
 	case "wait_agent":
 		return h.wait(ctx, call)
 	case "get_agent":
-		return h.get(call)
+		return h.get(ctx, call)
 	case "list_agents":
-		return h.list(call)
+		return h.list(ctx, call)
+	case "resume_agent":
+		return h.resume(ctx, call)
 	case "cancel_agent":
-		return h.cancel(call)
+		return h.cancel(ctx, call)
 	default:
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeExecution, "unknown agent lifecycle handler")
 	}
@@ -102,50 +110,73 @@ func (h agentLifecycleHandler) wait(ctx context.Context, call tool.Call) (tool.R
 	if err := json.Unmarshal(call.Arguments, &in); err != nil {
 		return tool.Result{}, invalidArgs("decode wait_agent arguments", err)
 	}
-	id := strings.TrimSpace(in.AgentID)
-	if id == "" {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "agent_id is required")
-	}
-	if in.TimeoutSeconds < 0 || in.TimeoutSeconds > 300 {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "timeout_seconds must be between 1 and 300 when provided")
+	if in.TimeoutSeconds < 0 || in.TimeoutSeconds > 3600 {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "timeout_seconds must be between 0 and 3600 when provided")
 	}
 	var timeout time.Duration
 	if in.TimeoutSeconds > 0 {
 		timeout = time.Duration(in.TimeoutSeconds) * time.Second
+		if timeout < 10*time.Second {
+			timeout = 10 * time.Second
+		}
 	}
-	wr, err := h.coordinator.Wait(ctx, id, timeout)
+	turnRef := agent.TurnRefFromContext(ctx)
+	wr, err := h.coordinator.WaitActivityForTurn(ctx, turnRef, timeout)
 	if err != nil {
-		return tool.Result{}, classifyAgentError("wait for subagent", err)
+		return tool.Result{}, classifyAgentError("wait for subagent activity", err)
 	}
-	return agentJSONResult(call, fmt.Sprintf("%s · %s", id, wr.State), map[string]any{"agent_id": id, "status": wr.State, "result": resultPayload(wr.Result)})
+	summary := "wait timed out"
+	if wr.Event != nil {
+		summary = fmt.Sprintf("%s · %s", wr.Event.AgentID, wr.Event.Kind)
+	}
+	return agentJSONResult(call, summary, map[string]any{
+		"timed_out": wr.TimedOut, "event": wr.Event, "events": wr.Events,
+		"cursor": wr.Cursor, "truncated": wr.Truncated, "agents": wr.Agents,
+	})
 }
 
-func (h agentLifecycleHandler) get(call tool.Call) (tool.Result, error) {
+func (h agentLifecycleHandler) get(ctx context.Context, call tool.Call) (tool.Result, error) {
 	id, err := decodeAgentID(call)
 	if err != nil {
 		return tool.Result{}, err
 	}
-	status, result, ok := h.coordinator.Lookup(id)
+	status, result, ok := h.coordinator.LookupRef(agent.AgentRef{SessionID: agent.SessionIDFromContext(ctx), AgentID: id})
 	if !ok {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeNotFound, fmt.Sprintf("subagent %q not found", id))
 	}
 	return agentJSONResult(call, fmt.Sprintf("%s · %s", status.ID, status.State), map[string]any{"agent": status, "result": resultPayload(result)})
 }
 
-func (h agentLifecycleHandler) list(call tool.Call) (tool.Result, error) {
-	agents := h.coordinator.List()
+func (h agentLifecycleHandler) list(ctx context.Context, call tool.Call) (tool.Result, error) {
+	agents := h.coordinator.ListSession(agent.SessionIDFromContext(ctx))
 	return agentJSONResult(call, fmt.Sprintf("%d retained agents", len(agents)), map[string]any{"agents": agents})
 }
 
-func (h agentLifecycleHandler) cancel(call tool.Call) (tool.Result, error) {
+func (h agentLifecycleHandler) resume(ctx context.Context, call tool.Call) (tool.Result, error) {
 	id, err := decodeAgentID(call)
 	if err != nil {
 		return tool.Result{}, err
 	}
-	if err := h.coordinator.Cancel(id); err != nil {
+	turnRef := agent.TurnRefFromContext(ctx)
+	handle, err := h.coordinator.ResumeRef(ctx, agent.AgentRef{SessionID: turnRef.SessionID, AgentID: id}, turnRef)
+	if err != nil {
+		return tool.Result{}, classifyAgentError("resume subagent", err)
+	}
+	status, _ := h.coordinator.GetRef(agent.AgentRef{SessionID: turnRef.SessionID, AgentID: handle.ID})
+	return agentJSONResult(call, fmt.Sprintf("resumed %s as %s", id, handle.ID), map[string]any{
+		"resumed_from": id, "agent_id": handle.ID, "profile": handle.Profile, "status": status.State,
+	})
+}
+
+func (h agentLifecycleHandler) cancel(ctx context.Context, call tool.Call) (tool.Result, error) {
+	id, err := decodeAgentID(call)
+	if err != nil {
+		return tool.Result{}, err
+	}
+	if err := h.coordinator.CancelRef(agent.AgentRef{SessionID: agent.SessionIDFromContext(ctx), AgentID: id}); err != nil {
 		return tool.Result{}, classifyAgentError("cancel subagent", err)
 	}
-	status, result, _ := h.coordinator.Lookup(id)
+	status, result, _ := h.coordinator.LookupRef(agent.AgentRef{SessionID: agent.SessionIDFromContext(ctx), AgentID: id})
 	return agentJSONResult(call, fmt.Sprintf("cancel requested · %s · %s", status.ID, status.State), map[string]any{"agent": status, "result": resultPayload(result)})
 }
 
@@ -168,6 +199,9 @@ func invalidArgs(message string, err error) error {
 func classifyAgentError(message string, err error) error {
 	if errors.Is(err, agent.ErrNotFound) {
 		return tool.WrapToolError(tool.ErrorCodeNotFound, message, err)
+	}
+	if errors.Is(err, agent.ErrNotResumable) {
+		return tool.WrapToolError(tool.ErrorCodeConflict, message, err)
 	}
 	if errors.Is(err, context.Canceled) {
 		return tool.WrapToolError(tool.ErrorCodeCanceled, message, err)

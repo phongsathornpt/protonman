@@ -44,6 +44,11 @@ func WithSessions(sessions *app.Sessions) Option {
 	return func(server *Server) { server.sessionService = sessions }
 }
 
+// WithAgents supplies shared subagent lifecycle control, scoped per ACP session.
+func WithAgents(agents app.Agents) Option {
+	return func(server *Server) { server.agents = agents }
+}
+
 // WithRunnerFactory supplies isolated runners for ACP sessions. The factory
 // receives the session-local tool-call service so model-driven calls do not
 // share permission state with other sessions.
@@ -71,6 +76,7 @@ type Server struct {
 	sessionRegistryFactory SessionRegistryFactory
 	mcpRegistryConfigurer  MCPRegistryConfigurer
 	sessionService         *app.Sessions
+	agents                 app.Agents
 
 	mu       sync.Mutex
 	writeMu  sync.Mutex
@@ -566,7 +572,7 @@ func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, m
 		}
 		runner = created
 	}
-	sess := NewSession(sessionID, cwd, service, registry, runner, s.sessionService)
+	sess := NewSession(sessionID, cwd, service, registry, runner, s.sessionService, s.agents.ForSession(sessionID))
 	sess.mcpServers = cloneMCPServerConfigs(mcpServers)
 	sess.resource = mcpResource
 	return sess, nil
@@ -614,13 +620,22 @@ func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, e
 }
 
 func (s *Server) deleteSession(ctx context.Context, sessionID string) error {
+	s.mu.Lock()
+	sess := s.sessions[sessionID]
+	s.mu.Unlock()
+	if sess != nil {
+		sess.Cancel()
+	}
+	if _, err := s.agents.ForSession(sessionID).CancelSessionAndWait(ctx); err != nil {
+		return fmt.Errorf("cancel session subagents %q: %w", sessionID, err)
+	}
 	if s.sessionService != nil {
 		if err := s.sessionService.Delete(ctx, sessionID); err != nil {
 			return fmt.Errorf("delete session state %q: %w", sessionID, err)
 		}
 	}
 	s.mu.Lock()
-	sess := s.sessions[sessionID]
+	sess = s.sessions[sessionID]
 	delete(s.sessions, sessionID)
 	s.mu.Unlock()
 	if sess != nil {

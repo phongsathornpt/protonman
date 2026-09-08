@@ -8,11 +8,11 @@ const (
 	AgentQueueTimeout                 = 30 * time.Second
 	AgentMaxLive                      = 16
 	AgentMaxRetained                  = 64
-	AgentResultTTL                    = 10 * time.Minute
+	AgentResultTTL                    = 24 * time.Hour
 	TurnMaxToolCalls                  = 100
 	TurnToolResultBytesPerRound       = 4 * 1024 * 1024
 	TurnToolResultBytesPerTurn        = 12 * 1024 * 1024
-	TurnTimeout                       = 10 * time.Minute
+	TurnTimeout                       = time.Duration(0)
 	RoundTimeout                      = 5 * time.Minute
 	ToolPermissionTimeout             = 2 * time.Minute
 	ToolExecutionTimeout              = 2 * time.Minute

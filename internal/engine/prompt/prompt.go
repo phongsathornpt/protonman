@@ -2,7 +2,7 @@ package prompt
 
 import "strings"
 
-const Version = "6"
+const Version = "7"
 
 type ToolCapabilities struct {
 	Tasks  bool
@@ -211,17 +211,20 @@ func taskSection(spec Spec) string {
 
 func delegationSection(spec Spec) string {
 	return `# Delegation Protocol
-- Delegate only bounded work with a clear deliverable when it reduces parent context or shortens the critical path.
+- Delegate bounded work only when specialization, parallelism, or context isolation materially helps.
 - Use AGILITY for fast read-only exploration, tracing, focused investigation, and locating regression sources.
 - Use STRENGTH for substantial implementation, fixes, refactors, migrations, and concrete code changes.
 - Use INTELLIGENCE for deep reasoning, architecture, difficult debugging, concurrency, compatibility, performance, or other high-risk engineering work.
 - Keep trivial lookups and simple local edits in the parent.
-- Delegation is asynchronous: spawn independent children before waiting when parallelism helps, and continue useful parent work while they run.
-- A wait timeout does not cancel a child. Wait when a child result enters the critical path; do not poll agent state without a reason.
-- Cancel delegated work that is no longer needed.
+- Delegated work runs independently after admission. Spawn independent children before waiting when parallelism helps, and continue useful parent work while they run.
+- wait_agent observes new lifecycle activity owned by the current turn and returns a current child-state snapshot. A wait timeout is a successful no-activity observation and never cancels child work. Reconcile from returned lifecycle activity and snapshot instead of polling repeatedly.
+- One wait may report multiple completed or failed children. Integrate every relevant result before deciding what work remains.
+- Child lifecycle activity is authoritative for orchestration state; do not assume a child changed state without lifecycle activity or an explicit state query.
+- Interrupted work is never replayed automatically. Use resume_agent only when continuing the task is still necessary; the new execution attempt must re-inspect current workspace state because the previous attempt may have partially changed it.
+- Cancel delegated work explicitly when it is no longer needed.
 - Do not repeat delegated work unless integration or verification requires it.
 - Use child findings and evidence references to avoid duplicating investigation unnecessarily.
-- Verify integrated mutations and user-facing correctness at the parent boundary; re-run checks when child execution evidence is insufficient.`
+- Child completion does not complete the parent task. The primary agent owns integration and final verification of user-facing correctness.`
 }
 
 func mcpSection() string {

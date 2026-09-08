@@ -133,11 +133,11 @@ func TestBuiltinToolSSOTContract(t *testing.T) {
 		},
 		{
 			name:            "wait_agent",
-			args:            map[string]any{"agent_id": "agent-99"},
+			args:            map[string]any{"timeout_seconds": 30},
 			wantKind:        tool.KindAgent,
-			wantDisplayName: "Wait agent",
-			targetSub:       "agent-99",
-			titlePrefix:     "Wait for agent agent-99",
+			wantDisplayName: "Wait for agents",
+			targetSub:       "agent activity",
+			titlePrefix:     "Wait for agent activity",
 		},
 		{
 			name:            "get_agent",

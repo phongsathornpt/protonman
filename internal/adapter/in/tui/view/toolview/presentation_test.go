@@ -411,11 +411,14 @@ func TestAgentToolPresentation(t *testing.T) {
 	if got := SummarizeOutput("delegate_task", kind, target, `{"agent_id":"explorer-7","status":"queued"}`, nil, false); got != "spawned explorer-7 · queued" {
 		t.Fatalf("spawn summary=%q", got)
 	}
-	if got := SummarizeOutput("wait_agent", kind, "explorer-7", `{"agent_id":"explorer-7","status":"running","result":null}`, nil, false); got != "waiting for explorer-7 · running" {
-		t.Fatalf("wait summary=%q", got)
+	if got := SummarizeOutput("wait_agent", kind, "", `{"timed_out":true,"event":null,"agents":[]}`, nil, false); got != "no new agent activity" {
+		t.Fatalf("wait timeout summary=%q", got)
 	}
-	if got := SummarizeOutput("wait_agent", kind, "explorer-7", `{"agent_id":"explorer-7","status":"completed","result":{"summary":"Found duplicate router branches in provider.go"}}`, nil, false); !strings.Contains(got, "Found duplicate router branches") {
+	if got := SummarizeOutput("wait_agent", kind, "", `{"timed_out":false,"event":{"kind":"agent_completed","agent_id":"explorer-7"},"agents":[]}`, nil, false); got != "explorer-7 · agent_completed" {
 		t.Fatalf("completed wait summary=%q", got)
+	}
+	if got := SummarizeOutput("wait_agent", kind, "", `{"timed_out":false,"event":{"kind":"agent_failed","agent_id":"strength-8"},"events":[{"kind":"agent_completed","agent_id":"explorer-7"},{"kind":"agent_failed","agent_id":"strength-8"}],"agents":[]}`, nil, false); got != "2 agent lifecycle events" {
+		t.Fatalf("batched wait summary=%q", got)
 	}
 	if got := SummarizeOutput("list_agents", kind, "subagents", `{"agents":[{"id":"a","state":"canceling"},{"id":"b","state":"completed"}]}`, nil, false); got != "2 agents · 1 active" {
 		t.Fatalf("canceling list summary=%q", got)
@@ -452,5 +455,15 @@ func TestLongPatternTruncation(t *testing.T) {
 	rendered := FormatPath(longTarget)
 	if !strings.Contains(rendered, "…") {
 		t.Fatalf("expected long target to be truncated with ellipsis, got: %s", rendered)
+	}
+}
+
+func TestSummarizeAgentResume(t *testing.T) {
+	got := SummarizeOutput("resume_agent", tool.KindAgent, "strength-4", `{"resumed_from":"strength-4","agent_id":"strength-9","profile":"strength","status":"queued"}`, nil, false)
+	if got != "resumed strength-4 as strength-9 · queued" {
+		t.Fatalf("summary = %q", got)
+	}
+	if !IsAgentLifecycleTool("resume_agent") {
+		t.Fatal("resume_agent should be treated as lifecycle presentation")
 	}
 }
