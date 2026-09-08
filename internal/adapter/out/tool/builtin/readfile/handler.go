@@ -37,9 +37,9 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 		input.View = "auto"
 	}
 	switch input.View {
-	case "auto", "text", "image", "structured", "metadata":
+	case "auto", "text", "source", "image", "structured", "metadata":
 	default:
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file view must be auto, text, image, structured, or metadata")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file view must be auto, text, source, image, structured, or metadata")
 	}
 	if input.Offset < 0 {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file offset must be non-negative")
@@ -65,6 +65,12 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	}
 	if input.Limit == 0 {
 		input.Limit = MaxReadFileBytes
+	}
+	if input.View == "source" {
+		if input.Offset != 0 || input.Continuation != "" || lineMode {
+			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file source view cannot be combined with text pagination or line selection")
+		}
+		return h.readSource(ctx, input, call)
 	}
 	path, err := h.workspace.ResolveExistingRead(ctx, input.Path)
 	if err != nil {
