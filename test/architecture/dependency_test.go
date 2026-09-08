@@ -90,6 +90,35 @@ func TestTUIDoesNotDependOnProjectDirectly(t *testing.T) {
 	})
 }
 
+func TestTUIStyleAndTextViewDependenciesStayAcyclic(t *testing.T) {
+	packages := listPackages(t)
+	stylePath := modulePath + "/internal/adapter/in/tui/style"
+	textPath := modulePath + "/internal/adapter/in/tui/textview"
+
+	stylePkg, ok := packages[stylePath]
+	if !ok {
+		t.Fatalf("package %s not found", stylePath)
+	}
+	for _, imported := range stylePkg.Imports {
+		if strings.HasPrefix(imported, modulePath+"/internal/") || strings.HasPrefix(imported, modulePath+"/cmd/") {
+			t.Errorf("TUI style leaf imports application package %s", imported)
+		}
+	}
+
+	textPkg, ok := packages[textPath]
+	if !ok {
+		t.Fatalf("package %s not found", textPath)
+	}
+	for _, imported := range textPkg.Imports {
+		if imported == stylePath {
+			continue
+		}
+		if strings.HasPrefix(imported, modulePath+"/internal/") || strings.HasPrefix(imported, modulePath+"/cmd/") {
+			t.Errorf("TUI textview imports forbidden application package %s", imported)
+		}
+	}
+}
+
 func TestTUIExecViewIsPresentationLeaf(t *testing.T) {
 	packages := listPackages(t)
 	pkgPath := modulePath + "/internal/adapter/in/tui/execview"

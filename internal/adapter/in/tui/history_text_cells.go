@@ -101,12 +101,12 @@ func (c *AssistantCell) renderAssistantIncremental(text string, width int) []str
 	stableLen := len(cache.decorated)
 	state := cache.state
 	tail := text[completeEnd:]
-	if tail == "" && !state.inFence {
+	if tail == "" && !state.InFence() {
 		for stableLen > 0 && cache.lines[stableLen-1] == "" {
 			stableLen--
 		}
 	}
-	if tail == "" && !state.inFence {
+	if tail == "" && !state.InFence() {
 		return cache.decorated[:stableLen]
 	}
 	out := append([]string(nil), cache.decorated[:stableLen]...)
@@ -114,7 +114,7 @@ func (c *AssistantCell) renderAssistantIncremental(text string, width int) []str
 		tailLines := renderMarkdownLine(tail, width, &state)
 		out = append(out, decorateAssistantLines(tailLines, stableLen)...)
 	}
-	if state.inFence {
+	if state.InFence() {
 		marker := markdownCodeStyle.Render("  └─ code (unterminated)")
 		out = append(out, assistantDecoratedLine(marker, len(out)))
 	}
@@ -132,7 +132,7 @@ func (c *AssistantCell) renderMarkdownIncremental(text string, width int) []stri
 	if tail := text[completeEnd:]; tail != "" {
 		out = append(out, renderMarkdownLine(tail, width, &state)...)
 	}
-	if state.inFence {
+	if state.InFence() {
 		out = append(out, markdownCodeStyle.Render("  └─ code (unterminated)"))
 	}
 	return trimTrailingBlankLines(out)
