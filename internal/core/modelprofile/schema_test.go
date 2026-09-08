@@ -80,3 +80,38 @@ func TestPublishInputSchemaLowersZeroArgumentToolForGemini(t *testing.T) {
 		t.Fatalf("canonical schema was mutated: %#v", canonical)
 	}
 }
+
+func TestPublishInputSchemaPreservesUnifiedReadFileSourceFieldsForGemini(t *testing.T) {
+	canonical := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"path":  map[string]any{"type": "string"},
+			"view":  map[string]any{"type": "string", "enum": []string{"auto", "text", "source", "image", "structured", "metadata"}},
+			"query": map[string]any{"type": "string"},
+			"mode":  map[string]any{"type": "string", "enum": []string{"literal", "regex"}},
+			"context": map[string]any{"type": "object", "properties": map[string]any{
+				"before": map[string]any{"type": "integer"},
+				"after":  map[string]any{"type": "integer"},
+			}},
+		},
+		"required": []string{"path"},
+	}
+	published := PublishInputSchema(Resolved{Compatibility: CompatibilityPolicy{ToolSchemaDialect: ToolSchemaGeminiSubset}}, canonical)
+	props := published["properties"].(map[string]any)
+	view := props["view"].(map[string]any)
+	values, ok := view["enum"].([]string)
+	if !ok || !reflect.DeepEqual(values, []string{"auto", "text", "source", "image", "structured", "metadata"}) {
+		t.Fatalf("published view enum = %#v", view["enum"])
+	}
+	contextSchema, ok := props["context"].(map[string]any)
+	if !ok {
+		t.Fatalf("published context schema = %#v", props["context"])
+	}
+	contextProps, ok := contextSchema["properties"].(map[string]any)
+	if !ok || contextProps["before"] == nil || contextProps["after"] == nil {
+		t.Fatalf("published context properties = %#v", contextSchema["properties"])
+	}
+	if props["query"] == nil || props["mode"] == nil {
+		t.Fatalf("published source fields missing: %#v", props)
+	}
+}
