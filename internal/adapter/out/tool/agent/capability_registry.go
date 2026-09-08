@@ -57,9 +57,13 @@ func (r *CapabilityRegistry) Definitions() []tool.Definition {
 	out := make([]tool.Definition, 0, len(base))
 	enabled, hasAgents := r.capabilityState()
 	for _, def := range base {
-		if visibleSubagentTool(def.Name, enabled, hasAgents) {
-			out = append(out, def)
+		if !visibleSubagentTool(def.Name, enabled, hasAgents) {
+			continue
 		}
+		if tool.CanonicalName(def.Name) == "subagent" && !enabled {
+			def = lifecycleOnlySubagentDefinition(def)
+		}
+		out = append(out, def)
 	}
 	return out
 }
@@ -95,23 +99,30 @@ func (r *CapabilityRegistry) capabilityState() (enabled, hasAgents bool) {
 }
 
 func visibleSubagentTool(name string, enabled, hasAgents bool) bool {
-	if !isSubagentTool(name) {
+	if tool.CanonicalName(name) != "subagent" {
 		return true
-	}
-	if name == "subagent" {
-		return enabled || hasAgents
-	}
-	if name == "delegate_task" || name == "resume_agent" {
-		return enabled
 	}
 	return enabled || hasAgents
 }
 
-func isSubagentTool(name string) bool {
-	switch name {
-	case "subagent", "delegate_task", "wait_agent", "get_agent", "list_agents", "cancel_agent", "resume_agent":
-		return true
-	default:
-		return false
+func lifecycleOnlySubagentDefinition(def tool.Definition) tool.Definition {
+	input := make(map[string]any, len(def.InputSchema))
+	for key, value := range def.InputSchema {
+		input[key] = value
 	}
+	properties, _ := def.InputSchema["properties"].(map[string]any)
+	nextProperties := make(map[string]any, len(properties))
+	for key, value := range properties {
+		nextProperties[key] = value
+	}
+	action, _ := properties["action"].(map[string]any)
+	nextAction := make(map[string]any, len(action))
+	for key, value := range action {
+		nextAction[key] = value
+	}
+	nextAction["enum"] = []string{"wait", "get", "list", "cancel"}
+	nextProperties["action"] = nextAction
+	input["properties"] = nextProperties
+	def.InputSchema = input
+	return def
 }

@@ -21,61 +21,61 @@ type waitAgentInput struct {
 }
 
 type agentLifecycleHandler struct {
-	name        string
+	action      subagentAction
 	coordinator *agent.Coordinator
 }
 
 func NewWaitAgent(c *agent.Coordinator) tool.Handler {
-	return agentLifecycleHandler{name: "wait_agent", coordinator: c}
+	return agentLifecycleHandler{action: subagentActionWait, coordinator: c}
 }
 func NewGetAgent(c *agent.Coordinator) tool.Handler {
-	return agentLifecycleHandler{name: "get_agent", coordinator: c}
+	return agentLifecycleHandler{action: subagentActionGet, coordinator: c}
 }
 func NewListAgents(c *agent.Coordinator) tool.Handler {
-	return agentLifecycleHandler{name: "list_agents", coordinator: c}
+	return agentLifecycleHandler{action: subagentActionList, coordinator: c}
 }
 func NewCancelAgent(c *agent.Coordinator) tool.Handler {
-	return agentLifecycleHandler{name: "cancel_agent", coordinator: c}
+	return agentLifecycleHandler{action: subagentActionCancel, coordinator: c}
 }
 func NewResumeAgent(c *agent.Coordinator) tool.Handler {
-	return agentLifecycleHandler{name: "resume_agent", coordinator: c}
+	return agentLifecycleHandler{action: subagentActionResume, coordinator: c}
 }
 
 func (h agentLifecycleHandler) Definition() tool.Definition {
-	def := tool.Definition{Name: h.name, Kind: tool.KindForName(h.name), ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded}
-	switch h.name {
-	case "wait_agent":
+	def := tool.Definition{Name: "subagent", Kind: tool.KindAgent, ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded}
+	switch h.action {
+	case subagentActionWait:
 		def.Description = "Wait for the next subagent completion/failure activity. A wait timeout is non-fatal and never cancels children."
 		def.Mutability = tool.MutabilityReadOnly
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
 		def.InputSchema = map[string]any{"type": "object", "properties": map[string]any{
 			"timeout_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 3600},
 		}, "additionalProperties": false}
-	case "get_agent":
+	case subagentActionGet:
 		def.Description = "Inspect one retained subagent and its terminal result when available."
 		def.Mutability = tool.MutabilityReadOnly
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
 		def.PermissionDetailKey = "agent_id"
 		def.InputSchema = agentIDSchema()
-	case "list_agents":
+	case subagentActionList:
 		def.Description = "List retained subagents and their lifecycle states."
 		def.Mutability = tool.MutabilityReadOnly
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
 		def.InputSchema = tool.NoArgumentsSchema()
-	case "resume_agent":
+	case subagentActionResume:
 		def.Description = "Explicitly restart an interrupted retained subagent as a fresh child after re-checking current workspace state."
 		def.Mutability = tool.MutabilityMutating
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainAgentState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
 		def.PermissionDetailKey = "agent_id"
 		def.InputSchema = agentIDSchema()
-	case "cancel_agent":
+	case subagentActionCancel:
 		def.Description = "Explicitly cancel a queued or running subagent."
 		def.Mutability = tool.MutabilityMutating
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainAgentState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
 		def.PermissionDetailKey = "agent_id"
 		def.InputSchema = agentIDSchema()
 	}
-	def.OutputSchema = agentLifecycleOutputSchema(h.name)
+	def.OutputSchema = agentLifecycleOutputSchema(h.action)
 	return def
 }
 
@@ -89,16 +89,16 @@ func (h agentLifecycleHandler) Execute(ctx context.Context, call tool.Call) (too
 	if h.coordinator == nil {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeExecution, "subagent coordinator is not configured")
 	}
-	switch h.name {
-	case "wait_agent":
+	switch h.action {
+	case subagentActionWait:
 		return h.wait(ctx, call)
-	case "get_agent":
+	case subagentActionGet:
 		return h.get(ctx, call)
-	case "list_agents":
+	case subagentActionList:
 		return h.list(ctx, call)
-	case "resume_agent":
+	case subagentActionResume:
 		return h.resume(ctx, call)
-	case "cancel_agent":
+	case subagentActionCancel:
 		return h.cancel(ctx, call)
 	default:
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeExecution, "unknown agent lifecycle handler")
@@ -108,7 +108,7 @@ func (h agentLifecycleHandler) Execute(ctx context.Context, call tool.Call) (too
 func (h agentLifecycleHandler) wait(ctx context.Context, call tool.Call) (tool.Result, error) {
 	var in waitAgentInput
 	if err := json.Unmarshal(call.Arguments, &in); err != nil {
-		return tool.Result{}, invalidArgs("decode wait_agent arguments", err)
+		return tool.Result{}, invalidArgs("decode subagent wait arguments", err)
 	}
 	if in.TimeoutSeconds < 0 || in.TimeoutSeconds > 3600 {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "timeout_seconds must be between 0 and 3600 when provided")

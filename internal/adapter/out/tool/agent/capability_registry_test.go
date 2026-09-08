@@ -18,7 +18,7 @@ func (r capabilityTestRegistry) Lookup(name string) (tool.Handler, bool) {
 }
 func (r capabilityTestRegistry) Definitions() []tool.Definition {
 	defs := make([]tool.Definition, 0, len(r.handlers))
-	for _, name := range []string{"delegate_task", "wait_agent", "get_agent", "list_agents", "cancel_agent"} {
+	for _, name := range []string{"subagent"} {
 		if h, ok := r.handlers[name]; ok {
 			defs = append(defs, h.Definition())
 		}
@@ -30,15 +30,11 @@ func TestCapabilityRegistryHidesSubagentToolsWhenDisabledAndIdle(t *testing.T) {
 	coord := agent.NewCoordinator(nil, nil, nil, nil, agent.WithEnabled(false))
 	defer coord.Close()
 	base := capabilityTestRegistry{handlers: map[string]tool.Handler{
-		"delegate_task": NewDelegateTask(coord), "wait_agent": NewWaitAgent(coord), "get_agent": NewGetAgent(coord),
-		"list_agents": NewListAgents(coord), "cancel_agent": NewCancelAgent(coord),
+		"subagent": NewSubagent(coord),
 	}}
 	reg := NewCapabilityRegistry(base, coord)
 	if got := reg.Definitions(); len(got) != 0 {
 		t.Fatalf("definitions = %d, want 0", len(got))
-	}
-	if _, ok := reg.Lookup("delegate_task"); ok {
-		t.Fatal("delegate_task should be hidden")
 	}
 }
 
@@ -51,17 +47,11 @@ func TestCapabilityRegistryKeepsLifecycleToolsForExistingAgents(t *testing.T) {
 	}
 	coord.SetEnabled(false)
 	base := capabilityTestRegistry{handlers: map[string]tool.Handler{
-		"delegate_task": NewDelegateTask(coord), "wait_agent": NewWaitAgent(coord), "get_agent": NewGetAgent(coord),
-		"list_agents": NewListAgents(coord), "cancel_agent": NewCancelAgent(coord),
+		"subagent": NewSubagent(coord),
 	}}
 	reg := NewCapabilityRegistry(base, coord)
-	if _, ok := reg.Lookup("delegate_task"); ok {
-		t.Fatal("delegate_task should be hidden after disable")
-	}
-	for _, name := range []string{"wait_agent", "get_agent", "list_agents", "cancel_agent"} {
-		if _, ok := reg.Lookup(name); !ok {
-			t.Fatalf("%s should remain visible for %s", name, h.ID)
-		}
+	if _, ok := reg.Lookup("subagent"); !ok {
+		t.Fatalf("subagent should remain visible for %s", h.ID)
 	}
 }
 
@@ -102,12 +92,12 @@ func TestCapabilityRegistryPreservesDynamicRegistrar(t *testing.T) {
 	if !ok {
 		t.Fatal("capability registry dropped DynamicRegistrar")
 	}
-	h := NewListAgents(coord)
+	h := NewSubagent(coord)
 	if err := dynamic.Register(h); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := reg.Lookup("list_agents"); !ok {
-		t.Fatal("dynamically registered handler is not visible")
+	if _, ok := reg.Lookup("subagent"); !ok {
+		t.Fatal("dynamically registered subagent handler is not visible")
 	}
 }
 
@@ -122,7 +112,7 @@ func TestCapabilityRegistryPreservesCompiledValidatorsForVisibleTools(t *testing
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
 	defer coord.Close()
 	base := compiledCapabilityTestRegistry{capabilityTestRegistry{handlers: map[string]tool.Handler{
-		"list_agents": NewListAgents(coord),
+		"subagent": NewSubagent(coord),
 	}}}
 	reg := NewCapabilityRegistry(base, coord)
 	compiled, ok := reg.(interface {
@@ -131,11 +121,11 @@ func TestCapabilityRegistryPreservesCompiledValidatorsForVisibleTools(t *testing
 	if !ok {
 		t.Fatal("capability registry dropped compiled validator cache")
 	}
-	if _, _, found := compiled.CompiledValidators("list_agents"); !found {
-		t.Fatal("visible tool did not preserve compiled validators")
+	if _, _, found := compiled.CompiledValidators("subagent"); !found {
+		t.Fatal("visible subagent did not preserve compiled validators")
 	}
 	coord.SetEnabled(false)
-	if _, _, found := compiled.CompiledValidators("list_agents"); found {
-		t.Fatal("hidden tool exposed cached validators")
+	if _, _, found := compiled.CompiledValidators("subagent"); found {
+		t.Fatal("hidden subagent exposed cached validators")
 	}
 }

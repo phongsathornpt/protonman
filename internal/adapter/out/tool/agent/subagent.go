@@ -10,6 +10,17 @@ import (
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
+type subagentAction string
+
+const (
+	subagentActionSpawn  subagentAction = "spawn"
+	subagentActionWait   subagentAction = "wait"
+	subagentActionGet    subagentAction = "get"
+	subagentActionList   subagentAction = "list"
+	subagentActionCancel subagentAction = "cancel"
+	subagentActionResume subagentAction = "resume"
+)
+
 type subagentHandler struct {
 	spawn  tool.Handler
 	wait   tool.Handler
@@ -44,11 +55,11 @@ func (h subagentHandler) Definition() tool.Definition {
 		OutputSchema: map[string]any{
 			"oneOf": []any{
 				withActionSchema(delegateTaskOutputSchema()),
-				withActionSchema(agentLifecycleOutputSchema("wait_agent")),
-				withActionSchema(agentLifecycleOutputSchema("get_agent")),
-				withActionSchema(agentLifecycleOutputSchema("list_agents")),
-				withActionSchema(agentLifecycleOutputSchema("cancel_agent")),
-				withActionSchema(agentLifecycleOutputSchema("resume_agent")),
+				withActionSchema(agentLifecycleOutputSchema(subagentActionWait)),
+				withActionSchema(agentLifecycleOutputSchema(subagentActionGet)),
+				withActionSchema(agentLifecycleOutputSchema(subagentActionList)),
+				withActionSchema(agentLifecycleOutputSchema(subagentActionCancel)),
+				withActionSchema(agentLifecycleOutputSchema(subagentActionResume)),
 			},
 		},
 	}

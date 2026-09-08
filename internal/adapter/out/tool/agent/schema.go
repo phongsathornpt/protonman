@@ -82,9 +82,9 @@ func delegateTaskOutputSchema() map[string]any {
 	}
 }
 
-func agentLifecycleOutputSchema(name string) map[string]any {
-	switch name {
-	case "wait_agent":
+func agentLifecycleOutputSchema(action subagentAction) map[string]any {
+	switch action {
+	case "wait":
 		return map[string]any{"type": "object", "properties": map[string]any{
 			"timed_out": map[string]any{"type": "boolean"},
 			"event":     map[string]any{"type": []any{"object", "null"}},
@@ -93,13 +93,13 @@ func agentLifecycleOutputSchema(name string) map[string]any {
 			"truncated": map[string]any{"type": "boolean"},
 			"agents":    map[string]any{"type": "array", "items": agentStatusSchema()},
 		}, "required": []any{"timed_out", "event", "events", "cursor", "truncated", "agents"}, "additionalProperties": false}
-	case "resume_agent":
+	case "resume":
 		return resumeAgentOutputSchema()
-	case "get_agent", "cancel_agent":
+	case "get", "cancel":
 		return map[string]any{"type": "object", "properties": map[string]any{
 			"agent": agentStatusSchema(), "result": agentResultSchema(),
 		}, "required": []any{"agent", "result"}, "additionalProperties": false}
-	case "list_agents":
+	case "list":
 		return map[string]any{"type": "object", "properties": map[string]any{
 			"agents": map[string]any{"type": "array", "items": agentStatusSchema()},
 		}, "required": []any{"agents"}, "additionalProperties": false}
