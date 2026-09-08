@@ -154,12 +154,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install published release asset
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           install_dir="$RUNNER_TEMP/protonman-bin"
-          curl -fsSL "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/install.sh" \
+          curl -fsSL --retry 6 --retry-all-errors --retry-delay 2 \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/install.sh" \
             | sh -s -- --version "$GITHUB_REF_NAME" --bin-dir "$install_dir"
           expected="Protonman ${GITHUB_REF_NAME#v}"
           test "$("$install_dir/protonman" --version)" = "$expected"
@@ -168,6 +167,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/install.sh" >/tmp/protonman-install.sh
+          curl -fsSL --retry 6 --retry-all-errors --retry-delay 2 \
+            "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/install.sh" \
+            >/tmp/protonman-install.sh
           test -s /tmp/protonman-install.sh
           grep -q 'Install Protonman from GitHub Releases.' /tmp/protonman-install.sh
