@@ -26,6 +26,7 @@ const (
 	KindQuotaExceeded    Kind = "quota_exceeded"
 	KindServerOverloaded Kind = "server_overloaded"
 	KindStreamTimeout    Kind = "stream_timeout"
+	KindRuntimeTimeout   Kind = "runtime_timeout"
 	KindInvalidPrompt    Kind = "invalid_prompt"
 	KindMCPFailed        Kind = "mcp_failed"
 	KindConfigInvalid    Kind = "config_invalid"
@@ -478,28 +479,53 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	// 13. Timeout & Stream Errors
+	// 13. Provider transport and stream failures. Keep this narrow: local
+	// operation deadlines must not be presented as network failures.
+	lowerRaw := strings.ToLower(raw)
 	if strings.Contains(raw, "ProviderHeaderTimeoutError") ||
 		strings.Contains(raw, "ProviderResponseStreamError") ||
-		strings.Contains(strings.ToLower(raw), "deadline exceeded") ||
-		strings.Contains(strings.ToLower(raw), "timeout") ||
+		strings.Contains(lowerRaw, "client.timeout") ||
+		strings.Contains(lowerRaw, "i/o timeout") ||
+		strings.Contains(lowerRaw, "tls handshake timeout") ||
+		strings.Contains(lowerRaw, "dial tcp") && strings.Contains(lowerRaw, "timeout") ||
 		strings.Contains(raw, "unexpected EOF") ||
-		strings.Contains(raw, "connection reset") {
+		strings.Contains(lowerRaw, "connection reset") {
 		return Error{
 			Kind:    KindStreamTimeout,
 			Title:   "Connection / Stream Timeout",
 			Badge:   "TIMEOUT",
 			Message: "The network connection timed out or the provider stream disconnected unexpectedly.",
 			Suggestions: []string{
-				"Check your internet connection and verify endpoint availability",
-				"Retry your prompt",
+				"Check endpoint availability and provider status",
+				"Retry the request",
 			},
 			RawDetails: raw,
 			Retryable:  true,
 		}
 	}
 
-	// 14. MCP Server Failures (MCPFailed)
+	// 14. Local/runtime deadline. This is deliberately separate from provider
+	// transport failures so a bounded turn, tool, or agent operation never tells
+	// the user to inspect their internet connection.
+	if errors.Is(err, context.DeadlineExceeded) ||
+		strings.Contains(lowerRaw, "deadline exceeded") ||
+		strings.Contains(lowerRaw, "timed out") ||
+		strings.Contains(lowerRaw, "timeout") {
+		return Error{
+			Kind:    KindRuntimeTimeout,
+			Title:   "Operation Timeout",
+			Badge:   "TIMEOUT",
+			Message: "A bounded operation reached its execution deadline.",
+			Suggestions: []string{
+				"Retry the operation if it is still required",
+				"Inspect the active tool or agent state before repeating work",
+			},
+			RawDetails: raw,
+			Retryable:  true,
+		}
+	}
+
+	// 15. MCP Server Failures (MCPFailed)
 	if strings.Contains(raw, "MCPFailed") || strings.Contains(raw, "MCP server") {
 		serverName := "server"
 		if m := regexp.MustCompile(`MCP server ["']?([^"'\s]+)["']? failed`).FindStringSubmatch(raw); len(m) > 1 {
