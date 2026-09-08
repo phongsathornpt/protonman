@@ -25,10 +25,11 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	if err := req.Validate(); err != nil {
 		return Handle{}, fmt.Errorf("invalid subagent request: %w", err)
 	}
-	if !c.Enabled() {
+	c.agentsMu.Lock()
+	if !c.enabled.Load() {
+		c.agentsMu.Unlock()
 		return Handle{}, ErrSubagentsDisabled
 	}
-	c.agentsMu.Lock()
 	if c.closed.Load() {
 		c.agentsMu.Unlock()
 		return Handle{}, ErrCoordinatorClosed
@@ -65,10 +66,12 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 		started: make(chan struct{}),
 	}
 	c.agents[id] = entry
+	// Add while admission is still serialized with Close so Wait can never
+	// observe a zero counter for a child that has already been admitted.
+	c.wg.Add(1)
 	c.agentsMu.Unlock()
 
 	c.emit(runCtx, Event{Kind: EventAgentQueued, AgentID: id, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task})
-	c.wg.Add(1)
 	go c.runEntry(runCtx, entry, req, queuedAt)
 	return Handle{ID: id, Profile: req.Profile}, nil
 }

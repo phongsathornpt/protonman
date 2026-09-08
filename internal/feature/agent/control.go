@@ -10,7 +10,16 @@ import (
 )
 
 // SetEnabled controls whether new subagents may be spawned. It never cancels existing agents.
-func (c *Coordinator) SetEnabled(enabled bool) { c.enabled.Store(enabled) }
+// The coordinator lock linearizes capability changes with Spawn admission: once
+// disabling returns, no later admission can have observed the previous state.
+func (c *Coordinator) SetEnabled(enabled bool) {
+	if c == nil {
+		return
+	}
+	c.agentsMu.Lock()
+	c.enabled.Store(enabled)
+	c.agentsMu.Unlock()
+}
 
 // Enabled reports whether new subagents may be spawned.
 func (c *Coordinator) Enabled() bool { return c != nil && c.enabled.Load() }
