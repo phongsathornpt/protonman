@@ -47,6 +47,7 @@ func agentLifecycleService(t *testing.T, coord *agent.Coordinator) *toolcall.Ser
 		agenttool.NewGetAgent(coord),
 		agenttool.NewListAgents(coord),
 		agenttool.NewCancelAgent(coord),
+		agenttool.NewResumeAgent(coord),
 	)
 	if err != nil {
 		t.Fatal(err)

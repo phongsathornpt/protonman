@@ -98,7 +98,7 @@ func visibleSubagentTool(name string, enabled, hasAgents bool) bool {
 	if !isSubagentTool(name) {
 		return true
 	}
-	if name == "delegate_task" {
+	if name == "delegate_task" || name == "resume_agent" {
 		return enabled
 	}
 	return enabled || hasAgents
@@ -106,7 +106,7 @@ func visibleSubagentTool(name string, enabled, hasAgents bool) bool {
 
 func isSubagentTool(name string) bool {
 	switch name {
-	case "delegate_task", "wait_agent", "get_agent", "list_agents", "cancel_agent":
+	case "delegate_task", "wait_agent", "get_agent", "list_agents", "cancel_agent", "resume_agent":
 		return true
 	default:
 		return false

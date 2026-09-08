@@ -98,16 +98,17 @@ func (p Profile) ShortLabel() string {
 type State string
 
 const (
-	StateQueued    State = "queued"
-	StateRunning   State = "running"
-	StateCanceling State = "canceling"
-	StateCompleted State = "completed"
-	StateFailed    State = "failed"
-	StateCanceled  State = "canceled"
+	StateQueued      State = "queued"
+	StateRunning     State = "running"
+	StateCanceling   State = "canceling"
+	StateCompleted   State = "completed"
+	StateFailed      State = "failed"
+	StateCanceled    State = "canceled"
+	StateInterrupted State = "interrupted"
 )
 
 func (s State) Terminal() bool {
-	return s == StateCompleted || s == StateFailed || s == StateCanceled
+	return s == StateCompleted || s == StateFailed || s == StateCanceled || s == StateInterrupted
 }
 
 // Handle identifies a spawned subagent without coupling its lifetime to a caller wait.

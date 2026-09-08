@@ -116,6 +116,7 @@ type AgentStatus struct {
 
 type agentEntry struct {
 	status          AgentStatus
+	request         Request
 	languageModel   sdk.LanguageModel
 	reasoningEffort sdk.ReasoningEffort
 	cancel          context.CancelFunc

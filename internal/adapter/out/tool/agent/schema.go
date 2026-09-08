@@ -5,7 +5,7 @@ import "github.com/phongsathornpt/protonman/internal/feature/agent"
 func agentStateSchema() map[string]any {
 	return map[string]any{"type": "string", "enum": []any{
 		string(agent.StateQueued), string(agent.StateRunning), string(agent.StateCanceling),
-		string(agent.StateCompleted), string(agent.StateFailed), string(agent.StateCanceled),
+		string(agent.StateCompleted), string(agent.StateFailed), string(agent.StateCanceled), string(agent.StateInterrupted),
 	}}
 }
 
@@ -85,6 +85,8 @@ func agentLifecycleOutputSchema(name string) map[string]any {
 			"event":     map[string]any{"type": []any{"object", "null"}},
 			"agents":    map[string]any{"type": "array", "items": agentStatusSchema()},
 		}, "required": []any{"timed_out", "event", "agents"}, "additionalProperties": false}
+	case "resume_agent":
+		return resumeAgentOutputSchema()
 	case "get_agent", "cancel_agent":
 		return map[string]any{"type": "object", "properties": map[string]any{
 			"agent": agentStatusSchema(), "result": agentResultSchema(),
@@ -95,5 +97,19 @@ func agentLifecycleOutputSchema(name string) map[string]any {
 		}, "required": []any{"agents"}, "additionalProperties": false}
 	default:
 		return nil
+	}
+}
+
+func resumeAgentOutputSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"resumed_from": map[string]any{"type": "string"},
+			"agent_id":     map[string]any{"type": "string"},
+			"profile":      map[string]any{"type": "string", "enum": agent.SubagentProfileNames()},
+			"status":       agentStateSchema(),
+		},
+		"required":             []any{"resumed_from", "agent_id", "profile", "status"},
+		"additionalProperties": false,
 	}
 }
