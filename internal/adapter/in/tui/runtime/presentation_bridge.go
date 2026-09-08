@@ -224,6 +224,7 @@ type HistoryCellKind = tuihistory.HistoryCellKind
 type HistoryCell = tuihistory.HistoryCell
 
 type HistoryState = tuihistory.HistoryState
+type ScrollAnchor = tuihistory.ScrollAnchor
 
 type UserCell = tuihistory.UserCell
 

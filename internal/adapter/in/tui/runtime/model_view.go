@@ -137,7 +137,15 @@ func (m *bubbleModel) relayoutIfSlashChanged(bool) {
 	m.relayout()
 }
 
+type viewportScrollSnapshot struct {
+	follow      bool
+	yOffset     int
+	anchor      ScrollAnchor
+	anchorValid bool
+}
+
 func (m *bubbleModel) relayout() {
+	scroll := m.captureViewportScroll()
 	m.syncPromptHeight()
 	chrome := m.chromeHeight()
 	viewportHeight := m.height - chrome
@@ -146,7 +154,7 @@ func (m *bubbleModel) relayout() {
 	}
 	m.viewport.Width = m.width
 	m.viewport.Height = viewportHeight
-	m.refreshViewport()
+	m.refreshViewportWithScroll(scroll)
 }
 
 func (m *bubbleModel) chromeHeight() int {
@@ -171,10 +179,13 @@ func (m *bubbleModel) chromeHeight() int {
 }
 
 func (m *bubbleModel) refreshViewport() {
-	follow := m.followTail || m.viewport.AtBottom()
+	m.refreshViewportWithScroll(m.captureViewportScroll())
+}
+
+func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
 	content := ""
 	tailOnly := false
-	if follow && m.busy && m.historyState.Active() != nil {
+	if scroll.follow && m.busy && m.historyState.Active() != nil {
 		content, tailOnly = m.historyState.RenderTailContent(maxInt(1, m.viewport.Height))
 	}
 	if !tailOnly {
@@ -182,13 +193,47 @@ func (m *bubbleModel) refreshViewport() {
 	}
 	m.viewport.SetContent(content)
 	m.viewportTailOnly = tailOnly
-	if follow {
-		m.viewport.GotoBottom()
-		m.followTail = true
-	}
+	m.restoreViewportScroll(scroll)
 	if m.showTranscript {
 		m.refreshTranscriptViewport(false)
 	}
+}
+
+func (m *bubbleModel) captureViewportScroll() viewportScrollSnapshot {
+	scroll := viewportScrollSnapshot{follow: m.followTail, yOffset: m.viewport.YOffset}
+	if scroll.follow || m.viewportTailOnly || m.historyState == nil {
+		return scroll
+	}
+	historyLine := m.viewport.YOffset - m.historyViewportPrefixLines()
+	if historyLine < 0 {
+		return scroll
+	}
+	scroll.anchor = m.historyState.CaptureScrollAnchor(historyLine)
+	_, scroll.anchorValid = m.historyState.ResolveScrollAnchor(scroll.anchor)
+	return scroll
+}
+
+func (m *bubbleModel) restoreViewportScroll(scroll viewportScrollSnapshot) {
+	if scroll.follow {
+		m.viewport.GotoBottom()
+		m.followTail = true
+		return
+	}
+	m.followTail = false
+	yOffset := scroll.yOffset
+	if scroll.anchorValid && m.historyState != nil {
+		if historyLine, ok := m.historyState.ResolveScrollAnchor(scroll.anchor); ok {
+			yOffset = m.historyViewportPrefixLines() + historyLine
+		}
+	}
+	m.viewport.SetYOffset(yOffset)
+}
+
+func (m *bubbleModel) historyViewportPrefixLines() int {
+	if !m.showWelcome || m.historyState == nil || m.historyState.RenderContent() == "" {
+		return 0
+	}
+	return lipgloss.Height(m.welcomeCard())
 }
 
 func (m *bubbleModel) fullViewportContent() string {

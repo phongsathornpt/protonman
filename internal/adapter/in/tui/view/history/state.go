@@ -1,10 +1,96 @@
 package history
 
 import (
+	"reflect"
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
+
+// ScrollAnchor identifies a logical rendered line inside a history cell. It is
+// intentionally tied to the in-memory cell instance so live mutations can
+// expand or contract earlier cells without moving the user's reading position.
+type ScrollAnchor struct {
+	cell      HistoryCell
+	cellIndex int
+	line      int
+	valid     bool
+}
+
+// CaptureScrollAnchor maps a rendered history line to its owning cell. Blank
+// separators anchor to the following cell so separator growth never becomes a
+// visible jump.
+func (s *HistoryState) CaptureScrollAnchor(renderedLine int) ScrollAnchor {
+	if s == nil || renderedLine < 0 {
+		return ScrollAnchor{}
+	}
+	cells := s.Cells()
+	cursor := 0
+	for index, cell := range cells {
+		if index > 0 {
+			if renderedLine == cursor {
+				return ScrollAnchor{cell: cell, cellIndex: index, line: 0, valid: true}
+			}
+			cursor++
+		}
+		lines := renderHistoryCell(cell, s.renderWidth)
+		if renderedLine < cursor+len(lines) {
+			return ScrollAnchor{cell: cell, cellIndex: index, line: renderedLine - cursor, valid: true}
+		}
+		cursor += len(lines)
+	}
+	return ScrollAnchor{}
+}
+
+// ResolveScrollAnchor returns the current rendered line for a previously
+// captured anchor after live history cells have changed size.
+func (s *HistoryState) ResolveScrollAnchor(anchor ScrollAnchor) (int, bool) {
+	if s == nil || !anchor.valid {
+		return 0, false
+	}
+	cells := s.Cells()
+	cursor := 0
+	for index, cell := range cells {
+		if index > 0 {
+			cursor++
+		}
+		if sameHistoryCell(cell, anchor.cell) {
+			lines := renderHistoryCell(cell, s.renderWidth)
+			if len(lines) == 0 {
+				return cursor, true
+			}
+			line := anchor.line
+			if line >= len(lines) {
+				line = len(lines) - 1
+			}
+			return cursor + line, true
+		}
+		cursor += len(renderHistoryCell(cell, s.renderWidth))
+	}
+	if anchor.cellIndex >= 0 && anchor.cellIndex < len(cells) {
+		cursor = 0
+		for index, cell := range cells[:anchor.cellIndex] {
+			if index > 0 {
+				cursor++
+			}
+			cursor += len(renderHistoryCell(cell, s.renderWidth))
+		}
+		if anchor.cellIndex > 0 {
+			cursor++
+		}
+		return cursor, true
+	}
+	return 0, false
+}
+
+func sameHistoryCell(left, right HistoryCell) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return reflect.ValueOf(left).Kind() == reflect.Pointer &&
+		reflect.ValueOf(right).Kind() == reflect.Pointer &&
+		reflect.ValueOf(left).Pointer() == reflect.ValueOf(right).Pointer()
+}
 
 type runningHistoryTool interface {
 	HistoryCell
