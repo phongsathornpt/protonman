@@ -1698,3 +1698,27 @@ func TestCancelSessionAndWaitIsSessionScoped(t *testing.T) {
 	}
 	_ = coord.Cancel(b.ID)
 }
+
+func TestSpawnSnapshotsChildToolRuntimePolicy(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
+		WithToolRuntimePolicy(17*time.Millisecond, 23*time.Millisecond, nil),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) { return &mockRunner{}, nil }),
+	)
+	defer coord.Close()
+	coord.SetPermissionMode(permission.ModeAlwaysApprove)
+	h, err := coord.Spawn(context.Background(), Request{SessionID: "session-a", ParentID: "turn-1", Profile: ProfileAgility, Task: "inspect"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	coord.SetPermissionMode(permission.ModeAsk)
+	coord.agentsMu.RLock()
+	entry := coord.agents[h.ID]
+	spec := entry.toolRuntime
+	coord.agentsMu.RUnlock()
+	if spec.permissionMode != permission.ModeAlwaysApprove {
+		t.Fatalf("permission mode=%s, want always-approve admission snapshot", spec.permissionMode)
+	}
+	if spec.permissionTimeout != 17*time.Millisecond || spec.executionTimeout != 23*time.Millisecond {
+		t.Fatalf("runtime timeouts=%s/%s", spec.permissionTimeout, spec.executionTimeout)
+	}
+}

@@ -85,8 +85,12 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 		runCancel()
 		return Handle{}, transitionErr
 	}
+	runtimeSpec := childToolRuntime{
+		permissionMode: c.permissionMode, prompt: c.prompt, guard: c.guard,
+		permissionTimeout: c.toolPermissionTimeout, executionTimeout: c.toolExecutionTimeout, observer: c.toolObserver,
+	}
 	entry := &agentEntry{
-		request: req, languageModel: boundModel, reasoningEffort: boundReasoning, status: queuedStatus,
+		request: req, languageModel: boundModel, reasoningEffort: boundReasoning, toolRuntime: runtimeSpec, status: queuedStatus,
 		cancel: runCancel, done: make(chan struct{}), started: make(chan struct{}),
 	}
 	c.agents[id] = entry
@@ -164,7 +168,7 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 	defer execCancel()
 
 	c.emit(execCtx, Event{Kind: EventAgentStarted, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task, QueueDuration: queueDuration})
-	res, runErr := c.executeWithRuntime(execCtx, req, entry.languageModel, entry.reasoningEffort)
+	res, runErr := c.executeWithRuntime(execCtx, req, entry.languageModel, entry.reasoningEffort, entry.toolRuntime)
 	c.agentsMu.RLock()
 	provider, modelID := entry.status.Provider, entry.status.Model
 	c.agentsMu.RUnlock()

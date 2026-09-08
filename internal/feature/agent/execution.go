@@ -21,22 +21,26 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	c.agentsMu.RLock()
 	languageModel := c.languageModel
 	reasoningEffort := c.reasoningEffort
+	runtimeSpec := childToolRuntime{
+		permissionMode: c.permissionMode, prompt: c.prompt, guard: c.guard,
+		permissionTimeout: c.toolPermissionTimeout, executionTimeout: c.toolExecutionTimeout, observer: c.toolObserver,
+	}
 	c.agentsMu.RUnlock()
-	return c.executeWithRuntime(ctx, req, languageModel, reasoningEffort)
+	return c.executeWithRuntime(ctx, req, languageModel, reasoningEffort, runtimeSpec)
 }
 
-func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, languageModel sdk.LanguageModel, reasoningEffort sdk.ReasoningEffort) (Result, error) {
+func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, languageModel sdk.LanguageModel, reasoningEffort sdk.ReasoningEffort, runtimeSpec childToolRuntime) (Result, error) {
 	if err := ctx.Err(); err != nil {
 		return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile}, err
 	}
 
 	c.agentsMu.RLock()
 	parentRegistry := c.parentRegistry
-	permMode := c.permissionMode
-	prompter := c.prompt
-	guard := c.guard
 	skillCatalog := c.skillRegistry
 	c.agentsMu.RUnlock()
+	permMode := runtimeSpec.permissionMode
+	prompter := runtimeSpec.prompt
+	guard := runtimeSpec.guard
 
 	// 1. Build profile-scoped tools and an isolated skill activation session.
 	childSkills := selectSubagentSkills(skillCatalog, req)
@@ -61,7 +65,14 @@ func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, langu
 		policy = p
 	}
 
-	serviceOpts := []toolcall.Option{toolcall.WithMode(serviceMode)}
+	serviceOpts := []toolcall.Option{
+		toolcall.WithMode(serviceMode),
+		toolcall.WithPermissionTimeout(runtimeSpec.permissionTimeout),
+		toolcall.WithExecutionTimeout(runtimeSpec.executionTimeout),
+	}
+	if runtimeSpec.observer != nil {
+		serviceOpts = append(serviceOpts, toolcall.WithObserver(runtimeSpec.observer))
+	}
 	if c.workspace != nil {
 		serviceOpts = append(serviceOpts, toolcall.WithWorkspaceMutationGate(c.workspace))
 	}
