@@ -1,78 +1,69 @@
 package tui
 
 import (
-	"github.com/charmbracelet/lipgloss"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/style"
 	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
 )
 
 const (
-	glyphPrompt      = "› "
-	glyphMark        = "› "
-	glyphTool        = "$ "
-	glyphSep         = " · "
-	glyphToolSuccess = "✓ "
-	glyphToolError   = "× "
-	glyphToolDenied  = "! "
-	glyphWeb         = "↗ "
-	glyphRead        = "≡ "
-	glyphDir         = "▸ "
-	glyphSearch      = "? "
-	glyphExec        = "$ "
-	glyphEdit        = "+ "
-	glyphSkill       = "* "
-	glyphAgent       = "→ "
-	glyphGeneric     = "· "
-	glyphTodoPending = "○ "
-	glyphTodoActive  = "● "
-	// glyphBrand is the compact Protonman terminal mark.
-	glyphBrand = "◆"
+	glyphPrompt      = tuistyle.GlyphPrompt
+	glyphMark        = tuistyle.GlyphMark
+	glyphTool        = tuistyle.GlyphTool
+	glyphSep         = tuistyle.GlyphSep
+	glyphToolSuccess = tuistyle.GlyphToolSuccess
+	glyphToolError   = tuistyle.GlyphToolError
+	glyphToolDenied  = tuistyle.GlyphToolDenied
+	glyphWeb         = tuistyle.GlyphWeb
+	glyphRead        = tuistyle.GlyphRead
+	glyphDir         = tuistyle.GlyphDir
+	glyphSearch      = tuistyle.GlyphSearch
+	glyphExec        = tuistyle.GlyphExec
+	glyphEdit        = tuistyle.GlyphEdit
+	glyphSkill       = tuistyle.GlyphSkill
+	glyphAgent       = tuistyle.GlyphAgent
+	glyphGeneric     = tuistyle.GlyphGeneric
+	glyphTodoPending = tuistyle.GlyphTodoPending
+	glyphTodoActive  = tuistyle.GlyphTodoActive
+	glyphBrand       = tuistyle.GlyphBrand
 )
 
-// Prefer terminal-native ANSI colors so Protonman remains readable across light,
-// dark and customized terminal themes. Primary body text intentionally uses
-// the terminal's default foreground.
 var (
 	appVersion      = buildinfo.Version()
-	accentAssistant = lipgloss.Color("5")                             // magenta: Protonman identity
-	accentUser      = lipgloss.Color("6")                             // cyan: input/selection
-	accentTool      = lipgloss.AdaptiveColor{Light: "240", Dark: "8"} // dim tool chrome
-	accentSystem    = lipgloss.Color("6")                             // cyan: status/info
-	accentPlan      = lipgloss.Color("6")
-	accentError     = lipgloss.Color("1") // red
-	accentSuccess   = lipgloss.Color("2") // green
-	commandColor    = lipgloss.Color("6")
-	warningColor    = lipgloss.Color("3") // yellow: warnings, attention, denied
-	promptBorder    = lipgloss.AdaptiveColor{Light: "242", Dark: "8"}
-)
+	accentAssistant = tuistyle.AccentAssistant
+	accentUser      = tuistyle.AccentUser
+	accentTool      = tuistyle.AccentTool
+	accentSystem    = tuistyle.AccentSystem
+	accentPlan      = tuistyle.AccentPlan
+	accentError     = tuistyle.AccentError
+	accentSuccess   = tuistyle.AccentSuccess
+	commandColor    = tuistyle.CommandColor
+	warningColor    = tuistyle.WarningColor
+	promptBorder    = tuistyle.PromptBorder
 
-var (
-	brandStyle       = lipgloss.NewStyle().Bold(true).Foreground(accentAssistant)
-	brandMarkStyle   = lipgloss.NewStyle().Foreground(accentAssistant)
-	userStyle        = lipgloss.NewStyle().Foreground(accentUser)
-	assistantStyle   = lipgloss.NewStyle()
-	toolStyle        = lipgloss.NewStyle().Foreground(accentTool)
-	systemStyle      = lipgloss.NewStyle().Foreground(accentSystem)
-	mutedStyle       = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "238", Dark: "7"})
-	statusStyle      = lipgloss.NewStyle().Foreground(accentSystem)
-	warningStyle     = lipgloss.NewStyle().Foreground(warningColor)
-	successStyle     = lipgloss.NewStyle().Foreground(accentSuccess)
-	errorStyle       = lipgloss.NewStyle().Foreground(accentError)
-	planStyle        = lipgloss.NewStyle().Foreground(accentPlan)
-	commandStyle     = lipgloss.NewStyle().Foreground(commandColor)
-	toolTargetStyle  = lipgloss.NewStyle().Bold(true).Foreground(accentUser)
-	toolDirStyle     = lipgloss.NewStyle().Foreground(accentTool)
-	toolSummaryStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "240", Dark: "8"})
-	fileBadgeStyle   = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "244", Dark: "8"})
-	toolExcerptStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "244", Dark: "8"}).Italic(true)
-	toolFoldStyle    = lipgloss.NewStyle().Italic(true).Foreground(lipgloss.AdaptiveColor{Light: "244", Dark: "8"})
-	heroLabelStyle   = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "240", Dark: "8"}).Bold(true)
-	heroKeyStyle     = lipgloss.NewStyle().Foreground(accentUser).Bold(true)
-	diffAddStyle     = lipgloss.NewStyle().Foreground(accentSuccess)
-	diffDeleteStyle  = lipgloss.NewStyle().Foreground(accentError)
-	diffHunkStyle    = lipgloss.NewStyle().Foreground(accentUser)
-	bodyStyle        = lipgloss.NewStyle()
-	modalStyle       = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(warningColor).
-				Padding(1, 2)
+	brandStyle       = tuistyle.BrandStyle
+	brandMarkStyle   = tuistyle.BrandMarkStyle
+	userStyle        = tuistyle.UserStyle
+	assistantStyle   = tuistyle.AssistantStyle
+	toolStyle        = tuistyle.ToolStyle
+	systemStyle      = tuistyle.SystemStyle
+	mutedStyle       = tuistyle.MutedStyle
+	statusStyle      = tuistyle.StatusStyle
+	warningStyle     = tuistyle.WarningStyle
+	successStyle     = tuistyle.SuccessStyle
+	errorStyle       = tuistyle.ErrorStyle
+	planStyle        = tuistyle.PlanStyle
+	commandStyle     = tuistyle.CommandStyle
+	toolTargetStyle  = tuistyle.ToolTargetStyle
+	toolDirStyle     = tuistyle.ToolDirStyle
+	toolSummaryStyle = tuistyle.ToolSummaryStyle
+	fileBadgeStyle   = tuistyle.FileBadgeStyle
+	toolExcerptStyle = tuistyle.ToolExcerptStyle
+	toolFoldStyle    = tuistyle.ToolFoldStyle
+	heroLabelStyle   = tuistyle.HeroLabelStyle
+	heroKeyStyle     = tuistyle.HeroKeyStyle
+	diffAddStyle     = tuistyle.DiffAddStyle
+	diffDeleteStyle  = tuistyle.DiffDeleteStyle
+	diffHunkStyle    = tuistyle.DiffHunkStyle
+	bodyStyle        = tuistyle.BodyStyle
+	modalStyle       = tuistyle.ModalStyle
 )

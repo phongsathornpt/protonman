@@ -1,37 +1,6 @@
 package tui
 
-import (
-	"strings"
+import tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/style"
 
-	"github.com/charmbracelet/x/ansi"
-)
-
-const minASCIIBrandWidth = 48
-
-var asciiBrandLines = [...]string{
-	"█▀█ █▀▄ █▀█ ▀█▀ █▀█ █▄ █ █▀▄▀█ ▄▀█ █▄ █",
-	"█▀▀ █▀▄ █▄█  █  █▄█ █ ▀█ █ ▀ █ █▀█ █ ▀█",
-}
-
-// brandLockup renders a compact two-line terminal wordmark, with a narrow
-// fallback that cannot wrap on cramped terminals.
-func brandLockup(width int) string {
-	if width < minASCIIBrandWidth {
-		if width >= ansi.StringWidth(glyphBrand+" protonman") {
-			return brandMarkStyle.Render(glyphBrand) + " " + brandStyle.Render("protonman")
-		}
-		return brandStyle.Render("protonman")
-	}
-
-	first := brandMarkStyle.Render(glyphBrand) + "  " + brandStyle.Render(asciiBrandLines[0])
-	second := "   " + brandStyle.Render(asciiBrandLines[1])
-	return first + "\n" + second
-}
-
-func brandLockupWidth(width int) int {
-	maxWidth := 0
-	for _, line := range strings.Split(brandLockup(width), "\n") {
-		maxWidth = max(maxWidth, ansi.StringWidth(line))
-	}
-	return maxWidth
-}
+func brandLockup(width int) string   { return tuistyle.BrandLockup(width) }
+func brandLockupWidth(width int) int { return tuistyle.BrandLockupWidth(width) }
