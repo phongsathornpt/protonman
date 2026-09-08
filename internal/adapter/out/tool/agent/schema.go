@@ -56,6 +56,7 @@ func agentStatusSchema() map[string]any {
 			"model":        map[string]any{"type": "string"},
 			"task":         map[string]any{"type": "string"},
 			"state":        agentStateSchema(),
+			"version":      map[string]any{"type": "integer", "minimum": 1},
 			"start_time":   map[string]any{"type": "string"},
 			"started_at":   map[string]any{"type": "string"},
 			"finished_at":  map[string]any{"type": "string"},
@@ -63,7 +64,7 @@ func agentStatusSchema() map[string]any {
 			"resumed_from": map[string]any{"type": "string"},
 			"resumed_as":   map[string]any{"type": "string"},
 		},
-		"required":             []any{"id", "profile", "task", "state", "start_time"},
+		"required":             []any{"version", "id", "profile", "task", "state", "start_time"},
 		"additionalProperties": false,
 	}
 }
