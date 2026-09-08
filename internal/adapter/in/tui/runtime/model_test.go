@@ -941,3 +941,114 @@ func TestReconfigureRunner_InvalidatesRunnerOnError(t *testing.T) {
 		t.Fatal("expected runner to be nil when provider lacks valid auth")
 	}
 }
+
+func TestModelPicker_OllamaKeylessDiscovery(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.providers = map[string]config.ProviderConfig{
+		"ollama": {Name: "ollama", BaseURL: "http://localhost:11434", APIKey: ""},
+	}
+	view := newModelSelectPaneView(bModel)
+	for i, name := range view.providerNames {
+		if strings.EqualFold(name, "ollama") {
+			view.providerIndex = i
+			break
+		}
+	}
+	cmd := view.loadProvider(bModel, true)
+	if cmd == nil {
+		t.Fatal("expected discovery command for keyless Ollama provider")
+	}
+}
+
+func TestModelPicker_EmptyFilterShowsSearchInput(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/model")
+	view, ok := bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if !ok || view == nil {
+		t.Fatal("expected modelSelectViewID open")
+	}
+	view.filter = "nonexistent-model-xyz"
+	view.filtering = true
+	view.applyFilter(bModel.activeModel)
+	rendered := view.Render(bModel)
+	if !strings.Contains(rendered, "Search: nonexistent-model-xyz") {
+		t.Fatalf("expected search query in rendered output: %s", rendered)
+	}
+	if !strings.Contains(rendered, "No models match") {
+		t.Fatalf("expected 'No models match' in rendered output: %s", rendered)
+	}
+}
+
+func TestModelPicker_ShiftTabCyclesProvidersWithoutLeaking(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.providers = map[string]config.ProviderConfig{
+		"alpha": {Name: "alpha", BaseURL: "https://alpha.example.com", APIKey: "k1"},
+		"beta":  {Name: "beta", BaseURL: "https://beta.example.com", APIKey: "k2"},
+	}
+	bModel.executeCommand("/model")
+	view, ok := bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if !ok || view == nil {
+		t.Fatal("expected modelSelectViewID open")
+	}
+	initialIdx := view.providerIndex
+	initialMode := bModel.service.Mode()
+
+	handled, _ := view.HandleKey(bModel, tea.KeyMsg{Type: tea.KeyShiftTab})
+	if !handled {
+		t.Fatal("shift+tab was not handled by model picker")
+	}
+	if bModel.service.Mode() != initialMode {
+		t.Fatalf("permission mode changed from %s to %s on shift+tab", initialMode, bModel.service.Mode())
+	}
+	if view.providerIndex == initialIdx && len(view.providerNames) > 1 {
+		t.Fatalf("providerIndex did not change on shift+tab: %d", view.providerIndex)
+	}
+}
+
+func TestModelPicker_EnterWhileFilteringSelectsModel(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/model")
+	view, ok := bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if !ok || view == nil {
+		t.Fatal("expected modelSelectViewID open")
+	}
+	view.models = []domainmodel.RemoteModel{
+		{ID: "deepseek-chat", Name: "DeepSeek Chat"},
+	}
+	view.filtering = true
+	view.index = 0
+
+	handled, cmd := view.HandleKey(bModel, tea.KeyMsg{Type: tea.KeyEnter})
+	if !handled {
+		t.Fatal("enter while filtering was not handled")
+	}
+	if cmd == nil {
+		t.Fatal("expected saveDefaultModelCmd returned on enter while filtering")
+	}
+	if bModel.bottom.has(modelSelectViewID) {
+		t.Fatal("expected model picker closed after enter selection")
+	}
+}
+
+func TestModelPicker_EnterOnZeroMatchesDoesNotOpenProviderEditor(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/model")
+	view, ok := bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if !ok || view == nil {
+		t.Fatal("expected modelSelectViewID open")
+	}
+	view.models = nil
+	view.filtering = false
+
+	handled, cmd := view.HandleKey(bModel, tea.KeyMsg{Type: tea.KeyEnter})
+	if !handled {
+		t.Fatal("enter on 0 matches was not handled")
+	}
+	if cmd != nil {
+		t.Fatal("unexpected command on enter with 0 models")
+	}
+	if bModel.bottom.has(providerViewID) {
+		t.Fatal("enter on 0 models should not open providerViewID")
+	}
+}
+
