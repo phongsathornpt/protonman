@@ -82,3 +82,52 @@ func TestBuildSubagentModelResolverRejectsMissingCredentials(t *testing.T) {
 		t.Fatalf("error = %v, want credentials error", err)
 	}
 }
+
+func TestBuildSubagentModelResolverSkipsReasoningOnlyConfig(t *testing.T) {
+	resolver, err := app.BuildSubagentModelResolver(app.SubagentModelResolverSpec{
+		Overrides: map[string]config.SubagentModelConfig{
+			"intelligence": {ReasoningEffort: sdk.ReasoningHigh},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolver != nil {
+		t.Fatalf("model resolver = %#v, want nil for reasoning-only config", resolver)
+	}
+}
+
+func TestBuildSubagentReasoningResolver(t *testing.T) {
+	resolver, err := app.BuildSubagentReasoningResolver(map[string]config.SubagentModelConfig{
+		"strength":     {ReasoningEffort: sdk.ReasoningMedium},
+		"agility":      {ReasoningEffort: sdk.ReasoningDefault},
+		"intelligence": {ReasoningEffort: sdk.ReasoningHigh},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolver == nil {
+		t.Fatal("reasoning resolver is nil")
+	}
+	if got := resolver.Resolve(agent.ProfileStrength, sdk.ReasoningLow); got != sdk.ReasoningMedium {
+		t.Fatalf("strength reasoning = %q, want medium", got)
+	}
+	if got := resolver.Resolve(agent.ProfileAgility, sdk.ReasoningLow); got != sdk.ReasoningLow {
+		t.Fatalf("agility auto reasoning = %q, want fallback low", got)
+	}
+	if got := resolver.Resolve(agent.ProfileIntelligence, sdk.ReasoningMedium); got != sdk.ReasoningHigh {
+		t.Fatalf("intelligence reasoning = %q, want high", got)
+	}
+}
+
+func TestBuildSubagentReasoningResolverReturnsNilForAutoOnly(t *testing.T) {
+	resolver, err := app.BuildSubagentReasoningResolver(map[string]config.SubagentModelConfig{
+		"agility": {ReasoningEffort: sdk.ReasoningDefault},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolver != nil {
+		t.Fatalf("reasoning resolver = %#v, want nil for auto-only config", resolver)
+	}
+}
