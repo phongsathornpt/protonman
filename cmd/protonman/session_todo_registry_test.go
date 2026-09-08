@@ -19,7 +19,7 @@ func TestRegistryForSessionIsolatesTodoState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	base, err := builtin.NewRegistry(todotool.NewGetTodo(baseStore), todotool.NewUpdateTodo(baseStore))
+	base, err := builtin.NewRegistry(todotool.NewTodo(baseStore))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,11 +35,11 @@ func TestRegistryForSessionIsolatesTodoState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	updateA, ok := regA.Lookup("update_todo")
+	updateA, ok := regA.Lookup("todo")
 	if !ok {
-		t.Fatal("session A update_todo missing")
+		t.Fatal("session A todo missing")
 	}
-	call, err := tool.NewCall("a-update", "update_todo", json.RawMessage(`{"expected_revision":0,"operations":[{"op":"add","id":"a","text":"session A","status":"pending"}]}`))
+	call, err := tool.NewCall("a-update", "todo", json.RawMessage(`{"action":"update","expected_revision":0,"operations":[{"op":"add","id":"a","text":"session A","status":"pending"}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,11 +47,11 @@ func TestRegistryForSessionIsolatesTodoState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	getB, ok := regB.Lookup("get_todo")
+	getB, ok := regB.Lookup("todo")
 	if !ok {
-		t.Fatal("session B get_todo missing")
+		t.Fatal("session B todo missing")
 	}
-	getCall, err := tool.NewCall("b-get", "get_todo", json.RawMessage(`{}`))
+	getCall, err := tool.NewCall("b-get", "todo", json.RawMessage(`{"action":"get"}`))
 	if err != nil {
 		t.Fatal(err)
 	}

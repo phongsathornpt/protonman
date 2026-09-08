@@ -19,7 +19,7 @@ func todoUpdateInputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"expected_revision": map[string]any{"type": "integer", "minimum": 0, "description": "Revision from the latest get_todo snapshot; stale revisions are rejected."},
+			"expected_revision": map[string]any{"type": "integer", "minimum": 0, "description": "Revision from the latest todo action=get snapshot; stale revisions are rejected."},
 			"operations": map[string]any{
 				"type": "array", "minItems": 1, "maxItems": 256,
 				"description": "Ordered patch operations. Unmentioned tasks are preserved. Removing a task requires an explicit remove operation.",

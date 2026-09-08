@@ -75,7 +75,7 @@ func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode update_todo arguments", err)
 	}
 	if input.ExpectedRevision == nil {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_revision is required; call get_todo first")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_revision is required; call todo with action=get first")
 	}
 	if len(input.Operations) == 0 {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "operations must contain at least one explicit todo patch")
@@ -110,7 +110,7 @@ func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 
 func todoConflictError(_ []tododomain.Operation, cause error) error {
 	return tool.WrapToolError(tool.ErrorCodeConflict, "todo snapshot changed; refresh tasks before applying this patch", cause).WithRecovery(tool.Recovery{
-		Action: tool.RecoveryRefreshResource, Tool: "get_todo", Arguments: json.RawMessage(`{}`),
+		Action: tool.RecoveryRefreshResource, Tool: "todo", Arguments: json.RawMessage(`{"action":"get"}`),
 	})
 }
 

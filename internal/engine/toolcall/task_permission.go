@@ -11,18 +11,25 @@ func taskMetadataAutoAllowed(request permission.Request) bool {
 	if request.ToolKind != permission.ToolTask {
 		return false
 	}
+	var input struct {
+		Action     string                 `json:"action"`
+		Operations []tododomain.Operation `json:"operations"`
+	}
+	if err := json.Unmarshal(request.Arguments, &input); err != nil {
+		return false
+	}
 	switch request.ToolName {
 	case "get_todo":
 		return true
 	case "update_todo":
-		var input struct {
-			Operations []tododomain.Operation `json:"operations"`
-		}
-		if err := json.Unmarshal(request.Arguments, &input); err != nil {
-			return false
-		}
 		return tododomain.ClassifyPatch(input.Operations) == tododomain.PatchImpactStatusOnly
-	default:
-		return false
+	case "todo":
+		switch input.Action {
+		case "get":
+			return true
+		case "update":
+			return tododomain.ClassifyPatch(input.Operations) == tododomain.PatchImpactStatusOnly
+		}
 	}
+	return false
 }

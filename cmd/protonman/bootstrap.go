@@ -223,8 +223,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		builtin.WithSandbox(launcher),
 		builtin.WithAdditionalHandlers(
 			webtool.NewWebFetch(sandboxProfile.Network, webtool.WithWebFetchTimeout(loadedConfig.Runtime.WebFetchTimeout)),
-			todotool.NewGetTodoForSession(todoStore, sessionID),
-			todotool.NewUpdateTodoForSession(todoStore, sessionID),
+			todotool.NewTodoForSession(todoStore, sessionID),
 			skilltool.NewActivateSkill(skillRegistry, workspaceRoot),
 			agenttool.NewDelegateTask(coordinator),
 			agenttool.NewWaitAgent(coordinator),
@@ -331,5 +330,5 @@ func (r *appRuntime) registryForSession(sessionID string) (tool.Registry, error)
 	if err != nil {
 		return nil, err
 	}
-	return tool.NewOverlayRegistry(r.registry, todotool.NewGetTodoForSession(store, sessionID), todotool.NewUpdateTodoForSession(store, sessionID))
+	return tool.NewOverlayRegistry(r.registry, todotool.NewTodoForSession(store, sessionID))
 }

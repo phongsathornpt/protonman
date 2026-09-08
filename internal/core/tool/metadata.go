@@ -34,6 +34,7 @@ var builtinMetadata = map[string]callMetadata{
 	"web":                {Metadata: Metadata{Name: "web", Kind: KindWebFetch, DisplayName: "Fetch"}, title: titleWebFetch, target: targetWebFetch},
 	"web_search":         {Metadata: Metadata{Name: "web_search", Kind: KindWebSearch, DisplayName: "Search web"}, title: titleWebSearch, target: targetWebSearch},
 	"git":                {Metadata: Metadata{Name: "git", Kind: KindGit, DisplayName: "Git"}, title: titleGitStatus, target: targetGitStatus},
+	"todo":               {Metadata: Metadata{Name: "todo", Kind: KindTask, DisplayName: "Tasks"}, title: titleTodo, target: targetTodo},
 	"get_todo":           {Metadata: Metadata{Name: "get_todo", Kind: KindTask, DisplayName: "Tasks"}, title: titleConstant("Check task list"), target: targetConstant("task plan")},
 	"update_todo":        {Metadata: Metadata{Name: "update_todo", Kind: KindTask, DisplayName: "Update tasks"}, title: titleUpdateTodo, target: targetUpdateTodo},
 	"activate_skill":     {Metadata: Metadata{Name: "activate_skill", Kind: KindRead, DisplayName: "Skill"}, title: titleActivateSkill, target: targetActivateSkill},
@@ -68,6 +69,24 @@ func titleConstant(value string) func(map[string]any) string {
 }
 func targetConstant(value string) func(map[string]any) string {
 	return func(map[string]any) string { return value }
+}
+
+func titleTodo(args map[string]any) string {
+	switch strings.ToLower(ExtractString(args, "action")) {
+	case "get":
+		return "Check task list"
+	case "update":
+		return titleUpdateTodo(args)
+	default:
+		return "Tasks"
+	}
+}
+
+func targetTodo(args map[string]any) string {
+	if strings.EqualFold(ExtractString(args, "action"), "update") {
+		return targetUpdateTodo(args)
+	}
+	return "task plan"
 }
 
 func titleCalculate(args map[string]any) string {

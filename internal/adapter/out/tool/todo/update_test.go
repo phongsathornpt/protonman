@@ -159,7 +159,7 @@ func TestUpdateTodoStaleRevisionReturnsStructuredRefreshRecovery(t *testing.T) {
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeConflict {
 		t.Fatalf("error = %v, want conflict", err)
 	}
-	if toolErr.Recovery == nil || toolErr.Recovery.Action != tool.RecoveryRefreshResource || toolErr.Recovery.Tool != "get_todo" || string(toolErr.Recovery.Arguments) != `{}` {
+	if toolErr.Recovery == nil || toolErr.Recovery.Action != tool.RecoveryRefreshResource || toolErr.Recovery.Tool != "todo" || string(toolErr.Recovery.Arguments) != `{"action":"get"}` {
 		t.Fatalf("recovery = %#v", toolErr.Recovery)
 	}
 }
