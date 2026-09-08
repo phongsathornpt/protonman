@@ -54,12 +54,12 @@ func (h subagentHandler) Definition() tool.Definition {
 		InputSchema:            subagentInputSchema(),
 		OutputSchema: map[string]any{
 			"oneOf": []any{
-				withActionSchema(delegateTaskOutputSchema()),
-				withActionSchema(agentLifecycleOutputSchema(subagentActionWait)),
-				withActionSchema(agentLifecycleOutputSchema(subagentActionGet)),
-				withActionSchema(agentLifecycleOutputSchema(subagentActionList)),
-				withActionSchema(agentLifecycleOutputSchema(subagentActionCancel)),
-				withActionSchema(agentLifecycleOutputSchema(subagentActionResume)),
+				withActionSchema(subagentActionSpawn, delegateTaskOutputSchema()),
+				withActionSchema(subagentActionWait, agentLifecycleOutputSchema(subagentActionWait)),
+				withActionSchema(subagentActionGet, agentLifecycleOutputSchema(subagentActionGet)),
+				withActionSchema(subagentActionList, agentLifecycleOutputSchema(subagentActionList)),
+				withActionSchema(subagentActionCancel, agentLifecycleOutputSchema(subagentActionCancel)),
+				withActionSchema(subagentActionResume, agentLifecycleOutputSchema(subagentActionResume)),
 			},
 		},
 	}
@@ -81,7 +81,7 @@ func subagentInputSchema() map[string]any {
 	}
 }
 
-func withActionSchema(schema map[string]any) map[string]any {
+func withActionSchema(action subagentAction, schema map[string]any) map[string]any {
 	if schema == nil {
 		return nil
 	}
@@ -94,7 +94,7 @@ func withActionSchema(schema map[string]any) map[string]any {
 	for key, value := range props {
 		nextProps[key] = value
 	}
-	nextProps["action"] = map[string]any{"type": "string"}
+	nextProps["action"] = map[string]any{"type": "string", "enum": []string{string(action)}}
 	clone["properties"] = nextProps
 	required, _ := clone["required"].([]any)
 	if required == nil {
