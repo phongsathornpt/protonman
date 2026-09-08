@@ -6,13 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/adapter/out/model"
-	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/core/session"
-	"github.com/projectTHORN/proton/internal/feature/skill"
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/engine/toolcall"
-	applicationturn "github.com/projectTHORN/proton/internal/engine/turn"
+	"github.com/phongsathornpt/proton/internal/adapter/out/model"
+	"github.com/phongsathornpt/proton/internal/core/permission"
+	"github.com/phongsathornpt/proton/internal/core/session"
+	"github.com/phongsathornpt/proton/internal/feature/skill"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/engine/toolcall"
+	applicationturn "github.com/phongsathornpt/proton/internal/engine/turn"
 )
 
 func TestHeadlessCallRunsThroughService(t *testing.T) {

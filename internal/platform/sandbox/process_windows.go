@@ -4,7 +4,7 @@ package sandbox
 
 import (
 	"errors"
-	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
+	"github.com/phongsathornpt/proton/internal/base/runtimepolicy"
 	"os"
 	"os/exec"
 	"strconv"

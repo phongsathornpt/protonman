@@ -8,8 +8,8 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/projectTHORN/proton/internal/app/appdirs"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/app/appdirs"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 func SaveUserProviderConfig(homeDir string, provider ProviderConfig, defaultModel string) error {

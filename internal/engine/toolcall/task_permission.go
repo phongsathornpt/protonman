@@ -3,8 +3,8 @@ package toolcall
 import (
 	"encoding/json"
 
-	"github.com/projectTHORN/proton/internal/core/permission"
-	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
+	"github.com/phongsathornpt/proton/internal/core/permission"
+	tododomain "github.com/phongsathornpt/proton/internal/feature/todo"
 )
 
 func taskMetadataAutoAllowed(request permission.Request) bool {

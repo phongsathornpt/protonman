@@ -1,6 +1,6 @@
 package modelprofile
 
-import sdk "github.com/projectTHORN/proton/proton-sdk"
+import sdk "github.com/phongsathornpt/proton/proton-sdk"
 
 func mergeProfile(dst *Resolved, src Profile) {
 	if src.Name != "" {

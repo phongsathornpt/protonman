@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/platform/telemetry"
+	"github.com/phongsathornpt/proton/internal/platform/telemetry"
 )
 
 // ErrUnavailable indicates that a requested profile cannot be enforced here.

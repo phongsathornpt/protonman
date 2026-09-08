@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/core/tool"
 )
 
 // AgentToolCell renders subagent lifecycle operations as orchestration rather

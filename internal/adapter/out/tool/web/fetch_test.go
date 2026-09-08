@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/base/buildinfo"
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/platform/sandbox"
+	"github.com/phongsathornpt/proton/internal/base/buildinfo"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/platform/sandbox"
 )
 
 type staticResolver struct {

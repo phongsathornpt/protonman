@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/base/envconfig"
-	"github.com/projectTHORN/proton/internal/core/session"
+	"github.com/phongsathornpt/proton/internal/base/envconfig"
+	"github.com/phongsathornpt/proton/internal/core/session"
 )
 
 func generateSessionID(workDir string) string { return session.NewID(workDir) }

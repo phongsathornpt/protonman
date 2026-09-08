@@ -1,9 +1,9 @@
 package turn
 
 import (
-	"github.com/projectTHORN/proton/internal/adapter/out/model"
-	"github.com/projectTHORN/proton/internal/core/modelprofile"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/adapter/out/model"
+	"github.com/phongsathornpt/proton/internal/core/modelprofile"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 func (l *Loop) resolveReasoningPolicy() (modelprofile.ReasoningResolution, error) {

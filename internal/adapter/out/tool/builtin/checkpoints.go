@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/platform/checkpoint"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/platform/checkpoint"
 )
 
 type noCheckpointStore struct{}

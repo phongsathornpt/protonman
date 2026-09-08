@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/feature/agent"
-	"github.com/projectTHORN/proton/internal/engine/prompt"
-	"github.com/projectTHORN/proton/internal/adapter/out/model"
-	"github.com/projectTHORN/proton/internal/feature/skill"
-	"github.com/projectTHORN/proton/internal/engine/toolcall"
-	"github.com/projectTHORN/proton/internal/engine/turn"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/feature/agent"
+	"github.com/phongsathornpt/proton/internal/engine/prompt"
+	"github.com/phongsathornpt/proton/internal/adapter/out/model"
+	"github.com/phongsathornpt/proton/internal/feature/skill"
+	"github.com/phongsathornpt/proton/internal/engine/toolcall"
+	"github.com/phongsathornpt/proton/internal/engine/turn"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 // Conversation executes one model/tool turn over an existing message history.

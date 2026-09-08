@@ -4,7 +4,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/core/tool"
 )
 
 const toolBudgetMarker = "[tool output truncated by turn budget]"

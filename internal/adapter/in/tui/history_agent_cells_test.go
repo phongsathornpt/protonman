@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/feature/agent"
+	"github.com/phongsathornpt/proton/internal/feature/agent"
 )
 
 func TestAgentRunCellKeepsTaskAndFailureReason(t *testing.T) {

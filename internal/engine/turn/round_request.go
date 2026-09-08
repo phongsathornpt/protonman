@@ -6,11 +6,11 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/adapter/out/model"
-	"github.com/projectTHORN/proton/internal/core/modelprofile"
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/engine/prompt"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/adapter/out/model"
+	"github.com/phongsathornpt/proton/internal/core/modelprofile"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/engine/prompt"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 type resolvedModelState struct {

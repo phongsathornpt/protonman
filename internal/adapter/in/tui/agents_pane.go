@@ -7,7 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/projectTHORN/proton/internal/feature/agent"
+	"github.com/phongsathornpt/proton/internal/feature/agent"
 )
 
 const agentsViewID = "agents"

@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/engine/toolcall"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/engine/toolcall"
 )
 
 // SlogObserver writes redacted tool-call events through a structured slog logger.

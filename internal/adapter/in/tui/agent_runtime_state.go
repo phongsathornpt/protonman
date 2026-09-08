@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"github.com/projectTHORN/proton/internal/adapter/out/config"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/adapter/out/config"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 // agentRuntimeState owns TUI-local agent controls across Bubble Tea program

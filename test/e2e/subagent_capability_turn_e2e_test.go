@@ -4,13 +4,13 @@ import (
 	"context"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/adapter/out/model"
-	agenttool "github.com/projectTHORN/proton/internal/adapter/out/tool/agent"
-	"github.com/projectTHORN/proton/internal/adapter/out/tool/builtin"
-	"github.com/projectTHORN/proton/internal/app"
-	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/engine/toolcall"
-	"github.com/projectTHORN/proton/internal/feature/agent"
+	"github.com/phongsathornpt/proton/internal/adapter/out/model"
+	agenttool "github.com/phongsathornpt/proton/internal/adapter/out/tool/agent"
+	"github.com/phongsathornpt/proton/internal/adapter/out/tool/builtin"
+	"github.com/phongsathornpt/proton/internal/app"
+	"github.com/phongsathornpt/proton/internal/core/permission"
+	"github.com/phongsathornpt/proton/internal/engine/toolcall"
+	"github.com/phongsathornpt/proton/internal/feature/agent"
 )
 
 func TestE2ESubagentCapabilityChangesPublishedToolsBetweenTurns(t *testing.T) {

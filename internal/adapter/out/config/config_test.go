@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/platform/sandbox"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/core/permission"
+	"github.com/phongsathornpt/proton/internal/platform/sandbox"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 func TestLoadLayeredConfigRequiresProjectTrust(t *testing.T) {

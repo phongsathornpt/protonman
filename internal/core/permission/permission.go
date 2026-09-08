@@ -9,8 +9,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/base/glob"
-	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/base/glob"
+	"github.com/phongsathornpt/proton/internal/core/tool"
 )
 
 // Action is the result of evaluating a permission rule.

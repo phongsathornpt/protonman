@@ -12,10 +12,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/feature/agent"
-	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
+	"github.com/phongsathornpt/proton/internal/core/permission"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/feature/agent"
+	tododomain "github.com/phongsathornpt/proton/internal/feature/todo"
 )
 
 func shortcutHelp(binding key.Binding) string {

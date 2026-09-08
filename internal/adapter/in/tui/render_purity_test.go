@@ -3,8 +3,8 @@ package tui
 import (
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/adapter/out/model"
-	"github.com/projectTHORN/proton/internal/core/permission"
+	"github.com/phongsathornpt/proton/internal/adapter/out/model"
+	"github.com/phongsathornpt/proton/internal/core/permission"
 )
 
 func TestPickerRenderDoesNotMutateNavigationState(t *testing.T) {

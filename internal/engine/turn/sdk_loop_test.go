@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/adapter/out/model"
-	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/engine/toolcall"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/adapter/out/model"
+	"github.com/phongsathornpt/proton/internal/core/permission"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/engine/toolcall"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 type sdkTestModel struct {

@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/core/tool"
 )
 
 var titleRegex = regexp.MustCompile(`(?i)<title[^>]*>([\s\S]*?)</title>`)

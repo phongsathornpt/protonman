@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/projectTHORN/proton/internal/app"
+	"github.com/phongsathornpt/proton/internal/app"
 )
 
 func (m *bubbleModel) executeSessionCommand(name string) tea.Cmd {

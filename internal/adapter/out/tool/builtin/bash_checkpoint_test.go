@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/core/tool"
 )
 
 func TestBashCheckpointsProvenRemoveMutation(t *testing.T) {

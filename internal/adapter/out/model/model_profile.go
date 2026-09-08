@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/core/modelprofile"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/core/modelprofile"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 // Provider-neutral model types and aliases owned by proton-sdk.

@@ -10,10 +10,10 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/projectTHORN/proton/internal/adapter/out/model"
-	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/core/session"
-	"github.com/projectTHORN/proton/internal/engine/prompt"
+	"github.com/phongsathornpt/proton/internal/adapter/out/model"
+	"github.com/phongsathornpt/proton/internal/core/permission"
+	"github.com/phongsathornpt/proton/internal/core/session"
+	"github.com/phongsathornpt/proton/internal/engine/prompt"
 )
 
 type Message = session.Message

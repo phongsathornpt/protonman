@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/adapter/out/tool/builtin"
-	todotool "github.com/projectTHORN/proton/internal/adapter/out/tool/todo"
-	"github.com/projectTHORN/proton/internal/core/session"
-	"github.com/projectTHORN/proton/internal/core/tool"
-	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
+	"github.com/phongsathornpt/proton/internal/adapter/out/tool/builtin"
+	todotool "github.com/phongsathornpt/proton/internal/adapter/out/tool/todo"
+	"github.com/phongsathornpt/proton/internal/core/session"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	tododomain "github.com/phongsathornpt/proton/internal/feature/todo"
 )
 
 func TestRegistryForSessionIsolatesTodoState(t *testing.T) {

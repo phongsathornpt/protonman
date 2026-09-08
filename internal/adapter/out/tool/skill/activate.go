@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/feature/skill"
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/core/workspace"
+	"github.com/phongsathornpt/proton/internal/feature/skill"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/core/workspace"
 )
 
 type activateSkillHandler struct {

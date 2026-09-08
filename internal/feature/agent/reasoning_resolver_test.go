@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/engine/toolcall"
-	"github.com/projectTHORN/proton/internal/engine/turn"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/engine/toolcall"
+	"github.com/phongsathornpt/proton/internal/engine/turn"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 func TestReasoningResolverSnapshotsOverrides(t *testing.T) {

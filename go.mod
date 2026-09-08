@@ -1,4 +1,4 @@
-module github.com/projectTHORN/proton
+module github.com/phongsathornpt/proton
 
 go 1.27
 

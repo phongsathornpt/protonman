@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/core/tool"
 )
 
 // ErrSymlinkPath indicates that a mutation-sensitive path contains a symlink

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	applicationturn "github.com/projectTHORN/proton/internal/engine/turn"
+	applicationturn "github.com/phongsathornpt/proton/internal/engine/turn"
 )
 
 func BenchmarkHistoryStateRenderLines_50Cells(b *testing.B) {

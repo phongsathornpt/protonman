@@ -9,9 +9,9 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/projectTHORN/proton/internal/app/appdirs"
-	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/platform/sandbox"
+	"github.com/phongsathornpt/proton/internal/app/appdirs"
+	"github.com/phongsathornpt/proton/internal/core/permission"
+	"github.com/phongsathornpt/proton/internal/platform/sandbox"
 )
 
 func Load(ctx context.Context, options Options) (Snapshot, error) {

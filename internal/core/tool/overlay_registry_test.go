@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 type overlayTestHandler struct{ name, description string }

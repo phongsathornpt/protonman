@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/projectTHORN/proton/internal/feature/agent"
+	"github.com/phongsathornpt/proton/internal/feature/agent"
 )
 
 func (m *bubbleModel) handleAgentCommand(argument string) tea.Cmd {

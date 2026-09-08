@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/adapter/out/model"
-	"github.com/projectTHORN/proton/internal/app"
-	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/adapter/out/model"
+	"github.com/phongsathornpt/proton/internal/app"
+	"github.com/phongsathornpt/proton/internal/core/tool"
 )
 
 const maxBubbleScrollback = 1000

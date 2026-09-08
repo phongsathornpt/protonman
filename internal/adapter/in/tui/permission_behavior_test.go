@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"github.com/projectTHORN/proton/internal/core/permission"
+	"github.com/phongsathornpt/proton/internal/core/permission"
 	"testing"
 	"time"
 )

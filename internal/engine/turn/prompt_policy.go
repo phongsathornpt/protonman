@@ -1,10 +1,10 @@
 package turn
 
 import (
-	"github.com/projectTHORN/proton/internal/adapter/out/model"
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/engine/prompt"
-	"github.com/projectTHORN/proton/internal/feature/skill"
+	"github.com/phongsathornpt/proton/internal/adapter/out/model"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/engine/prompt"
+	"github.com/phongsathornpt/proton/internal/feature/skill"
 )
 
 func (l *Loop) currentSkillPromptSection() string {

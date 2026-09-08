@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/projectTHORN/proton/internal/feature/skill"
+	"github.com/phongsathornpt/proton/internal/feature/skill"
 )
 
 const (

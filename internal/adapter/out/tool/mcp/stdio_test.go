@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/core/tool"
 )
 
 func TestStdioServerListsAndCallsTools(t *testing.T) {

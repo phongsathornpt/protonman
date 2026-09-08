@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/core/workspace"
+	"github.com/phongsathornpt/proton/internal/core/workspace"
 )
 
 func managedFileDetail(path string, proposed []byte) string {

@@ -3,7 +3,7 @@ package model
 import (
 	"testing"
 
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 func TestResolveProviderBaseURL(t *testing.T) {

@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/feature/agent"
+	"github.com/phongsathornpt/proton/internal/feature/agent"
 )
 
 type runningHistoryTool interface {

@@ -1,9 +1,9 @@
 package agenttool
 
 import (
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/feature/agent"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/feature/agent"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 // CapabilityRegistry filters the primary agent tool surface according to the
