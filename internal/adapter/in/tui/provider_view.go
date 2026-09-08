@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/pane"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -376,159 +377,12 @@ func (v *providerPaneView) currentModels() []model.RemoteModel {
 }
 
 func (v *providerPaneView) Render(m *bubbleModel) string {
-	v.resizeInputs(m.width)
-
-	switch v.state {
-	case providerStateFetching:
-		rows := []string{
-			brandStyle.Render("Connecting to " + v.nameInput.Value()),
-			"",
-			fmt.Sprintf("  %s Querying %s/models…", m.spinner.View(), v.endpointInput.Value()),
-			mutedStyle.Render("  Checking endpoint & discovering model catalog"),
-			"",
-			mutedStyle.Render("esc cancel"),
-		}
-		return renderProviderModal(m, accentAssistant, rows)
-
-	case providerStateSelectModel:
-		models := v.currentModels()
-		hasFreeModels := false
-		for _, md := range v.models {
-			if model.IsFreeModel(md.ID) {
-				hasFreeModels = true
-				break
-			}
-		}
-
-		titlePrefix := "✓ Select Active Model"
-		if v.isEditing && !v.activateOnSave {
-			titlePrefix = "✓ Select Model · active provider unchanged"
-		}
-		title := fmt.Sprintf("%s (%d discovered) [Step 2/2]", titlePrefix, len(models))
-		if hasFreeModels {
-			if v.filterFreeOnly {
-				title = fmt.Sprintf("%s (%d free models · [f] show all %d) [Step 2/2]", titlePrefix, len(models), len(v.models))
-			} else {
-				title = fmt.Sprintf("%s (%d discovered · [f] show free only) [Step 2/2]", titlePrefix, len(v.models))
-			}
-		}
-
-		if len(models) == 0 {
-			rows := []string{
-				brandStyle.Render(title),
-				"",
-				mutedStyle.Render("No matching models found."),
-				"",
-				mutedStyle.Render("f toggle filter · esc back"),
-			}
-			return renderProviderModal(m, accentUser, rows)
-		}
-
-		selectedIndex, scrollOffset, visibleEnd := normalizedPickerWindow(v.selectedIndex, v.scrollOffset, len(models), maxProviderSelectRows)
-		visible := models[scrollOffset:visibleEnd]
-
-		rows := []string{
-			brandStyle.Render(title),
-			"",
-		}
-
-		if scrollOffset > 0 {
-			rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ▲ %d more above", scrollOffset)))
-		}
-
-		for i, md := range visible {
-			idx := scrollOffset + i
-			resolved := model.ResolveRemoteMetadata(strings.TrimSpace(v.nameInput.Value()), md)
-			prefix := "    "
-			if idx == selectedIndex {
-				prefix = brandStyle.Render("  ❯ ")
-			}
-			line := fmt.Sprintf("%d. %s", idx+1, providerModelLabel(md))
-			if model.IsFreeModel(md.ID) {
-				line += " " + successStyle.Render("[FREE]")
-			}
-			if limits := formatModelTokenLimits(resolved.Profile.ContextWindow, resolved.Profile.MaxInputTokens, resolved.Profile.MaxOutputTokens); limits != "" {
-				line += " [" + limits + "]"
-			}
-			if len(resolved.Features) > 0 {
-				line += fmt.Sprintf(" (%s)", strings.Join(resolved.Features, ", "))
-			}
-			if reasoning := remoteModelReasoningSummary(strings.TrimSpace(v.nameInput.Value()), md, false); reasoning != "" {
-				line += " [" + reasoning + "]"
-			}
-			if idx == v.selectedIndex {
-				rows = append(rows, prefix+brandStyle.Render(line))
-			} else {
-				rows = append(rows, prefix+mutedStyle.Render(line))
-			}
-		}
-
-		if visibleEnd < len(models) {
-			rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ▼ %d more below", len(models)-visibleEnd)))
-		}
-
-		footer := "↑/↓ or j/k move · 1-9 select · enter confirm & save · esc back"
-		if v.isEditing && !v.activateOnSave {
-			footer = "↑/↓ move · 1-9 select · enter save details · esc back"
-		}
-		if hasFreeModels {
-			footer = "↑/↓ move · 1-9 select · f toggle free only · enter confirm · esc back"
-			if v.isEditing && !v.activateOnSave {
-				footer = "↑/↓ move · 1-9 select · f free only · enter save · esc back"
-			}
-		}
-		rows = append(rows, "", mutedStyle.Render(footer))
-		return renderProviderModal(m, accentUser, rows)
-
-	case providerStateSaving:
-		savingDescription := "  Applying the selected model as active"
-		if v.isEditing && !v.activateOnSave {
-			savingDescription = "  Keeping the current active provider and model"
-		}
-		rows := []string{
-			brandStyle.Render("Saving Provider…"),
-			"",
-			fmt.Sprintf("  Writing %s to %s", v.nameInput.Value(), appdirs.UserConfigDisplay()),
-			mutedStyle.Render(savingDescription),
-		}
-		return renderProviderModal(m, accentAssistant, rows)
-
-	case providerStateSaveError:
-		rows := []string{
-			errorStyle.Render("✕ Provider Save Failed"),
-			"",
-			"  " + v.errorMessage,
-			"",
-			mutedStyle.Render("enter retry save · esc back to models · ctrl+c cancel"),
-		}
-		return renderProviderModal(m, accentError, rows)
-
-	case providerStateConfirmOverwrite:
-		rows := []string{
-			warningStyle.Render("Provider Already Exists"),
-			"",
-			fmt.Sprintf("  %q is already configured.", strings.TrimSpace(v.nameInput.Value())),
-			mutedStyle.Render("  Continuing will replace its endpoint and API key."),
-			"",
-			mutedStyle.Render("enter overwrite · esc back · ctrl+c cancel"),
-		}
-		return renderProviderModal(m, warningColor, rows)
-
-	case providerStateError:
-		rows := []string{
-			errorStyle.Render("✕ Connection Failed"),
-			"",
-			"  " + v.errorMessage,
-			"",
-			mutedStyle.Render("enter / esc return to credentials"),
-		}
-		return renderProviderModal(m, accentError, rows)
-
-	case providerStateInput:
-		fallthrough
-	default:
-		return renderProviderInput(m)
+	if m == nil {
+		return ""
 	}
+	v.resizeInputs(m.width)
+	rows, tone := pane.ProviderEditorRows(providerEditorSnapshot(m, v))
+	return renderProviderModal(m, providerToneColor(tone), rows)
 }
 
 func (v *providerPaneView) resizeInputs(width int) {
@@ -538,44 +392,99 @@ func (v *providerPaneView) resizeInputs(width int) {
 	v.apiKeyInput.Width = inputWidth
 }
 
-func (v *providerPaneView) inputTitle(compact bool) string {
-	if v.isEditing {
-		if compact {
-			return fmt.Sprintf("✓ Edit %s", v.nameInput.Value())
+func providerEditorSnapshot(m *bubbleModel, v *providerPaneView) pane.ProviderEditorSnapshot {
+	if m == nil || v == nil {
+		return pane.ProviderEditorSnapshot{}
+	}
+	models := v.currentModels()
+	items := make([]pane.ProviderEditorModel, 0, len(models))
+	providerName := strings.TrimSpace(v.nameInput.Value())
+	for _, md := range models {
+		resolved := model.ResolveRemoteMetadata(providerName, md)
+		label := strings.TrimSpace(md.ID)
+		if name := strings.TrimSpace(md.Name); name != "" && !strings.EqualFold(name, label) {
+			if label == "" {
+				label = name
+			} else {
+				label = fmt.Sprintf("%s (%s)", name, label)
+			}
 		}
-		return fmt.Sprintf("✓ Edit Provider: %s [Step 1/2: Connection]", v.nameInput.Value())
+		items = append(items, pane.ProviderEditorModel{
+			Label:     label,
+			Free:      model.IsFreeModel(md.ID),
+			Limits:    formatModelTokenLimits(resolved.Profile.ContextWindow, resolved.Profile.MaxInputTokens, resolved.Profile.MaxOutputTokens),
+			Features:  strings.Join(resolved.Features, ", "),
+			Reasoning: remoteModelReasoningSummary(providerName, md, false),
+		})
 	}
-	if compact {
-		return "+ Add Provider"
+	hasFreeModels := false
+	for _, md := range v.models {
+		if model.IsFreeModel(md.ID) {
+			hasFreeModels = true
+			break
+		}
 	}
-	return "+ Add Model Provider [Step 1/2: Connection]"
+	fieldErrors := [3]string{
+		v.fieldErrors[providerFieldName],
+		v.fieldErrors[providerFieldEndpoint],
+		v.fieldErrors[providerFieldAPIKey],
+	}
+	return pane.ProviderEditorSnapshot{
+		Width:          m.width,
+		Height:         m.height,
+		State:          providerEditorPaneState(v.state),
+		Name:           v.nameInput.Value(),
+		Endpoint:       v.endpointInput.Value(),
+		Spinner:        m.spinner.View(),
+		UserConfigPath: appdirs.UserConfigDisplay(),
+		ErrorMessage:   v.errorMessage,
+		IsEditing:      v.isEditing,
+		ActivateOnSave: v.activateOnSave,
+		ProviderType:   v.providerType,
+		ProtocolLabel:  v.protocolLabel(),
+		RequiresAPIKey: v.requiresAPIKey,
+		NameInput:      v.nameInput.View(),
+		EndpointInput:  v.endpointInput.View(),
+		APIKeyInput:    v.apiKeyInput.View(),
+		FieldErrors:    fieldErrors,
+		Models:         items,
+		SelectedIndex:  v.selectedIndex,
+		ScrollOffset:   v.scrollOffset,
+		FilterFreeOnly: v.filterFreeOnly,
+		HasFreeModels:  hasFreeModels,
+		TotalModels:    len(v.models),
+	}
 }
 
-func (v *providerPaneView) inputFieldRows(compact bool) []string {
-	keyLabel := "API Key:"
-	if !v.requiresAPIKey {
-		keyLabel = "API Key (optional):"
+func providerEditorPaneState(state providerPaneState) pane.ProviderEditorState {
+	switch state {
+	case providerStateFetching:
+		return pane.ProviderEditorFetching
+	case providerStateSelectModel:
+		return pane.ProviderEditorSelectModel
+	case providerStateConfirmOverwrite:
+		return pane.ProviderEditorConfirmOverwrite
+	case providerStateSaving:
+		return pane.ProviderEditorSaving
+	case providerStateSaveError:
+		return pane.ProviderEditorSaveError
+	case providerStateError:
+		return pane.ProviderEditorError
+	default:
+		return pane.ProviderEditorInput
 	}
+}
 
-	if compact {
-		return []string{
-			renderProviderInlineField("N:", v.nameInput.View(), v.fieldErrors[providerFieldName]),
-			renderProviderInlineField("URL:", v.endpointInput.View(), v.fieldErrors[providerFieldEndpoint]),
-			renderProviderInlineField("K:", v.apiKeyInput.View(), v.fieldErrors[providerFieldAPIKey]),
-		}
-	}
-
-	return []string{
-		mutedStyle.Render("Protocol: ") + v.protocolLabel(),
-		"",
-		renderProviderFieldLabel("Provider Name:", v.fieldErrors[providerFieldName]),
-		v.nameInput.View(),
-		"",
-		renderProviderFieldLabel("Endpoint (Base URL):", v.fieldErrors[providerFieldEndpoint]),
-		v.endpointInput.View(),
-		"",
-		renderProviderFieldLabel(keyLabel, v.fieldErrors[providerFieldAPIKey]),
-		v.apiKeyInput.View(),
+func providerToneColor(tone pane.Tone) lipgloss.TerminalColor {
+	switch tone {
+	case pane.ToneUser:
+		return accentUser
+	case pane.ToneError:
+		return accentError
+	case pane.ToneWarning:
+		return warningColor
+	default:
+		return accentAssistant
 	}
 }
 
@@ -587,51 +496,11 @@ func renderProviderInput(m *bubbleModel) string {
 	if !ok || view == nil {
 		return ""
 	}
-	compact := m.height <= 20
-	rows := []string{brandStyle.Render(view.inputTitle(compact))}
-	if !compact {
-		rows = append(rows,
-			"",
-			mutedStyle.Render("Presets: alt+1 Protonman · alt+2 OpenCode · alt+3 Ollama · alt+4 OpenAI · alt+5 Anthropic"),
-			"",
-		)
-	}
-	rows = append(rows, view.inputFieldRows(compact)...)
-	rows = append(rows, "")
-	if compact {
-		footer := fmt.Sprintf("%s · ctrl+r · tab fields · enter connect · esc", strings.ToLower(strings.TrimSpace(view.providerType)))
-		if view.isEditing && !view.activateOnSave {
-			footer = "enter save · active stays · esc cancel"
-		}
-		rows = append(rows, mutedStyle.Render(footer))
-	} else {
-		footer := "tab/shift+tab cycle · ctrl+r protocol · enter connect & fetch · esc cancel"
-		if view.isEditing && !view.activateOnSave {
-			footer = "tab/shift+tab cycle · enter save · active provider stays · esc cancel"
-		}
-		rows = append(rows, mutedStyle.Render(footer))
-	}
-	return renderProviderModal(m, accentAssistant, rows)
-}
-
-func renderProviderInlineField(label, input, fieldError string) string {
-	row := label + " " + input
-	if fieldError != "" {
-		row += " " + errorStyle.Render("("+fieldError+")")
-	}
-	return row
-}
-
-func providerModelLabel(md model.RemoteModel) string {
-	id := strings.TrimSpace(md.ID)
-	name := strings.TrimSpace(md.Name)
-	if name == "" || strings.EqualFold(name, id) {
-		return id
-	}
-	if id == "" {
-		return name
-	}
-	return fmt.Sprintf("%s (%s)", name, id)
+	view.resizeInputs(m.width)
+	snapshot := providerEditorSnapshot(m, view)
+	snapshot.State = pane.ProviderEditorInput
+	rows, tone := pane.ProviderEditorRows(snapshot)
+	return renderProviderModal(m, providerToneColor(tone), rows)
 }
 
 func renderProviderModal(m *bubbleModel, border lipgloss.TerminalColor, rows []string) string {
@@ -648,14 +517,10 @@ func renderProviderModal(m *bubbleModel, border lipgloss.TerminalColor, rows []s
 }
 
 func providerModalContentWidth(m *bubbleModel) int {
-	return maxInt(1, maxInt(1, m.width-4)-6)
-}
-
-func renderProviderFieldLabel(label, fieldError string) string {
-	if fieldError == "" {
-		return mutedStyle.Render(label)
+	if m == nil {
+		return maxInt(1, defaultBubbleWidth-10)
 	}
-	return mutedStyle.Render(label+" ") + errorStyle.Render("("+fieldError+")")
+	return maxInt(1, maxInt(1, m.width-4)-6)
 }
 
 func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
