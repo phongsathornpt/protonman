@@ -210,6 +210,11 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 	if name == "" {
 		name = result.ToolName
 	}
+	if name == "bash" {
+		// Shell commands may change HEAD or switch worktrees. Refresh the cached
+		// welcome metadata once after completion instead of reading .git during View.
+		m.invalidateWelcomeBranch()
+	}
 	if name == "" {
 		name = m.lastRunningToolName()
 	}

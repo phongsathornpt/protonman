@@ -30,19 +30,42 @@ type structuredMetadata struct {
 	Fields   []string `json:"fields,omitempty"`
 }
 
-type numericSummary = baseanalysis.Summary
+type numericSummary struct {
+	baseanalysis.Summary
+	Median float64 `json:"median"`
+}
+
 type structuredAnalysis struct {
-	Preview    any                       `json:"preview,omitempty"`
-	Statistics map[string]numericSummary `json:"statistics,omitempty"`
+	Preview    any                            `json:"preview,omitempty"`
+	Statistics map[string]numericSummary      `json:"statistics,omitempty"`
+	Fields     map[string]fieldProfileSummary `json:"fields,omitempty"`
 }
 
 type numericAccumulator struct {
-	stats baseanalysis.RunningStats
+	stats  baseanalysis.RunningStats
+	values []float64
 }
 
-func (a *numericAccumulator) add(value float64) { a.stats.Add(value) }
+func (a *numericAccumulator) add(value float64) {
+	a.stats.Add(value)
+	a.values = append(a.values, value)
+}
 
-func (a numericAccumulator) summary() numericSummary { return a.stats.Summary() }
+func (a numericAccumulator) summary() numericSummary {
+	result := numericSummary{Summary: a.stats.Summary()}
+	if len(a.values) == 0 {
+		return result
+	}
+	values := append([]float64(nil), a.values...)
+	sort.Float64s(values)
+	middle := len(values) / 2
+	if len(values)%2 == 0 {
+		result.Median = (values[middle-1] + values[middle]) / 2
+	} else {
+		result.Median = values[middle]
+	}
+	return result
+}
 func readStructuredArtifact(ctx context.Context, file *os.File, info os.FileInfo, input readFileInput, artifact artifactInfo, call tool.Call) (tool.Result, error) {
 	defer file.Close()
 	data, err := io.ReadAll(io.LimitReader(file, int64(MaxReadFileBytes)+1))
@@ -116,6 +139,7 @@ func summarizeJSONValue(value any) (structuredMetadata, structuredAnalysis, erro
 		metadata.Columns = len(metadata.Fields)
 		analysis.Preview = previewSlice(typed)
 		analysis.Statistics = statisticsForObjects(typed, metadata.Fields)
+		analysis.Fields = profilesForObjects(typed, metadata.Fields)
 	case map[string]any:
 		metadata.TopLevel = "object"
 		metadata.Rows = 1
@@ -123,6 +147,7 @@ func summarizeJSONValue(value any) (structuredMetadata, structuredAnalysis, erro
 		metadata.Columns = len(metadata.Fields)
 		analysis.Preview = previewObject(typed, metadata.Fields)
 		analysis.Statistics = statisticsForObject(typed, metadata.Fields)
+		analysis.Fields = profilesForObject(typed, metadata.Fields)
 	default:
 		metadata.TopLevel = "scalar"
 		metadata.Rows = 1
@@ -289,7 +314,7 @@ func analyzeJSONL(data []byte, truncated bool) (structuredMetadata, structuredAn
 	fields := collectObjectFields(rows)
 	return structuredMetadata{
 		Format: "jsonl", TopLevel: "records", Rows: len(rows), Columns: len(fields), Fields: fields,
-	}, structuredAnalysis{Preview: previewSlice(rows), Statistics: statisticsForObjects(rows, fields)}, nil
+	}, structuredAnalysis{Preview: previewSlice(rows), Statistics: statisticsForObjects(rows, fields), Fields: profilesForObjects(rows, fields)}, nil
 }
 func analyzeDelimited(data []byte, kind artifactKind, truncated bool) (structuredMetadata, structuredAnalysis, error) {
 	if truncated {
@@ -311,6 +336,7 @@ func analyzeDelimited(data []byte, kind artifactKind, truncated bool) (structure
 	}
 	preview := make([]map[string]string, 0, maxStructuredPreviewRows)
 	accumulators := make(map[string]*numericAccumulator)
+	profiles := make(map[string]*fieldProfile, len(fields))
 	rows := 0
 	for {
 		record, readErr := reader.Read()
@@ -331,9 +357,16 @@ func analyzeDelimited(data []byte, kind artifactKind, truncated bool) (structure
 			preview = append(preview, row)
 		}
 		for index, field := range fields {
+			profile := profiles[field]
+			if profile == nil {
+				profile = &fieldProfile{}
+				profiles[field] = profile
+			}
 			if index >= len(record) {
+				profile.addDelimited("")
 				continue
 			}
+			profile.addDelimited(record[index])
 			value, parseErr := strconv.ParseFloat(strings.TrimSpace(record[index]), 64)
 			if parseErr != nil {
 				continue
@@ -352,5 +385,5 @@ func analyzeDelimited(data []byte, kind artifactKind, truncated bool) (structure
 	}
 	return structuredMetadata{
 		Format: format, TopLevel: "table", Rows: rows, Columns: len(header), Fields: fields,
-	}, structuredAnalysis{Preview: preview, Statistics: finalizeStatistics(accumulators)}, nil
+	}, structuredAnalysis{Preview: preview, Statistics: finalizeStatistics(accumulators), Fields: finalizeFieldProfiles(profiles, fields)}, nil
 }

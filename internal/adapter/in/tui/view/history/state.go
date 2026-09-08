@@ -19,89 +19,120 @@ type ScrollAnchor struct {
 
 // CaptureScrollAnchor maps a rendered history line to its owning cell. Blank
 // separators anchor to the following cell so separator growth never becomes a
-// visible jump.
+// visible jump. Committed lines reuse the render index built with the transcript
+// cache; only the mutable active tail may need rendering here.
 func (s *HistoryState) CaptureScrollAnchor(renderedLine int) ScrollAnchor {
 	if s == nil || renderedLine < 0 {
 		return ScrollAnchor{}
 	}
-	cells := s.Cells()
-	cursor := 0
-	for index, cell := range cells {
-		if index > 0 {
-			if renderedLine == cursor {
-				return ScrollAnchor{cell: cell, cellIndex: index, line: 0, valid: true}
-			}
-			cursor++
+	s.buildCommittedCache()
+	if renderedLine < len(s.cachedAnchors) {
+		return s.cachedAnchors[renderedLine]
+	}
+	if s.active == nil {
+		return ScrollAnchor{}
+	}
+	cursor := len(s.cachedAnchors)
+	activeIndex := len(s.committed)
+	if len(s.cachedRender) > 0 {
+		if renderedLine == cursor {
+			return ScrollAnchor{cell: s.active, cellIndex: activeIndex, line: 0, valid: true}
 		}
-		lines := renderHistoryCell(cell, s.renderWidth)
-		if renderedLine < cursor+len(lines) {
-			return ScrollAnchor{cell: cell, cellIndex: index, line: renderedLine - cursor, valid: true}
-		}
-		cursor += len(lines)
+		cursor++
+	}
+	activeLines := renderHistoryCell(s.active, s.renderWidth)
+	if renderedLine < cursor+len(activeLines) {
+		return ScrollAnchor{cell: s.active, cellIndex: activeIndex, line: renderedLine - cursor, valid: true}
 	}
 	return ScrollAnchor{}
 }
 
 // ScrollAnchors returns a line-for-line logical map for RenderContent.
-// Separator rows point at the following cell so scrolling onto whitespace still
-// retains a stable semantic position when earlier cells change height.
+// The committed prefix is cached with rendered content, avoiding a second full
+// render solely to reconstruct scroll metadata.
 func (s *HistoryState) ScrollAnchors() []ScrollAnchor {
 	if s == nil {
 		return nil
 	}
-	cells := s.Cells()
-	anchors := make([]ScrollAnchor, 0, s.lineCount()+len(cells))
-	for index, cell := range cells {
-		if index > 0 {
-			anchors = append(anchors, ScrollAnchor{cell: cell, cellIndex: index, line: 0, valid: true})
-		}
-		lines := renderHistoryCell(cell, s.renderWidth)
-		for line := range lines {
-			anchors = append(anchors, ScrollAnchor{cell: cell, cellIndex: index, line: line, valid: true})
-		}
+	s.buildCommittedCache()
+	activeLines := []string(nil)
+	if s.active != nil {
+		activeLines = renderHistoryCell(s.active, s.renderWidth)
+	}
+	extra := len(activeLines)
+	if len(s.cachedRender) > 0 && len(activeLines) > 0 {
+		extra++
+	}
+	anchors := make([]ScrollAnchor, len(s.cachedAnchors), len(s.cachedAnchors)+extra)
+	copy(anchors, s.cachedAnchors)
+	if len(activeLines) == 0 {
+		return anchors
+	}
+	activeIndex := len(s.committed)
+	if len(s.cachedRender) > 0 {
+		anchors = append(anchors, ScrollAnchor{cell: s.active, cellIndex: activeIndex, line: 0, valid: true})
+	}
+	for line := range activeLines {
+		anchors = append(anchors, ScrollAnchor{cell: s.active, cellIndex: activeIndex, line: line, valid: true})
 	}
 	return anchors
 }
 
 // ResolveScrollAnchor returns the current rendered line for a previously
-// captured anchor after live history cells have changed size.
+// captured anchor after live history cells have changed size. Committed cell
+// positions come from the render cache instead of rendering every preceding cell.
 func (s *HistoryState) ResolveScrollAnchor(anchor ScrollAnchor) (int, bool) {
 	if s == nil || !anchor.valid {
 		return 0, false
 	}
-	cells := s.Cells()
-	cursor := 0
-	for index, cell := range cells {
-		if index > 0 {
-			cursor++
+	s.buildCommittedCache()
+	if anchor.cellIndex >= 0 && anchor.cellIndex < len(s.cachedCells) {
+		indexed := s.cachedCells[anchor.cellIndex]
+		if sameHistoryCell(indexed.cell, anchor.cell) {
+			return resolveIndexedAnchor(indexed, anchor.line), true
 		}
-		if sameHistoryCell(cell, anchor.cell) {
-			lines := renderHistoryCell(cell, s.renderWidth)
-			if len(lines) == 0 {
-				return cursor, true
-			}
-			line := anchor.line
-			if line >= len(lines) {
-				line = len(lines) - 1
-			}
-			return cursor + line, true
-		}
-		cursor += len(renderHistoryCell(cell, s.renderWidth))
 	}
-	if anchor.cellIndex >= 0 && anchor.cellIndex < len(cells) {
-		cursor = 0
-		for index, cell := range cells[:anchor.cellIndex] {
-			if index > 0 {
-				cursor++
-			}
-			cursor += len(renderHistoryCell(cell, s.renderWidth))
+	for _, indexed := range s.cachedCells {
+		if sameHistoryCell(indexed.cell, anchor.cell) {
+			return resolveIndexedAnchor(indexed, anchor.line), true
 		}
-		if anchor.cellIndex > 0 {
-			cursor++
+	}
+	if s.active != nil && sameHistoryCell(s.active, anchor.cell) {
+		start := len(s.cachedRender)
+		if start > 0 {
+			start++
 		}
-		return cursor, true
+		lines := renderHistoryCell(s.active, s.renderWidth)
+		if len(lines) == 0 {
+			return start, true
+		}
+		line := min(anchor.line, len(lines)-1)
+		return start + line, true
+	}
+	if anchor.cellIndex >= 0 && anchor.cellIndex < len(s.cachedCells) {
+		return s.cachedCells[anchor.cellIndex].startLine, true
+	}
+	if anchor.cellIndex == len(s.committed) && s.active != nil {
+		start := len(s.cachedRender)
+		if start > 0 {
+			start++
+		}
+		return start, true
 	}
 	return 0, false
+}
+
+type renderedCellIndex struct {
+	cell      HistoryCell
+	startLine int
+	lineCount int
+}
+
+func resolveIndexedAnchor(index renderedCellIndex, line int) int {
+	if index.lineCount <= 0 {
+		return index.startLine
+	}
+	return index.startLine + min(line, index.lineCount-1)
 }
 
 func sameHistoryCell(left, right HistoryCell) bool {
@@ -123,23 +154,27 @@ type runningHistoryTool interface {
 // HistoryState separates finalized transcript cells from one mutable in-flight
 // cell. Renderers always see committed cells plus the live active tail.
 type HistoryState struct {
-	committed        []HistoryCell
-	active           HistoryCell
-	maxLines         int
-	renderWidth      int
-	cachedRender     []string
-	cachedRenderText string
-	renderTextValid  bool
-	cachedRaw        []string
-	cachedRawText    string
-	rawTextValid     bool
-	cacheValid       bool
-	cachedWidth      int
-	altRender        []string
-	altRenderValid   bool
-	altRenderWidth   int
-	spinnerFrame     string
-	committedLines   int
+	committed         []HistoryCell
+	active            HistoryCell
+	maxLines          int
+	renderWidth       int
+	cachedRender      []string
+	cachedAnchors     []ScrollAnchor
+	cachedCells       []renderedCellIndex
+	cachedRenderText  string
+	renderTextValid   bool
+	cachedRaw         []string
+	cachedRawText     string
+	rawTextValid      bool
+	cacheValid        bool
+	cachedWidth       int
+	altRender         []string
+	altRenderValid    bool
+	altRenderWidth    int
+	spinnerFrame      string
+	committedLines    int
+	committedRevision uint64
+	activeRevision    uint64
 }
 
 func NewHistoryState(maxLines int) *HistoryState {
@@ -148,6 +183,19 @@ func NewHistoryState(maxLines int) *HistoryState {
 	}
 	return &HistoryState{committed: make([]HistoryCell, 0), maxLines: maxLines, renderWidth: defaultHistoryWidth}
 }
+
+// Revisions reports visual generations for the committed prefix and mutable
+// active tail. Callers use them to avoid rebuilding full scrollback when only
+// off-screen streaming content changed.
+func (s *HistoryState) Revisions() (committed uint64, active uint64) {
+	if s == nil {
+		return 0, 0
+	}
+	return s.committedRevision, s.activeRevision
+}
+
+func (s *HistoryState) touchCommitted() { s.committedRevision++ }
+func (s *HistoryState) touchActive()    { s.activeRevision++ }
 
 // SetWidth updates the rich transcript width and invalidates visual caches.
 // Raw transcript consumers remain independent of terminal dimensions.
@@ -162,6 +210,8 @@ func (s *HistoryState) SetWidth(width int) {
 		return
 	}
 	s.renderWidth = width
+	s.touchCommitted()
+	s.touchActive()
 	s.cacheValid = false
 	s.buildCommittedCache()
 }
@@ -175,15 +225,39 @@ func (s *HistoryState) SetSpinnerFrame(frame string) bool {
 	if changed {
 		setCellSpinner(s.active, frame)
 	}
-	for _, cell := range s.committed {
+	for index, cell := range s.committed {
 		if r, ok := cell.(runningHistoryTool); ok && r.historyToolRunning() {
 			setCellSpinner(cell, frame)
-			s.cacheValid = false
+			if s.cacheValid && s.cachedWidth == s.renderWidth {
+				s.refreshCachedCommittedCell(index)
+			}
 			s.altRenderValid = false
 			changed = true
 		}
 	}
 	return changed
+}
+
+// refreshCachedCommittedCell updates one already-indexed committed cell in
+// place. Spinner frames are presentation-only and normally preserve line count,
+// so they should not force a full transcript rerender on every animation tick.
+func (s *HistoryState) refreshCachedCommittedCell(index int) {
+	if !s.cacheValid || index < 0 || index >= len(s.committed) || index >= len(s.cachedCells) {
+		return
+	}
+	cached := s.cachedCells[index]
+	if !sameHistoryCell(cached.cell, s.committed[index]) {
+		s.cacheValid = false
+		return
+	}
+	lines := renderHistoryCell(s.committed[index], s.renderWidth)
+	if len(lines) != cached.lineCount || cached.startLine < 0 || cached.startLine+cached.lineCount > len(s.cachedRender) {
+		s.cacheValid = false
+		return
+	}
+	copy(s.cachedRender[cached.startLine:cached.startLine+cached.lineCount], lines)
+	s.cachedRenderText = ""
+	s.renderTextValid = false
 }
 
 func cellUsesSpinner(cell HistoryCell) bool {
@@ -262,8 +336,14 @@ func (s *HistoryState) AgentRun(agentID string) *AgentRunCell {
 
 // TouchAgentRun invalidates cached rendering after an in-place lifecycle update.
 func (s *HistoryState) TouchAgentRun(agentID string) bool {
-	if s.AgentRun(agentID) == nil {
+	cell := s.AgentRun(agentID)
+	if cell == nil {
 		return false
+	}
+	if active, ok := s.active.(*AgentRunCell); ok && active == cell {
+		s.touchActive()
+	} else {
+		s.touchCommitted()
 	}
 	s.cacheValid = false
 	s.altRenderValid = false
@@ -279,6 +359,7 @@ func (s *HistoryState) Append(cell HistoryCell) {
 	s.CommitActive()
 	s.committed = append(s.committed, cell)
 	s.committedLines += historyCellLineCount(cell, s.renderWidth)
+	s.touchCommitted()
 	s.cacheValid = false
 	s.altRenderValid = false
 	s.trim()
@@ -287,6 +368,7 @@ func (s *HistoryState) Append(cell HistoryCell) {
 func (s *HistoryState) StartThinking() {
 	s.CommitActive()
 	s.active = &ThinkingCell{Spinner: s.spinnerFrame}
+	s.touchActive()
 }
 
 func (s *HistoryState) AppendAssistantDelta(delta string) {
@@ -297,16 +379,19 @@ func (s *HistoryState) AppendAssistantDelta(delta string) {
 		cell := &AssistantCell{}
 		cell.appendDelta(delta)
 		s.active = cell
+		s.touchActive()
 		return
 	}
 	if assistant, ok := s.active.(*AssistantCell); ok {
 		assistant.appendDelta(delta)
+		s.touchActive()
 		return
 	}
 	s.CommitActive()
 	cell := &AssistantCell{}
 	cell.appendDelta(delta)
 	s.active = cell
+	s.touchActive()
 }
 
 func (s *HistoryState) StartTool(name string) {
@@ -326,6 +411,7 @@ func (s *HistoryState) StartToolCell(cell HistoryCell) {
 		setCellSpinner(cell, s.spinnerFrame)
 	}
 	s.active = cell
+	s.touchActive()
 }
 
 func (s *HistoryState) CompleteTool(completed ToolCell) {
@@ -346,6 +432,7 @@ func (s *HistoryState) DiscardToolCall(callID string, name string) bool {
 	}
 	if runningToolMatches(s.active, callID, name) {
 		s.active = nil
+		s.touchActive()
 		s.cacheValid = false
 		s.altRenderValid = false
 		return true
@@ -356,6 +443,7 @@ func (s *HistoryState) DiscardToolCall(callID string, name string) bool {
 		}
 		s.committedLines -= historyCellLineCount(s.committed[i], s.renderWidth)
 		s.committed = append(s.committed[:i], s.committed[i+1:]...)
+		s.touchCommitted()
 		s.cacheValid = false
 		s.altRenderValid = false
 		s.renderTextValid = false
@@ -381,6 +469,7 @@ func (s *HistoryState) CompleteToolCall(callID string, name string, completed Hi
 		s.committedLines -= historyCellLineCount(s.committed[i], s.renderWidth)
 		s.committed[i] = completed
 		s.committedLines += historyCellLineCount(completed, s.renderWidth)
+		s.touchCommitted()
 		s.cacheValid = false
 		s.altRenderValid = false
 		s.trim()
@@ -464,11 +553,14 @@ func (s *HistoryState) CommitActive() {
 	}
 	if _, ok := s.active.(*ThinkingCell); ok {
 		s.active = nil
+		s.touchActive()
 		return
 	}
 	s.committed = append(s.committed, s.active)
 	s.committedLines += historyCellLineCount(s.active, s.renderWidth)
 	s.active = nil
+	s.touchCommitted()
+	s.touchActive()
 	s.cacheValid = false
 	s.altRenderValid = false
 	s.trim()
@@ -477,9 +569,13 @@ func (s *HistoryState) CommitActive() {
 func (s *HistoryState) Reset() {
 	s.committed = s.committed[:0]
 	s.active = nil
+	s.touchCommitted()
+	s.touchActive()
 	s.cacheValid = false
 	s.altRenderValid = false
 	s.cachedRender = nil
+	s.cachedAnchors = nil
+	s.cachedCells = nil
 	s.cachedRenderText = ""
 	s.renderTextValid = false
 	s.altRender = nil
@@ -490,6 +586,7 @@ func (s *HistoryState) Reset() {
 }
 
 func (s *HistoryState) InvalidateCache() {
+	s.touchCommitted()
 	s.cacheValid = false
 	s.altRenderValid = false
 }
@@ -499,19 +596,29 @@ func (s *HistoryState) buildCommittedCache() {
 		return
 	}
 	render := make([]string, 0, len(s.committed)*4)
+	anchors := make([]ScrollAnchor, 0, len(s.committed)*4)
+	cells := make([]renderedCellIndex, 0, len(s.committed))
 	raw := make([]string, 0, len(s.committed)*2)
 	committedLines := 0
 	for index, cell := range s.committed {
 		if index > 0 {
 			render = append(render, "")
+			anchors = append(anchors, ScrollAnchor{cell: cell, cellIndex: index, line: 0, valid: true})
 		}
 		cellLines := renderHistoryCell(cell, s.renderWidth)
+		startLine := len(render)
 		committedLines += len(cellLines)
+		for line := range cellLines {
+			anchors = append(anchors, ScrollAnchor{cell: cell, cellIndex: index, line: line, valid: true})
+		}
 		render = append(render, cellLines...)
+		cells = append(cells, renderedCellIndex{cell: cell, startLine: startLine, lineCount: len(cellLines)})
 		raw = append(raw, cell.RawLines()...)
 	}
 	s.committedLines = committedLines
 	s.cachedRender = render
+	s.cachedAnchors = anchors
+	s.cachedCells = cells
 	s.cachedRenderText = ""
 	s.renderTextValid = false
 	s.cachedRaw = raw

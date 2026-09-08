@@ -74,3 +74,93 @@ func TestBashDedicatedRecoveryResolvesCustomCwd(t *testing.T) {
 		t.Fatalf("recovery path = %#v", args["path"])
 	}
 }
+
+func TestBashRedirectsSimpleInspectionCommands(t *testing.T) {
+	tests := []struct {
+		command string
+		tool    string
+		args    map[string]any
+	}{
+		{`cat "main.go"`, "read_file", map[string]any{"path": "main.go"}},
+		{`ls internal`, "list_dir", map[string]any{"path": "internal"}},
+		{`rg "TODO" internal`, "grep", map[string]any{"pattern": "TODO", "path": "internal"}},
+		{`grep -R "TODO" internal`, "grep", map[string]any{"pattern": "TODO", "path": "internal"}},
+		{`find internal -name '*.go' -type f -maxdepth 3`, "find_files", map[string]any{
+			"path": "internal", "pattern": "*.go", "type": "file", "max_depth": 3,
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.command, func(t *testing.T) {
+			suggestion := dedicatedToolForCommand(test.command)
+			if suggestion == nil || suggestion.tool != test.tool {
+				t.Fatalf("suggestion = %#v, want tool %s", suggestion, test.tool)
+			}
+			for key, want := range test.args {
+				if got := suggestion.args[key]; got != want {
+					t.Fatalf("argument %s = %#v, want %#v", key, got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestBashLeavesNonEquivalentShellInspectionAlone(t *testing.T) {
+	for _, command := range []string{
+		`cat main.go | sed -n '1,5p'`,
+		`ls -la internal`,
+		`grep "TODO" internal/main.go`,
+		`rg -i "todo" internal`,
+		`find internal -mtime -1`,
+		`cat "$FILE"`,
+	} {
+		t.Run(command, func(t *testing.T) {
+			if suggestion := dedicatedToolForCommand(command); suggestion != nil {
+				t.Fatalf("suggestion = %#v, want nil", suggestion)
+			}
+		})
+	}
+}
+
+func TestSplitSimpleShellWordsPreservesQuotedArguments(t *testing.T) {
+	words, ok := splitSimpleShellWords(`rg "hello world" "src dir"`)
+	if !ok {
+		t.Fatal("splitSimpleShellWords rejected balanced quoting")
+	}
+	want := []string{"rg", "hello world", "src dir"}
+	if len(words) != len(want) {
+		t.Fatalf("words = %#v, want %#v", words, want)
+	}
+	for index := range want {
+		if words[index] != want[index] {
+			t.Fatalf("words = %#v, want %#v", words, want)
+		}
+	}
+}
+
+func TestBashRedirectsRuntimeDiscoveryScripts(t *testing.T) {
+	tests := []struct {
+		command string
+		tool    string
+		path    string
+	}{
+		{`python3 -c 'from pathlib import Path; print(list(Path("internal").rglob("*.go")))'`, "find_files", "internal"},
+		{`python3 -c 'import os; print(list(os.walk("internal")))'`, "find_files", "internal"},
+		{`python3 -c 'from pathlib import Path; print(list(Path("internal").iterdir()))'`, "list_dir", "internal"},
+		{`node -e 'console.log(fs.readdirSync("internal"))'`, "list_dir", "internal"},
+	}
+	for _, test := range tests {
+		t.Run(test.command, func(t *testing.T) {
+			suggestion := dedicatedToolForCommand(test.command)
+			if suggestion == nil || suggestion.tool != test.tool || suggestion.args["path"] != test.path {
+				t.Fatalf("suggestion = %#v, want %s path %s", suggestion, test.tool, test.path)
+			}
+		})
+	}
+}
+
+func TestBashDoesNotRedirectMutatingPythonDiscoveryScript(t *testing.T) {
+	command := `python3 -c 'import os; list(os.walk("internal")); os.remove("internal/tmp.txt")'`
+	if suggestion := dedicatedToolForCommand(command); suggestion != nil {
+		t.Fatalf("suggestion = %#v, want nil", suggestion)
+	}
+}

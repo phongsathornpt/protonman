@@ -39,3 +39,56 @@ func TestScrollAnchorsMatchRenderedContentLines(t *testing.T) {
 		t.Fatalf("ScrollAnchors lines=%d RenderContent lines=%d content=%q", got, want, content)
 	}
 }
+
+type countingCell struct {
+	text    string
+	renders int
+}
+
+func (*countingCell) Kind() HistoryCellKind { return HistoryCellSystem }
+func (c *countingCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
+func (c *countingCell) RenderWidth(int) []string {
+	c.renders++
+	return []string{c.text}
+}
+func (c *countingCell) RawLines() []string { return []string{c.text} }
+func (*countingCell) LineCount() int       { return 1 }
+
+func TestScrollMetadataReusesCommittedRenderCache(t *testing.T) {
+	state := NewHistoryState(100)
+	cell := &countingCell{text: "cached"}
+	state.Append(cell)
+	_ = state.RenderContent()
+	renders := cell.renders
+	anchor := state.CaptureScrollAnchor(0)
+	_ = state.ScrollAnchors()
+	if _, ok := state.ResolveScrollAnchor(anchor); !ok {
+		t.Fatal("cached anchor did not resolve")
+	}
+	if cell.renders != renders {
+		t.Fatalf("scroll metadata rerendered committed cell: before=%d after=%d", renders, cell.renders)
+	}
+}
+func TestSpinnerFrameUpdatesCommittedCacheInPlace(t *testing.T) {
+	state := NewHistoryState(100)
+	state.StartTool("read_file")
+	state.StartTool("grep")
+	_ = state.RenderContent()
+	if !state.cacheValid {
+		t.Fatal("expected committed render cache to be valid")
+	}
+	beforeRevision, _ := state.Revisions()
+	if !state.SetSpinnerFrame("⠙") {
+		t.Fatal("expected running committed tool to consume spinner frame")
+	}
+	if !state.cacheValid {
+		t.Fatal("spinner frame invalidated full committed render cache")
+	}
+	afterRevision, _ := state.Revisions()
+	if afterRevision != beforeRevision {
+		t.Fatalf("spinner changed committed semantic revision: before=%d after=%d", beforeRevision, afterRevision)
+	}
+	if content := state.RenderContent(); !strings.Contains(content, "⠙") {
+		t.Fatalf("cached transcript did not reflect spinner update: %q", content)
+	}
+}
