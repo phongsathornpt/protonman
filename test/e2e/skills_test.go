@@ -30,7 +30,7 @@ Execute test workflows efficiently.
 	}
 
 	result := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call activate_skill {"name":"sample-skill"}`},
+		args: []string{"-y", "-p", `/call skill {"name":"sample-skill"}`},
 		dir:  ws,
 		env:  []string{"PROTONMAN_HOME=" + home},
 	})
@@ -67,7 +67,7 @@ description: Project specific skill
 
 	t.Run("untrusted project warns and skips project skill", func(t *testing.T) {
 		result := runProton(t, runOptions{
-			args: []string{"-y", "-p", `/call activate_skill {"name":"project-skill"}`},
+			args: []string{"-y", "-p", `/call skill {"name":"project-skill"}`},
 			dir:  ws,
 			env:  []string{"PROTONMAN_HOME=" + home},
 		})
@@ -76,7 +76,7 @@ description: Project specific skill
 		if !strings.Contains(result.stderr, "skipping project skills") || !strings.Contains(result.stderr, "PROTONMAN_TRUST_PROJECT=1") {
 			t.Fatalf("expected trust warning on stderr, got: %s", result.stderr)
 		}
-		// activate_skill should fail since skill is not loaded
+		// skill should fail since skill is not loaded
 		if !strings.Contains(result.stdout, "skill \\\"project-skill\\\" not found") && !strings.Contains(result.stderr, "not found") {
 			t.Fatalf("expected skill not found, got stdout: %s, stderr: %s", result.stdout, result.stderr)
 		}
@@ -84,7 +84,7 @@ description: Project specific skill
 
 	t.Run("trusted project loads and executes project skill", func(t *testing.T) {
 		result := runProton(t, runOptions{
-			args: []string{"-y", "-p", `/call activate_skill {"name":"project-skill"}`},
+			args: []string{"-y", "-p", `/call skill {"name":"project-skill"}`},
 			dir:  ws,
 			env:  []string{"PROTONMAN_HOME=" + home, "PROTONMAN_TRUST_PROJECT=1"},
 		})
@@ -116,7 +116,7 @@ func TestE2EMultiSkillDiscoveryAndActivation(t *testing.T) {
 
 	// 1. Activate skill-alpha
 	result := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call activate_skill {"name":"skill-alpha"}`},
+		args: []string{"-y", "-p", `/call skill {"name":"skill-alpha"}`},
 		dir:  ws,
 		env:  []string{"PROTONMAN_HOME=" + home},
 	})
@@ -129,7 +129,7 @@ func TestE2EMultiSkillDiscoveryAndActivation(t *testing.T) {
 
 	// 2. Activate skill-gamma
 	result = runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call activate_skill {"name":"skill-gamma"}`},
+		args: []string{"-y", "-p", `/call skill {"name":"skill-gamma"}`},
 		dir:  ws,
 		env:  []string{"PROTONMAN_HOME=" + home},
 	})
@@ -142,7 +142,7 @@ func TestE2EMultiSkillDiscoveryAndActivation(t *testing.T) {
 
 	// 3. Attempt unknown skill: should report available skills
 	result = runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call activate_skill {"name":"skill-delta"}`},
+		args: []string{"-y", "-p", `/call skill {"name":"skill-delta"}`},
 		dir:  ws,
 		env:  []string{"PROTONMAN_HOME=" + home},
 	})

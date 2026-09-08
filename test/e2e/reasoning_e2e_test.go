@@ -12,7 +12,7 @@ func TestE2EReasoningGeminiProfileReachesWire(t *testing.T) {
 	ws, home := newTestWorkspace(t), newTestHome(t)
 	server := newMockLLMServer(t)
 	writeReasoningConfig(t, home, server.URL(), "openai", "gemini-3.8-flash", "dex", "")
-	server.AddToolCallResponse("reason-read", "read_file", `{"path":"hello.txt"}`)
+	server.AddToolCallResponse("reason-read", "read", `{"path":"hello.txt"}`)
 	server.AddTextResponse("done")
 
 	res := runProton(t, runOptions{args: []string{"-y", "-p", "Inspect hello.txt and answer done"}, dir: ws, env: []string{"PROTONMAN_HOME=" + home}})
@@ -37,27 +37,27 @@ func TestE2EReasoningGeminiProfileReachesWire(t *testing.T) {
 	if !containsString(initialTools, "read") {
 		t.Fatalf("initial grounding tools missing read: %#v", initialTools)
 	}
-	for _, forbidden := range []string{"get_todo", "update_todo", "delegate_task", "bash", "write_file", "apply_patch"} {
+	for _, forbidden := range []string{"todo", "subagent", "bash", "edit"} {
 		if containsString(initialTools, forbidden) {
 			t.Fatalf("initial grounding tools unexpectedly include %s: %#v", forbidden, initialTools)
 		}
 	}
-	if len(requests) < 2 || !containsString(requestToolNames(requests[1]), "get_todo") || !containsString(requestToolNames(requests[1]), "delegate_task") {
+	if len(requests) < 2 || !containsString(requestToolNames(requests[1]), "todo") || !containsString(requestToolNames(requests[1]), "subagent") {
 		t.Fatalf("post-grounding request did not restore full tool set: %#v", requests)
 	}
-	updateSchema := requestToolParameters(requests[1], "update_todo")
+	updateSchema := requestToolParameters(requests[1], "todo")
 	if len(updateSchema) == 0 {
-		t.Fatalf("Gemini request missing update_todo schema: %#v", requests[1]["tools"])
+		t.Fatalf("Gemini request missing todo schema: %#v", requests[1]["tools"])
 	}
 	for _, forbidden := range []string{"oneOf", "const", "additionalProperties"} {
 		if schemaContainsKey(updateSchema, forbidden) {
-			t.Fatalf("Gemini update_todo schema contains unsupported %s: %#v", forbidden, updateSchema)
+			t.Fatalf("Gemini todo schema contains unsupported %s: %#v", forbidden, updateSchema)
 		}
 	}
 	opSchema := updateSchema["properties"].(map[string]any)["operations"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)["op"].(map[string]any)
 	if !containsAnyString(opSchema["enum"], "add") || !containsAnyString(opSchema["enum"], "set_status") ||
 		!containsAnyString(opSchema["enum"], "set_text") || !containsAnyString(opSchema["enum"], "remove") {
-		t.Fatalf("Gemini update_todo op enum = %#v", opSchema["enum"])
+		t.Fatalf("Gemini todo op enum = %#v", opSchema["enum"])
 	}
 	assertNoSamplingControls(t, requests)
 }
@@ -66,8 +66,8 @@ func TestE2EGeminiOpenAIGetTodoEmptySnapshot(t *testing.T) {
 	ws, home := newTestWorkspace(t), newTestHome(t)
 	server := newMockLLMServer(t)
 	writeReasoningConfig(t, home, server.URL(), "openai", "gemini-3.8-flash", "dex", "")
-	server.AddToolCallResponse("todo-ground", "read_file", `{"path":"hello.txt"}`)
-	server.AddToolCallResponse("todo-empty", "get_todo", `{}`)
+	server.AddToolCallResponse("todo-ground", "read", `{"path":"hello.txt"}`)
+	server.AddToolCallResponse("todo-empty", "todo", `{"action":"get"}`)
 	server.AddTextResponse("done")
 
 	res := runProton(t, runOptions{
@@ -76,7 +76,7 @@ func TestE2EGeminiOpenAIGetTodoEmptySnapshot(t *testing.T) {
 		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
-		t.Fatalf("Gemini get_todo empty snapshot run failed: %s %s", res.stdout, res.stderr)
+		t.Fatalf("Gemini todo empty snapshot run failed: %s %s", res.stdout, res.stderr)
 	}
 	requests := server.Requests()
 	if len(requests) != 3 {

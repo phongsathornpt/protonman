@@ -108,14 +108,14 @@ func TestE2ETodoLivesInSessionAggregateNotWorkspace(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 	sessionID := "todo-session-scope"
-	args := `{"expected_revision":0,"operations":[{"op":"add","id":"inspect","text":"Inspect session todo","status":"in_progress"}]}`
+	args := `{"action":"update","expected_revision":0,"operations":[{"op":"add","id":"inspect","text":"Inspect session todo","status":"in_progress"}]}`
 	res := runProton(t, runOptions{
-		args: []string{"-y", "-s", sessionID, "-p", "/call update_todo " + args},
+		args: []string{"-y", "-s", sessionID, "-p", "/call todo " + args},
 		dir:  ws,
 		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
-		t.Fatalf("update_todo failed: %s\n%s", res.stdout, res.stderr)
+		t.Fatalf("todo update failed: %s\n%s", res.stdout, res.stderr)
 	}
 	todoPath := filepath.Join(home, ".protonman", "sessions", sessionID, "todo.md")
 	contents, err := os.ReadFile(todoPath)

@@ -13,11 +13,11 @@ func TestE2ESubagentUsesConfiguredProjectModelRoute(t *testing.T) {
 	primary := newMockLLMServer(t)
 	child := newMockLLMServer(t)
 
-	primary.AddToolCallResponse("delegate-1", "delegate_task", `{"task":"Inspect hello.txt","profile":"agility","timeout_seconds":30}`)
-	primary.AddToolCallResponse("wait-1", "wait_agent", `{"timeout_seconds":30}`)
+	primary.AddToolCallResponse("delegate-1", "subagent", `{"action":"spawn","task":"Inspect hello.txt","profile":"agility","timeout_seconds":30}`)
+	primary.AddToolCallResponse("wait-1", "subagent", `{"action":"wait","timeout_seconds":30}`)
 	primary.AddTextResponse("Delegation complete.")
 
-	child.AddToolCallResponse("child-read-1", "read_file", `{"path":"hello.txt"}`)
+	child.AddToolCallResponse("child-read-1", "read", `{"path":"hello.txt"}`)
 	child.AddTextResponse("Child inspected hello.txt.")
 
 	userConfig := fmt.Sprintf(`[model]
