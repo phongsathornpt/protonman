@@ -10,6 +10,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/pane"
+
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
@@ -269,33 +271,31 @@ func (m bubbleModel) permissionCard() string {
 func (v *permissionPaneView) card(m *bubbleModel) string {
 	request := v.pending.request
 	options := permissionOptionsFor(request)
+	labels := make([]string, 0, len(options))
+	for _, option := range options {
+		labels = append(labels, option.label)
+	}
 	shortcutHint := "y once · n deny"
 	if permission.SessionGrantEligible(request) {
 		shortcutHint = "y once · s session · n deny"
 	}
-	if v.parked {
-		line := fmt.Sprintf("! Permission pending · %s · tab review · %s", tool.DisplayName(request.ToolName), shortcutHint)
-		return mutedStyle.Render(truncateWithEllipsis(line, maxInt(1, m.width-2)))
-	}
 	title := "Permission required"
-	titleStyle := warningStyle
-	border := warningColor
-	detailExtras := make([]string, 0, 2)
+	tone := pane.ToneWarning
+	detailExtras := make([]string, 0, 3)
 	switch request.ToolKind {
 	case permission.ToolRead, permission.ToolGrep, permission.ToolTask, permission.ToolAgent:
-		if request.ToolKind == permission.ToolTask {
+		switch request.ToolKind {
+		case permission.ToolTask:
 			title = "Task plan change"
-		} else if request.ToolKind == permission.ToolAgent {
+		case permission.ToolAgent:
 			title = "Agent orchestration"
-		} else {
+		default:
 			title = "Permission request — read only"
 		}
-		titleStyle = userStyle
-		border = accentUser
+		tone = pane.ToneUser
 	case permission.ToolEdit:
 		title = "Permission required — modifies workspace"
-		titleStyle = errorStyle
-		border = accentError
+		tone = pane.ToneError
 	case permission.ToolBash:
 		var input struct {
 			Command string `json:"command"`
@@ -305,35 +305,27 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 		analysis := tool.AnalyzeCommand(input.Command)
 		switch analysis.Scope {
 		case tool.CommandScopePublish:
-			title = "Permission required — publishes package"
-			titleStyle = errorStyle
-			border = accentError
+			title, tone = "Permission required — publishes package", pane.ToneError
 		case tool.CommandScopeDeployment:
 			if analysis.Risk == tool.CommandRiskRemoteDestructive {
 				title = "Permission required — destructive deployment change"
 			} else {
 				title = "Permission required — changes deployment"
 			}
-			titleStyle = errorStyle
-			border = accentError
+			tone = pane.ToneError
 		case tool.CommandScopeRemote:
 			if analysis.Risk == tool.CommandRiskRemoteDestructive {
 				title = "Permission required — destructively modifies remote"
 			} else {
 				title = "Permission required — modifies remote"
 			}
-			titleStyle = errorStyle
-			border = accentError
+			tone = pane.ToneError
 		default:
 			switch analysis.Effect {
 			case tool.CommandEffectReadOnly:
-				title = "Permission request — shell read only"
-				titleStyle = userStyle
-				border = accentUser
+				title, tone = "Permission request — shell read only", pane.ToneUser
 			case tool.CommandEffectMutating:
-				title = "Permission required — shell modifies state"
-				titleStyle = errorStyle
-				border = accentError
+				title, tone = "Permission required — shell modifies state", pane.ToneError
 			default:
 				title = "Permission required — shell effects unknown"
 			}
@@ -350,55 +342,24 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 			detailExtras = append(detailExtras, fmt.Sprintf("Effect: %s · %s", analysis.Effect, analysis.Reason))
 		}
 	}
-	if layoutModeForHeight(m.height) == layoutTiny {
-		contentWidth := maxInt(8, m.width-8)
-		selected := options[v.index].label
-		rows := []string{
-			titleStyle.Render(truncateWithEllipsis(title, contentWidth)),
-			mutedStyle.Render(truncateWithEllipsis(tool.DisplayName(request.ToolName)+" · "+request.Detail, contentWidth)),
-			brandStyle.Render(glyphPrompt + selected),
-			mutedStyle.Render(shortcutHint),
-			mutedStyle.Render("esc review"),
-		}
-		return renderModalRows(m, border, rows)
+	result := pane.PermissionView(pane.PermissionSnapshot{
+		Width:        m.width,
+		Height:       m.height,
+		Parked:       v.parked,
+		Index:        v.index,
+		Title:        title,
+		Tone:         tone,
+		ToolName:     tool.DisplayName(request.ToolName),
+		ToolKind:     string(request.ToolKind),
+		Detail:       request.Detail,
+		DetailExtras: detailExtras,
+		Options:      labels,
+		ShortcutHint: shortcutHint,
+	})
+	if result.Inline != "" {
+		return result.Inline
 	}
-	maxWidth := maxInt(1, m.width-8)
-	rows := make([]string, 0, 8)
-	rows = append(rows, titleStyle.Render(title))
-	rows = append(rows, fmt.Sprintf("%s (%s)", tool.DisplayName(request.ToolName), request.ToolKind))
-	detailLines := wrapLines("Target: "+request.Detail, maxInt(1, maxWidth-6))
-	for _, extra := range detailExtras {
-		detailLines = append(detailLines, wrapLines(extra, maxInt(1, maxWidth-6))...)
-	}
-	maxDetailLines := 6
-	if layoutModeForHeight(m.height) == layoutCompact {
-		maxDetailLines = 2
-	}
-	if len(detailLines) > maxDetailLines {
-		omitted := len(detailLines) - maxDetailLines
-		detailLines = append(detailLines[:maxDetailLines], fmt.Sprintf("... (%d more lines truncated)", omitted))
-	}
-	rows = append(rows, mutedStyle.Render(strings.Join(detailLines, "\n")))
-	rows = append(rows, "")
-	for i, option := range options {
-		marker := "  "
-		if i == v.index && !v.parked {
-			marker = glyphPrompt
-			rows = append(rows, brandStyle.Render(marker+option.label))
-			continue
-		}
-		rows = append(rows, mutedStyle.Render(marker+option.label))
-	}
-	rows = append(rows, "")
-	if v.parked {
-		rows = append(rows, mutedStyle.Render("tab review approval   "+shortcutHint+"   pgup/pgdn scroll"))
-	} else {
-		rows = append(rows, mutedStyle.Render(fmt.Sprintf("j/k move   1-%d select   %s   esc review transcript", len(options), shortcutHint)))
-	}
-	if layoutModeForHeight(m.height) == layoutCompact {
-		rows = compactPickerRows(rows)
-	}
-	return renderModalRows(m, border, rows)
+	return renderModalRows(m, paneToneColor(result.Tone), result.Rows)
 }
 
 type permissionRequestMsg struct{ request permissionRequest }
