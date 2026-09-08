@@ -72,10 +72,18 @@ func Discover(ctx context.Context, opts Options) (DiscoveryResult, error) {
 		scanDirectory(dir, ScopeUser, userSkills, &result.Warnings)
 	}
 
-	// 2. Project-level scopes
-	projectPaths := []string{
-		appdirs.ResolvedProjectSkills(workDir),
-		filepath.Join(workDir, ".agents", "skills"),
+	// 2. Project-level scopes. When the workspace is the user home, these
+	// paths alias user-global roots and must not be treated as project input.
+	projectScope, err := appdirs.ResolveProjectScope(homeDir, workDir)
+	if err != nil {
+		return result, fmt.Errorf("resolve project skill scope: %w", err)
+	}
+	projectPaths := make([]string, 0, 2)
+	if projectScope.Available {
+		projectPaths = append(projectPaths,
+			projectScope.Skills,
+			filepath.Join(workDir, ".agents", "skills"),
+		)
 	}
 
 	for _, dir := range projectPaths {
