@@ -697,18 +697,21 @@ func TestStartTurnStreamsSinkEvents(t *testing.T) {
 		newPermissionBridge(),
 		"",
 	)
-	command := model.startTurn("hi")
-	if command == nil {
+	if command := model.startTurn("hi"); command == nil {
 		t.Fatal("startTurn command = nil")
 	}
-	for range 3 {
-		message := command()
-		updated, next := model.Update(message)
-		model = updated.(*bubbleModel)
-		command = next
-		if command == nil {
-			break
+	deadline := time.Now().Add(time.Second)
+	for model.busy {
+		if time.Now().After(deadline) {
+			t.Fatal("streamed turn did not finish")
 		}
+		events := model.turnEvents
+		if events == nil {
+			t.Fatal("busy turn has no event channel")
+		}
+		message := waitTurnCh(events)()
+		updated, _ := model.Update(message)
+		model = updated.(*bubbleModel)
 	}
 	plain := plainTranscript(model)
 	if !strings.Contains(plain, "hello stream") {
