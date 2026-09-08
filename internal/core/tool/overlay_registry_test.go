@@ -3,6 +3,7 @@ package tool
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -45,5 +46,51 @@ func TestOverlayRegistryReplacesHandlerAndPreservesOrder(t *testing.T) {
 	defs := r.Definitions()
 	if len(defs) != 2 || defs[0].Name != "a" || defs[1].Description != "session b" {
 		t.Fatalf("defs=%+v", defs)
+	}
+}
+
+type overlayDynamicRegistry struct{ overlayTestRegistry }
+
+func (r *overlayDynamicRegistry) Register(handler Handler) error {
+	r.handlers = append(r.handlers, handler)
+	return nil
+}
+func (r *overlayDynamicRegistry) RegisterBatch(handlers []Handler) error {
+	for _, handler := range handlers {
+		if err := r.Register(handler); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (r *overlayDynamicRegistry) ReplaceNamespace(prefix string, handlers []Handler) error {
+	kept := r.handlers[:0]
+	for _, handler := range r.handlers {
+		if !strings.HasPrefix(handler.Definition().Name, prefix) {
+			kept = append(kept, handler)
+		}
+	}
+	r.handlers = kept
+	return r.RegisterBatch(handlers)
+}
+
+func TestOverlayRegistryPreservesDynamicRegistrar(t *testing.T) {
+	base := &overlayDynamicRegistry{overlayTestRegistry{handlers: []Handler{
+		overlayTestHandler{"a", "base a"},
+		overlayTestHandler{"b", "base b"},
+	}}}
+	reg, err := NewOverlayRegistry(base, overlayTestHandler{"b", "session b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dynamic, ok := reg.(DynamicRegistrar)
+	if !ok {
+		t.Fatal("overlay registry dropped DynamicRegistrar")
+	}
+	if err := dynamic.Register(overlayTestHandler{"mcp.test.echo", "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := reg.Lookup("mcp.test.echo"); !ok {
+		t.Fatal("dynamically registered handler is not visible through overlay")
 	}
 }
