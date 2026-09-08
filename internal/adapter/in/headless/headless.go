@@ -241,7 +241,7 @@ func (r *Runner) handleSkillsCommand(argument string, parts []string, output io.
 		if len(active) == 0 {
 			return writeEvent(output, format, Event{
 				Kind: EventKindText,
-				Text: "No active agent skills in this session.\nActivate skills using /skill <name> or the activate_skill tool.",
+				Text: "No active agent skills in this session.\nActivate skills using /skill <name> or the skill tool.",
 			})
 		}
 		var builder strings.Builder

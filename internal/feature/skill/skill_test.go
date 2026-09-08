@@ -167,8 +167,8 @@ func TestSystemPromptSection(t *testing.T) {
 		},
 	}
 	got := SystemPromptSection(items)
-	if !strings.Contains(got, "activate_skill") {
-		t.Errorf("expected instruction mentioning activate_skill: %s", got)
+	if !strings.Contains(got, "skill tool") {
+		t.Errorf("expected instruction mentioning skill tool: %s", got)
 	}
 	if !strings.Contains(got, "<name>testing</name>") {
 		t.Errorf("expected catalog inclusion: %s", got)

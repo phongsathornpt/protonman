@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
+	"github.com/phongsathornpt/protonman/internal/feature/skill"
 )
 
 type activateSkillHandler struct {
@@ -42,9 +42,9 @@ func (h activateSkillHandler) BindSkillRegistry(registry *skill.Registry) tool.H
 
 func (activateSkillHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "activate_skill",
+		Name:                "skill",
 		Description:         "Load full instructions and bundled resource locations for a specialized skill.",
-		Kind:                tool.KindForName("activate_skill"),
+		Kind:                tool.KindForName("skill"),
 		Mutability:          tool.MutabilityMutating,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspacePolicy, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyExternalRead},
 		PermissionDetailKey: "name",
@@ -68,7 +68,7 @@ func (h activateSkillHandler) Execute(ctx context.Context, call tool.Call) (tool
 	}
 	var input activateSkillInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode activate_skill arguments", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode skill arguments", err)
 	}
 	name := strings.TrimSpace(input.Name)
 	if name == "" {

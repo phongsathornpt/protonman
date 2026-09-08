@@ -115,7 +115,7 @@ func (c ToolCell) RenderWidth(width int) []string {
 			targetStr = " " + toolview.FormatPath(c.Target)
 		}
 		headerLine = tuistyle.ErrorStyle.Render(tuistyle.GlyphToolError) + tuistyle.MutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + tuistyle.ErrorStyle.Render(tuistyle.GlyphSep+string(c.FailureCode))
-	} else if c.Name == "activate_skill" {
+	} else if c.Name == "skill" || c.Name == "activate_skill" {
 		target := c.Target
 		if target == "" {
 			if skillName := toolview.ExtractSkillContentName(c.Body); skillName != "" {
@@ -188,7 +188,7 @@ func (c ToolCell) historyToolID() string    { return c.CallID }
 func (c ToolCell) historyToolName() string  { return c.Name }
 func (c ToolCell) historyToolRunning() bool { return c.Running }
 func (c ToolCell) bodyLines() []string {
-	if c.Name == "activate_skill" {
+	if c.Name == "skill" || c.Name == "activate_skill" {
 		return formatSkillToolBody(c.Body, c.ExitCode, c.Truncated, c.Denied, c.FailureCode)
 	}
 	return resultBodyLines(c.Body, c.ExitCode, c.Truncated, c.Denied, c.FailureCode)

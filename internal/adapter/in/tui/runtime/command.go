@@ -648,7 +648,7 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 		active := m.skills.ActivatedList()
 		if len(active) == 0 {
 			m.appendLine("No active agent skills in this session.")
-			m.appendLine("Activate skills using /skills <name> or the activate_skill tool.")
+			m.appendLine("Activate skills using /skills <name> or the skill tool.")
 		} else {
 			m.appendLine(fmt.Sprintf("Active Agent Skills (%d):", len(active)))
 			for _, name := range active {

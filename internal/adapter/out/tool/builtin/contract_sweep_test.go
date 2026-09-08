@@ -30,7 +30,7 @@ func TestRegisteredBuiltinToolContracts(t *testing.T) {
 		"grep": true, "find": true, "ls": true, "git": true,
 		"web": true, "delegate_task": true,
 		"wait_agent": true, "get_agent": true, "list_agents": true, "cancel_agent": true, "resume_agent": true,
-		"get_todo": true, "update_todo": true, "activate_skill": true,
+		"get_todo": true, "update_todo": true, "skill": true,
 	}
 	seen := make(map[string]bool, len(expected))
 	for _, registry := range []*Registry{primary, auxiliary} {

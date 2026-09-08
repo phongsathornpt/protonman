@@ -61,7 +61,7 @@ func KindGlyph(kind tool.Kind, name string) string {
 	}
 
 	switch name {
-	case "activate_skill":
+	case "skill", "activate_skill":
 		return tuistyle.GlyphSkill
 	case "delegate_task":
 		return tuistyle.GlyphAgent
@@ -119,7 +119,7 @@ func SummarizeOutput(name string, kind tool.Kind, target string, body string, ex
 		}
 	}
 
-	if name == "activate_skill" {
+	if name == "skill" || name == "activate_skill" {
 		if skillName := ExtractSkillContentName(body); skillName != "" {
 			return fmt.Sprintf("Activated skill %q", skillName)
 		}
@@ -635,7 +635,7 @@ func ShouldSuppressBody(kind tool.Kind, name string) bool {
 		return true
 	}
 	switch name {
-	case "activate_skill", "delegate_task", "checkpoint_restore", "get_todo", "update_todo":
+	case "skill", "activate_skill", "delegate_task", "checkpoint_restore", "get_todo", "update_todo":
 		return true
 	default:
 		return false

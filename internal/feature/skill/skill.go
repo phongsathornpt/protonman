@@ -199,7 +199,7 @@ func SystemPromptSection(items []CatalogItem, activeSkills ...[]Skill) string {
 	if len(items) > 0 {
 		catalog := FormatCatalogXML(items)
 		parts = append(parts, fmt.Sprintf(`The following skills provide specialized instructions for specific tasks.
-When a task matches a skill's description, call the activate_skill tool with the skill's name to load its full instructions.
+When a task matches a skill's description, call the skill tool with the skill's name to load its full instructions.
 When a skill references relative paths, resolve them against the skill's directory and use absolute paths in tool calls.
 
 %s`, catalog))
