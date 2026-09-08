@@ -3,10 +3,10 @@ package agent
 import (
 	"time"
 
-	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/engine/toolcall"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/core/permission"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/engine/toolcall"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 // SetEnabled controls whether new subagents may be spawned. It never cancels existing agents.

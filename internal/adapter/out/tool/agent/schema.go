@@ -1,6 +1,6 @@
 package agenttool
 
-import "github.com/projectTHORN/proton/internal/feature/agent"
+import "github.com/phongsathornpt/proton/internal/feature/agent"
 
 func agentStateSchema() map[string]any {
 	return map[string]any{"type": "string", "enum": []any{

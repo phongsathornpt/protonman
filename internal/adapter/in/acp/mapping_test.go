@@ -7,7 +7,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/core/tool"
 )
 
 func makeCall(name string, args map[string]any) tool.Call {
@@ -213,8 +213,8 @@ func TestTitleForToolCall(t *testing.T) {
 		},
 		{
 			name: "web_fetch long url",
-			call: makeCall("web_fetch", map[string]any{"url": "https://github.com/projectTHORN/proton/blob/main/internal/acp/mapping.go#L1-L100"}),
-			want: "Fetch https://github.com/projectTHORN/proton/blob/…",
+			call: makeCall("web_fetch", map[string]any{"url": "https://github.com/phongsathornpt/proton/blob/main/internal/acp/mapping.go#L1-L100"}),
+			want: "Fetch https://github.com/phongsathornpt/proton/blo…",
 		},
 		{
 			name: "web_fetch empty",

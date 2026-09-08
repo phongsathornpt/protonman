@@ -3,7 +3,7 @@ package tui
 import (
 	"slices"
 
-	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
+	tododomain "github.com/phongsathornpt/proton/internal/feature/todo"
 )
 
 // TodoItem is kept as a compatibility alias while TODO ownership lives in the

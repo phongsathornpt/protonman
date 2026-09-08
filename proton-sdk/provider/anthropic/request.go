@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	sdk "github.com/projectTHORN/proton/proton-sdk"
-	"github.com/projectTHORN/proton/proton-sdk/internal/providerutil"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/proton-sdk/internal/providerutil"
 )
 
 type requestBody struct {

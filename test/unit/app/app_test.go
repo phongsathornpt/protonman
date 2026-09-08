@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/app"
-	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/core/session"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/app"
+	"github.com/phongsathornpt/proton/internal/core/permission"
+	"github.com/phongsathornpt/proton/internal/core/session"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 type mockSessionRepo struct {

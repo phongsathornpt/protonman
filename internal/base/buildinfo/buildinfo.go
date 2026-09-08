@@ -7,7 +7,7 @@ import (
 
 const (
 	Name       = "Proton"
-	Repository = "https://github.com/projectTHORN/proton"
+	Repository = "https://github.com/phongsathornpt/proton"
 )
 
 // version may be overridden at build time with -ldflags -X.

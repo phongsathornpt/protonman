@@ -2,7 +2,7 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/projectTHORN/proton/internal/adapter/out/model"
+	"github.com/phongsathornpt/proton/internal/adapter/out/model"
 )
 
 func (m *bubbleModel) selectModelDirect(modelID string) tea.Cmd {

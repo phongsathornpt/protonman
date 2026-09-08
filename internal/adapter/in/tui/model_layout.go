@@ -1,11 +1,11 @@
 package tui
 
 import (
-	"github.com/projectTHORN/proton/internal/app"
+	"github.com/phongsathornpt/proton/internal/app"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/core/tool"
 )
 
 func (m *bubbleModel) syncPromptHeight() {

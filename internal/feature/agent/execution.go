@@ -7,14 +7,14 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/projectTHORN/proton/internal/adapter/out/model"
-	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/engine/prompt"
-	"github.com/projectTHORN/proton/internal/engine/toolcall"
-	"github.com/projectTHORN/proton/internal/engine/turn"
-	"github.com/projectTHORN/proton/internal/feature/skill"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/adapter/out/model"
+	"github.com/phongsathornpt/proton/internal/core/permission"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/engine/prompt"
+	"github.com/phongsathornpt/proton/internal/engine/toolcall"
+	"github.com/phongsathornpt/proton/internal/engine/turn"
+	"github.com/phongsathornpt/proton/internal/feature/skill"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) {

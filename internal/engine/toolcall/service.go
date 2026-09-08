@@ -7,15 +7,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
+	"github.com/phongsathornpt/proton/internal/base/runtimepolicy"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/core/workspace"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/core/permission"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/core/workspace"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 // PermissionPrompt resolves an interactive permission request.

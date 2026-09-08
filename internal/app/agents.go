@@ -5,12 +5,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/adapter/out/config"
-	"github.com/projectTHORN/proton/internal/adapter/out/model"
-	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/engine/toolcall"
-	"github.com/projectTHORN/proton/internal/feature/agent"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/adapter/out/config"
+	"github.com/phongsathornpt/proton/internal/adapter/out/model"
+	"github.com/phongsathornpt/proton/internal/core/permission"
+	"github.com/phongsathornpt/proton/internal/engine/toolcall"
+	"github.com/phongsathornpt/proton/internal/feature/agent"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 // Agents owns inbound lifecycle/control access to the subagent coordinator.

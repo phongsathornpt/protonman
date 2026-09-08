@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/feature/agent"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/feature/agent"
 )
 
 type agentIDInput struct {

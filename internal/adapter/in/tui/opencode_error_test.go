@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	applicationturn "github.com/projectTHORN/proton/internal/engine/turn"
+	applicationturn "github.com/phongsathornpt/proton/internal/engine/turn"
 )
 
 func TestClassifyOpenCodeError_Cancellation(t *testing.T) {

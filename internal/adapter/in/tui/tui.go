@@ -11,16 +11,16 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/projectTHORN/proton/internal/adapter/out/config"
-	"github.com/projectTHORN/proton/internal/adapter/out/model"
-	"github.com/projectTHORN/proton/internal/app"
-	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/engine/toolcall"
-	"github.com/projectTHORN/proton/internal/feature/agent"
-	"github.com/projectTHORN/proton/internal/feature/skill"
-	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/adapter/out/config"
+	"github.com/phongsathornpt/proton/internal/adapter/out/model"
+	"github.com/phongsathornpt/proton/internal/app"
+	"github.com/phongsathornpt/proton/internal/core/permission"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/engine/toolcall"
+	"github.com/phongsathornpt/proton/internal/feature/agent"
+	"github.com/phongsathornpt/proton/internal/feature/skill"
+	tododomain "github.com/phongsathornpt/proton/internal/feature/todo"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 // BubbleTeaOption configures the Bubble Tea fullscreen adapter.

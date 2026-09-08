@@ -5,7 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/projectTHORN/proton/internal/base/contextutil"
+	"github.com/phongsathornpt/proton/internal/base/contextutil"
 )
 
 // Subscribe returns a bounded lifecycle stream. Slow subscribers drop events

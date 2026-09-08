@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/projectTHORN/proton/internal/app"
+	"github.com/phongsathornpt/proton/internal/app"
 	"math"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/app/appdirs"
+	"github.com/phongsathornpt/proton/internal/app/appdirs"
 )
 
 // OpenCodeErrorKind classifies errors matching the OpenCode error taxonomy.

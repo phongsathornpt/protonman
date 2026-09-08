@@ -12,9 +12,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/projectTHORN/proton/internal/base/runtimepolicy"
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/core/workspace"
+	"github.com/phongsathornpt/proton/internal/base/runtimepolicy"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/core/workspace"
 )
 
 const maxReadFileBytes = 2 * 1024 * 1024

@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/adapter/out/config"
-	"github.com/projectTHORN/proton/internal/app"
-	"github.com/projectTHORN/proton/internal/feature/agent"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/adapter/out/config"
+	"github.com/phongsathornpt/proton/internal/app"
+	"github.com/phongsathornpt/proton/internal/feature/agent"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 func TestAgentRuntimeStateSurvivesBubbleModelRestart(t *testing.T) {

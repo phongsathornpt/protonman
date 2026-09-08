@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/app/appdirs"
+	"github.com/phongsathornpt/proton/internal/app/appdirs"
 )
 
 func TestDiscoverProjectProtonState(t *testing.T) {

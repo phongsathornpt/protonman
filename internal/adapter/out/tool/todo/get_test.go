@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/core/tool"
-	tododomain "github.com/projectTHORN/proton/internal/feature/todo"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	tododomain "github.com/phongsathornpt/proton/internal/feature/todo"
 )
 
 func TestGetTodoReturnsStructuredSnapshotRevision(t *testing.T) {

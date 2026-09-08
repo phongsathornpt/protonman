@@ -12,13 +12,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/projectTHORN/proton/internal/app"
-	"github.com/projectTHORN/proton/internal/base/buildinfo"
-	"github.com/projectTHORN/proton/internal/core/permission"
-	"github.com/projectTHORN/proton/internal/core/session"
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/engine/toolcall"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/app"
+	"github.com/phongsathornpt/proton/internal/base/buildinfo"
+	"github.com/phongsathornpt/proton/internal/core/permission"
+	"github.com/phongsathornpt/proton/internal/core/session"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/engine/toolcall"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 // ErrInvalidServer indicates that the ACP server cannot start.

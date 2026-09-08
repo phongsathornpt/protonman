@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/core/tool"
 )
 
 // ErrInvalidTool indicates that an MCP tool manifest cannot be registered.

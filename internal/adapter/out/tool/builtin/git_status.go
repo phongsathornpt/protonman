@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/core/workspace"
-	"github.com/projectTHORN/proton/internal/platform/sandbox"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/core/workspace"
+	"github.com/phongsathornpt/proton/internal/platform/sandbox"
 )
 
 const (

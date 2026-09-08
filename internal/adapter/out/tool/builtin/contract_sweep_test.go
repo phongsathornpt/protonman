@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"testing"
 
-	skilltool "github.com/projectTHORN/proton/internal/adapter/out/tool/skill"
-	todotool "github.com/projectTHORN/proton/internal/adapter/out/tool/todo"
-	webtool "github.com/projectTHORN/proton/internal/adapter/out/tool/web"
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/feature/agent"
-	"github.com/projectTHORN/proton/internal/platform/sandbox"
+	skilltool "github.com/phongsathornpt/proton/internal/adapter/out/tool/skill"
+	todotool "github.com/phongsathornpt/proton/internal/adapter/out/tool/todo"
+	webtool "github.com/phongsathornpt/proton/internal/adapter/out/tool/web"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/feature/agent"
+	"github.com/phongsathornpt/proton/internal/platform/sandbox"
 )
 
 func TestRegisteredBuiltinToolContracts(t *testing.T) {

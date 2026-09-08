@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/projectTHORN/proton/internal/core/session"
+	"github.com/phongsathornpt/proton/internal/core/session"
 )
 
 // Sessions exposes persisted-session use cases to inbound adapters.

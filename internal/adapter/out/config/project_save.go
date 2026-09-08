@@ -9,9 +9,9 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/projectTHORN/proton/internal/app/appdirs"
-	"github.com/projectTHORN/proton/internal/core/permission"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/app/appdirs"
+	"github.com/phongsathornpt/proton/internal/core/permission"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 // SaveProjectAgentProfile updates the project-local agent profile.

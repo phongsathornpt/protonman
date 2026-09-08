@@ -11,16 +11,16 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/projectTHORN/proton/internal/adapter/in/acp"
-	"github.com/projectTHORN/proton/internal/adapter/in/tui"
-	mcpadapter "github.com/projectTHORN/proton/internal/adapter/out/tool/mcp"
-	"github.com/projectTHORN/proton/internal/app"
-	"github.com/projectTHORN/proton/internal/base/envconfig"
-	"github.com/projectTHORN/proton/internal/core/session"
-	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/engine/toolcall"
-	"github.com/projectTHORN/proton/internal/platform/telemetry"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/adapter/in/acp"
+	"github.com/phongsathornpt/proton/internal/adapter/in/tui"
+	mcpadapter "github.com/phongsathornpt/proton/internal/adapter/out/tool/mcp"
+	"github.com/phongsathornpt/proton/internal/app"
+	"github.com/phongsathornpt/proton/internal/base/envconfig"
+	"github.com/phongsathornpt/proton/internal/core/session"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/engine/toolcall"
+	"github.com/phongsathornpt/proton/internal/platform/telemetry"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 func configureACPMCP(ctx context.Context, cwd string, registry tool.Registry, configs []acp.MCPServerConfig) (io.Closer, error) {

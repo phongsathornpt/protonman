@@ -1,6 +1,6 @@
 package app
 
-import "github.com/projectTHORN/proton/internal/adapter/out/config"
+import "github.com/phongsathornpt/proton/internal/adapter/out/config"
 
 // UserSettings owns mutations to portable user-level Proton preferences.
 type UserSettings struct{}

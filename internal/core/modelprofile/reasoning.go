@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 // ReasoningSource identifies the policy layer that selected the effective effort.

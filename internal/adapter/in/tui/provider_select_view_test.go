@@ -8,7 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/projectTHORN/proton/internal/adapter/out/config"
+	"github.com/phongsathornpt/proton/internal/adapter/out/config"
 )
 
 func TestProviderSelectViewLaunchViaSlashCommand(t *testing.T) {

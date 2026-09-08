@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectTHORN/proton/internal/core/tool"
-	sdk "github.com/projectTHORN/proton/proton-sdk"
+	"github.com/phongsathornpt/proton/internal/core/tool"
+	sdk "github.com/phongsathornpt/proton/proton-sdk"
 )
 
 type dummyHandler struct {

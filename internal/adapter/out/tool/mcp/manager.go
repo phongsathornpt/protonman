@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/phongsathornpt/proton/internal/core/tool"
 )
 
 // ManagedServer is an MCP server whose transport owns resources that must be closed.

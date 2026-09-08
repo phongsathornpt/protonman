@@ -16,7 +16,7 @@ type listedPackage struct {
 	Imports    []string
 }
 
-const modulePath = "github.com/projectTHORN/proton"
+const modulePath = "github.com/phongsathornpt/proton"
 
 func TestCorePackagesDoNotDependOnOuterLayers(t *testing.T) {
 	packages := listPackages(t)
@@ -196,7 +196,7 @@ func TestSDKDoesNotDependOnCLIInternals(t *testing.T) {
 
 func TestHeadlessModeDoesNotDependOnTurn(t *testing.T) {
 	root := repositoryRoot(t)
-	cmd := exec.Command("rg", `"github\\.com/projectTHORN/proton/internal/engine/turn"`, "cmd/proton/headless_mode.go")
+	cmd := exec.Command("rg", `"github\\.com/phongsathornpt/proton/internal/engine/turn"`, "cmd/proton/headless_mode.go")
 	cmd.Dir = root
 	output, err := cmd.CombinedOutput()
 	if err == nil {
