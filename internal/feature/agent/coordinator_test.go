@@ -1455,3 +1455,30 @@ func TestTerminalReasonClassifiesKnownFailures(t *testing.T) {
 		})
 	}
 }
+
+func TestSetEnabledLinearizesWithSpawnAdmission(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil)
+	defer coord.Close()
+
+	coord.agentsMu.Lock()
+	done := make(chan struct{})
+	go func() {
+		coord.SetEnabled(false)
+		close(done)
+	}()
+	select {
+	case <-done:
+		coord.agentsMu.Unlock()
+		t.Fatal("SetEnabled returned while spawn admission lock was held")
+	case <-time.After(20 * time.Millisecond):
+	}
+	coord.agentsMu.Unlock()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("SetEnabled did not complete after admission lock was released")
+	}
+	if coord.Enabled() {
+		t.Fatal("coordinator remained enabled")
+	}
+}
