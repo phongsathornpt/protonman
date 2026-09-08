@@ -47,7 +47,7 @@ func agentStatusSchema() map[string]any {
 		"properties": map[string]any{
 			"id":          map[string]any{"type": "string"},
 			"parent_id":   map[string]any{"type": "string"},
-			"profile":     map[string]any{"type": "string", "enum": agent.ProfileNames()},
+			"profile":     map[string]any{"type": "string", "enum": agent.SubagentProfileNames()},
 			"task":        map[string]any{"type": "string"},
 			"state":       agentStateSchema(),
 			"start_time":  map[string]any{"type": "string"},
@@ -65,7 +65,7 @@ func delegateTaskOutputSchema() map[string]any {
 		"type": "object",
 		"properties": map[string]any{
 			"agent_id": map[string]any{"type": "string"},
-			"profile":  map[string]any{"type": "string", "enum": agent.ProfileNames()},
+			"profile":  map[string]any{"type": "string", "enum": agent.SubagentProfileNames()},
 			"status":   agentStateSchema(),
 		},
 		"required":             []any{"agent_id", "profile", "status"},

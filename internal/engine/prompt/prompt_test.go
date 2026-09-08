@@ -37,7 +37,7 @@ func TestRenderComposesStableContracts(t *testing.T) {
 
 func TestRenderRootIdentityDoesNotReuseSubagentRole(t *testing.T) {
 	got := Render(Spec{Profile: "int", Workspace: "/repo"})
-	if !strings.Contains(got, "primary coding agent") {
+	if !strings.Contains(got, "primary software engineering agent") {
 		t.Fatalf("root prompt missing primary identity: %s", got)
 	}
 	if strings.Contains(got, "specialized coding subagent") || strings.Contains(got, "read-only investigation subagent") {

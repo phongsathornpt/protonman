@@ -74,7 +74,7 @@ func TestCoordinatorSubagentCapabilityToggle(t *testing.T) {
 	if coord.Enabled() {
 		t.Fatal("coordinator should start disabled")
 	}
-	_, err := coord.Spawn(context.Background(), Request{Profile: ProfileINT, Task: "inspect router"})
+	_, err := coord.Spawn(context.Background(), Request{Profile: ProfileAgility, Task: "inspect router"})
 	if !errors.Is(err, ErrSubagentsDisabled) {
 		t.Fatalf("Spawn() error = %v, want ErrSubagentsDisabled", err)
 	}
@@ -108,7 +108,7 @@ func TestCoordinator_RunsSubagentInGoroutine(t *testing.T) {
 	defer coord.Close()
 
 	res, err := coord.Run(context.Background(), Request{
-		Profile: ProfileINT,
+		Profile: ProfileAgility,
 		Task:    "find test files",
 	})
 	if err != nil {
@@ -168,7 +168,7 @@ func TestCoordinator_EnforcesConcurrencySemaphore(t *testing.T) {
 		go func(taskNum int) {
 			defer wg.Done()
 			_, err := coord.Run(context.Background(), Request{
-				Profile: ProfileINT,
+				Profile: ProfileAgility,
 				Task:    "concurrent task",
 			})
 			if err != nil {
@@ -208,7 +208,7 @@ func TestCoordinator_CancelsChildWhenParentContextCancels(t *testing.T) {
 	errCh := make(chan error, 1)
 	go func() {
 		_, err := coord.Run(parentCtx, Request{
-			Profile: ProfileINT,
+			Profile: ProfileAgility,
 			Task:    "long task",
 		})
 		errCh <- err
@@ -264,7 +264,7 @@ func TestCoordinator_SerializesMutatingWorkers(t *testing.T) {
 		go func(wNum int) {
 			defer wg.Done()
 			_, err := coord.Run(context.Background(), Request{
-				Profile: ProfilePOW,
+				Profile: ProfileStrength,
 				Task:    "mutating task",
 			})
 			if err != nil {
@@ -316,7 +316,7 @@ func TestCoordinator_ZeroGoroutineLeaks(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 			defer cancel()
 			_, _ = coord.Run(ctx, Request{
-				Profile: ProfileINT,
+				Profile: ProfileAgility,
 				Task:    "short task",
 			})
 		}()
@@ -441,7 +441,7 @@ func TestCoordinator_EmitsLifecycleEvents(t *testing.T) {
 	defer coord.Close()
 
 	_, err := coord.Run(context.Background(), Request{
-		Profile: ProfileINT,
+		Profile: ProfileAgility,
 		Task:    "review auth logic",
 	})
 	if err != nil {
@@ -496,7 +496,7 @@ func TestCoordinator_ConcurrentCloseAndRun(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			_, _ = coord.Run(context.Background(), Request{
-				Profile: ProfileINT,
+				Profile: ProfileAgility,
 				Task:    "race task",
 			})
 		}()
@@ -543,7 +543,7 @@ func TestCoordinator_ResilientEmitOnCancel(t *testing.T) {
 	}()
 
 	_, _ = coord.Run(ctx, Request{
-		Profile: ProfileINT,
+		Profile: ProfileAgility,
 		Task:    "cancel task",
 	})
 
@@ -582,7 +582,7 @@ func TestCoordinator_ReadOnlyProfileInheritsAskModeForNetworkTools(t *testing.T)
 	)
 	defer coord.Close()
 
-	if _, err := coord.Run(context.Background(), Request{Profile: ProfileINT, Task: "inspect web"}); err != nil {
+	if _, err := coord.Run(context.Background(), Request{Profile: ProfileAgility, Task: "inspect web"}); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
 	if promptCalls != 1 {
@@ -620,7 +620,7 @@ func TestCoordinator_WorkerInheritsAlwaysApproveMode(t *testing.T) {
 	defer coord.Close()
 
 	res, err := coord.Run(context.Background(), Request{
-		Profile: ProfilePOW,
+		Profile: ProfileStrength,
 		Task:    "write file task",
 	})
 	if err != nil {
@@ -669,7 +669,7 @@ func TestCoordinator_SubagentInheritsCallGuard(t *testing.T) {
 	defer coord.Close()
 
 	_, err := coord.Run(context.Background(), Request{
-		Profile: ProfilePOW,
+		Profile: ProfileStrength,
 		Task:    "write file task",
 	})
 	if err != nil {
@@ -790,7 +790,7 @@ func TestCoordinatorExecutionTimeoutReturnsForNonCooperativeRunner(t *testing.T)
 	)
 
 	started := time.Now()
-	_, err := coord.Run(context.Background(), Request{Profile: ProfileINT, Task: "ignore cancellation"})
+	_, err := coord.Run(context.Background(), Request{Profile: ProfileAgility, Task: "ignore cancellation"})
 	elapsed := time.Since(started)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Run() error = %v, want deadline exceeded", err)
@@ -832,7 +832,7 @@ func TestCoordinatorQueueWaitDoesNotConsumeExecutionTimeout(t *testing.T) {
 
 	firstDone := make(chan error, 1)
 	go func() {
-		_, err := coord.Run(context.Background(), Request{Profile: ProfileINT, Task: "first", Timeout: 500 * time.Millisecond})
+		_, err := coord.Run(context.Background(), Request{Profile: ProfileAgility, Task: "first", Timeout: 500 * time.Millisecond})
 		firstDone <- err
 	}()
 	time.Sleep(20 * time.Millisecond)
@@ -840,7 +840,7 @@ func TestCoordinatorQueueWaitDoesNotConsumeExecutionTimeout(t *testing.T) {
 	secondDone := make(chan error, 1)
 	queuedAt := time.Now()
 	go func() {
-		_, err := coord.Run(context.Background(), Request{Profile: ProfileINT, Task: "second", Timeout: 80 * time.Millisecond})
+		_, err := coord.Run(context.Background(), Request{Profile: ProfileAgility, Task: "second", Timeout: 80 * time.Millisecond})
 		secondDone <- err
 	}()
 	time.Sleep(60 * time.Millisecond)
@@ -871,7 +871,7 @@ func TestCoordinatorParentDeadlineStillBoundsExecution(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	started := time.Now()
-	_, err := coord.Run(ctx, Request{Profile: ProfileINT, Task: "parent deadline"})
+	_, err := coord.Run(ctx, Request{Profile: ProfileAgility, Task: "parent deadline"})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Run() error = %v, want deadline exceeded", err)
 	}
@@ -882,8 +882,8 @@ func TestCoordinatorParentDeadlineStillBoundsExecution(t *testing.T) {
 
 func TestRequestRejectsNegativeTimeouts(t *testing.T) {
 	for _, req := range []Request{
-		{Profile: ProfileINT, Task: "bad execution timeout", Timeout: -time.Second},
-		{Profile: ProfileINT, Task: "bad queue timeout", QueueTimeout: -time.Second},
+		{Profile: ProfileAgility, Task: "bad execution timeout", Timeout: -time.Second},
+		{Profile: ProfileAgility, Task: "bad queue timeout", QueueTimeout: -time.Second},
 	} {
 		if err := req.Validate(); err == nil {
 			t.Fatalf("Validate(%+v) error = nil, want validation error", req)
@@ -903,7 +903,7 @@ func TestCoordinatorClampsRequestedTimeoutToConfiguredMaximum(t *testing.T) {
 		}),
 	)
 	started := time.Now()
-	_, err := coord.Run(context.Background(), Request{Profile: ProfileINT, Task: "clamp", Timeout: time.Second})
+	_, err := coord.Run(context.Background(), Request{Profile: ProfileAgility, Task: "clamp", Timeout: time.Second})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Run() error = %v, want configured maximum deadline", err)
 	}
@@ -930,7 +930,7 @@ func TestCoordinatorBlockedEventSinkDoesNotHoldExecution(t *testing.T) {
 		}),
 	)
 	started := time.Now()
-	_, err := coord.Run(context.Background(), Request{Profile: ProfileINT, Task: "blocked observer"})
+	_, err := coord.Run(context.Background(), Request{Profile: ProfileAgility, Task: "blocked observer"})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Run() error = %v, want deadline exceeded", err)
 	}
@@ -955,7 +955,7 @@ func TestCoordinatorCloseIsBoundedForNonCooperativeRunner(t *testing.T) {
 			}}, nil
 		}),
 	)
-	_, err := coord.Run(context.Background(), Request{Profile: ProfileINT, Task: "ignore close"})
+	_, err := coord.Run(context.Background(), Request{Profile: ProfileAgility, Task: "ignore close"})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Run() error = %v, want deadline exceeded", err)
 	}
@@ -1003,11 +1003,11 @@ func TestCoordinatorQueueTimeoutReportsLifecycleMetrics(t *testing.T) {
 	defer coord.Close()
 	firstDone := make(chan error, 1)
 	go func() {
-		_, err := coord.Run(context.Background(), Request{Profile: ProfileINT, Task: "holder", QueueTimeout: time.Second})
+		_, err := coord.Run(context.Background(), Request{Profile: ProfileAgility, Task: "holder", QueueTimeout: time.Second})
 		firstDone <- err
 	}()
 	time.Sleep(10 * time.Millisecond)
-	res, err := coord.Run(context.Background(), Request{Profile: ProfileINT, Task: "queued timeout"})
+	res, err := coord.Run(context.Background(), Request{Profile: ProfileAgility, Task: "queued timeout"})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("queued Run() error = %v, want deadline exceeded", err)
 	}
@@ -1049,7 +1049,7 @@ func TestCoordinatorRepeatedCloseStillReportsActiveWorker(t *testing.T) {
 			}}, nil
 		}),
 	)
-	_, _ = coord.Run(context.Background(), Request{Profile: ProfileINT, Task: "repeat close"})
+	_, _ = coord.Run(context.Background(), Request{Profile: ProfileAgility, Task: "repeat close"})
 	if err := coord.Close(); err == nil {
 		t.Fatal("first Close() error = nil, want active-worker timeout")
 	}
@@ -1082,7 +1082,7 @@ func TestCoordinatorWaitTimeoutDoesNotCancelSpawnedAgent(t *testing.T) {
 		}),
 	)
 	defer coord.Close()
-	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileINT, Task: "background"})
+	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileAgility, Task: "background"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1125,7 +1125,7 @@ func TestCoordinatorCancelExposesCancelingUntilRunnerStops(t *testing.T) {
 		}),
 	)
 	defer coord.Close()
-	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileINT, Task: "cancel state"})
+	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileAgility, Task: "cancel state"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1160,7 +1160,7 @@ func TestCoordinatorCancelSpawnedAgent(t *testing.T) {
 		}),
 	)
 	defer coord.Close()
-	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileINT, Task: "cancel me"})
+	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileAgility, Task: "cancel me"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1183,7 +1183,7 @@ func TestCoordinatorRetainsTerminalResultsOutsideActive(t *testing.T) {
 		}),
 	)
 	defer coord.Close()
-	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileINT, Task: "finish"})
+	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileAgility, Task: "finish"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1228,7 +1228,7 @@ func TestCoordinatorDefaultWaitTimeoutDoesNotCancel(t *testing.T) {
 		}),
 	)
 	defer coord.Close()
-	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileINT, Task: "wait default"})
+	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileAgility, Task: "wait default"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1263,16 +1263,16 @@ func TestCoordinatorMaxLiveAgents(t *testing.T) {
 		}),
 	)
 	defer coord.Close()
-	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileINT, Task: "one"})
+	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileAgility, Task: "one"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := coord.Spawn(context.Background(), Request{Profile: ProfileINT, Task: "two"}); !errors.Is(err, ErrLiveLimit) {
+	if _, err := coord.Spawn(context.Background(), Request{Profile: ProfileAgility, Task: "two"}); !errors.Is(err, ErrLiveLimit) {
 		t.Fatalf("second Spawn error=%v, want ErrLiveLimit", err)
 	}
 	close(release)
 	_, _ = coord.Wait(context.Background(), h.ID, time.Second)
-	if _, err := coord.Spawn(context.Background(), Request{Profile: ProfileINT, Task: "three"}); err != nil {
+	if _, err := coord.Spawn(context.Background(), Request{Profile: ProfileAgility, Task: "three"}); err != nil {
 		t.Fatalf("spawn after completion: %v", err)
 	}
 }
@@ -1283,7 +1283,7 @@ func TestCoordinatorCompletedResultTTL(t *testing.T) {
 		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) { return mockSubagentRunnerCompat("ttl"), nil }),
 	)
 	defer coord.Close()
-	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileINT, Task: "ttl"})
+	h, err := coord.Spawn(context.Background(), Request{Profile: ProfileAgility, Task: "ttl"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1303,7 +1303,7 @@ func TestCoordinatorBoundsRetainedTerminalRecords(t *testing.T) {
 	)
 	defer coord.Close()
 	for i := 0; i < 4; i++ {
-		if _, err := coord.Run(context.Background(), Request{Profile: ProfileINT, Task: fmt.Sprintf("task-%d", i)}); err != nil {
+		if _, err := coord.Run(context.Background(), Request{Profile: ProfileAgility, Task: fmt.Sprintf("task-%d", i)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1326,7 +1326,7 @@ func TestCoordinatorBoundsRetainedTerminalRecordsWhenTTLDisabled(t *testing.T) {
 	defer coord.Close()
 	coord.resultTTL = 0
 	for i := 0; i < 4; i++ {
-		if _, err := coord.Run(context.Background(), Request{Profile: ProfileINT, Task: fmt.Sprintf("no-ttl-%d", i)}); err != nil {
+		if _, err := coord.Run(context.Background(), Request{Profile: ProfileAgility, Task: fmt.Sprintf("no-ttl-%d", i)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1360,7 +1360,7 @@ func TestCoordinatorTerminalStatusIncludesReason(t *testing.T) {
 		}),
 	)
 	defer coord.Close()
-	res, err := coord.Run(context.Background(), Request{Profile: ProfileINT, Task: "slow review"})
+	res, err := coord.Run(context.Background(), Request{Profile: ProfileAgility, Task: "slow review"})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Run() error=%v", err)
 	}
@@ -1407,11 +1407,11 @@ func TestCoordinatorCancelByParentScopesCancellation(t *testing.T) {
 	)
 	defer func() { close(release); _ = coord.Close() }()
 
-	first, err := coord.Spawn(context.Background(), Request{ParentID: "turn-a", Profile: ProfileINT, Task: "first"})
+	first, err := coord.Spawn(context.Background(), Request{ParentID: "turn-a", Profile: ProfileAgility, Task: "first"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := coord.Spawn(context.Background(), Request{ParentID: "turn-b", Profile: ProfileINT, Task: "second"})
+	second, err := coord.Spawn(context.Background(), Request{ParentID: "turn-b", Profile: ProfileAgility, Task: "second"})
 	if err != nil {
 		t.Fatal(err)
 	}

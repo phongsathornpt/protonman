@@ -52,8 +52,8 @@ func (c AgentRunCell) RawLines() []string {
 
 func (c AgentRunCell) LineCount() int { return len(c.RawLines()) }
 func (c AgentRunCell) title() string {
-	profile := strings.ToUpper(strings.TrimSpace(string(c.Profile)))
-	if profile == "" {
+	profile := c.Profile.ShortLabel()
+	if !c.Profile.Valid() {
 		profile = "AGENT"
 	}
 	task := strings.TrimSpace(c.Task)

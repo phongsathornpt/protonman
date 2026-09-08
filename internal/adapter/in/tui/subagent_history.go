@@ -23,11 +23,12 @@ type agentToolResult struct {
 
 func agentRunFromCall(call tool.Call) pendingAgentRun {
 	var input struct {
-		Profile agent.Profile `json:"profile"`
-		Task    string        `json:"task"`
+		Profile string `json:"profile"`
+		Task    string `json:"task"`
 	}
 	_ = json.Unmarshal(call.Arguments, &input)
-	return pendingAgentRun{Profile: input.Profile, Task: strings.TrimSpace(input.Task)}
+	profile, _ := agent.ParseSubagentProfile(input.Profile)
+	return pendingAgentRun{Profile: profile, Task: strings.TrimSpace(input.Task)}
 }
 func parseAgentToolResult(body string) agentToolResult {
 	var payload struct {

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/feature/agent"
 	"github.com/projectTHORN/proton/internal/core/tool"
+	"github.com/projectTHORN/proton/internal/feature/agent"
 )
 
 type delegateTaskHandler struct {
@@ -51,8 +51,8 @@ func (delegateTaskHandler) Definition() tool.Definition {
 				},
 				"profile": map[string]any{
 					"type":        "string",
-					"enum":        agent.ProfileNames(),
-					"description": agent.ProfileSchemaDescription(),
+					"enum":        agent.SubagentProfileNames(),
+					"description": agent.SubagentProfileSchemaDescription(),
 				},
 				"context": map[string]any{
 					"type":        "string",
@@ -111,7 +111,7 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "timeout_seconds must be between 1 and 86400 when provided")
 	}
 
-	profile, err := agent.ParseProfile(input.Profile)
+	profile, err := agent.ParseSubagentProfile(input.Profile)
 	if err != nil {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, err.Error())
 	}

@@ -17,9 +17,10 @@ type ProfileSpec struct {
 }
 
 var profileSpecs = []ProfileSpec{
-	{Profile: ProfilePOW, Description: "implementation, fixes, and focused refactors", Mutating: true, Reasoning: sdk.ReasoningMedium, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch, tool.KindEdit, tool.KindBash}},
-	{Profile: ProfileINT, Description: "read-only investigation, tracing, research, and review", Reasoning: sdk.ReasoningHigh, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch}},
-	{Profile: ProfileDEX, Description: "complex design, difficult debugging, and high-risk engineering", Mutating: true, Reasoning: sdk.ReasoningHigh, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch, tool.KindEdit, tool.KindBash}},
+	{Profile: ProfileUniversal, Description: "adaptive primary software engineering orchestration", Mutating: true, Reasoning: sdk.ReasoningMedium, GroundingEvidence: tool.EvidenceNone},
+	{Profile: ProfileStrength, Description: "substantial implementation, fixes, and focused refactors", Mutating: true, Reasoning: sdk.ReasoningMedium, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch, tool.KindEdit, tool.KindBash}},
+	{Profile: ProfileAgility, Description: "fast read-only exploration, tracing, and focused investigation", Reasoning: sdk.ReasoningMedium, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch}},
+	{Profile: ProfileIntelligence, Description: "deep reasoning, difficult debugging, architecture, and high-risk engineering", Mutating: true, Reasoning: sdk.ReasoningHigh, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch, tool.KindEdit, tool.KindBash}},
 }
 
 func SpecForProfile(profile Profile) (ProfileSpec, bool) {
@@ -39,6 +40,23 @@ func SupportedProfiles() []Profile {
 	return out
 }
 
+func SubagentProfiles() []Profile {
+	return []Profile{ProfileStrength, ProfileAgility, ProfileIntelligence}
+}
+
+func SubagentProfileNames() []string {
+	profiles := SubagentProfiles()
+	out := make([]string, 0, len(profiles))
+	for _, profile := range profiles {
+		out = append(out, string(profile))
+	}
+	return out
+}
+
+func SubagentProfileList(separator string) string {
+	return strings.Join(SubagentProfileNames(), separator)
+}
+
 func ProfileNames() []string {
 	profiles := SupportedProfiles()
 	out := make([]string, 0, len(profiles))
@@ -55,7 +73,16 @@ func ProfileSchemaDescription() string {
 	for _, spec := range profileSpecs {
 		parts = append(parts, "'"+string(spec.Profile)+"' ("+spec.Description+")")
 	}
-	return "The subagent profile: " + strings.Join(parts, ", ") + "."
+	return "The Proton agent profile: " + strings.Join(parts, ", ") + "."
+}
+
+func SubagentProfileSchemaDescription() string {
+	parts := make([]string, 0, len(SubagentProfiles()))
+	for _, profile := range SubagentProfiles() {
+		spec, _ := SpecForProfile(profile)
+		parts = append(parts, "'"+string(profile)+"' ("+spec.Description+")")
+	}
+	return "The delegated subagent profile: " + strings.Join(parts, ", ") + "."
 }
 
 func (s ProfileSpec) Allows(kind tool.Kind) bool {

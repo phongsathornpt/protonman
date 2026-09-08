@@ -24,7 +24,7 @@ func TestAgentRuntimeStateSurvivesBubbleModelRestart(t *testing.T) {
 	first.agents = app.NewAgents(coord)
 	state.apply(first)
 	first.maxToolCalls = 23
-	first.agentProfile = "pow"
+	first.agentProfile = "strength"
 	first.subagentsEnabled = false
 	first.reasoningEffort = sdk.ReasoningLow
 	coord.SetEnabled(false)
@@ -33,7 +33,7 @@ func TestAgentRuntimeStateSurvivesBubbleModelRestart(t *testing.T) {
 	restarted := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "")
 	restarted.agents = app.NewAgents(coord)
 	state.apply(restarted)
-	if restarted.maxToolCalls != 23 || restarted.agentProfile != "pow" || restarted.subagentsEnabled || restarted.reasoningEffort != sdk.ReasoningLow {
+	if restarted.maxToolCalls != 23 || restarted.agentProfile != "strength" || restarted.subagentsEnabled || restarted.reasoningEffort != sdk.ReasoningLow {
 		t.Fatalf("restart state = tool_calls=%d profile=%q subagents=%v reasoning=%q", restarted.maxToolCalls, restarted.agentProfile, restarted.subagentsEnabled, restarted.reasoningEffort)
 	}
 	if coord.Enabled() {

@@ -222,6 +222,7 @@ func TestApplicationLayerFileStructure(t *testing.T) {
 		"projects.go":          true,
 		"providers.go":         true,
 		"sessions.go":          true,
+		"user_settings.go":     true,
 	}
 	for _, entry := range entries {
 		if !expected[entry.Name()] {

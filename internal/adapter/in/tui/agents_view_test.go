@@ -34,7 +34,7 @@ func TestAgentsViewShowsActiveAndRespectsLayout(t *testing.T) {
 		}),
 	)
 	defer coord.Close()
-	if _, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileINT, Task: "inspect router"}); err != nil {
+	if _, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileAgility, Task: "inspect router"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -74,9 +74,9 @@ func TestDisabledSubagentsKeepExistingAgentsManageableInPane(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.resize(100, 30)
 	m.subagentsEnabled = false
-	m.agentSnapshot = []agent.AgentStatus{{ID: "int-1", Profile: agent.ProfileINT, Task: "inspect", State: agent.StateRunning, StartedAt: time.Now()}}
+	m.agentSnapshot = []agent.AgentStatus{{ID: "int-1", Profile: agent.ProfileAgility, Task: "inspect", State: agent.StateRunning, StartedAt: time.Now()}}
 	joined := strings.Join(agentInspectionRows(m), "\n")
-	if !strings.Contains(joined, "New delegation disabled") || !strings.Contains(joined, "INT") {
+	if !strings.Contains(joined, "New delegation disabled") || !strings.Contains(joined, "AGI") {
 		t.Fatalf("agents pane=%q", joined)
 	}
 }
@@ -94,7 +94,7 @@ func TestAgentLifecycleMessageRefreshesSnapshot(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.agents = app.NewAgents(coord)
 	m.agentEvents = events
-	if _, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileINT, Task: "inspect router"}); err != nil {
+	if _, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileAgility, Task: "inspect router"}); err != nil {
 		t.Fatal(err)
 	}
 	msg := (<-events)
@@ -112,15 +112,15 @@ func TestAgentsViewPrioritizesActiveAndShowsCanceling(t *testing.T) {
 	m.agentSnapshot = []agent.AgentStatus{
 		{ID: "done-1", Task: "old result", State: agent.StateCompleted, StartedAt: now.Add(-20 * time.Second), FinishedAt: now.Add(-15 * time.Second)},
 		{ID: "done-2", Task: "new result", State: agent.StateCompleted, StartedAt: now.Add(-10 * time.Second), FinishedAt: now.Add(-9 * time.Second)},
-		{ID: "run-1", Profile: agent.ProfileINT, Task: "inspect active", State: agent.StateRunning, StartedAt: now.Add(-3 * time.Second)},
-		{ID: "cancel-1", Profile: agent.ProfileDEX, Task: "stop active", State: agent.StateCanceling, StartedAt: now.Add(-4 * time.Second)},
+		{ID: "run-1", Profile: agent.ProfileAgility, Task: "inspect active", State: agent.StateRunning, StartedAt: now.Add(-3 * time.Second)},
+		{ID: "cancel-1", Profile: agent.ProfileIntelligence, Task: "stop active", State: agent.StateCanceling, StartedAt: now.Add(-4 * time.Second)},
 	}
 	m.resize(100, 30)
 	got := m.agentsView()
 	if !strings.Contains(got, "Agents 2 active") || !strings.Contains(got, "1 running") || !strings.Contains(got, "1 canceling") {
 		t.Fatalf("agents view summary=%q", got)
 	}
-	if !strings.Contains(got, "INT") || !strings.Contains(got, "DEX") || strings.Contains(got, "run-1") || strings.Contains(got, "cancel-1") {
+	if !strings.Contains(got, "AGI") || !strings.Contains(got, "INT") || strings.Contains(got, "run-1") || strings.Contains(got, "cancel-1") {
 		t.Fatalf("agent identities were not normalized: %q", got)
 	}
 }
@@ -266,11 +266,11 @@ func TestCancelActiveTurnCancelsOnlyOwnedSubagents(t *testing.T) {
 	)
 	defer func() { close(release); _ = coord.Close() }()
 
-	owned, err := coord.Spawn(context.Background(), agent.Request{ParentID: "turn-owned", Profile: agent.ProfileINT, Task: "owned"})
+	owned, err := coord.Spawn(context.Background(), agent.Request{ParentID: "turn-owned", Profile: agent.ProfileAgility, Task: "owned"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, err := coord.Spawn(context.Background(), agent.Request{ParentID: "turn-other", Profile: agent.ProfileINT, Task: "other"})
+	other, err := coord.Spawn(context.Background(), agent.Request{ParentID: "turn-other", Profile: agent.ProfileAgility, Task: "other"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,8 +325,8 @@ func TestAgentsCommandOpensFocusedInspectionPane(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.resize(100, 30)
 	m.agentSnapshot = []agent.AgentStatus{
-		{ID: "int-7", Profile: agent.ProfileINT, Task: "inspect router", State: agent.StateRunning, StartedAt: time.Now().Add(-4 * time.Second)},
-		{ID: "dex-8", Profile: agent.ProfileDEX, Task: "review concurrency", State: agent.StateFailed, StartedAt: time.Now().Add(-6 * time.Second), FinishedAt: time.Now(), Reason: "timed out"},
+		{ID: "int-7", Profile: agent.ProfileAgility, Task: "inspect router", State: agent.StateRunning, StartedAt: time.Now().Add(-4 * time.Second)},
+		{ID: "dex-8", Profile: agent.ProfileIntelligence, Task: "review concurrency", State: agent.StateFailed, StartedAt: time.Now().Add(-6 * time.Second), FinishedAt: time.Now(), Reason: "timed out"},
 	}
 	m.agentActivity["int-7"] = AgentActivity{Label: `Search "routeRequest"`}
 
@@ -336,7 +336,7 @@ func TestAgentsCommandOpensFocusedInspectionPane(t *testing.T) {
 		t.Fatal("/agents did not open inspection pane")
 	}
 	got := pane.Render(m)
-	for _, want := range []string{"INT", "inspect router", "int-7", "DEX", "review concurrency", "dex-8", "timed out"} {
+	for _, want := range []string{"AGI", "inspect router", "int-7", "INT", "review concurrency", "dex-8", "timed out"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("agents pane=%q, want %q", got, want)
 		}

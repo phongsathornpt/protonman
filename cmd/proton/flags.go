@@ -10,8 +10,8 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/projectTHORN/proton/internal/feature/agent"
 	"github.com/projectTHORN/proton/internal/base/envconfig"
+	"github.com/projectTHORN/proton/internal/feature/agent"
 )
 
 type cliOptions struct {
@@ -90,7 +90,7 @@ Session flags:
   -n, --new-session, --new    start a new session (default)
 
 Agent flags:
-  -a, --agent, --profile string  agent profile: pow | dex | int | worker | explorer | reviewer
+  -a, --agent, --profile string  agent profile: universal | strength | agility | intelligence (legacy aliases: pow | int | dex | worker | explorer | reviewer)
 
 Headless flags:
   -p, --prompt string         prompt text

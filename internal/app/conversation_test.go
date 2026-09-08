@@ -7,11 +7,11 @@ import (
 )
 
 func TestPrimaryConversationProfileDoesNotBecomeSubagentRole(t *testing.T) {
-	prompt, _, err := primaryConversationPolicy(ConversationSpec{AgentProfile: string(agent.ProfilePOW)})
+	prompt, _, err := primaryConversationPolicy(ConversationSpec{AgentProfile: string(agent.ProfileStrength)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if prompt.Profile != string(agent.ProfilePOW) {
+	if prompt.Profile != string(agent.ProfileStrength) {
 		t.Fatalf("profile = %q", prompt.Profile)
 	}
 	if prompt.Role != "" {

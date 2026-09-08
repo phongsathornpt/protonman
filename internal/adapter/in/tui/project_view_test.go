@@ -190,14 +190,14 @@ func TestProjectSetUpdatesTrustedRuntimeAndConfig(t *testing.T) {
 			t.Fatalf("%s provenance = %q", tc.field, got)
 		}
 	}
-	if m.agentProfile != "dex" || m.reasoningEffort != sdk.ReasoningHigh || m.subagentsEnabled || m.maxToolCalls != 33 || m.service.Mode() != permission.ModeAlwaysApprove {
+	if m.agentProfile != "intelligence" || m.reasoningEffort != sdk.ReasoningHigh || m.subagentsEnabled || m.maxToolCalls != 33 || m.service.Mode() != permission.ModeAlwaysApprove {
 		t.Fatalf("project settings not applied to runtime: profile=%q reasoning=%q subagents=%v tool_calls=%d mode=%s", m.agentProfile, m.reasoningEffort, m.subagentsEnabled, m.maxToolCalls, m.service.Mode())
 	}
 	snapshot, err := config.Load(context.Background(), config.Options{HomeDir: t.TempDir(), WorkDir: m.workDir, ProjectTrusted: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.Agent.Profile != "dex" || snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh || snapshot.Agent.SubagentsEnabled || snapshot.Agent.MaxToolCalls != 33 || snapshot.Mode != permission.ModeAlwaysApprove {
+	if snapshot.Agent.Profile != "intelligence" || snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh || snapshot.Agent.SubagentsEnabled || snapshot.Agent.MaxToolCalls != 33 || snapshot.Mode != permission.ModeAlwaysApprove {
 		t.Fatalf("project settings not persisted: %#v", snapshot)
 	}
 }

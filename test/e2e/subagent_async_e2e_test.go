@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	agenttool "github.com/projectTHORN/proton/internal/adapter/out/tool/agent"
-	"github.com/projectTHORN/proton/internal/feature/agent"
 	"github.com/projectTHORN/proton/internal/adapter/out/model"
+	agenttool "github.com/projectTHORN/proton/internal/adapter/out/tool/agent"
+	"github.com/projectTHORN/proton/internal/adapter/out/tool/builtin"
 	"github.com/projectTHORN/proton/internal/core/permission"
 	"github.com/projectTHORN/proton/internal/core/tool"
-	"github.com/projectTHORN/proton/internal/adapter/out/tool/builtin"
 	"github.com/projectTHORN/proton/internal/engine/toolcall"
 	"github.com/projectTHORN/proton/internal/engine/turn"
+	"github.com/projectTHORN/proton/internal/feature/agent"
 )
 
 type asyncLifecycleRunner struct {
@@ -80,7 +80,7 @@ func TestE2EAsyncSubagentWaitDoesNotCancel(t *testing.T) {
 	defer coord.Close()
 	service := agentLifecycleService(t, coord)
 
-	spawn := callAgentTool(t, service, "spawn", "delegate_task", map[string]any{"profile": "int", "task": "inspect asynchronously"})
+	spawn := callAgentTool(t, service, "spawn", "delegate_task", map[string]any{"profile": "agility", "task": "inspect asynchronously"})
 	var handle struct {
 		AgentID string `json:"agent_id"`
 	}
@@ -119,7 +119,7 @@ func TestE2EAsyncSubagentExplicitCancel(t *testing.T) {
 	)
 	defer coord.Close()
 	service := agentLifecycleService(t, coord)
-	spawn := callAgentTool(t, service, "spawn", "delegate_task", map[string]any{"profile": "int", "task": "cancel me"})
+	spawn := callAgentTool(t, service, "spawn", "delegate_task", map[string]any{"profile": "agility", "task": "cancel me"})
 	var handle struct {
 		AgentID string `json:"agent_id"`
 	}

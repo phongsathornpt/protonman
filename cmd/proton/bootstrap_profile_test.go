@@ -34,8 +34,8 @@ func TestApplyAgentProfilePreservesCustomSystemInstruction(t *testing.T) {
 	if len(state.Messages) != 2 || state.Messages[0].Content != "custom system" {
 		t.Fatalf("custom transcript changed: %#v", state.Messages)
 	}
-	if state.AgentProfile != "dex" || cfg.Agent.Profile != "dex" {
-		t.Fatalf("profile state=%q config=%q, want dex", state.AgentProfile, cfg.Agent.Profile)
+	if state.AgentProfile != "intelligence" || cfg.Agent.Profile != "intelligence" {
+		t.Fatalf("profile state=%q config=%q, want intelligence", state.AgentProfile, cfg.Agent.Profile)
 	}
 }
 
@@ -46,7 +46,7 @@ func TestApplyAgentProfilePrecedence(t *testing.T) {
 	if err := applyAgentProfile(cfg, state, "pow"); err != nil {
 		t.Fatal(err)
 	}
-	if state.AgentProfile != "pow" || cfg.Agent.Profile != "pow" {
+	if state.AgentProfile != "strength" || cfg.Agent.Profile != "strength" {
 		t.Fatalf("explicit profile did not win: state=%q config=%q", state.AgentProfile, cfg.Agent.Profile)
 	}
 
@@ -55,7 +55,7 @@ func TestApplyAgentProfilePrecedence(t *testing.T) {
 	if err := applyAgentProfile(cfg, state, ""); err != nil {
 		t.Fatal(err)
 	}
-	if state.AgentProfile != "dex" || cfg.Agent.Profile != "dex" {
+	if state.AgentProfile != "intelligence" || cfg.Agent.Profile != "intelligence" {
 		t.Fatalf("session profile did not win: state=%q config=%q", state.AgentProfile, cfg.Agent.Profile)
 	}
 }
