@@ -139,6 +139,17 @@ func (c *Coordinator) CallGuard() toolcall.CallGuard {
 	return c.guard
 }
 
+// SetReasoningResolver updates immutable per-profile reasoning overrides for future admissions.
+// Already admitted agents keep the reasoning snapshot bound at Spawn time.
+func (c *Coordinator) SetReasoningResolver(resolver *ReasoningResolver) {
+	if c == nil {
+		return
+	}
+	c.agentsMu.Lock()
+	c.reasoningResolver = resolver
+	c.agentsMu.Unlock()
+}
+
 // SetReasoningEffort updates the explicit reasoning override inherited by new subagent turns.
 func (c *Coordinator) SetReasoningEffort(effort sdk.ReasoningEffort) {
 	if !effort.Valid() {

@@ -51,6 +51,10 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 		boundModel = c.modelResolver.Resolve(req.Profile, boundModel)
 	}
 	providerName, modelID := languageModelIdentity(boundModel)
+	boundReasoning := c.reasoningEffort
+	if c.reasoningResolver != nil {
+		boundReasoning = c.reasoningResolver.Resolve(req.Profile, boundReasoning)
+	}
 
 	id := strings.TrimSpace(req.ID)
 	if id == "" {
@@ -64,7 +68,8 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	queuedAt := time.Now()
 	runCtx, runCancel := context.WithCancel(c.rootCtx)
 	entry := &agentEntry{
-		languageModel: boundModel,
+		languageModel:   boundModel,
+		reasoningEffort: boundReasoning,
 		status: AgentStatus{
 			ID: id, ParentID: req.ParentID, Profile: req.Profile, Provider: providerName, Model: modelID, Task: req.Task,
 			State: StateQueued, StartTime: queuedAt,
@@ -145,7 +150,7 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 	defer execCancel()
 
 	c.emit(execCtx, Event{Kind: EventAgentStarted, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task, QueueDuration: queueDuration})
-	res, runErr := c.executeWithModel(execCtx, req, entry.languageModel)
+	res, runErr := c.executeWithRuntime(execCtx, req, entry.languageModel, entry.reasoningEffort)
 	res.Provider = entry.status.Provider
 	res.Model = entry.status.Model
 	res.QueueDuration = queueDuration

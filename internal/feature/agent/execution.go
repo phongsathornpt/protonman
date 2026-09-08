@@ -20,11 +20,12 @@ import (
 func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) {
 	c.agentsMu.RLock()
 	languageModel := c.languageModel
+	reasoningEffort := c.reasoningEffort
 	c.agentsMu.RUnlock()
-	return c.executeWithModel(ctx, req, languageModel)
+	return c.executeWithRuntime(ctx, req, languageModel, reasoningEffort)
 }
 
-func (c *Coordinator) executeWithModel(ctx context.Context, req Request, languageModel sdk.LanguageModel) (Result, error) {
+func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, languageModel sdk.LanguageModel, reasoningEffort sdk.ReasoningEffort) (Result, error) {
 	if err := ctx.Err(); err != nil {
 		return Result{AgentID: req.ID, Profile: req.Profile}, err
 	}
@@ -35,7 +36,6 @@ func (c *Coordinator) executeWithModel(ctx context.Context, req Request, languag
 	prompter := c.prompt
 	guard := c.guard
 	skillCatalog := c.skillRegistry
-	reasoningEffort := c.reasoningEffort
 	c.agentsMu.RUnlock()
 
 	// 1. Build profile-scoped tools and an isolated skill activation session.
