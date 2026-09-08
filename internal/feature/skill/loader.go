@@ -17,6 +17,7 @@ type Options struct {
 	HomeDir        string
 	WorkDir        string
 	ProjectTrusted bool
+	ProjectScope   *appdirs.ProjectScope
 }
 
 // DiscoveryResult contains discovered skills and any non-fatal diagnostic warnings.
@@ -74,9 +75,14 @@ func Discover(ctx context.Context, opts Options) (DiscoveryResult, error) {
 
 	// 2. Project-level scopes. When the workspace is the user home, these
 	// paths alias user-global roots and must not be treated as project input.
-	projectScope, err := appdirs.ResolveProjectScope(homeDir, workDir)
-	if err != nil {
-		return result, fmt.Errorf("resolve project skill scope: %w", err)
+	var projectScope appdirs.ProjectScope
+	if opts.ProjectScope != nil {
+		projectScope = *opts.ProjectScope
+	} else {
+		projectScope, err = appdirs.ResolveProjectScope(homeDir, workDir)
+		if err != nil {
+			return result, fmt.Errorf("resolve project skill scope: %w", err)
+		}
 	}
 	projectPaths := make([]string, 0, 2)
 	if projectScope.Available {

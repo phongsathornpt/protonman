@@ -121,3 +121,20 @@ func TestResolveProjectScopeKeepsDistinctWorkspaceAvailable(t *testing.T) {
 		t.Fatalf("Config = %q, want %q", got, want)
 	}
 }
+
+func TestResolveRuntimeLayoutDisablesProjectScopeAtHome(t *testing.T) {
+	home := t.TempDir()
+	layout, err := ResolveRuntimeLayout(home, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := layout.User.Root, filepath.Join(home, RootDirName); got != want {
+		t.Fatalf("User.Root = %q, want %q", got, want)
+	}
+	if got, want := layout.Workspace, home; got != want {
+		t.Fatalf("Workspace = %q, want %q", got, want)
+	}
+	if layout.Project.Available {
+		t.Fatalf("Project = %+v, want unavailable", layout.Project)
+	}
+}
