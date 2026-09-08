@@ -31,7 +31,7 @@ func TestCLIRefusesTUIWithoutTerminal(t *testing.T) {
 	result := runProton(t, runOptions{
 		args: []string{},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if result.exitCode == 0 {
 		t.Fatalf("exit code = 0, want non-zero when launched without a TTY")
@@ -58,7 +58,7 @@ func TestCLIUnknownFlag(t *testing.T) {
 func TestCLIHeadlessOutputFormats(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
-	env := []string{"PROTON_HOME=" + home}
+	env := []string{"PROTONMAN_HOME=" + home}
 
 	// 1. Plain Text output (default)
 	textRes := runProton(t, runOptions{
@@ -122,7 +122,7 @@ func TestCLIHeadlessPromptFromStdin(t *testing.T) {
 		args:  []string{"--headless", "-y"},
 		dir:   ws,
 		stdin: `/call read_file {"path":"hello.txt"}` + "\n",
-		env:   []string{"PROTON_HOME=" + home},
+		env:   []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("stdin prompt failed (code %d): %s\n%s", res.exitCode, res.stdout, res.stderr)
@@ -135,7 +135,7 @@ func TestCLIHeadlessPromptFromStdin(t *testing.T) {
 func TestCLIModeFlags(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
-	env := []string{"PROTON_HOME=" + home}
+	env := []string{"PROTONMAN_HOME=" + home}
 
 	// Mode deny should reject call
 	denyRes := runProton(t, runOptions{

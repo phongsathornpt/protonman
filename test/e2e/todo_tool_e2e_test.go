@@ -112,7 +112,7 @@ func TestE2ETodoLivesInSessionAggregateNotWorkspace(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-s", sessionID, "-p", "/call update_todo " + args},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("update_todo failed: %s\n%s", res.stdout, res.stderr)

@@ -37,7 +37,7 @@ func TestE2ECLIInvalidFlagCombinations(t *testing.T) {
 func TestE2ECLIHeadlessPromptVariations(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
-	env := []string{"PROTON_HOME=" + home}
+	env := []string{"PROTONMAN_HOME=" + home}
 
 	// 1. -p flag
 	res := runProton(t, runOptions{
@@ -95,7 +95,7 @@ func TestE2ECLIHeadlessPromptVariations(t *testing.T) {
 func TestE2ECLIOutputFormats(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
-	env := []string{"PROTON_HOME=" + home}
+	env := []string{"PROTONMAN_HOME=" + home}
 
 	// Text format (default)
 	res := runProton(t, runOptions{
@@ -135,7 +135,7 @@ func TestE2ECLIOutputFormats(t *testing.T) {
 func TestE2ECLIAgentProfiles(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
-	env := []string{"PROTON_HOME=" + home}
+	env := []string{"PROTONMAN_HOME=" + home}
 
 	profiles := []string{"pow", "int", "dex"}
 	for _, prof := range profiles {
@@ -169,7 +169,7 @@ func TestE2ECLISandboxAndTelemetryEnv(t *testing.T) {
 		args: []string{"-y", "-p", `/call bash {"command":"echo 'sandbox-env'"}`},
 		dir:  ws,
 		env: []string{
-			"PROTON_HOME=" + home,
+			"PROTONMAN_HOME=" + home,
 			"PROTON_SANDBOX=workspace",
 		},
 	})
@@ -182,7 +182,7 @@ func TestE2ECLISandboxAndTelemetryEnv(t *testing.T) {
 		args: []string{"-y", "-p", `/call bash {"command":"echo 'telemetry-env'"}`},
 		dir:  ws,
 		env: []string{
-			"PROTON_HOME=" + home,
+			"PROTONMAN_HOME=" + home,
 			"PROTON_TELEMETRY=stderr",
 		},
 	})
@@ -195,7 +195,7 @@ func TestE2ECLISandboxAndTelemetryEnv(t *testing.T) {
 		args: []string{"-y", "-p", "test"},
 		dir:  ws,
 		env: []string{
-			"PROTON_HOME=" + home,
+			"PROTONMAN_HOME=" + home,
 			"PROTON_TELEMETRY=invalid_sink_xyz",
 		},
 	})
@@ -215,7 +215,7 @@ func TestE2ECLITodoFileParsing(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call bash {"command":"echo 'todo-loaded'"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 || !strings.Contains(res.stdout, "todo-loaded") {
 		t.Fatalf("run with TODO.md failed: %s %s", res.stdout, res.stderr)

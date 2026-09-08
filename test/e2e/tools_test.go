@@ -10,7 +10,7 @@ import (
 func TestE2EFileAndProcessTools(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
-	env := []string{"PROTON_HOME=" + home}
+	env := []string{"PROTONMAN_HOME=" + home}
 
 	// 1. read_file
 	readRes := runProton(t, runOptions{
@@ -103,7 +103,7 @@ func TestE2EFileAndProcessTools(t *testing.T) {
 func TestE2EApplyPatch(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
-	env := []string{"PROTON_HOME=" + home}
+	env := []string{"PROTONMAN_HOME=" + home}
 
 	patch := "*** Begin Patch\n" +
 		"*** Update File: hello.txt\n" +
@@ -141,7 +141,7 @@ func TestE2EWorkspaceEscapeRejection(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call read_file {"path":"../../../../etc/passwd"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode == 0 {
 		t.Fatalf("expected path traversal to fail, got exit 0: %s", res.stdout)
@@ -179,7 +179,7 @@ protected_paths = [".env", "secrets/*"]
 		args: []string{"-y", "-p", `/call read_file {"path":".env"}`},
 		dir:  ws,
 		env: []string{
-			"PROTON_HOME=" + home,
+			"PROTONMAN_HOME=" + home,
 			"PROTON_TRUST_PROJECT=1",
 		},
 	})

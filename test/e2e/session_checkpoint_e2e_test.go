@@ -12,7 +12,7 @@ func TestE2ERollbackNonExistentCheckpoint(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call rollback_checkpoint {"checkpoint_id":"non_existent_cp_12345"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode == 0 {
 		t.Fatalf("expected failure when rolling back non-existent checkpoint, got exit 0")
@@ -32,7 +32,7 @@ func TestE2ESessionCustomIDCreationAndLoading(t *testing.T) {
 	res1 := runProton(t, runOptions{
 		args: []string{"-y", "--session", customID, "-p", `/call bash {"command":"echo 'created-custom'"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res1.exitCode != 0 || !strings.Contains(res1.stdout, "created-custom") {
 		t.Fatalf("create session failed: %s %s", res1.stdout, res1.stderr)
@@ -42,7 +42,7 @@ func TestE2ESessionCustomIDCreationAndLoading(t *testing.T) {
 	res2 := runProton(t, runOptions{
 		args: []string{"-y", "--resume", "--session", customID, "-p", `/call bash {"command":"echo 'resumed-custom'"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res2.exitCode != 0 || !strings.Contains(res2.stdout, "resumed-custom") {
 		t.Fatalf("resume custom session failed: %s %s", res2.stdout, res2.stderr)

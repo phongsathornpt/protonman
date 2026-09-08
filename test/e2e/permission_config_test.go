@@ -19,7 +19,7 @@ func TestE2EHeadlessAskModeFailsClosedWithoutPrompt(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-p", `/call bash {"command":"echo hello"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode == 0 {
 		t.Fatalf("expected ask mode to fail closed in headless run, got exit 0: %s", res.stdout)
@@ -53,7 +53,7 @@ pattern = "rm *"
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call bash {"command":"rm foo"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode == 0 {
 		t.Fatalf("expected explicit deny rule to block call even with -y, got 0: %s", res.stdout)
@@ -88,7 +88,7 @@ pattern = "*"
 	untrustedRes := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call bash {"command":"echo untrusted-ok"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if untrustedRes.exitCode != 0 {
 		t.Fatalf("expected untrusted project to ignore local config, got code %d: %s\n%s",
@@ -107,7 +107,7 @@ pattern = "*"
 		args: []string{"-y", "-p", `/call bash {"command":"echo should-deny"}`},
 		dir:  ws,
 		env: []string{
-			"PROTON_HOME=" + home,
+			"PROTONMAN_HOME=" + home,
 			"PROTON_TRUST_PROJECT=1",
 		},
 	})
@@ -186,11 +186,11 @@ func TestE2EProviderConfigSaveAndReload(t *testing.T) {
 		t.Fatalf("default model should be updated, got:\n%s", fileStr2)
 	}
 
-	// Step 4: Run compiled proton CLI binary with PROTON_HOME and verify clean startup
+	// Step 4: Run compiled proton CLI binary with PROTONMAN_HOME and verify clean startup
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call bash {"command":"echo config-verified"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 || !strings.Contains(res.stdout, "config-verified") {
 		t.Fatalf("proton binary failed to boot with saved config: code %d, out: %s, err: %s", res.exitCode, res.stdout, res.stderr)
@@ -262,7 +262,7 @@ func TestE2EOpenCodeFreeProviderConfig(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call bash {"command":"echo opencode-e2e-ok"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 || !strings.Contains(res.stdout, "opencode-e2e-ok") {
 		t.Fatalf("proton binary failed with OpenCode config: code %d, out: %s, err: %s", res.exitCode, res.stdout, res.stderr)
@@ -344,7 +344,7 @@ func TestE2EProviderSwitchAndSelect(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call bash {"command":"echo provider-switch-verified"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 || !strings.Contains(res.stdout, "provider-switch-verified") {
 		t.Fatalf("proton binary failed after provider switch: code %d, out: %s, err: %s", res.exitCode, res.stdout, res.stderr)

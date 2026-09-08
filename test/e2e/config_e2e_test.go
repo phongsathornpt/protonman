@@ -38,7 +38,7 @@ default = "project-model"
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call bash {"command":"echo 'untrusted-check'"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("run failed: %s %s", res.stdout, res.stderr)
@@ -52,7 +52,7 @@ default = "project-model"
 		args: []string{"-y", "-p", `/call bash {"command":"echo 'trusted-check'"}`},
 		dir:  ws,
 		env: []string{
-			"PROTON_HOME=" + home,
+			"PROTONMAN_HOME=" + home,
 			"PROTON_TRUST_PROJECT=1",
 		},
 	})
@@ -73,7 +73,7 @@ func TestE2EConfigMalformedTOMLHandling(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "test"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode == 0 {
 		t.Fatalf("expected exit code > 0 on malformed TOML, got 0")

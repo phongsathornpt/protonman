@@ -226,7 +226,7 @@ func TestModelPickerRefreshBypassesFreshCache(t *testing.T) {
 }
 
 func TestDirectModelSelectionMarksUnknownModelUnverified(t *testing.T) {
-	t.Setenv("PROTON_HOME", t.TempDir())
+	t.Setenv("PROTONMAN_HOME", t.TempDir())
 	m := newTestSkillsModel(t, 1)
 	m.activeProvider = model.DefaultProtonmanName
 	cmd := m.selectModelDirect("custom-unlisted-model")
@@ -243,7 +243,7 @@ func TestDirectModelSelectionMarksUnknownModelUnverified(t *testing.T) {
 }
 
 func TestDirectModelSelectionRecognizesDiscoveredModel(t *testing.T) {
-	t.Setenv("PROTON_HOME", t.TempDir())
+	t.Setenv("PROTONMAN_HOME", t.TempDir())
 	m := newTestSkillsModel(t, 1)
 	m.activeProvider = model.DefaultProtonmanName
 	m.modelCatalogs.set(model.DefaultProtonmanName, []model.RemoteModel{{ID: "glm-5.3-flash"}})
@@ -418,7 +418,7 @@ func TestModelSelectViewNavigationAndConfirm(t *testing.T) {
 	if view.models[view.index].ID != "Qwen3.8-Flash" {
 		t.Fatalf("expected Qwen3.8-Flash at index 2, got %s", view.models[view.index].ID)
 	}
-	t.Setenv("PROTON_HOME", t.TempDir())
+	t.Setenv("PROTONMAN_HOME", t.TempDir())
 	updated, cmd := bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	bModel = updated.(*bubbleModel)
 	if bModel.bottom.has(modelSelectViewID) {
@@ -447,7 +447,7 @@ func TestModelSelectViewNavigationAndConfirm(t *testing.T) {
 }
 
 func TestModelSelectViewDirectModelCommand(t *testing.T) {
-	t.Setenv("PROTON_HOME", t.TempDir())
+	t.Setenv("PROTONMAN_HOME", t.TempDir())
 	bModel := newTestSkillsModel(t, 1)
 	cmd := bModel.executeCommand("/model glm-5.3-flash")
 	if cmd == nil {

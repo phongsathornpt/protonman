@@ -11,7 +11,7 @@ import (
 func TestE2EBashStructuredExecution(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
-	env := []string{"PROTON_HOME=" + home}
+	env := []string{"PROTONMAN_HOME=" + home}
 	if err := os.MkdirAll(filepath.Join(ws, "nested", "work"), 0o755); err != nil {
 		t.Fatal(err)
 	}

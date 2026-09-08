@@ -13,7 +13,7 @@ func TestE2ESessionPersistenceAndRedaction(t *testing.T) {
 	home := newTestHome(t)
 	sessionID := "e2e-test-session"
 	env := []string{
-		"PROTON_HOME=" + home,
+		"PROTONMAN_HOME=" + home,
 		"PROTON_SESSION_ID=" + sessionID,
 	}
 
@@ -79,7 +79,7 @@ func TestE2ESessionPersistenceAndRedaction(t *testing.T) {
 func TestE2ECheckpointsAndRestore(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
-	env := []string{"PROTON_HOME=" + home}
+	env := []string{"PROTONMAN_HOME=" + home}
 
 	// Original content of hello.txt
 	origContent := "Hello Coding E2E\nLine 2\n"
@@ -143,7 +143,7 @@ func TestE2ECheckpointsAndRestore(t *testing.T) {
 func TestE2ENewSessionByDefaultAndResume(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
-	env := []string{"PROTON_HOME=" + home}
+	env := []string{"PROTONMAN_HOME=" + home}
 
 	// 1. Resume in a workspace with no previous session should fail
 	noRes := runProton(t, runOptions{

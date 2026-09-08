@@ -26,7 +26,6 @@ func TestMutableProductLiteralsStayCentralized(t *testing.T) {
 		"PROTONMAN_TELEMETRY":          "internal/base/envconfig/env.go",
 		"PROTONMAN_DEBUG_LOG":          "internal/base/envconfig/env.go",
 		"PROTONMAN_FORCE_TTY":          "internal/base/envconfig/env.go",
-		"PROTON_HOME":                  "internal/base/envconfig/env.go",
 		"PROTON_TRUST_PROJECT":         "internal/base/envconfig/env.go",
 		"PROTON_SESSION_ID":            "internal/base/envconfig/env.go",
 		"PROTON_SANDBOX":               "internal/base/envconfig/env.go",

@@ -44,11 +44,11 @@ func TestMainRun_InvalidConfigurations(t *testing.T) {
 	home := t.TempDir()
 	work := t.TempDir()
 
-	origHome := os.Getenv("PROTON_HOME")
+	origHome := os.Getenv("PROTONMAN_HOME")
 	defer func() {
-		_ = os.Setenv("PROTON_HOME", origHome)
+		_ = os.Setenv("PROTONMAN_HOME", origHome)
 	}()
-	_ = os.Setenv("PROTON_HOME", home)
+	_ = os.Setenv("PROTONMAN_HOME", home)
 
 	origWd, _ := os.Getwd()
 	_ = os.Chdir(work)
@@ -87,11 +87,11 @@ func TestMainRun_HeadlessRefusalAndExecution(t *testing.T) {
 	home := t.TempDir()
 	work := t.TempDir()
 
-	origHome := os.Getenv("PROTON_HOME")
+	origHome := os.Getenv("PROTONMAN_HOME")
 	defer func() {
-		_ = os.Setenv("PROTON_HOME", origHome)
+		_ = os.Setenv("PROTONMAN_HOME", origHome)
 	}()
-	_ = os.Setenv("PROTON_HOME", home)
+	_ = os.Setenv("PROTONMAN_HOME", home)
 
 	origWd, _ := os.Getwd()
 	_ = os.Chdir(work)

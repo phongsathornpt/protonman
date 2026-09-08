@@ -27,7 +27,7 @@ func TestE2ETUIStartupAndExitWithRealPTY(t *testing.T) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, protonBin)
 	cmd.Dir = ws
-	cmd.Env = append(os.Environ(), "PROTON_HOME="+home, "TERM=xterm-256color")
+	cmd.Env = append(os.Environ(), "PROTONMAN_HOME="+home, "TERM=xterm-256color")
 	if coverDir != "" {
 		cmd.Env = append(cmd.Env, "GOCOVERDIR="+coverDir)
 	}

@@ -15,7 +15,7 @@ func TestE2ESubagentDelegationSuccess(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call delegate_task {"task":"Explore repository structure","profile":"agility","timeout_seconds":30}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("delegation failed: %s %s", res.stdout, res.stderr)
@@ -33,7 +33,7 @@ func TestE2ESubagentDelegationInvalidArguments(t *testing.T) {
 	resMissing := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call delegate_task {"profile":"agility"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if resMissing.exitCode == 0 || !strings.Contains(resMissing.stdout+resMissing.stderr, "missing property 'task'") {
 		t.Fatalf("expected task required error, got: %s %s", resMissing.stdout, resMissing.stderr)
@@ -43,7 +43,7 @@ func TestE2ESubagentDelegationInvalidArguments(t *testing.T) {
 	resProfile := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call delegate_task {"task":"Do work","profile":"unknown_profile_xyz"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if resProfile.exitCode == 0 || !strings.Contains(resProfile.stdout+resProfile.stderr, "value must be one of") {
 		t.Fatalf("expected unknown profile error, got: %s %s", resProfile.stdout, resProfile.stderr)
@@ -56,7 +56,7 @@ func TestE2ESubagentDelegationRejectsExcessiveTimeout(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call delegate_task {"task":"Do work","profile":"agility","timeout_seconds":86401}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode == 0 || !strings.Contains(res.stdout+res.stderr, "timeout_seconds") {
 		t.Fatalf("expected timeout validation error, got: %s %s", res.stdout, res.stderr)

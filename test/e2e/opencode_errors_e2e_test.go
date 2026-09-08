@@ -18,7 +18,7 @@ func TestE2EOpenCodeModelNotFoundWithFuzzySuggestions(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Trigger model error"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode == 0 {
 		t.Fatalf("expected non-zero exit on model error, got 0: %s", res.stdout)
@@ -43,7 +43,7 @@ func TestE2EOpenCodeContextOverflow(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Trigger overflow"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode == 0 {
 		t.Fatalf("expected non-zero exit on context overflow, got 0: %s", res.stdout)
@@ -67,7 +67,7 @@ func TestE2EOpenCodeAuthAndForbiddenErrors(t *testing.T) {
 	resAuth := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Trigger 401"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if resAuth.exitCode == 0 {
 		t.Fatalf("expected non-zero exit on 401, got 0")
@@ -85,7 +85,7 @@ func TestE2EOpenCodeAuthAndForbiddenErrors(t *testing.T) {
 	res403 := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Trigger 403"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res403.exitCode == 0 {
 		t.Fatalf("expected non-zero exit on 403, got 0")
@@ -108,7 +108,7 @@ func TestE2EOpenCodeRateLimitAndOverloadErrors(t *testing.T) {
 	res429 := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Trigger 429"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res429.exitCode == 0 {
 		t.Fatalf("expected non-zero exit on 429, got 0")
@@ -126,7 +126,7 @@ func TestE2EOpenCodeRateLimitAndOverloadErrors(t *testing.T) {
 	res503 := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Trigger 503"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res503.exitCode == 0 {
 		t.Fatalf("expected non-zero exit on 503, got 0")
@@ -151,7 +151,7 @@ func TestE2EOpenCodeHTMLProxyGatewayError(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Trigger 502 HTML"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode == 0 {
 		t.Fatalf("expected non-zero exit on HTML gateway error, got 0")

@@ -31,10 +31,10 @@ func TestSessionResumeArgs(t *testing.T) {
 func TestRunSessionListFiltersCurrentWorkspaceAndSupportsJSON(t *testing.T) {
 	home := t.TempDir()
 	work := t.TempDir()
-	oldHome := os.Getenv("PROTON_HOME")
+	oldHome := os.Getenv("PROTONMAN_HOME")
 	oldWD, _ := os.Getwd()
-	defer func() { _ = os.Setenv("PROTON_HOME", oldHome); _ = os.Chdir(oldWD) }()
-	_ = os.Setenv("PROTON_HOME", home)
+	defer func() { _ = os.Setenv("PROTONMAN_HOME", oldHome); _ = os.Chdir(oldWD) }()
+	_ = os.Setenv("PROTONMAN_HOME", home)
 	_ = os.Chdir(work)
 	dirs, err := appdirs.Resolve("")
 	if err != nil {

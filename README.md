@@ -472,7 +472,7 @@ Execution safety notes:
 | `PROTONMAN_DEBUG_LOG` | Set to a file path or `stderr` for opt-in JSON development diagnostics; disabled by default |
 | `PROTONMAN_FORCE_TTY` | Test/development override for terminal detection; normal CLI use should leave it unset |
 
-Legacy `PROTON_HOME`, `PROTON_TRUST_PROJECT`, `PROTON_SESSION_ID`, `PROTON_SANDBOX`, `PROTON_TELEMETRY`, `PROTON_DEBUG_LOG`, and `PROTON_FORCE_TTY` are accepted only as fallbacks. If both namespaces are set, `PROTONMAN_*` wins.
+Legacy `PROTON_TRUST_PROJECT`, `PROTON_SESSION_ID`, `PROTON_SANDBOX`, `PROTON_TELEMETRY`, `PROTON_DEBUG_LOG`, and `PROTON_FORCE_TTY` are accepted only as fallbacks. `PROTONMAN_HOME` is the only supported home override.
 
 ---
 

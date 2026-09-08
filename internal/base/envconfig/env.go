@@ -14,7 +14,6 @@ const (
 	DebugLog     = "PROTONMAN_DEBUG_LOG"
 	ForceTTY     = "PROTONMAN_FORCE_TTY"
 
-	LegacyHome         = "PROTON_HOME"
 	LegacyTrustProject = "PROTON_TRUST_PROJECT"
 	LegacySessionID    = "PROTON_SESSION_ID"
 	LegacySandbox      = "PROTON_SANDBOX"
@@ -24,7 +23,6 @@ const (
 )
 
 var legacyNames = map[string]string{
-	Home:         LegacyHome,
 	TrustProject: LegacyTrustProject,
 	SessionID:    LegacySessionID,
 	Sandbox:      LegacySandbox,
