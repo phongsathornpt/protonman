@@ -510,7 +510,6 @@ func (v *modelSelectPaneView) applyFilter(activeModel string) {
 	}
 }
 
-
 func (v *modelSelectPaneView) resetSelection(activeModel string) {
 	if v == nil {
 		return
