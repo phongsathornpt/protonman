@@ -53,22 +53,30 @@ See [`docs/architecture.md`](docs/architecture.md) for the package responsibilit
 
 ## Quick Start
 
-### Prerequisites
-- Go 1.27+ installed
-- Git
-- Linux sandboxing uses native Landlock and network namespaces when supported; `bwrap` is an optional fallback
+### Install the CLI
 
-### Running Protonman
+For public releases on Linux or macOS:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/phongsathornpt/protonman/develop/install.sh | sh
+protonman --version
+```
+
+The installer detects OS/architecture, verifies the release SHA-256 checksum, and installs to `~/.local/bin` by default. Use `--version` or `--bin-dir` for an exact release or custom destination. When the repository is private, run `install.sh` from an authenticated checkout and set `GITHUB_TOKEN` or `GH_TOKEN` so private release assets can be fetched. See [`docs/install.md`](docs/install.md).
+
+### Build from Source
+
+Development requires Go 1.27+ and Git. Linux sandboxing uses native Landlock and network namespaces when supported; `bwrap` is an optional fallback.
 
 ```sh
 # Start the interactive fullscreen TUI (default)
 make tui
+
 # Or run directly with Go
 go run ./cmd/protonman
 
 # Build the standalone binary
 make build
-./bin/protonman
 ./bin/protonman --version
 ```
 
@@ -198,7 +206,7 @@ When prompted in `ask` mode:
 
 - **Path Traversal Protection**: File operations are confined to the workspace root directory. Relative escapes (`../`) and symlink traversal outside the workspace boundary are rejected.
 - **Protected Paths**: Configured protected paths (e.g. `.env`, `secrets/`, `*.pem`) are shielded from model reads, listings, and modifications.
-- **Automatic Checkpoints**: Mutating file operations create pre-edit snapshots stored under `~/.proton/checkpoints/`. File state can be restored via `checkpoint_restore`.
+- **Automatic Checkpoints**: Mutating file operations create pre-edit snapshots stored under `~/.protonman/checkpoints/`. File state can be restored via `checkpoint_restore`.
 
 ### OS Sandbox Profiles
 
@@ -223,7 +231,7 @@ protonman --sandbox strict -p "Analyze local files"
 Permission resolution and approved tool execution have separate two-minute
 deadlines by default. A shorter parent turn or tool context still wins. Bash
 commands receive context cancellation, preserve partial output, and terminate
-their process tree where the platform supports it. Set `PROTON_DEBUG_LOG` to
+their process tree where the platform supports it. Set `PROTONMAN_DEBUG_LOG` to
 `stderr` or a file path to inspect timeout cause, error type, and process
 termination diagnostics without logging command contents.
 
@@ -251,7 +259,7 @@ Protonman routes agent model calls through `proton-sdk`, with native OpenAI-comp
 - `muse-spark-1.3-contributor` (1M context, tool-calling)
 - `MiniMax-M3` (1M context)
 
-Configure providers directly inside the TUI with `/provider` or via `~/.proton/config.toml`.
+Configure providers directly inside the TUI with `/provider` or via `~/.protonman/config.toml`.
 
 `proton-sdk` owns provider-neutral agent messages, tools, streaming events, usage/finish metadata, model registry, middleware, and provider wire adapters. The Protonman CLI keeps permission policy, tool execution, sessions, and turn orchestration outside the SDK. See [`docs/proton-sdk.md`](docs/proton-sdk.md) for the agent-first SDK contract and provider extension boundaries.
 
@@ -294,10 +302,10 @@ Protonman registers a suite of workspace-safe tools:
 | `cancel_agent` | Multi-Agent | Explicitly cancel a queued or running subagent |
 | `checkpoint_restore` | Recovery | Rollback a file to a recorded pre-edit checkpoint ID |
 
-Session state and task plans are private user data, not workspace files. Each session owns an aggregate under `~/.proton/sessions/<session-id>/` (or the equivalent `PROTON_HOME` root):
+Session state and task plans are private user data, not workspace files. Each session owns an aggregate under `~/.protonman/sessions/<session-id>/`. When `PROTONMAN_HOME` overrides the effective home directory, the same `.protonman/sessions/<session-id>/` layout is created beneath that home:
 
 ```text
-.proton/sessions/<session-id>/
+.protonman/sessions/<session-id>/
   state.json
   todo.md
 ```
@@ -311,11 +319,13 @@ Session state and task plans are private user data, not workspace files. Each se
 Protonman implements the open [Agent Skills Specification](https://agentskills.io). Skills are self-contained directory packages containing a `SKILL.md` (YAML frontmatter + Markdown instructions) and optional helper scripts and references.
 
 ### Discovery Locations
-- **User-level**: `~/.proton/skills/` and `~/.agents/skills/`
-- **Project-level**: `<workspace>/.proton/skills/` and `<workspace>/.agents/skills/`
+- **User-level**: `~/.protonman/skills/` and `~/.agents/skills/`
+- **Project-level**: `<workspace>/.protonman/skills/` and `<workspace>/.agents/skills/`
 
 > [!NOTE]
-> Project-local skills and configuration are only loaded when `PROTON_TRUST_PROJECT=1` is enabled. Untrusted project skills are safely skipped with a diagnostic warning.
+> Project-local skills and configuration are only loaded when `PROTONMAN_TRUST_PROJECT=1` is enabled. Untrusted project skills are safely skipped with a diagnostic warning.
+
+Legacy `.proton/` directories and `PROTON_*` environment variables remain supported as compatibility fallbacks. Canonical `.protonman/` data and `PROTONMAN_*` variables take precedence when both exist. New project initialization writes `.protonman/`.
 
 ### Progressive Disclosure
 1. **Catalog (Tier 1)**: Available skills are summarized as `<available_skills>` in the system prompt (~50-100 tokens per skill).
@@ -326,7 +336,7 @@ Protonman implements the open [Agent Skills Specification](https://agentskills.i
 
 ## Configuration Reference
 
-Protonman loads `~/.proton/config.toml`. When `PROTON_TRUST_PROJECT=1` is set, a project-local `.proton/config.toml` is merged, with project rules overriding user defaults.
+Protonman loads `~/.protonman/config.toml`. When `PROTONMAN_TRUST_PROJECT=1` is set, a project-local `.protonman/config.toml` is merged, with project rules overriding user defaults.
 
 ```toml
 # Default permission mode: ask | plan | always-approve
@@ -454,12 +464,15 @@ Execution safety notes:
 
 | Variable | Description |
 | :--- | :--- |
-| `PROTON_HOME` | Custom root directory for configuration, sessions, and checkpoints |
-| `PROTON_TRUST_PROJECT` | Set to `1`, `true`, or `on` to trust and load project-local `.proton/` configs and skills |
-| `PROTON_SESSION_ID` | Explicit session identifier to resume or create |
-| `PROTON_SANDBOX` | Override sandbox profile (`off`, `workspace`, `read-only`, `strict`) |
-| `PROTON_TELEMETRY` | Set to `stderr` for redacted JSON tool lifecycle and loop-protection telemetry, including suppression, retry-budget, stale-continuation, and turn-deadline counters |
-| `PROTON_DEBUG_LOG` | Set to a file path or `stderr` for opt-in JSON development diagnostics; disabled by default |
+| `PROTONMAN_HOME` | Override the effective user home beneath which `.protonman/` stores configuration, sessions, checkpoints, skills, and logs |
+| `PROTONMAN_TRUST_PROJECT` | Set to `1`, `true`, or `on` to trust and load project-local `.protonman/` configs and skills |
+| `PROTONMAN_SESSION_ID` | Explicit session identifier to resume or create |
+| `PROTONMAN_SANDBOX` | Override sandbox profile (`off`, `workspace`, `read-only`, `strict`) |
+| `PROTONMAN_TELEMETRY` | Set to `stderr` for redacted JSON tool lifecycle and loop-protection telemetry, including suppression, retry-budget, stale-continuation, and turn-deadline counters |
+| `PROTONMAN_DEBUG_LOG` | Set to a file path or `stderr` for opt-in JSON development diagnostics; disabled by default |
+| `PROTONMAN_FORCE_TTY` | Test/development override for terminal detection; normal CLI use should leave it unset |
+
+Legacy `PROTON_HOME`, `PROTON_TRUST_PROJECT`, `PROTON_SESSION_ID`, `PROTON_SANDBOX`, `PROTON_TELEMETRY`, `PROTON_DEBUG_LOG`, and `PROTON_FORCE_TTY` are accepted only as fallbacks. If both namespaces are set, `PROTONMAN_*` wins.
 
 ---
 

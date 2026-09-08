@@ -52,7 +52,7 @@ Defines the primary application use cases and boundaries for inbound driving ada
 - `providers.go`: User provider settings mutations and persistence use cases.
 - `projects.go`: Project-local configuration mutations and project discovery / initialization.
 - `sessions.go`: Persisted session loading, listing, and deletion use cases.
-- `appdirs/`: Filesystem layout resolution (`.proton/`, `config.toml`, `sessions/`, etc.).
+- `appdirs/`: Filesystem layout resolution (`.protonman/`, `config.toml`, `sessions/`, etc.).
 
 *Rule*: Inbound adapters interact exclusively through `internal/app` and never touch concrete turn loops, config persistence, or direct database/filesystem stores.
 
@@ -103,12 +103,14 @@ Pure business rules and domain definitions. No `domain-ish` parent folder is cre
 A session ID is the ownership boundary for conversation state and the agent task plan:
 
 ```text
-~/.proton/sessions/<session-id>/
+~/.protonman/sessions/<session-id>/
   state.json
   todo.md
 ```
 
 The CLI resolves the session before constructing stateful tools. TUI/headless bind `get_todo` and `update_todo` to that session's repository; ACP creates a registry overlay per ACP session so task state cannot leak between concurrent sessions. Workspace file tools cannot mutate this private task state. Both session saves and todo patches use durable revisions plus filesystem serialization to reject stale writers.
+
+Runtime namespace resolution is centralized in `internal/app/appdirs` and `internal/base/envconfig`. `.protonman/` and `PROTONMAN_*` are canonical. Existing `.proton/` and `PROTON_*` values remain compatibility fallbacks; canonical state wins when both exist, while project initialization and fresh user state use the Protonman namespace.
 
 ---
 
