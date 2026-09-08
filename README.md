@@ -484,7 +484,7 @@ may be supplied explicitly. `protonman --version` reports the version embedded i
 the binary.
 
 Pushing a tag such as `v1.2.3` triggers `.github/workflows/release.yml`, which
-runs the full test suite, builds Linux/macOS/Windows archives, generates SHA-256
+runs the full test suite, builds Linux amd64 and macOS arm64 archives, generates SHA-256
 checksums, and publishes a GitHub Release. Prerelease tags such as `v1.2.3-rc.1`
 are published as GitHub prereleases.
 

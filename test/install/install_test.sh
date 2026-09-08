@@ -146,6 +146,20 @@ if run_installer "$case_dir/bin" "$case_dir/release" "$case_dir/home" \
 	fail 'unexpected archive layout succeeded'
 fi
 
+printf '%s\n' 'test: unsupported published platforms fail closed'
+for platform in 'Linux aarch64' 'Darwin x86_64'; do
+	set -- $platform
+	case_dir="$TEST_ROOT/unsupported-$1-$2"
+	mkdir -p "$case_dir"
+	make_fake_tools "$case_dir/bin"
+	make_release "$case_dir/release" 1.2.3
+	mkdir -p "$case_dir/home"
+	if PATH="$case_dir/bin:$PATH" FAKE_RELEASE_DIR="$case_dir/release" FAKE_UNAME_S="$1" FAKE_UNAME_M="$2" HOME="$case_dir/home" \
+		sh "$INSTALLER" --version v1.2.3 --bin-dir "$case_dir/install" >/dev/null 2>&1; then
+		fail "unsupported platform $1/$2 unexpectedly succeeded"
+	fi
+done
+
 printf '%s\n' 'test: unsupported architecture fails closed'
 case_dir="$TEST_ROOT/arch"
 mkdir -p "$case_dir"

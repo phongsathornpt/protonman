@@ -233,6 +233,10 @@ main() {
 
 	os=$(detect_os)
 	arch=$(detect_arch)
+	case "$os/$arch" in
+	linux/amd64 | darwin/arm64) ;;
+	*) die "unsupported platform: $os/$arch (supported: linux/amd64, darwin/arm64)" ;;
+	esac
 	plain_version=${VERSION#v}
 	archive_name="protonman_${plain_version}_${os}_${arch}.tar.gz"
 	TMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t protonman-install) || die "could not create temporary directory"

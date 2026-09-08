@@ -89,12 +89,9 @@ rm -rf "$HOME/.protonman"
 | OS | Architecture | Archive |
 | :--- | :--- | :--- |
 | Linux | amd64 | `.tar.gz` |
-| Linux | arm64 | `.tar.gz` |
-| macOS | amd64 | `.tar.gz` |
 | macOS | arm64 | `.tar.gz` |
-| Windows | amd64 | `.zip` (manual download) |
 
-Windows is not installed by the POSIX shell script. Download the matching `protonman_<version>_windows_amd64.zip` release asset and verify it against `checksums.txt`.
+Other OS/architecture combinations are not published or supported by the release installer.
 
 ## Verification and failure behavior
 
