@@ -66,6 +66,39 @@ func (r *ModelResolver) Resolve(profile Profile, fallback sdk.LanguageModel) sdk
 	return fallback
 }
 
+// ReasoningResolver holds immutable per-profile reasoning overrides.
+// ReasoningDefault entries intentionally inherit the current global/profile policy.
+type ReasoningResolver struct {
+	overrides map[Profile]sdk.ReasoningEffort
+}
+
+// NewReasoningResolver validates and snapshots explicit subagent reasoning overrides.
+func NewReasoningResolver(overrides map[Profile]sdk.ReasoningEffort) (*ReasoningResolver, error) {
+	cloned := make(map[Profile]sdk.ReasoningEffort, len(overrides))
+	for profile, effort := range overrides {
+		if !profile.IsSubagent() {
+			return nil, fmt.Errorf("reasoning override profile %q is not delegable", profile)
+		}
+		if !effort.Valid() {
+			return nil, fmt.Errorf("reasoning override for %s is invalid: %q", profile, effort)
+		}
+		if effort != sdk.ReasoningDefault {
+			cloned[profile] = effort
+		}
+	}
+	return &ReasoningResolver{overrides: cloned}, nil
+}
+
+// Resolve selects an explicit profile effort or the caller-provided fallback.
+func (r *ReasoningResolver) Resolve(profile Profile, fallback sdk.ReasoningEffort) sdk.ReasoningEffort {
+	if r != nil {
+		if effort, ok := r.overrides[profile]; ok {
+			return effort
+		}
+	}
+	return fallback
+}
+
 // AgentStatus describes the live state of an in-flight subagent.
 type AgentStatus struct {
 	ID         string    `json:"id"`
@@ -82,23 +115,25 @@ type AgentStatus struct {
 }
 
 type agentEntry struct {
-	status        AgentStatus
-	languageModel sdk.LanguageModel
-	cancel        context.CancelFunc
-	done          chan struct{}
-	started       chan struct{}
-	result        Result
-	err           error
+	status          AgentStatus
+	languageModel   sdk.LanguageModel
+	reasoningEffort sdk.ReasoningEffort
+	cancel          context.CancelFunc
+	done            chan struct{}
+	started         chan struct{}
+	result          Result
+	err             error
 }
 
 // Coordinator manages subagent execution in bounded, cancellable goroutines.
 type Coordinator struct {
-	languageModel  sdk.LanguageModel
-	modelResolver  *ModelResolver
-	parentRegistry tool.Registry
-	skillRegistry  *skill.Registry
-	workspace      *workspace.Workspace
-	policy         *permission.Policy
+	languageModel     sdk.LanguageModel
+	modelResolver     *ModelResolver
+	reasoningResolver *ReasoningResolver
+	parentRegistry    tool.Registry
+	skillRegistry     *skill.Registry
+	workspace         *workspace.Workspace
+	policy            *permission.Policy
 
 	permissionMode permission.Mode
 	prompt         toolcall.PermissionPrompt
@@ -160,6 +195,11 @@ func WithMaxConcurrency(n int) Option {
 // WithModelResolver configures optional per-profile model routing for new subagents.
 func WithModelResolver(resolver *ModelResolver) Option {
 	return func(c *Coordinator) { c.modelResolver = resolver }
+}
+
+// WithReasoningResolver configures optional per-profile reasoning overrides for new subagents.
+func WithReasoningResolver(resolver *ReasoningResolver) Option {
+	return func(c *Coordinator) { c.reasoningResolver = resolver }
 }
 
 // WithReasoningEffort overrides portable profile reasoning for subagents.
