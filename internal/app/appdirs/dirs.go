@@ -59,20 +59,6 @@ func dirsForRoot(home, root string) Dirs {
 	}
 }
 
-func samePath(left, right string) bool {
-	leftAbs, leftErr := filepath.Abs(left)
-	rightAbs, rightErr := filepath.Abs(right)
-	if leftErr == nil && rightErr == nil {
-		return filepath.Clean(leftAbs) == filepath.Clean(rightAbs)
-	}
-	return filepath.Clean(left) == filepath.Clean(right)
-}
-
-func pathEntryExists(path string) bool {
-	_, err := os.Lstat(path)
-	return err == nil || !os.IsNotExist(err)
-}
-
 func displayPath(path string) string {
 	if envconfig.DirectValue(envconfig.Home) != "" {
 		return path
