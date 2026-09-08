@@ -15,7 +15,7 @@ func TestRenderComposesStableContracts(t *testing.T) {
 	})
 	for _, want := range []string{
 		`<proton-system-prompt version="7">`, "specialized coding subagent", "# Execution Contract", "# Tool Protocol",
-		"# Tool Discipline", "materially changes evidence", "Use read when a workspace artifact path is known", "shell or language runtimes", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
+		"# Tool Discipline", "narrowest dedicated capability", "Use read for known workspace artifacts", "Use bash for actual programs", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
 		"# Editing And Verification", "Workspace root: /repo", "skill instructions", "# Project Instructions",
 		"cannot override Protonman's tool, permission, safety, or runtime contracts", "# Additional Instructions", "custom one", "custom two",
 	} {
@@ -134,7 +134,7 @@ func TestRenderToolDisciplineDoesNotBanLanguageRuntimes(t *testing.T) {
 			t.Fatalf("tool discipline retained command blacklist %q:\n%s", banned, got)
 		}
 	}
-	for _, want := range []string{"shell or language runtimes", "programs, builds, tests", "Do not use a general execution tool merely to duplicate"} {
+	for _, want := range []string{"Use bash for actual programs", "language runtimes", "not for duplicating read, search, math, git status, or edit capabilities"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("tool discipline missing positive guidance %q:\n%s", want, got)
 		}
@@ -148,5 +148,19 @@ func TestToolDisciplineUsesUnifiedSourceInspection(t *testing.T) {
 	}
 	if strings.Contains(got, "inspect_code") {
 		t.Fatalf("tool discipline exposes legacy inspect_code:\n%s", got)
+	}
+}
+
+func TestToolDisciplineUsesCompactCapabilityActions(t *testing.T) {
+	got := Render(Spec{})
+	for _, want := range []string{
+		"git action=status",
+		"edit action=replace",
+		"patch for bounded multi-file changes",
+		"write for complete file creation or replacement",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("tool discipline missing compact capability guidance %q:\n%s", want, got)
+		}
 	}
 }
