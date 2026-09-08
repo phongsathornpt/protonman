@@ -1055,7 +1055,8 @@ func (m *bubbleModel) updateTurnDelta(message turnDeltaMsg) (tea.Model, tea.Cmd)
 				continue
 			}
 			m.applyTurnEvents(batch)
-			m.refreshViewport()
+			// The terminal message performs its own relayout/viewport refresh.
+			// Avoid rendering the just-drained deltas twice at turn completion.
 			return m.Update(next)
 		default:
 		}
