@@ -13,14 +13,14 @@ BUILD_LDFLAGS := $(strip $(LDFLAGS) $(VERSION_LDFLAGS))
 VERSION_KEY := $(subst /,_,$(VERSION))
 VERSION_STAMP := $(BIN_DIR)/.version-$(VERSION_KEY)
 
-## tui: Run Proton TUI from the cached binary (default)
+## tui: Run Protonman TUI from the cached binary (default)
 tui: run
 
-## run: Build Proton only when sources changed, then run it
+## run: Build Protonman only when sources changed, then run it
 run: $(BINARY)
 	./$(BINARY)
 
-## dev: Run Proton through go run (always invokes the Go toolchain)
+## dev: Run Protonman through go run (always invokes the Go toolchain)
 dev:
 	go run -ldflags "$(BUILD_LDFLAGS)" ./cmd/protonman
 
@@ -81,7 +81,7 @@ clean:
 
 ## help: Display this help message
 help:
-	@echo "Proton - Go Coding Agent"
+	@echo "Protonman - Go Coding Agent"
 	@echo ""
 	@echo "Usage: make [target]"
 	@echo ""

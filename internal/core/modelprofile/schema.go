@@ -2,7 +2,7 @@ package modelprofile
 
 import "reflect"
 
-// PublishInputSchema adapts a canonical Proton tool schema to the subset a
+// PublishInputSchema adapts a canonical Protonman tool schema to the subset a
 // model family can reliably consume. Runtime validation still uses the
 // canonical schema, so lowering never weakens host-side argument checks.
 func PublishInputSchema(profile Resolved, schema map[string]any) map[string]any {

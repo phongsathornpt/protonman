@@ -45,7 +45,7 @@ func NewCheckpointRestore(store checkpoint.Store) tool.Handler {
 func (restoreCheckpointHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                "checkpoint_restore",
-		Description:         "Restore files from a previous Proton edit checkpoint.",
+		Description:         "Restore files from a previous Protonman edit checkpoint.",
 		Kind:                tool.KindForName("checkpoint_restore"),
 		Mutability:          tool.MutabilityMutating,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyWholeFile, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceWrite},

@@ -74,13 +74,13 @@ func TestCallTitle(t *testing.T) {
 		},
 		{
 			name: "grep with pattern and path",
-			call: makeTestCall("grep", map[string]any{"pattern": "Proton", "path": "internal"}),
-			want: `Search "Proton" in internal`,
+			call: makeTestCall("grep", map[string]any{"pattern": "Protonman", "path": "internal"}),
+			want: `Search "Protonman" in internal`,
 		},
 		{
 			name: "grep with query fallback",
-			call: makeTestCall("grep", map[string]any{"query": "Proton"}),
-			want: `Search "Proton"`,
+			call: makeTestCall("grep", map[string]any{"query": "Protonman"}),
+			want: `Search "Protonman"`,
 		},
 		{
 			name: "bash command truncated",

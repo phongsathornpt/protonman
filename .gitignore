@@ -24,7 +24,7 @@ go.work
 go.work.sum
 vendor/
 
-# Proton runtime & atomic write temporary files
+# Protonman runtime & atomic write temporary files
 .proton-write-*
 
 # Environment & credentials

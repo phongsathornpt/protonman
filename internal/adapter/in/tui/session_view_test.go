@@ -45,7 +45,7 @@ func TestSessionCommandsExposeIdentityAndWorkspaceSessions(t *testing.T) {
 	m.sessions = app.NewSessions(store)
 	m.executeCommand("/sessions")
 	content = m.historyState.RenderContent()
-	for _, want := range []string{"Recent sessions:", "current-session", "resume this work", "proton session resume"} {
+	for _, want := range []string{"Recent sessions:", "current-session", "resume this work", "protonman session resume"} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("/sessions missing %q: %s", want, content)
 		}

@@ -42,6 +42,13 @@ func TestToModelMessagesAndFromModelMessages(t *testing.T) {
 func TestManagedSystemPromptFiltering(t *testing.T) {
 	managedPrompts := []string{
 		`<proton-system-prompt version="5">instructions</proton-system-prompt>`,
+		"You are Protonman, an autonomous coding agent operating inside a real workspace.",
+		"You are an Explorer subagent in Protonman.",
+		"You are a Code Reviewer subagent in Protonman.",
+		"You are a Worker subagent in Protonman.",
+		"You are Protonman in POW Mode",
+		"You are Protonman in DEX Mode",
+		"You are Protonman in INT Mode",
 		"You are Proton, an autonomous coding agent operating inside a real workspace.",
 		"You are an Explorer subagent in Proton.",
 		"You are a Code Reviewer subagent in Proton.",

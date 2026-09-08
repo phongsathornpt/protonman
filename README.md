@@ -1,8 +1,8 @@
-# Proton
+# Protonman
 
-Proton is an autonomous, high-performance Go-based AI coding agent designed with clean architecture, strict security boundaries, fail-closed permission policies, and extensible agent skills.
+Protonman is an autonomous, high-performance Go-based AI coding agent designed with clean architecture, strict security boundaries, fail-closed permission policies, and extensible agent skills.
 
-Proton operates across multiple execution environments:
+Protonman operates across multiple execution environments:
 - **Interactive TUI**: A terminal interface built with Bubble Tea, featuring live streaming, markdown formatting, collapsible task panes, and modal approval controls.
 - **Headless CLI**: A scriptable runner supporting one-shot prompts, piped input via stdin, and structured text or JSON output.
 - **ACP Server**: An Agent Client Protocol server serving line-delimited JSON-RPC over stdio for IDE and editor integrations.
@@ -11,7 +11,7 @@ Proton operates across multiple execution environments:
 
 ## Architecture Overview
 
-Proton isolates external effects behind strict application boundaries. External commands and file modifications must pass policy checks and pre-edit checkpointing before execution.
+Protonman isolates external effects behind strict application boundaries. External commands and file modifications must pass policy checks and pre-edit checkpointing before execution.
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -58,7 +58,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the package responsibilit
 - Git
 - Linux sandboxing uses native Landlock and network namespaces when supported; `bwrap` is an optional fallback
 
-### Running Proton
+### Running Protonman
 
 ```sh
 # Start the interactive fullscreen TUI (default)
@@ -68,27 +68,27 @@ go run ./cmd/protonman
 
 # Build the standalone binary
 make build
-./bin/proton
-./bin/proton --version
+./bin/protonman
+./bin/protonman --version
 ```
 
 ### Headless & Scripting
 
 ```sh
 # Run a single prompt and exit
-proton -p "Explain the project architecture"
+protonman -p "Explain the project architecture"
 
 # Run non-interactively with auto-approval (always-approve mode)
-proton -y -p "Run the test suite and fix any failing tests"
+protonman -y -p "Run the test suite and fix any failing tests"
 
 # Read prompt from stdin and output JSON
-cat prompt.txt | proton --headless --output json
+cat prompt.txt | protonman --headless --output json
 
 # Serve Agent Client Protocol (ACP) over stdio
-proton --acp
+protonman --acp
 
 # Run within a strict OS sandbox profile
-proton --sandbox strict -p "Analyze dependencies"
+protonman --sandbox strict -p "Analyze dependencies"
 ```
 
 ---
@@ -101,7 +101,7 @@ The fullscreen TUI is built on [Bubble Tea](https://github.com/charmbracelet/bub
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────┐
-│  Proton ── Go Coding Agent                               [mode: ask]  │
+│  Protonman ── Go Coding Agent                               [mode: ask]  │
 ├────────────────────────────────────────────────────────────────────────┤
 │                                                                        │
 │  > Analyze repository structure and test coverage                      │
@@ -166,7 +166,7 @@ Type `/` at the prompt to trigger autocomplete, or prefix with a colon (`:help`)
 | `/always-approve` | Switch directly to `always-approve` mode | `/always-approve` |
 | `/new` | Clear conversation history inside the current persisted session | `/new` |
 | `!<command>` | Execute a shell command directly through the `bash` tool | `!git status` |
-| `/quit`, `:quit` | Exit Proton cleanly | `/quit` |
+| `/quit`, `:quit` | Exit Protonman cleanly | `/quit` |
 
 The model picker keeps catalogs scoped per configured provider. Fresh catalogs are cached briefly, stale or missing catalogs are refreshed, obsolete requests are canceled, and late responses from an older provider selection are ignored. Press `/` inside the model picker to filter by model ID, name, vendor, or feature; `r` forces a refresh. Direct `/model <id>` selection still permits custom/unlisted model IDs and marks them as unverified instead of rejecting them.
 
@@ -174,7 +174,7 @@ The model picker keeps catalogs scoped per configured provider. Fresh catalogs a
 
 ## Security & Policy Engine
 
-Proton enforces security policy boundaries before any tool executes.
+Protonman enforces security policy boundaries before any tool executes.
 
 ### Permission Modes
 
@@ -202,7 +202,7 @@ When prompted in `ask` mode:
 
 ### OS Sandbox Profiles
 
-Proton can confine sub-processes via OS-level sandboxing:
+Protonman can confine sub-processes via OS-level sandboxing:
 - **macOS**: Evaluates seatbelt confinement profiles via `sandbox-exec`.
 - **Linux**: Uses native Landlock for filesystem confinement and a user/network namespace for blocked-network profiles when supported. Bubblewrap (`bwrap`) is retained only as a fallback for hosts missing native prerequisites. The CLI probes Landlock and user-namespace capabilities before backend selection.
 
@@ -215,7 +215,7 @@ Proton can confine sub-processes via OS-level sandboxing:
 
 Configure the sandbox globally via config or per-run:
 ```sh
-proton --sandbox strict -p "Analyze local files"
+protonman --sandbox strict -p "Analyze local files"
 ```
 
 ### Tool Deadlines
@@ -231,7 +231,7 @@ termination diagnostics without logging command contents.
 
 ## Model Providers & Catalog
 
-Proton routes agent model calls through `proton-sdk`, with native OpenAI-compatible and Anthropic Messages protocol support. Custom gateways and local inference remain supported through provider configuration:
+Protonman routes agent model calls through `proton-sdk`, with native OpenAI-compatible and Anthropic Messages protocol support. Custom gateways and local inference remain supported through provider configuration:
 
 ### Built-in Provider Presets
 
@@ -253,13 +253,13 @@ Proton routes agent model calls through `proton-sdk`, with native OpenAI-compati
 
 Configure providers directly inside the TUI with `/provider` or via `~/.proton/config.toml`.
 
-`proton-sdk` owns provider-neutral agent messages, tools, streaming events, usage/finish metadata, model registry, middleware, and provider wire adapters. The Proton CLI keeps permission policy, tool execution, sessions, and turn orchestration outside the SDK. See [`docs/proton-sdk.md`](docs/proton-sdk.md) for the agent-first SDK contract and provider extension boundaries.
+`proton-sdk` owns provider-neutral agent messages, tools, streaming events, usage/finish metadata, model registry, middleware, and provider wire adapters. The Protonman CLI keeps permission policy, tool execution, sessions, and turn orchestration outside the SDK. See [`docs/proton-sdk.md`](docs/proton-sdk.md) for the agent-first SDK contract and provider extension boundaries.
 
 ---
 
 ## Agent Capabilities & Tools
 
-Proton uses Dota-style engineering attributes as a single agent vocabulary:
+Protonman uses Dota-style engineering attributes as a single agent vocabulary:
 
 | Attribute | TUI | Role |
 | :--- | :---: | :--- |
@@ -270,7 +270,7 @@ Proton uses Dota-style engineering attributes as a single agent vocabulary:
 
 `Universal` is the root identity even when subagents are disabled. `delegate_task` accepts only `strength`, `agility`, or `intelligence`; legacy CLI/config/session profile names (`pow`, `int`, `dex`, `worker`, `explorer`, `reviewer`) are normalized for compatibility but are not published in the new tool schema.
 
-Proton registers a suite of workspace-safe tools:
+Protonman registers a suite of workspace-safe tools:
 
 | Tool | Category | Description |
 | :--- | :--- | :--- |
@@ -302,13 +302,13 @@ Session state and task plans are private user data, not workspace files. Each se
   todo.md
 ```
 
-`state.json` and `todo.md` both use durable revisions. Session saves and task patches reject stale writers instead of silently accepting last-writer-wins updates. Workspace `TODO.md` files are never used as Proton's internal task store. Legacy flat session JSON files remain readable and migrate to the aggregate layout on the next successful save.
+`state.json` and `todo.md` both use durable revisions. Session saves and task patches reject stale writers instead of silently accepting last-writer-wins updates. Workspace `TODO.md` files are never used as Protonman's internal task store. Legacy flat session JSON files remain readable and migrate to the aggregate layout on the next successful save.
 
 ---
 
 ## Agent Skills
 
-Proton implements the open [Agent Skills Specification](https://agentskills.io). Skills are self-contained directory packages containing a `SKILL.md` (YAML frontmatter + Markdown instructions) and optional helper scripts and references.
+Protonman implements the open [Agent Skills Specification](https://agentskills.io). Skills are self-contained directory packages containing a `SKILL.md` (YAML frontmatter + Markdown instructions) and optional helper scripts and references.
 
 ### Discovery Locations
 - **User-level**: `~/.proton/skills/` and `~/.agents/skills/`
@@ -326,7 +326,7 @@ Proton implements the open [Agent Skills Specification](https://agentskills.io).
 
 ## Configuration Reference
 
-Proton loads `~/.proton/config.toml`. When `PROTON_TRUST_PROJECT=1` is set, a project-local `.proton/config.toml` is merged, with project rules overriding user defaults.
+Protonman loads `~/.proton/config.toml`. When `PROTON_TRUST_PROJECT=1` is set, a project-local `.proton/config.toml` is merged, with project rules overriding user defaults.
 
 ```toml
 # Default permission mode: ask | plan | always-approve
@@ -440,7 +440,7 @@ Execution safety notes:
 - `reasoning_effort` may be configured with or without a model override. Precedence is profile override -> current global `agent.reasoning_effort`/runtime reasoning -> profile default; `auto`/`default` means inherit.
 - User and trusted-project subagent tables merge field-wise by canonical profile. Project reasoning-only overrides do not erase a user-level model route, and project model-only overrides do not erase user-level reasoning.
 - Configured subagent providers are validated during runtime bootstrap. Missing providers or required credentials fail before delegation starts.
-- `delegate_task` starts work asynchronously. The returned `agent_id` can be used with `wait_agent`, `get_agent`, or `cancel_agent` in the same Proton session.
+- `delegate_task` starts work asynchronously. The returned `agent_id` can be used with `wait_agent`, `get_agent`, or `cancel_agent` in the same Protonman session.
 - `subagent_queue_timeout` bounds only admission to concurrency/workspace capacity; queueing never consumes the child runtime budget.
 - `subagent_wait_timeout` bounds one `wait_agent` call. Reaching it returns the current `queued`/`running` state and does **not** cancel the child.
 - `subagent_max_runtime` is the hard child-lifetime safety ceiling after execution starts. `delegate_task.timeout_seconds` may request a shorter ceiling but cannot extend the configured maximum.
@@ -467,7 +467,7 @@ Execution safety notes:
 
 Git tags are the source of truth for release versions. `make build` and `make dev`
 inject `git describe --tags --always --dirty --match 'v[0-9]*'` into the binary; `VERSION=v1.2.3`
-may be supplied explicitly. `proton --version` reports the version embedded in
+may be supplied explicitly. `protonman --version` reports the version embedded in
 the binary.
 
 Pushing a tag such as `v1.2.3` triggers `.github/workflows/release.yml`, which

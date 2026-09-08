@@ -1,4 +1,4 @@
-// Package protonsdk defines the provider-neutral model boundary used by Proton agents.
+// Package protonsdk defines the provider-neutral model boundary used by Protonman agents.
 package protonsdk
 
 import (

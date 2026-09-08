@@ -1,4 +1,4 @@
-// Package openai implements the OpenAI protocol for Proton SDK language models.
+// Package openai implements the OpenAI protocol for Protonman SDK language models.
 package openai
 
 import (

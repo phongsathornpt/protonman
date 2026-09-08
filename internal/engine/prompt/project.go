@@ -50,7 +50,7 @@ func readBoundedInstructionFile(path string) (string, bool, error) {
 	}
 	text := strings.TrimSpace(strings.ToValidUTF8(string(data), "�"))
 	if truncated {
-		text += "\n\n[project instructions truncated by Proton]"
+		text += "\n\n[project instructions truncated by Protonman]"
 	}
 	return text, true, nil
 }

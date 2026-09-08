@@ -126,7 +126,7 @@ func (m *bubbleModel) hydrateViewportForScroll() {
 
 func (m *bubbleModel) View() string {
 	if m.width == 0 || m.height == 0 {
-		return "Starting Proton…"
+		return "Starting Protonman…"
 	}
 	base := m.liveView()
 	if m.showTranscript {

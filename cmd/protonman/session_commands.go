@@ -38,7 +38,7 @@ func runSessionCommand(ctx context.Context, args []string) (bool, error) {
 
 func sessionResumeArgs(args []string) ([]string, error) {
 	if len(args) > 1 {
-		return nil, errors.New("usage: proton session resume [session-id]")
+		return nil, errors.New("usage: protonman session resume [session-id]")
 	}
 	out := []string{"--resume"}
 	if len(args) == 1 {
@@ -61,7 +61,7 @@ func runSessionList(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 	if flags.NArg() != 0 {
-		return errors.New("usage: proton session list [--all] [--limit N] [--json]")
+		return errors.New("usage: protonman session list [--all] [--limit N] [--json]")
 	}
 	if *limit < 1 || *limit > 1000 {
 		return errors.New("session list --limit must be between 1 and 1000")

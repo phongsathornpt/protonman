@@ -146,7 +146,7 @@ func newTestWorkspace(t *testing.T) string {
 
 	// Initialize a dummy file
 	testFile := filepath.Join(dir, "hello.txt")
-	if err := os.WriteFile(testFile, []byte("Hello Proton E2E\nLine 2\n"), 0o644); err != nil {
+	if err := os.WriteFile(testFile, []byte("Hello Coding E2E\nLine 2\n"), 0o644); err != nil {
 		t.Fatalf("create test file: %v", err)
 	}
 
@@ -155,7 +155,7 @@ func newTestWorkspace(t *testing.T) string {
 	gitInit.Dir = dir
 	_ = gitInit.Run()
 
-	gitConfigUser := exec.Command("git", "config", "user.name", "Proton Test")
+	gitConfigUser := exec.Command("git", "config", "user.name", "Protonman Test")
 	gitConfigUser.Dir = dir
 	_ = gitConfigUser.Run()
 

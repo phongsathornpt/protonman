@@ -259,8 +259,8 @@ func TestACPSessionLoadAndReplay(t *testing.T) {
 	err = store.Save(context.Background(), sessionID, session.State{
 		PermissionMode: "ask",
 		Messages: []session.Message{
-			{Role: model.RoleUser, Content: "Hello Proton"},
-			{Role: model.RoleAssistant, Content: "Hello from Proton Agent"},
+			{Role: model.RoleUser, Content: "Hello Protonman"},
+			{Role: model.RoleAssistant, Content: "Hello from Protonman Agent"},
 		},
 		UpdatedAt: time.Now().UTC(),
 	})
@@ -278,10 +278,10 @@ func TestACPSessionLoadAndReplay(t *testing.T) {
 	}
 
 	out := output.String()
-	if !strings.Contains(out, "user_message_chunk") || !strings.Contains(out, "Hello Proton") {
+	if !strings.Contains(out, "user_message_chunk") || !strings.Contains(out, "Hello Protonman") {
 		t.Fatalf("missing replayed user message: %s", out)
 	}
-	if !strings.Contains(out, "agent_message_chunk") || !strings.Contains(out, "Hello from Proton Agent") {
+	if !strings.Contains(out, "agent_message_chunk") || !strings.Contains(out, "Hello from Protonman Agent") {
 		t.Fatalf("missing replayed assistant message: %s", out)
 	}
 }

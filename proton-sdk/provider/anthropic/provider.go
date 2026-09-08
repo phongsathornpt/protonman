@@ -1,4 +1,4 @@
-// Package anthropic implements the Anthropic Messages protocol for Proton SDK.
+// Package anthropic implements the Anthropic Messages protocol for Protonman SDK.
 package anthropic
 
 import (

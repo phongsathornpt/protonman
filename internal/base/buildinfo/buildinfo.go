@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	Name       = "Proton"
+	Name       = "Protonman"
 	Repository = "https://github.com/phongsathornpt/protonman"
 )
 

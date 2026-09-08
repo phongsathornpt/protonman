@@ -27,8 +27,8 @@ var slashCatalog = []slashCommand{
 	{name: "help", description: "list commands"},
 	{name: "tools", description: "list tools"},
 	{name: "skills", aliases: []string{"skill"}, description: "browse, activate, or toggle agent skills (/skills [name|active|toggle])", takesArgs: true},
-	{name: "project", aliases: []string{"proton"}, description: "inspect or edit project-local Proton settings (/project [status|init|set ...])", takesArgs: true},
-	{name: "config", description: "edit user-level Proton settings (/config set subagents <on|off>)", takesArgs: true},
+	{name: "project", aliases: []string{"protonman", "proton"}, description: "inspect or edit project-local Protonman settings (/project [status|init|set ...])", takesArgs: true},
+	{name: "config", description: "edit user-level Protonman settings (/config set subagents <on|off>)", takesArgs: true},
 	{name: "session", description: "show the active session"},
 	{name: "sessions", description: "list resumable sessions for this workspace"},
 	{name: "agents", description: "inspect live and retained subagents"},
@@ -46,7 +46,7 @@ var slashCatalog = []slashCommand{
 	{name: "model", aliases: []string{"models"}, description: "select active model (/model, /model <id>, /model free, /model add)", takesArgs: true},
 	{name: "provider", aliases: []string{"providers"}, description: "select or configure model providers (/provider, /provider <name>, /provider add, /provider list)", takesArgs: true},
 	{name: "call", description: "run a registered tool", takesArgs: true},
-	{name: "quit", aliases: []string{"exit"}, description: "leave Proton"},
+	{name: "quit", aliases: []string{"exit"}, description: "leave Protonman"},
 }
 
 type slashPaneView struct{ index int }

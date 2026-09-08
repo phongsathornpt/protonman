@@ -32,7 +32,7 @@ func TestE2ETUIStartupAndExitWithRealPTY(t *testing.T) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
 
 	if err := cmd.Start(); err != nil {
-		t.Fatalf("start Proton on PTY: %v", err)
+		t.Fatalf("start Protonman on PTY: %v", err)
 	}
 	_ = slave.Close()
 
@@ -77,7 +77,7 @@ func TestE2ETUIStartupAndExitWithRealPTY(t *testing.T) {
 	}
 
 	view := output.String()
-	if !strings.Contains(view, "Proton") && !strings.Contains(view, "\x1b[") {
+	if !strings.Contains(view, "Protonman") && !strings.Contains(view, "\x1b[") {
 		t.Fatalf("PTY did not receive TUI output: %q", view)
 	}
 }

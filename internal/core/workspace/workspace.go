@@ -1,4 +1,4 @@
-// Package workspace provides the host-local filesystem boundary for Proton.
+// Package workspace provides the host-local filesystem boundary for Protonman.
 package workspace
 
 import (

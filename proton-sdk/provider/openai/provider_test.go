@@ -41,7 +41,7 @@ func TestChatStreamTextAndHeaders(t *testing.T) {
 		if got := r.Header.Get("X-Test"); got != "agent" {
 			t.Fatalf("X-Test = %q", got)
 		}
-		if got := r.Header.Get("User-Agent"); got != "Proton-Test" {
+		if got := r.Header.Get("User-Agent"); got != "Protonman-Test" {
 			t.Fatalf("User-Agent = %q", got)
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -51,7 +51,7 @@ func TestChatStreamTextAndHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider := NewProvider(ProviderOptions{BaseURL: server.URL + "/v1", APIKey: "secret", UserAgent: "Proton-Test", Headers: http.Header{"X-Test": []string{"agent"}}})
+	provider := NewProvider(ProviderOptions{BaseURL: server.URL + "/v1", APIKey: "secret", UserAgent: "Protonman-Test", Headers: http.Header{"X-Test": []string{"agent"}}})
 	stream, err := provider.Model("test-model").Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatalf("Stream() error = %v", err)

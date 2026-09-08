@@ -104,7 +104,7 @@ func (s *Session) ReasoningEffort() sdk.ReasoningEffort {
 	return s.reasoningEffort
 }
 
-// SetReasoningEffort replaces the session-local Proton loop with an independently configured clone.
+// SetReasoningEffort replaces the session-local Protonman loop with an independently configured clone.
 func (s *Session) SetReasoningEffort(effort sdk.ReasoningEffort) error {
 	if !effort.Valid() {
 		return fmt.Errorf("invalid reasoning effort %q", effort)

@@ -44,7 +44,7 @@ func TestMutableProductLiteralsStayCentralized(t *testing.T) {
 				t.Fatal(err)
 			}
 			rel = filepath.ToSlash(rel)
-			if strings.Contains(value, "Proton/1.0") {
+			if strings.Contains(value, "Protonman/1.0") {
 				t.Errorf("legacy User-Agent hardcode in %s: %q", rel, value)
 			}
 			if want, guarded := allowed[value]; guarded && rel != want {

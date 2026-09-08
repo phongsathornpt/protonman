@@ -1,8 +1,8 @@
-# Proton SDK
+# Protonman SDK
 
-`proton-sdk` is the provider-neutral model layer used by Proton Agent CLI.
+`proton-sdk` is the provider-neutral model layer used by Protonman Agent CLI.
 It follows the core provider/model concepts of modern AI SDKs while keeping
-Proton-specific permission, session, and tool execution policy outside the SDK.
+Protonman-specific permission, session, and tool execution policy outside the SDK.
 
 ## Ownership
 
@@ -16,7 +16,7 @@ Proton-specific permission, session, and tool execution policy outside the SDK.
 - model registry and language-model middleware
 - OpenAI-compatible and Anthropic Messages wire adapters
 
-Proton CLI owns turn orchestration, permissions, tool execution, sessions,
+Protonman CLI owns turn orchestration, permissions, tool execution, sessions,
 workspace policy, subagent lifecycle, and TUI/headless presentation.
 ## Agent Model Contract
 
@@ -56,7 +56,7 @@ is disabled, so untrusted `$ref` values cannot trigger filesystem or network
 fetches. MCP output schemas and structured output are preserved through the tool
 boundary.
 
-Tool execution remains in Proton CLI. The live model history records whether a
+Tool execution remains in Protonman CLI. The live model history records whether a
 tool result is an error so Anthropic can emit `tool_result.is_error`; OpenAI
 receives the same normalized tool-result content through its protocol shape.
 Persisted sessions intentionally compact tool protocol groups to plain assistant

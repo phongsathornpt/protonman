@@ -153,8 +153,8 @@ func TestWelcomeCardContainsBrandOnly(t *testing.T) {
 	m.activeProvider = "provider-name"
 	m.resize(32, 14)
 	card := m.welcomeCard()
-	if !strings.Contains(card, glyphBrand) || !strings.Contains(card, "█▀█") {
-		t.Fatalf("welcome card missing brand: %q", card)
+	if !strings.Contains(card, glyphBrand) || !strings.Contains(strings.ToLower(card), "protonman") {
+		t.Fatalf("welcome card missing Protonman brand: %q", card)
 	}
 	for _, unwanted := range []string{m.workDir, m.activeModel, m.activeProvider, "Ask anything", "No model selected"} {
 		if unwanted != "" && strings.Contains(card, unwanted) {

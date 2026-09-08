@@ -1,4 +1,4 @@
-// Package session persists small, safety-relevant Proton session state.
+// Package session persists small, safety-relevant Protonman session state.
 package session
 
 import (
@@ -20,7 +20,7 @@ const (
 	maxStoredContent    = 32 * 1024
 )
 
-// State is the persisted portion of a Proton session.
+// State is the persisted portion of a Protonman session.
 type State struct {
 	// Version allows incompatible state formats to fail closed.
 	Version int `json:"version"`
@@ -106,6 +106,13 @@ func FromModelMessages(messages []sdk.Message) []Message {
 func isManagedSystemPrompt(text string) bool {
 	trimmed := strings.TrimSpace(text)
 	return strings.HasPrefix(trimmed, "<proton-system-prompt ") ||
+		strings.HasPrefix(trimmed, "You are Protonman, an autonomous coding agent operating inside a real workspace.") ||
+		strings.HasPrefix(trimmed, "You are an Explorer subagent in Protonman.") ||
+		strings.HasPrefix(trimmed, "You are a Code Reviewer subagent in Protonman.") ||
+		strings.HasPrefix(trimmed, "You are a Worker subagent in Protonman.") ||
+		strings.HasPrefix(trimmed, "You are Protonman in POW Mode") ||
+		strings.HasPrefix(trimmed, "You are Protonman in DEX Mode") ||
+		strings.HasPrefix(trimmed, "You are Protonman in INT Mode") ||
 		strings.HasPrefix(trimmed, "You are Proton, an autonomous coding agent operating inside a real workspace.") ||
 		strings.HasPrefix(trimmed, "You are an Explorer subagent in Proton.") ||
 		strings.HasPrefix(trimmed, "You are a Code Reviewer subagent in Proton.") ||

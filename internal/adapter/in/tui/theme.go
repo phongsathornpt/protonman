@@ -24,16 +24,16 @@ const (
 	glyphGeneric     = "· "
 	glyphTodoPending = "○ "
 	glyphTodoActive  = "● "
-	// glyphBrand is the compact Proton terminal mark.
+	// glyphBrand is the compact Protonman terminal mark.
 	glyphBrand = "◆"
 )
 
-// Prefer terminal-native ANSI colors so Proton remains readable across light,
+// Prefer terminal-native ANSI colors so Protonman remains readable across light,
 // dark and customized terminal themes. Primary body text intentionally uses
 // the terminal's default foreground.
 var (
 	appVersion      = buildinfo.Version()
-	accentAssistant = lipgloss.Color("5")                             // magenta: Proton identity
+	accentAssistant = lipgloss.Color("5")                             // magenta: Protonman identity
 	accentUser      = lipgloss.Color("6")                             // cyan: input/selection
 	accentTool      = lipgloss.AdaptiveColor{Light: "240", Dark: "8"} // dim tool chrome
 	accentSystem    = lipgloss.Color("6")                             // cyan: status/info

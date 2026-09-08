@@ -18,7 +18,7 @@ func TestE2EFileAndProcessTools(t *testing.T) {
 		dir:  ws,
 		env:  env,
 	})
-	if readRes.exitCode != 0 || !strings.Contains(readRes.stdout, "Hello Proton E2E") {
+	if readRes.exitCode != 0 || !strings.Contains(readRes.stdout, "Hello Coding E2E") {
 		t.Fatalf("read_file failed (code %d): %s\n%s", readRes.exitCode, readRes.stdout, readRes.stderr)
 	}
 
@@ -108,7 +108,7 @@ func TestE2EApplyPatch(t *testing.T) {
 	patch := "*** Begin Patch\n" +
 		"*** Update File: hello.txt\n" +
 		"@@\n" +
-		"-Hello Proton E2E\n" +
+		"-Hello Coding E2E\n" +
 		"+Hello Patched E2E\n" +
 		" Line 2\n" +
 		"*** End Patch"

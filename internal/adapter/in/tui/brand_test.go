@@ -21,8 +21,8 @@ func TestBrandLockupResponsive(t *testing.T) {
 	}
 
 	narrow := ansi.Strip(brandLockup(20))
-	if strings.Contains(narrow, "█") || !strings.Contains(narrow, "proton") {
-		t.Fatalf("narrow brand = %q, want compact proton fallback", narrow)
+	if strings.Contains(narrow, "█") || !strings.Contains(narrow, "protonman") {
+		t.Fatalf("narrow brand = %q, want compact protonman fallback", narrow)
 	}
 	if got := brandLockupWidth(20); got > 20 {
 		t.Fatalf("narrow brand width = %d, terminal width 20", got)

@@ -12,14 +12,14 @@ import (
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 )
 
-// Options controls project-local Proton discovery.
+// Options controls project-local Protonman discovery.
 type Options struct {
 	WorkDir       string
 	Trusted       bool
 	ConfigSources []string
 }
 
-// State describes project-local Proton resources without loading configuration.
+// State describes project-local Protonman resources without loading configuration.
 type State struct {
 	WorkDir      string
 	ProtonDir    string

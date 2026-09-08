@@ -102,7 +102,7 @@ func newGitWorkspace(t *testing.T) *Workspace {
 	}
 	gitRun(t, root, "init", "--quiet")
 	gitRun(t, root, "config", "user.email", "proton@test.invalid")
-	gitRun(t, root, "config", "user.name", "Proton Test")
+	gitRun(t, root, "config", "user.name", "Protonman Test")
 	gitRun(t, root, "add", ".")
 	gitRun(t, root, "commit", "--quiet", "-m", "baseline")
 	ws, err := New(root, nil)

@@ -71,7 +71,7 @@ func TestE2ESessionPersistenceAndRedaction(t *testing.T) {
 		t.Fatalf("second run failed to restore always-approve mode from session (code %d): %s\n%s",
 			secondRes.exitCode, secondRes.stdout, secondRes.stderr)
 	}
-	if !strings.Contains(secondRes.stdout, "Hello Proton E2E") {
+	if !strings.Contains(secondRes.stdout, "Hello Coding E2E") {
 		t.Fatalf("output missing file content: %s", secondRes.stdout)
 	}
 }
@@ -82,13 +82,13 @@ func TestE2ECheckpointsAndRestore(t *testing.T) {
 	env := []string{"PROTON_HOME=" + home}
 
 	// Original content of hello.txt
-	origContent := "Hello Proton E2E\nLine 2\n"
+	origContent := "Hello Coding E2E\nLine 2\n"
 
 	// 1. Mutate file with search_replace, using --output json to capture checkpoint_id
 	srRes := runProton(t, runOptions{
 		args: []string{
 			"-y",
-			"-p", `/call search_replace {"file_path":"hello.txt", "old_string":"Hello Proton E2E", "new_string":"Mutated Content"}`,
+			"-p", `/call search_replace {"file_path":"hello.txt", "old_string":"Hello Coding E2E", "new_string":"Mutated Content"}`,
 			"--output", "json",
 		},
 		dir: ws,

@@ -1,4 +1,4 @@
-// Package tools contains the first host-side tool adapters for Proton.
+// Package tools contains the first host-side tool adapters for Protonman.
 package builtin
 
 import (

@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// ProtocolVersion is the ACP protocol version supported by Proton.
+// ProtocolVersion is the ACP protocol version supported by Protonman.
 const ProtocolVersion = 1
 
 // JSON-RPC 2.0 error codes.
@@ -71,7 +71,7 @@ type ClientFSCapabilities struct {
 	WriteTextFile bool `json:"writeTextFile,omitempty"`
 }
 
-// AgentCapabilities advertises capabilities supported by Proton.
+// AgentCapabilities advertises capabilities supported by Protonman.
 type AgentCapabilities struct {
 	LoadSession         bool                `json:"loadSession"`
 	PromptCapabilities  PromptCapabilities  `json:"promptCapabilities"`

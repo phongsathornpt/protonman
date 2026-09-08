@@ -1,4 +1,4 @@
-// Package telemetry adapts Proton's redacted application events to structured logs.
+// Package telemetry adapts Protonman's redacted application events to structured logs.
 package telemetry
 
 import (
@@ -73,7 +73,7 @@ func (o *SlogObserver) Observe(ctx context.Context, event toolcall.Event) {
 	if event.Kind == toolcall.EventCallFailed && event.ErrorCode == tool.ErrorCodeStaleContinuation {
 		o.increment("tool_continuation_stale_total")
 	}
-	o.logger.LogAttrs(ctx, slog.LevelInfo, "proton tool-call event", attrs...)
+	o.logger.LogAttrs(ctx, slog.LevelInfo, "protonman tool-call event", attrs...)
 }
 
 // ObserveProtection records redacted loop-safety telemetry and structured logs.
@@ -110,7 +110,7 @@ func (o *SlogObserver) ObserveProtection(ctx context.Context, event toolcall.Pro
 	if event.ErrorCode != "" {
 		attrs = append(attrs, slog.String("error_code", string(event.ErrorCode)))
 	}
-	o.logger.LogAttrs(ctx, slog.LevelInfo, "proton tool protection event", attrs...)
+	o.logger.LogAttrs(ctx, slog.LevelInfo, "protonman tool protection event", attrs...)
 }
 
 func protectionMetric(kind toolcall.ProtectionEventKind) string {

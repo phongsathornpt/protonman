@@ -63,9 +63,9 @@ func TestProjectCommandShowsUntrustedLocalResources(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd := m.executeCommand("/proton status")
+	cmd := m.executeCommand("/protonman status")
 	if cmd == nil {
-		t.Fatal("/proton alias did not start project discovery")
+		t.Fatal("/protonman alias did not start project discovery")
 	}
 	updated, _ := m.Update(cmd())
 	m = updated.(*bubbleModel)
@@ -74,6 +74,14 @@ func TestProjectCommandShowsUntrustedLocalResources(t *testing.T) {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("project pane missing %q: %q", want, rendered)
 		}
+	}
+}
+
+func TestProjectLegacyProtonAliasStillWorks(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.workDir = t.TempDir()
+	if cmd := m.executeCommand("/proton status"); cmd == nil {
+		t.Fatal("legacy /proton alias did not start project discovery")
 	}
 }
 

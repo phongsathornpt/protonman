@@ -18,7 +18,7 @@ func TestE2EFullBuiltinTools(t *testing.T) {
 		dir:  ws,
 		env:  env,
 	})
-	if res.exitCode != 0 || !strings.Contains(res.stdout, "Hello Proton E2E") || strings.Contains(res.stdout, "Line 2") {
+	if res.exitCode != 0 || !strings.Contains(res.stdout, "Hello Coding E2E") || strings.Contains(res.stdout, "Line 2") {
 		t.Fatalf("read_file first page failed: %s %s", res.stdout, res.stderr)
 	}
 	if !strings.Contains(res.stdout, "continue with offset=17") {
@@ -30,7 +30,7 @@ func TestE2EFullBuiltinTools(t *testing.T) {
 		dir:  ws,
 		env:  env,
 	})
-	if res.exitCode != 0 || !strings.Contains(res.stdout, "Line 2") || strings.Contains(res.stdout, "Hello Proton E2E") {
+	if res.exitCode != 0 || !strings.Contains(res.stdout, "Line 2") || strings.Contains(res.stdout, "Hello Coding E2E") {
 		t.Fatalf("read_file continuation failed: %s %s", res.stdout, res.stderr)
 	}
 

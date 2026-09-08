@@ -49,7 +49,7 @@ func (m *bubbleModel) executeSessionCommand(name string) tea.Cmd {
 		}
 		m.appendLine(fmt.Sprintf("%s %s  %s  %s", marker, summary.ID, profile, truncateWithEllipsis(preview, 72)))
 	}
-	m.appendLine("Resume with: proton session resume <session-id>")
+	m.appendLine("Resume with: protonman session resume <session-id>")
 	m.refreshViewport()
 	return nil
 }
