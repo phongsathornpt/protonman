@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/charmbracelet/bubbles/spinner"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
@@ -612,5 +614,86 @@ func TestRefreshViewportPreservesLogicalAnchorAcrossCellExpansion(t *testing.T) 
 	}
 	if m.followTail {
 		t.Fatal("content expansion re-enabled follow tail")
+	}
+}
+
+func TestScrolledViewportSurvivesLiveAgentChromeStress(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.showWelcome = false
+	m.resize(90, 24)
+	run := &AgentRunCell{AgentID: "worker-1", Profile: agent.ProfileStrength, Task: "fix TDZ and bun adapter", State: agent.StateRunning, StartedAt: time.Now()}
+	m.historyState.Append(run)
+	for i := 0; i < 80; i++ {
+		m.appendLine(fmt.Sprintf("history-%02d", i))
+	}
+	m.busy = true
+	m.busyStarted = time.Now().Add(-5 * time.Minute)
+	m.agentSnapshot = []agent.AgentStatus{{ID: "worker-1", Profile: agent.ProfileStrength, Task: "fix TDZ and bun adapter", State: agent.StateRunning, StartedAt: time.Now().Add(-5 * time.Minute)}}
+	m.relayout()
+	m.viewport.GotoBottom()
+	m.viewport.ScrollUp(7)
+	m.followTail = false
+	firstSemanticLine := func() string {
+		for _, line := range strings.Split(ansi.Strip(m.viewport.View()), "\n") {
+			if trimmed := strings.TrimSpace(line); trimmed != "" {
+				return trimmed
+			}
+		}
+		return ""
+	}
+	firstVisible := firstSemanticLine()
+
+	assertStable := func(stage string) {
+		t.Helper()
+		view := m.View()
+		if got := lipgloss.Height(view); got > m.height {
+			t.Fatalf("%s frame height=%d terminal=%d", stage, got, m.height)
+		}
+		for _, line := range strings.Split(view, "\n") {
+			if got := ansi.StringWidth(line); got > m.width {
+				t.Fatalf("%s line width=%d terminal=%d: %q", stage, got, m.width, line)
+			}
+		}
+		if m.followTail {
+			t.Fatalf("%s unexpectedly re-enabled follow tail", stage)
+		}
+		if got := firstSemanticLine(); got != firstVisible {
+			t.Fatalf("%s moved logical anchor: before=%q after=%q", stage, firstVisible, got)
+		}
+		if strings.Contains(ansi.Strip(m.historyState.RenderContent()), "coordinating 1 agent") {
+			t.Fatalf("%s persisted ephemeral coordination status into history", stage)
+		}
+	}
+
+	run.Activity = "กำลังแยกกลุ่ม failure ว่าเป็น TDZ, bun-adapter, หรือ logic จริง"
+	m.agentActivity["worker-1"] = AgentActivity{Label: run.Activity}
+	m.historyState.TouchAgentRun("worker-1")
+	m.relayout()
+	assertStable("thai agent progress")
+
+	updated, _ := m.Update(spinner.TickMsg{})
+	m = updated.(*bubbleModel)
+	assertStable("spinner tick")
+
+	m.todo = []TodoItem{{ID: "fix", Text: "ตรวจสอบผลแก้ไข", Status: tododomain.StatusInProgress}}
+	m.relayout()
+	assertStable("todo expanded")
+	m.todo = nil
+	m.relayout()
+	assertStable("todo collapsed")
+
+	m.agentSnapshot = nil
+	run.State = agent.StateCompleted
+	run.FinishedAt = time.Now()
+	m.historyState.TouchAgentRun("worker-1")
+	m.relayout()
+	assertStable("agent completed")
+
+	for !m.viewport.AtBottom() {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+		m = updated.(*bubbleModel)
+	}
+	if !m.followTail {
+		t.Fatal("explicit page down to bottom did not re-enable follow tail")
 	}
 }

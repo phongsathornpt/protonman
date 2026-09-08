@@ -42,6 +42,27 @@ func (s *HistoryState) CaptureScrollAnchor(renderedLine int) ScrollAnchor {
 	return ScrollAnchor{}
 }
 
+// ScrollAnchors returns a line-for-line logical map for RenderContent.
+// Separator rows point at the following cell so scrolling onto whitespace still
+// retains a stable semantic position when earlier cells change height.
+func (s *HistoryState) ScrollAnchors() []ScrollAnchor {
+	if s == nil {
+		return nil
+	}
+	cells := s.Cells()
+	anchors := make([]ScrollAnchor, 0, s.lineCount()+len(cells))
+	for index, cell := range cells {
+		if index > 0 {
+			anchors = append(anchors, ScrollAnchor{cell: cell, cellIndex: index, line: 0, valid: true})
+		}
+		lines := renderHistoryCell(cell, s.renderWidth)
+		for line := range lines {
+			anchors = append(anchors, ScrollAnchor{cell: cell, cellIndex: index, line: line, valid: true})
+		}
+	}
+	return anchors
+}
+
 // ResolveScrollAnchor returns the current rendered line for a previously
 // captured anchor after live history cells have changed size.
 func (s *HistoryState) ResolveScrollAnchor(anchor ScrollAnchor) (int, bool) {

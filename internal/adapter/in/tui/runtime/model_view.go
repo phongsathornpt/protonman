@@ -137,6 +137,38 @@ func (m *bubbleModel) relayoutIfSlashChanged(bool) {
 	m.relayout()
 }
 
+type frameChrome struct {
+	generation uint64
+	todo       string
+	agents     string
+	status     string
+	top        string
+	composer   string
+	footer     string
+	height     int
+}
+
+func (m *bubbleModel) buildFrameChrome() frameChrome {
+	frame := frameChrome{}
+	frame.todo = m.todoView()
+	frame.agents = m.agentsView()
+	frame.status = m.statusView()
+	frame.top = m.bottom.renderTop(m)
+	if m.bottom.composerVisible() {
+		frame.composer = m.promptView()
+	}
+	frame.footer = m.footerView()
+	for _, part := range []string{frame.todo, frame.agents, frame.status, frame.top, frame.composer} {
+		if part != "" {
+			frame.height += lipgloss.Height(part)
+		}
+	}
+	// The footer is always joined into the live view; even an empty footer
+	// occupies one physical row in lipgloss.JoinVertical.
+	frame.height += lipgloss.Height(frame.footer)
+	return frame
+}
+
 type viewportScrollSnapshot struct {
 	follow      bool
 	yOffset     int
@@ -147,8 +179,14 @@ type viewportScrollSnapshot struct {
 func (m *bubbleModel) relayout() {
 	scroll := m.captureViewportScroll()
 	m.syncPromptHeight()
-	chrome := m.chromeHeight()
-	viewportHeight := m.height - chrome
+	m.applyFrameLayout(scroll, m.buildFrameChrome())
+}
+
+func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame frameChrome) {
+	m.layoutGeneration++
+	frame.generation = m.layoutGeneration
+	m.frameChrome = frame
+	viewportHeight := m.height - frame.height
 	if viewportHeight < 1 {
 		viewportHeight = 1
 	}
@@ -157,25 +195,20 @@ func (m *bubbleModel) relayout() {
 	m.refreshViewportWithScroll(scroll)
 }
 
+func (m *bubbleModel) frameChromeForView() frameChrome {
+	m.syncPromptHeight()
+	frame := m.buildFrameChrome()
+	if m.frameChrome.generation == 0 || frame.height != m.frameChrome.height {
+		m.applyFrameLayout(m.captureViewportScroll(), frame)
+		return m.frameChrome
+	}
+	frame.generation = m.frameChrome.generation
+	m.frameChrome = frame
+	return frame
+}
+
 func (m *bubbleModel) chromeHeight() int {
-	var height int
-	if todo := m.todoView(); todo != "" {
-		height += lipgloss.Height(todo)
-	}
-	if agents := m.agentsView(); agents != "" {
-		height += lipgloss.Height(agents)
-	}
-	if status := m.statusView(); status != "" {
-		height += lipgloss.Height(status)
-	}
-	if top := m.bottom.renderTop(m); top != "" {
-		height += lipgloss.Height(top)
-	}
-	if m.bottom.composerVisible() {
-		height += lipgloss.Height(m.promptView())
-	}
-	height += lipgloss.Height(m.footerView())
-	return height
+	return m.buildFrameChrome().height
 }
 
 func (m *bubbleModel) refreshViewport() {
@@ -191,7 +224,7 @@ func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
 	if !tailOnly {
 		content = m.fullViewportContent()
 	}
-	m.viewport.SetContent(content)
+	m.setViewportContent(content, !tailOnly)
 	m.viewportTailOnly = tailOnly
 	m.restoreViewportScroll(scroll)
 	if m.showTranscript {
@@ -199,10 +232,32 @@ func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
 	}
 }
 
+func (m *bubbleModel) setViewportContent(content string, fullHistory bool) {
+	m.viewport.SetContent(content)
+	m.viewportLineAnchors = nil
+	if !fullHistory || m.historyState == nil {
+		return
+	}
+	historyAnchors := m.historyState.ScrollAnchors()
+	if len(historyAnchors) == 0 {
+		return
+	}
+	prefix := m.historyViewportPrefixLines()
+	m.viewportLineAnchors = make([]ScrollAnchor, prefix+len(historyAnchors))
+	copy(m.viewportLineAnchors[prefix:], historyAnchors)
+}
+
 func (m *bubbleModel) captureViewportScroll() viewportScrollSnapshot {
 	scroll := viewportScrollSnapshot{follow: m.followTail, yOffset: m.viewport.YOffset}
 	if scroll.follow || m.viewportTailOnly || m.historyState == nil {
 		return scroll
+	}
+	if m.viewport.YOffset >= 0 && m.viewport.YOffset < len(m.viewportLineAnchors) {
+		scroll.anchor = m.viewportLineAnchors[m.viewport.YOffset]
+		_, scroll.anchorValid = m.historyState.ResolveScrollAnchor(scroll.anchor)
+		if scroll.anchorValid {
+			return scroll
+		}
 	}
 	historyLine := m.viewport.YOffset - m.historyViewportPrefixLines()
 	if historyLine < 0 {
@@ -252,7 +307,7 @@ func (m *bubbleModel) hydrateViewportForScroll() {
 	if !m.viewportTailOnly {
 		return
 	}
-	m.viewport.SetContent(m.fullViewportContent())
+	m.setViewportContent(m.fullViewportContent(), true)
 	m.viewport.GotoBottom()
 	m.viewportTailOnly = false
 }
@@ -269,23 +324,14 @@ func (m *bubbleModel) View() string {
 }
 
 func (m *bubbleModel) liveView() string {
+	frame := m.frameChromeForView()
 	parts := []string{m.viewport.View()}
-	if todo := m.todoView(); todo != "" {
-		parts = append(parts, todo)
+	for _, part := range []string{frame.todo, frame.agents, frame.status, frame.top, frame.composer} {
+		if part != "" {
+			parts = append(parts, part)
+		}
 	}
-	if agents := m.agentsView(); agents != "" {
-		parts = append(parts, agents)
-	}
-	if status := m.statusView(); status != "" {
-		parts = append(parts, status)
-	}
-	if top := m.bottom.renderTop(m); top != "" {
-		parts = append(parts, top)
-	}
-	if m.bottom.composerVisible() {
-		parts = append(parts, m.promptView())
-	}
-	parts = append(parts, m.footerView())
+	parts = append(parts, frame.footer)
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 

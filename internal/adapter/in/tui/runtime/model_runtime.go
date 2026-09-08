@@ -81,9 +81,12 @@ type bubbleModel struct {
 	showTranscript          bool
 	rawTranscript           bool
 	viewportTailOnly        bool
+	viewportLineAnchors     []ScrollAnchor
 	nextID                  uint64
 	width                   int
 	height                  int
+	frameChrome             frameChrome
+	layoutGeneration        uint64
 	busyStarted             time.Time
 	turnCancel              context.CancelFunc
 	turnEvents              <-chan tea.Msg
