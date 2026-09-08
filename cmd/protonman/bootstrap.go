@@ -126,6 +126,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	var coordinator *agent.Coordinator
 	coordinator = agent.NewCoordinator(nil, nil, workspaceRoot, policy,
 		agent.WithLifecycleEventStore(stateStore),
+		agent.WithToolRuntimePolicy(loadedConfig.Runtime.ToolPermissionTimeout, loadedConfig.Runtime.ToolExecutionTimeout, observer),
 		agent.WithEnabled(loadedConfig.Agent.SubagentsEnabled),
 		agent.WithMaxToolCalls(loadedConfig.Agent.MaxToolCalls),
 		agent.WithReasoningEffort(loadedConfig.Agent.ReasoningEffort),
@@ -258,6 +259,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 			return nil, err
 		}
 	}
+	coordinator.SetPermissionMode(initialMode)
 	if err := applyAgentProfile(&loadedConfig, &state, options.agentProfile); err != nil {
 		return nil, err
 	}
