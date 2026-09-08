@@ -91,6 +91,18 @@ func WithRetentionPolicy(policy RetentionPolicy) StoreOption {
 	}
 }
 
+// NewWorkspaceFileStore creates the canonical per-workspace checkpoint store below a Protonman checkpoint root.
+func NewWorkspaceFileStore(checkpointsRoot, workspaceKey string, workspaceRoot *workspace.Workspace, options ...StoreOption) (*FileStore, error) {
+	key := strings.TrimSpace(workspaceKey)
+	if key == "" || filepath.Base(key) != key || key == "." || key == ".." {
+		return nil, fmt.Errorf("invalid checkpoint workspace key %q", workspaceKey)
+	}
+	if strings.TrimSpace(checkpointsRoot) == "" {
+		return nil, fmt.Errorf("checkpoint data root is required")
+	}
+	return NewFileStore(filepath.Join(checkpointsRoot, "workspace-"+key), workspaceRoot, options...)
+}
+
 // NewFileStore creates a checkpoint store rooted outside the workspace.
 func NewFileStore(root string, workspaceRoot *workspace.Workspace, options ...StoreOption) (*FileStore, error) {
 	if strings.TrimSpace(root) == "" {
