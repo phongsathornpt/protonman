@@ -89,9 +89,12 @@ func (c *Coordinator) RestorePersistentSnapshot(snapshot PersistentSnapshot) err
 		request.Task = status.Task
 		interrupted := false
 		if !status.State.Terminal() {
-			status.State = StateInterrupted
-			status.Reason = "interrupted by previous process exit"
-			status.FinishedAt = time.Now().UTC()
+			nextStatus, transitionErr := transitionStatus(status, StateInterrupted, time.Now().UTC(), "interrupted by previous process exit")
+			if transitionErr != nil {
+				c.agentsMu.Unlock()
+				return fmt.Errorf("restore subagent %q: %w", status.ID, transitionErr)
+			}
+			status = nextStatus
 			interrupted = true
 		}
 		result := Result{SessionID: status.SessionID, AgentID: status.ID, Profile: status.Profile, Provider: status.Provider, Model: status.Model}

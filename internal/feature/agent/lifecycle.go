@@ -139,8 +139,13 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 		c.finishEntry(entry, req, queuedAt, time.Time{}, context.Canceled)
 		return
 	}
-	entry.status.State = StateRunning
-	entry.status.StartedAt = startedAt
+	nextStatus, transitionErr := transitionStatus(entry.status, StateRunning, startedAt, "")
+	if transitionErr != nil {
+		c.agentsMu.Unlock()
+		c.finishEntry(entry, req, queuedAt, time.Time{}, transitionErr)
+		return
+	}
+	entry.status = nextStatus
 	close(entry.started)
 	c.agentsMu.Unlock()
 	queueDuration := startedAt.Sub(queuedAt)
@@ -154,15 +159,21 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 
 	c.emit(execCtx, Event{Kind: EventAgentStarted, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task, QueueDuration: queueDuration})
 	res, runErr := c.executeWithRuntime(execCtx, req, entry.languageModel, entry.reasoningEffort)
-	res.Provider = entry.status.Provider
-	res.Model = entry.status.Model
+	c.agentsMu.RLock()
+	provider, modelID := entry.status.Provider, entry.status.Model
+	c.agentsMu.RUnlock()
+	res.Provider = provider
+	res.Model = modelID
 	res.QueueDuration = queueDuration
 	res.Duration = time.Since(startedAt)
 	res.TotalDuration = time.Since(queuedAt)
 	if runErr != nil {
 		res.Err = runErr
 	}
-	c.storeTerminal(entry, res, runErr)
+	if transitionErr := c.storeTerminal(entry, res, runErr); transitionErr != nil {
+		runErr = transitionErr
+		res.Err = transitionErr
+	}
 
 	eventKind := EventAgentCompleted
 	if runErr != nil {
@@ -179,28 +190,34 @@ func (c *Coordinator) finishEntry(entry *agentEntry, req Request, queuedAt, star
 	if !startedAt.IsZero() {
 		res.Duration = now.Sub(startedAt)
 	}
-	c.storeTerminal(entry, res, err)
+	if transitionErr := c.storeTerminal(entry, res, err); transitionErr != nil {
+		err = transitionErr
+		res.Err = transitionErr
+	}
 	c.emit(c.rootCtx, Event{Kind: EventAgentFailed, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: err})
 	if startedAt.IsZero() {
 		close(entry.started)
 	}
 }
 
-func (c *Coordinator) storeTerminal(entry *agentEntry, res Result, err error) {
+func (c *Coordinator) storeTerminal(entry *agentEntry, res Result, err error) error {
 	c.agentsMu.Lock()
 	defer c.agentsMu.Unlock()
-	entry.result = res
-	entry.err = err
-	entry.status.FinishedAt = time.Now()
-	entry.status.Reason = terminalReason(err)
+	next := StateFailed
 	switch {
 	case err == nil:
-		entry.status.State = StateCompleted
+		next = StateCompleted
 	case errors.Is(err, context.Canceled):
-		entry.status.State = StateCanceled
-	default:
-		entry.status.State = StateFailed
+		next = StateCanceled
 	}
+	status, transitionErr := transitionStatus(entry.status, next, time.Now(), terminalReason(err))
+	if transitionErr != nil {
+		return transitionErr
+	}
+	entry.status = status
+	entry.result = res
+	entry.err = err
+	return nil
 }
 
 func languageModelIdentity(languageModel sdk.LanguageModel) (provider, modelID string) {
@@ -259,7 +276,11 @@ func (c *Coordinator) CancelByParent(parentID string) int {
 		if entry.status.ParentID != parentID || entry.status.State.Terminal() || entry.status.State == StateCanceling {
 			continue
 		}
-		entry.status.State = StateCanceling
+		status, err := transitionStatus(entry.status, StateCanceling, time.Now(), "cancel requested")
+		if err != nil {
+			continue
+		}
+		entry.status = status
 		cancels = append(cancels, entry.cancel)
 	}
 	c.agentsMu.Unlock()
@@ -280,7 +301,12 @@ func (c *Coordinator) Cancel(id string) error {
 		c.agentsMu.Unlock()
 		return nil
 	}
-	entry.status.State = StateCanceling
+	status, err := transitionStatus(entry.status, StateCanceling, time.Now(), "cancel requested")
+	if err != nil {
+		c.agentsMu.Unlock()
+		return err
+	}
+	entry.status = status
 	cancel := entry.cancel
 	c.agentsMu.Unlock()
 	cancel()
