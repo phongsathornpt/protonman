@@ -193,7 +193,7 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 		}
 		state.StartToolCell(&ExecCell{CallID: call.ID, Name: call.Name, Command: cmd, Running: true, StartedAt: time.Now()})
 	case tool.KindEdit:
-		if call.Name == "checkpoint_restore" {
+		if call.Name == "checkpoint_restore" || (tool.CanonicalName(call.Name) == "edit" && strings.EqualFold(extractStringArg(call.Arguments, "action"), "restore")) {
 			state.StartToolCell(&ToolCell{CallID: call.ID, Name: call.Name, Target: target, ToolKind: resolvedKind, Running: true})
 			m.syncLegacyBlocks()
 			return

@@ -129,10 +129,7 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 		NewListDir(workspaceRoot),
 		NewGitStatus(workspaceRoot, cfg.launcher),
 		NewBashWithCheckpoint(workspaceRoot, cfg.launcher, checkpointStore),
-		NewWriteFile(workspaceRoot, checkpointStore),
-		NewSearchReplace(workspaceRoot, checkpointStore),
-		NewApplyPatch(workspaceRoot, checkpointStore),
-		NewCheckpointRestore(checkpointStore),
+		NewEdit(workspaceRoot, checkpointStore),
 	}
 	handlers = append(handlers, cfg.additional...)
 	return NewRegistry(handlers...)

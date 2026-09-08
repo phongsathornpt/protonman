@@ -291,16 +291,13 @@ batch.
 Built-in workspace tools include:
 
 - `read`
-- `write_file`
-- `search_replace`
-- `apply_patch`
+- `edit`
 - `grep`
 - `inspect_code`
 - `find`
 - `ls`
 - `bash`
 - `git`
-- `checkpoint_restore`
 
 Feature tools add `web`, task tools, skill activation, agent lifecycle
 operations, and dynamically discovered MCP tools.
@@ -309,8 +306,7 @@ Canonical argument names for common tools are intentionally stable:
 
 - `bash` -> `command`
 - `read` -> `path`
-- `write_file` -> `file_path`
-- `search_replace` -> `file_path`
+- `edit` (`write`/`replace`) -> `file_path`
 - `grep` -> `pattern`
 - `web` (`action=fetch`) -> `url`
 

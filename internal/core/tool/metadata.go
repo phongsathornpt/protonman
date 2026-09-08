@@ -1,6 +1,9 @@
 package tool
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Metadata is the canonical human-facing and classification metadata for a known tool.
 // UI adapters may style these semantics, but presentation meaning lives here.
@@ -20,6 +23,7 @@ type callMetadata struct {
 var builtinMetadata = map[string]callMetadata{
 	"read":               {Metadata: Metadata{Name: "read", Kind: KindRead, DisplayName: "Read"}, title: titleReadFile, target: targetReadFile, affectedPaths: affectedSinglePath("path", "file_path", "file", "filename", "target")},
 	"math":               {Metadata: Metadata{Name: "math", Kind: KindCompute, DisplayName: "Calculate"}, title: titleCalculate, target: targetCalculate},
+	"edit":               {Metadata: Metadata{Name: "edit", Kind: KindEdit, DisplayName: "Edit"}, title: titleEdit, target: targetEdit, affectedPaths: affectedEdit},
 	"write_file":         {Metadata: Metadata{Name: "write_file", Kind: KindEdit, DisplayName: "Write"}, title: titleWriteFile, target: targetEditPath, affectedPaths: affectedSinglePath("file_path", "path", "file", "filename", "target", "destination", "move_path")},
 	"search_replace":     {Metadata: Metadata{Name: "search_replace", Kind: KindEdit, DisplayName: "Edit"}, title: titleSearchReplace, target: targetEditPath, affectedPaths: affectedSinglePath("file_path", "path", "file", "filename", "target", "destination", "move_path")},
 	"apply_patch":        {Metadata: Metadata{Name: "apply_patch", Kind: KindEdit, DisplayName: "Patch"}, title: titleApplyPatch, target: targetApplyPatch, affectedPaths: affectedPatch},
@@ -43,8 +47,16 @@ var builtinMetadata = map[string]callMetadata{
 }
 
 // MetadataForName returns canonical metadata for a known built-in tool.
-func MetadataForName(name string) (Metadata, bool) {
+func metadataForName(name string) (callMetadata, bool) {
+	if spec, ok := builtinMetadata[name]; ok {
+		return spec, true
+	}
 	spec, ok := builtinMetadata[CanonicalName(name)]
+	return spec, ok
+}
+
+func MetadataForName(name string) (Metadata, bool) {
+	spec, ok := metadataForName(name)
 	if !ok {
 		return Metadata{}, false
 	}
@@ -74,6 +86,45 @@ func titleReadFile(args map[string]any) string {
 }
 func targetReadFile(args map[string]any) string {
 	return ExtractString(args, "path", "file_path", "file")
+}
+
+func titleEdit(args map[string]any) string {
+	switch strings.ToLower(ExtractString(args, "action")) {
+	case "write":
+		return titleWriteFile(args)
+	case "replace":
+		return titleSearchReplace(args)
+	case "patch":
+		return titleApplyPatch(args)
+	case "restore":
+		return titleCheckpointRestore(args)
+	default:
+		return "Edit workspace"
+	}
+}
+
+func targetEdit(args map[string]any) string {
+	switch strings.ToLower(ExtractString(args, "action")) {
+	case "write", "replace":
+		return targetEditPath(args)
+	case "patch":
+		return targetApplyPatch(args)
+	case "restore":
+		return targetCheckpointRestore(args)
+	default:
+		return targetEditPath(args)
+	}
+}
+
+func affectedEdit(args map[string]any) []string {
+	switch strings.ToLower(ExtractString(args, "action")) {
+	case "write", "replace":
+		return affectedSinglePath("file_path", "path", "file", "filename", "target", "destination", "move_path")(args)
+	case "patch":
+		return affectedPatch(args)
+	default:
+		return nil
+	}
 }
 func titleWriteFile(args map[string]any) string {
 	if path := ExtractString(args, "file_path", "path", "file"); path != "" {

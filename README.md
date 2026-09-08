@@ -188,7 +188,7 @@ Protonman enforces security policy boundaries before any tool executes.
 ### Permission Modes
 
 - **`ask` (Default)**: Prompts interactively whenever a tool action is not explicitly pre-approved by configuration rules.
-- **`plan`**: Read-only mode. Mutating file tools (`write_file`, `search_replace`, `apply_patch`) and non-whitelisted shell commands are blocked.
+- **`plan`**: Read-only mode. Mutating `edit` actions and non-whitelisted shell commands are blocked.
 - **`always-approve`**: Automatically approves tool calls that would otherwise prompt. Explicit `deny` rules remain strictly enforced.
 
 ### Policy Evaluation
@@ -207,7 +207,7 @@ When prompted in `ask` mode:
 
 - **Path Traversal Protection**: File operations are confined to the workspace root directory. Relative escapes (`../`) and symlink traversal outside the workspace boundary are rejected.
 - **Protected Paths**: Configured protected paths (e.g. `.env`, `secrets/`, `*.pem`) are shielded from model reads, listings, and modifications.
-- **Automatic Checkpoints**: Mutating file operations create pre-edit snapshots stored under `~/.protonman/checkpoints/`. File state can be restored via `checkpoint_restore`.
+- **Automatic Checkpoints**: Mutating file operations create pre-edit snapshots stored under `~/.protonman/checkpoints/`. File state can be restored via `edit` with `action=restore`.
 
 ### OS Sandbox Profiles
 
@@ -284,9 +284,7 @@ Protonman registers a suite of workspace-safe tools:
 | Tool | Category | Description |
 | :--- | :--- | :--- |
 | `read` | File System | Read UTF-8 workspace files with byte pagination or bounded 1-based line ranges/line numbers, plus snapshot-bound byte continuations |
-| `write_file` | File System | Write file contents with automatic pre-edit checkpointing |
-| `search_replace` | File System | Exact block replacement in files with pre-edit checkpointing |
-| `apply_patch` | File System | Apply unified diff patches with pre-edit checkpointing |
+| `edit` | File System | Workspace edits via `write`, `replace`, `patch`, and `restore` actions with existing checkpoint safeguards |
 | `grep` | Search | Regex search with include globs plus snapshot-bound cursor pagination that resumes from the prior match location |
 | `find` | Search | Recursive workspace path discovery by glob with type/depth filters and snapshot-bound pagination |
 | `ls` | Search | List visible directory entries with protected-path filtering and snapshot-bound pagination |
@@ -301,7 +299,6 @@ Protonman registers a suite of workspace-safe tools:
 | `get_agent` | Multi-Agent | Inspect one retained subagent and terminal result |
 | `list_agents` | Multi-Agent | List queued, running, and retained terminal subagents |
 | `cancel_agent` | Multi-Agent | Explicitly cancel a queued or running subagent |
-| `checkpoint_restore` | Recovery | Rollback a file to a recorded pre-edit checkpoint ID |
 
 Session state and task plans are private user data, not workspace files. Each session owns an aggregate under `~/.protonman/sessions/<session-id>/`. When `PROTONMAN_HOME` overrides the effective home directory, the same `.protonman/sessions/<session-id>/` layout is created beneath that home:
 

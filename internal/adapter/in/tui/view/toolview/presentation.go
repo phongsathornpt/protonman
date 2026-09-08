@@ -600,6 +600,19 @@ func summarizeEdit(name string, body string) string {
 	if body == "" {
 		return "updated"
 	}
+	if tool.CanonicalName(name) == "edit" && name == "edit" {
+		lower := strings.ToLower(body)
+		switch {
+		case strings.Contains(lower, "restored checkpoint"):
+			return "restored checkpoint"
+		case strings.Contains(lower, "wrote file successfully"):
+			return "saved"
+		case strings.Contains(lower, "success. updated"), strings.Contains(lower, "success. added"), strings.Contains(lower, "success. deleted"):
+			return "patch applied"
+		case strings.Contains(lower, "has been updated"), strings.Contains(lower, "has been created"):
+			return "1 replacement applied"
+		}
+	}
 	switch name {
 	case "write_file":
 		return "saved"

@@ -11,12 +11,16 @@ type legacyToolAlias struct {
 }
 
 var legacyToolAliases = map[string]legacyToolAlias{
-	"read_file":  {Canonical: "read"},
-	"list_dir":   {Canonical: "ls"},
-	"find_files": {Canonical: "find"},
-	"calculate":  {Canonical: "math"},
-	"web_fetch":  {Canonical: "web", Action: "fetch"},
-	"git_status": {Canonical: "git", Action: "status"},
+	"read_file":          {Canonical: "read"},
+	"list_dir":           {Canonical: "ls"},
+	"find_files":         {Canonical: "find"},
+	"calculate":          {Canonical: "math"},
+	"web_fetch":          {Canonical: "web", Action: "fetch"},
+	"git_status":         {Canonical: "git", Action: "status"},
+	"write_file":         {Canonical: "edit", Action: "write"},
+	"search_replace":     {Canonical: "edit", Action: "replace"},
+	"apply_patch":        {Canonical: "edit", Action: "patch"},
+	"checkpoint_restore": {Canonical: "edit", Action: "restore"},
 }
 
 // CanonicalName maps legacy public tool names to the current model-facing

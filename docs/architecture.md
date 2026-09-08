@@ -83,7 +83,7 @@ Pure business rules and domain definitions. No `domain-ish` parent folder is cre
 - `internal/adapter/out/sessionfs/`: File-backed storage implementation of `session.Repository` plus the subagent lifecycle event store; each session is an aggregate directory containing `state.json`, `todo.md`, the compacted agent projection, and the append-only lifecycle journal.
 - `internal/adapter/tool/`: Unified home for **all tool implementations** satisfying `tool.Handler`:
   - `agent/`: Subagent orchestration tools (`delegate_task`, `wait_agent`, etc.).
-  - `builtin/`: Core developer tools (`read`, `write_file`, `search_replace`, `apply_patch`, `bash`, `grep`, `find`, `ls`, `git`).
+  - `builtin/`: Core developer tools (`read`, `edit`, `bash`, `grep`, `find`, `ls`, `git`, `math`).
   - `mcp/`: External Model Context Protocol server discovery and tool registration.
   - `skill/`: Agent skill activation (`activate_skill`).
   - `todo/`: Session-bound work tracking tools (`get_todo`, `update_todo`) using durable optimistic concurrency.
