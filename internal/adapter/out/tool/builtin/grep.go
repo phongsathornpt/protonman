@@ -211,7 +211,11 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	}
 	truncated := false
 	scanEnabled := true
-	snapshotHash := sha256.New()
+	needSnapshot := legacyContinuation != ""
+	var snapshotHash hash.Hash
+	if needSnapshot {
+		snapshotHash = sha256.New()
+	}
 	walkErr := filepath.WalkDir(resolvedPath, func(path string, entry os.DirEntry, walkErr error) error {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -239,8 +243,11 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 					return err
 				}
 			}
-			_, err := hashGrepSnapshotEntry(snapshotHash, relSearch, entry)
-			return err
+			if needSnapshot {
+				_, err := hashGrepSnapshotEntry(snapshotHash, relSearch, entry)
+				return err
+			}
+			return nil
 		}
 		if isIgnoredGrepExtension(entry.Name()) {
 			return nil
@@ -254,7 +261,25 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 				return nil
 			}
 		}
-		info, err := hashGrepSnapshotEntry(snapshotHash, relSearch, entry)
+		startLine := 0
+		if resumeActive {
+			switch strings.Compare(relSearch, resume.File) {
+			case -1:
+				if needSnapshot {
+					_, err := hashGrepSnapshotEntry(snapshotHash, relSearch, entry)
+					return err
+				}
+				return nil
+			case 0:
+				startLine = resume.Line
+			}
+		}
+		var info os.FileInfo
+		if needSnapshot {
+			info, err = hashGrepSnapshotEntry(snapshotHash, relSearch, entry)
+		} else {
+			info, err = entry.Info()
+		}
 		if err != nil {
 			return err
 		}
@@ -264,19 +289,13 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		if !scanEnabled {
 			return nil
 		}
-		startLine := 0
-		if resumeActive {
-			switch strings.Compare(relSearch, resume.File) {
-			case -1:
-				return nil
-			case 0:
-				startLine = resume.Line
-			}
-		}
 		scanErr := scanGrepFile(ctx, path, relWork, relSearch, startLine, grepMatcher, &page)
 		if scanErr != nil {
 			if errors.Is(scanErr, errGrepLimit) {
 				truncated = true
+				if !needSnapshot {
+					return errGrepLimit
+				}
 				scanEnabled = false
 				return nil
 			}
@@ -284,6 +303,9 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		}
 		return nil
 	})
+	if errors.Is(walkErr, errGrepLimit) && truncated && !needSnapshot {
+		walkErr = nil
+	}
 	if walkErr != nil {
 		switch {
 		case errors.Is(walkErr, os.ErrNotExist):
@@ -294,7 +316,10 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 			return tool.Result{}, fmt.Errorf("grep path %q: %w", searchPath, walkErr)
 		}
 	}
-	snapshot := hex.EncodeToString(snapshotHash.Sum(nil))
+	snapshot := queryHash
+	if needSnapshot {
+		snapshot = hex.EncodeToString(snapshotHash.Sum(nil))
+	}
 	if legacyContinuation != "" {
 		legacyToken, tokenErr := support.ContinuationToken("grep", query, snapshot)
 		if tokenErr != nil {
