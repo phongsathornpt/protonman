@@ -28,6 +28,7 @@ const (
 	CodeUnknownTool                Code = "unknown_tool"
 	CodeNotFound                   Code = "not_found"
 	CodeProtectedPath              Code = "protected_path"
+	CodeInternalPath               Code = "internal_path"
 	CodeOutsideWorkspace           Code = "outside_workspace"
 	CodeNoProgress                 Code = "no_progress"
 	CodeStaleContinuation          Code = "stale_continuation"
@@ -67,6 +68,7 @@ var catalog = map[Code]Traits{
 	CodeUnknownTool:                {Domain: DomainTool, UserFix: true},
 	CodeNotFound:                   {Domain: DomainTool, UserFix: true},
 	CodeProtectedPath:              {Domain: DomainWorkspace, UserFix: true},
+	CodeInternalPath:               {Domain: DomainWorkspace},
 	CodeOutsideWorkspace:           {Domain: DomainWorkspace, UserFix: true},
 	CodeNoProgress:                 {Domain: DomainRuntime, UserFix: true},
 	CodeStaleContinuation:          {Domain: DomainWorkspace, UserFix: true},
@@ -104,7 +106,7 @@ func Codes() []Code {
 	return []Code{
 		CodeInvalidArguments, CodeCommandFailed, CodeInvalidOutput, CodeOutputTooLarge,
 		CodeCanceled, CodeDeadlineExceeded, CodePermissionDenied, CodeUnknownTool,
-		CodeNotFound, CodeProtectedPath, CodeOutsideWorkspace, CodeNoProgress,
+		CodeNotFound, CodeProtectedPath, CodeInternalPath, CodeOutsideWorkspace, CodeNoProgress,
 		CodeStaleContinuation, CodeConflict, CodePreexistingWorkspaceChange,
 		CodeWorkspaceStateUnavailable, CodeSandboxUnavailable, CodeExecution,
 		CodeModelInvalidRequest, CodeModelAuthentication, CodeModelPermission,
