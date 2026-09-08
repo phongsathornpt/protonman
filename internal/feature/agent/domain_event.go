@@ -12,6 +12,12 @@ type LifecycleEventStore interface {
 	LoadLifecycleEvents(context.Context, string) ([]LifecycleEvent, error)
 }
 
+// LifecycleEventCompactor atomically installs a session projection snapshot before
+// discarding lifecycle facts already represented by that snapshot.
+type LifecycleEventCompactor interface {
+	CompactLifecycle(context.Context, string, PersistentSnapshot) error
+}
+
 // LifecycleEventKind identifies one durable lifecycle transition.
 type LifecycleEventKind string
 

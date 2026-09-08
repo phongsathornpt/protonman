@@ -111,3 +111,53 @@ func (s *FileStore) LoadLifecycleEvents(ctx context.Context, sessionID string) (
 	}
 	return events, nil
 }
+
+// CompactLifecycle atomically installs the supplied session projection before
+// truncating lifecycle facts already represented by it. A crash before truncation
+// only leaves replay duplicates, which aggregate versions safely ignore.
+func (s *FileStore) CompactLifecycle(ctx context.Context, sessionID string, snapshot agent.PersistentSnapshot) error {
+	if err := session.ValidateID(sessionID); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("before compacting agent lifecycle: %w", err)
+	}
+	return s.withSessionLock(ctx, sessionID, func() error {
+		resources, err := session.ResolveResources(s.root, sessionID)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(resources.Root, 0o700); err != nil {
+			return fmt.Errorf("create session directory: %w", err)
+		}
+		data, err := json.Marshal(snapshot)
+		if err != nil {
+			return fmt.Errorf("encode compacted agent snapshot: %w", err)
+		}
+		if len(data) > maxAgentSnapshotBytes {
+			return fmt.Errorf("agent snapshot exceeds %d bytes", maxAgentSnapshotBytes)
+		}
+		if err := writeAgentSnapshot(ctx, resources.Root, resources.Agents, data); err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("before truncating agent event journal: %w", err)
+		}
+		file, err := os.OpenFile(resources.AgentEvents, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+		if err != nil {
+			return fmt.Errorf("truncate agent event journal: %w", err)
+		}
+		if err := file.Chmod(0o600); err != nil {
+			_ = file.Close()
+			return fmt.Errorf("protect compacted agent event journal: %w", err)
+		}
+		if err := file.Sync(); err != nil {
+			_ = file.Close()
+			return fmt.Errorf("sync compacted agent event journal: %w", err)
+		}
+		if err := file.Close(); err != nil {
+			return fmt.Errorf("close compacted agent event journal: %w", err)
+		}
+		return nil
+	})
+}
