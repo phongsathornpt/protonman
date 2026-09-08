@@ -222,7 +222,7 @@ URLs, provider protocols, or config persistence details.
 - disabled with existing live/retained agents: hide `delegate_task`, keep lifecycle tools
 - disabled with no existing agents: hide all subagent tools
 
-Lifecycle tools are `wait_agent`, `get_agent`, `list_agents`, and `cancel_agent`.
+Lifecycle tools are `wait_agent`, `get_agent`, `list_agents`, `cancel_agent`, and `resume_agent`.
 This preserves control over work that existed before delegation was disabled.
 
 The execution boundary also rejects `Spawn` while disabled. Tool visibility is
@@ -231,10 +231,15 @@ outlive a capability change.
 
 ### Child ownership and nesting
 
-Children are coordinator-owned asynchronous runs. Parent wait timeout does not
-cancel a child. Explicit cancellation uses coordinator lifecycle operations.
-Subagent-scoped registries remove agent and task tools, so children cannot spawn
-nested children or mutate the parent's task plan.
+Children are coordinator-owned asynchronous runs scoped by session and parent turn.
+Lifecycle state is derived from versioned domain events. Durable events are appended
+before lifecycle admission or transition is acknowledged, and restart recovery replays
+the per-session journal before converting process-owned live states to `interrupted`.
+Parent wait timeout does not cancel a child. `wait_agent` observes ordered lifecycle
+activity for the current turn and reconciles against the current child snapshot.
+Explicit cancellation uses coordinator lifecycle operations. Subagent-scoped registries
+remove agent and task tools, so children cannot spawn nested children or mutate the
+parent's task plan.
 
 ### Workspace scheduling
 
@@ -582,7 +587,7 @@ Canonical defaults live in `internal/base/runtimepolicy`, not duplicated literal
 Important current defaults include:
 
 - turn tool calls: 100
-- turn timeout: 10m
+- turn timeout: disabled by default (`0`); configure explicitly when a whole-turn ceiling is required
 - round timeout: 5m
 - tool permission timeout: 2m
 - tool execution timeout: 2m
@@ -592,7 +597,7 @@ Important current defaults include:
 - subagent queue timeout: 30s
 - max live subagents: 16
 - max retained subagents: 64
-- retained subagent result TTL: 10m
+- retained subagent result TTL: 24h
 
 Other resource limits such as tool-result budgets, read scan bytes, checkpoint
 retention, and infrastructure timeouts also belong in runtime policy or the
