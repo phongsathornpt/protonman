@@ -101,18 +101,20 @@ func (r *ReasoningResolver) Resolve(profile Profile, fallback sdk.ReasoningEffor
 
 // AgentStatus describes the live state of an in-flight subagent.
 type AgentStatus struct {
-	SessionID  string    `json:"session_id,omitempty"`
-	ID         string    `json:"id"`
-	ParentID   string    `json:"parent_id,omitempty"`
-	Profile    Profile   `json:"profile"`
-	Provider   string    `json:"provider,omitempty"`
-	Model      string    `json:"model,omitempty"`
-	Task       string    `json:"task"`
-	State      State     `json:"state"`
-	StartTime  time.Time `json:"start_time"`
-	StartedAt  time.Time `json:"started_at,omitempty"`
-	FinishedAt time.Time `json:"finished_at,omitempty"`
-	Reason     string    `json:"reason,omitempty"`
+	SessionID   string    `json:"session_id,omitempty"`
+	ID          string    `json:"id"`
+	ParentID    string    `json:"parent_id,omitempty"`
+	Profile     Profile   `json:"profile"`
+	Provider    string    `json:"provider,omitempty"`
+	Model       string    `json:"model,omitempty"`
+	Task        string    `json:"task"`
+	State       State     `json:"state"`
+	StartTime   time.Time `json:"start_time"`
+	StartedAt   time.Time `json:"started_at,omitempty"`
+	FinishedAt  time.Time `json:"finished_at,omitempty"`
+	Reason      string    `json:"reason,omitempty"`
+	ResumedFrom string    `json:"resumed_from,omitempty"`
+	ResumedAs   string    `json:"resumed_as,omitempty"`
 }
 
 type agentEntry struct {

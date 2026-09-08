@@ -74,7 +74,7 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 		languageModel:   boundModel,
 		reasoningEffort: boundReasoning,
 		status: AgentStatus{
-			SessionID: req.SessionID, ID: id, ParentID: req.ParentID, Profile: req.Profile, Provider: providerName, Model: modelID, Task: req.Task,
+			SessionID: req.SessionID, ID: id, ParentID: req.ParentID, Profile: req.Profile, Provider: providerName, Model: modelID, Task: req.Task, ResumedFrom: req.ResumedFrom,
 			State: StateQueued, StartTime: queuedAt,
 		},
 		cancel:  runCancel,
