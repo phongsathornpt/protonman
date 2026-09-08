@@ -55,8 +55,9 @@ func (r *CapabilityRegistry) Definitions() []tool.Definition {
 	}
 	base := r.base.Definitions()
 	out := make([]tool.Definition, 0, len(base))
+	enabled, hasAgents := r.capabilityState()
 	for _, def := range base {
-		if r.visible(def.Name) {
+		if visibleSubagentTool(def.Name, enabled, hasAgents) {
 			out = append(out, def)
 		}
 	}
@@ -78,16 +79,29 @@ func (r *CapabilityRegistry) CompiledValidators(name string) (input, output *sdk
 }
 
 func (r *CapabilityRegistry) visible(name string) bool {
+	enabled, hasAgents := r.capabilityState()
+	return visibleSubagentTool(name, enabled, hasAgents)
+}
+
+func (r *CapabilityRegistry) capabilityState() (enabled, hasAgents bool) {
+	if r == nil || r.coordinator == nil {
+		return false, false
+	}
+	enabled = r.coordinator.Enabled()
+	if !enabled {
+		hasAgents = r.coordinator.HasAgents()
+	}
+	return enabled, hasAgents
+}
+
+func visibleSubagentTool(name string, enabled, hasAgents bool) bool {
 	if !isSubagentTool(name) {
 		return true
 	}
-	if r.coordinator == nil {
-		return false
-	}
 	if name == "delegate_task" {
-		return r.coordinator.Enabled()
+		return enabled
 	}
-	return r.coordinator.Enabled() || len(r.coordinator.List()) > 0
+	return enabled || hasAgents
 }
 
 func isSubagentTool(name string) bool {

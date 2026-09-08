@@ -24,6 +24,19 @@ func (c *Coordinator) SetEnabled(enabled bool) {
 // Enabled reports whether new subagents may be spawned.
 func (c *Coordinator) Enabled() bool { return c != nil && c.enabled.Load() }
 
+// HasAgents reports whether any live or retained subagent lifecycle record is
+// still queryable. It prunes expired terminal records without allocating or
+// sorting a snapshot, making it suitable for capability publication checks.
+func (c *Coordinator) HasAgents() bool {
+	if c == nil {
+		return false
+	}
+	c.agentsMu.Lock()
+	defer c.agentsMu.Unlock()
+	c.pruneExpiredLocked(time.Now())
+	return len(c.agents) > 0
+}
+
 func (c *Coordinator) Close() error {
 	c.agentsMu.Lock()
 	c.closed.Store(true)

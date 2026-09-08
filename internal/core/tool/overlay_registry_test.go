@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 type overlayTestHandler struct{ name, description string }
@@ -92,5 +94,35 @@ func TestOverlayRegistryPreservesDynamicRegistrar(t *testing.T) {
 	}
 	if _, ok := reg.Lookup("mcp.test.echo"); !ok {
 		t.Fatal("dynamically registered handler is not visible through overlay")
+	}
+}
+
+type overlayCompiledRegistry struct{ overlayTestRegistry }
+
+func (r overlayCompiledRegistry) CompiledValidators(name string) (*sdk.ToolSchemaValidator, *sdk.ToolSchemaValidator, bool) {
+	_, ok := r.Lookup(name)
+	return nil, nil, ok
+}
+
+func TestOverlayRegistryPreservesCompiledValidatorsExceptOverrides(t *testing.T) {
+	base := overlayCompiledRegistry{overlayTestRegistry{handlers: []Handler{
+		overlayTestHandler{"a", "base a"},
+		overlayTestHandler{"b", "base b"},
+	}}}
+	reg, err := NewOverlayRegistry(base, overlayTestHandler{"b", "session b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiled, ok := reg.(interface {
+		CompiledValidators(string) (*sdk.ToolSchemaValidator, *sdk.ToolSchemaValidator, bool)
+	})
+	if !ok {
+		t.Fatal("overlay registry dropped compiled validator cache")
+	}
+	if _, _, found := compiled.CompiledValidators("a"); !found {
+		t.Fatal("base validator cache was not forwarded")
+	}
+	if _, _, found := compiled.CompiledValidators("b"); found {
+		t.Fatal("overlay reused stale base validators for overridden schema")
 	}
 }
