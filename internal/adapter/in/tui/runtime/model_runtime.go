@@ -749,6 +749,7 @@ func (m *bubbleModel) updateAgentLifecycle(message agentLifecycleMsg) (tea.Model
 				run.Activity = activity.String()
 				m.ensureHistoryState().TouchAgentRun(message.event.AgentID)
 			}
+			m.relayout()
 		}
 		return m, m.nextAgentEvent()
 	}
