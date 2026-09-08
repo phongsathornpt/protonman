@@ -1,12 +1,8 @@
 package tui
 
 import (
-	"fmt"
-	"sort"
-	"strings"
-	"time"
-
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/pane"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
@@ -31,53 +27,17 @@ func (*agentsPaneView) Render(m *bubbleModel) string {
 }
 
 func agentInspectionRows(m *bubbleModel) []string {
-	snapshot := append([]agent.AgentStatus(nil), m.agentSnapshot...)
-	if len(snapshot) == 0 {
-		rows := []string{brandStyle.Render("Agents")}
-		if !m.subagentsEnabled {
-			rows = append(rows, warningStyle.Render("Subagents disabled"), mutedStyle.Render("Universal handles work directly."))
-		} else {
-			rows = append(rows, mutedStyle.Render("No subagents in this session."))
-		}
-		return append(rows, mutedStyle.Render("esc close"))
+	activity := make(map[string]string, len(m.agentActivity))
+	for id, state := range m.agentActivity {
+		activity[id] = state.String()
 	}
-	sort.SliceStable(snapshot, func(i, j int) bool {
-		return agentDisplayPriority(snapshot[i].State) < agentDisplayPriority(snapshot[j].State)
+	return pane.AgentRows(pane.AgentsSnapshot{
+		Width:            m.width,
+		Height:           m.height,
+		Retained:         m.agentSnapshot,
+		SubagentsEnabled: m.subagentsEnabled,
+		Activity:         activity,
 	})
-	limit := 8
-	if layoutModeForHeight(m.height) == layoutCompact {
-		limit = 4
-	}
-	if len(snapshot) > limit {
-		snapshot = snapshot[:limit]
-	}
-	rows := []string{brandStyle.Render(fmt.Sprintf("Agents · %d retained", len(m.agentSnapshot)))}
-	if !m.subagentsEnabled {
-		rows = append(rows, warningStyle.Render("New delegation disabled · existing agents remain manageable"))
-	}
-	now := time.Now()
-	for _, st := range snapshot {
-		identity := agentDisplayProfile(st)
-		header := fmt.Sprintf("%s  %-9s %s", identity, string(st.State), formatElapsed(agentDisplayDuration(st, now)))
-		rows = append(rows, commandStyle.Render(strings.TrimSpace(header)))
-		if task := strings.TrimSpace(st.Task); task != "" {
-			rows = append(rows, "  "+truncateWithEllipsis(task, maxInt(12, m.width-8)))
-		}
-		if modelLabel := agentModelLabel(st); modelLabel != "" {
-			rows = append(rows, mutedStyle.Render("  "+truncateWithEllipsis(modelLabel, maxInt(12, m.width-8))))
-		}
-		if activity := m.agentActivity[st.ID].String(); activity != "" && !st.State.Terminal() {
-			rows = append(rows, mutedStyle.Render("  "+truncateWithEllipsis(activity, maxInt(12, m.width-8))))
-		} else if reason := strings.TrimSpace(st.Reason); reason != "" {
-			rows = append(rows, errorStyle.Render("  "+truncateWithEllipsis(reason, maxInt(12, m.width-8))))
-		}
-		rows = append(rows, mutedStyle.Render("  id: "+st.ID))
-	}
-	if hidden := len(m.agentSnapshot) - len(snapshot); hidden > 0 {
-		rows = append(rows, mutedStyle.Render(fmt.Sprintf("… %d more retained", hidden)))
-	}
-	rows = append(rows, mutedStyle.Render("esc close"))
-	return rows
 }
 
 func (m *bubbleModel) openAgentsPane() tea.Cmd {
@@ -93,14 +53,4 @@ func (m *bubbleModel) openAgentsPane() tea.Cmd {
 	return nil
 }
 
-func agentModelLabel(st agent.AgentStatus) string {
-	provider := strings.TrimSpace(st.Provider)
-	modelID := strings.TrimSpace(st.Model)
-	if modelID == "" {
-		return ""
-	}
-	if provider == "" {
-		return modelID
-	}
-	return provider + " · " + modelID
-}
+func agentModelLabel(st agent.AgentStatus) string { return pane.AgentModelLabel(st) }

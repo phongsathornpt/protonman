@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/pane"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
@@ -283,12 +284,7 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 	m.agents.SetCallGuard(guard)
 }
 
-func formatElapsed(duration time.Duration) string {
-	if duration < time.Second {
-		return "0s"
-	}
-	return duration.Truncate(time.Second).String()
-}
+func formatElapsed(duration time.Duration) string { return pane.FormatElapsed(duration) }
 
 func (m bubbleModel) agentsView() string {
 	snapshot := m.agentSnapshot
@@ -379,55 +375,12 @@ func (m bubbleModel) agentsView() string {
 	return strings.Join(lines, "\n")
 }
 
-func agentDisplayProfile(st agent.AgentStatus) string {
-	profile := st.Profile
-	if !profile.Valid() {
-		prefix := st.ID
-		if idx := strings.IndexByte(prefix, '-'); idx >= 0 {
-			prefix = prefix[:idx]
-		}
-		if parsed, err := agent.ParseProfile(prefix); err == nil {
-			profile = parsed
-		}
-	}
-	if !profile.Valid() {
-		return "AGENT"
-	}
-	return profile.ShortLabel()
-}
+func agentDisplayProfile(st agent.AgentStatus) string { return pane.AgentDisplayProfile(st) }
 
-func agentDisplayPriority(state agent.State) int {
-	switch state {
-	case agent.StateCanceling:
-		return 0
-	case agent.StateRunning:
-		return 1
-	case agent.StateQueued:
-		return 2
-	case agent.StateFailed, agent.StateCanceled:
-		return 3
-	case agent.StateCompleted:
-		return 4
-	default:
-		return 5
-	}
-}
+func agentDisplayPriority(state agent.State) int { return pane.AgentDisplayPriority(state) }
 
 func agentDisplayDuration(st agent.AgentStatus, now time.Time) time.Duration {
-	start := st.StartTime
-	if !st.StartedAt.IsZero() {
-		start = st.StartedAt
-	}
-	if st.State.Terminal() && !st.FinishedAt.IsZero() {
-		if st.StartedAt.IsZero() {
-			return 0
-		}
-		return st.FinishedAt.Sub(st.StartedAt)
-	}
-	if start.IsZero() || now.Before(start) {
-		return 0
-	}
-	return now.Sub(start)
+	return pane.AgentDisplayDuration(st, now)
 }
 
 func (m bubbleModel) todoView() string {
@@ -489,19 +442,7 @@ func (m bubbleModel) todoView() string {
 	return strings.Join(lines, "\n")
 }
 
-func todoCounts(items []TodoItem) (completed, active, pending int) {
-	for _, item := range items {
-		switch item.Status {
-		case tododomain.StatusCompleted:
-			completed++
-		case tododomain.StatusInProgress:
-			active++
-		case tododomain.StatusPending:
-			pending++
-		}
-	}
-	return completed, active, pending
-}
+func todoCounts(items []TodoItem) (completed, active, pending int) { return pane.TodoCounts(items) }
 
 func todoVisibleRows(height int) int {
 	rows := height - 18

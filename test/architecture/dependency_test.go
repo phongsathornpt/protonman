@@ -90,6 +90,17 @@ func TestTUIDoesNotDependOnProjectDirectly(t *testing.T) {
 	})
 }
 
+func TestTUIPaneDoesNotOwnApplicationServices(t *testing.T) {
+	packages := listPackages(t)
+	pkgPath := modulePath + "/internal/adapter/in/tui/pane"
+	assertNoImports(t, packages, pkgPath, []string{
+		modulePath + "/internal/adapter/in/tui",
+		modulePath + "/internal/adapter/out/config",
+		modulePath + "/internal/app",
+		modulePath + "/internal/engine/turn",
+	})
+}
+
 func TestTUIHistoryDependsOnlyOnPresentationAndDomainLeaves(t *testing.T) {
 	packages := listPackages(t)
 	pkgPath := modulePath + "/internal/adapter/in/tui/history"

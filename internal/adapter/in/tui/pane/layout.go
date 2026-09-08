@@ -1,0 +1,66 @@
+// Package pane contains presentation-only TUI pane renderers and layout policy.
+package pane
+
+import (
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/style"
+)
+
+// LayoutMode describes vertical-space constraints for transient panes.
+type LayoutMode uint8
+
+const (
+	LayoutNormal LayoutMode = iota
+	LayoutCompact
+	LayoutTiny
+)
+
+func ModeForHeight(height int) LayoutMode {
+	switch {
+	case height < 14:
+		return LayoutTiny
+	case height < 20:
+		return LayoutCompact
+	default:
+		return LayoutNormal
+	}
+}
+
+func PickerVisibleRows(height, maximum int) int {
+	rows := maximum
+	switch {
+	case height <= 12:
+		rows = 2
+	case height <= 14:
+		rows = 3
+	case height <= 20:
+		rows = 4
+	}
+	if rows < 1 {
+		return 1
+	}
+	if maximum > 0 && rows > maximum {
+		return maximum
+	}
+	return rows
+}
+
+func CompactRows(rows []string) []string {
+	compact := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if strings.TrimSpace(row) != "" {
+			compact = append(compact, row)
+		}
+	}
+	return compact
+}
+
+func RenderModal(width, height int, border lipgloss.TerminalColor, rows []string) string {
+	style := tuistyle.ModalStyle.BorderForeground(border).MaxWidth(max(1, width-4))
+	if ModeForHeight(height) != LayoutNormal {
+		style = style.Padding(0, 1)
+	}
+	return style.Render(strings.Join(rows, "\n"))
+}
