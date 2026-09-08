@@ -26,6 +26,8 @@ func agentResultSchema() map[string]any {
 		"type": "object",
 		"properties": map[string]any{
 			"summary":               map[string]any{"type": "string"},
+			"provider":              map[string]any{"type": "string"},
+			"model":                 map[string]any{"type": "string"},
 			"rounds":                map[string]any{"type": "integer", "minimum": 0},
 			"verification":          agentVerificationSchema(),
 			"evidence":              map[string]any{"type": "array", "items": agentEvidenceSchema()},
@@ -48,6 +50,8 @@ func agentStatusSchema() map[string]any {
 			"id":          map[string]any{"type": "string"},
 			"parent_id":   map[string]any{"type": "string"},
 			"profile":     map[string]any{"type": "string", "enum": agent.SubagentProfileNames()},
+			"provider":    map[string]any{"type": "string"},
+			"model":       map[string]any{"type": "string"},
 			"task":        map[string]any{"type": "string"},
 			"state":       agentStateSchema(),
 			"start_time":  map[string]any{"type": "string"},

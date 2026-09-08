@@ -195,6 +195,12 @@ func resultPayload(result *agent.Result) any {
 		"verification": result.Verification, "evidence": evidence, "changed_targets": changedTargets,
 		"queue_duration_ms": result.QueueDuration.Milliseconds(), "execution_duration_ms": result.Duration.Milliseconds(), "total_duration_ms": result.TotalDuration.Milliseconds(),
 	}
+	if result.Provider != "" {
+		payload["provider"] = result.Provider
+	}
+	if result.Model != "" {
+		payload["model"] = result.Model
+	}
 	if result.Err != nil {
 		payload["error"] = result.Err.Error()
 	}

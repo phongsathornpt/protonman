@@ -63,6 +63,9 @@ func agentInspectionRows(m *bubbleModel) []string {
 		if task := strings.TrimSpace(st.Task); task != "" {
 			rows = append(rows, "  "+truncateWithEllipsis(task, maxInt(12, m.width-8)))
 		}
+		if modelLabel := agentModelLabel(st); modelLabel != "" {
+			rows = append(rows, mutedStyle.Render("  "+truncateWithEllipsis(modelLabel, maxInt(12, m.width-8))))
+		}
 		if activity := m.agentActivity[st.ID].String(); activity != "" && !st.State.Terminal() {
 			rows = append(rows, mutedStyle.Render("  "+truncateWithEllipsis(activity, maxInt(12, m.width-8))))
 		} else if reason := strings.TrimSpace(st.Reason); reason != "" {
@@ -88,4 +91,16 @@ func (m *bubbleModel) openAgentsPane() tea.Cmd {
 	}
 	m.relayout()
 	return nil
+}
+
+func agentModelLabel(st agent.AgentStatus) string {
+	provider := strings.TrimSpace(st.Provider)
+	modelID := strings.TrimSpace(st.Model)
+	if modelID == "" {
+		return ""
+	}
+	if provider == "" {
+		return modelID
+	}
+	return provider + " · " + modelID
 }

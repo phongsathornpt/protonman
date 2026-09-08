@@ -135,3 +135,33 @@ func TestCoordinatorModelResolverUpdateAffectsFutureAdmissionsOnly(t *testing.T)
 		t.Fatalf("bound models = %q, %q; want %q, %q", firstModel.ModelID(), secondModel.ModelID(), fallback.id, override.id)
 	}
 }
+
+func TestCoordinatorReportsBoundModelIdentity(t *testing.T) {
+	model := resolverTestModel{id: "agility-fast"}
+	resolver, err := NewModelResolver(map[Profile]sdk.LanguageModel{ProfileAgility: model})
+	if err != nil {
+		t.Fatal(err)
+	}
+	coord := NewCoordinator(resolverTestModel{id: "fallback"}, emptyRegistry{}, nil, nil,
+		WithModelResolver(resolver),
+		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+			return &mockRunner{}, nil
+		}),
+	)
+	defer coord.Close()
+
+	result, err := coord.Run(context.Background(), Request{Profile: ProfileAgility, Task: "inspect"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Provider != "test" || result.Model != model.id {
+		t.Fatalf("result identity = %q/%q, want test/%s", result.Provider, result.Model, model.id)
+	}
+	statuses := coord.List()
+	if len(statuses) != 1 {
+		t.Fatalf("statuses = %#v, want one retained agent", statuses)
+	}
+	if statuses[0].Provider != "test" || statuses[0].Model != model.id {
+		t.Fatalf("status identity = %q/%q, want test/%s", statuses[0].Provider, statuses[0].Model, model.id)
+	}
+}

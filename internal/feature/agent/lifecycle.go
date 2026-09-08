@@ -13,6 +13,7 @@ import (
 	"github.com/projectTHORN/proton/internal/base/contextutil"
 	"github.com/projectTHORN/proton/internal/base/failure"
 	"github.com/projectTHORN/proton/internal/engine/toolcall"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
@@ -49,6 +50,7 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	if c.modelResolver != nil {
 		boundModel = c.modelResolver.Resolve(req.Profile, boundModel)
 	}
+	providerName, modelID := languageModelIdentity(boundModel)
 
 	id := strings.TrimSpace(req.ID)
 	if id == "" {
@@ -64,7 +66,7 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	entry := &agentEntry{
 		languageModel: boundModel,
 		status: AgentStatus{
-			ID: id, ParentID: req.ParentID, Profile: req.Profile, Task: req.Task,
+			ID: id, ParentID: req.ParentID, Profile: req.Profile, Provider: providerName, Model: modelID, Task: req.Task,
 			State: StateQueued, StartTime: queuedAt,
 		},
 		cancel:  runCancel,
@@ -144,6 +146,8 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 
 	c.emit(execCtx, Event{Kind: EventAgentStarted, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task, QueueDuration: queueDuration})
 	res, runErr := c.executeWithModel(execCtx, req, entry.languageModel)
+	res.Provider = entry.status.Provider
+	res.Model = entry.status.Model
 	res.QueueDuration = queueDuration
 	res.Duration = time.Since(startedAt)
 	res.TotalDuration = time.Since(queuedAt)
@@ -163,7 +167,7 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 
 func (c *Coordinator) finishEntry(entry *agentEntry, req Request, queuedAt, startedAt time.Time, err error) {
 	now := time.Now()
-	res := Result{AgentID: req.ID, Profile: req.Profile, QueueDuration: now.Sub(queuedAt), TotalDuration: now.Sub(queuedAt), Err: err}
+	res := Result{AgentID: req.ID, Profile: req.Profile, Provider: entry.status.Provider, Model: entry.status.Model, QueueDuration: now.Sub(queuedAt), TotalDuration: now.Sub(queuedAt), Err: err}
 	if !startedAt.IsZero() {
 		res.Duration = now.Sub(startedAt)
 	}
@@ -189,6 +193,13 @@ func (c *Coordinator) storeTerminal(entry *agentEntry, res Result, err error) {
 	default:
 		entry.status.State = StateFailed
 	}
+}
+
+func languageModelIdentity(languageModel sdk.LanguageModel) (provider, modelID string) {
+	if languageModel == nil {
+		return "", ""
+	}
+	return strings.TrimSpace(languageModel.Provider()), strings.TrimSpace(languageModel.ModelID())
 }
 
 func terminalReason(err error) string {
