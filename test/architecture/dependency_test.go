@@ -90,6 +90,22 @@ func TestTUIDoesNotDependOnProjectDirectly(t *testing.T) {
 	})
 }
 
+func TestTUISubpackagesNeverImportPresentationRoot(t *testing.T) {
+	packages := listPackages(t)
+	root := modulePath + "/internal/adapter/in/tui"
+	prefix := root + "/"
+	for pkgPath, pkg := range packages {
+		if !strings.HasPrefix(pkgPath, prefix) {
+			continue
+		}
+		for _, imported := range pkg.Imports {
+			if imported == root {
+				t.Errorf("TUI subpackage %s imports parent presentation package %s", pkgPath, imported)
+			}
+		}
+	}
+}
+
 func TestTUIPaneDoesNotOwnApplicationServices(t *testing.T) {
 	packages := listPackages(t)
 	pkgPath := modulePath + "/internal/adapter/in/tui/pane"
