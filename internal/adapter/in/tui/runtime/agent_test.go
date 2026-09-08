@@ -3,6 +3,9 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -11,6 +14,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"strings"
 	"testing"
@@ -547,5 +551,66 @@ func TestAgentRunCellTerminalFallbacksAreExplicit(t *testing.T) {
 		if !strings.Contains(got, "review concurrency") || !strings.Contains(got, tc.want) {
 			t.Fatalf("state=%s render=%q", tc.state, got)
 		}
+	}
+}
+
+func TestAgentProgressKeepsFrameWithinTerminal(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.resize(100, 30)
+	m.busy = true
+	m.agentSnapshot = []agent.AgentStatus{{ID: "worker-1", Profile: agent.ProfileStrength, Task: "fix failures", State: agent.StateRunning, StartedAt: time.Now()}}
+	m.relayout()
+	if got := lipgloss.Height(m.View()); got > m.height {
+		t.Fatalf("initial frame height=%d terminal=%d", got, m.height)
+	}
+	call, _ := tool.NewCall("grep-1", "grep", []byte(`{"pattern":"TDZ","path":"."}`))
+	updated, _ := m.Update(agentLifecycleMsg{event: agent.Event{Kind: agent.EventAgentProgress, AgentID: "worker-1", Call: &call}})
+	m = updated.(*bubbleModel)
+	if got := lipgloss.Height(m.View()); got > m.height {
+		t.Fatalf("agent progress frame height=%d terminal=%d", got, m.height)
+	}
+}
+
+func TestRelayoutDoesNotReenableFollowTailAfterUserScroll(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.showWelcome = false
+	m.resize(80, 24)
+	for i := 0; i < 80; i++ {
+		m.appendLine(fmt.Sprintf("line-%02d", i))
+	}
+	m.todo = []TodoItem{{ID: "a", Text: "dynamic chrome", Status: tododomain.StatusInProgress}}
+	m.relayout()
+	m.viewport.GotoBottom()
+	m.viewport.ScrollUp(1)
+	m.followTail = false
+	m.todo = nil
+	m.relayout()
+	if m.followTail {
+		t.Fatal("relayout re-enabled follow tail after explicit user scroll")
+	}
+}
+
+func TestRefreshViewportPreservesLogicalAnchorAcrossCellExpansion(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.showWelcome = false
+	m.resize(80, 16)
+	run := &AgentRunCell{AgentID: "worker-1", Profile: agent.ProfileStrength, Task: "fix failures", State: agent.StateRunning}
+	m.historyState.Append(run)
+	for i := 0; i < 40; i++ {
+		m.appendLine(fmt.Sprintf("line-%02d", i))
+	}
+	m.refreshViewport()
+	m.viewport.SetYOffset(10)
+	m.followTail = false
+	before := strings.Split(ansi.Strip(m.viewport.View()), "\n")[0]
+	run.Activity = "search TDZ"
+	m.historyState.TouchAgentRun("worker-1")
+	m.refreshViewport()
+	after := strings.Split(ansi.Strip(m.viewport.View()), "\n")[0]
+	if after != before {
+		t.Fatalf("logical scroll anchor moved: before=%q after=%q", before, after)
+	}
+	if m.followTail {
+		t.Fatal("content expansion re-enabled follow tail")
 	}
 }
