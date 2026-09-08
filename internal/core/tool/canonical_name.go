@@ -6,6 +6,7 @@ var legacyToolNames = map[string]string{
 	"read_file":  "read",
 	"list_dir":   "ls",
 	"find_files": "find",
+	"calculate":  "math",
 }
 
 // CanonicalName maps legacy public tool names to the current model-facing

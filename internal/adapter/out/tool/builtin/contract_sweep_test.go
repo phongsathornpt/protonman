@@ -26,7 +26,7 @@ func TestRegisteredBuiltinToolContracts(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := map[string]bool{
-		"read": true, "calculate": true, "bash": true, "write_file": true, "search_replace": true,
+		"read": true, "math": true, "bash": true, "write_file": true, "search_replace": true,
 		"apply_patch": true, "grep": true, "find": true, "ls": true, "git_status": true,
 		"checkpoint_restore": true, "web_fetch": true, "delegate_task": true,
 		"wait_agent": true, "get_agent": true, "list_agents": true, "cancel_agent": true, "resume_agent": true,

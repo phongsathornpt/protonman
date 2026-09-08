@@ -26,7 +26,7 @@ func TestBuiltinToolSSOTContract(t *testing.T) {
 			titlePrefix:     "Read pkg/api.go",
 		},
 		{
-			name:            "calculate",
+			name:            "math",
 			args:            map[string]any{"expression": "2+2"},
 			wantKind:        tool.KindCompute,
 			wantDisplayName: "Calculate",

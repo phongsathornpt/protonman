@@ -30,7 +30,7 @@ func NewCalculate() tool.Handler { return calculateHandler{} }
 
 func (calculateHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:        "calculate",
+		Name:        "math",
 		Description: "Evaluate deterministic numeric expressions locally in pure Go. Use for arithmetic and common math functions instead of shell, Python, Node, or ad-hoc scripts. Supports +, -, *, /, %, ^, parentheses, pi, e, and common functions such as sqrt, abs, min, max, pow, round, floor, ceil, ln, log10, exp, sin, cos, and tan.",
 		Kind:        tool.KindCompute,
 		Mutability:  tool.MutabilityReadOnly,
@@ -66,28 +66,28 @@ func (calculateHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 	}
 	var input calculateInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode calculate arguments", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode math arguments", err)
 	}
 	input.Expression = strings.TrimSpace(input.Expression)
 	if input.Expression == "" {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "calculate expression is required")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "math expression is required")
 	}
 	if len(input.Expression) > maxCalculateExpressionBytes {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "calculate expression exceeds 64 KiB")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "math expression exceeds 64 KiB")
 	}
 	parser := expressionParser{input: input.Expression}
 	value, err := parser.parse()
 	if err != nil {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "calculate: "+err.Error())
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "math: "+err.Error())
 	}
 	if math.IsNaN(value) || math.IsInf(value, 0) {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "calculate result is not finite")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "math result is not finite")
 	}
 	formatted := strconv.FormatFloat(value, 'g', -1, 64)
 	payload := calculateOutput{Expression: input.Expression, Value: value, Formatted: formatted}
 	structured, err := json.Marshal(payload)
 	if err != nil {
-		return tool.Result{}, fmt.Errorf("encode calculate result: %w", err)
+		return tool.Result{}, fmt.Errorf("encode math result: %w", err)
 	}
 	return tool.Result{CallID: call.ID, ToolName: call.Name, Output: formatted, StructuredOutput: structured}, nil
 }

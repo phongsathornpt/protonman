@@ -131,7 +131,7 @@ func toolDisciplineSection(spec Spec) string {
 		"- Reuse existing evidence. Do not repeat equivalent reads, searches, or commands without new information that justifies the retry.",
 		"- Use read when a workspace artifact path is known; it handles text plus bounded inspection of supported images and structured data.",
 		"- Use read with view=source for bounded multi-file source inspection; use grep, find, and ls for repository discovery and targeted search.",
-		"- Use calculate for deterministic arithmetic and common math expressions instead of shell or language-runtime evaluation.",
+		"- Use math for deterministic arithmetic and common math expressions instead of shell or language-runtime evaluation.",
 		"- Use shell or language runtimes for actual programs, builds, tests, package managers, transformations, or execution behavior that dedicated tools do not express.",
 		"- Do not use a general execution tool merely to duplicate repository evidence already returned by a dedicated workspace tool.",
 		"- Treat successful dedicated-tool results as evidence; do not invoke bash only to re-read, recount, hash, or otherwise re-prove the same file state unless the result is incomplete or conflicting.",
