@@ -9,7 +9,7 @@ import (
 
 func TestBuildCrashReport(t *testing.T) {
 	report := BuildCrashReport("nil pointer dereference", "goroutine 1 [running]:\nmain.go:123")
-	if !strings.Contains(report, "Proton Crash Report") {
+	if !strings.Contains(report, "Protonman Crash Report") {
 		t.Fatalf("expected report header, got: %s", report)
 	}
 	if !strings.Contains(report, "nil pointer dereference") {
@@ -28,7 +28,7 @@ func TestCrashModelNavigation(t *testing.T) {
 
 	// Test View rendering
 	rendered := m.View()
-	if !strings.Contains(rendered, "Proton crashed") {
+	if !strings.Contains(rendered, "Protonman crashed") {
 		t.Fatalf("expected headline in view, got: %s", rendered)
 	}
 	if !strings.Contains(rendered, "test failure") {

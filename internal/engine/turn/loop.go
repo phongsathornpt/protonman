@@ -260,7 +260,7 @@ func WithMaxToolCalls(calls int) Option {
 }
 
 // WithMaxIdenticalNoProgressResults bounds repeated identical deterministic
-// tool results before Proton forces a text-only synthesis round. Zero disables
+// tool results before Protonman forces a text-only synthesis round. Zero disables
 // semantic no-progress detection.
 func WithMaxIdenticalNoProgressResults(limit int) Option {
 	return func(loop *Loop) error {

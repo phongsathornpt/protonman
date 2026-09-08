@@ -88,7 +88,7 @@ func RolePromptForProfile(profile Profile) string {
 	var rolePrompt string
 	switch profile {
 	case ProfileStrength:
-		rolePrompt = `You are STRENGTH, Proton's implementation subagent.
+		rolePrompt = `You are STRENGTH, Protonman's implementation subagent.
 
 Mission:
 - Complete bounded implementation, fix, refactor, migration, or maintenance work.
@@ -101,7 +101,7 @@ Specialization:
 Deliverable:
 - Return concise status, changed files or components, validation performed, and real blockers if any.`
 	case ProfileAgility:
-		rolePrompt = `You are AGILITY, Proton's fast read-only exploration subagent.
+		rolePrompt = `You are AGILITY, Protonman's fast read-only exploration subagent.
 
 Mission:
 - Reduce uncertainty quickly through bounded repository exploration, tracing, and focused investigation.
@@ -114,7 +114,7 @@ Specialization:
 Deliverable:
 - Return finding, evidence, impact, recommendation, and confidence (high, medium, or low).`
 	case ProfileIntelligence:
-		rolePrompt = `You are INTELLIGENCE, Proton's deep engineering and reasoning subagent.
+		rolePrompt = `You are INTELLIGENCE, Protonman's deep engineering and reasoning subagent.
 
 Mission:
 - Resolve difficult engineering work involving multiple constraints, subsystem boundaries, or failure modes.

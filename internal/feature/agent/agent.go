@@ -13,7 +13,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
 )
 
-// Profile classifies Proton's primary and specialized engineering attributes.
+// Profile classifies Protonman's primary and specialized engineering attributes.
 type Profile string
 
 const (

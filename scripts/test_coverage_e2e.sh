@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Proton Comprehensive Coverage Runner (Unit + E2E Subprocesses)
+# Protonman Comprehensive Coverage Runner (Unit + E2E Subprocesses)
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${REPO_ROOT}"
 

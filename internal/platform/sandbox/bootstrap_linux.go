@@ -24,7 +24,7 @@ func init() {
 		return
 	}
 	if err := runSandboxBootstrap(encoded); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "proton sandbox bootstrap:", err)
+		_, _ = fmt.Fprintln(os.Stderr, "protonman sandbox bootstrap:", err)
 		os.Exit(126)
 	}
 	os.Exit(0)

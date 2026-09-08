@@ -128,7 +128,7 @@ func nativeLandlockCommand(ctx context.Context, profile Profile, dir, cwd, comma
 	}
 	executable, err := os.Executable()
 	if err != nil {
-		return nil, fmt.Errorf("resolve Proton executable: %w", err)
+		return nil, fmt.Errorf("resolve Protonman executable: %w", err)
 	}
 	cmd := exec.CommandContext(ctx, executable)
 	cmd.Dir = cwd

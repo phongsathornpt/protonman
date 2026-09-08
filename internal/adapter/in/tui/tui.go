@@ -1,4 +1,4 @@
-// Package tui provides the Bubble Tea fullscreen terminal adapter for Proton.
+// Package tui provides the Bubble Tea fullscreen terminal adapter for Protonman.
 package tui
 
 import (
@@ -126,7 +126,7 @@ func WithCoordinator(coordinator *agent.Coordinator) BubbleTeaOption {
 	}
 }
 
-// BubbleTeaUI is the Bubble Tea terminal adapter over Proton services.
+// BubbleTeaUI is the Bubble Tea terminal adapter over Protonman services.
 type BubbleTeaUI struct {
 	service                 *toolcall.Service
 	registry                tool.Registry
@@ -327,7 +327,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 				continue
 			}
 			slog.DebugContext(ctx, "tui run stopped after panic")
-			return fmt.Errorf("proton crashed: %v", panicVal)
+			return fmt.Errorf("protonman crashed: %v", panicVal)
 		}
 
 		if modelState, ok := finalModel.(*bubbleModel); ok {

@@ -92,7 +92,7 @@ func newCommittedWorkspace(t *testing.T) *workspace.Workspace {
 	writeTestFile(t, ws.Root(), "clean.txt", "clean\n")
 	gitRunBuiltin(t, ws.Root(), "init", "--quiet")
 	gitRunBuiltin(t, ws.Root(), "config", "user.email", "proton@test.invalid")
-	gitRunBuiltin(t, ws.Root(), "config", "user.name", "Proton Test")
+	gitRunBuiltin(t, ws.Root(), "config", "user.name", "Protonman Test")
 	gitRunBuiltin(t, ws.Root(), "add", ".")
 	gitRunBuiltin(t, ws.Root(), "commit", "--quiet", "-m", "baseline")
 	return ws

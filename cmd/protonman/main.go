@@ -1,4 +1,4 @@
-// Command proton starts the Proton coding-agent TUI or a headless run.
+// Command protonman starts the Protonman coding-agent TUI or a headless run.
 package main
 
 import (
@@ -85,7 +85,7 @@ func run(ctx context.Context, args []string) error {
 		return fmt.Errorf("configure debug logging: %w", err)
 	}
 	defer restoreDebugLogger()
-	slog.DebugContext(ctx, "proton debug logging enabled")
+	slog.DebugContext(ctx, "protonman debug logging enabled")
 
 	runtimeState, err := buildRuntime(ctx, options)
 	if err != nil {

@@ -26,7 +26,7 @@ func TestBashClassifiesMergeConflictAndOwnsConflictPath(t *testing.T) {
 	root := t.TempDir()
 	runGitTestCommand(t, root, "init", "-q", "-b", "main")
 	runGitTestCommand(t, root, "config", "user.email", "proton@example.test")
-	runGitTestCommand(t, root, "config", "user.name", "Proton Test")
+	runGitTestCommand(t, root, "config", "user.name", "Protonman Test")
 	writeGitTestFile(t, root, "conflict.txt", "base\n")
 	runGitTestCommand(t, root, "add", "conflict.txt")
 	runGitTestCommand(t, root, "commit", "-q", "-m", "base")

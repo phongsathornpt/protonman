@@ -87,7 +87,7 @@ jobs:
             ./cmd/protonman
 
           if [[ "$GOOS" == "linux" && "$GOARCH" == "amd64" ]]; then
-            test "$("dist/$package/$binary" --version)" = "Proton $plain_version"
+            test "$("dist/$package/$binary" --version)" = "Protonman $plain_version"
           fi
           if [[ "$GOOS" == "windows" ]]; then
             (cd "dist/$package" && zip -q "../${package}.zip" "$binary")
@@ -127,7 +127,7 @@ jobs:
         run: |
           set -euo pipefail
           tag="$GITHUB_REF_NAME"
-          title="Proton $tag"
+          title="Protonman $tag"
           prerelease=()
           if [[ "$tag" == *-* ]]; then
             prerelease=(--prerelease)

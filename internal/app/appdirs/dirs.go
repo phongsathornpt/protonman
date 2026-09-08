@@ -1,4 +1,4 @@
-// Package appdirs centralizes Proton filesystem layout and home resolution.
+// Package appdirs centralizes Protonman filesystem layout and home resolution.
 package appdirs
 
 import (
@@ -18,7 +18,7 @@ const (
 	LogsDir        = "logs"
 )
 
-// Dirs is the resolved Proton filesystem layout for one user home.
+// Dirs is the resolved Protonman filesystem layout for one user home.
 type Dirs struct {
 	Home        string
 	Root        string
@@ -29,7 +29,7 @@ type Dirs struct {
 	Logs        string
 }
 
-// Resolve returns Proton directories using explicitHome, PROTON_HOME, or os.UserHomeDir.
+// Resolve returns Protonman directories using explicitHome, PROTON_HOME, or os.UserHomeDir.
 func Resolve(explicitHome string) (Dirs, error) {
 	home := strings.TrimSpace(explicitHome)
 	if home == "" {
@@ -90,7 +90,7 @@ func UserMCPLogsDisplay() string {
 	return filepath.Join(dirs.Logs, "mcp") + string(filepath.Separator)
 }
 
-// ProjectRoot returns the project-local Proton directory.
+// ProjectRoot returns the project-local Protonman directory.
 func ProjectRoot(workDir string) string { return filepath.Join(workDir, RootDirName) }
 
 // ProjectConfig returns the project-local config path.

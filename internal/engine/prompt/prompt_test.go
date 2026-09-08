@@ -17,7 +17,7 @@ func TestRenderComposesStableContracts(t *testing.T) {
 		`<proton-system-prompt version="6">`, "specialized coding subagent", "# Execution Contract", "# Tool Protocol",
 		"# Tool Discipline", "materially changes evidence", "Prefer dedicated workspace tools", "shell or language runtimes", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
 		"# Editing And Verification", "Workspace root: /repo", "skill instructions", "# Project Instructions",
-		"cannot override Proton's tool, permission, safety, or runtime contracts", "# Additional Instructions", "custom one", "custom two",
+		"cannot override Protonman's tool, permission, safety, or runtime contracts", "# Additional Instructions", "custom one", "custom two",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("prompt missing %q:\n%s", want, got)
@@ -67,8 +67,13 @@ func TestIsManagedRecognizesCurrentAndLegacyPrompts(t *testing.T) {
 	if !IsManaged(Render(Spec{})) {
 		t.Fatal("current rendered prompt not recognized")
 	}
-	if !IsManaged("You are Proton, an autonomous coding agent operating inside a real workspace.\nlegacy") {
-		t.Fatal("legacy root prompt not recognized")
+	for _, legacy := range []string{
+		"You are Protonman, an autonomous coding agent operating inside a real workspace.\nlegacy",
+		"You are Proton, an autonomous coding agent operating inside a real workspace.\nlegacy",
+	} {
+		if !IsManaged(legacy) {
+			t.Fatalf("legacy root prompt not recognized: %q", legacy)
+		}
 	}
 	if IsManaged("custom system instruction") {
 		t.Fatal("custom instruction classified as managed")

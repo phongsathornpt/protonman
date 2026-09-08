@@ -1,18 +1,18 @@
-# Releasing Proton
+# Releasing Protonman
 
 Git tags are the source of truth for release versions. Stable releases use
 `vMAJOR.MINOR.PATCH`; prereleases may use a suffix such as `v1.2.0-rc.1`.
 
 ## Version resolution
 
-A Proton binary resolves its current version in this order:
+A Protonman binary resolves its current version in this order:
 
 1. build-time `-ldflags -X` injection
 2. Go module build metadata from `debug.ReadBuildInfo`
 3. `dev` when neither source contains a release version
 
 `buildinfo.Version()` removes the leading `v`, so a binary built from tag
-`v1.2.3` reports `Proton 1.2.3` through `proton --version`.
+`v1.2.3` reports `Protonman 1.2.3` through `protonman --version`.
 
 Local `make build` and `make dev` derive their injected version from:
 
@@ -24,14 +24,14 @@ Override it explicitly when needed:
 
 ```sh
 make build VERSION=v1.2.3
-./bin/proton --version
+./bin/protonman --version
 ```
 ## Publishing a GitHub Release
 
 Push a version tag after the release commit is on the remote:
 
 ```sh
-git tag -a v1.2.3 -m "Proton v1.2.3"
+git tag -a v1.2.3 -m "Protonman v1.2.3"
 git push origin v1.2.3
 ```
 
@@ -57,5 +57,5 @@ A versioned Go install also works without explicit linker flags because the exis
 
 ```sh
 go install github.com/phongsathornpt/protonman/cmd/protonman@v1.2.3
-proton --version
+protonman --version
 ```

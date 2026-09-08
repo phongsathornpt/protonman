@@ -340,7 +340,7 @@ func TestE2EProviderSwitchAndSelect(t *testing.T) {
 		t.Fatalf("active provider = %q, want 'protonman'", snap2.Model.Provider)
 	}
 
-	// Step 6: Verify Proton boots cleanly with updated config
+	// Step 6: Verify Protonman boots cleanly with updated config
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call bash {"command":"echo provider-switch-verified"}`},
 		dir:  ws,

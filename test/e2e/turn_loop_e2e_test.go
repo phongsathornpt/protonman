@@ -50,7 +50,7 @@ func TestE2ETurnLoopToolCallAndResultCycle(t *testing.T) {
 		t.Fatalf("tool call loop failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)
 	}
 
-	// Verify file was written to disk by Proton's tool executor
+	// Verify file was written to disk by Protonman's tool executor
 	diskContent, err := os.ReadFile(filepath.Join(ws, "agent_output.txt"))
 	if err != nil {
 		t.Fatalf("agent_output.txt not created: %v", err)
@@ -76,7 +76,7 @@ func TestE2ETurnLoopMultiRoundChain(t *testing.T) {
 	// Round 2: read_file
 	server.AddToolCallResponse("call_read_2", "read_file", `{"path":"hello.txt"}`)
 	// Round 3: final answer
-	server.AddTextResponse("The file contains Hello Proton E2E.")
+	server.AddTextResponse("The file contains Hello Coding E2E.")
 
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Inspect workspace and report content"},
@@ -86,7 +86,7 @@ func TestE2ETurnLoopMultiRoundChain(t *testing.T) {
 	if res.exitCode != 0 {
 		t.Fatalf("multi-round chain failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)
 	}
-	if !strings.Contains(res.stdout, "The file contains Hello Proton E2E.") {
+	if !strings.Contains(res.stdout, "The file contains Hello Coding E2E.") {
 		t.Fatalf("stdout missing final summary: %s", res.stdout)
 	}
 }

@@ -102,7 +102,7 @@ func (v *projectPaneView) Render(m *bubbleModel) string {
 	if state.ConfigExists && !state.Trusted {
 		rows = append(rows, warningStyle.Render("Project config and skills are present but not trusted."), mutedStyle.Render("Restart with "+envconfig.TrustProject+"=1 to enable project-local settings."))
 	} else if !state.Exists {
-		rows = append(rows, mutedStyle.Render("No project-local Proton settings are configured."))
+		rows = append(rows, mutedStyle.Render("No project-local Protonman settings are configured."))
 	}
 	rows = append(rows, mutedStyle.Render("/project set <setting> <value> · r reload · esc close"))
 	if layoutModeForHeight(m.height) == layoutTiny {

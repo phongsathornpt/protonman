@@ -8,7 +8,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
-// ToolKindForName returns the ACP ToolKind for a Proton tool.
+// ToolKindForName returns the ACP ToolKind for a Protonman tool.
 func ToolKindForName(name string) ToolKind {
 	switch tool.KindForName(name) {
 	case tool.KindRead:
@@ -123,7 +123,7 @@ func DefaultAvailableCommands() []AvailableCommand {
 	}
 }
 
-// DefaultSessionModes returns the standard modes available in Proton.
+// DefaultSessionModes returns the standard modes available in Protonman.
 func DefaultSessionModes(current string) *SessionModeState {
 	if current == "" {
 		current = "ask"

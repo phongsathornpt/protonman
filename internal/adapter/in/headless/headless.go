@@ -1,4 +1,4 @@
-// Package headless runs Proton without a terminal UI.
+// Package headless runs Protonman without a terminal UI.
 package headless
 
 import (
@@ -75,7 +75,7 @@ func (f *Format) UnmarshalText(text []byte) error {
 // ErrInvalidRunner indicates that the headless adapter cannot be constructed.
 var ErrInvalidRunner = errors.New("invalid headless runner")
 
-// Runner is the non-interactive adapter over Proton services.
+// Runner is the non-interactive adapter over Protonman services.
 type Runner struct {
 	service  *toolcall.Service
 	registry tool.Registry

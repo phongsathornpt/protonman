@@ -69,7 +69,7 @@ func TestCLIHeadlessOutputFormats(t *testing.T) {
 	if textRes.exitCode != 0 {
 		t.Fatalf("text run failed (code %d): %s\n%s", textRes.exitCode, textRes.stdout, textRes.stderr)
 	}
-	if !strings.Contains(textRes.stdout, "Hello Proton E2E") {
+	if !strings.Contains(textRes.stdout, "Hello Coding E2E") {
 		t.Fatalf("text output missing file content: %s", textRes.stdout)
 	}
 
@@ -102,7 +102,7 @@ func TestCLIHeadlessOutputFormats(t *testing.T) {
 			hasResult = true
 			if resMap, ok := evt["result"].(map[string]any); ok {
 				if output, ok := resMap["output"].(string); ok {
-					if !strings.Contains(output, "Hello Proton E2E") {
+					if !strings.Contains(output, "Hello Coding E2E") {
 						t.Fatalf("json result output missing expected content: %s", output)
 					}
 				}
@@ -127,7 +127,7 @@ func TestCLIHeadlessPromptFromStdin(t *testing.T) {
 	if res.exitCode != 0 {
 		t.Fatalf("stdin prompt failed (code %d): %s\n%s", res.exitCode, res.stdout, res.stderr)
 	}
-	if !strings.Contains(res.stdout, "Hello Proton E2E") {
+	if !strings.Contains(res.stdout, "Hello Coding E2E") {
 		t.Fatalf("output missing file contents: %s", res.stdout)
 	}
 }
@@ -160,7 +160,7 @@ func TestCLIModeFlags(t *testing.T) {
 	if allowRes.exitCode != 0 {
 		t.Fatalf("expected always-approve to succeed, got code %d: %s", allowRes.exitCode, allowRes.stderr)
 	}
-	if !strings.Contains(allowRes.stdout, "Hello Proton E2E") {
+	if !strings.Contains(allowRes.stdout, "Hello Coding E2E") {
 		t.Fatalf("expected file content: %s", allowRes.stdout)
 	}
 }

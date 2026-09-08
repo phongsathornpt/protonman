@@ -73,7 +73,7 @@ func ProfileSchemaDescription() string {
 	for _, spec := range profileSpecs {
 		parts = append(parts, "'"+string(spec.Profile)+"' ("+spec.Description+")")
 	}
-	return "The Proton agent profile: " + strings.Join(parts, ", ") + "."
+	return "The Protonman agent profile: " + strings.Join(parts, ", ") + "."
 }
 
 func SubagentProfileSchemaDescription() string {

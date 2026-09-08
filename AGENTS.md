@@ -2,12 +2,12 @@
 
 ## Purpose
 
-This file is the working contract for coding agents modifying Proton.
+This file is the working contract for coding agents modifying Protonman.
 It summarizes the current codebase, architectural ownership, runtime invariants,
 and the expected engineering workflow. Treat repository code and tests as the
 source of truth when this document and implementation ever disagree.
 
-Proton is a Go 1.27 autonomous coding agent with three inbound modes:
+Protonman is a Go 1.27 autonomous coding agent with three inbound modes:
 
 - Bubble Tea interactive TUI
 - headless CLI for scripts and CI
@@ -19,7 +19,7 @@ empirical verification.
 
 ## Engineering Contract
 
-When changing Proton:
+When changing Protonman:
 
 1. Inspect the relevant implementation and nearby tests before editing.
 2. Preserve Clean Architecture dependency direction.
@@ -393,7 +393,7 @@ User filesystem layout is centralized in `internal/app/appdirs`:
   logs/
 ```
 
-`PROTON_HOME` may replace the effective user home for Proton data.
+`PROTON_HOME` may replace the effective user home for Protonman data.
 Project-local resources live under `<workspace>/.proton/`.
 
 Configuration layering is:
@@ -469,7 +469,7 @@ actual JSON type.
 Do not blindly retry an external mutating call after an ambiguous transport
 failure. First determine whether the remote side may already have changed state.
 
-## Proton SDK and Models
+## Protonman SDK and Models
 
 `proton-sdk` is provider-neutral and must not import CLI-owned `internal/*` or
 `cmd/*` packages. It owns:

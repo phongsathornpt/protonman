@@ -127,7 +127,7 @@ func detectGitBranch(dir string) string {
 
 func promptPlaceholder(hasRunner bool) string {
 	if hasRunner {
-		return "Ask Proton to inspect or change this workspace…"
+		return "Ask Protonman to inspect or change this workspace…"
 	}
 	return "Type a message or /command…"
 }

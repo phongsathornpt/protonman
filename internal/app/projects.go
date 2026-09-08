@@ -9,13 +9,13 @@ import (
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
-// ProjectDiscoveryOptions controls project-local Proton discovery.
+// ProjectDiscoveryOptions controls project-local Protonman discovery.
 type ProjectDiscoveryOptions = project.Options
 
-// ProjectState describes project-local Proton resources.
+// ProjectState describes project-local Protonman resources.
 type ProjectState = project.State
 
-// ProjectInitResult reports whether project-local Proton configuration was created.
+// ProjectInitResult reports whether project-local Protonman configuration was created.
 type ProjectInitResult = project.InitResult
 
 // Projects owns project-local configuration mutations and lifecycle use cases.

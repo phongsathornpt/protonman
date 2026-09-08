@@ -32,7 +32,7 @@ type cliOptions struct {
 
 func parseArgs(args []string) (cliOptions, error) {
 	var options cliOptions
-	flags := flag.NewFlagSet("proton", flag.ContinueOnError)
+	flags := flag.NewFlagSet("protonman", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	flags.StringVar(&options.prompt, "p", "", "run one headless prompt and exit")
 	flags.StringVar(&options.prompt, "prompt", "", "run one headless prompt and exit")
@@ -79,13 +79,13 @@ func parseArgs(args []string) (cliOptions, error) {
 func usage() string {
 	return strings.TrimSpace(`
 Usage:
-  proton                      start the fullscreen TUI (new session)
-  proton --resume             resume the previous session
-  proton session list         list sessions for the current workspace
-  proton session resume [id]  resume the latest or a specific session
-  proton -p "<prompt>"        run one headless prompt
-  proton --headless           read the headless prompt from stdin
-  proton --version            print the binary version and exit
+  protonman                   start the fullscreen TUI (new session)
+  protonman --resume             resume the previous session
+  protonman session list         list sessions for the current workspace
+  protonman session resume [id]  resume the latest or a specific session
+  protonman -p "<prompt>"        run one headless prompt
+  protonman --headless           read the headless prompt from stdin
+  protonman --version            print the binary version and exit
 
 Session flags:
   -r, --resume, --continue    resume the previous session

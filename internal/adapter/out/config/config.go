@@ -1,4 +1,4 @@
-// Package config loads layered Proton configuration files.
+// Package config loads layered Protonman configuration files.
 package config
 
 import (

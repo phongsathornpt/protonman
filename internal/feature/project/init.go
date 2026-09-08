@@ -10,14 +10,14 @@ import (
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 )
 
-// InitResult reports whether project-local Proton configuration was created.
+// InitResult reports whether project-local Protonman configuration was created.
 type InitResult struct {
 	ProtonDir  string
 	ConfigPath string
 	Created    bool
 }
 
-// Init creates a minimal project-local Proton configuration without overwriting
+// Init creates a minimal project-local Protonman configuration without overwriting
 // an existing config file or following an existing .proton symlink.
 func Init(ctx context.Context, workDir string) (InitResult, error) {
 	if err := ctx.Err(); err != nil {
@@ -54,7 +54,7 @@ func Init(ctx context.Context, workDir string) (InitResult, error) {
 	if err != nil {
 		return result, fmt.Errorf("create project config: %w", err)
 	}
-	const initialConfig = "# Proton project configuration\n"
+	const initialConfig = "# Protonman project configuration\n"
 	if _, err := file.WriteString(initialConfig); err != nil {
 		_ = file.Close()
 		_ = os.Remove(configPath)

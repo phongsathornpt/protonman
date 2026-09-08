@@ -162,7 +162,7 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 			}
 			if item.isActive {
 				rows = append(rows, warningStyle.Render("  This is the active provider."))
-				rows = append(rows, mutedStyle.Render("  Proton will select another saved provider."))
+				rows = append(rows, mutedStyle.Render("  Protonman will select another saved provider."))
 			}
 			rows = append(rows, "", mutedStyle.Render("enter remove permanently · esc cancel"))
 			return renderProviderModal(m, warningColor, rows)

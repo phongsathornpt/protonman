@@ -2,7 +2,7 @@ package app
 
 import "github.com/phongsathornpt/protonman/internal/adapter/out/config"
 
-// UserSettings owns mutations to portable user-level Proton preferences.
+// UserSettings owns mutations to portable user-level Protonman preferences.
 type UserSettings struct{}
 
 func (UserSettings) SaveSubagentsEnabled(enabled bool) error {

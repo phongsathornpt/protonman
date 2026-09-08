@@ -13,7 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// CrashModel is a fullscreen terminal view shown when Proton encounters a fatal panic or crash.
+// CrashModel is a fullscreen terminal view shown when Protonman encounters a fatal panic or crash.
 // Inspired by OpenCode's error-component.tsx.
 type CrashModel struct {
 	errMessage   string
@@ -51,10 +51,10 @@ func NewCrashModel(panicVal any, stack []byte) *CrashModel {
 // BuildCrashReport formats a GitHub issue bug report with environment context.
 func BuildCrashReport(message string, stack string) string {
 	var sb strings.Builder
-	sb.WriteString("### Proton Crash Report\n\n")
-	sb.WriteString("The Proton TUI encountered an unexpected error.\n\n")
+	sb.WriteString("### Protonman Crash Report\n\n")
+	sb.WriteString("The Protonman TUI encountered an unexpected error.\n\n")
 	sb.WriteString(fmt.Sprintf("**Error:** `%s`\n\n", message))
-	sb.WriteString(fmt.Sprintf("**Proton Version:** `%s`\n", appVersion))
+	sb.WriteString(fmt.Sprintf("**Protonman Version:** `%s`\n", appVersion))
 	sb.WriteString(fmt.Sprintf("**Platform:** `%s/%s`\n", runtime.GOOS, runtime.GOARCH))
 	sb.WriteString(fmt.Sprintf("**Terminal:** `%s`\n\n", os.Getenv("TERM")))
 	sb.WriteString("```\n")
@@ -119,7 +119,7 @@ func (m *CrashModel) View() string {
 	var parts []string
 
 	// 1. Headline
-	headline := brandStyle.Render("Proton crashed")
+	headline := brandStyle.Render("Protonman crashed")
 	subtext := mutedStyle.Render("An unexpected error stopped the session.")
 	parts = append(parts, lipgloss.JoinVertical(lipgloss.Center, headline, subtext))
 
@@ -173,7 +173,7 @@ func (m *CrashModel) View() string {
 	parts = append(parts, stackBoxStyle.Render(lipgloss.JoinVertical(lipgloss.Left, stackHeader, mutedStyle.Render(stackBody))))
 
 	// 5. Footer
-	footer := mutedStyle.Render(fmt.Sprintf("Proton %s · %s/%s", appVersion, runtime.GOOS, runtime.GOARCH))
+	footer := mutedStyle.Render(fmt.Sprintf("Protonman %s · %s/%s", appVersion, runtime.GOOS, runtime.GOARCH))
 	parts = append(parts, footer)
 
 	mainContent := lipgloss.JoinVertical(lipgloss.Center, parts...)

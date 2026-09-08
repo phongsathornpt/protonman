@@ -351,8 +351,8 @@ func TestExtractReadFileExcerpt(t *testing.T) {
 	}
 
 	// Markdown title
-	mdText := "# Proton Coding Agent\n\nHigh performance..."
-	if got := extractReadFileExcerpt(mdText); got != "# Proton Coding Agent" {
+	mdText := "# Protonman Coding Agent\n\nHigh performance..."
+	if got := extractReadFileExcerpt(mdText); got != "# Protonman Coding Agent" {
 		t.Fatalf("expected markdown title excerpt, got: %q", got)
 	}
 

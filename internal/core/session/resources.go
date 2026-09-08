@@ -14,7 +14,7 @@ const (
 	TodoFileName  = "todo.md"
 )
 
-// Resources are the durable files owned by one Proton session.
+// Resources are the durable files owned by one Protonman session.
 type Resources struct {
 	Root  string
 	State string

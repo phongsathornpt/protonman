@@ -34,7 +34,7 @@ func TestLoadProjectInstructionsBoundsLargeFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(got, "truncated by Proton") || len(got) > MaxProjectInstructionsBytes+128 {
+	if !strings.Contains(got, "truncated by Protonman") || len(got) > MaxProjectInstructionsBytes+128 {
 		t.Fatalf("bounded instructions bytes=%d", len(got))
 	}
 }

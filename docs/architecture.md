@@ -1,6 +1,6 @@
 # Clean Architecture Blueprint
 
-Proton follows **Clean Architecture** (Hexagonal / Ports and Adapters) principles. The codebase maintains strict concentric dependency boundaries where dependencies point inward toward the core domain.
+Protonman follows **Clean Architecture** (Hexagonal / Ports and Adapters) principles. The codebase maintains strict concentric dependency boundaries where dependencies point inward toward the core domain.
 
 ```
        +-------------------------------------------------------------+

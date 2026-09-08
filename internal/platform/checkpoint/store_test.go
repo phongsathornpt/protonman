@@ -82,7 +82,7 @@ func TestFileStoreRestoreRejectsNewerUnownedWorkspaceChanges(t *testing.T) {
 	}
 	gitRunCheckpoint(t, workspaceRoot.Root(), "init", "--quiet")
 	gitRunCheckpoint(t, workspaceRoot.Root(), "config", "user.email", "proton@test.invalid")
-	gitRunCheckpoint(t, workspaceRoot.Root(), "config", "user.name", "Proton Test")
+	gitRunCheckpoint(t, workspaceRoot.Root(), "config", "user.name", "Protonman Test")
 	gitRunCheckpoint(t, workspaceRoot.Root(), "add", ".")
 	gitRunCheckpoint(t, workspaceRoot.Root(), "commit", "--quiet", "-m", "baseline")
 

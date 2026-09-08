@@ -1,4 +1,4 @@
-// Package mcp adapts discovered MCP servers into Proton's permission-aware tool registry.
+// Package mcp adapts discovered MCP servers into Protonman's permission-aware tool registry.
 package mcp
 
 import (
@@ -262,7 +262,7 @@ func normalizedMCPDescription(serverName, namespacedName string, manifest Tool) 
 	if len(purpose) > maxPurposeBytes {
 		purpose = purpose[:maxPurposeBytes] + "..."
 	}
-	stateEffect := "unspecified; Proton treats this tool as potentially mutating"
+	stateEffect := "unspecified; Protonman treats this tool as potentially mutating"
 	switch manifest.Mutability {
 	case tool.MutabilityReadOnly:
 		stateEffect = "read-only"
