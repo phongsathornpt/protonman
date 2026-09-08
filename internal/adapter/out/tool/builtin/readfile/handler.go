@@ -3,7 +3,9 @@ package readfile
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -64,14 +66,21 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	if input.Limit == 0 {
 		input.Limit = MaxReadFileBytes
 	}
-	path, err := h.workspace.ResolveRead(ctx, input.Path)
+	path, err := h.workspace.ResolveExistingRead(ctx, input.Path)
 	if err != nil {
 		return tool.Result{}, err
 	}
 
 	file, err := h.workspace.OpenReadFile(ctx, path)
 	if err != nil {
-		return tool.Result{}, fmt.Errorf("open %q: %w", input.Path, err)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeNotFound, fmt.Sprintf("path does not exist: %q", input.Path), err)
+		case errors.Is(err, os.ErrPermission):
+			return tool.Result{}, tool.WrapToolError(tool.ErrorCodePermissionDenied, fmt.Sprintf("cannot read path: %q", input.Path), err)
+		default:
+			return tool.Result{}, fmt.Errorf("open %q: %w", input.Path, err)
+		}
 	}
 	fileInfo, err := file.Stat()
 	if err != nil {

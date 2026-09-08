@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 func TestReadFileSupportsLineRangesAndNumbers(t *testing.T) {
@@ -120,5 +122,22 @@ func TestReadFileLineRangePreservesFinalLineWithoutNewline(t *testing.T) {
 	}
 	if result.Output != "b" {
 		t.Fatalf("Output = %q, want final line without synthesized newline", result.Output)
+	}
+}
+
+func TestReadFileMissingTargetIsNotFound(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	_, err := New(ws).Execute(context.Background(), newJSONCall(t, "read-missing", "read_file", map[string]any{
+		"path": "worker/src/infrastructure/store.rs",
+	}))
+	if err == nil {
+		t.Fatal("Execute() error = nil, want missing target failure")
+	}
+	failure := tool.FailureFromError(err)
+	if failure == nil || failure.Code != tool.ErrorCodeNotFound {
+		t.Fatalf("failure = %#v, want not_found", failure)
+	}
+	if strings.Contains(failure.Message, "execution_error") {
+		t.Fatalf("missing path leaked execution_error semantics: %q", failure.Message)
 	}
 }
