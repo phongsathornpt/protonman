@@ -15,6 +15,7 @@ import (
 	"github.com/phongsathornpt/proton/internal/adapter/in/tui"
 	mcpadapter "github.com/phongsathornpt/proton/internal/adapter/out/tool/mcp"
 	"github.com/phongsathornpt/proton/internal/app"
+	"github.com/phongsathornpt/proton/internal/base/buildinfo"
 	"github.com/phongsathornpt/proton/internal/base/envconfig"
 	"github.com/phongsathornpt/proton/internal/core/session"
 	"github.com/phongsathornpt/proton/internal/core/tool"
@@ -72,6 +73,10 @@ func run(ctx context.Context, args []string) error {
 	}
 	if options.help {
 		fmt.Fprint(os.Stdout, usage())
+		return nil
+	}
+	if options.version {
+		fmt.Fprintf(os.Stdout, "%s %s\n", buildinfo.Name, buildinfo.Version())
 		return nil
 	}
 

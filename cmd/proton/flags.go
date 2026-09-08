@@ -24,6 +24,7 @@ type cliOptions struct {
 	headless     bool
 	acp          bool
 	help         bool
+	version      bool
 	resume       bool
 	newSession   bool
 	sessionID    string
@@ -56,6 +57,7 @@ func parseArgs(args []string) (cliOptions, error) {
 	flags.StringVar(&options.sessionID, "session", "", "session id to load or create")
 	flags.BoolVar(&options.help, "help", false, "show usage")
 	flags.BoolVar(&options.help, "h", false, "show usage")
+	flags.BoolVar(&options.version, "version", false, "show version")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return cliOptions{help: true}, nil
@@ -83,6 +85,7 @@ Usage:
   proton session resume [id]  resume the latest or a specific session
   proton -p "<prompt>"        run one headless prompt
   proton --headless           read the headless prompt from stdin
+  proton --version            print the binary version and exit
 
 Session flags:
   -r, --resume, --continue    resume the previous session
@@ -91,6 +94,9 @@ Session flags:
 
 Agent flags:
   -a, --agent, --profile string  agent profile: universal | strength | agility | intelligence (legacy aliases: pow | int | dex | worker | explorer | reviewer)
+
+General flags:
+  --version                   print the binary version and exit
 
 Headless flags:
   -p, --prompt string         prompt text

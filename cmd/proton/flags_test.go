@@ -35,7 +35,7 @@ func TestParseArgsPositionalPrompt(t *testing.T) {
 
 func TestUsageMentionsHeadless(t *testing.T) {
 	text := usage()
-	for _, expected := range []string{"-p", "--headless", "--output", "--acp", "--sandbox", "--resume", "--new-session", "--session", "--agent"} {
+	for _, expected := range []string{"-p", "--headless", "--output", "--acp", "--sandbox", "--resume", "--new-session", "--session", "--agent", "--version"} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("usage missing %q: %s", expected, text)
 		}
@@ -93,5 +93,15 @@ func TestParseArgsSessionFlagsMutualExclusion(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "cannot specify both --resume and --new-session") {
 		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestParseArgsVersion(t *testing.T) {
+	options, err := parseArgs([]string{"--version"})
+	if err != nil {
+		t.Fatalf("parseArgs(--version) error = %v", err)
+	}
+	if !options.version {
+		t.Fatal("parseArgs(--version) version = false, want true")
 	}
 }
