@@ -84,6 +84,17 @@ func (c *Coordinator) SetLanguageModel(languageModel sdk.LanguageModel) {
 	c.languageModel = languageModel
 }
 
+// SetModelResolver updates immutable per-profile model overrides for future admissions.
+// Already admitted agents keep the model snapshot bound at Spawn time.
+func (c *Coordinator) SetModelResolver(resolver *ModelResolver) {
+	if c == nil {
+		return
+	}
+	c.agentsMu.Lock()
+	c.modelResolver = resolver
+	c.agentsMu.Unlock()
+}
+
 // LanguageModel returns the proton-sdk model used by child subagents.
 func (c *Coordinator) LanguageModel() sdk.LanguageModel {
 	c.agentsMu.RLock()
