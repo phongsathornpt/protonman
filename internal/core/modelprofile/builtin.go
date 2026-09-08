@@ -17,11 +17,8 @@ var builtinRegistry = mustRegistry(
 		ContextWindow: 1_048_576,
 		Compatibility: CompatibilityPolicy{ToolSchemaDialect: ToolSchemaGeminiSubset},
 		AgentPolicy: AgentPolicy{PromptHints: []string{
-			"Prefer explicit tool calls over unsupported assumptions when repository facts are needed.",
-			"Use read for known workspace artifacts, including supported images and structured data, before writing an inspection script.",
-			"Use read with view=source for bounded multi-file source inspection; use grep, find, and ls for repository discovery; use math for deterministic arithmetic; reserve bash for actual programs, builds, tests, and shell workflows.",
-			"Use tool names exactly as provided; do not invent namespaces or prefixes.",
-			"For broad exploration, prefer explicit delegation when available over unsupported prose-only assumptions.",
+			"Prefer provided structured capabilities over ad-hoc scripts when a capability directly represents the operation.",
+			"Use tool and action names exactly as provided; do not invent namespaces, prefixes, or operation names.",
 		}},
 	},
 	Profile{

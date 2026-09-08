@@ -261,13 +261,17 @@ func TestMetadataProvenanceSummaryIsDeterministic(t *testing.T) {
 	}
 }
 
-func TestGeminiToolHintsUseUnifiedReadFileSourceView(t *testing.T) {
+func TestGeminiToolHintsContainOnlyModelSpecificDiscipline(t *testing.T) {
 	got := ResolveBuiltin("gateway", "gemini-3.8-flash", CatalogMetadata{})
 	joined := strings.Join(got.AgentPolicy.PromptHints, "\n")
-	if !strings.Contains(joined, "read with view=source") {
-		t.Fatalf("Gemini prompt hints missing unified source view: %q", joined)
+	for _, want := range []string{"structured capabilities", "tool and action names exactly as provided", "do not invent namespaces"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("Gemini prompt hints missing model-specific guidance %q: %q", want, joined)
+		}
 	}
-	if strings.Contains(joined, "inspect_code") {
-		t.Fatalf("Gemini prompt hints expose legacy inspect_code: %q", joined)
+	for _, duplicated := range []string{"read with view=source", "grep, find", "Use math", "reserve bash", "inspect_code"} {
+		if strings.Contains(joined, duplicated) {
+			t.Fatalf("Gemini prompt hints duplicate generic tool policy %q: %q", duplicated, joined)
+		}
 	}
 }
