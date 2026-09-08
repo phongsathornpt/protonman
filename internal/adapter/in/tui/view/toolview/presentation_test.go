@@ -467,3 +467,14 @@ func TestSummarizeAgentResume(t *testing.T) {
 		t.Fatal("resume_agent should be treated as lifecycle presentation")
 	}
 }
+
+func TestSummarizeReadFilePreservesArtifactSummary(t *testing.T) {
+	image := "image png 1207x210 · sampled 64000 px · brightness mean 42.8 · dominant #505070"
+	if got := summarizeReadFileTarget("screenshot.png", image, false); got != image {
+		t.Fatalf("image summary = %q", got)
+	}
+	structured := "structured csv · rows 120 · columns 4"
+	if got := summarizeReadFileTarget("bench.csv", structured, false); got != structured {
+		t.Fatalf("structured summary = %q", got)
+	}
+}

@@ -535,7 +535,8 @@ func newProviderSelectPaneView(m *bubbleModel) *providerSelectPaneView {
 	}
 	for _, preset := range model.SupportedPresets {
 		if !configuredMap[strings.ToLower(preset.ID)] {
-			items = append(items, providerSelectItem{kind: providerItemPreset, name: preset.ID, displayName: preset.Name, baseURL: preset.BaseURL, description: preset.Description, presetID: preset.ID, isConfigured: false, isActive: false, isFree: !preset.RequiresKey})
+			isActive := m != nil && strings.EqualFold(preset.ID, m.activeProvider)
+			items = append(items, providerSelectItem{kind: providerItemPreset, name: preset.ID, displayName: preset.Name, baseURL: preset.BaseURL, description: preset.Description, presetID: preset.ID, isConfigured: false, isActive: isActive, isFree: !preset.RequiresKey})
 		}
 	}
 	items = append(items, providerSelectItem{kind: providerItemCustom, name: "custom", displayName: "+ Custom Gateway / Proxy", description: "Any OpenAI-compatible or Anthropic Messages base URL", isConfigured: false, isActive: false})
@@ -772,7 +773,7 @@ func (v *providerPaneView) handleModelSelectKey(m *bubbleModel, message tea.KeyM
 		}
 		return true, nil
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		num := int(message.Runes[0] - '1')
+		num := v.scrollOffset + int(message.Runes[0]-'1')
 		if num >= 0 && num < len(models) {
 			v.selectedIndex = num
 		}

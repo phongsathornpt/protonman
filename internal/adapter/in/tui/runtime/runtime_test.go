@@ -17,6 +17,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -652,5 +653,103 @@ func TestMouseWheelOnlyScrollsInsideTranscriptViewport(t *testing.T) {
 	m = updated.(*bubbleModel)
 	if m.viewport.YOffset >= bottom || m.followTail {
 		t.Fatalf("wheel inside transcript did not scroll: offset=%d bottom=%d follow=%v", m.viewport.YOffset, bottom, m.followTail)
+	}
+}
+
+func TestScrolledViewportDefersActiveTailRefreshUntilScroll(t *testing.T) {
+	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
+	m.resize(80, 18)
+	m.showWelcome = false
+	for i := 0; i < 40; i++ {
+		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nmore detail", i)})
+	}
+	m.refreshViewport()
+	m.followTail = false
+	m.viewport.SetYOffset(maxInt(1, m.viewport.TotalLineCount()/3))
+	beforeLines := m.viewport.TotalLineCount()
+	beforeOffset := m.viewport.YOffset
+
+	m.historyState.AppendAssistantDelta("live one\nlive two\nlive three")
+	m.refreshViewport()
+	if !m.viewportStaleTail {
+		t.Fatal("expected off-screen active tail to be deferred while scrolled")
+	}
+	if m.viewport.TotalLineCount() != beforeLines || m.viewport.YOffset != beforeOffset {
+		t.Fatalf("deferred refresh changed viewport: lines %d->%d offset %d->%d", beforeLines, m.viewport.TotalLineCount(), beforeOffset, m.viewport.YOffset)
+	}
+}
+func TestPageDownHydratesDeferredTail(t *testing.T) {
+	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
+	m.resize(80, 18)
+	m.showWelcome = false
+	for i := 0; i < 40; i++ {
+		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nmore detail", i)})
+	}
+	m.refreshViewport()
+	m.followTail = false
+	m.viewport.SetYOffset(maxInt(1, m.viewport.TotalLineCount()/3))
+	beforeLines := m.viewport.TotalLineCount()
+	m.historyState.AppendAssistantDelta("live one\nlive two\nlive three")
+	m.refreshViewport()
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	m = updated.(*bubbleModel)
+	if m.viewportStaleTail || m.viewportTailOnly {
+		t.Fatal("page down should hydrate deferred full scrollback")
+	}
+	if m.viewport.TotalLineCount() <= beforeLines {
+		t.Fatalf("hydrated viewport did not include active tail: before=%d after=%d", beforeLines, m.viewport.TotalLineCount())
+	}
+}
+func TestWelcomeCardCachesGitBranchUntilInvalidated(t *testing.T) {
+	workDir := t.TempDir()
+	gitDir := filepath.Join(workDir, ".git")
+	if err := os.MkdirAll(gitDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	head := filepath.Join(gitDir, "HEAD")
+	if err := os.WriteFile(head, []byte("ref: refs/heads/main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), workDir)
+	m.resize(80, 24)
+	first := m.welcomeCard()
+	if !strings.Contains(first, "git:(main)") {
+		t.Fatalf("initial welcome branch missing: %q", first)
+	}
+	if err := os.WriteFile(head, []byte("ref: refs/heads/dev\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if cached := m.welcomeCard(); !strings.Contains(cached, "git:(main)") {
+		t.Fatalf("welcome card unexpectedly reread git metadata: %q", cached)
+	}
+	m.invalidateWelcomeBranch()
+	if refreshed := m.welcomeCard(); !strings.Contains(refreshed, "git:(dev)") {
+		t.Fatalf("invalidated welcome branch did not refresh: %q", refreshed)
+	}
+}
+
+func TestScrollingRendersSingleComposer(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.runner = fakeConversation{}
+	m.syncPromptPlaceholder()
+	m.showWelcome = false
+	m.resize(90, 20)
+	for i := 0; i < 60; i++ {
+		m.appendLine(fmt.Sprintf("history-%02d", i))
+	}
+	m.refreshViewport()
+	m.viewport.GotoBottom()
+	m.followTail = true
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	m = updated.(*bubbleModel)
+	plain := ansi.Strip(m.View())
+	placeholder := "Ask Protonman to inspect or change this workspace"
+	if got := strings.Count(plain, placeholder); got != 1 {
+		t.Fatalf("composer rendered %d times after page-up; view=%q", got, plain)
+	}
+	if got := lipgloss.Height(m.View()); got > m.height {
+		t.Fatalf("scrolled live view height=%d exceeds terminal height=%d", got, m.height)
 	}
 }

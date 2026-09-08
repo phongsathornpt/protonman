@@ -906,3 +906,102 @@ func TestProviderSavedMessagePreservesAnthropicTypeInMemory(t *testing.T) {
 		t.Fatalf("in-memory provider type = %q, want anthropic", got.Type)
 	}
 }
+
+func TestProviderSwitch_ReconcilesIncompatibleModel(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("PROTONMAN_HOME", tempHome)
+	bModel := newTestSkillsModel(t, 1)
+	bModel.providers = map[string]config.ProviderConfig{
+		"opencode":  {Name: "opencode", BaseURL: "https://opencode.ai/zen/v1", Type: "openai"},
+		"protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-test-key", Type: "openai"},
+	}
+	bModel.activeProvider = "protonman"
+	bModel.activeModel = "pm-exclusive-model"
+	bModel.modelCatalogs.set("opencode", []model.RemoteModel{
+		{ID: "opencode-default-model"},
+		{ID: "opencode-secondary-model"},
+	})
+
+	updated, _ := bModel.Update(providerActiveSelectedMsg{providerName: "opencode"})
+	bModel = updated.(*bubbleModel)
+
+	if bModel.activeProvider != "opencode" {
+		t.Fatalf("activeProvider = %q, want 'opencode'", bModel.activeProvider)
+	}
+	if bModel.activeModel != "opencode-default-model" {
+		t.Fatalf("activeModel = %q, want 'opencode-default-model'", bModel.activeModel)
+	}
+	rendered := bModel.View()
+	if !strings.Contains(rendered, "Reconciled active model to opencode-default-model") {
+		t.Fatalf("expected reconciliation notice in view, got:\n%s", rendered)
+	}
+}
+
+func TestProviderDeleted_DeterministicFallbackAndRunnerCleanup(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("PROTONMAN_HOME", tempHome)
+	bModel := newTestSkillsModel(t, 1)
+	bModel.providers = map[string]config.ProviderConfig{
+		"zeta":  {Name: "zeta", BaseURL: "https://zeta.example.com", Type: "openai"},
+		"alpha": {Name: "alpha", BaseURL: "https://alpha.example.com", Type: "openai"},
+	}
+	bModel.activeProvider = "zeta"
+	bModel.activeModel = "zeta-model"
+	bModel.modelCatalogs.set("alpha", []model.RemoteModel{
+		{ID: "alpha-model"},
+	})
+
+	// Deleting active provider 'zeta' should deterministically fall back to alphabetically first 'alpha'
+	updated, _ := bModel.Update(providerDeletedMsg{providerName: "zeta"})
+	bModel = updated.(*bubbleModel)
+
+	if bModel.activeProvider != "alpha" {
+		t.Fatalf("activeProvider = %q, want 'alpha'", bModel.activeProvider)
+	}
+	if bModel.activeModel != "alpha-model" {
+		t.Fatalf("activeModel = %q, want 'alpha-model'", bModel.activeModel)
+	}
+
+	// Now delete remaining provider 'alpha' -> no providers remain
+	updated, _ = bModel.Update(providerDeletedMsg{providerName: "alpha"})
+	bModel = updated.(*bubbleModel)
+
+	if bModel.activeProvider != "" {
+		t.Fatalf("activeProvider = %q, want empty", bModel.activeProvider)
+	}
+	if bModel.activeModel != "" {
+		t.Fatalf("activeModel = %q, want empty", bModel.activeModel)
+	}
+	if bModel.runner != nil {
+		t.Fatal("expected runner cleared when all providers deleted")
+	}
+}
+
+func TestProviderSelect_PresetIsActiveWhenMatchesActiveProvider(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.providers = make(map[string]config.ProviderConfig)
+	bModel.activeProvider = "protonman"
+
+	bModel.executeCommand("/provider")
+	if !bModel.bottom.has(providerSelectViewID) {
+		t.Fatal("expected provider select modal open")
+	}
+	view := bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView)
+
+	var protonmanItem *providerSelectItem
+	for i := range view.items {
+		if strings.EqualFold(view.items[i].name, "protonman") {
+			protonmanItem = &view.items[i]
+			break
+		}
+	}
+	if protonmanItem == nil {
+		t.Fatal("expected protonman preset in items")
+	}
+	if !protonmanItem.isActive {
+		t.Fatal("expected protonman preset item to be active")
+	}
+	if view.items[view.index].name != "protonman" {
+		t.Fatalf("expected view cursor focused on active protonman preset, got %q", view.items[view.index].name)
+	}
+}

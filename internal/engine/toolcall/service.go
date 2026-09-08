@@ -257,6 +257,22 @@ func (s *Service) SetMode(mode permission.Mode) error {
 	return nil
 }
 
+// AddRule dynamically appends a static rule to the active permission policy.
+func (s *Service) AddRule(rule permission.Rule) error {
+	if s == nil || s.policy == nil {
+		return ErrInvalidService
+	}
+	return s.policy.AddRule(rule)
+}
+
+// Policy returns the compiled static permission policy used by the service.
+func (s *Service) Policy() *permission.Policy {
+	if s == nil {
+		return nil
+	}
+	return s.policy
+}
+
 // Definitions returns the registry snapshot used by the UI or model adapter.
 func (s *Service) Definitions() []tool.Definition {
 	return s.registry.Definitions()
@@ -279,6 +295,10 @@ func (s *Service) SetCallGuard(guard CallGuard) {
 
 // Call evaluates permission and executes one tool call if authorized.
 func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error) {
+	return s.call(ctx, call, 0)
+}
+
+func (s *Service) call(ctx context.Context, call tool.Call, recoveryDepth int) (tool.Result, error) {
 	telemetry := callTelemetry{
 		started: time.Now(),
 		call:    call,
@@ -413,7 +433,7 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 	defer executionCancel()
 	result, err := executeHandler(executionCtx, handler, call)
 	if err != nil {
-		if recoveredResult, recoveredErr, recovered := s.recoverReadOnlyCall(executionCtx, telemetry, handler, definition, validators, call, err); recovered {
+		if recoveredResult, recoveredErr, recovered := s.recoverCall(executionCtx, telemetry, handler, definition, validators, call, err, recoveryDepth); recovered {
 			result, err = recoveredResult, recoveredErr
 		}
 	}
@@ -457,31 +477,75 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 	return result, nil
 }
 
-func (s *Service) recoverReadOnlyCall(ctx context.Context, telemetry callTelemetry, handler tool.Handler, definition tool.Definition, validators compiledToolValidators, call tool.Call, err error) (tool.Result, error, bool) {
+func (s *Service) recoverCall(ctx context.Context, telemetry callTelemetry, handler tool.Handler, definition tool.Definition, validators compiledToolValidators, call tool.Call, err error, recoveryDepth int) (tool.Result, error, bool) {
 	failure := tool.FailureFromError(err)
-	if failure == nil || failure.Recovery == nil || failure.Recovery.Action != tool.RecoveryRestartPagination {
+	if failure == nil || failure.Recovery == nil {
 		return tool.Result{}, nil, false
 	}
-	action := failure.Recovery.Action
-	if failure.Recovery.Tool != definition.Name || tool.EffectiveMutability(definition) != tool.MutabilityReadOnly {
+	switch failure.Recovery.Action {
+	case tool.RecoveryRestartPagination:
+		return s.recoverPagination(ctx, telemetry, handler, definition, validators, call, failure.Recovery)
+	case tool.RecoveryUseDedicatedTool:
+		return s.recoverDedicatedTool(ctx, telemetry, call, failure.Recovery, recoveryDepth)
+	default:
 		return tool.Result{}, nil, false
 	}
-	recoveryArgs := tool.NormalizeArguments(definition, failure.Recovery.Arguments)
+}
+
+func (s *Service) recoverPagination(ctx context.Context, telemetry callTelemetry, handler tool.Handler, definition tool.Definition, validators compiledToolValidators, call tool.Call, recovery *tool.Recovery) (tool.Result, error, bool) {
+	if recovery.Tool != definition.Name || tool.EffectiveMutability(definition) != tool.MutabilityReadOnly {
+		return tool.Result{}, nil, false
+	}
+	recoveryArgs := tool.NormalizeArguments(definition, recovery.Arguments)
 	if validators.input != nil {
 		if validationErr := validators.input.Validate(recoveryArgs); validationErr != nil {
 			return tool.Result{}, nil, false
 		}
 	}
-	s.observeRecovery(ctx, telemetry, EventRecoveryAttempted, action, nil)
+	s.observeRecovery(ctx, telemetry, EventRecoveryAttempted, recovery.Action, nil)
 	retry := call
 	retry.Arguments = recoveryArgs
 	result, retryErr := executeHandler(ctx, handler, retry)
 	if retryErr != nil {
-		s.observeRecovery(ctx, telemetry, EventRecoveryFailed, action, retryErr)
+		s.observeRecovery(ctx, telemetry, EventRecoveryFailed, recovery.Action, retryErr)
 	} else {
-		s.observeRecovery(ctx, telemetry, EventRecoverySucceeded, action, nil)
+		s.observeRecovery(ctx, telemetry, EventRecoverySucceeded, recovery.Action, nil)
 	}
 	return result, retryErr, true
+}
+
+func (s *Service) recoverDedicatedTool(ctx context.Context, telemetry callTelemetry, call tool.Call, recovery *tool.Recovery, recoveryDepth int) (tool.Result, error, bool) {
+	if recoveryDepth > 0 || recovery == nil || strings.TrimSpace(recovery.Tool) == "" || recovery.Tool == call.Name {
+		return tool.Result{}, nil, false
+	}
+	handler, ok := s.registry.Lookup(recovery.Tool)
+	if !ok {
+		return tool.Result{}, nil, false
+	}
+	definition := handler.Definition()
+	recoveryArgs := tool.NormalizeArguments(definition, recovery.Arguments)
+	if tool.EffectiveCallMutability(definition, recoveryArgs) != tool.MutabilityReadOnly ||
+		definition.Safety.Boundary != tool.BoundaryPolicyWorkspaceRead {
+		return tool.Result{}, nil, false
+	}
+	validators, err := s.validatorsFor(definition)
+	if err != nil || validators.input != nil && validators.input.Validate(recoveryArgs) != nil {
+		return tool.Result{}, nil, false
+	}
+	recoveryCall, err := tool.NewCall(call.ID+":recovery", definition.Name, recoveryArgs)
+	if err != nil {
+		return tool.Result{}, nil, false
+	}
+	s.observeRecovery(ctx, telemetry, EventRecoveryAttempted, recovery.Action, nil)
+	result, recoveryErr := s.call(ctx, recoveryCall, recoveryDepth+1)
+	if recoveryErr != nil {
+		s.observeRecovery(ctx, telemetry, EventRecoveryFailed, recovery.Action, recoveryErr)
+	} else {
+		s.observeRecovery(ctx, telemetry, EventRecoverySucceeded, recovery.Action, nil)
+	}
+	result.CallID = call.ID
+	result.ToolName = call.Name
+	return result, recoveryErr, true
 }
 
 func validatorsForRegistry(registry tool.Registry, definition tool.Definition) (compiledToolValidators, error) {

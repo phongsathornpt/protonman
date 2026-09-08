@@ -1,172 +1,33 @@
-package builtin
+package readfile
 
 import (
 	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin/support"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
-	"github.com/phongsathornpt/protonman/internal/core/workspace"
 )
 
-const maxReadFileBytes = 2 * 1024 * 1024
-
-type readFileHandler struct {
-	workspace *workspace.Workspace
-}
-
-type readFileInput struct {
-	Path         string `json:"path"`
-	Offset       int64  `json:"offset,omitempty"`
-	Limit        int    `json:"limit,omitempty"`
-	Continuation string `json:"continuation,omitempty"`
-	StartLine    int    `json:"start_line,omitempty"`
-	EndLine      int    `json:"end_line,omitempty"`
-	LineNumbers  bool   `json:"line_numbers,omitempty"`
-}
-
-// NewReadFile returns the filesystem read adapter.
-func NewReadFile(workspaceRoot *workspace.Workspace) tool.Handler {
-	return readFileHandler{workspace: workspaceRoot}
-}
-
-func (readFileHandler) Definition() tool.Definition {
-	return tool.Definition{
-		Name:                "read_file",
-		Description:         "Read a UTF-8 text file from the current workspace, with optional 1-based line ranges and line numbers; complete full-file reads also return SHA-256 evidence. Prefer this over shell cat, head, tail, nl, sed, wc, or sha* used only to inspect or re-verify file contents.",
-		Kind:                tool.KindForName("read_file"),
-		Mutability:          tool.MutabilityReadOnly,
-		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead},
-		Evidence:            tool.EvidenceWorkspace,
-		PermissionDetailKey: "path",
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"path": map[string]any{
-					"type":        "string",
-					"description": "Path to the file to read",
-				},
-				"offset": map[string]any{
-					"type":        "integer",
-					"minimum":     0,
-					"description": "Byte offset to start reading from; use next_offset from a truncated result",
-				},
-				"continuation": map[string]any{
-					"type":        "string",
-					"description": "Snapshot token from a truncated result; send it with next_offset to detect file changes",
-				},
-				"limit": map[string]any{
-					"type":        "integer",
-					"minimum":     0,
-					"maximum":     maxReadFileBytes,
-					"description": "Target page size in bytes; defaults to 2 MiB and may extend to finish one UTF-8 code point",
-				},
-				"start_line": map[string]any{
-					"type":        "integer",
-					"minimum":     0,
-					"description": "Optional 1-based first line to read; use with end_line for narrow source inspection",
-				},
-				"end_line": map[string]any{
-					"type":        "integer",
-					"minimum":     0,
-					"description": "Optional 1-based inclusive last line; 0 reads through EOF",
-				},
-				"line_numbers": map[string]any{
-					"type":        "boolean",
-					"description": "Prefix selected lines with their 1-based line number",
-				},
-			},
-			"required":             []string{"path"},
-			"additionalProperties": false,
-		},
-	}
-}
-
-func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
-	if h.workspace == nil {
-		return tool.Result{}, fmt.Errorf("read_file workspace is required")
-	}
-	var input readFileInput
-	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode read_file arguments", err)
-	}
-	input.Path = strings.TrimSpace(input.Path)
-	if input.Path == "" {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file path is required")
-	}
-	if input.Offset < 0 {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file offset must be non-negative")
-	}
-	if input.StartLine < 0 || input.EndLine < 0 {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file start_line and end_line must be non-negative")
-	}
-	lineMode := input.StartLine > 0 || input.EndLine > 0 || input.LineNumbers
-	if lineMode && (input.Offset != 0 || input.Continuation != "") {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file line selection cannot be combined with offset or continuation")
-	}
-	if input.StartLine == 0 && input.EndLine > 0 {
-		input.StartLine = 1
-	}
-	if input.EndLine > 0 && input.EndLine < input.StartLine {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file end_line must be greater than or equal to start_line")
-	}
-	if input.Limit < 0 || input.Limit > maxReadFileBytes {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file limit must be between 1 byte and 2 MiB")
-	}
-	if input.Limit == 0 {
-		input.Limit = maxReadFileBytes
-	}
-	path, err := h.workspace.ResolveRead(ctx, input.Path)
-	if err != nil {
-		return tool.Result{}, err
-	}
-
-	file, err := h.workspace.OpenReadFile(ctx, path)
-	if err != nil {
-		return tool.Result{}, fmt.Errorf("open %q: %w", input.Path, err)
-	}
-	fileInfo, err := file.Stat()
-	if err != nil {
-		_ = file.Close()
-		return tool.Result{}, fmt.Errorf("stat %q: %w", input.Path, err)
-	}
-	if fileInfo.IsDir() {
-		_ = file.Close()
-		return tool.Result{}, tool.NewToolError(
-			tool.ErrorCodeInvalidArguments,
-			fmt.Sprintf("%q is a directory; use list_dir instead", input.Path),
-		)
-	}
-	if !fileInfo.Mode().IsRegular() {
-		_ = file.Close()
-		return tool.Result{}, tool.NewToolError(
-			tool.ErrorCodeInvalidArguments,
-			fmt.Sprintf("%q is not a regular file", input.Path),
-		)
-	}
-	if lineMode {
-		return readFileLines(ctx, file, input, call)
-	}
-
+func readTextBytes(ctx context.Context, file *os.File, fileInfo os.FileInfo, input readFileInput, call tool.Call) (tool.Result, error) {
 	size := fileInfo.Size()
-	continuation, err := continuationToken("read_file", struct {
+	continuation, err := support.ContinuationToken("read_file", struct {
 		Path string `json:"path"`
-	}{Path: input.Path}, fileSnapshot(fileInfo))
+	}{Path: input.Path}, support.FileSnapshot(fileInfo))
 	if err != nil {
 		_ = file.Close()
 		return tool.Result{}, err
 	}
 	if input.Continuation != "" && input.Continuation != continuation {
 		_ = file.Close()
-		return tool.Result{}, stalePaginationError("read_file", "read_file continuation is stale; restart from offset 0", call.Arguments)
+		return tool.Result{}, support.StalePaginationError("read_file", "read_file continuation is stale; restart from offset 0", call.Arguments)
 	}
 	if input.Offset > size {
 		input.Offset = size
@@ -249,7 +110,7 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 			}
 			return ""
 		}(),
-		Pagination: paginationState(truncated, "offset", nextOffset, nil, continuation),
+		Pagination: support.PaginationState(truncated, "offset", nextOffset, nil, continuation),
 	}, nil
 }
 func readFileLines(ctx context.Context, file *os.File, input readFileInput, call tool.Call) (tool.Result, error) {
@@ -263,7 +124,7 @@ func readFileLinesBounded(ctx context.Context, file *os.File, input readFileInpu
 	}
 
 	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 64*1024), maxReadFileBytes+utf8.UTFMax)
+	scanner.Buffer(make([]byte, 64*1024), MaxReadFileBytes+utf8.UTFMax)
 	scanner.Split(scanLinesKeepEnd)
 
 	var output strings.Builder
@@ -333,7 +194,7 @@ func readFileLinesBounded(ctx context.Context, file *os.File, input readFileInpu
 		ToolName:   call.Name,
 		Output:     text,
 		Truncated:  truncated,
-		Pagination: paginationState(truncated, "line", nil, nextLine, ""),
+		Pagination: support.PaginationState(truncated, "line", nil, nextLine, ""),
 	}, nil
 }
 

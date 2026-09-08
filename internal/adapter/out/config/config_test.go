@@ -648,3 +648,64 @@ reasoning_effort = "high"
 		}
 	}
 }
+
+func TestSaveUserPermissionRuleRoundTrip(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+
+	rule := permission.Rule{
+		Action:      permission.ActionAllow,
+		Tool:        permission.ToolRead,
+		Pattern:     "*.go",
+		PatternMode: permission.PatternModeGlob,
+	}
+
+	if err := SaveUserPermissionRule(homeDir, rule); err != nil {
+		t.Fatalf("SaveUserPermissionRule error: %v", err)
+	}
+
+	// Saving identical rule is deduplicated
+	if err := SaveUserPermissionRule(homeDir, rule); err != nil {
+		t.Fatalf("SaveUserPermissionRule duplicate error: %v", err)
+	}
+
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+
+	if len(snapshot.Permission.Rules) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(snapshot.Permission.Rules))
+	}
+	r := snapshot.Permission.Rules[0]
+	if r.Action != permission.ActionAllow || r.Tool != permission.ToolRead || r.Pattern != "*.go" {
+		t.Fatalf("unexpected saved rule: %+v", r)
+	}
+}
+
+func TestLoadPermissionRuleAllPattern(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[permission]
+default = "ask"
+
+[[permission.rules]]
+action = "allow"
+tool = "bash"
+pattern = "all"
+`)
+
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+
+	if len(snapshot.Permission.Rules) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(snapshot.Permission.Rules))
+	}
+	r := snapshot.Permission.Rules[0]
+	if r.Action != permission.ActionAllow || r.Tool != permission.ToolBash || r.Pattern != "*" {
+		t.Fatalf("unexpected rule decoded: %+v", r)
+	}
+}

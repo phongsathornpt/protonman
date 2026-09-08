@@ -19,13 +19,13 @@ type callMetadata struct {
 
 var builtinMetadata = map[string]callMetadata{
 	"read_file":          {Metadata: Metadata{Name: "read_file", Kind: KindRead, DisplayName: "Read"}, title: titleReadFile, target: targetReadFile, affectedPaths: affectedSinglePath("path", "file_path", "file", "filename", "target")},
+	"calculate":          {Metadata: Metadata{Name: "calculate", Kind: KindCompute, DisplayName: "Calculate"}, title: titleCalculate, target: targetCalculate},
 	"write_file":         {Metadata: Metadata{Name: "write_file", Kind: KindEdit, DisplayName: "Write"}, title: titleWriteFile, target: targetEditPath, affectedPaths: affectedSinglePath("file_path", "path", "file", "filename", "target", "destination", "move_path")},
 	"search_replace":     {Metadata: Metadata{Name: "search_replace", Kind: KindEdit, DisplayName: "Edit"}, title: titleSearchReplace, target: targetEditPath, affectedPaths: affectedSinglePath("file_path", "path", "file", "filename", "target", "destination", "move_path")},
 	"apply_patch":        {Metadata: Metadata{Name: "apply_patch", Kind: KindEdit, DisplayName: "Patch"}, title: titleApplyPatch, target: targetApplyPatch, affectedPaths: affectedPatch},
 	"list_dir":           {Metadata: Metadata{Name: "list_dir", Kind: KindRead, DisplayName: "List"}, title: titleListDir, target: targetListDir},
 	"find_files":         {Metadata: Metadata{Name: "find_files", Kind: KindRead, DisplayName: "Find files"}, title: titleFindFiles, target: targetFindFiles},
 	"grep":               {Metadata: Metadata{Name: "grep", Kind: KindGrep, DisplayName: "Search"}, title: titleGrep, target: targetGrep},
-	"inspect_code":       {Metadata: Metadata{Name: "inspect_code", Kind: KindGrep, DisplayName: "Inspect code"}, title: titleInspectCode, target: targetInspectCode},
 	"bash":               {Metadata: Metadata{Name: "bash", Kind: KindBash, DisplayName: "Run"}, title: titleBash, target: targetBash},
 	"web_fetch":          {Metadata: Metadata{Name: "web_fetch", Kind: KindWebFetch, DisplayName: "Fetch"}, title: titleWebFetch, target: targetWebFetch},
 	"web_search":         {Metadata: Metadata{Name: "web_search", Kind: KindWebSearch, DisplayName: "Search web"}, title: titleWebSearch, target: targetWebSearch},
@@ -57,6 +57,14 @@ func titleConstant(value string) func(map[string]any) string {
 func targetConstant(value string) func(map[string]any) string {
 	return func(map[string]any) string { return value }
 }
+
+func titleCalculate(args map[string]any) string {
+	if expression := ExtractString(args, "expression"); expression != "" {
+		return "Calculate " + expression
+	}
+	return "Calculate"
+}
+func targetCalculate(args map[string]any) string { return ExtractString(args, "expression") }
 
 func titleReadFile(args map[string]any) string {
 	if path := ExtractString(args, "path", "file_path", "file"); path != "" {

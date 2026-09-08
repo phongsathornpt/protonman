@@ -204,7 +204,7 @@ func (m *bubbleModel) acceptSlash(run bool) (applied bool, command tea.Cmd) {
 		m.bottom.remove(slashViewID)
 		return true, nil
 	}
-	prompt.Reset()
+	m.resetPrompt()
 	m.bottom.remove(slashViewID)
 	return true, m.dispatch(insertion)
 }
@@ -537,8 +537,14 @@ func (m *bubbleModel) executeProjectCommand(line, rawName string) tea.Cmd {
 			settingArgs = strings.Join(fields[1:], " ")
 		}
 		return m.handleProjectSet(settingArgs)
+	case "permission":
+		permArgs := ""
+		if len(fields) > 1 {
+			permArgs = strings.Join(fields[1:], " ")
+		}
+		return m.handleProjectPermission(permArgs)
 	default:
-		m.appendError("usage: /project [status|reload|init|set <setting> <value>]")
+		m.appendError("usage: /project [status|reload|init|set <setting> <value>|permission <allow|deny|ask> <tool> [pattern]]")
 		m.refreshViewport()
 		return nil
 	}

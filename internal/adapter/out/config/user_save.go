@@ -9,6 +9,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -107,6 +108,19 @@ func SaveUserMaxToolCalls(homeDir string, maxToolCalls int) error {
 	}
 	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
 		doc.Agent.MaxToolCalls = &maxToolCalls
+	})
+}
+
+// SaveUserPermissionRule adds a static permission rule to ~/.protonman/config.toml.
+func SaveUserPermissionRule(homeDir string, rule permission.Rule) error {
+	if !rule.Action.Valid() {
+		return fmt.Errorf("invalid permission action: %v", rule.Action)
+	}
+	if !permission.ValidToolKind(rule.Tool) {
+		return fmt.Errorf("invalid permission tool kind: %q", rule.Tool)
+	}
+	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
+		appendRuleToDocument(doc, rule)
 	})
 }
 

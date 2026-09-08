@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin/support"
 	"hash"
 	"io"
 	"os"
@@ -160,7 +161,7 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	if strings.TrimSpace(searchPath) == "" {
 		searchPath = "."
 	}
-	resolvedPath, err := h.workspace.ResolveRead(ctx, searchPath)
+	resolvedPath, err := h.workspace.ResolveExistingRead(ctx, searchPath)
 	if err != nil {
 		return tool.Result{}, err
 	}
@@ -175,7 +176,7 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		return tool.Result{}, err
 	}
 	query := struct{ Pattern, Path, Include string }{input.Pattern, searchPath, input.Include}
-	queryHash, err := continuationToken("grep-query", query, "")
+	queryHash, err := support.ContinuationToken("grep-query", query, "")
 	if err != nil {
 		return tool.Result{}, err
 	}
@@ -185,11 +186,11 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	if input.Continuation != "" {
 		decoded, isCursor, decodeErr := decodeGrepContinuation(input.Continuation)
 		if decodeErr != nil {
-			return tool.Result{}, stalePaginationError("grep", decodeErr.Error(), call.Arguments)
+			return tool.Result{}, support.StalePaginationError("grep", decodeErr.Error(), call.Arguments)
 		}
 		if isCursor {
 			if decoded.Query != queryHash || decoded.Matches != input.Offset {
-				return tool.Result{}, stalePaginationError("grep", "grep continuation does not match this query or offset; restart from offset 0", call.Arguments)
+				return tool.Result{}, support.StalePaginationError("grep", "grep continuation does not match this query or offset; restart from offset 0", call.Arguments)
 			}
 			resume = decoded
 			resumeActive = true
@@ -284,16 +285,23 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		return nil
 	})
 	if walkErr != nil {
-		return tool.Result{}, fmt.Errorf("grep workspace: %w", walkErr)
+		switch {
+		case errors.Is(walkErr, os.ErrNotExist):
+			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeNotFound, fmt.Sprintf("grep path does not exist: %q", searchPath), walkErr)
+		case errors.Is(walkErr, os.ErrPermission):
+			return tool.Result{}, tool.WrapToolError(tool.ErrorCodePermissionDenied, fmt.Sprintf("cannot search path: %q", searchPath), walkErr)
+		default:
+			return tool.Result{}, fmt.Errorf("grep path %q: %w", searchPath, walkErr)
+		}
 	}
 	snapshot := hex.EncodeToString(snapshotHash.Sum(nil))
 	if legacyContinuation != "" {
-		legacyToken, tokenErr := continuationToken("grep", query, snapshot)
+		legacyToken, tokenErr := support.ContinuationToken("grep", query, snapshot)
 		if tokenErr != nil {
 			return tool.Result{}, tokenErr
 		}
 		if legacyContinuation != legacyToken {
-			return tool.Result{}, stalePaginationError("grep", "grep continuation is stale; restart from offset 0", call.Arguments)
+			return tool.Result{}, support.StalePaginationError("grep", "grep continuation is stale; restart from offset 0", call.Arguments)
 		}
 	}
 
@@ -322,7 +330,7 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		Truncated:    truncated,
 		NextOffset:   nextOffset,
 		Continuation: continuation,
-		Pagination:   paginationState(truncated, "offset", nextOffset, nil, continuation),
+		Pagination:   support.PaginationState(truncated, "offset", nextOffset, nil, continuation),
 	}, nil
 }
 

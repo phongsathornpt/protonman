@@ -8,12 +8,14 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	domainmodel "github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"strings"
 	"testing"
 	"time"
@@ -894,5 +896,158 @@ func TestPlanModeAllowsTaskMetadataButBlocksWorkspaceEdit(t *testing.T) {
 				t.Fatalf("task metadata blocked in plan mode: %v", err)
 			}
 		})
+	}
+}
+
+func TestModelSelect_ReconcilesIncompatibleReasoningEffort(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.activeProvider = "openai"
+	bModel.activeModel = "o3-mini"
+	bModel.reasoningEffort = sdk.ReasoningHigh
+	bModel.providers = map[string]config.ProviderConfig{
+		"openai": {Name: "openai", BaseURL: "https://api.openai.com/v1", APIKey: "test-key"},
+	}
+	// Populate catalog entry for gpt-4o declaring no reasoning support
+	noReasoning := false
+	bModel.modelCatalogs.set("openai", []domainmodel.RemoteModel{
+		{ID: "gpt-4o", Reasoning: &modelprofile.CatalogReasoning{Supported: &noReasoning}},
+	})
+
+	// Switch to gpt-4o which does not support reasoning
+	msg := modelSelectedMsg{
+		providerName: "openai",
+		modelID:      "gpt-4o",
+	}
+	updated, _ := bModel.Update(msg)
+	bModel = updated.(*bubbleModel)
+
+	if bModel.activeModel != "gpt-4o" {
+		t.Fatalf("activeModel = %q, want gpt-4o", bModel.activeModel)
+	}
+	if bModel.reasoningEffort != sdk.ReasoningDefault {
+		t.Fatalf("reasoningEffort was not reset to auto: got %q", bModel.reasoningEffort)
+	}
+}
+
+func TestReconfigureRunner_InvalidatesRunnerOnError(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.activeProvider = "openai"
+	bModel.activeModel = "non-existent-model"
+	bModel.providers = map[string]config.ProviderConfig{
+		"openai": {Name: "openai", BaseURL: "https://api.openai.com/v1", APIKey: ""}, // empty key -> no auth
+	}
+	bModel.reconfigureRunner()
+	if bModel.runner != nil {
+		t.Fatal("expected runner to be nil when provider lacks valid auth")
+	}
+}
+
+func TestModelPicker_OllamaKeylessDiscovery(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.providers = map[string]config.ProviderConfig{
+		"ollama": {Name: "ollama", BaseURL: "http://localhost:11434", APIKey: ""},
+	}
+	view := newModelSelectPaneView(bModel)
+	for i, name := range view.providerNames {
+		if strings.EqualFold(name, "ollama") {
+			view.providerIndex = i
+			break
+		}
+	}
+	cmd := view.loadProvider(bModel, true)
+	if cmd == nil {
+		t.Fatal("expected discovery command for keyless Ollama provider")
+	}
+}
+
+func TestModelPicker_EmptyFilterShowsSearchInput(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/model")
+	view, ok := bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if !ok || view == nil {
+		t.Fatal("expected modelSelectViewID open")
+	}
+	view.filter = "nonexistent-model-xyz"
+	view.filtering = true
+	view.applyFilter(bModel.activeModel)
+	rendered := view.Render(bModel)
+	if !strings.Contains(rendered, "Search: nonexistent-model-xyz") {
+		t.Fatalf("expected search query in rendered output: %s", rendered)
+	}
+	if !strings.Contains(rendered, "No models match") {
+		t.Fatalf("expected 'No models match' in rendered output: %s", rendered)
+	}
+}
+
+func TestModelPicker_ShiftTabCyclesProvidersWithoutLeaking(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.providers = map[string]config.ProviderConfig{
+		"alpha": {Name: "alpha", BaseURL: "https://alpha.example.com", APIKey: "k1"},
+		"beta":  {Name: "beta", BaseURL: "https://beta.example.com", APIKey: "k2"},
+	}
+	bModel.executeCommand("/model")
+	view, ok := bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if !ok || view == nil {
+		t.Fatal("expected modelSelectViewID open")
+	}
+	initialIdx := view.providerIndex
+	initialMode := bModel.service.Mode()
+
+	handled, _ := view.HandleKey(bModel, tea.KeyMsg{Type: tea.KeyShiftTab})
+	if !handled {
+		t.Fatal("shift+tab was not handled by model picker")
+	}
+	if bModel.service.Mode() != initialMode {
+		t.Fatalf("permission mode changed from %s to %s on shift+tab", initialMode, bModel.service.Mode())
+	}
+	if view.providerIndex == initialIdx && len(view.providerNames) > 1 {
+		t.Fatalf("providerIndex did not change on shift+tab: %d", view.providerIndex)
+	}
+}
+
+func TestModelPicker_EnterWhileFilteringSelectsModel(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/model")
+	view, ok := bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if !ok || view == nil {
+		t.Fatal("expected modelSelectViewID open")
+	}
+	view.models = []domainmodel.RemoteModel{
+		{ID: "deepseek-chat", Name: "DeepSeek Chat"},
+	}
+	view.filtering = true
+	view.index = 0
+
+	handled, cmd := view.HandleKey(bModel, tea.KeyMsg{Type: tea.KeyEnter})
+	if !handled {
+		t.Fatal("enter while filtering was not handled")
+	}
+	if cmd == nil {
+		t.Fatal("expected saveDefaultModelCmd returned on enter while filtering")
+	}
+	if bModel.bottom.has(modelSelectViewID) {
+		t.Fatal("expected model picker closed after enter selection")
+	}
+}
+
+func TestModelPicker_EnterOnZeroMatchesDoesNotOpenProviderEditor(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/model")
+	view, ok := bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if !ok || view == nil {
+		t.Fatal("expected modelSelectViewID open")
+	}
+	view.models = nil
+	view.filtering = false
+
+	handled, cmd := view.HandleKey(bModel, tea.KeyMsg{Type: tea.KeyEnter})
+	if !handled {
+		t.Fatal("enter on 0 matches was not handled")
+	}
+	if cmd != nil {
+		t.Fatal("unexpected command on enter with 0 models")
+	}
+	if bModel.bottom.has(providerViewID) {
+		t.Fatal("enter on 0 models should not open providerViewID")
 	}
 }

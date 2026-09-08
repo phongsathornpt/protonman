@@ -14,6 +14,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,14 +25,54 @@ import (
 	"time"
 )
 
-func (m bubbleModel) welcomeCard() string {
+type welcomeCardCache struct {
+	workDir     string
+	branch      string
+	branchValid bool
+	width       int
+	height      int
+	rendered    string
+	renderValid bool
+}
+
+func (m *bubbleModel) welcomeCard() string {
+	if m == nil {
+		return ""
+	}
+	cache := &m.welcomeCache
+	if cache.workDir != m.workDir {
+		*cache = welcomeCardCache{workDir: m.workDir}
+	}
+	if !cache.branchValid {
+		cache.branch = detectGitBranch(m.workDir)
+		cache.branchValid = true
+		cache.renderValid = false
+	}
+	if cache.renderValid && cache.width == m.width && cache.height == m.height {
+		return cache.rendered
+	}
+	cache.rendered = m.renderWelcomeCard(cache.branch)
+	cache.width = m.width
+	cache.height = m.height
+	cache.renderValid = true
+	return cache.rendered
+}
+
+func (m *bubbleModel) invalidateWelcomeBranch() {
+	if m == nil {
+		return
+	}
+	m.welcomeCache.branchValid = false
+	m.welcomeCache.renderValid = false
+}
+
+func (m *bubbleModel) renderWelcomeCard(branch string) string {
 	mode := layoutModeForHeight(m.height)
 	if mode != layoutNormal || m.width < 60 {
 		return brandLockup(m.width)
 	}
 	rows := []string{brandLockup(m.width), ""}
 	if ws := formatWorkspaceDisplay(m.workDir); ws != "" {
-		branch := detectGitBranch(m.workDir)
 		branchBadge := ""
 		if branch != "" {
 			branchBadge = " " + mutedStyle.Render("git:(") + systemStyle.Render(branch) + mutedStyle.Render(")")
@@ -119,11 +160,21 @@ func detectGitBranch(dir string) string {
 	return ""
 }
 
-func promptPlaceholder(hasRunner bool) string {
-	if hasRunner {
+func promptPlaceholder(hasRunner bool, mode permission.Mode, planMode bool) string {
+	if !hasRunner {
+		return "Type a message or /command…"
+	}
+	if planMode {
+		return "Ask Protonman to plan or inspect (plan mode · read-only)…"
+	}
+	switch mode {
+	case permission.ModeAlwaysApprove:
+		return "Ask Protonman (auto-approve active · commands run without prompt)…"
+	case permission.ModeDeny:
+		return "Ask Protonman to inspect (deny mode · mutations blocked)…"
+	default:
 		return "Ask Protonman to inspect or change this workspace…"
 	}
-	return "Type a message or /command…"
 }
 
 func (m *bubbleModel) resetTranscript() {
@@ -381,12 +432,48 @@ func agentActivityCounts(snapshot []agent.AgentStatus) (active, running, queued,
 	return active, running, queued, canceling
 }
 
-func (m bubbleModel) infoView() string {
+type infoViewCacheKey struct {
+	width            int
+	height           int
+	planMode         bool
+	permissionMode   permission.Mode
+	activeModel      string
+	reasoningEffort  sdk.ReasoningEffort
+	queueLen         int
+	subagentsEnabled bool
+	activeSkillCount int
+	activeSkill      string
+}
+
+type infoViewCache struct {
+	key   infoViewCacheKey
+	value string
+	valid bool
+}
+
+func (m *bubbleModel) infoView() string {
 	if view := m.permissionView(); view != nil {
 		if view.parked {
 			return mutedStyle.Render("tab review · y once · s session · n deny")
 		}
 		return mutedStyle.Render("y once · s session · n deny · esc review")
+	}
+	permissionMode := permission.ModeAsk
+	if m.service != nil {
+		permissionMode = m.service.Mode()
+	}
+	activeSkillCount := 0
+	activeSkill := ""
+	if layoutModeForHeight(m.height) == layoutNormal && m.skills != nil {
+		active := m.skills.ActivatedList()
+		activeSkillCount = len(active)
+		if len(active) == 1 {
+			activeSkill = active[0]
+		}
+	}
+	key := infoViewCacheKey{width: m.width, height: m.height, planMode: m.planMode, permissionMode: permissionMode, activeModel: m.activeModel, reasoningEffort: m.reasoningEffort, queueLen: len(m.queue), subagentsEnabled: m.subagentsEnabled, activeSkillCount: activeSkillCount, activeSkill: activeSkill}
+	if m.infoCache.valid && m.infoCache.key == key {
+		return m.infoCache.value
 	}
 	targetWidth := m.width - 2
 	if targetWidth <= 0 {
@@ -410,10 +497,13 @@ func (m bubbleModel) infoView() string {
 		}
 		return false
 	}
-	addPart(m.modeChip())
+	addPart(m.modeChipFor(permissionMode))
 	if m.activeModel != "" {
 		cleanModel := truncateWithEllipsis(m.activeModel, maxInt(8, targetWidth/3))
 		addPart(brandStyle.Render("model: " + cleanModel))
+	}
+	if m.reasoningEffort != sdk.ReasoningDefault && m.reasoningEffort != "" {
+		addPart(brandStyle.Render("thinking: " + string(m.reasoningEffort)))
 	}
 	if n := len(m.queue); n > 0 {
 		addPart(mutedStyle.Render(fmt.Sprintf("%d queued", n)))
@@ -421,13 +511,12 @@ func (m bubbleModel) infoView() string {
 	if !m.subagentsEnabled {
 		addPart(warningStyle.Render("subagents off"))
 	}
-	if mode == layoutNormal && m.skills != nil {
-		active := m.skills.ActivatedList()
-		if len(active) == 1 {
-			cleanSkill := truncateWithEllipsis(active[0], maxInt(14, targetWidth/3))
+	if mode == layoutNormal {
+		if activeSkillCount == 1 {
+			cleanSkill := truncateWithEllipsis(activeSkill, maxInt(14, targetWidth/3))
 			addPart(successStyle.Render("skill: " + cleanSkill))
-		} else if len(active) > 1 {
-			addPart(successStyle.Render(fmt.Sprintf("%d skills active", len(active))))
+		} else if activeSkillCount > 1 {
+			addPart(successStyle.Render(fmt.Sprintf("%d skills active", activeSkillCount)))
 		}
 	}
 	candidates := make([]string, 0, 2)
@@ -440,16 +529,22 @@ func (m bubbleModel) infoView() string {
 	for _, cand := range candidates {
 		addPart(mutedStyle.Render(cand))
 	}
-	return strings.Join(parts, mutedStyle.Render(sepStr))
+	value := strings.Join(parts, mutedStyle.Render(sepStr))
+	m.infoCache = infoViewCache{key: key, value: value, valid: true}
+	return value
 }
 
-func (m bubbleModel) modeChip() string {
-	if m.planMode {
-		return planStyle.Render("mode: plan · read-only")
-	}
+func (m *bubbleModel) modeChip() string {
 	mode := permission.ModeAsk
 	if m.service != nil {
 		mode = m.service.Mode()
+	}
+	return m.modeChipFor(mode)
+}
+
+func (m *bubbleModel) modeChipFor(mode permission.Mode) string {
+	if m.planMode {
+		return planStyle.Render("mode: plan · read-only")
 	}
 	if m.width < 40 {
 		switch mode {
@@ -530,6 +625,7 @@ func (m *bubbleModel) setPlanMode(argument string) {
 
 func (m *bubbleModel) setPlanEnabled(enabled bool) {
 	m.planMode = enabled
+	m.syncPromptPlaceholder()
 	if !enabled {
 		m.service.SetCallGuard(nil)
 		m.agents.SetCallGuard(nil)
@@ -705,7 +801,14 @@ func (m bubbleModel) todoView() string {
 		return renderSummary(summary + " · " + shortcutHelp(m.keys.ToggleTodo))
 	}
 	limit := todoVisibleRows(m.height)
-	lines := []string{renderSummary(summary)}
+	header := summary + " · " + shortcutHelp(m.keys.ToggleTodo)
+	headerWidth := ansi.StringWidth(header)
+	divLen := maxInt(0, m.width-headerWidth-6)
+	divider := ""
+	if divLen > 0 {
+		divider = " " + strings.Repeat("─", divLen)
+	}
+	lines := []string{brandStyle.Render(truncateWithEllipsis("── "+header+divider, maxInt(1, m.width-2)))}
 	shown := 0
 	for _, status := range []tododomain.Status{tododomain.StatusInProgress, tododomain.StatusPending, tododomain.StatusCompleted} {
 		for _, item := range m.todo {
@@ -727,12 +830,12 @@ func todoCounts(items []TodoItem) (completed, active, pending int) {
 }
 
 func todoVisibleRows(height int) int {
-	rows := height - 18
-	if rows < 4 {
-		rows = 4
+	rows := (height - 14) / 2
+	if rows < 3 {
+		rows = 3
 	}
-	if rows > 10 {
-		rows = 10
+	if rows > 8 {
+		rows = 8
 	}
 	return rows
 }
@@ -779,18 +882,54 @@ func (m *bubbleModel) appendTodo() {
 	}
 }
 
-func (m bubbleModel) promptView() string {
+type promptBoxChromeCache struct {
+	width  int
+	bash   bool
+	top    string
+	bottom string
+	side   string
+}
+
+func (m *bubbleModel) promptView() string {
 	if m.bottom == nil || m.bottom.prompt() == nil {
 		return ""
 	}
 	if layoutModeForHeight(m.height) == layoutTiny {
 		return m.bottom.prompt().View()
 	}
-	width := maxInt(1, m.width-2)
-	var border lipgloss.TerminalColor = promptBorder
-	if m.bottom.bashMode() {
-		border = commandColor
+	boxWidth := maxInt(3, m.width)
+	innerWidth := maxInt(1, boxWidth-4)
+	bash := m.bottom.bashMode()
+	chrome := &m.promptBoxCache
+	if chrome.width != boxWidth || chrome.bash != bash || chrome.top == "" {
+		var border lipgloss.TerminalColor = promptBorder
+		if bash {
+			border = commandColor
+		}
+		style := lipgloss.NewStyle().Foreground(border)
+		chrome.width = boxWidth
+		chrome.bash = bash
+		chrome.top = style.Render("╭" + strings.Repeat("─", boxWidth-2) + "╮")
+		chrome.bottom = style.Render("╰" + strings.Repeat("─", boxWidth-2) + "╯")
+		chrome.side = style.Render("│")
 	}
-	style := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).Padding(0, 1).Width(width)
-	return style.Render(m.bottom.prompt().View())
+
+	content := strings.Split(m.bottom.prompt().View(), "\n")
+	var out strings.Builder
+	out.Grow(len(chrome.top) + len(chrome.bottom) + len(content)*(boxWidth+8))
+	out.WriteString(chrome.top)
+	for _, line := range content {
+		out.WriteByte('\n')
+		out.WriteString(chrome.side)
+		out.WriteByte(' ')
+		out.WriteString(line)
+		if pad := innerWidth - ansi.StringWidth(line); pad > 0 {
+			out.WriteString(strings.Repeat(" ", pad))
+		}
+		out.WriteByte(' ')
+		out.WriteString(chrome.side)
+	}
+	out.WriteByte('\n')
+	out.WriteString(chrome.bottom)
+	return out.String()
 }

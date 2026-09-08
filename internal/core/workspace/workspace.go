@@ -261,6 +261,26 @@ func (w *Workspace) ResolveRead(ctx context.Context, input string) (string, erro
 	return path, nil
 }
 
+// ResolveExistingRead resolves a read target and requires the final path to exist.
+// Read-only tools should prefer this over ResolveRead when a missing target is
+// a model/input error rather than a valid prospective path.
+func (w *Workspace) ResolveExistingRead(ctx context.Context, input string) (string, error) {
+	path, err := w.ResolveRead(ctx, input)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", tool.WrapToolError(tool.ErrorCodeNotFound, fmt.Sprintf("path does not exist: %q", input), err)
+		}
+		if errors.Is(err, os.ErrPermission) {
+			return "", tool.WrapToolError(tool.ErrorCodePermissionDenied, fmt.Sprintf("cannot access path: %q", input), err)
+		}
+		return "", fmt.Errorf("stat read path %q: %w", input, err)
+	}
+	return path, nil
+}
+
 // CheckAbsoluteRead validates an absolute path discovered or requested for read operations.
 // It allows paths inside the workspace root or inside any authorized read roots,
 // while checking for protected paths and symlink boundary escapes.

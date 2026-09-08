@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin/support"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -106,7 +107,7 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 		input.Limit = maxDirectoryEntries
 	}
 
-	resolvedPath, err := h.workspace.ResolveRead(ctx, targetPath)
+	resolvedPath, err := h.workspace.ResolveExistingRead(ctx, targetPath)
 	if err != nil {
 		return tool.Result{}, err
 	}
@@ -115,14 +116,14 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 		return tool.Result{}, fmt.Errorf("list %q: %w", targetPath, err)
 	}
 
-	continuation, err := continuationToken("list_dir", struct {
+	continuation, err := support.ContinuationToken("list_dir", struct {
 		Path string `json:"path"`
 	}{Path: targetPath}, "")
 	if err != nil {
 		return tool.Result{}, err
 	}
 	if input.Continuation != "" && input.Continuation != continuation {
-		return tool.Result{}, stalePaginationError("list_dir", "list_dir continuation is stale; restart from offset 0", call.Arguments)
+		return tool.Result{}, support.StalePaginationError("list_dir", "list_dir continuation is stale; restart from offset 0", call.Arguments)
 	}
 
 	allocHint := len(entries)
@@ -259,7 +260,7 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 			}
 			return ""
 		}(),
-		Pagination: paginationState(truncated, "offset", nextOffset, nil, continuation),
+		Pagination: support.PaginationState(truncated, "offset", nextOffset, nil, continuation),
 	}, nil
 }
 

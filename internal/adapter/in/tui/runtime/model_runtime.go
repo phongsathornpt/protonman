@@ -25,6 +25,7 @@ import (
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"log/slog"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -46,67 +47,75 @@ type turnProgress struct {
 }
 
 type bubbleModel struct {
-	ctx                     context.Context
-	service                 *toolcall.Service
-	registry                tool.Registry
-	skills                  *skill.Registry
-	runner                  app.Conversation
-	bridge                  *permissionBridge
-	agents                  app.Agents
-	agentEvents             <-chan agent.Event
-	agentSnapshot           []agent.AgentStatus
-	agentActivity           map[string]AgentActivity
-	agentHistory            agentui.Tracker
-	turnProgress            turnProgress
-	activeTurnOwner         string
-	workDir                 string
-	viewport                viewport.Model
-	transcriptViewport      viewport.Model
-	spinner                 spinner.Model
-	keys                    bubbleKeyMap
-	bottom                  *bottomPane
-	historyState            *HistoryState
-	queue                   []string
-	todo                    []TodoItem
-	todoStore               tododomain.Repository
-	todoRevision            uint64
-	todoViewState           todoViewState
-	todoLifecycle           todoLifecycleState
-	busy                    bool
-	activity                string
-	pendingActivity         string
-	planMode                bool
-	followTail              bool
-	showWelcome             bool
-	showTranscript          bool
-	rawTranscript           bool
-	viewportTailOnly        bool
-	viewportLineAnchors     []ScrollAnchor
-	nextID                  uint64
-	width                   int
-	height                  int
-	frameChrome             frameChrome
-	layoutGeneration        uint64
-	busyStarted             time.Time
-	turnCancel              context.CancelFunc
-	turnEvents              <-chan tea.Msg
-	messages                []model.Message
-	activeModel             string
-	activeProvider          string
-	providers               map[string]config.ProviderConfig
-	maxToolCalls            int
-	agentProfile            string
-	subagentsEnabled        bool
-	reasoningEffort         sdk.ReasoningEffort
-	sessionID               string
-	sessions                *app.Sessions
-	workspaceKey            string
-	modelCatalogs           modelCatalogState
-	runtimeConfig           config.RuntimeConfig
-	projectTrusted          bool
-	projectConfigSources    []string
-	projectConfigProvenance map[string]config.ValueSource
-	blocks                  []Block // Compatibility snapshots for existing in-package tests during the
+	ctx                       context.Context
+	service                   *toolcall.Service
+	registry                  tool.Registry
+	skills                    *skill.Registry
+	runner                    app.Conversation
+	bridge                    *permissionBridge
+	agents                    app.Agents
+	agentEvents               <-chan agent.Event
+	agentSnapshot             []agent.AgentStatus
+	agentActivity             map[string]AgentActivity
+	agentHistory              agentui.Tracker
+	turnProgress              turnProgress
+	activeTurnOwner           string
+	workDir                   string
+	viewport                  viewport.Model
+	transcriptViewport        viewport.Model
+	spinner                   spinner.Model
+	keys                      bubbleKeyMap
+	bottom                    *bottomPane
+	historyState              *HistoryState
+	queue                     []string
+	todo                      []TodoItem
+	todoStore                 tododomain.Repository
+	todoRevision              uint64
+	todoViewState             todoViewState
+	todoLifecycle             todoLifecycleState
+	busy                      bool
+	activity                  string
+	pendingActivity           string
+	planMode                  bool
+	followTail                bool
+	showWelcome               bool
+	showTranscript            bool
+	rawTranscript             bool
+	viewportTailOnly          bool
+	viewportStaleTail         bool
+	viewportCommittedRevision uint64
+	viewportActiveRevision    uint64
+	viewportLineAnchors       []ScrollAnchor
+	viewportViewCache         string
+	viewportViewDirty         bool
+	nextID                    uint64
+	width                     int
+	height                    int
+	frameChrome               frameChrome
+	welcomeCache              welcomeCardCache
+	promptBoxCache            promptBoxChromeCache
+	infoCache                 infoViewCache
+	layoutGeneration          uint64
+	busyStarted               time.Time
+	turnCancel                context.CancelFunc
+	turnEvents                <-chan tea.Msg
+	messages                  []model.Message
+	activeModel               string
+	activeProvider            string
+	providers                 map[string]config.ProviderConfig
+	maxToolCalls              int
+	agentProfile              string
+	subagentsEnabled          bool
+	reasoningEffort           sdk.ReasoningEffort
+	sessionID                 string
+	sessions                  *app.Sessions
+	workspaceKey              string
+	modelCatalogs             modelCatalogState
+	runtimeConfig             config.RuntimeConfig
+	projectTrusted            bool
+	projectConfigSources      []string
+	projectConfigProvenance   map[string]config.ValueSource
+	blocks                    []Block // Compatibility snapshots for existing in-package tests during the
 	// migration. Runtime ownership lives in bottom/historyState.
 
 	prompt      *textarea.Model
@@ -149,6 +158,7 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	ui.prompt = bottom.prompt()
 	ui.loadInitialMessages(messages)
 	ui.syncComponentsToLegacy()
+	ui.syncPromptPlaceholder()
 	ui.relayout()
 	return ui
 }
@@ -205,7 +215,7 @@ func (m *bubbleModel) submit() tea.Cmd {
 	line := strings.TrimSpace(prompt.Value())
 	if m.bottom.bashMode() {
 		if line == "" {
-			prompt.Reset()
+			m.resetPrompt()
 			m.bottom.remove(slashViewID)
 			m.setBashMode(false)
 			return nil
@@ -214,12 +224,12 @@ func (m *bubbleModel) submit() tea.Cmd {
 			if !m.enqueuePrompt("!" + line) {
 				return nil
 			}
-			prompt.Reset()
+			m.resetPrompt()
 			m.bottom.remove(slashViewID)
 			m.refreshViewport()
 			return nil
 		}
-		prompt.Reset()
+		m.resetPrompt()
 		m.bottom.remove(slashViewID)
 		m.setBashMode(false)
 		return m.dispatchBang(line)
@@ -231,12 +241,12 @@ func (m *bubbleModel) submit() tea.Cmd {
 		if !m.enqueuePrompt(line) {
 			return nil
 		}
-		prompt.Reset()
+		m.resetPrompt()
 		m.bottom.remove(slashViewID)
 		m.refreshViewport()
 		return nil
 	}
-	prompt.Reset()
+	m.resetPrompt()
 	m.bottom.remove(slashViewID)
 	return m.dispatch(line)
 }
@@ -354,6 +364,8 @@ func (m *bubbleModel) reconfigureRunner() {
 		}
 	}
 	if !hasValidAuth {
+		m.runner = nil
+		m.syncPromptPlaceholder()
 		return
 	}
 	sessID := m.sessionID
@@ -365,11 +377,15 @@ func (m *bubbleModel) reconfigureRunner() {
 		remote = &resolved
 	}
 	conversation, err := app.BuildConversation(m.service, m.skills, m.agents, app.ConversationSpec{ProviderName: provName, ProviderType: prov.Type, BaseURL: prov.BaseURL, APIKey: prov.APIKey, ModelID: m.activeModel, SessionID: sessID, Workspace: m.workDir, AgentProfile: m.agentProfile, ReasoningEffort: m.reasoningEffort, MaxToolCalls: m.maxToolCalls, RequestTimeout: m.runtimeConfig.ModelRequestTimeout, TurnTimeout: m.runtimeConfig.TurnTimeout, RoundTimeout: m.runtimeConfig.RoundTimeout, RemoteModel: remote})
-	if err == nil && conversation != nil {
+	if err != nil {
+		m.appendError("failed to configure model runner: " + err.Error())
+		m.runner = nil
+		m.syncPromptPlaceholder()
+		return
+	}
+	if conversation != nil {
 		m.runner = conversation
-		if m.bottom != nil {
-			m.bottom.setHasRunner(true)
-		}
+		m.syncPromptPlaceholder()
 	}
 }
 
@@ -378,7 +394,20 @@ func (m *bubbleModel) setPermissionMode(mode permission.Mode) error {
 		return err
 	}
 	m.agents.SetPermissionMode(mode)
+	m.syncPromptPlaceholder()
 	return nil
+}
+
+func (m *bubbleModel) syncPromptPlaceholder() {
+	if m == nil || m.bottom == nil {
+		return
+	}
+	mode := permission.ModeAsk
+	if m.service != nil {
+		mode = m.service.Mode()
+	}
+	hasRunner := m.runner != nil
+	m.bottom.setPlaceholder(promptPlaceholder(hasRunner, mode, m.planMode))
 }
 
 var tuiTurnOwnerSeq atomic.Uint64
@@ -526,10 +555,14 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if message.Y < 0 || message.Y >= m.viewport.Height {
 			return m, nil
 		}
-		if m.viewportTailOnly && message.Button == tea.MouseButtonWheelUp {
+		if (m.viewportTailOnly || m.viewportStaleTail) && (message.Button == tea.MouseButtonWheelUp || message.Button == tea.MouseButtonWheelDown) {
 			m.hydrateViewportForScroll()
 		}
+		beforeOffset := m.viewport.YOffset
 		m.viewport, command = m.viewport.Update(message)
+		if m.viewport.YOffset != beforeOffset {
+			m.markViewportViewDirty()
+		}
 		m.followTail = m.viewport.AtBottom()
 		return m, command
 	case spinner.TickMsg:
@@ -569,6 +602,8 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateProjectSettingSaved(message)
 	case userSettingSavedMsg:
 		return m.updateUserSettingSaved(message)
+	case permissionRuleSavedMsg:
+		return m.updatePermissionRuleSaved(message)
 	case projectLoadedMsg:
 		return m.updateProjectLoaded(message)
 	case turnDeltaMsg:
@@ -606,7 +641,7 @@ func (m *bubbleModel) handleInterruptKey() (tea.Model, tea.Cmd) {
 	}
 	prompt := m.bottom.prompt()
 	if prompt.Value() != "" || m.bottom.bashMode() {
-		prompt.Reset()
+		m.resetPrompt()
 		m.setBashMode(false)
 		m.syncSlashView()
 		m.relayout()
@@ -683,11 +718,20 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyMsg) (bool, tea.Cmd) {
 		return true, nil
 	case key.Matches(message, m.keys.PageUp):
 		m.hydrateViewportForScroll()
+		before := m.viewport.YOffset
 		m.viewport.PageUp()
+		if m.viewport.YOffset != before {
+			m.markViewportViewDirty()
+		}
 		m.followTail = m.viewport.AtBottom()
 		return true, nil
 	case key.Matches(message, m.keys.PageDown):
+		m.hydrateViewportForScroll()
+		before := m.viewport.YOffset
 		m.viewport.PageDown()
+		if m.viewport.YOffset != before {
+			m.markViewportViewDirty()
+		}
 		m.followTail = m.viewport.AtBottom()
 		return true, nil
 	default:
@@ -704,7 +748,7 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyMsg) tea.Cmd {
 		if m.bottom.bashMode() {
 			m.setBashMode(false)
 		}
-		prompt.Reset()
+		m.resetPrompt()
 		m.syncSlashView()
 		m.relayout()
 		return nil
@@ -886,6 +930,15 @@ func (m *bubbleModel) updateModelSelected(message modelSelectedMsg) (tea.Model, 
 		if message.providerName != "" {
 			m.activeProvider = message.providerName
 		}
+		if m.reasoningEffort != sdk.ReasoningDefault {
+			profile := m.activeResolvedModelProfile()
+			if _, err := profile.ResolveExplicitReasoning(m.reasoningEffort); err != nil {
+				previous := m.reasoningEffort
+				m.reasoningEffort = sdk.ReasoningDefault
+				m.agents.SetReasoningEffort(sdk.ReasoningDefault)
+				m.appendLine(mutedStyle.Render(fmt.Sprintf("  Reset thinking level to auto (previous level %q is unsupported by %s)", previous, message.modelID)))
+			}
+		}
 		m.reconfigureRunner()
 		m.appendLine(successStyle.Render(fmt.Sprintf("✓ Active model set to %s (%s)", message.modelID, m.activeProvider)))
 		if message.unverified {
@@ -903,6 +956,31 @@ func (m *bubbleModel) updateProviderActiveSelected(message providerActiveSelecte
 		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to switch provider: %v", message.err)))
 	} else {
 		m.activeProvider = message.providerName
+		models := m.modelCatalogs.models(message.providerName)
+		if len(models) > 0 {
+			found := false
+			for _, mod := range models {
+				if strings.EqualFold(mod.ID, m.activeModel) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				targetModel := models[0].ID
+				m.activeModel = targetModel
+				_ = (app.Providers{}).SelectModel(message.providerName, targetModel)
+				m.appendLine(mutedStyle.Render(fmt.Sprintf("  Reconciled active model to %s", targetModel)))
+			}
+		}
+		if m.reasoningEffort != sdk.ReasoningDefault {
+			profile := m.activeResolvedModelProfile()
+			if _, err := profile.ResolveExplicitReasoning(m.reasoningEffort); err != nil {
+				previous := m.reasoningEffort
+				m.reasoningEffort = sdk.ReasoningDefault
+				m.agents.SetReasoningEffort(sdk.ReasoningDefault)
+				m.appendLine(mutedStyle.Render(fmt.Sprintf("  Reset thinking level to auto (previous level %q is unsupported by %s)", previous, m.activeModel)))
+			}
+		}
 		m.reconfigureRunner()
 		m.appendLine(successStyle.Render(fmt.Sprintf("✓ Switched active provider to %s", message.providerName)))
 		if p, ok := m.providers[strings.ToLower(message.providerName)]; ok && p.BaseURL != "" {
@@ -927,11 +1005,25 @@ func (m *bubbleModel) updateProviderDeleted(message providerDeletedMsg) (tea.Mod
 		delete(m.providers, strings.ToLower(message.providerName))
 		if strings.EqualFold(m.activeProvider, message.providerName) {
 			m.activeProvider = ""
-			for remaining := range m.providers {
-				m.activeProvider = remaining
-				break
+			if len(m.providers) > 0 {
+				keys := make([]string, 0, len(m.providers))
+				for k := range m.providers {
+					keys = append(keys, k)
+				}
+				sort.Strings(keys)
+				m.activeProvider = keys[0]
+				models := m.modelCatalogs.models(m.activeProvider)
+				if len(models) > 0 {
+					m.activeModel = models[0].ID
+				} else {
+					m.activeModel = ""
+				}
+				m.reconfigureRunner()
+			} else {
+				m.activeModel = ""
+				m.runner = nil
+				m.bottom.setHasRunner(false)
 			}
-			m.reconfigureRunner()
 		}
 		m.appendLine(successStyle.Render(fmt.Sprintf("✓ Removed provider %s", message.providerName)))
 		if m.activeProvider != "" {
@@ -963,7 +1055,8 @@ func (m *bubbleModel) updateTurnDelta(message turnDeltaMsg) (tea.Model, tea.Cmd)
 				continue
 			}
 			m.applyTurnEvents(batch)
-			m.refreshViewport()
+			// The terminal message performs its own relayout/viewport refresh.
+			// Avoid rendering the just-drained deltas twice at turn completion.
 			return m.Update(next)
 		default:
 		}

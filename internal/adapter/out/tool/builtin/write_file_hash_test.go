@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin/readfile"
 	"strings"
 	"testing"
 
@@ -15,7 +16,7 @@ import (
 func TestReadFilePublishesSHA256ForCompleteSnapshot(t *testing.T) {
 	ws := newTestWorkspace(t, nil)
 	writeTestFile(t, ws.Root(), "file.txt", "hello\n")
-	result := executeJSON(t, NewReadFile(ws), "read-hash", map[string]any{"path": "file.txt"})
+	result := executeJSON(t, readfile.New(ws), "read-hash", map[string]any{"path": "file.txt"})
 	digest := sha256.Sum256([]byte("hello\n"))
 	if want := fmt.Sprintf("%x", digest[:]); result.SHA256 != want {
 		t.Fatalf("read sha256 = %q, want %q", result.SHA256, want)
@@ -25,7 +26,7 @@ func TestReadFilePublishesSHA256ForCompleteSnapshot(t *testing.T) {
 func TestReadFileOmitsSHA256ForPartialSnapshot(t *testing.T) {
 	ws := newTestWorkspace(t, nil)
 	writeTestFile(t, ws.Root(), "file.txt", strings.Repeat("a", 64))
-	result := executeJSON(t, NewReadFile(ws), "read-partial", map[string]any{"path": "file.txt", "limit": 8})
+	result := executeJSON(t, readfile.New(ws), "read-partial", map[string]any{"path": "file.txt", "limit": 8})
 	if !result.Truncated || result.SHA256 != "" {
 		t.Fatalf("partial read truncated=%v sha256=%q", result.Truncated, result.SHA256)
 	}

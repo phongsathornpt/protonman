@@ -261,3 +261,269 @@ func TestUserConfigDoesNotOverrideTrustedProjectSetting(t *testing.T) {
 		t.Fatal("user default was not persisted")
 	}
 }
+
+func TestUserConfigSetsThinkingAndPersists(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	t.Setenv("PROTONMAN_HOME", homeDir)
+	coord := agent.NewCoordinator(nil, nil, nil, nil)
+	defer coord.Close()
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.workDir = workDir
+	m.agents = app.NewAgents(coord)
+	m.reasoningEffort = sdk.ReasoningDefault
+
+	cmd := m.executeCommand("/config set thinking high")
+	if cmd == nil {
+		t.Fatal("config command returned nil")
+	}
+	updated, _ := m.Update(cmd())
+	m = updated.(*bubbleModel)
+	if m.reasoningEffort != sdk.ReasoningHigh || coord.ReasoningEffort() != sdk.ReasoningHigh {
+		t.Fatalf("user config did not update reasoning effort: tui=%q coord=%q", m.reasoningEffort, coord.ReasoningEffort())
+	}
+	if got := m.projectSource(config.FieldAgentReasoningEffort); got != config.SourceUser {
+		t.Fatalf("provenance = %q, want user", got)
+	}
+	snapshot, err := config.Load(context.Background(), config.Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh {
+		t.Fatalf("snapshot reasoning_effort = %q, want high", snapshot.Agent.ReasoningEffort)
+	}
+}
+
+func TestUserConfigSetsToolCallsAndPersists(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	t.Setenv("PROTONMAN_HOME", homeDir)
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.workDir = workDir
+	m.maxToolCalls = 100
+
+	cmd := m.executeCommand("/config set tool-calls 42")
+	if cmd == nil {
+		t.Fatal("config command returned nil")
+	}
+	updated, _ := m.Update(cmd())
+	m = updated.(*bubbleModel)
+	if m.maxToolCalls != 42 {
+		t.Fatalf("user config did not update maxToolCalls: got %d, want 42", m.maxToolCalls)
+	}
+	if got := m.projectSource(config.FieldAgentMaxToolCalls); got != config.SourceUser {
+		t.Fatalf("provenance = %q, want user", got)
+	}
+	snapshot, err := config.Load(context.Background(), config.Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Agent.MaxToolCalls != 42 {
+		t.Fatalf("snapshot max_tool_calls = %d, want 42", snapshot.Agent.MaxToolCalls)
+	}
+}
+
+func TestUserConfigPermissionAllowBashAllPersistsAndApplies(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	t.Setenv("PROTONMAN_HOME", homeDir)
+
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.workDir = workDir
+
+	cmd := m.executeCommand("/config permission allow bash all")
+	if cmd == nil {
+		t.Fatal("command returned nil")
+	}
+
+	// Live policy should be updated immediately
+	d := m.service.Policy().Evaluate(permission.Request{
+		ToolName: "bash",
+		ToolKind: permission.ToolBash,
+		Detail:   "npm test",
+	})
+	if d.Action != permission.ActionAllow {
+		t.Fatalf("live policy decision = %v, want allow", d.Action)
+	}
+
+	// Execute persistence cmd
+	msg := cmd()
+	updated, _ := m.Update(msg)
+	m = updated.(*bubbleModel)
+
+	if !strings.Contains(plainTranscript(m), "Saved allow rule to user config (bash: *)") {
+		t.Fatalf("transcript missing confirmation: %s", plainTranscript(m))
+	}
+
+	// Verify persistence in snapshot
+	snapshot, err := config.Load(context.Background(), config.Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Permission.Rules) != 1 {
+		t.Fatalf("rules count = %d, want 1", len(snapshot.Permission.Rules))
+	}
+	r := snapshot.Permission.Rules[0]
+	if r.Action != permission.ActionAllow || r.Tool != permission.ToolBash || r.Pattern != "*" {
+		t.Fatalf("persisted rule mismatch: %+v", r)
+	}
+}
+
+func TestProjectPermissionAllowBashAllPersistsAndApplies(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	t.Setenv("PROTONMAN_HOME", homeDir)
+
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.workDir = workDir
+	m.projectTrusted = true
+
+	cmd := m.executeCommand("/project permission allow bash all")
+	if cmd == nil {
+		t.Fatal("command returned nil")
+	}
+
+	// Live policy updated
+	d := m.service.Policy().Evaluate(permission.Request{
+		ToolName: "bash",
+		ToolKind: permission.ToolBash,
+		Detail:   "git push origin main",
+	})
+	if d.Action != permission.ActionAllow {
+		t.Fatalf("live policy decision = %v, want allow", d.Action)
+	}
+
+	// Execute persistence cmd
+	msg := cmd()
+	updated, _ := m.Update(msg)
+	m = updated.(*bubbleModel)
+
+	if !strings.Contains(plainTranscript(m), "Saved allow rule to project config (bash: *)") {
+		t.Fatalf("transcript missing confirmation: %s", plainTranscript(m))
+	}
+
+	// Verify persistence in project snapshot
+	snapshot, err := config.Load(context.Background(), config.Options{
+		HomeDir:        homeDir,
+		WorkDir:        workDir,
+		ProjectTrusted: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Permission.Rules) != 1 {
+		t.Fatalf("rules count = %d, want 1", len(snapshot.Permission.Rules))
+	}
+	r := snapshot.Permission.Rules[0]
+	if r.Action != permission.ActionAllow || r.Tool != permission.ToolBash || r.Pattern != "*" {
+		t.Fatalf("persisted rule mismatch: %+v", r)
+	}
+}
+
+func TestProjectPermissionRequiresTrust(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.projectTrusted = false
+
+	cmd := m.executeCommand("/project permission allow bash all")
+	if cmd != nil {
+		t.Fatalf("expected nil cmd when untrusted, got %v", cmd)
+	}
+	if !strings.Contains(plainTranscript(m), "project settings are read-only until the workspace is trusted") {
+		t.Fatalf("expected untrusted error in transcript: %s", plainTranscript(m))
+	}
+}
+
+func TestUserConfigSetPermissionAllowBashWildcard(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	t.Setenv("PROTONMAN_HOME", homeDir)
+
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.workDir = workDir
+
+	cmd := m.executeCommand("/config set permission allow bash *")
+	if cmd == nil {
+		t.Fatal("command returned nil")
+	}
+
+	// Live policy updated
+	d := m.service.Policy().Evaluate(permission.Request{
+		ToolName: "bash",
+		ToolKind: permission.ToolBash,
+		Detail:   "make test",
+	})
+	if d.Action != permission.ActionAllow {
+		t.Fatalf("live policy decision = %v, want allow", d.Action)
+	}
+
+	msg := cmd()
+	updated, _ := m.Update(msg)
+	m = updated.(*bubbleModel)
+
+	if !strings.Contains(plainTranscript(m), "Saved allow rule to user config (bash: *)") {
+		t.Fatalf("transcript missing confirmation: %s", plainTranscript(m))
+	}
+}
+
+func TestProjectSetPermissionAllowBashAll(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	t.Setenv("PROTONMAN_HOME", homeDir)
+
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.workDir = workDir
+	m.projectTrusted = true
+
+	cmd := m.executeCommand("/project set permission allow bash all")
+	if cmd == nil {
+		t.Fatal("command returned nil")
+	}
+
+	d := m.service.Policy().Evaluate(permission.Request{
+		ToolName: "bash",
+		ToolKind: permission.ToolBash,
+		Detail:   "pytest",
+	})
+	if d.Action != permission.ActionAllow {
+		t.Fatalf("live policy decision = %v, want allow", d.Action)
+	}
+
+	msg := cmd()
+	updated, _ := m.Update(msg)
+	m = updated.(*bubbleModel)
+
+	if !strings.Contains(plainTranscript(m), "Saved allow rule to project config (bash: *)") {
+		t.Fatalf("transcript missing confirmation: %s", plainTranscript(m))
+	}
+}
+
+func TestConfigPermissionSyntaxErrors(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+
+	// Missing tool
+	cmd := m.executeCommand("/config permission allow")
+	if cmd != nil {
+		t.Fatal("expected nil cmd")
+	}
+	if !strings.Contains(plainTranscript(m), "usage: permission <allow|deny|ask> <tool> [pattern]") {
+		t.Fatalf("unexpected transcript: %s", plainTranscript(m))
+	}
+
+	// Invalid action
+	cmd = m.executeCommand("/config permission invalid bash")
+	if cmd != nil {
+		t.Fatal("expected nil cmd")
+	}
+	if !strings.Contains(plainTranscript(m), "invalid permission action") {
+		t.Fatalf("unexpected transcript: %s", plainTranscript(m))
+	}
+
+	// Invalid tool
+	cmd = m.executeCommand("/config permission allow notatool")
+	if cmd != nil {
+		t.Fatal("expected nil cmd")
+	}
+	if !strings.Contains(plainTranscript(m), "unknown permission tool") {
+		t.Fatalf("unexpected transcript: %s", plainTranscript(m))
+	}
+}

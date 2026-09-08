@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
 	"slices"
 	"testing"
 )
@@ -64,6 +66,18 @@ func TestFailureFromErrorClassifiesStableCodes(t *testing.T) {
 			name:      "coded error",
 			err:       WrapToolError(ErrorCodeNotFound, "missing file", errors.New("no entry")),
 			wantCode:  ErrorCodeNotFound,
+			wantRetry: false,
+		},
+		{
+			name:      "filesystem not found",
+			err:       fmt.Errorf("open target: %w", os.ErrNotExist),
+			wantCode:  ErrorCodeNotFound,
+			wantRetry: false,
+		},
+		{
+			name:      "filesystem permission denied",
+			err:       fmt.Errorf("open target: %w", os.ErrPermission),
+			wantCode:  ErrorCodePermissionDenied,
 			wantRetry: false,
 		},
 	}

@@ -1004,3 +1004,168 @@ func TestServiceEmitsRecoveryLifecycleEvents(t *testing.T) {
 		t.Fatalf("recovery events = %#v", events)
 	}
 }
+
+func TestServiceAddRuleDynamicallyAllowsSubsequentCalls(t *testing.T) {
+	handler := &fakeHandler{definition: tool.Definition{
+		Name: "read_file", Description: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
+		PermissionDetailKey: "path",
+	}}
+	// Default ask mode, no prompt configured -> fails closed with ErrPermissionDenied
+	service := newTestService(t, handler, permission.Config{Default: permission.ActionAsk}, WithMode(permission.ModeAsk))
+	call, _ := tool.NewCall("read-1", "read_file", json.RawMessage(`{"path":"src/safe.go"}`))
+
+	// First call denied because mode is ask and no prompt is set
+	result, err := service.Call(context.Background(), call)
+	if err == nil || !result.Denied {
+		t.Fatalf("expected first call to be denied without prompt, got: result=%#v, err=%v", result, err)
+	}
+	if handler.calls != 0 {
+		t.Fatalf("handler calls = %d, want 0", handler.calls)
+	}
+
+	// Add static allow rule dynamically
+	err = service.AddRule(permission.Rule{
+		Action:      permission.ActionAllow,
+		Tool:        permission.ToolRead,
+		Pattern:     "src/safe.go",
+		PatternMode: permission.PatternModeGlob,
+	})
+	if err != nil {
+		t.Fatalf("AddRule error = %v", err)
+	}
+
+	// Second call with same target now succeeds immediately without asking
+	call2, _ := tool.NewCall("read-2", "read_file", json.RawMessage(`{"path":"src/safe.go"}`))
+	result2, err := service.Call(context.Background(), call2)
+	if err != nil || result2.Denied {
+		t.Fatalf("expected second call to be allowed by dynamically added rule, got: result=%#v, err=%v", result2, err)
+	}
+	if handler.calls != 1 {
+		t.Fatalf("handler calls = %d, want 1", handler.calls)
+	}
+
+	// Different target still asks (denies without prompt)
+	call3, _ := tool.NewCall("read-3", "read_file", json.RawMessage(`{"path":"src/other.go"}`))
+	result3, err := service.Call(context.Background(), call3)
+	if err == nil || !result3.Denied {
+		t.Fatalf("expected different target to be denied, got: result=%#v, err=%v", result3, err)
+	}
+	if handler.calls != 1 {
+		t.Fatalf("handler calls = %d, want 1", handler.calls)
+	}
+}
+
+type recoveryRegistry struct {
+	handlers []tool.Handler
+}
+
+func (r recoveryRegistry) Lookup(name string) (tool.Handler, bool) {
+	for _, handler := range r.handlers {
+		if handler.Definition().Name == name {
+			return handler, true
+		}
+	}
+	return nil, false
+}
+
+func (r recoveryRegistry) Definitions() []tool.Definition {
+	definitions := make([]tool.Definition, 0, len(r.handlers))
+	for _, handler := range r.handlers {
+		definitions = append(definitions, handler.Definition())
+	}
+	return definitions
+}
+
+func workspaceReadSafety() tool.SafetyContract {
+	return tool.SafetyContract{
+		MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone,
+		CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead,
+	}
+}
+
+func TestServiceRecoversWithDedicatedWorkspaceReadTool(t *testing.T) {
+	recoveryArgs := json.RawMessage(`{"path":"screen.png","view":"image"}`)
+	bash := &fakeHandler{definition: tool.Definition{
+		Name: "bash", Description: "fake shell", Kind: tool.KindBash,
+		Mutability: tool.MutabilityMutating, PermissionDetailKey: "command",
+	}, firstErr: tool.NewToolError(tool.ErrorCodeInvalidArguments, "use read_file").WithRecovery(tool.Recovery{
+		Action: tool.RecoveryUseDedicatedTool, Tool: "read_file", Arguments: recoveryArgs,
+	})}
+	reader := &fakeHandler{definition: tool.Definition{
+		Name: "read_file", Description: "fake reader", Kind: tool.KindRead,
+		Mutability: tool.MutabilityReadOnly, Safety: workspaceReadSafety(), PermissionDetailKey: "path",
+		InputSchema: map[string]any{
+			"type": "object", "properties": map[string]any{
+				"path": map[string]any{"type": "string"}, "view": map[string]any{"type": "string"},
+			}, "required": []string{"path"}, "additionalProperties": false,
+		},
+	}}
+	policy, err := permission.NewPolicy(permission.Config{Default: permission.ActionAllow})
+	if err != nil {
+		t.Fatal(err)
+	}
+	observer := &recordingObserver{}
+	service, err := NewService(recoveryRegistry{handlers: []tool.Handler{bash, reader}}, policy, WithMode(permission.ModeAlwaysApprove), WithObserver(observer))
+	if err != nil {
+		t.Fatal(err)
+	}
+	call, _ := tool.NewCall("bash-image", "bash", json.RawMessage(`{"command":"python3 inspect.py"}`))
+	result, err := service.Call(context.Background(), call)
+	if err != nil {
+		t.Fatalf("Call() error = %v", err)
+	}
+	if bash.calls != 1 || reader.calls != 1 {
+		t.Fatalf("handler calls bash=%d read=%d, want 1 and 1", bash.calls, reader.calls)
+	}
+	if result.CallID != call.ID || result.ToolName != call.Name || result.Output != "executed" {
+		t.Fatalf("recovered result = %#v", result)
+	}
+	var attempted, succeeded bool
+	for _, event := range observer.Events() {
+		switch event.Kind {
+		case EventRecoveryAttempted:
+			attempted = attempted || event.RecoveryAction == tool.RecoveryUseDedicatedTool
+		case EventRecoverySucceeded:
+			succeeded = succeeded || event.RecoveryAction == tool.RecoveryUseDedicatedTool
+		}
+	}
+	if !attempted || !succeeded {
+		t.Fatalf("dedicated recovery events = %#v", observer.Events())
+	}
+}
+
+func TestDedicatedToolRecoveryRespectsTargetPermission(t *testing.T) {
+	recoveryArgs := json.RawMessage(`{"path":"secret.txt"}`)
+	bash := &fakeHandler{definition: tool.Definition{
+		Name: "bash", Description: "fake shell", Kind: tool.KindBash, Mutability: tool.MutabilityMutating,
+	}, firstErr: tool.NewToolError(tool.ErrorCodeInvalidArguments, "use read_file").WithRecovery(tool.Recovery{
+		Action: tool.RecoveryUseDedicatedTool, Tool: "read_file", Arguments: recoveryArgs,
+	})}
+	reader := &fakeHandler{definition: tool.Definition{
+		Name: "read_file", Description: "fake reader", Kind: tool.KindRead,
+		Mutability: tool.MutabilityReadOnly, Safety: workspaceReadSafety(), PermissionDetailKey: "path",
+		InputSchema: map[string]any{
+			"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}},
+			"required": []string{"path"}, "additionalProperties": false,
+		},
+	}}
+	policy, err := permission.NewPolicy(permission.Config{Rules: []permission.Rule{
+		{Action: permission.ActionAllow, Tool: permission.ToolBash},
+		{Action: permission.ActionDeny, Tool: permission.ToolRead},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewService(recoveryRegistry{handlers: []tool.Handler{bash, reader}}, policy, WithMode(permission.ModeAlwaysApprove))
+	if err != nil {
+		t.Fatal(err)
+	}
+	call, _ := tool.NewCall("bash-secret", "bash", json.RawMessage(`{"command":"python3 inspect.py"}`))
+	result, err := service.Call(context.Background(), call)
+	if !errors.Is(err, ErrPermissionDenied) {
+		t.Fatalf("Call() error = %v, want permission denied", err)
+	}
+	if reader.calls != 0 || !result.Denied {
+		t.Fatalf("reader calls=%d result=%#v, want denied before target execution", reader.calls, result)
+	}
+}

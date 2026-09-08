@@ -4,6 +4,7 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
 type bottomPaneView interface {
@@ -105,7 +106,14 @@ func (p *bottomPane) setHasRunner(hasRunner bool) {
 	if p == nil {
 		return
 	}
-	p.composer.input.Placeholder = promptPlaceholder(hasRunner)
+	p.composer.input.Placeholder = promptPlaceholder(hasRunner, permission.ModeAsk, false)
+}
+
+func (p *bottomPane) setPlaceholder(text string) {
+	if p == nil {
+		return
+	}
+	p.composer.input.Placeholder = text
 }
 
 func (p *bottomPane) bashMode() bool {
@@ -176,7 +184,7 @@ func (p *bottomPane) composerVisible() bool {
 
 func newPrompt(hasRunner bool) textarea.Model {
 	prompt := textarea.New()
-	prompt.Placeholder = promptPlaceholder(hasRunner)
+	prompt.Placeholder = promptPlaceholder(hasRunner, permission.ModeAsk, false)
 	prompt.CharLimit = 20_000
 	prompt.ShowLineNumbers = false
 	prompt.EndOfBufferCharacter = ' '
@@ -207,6 +215,13 @@ func applyPromptChrome(prompt *textarea.Model, bash bool) {
 func (m *bubbleModel) setBashMode(on bool) {
 	m.bottom.setBashMode(on)
 	m.syncSlashView()
+}
+
+func (m *bubbleModel) resetPrompt() {
+	if m == nil || m.bottom == nil || m.bottom.prompt() == nil {
+		return
+	}
+	m.bottom.prompt().Reset()
 }
 
 func (m *bubbleModel) historyPrevious() {

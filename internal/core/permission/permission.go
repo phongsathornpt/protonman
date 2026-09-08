@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/phongsathornpt/protonman/internal/base/glob"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -173,6 +174,8 @@ const (
 	ToolTask ToolKind = tool.KindTask
 	// ToolAgent matches subagent orchestration tools.
 	ToolAgent ToolKind = tool.KindAgent
+	// ToolCompute matches deterministic local computation tools.
+	ToolCompute ToolKind = tool.KindCompute
 )
 
 // PatternMode controls what part of a request a rule pattern matches.
@@ -243,6 +246,8 @@ func ParseToolKind(value string) (ToolKind, error) {
 		return ToolTask, nil
 	case "agent", "subagent":
 		return ToolAgent, nil
+	case "compute", "calculate", "math":
+		return ToolCompute, nil
 	default:
 		return "", fmt.Errorf("unknown permission tool %q", value)
 	}
@@ -392,6 +397,76 @@ func SessionGrantEligible(r Request) bool {
 	return r.Effect == tool.CommandEffectReadOnly && r.Risk == tool.CommandRiskNormal
 }
 
+// PersistentRuleEligible reports whether a request is safe to remember across
+// future runs by persisting a static allow rule to project or user configuration.
+// Mutating, unknown, or destructive requests remain one-shot or session-bound.
+func PersistentRuleEligible(r Request) bool {
+	if !SessionGrantEligible(r) {
+		return false
+	}
+	_, ok := RuleFromRequest(r)
+	return ok
+}
+
+// RuleFromRequest constructs a static allow Rule that matches future occurrences
+// of the given request. It returns false if the request cannot be converted
+// into a safe, specific rule (e.g. empty target, multi-line commands, raw JSON).
+func RuleFromRequest(r Request) (Rule, bool) {
+	if r.ToolKind == ToolMCP {
+		name := strings.TrimSpace(r.ToolName)
+		if name == "" {
+			return Rule{}, false
+		}
+		return Rule{
+			Action:      ActionAllow,
+			Tool:        ToolMCP,
+			Pattern:     name,
+			PatternMode: PatternModeGlob,
+		}, true
+	}
+
+	detail := strings.TrimSpace(r.Detail)
+	if detail == "" || strings.ContainsAny(detail, "\r\n") {
+		return Rule{}, false
+	}
+	if strings.HasPrefix(detail, "{") && strings.HasSuffix(detail, "}") {
+		return Rule{}, false
+	}
+
+	switch r.ToolKind {
+	case ToolBash:
+		return Rule{
+			Action:      ActionAllow,
+			Tool:        ToolBash,
+			Pattern:     detail,
+			PatternMode: PatternModeGlob,
+		}, true
+
+	case ToolRead, ToolGrep:
+		return Rule{
+			Action:      ActionAllow,
+			Tool:        r.ToolKind,
+			Pattern:     detail,
+			PatternMode: PatternModeGlob,
+		}, true
+
+	case ToolWebFetch:
+		parsed, err := url.Parse(detail)
+		if err != nil || parsed.Hostname() == "" {
+			return Rule{}, false
+		}
+		return Rule{
+			Action:      ActionAllow,
+			Tool:        ToolWebFetch,
+			Pattern:     strings.ToLower(parsed.Hostname()),
+			PatternMode: PatternModeDomain,
+		}, true
+
+	default:
+		return Rule{}, false
+	}
+}
+
 // Key returns the exact session-grant key for a request.
 func (r Request) Key() GrantKey {
 	return GrantKey{
@@ -421,6 +496,7 @@ var ErrInvalidConfig = errors.New("invalid permission config")
 
 // Policy evaluates static rules without performing I/O or prompting.
 type Policy struct {
+	mu            sync.RWMutex
 	rules         []Rule
 	defaultAction Action
 }
@@ -457,13 +533,25 @@ func NewPolicy(config Config) (*Policy, error) {
 			return nil, fmt.Errorf("%w: rule %d has invalid pattern mode %s", ErrInvalidConfig, i, patternMode)
 		}
 		if patternMode == PatternModeDomain {
-			rules[i].Pattern = strings.ToLower(strings.TrimSpace(rule.Pattern))
+			if strings.EqualFold(strings.TrimSpace(rule.Pattern), "all") {
+				rules[i].Pattern = "*"
+			} else {
+				rules[i].Pattern = strings.ToLower(strings.TrimSpace(rule.Pattern))
+			}
 		} else if rule.Tool == ToolMCP {
 			pattern := strings.TrimSpace(rule.Pattern)
 			// Dotted MCP patterns are tool namespaces. Plain patterns remain
 			// request-detail matchers for backwards-compatible resource rules.
-			if pattern != "" && strings.Contains(pattern, ".") && !strings.HasPrefix(pattern, "mcp.") {
+			if strings.EqualFold(pattern, "all") {
+				pattern = "*"
+			} else if pattern != "" && strings.Contains(pattern, ".") && !strings.HasPrefix(pattern, "mcp.") {
 				pattern = "mcp." + pattern
+			}
+			rules[i].Pattern = pattern
+		} else {
+			pattern := strings.TrimSpace(rule.Pattern)
+			if strings.EqualFold(pattern, "all") {
+				pattern = "*"
 			}
 			rules[i].Pattern = pattern
 		}
@@ -477,6 +565,8 @@ func NewPolicy(config Config) (*Policy, error) {
 
 // Evaluate returns the effective static decision for a request.
 func (p *Policy) Evaluate(request Request) Decision {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	matchedAsk := false
 	matchedAllow := false
 	for _, rule := range p.rules {
@@ -502,17 +592,65 @@ func (p *Policy) Evaluate(request Request) Decision {
 	if matchedAllow {
 		return Decision{Action: ActionAllow, Reason: "allowed by permission policy"}
 	}
+	if request.ToolKind == ToolCompute {
+		return Decision{Action: ActionAllow, Reason: "safe local computation"}
+	}
 	return Decision{
 		Action: p.defaultAction,
 		Reason: "permission policy default: " + p.defaultAction.String(),
 	}
 }
 
+// AddRule appends a static rule to the policy in a thread-safe manner.
+// If an identical rule already exists, AddRule is a no-op.
+func (p *Policy) AddRule(rule Rule) error {
+	if !validAction(rule.Action) {
+		return fmt.Errorf("%w: invalid action %d", ErrInvalidConfig, rule.Action)
+	}
+	if rule.Tool == "" {
+		rule.Tool = ToolAny
+	}
+	if !validToolKind(rule.Tool) {
+		return fmt.Errorf("%w: invalid tool %q", ErrInvalidConfig, rule.Tool)
+	}
+	patternMode := rule.PatternMode
+	if patternMode == PatternModeUnknown {
+		patternMode = PatternModeGlob
+	}
+	if !patternMode.Valid() {
+		return fmt.Errorf("%w: invalid pattern mode %s", ErrInvalidConfig, patternMode)
+	}
+	rule.PatternMode = patternMode
+	rule.Pattern = NormalizePattern(rule.Tool, rule.PatternMode, rule.Pattern)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, existing := range p.rules {
+		if existing.Action == rule.Action &&
+			existing.Tool == rule.Tool &&
+			existing.Pattern == rule.Pattern &&
+			existing.PatternMode == rule.PatternMode {
+			return nil
+		}
+	}
+	p.rules = append(p.rules, rule)
+	return nil
+}
+
+// Rules returns a defensive copy of the current policy rules.
+func (p *Policy) Rules() []Rule {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	out := make([]Rule, len(p.rules))
+	copy(out, p.rules)
+	return out
+}
+
 func ruleMatches(rule Rule, request Request) bool {
 	if rule.Tool != ToolAny && rule.Tool != request.ToolKind {
 		return false
 	}
-	if rule.Pattern == "" {
+	if rule.Pattern == "" || rule.Pattern == "*" {
 		return true
 	}
 
@@ -552,9 +690,34 @@ func ValidToolKind(kind ToolKind) bool {
 
 func validToolKind(kind ToolKind) bool {
 	switch kind {
-	case ToolAny, ToolRead, ToolEdit, ToolBash, ToolGrep, ToolMCP, ToolWebFetch, ToolWebSearch, ToolTask, ToolAgent:
+	case ToolAny, ToolRead, ToolEdit, ToolBash, ToolGrep, ToolMCP, ToolWebFetch, ToolWebSearch, ToolTask, ToolAgent, ToolCompute:
 		return true
 	default:
 		return false
 	}
+}
+
+// NormalizePattern returns the canonical pattern for a tool kind and pattern mode.
+// It normalizes "all" and empty patterns to "*" for wildcard matching,
+// canonicalizes MCP namespaces, and lowercases domain patterns.
+func NormalizePattern(kind ToolKind, patternMode PatternMode, pattern string) string {
+	trimmed := strings.TrimSpace(pattern)
+	if patternMode == PatternModeDomain {
+		if trimmed == "" || trimmed == "*" || strings.EqualFold(trimmed, "all") {
+			return "*"
+		}
+		return strings.ToLower(trimmed)
+	}
+	if kind == ToolMCP {
+		if strings.EqualFold(trimmed, "all") {
+			return "*"
+		}
+		if trimmed != "" && strings.Contains(trimmed, ".") && !strings.HasPrefix(trimmed, "mcp.") {
+			trimmed = "mcp." + trimmed
+		}
+	}
+	if trimmed == "" || trimmed == "*" || strings.EqualFold(trimmed, "all") {
+		return "*"
+	}
+	return trimmed
 }

@@ -109,7 +109,9 @@ func (m *bubbleModel) syncPromptHeight() {
 	if lines > 4 {
 		lines = 4
 	}
-	prompt.SetHeight(lines)
+	if prompt.Height() != lines {
+		prompt.SetHeight(lines)
+	}
 }
 
 func (m *bubbleModel) resize(width int, height int) {
@@ -155,6 +157,10 @@ func (m *bubbleModel) buildFrameChrome() frameChrome {
 	frame.status = m.statusView()
 	frame.top = m.bottom.renderTop(m)
 	if m.bottom.composerVisible() {
+		// The composer is small and stateful (cursor, focus, placeholder, bash mode).
+		// Render it from the textarea model every frame instead of reusing terminal
+		// output from a previous frame. Caching this string can leave stale prompt
+		// rows behind when the transcript scrolls while the textarea changes.
 		frame.composer = m.promptView()
 	}
 	frame.footer = m.footerView()
@@ -166,6 +172,31 @@ func (m *bubbleModel) buildFrameChrome() frameChrome {
 	// The footer is always joined into the live view; even an empty footer
 	// occupies one physical row in lipgloss.JoinVertical.
 	frame.height += lipgloss.Height(frame.footer)
+
+	// Guard against viewport starvation: if the chrome consumes so much height that the
+	// scrollable transcript has fewer than 4 rows in a normal terminal, collapse the expanded
+	// todo widget to its compact summary line.
+	minViewport := 4
+	if m.height >= 14 && m.height-frame.height < minViewport && m.todoViewState.Expanded && len(m.todo) > 0 {
+		completed, active, pending := todoCounts(m.todo)
+		summary := fmt.Sprintf("Tasks %d/%d", completed, len(m.todo))
+		if active > 0 {
+			summary += fmt.Sprintf(" · %d active", active)
+		}
+		if pending > 0 {
+			summary += fmt.Sprintf(" · %d pending", pending)
+		}
+		if completed == len(m.todo) {
+			summary += " ✓"
+		}
+		compactTodo := brandStyle.Render(truncateWithEllipsis(summary+" · "+shortcutHelp(m.keys.ToggleTodo), maxInt(1, m.width-2)))
+		saved := lipgloss.Height(frame.todo) - lipgloss.Height(compactTodo)
+		if saved > 0 {
+			frame.todo = compactTodo
+			frame.height -= saved
+		}
+	}
+
 	return frame
 }
 
@@ -190,8 +221,11 @@ func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame fram
 	if viewportHeight < 1 {
 		viewportHeight = 1
 	}
-	m.viewport.Width = m.width
-	m.viewport.Height = viewportHeight
+	if m.viewport.Width != m.width || m.viewport.Height != viewportHeight {
+		m.viewport.Width = m.width
+		m.viewport.Height = viewportHeight
+		m.markViewportViewDirty()
+	}
 	m.refreshViewportWithScroll(scroll)
 }
 
@@ -216,6 +250,21 @@ func (m *bubbleModel) refreshViewport() {
 }
 
 func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
+	if m.historyState != nil && !scroll.follow && !m.viewportTailOnly {
+		committedRevision, activeRevision := m.historyState.Revisions()
+		if committedRevision == m.viewportCommittedRevision {
+			// The user is reading older content and only the mutable tail changed.
+			// Keep the viewport buffer stable until they scroll again instead of
+			// rebuilding the entire transcript for invisible streaming deltas.
+			m.viewportStaleTail = activeRevision != m.viewportActiveRevision
+			m.followTail = false
+			if m.showTranscript {
+				m.refreshTranscriptViewport(false)
+			}
+			return
+		}
+	}
+
 	content := ""
 	tailOnly := false
 	if scroll.follow && m.busy && m.historyState.Active() != nil {
@@ -234,7 +283,12 @@ func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
 
 func (m *bubbleModel) setViewportContent(content string, fullHistory bool) {
 	m.viewport.SetContent(content)
+	m.markViewportViewDirty()
+	m.viewportStaleTail = false
 	m.viewportLineAnchors = nil
+	if m.historyState != nil {
+		m.viewportCommittedRevision, m.viewportActiveRevision = m.historyState.Revisions()
+	}
 	if !fullHistory || m.historyState == nil {
 		return
 	}
@@ -270,7 +324,11 @@ func (m *bubbleModel) captureViewportScroll() viewportScrollSnapshot {
 
 func (m *bubbleModel) restoreViewportScroll(scroll viewportScrollSnapshot) {
 	if scroll.follow {
+		before := m.viewport.YOffset
 		m.viewport.GotoBottom()
+		if m.viewport.YOffset != before {
+			m.markViewportViewDirty()
+		}
 		m.followTail = true
 		return
 	}
@@ -281,7 +339,10 @@ func (m *bubbleModel) restoreViewportScroll(scroll viewportScrollSnapshot) {
 			yOffset = m.historyViewportPrefixLines() + historyLine
 		}
 	}
-	m.viewport.SetYOffset(yOffset)
+	if m.viewport.YOffset != yOffset {
+		m.viewport.SetYOffset(yOffset)
+		m.markViewportViewDirty()
+	}
 }
 
 func (m *bubbleModel) historyViewportPrefixLines() int {
@@ -304,12 +365,13 @@ func (m *bubbleModel) fullViewportContent() string {
 }
 
 func (m *bubbleModel) hydrateViewportForScroll() {
-	if !m.viewportTailOnly {
+	if !m.viewportTailOnly && !m.viewportStaleTail {
 		return
 	}
+	scroll := m.captureViewportScroll()
 	m.setViewportContent(m.fullViewportContent(), true)
-	m.viewport.GotoBottom()
 	m.viewportTailOnly = false
+	m.restoreViewportScroll(scroll)
 }
 
 func (m *bubbleModel) View() string {
@@ -323,9 +385,27 @@ func (m *bubbleModel) View() string {
 	return base
 }
 
+func (m *bubbleModel) markViewportViewDirty() {
+	if m != nil {
+		m.viewportViewDirty = true
+	}
+}
+
+func (m *bubbleModel) renderedViewport() string {
+	if m == nil {
+		return ""
+	}
+	if !m.viewportViewDirty && m.viewportViewCache != "" {
+		return m.viewportViewCache
+	}
+	m.viewportViewCache = m.viewport.View()
+	m.viewportViewDirty = false
+	return m.viewportViewCache
+}
+
 func (m *bubbleModel) liveView() string {
 	frame := m.frameChromeForView()
-	parts := []string{m.viewport.View()}
+	parts := []string{m.renderedViewport()}
 	for _, part := range []string{frame.todo, frame.agents, frame.status, frame.top, frame.composer} {
 		if part != "" {
 			parts = append(parts, part)
@@ -426,14 +506,20 @@ type modelSelectPaneView struct {
 
 func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
 	providers := make([]string, 0)
+	seen := make(map[string]bool)
 	if m != nil && len(m.providers) > 0 {
 		for name := range m.providers {
 			providers = append(providers, name)
+			seen[strings.ToLower(name)] = true
 		}
 		sort.Strings(providers)
-	} else if m != nil && m.activeProvider != "" {
-		providers = append(providers, m.activeProvider)
-	} else {
+	}
+	if m != nil && m.activeProvider != "" {
+		if !seen[strings.ToLower(m.activeProvider)] {
+			providers = append([]string{m.activeProvider}, providers...)
+			seen[strings.ToLower(m.activeProvider)] = true
+		}
+	} else if len(providers) == 0 {
 		providers = append(providers, model.DefaultProtonmanName)
 	}
 	providerIdx := 0
@@ -445,10 +531,9 @@ func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
 			}
 		}
 	}
-	var modelsList []model. // Resolve the catalog for the selected provider only.
-				RemoteModel
+	var modelsList []model.RemoteModel
 	hasFreshCatalog := false
-	if m != nil {
+	if m != nil && providerIdx < len(providers) {
 		modelsList, hasFreshCatalog = m.modelCatalogs.freshModels(providers[providerIdx], time.Now(), m.runtimeConfig.ModelCatalogTTL)
 	}
 	if !hasFreshCatalog {
@@ -497,7 +582,12 @@ func (v *modelSelectPaneView) applyFilter(activeModel string) {
 		}
 	}
 	v.models = filtered
-	v.resetSelection(activeModel)
+	if len(filtered) == 0 {
+		v.index = 0
+		v.offset = 0
+	} else if v.index >= len(filtered) {
+		v.index = len(filtered) - 1
+	}
 }
 
 func (v *modelSelectPaneView) resetSelection(activeModel string) {
@@ -539,7 +629,7 @@ func (v *modelSelectPaneView) beginFetch(parent context.Context, providerName st
 	v.allModels = nil
 	v.index = 0
 	v.offset = 0
-	return fetchProviderModelsCmd(providerFetchRequest{ctx: ctx, requestID: v.fetchRequestID, providerName: providerName, baseURL: cfg.BaseURL, apiKey: cfg.APIKey, discoveryTimeout: discoveryTimeout})
+	return fetchProviderModelsCmd(providerFetchRequest{ctx: ctx, requestID: v.fetchRequestID, providerName: providerName, providerType: cfg.Type, baseURL: cfg.BaseURL, apiKey: cfg.APIKey, discoveryTimeout: discoveryTimeout})
 }
 
 func (v *modelSelectPaneView) cancelFetch() {
@@ -566,8 +656,7 @@ func (v *modelSelectPaneView) loadProvider(m *bubbleModel, force bool) tea.Cmd {
 	}
 	cfg, configured := m.providers[normalizeProviderKey(providerName)]
 	if configured {
-		isOpenCode := model.IsProvider(model.DefaultOpenCodeName, providerName, cfg.BaseURL)
-		if strings.TrimSpace(cfg.APIKey) != "" || isOpenCode {
+		if model.ProviderHasUsableAuth(providerName, cfg.BaseURL, cfg.APIKey) {
 			return v.beginFetch(m.ctx, providerName, cfg, m.runtimeConfig.ModelDiscoveryTimeout)
 		}
 	}
@@ -607,7 +696,8 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 		if reasoning := remoteModelReasoningSummary(providerName, md, true); reasoning != "" {
 			details = append(details, reasoning)
 		}
-		items = append(items, pane.ModelItem{ID: md.ID, Label: label, Free: model.IsFreeModel(md.ID), Current: m != nil && strings.EqualFold(md.ID, m.activeModel), Details: strings.Join(details, " · ")})
+		isCurrent := m != nil && strings.EqualFold(md.ID, m.activeModel) && strings.EqualFold(providerName, m.activeProvider)
+		items = append(items, pane.ModelItem{ID: md.ID, Label: label, Free: model.IsFreeModel(md.ID), Current: isCurrent, Details: strings.Join(details, " · ")})
 	}
 	errorText := ""
 	if v.err != nil {
@@ -623,9 +713,19 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 		m.bottom.remove(modelSelectViewID)
 		return true, nil
 	}
+	defer func() {
+		visible := pickerVisibleRows(m.height, maxModelSelectRows)
+		v.index, v.offset, _ = normalizedPickerWindow(v.index, v.offset, len(v.models), visible)
+	}()
 	if v.filtering {
 		switch message.Type {
 		case tea.KeyEsc:
+			if v.filter != "" {
+				v.filter = ""
+				v.filtering = false
+				v.applyFilter(m.activeModel)
+				return true, nil
+			}
 			v.filtering = false
 			return true, nil
 		case tea.KeyBackspace, tea.KeyCtrlH, tea.KeyDelete:
@@ -636,6 +736,16 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 			}
 			return true, nil
 		case tea.KeyEnter:
+			if len(v.models) > 0 && v.index >= 0 && v.index < len(v.models) {
+				selected := v.models[v.index]
+				provName := model.DefaultProtonmanName
+				if v.providerIndex >= 0 && v.providerIndex < len(v.providerNames) {
+					provName = v.providerNames[v.providerIndex]
+				}
+				cmd := saveDefaultModelCmd(provName, selected.ID)
+				m.bottom.remove(modelSelectViewID)
+				return true, cmd
+			}
 			v.filtering = false
 			return true, nil
 		case tea.KeyRunes:
@@ -679,6 +789,12 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 			return true, v.loadProvider(m, false)
 		}
 		return true, nil
+	case "shift+tab":
+		if len(v.providerNames) > 1 {
+			v.providerIndex = (v.providerIndex - 1 + len(v.providerNames)) % len(v.providerNames)
+			return true, v.loadProvider(m, false)
+		}
+		return true, nil
 	case "up", "k":
 		if v.index > 0 {
 			v.index--
@@ -710,13 +826,20 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 		}
 		return true, nil
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		targetIdx := int(message.String()[0]-'1') + v.offset
+		if targetIdx >= 0 && targetIdx < len(v.models) {
+			selected := v.models[targetIdx]
+			provName := model.DefaultProtonmanName
+			if v.providerIndex >= 0 && v.providerIndex < len(v.providerNames) {
+				provName = v.providerNames[v.providerIndex]
+			}
+			cmd := saveDefaultModelCmd(provName, selected.ID)
+			m.bottom.remove(modelSelectViewID)
+			return true, cmd
+		}
 		return true, nil
 	case "enter":
 		if len(v.models) == 0 {
-			m.bottom.remove(modelSelectViewID)
-			if !m.bottom.has(providerViewID) {
-				m.bottom.push(newProviderPaneView())
-			}
 			return true, nil
 		}
 		if v.index >= 0 && v.index < len(v.models) {
@@ -812,7 +935,7 @@ func (m *bubbleModel) setReasoningEffort(effort sdk.ReasoningEffort) tea.Cmd {
 	m.reasoningEffort = effort
 	m.agents.SetReasoningEffort(effort)
 	m.reconfigureRunner()
-	m.appendLine(successStyle.Render("Thinking level set to " + reasoningEffortLabel(effort) + "."))
+	m.appendLine(successStyle.Render("Thinking level set to " + reasoningEffortLabel(effort) + " for this session."))
 	m.refreshViewport()
 	return nil
 }
@@ -846,16 +969,30 @@ func (v *reasoningPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool,
 	v.index, _, _ = normalizedPickerWindow(v.index, 0, len(choices), len(choices))
 	switch message.String() {
 	case "up", "k":
-		v.index = (v.index - 1 + len(choices)) % len(choices)
+		if v.index > 0 {
+			v.index--
+		}
 		return true, nil
 	case "down", "j":
-		v.index = (v.index + 1) % len(choices)
+		if v.index < len(choices)-1 {
+			v.index++
+		}
 		return true, nil
 	case "home", "g":
 		v.index = 0
 		return true, nil
 	case "end", "G":
 		v.index = len(choices) - 1
+		return true, nil
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		idx := int(message.String()[0] - '1')
+		if idx >= 0 && idx < len(choices) {
+			effort := choices[idx]
+			m.bottom.remove(reasoningViewID)
+			return true, m.setReasoningEffort(effort)
+		}
+		return true, nil
+	case "tab", "shift+tab":
 		return true, nil
 	case "enter":
 		effort := choices[v.index]

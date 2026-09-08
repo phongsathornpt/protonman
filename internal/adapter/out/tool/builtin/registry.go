@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin/readfile"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 	"github.com/phongsathornpt/protonman/internal/platform/checkpoint"
@@ -121,16 +122,16 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 	}
 	checkpointStore := selectCheckpointStore(cfg.stores)
 	handlers := []tool.Handler{
-		NewReadFile(workspaceRoot),
+		readfile.New(workspaceRoot),
+		NewCalculate(),
+		NewGrep(workspaceRoot),
+		NewFindFiles(workspaceRoot),
+		NewListDir(workspaceRoot),
+		NewGitStatus(workspaceRoot, cfg.launcher),
 		NewBashWithCheckpoint(workspaceRoot, cfg.launcher, checkpointStore),
 		NewWriteFile(workspaceRoot, checkpointStore),
 		NewSearchReplace(workspaceRoot, checkpointStore),
 		NewApplyPatch(workspaceRoot, checkpointStore),
-		NewGrep(workspaceRoot),
-		NewInspectCode(workspaceRoot),
-		NewFindFiles(workspaceRoot),
-		NewListDir(workspaceRoot),
-		NewGitStatus(workspaceRoot, cfg.launcher),
 		NewCheckpointRestore(checkpointStore),
 	}
 	handlers = append(handlers, cfg.additional...)

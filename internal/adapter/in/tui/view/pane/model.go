@@ -48,18 +48,32 @@ func ModelRows(snapshot ModelSnapshot) []string {
 		}
 	}
 	if len(snapshot.Models) == 0 {
-		return []string{
-			tuistyle.BrandStyle.Render("✓ Select Model"), "",
-			tuistyle.MutedStyle.Render("No models available for the selected provider."), "",
-			tuistyle.MutedStyle.Render("a add provider credentials · esc close"),
+		title := fmt.Sprintf("Select Model · %s", snapshot.ProviderName)
+		rows := []string{
+			tuistyle.BrandStyle.Render(title),
 		}
+		if snapshot.Filtering || strings.TrimSpace(snapshot.Filter) != "" {
+			search := "Search: " + snapshot.Filter
+			if snapshot.Filtering {
+				search += "█"
+			}
+			rows = append(rows, tuistyle.MutedStyle.Render(textview.TruncateEllipsis(search, maxWidth-2)), "")
+			rows = append(rows, tuistyle.MutedStyle.Render(fmt.Sprintf("No models match %q", snapshot.Filter)), "")
+			rows = append(rows, tuistyle.MutedStyle.Render("esc clear filter · tab provider · p providers · esc close"))
+		} else {
+			rows = append(rows, "",
+				tuistyle.MutedStyle.Render("No models available for the selected provider."), "",
+				tuistyle.MutedStyle.Render("a add provider credentials · esc close"),
+			)
+		}
+		return rows
 	}
-	visibleRows := PickerVisibleRows(snapshot.Height, 6)
+	visibleRows := PickerVisibleRows(snapshot.Height, 7)
 	index, offset, visibleEnd := NormalizedWindow(snapshot.Index, snapshot.Offset, len(snapshot.Models), visibleRows)
 	visible := snapshot.Models[offset:visibleEnd]
 	title := fmt.Sprintf("Select Model · %s · %d/%d", snapshot.ProviderName, index+1, len(snapshot.Models))
 	if snapshot.ProviderCount > 1 {
-		title += " · tab provider"
+		title += " · tab/shift+tab provider"
 	}
 	rows := make([]string, 0, len(visible)*2+8)
 	rows = append(rows, tuistyle.BrandStyle.Render(title))

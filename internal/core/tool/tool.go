@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/base/failure"
@@ -185,6 +186,8 @@ const (
 	KindTask Kind = "task"
 	// KindAgent identifies subagent orchestration and lifecycle tools.
 	KindAgent Kind = "agent"
+	// KindCompute identifies deterministic local computation tools.
+	KindCompute Kind = "compute"
 )
 
 // ErrInvalidCall indicates that a call envelope cannot be dispatched safely.
@@ -222,6 +225,7 @@ type RecoveryAction string
 const (
 	RecoveryRestartPagination RecoveryAction = "restart_pagination"
 	RecoveryRefreshResource   RecoveryAction = "refresh_resource"
+	RecoveryUseDedicatedTool  RecoveryAction = "use_dedicated_tool"
 )
 
 // ToolError is an internal error with a stable model-facing classification.
@@ -323,6 +327,10 @@ func FailureFromError(err error) *Failure {
 		result.Code = ErrorCodeCanceled
 	case errors.Is(err, context.DeadlineExceeded):
 		result.Code = ErrorCodeDeadlineExceeded
+	case errors.Is(err, os.ErrNotExist):
+		result.Code = ErrorCodeNotFound
+	case errors.Is(err, os.ErrPermission):
+		result.Code = ErrorCodePermissionDenied
 	}
 	if traits, ok := failure.TraitsFor(result.Code); ok {
 		result.Retryable = traits.Retryable
@@ -623,7 +631,7 @@ type DynamicRegistrar interface {
 
 func validKind(kind Kind) bool {
 	switch kind {
-	case KindRead, KindEdit, KindBash, KindGrep, KindMCP, KindWebFetch, KindWebSearch, KindTask, KindAgent:
+	case KindRead, KindEdit, KindBash, KindGrep, KindMCP, KindWebFetch, KindWebSearch, KindTask, KindAgent, KindCompute:
 		return true
 	default:
 		return false
@@ -664,7 +672,7 @@ func EffectiveMutability(definition Definition) Mutability {
 		return definition.Mutability
 	}
 	switch definition.Kind {
-	case KindRead, KindGrep, KindWebFetch, KindWebSearch:
+	case KindRead, KindGrep, KindWebFetch, KindWebSearch, KindCompute:
 		return MutabilityReadOnly
 	default:
 		return MutabilityMutating

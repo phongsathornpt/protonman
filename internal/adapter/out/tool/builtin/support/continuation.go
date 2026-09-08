@@ -1,4 +1,4 @@
-package builtin
+package support
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
-func continuationToken(toolName string, query any, snapshot string) (string, error) {
+func ContinuationToken(toolName string, query any, snapshot string) (string, error) {
 	canonical, err := json.Marshal(query)
 	if err != nil {
 		return "", fmt.Errorf("encode continuation query: %w", err)
@@ -25,11 +25,11 @@ func continuationToken(toolName string, query any, snapshot string) (string, err
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-func fileSnapshot(info os.FileInfo) string {
+func FileSnapshot(info os.FileInfo) string {
 	return fmt.Sprintf("%d:%d:%d", info.Size(), info.ModTime().UnixNano(), uint32(info.Mode()))
 }
 
-func directorySnapshot(ctx context.Context, root string, entries []os.DirEntry) (string, error) {
+func DirectorySnapshot(ctx context.Context, root string, entries []os.DirEntry) (string, error) {
 	hash := sha256.New()
 	for _, entry := range entries {
 		if err := ctx.Err(); err != nil {
@@ -44,14 +44,14 @@ func directorySnapshot(ctx context.Context, root string, entries []os.DirEntry) 
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-func paginationState(truncated bool, kind string, nextOffset *int64, nextLine *int, continuation string) *tool.Pagination {
+func PaginationState(truncated bool, kind string, nextOffset *int64, nextLine *int, continuation string) *tool.Pagination {
 	if !truncated {
 		return nil
 	}
 	return &tool.Pagination{Kind: kind, NextOffset: nextOffset, NextLine: nextLine, Continuation: continuation}
 }
 
-func stalePaginationError(toolName, message string, arguments json.RawMessage) *tool.ToolError {
+func StalePaginationError(toolName, message string, arguments json.RawMessage) *tool.ToolError {
 	err := tool.NewToolError(tool.ErrorCodeStaleContinuation, message)
 	var object map[string]json.RawMessage
 	if json.Unmarshal(arguments, &object) != nil || object == nil {
