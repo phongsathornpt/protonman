@@ -1,11 +1,13 @@
 .DEFAULT_GOAL := tui
 
-.PHONY: all tui run dev build run-bin clean test test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint tag tag-push help
+.PHONY: all tui run dev build install run-bin clean test test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint tag tag-push help
 
 # Binary configuration
 BIN_DIR := bin
 BIN_NAME := protonman
 BINARY := $(BIN_DIR)/$(BIN_NAME)
+INSTALL_DIR ?= $(HOME)/.local/bin
+INSTALL_BINARY := $(INSTALL_DIR)/$(BIN_NAME)
 GO_SOURCES := $(shell find cmd internal proton-sdk -type f -name '*.go' ! -name '*_test.go')
 VERSION ?= $(shell git describe --tags --always --dirty --match 'v[0-9]*' 2>/dev/null || echo dev)
 VERSION_LDFLAGS := -X github.com/phongsathornpt/protonman/internal/base/buildinfo.version=$(VERSION)
@@ -35,6 +37,12 @@ $(VERSION_STAMP):
 $(BINARY): $(GO_SOURCES) go.mod go.sum Makefile $(VERSION_STAMP)
 	@mkdir -p $(BIN_DIR)
 	go build -trimpath -ldflags "$(BUILD_LDFLAGS)" -o $(BINARY) ./cmd/protonman
+
+## install: Build from the current source tree and install into ~/.local/bin by default
+install: build
+	@mkdir -p "$(INSTALL_DIR)"
+	install -m 0755 "$(BINARY)" "$(INSTALL_BINARY)"
+	@printf 'installed %s (%s)\n' "$(INSTALL_BINARY)" "$$($(INSTALL_BINARY) --version)"
 
 ## run-bin: Alias for run
 run-bin: run

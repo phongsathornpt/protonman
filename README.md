@@ -77,6 +77,7 @@ go run ./cmd/protonman
 
 # Build the standalone binary
 make build
+make install   # build HEAD and install to ~/.local/bin/protonman
 ./bin/protonman --version
 ```
 
