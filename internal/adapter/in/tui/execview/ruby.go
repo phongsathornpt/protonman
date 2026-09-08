@@ -1,4 +1,4 @@
-package tui
+package execview
 
 import (
 	"path/filepath"
@@ -50,7 +50,7 @@ func rubyExecTitle(name string, args []string, action string) string {
 	return execTitle("Ruby", action)
 }
 
-func summarizeRubyExec(p *execPresentation, output string) {
+func summarizeRubyExec(p *Presentation, output string) {
 	if p.Title == "RSpec" {
 		if m := rspecSummaryRE.FindStringSubmatch(output); len(m) > 0 {
 			examples, failed := atoiExec(m[1]), atoiExec(m[2])

@@ -1,4 +1,4 @@
-package tui
+package execview
 
 import (
 	"fmt"
@@ -27,7 +27,7 @@ func gitAction(args []string) string {
 	return ""
 }
 
-func summarizeGitExec(p *execPresentation, output string) {
+func summarizeGitExec(p *Presentation, output string) {
 	lines := nonEmptyExecLines(output)
 	switch p.Action {
 	case "status":

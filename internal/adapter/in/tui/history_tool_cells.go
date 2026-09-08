@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/execview"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
@@ -289,7 +290,7 @@ func (c ExecCell) RenderWidth(width int) []string {
 		}
 
 		if summary == "" && c.Duration > 0 {
-			header = alignExecDuration(header, formatExecDuration(c.Duration), width)
+			header = alignExecDuration(header, execview.FormatDuration(c.Duration), width)
 		}
 		out = append(out, wrapStyledLines(header, width)...)
 		if summary != "" {
@@ -338,7 +339,7 @@ func renderExecMetaLine(summary string, duration time.Duration, width int) strin
 	text := sanitizeBubbleText(strings.TrimSpace(summary))
 	durationText := ""
 	if duration > 0 {
-		durationText = formatExecDuration(duration)
+		durationText = execview.FormatDuration(duration)
 	}
 	if durationText == "" {
 		return toolSummaryStyle.Render("  " + text)
@@ -355,12 +356,12 @@ func renderExecMetaLine(summary string, duration time.Duration, width int) strin
 	return toolSummaryStyle.Render(left) + strings.Repeat(" ", gap) + toolSummaryStyle.Render(durationText)
 }
 
-func (c ExecCell) presentation(command string) execPresentation {
+func (c ExecCell) presentation(command string) execview.Presentation {
 	stdout, stderr := c.Stdout, c.Stderr
 	if stdout == "" && stderr == "" {
 		stdout = c.Body
 	}
-	return presentExec(command, stdout, stderr)
+	return execview.Present(command, stdout, stderr)
 }
 
 func (c ExecCell) RawLines() []string {

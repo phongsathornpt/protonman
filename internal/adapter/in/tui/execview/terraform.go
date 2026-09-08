@@ -1,4 +1,4 @@
-package tui
+package execview
 
 import (
 	"fmt"
@@ -19,7 +19,7 @@ func terraformExecTitle(name string, _ []string, action string) string {
 	return execTitle(label, action)
 }
 
-func summarizeTerraformExec(p *execPresentation, output string) {
+func summarizeTerraformExec(p *Presentation, output string) {
 	switch p.Action {
 	case "plan":
 		if m := terraformPlanRE.FindStringSubmatch(output); len(m) == 4 {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/execview"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
@@ -31,7 +32,7 @@ func (c AgentRunCell) RenderWidth(width int) []string {
 	indicator, style := c.statePresentation()
 	header := style.Render(indicator + label)
 	if duration := c.duration(); duration > 0 {
-		header += toolSummaryStyle.Render(glyphSep + formatExecDuration(duration))
+		header += toolSummaryStyle.Render(glyphSep + execview.FormatDuration(duration))
 	}
 	out := wrapStyledLines(header, maxInt(1, width))
 	if detail := c.detail(); detail != "" {

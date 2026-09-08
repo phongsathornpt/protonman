@@ -1,4 +1,4 @@
-package tui
+package execview
 
 import "strings"
 
@@ -18,7 +18,7 @@ func makeExecTitle(_ string, _ []string, action string) string {
 	return execTitle("Make", action)
 }
 
-func summarizeMakeExec(p *execPresentation, output string) {
+func summarizeMakeExec(p *Presentation, output string) {
 	if strings.TrimSpace(output) == "" {
 		p.SuccessSummary = "completed"
 		return
