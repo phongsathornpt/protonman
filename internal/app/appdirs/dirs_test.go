@@ -76,3 +76,48 @@ func TestProjectPathsUseOnlyProtonmanNamespace(t *testing.T) {
 		t.Fatalf("ResolvedProjectSkills() = %q", got)
 	}
 }
+
+func TestResolveProjectScopeDisablesHomeAlias(t *testing.T) {
+	home := t.TempDir()
+	scope, err := ResolveProjectScope(home, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scope.Available {
+		t.Fatalf("project scope = %+v, want unavailable", scope)
+	}
+	if got, want := scope.Root, filepath.Join(home, RootDirName); got != want {
+		t.Fatalf("Root = %q, want %q", got, want)
+	}
+}
+
+func TestResolveProjectScopeDetectsSymlinkAlias(t *testing.T) {
+	home := t.TempDir()
+	parent := t.TempDir()
+	alias := filepath.Join(parent, "home-link")
+	if err := os.Symlink(home, alias); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	scope, err := ResolveProjectScope(home, alias)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scope.Available {
+		t.Fatalf("project scope = %+v, want unavailable", scope)
+	}
+}
+
+func TestResolveProjectScopeKeepsDistinctWorkspaceAvailable(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	scope, err := ResolveProjectScope(home, work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scope.Available {
+		t.Fatalf("project scope = %+v, want available", scope)
+	}
+	if got, want := scope.Config, filepath.Join(work, RootDirName, ConfigFileName); got != want {
+		t.Fatalf("Config = %q, want %q", got, want)
+	}
+}
