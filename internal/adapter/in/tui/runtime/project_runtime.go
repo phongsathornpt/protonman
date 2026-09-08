@@ -332,20 +332,49 @@ func (m *bubbleModel) executeUserConfigCommand(line, rawName string) tea.Cmd {
 	cmdLine := strings.TrimSpace(strings.TrimPrefix(line, "/"))
 	cmdLine = strings.TrimSpace(strings.TrimPrefix(cmdLine, rawName))
 	fields := strings.Fields(cmdLine)
-	if len(fields) != 3 || strings.ToLower(fields[0]) != "set" || strings.ToLower(fields[1]) != "subagents" {
-		m.appendError("usage: /config set subagents <on|off>")
+	if len(fields) != 3 || strings.ToLower(fields[0]) != "set" {
+		m.appendError("usage: /config set <subagents|thinking|tool-calls> <value>")
 		m.refreshViewport()
 		return nil
 	}
-	enabled, err := parseSubagentsEnabled(fields[2])
-	if err != nil {
-		m.appendError(err.Error())
+	switch strings.ToLower(fields[1]) {
+	case "subagents":
+		enabled, err := parseSubagentsEnabled(fields[2])
+		if err != nil {
+			m.appendError(err.Error())
+			m.refreshViewport()
+			return nil
+		}
+		return func() tea.Msg {
+			err := (app.UserSettings{}).SaveSubagentsEnabled(enabled)
+			return userSettingSavedMsg{field: config.FieldAgentSubagentsEnabled, value: enabled, err: err}
+		}
+	case "thinking", "reasoning":
+		effort, err := sdk.ParseReasoningEffort(fields[2])
+		if err != nil {
+			m.appendError("invalid reasoning effort: use auto, none, low, medium, high, xhigh, or max")
+			m.refreshViewport()
+			return nil
+		}
+		return func() tea.Msg {
+			err := (app.UserSettings{}).SaveReasoningEffort(effort)
+			return userSettingSavedMsg{field: config.FieldAgentReasoningEffort, value: effort, err: err}
+		}
+	case "tool-calls", "tool_calls", "toolcalls":
+		limit, err := strconv.Atoi(fields[2])
+		if err != nil || limit < 0 {
+			m.appendError("invalid tool-calls limit: must be a non-negative integer")
+			m.refreshViewport()
+			return nil
+		}
+		return func() tea.Msg {
+			err := (app.UserSettings{}).SaveMaxToolCalls(limit)
+			return userSettingSavedMsg{field: config.FieldAgentMaxToolCalls, value: limit, err: err}
+		}
+	default:
+		m.appendError("usage: /config set <subagents|thinking|tool-calls> <value>")
 		m.refreshViewport()
 		return nil
-	}
-	return func() tea.Msg {
-		err := (app.UserSettings{}).SaveSubagentsEnabled(enabled)
-		return userSettingSavedMsg{field: config.FieldAgentSubagentsEnabled, value: enabled, err: err}
 	}
 }
 
@@ -355,26 +384,67 @@ func (m *bubbleModel) updateUserSettingSaved(message userSettingSavedMsg) (tea.M
 		m.refreshViewport()
 		return m, nil
 	}
-	if message.field != config.FieldAgentSubagentsEnabled {
+	switch message.field {
+	case config.FieldAgentSubagentsEnabled:
+		enabled := message.value.(bool)
+		if m.projectSource(config.FieldAgentSubagentsEnabled) == config.SourceProject {
+			m.appendLine(successStyle.Render("User subagent default saved."))
+			m.appendMuted("The trusted project override remains effective in this workspace.")
+			m.refreshViewport()
+			return m, nil
+		}
+		m.subagentsEnabled = enabled
+		m.agents.SetEnabled(enabled)
+		if m.projectConfigProvenance == nil {
+			m.projectConfigProvenance = make(map[string]config.ValueSource)
+		}
+		m.projectConfigProvenance[config.FieldAgentSubagentsEnabled] = config.SourceUser
+		m.reconfigureRunner()
+		m.appendLine(successStyle.Render("User subagent default saved and applied."))
+		m.refreshViewport()
+		return m, nil
+
+	case config.FieldAgentReasoningEffort:
+		effort := message.value.(sdk.ReasoningEffort)
+		if m.projectSource(config.FieldAgentReasoningEffort) == config.SourceProject {
+			m.appendLine(successStyle.Render("User thinking default saved to " + appdirs.UserConfigDisplay() + "."))
+			m.appendMuted("The trusted project override remains effective in this workspace.")
+			m.refreshViewport()
+			return m, nil
+		}
+		m.reasoningEffort = effort
+		m.agents.SetReasoningEffort(effort)
+		if m.projectConfigProvenance == nil {
+			m.projectConfigProvenance = make(map[string]config.ValueSource)
+		}
+		m.projectConfigProvenance[config.FieldAgentReasoningEffort] = config.SourceUser
+		m.reconfigureRunner()
+		m.appendLine(successStyle.Render("User thinking default saved and applied to " + appdirs.UserConfigDisplay() + "."))
+		m.refreshViewport()
+		return m, nil
+
+	case config.FieldAgentMaxToolCalls:
+		limit := message.value.(int)
+		if m.projectSource(config.FieldAgentMaxToolCalls) == config.SourceProject {
+			m.appendLine(successStyle.Render("User tool call limit saved to " + appdirs.UserConfigDisplay() + "."))
+			m.appendMuted("The trusted project override remains effective in this workspace.")
+			m.refreshViewport()
+			return m, nil
+		}
+		m.maxToolCalls = limit
+		if m.projectConfigProvenance == nil {
+			m.projectConfigProvenance = make(map[string]config.ValueSource)
+		}
+		m.projectConfigProvenance[config.FieldAgentMaxToolCalls] = config.SourceUser
+		m.reconfigureRunner()
+		m.appendLine(successStyle.Render("User tool call limit saved and applied to " + appdirs.UserConfigDisplay() + "."))
+		m.refreshViewport()
+		return m, nil
+
+	default:
 		m.appendError("unsupported user setting")
 		m.refreshViewport()
 		return m, nil
 	}
-	enabled := message.value.(bool)
-	if m.projectSource(config.FieldAgentSubagentsEnabled) == config.SourceProject {
-		m.appendLine(successStyle.Render("User subagent default saved."))
-		m.appendMuted("The trusted project override remains effective in this workspace.")
-		m.refreshViewport()
-		return m, nil
-	}
-	m.subagentsEnabled = enabled
-	m.agents.SetEnabled(enabled)
-	if m.projectConfigProvenance == nil {
-		m.projectConfigProvenance = make(map[string]config.ValueSource)
-	}
-	m.projectConfigProvenance[config.FieldAgentSubagentsEnabled] = config.SourceUser
-	m.reconfigureRunner()
-	m.appendLine(successStyle.Render("User subagent default saved and applied."))
-	m.refreshViewport()
-	return m, nil
 }
+

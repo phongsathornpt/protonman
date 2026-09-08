@@ -24,7 +24,7 @@ func Catalog(agentProfiles string) []Command {
 		{Name: "tools", Description: "list tools"},
 		{Name: "skills", Aliases: []string{"skill"}, Description: "browse, activate, or toggle agent skills (/skills [name|active|toggle])", TakesArgs: true},
 		{Name: "project", Aliases: []string{"protonman", "proton"}, Description: "inspect or edit project-local Protonman settings (/project [status|init|set ...])", TakesArgs: true},
-		{Name: "config", Description: "edit user-level Protonman settings (/config set subagents <on|off>)", TakesArgs: true},
+		{Name: "config", Description: "edit user-level Protonman settings (/config set <subagents|thinking|tool-calls> <value>)", TakesArgs: true},
 		{Name: "session", Description: "show the active session"},
 		{Name: "sessions", Description: "list resumable sessions for this workspace"},
 		{Name: "agents", Description: "inspect live and retained subagents"},
