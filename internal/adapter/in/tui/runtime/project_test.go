@@ -261,3 +261,64 @@ func TestUserConfigDoesNotOverrideTrustedProjectSetting(t *testing.T) {
 		t.Fatal("user default was not persisted")
 	}
 }
+
+func TestUserConfigSetsThinkingAndPersists(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	t.Setenv("PROTONMAN_HOME", homeDir)
+	coord := agent.NewCoordinator(nil, nil, nil, nil)
+	defer coord.Close()
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.workDir = workDir
+	m.agents = app.NewAgents(coord)
+	m.reasoningEffort = sdk.ReasoningDefault
+
+	cmd := m.executeCommand("/config set thinking high")
+	if cmd == nil {
+		t.Fatal("config command returned nil")
+	}
+	updated, _ := m.Update(cmd())
+	m = updated.(*bubbleModel)
+	if m.reasoningEffort != sdk.ReasoningHigh || coord.ReasoningEffort() != sdk.ReasoningHigh {
+		t.Fatalf("user config did not update reasoning effort: tui=%q coord=%q", m.reasoningEffort, coord.ReasoningEffort())
+	}
+	if got := m.projectSource(config.FieldAgentReasoningEffort); got != config.SourceUser {
+		t.Fatalf("provenance = %q, want user", got)
+	}
+	snapshot, err := config.Load(context.Background(), config.Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh {
+		t.Fatalf("snapshot reasoning_effort = %q, want high", snapshot.Agent.ReasoningEffort)
+	}
+}
+
+func TestUserConfigSetsToolCallsAndPersists(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	t.Setenv("PROTONMAN_HOME", homeDir)
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.workDir = workDir
+	m.maxToolCalls = 100
+
+	cmd := m.executeCommand("/config set tool-calls 42")
+	if cmd == nil {
+		t.Fatal("config command returned nil")
+	}
+	updated, _ := m.Update(cmd())
+	m = updated.(*bubbleModel)
+	if m.maxToolCalls != 42 {
+		t.Fatalf("user config did not update maxToolCalls: got %d, want 42", m.maxToolCalls)
+	}
+	if got := m.projectSource(config.FieldAgentMaxToolCalls); got != config.SourceUser {
+		t.Fatalf("provenance = %q, want user", got)
+	}
+	snapshot, err := config.Load(context.Background(), config.Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Agent.MaxToolCalls != 42 {
+		t.Fatalf("snapshot max_tool_calls = %d, want 42", snapshot.Agent.MaxToolCalls)
+	}
+}
