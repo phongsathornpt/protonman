@@ -161,7 +161,7 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	if strings.TrimSpace(searchPath) == "" {
 		searchPath = "."
 	}
-	resolvedPath, err := h.workspace.ResolveRead(ctx, searchPath)
+	resolvedPath, err := h.workspace.ResolveExistingRead(ctx, searchPath)
 	if err != nil {
 		return tool.Result{}, err
 	}
@@ -285,7 +285,14 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		return nil
 	})
 	if walkErr != nil {
-		return tool.Result{}, fmt.Errorf("grep workspace: %w", walkErr)
+		switch {
+		case errors.Is(walkErr, os.ErrNotExist):
+			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeNotFound, fmt.Sprintf("grep path does not exist: %q", searchPath), walkErr)
+		case errors.Is(walkErr, os.ErrPermission):
+			return tool.Result{}, tool.WrapToolError(tool.ErrorCodePermissionDenied, fmt.Sprintf("cannot search path: %q", searchPath), walkErr)
+		default:
+			return tool.Result{}, fmt.Errorf("grep path %q: %w", searchPath, walkErr)
+		}
 	}
 	snapshot := hex.EncodeToString(snapshotHash.Sum(nil))
 	if legacyContinuation != "" {
