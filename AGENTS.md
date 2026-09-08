@@ -1,0 +1,786 @@
+# AGENTS.md
+
+## Purpose
+
+This file is the working contract for coding agents modifying Proton.
+It summarizes the current codebase, architectural ownership, runtime invariants,
+and the expected engineering workflow. Treat repository code and tests as the
+source of truth when this document and implementation ever disagree.
+
+Proton is a Go 1.27 autonomous coding agent with three inbound modes:
+
+- Bubble Tea interactive TUI
+- headless CLI for scripts and CI
+- ACP stdio server for editor/IDE integrations
+
+The project prioritizes clean architecture, explicit capability boundaries,
+fail-closed security, bounded concurrency, structured tool contracts, and
+empirical verification.
+
+## Engineering Contract
+
+When changing Proton:
+
+1. Inspect the relevant implementation and nearby tests before editing.
+2. Preserve Clean Architecture dependency direction.
+3. Prefer the smallest coherent fix over broad speculative refactors.
+4. Preserve unrelated user work and repository state.
+5. Add or update tests for behavioral changes.
+6. Run the narrowest useful verifier first, then broaden according to risk.
+7. Do not claim verification that did not actually run.
+8. Do not create commits, branches, releases, or deployments unless explicitly requested.
+
+## Repository Shape
+
+```text
+cmd/proton/                     composition root and CLI mode selection
+internal/adapter/in/            inbound adapters
+  acp/                          ACP JSON-RPC/stdin-stdout adapter
+  headless/                     non-interactive CLI adapter
+  tui/                          Bubble Tea presentation layer
+internal/adapter/out/           driven infrastructure adapters
+  config/                       layered TOML loading and persistence
+  model/                        provider discovery and SDK adaptation
+  sessionfs/                    file-backed session repository
+  tool/
+    agent/                      subagent lifecycle tools and capability registry
+    builtin/                    workspace coding tools
+    mcp/                        external MCP discovery and handlers
+    skill/                      skill activation tool
+    todo/                       session-bound task tools
+    web/                        web_fetch adapter
+internal/app/                   application use-case boundaries
+internal/base/                  leaf utilities with zero internal dependencies
+internal/core/                  pure domain contracts and policies
+internal/engine/                prompt, tool-call, and turn orchestration
+internal/feature/               agent, project, skill, and todo features
+internal/platform/              checkpoint, sandbox, and telemetry infrastructure
+proton-sdk/                     provider-neutral model SDK
+proton-sdk/provider/            OpenAI-compatible and Anthropic protocol implementations
+test/architecture/              dependency and structure guards
+test/e2e/                       binary/provider/TUI integration tests
+test/unit/                      application/domain unit tests
+```
+
+## Clean Architecture Boundaries
+
+Dependency direction is enforced by `test/architecture/dependency_test.go`.
+Do not weaken those tests to make an architectural violation pass.
+
+### `internal/base/*`
+
+Leaf packages only. They must not import any other `internal/*` or `cmd/*` package.
+Current responsibilities include build metadata, context helpers, environment
+parsing, failure classification, glob matching, and global runtime defaults.
+
+### `internal/core/*`
+
+Pure domain contracts and policies:
+
+- `modelprofile`: model metadata/capability policy
+- `permission`: permission modes, rules, grants, request evaluation
+- `session`: session aggregate, repository port, state/resource ownership
+- `tool`: tool definitions, registry interfaces, metadata, safety/effect contracts
+- `workspace`: authorized root, protected paths, mutation synchronization
+
+Core packages must not import adapters, features, engines, or the composition root.
+
+### `internal/app/*`
+
+Application ports used by inbound adapters. TUI, ACP, and headless code should
+reach concrete subsystems through this layer instead of taking implementation
+escape hatches.
+
+Important application boundaries:
+
+- `app.Conversation` hides `engine/turn` from inbound adapters.
+- `app.Agents` hides the concrete `agent.Coordinator` from TUI/ACP/headless.
+- `app.Projects`, `app.Providers`, and `app.UserSettings` own persistence use cases.
+- `app.Sessions` owns session discovery/load/delete operations.
+- `app.Models` owns provider model discovery.
+
+Inbound adapters must not call config persistence, provider discovery, session
+filesystem stores, or coordinator methods directly.
+
+### Composition Root
+
+`cmd/proton/bootstrap.go` is the main assembly point. It resolves configuration,
+workspace policy, checkpoints, sandboxing, skills, permissions, coordinator,
+session-owned TODO state, tool registry, tool-call service, and the initial
+conversation. Cross-layer wiring belongs here rather than inside domain packages.
+
+## Runtime Assembly Flow
+
+The primary runtime is assembled roughly as:
+
+```text
+config.Load
+  -> workspace.New + checkpoint store + sandbox launcher
+  -> skill discovery + permission policy
+  -> agent.Coordinator
+  -> session repository + session-owned todo repository
+  -> builtin registry + feature tools
+  -> subagent CapabilityRegistry decorator
+  -> toolcall.Service
+  -> provider LanguageModel
+  -> app.BuildConversation / turn.Loop
+  -> TUI | headless | ACP
+```
+
+## Agent Model: Dota-Style Attributes
+
+Canonical profile identifiers are:
+
+| Profile | TUI | Role | Mutating | Default reasoning |
+| --- | --- | --- | --- | --- |
+| `universal` | `UNI` | primary software engineer and orchestrator | yes | medium |
+| `strength` | `STR` | substantial implementation, fixes, refactors | yes | medium |
+| `agility` | `AGI` | fast bounded read-only exploration/tracing | no | medium |
+| `intelligence` | `INT` | deep reasoning, architecture, difficult/high-risk engineering | yes | high |
+
+`Universal` owns the user's goal. `Strength` builds. `Agility` moves quickly
+through evidence. `Intelligence` reasons deeply.
+
+Only `strength`, `agility`, and `intelligence` are valid delegated profiles.
+`universal` is the primary/root profile and cannot be spawned as a child.
+
+Legacy profile names are accepted only for migration/compatibility and normalize
+immediately:
+
+- `pow`, `worker` -> `strength`
+- `int`, `explorer`, `reviewer` -> `agility`
+- `dex` -> `intelligence`
+
+Do not add new behavior keyed to legacy names. Use canonical profiles internally.
+
+Profile policy is centralized in `internal/feature/agent/profile_spec.go`; avoid
+scattering profile-specific permissions, reasoning defaults, or descriptions.
+
+## Subagent Runtime Semantics
+
+Subagents are optional runtime capability, not a different root-agent type.
+Universal works normally when delegation is disabled.
+
+Configuration:
+
+```toml
+[agent]
+subagents_enabled = true
+reasoning_effort = "auto"
+
+[agent.subagents.strength]
+provider = "protonman"
+model = "coding-model-id"
+reasoning_effort = "medium"
+
+[agent.subagents.agility]
+reasoning_effort = "low" # model omitted: inherit Universal dynamically
+
+[agent.subagents.intelligence]
+provider = "anthropic"
+model = "reasoning-model-id"
+reasoning_effort = "high"
+```
+
+Default delegation is enabled. Effective precedence is default -> user -> trusted project.
+Subagent profile tables merge field-wise by canonical profile. Provider/model must be
+specified together; reasoning may be specified independently. Configured providers must
+already exist in the effective provider map and satisfy their authentication requirements.
+
+Runtime controls:
+
+```text
+/subagents             show current runtime state
+/subagents on|off      change current runtime state
+/config set subagents on|off
+                       persist user-level default
+/project set subagents on|off
+                       persist trusted project override
+```
+
+Disabling subagents prevents **new admission only**. It never cancels running
+children and does not discard retained lifecycle records.
+
+Capability changes are linearized with `Coordinator.Spawn`: once `SetEnabled(false)`
+returns, later spawn admission cannot observe the previous enabled state.
+
+Model and reasoning selection are also bound at `Spawn` admission. A profile with no
+explicit model route inherits the current Universal model; later Universal model changes
+affect only future admissions. A configured profile model is immutable for that child.
+Reasoning resolution is profile override -> current global override -> profile default.
+`auto`/`default` is inheritance, not a separate reasoning level.
+
+Provider/model objects are built at the application/composition boundary. The coordinator
+receives provider-neutral `sdk.LanguageModel` instances and must not learn API keys, base
+URLs, provider protocols, or config persistence details.
+
+### Tool publication while disabled
+
+`internal/adapter/out/tool/agent/CapabilityRegistry` controls what the model sees:
+
+- enabled: publish `delegate_task` and all lifecycle tools
+- disabled with existing live/retained agents: hide `delegate_task`, keep lifecycle tools
+- disabled with no existing agents: hide all subagent tools
+
+Lifecycle tools are `wait_agent`, `get_agent`, `list_agents`, and `cancel_agent`.
+This preserves control over work that existed before delegation was disabled.
+
+The execution boundary also rejects `Spawn` while disabled. Tool visibility is
+not a substitute for runtime authorization because a stale model request can
+outlive a capability change.
+
+### Child ownership and nesting
+
+Children are coordinator-owned asynchronous runs. Parent wait timeout does not
+cancel a child. Explicit cancellation uses coordinator lifecycle operations.
+Subagent-scoped registries remove agent and task tools, so children cannot spawn
+nested children or mutate the parent's task plan.
+
+### Workspace scheduling
+
+Mutating profiles acquire exclusive workspace capacity. Read-only children may
+run concurrently. Writer admission prevents a stream of readers from starving a
+waiting writer. Preserve this fairness property when touching scheduler code.
+
+## Prompt Architecture
+
+System prompt composition lives in `internal/engine/prompt` and is capability-driven.
+Do not maintain separate large root prompts per provider or agent mode.
+
+The root identity is Universal. When agent tools are published, the prompt adds
+orchestration guidance. When they are absent, the prompt becomes a clean
+single-agent software engineering prompt without stale delegation instructions.
+
+Prompt sections are derived from the effective tool surface:
+
+- task tools -> Task Coordination section
+- agent tools -> Delegation Protocol
+- MCP tools -> External MCP Tools trust section
+- mutating workspace tools -> Editing and Verification section
+- grounding profile -> Grounding Contract
+- active skills -> Skills section
+- repository instructions -> Project Instructions
+- model profile -> provider/model guidance hints
+
+Do not hard-code claims that a capability exists. If the model cannot call a
+capability, the prompt should normally omit instructions for it.
+
+Prefer positive semantic tool guidance. Python, Node, shell, Go, Rust, and other
+runtimes are valid engineering tools when they are the appropriate operation;
+do not turn prompt wording into arbitrary runtime bans.
+
+The prompt must never treat task state, orchestration status, or agent reports as
+repository evidence. Child results are context; integration and final verification
+remain the primary agent's responsibility.
+
+## Tool System
+
+Pure tool contracts live in `internal/core/tool`. Implementations belong under
+`internal/adapter/out/tool/*`; do not put concrete tools in the domain package.
+
+The default registry requires an explicit sandbox launcher and checkpoint store.
+It fails closed if either is omitted. Registration validates definitions and
+precompiles input/output JSON-schema validators before atomically publishing a
+batch.
+
+Built-in workspace tools include:
+
+- `read_file`
+- `write_file`
+- `search_replace`
+- `apply_patch`
+- `grep`
+- `inspect_code`
+- `find_files`
+- `list_dir`
+- `bash`
+- `git_status`
+- `checkpoint_restore`
+
+Feature tools add `web_fetch`, task tools, skill activation, agent lifecycle
+operations, and dynamically discovered MCP tools.
+
+Canonical argument names for common tools are intentionally stable:
+
+- `bash` -> `command`
+- `read_file` -> `path`
+- `write_file` -> `file_path`
+- `search_replace` -> `file_path`
+- `grep` -> `pattern`
+- `web_fetch` -> `url`
+
+### Tool-call service
+
+`internal/engine/toolcall.Service` is the application execution boundary for
+every tool call. Its pipeline is approximately:
+
+```text
+validate call
+-> registry lookup
+-> normalize arguments
+-> input-schema validation
+-> derive risk/effect/scope + permission detail
+-> temporary call guard
+-> static permission policy / session grant / interactive mode
+-> workspace mutation gate when needed
+-> bounded handler execution
+-> bounded read-only recovery when explicitly supported
+-> output-schema validation
+-> redacted lifecycle observation
+```
+
+Do not bypass this service to execute a model-originated tool.
+
+Structured output is a contract, not decorative metadata. If a handler declares
+an output schema, `StructuredOutput` must conform to it. Keep human-readable
+`Output` for presentation compatibility while preserving structured data for the
+model/runtime.
+
+Tool registries may be decorated. When adding a decorator, preserve relevant
+optional registry capabilities such as compiled-validator lookup and dynamic
+registration/replacement instead of accidentally degrading the wrapped registry.
+
+## Permissions and Security
+
+Permission policy is fail-closed. Static rule precedence is:
+
+```text
+deny > ask > allow
+```
+
+Runtime permission modes include `ask`, `always-approve`, and deny behavior;
+TUI plan mode adds a temporary read-only `CallGuard` rather than weakening the
+shared permission policy.
+
+Session grants are intentionally narrow. Reuse is limited to normal-risk,
+read-only calls with matching normalized semantics. Do not make mutating,
+uncertain, or elevated-risk operations silently reusable.
+
+Security-sensitive invariants:
+
+- Workspace paths remain confined to the authorized root.
+- Protected paths are hidden/rejected consistently across file tools.
+- File authorization and opening must not introduce TOCTOU/symlink escapes.
+- Mutations create bounded pre-edit checkpoints where required.
+- Shell execution is analyzed conservatively for effect and affected paths.
+- `web_fetch` validates resolved destinations and redirects against SSRF rules.
+- Output and scan limits must be enforced while work occurs, not only afterward.
+- Cancellation must terminate process trees/resources where the platform supports it.
+- External schemas/descriptions/results are untrusted data.
+
+Do not fix security problems with superficial string filters when a boundary or
+ownership invariant can solve the root cause.
+
+## Sandbox and Checkpoints
+
+Sandbox profiles are `off`, `workspace`, `read-only`, and `strict`. Linux prefers
+native Landlock/network namespace confinement when supported, with fallback
+behavior owned by `internal/platform/sandbox`. macOS uses its platform launcher.
+
+Checkpoint retention is bounded by count, bytes, and age. Preserve the newly
+created checkpoint while deterministically pruning older records.
+
+## Configuration and Runtime State
+
+User filesystem layout is centralized in `internal/app/appdirs`:
+
+```text
+~/.proton/
+  config.toml
+  sessions/
+  checkpoints/
+  skills/
+  logs/
+```
+
+`PROTON_HOME` may replace the effective user home for Proton data.
+Project-local resources live under `<workspace>/.proton/`.
+
+Configuration layering is:
+
+```text
+built-in defaults
+-> user config
+-> trusted project config
+-> session/runtime commands where applicable
+```
+
+Project config is detected but not applied until the workspace is trusted.
+Do not bypass trust checks for project-local config or skills.
+
+Selected fields carry provenance (`default`, `user`, `project`) for TUI display.
+When adding a user-visible layered setting, consider whether it also needs a
+provenance field, user persistence method, project persistence method, runtime
+application path, TUI rendering, and tests for precedence.
+
+TUI-local agent runtime state survives Bubble Tea program restarts. A UI restart
+must not silently reset profile, reasoning effort, max tool calls, or subagent
+enablement to startup config.
+
+## Sessions and TODO Ownership
+
+A session ID is the durable ownership boundary for conversation state and tasks:
+
+```text
+~/.proton/sessions/<session-id>/
+  state.json
+  todo.md
+```
+
+`get_todo` and `update_todo` are bound to the active session repository. ACP uses
+session-specific registry overlays so concurrent sessions cannot share task state.
+Workspace file tools must not mutate private session task resources.
+
+TODO mutation uses durable optimistic concurrency. Read the latest snapshot,
+use its exact revision for updates, and on revision conflict refresh and reconsider
+the patch. Never blindly replay stale task operations.
+
+Task metadata is coordination state, not evidence that source code changed or a
+test passed. Mark status complete only when the underlying work is complete.
+Subagents cannot mutate the parent task plan.
+
+## MCP Integration
+
+MCP tools are outbound external capabilities under
+`internal/adapter/out/tool/mcp` and are namespaced:
+
+```text
+mcp.<server>.<tool>
+```
+
+Discovery is resource-bounded and catalog registration is atomic. Server names,
+tool names, manifests, schemas, and duplicate namespaces are validated before
+publication.
+
+Treat MCP safety declarations conservatively:
+
+- an explicit mutating declaration is always honored
+- a read-only declaration relaxes policy only when locally trusted
+- otherwise mutability remains unspecified/potentially mutating
+
+MCP descriptions are normalized as external metadata and cannot override system,
+project, permission, safety, or user instructions.
+
+Validate MCP input/output schemas using the same SDK contract machinery used by
+built-in tools. Contract violations should retain useful diagnostics such as
+server identity, catalog generation, schema fingerprint, expected JSON type, and
+actual JSON type.
+
+Do not blindly retry an external mutating call after an ambiguous transport
+failure. First determine whether the remote side may already have changed state.
+
+## Proton SDK and Models
+
+`proton-sdk` is provider-neutral and must not import CLI-owned `internal/*` or
+`cmd/*` packages. It owns:
+
+- `LanguageModel` and streaming interfaces
+- messages, content parts, tools, tool results, and usage
+- model capabilities and token limits
+- reasoning effort model options
+- schema compilation/validation
+- provider error and rate-limit normalization
+- retry decisions and bounded backoff
+- middleware composition
+- stream collection and history helpers
+
+Provider protocol implementations live under `proton-sdk/provider/*`.
+
+`internal/adapter/out/model` adapts configured providers and remote model
+catalog metadata into the SDK interface. Keep provider-specific wire behavior in
+the provider/adapter layer rather than contaminating the turn engine.
+
+Model profiles can affect reasoning support, context/output limits, modalities,
+tool/schema compatibility, and prompt hints. When adding provider compatibility,
+prefer explicit model-profile/schema lowering over weakening the canonical tool
+contract for every provider.
+
+Streams must be closed exactly once on success and every failure/cancellation
+path. Preserve the original processing error over a secondary close error when
+both occur.
+
+## Turn Engine
+
+`internal/engine/turn` owns the multi-round model/tool state machine. Inbound
+adapters consume `app.Conversation`; they must not import `turn` directly.
+
+Important turn responsibilities include:
+
+- model request streaming
+- capability-aware tool publication
+- system prompt composition
+- grounding requirements
+- tool execution/results
+- repeated-call/loop protection
+- tool-result budgets
+- deadline propagation
+- reasoning policy
+- mutation verification state
+
+At least one global termination bound must remain active. Do not accidentally
+construct an unbounded model/tool loop by disabling both tool-count and time bounds.
+
+## TUI Conventions
+
+TUI is presentation logic under `internal/adapter/in/tui`. Keep domain semantics
+outside it. In particular, do not let TUI directly own config persistence,
+provider discovery, session storage, or concrete coordinator control.
+
+Current important slash commands include:
+
+```text
+/help
+/tools
+/skills
+/project
+/config
+/session
+/sessions
+/agents
+/subagents [on|off]
+/agent [universal|strength|agility|intelligence]
+/reasoning [auto|none|low|medium|high|xhigh|max]
+/mode
+/ask
+/always-approve
+/plan
+/transcript
+/todo
+/new
+/model
+/provider
+/call
+/quit
+```
+
+Agent lifecycle presentation should aggregate by agent identity rather than dump
+raw orchestration RPC noise. Active work belongs in live status/panes; terminal
+results remain useful in transcript/history. Internal IDs are appropriate in the
+detailed `/agents` inspection view, not as constant visual clutter.
+
+Subagent-off is a non-default state and should be visible without permanently
+spending footer space on the default enabled state. Existing children must remain
+inspectable when delegation is disabled.
+
+Shell result presentation should be generic and semantic rather than special-case
+one ecosystem. Python, Node, Cargo/Rust, Make, Docker, Java/Gradle/Maven, PHP,
+Ruby, .NET, Terraform, Kubernetes, and future command families should reuse the
+same execution/result model where possible.
+
+When changing TUI behavior, test at the smallest useful layer:
+
+- pure renderer/state unit tests
+- Bubble Tea update/command tests
+- PTY E2E tests for terminal interaction when keyboard/layout behavior matters
+
+Avoid snapshots that assert irrelevant whitespace if semantic assertions are
+more stable.
+
+## Runtime Defaults
+
+Canonical defaults live in `internal/base/runtimepolicy`, not duplicated literals.
+Important current defaults include:
+
+- turn tool calls: 100
+- turn timeout: 10m
+- round timeout: 5m
+- tool permission timeout: 2m
+- tool execution timeout: 2m
+- model request timeout: 5m
+- subagent max runtime: 30m
+- subagent wait timeout: 30s
+- subagent queue timeout: 30s
+- max live subagents: 16
+- max retained subagents: 64
+- retained subagent result TTL: 10m
+
+Other resource limits such as tool-result budgets, read scan bytes, checkpoint
+retention, and infrastructure timeouts also belong in runtime policy or the
+boundary that owns the resource. Avoid magic-number drift across packages.
+
+## Testing and Verification
+
+Use focused tests during development and the full suite before declaring a
+cross-cutting change complete.
+
+Common commands:
+
+```sh
+# Fast package tests
+make test
+
+# Full repository suite, including architecture and E2E
+go test ./...
+
+# E2E only
+make test-e2e
+
+# Full race detector
+make test-race
+
+# Format and vet
+make lint
+
+# Build binary
+make build
+```
+
+For concurrency-heavy agent/tool/TUI changes, a useful targeted race run is:
+
+```sh
+go test -race \
+  ./internal/feature/agent \
+  ./internal/adapter/out/tool/agent \
+  ./internal/adapter/in/tui
+```
+
+Run architecture tests whenever moving packages, adding cross-layer imports, or
+introducing a new application boundary:
+
+```sh
+go test ./test/architecture
+```
+
+High-risk changes should usually add regression coverage at the boundary where
+the bug was observable. Examples:
+
+- provider/tool publication -> mock HTTP E2E request inspection
+- config precedence -> config package + TUI/application tests
+- subagent lifecycle -> coordinator tests + race detector
+- terminal UX -> TUI update tests or PTY E2E
+- tool schemas -> generic registry/toolcall contract tests
+- MCP discovery -> catalog atomicity, contract, and concurrency tests
+- filesystem security -> boundary-focused tool/workspace tests
+
+## Change Placement Guide
+
+When implementing a change, place it according to ownership:
+
+| Change | Primary location |
+| --- | --- |
+| tool domain metadata/risk/effect contract | `internal/core/tool` |
+| built-in workspace tool implementation | `internal/adapter/out/tool/builtin` |
+| subagent tool adapter | `internal/adapter/out/tool/agent` |
+| agent scheduling/lifecycle/profile policy | `internal/feature/agent` |
+| prompt wording/composition | `internal/engine/prompt` |
+| model/tool turn behavior | `internal/engine/turn` |
+| permission execution pipeline | `internal/engine/toolcall` + `internal/core/permission` |
+| user/project TOML persistence | `internal/adapter/out/config`, exposed via `internal/app` |
+| terminal interaction/rendering | `internal/adapter/in/tui` |
+| provider model discovery/adaptation | `internal/adapter/out/model` |
+| provider wire protocol | `proton-sdk/provider/*` |
+| session persistence | `internal/adapter/out/sessionfs` |
+| reusable low-level defaults/helpers | `internal/base/*` only if truly dependency-free |
+| composition/wiring | `cmd/proton` |
+
+## Implementation Style
+
+Prefer idiomatic Go and explicit contracts:
+
+- keep interfaces small and owned by the consumer when practical
+- validate at boundaries before launching expensive or concurrent work
+- make invalid states difficult to construct
+- prefer typed errors/sentinels that callers can classify with `errors.Is/As`
+- preserve context cancellation and deadlines through every layer
+- bound queues, buffers, retained state, scans, and external payloads
+- avoid goroutine leaks and channels that no owner can close
+- keep mutex scope small, but preserve linearization where correctness needs it
+- clone externally mutable slices/maps/JSON schemas at ownership boundaries
+- avoid global mutable state unless it is an intentional immutable registry/default
+- use comments to explain invariants and why, not to narrate obvious syntax
+
+For refactors, maintain behavior with focused tests before broad movement. Do not
+create god packages or generic utility dumping grounds to reduce file count.
+Architecture and ownership are more important than making a directory look small.
+
+## Concurrency Checklist
+
+For asynchronous/concurrent changes, explicitly identify:
+
+1. owner and lifetime of every goroutine/task
+2. cancellation source and propagation
+3. queue/admission timeout versus execution timeout
+4. shared state lock/atomic ownership
+5. ordering/linearization requirements
+6. backpressure and retained-state bounds
+7. terminal-state publication and subscriber shutdown
+8. whether writer/read fairness can regress
+9. what happens during shutdown and partial failure
+
+Passing a happy-path test is not sufficient evidence for concurrency correctness.
+
+## Git and Repository Hygiene
+
+Before editing, inspect `git status` when existing work may be present. Preserve
+unrelated modifications. Do not reset, checkout, restore, clean, or rewrite
+history merely to simplify the task.
+
+When commits are explicitly requested:
+
+- inspect the diff first
+- keep commits logically scoped and reviewable
+- run relevant tests before each meaningful commit when practical
+- use concise conventional messages describing the behavior changed
+- do not bundle unrelated user changes
+
+Generated binaries and temporary diagnostics do not belong in commits unless the
+repository explicitly tracks them. Remove debugging artifacts introduced by the
+current task.
+
+## Documentation Rules
+
+`README.md` is user-facing product/usage documentation.
+`docs/architecture.md` explains architectural boundaries.
+`AGENTS.md` is the coding-agent working contract.
+
+Keep these roles distinct. When behavior changes, update the smallest relevant
+document rather than duplicating the same prose everywhere.
+
+Documentation must describe current behavior, not planned behavior as if already
+implemented. Prefer canonical identifiers and current package paths. Mention
+legacy agent profile names only when documenting compatibility/migration.
+
+## Completion Checklist
+
+Before declaring a task complete, verify the relevant subset of:
+
+- requested behavior is implemented, not merely planned
+- final diff is focused and contains no accidental files
+- architecture boundaries still hold
+- tool input/output contracts still validate
+- security/trust boundaries remain fail-closed
+- cancellation/deadline/resource limits still propagate correctly
+- subagent enable/disable behavior remains consistent at config, registry, prompt, and execution layers
+- existing delegated work remains manageable after disabling new delegation
+- session/TODO ownership cannot leak across sessions
+- TUI state survives expected restarts/reconfiguration
+- provider-specific compatibility does not weaken canonical contracts globally
+- targeted tests pass after the final mutation
+- broader tests are run when blast radius warrants them
+- race tests are run for meaningful concurrency changes
+- no success claim depends solely on a subagent report
+
+## Useful Starting Points
+
+For common investigations, begin here:
+
+- startup/wiring: `cmd/proton/bootstrap.go`
+- architecture guardrails: `test/architecture/dependency_test.go`
+- tool contracts: `internal/core/tool/`
+- default tools: `internal/adapter/out/tool/builtin/registry.go`
+- tool execution: `internal/engine/toolcall/service.go`
+- turn loop: `internal/engine/turn/`
+- system prompt: `internal/engine/prompt/prompt.go`
+- agent profiles: `internal/feature/agent/agent.go`, `profile_spec.go`
+- agent lifecycle/concurrency: `internal/feature/agent/coordinator.go`, `lifecycle.go`, `scheduler.go`
+- subagent publication: `internal/adapter/out/tool/agent/capability_registry.go`
+- configuration: `internal/adapter/out/config/`
+- TUI commands/state: `internal/adapter/in/tui/`
+- sessions: `internal/core/session/`, `internal/adapter/out/sessionfs/`
+- tasks: `internal/feature/todo/`, `internal/adapter/out/tool/todo/`
+- MCP: `internal/adapter/out/tool/mcp/`
+- model adaptation: `internal/adapter/out/model/`
+- provider SDK: `proton-sdk/`, `proton-sdk/provider/`
+
+When uncertain, follow evidence from these ownership points outward instead of
+adding a shortcut across layers.
