@@ -1,4 +1,4 @@
-package tui
+package toolview
 
 import (
 	"encoding/json"
@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/style"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
@@ -126,12 +127,12 @@ func TestExtractToolTarget(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotTarget, gotKind := extractToolTarget(tt.toolName, tt.kind, json.RawMessage(tt.args))
+			gotTarget, gotKind := ExtractTarget(tt.toolName, tt.kind, json.RawMessage(tt.args))
 			if gotTarget != tt.wantTarget {
-				t.Errorf("extractToolTarget() target = %q, want %q", gotTarget, tt.wantTarget)
+				t.Errorf("ExtractTarget() target = %q, want %q", gotTarget, tt.wantTarget)
 			}
 			if tt.wantKind != "" && gotKind != tt.wantKind {
-				t.Errorf("extractToolTarget() kind = %q, want %q", gotKind, tt.wantKind)
+				t.Errorf("ExtractTarget() kind = %q, want %q", gotKind, tt.wantKind)
 			}
 		})
 	}
@@ -222,12 +223,12 @@ func TestSummarizeGitStatus(t *testing.T) {
 
 func TestFormatOutputFold(t *testing.T) {
 	lines := []string{"one", "two", "three"}
-	if got := formatOutputFold(lines, 3); len(got) != 3 {
+	if got := FormatOutputFold(lines, 3); len(got) != 3 {
 		t.Fatalf("expected unfolded lines for len <= 3, got: %d", len(got))
 	}
 
 	fourLines := []string{"one", "two", "three", "four"}
-	fourFolded := formatOutputFold(fourLines, 3)
+	fourFolded := FormatOutputFold(fourLines, 3)
 	if len(fourFolded) != 4 {
 		t.Fatalf("expected 4 folded items, got: %d", len(fourFolded))
 	}
@@ -236,7 +237,7 @@ func TestFormatOutputFold(t *testing.T) {
 	}
 
 	fiveLines := []string{"one", "two", "three", "four", "five"}
-	fiveFolded := formatOutputFold(fiveLines, 3)
+	fiveFolded := FormatOutputFold(fiveLines, 3)
 	if len(fiveFolded) != 4 {
 		t.Fatalf("expected 5 lines to fold to 4 items, got: %d", len(fiveFolded))
 	}
@@ -245,7 +246,7 @@ func TestFormatOutputFold(t *testing.T) {
 	}
 
 	longLines := []string{"line1", "line2", "line3", "line4", "line5", "line6", "line7", "line8"}
-	folded := formatOutputFold(longLines, 3)
+	folded := FormatOutputFold(longLines, 3)
 	if len(folded) != 4 { // first 2 + fold indicator + last 1
 		t.Fatalf("expected 4 folded items, got: %d (%v)", len(folded), folded)
 	}
@@ -255,22 +256,22 @@ func TestFormatOutputFold(t *testing.T) {
 }
 
 func TestStyleDiffLine(t *testing.T) {
-	styled, isDiff := styleDiffLine("+func NewFeature() {")
+	styled, isDiff := StyleDiffLine("+func NewFeature() {")
 	if !isDiff || !strings.Contains(styled, "+func NewFeature() {") {
 		t.Fatalf("expected diff addition styling, got: %s (isDiff=%v)", styled, isDiff)
 	}
 
-	styledDel, isDiffDel := styleDiffLine("-oldCode()")
+	styledDel, isDiffDel := StyleDiffLine("-oldCode()")
 	if !isDiffDel || !strings.Contains(styledDel, "-oldCode()") {
 		t.Fatalf("expected diff deletion styling, got: %s (isDiff=%v)", styledDel, isDiffDel)
 	}
 
-	styledHunk, isDiffHunk := styleDiffLine("@@ -10,5 +10,6 @@")
+	styledHunk, isDiffHunk := StyleDiffLine("@@ -10,5 +10,6 @@")
 	if !isDiffHunk || !strings.Contains(styledHunk, "@@ -10,5 +10,6 @@") {
 		t.Fatalf("expected diff hunk styling, got: %s (isDiff=%v)", styledHunk, isDiffHunk)
 	}
 
-	_, isRegular := styleDiffLine("regular terminal output")
+	_, isRegular := StyleDiffLine("regular terminal output")
 	if isRegular {
 		t.Fatal("expected regular output not to be classified as diff")
 	}
@@ -325,19 +326,19 @@ func TestDetectFileType(t *testing.T) {
 
 func TestFormatPathSegmentsStyled(t *testing.T) {
 	// Nested path contains dir and file
-	nested := formatPathSegmentsStyled("internal/tui/theme.go")
+	nested := FormatPath("internal/tui/theme.go")
 	if !strings.Contains(nested, "internal/tui/") || !strings.Contains(nested, "theme.go") {
 		t.Fatalf("expected nested path to contain dir and base, got: %s", nested)
 	}
 
 	// Root file
-	rootFile := formatPathSegmentsStyled("README.md")
+	rootFile := FormatPath("README.md")
 	if !strings.Contains(rootFile, "README.md") {
 		t.Fatalf("expected root file to contain name, got: %s", rootFile)
 	}
 
 	// Grep pattern query
-	grepQuery := formatPathSegmentsStyled(`"glyphMark" in internal/tui`)
+	grepQuery := FormatPath(`"glyphMark" in internal/tui`)
 	if !strings.Contains(grepQuery, `"glyphMark"`) || !strings.Contains(grepQuery, "internal/") {
 		t.Fatalf("expected grep pattern query to contain pattern and path, got: %s", grepQuery)
 	}
@@ -346,25 +347,25 @@ func TestFormatPathSegmentsStyled(t *testing.T) {
 func TestExtractReadFileExcerpt(t *testing.T) {
 	// Go package
 	goCode := "// Package foo\npackage foo\n\nfunc main() {}\n"
-	if got := extractReadFileExcerpt(goCode); got != "package foo" {
+	if got := ExtractReadFileExcerpt(goCode); got != "package foo" {
 		t.Fatalf("expected package foo excerpt, got: %q", got)
 	}
 
 	// Markdown title
 	mdText := "# Protonman Coding Agent\n\nHigh performance..."
-	if got := extractReadFileExcerpt(mdText); got != "# Protonman Coding Agent" {
+	if got := ExtractReadFileExcerpt(mdText); got != "# Protonman Coding Agent" {
 		t.Fatalf("expected markdown title excerpt, got: %q", got)
 	}
 
 	// Shell script
 	shText := "#!/usr/bin/env bash\nset -euo pipefail\n"
-	if got := extractReadFileExcerpt(shText); got != "#!/usr/bin/env bash" {
+	if got := ExtractReadFileExcerpt(shText); got != "#!/usr/bin/env bash" {
 		t.Fatalf("expected shebang excerpt, got: %q", got)
 	}
 
 	// Plain statements should not be extracted
 	plainCode := "x := 1\ny := 2\n"
-	if got := extractReadFileExcerpt(plainCode); got != "" {
+	if got := ExtractReadFileExcerpt(plainCode); got != "" {
 		t.Fatalf("expected empty excerpt for non-structural code, got: %q", got)
 	}
 }
@@ -383,14 +384,14 @@ func TestSummarizeReadFileTarget(t *testing.T) {
 }
 
 func TestTodoToolPresentation(t *testing.T) {
-	target, kind := extractToolTarget("update_todo", "", json.RawMessage(`{"operations":[{"op":"set_status","id":"a","status":"in_progress"},{"op":"set_status","id":"b","status":"completed"}]}`))
+	target, kind := ExtractTarget("update_todo", "", json.RawMessage(`{"operations":[{"op":"set_status","id":"a","status":"in_progress"},{"op":"set_status","id":"b","status":"completed"}]}`))
 	if kind != tool.KindTask || target != "2 task operations" {
 		t.Fatalf("target=%q kind=%q", target, kind)
 	}
-	if glyph := toolKindGlyph(kind, "update_todo"); glyph != glyphTodoActive {
+	if glyph := KindGlyph(kind, "update_todo"); glyph != tuistyle.GlyphTodoActive {
 		t.Fatalf("glyph = %q", glyph)
 	}
-	summary := summarizeToolOutput("update_todo", kind, target, `{"total":2,"completed":1,"in_progress":1}`, nil, false)
+	summary := SummarizeOutput("update_todo", kind, target, `{"total":2,"completed":1,"in_progress":1}`, nil, false)
 	if got := summarizeTodoUpdate(`{"total":3,"completed":1,"in_progress":1,"changes":{"completed":1,"started":1,"removed":1}}`); got != "Tasks updated · 1 completed · 1 started · 1 removed" {
 		t.Fatalf("todo diff summary=%q", got)
 	}
@@ -400,26 +401,26 @@ func TestTodoToolPresentation(t *testing.T) {
 }
 
 func TestAgentToolPresentation(t *testing.T) {
-	target, kind := extractToolTarget("delegate_task", "", json.RawMessage(`{"profile":"int","task":"inspect router behavior"}`))
+	target, kind := ExtractTarget("delegate_task", "", json.RawMessage(`{"profile":"int","task":"inspect router behavior"}`))
 	if kind != tool.KindAgent || !strings.Contains(target, "[int]") {
 		t.Fatalf("target=%q kind=%q", target, kind)
 	}
-	if glyph := toolKindGlyph(kind, "delegate_task"); glyph != glyphAgent {
+	if glyph := KindGlyph(kind, "delegate_task"); glyph != tuistyle.GlyphAgent {
 		t.Fatalf("glyph=%q", glyph)
 	}
-	if got := summarizeToolOutput("delegate_task", kind, target, `{"agent_id":"explorer-7","status":"queued"}`, nil, false); got != "spawned explorer-7 · queued" {
+	if got := SummarizeOutput("delegate_task", kind, target, `{"agent_id":"explorer-7","status":"queued"}`, nil, false); got != "spawned explorer-7 · queued" {
 		t.Fatalf("spawn summary=%q", got)
 	}
-	if got := summarizeToolOutput("wait_agent", kind, "explorer-7", `{"agent_id":"explorer-7","status":"running","result":null}`, nil, false); got != "waiting for explorer-7 · running" {
+	if got := SummarizeOutput("wait_agent", kind, "explorer-7", `{"agent_id":"explorer-7","status":"running","result":null}`, nil, false); got != "waiting for explorer-7 · running" {
 		t.Fatalf("wait summary=%q", got)
 	}
-	if got := summarizeToolOutput("wait_agent", kind, "explorer-7", `{"agent_id":"explorer-7","status":"completed","result":{"summary":"Found duplicate router branches in provider.go"}}`, nil, false); !strings.Contains(got, "Found duplicate router branches") {
+	if got := SummarizeOutput("wait_agent", kind, "explorer-7", `{"agent_id":"explorer-7","status":"completed","result":{"summary":"Found duplicate router branches in provider.go"}}`, nil, false); !strings.Contains(got, "Found duplicate router branches") {
 		t.Fatalf("completed wait summary=%q", got)
 	}
-	if got := summarizeToolOutput("list_agents", kind, "subagents", `{"agents":[{"id":"a","state":"canceling"},{"id":"b","state":"completed"}]}`, nil, false); got != "2 agents · 1 active" {
+	if got := SummarizeOutput("list_agents", kind, "subagents", `{"agents":[{"id":"a","state":"canceling"},{"id":"b","state":"completed"}]}`, nil, false); got != "2 agents · 1 active" {
 		t.Fatalf("canceling list summary=%q", got)
 	}
-	if got := summarizeToolOutput("list_agents", kind, "subagents", `{"agents":[{"id":"a","state":"running"},{"id":"b","state":"completed"}]}`, nil, false); got != "2 agents · 1 active" {
+	if got := SummarizeOutput("list_agents", kind, "subagents", `{"agents":[{"id":"a","state":"running"},{"id":"b","state":"completed"}]}`, nil, false); got != "2 agents · 1 active" {
 		t.Fatalf("list summary=%q", got)
 	}
 }
@@ -433,7 +434,7 @@ func TestFormatGrepToolView(t *testing.T) {
 		"internal/tui/theme.go:50:brandMarkStyle = lipgloss.NewStyle()",
 	}
 	target := `"brandLockup|brandStyle"`
-	view := formatGrepToolView(lines, target, 80)
+	view := FormatGrepView(lines, target, 80)
 	if len(view) != 5 {
 		t.Fatalf("expected 5 lines in folded view, got %d", len(view))
 	}
@@ -448,7 +449,7 @@ func TestFormatGrepToolView(t *testing.T) {
 
 func TestLongPatternTruncation(t *testing.T) {
 	longTarget := `"brandLockup|welcomeCard|glyphBrand|showWelcome|brandStyle|brandMark" in internal/tui`
-	rendered := formatPathSegmentsStyled(longTarget)
+	rendered := FormatPath(longTarget)
 	if !strings.Contains(rendered, "…") {
 		t.Fatalf("expected long target to be truncated with ellipsis, got: %s", rendered)
 	}

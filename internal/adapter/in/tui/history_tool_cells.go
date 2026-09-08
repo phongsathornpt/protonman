@@ -204,20 +204,6 @@ func formatSkillToolBody(body string, exitCode *int, truncated bool, denied bool
 	return resultBodyLines(body, exitCode, truncated, denied, failureCode)
 }
 
-func extractSkillContentName(body string) string {
-	for _, quote := range []string{`name="`, `name='`} {
-		idx := strings.Index(body, quote)
-		if idx != -1 {
-			rest := body[idx+len(quote):]
-			end := strings.IndexAny(rest, `"'`)
-			if end != -1 {
-				return rest[:end]
-			}
-		}
-	}
-	return ""
-}
-
 // ExecCell gives shell execution a compact, command-oriented presentation.
 type ExecCell struct {
 	CallID          string

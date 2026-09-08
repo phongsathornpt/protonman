@@ -90,6 +90,16 @@ func TestTUIDoesNotDependOnProjectDirectly(t *testing.T) {
 	})
 }
 
+func TestTUIToolViewDoesNotDependOnPresentationRoot(t *testing.T) {
+	packages := listPackages(t)
+	pkgPath := modulePath + "/internal/adapter/in/tui/toolview"
+	assertNoImports(t, packages, pkgPath, []string{
+		modulePath + "/internal/adapter/in/tui",
+		modulePath + "/internal/app",
+		modulePath + "/internal/engine/turn",
+	})
+}
+
 func TestTUIDiagnosticDoesNotDependOnPresentationRoot(t *testing.T) {
 	packages := listPackages(t)
 	pkgPath := modulePath + "/internal/adapter/in/tui/diagnostic"
