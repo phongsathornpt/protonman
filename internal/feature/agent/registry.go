@@ -50,10 +50,19 @@ func (c *Coordinator) Wait(ctx context.Context, id string, timeout time.Duration
 	}
 }
 
-// WaitActivity waits for the next terminal subagent mailbox activity. The observation
-// timeout is non-fatal and does
-// not cancel or otherwise mutate any child agent.
+// WaitActivity waits for the next terminal subagent mailbox activity across all parents.
+// Observation timeout is non-fatal and never mutates child state.
 func (c *Coordinator) WaitActivity(ctx context.Context, timeout time.Duration) (ActivityWaitResult, error) {
+	return c.waitActivity(ctx, "", timeout)
+}
+
+// WaitActivityForParent waits for terminal activity owned by parentID only.
+// Unrelated background agents cannot wake this wait.
+func (c *Coordinator) WaitActivityForParent(ctx context.Context, parentID string, timeout time.Duration) (ActivityWaitResult, error) {
+	return c.waitActivity(ctx, strings.TrimSpace(parentID), timeout)
+}
+
+func (c *Coordinator) waitActivity(ctx context.Context, parentID string, timeout time.Duration) (ActivityWaitResult, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -64,16 +73,35 @@ func (c *Coordinator) WaitActivity(ctx context.Context, timeout time.Duration) (
 	consume := func() (*Event, <-chan struct{}) {
 		c.activityMu.Lock()
 		defer c.activityMu.Unlock()
-		if c.activitySeq > c.activitySeen {
-			c.activitySeen = c.activitySeq
-			ev := c.activityEvent
+		mailbox := c.activityMailboxes[parentID]
+		if mailbox == nil {
+			mailbox = &activityMailbox{notify: make(chan struct{})}
+			c.activityMailboxes[parentID] = mailbox
+		}
+		if mailbox.seq > mailbox.seen {
+			mailbox.seen = mailbox.seq
+			ev := mailbox.event
 			return &ev, nil
 		}
-		return nil, c.activityNotify
+		return nil, mailbox.notify
+	}
+
+	snapshot := func() []AgentStatus {
+		agents := c.List()
+		if parentID == "" {
+			return agents
+		}
+		filtered := make([]AgentStatus, 0, len(agents))
+		for _, status := range agents {
+			if status.ParentID == parentID {
+				filtered = append(filtered, status)
+			}
+		}
+		return filtered
 	}
 
 	if ev, notify := consume(); ev != nil {
-		return ActivityWaitResult{Event: ev, Agents: c.List()}, nil
+		return ActivityWaitResult{Event: ev, Agents: snapshot()}, nil
 	} else {
 		waitCtx := ctx
 		cancel := func() {}
@@ -84,10 +112,10 @@ func (c *Coordinator) WaitActivity(ctx context.Context, timeout time.Duration) (
 		select {
 		case <-notify:
 			ev, _ := consume()
-			return ActivityWaitResult{Event: ev, Agents: c.List()}, nil
+			return ActivityWaitResult{Event: ev, Agents: snapshot()}, nil
 		case <-waitCtx.Done():
 			if errors.Is(waitCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
-				return ActivityWaitResult{Agents: c.List(), TimedOut: true}, nil
+				return ActivityWaitResult{Agents: snapshot(), TimedOut: true}, nil
 			}
 			return ActivityWaitResult{}, waitCtx.Err()
 		}

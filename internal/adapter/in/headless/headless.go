@@ -17,6 +17,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
 )
 
@@ -84,6 +85,7 @@ type Runner struct {
 	runner   app.Conversation
 	messages []model.Message
 	nextID   uint64
+	turnSeq  uint64
 }
 
 // New creates a fail-closed headless runner. Ask-mode calls stay denied
@@ -392,7 +394,9 @@ func (r *Runner) runTurn(
 		return fmt.Errorf("model client is not configured; use /help or /call")
 	}
 	r.messages = append(r.messages, model.Message{Role: model.RoleUser, Content: prompt})
-	result, err := r.runner.Run(ctx, r.Messages(), func(_ context.Context, event app.Event) error {
+	r.turnSeq++
+	turnCtx := agent.WithParentID(ctx, fmt.Sprintf("headless-turn-%d", r.turnSeq))
+	result, err := r.runner.Run(turnCtx, r.Messages(), func(_ context.Context, event app.Event) error {
 		switch event.Kind {
 		case app.EventTextDelta:
 			return writeEvent(output, format, Event{Kind: EventKindText, Text: event.Text})

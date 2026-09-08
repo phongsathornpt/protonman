@@ -2,11 +2,19 @@ package agent
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"sync/atomic"
 
 	"github.com/phongsathornpt/protonman/internal/base/contextutil"
 )
+
+type activityMailbox struct {
+	seq    uint64
+	seen   uint64
+	event  Event
+	notify chan struct{}
+}
 
 // Subscribe returns a bounded lifecycle stream. Slow subscribers drop events
 // rather than blocking agent execution; callers resnapshot coordinator state on
@@ -69,11 +77,23 @@ func (c *Coordinator) recordActivity(ev Event) {
 		return
 	}
 	c.activityMu.Lock()
-	c.activitySeq++
-	c.activityEvent = ev
-	close(c.activityNotify)
-	c.activityNotify = make(chan struct{})
+	c.recordActivityLocked("", ev)
+	if parentID := strings.TrimSpace(ev.ParentID); parentID != "" {
+		c.recordActivityLocked(parentID, ev)
+	}
 	c.activityMu.Unlock()
+}
+
+func (c *Coordinator) recordActivityLocked(scope string, ev Event) {
+	mailbox := c.activityMailboxes[scope]
+	if mailbox == nil {
+		mailbox = &activityMailbox{notify: make(chan struct{})}
+		c.activityMailboxes[scope] = mailbox
+	}
+	mailbox.seq++
+	mailbox.event = ev
+	close(mailbox.notify)
+	mailbox.notify = make(chan struct{})
 }
 
 func enqueueLifecycleEvent(ch chan Event, ev Event) {
