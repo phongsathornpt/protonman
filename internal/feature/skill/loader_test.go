@@ -107,3 +107,31 @@ func TestDiscover_UserAndProjectSkills(t *testing.T) {
 		}
 	})
 }
+
+func TestDiscoverHomeWorkspaceKeepsAliasedSkillsInUserScope(t *testing.T) {
+	home := t.TempDir()
+	createSkill(t, filepath.Join(home, ".protonman", "skills"), "protonman-user", "User Protonman skill")
+	createSkill(t, filepath.Join(home, ".agents", "skills"), "agents-user", "User shared skill")
+
+	for _, trusted := range []bool{false, true} {
+		res, err := Discover(context.Background(), Options{
+			HomeDir:        home,
+			WorkDir:        home,
+			ProjectTrusted: trusted,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(res.Skills) != 2 {
+			t.Fatalf("trusted=%v skills=%d, want 2", trusted, len(res.Skills))
+		}
+		if len(res.Warnings) != 0 {
+			t.Fatalf("trusted=%v warnings=%v, want none", trusted, res.Warnings)
+		}
+		for _, discovered := range res.Skills {
+			if discovered.Scope != ScopeUser {
+				t.Fatalf("trusted=%v skill %q scope=%s, want user", trusted, discovered.Name, discovered.Scope)
+			}
+		}
+	}
+}
