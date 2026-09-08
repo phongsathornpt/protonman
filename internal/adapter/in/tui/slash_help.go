@@ -8,10 +8,10 @@ import (
 func (m *bubbleModel) appendHelp() {
 	for _, command := range slashCatalog {
 		alias := ""
-		if len(command.aliases) > 0 {
-			alias = " (" + strings.Join(prefixNames(command.aliases), ", ") + ")"
+		if len(command.Aliases) > 0 {
+			alias = " (" + strings.Join(prefixNames(command.Aliases), ", ") + ")"
 		}
-		m.appendLine(fmt.Sprintf("/%-16s %s%s", command.name, command.description, alias))
+		m.appendLine(fmt.Sprintf("/%-16s %s%s", command.Name, command.Description, alias))
 	}
 }
 

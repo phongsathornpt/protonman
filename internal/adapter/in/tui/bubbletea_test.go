@@ -610,7 +610,7 @@ func TestSlashDropdownFiltersAndTabAccepts(t *testing.T) {
 		t.Fatal("slash dropdown did not open for /he")
 	}
 	matches := model.slashMatches()
-	if len(matches) != 1 || matches[0].name != "help" {
+	if len(matches) != 1 || matches[0].Name != "help" {
 		t.Fatalf("slash matches = %#v, want help", matches)
 	}
 	applied, command := model.acceptSlash(false)

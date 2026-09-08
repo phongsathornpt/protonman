@@ -101,6 +101,24 @@ func TestTUIPaneDoesNotOwnApplicationServices(t *testing.T) {
 	})
 }
 
+func TestTUISlashViewDoesNotOwnRuntimeState(t *testing.T) {
+	packages := listPackages(t)
+	pkgPath := modulePath + "/internal/adapter/in/tui/slashview"
+	pkg, ok := packages[pkgPath]
+	if !ok {
+		t.Fatalf("package %s not found", pkgPath)
+	}
+	allowed := map[string]bool{
+		modulePath + "/internal/adapter/in/tui/style": true,
+		modulePath + "/internal/core/tool":            true,
+	}
+	for _, imported := range pkg.Imports {
+		if strings.HasPrefix(imported, modulePath+"/internal/") && !allowed[imported] {
+			t.Errorf("TUI slashview imports forbidden runtime package %s", imported)
+		}
+	}
+}
+
 func TestTUIHistoryDependsOnlyOnPresentationAndDomainLeaves(t *testing.T) {
 	packages := listPackages(t)
 	pkgPath := modulePath + "/internal/adapter/in/tui/history"

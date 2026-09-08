@@ -210,7 +210,7 @@ func TestSlashSkills(t *testing.T) {
 		// Filter by prefix
 		model.bottom.prompt().SetValue("/skill pd")
 		matches = model.slashMatches()
-		if len(matches) != 1 || matches[0].name != "pdf-processing" {
+		if len(matches) != 1 || matches[0].Name != "pdf-processing" {
 			t.Fatalf("expected pdf-processing match, got: %#v", matches)
 		}
 
@@ -312,7 +312,7 @@ func TestSlashSkills(t *testing.T) {
 		var foundSkills *slashCommand
 		count := 0
 		for i, cmd := range slashCatalog {
-			if cmd.name == "skills" || cmd.name == "skill" {
+			if cmd.Name == "skills" || cmd.Name == "skill" {
 				foundSkills = &slashCatalog[i]
 				count++
 			}
@@ -320,18 +320,18 @@ func TestSlashSkills(t *testing.T) {
 		if count != 1 {
 			t.Fatalf("expected exactly 1 catalog entry for skills, found %d", count)
 		}
-		if foundSkills == nil || foundSkills.name != "skills" {
+		if foundSkills == nil || foundSkills.Name != "skills" {
 			t.Fatalf("expected primary command name to be 'skills', got %v", foundSkills)
 		}
 		hasAlias := false
-		for _, a := range foundSkills.aliases {
+		for _, a := range foundSkills.Aliases {
 			if a == "skill" {
 				hasAlias = true
 				break
 			}
 		}
 		if !hasAlias {
-			t.Fatalf("expected 'skill' alias in skills command, got %v", foundSkills.aliases)
+			t.Fatalf("expected 'skill' alias in skills command, got %v", foundSkills.Aliases)
 		}
 	})
 }
