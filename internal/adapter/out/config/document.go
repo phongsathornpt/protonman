@@ -27,8 +27,9 @@ type fileAgent struct {
 }
 
 type fileSubagent struct {
-	Provider string `toml:"provider,omitempty"`
-	Model    string `toml:"model,omitempty"`
+	Provider        string  `toml:"provider,omitempty"`
+	Model           string  `toml:"model,omitempty"`
+	ReasoningEffort *string `toml:"reasoning_effort,omitempty"`
 }
 
 type fileRuntime struct {
