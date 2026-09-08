@@ -63,12 +63,10 @@ func (c *Coordinator) CancelRef(ref AgentRef) error {
 		c.agentsMu.Unlock()
 		return nil
 	}
-	status, err := transitionStatus(entry.status, StateCanceling, time.Now(), "cancel requested")
-	if err != nil {
+	if err := applyEntryTransition(entry, LifecycleAgentCancelRequested, time.Now(), "cancel requested"); err != nil {
 		c.agentsMu.Unlock()
 		return err
 	}
-	entry.status = status
 	cancel := entry.cancel
 	c.agentsMu.Unlock()
 	cancel()
@@ -87,11 +85,9 @@ func (c *Coordinator) CancelByTurn(ref TurnRef) int {
 		if entry.status.SessionID != ref.SessionID || entry.status.ParentID != ref.TurnID || entry.status.State.Terminal() || entry.status.State == StateCanceling {
 			continue
 		}
-		status, err := transitionStatus(entry.status, StateCanceling, time.Now(), "cancel requested")
-		if err != nil {
+		if err := applyEntryTransition(entry, LifecycleAgentCancelRequested, time.Now(), "cancel requested"); err != nil {
 			continue
 		}
-		entry.status = status
 		cancels = append(cancels, entry.cancel)
 	}
 	c.agentsMu.Unlock()

@@ -37,12 +37,10 @@ func (c *Coordinator) Resume(ctx context.Context, id, parentID string) (Handle, 
 		c.agentsMu.Unlock()
 		return Handle{}, fmt.Errorf("%w: %q is %s", ErrNotResumable, id, state)
 	}
-	status, err := transitionStatus(entry.status, StateResuming, time.Now(), "resume requested")
-	if err != nil {
+	if err := applyEntryTransition(entry, LifecycleAgentResumeRequested, time.Now(), "resume requested"); err != nil {
 		c.agentsMu.Unlock()
 		return Handle{}, err
 	}
-	entry.status = status
 	req := entry.request
 	c.agentsMu.Unlock()
 
@@ -66,14 +64,13 @@ func (c *Coordinator) Resume(ctx context.Context, id, parentID string) (Handle, 
 		_ = c.Cancel(handle.ID)
 		return Handle{}, fmt.Errorf("%w: source %q disappeared during resume", ErrNotFound, id)
 	}
-	status, err = transitionStatus(source.status, StateResumed, time.Now(), "resumed as "+handle.ID)
-	if err != nil {
+	event := nextLifecycleEvent(source.status, LifecycleAgentResumed, time.Now(), "resumed as "+handle.ID)
+	event.ResumedAs = handle.ID
+	if err := applyEntryLifecycleEvent(source, event); err != nil {
 		c.agentsMu.Unlock()
 		_ = c.Cancel(handle.ID)
 		return Handle{}, err
 	}
-	status.ResumedAs = handle.ID
-	source.status = status
 	c.agentsMu.Unlock()
 
 	c.observeMetric(ctx, MetricEvent{Kind: MetricResumed, SessionID: req.SessionID, AgentID: handle.ID, ParentID: req.ParentID, Profile: handle.Profile})
@@ -100,10 +97,7 @@ func (c *Coordinator) rollbackResume(id string) {
 	if entry == nil || entry.status.State != StateResuming {
 		return
 	}
-	status, err := transitionStatus(entry.status, StateInterrupted, time.Now(), "resume admission failed")
-	if err == nil {
-		entry.status = status
-	}
+	_ = applyEntryTransition(entry, LifecycleAgentInterrupted, time.Now(), "resume admission failed")
 }
 func (c *Coordinator) handleForIDLocked(id string) (Handle, bool) {
 	entry := c.agents[strings.TrimSpace(id)]

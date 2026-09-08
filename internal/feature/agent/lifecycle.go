@@ -69,17 +69,19 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 
 	queuedAt := time.Now()
 	runCtx, runCancel := context.WithCancel(c.rootCtx)
+	queuedEvent := LifecycleEvent{
+		Kind: LifecycleAgentQueued, Version: 1, At: queuedAt, SessionID: req.SessionID, ParentID: req.ParentID,
+		AgentID: id, Profile: req.Profile, Task: req.Task, Provider: providerName, Model: modelID, ResumedFrom: req.ResumedFrom,
+	}
+	queuedStatus, transitionErr := applyLifecycleEvent(AgentStatus{}, queuedEvent)
+	if transitionErr != nil {
+		c.agentsMu.Unlock()
+		runCancel()
+		return Handle{}, transitionErr
+	}
 	entry := &agentEntry{
-		request:         req,
-		languageModel:   boundModel,
-		reasoningEffort: boundReasoning,
-		status: AgentStatus{
-			SessionID: req.SessionID, ID: id, ParentID: req.ParentID, Profile: req.Profile, Provider: providerName, Model: modelID, Task: req.Task, ResumedFrom: req.ResumedFrom,
-			State: StateQueued, StartTime: queuedAt,
-		},
-		cancel:  runCancel,
-		done:    make(chan struct{}),
-		started: make(chan struct{}),
+		request: req, languageModel: boundModel, reasoningEffort: boundReasoning, status: queuedStatus,
+		cancel: runCancel, done: make(chan struct{}), started: make(chan struct{}),
 	}
 	c.agents[id] = entry
 	// Add while admission is still serialized with Close so Wait can never
@@ -139,13 +141,11 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 		c.finishEntry(entry, req, queuedAt, time.Time{}, context.Canceled)
 		return
 	}
-	nextStatus, transitionErr := transitionStatus(entry.status, StateRunning, startedAt, "")
-	if transitionErr != nil {
+	if transitionErr := applyEntryTransition(entry, LifecycleAgentStarted, startedAt, ""); transitionErr != nil {
 		c.agentsMu.Unlock()
 		c.finishEntry(entry, req, queuedAt, time.Time{}, transitionErr)
 		return
 	}
-	entry.status = nextStatus
 	close(entry.started)
 	c.agentsMu.Unlock()
 	queueDuration := startedAt.Sub(queuedAt)
@@ -203,18 +203,16 @@ func (c *Coordinator) finishEntry(entry *agentEntry, req Request, queuedAt, star
 func (c *Coordinator) storeTerminal(entry *agentEntry, res Result, err error) error {
 	c.agentsMu.Lock()
 	defer c.agentsMu.Unlock()
-	next := StateFailed
+	kind := LifecycleAgentFailed
 	switch {
 	case err == nil:
-		next = StateCompleted
+		kind = LifecycleAgentCompleted
 	case errors.Is(err, context.Canceled):
-		next = StateCanceled
+		kind = LifecycleAgentCanceled
 	}
-	status, transitionErr := transitionStatus(entry.status, next, time.Now(), terminalReason(err))
-	if transitionErr != nil {
+	if transitionErr := applyEntryTransition(entry, kind, time.Now(), terminalReason(err)); transitionErr != nil {
 		return transitionErr
 	}
-	entry.status = status
 	entry.result = res
 	entry.err = err
 	return nil
@@ -276,11 +274,9 @@ func (c *Coordinator) CancelByParent(parentID string) int {
 		if entry.status.ParentID != parentID || entry.status.State.Terminal() || entry.status.State == StateCanceling {
 			continue
 		}
-		status, err := transitionStatus(entry.status, StateCanceling, time.Now(), "cancel requested")
-		if err != nil {
+		if err := applyEntryTransition(entry, LifecycleAgentCancelRequested, time.Now(), "cancel requested"); err != nil {
 			continue
 		}
-		entry.status = status
 		cancels = append(cancels, entry.cancel)
 	}
 	c.agentsMu.Unlock()
@@ -301,12 +297,10 @@ func (c *Coordinator) Cancel(id string) error {
 		c.agentsMu.Unlock()
 		return nil
 	}
-	status, err := transitionStatus(entry.status, StateCanceling, time.Now(), "cancel requested")
-	if err != nil {
+	if err := applyEntryTransition(entry, LifecycleAgentCancelRequested, time.Now(), "cancel requested"); err != nil {
 		c.agentsMu.Unlock()
 		return err
 	}
-	entry.status = status
 	cancel := entry.cancel
 	c.agentsMu.Unlock()
 	cancel()
