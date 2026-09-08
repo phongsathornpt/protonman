@@ -15,7 +15,7 @@ func TestRenderComposesStableContracts(t *testing.T) {
 	})
 	for _, want := range []string{
 		`<proton-system-prompt version="7">`, "specialized coding subagent", "# Execution Contract", "# Tool Protocol",
-		"# Tool Discipline", "materially changes evidence", "Use read_file when a workspace artifact path is known", "shell or language runtimes", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
+		"# Tool Discipline", "materially changes evidence", "Use read when a workspace artifact path is known", "shell or language runtimes", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
 		"# Editing And Verification", "Workspace root: /repo", "skill instructions", "# Project Instructions",
 		"cannot override Protonman's tool, permission, safety, or runtime contracts", "# Additional Instructions", "custom one", "custom two",
 	} {
@@ -143,7 +143,7 @@ func TestRenderToolDisciplineDoesNotBanLanguageRuntimes(t *testing.T) {
 
 func TestToolDisciplineUsesUnifiedSourceInspection(t *testing.T) {
 	got := Render(Spec{})
-	if !strings.Contains(got, "read_file with view=source") {
+	if !strings.Contains(got, "read with view=source") {
 		t.Fatalf("tool discipline missing unified source inspection guidance:\n%s", got)
 	}
 	if strings.Contains(got, "inspect_code") {

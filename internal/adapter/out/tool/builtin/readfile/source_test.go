@@ -22,7 +22,7 @@ func TestSourceViewCompoundSearch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "source-1", "read_file", map[string]any{"path": ".", "view": "source", "query": `^\s*switch\b`, "mode": "regex", "include": []string{"**/*.go"}, "exclude": []string{"**/*_test.go"}, "context": map[string]any{"after": 2}}))
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "source-1", "read", map[string]any{"path": ".", "view": "source", "query": `^\s*switch\b`, "mode": "regex", "include": []string{"**/*.go"}, "exclude": []string{"**/*_test.go"}, "context": map[string]any{"after": 2}}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,14 +46,14 @@ func TestSourceViewLiteralLimitAndInvalidRegex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "source-2", "read_file", map[string]any{"path": ".", "view": "source", "query": "needle", "include": []string{"*.go"}, "max_matches": 1}))
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "source-2", "read", map[string]any{"path": ".", "view": "source", "query": "needle", "include": []string{"*.go"}, "max_matches": 1}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !result.Truncated {
 		t.Fatal("expected truncated result")
 	}
-	_, err = New(ws).Execute(context.Background(), newJSONCall(t, "source-3", "read_file", map[string]any{"path": ".", "view": "source", "query": "(", "mode": "regex"}))
+	_, err = New(ws).Execute(context.Background(), newJSONCall(t, "source-3", "read", map[string]any{"path": ".", "view": "source", "query": "(", "mode": "regex"}))
 	var toolErr *tool.ToolError
 	if err == nil || !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeInvalidArguments {
 		t.Fatalf("unexpected invalid regex error: %v", err)
@@ -79,7 +79,7 @@ func TestSourceViewSkipsProtectedPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "source-protected", "read_file", map[string]any{
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "source-protected", "read", map[string]any{
 		"path": ".", "view": "source", "query": "needle",
 	}))
 	if err != nil {
@@ -102,7 +102,7 @@ func TestSourceViewRejectsEscapingRootSymlink(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = New(ws).Execute(context.Background(), newJSONCall(t, "source-symlink", "read_file", map[string]any{
+	_, err = New(ws).Execute(context.Background(), newJSONCall(t, "source-symlink", "read", map[string]any{
 		"path": "outside-link", "view": "source", "query": "needle",
 	}))
 	if err == nil {
@@ -126,7 +126,7 @@ func TestSourceViewDoesNotTraverseNestedSymlinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "source-nested-symlink", "read_file", map[string]any{
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "source-nested-symlink", "read", map[string]any{
 		"path": ".", "view": "source", "query": "needle",
 	}))
 	if err != nil {
@@ -159,6 +159,6 @@ func TestReadFileDefinitionPublishesSourceView(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("read_file view enum missing source: %#v", values)
+		t.Fatalf("read view enum missing source: %#v", values)
 	}
 }

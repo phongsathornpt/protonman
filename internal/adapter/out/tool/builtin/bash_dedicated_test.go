@@ -20,7 +20,7 @@ func TestBashRedirectsPythonImageInspectionToReadFile(t *testing.T) {
 	if !errors.As(err, &toolErr) {
 		t.Fatalf("Execute() error = %v, want ToolError", err)
 	}
-	if toolErr.Recovery == nil || toolErr.Recovery.Action != tool.RecoveryUseDedicatedTool || toolErr.Recovery.Tool != "read_file" {
+	if toolErr.Recovery == nil || toolErr.Recovery.Action != tool.RecoveryUseDedicatedTool || toolErr.Recovery.Tool != "read" {
 		t.Fatalf("recovery = %+v", toolErr.Recovery)
 	}
 	var args map[string]any
@@ -37,14 +37,14 @@ func TestBashRedirectsPythonImageInspectionToReadFile(t *testing.T) {
 
 func TestBashRedirectsPythonTextReadToReadFile(t *testing.T) {
 	suggestion := dedicatedToolForCommand(`python3 -c 'print(open("main.go").read())'`)
-	if suggestion == nil || suggestion.tool != "read_file" || suggestion.args["path"] != "main.go" {
+	if suggestion == nil || suggestion.tool != "read" || suggestion.args["path"] != "main.go" {
 		t.Fatalf("suggestion = %#v", suggestion)
 	}
 }
 
 func TestBashRedirectsNodeTextReadToReadFile(t *testing.T) {
 	suggestion := dedicatedToolForCommand(`node -e 'console.log(fs.readFileSync("package.json", "utf8"))'`)
-	if suggestion == nil || suggestion.tool != "read_file" || suggestion.args["path"] != "package.json" {
+	if suggestion == nil || suggestion.tool != "read" || suggestion.args["path"] != "package.json" {
 		t.Fatalf("suggestion = %#v", suggestion)
 	}
 }
@@ -81,7 +81,7 @@ func TestBashRedirectsSimpleInspectionCommands(t *testing.T) {
 		tool    string
 		args    map[string]any
 	}{
-		{`cat "main.go"`, "read_file", map[string]any{"path": "main.go"}},
+		{`cat "main.go"`, "read", map[string]any{"path": "main.go"}},
 		{`ls internal`, "list_dir", map[string]any{"path": "internal"}},
 		{`rg "TODO" internal`, "grep", map[string]any{"pattern": "TODO", "path": "internal"}},
 		{`grep -R "TODO" internal`, "grep", map[string]any{"pattern": "TODO", "path": "internal"}},

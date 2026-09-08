@@ -67,7 +67,7 @@ func readImageArtifact(ctx context.Context, file *os.File, info os.FileInfo, inp
 	}
 	pixels := int64(config.Width) * int64(config.Height)
 	if config.Width <= 0 || config.Height <= 0 || pixels > maxImagePixels {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeExecution, fmt.Sprintf("read_file image dimensions %dx%d exceed the safe analysis limit", config.Width, config.Height))
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeExecution, fmt.Sprintf("read image dimensions %dx%d exceed the safe analysis limit", config.Width, config.Height))
 	}
 	if _, err := file.Seek(0, 0); err != nil {
 		return tool.Result{}, fmt.Errorf("rewind %q: %w", input.Path, err)

@@ -161,3 +161,18 @@ func TestRegistryReplaceNamespaceCanRemoveAllTools(t *testing.T) {
 		t.Fatal("unrelated tool removed")
 	}
 }
+
+func TestRegistryResolvesLegacyReadFileAliasWithoutPublishingIt(t *testing.T) {
+	registry, err := NewRegistry(namedSchemaHandler{name: "read"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := registry.Lookup("read_file"); !ok {
+		t.Fatal("legacy read_file alias did not resolve canonical read handler")
+	}
+	for _, definition := range registry.Definitions() {
+		if definition.Name == "read_file" {
+			t.Fatal("legacy read_file alias leaked into model-facing definitions")
+		}
+	}
+}

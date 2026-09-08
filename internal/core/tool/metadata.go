@@ -18,7 +18,7 @@ type callMetadata struct {
 }
 
 var builtinMetadata = map[string]callMetadata{
-	"read_file":          {Metadata: Metadata{Name: "read_file", Kind: KindRead, DisplayName: "Read"}, title: titleReadFile, target: targetReadFile, affectedPaths: affectedSinglePath("path", "file_path", "file", "filename", "target")},
+	"read":               {Metadata: Metadata{Name: "read", Kind: KindRead, DisplayName: "Read"}, title: titleReadFile, target: targetReadFile, affectedPaths: affectedSinglePath("path", "file_path", "file", "filename", "target")},
 	"calculate":          {Metadata: Metadata{Name: "calculate", Kind: KindCompute, DisplayName: "Calculate"}, title: titleCalculate, target: targetCalculate},
 	"write_file":         {Metadata: Metadata{Name: "write_file", Kind: KindEdit, DisplayName: "Write"}, title: titleWriteFile, target: targetEditPath, affectedPaths: affectedSinglePath("file_path", "path", "file", "filename", "target", "destination", "move_path")},
 	"search_replace":     {Metadata: Metadata{Name: "search_replace", Kind: KindEdit, DisplayName: "Edit"}, title: titleSearchReplace, target: targetEditPath, affectedPaths: affectedSinglePath("file_path", "path", "file", "filename", "target", "destination", "move_path")},
@@ -44,7 +44,7 @@ var builtinMetadata = map[string]callMetadata{
 
 // MetadataForName returns canonical metadata for a known built-in tool.
 func MetadataForName(name string) (Metadata, bool) {
-	spec, ok := builtinMetadata[name]
+	spec, ok := builtinMetadata[CanonicalName(name)]
 	if !ok {
 		return Metadata{}, false
 	}

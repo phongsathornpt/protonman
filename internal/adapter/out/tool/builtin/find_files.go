@@ -87,7 +87,7 @@ func (h findFilesHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		return tool.Result{}, fmt.Errorf("stat find_files root %q: %w", input.Path, err)
 	}
 	if !info.IsDir() {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, fmt.Sprintf("%q is not a directory; use read_file instead", input.Path))
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, fmt.Sprintf("%q is not a directory; use read instead", input.Path))
 	}
 
 	query := struct {

@@ -39,11 +39,11 @@ func TestE2EGeminiStyleImageProbeRecoversToReadFile(t *testing.T) {
 	if got, want := len(requests), 2; got != want {
 		t.Fatalf("model requests = %d, want %d", got, want)
 	}
-	if !requestMessagesContain(requests[0], "Use read_file for known workspace artifacts") {
+	if !requestMessagesContain(requests[0], "Use read for known workspace artifacts") {
 		t.Fatalf("Gemini request missing artifact guidance: %#v", requests[0]["messages"])
 	}
-	if !toolAppearsBefore(requests[0], "read_file", "bash") {
-		t.Fatalf("read_file was not published before bash: %#v", requests[0]["tools"])
+	if !toolAppearsBefore(requests[0], "read", "bash") {
+		t.Fatalf("read was not published before bash: %#v", requests[0]["tools"])
 	}
 	for _, want := range []string{`"kind":"image"`, `"edge_density"`, `"ascii_preview"`} {
 		if !requestMessagesContain(requests[1], want) {

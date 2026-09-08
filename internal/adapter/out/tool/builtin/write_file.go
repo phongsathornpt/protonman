@@ -55,7 +55,7 @@ func (writeFileHandler) Definition() tool.Definition {
 				"content":   map[string]any{"type": "string"},
 				"expected_sha256": map[string]any{
 					"type":        "string",
-					"description": "SHA-256 from a complete read_file result; required when overwriting an existing file",
+					"description": "SHA-256 from a complete read result; required when overwriting an existing file",
 				},
 			},
 			"required":             []string{"file_path", "content"},
@@ -91,7 +91,7 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		expected := strings.ToLower(strings.TrimSpace(input.ExpectedSHA256))
 		decoded, decodeErr := hex.DecodeString(expected)
 		if expected == "" {
-			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_sha256 is required when overwriting an existing file; call read_file first")
+			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_sha256 is required when overwriting an existing file; call read first")
 		}
 		if decodeErr != nil || len(decoded) != sha256.Size {
 			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_sha256 must be a 64-character SHA-256 hex digest")
@@ -100,7 +100,7 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		if expected != fmt.Sprintf("%x", current[:]) {
 			recoveryArgs, _ := json.Marshal(map[string]any{"path": input.FilePath})
 			return tool.Result{}, tool.NewToolError(tool.ErrorCodeConflict, "write_file target changed since it was read; refresh the file and retry").WithRecovery(tool.Recovery{
-				Action: tool.RecoveryRefreshResource, Tool: "read_file", Arguments: recoveryArgs,
+				Action: tool.RecoveryRefreshResource, Tool: "read", Arguments: recoveryArgs,
 			})
 		}
 	}

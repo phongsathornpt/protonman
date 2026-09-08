@@ -26,7 +26,7 @@ func (c Call) Kind() Kind {
 
 // Title produces a human-readable title describing what the tool call is doing.
 func (c Call) Title() string {
-	if spec, ok := builtinMetadata[c.Name]; ok && spec.title != nil {
+	if spec, ok := builtinMetadata[CanonicalName(c.Name)]; ok && spec.title != nil {
 		return spec.title(c.ArgumentsMap())
 	}
 	return c.Name
@@ -36,7 +36,7 @@ func (c Call) Title() string {
 // string (e.g. URL, filepath, pattern, command, subagent ID).
 func (c Call) Target() string {
 	args := c.ArgumentsMap()
-	if spec, ok := builtinMetadata[c.Name]; ok && spec.target != nil {
+	if spec, ok := builtinMetadata[CanonicalName(c.Name)]; ok && spec.target != nil {
 		return spec.target(args)
 	}
 	// Heuristic fallback for arbitrary MCP and custom tools.
@@ -68,7 +68,7 @@ func (d Definition) DisplayName() string {
 // AffectedPaths returns all file paths affected or accessed by the tool call.
 func (c Call) AffectedPaths() []string {
 	args := c.ArgumentsMap()
-	if spec, ok := builtinMetadata[c.Name]; ok && spec.affectedPaths != nil {
+	if spec, ok := builtinMetadata[CanonicalName(c.Name)]; ok && spec.affectedPaths != nil {
 		return spec.affectedPaths(args)
 	}
 	for _, key := range []string{"patch", "diff", "input"} {

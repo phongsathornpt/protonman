@@ -219,7 +219,7 @@ func TestReadFileRejectsDirectory(t *testing.T) {
 
 	_, err := readfile.New(workspaceRoot).Execute(
 		context.Background(),
-		newJSONCall(t, "read-dir", "read_file", map[string]any{"path": "sub"}),
+		newJSONCall(t, "read-dir", "read", map[string]any{"path": "sub"}),
 	)
 	if err == nil {
 		t.Fatal("expected error reading directory, got nil")
@@ -673,7 +673,7 @@ func TestReadFileRejectsOffsetInsideUTF8CodePoint(t *testing.T) {
 	writeTestFile(t, workspaceRoot.Root(), "utf8.txt", "A界B")
 	_, err := readfile.New(workspaceRoot).Execute(
 		context.Background(),
-		newJSONCall(t, "utf8-split", "read_file", map[string]any{"path": "utf8.txt", "offset": 2, "limit": 2}),
+		newJSONCall(t, "utf8-split", "read", map[string]any{"path": "utf8.txt", "offset": 2, "limit": 2}),
 	)
 	if err == nil || !strings.Contains(err.Error(), "splits a UTF-8 code point") {
 		t.Fatalf("Execute() error = %v, want UTF-8 boundary rejection", err)
@@ -689,14 +689,14 @@ func TestReadFileContinuationRejectsChangedFile(t *testing.T) {
 		t.Fatalf("first continuation = %q next=%v", first.Continuation, first.NextOffset)
 	}
 	writeTestFile(t, workspaceRoot.Root(), "snapshot.txt", "abcdefghij changed")
-	_, err := handler.Execute(context.Background(), newJSONCall(t, "snapshot-2", "read_file", map[string]any{
+	_, err := handler.Execute(context.Background(), newJSONCall(t, "snapshot-2", "read", map[string]any{
 		"path": "snapshot.txt", "offset": *first.NextOffset, "limit": 4, "continuation": first.Continuation,
 	}))
 	var toolErr *tool.ToolError
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeStaleContinuation {
 		t.Fatalf("Execute() error = %v, want stale continuation", err)
 	}
-	if toolErr.Recovery == nil || toolErr.Recovery.Action != tool.RecoveryRestartPagination || toolErr.Recovery.Tool != "read_file" || !strings.Contains(string(toolErr.Recovery.Arguments), "snapshot.txt") {
+	if toolErr.Recovery == nil || toolErr.Recovery.Action != tool.RecoveryRestartPagination || toolErr.Recovery.Tool != "read" || !strings.Contains(string(toolErr.Recovery.Arguments), "snapshot.txt") {
 		t.Fatalf("recovery = %+v", toolErr.Recovery)
 	}
 }

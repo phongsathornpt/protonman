@@ -21,7 +21,7 @@ type artifactEnvelope struct {
 func artifactResult(call tool.Call, envelope artifactEnvelope, output string) (tool.Result, error) {
 	structured, err := json.Marshal(envelope)
 	if err != nil {
-		return tool.Result{}, fmt.Errorf("encode read_file artifact result: %w", err)
+		return tool.Result{}, fmt.Errorf("encode read artifact result: %w", err)
 	}
 	return tool.Result{
 		CallID:           call.ID,

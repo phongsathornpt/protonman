@@ -149,7 +149,7 @@ func (c ToolCell) RenderWidth(width int) []string {
 	}
 
 	// Read file excerpt preview
-	if !c.Running && c.Name == "read_file" && !c.Denied && c.FailureCode == "" && c.Body != "" {
+	if !c.Running && tool.CanonicalName(c.Name) == "read" && !c.Denied && c.FailureCode == "" && c.Body != "" {
 		if excerpt := toolview.ExtractReadFileExcerpt(c.Body); excerpt != "" {
 			out = append(out, tuistyle.ToolExcerptStyle.Render("  ↳ "+excerpt))
 		}

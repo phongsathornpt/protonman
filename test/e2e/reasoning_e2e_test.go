@@ -34,8 +34,8 @@ func TestE2EReasoningGeminiProfileReachesWire(t *testing.T) {
 		}
 	}
 	initialTools := requestToolNames(requests[0])
-	if !containsString(initialTools, "read_file") {
-		t.Fatalf("initial grounding tools missing read_file: %#v", initialTools)
+	if !containsString(initialTools, "read") {
+		t.Fatalf("initial grounding tools missing read: %#v", initialTools)
 	}
 	for _, forbidden := range []string{"get_todo", "update_todo", "delegate_task", "bash", "write_file", "apply_patch"} {
 		if containsString(initialTools, forbidden) {

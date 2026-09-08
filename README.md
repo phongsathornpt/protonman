@@ -117,7 +117,7 @@ The fullscreen TUI is built on [Bubble Tea](https://github.com/charmbracelet/bub
 │                                                                        │
 │  ● Assistant response streaming with sanitized ANSI formatting...      │
 │                                                                        │
-│  ⚙ Tool Call: read_file (internal/config/config.go)          [SUCCESS] │
+│  ⚙ Tool Call: read (internal/config/config.go)          [SUCCESS] │
 │                                                                        │
 │  ┌─ [Ctrl+O] Tasks Checklist ───────────────────────────────────────┐  │
 │  │ [x] 1. Inspect configuration package                             │  │
@@ -168,7 +168,7 @@ Type `/` at the prompt to trigger autocomplete, or prefix with a colon (`:help`)
 | `/agent [profile]` | Show or set the primary agent profile/posture | `/agent universal` |
 | `/skills` | List discovered Agent Skills | `/skills` |
 | `/skill <name>` | Inspect or activate a specific Agent Skill | `/skill pdf-processing` |
-| `/call <tool> <json>` | Directly execute a tool with JSON arguments | `/call read_file {"path":"README.md"}` |
+| `/call <tool> <json>` | Directly execute a tool with JSON arguments | `/call read {"path":"README.md"}` |
 | `/mode <mode>` | Switch permission mode (`ask`, `plan`, `always-approve`) | `/mode plan` |
 | `/ask` | Switch directly to `ask` mode | `/ask` |
 | `/plan` | Switch directly to read-only `plan` mode | `/plan` |
@@ -283,7 +283,7 @@ Protonman registers a suite of workspace-safe tools:
 
 | Tool | Category | Description |
 | :--- | :--- | :--- |
-| `read_file` | File System | Read UTF-8 workspace files with byte pagination or bounded 1-based line ranges/line numbers, plus snapshot-bound byte continuations |
+| `read` | File System | Read UTF-8 workspace files with byte pagination or bounded 1-based line ranges/line numbers, plus snapshot-bound byte continuations |
 | `write_file` | File System | Write file contents with automatic pre-edit checkpointing |
 | `search_replace` | File System | Exact block replacement in files with pre-edit checkpointing |
 | `apply_patch` | File System | Apply unified diff patches with pre-edit checkpointing |
@@ -355,7 +355,7 @@ pattern = "rm -rf *"
 
 [[permission.rules]]
 action = "allow"
-tool = "read_file"
+tool = "read"
 pattern = "*.go"
 
 # Workspace boundary & protected file protection
@@ -460,7 +460,7 @@ Execution safety notes:
 - Legacy `subagent_timeout` is accepted as an alias for `subagent_max_runtime` with a deprecation warning.
 - `[runtime]` centralizes model, tool, discovery, web-fetch, and catalog-cache time bounds. The loop refuses construction if every global termination bound is disabled.
 - Repeating the same deterministic tool call with the same semantic arguments and result twice without an intervening mutation triggers a text-only synthesis round instead of continuing the tool loop; identical retryable failures are capped at three attempts.
-- Truncated `read_file`, `grep`, `find_files`, and `list_dir` results include `next_offset` plus a snapshot-bound `continuation`; send both on the next page to detect stale file, query, or directory state. `grep` continuations also carry a validated cursor so deep pages resume near the prior match instead of rescanning earlier files. Plain `offset` remains supported for compatibility. `read_file` also supports bounded 1-based `start_line`/`end_line` selection with optional `line_numbers` for source inspection without shell `nl`/`sed`.
+- Truncated `read`, `grep`, `find_files`, and `list_dir` results include `next_offset` plus a snapshot-bound `continuation`; send both on the next page to detect stale file, query, or directory state. `grep` continuations also carry a validated cursor so deep pages resume near the prior match instead of rescanning earlier files. Plain `offset` remains supported for compatibility. `read` also supports bounded 1-based `start_line`/`end_line` selection with optional `line_numbers` for source inspection without shell `nl`/`sed`.
 
 ### Environment Variables
 

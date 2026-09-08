@@ -18,7 +18,7 @@ func TestBuiltinToolSSOTContract(t *testing.T) {
 		titlePrefix     string
 	}{
 		{
-			name:            "read_file",
+			name:            "read",
 			args:            map[string]any{"path": "pkg/api.go"},
 			wantKind:        tool.KindRead,
 			wantDisplayName: "Read",

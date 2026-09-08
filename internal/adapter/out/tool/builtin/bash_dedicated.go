@@ -98,8 +98,8 @@ func dedicatedPythonTool(command string) *dedicatedToolSuggestion {
 	if strings.Contains(lower, "image.open(") || strings.Contains(lower, "cv2.imread(") || strings.Contains(lower, "imageio.imread(") {
 		if path := firstPatternGroup(pythonImagePathPattern, command); path != "" {
 			return &dedicatedToolSuggestion{
-				tool: "read_file", args: map[string]any{"path": path, "view": "image"},
-				reason: "image inspection is available through read_file",
+				tool: "read", args: map[string]any{"path": path, "view": "image"},
+				reason: "image inspection is available through read",
 			}
 		}
 	}
@@ -107,8 +107,8 @@ func dedicatedPythonTool(command string) *dedicatedToolSuggestion {
 	if readsFile {
 		if path := firstPatternGroup(pythonFilePathPattern, command); path != "" {
 			return &dedicatedToolSuggestion{
-				tool: "read_file", args: map[string]any{"path": path},
-				reason: "workspace file inspection is available through read_file",
+				tool: "read", args: map[string]any{"path": path},
+				reason: "workspace file inspection is available through read",
 			}
 		}
 	}
@@ -120,8 +120,8 @@ func dedicatedNodeTool(command string) *dedicatedToolSuggestion {
 	if strings.Contains(lower, "readfilesync(") || strings.Contains(lower, "readfile(") {
 		if path := firstPatternGroup(nodeFilePathPattern, command); path != "" {
 			return &dedicatedToolSuggestion{
-				tool: "read_file", args: map[string]any{"path": path},
-				reason: "workspace file inspection is available through read_file",
+				tool: "read", args: map[string]any{"path": path},
+				reason: "workspace file inspection is available through read",
 			}
 		}
 	}

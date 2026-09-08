@@ -33,7 +33,7 @@ func TestReadFileAutoAnalyzesPNG(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "image", "read_file", map[string]any{"path": "screen.png"}))
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "image", "read", map[string]any{"path": "screen.png"}))
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -67,7 +67,7 @@ func TestReadFileAutoReturnsBinaryMetadata(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(ws.Root(), "blob.bin"), []byte{0, 1, 2, 3, 4, 5}, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "binary", "read_file", map[string]any{"path": "blob.bin"}))
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "binary", "read", map[string]any{"path": "blob.bin"}))
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}

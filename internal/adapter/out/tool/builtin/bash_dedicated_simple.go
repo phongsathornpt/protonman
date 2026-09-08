@@ -90,8 +90,8 @@ func dedicatedCatTool(args []string) *dedicatedToolSuggestion {
 		return nil
 	}
 	return &dedicatedToolSuggestion{
-		tool: "read_file", args: map[string]any{"path": args[0]},
-		reason: "workspace file inspection is available through read_file",
+		tool: "read", args: map[string]any{"path": args[0]},
+		reason: "workspace file inspection is available through read",
 	}
 }
 

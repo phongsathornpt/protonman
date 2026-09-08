@@ -290,7 +290,7 @@ batch.
 
 Built-in workspace tools include:
 
-- `read_file`
+- `read`
 - `write_file`
 - `search_replace`
 - `apply_patch`
@@ -308,7 +308,7 @@ operations, and dynamically discovered MCP tools.
 Canonical argument names for common tools are intentionally stable:
 
 - `bash` -> `command`
-- `read_file` -> `path`
+- `read` -> `path`
 - `write_file` -> `file_path`
 - `search_replace` -> `file_path`
 - `grep` -> `pattern`

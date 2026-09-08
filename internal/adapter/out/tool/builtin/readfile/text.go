@@ -18,7 +18,7 @@ import (
 
 func readTextBytes(ctx context.Context, file *os.File, fileInfo os.FileInfo, input readFileInput, call tool.Call) (tool.Result, error) {
 	size := fileInfo.Size()
-	continuation, err := support.ContinuationToken("read_file", struct {
+	continuation, err := support.ContinuationToken("read", struct {
 		Path string `json:"path"`
 	}{Path: input.Path}, support.FileSnapshot(fileInfo))
 	if err != nil {
@@ -27,7 +27,7 @@ func readTextBytes(ctx context.Context, file *os.File, fileInfo os.FileInfo, inp
 	}
 	if input.Continuation != "" && input.Continuation != continuation {
 		_ = file.Close()
-		return tool.Result{}, support.StalePaginationError("read_file", "read_file continuation is stale; restart from offset 0", call.Arguments)
+		return tool.Result{}, support.StalePaginationError("read", "read continuation is stale; restart from offset 0", call.Arguments)
 	}
 	if input.Offset > size {
 		input.Offset = size
@@ -42,7 +42,7 @@ func readTextBytes(ctx context.Context, file *os.File, fileInfo os.FileInfo, inp
 			_ = file.Close()
 			return tool.Result{}, tool.NewToolError(
 				tool.ErrorCodeInvalidArguments,
-				fmt.Sprintf("read_file offset %d splits a UTF-8 code point; use next_offset from the previous page", input.Offset),
+				fmt.Sprintf("read offset %d splits a UTF-8 code point; use next_offset from the previous page", input.Offset),
 			)
 		}
 	}
@@ -143,7 +143,7 @@ func readFileLinesBounded(ctx context.Context, file *os.File, input readFileInpu
 			_ = file.Close()
 			return tool.Result{}, tool.NewToolError(
 				tool.ErrorCodeExecution,
-				fmt.Sprintf("read_file line selection scanned more than %d bytes; use byte offset pagination for very large files", maxScanBytes),
+				fmt.Sprintf("read line selection scanned more than %d bytes; use byte offset pagination for very large files", maxScanBytes),
 			)
 		}
 		lineNumber++

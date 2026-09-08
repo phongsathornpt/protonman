@@ -22,15 +22,15 @@ func New(workspaceRoot *workspace.Workspace) tool.Handler {
 
 func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	if h.workspace == nil {
-		return tool.Result{}, fmt.Errorf("read_file workspace is required")
+		return tool.Result{}, fmt.Errorf("read workspace is required")
 	}
 	var input readFileInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode read_file arguments", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode read arguments", err)
 	}
 	input.Path = strings.TrimSpace(input.Path)
 	if input.Path == "" {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file path is required")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read path is required")
 	}
 	input.View = strings.ToLower(strings.TrimSpace(input.View))
 	if input.View == "" {
@@ -39,36 +39,36 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	switch input.View {
 	case "auto", "text", "source", "image", "structured", "metadata":
 	default:
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file view must be auto, text, source, image, structured, or metadata")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read view must be auto, text, source, image, structured, or metadata")
 	}
 	if input.Offset < 0 {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file offset must be non-negative")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read offset must be non-negative")
 	}
 	if input.StartLine < 0 || input.EndLine < 0 {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file start_line and end_line must be non-negative")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read start_line and end_line must be non-negative")
 	}
 	lineMode := input.StartLine > 0 || input.EndLine > 0 || input.LineNumbers
 	if lineMode && input.View != "auto" && input.View != "text" {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file line selection requires text view")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read line selection requires text view")
 	}
 	if lineMode && (input.Offset != 0 || input.Continuation != "") {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file line selection cannot be combined with offset or continuation")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read line selection cannot be combined with offset or continuation")
 	}
 	if input.StartLine == 0 && input.EndLine > 0 {
 		input.StartLine = 1
 	}
 	if input.EndLine > 0 && input.EndLine < input.StartLine {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file end_line must be greater than or equal to start_line")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read end_line must be greater than or equal to start_line")
 	}
 	if input.Limit < 0 || input.Limit > MaxReadFileBytes {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file limit must be between 1 byte and 2 MiB")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read limit must be between 1 byte and 2 MiB")
 	}
 	if input.Limit == 0 {
 		input.Limit = MaxReadFileBytes
 	}
 	if input.View == "source" {
 		if input.Offset != 0 || input.Continuation != "" || lineMode {
-			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file source view cannot be combined with text pagination or line selection")
+			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read source view cannot be combined with text pagination or line selection")
 		}
 		return h.readSource(ctx, input, call)
 	}
@@ -120,7 +120,7 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	artifactView := input.View
 	if artifactView != "auto" && artifactView != "text" && (input.Offset != 0 || input.Continuation != "") {
 		_ = file.Close()
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file artifact views cannot be combined with offset or continuation")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read artifact views cannot be combined with offset or continuation")
 	}
 	if artifactView != "text" && input.Offset == 0 && input.Continuation == "" {
 		artifact, detectErr := detectArtifact(file, input.Path)

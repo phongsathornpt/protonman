@@ -58,7 +58,7 @@ func (h readFileHandler) readSource(ctx context.Context, input readFileInput, ca
 	}
 	info, err := os.Stat(root)
 	if err != nil {
-		return tool.Result{}, fmt.Errorf("stat read_file source root %q: %w", input.Path, err)
+		return tool.Result{}, fmt.Errorf("stat read source root %q: %w", input.Path, err)
 	}
 	if !info.IsDir() {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, fmt.Sprintf("%q is not a directory; use text view instead", input.Path))
@@ -130,7 +130,7 @@ func (h readFileHandler) readSource(ctx context.Context, input readFileInput, ca
 	out.Stats.Matches = len(out.Matches)
 	structured, err := json.Marshal(out)
 	if err != nil {
-		return tool.Result{}, fmt.Errorf("encode read_file source result: %w", err)
+		return tool.Result{}, fmt.Errorf("encode read source result: %w", err)
 	}
 	return tool.Result{CallID: call.ID, ToolName: call.Name, Output: formatSourceOutput(out), StructuredOutput: structured, Truncated: out.Truncated}, nil
 }
@@ -141,20 +141,20 @@ func normalizeSourceInput(input *readFileInput) (sourceMatcher, error) {
 	}
 	input.Query = strings.TrimSpace(input.Query)
 	if input.Query == "" {
-		return sourceMatcher{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file source query is required")
+		return sourceMatcher{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read source query is required")
 	}
 	input.Mode = strings.ToLower(strings.TrimSpace(input.Mode))
 	if input.Mode == "" {
 		input.Mode = "literal"
 	}
 	if input.Mode != "literal" && input.Mode != "regex" {
-		return sourceMatcher{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file source mode must be literal or regex")
+		return sourceMatcher{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read source mode must be literal or regex")
 	}
 	if input.Context.Before < 0 || input.Context.Before > maxSourceContext || input.Context.After < 0 || input.Context.After > maxSourceContext {
-		return sourceMatcher{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file source context must be between 0 and 100 lines")
+		return sourceMatcher{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read source context must be between 0 and 100 lines")
 	}
 	if input.MaxFiles < 0 || input.MaxFiles > maxSourceFiles || input.MaxMatches < 0 || input.MaxMatches > maxSourceMatches {
-		return sourceMatcher{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file source limits are out of range")
+		return sourceMatcher{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read source limits are out of range")
 	}
 	if input.MaxFiles == 0 {
 		input.MaxFiles = maxSourceFiles
@@ -167,7 +167,7 @@ func normalizeSourceInput(input *readFileInput) (sourceMatcher, error) {
 			continue
 		}
 		if _, err := filepath.Match(pattern, "probe"); err != nil {
-			return sourceMatcher{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read_file source contains an invalid glob: "+pattern)
+			return sourceMatcher{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read source contains an invalid glob: "+pattern)
 		}
 	}
 	if input.Mode == "literal" {
@@ -175,7 +175,7 @@ func normalizeSourceInput(input *readFileInput) (sourceMatcher, error) {
 	}
 	re, err := regexp.Compile(input.Query)
 	if err != nil {
-		return sourceMatcher{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "invalid read_file source regex: "+err.Error())
+		return sourceMatcher{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "invalid read source regex: "+err.Error())
 	}
 	return sourceMatcher{regex: re}, nil
 }

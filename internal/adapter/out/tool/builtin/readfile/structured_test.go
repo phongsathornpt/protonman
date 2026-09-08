@@ -15,7 +15,7 @@ func TestReadFileAutoAnalyzesJSON(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(ws.Root(), "bench.json"), []byte(data), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "json", "read_file", map[string]any{"path": "bench.json", "view": "structured"}))
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "json", "read", map[string]any{"path": "bench.json", "view": "structured"}))
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -58,7 +58,7 @@ func TestReadFileAutoAnalyzesCSV(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(ws.Root(), "bench.csv"), []byte(data), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "csv", "read_file", map[string]any{"path": "bench.csv", "view": "structured"}))
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "csv", "read", map[string]any{"path": "bench.csv", "view": "structured"}))
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -73,7 +73,7 @@ func TestReadFileAutoPreservesStructuredTextCompatibility(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(ws.Root(), "config.json"), []byte(data), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "json-text", "read_file", map[string]any{"path": "config.json"}))
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "json-text", "read", map[string]any{"path": "config.json"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestReadFileStructuredCSVInfersTypesAndMedian(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(ws.Root(), "typed.csv"), []byte(data), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "csv-types", "read_file", map[string]any{
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "csv-types", "read", map[string]any{
 		"path": "typed.csv", "view": "structured",
 	}))
 	if err != nil {

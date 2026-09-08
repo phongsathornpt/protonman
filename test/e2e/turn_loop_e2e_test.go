@@ -272,7 +272,7 @@ func TestE2EResumeCompactsHistoricalToolProtocol(t *testing.T) {
 			}
 		}
 	}
-	if !requestMessagesContain(requests[2], "Historical tool read_file result") {
+	if !requestMessagesContain(requests[2], "Historical tool read result") {
 		t.Fatalf("resumed request missing compacted historical result: %#v", requests[2]["messages"])
 	}
 }

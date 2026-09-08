@@ -264,7 +264,7 @@ func TestMetadataProvenanceSummaryIsDeterministic(t *testing.T) {
 func TestGeminiToolHintsUseUnifiedReadFileSourceView(t *testing.T) {
 	got := ResolveBuiltin("gateway", "gemini-3.8-flash", CatalogMetadata{})
 	joined := strings.Join(got.AgentPolicy.PromptHints, "\n")
-	if !strings.Contains(joined, "read_file with view=source") {
+	if !strings.Contains(joined, "read with view=source") {
 		t.Fatalf("Gemini prompt hints missing unified source view: %q", joined)
 	}
 	if strings.Contains(joined, "inspect_code") {
