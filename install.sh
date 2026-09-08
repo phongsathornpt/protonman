@@ -96,9 +96,21 @@ load_release_json() {
 release_asset_api_url() {
 	asset_name=$1
 	load_release_json
-	asset_url=$(printf '%s' "$RELEASE_JSON" | tr '{' '\n' | \
-		grep -F "\"name\":\"$asset_name\"" | \
-		sed -n 's/.*"url":"\([^"]*\/releases\/assets\/[0-9][0-9]*\)".*/\1/p' | head -n 1)
+	asset_url=$(printf '%s\n' "$RELEASE_JSON" | awk -v want="$asset_name" '
+		/"url"[[:space:]]*:[[:space:]]*"[^"]*\/releases\/assets\/[0-9][0-9]*"/ {
+			url = $0
+			sub(/^.*"url"[[:space:]]*:[[:space:]]*"/, "", url)
+			sub(/".*$/, "", url)
+		}
+		/"name"[[:space:]]*:[[:space:]]*"/ {
+			name = $0
+			sub(/^.*"name"[[:space:]]*:[[:space:]]*"/, "", name)
+			sub(/".*$/, "", name)
+			if (name == want && url != "") {
+				print url
+				exit
+			}
+		}')
 	[ -n "$asset_url" ] || die "release asset not found: $asset_name"
 	printf '%s\n' "$asset_url"
 }
