@@ -1,14 +1,19 @@
-package tui
+package history
 
-import "strings"
+import (
+	"strings"
+
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/style"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/textview"
+)
 
 // UserCell renders submitted user input.
 type UserCell struct{ Text string }
 
 func (UserCell) Kind() HistoryCellKind { return HistoryCellUser }
-func (c UserCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c UserCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c UserCell) RenderWidth(width int) []string {
-	lines := safeWrappedLines(strings.TrimRight(c.Text, "\n"), maxInt(1, width-2))
+	lines := safeWrappedLines(strings.TrimRight(c.Text, "\n"), max(1, width-2))
 	if len(lines) == 0 {
 		return nil
 	}
@@ -16,9 +21,9 @@ func (c UserCell) RenderWidth(width int) []string {
 	for index, line := range lines {
 		prefix := "  "
 		if index == 0 {
-			prefix = glyphMark
+			prefix = tuistyle.GlyphMark
 		}
-		out = append(out, userStyle.Render(prefix)+bodyStyle.Render(line))
+		out = append(out, tuistyle.UserStyle.Render(prefix)+tuistyle.BodyStyle.Render(line))
 	}
 	return out
 }
@@ -40,7 +45,7 @@ type assistantRenderCache struct {
 	processedAt string
 	lines       []string
 	decorated   []string
-	state       markdownRenderState
+	state       textview.MarkdownState
 }
 
 func (c *AssistantCell) appendDelta(delta string) {
@@ -72,13 +77,13 @@ func (c *AssistantCell) sealStream() {
 }
 
 func (*AssistantCell) Kind() HistoryCellKind { return HistoryCellAssistant }
-func (c *AssistantCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c *AssistantCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c *AssistantCell) RenderWidth(width int) []string {
 	text := assistantIncrementalText(c.Text)
 	if text == "" {
 		return nil
 	}
-	return c.renderAssistantIncremental(text, maxInt(8, width-2))
+	return c.renderAssistantIncremental(text, max(8, width-2))
 }
 
 func assistantIncrementalText(text string) string {
@@ -95,7 +100,7 @@ func assistantIncrementalText(text string) string {
 func (c *AssistantCell) renderAssistantIncremental(text string, width int) []string {
 	if strings.ContainsRune(text, '\r') {
 		c.renderCache = assistantRenderCache{}
-		return decorateAssistantLines(renderMarkdownLines(text, width), 0)
+		return decorateAssistantLines(textview.RenderMarkdownLines(text, width), 0)
 	}
 	cache, completeEnd := c.updateAssistantRenderCache(text, width)
 	stableLen := len(cache.decorated)
@@ -111,11 +116,11 @@ func (c *AssistantCell) renderAssistantIncremental(text string, width int) []str
 	}
 	out := append([]string(nil), cache.decorated[:stableLen]...)
 	if tail != "" {
-		tailLines := renderMarkdownLine(tail, width, &state)
+		tailLines := textview.RenderMarkdownLine(tail, width, &state)
 		out = append(out, decorateAssistantLines(tailLines, stableLen)...)
 	}
 	if state.InFence() {
-		marker := markdownCodeStyle.Render("  └─ code (unterminated)")
+		marker := tuistyle.MarkdownCodeStyle.Render("  └─ code (unterminated)")
 		out = append(out, assistantDecoratedLine(marker, len(out)))
 	}
 	return out
@@ -124,18 +129,18 @@ func (c *AssistantCell) renderAssistantIncremental(text string, width int) []str
 func (c *AssistantCell) renderMarkdownIncremental(text string, width int) []string {
 	if strings.ContainsRune(text, '\r') {
 		c.renderCache = assistantRenderCache{}
-		return renderMarkdownLines(text, width)
+		return textview.RenderMarkdownLines(text, width)
 	}
 	cache, completeEnd := c.updateAssistantRenderCache(text, width)
 	out := append([]string(nil), cache.lines...)
 	state := cache.state
 	if tail := text[completeEnd:]; tail != "" {
-		out = append(out, renderMarkdownLine(tail, width, &state)...)
+		out = append(out, textview.RenderMarkdownLine(tail, width, &state)...)
 	}
 	if state.InFence() {
-		out = append(out, markdownCodeStyle.Render("  └─ code (unterminated)"))
+		out = append(out, tuistyle.MarkdownCodeStyle.Render("  └─ code (unterminated)"))
 	}
-	return trimTrailingBlankLines(out)
+	return textview.TrimTrailingBlankLines(out)
 }
 
 func (c *AssistantCell) updateAssistantRenderCache(text string, width int) (*assistantRenderCache, int) {
@@ -155,7 +160,7 @@ func (c *AssistantCell) updateAssistantRenderCache(text string, width int) (*ass
 				break
 			}
 			end := offset + relativeEnd
-			lines := renderMarkdownLine(segment[offset:end], width, &cache.state)
+			lines := textview.RenderMarkdownLine(segment[offset:end], width, &cache.state)
 			start := len(cache.lines)
 			cache.lines = append(cache.lines, lines...)
 			cache.decorated = appendAssistantDecoratedLines(cache.decorated, lines, start)

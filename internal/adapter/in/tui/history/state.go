@@ -1,4 +1,4 @@
-package tui
+package history
 
 import (
 	"strings"
@@ -37,9 +37,9 @@ type HistoryState struct {
 
 func NewHistoryState(maxLines int) *HistoryState {
 	if maxLines <= 0 {
-		maxLines = maxBubbleScrollback
+		maxLines = defaultHistoryMaxLines
 	}
-	return &HistoryState{committed: make([]HistoryCell, 0), maxLines: maxLines, renderWidth: defaultBubbleWidth}
+	return &HistoryState{committed: make([]HistoryCell, 0), maxLines: maxLines, renderWidth: defaultHistoryWidth}
 }
 
 // SetWidth updates the rich transcript width and invalidates visual caches.
@@ -49,7 +49,7 @@ func (s *HistoryState) SetWidth(width int) {
 		return
 	}
 	if width <= 0 {
-		width = defaultBubbleWidth
+		width = defaultHistoryWidth
 	}
 	if s.renderWidth == width {
 		return
@@ -282,6 +282,61 @@ func (s *HistoryState) CompleteToolCall(callID string, name string, completed Hi
 	s.Append(completed)
 }
 
+// RunningTool identifies one currently running tool call without exposing cell internals.
+type RunningTool struct {
+	CallID string
+	Name   string
+}
+
+// RunningTools returns all currently running tool calls in transcript order.
+func (s *HistoryState) RunningTools() []RunningTool {
+	if s == nil {
+		return nil
+	}
+	cells := s.Cells()
+	out := make([]RunningTool, 0)
+	for _, cell := range cells {
+		running, ok := cell.(runningHistoryTool)
+		if !ok || !running.historyToolRunning() {
+			continue
+		}
+		out = append(out, RunningTool{CallID: running.historyToolID(), Name: running.historyToolName()})
+	}
+	return out
+}
+
+// FindRunningTool returns the newest running cell matching call ID or tool name.
+func (s *HistoryState) FindRunningTool(callID, name string) HistoryCell {
+	if s == nil {
+		return nil
+	}
+	if runningToolMatches(s.active, callID, name) {
+		return s.active
+	}
+	for i := len(s.committed) - 1; i >= 0; i-- {
+		if runningToolMatches(s.committed[i], callID, name) {
+			return s.committed[i]
+		}
+	}
+	return nil
+}
+
+// LastRunningToolName returns the newest running tool name, if any.
+func (s *HistoryState) LastRunningToolName() string {
+	if s == nil {
+		return ""
+	}
+	if running, ok := s.active.(runningHistoryTool); ok && running.historyToolRunning() {
+		return running.historyToolName()
+	}
+	for i := len(s.committed) - 1; i >= 0; i-- {
+		if running, ok := s.committed[i].(runningHistoryTool); ok && running.historyToolRunning() {
+			return running.historyToolName()
+		}
+	}
+	return ""
+}
+
 func runningToolMatches(cell HistoryCell, callID string, name string) bool {
 	running, ok := cell.(runningHistoryTool)
 	if !ok || !running.historyToolRunning() {
@@ -443,7 +498,7 @@ func (s *HistoryState) RenderTailContent(maxLines int) (string, bool) {
 	remaining := maxLines
 	activeStart := len(activeLines)
 	if remaining > 0 && len(activeLines) > 0 {
-		take := minInt(remaining, len(activeLines))
+		take := min(remaining, len(activeLines))
 		activeStart -= take
 		remaining -= take
 	}
@@ -454,7 +509,7 @@ func (s *HistoryState) RenderTailContent(maxLines int) (string, bool) {
 	}
 	committedStart := len(s.cachedRender)
 	if remaining > 0 {
-		take := minInt(remaining, len(s.cachedRender))
+		take := min(remaining, len(s.cachedRender))
 		committedStart -= take
 	}
 	return joinRenderedTail(s.cachedRender[committedStart:], includeSeparator, activeLines[activeStart:]), true
@@ -584,6 +639,9 @@ func (s *HistoryState) trim() {
 		s.committedLines = 0
 	}
 }
+
+// LineCount returns the rendered line count at the state's current width.
+func (s *HistoryState) LineCount() int { return s.lineCount() }
 
 func (s *HistoryState) lineCount() int {
 	total := s.committedLines

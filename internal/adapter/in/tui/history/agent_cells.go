@@ -1,4 +1,4 @@
-package tui
+package history
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/execview"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/style"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
@@ -26,17 +27,17 @@ type AgentRunCell struct {
 }
 
 func (AgentRunCell) Kind() HistoryCellKind { return HistoryCellTool }
-func (c AgentRunCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c AgentRunCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c AgentRunCell) RenderWidth(width int) []string {
 	label := c.title()
 	indicator, style := c.statePresentation()
 	header := style.Render(indicator + label)
 	if duration := c.duration(); duration > 0 {
-		header += toolSummaryStyle.Render(glyphSep + execview.FormatDuration(duration))
+		header += tuistyle.ToolSummaryStyle.Render(tuistyle.GlyphSep + execview.FormatDuration(duration))
 	}
-	out := wrapStyledLines(header, maxInt(1, width))
+	out := wrapStyledLines(header, max(1, width))
 	if detail := c.detail(); detail != "" {
-		for _, line := range wrapStyledLines(bodyStyle.Render("  "+detail), maxInt(1, width)) {
+		for _, line := range wrapStyledLines(tuistyle.BodyStyle.Render("  "+detail), max(1, width)) {
 			out = append(out, line)
 		}
 	}
@@ -103,19 +104,19 @@ func (c AgentRunCell) duration() time.Duration {
 func (c AgentRunCell) statePresentation() (string, lipgloss.Style) {
 	switch c.State {
 	case agent.StateCompleted:
-		return glyphToolSuccess, successStyle
+		return tuistyle.GlyphToolSuccess, tuistyle.SuccessStyle
 	case agent.StateFailed, agent.StateCanceled:
-		return glyphToolError, errorStyle
+		return tuistyle.GlyphToolError, tuistyle.ErrorStyle
 	case agent.StateCanceling:
-		return glyphAgent, warningStyle
+		return tuistyle.GlyphAgent, tuistyle.WarningStyle
 	case agent.StateQueued:
-		return "○ ", mutedStyle
+		return "○ ", tuistyle.MutedStyle
 	default:
-		indicator := glyphAgent
+		indicator := tuistyle.GlyphAgent
 		if c.Spinner != "" {
 			indicator = c.Spinner + " "
 		}
-		return indicator, toolStyle
+		return indicator, tuistyle.ToolStyle
 	}
 }
 

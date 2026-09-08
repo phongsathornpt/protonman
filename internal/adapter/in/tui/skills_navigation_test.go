@@ -368,8 +368,8 @@ func TestHistoryStateTrimO1(t *testing.T) {
 		state.Append(&UserCell{Text: fmt.Sprintf("msg %d", i)})
 	}
 
-	if state.lineCount() > 10 {
-		t.Fatalf("expected state.lineCount() <= 10, got %d", state.lineCount())
+	if state.LineCount() > 10 {
+		t.Fatalf("expected state.LineCount() <= 10, got %d", state.LineCount())
 	}
 	if len(state.Committed()) > 10 {
 		t.Fatalf("expected committed <= 10, got %d", len(state.Committed()))
@@ -379,8 +379,8 @@ func TestHistoryStateTrimO1(t *testing.T) {
 	for _, c := range state.Committed() {
 		total += c.LineCount()
 	}
-	if state.lineCount() != total {
-		t.Fatalf("cached line count %d != calculated %d", state.lineCount(), total)
+	if state.LineCount() != total {
+		t.Fatalf("cached line count %d != calculated %d", state.LineCount(), total)
 	}
 }
 
