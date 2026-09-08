@@ -93,7 +93,6 @@ type bubbleModel struct {
 	height                    int
 	frameChrome               frameChrome
 	welcomeCache              welcomeCardCache
-	composerDirty             bool
 	layoutGeneration          uint64
 	busyStarted               time.Time
 	turnCancel                context.CancelFunc
@@ -401,7 +400,6 @@ func (m *bubbleModel) syncPromptPlaceholder() {
 	if m == nil || m.bottom == nil {
 		return
 	}
-	m.composerDirty = true
 	mode := permission.ModeAsk
 	if m.service != nil {
 		mode = m.service.Mode()
@@ -579,7 +577,6 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		prompt := m.bottom.prompt()
 		updated, command := prompt.Update(message)
 		*prompt = updated
-		m.composerDirty = true
 		return m, command
 	case permissionRequestMsg:
 		return m.updatePermissionRequest(message)

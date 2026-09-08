@@ -110,7 +110,6 @@ func (m *bubbleModel) syncPromptHeight() {
 		lines = 4
 	}
 	if prompt.Height() != lines {
-		m.composerDirty = true
 		prompt.SetHeight(lines)
 	}
 }
@@ -125,7 +124,6 @@ func (m *bubbleModel) resize(width int, height int) {
 	m.width = width
 	m.height = height
 	prompt := m.bottom.prompt()
-	m.composerDirty = true
 	prompt.SetWidth(maxInt(1, width-4))
 	m.syncPromptHeight()
 	m.transcriptViewport.Width = maxInt(1, width-10)
@@ -159,12 +157,11 @@ func (m *bubbleModel) buildFrameChrome() frameChrome {
 	frame.status = m.statusView()
 	frame.top = m.bottom.renderTop(m)
 	if m.bottom.composerVisible() {
-		if m.frameChrome.generation != 0 && !m.composerDirty && m.frameChrome.composer != "" {
-			frame.composer = m.frameChrome.composer
-		} else {
-			frame.composer = m.promptView()
-			m.composerDirty = false
-		}
+		// The composer is small and stateful (cursor, focus, placeholder, bash mode).
+		// Render it from the textarea model every frame instead of reusing terminal
+		// output from a previous frame. Caching this string can leave stale prompt
+		// rows behind when the transcript scrolls while the textarea changes.
+		frame.composer = m.promptView()
 	}
 	frame.footer = m.footerView()
 	for _, part := range []string{frame.todo, frame.agents, frame.status, frame.top, frame.composer} {
@@ -212,7 +209,6 @@ type viewportScrollSnapshot struct {
 
 func (m *bubbleModel) relayout() {
 	scroll := m.captureViewportScroll()
-	m.composerDirty = true
 	m.syncPromptHeight()
 	m.applyFrameLayout(scroll, m.buildFrameChrome())
 }
