@@ -94,6 +94,7 @@ type bubbleModel struct {
 	frameChrome               frameChrome
 	welcomeCache              welcomeCardCache
 	promptBoxCache            promptBoxChromeCache
+	infoCache                 infoViewCache
 	layoutGeneration          uint64
 	busyStarted               time.Time
 	turnCancel                context.CancelFunc
