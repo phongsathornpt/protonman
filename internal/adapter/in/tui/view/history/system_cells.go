@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/diagnostic"
-	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/style"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/diagnostic"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 

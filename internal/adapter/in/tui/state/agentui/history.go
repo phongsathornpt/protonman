@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/history"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/toolview"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/toolview"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )

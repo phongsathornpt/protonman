@@ -3,8 +3,8 @@ package runtime
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/agentui"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/pane"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"

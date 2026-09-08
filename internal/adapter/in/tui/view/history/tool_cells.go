@@ -7,9 +7,9 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/execview"
-	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/style"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/toolview"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/execview"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/toolview"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 

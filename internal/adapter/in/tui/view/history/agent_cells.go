@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/execview"
-	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/style"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/execview"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 

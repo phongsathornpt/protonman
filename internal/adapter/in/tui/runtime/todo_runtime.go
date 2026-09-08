@@ -2,7 +2,7 @@ package runtime
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/pane"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 	"slices"
 )

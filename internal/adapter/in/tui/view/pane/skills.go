@@ -3,8 +3,8 @@ package pane
 import (
 	"fmt"
 
-	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/style"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/textview"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 )
 
 type SkillItem struct {

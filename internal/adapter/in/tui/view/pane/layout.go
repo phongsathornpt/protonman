@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/style"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 )
 
 // LayoutMode describes vertical-space constraints for transient panes.
