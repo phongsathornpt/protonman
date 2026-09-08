@@ -1,6 +1,7 @@
 package modelprofile
 
 import (
+	"strings"
 	"testing"
 
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
@@ -237,5 +238,16 @@ func TestMetadataProvenanceSummaryIsDeterministic(t *testing.T) {
 	want := "tools=catalog,context_window=builtin,tool_schema_dialect=builtin"
 	if got != want {
 		t.Fatalf("Summary() = %q, want %q", got, want)
+	}
+}
+
+func TestGeminiToolHintsUseUnifiedReadFileSourceView(t *testing.T) {
+	got := ResolveBuiltin("gateway", "gemini-3.8-flash", CatalogMetadata{})
+	joined := strings.Join(got.AgentPolicy.PromptHints, "\n")
+	if !strings.Contains(joined, "read_file with view=source") {
+		t.Fatalf("Gemini prompt hints missing unified source view: %q", joined)
+	}
+	if strings.Contains(joined, "inspect_code") {
+		t.Fatalf("Gemini prompt hints expose legacy inspect_code: %q", joined)
 	}
 }

@@ -140,3 +140,13 @@ func TestRenderToolDisciplineDoesNotBanLanguageRuntimes(t *testing.T) {
 		}
 	}
 }
+
+func TestToolDisciplineUsesUnifiedSourceInspection(t *testing.T) {
+	got := Render(Spec{})
+	if !strings.Contains(got, "read_file with view=source") {
+		t.Fatalf("tool discipline missing unified source inspection guidance:\n%s", got)
+	}
+	if strings.Contains(got, "inspect_code") {
+		t.Fatalf("tool discipline exposes legacy inspect_code:\n%s", got)
+	}
+}
