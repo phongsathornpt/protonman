@@ -1,6 +1,12 @@
 package app
 
 import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/projectTHORN/proton/internal/adapter/out/config"
+	"github.com/projectTHORN/proton/internal/adapter/out/model"
 	"github.com/projectTHORN/proton/internal/core/permission"
 	"github.com/projectTHORN/proton/internal/engine/toolcall"
 	"github.com/projectTHORN/proton/internal/feature/agent"
@@ -9,6 +15,59 @@ import (
 
 // Agents owns inbound lifecycle/control access to the subagent coordinator.
 type Agents struct{ coordinator *agent.Coordinator }
+
+// SubagentModelResolverSpec contains immutable runtime inputs used to build
+// configured per-profile subagent language models.
+type SubagentModelResolverSpec struct {
+	Providers      map[string]config.ProviderConfig
+	Overrides      map[string]config.SubagentModelConfig
+	SessionID      string
+	RequestTimeout time.Duration
+}
+
+// BuildSubagentModelResolver validates configured provider/model pairs and
+// prebuilds immutable language-model overrides. Missing profiles dynamically
+// inherit the current Universal model inside the coordinator.
+func BuildSubagentModelResolver(spec SubagentModelResolverSpec) (*agent.ModelResolver, error) {
+	if len(spec.Overrides) == 0 {
+		return nil, nil
+	}
+	overrides := make(map[agent.Profile]sdk.LanguageModel, len(spec.Overrides))
+	for rawProfile, configured := range spec.Overrides {
+		profile, err := agent.ParseSubagentProfile(rawProfile)
+		if err != nil {
+			return nil, fmt.Errorf("subagent model %q: %w", rawProfile, err)
+		}
+		providerKey, provider, ok := lookupProvider(spec.Providers, configured.Provider)
+		if !ok {
+			return nil, fmt.Errorf("agent.subagents.%s: provider %q is not configured", profile, configured.Provider)
+		}
+		if !model.ProviderHasUsableAuth(providerKey, provider.BaseURL, provider.APIKey) {
+			return nil, fmt.Errorf("agent.subagents.%s: provider %q requires credentials", profile, providerKey)
+		}
+		opts := []model.ClientOption{model.WithRequestTimeout(spec.RequestTimeout)}
+		if strings.TrimSpace(spec.SessionID) != "" {
+			opts = append(opts, model.WithSessionID(spec.SessionID))
+		}
+		overrides[profile] = model.NewProviderLanguageModel(
+			providerKey, provider.Type, provider.BaseURL, provider.APIKey, configured.Model, opts...,
+		)
+	}
+	return agent.NewModelResolver(overrides)
+}
+
+func lookupProvider(providers map[string]config.ProviderConfig, requested string) (string, config.ProviderConfig, bool) {
+	requested = strings.TrimSpace(requested)
+	if provider, ok := providers[requested]; ok {
+		return requested, provider, true
+	}
+	for key, provider := range providers {
+		if strings.EqualFold(key, requested) {
+			return key, provider, true
+		}
+	}
+	return "", config.ProviderConfig{}, false
+}
 
 func NewAgents(coordinator *agent.Coordinator) Agents { return Agents{coordinator: coordinator} }
 func (a Agents) Available() bool                      { return a.coordinator != nil }
