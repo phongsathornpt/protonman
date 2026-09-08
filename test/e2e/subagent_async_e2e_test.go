@@ -88,18 +88,18 @@ func TestE2EAsyncSubagentWaitDoesNotCancel(t *testing.T) {
 		t.Fatalf("spawn=%s err=%v", spawn.Output, err)
 	}
 
-	wait := callAgentTool(t, service, "wait-1", "wait_agent", map[string]any{"agent_id": handle.AgentID})
-	if !strings.Contains(string(wait.StructuredOutput), `"status":"running"`) && !strings.Contains(string(wait.StructuredOutput), `"status":"queued"`) {
-		t.Fatalf("first wait=%s", wait.Output)
+	wait := callAgentTool(t, service, "wait-1", "wait_agent", map[string]any{})
+	if !strings.Contains(string(wait.StructuredOutput), `"timed_out":true`) {
+		t.Fatalf("first wait=%s structured=%s", wait.Output, wait.StructuredOutput)
 	}
 	if _, ok := coord.Get(handle.AgentID); !ok {
 		t.Fatal("wait timeout removed child")
 	}
 
 	close(release)
-	wait = callAgentTool(t, service, "wait-2", "wait_agent", map[string]any{"agent_id": handle.AgentID, "timeout_seconds": 1})
-	if !strings.Contains(string(wait.StructuredOutput), `"status":"completed"`) || !strings.Contains(string(wait.StructuredOutput), "persistent result") {
-		t.Fatalf("completed wait=%s", wait.Output)
+	wait = callAgentTool(t, service, "wait-2", "wait_agent", map[string]any{"timeout_seconds": 10})
+	if !strings.Contains(string(wait.StructuredOutput), `"timed_out":false`) || !strings.Contains(string(wait.StructuredOutput), "persistent result") || !strings.Contains(string(wait.StructuredOutput), handle.AgentID) {
+		t.Fatalf("completed wait=%s structured=%s", wait.Output, wait.StructuredOutput)
 	}
 	get := callAgentTool(t, service, "get", "get_agent", map[string]any{"agent_id": handle.AgentID})
 	if !strings.Contains(string(get.StructuredOutput), `"state":"completed"`) || !strings.Contains(string(get.StructuredOutput), "persistent result") {
@@ -125,8 +125,8 @@ func TestE2EAsyncSubagentExplicitCancel(t *testing.T) {
 	}
 	_ = json.Unmarshal(spawn.StructuredOutput, &handle)
 	callAgentTool(t, service, "cancel", "cancel_agent", map[string]any{"agent_id": handle.AgentID})
-	wait := callAgentTool(t, service, "wait", "wait_agent", map[string]any{"agent_id": handle.AgentID, "timeout_seconds": 1})
-	if !strings.Contains(string(wait.StructuredOutput), `"status":"canceled"`) {
-		t.Fatalf("wait after cancel=%s", wait.Output)
+	wait := callAgentTool(t, service, "wait", "wait_agent", map[string]any{"timeout_seconds": 10})
+	if !strings.Contains(string(wait.StructuredOutput), `"agent_failed"`) || !strings.Contains(string(wait.StructuredOutput), handle.AgentID) {
+		t.Fatalf("wait after cancel=%s structured=%s", wait.Output, wait.StructuredOutput)
 	}
 }

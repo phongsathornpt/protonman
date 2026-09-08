@@ -42,9 +42,55 @@ func (c *Coordinator) Wait(ctx context.Context, id string, timeout time.Duration
 		return c.waitSnapshot(id)
 	case <-waitCtx.Done():
 		if errors.Is(waitCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
-			return c.waitSnapshot(id)
+			wr, snapshotErr := c.waitSnapshot(id)
+			wr.TimedOut = true
+			return wr, snapshotErr
 		}
 		return WaitResult{}, waitCtx.Err()
+	}
+}
+
+// WaitActivity waits for the next terminal subagent mailbox activity. The observation
+// timeout is non-fatal and does
+// not cancel or otherwise mutate any child agent.
+func (c *Coordinator) WaitActivity(ctx context.Context, timeout time.Duration) (ActivityWaitResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if timeout <= 0 {
+		timeout = c.waitTimeout
+	}
+
+	consume := func() (*Event, <-chan struct{}) {
+		c.activityMu.Lock()
+		defer c.activityMu.Unlock()
+		if c.activitySeq > c.activitySeen {
+			c.activitySeen = c.activitySeq
+			ev := c.activityEvent
+			return &ev, nil
+		}
+		return nil, c.activityNotify
+	}
+
+	if ev, notify := consume(); ev != nil {
+		return ActivityWaitResult{Event: ev, Agents: c.List()}, nil
+	} else {
+		waitCtx := ctx
+		cancel := func() {}
+		if timeout > 0 {
+			waitCtx, cancel = context.WithTimeout(ctx, timeout)
+		}
+		defer cancel()
+		select {
+		case <-notify:
+			ev, _ := consume()
+			return ActivityWaitResult{Event: ev, Agents: c.List()}, nil
+		case <-waitCtx.Done():
+			if errors.Is(waitCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+				return ActivityWaitResult{Agents: c.List(), TimedOut: true}, nil
+			}
+			return ActivityWaitResult{}, waitCtx.Err()
+		}
 	}
 }
 

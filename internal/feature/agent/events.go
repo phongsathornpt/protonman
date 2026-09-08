@@ -56,11 +56,24 @@ func (c *Coordinator) broadcast(ev Event) {
 }
 
 func (c *Coordinator) emit(_ context.Context, ev Event) {
+	c.recordActivity(ev)
 	c.broadcast(ev)
 	if c.eventSink == nil {
 		return
 	}
 	enqueueLifecycleEvent(c.eventQueue, ev)
+}
+
+func (c *Coordinator) recordActivity(ev Event) {
+	if !terminalLifecycleEvent(ev.Kind) {
+		return
+	}
+	c.activityMu.Lock()
+	c.activitySeq++
+	c.activityEvent = ev
+	close(c.activityNotify)
+	c.activityNotify = make(chan struct{})
+	c.activityMu.Unlock()
 }
 
 func enqueueLifecycleEvent(ch chan Event, ev Event) {

@@ -118,8 +118,17 @@ type Handle struct {
 
 // WaitResult reports the current state after a bounded wait.
 type WaitResult struct {
-	State  State   `json:"state"`
-	Result *Result `json:"result,omitempty"`
+	State    State   `json:"state"`
+	Result   *Result `json:"result,omitempty"`
+	TimedOut bool    `json:"timed_out"`
+}
+
+// ActivityWaitResult reports the next session-scoped subagent mailbox activity.
+// A timeout is a successful observation with TimedOut=true, not an agent failure.
+type ActivityWaitResult struct {
+	Event    *Event        `json:"event,omitempty"`
+	Agents   []AgentStatus `json:"agents"`
+	TimedOut bool          `json:"timed_out"`
 }
 
 // Request is the invocation payload for a delegated subagent.
