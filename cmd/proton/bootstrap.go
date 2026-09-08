@@ -145,6 +145,11 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		return nil, fmt.Errorf("configure subagent models: %w", err)
 	}
 	coordinator.SetModelResolver(subagentModelResolver)
+	subagentReasoningResolver, err := app.BuildSubagentReasoningResolver(loadedConfig.Agent.Subagents)
+	if err != nil {
+		return nil, fmt.Errorf("configure subagent reasoning: %w", err)
+	}
+	coordinator.SetReasoningResolver(subagentReasoningResolver)
 	resources, err := session.ResolveResources(dirs.Sessions, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("resolve session resources: %w", err)

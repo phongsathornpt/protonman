@@ -38,6 +38,9 @@ func BuildSubagentModelResolver(spec SubagentModelResolverSpec) (*agent.ModelRes
 		if err != nil {
 			return nil, fmt.Errorf("subagent model %q: %w", rawProfile, err)
 		}
+		if strings.TrimSpace(configured.Provider) == "" && strings.TrimSpace(configured.Model) == "" {
+			continue
+		}
 		providerKey, provider, ok := lookupProvider(spec.Providers, configured.Provider)
 		if !ok {
 			return nil, fmt.Errorf("agent.subagents.%s: provider %q is not configured", profile, configured.Provider)
@@ -53,7 +56,32 @@ func BuildSubagentModelResolver(spec SubagentModelResolverSpec) (*agent.ModelRes
 			providerKey, provider.Type, provider.BaseURL, provider.APIKey, configured.Model, opts...,
 		)
 	}
+	if len(overrides) == 0 {
+		return nil, nil
+	}
 	return agent.NewModelResolver(overrides)
+}
+
+// BuildSubagentReasoningResolver validates and snapshots per-profile reasoning overrides.
+// Profiles configured as auto/default inherit the current global/profile policy.
+func BuildSubagentReasoningResolver(configured map[string]config.SubagentModelConfig) (*agent.ReasoningResolver, error) {
+	if len(configured) == 0 {
+		return nil, nil
+	}
+	overrides := make(map[agent.Profile]sdk.ReasoningEffort, len(configured))
+	for rawProfile, subagentConfig := range configured {
+		profile, err := agent.ParseSubagentProfile(rawProfile)
+		if err != nil {
+			return nil, fmt.Errorf("subagent reasoning %q: %w", rawProfile, err)
+		}
+		if subagentConfig.ReasoningEffort != sdk.ReasoningDefault {
+			overrides[profile] = subagentConfig.ReasoningEffort
+		}
+	}
+	if len(overrides) == 0 {
+		return nil, nil
+	}
+	return agent.NewReasoningResolver(overrides)
 }
 
 func lookupProvider(providers map[string]config.ProviderConfig, requested string) (string, config.ProviderConfig, bool) {
