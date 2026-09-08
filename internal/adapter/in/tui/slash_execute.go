@@ -18,6 +18,8 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		return m.handleSkillsCommand(argument, parts)
 	case "project":
 		return m.executeProjectCommand(line, rawName)
+	case "config":
+		return m.executeUserConfigCommand(line, rawName)
 	case "session", "sessions":
 		return m.executeSessionCommand(name)
 	case "mode", "ask", "always-approve", "plan":
