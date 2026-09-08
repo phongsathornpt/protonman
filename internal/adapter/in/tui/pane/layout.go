@@ -64,3 +64,31 @@ func RenderModal(width, height int, border lipgloss.TerminalColor, rows []string
 	}
 	return style.Render(strings.Join(rows, "\n"))
 }
+
+func NormalizedWindow(index, offset, count, visible int) (int, int, int) {
+	if count <= 0 {
+		return 0, 0, 0
+	}
+	if visible <= 0 {
+		visible = 1
+	}
+	if index < 0 {
+		index = 0
+	} else if index >= count {
+		index = count - 1
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if index < offset {
+		offset = index
+	} else if index >= offset+visible {
+		offset = index - visible + 1
+	}
+	maxOffset := max(0, count-visible)
+	if offset > maxOffset {
+		offset = maxOffset
+	}
+	end := min(count, offset+visible)
+	return index, offset, end
+}

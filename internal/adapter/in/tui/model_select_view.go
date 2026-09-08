@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/pane"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -214,125 +214,52 @@ func (m *bubbleModel) openModelSelectPane() tea.Cmd {
 }
 
 func (v *modelSelectPaneView) Render(m *bubbleModel) string {
-	maxWidth := maxInt(1, m.width-4)
-	activeProv := v.activeProviderName()
-	if v.loading {
-		rows := []string{
-			brandStyle.Render("Select Model · " + activeProv),
-			"",
-			mutedStyle.Render("Loading models..."),
-			"",
-			mutedStyle.Render("esc close"),
-		}
-		return renderModalRows(m, accentAssistant, rows)
-	}
-	if v.err != nil {
-		rows := []string{
-			brandStyle.Render("Select Model · " + activeProv),
-			"",
-			errorStyle.Render("Failed to load models"),
-			mutedStyle.Render(truncateWithEllipsis(v.err.Error(), maxInt(8, maxWidth-4))),
-			"",
-			mutedStyle.Render("r retry · p providers · esc close"),
-		}
-		return renderModalRows(m, accentAssistant, rows)
-	}
-	if len(v.models) == 0 {
-		rows := []string{
-			brandStyle.Render("✓ Select Model"),
-			"",
-			mutedStyle.Render("No models available for the selected provider."),
-			"",
-			mutedStyle.Render("a add provider credentials · esc close"),
-		}
-		return renderModalRows(m, accentAssistant, rows)
-	}
-
-	visibleRows := pickerVisibleRows(m.height, maxModelSelectRows)
-	index, offset, visibleEnd := normalizedPickerWindow(v.index, v.offset, len(v.models), visibleRows)
-	visible := v.models[offset:visibleEnd]
-
-	title := fmt.Sprintf("Select Model · %s · %d/%d", activeProv, index+1, len(v.models))
-	if len(v.providerNames) > 1 {
-		title += " · tab provider"
-	}
-
-	rows := make([]string, 0, len(visible)*2+8)
-	rows = append(rows, brandStyle.Render(title))
-	if v.filtering || strings.TrimSpace(v.filter) != "" {
-		search := "Search: " + v.filter
-		if v.filtering {
-			search += "█"
-		}
-		rows = append(rows, mutedStyle.Render(truncateWithEllipsis(search, maxWidth-2)))
-	}
-	rows = append(rows, "")
-
-	if offset > 0 {
-		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ↑ %d more", v.offset)))
-	}
-
-	contentWidth := maxInt(8, maxWidth-6)
-	showDetails := layoutModeForHeight(m.height) == layoutNormal
-	for i, md := range visible {
-		idx := offset + i
-		isCurrent := m != nil && strings.EqualFold(md.ID, m.activeModel)
-		focus := "  "
-		if idx == index {
-			focus = "❯ "
-		}
-		active := " "
-		if isCurrent {
-			active = "✓"
-		}
+	items := make([]pane.ModelItem, 0, len(v.models))
+	providerName := v.activeProviderName()
+	for _, md := range v.models {
 		label := strings.TrimSpace(md.Name)
 		if label == "" {
 			label = md.ID
 		}
-		line := fmt.Sprintf("%s%s %s", focus, active, label)
-		if model.IsFreeModel(md.ID) {
-			line += " · FREE"
+		details := make([]string, 0, 4)
+		resolved := model.ResolveRemoteMetadata(providerName, md)
+		if label != md.ID && strings.TrimSpace(md.ID) != "" {
+			details = append(details, md.ID)
 		}
-		line = truncateWithEllipsis(line, contentWidth)
-		if idx == v.index {
-			rows = append(rows, brandStyle.Render(line))
-		} else if isCurrent {
-			rows = append(rows, successStyle.Render(line))
-		} else {
-			rows = append(rows, mutedStyle.Render(line))
+		if limits := formatModelTokenLimits(resolved.Profile.ContextWindow, resolved.Profile.MaxInputTokens, resolved.Profile.MaxOutputTokens); limits != "" {
+			details = append(details, limits)
 		}
-
-		if showDetails {
-			resolved := model.ResolveRemoteMetadata(v.activeProviderName(), md)
-			details := make([]string, 0, 3)
-			if label != md.ID && strings.TrimSpace(md.ID) != "" {
-				details = append(details, md.ID)
-			}
-			if limits := formatModelTokenLimits(resolved.Profile.ContextWindow, resolved.Profile.MaxInputTokens, resolved.Profile.MaxOutputTokens); limits != "" {
-				details = append(details, limits)
-			}
-			if len(resolved.Features) > 0 {
-				details = append(details, strings.Join(resolved.Features, " · "))
-			}
-			if reasoning := remoteModelReasoningSummary(v.activeProviderName(), md, true); reasoning != "" {
-				details = append(details, reasoning)
-			}
-			if len(details) > 0 {
-				rows = append(rows, mutedStyle.Render("    "+truncateWithEllipsis(strings.Join(details, " · "), maxInt(4, contentWidth-4))))
-			}
+		if len(resolved.Features) > 0 {
+			details = append(details, strings.Join(resolved.Features, " · "))
 		}
+		if reasoning := remoteModelReasoningSummary(providerName, md, true); reasoning != "" {
+			details = append(details, reasoning)
+		}
+		items = append(items, pane.ModelItem{
+			ID:      md.ID,
+			Label:   label,
+			Free:    model.IsFreeModel(md.ID),
+			Current: m != nil && strings.EqualFold(md.ID, m.activeModel),
+			Details: strings.Join(details, " · "),
+		})
 	}
-
-	if visibleEnd < len(v.models) {
-		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ↓ %d more", len(v.models)-visibleEnd)))
+	errorText := ""
+	if v.err != nil {
+		errorText = v.err.Error()
 	}
-
-	footer := "↑/↓ move · enter select · / search · ctrl+u clear · p providers · esc close"
-	if layoutModeForHeight(m.height) == layoutTiny {
-		footer = "↑/↓ · enter · esc"
-		rows = compactPickerRows(rows)
-	}
-	rows = append(rows, "", mutedStyle.Render(footer))
+	rows := pane.ModelRows(pane.ModelSnapshot{
+		Width:         m.width,
+		Height:        m.height,
+		Index:         v.index,
+		Offset:        v.offset,
+		ProviderName:  providerName,
+		ProviderCount: len(v.providerNames),
+		Models:        items,
+		Filter:        v.filter,
+		Filtering:     v.filtering,
+		Loading:       v.loading,
+		ErrorText:     errorText,
+	})
 	return renderModalRows(m, accentAssistant, rows)
 }
 
