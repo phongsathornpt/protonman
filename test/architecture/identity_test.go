@@ -28,7 +28,7 @@ func TestProtonmanDistributionIdentity(t *testing.T) {
 	assertFileContains(t, workflow, `package="protonman_${plain_version}_${GOOS}_${GOARCH}"`)
 	assertFileContains(t, workflow, `binary="protonman"`)
 	assertFileContains(t, workflow, "pattern: protonman-*")
-	assertFileContains(t, workflow, "sha256sum protonman_* > checksums.txt")
+	assertFileContains(t, workflow, `sha256sum "${expected[@]}" > checksums.txt`)
 
 	body, err := os.ReadFile(workflow)
 	if err != nil {
