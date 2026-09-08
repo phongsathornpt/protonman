@@ -12,7 +12,7 @@ const (
 	TurnMaxToolCalls                  = 100
 	TurnToolResultBytesPerRound       = 4 * 1024 * 1024
 	TurnToolResultBytesPerTurn        = 12 * 1024 * 1024
-	TurnTimeout                       = 10 * time.Minute
+	TurnTimeout                       = time.Duration(0)
 	RoundTimeout                      = 5 * time.Minute
 	ToolPermissionTimeout             = 2 * time.Minute
 	ToolExecutionTimeout              = 2 * time.Minute

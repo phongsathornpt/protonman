@@ -217,7 +217,7 @@ func delegationSection(spec Spec) string {
 - Use INTELLIGENCE for deep reasoning, architecture, difficult debugging, concurrency, compatibility, performance, or other high-risk engineering work.
 - Keep trivial lookups and simple local edits in the parent.
 - Delegation is asynchronous: spawn independent children before waiting when parallelism helps, and continue useful parent work while they run.
-- A wait timeout does not cancel a child. Wait when a child result enters the critical path; do not poll agent state without a reason.
+- wait_agent blocks on session-scoped child completion/failure activity rather than targeting one child. A wait timeout does not cancel a child; it is a successful no-activity observation. Use list_agents/get_agent to inspect state after wakeup; do not poll agent state without a reason.
 - Cancel delegated work that is no longer needed.
 - Do not repeat delegated work unless integration or verification requires it.
 - Use child findings and evidence references to avoid duplicating investigation unnecessarily.

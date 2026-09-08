@@ -81,8 +81,10 @@ func agentLifecycleOutputSchema(name string) map[string]any {
 	switch name {
 	case "wait_agent":
 		return map[string]any{"type": "object", "properties": map[string]any{
-			"agent_id": map[string]any{"type": "string"}, "status": agentStateSchema(), "result": agentResultSchema(),
-		}, "required": []any{"agent_id", "status", "result"}, "additionalProperties": false}
+			"timed_out": map[string]any{"type": "boolean"},
+			"event":     map[string]any{"type": []any{"object", "null"}},
+			"agents":    map[string]any{"type": "array", "items": agentStatusSchema()},
+		}, "required": []any{"timed_out", "event", "agents"}, "additionalProperties": false}
 	case "get_agent", "cancel_agent":
 		return map[string]any{"type": "object", "properties": map[string]any{
 			"agent": agentStatusSchema(), "result": agentResultSchema(),

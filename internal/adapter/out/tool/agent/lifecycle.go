@@ -17,8 +17,7 @@ type agentIDInput struct {
 }
 
 type waitAgentInput struct {
-	AgentID        string `json:"agent_id"`
-	TimeoutSeconds int64  `json:"timeout_seconds,omitempty"`
+	TimeoutSeconds int64 `json:"timeout_seconds,omitempty"`
 }
 
 type agentLifecycleHandler struct {
@@ -43,14 +42,12 @@ func (h agentLifecycleHandler) Definition() tool.Definition {
 	def := tool.Definition{Name: h.name, Kind: tool.KindForName(h.name), ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded}
 	switch h.name {
 	case "wait_agent":
-		def.Description = "Wait briefly for a subagent without canceling it when the wait expires."
+		def.Description = "Wait for the next subagent completion/failure activity. A wait timeout is non-fatal and never cancels children."
 		def.Mutability = tool.MutabilityReadOnly
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
-		def.PermissionDetailKey = "agent_id"
 		def.InputSchema = map[string]any{"type": "object", "properties": map[string]any{
-			"agent_id":        map[string]any{"type": "string"},
-			"timeout_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 300},
-		}, "required": []string{"agent_id"}, "additionalProperties": false}
+			"timeout_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 3600},
+		}, "additionalProperties": false}
 	case "get_agent":
 		def.Description = "Inspect one retained subagent and its terminal result when available."
 		def.Mutability = tool.MutabilityReadOnly
@@ -102,22 +99,25 @@ func (h agentLifecycleHandler) wait(ctx context.Context, call tool.Call) (tool.R
 	if err := json.Unmarshal(call.Arguments, &in); err != nil {
 		return tool.Result{}, invalidArgs("decode wait_agent arguments", err)
 	}
-	id := strings.TrimSpace(in.AgentID)
-	if id == "" {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "agent_id is required")
-	}
-	if in.TimeoutSeconds < 0 || in.TimeoutSeconds > 300 {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "timeout_seconds must be between 1 and 300 when provided")
+	if in.TimeoutSeconds < 0 || in.TimeoutSeconds > 3600 {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "timeout_seconds must be between 0 and 3600 when provided")
 	}
 	var timeout time.Duration
 	if in.TimeoutSeconds > 0 {
 		timeout = time.Duration(in.TimeoutSeconds) * time.Second
+		if timeout < 10*time.Second {
+			timeout = 10 * time.Second
+		}
 	}
-	wr, err := h.coordinator.Wait(ctx, id, timeout)
+	wr, err := h.coordinator.WaitActivity(ctx, timeout)
 	if err != nil {
-		return tool.Result{}, classifyAgentError("wait for subagent", err)
+		return tool.Result{}, classifyAgentError("wait for subagent activity", err)
 	}
-	return agentJSONResult(call, fmt.Sprintf("%s · %s", id, wr.State), map[string]any{"agent_id": id, "status": wr.State, "result": resultPayload(wr.Result)})
+	summary := "wait timed out"
+	if wr.Event != nil {
+		summary = fmt.Sprintf("%s · %s", wr.Event.AgentID, wr.Event.Kind)
+	}
+	return agentJSONResult(call, summary, map[string]any{"timed_out": wr.TimedOut, "event": wr.Event, "agents": wr.Agents})
 }
 
 func (h agentLifecycleHandler) get(call tool.Call) (tool.Result, error) {

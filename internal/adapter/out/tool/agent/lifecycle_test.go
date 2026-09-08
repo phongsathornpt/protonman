@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
 func TestWaitAgentTimeoutDoesNotCancelChild(t *testing.T) {
@@ -37,26 +37,26 @@ func TestWaitAgentTimeoutDoesNotCancelChild(t *testing.T) {
 		t.Fatal(err)
 	}
 	wait := NewWaitAgent(coord)
-	call, _ := tool.NewCall("wait-1", "wait_agent", json.RawMessage(`{"agent_id":"`+h.ID+`"}`))
+	call, _ := tool.NewCall("wait-1", "wait_agent", json.RawMessage(`{}`))
 	res, err := wait.Execute(context.Background(), call)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(res.StructuredOutput), `"status":"running"`) && !strings.Contains(string(res.StructuredOutput), `"status":"queued"`) {
-		t.Fatalf("wait output = %s", res.Output)
+	if !strings.Contains(string(res.StructuredOutput), `"timed_out":true`) {
+		t.Fatalf("wait output = %s structured=%s", res.Output, res.StructuredOutput)
 	}
 	if _, ok := coord.Get(h.ID); !ok {
 		t.Fatal("wait timeout canceled or removed child")
 	}
 
 	close(release)
-	call2, _ := tool.NewCall("wait-2", "wait_agent", json.RawMessage(`{"agent_id":"`+h.ID+`","timeout_seconds":1}`))
+	call2, _ := tool.NewCall("wait-2", "wait_agent", json.RawMessage(`{"timeout_seconds":10}`))
 	res, err = wait.Execute(context.Background(), call2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(res.StructuredOutput), `"status":"completed"`) || !strings.Contains(string(res.StructuredOutput), "finished") {
-		t.Fatalf("completion output = %s", res.Output)
+	if !strings.Contains(string(res.StructuredOutput), `"timed_out":false`) || !strings.Contains(string(res.StructuredOutput), "finished") || !strings.Contains(string(res.StructuredOutput), h.ID) {
+		t.Fatalf("completion output = %s structured=%s", res.Output, res.StructuredOutput)
 	}
 }
 
