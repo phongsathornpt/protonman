@@ -48,7 +48,7 @@ case "$url" in
 	;;
 */releases/tags/*)
 	archive_name=${FAKE_ARCHIVE_NAME:-protonman_1.2.3_linux_amd64.tar.gz}
-	printf '{"assets":[{"url":"https://api.github.com/repos/phongsathornpt/protonman/releases/assets/101","id":101,"name":"%s"},{"url":"https://api.github.com/repos/phongsathornpt/protonman/releases/assets/102","id":102,"name":"checksums.txt"}]}' "$archive_name"
+	printf '{\n  "assets": [\n    {\n      "url": "https://api.github.com/repos/phongsathornpt/protonman/releases/assets/101",\n      "id": 101,\n      "name": "%s"\n    },\n    {\n      "url": "https://api.github.com/repos/phongsathornpt/protonman/releases/assets/102",\n      "id": 102,\n      "name": "checksums.txt"\n    }\n  ]\n}' "$archive_name"
 	exit 0
 	;;
 */releases/assets/101)
