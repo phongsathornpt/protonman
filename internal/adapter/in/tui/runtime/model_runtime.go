@@ -25,6 +25,7 @@ import (
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"log/slog"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -924,6 +925,31 @@ func (m *bubbleModel) updateProviderActiveSelected(message providerActiveSelecte
 		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to switch provider: %v", message.err)))
 	} else {
 		m.activeProvider = message.providerName
+		models := m.modelCatalogs.models(message.providerName)
+		if len(models) > 0 {
+			found := false
+			for _, mod := range models {
+				if strings.EqualFold(mod.ID, m.activeModel) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				targetModel := models[0].ID
+				m.activeModel = targetModel
+				_ = (app.Providers{}).SelectModel(message.providerName, targetModel)
+				m.appendLine(mutedStyle.Render(fmt.Sprintf("  Reconciled active model to %s", targetModel)))
+			}
+		}
+		if m.reasoningEffort != sdk.ReasoningDefault {
+			profile := m.activeResolvedModelProfile()
+			if _, err := profile.ResolveExplicitReasoning(m.reasoningEffort); err != nil {
+				previous := m.reasoningEffort
+				m.reasoningEffort = sdk.ReasoningDefault
+				m.agents.SetReasoningEffort(sdk.ReasoningDefault)
+				m.appendLine(mutedStyle.Render(fmt.Sprintf("  Reset thinking level to auto (previous level %q is unsupported by %s)", previous, m.activeModel)))
+			}
+		}
 		m.reconfigureRunner()
 		m.appendLine(successStyle.Render(fmt.Sprintf("✓ Switched active provider to %s", message.providerName)))
 		if p, ok := m.providers[strings.ToLower(message.providerName)]; ok && p.BaseURL != "" {
@@ -948,11 +974,25 @@ func (m *bubbleModel) updateProviderDeleted(message providerDeletedMsg) (tea.Mod
 		delete(m.providers, strings.ToLower(message.providerName))
 		if strings.EqualFold(m.activeProvider, message.providerName) {
 			m.activeProvider = ""
-			for remaining := range m.providers {
-				m.activeProvider = remaining
-				break
+			if len(m.providers) > 0 {
+				keys := make([]string, 0, len(m.providers))
+				for k := range m.providers {
+					keys = append(keys, k)
+				}
+				sort.Strings(keys)
+				m.activeProvider = keys[0]
+				models := m.modelCatalogs.models(m.activeProvider)
+				if len(models) > 0 {
+					m.activeModel = models[0].ID
+				} else {
+					m.activeModel = ""
+				}
+				m.reconfigureRunner()
+			} else {
+				m.activeModel = ""
+				m.runner = nil
+				m.bottom.setHasRunner(false)
 			}
-			m.reconfigureRunner()
 		}
 		m.appendLine(successStyle.Render(fmt.Sprintf("✓ Removed provider %s", message.providerName)))
 		if m.activeProvider != "" {
