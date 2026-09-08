@@ -105,10 +105,12 @@ const (
 	StateFailed      State = "failed"
 	StateCanceled    State = "canceled"
 	StateInterrupted State = "interrupted"
+	StateResuming    State = "resuming"
+	StateResumed     State = "resumed"
 )
 
 func (s State) Terminal() bool {
-	return s == StateCompleted || s == StateFailed || s == StateCanceled || s == StateInterrupted
+	return s == StateCompleted || s == StateFailed || s == StateCanceled || s == StateInterrupted || s == StateResumed
 }
 
 // Handle identifies a spawned subagent without coupling its lifetime to a caller wait.

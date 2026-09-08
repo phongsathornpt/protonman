@@ -6,6 +6,7 @@ func agentStateSchema() map[string]any {
 	return map[string]any{"type": "string", "enum": []any{
 		string(agent.StateQueued), string(agent.StateRunning), string(agent.StateCanceling),
 		string(agent.StateCompleted), string(agent.StateFailed), string(agent.StateCanceled), string(agent.StateInterrupted),
+		string(agent.StateResuming), string(agent.StateResumed),
 	}}
 }
 
