@@ -1,6 +1,7 @@
 package history
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
@@ -21,5 +22,20 @@ func TestScrollAnchorTracksCellAcrossEarlierExpansion(t *testing.T) {
 	}
 	if got != 3 {
 		t.Fatalf("resolved line=%d, want 3", got)
+	}
+}
+
+func TestScrollAnchorsMatchRenderedContentLines(t *testing.T) {
+	state := NewHistoryState(100)
+	state.Append(&SystemCell{Text: "one"})
+	state.Append(&SystemCell{Text: "two"})
+	state.active = &AssistantCell{Text: "three"}
+	content := state.RenderContent()
+	want := 0
+	if content != "" {
+		want = strings.Count(content, "\n") + 1
+	}
+	if got := len(state.ScrollAnchors()); got != want {
+		t.Fatalf("ScrollAnchors lines=%d RenderContent lines=%d content=%q", got, want, content)
 	}
 }
