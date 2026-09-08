@@ -2,6 +2,8 @@ package readfile
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -139,5 +141,35 @@ func TestReadFileMissingTargetIsNotFound(t *testing.T) {
 	}
 	if strings.Contains(failure.Message, "execution_error") {
 		t.Fatalf("missing path leaked execution_error semantics: %q", failure.Message)
+	}
+}
+
+func TestReadFileDirectorySuggestsListDirRecovery(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	if err := os.MkdirAll(filepath.Join(ws.Root(), "internal/base/runtimepolicy"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := New(ws).Execute(context.Background(), newJSONCall(t, "read-dir", "read_file", map[string]any{
+		"path": "internal/base/runtimepolicy",
+	}))
+	if err == nil {
+		t.Fatal("Execute() error = nil, want directory recovery")
+	}
+	var toolErr *tool.ToolError
+	if !errors.As(err, &toolErr) {
+		t.Fatalf("Execute() error = %T %v, want *tool.ToolError", err, err)
+	}
+	if toolErr.Code != tool.ErrorCodeInvalidArguments {
+		t.Fatalf("error code = %q, want invalid_arguments", toolErr.Code)
+	}
+	if toolErr.Recovery == nil || toolErr.Recovery.Action != tool.RecoveryUseDedicatedTool || toolErr.Recovery.Tool != "list_dir" {
+		t.Fatalf("recovery = %#v, want list_dir dedicated-tool recovery", toolErr.Recovery)
+	}
+	var args map[string]any
+	if err := json.Unmarshal(toolErr.Recovery.Arguments, &args); err != nil {
+		t.Fatalf("decode recovery arguments: %v", err)
+	}
+	if got := args["path"]; got != "internal/base/runtimepolicy" {
+		t.Fatalf("recovery path = %#v", got)
 	}
 }
