@@ -24,9 +24,14 @@ func TestE2EReasoningGeminiProfileReachesWire(t *testing.T) {
 		t.Fatalf("Gemini request reasoning = %#v", requests)
 	}
 	if !requestMessagesContain(requests[0], "# Grounding Contract") ||
-		!requestMessagesContain(requests[0], "Use tool names exactly as provided") ||
+		!requestMessagesContain(requests[0], "Use tool and action names exactly as provided") ||
 		!requestMessagesContain(requests[0], "primary software engineering agent") {
 		t.Fatalf("Gemini prompt missing stable grounding/model guidance: %#v", requests[0]["messages"])
+	}
+	for _, unavailable := range []string{"Use edit action=", "Use bash for actual programs"} {
+		if requestMessagesContain(requests[0], unavailable) {
+			t.Fatalf("Gemini grounding prompt mentioned unavailable capability %q: %#v", unavailable, requests[0]["messages"])
+		}
 	}
 	for _, leaked := range []string{"reasoning_effective=", "reasoning_source=", "model_profile=", "model_profile_match=", "provider="} {
 		if requestMessagesContain(requests[0], leaked) {

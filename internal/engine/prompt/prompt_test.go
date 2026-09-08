@@ -188,12 +188,12 @@ func TestToolDisciplineMentionsOnlyAvailableCapabilities(t *testing.T) {
 	got := Render(Spec{AvailableTools: []string{"read", "web"}})
 	for _, want := range []string{"Use read for known workspace artifacts", "Use web for exposed web operations"} {
 		if !strings.Contains(got, want) {
-			t.Fatalf("tool discipline missing available capability %q:\\n%s", want, got)
+			t.Fatalf("tool discipline missing available capability %q:\n%s", want, got)
 		}
 	}
 	for _, unavailable := range []string{"git action=status", "Use math", "Use edit action=", "Use bash for actual programs", "find discovers", "ls inspects"} {
 		if strings.Contains(got, unavailable) {
-			t.Fatalf("tool discipline mentions unavailable capability %q:\\n%s", unavailable, got)
+			t.Fatalf("tool discipline mentions unavailable capability %q:\n%s", unavailable, got)
 		}
 	}
 }

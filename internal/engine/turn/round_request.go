@@ -118,7 +118,7 @@ func (l *Loop) prepareRoundRequest(
 		softToolBudgetWarned = true
 	}
 	if l.promptSpec != nil {
-		spec := l.effectivePromptSpec(definitions, promptExtras)
+		spec := l.effectivePromptSpec(tools, promptExtras)
 		spec.GroundingEvidence = string(grounding.evidence)
 		if projectInstructions != "" {
 			if base := strings.TrimSpace(spec.ProjectInstructions); base != "" {
