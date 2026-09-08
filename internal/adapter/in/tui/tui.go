@@ -238,6 +238,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 	defer ui.bridge.Close()
 
 	currentMessages := model.CloneMessages(ui.initialMessages)
+	agentRuntime := newAgentRuntimeState(ui.agentConfig, ui.hasAgentConfig)
 
 	for {
 		todoSnapshot := tododomain.Snapshot{}
@@ -276,13 +277,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		if ui.hasRuntimeConfig {
 			bModel.runtimeConfig = ui.runtimeConfig
 		}
-		if ui.hasAgentConfig {
-			bModel.maxToolCalls = ui.agentConfig.MaxToolCalls
-			bModel.agentProfile = ui.agentConfig.Profile
-			bModel.subagentsEnabled = ui.agentConfig.SubagentsEnabled
-			bModel.agents.SetEnabled(bModel.subagentsEnabled)
-			bModel.reasoningEffort = ui.agentConfig.ReasoningEffort
-		}
+		agentRuntime.apply(bModel)
 		bModel.reconfigureRunner()
 
 		program := tea.NewProgram(
@@ -307,6 +302,13 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 			finalModel, err = program.Run()
 		}()
 		cancelAgentEvents()
+
+		// Bubble model updates mutate the same runtime state object. Capture the
+		// latest controls even when Bubble Tea exits through the crash screen so a
+		// restart cannot silently restore stale config defaults.
+		agentRuntime.capture(bModel)
+		ui.finalAgentProfile = bModel.agentProfile
+		ui.finalReasoningEffort = bModel.reasoningEffort
 
 		if panicVal != nil {
 			slog.DebugContext(ctx, "tui program panicked",
