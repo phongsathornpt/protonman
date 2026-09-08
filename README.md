@@ -395,7 +395,8 @@ reasoning_effort = "high"
 
 # Shared runtime and network policies
 [runtime]
-turn_timeout = "10m"
+# turn_timeout is disabled by default; set it only when you explicitly want a
+# wall-clock ceiling for the entire foreground turn.
 round_timeout = "5m"
 tool_permission_timeout = "2m"
 tool_execution_timeout = "2m"
