@@ -174,6 +174,8 @@ const (
 	ToolTask ToolKind = tool.KindTask
 	// ToolAgent matches subagent orchestration tools.
 	ToolAgent ToolKind = tool.KindAgent
+	// ToolCompute matches deterministic local computation tools.
+	ToolCompute ToolKind = tool.KindCompute
 )
 
 // PatternMode controls what part of a request a rule pattern matches.
@@ -244,6 +246,8 @@ func ParseToolKind(value string) (ToolKind, error) {
 		return ToolTask, nil
 	case "agent", "subagent":
 		return ToolAgent, nil
+	case "compute", "calculate", "math":
+		return ToolCompute, nil
 	default:
 		return "", fmt.Errorf("unknown permission tool %q", value)
 	}
@@ -588,6 +592,9 @@ func (p *Policy) Evaluate(request Request) Decision {
 	if matchedAllow {
 		return Decision{Action: ActionAllow, Reason: "allowed by permission policy"}
 	}
+	if request.ToolKind == ToolCompute {
+		return Decision{Action: ActionAllow, Reason: "safe local computation"}
+	}
 	return Decision{
 		Action: p.defaultAction,
 		Reason: "permission policy default: " + p.defaultAction.String(),
@@ -683,7 +690,7 @@ func ValidToolKind(kind ToolKind) bool {
 
 func validToolKind(kind ToolKind) bool {
 	switch kind {
-	case ToolAny, ToolRead, ToolEdit, ToolBash, ToolGrep, ToolMCP, ToolWebFetch, ToolWebSearch, ToolTask, ToolAgent:
+	case ToolAny, ToolRead, ToolEdit, ToolBash, ToolGrep, ToolMCP, ToolWebFetch, ToolWebSearch, ToolTask, ToolAgent, ToolCompute:
 		return true
 	default:
 		return false

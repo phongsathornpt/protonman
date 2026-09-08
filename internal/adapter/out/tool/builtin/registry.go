@@ -123,6 +123,7 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 	checkpointStore := selectCheckpointStore(cfg.stores)
 	handlers := []tool.Handler{
 		readfile.New(workspaceRoot),
+		NewCalculate(),
 		NewGrep(workspaceRoot),
 		NewFindFiles(workspaceRoot),
 		NewListDir(workspaceRoot),

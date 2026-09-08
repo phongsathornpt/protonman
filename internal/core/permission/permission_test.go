@@ -281,6 +281,7 @@ func TestToolKindValidationAndParsing(t *testing.T) {
 	kinds := []ToolKind{
 		ToolAny, ToolRead, ToolEdit, ToolBash,
 		ToolGrep, ToolMCP, ToolWebFetch, ToolWebSearch,
+		ToolTask, ToolAgent, ToolCompute,
 	}
 	for _, k := range kinds {
 		if !ValidToolKind(k) {
@@ -299,6 +300,24 @@ func TestToolKindValidationAndParsing(t *testing.T) {
 	}
 	if _, err := ParseToolKind("unsupported"); err == nil {
 		t.Fatal("ParseToolKind(unsupported) error = nil, want error")
+	}
+}
+
+func TestComputeIsAllowedByDefaultButExplicitRulesWin(t *testing.T) {
+	policy, err := NewPolicy(Config{Default: ActionAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := Request{ToolName: "calculate", ToolKind: ToolCompute, Detail: "sqrt(144)"}
+	if got := policy.Evaluate(request); got.Action != ActionAllow {
+		t.Fatalf("default compute action = %v, want allow", got.Action)
+	}
+	denied, err := NewPolicy(Config{Default: ActionAsk, Rules: []Rule{{Action: ActionDeny, Tool: ToolCompute, Pattern: "*"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := denied.Evaluate(request); got.Action != ActionDeny {
+		t.Fatalf("explicit compute deny = %v, want deny", got.Action)
 	}
 }
 
