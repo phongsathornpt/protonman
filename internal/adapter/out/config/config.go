@@ -64,11 +64,12 @@ type ModelConfig struct {
 	Provider string `toml:"provider"`
 }
 
-// SubagentModelConfig selects an explicit provider/model pair for one specialized subagent profile.
-// An absent profile entry inherits the current Universal language model dynamically.
+// SubagentModelConfig contains per-profile runtime overrides for one specialized subagent.
+// Provider/model may be omitted together to inherit Universal dynamically while still overriding reasoning.
 type SubagentModelConfig struct {
-	Provider string `toml:"provider"`
-	Model    string `toml:"model"`
+	Provider        string              `toml:"provider"`
+	Model           string              `toml:"model"`
+	ReasoningEffort sdk.ReasoningEffort `toml:"reasoning_effort"`
 }
 
 // AgentConfig specifies autonomous agent execution settings.

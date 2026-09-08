@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 func TestLoadSubagentModelsDefaultsToInherit(t *testing.T) {
@@ -100,5 +102,68 @@ model = "legacy-model"
 	_, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
 	if err == nil || !strings.Contains(err.Error(), "unsupported profile") {
 		t.Fatalf("Load() error = %v, want legacy profile rejection", err)
+	}
+}
+
+func TestLoadSubagentReasoningMergesFieldWise(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent.subagents.strength]
+provider = "protonman"
+model = "coding-model"
+reasoning_effort = "low"
+
+[agent.subagents.agility]
+reasoning_effort = "low"
+`)
+	writeConfig(t, filepath.Join(workDir, ".proton", "config.toml"), `[agent.subagents.strength]
+reasoning_effort = "high"
+
+[agent.subagents.agility]
+provider = "opencode"
+model = "fast-model"
+`)
+
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir, ProjectTrusted: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	strength := snapshot.Agent.Subagents["strength"]
+	if strength.Provider != "protonman" || strength.Model != "coding-model" || strength.ReasoningEffort != sdk.ReasoningHigh {
+		t.Fatalf("strength config = %#v, want preserved model with project reasoning override", strength)
+	}
+	agility := snapshot.Agent.Subagents["agility"]
+	if agility.Provider != "opencode" || agility.Model != "fast-model" || agility.ReasoningEffort != sdk.ReasoningLow {
+		t.Fatalf("agility config = %#v, want project model with preserved user reasoning", agility)
+	}
+}
+
+func TestLoadSubagentReasoningAllowsInheritedModel(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent.subagents.intelligence]
+reasoning_effort = "high"
+`)
+
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := snapshot.Agent.Subagents["intelligence"]
+	if got.Provider != "" || got.Model != "" || got.ReasoningEffort != sdk.ReasoningHigh {
+		t.Fatalf("intelligence config = %#v, want inherited model with high reasoning", got)
+	}
+}
+
+func TestLoadSubagentReasoningRejectsInvalidValue(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	writeConfig(t, filepath.Join(homeDir, ".proton", "config.toml"), `[agent.subagents.agility]
+reasoning_effort = "turbo"
+`)
+
+	_, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err == nil || !strings.Contains(err.Error(), "agent.subagents.agility.reasoning_effort") {
+		t.Fatalf("Load() error = %v, want subagent reasoning error", err)
 	}
 }

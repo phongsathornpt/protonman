@@ -76,10 +76,24 @@ func mergeDocument(document fileDocument, snapshot *Snapshot, source ValueSource
 			}
 			provider := strings.TrimSpace(raw.Provider)
 			modelID := strings.TrimSpace(raw.Model)
-			if provider == "" || modelID == "" {
-				return fmt.Errorf("agent.subagents.%s: provider and model must both be set", profile)
+			if (provider == "") != (modelID == "") {
+				return fmt.Errorf("agent.subagents.%s: provider and model must both be set or both be omitted", profile)
 			}
-			snapshot.Agent.Subagents[profile] = SubagentModelConfig{Provider: provider, Model: modelID}
+			current := snapshot.Agent.Subagents[profile]
+			if provider != "" {
+				current.Provider = provider
+				current.Model = modelID
+			}
+			if raw.ReasoningEffort != nil {
+				effort, err := sdk.ParseReasoningEffort(*raw.ReasoningEffort)
+				if err != nil {
+					return fmt.Errorf("agent.subagents.%s.reasoning_effort: %w", profile, err)
+				}
+				current.ReasoningEffort = effort
+			}
+			if current.Provider != "" || current.Model != "" || current.ReasoningEffort != sdk.ReasoningDefault {
+				snapshot.Agent.Subagents[profile] = current
+			}
 		}
 	}
 	if document.Agent.MaxToolCalls != nil {
