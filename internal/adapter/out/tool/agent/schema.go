@@ -47,6 +47,7 @@ func agentStatusSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
+			"session_id":  map[string]any{"type": "string"},
 			"id":          map[string]any{"type": "string"},
 			"parent_id":   map[string]any{"type": "string"},
 			"profile":     map[string]any{"type": "string", "enum": agent.SubagentProfileNames()},

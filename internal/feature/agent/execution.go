@@ -27,7 +27,7 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 
 func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, languageModel sdk.LanguageModel, reasoningEffort sdk.ReasoningEffort) (Result, error) {
 	if err := ctx.Err(); err != nil {
-		return Result{AgentID: req.ID, Profile: req.Profile}, err
+		return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile}, err
 	}
 
 	c.agentsMu.RLock()
@@ -56,7 +56,7 @@ func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, langu
 	if policy == nil {
 		p, err := permission.NewPolicy(permission.Config{})
 		if err != nil {
-			return Result{AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create default policy: %w", err)
+			return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create default policy: %w", err)
 		}
 		policy = p
 	}
@@ -75,7 +75,7 @@ func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, langu
 		serviceOpts...,
 	)
 	if err != nil {
-		return Result{AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create scoped tool service: %w", err)
+		return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create scoped tool service: %w", err)
 	}
 	if guard != nil {
 		service.SetCallGuard(guard)
@@ -86,12 +86,12 @@ func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, langu
 	if c.runnerFactory != nil {
 		r, rerr := c.runnerFactory(req.Profile, service)
 		if rerr != nil {
-			return Result{AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create turn runner: %w", rerr)
+			return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create turn runner: %w", rerr)
 		}
 		runner = r
 	} else {
 		if languageModel == nil {
-			return Result{AgentID: req.ID, Profile: req.Profile}, errors.New("language model is required for subagent execution")
+			return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile}, errors.New("language model is required for subagent execution")
 		}
 		promptSpec := prompt.Spec{Profile: string(req.Profile), Role: RolePromptForProfile(req.Profile)}
 		if c.workspace != nil {
@@ -112,7 +112,7 @@ func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, langu
 		}
 		loop, lerr := turn.NewLoop(languageModel, service, loopOptions...)
 		if lerr != nil {
-			return Result{AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create turn loop: %w", lerr)
+			return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile}, fmt.Errorf("create turn loop: %w", lerr)
 		}
 		runner = loop
 	}
@@ -133,11 +133,12 @@ func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, langu
 		case turn.EventToolCall:
 			call := te.Call
 			c.emit(ctx, Event{
-				Kind:     EventAgentProgress,
-				AgentID:  req.ID,
-				ParentID: req.ParentID,
-				Profile:  req.Profile,
-				Call:     &call,
+				Kind:      EventAgentProgress,
+				SessionID: req.SessionID,
+				AgentID:   req.ID,
+				ParentID:  req.ParentID,
+				Profile:   req.Profile,
+				Call:      &call,
 			})
 		case turn.EventToolResult:
 			if te.Err != nil || te.Result.Denied || te.Result.Failure != nil {
@@ -167,10 +168,10 @@ func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, langu
 		return nil
 	})
 	if err != nil {
-		return Result{AgentID: req.ID, Profile: req.Profile, Rounds: turnResult.Rounds, Verification: turnResult.Verification}, err
+		return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile, Rounds: turnResult.Rounds, Verification: turnResult.Verification}, err
 	}
 	if req.Profile == ProfileIntelligence && turnResult.Verification.Mutated && !turnResult.Verification.Verified {
-		return Result{AgentID: req.ID, Profile: req.Profile, Rounds: turnResult.Rounds, Verification: turnResult.Verification}, ErrUnverifiedChanges
+		return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile, Rounds: turnResult.Rounds, Verification: turnResult.Verification}, ErrUnverifiedChanges
 	}
 
 	summary := strings.TrimSpace(turnResult.Message.Content)
@@ -183,6 +184,7 @@ func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, langu
 	summary = truncateSummary(summary, maxSummaryBytes)
 
 	return Result{
+		SessionID:      req.SessionID,
 		AgentID:        req.ID,
 		Profile:        req.Profile,
 		Summary:        summary,

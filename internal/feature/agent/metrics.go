@@ -16,10 +16,11 @@ const (
 
 // MetricEvent excludes task text, model output, tool arguments, and other private data.
 type MetricEvent struct {
-	Kind     MetricKind
-	AgentID  string
-	ParentID string
-	Profile  Profile
+	Kind      MetricKind
+	SessionID string
+	AgentID   string
+	ParentID  string
+	Profile   Profile
 }
 
 // MetricObserver receives redacted orchestration telemetry and must be concurrency-safe.

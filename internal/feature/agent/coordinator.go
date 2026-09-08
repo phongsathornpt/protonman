@@ -101,6 +101,7 @@ func (r *ReasoningResolver) Resolve(profile Profile, fallback sdk.ReasoningEffor
 
 // AgentStatus describes the live state of an in-flight subagent.
 type AgentStatus struct {
+	SessionID  string    `json:"session_id,omitempty"`
 	ID         string    `json:"id"`
 	ParentID   string    `json:"parent_id,omitempty"`
 	Profile    Profile   `json:"profile"`

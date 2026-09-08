@@ -120,8 +120,8 @@ func (h agentLifecycleHandler) wait(ctx context.Context, call tool.Call) (tool.R
 			timeout = 10 * time.Second
 		}
 	}
-	parentID := agent.ParentIDFromContext(ctx)
-	wr, err := h.coordinator.WaitActivityForParent(ctx, parentID, timeout)
+	turnRef := agent.TurnRefFromContext(ctx)
+	wr, err := h.coordinator.WaitActivityForTurn(ctx, turnRef, timeout)
 	if err != nil {
 		return tool.Result{}, classifyAgentError("wait for subagent activity", err)
 	}

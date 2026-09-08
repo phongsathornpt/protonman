@@ -29,7 +29,7 @@ func runHeadless(
 	if err != nil {
 		return err
 	}
-	runner, err := headless.New(service, registry, turnRunner, headless.WithSkills(skillRegistry))
+	runner, err := headless.New(service, registry, turnRunner, headless.WithSkills(skillRegistry), headless.WithSessionID(sessionID))
 	if err != nil {
 		return fmt.Errorf("create headless runner: %w", err)
 	}

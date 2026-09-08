@@ -116,15 +116,16 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, err.Error())
 	}
 
-	parentID := agent.ParentIDFromContext(ctx)
-	if parentID == "" {
-		parentID = h.parentID
+	turnRef := agent.TurnRefFromContext(ctx)
+	if turnRef.TurnID == "" {
+		turnRef.TurnID = h.parentID
 	}
 	req := agent.Request{
-		ParentID: parentID,
-		Profile:  profile,
-		Task:     task,
-		Context:  strings.TrimSpace(input.Context),
+		SessionID: turnRef.SessionID,
+		ParentID:  turnRef.TurnID,
+		Profile:   profile,
+		Task:      task,
+		Context:   strings.TrimSpace(input.Context),
 	}
 	if input.TimeoutSeconds > 0 {
 		req.Timeout = time.Duration(input.TimeoutSeconds) * time.Second

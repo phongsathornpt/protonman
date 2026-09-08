@@ -31,6 +31,11 @@ func WithSkills(skills *skill.Registry) Option {
 	}
 }
 
+// WithSessionID binds orchestration spawned by this runner to one session.
+func WithSessionID(sessionID string) Option {
+	return func(r *Runner) { r.sessionID = strings.TrimSpace(sessionID) }
+}
+
 // Format is the headless output encoding.
 type Format uint8
 
@@ -79,13 +84,14 @@ var ErrInvalidRunner = errors.New("invalid headless runner")
 
 // Runner is the non-interactive adapter over Protonman services.
 type Runner struct {
-	service  *toolcall.Service
-	registry tool.Registry
-	skills   *skill.Registry
-	runner   app.Conversation
-	messages []model.Message
-	nextID   uint64
-	turnSeq  uint64
+	service   *toolcall.Service
+	registry  tool.Registry
+	skills    *skill.Registry
+	runner    app.Conversation
+	messages  []model.Message
+	nextID    uint64
+	turnSeq   uint64
+	sessionID string
 }
 
 // New creates a fail-closed headless runner. Ask-mode calls stay denied
@@ -395,7 +401,7 @@ func (r *Runner) runTurn(
 	}
 	r.messages = append(r.messages, model.Message{Role: model.RoleUser, Content: prompt})
 	r.turnSeq++
-	turnCtx := agent.WithParentID(ctx, fmt.Sprintf("headless-turn-%d", r.turnSeq))
+	turnCtx := agent.WithTurnRef(ctx, agent.TurnRef{SessionID: r.sessionID, TurnID: fmt.Sprintf("headless-turn-%d", r.turnSeq)})
 	result, err := r.runner.Run(turnCtx, r.Messages(), func(_ context.Context, event app.Event) error {
 		switch event.Kind {
 		case app.EventTextDelta:

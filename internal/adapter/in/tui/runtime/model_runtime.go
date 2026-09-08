@@ -404,7 +404,7 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 	m.historyState.StartThinking()
 	m.relayout()
 	ctx, cancel := context.WithCancel(m.ctx)
-	ctx = agent.WithParentID(ctx, m.activeTurnOwner)
+	ctx = agent.WithTurnRef(ctx, agent.TurnRef{SessionID: m.sessionID, TurnID: m.activeTurnOwner})
 	m.turnCancel = cancel
 	events := make(chan tea.Msg, 32)
 	history := model.CloneMessages(m.messages)
