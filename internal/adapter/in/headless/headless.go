@@ -36,6 +36,11 @@ func WithSessionID(sessionID string) Option {
 	return func(r *Runner) { r.sessionID = strings.TrimSpace(sessionID) }
 }
 
+// WithAgents supplies session-scoped subagent lifecycle control.
+func WithAgents(agents app.Agents) Option {
+	return func(r *Runner) { r.agents = agents }
+}
+
 // Format is the headless output encoding.
 type Format uint8
 
@@ -92,6 +97,7 @@ type Runner struct {
 	nextID    uint64
 	turnSeq   uint64
 	sessionID string
+	agents    app.Agents
 }
 
 // New creates a fail-closed headless runner. Ask-mode calls stay denied
@@ -402,7 +408,8 @@ func (r *Runner) runTurn(
 	}
 	r.messages = append(r.messages, model.Message{Role: model.RoleUser, Content: prompt})
 	r.turnSeq++
-	turnCtx := agent.WithTurnRef(ctx, agent.TurnRef{SessionID: r.sessionID, TurnID: fmt.Sprintf("headless-turn-%d", r.turnSeq)})
+	turnID := fmt.Sprintf("headless-turn-%d", r.turnSeq)
+	turnCtx := agent.WithTurnRef(ctx, agent.TurnRef{SessionID: r.sessionID, TurnID: turnID})
 	result, err := r.runner.Run(turnCtx, r.Messages(), func(_ context.Context, event app.Event) error {
 		switch event.Kind {
 		case app.EventTextDelta:
@@ -419,6 +426,9 @@ func (r *Runner) runTurn(
 			return nil
 		}
 	})
+	if turnCtx.Err() != nil {
+		r.agents.CancelTurn(turnID, agent.CancelTurnAndChildren)
+	}
 	if err == nil {
 		if len(result.Messages) > 0 {
 			r.messages = append(r.messages, model.CloneMessages(result.Messages)...)

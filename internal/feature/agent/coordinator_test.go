@@ -1621,3 +1621,80 @@ func TestWaitActivityGlobalStillObservesScopedActivity(t *testing.T) {
 		t.Fatalf("global activity = %+v", wr)
 	}
 }
+
+func TestCancelTurnPolicyCancelsOwnedChildrenOnly(t *testing.T) {
+	started := make(chan struct{})
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil, WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+		return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+			select {
+			case <-started:
+			default:
+				close(started)
+			}
+			<-ctx.Done()
+			return turn.Result{}, ctx.Err()
+		}}, nil
+	}))
+	defer coord.Close()
+	h, err := coord.Spawn(context.Background(), Request{SessionID: "session-a", ParentID: "turn-1", Profile: ProfileAgility, Task: "wait"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("child did not start")
+	}
+	if got := coord.CancelTurn(TurnRef{SessionID: "session-a", TurnID: "turn-1"}, CancelTurnOnly); got != 0 {
+		t.Fatalf("CancelTurn(turn-only)=%d", got)
+	}
+	if got := coord.CancelTurn(TurnRef{SessionID: "session-a", TurnID: "turn-1"}, CancelTurnAndChildren); got != 1 {
+		t.Fatalf("CancelTurn(with-children)=%d", got)
+	}
+	wr, err := coord.Wait(context.Background(), h.ID, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wr.State != StateCanceled {
+		t.Fatalf("state=%s, want canceled", wr.State)
+	}
+}
+
+func TestCancelSessionAndWaitIsSessionScoped(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil, WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
+		return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+			<-ctx.Done()
+			return turn.Result{}, ctx.Err()
+		}}, nil
+	}), WithMaxConcurrency(2))
+	defer coord.Close()
+	a, err := coord.Spawn(context.Background(), Request{SessionID: "session-a", ParentID: "turn-a", Profile: ProfileAgility, Task: "a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := coord.Spawn(context.Background(), Request{SessionID: "session-b", ParentID: "turn-b", Profile: ProfileAgility, Task: "b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForTest(t, time.Second, func() bool {
+		sa, oka := coord.Get(a.ID)
+		sb, okb := coord.Get(b.ID)
+		return oka && okb && sa.State == StateRunning && sb.State == StateRunning
+	})
+	count, err := coord.CancelSessionAndWait(context.Background(), "session-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("count=%d", count)
+	}
+	sa, _ := coord.Get(a.ID)
+	sb, _ := coord.Get(b.ID)
+	if sa.State != StateCanceled {
+		t.Fatalf("session-a state=%s", sa.State)
+	}
+	if sb.State != StateRunning {
+		t.Fatalf("session-b state=%s", sb.State)
+	}
+	_ = coord.Cancel(b.ID)
+}

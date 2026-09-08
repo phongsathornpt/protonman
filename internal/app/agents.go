@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -105,6 +106,10 @@ func NewAgents(coordinator *agent.Coordinator) Agents { return Agents{coordinato
 func NewAgentsForSession(coordinator *agent.Coordinator, sessionID string) Agents {
 	return Agents{coordinator: coordinator, sessionID: strings.TrimSpace(sessionID)}
 }
+func (a Agents) ForSession(sessionID string) Agents {
+	a.sessionID = strings.TrimSpace(sessionID)
+	return a
+}
 func (a Agents) Available() bool { return a.coordinator != nil }
 func (a Agents) Subscribe(buffer int) (<-chan agent.Event, func()) {
 	if a.coordinator == nil {
@@ -128,6 +133,18 @@ func (a Agents) List() []agent.AgentStatus {
 		return a.coordinator.ListSession(a.sessionID)
 	}
 	return a.coordinator.List()
+}
+func (a Agents) CancelSessionAndWait(ctx context.Context) (int, error) {
+	if a.coordinator == nil {
+		return 0, nil
+	}
+	return a.coordinator.CancelSessionAndWait(ctx, a.sessionID)
+}
+func (a Agents) CancelTurn(parentID string, policy agent.CancelPolicy) int {
+	if a.coordinator == nil {
+		return 0
+	}
+	return a.coordinator.CancelTurn(agent.TurnRef{SessionID: a.sessionID, TurnID: parentID}, policy)
 }
 func (a Agents) CancelByParent(parentID string) int {
 	if a.coordinator == nil {

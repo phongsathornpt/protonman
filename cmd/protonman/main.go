@@ -97,6 +97,7 @@ func run(ctx context.Context, args []string) error {
 		server, serverErr := acp.New(
 			runtimeState.service, runtimeState.registry, runtimeState.runner,
 			acp.WithSessions(app.NewSessions(runtimeState.stateStore)),
+			acp.WithAgents(app.NewAgents(runtimeState.coordinator)),
 			acp.WithSessionRegistryFactory(func(sessionID, _ string) (tool.Registry, error) {
 				return runtimeState.registryForSession(sessionID)
 			}),
@@ -115,7 +116,7 @@ func run(ctx context.Context, args []string) error {
 		}
 	}
 	if headlessPrompt != "" {
-		return runHeadless(ctx, runtimeState.service, runtimeState.registry, runtimeState.skills, runtimeState.stateStore, runtimeState.sessionID, runtimeState.state, headlessPrompt, options.output, runtimeState.runner)
+		return runHeadless(ctx, runtimeState.service, runtimeState.registry, runtimeState.skills, runtimeState.stateStore, runtimeState.sessionID, runtimeState.state, headlessPrompt, options.output, runtimeState.runner, app.NewAgents(runtimeState.coordinator))
 	}
 	if !stdinIsTerminal() || !stdoutIsTerminal() {
 		return fmt.Errorf("refusing to start the TUI without a terminal; use -p, --headless, or --acp")
