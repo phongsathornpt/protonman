@@ -728,3 +728,28 @@ func TestWelcomeCardCachesGitBranchUntilInvalidated(t *testing.T) {
 		t.Fatalf("invalidated welcome branch did not refresh: %q", refreshed)
 	}
 }
+
+func TestScrollingRendersSingleComposer(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.runner = fakeConversation{}
+	m.syncPromptPlaceholder()
+	m.showWelcome = false
+	m.resize(90, 20)
+	for i := 0; i < 60; i++ {
+		m.appendLine(fmt.Sprintf("history-%02d", i))
+	}
+	m.refreshViewport()
+	m.viewport.GotoBottom()
+	m.followTail = true
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	m = updated.(*bubbleModel)
+	plain := ansi.Strip(m.View())
+	placeholder := "Ask Protonman to inspect or change this workspace"
+	if got := strings.Count(plain, placeholder); got != 1 {
+		t.Fatalf("composer rendered %d times after page-up; view=%q", got, plain)
+	}
+	if got := lipgloss.Height(m.View()); got > m.height {
+		t.Fatalf("scrolled live view height=%d exceeds terminal height=%d", got, m.height)
+	}
+}

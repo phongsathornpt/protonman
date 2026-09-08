@@ -214,7 +214,6 @@ func applyPromptChrome(prompt *textarea.Model, bash bool) {
 
 func (m *bubbleModel) setBashMode(on bool) {
 	m.bottom.setBashMode(on)
-	m.composerDirty = true
 	m.syncSlashView()
 }
 
@@ -223,15 +222,12 @@ func (m *bubbleModel) resetPrompt() {
 		return
 	}
 	m.bottom.prompt().Reset()
-	m.composerDirty = true
 }
 
 func (m *bubbleModel) historyPrevious() {
 	m.bottom.historyPrevious()
-	m.composerDirty = true
 }
 
 func (m *bubbleModel) historyNext() {
 	m.bottom.historyNext()
-	m.composerDirty = true
 }
