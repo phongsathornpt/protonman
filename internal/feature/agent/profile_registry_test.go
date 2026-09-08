@@ -43,8 +43,7 @@ func TestFilterRegistryForCanonicalProfiles(t *testing.T) {
 		"read_file":     dummyHandler{def: tool.Definition{Name: "read_file", Kind: tool.KindRead}},
 		"find_files":    dummyHandler{def: tool.Definition{Name: "find_files", Kind: tool.KindRead}},
 		"grep":          dummyHandler{def: tool.Definition{Name: "grep", Kind: tool.KindGrep}},
-		"web_fetch":     dummyHandler{def: tool.Definition{Name: "web_fetch", Kind: tool.KindWebFetch}},
-		"web_search":    dummyHandler{def: tool.Definition{Name: "web_search", Kind: tool.KindWebSearch}},
+		"web":           dummyHandler{def: tool.Definition{Name: "web", Kind: tool.KindWebFetch}},
 		"write_file":    dummyHandler{def: tool.Definition{Name: "write_file", Kind: tool.KindEdit}},
 		"bash":          dummyHandler{def: tool.Definition{Name: "bash", Kind: tool.KindBash}},
 		"delegate_task": dummyHandler{def: tool.Definition{Name: "delegate_task", Kind: tool.KindAgent}},
@@ -56,7 +55,7 @@ func TestFilterRegistryForCanonicalProfiles(t *testing.T) {
 
 	for _, profile := range []Profile{ProfileStrength, ProfileIntelligence} {
 		scoped := FilterRegistryForProfile(baseReg, profile)
-		for _, name := range []string{"read_file", "find_files", "grep", "web_fetch", "web_search", "write_file", "bash", "mcp.read", "mcp.write", "mcp.unknown"} {
+		for _, name := range []string{"read_file", "find_files", "grep", "web", "write_file", "bash", "mcp.read", "mcp.write", "mcp.unknown"} {
 			if _, ok := scoped.Lookup(name); !ok {
 				t.Errorf("%s missing tool %s", profile, name)
 			}
@@ -69,7 +68,7 @@ func TestFilterRegistryForCanonicalProfiles(t *testing.T) {
 	}
 
 	intScoped := FilterRegistryForProfile(baseReg, ProfileAgility)
-	for _, name := range []string{"read_file", "find_files", "grep", "web_fetch", "web_search", "mcp.read"} {
+	for _, name := range []string{"read_file", "find_files", "grep", "web", "mcp.read"} {
 		if _, ok := intScoped.Lookup(name); !ok {
 			t.Errorf("int missing tool %s", name)
 		}

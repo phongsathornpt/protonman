@@ -156,7 +156,7 @@ func toolDisciplineSection(spec Spec) string {
 		lines = append(lines, "- Use edit action=replace for exact text changes, patch for bounded multi-file changes, write for complete file creation or replacement, and restore only for Protonman checkpoints.")
 	}
 	if hasTool(spec, "web") {
-		lines = append(lines, "- Use web for exposed web operations instead of recreating an equivalent network request through bash.")
+		lines = append(lines, "- Use web action=search to discover sources and web action=fetch when the target URL is already known; do not recreate equivalent network requests through bash.")
 	}
 	if hasTool(spec, "bash") {
 		lines = append(lines, "- Use bash for actual programs, builds, tests, package managers, language runtimes, transformations, and shell workflows not represented by an available dedicated capability.")

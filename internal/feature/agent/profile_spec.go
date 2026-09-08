@@ -18,9 +18,9 @@ type ProfileSpec struct {
 
 var profileSpecs = []ProfileSpec{
 	{Profile: ProfileUniversal, Description: "adaptive primary software engineering orchestration", Mutating: true, Reasoning: sdk.ReasoningMedium, GroundingEvidence: tool.EvidenceNone},
-	{Profile: ProfileStrength, Description: "substantial implementation, fixes, and focused refactors", Mutating: true, Reasoning: sdk.ReasoningMedium, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch, tool.KindEdit, tool.KindBash}},
-	{Profile: ProfileAgility, Description: "fast read-only exploration, tracing, and focused investigation", Reasoning: sdk.ReasoningMedium, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch}},
-	{Profile: ProfileIntelligence, Description: "deep reasoning, difficult debugging, architecture, and high-risk engineering", Mutating: true, Reasoning: sdk.ReasoningHigh, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindWebSearch, tool.KindEdit, tool.KindBash}},
+	{Profile: ProfileStrength, Description: "substantial implementation, fixes, and focused refactors", Mutating: true, Reasoning: sdk.ReasoningMedium, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindEdit, tool.KindBash}},
+	{Profile: ProfileAgility, Description: "fast read-only exploration, tracing, and focused investigation", Reasoning: sdk.ReasoningMedium, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch}},
+	{Profile: ProfileIntelligence, Description: "deep reasoning, difficult debugging, architecture, and high-risk engineering", Mutating: true, Reasoning: sdk.ReasoningHigh, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindWebFetch, tool.KindEdit, tool.KindBash}},
 }
 
 func SpecForProfile(profile Profile) (ProfileSpec, bool) {

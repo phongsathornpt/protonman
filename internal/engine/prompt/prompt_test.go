@@ -186,7 +186,7 @@ func TestRenderDelegationAvoidsLegacySubagentToolNames(t *testing.T) {
 
 func TestToolDisciplineMentionsOnlyAvailableCapabilities(t *testing.T) {
 	got := Render(Spec{AvailableTools: []string{"read", "web"}})
-	for _, want := range []string{"Use read for known workspace artifacts", "Use web for exposed web operations"} {
+	for _, want := range []string{"Use read for known workspace artifacts", "Use web action=search to discover sources"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("tool discipline missing available capability %q:\n%s", want, got)
 		}
