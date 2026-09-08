@@ -19,6 +19,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -130,6 +131,9 @@ func TestACPStreamingAndToolCalls(t *testing.T) {
 	}
 	if !strings.Contains(out, `"stopReason":"end_turn"`) {
 		t.Fatalf("missing end_turn: %s", out)
+	}
+	if runner.parentID == "" || !strings.HasPrefix(runner.parentID, "acp-"+sessionID+"-turn-") {
+		t.Fatalf("parent id = %q, want ACP turn ownership", runner.parentID)
 	}
 }
 
@@ -611,9 +615,12 @@ func (r *blockingACPRunner) Run(ctx context.Context, _ []model.Message, _ applic
 	return applicationturn.Result{}, ctx.Err()
 }
 
-type streamingACPRunner struct{}
+type streamingACPRunner struct {
+	parentID string
+}
 
 func (r *streamingACPRunner) Run(ctx context.Context, _ []model.Message, sink applicationturn.Sink) (applicationturn.Result, error) {
+	r.parentID = agent.ParentIDFromContext(ctx)
 	// Emit streaming text delta
 	_ = sink(ctx, applicationturn.Event{
 		Kind: applicationturn.EventTextDelta,

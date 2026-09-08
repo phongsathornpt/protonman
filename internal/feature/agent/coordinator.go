@@ -167,10 +167,7 @@ type Coordinator struct {
 	subscribers         map[uint64]chan Event
 	subscriberSeq       uint64
 	activityMu          sync.Mutex
-	activitySeq         uint64
-	activitySeen        uint64
-	activityEvent       Event
-	activityNotify      chan struct{}
+	activityMailboxes   map[string]*activityMailbox
 
 	seq     uint64
 	closed  atomic.Bool
@@ -363,7 +360,7 @@ func NewCoordinator(
 		resultTTL:           defaultResultTTL,
 		closeTimeout:        defaultCloseTimeout,
 		subscribers:         make(map[uint64]chan Event),
-		activityNotify:      make(chan struct{}),
+		activityMailboxes:   make(map[string]*activityMailbox),
 		eventQueue:          make(chan Event, defaultEventQueueSize),
 		closeDone:           make(chan struct{}),
 	}

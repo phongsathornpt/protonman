@@ -1585,3 +1585,39 @@ func TestWaitActivityCallerCancellationDoesNotCancelChild(t *testing.T) {
 		t.Fatalf("child state after caller cancellation = %+v, ok=%v", status, ok)
 	}
 }
+
+func TestWaitActivityForParentIgnoresUnrelatedActivity(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil, WithDefaultWaitTimeout(20*time.Millisecond))
+	defer coord.Close()
+
+	coord.recordActivity(Event{Kind: EventAgentCompleted, AgentID: "agent-a", ParentID: "turn-a"})
+	wr, err := coord.WaitActivityForParent(context.Background(), "turn-b", 20*time.Millisecond)
+	if err != nil {
+		t.Fatalf("WaitActivityForParent() error = %v", err)
+	}
+	if !wr.TimedOut || wr.Event != nil {
+		t.Fatalf("unrelated activity woke scoped wait: %+v", wr)
+	}
+
+	wr, err = coord.WaitActivityForParent(context.Background(), "turn-a", time.Second)
+	if err != nil {
+		t.Fatalf("WaitActivityForParent() error = %v", err)
+	}
+	if wr.TimedOut || wr.Event == nil || wr.Event.AgentID != "agent-a" {
+		t.Fatalf("scoped activity = %+v, want agent-a", wr)
+	}
+}
+
+func TestWaitActivityGlobalStillObservesScopedActivity(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil)
+	defer coord.Close()
+
+	coord.recordActivity(Event{Kind: EventAgentFailed, AgentID: "agent-a", ParentID: "turn-a"})
+	wr, err := coord.WaitActivity(context.Background(), time.Second)
+	if err != nil {
+		t.Fatalf("WaitActivity() error = %v", err)
+	}
+	if wr.Event == nil || wr.Event.AgentID != "agent-a" || wr.Event.ParentID != "turn-a" {
+		t.Fatalf("global activity = %+v", wr)
+	}
+}

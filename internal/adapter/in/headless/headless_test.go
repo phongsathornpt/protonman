@@ -9,10 +9,11 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
-	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
+	"github.com/phongsathornpt/protonman/internal/feature/skill"
 )
 
 func TestHeadlessCallRunsThroughService(t *testing.T) {
@@ -161,6 +162,9 @@ func TestHeadlessTurnStreamsEvents(t *testing.T) {
 	if len(runner.Messages()) != 2 {
 		t.Fatalf("messages = %d, want 2", len(runner.Messages()))
 	}
+	if loop.parentID == "" || !strings.HasPrefix(loop.parentID, "headless-turn-") {
+		t.Fatalf("parent id = %q, want headless turn ownership", loop.parentID)
+	}
 }
 
 func ioDiscard() *bytes.Buffer {
@@ -168,8 +172,9 @@ func ioDiscard() *bytes.Buffer {
 }
 
 type scriptedTurn struct {
-	events []applicationturn.Event
-	result applicationturn.Result
+	events   []applicationturn.Event
+	result   applicationturn.Result
+	parentID string
 }
 
 func (s *scriptedTurn) Run(
@@ -177,6 +182,7 @@ func (s *scriptedTurn) Run(
 	_ []model.Message,
 	sink applicationturn.Sink,
 ) (applicationturn.Result, error) {
+	s.parentID = agent.ParentIDFromContext(ctx)
 	for _, event := range s.events {
 		if err := sink(ctx, event); err != nil {
 			return applicationturn.Result{}, err

@@ -21,6 +21,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -47,6 +48,7 @@ type Session struct {
 	cancelled bool
 	cancel    context.CancelFunc
 	nextID    uint64
+	promptSeq uint64
 }
 
 // NewSession creates an ACP session with its own conversation history and tools.
@@ -156,6 +158,9 @@ func (s *Session) ExecutePrompt(
 		return SessionPromptResult{}, fmt.Errorf("session %q already has an active prompt", s.id)
 	}
 	promptCtx, cancel := context.WithCancel(ctx)
+	s.promptSeq++
+	promptSeq := s.promptSeq
+	promptCtx = agent.WithParentID(promptCtx, fmt.Sprintf("acp-%s-turn-%d", s.id, promptSeq))
 	s.active = true
 	s.cancelled = false
 	s.cancel = cancel
