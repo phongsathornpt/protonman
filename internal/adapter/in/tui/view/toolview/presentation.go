@@ -349,6 +349,9 @@ func summarizeReadFileTarget(target string, body string, truncated bool) string 
 	if body == "" {
 		return "0 B (empty file)"
 	}
+	if strings.HasPrefix(body, "image ") || strings.HasPrefix(body, "structured ") || strings.HasPrefix(body, "binary ") {
+		return textview.TruncateEllipsis(body, 120)
+	}
 	sizeStr := formatByteSize(len(body))
 	if truncated {
 		sizeStr += "+ truncated"

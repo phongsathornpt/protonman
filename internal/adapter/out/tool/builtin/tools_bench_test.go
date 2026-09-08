@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin/readfile"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,7 +20,7 @@ func BenchmarkReadFile_64KB(b *testing.B) {
 	if err != nil {
 		b.Fatalf("workspace.New: %v", err)
 	}
-	handler := NewReadFile(ws)
+	handler := readfile.New(ws)
 	content := strings.Repeat("a", 64*1024)
 	if err := os.WriteFile(filepath.Join(dir, "test.txt"), []byte(content), 0o644); err != nil {
 		b.Fatalf("WriteFile: %v", err)

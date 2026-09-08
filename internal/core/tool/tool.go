@@ -222,6 +222,7 @@ type RecoveryAction string
 const (
 	RecoveryRestartPagination RecoveryAction = "restart_pagination"
 	RecoveryRefreshResource   RecoveryAction = "refresh_resource"
+	RecoveryUseDedicatedTool  RecoveryAction = "use_dedicated_tool"
 )
 
 // ToolError is an internal error with a stable model-facing classification.
