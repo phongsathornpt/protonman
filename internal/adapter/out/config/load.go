@@ -82,9 +82,14 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 		return Snapshot{}, err
 	}
 
-	projectScope, err := appdirs.ResolveProjectScope(homeDir, workDir)
-	if err != nil {
-		return Snapshot{}, fmt.Errorf("resolve project config scope: %w", err)
+	var projectScope appdirs.ProjectScope
+	if options.ProjectScope != nil {
+		projectScope = *options.ProjectScope
+	} else {
+		projectScope, err = appdirs.ResolveProjectScope(homeDir, workDir)
+		if err != nil {
+			return Snapshot{}, fmt.Errorf("resolve project config scope: %w", err)
+		}
 	}
 	if !projectScope.Available {
 		return snapshot, nil

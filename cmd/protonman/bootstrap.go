@@ -54,16 +54,14 @@ func (r *appRuntime) Close() {
 }
 
 func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) {
-	dirs, err := appdirs.Resolve("")
+	layout, err := appdirs.ResolveRuntimeLayout("", "")
 	if err != nil {
 		return nil, err
 	}
+	dirs := layout.User
 	homeDir := dirs.Home
-	workDir, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("resolve work directory: %w", err)
-	}
-	loadedConfig, err := config.Load(ctx, config.Options{HomeDir: homeDir, WorkDir: workDir, ProjectTrusted: envconfig.Bool(envconfig.TrustProject)})
+	workDir := layout.Workspace
+	loadedConfig, err := config.Load(ctx, config.Options{HomeDir: homeDir, WorkDir: workDir, ProjectTrusted: envconfig.Bool(envconfig.TrustProject), ProjectScope: &layout.Project})
 	if err != nil {
 		return nil, fmt.Errorf("load configuration: %w", err)
 	}
@@ -96,7 +94,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	}
 	launcher := sandbox.NewOSLauncher(sandboxProfile)
 
-	skillsResult, err := skill.Discover(ctx, skill.Options{HomeDir: homeDir, WorkDir: workDir, ProjectTrusted: envconfig.Bool(envconfig.TrustProject)})
+	skillsResult, err := skill.Discover(ctx, skill.Options{HomeDir: homeDir, WorkDir: workDir, ProjectTrusted: envconfig.Bool(envconfig.TrustProject), ProjectScope: &layout.Project})
 	if err != nil {
 		return nil, fmt.Errorf("discover agent skills: %w", err)
 	}

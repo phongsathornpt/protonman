@@ -4,6 +4,7 @@ package config
 import (
 	"time"
 
+	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
@@ -38,6 +39,8 @@ type Options struct {
 	// ProjectTrusted allows project-local config to contribute rules. An
 	// untrusted project file is detected and reported but never loaded.
 	ProjectTrusted bool
+	// ProjectScope reuses a project namespace already resolved by bootstrap.
+	ProjectScope *appdirs.ProjectScope
 }
 
 // ProviderConfig specifies an AI model provider connection.

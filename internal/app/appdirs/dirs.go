@@ -39,6 +39,13 @@ type ProjectScope struct {
 	Available bool
 }
 
+// RuntimeLayout is the resolved filesystem topology for one Protonman process.
+type RuntimeLayout struct {
+	User      Dirs
+	Workspace string
+	Project   ProjectScope
+}
+
 // Resolve returns Protonman directories using explicitHome, PROTONMAN_HOME, or os.UserHomeDir.
 func Resolve(explicitHome string) (Dirs, error) {
 	home := strings.TrimSpace(explicitHome)
@@ -137,6 +144,30 @@ func ResolvedProjectSkills(workDir string) string {
 	return filepath.Join(ResolvedProjectRoot(workDir), SkillsDir)
 }
 
+// ResolveRuntimeLayout resolves user-global, workspace, and project-local paths once.
+func ResolveRuntimeLayout(explicitHome, workDir string) (RuntimeLayout, error) {
+	userDirs, err := Resolve(explicitHome)
+	if err != nil {
+		return RuntimeLayout{}, err
+	}
+	workDir = strings.TrimSpace(workDir)
+	if workDir == "" {
+		workDir, err = os.Getwd()
+		if err != nil {
+			return RuntimeLayout{}, fmt.Errorf("resolve work directory: %w", err)
+		}
+	}
+	absoluteWorkDir, err := filepath.Abs(workDir)
+	if err != nil {
+		return RuntimeLayout{}, fmt.Errorf("resolve project work directory: %w", err)
+	}
+	project, err := resolveProjectScope(userDirs, absoluteWorkDir)
+	if err != nil {
+		return RuntimeLayout{}, err
+	}
+	return RuntimeLayout{User: userDirs, Workspace: absoluteWorkDir, Project: project}, nil
+}
+
 // ResolveProjectScope resolves project-local paths and disables the scope when
 // its root aliases the user-global Protonman root.
 func ResolveProjectScope(homeDir, workDir string) (ProjectScope, error) {
@@ -148,6 +179,10 @@ func ResolveProjectScope(homeDir, workDir string) (ProjectScope, error) {
 	if err != nil {
 		return ProjectScope{}, fmt.Errorf("resolve project work directory: %w", err)
 	}
+	return resolveProjectScope(userDirs, absoluteWorkDir)
+}
+
+func resolveProjectScope(userDirs Dirs, absoluteWorkDir string) (ProjectScope, error) {
 	root := ProjectRoot(absoluteWorkDir)
 	same, err := pathutil.Same(root, userDirs.Root)
 	if err != nil {
