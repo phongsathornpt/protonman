@@ -74,6 +74,9 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	if err != nil {
 		return nil, fmt.Errorf("create workspace policy: %w", err)
 	}
+	if err := workspaceRoot.ReserveInternalPath(dirs.Root); err != nil {
+		return nil, fmt.Errorf("reserve Protonman internal state: %w", err)
+	}
 	checkpointStore, err := checkpoint.NewFileStore(filepath.Join(dirs.Checkpoints, "workspace-"+workspaceKey(workDir)), workspaceRoot)
 	if err != nil {
 		return nil, fmt.Errorf("create checkpoint store: %w", err)

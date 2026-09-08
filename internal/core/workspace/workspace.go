@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/phongsathornpt/protonman/internal/base/glob"
+	"github.com/phongsathornpt/protonman/internal/base/pathutil"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
@@ -32,12 +33,13 @@ type protectedPath struct {
 
 // Workspace is the shared path policy and root for local file tools.
 type Workspace struct {
-	mu           sync.RWMutex
-	root         string
-	rawRoot      string
-	protected    []protectedPath
-	readRoots    []string
-	mutationGate chan struct{}
+	mu            sync.RWMutex
+	root          string
+	rawRoot       string
+	protected     []protectedPath
+	readRoots     []string
+	internalRoots []string
+	mutationGate  chan struct{}
 }
 
 // New validates a workspace root and compiles protected path entries.
@@ -70,11 +72,12 @@ func New(root string, protectedPaths []string) (*Workspace, error) {
 		compiledProtected = append(compiledProtected, entry)
 	}
 	return &Workspace{
-		root:         filepath.Clean(resolvedRoot),
-		rawRoot:      filepath.Clean(absoluteRoot),
-		protected:    compiledProtected,
-		readRoots:    make([]string, 0),
-		mutationGate: make(chan struct{}, 1),
+		root:          filepath.Clean(resolvedRoot),
+		rawRoot:       filepath.Clean(absoluteRoot),
+		protected:     compiledProtected,
+		readRoots:     make([]string, 0),
+		internalRoots: make([]string, 0),
+		mutationGate:  make(chan struct{}, 1),
 	}, nil
 }
 
@@ -120,6 +123,38 @@ func (w *Workspace) addReadRootLocked(dir string) {
 		}
 	}
 	w.readRoots = append(w.readRoots, dir)
+}
+
+// ReserveInternalPath marks Protonman-owned state as inaccessible to model-facing workspace tools.
+func (w *Workspace) ReserveInternalPath(path string) error {
+	canonical, err := pathutil.Canonical(path)
+	if err != nil {
+		return fmt.Errorf("resolve internal workspace path: %w", err)
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, existing := range w.internalRoots {
+		if existing == canonical {
+			return nil
+		}
+	}
+	w.internalRoots = append(w.internalRoots, canonical)
+	return nil
+}
+
+func (w *Workspace) isInternalPath(path string) (bool, error) {
+	canonical, err := pathutil.Canonical(path)
+	if err != nil {
+		return false, err
+	}
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	for _, root := range w.internalRoots {
+		if isWithin(root, canonical) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (w *Workspace) isWithinPrimary(path string) bool {
@@ -285,6 +320,15 @@ func (w *Workspace) checkAbsolute(ctx context.Context, path string) error {
 			ErrOutsideWorkspace,
 		)
 	}
+	if internal, err := w.isInternalPath(path); err != nil {
+		return fmt.Errorf("check internal workspace path: %w", err)
+	} else if internal {
+		return newBoundaryError(
+			tool.ErrorCodeProtectedPath,
+			fmt.Sprintf("path is reserved Protonman internal state: %q", path),
+			ErrProtectedPath,
+		)
+	}
 	if w.isProtected(path) {
 		return newBoundaryError(
 			tool.ErrorCodeProtectedPath,
@@ -323,6 +367,15 @@ func (w *Workspace) checkSymlinkBoundary(path string) error {
 			ErrOutsideWorkspace,
 		)
 	}
+	if internal, err := w.isInternalPath(resolvedAncestor); err != nil {
+		return fmt.Errorf("check internal symlink target: %w", err)
+	} else if internal {
+		return newBoundaryError(
+			tool.ErrorCodeProtectedPath,
+			fmt.Sprintf("symlink target is reserved Protonman internal state: %q", resolvedAncestor),
+			ErrProtectedPath,
+		)
+	}
 	if w.isProtected(resolvedAncestor) {
 		return newBoundaryError(
 			tool.ErrorCodeProtectedPath,
@@ -347,6 +400,15 @@ func (w *Workspace) checkSymlinkBoundaryWithRoot(path string, root string) error
 			tool.ErrorCodeOutsideWorkspace,
 			fmt.Sprintf("symlink target is outside workspace: %q", resolvedAncestor),
 			ErrOutsideWorkspace,
+		)
+	}
+	if internal, err := w.isInternalPath(resolvedAncestor); err != nil {
+		return fmt.Errorf("check internal symlink target: %w", err)
+	} else if internal {
+		return newBoundaryError(
+			tool.ErrorCodeProtectedPath,
+			fmt.Sprintf("symlink target is reserved Protonman internal state: %q", resolvedAncestor),
+			ErrProtectedPath,
 		)
 	}
 	if w.isProtected(resolvedAncestor) {
