@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1391,5 +1392,53 @@ func TestLoopPublishesProviderSafeMCPAliasAndDispatchesCanonicalName(t *testing.
 	}
 	if assistantName != alias || resultName != alias {
 		t.Fatalf("model transcript names = assistant %q result %q, want alias %q", assistantName, resultName, alias)
+	}
+}
+
+func TestLoopPublishesUnifiedReadFileSourceSchemaForGemini(t *testing.T) {
+	definition := readFileDefinition()
+	definition.InputSchema = map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"path":  map[string]any{"type": "string"},
+			"view":  map[string]any{"type": "string", "enum": []string{"auto", "text", "source", "image", "structured", "metadata"}},
+			"query": map[string]any{"type": "string"},
+			"mode":  map[string]any{"type": "string", "enum": []string{"literal", "regex"}},
+			"context": map[string]any{"type": "object", "properties": map[string]any{
+				"before": map[string]any{"type": "integer", "minimum": 0, "maximum": 100},
+				"after":  map[string]any{"type": "integer", "minimum": 0, "maximum": 100},
+			}, "additionalProperties": false},
+		},
+		"required":             []string{"path"},
+		"additionalProperties": false,
+	}
+	handler := &recordingHandler{definition: definition}
+	client := &scriptedClient{
+		profile: modelprofile.ResolveBuiltin("gateway", "gemini-3.8-flash", modelprofile.CatalogMetadata{}),
+		streams: []scriptedStreamSpec{{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}}},
+	}
+	loop := newLoopForHandler(t, client, handler, permission.ActionAllow, permission.ModeAsk)
+	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect source"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(client.requests) != 1 || len(client.requests[0].Tools) != 1 {
+		t.Fatalf("published tools = %#v", client.requests)
+	}
+	published := client.requests[0].Tools[0]
+	if published.Name != "read_file" {
+		t.Fatalf("published tool name = %q, want read_file", published.Name)
+	}
+	props := published.InputSchema["properties"].(map[string]any)
+	view := props["view"].(map[string]any)
+	values, ok := view["enum"].([]string)
+	if !ok || !slices.Contains(values, "source") {
+		t.Fatalf("published read_file view enum = %#v", view["enum"])
+	}
+	contextSchema, ok := props["context"].(map[string]any)
+	if !ok || contextSchema["properties"] == nil || props["query"] == nil || props["mode"] == nil {
+		t.Fatalf("published source schema incomplete: %#v", props)
+	}
+	if _, forbidden := published.InputSchema["additionalProperties"]; forbidden {
+		t.Fatalf("Gemini schema retained unsupported additionalProperties: %#v", published.InputSchema)
 	}
 }
