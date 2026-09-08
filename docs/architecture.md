@@ -47,7 +47,7 @@ The single assembly point of the application:
 ## 2. Application Layer (`internal/app/`)
 Defines the primary application use cases and boundaries for inbound driving adapters:
 - `conversation.go`: `Conversation` interface port (`Run(ctx, messages, sink) (Result, error)`) and `BuildConversation` factory.
-- `agents.go`: Subagent lifecycle management, subscription, and cancellation use cases.
+- `agents.go`: Subagent lifecycle management plus construction of provider-neutral per-profile model/reasoning resolvers from effective config.
 - `models.go`: Remote provider model discovery use cases.
 - `providers.go`: User provider settings mutations and persistence use cases.
 - `projects.go`: Project-local configuration mutations and project discovery / initialization.
@@ -55,6 +55,8 @@ Defines the primary application use cases and boundaries for inbound driving ada
 - `appdirs/`: Filesystem layout resolution (`.proton/`, `config.toml`, `sessions/`, etc.).
 
 *Rule*: Inbound adapters interact exclusively through `internal/app` and never touch concrete turn loops, config persistence, or direct database/filesystem stores.
+
+*Subagent routing*: Universal owns the active primary model. `strength`, `agility`, and `intelligence` may bind explicit provider/model and reasoning overrides from the effective user/trusted-project configuration. Missing model overrides inherit Universal dynamically at child admission; admitted children retain their bound model/reasoning snapshot. Provider credentials and protocol construction stay outside `internal/feature/agent`.
 
 ---
 

@@ -365,6 +365,23 @@ subagent_wait_timeout = "30s"
 subagent_max_runtime = "30m"
 completed_result_ttl = "10m"
 
+# Optional specialized subagent routes. Provider/model must be set together.
+# Omit both to inherit the current Universal model dynamically.
+[agent.subagents.strength]
+provider = "protonman"
+model = "coding-model-id"
+reasoning_effort = "medium"
+
+[agent.subagents.agility]
+provider = "opencode"
+model = "fast-model-id"
+reasoning_effort = "low"
+
+[agent.subagents.intelligence]
+provider = "anthropic"
+model = "reasoning-model-id"
+reasoning_effort = "high"
+
 # Shared runtime and network policies
 [runtime]
 turn_timeout = "10m"
@@ -417,6 +434,11 @@ Execution safety notes:
 - `subagents_enabled = false` disables new delegation by default. The model no longer sees `delegate_task`; existing children remain inspectable/waitable/cancelable until their retained lifecycle records expire.
 - `/subagents off` applies the same rule at runtime without canceling existing children; `/subagents on` re-enables delegation.
 - `/config set subagents off` persists the user-level default. A trusted project setting still has higher precedence; `/project set subagents ...` controls that project override.
+- Per-profile `[agent.subagents.strength|agility|intelligence]` tables may route children to a different configured provider/model. `provider` and `model` must either both be present or both be omitted.
+- A profile without an explicit provider/model inherits the **current** Universal language model when the child is admitted. Changing `/model` affects future inherited children only; already queued/running children keep their bound model.
+- `reasoning_effort` may be configured with or without a model override. Precedence is profile override -> current global `agent.reasoning_effort`/runtime reasoning -> profile default; `auto`/`default` means inherit.
+- User and trusted-project subagent tables merge field-wise by canonical profile. Project reasoning-only overrides do not erase a user-level model route, and project model-only overrides do not erase user-level reasoning.
+- Configured subagent providers are validated during runtime bootstrap. Missing providers or required credentials fail before delegation starts.
 - `delegate_task` starts work asynchronously. The returned `agent_id` can be used with `wait_agent`, `get_agent`, or `cancel_agent` in the same Proton session.
 - `subagent_queue_timeout` bounds only admission to concurrency/workspace capacity; queueing never consumes the child runtime budget.
 - `subagent_wait_timeout` bounds one `wait_agent` call. Reaching it returns the current `queued`/`running` state and does **not** cancel the child.
