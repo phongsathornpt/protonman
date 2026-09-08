@@ -23,3 +23,16 @@ func renderModalRows(m *bubbleModel, border lipgloss.TerminalColor, rows []strin
 	}
 	return pane.RenderModal(m.width, m.height, border, rows)
 }
+
+func paneToneColor(tone pane.Tone) lipgloss.TerminalColor {
+	switch tone {
+	case pane.ToneUser:
+		return accentUser
+	case pane.ToneError:
+		return accentError
+	case pane.ToneWarning:
+		return warningColor
+	default:
+		return accentAssistant
+	}
+}

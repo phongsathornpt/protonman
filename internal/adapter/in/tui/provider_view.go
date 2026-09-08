@@ -382,7 +382,7 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 	}
 	v.resizeInputs(m.width)
 	rows, tone := pane.ProviderEditorRows(providerEditorSnapshot(m, v))
-	return renderProviderModal(m, providerToneColor(tone), rows)
+	return renderProviderModal(m, paneToneColor(tone), rows)
 }
 
 func (v *providerPaneView) resizeInputs(width int) {
@@ -475,19 +475,6 @@ func providerEditorPaneState(state providerPaneState) pane.ProviderEditorState {
 	}
 }
 
-func providerToneColor(tone pane.Tone) lipgloss.TerminalColor {
-	switch tone {
-	case pane.ToneUser:
-		return accentUser
-	case pane.ToneError:
-		return accentError
-	case pane.ToneWarning:
-		return warningColor
-	default:
-		return accentAssistant
-	}
-}
-
 func renderProviderInput(m *bubbleModel) string {
 	if m == nil || m.bottom == nil {
 		return ""
@@ -500,7 +487,7 @@ func renderProviderInput(m *bubbleModel) string {
 	snapshot := providerEditorSnapshot(m, view)
 	snapshot.State = pane.ProviderEditorInput
 	rows, tone := pane.ProviderEditorRows(snapshot)
-	return renderProviderModal(m, providerToneColor(tone), rows)
+	return renderProviderModal(m, paneToneColor(tone), rows)
 }
 
 func renderProviderModal(m *bubbleModel, border lipgloss.TerminalColor, rows []string) string {
