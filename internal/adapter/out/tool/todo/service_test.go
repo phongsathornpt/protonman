@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	tododomain "github.com/phongsathornpt/proton/internal/feature/todo"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/adapter/out/tool/builtin"
-	"github.com/phongsathornpt/proton/internal/engine/toolcall"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin"
+	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 )
 
 func TestTodoToolsValidateStructuredOutputThroughService(t *testing.T) {

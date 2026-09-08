@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 
-	"github.com/phongsathornpt/proton/internal/core/workspace"
+	"github.com/phongsathornpt/protonman/internal/core/workspace"
 )
 
 func TestFileStoreCapturesAndRestoresDurably(t *testing.T) {

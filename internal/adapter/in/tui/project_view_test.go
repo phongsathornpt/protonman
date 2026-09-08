@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/adapter/out/config"
-	"github.com/phongsathornpt/proton/internal/app"
-	"github.com/phongsathornpt/proton/internal/app/appdirs"
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 func TestProjectCommandLoadsTrustedWorkspaceState(t *testing.T) {

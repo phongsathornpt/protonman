@@ -10,10 +10,10 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/phongsathornpt/proton/internal/adapter/out/config"
-	"github.com/phongsathornpt/proton/internal/adapter/out/model"
-	"github.com/phongsathornpt/proton/internal/app"
-	"github.com/phongsathornpt/proton/internal/base/runtimepolicy"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 )
 
 const modelSelectViewID = "model_select"

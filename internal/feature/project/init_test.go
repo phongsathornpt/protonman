@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 )
 
 func TestInitCreatesMinimalProjectConfigWithoutOverwrite(t *testing.T) {

@@ -8,8 +8,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/phongsathornpt/proton/internal/adapter/out/config"
-	"github.com/phongsathornpt/proton/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 )
 
 func TestProviderViewLaunchViaSlashCommand(t *testing.T) {

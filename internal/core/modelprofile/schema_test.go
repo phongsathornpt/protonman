@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 func TestPublishInputSchemaLowersGeminiOneOfToBroadObject(t *testing.T) {

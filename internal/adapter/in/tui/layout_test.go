@@ -10,8 +10,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	tododomain "github.com/phongsathornpt/proton/internal/feature/todo"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 )
 
 func TestPickerVisibleRows(t *testing.T) {

@@ -10,9 +10,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/phongsathornpt/proton/internal/adapter/out/sessionfs"
-	"github.com/phongsathornpt/proton/internal/app/appdirs"
-	"github.com/phongsathornpt/proton/internal/core/session"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/sessionfs"
+	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/core/session"
 )
 
 func runSessionCommand(ctx context.Context, args []string) (bool, error) {

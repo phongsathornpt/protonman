@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/phongsathornpt/proton/internal/adapter/out/config"
-	"github.com/phongsathornpt/proton/internal/app"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/app"
 )
 
 type userSettingSavedMsg struct {

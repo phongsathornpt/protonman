@@ -7,8 +7,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/phongsathornpt/proton/internal/adapter/out/model"
-	"github.com/phongsathornpt/proton/internal/app"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
 )
 
 const providerSelectViewID = "provider_select"

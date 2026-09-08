@@ -10,8 +10,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 const (

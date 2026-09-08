@@ -1,6 +1,6 @@
 package turn
 
-import "github.com/phongsathornpt/proton/internal/core/tool"
+import "github.com/phongsathornpt/protonman/internal/core/tool"
 
 type groundingState struct {
 	evidence tool.EvidenceKind

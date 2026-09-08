@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/phongsathornpt/proton/internal/core/modelprofile"
+	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 )
 
 func decodeCompatibleModels(body []byte) ([]RemoteModel, error) {

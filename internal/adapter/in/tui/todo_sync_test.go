@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	tododomain "github.com/phongsathornpt/proton/internal/feature/todo"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 )
 
 type fixedTodoRepository struct{ snapshot tododomain.Snapshot }

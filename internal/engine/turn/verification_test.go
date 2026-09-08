@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 func TestVerificationStateTracksMutationAndVerifierOrder(t *testing.T) {

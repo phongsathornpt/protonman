@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/phongsathornpt/proton/internal/base/glob"
-	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/base/glob"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 // ErrOutsideWorkspace indicates that a path escapes the configured root,

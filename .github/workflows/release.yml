@@ -74,17 +74,17 @@ jobs:
           version="$GITHUB_REF_NAME"
           plain_version="${version#v}"
           package="proton_${plain_version}_${GOOS}_${GOARCH}"
-          binary="proton"
+          binary="protonman"
           if [[ "$GOOS" == "windows" ]]; then
-            binary="proton.exe"
+            binary="protonman.exe"
           fi
 
           mkdir -p "dist/$package"
           CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build \
             -trimpath \
-            -ldflags "-s -w -X github.com/phongsathornpt/proton/internal/base/buildinfo.version=$version" \
+            -ldflags "-s -w -X github.com/phongsathornpt/protonman/internal/base/buildinfo.version=$version" \
             -o "dist/$package/$binary" \
-            ./cmd/proton
+            ./cmd/protonman
 
           if [[ "$GOOS" == "linux" && "$GOARCH" == "amd64" ]]; then
             test "$("dist/$package/$binary" --version)" = "Proton $plain_version"

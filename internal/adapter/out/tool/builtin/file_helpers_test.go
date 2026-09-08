@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/core/workspace"
+	"github.com/phongsathornpt/protonman/internal/core/workspace"
 )
 
 func TestAtomicWriteResolvedRejectsParentSymlinkSwap(t *testing.T) {

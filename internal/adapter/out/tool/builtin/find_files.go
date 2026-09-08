@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/phongsathornpt/proton/internal/base/glob"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/core/workspace"
+	"github.com/phongsathornpt/protonman/internal/base/glob"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/core/workspace"
 )
 
 const maxFindFilesResults = 1000

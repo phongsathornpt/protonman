@@ -56,6 +56,6 @@ A versioned Go install also works without explicit linker flags because the exis
 `debug.ReadBuildInfo` fallback reads the module version:
 
 ```sh
-go install github.com/phongsathornpt/proton/cmd/proton@v1.2.3
+go install github.com/phongsathornpt/protonman/cmd/protonman@v1.2.3
 proton --version
 ```

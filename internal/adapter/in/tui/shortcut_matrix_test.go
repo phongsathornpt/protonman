@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/phongsathornpt/proton/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
 func TestShortcutMatrixGlobalKeysSurviveModalRouting(t *testing.T) {

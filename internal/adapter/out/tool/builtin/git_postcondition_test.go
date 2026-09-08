@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/core/workspace"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/core/workspace"
 )
 
 func TestParseGitConflictPaths(t *testing.T) {

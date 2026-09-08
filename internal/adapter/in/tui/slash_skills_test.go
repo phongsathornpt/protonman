@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/feature/skill"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/feature/skill"
 )
 
 func TestSlashSkills(t *testing.T) {

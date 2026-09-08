@@ -33,7 +33,7 @@ When changing Proton:
 ## Repository Shape
 
 ```text
-cmd/proton/                     composition root and CLI mode selection
+cmd/protonman/                     composition root and CLI mode selection
 internal/adapter/in/            inbound adapters
   acp/                          ACP JSON-RPC/stdin-stdout adapter
   headless/                     non-interactive CLI adapter
@@ -104,7 +104,7 @@ filesystem stores, or coordinator methods directly.
 
 ### Composition Root
 
-`cmd/proton/bootstrap.go` is the main assembly point. It resolves configuration,
+`cmd/protonman/bootstrap.go` is the main assembly point. It resolves configuration,
 workspace policy, checkpoints, sandboxing, skills, permissions, coordinator,
 session-owned TODO state, tool registry, tool-call service, and the initial
 conversation. Cross-layer wiring belongs here rather than inside domain packages.
@@ -671,7 +671,7 @@ When implementing a change, place it according to ownership:
 | provider wire protocol | `proton-sdk/provider/*` |
 | session persistence | `internal/adapter/out/sessionfs` |
 | reusable low-level defaults/helpers | `internal/base/*` only if truly dependency-free |
-| composition/wiring | `cmd/proton` |
+| composition/wiring | `cmd/protonman` |
 
 ## Implementation Style
 
@@ -764,7 +764,7 @@ Before declaring a task complete, verify the relevant subset of:
 
 For common investigations, begin here:
 
-- startup/wiring: `cmd/proton/bootstrap.go`
+- startup/wiring: `cmd/protonman/bootstrap.go`
 - architecture guardrails: `test/architecture/dependency_test.go`
 - tool contracts: `internal/core/tool/`
 - default tools: `internal/adapter/out/tool/builtin/registry.go`

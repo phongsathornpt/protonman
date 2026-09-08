@@ -4,7 +4,7 @@ Proton follows **Clean Architecture** (Hexagonal / Ports and Adapters) principle
 
 ```
        +-------------------------------------------------------------+
-       |                  cmd/proton (Composition Root)              |
+       |                  cmd/protonman (Composition Root)              |
        |  +-------------------------------------------------------+  |
        |  |     Inbound Adapters (Driving / Presentation)         |  |
        |  |  internal/tui  |  internal/acp  |  internal/headless  |  |
@@ -35,7 +35,7 @@ Proton follows **Clean Architecture** (Hexagonal / Ports and Adapters) principle
 
 ---
 
-## 1. Composition Root (`cmd/proton/`)
+## 1. Composition Root (`cmd/protonman/`)
 The single assembly point of the application:
 - `main.go`: Process entry point, signal trapping, and presentation mode selection (`tui`, `acp`, `headless`, `session`).
 - `bootstrap.go`: Instantiates infrastructure stores, domain policies, and wires outbound adapters into application services (`app.BuildConversation`, `app.NewSessions`, `app.NewAgents`).
@@ -68,7 +68,7 @@ Pure business rules and domain definitions. No `domain-ish` parent folder is cre
 - `internal/tool/`: Pure domain contracts for tools: `Handler` interface, `Registry`, `Specification`, parameter metadata, call context. Contains zero tool implementations.
 - `internal/workspace/`: Filesystem root isolation, directory safety gates, mutation boundaries.
 
-*Rule*: Core domain packages never import outer layers (`cmd/proton`, `app`, `turn`, `tui`, `acp`, `headless`, or adapters).
+*Rule*: Core domain packages never import outer layers (`cmd/protonman`, `app`, `turn`, `tui`, `acp`, `headless`, or adapters).
 
 ---
 

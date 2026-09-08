@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 )
 
 type providerModelCatalog struct {

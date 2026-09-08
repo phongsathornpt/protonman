@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/core/workspace"
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/core/workspace"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 type fakeHandler struct {

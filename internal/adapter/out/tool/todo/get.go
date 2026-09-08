@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	tododomain "github.com/phongsathornpt/proton/internal/feature/todo"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 )
 
 type getTodoHandler struct {

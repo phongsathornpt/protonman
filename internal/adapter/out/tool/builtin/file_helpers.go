@@ -9,7 +9,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/phongsathornpt/proton/internal/core/workspace"
+	"github.com/phongsathornpt/protonman/internal/core/workspace"
 )
 
 const maxEditFileBytes = 16 * 1024 * 1024

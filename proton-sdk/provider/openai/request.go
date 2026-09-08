@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
-	"github.com/phongsathornpt/proton/proton-sdk/internal/providerutil"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/internal/providerutil"
 )
 
 type chatToolCall struct {

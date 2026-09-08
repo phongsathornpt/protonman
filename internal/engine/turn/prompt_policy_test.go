@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/engine/prompt"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 )
 
 func TestEffectivePromptSpecDerivesCapabilitiesAndMutationDomains(t *testing.T) {

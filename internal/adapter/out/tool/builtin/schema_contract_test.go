@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 type invalidSchemaHandler struct{}

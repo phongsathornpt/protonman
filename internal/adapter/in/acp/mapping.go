@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/phongsathornpt/proton/internal/adapter/out/model"
-	"github.com/phongsathornpt/proton/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 // ToolKindForName returns the ACP ToolKind for a Proton tool.

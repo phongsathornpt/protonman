@@ -12,12 +12,12 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/phongsathornpt/proton/internal/adapter/out/model"
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/engine/toolcall"
-	"github.com/phongsathornpt/proton/internal/engine/turn"
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
+	"github.com/phongsathornpt/protonman/internal/engine/turn"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 type mockRunner struct {

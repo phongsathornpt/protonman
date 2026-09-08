@@ -9,8 +9,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	tododomain "github.com/phongsathornpt/proton/internal/feature/todo"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 )
 
 type updateTodoHandler struct {

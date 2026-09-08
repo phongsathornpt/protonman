@@ -3,10 +3,10 @@ package app
 import (
 	"context"
 
-	"github.com/phongsathornpt/proton/internal/adapter/out/config"
-	"github.com/phongsathornpt/proton/internal/core/permission"
-	"github.com/phongsathornpt/proton/internal/feature/project"
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/feature/project"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 // ProjectDiscoveryOptions controls project-local Proton discovery.

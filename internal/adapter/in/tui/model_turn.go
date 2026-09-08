@@ -9,9 +9,9 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/phongsathornpt/proton/internal/adapter/out/model"
-	"github.com/phongsathornpt/proton/internal/app"
-	"github.com/phongsathornpt/proton/internal/feature/agent"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
 var tuiTurnOwnerSeq atomic.Uint64

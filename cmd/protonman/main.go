@@ -11,17 +11,17 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/phongsathornpt/proton/internal/adapter/in/acp"
-	"github.com/phongsathornpt/proton/internal/adapter/in/tui"
-	mcpadapter "github.com/phongsathornpt/proton/internal/adapter/out/tool/mcp"
-	"github.com/phongsathornpt/proton/internal/app"
-	"github.com/phongsathornpt/proton/internal/base/buildinfo"
-	"github.com/phongsathornpt/proton/internal/base/envconfig"
-	"github.com/phongsathornpt/proton/internal/core/session"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/engine/toolcall"
-	"github.com/phongsathornpt/proton/internal/platform/telemetry"
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/acp"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui"
+	mcpadapter "github.com/phongsathornpt/protonman/internal/adapter/out/tool/mcp"
+	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
+	"github.com/phongsathornpt/protonman/internal/base/envconfig"
+	"github.com/phongsathornpt/protonman/internal/core/session"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
+	"github.com/phongsathornpt/protonman/internal/platform/telemetry"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 func configureACPMCP(ctx context.Context, cwd string, registry tool.Registry, configs []acp.MCPServerConfig) (io.Closer, error) {

@@ -3,7 +3,7 @@ package appdirs
 
 import (
 	"fmt"
-	"github.com/phongsathornpt/proton/internal/base/envconfig"
+	"github.com/phongsathornpt/protonman/internal/base/envconfig"
 	"os"
 	"path/filepath"
 	"strings"

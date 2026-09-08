@@ -11,15 +11,15 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/phongsathornpt/proton/internal/adapter/out/config"
-	"github.com/phongsathornpt/proton/internal/adapter/out/model"
-	"github.com/phongsathornpt/proton/internal/app"
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/engine/toolcall"
-	"github.com/phongsathornpt/proton/internal/feature/agent"
-	"github.com/phongsathornpt/proton/internal/feature/skill"
-	tododomain "github.com/phongsathornpt/proton/internal/feature/todo"
-	sdk "github.com/phongsathornpt/proton/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
+	"github.com/phongsathornpt/protonman/internal/feature/skill"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 const (

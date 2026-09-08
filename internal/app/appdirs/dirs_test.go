@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/base/envconfig"
+	"github.com/phongsathornpt/protonman/internal/base/envconfig"
 )
 
 func TestResolveExplicitHome(t *testing.T) {

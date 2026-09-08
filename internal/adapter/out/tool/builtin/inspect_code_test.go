@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/phongsathornpt/proton/internal/core/tool"
-	"github.com/phongsathornpt/proton/internal/core/workspace"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/core/workspace"
 )
 
 func TestInspectCodeCompoundSearch(t *testing.T) {
