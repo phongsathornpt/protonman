@@ -432,12 +432,48 @@ func agentActivityCounts(snapshot []agent.AgentStatus) (active, running, queued,
 	return active, running, queued, canceling
 }
 
-func (m bubbleModel) infoView() string {
+type infoViewCacheKey struct {
+	width            int
+	height           int
+	planMode         bool
+	permissionMode   permission.Mode
+	activeModel      string
+	reasoningEffort  sdk.ReasoningEffort
+	queueLen         int
+	subagentsEnabled bool
+	activeSkillCount int
+	activeSkill      string
+}
+
+type infoViewCache struct {
+	key   infoViewCacheKey
+	value string
+	valid bool
+}
+
+func (m *bubbleModel) infoView() string {
 	if view := m.permissionView(); view != nil {
 		if view.parked {
 			return mutedStyle.Render("tab review · y once · s session · n deny")
 		}
 		return mutedStyle.Render("y once · s session · n deny · esc review")
+	}
+	permissionMode := permission.ModeAsk
+	if m.service != nil {
+		permissionMode = m.service.Mode()
+	}
+	activeSkillCount := 0
+	activeSkill := ""
+	if layoutModeForHeight(m.height) == layoutNormal && m.skills != nil {
+		active := m.skills.ActivatedList()
+		activeSkillCount = len(active)
+		if len(active) == 1 {
+			activeSkill = active[0]
+		}
+	}
+	key := infoViewCacheKey{width: m.width, height: m.height, planMode: m.planMode, permissionMode: permissionMode, activeModel: m.activeModel, reasoningEffort: m.reasoningEffort, queueLen: len(m.queue), subagentsEnabled: m.subagentsEnabled, activeSkillCount: activeSkillCount, activeSkill: activeSkill}
+	if m.infoCache.valid && m.infoCache.key == key {
+		return m.infoCache.value
 	}
 	targetWidth := m.width - 2
 	if targetWidth <= 0 {
@@ -461,7 +497,7 @@ func (m bubbleModel) infoView() string {
 		}
 		return false
 	}
-	addPart(m.modeChip())
+	addPart(m.modeChipFor(permissionMode))
 	if m.activeModel != "" {
 		cleanModel := truncateWithEllipsis(m.activeModel, maxInt(8, targetWidth/3))
 		addPart(brandStyle.Render("model: " + cleanModel))
@@ -475,13 +511,12 @@ func (m bubbleModel) infoView() string {
 	if !m.subagentsEnabled {
 		addPart(warningStyle.Render("subagents off"))
 	}
-	if mode == layoutNormal && m.skills != nil {
-		active := m.skills.ActivatedList()
-		if len(active) == 1 {
-			cleanSkill := truncateWithEllipsis(active[0], maxInt(14, targetWidth/3))
+	if mode == layoutNormal {
+		if activeSkillCount == 1 {
+			cleanSkill := truncateWithEllipsis(activeSkill, maxInt(14, targetWidth/3))
 			addPart(successStyle.Render("skill: " + cleanSkill))
-		} else if len(active) > 1 {
-			addPart(successStyle.Render(fmt.Sprintf("%d skills active", len(active))))
+		} else if activeSkillCount > 1 {
+			addPart(successStyle.Render(fmt.Sprintf("%d skills active", activeSkillCount)))
 		}
 	}
 	candidates := make([]string, 0, 2)
@@ -494,16 +529,22 @@ func (m bubbleModel) infoView() string {
 	for _, cand := range candidates {
 		addPart(mutedStyle.Render(cand))
 	}
-	return strings.Join(parts, mutedStyle.Render(sepStr))
+	value := strings.Join(parts, mutedStyle.Render(sepStr))
+	m.infoCache = infoViewCache{key: key, value: value, valid: true}
+	return value
 }
 
-func (m bubbleModel) modeChip() string {
-	if m.planMode {
-		return planStyle.Render("mode: plan · read-only")
-	}
+func (m *bubbleModel) modeChip() string {
 	mode := permission.ModeAsk
 	if m.service != nil {
 		mode = m.service.Mode()
+	}
+	return m.modeChipFor(mode)
+}
+
+func (m *bubbleModel) modeChipFor(mode permission.Mode) string {
+	if m.planMode {
+		return planStyle.Render("mode: plan · read-only")
 	}
 	if m.width < 40 {
 		switch mode {
