@@ -2,6 +2,7 @@ package agenttool
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/projectTHORN/proton/internal/core/tool"
@@ -60,5 +61,51 @@ func TestCapabilityRegistryKeepsLifecycleToolsForExistingAgents(t *testing.T) {
 		if _, ok := reg.Lookup(name); !ok {
 			t.Fatalf("%s should remain visible for %s", name, h.ID)
 		}
+	}
+}
+
+type dynamicCapabilityTestRegistry struct{ capabilityTestRegistry }
+
+func (r *dynamicCapabilityTestRegistry) Register(handler tool.Handler) error {
+	if r.handlers == nil {
+		r.handlers = make(map[string]tool.Handler)
+	}
+	r.handlers[handler.Definition().Name] = handler
+	return nil
+}
+
+func (r *dynamicCapabilityTestRegistry) RegisterBatch(handlers []tool.Handler) error {
+	for _, handler := range handlers {
+		if err := r.Register(handler); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *dynamicCapabilityTestRegistry) ReplaceNamespace(prefix string, handlers []tool.Handler) error {
+	for name := range r.handlers {
+		if strings.HasPrefix(name, prefix) {
+			delete(r.handlers, name)
+		}
+	}
+	return r.RegisterBatch(handlers)
+}
+
+func TestCapabilityRegistryPreservesDynamicRegistrar(t *testing.T) {
+	coord := agent.NewCoordinator(nil, nil, nil, nil)
+	defer coord.Close()
+	base := &dynamicCapabilityTestRegistry{capabilityTestRegistry{handlers: map[string]tool.Handler{}}}
+	reg := NewCapabilityRegistry(base, coord)
+	dynamic, ok := reg.(tool.DynamicRegistrar)
+	if !ok {
+		t.Fatal("capability registry dropped DynamicRegistrar")
+	}
+	h := NewListAgents(coord)
+	if err := dynamic.Register(h); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := reg.Lookup("list_agents"); !ok {
+		t.Fatal("dynamically registered handler is not visible")
 	}
 }

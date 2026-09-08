@@ -3,6 +3,7 @@ package agenttool
 import (
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/feature/agent"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 // CapabilityRegistry filters the primary agent tool surface according to the
@@ -17,7 +18,28 @@ func NewCapabilityRegistry(base tool.Registry, coordinator *agent.Coordinator) t
 	if base == nil {
 		return nil
 	}
-	return &CapabilityRegistry{base: base, coordinator: coordinator}
+	filtered := &CapabilityRegistry{base: base, coordinator: coordinator}
+	if dynamic, ok := base.(tool.DynamicRegistrar); ok {
+		return &dynamicCapabilityRegistry{CapabilityRegistry: filtered, dynamic: dynamic}
+	}
+	return filtered
+}
+
+type dynamicCapabilityRegistry struct {
+	*CapabilityRegistry
+	dynamic tool.DynamicRegistrar
+}
+
+func (r *dynamicCapabilityRegistry) Register(handler tool.Handler) error {
+	return r.dynamic.Register(handler)
+}
+
+func (r *dynamicCapabilityRegistry) RegisterBatch(handlers []tool.Handler) error {
+	return r.dynamic.RegisterBatch(handlers)
+}
+
+func (r *dynamicCapabilityRegistry) ReplaceNamespace(prefix string, handlers []tool.Handler) error {
+	return r.dynamic.ReplaceNamespace(prefix, handlers)
 }
 
 func (r *CapabilityRegistry) Lookup(name string) (tool.Handler, bool) {
@@ -39,6 +61,20 @@ func (r *CapabilityRegistry) Definitions() []tool.Definition {
 		}
 	}
 	return out
+}
+
+func (r *CapabilityRegistry) CompiledValidators(name string) (input, output *sdk.ToolSchemaValidator, ok bool) {
+	if r == nil || r.base == nil || !r.visible(name) {
+		return nil, nil, false
+	}
+	type compiledRegistry interface {
+		CompiledValidators(string) (*sdk.ToolSchemaValidator, *sdk.ToolSchemaValidator, bool)
+	}
+	compiled, ok := r.base.(compiledRegistry)
+	if !ok {
+		return nil, nil, false
+	}
+	return compiled.CompiledValidators(name)
 }
 
 func (r *CapabilityRegistry) visible(name string) bool {

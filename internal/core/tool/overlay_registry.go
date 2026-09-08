@@ -1,6 +1,10 @@
 package tool
 
-import "fmt"
+import (
+	"fmt"
+
+	sdk "github.com/projectTHORN/proton/proton-sdk"
+)
 
 // OverlayRegistry replaces selected handlers while preserving the base
 // registry's definition order. It is used for session-bound stateful tools.
@@ -9,7 +13,7 @@ type OverlayRegistry struct {
 	overrides map[string]Handler
 }
 
-func NewOverlayRegistry(base Registry, overrides ...Handler) (*OverlayRegistry, error) {
+func NewOverlayRegistry(base Registry, overrides ...Handler) (Registry, error) {
 	if base == nil {
 		return nil, fmt.Errorf("overlay registry base is required")
 	}
@@ -30,7 +34,27 @@ func NewOverlayRegistry(base Registry, overrides ...Handler) (*OverlayRegistry, 
 		}
 		r.overrides[def.Name] = handler
 	}
+	if dynamic, ok := base.(DynamicRegistrar); ok {
+		return &dynamicOverlayRegistry{OverlayRegistry: r, dynamic: dynamic}, nil
+	}
 	return r, nil
+}
+
+type dynamicOverlayRegistry struct {
+	*OverlayRegistry
+	dynamic DynamicRegistrar
+}
+
+func (r *dynamicOverlayRegistry) Register(handler Handler) error {
+	return r.dynamic.Register(handler)
+}
+
+func (r *dynamicOverlayRegistry) RegisterBatch(handlers []Handler) error {
+	return r.dynamic.RegisterBatch(handlers)
+}
+
+func (r *dynamicOverlayRegistry) ReplaceNamespace(prefix string, handlers []Handler) error {
+	return r.dynamic.ReplaceNamespace(prefix, handlers)
 }
 
 func (r *OverlayRegistry) Lookup(name string) (Handler, bool) {
@@ -41,6 +65,23 @@ func (r *OverlayRegistry) Lookup(name string) (Handler, bool) {
 		return handler, true
 	}
 	return r.base.Lookup(name)
+}
+
+func (r *OverlayRegistry) CompiledValidators(name string) (input, output *sdk.ToolSchemaValidator, ok bool) {
+	if r == nil || r.base == nil {
+		return nil, nil, false
+	}
+	if _, overridden := r.overrides[name]; overridden {
+		return nil, nil, false
+	}
+	type compiledRegistry interface {
+		CompiledValidators(string) (*sdk.ToolSchemaValidator, *sdk.ToolSchemaValidator, bool)
+	}
+	compiled, ok := r.base.(compiledRegistry)
+	if !ok {
+		return nil, nil, false
+	}
+	return compiled.CompiledValidators(name)
 }
 
 func (r *OverlayRegistry) Definitions() []Definition {
