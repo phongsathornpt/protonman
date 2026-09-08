@@ -263,10 +263,6 @@ func extractToolTarget(name string, kind tool.Kind, args json.RawMessage) (strin
 	return toolview.ExtractTarget(name, kind, args)
 }
 
-func isAgentLifecycleTool(name string) bool {
-	return toolview.IsAgentLifecycleTool(name)
-}
-
 func toolKindGlyph(kind tool.Kind, name string) string {
 	return toolview.KindGlyph(kind, name)
 }

@@ -163,6 +163,7 @@ func toolFailureSuggestions(toolName string, code tool.ErrorCode) []string {
 }
 
 func (m *bubbleModel) appendToolCall(call tool.Call) {
+	call = tool.NormalizeLegacyCall(call)
 	state := m.ensureHistoryState()
 	var kind tool.Kind
 	if handler, ok := m.registry.Lookup(call.Name); ok {
@@ -179,21 +180,9 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 		if action == "spawn" {
 			m.rememberAgentRun(call)
 			state.StartToolCell(&AgentToolCell{CallID: call.ID, Name: call.Name, Target: target, Running: true})
-			m.syncLegacyBlocks()
-			return
+		} else {
+			m.touchAgentOperation(call.Name, call)
 		}
-		m.touchAgentOperation(call.Name, call)
-		m.syncLegacyBlocks()
-		return
-	}
-	if call.Name == "delegate_task" {
-		m.rememberAgentRun(call)
-		state.StartToolCell(&AgentToolCell{CallID: call.ID, Name: call.Name, Target: target, Running: true})
-		m.syncLegacyBlocks()
-		return
-	}
-	if isAgentLifecycleTool(call.Name) {
-		m.touchAgentOperation(call.Name, call)
 		m.syncLegacyBlocks()
 		return
 	}
@@ -232,7 +221,8 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 	}
 	state := m.ensureHistoryState()
 	body := result.Output
-	if len(result.StructuredOutput) > 0 && (name == "todo" || name == "get_todo" || name == "update_todo" || name == "subagent" || name == "delegate_task" || name == "wait_agent" || name == "get_agent" || name == "list_agents" || name == "cancel_agent") {
+	name = tool.CanonicalName(name)
+	if len(result.StructuredOutput) > 0 && (name == "todo" || name == "subagent") {
 		body = string(result.StructuredOutput)
 	}
 	if result.CheckpointID != "" {
@@ -257,7 +247,7 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 		title := tool.DisplayName(name)
 		badge := string(result.Failure.Code)
 		text := result.Failure.Message
-		if (name == "update_todo" || name == "todo") && result.Failure.Code == tool.ErrorCodeConflict {
+		if name == "todo" && result.Failure.Code == tool.ErrorCodeConflict {
 			title = "Task plan changed"
 			badge = "stale"
 			text = "The task plan changed while this update was being prepared."

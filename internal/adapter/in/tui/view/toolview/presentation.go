@@ -27,15 +27,6 @@ func ExtractTarget(name string, kind tool.Kind, args json.RawMessage) (string, t
 	return target, kind
 }
 
-func IsAgentLifecycleTool(name string) bool {
-	switch name {
-	case "subagent", "wait_agent", "get_agent", "list_agents", "cancel_agent", "resume_agent":
-		return true
-	default:
-		return false
-	}
-}
-
 // KindGlyph returns the appropriate category glyph for a tool.
 func KindGlyph(kind tool.Kind, name string) string {
 	switch kind {
@@ -60,14 +51,10 @@ func KindGlyph(kind tool.Kind, name string) string {
 		return tuistyle.GlyphAgent
 	}
 
-	switch name {
-	case "skill", "activate_skill":
+	if tool.CanonicalName(name) == "skill" {
 		return tuistyle.GlyphSkill
-	case "delegate_task":
-		return tuistyle.GlyphAgent
-	default:
-		return tuistyle.GlyphGeneric
 	}
+	return tuistyle.GlyphGeneric
 }
 
 // SummarizeOutput produces a concise, high-signal semantic analysis summary
@@ -108,10 +95,7 @@ func SummarizeOutput(name string, kind tool.Kind, target string, body string, ex
 	case tool.KindEdit:
 		return summarizeEdit(name, bodyTrimmed)
 	case tool.KindTask:
-		if name == "get_todo" {
-			return summarizeTodoSnapshot(bodyTrimmed)
-		}
-		if name == "todo" {
+		if tool.CanonicalName(name) == "todo" {
 			var payload map[string]any
 			if json.Unmarshal([]byte(bodyTrimmed), &payload) == nil {
 				if _, ok := payload["items"]; ok {
@@ -128,7 +112,7 @@ func SummarizeOutput(name string, kind tool.Kind, target string, body string, ex
 		}
 	}
 
-	if name == "skill" || name == "activate_skill" {
+	if tool.CanonicalName(name) == "skill" {
 		if skillName := ExtractSkillContentName(body); skillName != "" {
 			return fmt.Sprintf("Activated skill %q", skillName)
 		}
@@ -155,25 +139,15 @@ func summarizeAgentTool(name, body string) string {
 	if json.Unmarshal([]byte(body), &payload) != nil {
 		return "agent updated"
 	}
-	if name == "subagent" {
-		if action, _ := payload["action"].(string); action != "" {
-			switch action {
-			case "spawn":
-				name = "delegate_task"
-			case "wait":
-				name = "wait_agent"
-			case "get":
-				name = "get_agent"
-			case "list":
-				name = "list_agents"
-			case "cancel":
-				name = "cancel_agent"
-			case "resume":
-				name = "resume_agent"
-			}
+	action, _ := payload["action"].(string)
+	action = strings.ToLower(strings.TrimSpace(action))
+	if action == "" {
+		call := tool.NormalizeLegacyCall(tool.Call{Name: name, Arguments: json.RawMessage(`{}`)})
+		if call.Name == "subagent" {
+			action = strings.ToLower(strings.TrimSpace(tool.ExtractString(call.ArgumentsMap(), "action")))
 		}
 	}
-	if name == "list_agents" {
+	if action == "list" {
 		agents, _ := payload["agents"].([]any)
 		active := 0
 		for _, raw := range agents {
@@ -196,13 +170,13 @@ func summarizeAgentTool(name, body string) string {
 		}
 	}
 	resultSummary := agentResultSummary(payload)
-	switch name {
-	case "delegate_task":
+	switch action {
+	case "spawn":
 		if id != "" {
 			return fmt.Sprintf("spawned %s · %s", id, status)
 		}
 		return "subagent spawned"
-	case "wait_agent":
+	case "wait":
 		if timedOut, _ := payload["timed_out"].(bool); timedOut {
 			return "no new agent activity"
 		}
@@ -218,11 +192,11 @@ func summarizeAgentTool(name, body string) string {
 			}
 		}
 		return "agent activity received"
-	case "get_agent":
+	case "get":
 		return joinAgentCompletionSummary(id, status, resultSummary)
-	case "cancel_agent":
+	case "cancel":
 		return fmt.Sprintf("cancel requested · %s", id)
-	case "resume_agent":
+	case "resume":
 		from, _ := payload["resumed_from"].(string)
 		if from != "" && id != "" {
 			return fmt.Sprintf("resumed %s as %s · %s", from, id, status)
@@ -661,8 +635,8 @@ func ShouldSuppressBody(kind tool.Kind, name string) bool {
 	case tool.KindWebFetch, tool.KindRead, tool.KindGit, tool.KindAgent, tool.KindTask, tool.KindEdit:
 		return true
 	}
-	switch name {
-	case "skill", "activate_skill", "delegate_task", "checkpoint_restore", "get_todo", "update_todo":
+	switch tool.CanonicalName(name) {
+	case "skill", "subagent", "todo", "edit":
 		return true
 	default:
 		return false

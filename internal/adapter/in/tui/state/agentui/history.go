@@ -36,7 +36,11 @@ func (t *Tracker) RememberRun(call tool.Call) {
 	if t.pendingRuns == nil {
 		t.pendingRuns = make(map[string]PendingRun)
 	}
+	if t.pendingActions == nil {
+		t.pendingActions = make(map[string]string)
+	}
 	t.pendingRuns[call.ID] = RunFromCall(call)
+	t.pendingActions[call.ID] = "spawn"
 }
 
 func RunFromCall(call tool.Call) PendingRun {
@@ -119,15 +123,16 @@ func ParseToolResult(body string) ToolResult {
 }
 
 func (t *Tracker) TouchOperation(name string, call tool.Call, state *history.HistoryState) {
-	if name == "subagent" {
-		action := extractStringArg(call.Arguments, "action")
-		if t.pendingActions == nil {
-			t.pendingActions = make(map[string]string)
-		}
-		t.pendingActions[call.ID] = action
-		name = legacyAgentToolName(action)
+	call = tool.NormalizeLegacyCall(call)
+	if call.Name != "subagent" {
+		return
 	}
-	if name == "wait_agent" {
+	action := extractStringArg(call.Arguments, "action")
+	if t.pendingActions == nil {
+		t.pendingActions = make(map[string]string)
+	}
+	t.pendingActions[call.ID] = action
+	if action == "wait" {
 		return
 	}
 	id := extractStringArg(call.Arguments, "agent_id")
@@ -141,38 +146,39 @@ func (t *Tracker) TouchOperation(name string, call tool.Call, state *history.His
 	if cell == nil {
 		return
 	}
-	switch name {
-	case "get_agent":
+	switch action {
+	case "get":
 		cell.Activity = "checking status"
-	case "cancel_agent":
+	case "cancel":
 		cell.State, cell.Activity = agent.StateCanceling, "canceling"
-	case "resume_agent":
+	case "resume":
 		cell.Activity = "resuming"
 	}
 	state.TouchAgentRun(id)
 }
 
 func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, state *history.HistoryState) bool {
-	publicName := name
+	publicName := tool.CanonicalName(name)
 	parsed := ParseToolResult(body)
-	if name == "subagent" {
-		name = legacyAgentToolName(parsed.Action)
-		if name == "" {
-			name = legacyAgentToolName(t.pendingActions[result.CallID])
-		}
-		delete(t.pendingActions, result.CallID)
+	action := strings.ToLower(strings.TrimSpace(parsed.Action))
+	if action == "" {
+		action = strings.ToLower(strings.TrimSpace(t.pendingActions[result.CallID]))
 	}
-	if name != "delegate_task" && !toolview.IsAgentLifecycleTool(name) {
+	if action == "" {
+		action = legacySubagentAction(name)
+	}
+	delete(t.pendingActions, result.CallID)
+	if publicName != "subagent" || action == "" {
 		return false
 	}
 	if parsed.AgentID == "" {
 		parsed.AgentID = t.pendingOps[result.CallID]
 	}
-	delete(t.pendingOps, result.CallID)
-	if name == "list_agents" {
+	if action == "list" {
+		delete(t.pendingOps, result.CallID)
 		return true
 	}
-	if name == "resume_agent" {
+	if action == "resume" {
 		fromID := parsed.ResumedFrom
 		if fromID == "" {
 			fromID = t.pendingOps[result.CallID]
@@ -198,7 +204,8 @@ func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, 
 		state.TouchAgentRun(parsed.AgentID)
 		return true
 	}
-	if name == "delegate_task" {
+	delete(t.pendingOps, result.CallID)
+	if action == "spawn" {
 		intent := t.pendingRuns[result.CallID]
 		delete(t.pendingRuns, result.CallID)
 		if parsed.AgentID == "" {
@@ -228,7 +235,9 @@ func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, 
 		if cell.State == "" {
 			cell.State = agent.StateQueued
 		}
-		state.CompleteToolCall(result.CallID, publicName, cell)
+		state.DiscardToolCall(result.CallID, publicName)
+		state.Append(cell)
+		state.TouchAgentRun(parsed.AgentID)
 		return true
 	}
 	if parsed.AgentID == "" {
@@ -296,11 +305,12 @@ func (t *Tracker) SyncSnapshot(agentID string, snapshot []agent.AgentStatus, sta
 }
 
 func (t *Tracker) ApplyToolFailure(name string, result tool.Result, err error, state *history.HistoryState) bool {
-	if name == "subagent" {
-		name = legacyAgentToolName(t.pendingActions[result.CallID])
-		delete(t.pendingActions, result.CallID)
+	action := strings.ToLower(strings.TrimSpace(t.pendingActions[result.CallID]))
+	if action == "" {
+		action = legacySubagentAction(name)
 	}
-	if !toolview.IsAgentLifecycleTool(name) {
+	delete(t.pendingActions, result.CallID)
+	if tool.CanonicalName(name) != "subagent" || action == "" {
 		return false
 	}
 	id := t.pendingOps[result.CallID]
@@ -313,9 +323,9 @@ func (t *Tracker) ApplyToolFailure(name string, result tool.Result, err error, s
 		return true
 	}
 	message := "status check failed"
-	if name == "cancel_agent" {
+	if action == "cancel" {
 		message = "cancel failed"
-	} else if name == "resume_agent" {
+	} else if action == "resume" {
 		message = "resume failed"
 	}
 	if result.Failure != nil && strings.TrimSpace(result.Failure.Message) != "" {
@@ -328,23 +338,12 @@ func (t *Tracker) ApplyToolFailure(name string, result tool.Result, err error, s
 	return true
 }
 
-func legacyAgentToolName(action string) string {
-	switch strings.ToLower(strings.TrimSpace(action)) {
-	case "spawn":
-		return "delegate_task"
-	case "wait":
-		return "wait_agent"
-	case "get":
-		return "get_agent"
-	case "list":
-		return "list_agents"
-	case "cancel":
-		return "cancel_agent"
-	case "resume":
-		return "resume_agent"
-	default:
+func legacySubagentAction(name string) string {
+	call := tool.NormalizeLegacyCall(tool.Call{Name: name, Arguments: json.RawMessage(`{}`)})
+	if call.Name != "subagent" {
 		return ""
 	}
+	return strings.ToLower(strings.TrimSpace(extractStringArg(call.Arguments, "action")))
 }
 
 type Activity struct {

@@ -459,11 +459,11 @@ func TestExecCellSeparatesStderrAndStreamTruncation(t *testing.T) {
 }
 
 func TestAgentToolCellRendersOrchestrationSemantics(t *testing.T) {
-	running := (&AgentToolCell{Name: "wait_agent", Target: "explorer-7", Running: true, Spinner: "⠋"}).RenderWidth(80)
-	if got := strings.Join(running, "\n"); !strings.Contains(got, "Waiting for explorer-7") || strings.Contains(got, "wait_agent") {
+	running := (&AgentToolCell{Name: "subagent", Target: "explorer-7", Running: true, Spinner: "⠋"}).RenderWidth(80)
+	if got := strings.Join(running, "\n"); !strings.Contains(got, "Coordinating subagents") || strings.Contains(got, "wait_agent") {
 		t.Fatalf("running agent cell=%q", got)
 	}
-	completed := (&AgentToolCell{Name: "wait_agent", Target: "explorer-7", Summary: "explorer-7 · completed · found routing issue"}).RenderWidth(80)
+	completed := (&AgentToolCell{Name: "subagent", Target: "explorer-7", Summary: "explorer-7 · completed · found routing issue"}).RenderWidth(80)
 	if got := strings.Join(completed, "\n"); !strings.Contains(got, "found routing issue") {
 		t.Fatalf("completed agent cell=%q", got)
 	}
@@ -485,9 +485,9 @@ func TestApplyTurnEventsCoalescesContiguousText(t *testing.T) {
 }
 
 func TestAgentToolCellRawLinesUseOrchestrationLabel(t *testing.T) {
-	cell := AgentToolCell{Name: "wait_agent", Target: "explorer-7", Running: true, Spinner: "⠋"}
+	cell := AgentToolCell{Name: "subagent", Target: "explorer-7", Running: true, Spinner: "⠋"}
 	got := strings.Join(cell.RawLines(), "\n")
-	if got != "Waiting for explorer-7" {
+	if got != "Coordinating subagents" {
 		t.Fatalf("RawLines()=%q", got)
 	}
 }
@@ -499,8 +499,8 @@ func TestPatchCellRenderingPolish(t *testing.T) {
 	if strings.Contains(joined, "✓ +") {
 		t.Fatalf("unexpected glyph stutter '✓ +' in patch cell header:\n%s", joined)
 	}
-	if !strings.Contains(joined, "✓") || !strings.Contains(joined, "Write") {
-		t.Fatalf("expected clean checkmark and tool display name 'Write' in patch cell header:\n%s", joined)
+	if !strings.Contains(joined, "✓") || !strings.Contains(joined, "Edit") {
+		t.Fatalf("expected clean checkmark and tool display name 'Edit' in patch cell header:\n%s", joined)
 	}
 	if strings.Contains(joined, "write_file") {
 		t.Fatalf("expected raw tool name 'write_file' to NOT appear in patch cell header:\n%s", joined)

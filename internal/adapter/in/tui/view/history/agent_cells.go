@@ -12,7 +12,7 @@ import (
 )
 
 // AgentRunCell presents one delegated subagent job as a single user-facing
-// lifecycle instead of exposing orchestration RPCs such as wait_agent.
+// lifecycle instead of exposing orchestration implementation details.
 type AgentRunCell struct {
 	AgentID    string
 	Profile    agent.Profile

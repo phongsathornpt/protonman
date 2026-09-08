@@ -654,10 +654,6 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 					return nil
 				}
 			}
-			switch request.ToolName {
-			case "wait_agent", "get_agent", "list_agents":
-				return nil
-			}
 		}
 		return fmt.Errorf("plan mode is read-only; %s tool %q is blocked", request.ToolKind, request.ToolName)
 	}

@@ -463,9 +463,6 @@ func TestSummarizeAgentResume(t *testing.T) {
 	if got != "resumed strength-4 as strength-9 · queued" {
 		t.Fatalf("summary = %q", got)
 	}
-	if !IsAgentLifecycleTool("resume_agent") {
-		t.Fatal("resume_agent should be treated as lifecycle presentation")
-	}
 }
 
 func TestSummarizeReadFilePreservesArtifactSummary(t *testing.T) {
