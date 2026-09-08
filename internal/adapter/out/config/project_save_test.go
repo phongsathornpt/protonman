@@ -41,6 +41,61 @@ func TestSaveProjectSettingsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSaveProjectPermissionRuleRoundTrip(t *testing.T) {
+	workDir := t.TempDir()
+	homeDir := t.TempDir()
+
+	rule := permission.Rule{
+		Action:      permission.ActionAllow,
+		Tool:        permission.ToolBash,
+		Pattern:     "git status",
+		PatternMode: permission.PatternModeGlob,
+	}
+
+	if err := SaveProjectPermissionRule(workDir, rule); err != nil {
+		t.Fatalf("SaveProjectPermissionRule error: %v", err)
+	}
+
+	// Saving identical rule is deduplicated
+	if err := SaveProjectPermissionRule(workDir, rule); err != nil {
+		t.Fatalf("SaveProjectPermissionRule duplicate error: %v", err)
+	}
+
+	// Saving domain rule
+	domainRule := permission.Rule{
+		Action:      permission.ActionAllow,
+		Tool:        permission.ToolWebFetch,
+		Pattern:     "api.github.com",
+		PatternMode: permission.PatternModeDomain,
+	}
+	if err := SaveProjectPermissionRule(workDir, domainRule); err != nil {
+		t.Fatalf("SaveProjectPermissionRule domain error: %v", err)
+	}
+
+	snapshot, err := Load(context.Background(), Options{
+		HomeDir:        homeDir,
+		WorkDir:        workDir,
+		ProjectTrusted: true,
+	})
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+
+	if len(snapshot.Permission.Rules) != 2 {
+		t.Fatalf("expected 2 rules, got %d: %#v", len(snapshot.Permission.Rules), snapshot.Permission.Rules)
+	}
+
+	r0 := snapshot.Permission.Rules[0]
+	if r0.Action != permission.ActionAllow || r0.Tool != permission.ToolBash || r0.Pattern != "git status" || r0.PatternMode != permission.PatternModeGlob {
+		t.Fatalf("rule 0 mismatch: %+v", r0)
+	}
+
+	r1 := snapshot.Permission.Rules[1]
+	if r1.Action != permission.ActionAllow || r1.Tool != permission.ToolWebFetch || r1.Pattern != "api.github.com" || r1.PatternMode != permission.PatternModeDomain {
+		t.Fatalf("rule 1 mismatch: %+v", r1)
+	}
+}
+
 func TestSaveProjectSettingsRejectsSymlinkRoot(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink behavior varies on Windows")

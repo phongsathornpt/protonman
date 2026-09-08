@@ -48,3 +48,7 @@ func (Projects) SaveMaxToolCalls(workDir string, calls int) error {
 func (Projects) SavePermissionMode(workDir string, mode permission.Mode) error {
 	return config.SaveProjectPermissionMode(workDir, mode)
 }
+
+func (Projects) SavePermissionRule(workDir string, rule permission.Rule) error {
+	return config.SaveProjectPermissionRule(workDir, rule)
+}

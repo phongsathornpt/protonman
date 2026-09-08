@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
@@ -232,6 +233,9 @@ func (m *bubbleModel) handleProjectSet(argument string) tea.Cmd {
 		}
 		return saveProjectToolCallsCmd(m.workDir, calls)
 	case "permission", "mode":
+		if len(parts) >= 3 && isPermissionAction(parts[1]) {
+			return m.handleProjectPermission(strings.Join(parts[1:], " "))
+		}
 		mode, err := permission.ParseMode(value)
 		if err != nil {
 			m.appendError(err.Error())
@@ -332,8 +336,14 @@ func (m *bubbleModel) executeUserConfigCommand(line, rawName string) tea.Cmd {
 	cmdLine := strings.TrimSpace(strings.TrimPrefix(line, "/"))
 	cmdLine = strings.TrimSpace(strings.TrimPrefix(cmdLine, rawName))
 	fields := strings.Fields(cmdLine)
+	if len(fields) >= 1 && strings.ToLower(fields[0]) == "permission" {
+		return m.handleUserConfigPermission(fields[1:])
+	}
+	if len(fields) >= 2 && strings.ToLower(fields[0]) == "set" && strings.ToLower(fields[1]) == "permission" {
+		return m.handleUserConfigPermission(fields[2:])
+	}
 	if len(fields) != 3 || strings.ToLower(fields[0]) != "set" {
-		m.appendError("usage: /config set <subagents|thinking|tool-calls> <value>")
+		m.appendError("usage: /config set <subagents|thinking|tool-calls> <value> or /config permission <allow|deny|ask> <tool> [pattern]")
 		m.refreshViewport()
 		return nil
 	}
@@ -372,9 +382,86 @@ func (m *bubbleModel) executeUserConfigCommand(line, rawName string) tea.Cmd {
 			return userSettingSavedMsg{field: config.FieldAgentMaxToolCalls, value: limit, err: err}
 		}
 	default:
-		m.appendError("usage: /config set <subagents|thinking|tool-calls> <value>")
+		m.appendError("usage: /config set <subagents|thinking|tool-calls> <value> or /config permission <allow|deny|ask> <tool> [pattern]")
 		m.refreshViewport()
 		return nil
+	}
+}
+
+func (m *bubbleModel) handleUserConfigPermission(args []string) tea.Cmd {
+	rule, err := parsePermissionRuleArgs(args)
+	if err != nil {
+		m.appendError(err.Error())
+		m.refreshViewport()
+		return nil
+	}
+	if m.service != nil {
+		_ = m.service.AddRule(rule)
+	}
+	return func() tea.Msg {
+		err := (app.UserSettings{}).SavePermissionRule(rule)
+		return permissionRuleSavedMsg{scope: "user", rule: rule, err: err}
+	}
+}
+
+func (m *bubbleModel) handleProjectPermission(argument string) tea.Cmd {
+	if !m.projectTrusted {
+		m.appendError("project settings are read-only until the workspace is trusted")
+		m.refreshViewport()
+		return nil
+	}
+	parts := strings.Fields(strings.TrimSpace(argument))
+	rule, err := parsePermissionRuleArgs(parts)
+	if err != nil {
+		m.appendError(err.Error())
+		m.refreshViewport()
+		return nil
+	}
+	if m.service != nil {
+		_ = m.service.AddRule(rule)
+	}
+	workDir := m.workDir
+	return func() tea.Msg {
+		err := (app.Projects{}).SavePermissionRule(workDir, rule)
+		return permissionRuleSavedMsg{scope: "project", rule: rule, err: err}
+	}
+}
+
+func parsePermissionRuleArgs(args []string) (permission.Rule, error) {
+	if len(args) < 2 {
+		return permission.Rule{}, errors.New("usage: permission <allow|deny|ask> <tool> [pattern]")
+	}
+	action, err := permission.ParseAction(args[0])
+	if err != nil {
+		return permission.Rule{}, fmt.Errorf("invalid permission action %q: use allow, deny, or ask", args[0])
+	}
+	toolKind, err := permission.ParseToolKind(args[1])
+	if err != nil {
+		return permission.Rule{}, err
+	}
+	patternMode := permission.PatternModeGlob
+	if toolKind == permission.ToolWebFetch {
+		patternMode = permission.PatternModeDomain
+	}
+	pattern := "*"
+	if len(args) > 2 {
+		pattern = strings.Join(args[2:], " ")
+	}
+	pattern = permission.NormalizePattern(toolKind, patternMode, pattern)
+	return permission.Rule{
+		Action:      action,
+		Tool:        toolKind,
+		Pattern:     pattern,
+		PatternMode: patternMode,
+	}, nil
+}
+
+func isPermissionAction(s string) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "allow", "deny", "ask":
+		return true
+	default:
+		return false
 	}
 }
 

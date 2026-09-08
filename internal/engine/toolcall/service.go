@@ -257,6 +257,22 @@ func (s *Service) SetMode(mode permission.Mode) error {
 	return nil
 }
 
+// AddRule dynamically appends a static rule to the active permission policy.
+func (s *Service) AddRule(rule permission.Rule) error {
+	if s == nil || s.policy == nil {
+		return ErrInvalidService
+	}
+	return s.policy.AddRule(rule)
+}
+
+// Policy returns the compiled static permission policy used by the service.
+func (s *Service) Policy() *permission.Policy {
+	if s == nil {
+		return nil
+	}
+	return s.policy
+}
+
 // Definitions returns the registry snapshot used by the UI or model adapter.
 func (s *Service) Definitions() []tool.Definition {
 	return s.registry.Definitions()

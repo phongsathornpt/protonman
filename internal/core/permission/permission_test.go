@@ -2,6 +2,8 @@ package permission
 
 import (
 	"testing"
+
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 func TestPolicyPrecedence(t *testing.T) {
@@ -367,5 +369,272 @@ func TestMCPRulePatternsAreCanonicalized(t *testing.T) {
 		if decision.Action != tc.want {
 			t.Fatalf("%s action = %v, want %v", tc.name, decision.Action, tc.want)
 		}
+	}
+}
+
+func TestRuleFromRequestAndPersistentEligibility(t *testing.T) {
+	tests := []struct {
+		name         string
+		req          Request
+		wantEligible bool
+		wantRuleOK   bool
+		wantRuleTool ToolKind
+		wantRulePat  string
+		wantRuleMode PatternMode
+	}{
+		{
+			name: "read-only bash is eligible",
+			req: Request{
+				ToolName: "bash",
+				ToolKind: ToolBash,
+				Detail:   "git status --short",
+				Effect:   tool.CommandEffectReadOnly,
+				Risk:     tool.CommandRiskNormal,
+			},
+			wantEligible: true,
+			wantRuleOK:   true,
+			wantRuleTool: ToolBash,
+			wantRulePat:  "git status --short",
+			wantRuleMode: PatternModeGlob,
+		},
+		{
+			name: "mutating bash is ineligible",
+			req: Request{
+				ToolName: "bash",
+				ToolKind: ToolBash,
+				Detail:   "rm -rf tmp",
+				Effect:   tool.CommandEffectMutating,
+				Risk:     tool.CommandRiskNormal,
+			},
+			wantEligible: false,
+			wantRuleOK:   true,
+		},
+		{
+			name: "destructive bash is ineligible",
+			req: Request{
+				ToolName: "bash",
+				ToolKind: ToolBash,
+				Detail:   "drop database",
+				Effect:   tool.CommandEffectReadOnly,
+				Risk:     tool.CommandRiskDestructive,
+			},
+			wantEligible: false,
+			wantRuleOK:   true,
+		},
+		{
+			name: "read_file is eligible",
+			req: Request{
+				ToolName: "read_file",
+				ToolKind: ToolRead,
+				Detail:   "internal/tui/theme.go",
+				Effect:   tool.CommandEffectReadOnly,
+				Risk:     tool.CommandRiskNormal,
+			},
+			wantEligible: true,
+			wantRuleOK:   true,
+			wantRuleTool: ToolRead,
+			wantRulePat:  "internal/tui/theme.go",
+			wantRuleMode: PatternModeGlob,
+		},
+		{
+			name: "grep is eligible",
+			req: Request{
+				ToolName: "grep",
+				ToolKind: ToolGrep,
+				Detail:   "src",
+				Effect:   tool.CommandEffectReadOnly,
+				Risk:     tool.CommandRiskNormal,
+			},
+			wantEligible: true,
+			wantRuleOK:   true,
+			wantRuleTool: ToolGrep,
+			wantRulePat:  "src",
+			wantRuleMode: PatternModeGlob,
+		},
+		{
+			name: "web_fetch normalizes domain",
+			req: Request{
+				ToolName: "web_fetch",
+				ToolKind: ToolWebFetch,
+				Detail:   "https://API.GitHub.COM/repos/owner/repo",
+				Effect:   tool.CommandEffectReadOnly,
+				Risk:     tool.CommandRiskNormal,
+			},
+			wantEligible: true,
+			wantRuleOK:   true,
+			wantRuleTool: ToolWebFetch,
+			wantRulePat:  "api.github.com",
+			wantRuleMode: PatternModeDomain,
+		},
+		{
+			name: "mcp tool is eligible",
+			req: Request{
+				ToolName: "mcp.github.get_repo",
+				ToolKind: ToolMCP,
+				Detail:   `{"owner":"foo"}`,
+				Effect:   tool.CommandEffectReadOnly,
+				Risk:     tool.CommandRiskNormal,
+			},
+			wantEligible: true,
+			wantRuleOK:   true,
+			wantRuleTool: ToolMCP,
+			wantRulePat:  "mcp.github.get_repo",
+			wantRuleMode: PatternModeGlob,
+		},
+		{
+			name: "empty detail is ineligible",
+			req: Request{
+				ToolName: "bash",
+				ToolKind: ToolBash,
+				Detail:   "",
+				Effect:   tool.CommandEffectReadOnly,
+				Risk:     tool.CommandRiskNormal,
+			},
+			wantEligible: false,
+			wantRuleOK:   false,
+		},
+		{
+			name: "multiline command is rejected for rule",
+			req: Request{
+				ToolName: "bash",
+				ToolKind: ToolBash,
+				Detail:   "echo hello\necho world",
+				Effect:   tool.CommandEffectReadOnly,
+				Risk:     tool.CommandRiskNormal,
+			},
+			wantEligible: false,
+			wantRuleOK:   false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := PersistentRuleEligible(tc.req); got != tc.wantEligible {
+				t.Fatalf("PersistentRuleEligible() = %v, want %v", got, tc.wantEligible)
+			}
+			rule, ok := RuleFromRequest(tc.req)
+			if ok != tc.wantRuleOK {
+				t.Fatalf("RuleFromRequest() ok = %v, want %v", ok, tc.wantRuleOK)
+			}
+			if ok && tc.wantRuleOK {
+				if rule.Action != ActionAllow {
+					t.Fatalf("rule.Action = %v, want %v", rule.Action, ActionAllow)
+				}
+				if tc.wantRuleTool != "" && rule.Tool != tc.wantRuleTool {
+					t.Fatalf("rule.Tool = %v, want %v", rule.Tool, tc.wantRuleTool)
+				}
+				if tc.wantRulePat != "" && rule.Pattern != tc.wantRulePat {
+					t.Fatalf("rule.Pattern = %v, want %v", rule.Pattern, tc.wantRulePat)
+				}
+				if tc.wantRuleMode != PatternModeUnknown && rule.PatternMode != tc.wantRuleMode {
+					t.Fatalf("rule.PatternMode = %v, want %v", rule.PatternMode, tc.wantRuleMode)
+				}
+			}
+		})
+	}
+}
+
+func TestPolicyAddRuleThreadSafe(t *testing.T) {
+	policy, err := NewPolicy(Config{
+		Default: ActionAsk,
+		Rules:   []Rule{{Action: ActionDeny, Tool: ToolBash, Pattern: "rm *"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := Request{
+		ToolName: "bash",
+		ToolKind: ToolBash,
+		Detail:   "git status",
+	}
+
+	// Initially asks
+	if d := policy.Evaluate(req); d.Action != ActionAsk {
+		t.Fatalf("initial action = %v, want ask", d.Action)
+	}
+
+	// Add allow rule
+	err = policy.AddRule(Rule{
+		Action:  ActionAllow,
+		Tool:    ToolBash,
+		Pattern: "git status",
+	})
+	if err != nil {
+		t.Fatalf("AddRule() error = %v", err)
+	}
+
+	// Now allows
+	if d := policy.Evaluate(req); d.Action != ActionAllow {
+		t.Fatalf("action after AddRule = %v, want allow", d.Action)
+	}
+
+	// Adding duplicate is no-op
+	if err := policy.AddRule(Rule{Action: ActionAllow, Tool: ToolBash, Pattern: "git status"}); err != nil {
+		t.Fatalf("duplicate AddRule() error = %v", err)
+	}
+	if len(policy.Rules()) != 2 {
+		t.Fatalf("rules count = %d, want 2", len(policy.Rules()))
+	}
+
+	// Deny rule still beats added allow rule
+	denyReq := Request{
+		ToolName: "bash",
+		ToolKind: ToolBash,
+		Detail:   "rm foo",
+	}
+	if d := policy.Evaluate(denyReq); d.Action != ActionDeny {
+		t.Fatalf("denyReq action = %v, want deny", d.Action)
+	}
+}
+
+func TestNormalizePatternAndWildcardAll(t *testing.T) {
+	tests := []struct {
+		kind    ToolKind
+		mode    PatternMode
+		pattern string
+		want    string
+	}{
+		{ToolBash, PatternModeGlob, "all", "*"},
+		{ToolBash, PatternModeGlob, "ALL", "*"},
+		{ToolBash, PatternModeGlob, "*", "*"},
+		{ToolBash, PatternModeGlob, "", "*"},
+		{ToolBash, PatternModeGlob, "git status", "git status"},
+		{ToolWebFetch, PatternModeDomain, "all", "*"},
+		{ToolWebFetch, PatternModeDomain, "API.GitHub.COM", "api.github.com"},
+		{ToolMCP, PatternModeGlob, "all", "*"},
+		{ToolMCP, PatternModeGlob, "github.search", "mcp.github.search"},
+	}
+	for _, tc := range tests {
+		if got := NormalizePattern(tc.kind, tc.mode, tc.pattern); got != tc.want {
+			t.Errorf("NormalizePattern(%s, %s, %q) = %q, want %q", tc.kind, tc.mode, tc.pattern, got, tc.want)
+		}
+	}
+}
+
+func TestPolicyAllowBashAllMatchesAnyCommand(t *testing.T) {
+	policy, err := NewPolicy(Config{
+		Default: ActionAsk,
+		Rules: []Rule{
+			{Action: ActionAllow, Tool: ToolBash, Pattern: "all"},
+			{Action: ActionDeny, Tool: ToolBash, Pattern: "sudo *"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Normal commands allowed
+	for _, cmd := range []string{"ls -la", "cargo build", "npm test", "git log"} {
+		d := policy.Evaluate(Request{ToolName: "bash", ToolKind: ToolBash, Detail: cmd})
+		if d.Action != ActionAllow {
+			t.Errorf("command %q action = %v, want allow", cmd, d.Action)
+		}
+	}
+
+	// Specific deny still respected
+	d := policy.Evaluate(Request{ToolName: "bash", ToolKind: ToolBash, Detail: "sudo rm -rf /"})
+	if d.Action != ActionDeny {
+		t.Errorf("sudo command action = %v, want deny", d.Action)
 	}
 }

@@ -11,7 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
-
+	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
@@ -23,29 +23,77 @@ type permissionOption int
 const (
 	optionAllowOnce permissionOption = iota
 	optionAllowSession
+	optionAllowProject
+	optionAllowGlobal
 	optionDeny
 )
 
-var permissionOptions = []struct {
-	option permissionOption
-	label  string
-}{
-	{optionAllowOnce, "Allow once"},
-	{optionAllowSession, "Allow for this request this session"},
-	{optionDeny, "Deny"},
+type permissionOptionItem struct {
+	option   permissionOption
+	label    string
+	shortcut string
 }
 
-func permissionOptionsFor(request permission.Request) []struct {
-	option permissionOption
-	label  string
-} {
-	if permission.SessionGrantEligible(request) {
-		return permissionOptions
+func permissionOptionsFor(request permission.Request, projectTrusted bool, hasWorkDir bool) []permissionOptionItem {
+	items := []permissionOptionItem{
+		{option: optionAllowOnce, label: "Allow once", shortcut: "y"},
 	}
-	return []struct {
-		option permissionOption
-		label  string
-	}{permissionOptions[0], permissionOptions[2]}
+	if permission.SessionGrantEligible(request) {
+		items = append(items, permissionOptionItem{
+			option:   optionAllowSession,
+			label:    "Allow for this request this session",
+			shortcut: "s",
+		})
+	}
+	if permission.PersistentRuleEligible(request) {
+		if projectTrusted && hasWorkDir {
+			items = append(items, permissionOptionItem{
+				option:   optionAllowProject,
+				label:    "Allow and save to project (.protonman/config.toml)",
+				shortcut: "p",
+			})
+		}
+		items = append(items, permissionOptionItem{
+			option:   optionAllowGlobal,
+			label:    "Allow and save globally (~/.protonman/config.toml)",
+			shortcut: "g",
+		})
+	}
+	items = append(items, permissionOptionItem{
+		option:   optionDeny,
+		label:    "Deny",
+		shortcut: "n",
+	})
+	return items
+}
+
+func (v *permissionPaneView) options(m *bubbleModel) []permissionOptionItem {
+	projectTrusted := false
+	hasWorkDir := false
+	if m != nil {
+		projectTrusted = m.projectTrusted
+		hasWorkDir = m.workDir != ""
+	}
+	return permissionOptionsFor(v.pending.request, projectTrusted, hasWorkDir)
+}
+
+func shortcutHintFor(options []permissionOptionItem) string {
+	parts := make([]string, 0, len(options))
+	for _, opt := range options {
+		switch opt.option {
+		case optionAllowOnce:
+			parts = append(parts, "y once")
+		case optionAllowSession:
+			parts = append(parts, "s session")
+		case optionAllowProject:
+			parts = append(parts, "p project")
+		case optionAllowGlobal:
+			parts = append(parts, "g global")
+		case optionDeny:
+			parts = append(parts, "n deny")
+		}
+	}
+	return strings.Join(parts, " · ")
 }
 
 type permissionBridge struct {
@@ -117,9 +165,12 @@ func (v *permissionPaneView) Render(m *bubbleModel) string {
 }
 
 func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
-	options := permissionOptionsFor(v.pending.request)
+	options := v.options(m)
 	if v.index >= len(options) {
 		v.index = len(options) - 1
+	}
+	if v.index < 0 {
+		v.index = 0
 	}
 	if v.parked {
 		switch message.String() {
@@ -145,7 +196,7 @@ func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool
 			m.viewport.ScrollDown(1)
 			m.followTail = m.viewport.AtBottom()
 			return true, nil
-		case "y", "s", "n", "1", "2", "3", "enter":
+		case "y", "s", "p", "g", "n", "1", "2", "3", "4", "5", "enter":
 			// Decisions remain available while reviewing the transcript.
 		default:
 			return !m.matchesGlobalShortcut(message), nil
@@ -167,23 +218,33 @@ func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool
 			v.index++
 		}
 		return true, nil
-	case "1":
-		return true, m.resolvePermission(options[0].option)
-	case "2":
-		if len(options) > 1 {
-			return true, m.resolvePermission(options[1].option)
-		}
-		return true, nil
-	case "3":
-		if len(options) > 2 {
-			return true, m.resolvePermission(options[2].option)
+	case "1", "2", "3", "4", "5":
+		idx := int(message.String()[0] - '1')
+		if idx >= 0 && idx < len(options) {
+			return true, m.resolvePermission(options[idx].option)
 		}
 		return true, nil
 	case "y":
 		return true, m.resolvePermission(optionAllowOnce)
 	case "s":
-		if permission.SessionGrantEligible(v.pending.request) {
-			return true, m.resolvePermission(optionAllowSession)
+		for _, item := range options {
+			if item.option == optionAllowSession {
+				return true, m.resolvePermission(optionAllowSession)
+			}
+		}
+		return true, nil
+	case "p":
+		for _, item := range options {
+			if item.option == optionAllowProject {
+				return true, m.resolvePermission(optionAllowProject)
+			}
+		}
+		return true, nil
+	case "g":
+		for _, item := range options {
+			if item.option == optionAllowGlobal {
+				return true, m.resolvePermission(optionAllowGlobal)
+			}
 		}
 		return true, nil
 	case "n":
@@ -231,6 +292,9 @@ func (m *bubbleModel) resolvePermission(option permissionOption) tea.Cmd {
 		return nil
 	}
 	var resolution permission.Resolution
+	var saveCmd tea.Cmd
+	request := view.pending.request
+
 	switch option {
 	case optionAllowOnce:
 		resolution = permission.Resolution{
@@ -243,6 +307,33 @@ func (m *bubbleModel) resolvePermission(option permissionOption) tea.Cmd {
 			Action: permission.ActionAllow,
 			Scope:  permission.GrantScopeSession,
 			Reason: "user allowed this exact request for the session",
+		}
+	case optionAllowProject:
+		resolution = permission.Resolution{
+			Action: permission.ActionAllow,
+			Scope:  permission.GrantScopeOnce,
+			Reason: "user allowed call and saved rule to project",
+		}
+		if rule, ok := permission.RuleFromRequest(request); ok {
+			_ = m.service.AddRule(rule)
+			workDir := m.workDir
+			saveCmd = func() tea.Msg {
+				err := (app.Projects{}).SavePermissionRule(workDir, rule)
+				return permissionRuleSavedMsg{scope: "project", rule: rule, err: err}
+			}
+		}
+	case optionAllowGlobal:
+		resolution = permission.Resolution{
+			Action: permission.ActionAllow,
+			Scope:  permission.GrantScopeOnce,
+			Reason: "user allowed call and saved rule globally",
+		}
+		if rule, ok := permission.RuleFromRequest(request); ok {
+			_ = m.service.AddRule(rule)
+			saveCmd = func() tea.Msg {
+				err := (app.UserSettings{}).SavePermissionRule(rule)
+				return permissionRuleSavedMsg{scope: "global", rule: rule, err: err}
+			}
 		}
 	default:
 		resolution = permission.Resolution{Action: permission.ActionDeny, Reason: "user denied one call"}
@@ -257,7 +348,7 @@ func (m *bubbleModel) resolvePermission(option permissionOption) tea.Cmd {
 		m.activity = "running tool"
 	}
 	m.syncSlashView()
-	return nil
+	return saveCmd
 }
 
 func (m bubbleModel) permissionCard() string {
@@ -270,15 +361,12 @@ func (m bubbleModel) permissionCard() string {
 
 func (v *permissionPaneView) card(m *bubbleModel) string {
 	request := v.pending.request
-	options := permissionOptionsFor(request)
+	options := v.options(m)
 	labels := make([]string, 0, len(options))
 	for _, option := range options {
 		labels = append(labels, option.label)
 	}
-	shortcutHint := "y once · n deny"
-	if permission.SessionGrantEligible(request) {
-		shortcutHint = "y once · s session · n deny"
-	}
+	shortcutHint := shortcutHintFor(options)
 	title := "Permission required"
 	tone := pane.ToneWarning
 	detailExtras := make([]string, 0, 3)
@@ -364,3 +452,26 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 
 type permissionRequestMsg struct{ request permissionRequest }
 type permissionBridgeClosedMsg struct{}
+
+type permissionRuleSavedMsg struct {
+	scope string
+	rule  permission.Rule
+	err   error
+}
+
+func (m *bubbleModel) updatePermissionRuleSaved(message permissionRuleSavedMsg) (tea.Model, tea.Cmd) {
+	if message.err != nil {
+		m.appendError(fmt.Sprintf("Failed to save permission rule to %s: %s", message.scope, message.err))
+		m.refreshViewport()
+		return m, nil
+	}
+	m.appendLine(successStyle.Render(fmt.Sprintf("Saved %s rule to %s config (%s: %s).", message.rule.Action, message.scope, message.rule.Tool, message.rule.Pattern)))
+	m.refreshViewport()
+	if message.scope == "project" {
+		if view, _ := m.bottom.find(projectViewID).(*projectPaneView); view != nil {
+			view.notice = "Permission rule saved"
+			return m, view.reload(m)
+		}
+	}
+	return m, nil
+}

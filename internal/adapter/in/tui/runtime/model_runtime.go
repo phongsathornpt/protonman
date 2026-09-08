@@ -582,6 +582,8 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateProjectSettingSaved(message)
 	case userSettingSavedMsg:
 		return m.updateUserSettingSaved(message)
+	case permissionRuleSavedMsg:
+		return m.updatePermissionRuleSaved(message)
 	case projectLoadedMsg:
 		return m.updateProjectLoaded(message)
 	case turnDeltaMsg:
