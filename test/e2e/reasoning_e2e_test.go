@@ -15,7 +15,7 @@ func TestE2EReasoningGeminiProfileReachesWire(t *testing.T) {
 	server.AddToolCallResponse("reason-read", "read_file", `{"path":"hello.txt"}`)
 	server.AddTextResponse("done")
 
-	res := runProton(t, runOptions{args: []string{"-y", "-p", "Inspect hello.txt and answer done"}, dir: ws, env: []string{"PROTON_HOME=" + home}})
+	res := runProton(t, runOptions{args: []string{"-y", "-p", "Inspect hello.txt and answer done"}, dir: ws, env: []string{"PROTONMAN_HOME=" + home}})
 	if res.exitCode != 0 {
 		t.Fatalf("Gemini reasoning run failed: %s %s", res.stdout, res.stderr)
 	}
@@ -73,7 +73,7 @@ func TestE2EGeminiOpenAIGetTodoEmptySnapshot(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Inspect hello.txt, read the current task plan, then answer done"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("Gemini get_todo empty snapshot run failed: %s %s", res.stdout, res.stderr)
@@ -92,7 +92,7 @@ func TestE2EReasoningGeminiRejectsUnsupportedExplicitLevelBeforeHTTP(t *testing.
 	server := newMockLLMServer(t)
 	writeReasoningConfig(t, home, server.URL(), "openai", "gemini-3.8-flash", "", "xhigh")
 
-	res := runProton(t, runOptions{args: []string{"-y", "-p", "Say done"}, dir: ws, env: []string{"PROTON_HOME=" + home}})
+	res := runProton(t, runOptions{args: []string{"-y", "-p", "Say done"}, dir: ws, env: []string{"PROTONMAN_HOME=" + home}})
 	if res.exitCode == 0 {
 		t.Fatalf("unsupported Gemini xhigh unexpectedly succeeded: %s", res.stdout)
 	}
@@ -110,7 +110,7 @@ func TestE2EReasoningOpenAIResponsesEncoding(t *testing.T) {
 	writeReasoningConfig(t, home, server.URL(), "openai", "gpt-5.6-responses", "", "high")
 	server.AddResponsesTextResponse("done")
 
-	res := runProton(t, runOptions{args: []string{"-y", "-p", "Say done"}, dir: ws, env: []string{"PROTON_HOME=" + home}})
+	res := runProton(t, runOptions{args: []string{"-y", "-p", "Say done"}, dir: ws, env: []string{"PROTONMAN_HOME=" + home}})
 	if res.exitCode != 0 {
 		t.Fatalf("Responses reasoning run failed: %s %s", res.stdout, res.stderr)
 	}
@@ -131,7 +131,7 @@ func TestE2EReasoningAnthropicAdaptiveEncoding(t *testing.T) {
 	writeReasoningConfig(t, home, server.URL(), "anthropic", "claude-sonnet-4-6", "", "high")
 	server.AddAnthropicTextResponse("done")
 
-	res := runProton(t, runOptions{args: []string{"-y", "-p", "Say done"}, dir: ws, env: []string{"PROTON_HOME=" + home}})
+	res := runProton(t, runOptions{args: []string{"-y", "-p", "Say done"}, dir: ws, env: []string{"PROTONMAN_HOME=" + home}})
 	if res.exitCode != 0 {
 		t.Fatalf("Anthropic reasoning run failed: %s %s", res.stdout, res.stderr)
 	}

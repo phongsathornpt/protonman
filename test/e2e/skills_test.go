@@ -32,7 +32,7 @@ Execute test workflows efficiently.
 	result := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call activate_skill {"name":"sample-skill"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 
 	if result.exitCode != 0 {
@@ -69,7 +69,7 @@ description: Project specific skill
 		result := runProton(t, runOptions{
 			args: []string{"-y", "-p", `/call activate_skill {"name":"project-skill"}`},
 			dir:  ws,
-			env:  []string{"PROTON_HOME=" + home},
+			env:  []string{"PROTONMAN_HOME=" + home},
 		})
 
 		// Should emit warning on stderr
@@ -86,7 +86,7 @@ description: Project specific skill
 		result := runProton(t, runOptions{
 			args: []string{"-y", "-p", `/call activate_skill {"name":"project-skill"}`},
 			dir:  ws,
-			env:  []string{"PROTON_HOME=" + home, "PROTONMAN_TRUST_PROJECT=1"},
+			env:  []string{"PROTONMAN_HOME=" + home, "PROTONMAN_TRUST_PROJECT=1"},
 		})
 
 		if result.exitCode != 0 {
@@ -102,7 +102,7 @@ func TestE2EMultiSkillDiscoveryAndActivation(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 
-	// Create 3 user skills in PROTON_HOME
+	// Create 3 user skills in PROTONMAN_HOME
 	for _, name := range []string{"skill-alpha", "skill-beta", "skill-gamma"} {
 		skillDir := filepath.Join(home, ".proton", "skills", name)
 		if err := os.MkdirAll(skillDir, 0o755); err != nil {
@@ -118,7 +118,7 @@ func TestE2EMultiSkillDiscoveryAndActivation(t *testing.T) {
 	result := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call activate_skill {"name":"skill-alpha"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if result.exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0; stderr = %s", result.exitCode, result.stderr)
@@ -131,7 +131,7 @@ func TestE2EMultiSkillDiscoveryAndActivation(t *testing.T) {
 	result = runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call activate_skill {"name":"skill-gamma"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if result.exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0; stderr = %s", result.exitCode, result.stderr)
@@ -144,7 +144,7 @@ func TestE2EMultiSkillDiscoveryAndActivation(t *testing.T) {
 	result = runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call activate_skill {"name":"skill-delta"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if !strings.Contains(result.stdout, "skill-alpha") || !strings.Contains(result.stdout, "skill-beta") || !strings.Contains(result.stdout, "skill-gamma") {
 		t.Fatalf("expected available skills list in error response, got stdout: %s, stderr: %s", result.stdout, result.stderr)
@@ -155,7 +155,7 @@ func TestE2ESkillSessionPersistenceAndHeadlessParity(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 
-	// Create user skill in PROTON_HOME
+	// Create user skill in PROTONMAN_HOME
 	skillDir := filepath.Join(home, ".proton", "skills", "code-reviewer")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -175,7 +175,7 @@ Review code thoroughly.
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "/skills"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0; stderr = %s", res.exitCode, res.stderr)
@@ -188,7 +188,7 @@ Review code thoroughly.
 	res = runProton(t, runOptions{
 		args: []string{"-y", "-p", "/skill Code-Reviewer"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0; stderr = %s", res.exitCode, res.stderr)
@@ -205,7 +205,7 @@ Review code thoroughly.
 	res = runProton(t, runOptions{
 		args: []string{"-y", "--resume", "-p", "/skills active"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0; stderr = %s", res.exitCode, res.stderr)
@@ -218,7 +218,7 @@ Review code thoroughly.
 	res = runProton(t, runOptions{
 		args: []string{"-y", "--resume", "-p", "/skill toggle code-reviewer"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0; stderr = %s", res.exitCode, res.stderr)
@@ -231,7 +231,7 @@ Review code thoroughly.
 	res = runProton(t, runOptions{
 		args: []string{"-y", "--resume", "-p", "/skills active"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0; stderr = %s", res.exitCode, res.stderr)
@@ -245,7 +245,7 @@ func TestE2EUnifiedSkillSlashCommand(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 
-	// Create a user skill in PROTON_HOME
+	// Create a user skill in PROTONMAN_HOME
 	skillDir := filepath.Join(home, ".proton", "skills", "linter")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -265,7 +265,7 @@ Lint cleanly.
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "/skill"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0; stderr = %s", res.exitCode, res.stderr)
@@ -278,7 +278,7 @@ Lint cleanly.
 	res = runProton(t, runOptions{
 		args: []string{"-y", "-p", "/skills linter"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0; stderr = %s", res.exitCode, res.stderr)
@@ -291,7 +291,7 @@ Lint cleanly.
 	res = runProton(t, runOptions{
 		args: []string{"-y", "--resume", "-p", "/skills toggle linter"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0; stderr = %s", res.exitCode, res.stderr)

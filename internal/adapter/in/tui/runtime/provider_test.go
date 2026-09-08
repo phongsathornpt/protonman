@@ -65,7 +65,7 @@ func TestProviderSelectViewLaunchViaSlashCommand(t *testing.T) {
 
 func TestProviderSelectViewNavigationAndConfirm(t *testing.T) {
 	tempHome := t.TempDir()
-	t.Setenv("PROTON_HOME", tempHome)
+	t.Setenv("PROTONMAN_HOME", tempHome)
 	bModel := newTestSkillsModel(t, 1)
 	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: "https://opencode.ai/zen/v1", Type: "openai"}, "protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-test-key", Type: "openai"}}
 	bModel.activeProvider = "protonman"
@@ -191,7 +191,7 @@ func TestProviderSelectViewSetupPreset(t *testing.T) {
 
 func TestProviderSelectViewDelete(t *testing.T) {
 	tempHome := t.TempDir()
-	t.Setenv("PROTON_HOME", tempHome)
+	t.Setenv("PROTONMAN_HOME", tempHome)
 	bModel := newTestSkillsModel(t, 1)
 	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: "https://opencode.ai/zen/v1", Type: "openai"}, "protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-key", Type: "openai"}}
 	bModel.activeProvider = "protonman"
@@ -237,7 +237,7 @@ func TestProviderSelectViewDelete(t *testing.T) {
 
 func TestProviderSelectDirectSlashCommand(t *testing.T) {
 	tempHome := t.TempDir()
-	t.Setenv("PROTON_HOME", tempHome)
+	t.Setenv("PROTONMAN_HOME", tempHome)
 	bModel := newTestSkillsModel(t, 1)
 	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: "https://opencode.ai/zen/v1", Type: "openai"}, "protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-test-key", Type: "openai"}}
 	bModel.activeProvider = "protonman"
@@ -583,7 +583,7 @@ func TestProviderViewFetchAndModelSelectionFlow(t *testing.T) {
 
 func TestProviderViewInactiveEditKeepsActiveProvider(t *testing.T) {
 	homeDir := t.TempDir()
-	t.Setenv("PROTON_HOME", homeDir)
+	t.Setenv("PROTONMAN_HOME", homeDir)
 	if err := config.SaveUserProviderConfig(homeDir, config.ProviderConfig{Name: "opencode", Type: "openai", BaseURL: "https://opencode.ai/zen/v1"}, "free-model"); err != nil {
 		t.Fatalf("save active provider fixture: %v", err)
 	}

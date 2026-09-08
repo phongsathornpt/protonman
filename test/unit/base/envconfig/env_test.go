@@ -18,7 +18,6 @@ func TestConstants(t *testing.T) {
 		{envconfig.Telemetry, "PROTONMAN_TELEMETRY"},
 		{envconfig.DebugLog, "PROTONMAN_DEBUG_LOG"},
 		{envconfig.ForceTTY, "PROTONMAN_FORCE_TTY"},
-		{envconfig.LegacyHome, "PROTON_HOME"},
 		{envconfig.LegacyTrustProject, "PROTON_TRUST_PROJECT"},
 		{envconfig.LegacySessionID, "PROTON_SESSION_ID"},
 		{envconfig.LegacySandbox, "PROTON_SANDBOX"},
@@ -33,16 +32,16 @@ func TestConstants(t *testing.T) {
 	}
 }
 
-func TestValuePrefersCanonicalAndFallsBackToLegacy(t *testing.T) {
+func TestHomeValueUsesCanonicalVariableOnly(t *testing.T) {
 	t.Setenv(envconfig.Home, "  canonical  ")
-	t.Setenv(envconfig.LegacyHome, "legacy")
+	t.Setenv("PROTON_HOME", "legacy")
 	if got := envconfig.Value(envconfig.Home); got != "canonical" {
 		t.Fatalf("Value(Home) = %q, want canonical", got)
 	}
 
 	t.Setenv(envconfig.Home, "")
-	if got := envconfig.Value(envconfig.Home); got != "legacy" {
-		t.Fatalf("Value(Home) legacy fallback = %q, want legacy", got)
+	if got := envconfig.Value(envconfig.Home); got != "" {
+		t.Fatalf("Value(Home) = %q, want no legacy fallback", got)
 	}
 }
 

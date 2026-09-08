@@ -208,7 +208,7 @@ func TestProjectPaneDistinguishesDetectedFromLoadedConfig(t *testing.T) {
 func TestUserConfigSetSubagentsPersistsAndApplies(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	t.Setenv("PROTON_HOME", homeDir)
+	t.Setenv("PROTONMAN_HOME", homeDir)
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
 	defer coord.Close()
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
@@ -239,7 +239,7 @@ func TestUserConfigSetSubagentsPersistsAndApplies(t *testing.T) {
 func TestUserConfigDoesNotOverrideTrustedProjectSetting(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	t.Setenv("PROTON_HOME", homeDir)
+	t.Setenv("PROTONMAN_HOME", homeDir)
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
 	defer coord.Close()
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)

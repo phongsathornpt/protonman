@@ -11,7 +11,6 @@ import (
 func TestResolveExplicitHomeUsesProtonmanRoot(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv(envconfig.Home, filepath.Join(t.TempDir(), "ignored"))
-	t.Setenv(envconfig.LegacyHome, filepath.Join(t.TempDir(), "legacy-ignored"))
 
 	dirs, err := Resolve(home)
 	if err != nil {
@@ -47,7 +46,6 @@ func TestResolveIgnoresLegacyProtonDirectory(t *testing.T) {
 func TestResolveEnvironmentHomeUsesProtonmanRoot(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv(envconfig.Home, home)
-	t.Setenv(envconfig.LegacyHome, filepath.Join(t.TempDir(), "legacy"))
 
 	dirs, err := Resolve("")
 	if err != nil {

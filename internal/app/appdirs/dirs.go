@@ -34,11 +34,7 @@ type Dirs struct {
 func Resolve(explicitHome string) (Dirs, error) {
 	home := strings.TrimSpace(explicitHome)
 	if home == "" {
-		if configured := envconfig.DirectValue(envconfig.Home); configured != "" {
-			home = configured
-		} else if legacy := envconfig.DirectValue(envconfig.LegacyHome); legacy != "" {
-			home = legacy
-		}
+		home = envconfig.DirectValue(envconfig.Home)
 	}
 	if home == "" {
 		resolved, err := os.UserHomeDir()
@@ -78,7 +74,7 @@ func pathEntryExists(path string) bool {
 }
 
 func displayPath(path string) string {
-	if envconfig.DirectValue(envconfig.Home) != "" || envconfig.DirectValue(envconfig.LegacyHome) != "" {
+	if envconfig.DirectValue(envconfig.Home) != "" {
 		return path
 	}
 	home, err := os.UserHomeDir()

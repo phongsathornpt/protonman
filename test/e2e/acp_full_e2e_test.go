@@ -22,7 +22,7 @@ func TestE2EACPErrorsAndMethods(t *testing.T) {
 
 	cmd := exec.CommandContext(ctx, protonBin, "--acp", "-y")
 	cmd.Dir = ws
-	cmd.Env = append(os.Environ(), "PROTON_HOME="+home)
+	cmd.Env = append(os.Environ(), "PROTONMAN_HOME="+home)
 	if coverDir != "" {
 		cmd.Env = append(cmd.Env, "GOCOVERDIR="+coverDir)
 	}

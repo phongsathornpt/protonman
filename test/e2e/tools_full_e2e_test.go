@@ -10,7 +10,7 @@ import (
 func TestE2EFullBuiltinTools(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
-	env := []string{"PROTON_HOME=" + home}
+	env := []string{"PROTONMAN_HOME=" + home}
 
 	// 1. read_file byte pagination returns a usable continuation offset.
 	res := runProton(t, runOptions{
@@ -107,7 +107,7 @@ func TestE2EWebFetchTool(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call web_fetch {"url":"http://127.0.0.1:8080/internal-data"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode == 0 {
 		t.Fatalf("expected loopback web_fetch to fail, got exit 0: %s", res.stdout)

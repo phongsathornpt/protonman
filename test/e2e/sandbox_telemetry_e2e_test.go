@@ -13,7 +13,7 @@ func TestE2ESandboxReadOnlyWriteRejection(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"--sandbox", "read-only", "-y", "-p", `/call bash {"command":"touch read_only_probe.txt"}`},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	// On systems with launcher confinement, touch will fail with read-only filesystem or non-zero exit
 	_ = res
@@ -26,7 +26,7 @@ func TestE2ESandboxInvalidProfileRejection(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"--sandbox", "invalid-profile-xyz", "-p", "test"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode == 0 {
 		t.Fatalf("expected invalid sandbox profile to fail, got exit 0")
@@ -45,7 +45,7 @@ func TestE2ETelemetryExplicitOff(t *testing.T) {
 		args: []string{"-y", "-p", `/call bash {"command":"echo 'telem-off'"}`},
 		dir:  ws,
 		env: []string{
-			"PROTON_HOME=" + home,
+			"PROTONMAN_HOME=" + home,
 			"PROTON_TELEMETRY=off",
 		},
 	})

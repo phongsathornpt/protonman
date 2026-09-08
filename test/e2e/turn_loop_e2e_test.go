@@ -19,7 +19,7 @@ func TestE2ETurnLoopSingleTurnText(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Say hello to me"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("turn loop failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)
@@ -44,7 +44,7 @@ func TestE2ETurnLoopToolCallAndResultCycle(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Create agent_output.txt"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("tool call loop failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)
@@ -81,7 +81,7 @@ func TestE2ETurnLoopMultiRoundChain(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Inspect workspace and report content"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("multi-round chain failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)
@@ -115,7 +115,7 @@ func TestE2ETurnLoopContinuesBeyondLegacyRoundLimit(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Inspect every round file and report when complete"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("long multi-round turn failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)
@@ -144,7 +144,7 @@ func TestE2ETurnLoopSessionResumption(t *testing.T) {
 	res1 := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Remember the secret purple-elephant"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res1.exitCode != 0 || !strings.Contains(res1.stdout, "purple-elephant") {
 		t.Fatalf("turn 1 failed: %s %s", res1.stdout, res1.stderr)
@@ -155,7 +155,7 @@ func TestE2ETurnLoopSessionResumption(t *testing.T) {
 	res2 := runProton(t, runOptions{
 		args: []string{"-y", "-r", "-p", "What was the secret?"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res2.exitCode != 0 || !strings.Contains(res2.stdout, "purple-elephant") {
 		t.Fatalf("turn 2 resume failed: %s %s", res2.stdout, res2.stderr)
@@ -175,7 +175,7 @@ func TestE2ETurnLoopForcesSynthesisAfterRepeatedRead(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Read hello.txt until you can answer"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("semantic loop synthesis failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)
@@ -212,7 +212,7 @@ func TestE2ETurnLoopIgnoresRepeatedToolAfterLoopDetected(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Keep reading hello.txt"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("ignored loop call failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)
@@ -241,7 +241,7 @@ func TestE2EResumeCompactsHistoricalToolProtocol(t *testing.T) {
 	res1 := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Inspect hello.txt"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res1.exitCode != 0 {
 		t.Fatalf("initial tool turn failed: %s %s", res1.stdout, res1.stderr)
@@ -251,7 +251,7 @@ func TestE2EResumeCompactsHistoricalToolProtocol(t *testing.T) {
 	res2 := runProton(t, runOptions{
 		args: []string{"-y", "-r", "-p", "What did you inspect?"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res2.exitCode != 0 {
 		t.Fatalf("resumed tool turn failed: %s %s", res2.stdout, res2.stderr)
@@ -349,7 +349,7 @@ func TestE2ETurnLoopSuppressesDeadCallInsideProductiveBatch(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Inspect several files without repeating dead work"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("mixed batch loop failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)
@@ -381,7 +381,7 @@ func TestE2EBashExit128IsCommandFailure(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Run the diagnostic command and explain the failure"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("bash exit-128 turn failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)
@@ -411,7 +411,7 @@ func TestE2EGetTodoAcceptsEmptyProviderArguments(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Read the current task plan"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("get_todo empty-argument turn failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)

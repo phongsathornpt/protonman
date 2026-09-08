@@ -13,7 +13,7 @@ func TestE2ETUIWithoutForcedTTYFails(t *testing.T) {
 	res := runProton(t, runOptions{
 		args: []string{},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home},
+		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode == 0 {
 		t.Fatalf("expected non-zero exit when launching TUI without terminal, got 0")

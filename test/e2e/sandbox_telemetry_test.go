@@ -18,7 +18,7 @@ func TestE2ESandboxFlagNetworkRestriction(t *testing.T) {
 			"-p", `/call web_fetch {"url":"http://example.com"}`,
 		},
 		dir: ws,
-		env: []string{"PROTON_HOME=" + home},
+		env: []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode == 0 {
 		t.Fatalf("expected strict sandbox to block web_fetch, got exit 0: %s", res.stdout)
@@ -41,7 +41,7 @@ func TestE2ESandboxWorkspaceCommandExecution(t *testing.T) {
 			"-p", `/call bash {"command":"pwd"}`,
 		},
 		dir: ws,
-		env: []string{"PROTON_HOME=" + home},
+		env: []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("workspace sandbox failed (code %d): %s\n%s", res.exitCode, res.stdout, res.stderr)
@@ -59,7 +59,7 @@ func TestE2ETelemetryEmissionAndRedaction(t *testing.T) {
 		args: []string{"-y", "-p", `/call read_file {"path":"hello.txt"}`},
 		dir:  ws,
 		env: []string{
-			"PROTON_HOME=" + home,
+			"PROTONMAN_HOME=" + home,
 			"PROTON_TELEMETRY=stderr",
 		},
 	})

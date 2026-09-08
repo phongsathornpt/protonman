@@ -54,7 +54,7 @@ reasoning_effort = "low"
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Delegate inspection of hello.txt and report the result"},
 		dir:  ws,
-		env:  []string{"PROTON_HOME=" + home, "PROTON_TRUST_PROJECT=1"},
+		env:  []string{"PROTONMAN_HOME=" + home, "PROTON_TRUST_PROJECT=1"},
 	})
 	if res.exitCode != 0 {
 		t.Fatalf("proton failed: stdout=%s stderr=%s", res.stdout, res.stderr)
