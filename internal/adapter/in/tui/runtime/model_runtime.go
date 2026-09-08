@@ -354,6 +354,10 @@ func (m *bubbleModel) reconfigureRunner() {
 		}
 	}
 	if !hasValidAuth {
+		m.runner = nil
+		if m.bottom != nil {
+			m.bottom.setHasRunner(false)
+		}
 		return
 	}
 	sessID := m.sessionID
@@ -365,7 +369,15 @@ func (m *bubbleModel) reconfigureRunner() {
 		remote = &resolved
 	}
 	conversation, err := app.BuildConversation(m.service, m.skills, m.agents, app.ConversationSpec{ProviderName: provName, ProviderType: prov.Type, BaseURL: prov.BaseURL, APIKey: prov.APIKey, ModelID: m.activeModel, SessionID: sessID, Workspace: m.workDir, AgentProfile: m.agentProfile, ReasoningEffort: m.reasoningEffort, MaxToolCalls: m.maxToolCalls, RequestTimeout: m.runtimeConfig.ModelRequestTimeout, TurnTimeout: m.runtimeConfig.TurnTimeout, RoundTimeout: m.runtimeConfig.RoundTimeout, RemoteModel: remote})
-	if err == nil && conversation != nil {
+	if err != nil {
+		m.appendError("failed to configure model runner: " + err.Error())
+		m.runner = nil
+		if m.bottom != nil {
+			m.bottom.setHasRunner(false)
+		}
+		return
+	}
+	if conversation != nil {
 		m.runner = conversation
 		if m.bottom != nil {
 			m.bottom.setHasRunner(true)
@@ -885,6 +897,15 @@ func (m *bubbleModel) updateModelSelected(message modelSelectedMsg) (tea.Model, 
 		m.activeModel = message.modelID
 		if message.providerName != "" {
 			m.activeProvider = message.providerName
+		}
+		if m.reasoningEffort != sdk.ReasoningDefault {
+			profile := m.activeResolvedModelProfile()
+			if _, err := profile.ResolveExplicitReasoning(m.reasoningEffort); err != nil {
+				previous := m.reasoningEffort
+				m.reasoningEffort = sdk.ReasoningDefault
+				m.agents.SetReasoningEffort(sdk.ReasoningDefault)
+				m.appendLine(mutedStyle.Render(fmt.Sprintf("  Reset thinking level to auto (previous level %q is unsupported by %s)", previous, message.modelID)))
+			}
 		}
 		m.reconfigureRunner()
 		m.appendLine(successStyle.Render(fmt.Sprintf("✓ Active model set to %s (%s)", message.modelID, m.activeProvider)))

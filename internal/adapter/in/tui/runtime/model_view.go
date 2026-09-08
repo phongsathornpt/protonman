@@ -812,7 +812,7 @@ func (m *bubbleModel) setReasoningEffort(effort sdk.ReasoningEffort) tea.Cmd {
 	m.reasoningEffort = effort
 	m.agents.SetReasoningEffort(effort)
 	m.reconfigureRunner()
-	m.appendLine(successStyle.Render("Thinking level set to " + reasoningEffortLabel(effort) + "."))
+	m.appendLine(successStyle.Render("Thinking level set to " + reasoningEffortLabel(effort) + " for this session."))
 	m.refreshViewport()
 	return nil
 }

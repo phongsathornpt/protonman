@@ -8,12 +8,14 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	domainmodel "github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"strings"
 	"testing"
 	"time"
@@ -894,5 +896,48 @@ func TestPlanModeAllowsTaskMetadataButBlocksWorkspaceEdit(t *testing.T) {
 				t.Fatalf("task metadata blocked in plan mode: %v", err)
 			}
 		})
+	}
+}
+
+func TestModelSelect_ReconcilesIncompatibleReasoningEffort(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.activeProvider = "openai"
+	bModel.activeModel = "o3-mini"
+	bModel.reasoningEffort = sdk.ReasoningHigh
+	bModel.providers = map[string]config.ProviderConfig{
+		"openai": {Name: "openai", BaseURL: "https://api.openai.com/v1", APIKey: "test-key"},
+	}
+	// Populate catalog entry for gpt-4o declaring no reasoning support
+	noReasoning := false
+	bModel.modelCatalogs.set("openai", []domainmodel.RemoteModel{
+		{ID: "gpt-4o", Reasoning: &modelprofile.CatalogReasoning{Supported: &noReasoning}},
+	})
+
+	// Switch to gpt-4o which does not support reasoning
+	msg := modelSelectedMsg{
+		providerName: "openai",
+		modelID:      "gpt-4o",
+	}
+	updated, _ := bModel.Update(msg)
+	bModel = updated.(*bubbleModel)
+
+	if bModel.activeModel != "gpt-4o" {
+		t.Fatalf("activeModel = %q, want gpt-4o", bModel.activeModel)
+	}
+	if bModel.reasoningEffort != sdk.ReasoningDefault {
+		t.Fatalf("reasoningEffort was not reset to auto: got %q", bModel.reasoningEffort)
+	}
+}
+
+func TestReconfigureRunner_InvalidatesRunnerOnError(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.activeProvider = "openai"
+	bModel.activeModel = "non-existent-model"
+	bModel.providers = map[string]config.ProviderConfig{
+		"openai": {Name: "openai", BaseURL: "https://api.openai.com/v1", APIKey: ""}, // empty key -> no auth
+	}
+	bModel.reconfigureRunner()
+	if bModel.runner != nil {
+		t.Fatal("expected runner to be nil when provider lacks valid auth")
 	}
 }
