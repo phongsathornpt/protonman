@@ -63,8 +63,18 @@ func (c *Coordinator) broadcast(ev Event) {
 	}
 }
 
-func (c *Coordinator) emit(_ context.Context, ev Event) {
+func (c *Coordinator) emit(ctx context.Context, ev Event) {
 	c.recordActivity(ev)
+	switch ev.Kind {
+	case EventAgentCompleted:
+		c.observeMetric(ctx, MetricEvent{Kind: MetricCompleted, AgentID: ev.AgentID, ParentID: ev.ParentID, Profile: ev.Profile})
+	case EventAgentFailed:
+		kind := MetricFailed
+		if status, ok := c.Get(ev.AgentID); ok && status.State == StateCanceled {
+			kind = MetricCanceled
+		}
+		c.observeMetric(ctx, MetricEvent{Kind: kind, AgentID: ev.AgentID, ParentID: ev.ParentID, Profile: ev.Profile})
+	}
 	c.broadcast(ev)
 	if c.eventSink == nil || ev.Kind == EventAgentProgress {
 		return

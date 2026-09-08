@@ -161,6 +161,7 @@ type Coordinator struct {
 	closeTimeout        time.Duration
 	eventSink           EventSink
 	runnerFactory       RunnerFactory
+	metricObserver      MetricObserver
 	eventQueue          chan Event
 	closeOnce           sync.Once
 	closeDone           chan struct{}

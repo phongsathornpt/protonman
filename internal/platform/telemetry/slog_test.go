@@ -109,3 +109,31 @@ func TestSlogObserverCountsRecoveryLifecycle(t *testing.T) {
 		t.Fatalf("recovery action missing from log: %s", logLine)
 	}
 }
+
+func TestSlogObserverCountsRedactedAgentLifecycle(t *testing.T) {
+	var output bytes.Buffer
+	observer, err := NewSlogObserver(slog.New(slog.NewJSONHandler(&output, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"agent_wait_timeout", "agent_completed", "agent_failed", "agent_interrupted", "agent_resumed", "agent_persistence_failure"} {
+		observer.ObserveAgent(context.Background(), kind, "strength-7", "turn-4", "strength")
+	}
+	counters := observer.Counters()
+	for _, metric := range []string{"agent_wait_timeout_total", "agent_completed_total", "agent_failed_total", "agent_interrupted_total", "agent_resumed_total", "agent_persistence_failure_total"} {
+		if counters[metric] != 1 {
+			t.Fatalf("%s = %d, want 1; counters=%#v", metric, counters[metric], counters)
+		}
+	}
+	logLine := output.String()
+	for _, expected := range []string{`"event_kind":"agent_resumed"`, `"agent_id":"strength-7"`, `"parent_id":"turn-4"`, `"profile":"strength"`} {
+		if !strings.Contains(logLine, expected) {
+			t.Fatalf("agent log missing %q: %s", expected, logLine)
+		}
+	}
+	for _, forbidden := range []string{"task text", "tool arguments", "model output"} {
+		if strings.Contains(logLine, forbidden) {
+			t.Fatalf("agent log contains forbidden value %q: %s", forbidden, logLine)
+		}
+	}
+}

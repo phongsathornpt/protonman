@@ -132,6 +132,31 @@ func protectionMetric(kind toolcall.ProtectionEventKind) string {
 	}
 }
 
+// ObserveAgent records one redacted subagent orchestration event and its counter.
+func (o *SlogObserver) ObserveAgent(ctx context.Context, kind, agentID, parentID, profile string) {
+	if o == nil {
+		return
+	}
+	metric := kind + "_total"
+	switch kind {
+	case "agent_wait_timeout", "agent_completed", "agent_failed", "agent_canceled", "agent_interrupted", "agent_resumed", "agent_persistence_failure":
+		o.increment(metric)
+	default:
+		return
+	}
+	attrs := []slog.Attr{slog.String("event_kind", kind)}
+	if agentID != "" {
+		attrs = append(attrs, slog.String("agent_id", agentID))
+	}
+	if parentID != "" {
+		attrs = append(attrs, slog.String("parent_id", parentID))
+	}
+	if profile != "" {
+		attrs = append(attrs, slog.String("profile", profile))
+	}
+	o.logger.LogAttrs(ctx, slog.LevelInfo, "protonman agent event", attrs...)
+}
+
 func (o *SlogObserver) increment(name string) {
 	o.mu.Lock()
 	o.counters[name]++

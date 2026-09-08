@@ -111,6 +111,14 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	if err != nil {
 		return nil, fmt.Errorf("create session store: %w", err)
 	}
+	observer, err := configuredTelemetryObserver()
+	if err != nil {
+		return nil, err
+	}
+	type agentTelemetryObserver interface {
+		ObserveAgent(context.Context, string, string, string, string)
+	}
+	agentTelemetry, _ := observer.(agentTelemetryObserver)
 	sessionID, state, found, err := resolveSession(ctx, stateStore, workDir, options)
 	if err != nil {
 		return nil, err
@@ -127,6 +135,11 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		agent.WithMaxLiveAgents(loadedConfig.Agent.MaxLiveSubagents),
 		agent.WithMaxRetainedAgents(loadedConfig.Agent.MaxRetainedSubagents),
 		agent.WithResultTTL(loadedConfig.Agent.CompletedResultTTL),
+		agent.WithMetricObserver(func(metricCtx context.Context, ev agent.MetricEvent) {
+			if agentTelemetry != nil {
+				agentTelemetry.ObserveAgent(metricCtx, string(ev.Kind), ev.AgentID, ev.ParentID, string(ev.Profile))
+			}
+		}),
 		agent.WithEventSink(func(eventCtx context.Context, ev agent.Event) error {
 			slog.Debug("subagent lifecycle event", "kind", ev.Kind, "agent_id", ev.AgentID, "parent_id", ev.ParentID, "profile", ev.Profile, "duration", ev.Duration, "err", ev.Err)
 			if ev.Kind == agent.EventAgentProgress || coordinator == nil {
@@ -136,6 +149,9 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 			defer done()
 			if err := stateStore.SaveAgents(persistCtx, sessionID, coordinator.PersistentSnapshot()); err != nil {
 				slog.Warn("persist subagent lifecycle state", "session_id", sessionID, "error", err)
+				if agentTelemetry != nil {
+					agentTelemetry.ObserveAgent(persistCtx, "agent_persistence_failure", ev.AgentID, ev.ParentID, string(ev.Profile))
+				}
 			}
 			return nil
 		}),
@@ -237,10 +253,6 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		toolcall.WithPermissionTimeout(loadedConfig.Runtime.ToolPermissionTimeout),
 		toolcall.WithExecutionTimeout(loadedConfig.Runtime.ToolExecutionTimeout),
 		toolcall.WithWorkspaceMutationGate(workspaceRoot),
-	}
-	observer, err := configuredTelemetryObserver()
-	if err != nil {
-		return nil, err
 	}
 	if observer != nil {
 		serviceOptions = append(serviceOptions, toolcall.WithObserver(observer))

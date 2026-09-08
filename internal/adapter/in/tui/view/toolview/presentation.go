@@ -29,7 +29,7 @@ func ExtractTarget(name string, kind tool.Kind, args json.RawMessage) (string, t
 
 func IsAgentLifecycleTool(name string) bool {
 	switch name {
-	case "wait_agent", "get_agent", "list_agents", "cancel_agent":
+	case "wait_agent", "get_agent", "list_agents", "cancel_agent", "resume_agent":
 		return true
 	default:
 		return false
@@ -193,6 +193,12 @@ func summarizeAgentTool(name, body string) string {
 		return joinAgentCompletionSummary(id, status, resultSummary)
 	case "cancel_agent":
 		return fmt.Sprintf("cancel requested · %s", id)
+	case "resume_agent":
+		from, _ := payload["resumed_from"].(string)
+		if from != "" && id != "" {
+			return fmt.Sprintf("resumed %s as %s · %s", from, id, status)
+		}
+		return joinAgentCompletionSummary(id, status, resultSummary)
 	default:
 		if id != "" {
 			return fmt.Sprintf("%s · %s", id, status)
