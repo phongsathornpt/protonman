@@ -109,7 +109,10 @@ func (m *bubbleModel) syncPromptHeight() {
 	if lines > 4 {
 		lines = 4
 	}
-	prompt.SetHeight(lines)
+	if prompt.Height() != lines {
+		m.composerDirty = true
+		prompt.SetHeight(lines)
+	}
 }
 
 func (m *bubbleModel) resize(width int, height int) {
@@ -122,6 +125,7 @@ func (m *bubbleModel) resize(width int, height int) {
 	m.width = width
 	m.height = height
 	prompt := m.bottom.prompt()
+	m.composerDirty = true
 	prompt.SetWidth(maxInt(1, width-4))
 	m.syncPromptHeight()
 	m.transcriptViewport.Width = maxInt(1, width-10)
@@ -155,7 +159,12 @@ func (m *bubbleModel) buildFrameChrome() frameChrome {
 	frame.status = m.statusView()
 	frame.top = m.bottom.renderTop(m)
 	if m.bottom.composerVisible() {
-		frame.composer = m.promptView()
+		if m.frameChrome.generation != 0 && !m.composerDirty && m.frameChrome.composer != "" {
+			frame.composer = m.frameChrome.composer
+		} else {
+			frame.composer = m.promptView()
+			m.composerDirty = false
+		}
 	}
 	frame.footer = m.footerView()
 	for _, part := range []string{frame.todo, frame.agents, frame.status, frame.top, frame.composer} {
@@ -203,6 +212,7 @@ type viewportScrollSnapshot struct {
 
 func (m *bubbleModel) relayout() {
 	scroll := m.captureViewportScroll()
+	m.composerDirty = true
 	m.syncPromptHeight()
 	m.applyFrameLayout(scroll, m.buildFrameChrome())
 }
@@ -215,8 +225,11 @@ func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame fram
 	if viewportHeight < 1 {
 		viewportHeight = 1
 	}
-	m.viewport.Width = m.width
-	m.viewport.Height = viewportHeight
+	if m.viewport.Width != m.width || m.viewport.Height != viewportHeight {
+		m.viewport.Width = m.width
+		m.viewport.Height = viewportHeight
+		m.markViewportViewDirty()
+	}
 	m.refreshViewportWithScroll(scroll)
 }
 
@@ -274,6 +287,7 @@ func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
 
 func (m *bubbleModel) setViewportContent(content string, fullHistory bool) {
 	m.viewport.SetContent(content)
+	m.markViewportViewDirty()
 	m.viewportStaleTail = false
 	m.viewportLineAnchors = nil
 	if m.historyState != nil {
@@ -314,7 +328,11 @@ func (m *bubbleModel) captureViewportScroll() viewportScrollSnapshot {
 
 func (m *bubbleModel) restoreViewportScroll(scroll viewportScrollSnapshot) {
 	if scroll.follow {
+		before := m.viewport.YOffset
 		m.viewport.GotoBottom()
+		if m.viewport.YOffset != before {
+			m.markViewportViewDirty()
+		}
 		m.followTail = true
 		return
 	}
@@ -325,7 +343,10 @@ func (m *bubbleModel) restoreViewportScroll(scroll viewportScrollSnapshot) {
 			yOffset = m.historyViewportPrefixLines() + historyLine
 		}
 	}
-	m.viewport.SetYOffset(yOffset)
+	if m.viewport.YOffset != yOffset {
+		m.viewport.SetYOffset(yOffset)
+		m.markViewportViewDirty()
+	}
 }
 
 func (m *bubbleModel) historyViewportPrefixLines() int {
@@ -368,9 +389,27 @@ func (m *bubbleModel) View() string {
 	return base
 }
 
+func (m *bubbleModel) markViewportViewDirty() {
+	if m != nil {
+		m.viewportViewDirty = true
+	}
+}
+
+func (m *bubbleModel) renderedViewport() string {
+	if m == nil {
+		return ""
+	}
+	if !m.viewportViewDirty && m.viewportViewCache != "" {
+		return m.viewportViewCache
+	}
+	m.viewportViewCache = m.viewport.View()
+	m.viewportViewDirty = false
+	return m.viewportViewCache
+}
+
 func (m *bubbleModel) liveView() string {
 	frame := m.frameChromeForView()
-	parts := []string{m.viewport.View()}
+	parts := []string{m.renderedViewport()}
 	for _, part := range []string{frame.todo, frame.agents, frame.status, frame.top, frame.composer} {
 		if part != "" {
 			parts = append(parts, part)
