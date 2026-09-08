@@ -45,6 +45,7 @@ api_key = "fast-key"
 	projectConfig := `[agent.subagents.agility]
 provider = "fast"
 model = "agility-model"
+reasoning_effort = "low"
 `
 	if err := os.WriteFile(filepath.Join(projectDir, "config.toml"), []byte(projectConfig), 0o644); err != nil {
 		t.Fatalf("write project config: %v", err)
@@ -67,6 +68,9 @@ model = "agility-model"
 		if got, _ := request["model"].(string); got != "agility-model" {
 			t.Fatalf("child request %d model = %q, want agility-model", i, got)
 		}
+		if got, _ := request["reasoning_effort"].(string); got != "low" {
+			t.Fatalf("child request %d reasoning_effort = %q, want low", i, got)
+		}
 	}
 
 	primaryRequests := primary.Requests()
@@ -76,6 +80,9 @@ model = "agility-model"
 	for i, request := range primaryRequests {
 		if got, _ := request["model"].(string); got != "universal-model" {
 			t.Fatalf("primary request %d model = %q, want universal-model", i, got)
+		}
+		if got, exists := request["reasoning_effort"]; exists {
+			t.Fatalf("primary request %d unexpectedly inherited child reasoning: %#v", i, got)
 		}
 	}
 }
