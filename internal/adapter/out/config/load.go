@@ -50,6 +50,7 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 		Providers:      make(map[string]ProviderConfig),
 		Agent: AgentConfig{
 			SubagentsEnabled:     true,
+			Subagents:            make(map[string]SubagentModelConfig),
 			MaxToolCalls:         DefaultMaxToolCalls,
 			MaxLiveSubagents:     DefaultMaxLiveSubagents,
 			MaxRetainedSubagents: DefaultMaxRetainedSubagents,

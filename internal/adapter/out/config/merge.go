@@ -66,6 +66,22 @@ func mergeDocument(document fileDocument, snapshot *Snapshot, source ValueSource
 		snapshot.Agent.SubagentsEnabled = *document.Agent.SubagentsEnabled
 		snapshot.Provenance[FieldAgentSubagentsEnabled] = source
 	}
+	if len(document.Agent.Subagents) > 0 {
+		if snapshot.Agent.Subagents == nil {
+			snapshot.Agent.Subagents = make(map[string]SubagentModelConfig)
+		}
+		for profile, raw := range document.Agent.Subagents {
+			if !validSubagentModelProfile(profile) {
+				return fmt.Errorf("agent.subagents.%s: unsupported profile; expected strength, agility, or intelligence", profile)
+			}
+			provider := strings.TrimSpace(raw.Provider)
+			modelID := strings.TrimSpace(raw.Model)
+			if provider == "" || modelID == "" {
+				return fmt.Errorf("agent.subagents.%s: provider and model must both be set", profile)
+			}
+			snapshot.Agent.Subagents[profile] = SubagentModelConfig{Provider: provider, Model: modelID}
+		}
+	}
 	if document.Agent.MaxToolCalls != nil {
 		if *document.Agent.MaxToolCalls < 0 {
 			return fmt.Errorf("agent.max_tool_calls must be non-negative")
@@ -199,4 +215,13 @@ func decodeRule(raw fileRule) (permission.Rule, error) {
 		Pattern:     raw.Pattern,
 		PatternMode: patternMode,
 	}, nil
+}
+
+func validSubagentModelProfile(profile string) bool {
+	switch profile {
+	case "strength", "agility", "intelligence":
+		return true
+	default:
+		return false
+	}
 }
