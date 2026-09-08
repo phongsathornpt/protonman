@@ -82,7 +82,7 @@ func TestBashRedirectsSimpleInspectionCommands(t *testing.T) {
 		args    map[string]any
 	}{
 		{`cat "main.go"`, "read", map[string]any{"path": "main.go"}},
-		{`ls internal`, "list_dir", map[string]any{"path": "internal"}},
+		{`ls internal`, "ls", map[string]any{"path": "internal"}},
 		{`rg "TODO" internal`, "grep", map[string]any{"pattern": "TODO", "path": "internal"}},
 		{`grep -R "TODO" internal`, "grep", map[string]any{"pattern": "TODO", "path": "internal"}},
 		{`find internal -name '*.go' -type f -maxdepth 3`, "find_files", map[string]any{
@@ -145,8 +145,8 @@ func TestBashRedirectsRuntimeDiscoveryScripts(t *testing.T) {
 	}{
 		{`python3 -c 'from pathlib import Path; print(list(Path("internal").rglob("*.go")))'`, "find_files", "internal"},
 		{`python3 -c 'import os; print(list(os.walk("internal")))'`, "find_files", "internal"},
-		{`python3 -c 'from pathlib import Path; print(list(Path("internal").iterdir()))'`, "list_dir", "internal"},
-		{`node -e 'console.log(fs.readdirSync("internal"))'`, "list_dir", "internal"},
+		{`python3 -c 'from pathlib import Path; print(list(Path("internal").iterdir()))'`, "ls", "internal"},
+		{`node -e 'console.log(fs.readdirSync("internal"))'`, "ls", "internal"},
 	}
 	for _, test := range tests {
 		t.Run(test.command, func(t *testing.T) {

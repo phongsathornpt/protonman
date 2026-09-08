@@ -128,8 +128,8 @@ func dedicatedNodeTool(command string) *dedicatedToolSuggestion {
 	if strings.Contains(lower, "readdirsync(") || strings.Contains(lower, "readdir(") {
 		if path := firstPatternGroup(nodeReadDirPattern, command); path != "" {
 			return &dedicatedToolSuggestion{
-				tool: "list_dir", args: map[string]any{"path": path},
-				reason: "directory inspection is available through list_dir",
+				tool: "ls", args: map[string]any{"path": path},
+				reason: "directory inspection is available through ls",
 			}
 		}
 	}

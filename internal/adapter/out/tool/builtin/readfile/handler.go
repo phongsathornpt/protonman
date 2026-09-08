@@ -97,13 +97,13 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 		_ = file.Close()
 		recoveryArgs, marshalErr := json.Marshal(map[string]any{"path": input.Path})
 		if marshalErr != nil {
-			return tool.Result{}, fmt.Errorf("encode list_dir recovery for %q: %w", input.Path, marshalErr)
+			return tool.Result{}, fmt.Errorf("encode ls recovery for %q: %w", input.Path, marshalErr)
 		}
 		return tool.Result{}, tool.NewToolError(
 			tool.ErrorCodeInvalidArguments,
-			fmt.Sprintf("%q is a directory; use list_dir instead", input.Path),
+			fmt.Sprintf("%q is a directory; use ls instead", input.Path),
 		).WithRecovery(tool.Recovery{
-			Action: tool.RecoveryUseDedicatedTool, Tool: "list_dir", Arguments: recoveryArgs,
+			Action: tool.RecoveryUseDedicatedTool, Tool: "ls", Arguments: recoveryArgs,
 		})
 	}
 	if !fileInfo.Mode().IsRegular() {

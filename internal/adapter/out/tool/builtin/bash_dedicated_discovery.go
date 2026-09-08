@@ -34,8 +34,8 @@ func dedicatedPythonDiscoveryTool(command, lower string) *dedicatedToolSuggestio
 	}
 	if path := firstPatternGroup(pythonIterdirPattern, command); path != "" {
 		return &dedicatedToolSuggestion{
-			tool: "list_dir", args: map[string]any{"path": path},
-			reason: "directory inspection is available through list_dir",
+			tool: "ls", args: map[string]any{"path": path},
+			reason: "directory inspection is available through ls",
 		}
 	}
 	return nil

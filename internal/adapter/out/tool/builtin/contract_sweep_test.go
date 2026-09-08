@@ -27,7 +27,7 @@ func TestRegisteredBuiltinToolContracts(t *testing.T) {
 	}
 	expected := map[string]bool{
 		"read": true, "calculate": true, "bash": true, "write_file": true, "search_replace": true,
-		"apply_patch": true, "grep": true, "find_files": true, "list_dir": true, "git_status": true,
+		"apply_patch": true, "grep": true, "find_files": true, "ls": true, "git_status": true,
 		"checkpoint_restore": true, "web_fetch": true, "delegate_task": true,
 		"wait_agent": true, "get_agent": true, "list_agents": true, "cancel_agent": true, "resume_agent": true,
 		"get_todo": true, "update_todo": true, "activate_skill": true,
@@ -105,7 +105,7 @@ func TestOptionalZeroNumericArgumentsMatchOmittedSemantics(t *testing.T) {
 		badArgs  map[string]any
 	}{
 		{"read", map[string]any{"path": "x", "limit": 0}, map[string]any{"path": "x", "limit": -1}},
-		{"list_dir", map[string]any{"limit": 0}, map[string]any{"limit": -1}},
+		{"ls", map[string]any{"limit": 0}, map[string]any{"limit": -1}},
 		{"grep", map[string]any{"pattern": "x", "limit": 0}, map[string]any{"pattern": "x", "limit": -1}},
 		{"bash", map[string]any{"command": "true", "timeout_seconds": 0}, map[string]any{"command": "true", "timeout_seconds": -1}},
 		{"delegate_task", map[string]any{"task": "inspect", "profile": "agility", "timeout_seconds": 0}, map[string]any{"task": "inspect", "profile": "agility", "timeout_seconds": -1}},

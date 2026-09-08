@@ -297,7 +297,7 @@ Built-in workspace tools include:
 - `grep`
 - `inspect_code`
 - `find_files`
-- `list_dir`
+- `ls`
 - `bash`
 - `git_status`
 - `checkpoint_restore`

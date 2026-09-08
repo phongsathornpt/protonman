@@ -162,8 +162,8 @@ func TestReadFileDirectorySuggestsListDirRecovery(t *testing.T) {
 	if toolErr.Code != tool.ErrorCodeInvalidArguments {
 		t.Fatalf("error code = %q, want invalid_arguments", toolErr.Code)
 	}
-	if toolErr.Recovery == nil || toolErr.Recovery.Action != tool.RecoveryUseDedicatedTool || toolErr.Recovery.Tool != "list_dir" {
-		t.Fatalf("recovery = %#v, want list_dir dedicated-tool recovery", toolErr.Recovery)
+	if toolErr.Recovery == nil || toolErr.Recovery.Action != tool.RecoveryUseDedicatedTool || toolErr.Recovery.Tool != "ls" {
+		t.Fatalf("recovery = %#v, want ls dedicated-tool recovery", toolErr.Recovery)
 	}
 	var args map[string]any
 	if err := json.Unmarshal(toolErr.Recovery.Arguments, &args); err != nil {

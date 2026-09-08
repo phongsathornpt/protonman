@@ -224,7 +224,7 @@ func TestReadFileRejectsDirectory(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error reading directory, got nil")
 	}
-	if !strings.Contains(err.Error(), "is a directory; use list_dir instead") {
+	if !strings.Contains(err.Error(), "is a directory; use ls instead") {
 		t.Fatalf("unexpected error message: %v", err)
 	}
 }

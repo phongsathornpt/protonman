@@ -34,9 +34,9 @@ func NewListDir(workspaceRoot *workspace.Workspace) tool.Handler {
 
 func (listDirHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "list_dir",
+		Name:                "ls",
 		Description:         "List entries in a workspace directory. Prefer this over shell ls for directory inspection.",
-		Kind:                tool.KindForName("list_dir"),
+		Kind:                tool.KindForName("ls"),
 		Mutability:          tool.MutabilityReadOnly,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead},
 		Evidence:            tool.EvidenceWorkspace,
@@ -85,12 +85,12 @@ func (h listDirHandler) PermissionDetail(arguments json.RawMessage) string {
 
 func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	if h.workspace == nil {
-		return tool.Result{}, fmt.Errorf("list_dir workspace is required")
+		return tool.Result{}, fmt.Errorf("ls workspace is required")
 	}
 	call.Arguments = tool.NormalizeArguments(h.Definition(), call.Arguments)
 	var input listDirInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode list_dir arguments", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode ls arguments", err)
 	}
 
 	targetPath := strings.TrimSpace(input.Path)
@@ -98,10 +98,10 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 		targetPath = "."
 	}
 	if input.Offset < 0 {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "list_dir offset must be non-negative")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "ls offset must be non-negative")
 	}
 	if input.Limit < 0 || input.Limit > maxDirectoryEntries {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "list_dir limit must be between 1 and 1000")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "ls limit must be between 1 and 1000")
 	}
 	if input.Limit == 0 {
 		input.Limit = maxDirectoryEntries
@@ -116,14 +116,14 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 		return tool.Result{}, fmt.Errorf("list %q: %w", targetPath, err)
 	}
 
-	continuation, err := support.ContinuationToken("list_dir", struct {
+	continuation, err := support.ContinuationToken("ls", struct {
 		Path string `json:"path"`
 	}{Path: targetPath}, "")
 	if err != nil {
 		return tool.Result{}, err
 	}
 	if input.Continuation != "" && input.Continuation != continuation {
-		return tool.Result{}, support.StalePaginationError("list_dir", "list_dir continuation is stale; restart from offset 0", call.Arguments)
+		return tool.Result{}, support.StalePaginationError("ls", "ls continuation is stale; restart from offset 0", call.Arguments)
 	}
 
 	allocHint := len(entries)

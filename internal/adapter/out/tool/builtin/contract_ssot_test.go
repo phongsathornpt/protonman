@@ -60,7 +60,7 @@ func TestBuiltinToolSSOTContract(t *testing.T) {
 			titlePrefix:     "Patch config.json",
 		},
 		{
-			name:            "list_dir",
+			name:            "ls",
 			args:            map[string]any{"path": "cmd"},
 			wantKind:        tool.KindRead,
 			wantDisplayName: "List",

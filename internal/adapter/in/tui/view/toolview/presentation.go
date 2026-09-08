@@ -42,7 +42,7 @@ func KindGlyph(kind tool.Kind, name string) string {
 	case tool.KindWebFetch, tool.KindWebSearch:
 		return tuistyle.GlyphWeb
 	case tool.KindRead:
-		if name == "list_dir" {
+		if tool.CanonicalName(name) == "ls" {
 			return tuistyle.GlyphDir
 		}
 		if name == "git_status" {
@@ -97,7 +97,7 @@ func SummarizeOutput(name string, kind tool.Kind, target string, body string, ex
 	case tool.KindWebSearch:
 		return summarizeWebSearch(bodyTrimmed)
 	case tool.KindRead:
-		if name == "list_dir" {
+		if tool.CanonicalName(name) == "ls" {
 			return summarizeListDir(bodyTrimmed, truncated)
 		}
 		if name == "git_status" {

@@ -148,7 +148,7 @@ func toolFailureSuggestions(toolName string, code tool.ErrorCode) []string {
 	switch code {
 	case tool.ErrorCodeNotFound:
 		if tool.CanonicalName(toolName) == "read" {
-			suggestions = append(suggestions, "Verify workspace relative path spelling", "Use list_dir to inspect directory contents", "Use grep to locate the symbol or filename across the project")
+			suggestions = append(suggestions, "Verify workspace relative path spelling", "Use ls to inspect directory contents", "Use grep to locate the symbol or filename across the project")
 		}
 	case tool.ErrorCodeProtectedPath:
 		suggestions = append(suggestions, "This path is shielded by workspace protection rules")
