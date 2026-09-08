@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -395,6 +396,16 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 	default:
 		return false, nil
 	}
+}
+
+func formatContextTokens(tokens int) string {
+	if tokens >= 1000000 {
+		return fmt.Sprintf("%.1fM", float64(tokens)/1000000.0)
+	}
+	if tokens >= 1000 {
+		return fmt.Sprintf("%dK", tokens/1000)
+	}
+	return fmt.Sprintf("%d", tokens)
 }
 
 func formatModelTokenLimits(contextWindow, maxInput, maxOutput int) string {
