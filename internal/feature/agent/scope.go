@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -95,4 +96,65 @@ func (c *Coordinator) CancelByTurn(ref TurnRef) int {
 		cancel()
 	}
 	return len(cancels)
+}
+
+// CancelPolicy controls whether canceling a root turn also cancels owned children.
+type CancelPolicy uint8
+
+const (
+	CancelTurnOnly CancelPolicy = iota
+	CancelTurnAndChildren
+)
+
+// CancelTurn applies the shared root-turn cancellation policy for all adapters.
+func (c *Coordinator) CancelTurn(ref TurnRef, policy CancelPolicy) int {
+	if policy != CancelTurnAndChildren {
+		return 0
+	}
+	return c.CancelByTurn(ref)
+}
+
+// CancelSessionAndWait requests cancellation for every live child owned by one
+// session and waits until their runtimes have stopped or ctx is canceled.
+func (c *Coordinator) CancelSessionAndWait(ctx context.Context, sessionID string) (int, error) {
+	if c == nil {
+		return 0, ErrCoordinatorClosed
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return 0, fmt.Errorf("cancel session: session id is required")
+	}
+	c.agentsMu.Lock()
+	cancels := make([]func(), 0)
+	done := make([]<-chan struct{}, 0)
+	count := 0
+	for _, entry := range c.agents {
+		if entry.status.SessionID != sessionID || entry.status.State.Terminal() {
+			continue
+		}
+		done = append(done, entry.done)
+		if entry.status.State != StateCanceling {
+			if err := c.persistAndApplyTransition(ctx, entry, LifecycleAgentCancelRequested, time.Now(), "session canceled"); err != nil {
+				c.agentsMu.Unlock()
+				return count, err
+			}
+			count++
+		}
+		cancels = append(cancels, entry.cancel)
+	}
+	c.agentsMu.Unlock()
+	for _, cancel := range cancels {
+		cancel()
+	}
+	for _, stopped := range done {
+		select {
+		case <-stopped:
+		case <-ctx.Done():
+			return count, ctx.Err()
+		}
+	}
+	return count, nil
 }

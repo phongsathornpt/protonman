@@ -38,17 +38,19 @@ type Session struct {
 	registry        tool.Registry
 	runner          app.Conversation
 	sessionService  *app.Sessions
+	agents          app.Agents
 	reasoningEffort sdk.ReasoningEffort
 	mcpServers      []MCPServerConfig
 	resource        io.Closer
 
-	mu        sync.Mutex
-	messages  []model.Message
-	active    bool
-	cancelled bool
-	cancel    context.CancelFunc
-	nextID    uint64
-	promptSeq uint64
+	mu           sync.Mutex
+	messages     []model.Message
+	active       bool
+	cancelled    bool
+	cancel       context.CancelFunc
+	nextID       uint64
+	promptSeq    uint64
+	activeTurnID string
 }
 
 // NewSession creates an ACP session with its own conversation history and tools.
@@ -59,6 +61,7 @@ func NewSession(
 	registry tool.Registry,
 	runner app.Conversation,
 	sessionService *app.Sessions,
+	agents app.Agents,
 ) *Session {
 	reasoningEffort := sdk.ReasoningDefault
 	if effort, explicit := app.ReasoningPolicy(runner); explicit {
@@ -70,7 +73,7 @@ func NewSession(
 	}
 	return &Session{
 		id: id, cwd: cwd, workspaceKey: session.WorkspaceKey(cwd), workspaceName: workspaceName,
-		service: service, registry: registry, runner: runner, sessionService: sessionService,
+		service: service, registry: registry, runner: runner, sessionService: sessionService, agents: agents,
 		reasoningEffort: reasoningEffort, messages: make([]model.Message, 0),
 	}
 }
@@ -160,8 +163,10 @@ func (s *Session) ExecutePrompt(
 	promptCtx, cancel := context.WithCancel(ctx)
 	s.promptSeq++
 	promptSeq := s.promptSeq
-	promptCtx = agent.WithTurnRef(promptCtx, agent.TurnRef{SessionID: s.id, TurnID: fmt.Sprintf("acp-%s-turn-%d", s.id, promptSeq)})
+	turnID := fmt.Sprintf("acp-%s-turn-%d", s.id, promptSeq)
+	promptCtx = agent.WithTurnRef(promptCtx, agent.TurnRef{SessionID: s.id, TurnID: turnID})
 	s.active = true
+	s.activeTurnID = turnID
 	s.cancelled = false
 	s.cancel = cancel
 	s.mu.Unlock()
@@ -169,6 +174,7 @@ func (s *Session) ExecutePrompt(
 	defer func() {
 		s.mu.Lock()
 		s.active = false
+		s.activeTurnID = ""
 		s.cancel = nil
 		s.mu.Unlock()
 		cancel()
@@ -328,13 +334,23 @@ func (s *Session) ExecutePrompt(
 	return SessionPromptResult{StopReason: StopReasonEndTurn}, nil
 }
 
-// Cancel interrupts an active prompt turn.
+// Cancel interrupts an active prompt turn and its owned delegated children.
 func (s *Session) Cancel() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.active && s.cancel != nil {
-		s.cancelled = true
-		s.cancel()
+	if !s.active {
+		s.mu.Unlock()
+		return
+	}
+	s.cancelled = true
+	cancel := s.cancel
+	turnID := s.activeTurnID
+	agents := s.agents
+	s.mu.Unlock()
+	if turnID != "" {
+		agents.CancelTurn(turnID, agent.CancelTurnAndChildren)
+	}
+	if cancel != nil {
+		cancel()
 	}
 }
 
