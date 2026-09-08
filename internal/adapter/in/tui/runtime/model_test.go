@@ -1,0 +1,898 @@
+package runtime
+
+import (
+	"context"
+	"errors"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	domainmodel "github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/core/workspace"
+	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestModelCatalogStateScopesByProvider(t *testing.T) {
+	var state modelCatalogState
+	state.set("Provider-A", []model.RemoteModel{{ID: "a-1"}})
+	state.set("provider-b", []model.RemoteModel{{ID: "b-1"}})
+	if got := state.models("provider-a"); len(got) != 1 || got[0].ID != "a-1" {
+		t.Fatalf("provider-a catalog = %#v", got)
+	}
+	if got := state.models("PROVIDER-B"); len(got) != 1 || got[0].ID != "b-1" {
+		t.Fatalf("provider-b catalog = %#v", got)
+	}
+}
+
+func TestModelCatalogStateReturnsCopies(t *testing.T) {
+	var state modelCatalogState
+	state.set("provider", []model.RemoteModel{{ID: "original"}})
+	got := state.models("provider")
+	got[0].ID = "mutated"
+	if stored := state.models("provider"); stored[0].ID != "original" {
+		t.Fatalf("catalog mutation leaked into state: %#v", stored)
+	}
+}
+
+func TestModelPickerRejectsStaleProviderResponse(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.providers = map[string]config.ProviderConfig{"alpha": {Name: "alpha", APIKey: "a"}, "beta": {Name: "beta", APIKey: "b"}}
+	m.activeProvider = "alpha"
+	view := newModelSelectPaneView(m)
+	m.bottom.push(view)
+	view.fetchRequestID = 2
+	view.providerIndex = 1
+	updated, _ := m.Update(modelsFetchedMsg{providerName: "alpha", requestID: 1, models: []model.RemoteModel{{ID: "stale-alpha"}}})
+	m = updated.(*bubbleModel)
+	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if got := m.modelCatalogs.models("alpha"); len(got) != 0 {
+		t.Fatalf("stale alpha response mutated catalog: %#v", got)
+	}
+	if len(view.models) > 0 && view.models[0].ID == "stale-alpha" {
+		t.Fatalf("stale alpha response mutated beta picker: %#v", view.models)
+	}
+}
+
+func TestModelPickerAcceptsCurrentProviderResponse(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.providers = map[string]config.ProviderConfig{"alpha": {Name: "alpha", APIKey: "a"}, "beta": {Name: "beta", APIKey: "b"}}
+	m.activeProvider = "beta"
+	view := newModelSelectPaneView(m)
+	m.bottom.push(view)
+	view.fetchRequestID = 3
+	updated, _ := m.Update(modelsFetchedMsg{providerName: "beta", requestID: 3, models: []model.RemoteModel{{ID: "beta-model"}}})
+	m = updated.(*bubbleModel)
+	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if len(view.models) != 1 || view.models[0].ID != "beta-model" {
+		t.Fatalf("current response not applied: %#v", view.models)
+	}
+}
+
+func TestModelPickerLoadingHidesPreviousProviderModels(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.providers = map[string]config.ProviderConfig{"alpha": {Name: "alpha", APIKey: "a"}, "beta": {Name: "beta", APIKey: "b"}}
+	m.activeProvider = "alpha"
+	m.modelCatalogs.set("alpha", []model.RemoteModel{{ID: "alpha-only", Name: "Alpha Only"}})
+	view := newModelSelectPaneView(m)
+	m.bottom.push(view)
+	view.providerIndex = 1
+	_ = view.beginFetch(m.ctx, "beta", m.providers["beta"])
+	rendered := view.Render(m)
+	if !strings.Contains(rendered, "Loading models") {
+		t.Fatalf("loading state not rendered: %q", rendered)
+	}
+	if strings.Contains(rendered, "Alpha Only") {
+		t.Fatalf("previous provider model leaked into loading state: %q", rendered)
+	}
+}
+
+func TestModelPickerRendersFetchError(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	view := newModelSelectPaneView(m)
+	view.loading = false
+	view.err = errors.New("authentication failed (401)")
+	rendered := view.Render(m)
+	if !strings.Contains(rendered, "Failed to load models") || !strings.Contains(rendered, "authentication failed") {
+		t.Fatalf("error state not rendered: %q", rendered)
+	}
+}
+
+func TestModelPickerAcceptsEmptyCurrentCatalog(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.providers = map[string]config.ProviderConfig{"alpha": {Name: "alpha", APIKey: "a"}}
+	m.activeProvider = "alpha"
+	view := newModelSelectPaneView(m)
+	m.bottom.push(view)
+	view.fetchRequestID = 4
+	view.loading = true
+	updated, _ := m.Update(modelsFetchedMsg{providerName: "alpha", requestID: 4})
+	m = updated.(*bubbleModel)
+	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if view.loading || view.err != nil || len(view.models) != 0 {
+		t.Fatalf("empty current catalog state = loading:%t err:%v models:%#v", view.loading, view.err, view.models)
+	}
+}
+
+func TestModelPickerBeginFetchCancelsPreviousRequest(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	view := newModelSelectPaneView(m)
+	canceled := false
+	view.fetchCancel = func() {
+		canceled = true
+	}
+	_ = view.beginFetch(m.ctx, "protonman", config.ProviderConfig{Name: "protonman", APIKey: "key"})
+	if !canceled {
+		t.Fatal("previous model fetch was not canceled")
+	}
+	if view.fetchCancel == nil {
+		t.Fatal("new model fetch cancel function was not installed")
+	}
+}
+
+func TestModelPickerCloseCancelsFetch(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	view := newModelSelectPaneView(m)
+	m.bottom.push(view)
+	canceled := false
+	view.fetchCancel = func() {
+		canceled = true
+	}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(*bubbleModel)
+	if !canceled {
+		t.Fatal("closing model picker did not cancel fetch")
+	}
+	if m.bottom.has(modelSelectViewID) {
+		t.Fatal("model picker remained open after escape")
+	}
+}
+
+func TestModelPickerCustomProviderDoesNotUseProtonmanFallback(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.providers = map[string]config.ProviderConfig{"custom": {Name: "custom", BaseURL: "https://api.example.com/v1", APIKey: "key"}}
+	m.activeProvider = "custom"
+	view := newModelSelectPaneView(m)
+	if len(view.models) != 0 {
+		t.Fatalf("custom provider inherited fallback models: %#v", view.models)
+	}
+}
+
+func TestModelPickerResetSelectionAnchorsActiveModel(t *testing.T) {
+	view := &modelSelectPaneView{models: []model.RemoteModel{{ID: "one"}, {ID: "two"}, {ID: "three"}}}
+	view.index = 2
+	view.offset = 2
+	view.resetSelection("two")
+	if view.index != 1 || view.offset != 0 {
+		t.Fatalf("selection = index:%d offset:%d, want 1/0", view.index, view.offset)
+	}
+}
+
+func TestModelPickerResetSelectionFallsBackToFirstModel(t *testing.T) {
+	view := &modelSelectPaneView{models: []model.RemoteModel{{ID: "one"}, {ID: "two"}}}
+	view.index = 1
+	view.offset = 1
+	view.resetSelection("missing")
+	if view.index != 0 || view.offset != 0 {
+		t.Fatalf("selection = index:%d offset:%d, want 0/0", view.index, view.offset)
+	}
+}
+
+func TestModelCatalogFreshness(t *testing.T) {
+	var state modelCatalogState
+	now := time.Now()
+	state.setAt("provider", []model.RemoteModel{{ID: "fresh"}}, now.Add(-time.Minute))
+	if got, ok := state.freshModels("provider", now, 2*time.Minute); !ok || len(got) != 1 || got[0].ID != "fresh" {
+		t.Fatalf("fresh catalog = %#v, %t", got, ok)
+	}
+	if got, ok := state.freshModels("provider", now.Add(2*time.Minute), 2*time.Minute); ok || got != nil {
+		t.Fatalf("stale catalog reported fresh: %#v, %t", got, ok)
+	}
+}
+
+func TestModelPickerUsesFreshCacheWithoutFetch(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.providers = map[string]config.ProviderConfig{"custom": {Name: "custom", BaseURL: "https://api.example.com/v1", APIKey: "key"}}
+	m.activeProvider = "custom"
+	m.modelCatalogs.set("custom", []model.RemoteModel{{ID: "cached"}})
+	view := newModelSelectPaneView(m)
+	if cmd := view.loadProvider(m, false); cmd != nil {
+		t.Fatal("fresh catalog triggered a network fetch")
+	}
+	if len(view.models) != 1 || view.models[0].ID != "cached" {
+		t.Fatalf("fresh cache not used: %#v", view.models)
+	}
+}
+
+func TestModelPickerRefreshBypassesFreshCache(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.providers = map[string]config.ProviderConfig{"custom": {Name: "custom", BaseURL: "https://api.example.com/v1", APIKey: "key"}}
+	m.activeProvider = "custom"
+	m.modelCatalogs.set("custom", []model.RemoteModel{{ID: "cached"}})
+	view := newModelSelectPaneView(m)
+	if cmd := view.loadProvider(m, true); cmd == nil {
+		t.Fatal("forced refresh did not start a network fetch")
+	}
+	if !view.loading {
+		t.Fatal("forced refresh did not enter loading state")
+	}
+	view.cancelFetch()
+}
+
+func TestDirectModelSelectionMarksUnknownModelUnverified(t *testing.T) {
+	t.Setenv("PROTON_HOME", t.TempDir())
+	m := newTestSkillsModel(t, 1)
+	m.activeProvider = model.DefaultProtonmanName
+	cmd := m.selectModelDirect("custom-unlisted-model")
+	if cmd == nil {
+		t.Fatal("direct model selection returned nil command")
+	}
+	msg, ok := cmd().(modelSelectedMsg)
+	if !ok {
+		t.Fatalf("expected modelSelectedMsg")
+	}
+	if !msg.unverified {
+		t.Fatal("unknown model was not marked unverified")
+	}
+}
+
+func TestDirectModelSelectionRecognizesDiscoveredModel(t *testing.T) {
+	t.Setenv("PROTON_HOME", t.TempDir())
+	m := newTestSkillsModel(t, 1)
+	m.activeProvider = model.DefaultProtonmanName
+	m.modelCatalogs.set(model.DefaultProtonmanName, []model.RemoteModel{{ID: "glm-5.3-flash"}})
+	cmd := m.selectModelDirect("glm-5.3-flash")
+	msg := cmd().(modelSelectedMsg)
+	if msg.unverified {
+		t.Fatal("discovered model was marked unverified")
+	}
+}
+
+func TestModelPickerFilterMatchesIDNameVendorAndFeatures(t *testing.T) {
+	view := &modelSelectPaneView{}
+	view.setModels([]model.RemoteModel{{ID: "deepseek-v4", Name: "DeepSeek V4", Provider: "DeepSeek", Features: []string{"tools", "vision"}}, {ID: "qwen-flash", Name: "Qwen Flash", Provider: "Qwen", Features: []string{"text"}}}, "")
+	for _, query := range []string{"deepseek-v4", "DeepSeek V4", "deepseek", "vision"} {
+		view.filter = query
+		view.applyFilter("")
+		if len(view.models) != 1 || view.models[0].ID != "deepseek-v4" {
+			t.Fatalf("filter %q = %#v", query, view.models)
+		}
+	}
+}
+
+func TestModelPickerFilterCanReturnNoResults(t *testing.T) {
+	view := &modelSelectPaneView{}
+	view.setModels([]model.RemoteModel{{ID: "one"}, {ID: "two"}}, "")
+	view.filter = "missing"
+	view.applyFilter("")
+	if len(view.models) != 0 || len(view.allModels) != 2 {
+		t.Fatalf("filtered/all models = %#v / %#v", view.models, view.allModels)
+	}
+}
+
+func TestModelPickerSearchModeAcceptsReservedLetters(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	view := newModelSelectPaneView(m)
+	m.bottom.push(view)
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = updated.(*bubbleModel)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q', 'w', 'e', 'n'}})
+	m = updated.(*bubbleModel)
+	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if view.filter != "qwen" {
+		t.Fatalf("filter = %q, want qwen", view.filter)
+	}
+	if !m.bottom.has(modelSelectViewID) {
+		t.Fatal("reserved q closed picker while search mode was active")
+	}
+}
+
+func TestCanonicalSlashNameNormalizesModelAlias(t *testing.T) {
+	if got := canonicalSlashName("models"); got != "model" {
+		t.Fatalf("canonical name = %q, want model", got)
+	}
+	if got := canonicalSlashName("MODEL"); got != "model" {
+		t.Fatalf("canonical uppercase name = %q, want model", got)
+	}
+}
+
+func TestActiveRemoteModelFindsSelectedCatalogModel(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeProvider = "protonman"
+	m.activeModel = "TEXT-ONLY"
+	m.modelCatalogs.set("ProtonMan", []model.RemoteModel{{ID: "text-only", Features: []string{"tools"}}})
+	got, ok := m.activeRemoteModel()
+	if !ok || got.ID != "text-only" {
+		t.Fatalf("activeRemoteModel() = %#v, %v", got, ok)
+	}
+}
+
+func TestFormatModelTokenLimitsRendersIndependentLimits(t *testing.T) {
+	got := formatModelTokenLimits(0, 200000, 8192)
+	if got != "200K input · 8K output" {
+		t.Fatalf("formatModelTokenLimits() = %q", got)
+	}
+}
+
+func seedModelSelectCatalog(m *bubbleModel) {
+	m.modelCatalogs.set(model.DefaultProtonmanName, []model.RemoteModel{{ID: "deepseek-v4-flash-vision-exp", Name: "DeepSeek V4 Flash Vision"}, {ID: "glm-5.3-flash", Name: "GLM 5.3 Flash"}, {ID: "Qwen3.8-Flash", Name: "Qwen 3.8 Flash"}, {ID: "muse-spark", Name: "Muse Spark"}, {ID: "MiniMax-M3", Name: "MiniMax M3"}, {ID: "fixture-six", Name: "Fixture Six"}})
+}
+
+func TestModelSelectViewLaunchViaSlashCommand(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	seedModelSelectCatalog(bModel)
+	bModel.activeModel = "MiniMax-M3"
+	bModel.activeProvider = "protonman"
+	bModel.executeCommand("/model")
+	if !bModel.bottom.has(modelSelectViewID) {
+		t.Fatal("expected model select modal open after /model")
+	}
+	view := bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if len(view.models) == 0 {
+		t.Fatal("expected models in catalog")
+	}
+	if view.models[view.index].ID != "MiniMax-M3" {
+		t.Fatalf("expected focused model 'MiniMax-M3', got %s", view.models[view.index].ID)
+	}
+	rendered := bModel.View()
+	if !strings.Contains(rendered, "Select Model") {
+		t.Fatalf("expected 'Select Model' in view, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "✓") {
+		t.Fatalf("expected active model checkmark in view, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "MiniMax-M3") {
+		t.Fatalf("expected 'MiniMax-M3' in view, got:\n%s", rendered)
+	}
+	updated, _ := bModel.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	bModel = updated.(*bubbleModel)
+	if bModel.bottom.has(modelSelectViewID) {
+		t.Fatal("expected model select modal closed after Esc")
+	}
+	bModel.executeCommand("/models")
+	if !bModel.bottom.has(modelSelectViewID) {
+		t.Fatal("expected model select modal open after /models")
+	}
+	bModel.bottom.remove(modelSelectViewID)
+	bModel.executeCommand("/model select")
+	if !bModel.bottom.has(modelSelectViewID) {
+		t.Fatal("expected model select modal open after /model select")
+	}
+}
+
+func TestModelSelectViewToggleKeybinding(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	updated, _ := bModel.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	bModel = updated.(*bubbleModel)
+	if !bModel.bottom.has(modelSelectViewID) {
+		t.Fatal("expected model select modal open after Ctrl+P")
+	}
+	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	bModel = updated.(*bubbleModel)
+	if bModel.bottom.has(modelSelectViewID) {
+		t.Fatal("expected model select modal closed after second Ctrl+P")
+	}
+	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}, Alt: true})
+	bModel = updated.(*bubbleModel)
+	if !bModel.bottom.has(modelSelectViewID) {
+		t.Fatal("expected model select modal open after Alt+M")
+	}
+}
+
+func TestModelSelectViewNavigationAndConfirm(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	seedModelSelectCatalog(bModel)
+	bModel.activeModel = "deepseek-v4-flash-vision-exp"
+	bModel.activeProvider = "protonman"
+	bModel.executeCommand("/model")
+	view := bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if view.index != 0 {
+		t.Fatalf("expected initial index 0, got %d", view.index)
+	}
+	updated, _ := bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	bModel = updated.(*bubbleModel)
+	view = bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if view.index != 1 {
+		t.Fatalf("expected index 1 after 'j', got %d", view.index)
+	}
+	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	bModel = updated.(*bubbleModel)
+	view = bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if view.index != 0 {
+		t.Fatalf("expected index 0 after 'k', got %d", view.index)
+	}
+	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyDown})
+	bModel = updated.(*bubbleModel)
+	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyDown})
+	bModel = updated.(*bubbleModel)
+	view = bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if view.index != 2 {
+		t.Fatalf("expected index 2 after moving down twice, got %d", view.index)
+	}
+	if view.models[view.index].ID != "Qwen3.8-Flash" {
+		t.Fatalf("expected Qwen3.8-Flash at index 2, got %s", view.models[view.index].ID)
+	}
+	t.Setenv("PROTON_HOME", t.TempDir())
+	updated, cmd := bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	bModel = updated.(*bubbleModel)
+	if bModel.bottom.has(modelSelectViewID) {
+		t.Fatal("expected modelSelectViewID removed on Enter")
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd on Enter")
+	}
+	msg := cmd()
+	selectedMsg, ok := msg.(modelSelectedMsg)
+	if !ok {
+		t.Fatalf("expected modelSelectedMsg, got %T", msg)
+	}
+	if selectedMsg.modelID != "Qwen3.8-Flash" {
+		t.Fatalf("expected selected model 'Qwen3.8-Flash', got: %s", selectedMsg.modelID)
+	}
+	bModel.providers = map[string]config.ProviderConfig{"protonman": {Name: "protonman", APIKey: "plk_test_123"}}
+	updated, _ = bModel.Update(selectedMsg)
+	bModel = updated.(*bubbleModel)
+	if bModel.activeModel != "Qwen3.8-Flash" {
+		t.Fatalf("expected activeModel updated to 'Qwen3.8-Flash', got: %s", bModel.activeModel)
+	}
+	if bModel.runner == nil {
+		t.Fatal("expected runner to be configured after model selection with valid API key")
+	}
+}
+
+func TestModelSelectViewDirectModelCommand(t *testing.T) {
+	t.Setenv("PROTON_HOME", t.TempDir())
+	bModel := newTestSkillsModel(t, 1)
+	cmd := bModel.executeCommand("/model glm-5.3-flash")
+	if cmd == nil {
+		t.Fatal("expected cmd from /model <id>")
+	}
+	msg := cmd()
+	selectedMsg, ok := msg.(modelSelectedMsg)
+	if !ok {
+		t.Fatalf("expected modelSelectedMsg, got %T", msg)
+	}
+	if selectedMsg.modelID != "glm-5.3-flash" {
+		t.Fatalf("expected modelID 'glm-5.3-flash', got: %s", selectedMsg.modelID)
+	}
+	updated, _ := bModel.Update(selectedMsg)
+	bModel = updated.(*bubbleModel)
+	if bModel.activeModel != "glm-5.3-flash" {
+		t.Fatalf("expected activeModel 'glm-5.3-flash', got: %s", bModel.activeModel)
+	}
+}
+
+func TestModelSelectViewSwitchToAddProvider(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/model")
+	if !bModel.bottom.has(modelSelectViewID) {
+		t.Fatal("expected model select modal open")
+	}
+	updated, _ := bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	bModel = updated.(*bubbleModel)
+	if bModel.bottom.has(modelSelectViewID) {
+		t.Fatal("expected modelSelectViewID removed after 'a'")
+	}
+	if !bModel.bottom.has(providerViewID) {
+		t.Fatal("expected providerViewID added after 'a'")
+	}
+}
+
+func TestModelSelectInfoViewAndWelcome(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.activeModel = "deepseek-v4-flash-vision-exp"
+	bModel.activeProvider = "protonman"
+	info := bModel.infoView()
+	if !strings.Contains(info, "deepseek-v4") {
+		t.Fatalf("expected model in infoView, got: %s", info)
+	}
+	if !strings.Contains(info, "ctrl+p model") {
+		t.Fatalf("expected 'ctrl+p model' in infoView, got: %s", info)
+	}
+	welcome := bModel.welcomeCard()
+	if strings.Contains(welcome, "deepseek-v4-flash-vision-exp") {
+		t.Fatalf("welcomeCard duplicated model already shown in status bar: %s", welcome)
+	}
+}
+
+func TestProviderListSlashCommand(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.providers = map[string]config.ProviderConfig{"protonman": {Name: "protonman", BaseURL: "https://protonman.dev/api/v1"}}
+	bModel.activeProvider = "protonman"
+	bModel.activeModel = "MiniMax-M3"
+	bModel.executeCommand("/provider list")
+	rendered := bModel.View()
+	if !strings.Contains(rendered, "Configured Providers") {
+		t.Fatalf("expected 'Configured Providers' in view, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "https://protonman.dev/api/v1") {
+		t.Fatalf("expected endpoint in view, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "[active]") {
+		t.Fatalf("expected '[active]' in view, got:\n%s", rendered)
+	}
+}
+
+func TestModelSelectPagedNavigation(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	seedModelSelectCatalog(m)
+	m.resize(40, 14)
+	m.executeCommand("/model")
+	view := m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	view.index = 0
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	m = updated.(*bubbleModel)
+	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if view.index != pickerVisibleRows(m.height, maxModelSelectRows) {
+		t.Fatalf("pgdown index = %d", view.index)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	m = updated.(*bubbleModel)
+	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if view.index != len(view.models)-1 {
+		t.Fatalf("end index = %d, want %d", view.index, len(view.models)-1)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyHome})
+	m = updated.(*bubbleModel)
+	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	if view.index != 0 {
+		t.Fatalf("home index = %d, want 0", view.index)
+	}
+}
+
+func TestBubbleModelRunsToolCommandThroughService(t *testing.T) {
+	registry, handler := newBubbleTestRegistry()
+	service := newBubbleTestService(t, registry, permission.ModeAlwaysApprove, permission.Config{})
+	model := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, newPermissionBridge(), "")
+	model.resize(80, 24)
+	model.prompt.SetValue(`:call read_file {"path":"README.md"}`)
+	command := model.submit()
+	if command == nil {
+		t.Fatal("submit() command = nil, want tool command")
+	}
+	message := command()
+	resultMessage, ok := message.(toolResultMsg)
+	if !ok {
+		t.Fatalf("tool command message = %T, want toolResultMsg", message)
+	}
+	updated, _ := model.Update(resultMessage)
+	model = updated.(*bubbleModel)
+	if handler.calls != 1 {
+		t.Fatalf("handler calls = %d, want 1", handler.calls)
+	}
+	if !strings.Contains(plainTranscript(model), "file contents") {
+		t.Fatalf("scrollback does not contain tool output: %#v", model.blocks)
+	}
+}
+
+func TestSubmitWhileBusyQueuesDraft(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAlwaysApprove, emptyTodoItems())
+	model.resize(80, 24)
+	model.busy = true
+	model.prompt.SetValue(":help")
+	if command := model.submit(); command != nil {
+		t.Fatalf("busy submit command = %v, want nil", command)
+	}
+	if got := model.prompt.Value(); got != "" {
+		t.Fatalf("busy submit cleared prompt = %q, want empty", got)
+	}
+	if len(model.queue) != 1 || model.queue[0] != ":help" {
+		t.Fatalf("queue = %#v, want [:help]", model.queue)
+	}
+	if !strings.Contains(plainTranscript(model), "queued (1): :help") {
+		t.Fatalf("scrollback missing queue notice: %#v", model.blocks)
+	}
+	model.busy = false
+	if command := model.drainQueue(); command != nil {
+		t.Fatalf("queued :help command = %v, want nil", command)
+	}
+	if len(model.queue) != 0 {
+		t.Fatalf("queue after drain = %#v, want empty", model.queue)
+	}
+	if !strings.Contains(plainTranscript(model), "/help") {
+		t.Fatalf("drained :help did not render: %#v", model.blocks)
+	}
+}
+
+func TestAppendTurnResultCoalescesAssistantText(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.appendTurnResult([]applicationturn.Event{{Kind: applicationturn.EventTextDelta, Text: "hello"}, {Kind: applicationturn.EventTextDelta, Text: " world"}}, applicationturn.Result{Message: domainmodel.Message{Content: "hello world"}}, nil)
+	plain := plainTranscript(model)
+	if strings.Count(plain, "hello world") != 1 {
+		t.Fatalf("assistant text count = %d, want 1: %q", strings.Count(plain, "hello world"), plain)
+	}
+	if strings.Contains(plain, "assistant: hello") {
+		t.Fatalf("text deltas were not coalesced: %q", plain)
+	}
+}
+
+func TestAppendTurnResultPreservesToolNewlines(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.appendTurnResult([]applicationturn.Event{{Kind: applicationturn.EventToolResult, Call: tool.Call{Name: "read_file"}, Result: tool.Result{Output: "alpha\nbeta\ngamma"}}}, applicationturn.Result{}, nil)
+	plain := plainTranscript(model)
+	if !strings.Contains(plain, "alpha\nbeta\ngamma") {
+		t.Fatalf("tool output newlines were flattened: %q", plain)
+	}
+}
+
+func TestStartTurnStreamsSinkEvents(t *testing.T) {
+	runner := &scriptedRunner{events: []applicationturn.Event{{Kind: applicationturn.EventTextDelta, Text: "hello"}, {Kind: applicationturn.EventTextDelta, Text: " stream"}}, result: applicationturn.Result{Message: domainmodel.Message{Role: domainmodel.RoleAssistant, Content: "hello stream"}}}
+	registry, _ := newBubbleTestRegistry()
+	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
+	model := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), runner, newPermissionBridge(), "")
+	if command := model.startTurn("hi"); command == nil {
+		t.Fatal("startTurn command = nil")
+	}
+	deadline := time.Now().Add(time.Second)
+	for model.busy {
+		if time.Now().After(deadline) {
+			t.Fatal("streamed turn did not finish")
+		}
+		events := model.turnEvents
+		if events == nil {
+			t.Fatal("busy turn has no event channel")
+		}
+		message := waitTurnCh(events)()
+		updated, _ := model.Update(message)
+		model = updated.(*bubbleModel)
+	}
+	plain := plainTranscript(model)
+	if !strings.Contains(plain, "hello stream") {
+		t.Fatalf("streamed transcript = %q, want hello stream", plain)
+	}
+	if model.busy {
+		t.Fatal("model still busy after streamed turn")
+	}
+}
+
+func TestClosedTurnEventsRenderTerminalFailure(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.busy = true
+	events := make(chan tea.Msg)
+	close(events)
+	model.turnEvents = events
+	updated, _ := model.Update(turnEventsClosedMsg{})
+	model = updated.(*bubbleModel)
+	if model.busy {
+		t.Fatal("model remained busy after turn event channel closed")
+	}
+	if !strings.Contains(plainTranscript(model), "turn event stream closed before completion") {
+		t.Fatalf("closed turn channel missing terminal failure: %q", plainTranscript(model))
+	}
+}
+
+func TestTurnDoneAppendsProducedToolHistory(t *testing.T) {
+	runner := &scriptedRunner{result: applicationturn.Result{Message: domainmodel.Message{Role: domainmodel.RoleAssistant, Content: "done"}, Messages: []domainmodel.Message{{Role: domainmodel.RoleAssistant, ToolCalls: []domainmodel.ToolCall{{ID: "call-1", Name: "read_file", Arguments: []byte(`{"path":"README.md"}`)}}}, {Role: domainmodel.RoleTool, ToolCallID: "call-1", ToolName: "read_file", Content: `{"output":"ok"}`}, {Role: domainmodel.RoleAssistant, Content: "done"}}}}
+	registry, _ := newBubbleTestRegistry()
+	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
+	m := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), runner, newPermissionBridge(), "")
+	message := m.startTurn("inspect")()
+	updated, _ := m.Update(message)
+	m = updated.(*bubbleModel)
+	if got, want := len(m.messages), 4; got != want {
+		t.Fatalf("provider history length = %d, want %d", got, want)
+	}
+	if m.messages[1].Role != domainmodel.RoleAssistant || m.messages[2].Role != domainmodel.RoleTool {
+		t.Fatalf("provider history = %#v, want assistant/tool exchange", m.messages)
+	}
+}
+
+func TestBangPrefixSubmitsBashCall(t *testing.T) {
+	registry := newNamedTestRegistry(tool.Definition{Name: "bash", Description: "run a shell command", Kind: tool.KindBash, PermissionDetailKey: "command"})
+	service := newBubbleTestService(t, registry, permission.ModeAlwaysApprove, permission.Config{})
+	model := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, newPermissionBridge(), "")
+	model.setBashMode(true)
+	model.prompt.SetValue("pwd")
+	command := model.submit()
+	if command == nil {
+		t.Fatal("bash submit command = nil")
+	}
+	if model.bottom.bashMode() {
+		t.Fatal("bash mode stayed on after submit")
+	}
+	message := command()
+	resultMessage, ok := message.(toolResultMsg)
+	if !ok {
+		t.Fatalf("bash message = %T, want toolResultMsg", message)
+	}
+	if resultMessage.err != nil {
+		t.Fatalf("bash call error = %v", resultMessage.err)
+	}
+	if registry.handler.calls != 1 {
+		t.Fatalf("bash handler calls = %d, want 1", registry.handler.calls)
+	}
+}
+
+func TestTodoStoreRevisionSyncsAfterToolResult(t *testing.T) {
+	initial := []TodoItem{{ID: "a", Text: "inspect", Status: tododomain.StatusPending}}
+	store, err := tododomain.NewStore(initial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := newTestBubbleModel(t, permission.ModeAsk, initial)
+	m.todoStore = store
+	m.todoRevision = store.Snapshot().Revision
+	if _, err := store.Replace(context.Background(), []tododomain.Item{{ID: "a", Text: "inspect", Status: tododomain.StatusCompleted}}); err != nil {
+		t.Fatal(err)
+	}
+	m.applyTurnEvent(applicationturn.Event{Kind: applicationturn.EventToolResult, Call: tool.Call{ID: "todo-1", Name: "update_todo"}, Result: tool.Result{CallID: "todo-1", ToolName: "update_todo"}})
+	if len(m.todo) != 1 || m.todo[0].Status != tododomain.StatusCompleted {
+		t.Fatalf("todo = %#v", m.todo)
+	}
+	if m.todoRevision != store.Snapshot().Revision {
+		t.Fatalf("revision = %d", m.todoRevision)
+	}
+	if m.syncTodoSnapshot() {
+		t.Fatal("unchanged revision reported a sync")
+	}
+}
+
+func TestTUI_WithCoordinatorOption(t *testing.T) {
+	registry, _ := newBubbleTestRegistry()
+	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
+	policy, err := permission.NewPolicy(permission.Config{})
+	if err != nil {
+		t.Fatalf("NewPolicy() error = %v", err)
+	}
+	ws, err := workspace.New(t.TempDir(), nil)
+	if err != nil {
+		t.Fatalf("workspace.New() error = %v", err)
+	}
+	coordinator := agent.NewCoordinator(nil, registry, ws, policy)
+	defer func() {
+		_ = coordinator.Close()
+	}()
+	ui, err := NewBubbleTea(service, registry, nil, WithCoordinator(coordinator))
+	if err != nil {
+		t.Fatalf("NewBubbleTea() error = %v", err)
+	}
+	if !ui.agents.Available() {
+		t.Fatal("expected agent service to be available on BubbleTeaUI")
+	}
+}
+
+func TestTUI_CycleModeUpdatesCoordinator(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	policy, err := permission.NewPolicy(permission.Config{})
+	if err != nil {
+		t.Fatalf("NewPolicy() error = %v", err)
+	}
+	ws, err := workspace.New(t.TempDir(), nil)
+	if err != nil {
+		t.Fatalf("workspace.New() error = %v", err)
+	}
+	coordinator := agent.NewCoordinator(nil, model.registry, ws, policy)
+	defer func() {
+		_ = coordinator.Close()
+	}()
+	model.agents = app.NewAgents(coordinator)
+	if model.planMode {
+		t.Fatal("expected planMode initially false")
+	}
+	model.cycleMode()
+	if !model.planMode {
+		t.Fatal("expected planMode to be true after first cycle")
+	}
+	guard := coordinator.CallGuard()
+	if guard == nil {
+		t.Fatal("expected coordinator call guard to be set in plan mode")
+	}
+	err = guard(context.Background(), permission.Request{ToolKind: permission.ToolBash, ToolName: "bash"})
+	if err == nil {
+		t.Fatal("expected plan mode guard to block bash execution")
+	}
+	err = guard(context.Background(), permission.Request{ToolKind: permission.ToolRead, ToolName: "read_file"})
+	if err != nil {
+		t.Fatalf("expected plan mode guard to allow read_file, got: %v", err)
+	}
+	model.cycleMode()
+	if model.planMode {
+		t.Fatal("expected planMode to be false after second cycle")
+	}
+	if coordinator.CallGuard() != nil {
+		t.Fatal("expected coordinator call guard to be cleared")
+	}
+	if coordinator.PermissionMode() != permission.ModeAlwaysApprove {
+		t.Fatalf("expected coordinator mode %v, got %v", permission.ModeAlwaysApprove, coordinator.PermissionMode())
+	}
+	model.cycleMode()
+	if coordinator.PermissionMode() != permission.ModeAsk {
+		t.Fatalf("expected coordinator mode %v, got %v", permission.ModeAsk, coordinator.PermissionMode())
+	}
+}
+
+func TestTUI_SlashModeUpdatesCoordinator(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	policy, err := permission.NewPolicy(permission.Config{})
+	if err != nil {
+		t.Fatalf("NewPolicy() error = %v", err)
+	}
+	ws, err := workspace.New(t.TempDir(), nil)
+	if err != nil {
+		t.Fatalf("workspace.New() error = %v", err)
+	}
+	coordinator := agent.NewCoordinator(nil, model.registry, ws, policy)
+	defer func() {
+		_ = coordinator.Close()
+	}()
+	model.agents = app.NewAgents(coordinator)
+	_ = model.executeCommand("/mode always-approve")
+	if coordinator.PermissionMode() != permission.ModeAlwaysApprove {
+		t.Fatalf("expected coordinator mode %v, got %v", permission.ModeAlwaysApprove, coordinator.PermissionMode())
+	}
+	_ = model.executeCommand("/mode ask")
+	if coordinator.PermissionMode() != permission.ModeAsk {
+		t.Fatalf("expected coordinator mode %v, got %v", permission.ModeAsk, coordinator.PermissionMode())
+	}
+	_ = model.executeCommand("/yolo")
+	if coordinator.PermissionMode() != permission.ModeAlwaysApprove {
+		t.Fatalf("expected coordinator mode %v, got %v", permission.ModeAlwaysApprove, coordinator.PermissionMode())
+	}
+	_ = model.executeCommand("/plan on")
+	if coordinator.CallGuard() == nil {
+		t.Fatal("expected coordinator call guard to be set after /plan on")
+	}
+	_ = model.executeCommand("/plan off")
+	if coordinator.CallGuard() != nil {
+		t.Fatal("expected coordinator call guard to be cleared after /plan off")
+	}
+}
+
+func TestTUI_ReconfigureRunnerUpdatesCoordinatorClient(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	policy, err := permission.NewPolicy(permission.Config{})
+	if err != nil {
+		t.Fatalf("NewPolicy() error = %v", err)
+	}
+	ws, err := workspace.New(t.TempDir(), nil)
+	if err != nil {
+		t.Fatalf("workspace.New() error = %v", err)
+	}
+	coordinator := agent.NewCoordinator(nil, model.registry, ws, policy)
+	defer func() {
+		_ = coordinator.Close()
+	}()
+	model.agents = app.NewAgents(coordinator)
+	if coordinator.LanguageModel() != nil {
+		t.Fatal("expected coordinator language model initially nil")
+	}
+	model.activeModel = "test-model"
+	model.activeProvider = "openai"
+	model.providers = map[string]config.ProviderConfig{"openai": {Name: "openai", APIKey: "sk-test-key", BaseURL: "https://api.openai.com/v1"}}
+	model.reconfigureRunner()
+	if coordinator.LanguageModel() == nil {
+		t.Fatal("expected coordinator language model to be updated after reconfigureRunner()")
+	}
+}
+
+func TestPlanModeAllowsTaskMetadataButBlocksWorkspaceEdit(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		kind       tool.Kind
+		wantDenied bool
+	}{{name: "update_todo", kind: tool.KindTask, wantDenied: false}, {name: "write_file", kind: tool.KindEdit, wantDenied: true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := newNamedTestRegistry(tool.Definition{Name: tc.name, Description: tc.name, Kind: tc.kind, Mutability: tool.MutabilityMutating})
+			service := newBubbleTestService(t, registry, permission.ModeAlwaysApprove, permission.Config{})
+			m := newBubbleModel(context.Background(), service, registry, nil, nil, newPermissionBridge(), "/tmp/proton")
+			m.setPlanEnabled(true)
+			call, err := tool.NewCall("call", tc.name, []byte(`{}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = service.Call(context.Background(), call)
+			if tc.wantDenied && err == nil {
+				t.Fatal("workspace edit was allowed in plan mode")
+			}
+			if !tc.wantDenied && err != nil {
+				t.Fatalf("task metadata blocked in plan mode: %v", err)
+			}
+		})
+	}
+}

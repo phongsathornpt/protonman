@@ -52,6 +52,7 @@ func TestInboundAdaptersUseApplicationConversationBoundary(t *testing.T) {
 		modulePath + "/internal/adapter/in/acp",
 		modulePath + "/internal/adapter/in/headless",
 		modulePath + "/internal/adapter/in/tui",
+		modulePath + "/internal/adapter/in/tui/runtime",
 	} {
 		assertNoImports(t, packages, adapter, []string{modulePath + "/internal/engine/turn"})
 	}
@@ -78,16 +79,37 @@ func TestSessionDomainDoesNotOwnFilesystemPersistence(t *testing.T) {
 
 func TestTUIDoesNotDependOnSessionPersistenceDomain(t *testing.T) {
 	packages := listPackages(t)
-	assertNoImports(t, packages, modulePath+"/internal/adapter/in/tui", []string{
-		modulePath + "/internal/core/session",
-	})
+	for _, pkgPath := range []string{
+		modulePath + "/internal/adapter/in/tui",
+		modulePath + "/internal/adapter/in/tui/runtime",
+	} {
+		assertNoImports(t, packages, pkgPath, []string{modulePath + "/internal/core/session"})
+	}
 }
 
 func TestTUIDoesNotDependOnProjectDirectly(t *testing.T) {
 	packages := listPackages(t)
-	assertNoImports(t, packages, modulePath+"/internal/adapter/in/tui", []string{
-		modulePath + "/internal/feature/project",
-	})
+	for _, pkgPath := range []string{
+		modulePath + "/internal/adapter/in/tui",
+		modulePath + "/internal/adapter/in/tui/runtime",
+	} {
+		assertNoImports(t, packages, pkgPath, []string{modulePath + "/internal/feature/project"})
+	}
+}
+
+func TestTUIFacadeOnlyDependsOnRuntime(t *testing.T) {
+	packages := listPackages(t)
+	root := modulePath + "/internal/adapter/in/tui"
+	pkg, ok := packages[root]
+	if !ok {
+		t.Fatalf("package %s not found", root)
+	}
+	allowed := modulePath + "/internal/adapter/in/tui/runtime"
+	for _, imported := range pkg.Imports {
+		if strings.HasPrefix(imported, modulePath+"/") && imported != allowed {
+			t.Errorf("TUI facade imports %s; only runtime package is allowed", imported)
+		}
+	}
 }
 
 func TestTUISubpackagesNeverImportPresentationRoot(t *testing.T) {
