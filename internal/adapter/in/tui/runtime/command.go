@@ -3,7 +3,7 @@ package runtime
 import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/slashview"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/textview"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 )
 
 func TestAssistantIncrementalMarkdownMatchesFullRenderer(t *testing.T) {

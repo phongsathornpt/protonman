@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/style"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/textview"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 

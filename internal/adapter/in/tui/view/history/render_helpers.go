@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/textview"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 )
 
 func rawTextLines(text string) []string {

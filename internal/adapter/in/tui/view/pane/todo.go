@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/style"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 )

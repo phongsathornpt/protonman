@@ -6,7 +6,7 @@ import (
 	"unicode"
 
 	"github.com/charmbracelet/lipgloss"
-	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/style"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 )
 
 var (

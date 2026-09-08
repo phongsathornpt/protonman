@@ -112,6 +112,42 @@ func TestTUIFacadeOnlyDependsOnRuntime(t *testing.T) {
 	}
 }
 
+func TestTUIFolderOrganization(t *testing.T) {
+	root := repositoryRoot(t)
+	tuiRoot := filepath.Join(root, "internal", "adapter", "in", "tui")
+	entries, err := os.ReadDir(tuiRoot)
+	if err != nil {
+		t.Fatalf("read TUI root: %v", err)
+	}
+	allowedDirs := map[string]bool{"runtime": true, "state": true, "view": true}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			if !allowedDirs[entry.Name()] {
+				t.Errorf("unexpected TUI root directory %s; group it under runtime, state, or view", entry.Name())
+			}
+			continue
+		}
+		if entry.Name() != "facade.go" {
+			t.Errorf("unexpected TUI root file %s; root must only expose facade.go", entry.Name())
+		}
+	}
+
+	viewRoot := filepath.Join(tuiRoot, "view")
+	viewEntries, err := os.ReadDir(viewRoot)
+	if err != nil {
+		t.Fatalf("read TUI view root: %v", err)
+	}
+	allowedViews := map[string]bool{
+		"diagnostic": true, "execview": true, "history": true, "pane": true,
+		"slashview": true, "style": true, "textview": true, "toolview": true,
+	}
+	for _, entry := range viewEntries {
+		if !entry.IsDir() || !allowedViews[entry.Name()] {
+			t.Errorf("unexpected TUI view entry %s", entry.Name())
+		}
+	}
+}
+
 func TestTUISubpackagesNeverImportPresentationRoot(t *testing.T) {
 	packages := listPackages(t)
 	root := modulePath + "/internal/adapter/in/tui"
@@ -130,7 +166,7 @@ func TestTUISubpackagesNeverImportPresentationRoot(t *testing.T) {
 
 func TestTUIPaneDoesNotOwnApplicationServices(t *testing.T) {
 	packages := listPackages(t)
-	pkgPath := modulePath + "/internal/adapter/in/tui/pane"
+	pkgPath := modulePath + "/internal/adapter/in/tui/view/pane"
 	assertNoImports(t, packages, pkgPath, []string{
 		modulePath + "/internal/adapter/in/tui",
 		modulePath + "/internal/adapter/out/config",
@@ -141,14 +177,14 @@ func TestTUIPaneDoesNotOwnApplicationServices(t *testing.T) {
 
 func TestTUISlashViewDoesNotOwnRuntimeState(t *testing.T) {
 	packages := listPackages(t)
-	pkgPath := modulePath + "/internal/adapter/in/tui/slashview"
+	pkgPath := modulePath + "/internal/adapter/in/tui/view/slashview"
 	pkg, ok := packages[pkgPath]
 	if !ok {
 		t.Fatalf("package %s not found", pkgPath)
 	}
 	allowed := map[string]bool{
-		modulePath + "/internal/adapter/in/tui/style": true,
-		modulePath + "/internal/core/tool":            true,
+		modulePath + "/internal/adapter/in/tui/view/style": true,
+		modulePath + "/internal/core/tool":                 true,
 	}
 	for _, imported := range pkg.Imports {
 		if strings.HasPrefix(imported, modulePath+"/internal/") && !allowed[imported] {
@@ -159,19 +195,19 @@ func TestTUISlashViewDoesNotOwnRuntimeState(t *testing.T) {
 
 func TestTUIHistoryDependsOnlyOnPresentationAndDomainLeaves(t *testing.T) {
 	packages := listPackages(t)
-	pkgPath := modulePath + "/internal/adapter/in/tui/history"
+	pkgPath := modulePath + "/internal/adapter/in/tui/view/history"
 	pkg, ok := packages[pkgPath]
 	if !ok {
 		t.Fatalf("package %s not found", pkgPath)
 	}
 	allowed := map[string]bool{
-		modulePath + "/internal/adapter/in/tui/diagnostic": true,
-		modulePath + "/internal/adapter/in/tui/execview":   true,
-		modulePath + "/internal/adapter/in/tui/style":      true,
-		modulePath + "/internal/adapter/in/tui/textview":   true,
-		modulePath + "/internal/adapter/in/tui/toolview":   true,
-		modulePath + "/internal/core/tool":                 true,
-		modulePath + "/internal/feature/agent":             true,
+		modulePath + "/internal/adapter/in/tui/view/diagnostic": true,
+		modulePath + "/internal/adapter/in/tui/view/execview":   true,
+		modulePath + "/internal/adapter/in/tui/view/style":      true,
+		modulePath + "/internal/adapter/in/tui/view/textview":   true,
+		modulePath + "/internal/adapter/in/tui/view/toolview":   true,
+		modulePath + "/internal/core/tool":                      true,
+		modulePath + "/internal/feature/agent":                  true,
 	}
 	for _, imported := range pkg.Imports {
 		if strings.HasPrefix(imported, modulePath+"/internal/") && !allowed[imported] {
@@ -182,7 +218,7 @@ func TestTUIHistoryDependsOnlyOnPresentationAndDomainLeaves(t *testing.T) {
 
 func TestTUIToolViewDoesNotDependOnPresentationRoot(t *testing.T) {
 	packages := listPackages(t)
-	pkgPath := modulePath + "/internal/adapter/in/tui/toolview"
+	pkgPath := modulePath + "/internal/adapter/in/tui/view/toolview"
 	assertNoImports(t, packages, pkgPath, []string{
 		modulePath + "/internal/adapter/in/tui",
 		modulePath + "/internal/app",
@@ -192,18 +228,18 @@ func TestTUIToolViewDoesNotDependOnPresentationRoot(t *testing.T) {
 
 func TestTUIDiagnosticDoesNotDependOnPresentationRoot(t *testing.T) {
 	packages := listPackages(t)
-	pkgPath := modulePath + "/internal/adapter/in/tui/diagnostic"
+	pkgPath := modulePath + "/internal/adapter/in/tui/view/diagnostic"
 	assertNoImports(t, packages, pkgPath, []string{
 		modulePath + "/internal/adapter/in/tui",
-		modulePath + "/internal/adapter/in/tui/history",
-		modulePath + "/internal/adapter/in/tui/pane",
+		modulePath + "/internal/adapter/in/tui/view/history",
+		modulePath + "/internal/adapter/in/tui/view/pane",
 	})
 }
 
 func TestTUIStyleAndTextViewDependenciesStayAcyclic(t *testing.T) {
 	packages := listPackages(t)
-	stylePath := modulePath + "/internal/adapter/in/tui/style"
-	textPath := modulePath + "/internal/adapter/in/tui/textview"
+	stylePath := modulePath + "/internal/adapter/in/tui/view/style"
+	textPath := modulePath + "/internal/adapter/in/tui/view/textview"
 
 	stylePkg, ok := packages[stylePath]
 	if !ok {
@@ -231,7 +267,7 @@ func TestTUIStyleAndTextViewDependenciesStayAcyclic(t *testing.T) {
 
 func TestTUIExecViewIsPresentationLeaf(t *testing.T) {
 	packages := listPackages(t)
-	pkgPath := modulePath + "/internal/adapter/in/tui/execview"
+	pkgPath := modulePath + "/internal/adapter/in/tui/view/execview"
 	pkg, ok := packages[pkgPath]
 	if !ok {
 		t.Fatalf("package %s not found", pkgPath)
