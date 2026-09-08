@@ -7,7 +7,7 @@ import (
 	"time"
 
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
-	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
@@ -51,18 +51,18 @@ func AgentRows(snapshot AgentsSnapshot) []string {
 		now = time.Now()
 	}
 	for _, st := range visible {
-		header := fmt.Sprintf("%s  %-9s %s", AgentDisplayProfile(st), string(st.State), FormatElapsed(AgentDisplayDuration(st, now)))
+		header := AgentDisplayProfile(st) + "  " + textview.PadRight(string(st.State), 9) + " " + FormatElapsed(AgentDisplayDuration(st, now))
 		rows = append(rows, tuistyle.CommandStyle.Render(strings.TrimSpace(header)))
 		if task := strings.TrimSpace(st.Task); task != "" {
-			rows = append(rows, "  "+tool.TruncateRunes(task, max(12, snapshot.Width-8)))
+			rows = append(rows, "  "+textview.TruncateEllipsis(task, max(12, snapshot.Width-8)))
 		}
 		if label := AgentModelLabel(st); label != "" {
-			rows = append(rows, tuistyle.MutedStyle.Render("  "+tool.TruncateRunes(label, max(12, snapshot.Width-8))))
+			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(label, max(12, snapshot.Width-8))))
 		}
 		if activity := strings.TrimSpace(snapshot.Activity[st.ID]); activity != "" && !st.State.Terminal() {
-			rows = append(rows, tuistyle.MutedStyle.Render("  "+tool.TruncateRunes(activity, max(12, snapshot.Width-8))))
+			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(activity, max(12, snapshot.Width-8))))
 		} else if reason := strings.TrimSpace(st.Reason); reason != "" {
-			rows = append(rows, tuistyle.ErrorStyle.Render("  "+tool.TruncateRunes(reason, max(12, snapshot.Width-8))))
+			rows = append(rows, tuistyle.ErrorStyle.Render("  "+textview.TruncateEllipsis(reason, max(12, snapshot.Width-8))))
 		}
 		rows = append(rows, tuistyle.MutedStyle.Render("  id: "+st.ID))
 	}

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
@@ -65,7 +66,7 @@ func ReasoningRows(snapshot ReasoningSnapshot) []string {
 		if len(badges) > 0 {
 			detail += " · " + strings.Join(badges, " · ")
 		}
-		line := fmt.Sprintf("%s%-7s %s", cursor, label, tuistyle.MutedStyle.Render(detail))
+		line := cursor + textview.PadRight(label, 7) + " " + tuistyle.MutedStyle.Render(detail)
 		if i == index {
 			line = fmt.Sprintf("%s%s %s", cursor, tuistyle.BrandStyle.Bold(true).Render(label), tuistyle.MutedStyle.Render(detail))
 		}

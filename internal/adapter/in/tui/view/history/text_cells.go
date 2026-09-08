@@ -2,6 +2,7 @@ package history
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
@@ -213,7 +214,11 @@ func assistantCacheTail(text string) string {
 	if len(text) <= tailBytes {
 		return text
 	}
-	return text[len(text)-tailBytes:]
+	start := len(text) - tailBytes
+	for start < len(text) && !utf8.RuneStart(text[start]) {
+		start++
+	}
+	return text[start:]
 }
 
 func (c *AssistantCell) RawLines() []string { return rawTextLines(c.Text) }

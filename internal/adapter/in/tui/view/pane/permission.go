@@ -6,7 +6,6 @@ import (
 
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
-	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 type PermissionSnapshot struct {
@@ -33,7 +32,7 @@ type PermissionRender struct {
 func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 	if snapshot.Parked {
 		line := fmt.Sprintf("! Permission pending · %s · tab review · %s", snapshot.ToolName, snapshot.ShortcutHint)
-		return PermissionRender{Inline: tuistyle.MutedStyle.Render(tool.TruncateRunes(line, max(1, snapshot.Width-2))), Tone: snapshot.Tone}
+		return PermissionRender{Inline: tuistyle.MutedStyle.Render(textview.TruncateEllipsis(line, max(1, snapshot.Width-2))), Tone: snapshot.Tone}
 	}
 	index := snapshot.Index
 	if index < 0 {
@@ -56,8 +55,8 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 			selected = snapshot.Options[index]
 		}
 		return PermissionRender{Rows: []string{
-			titleStyle.Render(tool.TruncateRunes(snapshot.Title, contentWidth)),
-			tuistyle.MutedStyle.Render(tool.TruncateRunes(snapshot.ToolName+" · "+snapshot.Detail, contentWidth)),
+			titleStyle.Render(textview.TruncateEllipsis(snapshot.Title, contentWidth)),
+			tuistyle.MutedStyle.Render(textview.TruncateEllipsis(snapshot.ToolName+" · "+snapshot.Detail, contentWidth)),
 			tuistyle.BrandStyle.Render(tuistyle.GlyphPrompt + selected),
 			tuistyle.MutedStyle.Render(snapshot.ShortcutHint),
 			tuistyle.MutedStyle.Render("esc review"),
