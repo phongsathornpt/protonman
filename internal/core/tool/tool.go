@@ -186,6 +186,8 @@ const (
 	KindTask Kind = "task"
 	// KindAgent identifies subagent orchestration and lifecycle tools.
 	KindAgent Kind = "agent"
+	// KindCompute identifies deterministic local computation tools.
+	KindCompute Kind = "compute"
 )
 
 // ErrInvalidCall indicates that a call envelope cannot be dispatched safely.
@@ -629,7 +631,7 @@ type DynamicRegistrar interface {
 
 func validKind(kind Kind) bool {
 	switch kind {
-	case KindRead, KindEdit, KindBash, KindGrep, KindMCP, KindWebFetch, KindWebSearch, KindTask, KindAgent:
+	case KindRead, KindEdit, KindBash, KindGrep, KindMCP, KindWebFetch, KindWebSearch, KindTask, KindAgent, KindCompute:
 		return true
 	default:
 		return false
@@ -670,7 +672,7 @@ func EffectiveMutability(definition Definition) Mutability {
 		return definition.Mutability
 	}
 	switch definition.Kind {
-	case KindRead, KindGrep, KindWebFetch, KindWebSearch:
+	case KindRead, KindGrep, KindWebFetch, KindWebSearch, KindCompute:
 		return MutabilityReadOnly
 	default:
 		return MutabilityMutating

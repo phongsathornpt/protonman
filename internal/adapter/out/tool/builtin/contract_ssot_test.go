@@ -26,6 +26,14 @@ func TestBuiltinToolSSOTContract(t *testing.T) {
 			titlePrefix:     "Read pkg/api.go",
 		},
 		{
+			name:            "calculate",
+			args:            map[string]any{"expression": "2+2"},
+			wantKind:        tool.KindCompute,
+			wantDisplayName: "Calculate",
+			targetSub:       "2+2",
+			titlePrefix:     "Calculate 2+2",
+		},
+		{
 			name:            "write_file",
 			args:            map[string]any{"file_path": "pkg/out.go", "content": "package pkg"},
 			wantKind:        tool.KindEdit,
