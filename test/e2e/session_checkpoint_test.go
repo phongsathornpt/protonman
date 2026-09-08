@@ -28,7 +28,7 @@ func TestE2ESessionPersistenceAndRedaction(t *testing.T) {
 	}
 
 	// Verify session file was saved
-	sessionFile := filepath.Join(home, ".proton", "sessions", sessionID, "state.json")
+	sessionFile := filepath.Join(home, ".protonman", "sessions", sessionID, "state.json")
 	data, err := os.ReadFile(sessionFile)
 	if err != nil {
 		t.Fatalf("session file not found at %s: %v", sessionFile, err)
@@ -98,10 +98,10 @@ func TestE2ECheckpointsAndRestore(t *testing.T) {
 		t.Fatalf("search_replace failed: %s\n%s", srRes.stdout, srRes.stderr)
 	}
 
-	// Find the created checkpoint file on disk under .proton/checkpoints/
-	checkpointFiles, err := filepath.Glob(filepath.Join(home, ".proton", "checkpoints", "*", "checkpoint-*.json"))
+	// Find the created checkpoint file on disk under .protonman/checkpoints/
+	checkpointFiles, err := filepath.Glob(filepath.Join(home, ".protonman", "checkpoints", "*", "checkpoint-*.json"))
 	if err != nil || len(checkpointFiles) == 0 {
-		t.Fatalf("no checkpoint file found in %s: %v", filepath.Join(home, ".proton", "checkpoints"), err)
+		t.Fatalf("no checkpoint file found in %s: %v", filepath.Join(home, ".protonman", "checkpoints"), err)
 	}
 	checkpointID := strings.TrimSuffix(filepath.Base(checkpointFiles[0]), ".json")
 	if checkpointID == "" {
@@ -169,7 +169,7 @@ func TestE2ENewSessionByDefaultAndResume(t *testing.T) {
 		t.Fatalf("first run failed (code %d): %s\n%s", res1.exitCode, res1.stdout, res1.stderr)
 	}
 
-	sessDir := filepath.Join(home, ".proton", "sessions")
+	sessDir := filepath.Join(home, ".protonman", "sessions")
 	files1, err := filepath.Glob(filepath.Join(sessDir, "workspace-*", "state.json"))
 	if err != nil {
 		t.Fatalf("glob sessions: %v", err)

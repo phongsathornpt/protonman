@@ -110,7 +110,7 @@ A session ID is the ownership boundary for conversation state and the agent task
 
 The CLI resolves the session before constructing stateful tools. TUI/headless bind `get_todo` and `update_todo` to that session's repository; ACP creates a registry overlay per ACP session so task state cannot leak between concurrent sessions. Workspace file tools cannot mutate this private task state. Both session saves and todo patches use durable revisions plus filesystem serialization to reject stale writers.
 
-Runtime namespace resolution is centralized in `internal/app/appdirs` and `internal/base/envconfig`. `.protonman/` and `PROTONMAN_*` are canonical. Existing `.proton/` and `PROTON_*` values remain compatibility fallbacks; canonical state wins when both exist, while project initialization and fresh user state use the Protonman namespace.
+Runtime namespace resolution is centralized in `internal/app/appdirs` and `internal/base/envconfig`. User-global state uses `~/.protonman/`; project-local state uses `<workspace>/.protonman/`. The filesystem namespace has no `.proton/` fallback.
 
 ---
 

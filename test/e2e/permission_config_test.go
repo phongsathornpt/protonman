@@ -35,7 +35,7 @@ func TestE2EGlobalConfigDenyRuleOverridesAlwaysApprove(t *testing.T) {
 	home := newTestHome(t)
 
 	// Write global config.toml with explicit deny rule for bash rm *
-	configPath := filepath.Join(home, ".proton", "config.toml")
+	configPath := filepath.Join(home, ".protonman", "config.toml")
 	configContent := `
 [permission]
 default = "ask"
@@ -68,10 +68,10 @@ func TestE2EProjectTrustGating(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 
-	// Create project-local .proton/config.toml denying bash
-	projectProton := filepath.Join(ws, ".proton")
+	// Create project-local .protonman/config.toml denying bash
+	projectProton := filepath.Join(ws, ".protonman")
 	if err := os.MkdirAll(projectProton, 0o755); err != nil {
-		t.Fatalf("mkdir project .proton: %v", err)
+		t.Fatalf("mkdir project .protonman: %v", err)
 	}
 	projectConfig := `
 [[permission.rules]]
@@ -137,7 +137,7 @@ func TestE2EProviderConfigSaveAndReload(t *testing.T) {
 	}
 
 	// Step 2: Verify file existence and permissions on disk
-	configFile := filepath.Join(home, ".proton", "config.toml")
+	configFile := filepath.Join(home, ".protonman", "config.toml")
 	info, err := os.Stat(configFile)
 	if err != nil {
 		t.Fatalf("stat config file error = %v", err)
@@ -215,7 +215,7 @@ func TestE2EOpenCodeFreeProviderConfig(t *testing.T) {
 	}
 
 	// Step 2: Verify file existence and 0600 permissions
-	configFile := filepath.Join(home, ".proton", "config.toml")
+	configFile := filepath.Join(home, ".protonman", "config.toml")
 	info, err := os.Stat(configFile)
 	if err != nil {
 		t.Fatalf("stat config file error = %v", err)
@@ -299,8 +299,8 @@ func TestE2EProviderSwitchAndSelect(t *testing.T) {
 		t.Fatalf("SaveUserDefaultProvider(opencode) error: %v", err)
 	}
 
-	// Step 3: Check permissions on ~/.proton/config.toml (must be 0600)
-	configFile := filepath.Join(home, ".proton", "config.toml")
+	// Step 3: Check permissions on ~/.protonman/config.toml (must be 0600)
+	configFile := filepath.Join(home, ".protonman", "config.toml")
 	info, err := os.Stat(configFile)
 	if err != nil {
 		t.Fatalf("stat config file error: %v", err)

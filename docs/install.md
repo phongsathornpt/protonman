@@ -76,7 +76,7 @@ Remove only the executable:
 rm "$HOME/.local/bin/protonman"
 ```
 
-Runtime data is intentionally separate and is not deleted by uninstalling the binary. New installations use `~/.protonman/`; legacy `~/.proton/` data remains readable as a compatibility fallback.
+Runtime data is intentionally separate and is not deleted by uninstalling the binary. Protonman runtime state lives under `~/.protonman/`.
 
 Delete runtime data only when you explicitly want to remove configuration, sessions, checkpoints, skills, and logs:
 

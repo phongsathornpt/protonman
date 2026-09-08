@@ -34,11 +34,11 @@ type = "openai"
 base_url = %q
 api_key = "fast-key"
 `, primary.URL(), child.URL())
-	if err := os.WriteFile(filepath.Join(home, ".proton", "config.toml"), []byte(userConfig), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(home, ".protonman", "config.toml"), []byte(userConfig), 0o644); err != nil {
 		t.Fatalf("write user config: %v", err)
 	}
 
-	projectDir := filepath.Join(ws, ".proton")
+	projectDir := filepath.Join(ws, ".protonman")
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		t.Fatalf("create project config dir: %v", err)
 	}

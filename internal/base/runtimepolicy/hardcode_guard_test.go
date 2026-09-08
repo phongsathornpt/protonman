@@ -33,7 +33,6 @@ func TestMutableProductLiteralsStayCentralized(t *testing.T) {
 		"PROTON_DEBUG_LOG":             "internal/base/envconfig/env.go",
 		"PROTON_FORCE_TTY":             "internal/base/envconfig/env.go",
 		".protonman":                   "internal/app/appdirs/dirs.go",
-		".proton":                      "internal/app/appdirs/dirs.go",
 		"~/.protonman/config.toml":     "internal/app/appdirs/dirs.go",
 		"~/.protonman/skills/":         "internal/app/appdirs/dirs.go",
 		"~/.protonman/logs/mcp/":       "internal/app/appdirs/dirs.go",

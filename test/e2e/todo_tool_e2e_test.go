@@ -117,7 +117,7 @@ func TestE2ETodoLivesInSessionAggregateNotWorkspace(t *testing.T) {
 	if res.exitCode != 0 {
 		t.Fatalf("update_todo failed: %s\n%s", res.stdout, res.stderr)
 	}
-	todoPath := filepath.Join(home, ".proton", "sessions", sessionID, "todo.md")
+	todoPath := filepath.Join(home, ".protonman", "sessions", sessionID, "todo.md")
 	contents, err := os.ReadFile(todoPath)
 	if err != nil {
 		t.Fatalf("session todo missing at %s: %v", todoPath, err)
