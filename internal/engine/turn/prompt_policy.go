@@ -36,7 +36,9 @@ func (l *Loop) effectivePromptSpec(definitions []tool.Definition, extras []strin
 	}
 	spec.Capabilities = prompt.ToolCapabilities{}
 	spec.Mutations = prompt.MutationCapabilities{}
+	spec.AvailableTools = make([]string, 0, len(definitions))
 	for _, definition := range definitions {
+		spec.AvailableTools = append(spec.AvailableTools, definition.Name)
 		switch definition.Kind {
 		case tool.KindTask:
 			spec.Capabilities.Tasks = true

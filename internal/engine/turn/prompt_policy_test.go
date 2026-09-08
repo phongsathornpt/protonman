@@ -21,6 +21,9 @@ func TestEffectivePromptSpecDerivesCapabilitiesAndMutationDomains(t *testing.T) 
 	if !got.Capabilities.Tasks || !got.Capabilities.Agents || !got.Capabilities.MCP {
 		t.Fatalf("capabilities = %+v", got.Capabilities)
 	}
+	if joined := strings.Join(got.AvailableTools, ","); joined != "tasks,agents,edit,mcp.read,mcp.write" {
+		t.Fatalf("available tools = %q", joined)
+	}
 	if !got.Mutations.Task || !got.Mutations.Agent || !got.Mutations.Workspace || !got.Mutations.External {
 		t.Fatalf("mutations = %+v", got.Mutations)
 	}

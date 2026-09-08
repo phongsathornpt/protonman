@@ -197,6 +197,7 @@ func WithSystemPromptSpec(spec prompt.Spec) Option {
 	return func(loop *Loop) error {
 		clone := spec
 		clone.ModelPromptHints = append([]string(nil), spec.ModelPromptHints...)
+		clone.AvailableTools = append([]string(nil), spec.AvailableTools...)
 		clone.ExtraInstructions = append([]string(nil), spec.ExtraInstructions...)
 		loop.promptSpec = &clone
 		return nil
@@ -465,6 +466,7 @@ func (l *Loop) CloneWithTools(tools *toolcall.Service) (*Loop, error) {
 	if l.promptSpec != nil {
 		spec := *l.promptSpec
 		spec.ModelPromptHints = append([]string(nil), l.promptSpec.ModelPromptHints...)
+		spec.AvailableTools = append([]string(nil), l.promptSpec.AvailableTools...)
 		spec.ExtraInstructions = append([]string(nil), l.promptSpec.ExtraInstructions...)
 		clone.promptSpec = &spec
 	}

@@ -9,6 +9,7 @@ func TestRenderComposesStableContracts(t *testing.T) {
 	got := Render(Spec{
 		Role: "You inspect code.", Profile: "int", Workspace: "/repo",
 		GroundingEvidence: "workspace",
+		AvailableTools:    []string{"read", "grep", "find", "ls", "git", "math", "edit", "web", "bash", "todo", "subagent"},
 		Capabilities:      ToolCapabilities{Tasks: true, Agents: true}, Mutations: MutationCapabilities{Workspace: true}, Skills: "skill instructions",
 		ProjectInstructions: "follow repository rules",
 		ExtraInstructions:   []string{"custom one", "custom two"},
@@ -128,13 +129,13 @@ func TestRenderOmitsMCPContractWhenUnavailable(t *testing.T) {
 }
 
 func TestRenderToolDisciplineDoesNotBanLanguageRuntimes(t *testing.T) {
-	got := Render(Spec{})
+	got := Render(Spec{AvailableTools: []string{"read", "math", "bash"}})
 	for _, banned := range []string{"do not use Python", "do not use Node", "cat/head/tail", "grep/rg/find/ls"} {
 		if strings.Contains(got, banned) {
 			t.Fatalf("tool discipline retained command blacklist %q:\n%s", banned, got)
 		}
 	}
-	for _, want := range []string{"Use bash for actual programs", "language runtimes", "not for duplicating read, search, math, git status, or edit capabilities"} {
+	for _, want := range []string{"Use bash for actual programs", "language runtimes", "not represented by an available dedicated capability"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("tool discipline missing positive guidance %q:\n%s", want, got)
 		}
@@ -142,7 +143,7 @@ func TestRenderToolDisciplineDoesNotBanLanguageRuntimes(t *testing.T) {
 }
 
 func TestToolDisciplineUsesUnifiedSourceInspection(t *testing.T) {
-	got := Render(Spec{})
+	got := Render(Spec{AvailableTools: []string{"read"}})
 	if !strings.Contains(got, "read with view=source") {
 		t.Fatalf("tool discipline missing unified source inspection guidance:\n%s", got)
 	}
@@ -152,7 +153,7 @@ func TestToolDisciplineUsesUnifiedSourceInspection(t *testing.T) {
 }
 
 func TestToolDisciplineUsesCompactCapabilityActions(t *testing.T) {
-	got := Render(Spec{})
+	got := Render(Spec{AvailableTools: []string{"git", "edit"}})
 	for _, want := range []string{
 		"git action=status",
 		"edit action=replace",
@@ -179,6 +180,20 @@ func TestRenderDelegationAvoidsLegacySubagentToolNames(t *testing.T) {
 	for _, legacy := range []string{"delegate_task", "wait_agent", "get_agent", "list_agents", "cancel_agent", "resume_agent"} {
 		if strings.Contains(got, legacy) {
 			t.Fatalf("delegation contract exposes legacy subagent tool %q:\n%s", legacy, got)
+		}
+	}
+}
+
+func TestToolDisciplineMentionsOnlyAvailableCapabilities(t *testing.T) {
+	got := Render(Spec{AvailableTools: []string{"read", "web"}})
+	for _, want := range []string{"Use read for known workspace artifacts", "Use web for exposed web operations"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("tool discipline missing available capability %q:\\n%s", want, got)
+		}
+	}
+	for _, unavailable := range []string{"git action=status", "Use math", "Use edit action=", "Use bash for actual programs", "find discovers", "ls inspects"} {
+		if strings.Contains(got, unavailable) {
+			t.Fatalf("tool discipline mentions unavailable capability %q:\\n%s", unavailable, got)
 		}
 	}
 }

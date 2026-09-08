@@ -22,6 +22,7 @@ type Spec struct {
 	Profile             string
 	Workspace           string
 	ModelPromptHints    []string
+	AvailableTools      []string
 	GroundingEvidence   string
 	Capabilities        ToolCapabilities
 	Mutations           MutationCapabilities
@@ -128,18 +129,44 @@ func toolDisciplineSection(spec Spec) string {
 	lines := []string{
 		"# Tool Discipline",
 		"- Prefer the narrowest dedicated capability that directly represents the operation; use a tool only when it materially changes evidence, state, implementation, or verification.",
-		"- Use read for known workspace artifacts and read with view=source for bounded multi-file source inspection.",
-		"- Use grep to search file contents, find to discover workspace paths, and ls to inspect directory entries.",
-		"- Use git action=status for compact branch and working-tree state; use bash for Git operations not exposed by git.",
-		"- Use math for deterministic numeric computation.",
-		"- Use edit action=replace for exact text changes, patch for bounded multi-file changes, write for complete file creation or replacement, and restore only for Protonman checkpoints.",
-		"- Use bash for actual programs, builds, tests, package managers, language runtimes, transformations, and shell workflows not represented by a dedicated capability.",
-		"- Language runtimes invoked through bash are appropriate for real program logic, not for duplicating read, search, math, git status, or edit capabilities.",
+	}
+	if hasTool(spec, "read") {
+		lines = append(lines, "- Use read for known workspace artifacts and read with view=source for bounded multi-file source inspection.")
+	}
+	if hasTool(spec, "grep") || hasTool(spec, "find") || hasTool(spec, "ls") {
+		parts := make([]string, 0, 3)
+		if hasTool(spec, "grep") {
+			parts = append(parts, "grep searches file contents")
+		}
+		if hasTool(spec, "find") {
+			parts = append(parts, "find discovers workspace paths")
+		}
+		if hasTool(spec, "ls") {
+			parts = append(parts, "ls inspects directory entries")
+		}
+		lines = append(lines, "- Repository discovery capabilities: "+strings.Join(parts, "; ")+".")
+	}
+	if hasTool(spec, "git") {
+		lines = append(lines, "- Use git action=status for compact branch and working-tree state; use bash for Git operations not exposed by git when bash is available.")
+	}
+	if hasTool(spec, "math") {
+		lines = append(lines, "- Use math for deterministic numeric computation.")
+	}
+	if hasTool(spec, "edit") {
+		lines = append(lines, "- Use edit action=replace for exact text changes, patch for bounded multi-file changes, write for complete file creation or replacement, and restore only for Protonman checkpoints.")
+	}
+	if hasTool(spec, "web") {
+		lines = append(lines, "- Use web for exposed web operations instead of recreating an equivalent network request through bash.")
+	}
+	if hasTool(spec, "bash") {
+		lines = append(lines, "- Use bash for actual programs, builds, tests, package managers, language runtimes, transformations, and shell workflows not represented by an available dedicated capability.")
+	}
+	lines = append(lines,
 		"- Reuse existing evidence and do not repeat equivalent reads, searches, commands, or verification without new information that justifies the retry.",
 		"- After every tool result, reassess whether the requested outcome is already complete.",
 		"- If repeated attempts are not producing new progress, change strategy or report the blocker instead of looping.",
 		"- Do not continue optional exploration after the user's requested work is complete.",
-	}
+	)
 	if spec.Mutations.Workspace {
 		lines = append(lines,
 			"- For implementation work, finish once the requested behavior is implemented, relevant verification passes, and no required work remains.",
@@ -149,6 +176,15 @@ func toolDisciplineSection(spec Spec) string {
 		lines = append(lines, "- As a subagent, stay within the delegated scope and return as soon as the bounded deliverable is complete.")
 	}
 	return strings.Join(lines, "\n")
+}
+
+func hasTool(spec Spec, name string) bool {
+	for _, candidate := range spec.AvailableTools {
+		if candidate == name {
+			return true
+		}
+	}
+	return false
 }
 
 func workspaceSection(spec Spec) string {
