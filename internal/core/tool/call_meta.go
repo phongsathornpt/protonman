@@ -26,8 +26,9 @@ func (c Call) Kind() Kind {
 
 // Title produces a human-readable title describing what the tool call is doing.
 func (c Call) Title() string {
-	if spec, ok := metadataForName(c.Name); ok && spec.title != nil {
-		return spec.title(c.ArgumentsMap())
+	canonical := NormalizeLegacyCall(c)
+	if spec, ok := metadataForName(canonical.Name); ok && spec.title != nil {
+		return spec.title(canonical.ArgumentsMap())
 	}
 	return c.Name
 }
@@ -35,8 +36,9 @@ func (c Call) Title() string {
 // Target inspects the tool call and returns a human-facing target
 // string (e.g. URL, filepath, pattern, command, subagent ID).
 func (c Call) Target() string {
-	args := c.ArgumentsMap()
-	if spec, ok := metadataForName(c.Name); ok && spec.target != nil {
+	canonical := NormalizeLegacyCall(c)
+	args := canonical.ArgumentsMap()
+	if spec, ok := metadataForName(canonical.Name); ok && spec.target != nil {
 		return spec.target(args)
 	}
 	// Heuristic fallback for arbitrary MCP and custom tools.
@@ -67,8 +69,9 @@ func (d Definition) DisplayName() string {
 
 // AffectedPaths returns all file paths affected or accessed by the tool call.
 func (c Call) AffectedPaths() []string {
-	args := c.ArgumentsMap()
-	if spec, ok := metadataForName(c.Name); ok && spec.affectedPaths != nil {
+	canonical := NormalizeLegacyCall(c)
+	args := canonical.ArgumentsMap()
+	if spec, ok := metadataForName(canonical.Name); ok && spec.affectedPaths != nil {
 		return spec.affectedPaths(args)
 	}
 	for _, key := range []string{"patch", "diff", "input"} {
@@ -79,7 +82,7 @@ func (c Call) AffectedPaths() []string {
 		}
 	}
 	if path := ExtractString(args, "file_path", "path", "file", "filename", "target", "destination", "move_path"); path != "" {
-		if kind := KindForName(c.Name); kind == KindEdit || kind == KindRead {
+		if kind := KindForName(canonical.Name); kind == KindEdit || kind == KindRead {
 			return []string{path}
 		}
 	}

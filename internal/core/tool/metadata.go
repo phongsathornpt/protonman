@@ -31,8 +31,7 @@ var builtinMetadata = map[string]callMetadata{
 	"find":               {Metadata: Metadata{Name: "find", Kind: KindRead, DisplayName: "Find files"}, title: titleFindFiles, target: targetFindFiles},
 	"grep":               {Metadata: Metadata{Name: "grep", Kind: KindGrep, DisplayName: "Search"}, title: titleGrep, target: targetGrep},
 	"bash":               {Metadata: Metadata{Name: "bash", Kind: KindBash, DisplayName: "Run"}, title: titleBash, target: targetBash},
-	"web":                {Metadata: Metadata{Name: "web", Kind: KindWebFetch, DisplayName: "Fetch"}, title: titleWebFetch, target: targetWebFetch},
-	"web_search":         {Metadata: Metadata{Name: "web_search", Kind: KindWebSearch, DisplayName: "Search web"}, title: titleWebSearch, target: targetWebSearch},
+	"web":                {Metadata: Metadata{Name: "web", Kind: KindWebFetch, DisplayName: "Web"}, title: titleWeb, target: targetWeb},
 	"git":                {Metadata: Metadata{Name: "git", Kind: KindGit, DisplayName: "Git"}, title: titleGitStatus, target: targetGitStatus},
 	"todo":               {Metadata: Metadata{Name: "todo", Kind: KindTask, DisplayName: "Tasks"}, title: titleTodo, target: targetTodo},
 	"get_todo":           {Metadata: Metadata{Name: "get_todo", Kind: KindTask, DisplayName: "Tasks"}, title: titleConstant("Check task list"), target: targetConstant("task plan")},
@@ -305,6 +304,22 @@ func titleBash(args map[string]any) string {
 	return "Run shell command"
 }
 func targetBash(args map[string]any) string { return ExtractString(args, "command", "cmd") }
+func titleWeb(args map[string]any) string {
+	switch strings.ToLower(ExtractString(args, "action")) {
+	case "search":
+		return titleWebSearch(args)
+	case "fetch":
+		return titleWebFetch(args)
+	default:
+		return "Web"
+	}
+}
+func targetWeb(args map[string]any) string {
+	if strings.EqualFold(ExtractString(args, "action"), "search") {
+		return targetWebSearch(args)
+	}
+	return targetWebFetch(args)
+}
 func titleWebFetch(args map[string]any) string {
 	if value := ExtractString(args, "url"); value != "" {
 		return "Fetch " + TruncateRunes(value, 45)

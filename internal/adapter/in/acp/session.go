@@ -243,7 +243,7 @@ func (s *Session) ExecutePrompt(
 				"sessionUpdate": "tool_call",
 				"toolCallId":    event.Call.ID,
 				"title":         TitleForToolCall(event.Call),
-				"kind":          string(ToolKindForName(event.Call.Name)),
+				"kind":          string(ToolKindForCall(event.Call)),
 				"status":        string(ToolCallStatusInProgress),
 			}
 			if len(locations) > 0 {
@@ -627,7 +627,7 @@ func (s *Session) handleSlashCommand(
 			"sessionUpdate": "tool_call",
 			"toolCallId":    call.ID,
 			"title":         TitleForToolCall(call),
-			"kind":          string(ToolKindForName(call.Name)),
+			"kind":          string(ToolKindForCall(call)),
 			"status":        string(ToolCallStatusInProgress),
 			"rawInput":      call.Arguments,
 		}

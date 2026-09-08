@@ -307,3 +307,55 @@ func TestWebFetchBlocksPrivateAndMetadataSSRF(t *testing.T) {
 		t.Fatalf("expected ErrNetworkDenied for cloud metadata even with AllowLocalhost, got: %v", err)
 	}
 }
+
+func TestWebSearchUsesCanonicalCapability(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+		if got := req.URL.Query().Get("q"); got != "golang concurrency" {
+			t.Fatalf("query = %q", got)
+		}
+		writer.Header().Set("Content-Type", "text/html")
+		_, _ = writer.Write([]byte(`<html><body>
+<a class="result__a" href="https://example.com/one">First &amp; Result</a>
+<a class="result__a" href="/l/?uddg=https%3A%2F%2Fexample.org%2Ftwo">Second Result</a>
+</body></html>`))
+	}))
+	t.Cleanup(server.Close)
+
+	handler := NewWebFetch(
+		sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted, AllowLocalhost: true},
+		WithWebSearchEndpoint(server.URL),
+	)
+	result, err := handler.Execute(context.Background(), newJSONCall(t, "search-1", "web", map[string]any{
+		"action": "search",
+		"query":  "golang concurrency",
+		"limit":  2,
+	}))
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	for _, want := range []string{"First & Result", "https://example.com/one", "Second Result", "https://example.org/two"} {
+		if !strings.Contains(result.Output, want) {
+			t.Fatalf("output missing %q: %s", want, result.Output)
+		}
+	}
+	if result.ToolName != "web" {
+		t.Fatalf("ToolName = %q, want web", result.ToolName)
+	}
+}
+
+func TestWebDefinitionPublishesFetchAndSearchActions(t *testing.T) {
+	def := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted}).Definition()
+	if def.Name != "web" {
+		t.Fatalf("name = %q", def.Name)
+	}
+	encoded, err := json.Marshal(def.InputSchema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(encoded)
+	for _, want := range []string{`"fetch"`, `"search"`, `"query"`, `"url"`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("schema missing %s: %s", want, text)
+		}
+	}
+}

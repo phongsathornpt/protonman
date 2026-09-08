@@ -16,11 +16,21 @@ var legacyToolAliases = map[string]legacyToolAlias{
 	"find_files":         {Canonical: "find"},
 	"calculate":          {Canonical: "math"},
 	"web_fetch":          {Canonical: "web", Action: "fetch"},
+	"web_search":         {Canonical: "web", Action: "search"},
 	"git_status":         {Canonical: "git", Action: "status"},
 	"write_file":         {Canonical: "edit", Action: "write"},
 	"search_replace":     {Canonical: "edit", Action: "replace"},
 	"apply_patch":        {Canonical: "edit", Action: "patch"},
 	"checkpoint_restore": {Canonical: "edit", Action: "restore"},
+	"get_todo":           {Canonical: "todo", Action: "get"},
+	"update_todo":        {Canonical: "todo", Action: "update"},
+	"activate_skill":     {Canonical: "skill"},
+	"delegate_task":      {Canonical: "subagent", Action: "spawn"},
+	"wait_agent":         {Canonical: "subagent", Action: "wait"},
+	"get_agent":          {Canonical: "subagent", Action: "get"},
+	"list_agents":        {Canonical: "subagent", Action: "list"},
+	"cancel_agent":       {Canonical: "subagent", Action: "cancel"},
+	"resume_agent":       {Canonical: "subagent", Action: "resume"},
 }
 
 // CanonicalName maps legacy public tool names to the current model-facing

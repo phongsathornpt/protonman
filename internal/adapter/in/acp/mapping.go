@@ -1,6 +1,7 @@
 package acp
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -8,9 +9,28 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
-// ToolKindForName returns the ACP ToolKind for a Protonman tool.
+// ToolKindForName returns the ACP ToolKind for a Protonman tool name.
 func ToolKindForName(name string) ToolKind {
-	switch tool.KindForName(name) {
+	return ToolKindForCall(tool.Call{Name: name, Arguments: json.RawMessage(`{}`)})
+}
+
+// ToolKindForCall classifies canonical capability actions without depending on legacy tool names.
+func ToolKindForCall(call tool.Call) ToolKind {
+	call = tool.NormalizeLegacyCall(call)
+	args := call.ArgumentsMap()
+	if call.Name == "web" {
+		if strings.EqualFold(tool.ExtractString(args, "action"), "search") {
+			return ToolKindSearch
+		}
+		return ToolKindFetch
+	}
+	if call.Name == "todo" {
+		if strings.EqualFold(tool.ExtractString(args, "action"), "get") {
+			return ToolKindRead
+		}
+		return ToolKindEdit
+	}
+	switch tool.KindForName(call.Name) {
 	case tool.KindRead:
 		return ToolKindRead
 	case tool.KindEdit:
@@ -22,9 +42,6 @@ func ToolKindForName(name string) ToolKind {
 	case tool.KindWebFetch:
 		return ToolKindFetch
 	case tool.KindTask:
-		if name == "get_todo" {
-			return ToolKindRead
-		}
 		return ToolKindEdit
 	default:
 		return ToolKindOther
