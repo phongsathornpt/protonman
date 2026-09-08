@@ -14,6 +14,7 @@ import (
 
 // Options controls project-local Protonman discovery.
 type Options struct {
+	HomeDir       string
 	WorkDir       string
 	Trusted       bool
 	ConfigSources []string
@@ -22,6 +23,7 @@ type Options struct {
 // State describes project-local Protonman resources without loading configuration.
 type State struct {
 	WorkDir      string
+	Available    bool
 	ProtonDir    string
 	Exists       bool
 	Trusted      bool
@@ -50,12 +52,20 @@ func Discover(ctx context.Context, opts Options) (State, error) {
 	if err != nil {
 		return State{}, fmt.Errorf("resolve absolute project path: %w", err)
 	}
+	scope, err := appdirs.ResolveProjectScope(opts.HomeDir, absWorkDir)
+	if err != nil {
+		return State{}, fmt.Errorf("resolve project scope: %w", err)
+	}
 	state := State{
 		WorkDir:    absWorkDir,
-		ProtonDir:  appdirs.ResolvedProjectRoot(absWorkDir),
+		Available:  scope.Available,
+		ProtonDir:  scope.Root,
 		Trusted:    opts.Trusted,
-		ConfigPath: appdirs.ResolvedProjectConfig(absWorkDir),
-		SkillsPath: appdirs.ResolvedProjectSkills(absWorkDir),
+		ConfigPath: scope.Config,
+		SkillsPath: scope.Skills,
+	}
+	if !scope.Available {
+		return state, nil
 	}
 	if state.Exists, err = isDir(state.ProtonDir); err != nil {
 		return State{}, fmt.Errorf("inspect project protonman directory: %w", err)
