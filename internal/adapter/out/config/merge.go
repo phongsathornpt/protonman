@@ -223,10 +223,14 @@ func decodeRule(raw fileRule) (permission.Rule, error) {
 	if err != nil {
 		return permission.Rule{}, fmt.Errorf("pattern_mode: %w", err)
 	}
+	pattern := raw.Pattern
+	if strings.EqualFold(strings.TrimSpace(pattern), "all") {
+		pattern = "*"
+	}
 	return permission.Rule{
 		Action:      action,
 		Tool:        toolKind,
-		Pattern:     raw.Pattern,
+		Pattern:     pattern,
 		PatternMode: patternMode,
 	}, nil
 }

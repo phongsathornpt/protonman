@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -30,4 +31,12 @@ func (UserSettings) SaveMaxToolCalls(maxToolCalls int) error {
 		return err
 	}
 	return config.SaveUserMaxToolCalls(homeDir, maxToolCalls)
+}
+
+func (UserSettings) SavePermissionRule(rule permission.Rule) error {
+	homeDir, err := userHomeDir()
+	if err != nil {
+		return err
+	}
+	return config.SaveUserPermissionRule(homeDir, rule)
 }

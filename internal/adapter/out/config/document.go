@@ -60,7 +60,7 @@ type fileRule struct {
 	Action      string `toml:"action"`
 	Tool        string `toml:"tool"`
 	Pattern     string `toml:"pattern"`
-	PatternMode string `toml:"pattern_mode"`
+	PatternMode string `toml:"pattern_mode,omitempty"`
 }
 
 type fileUI struct {

@@ -1004,3 +1004,53 @@ func TestServiceEmitsRecoveryLifecycleEvents(t *testing.T) {
 		t.Fatalf("recovery events = %#v", events)
 	}
 }
+
+func TestServiceAddRuleDynamicallyAllowsSubsequentCalls(t *testing.T) {
+	handler := &fakeHandler{definition: tool.Definition{
+		Name: "read_file", Description: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
+		PermissionDetailKey: "path",
+	}}
+	// Default ask mode, no prompt configured -> fails closed with ErrPermissionDenied
+	service := newTestService(t, handler, permission.Config{Default: permission.ActionAsk}, WithMode(permission.ModeAsk))
+	call, _ := tool.NewCall("read-1", "read_file", json.RawMessage(`{"path":"src/safe.go"}`))
+
+	// First call denied because mode is ask and no prompt is set
+	result, err := service.Call(context.Background(), call)
+	if err == nil || !result.Denied {
+		t.Fatalf("expected first call to be denied without prompt, got: result=%#v, err=%v", result, err)
+	}
+	if handler.calls != 0 {
+		t.Fatalf("handler calls = %d, want 0", handler.calls)
+	}
+
+	// Add static allow rule dynamically
+	err = service.AddRule(permission.Rule{
+		Action:      permission.ActionAllow,
+		Tool:        permission.ToolRead,
+		Pattern:     "src/safe.go",
+		PatternMode: permission.PatternModeGlob,
+	})
+	if err != nil {
+		t.Fatalf("AddRule error = %v", err)
+	}
+
+	// Second call with same target now succeeds immediately without asking
+	call2, _ := tool.NewCall("read-2", "read_file", json.RawMessage(`{"path":"src/safe.go"}`))
+	result2, err := service.Call(context.Background(), call2)
+	if err != nil || result2.Denied {
+		t.Fatalf("expected second call to be allowed by dynamically added rule, got: result=%#v, err=%v", result2, err)
+	}
+	if handler.calls != 1 {
+		t.Fatalf("handler calls = %d, want 1", handler.calls)
+	}
+
+	// Different target still asks (denies without prompt)
+	call3, _ := tool.NewCall("read-3", "read_file", json.RawMessage(`{"path":"src/other.go"}`))
+	result3, err := service.Call(context.Background(), call3)
+	if err == nil || !result3.Denied {
+		t.Fatalf("expected different target to be denied, got: result=%#v, err=%v", result3, err)
+	}
+	if handler.calls != 1 {
+		t.Fatalf("handler calls = %d, want 1", handler.calls)
+	}
+}

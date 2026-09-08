@@ -70,6 +70,53 @@ func SaveProjectPermissionMode(workDir string, mode permission.Mode) error {
 	})
 }
 
+// SaveProjectPermissionRule adds a static permission rule to the project config.
+func SaveProjectPermissionRule(workDir string, rule permission.Rule) error {
+	if !rule.Action.Valid() {
+		return fmt.Errorf("invalid permission action: %v", rule.Action)
+	}
+	if !permission.ValidToolKind(rule.Tool) {
+		return fmt.Errorf("invalid permission tool kind: %q", rule.Tool)
+	}
+	return modifyProjectConfigFile(workDir, func(doc *fileDocument) {
+		appendRuleToDocument(doc, rule)
+	})
+}
+
+func appendRuleToDocument(doc *fileDocument, rule permission.Rule) {
+	patternModeStr := ""
+	if rule.PatternMode == permission.PatternModeDomain {
+		patternModeStr = "domain"
+	}
+	pattern := rule.Pattern
+	if rule.PatternMode != permission.PatternModeDomain && (strings.EqualFold(strings.TrimSpace(pattern), "all") || strings.TrimSpace(pattern) == "") {
+		pattern = "*"
+	}
+	raw := fileRule{
+		Action:      rule.Action.String(),
+		Tool:        string(rule.Tool),
+		Pattern:     pattern,
+		PatternMode: patternModeStr,
+	}
+	for _, existing := range doc.Permission.Rules {
+		existingMode := existing.PatternMode
+		if existingMode == "glob" {
+			existingMode = ""
+		}
+		existingPattern := existing.Pattern
+		if existingMode != "domain" && (strings.EqualFold(strings.TrimSpace(existingPattern), "all") || strings.TrimSpace(existingPattern) == "") {
+			existingPattern = "*"
+		}
+		if existing.Action == raw.Action &&
+			strings.EqualFold(existing.Tool, raw.Tool) &&
+			existingPattern == raw.Pattern &&
+			existingMode == raw.PatternMode {
+			return
+		}
+	}
+	doc.Permission.Rules = append(doc.Permission.Rules, raw)
+}
+
 func modifyProjectConfigFile(workDir string, mutate func(*fileDocument)) error {
 	absWorkDir, err := filepath.Abs(strings.TrimSpace(workDir))
 	if err != nil {

@@ -280,3 +280,179 @@ func TestStalePermissionRequestAfterTurnEndIsDenied(t *testing.T) {
 		t.Fatal("stale permission request was not resolved")
 	}
 }
+
+func TestBubbleModelPermissionModalAllowsAndSavesProjectRule(t *testing.T) {
+	bridge := newPermissionBridge()
+	defer bridge.Close()
+	registry, _ := newBubbleTestRegistry()
+	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
+	workDir := t.TempDir()
+	model := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, bridge, workDir)
+	model.projectTrusted = true
+
+	response := make(chan permissionResponse, 1)
+	model.modal = &permissionRequest{
+		request: permission.Request{
+			ToolName: "bash",
+			ToolKind: permission.ToolBash,
+			Detail:   "git status --short",
+			Effect:   tool.CommandEffectReadOnly,
+			Risk:     tool.CommandRiskNormal,
+		},
+		response: response,
+	}
+	model.openPermission(*model.modal)
+
+	// Press 'p' to allow and save to project
+	updated, saveCmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	model = updated.(*bubbleModel)
+	if model.modal != nil {
+		t.Fatal("permission modal remains open after project save grant")
+	}
+	if saveCmd == nil {
+		t.Fatal("expected saveCmd from project save")
+	}
+
+	// Verify response was sent as allow once
+	select {
+	case res := <-response:
+		if res.resolution.Action != permission.ActionAllow {
+			t.Fatalf("permission action = %s, want allow", res.resolution.Action)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no response received")
+	}
+
+	// Verify live policy was updated
+	d := service.Policy().Evaluate(permission.Request{
+		ToolName: "bash",
+		ToolKind: permission.ToolBash,
+		Detail:   "git status --short",
+	})
+	if d.Action != permission.ActionAllow {
+		t.Fatalf("live policy decision = %v, want allow", d.Action)
+	}
+
+	// Execute saveCmd and verify project setting saved msg
+	msg := saveCmd()
+	savedMsg, ok := msg.(permissionRuleSavedMsg)
+	if !ok {
+		t.Fatalf("msg type = %T, want permissionRuleSavedMsg", msg)
+	}
+	if savedMsg.err != nil {
+		t.Fatalf("save rule error: %v", savedMsg.err)
+	}
+	if savedMsg.scope != "project" {
+		t.Fatalf("scope = %q, want project", savedMsg.scope)
+	}
+
+	// Process message in model
+	updated, _ = model.Update(savedMsg)
+	model = updated.(*bubbleModel)
+	if !strings.Contains(plainTranscript(model), "Saved allow rule to project config") {
+		t.Fatalf("transcript missing save notice: %s", plainTranscript(model))
+	}
+}
+
+func TestBubbleModelPermissionModalAllowsAndSavesGlobalRule(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("PROTONMAN_HOME", homeDir)
+
+	bridge := newPermissionBridge()
+	defer bridge.Close()
+	registry, _ := newBubbleTestRegistry()
+	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
+	model := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, bridge, t.TempDir())
+
+	response := make(chan permissionResponse, 1)
+	model.modal = &permissionRequest{
+		request: permission.Request{
+			ToolName: "read_file",
+			ToolKind: permission.ToolRead,
+			Detail:   "README.md",
+			Effect:   tool.CommandEffectReadOnly,
+			Risk:     tool.CommandRiskNormal,
+		},
+		response: response,
+	}
+	model.openPermission(*model.modal)
+
+	// Press 'g' to allow and save globally
+	updated, saveCmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+	model = updated.(*bubbleModel)
+	if model.modal != nil {
+		t.Fatal("permission modal remains open after global save grant")
+	}
+	if saveCmd == nil {
+		t.Fatal("expected saveCmd from global save")
+	}
+
+	// Verify response was sent as allow once
+	select {
+	case res := <-response:
+		if res.resolution.Action != permission.ActionAllow {
+			t.Fatalf("permission action = %s, want allow", res.resolution.Action)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no response received")
+	}
+
+	// Verify live policy was updated
+	d := service.Policy().Evaluate(permission.Request{
+		ToolName: "read_file",
+		ToolKind: permission.ToolRead,
+		Detail:   "README.md",
+	})
+	if d.Action != permission.ActionAllow {
+		t.Fatalf("live policy decision = %v, want allow", d.Action)
+	}
+
+	// Execute saveCmd and verify global setting saved msg
+	msg := saveCmd()
+	savedMsg, ok := msg.(permissionRuleSavedMsg)
+	if !ok {
+		t.Fatalf("msg type = %T, want permissionRuleSavedMsg", msg)
+	}
+	if savedMsg.err != nil {
+		t.Fatalf("save rule error: %v", savedMsg.err)
+	}
+	if savedMsg.scope != "global" {
+		t.Fatalf("scope = %q, want global", savedMsg.scope)
+	}
+}
+
+func TestBubbleModelPermissionModalProjectOptionHiddenWhenUntrusted(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.projectTrusted = false
+	model.resize(100, 30)
+
+	model.modal = &permissionRequest{
+		request: permission.Request{
+			ToolName: "bash",
+			ToolKind: permission.ToolBash,
+			Detail:   "git status",
+			Effect:   tool.CommandEffectReadOnly,
+			Risk:     tool.CommandRiskNormal,
+		},
+		response: make(chan permissionResponse, 1),
+	}
+	model.openPermission(*model.modal)
+
+	view := model.View()
+	if strings.Contains(view, "Allow and save to project") || strings.Contains(view, "p project") {
+		t.Fatalf("untrusted workspace exposed project rule option:\n%s", view)
+	}
+	if !strings.Contains(view, "Allow and save globally") {
+		t.Fatalf("view missing global rule option:\n%s", view)
+	}
+
+	// 'p' shortcut should do nothing when project option is hidden
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	model = updated.(*bubbleModel)
+	if cmd != nil {
+		t.Fatalf("unexpected cmd on 'p' when untrusted: %v", cmd)
+	}
+	if model.modal == nil {
+		t.Fatal("permission modal should remain open after invalid shortcut 'p'")
+	}
+}
