@@ -145,7 +145,8 @@ func (w *Workspace) ReserveInternalPath(path string) error {
 	return nil
 }
 
-func (w *Workspace) isInternalPath(path string) (bool, error) {
+// IsInternalPath reports whether path belongs to a reserved Protonman internal subtree.
+func (w *Workspace) IsInternalPath(path string) (bool, error) {
 	canonical, err := pathutil.Canonical(path)
 	if err != nil {
 		return false, err
@@ -323,7 +324,7 @@ func (w *Workspace) checkAbsolute(ctx context.Context, path string) error {
 			ErrOutsideWorkspace,
 		)
 	}
-	if internal, err := w.isInternalPath(path); err != nil {
+	if internal, err := w.IsInternalPath(path); err != nil {
 		return fmt.Errorf("check internal workspace path: %w", err)
 	} else if internal {
 		return newBoundaryError(
@@ -370,7 +371,7 @@ func (w *Workspace) checkSymlinkBoundary(path string) error {
 			ErrOutsideWorkspace,
 		)
 	}
-	if internal, err := w.isInternalPath(resolvedAncestor); err != nil {
+	if internal, err := w.IsInternalPath(resolvedAncestor); err != nil {
 		return fmt.Errorf("check internal symlink target: %w", err)
 	} else if internal {
 		return newBoundaryError(
@@ -405,7 +406,7 @@ func (w *Workspace) checkSymlinkBoundaryWithRoot(path string, root string) error
 			ErrOutsideWorkspace,
 		)
 	}
-	if internal, err := w.isInternalPath(resolvedAncestor); err != nil {
+	if internal, err := w.IsInternalPath(resolvedAncestor); err != nil {
 		return fmt.Errorf("check internal symlink target: %w", err)
 	} else if internal {
 		return newBoundaryError(

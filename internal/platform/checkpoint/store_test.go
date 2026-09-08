@@ -346,3 +346,23 @@ func newTestWorkspace(t *testing.T, protected []string) *workspace.Workspace {
 	}
 	return workspaceRoot
 }
+
+func TestFileStoreAllowsReservedStoreInsideWorkspace(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	internalRoot := filepath.Join(workspaceRoot.Root(), ".protonman")
+	if err := workspaceRoot.ReserveInternalPath(internalRoot); err != nil {
+		t.Fatal(err)
+	}
+	storeRoot := filepath.Join(internalRoot, "checkpoints", "workspace-test")
+	if _, err := NewFileStore(storeRoot, workspaceRoot); err != nil {
+		t.Fatalf("NewFileStore() reserved internal root error = %v", err)
+	}
+}
+
+func TestFileStoreRejectsUnreservedStoreInsideWorkspace(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	storeRoot := filepath.Join(workspaceRoot.Root(), "checkpoints")
+	if _, err := NewFileStore(storeRoot, workspaceRoot); err == nil {
+		t.Fatal("NewFileStore() error = nil, want unreserved workspace root rejection")
+	}
+}
