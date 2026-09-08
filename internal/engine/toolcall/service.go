@@ -525,7 +525,7 @@ func (s *Service) recoverDedicatedTool(ctx context.Context, telemetry callTeleme
 	definition := handler.Definition()
 	recoveryArgs := tool.NormalizeArguments(definition, recovery.Arguments)
 	if tool.EffectiveCallMutability(definition, recoveryArgs) != tool.MutabilityReadOnly ||
-		definition.Safety.Boundary != tool.BoundaryPolicyWorkspaceRead {
+		tool.EffectiveCallSafety(definition, recoveryArgs).Boundary != tool.BoundaryPolicyWorkspaceRead {
 		return tool.Result{}, nil, false
 	}
 	validators, err := s.validatorsFor(definition)

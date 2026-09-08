@@ -22,3 +22,42 @@ func TestEffectiveCallEffect(t *testing.T) {
 		}
 	}
 }
+
+func TestEffectiveCallSemanticsUsesDefinitionResolver(t *testing.T) {
+	definition := Definition{
+		Name:       "todo",
+		Kind:       KindTask,
+		Mutability: MutabilityMutating,
+		Safety: SafetyContract{
+			MutationDomain: MutationDomainTaskState, MutationSafety: MutationSafetyNone,
+			CheckpointPolicy: CheckpointPolicyNone, Boundary: BoundaryPolicyNone,
+		},
+		Semantics: func(arguments json.RawMessage) CallSemantics {
+			semantics := StaticCallSemantics(Definition{
+				Kind:       KindTask,
+				Mutability: MutabilityMutating,
+				Safety: SafetyContract{
+					MutationDomain: MutationDomainTaskState, MutationSafety: MutationSafetyNone,
+					CheckpointPolicy: CheckpointPolicyNone, Boundary: BoundaryPolicyNone,
+				},
+			})
+			var input struct {
+				Action string `json:"action"`
+			}
+			if json.Unmarshal(arguments, &input) == nil && input.Action == "get" {
+				semantics.Mutability = MutabilityReadOnly
+				semantics.Effect = CommandEffectReadOnly
+			}
+			return semantics
+		},
+	}
+	if got := EffectiveCallMutability(definition, json.RawMessage(`{"action":"get"}`)); got != MutabilityReadOnly {
+		t.Fatalf("get mutability = %q, want read_only", got)
+	}
+	if got := EffectiveCallEffect(definition, json.RawMessage(`{"action":"get"}`)); got != CommandEffectReadOnly {
+		t.Fatalf("get effect = %q, want read_only", got)
+	}
+	if got := EffectiveCallMutability(definition, json.RawMessage(`{"action":"update"}`)); got != MutabilityMutating {
+		t.Fatalf("update mutability = %q, want mutating", got)
+	}
+}

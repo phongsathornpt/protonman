@@ -47,7 +47,7 @@ func (s *groundingState) observe(executions []executedCall, definitions []tool.D
 	}
 	for _, execution := range executions {
 		definition, ok := byName[execution.call.Name]
-		if !ok || definition.Evidence != s.evidence {
+		if !ok || tool.EffectiveCallEvidence(definition, execution.call.Arguments) != s.evidence {
 			continue
 		}
 		if execution.suppressed || execution.err != nil || execution.result.Denied || execution.result.Failure != nil {

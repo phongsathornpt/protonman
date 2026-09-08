@@ -43,6 +43,23 @@ type SafetyContract struct {
 	Boundary         BoundaryPolicy
 }
 
+// CallSemantics describes the effective safety and state semantics of one
+// concrete invocation. Capability facade tools use this to refine a broad
+// static Definition according to an action encoded in the arguments.
+type CallSemantics struct {
+	Mutability Mutability
+	Safety     SafetyContract
+	Evidence   EvidenceKind
+	Effect     CommandEffect
+	Risk       CommandRisk
+	Scope      CommandScope
+}
+
+// CallSemanticsResolver refines a tool definition for one concrete call.
+// Resolvers should start from StaticCallSemantics and change only semantics
+// proven by the call arguments.
+type CallSemanticsResolver func(json.RawMessage) CallSemantics
+
 // Declared reports whether a tool explicitly published its safety semantics.
 func (s SafetyContract) Declared() bool {
 	return s.MutationDomain != MutationDomainUnspecified &&
@@ -494,6 +511,9 @@ type Definition struct {
 	InputAliases map[string][]string
 	// OutputSchema optionally validates structured output returned by the tool.
 	OutputSchema map[string]any
+	// Semantics optionally refines mutability, safety, evidence, and risk for a
+	// concrete call. This is intentionally host-only and is never published to models.
+	Semantics CallSemanticsResolver
 }
 
 // Validate checks the invariants required for safe registry insertion.
@@ -679,72 +699,85 @@ func EffectiveMutability(definition Definition) Mutability {
 	}
 }
 
-// EffectiveCallEffect reports the per-call shell effect for grant scoping.
-// Unknown shell effects stay unknown so callers fail closed. Non-bash tools
-// map read-only mutability to read-only, everything else to mutating.
-func EffectiveCallEffect(definition Definition, arguments json.RawMessage) CommandEffect {
-	if definition.Kind != KindBash {
-		if EffectiveMutability(definition) == MutabilityReadOnly {
-			return CommandEffectReadOnly
-		}
-		return CommandEffectMutating
+// StaticCallSemantics returns the conservative semantics implied by a tool
+// definition before any call-specific refinement is applied.
+func StaticCallSemantics(definition Definition) CallSemantics {
+	mutability := EffectiveMutability(definition)
+	effect := CommandEffectMutating
+	if mutability == MutabilityReadOnly {
+		effect = CommandEffectReadOnly
 	}
-	var input struct {
-		Command string `json:"command"`
+	return CallSemantics{
+		Mutability: mutability,
+		Safety:     definition.Safety,
+		Evidence:   definition.Evidence,
+		Effect:     effect,
+		Risk:       CommandRiskNormal,
+		Scope:      CommandScopeUnknown,
 	}
-	if err := json.Unmarshal(arguments, &input); err != nil {
-		return CommandEffectUnknown
-	}
-	return AnalyzeCommand(input.Command).Effect
 }
 
-// EffectiveCallRisk reports proven destructive behavior for calls whose arguments can be analyzed safely.
-// Undecodable arguments and unknown shell effects fail closed as destructive,
-// so session grants and one-shot clamps never treat the unknown as safe.
-func EffectiveCallScope(definition Definition, arguments json.RawMessage) CommandScope {
+// EffectiveCallSemantics resolves the host-side semantics for one invocation.
+// Capability facades may provide an explicit resolver; bash retains its
+// command analyzer fallback for backwards compatibility.
+func EffectiveCallSemantics(definition Definition, arguments json.RawMessage) CallSemantics {
+	if definition.Semantics != nil {
+		return definition.Semantics(arguments)
+	}
+	semantics := StaticCallSemantics(definition)
 	if definition.Kind != KindBash {
-		return CommandScopeUnknown
+		return semantics
 	}
 	var input struct {
 		Command string `json:"command"`
 	}
 	if err := json.Unmarshal(arguments, &input); err != nil {
-		return CommandScopeUnknown
-	}
-	return AnalyzeCommand(input.Command).Scope
-}
-
-func EffectiveCallRisk(definition Definition, arguments json.RawMessage) CommandRisk {
-	if definition.Kind != KindBash {
-		return CommandRiskNormal
-	}
-	var input struct {
-		Command string `json:"command"`
-	}
-	if err := json.Unmarshal(arguments, &input); err != nil {
-		return CommandRiskDestructive
+		semantics.Mutability = MutabilityMutating
+		semantics.Effect = CommandEffectUnknown
+		semantics.Risk = CommandRiskDestructive
+		return semantics
 	}
 	analysis := AnalyzeCommand(input.Command)
-	if analysis.Effect == CommandEffectUnknown {
-		return CommandRiskDestructive
+	semantics.Effect = analysis.Effect
+	semantics.Risk = analysis.Risk
+	semantics.Scope = analysis.Scope
+	if analysis.Effect == CommandEffectReadOnly {
+		semantics.Mutability = MutabilityReadOnly
+	} else {
+		semantics.Mutability = MutabilityMutating
 	}
-	return analysis.Risk
+	if analysis.Effect == CommandEffectUnknown {
+		semantics.Risk = CommandRiskDestructive
+	}
+	return semantics
 }
 
+// EffectiveCallEffect reports the per-call effect for grant scoping.
+func EffectiveCallEffect(definition Definition, arguments json.RawMessage) CommandEffect {
+	return EffectiveCallSemantics(definition, arguments).Effect
+}
+
+// EffectiveCallScope reports the proven scope of one call.
+func EffectiveCallScope(definition Definition, arguments json.RawMessage) CommandScope {
+	return EffectiveCallSemantics(definition, arguments).Scope
+}
+
+// EffectiveCallRisk reports proven destructive behavior for one call.
+func EffectiveCallRisk(definition Definition, arguments json.RawMessage) CommandRisk {
+	return EffectiveCallSemantics(definition, arguments).Risk
+}
+
+// EffectiveCallMutability reports whether one concrete call may mutate state.
 func EffectiveCallMutability(definition Definition, arguments json.RawMessage) Mutability {
-	if definition.Kind != KindBash {
-		return EffectiveMutability(definition)
-	}
-	var input struct {
-		Command string `json:"command"`
-	}
-	if err := json.Unmarshal(arguments, &input); err != nil {
-		return MutabilityMutating
-	}
-	switch AnalyzeCommand(input.Command).Effect {
-	case CommandEffectReadOnly:
-		return MutabilityReadOnly
-	default:
-		return MutabilityMutating
-	}
+	return EffectiveCallSemantics(definition, arguments).Mutability
+}
+
+// EffectiveCallSafety reports the effective resource and checkpoint contract.
+func EffectiveCallSafety(definition Definition, arguments json.RawMessage) SafetyContract {
+	return EffectiveCallSemantics(definition, arguments).Safety
+}
+
+// EffectiveCallEvidence reports which empirical state a successful call establishes.
+func EffectiveCallEvidence(definition Definition, arguments json.RawMessage) EvidenceKind {
+	return EffectiveCallSemantics(definition, arguments).Evidence
 }
