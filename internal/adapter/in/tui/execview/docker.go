@@ -1,4 +1,4 @@
-package tui
+package execview
 
 import "strings"
 
@@ -19,7 +19,7 @@ func dockerExecTitle(name string, _ []string, action string) string {
 	return execTitle("Docker", action)
 }
 
-func summarizeDockerExec(p *execPresentation, output string) {
+func summarizeDockerExec(p *Presentation, output string) {
 	lines := nonEmptyExecLines(output)
 	switch p.Action {
 	case "build", "compose build":

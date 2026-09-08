@@ -1,4 +1,4 @@
-package tui
+package execview
 
 import (
 	"fmt"
@@ -54,7 +54,8 @@ func pluralCount(n int, singular, plural string) string {
 	return fmt.Sprintf("%d %s", n, plural)
 }
 
-func formatExecDuration(d time.Duration) string {
+// FormatDuration renders compact execution durations for terminal presentation.
+func FormatDuration(d time.Duration) string {
 	if d <= 0 {
 		return ""
 	}

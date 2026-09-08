@@ -90,6 +90,20 @@ func TestTUIDoesNotDependOnProjectDirectly(t *testing.T) {
 	})
 }
 
+func TestTUIExecViewIsPresentationLeaf(t *testing.T) {
+	packages := listPackages(t)
+	pkgPath := modulePath + "/internal/adapter/in/tui/execview"
+	pkg, ok := packages[pkgPath]
+	if !ok {
+		t.Fatalf("package %s not found", pkgPath)
+	}
+	for _, imported := range pkg.Imports {
+		if strings.HasPrefix(imported, modulePath+"/internal/") || strings.HasPrefix(imported, modulePath+"/cmd/") {
+			t.Errorf("TUI execution presentation leaf %s imports application package %s", pkgPath, imported)
+		}
+	}
+}
+
 func TestTUIDoesNotControlAgentCoordinatorDirectly(t *testing.T) {
 	assertNoSourceMatch(t, "internal/adapter/in/tui", `(m|ui)\.coordinator\.[A-Z]`, false, "TUI controls agent coordinator directly")
 }

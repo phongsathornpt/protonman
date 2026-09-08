@@ -1,8 +1,8 @@
-package tui
+package execview
 
 import "strings"
 
-func summarizeGoExec(p *execPresentation, output string) {
+func summarizeGoExec(p *Presentation, output string) {
 	lines := nonEmptyExecLines(output)
 	switch p.Action {
 	case "test":

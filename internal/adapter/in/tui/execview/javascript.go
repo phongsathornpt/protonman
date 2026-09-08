@@ -1,4 +1,4 @@
-package tui
+package execview
 
 import (
 	"fmt"
@@ -83,7 +83,7 @@ func frameworkAction(action, command, framework string) string {
 	return action
 }
 
-func summarizeBunExec(p *execPresentation, output string) {
+func summarizeBunExec(p *Presentation, output string) {
 	switch {
 	case p.Action == "test":
 		passed := firstRegexpInt(bunPassRE, output)
@@ -112,7 +112,7 @@ func summarizeBunExec(p *execPresentation, output string) {
 	}
 }
 
-func summarizeNodeExec(p *execPresentation, output string) {
+func summarizeNodeExec(p *Presentation, output string) {
 	switch p.Action {
 	case "test":
 		passed := firstRegexpInt(nodePassRE, output)
@@ -135,7 +135,7 @@ func summarizeNodeExec(p *execPresentation, output string) {
 	}
 }
 
-func summarizeViteExec(p *execPresentation, output string) {
+func summarizeViteExec(p *Presentation, output string) {
 	switch p.Action {
 	case "build":
 		if matches := viteModulesRE.FindStringSubmatch(output); len(matches) == 2 {
@@ -158,7 +158,7 @@ func summarizeViteExec(p *execPresentation, output string) {
 	}
 }
 
-func summarizeNextExec(p *execPresentation, output string) {
+func summarizeNextExec(p *Presentation, output string) {
 	switch p.Action {
 	case "build":
 		routes := filterExecLines(output, func(line string) bool {

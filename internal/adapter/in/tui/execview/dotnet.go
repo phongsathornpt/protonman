@@ -1,4 +1,4 @@
-package tui
+package execview
 
 import (
 	"regexp"
@@ -12,7 +12,7 @@ var (
 
 func dotnetExecTitle(_ string, _ []string, action string) string { return execTitle("Dotnet", action) }
 
-func summarizeDotnetExec(p *execPresentation, output string) {
+func summarizeDotnetExec(p *Presentation, output string) {
 	switch p.Action {
 	case "test":
 		if m := dotnetTestRE.FindStringSubmatch(output); len(m) == 4 {

@@ -8,13 +8,15 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/execview"
+
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 func TestExecPresentationGitDiff(t *testing.T) {
-	p := presentExec("git diff", "diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new\n", "")
-	if p.Family != execFamilyGit || p.Title != "Git diff" {
+	p := execview.Present("git diff", "diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new\n", "")
+	if p.Family != execview.FamilyGit || p.Title != "Git diff" {
 		t.Fatalf("presentation = %#v", p)
 	}
 	if p.Summary != "1 file · +1 -1" || !p.SuppressRaw {
@@ -26,76 +28,76 @@ func TestExecPresentationGitDiff(t *testing.T) {
 }
 
 func TestExecPresentationGoTest(t *testing.T) {
-	p := presentExec("go test ./...", "ok  example/a 0.10s\n?   example/b [no test files]\n", "")
+	p := execview.Present("go test ./...", "ok  example/a 0.10s\n?   example/b [no test files]\n", "")
 	if p.Title != "Go test ./..." || p.Summary != "1 package passed · 1 no tests" || !p.SuppressRaw {
 		t.Fatalf("go test presentation = %#v", p)
 	}
 }
 
 func TestExecPresentationBunAndNodeTests(t *testing.T) {
-	bun := presentExec("bun test", "  12 pass\n  0 fail\n", "")
+	bun := execview.Present("bun test", "  12 pass\n  0 fail\n", "")
 	if bun.Title != "Bun test" || bun.Summary != "12 passed" || !bun.SuppressRaw {
 		t.Fatalf("bun test presentation = %#v", bun)
 	}
-	node := presentExec("node --test", "# tests 9\n# pass 9\n# fail 0\n", "")
+	node := execview.Present("node --test", "# tests 9\n# pass 9\n# fail 0\n", "")
 	if node.Title != "Node test" || node.Summary != "9 passed" || !node.SuppressRaw {
 		t.Fatalf("node test presentation = %#v", node)
 	}
 }
 
 func TestExecPresentationPromotesFrameworkRunnerOutput(t *testing.T) {
-	vite := presentExec("bun run dev", "VITE v7.0.0 ready in 220 ms\n  Local: http://localhost:5173/\n", "")
-	if vite.Family != execFamilyVite || vite.Title != "Vite dev" || vite.Summary != "ready" {
+	vite := execview.Present("bun run dev", "VITE v7.0.0 ready in 220 ms\n  Local: http://localhost:5173/\n", "")
+	if vite.Family != execview.FamilyVite || vite.Title != "Vite dev" || vite.Summary != "ready" {
 		t.Fatalf("vite presentation = %#v", vite)
 	}
-	next := presentExec("npm run dev", "▲ Next.js 16.0.0\n- Local: http://localhost:3000\n", "")
-	if next.Family != execFamilyNext || next.Title != "Next dev" || next.Summary != "ready" {
+	next := execview.Present("npm run dev", "▲ Next.js 16.0.0\n- Local: http://localhost:3000\n", "")
+	if next.Family != execview.FamilyNext || next.Title != "Next dev" || next.Summary != "ready" {
 		t.Fatalf("next presentation = %#v", next)
 	}
 }
 
 func TestExecPresentationNextBuildRoutes(t *testing.T) {
 	output := "▲ Next.js 16.0.0\n○ /\nƒ /dashboard\nƒ /api/users\n"
-	p := presentExec("next build", output, "")
+	p := execview.Present("next build", output, "")
 	if p.Title != "Next build" || p.Summary != "3 routes" || len(p.Details) != 3 || !p.SuppressRaw {
 		t.Fatalf("next build presentation = %#v", p)
 	}
 }
 
 func TestExecPresentationGenericFallback(t *testing.T) {
-	p := presentExec("curl https://example.com", "ok", "")
-	if p.Family != execFamilyGeneric || p.Title != "$ curl https://example.com" || p.SuppressRaw {
+	p := execview.Present("curl https://example.com", "ok", "")
+	if p.Family != execview.FamilyGeneric || p.Title != "$ curl https://example.com" || p.SuppressRaw {
 		t.Fatalf("generic presentation = %#v", p)
 	}
 }
 
 func TestExecPresentationGitStatusAndStat(t *testing.T) {
-	status := presentExec("git status --short", " M a.go\n?? b.go\n", "")
+	status := execview.Present("git status --short", " M a.go\n?? b.go\n", "")
 	if status.Summary != "1 changed file · 1 untracked" || len(status.Details) != 2 {
 		t.Fatalf("git status presentation = %#v", status)
 	}
-	clean := presentExec("git status", "On branch develop\nnothing to commit, working tree clean\n", "")
+	clean := execview.Present("git status", "On branch develop\nnothing to commit, working tree clean\n", "")
 	if clean.Summary != "clean" || len(clean.Details) != 0 {
 		t.Fatalf("clean git status presentation = %#v", clean)
 	}
-	stat := presentExec("git diff --stat", " a.go | 3 ++-\n b.go | 2 +\n 2 files changed, 3 insertions(+), 2 deletions(-)\n", "")
+	stat := execview.Present("git diff --stat", " a.go | 3 ++-\n b.go | 2 +\n 2 files changed, 3 insertions(+), 2 deletions(-)\n", "")
 	if stat.Summary != "2 files · +3 -2" {
 		t.Fatalf("git diff stat presentation = %#v", stat)
 	}
 }
 
 func TestExecPresentationPythonCommands(t *testing.T) {
-	pytest := presentExec("python3 -m pytest tests/", "================ 84 passed, 2 skipped in 1.80s ================\n", "")
-	if pytest.Family != execFamilyPython || pytest.Title != "Python pytest" || pytest.Summary != "84 passed · 2 skipped" || !pytest.SuppressRaw {
+	pytest := execview.Present("python3 -m pytest tests/", "================ 84 passed, 2 skipped in 1.80s ================\n", "")
+	if pytest.Family != execview.FamilyPython || pytest.Title != "Python pytest" || pytest.Summary != "84 passed · 2 skipped" || !pytest.SuppressRaw {
 		t.Fatalf("pytest presentation = %#v", pytest)
 	}
 
-	eval := presentExec(`python3 -c "print(1)"`, "1\n", "")
-	if eval.Family != execFamilyPython || eval.Title != "Python eval" || eval.Action != "eval" {
+	eval := execview.Present(`python3 -c "print(1)"`, "1\n", "")
+	if eval.Family != execview.FamilyPython || eval.Title != "Python eval" || eval.Action != "eval" {
 		t.Fatalf("python eval presentation = %#v", eval)
 	}
 
-	unit := presentExec("python -m unittest", "Ran 36 tests in 0.940s\n\nOK\n", "")
+	unit := execview.Present("python -m unittest", "Ran 36 tests in 0.940s\n\nOK\n", "")
 	if unit.Title != "Python unittest" || unit.Summary != "36 passed" || !unit.SuppressRaw {
 		t.Fatalf("unittest presentation = %#v", unit)
 	}
@@ -115,9 +117,9 @@ func TestExecPresentationPythonAndNodeCompactTitles(t *testing.T) {
 		{`node -p "process.version"`, "Node print", "print"},
 	}
 	for _, tc := range cases {
-		p := presentExec(tc.command, "", "")
+		p := execview.Present(tc.command, "", "")
 		if p.Title != tc.title || p.Action != tc.action {
-			t.Fatalf("presentExec(%q) = %#v", tc.command, p)
+			t.Fatalf("execview.Present(%q) = %#v", tc.command, p)
 		}
 	}
 }
@@ -169,8 +171,8 @@ func TestFormatExecDuration(t *testing.T) {
 		74 * time.Second:        "1m 14s",
 	}
 	for input, want := range cases {
-		if got := formatExecDuration(input); got != want {
-			t.Fatalf("formatExecDuration(%s) = %q, want %q", input, got, want)
+		if got := execview.FormatDuration(input); got != want {
+			t.Fatalf("execview.FormatDuration(%s) = %q, want %q", input, got, want)
 		}
 	}
 }
@@ -299,141 +301,128 @@ func TestBashCommandFailureKeepsExecCellPresentation(t *testing.T) {
 	}
 }
 
-func TestExecSummaryPrimitives(t *testing.T) {
-	if got := formatTestCounts(testCounts{Passed: 8, Failed: 1, Skipped: 2}); got != "8 passed · 1 failed · 2 skipped" {
-		t.Fatalf("formatTestCounts = %q", got)
-	}
-	if got := formatDiagnosticCounts(diagnosticCounts{Errors: 2, Warnings: 3}); got != "2 errors · 3 warnings" {
-		t.Fatalf("formatDiagnosticCounts = %q", got)
-	}
-	lines := firstFailureLines("ok\nFAIL parser::nested\nerror[E1]: bad\n", 2)
-	if len(lines) != 2 {
-		t.Fatalf("firstFailureLines = %#v", lines)
-	}
-}
-
 func TestExecPresentationRustAndCargo(t *testing.T) {
-	cargo := presentExec("cargo test", "test result: ok. 84 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out\n", "")
+	cargo := execview.Present("cargo test", "test result: ok. 84 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out\n", "")
 	if cargo.Title != "Cargo test" || cargo.Summary != "84 passed · 3 ignored" || !cargo.SuppressRaw {
 		t.Fatalf("cargo test = %#v", cargo)
 	}
-	check := presentExec("cargo check", "warning: unused import\nerror[E0382]: borrow of moved value\n", "")
+	check := execview.Present("cargo check", "warning: unused import\nerror[E0382]: borrow of moved value\n", "")
 	if check.Title != "Cargo check" || check.Summary != "1 error · 1 warning" || len(check.Details) == 0 {
 		t.Fatalf("cargo check = %#v", check)
 	}
-	rustc := presentExec("rustc src/main.rs", "", "")
+	rustc := execview.Present("rustc src/main.rs", "", "")
 	if rustc.Title != "Rustc src/main.rs" {
 		t.Fatalf("rustc = %#v", rustc)
 	}
 }
 
 func TestExecPresentationMake(t *testing.T) {
-	p := presentExec("make -j8 test", "", "")
+	p := execview.Present("make -j8 test", "", "")
 	if p.Title != "Make test" || p.SuccessSummary != "completed" {
 		t.Fatalf("make = %#v", p)
 	}
-	failed := presentExec("gmake build", "make: *** [Makefile:42: build] Error 1\n", "")
+	failed := execview.Present("gmake build", "make: *** [Makefile:42: build] Error 1\n", "")
 	if failed.Title != "Make build" || len(failed.Details) == 0 {
 		t.Fatalf("gmake = %#v", failed)
 	}
 }
 
 func TestExecPresentationDocker(t *testing.T) {
-	build := presentExec("docker build .", "#12 exporting to image\n", "")
+	build := execview.Present("docker build .", "#12 exporting to image\n", "")
 	if build.Title != "Docker build" || build.Summary != "built image" {
 		t.Fatalf("docker build = %#v", build)
 	}
-	compose := presentExec("docker compose up -d", "Container api Started\nContainer db Started\n", "")
+	compose := execview.Present("docker compose up -d", "Container api Started\nContainer db Started\n", "")
 	if compose.Title != "Docker compose up" || compose.Summary != "2 services running" {
 		t.Fatalf("docker compose = %#v", compose)
 	}
-	legacy := presentExec("docker-compose down", "", "")
+	legacy := execview.Present("docker-compose down", "", "")
 	if legacy.Title != "Docker compose down" {
 		t.Fatalf("docker-compose = %#v", legacy)
 	}
 }
 
 func TestExecPresentationJVMTools(t *testing.T) {
-	maven := presentExec("mvn test", "Tests run: 100, Failures: 1, Errors: 0, Skipped: 2\n", "")
+	maven := execview.Present("mvn test", "Tests run: 100, Failures: 1, Errors: 0, Skipped: 2\n", "")
 	if maven.Title != "Maven test" || maven.Summary != "97 passed · 1 failed · 2 skipped" {
 		t.Fatalf("maven = %#v", maven)
 	}
-	gradle := presentExec("./gradlew test", "100 tests completed, 2 failed\n", "")
+	gradle := execview.Present("./gradlew test", "100 tests completed, 2 failed\n", "")
 	if gradle.Title != "Gradle test" || gradle.Summary != "98 passed · 2 failed" {
 		t.Fatalf("gradle = %#v", gradle)
 	}
-	javac := presentExec("javac src/Main.java", "", "")
+	javac := execview.Present("javac src/Main.java", "", "")
 	if javac.Title != "Javac src/Main.java" {
 		t.Fatalf("javac = %#v", javac)
 	}
 }
 
 func TestExecPresentationPHP(t *testing.T) {
-	lint := presentExec("php -l src/App.php", "No syntax errors detected in src/App.php\n", "")
+	lint := execview.Present("php -l src/App.php", "No syntax errors detected in src/App.php\n", "")
 	if lint.Title != "PHP lint src/App.php" || lint.Summary != "valid syntax" {
 		t.Fatalf("php lint = %#v", lint)
 	}
-	unit := presentExec("vendor/bin/phpunit", "Tests: 93, Assertions: 120, Failures: 1, Skipped: 1.\n", "")
+	unit := execview.Present("vendor/bin/phpunit", "Tests: 93, Assertions: 120, Failures: 1, Skipped: 1.\n", "")
 	if unit.Title != "PHPUnit" || unit.Summary != "91 passed · 1 failed · 1 skipped" {
 		t.Fatalf("phpunit = %#v", unit)
 	}
-	eval := presentExec(`php -r "echo 1;"`, "1", "")
+	eval := execview.Present(`php -r "echo 1;"`, "1", "")
 	if eval.Title != "PHP eval" {
 		t.Fatalf("php eval = %#v", eval)
 	}
 }
 
 func TestExecPresentationRuby(t *testing.T) {
-	check := presentExec("ruby -c app.rb", "Syntax OK\n", "")
+	check := execview.Present("ruby -c app.rb", "Syntax OK\n", "")
 	if check.Title != "Ruby check app.rb" || check.Summary != "syntax OK" {
 		t.Fatalf("ruby check = %#v", check)
 	}
-	rspec := presentExec("bundle exec rspec", "48 examples, 1 failure, 2 pending\n", "")
+	rspec := execview.Present("bundle exec rspec", "48 examples, 1 failure, 2 pending\n", "")
 	if rspec.Title != "RSpec" || rspec.Summary != "48 examples · 1 failure · 2 pending" {
 		t.Fatalf("rspec = %#v", rspec)
 	}
-	eval := presentExec(`ruby -e "puts 1"`, "1\n", "")
+	eval := execview.Present(`ruby -e "puts 1"`, "1\n", "")
 	if eval.Title != "Ruby eval" {
 		t.Fatalf("ruby eval = %#v", eval)
 	}
 }
 
 func TestExecPresentationDotnet(t *testing.T) {
-	test := presentExec("dotnet test", "Passed! - Failed: 0, Passed: 126, Skipped: 2, Total: 128\n", "")
+	test := execview.Present("dotnet test", "Passed! - Failed: 0, Passed: 126, Skipped: 2, Total: 128\n", "")
 	if test.Title != "Dotnet test" || test.Summary != "126 passed · 2 skipped" {
 		t.Fatalf("dotnet test = %#v", test)
 	}
-	build := presentExec("dotnet build", "Build succeeded.\n    3 Warning(s)\n    0 Error(s)\n", "")
+	build := execview.Present("dotnet build", "Build succeeded.\n    3 Warning(s)\n    0 Error(s)\n", "")
 	if build.Title != "Dotnet build" || build.Summary != "3 warnings" {
 		t.Fatalf("dotnet build = %#v", build)
 	}
 }
 
 func TestExecPresentationTerraform(t *testing.T) {
-	plan := presentExec("terraform plan", "Plan: 3 to add, 1 to change, 0 to destroy.\n", "")
+	plan := execview.Present("terraform plan", "Plan: 3 to add, 1 to change, 0 to destroy.\n", "")
 	if plan.Title != "Terraform plan" || plan.Summary != "+3 ~1 -0" {
 		t.Fatalf("terraform plan = %#v", plan)
 	}
-	apply := presentExec("tofu apply", "Apply complete! Resources: 4 added, 1 changed, 0 destroyed.\n", "")
+	apply := execview.Present("tofu apply", "Apply complete! Resources: 4 added, 1 changed, 0 destroyed.\n", "")
 	if apply.Title != "OpenTofu apply" || apply.Summary != "4 added · 1 changed · 0 destroyed" {
 		t.Fatalf("tofu apply = %#v", apply)
 	}
-	valid := presentExec("terraform validate", "Success! The configuration is valid.\n", "")
+	valid := execview.Present("terraform validate", "Success! The configuration is valid.\n", "")
 	if valid.Summary != "valid configuration" {
 		t.Fatalf("terraform validate = %#v", valid)
 	}
 }
 
 func TestExecPresentationKubectl(t *testing.T) {
-	apply := presentExec("kubectl apply -f k8s/", "deployment.apps/api configured\nservice/api created\n", "")
+	apply := execview.Present("kubectl apply -f k8s/", "deployment.apps/api configured\nservice/api created\n", "")
 	if apply.Title != "Kubectl apply" || apply.Summary != "1 configured · 1 created" {
 		t.Fatalf("kubectl apply = %#v", apply)
 	}
-	get := presentExec("kubectl get pods", "NAME READY STATUS\na 1/1 Running\nb 1/1 Running\n", "")
+	get := execview.Present("kubectl get pods", "NAME READY STATUS\na 1/1 Running\nb 1/1 Running\n", "")
 	if get.Title != "Kubectl get pods" || get.Summary != "2 resources" || get.SuppressRaw {
 		t.Fatalf("kubectl get = %#v", get)
 	}
-	rollout := presentExec("kubectl rollout status deployment/api", "deployment \"api\" successfully rolled out\n", "")
+	rollout := execview.Present("kubectl rollout status deployment/api", "deployment \"api\" successfully rolled out\n", "")
 	if rollout.Title != "Kubectl rollout status" || rollout.Summary != "rollout complete" {
 		t.Fatalf("kubectl rollout = %#v", rollout)
 	}
@@ -477,8 +466,8 @@ func TestExecProfileWrappersAndEnvPrefixes(t *testing.T) {
 		"TF_IN_AUTOMATION=1 tofu plan":    "OpenTofu plan",
 	}
 	for command, want := range cases {
-		if got := presentExec(command, "", "").Title; got != want {
-			t.Fatalf("presentExec(%q).Title = %q, want %q", command, got, want)
+		if got := execview.Present(command, "", "").Title; got != want {
+			t.Fatalf("execview.Present(%q).Title = %q, want %q", command, got, want)
 		}
 	}
 }

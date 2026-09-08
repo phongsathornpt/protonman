@@ -1,4 +1,4 @@
-package tui
+package execview
 
 import (
 	"strings"
@@ -6,30 +6,32 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-type execFamily string
+// Family identifies the command ecosystem used for execution presentation.
+type Family string
 
 const (
-	execFamilyGeneric   execFamily = "generic"
-	execFamilyGit       execFamily = "git"
-	execFamilyGo        execFamily = "go"
-	execFamilyBun       execFamily = "bun"
-	execFamilyNode      execFamily = "node"
-	execFamilyPython    execFamily = "python"
-	execFamilyRust      execFamily = "rust"
-	execFamilyMake      execFamily = "make"
-	execFamilyDocker    execFamily = "docker"
-	execFamilyJVM       execFamily = "jvm"
-	execFamilyPHP       execFamily = "php"
-	execFamilyRuby      execFamily = "ruby"
-	execFamilyDotnet    execFamily = "dotnet"
-	execFamilyTerraform execFamily = "terraform"
-	execFamilyKubectl   execFamily = "kubectl"
-	execFamilyVite      execFamily = "vite"
-	execFamilyNext      execFamily = "next"
+	FamilyGeneric   Family = "generic"
+	FamilyGit       Family = "git"
+	FamilyGo        Family = "go"
+	FamilyBun       Family = "bun"
+	FamilyNode      Family = "node"
+	FamilyPython    Family = "python"
+	FamilyRust      Family = "rust"
+	FamilyMake      Family = "make"
+	FamilyDocker    Family = "docker"
+	FamilyJVM       Family = "jvm"
+	FamilyPHP       Family = "php"
+	FamilyRuby      Family = "ruby"
+	FamilyDotnet    Family = "dotnet"
+	FamilyTerraform Family = "terraform"
+	FamilyKubectl   Family = "kubectl"
+	FamilyVite      Family = "vite"
+	FamilyNext      Family = "next"
 )
 
-type execPresentation struct {
-	Family         execFamily
+// Presentation is the semantic rendering metadata for one shell execution.
+type Presentation struct {
+	Family         Family
 	Action         string
 	Title          string
 	Summary        string
@@ -38,7 +40,8 @@ type execPresentation struct {
 	SuppressRaw    bool
 }
 
-func presentExec(command, stdout, stderr string) execPresentation {
+// Present classifies a command and summarizes its output for the TUI.
+func Present(command, stdout, stderr string) Presentation {
 	family, action, title := classifyExecCommand(command)
 	cleanOut := cleanExecOutput(stdout)
 	cleanErr := cleanExecOutput(stderr)
@@ -46,23 +49,23 @@ func presentExec(command, stdout, stderr string) execPresentation {
 
 	lower := strings.ToLower(combined)
 	if strings.Contains(lower, "next.js") {
-		family = execFamilyNext
+		family = FamilyNext
 		action = frameworkAction(action, command, "next")
 		title = execTitle("Next", action)
 	} else if strings.Contains(combined, "VITE v") || strings.Contains(lower, "vite v") {
-		family = execFamilyVite
+		family = FamilyVite
 		action = frameworkAction(action, command, "vite")
 		title = execTitle("Vite", action)
 	}
 
-	p := execPresentation{Family: family, Action: action, Title: title}
+	p := Presentation{Family: family, Action: action, Title: title}
 	if profile := execProfileForFamily(family); profile != nil && profile.Summarize != nil {
 		profile.Summarize(&p, combined)
 	}
 	return p
 }
 
-func classifyExecCommand(command string) (execFamily, string, string) {
+func classifyExecCommand(command string) (Family, string, string) {
 	for _, segment := range splitExecSegments(command) {
 		words := execWords(segment)
 		if len(words) == 0 {
@@ -78,7 +81,7 @@ func classifyExecCommand(command string) (execFamily, string, string) {
 	if command == "" {
 		command = "shell command"
 	}
-	return execFamilyGeneric, "", "$ " + command
+	return FamilyGeneric, "", "$ " + command
 }
 
 func splitExecSegments(command string) []string {

@@ -1,4 +1,4 @@
-package tui
+package execview
 
 import (
 	"fmt"
@@ -72,7 +72,7 @@ func pythonExecTitle(args []string, action string) string {
 	return "Python"
 }
 
-func summarizePythonExec(p *execPresentation, output string) {
+func summarizePythonExec(p *Presentation, output string) {
 	switch p.Action {
 	case "pytest":
 		summarizePytestExec(p, output)
@@ -94,7 +94,7 @@ func summarizePythonExec(p *execPresentation, output string) {
 	}
 }
 
-func summarizePytestExec(p *execPresentation, output string) {
+func summarizePytestExec(p *Presentation, output string) {
 	counts := map[string]int{}
 	for _, match := range pytestCountRE.FindAllStringSubmatch(output, -1) {
 		if len(match) != 3 {
@@ -121,7 +121,7 @@ func summarizePytestExec(p *execPresentation, output string) {
 	}
 }
 
-func summarizeUnittestExec(p *execPresentation, output string) {
+func summarizeUnittestExec(p *Presentation, output string) {
 	match := unittestRanRE.FindStringSubmatch(output)
 	if len(match) != 2 {
 		return
@@ -149,7 +149,10 @@ func summarizeUnittestExec(p *execPresentation, output string) {
 			}
 		}
 	}
-	passed := maxInt(0, total-failed-errors)
+	passed := total - failed - errors
+	if passed < 0 {
+		passed = 0
+	}
 	parts := []string{fmt.Sprintf("%d passed", passed)}
 	if failed > 0 {
 		parts = append(parts, fmt.Sprintf("%d failed", failed))

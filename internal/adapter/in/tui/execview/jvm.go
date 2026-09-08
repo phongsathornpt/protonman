@@ -1,4 +1,4 @@
-package tui
+package execview
 
 import (
 	"regexp"
@@ -25,7 +25,7 @@ func jvmExecTitle(name string, _ []string, action string) string {
 	}
 }
 
-func summarizeJVMExec(p *execPresentation, output string) {
+func summarizeJVMExec(p *Presentation, output string) {
 	if strings.HasPrefix(p.Title, "Maven ") {
 		summarizeMavenExec(p, output)
 		return
@@ -42,7 +42,7 @@ func summarizeJVMExec(p *execPresentation, output string) {
 	}
 }
 
-func summarizeMavenExec(p *execPresentation, output string) {
+func summarizeMavenExec(p *Presentation, output string) {
 	matches := mavenTestsRE.FindAllStringSubmatch(output, -1)
 	if len(matches) > 0 {
 		counts := testCounts{}
@@ -61,7 +61,7 @@ func summarizeMavenExec(p *execPresentation, output string) {
 	}
 }
 
-func summarizeGradleExec(p *execPresentation, output string) {
+func summarizeGradleExec(p *Presentation, output string) {
 	if m := gradleTestsRE.FindStringSubmatch(output); len(m) > 0 {
 		total, failed := atoiExec(m[1]), 0
 		if len(m) > 2 && m[2] != "" {

@@ -1,4 +1,4 @@
-package tui
+package execview
 
 import (
 	"path/filepath"
@@ -54,7 +54,7 @@ func phpExecTitle(name string, args []string, action string) string {
 	return execTitle("PHP", action)
 }
 
-func summarizePHPExec(p *execPresentation, output string) {
+func summarizePHPExec(p *Presentation, output string) {
 	if p.Title == "PHPUnit" {
 		summarizePHPUnitExec(p, output)
 		return
@@ -67,7 +67,7 @@ func summarizePHPExec(p *execPresentation, output string) {
 	}
 }
 
-func summarizePHPUnitExec(p *execPresentation, output string) {
+func summarizePHPUnitExec(p *Presentation, output string) {
 	if m := phpunitTestsRE.FindStringSubmatch(output); len(m) > 0 {
 		total := atoiExec(m[1])
 		failed, errs, skipped := 0, 0, 0

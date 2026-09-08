@@ -1,4 +1,4 @@
-package tui
+package execview
 
 import (
 	"regexp"
@@ -26,7 +26,7 @@ func rustExecTitle(name string, args []string, action string) string {
 	}
 }
 
-func summarizeRustExec(p *execPresentation, output string) {
+func summarizeRustExec(p *Presentation, output string) {
 	if p.Title == "" {
 		return
 	}

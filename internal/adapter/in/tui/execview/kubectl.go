@@ -1,4 +1,4 @@
-package tui
+package execview
 
 import "strings"
 
@@ -26,7 +26,7 @@ func kubectlExecTitle(_ string, args []string, action string) string {
 	return execTitle("Kubectl", action)
 }
 
-func summarizeKubectlExec(p *execPresentation, output string) {
+func summarizeKubectlExec(p *Presentation, output string) {
 	lines := nonEmptyExecLines(output)
 	switch {
 	case strings.HasPrefix(p.Action, "rollout"):
