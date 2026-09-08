@@ -7,6 +7,7 @@ import (
 
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/feature/agent"
+	sdk "github.com/projectTHORN/proton/proton-sdk"
 )
 
 type capabilityTestRegistry struct{ handlers map[string]tool.Handler }
@@ -107,5 +108,34 @@ func TestCapabilityRegistryPreservesDynamicRegistrar(t *testing.T) {
 	}
 	if _, ok := reg.Lookup("list_agents"); !ok {
 		t.Fatal("dynamically registered handler is not visible")
+	}
+}
+
+type compiledCapabilityTestRegistry struct{ capabilityTestRegistry }
+
+func (r compiledCapabilityTestRegistry) CompiledValidators(name string) (*sdk.ToolSchemaValidator, *sdk.ToolSchemaValidator, bool) {
+	_, ok := r.handlers[name]
+	return nil, nil, ok
+}
+
+func TestCapabilityRegistryPreservesCompiledValidatorsForVisibleTools(t *testing.T) {
+	coord := agent.NewCoordinator(nil, nil, nil, nil)
+	defer coord.Close()
+	base := compiledCapabilityTestRegistry{capabilityTestRegistry{handlers: map[string]tool.Handler{
+		"list_agents": NewListAgents(coord),
+	}}}
+	reg := NewCapabilityRegistry(base, coord)
+	compiled, ok := reg.(interface {
+		CompiledValidators(string) (*sdk.ToolSchemaValidator, *sdk.ToolSchemaValidator, bool)
+	})
+	if !ok {
+		t.Fatal("capability registry dropped compiled validator cache")
+	}
+	if _, _, found := compiled.CompiledValidators("list_agents"); !found {
+		t.Fatal("visible tool did not preserve compiled validators")
+	}
+	coord.SetEnabled(false)
+	if _, _, found := compiled.CompiledValidators("list_agents"); found {
+		t.Fatal("hidden tool exposed cached validators")
 	}
 }
