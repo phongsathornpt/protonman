@@ -30,10 +30,10 @@ func TestExtractToolTarget(t *testing.T) {
 		{
 			name:       "web_search query",
 			toolName:   "web_search",
-			kind:       tool.KindWebSearch,
+			kind:       tool.KindWebFetch,
 			args:       `{"query":"proton AI"}`,
 			wantTarget: `"proton AI"`,
-			wantKind:   tool.KindWebSearch,
+			wantKind:   tool.KindWebFetch,
 		},
 		{
 			name:       "read_file path",

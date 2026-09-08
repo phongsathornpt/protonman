@@ -39,7 +39,7 @@ func IsAgentLifecycleTool(name string) bool {
 // KindGlyph returns the appropriate category glyph for a tool.
 func KindGlyph(kind tool.Kind, name string) string {
 	switch kind {
-	case tool.KindWebFetch, tool.KindWebSearch:
+	case tool.KindWebFetch:
 		return tuistyle.GlyphWeb
 	case tool.KindRead:
 		if tool.CanonicalName(name) == "ls" {
@@ -92,9 +92,10 @@ func SummarizeOutput(name string, kind tool.Kind, target string, body string, ex
 
 	switch kind {
 	case tool.KindWebFetch:
+		if tool.CanonicalName(name) == "web" && strings.HasPrefix(strings.TrimSpace(target), `"`) {
+			return summarizeWebSearch(bodyTrimmed)
+		}
 		return summarizeWebFetch(bodyTrimmed, truncated)
-	case tool.KindWebSearch:
-		return summarizeWebSearch(bodyTrimmed)
 	case tool.KindRead:
 		if tool.CanonicalName(name) == "ls" {
 			return summarizeListDir(bodyTrimmed, truncated)
@@ -657,7 +658,7 @@ func summarizeEdit(name string, body string) string {
 // in the primary conversation viewport because the semantic header already summarizes it.
 func ShouldSuppressBody(kind tool.Kind, name string) bool {
 	switch kind {
-	case tool.KindWebFetch, tool.KindWebSearch, tool.KindRead, tool.KindGit, tool.KindAgent, tool.KindTask, tool.KindEdit:
+	case tool.KindWebFetch, tool.KindRead, tool.KindGit, tool.KindAgent, tool.KindTask, tool.KindEdit:
 		return true
 	}
 	switch name {

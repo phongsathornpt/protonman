@@ -170,8 +170,6 @@ const (
 	ToolMCP ToolKind = tool.KindMCP
 	// ToolWebFetch matches URL-fetching tools.
 	ToolWebFetch ToolKind = tool.KindWebFetch
-	// ToolWebSearch matches web-search tools.
-	ToolWebSearch ToolKind = tool.KindWebSearch
 	// ToolTask matches structured planning/task metadata tools.
 	ToolTask ToolKind = tool.KindTask
 	// ToolAgent matches subagent orchestration tools.
@@ -245,7 +243,7 @@ func ParseToolKind(value string) (ToolKind, error) {
 	case "web_fetch", "web-fetch", "webfetch":
 		return ToolWebFetch, nil
 	case "web_search", "web-search", "websearch":
-		return ToolWebSearch, nil
+		return ToolWebFetch, nil
 	case "task", "todo":
 		return ToolTask, nil
 	case "agent", "subagent":
@@ -694,7 +692,7 @@ func ValidToolKind(kind ToolKind) bool {
 
 func validToolKind(kind ToolKind) bool {
 	switch kind {
-	case ToolAny, ToolRead, ToolEdit, ToolBash, ToolGrep, ToolGit, ToolMCP, ToolWebFetch, ToolWebSearch, ToolTask, ToolAgent, ToolCompute:
+	case ToolAny, ToolRead, ToolEdit, ToolBash, ToolGrep, ToolGit, ToolMCP, ToolWebFetch, ToolTask, ToolAgent, ToolCompute:
 		return true
 	default:
 		return false

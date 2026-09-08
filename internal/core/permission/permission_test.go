@@ -280,7 +280,7 @@ func TestGrantScopeEnumAndTextMarshaling(t *testing.T) {
 func TestToolKindValidationAndParsing(t *testing.T) {
 	kinds := []ToolKind{
 		ToolAny, ToolRead, ToolEdit, ToolBash,
-		ToolGrep, ToolMCP, ToolWebFetch, ToolWebSearch,
+		ToolGrep, ToolMCP, ToolWebFetch,
 		ToolTask, ToolAgent, ToolCompute,
 	}
 	for _, k := range kinds {

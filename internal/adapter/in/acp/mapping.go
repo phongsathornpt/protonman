@@ -35,7 +35,7 @@ func ToolKindForCall(call tool.Call) ToolKind {
 		return ToolKindRead
 	case tool.KindEdit:
 		return ToolKindEdit
-	case tool.KindGrep, tool.KindWebSearch:
+	case tool.KindGrep:
 		return ToolKindSearch
 	case tool.KindBash, tool.KindAgent, tool.KindGit:
 		return ToolKindExecute

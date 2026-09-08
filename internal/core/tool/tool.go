@@ -199,8 +199,6 @@ const (
 	KindMCP Kind = "mcp"
 	// KindWebFetch identifies tools that fetch a URL.
 	KindWebFetch Kind = "web_fetch"
-	// KindWebSearch identifies tools that search the web.
-	KindWebSearch Kind = "web_search"
 	// KindTask identifies structured planning/task metadata mutations.
 	KindTask Kind = "task"
 	// KindAgent identifies subagent orchestration and lifecycle tools.
@@ -653,7 +651,7 @@ type DynamicRegistrar interface {
 
 func validKind(kind Kind) bool {
 	switch kind {
-	case KindRead, KindEdit, KindBash, KindGrep, KindGit, KindMCP, KindWebFetch, KindWebSearch, KindTask, KindAgent, KindCompute:
+	case KindRead, KindEdit, KindBash, KindGrep, KindGit, KindMCP, KindWebFetch, KindTask, KindAgent, KindCompute:
 		return true
 	default:
 		return false
@@ -694,7 +692,7 @@ func EffectiveMutability(definition Definition) Mutability {
 		return definition.Mutability
 	}
 	switch definition.Kind {
-	case KindRead, KindGrep, KindWebFetch, KindWebSearch, KindCompute:
+	case KindRead, KindGrep, KindWebFetch, KindCompute:
 		return MutabilityReadOnly
 	default:
 		return MutabilityMutating
