@@ -163,15 +163,26 @@ jobs:
             prerelease=(--prerelease)
           fi
 
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" "${assets[@]}" --clobber
-          else
-            gh release create "$tag" "${assets[@]}" \
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" \
               --verify-tag \
               --generate-notes \
               --title "$title" \
               "${prerelease[@]}"
           fi
+
+          for asset in "${assets[@]}"; do
+            gh release upload "$tag" "$asset" --clobber
+          done
+
+          published_assets=$(gh release view "$tag" --json assets --jq '.assets[].name')
+          for asset in "${assets[@]}"; do
+            asset_name=$(basename "$asset")
+            if ! grep -Fxq "$asset_name" <<<"$published_assets"; then
+              echo "release asset missing after upload: $asset_name" >&2
+              exit 1
+            fi
+          done
 
   install-smoke:
     needs: release
