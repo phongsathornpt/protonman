@@ -40,7 +40,7 @@ git push origin v1.2.3
 
 - validates the version tag
 - runs `go test ./...` and the offline installer integration tests
-- builds Linux amd64/arm64, macOS amd64/arm64, and Windows amd64
+- builds Linux amd64 and macOS arm64
 - injects the exact Git tag into every binary
 - smoke-tests the native Linux amd64 binary with `--version`
 - packages `protonman_<version>_<os>_<arch>` archives
@@ -55,14 +55,12 @@ Release assets use these names:
 
 ```text
 protonman_1.2.3_linux_amd64.tar.gz
-protonman_1.2.3_linux_arm64.tar.gz
-protonman_1.2.3_darwin_amd64.tar.gz
 protonman_1.2.3_darwin_arm64.tar.gz
-protonman_1.2.3_windows_amd64.zip
 checksums.txt
+install.sh
 ```
 
-The executable inside each archive is `protonman` (`protonman.exe` on Windows).
+The executable inside each archive is `protonman`.
 
 GitHub's latest-release API is intentionally not used to determine the current
 binary version. It may be used separately for update checks, because the latest

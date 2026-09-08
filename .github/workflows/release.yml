@@ -46,18 +46,9 @@ jobs:
           - target: protonman-linux-amd64
             goos: linux
             goarch: amd64
-          - target: protonman-linux-arm64
-            goos: linux
-            goarch: arm64
-          - target: protonman-darwin-amd64
-            goos: darwin
-            goarch: amd64
           - target: protonman-darwin-arm64
             goos: darwin
             goarch: arm64
-          - target: protonman-windows-amd64
-            goos: windows
-            goarch: amd64
     steps:
       - uses: actions/checkout@v4
         with:
@@ -77,9 +68,6 @@ jobs:
           plain_version="${version#v}"
           package="protonman_${plain_version}_${GOOS}_${GOARCH}"
           binary="protonman"
-          if [[ "$GOOS" == "windows" ]]; then
-            binary="protonman.exe"
-          fi
 
           mkdir -p "dist/$package"
           CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build \
@@ -91,18 +79,13 @@ jobs:
           if [[ "$GOOS" == "linux" && "$GOARCH" == "amd64" ]]; then
             test "$("dist/$package/$binary" --version)" = "Protonman $plain_version"
           fi
-          if [[ "$GOOS" == "windows" ]]; then
-            (cd "dist/$package" && zip -q "../${package}.zip" "$binary")
-          else
-            (cd "dist/$package" && tar -czf "../${package}.tar.gz" "$binary")
-          fi
+          (cd "dist/$package" && tar -czf "../${package}.tar.gz" "$binary")
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
           path: |
             dist/*.tar.gz
-            dist/*.zip
           if-no-files-found: error
           retention-days: 7
 
@@ -124,10 +107,7 @@ jobs:
           plain_version="${GITHUB_REF_NAME#v}"
           expected=(
             "protonman_${plain_version}_linux_amd64.tar.gz"
-            "protonman_${plain_version}_linux_arm64.tar.gz"
-            "protonman_${plain_version}_darwin_amd64.tar.gz"
             "protonman_${plain_version}_darwin_arm64.tar.gz"
-            "protonman_${plain_version}_windows_amd64.zip"
           )
           for asset in "${expected[@]}"; do
             if [[ ! -f "$asset" ]]; then
@@ -151,10 +131,7 @@ jobs:
           title="Protonman $tag"
           assets=(
             "dist/protonman_${plain_version}_linux_amd64.tar.gz"
-            "dist/protonman_${plain_version}_linux_arm64.tar.gz"
-            "dist/protonman_${plain_version}_darwin_amd64.tar.gz"
             "dist/protonman_${plain_version}_darwin_arm64.tar.gz"
-            "dist/protonman_${plain_version}_windows_amd64.zip"
             "dist/checksums.txt"
             "dist/install.sh"
           )
