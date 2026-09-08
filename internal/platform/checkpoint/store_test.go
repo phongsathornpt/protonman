@@ -366,3 +366,24 @@ func TestFileStoreRejectsUnreservedStoreInsideWorkspace(t *testing.T) {
 		t.Fatal("NewFileStore() error = nil, want unreserved workspace root rejection")
 	}
 }
+
+func TestNewWorkspaceFileStoreBindsWorkspaceKeyBelowCheckpointRoot(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	checkpointRoot := t.TempDir()
+	store, err := NewWorkspaceFileStore(checkpointRoot, "abc123", workspaceRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := store.root, filepath.Join(checkpointRoot, "workspace-abc123"); got != want {
+		t.Fatalf("store root = %q, want %q", got, want)
+	}
+}
+
+func TestNewWorkspaceFileStoreRejectsUnsafeWorkspaceKey(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	for _, key := range []string{"", "..", "../escape", "nested/key"} {
+		if _, err := NewWorkspaceFileStore(t.TempDir(), key, workspaceRoot); err == nil {
+			t.Fatalf("workspace key %q accepted", key)
+		}
+	}
+}
