@@ -23,6 +23,8 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	if err := ctx.Err(); err != nil {
 		return Handle{}, err
 	}
+	req.SessionID = strings.TrimSpace(req.SessionID)
+	req.ParentID = strings.TrimSpace(req.ParentID)
 	if err := req.Validate(); err != nil {
 		return Handle{}, fmt.Errorf("invalid subagent request: %w", err)
 	}
@@ -72,7 +74,7 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 		languageModel:   boundModel,
 		reasoningEffort: boundReasoning,
 		status: AgentStatus{
-			ID: id, ParentID: req.ParentID, Profile: req.Profile, Provider: providerName, Model: modelID, Task: req.Task,
+			SessionID: req.SessionID, ID: id, ParentID: req.ParentID, Profile: req.Profile, Provider: providerName, Model: modelID, Task: req.Task,
 			State: StateQueued, StartTime: queuedAt,
 		},
 		cancel:  runCancel,
@@ -85,9 +87,9 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	c.wg.Add(1)
 	c.agentsMu.Unlock()
 
-	c.emit(runCtx, Event{Kind: EventAgentQueued, AgentID: id, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task})
+	c.emit(runCtx, Event{Kind: EventAgentQueued, SessionID: req.SessionID, AgentID: id, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task})
 	go c.runEntry(runCtx, entry, req, queuedAt)
-	return Handle{ID: id, Profile: req.Profile}, nil
+	return Handle{SessionID: req.SessionID, ID: id, Profile: req.Profile}, nil
 }
 
 func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Request, queuedAt time.Time) {
@@ -150,7 +152,7 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 	}
 	defer execCancel()
 
-	c.emit(execCtx, Event{Kind: EventAgentStarted, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task, QueueDuration: queueDuration})
+	c.emit(execCtx, Event{Kind: EventAgentStarted, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task, QueueDuration: queueDuration})
 	res, runErr := c.executeWithRuntime(execCtx, req, entry.languageModel, entry.reasoningEffort)
 	res.Provider = entry.status.Provider
 	res.Model = entry.status.Model
@@ -167,18 +169,18 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 		eventKind = EventAgentFailed
 	}
 	emitCtx, emitDone := contextutil.DetachedTimeout(execCtx, runtimepolicy.AgentLifecycleEmitTimeout)
-	c.emit(emitCtx, Event{Kind: eventKind, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: res.Summary, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: runErr})
+	c.emit(emitCtx, Event{Kind: eventKind, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: res.Summary, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: runErr})
 	emitDone()
 }
 
 func (c *Coordinator) finishEntry(entry *agentEntry, req Request, queuedAt, startedAt time.Time, err error) {
 	now := time.Now()
-	res := Result{AgentID: req.ID, Profile: req.Profile, Provider: entry.status.Provider, Model: entry.status.Model, QueueDuration: now.Sub(queuedAt), TotalDuration: now.Sub(queuedAt), Err: err}
+	res := Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile, Provider: entry.status.Provider, Model: entry.status.Model, QueueDuration: now.Sub(queuedAt), TotalDuration: now.Sub(queuedAt), Err: err}
 	if !startedAt.IsZero() {
 		res.Duration = now.Sub(startedAt)
 	}
 	c.storeTerminal(entry, res, err)
-	c.emit(c.rootCtx, Event{Kind: EventAgentFailed, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: err})
+	c.emit(c.rootCtx, Event{Kind: EventAgentFailed, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: err})
 	if startedAt.IsZero() {
 		close(entry.started)
 	}
@@ -304,7 +306,7 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 	case <-started:
 	case <-ctx.Done():
 		_ = c.Cancel(h.ID)
-		return Result{AgentID: h.ID, Profile: h.Profile, Err: ctx.Err()}, ctx.Err()
+		return Result{SessionID: h.SessionID, AgentID: h.ID, Profile: h.Profile, Err: ctx.Err()}, ctx.Err()
 	}
 	c.agentsMu.RLock()
 	terminal := e.status.State.Terminal()
@@ -324,7 +326,7 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 	case <-wctx.Done():
 		_ = c.Cancel(h.ID)
 		err := wctx.Err()
-		return Result{AgentID: h.ID, Profile: h.Profile, Err: err}, err
+		return Result{SessionID: h.SessionID, AgentID: h.ID, Profile: h.Profile, Err: err}, err
 	}
 }
 

@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -67,13 +66,13 @@ func (c *Coordinator) emit(ctx context.Context, ev Event) {
 	c.recordActivity(ev)
 	switch ev.Kind {
 	case EventAgentCompleted:
-		c.observeMetric(ctx, MetricEvent{Kind: MetricCompleted, AgentID: ev.AgentID, ParentID: ev.ParentID, Profile: ev.Profile})
+		c.observeMetric(ctx, MetricEvent{Kind: MetricCompleted, SessionID: ev.SessionID, AgentID: ev.AgentID, ParentID: ev.ParentID, Profile: ev.Profile})
 	case EventAgentFailed:
 		kind := MetricFailed
 		if status, ok := c.Get(ev.AgentID); ok && status.State == StateCanceled {
 			kind = MetricCanceled
 		}
-		c.observeMetric(ctx, MetricEvent{Kind: kind, AgentID: ev.AgentID, ParentID: ev.ParentID, Profile: ev.Profile})
+		c.observeMetric(ctx, MetricEvent{Kind: kind, SessionID: ev.SessionID, AgentID: ev.AgentID, ParentID: ev.ParentID, Profile: ev.Profile})
 	}
 	c.broadcast(ev)
 	if c.eventSink == nil || ev.Kind == EventAgentProgress {
@@ -88,8 +87,9 @@ func (c *Coordinator) recordActivity(ev Event) {
 	}
 	c.activityMu.Lock()
 	c.recordActivityLocked("", ev)
-	if parentID := strings.TrimSpace(ev.ParentID); parentID != "" {
-		c.recordActivityLocked(parentID, ev)
+	ref := TurnRef{SessionID: ev.SessionID, TurnID: ev.ParentID}.normalized()
+	if ref.SessionID != "" || ref.TurnID != "" {
+		c.recordActivityLocked(activityScopeKey(ref), ev)
 	}
 	c.activityMu.Unlock()
 }

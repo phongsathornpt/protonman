@@ -39,6 +39,6 @@ func (c *Coordinator) Resume(ctx context.Context, id, parentID string) (Handle, 
 	if err != nil {
 		return Handle{}, err
 	}
-	c.observeMetric(ctx, MetricEvent{Kind: MetricResumed, AgentID: handle.ID, ParentID: req.ParentID, Profile: handle.Profile})
+	c.observeMetric(ctx, MetricEvent{Kind: MetricResumed, SessionID: req.SessionID, AgentID: handle.ID, ParentID: req.ParentID, Profile: handle.Profile})
 	return handle, nil
 }

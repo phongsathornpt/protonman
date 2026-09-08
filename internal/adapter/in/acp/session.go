@@ -160,7 +160,7 @@ func (s *Session) ExecutePrompt(
 	promptCtx, cancel := context.WithCancel(ctx)
 	s.promptSeq++
 	promptSeq := s.promptSeq
-	promptCtx = agent.WithParentID(promptCtx, fmt.Sprintf("acp-%s-turn-%d", s.id, promptSeq))
+	promptCtx = agent.WithTurnRef(promptCtx, agent.TurnRef{SessionID: s.id, TurnID: fmt.Sprintf("acp-%s-turn-%d", s.id, promptSeq)})
 	s.active = true
 	s.cancelled = false
 	s.cancel = cancel

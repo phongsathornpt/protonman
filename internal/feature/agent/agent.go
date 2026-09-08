@@ -113,8 +113,9 @@ func (s State) Terminal() bool {
 
 // Handle identifies a spawned subagent without coupling its lifetime to a caller wait.
 type Handle struct {
-	ID      string  `json:"agent_id"`
-	Profile Profile `json:"profile"`
+	SessionID string  `json:"session_id,omitempty"`
+	ID        string  `json:"agent_id"`
+	Profile   Profile `json:"profile"`
 }
 
 // WaitResult reports the current state after a bounded wait.
@@ -134,6 +135,7 @@ type ActivityWaitResult struct {
 
 // Request is the invocation payload for a delegated subagent.
 type Request struct {
+	SessionID    string        `json:"session_id,omitempty"`
 	ID           string        `json:"id,omitempty"`
 	ParentID     string        `json:"parent_id,omitempty"`
 	Profile      Profile       `json:"profile"`
@@ -172,6 +174,7 @@ type EvidenceRef struct {
 
 // Result is the bounded final output returned from a subagent to its caller.
 type Result struct {
+	SessionID      string                 `json:"session_id,omitempty"`
 	AgentID        string                 `json:"agent_id"`
 	Profile        Profile                `json:"profile"`
 	Provider       string                 `json:"provider,omitempty"`
@@ -206,6 +209,7 @@ const (
 // Event is one lifecycle progress event emitted by an executing subagent.
 type Event struct {
 	Kind          EventKind     `json:"kind"`
+	SessionID     string        `json:"session_id,omitempty"`
 	AgentID       string        `json:"agent_id"`
 	ParentID      string        `json:"parent_id,omitempty"`
 	Profile       Profile       `json:"profile"`

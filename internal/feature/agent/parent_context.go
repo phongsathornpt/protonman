@@ -5,25 +5,15 @@ import (
 	"strings"
 )
 
-type parentIDContextKey struct{}
-
-// WithParentID associates delegated subagents with one owning root turn.
+// WithParentID is the compatibility wrapper for callers that only know a turn id.
+// Existing session scope is preserved when one is already present on ctx.
 func WithParentID(ctx context.Context, parentID string) context.Context {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	parentID = strings.TrimSpace(parentID)
-	if parentID == "" {
-		return ctx
-	}
-	return context.WithValue(ctx, parentIDContextKey{}, parentID)
+	ref := TurnRefFromContext(ctx)
+	ref.TurnID = strings.TrimSpace(parentID)
+	return WithTurnRef(ctx, ref)
 }
 
-// ParentIDFromContext returns the owning root-turn identifier, when present.
+// ParentIDFromContext returns the owning parent-turn identifier, when present.
 func ParentIDFromContext(ctx context.Context) string {
-	if ctx == nil {
-		return ""
-	}
-	parentID, _ := ctx.Value(parentIDContextKey{}).(string)
-	return strings.TrimSpace(parentID)
+	return TurnRefFromContext(ctx).TurnID
 }

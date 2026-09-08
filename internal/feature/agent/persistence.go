@@ -82,6 +82,7 @@ func (c *Coordinator) RestorePersistentSnapshot(snapshot PersistentSnapshot) err
 		}
 		status := record.Status
 		request := record.Request
+		request.SessionID = status.SessionID
 		request.ID = status.ID
 		request.ParentID = status.ParentID
 		request.Profile = status.Profile
@@ -93,7 +94,7 @@ func (c *Coordinator) RestorePersistentSnapshot(snapshot PersistentSnapshot) err
 			status.FinishedAt = time.Now().UTC()
 			interrupted = true
 		}
-		result := Result{AgentID: status.ID, Profile: status.Profile, Provider: status.Provider, Model: status.Model}
+		result := Result{SessionID: status.SessionID, AgentID: status.ID, Profile: status.Profile, Provider: status.Provider, Model: status.Model}
 		if record.Result != nil {
 			result = cloneResult(*record.Result)
 		}
@@ -104,7 +105,7 @@ func (c *Coordinator) RestorePersistentSnapshot(snapshot PersistentSnapshot) err
 		c.agents[status.ID] = &agentEntry{status: status, request: request, result: result, cancel: func() {}, done: done, started: started}
 		c.raiseSequenceForID(status.ID)
 		if interrupted {
-			interruptedEvents = append(interruptedEvents, MetricEvent{Kind: MetricInterrupted, AgentID: status.ID, ParentID: status.ParentID, Profile: status.Profile})
+			interruptedEvents = append(interruptedEvents, MetricEvent{Kind: MetricInterrupted, SessionID: status.SessionID, AgentID: status.ID, ParentID: status.ParentID, Profile: status.Profile})
 		}
 	}
 	c.pruneExpiredLocked(time.Now())
