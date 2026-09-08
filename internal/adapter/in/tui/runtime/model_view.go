@@ -846,16 +846,30 @@ func (v *reasoningPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool,
 	v.index, _, _ = normalizedPickerWindow(v.index, 0, len(choices), len(choices))
 	switch message.String() {
 	case "up", "k":
-		v.index = (v.index - 1 + len(choices)) % len(choices)
+		if v.index > 0 {
+			v.index--
+		}
 		return true, nil
 	case "down", "j":
-		v.index = (v.index + 1) % len(choices)
+		if v.index < len(choices)-1 {
+			v.index++
+		}
 		return true, nil
 	case "home", "g":
 		v.index = 0
 		return true, nil
 	case "end", "G":
 		v.index = len(choices) - 1
+		return true, nil
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		idx := int(message.String()[0] - '1')
+		if idx >= 0 && idx < len(choices) {
+			effort := choices[idx]
+			m.bottom.remove(reasoningViewID)
+			return true, m.setReasoningEffort(effort)
+		}
+		return true, nil
+	case "tab", "shift+tab":
 		return true, nil
 	case "enter":
 		effort := choices[v.index]

@@ -14,6 +14,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -414,6 +415,9 @@ func (m bubbleModel) infoView() string {
 	if m.activeModel != "" {
 		cleanModel := truncateWithEllipsis(m.activeModel, maxInt(8, targetWidth/3))
 		addPart(brandStyle.Render("model: " + cleanModel))
+	}
+	if m.reasoningEffort != sdk.ReasoningDefault && m.reasoningEffort != "" {
+		addPart(brandStyle.Render("thinking: " + string(m.reasoningEffort)))
 	}
 	if n := len(m.queue); n > 0 {
 		addPart(mutedStyle.Render(fmt.Sprintf("%d queued", n)))

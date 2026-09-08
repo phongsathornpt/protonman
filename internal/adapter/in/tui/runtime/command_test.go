@@ -186,6 +186,64 @@ func TestReasoningPickerSelectsLevel(t *testing.T) {
 	}
 }
 
+func TestReasoningPickerShiftTabDoesNotLeak(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeProvider = "protonman"
+	m.activeModel = "gemini-3.8-flash"
+	m.executeCommand("/reasoning")
+	view, ok := m.bottom.find(reasoningViewID).(*reasoningPaneView)
+	if !ok || view == nil {
+		t.Fatal("reasoning picker missing")
+	}
+	initialMode := m.service.Mode()
+	handled, _ := view.HandleKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	// Test shift+tab directly:
+	handledShiftTab, _ := view.HandleKey(m, tea.KeyMsg{Type: tea.KeyShiftTab})
+	if !handledShiftTab {
+		t.Fatal("shift+tab was not handled by reasoning picker")
+	}
+	if m.service.Mode() != initialMode {
+		t.Fatalf("permission mode changed from %s to %s on shift+tab", initialMode, m.service.Mode())
+	}
+	_ = handled
+}
+
+func TestReasoningPickerNumberKeySelects(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeProvider = "protonman"
+	m.activeModel = "gemini-3.8-flash"
+	m.executeCommand("/reasoning")
+	view, ok := m.bottom.find(reasoningViewID).(*reasoningPaneView)
+	if !ok || view == nil {
+		t.Fatal("reasoning picker missing")
+	}
+	// Pressing '2' selects choice index 1 (low)
+	handled, _ := view.HandleKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	if !handled {
+		t.Fatal("key 2 was not handled")
+	}
+	if got := m.reasoningEffort; got != sdk.ReasoningLow {
+		t.Fatalf("reasoningEffort = %q, want low", got)
+	}
+	if m.bottom.has(reasoningViewID) {
+		t.Fatal("picker stayed open after number selection")
+	}
+}
+
+func TestInfoViewDisplaysThinkingChipWhenNonDefault(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.resize(100, 30)
+	m.activeModel = "claude-3-7-sonnet"
+	m.reasoningEffort = sdk.ReasoningDefault
+	if strings.Contains(m.infoView(), "thinking:") {
+		t.Fatalf("infoView should not display thinking chip when effort is default: %s", m.infoView())
+	}
+	m.reasoningEffort = sdk.ReasoningHigh
+	if !strings.Contains(m.infoView(), "thinking: high") {
+		t.Fatalf("infoView missing thinking: high chip: %s", m.infoView())
+	}
+}
+
 func TestSlashReasoningSyncsCoordinator(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeModel = "gemini-3.8-flash"
