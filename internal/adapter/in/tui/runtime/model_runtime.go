@@ -86,11 +86,14 @@ type bubbleModel struct {
 	viewportCommittedRevision uint64
 	viewportActiveRevision    uint64
 	viewportLineAnchors       []ScrollAnchor
+	viewportViewCache         string
+	viewportViewDirty         bool
 	nextID                    uint64
 	width                     int
 	height                    int
 	frameChrome               frameChrome
 	welcomeCache              welcomeCardCache
+	composerDirty             bool
 	layoutGeneration          uint64
 	busyStarted               time.Time
 	turnCancel                context.CancelFunc
@@ -211,7 +214,7 @@ func (m *bubbleModel) submit() tea.Cmd {
 	line := strings.TrimSpace(prompt.Value())
 	if m.bottom.bashMode() {
 		if line == "" {
-			prompt.Reset()
+			m.resetPrompt()
 			m.bottom.remove(slashViewID)
 			m.setBashMode(false)
 			return nil
@@ -220,12 +223,12 @@ func (m *bubbleModel) submit() tea.Cmd {
 			if !m.enqueuePrompt("!" + line) {
 				return nil
 			}
-			prompt.Reset()
+			m.resetPrompt()
 			m.bottom.remove(slashViewID)
 			m.refreshViewport()
 			return nil
 		}
-		prompt.Reset()
+		m.resetPrompt()
 		m.bottom.remove(slashViewID)
 		m.setBashMode(false)
 		return m.dispatchBang(line)
@@ -237,12 +240,12 @@ func (m *bubbleModel) submit() tea.Cmd {
 		if !m.enqueuePrompt(line) {
 			return nil
 		}
-		prompt.Reset()
+		m.resetPrompt()
 		m.bottom.remove(slashViewID)
 		m.refreshViewport()
 		return nil
 	}
-	prompt.Reset()
+	m.resetPrompt()
 	m.bottom.remove(slashViewID)
 	return m.dispatch(line)
 }
@@ -398,6 +401,7 @@ func (m *bubbleModel) syncPromptPlaceholder() {
 	if m == nil || m.bottom == nil {
 		return
 	}
+	m.composerDirty = true
 	mode := permission.ModeAsk
 	if m.service != nil {
 		mode = m.service.Mode()
@@ -554,7 +558,11 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if (m.viewportTailOnly || m.viewportStaleTail) && (message.Button == tea.MouseButtonWheelUp || message.Button == tea.MouseButtonWheelDown) {
 			m.hydrateViewportForScroll()
 		}
+		beforeOffset := m.viewport.YOffset
 		m.viewport, command = m.viewport.Update(message)
+		if m.viewport.YOffset != beforeOffset {
+			m.markViewportViewDirty()
+		}
 		m.followTail = m.viewport.AtBottom()
 		return m, command
 	case spinner.TickMsg:
@@ -571,6 +579,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		prompt := m.bottom.prompt()
 		updated, command := prompt.Update(message)
 		*prompt = updated
+		m.composerDirty = true
 		return m, command
 	case permissionRequestMsg:
 		return m.updatePermissionRequest(message)
@@ -633,7 +642,7 @@ func (m *bubbleModel) handleInterruptKey() (tea.Model, tea.Cmd) {
 	}
 	prompt := m.bottom.prompt()
 	if prompt.Value() != "" || m.bottom.bashMode() {
-		prompt.Reset()
+		m.resetPrompt()
 		m.setBashMode(false)
 		m.syncSlashView()
 		m.relayout()
@@ -710,12 +719,20 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyMsg) (bool, tea.Cmd) {
 		return true, nil
 	case key.Matches(message, m.keys.PageUp):
 		m.hydrateViewportForScroll()
+		before := m.viewport.YOffset
 		m.viewport.PageUp()
+		if m.viewport.YOffset != before {
+			m.markViewportViewDirty()
+		}
 		m.followTail = m.viewport.AtBottom()
 		return true, nil
 	case key.Matches(message, m.keys.PageDown):
 		m.hydrateViewportForScroll()
+		before := m.viewport.YOffset
 		m.viewport.PageDown()
+		if m.viewport.YOffset != before {
+			m.markViewportViewDirty()
+		}
 		m.followTail = m.viewport.AtBottom()
 		return true, nil
 	default:
@@ -732,7 +749,7 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyMsg) tea.Cmd {
 		if m.bottom.bashMode() {
 			m.setBashMode(false)
 		}
-		prompt.Reset()
+		m.resetPrompt()
 		m.syncSlashView()
 		m.relayout()
 		return nil

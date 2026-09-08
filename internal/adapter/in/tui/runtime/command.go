@@ -204,7 +204,7 @@ func (m *bubbleModel) acceptSlash(run bool) (applied bool, command tea.Cmd) {
 		m.bottom.remove(slashViewID)
 		return true, nil
 	}
-	prompt.Reset()
+	m.resetPrompt()
 	m.bottom.remove(slashViewID)
 	return true, m.dispatch(insertion)
 }
