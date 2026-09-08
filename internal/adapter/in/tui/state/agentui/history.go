@@ -59,6 +59,11 @@ func ParseToolResult(body string) ToolResult {
 		Result *struct {
 			Summary string `json:"summary"`
 		} `json:"result"`
+		Event *struct {
+			AgentID string `json:"agent_id"`
+			Message string `json:"message"`
+		} `json:"event"`
+		Agents []agent.AgentStatus `json:"agents"`
 	}
 	if json.Unmarshal([]byte(body), &payload) != nil {
 		return ToolResult{}
@@ -81,10 +86,35 @@ func ParseToolResult(body string) ToolResult {
 	if payload.Result != nil {
 		out.Summary = strings.TrimSpace(payload.Result.Summary)
 	}
+	if payload.Event != nil {
+		if out.AgentID == "" {
+			out.AgentID = strings.TrimSpace(payload.Event.AgentID)
+		}
+		if out.Summary == "" {
+			out.Summary = strings.TrimSpace(payload.Event.Message)
+		}
+	}
+	if out.AgentID != "" {
+		for _, status := range payload.Agents {
+			if status.ID != out.AgentID {
+				continue
+			}
+			if out.State == "" {
+				out.State = status.State
+			}
+			if out.Reason == "" {
+				out.Reason = strings.TrimSpace(status.Reason)
+			}
+			break
+		}
+	}
 	return out
 }
 
 func (t *Tracker) TouchOperation(name string, call tool.Call, state *history.HistoryState) {
+	if name == "wait_agent" {
+		return
+	}
 	id := extractStringArg(call.Arguments, "agent_id")
 	if t.pendingOps == nil {
 		t.pendingOps = make(map[string]string)
@@ -97,8 +127,6 @@ func (t *Tracker) TouchOperation(name string, call tool.Call, state *history.His
 		return
 	}
 	switch name {
-	case "wait_agent":
-		cell.Activity = "waiting for completion"
 	case "get_agent":
 		cell.Activity = "checking status"
 	case "cancel_agent":
