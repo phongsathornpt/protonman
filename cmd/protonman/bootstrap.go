@@ -266,7 +266,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		providerKey = model.DefaultProtonmanName
 	}
 	provider := loadedConfig.Providers[providerKey]
-	initialRunner, _ := app.BuildConversation(service, skillRegistry, app.NewAgents(coordinator), app.ConversationSpec{
+	initialRunner, _ := app.BuildConversation(service, skillRegistry, app.NewAgentsForSession(coordinator, sessionID), app.ConversationSpec{
 		ProviderName: providerKey, ProviderType: provider.Type, BaseURL: provider.BaseURL, APIKey: provider.APIKey,
 		ModelID: loadedConfig.Model.Default, SessionID: sessionID, Workspace: workDir, AgentProfile: loadedConfig.Agent.Profile,
 		ReasoningEffort: loadedConfig.Agent.ReasoningEffort, MaxToolCalls: loadedConfig.Agent.MaxToolCalls,

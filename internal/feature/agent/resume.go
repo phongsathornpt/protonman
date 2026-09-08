@@ -80,6 +80,19 @@ func (c *Coordinator) Resume(ctx context.Context, id, parentID string) (Handle, 
 	return handle, nil
 }
 
+// ResumeRef resumes a source agent only within its owning session.
+func (c *Coordinator) ResumeRef(ctx context.Context, ref AgentRef, parent TurnRef) (Handle, error) {
+	ref = ref.normalized()
+	parent = parent.normalized()
+	if ref.SessionID != parent.SessionID {
+		return Handle{}, fmt.Errorf("%w: %q", ErrNotFound, ref.AgentID)
+	}
+	if _, ok := c.GetRef(ref); !ok {
+		return Handle{}, fmt.Errorf("%w: %q", ErrNotFound, ref.AgentID)
+	}
+	return c.Resume(ctx, ref.AgentID, parent.TurnID)
+}
+
 func (c *Coordinator) rollbackResume(id string) {
 	c.agentsMu.Lock()
 	defer c.agentsMu.Unlock()
