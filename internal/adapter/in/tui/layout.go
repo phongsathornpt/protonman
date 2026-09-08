@@ -1,66 +1,25 @@
 package tui
 
 import (
-	"strings"
-
 	"github.com/charmbracelet/lipgloss"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/pane"
 )
 
-type terminalLayoutMode uint8
+type terminalLayoutMode = pane.LayoutMode
 
 const (
-	layoutNormal terminalLayoutMode = iota
-	layoutCompact
-	layoutTiny
+	layoutNormal  = pane.LayoutNormal
+	layoutCompact = pane.LayoutCompact
+	layoutTiny    = pane.LayoutTiny
 )
 
-func layoutModeForHeight(height int) terminalLayoutMode {
-	switch {
-	case height < 14:
-		return layoutTiny
-	case height < 20:
-		return layoutCompact
-	default:
-		return layoutNormal
-	}
-}
-
-func pickerVisibleRows(height, maximum int) int {
-	rows := maximum
-	switch {
-	case height <= 12:
-		rows = 2
-	case height <= 14:
-		rows = 3
-	case height <= 20:
-		rows = 4
-	}
-	if rows < 1 {
-		return 1
-	}
-	if maximum > 0 && rows > maximum {
-		return maximum
-	}
-	return rows
-}
+func layoutModeForHeight(height int) terminalLayoutMode { return pane.ModeForHeight(height) }
+func pickerVisibleRows(height, maximum int) int         { return pane.PickerVisibleRows(height, maximum) }
+func compactPickerRows(rows []string) []string          { return pane.CompactRows(rows) }
 
 func renderModalRows(m *bubbleModel, border lipgloss.TerminalColor, rows []string) string {
-	style := modalStyle.
-		BorderForeground(border).
-		MaxWidth(maxInt(1, m.width-4))
-	if layoutModeForHeight(m.height) != layoutNormal {
-		style = style.Padding(0, 1)
+	if m == nil {
+		return pane.RenderModal(defaultBubbleWidth, defaultBubbleHeight, border, rows)
 	}
-	return style.Render(strings.Join(rows, "\n"))
-}
-
-func compactPickerRows(rows []string) []string {
-	compact := make([]string, 0, len(rows))
-	for _, row := range rows {
-		if strings.TrimSpace(row) == "" {
-			continue
-		}
-		compact = append(compact, row)
-	}
-	return compact
+	return pane.RenderModal(m.width, m.height, border, rows)
 }
