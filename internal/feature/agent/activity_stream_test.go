@@ -97,3 +97,39 @@ func TestActivityStreamReportsTruncationAfterRetentionBoundary(t *testing.T) {
 		t.Fatalf("result = cursor=%d truncated=%v events=%d", result.Cursor, result.Truncated, len(result.Events))
 	}
 }
+
+func TestPruneActivityMailboxesBoundsInactiveTurns(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil)
+	defer coord.Close()
+	now := time.Now()
+	coord.activityMu.Lock()
+	for i := 0; i < maxActivityMailboxes+12; i++ {
+		scope := activityScopeKey(TurnRef{SessionID: "session-a", TurnID: fmt.Sprintf("turn-%d", i)})
+		coord.activityMailboxes[scope] = &activityMailbox{notify: make(chan struct{}), updatedAt: now.Add(time.Duration(i) * time.Second)}
+	}
+	coord.activityMu.Unlock()
+	coord.pruneActivityMailboxes(now.Add(time.Minute))
+	coord.activityMu.Lock()
+	count := len(coord.activityMailboxes)
+	coord.activityMu.Unlock()
+	if count > maxActivityMailboxes {
+		t.Fatalf("mailboxes = %d, want <= %d", count, maxActivityMailboxes)
+	}
+}
+
+func TestPruneActivityMailboxesExpiresInactiveTurn(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil)
+	defer coord.Close()
+	now := time.Now()
+	scope := activityScopeKey(TurnRef{SessionID: "session-a", TurnID: "old-turn"})
+	coord.activityMu.Lock()
+	coord.activityMailboxes[scope] = &activityMailbox{notify: make(chan struct{}), updatedAt: now.Add(-activityMailboxTTL - time.Second)}
+	coord.activityMu.Unlock()
+	coord.pruneActivityMailboxes(now)
+	coord.activityMu.Lock()
+	_, exists := coord.activityMailboxes[scope]
+	coord.activityMu.Unlock()
+	if exists {
+		t.Fatal("expired inactive mailbox was retained")
+	}
+}

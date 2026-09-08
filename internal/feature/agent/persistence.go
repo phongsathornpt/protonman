@@ -34,14 +34,28 @@ type PersistentAgent struct {
 
 // PersistentSnapshot returns a detached copy suitable for durable storage.
 func (c *Coordinator) PersistentSnapshot() PersistentSnapshot {
+	return c.PersistentSnapshotForSession("")
+}
+
+// PersistentSnapshotForSession returns a detached projection for one session.
+// An empty session ID preserves the compatibility behavior of returning all agents.
+func (c *Coordinator) PersistentSnapshotForSession(sessionID string) PersistentSnapshot {
 	if c == nil {
 		return PersistentSnapshot{Version: PersistentSnapshotVersion, Agents: []PersistentAgent{}, UpdatedAt: time.Now().UTC()}
 	}
+	sessionID = strings.TrimSpace(sessionID)
 	c.pruneExpired()
 	c.agentsMu.RLock()
 	defer c.agentsMu.RUnlock()
+	return c.persistentSnapshotLocked(sessionID)
+}
+
+func (c *Coordinator) persistentSnapshotLocked(sessionID string) PersistentSnapshot {
 	agents := make([]PersistentAgent, 0, len(c.agents))
 	for _, entry := range c.agents {
+		if sessionID != "" && entry.status.SessionID != sessionID {
+			continue
+		}
 		status := entry.status
 		request := entry.request
 		request.Task = truncatePersistentText(request.Task, maxPersistentTaskBytes)

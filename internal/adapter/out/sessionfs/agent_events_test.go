@@ -60,3 +60,31 @@ func TestFileStoreMissingLifecycleJournalIsEmpty(t *testing.T) {
 		t.Fatalf("events=%#v err=%v", events, err)
 	}
 }
+
+func TestCompactLifecycleInstallsSnapshotBeforeTruncatingJournal(t *testing.T) {
+	store, err := NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := agent.LifecycleEvent{Kind: agent.LifecycleAgentQueued, Version: 1, SessionID: "session-1", AgentID: "agility-1", Profile: agent.ProfileAgility, Task: "inspect"}
+	if err := store.AppendLifecycleEvent(context.Background(), event); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := agent.PersistentSnapshot{Version: agent.PersistentSnapshotVersion, Agents: []agent.PersistentAgent{{
+		Status: agent.AgentStatus{SessionID: "session-1", ID: "agility-1", Profile: agent.ProfileAgility, Task: "inspect", State: agent.StateCompleted, Version: 2},
+	}}}
+	if err := store.CompactLifecycle(context.Background(), "session-1", snapshot); err != nil {
+		t.Fatal(err)
+	}
+	got, found, err := store.LoadAgents(context.Background(), "session-1")
+	if err != nil || !found || len(got.Agents) != 1 || got.Agents[0].Status.State != agent.StateCompleted {
+		t.Fatalf("snapshot found=%v err=%v got=%+v", found, err, got)
+	}
+	events, err := store.LoadLifecycleEvents(context.Background(), "session-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("events after compaction = %#v", events)
+	}
+}

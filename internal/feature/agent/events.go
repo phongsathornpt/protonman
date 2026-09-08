@@ -2,13 +2,19 @@ package agent
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/phongsathornpt/protonman/internal/base/contextutil"
 )
 
-const maxActivityMailboxEvents = 128
+const (
+	maxActivityMailboxEvents = 128
+	maxActivityMailboxes     = 256
+	activityMailboxTTL       = 30 * time.Minute
+)
 
 type activityRecord struct {
 	seq   uint64
@@ -16,10 +22,11 @@ type activityRecord struct {
 }
 
 type activityMailbox struct {
-	nextSeq uint64
-	seen    uint64
-	events  []activityRecord
-	notify  chan struct{}
+	nextSeq   uint64
+	seen      uint64
+	events    []activityRecord
+	notify    chan struct{}
+	updatedAt time.Time
 }
 
 // Subscribe returns a bounded lifecycle stream. Slow subscribers drop events
@@ -99,6 +106,7 @@ func (c *Coordinator) recordActivity(ev Event) {
 		c.recordActivityLocked(activityScopeKey(ref), ev)
 	}
 	c.activityMu.Unlock()
+	c.pruneActivityMailboxes(time.Now())
 }
 
 func (c *Coordinator) recordActivityLocked(scope string, ev Event) {
@@ -107,6 +115,7 @@ func (c *Coordinator) recordActivityLocked(scope string, ev Event) {
 		mailbox = &activityMailbox{notify: make(chan struct{})}
 		c.activityMailboxes[scope] = mailbox
 	}
+	mailbox.updatedAt = time.Now()
 	mailbox.nextSeq++
 	mailbox.events = append(mailbox.events, activityRecord{seq: mailbox.nextSeq, event: ev})
 	if len(mailbox.events) > maxActivityMailboxEvents {
@@ -115,6 +124,50 @@ func (c *Coordinator) recordActivityLocked(scope string, ev Event) {
 	}
 	close(mailbox.notify)
 	mailbox.notify = make(chan struct{})
+}
+
+func (c *Coordinator) pruneActivityMailboxes(now time.Time) {
+	if c == nil {
+		return
+	}
+	active := make(map[string]struct{})
+	c.agentsMu.RLock()
+	for _, entry := range c.agents {
+		if entry.status.State.Terminal() {
+			continue
+		}
+		active[activityScopeKey(TurnRef{SessionID: entry.status.SessionID, TurnID: entry.status.ParentID})] = struct{}{}
+	}
+	c.agentsMu.RUnlock()
+
+	c.activityMu.Lock()
+	defer c.activityMu.Unlock()
+	type candidate struct {
+		scope string
+		at    time.Time
+	}
+	candidates := make([]candidate, 0, len(c.activityMailboxes))
+	for scope, mailbox := range c.activityMailboxes {
+		if scope == "" {
+			continue
+		}
+		if _, live := active[scope]; live {
+			continue
+		}
+		if !mailbox.updatedAt.IsZero() && now.Sub(mailbox.updatedAt) >= activityMailboxTTL {
+			delete(c.activityMailboxes, scope)
+			continue
+		}
+		candidates = append(candidates, candidate{scope: scope, at: mailbox.updatedAt})
+	}
+	over := len(c.activityMailboxes) - maxActivityMailboxes
+	if over <= 0 {
+		return
+	}
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].at.Before(candidates[j].at) })
+	for i := 0; i < over && i < len(candidates); i++ {
+		delete(c.activityMailboxes, candidates[i].scope)
+	}
 }
 
 func enqueueLifecycleEvent(ch chan Event, ev Event) {

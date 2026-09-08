@@ -84,6 +84,7 @@ func activityScopeKey(ref TurnRef) string {
 }
 
 func (c *Coordinator) waitActivity(ctx context.Context, ref TurnRef, after *uint64, timeout time.Duration) (ActivityWaitResult, error) {
+	defer c.pruneActivityMailboxes(time.Now())
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -97,9 +98,10 @@ func (c *Coordinator) waitActivity(ctx context.Context, ref TurnRef, after *uint
 		scope := activityScopeKey(ref)
 		mailbox := c.activityMailboxes[scope]
 		if mailbox == nil {
-			mailbox = &activityMailbox{notify: make(chan struct{})}
+			mailbox = &activityMailbox{notify: make(chan struct{}), updatedAt: time.Now()}
 			c.activityMailboxes[scope] = mailbox
 		}
+		mailbox.updatedAt = time.Now()
 		cursor := mailbox.seen
 		if after != nil {
 			cursor = *after

@@ -146,10 +146,20 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 			if ev.Kind == agent.EventAgentProgress || coordinator == nil {
 				return nil
 			}
+			ownerSession := strings.TrimSpace(ev.SessionID)
+			if ownerSession == "" {
+				ownerSession = sessionID
+			}
 			persistCtx, done := contextutil.DetachedTimeout(eventCtx, runtimepolicy.SessionPersistenceTimeout)
 			defer done()
-			if err := stateStore.SaveAgents(persistCtx, sessionID, coordinator.PersistentSnapshot()); err != nil {
-				slog.Warn("persist subagent lifecycle state", "session_id", sessionID, "error", err)
+			var persistErr error
+			if ev.Kind == agent.EventAgentCompleted || ev.Kind == agent.EventAgentFailed {
+				persistErr = coordinator.CompactLifecycleSession(persistCtx, ownerSession)
+			} else {
+				persistErr = stateStore.SaveAgents(persistCtx, ownerSession, coordinator.PersistentSnapshotForSession(ownerSession))
+			}
+			if persistErr != nil {
+				slog.Warn("persist subagent lifecycle state", "session_id", ownerSession, "error", persistErr)
 				if agentTelemetry != nil {
 					agentTelemetry.ObserveAgent(persistCtx, "agent_persistence_failure", ev.AgentID, ev.ParentID, string(ev.Profile))
 				}
@@ -174,9 +184,9 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 			return nil, fmt.Errorf("recover session subagents: %w", recoverErr)
 		}
 		persistCtx, persistDone := contextutil.DetachedTimeout(ctx, runtimepolicy.SessionPersistenceTimeout)
-		if persistErr := stateStore.SaveAgents(persistCtx, sessionID, coordinator.PersistentSnapshot()); persistErr != nil {
+		if persistErr := coordinator.CompactLifecycleSession(persistCtx, sessionID); persistErr != nil {
 			persistDone()
-			return nil, fmt.Errorf("persist recovered session subagents: %w", persistErr)
+			return nil, fmt.Errorf("compact recovered session subagents: %w", persistErr)
 		}
 		persistDone()
 	}
