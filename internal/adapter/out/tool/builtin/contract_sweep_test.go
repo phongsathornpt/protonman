@@ -22,7 +22,7 @@ func TestRegisteredBuiltinToolContracts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	auxiliary, err := NewRegistry(todotool.NewGetTodo(nil), todotool.NewUpdateTodo(nil), skilltool.NewActivateSkill(nil, workspaceRoot))
+	auxiliary, err := NewRegistry(todotool.NewTodo(nil), skilltool.NewActivateSkill(nil, workspaceRoot))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +30,7 @@ func TestRegisteredBuiltinToolContracts(t *testing.T) {
 		"read": true, "math": true, "bash": true, "edit": true,
 		"grep": true, "find": true, "ls": true, "git": true,
 		"web": true, "subagent": true,
-		"get_todo": true, "update_todo": true, "skill": true,
+		"todo": true, "skill": true,
 	}
 	seen := make(map[string]bool, len(expected))
 	for _, registry := range []*Registry{primary, auxiliary} {

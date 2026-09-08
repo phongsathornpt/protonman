@@ -31,7 +31,7 @@ func (h todoHandler) Definition() tool.Definition {
 		Description: "Task-plan capability. Use action=get to read the current revision and tasks, or action=update to atomically patch tasks using expected_revision and operations.",
 		Kind:        tool.KindTask,
 		Mutability:  tool.MutabilityMutating,
-		Safety:      tool.SafetyContract{MutationDomain: tool.MutationDomainTaskState, MutationSafety: tool.MutationSafetyDynamic, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
+		Safety:      tool.SafetyContract{MutationDomain: tool.MutationDomainTaskState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
 		Semantics:   h.callSemantics,
 		InputSchema: todoCapabilityInputSchema(),
 		OutputSchema: map[string]any{
@@ -67,7 +67,7 @@ func (h todoHandler) child(action string) (tool.Handler, bool) {
 }
 
 func (h todoHandler) callSemantics(arguments json.RawMessage) tool.CallSemantics {
-	fallback := tool.CallSemantics{Mutability: tool.MutabilityMutating, Safety: tool.SafetyContract{MutationDomain: tool.MutationDomainTaskState, MutationSafety: tool.MutationSafetyDynamic, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}}
+	fallback := tool.CallSemantics{Mutability: tool.MutabilityMutating, Safety: tool.SafetyContract{MutationDomain: tool.MutationDomainTaskState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}}
 	var in struct {
 		Action string `json:"action"`
 	}
