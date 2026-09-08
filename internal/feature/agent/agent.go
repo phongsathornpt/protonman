@@ -145,6 +145,7 @@ type Request struct {
 	Context      string        `json:"context,omitempty"`
 	Timeout      time.Duration `json:"timeout,omitempty"`
 	QueueTimeout time.Duration `json:"queue_timeout,omitempty"`
+	ResumedFrom  string        `json:"resumed_from,omitempty"`
 }
 
 // Validate checks request invariants before dispatch.
