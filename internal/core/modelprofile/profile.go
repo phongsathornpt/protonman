@@ -251,14 +251,16 @@ func (r *Registry) Resolve(provider, modelID string, catalog CatalogMetadata) Re
 
 func (m Matcher) kind(provider, modelID string) MatchKind {
 	modelID = strings.ToLower(strings.TrimSpace(modelID))
+	modelLeaf := modelIDLeaf(modelID)
 	for _, exact := range m.ExactIDs {
-		if strings.EqualFold(strings.TrimSpace(exact), modelID) {
+		exact = strings.ToLower(strings.TrimSpace(exact))
+		if exact != "" && (exact == modelID || exact == modelLeaf) {
 			return MatchExact
 		}
 	}
 	for _, prefix := range m.Prefixes {
 		prefix = strings.ToLower(strings.TrimSpace(prefix))
-		if prefix != "" && strings.HasPrefix(modelID, prefix) {
+		if prefix != "" && (strings.HasPrefix(modelID, prefix) || strings.HasPrefix(modelLeaf, prefix)) {
 			return MatchFamily
 		}
 	}
@@ -268,6 +270,14 @@ func (m Matcher) kind(provider, modelID string) MatchKind {
 	return MatchFallback
 }
 
+func modelIDLeaf(modelID string) string {
+	modelID = strings.TrimSpace(modelID)
+	if slash := strings.LastIndexByte(modelID, '/'); slash >= 0 && slash+1 < len(modelID) {
+		return modelID[slash+1:]
+	}
+	return modelID
+}
+
 func catalogHasMetadata(c CatalogMetadata) bool {
 	return c.Tools != nil || c.Vision != nil || c.ToolChoiceRequired != nil || c.ContextWindow > 0 || c.MaxInputTokens > 0 || c.MaxOutputTokens > 0 || c.Reasoning != nil
 }
@@ -275,6 +285,7 @@ func catalogHasMetadata(c CatalogMetadata) bool {
 func (m Matcher) score(provider, modelID string) (int, bool) {
 	provider = strings.ToLower(strings.TrimSpace(provider))
 	modelID = strings.ToLower(strings.TrimSpace(modelID))
+	modelLeaf := modelIDLeaf(modelID)
 	if want := strings.ToLower(strings.TrimSpace(m.Provider)); want != "" && provider != want {
 		return 0, false
 	}
@@ -283,14 +294,15 @@ func (m Matcher) score(provider, modelID string) (int, bool) {
 		score += 10
 	}
 	for _, exact := range m.ExactIDs {
-		if strings.EqualFold(strings.TrimSpace(exact), modelID) {
+		exact = strings.ToLower(strings.TrimSpace(exact))
+		if exact != "" && (exact == modelID || exact == modelLeaf) {
 			return score + 10000, true
 		}
 	}
 	bestPrefix := -1
 	for _, prefix := range m.Prefixes {
 		prefix = strings.ToLower(strings.TrimSpace(prefix))
-		if prefix != "" && strings.HasPrefix(modelID, prefix) && len(prefix) > bestPrefix {
+		if prefix != "" && (strings.HasPrefix(modelID, prefix) || strings.HasPrefix(modelLeaf, prefix)) && len(prefix) > bestPrefix {
 			bestPrefix = len(prefix)
 		}
 	}

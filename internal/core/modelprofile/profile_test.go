@@ -33,6 +33,26 @@ func TestResolveBuiltinKnownFamilies(t *testing.T) {
 	}
 }
 
+func TestResolveBuiltinMatchesNamespacedModelIDs(t *testing.T) {
+	tests := []struct {
+		model   string
+		profile string
+		kind    MatchKind
+	}{
+		{model: "ag/gemini-3.8-flash", profile: "gemini-3.8-flash", kind: MatchExact},
+		{model: "bai/gemini-3.8-flash", profile: "gemini-3.8-flash", kind: MatchExact},
+		{model: "router/gpt-5.6-sol", profile: "gpt-5.6-family", kind: MatchFamily},
+	}
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			got := ResolveBuiltin("gateway", tt.model, CatalogMetadata{})
+			if got.ProfileName != tt.profile || got.ProfileMatch != tt.kind {
+				t.Fatalf("ResolveBuiltin(%q) = profile %q match %q, want %q/%q", tt.model, got.ProfileName, got.ProfileMatch, tt.profile, tt.kind)
+			}
+		})
+	}
+}
+
 func TestCatalogExplicitMetadataOverridesBuiltin(t *testing.T) {
 	no := false
 	yes := true
