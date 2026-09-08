@@ -25,9 +25,9 @@ func NewGetTodoForSession(store tododomain.Repository, sessionID string) tool.Ha
 
 func (getTodoHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:         "get_todo",
-		Description:  "Read the current parent-owned task snapshot and revision before applying update_todo patch operations. This tool takes no arguments; call it with an empty JSON object {}.",
-		Kind:         tool.KindForName("get_todo"),
+		Name:         "todo",
+		Description:  "Read the current parent-owned task snapshot and revision.",
+		Kind:         tool.KindTask,
 		Mutability:   tool.MutabilityReadOnly,
 		Safety:       tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
 		InputSchema:  tool.NoArgumentsSchema(),
@@ -37,7 +37,7 @@ func (getTodoHandler) Definition() tool.Definition {
 
 func (h getTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	if err := decodeGetTodoInput(call.Arguments); err != nil {
-		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode get_todo arguments", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode todo get arguments", err)
 	}
 	if h.store == nil {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeExecution, "todo store is not configured")

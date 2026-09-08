@@ -33,9 +33,9 @@ func NewUpdateTodoForSession(store tododomain.Repository, sessionID string) tool
 
 func (updateTodoHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:         "update_todo",
+		Name:         "todo",
 		Description:  "Patch the parent-owned task plan atomically using explicit add, set_status, set_text, or remove operations.",
-		Kind:         tool.KindForName("update_todo"),
+		Kind:         tool.KindTask,
 		Mutability:   tool.MutabilityMutating,
 		Safety:       tool.SafetyContract{MutationDomain: tool.MutationDomainTaskState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
 		InputSchema:  todoUpdateInputSchema(),
@@ -72,7 +72,7 @@ func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 	}
 	input, err := decodeUpdateTodoInput(call.Arguments)
 	if err != nil {
-		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode update_todo arguments", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode todo update arguments", err)
 	}
 	if input.ExpectedRevision == nil {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_revision is required; call todo with action=get first")

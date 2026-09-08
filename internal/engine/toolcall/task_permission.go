@@ -19,10 +19,6 @@ func taskMetadataAutoAllowed(request permission.Request) bool {
 		return false
 	}
 	switch request.ToolName {
-	case "get_todo":
-		return true
-	case "update_todo":
-		return tododomain.ClassifyPatch(input.Operations) == tododomain.PatchImpactStatusOnly
 	case "todo":
 		switch input.Action {
 		case "get":
