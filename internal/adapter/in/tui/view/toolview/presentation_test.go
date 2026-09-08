@@ -417,6 +417,9 @@ func TestAgentToolPresentation(t *testing.T) {
 	if got := SummarizeOutput("wait_agent", kind, "", `{"timed_out":false,"event":{"kind":"agent_completed","agent_id":"explorer-7"},"agents":[]}`, nil, false); got != "explorer-7 · agent_completed" {
 		t.Fatalf("completed wait summary=%q", got)
 	}
+	if got := SummarizeOutput("wait_agent", kind, "", `{"timed_out":false,"event":{"kind":"agent_failed","agent_id":"strength-8"},"events":[{"kind":"agent_completed","agent_id":"explorer-7"},{"kind":"agent_failed","agent_id":"strength-8"}],"agents":[]}`, nil, false); got != "2 agent lifecycle events" {
+		t.Fatalf("batched wait summary=%q", got)
+	}
 	if got := SummarizeOutput("list_agents", kind, "subagents", `{"agents":[{"id":"a","state":"canceling"},{"id":"b","state":"completed"}]}`, nil, false); got != "2 agents · 1 active" {
 		t.Fatalf("canceling list summary=%q", got)
 	}

@@ -181,6 +181,10 @@ func summarizeAgentTool(name, body string) string {
 		if timedOut, _ := payload["timed_out"].(bool); timedOut {
 			return "no new agent activity"
 		}
+		events, _ := payload["events"].([]any)
+		if len(events) > 1 {
+			return fmt.Sprintf("%d agent lifecycle events", len(events))
+		}
 		if event, ok := payload["event"].(map[string]any); ok {
 			eventID, _ := event["agent_id"].(string)
 			eventKind, _ := event["kind"].(string)

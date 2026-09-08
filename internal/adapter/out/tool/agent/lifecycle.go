@@ -129,7 +129,10 @@ func (h agentLifecycleHandler) wait(ctx context.Context, call tool.Call) (tool.R
 	if wr.Event != nil {
 		summary = fmt.Sprintf("%s · %s", wr.Event.AgentID, wr.Event.Kind)
 	}
-	return agentJSONResult(call, summary, map[string]any{"timed_out": wr.TimedOut, "event": wr.Event, "agents": wr.Agents})
+	return agentJSONResult(call, summary, map[string]any{
+		"timed_out": wr.TimedOut, "event": wr.Event, "events": wr.Events,
+		"cursor": wr.Cursor, "truncated": wr.Truncated, "agents": wr.Agents,
+	})
 }
 
 func (h agentLifecycleHandler) get(ctx context.Context, call tool.Call) (tool.Result, error) {

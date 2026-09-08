@@ -8,11 +8,18 @@ import (
 	"github.com/phongsathornpt/protonman/internal/base/contextutil"
 )
 
+const maxActivityMailboxEvents = 128
+
+type activityRecord struct {
+	seq   uint64
+	event Event
+}
+
 type activityMailbox struct {
-	seq    uint64
-	seen   uint64
-	event  Event
-	notify chan struct{}
+	nextSeq uint64
+	seen    uint64
+	events  []activityRecord
+	notify  chan struct{}
 }
 
 // Subscribe returns a bounded lifecycle stream. Slow subscribers drop events
@@ -100,8 +107,12 @@ func (c *Coordinator) recordActivityLocked(scope string, ev Event) {
 		mailbox = &activityMailbox{notify: make(chan struct{})}
 		c.activityMailboxes[scope] = mailbox
 	}
-	mailbox.seq++
-	mailbox.event = ev
+	mailbox.nextSeq++
+	mailbox.events = append(mailbox.events, activityRecord{seq: mailbox.nextSeq, event: ev})
+	if len(mailbox.events) > maxActivityMailboxEvents {
+		drop := len(mailbox.events) - maxActivityMailboxEvents
+		mailbox.events = append([]activityRecord(nil), mailbox.events[drop:]...)
+	}
 	close(mailbox.notify)
 	mailbox.notify = make(chan struct{})
 }
