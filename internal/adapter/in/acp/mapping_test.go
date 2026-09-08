@@ -26,7 +26,7 @@ func TestToolKindForName(t *testing.T) {
 	}{
 		{"read_file", ToolKindRead},
 		{"list_dir", ToolKindRead},
-		{"git_status", ToolKindRead},
+		{"git_status", ToolKindExecute},
 		{"get_todo", ToolKindRead},
 		{"write_file", ToolKindEdit},
 		{"search_replace", ToolKindEdit},

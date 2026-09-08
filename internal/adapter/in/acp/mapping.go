@@ -17,7 +17,7 @@ func ToolKindForName(name string) ToolKind {
 		return ToolKindEdit
 	case tool.KindGrep, tool.KindWebSearch:
 		return ToolKindSearch
-	case tool.KindBash, tool.KindAgent:
+	case tool.KindBash, tool.KindAgent, tool.KindGit:
 		return ToolKindExecute
 	case tool.KindWebFetch:
 		return ToolKindFetch

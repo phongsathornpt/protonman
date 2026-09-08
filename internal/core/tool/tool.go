@@ -193,6 +193,8 @@ const (
 	KindBash Kind = "bash"
 	// KindGrep identifies tools that search project contents.
 	KindGrep Kind = "grep"
+	// KindGit identifies repository operations whose mutability is action-dependent.
+	KindGit Kind = "git"
 	// KindMCP identifies tools provided by an MCP server.
 	KindMCP Kind = "mcp"
 	// KindWebFetch identifies tools that fetch a URL.
@@ -651,7 +653,7 @@ type DynamicRegistrar interface {
 
 func validKind(kind Kind) bool {
 	switch kind {
-	case KindRead, KindEdit, KindBash, KindGrep, KindMCP, KindWebFetch, KindWebSearch, KindTask, KindAgent, KindCompute:
+	case KindRead, KindEdit, KindBash, KindGrep, KindGit, KindMCP, KindWebFetch, KindWebSearch, KindTask, KindAgent, KindCompute:
 		return true
 	default:
 		return false

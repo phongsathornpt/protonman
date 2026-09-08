@@ -16,6 +16,7 @@ var legacyToolAliases = map[string]legacyToolAlias{
 	"find_files": {Canonical: "find"},
 	"calculate":  {Canonical: "math"},
 	"web_fetch":  {Canonical: "web", Action: "fetch"},
+	"git_status": {Canonical: "git", Action: "status"},
 }
 
 // CanonicalName maps legacy public tool names to the current model-facing

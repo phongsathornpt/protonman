@@ -321,7 +321,7 @@ func TestKindForName(t *testing.T) {
 	}{
 		{"read_file", KindRead},
 		{"list_dir", KindRead},
-		{"git_status", KindRead},
+		{"git_status", KindGit},
 		{"write_file", KindEdit},
 		{"search_replace", KindEdit},
 		{"apply_patch", KindEdit},
@@ -389,7 +389,7 @@ func TestDisplayName(t *testing.T) {
 		{"bash", "Run"},
 		{"web_fetch", "Fetch"},
 		{"web_search", "Search web"},
-		{"git_status", "Git status"},
+		{"git_status", "Git"},
 		{"get_todo", "Tasks"},
 		{"update_todo", "Update tasks"},
 		{"activate_skill", "Skill"},

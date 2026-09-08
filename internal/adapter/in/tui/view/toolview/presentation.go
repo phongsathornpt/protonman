@@ -45,12 +45,11 @@ func KindGlyph(kind tool.Kind, name string) string {
 		if tool.CanonicalName(name) == "ls" {
 			return tuistyle.GlyphDir
 		}
-		if name == "git_status" {
-			return "⌥ "
-		}
 		return tuistyle.GlyphRead
 	case tool.KindGrep:
 		return tuistyle.GlyphSearch
+	case tool.KindGit:
+		return "⌥ "
 	case tool.KindBash:
 		return tuistyle.GlyphExec
 	case tool.KindEdit:
@@ -100,12 +99,11 @@ func SummarizeOutput(name string, kind tool.Kind, target string, body string, ex
 		if tool.CanonicalName(name) == "ls" {
 			return summarizeListDir(bodyTrimmed, truncated)
 		}
-		if name == "git_status" {
-			return summarizeGitStatus(bodyTrimmed)
-		}
 		return summarizeReadFileTarget(target, bodyTrimmed, truncated)
 	case tool.KindGrep:
 		return summarizeGrep(bodyTrimmed, truncated)
+	case tool.KindGit:
+		return summarizeGitStatus(bodyTrimmed)
 	case tool.KindEdit:
 		return summarizeEdit(name, bodyTrimmed)
 	case tool.KindTask:
@@ -620,7 +618,7 @@ func summarizeEdit(name string, body string) string {
 // in the primary conversation viewport because the semantic header already summarizes it.
 func ShouldSuppressBody(kind tool.Kind, name string) bool {
 	switch kind {
-	case tool.KindWebFetch, tool.KindWebSearch, tool.KindRead, tool.KindAgent, tool.KindTask, tool.KindEdit:
+	case tool.KindWebFetch, tool.KindWebSearch, tool.KindRead, tool.KindGit, tool.KindAgent, tool.KindTask, tool.KindEdit:
 		return true
 	}
 	switch name {

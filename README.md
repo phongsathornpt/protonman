@@ -290,7 +290,7 @@ Protonman registers a suite of workspace-safe tools:
 | `grep` | Search | Regex search with include globs plus snapshot-bound cursor pagination that resumes from the prior match location |
 | `find` | Search | Recursive workspace path discovery by glob with type/depth filters and snapshot-bound pagination |
 | `ls` | Search | List visible directory entries with protected-path filtering and snapshot-bound pagination |
-| `git_status` | Version Control | Inspect Git working tree state and uncommitted changes |
+| `git` | Version Control | Git capability; `action=status` inspects working tree state |
 | `bash` | Execution | Run bounded shell commands with workspace-relative `cwd`, optional `timeout_seconds`, effect analysis, and structured stdout/stderr |
 | `web` | Network | Retrieve remote web pages conforming to sandbox network policy |
 | `activate_skill` | Skills | Dynamically load an Agent Skill's full context into the session |

@@ -299,7 +299,7 @@ Built-in workspace tools include:
 - `find`
 - `ls`
 - `bash`
-- `git_status`
+- `git`
 - `checkpoint_restore`
 
 Feature tools add `web`, task tools, skill activation, agent lifecycle

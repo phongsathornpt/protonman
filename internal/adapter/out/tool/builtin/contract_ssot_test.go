@@ -100,10 +100,10 @@ func TestBuiltinToolSSOTContract(t *testing.T) {
 			titlePrefix:     "Search web: golang testing",
 		},
 		{
-			name:            "git_status",
+			name:            "git",
 			args:            map[string]any{"path": "."},
-			wantKind:        tool.KindRead,
-			wantDisplayName: "Git status",
+			wantKind:        tool.KindGit,
+			wantDisplayName: "Git",
 			targetSub:       "",
 			titlePrefix:     "Check git status",
 		},

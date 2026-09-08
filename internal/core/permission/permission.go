@@ -164,6 +164,8 @@ const (
 	ToolBash ToolKind = tool.KindBash
 	// ToolGrep matches content-search tools.
 	ToolGrep ToolKind = tool.KindGrep
+	// ToolGit matches repository operations.
+	ToolGit ToolKind = tool.KindGit
 	// ToolMCP matches tools supplied by MCP servers.
 	ToolMCP ToolKind = tool.KindMCP
 	// ToolWebFetch matches URL-fetching tools.
@@ -236,6 +238,8 @@ func ParseToolKind(value string) (ToolKind, error) {
 		return ToolBash, nil
 	case "grep", "search":
 		return ToolGrep, nil
+	case "git":
+		return ToolGit, nil
 	case "mcp":
 		return ToolMCP, nil
 	case "web_fetch", "web-fetch", "webfetch":
@@ -442,7 +446,7 @@ func RuleFromRequest(r Request) (Rule, bool) {
 			PatternMode: PatternModeGlob,
 		}, true
 
-	case ToolRead, ToolGrep:
+	case ToolRead, ToolGrep, ToolGit:
 		return Rule{
 			Action:      ActionAllow,
 			Tool:        r.ToolKind,
@@ -690,7 +694,7 @@ func ValidToolKind(kind ToolKind) bool {
 
 func validToolKind(kind ToolKind) bool {
 	switch kind {
-	case ToolAny, ToolRead, ToolEdit, ToolBash, ToolGrep, ToolMCP, ToolWebFetch, ToolWebSearch, ToolTask, ToolAgent, ToolCompute:
+	case ToolAny, ToolRead, ToolEdit, ToolBash, ToolGrep, ToolGit, ToolMCP, ToolWebFetch, ToolWebSearch, ToolTask, ToolAgent, ToolCompute:
 		return true
 	default:
 		return false

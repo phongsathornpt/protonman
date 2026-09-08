@@ -83,7 +83,7 @@ Pure business rules and domain definitions. No `domain-ish` parent folder is cre
 - `internal/adapter/out/sessionfs/`: File-backed storage implementation of `session.Repository` plus the subagent lifecycle event store; each session is an aggregate directory containing `state.json`, `todo.md`, the compacted agent projection, and the append-only lifecycle journal.
 - `internal/adapter/tool/`: Unified home for **all tool implementations** satisfying `tool.Handler`:
   - `agent/`: Subagent orchestration tools (`delegate_task`, `wait_agent`, etc.).
-  - `builtin/`: Core developer tools (`read`, `write_file`, `search_replace`, `apply_patch`, `bash`, `grep`, `find`, `ls`, `git_status`).
+  - `builtin/`: Core developer tools (`read`, `write_file`, `search_replace`, `apply_patch`, `bash`, `grep`, `find`, `ls`, `git`).
   - `mcp/`: External Model Context Protocol server discovery and tool registration.
   - `skill/`: Agent skill activation (`activate_skill`).
   - `todo/`: Session-bound work tracking tools (`get_todo`, `update_todo`) using durable optimistic concurrency.
@@ -149,6 +149,6 @@ Tool limits are enforced at the resource boundary, not after expensive work has 
 - checkpoint persistence is bounded per workspace by retained count, total bytes, and age. A new checkpoint is preserved while older records are pruned deterministically.
 - `find` pagination stops after the current page boundary and validates continuation state against the matched prefix before the cursor instead of hashing the unread remainder of the tree.
 - `read` opens through a pinned authorized root so policy validation and file opening share the same filesystem boundary. Line-range reads also have a scan-byte ceiling independent of their output-byte ceiling.
-- `git_status` bounds stdout and stderr while the subprocess is running. Oversized stdout cancels execution rather than buffering unbounded output and checking its size afterward.
+- `git` bounds stdout and stderr while the subprocess is running. Oversized stdout cancels execution rather than buffering unbounded output and checking its size afterward.
 
 These invariants are covered by package-level regression tests and are expected to remain true even when tool presentation, pagination formats, or sandbox implementations evolve.

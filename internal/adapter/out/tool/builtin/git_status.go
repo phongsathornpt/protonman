@@ -27,7 +27,29 @@ type gitStatusHandler struct {
 }
 
 type gitStatusInput struct {
-	Path string `json:"path"`
+	Action string `json:"action"`
+	Path   string `json:"path"`
+}
+
+func gitStatusSemantics(arguments json.RawMessage) tool.CallSemantics {
+	semantics := tool.CallSemantics{
+		Mutability: tool.MutabilityMutating,
+		Safety:     tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyDynamic, CheckpointPolicy: tool.CheckpointPolicyWhenKnown, Boundary: tool.BoundaryPolicySandbox},
+		Evidence:   tool.EvidenceWorkspace, Effect: tool.CommandEffectMutating, Risk: tool.CommandRiskDestructive, Scope: tool.CommandScopeLocal,
+	}
+	var input struct {
+		Action string `json:"action"`
+	}
+	if json.Unmarshal(arguments, &input) == nil {
+		action := strings.ToLower(strings.TrimSpace(input.Action))
+		if action == "" || action == "status" {
+			semantics.Mutability = tool.MutabilityReadOnly
+			semantics.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead}
+			semantics.Effect = tool.CommandEffectReadOnly
+			semantics.Risk = tool.CommandRiskNormal
+		}
+	}
+	return semantics
 }
 
 // NewGitStatus returns the bounded read-only git status adapter.
@@ -41,21 +63,24 @@ func NewGitStatus(workspaceRoot *workspace.Workspace, launchers ...sandbox.Launc
 
 func (gitStatusHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "git_status",
-		Description:         "Show compact git branch and working-tree status.",
-		Kind:                tool.KindForName("git_status"),
-		Mutability:          tool.MutabilityReadOnly,
-		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead},
+		Name:                "git",
+		Description:         "Git capability. Use action=status to inspect compact branch and working-tree state.",
+		Kind:                tool.KindGit,
+		Mutability:          tool.MutabilityMutating,
+		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyDynamic, CheckpointPolicy: tool.CheckpointPolicyWhenKnown, Boundary: tool.BoundaryPolicySandbox},
 		Evidence:            tool.EvidenceWorkspace,
 		PermissionDetailKey: "path",
+		Semantics:           gitStatusSemantics,
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
+				"action": map[string]any{"type": "string", "enum": []string{"status"}, "description": "Git operation to perform"},
 				"path": map[string]any{
 					"type":        "string",
 					"description": "Optional workspace-relative path; status is rooted at the workspace",
 				},
 			},
+			"required":             []string{"action"},
 			"additionalProperties": false,
 		},
 	}
@@ -63,14 +88,21 @@ func (gitStatusHandler) Definition() tool.Definition {
 
 func (h gitStatusHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	if h.workspace == nil {
-		return tool.Result{}, fmt.Errorf("git_status workspace is required")
+		return tool.Result{}, fmt.Errorf("git workspace is required")
 	}
 	if h.launcher == nil {
-		return tool.Result{}, fmt.Errorf("git_status sandbox launcher is required: configure an explicit sandbox profile (use --sandbox off to opt out)")
+		return tool.Result{}, fmt.Errorf("git sandbox launcher is required: configure an explicit sandbox profile (use --sandbox off to opt out)")
 	}
 	var input gitStatusInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode git_status arguments", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode git arguments", err)
+	}
+	input.Action = strings.ToLower(strings.TrimSpace(input.Action))
+	if input.Action == "" {
+		input.Action = "status"
+	}
+	if input.Action != "status" {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "git action must be status")
 	}
 	statusPath := strings.TrimSpace(input.Path)
 	relativePath := ""
