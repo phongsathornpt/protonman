@@ -35,6 +35,7 @@ func (m *bubbleModel) syncTodoSnapshot() bool {
 	if isComplete && !wasComplete {
 		m.todoLifecycle.CompletionFresh = true
 		m.todoLifecycle.CompletionDismissed = false
+		m.todoViewState.Expanded = false
 	} else if !isComplete {
 		m.todoLifecycle.CompletionFresh = false
 		m.todoLifecycle.CompletionDismissed = false

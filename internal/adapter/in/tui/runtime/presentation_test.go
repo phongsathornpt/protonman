@@ -1266,3 +1266,141 @@ func TestFormatElapsed(t *testing.T) {
 		}
 	}
 }
+
+func TestTodoAutoCollapsesWhenAllTasksComplete(t *testing.T) {
+	store, err := tododomain.NewStore([]tododomain.Item{
+		{ID: "task-1", Text: "first step", Status: tododomain.StatusInProgress},
+		{ID: "task-2", Text: "second step", Status: tododomain.StatusPending},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := newTestBubbleModel(t, permission.ModeAsk, store.Snapshot().Items)
+	m.todoStore = store
+	m.todoRevision = store.Snapshot().Revision
+	m.todoViewState.Expanded = true
+
+	// While in progress and expanded, it shows task text
+	if got := m.todoView(); !strings.Contains(got, "first step") {
+		t.Fatalf("expected expanded view with active task: %s", got)
+	}
+
+	// Transition all tasks to complete
+	if _, err := store.CompareAndReplace(context.Background(), m.todoRevision, []tododomain.Item{
+		{ID: "task-1", Text: "first step", Status: tododomain.StatusCompleted},
+		{ID: "task-2", Text: "second step", Status: tododomain.StatusCompleted},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if !m.syncTodoSnapshot() {
+		t.Fatal("syncTodoSnapshot returned false")
+	}
+
+	// Must auto-collapse Expanded state to false
+	if m.todoViewState.Expanded {
+		t.Fatal("expected todoViewState.Expanded to be false after all tasks completed")
+	}
+
+	// Must show compact single-line summary without task item details
+	got := m.todoView()
+	if !strings.Contains(got, "Tasks 2/2 ✓") {
+		t.Fatalf("missing completed summary: %s", got)
+	}
+	if strings.Contains(got, "first step") || strings.Contains(got, "second step") {
+		t.Fatalf("auto-collapsed completed view should not contain item details: %s", got)
+	}
+
+	// User can still explicitly expand via ctrl+o
+	m.todoViewState.Expanded = true
+	gotExpanded := m.todoView()
+	if !strings.Contains(gotExpanded, "first step") || !strings.Contains(gotExpanded, "second step") {
+		t.Fatalf("explicitly expanded view missing completed items: %s", gotExpanded)
+	}
+}
+
+func TestTodoExpandedRendersDividerLine(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{
+		{ID: "a", Text: "active item", Status: tododomain.StatusInProgress},
+	})
+	m.resize(80, 24)
+	m.todoViewState.Expanded = true
+
+	got := m.todoView()
+	if !strings.Contains(got, "── Tasks") || !strings.Contains(got, "active item") {
+		t.Fatalf("expected divider header in expanded view, got: %s", got)
+	}
+}
+
+func TestBuildFrameChromeProtectsViewportFloor(t *testing.T) {
+	// Create many tasks that would otherwise consume many rows
+	items := make([]TodoItem, 10)
+	for i := range items {
+		items[i] = TodoItem{
+			ID:     fmt.Sprintf("t-%d", i),
+			Text:   fmt.Sprintf("task number %d", i),
+			Status: tododomain.StatusPending,
+		}
+	}
+	m := newTestBubbleModel(t, permission.ModeAsk, items)
+	// Set small height of 15
+	m.resize(80, 15)
+	m.todoViewState.Expanded = true
+
+	frame := m.buildFrameChrome()
+	viewportHeight := m.height - frame.height
+	if viewportHeight < 4 {
+		t.Fatalf("viewport starved: height=%d, frame.height=%d, viewportHeight=%d (want >= 4)", m.height, frame.height, viewportHeight)
+	}
+}
+
+type fakeConversation struct{}
+
+func (fakeConversation) Run(context.Context, []model.Message, applicationturn.Sink) (applicationturn.Result, error) {
+	return applicationturn.Result{}, nil
+}
+
+func TestPromptPlaceholderReflectsPermissionAndPlanMode(t *testing.T) {
+	// Without runner
+	if got := promptPlaceholder(false, permission.ModeAsk, false); got != "Type a message or /command…" {
+		t.Fatalf("no runner placeholder = %q", got)
+	}
+
+	// Normal ask mode
+	if got := promptPlaceholder(true, permission.ModeAsk, false); got != "Ask Protonman to inspect or change this workspace…" {
+		t.Fatalf("ask mode placeholder = %q", got)
+	}
+
+	// Auto-approve mode
+	if got := promptPlaceholder(true, permission.ModeAlwaysApprove, false); !strings.Contains(got, "auto-approve active") {
+		t.Fatalf("auto-approve placeholder = %q", got)
+	}
+
+	// Plan mode
+	if got := promptPlaceholder(true, permission.ModeAsk, true); !strings.Contains(got, "plan mode") {
+		t.Fatalf("plan mode placeholder = %q", got)
+	}
+
+	// Deny mode
+	if got := promptPlaceholder(true, permission.ModeDeny, false); !strings.Contains(got, "deny mode") {
+		t.Fatalf("deny mode placeholder = %q", got)
+	}
+
+	// Dynamic update on bubbleModel
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.runner = fakeConversation{}
+	m.syncPromptPlaceholder()
+	if !strings.Contains(m.prompt.Placeholder, "inspect or change") {
+		t.Fatalf("initial placeholder = %q", m.prompt.Placeholder)
+	}
+
+	_ = m.setPermissionMode(permission.ModeAlwaysApprove)
+	if !strings.Contains(m.prompt.Placeholder, "auto-approve active") {
+		t.Fatalf("placeholder after mode always-approve = %q", m.prompt.Placeholder)
+	}
+
+	m.setPlanEnabled(true)
+	if !strings.Contains(m.prompt.Placeholder, "plan mode") {
+		t.Fatalf("placeholder after plan mode = %q", m.prompt.Placeholder)
+	}
+}

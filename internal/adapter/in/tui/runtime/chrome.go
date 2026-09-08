@@ -120,11 +120,21 @@ func detectGitBranch(dir string) string {
 	return ""
 }
 
-func promptPlaceholder(hasRunner bool) string {
-	if hasRunner {
+func promptPlaceholder(hasRunner bool, mode permission.Mode, planMode bool) string {
+	if !hasRunner {
+		return "Type a message or /command…"
+	}
+	if planMode {
+		return "Ask Protonman to plan or inspect (plan mode · read-only)…"
+	}
+	switch mode {
+	case permission.ModeAlwaysApprove:
+		return "Ask Protonman (auto-approve active · commands run without prompt)…"
+	case permission.ModeDeny:
+		return "Ask Protonman to inspect (deny mode · mutations blocked)…"
+	default:
 		return "Ask Protonman to inspect or change this workspace…"
 	}
-	return "Type a message or /command…"
 }
 
 func (m *bubbleModel) resetTranscript() {
@@ -534,6 +544,7 @@ func (m *bubbleModel) setPlanMode(argument string) {
 
 func (m *bubbleModel) setPlanEnabled(enabled bool) {
 	m.planMode = enabled
+	m.syncPromptPlaceholder()
 	if !enabled {
 		m.service.SetCallGuard(nil)
 		m.agents.SetCallGuard(nil)
@@ -709,7 +720,14 @@ func (m bubbleModel) todoView() string {
 		return renderSummary(summary + " · " + shortcutHelp(m.keys.ToggleTodo))
 	}
 	limit := todoVisibleRows(m.height)
-	lines := []string{renderSummary(summary)}
+	header := summary + " · " + shortcutHelp(m.keys.ToggleTodo)
+	headerWidth := ansi.StringWidth(header)
+	divLen := maxInt(0, m.width-headerWidth-6)
+	divider := ""
+	if divLen > 0 {
+		divider = " " + strings.Repeat("─", divLen)
+	}
+	lines := []string{brandStyle.Render(truncateWithEllipsis("── "+header+divider, maxInt(1, m.width-2)))}
 	shown := 0
 	for _, status := range []tododomain.Status{tododomain.StatusInProgress, tododomain.StatusPending, tododomain.StatusCompleted} {
 		for _, item := range m.todo {
@@ -731,12 +749,12 @@ func todoCounts(items []TodoItem) (completed, active, pending int) {
 }
 
 func todoVisibleRows(height int) int {
-	rows := height - 18
-	if rows < 4 {
-		rows = 4
+	rows := (height - 14) / 2
+	if rows < 3 {
+		rows = 3
 	}
-	if rows > 10 {
-		rows = 10
+	if rows > 8 {
+		rows = 8
 	}
 	return rows
 }

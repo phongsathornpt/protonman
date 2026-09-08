@@ -150,6 +150,7 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	ui.prompt = bottom.prompt()
 	ui.loadInitialMessages(messages)
 	ui.syncComponentsToLegacy()
+	ui.syncPromptPlaceholder()
 	ui.relayout()
 	return ui
 }
@@ -356,9 +357,7 @@ func (m *bubbleModel) reconfigureRunner() {
 	}
 	if !hasValidAuth {
 		m.runner = nil
-		if m.bottom != nil {
-			m.bottom.setHasRunner(false)
-		}
+		m.syncPromptPlaceholder()
 		return
 	}
 	sessID := m.sessionID
@@ -373,16 +372,12 @@ func (m *bubbleModel) reconfigureRunner() {
 	if err != nil {
 		m.appendError("failed to configure model runner: " + err.Error())
 		m.runner = nil
-		if m.bottom != nil {
-			m.bottom.setHasRunner(false)
-		}
+		m.syncPromptPlaceholder()
 		return
 	}
 	if conversation != nil {
 		m.runner = conversation
-		if m.bottom != nil {
-			m.bottom.setHasRunner(true)
-		}
+		m.syncPromptPlaceholder()
 	}
 }
 
@@ -391,7 +386,20 @@ func (m *bubbleModel) setPermissionMode(mode permission.Mode) error {
 		return err
 	}
 	m.agents.SetPermissionMode(mode)
+	m.syncPromptPlaceholder()
 	return nil
+}
+
+func (m *bubbleModel) syncPromptPlaceholder() {
+	if m == nil || m.bottom == nil {
+		return
+	}
+	mode := permission.ModeAsk
+	if m.service != nil {
+		mode = m.service.Mode()
+	}
+	hasRunner := m.runner != nil
+	m.bottom.setPlaceholder(promptPlaceholder(hasRunner, mode, m.planMode))
 }
 
 var tuiTurnOwnerSeq atomic.Uint64
