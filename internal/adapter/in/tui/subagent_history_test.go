@@ -87,10 +87,10 @@ func TestTerminalAgentLeavesLivePaneButStaysInTranscript(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.resize(100, 30)
 	started := time.Now().Add(-5 * time.Second)
-	run := &AgentRunCell{AgentID: "dex-9", Profile: agent.ProfileDEX, Task: "review concurrency", State: agent.StateRunning, StartedAt: started}
+	run := &AgentRunCell{AgentID: "dex-9", Profile: agent.ProfileIntelligence, Task: "review concurrency", State: agent.StateRunning, StartedAt: started}
 	m.historyState.Append(run)
 	m.agentSnapshot = []agent.AgentStatus{{
-		ID: "dex-9", Profile: agent.ProfileDEX, Task: "review concurrency",
+		ID: "dex-9", Profile: agent.ProfileIntelligence, Task: "review concurrency",
 		State: agent.StateFailed, StartedAt: started, FinishedAt: time.Now(), Reason: "timed out",
 	}}
 	m.syncAgentRunSnapshot("dex-9")
@@ -124,7 +124,7 @@ func TestOutOfOrderAgentResultMergesIntoDelegateRun(t *testing.T) {
 		t.Fatalf("out-of-order lifecycle created duplicate cells: %#v", cells)
 	}
 	run, ok := cells[0].(*AgentRunCell)
-	if !ok || run.AgentID != "int-7" || run.Profile != agent.ProfileINT || run.Task != "inspect router" {
+	if !ok || run.AgentID != "int-7" || run.Profile != agent.ProfileAgility || run.Task != "inspect router" {
 		t.Fatalf("merged run=%T %#v", cells[0], cells[0])
 	}
 }

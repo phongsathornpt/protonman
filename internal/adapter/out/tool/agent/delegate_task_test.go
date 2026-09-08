@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/projectTHORN/proton/internal/feature/agent"
 	"github.com/projectTHORN/proton/internal/adapter/out/model"
 	"github.com/projectTHORN/proton/internal/core/tool"
 	"github.com/projectTHORN/proton/internal/engine/toolcall"
 	"github.com/projectTHORN/proton/internal/engine/turn"
+	"github.com/projectTHORN/proton/internal/feature/agent"
 )
 
 type mockSubagentRunner struct {
@@ -54,7 +54,7 @@ func TestDelegateTask_Execute(t *testing.T) {
 
 	t.Run("successful delegation", func(t *testing.T) {
 		args, _ := json.Marshal(map[string]any{
-			"profile": "int",
+			"profile": "agility",
 			"task":    "search for auth middleware",
 		})
 		call, err := tool.NewCall("call-1", "delegate_task", args)
@@ -91,12 +91,12 @@ func TestDelegateTask_Execute(t *testing.T) {
 			t.Fatal("handler does not implement tool.DetailProvider")
 		}
 		args, _ := json.Marshal(map[string]any{
-			"profile": "int",
+			"profile": "agility",
 			"task":    "analyze database queries in repository",
 		})
 		detail := provider.PermissionDetail(args)
-		if detail != "[int] analyze database queries in repository" {
-			t.Errorf("detail = %q, want '[int] analyze database queries in repository'", detail)
+		if detail != "[agility] analyze database queries in repository" {
+			t.Errorf("detail = %q, want '[agility] analyze database queries in repository'", detail)
 		}
 	})
 
@@ -118,7 +118,7 @@ func TestDelegateTask_Execute(t *testing.T) {
 
 	t.Run("missing task", func(t *testing.T) {
 		args, _ := json.Marshal(map[string]any{
-			"profile": "int",
+			"profile": "agility",
 			"task":    "",
 		})
 		call, _ := tool.NewCall("call-3", "delegate_task", args)
@@ -136,7 +136,7 @@ func TestDelegateTask_Execute(t *testing.T) {
 		cHandler := NewDelegateTask(coord)
 		cancelCtx, cancel := context.WithCancel(context.Background())
 		cancel()
-		args, _ := json.Marshal(map[string]any{"profile": "int", "task": "hang task"})
+		args, _ := json.Marshal(map[string]any{"profile": "agility", "task": "hang task"})
 		call, _ := tool.NewCall("call-4", "delegate_task", args)
 		if _, err := cHandler.Execute(cancelCtx, call); err == nil {
 			t.Fatal("expected canceled submission error")
@@ -157,7 +157,7 @@ func TestDelegateTask_Execute(t *testing.T) {
 
 		pHandler := NewDelegateTask(parentCoord, "session-xyz")
 		args, _ := json.Marshal(map[string]any{
-			"profile": "int",
+			"profile": "agility",
 			"task":    "test task",
 		})
 		call, _ := tool.NewCall("call-parent", "delegate_task", args)
@@ -178,7 +178,7 @@ func TestDelegateTask_Execute(t *testing.T) {
 		_, _ = parentCoord.Wait(context.Background(), spawned.AgentID, time.Second)
 	})
 
-	t.Run("pow dex int delegation and schema", func(t *testing.T) {
+	t.Run("dota attribute delegation and schema", func(t *testing.T) {
 		def := handler.Definition()
 		props, ok := def.InputSchema["properties"].(map[string]any)
 		if !ok {
@@ -196,13 +196,13 @@ func TestDelegateTask_Execute(t *testing.T) {
 		for _, e := range enums {
 			enumMap[e] = true
 		}
-		for _, expected := range []string{"pow", "dex", "int"} {
+		for _, expected := range []string{"strength", "intelligence", "agility"} {
 			if !enumMap[expected] {
 				t.Errorf("delegate_task enum missing %q", expected)
 			}
 		}
 
-		for _, prof := range []string{"pow", "dex", "int"} {
+		for _, prof := range []string{"strength", "intelligence", "agility"} {
 			args, _ := json.Marshal(map[string]any{
 				"profile": prof,
 				"task":    "task for " + prof,
@@ -244,7 +244,7 @@ func TestDelegateTaskAppliesRequestedShorterTimeout(t *testing.T) {
 	)
 	defer coord.Close()
 	handler := NewDelegateTask(coord)
-	args, _ := json.Marshal(map[string]any{"profile": "int", "task": "short", "timeout_seconds": 1})
+	args, _ := json.Marshal(map[string]any{"profile": "agility", "task": "short", "timeout_seconds": 1})
 	call, _ := tool.NewCall("short-timeout", "delegate_task", args)
 	if _, err := handler.Execute(context.Background(), call); err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -257,7 +257,7 @@ func TestDelegateTaskAppliesRequestedShorterTimeout(t *testing.T) {
 
 func TestDelegateTaskRejectsExcessiveTimeoutSeconds(t *testing.T) {
 	handler := NewDelegateTask(agent.NewCoordinator(nil, nil, nil, nil))
-	args, _ := json.Marshal(map[string]any{"profile": "int", "task": "too long", "timeout_seconds": 86401})
+	args, _ := json.Marshal(map[string]any{"profile": "agility", "task": "too long", "timeout_seconds": 86401})
 	call, _ := tool.NewCall("bad-timeout", "delegate_task", args)
 	if _, err := handler.Execute(context.Background(), call); err == nil || !strings.Contains(err.Error(), "timeout_seconds") {
 		t.Fatalf("Execute() error = %v, want timeout validation error", err)
@@ -274,7 +274,7 @@ func TestDelegateTaskPrefersContextParentID(t *testing.T) {
 
 	handler := NewDelegateTask(coord, "fallback-parent")
 	ctx := agent.WithParentID(context.Background(), "turn-7")
-	args, _ := json.Marshal(map[string]any{"profile": "int", "task": "inspect"})
+	args, _ := json.Marshal(map[string]any{"profile": "agility", "task": "inspect"})
 	call, _ := tool.NewCall("call-context-parent", "delegate_task", args)
 	res, err := handler.Execute(ctx, call)
 	if err != nil {

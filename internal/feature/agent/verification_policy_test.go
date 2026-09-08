@@ -33,7 +33,7 @@ func TestDEXRejectsUnverifiedMutations(t *testing.T) {
 		Verification: turn.VerificationState{Mutated: true},
 	})
 	defer coord.Close()
-	result, err := coord.execute(context.Background(), Request{ID: "dex-1", Profile: ProfileDEX, Task: "edit"})
+	result, err := coord.execute(context.Background(), Request{ID: "dex-1", Profile: ProfileIntelligence, Task: "edit"})
 	if !errors.Is(err, ErrUnverifiedChanges) {
 		t.Fatalf("execute() error = %v, want ErrUnverifiedChanges", err)
 	}
@@ -48,7 +48,7 @@ func TestWorkerSurfacesUnverifiedMutationWarning(t *testing.T) {
 		Verification: turn.VerificationState{Mutated: true},
 	})
 	defer coord.Close()
-	result, err := coord.execute(context.Background(), Request{ID: "worker-1", Profile: ProfilePOW, Task: "edit"})
+	result, err := coord.execute(context.Background(), Request{ID: "worker-1", Profile: ProfileStrength, Task: "edit"})
 	if err != nil {
 		t.Fatalf("execute() error = %v", err)
 	}
@@ -64,7 +64,7 @@ func TestDEXAcceptsVerifiedMutation(t *testing.T) {
 		},
 	})
 	defer coord.Close()
-	result, err := coord.execute(context.Background(), Request{ID: "dex-2", Profile: ProfileDEX, Task: "edit"})
+	result, err := coord.execute(context.Background(), Request{ID: "dex-2", Profile: ProfileIntelligence, Task: "edit"})
 	if err != nil {
 		t.Fatalf("execute() error = %v", err)
 	}

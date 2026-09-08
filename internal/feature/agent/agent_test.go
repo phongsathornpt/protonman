@@ -11,15 +11,19 @@ func TestProfile(t *testing.T) {
 		wantErr    bool
 		isMutating bool
 	}{
-		{"explorer", ProfileINT, false, false},
-		{"reviewer", ProfileINT, false, false},
-		{"worker", ProfilePOW, false, true},
-		{"pow", ProfilePOW, false, true},
-		{"dex", ProfileDEX, false, true},
-		{"int", ProfileINT, false, false},
-		{"  POW  ", ProfilePOW, false, true},
-		{"  Dex  ", ProfileDEX, false, true},
-		{"  INT  ", ProfileINT, false, false},
+		{"universal", ProfileUniversal, false, true},
+		{"strength", ProfileStrength, false, true},
+		{"agility", ProfileAgility, false, false},
+		{"intelligence", ProfileIntelligence, false, true},
+		{"explorer", ProfileAgility, false, false},
+		{"reviewer", ProfileAgility, false, false},
+		{"worker", ProfileStrength, false, true},
+		{"pow", ProfileStrength, false, true},
+		{"dex", ProfileIntelligence, false, true},
+		{"int", ProfileAgility, false, false},
+		{"  POW  ", ProfileStrength, false, true},
+		{"  Dex  ", ProfileIntelligence, false, true},
+		{"  INT  ", ProfileAgility, false, false},
 		{"invalid", "", true, false},
 		{"", "", true, false},
 	}
@@ -50,5 +54,16 @@ func TestProfile(t *testing.T) {
 	}
 	if invalid.IsMutating() {
 		t.Error("unknown profile should not be mutating")
+	}
+}
+
+func TestUniversalCannotBeDelegated(t *testing.T) {
+	if _, err := ParseSubagentProfile("universal"); err == nil {
+		t.Fatal("universal should not be a delegated subagent profile")
+	}
+	for _, name := range []string{"strength", "agility", "intelligence", "pow", "int", "dex"} {
+		if _, err := ParseSubagentProfile(name); err != nil {
+			t.Fatalf("ParseSubagentProfile(%q) error = %v", name, err)
+		}
 	}
 }

@@ -20,11 +20,11 @@ type subagentSkillBudget struct {
 
 func skillBudgetForProfile(profile Profile) subagentSkillBudget {
 	switch profile {
-	case ProfilePOW:
+	case ProfileStrength:
 		return subagentSkillBudget{maxActive: 2, maxInstructionBytes: 8 * 1024}
-	case ProfileINT:
+	case ProfileAgility:
 		return subagentSkillBudget{maxActive: 3, maxInstructionBytes: 12 * 1024}
-	case ProfileDEX:
+	case ProfileIntelligence:
 		return subagentSkillBudget{maxActive: 3, maxInstructionBytes: 16 * 1024}
 	default:
 		return subagentSkillBudget{maxActive: 2, maxInstructionBytes: 8 * 1024}
@@ -111,7 +111,8 @@ func skillProfileAffinity(candidate skill.Skill, profile Profile) (bool, int) {
 	profiles, declared := skillMetadataProfiles(candidate.Metadata)
 	if declared {
 		for _, name := range profiles {
-			if strings.EqualFold(strings.TrimSpace(name), string(profile)) {
+			declaredProfile, err := ParseProfile(name)
+			if err == nil && declaredProfile == profile {
 				return true, 12
 			}
 		}

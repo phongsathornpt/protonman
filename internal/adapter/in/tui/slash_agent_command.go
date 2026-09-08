@@ -13,13 +13,14 @@ func (m *bubbleModel) handleAgentCommand(argument string) tea.Cmd {
 	if arg == "" {
 		current := m.agentProfile
 		if current == "" {
-			current = "default"
+			current = "universal"
 		}
 		m.appendLine(fmt.Sprintf("Active agent profile: %s", commandStyle.Render(current)))
 		m.appendLine("Available profiles:")
-		m.appendLine("  pow - Fast implementation and concrete execution")
-		m.appendLine("  int - Read-only investigation, tracing, research, and review")
-		m.appendLine("  dex - Defensive engineering for complex or high-risk work")
+		m.appendLine("  universal - Primary adaptive software engineering orchestrator")
+		m.appendLine("  strength - Substantial implementation, fixes, and refactors")
+		m.appendLine("  agility - Fast read-only exploration and tracing")
+		m.appendLine("  intelligence - Deep reasoning, architecture, and high-risk engineering")
 		m.appendLine("Switch profile: /agent <" + agent.ProfileList("|") + ">")
 		m.refreshViewport()
 		return nil

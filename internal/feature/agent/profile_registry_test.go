@@ -54,7 +54,7 @@ func TestFilterRegistryForCanonicalProfiles(t *testing.T) {
 		"mcp.unknown":   dummyHandler{def: tool.Definition{Name: "mcp.unknown", Kind: tool.KindMCP}},
 	}}
 
-	for _, profile := range []Profile{ProfilePOW, ProfileDEX} {
+	for _, profile := range []Profile{ProfileStrength, ProfileIntelligence} {
 		scoped := FilterRegistryForProfile(baseReg, profile)
 		for _, name := range []string{"read_file", "find_files", "grep", "web_fetch", "web_search", "write_file", "bash", "mcp.read", "mcp.write", "mcp.unknown"} {
 			if _, ok := scoped.Lookup(name); !ok {
@@ -68,7 +68,7 @@ func TestFilterRegistryForCanonicalProfiles(t *testing.T) {
 		}
 	}
 
-	intScoped := FilterRegistryForProfile(baseReg, ProfileINT)
+	intScoped := FilterRegistryForProfile(baseReg, ProfileAgility)
 	for _, name := range []string{"read_file", "find_files", "grep", "web_fetch", "web_search", "mcp.read"} {
 		if _, ok := intScoped.Lookup(name); !ok {
 			t.Errorf("int missing tool %s", name)
@@ -83,9 +83,9 @@ func TestFilterRegistryForCanonicalProfiles(t *testing.T) {
 
 func TestSystemPromptForProfileBehaviorContracts(t *testing.T) {
 	checks := map[Profile][]string{
-		ProfilePOW: {"implementation subagent", "smallest coherent change", "project conventions", "validation"},
-		ProfileINT: {"read-only investigation subagent", "Gather evidence before concluding", "Do not modify workspace files", "confidence"},
-		ProfileDEX: {"deep engineering subagent", "invariants and constraints", "Compare viable solutions", "material risks"},
+		ProfileStrength:     {"implementation subagent", "smallest coherent change", "project conventions", "validation"},
+		ProfileAgility:      {"fast read-only exploration subagent", "minimum evidence", "Do not modify workspace files", "confidence"},
+		ProfileIntelligence: {"deep engineering and reasoning subagent", "invariants and constraints", "Compare viable solutions", "material risks"},
 	}
 	for profile, markers := range checks {
 		prompt := SystemPromptForProfile(profile)
@@ -98,7 +98,7 @@ func TestSystemPromptForProfileBehaviorContracts(t *testing.T) {
 }
 
 func TestProfileSpecsAreCanonicalAndComplete(t *testing.T) {
-	want := []Profile{ProfilePOW, ProfileINT, ProfileDEX}
+	want := []Profile{ProfileUniversal, ProfileStrength, ProfileAgility, ProfileIntelligence}
 	got := SupportedProfiles()
 	if len(got) != len(want) {
 		t.Fatalf("supported profiles = %v, want %v", got, want)
@@ -111,7 +111,7 @@ func TestProfileSpecsAreCanonicalAndComplete(t *testing.T) {
 }
 
 func TestParseProfileNormalizesLegacyAliases(t *testing.T) {
-	cases := map[string]Profile{"explorer": ProfileINT, "reviewer": ProfileINT, "worker": ProfilePOW}
+	cases := map[string]Profile{"pow": ProfileStrength, "worker": ProfileStrength, "int": ProfileAgility, "explorer": ProfileAgility, "reviewer": ProfileAgility, "dex": ProfileIntelligence}
 	for raw, want := range cases {
 		got, err := ParseProfile(raw)
 		if err != nil || got != want {
@@ -123,7 +123,8 @@ func TestParseProfileNormalizesLegacyAliases(t *testing.T) {
 func TestDefaultSystemPromptGroundsCodingToolUse(t *testing.T) {
 	prompt := DefaultSystemPrompt()
 	for _, marker := range []string{
-		"primary coding agent",
+		"UNIVERSAL",
+		"primary software engineering agent",
 		"Never guess workspace contents",
 		"Inspect relevant code",
 		"perform the edits",
@@ -148,9 +149,10 @@ func TestProfilePromptsIncludeSharedToolContract(t *testing.T) {
 
 func TestProfileSpecsDeclarePortableReasoningEffort(t *testing.T) {
 	want := map[Profile]sdk.ReasoningEffort{
-		ProfilePOW: sdk.ReasoningMedium,
-		ProfileINT: sdk.ReasoningHigh,
-		ProfileDEX: sdk.ReasoningHigh,
+		ProfileUniversal:    sdk.ReasoningMedium,
+		ProfileStrength:     sdk.ReasoningMedium,
+		ProfileAgility:      sdk.ReasoningMedium,
+		ProfileIntelligence: sdk.ReasoningHigh,
 	}
 	for profile, effort := range want {
 		spec, ok := SpecForProfile(profile)
@@ -161,13 +163,26 @@ func TestProfileSpecsDeclarePortableReasoningEffort(t *testing.T) {
 }
 
 func TestProfileSpecsRequireWorkspaceGrounding(t *testing.T) {
-	for _, profile := range SupportedProfiles() {
+	for _, profile := range SubagentProfiles() {
 		spec, ok := SpecForProfile(profile)
 		if !ok {
 			t.Fatalf("missing spec for %q", profile)
 		}
 		if got := spec.GroundingEvidence; got != tool.EvidenceWorkspace {
 			t.Fatalf("profile %q grounding = %q, want workspace", profile, got)
+		}
+	}
+}
+
+func TestSubagentProfilesExcludeUniversal(t *testing.T) {
+	got := SubagentProfiles()
+	want := []Profile{ProfileStrength, ProfileAgility, ProfileIntelligence}
+	if len(got) != len(want) {
+		t.Fatalf("subagent profiles = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("subagent profiles = %v, want %v", got, want)
 		}
 	}
 }

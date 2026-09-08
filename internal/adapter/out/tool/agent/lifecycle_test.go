@@ -32,7 +32,7 @@ func TestWaitAgentTimeoutDoesNotCancelChild(t *testing.T) {
 	)
 	defer coord.Close()
 
-	h, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileINT, Task: "background"})
+	h, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileAgility, Task: "background"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestAgentLifecycleGetListCancel(t *testing.T) {
 		}),
 	)
 	defer coord.Close()
-	h, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileINT, Task: "cancel target"})
+	h, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileAgility, Task: "cancel target"})
 	if err != nil {
 		t.Fatal(err)
 	}

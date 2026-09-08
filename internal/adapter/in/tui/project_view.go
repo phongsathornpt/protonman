@@ -89,7 +89,7 @@ func (v *projectPaneView) Render(m *bubbleModel) string {
 	rows = append(rows,
 		projectFactWithSource("Model", fallbackProjectValue(m.activeModel, "not selected"), m.projectSource(config.FieldModelDefault)),
 		projectFactWithSource("Provider", fallbackProjectValue(m.activeProvider, "not selected"), m.projectSource(config.FieldModelProvider)),
-		projectFactWithSource("Agent", fallbackProjectValue(m.agentProfile, "default"), m.projectSource(config.FieldAgentProfile)),
+		projectFactWithSource("Agent", fallbackProjectValue(m.agentProfile, "universal"), m.projectSource(config.FieldAgentProfile)),
 		projectFactWithSource("Thinking", reasoningEffortLabel(m.reasoningEffort), m.projectSource(config.FieldAgentReasoningEffort)),
 		projectFactWithSource("Subagents", subagentsEnabledLabel(m.subagentsEnabled), m.projectSource(config.FieldAgentSubagentsEnabled)),
 		projectFactWithSource("Permission", m.service.Mode().String(), m.projectSource(config.FieldUIPermissionMode)),

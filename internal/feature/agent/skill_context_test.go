@@ -18,7 +18,7 @@ func TestSelectSubagentSkillsFiltersByTaskAndProfile(t *testing.T) {
 		}),
 	)
 	selected := selectSubagentSkills(catalog, Request{
-		Profile: ProfileDEX,
+		Profile: ProfileIntelligence,
 		Task:    "review Go transaction code for concurrency and security regressions",
 		Context: "internal/store/tx.go",
 	})
@@ -32,7 +32,7 @@ func TestSelectSubagentSkillsFiltersByTaskAndProfile(t *testing.T) {
 		t.Fatalf("unrelated skill leaked into catalog: %v", names)
 	}
 
-	pow := selectSubagentSkills(catalog, Request{Profile: ProfilePOW, Task: "security regression"})
+	pow := selectSubagentSkills(catalog, Request{Profile: ProfileStrength, Task: "security regression"})
 	if containsString(selectedSkillNames(pow), "dex-only") {
 		t.Fatalf("profile-incompatible skill leaked into POW catalog: %v", selectedSkillNames(pow))
 	}
@@ -48,7 +48,7 @@ func TestSelectSubagentSkillsEnforcesCatalogLimits(t *testing.T) {
 			nil,
 		))
 	}
-	selected := selectSubagentSkills(skill.NewRegistry(skills...), Request{Profile: ProfilePOW, Task: "implement Go code"})
+	selected := selectSubagentSkills(skill.NewRegistry(skills...), Request{Profile: ProfileStrength, Task: "implement Go code"})
 	items := selected.Catalog()
 	if len(items) > subagentSkillCatalogMaxItems {
 		t.Fatalf("selected %d skills, max %d", len(items), subagentSkillCatalogMaxItems)
@@ -64,9 +64,9 @@ func TestSelectSubagentSkillsEnforcesCatalogLimits(t *testing.T) {
 
 func TestSkillBudgetForProfile(t *testing.T) {
 	cases := map[Profile]subagentSkillBudget{
-		ProfilePOW: {maxActive: 2, maxInstructionBytes: 8 * 1024},
-		ProfileINT: {maxActive: 3, maxInstructionBytes: 12 * 1024},
-		ProfileDEX: {maxActive: 3, maxInstructionBytes: 16 * 1024},
+		ProfileStrength: {maxActive: 2, maxInstructionBytes: 8 * 1024},
+		ProfileAgility: {maxActive: 3, maxInstructionBytes: 12 * 1024},
+		ProfileIntelligence: {maxActive: 3, maxInstructionBytes: 16 * 1024},
 	}
 	for profile, want := range cases {
 		if got := skillBudgetForProfile(profile); got != want {
@@ -77,7 +77,7 @@ func TestSkillBudgetForProfile(t *testing.T) {
 
 func TestSelectSubagentSkillsReturnsEmptyForIrrelevantCatalog(t *testing.T) {
 	catalog := skill.NewRegistry(testSkill("pdf-tools", "Work with PDF documents", skill.ScopeProject, nil))
-	selected := selectSubagentSkills(catalog, Request{Profile: ProfileINT, Task: "inspect Go scheduler code"})
+	selected := selectSubagentSkills(catalog, Request{Profile: ProfileAgility, Task: "inspect Go scheduler code"})
 	if got := len(selected.List()); got != 0 {
 		t.Fatalf("selected %d irrelevant skills, want 0", got)
 	}

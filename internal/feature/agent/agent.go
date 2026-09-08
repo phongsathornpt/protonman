@@ -13,16 +13,18 @@ import (
 	"github.com/projectTHORN/proton/internal/engine/turn"
 )
 
-// Profile classifies the role and capability scope of a subagent.
+// Profile classifies Proton's primary and specialized engineering attributes.
 type Profile string
 
 const (
-	// ProfilePOW executes concrete implementation, fixes, and refactors.
-	ProfilePOW Profile = "pow"
-	// ProfileINT investigates, traces, researches, and reviews without mutating the workspace.
-	ProfileINT Profile = "int"
-	// ProfileDEX handles complex design, difficult debugging, and high-risk engineering work.
-	ProfileDEX Profile = "dex"
+	// ProfileUniversal is the adaptive primary software engineering orchestrator.
+	ProfileUniversal Profile = "universal"
+	// ProfileStrength executes substantial implementation, fixes, and refactors.
+	ProfileStrength Profile = "strength"
+	// ProfileAgility performs fast, bounded, read-only exploration and tracing.
+	ProfileAgility Profile = "agility"
+	// ProfileIntelligence handles deep reasoning, difficult debugging, and high-risk engineering work.
+	ProfileIntelligence Profile = "intelligence"
 )
 
 // Valid reports whether the profile is recognized.
@@ -41,15 +43,55 @@ func (p Profile) IsMutating() bool {
 func ParseProfile(raw string) (Profile, error) {
 	p := Profile(strings.TrimSpace(strings.ToLower(raw)))
 	switch p {
-	case "explorer", "reviewer":
-		p = ProfileINT
-	case "worker":
-		p = ProfilePOW
+	case "pow", "worker":
+		p = ProfileStrength
+	case "int", "explorer", "reviewer":
+		p = ProfileAgility
+	case "dex":
+		p = ProfileIntelligence
 	}
 	if !p.Valid() {
 		return "", fmt.Errorf("unknown agent profile %q: supported profiles are %s", raw, ProfileList(", "))
 	}
 	return p, nil
+}
+
+// IsSubagent reports whether the profile may be delegated by Universal.
+func (p Profile) IsSubagent() bool {
+	switch p {
+	case ProfileStrength, ProfileAgility, ProfileIntelligence:
+		return true
+	default:
+		return false
+	}
+}
+
+// ParseSubagentProfile validates a delegated specialized attribute.
+func ParseSubagentProfile(raw string) (Profile, error) {
+	p, err := ParseProfile(raw)
+	if err != nil {
+		return "", err
+	}
+	if !p.IsSubagent() {
+		return "", fmt.Errorf("profile %q cannot be delegated: supported subagents are %s", raw, SubagentProfileList(", "))
+	}
+	return p, nil
+}
+
+// ShortLabel returns the compact Dota-style attribute label used by the TUI.
+func (p Profile) ShortLabel() string {
+	switch p {
+	case ProfileUniversal:
+		return "UNI"
+	case ProfileStrength:
+		return "STR"
+	case ProfileAgility:
+		return "AGI"
+	case ProfileIntelligence:
+		return "INT"
+	default:
+		return "AGENT"
+	}
 }
 
 // State describes the lifecycle of a persistent subagent.
@@ -93,7 +135,7 @@ type Request struct {
 
 // Validate checks request invariants before dispatch.
 func (r Request) Validate() error {
-	if !r.Profile.Valid() {
+	if !r.Profile.IsSubagent() {
 		return fmt.Errorf("invalid subagent profile %q", r.Profile)
 	}
 	if strings.TrimSpace(r.Task) == "" {

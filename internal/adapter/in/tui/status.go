@@ -393,7 +393,7 @@ func agentDisplayProfile(st agent.AgentStatus) string {
 	if !profile.Valid() {
 		return "AGENT"
 	}
-	return strings.ToUpper(string(profile))
+	return profile.ShortLabel()
 }
 
 func agentDisplayPriority(state agent.State) int {

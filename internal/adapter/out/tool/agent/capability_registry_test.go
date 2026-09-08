@@ -45,7 +45,7 @@ func TestCapabilityRegistryHidesSubagentToolsWhenDisabledAndIdle(t *testing.T) {
 func TestCapabilityRegistryKeepsLifecycleToolsForExistingAgents(t *testing.T) {
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
 	defer coord.Close()
-	h, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileINT, Task: "inspect"})
+	h, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileAgility, Task: "inspect"})
 	if err != nil {
 		t.Fatal(err)
 	}
