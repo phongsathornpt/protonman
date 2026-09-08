@@ -136,3 +136,29 @@ func TestSourceViewDoesNotTraverseNestedSymlinks(t *testing.T) {
 		t.Fatalf("nested symlink content leaked: %s", result.Output)
 	}
 }
+
+func TestReadFileDefinitionPublishesSourceView(t *testing.T) {
+	def := readFileHandler{}.Definition()
+	properties, ok := def.InputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %#v", def.InputSchema["properties"])
+	}
+	view, ok := properties["view"].(map[string]any)
+	if !ok {
+		t.Fatalf("view schema = %#v", properties["view"])
+	}
+	values, ok := view["enum"].([]string)
+	if !ok {
+		t.Fatalf("view enum = %#v", view["enum"])
+	}
+	found := false
+	for _, value := range values {
+		if value == "source" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("read_file view enum missing source: %#v", values)
+	}
+}
