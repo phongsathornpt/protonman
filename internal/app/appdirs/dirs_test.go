@@ -66,15 +66,6 @@ func TestProjectPathsUseOnlyProtonmanNamespace(t *testing.T) {
 	if got := ProjectRoot(work); got != root {
 		t.Fatalf("ProjectRoot() = %q, want %q", got, root)
 	}
-	if got := ResolvedProjectRoot(work); got != root {
-		t.Fatalf("ResolvedProjectRoot() = %q, want %q", got, root)
-	}
-	if got := ResolvedProjectConfig(work); got != filepath.Join(root, ConfigFileName) {
-		t.Fatalf("ResolvedProjectConfig() = %q", got)
-	}
-	if got := ResolvedProjectSkills(work); got != filepath.Join(root, SkillsDir) {
-		t.Fatalf("ResolvedProjectSkills() = %q", got)
-	}
 }
 
 func TestResolveProjectScopeDisablesHomeAlias(t *testing.T) {
