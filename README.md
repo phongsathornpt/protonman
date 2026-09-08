@@ -374,7 +374,7 @@ max_retained_subagents = 64
 subagent_queue_timeout = "30s"
 subagent_wait_timeout = "30s"
 subagent_max_runtime = "30m"
-completed_result_ttl = "10m"
+completed_result_ttl = "24h"
 
 # Optional specialized subagent routes. Provider/model must be set together.
 # Omit both to inherit the current Universal model dynamically.

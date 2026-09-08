@@ -24,6 +24,7 @@ func TestE2ESubagentCapabilityChangesPublishedToolsBetweenTurns(t *testing.T) {
 		agenttool.NewGetAgent(coord),
 		agenttool.NewListAgents(coord),
 		agenttool.NewCancelAgent(coord),
+		agenttool.NewResumeAgent(coord),
 	)
 	if err != nil {
 		t.Fatal(err)

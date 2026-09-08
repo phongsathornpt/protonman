@@ -17,7 +17,9 @@ import (
 	webtool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/web"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/base/contextutil"
 	"github.com/phongsathornpt/protonman/internal/base/envconfig"
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -105,7 +107,16 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	if err != nil {
 		return nil, fmt.Errorf("create permission policy: %w", err)
 	}
-	coordinator := agent.NewCoordinator(nil, nil, workspaceRoot, policy,
+	stateStore, err := sessionfs.NewFileStore(dirs.Sessions)
+	if err != nil {
+		return nil, fmt.Errorf("create session store: %w", err)
+	}
+	sessionID, state, found, err := resolveSession(ctx, stateStore, workDir, options)
+	if err != nil {
+		return nil, err
+	}
+	var coordinator *agent.Coordinator
+	coordinator = agent.NewCoordinator(nil, nil, workspaceRoot, policy,
 		agent.WithEnabled(loadedConfig.Agent.SubagentsEnabled),
 		agent.WithMaxToolCalls(loadedConfig.Agent.MaxToolCalls),
 		agent.WithReasoningEffort(loadedConfig.Agent.ReasoningEffort),
@@ -116,25 +127,38 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		agent.WithMaxLiveAgents(loadedConfig.Agent.MaxLiveSubagents),
 		agent.WithMaxRetainedAgents(loadedConfig.Agent.MaxRetainedSubagents),
 		agent.WithResultTTL(loadedConfig.Agent.CompletedResultTTL),
-		agent.WithEventSink(func(ctx context.Context, ev agent.Event) error {
+		agent.WithEventSink(func(eventCtx context.Context, ev agent.Event) error {
 			slog.Debug("subagent lifecycle event", "kind", ev.Kind, "agent_id", ev.AgentID, "parent_id", ev.ParentID, "profile", ev.Profile, "duration", ev.Duration, "err", ev.Err)
+			if ev.Kind == agent.EventAgentProgress || coordinator == nil {
+				return nil
+			}
+			persistCtx, done := contextutil.DetachedTimeout(eventCtx, runtimepolicy.SessionPersistenceTimeout)
+			defer done()
+			if err := stateStore.SaveAgents(persistCtx, sessionID, coordinator.PersistentSnapshot()); err != nil {
+				slog.Warn("persist subagent lifecycle state", "session_id", sessionID, "error", err)
+			}
 			return nil
 		}),
 	)
+	if persistedAgents, agentsFound, loadErr := stateStore.LoadAgents(ctx, sessionID); loadErr != nil {
+		return nil, fmt.Errorf("load session subagents: %w", loadErr)
+	} else if agentsFound {
+		if restoreErr := coordinator.RestorePersistentSnapshot(persistedAgents); restoreErr != nil {
+			return nil, fmt.Errorf("restore session subagents: %w", restoreErr)
+		}
+		persistCtx, persistDone := contextutil.DetachedTimeout(ctx, runtimepolicy.SessionPersistenceTimeout)
+		if persistErr := stateStore.SaveAgents(persistCtx, sessionID, coordinator.PersistentSnapshot()); persistErr != nil {
+			persistDone()
+			return nil, fmt.Errorf("persist recovered session subagents: %w", persistErr)
+		}
+		persistDone()
+	}
 	failed := true
 	defer func() {
 		if failed {
 			_ = coordinator.Close()
 		}
 	}()
-	stateStore, err := sessionfs.NewFileStore(dirs.Sessions)
-	if err != nil {
-		return nil, fmt.Errorf("create session store: %w", err)
-	}
-	sessionID, state, found, err := resolveSession(ctx, stateStore, workDir, options)
-	if err != nil {
-		return nil, err
-	}
 	subagentModelResolver, err := app.BuildSubagentModelResolver(app.SubagentModelResolverSpec{
 		Providers:      loadedConfig.Providers,
 		Overrides:      loadedConfig.Agent.Subagents,
@@ -171,6 +195,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 			agenttool.NewGetAgent(coordinator),
 			agenttool.NewListAgents(coordinator),
 			agenttool.NewCancelAgent(coordinator),
+			agenttool.NewResumeAgent(coordinator),
 		),
 	)
 	if err != nil {

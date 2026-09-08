@@ -66,7 +66,7 @@ func (c *Coordinator) broadcast(ev Event) {
 func (c *Coordinator) emit(_ context.Context, ev Event) {
 	c.recordActivity(ev)
 	c.broadcast(ev)
-	if c.eventSink == nil {
+	if c.eventSink == nil || ev.Kind == EventAgentProgress {
 		return
 	}
 	enqueueLifecycleEvent(c.eventQueue, ev)

@@ -218,6 +218,7 @@ func delegationSection(spec Spec) string {
 - Keep trivial lookups and simple local edits in the parent.
 - Delegation is asynchronous: spawn independent children before waiting when parallelism helps, and continue useful parent work while they run.
 - wait_agent blocks on session-scoped child completion/failure activity rather than targeting one child. A wait timeout does not cancel a child; it is a successful no-activity observation. Use list_agents/get_agent to inspect state after wakeup; do not poll agent state without a reason.
+- If a retained agent is interrupted after a process restart, use resume_agent only when continuing that task is still necessary. A resumed child must re-inspect current workspace state before mutating because the prior run may have partially completed.
 - Cancel delegated work that is no longer needed.
 - Do not repeat delegated work unless integration or verification requires it.
 - Use child findings and evidence references to avoid duplicating investigation unnecessarily.

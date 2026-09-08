@@ -12,5 +12,6 @@ func withAgentTools(coordinator *agent.Coordinator) RegistryOption {
 		agenttool.NewGetAgent(coordinator),
 		agenttool.NewListAgents(coordinator),
 		agenttool.NewCancelAgent(coordinator),
+		agenttool.NewResumeAgent(coordinator),
 	)
 }

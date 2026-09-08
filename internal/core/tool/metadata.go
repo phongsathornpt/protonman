@@ -38,6 +38,7 @@ var builtinMetadata = map[string]callMetadata{
 	"get_agent":          {Metadata: Metadata{Name: "get_agent", Kind: KindAgent, DisplayName: "Agent status"}, title: titleAgentID("Get agent status", "Get agent status"), target: targetAgentID},
 	"list_agents":        {Metadata: Metadata{Name: "list_agents", Kind: KindAgent, DisplayName: "Subagents"}, title: titleConstant("List subagents"), target: targetConstant("subagents")},
 	"cancel_agent":       {Metadata: Metadata{Name: "cancel_agent", Kind: KindAgent, DisplayName: "Cancel agent"}, title: titleAgentID("Cancel agent", "Cancel agent"), target: targetAgentID},
+	"resume_agent":       {Metadata: Metadata{Name: "resume_agent", Kind: KindAgent, DisplayName: "Resume agent"}, title: titleAgentID("Resume agent", "Resume agent"), target: targetAgentID},
 	"checkpoint_restore": {Metadata: Metadata{Name: "checkpoint_restore", Kind: KindEdit, DisplayName: "Restore"}, title: titleCheckpointRestore, target: targetCheckpointRestore},
 }
 

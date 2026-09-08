@@ -37,6 +37,9 @@ func NewListAgents(c *agent.Coordinator) tool.Handler {
 func NewCancelAgent(c *agent.Coordinator) tool.Handler {
 	return agentLifecycleHandler{name: "cancel_agent", coordinator: c}
 }
+func NewResumeAgent(c *agent.Coordinator) tool.Handler {
+	return agentLifecycleHandler{name: "resume_agent", coordinator: c}
+}
 
 func (h agentLifecycleHandler) Definition() tool.Definition {
 	def := tool.Definition{Name: h.name, Kind: tool.KindForName(h.name), ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded}
@@ -59,6 +62,12 @@ func (h agentLifecycleHandler) Definition() tool.Definition {
 		def.Mutability = tool.MutabilityReadOnly
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
 		def.InputSchema = tool.NoArgumentsSchema()
+	case "resume_agent":
+		def.Description = "Explicitly restart an interrupted retained subagent as a fresh child after re-checking current workspace state."
+		def.Mutability = tool.MutabilityMutating
+		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainAgentState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
+		def.PermissionDetailKey = "agent_id"
+		def.InputSchema = agentIDSchema()
 	case "cancel_agent":
 		def.Description = "Explicitly cancel a queued or running subagent."
 		def.Mutability = tool.MutabilityMutating
@@ -87,6 +96,8 @@ func (h agentLifecycleHandler) Execute(ctx context.Context, call tool.Call) (too
 		return h.get(call)
 	case "list_agents":
 		return h.list(call)
+	case "resume_agent":
+		return h.resume(ctx, call)
 	case "cancel_agent":
 		return h.cancel(call)
 	default:
@@ -138,6 +149,21 @@ func (h agentLifecycleHandler) list(call tool.Call) (tool.Result, error) {
 	return agentJSONResult(call, fmt.Sprintf("%d retained agents", len(agents)), map[string]any{"agents": agents})
 }
 
+func (h agentLifecycleHandler) resume(ctx context.Context, call tool.Call) (tool.Result, error) {
+	id, err := decodeAgentID(call)
+	if err != nil {
+		return tool.Result{}, err
+	}
+	handle, err := h.coordinator.Resume(ctx, id, agent.ParentIDFromContext(ctx))
+	if err != nil {
+		return tool.Result{}, classifyAgentError("resume subagent", err)
+	}
+	status, _ := h.coordinator.Get(handle.ID)
+	return agentJSONResult(call, fmt.Sprintf("resumed %s as %s", id, handle.ID), map[string]any{
+		"resumed_from": id, "agent_id": handle.ID, "profile": handle.Profile, "status": status.State,
+	})
+}
+
 func (h agentLifecycleHandler) cancel(call tool.Call) (tool.Result, error) {
 	id, err := decodeAgentID(call)
 	if err != nil {
@@ -169,6 +195,9 @@ func invalidArgs(message string, err error) error {
 func classifyAgentError(message string, err error) error {
 	if errors.Is(err, agent.ErrNotFound) {
 		return tool.WrapToolError(tool.ErrorCodeNotFound, message, err)
+	}
+	if errors.Is(err, agent.ErrNotResumable) {
+		return tool.WrapToolError(tool.ErrorCodeConflict, message, err)
 	}
 	if errors.Is(err, context.Canceled) {
 		return tool.WrapToolError(tool.ErrorCodeCanceled, message, err)

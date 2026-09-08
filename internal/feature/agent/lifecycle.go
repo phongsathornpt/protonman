@@ -68,6 +68,7 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	queuedAt := time.Now()
 	runCtx, runCancel := context.WithCancel(c.rootCtx)
 	entry := &agentEntry{
+		request:         req,
 		languageModel:   boundModel,
 		reasoningEffort: boundReasoning,
 		status: AgentStatus{
