@@ -71,6 +71,8 @@ type AgentStatus struct {
 	ID         string    `json:"id"`
 	ParentID   string    `json:"parent_id,omitempty"`
 	Profile    Profile   `json:"profile"`
+	Provider   string    `json:"provider,omitempty"`
+	Model      string    `json:"model,omitempty"`
 	Task       string    `json:"task"`
 	State      State     `json:"state"`
 	StartTime  time.Time `json:"start_time"`

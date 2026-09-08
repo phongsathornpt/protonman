@@ -164,6 +164,8 @@ type EvidenceRef struct {
 type Result struct {
 	AgentID        string                 `json:"agent_id"`
 	Profile        Profile                `json:"profile"`
+	Provider       string                 `json:"provider,omitempty"`
+	Model          string                 `json:"model,omitempty"`
 	Summary        string                 `json:"summary"`
 	Rounds         int                    `json:"rounds"`
 	Verification   turn.VerificationState `json:"verification"`

@@ -342,3 +342,21 @@ func TestAgentsCommandOpensFocusedInspectionPane(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentsPaneShowsBoundModelIdentity(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.resize(100, 30)
+	m.agentSnapshot = []agent.AgentStatus{{
+		ID:        "agility-1",
+		Profile:   agent.ProfileAgility,
+		Provider:  "openai",
+		Model:     "fast-model",
+		Task:      "inspect router",
+		State:     agent.StateRunning,
+		StartedAt: time.Now(),
+	}}
+	joined := strings.Join(agentInspectionRows(m), "\n")
+	if !strings.Contains(joined, "openai · fast-model") {
+		t.Fatalf("agents pane=%q, want bound model identity", joined)
+	}
+}
