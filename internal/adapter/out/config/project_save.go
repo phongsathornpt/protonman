@@ -14,6 +14,9 @@ import (
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
+// ErrProjectScopeUnavailable indicates that project-local state aliases user-global state.
+var ErrProjectScopeUnavailable = errors.New("project scope is unavailable")
+
 // SaveProjectAgentProfile updates the project-local agent profile.
 func SaveProjectAgentProfile(workDir, profile string) error {
 	profile = strings.TrimSpace(profile)
@@ -72,7 +75,18 @@ func modifyProjectConfigFile(workDir string, mutate func(*fileDocument)) error {
 	if err != nil {
 		return fmt.Errorf("resolve project work directory: %w", err)
 	}
-	root := appdirs.ResolvedProjectRoot(absWorkDir)
+	dirs, err := appdirs.Resolve("")
+	if err != nil {
+		return fmt.Errorf("resolve user protonman state: %w", err)
+	}
+	scope, err := appdirs.ResolveProjectScope(dirs.Home, absWorkDir)
+	if err != nil {
+		return fmt.Errorf("resolve project scope: %w", err)
+	}
+	if !scope.Available {
+		return fmt.Errorf("%w: project settings cannot target user-global Protonman state", ErrProjectScopeUnavailable)
+	}
+	root := scope.Root
 	if info, statErr := os.Lstat(root); statErr == nil {
 		if info.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("refusing project config write through symlink: %s", root)
@@ -88,7 +102,7 @@ func modifyProjectConfigFile(workDir string, mutate func(*fileDocument)) error {
 		return fmt.Errorf("inspect project protonman directory: %w", statErr)
 	}
 
-	path := appdirs.ResolvedProjectConfig(absWorkDir)
+	path := scope.Config
 	var doc fileDocument
 	if info, statErr := os.Lstat(path); statErr == nil {
 		if info.Mode()&os.ModeSymlink != 0 {

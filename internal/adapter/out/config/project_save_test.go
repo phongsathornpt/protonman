@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -71,5 +72,29 @@ func TestSaveProjectSettingsRejectsSymlinkConfig(t *testing.T) {
 	}
 	if err := SaveProjectMaxToolCalls(workDir, 10); err == nil {
 		t.Fatal("expected symlink config rejection")
+	}
+}
+
+func TestSaveProjectSettingsRejectsUserHomeAlias(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("PROTONMAN_HOME", home)
+	if err := os.Mkdir(filepath.Join(home, appdirs.RootDirName), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(home, appdirs.RootDirName, appdirs.ConfigFileName)
+	if err := os.WriteFile(configPath, []byte("[agent]\nmax_tool_calls = 7\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := SaveProjectMaxToolCalls(home, 99)
+	if !errors.Is(err, ErrProjectScopeUnavailable) {
+		t.Fatalf("SaveProjectMaxToolCalls() error = %v, want project scope unavailable", err)
+	}
+	contents, readErr := os.ReadFile(configPath)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(contents) != "[agent]\nmax_tool_calls = 7\n" {
+		t.Fatalf("user config was modified: %q", contents)
 	}
 }
