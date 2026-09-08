@@ -69,7 +69,7 @@ func (c AgentRunCell) title() string {
 }
 
 func (c AgentRunCell) detail() string {
-	if c.State == agent.StateFailed || c.State == agent.StateCanceled {
+	if c.State == agent.StateFailed || c.State == agent.StateCanceled || c.State == agent.StateInterrupted {
 		if reason := strings.TrimSpace(c.Reason); reason != "" {
 			return reason
 		}
@@ -83,6 +83,8 @@ func (c AgentRunCell) detail() string {
 			return "canceled"
 		case agent.StateFailed:
 			return "failed"
+		case agent.StateInterrupted:
+			return "interrupted · resume available"
 		}
 	}
 	return strings.TrimSpace(c.Activity)
@@ -107,6 +109,8 @@ func (c AgentRunCell) statePresentation() (string, lipgloss.Style) {
 		return tuistyle.GlyphToolSuccess, tuistyle.SuccessStyle
 	case agent.StateFailed, agent.StateCanceled:
 		return tuistyle.GlyphToolError, tuistyle.ErrorStyle
+	case agent.StateInterrupted:
+		return tuistyle.GlyphAgent, tuistyle.WarningStyle
 	case agent.StateCanceling:
 		return tuistyle.GlyphAgent, tuistyle.WarningStyle
 	case agent.StateQueued:

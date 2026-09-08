@@ -454,3 +454,13 @@ func TestLongPatternTruncation(t *testing.T) {
 		t.Fatalf("expected long target to be truncated with ellipsis, got: %s", rendered)
 	}
 }
+
+func TestSummarizeAgentResume(t *testing.T) {
+	got := SummarizeOutput("resume_agent", tool.KindAgent, "strength-4", `{"resumed_from":"strength-4","agent_id":"strength-9","profile":"strength","status":"queued"}`, nil, false)
+	if got != "resumed strength-4 as strength-9 · queued" {
+		t.Fatalf("summary = %q", got)
+	}
+	if !IsAgentLifecycleTool("resume_agent") {
+		t.Fatal("resume_agent should be treated as lifecycle presentation")
+	}
+}

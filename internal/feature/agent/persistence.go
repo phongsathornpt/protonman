@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -66,9 +67,10 @@ func (c *Coordinator) RestorePersistentSnapshot(snapshot PersistentSnapshot) err
 		return fmt.Errorf("unsupported agent snapshot version %d", snapshot.Version)
 	}
 
+	interruptedEvents := make([]MetricEvent, 0)
 	c.agentsMu.Lock()
-	defer c.agentsMu.Unlock()
 	if c.closed.Load() {
+		c.agentsMu.Unlock()
 		return ErrCoordinatorClosed
 	}
 	for _, record := range snapshot.Agents {
@@ -84,10 +86,12 @@ func (c *Coordinator) RestorePersistentSnapshot(snapshot PersistentSnapshot) err
 		request.ParentID = status.ParentID
 		request.Profile = status.Profile
 		request.Task = status.Task
+		interrupted := false
 		if !status.State.Terminal() {
 			status.State = StateInterrupted
 			status.Reason = "interrupted by previous process exit"
 			status.FinishedAt = time.Now().UTC()
+			interrupted = true
 		}
 		result := Result{AgentID: status.ID, Profile: status.Profile, Provider: status.Provider, Model: status.Model}
 		if record.Result != nil {
@@ -99,8 +103,15 @@ func (c *Coordinator) RestorePersistentSnapshot(snapshot PersistentSnapshot) err
 		close(started)
 		c.agents[status.ID] = &agentEntry{status: status, request: request, result: result, cancel: func() {}, done: done, started: started}
 		c.raiseSequenceForID(status.ID)
+		if interrupted {
+			interruptedEvents = append(interruptedEvents, MetricEvent{Kind: MetricInterrupted, AgentID: status.ID, ParentID: status.ParentID, Profile: status.Profile})
+		}
 	}
 	c.pruneExpiredLocked(time.Now())
+	c.agentsMu.Unlock()
+	for _, event := range interruptedEvents {
+		c.observeMetric(context.Background(), event)
+	}
 	return nil
 }
 

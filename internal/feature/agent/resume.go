@@ -35,5 +35,10 @@ func (c *Coordinator) Resume(ctx context.Context, id, parentID string) (Handle, 
 	} else {
 		req.Context = resumeSafetyContext + "\n\nPrevious task context:\n" + req.Context
 	}
-	return c.Spawn(ctx, req)
+	handle, err := c.Spawn(ctx, req)
+	if err != nil {
+		return Handle{}, err
+	}
+	c.observeMetric(ctx, MetricEvent{Kind: MetricResumed, AgentID: handle.ID, ParentID: req.ParentID, Profile: handle.Profile})
+	return handle, nil
 }

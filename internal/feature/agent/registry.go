@@ -44,6 +44,9 @@ func (c *Coordinator) Wait(ctx context.Context, id string, timeout time.Duration
 		if errors.Is(waitCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
 			wr, snapshotErr := c.waitSnapshot(id)
 			wr.TimedOut = true
+			if status, ok := c.Get(id); ok {
+				c.observeMetric(ctx, MetricEvent{Kind: MetricWaitTimeout, AgentID: status.ID, ParentID: status.ParentID, Profile: status.Profile})
+			}
 			return wr, snapshotErr
 		}
 		return WaitResult{}, waitCtx.Err()
@@ -115,6 +118,7 @@ func (c *Coordinator) waitActivity(ctx context.Context, parentID string, timeout
 			return ActivityWaitResult{Event: ev, Agents: snapshot()}, nil
 		case <-waitCtx.Done():
 			if errors.Is(waitCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+				c.observeMetric(ctx, MetricEvent{Kind: MetricWaitTimeout, ParentID: parentID})
 				return ActivityWaitResult{Agents: snapshot(), TimedOut: true}, nil
 			}
 			return ActivityWaitResult{}, waitCtx.Err()
