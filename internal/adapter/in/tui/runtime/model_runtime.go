@@ -520,6 +520,9 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+		if message.Y < 0 || message.Y >= m.viewport.Height {
+			return m, nil
+		}
 		if m.viewportTailOnly && message.Button == tea.MouseButtonWheelUp {
 			m.hydrateViewportForScroll()
 		}
