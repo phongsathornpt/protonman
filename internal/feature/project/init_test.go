@@ -57,24 +57,13 @@ func TestInitRejectsSymlinkedProjectRoot(t *testing.T) {
 	}
 }
 
-func TestInitCreatesCanonicalDirectoryAlongsideLegacyProject(t *testing.T) {
-	workDir := t.TempDir()
-	legacyRoot := appdirs.LegacyProjectRoot(workDir)
-	if err := os.Mkdir(legacyRoot, 0o755); err != nil {
-		t.Fatal(err)
+func TestInitRejectsUserHomeAlias(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("PROTONMAN_HOME", home)
+	if _, err := Init(context.Background(), home); err == nil {
+		t.Fatal("Init() error = nil, want unavailable project scope")
 	}
-	if err := os.WriteFile(filepath.Join(legacyRoot, appdirs.ConfigFileName), []byte("# legacy\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	result, err := Init(context.Background(), workDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !result.Created || result.ProtonDir != appdirs.ProjectRoot(workDir) {
-		t.Fatalf("Init() result = %#v", result)
-	}
-	if _, err := os.Stat(appdirs.ProjectConfig(workDir)); err != nil {
-		t.Fatalf("canonical project config missing: %v", err)
+	if _, err := os.Stat(filepath.Join(home, appdirs.RootDirName)); !os.IsNotExist(err) {
+		t.Fatalf("Init() created user-global root as project state: %v", err)
 	}
 }

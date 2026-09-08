@@ -27,8 +27,15 @@ func Init(ctx context.Context, workDir string) (InitResult, error) {
 	if err != nil {
 		return InitResult{}, fmt.Errorf("resolve absolute project path: %w", err)
 	}
-	root := appdirs.ProjectRoot(absWorkDir)
-	configPath := appdirs.ProjectConfig(absWorkDir)
+	scope, err := appdirs.ResolveProjectScope("", absWorkDir)
+	if err != nil {
+		return InitResult{}, fmt.Errorf("resolve project scope: %w", err)
+	}
+	if !scope.Available {
+		return InitResult{}, fmt.Errorf("project scope is unavailable: project state aliases user-global Protonman state")
+	}
+	root := scope.Root
+	configPath := scope.Config
 	result := InitResult{ProtonDir: root, ConfigPath: configPath}
 
 	if info, statErr := os.Lstat(root); statErr == nil {
