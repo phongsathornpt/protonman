@@ -183,8 +183,9 @@ func TestTUISlashViewDoesNotOwnRuntimeState(t *testing.T) {
 		t.Fatalf("package %s not found", pkgPath)
 	}
 	allowed := map[string]bool{
-		modulePath + "/internal/adapter/in/tui/view/style": true,
-		modulePath + "/internal/core/tool":                 true,
+		modulePath + "/internal/adapter/in/tui/view/style":    true,
+		modulePath + "/internal/adapter/in/tui/view/textview": true,
+		modulePath + "/internal/core/tool":                    true,
 	}
 	for _, imported := range pkg.Imports {
 		if strings.HasPrefix(imported, modulePath+"/internal/") && !allowed[imported] {
