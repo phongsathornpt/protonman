@@ -17,6 +17,12 @@ func TestMainRun_Help(t *testing.T) {
 	}
 }
 
+func TestMainRun_Version(t *testing.T) {
+	if err := run(context.Background(), []string{"--version"}); err != nil {
+		t.Fatalf("run(--version) failed: %v", err)
+	}
+}
+
 func TestMainRun_InvalidFlags(t *testing.T) {
 	ctx := context.Background()
 

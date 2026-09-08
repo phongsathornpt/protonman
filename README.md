@@ -69,6 +69,7 @@ go run ./cmd/proton
 # Build the standalone binary
 make build
 ./bin/proton
+./bin/proton --version
 ```
 
 ### Headless & Scripting
@@ -459,6 +460,23 @@ Execution safety notes:
 | `PROTON_SANDBOX` | Override sandbox profile (`off`, `workspace`, `read-only`, `strict`) |
 | `PROTON_TELEMETRY` | Set to `stderr` for redacted JSON tool lifecycle and loop-protection telemetry, including suppression, retry-budget, stale-continuation, and turn-deadline counters |
 | `PROTON_DEBUG_LOG` | Set to a file path or `stderr` for opt-in JSON development diagnostics; disabled by default |
+
+---
+
+## Versioning & Releases
+
+Git tags are the source of truth for release versions. `make build` and `make dev`
+inject `git describe --tags --always --dirty --match 'v[0-9]*'` into the binary; `VERSION=v1.2.3`
+may be supplied explicitly. `proton --version` reports the version embedded in
+the binary.
+
+Pushing a tag such as `v1.2.3` triggers `.github/workflows/release.yml`, which
+runs the full test suite, builds Linux/macOS/Windows archives, generates SHA-256
+checksums, and publishes a GitHub Release. Prerelease tags such as `v1.2.3-rc.1`
+are published as GitHub prereleases.
+
+See [`docs/releasing.md`](docs/releasing.md) for the release procedure and version
+resolution rules.
 
 ---
 

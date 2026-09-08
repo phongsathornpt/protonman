@@ -1,0 +1,144 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Validate release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+            echo "invalid release tag: $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+      - name: Test
+        run: go test ./...
+
+  build:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: proton-linux-amd64
+            goos: linux
+            goarch: amd64
+          - target: proton-linux-arm64
+            goos: linux
+            goarch: arm64
+          - target: proton-darwin-amd64
+            goos: darwin
+            goarch: amd64
+          - target: proton-darwin-arm64
+            goos: darwin
+            goarch: arm64
+          - target: proton-windows-amd64
+            goos: windows
+            goarch: amd64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build artifact
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          set -euo pipefail
+          version="$GITHUB_REF_NAME"
+          plain_version="${version#v}"
+          package="proton_${plain_version}_${GOOS}_${GOARCH}"
+          binary="proton"
+          if [[ "$GOOS" == "windows" ]]; then
+            binary="proton.exe"
+          fi
+
+          mkdir -p "dist/$package"
+          CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build \
+            -trimpath \
+            -ldflags "-s -w -X github.com/phongsathornpt/proton/internal/base/buildinfo.version=$version" \
+            -o "dist/$package/$binary" \
+            ./cmd/proton
+
+          if [[ "$GOOS" == "linux" && "$GOARCH" == "amd64" ]]; then
+            test "$("dist/$package/$binary" --version)" = "Proton $plain_version"
+          fi
+          if [[ "$GOOS" == "windows" ]]; then
+            (cd "dist/$package" && zip -q "../${package}.zip" "$binary")
+          else
+            (cd "dist/$package" && tar -czf "../${package}.tar.gz" "$binary")
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: proton-*
+          path: dist
+          merge-multiple: true
+      - name: Generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum proton_* > checksums.txt
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          title="Proton $tag"
+          prerelease=()
+          if [[ "$tag" == *-* ]]; then
+            prerelease=(--prerelease)
+          fi
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" dist/* --clobber
+          else
+            gh release create "$tag" dist/* \
+              --verify-tag \
+              --generate-notes \
+              --title "$title" \
+              "${prerelease[@]}"
+          fi
