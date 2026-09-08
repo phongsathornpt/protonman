@@ -104,7 +104,7 @@ func TestRenderTaskDelegationOwnershipIsRootOnly(t *testing.T) {
 
 func TestRenderDelegationExplainsAsyncLifecycle(t *testing.T) {
 	got := Render(Spec{Capabilities: ToolCapabilities{Agents: true}})
-	for _, want := range []string{"Delegated work runs independently after admission", "Spawn independent children before waiting", "A wait timeout is a successful no-activity observation and never cancels child work", "instead of polling repeatedly", "Cancel delegated work"} {
+	for _, want := range []string{"subagent action=spawn", "Spawn independent children before waiting", "subagent action=wait", "A wait timeout is a successful no-activity observation and never cancels child work", "instead of polling repeatedly", "subagent action=get", "subagent action=list", "subagent action=cancel", "subagent action=resume"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("delegation contract missing %q:\n%s", want, got)
 		}
@@ -170,6 +170,15 @@ func TestRenderTaskContractAvoidsLegacyTodoToolNames(t *testing.T) {
 	for _, legacy := range []string{"get_todo", "update_todo", "Task tools"} {
 		if strings.Contains(got, legacy) {
 			t.Fatalf("task contract exposes legacy todo wording %q:\n%s", legacy, got)
+		}
+	}
+}
+
+func TestRenderDelegationAvoidsLegacySubagentToolNames(t *testing.T) {
+	got := Render(Spec{Capabilities: ToolCapabilities{Agents: true}})
+	for _, legacy := range []string{"delegate_task", "wait_agent", "get_agent", "list_agents", "cancel_agent", "resume_agent"} {
+		if strings.Contains(got, legacy) {
+			t.Fatalf("delegation contract exposes legacy subagent tool %q:\n%s", legacy, got)
 		}
 	}
 }
