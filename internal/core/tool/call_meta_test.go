@@ -391,7 +391,7 @@ func TestDisplayName(t *testing.T) {
 		{"web_search", "Web"},
 		{"git_status", "Git"},
 		{"get_todo", "Tasks"},
-		{"update_todo", "Update tasks"},
+		{"update_todo", "Tasks"},
 		{"activate_skill", "Skill"},
 		{"delegate_task", "Delegate"},
 		{"wait_agent", "Wait for agents"},

@@ -325,8 +325,7 @@ func TestBuiltinInputSchemasRejectUnknownProperties(t *testing.T) {
 	}
 	definitions := registry.Definitions()
 	definitions = append(definitions,
-		todotool.NewGetTodo(nil).Definition(),
-		todotool.NewUpdateTodo(nil).Definition(),
+		todotool.NewTodo(nil).Definition(),
 		skilltool.NewActivateSkill(nil, workspaceRoot).Definition(),
 	)
 	for _, definition := range definitions {

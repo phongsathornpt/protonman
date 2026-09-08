@@ -5,19 +5,24 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/phongsathornpt/protonman/internal/core/permission"
-	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
-	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 )
+
+func todoCapabilityPatchArgs(revision uint64, operations ...map[string]any) json.RawMessage {
+	payload, _ := json.Marshal(map[string]any{"action": "update", "expected_revision": revision, "operations": operations})
+	return payload
+}
 
 func TestTodoToolsValidateStructuredOutputThroughService(t *testing.T) {
 	store, err := tododomain.NewStore([]tododomain.Item{{ID: "a", Text: "inspect", Status: tododomain.StatusPending}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	registry, err := builtin.NewRegistry(NewGetTodo(store), NewUpdateTodo(store))
+	registry, err := builtin.NewRegistry(NewTodo(store))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +35,7 @@ func TestTodoToolsValidateStructuredOutputThroughService(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	getCall, _ := tool.NewCall("todo-get", "get_todo", json.RawMessage(`{}`))
+	getCall, _ := tool.NewCall("todo-get", "todo", json.RawMessage(`{"action":"get"}`))
 	getResult, err := service.Call(context.Background(), getCall)
 	if err != nil {
 		t.Fatalf("get_todo through service: %v", err)
@@ -39,7 +44,7 @@ func TestTodoToolsValidateStructuredOutputThroughService(t *testing.T) {
 		t.Fatal("get_todo structured output is empty")
 	}
 
-	updateCall, _ := tool.NewCall("todo-update", "update_todo", todoPatchArgs(0,
+	updateCall, _ := tool.NewCall("todo-update", "todo", todoCapabilityPatchArgs(0,
 		map[string]any{"op": "set_status", "id": "a", "status": "in_progress"},
 	))
 	updateResult, err := service.Call(context.Background(), updateCall)
@@ -56,7 +61,7 @@ func TestGetTodoEmptySnapshotValidatesStructuredOutputThroughService(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	registry, err := builtin.NewRegistry(NewGetTodo(store))
+	registry, err := builtin.NewRegistry(NewTodo(store))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +73,7 @@ func TestGetTodoEmptySnapshotValidatesStructuredOutputThroughService(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	call, _ := tool.NewCall("todo-empty", "get_todo", json.RawMessage(`{}`))
+	call, _ := tool.NewCall("todo-empty", "todo", json.RawMessage(`{"action":"get"}`))
 	result, err := service.Call(context.Background(), call)
 	if err != nil {
 		t.Fatalf("empty get_todo through service: %v", err)

@@ -632,14 +632,14 @@ func (r *customHandlerRegistry) Definitions() []tool.Definition {
 }
 
 func TestTaskMetadataPermissionDistinguishesStatusFromStructuralChanges(t *testing.T) {
-	handler := &fakeHandler{definition: tool.Definition{Name: "update_todo", Description: "update tasks", Kind: tool.KindTask, Mutability: tool.MutabilityMutating}}
+	handler := &fakeHandler{definition: tool.Definition{Name: "todo", Description: "update tasks", Kind: tool.KindTask, Mutability: tool.MutabilityMutating}}
 	prompted := 0
 	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAsk), WithPrompt(func(context.Context, permission.Request) (permission.Resolution, error) {
 		prompted++
 		return permission.Resolution{Action: permission.ActionAllow, Scope: permission.GrantScopeSession}, nil
 	}))
 
-	statusCall, err := tool.NewCall("todo-status", "update_todo", json.RawMessage(`{"expected_revision":1,"operations":[{"op":"set_status","id":"a","status":"completed"}]}`))
+	statusCall, err := tool.NewCall("todo-status", "todo", json.RawMessage(`{"action":"update","expected_revision":1,"operations":[{"op":"set_status","id":"a","status":"completed"}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -656,7 +656,13 @@ func TestTaskMetadataPermissionDistinguishesStatusFromStructuralChanges(t *testi
 		json.RawMessage(`{"expected_revision":1,"operations":[{"op":"remove","id":"a"}]}`),
 		json.RawMessage(`{"expected_revision":1,"operations":[{"op":"set_status","id":"a","status":"completed"},{"op":"remove","id":"b"}]}`),
 	} {
-		call, err := tool.NewCall(fmt.Sprintf("todo-structural-%d", index), "update_todo", args)
+		var object map[string]any
+		if err := json.Unmarshal(args, &object); err != nil {
+			t.Fatal(err)
+		}
+		object["action"] = "update"
+		canonicalArgs, _ := json.Marshal(object)
+		call, err := tool.NewCall(fmt.Sprintf("todo-structural-%d", index), "todo", canonicalArgs)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -677,13 +683,13 @@ func TestTaskMetadataPermissionDistinguishesStatusFromStructuralChanges(t *testi
 }
 
 func TestGetTodoMetadataAutoAllowedInAskMode(t *testing.T) {
-	handler := &fakeHandler{definition: tool.Definition{Name: "get_todo", Description: "read tasks", Kind: tool.KindTask, Mutability: tool.MutabilityReadOnly}}
+	handler := &fakeHandler{definition: tool.Definition{Name: "todo", Description: "read tasks", Kind: tool.KindTask, Mutability: tool.MutabilityReadOnly}}
 	prompted := 0
 	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAsk), WithPrompt(func(context.Context, permission.Request) (permission.Resolution, error) {
 		prompted++
 		return permission.Resolution{Action: permission.ActionAllow}, nil
 	}))
-	call, err := tool.NewCall("todo-get", "get_todo", json.RawMessage(`{}`))
+	call, err := tool.NewCall("todo-get", "todo", json.RawMessage(`{"action":"get"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
