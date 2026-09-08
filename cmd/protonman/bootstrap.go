@@ -225,12 +225,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 			webtool.NewWebFetch(sandboxProfile.Network, webtool.WithWebFetchTimeout(loadedConfig.Runtime.WebFetchTimeout)),
 			todotool.NewTodoForSession(todoStore, sessionID),
 			skilltool.NewActivateSkill(skillRegistry, workspaceRoot),
-			agenttool.NewDelegateTask(coordinator),
-			agenttool.NewWaitAgent(coordinator),
-			agenttool.NewGetAgent(coordinator),
-			agenttool.NewListAgents(coordinator),
-			agenttool.NewCancelAgent(coordinator),
-			agenttool.NewResumeAgent(coordinator),
+			agenttool.NewSubagent(coordinator),
 		),
 	)
 	if err != nil {

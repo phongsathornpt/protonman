@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	skilltool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/skill"
@@ -28,8 +29,7 @@ func TestRegisteredBuiltinToolContracts(t *testing.T) {
 	expected := map[string]bool{
 		"read": true, "math": true, "bash": true, "edit": true,
 		"grep": true, "find": true, "ls": true, "git": true,
-		"web": true, "delegate_task": true,
-		"wait_agent": true, "get_agent": true, "list_agents": true, "cancel_agent": true, "resume_agent": true,
+		"web": true, "subagent": true,
 		"get_todo": true, "update_todo": true, "skill": true,
 	}
 	seen := make(map[string]bool, len(expected))
@@ -108,14 +108,18 @@ func TestOptionalZeroNumericArgumentsMatchOmittedSemantics(t *testing.T) {
 		{"ls", map[string]any{"limit": 0}, map[string]any{"limit": -1}},
 		{"grep", map[string]any{"pattern": "x", "limit": 0}, map[string]any{"pattern": "x", "limit": -1}},
 		{"bash", map[string]any{"command": "true", "timeout_seconds": 0}, map[string]any{"command": "true", "timeout_seconds": -1}},
-		{"delegate_task", map[string]any{"task": "inspect", "profile": "agility", "timeout_seconds": 0}, map[string]any{"task": "inspect", "profile": "agility", "timeout_seconds": -1}},
-		{"wait_agent", map[string]any{"timeout_seconds": 0}, map[string]any{"timeout_seconds": -1}},
+		{"subagent_spawn", map[string]any{"action": "spawn", "task": "inspect", "profile": "agility", "timeout_seconds": 0}, map[string]any{"action": "spawn", "task": "inspect", "profile": "agility", "timeout_seconds": -1}},
+		{"subagent_wait", map[string]any{"action": "wait", "timeout_seconds": 0}, map[string]any{"action": "wait", "timeout_seconds": -1}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			input, _, ok := registry.CompiledValidators(tc.name)
+			lookupName := tc.name
+			if strings.HasPrefix(lookupName, "subagent_") {
+				lookupName = "subagent"
+			}
+			input, _, ok := registry.CompiledValidators(lookupName)
 			if !ok || input == nil {
-				t.Fatalf("compiled input validator missing for %s", tc.name)
+				t.Fatalf("compiled input validator missing for %s", lookupName)
 			}
 			zeroPayload, err := json.Marshal(tc.zeroArgs)
 			if err != nil {

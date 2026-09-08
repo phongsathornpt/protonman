@@ -17,6 +17,7 @@ type PendingRun struct {
 }
 
 type ToolResult struct {
+	Action      string
 	AgentID     string
 	ResumedFrom string
 	Profile     agent.Profile
@@ -26,8 +27,9 @@ type ToolResult struct {
 }
 
 type Tracker struct {
-	pendingRuns map[string]PendingRun
-	pendingOps  map[string]string
+	pendingRuns    map[string]PendingRun
+	pendingOps     map[string]string
+	pendingActions map[string]string
 }
 
 func (t *Tracker) RememberRun(call tool.Call) {
@@ -49,6 +51,7 @@ func RunFromCall(call tool.Call) PendingRun {
 
 func ParseToolResult(body string) ToolResult {
 	var payload struct {
+		Action      string        `json:"action"`
 		AgentID     string        `json:"agent_id"`
 		ResumedFrom string        `json:"resumed_from"`
 		Profile     agent.Profile `json:"profile"`
@@ -72,7 +75,7 @@ func ParseToolResult(body string) ToolResult {
 	if json.Unmarshal([]byte(body), &payload) != nil {
 		return ToolResult{}
 	}
-	out := ToolResult{AgentID: payload.AgentID, ResumedFrom: strings.TrimSpace(payload.ResumedFrom), Profile: payload.Profile, State: payload.Status, Reason: strings.TrimSpace(payload.Reason)}
+	out := ToolResult{Action: strings.TrimSpace(payload.Action), AgentID: payload.AgentID, ResumedFrom: strings.TrimSpace(payload.ResumedFrom), Profile: payload.Profile, State: payload.Status, Reason: strings.TrimSpace(payload.Reason)}
 	if out.State == "" {
 		out.State = payload.State
 	}
@@ -116,6 +119,14 @@ func ParseToolResult(body string) ToolResult {
 }
 
 func (t *Tracker) TouchOperation(name string, call tool.Call, state *history.HistoryState) {
+	if name == "subagent" {
+		action := extractStringArg(call.Arguments, "action")
+		if t.pendingActions == nil {
+			t.pendingActions = make(map[string]string)
+		}
+		t.pendingActions[call.ID] = action
+		name = legacyAgentToolName(action)
+	}
 	if name == "wait_agent" {
 		return
 	}
@@ -142,10 +153,18 @@ func (t *Tracker) TouchOperation(name string, call tool.Call, state *history.His
 }
 
 func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, state *history.HistoryState) bool {
+	publicName := name
+	parsed := ParseToolResult(body)
+	if name == "subagent" {
+		name = legacyAgentToolName(parsed.Action)
+		if name == "" {
+			name = legacyAgentToolName(t.pendingActions[result.CallID])
+		}
+		delete(t.pendingActions, result.CallID)
+	}
 	if name != "delegate_task" && !toolview.IsAgentLifecycleTool(name) {
 		return false
 	}
-	parsed := ParseToolResult(body)
 	if parsed.AgentID == "" {
 		parsed.AgentID = t.pendingOps[result.CallID]
 	}
@@ -174,7 +193,7 @@ func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, 
 		if resumed.State == "" {
 			resumed.State = agent.StateQueued
 		}
-		state.DiscardToolCall(result.CallID, name)
+		state.DiscardToolCall(result.CallID, publicName)
 		state.Append(resumed)
 		state.TouchAgentRun(parsed.AgentID)
 		return true
@@ -201,7 +220,7 @@ func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, 
 			if parsed.Reason != "" {
 				existing.Reason = parsed.Reason
 			}
-			state.DiscardToolCall(result.CallID, name)
+			state.DiscardToolCall(result.CallID, publicName)
 			state.TouchAgentRun(parsed.AgentID)
 			return true
 		}
@@ -209,7 +228,7 @@ func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, 
 		if cell.State == "" {
 			cell.State = agent.StateQueued
 		}
-		state.CompleteToolCall(result.CallID, name, cell)
+		state.CompleteToolCall(result.CallID, publicName, cell)
 		return true
 	}
 	if parsed.AgentID == "" {
@@ -277,6 +296,10 @@ func (t *Tracker) SyncSnapshot(agentID string, snapshot []agent.AgentStatus, sta
 }
 
 func (t *Tracker) ApplyToolFailure(name string, result tool.Result, err error, state *history.HistoryState) bool {
+	if name == "subagent" {
+		name = legacyAgentToolName(t.pendingActions[result.CallID])
+		delete(t.pendingActions, result.CallID)
+	}
 	if !toolview.IsAgentLifecycleTool(name) {
 		return false
 	}
@@ -303,6 +326,25 @@ func (t *Tracker) ApplyToolFailure(name string, result tool.Result, err error, s
 	cell.Activity = message
 	state.TouchAgentRun(id)
 	return true
+}
+
+func legacyAgentToolName(action string) string {
+	switch strings.ToLower(strings.TrimSpace(action)) {
+	case "spawn":
+		return "delegate_task"
+	case "wait":
+		return "wait_agent"
+	case "get":
+		return "get_agent"
+	case "list":
+		return "list_agents"
+	case "cancel":
+		return "cancel_agent"
+	case "resume":
+		return "resume_agent"
+	default:
+		return ""
+	}
 }
 
 type Activity struct {

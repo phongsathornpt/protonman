@@ -457,7 +457,7 @@ func TestTodoConflictRendersTaskSpecificGuidance(t *testing.T) {
 	m.appendToolCall(call)
 	m.applyToolResult("update_todo", tool.Result{CallID: "todo-conflict", ToolName: "update_todo", Failure: &tool.Failure{Code: tool.ErrorCodeConflict, Message: "todo snapshot is stale"}}, nil)
 	plain := plainTranscript(m)
-	for _, want := range []string{"Task plan changed", "task plan changed while this update was being prepared", "get_todo"} {
+	for _, want := range []string{"Task plan changed", "task plan changed while this update was being prepared", "todo action=get"} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("transcript=%q missing %q", plain, want)
 		}

@@ -219,10 +219,10 @@ func delegationSection(spec Spec) string {
 - Use INTELLIGENCE for deep reasoning, architecture, difficult debugging, concurrency, compatibility, performance, or other high-risk engineering work.
 - Keep trivial lookups and simple local edits in the parent.
 - Delegated work runs independently after admission. Spawn independent children before waiting when parallelism helps, and continue useful parent work while they run.
-- wait_agent observes new lifecycle activity owned by the current turn and returns a current child-state snapshot. A wait timeout is a successful no-activity observation and never cancels child work. Reconcile from returned lifecycle activity and snapshot instead of polling repeatedly.
+- subagent action=wait observes new lifecycle activity owned by the current turn and returns a current child-state snapshot. A wait timeout is a successful no-activity observation and never cancels child work. Reconcile from returned lifecycle activity and snapshot instead of polling repeatedly.
 - One wait may report multiple completed or failed children. Integrate every relevant result before deciding what work remains.
 - Child lifecycle activity is authoritative for orchestration state; do not assume a child changed state without lifecycle activity or an explicit state query.
-- Interrupted work is never replayed automatically. Use resume_agent only when continuing the task is still necessary; the new execution attempt must re-inspect current workspace state because the previous attempt may have partially changed it.
+- Interrupted work is never replayed automatically. Use subagent action=resume only when continuing the task is still necessary; the new execution attempt must re-inspect current workspace state because the previous attempt may have partially changed it.
 - Cancel delegated work explicitly when it is no longer needed.
 - Do not repeat delegated work unless integration or verification requires it.
 - Use child findings and evidence references to avoid duplicating investigation unnecessarily.

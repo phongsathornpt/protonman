@@ -174,6 +174,18 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 	} else {
 		m.activity = "calling " + tool.DisplayName(call.Name)
 	}
+	if call.Name == "subagent" {
+		action := extractStringArg(call.Arguments, "action")
+		if action == "spawn" {
+			m.rememberAgentRun(call)
+			state.StartToolCell(&AgentToolCell{CallID: call.ID, Name: call.Name, Target: target, Running: true})
+			m.syncLegacyBlocks()
+			return
+		}
+		m.touchAgentOperation(call.Name, call)
+		m.syncLegacyBlocks()
+		return
+	}
 	if call.Name == "delegate_task" {
 		m.rememberAgentRun(call)
 		state.StartToolCell(&AgentToolCell{CallID: call.ID, Name: call.Name, Target: target, Running: true})
@@ -220,7 +232,7 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 	}
 	state := m.ensureHistoryState()
 	body := result.Output
-	if len(result.StructuredOutput) > 0 && (name == "get_todo" || name == "update_todo" || name == "delegate_task" || name == "wait_agent" || name == "get_agent" || name == "list_agents" || name == "cancel_agent") {
+	if len(result.StructuredOutput) > 0 && (name == "todo" || name == "get_todo" || name == "update_todo" || name == "subagent" || name == "delegate_task" || name == "wait_agent" || name == "get_agent" || name == "list_agents" || name == "cancel_agent") {
 		body = string(result.StructuredOutput)
 	}
 	if result.CheckpointID != "" {
@@ -245,11 +257,11 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 		title := tool.DisplayName(name)
 		badge := string(result.Failure.Code)
 		text := result.Failure.Message
-		if name == "update_todo" && result.Failure.Code == tool.ErrorCodeConflict {
+		if (name == "update_todo" || name == "todo") && result.Failure.Code == tool.ErrorCodeConflict {
 			title = "Task plan changed"
 			badge = "stale"
 			text = "The task plan changed while this update was being prepared."
-			suggestions = []string{"Refresh tasks with get_todo, then retry the update."}
+			suggestions = []string{"Refresh tasks with todo action=get, then retry the update."}
 		}
 		errorCell := &ErrorCell{ErrorKind: ErrorKindToolFailed, Title: title, Badge: badge, Text: text, Code: result.Failure.Code, Suggestions: suggestions}
 		state.CompleteToolCall(result.CallID, name, errorCell)

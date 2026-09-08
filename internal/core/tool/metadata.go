@@ -39,6 +39,7 @@ var builtinMetadata = map[string]callMetadata{
 	"update_todo":        {Metadata: Metadata{Name: "update_todo", Kind: KindTask, DisplayName: "Update tasks"}, title: titleUpdateTodo, target: targetUpdateTodo},
 	"skill":              {Metadata: Metadata{Name: "skill", Kind: KindRead, DisplayName: "Skill"}, title: titleActivateSkill, target: targetActivateSkill},
 	"activate_skill":     {Metadata: Metadata{Name: "activate_skill", Kind: KindRead, DisplayName: "Skill"}, title: titleActivateSkill, target: targetActivateSkill},
+	"subagent":           {Metadata: Metadata{Name: "subagent", Kind: KindAgent, DisplayName: "Subagent"}, title: titleSubagent, target: targetSubagent},
 	"delegate_task":      {Metadata: Metadata{Name: "delegate_task", Kind: KindAgent, DisplayName: "Delegate"}, title: titleDelegateTask, target: targetDelegateTask},
 	"wait_agent":         {Metadata: Metadata{Name: "wait_agent", Kind: KindAgent, DisplayName: "Wait for agents"}, title: titleConstant("Wait for agent activity"), target: targetConstant("agent activity")},
 	"get_agent":          {Metadata: Metadata{Name: "get_agent", Kind: KindAgent, DisplayName: "Agent status"}, title: titleAgentID("Get agent status", "Get agent status"), target: targetAgentID},
@@ -70,6 +71,35 @@ func titleConstant(value string) func(map[string]any) string {
 }
 func targetConstant(value string) func(map[string]any) string {
 	return func(map[string]any) string { return value }
+}
+
+func titleSubagent(args map[string]any) string {
+	switch strings.ToLower(ExtractString(args, "action")) {
+	case "spawn":
+		return titleDelegateTask(args)
+	case "wait":
+		return "Wait for agent activity"
+	case "get":
+		return titleAgentID("Get agent status", "Get agent status")(args)
+	case "list":
+		return "List subagents"
+	case "cancel":
+		return titleAgentID("Cancel agent", "Cancel agent")(args)
+	case "resume":
+		return titleAgentID("Resume agent", "Resume agent")(args)
+	default:
+		return "Subagent"
+	}
+}
+
+func targetSubagent(args map[string]any) string {
+	if strings.EqualFold(ExtractString(args, "action"), "spawn") {
+		return targetDelegateTask(args)
+	}
+	if id := targetAgentID(args); id != "" {
+		return id
+	}
+	return "subagents"
 }
 
 func titleTodo(args map[string]any) string {

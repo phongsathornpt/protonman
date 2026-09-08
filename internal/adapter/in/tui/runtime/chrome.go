@@ -646,6 +646,14 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 				return nil
 			}
 		case permission.ToolAgent:
+			if request.ToolName == "subagent" {
+				var input struct {
+					Action string `json:"action"`
+				}
+				if json.Unmarshal(request.Arguments, &input) == nil && (input.Action == "wait" || input.Action == "get" || input.Action == "list") {
+					return nil
+				}
+			}
 			switch request.ToolName {
 			case "wait_agent", "get_agent", "list_agents":
 				return nil

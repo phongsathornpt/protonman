@@ -6,12 +6,5 @@ import (
 )
 
 func withAgentTools(coordinator *agent.Coordinator) RegistryOption {
-	return WithAdditionalHandlers(
-		agenttool.NewDelegateTask(coordinator),
-		agenttool.NewWaitAgent(coordinator),
-		agenttool.NewGetAgent(coordinator),
-		agenttool.NewListAgents(coordinator),
-		agenttool.NewCancelAgent(coordinator),
-		agenttool.NewResumeAgent(coordinator),
-	)
+	return WithAdditionalHandlers(agenttool.NewSubagent(coordinator))
 }

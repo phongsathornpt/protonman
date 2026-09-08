@@ -29,7 +29,7 @@ func ExtractTarget(name string, kind tool.Kind, args json.RawMessage) (string, t
 
 func IsAgentLifecycleTool(name string) bool {
 	switch name {
-	case "wait_agent", "get_agent", "list_agents", "cancel_agent", "resume_agent":
+	case "subagent", "wait_agent", "get_agent", "list_agents", "cancel_agent", "resume_agent":
 		return true
 	default:
 		return false
@@ -110,6 +110,14 @@ func SummarizeOutput(name string, kind tool.Kind, target string, body string, ex
 		if name == "get_todo" {
 			return summarizeTodoSnapshot(bodyTrimmed)
 		}
+		if name == "todo" {
+			var payload map[string]any
+			if json.Unmarshal([]byte(bodyTrimmed), &payload) == nil {
+				if _, ok := payload["items"]; ok {
+					return summarizeTodoSnapshot(bodyTrimmed)
+				}
+			}
+		}
 		return summarizeTodoUpdate(bodyTrimmed)
 	case tool.KindAgent:
 		return summarizeAgentTool(name, bodyTrimmed)
@@ -145,6 +153,24 @@ func summarizeAgentTool(name, body string) string {
 	var payload map[string]any
 	if json.Unmarshal([]byte(body), &payload) != nil {
 		return "agent updated"
+	}
+	if name == "subagent" {
+		if action, _ := payload["action"].(string); action != "" {
+			switch action {
+			case "spawn":
+				name = "delegate_task"
+			case "wait":
+				name = "wait_agent"
+			case "get":
+				name = "get_agent"
+			case "list":
+				name = "list_agents"
+			case "cancel":
+				name = "cancel_agent"
+			case "resume":
+				name = "resume_agent"
+			}
+		}
 	}
 	if name == "list_agents" {
 		agents, _ := payload["agents"].([]any)
