@@ -294,9 +294,9 @@ func TestTitleForToolCall(t *testing.T) {
 
 		// subagents
 		{
-			name: "wait_agent with id",
-			call: makeCall("wait_agent", map[string]any{"agent_id": "agent-42"}),
-			want: "Wait for agent agent-42",
+			name: "wait_agent",
+			call: makeCall("wait_agent", map[string]any{"timeout_seconds": 30}),
+			want: "Wait for agent activity",
 		},
 		{
 			name: "get_agent with id",
