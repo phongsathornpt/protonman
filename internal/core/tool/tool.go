@@ -204,6 +204,7 @@ const (
 	ErrorCodeUnknownTool                = failure.CodeUnknownTool
 	ErrorCodeNotFound                   = failure.CodeNotFound
 	ErrorCodeProtectedPath              = failure.CodeProtectedPath
+	ErrorCodeInternalPath               = failure.CodeInternalPath
 	ErrorCodeOutsideWorkspace           = failure.CodeOutsideWorkspace
 	ErrorCodeNoProgress                 = failure.CodeNoProgress
 	ErrorCodeStaleContinuation          = failure.CodeStaleContinuation
