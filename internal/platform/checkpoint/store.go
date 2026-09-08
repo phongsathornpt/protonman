@@ -108,7 +108,13 @@ func NewFileStore(root string, workspaceRoot *workspace.Workspace, options ...St
 		return nil, fmt.Errorf("validate checkpoint store root: %w", err)
 	}
 	if insideWorkspace {
-		return nil, fmt.Errorf("checkpoint store must be outside workspace")
+		internal, internalErr := workspaceRoot.IsInternalPath(absoluteRoot)
+		if internalErr != nil {
+			return nil, fmt.Errorf("validate checkpoint internal root: %w", internalErr)
+		}
+		if !internal {
+			return nil, fmt.Errorf("checkpoint store inside workspace must be reserved Protonman internal state")
+		}
 	}
 	store := &FileStore{
 		root:      filepath.Clean(absoluteRoot),
