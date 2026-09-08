@@ -1,36 +1,51 @@
-package tui
+package agentui
 
 import (
 	"encoding/json"
 	"strings"
 	"time"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/history"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/toolview"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
-type pendingAgentRun struct {
+type PendingRun struct {
 	Profile agent.Profile
 	Task    string
 }
 
-type agentToolResult struct {
+type ToolResult struct {
 	AgentID string
 	State   agent.State
 	Summary string
 	Reason  string
 }
 
-func agentRunFromCall(call tool.Call) pendingAgentRun {
+type Tracker struct {
+	pendingRuns map[string]PendingRun
+	pendingOps  map[string]string
+}
+
+func (t *Tracker) RememberRun(call tool.Call) {
+	if t.pendingRuns == nil {
+		t.pendingRuns = make(map[string]PendingRun)
+	}
+	t.pendingRuns[call.ID] = RunFromCall(call)
+}
+
+func RunFromCall(call tool.Call) PendingRun {
 	var input struct {
 		Profile string `json:"profile"`
 		Task    string `json:"task"`
 	}
 	_ = json.Unmarshal(call.Arguments, &input)
 	profile, _ := agent.ParseSubagentProfile(input.Profile)
-	return pendingAgentRun{Profile: profile, Task: strings.TrimSpace(input.Task)}
+	return PendingRun{Profile: profile, Task: strings.TrimSpace(input.Task)}
 }
-func parseAgentToolResult(body string) agentToolResult {
+
+func ParseToolResult(body string) ToolResult {
 	var payload struct {
 		AgentID string      `json:"agent_id"`
 		Status  agent.State `json:"status"`
@@ -46,9 +61,9 @@ func parseAgentToolResult(body string) agentToolResult {
 		} `json:"result"`
 	}
 	if json.Unmarshal([]byte(body), &payload) != nil {
-		return agentToolResult{}
+		return ToolResult{}
 	}
-	out := agentToolResult{AgentID: payload.AgentID, State: payload.Status, Reason: strings.TrimSpace(payload.Reason)}
+	out := ToolResult{AgentID: payload.AgentID, State: payload.Status, Reason: strings.TrimSpace(payload.Reason)}
 	if out.State == "" {
 		out.State = payload.State
 	}
@@ -69,22 +84,15 @@ func parseAgentToolResult(body string) agentToolResult {
 	return out
 }
 
-func (m *bubbleModel) rememberAgentRun(call tool.Call) {
-	if m.pendingAgentRuns == nil {
-		m.pendingAgentRuns = make(map[string]pendingAgentRun)
-	}
-	m.pendingAgentRuns[call.ID] = agentRunFromCall(call)
-}
-
-func (m *bubbleModel) touchAgentOperation(name string, call tool.Call) {
+func (t *Tracker) TouchOperation(name string, call tool.Call, state *history.HistoryState) {
 	id := extractStringArg(call.Arguments, "agent_id")
-	if m.pendingAgentOps == nil {
-		m.pendingAgentOps = make(map[string]string)
+	if t.pendingOps == nil {
+		t.pendingOps = make(map[string]string)
 	}
 	if call.ID != "" && id != "" {
-		m.pendingAgentOps[call.ID] = id
+		t.pendingOps[call.ID] = id
 	}
-	cell := m.ensureHistoryState().AgentRun(id)
+	cell := state.AgentRun(id)
 	if cell == nil {
 		return
 	}
@@ -94,27 +102,26 @@ func (m *bubbleModel) touchAgentOperation(name string, call tool.Call) {
 	case "get_agent":
 		cell.Activity = "checking status"
 	case "cancel_agent":
-		cell.State = agent.StateCanceling
-		cell.Activity = "canceling"
+		cell.State, cell.Activity = agent.StateCanceling, "canceling"
 	}
-	m.ensureHistoryState().TouchAgentRun(id)
+	state.TouchAgentRun(id)
 }
-func (m *bubbleModel) applyAgentToolResult(name string, result tool.Result, body string) bool {
-	if name != "delegate_task" && !isAgentLifecycleTool(name) {
+
+func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, state *history.HistoryState) bool {
+	if name != "delegate_task" && !toolview.IsAgentLifecycleTool(name) {
 		return false
 	}
-	parsed := parseAgentToolResult(body)
-	state := m.ensureHistoryState()
+	parsed := ParseToolResult(body)
 	if parsed.AgentID == "" {
-		parsed.AgentID = m.pendingAgentOps[result.CallID]
+		parsed.AgentID = t.pendingOps[result.CallID]
 	}
-	delete(m.pendingAgentOps, result.CallID)
+	delete(t.pendingOps, result.CallID)
 	if name == "list_agents" {
 		return true
 	}
 	if name == "delegate_task" {
-		intent := m.pendingAgentRuns[result.CallID]
-		delete(m.pendingAgentRuns, result.CallID)
+		intent := t.pendingRuns[result.CallID]
+		delete(t.pendingRuns, result.CallID)
 		if parsed.AgentID == "" {
 			return false
 		}
@@ -138,7 +145,7 @@ func (m *bubbleModel) applyAgentToolResult(name string, result tool.Result, body
 			state.TouchAgentRun(parsed.AgentID)
 			return true
 		}
-		cell := &AgentRunCell{AgentID: parsed.AgentID, Profile: intent.Profile, Task: intent.Task, State: parsed.State, Summary: parsed.Summary, Reason: parsed.Reason, StartedAt: time.Now()}
+		cell := &history.AgentRunCell{AgentID: parsed.AgentID, Profile: intent.Profile, Task: intent.Task, State: parsed.State, Summary: parsed.Summary, Reason: parsed.Reason, StartedAt: time.Now()}
 		if cell.State == "" {
 			cell.State = agent.StateQueued
 		}
@@ -150,7 +157,7 @@ func (m *bubbleModel) applyAgentToolResult(name string, result tool.Result, body
 	}
 	cell := state.AgentRun(parsed.AgentID)
 	if cell == nil {
-		cell = &AgentRunCell{AgentID: parsed.AgentID, State: parsed.State, StartedAt: time.Now()}
+		cell = &history.AgentRunCell{AgentID: parsed.AgentID, State: parsed.State, StartedAt: time.Now()}
 		state.Append(cell)
 	}
 	if parsed.State != "" {
@@ -170,21 +177,21 @@ func (m *bubbleModel) applyAgentToolResult(name string, result tool.Result, body
 	return true
 }
 
-func (m *bubbleModel) syncAgentRunSnapshot(agentID string) {
+func (t *Tracker) SyncSnapshot(agentID string, snapshot []agent.AgentStatus, state *history.HistoryState) {
 	if strings.TrimSpace(agentID) == "" {
 		return
 	}
 	var status *agent.AgentStatus
-	for i := range m.agentSnapshot {
-		if m.agentSnapshot[i].ID == agentID {
-			status = &m.agentSnapshot[i]
+	for i := range snapshot {
+		if snapshot[i].ID == agentID {
+			status = &snapshot[i]
 			break
 		}
 	}
 	if status == nil {
 		return
 	}
-	cell := m.ensureHistoryState().AgentRun(agentID)
+	cell := state.AgentRun(agentID)
 	if cell == nil {
 		return
 	}
@@ -192,8 +199,7 @@ func (m *bubbleModel) syncAgentRunSnapshot(agentID string) {
 	if strings.TrimSpace(status.Task) != "" {
 		cell.Task = status.Task
 	}
-	cell.State = status.State
-	cell.Reason = status.Reason
+	cell.State, cell.Reason = status.State, status.Reason
 	startedAt := status.StartedAt
 	if startedAt.IsZero() {
 		startedAt = status.StartTime
@@ -207,19 +213,19 @@ func (m *bubbleModel) syncAgentRunSnapshot(agentID string) {
 	if status.State.Terminal() {
 		cell.Activity = ""
 	}
-	m.ensureHistoryState().TouchAgentRun(agentID)
+	state.TouchAgentRun(agentID)
 }
 
-func (m *bubbleModel) applyAgentToolFailure(name string, result tool.Result, err error) bool {
-	if !isAgentLifecycleTool(name) {
+func (t *Tracker) ApplyToolFailure(name string, result tool.Result, err error, state *history.HistoryState) bool {
+	if !toolview.IsAgentLifecycleTool(name) {
 		return false
 	}
-	id := m.pendingAgentOps[result.CallID]
-	delete(m.pendingAgentOps, result.CallID)
+	id := t.pendingOps[result.CallID]
+	delete(t.pendingOps, result.CallID)
 	if id == "" {
 		return true
 	}
-	cell := m.ensureHistoryState().AgentRun(id)
+	cell := state.AgentRun(id)
 	if cell == nil {
 		return true
 	}
@@ -233,28 +239,35 @@ func (m *bubbleModel) applyAgentToolFailure(name string, result tool.Result, err
 		message += ": " + strings.TrimSpace(err.Error())
 	}
 	cell.Activity = message
-	m.ensureHistoryState().TouchAgentRun(id)
+	state.TouchAgentRun(id)
 	return true
 }
 
-type AgentActivity struct {
+type Activity struct {
 	ToolName string
 	ToolKind tool.Kind
 	Target   string
 	Label    string
 }
 
-func agentActivityFromEvent(ev agent.Event) AgentActivity {
+func ActivityFromEvent(ev agent.Event) Activity {
 	if ev.Call == nil {
-		return AgentActivity{Label: strings.TrimSpace(ev.Message)}
+		return Activity{Label: strings.TrimSpace(ev.Message)}
 	}
-	target, kind := extractToolTarget(ev.Call.Name, "", ev.Call.Arguments)
-	activity := AgentActivity{ToolName: ev.Call.Name, ToolKind: kind, Target: target}
-	activity.Label = tool.DisplayName(ev.Call.Name)
+	target, kind := toolview.ExtractTarget(ev.Call.Name, "", ev.Call.Arguments)
+	activity := Activity{ToolName: ev.Call.Name, ToolKind: kind, Target: target, Label: tool.DisplayName(ev.Call.Name)}
 	if strings.TrimSpace(target) != "" {
 		activity.Label += " " + strings.TrimSpace(target)
 	}
 	return activity
 }
+func (a Activity) String() string { return strings.TrimSpace(a.Label) }
 
-func (a AgentActivity) String() string { return strings.TrimSpace(a.Label) }
+func extractStringArg(args json.RawMessage, key string) string {
+	var values map[string]any
+	if json.Unmarshal(args, &values) != nil {
+		return ""
+	}
+	value, _ := values[key].(string)
+	return strings.TrimSpace(value)
+}

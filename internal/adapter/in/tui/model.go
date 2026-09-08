@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/agentui"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -38,21 +39,20 @@ type turnProgress struct {
 }
 
 type bubbleModel struct {
-	ctx              context.Context
-	service          *toolcall.Service
-	registry         tool.Registry
-	skills           *skill.Registry
-	runner           app.Conversation
-	bridge           *permissionBridge
-	agents           app.Agents
-	agentEvents      <-chan agent.Event
-	agentSnapshot    []agent.AgentStatus
-	agentActivity    map[string]AgentActivity
-	pendingAgentRuns map[string]pendingAgentRun
-	pendingAgentOps  map[string]string
-	turnProgress     turnProgress
-	activeTurnOwner  string
-	workDir          string
+	ctx             context.Context
+	service         *toolcall.Service
+	registry        tool.Registry
+	skills          *skill.Registry
+	runner          app.Conversation
+	bridge          *permissionBridge
+	agents          app.Agents
+	agentEvents     <-chan agent.Event
+	agentSnapshot   []agent.AgentStatus
+	agentActivity   map[string]AgentActivity
+	agentHistory    agentui.Tracker
+	turnProgress    turnProgress
+	activeTurnOwner string
+	workDir         string
 
 	viewport           viewport.Model
 	transcriptViewport viewport.Model
