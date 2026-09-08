@@ -153,7 +153,9 @@ Type `/` at the prompt to trigger autocomplete, or prefix with a colon (`:help`)
 | `/tools` | List registered tools and parameter schemas | `/tools` |
 | `/agents` | Inspect live and retained subagents | `/agents` |
 | `/subagents [on|off]` | Toggle new subagent delegation for the current runtime | `/subagents off` |
+| `/config set subagents <on|off>` | Persist the user-level default | `/config set subagents off` |
 | `/project set subagents <on|off>` | Persist the subagent capability for a trusted project | `/project set subagents off` |
+| `/agent [profile]` | Show or set the primary agent profile/posture | `/agent universal` |
 | `/skills` | List discovered Agent Skills | `/skills` |
 | `/skill <name>` | Inspect or activate a specific Agent Skill | `/skill pdf-processing` |
 | `/call <tool> <json>` | Directly execute a tool with JSON arguments | `/call read_file {"path":"README.md"}` |
@@ -255,6 +257,17 @@ Configure providers directly inside the TUI with `/provider` or via `~/.proton/c
 ---
 
 ## Agent Capabilities & Tools
+
+Proton uses Dota-style engineering attributes as a single agent vocabulary:
+
+| Attribute | TUI | Role |
+| :--- | :---: | :--- |
+| `universal` | `UNI` | Primary software engineering agent and orchestrator; owns integration and verification |
+| `strength` | `STR` | Substantial implementation, fixes, refactors, migrations, and concrete execution |
+| `agility` | `AGI` | Fast read-only exploration, tracing, and focused investigation |
+| `intelligence` | `INT` | Deep reasoning, architecture, difficult debugging, concurrency, performance, and high-risk engineering |
+
+`Universal` is the root identity even when subagents are disabled. `delegate_task` accepts only `strength`, `agility`, or `intelligence`; legacy CLI/config/session profile names (`pow`, `int`, `dex`, `worker`, `explorer`, `reviewer`) are normalized for compatibility but are not published in the new tool schema.
 
 Proton registers a suite of workspace-safe tools:
 
@@ -403,6 +416,7 @@ Execution safety notes:
 - Bash results preserve compatibility `output` while also exposing bounded `stdout`, `stderr`, per-stream byte counts/truncation flags, exit code, and stable failure codes. Cancellation terminates the command process tree through the sandbox launcher.
 - `subagents_enabled = false` disables new delegation by default. The model no longer sees `delegate_task`; existing children remain inspectable/waitable/cancelable until their retained lifecycle records expire.
 - `/subagents off` applies the same rule at runtime without canceling existing children; `/subagents on` re-enables delegation.
+- `/config set subagents off` persists the user-level default. A trusted project setting still has higher precedence; `/project set subagents ...` controls that project override.
 - `delegate_task` starts work asynchronously. The returned `agent_id` can be used with `wait_agent`, `get_agent`, or `cancel_agent` in the same Proton session.
 - `subagent_queue_timeout` bounds only admission to concurrency/workspace capacity; queueing never consumes the child runtime budget.
 - `subagent_wait_timeout` bounds one `wait_agent` call. Reaching it returns the current `queued`/`running` state and does **not** cancel the child.
