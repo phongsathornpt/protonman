@@ -133,9 +133,9 @@ func TestCallTitle(t *testing.T) {
 			want: "Delegate [researcher]: run analysis",
 		},
 		{
-			name: "wait_agent with id",
-			call: makeTestCall("wait_agent", map[string]any{"agent_id": "agent-101"}),
-			want: "Wait for agent agent-101",
+			name: "wait_agent",
+			call: makeTestCall("wait_agent", map[string]any{"timeout_seconds": 30}),
+			want: "Wait for agent activity",
 		},
 		{
 			name: "get_agent with id",
@@ -394,7 +394,7 @@ func TestDisplayName(t *testing.T) {
 		{"update_todo", "Update tasks"},
 		{"activate_skill", "Skill"},
 		{"delegate_task", "Delegate"},
-		{"wait_agent", "Wait agent"},
+		{"wait_agent", "Wait for agents"},
 		{"get_agent", "Agent status"},
 		{"list_agents", "Subagents"},
 		{"cancel_agent", "Cancel agent"},
@@ -420,4 +420,3 @@ func TestDisplayName(t *testing.T) {
 		})
 	}
 }
-

@@ -34,7 +34,7 @@ var builtinMetadata = map[string]callMetadata{
 	"update_todo":        {Metadata: Metadata{Name: "update_todo", Kind: KindTask, DisplayName: "Update tasks"}, title: titleUpdateTodo, target: targetUpdateTodo},
 	"activate_skill":     {Metadata: Metadata{Name: "activate_skill", Kind: KindRead, DisplayName: "Skill"}, title: titleActivateSkill, target: targetActivateSkill},
 	"delegate_task":      {Metadata: Metadata{Name: "delegate_task", Kind: KindAgent, DisplayName: "Delegate"}, title: titleDelegateTask, target: targetDelegateTask},
-	"wait_agent":         {Metadata: Metadata{Name: "wait_agent", Kind: KindAgent, DisplayName: "Wait agent"}, title: titleAgentID("Wait for agent", "Wait for agent"), target: targetAgentID},
+	"wait_agent":         {Metadata: Metadata{Name: "wait_agent", Kind: KindAgent, DisplayName: "Wait for agents"}, title: titleConstant("Wait for agent activity"), target: targetConstant("agent activity")},
 	"get_agent":          {Metadata: Metadata{Name: "get_agent", Kind: KindAgent, DisplayName: "Agent status"}, title: titleAgentID("Get agent status", "Get agent status"), target: targetAgentID},
 	"list_agents":        {Metadata: Metadata{Name: "list_agents", Kind: KindAgent, DisplayName: "Subagents"}, title: titleConstant("List subagents"), target: targetConstant("subagents")},
 	"cancel_agent":       {Metadata: Metadata{Name: "cancel_agent", Kind: KindAgent, DisplayName: "Cancel agent"}, title: titleAgentID("Cancel agent", "Cancel agent"), target: targetAgentID},
