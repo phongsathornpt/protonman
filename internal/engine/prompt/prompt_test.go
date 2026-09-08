@@ -82,7 +82,7 @@ func TestIsManagedRecognizesCurrentAndLegacyPrompts(t *testing.T) {
 
 func TestRenderTaskContractUsesStrictRevisionSemantics(t *testing.T) {
 	got := Render(Spec{Capabilities: ToolCapabilities{Tasks: true}})
-	for _, want := range []string{"meaningful multi-step work", "exact revision", "revision conflict", "never retry stale operations blindly", "Preserve tasks"} {
+	for _, want := range []string{"todo capability", "meaningful multi-step work", "todo action=get", "todo action=update", "exact revision", "revision conflict", "never retry stale operations blindly", "Preserve tasks"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("task contract missing %q:\n%s", want, got)
 		}
@@ -161,6 +161,15 @@ func TestToolDisciplineUsesCompactCapabilityActions(t *testing.T) {
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("tool discipline missing compact capability guidance %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderTaskContractAvoidsLegacyTodoToolNames(t *testing.T) {
+	got := Render(Spec{Capabilities: ToolCapabilities{Tasks: true}})
+	for _, legacy := range []string{"get_todo", "update_todo", "Task tools"} {
+		if strings.Contains(got, legacy) {
+			t.Fatalf("task contract exposes legacy todo wording %q:\n%s", legacy, got)
 		}
 	}
 }
