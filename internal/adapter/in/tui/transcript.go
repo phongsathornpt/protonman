@@ -333,14 +333,10 @@ func (m *bubbleModel) finalizeRunningTools(err error) {
 	case tool.ErrorCodeDeadlineExceeded:
 		body = "timed out"
 	}
-	for _, cell := range m.ensureHistoryState().Cells() {
-		running, ok := cell.(runningHistoryTool)
-		if !ok || !running.historyToolRunning() {
-			continue
-		}
-		m.applyToolResult(running.historyToolName(), tool.Result{
-			CallID:   running.historyToolID(),
-			ToolName: running.historyToolName(),
+	for _, running := range m.ensureHistoryState().RunningTools() {
+		m.applyToolResult(running.Name, tool.Result{
+			CallID:   running.CallID,
+			ToolName: running.Name,
 			Output:   body,
 			Failure:  failure,
 		}, nil)
@@ -420,27 +416,11 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 }
 
 func (m *bubbleModel) runningToolCell(callID string, name string) HistoryCell {
-	state := m.ensureHistoryState()
-	if runningToolMatches(state.Active(), callID, name) {
-		return state.Active()
-	}
-	committed := state.Committed()
-	for i := len(committed) - 1; i >= 0; i-- {
-		if runningToolMatches(committed[i], callID, name) {
-			return committed[i]
-		}
-	}
-	return nil
+	return m.ensureHistoryState().FindRunningTool(callID, name)
 }
 
 func (m *bubbleModel) lastRunningToolName() string {
-	cells := m.ensureHistoryState().Cells()
-	for i := len(cells) - 1; i >= 0; i-- {
-		if running, ok := cells[i].(runningHistoryTool); ok && running.historyToolRunning() {
-			return running.historyToolName()
-		}
-	}
-	return ""
+	return m.ensureHistoryState().LastRunningToolName()
 }
 
 func failureCode(result tool.Result) tool.ErrorCode {

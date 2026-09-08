@@ -1,4 +1,9 @@
-package tui
+package history
+
+const (
+	defaultHistoryWidth    = 80
+	defaultHistoryMaxLines = 1000
+)
 
 // HistoryCellKind identifies the semantic role of one transcript cell.
 type HistoryCellKind uint8

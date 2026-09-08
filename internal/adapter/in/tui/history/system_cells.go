@@ -1,10 +1,12 @@
-package tui
+package history
 
 import (
 	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/diagnostic"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/style"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
@@ -12,9 +14,9 @@ import (
 type SystemCell struct{ Text string }
 
 func (SystemCell) Kind() HistoryCellKind { return HistoryCellSystem }
-func (c SystemCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c SystemCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c SystemCell) RenderWidth(width int) []string {
-	return styledWrappedLines(c.Text, width, mutedStyle)
+	return styledWrappedLines(c.Text, width, tuistyle.MutedStyle)
 }
 func (c SystemCell) RawLines() []string { return rawTextLines(c.Text) }
 func (c SystemCell) LineCount() int     { return len(c.RawLines()) }
@@ -24,7 +26,7 @@ type ErrorCell struct {
 	Title       string
 	Text        string
 	Code        tool.ErrorCode
-	ErrorKind   OpenCodeErrorKind
+	ErrorKind   diagnostic.Kind
 	Badge       string
 	Suggestions []string
 	RawDetails  string
@@ -32,16 +34,16 @@ type ErrorCell struct {
 }
 
 func (ErrorCell) Kind() HistoryCellKind { return HistoryCellError }
-func (c ErrorCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c ErrorCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 
 func (c ErrorCell) RenderWidth(width int) []string {
 	if width <= 0 {
-		width = defaultBubbleWidth
+		width = defaultHistoryWidth
 	}
 
 	// If this has structured error attributes (ErrorKind, Badge, or Suggestions),
 	// render it as an OpenCode-style bordered error card.
-	if c.Badge != "" || len(c.Suggestions) > 0 || (c.ErrorKind != "" && c.ErrorKind != ErrorKindGeneric) {
+	if c.Badge != "" || len(c.Suggestions) > 0 || (c.ErrorKind != "" && c.ErrorKind != diagnostic.KindGeneric) {
 		return c.renderCard(width)
 	}
 
@@ -50,11 +52,11 @@ func (c ErrorCell) RenderWidth(width int) []string {
 	if c.Title != "" {
 		text = c.Title + ": " + text
 	}
-	return styledWrappedLines(glyphToolError+text, width, errorStyle)
+	return styledWrappedLines(tuistyle.GlyphToolError+text, width, tuistyle.ErrorStyle)
 }
 
 func (c ErrorCell) renderCard(width int) []string {
-	cardWidth := maxInt(24, width-2)
+	cardWidth := max(24, width-2)
 	innerWidth := cardWidth - 4 // Account for border (2) and padding (2)
 
 	badge := c.Badge
@@ -68,26 +70,26 @@ func (c ErrorCell) renderCard(width int) []string {
 
 	header := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(accentError).
-		Render(fmt.Sprintf("%s[%s] %s", glyphToolError, badge, title))
+		Foreground(tuistyle.AccentError).
+		Render(fmt.Sprintf("%s[%s] %s", tuistyle.GlyphToolError, badge, title))
 
 	bodyLines := safeWrappedLines(c.Text, innerWidth)
 	cardContent := []string{header}
 	if len(bodyLines) > 0 {
 		cardContent = append(cardContent, "")
 		for _, bLine := range bodyLines {
-			cardContent = append(cardContent, bodyStyle.Render(bLine))
+			cardContent = append(cardContent, tuistyle.BodyStyle.Render(bLine))
 		}
 	}
 
 	if len(c.Suggestions) > 0 {
 		cardContent = append(cardContent, "")
-		suggestHeader := lipgloss.NewStyle().Bold(true).Foreground(warningColor).Render("💡 Suggestions:")
+		suggestHeader := lipgloss.NewStyle().Bold(true).Foreground(tuistyle.WarningColor).Render("💡 Suggestions:")
 		cardContent = append(cardContent, suggestHeader)
 		for _, s := range c.Suggestions {
 			wrappedS := safeWrappedLines("• "+s, innerWidth-2)
 			for _, w := range wrappedS {
-				cardContent = append(cardContent, mutedStyle.Render("  "+w))
+				cardContent = append(cardContent, tuistyle.MutedStyle.Render("  "+w))
 			}
 		}
 	}
@@ -95,7 +97,7 @@ func (c ErrorCell) renderCard(width int) []string {
 	joined := strings.Join(cardContent, "\n")
 	cardStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(accentError).
+		BorderForeground(tuistyle.AccentError).
 		Padding(0, 1).
 		Width(cardWidth)
 
@@ -114,7 +116,7 @@ func (c ErrorCell) RawLines() []string {
 	}
 
 	var lines []string
-	if c.Badge != "" || len(c.Suggestions) > 0 || (c.ErrorKind != "" && c.ErrorKind != ErrorKindGeneric) {
+	if c.Badge != "" || len(c.Suggestions) > 0 || (c.ErrorKind != "" && c.ErrorKind != diagnostic.KindGeneric) {
 		lines = append(lines, fmt.Sprintf("[%s] %s: %s", badge, title, c.Text))
 		for _, s := range c.Suggestions {
 			lines = append(lines, "  • "+s)
@@ -138,13 +140,13 @@ type ThinkingCell struct {
 }
 
 func (ThinkingCell) Kind() HistoryCellKind { return HistoryCellAssistant }
-func (c ThinkingCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c ThinkingCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c ThinkingCell) RenderWidth(_ int) []string {
 	indicator := "…"
 	if c.Spinner != "" {
 		indicator = c.Spinner
 	}
-	return []string{assistantStyle.Render(indicator + " Thinking…")}
+	return []string{tuistyle.AssistantStyle.Render(indicator + " Thinking…")}
 }
 func (ThinkingCell) RawLines() []string { return []string{"Thinking…"} }
 func (ThinkingCell) LineCount() int     { return 1 }

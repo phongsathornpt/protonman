@@ -64,6 +64,19 @@ func WrapLines(text string, width int) []string {
 	return lines
 }
 
+// SafeWrappedLines sanitizes and wraps multiline untrusted terminal text.
+func SafeWrappedLines(text string, width int) []string {
+	text = strings.TrimRight(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	if text == "" {
+		return nil
+	}
+	lines := make([]string, 0, strings.Count(text, "\n")+1)
+	for _, line := range strings.Split(text, "\n") {
+		lines = append(lines, WrapLines(Sanitize(line), width)...)
+	}
+	return lines
+}
+
 func isSingleLinePrintableASCII(text string) bool {
 	for index := 0; index < len(text); index++ {
 		value := text[index]

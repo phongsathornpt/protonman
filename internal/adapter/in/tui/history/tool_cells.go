@@ -1,4 +1,4 @@
-package tui
+package history
 
 import (
 	"fmt"
@@ -8,6 +8,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/execview"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/style"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/toolview"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
@@ -23,13 +25,13 @@ type AgentToolCell struct {
 }
 
 func (AgentToolCell) Kind() HistoryCellKind { return HistoryCellTool }
-func (c AgentToolCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c AgentToolCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c AgentToolCell) RenderWidth(width int) []string {
 	label := c.presentationLabel(true)
 	if c.Running {
-		return wrapStyledLines(toolStyle.Render(glyphAgent)+mutedStyle.Render(sanitizeBubbleText(label)), maxInt(1, width))
+		return wrapStyledLines(tuistyle.ToolStyle.Render(tuistyle.GlyphAgent)+tuistyle.MutedStyle.Render(sanitizeBubbleText(label)), max(1, width))
 	}
-	return wrapStyledLines(successStyle.Render(glyphToolSuccess)+mutedStyle.Render(sanitizeBubbleText(label)), maxInt(1, width))
+	return wrapStyledLines(tuistyle.SuccessStyle.Render(tuistyle.GlyphToolSuccess)+tuistyle.MutedStyle.Render(sanitizeBubbleText(label)), max(1, width))
 }
 func (c AgentToolCell) presentationLabel(includeSpinner bool) string {
 	label := c.Summary
@@ -85,85 +87,85 @@ type ToolCell struct {
 }
 
 func (ToolCell) Kind() HistoryCellKind { return HistoryCellTool }
-func (c ToolCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c ToolCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c ToolCell) RenderWidth(width int) []string {
 	var headerLine string
 
 	if c.Running {
-		glyph := toolKindGlyph(c.ToolKind, c.Name)
+		glyph := toolview.KindGlyph(c.ToolKind, c.Name)
 		indicator := " …"
 		if c.Spinner != "" {
 			indicator = " " + c.Spinner
 		}
 		targetStr := ""
 		if strings.TrimSpace(c.Target) != "" {
-			targetStr = " " + formatPathSegmentsStyled(c.Target)
+			targetStr = " " + toolview.FormatPath(c.Target)
 		}
-		headerLine = toolStyle.Render(glyph) + mutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + toolStyle.Render(indicator)
+		headerLine = tuistyle.ToolStyle.Render(glyph) + tuistyle.MutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + tuistyle.ToolStyle.Render(indicator)
 	} else if c.Denied {
 		targetStr := ""
 		if strings.TrimSpace(c.Target) != "" {
-			targetStr = " " + formatPathSegmentsStyled(c.Target)
+			targetStr = " " + toolview.FormatPath(c.Target)
 		}
-		headerLine = warningStyle.Render(glyphToolDenied) + mutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + warningStyle.Render(glyphSep+"denied")
+		headerLine = tuistyle.WarningStyle.Render(tuistyle.GlyphToolDenied) + tuistyle.MutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + tuistyle.WarningStyle.Render(tuistyle.GlyphSep+"denied")
 	} else if c.FailureCode != "" {
 		targetStr := ""
 		if strings.TrimSpace(c.Target) != "" {
-			targetStr = " " + formatPathSegmentsStyled(c.Target)
+			targetStr = " " + toolview.FormatPath(c.Target)
 		}
-		headerLine = errorStyle.Render(glyphToolError) + mutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + errorStyle.Render(glyphSep+string(c.FailureCode))
+		headerLine = tuistyle.ErrorStyle.Render(tuistyle.GlyphToolError) + tuistyle.MutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + tuistyle.ErrorStyle.Render(tuistyle.GlyphSep+string(c.FailureCode))
 	} else if c.Name == "activate_skill" {
 		target := c.Target
 		if target == "" {
-			if skillName := extractSkillContentName(c.Body); skillName != "" {
+			if skillName := toolview.ExtractSkillContentName(c.Body); skillName != "" {
 				target = fmt.Sprintf("%q", skillName)
 			}
 		}
 		if target != "" {
-			headerLine = successStyle.Render(glyphToolSuccess) + mutedStyle.Render("Activated skill ") + toolTargetStyle.Render(target)
+			headerLine = tuistyle.SuccessStyle.Render(tuistyle.GlyphToolSuccess) + tuistyle.MutedStyle.Render("Activated skill ") + tuistyle.ToolTargetStyle.Render(target)
 		} else {
-			headerLine = successStyle.Render(glyphToolSuccess) + mutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name)))
+			headerLine = tuistyle.SuccessStyle.Render(tuistyle.GlyphToolSuccess) + tuistyle.MutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name)))
 		}
 	} else {
 		summary := c.Summary
 		if summary == "" && c.Body != "" {
-			summary = summarizeToolOutput(c.Name, c.ToolKind, c.Target, c.Body, c.ExitCode, c.Truncated)
+			summary = toolview.SummarizeOutput(c.Name, c.ToolKind, c.Target, c.Body, c.ExitCode, c.Truncated)
 		}
 		targetStr := ""
 		if strings.TrimSpace(c.Target) != "" {
-			targetStr = " " + formatPathSegmentsStyled(c.Target)
+			targetStr = " " + toolview.FormatPath(c.Target)
 		}
 		summaryStr := ""
 		if summary != "" {
-			summaryStr = toolSummaryStyle.Render(glyphSep + summary)
+			summaryStr = tuistyle.ToolSummaryStyle.Render(tuistyle.GlyphSep + summary)
 		}
-		headerLine = successStyle.Render(glyphToolSuccess) + mutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + summaryStr
+		headerLine = tuistyle.SuccessStyle.Render(tuistyle.GlyphToolSuccess) + tuistyle.MutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + summaryStr
 	}
 
 	out := make([]string, 0, 1)
-	for _, line := range wrapStyledLines(headerLine, maxInt(1, width)) {
+	for _, line := range wrapStyledLines(headerLine, max(1, width)) {
 		out = append(out, line)
 	}
 
 	// Read file excerpt preview
 	if !c.Running && c.Name == "read_file" && !c.Denied && c.FailureCode == "" && c.Body != "" {
-		if excerpt := extractReadFileExcerpt(c.Body); excerpt != "" {
-			out = append(out, toolExcerptStyle.Render("  ↳ "+excerpt))
+		if excerpt := toolview.ExtractReadFileExcerpt(c.Body); excerpt != "" {
+			out = append(out, tuistyle.ToolExcerptStyle.Render("  ↳ "+excerpt))
 		}
 	}
 
-	if !c.Running && !shouldSuppressBody(c.ToolKind, c.Name) {
+	if !c.Running && !toolview.ShouldSuppressBody(c.ToolKind, c.Name) {
 		if c.ToolKind == tool.KindGrep || c.Name == "grep" {
-			for _, line := range formatGrepToolView(c.bodyLines(), c.Target, width) {
+			for _, line := range toolview.FormatGrepView(c.bodyLines(), c.Target, width) {
 				out = append(out, "  "+line)
 			}
 		} else {
 			bodyLines := c.bodyLines()
 			if len(bodyLines) > 0 {
-				folded := formatOutputFold(bodyLines, 3)
+				folded := toolview.FormatOutputFold(bodyLines, 3)
 				for _, line := range folded {
-					for _, wrapped := range wrapStyledLines(line, maxInt(1, width-2)) {
-						out = append(out, bodyStyle.Render("  "+wrapped))
+					for _, wrapped := range wrapStyledLines(line, max(1, width-2)) {
+						out = append(out, tuistyle.BodyStyle.Render("  "+wrapped))
 					}
 				}
 			}
@@ -198,7 +200,7 @@ func formatSkillToolBody(body string, exitCode *int, truncated bool, denied bool
 	if failureCode != "" {
 		return []string{"failure: " + string(failureCode)}
 	}
-	if skillName := extractSkillContentName(body); skillName != "" {
+	if skillName := toolview.ExtractSkillContentName(body); skillName != "" {
 		return []string{fmt.Sprintf("[x] Activated skill %q", skillName)}
 	}
 	return resultBodyLines(body, exitCode, truncated, denied, failureCode)
@@ -225,7 +227,7 @@ type ExecCell struct {
 }
 
 func (ExecCell) Kind() HistoryCellKind { return HistoryCellTool }
-func (c ExecCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c ExecCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c ExecCell) RenderWidth(width int) []string {
 	command := strings.TrimSpace(c.Command)
 	if command == "" {
@@ -237,14 +239,14 @@ func (c ExecCell) RenderWidth(width int) []string {
 		presentation.Summary = presentation.SuccessSummary
 	}
 
-	width = maxInt(1, width)
+	width = max(1, width)
 	var out []string
 	if c.Running {
 		indicator := " …"
 		if c.Spinner != "" {
 			indicator = " " + c.Spinner
 		}
-		header := commandStyle.Render(sanitizeBubbleText(presentation.Title + indicator))
+		header := tuistyle.CommandStyle.Render(sanitizeBubbleText(presentation.Title + indicator))
 		out = append(out, wrapStyledLines(header, width)...)
 	} else {
 		title := sanitizeBubbleText(presentation.Title)
@@ -254,13 +256,13 @@ func (c ExecCell) RenderWidth(width int) []string {
 		var glyph string
 		switch {
 		case c.Denied:
-			glyph = warningStyle.Render(glyphToolDenied)
+			glyph = tuistyle.WarningStyle.Render(tuistyle.GlyphToolDenied)
 		case failed:
-			glyph = errorStyle.Render(glyphToolError)
+			glyph = tuistyle.ErrorStyle.Render(tuistyle.GlyphToolError)
 		default:
-			glyph = successStyle.Render(glyphToolSuccess)
+			glyph = tuistyle.SuccessStyle.Render(tuistyle.GlyphToolSuccess)
 		}
-		header := glyph + commandStyle.Render(title)
+		header := glyph + tuistyle.CommandStyle.Render(title)
 		summary := presentation.Summary
 		if c.Denied {
 			summary = "denied"
@@ -285,24 +287,24 @@ func (c ExecCell) RenderWidth(width int) []string {
 	}
 
 	if !c.Running {
-		contentWidth := maxInt(20, width-4)
+		contentWidth := max(20, width-4)
 		for _, line := range c.renderOutputLines() {
-			style := bodyStyle
+			style := tuistyle.BodyStyle
 			if strings.TrimSpace(line) == "stderr:" {
-				style = warningStyle
+				style = tuistyle.WarningStyle
 			}
 			clean := line
 			isFoldIndicator := strings.HasPrefix(clean, "… (")
 			if !isFoldIndicator && ansi.StringWidth(clean) > contentWidth {
-				clean = truncateWithEllipsis(clean, contentWidth)
+				clean = tool.TruncateRunes(clean, contentWidth)
 			}
-			if styled, isDiff := styleDiffLine(clean); isDiff {
-				for _, wrapped := range safeWrappedLines(styled, maxInt(1, width-2)) {
+			if styled, isDiff := toolview.StyleDiffLine(clean); isDiff {
+				for _, wrapped := range safeWrappedLines(styled, max(1, width-2)) {
 					out = append(out, "  "+wrapped)
 				}
 				continue
 			}
-			for _, wrapped := range safeWrappedLines(clean, maxInt(1, width-2)) {
+			for _, wrapped := range safeWrappedLines(clean, max(1, width-2)) {
 				out = append(out, style.Render("  "+wrapped))
 			}
 		}
@@ -316,9 +318,9 @@ func alignExecDuration(header, duration string, width int) string {
 	}
 	gap := width - ansi.StringWidth(header) - ansi.StringWidth(duration)
 	if gap < 2 {
-		return header + toolSummaryStyle.Render(glyphSep+duration)
+		return header + tuistyle.ToolSummaryStyle.Render(tuistyle.GlyphSep+duration)
 	}
-	return header + strings.Repeat(" ", gap) + toolSummaryStyle.Render(duration)
+	return header + strings.Repeat(" ", gap) + tuistyle.ToolSummaryStyle.Render(duration)
 }
 
 func renderExecMetaLine(summary string, duration time.Duration, width int) string {
@@ -328,18 +330,18 @@ func renderExecMetaLine(summary string, duration time.Duration, width int) strin
 		durationText = execview.FormatDuration(duration)
 	}
 	if durationText == "" {
-		return toolSummaryStyle.Render("  " + text)
+		return tuistyle.ToolSummaryStyle.Render("  " + text)
 	}
-	maxSummaryWidth := maxInt(1, width-2-ansi.StringWidth(durationText)-2)
+	maxSummaryWidth := max(1, width-2-ansi.StringWidth(durationText)-2)
 	if ansi.StringWidth(text) > maxSummaryWidth {
-		text = truncateWithEllipsis(text, maxSummaryWidth)
+		text = tool.TruncateRunes(text, maxSummaryWidth)
 	}
 	left := "  " + text
 	gap := width - ansi.StringWidth(left) - ansi.StringWidth(durationText)
 	if gap < 2 {
 		gap = 2
 	}
-	return toolSummaryStyle.Render(left) + strings.Repeat(" ", gap) + toolSummaryStyle.Render(durationText)
+	return tuistyle.ToolSummaryStyle.Render(left) + strings.Repeat(" ", gap) + tuistyle.ToolSummaryStyle.Render(durationText)
 }
 
 func (c ExecCell) presentation(command string) execview.Presentation {
@@ -371,21 +373,21 @@ func (c ExecCell) renderOutputLines() []string {
 	}
 	structured := c.Stdout != "" || c.Stderr != "" || c.StdoutTruncated || c.StderrTruncated
 	if !structured {
-		return formatOutputFold(resultBodyLines(c.Body, nil, c.Truncated, false, ""), 3)
+		return toolview.FormatOutputFold(resultBodyLines(c.Body, nil, c.Truncated, false, ""), 3)
 	}
 	out := make([]string, 0, 8)
 	stdoutLines := rawTextLines(strings.TrimRight(c.Stdout, "\n"))
 	if c.StdoutTruncated {
 		stdoutLines = append(stdoutLines, "stdout truncated")
 	}
-	out = append(out, formatOutputFold(stdoutLines, 3)...)
+	out = append(out, toolview.FormatOutputFold(stdoutLines, 3)...)
 	if c.Stderr != "" || c.StderrTruncated {
 		out = append(out, "stderr:")
 		stderrLines := rawTextLines(strings.TrimRight(c.Stderr, "\n"))
 		if c.StderrTruncated {
 			stderrLines = append(stderrLines, "stderr truncated")
 		}
-		out = append(out, formatOutputFold(stderrLines, 3)...)
+		out = append(out, toolview.FormatOutputFold(stderrLines, 3)...)
 	}
 	if c.Truncated && !c.StdoutTruncated && !c.StderrTruncated {
 		out = append(out, "output truncated")
@@ -459,7 +461,7 @@ type PatchCell struct {
 }
 
 func (PatchCell) Kind() HistoryCellKind { return HistoryCellTool }
-func (c PatchCell) Render() []string    { return c.RenderWidth(defaultBubbleWidth) }
+func (c PatchCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c PatchCell) RenderWidth(width int) []string {
 	title := tool.DisplayName(c.Name)
 	if strings.TrimSpace(c.Summary) != "" {
@@ -472,20 +474,20 @@ func (c PatchCell) RenderWidth(width int) []string {
 		if c.Spinner != "" {
 			indicator = " " + c.Spinner
 		}
-		header = glyphEdit + title + indicator
-		headerStyle = planStyle
+		header = tuistyle.GlyphEdit + title + indicator
+		headerStyle = tuistyle.PlanStyle
 	} else if c.Denied {
-		header = glyphToolDenied + title + glyphSep + "denied"
-		headerStyle = warningStyle
+		header = tuistyle.GlyphToolDenied + title + tuistyle.GlyphSep + "denied"
+		headerStyle = tuistyle.WarningStyle
 	} else if c.FailureCode != "" {
-		header = glyphToolError + title + glyphSep + string(c.FailureCode)
-		headerStyle = errorStyle
+		header = tuistyle.GlyphToolError + title + tuistyle.GlyphSep + string(c.FailureCode)
+		headerStyle = tuistyle.ErrorStyle
 	} else {
-		header = glyphToolSuccess + title
-		headerStyle = successStyle
+		header = tuistyle.GlyphToolSuccess + title
+		headerStyle = tuistyle.SuccessStyle
 	}
 	out := make([]string, 0, 1)
-	for _, line := range safeWrappedLines(header, maxInt(1, width)) {
+	for _, line := range safeWrappedLines(header, max(1, width)) {
 		out = append(out, headerStyle.Render(line))
 	}
 	visiblePaths := c.Paths
@@ -495,27 +497,27 @@ func (c PatchCell) RenderWidth(width int) []string {
 		visiblePaths = visiblePaths[:3]
 	}
 	for _, path := range visiblePaths {
-		styledPath := formatPathSegmentsStyled(path)
-		for _, wrapped := range wrapStyledLines(styledPath, maxInt(1, width-2)) {
+		styledPath := toolview.FormatPath(path)
+		for _, wrapped := range wrapStyledLines(styledPath, max(1, width-2)) {
 			out = append(out, "  "+wrapped)
 		}
 	}
 	if hiddenPaths > 0 {
-		out = append(out, toolFoldStyle.Render(fmt.Sprintf("  … (+%d more files · ctrl+t for full list)", hiddenPaths)))
+		out = append(out, tuistyle.ToolFoldStyle.Render(fmt.Sprintf("  … (+%d more files · ctrl+t for full list)", hiddenPaths)))
 	}
 	if !c.Running && c.Body != "" && (c.Denied || c.FailureCode != "" || len(c.Paths) == 0) {
 		bodyLines := resultBodyLines(c.Body, nil, c.Truncated, c.Denied, c.FailureCode)
 		if len(bodyLines) > 0 {
-			folded := formatOutputFold(bodyLines, 3)
+			folded := toolview.FormatOutputFold(bodyLines, 3)
 			for _, line := range folded {
-				if styled, isDiff := styleDiffLine(line); isDiff {
-					for _, wrapped := range safeWrappedLines(styled, maxInt(1, width-2)) {
+				if styled, isDiff := toolview.StyleDiffLine(line); isDiff {
+					for _, wrapped := range safeWrappedLines(styled, max(1, width-2)) {
 						out = append(out, "  "+wrapped)
 					}
 					continue
 				}
-				for _, wrapped := range safeWrappedLines(line, maxInt(1, width-2)) {
-					out = append(out, bodyStyle.Render("  "+wrapped))
+				for _, wrapped := range safeWrappedLines(line, max(1, width-2)) {
+					out = append(out, tuistyle.BodyStyle.Render("  "+wrapped))
 				}
 			}
 		}
@@ -527,7 +529,7 @@ func (c PatchCell) RawLines() []string {
 	if strings.TrimSpace(c.Summary) != "" {
 		title += " · " + c.Summary
 	}
-	out := []string{glyphEdit + sanitizeBubbleText(title)}
+	out := []string{tuistyle.GlyphEdit + sanitizeBubbleText(title)}
 	for _, path := range c.Paths {
 		out = append(out, sanitizeBubbleText(path))
 	}

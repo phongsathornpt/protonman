@@ -1,9 +1,10 @@
-package tui
+package history
 
 import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/textview"
 )
 
 func rawTextLines(text string) []string {
@@ -57,3 +58,6 @@ func styledWrappedLines(text string, width int, style lipgloss.Style) []string {
 	}
 	return lines
 }
+
+func sanitizeBubbleText(text string) string     { return textview.Sanitize(text) }
+func wrapLines(text string, width int) []string { return textview.WrapLines(text, width) }

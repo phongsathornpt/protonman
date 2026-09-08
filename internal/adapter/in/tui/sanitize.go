@@ -7,9 +7,10 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/textview"
 )
 
-func wrapWords(text string, width int) string   { return textview.WrapWords(text, width) }
-func wrapLines(text string, width int) []string { return textview.WrapLines(text, width) }
-func sanitizeBubbleText(text string) string     { return textview.Sanitize(text) }
+func wrapWords(text string, width int) string          { return textview.WrapWords(text, width) }
+func wrapLines(text string, width int) []string        { return textview.WrapLines(text, width) }
+func sanitizeBubbleText(text string) string            { return textview.Sanitize(text) }
+func safeWrappedLines(text string, width int) []string { return textview.SafeWrappedLines(text, width) }
 
 func overlayCenter(background, overlay string, width, height int) string {
 	if width <= 0 || height <= 0 {

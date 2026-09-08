@@ -90,6 +90,29 @@ func TestTUIDoesNotDependOnProjectDirectly(t *testing.T) {
 	})
 }
 
+func TestTUIHistoryDependsOnlyOnPresentationAndDomainLeaves(t *testing.T) {
+	packages := listPackages(t)
+	pkgPath := modulePath + "/internal/adapter/in/tui/history"
+	pkg, ok := packages[pkgPath]
+	if !ok {
+		t.Fatalf("package %s not found", pkgPath)
+	}
+	allowed := map[string]bool{
+		modulePath + "/internal/adapter/in/tui/diagnostic": true,
+		modulePath + "/internal/adapter/in/tui/execview":   true,
+		modulePath + "/internal/adapter/in/tui/style":      true,
+		modulePath + "/internal/adapter/in/tui/textview":   true,
+		modulePath + "/internal/adapter/in/tui/toolview":   true,
+		modulePath + "/internal/core/tool":                 true,
+		modulePath + "/internal/feature/agent":             true,
+	}
+	for _, imported := range pkg.Imports {
+		if strings.HasPrefix(imported, modulePath+"/internal/") && !allowed[imported] {
+			t.Errorf("TUI history imports forbidden application package %s", imported)
+		}
+	}
+}
+
 func TestTUIToolViewDoesNotDependOnPresentationRoot(t *testing.T) {
 	packages := listPackages(t)
 	pkgPath := modulePath + "/internal/adapter/in/tui/toolview"
