@@ -78,7 +78,7 @@ func (h findFilesHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	if err := normalizeFindFilesInput(&input); err != nil {
 		return tool.Result{}, err
 	}
-	resolvedRoot, err := h.workspace.ResolveRead(ctx, input.Path)
+	resolvedRoot, err := h.workspace.ResolveExistingRead(ctx, input.Path)
 	if err != nil {
 		return tool.Result{}, err
 	}

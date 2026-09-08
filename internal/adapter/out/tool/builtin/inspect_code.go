@@ -145,7 +145,7 @@ func (h inspectCodeHandler) Execute(ctx context.Context, call tool.Call) (tool.R
 	if err != nil {
 		return tool.Result{}, err
 	}
-	root, err := h.workspace.ResolveRead(ctx, input.Path)
+	root, err := h.workspace.ResolveExistingRead(ctx, input.Path)
 	if err != nil {
 		return tool.Result{}, err
 	}

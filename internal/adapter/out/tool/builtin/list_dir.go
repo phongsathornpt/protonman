@@ -107,7 +107,7 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 		input.Limit = maxDirectoryEntries
 	}
 
-	resolvedPath, err := h.workspace.ResolveRead(ctx, targetPath)
+	resolvedPath, err := h.workspace.ResolveExistingRead(ctx, targetPath)
 	if err != nil {
 		return tool.Result{}, err
 	}
