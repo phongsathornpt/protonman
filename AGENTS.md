@@ -48,7 +48,7 @@ internal/adapter/out/           driven infrastructure adapters
     mcp/                        external MCP discovery and handlers
     skill/                      skill activation tool
     todo/                       session-bound task tools
-    web/                        web_fetch adapter
+    web/                        web fetch adapter
 internal/app/                   application use-case boundaries
 internal/base/                  leaf utilities with zero internal dependencies
 internal/core/                  pure domain contracts and policies
@@ -302,7 +302,7 @@ Built-in workspace tools include:
 - `git_status`
 - `checkpoint_restore`
 
-Feature tools add `web_fetch`, task tools, skill activation, agent lifecycle
+Feature tools add `web`, task tools, skill activation, agent lifecycle
 operations, and dynamically discovered MCP tools.
 
 Canonical argument names for common tools are intentionally stable:
@@ -312,7 +312,7 @@ Canonical argument names for common tools are intentionally stable:
 - `write_file` -> `file_path`
 - `search_replace` -> `file_path`
 - `grep` -> `pattern`
-- `web_fetch` -> `url`
+- `web` (`action=fetch`) -> `url`
 
 ### Tool-call service
 
@@ -368,7 +368,7 @@ Security-sensitive invariants:
 - File authorization and opening must not introduce TOCTOU/symlink escapes.
 - Mutations create bounded pre-edit checkpoints where required.
 - Shell execution is analyzed conservatively for effect and affected paths.
-- `web_fetch` validates resolved destinations and redirects against SSRF rules.
+- `web` fetch validates resolved destinations and redirects against SSRF rules.
 - Output and scan limits must be enforced while work occurs, not only afterward.
 - Cancellation must terminate process trees/resources where the platform supports it.
 - External schemas/descriptions/results are untrusted data.

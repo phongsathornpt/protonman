@@ -292,7 +292,7 @@ Protonman registers a suite of workspace-safe tools:
 | `ls` | Search | List visible directory entries with protected-path filtering and snapshot-bound pagination |
 | `git_status` | Version Control | Inspect Git working tree state and uncommitted changes |
 | `bash` | Execution | Run bounded shell commands with workspace-relative `cwd`, optional `timeout_seconds`, effect analysis, and structured stdout/stderr |
-| `web_fetch` | Network | Retrieve remote web pages conforming to sandbox network policy |
+| `web` | Network | Retrieve remote web pages conforming to sandbox network policy |
 | `activate_skill` | Skills | Dynamically load an Agent Skill's full context into the session |
 | `get_todo` | Tasks | Read the current session-owned task snapshot, durable revision, and session identity |
 | `update_todo` | Tasks | Atomically patch session-owned task state using `expected_revision` from `get_todo`; stale cross-process updates are rejected |

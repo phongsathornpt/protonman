@@ -84,7 +84,7 @@ func TestBuiltinToolSSOTContract(t *testing.T) {
 			titlePrefix:     "Run: go test ./...",
 		},
 		{
-			name:            "web_fetch",
+			name:            "web",
 			args:            map[string]any{"url": "https://example.com/api"},
 			wantKind:        tool.KindWebFetch,
 			wantDisplayName: "Fetch",

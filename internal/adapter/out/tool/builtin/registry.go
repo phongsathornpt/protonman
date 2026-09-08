@@ -67,7 +67,7 @@ func WithCheckpointStore(store checkpoint.Store) RegistryOption {
 	}
 }
 
-// WithSandbox confines bash and web_fetch under the resolved profile.
+// WithSandbox confines bash and web under the resolved profile.
 // The launcher must be non-nil; use an Off-profile OSLauncher for explicit
 // opt-out rather than omitting this option.
 func WithSandbox(launcher sandbox.Launcher) RegistryOption {

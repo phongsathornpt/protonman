@@ -45,7 +45,8 @@ type contextDialer interface {
 }
 
 type webFetchInput struct {
-	URL string `json:"url"`
+	Action string `json:"action"`
+	URL    string `json:"url"`
 }
 
 // NewWebFetch returns a permission-gated URL fetch adapter.
@@ -83,7 +84,7 @@ func newWebFetchTransport(policy sandbox.NetworkPolicy, resolver ipResolver, dia
 	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
 		host, port, err := net.SplitHostPort(address)
 		if err != nil {
-			return nil, fmt.Errorf("split web_fetch dial address %q: %w", address, err)
+			return nil, fmt.Errorf("split web dial address %q: %w", address, err)
 		}
 		ips := []net.IP(nil)
 		if literal := net.ParseIP(host); literal != nil {
@@ -91,7 +92,7 @@ func newWebFetchTransport(policy sandbox.NetworkPolicy, resolver ipResolver, dia
 		} else {
 			ips, err = resolver.LookupIP(ctx, "ip", host)
 			if err != nil {
-				return nil, fmt.Errorf("resolve web_fetch host %q: %w", host, err)
+				return nil, fmt.Errorf("resolve web host %q: %w", host, err)
 			}
 		}
 		if err := policy.ValidateResolvedAddresses(ips); err != nil {
@@ -105,28 +106,32 @@ func newWebFetchTransport(policy sandbox.NetworkPolicy, resolver ipResolver, dia
 			}
 			lastErr = dialErr
 		}
-		return nil, fmt.Errorf("dial web_fetch destination %q: %w", address, lastErr)
+		return nil, fmt.Errorf("dial web destination %q: %w", address, lastErr)
 	}
 	return transport
 }
 
 func (webFetchHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "web_fetch",
-		Description:         "Fetch a URL subject to the sandbox network policy.",
-		Kind:                tool.KindForName("web_fetch"),
+		Name:                "web",
+		Description:         "Web capability. Use action=fetch to retrieve an HTTP or HTTPS URL subject to the sandbox network policy.",
+		Kind:                tool.KindForName("web"),
 		Mutability:          tool.MutabilityReadOnly,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyExternalRead},
 		PermissionDetailKey: "url",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
+				"action": map[string]any{
+					"type": "string", "enum": []string{"fetch"},
+					"description": "Web operation to perform",
+				},
 				"url": map[string]any{
 					"type":        "string",
 					"description": "HTTP or HTTPS URL to fetch",
 				},
 			},
-			"required":             []string{"url"},
+			"required":             []string{"action", "url"},
 			"additionalProperties": false,
 		},
 	}
@@ -135,41 +140,48 @@ func (webFetchHandler) Definition() tool.Definition {
 func (h webFetchHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	var input webFetchInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode web_fetch arguments", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode web arguments", err)
+	}
+	input.Action = strings.ToLower(strings.TrimSpace(input.Action))
+	if input.Action == "" {
+		input.Action = "fetch"
+	}
+	if input.Action != "fetch" {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "web action must be fetch")
 	}
 	input.URL = strings.TrimSpace(input.URL)
 	if input.URL == "" {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "web_fetch url is required")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "web url is required")
 	}
 
 	parsedURL, err := url.Parse(input.URL)
 	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Hostname() == "" {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "web_fetch url must be a valid http or https URL")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "web url must be a valid http or https URL")
 	}
 
 	if err := h.policy.AllowURL(input.URL); err != nil {
 		return tool.Result{}, err
 	}
 	if err := ctx.Err(); err != nil {
-		return tool.Result{}, fmt.Errorf("before web_fetch: %w", err)
+		return tool.Result{}, fmt.Errorf("before web: %w", err)
 	}
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, input.URL, nil)
 	if err != nil {
-		return tool.Result{}, fmt.Errorf("build web_fetch request: %w", err)
+		return tool.Result{}, fmt.Errorf("build web request: %w", err)
 	}
 	request.Header.Set("User-Agent", buildinfo.WebUserAgent())
 	request.Header.Set("Accept", "text/html,application/xhtml+xml,application/json,text/plain;q=0.9,*/*;q=0.8")
 
 	response, err := h.client.Do(request)
 	if err != nil {
-		return tool.Result{}, fmt.Errorf("web_fetch: %w", err)
+		return tool.Result{}, fmt.Errorf("web: %w", err)
 	}
 	defer response.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxFetchBytes+1))
 	if err != nil {
-		return tool.Result{}, fmt.Errorf("read web_fetch body: %w", err)
+		return tool.Result{}, fmt.Errorf("read web body: %w", err)
 	}
 
 	contentType := response.Header.Get("Content-Type")
@@ -202,9 +214,9 @@ func (h webFetchHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	if response.StatusCode >= 400 {
 		statusText := http.StatusText(response.StatusCode)
 		if statusText != "" {
-			return result, fmt.Errorf("web_fetch status %d: %s", response.StatusCode, statusText)
+			return result, fmt.Errorf("web status %d: %s", response.StatusCode, statusText)
 		}
-		return result, fmt.Errorf("web_fetch status %d", response.StatusCode)
+		return result, fmt.Errorf("web status %d", response.StatusCode)
 	}
 	return result, nil
 }

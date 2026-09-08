@@ -226,7 +226,7 @@ func TestWebFetchStatusErrorText(t *testing.T) {
 	result, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-404", "web_fetch", map[string]any{
 		"url": server.URL,
 	}))
-	if err == nil || !strings.Contains(err.Error(), "web_fetch status 404: Not Found") {
+	if err == nil || !strings.Contains(err.Error(), "web status 404: Not Found") {
 		t.Fatalf("expected status 404: Not Found error, got: %v", err)
 	}
 	if !strings.Contains(result.Output, "resource missing") {

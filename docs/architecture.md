@@ -87,7 +87,7 @@ Pure business rules and domain definitions. No `domain-ish` parent folder is cre
   - `mcp/`: External Model Context Protocol server discovery and tool registration.
   - `skill/`: Agent skill activation (`activate_skill`).
   - `todo/`: Session-bound work tracking tools (`get_todo`, `update_todo`) using durable optimistic concurrency.
-  - `web/`: Network web fetching with sandbox isolation (`web_fetch`).
+  - `web/`: Network web fetching with sandbox isolation (`web`).
 - `internal/model/`: Provider integration and SDK translation:
   - `provider_preset.go`: Endpoint and protocol presets.
   - `provider_discovery.go`: Dynamic model discovery over provider APIs.
@@ -142,7 +142,7 @@ Architecture boundaries are permanently enforced by automated tests in `test/arc
 
 Tool limits are enforced at the resource boundary, not after expensive work has already completed:
 
-- `web_fetch` resolves and validates every destination IP, then dials only an approved address. Redirects repeat the same destination check; proxy environment variables cannot bypass it.
+- `web` with `action=fetch` resolves and validates every destination IP, then dials only an approved address. Redirects repeat the same destination check; proxy environment variables cannot bypass it.
 - model streams consumed by `proton-sdk.CollectStep` are closed exactly once on success, cancellation, validation failure, provider failure, or incomplete EOF.
 - subagent terminal retention applies its TTL and hard-count limits independently. Disabling one bound never disables the other.
 - session permission grants are reusable only for normal-risk read-only calls and are fingerprinted by normalized arguments plus their effective risk/effect/scope. Mutating or uncertain calls remain one-shot.

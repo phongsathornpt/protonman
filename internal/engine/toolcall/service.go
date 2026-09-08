@@ -323,7 +323,8 @@ func (s *Service) call(ctx context.Context, call tool.Call, recoveryDepth int) (
 		s.observeCallResult(ctx, telemetry, result, wrappedErr)
 		return result, wrappedErr
 	}
-	handler, ok := s.registry.Lookup(call.Name)
+	originalName := call.Name
+	handler, ok := s.registry.Lookup(originalName)
 	if !ok {
 		unknownErr := fmt.Errorf("%w: %s", ErrUnknownTool, call.Name)
 		result := tool.Result{
@@ -335,6 +336,11 @@ func (s *Service) call(ctx context.Context, call tool.Call, recoveryDepth int) (
 		return result, unknownErr
 	}
 	definition := handler.Definition()
+	if definition.Name != originalName {
+		call.Name = definition.Name
+		call.Arguments = tool.NormalizeLegacyArguments(originalName, call.Arguments)
+		telemetry.call.Name = call.Name
+	}
 	call.Arguments = tool.NormalizeArguments(definition, call.Arguments)
 	telemetry.call.Arguments = append(json.RawMessage(nil), call.Arguments...)
 	telemetry.toolKind = definition.Kind
