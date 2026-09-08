@@ -11,13 +11,12 @@ import (
 )
 
 const (
-	RootDirName       = ".protonman"
-	LegacyRootDirName = ".proton"
-	ConfigFileName    = "config.toml"
-	SessionsDir       = "sessions"
-	CheckpointsDir    = "checkpoints"
-	SkillsDir         = "skills"
-	LogsDir           = "logs"
+	RootDirName    = ".protonman"
+	ConfigFileName = "config.toml"
+	SessionsDir    = "sessions"
+	CheckpointsDir = "checkpoints"
+	SkillsDir      = "skills"
+	LogsDir        = "logs"
 )
 
 // Dirs is the resolved Protonman filesystem layout for one user home.
@@ -31,22 +30,15 @@ type Dirs struct {
 	Logs        string
 }
 
-// Resolve returns Protonman directories using explicitHome, PROTONMAN_HOME,
-// legacy PROTON_HOME, or os.UserHomeDir. Existing .protonman data wins over
-// .proton; when only legacy data exists it remains in place.
+// Resolve returns Protonman directories using explicitHome, PROTONMAN_HOME, or os.UserHomeDir.
 func Resolve(explicitHome string) (Dirs, error) {
 	home := strings.TrimSpace(explicitHome)
-	preferLegacy := false
 	if home == "" {
 		if configured := envconfig.DirectValue(envconfig.Home); configured != "" {
 			home = configured
 		} else if legacy := envconfig.DirectValue(envconfig.LegacyHome); legacy != "" {
 			home = legacy
-			preferLegacy = true
 		}
-	} else if envconfig.DirectValue(envconfig.Home) == "" {
-		legacy := envconfig.DirectValue(envconfig.LegacyHome)
-		preferLegacy = legacy != "" && samePath(home, legacy)
 	}
 	if home == "" {
 		resolved, err := os.UserHomeDir()
@@ -55,23 +47,8 @@ func Resolve(explicitHome string) (Dirs, error) {
 		}
 		home = resolved
 	}
-	root := resolvedUserRoot(home, preferLegacy)
+	root := filepath.Join(home, RootDirName)
 	return dirsForRoot(home, root), nil
-}
-
-func resolvedUserRoot(home string, preferLegacy bool) string {
-	canonical := filepath.Join(home, RootDirName)
-	legacy := filepath.Join(home, LegacyRootDirName)
-	if pathEntryExists(canonical) {
-		return canonical
-	}
-	if pathEntryExists(legacy) {
-		return legacy
-	}
-	if preferLegacy {
-		return legacy
-	}
-	return canonical
 }
 
 func dirsForRoot(home, root string) Dirs {
@@ -147,25 +124,11 @@ func UserMCPLogsDisplay() string {
 	return displayPath(filepath.Join(dirs.Logs, "mcp")) + string(filepath.Separator)
 }
 
-// ProjectRoot returns the canonical project-local Protonman directory for new data.
+// ProjectRoot returns the project-local Protonman directory.
 func ProjectRoot(workDir string) string { return filepath.Join(workDir, RootDirName) }
 
-// LegacyProjectRoot returns the legacy project-local Proton directory.
-func LegacyProjectRoot(workDir string) string { return filepath.Join(workDir, LegacyRootDirName) }
-
-// ResolvedProjectRoot returns .protonman when present, otherwise legacy .proton
-// when present, and defaults to .protonman for new project data.
-func ResolvedProjectRoot(workDir string) string {
-	canonical := ProjectRoot(workDir)
-	if pathEntryExists(canonical) {
-		return canonical
-	}
-	legacy := LegacyProjectRoot(workDir)
-	if pathEntryExists(legacy) {
-		return legacy
-	}
-	return canonical
-}
+// ResolvedProjectRoot returns the project-local Protonman directory.
+func ResolvedProjectRoot(workDir string) string { return ProjectRoot(workDir) }
 
 // ProjectConfig returns the canonical project-local config path for new data.
 func ProjectConfig(workDir string) string { return filepath.Join(ProjectRoot(workDir), ConfigFileName) }

@@ -8,7 +8,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/base/envconfig"
 )
 
-func TestResolveExplicitHomeDefaultsToProtonman(t *testing.T) {
+func TestResolveExplicitHomeUsesProtonmanRoot(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv(envconfig.Home, filepath.Join(t.TempDir(), "ignored"))
 	t.Setenv(envconfig.LegacyHome, filepath.Join(t.TempDir(), "legacy-ignored"))
@@ -28,10 +28,10 @@ func TestResolveExplicitHomeDefaultsToProtonman(t *testing.T) {
 	}
 }
 
-func TestResolveReusesLegacyDataWhenCanonicalMissing(t *testing.T) {
+func TestResolveIgnoresLegacyProtonDirectory(t *testing.T) {
 	home := t.TempDir()
-	legacyRoot := filepath.Join(home, LegacyRootDirName)
-	if err := os.Mkdir(legacyRoot, 0o700); err != nil {
+	legacy := filepath.Join(home, ".proton")
+	if err := os.Mkdir(legacy, 0o700); err != nil {
 		t.Fatal(err)
 	}
 
@@ -39,84 +39,42 @@ func TestResolveReusesLegacyDataWhenCanonicalMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
-	if dirs.Root != legacyRoot {
-		t.Fatalf("Root = %q, want legacy %q", dirs.Root, legacyRoot)
+	if got, want := dirs.Root, filepath.Join(home, RootDirName); got != want {
+		t.Fatalf("Root = %q, want %q", got, want)
 	}
 }
 
-func TestResolveCanonicalDataWinsOverLegacy(t *testing.T) {
+func TestResolveEnvironmentHomeUsesProtonmanRoot(t *testing.T) {
 	home := t.TempDir()
-	canonical := filepath.Join(home, RootDirName)
-	legacy := filepath.Join(home, LegacyRootDirName)
-	for _, root := range []string{legacy, canonical} {
-		if err := os.Mkdir(root, 0o700); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	dirs, err := Resolve(home)
-	if err != nil {
-		t.Fatalf("Resolve() error = %v", err)
-	}
-	if dirs.Root != canonical {
-		t.Fatalf("Root = %q, want canonical %q", dirs.Root, canonical)
-	}
-}
-
-func TestResolveEnvironmentPrecedenceAndLegacyCreation(t *testing.T) {
-	canonicalHome := t.TempDir()
-	legacyHome := t.TempDir()
-	t.Setenv(envconfig.Home, canonicalHome)
-	t.Setenv(envconfig.LegacyHome, legacyHome)
+	t.Setenv(envconfig.Home, home)
+	t.Setenv(envconfig.LegacyHome, filepath.Join(t.TempDir(), "legacy"))
 
 	dirs, err := Resolve("")
 	if err != nil {
-		t.Fatalf("Resolve() canonical env error = %v", err)
+		t.Fatalf("Resolve() error = %v", err)
 	}
-	if dirs.Home != canonicalHome || dirs.Root != filepath.Join(canonicalHome, RootDirName) {
-		t.Fatalf("canonical env dirs = %+v", dirs)
-	}
-
-	t.Setenv(envconfig.Home, "")
-	dirs, err = Resolve("")
-	if err != nil {
-		t.Fatalf("Resolve() legacy env error = %v", err)
-	}
-	if dirs.Home != legacyHome || dirs.Root != filepath.Join(legacyHome, LegacyRootDirName) {
-		t.Fatalf("legacy env dirs = %+v", dirs)
+	if dirs.Home != home || dirs.Root != filepath.Join(home, RootDirName) {
+		t.Fatalf("dirs = %+v", dirs)
 	}
 }
 
-func TestProjectPathsPreferCanonicalThenLegacy(t *testing.T) {
+func TestProjectPathsUseOnlyProtonmanNamespace(t *testing.T) {
 	work := filepath.Join(t.TempDir(), "workspace")
 	if err := os.Mkdir(work, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	canonical := filepath.Join(work, RootDirName)
-	legacy := filepath.Join(work, LegacyRootDirName)
+	root := filepath.Join(work, RootDirName)
 
-	if got := ProjectRoot(work); got != canonical {
-		t.Fatalf("ProjectRoot() = %q, want %q", got, canonical)
+	if got := ProjectRoot(work); got != root {
+		t.Fatalf("ProjectRoot() = %q, want %q", got, root)
 	}
-	if got := ResolvedProjectRoot(work); got != canonical {
-		t.Fatalf("ResolvedProjectRoot() with no data = %q, want canonical", got)
+	if got := ResolvedProjectRoot(work); got != root {
+		t.Fatalf("ResolvedProjectRoot() = %q, want %q", got, root)
 	}
-	if err := os.Mkdir(legacy, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if got := ResolvedProjectRoot(work); got != legacy {
-		t.Fatalf("ResolvedProjectRoot() legacy = %q, want %q", got, legacy)
-	}
-	if err := os.Mkdir(canonical, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if got := ResolvedProjectRoot(work); got != canonical {
-		t.Fatalf("ResolvedProjectRoot() canonical = %q, want %q", got, canonical)
-	}
-	if got := ResolvedProjectConfig(work); got != filepath.Join(canonical, ConfigFileName) {
+	if got := ResolvedProjectConfig(work); got != filepath.Join(root, ConfigFileName) {
 		t.Fatalf("ResolvedProjectConfig() = %q", got)
 	}
-	if got := ResolvedProjectSkills(work); got != filepath.Join(canonical, SkillsDir) {
+	if got := ResolvedProjectSkills(work); got != filepath.Join(root, SkillsDir) {
 		t.Fatalf("ResolvedProjectSkills() = %q", got)
 	}
 }
