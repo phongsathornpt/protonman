@@ -1,12 +1,12 @@
 package tui
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/pane"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 )
@@ -137,123 +137,37 @@ func (*providerSelectPaneView) ID() string             { return providerSelectVi
 func (*providerSelectPaneView) ReplacesComposer() bool { return true }
 
 func (v *providerSelectPaneView) Render(m *bubbleModel) string {
-	compact := m.height <= 20
-	visibleRows := pickerVisibleRows(m.height, maxProviderListRows)
-	if len(v.items) == 0 {
-		rows := []string{
-			brandStyle.Render("✓ Model Providers"),
-			"",
-			mutedStyle.Render("No providers or presets available."),
-			"",
-			mutedStyle.Render("a add provider · esc close"),
-		}
-		return renderProviderModal(m, accentAssistant, rows)
+	items := make([]pane.ProviderItem, 0, len(v.items))
+	for _, item := range v.items {
+		items = append(items, pane.ProviderItem{
+			DisplayName: item.displayName,
+			BaseURL:     item.baseURL,
+			Description: item.description,
+			Configured:  item.isConfigured,
+			Active:      item.isActive,
+			Free:        item.isFree,
+			Custom:      item.kind == providerItemCustom,
+		})
 	}
-
-	index, offset, visibleEnd := normalizedPickerWindow(v.index, v.offset, len(v.items), visibleRows)
-	if v.deleteConfirm {
-		item := v.items[index]
-		if item.isConfigured {
-			rows := []string{
-				warningStyle.Render("Remove Provider?"),
-				"",
-				fmt.Sprintf("  %s", item.displayName),
-				mutedStyle.Render("  " + item.baseURL),
-			}
-			if item.isActive {
-				rows = append(rows, warningStyle.Render("  This is the active provider."))
-				rows = append(rows, mutedStyle.Render("  Protonman will select another saved provider."))
-			}
-			rows = append(rows, "", mutedStyle.Render("enter remove permanently · esc cancel"))
-			return renderProviderModal(m, warningColor, rows)
-		}
-	}
-
-	visible := v.items[offset:visibleEnd]
-
-	numConfigured := 0
-	numAvailable := 0
-	for _, it := range v.items {
-		if it.isConfigured {
-			numConfigured++
-		} else {
-			numAvailable++
-		}
-	}
-
-	activeName := "none"
-	if m != nil && m.activeProvider != "" {
+	activeName := ""
+	if m != nil {
 		activeName = m.activeProvider
 	}
-
-	title := fmt.Sprintf("Providers · active: %s · %d/%d", activeName, v.index+1, len(v.items))
-	title = truncateWithEllipsis(title, providerModalContentWidth(m))
-
-	rows := make([]string, 0, len(visible)*2+6)
-	rows = append(rows, brandStyle.Render(title), "")
-
-	if offset > 0 {
-		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ↑ %d more", v.offset)))
+	rows, warning := pane.ProviderRows(pane.ProviderSnapshot{
+		Width:         m.width,
+		Height:        m.height,
+		ContentWidth:  providerModalContentWidth(m),
+		Index:         v.index,
+		Offset:        v.offset,
+		ActiveName:    activeName,
+		DeleteConfirm: v.deleteConfirm,
+		Items:         items,
+	})
+	border := accentAssistant
+	if warning {
+		border = warningColor
 	}
-
-	contentWidth := maxInt(8, providerModalContentWidth(m)-2)
-	showDetails := layoutModeForHeight(m.height) == layoutNormal
-	for i, item := range visible {
-		idx := offset + i
-		focus := "  "
-		if idx == index {
-			focus = "❯ "
-		}
-		active := " "
-		if item.isActive {
-			active = "✓"
-		}
-		status := "setup"
-		switch {
-		case item.isActive:
-			status = "active"
-		case item.isConfigured:
-			status = "saved"
-		case item.kind == providerItemCustom:
-			status = "custom"
-		}
-		line := fmt.Sprintf("%s%s %s · %s", focus, active, item.displayName, status)
-		if item.isFree {
-			line += " · free"
-		}
-		line = truncateWithEllipsis(line, contentWidth)
-		if idx == v.index {
-			rows = append(rows, brandStyle.Render(line))
-		} else if item.isActive {
-			rows = append(rows, successStyle.Render(line))
-		} else {
-			rows = append(rows, mutedStyle.Render(line))
-		}
-
-		if showDetails {
-			detail := item.baseURL
-			if item.kind == providerItemCustom || detail == "" {
-				detail = item.description
-			}
-			if detail != "" {
-				rows = append(rows, mutedStyle.Render("    "+truncateWithEllipsis(detail, maxInt(4, contentWidth-4))))
-			}
-		}
-	}
-
-	if visibleEnd < len(v.items) {
-		rows = append(rows, mutedStyle.Render(fmt.Sprintf("  ↓ %d more", len(v.items)-visibleEnd)))
-	}
-
-	footer := "↑/↓ move · enter activate/setup · e edit · m models · d remove · esc"
-	if compact {
-		footer = "↑/↓ move · enter activate/setup · e edit · esc"
-		if m.width <= 30 {
-			footer = "↑/↓ · enter · esc"
-		}
-	}
-	rows = append(rows, "", mutedStyle.Render(footer))
-	return renderProviderModal(m, accentAssistant, rows)
+	return renderProviderModal(m, border, rows)
 }
 
 func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
