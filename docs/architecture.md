@@ -63,10 +63,12 @@ those boundaries to persist configuration, discover provider models, access sess
 filesystem stores, or control concrete coordinator/turn implementations directly.
 
 The TUI root model is an event orchestrator. Bubble Tea `Update` owns state transitions and
-layout reconciliation; `View` is pure rendering. Layout, pane, and conversation-viewport
-state are grouped by ownership. Pane renderers consume immutable presentation snapshots
-instead of the root runtime model, and transcript cells use one width-aware render contract
-so viewport width remains the rendering source of truth.
+layout reconciliation; `View` is pure rendering. Runtime state is grouped into agent, turn,
+model-selection, session, project, conversation, TODO, presentation, and execution-policy
+ownership blocks rather than accumulated as unrelated flat fields. Pane renderers consume
+immutable presentation snapshots, and pane interactions return typed actions for the root
+to apply instead of mutating it directly. Transcript cells use one width-aware render
+contract so viewport width remains the rendering source of truth.
 
 ## 3. Application Layer (`internal/app/`)
 

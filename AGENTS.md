@@ -579,7 +579,11 @@ change pane stacks, or mutate runtime/domain state. Runtime events request layou
 and the root Bubble Tea `Update` boundary reconciles layout once per event. Conversation
 viewport state explicitly distinguishes following the live tail from reading older content,
 so streaming updates preserve semantic scroll anchors. Pane rendering receives
-`paneRenderContext` rather than the root model; new panes should preserve that boundary.
+`paneRenderContext` rather than the root model; pane key handlers return typed actions for
+the root to apply instead of mutating the root model directly. Root runtime state is grouped
+by ownership: agent, turn, model selection, session, project, conversation, TODO,
+presentation, and execution policy. Preserve these boundaries instead of adding new flat
+fields to `bubbleModel` without a clear orchestration-level reason.
 
 When changing TUI behavior, test at the smallest useful layer:
 
