@@ -7,7 +7,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
-	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
@@ -142,21 +141,9 @@ func (m *bubbleModel) updateProviderActiveSelected(message providerActiveSelecte
 		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to switch provider: %v", message.err)))
 	} else {
 		m.activeProvider = message.providerName
-		models := m.modelCatalogs.Models(message.providerName)
-		if len(models) > 0 {
-			found := false
-			for _, mod := range models {
-				if strings.EqualFold(mod.ID, m.activeModel) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				targetModel := models[0].ID
-				m.activeModel = targetModel
-				_ = (app.Providers{}).SelectModel(message.providerName, targetModel)
-				m.appendLine(mutedStyle.Render(fmt.Sprintf("  Reconciled active model to %s", targetModel)))
-			}
+		if message.reconciledModel != "" {
+			m.activeModel = message.reconciledModel
+			m.appendLine(mutedStyle.Render(fmt.Sprintf("  Reconciled active model to %s", message.reconciledModel)))
 		}
 		if m.reasoningEffort != sdk.ReasoningDefault {
 			profile := m.activeResolvedModelProfile()

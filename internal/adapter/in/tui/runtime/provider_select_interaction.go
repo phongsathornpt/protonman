@@ -135,10 +135,10 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 	}
 }
 
-func saveActiveProviderCmd(operationID asyncOperationID, providerName string) tea.Cmd {
+func saveActiveProviderCmd(operationID asyncOperationID, providerName, reconciledModel string) tea.Cmd {
 	return func() tea.Msg {
-		err := (app.Providers{}).Select(providerName)
-		return providerActiveSelectedMsg{operationID: operationID, providerName: providerName, err: err}
+		err := (app.Providers{}).Activate(providerName, reconciledModel)
+		return providerActiveSelectedMsg{operationID: operationID, providerName: providerName, reconciledModel: reconciledModel, err: err}
 	}
 }
 

@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"strings"
 	"sync/atomic"
 
 	tea "charm.land/bubbletea/v2"
@@ -23,7 +24,21 @@ func (m *bubbleModel) beginProviderSave(request providerSaveRequest) tea.Cmd {
 func (m *bubbleModel) beginProviderSelect(providerName string) tea.Cmd {
 	id := nextAsyncOperationID()
 	m.activeProviderSelect = id
-	return saveActiveProviderCmd(id, providerName)
+	reconciledModel := m.reconciledModelForProvider(providerName)
+	return saveActiveProviderCmd(id, providerName, reconciledModel)
+}
+
+func (m *bubbleModel) reconciledModelForProvider(providerName string) string {
+	models := m.modelCatalogs.Models(providerName)
+	if len(models) == 0 {
+		return ""
+	}
+	for _, candidate := range models {
+		if strings.EqualFold(candidate.ID, m.activeModel) {
+			return ""
+		}
+	}
+	return models[0].ID
 }
 
 func (m *bubbleModel) beginProviderDelete(providerName string) tea.Cmd {

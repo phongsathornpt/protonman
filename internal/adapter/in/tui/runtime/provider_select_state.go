@@ -14,9 +14,10 @@ const providerSelectViewID = "provider_select"
 const maxProviderListRows = 5
 
 type providerActiveSelectedMsg struct {
-	operationID  asyncOperationID
-	providerName string
-	err          error
+	operationID     asyncOperationID
+	providerName    string
+	reconciledModel string
+	err             error
 }
 
 type providerDeletedMsg struct {

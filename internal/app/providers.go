@@ -2,8 +2,8 @@ package app
 
 import (
 	"context"
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 )
 
 // ProviderSaveRequest describes a persisted user provider update.
@@ -30,11 +30,16 @@ func (Providers) Save(request ProviderSaveRequest) error {
 }
 
 func (Providers) Select(providerName string) error {
+	return (Providers{}).Activate(providerName, "")
+}
+
+// Activate atomically persists the active provider and an optional reconciled model.
+func (Providers) Activate(providerName, modelID string) error {
 	homeDir, err := userHomeDir()
 	if err != nil {
 		return err
 	}
-	return config.SaveUserDefaultProvider(homeDir, providerName)
+	return config.SaveUserDefaultModel(homeDir, providerName, modelID)
 }
 
 func (Providers) SelectModel(providerName, modelID string) error {

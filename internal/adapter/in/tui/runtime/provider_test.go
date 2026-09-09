@@ -921,7 +921,7 @@ func TestProviderSwitchReconcilesIncompatibleModel(t *testing.T) {
 		{ID: "opencode-secondary-model"},
 	})
 
-	updated, _ := bModel.Update(providerActiveSelectedMsg{providerName: "opencode"})
+	updated, _ := bModel.Update(providerActiveSelectedMsg{providerName: "opencode", reconciledModel: "opencode-default-model"})
 	bModel = updated.(*bubbleModel)
 
 	if bModel.activeProvider != "opencode" {
@@ -1095,5 +1095,24 @@ func TestStaleProviderSelectionDoesNotCloseReopenedPicker(t *testing.T) {
 	}
 	if !m.bottom.has(providerSelectViewID) {
 		t.Fatal("stale provider selection closed reopened picker")
+	}
+}
+
+func TestProviderActivationFailureDoesNotMutateRuntimeState(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.activeProvider = "protonman"
+	m.activeModel = "pm-model"
+	id := nextAsyncOperationID()
+	m.activeProviderSelect = id
+
+	updated, _ := m.Update(providerActiveSelectedMsg{
+		operationID:     id,
+		providerName:    "opencode",
+		reconciledModel: "opencode-model",
+		err:             errors.New("persist failed"),
+	})
+	m = updated.(*bubbleModel)
+	if m.activeProvider != "protonman" || m.activeModel != "pm-model" {
+		t.Fatalf("failed activation mutated runtime: provider=%q model=%q", m.activeProvider, m.activeModel)
 	}
 }
