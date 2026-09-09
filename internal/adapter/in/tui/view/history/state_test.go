@@ -92,3 +92,25 @@ func TestSpinnerFrameUpdatesCommittedCacheInPlace(t *testing.T) {
 		t.Fatalf("cached transcript did not reflect spinner update: %q", content)
 	}
 }
+
+func TestDiscardToolCallClearsRemovedBackingSlot(t *testing.T) {
+	state := NewHistoryState(100)
+	state.committed = make([]HistoryCell, 0, 4)
+	state.committed = append(state.committed,
+		&SystemCell{Text: "before"},
+		&ToolCell{CallID: "call-1", Name: "read", Running: true},
+		&SystemCell{Text: "after"},
+	)
+	state.committedLines = 3
+
+	if !state.DiscardToolCall("call-1", "read") {
+		t.Fatal("expected running tool to be discarded")
+	}
+	if len(state.committed) != 2 {
+		t.Fatalf("committed len=%d, want 2", len(state.committed))
+	}
+	backing := state.committed[:3]
+	if backing[2] != nil {
+		t.Fatalf("removed backing slot still retains %#v", backing[2])
+	}
+}

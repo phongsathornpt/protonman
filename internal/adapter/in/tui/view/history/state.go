@@ -442,7 +442,10 @@ func (s *HistoryState) DiscardToolCall(callID string, name string) bool {
 			continue
 		}
 		s.committedLines -= historyCellLineCount(s.committed[i], s.renderWidth)
-		s.committed = append(s.committed[:i], s.committed[i+1:]...)
+		copy(s.committed[i:], s.committed[i+1:])
+		last := len(s.committed) - 1
+		s.committed[last] = nil
+		s.committed = s.committed[:last]
 		s.touchCommitted()
 		s.cacheValid = false
 		s.altRenderValid = false
@@ -844,6 +847,7 @@ func (s *HistoryState) trim() {
 	}
 	for s.committedLines+activeCount > s.maxLines && len(s.committed) > 1 {
 		popped := s.committed[0]
+		s.committed[0] = nil
 		s.committed = s.committed[1:]
 		s.committedLines -= historyCellLineCount(popped, s.renderWidth)
 		s.cacheValid = false
