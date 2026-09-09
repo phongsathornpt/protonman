@@ -130,3 +130,21 @@ func TestReadFileStructuredJSONProfilesNullableAndMixedFields(t *testing.T) {
 		t.Fatalf("value profile = %+v", profile)
 	}
 }
+
+func TestNumericAccumulatorBoundsMedianSamples(t *testing.T) {
+	var acc numericAccumulator
+	const values = 100000
+	for i := 0; i < values; i++ {
+		acc.add(float64(i))
+	}
+	if len(acc.values) != maxStructuredMedianSamples {
+		t.Fatalf("median sample size = %d, want %d", len(acc.values), maxStructuredMedianSamples)
+	}
+	summary := acc.summary()
+	if summary.Count != values {
+		t.Fatalf("stats count = %d, want %d", summary.Count, values)
+	}
+	if summary.Median < 40000 || summary.Median > 60000 {
+		t.Fatalf("sampled median = %f, want representative midpoint", summary.Median)
+	}
+}

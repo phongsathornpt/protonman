@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	maxStructuredPreviewRows = 5
-	maxStructuredFields      = 64
+	maxStructuredPreviewRows   = 5
+	maxStructuredFields        = 64
+	maxStructuredMedianSamples = 4096
 )
 
 type structuredMetadata struct {
@@ -44,11 +45,27 @@ type structuredAnalysis struct {
 type numericAccumulator struct {
 	stats  baseanalysis.RunningStats
 	values []float64
+	seen   uint64
+	rng    uint64
 }
 
 func (a *numericAccumulator) add(value float64) {
 	a.stats.Add(value)
-	a.values = append(a.values, value)
+	a.seen++
+	if len(a.values) < maxStructuredMedianSamples {
+		a.values = append(a.values, value)
+		return
+	}
+	if a.rng == 0 {
+		a.rng = 0x9e3779b97f4a7c15
+	}
+	a.rng ^= a.rng << 13
+	a.rng ^= a.rng >> 7
+	a.rng ^= a.rng << 17
+	index := a.rng % a.seen
+	if index < uint64(len(a.values)) {
+		a.values[index] = value
+	}
 }
 
 func (a numericAccumulator) summary() numericSummary {
