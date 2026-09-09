@@ -1,0 +1,169 @@
+package runtime
+
+import (
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+)
+
+func (m *bubbleModel) matchesGlobalShortcut(message tea.KeyPressMsg) bool {
+	return key.Matches(message, m.keys.Clear) || key.Matches(message, m.keys.ToggleTodo) || key.Matches(message, m.keys.Transcript) || key.Matches(message, m.keys.CycleMode) || key.Matches(message, m.keys.ToggleSkills) || key.Matches(message, m.keys.ToggleModel)
+}
+
+func (m *bubbleModel) handleInterruptKey() (tea.Model, tea.Cmd) {
+	if m.showTranscript {
+		m.closeTranscriptOverlay()
+		m.relayout()
+		return m, nil
+	}
+	if top := m.bottom.top(); top != nil && top.ID() != permissionViewID && top.ID() != slashViewID {
+		if provider, ok := top.(*providerPaneView); ok {
+			provider.cancelFetch()
+		}
+		m.bottom.remove(top.ID())
+		m.relayout()
+		return m, nil
+	}
+	if m.busy && m.turnCancel != nil {
+		m.cancelActiveTurn()
+		m.queue = nil
+		return m, nil
+	}
+	prompt := m.bottom.prompt()
+	if prompt.Value() != "" || m.bottom.bashMode() {
+		m.resetPrompt()
+		m.setBashMode(false)
+		m.syncSlashView()
+		m.relayout()
+		return m, nil
+	}
+	return m, tea.Quit
+}
+
+func (m *bubbleModel) updateKey(message tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if handled, command := m.handleModalKey(message); handled {
+		return m, m.withSpinner(command)
+	}
+	if handled, command := m.handleGlobalKey(message); handled {
+		return m, m.withSpinner(command)
+	}
+	return m, m.handlePromptKey(message)
+}
+
+func (m *bubbleModel) handleModalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
+	top := m.bottom.top()
+	if top == nil {
+		return false, nil
+	}
+	handled, command := top.HandleKey(m, message)
+	if handled {
+		m.relayout()
+	}
+	return handled, command
+}
+
+func (m *bubbleModel) handleGlobalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
+	switch {
+	case key.Matches(message, m.keys.CycleMode):
+		m.cycleMode()
+		return true, nil
+	case key.Matches(message, m.keys.Transcript):
+		m.showTranscript = true
+		m.refreshTranscriptViewport(true)
+		return true, nil
+	case key.Matches(message, m.keys.ToggleSkills):
+		if m.bottom.has(skillsViewID) {
+			m.bottom.remove(skillsViewID)
+			m.relayout()
+			return true, nil
+		}
+		if m.skills != nil && len(m.skills.List()) > 0 {
+			m.bottom.push(&skillsPaneView{})
+			m.relayout()
+			return true, nil
+		}
+		m.executeCommand("/skills")
+		return true, nil
+	case key.Matches(message, m.keys.ToggleModel):
+		if m.bottom.has(modelSelectViewID) {
+			m.bottom.remove(modelSelectViewID)
+			m.relayout()
+			return true, nil
+		}
+		return true, m.openModelSelectPane()
+	case key.Matches(message, m.keys.Clear):
+		m.resetTranscript()
+		m.refreshViewport()
+		return true, nil
+	case key.Matches(message, m.keys.ToggleTodo):
+		m.toggleTodoPane()
+		return true, nil
+	case key.Matches(message, m.keys.PageUp):
+		m.hydrateViewportForScroll()
+		before := m.viewport.YOffset()
+		m.viewport.PageUp()
+		if m.viewport.YOffset() != before {
+			m.markViewportViewDirty()
+		}
+		m.followTail = m.viewport.AtBottom()
+		return true, nil
+	case key.Matches(message, m.keys.PageDown):
+		m.hydrateViewportForScroll()
+		before := m.viewport.YOffset()
+		m.viewport.PageDown()
+		if m.viewport.YOffset() != before {
+			m.markViewportViewDirty()
+		}
+		m.followTail = m.viewport.AtBottom()
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
+	if message.String() == "tab" && m.busy {
+		return m.withSpinner(m.submit())
+	}
+	prompt := m.bottom.prompt()
+	if message.String() == "esc" {
+		if m.bottom.bashMode() {
+			m.setBashMode(false)
+		}
+		m.resetPrompt()
+		m.syncSlashView()
+		m.relayout()
+		return nil
+	}
+	if message.String() == "enter" {
+		return m.withSpinner(m.submit())
+	}
+	if !m.bottom.bashMode() && prompt.Value() == "" && message.String() == "!" {
+		m.setBashMode(true)
+		return nil
+	}
+	if m.bottom.bashMode() && prompt.Value() == "" {
+		switch message.String() {
+		case "backspace", "ctrl+h", "delete":
+			m.setBashMode(false)
+			return nil
+		}
+	}
+	if message.String() == "up" {
+		lineInfo := prompt.LineInfo()
+		if prompt.LineCount() == 1 || (prompt.Line() == 0 && lineInfo.RowOffset == 0 && lineInfo.ColumnOffset == 0) {
+			m.historyPrevious()
+			m.syncSlashView()
+			return nil
+		}
+	}
+	if message.String() == "down" && m.bottom.historyNavigating() {
+		m.historyNext()
+		m.syncSlashView()
+		return nil
+	}
+	updated, command := prompt.Update(message)
+	*prompt = updated
+	m.syncSlashView()
+	m.relayout()
+	return command
+}
