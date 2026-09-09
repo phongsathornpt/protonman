@@ -274,7 +274,7 @@ func TestExecCellFolding(t *testing.T) {
 	if !strings.Contains(rendered, "Npm test") || strings.Contains(rendered, "exit 0") {
 		t.Fatalf("expected semantic command title without redundant exit 0, got: %s", rendered)
 	}
-	if !strings.Contains(rendered, "lines hidden") || !strings.Contains(rendered, "ctrl+t") {
+	if !strings.Contains(rendered, "more") || !strings.Contains(rendered, "ctrl+t") {
 		t.Fatalf("expected fold indicator in long exec output, got: %s", rendered)
 	}
 	raw := strings.Join(cell.RawLines(), "\n")

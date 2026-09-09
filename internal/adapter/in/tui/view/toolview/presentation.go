@@ -150,11 +150,7 @@ func FormatOutputFold(lines []string, maxVisible int) []string {
 	hidden := len(lines) - maxVisible
 	out := make([]string, 0, maxVisible+1)
 	out = append(out, lines[:headCount]...)
-	lineWord := "lines"
-	if hidden == 1 {
-		lineWord = "line"
-	}
-	foldMsg := tuistyle.ToolFoldStyle.Render(fmt.Sprintf("… (%d %s hidden · ctrl+t for full output)", hidden, lineWord))
+	foldMsg := tuistyle.ToolFoldStyle.Render(fmt.Sprintf("… %d more · ctrl+t", hidden))
 	out = append(out, foldMsg)
 	out = append(out, lines[len(lines)-1])
 	return out
