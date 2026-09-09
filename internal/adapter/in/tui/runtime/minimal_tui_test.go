@@ -27,6 +27,28 @@ func TestMinimalIdleChromeUsesBubblesHelp(t *testing.T) {
 	}
 }
 
+func TestContextualHelpUsesBubblesBindings(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.bottom.prompt().SetValue("/he")
+	m.syncSlashView()
+	slashHelp := ansi.Strip(m.shortcutHint())
+	for _, want := range []string{"tab", "accept", "enter", "run", "esc", "close"} {
+		if !strings.Contains(slashHelp, want) {
+			t.Fatalf("slash help missing %q: %q", want, slashHelp)
+		}
+	}
+	m.bottom.prompt().Reset()
+	m.syncSlashView()
+	m.bottom.push(&todoPaneView{})
+	todoHelp := ansi.Strip(m.shortcutHint())
+	for _, want := range []string{"move", "enter/esc", "close"} {
+		if !strings.Contains(todoHelp, want) {
+			t.Fatalf("todo help missing %q: %q", want, todoHelp)
+		}
+	}
+}
+
 func TestMinimalWelcomeHidesAfterConversationStarts(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)

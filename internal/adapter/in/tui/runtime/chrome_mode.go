@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
@@ -42,16 +43,32 @@ func (m *bubbleModel) modeChipFor(mode permission.Mode) string {
 	}
 }
 
+type contextualHelp []key.Binding
+
+func (h contextualHelp) ShortHelp() []key.Binding  { return h }
+func (h contextualHelp) FullHelp() [][]key.Binding { return [][]key.Binding{h} }
+
 func (m bubbleModel) shortcutHint() string {
 	if view := m.permissionView(); view != nil {
 		return m.infoView()
 	}
-	if m.slashOpen() {
-		return mutedStyle.Render("tab accept · enter run · esc close · ↑↓ move")
-	}
 	helpView := m.help
 	helpView.ShowAll = false
 	helpView.SetWidth(maxInt(1, m.width-2))
+	if m.slashOpen() {
+		return helpView.View(contextualHelp{
+			key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "accept")),
+			key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "run")),
+			key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑↓", "move")),
+			key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "close")),
+		})
+	}
+	if m.bottom != nil && m.bottom.has(todoInspectViewID) {
+		return helpView.View(contextualHelp{
+			key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑↓", "move")),
+			key.NewBinding(key.WithKeys("enter", "esc"), key.WithHelp("enter/esc", "close")),
+		})
+	}
 	return helpView.View(m.keys)
 }
 
