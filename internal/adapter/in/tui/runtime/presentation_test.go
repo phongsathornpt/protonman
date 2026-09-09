@@ -783,8 +783,6 @@ func TestBuildCrashReport(t *testing.T) {
 func TestCrashModelNavigation(t *testing.T) {
 	stack := "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10"
 	m := NewCrashModel("test failure", []byte(stack))
-	m.width = 80
-	m.height = 24
 	rendered := m.View().Content
 	if !strings.Contains(rendered, "Protonman crashed") {
 		t.Fatalf("expected headline in view, got: %s", rendered)
@@ -796,19 +794,19 @@ func TestCrashModelNavigation(t *testing.T) {
 		t.Fatalf("expected copy report action in view, got: %s", rendered)
 	}
 	_, _ = m.Update(testKey(tea.KeyDown))
-	if m.scrollOffset != 1 {
-		t.Fatalf("expected scrollOffset 1, got %d", m.scrollOffset)
+	if m.ScrollOffset() != 1 {
+		t.Fatalf("expected scrollOffset 1, got %d", m.ScrollOffset())
 	}
 	_, _ = m.Update(testKey(tea.KeyUp))
-	if m.scrollOffset != 0 {
-		t.Fatalf("expected scrollOffset 0, got %d", m.scrollOffset)
+	if m.ScrollOffset() != 0 {
+		t.Fatalf("expected scrollOffset 0, got %d", m.ScrollOffset())
 	}
 	_, _ = m.Update(testText("c"))
-	if !m.copied {
+	if !m.Copied() {
 		t.Fatal("expected copied flag to be set")
 	}
 	_, cmd := m.Update(testText("r"))
-	if !m.restart {
+	if !m.RestartRequested() {
 		t.Fatal("expected restart flag to be set")
 	}
 	if cmd == nil {

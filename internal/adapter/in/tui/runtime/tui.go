@@ -215,7 +215,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 				tea.WithContext(runCtx),
 			)
 			finalCrash, _ := crashProg.Run()
-			if cm, ok := finalCrash.(*CrashModel); ok && cm.restart {
+			if cm, ok := finalCrash.(*CrashModel); ok && cm.RestartRequested() {
 				slog.DebugContext(ctx, "tui crash screen requested restart")
 				continue
 			}
