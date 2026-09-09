@@ -49,15 +49,14 @@ func (v *projectPaneView) Render(ctx paneRenderContext) string {
 	return renderModalRows(ctx, accentAssistant, rows)
 }
 
-func (v *projectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
+func (v *projectPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	switch message.String() {
 	case "r":
-		return true, v.reload(m)
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionReloadProject, paneID: projectViewID}}
 	case "esc", "q":
-		m.panes.bottom.remove(projectViewID)
-		return true, nil
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: projectViewID}}
 	default:
-		return false, nil
+		return paneKeyResult{}
 	}
 }
 

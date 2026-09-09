@@ -56,13 +56,13 @@ func (m *bubbleModel) updateMouseEvent(message tea.MouseMsg) tea.Cmd {
 		if view, ok := m.panes.bottom.find(skillsViewID).(*skillsPaneView); ok {
 			switch mouse.Button {
 			case tea.MouseWheelUp:
-				view.HandleKey(m, tea.KeyPressMsg{Code: tea.KeyUp})
+				result := view.HandlePaneKey(newPaneRenderContext(m), tea.KeyPressMsg{Code: tea.KeyUp})
 				m.requestRelayout()
-				return nil
+				return result.cmd
 			case tea.MouseWheelDown:
-				view.HandleKey(m, tea.KeyPressMsg{Code: tea.KeyDown})
+				result := view.HandlePaneKey(newPaneRenderContext(m), tea.KeyPressMsg{Code: tea.KeyDown})
 				m.requestRelayout()
-				return nil
+				return result.cmd
 			}
 		}
 	}

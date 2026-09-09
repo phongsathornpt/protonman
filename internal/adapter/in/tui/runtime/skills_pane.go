@@ -101,60 +101,51 @@ func (v *skillsPaneView) configureDensity(ctx paneRenderContext) {
 	v.picker.SetShowPagination(false)
 	v.picker.SetShowHelp(layoutModeForHeight(ctx.height) != layoutTiny)
 }
-func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
-	ctx := newPaneRenderContext(m)
+func (v *skillsPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	v.ensurePicker(ctx)
-	if !v.initialized || m == nil || m.skills == nil {
-		if m != nil {
-			m.panes.bottom.remove(skillsViewID)
-		}
-		return true, nil
+	if !v.initialized || len(ctx.skillItems) == 0 {
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: skillsViewID}}
 	}
 	if message.String() == "ctrl+s" {
-		m.panes.bottom.remove(skillsViewID)
-		return true, nil
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: skillsViewID}}
 	}
 
 	switch message.String() {
 	case "space", "t":
-		return true, v.toggleSelected(m)
+		selected, ok := v.picker.SelectedItem().(skillListItem)
+		if !ok {
+			return paneKeyResult{handled: true}
+		}
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionToggleSkill, skillName: selected.name}}
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		index := int(message.String()[0] - '1')
+		index := int(message.String()[0] - "1"[0])
 		if index < len(v.picker.Items()) {
 			v.picker.Select(index)
 			v.syncTitle(ctx)
 		}
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "enter":
 		if !v.picker.SettingFilter() {
-			m.panes.bottom.remove(skillsViewID)
-			return true, nil
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: skillsViewID}}
 		}
 	case "esc":
 		if !v.picker.SettingFilter() && !v.picker.IsFiltered() {
-			m.panes.bottom.remove(skillsViewID)
-			return true, nil
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: skillsViewID}}
 		}
 	case "q":
 		if !v.picker.SettingFilter() {
-			m.panes.bottom.remove(skillsViewID)
-			return true, nil
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: skillsViewID}}
 		}
 	}
 
 	updated, cmd := v.picker.Update(message)
 	v.picker = updated
 	v.syncTitle(ctx)
-	return true, cmd
+	return paneKeyResult{handled: true, cmd: cmd}
 }
-func (v *skillsPaneView) toggleSelected(m *bubbleModel) tea.Cmd {
-	selected, ok := v.picker.SelectedItem().(skillListItem)
-	if !ok {
-		return nil
-	}
-	_, _ = m.skills.Toggle(selected.name)
-	selected.active = m.skills.IsActivated(selected.name)
-	cmd := v.picker.SetItem(v.picker.GlobalIndex(), selected)
-	v.syncTitle(newPaneRenderContext(m))
+
+func (v *skillsPaneView) refreshItems(ctx paneRenderContext) tea.Cmd {
+	cmd := v.picker.SetItems(skillListItems(ctx.skillItems))
+	v.syncTitle(ctx)
 	return cmd
 }

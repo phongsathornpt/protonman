@@ -12,6 +12,8 @@ const (
 	paneActionClose
 	paneActionSetReasoning
 	paneActionAcceptSlash
+	paneActionToggleSkill
+	paneActionReloadProject
 )
 
 type paneAction struct {
@@ -19,6 +21,7 @@ type paneAction struct {
 	paneID    string
 	reasoning sdk.ReasoningEffort
 	runSlash  bool
+	skillName string
 }
 
 type paneKeyResult struct {
@@ -45,6 +48,18 @@ func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
 	case paneActionAcceptSlash:
 		_, cmd := m.acceptSlash(action.runSlash)
 		return cmd
+	case paneActionToggleSkill:
+		if m.skills == nil {
+			return nil
+		}
+		_, _ = m.skills.Toggle(action.skillName)
+		if view, _ := m.panes.bottom.find(skillsViewID).(*skillsPaneView); view != nil {
+			return view.refreshItems(newPaneRenderContext(m))
+		}
+	case paneActionReloadProject:
+		if view, _ := m.panes.bottom.find(projectViewID).(*projectPaneView); view != nil {
+			return view.reload(m)
+		}
 	}
 	return nil
 }
