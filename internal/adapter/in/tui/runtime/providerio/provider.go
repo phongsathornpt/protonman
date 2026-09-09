@@ -61,3 +61,7 @@ func Save(request SaveRequest) error {
 		Activate:     request.Activate,
 	})
 }
+
+func SelectModel(providerName, modelID string) error {
+	return (app.Providers{}).SelectModel(providerName, modelID)
+}

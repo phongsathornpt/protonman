@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelpicker"
 	providerpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/provider"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
@@ -45,7 +46,7 @@ func providerEditorSnapshot(m *bubbleModel, v *providerPaneView) providerpane.Pr
 				label = fmt.Sprintf("%s (%s)", name, label)
 			}
 		}
-		items = append(items, providerpane.ProviderEditorModel{Label: label, Free: model.IsFreeModel(md.ID), Limits: formatModelTokenLimits(resolved.Profile.ContextWindow, resolved.Profile.MaxInputTokens, resolved.Profile.MaxOutputTokens), Features: strings.Join(resolved.Features, ", "), Reasoning: remoteModelReasoningSummary(providerName, md, false)})
+		items = append(items, providerpane.ProviderEditorModel{Label: label, Free: model.IsFreeModel(md.ID), Limits: modelpicker.FormatTokenLimits(resolved.Profile.ContextWindow, resolved.Profile.MaxInputTokens, resolved.Profile.MaxOutputTokens), Features: strings.Join(resolved.Features, ", "), Reasoning: remoteModelReasoningSummary(providerName, md, false)})
 	}
 	hasFreeModels := false
 	for _, md := range v.models {

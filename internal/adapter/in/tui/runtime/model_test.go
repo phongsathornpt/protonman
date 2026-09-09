@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelpicker"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -334,9 +335,9 @@ func TestActiveRemoteModelFindsSelectedCatalogModel(t *testing.T) {
 }
 
 func TestFormatModelTokenLimitsRendersIndependentLimits(t *testing.T) {
-	got := formatModelTokenLimits(0, 200000, 8192)
+	got := modelpicker.FormatTokenLimits(0, 200000, 8192)
 	if got != "200K input · 8K output" {
-		t.Fatalf("formatModelTokenLimits() = %q", got)
+		t.Fatalf("modelpicker.FormatTokenLimits() = %q", got)
 	}
 }
 

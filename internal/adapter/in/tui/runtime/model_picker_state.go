@@ -3,7 +3,7 @@ package runtime
 import (
 	"context"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
-	"sort"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelpicker"
 	"strings"
 	"time"
 
@@ -39,32 +39,7 @@ type modelSelectPaneView struct {
 }
 
 func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
-	providers := make([]string, 0)
-	seen := make(map[string]bool)
-	if m != nil && len(m.providers) > 0 {
-		for name := range m.providers {
-			providers = append(providers, name)
-			seen[strings.ToLower(name)] = true
-		}
-		sort.Strings(providers)
-	}
-	if m != nil && m.activeProvider != "" {
-		if !seen[strings.ToLower(m.activeProvider)] {
-			providers = append([]string{m.activeProvider}, providers...)
-			seen[strings.ToLower(m.activeProvider)] = true
-		}
-	} else if len(providers) == 0 {
-		providers = append(providers, model.DefaultProtonmanName)
-	}
-	providerIdx := 0
-	if m != nil && m.activeProvider != "" {
-		for i, name := range providers {
-			if strings.EqualFold(name, m.activeProvider) {
-				providerIdx = i
-				break
-			}
-		}
-	}
+	providers, providerIdx := modelpicker.ProviderNames(m.providers, m.activeProvider)
 	var modelsList []model.RemoteModel
 	hasFreshCatalog := false
 	if m != nil && providerIdx < len(providers) {
@@ -115,7 +90,7 @@ func (i modelListItem) Description() string {
 		parts = append(parts, i.model.ID)
 	}
 	resolved := model.ResolveRemoteMetadata(i.providerName, i.model)
-	if limits := formatModelTokenLimits(resolved.Profile.ContextWindow, resolved.Profile.MaxInputTokens, resolved.Profile.MaxOutputTokens); limits != "" {
+	if limits := modelpicker.FormatTokenLimits(resolved.Profile.ContextWindow, resolved.Profile.MaxInputTokens, resolved.Profile.MaxOutputTokens); limits != "" {
 		parts = append(parts, limits)
 	}
 	if len(resolved.Features) > 0 {

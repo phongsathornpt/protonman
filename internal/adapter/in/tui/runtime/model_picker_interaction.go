@@ -1,14 +1,12 @@
 package runtime
 
 import (
-	"fmt"
-	"strings"
-
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/providerio"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
-	"github.com/phongsathornpt/protonman/internal/app"
+	"strings"
 )
 
 func (v *modelSelectPaneView) Render(m *bubbleModel) string {
@@ -148,37 +146,13 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg)
 	}
 }
 
-func formatContextTokens(tokens int) string {
-	if tokens >= 1000000 {
-		return fmt.Sprintf("%.1fM", float64(tokens)/1000000.0)
-	}
-	if tokens >= 1000 {
-		return fmt.Sprintf("%dK", tokens/1000)
-	}
-	return fmt.Sprintf("%d", tokens)
-}
-
-func formatModelTokenLimits(contextWindow, maxInput, maxOutput int) string {
-	parts := make([]string, 0, 3)
-	if contextWindow > 0 {
-		parts = append(parts, formatContextTokens(contextWindow)+" context")
-	}
-	if maxInput > 0 {
-		parts = append(parts, formatContextTokens(maxInput)+" input")
-	}
-	if maxOutput > 0 {
-		parts = append(parts, formatContextTokens(maxOutput)+" output")
-	}
-	return strings.Join(parts, " · ")
-}
-
 func saveDefaultModelCmd(providerName, modelID string) tea.Cmd {
 	return saveModelSelectionCmd(providerName, modelID, false)
 }
 
 func saveModelSelectionCmd(providerName, modelID string, unverified bool) tea.Cmd {
 	return func() tea.Msg {
-		err := (app.Providers{}).SelectModel(providerName, modelID)
+		err := providerio.SelectModel(providerName, modelID)
 		return modelSelectedMsg{providerName: providerName, modelID: modelID, unverified: unverified, err: err}
 	}
 }
