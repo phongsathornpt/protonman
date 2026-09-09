@@ -1,6 +1,6 @@
 # Installing Protonman
 
-Protonman release binaries are distributed through GitHub Releases. The supported `install.sh` path targets Linux and macOS on amd64 or arm64.
+Protonman release binaries are distributed through GitHub Releases. The currently published and supported release targets are Linux amd64 and macOS arm64.
 
 ## Public release install
 

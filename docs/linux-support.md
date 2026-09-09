@@ -14,4 +14,4 @@ The filesystem and network sandbox paths are now native Go/Linux implementations
 
 ## Compatibility testing
 
-Linux CI must cover normal Ubuntu, restricted user-namespace environments, real PTY behavior, amd64, arm64, and a no-`bwrap` path as the native backend lands.
+The published Linux release target is currently amd64. Linux CI should exercise normal Ubuntu, restricted user-namespace environments, real PTY behavior, and a no-`bwrap` path for the native backend. Linux arm64 is future compatibility coverage rather than a currently published release target.

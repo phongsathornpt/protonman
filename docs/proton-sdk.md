@@ -66,6 +66,11 @@ Provider failures use `ProviderError` with a normalized `ErrorKind`, HTTP status
 provider code, message, and retryability. HTTP and streaming errors use the same
 error type, so callers can use `errors.As` instead of parsing provider strings.
 
+Retry and bounded backoff policy belongs to the SDK/provider boundary rather than the
+turn engine. Model streams must be closed exactly once on success and on every
+failure/cancellation path; when processing and close both fail, preserve the original
+processing failure as the primary error.
+
 ## Providers
 
 - `proton-sdk/provider/openai`: Chat Completions, Responses API, OpenAI-compatible gateways, streaming tools, images, usage, and retries.
