@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"path/filepath"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -73,28 +74,59 @@ func (m *bubbleModel) promptMetadataView() string {
 	if m == nil {
 		return ""
 	}
-	parts := make([]string, 0, 3)
-	if model := strings.TrimSpace(m.activeModel); model != "" {
-		parts = append(parts, model)
-	}
-	if agent := strings.TrimSpace(m.agentProfile); agent != "" {
-		parts = append(parts, agent)
-	}
-	if workspace := formatWorkspaceDisplay(m.workDir); workspace != "" {
-		parts = append(parts, workspace)
-	}
 	available := maxInt(1, m.layout.width-2)
 	mode := m.promptModeLabel()
-	if len(parts) == 0 {
-		return mutedStyle.Render(truncateWithEllipsis(mode, available))
+	parts := promptMetadataParts(m.activeModel, m.agentProfile, m.workDir)
+	full := append(append([]string(nil), parts...), mode)
+	if rendered := strings.Join(full, " · "); ansi.StringWidth(rendered) <= available {
+		return mutedStyle.Render(rendered)
 	}
-	suffix := " · " + mode
-	leftWidth := available - ansi.StringWidth(suffix)
-	if leftWidth <= 0 {
-		return mutedStyle.Render(truncateWithEllipsis(mode, available))
+	compact := compactPromptMetadataParts(m.activeModel, m.workDir, mode, available)
+	return mutedStyle.Render(strings.Join(compact, " · "))
+}
+
+func promptMetadataParts(model, agent, workDir string) []string {
+	parts := make([]string, 0, 3)
+	if model = strings.TrimSpace(model); model != "" {
+		parts = append(parts, model)
 	}
-	left := truncateWithEllipsis(strings.Join(parts, " · "), leftWidth)
-	return mutedStyle.Render(left + suffix)
+	if agent = strings.TrimSpace(agent); agent != "" {
+		parts = append(parts, agent)
+	}
+	if workspace := formatWorkspaceDisplay(workDir); workspace != "" {
+		parts = append(parts, workspace)
+	}
+	return parts
+}
+
+func compactPromptMetadataParts(model, workDir, mode string, available int) []string {
+	model = strings.TrimSpace(model)
+	if slash := strings.LastIndex(model, "/"); slash >= 0 && slash+1 < len(model) {
+		model = model[slash+1:]
+	}
+	workspace := formatWorkspaceDisplay(workDir)
+	if workspace != "" {
+		workspace = filepath.Base(workspace)
+	}
+	parts := make([]string, 0, 3)
+	for _, value := range []string{model, workspace, mode} {
+		if value != "" {
+			parts = append(parts, value)
+		}
+	}
+	for ansi.StringWidth(strings.Join(parts, " · ")) > available && len(parts) > 1 {
+		// Preserve the mode and workspace identity; trim the model first.
+		budget := available - ansi.StringWidth(strings.Join(parts[1:], " · ")) - 3
+		if budget > 1 {
+			parts[0] = truncateWithEllipsis(parts[0], budget)
+			break
+		}
+		parts = parts[1:]
+	}
+	if rendered := strings.Join(parts, " · "); ansi.StringWidth(rendered) > available {
+		return []string{truncateWithEllipsis(mode, available)}
+	}
+	return parts
 }
 
 func (m *bubbleModel) promptModeLabel() string {
