@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin/readfile"
-
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
@@ -17,7 +15,7 @@ func TestReadOnlyToolsClassifyMissingTargets(t *testing.T) {
 		handler tool.Handler
 		args    map[string]any
 	}{
-		{name: "read_file source", handler: readfile.New(ws), args: map[string]any{"path": "missing/src", "view": "source", "query": "main"}},
+		{name: "grep", handler: NewGrep(ws), args: map[string]any{"path": "missing/src", "pattern": "main"}},
 		{name: "list_dir", handler: NewListDir(ws), args: map[string]any{"path": "missing/src"}},
 		{name: "find", handler: NewFindFiles(ws), args: map[string]any{"path": "missing/src", "pattern": "*.go"}},
 	}

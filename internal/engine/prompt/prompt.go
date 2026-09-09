@@ -134,7 +134,7 @@ func toolDisciplineSection(spec Spec) string {
 		lines = append(lines, "- Workspace filesystem paths are relative to the workspace root. Use . for the workspace root; never use / or another absolute filesystem path with workspace tools.")
 	}
 	if hasTool(spec, "read") {
-		lines = append(lines, "- Use read for known workspace artifacts and read with view=source for bounded multi-file source inspection.")
+		lines = append(lines, "- Use read for known workspace artifacts. Use grep for workspace content search and find for path discovery.")
 	}
 	if hasTool(spec, "grep") || hasTool(spec, "find") || hasTool(spec, "ls") {
 		parts := make([]string, 0, 3)

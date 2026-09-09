@@ -153,8 +153,10 @@ func TestToolDisciplineDefinesWorkspacePathConvention(t *testing.T) {
 
 func TestToolDisciplineUsesUnifiedSourceInspection(t *testing.T) {
 	got := Render(Spec{AvailableTools: []string{"read"}})
-	if !strings.Contains(got, "read with view=source") {
-		t.Fatalf("tool discipline missing unified source inspection guidance:\n%s", got)
+	for _, want := range []string{"Use read for known workspace artifacts", "Use grep for workspace content search", "find for path discovery"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("tool discipline missing read/search separation %q:\n%s", want, got)
+		}
 	}
 	if strings.Contains(got, "inspect_code") {
 		t.Fatalf("tool discipline exposes legacy inspect_code:\n%s", got)
