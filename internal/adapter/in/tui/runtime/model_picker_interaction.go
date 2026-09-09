@@ -23,7 +23,7 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 	mode := layoutModeForHeight(m.height)
 	v.picker.SetShowStatusBar(false)
 	v.picker.SetShowPagination(false)
-	v.picker.SetShowHelp(false)
+	v.picker.SetShowHelp(mode != layoutTiny)
 	delegate := list.NewDefaultDelegate()
 	delegate.SetSpacing(0)
 	delegate.ShowDescription = mode == layoutNormal
@@ -110,24 +110,7 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg)
 			return true, v.loadProvider(m, false)
 		}
 		return true, nil
-	case "pgup", "pgdown":
-		step := maxInt(1, v.picker.Paginator.PerPage)
-		target := v.picker.GlobalIndex()
-		if message.String() == "pgup" {
-			target -= step
-		} else {
-			target += step
-		}
-		if target < 0 {
-			target = 0
-		}
-		if maxIndex := len(v.picker.Items()) - 1; target > maxIndex {
-			target = maxIndex
-		}
-		v.picker.Select(target)
-		v.syncPickerProjection()
-		return true, nil
-	case "up", "k", "down", "j", "home", "g", "end", "G":
+	case "pgup", "pgdown", "up", "k", "down", "j", "home", "g", "end", "G":
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
 		v.syncPickerProjection()

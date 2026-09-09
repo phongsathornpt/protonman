@@ -2,11 +2,12 @@ package runtime
 
 import (
 	"context"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelpicker"
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelpicker"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 )
 
@@ -115,6 +116,13 @@ func (v *modelSelectPaneView) initPicker(delegates ...list.DefaultDelegate) {
 	v.picker.DisableQuitKeybindings()
 	v.picker.SetStatusBarItemName("model", "models")
 	v.picker.FilterInput.Prompt = "Search: "
+	v.picker.AdditionalShortHelpKeys = func() []key.Binding {
+		return []key.Binding{
+			key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
+			key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "provider")),
+			key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "close")),
+		}
+	}
 	v.pickerReady = true
 }
 
