@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 )
@@ -45,6 +46,12 @@ func (v *skillsPaneView) ensurePicker(m *bubbleModel) {
 	v.picker.InfiniteScrolling = true
 	v.picker.DisableQuitKeybindings()
 	v.picker.SetStatusBarItemName("skill", "skills")
+	v.picker.AdditionalShortHelpKeys = func() []key.Binding {
+		return []key.Binding{
+			key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "toggle")),
+			key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "close")),
+		}
+	}
 	v.initialized = true
 	v.syncTitle(m)
 }
@@ -95,10 +102,10 @@ func (v *skillsPaneView) Render(m *bubbleModel) string {
 	return renderModalRows(m, accentAssistant, strings.Split(v.picker.View(), "\n"))
 }
 
-func (v *skillsPaneView) configureDensity(_ *bubbleModel) {
+func (v *skillsPaneView) configureDensity(m *bubbleModel) {
 	v.picker.SetShowStatusBar(false)
 	v.picker.SetShowPagination(false)
-	v.picker.SetShowHelp(false)
+	v.picker.SetShowHelp(m != nil && layoutModeForHeight(m.height) != layoutTiny)
 }
 func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	v.ensurePicker(m)
