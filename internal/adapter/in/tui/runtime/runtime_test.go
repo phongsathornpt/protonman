@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
+	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	domainmodel "github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/sessionfs"
@@ -245,7 +246,7 @@ func TestTurnFailureFinalizesRunningToolCells(t *testing.T) {
 	}
 	model.appendToolCall(call)
 	model.busy = true
-	updated, _ := model.Update(turnDoneMsg{err: context.Canceled})
+	updated, _ := model.Update(turnmsg.Done{Err: context.Canceled})
 	model = updated.(*bubbleModel)
 	assertNoRunningTool(t, model)
 	if !strings.Contains(plainTranscript(model), "cancelled") {

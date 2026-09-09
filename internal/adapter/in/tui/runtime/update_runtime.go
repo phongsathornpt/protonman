@@ -9,6 +9,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
+	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
@@ -102,11 +103,11 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updatePermissionRuleSaved(message)
 	case projectLoadedMsg:
 		return m.updateProjectLoaded(message)
-	case turnDeltaMsg:
+	case turnmsg.Delta:
 		return m.updateTurnDelta(message)
-	case turnEventsClosedMsg:
+	case turnmsg.EventsClosed:
 		return m.updateTurnEventsClosed(message)
-	case turnDoneMsg:
+	case turnmsg.Done:
 		return m.updateTurnDone(message)
 	}
 	return m, nil

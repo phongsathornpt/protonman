@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
+	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -765,7 +766,7 @@ func TestTranscriptOverlayQAndCtrlC(t *testing.T) {
 func TestMessageHistoryIntegrityOnTurnCancel(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.messages = append(bModel.messages, model.Message{Role: model.RoleUser, Content: "do something that will be cancelled"})
-	updated, _ := bModel.Update(turnDoneMsg{err: context.Canceled})
+	updated, _ := bModel.Update(turnmsg.Done{Err: context.Canceled})
 	bModel = updated.(*bubbleModel)
 	if len(bModel.messages) != 0 {
 		t.Fatalf("expected orphan user message to be rolled back on cancellation, got len=%d: %#v", len(bModel.messages), bModel.messages)

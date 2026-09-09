@@ -5,6 +5,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"context"
 	"errors"
+	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	domainmodel "github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -655,7 +656,7 @@ func TestStartTurnStreamsSinkEvents(t *testing.T) {
 		if events == nil {
 			t.Fatal("busy turn has no event channel")
 		}
-		message := waitTurnCh(events)()
+		message := turnmsg.Wait(events)()
 		updated, _ := model.Update(message)
 		model = updated.(*bubbleModel)
 	}
@@ -674,7 +675,7 @@ func TestClosedTurnEventsRenderTerminalFailure(t *testing.T) {
 	events := make(chan tea.Msg)
 	close(events)
 	model.turnEvents = events
-	updated, _ := model.Update(turnEventsClosedMsg{})
+	updated, _ := model.Update(turnmsg.EventsClosed{})
 	model = updated.(*bubbleModel)
 	if model.busy {
 		t.Fatal("model remained busy after turn event channel closed")

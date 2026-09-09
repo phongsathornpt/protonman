@@ -10,6 +10,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
@@ -49,7 +50,7 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 	go func() {
 		queueTerminal := func(result app.Result, err error) {
 			select {
-			case events <- turnDoneMsg{result: result, err: err}:
+			case events <- turnmsg.Done{Result: result, Err: err}:
 				slog.DebugContext(ctx, "tui turn terminal message queued")
 			case <-m.ctx.Done():
 				slog.DebugContext(ctx, "tui turn terminal message dropped", "reason", "ui_context_done")
@@ -66,7 +67,7 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 		}()
 		result, err := m.runner.Run(ctx, history, func(runCtx context.Context, event app.Event) error {
 			select {
-			case events <- turnDeltaMsg{event: event}:
+			case events <- turnmsg.Delta{Event: event}:
 				return nil
 			case <-runCtx.Done():
 				return runCtx.Err()
@@ -76,7 +77,7 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 		queueTerminal(result, err)
 	}()
 	m.turnEvents = events
-	return waitTurnCh(events)
+	return turnmsg.Wait(events)
 }
 
 func (m *bubbleModel) withSpinner(command tea.Cmd) tea.Cmd {
@@ -84,20 +85,6 @@ func (m *bubbleModel) withSpinner(command tea.Cmd) tea.Cmd {
 		return command
 	}
 	return tea.Batch(m.spinner.Tick, command)
-}
-
-func waitTurnCh(events <-chan tea.Msg) tea.Cmd {
-	if events == nil {
-		return nil
-	}
-	return func() tea.Msg {
-		msg, ok := <-events
-		if !ok {
-			slog.Debug("tui turn wait observed closed event channel")
-			return turnEventsClosedMsg{}
-		}
-		return msg
-	}
 }
 
 func errorType(err error) string {
@@ -122,8 +109,8 @@ func (m *bubbleModel) cancelActiveTurn() int {
 	return stopping
 }
 
-func (m *bubbleModel) updateTurnDelta(message turnDeltaMsg) (tea.Model, tea.Cmd) {
-	batch := []app.Event{message.event}
+func (m *bubbleModel) updateTurnDelta(message turnmsg.Delta) (tea.Model, tea.Cmd) {
+	batch := []app.Event{message.Event}
 	for {
 		select {
 		case next, ok := <-m.turnEvents:
@@ -131,13 +118,13 @@ func (m *bubbleModel) updateTurnDelta(message turnDeltaMsg) (tea.Model, tea.Cmd)
 				m.applyTurnEvents(batch)
 				slog.DebugContext(m.ctx, "tui turn event channel closed before terminal message", "busy", m.busy)
 				if m.busy && m.ctx.Err() == nil {
-					return m.Update(turnEventsClosedMsg{})
+					return m.Update(turnmsg.EventsClosed{})
 				}
 				m.refreshViewport()
 				return m, nil
 			}
-			if delta, isDelta := next.(turnDeltaMsg); isDelta {
-				batch = append(batch, delta.event)
+			if delta, isDelta := next.(turnmsg.Delta); isDelta {
+				batch = append(batch, delta.Event)
 				continue
 			}
 			m.applyTurnEvents(batch)
@@ -150,44 +137,44 @@ func (m *bubbleModel) updateTurnDelta(message turnDeltaMsg) (tea.Model, tea.Cmd)
 	}
 	m.applyTurnEvents(batch)
 	m.refreshViewport()
-	return m, m.withSpinner(waitTurnCh(m.turnEvents))
+	return m, m.withSpinner(turnmsg.Wait(m.turnEvents))
 }
 
-func (m *bubbleModel) updateTurnEventsClosed(message turnEventsClosedMsg) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) updateTurnEventsClosed(message turnmsg.EventsClosed) (tea.Model, tea.Cmd) {
 	slog.DebugContext(m.ctx, "tui turn event channel closed unexpectedly", "busy", m.busy, "context_error", m.ctx.Err() != nil)
 	if !m.busy || m.ctx.Err() != nil {
 		return m, nil
 	}
-	return m.Update(turnDoneMsg{err: errTurnEventsClosed})
+	return m.Update(turnmsg.Done{Err: errTurnEventsClosed})
 }
 
-func (m *bubbleModel) updateTurnDone(message turnDoneMsg) (tea.Model, tea.Cmd) {
-	slog.DebugContext(m.ctx, "tui turn terminal message received", "success", message.err == nil, "error_type", errorType(message.err), "rounds", message.result.Rounds, "message_count", len(message.result.Messages), "assistant_bytes", len(message.result.Message.Content))
+func (m *bubbleModel) updateTurnDone(message turnmsg.Done) (tea.Model, tea.Cmd) {
+	slog.DebugContext(m.ctx, "tui turn terminal message received", "success", message.Err == nil, "error_type", errorType(message.Err), "rounds", message.Result.Rounds, "message_count", len(message.Result.Messages), "assistant_bytes", len(message.Result.Message.Content))
 	m.busy = false
 	m.busyStarted = time.Time{}
 	m.activity = "ready"
 	m.turnCancel = nil
 	m.turnEvents = nil
 	m.activeTurnOwner = ""
-	if message.err != nil {
-		m.finalizeRunningTools(message.err)
+	if message.Err != nil {
+		m.finalizeRunningTools(message.Err)
 	}
 	m.historyState.CommitActive()
-	if message.err == nil {
-		if len(message.result.Messages) > 0 {
-			m.messages = append(m.messages, message.result.Messages...)
-		} else if message.result.Message.Content != "" {
-			m.messages = append(m.messages, message.result.Message)
+	if message.Err == nil {
+		if len(message.Result.Messages) > 0 {
+			m.messages = append(m.messages, message.Result.Messages...)
+		} else if message.Result.Message.Content != "" {
+			m.messages = append(m.messages, message.Result.Message)
 		}
-	} else if message.err != nil && len(m.messages) > 0 && m.messages[len(m.messages)-1].Role == model.RoleUser {
+	} else if message.Err != nil && len(m.messages) > 0 && m.messages[len(m.messages)-1].Role == model.RoleUser {
 		messages := m.messages
 		messages[len(messages)-1] = model.Message{}
 		m.messages = messages[:len(messages)-1]
 	}
 	m.retainConversationMessages()
-	m.appendTurnFailure(message.err)
+	m.appendTurnFailure(message.Err)
 	m.relayout()
-	if message.err != nil {
+	if message.Err != nil {
 		m.queue = nil
 		return m, nil
 	}
