@@ -42,9 +42,9 @@ func (h writeFileHandler) PermissionDetail(arguments json.RawMessage) string {
 
 func (writeFileHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "write_file",
+		Name:                "edit",
 		Description:         "Create or replace a UTF-8 text file atomically and return SHA-256 evidence for the written content. Prefer this over shell echo/printf/cat heredocs or output redirection used only to write a file.",
-		Kind:                tool.KindForName("write_file"),
+		Kind:                tool.KindEdit,
 		Mutability:          tool.MutabilityMutating,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyWholeFile, CheckpointPolicy: tool.CheckpointPolicyRequired, Boundary: tool.BoundaryPolicyWorkspaceWrite},
 		PermissionDetailKey: "file_path",
@@ -66,15 +66,15 @@ func (writeFileHandler) Definition() tool.Definition {
 
 func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	if h.workspace == nil {
-		return tool.Result{}, fmt.Errorf("write_file workspace is required")
+		return tool.Result{}, fmt.Errorf("edit write workspace is required")
 	}
 	var input writeFileInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode write_file arguments", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode edit write arguments", err)
 	}
 	input.FilePath = strings.TrimSpace(input.FilePath)
 	if input.FilePath == "" {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "write_file file_path is required")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "edit write file_path is required")
 	}
 	resolvedPath, err := h.workspace.Resolve(ctx, input.FilePath)
 	if err != nil {
@@ -99,7 +99,7 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		current := sha256.Sum256(existing)
 		if expected != fmt.Sprintf("%x", current[:]) {
 			recoveryArgs, _ := json.Marshal(map[string]any{"path": input.FilePath})
-			return tool.Result{}, tool.NewToolError(tool.ErrorCodeConflict, "write_file target changed since it was read; refresh the file and retry").WithRecovery(tool.Recovery{
+			return tool.Result{}, tool.NewToolError(tool.ErrorCodeConflict, "edit write target changed since it was read; refresh the file and retry").WithRecovery(tool.Recovery{
 				Action: tool.RecoveryRefreshResource, Tool: "read", Arguments: recoveryArgs,
 			})
 		}

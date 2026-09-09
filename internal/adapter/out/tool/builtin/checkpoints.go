@@ -44,9 +44,9 @@ func NewCheckpointRestore(store checkpoint.Store) tool.Handler {
 
 func (restoreCheckpointHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "checkpoint_restore",
+		Name:                "edit",
 		Description:         "Restore files from a previous Protonman edit checkpoint.",
-		Kind:                tool.KindForName("checkpoint_restore"),
+		Kind:                tool.KindEdit,
 		Mutability:          tool.MutabilityMutating,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyWholeFile, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceWrite},
 		PermissionDetailKey: "checkpoint_id",
@@ -64,11 +64,11 @@ func (restoreCheckpointHandler) Definition() tool.Definition {
 func (h restoreCheckpointHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	var input restoreCheckpointInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode checkpoint_restore arguments", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode edit restore arguments", err)
 	}
 	input.CheckpointID = strings.TrimSpace(input.CheckpointID)
 	if input.CheckpointID == "" {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "checkpoint_restore checkpoint_id is required")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "edit restore checkpoint_id is required")
 	}
 	if err := h.checkpoints.Restore(ctx, input.CheckpointID); err != nil {
 		return tool.Result{}, fmt.Errorf("restore checkpoint %q: %w", input.CheckpointID, err)

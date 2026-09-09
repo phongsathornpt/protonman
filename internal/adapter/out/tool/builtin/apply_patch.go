@@ -77,9 +77,9 @@ func NewApplyPatch(workspaceRoot *workspace.Workspace, stores ...checkpoint.Stor
 
 func (applyPatchHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "apply_patch",
+		Name:                "edit",
 		Description:         "Apply a bounded multi-file patch to the workspace.",
-		Kind:                tool.KindForName("apply_patch"),
+		Kind:                tool.KindEdit,
 		Mutability:          tool.MutabilityMutating,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyDynamic, CheckpointPolicy: tool.CheckpointPolicyRequired, Boundary: tool.BoundaryPolicyWorkspaceWrite},
 		PermissionDetailKey: "patch",
@@ -164,22 +164,22 @@ func (s patchOperationSummary) String() string {
 
 func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	if h.workspace == nil {
-		return tool.Result{}, fmt.Errorf("apply_patch workspace is required")
+		return tool.Result{}, fmt.Errorf("edit patch workspace is required")
 	}
 	var input applyPatchInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode apply_patch arguments", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode edit patch arguments", err)
 	}
 	if strings.TrimSpace(input.Patch) == "" {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "apply_patch patch is required")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "edit patch payload is required")
 	}
 	operations, err := parsePatch(input.Patch)
 	if err != nil {
-		return tool.Result{}, fmt.Errorf("parse apply_patch: %w", err)
+		return tool.Result{}, fmt.Errorf("parse edit patch: %w", err)
 	}
 	changes, err := h.planPatch(ctx, operations)
 	if err != nil {
-		return tool.Result{}, fmt.Errorf("plan apply_patch: %w", err)
+		return tool.Result{}, fmt.Errorf("plan edit patch: %w", err)
 	}
 	riskyPaths := make([]string, 0, len(changes)*2)
 	for _, change := range changes {
@@ -224,7 +224,7 @@ func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 			return patchFailureResult(
 				call,
 				checkpointID,
-				fmt.Errorf("apply_patch has unknown change kind %d", change.kind),
+				fmt.Errorf("edit patch has unknown change kind %d", change.kind),
 			)
 		}
 		if change.destination != "" {

@@ -41,9 +41,9 @@ func (h searchReplaceHandler) PermissionDetail(arguments json.RawMessage) string
 
 func (searchReplaceHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "search_replace",
+		Name:                "edit",
 		Description:         "Replace an exact string in a workspace file.",
-		Kind:                tool.KindForName("search_replace"),
+		Kind:                tool.KindEdit,
 		Mutability:          tool.MutabilityMutating,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyContextual, CheckpointPolicy: tool.CheckpointPolicyRequired, Boundary: tool.BoundaryPolicyWorkspaceWrite},
 		PermissionDetailKey: "file_path",
@@ -66,18 +66,18 @@ func (searchReplaceHandler) Definition() tool.Definition {
 
 func (h searchReplaceHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	if h.workspace == nil {
-		return tool.Result{}, fmt.Errorf("search_replace workspace is required")
+		return tool.Result{}, fmt.Errorf("edit replace workspace is required")
 	}
 	var input searchReplaceInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
-		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode search_replace arguments", err)
+		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode edit replace arguments", err)
 	}
 	input.FilePath = strings.TrimSpace(input.FilePath)
 	if input.FilePath == "" {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "search_replace file_path is required")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "edit replace file_path is required")
 	}
 	if input.OldString == input.NewString {
-		return tool.Result{}, fmt.Errorf("search_replace old_string and new_string must differ")
+		return tool.Result{}, fmt.Errorf("edit replace old_string and new_string must differ")
 	}
 	resolvedPath, err := h.workspace.Resolve(ctx, input.FilePath)
 	if err != nil {
