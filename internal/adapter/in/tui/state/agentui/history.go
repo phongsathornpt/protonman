@@ -310,6 +310,7 @@ func (t *Tracker) ApplyToolFailure(name string, result tool.Result, err error, s
 		action = legacySubagentAction(name)
 	}
 	delete(t.pendingActions, result.CallID)
+	delete(t.pendingRuns, result.CallID)
 	if tool.CanonicalName(name) != "subagent" || action == "" {
 		return false
 	}
