@@ -1,41 +1,41 @@
 package runtime
 
 import (
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/diagnostic"
+	presentationpolicy "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/presentationpolicy"
 	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	"image/color"
 )
 
-type OpenCodeErrorKind = diagnostic.Kind
+type OpenCodeErrorKind = presentationpolicy.ErrorKind
 
-type ClassifiedError = diagnostic.Error
+type ClassifiedError = presentationpolicy.ClassifiedError
 
 const (
-	ErrorKindModelNotFound    = diagnostic.KindModelNotFound
-	ErrorKindContextOverflow  = diagnostic.KindContextOverflow
-	ErrorKindAuthentication   = diagnostic.KindAuthentication
-	ErrorKindForbidden        = diagnostic.KindForbidden
-	ErrorKindRateLimit        = diagnostic.KindRateLimit
-	ErrorKindQuotaExceeded    = diagnostic.KindQuotaExceeded
-	ErrorKindServerOverloaded = diagnostic.KindServerOverloaded
-	ErrorKindStreamTimeout    = diagnostic.KindStreamTimeout
-	ErrorKindInvalidPrompt    = diagnostic.KindInvalidPrompt
-	ErrorKindMCPFailed        = diagnostic.KindMCPFailed
-	ErrorKindConfigInvalid    = diagnostic.KindConfigInvalid
-	ErrorKindConfigTypo       = diagnostic.KindConfigTypo
-	ErrorKindToolFailed       = diagnostic.KindToolFailed
-	ErrorKindToolDispatch     = diagnostic.KindToolDispatch
-	ErrorKindPermissionDenied = diagnostic.KindPermissionDenied
-	ErrorKindCancelled        = diagnostic.KindCancelled
-	ErrorKindGeneric          = diagnostic.KindGeneric
+	ErrorKindModelNotFound    = presentationpolicy.ErrorKind("model_not_found")
+	ErrorKindContextOverflow  = presentationpolicy.ErrorKind("context_overflow")
+	ErrorKindAuthentication   = presentationpolicy.ErrorKind("authentication")
+	ErrorKindForbidden        = presentationpolicy.ErrorKind("forbidden")
+	ErrorKindRateLimit        = presentationpolicy.ErrorKind("rate_limit")
+	ErrorKindQuotaExceeded    = presentationpolicy.ErrorKind("quota_exceeded")
+	ErrorKindServerOverloaded = presentationpolicy.ErrorKind("server_overloaded")
+	ErrorKindStreamTimeout    = presentationpolicy.ErrorKind("stream_timeout")
+	ErrorKindInvalidPrompt    = presentationpolicy.ErrorKind("invalid_prompt")
+	ErrorKindMCPFailed        = presentationpolicy.ErrorKind("mcp_failed")
+	ErrorKindConfigInvalid    = presentationpolicy.ErrorKind("config_invalid")
+	ErrorKindConfigTypo       = presentationpolicy.ErrorKind("config_typo")
+	ErrorKindToolFailed       = presentationpolicy.ErrorKind("tool_failed")
+	ErrorKindToolDispatch     = presentationpolicy.ErrorKind("tool_dispatch")
+	ErrorKindPermissionDenied = presentationpolicy.ErrorKind("permission_denied")
+	ErrorKindCancelled        = presentationpolicy.ErrorKind("cancelled")
+	ErrorKindGeneric          = presentationpolicy.ErrorKind("generic")
 )
 
 func ClassifyOpenCodeError(err error, activeProvider, activeModel string) ClassifiedError {
-	return diagnostic.Classify(err, activeProvider, activeModel)
+	return presentationpolicy.ClassifyError(err, activeProvider, activeModel)
 }
 
 func FormatErrorSummary(classified ClassifiedError) string {
-	return diagnostic.FormatSummary(classified)
+	return presentationpolicy.FormatErrorSummary(classified)
 }
 
 type terminalLayoutMode = panecommon.LayoutMode
@@ -47,15 +47,15 @@ const (
 )
 
 func layoutModeForHeight(height int) terminalLayoutMode {
-	return panecommon.ModeForHeight(height)
+	return presentationpolicy.LayoutModeForHeight(height)
 }
 
 func pickerVisibleRows(height, maximum int) int {
-	return panecommon.PickerVisibleRows(height, maximum)
+	return presentationpolicy.PickerVisibleRows(height, maximum)
 }
 
 func compactPickerRows(rows []string) []string {
-	return panecommon.CompactRows(rows)
+	return presentationpolicy.CompactPickerRows(rows)
 }
 
 func renderModalRows(m *bubbleModel, border color.Color, rows []string) string {
