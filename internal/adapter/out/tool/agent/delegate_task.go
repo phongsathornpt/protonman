@@ -34,7 +34,7 @@ func NewDelegateTask(coordinator *agent.Coordinator, parentIDs ...string) tool.H
 
 func (delegateTaskHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                   "subagent",
+		Name:                   tool.NameSubagent,
 		Description:            "Spawn a specialized subagent asynchronously and return its agent_id immediately. Use subagent action=wait when delegated work reaches the critical path; it waits for session agent activity and never cancels children on observation timeout.",
 		Kind:                   tool.KindAgent,
 		Mutability:             tool.MutabilityMutating,

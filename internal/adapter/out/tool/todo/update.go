@@ -33,7 +33,7 @@ func NewUpdateTodoForSession(store tododomain.Repository, sessionID string) tool
 
 func (updateTodoHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:         "todo",
+		Name:         tool.NameTodo,
 		Description:  "Patch the parent-owned task plan atomically using explicit add, set_status, set_text, or remove operations.",
 		Kind:         tool.KindTask,
 		Mutability:   tool.MutabilityMutating,

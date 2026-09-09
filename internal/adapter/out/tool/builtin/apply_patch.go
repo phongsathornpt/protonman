@@ -77,7 +77,7 @@ func NewApplyPatch(workspaceRoot *workspace.Workspace, stores ...checkpoint.Stor
 
 func (applyPatchHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "edit",
+		Name:                tool.NameEdit,
 		Description:         "Apply a bounded multi-file patch to the workspace.",
 		Kind:                tool.KindEdit,
 		Mutability:          tool.MutabilityMutating,

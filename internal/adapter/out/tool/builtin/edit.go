@@ -41,7 +41,7 @@ func NewEdit(workspaceRoot *workspace.Workspace, store checkpoint.Store) tool.Ha
 
 func (h editHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:        "edit",
+		Name:        tool.NameEdit,
 		Description: "Edit workspace files. Use action=write to create/replace a full file, replace for exact text replacement, patch for a bounded multi-file patch, or restore for a Protonman checkpoint.",
 		Kind:        tool.KindEdit,
 		Mutability:  tool.MutabilityMutating,

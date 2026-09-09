@@ -25,7 +25,7 @@ func NewGetTodoForSession(store tododomain.Repository, sessionID string) tool.Ha
 
 func (getTodoHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:         "todo",
+		Name:         tool.NameTodo,
 		Description:  "Read the current parent-owned task snapshot and revision.",
 		Kind:         tool.KindTask,
 		Mutability:   tool.MutabilityReadOnly,

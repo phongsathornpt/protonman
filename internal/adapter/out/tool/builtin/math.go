@@ -30,7 +30,7 @@ func NewMath() tool.Handler { return mathHandler{} }
 
 func (mathHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:        "math",
+		Name:        tool.NameMath,
 		Description: "Evaluate deterministic numeric expressions locally in pure Go. Supports +, -, *, /, %, ^, parentheses, pi, e, and common functions such as sqrt, abs, min, max, pow, round, floor, ceil, ln, log10, exp, sin, cos, and tan.",
 		Kind:        tool.KindCompute,
 		Mutability:  tool.MutabilityReadOnly,

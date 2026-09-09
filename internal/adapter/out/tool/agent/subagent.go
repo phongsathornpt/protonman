@@ -44,7 +44,7 @@ func NewSubagent(coordinator *agent.Coordinator, parentIDs ...string) tool.Handl
 
 func (h subagentHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                   "subagent",
+		Name:                   tool.NameSubagent,
 		Description:            "Subagent capability. Use action=spawn, wait, get, list, cancel, or resume to manage specialized concurrent agents.",
 		Kind:                   tool.KindAgent,
 		Mutability:             tool.MutabilityMutating,

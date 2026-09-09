@@ -42,7 +42,7 @@ func NewResumeAgent(c *agent.Coordinator) tool.Handler {
 }
 
 func (h agentLifecycleHandler) Definition() tool.Definition {
-	def := tool.Definition{Name: "subagent", Kind: tool.KindAgent, ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded}
+	def := tool.Definition{Name: tool.NameSubagent, Kind: tool.KindAgent, ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded}
 	switch h.action {
 	case subagentActionWait:
 		def.Description = "Wait for the next subagent completion/failure activity. A wait timeout is non-fatal and never cancels children."

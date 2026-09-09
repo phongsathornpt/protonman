@@ -20,7 +20,7 @@ type readFileInput struct {
 
 func (readFileHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "read",
+		Name:                tool.NameRead,
 		Description:         "Read a known workspace artifact. Text supports bounded byte or line ranges; image, structured, and metadata views provide bounded inspection.",
 		Kind:                tool.KindForName("read"),
 		Mutability:          tool.MutabilityReadOnly,

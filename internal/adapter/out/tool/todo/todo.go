@@ -27,7 +27,7 @@ func NewTodoForSession(store tododomain.Repository, sessionID string) tool.Handl
 
 func (h todoHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:        "todo",
+		Name:        tool.NameTodo,
 		Description: "Task-plan capability. Use action=get to read the current revision and tasks, or action=update to atomically patch tasks using expected_revision and operations.",
 		Kind:        tool.KindTask,
 		Mutability:  tool.MutabilityMutating,

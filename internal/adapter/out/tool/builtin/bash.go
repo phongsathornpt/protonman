@@ -56,7 +56,7 @@ func NewBashWithCheckpoint(workspaceRoot *workspace.Workspace, launcher sandbox.
 
 func (bashHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                   "bash",
+		Name:                   tool.NameBash,
 		Description:            "Execute external programs, builds, tests, package managers, language runtimes, transformations, and shell workflows.",
 		Kind:                   tool.KindForName("bash"),
 		Mutability:             tool.MutabilityMutating,

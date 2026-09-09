@@ -21,18 +21,18 @@ type callMetadata struct {
 }
 
 var builtinMetadata = map[string]callMetadata{
-	"read":     {Metadata: Metadata{Name: "read", Kind: KindRead, DisplayName: "Read"}, title: titleReadFile, target: targetReadFile, affectedPaths: affectedSinglePath("path", "file_path", "file", "filename", "target")},
-	"math":     {Metadata: Metadata{Name: "math", Kind: KindCompute, DisplayName: "Calculate"}, title: titleCalculate, target: targetCalculate},
-	"edit":     {Metadata: Metadata{Name: "edit", Kind: KindEdit, DisplayName: "Edit"}, title: titleEdit, target: targetEdit, affectedPaths: affectedEdit},
-	"ls":       {Metadata: Metadata{Name: "ls", Kind: KindRead, DisplayName: "List"}, title: titleListDir, target: targetListDir},
-	"find":     {Metadata: Metadata{Name: "find", Kind: KindRead, DisplayName: "Find files"}, title: titleFindFiles, target: targetFindFiles},
-	"grep":     {Metadata: Metadata{Name: "grep", Kind: KindGrep, DisplayName: "Search"}, title: titleGrep, target: targetGrep},
-	"bash":     {Metadata: Metadata{Name: "bash", Kind: KindBash, DisplayName: "Run"}, title: titleBash, target: targetBash},
-	"web":      {Metadata: Metadata{Name: "web", Kind: KindWeb, DisplayName: "Web"}, title: titleWeb, target: targetWeb},
-	"git":      {Metadata: Metadata{Name: "git", Kind: KindGit, DisplayName: "Git"}, title: titleGitStatus, target: targetGitStatus},
-	"todo":     {Metadata: Metadata{Name: "todo", Kind: KindTask, DisplayName: "Tasks"}, title: titleTodo, target: targetTodo},
-	"skill":    {Metadata: Metadata{Name: "skill", Kind: KindRead, DisplayName: "Skill"}, title: titleActivateSkill, target: targetActivateSkill},
-	"subagent": {Metadata: Metadata{Name: "subagent", Kind: KindAgent, DisplayName: "Subagent"}, title: titleSubagent, target: targetSubagent},
+	NameRead:     {Metadata: Metadata{Name: NameRead, Kind: KindRead, DisplayName: "Read"}, title: titleReadFile, target: targetReadFile, affectedPaths: affectedSinglePath("path", "file_path", "file", "filename", "target")},
+	NameMath:     {Metadata: Metadata{Name: NameMath, Kind: KindCompute, DisplayName: "Calculate"}, title: titleCalculate, target: targetCalculate},
+	NameEdit:     {Metadata: Metadata{Name: NameEdit, Kind: KindEdit, DisplayName: "Edit"}, title: titleEdit, target: targetEdit, affectedPaths: affectedEdit},
+	NameLS:       {Metadata: Metadata{Name: NameLS, Kind: KindRead, DisplayName: "List"}, title: titleListDir, target: targetListDir},
+	NameFind:     {Metadata: Metadata{Name: NameFind, Kind: KindRead, DisplayName: "Find files"}, title: titleFindFiles, target: targetFindFiles},
+	"grep":       {Metadata: Metadata{Name: "grep", Kind: KindGrep, DisplayName: "Search"}, title: titleGrep, target: targetGrep},
+	NameBash:     {Metadata: Metadata{Name: NameBash, Kind: KindBash, DisplayName: "Run"}, title: titleBash, target: targetBash},
+	NameWeb:      {Metadata: Metadata{Name: NameWeb, Kind: KindWeb, DisplayName: "Web"}, title: titleWeb, target: targetWeb},
+	NameGit:      {Metadata: Metadata{Name: NameGit, Kind: KindGit, DisplayName: "Git"}, title: titleGitStatus, target: targetGitStatus},
+	NameTodo:     {Metadata: Metadata{Name: NameTodo, Kind: KindTask, DisplayName: "Tasks"}, title: titleTodo, target: targetTodo},
+	NameSkill:    {Metadata: Metadata{Name: NameSkill, Kind: KindRead, DisplayName: "Skill"}, title: titleActivateSkill, target: targetActivateSkill},
+	NameSubagent: {Metadata: Metadata{Name: NameSubagent, Kind: KindAgent, DisplayName: "Subagent"}, title: titleSubagent, target: targetSubagent},
 }
 
 // MetadataForName returns canonical metadata for a known built-in tool.

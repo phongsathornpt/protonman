@@ -41,7 +41,7 @@ func (h searchReplaceHandler) PermissionDetail(arguments json.RawMessage) string
 
 func (searchReplaceHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "edit",
+		Name:                tool.NameEdit,
 		Description:         "Replace an exact string in a workspace file.",
 		Kind:                tool.KindEdit,
 		Mutability:          tool.MutabilityMutating,

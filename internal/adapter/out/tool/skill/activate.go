@@ -42,7 +42,7 @@ func (h activateSkillHandler) BindSkillRegistry(registry *skill.Registry) tool.H
 
 func (activateSkillHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "skill",
+		Name:                tool.NameSkill,
 		Description:         "Load full instructions and bundled resource locations for a specialized skill.",
 		Kind:                tool.KindForName("skill"),
 		Mutability:          tool.MutabilityMutating,

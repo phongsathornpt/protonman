@@ -131,7 +131,7 @@ func newWebFetchTransport(policy sandbox.NetworkPolicy, resolver ipResolver, dia
 
 func (webFetchHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:        "web",
+		Name:        tool.NameWeb,
 		Description: "Web capability. Use action=search to discover sources, or action=fetch when the target HTTP or HTTPS URL is already known.",
 		Kind:        tool.KindForName("web"),
 		Mutability:  tool.MutabilityReadOnly,

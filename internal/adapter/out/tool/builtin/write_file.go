@@ -42,7 +42,7 @@ func (h writeFileHandler) PermissionDetail(arguments json.RawMessage) string {
 
 func (writeFileHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "edit",
+		Name:                tool.NameEdit,
 		Description:         "Create or replace a UTF-8 text file atomically and return SHA-256 evidence for the written content. Prefer this over shell echo/printf/cat heredocs or output redirection used only to write a file.",
 		Kind:                tool.KindEdit,
 		Mutability:          tool.MutabilityMutating,

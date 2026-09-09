@@ -63,7 +63,7 @@ func NewGitStatus(workspaceRoot *workspace.Workspace, launchers ...sandbox.Launc
 
 func (gitStatusHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "git",
+		Name:                tool.NameGit,
 		Description:         "Git capability. Use action=status to inspect compact branch and working-tree state.",
 		Kind:                tool.KindGit,
 		Mutability:          tool.MutabilityMutating,

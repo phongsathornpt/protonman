@@ -36,7 +36,7 @@ func NewFindFiles(workspaceRoot *workspace.Workspace) tool.Handler {
 
 func (findFilesHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "find",
+		Name:                tool.NameFind,
 		Description:         "Find workspace paths recursively by glob pattern.",
 		Kind:                tool.KindForName("find"),
 		Mutability:          tool.MutabilityReadOnly,
