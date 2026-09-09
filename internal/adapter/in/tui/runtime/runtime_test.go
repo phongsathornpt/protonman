@@ -396,7 +396,7 @@ func TestViewportTailOnlyHydratesBeforePageUp(t *testing.T) {
 	m.resize(80, 18)
 	m.showWelcome = false
 	m.busy = true
-	m.conversationViewport.followTail = true
+	m.conversationViewport.setFollowing(true)
 	for i := 0; i < 40; i++ {
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nmore detail", i)})
 	}
@@ -646,17 +646,17 @@ func TestMouseWheelOnlyScrollsInsideTranscriptViewport(t *testing.T) {
 	}
 	m.refreshViewport()
 	m.viewport.GotoBottom()
-	m.conversationViewport.followTail = true
+	m.conversationViewport.setFollowing(true)
 	bottom := m.viewport.YOffset()
 	updated, _ := m.Update(tea.MouseWheelMsg{X: 4, Y: m.viewport.Height() + 1, Button: tea.MouseWheelUp})
 	m = updated.(*bubbleModel)
-	if m.viewport.YOffset() != bottom || !m.conversationViewport.followTail {
-		t.Fatalf("wheel over chrome changed viewport: offset=%d want=%d follow=%v", m.viewport.YOffset(), bottom, m.conversationViewport.followTail)
+	if m.viewport.YOffset() != bottom || !m.conversationViewport.following() {
+		t.Fatalf("wheel over chrome changed viewport: offset=%d want=%d follow=%v", m.viewport.YOffset(), bottom, m.conversationViewport.following())
 	}
 	updated, _ = m.Update(tea.MouseWheelMsg{X: 4, Y: maxInt(0, m.viewport.Height()-1), Button: tea.MouseWheelUp})
 	m = updated.(*bubbleModel)
-	if m.viewport.YOffset() >= bottom || m.conversationViewport.followTail {
-		t.Fatalf("wheel inside transcript did not scroll: offset=%d bottom=%d follow=%v", m.viewport.YOffset(), bottom, m.conversationViewport.followTail)
+	if m.viewport.YOffset() >= bottom || m.conversationViewport.following() {
+		t.Fatalf("wheel inside transcript did not scroll: offset=%d bottom=%d follow=%v", m.viewport.YOffset(), bottom, m.conversationViewport.following())
 	}
 }
 
@@ -668,7 +668,7 @@ func TestScrolledViewportDefersActiveTailRefreshUntilScroll(t *testing.T) {
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nmore detail", i)})
 	}
 	m.refreshViewport()
-	m.conversationViewport.followTail = false
+	m.conversationViewport.setFollowing(false)
 	m.viewport.SetYOffset(maxInt(1, m.viewport.TotalLineCount()/3))
 	beforeLines := m.viewport.TotalLineCount()
 	beforeOffset := m.viewport.YOffset()
@@ -690,7 +690,7 @@ func TestPageDownHydratesDeferredTail(t *testing.T) {
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nmore detail", i)})
 	}
 	m.refreshViewport()
-	m.conversationViewport.followTail = false
+	m.conversationViewport.setFollowing(false)
 	m.viewport.SetYOffset(maxInt(1, m.viewport.TotalLineCount()/3))
 	beforeLines := m.viewport.TotalLineCount()
 	m.historyState.AppendAssistantDelta("live one\nlive two\nlive three")
@@ -744,7 +744,7 @@ func TestScrollingRendersSingleComposer(t *testing.T) {
 	}
 	m.refreshViewport()
 	m.viewport.GotoBottom()
-	m.conversationViewport.followTail = true
+	m.conversationViewport.setFollowing(true)
 
 	updated, _ := m.Update(testKey(tea.KeyPgUp))
 	m = updated.(*bubbleModel)

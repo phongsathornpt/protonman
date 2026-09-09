@@ -123,7 +123,7 @@ func TestMinimalBusyChromeKeepsActionableHelpCompact(t *testing.T) {
 func TestScrolledFooterPrioritizesReturnToLatest(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
-	m.conversationViewport.followTail = false
+	m.conversationViewport.setFollowing(false)
 	footer := ansi.Strip(m.footerView())
 	for _, want := range []string{"enter", "send", "pgdn", "scroll"} {
 		if !strings.Contains(footer, want) {

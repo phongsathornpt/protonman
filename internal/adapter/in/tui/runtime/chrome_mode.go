@@ -75,7 +75,7 @@ func (m bubbleModel) shortcutHint() string {
 			key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "stop")),
 		})
 	}
-	if !m.conversationViewport.followTail {
+	if !m.conversationViewport.following() {
 		return helpView.View(contextualHelp{
 			m.keys.Submit,
 			m.keys.PageDown,

@@ -27,7 +27,7 @@ func promptPlaceholder(hasRunner bool, mode permission.Mode, planMode bool) stri
 
 func (m *bubbleModel) resetTranscript() {
 	m.ensureHistoryState().Reset()
-	m.conversationViewport.followTail = true
+	m.conversationViewport.setFollowing(true)
 	m.showWelcome = true
 	m.refreshTranscriptViewport(true)
 }
@@ -36,7 +36,7 @@ func (m *bubbleModel) resetConversation() {
 	m.ensureHistoryState().Reset()
 	m.messages = nil
 	m.queue = nil
-	m.conversationViewport.followTail = true
+	m.conversationViewport.setFollowing(true)
 	m.showWelcome = true
 	if m.skills != nil {
 		m.skills.ResetActivated()
