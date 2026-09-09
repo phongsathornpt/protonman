@@ -133,17 +133,15 @@ func (v *todoPaneView) syncTitle(ctx paneRenderContext) {
 	v.picker.Title = fmt.Sprintf("Tasks · %d/%d done", completed, len(ctx.todos))
 }
 
-func (v *todoPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
-	ctx := newPaneRenderContext(m)
+func (v *todoPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	v.ensurePicker(ctx)
 	switch message.String() {
 	case "esc", "enter":
-		m.panes.bottom.remove(todoInspectViewID)
-		return true, nil
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: todoInspectViewID}}
 	}
 	updated, cmd := v.picker.Update(message)
 	v.picker = updated
-	return true, cmd
+	return paneKeyResult{handled: true, cmd: cmd}
 }
 
 func (v *todoPaneView) Render(ctx paneRenderContext) string {

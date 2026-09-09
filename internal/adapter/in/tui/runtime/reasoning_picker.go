@@ -117,36 +117,33 @@ func (v *reasoningPaneView) Render(ctx paneRenderContext) string {
 	return renderModalRows(ctx, accentAssistant, strings.Split(v.picker.View(), "\n"))
 }
 
-func (v *reasoningPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
+func (v *reasoningPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	if len(v.choices) == 0 {
-		return true, nil
+		return paneKeyResult{handled: true}
 	}
 	switch message.String() {
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		idx := int(message.String()[0] - '1')
+		idx := int(message.String()[0] - "1"[0])
 		if idx >= 0 && idx < len(v.choices) {
-			m.panes.bottom.remove(reasoningViewID)
-			return true, m.setReasoningEffort(v.choices[idx])
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionSetReasoning, paneID: reasoningViewID, reasoning: v.choices[idx]}}
 		}
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "tab", "shift+tab":
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "enter":
 		idx := v.picker.Index()
 		if idx < 0 || idx >= len(v.choices) {
-			return true, nil
+			return paneKeyResult{handled: true}
 		}
-		m.panes.bottom.remove(reasoningViewID)
-		return true, m.setReasoningEffort(v.choices[idx])
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionSetReasoning, paneID: reasoningViewID, reasoning: v.choices[idx]}}
 	case "esc", "q":
-		m.panes.bottom.remove(reasoningViewID)
-		return true, nil
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: reasoningViewID}}
 	case "up", "k", "down", "j", "home", "g", "end", "G", "pgup", "pgdown":
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
-		return true, cmd
+		return paneKeyResult{handled: true, cmd: cmd}
 	default:
-		return false, nil
+		return paneKeyResult{}
 	}
 }
 

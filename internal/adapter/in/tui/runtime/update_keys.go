@@ -54,7 +54,22 @@ func (m *bubbleModel) handleModalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 	if top == nil {
 		return false, nil
 	}
-	handled, command := top.HandleKey(m, message)
+	if isolated, ok := top.(isolatedPaneKeyHandler); ok {
+		result := isolated.HandlePaneKey(newPaneRenderContext(m), message)
+		command := result.cmd
+		if result.action.kind != paneActionNone {
+			command = tea.Batch(command, m.applyPaneAction(result.action))
+		}
+		if result.handled {
+			m.requestRelayout()
+		}
+		return result.handled, command
+	}
+	legacy, ok := top.(modelPaneKeyHandler)
+	if !ok {
+		return false, nil
+	}
+	handled, command := legacy.HandleKey(m, message)
 	if handled {
 		m.requestRelayout()
 	}

@@ -175,7 +175,7 @@ func TestReasoningPickerSelectsLevel(t *testing.T) {
 		t.Fatal("reasoning picker missing")
 	}
 	view.picker.Select(3)
-	handled, _ := view.HandleKey(m, testKey(tea.KeyEnter))
+	handled, _ := m.handleModalKey(testKey(tea.KeyEnter))
 	if !handled {
 		t.Fatal("enter was not handled")
 	}
@@ -197,9 +197,9 @@ func TestReasoningPickerShiftTabDoesNotLeak(t *testing.T) {
 		t.Fatal("reasoning picker missing")
 	}
 	initialMode := m.service.Mode()
-	handled, _ := view.HandleKey(m, testText("s"))
+	handled, _ := m.handleModalKey(testText("s"))
 	// Test shift+tab directly:
-	handledShiftTab, _ := view.HandleKey(m, testShiftTab())
+	handledShiftTab, _ := m.handleModalKey(testShiftTab())
 	if !handledShiftTab {
 		t.Fatal("shift+tab was not handled by reasoning picker")
 	}
@@ -219,7 +219,7 @@ func TestReasoningPickerNumberKeySelects(t *testing.T) {
 		t.Fatal("reasoning picker missing")
 	}
 	// Pressing '2' selects choice index 1 (low)
-	handled, _ := view.HandleKey(m, testText("2"))
+	handled, _ := m.handleModalKey(testText("2"))
 	if !handled {
 		t.Fatal("key 2 was not handled")
 	}
@@ -686,12 +686,12 @@ func TestSlashAutocompleteWrapAround(t *testing.T) {
 	if state == nil {
 		t.Fatal("expected slash pane state")
 	}
-	_, _ = state.HandleKey(model, testKey(tea.KeyUp))
+	_ = state.HandlePaneKey(newPaneRenderContext(model), testKey(tea.KeyUp))
 	matches := model.slashMatches()
 	if state.picker.Index() != len(matches)-1 {
 		t.Fatalf("expected wrapped index %d, got %d", len(matches)-1, state.picker.Index())
 	}
-	_, _ = state.HandleKey(model, testKey(tea.KeyDown))
+	_ = state.HandlePaneKey(newPaneRenderContext(model), testKey(tea.KeyDown))
 	if state.picker.Index() != 0 {
 		t.Fatalf("expected wrapped index 0, got %d", state.picker.Index())
 	}

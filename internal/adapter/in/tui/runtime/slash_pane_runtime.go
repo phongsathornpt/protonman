@@ -87,24 +87,20 @@ func (v *slashPaneView) Render(ctx paneRenderContext) string {
 	return v.picker.View()
 }
 
-func (v *slashPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
-	ctx := newPaneRenderContext(m)
+func (v *slashPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	v.sync(ctx)
 	switch message.String() {
 	case "up", "k", "down", "j", "pgup", "pgdown", "home", "g", "end", "G":
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
-		return true, cmd
+		return paneKeyResult{handled: true, cmd: cmd}
 	case "tab":
-		_, command := m.acceptSlash(false)
-		return true, command
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionAcceptSlash}}
 	case "enter":
-		_, command := m.acceptSlash(true)
-		return true, command
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionAcceptSlash, runSlash: true}}
 	case "esc":
-		m.panes.bottom.remove(slashViewID)
-		return true, nil
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: slashViewID}}
 	default:
-		return false, nil
+		return paneKeyResult{}
 	}
 }

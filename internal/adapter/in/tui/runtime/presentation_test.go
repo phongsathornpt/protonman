@@ -211,7 +211,7 @@ func TestFocusedTodoPaneBoundsAndScrollsLargePlans(t *testing.T) {
 		t.Fatalf("pane exceeds terminal: %dx%d", lipgloss.Width(first), lipgloss.Height(first))
 	}
 	for range 5 {
-		_, _ = view.HandleKey(m, testKey(tea.KeyDown))
+		_ = view.HandlePaneKey(newPaneRenderContext(m), testKey(tea.KeyDown))
 	}
 	after := view.Render(newPaneRenderContext(m))
 	if first == after || !strings.Contains(after, "task-005") {

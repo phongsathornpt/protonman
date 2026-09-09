@@ -3,7 +3,6 @@ package runtime
 import (
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
-	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
@@ -11,7 +10,6 @@ import (
 type bottomPaneView interface {
 	ID() string
 	Render(paneRenderContext) string
-	HandleKey(*bubbleModel, tea.KeyPressMsg) (handled bool, cmd tea.Cmd)
 	ReplacesComposer() bool
 } // bottomPaneView is a transient interaction surface that can replace or augment
 // the composer. Permission prompts and slash completion are the first users;

@@ -67,13 +67,12 @@ type agentsPaneView struct{}
 
 func (*agentsPaneView) ID() string             { return agentsViewID }
 func (*agentsPaneView) ReplacesComposer() bool { return false }
-func (*agentsPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
+func (*agentsPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	switch message.String() {
 	case "esc", "enter":
-		m.panes.bottom.remove(agentsViewID)
-		return true, nil
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: agentsViewID}}
 	default:
-		return false, nil
+		return paneKeyResult{}
 	}
 }
 func (*agentsPaneView) Render(ctx paneRenderContext) string {
