@@ -65,15 +65,8 @@ func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) 
 			v.parked = false
 			m.activity = "waiting for permission"
 			return true, nil
-		case "pgup":
-			m.hydrateViewportForScroll()
-			m.viewport.PageUp()
-			m.followTail = m.viewport.AtBottom()
-			return true, nil
-		case "pgdown":
-			m.viewport.PageDown()
-			m.followTail = m.viewport.AtBottom()
-			return true, nil
+		case "pgup", "pgdown":
+			return true, m.updateConversationViewport(message)
 		case "up", "k":
 			m.hydrateViewportForScroll()
 			m.viewport.ScrollUp(1)
