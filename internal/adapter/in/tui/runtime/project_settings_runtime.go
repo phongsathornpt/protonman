@@ -3,6 +3,7 @@ package runtime
 import (
 	tea "charm.land/bubbletea/v2"
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/commandutil"
 	"strconv"
 	"strings"
 
@@ -58,7 +59,7 @@ func (m *bubbleModel) handleProjectSet(argument string) tea.Cmd {
 		}
 		return saveProjectReasoningCmd(m.workDir, effort)
 	case "subagents":
-		enabled, err := parseSubagentsEnabled(value)
+		enabled, err := commandutil.ParseSubagentsEnabled(value)
 		if err != nil {
 			m.appendError(err.Error())
 			m.refreshViewport()
@@ -74,7 +75,7 @@ func (m *bubbleModel) handleProjectSet(argument string) tea.Cmd {
 		}
 		return saveProjectToolCallsCmd(m.workDir, calls)
 	case "permission", "mode":
-		if len(parts) >= 3 && isPermissionAction(parts[1]) {
+		if len(parts) >= 3 && commandutil.IsPermissionAction(parts[1]) {
 			return m.handleProjectPermission(strings.Join(parts[1:], " "))
 		}
 		mode, err := permission.ParseMode(value)

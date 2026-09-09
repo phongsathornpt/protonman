@@ -3,6 +3,7 @@ package runtime
 import (
 	tea "charm.land/bubbletea/v2"
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/commandutil"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -189,35 +190,17 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 	return nil
 }
 
-func parseSubagentsEnabled(value string) (bool, error) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "on", "true", "enable", "enabled":
-		return true, nil
-	case "off", "false", "disable", "disabled":
-		return false, nil
-	default:
-		return false, fmt.Errorf("subagents must be on or off")
-	}
-}
-
-func subagentsEnabledLabel(enabled bool) string {
-	if enabled {
-		return "enabled"
-	}
-	return "disabled"
-}
-
 func (m *bubbleModel) handleSubagentsCommand(argument string) tea.Cmd {
 	arg := strings.TrimSpace(argument)
 	if arg == "" {
-		m.appendLine("Subagents: " + commandStyle.Render(subagentsEnabledLabel(m.subagentsEnabled)))
+		m.appendLine("Subagents: " + commandStyle.Render(commandutil.SubagentsEnabledLabel(m.subagentsEnabled)))
 		if !m.subagentsEnabled && len(m.agents.List()) > 0 {
 			m.appendMuted("New delegation is disabled; existing agents remain manageable.")
 		}
 		m.refreshViewport()
 		return nil
 	}
-	enabled, err := parseSubagentsEnabled(arg)
+	enabled, err := commandutil.ParseSubagentsEnabled(arg)
 	if err != nil {
 		m.appendError(err.Error())
 		m.refreshViewport()

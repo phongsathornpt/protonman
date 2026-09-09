@@ -2,15 +2,13 @@ package runtime
 
 import (
 	tea "charm.land/bubbletea/v2"
-	"errors"
-	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/commandutil"
 	"strconv"
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
-	"github.com/phongsathornpt/protonman/internal/core/permission"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -37,7 +35,7 @@ func (m *bubbleModel) executeUserConfigCommand(line, rawName string) tea.Cmd {
 	}
 	switch strings.ToLower(fields[1]) {
 	case "subagents":
-		enabled, err := parseSubagentsEnabled(fields[2])
+		enabled, err := commandutil.ParseSubagentsEnabled(fields[2])
 		if err != nil {
 			m.appendError(err.Error())
 			m.refreshViewport()
@@ -77,7 +75,7 @@ func (m *bubbleModel) executeUserConfigCommand(line, rawName string) tea.Cmd {
 }
 
 func (m *bubbleModel) handleUserConfigPermission(args []string) tea.Cmd {
-	rule, err := parsePermissionRuleArgs(args)
+	rule, err := commandutil.ParsePermissionRuleArgs(args)
 	if err != nil {
 		m.appendError(err.Error())
 		m.refreshViewport()
@@ -99,7 +97,7 @@ func (m *bubbleModel) handleProjectPermission(argument string) tea.Cmd {
 		return nil
 	}
 	parts := strings.Fields(strings.TrimSpace(argument))
-	rule, err := parsePermissionRuleArgs(parts)
+	rule, err := commandutil.ParsePermissionRuleArgs(parts)
 	if err != nil {
 		m.appendError(err.Error())
 		m.refreshViewport()
@@ -112,44 +110,6 @@ func (m *bubbleModel) handleProjectPermission(argument string) tea.Cmd {
 	return func() tea.Msg {
 		err := (app.Projects{}).SavePermissionRule(workDir, rule)
 		return permissionRuleSavedMsg{scope: "project", rule: rule, err: err}
-	}
-}
-
-func parsePermissionRuleArgs(args []string) (permission.Rule, error) {
-	if len(args) < 2 {
-		return permission.Rule{}, errors.New("usage: permission <allow|deny|ask> <tool> [pattern]")
-	}
-	action, err := permission.ParseAction(args[0])
-	if err != nil {
-		return permission.Rule{}, fmt.Errorf("invalid permission action %q: use allow, deny, or ask", args[0])
-	}
-	toolKind, err := permission.ParseToolKind(args[1])
-	if err != nil {
-		return permission.Rule{}, err
-	}
-	patternMode := permission.PatternModeGlob
-	if toolKind == permission.ToolWeb {
-		patternMode = permission.PatternModeDomain
-	}
-	pattern := "*"
-	if len(args) > 2 {
-		pattern = strings.Join(args[2:], " ")
-	}
-	pattern = permission.NormalizePattern(toolKind, patternMode, pattern)
-	return permission.Rule{
-		Action:      action,
-		Tool:        toolKind,
-		Pattern:     pattern,
-		PatternMode: patternMode,
-	}, nil
-}
-
-func isPermissionAction(s string) bool {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "allow", "deny", "ask":
-		return true
-	default:
-		return false
 	}
 }
 

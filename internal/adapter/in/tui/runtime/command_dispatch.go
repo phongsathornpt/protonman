@@ -3,6 +3,7 @@ package runtime
 import (
 	tea "charm.land/bubbletea/v2"
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/commandutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	"strings"
 )
@@ -54,16 +55,8 @@ func (m *bubbleModel) appendHelp() {
 	for _, command := range slashCatalog {
 		alias := ""
 		if len(command.Aliases) > 0 {
-			alias = " (" + strings.Join(prefixNames(command.Aliases), ", ") + ")"
+			alias = " (" + strings.Join(commandutil.PrefixNames(command.Aliases), ", ") + ")"
 		}
 		m.appendLine("/" + textview.PadRight(command.Name, 16) + " " + command.Description + alias)
 	}
-}
-
-func prefixNames(names []string) []string {
-	out := make([]string, 0, len(names))
-	for _, name := range names {
-		out = append(out, "/"+name)
-	}
-	return out
 }
