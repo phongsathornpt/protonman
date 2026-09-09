@@ -29,12 +29,7 @@ func (m *bubbleModel) renderedViewport() string {
 	if m == nil {
 		return ""
 	}
-	if !m.viewportViewDirty && m.viewportViewCache != "" {
-		return m.viewportViewCache
-	}
-	m.viewportViewCache = m.viewport.View()
-	m.viewportViewDirty = false
-	return m.viewportViewCache
+	return m.viewport.View()
 }
 
 func (m *bubbleModel) liveView() string {

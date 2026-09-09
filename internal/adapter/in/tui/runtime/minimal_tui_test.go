@@ -256,3 +256,28 @@ func TestMinimalIdleFooterHidesSecondaryShortcuts(t *testing.T) {
 		}
 	}
 }
+
+func TestViewIsPureAndIdempotent(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(60, 16)
+	m.showWelcome = false
+	m.appendLine("history")
+	m.refreshViewport()
+	m.viewportViewCache = "sentinel-cache"
+	m.viewportViewDirty = true
+
+	generation := m.layoutGeneration
+	frame := m.frameChrome
+	yOffset := m.viewport.YOffset()
+	dirty := m.viewportViewDirty
+	cache := m.viewportViewCache
+
+	first := m.View().Content
+	second := m.View().Content
+	if first != second {
+		t.Fatal("repeated View calls produced different output")
+	}
+	if m.layoutGeneration != generation || m.frameChrome != frame || m.viewport.YOffset() != yOffset || m.viewportViewDirty != dirty || m.viewportViewCache != cache {
+		t.Fatal("View mutated runtime state")
+	}
+}

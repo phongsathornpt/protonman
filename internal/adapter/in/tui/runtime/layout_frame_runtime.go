@@ -115,14 +115,8 @@ func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame fram
 }
 
 func (m *bubbleModel) frameChromeForView() frameChrome {
-	m.syncPromptHeight()
 	frame := m.buildFrameChrome()
-	if m.frameChrome.generation == 0 || frame.height != m.frameChrome.height {
-		m.applyFrameLayout(m.captureViewportScroll(), frame)
-		return m.frameChrome
-	}
 	frame.generation = m.frameChrome.generation
-	m.frameChrome = frame
 	return frame
 }
 
