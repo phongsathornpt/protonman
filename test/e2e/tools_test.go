@@ -22,9 +22,9 @@ func TestE2EFileAndProcessTools(t *testing.T) {
 		t.Fatalf("read_file failed (code %d): %s\n%s", readRes.exitCode, readRes.stdout, readRes.stderr)
 	}
 
-	// 2. write_file
+	// 2. edit action=write
 	writeRes := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call write_file {"file_path":"created.txt", "content":"Brand New Content"}`},
+		args: []string{"-y", "-p", `/call edit {"action":"write", "file_path":"created.txt", "content":"Brand New Content"}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -39,9 +39,9 @@ func TestE2EFileAndProcessTools(t *testing.T) {
 		t.Fatalf("created.txt content = %q, want 'Brand New Content'", string(createdDisk))
 	}
 
-	// 3. search_replace
+	// 3. edit action=replace
 	srRes := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call search_replace {"file_path":"created.txt", "old_string":"Brand New", "new_string":"Updated"}`},
+		args: []string{"-y", "-p", `/call edit {"action":"replace", "file_path":"created.txt", "old_string":"Brand New", "new_string":"Updated"}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -114,7 +114,7 @@ func TestE2EApplyPatch(t *testing.T) {
 		"*** End Patch"
 
 	patchEscaped := strings.ReplaceAll(patch, "\n", `\n`)
-	prompt := `/call apply_patch {"patch":"` + patchEscaped + `"}`
+	prompt := `/call edit {"action":"patch", "patch":"` + patchEscaped + `"}`
 
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", prompt},

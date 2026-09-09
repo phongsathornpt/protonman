@@ -44,9 +44,9 @@ func TestE2EFullBuiltinTools(t *testing.T) {
 		t.Fatalf("expected file not found error, got: %s %s", res.stdout, res.stderr)
 	}
 
-	// 3. write_file creating nested directories
+	// 3. edit action=write creating nested directories
 	res = runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call write_file {"file_path":"nested/deep/dir/file.txt","content":"deeply nested content"}`},
+		args: []string{"-y", "-p", `/call edit {"action":"write", "file_path":"nested/deep/dir/file.txt","content":"deeply nested content"}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -58,9 +58,9 @@ func TestE2EFullBuiltinTools(t *testing.T) {
 		t.Fatalf("nested file not written properly: %v", err)
 	}
 
-	// 4. search_replace error on missing string
+	// 4. edit action=replace error on missing string
 	res = runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call search_replace {"file_path":"hello.txt","old_string":"NonExistentTextXYZ","new_string":"replacement"}`},
+		args: []string{"-y", "-p", `/call edit {"action":"replace", "file_path":"hello.txt","old_string":"NonExistentTextXYZ","new_string":"replacement"}`},
 		dir:  ws,
 		env:  env,
 	})

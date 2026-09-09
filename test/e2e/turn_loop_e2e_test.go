@@ -37,7 +37,7 @@ func TestE2ETurnLoopToolCallAndResultCycle(t *testing.T) {
 	server.SetupWorkspaceConfig(t, home)
 
 	// Round 1: Model responds with a tool call to write a file
-	server.AddToolCallResponse("call_write_1", "write_file", `{"file_path":"agent_output.txt","content":"Created by AI Agent"}`)
+	server.AddToolCallResponse("call_write_1", "edit", `{"action":"write","file_path":"agent_output.txt","content":"Created by AI Agent"}`)
 	// Round 2: Model confirms after tool execution
 	server.AddTextResponse("File has been successfully created.")
 

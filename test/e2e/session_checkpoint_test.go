@@ -84,11 +84,11 @@ func TestE2ECheckpointsAndRestore(t *testing.T) {
 	// Original content of hello.txt
 	origContent := "Hello Coding E2E\nLine 2\n"
 
-	// 1. Mutate file with search_replace, using --output json to capture checkpoint_id
+	// 1. Mutate file with edit action=replace, using --output json to capture checkpoint_id
 	srRes := runProton(t, runOptions{
 		args: []string{
 			"-y",
-			"-p", `/call search_replace {"file_path":"hello.txt", "old_string":"Hello Coding E2E", "new_string":"Mutated Content"}`,
+			"-p", `/call edit {"action":"replace", "file_path":"hello.txt", "old_string":"Hello Coding E2E", "new_string":"Mutated Content"}`,
 			"--output", "json",
 		},
 		dir: ws,
@@ -117,11 +117,11 @@ func TestE2ECheckpointsAndRestore(t *testing.T) {
 		t.Fatalf("file not mutated: %s", string(diskContent))
 	}
 
-	// 2. Restore checkpoint via /call checkpoint_restore
+	// 2. Restore checkpoint via edit action=restore
 	restoreRes := runProton(t, runOptions{
 		args: []string{
 			"-y",
-			"-p", `/call checkpoint_restore {"checkpoint_id":"` + checkpointID + `"}`,
+			"-p", `/call edit {"action":"restore", "checkpoint_id":"` + checkpointID + `"}`,
 		},
 		dir: ws,
 		env: env,
