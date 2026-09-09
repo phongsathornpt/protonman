@@ -221,7 +221,7 @@ func (c *Coordinator) storeTerminal(ctx context.Context, entry *agentEntry, res 
 		kind = LifecycleAgentCanceled
 	}
 	event := nextLifecycleEvent(entry.status, kind, time.Now(), terminalReason(err))
-	resultCopy := cloneResult(res)
+	resultCopy := compactRetainedResult(res)
 	resultCopy.Err = nil
 	event.Result = &resultCopy
 	if err != nil {
@@ -230,7 +230,7 @@ func (c *Coordinator) storeTerminal(ctx context.Context, entry *agentEntry, res 
 	if transitionErr := c.persistAndApplyEntry(ctx, entry, event); transitionErr != nil {
 		return transitionErr
 	}
-	entry.result = res
+	entry.result = compactRetainedResult(res)
 	entry.err = err
 	return nil
 }
