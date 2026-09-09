@@ -8,92 +8,142 @@ import (
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 )
 
-func (m *bubbleModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
+func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	defer m.reconcileLayout()
+	if command, handled := m.updateTerminalEvent(msg); handled {
+		return m, command
+	}
+	if command, handled := m.updateAnimationEvent(msg); handled {
+		return m, command
+	}
+	if command, handled := m.updateRuntimeEvent(msg); handled {
+		return m, command
+	}
+	return m, nil
+}
+
+func (m *bubbleModel) updateTerminalEvent(msg tea.Msg) (tea.Cmd, bool) {
 	switch message := msg.(type) {
-	case agentLifecycleMsg:
-		return m.updateAgentLifecycle(message)
 	case tea.WindowSizeMsg:
 		m.resize(message.Width, message.Height)
-		return m, nil
+		return nil, true
 	case tea.KeyPressMsg:
 		if key.Matches(message, m.keys.Quit) {
-			return m.handleInterruptKey()
+			_, command := m.handleInterruptKey()
+			return command, true
 		}
 		if m.showTranscript {
-			return m.updateTranscriptKey(message)
+			_, command := m.updateTranscriptKey(message)
+			return command, true
 		}
-		return m.updateKey(message)
+		_, command := m.updateKey(message)
+		return command, true
 	case tea.MouseMsg:
-		mouse := message.Mouse()
+		return m.updateMouseEvent(message), true
+	default:
+		return nil, false
+	}
+}
+
+func (m *bubbleModel) updateMouseEvent(message tea.MouseMsg) tea.Cmd {
+	mouse := message.Mouse()
+	if m.showTranscript {
 		var command tea.Cmd
-		if m.showTranscript {
-			m.transcriptViewport, command = m.transcriptViewport.Update(message)
-			return m, command
-		}
-		if m.bottom.has(skillsViewID) {
-			if view, ok := m.bottom.find(skillsViewID).(*skillsPaneView); ok {
-				switch mouse.Button {
-				case tea.MouseWheelUp:
-					view.HandleKey(m, tea.KeyPressMsg{Code: tea.KeyUp})
-					m.requestRelayout()
-					return m, nil
-				case tea.MouseWheelDown:
-					view.HandleKey(m, tea.KeyPressMsg{Code: tea.KeyDown})
-					m.requestRelayout()
-					return m, nil
-				}
+		m.transcriptViewport, command = m.transcriptViewport.Update(message)
+		return command
+	}
+	if m.bottom.has(skillsViewID) {
+		if view, ok := m.bottom.find(skillsViewID).(*skillsPaneView); ok {
+			switch mouse.Button {
+			case tea.MouseWheelUp:
+				view.HandleKey(m, tea.KeyPressMsg{Code: tea.KeyUp})
+				m.requestRelayout()
+				return nil
+			case tea.MouseWheelDown:
+				view.HandleKey(m, tea.KeyPressMsg{Code: tea.KeyDown})
+				m.requestRelayout()
+				return nil
 			}
 		}
-		if mouse.Y < 0 || mouse.Y >= m.viewport.Height() {
-			return m, nil
-		}
-		command = m.updateConversationViewport(message)
-		return m, command
+	}
+	if mouse.Y < 0 || mouse.Y >= m.viewport.Height() {
+		return nil
+	}
+	return m.updateConversationViewport(message)
+}
+
+func (m *bubbleModel) updateAnimationEvent(msg tea.Msg) (tea.Cmd, bool) {
+	switch message := msg.(type) {
 	case spinner.TickMsg:
 		var command tea.Cmd
 		m.spinner, command = m.spinner.Update(message)
 		if !m.busy {
-			return m, nil
+			return nil, true
 		}
-		return m, command
+		return command, true
 	case cursor.BlinkMsg:
 		prompt := m.bottom.prompt()
 		updated, command := prompt.Update(message)
 		*prompt = updated
-		return m, command
-	case permissionRequestMsg:
-		return m.updatePermissionRequest(message)
-	case permissionBridgeClosedMsg:
-		return m, nil
-	case toolResultMsg:
-		return m.updateToolResult(message)
-	case modelsFetchedMsg:
-		return m.updateModelsFetched(message)
-	case providerSavedMsg:
-		return m.updateProviderSaved(message)
-	case modelSelectedMsg:
-		return m.updateModelSelected(message)
-	case providerActiveSelectedMsg:
-		return m.updateProviderActiveSelected(message)
-	case providerDeletedMsg:
-		return m.updateProviderDeleted(message)
-	case projectInitializedMsg:
-		return m.updateProjectInitialized(message)
-	case projectSettingSavedMsg:
-		return m.updateProjectSettingSaved(message)
-	case userSettingSavedMsg:
-		return m.updateUserSettingSaved(message)
-	case permissionRuleSavedMsg:
-		return m.updatePermissionRuleSaved(message)
-	case projectLoadedMsg:
-		return m.updateProjectLoaded(message)
-	case turnmsg.Delta:
-		return m.updateTurnDelta(message)
-	case turnmsg.EventsClosed:
-		return m.updateTurnEventsClosed(message)
-	case turnmsg.Done:
-		return m.updateTurnDone(message)
+		return command, true
+	default:
+		return nil, false
 	}
-	return m, nil
+}
+
+func (m *bubbleModel) updateRuntimeEvent(msg tea.Msg) (tea.Cmd, bool) {
+	switch message := msg.(type) {
+	case agentLifecycleMsg:
+		_, command := m.updateAgentLifecycle(message)
+		return command, true
+	case permissionRequestMsg:
+		_, command := m.updatePermissionRequest(message)
+		return command, true
+	case permissionBridgeClosedMsg:
+		return nil, true
+	case toolResultMsg:
+		_, command := m.updateToolResult(message)
+		return command, true
+	case modelsFetchedMsg:
+		_, command := m.updateModelsFetched(message)
+		return command, true
+	case providerSavedMsg:
+		_, command := m.updateProviderSaved(message)
+		return command, true
+	case modelSelectedMsg:
+		_, command := m.updateModelSelected(message)
+		return command, true
+	case providerActiveSelectedMsg:
+		_, command := m.updateProviderActiveSelected(message)
+		return command, true
+	case providerDeletedMsg:
+		_, command := m.updateProviderDeleted(message)
+		return command, true
+	case projectInitializedMsg:
+		_, command := m.updateProjectInitialized(message)
+		return command, true
+	case projectSettingSavedMsg:
+		_, command := m.updateProjectSettingSaved(message)
+		return command, true
+	case userSettingSavedMsg:
+		_, command := m.updateUserSettingSaved(message)
+		return command, true
+	case permissionRuleSavedMsg:
+		_, command := m.updatePermissionRuleSaved(message)
+		return command, true
+	case projectLoadedMsg:
+		_, command := m.updateProjectLoaded(message)
+		return command, true
+	case turnmsg.Delta:
+		_, command := m.updateTurnDelta(message)
+		return command, true
+	case turnmsg.EventsClosed:
+		_, command := m.updateTurnEventsClosed(message)
+		return command, true
+	case turnmsg.Done:
+		_, command := m.updateTurnDone(message)
+		return command, true
+	default:
+		return nil, false
+	}
 }
