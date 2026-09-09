@@ -3,6 +3,7 @@ package runtime
 import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/commandutil"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/projectpolicy"
 	projectpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/project"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -41,7 +42,7 @@ func (*projectPaneView) ReplacesComposer() bool {
 
 func (v *projectPaneView) Render(m *bubbleModel) string {
 	state := v.state
-	facts := []projectpane.ProjectFact{{Label: "Model", Value: fallbackProjectValue(m.activeModel, "not selected"), Source: string(m.projectSource(config.FieldModelDefault))}, {Label: "Provider", Value: fallbackProjectValue(m.activeProvider, "not selected"), Source: string(m.projectSource(config.FieldModelProvider))}, {Label: "Agent", Value: fallbackProjectValue(m.agentProfile, "universal"), Source: string(m.projectSource(config.FieldAgentProfile))}, {Label: "Thinking", Value: reasoningEffortLabel(m.reasoningEffort), Source: string(m.projectSource(config.FieldAgentReasoningEffort))}, {Label: "Subagents", Value: commandutil.SubagentsEnabledLabel(m.subagentsEnabled), Source: string(m.projectSource(config.FieldAgentSubagentsEnabled))}, {Label: "Permission", Value: m.service.Mode().String(), Source: string(m.projectSource(config.FieldUIPermissionMode))}, {Label: "Tool calls", Value: formatProjectLimit(m.maxToolCalls), Source: string(m.projectSource(config.FieldAgentMaxToolCalls))}}
+	facts := []projectpane.ProjectFact{{Label: "Model", Value: projectpolicy.FallbackValue(m.activeModel, "not selected"), Source: string(m.projectSource(config.FieldModelDefault))}, {Label: "Provider", Value: projectpolicy.FallbackValue(m.activeProvider, "not selected"), Source: string(m.projectSource(config.FieldModelProvider))}, {Label: "Agent", Value: projectpolicy.FallbackValue(m.agentProfile, "universal"), Source: string(m.projectSource(config.FieldAgentProfile))}, {Label: "Thinking", Value: reasoningEffortLabel(m.reasoningEffort), Source: string(m.projectSource(config.FieldAgentReasoningEffort))}, {Label: "Subagents", Value: commandutil.SubagentsEnabledLabel(m.subagentsEnabled), Source: string(m.projectSource(config.FieldAgentSubagentsEnabled))}, {Label: "Permission", Value: m.service.Mode().String(), Source: string(m.projectSource(config.FieldUIPermissionMode))}, {Label: "Tool calls", Value: projectpolicy.FormatLimit(m.maxToolCalls), Source: string(m.projectSource(config.FieldAgentMaxToolCalls))}}
 	errorText := ""
 	if v.err != nil {
 		errorText = v.err.Error()
@@ -133,35 +134,9 @@ func (m *bubbleModel) updateProjectLoaded(message projectLoadedMsg) (tea.Model, 
 	return m, nil
 }
 
-func projectFact(label, value string) string {
-	return projectpane.ProjectFactLine(label, value)
-}
-
-func fallbackProjectValue(value, fallback string) string {
-	return projectpane.FallbackValue(value, fallback)
-}
-
-func formatProjectLimit(value int) string {
-	return projectpane.FormatLimit(value)
-}
-
-func cloneProjectProvenance(in map[string]config.ValueSource) map[string]config.ValueSource {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make(map[string]config.ValueSource, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
-}
-
 func (m *bubbleModel) projectSource(field string) config.ValueSource {
-	if m == nil || m.projectConfigProvenance == nil {
+	if m == nil {
 		return config.SourceDefault
 	}
-	if source, ok := m.projectConfigProvenance[field]; ok {
-		return source
-	}
-	return config.SourceDefault
+	return projectpolicy.Source(m.projectConfigProvenance, field)
 }

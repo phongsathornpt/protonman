@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/projectio"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
-	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
@@ -94,35 +94,35 @@ func (m *bubbleModel) handleProjectSet(argument string) tea.Cmd {
 
 func saveProjectAgentCmd(workDir, profile string) tea.Cmd {
 	return func() tea.Msg {
-		err := (app.Projects{}).SaveAgentProfile(workDir, profile)
+		err := projectio.SaveAgentProfile(workDir, profile)
 		return projectSettingSavedMsg{field: config.FieldAgentProfile, value: profile, err: err}
 	}
 }
 
 func saveProjectSubagentsCmd(workDir string, enabled bool) tea.Cmd {
 	return func() tea.Msg {
-		err := (app.Projects{}).SaveSubagentsEnabled(workDir, enabled)
+		err := projectio.SaveSubagentsEnabled(workDir, enabled)
 		return projectSettingSavedMsg{field: config.FieldAgentSubagentsEnabled, value: enabled, err: err}
 	}
 }
 
 func saveProjectReasoningCmd(workDir string, effort sdk.ReasoningEffort) tea.Cmd {
 	return func() tea.Msg {
-		err := (app.Projects{}).SaveReasoningEffort(workDir, effort)
+		err := projectio.SaveReasoningEffort(workDir, effort)
 		return projectSettingSavedMsg{field: config.FieldAgentReasoningEffort, value: effort, err: err}
 	}
 }
 
 func saveProjectToolCallsCmd(workDir string, calls int) tea.Cmd {
 	return func() tea.Msg {
-		err := (app.Projects{}).SaveMaxToolCalls(workDir, calls)
+		err := projectio.SaveMaxToolCalls(workDir, calls)
 		return projectSettingSavedMsg{field: config.FieldAgentMaxToolCalls, value: calls, err: err}
 	}
 }
 
 func saveProjectPermissionCmd(workDir string, mode permission.Mode) tea.Cmd {
 	return func() tea.Msg {
-		err := (app.Projects{}).SavePermissionMode(workDir, mode)
+		err := projectio.SavePermissionMode(workDir, mode)
 		return projectSettingSavedMsg{field: config.FieldUIPermissionMode, value: mode, err: err}
 	}
 }
