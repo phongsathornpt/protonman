@@ -17,6 +17,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/base/contextutil"
+	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -40,6 +41,7 @@ type Session struct {
 	sessionService  *app.Sessions
 	agents          app.Agents
 	reasoningEffort sdk.ReasoningEffort
+	retention       conversation.RetentionPolicy
 	mcpServers      []MCPServerConfig
 	resource        io.Closer
 
@@ -74,7 +76,7 @@ func NewSession(
 	return &Session{
 		id: id, cwd: cwd, workspaceKey: session.WorkspaceKey(cwd), workspaceName: workspaceName,
 		service: service, registry: registry, runner: runner, sessionService: sessionService, agents: agents,
-		reasoningEffort: reasoningEffort, messages: make([]model.Message, 0),
+		reasoningEffort: reasoningEffort, retention: conversation.DefaultRetentionPolicy(), messages: make([]model.Message, 0),
 	}
 }
 
@@ -146,7 +148,7 @@ func (s *Session) Messages() []model.Message {
 func (s *Session) SetMessages(messages []model.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.messages = model.CloneMessages(messages)
+	s.messages = conversation.Retain(model.CloneMessages(messages), s.retention)
 }
 
 // ExecutePrompt runs a prompt turn, streaming events in real time to notifier.
@@ -196,8 +198,8 @@ func (s *Session) ExecutePrompt(
 	}
 
 	s.mu.Lock()
-	baseMessageCount := len(s.messages)
 	s.messages = append(s.messages, userMsg)
+	s.messages = conversation.Retain(s.messages, s.retention)
 	history := model.CloneMessages(s.messages)
 	s.mu.Unlock()
 
@@ -298,8 +300,10 @@ func (s *Session) ExecutePrompt(
 	s.mu.Lock()
 	wasCancelled := s.cancelled || promptCtx.Err() != nil
 	if err != nil || wasCancelled {
-		if baseMessageCount <= len(s.messages) {
-			s.messages = s.messages[:baseMessageCount]
+		if len(s.messages) > 0 && s.messages[len(s.messages)-1].Role == model.RoleUser {
+			last := len(s.messages) - 1
+			s.messages[last] = model.Message{}
+			s.messages = s.messages[:last]
 		}
 	} else if len(result.Messages) > 0 {
 		s.messages = append(s.messages, result.Messages...)
@@ -312,6 +316,7 @@ func (s *Session) ExecutePrompt(
 			ToolCalls: toModelToolCalls(assistantCalls),
 		})
 	}
+	s.messages = conversation.Retain(s.messages, s.retention)
 	s.mu.Unlock()
 
 	saveErr := s.saveStateDetached(promptCtx)
@@ -698,6 +703,7 @@ func (s *Session) handleSlashCommand(
 				Content:    result.Output,
 			},
 		)
+		s.messages = conversation.Retain(s.messages, s.retention)
 		s.mu.Unlock()
 		if err := s.saveStateDetached(ctx); err != nil {
 			return true, SessionPromptResult{}, fmt.Errorf("save session %q: %w", s.id, err)

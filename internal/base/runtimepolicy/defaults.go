@@ -12,6 +12,8 @@ const (
 	TurnMaxToolCalls                  = 100
 	TurnToolResultBytesPerRound       = 4 * 1024 * 1024
 	TurnToolResultBytesPerTurn        = 12 * 1024 * 1024
+	ConversationMaxMessages           = 256
+	ConversationMaxBytes              = 16 * 1024 * 1024
 	TurnTimeout                       = time.Duration(0)
 	RoundTimeout                      = 5 * time.Minute
 	ToolPermissionTimeout             = 2 * time.Minute

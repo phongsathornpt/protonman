@@ -9,6 +9,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -470,4 +471,18 @@ func (r headlessSubagentCancelRunner) Run(ctx context.Context, _ []model.Message
 	}
 	<-ctx.Done()
 	return applicationturn.Result{}, ctx.Err()
+}
+
+func TestHeadlessSetMessagesAppliesLiveRetention(t *testing.T) {
+	r := &Runner{retention: conversation.RetentionPolicy{MaxMessages: 2}}
+	if err := r.SetMessages([]model.Message{
+		{Role: model.RoleUser, Content: "old"},
+		{Role: model.RoleAssistant, Content: "middle"},
+		{Role: model.RoleUser, Content: "latest"},
+	}); err != nil {
+		t.Fatalf("SetMessages() error = %v", err)
+	}
+	if len(r.messages) != 2 || r.messages[0].Content != "middle" || r.messages[1].Content != "latest" {
+		t.Fatalf("retained headless history = %#v", r.messages)
+	}
 }

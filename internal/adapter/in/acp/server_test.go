@@ -14,6 +14,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/sessionfs"
 	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -924,5 +925,17 @@ func TestACPDeleteSessionCancelsBackgroundSubagents(t *testing.T) {
 	}
 	if _, found, err := store.Load(context.Background(), sessionID); err != nil || found {
 		t.Fatalf("persisted session found=%v err=%v", found, err)
+	}
+}
+
+func TestACPSessionSetMessagesAppliesLiveRetention(t *testing.T) {
+	s := &Session{retention: conversation.RetentionPolicy{MaxMessages: 2}}
+	s.SetMessages([]model.Message{
+		{Role: model.RoleUser, Content: "old"},
+		{Role: model.RoleAssistant, Content: "middle"},
+		{Role: model.RoleUser, Content: "latest"},
+	})
+	if len(s.messages) != 2 || s.messages[0].Content != "middle" || s.messages[1].Content != "latest" {
+		t.Fatalf("retained ACP history = %#v", s.messages)
 	}
 }

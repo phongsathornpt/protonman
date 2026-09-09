@@ -16,6 +16,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
@@ -100,6 +101,7 @@ type bubbleModel struct {
 	turnCancel                context.CancelFunc
 	turnEvents                <-chan tea.Msg
 	messages                  []model.Message
+	conversationRetention     conversation.RetentionPolicy
 	activeModel               string
 	activeProvider            string
 	providers                 map[string]config.ProviderConfig
@@ -146,10 +148,11 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	disableViewportKeys(&transcriptPane)
 	bottom := newBottomPane(runner != nil)
 	messages := []model.Message(nil)
+	retention := conversation.DefaultRetentionPolicy()
 	if len(initialMessages) > 0 {
-		messages = model.CloneMessages(initialMessages[0])
+		messages = conversation.Retain(model.CloneMessages(initialMessages[0]), retention)
 	}
-	ui := &bubbleModel{ctx: ctx, service: service, registry: registry, runner: runner, bridge: bridge, workDir: workDir, viewport: pane, transcriptViewport: transcriptPane, spinner: spin, keys: newBubbleKeyMap(), bottom: bottom, historyState: NewHistoryState(maxBubbleScrollback), queue: make([]string, 0), todo: append([]TodoItem{}, todo...), activity: "ready", followTail: true, showWelcome: true, width: defaultBubbleWidth, height: defaultBubbleHeight, messages: messages, maxToolCalls: config.DefaultMaxToolCalls, subagentsEnabled: true, runtimeConfig: config.DefaultRuntimeConfig(), agentActivity: make(map[string]AgentActivity)}
+	ui := &bubbleModel{ctx: ctx, service: service, registry: registry, runner: runner, bridge: bridge, workDir: workDir, viewport: pane, transcriptViewport: transcriptPane, spinner: spin, keys: newBubbleKeyMap(), bottom: bottom, historyState: NewHistoryState(maxBubbleScrollback), queue: make([]string, 0), todo: append([]TodoItem{}, todo...), activity: "ready", followTail: true, showWelcome: true, width: defaultBubbleWidth, height: defaultBubbleHeight, messages: messages, conversationRetention: retention, maxToolCalls: config.DefaultMaxToolCalls, subagentsEnabled: true, runtimeConfig: config.DefaultRuntimeConfig(), agentActivity: make(map[string]AgentActivity)}
 	if allTodoCompleted(ui.todo) {
 		ui.todoLifecycle.CompletionFresh = true
 	}
@@ -300,9 +303,17 @@ func (m *bubbleModel) dispatchBang(command string) tea.Cmd {
 	return m.startBash(command)
 }
 
+func (m *bubbleModel) retainConversationMessages() {
+	if m == nil {
+		return
+	}
+	m.messages = conversation.Retain(m.messages, m.conversationRetention)
+}
+
 func (m *bubbleModel) startTool(call tool.Call) tea.Cmd {
 	slog.DebugContext(m.ctx, "tui direct tool started", "call_id", call.ID, "tool_name", call.Name, "argument_bytes", len(call.Arguments))
 	m.messages = append(m.messages, model.Message{Role: model.RoleAssistant, ToolCalls: []model.ToolCall{{ID: call.ID, Name: call.Name, Arguments: append([]byte(nil), call.Arguments...)}}})
+	m.retainConversationMessages()
 	m.busy = true
 	m.busyStarted = time.Now()
 	m.activity = "running " + call.Name
@@ -336,6 +347,7 @@ func (m *bubbleModel) appendModelToolResult(call tool.Call, result tool.Result) 
 		content = []byte(fmt.Sprintf(`{"call_id":%q,"tool_name":%q,"error":{"code":"execution_error","message":%q}}`, call.ID, call.Name, err.Error()))
 	}
 	m.messages = append(m.messages, model.Message{Role: model.RoleTool, Content: string(content), ToolCallID: result.CallID, ToolName: result.ToolName})
+	m.retainConversationMessages()
 }
 
 func (m *bubbleModel) reconfigureRunner() {
@@ -422,6 +434,7 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 	}
 	m.retireCompletedTodoForNextTurn()
 	m.messages = append(m.messages, model.Message{Role: model.RoleUser, Content: prompt})
+	m.retainConversationMessages()
 	m.busy = true
 	m.busyStarted = time.Now()
 	m.turnProgress = turnProgress{}
@@ -1092,8 +1105,11 @@ func (m *bubbleModel) updateTurnDone(message turnDoneMsg) (tea.Model, tea.Cmd) {
 			m.messages = append(m.messages, message.result.Message)
 		}
 	} else if message.err != nil && len(m.messages) > 0 && m.messages[len(m.messages)-1].Role == model.RoleUser {
-		m.messages = m.messages[:len(m.messages)-1]
+		messages := m.messages
+		messages[len(messages)-1] = model.Message{}
+		m.messages = messages[:len(messages)-1]
 	}
+	m.retainConversationMessages()
 	m.appendTurnFailure(message.err)
 	m.relayout()
 	if message.err != nil {

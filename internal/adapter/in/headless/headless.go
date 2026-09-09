@@ -13,6 +13,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/base/envconfig"
+	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -94,6 +95,7 @@ type Runner struct {
 	skills    *skill.Registry
 	runner    app.Conversation
 	messages  []model.Message
+	retention conversation.RetentionPolicy
 	nextID    uint64
 	turnSeq   uint64
 	sessionID string
@@ -110,10 +112,11 @@ func New(service *toolcall.Service, registry tool.Registry, runner app.Conversat
 		return nil, fmt.Errorf("%w: registry is required", ErrInvalidRunner)
 	}
 	r := &Runner{
-		service:  service,
-		registry: registry,
-		runner:   runner,
-		messages: make([]model.Message, 0),
+		service:   service,
+		registry:  registry,
+		runner:    runner,
+		messages:  make([]model.Message, 0),
+		retention: conversation.DefaultRetentionPolicy(),
 	}
 	for _, opt := range options {
 		if opt != nil {
@@ -135,7 +138,7 @@ func (r *Runner) SetMessages(messages []model.Message) error {
 			return fmt.Errorf("load headless transcript: %w", err)
 		}
 	}
-	r.messages = model.CloneMessages(messages)
+	r.messages = conversation.Retain(model.CloneMessages(messages), r.retention)
 	return nil
 }
 
@@ -327,6 +330,13 @@ func (r *Runner) handleSkillsCommand(argument string, parts []string, output io.
 	})
 }
 
+func (r *Runner) retainMessages() {
+	if r == nil {
+		return
+	}
+	r.messages = conversation.Retain(r.messages, r.retention)
+}
+
 func (r *Runner) runCall(
 	ctx context.Context,
 	parts []string,
@@ -374,6 +384,7 @@ func (r *Runner) runCall(
 		ToolName:   call.Name,
 		ToolCallID: call.ID,
 	})
+	r.retainMessages()
 	event := Event{Kind: "tool_result", Tool: call.Name, Output: result.Output}
 	if callErr != nil {
 		if result.Failure != nil {
@@ -407,6 +418,7 @@ func (r *Runner) runTurn(
 		return fmt.Errorf("model client is not configured; use /help or /call")
 	}
 	r.messages = append(r.messages, model.Message{Role: model.RoleUser, Content: prompt})
+	r.retainMessages()
 	r.turnSeq++
 	turnID := fmt.Sprintf("headless-turn-%d", r.turnSeq)
 	turnCtx := agent.WithTurnRef(ctx, agent.TurnRef{SessionID: r.sessionID, TurnID: turnID})
@@ -438,13 +450,17 @@ func (r *Runner) runTurn(
 	}
 	if err != nil {
 		if len(r.messages) > 0 && r.messages[len(r.messages)-1].Role == model.RoleUser && r.messages[len(r.messages)-1].Content == prompt {
-			r.messages = r.messages[:len(r.messages)-1]
+			last := len(r.messages) - 1
+			r.messages[last] = model.Message{}
+			r.messages = r.messages[:last]
 		}
+		r.retainMessages()
 		if writeErr := writeEvent(output, format, Event{Kind: EventKindFailed, Error: err.Error()}); writeErr != nil {
 			return errors.Join(err, writeErr)
 		}
 		return err
 	}
+	r.retainMessages()
 	return writeEvent(output, format, Event{Kind: EventKindDone})
 }
 

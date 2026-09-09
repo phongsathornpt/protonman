@@ -12,6 +12,7 @@ import (
 	domainmodel "github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/sessionfs"
 	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -788,5 +789,23 @@ func TestClosingTranscriptOverlayReleasesViewportContent(t *testing.T) {
 	}
 	if got := m.transcriptViewport.View(); strings.Contains(got, "retained transcript sentinel") {
 		t.Fatalf("closed transcript overlay retained content: %q", got)
+	}
+}
+
+func TestLiveConversationRetentionKeepsToolProtocolGroup(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.conversationRetention = conversation.RetentionPolicy{MaxMessages: 3}
+	m.messages = []model.Message{
+		{Role: model.RoleUser, Content: "old"},
+		{Role: model.RoleAssistant, ToolCalls: []model.ToolCall{{ID: "call-1", Name: "read", Arguments: []byte(`{"path":"README.md"}`)}}},
+		{Role: model.RoleTool, ToolCallID: "call-1", ToolName: "read", Content: "result"},
+		{Role: model.RoleUser, Content: "latest"},
+	}
+	m.retainConversationMessages()
+	if len(m.messages) != 3 {
+		t.Fatalf("retained message count=%d, want 3: %#v", len(m.messages), m.messages)
+	}
+	if m.messages[0].Role != model.RoleAssistant || m.messages[1].Role != model.RoleTool || m.messages[2].Content != "latest" {
+		t.Fatalf("live retention split protocol group: %#v", m.messages)
 	}
 }
