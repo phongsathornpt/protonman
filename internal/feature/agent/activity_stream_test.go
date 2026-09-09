@@ -2,10 +2,14 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
 )
@@ -131,5 +135,35 @@ func TestPruneActivityMailboxesExpiresInactiveTurn(t *testing.T) {
 	coord.activityMu.Unlock()
 	if exists {
 		t.Fatal("expired inactive mailbox was retained")
+	}
+}
+
+func TestRecordActivityCompactsRetainedPayload(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil)
+	defer coord.Close()
+	call, err := tool.NewCall("call-1", "read", []byte(`{"payload":"`+strings.Repeat("x", 32*1024)+`"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	coord.recordActivity(Event{
+		Kind: EventAgentFailed, AgentID: "agent-1", ParentID: "turn-1",
+		Message: strings.Repeat("m", runtimepolicy.AgentActivityMessageBytes+1024),
+		Call:    &call, Err: errors.New(strings.Repeat("e", runtimepolicy.AgentActivityErrorBytes+1024)),
+	})
+	result, err := coord.WaitActivityForParent(context.Background(), "turn-1", time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Event == nil {
+		t.Fatal("expected retained terminal activity")
+	}
+	if len(result.Event.Message) > runtimepolicy.AgentActivityMessageBytes {
+		t.Fatalf("message bytes=%d", len(result.Event.Message))
+	}
+	if result.Event.Call == nil || len(result.Event.Call.Arguments) != 0 {
+		t.Fatalf("retained call payload = %#v", result.Event.Call)
+	}
+	if result.Event.Err == nil || len(result.Event.Err.Error()) > runtimepolicy.AgentActivityErrorBytes {
+		t.Fatalf("retained error=%v", result.Event.Err)
 	}
 }

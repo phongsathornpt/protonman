@@ -2,12 +2,14 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/phongsathornpt/protonman/internal/base/contextutil"
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 )
 
 const (
@@ -99,6 +101,7 @@ func (c *Coordinator) recordActivity(ev Event) {
 	if !terminalLifecycleEvent(ev.Kind) {
 		return
 	}
+	ev = compactActivityEvent(ev)
 	c.activityMu.Lock()
 	c.recordActivityLocked("", ev)
 	ref := TurnRef{SessionID: ev.SessionID, TurnID: ev.ParentID}.normalized()
@@ -107,6 +110,24 @@ func (c *Coordinator) recordActivity(ev Event) {
 	}
 	c.activityMu.Unlock()
 	c.pruneActivityMailboxes(time.Now())
+}
+
+func compactActivityEvent(ev Event) Event {
+	ev.Message = truncatePersistentText(ev.Message, runtimepolicy.AgentActivityMessageBytes)
+	if ev.Call != nil {
+		call := *ev.Call
+		call.Arguments = nil
+		ev.Call = &call
+	}
+	if ev.Err != nil {
+		message := truncatePersistentText(ev.Err.Error(), runtimepolicy.AgentActivityErrorBytes)
+		if message != "" {
+			ev.Err = errors.New(message)
+		} else {
+			ev.Err = nil
+		}
+	}
+	return ev
 }
 
 func (c *Coordinator) recordActivityLocked(scope string, ev Event) {
