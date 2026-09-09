@@ -101,6 +101,67 @@ func TestE2ETUIStartupAndExitWithRealPTY(t *testing.T) {
 	}
 }
 
+func TestE2ETUISlashHelpWithRealPTY(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+	master, slave := openLinuxPTY(t, 80, 24)
+	defer master.Close()
+	defer slave.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, protonBin)
+	cmd.Dir = ws
+	cmd.Env = append(os.Environ(), "PROTONMAN_HOME="+home, "TERM=xterm-256color")
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start Protonman on PTY: %v", err)
+	}
+	_ = slave.Close()
+
+	var output bytes.Buffer
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		buf := make([]byte, 4096)
+		for {
+			n, err := master.Read(buf)
+			if n > 0 {
+				_, _ = output.Write(buf[:n])
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	if _, err := master.Write([]byte("/he")); err != nil {
+		t.Fatalf("type slash command: %v", err)
+	}
+	time.Sleep(150 * time.Millisecond)
+	view := output.String()
+	for _, want := range []string{"tab", "accept", "enter", "run"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("slash PTY output missing %q: %q", want, view)
+		}
+	}
+	// First Ctrl+C clears the draft; the second exits the idle TUI.
+	_, _ = master.Write([]byte{3})
+	time.Sleep(50 * time.Millisecond)
+	_, _ = master.Write([]byte{3})
+	if err := cmd.Wait(); err != nil && ctx.Err() != nil {
+		t.Fatalf("TUI did not exit before timeout: %v", err)
+	}
+	_ = master.Close()
+	select {
+	case <-readDone:
+	case <-time.After(time.Second):
+		t.Fatal("timed out draining slash PTY output")
+	}
+}
+
 func openLinuxPTY(t *testing.T, cols, rows uint16) (*os.File, *os.File) {
 	t.Helper()
 	masterFD, err := unix.Open("/dev/ptmx", unix.O_RDWR|unix.O_NOCTTY|unix.O_CLOEXEC, 0)
