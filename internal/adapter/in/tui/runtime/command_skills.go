@@ -1,61 +1,12 @@
 package runtime
 
 import (
-	tea "charm.land/bubbletea/v2"
 	"fmt"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/commandutil"
-	"github.com/phongsathornpt/protonman/internal/app"
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
-	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"strings"
-)
 
-func (m *bubbleModel) executeSessionCommand(name string) tea.Cmd {
-	if name == "session" {
-		m.appendLine("session: " + m.sessionID)
-		if m.workspaceKey != "" {
-			m.appendLine("workspace: " + m.workspaceKey)
-		}
-		m.appendLine(fmt.Sprintf("messages: %d", len(m.messages)))
-		m.refreshViewport()
-		return nil
-	}
-	if m.sessions == nil {
-		m.appendError("session store is unavailable")
-		m.refreshViewport()
-		return nil
-	}
-	summaries, err := m.sessions.ListSummaries(m.ctx, app.SessionListOptions{WorkspaceKey: m.workspaceKey, Limit: 20})
-	if err != nil {
-		m.appendError("list sessions: " + err.Error())
-		m.refreshViewport()
-		return nil
-	}
-	if len(summaries) == 0 {
-		m.appendLine("No resumable sessions for this workspace.")
-		m.refreshViewport()
-		return nil
-	}
-	m.appendLine("Recent sessions:")
-	for _, summary := range summaries {
-		marker := " "
-		if summary.ID == m.sessionID {
-			marker = "*"
-		}
-		profile := summary.AgentProfile
-		if profile == "" {
-			profile = "-"
-		}
-		preview := summary.Preview
-		if preview == "" {
-			preview = "(empty session)"
-		}
-		m.appendLine(fmt.Sprintf("%s %s  %s  %s", marker, summary.ID, profile, truncateWithEllipsis(preview, 72)))
-	}
-	m.appendLine("Resume with: protonman session resume <session-id>")
-	m.refreshViewport()
-	return nil
-}
+	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+)
 
 func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.Cmd {
 	trimmedArg := strings.TrimSpace(argument)
@@ -188,76 +139,4 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 	}
 	m.refreshViewport()
 	return nil
-}
-
-func (m *bubbleModel) handleSubagentsCommand(argument string) tea.Cmd {
-	arg := strings.TrimSpace(argument)
-	if arg == "" {
-		m.appendLine("Subagents: " + commandStyle.Render(commandutil.SubagentsEnabledLabel(m.subagentsEnabled)))
-		if !m.subagentsEnabled && len(m.agents.List()) > 0 {
-			m.appendMuted("New delegation is disabled; existing agents remain manageable.")
-		}
-		m.refreshViewport()
-		return nil
-	}
-	enabled, err := commandutil.ParseSubagentsEnabled(arg)
-	if err != nil {
-		m.appendError(err.Error())
-		m.refreshViewport()
-		return nil
-	}
-	m.subagentsEnabled = enabled
-	m.agents.SetEnabled(enabled)
-	m.reconfigureRunner()
-	if enabled {
-		m.appendLine(successStyle.Render("Subagents enabled."))
-	} else {
-		m.appendLine(successStyle.Render("Subagents disabled."))
-		if len(m.agents.List()) > 0 {
-			m.appendMuted("Running and retained agents remain available for lifecycle control.")
-		} else {
-			m.appendMuted("Universal will handle work directly.")
-		}
-	}
-	m.refreshViewport()
-	return nil
-}
-
-func (m *bubbleModel) appendRegisteredTools() {
-	m.appendLine("Registered tools:")
-	for _, definition := range m.registry.Definitions() {
-		m.appendLine(fmt.Sprintf("- %s [%s]: %s", definition.Name, definition.Kind, definition.Description))
-	}
-}
-
-func (m *bubbleModel) startCall(parts []string) tea.Cmd {
-	if len(parts) < 2 || strings.TrimSpace(parts[1]) == "" {
-		m.appendError("usage: /call <tool> <json>")
-		m.refreshViewport()
-		return nil
-	}
-	arguments := "{}"
-	if len(parts) == 3 && strings.TrimSpace(parts[2]) != "" {
-		arguments = parts[2]
-	}
-	m.nextID++
-	call, err := tool.NewCall(fmt.Sprintf("bubble-%d", m.nextID), strings.TrimSpace(parts[1]), []byte(arguments))
-	if err != nil {
-		m.appendError(err.Error())
-		m.refreshViewport()
-		return nil
-	}
-	return m.startTool(call)
-}
-
-func (m *bubbleModel) startBash(command string) tea.Cmd {
-	m.nextID++
-	payload := fmt.Sprintf(`{"command":%q}`, command)
-	call, err := tool.NewCall(fmt.Sprintf("bubble-%d", m.nextID), "bash", []byte(payload))
-	if err != nil {
-		m.appendError(err.Error())
-		m.refreshViewport()
-		return nil
-	}
-	return m.startTool(call)
 }
