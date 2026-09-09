@@ -8,7 +8,8 @@ import (
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 )
 
-func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
+	defer m.reconcileLayout()
 	switch message := msg.(type) {
 	case agentLifecycleMsg:
 		return m.updateAgentLifecycle(message)
@@ -35,11 +36,11 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				switch mouse.Button {
 				case tea.MouseWheelUp:
 					view.HandleKey(m, tea.KeyPressMsg{Code: tea.KeyUp})
-					m.relayout()
+					m.requestRelayout()
 					return m, nil
 				case tea.MouseWheelDown:
 					view.HandleKey(m, tea.KeyPressMsg{Code: tea.KeyDown})
-					m.relayout()
+					m.requestRelayout()
 					return m, nil
 				}
 			}

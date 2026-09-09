@@ -27,7 +27,7 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 	if m.runner == nil {
 		slog.DebugContext(m.ctx, "tui turn rejected", "reason", "runner_unavailable")
 		m.appendError("model client is not configured; use /model or /provider add to configure")
-		m.relayout()
+		m.requestRelayout()
 		return nil
 	}
 	m.retireCompletedTodoForNextTurn()
@@ -39,7 +39,7 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 	m.activeTurnOwner = fmt.Sprintf("tui-turn-%d", tuiTurnOwnerSeq.Add(1))
 	m.activity = "analyzing"
 	m.historyState.StartThinking()
-	m.relayout()
+	m.requestRelayout()
 	ctx, cancel := context.WithCancel(m.ctx)
 	ctx = agent.WithTurnRef(ctx, agent.TurnRef{SessionID: m.sessionID, TurnID: m.activeTurnOwner})
 	m.turnCancel = cancel
@@ -105,7 +105,7 @@ func (m *bubbleModel) cancelActiveTurn() int {
 		m.syncAgentSnapshot()
 	}
 	m.turnCancel()
-	m.relayout()
+	m.requestRelayout()
 	return stopping
 }
 
@@ -173,7 +173,7 @@ func (m *bubbleModel) updateTurnDone(message turnmsg.Done) (tea.Model, tea.Cmd) 
 	}
 	m.retainConversationMessages()
 	m.appendTurnFailure(message.Err)
-	m.relayout()
+	m.requestRelayout()
 	if message.Err != nil {
 		m.queue = nil
 		return m, nil

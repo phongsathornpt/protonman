@@ -84,7 +84,7 @@ func (m *bubbleModel) initProject() tea.Cmd {
 	view.loading = true
 	view.err = nil
 	view.notice = ""
-	m.relayout()
+	m.requestRelayout()
 	return func() tea.Msg {
 		result, err := (app.Projects{}).Init(m.ctx, m.workDir)
 		return projectInitializedMsg{result: result, err: err}
@@ -99,7 +99,7 @@ func (m *bubbleModel) updateProjectInitialized(message projectInitializedMsg) (t
 	if message.err != nil {
 		view.loading = false
 		view.err = message.err
-		m.relayout()
+		m.requestRelayout()
 		return m, nil
 	}
 	if message.result.Created {
@@ -116,7 +116,7 @@ func (m *bubbleModel) openProjectPane() tea.Cmd {
 		view = &projectPaneView{}
 		m.bottom.push(view)
 	}
-	m.relayout()
+	m.requestRelayout()
 	return view.reload(m)
 }
 
@@ -130,7 +130,7 @@ func (m *bubbleModel) updateProjectLoaded(message projectLoadedMsg) (tea.Model, 
 	if message.err == nil {
 		view.state = message.state
 	}
-	m.relayout()
+	m.requestRelayout()
 	return m, nil
 }
 

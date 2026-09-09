@@ -27,7 +27,7 @@ func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) (tea.Model, 
 				pv.state = providerStateSelectModel
 				pv.setFetchedModels(message.models)
 			}
-			m.relayout()
+			m.requestRelayout()
 		}
 		return m, nil
 	}
@@ -44,7 +44,7 @@ func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) (tea.Model, 
 				m.modelCatalogs.Set(message.providerName, message.models)
 				mv.setModels(m.modelCatalogs.Models(message.providerName), m.activeModel)
 			}
-			m.relayout()
+			m.requestRelayout()
 		}
 	}
 	return m, nil
@@ -60,7 +60,7 @@ func (m *bubbleModel) updateProviderSaved(message providerSavedMsg) (tea.Model, 
 			if pv, ok := pane.(*providerPaneView); ok {
 				pv.state = providerStateSaveError
 				pv.errorMessage = message.err.Error()
-				m.relayout()
+				m.requestRelayout()
 				return m, nil
 			}
 		}
@@ -94,7 +94,7 @@ func (m *bubbleModel) updateProviderSaved(message providerSavedMsg) (tea.Model, 
 		}
 	}
 	m.bottom.remove(providerViewID)
-	m.relayout()
+	m.requestRelayout()
 	return m, nil
 }
 
@@ -126,7 +126,7 @@ func (m *bubbleModel) updateModelSelected(message modelSelectedMsg) (tea.Model, 
 		}
 	}
 	m.bottom.remove(modelSelectViewID)
-	m.relayout()
+	m.requestRelayout()
 	return m, nil
 }
 
@@ -160,7 +160,7 @@ func (m *bubbleModel) updateProviderActiveSelected(message providerActiveSelecte
 		m.appendLine(successStyle.Render(label))
 	}
 	m.bottom.remove(providerSelectViewID)
-	m.relayout()
+	m.requestRelayout()
 	return m, nil
 }
 
@@ -203,6 +203,6 @@ func (m *bubbleModel) updateProviderDeleted(message providerDeletedMsg) (tea.Mod
 		m.appendLine(successStyle.Render(label))
 	}
 	m.bottom.remove(providerSelectViewID)
-	m.relayout()
+	m.requestRelayout()
 	return m, nil
 }

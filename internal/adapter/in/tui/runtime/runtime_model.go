@@ -84,6 +84,7 @@ type bubbleModel struct {
 	frameChrome               frameChrome
 	welcomeCache              welcomeCardCache
 	layoutGeneration          uint64
+	layoutDirty               bool
 	busyStarted               time.Time
 	turnCancel                context.CancelFunc
 	turnEvents                <-chan tea.Msg
@@ -147,7 +148,8 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	}
 	ui.loadInitialMessages(messages)
 	ui.syncPromptPlaceholder()
-	ui.relayout()
+	ui.requestRelayout()
+	ui.reconcileLayout()
 	return ui
 }
 

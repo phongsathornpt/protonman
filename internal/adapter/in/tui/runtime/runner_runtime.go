@@ -39,7 +39,7 @@ func (m *bubbleModel) startTool(call tool.Call) tea.Cmd {
 	m.busyStarted = time.Now()
 	m.activity = "running " + call.Name
 	m.appendToolCall(call)
-	m.relayout()
+	m.requestRelayout()
 	ctx, cancel := context.WithCancel(m.ctx)
 	m.turnCancel = cancel
 	return func() tea.Msg {

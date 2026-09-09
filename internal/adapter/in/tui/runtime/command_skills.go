@@ -52,7 +52,7 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 			}
 		}
 		m.bottom.push(&skillsPaneView{})
-		m.relayout()
+		m.requestRelayout()
 		return nil
 	}
 	if trimmedArg == "active" {

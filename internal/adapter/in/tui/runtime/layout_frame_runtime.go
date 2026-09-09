@@ -44,12 +44,13 @@ func (m *bubbleModel) resize(width int, height int) {
 	if m.historyState != nil {
 		m.historyState.SetWidth(width)
 	}
-	m.relayout()
+	m.requestRelayout()
+	m.reconcileLayout()
 	m.refreshTranscriptViewport(false)
 }
 
 func (m *bubbleModel) relayoutIfSlashChanged(bool) {
-	m.relayout()
+	m.requestRelayout()
 }
 
 type frameChrome struct {
@@ -92,10 +93,25 @@ type viewportScrollSnapshot struct {
 	anchorValid bool
 }
 
-func (m *bubbleModel) relayout() {
+func (m *bubbleModel) requestRelayout() {
+	m.layoutDirty = true
+}
+
+func (m *bubbleModel) reconcileLayout() {
+	if m == nil || !m.layoutDirty {
+		return
+	}
+	m.layoutDirty = false
 	scroll := m.captureViewportScroll()
 	m.syncPromptHeight()
 	m.applyFrameLayout(scroll, m.buildFrameChrome())
+}
+
+// relayout remains as an eager test/helper boundary while runtime event handlers
+// only request layout and let Update reconcile once per event.
+func (m *bubbleModel) relayout() {
+	m.requestRelayout()
+	m.reconcileLayout()
 }
 
 func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame frameChrome) {

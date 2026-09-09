@@ -51,10 +51,10 @@ func (m *bubbleModel) executeConversationCommand(name, argument string) tea.Cmd 
 			if !m.bottom.has(todoInspectViewID) {
 				m.bottom.push(&todoPaneView{})
 			}
-			m.relayout()
+			m.requestRelayout()
 		case "hide":
 			m.bottom.remove(todoInspectViewID)
-			m.relayout()
+			m.requestRelayout()
 		default:
 			m.appendError("usage: /todo [show|hide]")
 		}
@@ -89,13 +89,13 @@ func (m *bubbleModel) executeModelCommand(argument string) tea.Cmd {
 	case "add":
 		if !m.bottom.has(providerViewID) {
 			m.pushProviderPane(newProviderPaneView())
-			m.relayout()
+			m.requestRelayout()
 		}
 		return nil
 	case "free":
 		if !m.bottom.has(providerViewID) {
 			m.pushProviderPane(newProviderPaneViewWithPreset(model.DefaultOpenCodeName))
-			m.relayout()
+			m.requestRelayout()
 		}
 		return nil
 	case "", "select":

@@ -167,5 +167,5 @@ func (m *bubbleModel) toggleTodoPane() {
 	} else {
 		m.bottom.push(&todoPaneView{})
 	}
-	m.relayout()
+	m.requestRelayout()
 }

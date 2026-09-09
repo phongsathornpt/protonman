@@ -26,14 +26,14 @@ func (m *bubbleModel) executeProviderCommand(line, rawName string) tea.Cmd {
 			} else {
 				m.pushProviderPane(newProviderPaneView())
 			}
-			m.relayout()
+			m.requestRelayout()
 		}
 		return nil
 	}
 	if subCmd == "" || subCmd == "select" {
 		if !m.bottom.has(providerSelectViewID) {
 			m.bottom.push(newProviderSelectPaneView(m))
-			m.relayout()
+			m.requestRelayout()
 		}
 		return nil
 	}
@@ -49,7 +49,7 @@ func (m *bubbleModel) executeProviderCommand(line, rawName string) tea.Cmd {
 	if p := model.LookupPreset(subCmd); p != nil {
 		if !m.bottom.has(providerViewID) {
 			m.pushProviderPane(newProviderPaneViewWithPreset(p.ID))
-			m.relayout()
+			m.requestRelayout()
 		}
 		return nil
 	}

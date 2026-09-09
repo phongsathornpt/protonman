@@ -72,6 +72,6 @@ func (m *bubbleModel) openModelSelectPane() tea.Cmd {
 	}
 	view := newModelSelectPaneView(m)
 	m.bottom.push(view)
-	m.relayout()
+	m.requestRelayout()
 	return view.loadProvider(m, false)
 }

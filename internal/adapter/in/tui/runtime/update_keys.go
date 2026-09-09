@@ -12,7 +12,7 @@ func (m *bubbleModel) matchesGlobalShortcut(message tea.KeyPressMsg) bool {
 func (m *bubbleModel) handleInterruptKey() (tea.Model, tea.Cmd) {
 	if m.showTranscript {
 		m.closeTranscriptOverlay()
-		m.relayout()
+		m.requestRelayout()
 		return m, nil
 	}
 	if top := m.bottom.top(); top != nil && top.ID() != permissionViewID && top.ID() != slashViewID {
@@ -20,7 +20,7 @@ func (m *bubbleModel) handleInterruptKey() (tea.Model, tea.Cmd) {
 			provider.cancelFetch()
 		}
 		m.bottom.remove(top.ID())
-		m.relayout()
+		m.requestRelayout()
 		return m, nil
 	}
 	if m.busy && m.turnCancel != nil {
@@ -33,7 +33,7 @@ func (m *bubbleModel) handleInterruptKey() (tea.Model, tea.Cmd) {
 		m.resetPrompt()
 		m.setBashMode(false)
 		m.syncSlashView()
-		m.relayout()
+		m.requestRelayout()
 		return m, nil
 	}
 	return m, tea.Quit
@@ -56,7 +56,7 @@ func (m *bubbleModel) handleModalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 	}
 	handled, command := top.HandleKey(m, message)
 	if handled {
-		m.relayout()
+		m.requestRelayout()
 	}
 	return handled, command
 }
@@ -73,12 +73,12 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 	case key.Matches(message, m.keys.ToggleSkills):
 		if m.bottom.has(skillsViewID) {
 			m.bottom.remove(skillsViewID)
-			m.relayout()
+			m.requestRelayout()
 			return true, nil
 		}
 		if m.skills != nil && len(m.skills.List()) > 0 {
 			m.bottom.push(&skillsPaneView{})
-			m.relayout()
+			m.requestRelayout()
 			return true, nil
 		}
 		m.executeCommand("/skills")
@@ -86,7 +86,7 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 	case key.Matches(message, m.keys.ToggleModel):
 		if m.bottom.has(modelSelectViewID) {
 			m.bottom.remove(modelSelectViewID)
-			m.relayout()
+			m.requestRelayout()
 			return true, nil
 		}
 		return true, m.openModelSelectPane()
@@ -117,7 +117,7 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 		}
 		m.resetPrompt()
 		m.syncSlashView()
-		m.relayout()
+		m.requestRelayout()
 		return nil
 	}
 	if message.String() == "enter" {
@@ -150,6 +150,6 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 	updated, command := prompt.Update(message)
 	*prompt = updated
 	m.syncSlashView()
-	m.relayout()
+	m.requestRelayout()
 	return command
 }

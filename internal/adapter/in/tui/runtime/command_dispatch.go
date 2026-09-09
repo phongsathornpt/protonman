@@ -9,6 +9,8 @@ import (
 )
 
 func (m *bubbleModel) executeCommand(line string) tea.Cmd {
+	defer m.reconcileLayout()
+
 	rawName, argument, parts := splitCommand(line)
 	name := canonicalSlashName(rawName)
 	switch name {

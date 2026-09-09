@@ -22,7 +22,7 @@ func (m *bubbleModel) updateAgentLifecycle(message agentLifecycleMsg) (tea.Model
 				run.Activity = activity.String()
 				m.ensureHistoryState().TouchAgentRun(message.event.AgentID)
 			}
-			m.relayout()
+			m.requestRelayout()
 		}
 		return m, m.nextAgentEvent()
 	}
@@ -31,7 +31,7 @@ func (m *bubbleModel) updateAgentLifecycle(message agentLifecycleMsg) (tea.Model
 	}
 	m.syncAgentSnapshot()
 	m.syncAgentRunSnapshot(message.event.AgentID)
-	m.relayout()
+	m.requestRelayout()
 	return m, m.nextAgentEvent()
 }
 
@@ -41,7 +41,7 @@ func (m *bubbleModel) updatePermissionRequest(message permissionRequestMsg) (tea
 		return m, m.bridge.Next()
 	}
 	m.openPermission(message.request)
-	m.relayout()
+	m.requestRelayout()
 	return m, m.bridge.Next()
 }
 
@@ -57,6 +57,6 @@ func (m *bubbleModel) updateToolResult(message toolResultMsg) (tea.Model, tea.Cm
 	if message.call.ID != "" {
 		m.appendModelToolResult(message.call, message.result)
 	}
-	m.relayout()
+	m.requestRelayout()
 	return m, m.withSpinner(m.drainQueue())
 }

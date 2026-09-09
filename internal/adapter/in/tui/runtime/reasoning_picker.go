@@ -42,7 +42,7 @@ func (m *bubbleModel) handleReasoningCommand(argument string) tea.Cmd {
 		if !m.bottom.has(reasoningViewID) {
 			m.bottom.push(newReasoningPaneView(m))
 		}
-		m.relayout()
+		m.requestRelayout()
 		return nil
 	}
 	effort, err := sdk.ParseReasoningEffort(argument)
