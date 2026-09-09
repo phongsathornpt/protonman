@@ -8,7 +8,6 @@ import (
 	agentpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/agent"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 func (m bubbleModel) statusView() string {
@@ -76,20 +75,18 @@ func (m *bubbleModel) infoView() string {
 		}
 		return mutedStyle.Render("y once · s session · n deny · esc review")
 	}
-	targetWidth := maxInt(1, m.width-2)
-	parts := make([]string, 0, 3)
-	if modelID := strings.TrimSpace(m.activeModel); modelID != "" {
-		parts = append(parts, brandStyle.Render(truncateWithEllipsis(modelID, maxInt(8, targetWidth/2))))
-	}
 	if m.planMode {
-		parts = append(parts, planStyle.Render("plan"))
-	} else if m.service != nil && m.service.Mode() == permission.ModeAlwaysApprove {
-		parts = append(parts, warningStyle.Render("auto"))
+		return planStyle.Render("plan · read-only")
 	}
-	if m.reasoningEffort != sdk.ReasoningDefault && m.reasoningEffort != "" {
-		parts = append(parts, mutedStyle.Render(string(m.reasoningEffort)))
+	if m.service != nil {
+		switch m.service.Mode() {
+		case permission.ModeAlwaysApprove:
+			return warningStyle.Render("auto")
+		case permission.ModeDeny:
+			return errorStyle.Render("deny")
+		}
 	}
-	return truncateWithEllipsis(strings.Join(parts, mutedStyle.Render(glyphSep)), targetWidth)
+	return ""
 }
 
 func formatElapsed(duration time.Duration) string {

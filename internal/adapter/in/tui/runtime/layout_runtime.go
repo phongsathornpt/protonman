@@ -45,7 +45,9 @@ func (m *bubbleModel) liveView() string {
 			parts = append(parts, part)
 		}
 	}
-	parts = append(parts, frame.footer)
+	if frame.footer != "" {
+		parts = append(parts, frame.footer)
+	}
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
@@ -56,7 +58,7 @@ func (m *bubbleModel) footerView() string {
 		}
 		return m.shortcutHint()
 	}
-	return m.infoView()
+	return ""
 }
 
 func (m *bubbleModel) syncLegacyToComponents() {

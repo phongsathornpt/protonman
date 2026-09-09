@@ -1074,12 +1074,12 @@ func TestEmptyStateWithoutRunnerGuidesSlashCommands(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
 	view := testPlain(model.View().Content)
-	for _, expected := range []string{"Type a message or /command", glyphBrand + " protonman"} {
+	for _, expected := range []string{"Message or /command", glyphBrand + " protonman"} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("empty state view does not contain %q: %s", expected, view)
 		}
 	}
-	if got, want := model.prompt.Placeholder, "Type a message or /command…"; got != want {
+	if got, want := model.prompt.Placeholder, "Message or /command…"; got != want {
 		t.Fatalf("placeholder = %q, want %q", got, want)
 	}
 }
@@ -1155,27 +1155,27 @@ func (fakeConversation) Run(context.Context, []model.Message, applicationturn.Si
 
 func TestPromptPlaceholderReflectsPermissionAndPlanMode(t *testing.T) {
 	// Without runner
-	if got := promptPlaceholder(false, permission.ModeAsk, false); got != "Type a message or /command…" {
+	if got := promptPlaceholder(false, permission.ModeAsk, false); got != "Message or /command…" {
 		t.Fatalf("no runner placeholder = %q", got)
 	}
 
 	// Normal ask mode
-	if got := promptPlaceholder(true, permission.ModeAsk, false); got != "Ask Protonman to inspect or change this workspace…" {
+	if got := promptPlaceholder(true, permission.ModeAsk, false); got != "Message Protonman…" {
 		t.Fatalf("ask mode placeholder = %q", got)
 	}
 
-	// Auto-approve mode
-	if got := promptPlaceholder(true, permission.ModeAlwaysApprove, false); !strings.Contains(got, "auto-approve active") {
+	// Auto-approve mode stays visually quiet; mode context is shown separately.
+	if got := promptPlaceholder(true, permission.ModeAlwaysApprove, false); got != "Message Protonman…" {
 		t.Fatalf("auto-approve placeholder = %q", got)
 	}
 
 	// Plan mode
-	if got := promptPlaceholder(true, permission.ModeAsk, true); !strings.Contains(got, "plan mode") {
+	if got := promptPlaceholder(true, permission.ModeAsk, true); got != "Plan or inspect…" {
 		t.Fatalf("plan mode placeholder = %q", got)
 	}
 
 	// Deny mode
-	if got := promptPlaceholder(true, permission.ModeDeny, false); !strings.Contains(got, "deny mode") {
+	if got := promptPlaceholder(true, permission.ModeDeny, false); got != "Inspect workspace…" {
 		t.Fatalf("deny mode placeholder = %q", got)
 	}
 
@@ -1183,17 +1183,17 @@ func TestPromptPlaceholderReflectsPermissionAndPlanMode(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.runner = fakeConversation{}
 	m.syncPromptPlaceholder()
-	if !strings.Contains(m.prompt.Placeholder, "inspect or change") {
-		t.Fatalf("initial placeholder = %q", m.prompt.Placeholder)
+	if got := m.prompt.Placeholder; got != "Message Protonman…" {
+		t.Fatalf("initial placeholder = %q", got)
 	}
 
 	_ = m.setPermissionMode(permission.ModeAlwaysApprove)
-	if !strings.Contains(m.prompt.Placeholder, "auto-approve active") {
-		t.Fatalf("placeholder after mode always-approve = %q", m.prompt.Placeholder)
+	if got := m.prompt.Placeholder; got != "Message Protonman…" {
+		t.Fatalf("placeholder after mode always-approve = %q", got)
 	}
 
 	m.setPlanEnabled(true)
-	if !strings.Contains(m.prompt.Placeholder, "plan mode") {
+	if got := m.prompt.Placeholder; got != "Plan or inspect…" {
 		t.Fatalf("placeholder after plan mode = %q", m.prompt.Placeholder)
 	}
 }

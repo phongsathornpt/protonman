@@ -510,11 +510,8 @@ func TestModelSelectInfoViewAndWelcome(t *testing.T) {
 	bModel.activeModel = "deepseek-v4-flash-vision-exp"
 	bModel.activeProvider = "protonman"
 	info := bModel.infoView()
-	if !strings.Contains(info, "deepseek-v4") {
-		t.Fatalf("expected model in infoView, got: %s", info)
-	}
-	if strings.Contains(info, "ctrl+p") {
-		t.Fatalf("minimal infoView leaked shortcut chrome: %s", info)
+	if info != "" {
+		t.Fatalf("idle infoView = %q, want no persistent model metadata", info)
 	}
 	welcome := bModel.welcomeCard()
 	if strings.Contains(welcome, "deepseek-v4-flash-vision-exp") {

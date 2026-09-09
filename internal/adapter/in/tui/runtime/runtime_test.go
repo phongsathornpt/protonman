@@ -748,7 +748,7 @@ func TestScrollingRendersSingleComposer(t *testing.T) {
 	updated, _ := m.Update(testKey(tea.KeyPgUp))
 	m = updated.(*bubbleModel)
 	plain := ansi.Strip(m.View().Content)
-	placeholder := "Ask Protonman to inspect or change this workspace"
+	placeholder := "Message Protonman"
 	if got := strings.Count(plain, placeholder); got != 1 {
 		t.Fatalf("composer rendered %d times after page-up; view=%q", got, plain)
 	}

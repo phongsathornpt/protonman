@@ -9,18 +9,18 @@ import (
 
 func promptPlaceholder(hasRunner bool, mode permission.Mode, planMode bool) string {
 	if !hasRunner {
-		return "Type a message or /command…"
+		return "Message or /command…"
 	}
 	if planMode {
-		return "Ask Protonman to plan or inspect (plan mode · read-only)…"
+		return "Plan or inspect…"
 	}
 	switch mode {
 	case permission.ModeAlwaysApprove:
-		return "Ask Protonman (auto-approve active · commands run without prompt)…"
+		return "Message Protonman…"
 	case permission.ModeDeny:
-		return "Ask Protonman to inspect (deny mode · mutations blocked)…"
+		return "Inspect workspace…"
 	default:
-		return "Ask Protonman to inspect or change this workspace…"
+		return "Message Protonman…"
 	}
 }
 

@@ -78,9 +78,9 @@ func (m *bubbleModel) buildFrameChrome() frameChrome {
 			frame.height += lipgloss.Height(part)
 		}
 	}
-	// The footer is always joined into the live view; even an empty footer
-	// occupies one physical row in lipgloss.JoinVertical.
-	frame.height += lipgloss.Height(frame.footer)
+	if frame.footer != "" {
+		frame.height += lipgloss.Height(frame.footer)
+	}
 
 	return frame
 }

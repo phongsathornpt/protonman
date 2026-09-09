@@ -231,17 +231,13 @@ func TestReasoningPickerNumberKeySelects(t *testing.T) {
 	}
 }
 
-func TestInfoViewDisplaysThinkingChipWhenNonDefault(t *testing.T) {
+func TestInfoViewKeepsIdleChromeEmpty(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.resize(100, 30)
 	m.activeModel = "claude-3-7-sonnet"
-	m.reasoningEffort = sdk.ReasoningDefault
-	if strings.Contains(m.infoView(), "high") {
-		t.Fatalf("infoView should not display reasoning when effort is default: %s", m.infoView())
-	}
 	m.reasoningEffort = sdk.ReasoningHigh
-	if !strings.Contains(m.infoView(), "high") {
-		t.Fatalf("infoView missing non-default reasoning: %s", m.infoView())
+	if got := m.infoView(); got != "" {
+		t.Fatalf("idle infoView = %q, want empty minimal chrome", got)
 	}
 }
 
