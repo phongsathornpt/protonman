@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
+	crashview "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/crash"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/execview"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -768,7 +769,7 @@ func TestPickerRenderDoesNotMutateNavigationState(t *testing.T) {
 }
 
 func TestBuildCrashReport(t *testing.T) {
-	report := BuildCrashReport("nil pointer dereference", "goroutine 1 [running]:\nmain.go:123")
+	report := crashview.BuildCrashReport("nil pointer dereference", "goroutine 1 [running]:\nmain.go:123")
 	if !strings.Contains(report, "Protonman Crash Report") {
 		t.Fatalf("expected report header, got: %s", report)
 	}
@@ -782,7 +783,7 @@ func TestBuildCrashReport(t *testing.T) {
 
 func TestCrashModelNavigation(t *testing.T) {
 	stack := "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10"
-	m := NewCrashModel("test failure", []byte(stack))
+	m := crashview.NewCrashModel("test failure", []byte(stack))
 	rendered := m.View().Content
 	if !strings.Contains(rendered, "Protonman crashed") {
 		t.Fatalf("expected headline in view, got: %s", rendered)

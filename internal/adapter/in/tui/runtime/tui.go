@@ -11,6 +11,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	crashview "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/crash"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -209,13 +210,13 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 				"error_type", fmt.Sprintf("%T", panicVal),
 				"duration_ms", time.Since(startedAt).Milliseconds(),
 			)
-			crash := NewCrashModel(panicVal, panicStack)
+			crash := crashview.NewCrashModel(panicVal, panicStack)
 			crashProg := tea.NewProgram(
 				crash,
 				tea.WithContext(runCtx),
 			)
 			finalCrash, _ := crashProg.Run()
-			if cm, ok := finalCrash.(*CrashModel); ok && cm.RestartRequested() {
+			if cm, ok := finalCrash.(*crashview.CrashModel); ok && cm.RestartRequested() {
 				slog.DebugContext(ctx, "tui crash screen requested restart")
 				continue
 			}
