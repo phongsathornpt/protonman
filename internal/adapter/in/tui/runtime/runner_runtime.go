@@ -31,6 +31,7 @@ func (m *bubbleModel) retainConversationMessages() {
 }
 
 func (m *bubbleModel) startTool(call tool.Call) tea.Cmd {
+	m.showWelcome = false
 	slog.DebugContext(m.ctx, "tui direct tool started", "call_id", call.ID, "tool_name", call.Name, "argument_bytes", len(call.Arguments))
 	m.messages = append(m.messages, model.Message{Role: model.RoleAssistant, ToolCalls: []model.ToolCall{{ID: call.ID, Name: call.Name, Arguments: append([]byte(nil), call.Arguments...)}}})
 	m.retainConversationMessages()
