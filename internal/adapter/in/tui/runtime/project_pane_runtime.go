@@ -2,7 +2,6 @@ package runtime
 
 import (
 	tea "charm.land/bubbletea/v2"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/projectpolicy"
 	projectpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/project"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -137,5 +136,5 @@ func (m *bubbleModel) projectSource(field string) config.ValueSource {
 	if m == nil {
 		return config.SourceDefault
 	}
-	return projectpolicy.Source(m.projectConfigProvenance, field)
+	return projectConfigSource(m.projectConfigProvenance, field)
 }

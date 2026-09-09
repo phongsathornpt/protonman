@@ -10,7 +10,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	crashview "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/crash"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/projectpolicy"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 )
@@ -73,7 +72,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		bModel.workspaceKey = ui.workspaceKey
 		bModel.projectTrusted = ui.projectTrusted
 		bModel.projectConfigSources = append([]string(nil), ui.projectConfigSources...)
-		bModel.projectConfigProvenance = projectpolicy.CloneProvenance(ui.projectConfigProvenance)
+		bModel.projectConfigProvenance = cloneProjectConfigProvenance(ui.projectConfigProvenance)
 		if ui.hasRuntimeConfig {
 			bModel.runtimeConfig = ui.runtimeConfig
 		}

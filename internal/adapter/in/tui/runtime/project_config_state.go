@@ -1,8 +1,8 @@
-package projectpolicy
+package runtime
 
 import "github.com/phongsathornpt/protonman/internal/adapter/out/config"
 
-func CloneProvenance(in map[string]config.ValueSource) map[string]config.ValueSource {
+func cloneProjectConfigProvenance(in map[string]config.ValueSource) map[string]config.ValueSource {
 	if len(in) == 0 {
 		return nil
 	}
@@ -13,7 +13,7 @@ func CloneProvenance(in map[string]config.ValueSource) map[string]config.ValueSo
 	return out
 }
 
-func Source(provenance map[string]config.ValueSource, field string) config.ValueSource {
+func projectConfigSource(provenance map[string]config.ValueSource, field string) config.ValueSource {
 	if source, ok := provenance[field]; ok {
 		return source
 	}
