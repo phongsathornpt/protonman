@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
 	"sort"
 	"strings"
 	"time"
@@ -67,7 +68,7 @@ func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
 	var modelsList []model.RemoteModel
 	hasFreshCatalog := false
 	if m != nil && providerIdx < len(providers) {
-		modelsList, hasFreshCatalog = m.modelCatalogs.freshModels(providers[providerIdx], time.Now(), m.runtimeConfig.ModelCatalogTTL)
+		modelsList, hasFreshCatalog = m.modelCatalogs.FreshModels(providers[providerIdx], time.Now(), m.runtimeConfig.ModelCatalogTTL)
 	}
 	if !hasFreshCatalog {
 		modelsList = nil
@@ -256,12 +257,12 @@ func (v *modelSelectPaneView) loadProvider(m *bubbleModel, force bool) tea.Cmd {
 	v.loading = false
 	v.err = nil
 	if !force {
-		if models, ok := m.modelCatalogs.freshModels(providerName, time.Now(), m.runtimeConfig.ModelCatalogTTL); ok {
+		if models, ok := m.modelCatalogs.FreshModels(providerName, time.Now(), m.runtimeConfig.ModelCatalogTTL); ok {
 			v.setModels(models, m.activeModel)
 			return nil
 		}
 	}
-	cfg, configured := m.providers[normalizeProviderKey(providerName)]
+	cfg, configured := m.providers[modelcatalog.NormalizeProviderKey(providerName)]
 	if configured {
 		if model.ProviderHasUsableAuth(providerName, cfg.BaseURL, cfg.APIKey) {
 			return v.beginFetch(m.ctx, providerName, cfg, m.runtimeConfig.ModelDiscoveryTimeout)

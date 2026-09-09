@@ -5,6 +5,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"context"
 	"errors"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -24,38 +25,38 @@ import (
 )
 
 func TestModelCatalogDeleteReleasesProviderEntry(t *testing.T) {
-	var catalogs modelCatalogState
-	catalogs.set("Alpha", []model.RemoteModel{{ID: "large-model", Name: strings.Repeat("x", 4096)}})
-	if catalogs.len() != 1 {
-		t.Fatalf("entries before delete = %d, want 1", catalogs.len())
+	var catalogs modelcatalog.State
+	catalogs.Set("Alpha", []model.RemoteModel{{ID: "large-model", Name: strings.Repeat("x", 4096)}})
+	if catalogs.Len() != 1 {
+		t.Fatalf("entries before delete = %d, want 1", catalogs.Len())
 	}
-	catalogs.delete(" alpha ")
-	if catalogs.len() != 0 {
-		t.Fatalf("entries after delete = %d, want 0", catalogs.len())
+	catalogs.Delete(" alpha ")
+	if catalogs.Len() != 0 {
+		t.Fatalf("entries after delete = %d, want 0", catalogs.Len())
 	}
-	if got := catalogs.models("alpha"); len(got) != 0 {
+	if got := catalogs.Models("alpha"); len(got) != 0 {
 		t.Fatalf("deleted provider models = %#v, want none", got)
 	}
 }
 
 func TestModelCatalogStateScopesByProvider(t *testing.T) {
-	var state modelCatalogState
-	state.set("Provider-A", []model.RemoteModel{{ID: "a-1"}})
-	state.set("provider-b", []model.RemoteModel{{ID: "b-1"}})
-	if got := state.models("provider-a"); len(got) != 1 || got[0].ID != "a-1" {
+	var state modelcatalog.State
+	state.Set("Provider-A", []model.RemoteModel{{ID: "a-1"}})
+	state.Set("provider-b", []model.RemoteModel{{ID: "b-1"}})
+	if got := state.Models("provider-a"); len(got) != 1 || got[0].ID != "a-1" {
 		t.Fatalf("provider-a catalog = %#v", got)
 	}
-	if got := state.models("PROVIDER-B"); len(got) != 1 || got[0].ID != "b-1" {
+	if got := state.Models("PROVIDER-B"); len(got) != 1 || got[0].ID != "b-1" {
 		t.Fatalf("provider-b catalog = %#v", got)
 	}
 }
 
 func TestModelCatalogStateReturnsCopies(t *testing.T) {
-	var state modelCatalogState
-	state.set("provider", []model.RemoteModel{{ID: "original"}})
-	got := state.models("provider")
+	var state modelcatalog.State
+	state.Set("provider", []model.RemoteModel{{ID: "original"}})
+	got := state.Models("provider")
 	got[0].ID = "mutated"
-	if stored := state.models("provider"); stored[0].ID != "original" {
+	if stored := state.Models("provider"); stored[0].ID != "original" {
 		t.Fatalf("catalog mutation leaked into state: %#v", stored)
 	}
 }
@@ -71,7 +72,7 @@ func TestModelPickerRejectsStaleProviderResponse(t *testing.T) {
 	updated, _ := m.Update(modelsFetchedMsg{providerName: "alpha", requestID: 1, models: []model.RemoteModel{{ID: "stale-alpha"}}})
 	m = updated.(*bubbleModel)
 	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
-	if got := m.modelCatalogs.models("alpha"); len(got) != 0 {
+	if got := m.modelCatalogs.Models("alpha"); len(got) != 0 {
 		t.Fatalf("stale alpha response mutated catalog: %#v", got)
 	}
 	if len(view.models) > 0 && view.models[0].ID == "stale-alpha" {
@@ -98,7 +99,7 @@ func TestModelPickerLoadingHidesPreviousProviderModels(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.providers = map[string]config.ProviderConfig{"alpha": {Name: "alpha", APIKey: "a"}, "beta": {Name: "beta", APIKey: "b"}}
 	m.activeProvider = "alpha"
-	m.modelCatalogs.set("alpha", []model.RemoteModel{{ID: "alpha-only", Name: "Alpha Only"}})
+	m.modelCatalogs.Set("alpha", []model.RemoteModel{{ID: "alpha-only", Name: "Alpha Only"}})
 	view := newModelSelectPaneView(m)
 	m.bottom.push(view)
 	view.providerIndex = 1
@@ -204,13 +205,13 @@ func TestModelPickerResetSelectionFallsBackToFirstModel(t *testing.T) {
 }
 
 func TestModelCatalogFreshness(t *testing.T) {
-	var state modelCatalogState
+	var state modelcatalog.State
 	now := time.Now()
-	state.setAt("provider", []model.RemoteModel{{ID: "fresh"}}, now.Add(-time.Minute))
-	if got, ok := state.freshModels("provider", now, 2*time.Minute); !ok || len(got) != 1 || got[0].ID != "fresh" {
+	state.SetAt("provider", []model.RemoteModel{{ID: "fresh"}}, now.Add(-time.Minute))
+	if got, ok := state.FreshModels("provider", now, 2*time.Minute); !ok || len(got) != 1 || got[0].ID != "fresh" {
 		t.Fatalf("fresh catalog = %#v, %t", got, ok)
 	}
-	if got, ok := state.freshModels("provider", now.Add(2*time.Minute), 2*time.Minute); ok || got != nil {
+	if got, ok := state.FreshModels("provider", now.Add(2*time.Minute), 2*time.Minute); ok || got != nil {
 		t.Fatalf("stale catalog reported fresh: %#v, %t", got, ok)
 	}
 }
@@ -219,7 +220,7 @@ func TestModelPickerUsesFreshCacheWithoutFetch(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.providers = map[string]config.ProviderConfig{"custom": {Name: "custom", BaseURL: "https://api.example.com/v1", APIKey: "key"}}
 	m.activeProvider = "custom"
-	m.modelCatalogs.set("custom", []model.RemoteModel{{ID: "cached"}})
+	m.modelCatalogs.Set("custom", []model.RemoteModel{{ID: "cached"}})
 	view := newModelSelectPaneView(m)
 	if cmd := view.loadProvider(m, false); cmd != nil {
 		t.Fatal("fresh catalog triggered a network fetch")
@@ -233,7 +234,7 @@ func TestModelPickerRefreshBypassesFreshCache(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.providers = map[string]config.ProviderConfig{"custom": {Name: "custom", BaseURL: "https://api.example.com/v1", APIKey: "key"}}
 	m.activeProvider = "custom"
-	m.modelCatalogs.set("custom", []model.RemoteModel{{ID: "cached"}})
+	m.modelCatalogs.Set("custom", []model.RemoteModel{{ID: "cached"}})
 	view := newModelSelectPaneView(m)
 	if cmd := view.loadProvider(m, true); cmd == nil {
 		t.Fatal("forced refresh did not start a network fetch")
@@ -265,7 +266,7 @@ func TestDirectModelSelectionRecognizesDiscoveredModel(t *testing.T) {
 	t.Setenv("PROTONMAN_HOME", t.TempDir())
 	m := newTestSkillsModel(t, 1)
 	m.activeProvider = model.DefaultProtonmanName
-	m.modelCatalogs.set(model.DefaultProtonmanName, []model.RemoteModel{{ID: "glm-5.3-flash"}})
+	m.modelCatalogs.Set(model.DefaultProtonmanName, []model.RemoteModel{{ID: "glm-5.3-flash"}})
 	cmd := m.selectModelDirect("glm-5.3-flash")
 	msg := cmd().(modelSelectedMsg)
 	if msg.unverified {
@@ -325,7 +326,7 @@ func TestActiveRemoteModelFindsSelectedCatalogModel(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeProvider = "protonman"
 	m.activeModel = "TEXT-ONLY"
-	m.modelCatalogs.set("ProtonMan", []model.RemoteModel{{ID: "text-only", Features: []string{"tools"}}})
+	m.modelCatalogs.Set("ProtonMan", []model.RemoteModel{{ID: "text-only", Features: []string{"tools"}}})
 	got, ok := m.activeRemoteModel()
 	if !ok || got.ID != "text-only" {
 		t.Fatalf("activeRemoteModel() = %#v, %v", got, ok)
@@ -340,7 +341,7 @@ func TestFormatModelTokenLimitsRendersIndependentLimits(t *testing.T) {
 }
 
 func seedModelSelectCatalog(m *bubbleModel) {
-	m.modelCatalogs.set(model.DefaultProtonmanName, []model.RemoteModel{{ID: "deepseek-v4-flash-vision-exp", Name: "DeepSeek V4 Flash Vision"}, {ID: "glm-5.3-flash", Name: "GLM 5.3 Flash"}, {ID: "Qwen3.8-Flash", Name: "Qwen 3.8 Flash"}, {ID: "muse-spark", Name: "Muse Spark"}, {ID: "MiniMax-M3", Name: "MiniMax M3"}, {ID: "fixture-six", Name: "Fixture Six"}})
+	m.modelCatalogs.Set(model.DefaultProtonmanName, []model.RemoteModel{{ID: "deepseek-v4-flash-vision-exp", Name: "DeepSeek V4 Flash Vision"}, {ID: "glm-5.3-flash", Name: "GLM 5.3 Flash"}, {ID: "Qwen3.8-Flash", Name: "Qwen 3.8 Flash"}, {ID: "muse-spark", Name: "Muse Spark"}, {ID: "MiniMax-M3", Name: "MiniMax M3"}, {ID: "fixture-six", Name: "Fixture Six"}})
 }
 
 func TestModelSelectViewLaunchViaSlashCommand(t *testing.T) {
@@ -925,7 +926,7 @@ func TestModelSelectReconcilesIncompatibleReasoningEffort(t *testing.T) {
 	}
 	// Populate catalog entry for gpt-4o declaring no reasoning support
 	noReasoning := false
-	bModel.modelCatalogs.set("openai", []domainmodel.RemoteModel{
+	bModel.modelCatalogs.Set("openai", []domainmodel.RemoteModel{
 		{ID: "gpt-4o", Reasoning: &modelprofile.CatalogReasoning{Supported: &noReasoning}},
 	})
 

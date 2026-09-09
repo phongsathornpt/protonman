@@ -917,7 +917,7 @@ func TestProviderSwitchReconcilesIncompatibleModel(t *testing.T) {
 	}
 	bModel.activeProvider = "protonman"
 	bModel.activeModel = "pm-exclusive-model"
-	bModel.modelCatalogs.set("opencode", []model.RemoteModel{
+	bModel.modelCatalogs.Set("opencode", []model.RemoteModel{
 		{ID: "opencode-default-model"},
 		{ID: "opencode-secondary-model"},
 	})
@@ -947,7 +947,7 @@ func TestProviderDeletedDeterministicFallbackAndRunnerCleanup(t *testing.T) {
 	}
 	bModel.activeProvider = "zeta"
 	bModel.activeModel = "zeta-model"
-	bModel.modelCatalogs.set("alpha", []model.RemoteModel{
+	bModel.modelCatalogs.Set("alpha", []model.RemoteModel{
 		{ID: "alpha-model"},
 	})
 
@@ -955,7 +955,7 @@ func TestProviderDeletedDeterministicFallbackAndRunnerCleanup(t *testing.T) {
 	updated, _ := bModel.Update(providerDeletedMsg{providerName: "zeta"})
 	bModel = updated.(*bubbleModel)
 
-	if bModel.modelCatalogs.has("zeta") {
+	if bModel.modelCatalogs.Has("zeta") {
 		t.Fatal("deleted provider catalog retained")
 	}
 	if bModel.activeProvider != "alpha" {

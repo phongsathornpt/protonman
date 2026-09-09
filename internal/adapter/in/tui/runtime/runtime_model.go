@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/help"
@@ -10,6 +11,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -99,7 +101,7 @@ type bubbleModel struct {
 	sessionID                 string
 	sessions                  *app.Sessions
 	workspaceKey              string
-	modelCatalogs             modelCatalogState
+	modelCatalogs             modelcatalog.State
 	runtimeConfig             config.RuntimeConfig
 	projectTrusted            bool
 	projectConfigSources      []string
@@ -202,4 +204,28 @@ func (m *bubbleModel) syncAgentSnapshot() {
 		return
 	}
 	m.agentSnapshot = m.agents.List()
+}
+
+func (m *bubbleModel) modelIDKnown(provider, modelID string) bool {
+	if m == nil {
+		return false
+	}
+	for _, candidate := range m.modelCatalogs.Models(provider) {
+		if strings.EqualFold(strings.TrimSpace(candidate.ID), strings.TrimSpace(modelID)) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *bubbleModel) activeRemoteModel() (model.RemoteModel, bool) {
+	if m == nil {
+		return model.RemoteModel{}, false
+	}
+	for _, candidate := range m.modelCatalogs.Models(m.activeProvider) {
+		if strings.EqualFold(strings.TrimSpace(candidate.ID), strings.TrimSpace(m.activeModel)) {
+			return candidate, true
+		}
+	}
+	return model.RemoteModel{}, false
 }

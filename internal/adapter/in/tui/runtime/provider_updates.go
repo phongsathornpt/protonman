@@ -20,7 +20,7 @@ func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) (tea.Model, 
 			}
 			pv.fetchCancel = nil
 			if message.err == nil && len(message.models) > 0 {
-				m.modelCatalogs.set(message.providerName, message.models)
+				m.modelCatalogs.Set(message.providerName, message.models)
 			}
 			if message.err != nil {
 				pv.state = providerStateError
@@ -43,8 +43,8 @@ func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) (tea.Model, 
 			mv.loading = false
 			mv.err = message.err
 			if message.err == nil {
-				m.modelCatalogs.set(message.providerName, message.models)
-				mv.setModels(m.modelCatalogs.models(message.providerName), m.activeModel)
+				m.modelCatalogs.Set(message.providerName, message.models)
+				mv.setModels(m.modelCatalogs.Models(message.providerName), m.activeModel)
 			}
 			m.relayout()
 		}
@@ -130,7 +130,7 @@ func (m *bubbleModel) updateProviderActiveSelected(message providerActiveSelecte
 		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to switch provider: %v", message.err)))
 	} else {
 		m.activeProvider = message.providerName
-		models := m.modelCatalogs.models(message.providerName)
+		models := m.modelCatalogs.Models(message.providerName)
 		if len(models) > 0 {
 			found := false
 			for _, mod := range models {
@@ -177,7 +177,7 @@ func (m *bubbleModel) updateProviderDeleted(message providerDeletedMsg) (tea.Mod
 		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to remove provider %s: %v", message.providerName, message.err)))
 	} else {
 		delete(m.providers, strings.ToLower(message.providerName))
-		m.modelCatalogs.delete(message.providerName)
+		m.modelCatalogs.Delete(message.providerName)
 		if strings.EqualFold(m.activeProvider, message.providerName) {
 			m.activeProvider = ""
 			if len(m.providers) > 0 {
@@ -187,7 +187,7 @@ func (m *bubbleModel) updateProviderDeleted(message providerDeletedMsg) (tea.Mod
 				}
 				sort.Strings(keys)
 				m.activeProvider = keys[0]
-				models := m.modelCatalogs.models(m.activeProvider)
+				models := m.modelCatalogs.Models(m.activeProvider)
 				if len(models) > 0 {
 					m.activeModel = models[0].ID
 				} else {

@@ -278,7 +278,7 @@ func TestSlashReasoningPickerUsesCatalogResolvedProfile(t *testing.T) {
 	m.activeProvider = "protonman"
 	m.activeModel = "gemini-3.8-flash"
 	yes := true
-	m.modelCatalogs.set("protonman", []model.RemoteModel{{ID: "gemini-3.8-flash", ToolSupport: &yes}})
+	m.modelCatalogs.Set("protonman", []model.RemoteModel{{ID: "gemini-3.8-flash", ToolSupport: &yes}})
 	m.executeCommand("/reasoning")
 	got := m.bottom.renderTop(m)
 	for _, want := range []string{"low", "medium", "high"} {
