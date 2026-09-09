@@ -175,6 +175,94 @@ func TestE2ETUIRapidResizeWithRealPTY(t *testing.T) {
 	}
 }
 
+func TestE2ETUIResizeDuringRunningTool(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+	master, slave := openLinuxPTY(t, 80, 24)
+	defer master.Close()
+	defer slave.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, protonBin, "-y")
+	cmd.Dir = ws
+	cmd.Env = append(os.Environ(), "PROTONMAN_HOME="+home, "TERM=xterm-256color")
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start Protonman on PTY: %v", err)
+	}
+	_ = slave.Close()
+
+	var output bytes.Buffer
+	firstOutput := make(chan struct{})
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		buf := make([]byte, 4096)
+		signaled := false
+		for {
+			n, err := master.Read(buf)
+			if n > 0 {
+				_, _ = output.Write(buf[:n])
+				if !signaled {
+					close(firstOutput)
+					signaled = true
+				}
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	select {
+	case <-firstOutput:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for initial TUI output")
+	}
+
+	time.Sleep(120 * time.Millisecond)
+	command := "!for i in $(seq 1 12); do echo live-$i; sleep 0.04; done"
+	if _, err := master.Write([]byte(command)); err != nil {
+		t.Fatalf("type long-running tool: %v", err)
+	}
+	time.Sleep(30 * time.Millisecond)
+	if _, err := master.Write([]byte{'\r'}); err != nil {
+		t.Fatalf("submit long-running tool: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	for _, size := range []struct{ cols, rows uint16 }{{48, 12}, {110, 32}, {30, 9}, {88, 22}} {
+		if err := unix.IoctlSetWinsize(int(master.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Col: size.cols, Row: size.rows}); err != nil {
+			t.Fatalf("resize PTY during tool to %dx%d: %v", size.cols, size.rows, err)
+		}
+		time.Sleep(45 * time.Millisecond)
+	}
+	if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
+		t.Fatalf("TUI exited while tool was running: %v\noutput: %q", err, output.String())
+	}
+	time.Sleep(500 * time.Millisecond)
+	view := output.String()
+	if !strings.Contains(view, "live-12") {
+		t.Fatalf("running tool output missing terminal line after resize: %q", view)
+	}
+	for _, unwanted := range []string{"Protonman crashed", "panic:"} {
+		if strings.Contains(view, unwanted) {
+			t.Fatalf("running-tool resize output contains %q: %q", unwanted, view)
+		}
+	}
+
+	_, _ = master.Write([]byte{3})
+	if err := cmd.Wait(); err != nil && ctx.Err() != nil {
+		t.Fatalf("TUI did not exit after running-tool resize: %v", err)
+	}
+	_ = master.Close()
+	select {
+	case <-readDone:
+	case <-time.After(time.Second):
+		t.Fatal("timed out draining running-tool PTY output")
+	}
+}
+
 func TestE2ETUIBracketedUnicodePasteSurvivesResize(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
