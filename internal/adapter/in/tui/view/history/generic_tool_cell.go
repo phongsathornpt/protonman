@@ -32,7 +32,6 @@ type ToolCell struct {
 }
 
 func (ToolCell) Kind() HistoryCellKind { return HistoryCellTool }
-func (c ToolCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c ToolCell) RenderWidth(width int) []string {
 	var headerLine string
 

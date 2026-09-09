@@ -17,7 +17,6 @@ type AgentToolCell struct {
 }
 
 func (AgentToolCell) Kind() HistoryCellKind { return HistoryCellTool }
-func (c AgentToolCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c AgentToolCell) RenderWidth(width int) []string {
 	label := c.presentationLabel(true)
 	if c.Running {

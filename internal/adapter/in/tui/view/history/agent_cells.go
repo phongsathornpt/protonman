@@ -27,7 +27,6 @@ type AgentRunCell struct {
 }
 
 func (AgentRunCell) Kind() HistoryCellKind { return HistoryCellTool }
-func (c AgentRunCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c AgentRunCell) RenderWidth(width int) []string {
 	label := c.title()
 	indicator, style := c.statePresentation()

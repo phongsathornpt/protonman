@@ -179,7 +179,7 @@ func TestActivateSkillToolCellCompactRendering(t *testing.T) {
 			t.Fatalf("RawLines should not contain raw instruction markdown, got: %v", raw)
 		}
 	}
-	rendered := cell.Render()
+	rendered := cell.RenderWidth(80)
 	joined := testPlain(strings.Join(rendered, "\n"))
 	if !strings.Contains(joined, `Activated skill "golang-performance"`) {
 		t.Fatalf("expected compact activation badge in render, got: %s", joined)
@@ -244,7 +244,7 @@ func TestToolCellRefinedRenderingWebFetch(t *testing.T) {
 func TestToolCellRefinedRenderingReadFile(t *testing.T) {
 	fileContent := strings.Repeat("fmt.Println(\"code\")\n", 50)
 	cell := &ToolCell{Name: "read", Target: "internal/tui/theme.go", ToolKind: tool.KindRead, Body: fileContent, Summary: summarizeToolOutput("read", tool.KindRead, "internal/tui/theme.go", fileContent, nil, false)}
-	rendered := testPlain(strings.Join(cell.Render(), "\n"))
+	rendered := testPlain(strings.Join(cell.RenderWidth(80), "\n"))
 	if !strings.Contains(rendered, "50 lines") || !strings.Contains(rendered, "internal/tui/theme.go") {
 		t.Fatalf("expected summary with line count and target, got: %s", rendered)
 	}
@@ -270,7 +270,7 @@ func TestExecCellFolding(t *testing.T) {
 	exit0 := 0
 	longOutput := "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\n"
 	cell := &ExecCell{Command: "npm test", Body: longOutput, ExitCode: &exit0}
-	rendered := testPlain(strings.Join(cell.Render(), "\n"))
+	rendered := testPlain(strings.Join(cell.RenderWidth(80), "\n"))
 	if !strings.Contains(rendered, "Npm test") || strings.Contains(rendered, "exit 0") {
 		t.Fatalf("expected semantic command title without redundant exit 0, got: %s", rendered)
 	}

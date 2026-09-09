@@ -14,7 +14,6 @@ import (
 type SystemCell struct{ Text string }
 
 func (SystemCell) Kind() HistoryCellKind { return HistoryCellSystem }
-func (c SystemCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c SystemCell) RenderWidth(width int) []string {
 	return styledWrappedLines(c.Text, width, tuistyle.MutedStyle)
 }
@@ -34,7 +33,6 @@ type ErrorCell struct {
 }
 
 func (ErrorCell) Kind() HistoryCellKind { return HistoryCellError }
-func (c ErrorCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 
 func (c ErrorCell) RenderWidth(width int) []string {
 	if width <= 0 {
@@ -168,7 +166,6 @@ type ThinkingCell struct {
 }
 
 func (ThinkingCell) Kind() HistoryCellKind { return HistoryCellAssistant }
-func (c ThinkingCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c ThinkingCell) RenderWidth(_ int) []string {
 	indicator := "…"
 	if c.Spinner != "" {

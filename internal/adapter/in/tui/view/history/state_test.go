@@ -47,7 +47,6 @@ type countingCell struct {
 }
 
 func (*countingCell) Kind() HistoryCellKind { return HistoryCellSystem }
-func (c *countingCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c *countingCell) RenderWidth(int) []string {
 	c.renders++
 	return []string{c.text}

@@ -43,23 +43,13 @@ func (k HistoryCellKind) String() string {
 // Bubble Tea model about every presentation type.
 type HistoryCell interface {
 	Kind() HistoryCellKind
-	Render() []string
+	RenderWidth(width int) []string
 	RawLines() []string
 	LineCount() int
 }
 
-// widthHistoryCell is implemented by cells whose rich presentation can wrap
-// to the current viewport. The compatibility methods on HistoryCell remain
-// available to callers that do not have a terminal width.
-type widthHistoryCell interface {
-	RenderWidth(width int) []string
-}
-
 func renderHistoryCell(cell HistoryCell, width int) []string {
-	if sized, ok := cell.(widthHistoryCell); ok {
-		return sized.RenderWidth(width)
-	}
-	return cell.Render()
+	return cell.RenderWidth(width)
 }
 
 func historyCellLineCount(cell HistoryCell, width int) int {

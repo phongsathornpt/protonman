@@ -27,7 +27,6 @@ type PatchCell struct {
 }
 
 func (PatchCell) Kind() HistoryCellKind { return HistoryCellTool }
-func (c PatchCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c PatchCell) RenderWidth(width int) []string {
 	title := tool.DisplayName(c.Name)
 	if strings.TrimSpace(c.Summary) != "" {

@@ -34,7 +34,6 @@ type ExecCell struct {
 }
 
 func (ExecCell) Kind() HistoryCellKind { return HistoryCellTool }
-func (c ExecCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c ExecCell) RenderWidth(width int) []string {
 	command := strings.TrimSpace(c.Command)
 	if command == "" {
