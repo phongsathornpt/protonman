@@ -17,7 +17,7 @@ func TestE2ESessionPersistenceAndRedaction(t *testing.T) {
 		"PROTON_SESSION_ID=" + sessionID,
 	}
 
-	// First run with -y (sets mode to always-approve) and calls read_file
+	// First run with -y (sets mode to always-approve) and calls read
 	firstRes := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call read {"path":"hello.txt"}`},
 		dir:  ws,

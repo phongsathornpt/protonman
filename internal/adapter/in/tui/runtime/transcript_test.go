@@ -66,16 +66,16 @@ func TestHistoryStateToolRunningToCompleted(t *testing.T) {
 
 func TestHistoryStateCompletesPreviouslyCommittedParallelTool(t *testing.T) {
 	state := NewHistoryState(100)
-	state.StartTool("read_file")
+	state.StartTool("read")
 	state.StartTool("grep")
-	state.CompleteTool(ToolCell{Name: "read_file", Body: "contents"})
+	state.CompleteTool(ToolCell{Name: "read", Body: "contents"})
 	cells := state.Cells()
 	if len(cells) != 2 {
 		t.Fatalf("cell count = %d, want 2", len(cells))
 	}
 	first, ok := cells[0].(*ToolCell)
 	if !ok || first.Running || first.Body != "contents" {
-		t.Fatalf("first tool = %#v, want completed read_file", cells[0])
+		t.Fatalf("first tool = %#v, want completed read", cells[0])
 	}
 	second, ok := cells[1].(*ToolCell)
 	if !ok || !second.Running || second.Name != "grep" {
@@ -85,9 +85,9 @@ func TestHistoryStateCompletesPreviouslyCommittedParallelTool(t *testing.T) {
 
 func TestHistoryStateUsesCallIDForSameNameParallelTools(t *testing.T) {
 	state := NewHistoryState(100)
-	state.StartToolCall("read-1", "read_file")
-	state.StartToolCall("read-2", "read_file")
-	state.CompleteTool(ToolCell{CallID: "read-1", Name: "read_file", Body: "first"})
+	state.StartToolCall("read-1", "read")
+	state.StartToolCall("read-2", "read")
+	state.CompleteTool(ToolCell{CallID: "read-1", Name: "read", Body: "first"})
 	cells := state.Cells()
 	if len(cells) != 2 {
 		t.Fatalf("cell count = %d, want 2", len(cells))
@@ -100,7 +100,7 @@ func TestHistoryStateUsesCallIDForSameNameParallelTools(t *testing.T) {
 	if !ok || second.CallID != "read-2" || !second.Running {
 		t.Fatalf("second tool = %#v, want active read-2", cells[1])
 	}
-	state.CompleteTool(ToolCell{CallID: "read-2", Name: "read_file", Body: "second"})
+	state.CompleteTool(ToolCell{CallID: "read-2", Name: "read", Body: "second"})
 	cells = state.Cells()
 	second = cells[1].(*ToolCell)
 	if second.Running || second.Body != "second" {
@@ -134,7 +134,7 @@ func TestHistoryCellKindEnum(t *testing.T) {
 func TestHistoryStateRunningToolSpinner(t *testing.T) {
 	state := NewHistoryState(100)
 	state.SetSpinnerFrame("⠋")
-	state.StartTool("read_file")
+	state.StartTool("read")
 	lines := state.RenderLines()
 	if len(lines) == 0 || !strings.Contains(lines[len(lines)-1], "⠋") {
 		t.Fatalf("expected running tool to contain spinner frame ⠋, got: %v", lines)
@@ -144,7 +144,7 @@ func TestHistoryStateRunningToolSpinner(t *testing.T) {
 	if len(lines) == 0 || !strings.Contains(lines[len(lines)-1], "⠙") {
 		t.Fatalf("expected running tool to contain updated spinner frame ⠙, got: %v", lines)
 	}
-	state.CompleteTool(ToolCell{Name: "read_file", Body: "done"})
+	state.CompleteTool(ToolCell{Name: "read", Body: "done"})
 	lines = state.RenderLines()
 	if len(lines) == 0 || strings.Contains(lines[0], "⠙") || strings.Contains(lines[0], "…") {
 		t.Fatalf("completed tool should not contain spinner, got: %v", lines)
@@ -193,7 +193,7 @@ func TestActivateSkillToolCellCompactRendering(t *testing.T) {
 # Go Performance Optimization
 1. Profile before optimizing...
 </skill_content>`
-	cell := ToolCell{Name: "activate_skill", Body: xmlBody}
+	cell := ToolCell{Name: "skill", Body: xmlBody}
 	raw := cell.RawLines()
 	for _, line := range raw {
 		if strings.Contains(line, "Profile before optimizing") {
@@ -212,7 +212,7 @@ func TestActivateSkillToolCellCompactRendering(t *testing.T) {
 
 func TestLoadInitialMessagesCompactsSkillDetail(t *testing.T) {
 	bm := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "")
-	bm.loadInitialMessages([]model.Message{{Role: model.RoleTool, ToolName: "activate_skill", Content: `<skill_content name="golang-code-style">\n# Full instructions...\n</skill_content>`}, {Role: model.RoleUser, Content: "Activated skill pdf-tool [user]:\n# PDF Guide\nLong content here..."}})
+	bm.loadInitialMessages([]model.Message{{Role: model.RoleTool, ToolName: "skill", Content: `<skill_content name="golang-code-style">\n# Full instructions...\n</skill_content>`}, {Role: model.RoleUser, Content: "Activated skill pdf-tool [user]:\n# PDF Guide\nLong content here..."}})
 	rendered := strings.Join(bm.historyState.RenderLines(), "\n")
 	if strings.Contains(rendered, "Full instructions") {
 		t.Fatalf("history rendered full skill instructions from tool message: %s", rendered)
@@ -268,7 +268,7 @@ func TestToolCellRefinedRenderingWebFetch(t *testing.T) {
 
 func TestToolCellRefinedRenderingReadFile(t *testing.T) {
 	fileContent := strings.Repeat("fmt.Println(\"code\")\n", 50)
-	cell := &ToolCell{Name: "read_file", Target: "internal/tui/theme.go", ToolKind: tool.KindRead, Body: fileContent, Summary: summarizeToolOutput("read_file", tool.KindRead, "internal/tui/theme.go", fileContent, nil, false)}
+	cell := &ToolCell{Name: "read", Target: "internal/tui/theme.go", ToolKind: tool.KindRead, Body: fileContent, Summary: summarizeToolOutput("read", tool.KindRead, "internal/tui/theme.go", fileContent, nil, false)}
 	rendered := strings.Join(cell.Render(), "\n")
 	if !strings.Contains(rendered, "50 lines") || !strings.Contains(rendered, "internal/tui/theme.go") {
 		t.Fatalf("expected summary with line count and target, got: %s", rendered)
@@ -276,8 +276,8 @@ func TestToolCellRefinedRenderingReadFile(t *testing.T) {
 	if !strings.Contains(rendered, "Read") {
 		t.Fatalf("expected action verb 'Read' in header, got: %s", rendered)
 	}
-	if strings.Contains(rendered, "read_file") {
-		t.Fatalf("raw 'read_file' should be replaced by SSOT DisplayName, got: %s", rendered)
+	if strings.Contains(rendered, "read") {
+		t.Fatalf("raw 'read' should be replaced by SSOT DisplayName, got: %s", rendered)
 	}
 	if strings.Contains(rendered, "fmt.Println") {
 		t.Fatalf("raw file contents should be suppressed from viewport, got: %s", rendered)
@@ -333,19 +333,19 @@ func TestErrorCellCardRendering(t *testing.T) {
 }
 
 func TestErrorCellFallbackRendering(t *testing.T) {
-	cell := &ErrorCell{Title: "read_file", Text: "file not found"}
+	cell := &ErrorCell{Title: "read", Text: "file not found"}
 	rendered := strings.Join(cell.RenderWidth(80), "\n")
-	if !strings.Contains(rendered, "read_file: file not found") {
+	if !strings.Contains(rendered, "read: file not found") {
 		t.Fatalf("expected simple fallback error line, got:\n%s", rendered)
 	}
 	raw := strings.Join(cell.RawLines(), "\n")
-	if raw != "read_file: file not found" {
+	if raw != "read: file not found" {
 		t.Fatalf("expected raw text to match, got %q", raw)
 	}
 }
 
 func TestToolCellRenderReadFileExcerpt(t *testing.T) {
-	cell := &ToolCell{Name: "read_file", Target: "internal/tui/theme.go", ToolKind: tool.KindRead, Body: "// Package tui\npackage tui\n\nimport \"fmt\"\n", Summary: "4 lines (45 B)"}
+	cell := &ToolCell{Name: "read", Target: "internal/tui/theme.go", ToolKind: tool.KindRead, Body: "// Package tui\npackage tui\n\nimport \"fmt\"\n", Summary: "4 lines (45 B)"}
 	rendered := strings.Join(cell.RenderWidth(80), "\n")
 	if !strings.Contains(rendered, "package tui") || !strings.Contains(rendered, "↳") {
 		t.Fatalf("expected rendered cell to contain excerpt '↳ package tui', got:\n%s", rendered)
@@ -353,15 +353,15 @@ func TestToolCellRenderReadFileExcerpt(t *testing.T) {
 }
 
 func TestToolFailureSuggestions(t *testing.T) {
-	notFoundSugg := toolFailureSuggestions("read_file", tool.ErrorCodeNotFound)
+	notFoundSugg := toolFailureSuggestions("read", tool.ErrorCodeNotFound)
 	if len(notFoundSugg) == 0 {
-		t.Fatalf("expected suggestions for read_file not found error")
+		t.Fatalf("expected suggestions for read not found error")
 	}
-	protectedSugg := toolFailureSuggestions("read_file", tool.ErrorCodeProtectedPath)
+	protectedSugg := toolFailureSuggestions("read", tool.ErrorCodeProtectedPath)
 	if len(protectedSugg) == 0 || !strings.Contains(protectedSugg[0], "workspace protection rules") {
 		t.Fatalf("expected suggestions for protected path error")
 	}
-	escapeSugg := toolFailureSuggestions("read_file", tool.ErrorCodeOutsideWorkspace)
+	escapeSugg := toolFailureSuggestions("read", tool.ErrorCodeOutsideWorkspace)
 	if len(escapeSugg) != 1 || escapeSugg[0] != "use . or a workspace-relative path" {
 		t.Fatalf("expected actionable suggestions for outside workspace error: %#v", escapeSugg)
 	}
@@ -402,7 +402,7 @@ func TestHistoryStateSpinnerFrameReportsVisualChanges(t *testing.T) {
 	if !state.SetSpinnerFrame("b") {
 		t.Fatal("thinking cell did not report spinner change")
 	}
-	state.StartTool("read_file")
+	state.StartTool("read")
 	if !state.SetSpinnerFrame("c") {
 		t.Fatal("running tool did not report spinner change")
 	}
@@ -545,7 +545,7 @@ func TestExecCellClampsLongLinesAndHighlightsDiff(t *testing.T) {
 }
 
 func TestActivateSkillFallbackToTarget(t *testing.T) {
-	cell := &ToolCell{Name: "activate_skill", Target: `"pdf-processing"`, Body: "Loaded skill instructions successfully.", ToolKind: tool.KindRead}
+	cell := &ToolCell{Name: "skill", Target: `"pdf-processing"`, Body: "Loaded skill instructions successfully.", ToolKind: tool.KindRead}
 	rendered := cell.RenderWidth(80)
 	joined := strings.Join(rendered, "\n")
 	if !strings.Contains(joined, `"pdf-processing"`) {

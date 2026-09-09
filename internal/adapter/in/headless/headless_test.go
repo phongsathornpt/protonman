@@ -28,7 +28,7 @@ func TestHeadlessCallRunsThroughService(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := runner.Run(context.Background(), `:call read_file {"path":"README.md"}`, &out, FormatText); err != nil {
+	if err := runner.Run(context.Background(), `:call read {"path":"README.md"}`, &out, FormatText); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
 	if handler.calls != 1 {
@@ -48,7 +48,7 @@ func TestHeadlessAskModeDeniesWithoutPrompt(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	err = runner.Run(context.Background(), `/call read_file {"path":"README.md"}`, &out, FormatText)
+	err = runner.Run(context.Background(), `/call read {"path":"README.md"}`, &out, FormatText)
 	if err == nil {
 		t.Fatal("Run() error = nil, want permission denied")
 	}
@@ -69,7 +69,7 @@ func TestHeadlessJSONEmitsEvents(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := runner.Run(context.Background(), `/call read_file {}`, &out, FormatJSON); err != nil {
+	if err := runner.Run(context.Background(), `/call read {}`, &out, FormatJSON); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
 	if !strings.Contains(out.String(), `"kind":"tool_call"`) {
@@ -88,14 +88,14 @@ func TestHeadlessPersistsTranscriptWithoutToolArguments(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 	var out bytes.Buffer
-	if err := runner.Run(context.Background(), `/call read_file {"path":"secret"}`, &out, FormatText); err != nil {
+	if err := runner.Run(context.Background(), `/call read {"path":"secret"}`, &out, FormatText); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
 	stored := runner.SessionState()
 	if len(stored) != 2 {
 		t.Fatalf("session messages = %d, want 2", len(stored))
 	}
-	if stored[0].Role != model.RoleUser || !strings.Contains(stored[0].Content, "/call read_file") {
+	if stored[0].Role != model.RoleUser || !strings.Contains(stored[0].Content, "/call read") {
 		t.Fatalf("user message = %+v", stored[0])
 	}
 	if stored[1].Role != model.RoleAssistant || len(stored[1].ToolCalls) != 0 {
@@ -224,7 +224,7 @@ func (r *testRegistry) Definitions() []tool.Definition {
 func newTestRegistry() (*testRegistry, *testHandler) {
 	handler := &testHandler{
 		definition: tool.Definition{
-			Name:                "read_file",
+			Name:                "read",
 			Description:         "read a file",
 			Kind:                tool.KindRead,
 			PermissionDetailKey: "path",

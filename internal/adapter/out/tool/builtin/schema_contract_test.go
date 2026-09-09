@@ -115,7 +115,7 @@ func TestRegistryRegisterBatchIsAtomic(t *testing.T) {
 
 func TestRegistryReplaceNamespaceIsAtomic(t *testing.T) {
 	registry, err := NewRegistry(
-		namedSchemaHandler{name: "read_file"},
+		namedSchemaHandler{name: "read"},
 		namedSchemaHandler{name: "mcp.db.old"},
 	)
 	if err != nil {
@@ -132,7 +132,7 @@ func TestRegistryReplaceNamespaceIsAtomic(t *testing.T) {
 	if _, ok := registry.Lookup("mcp.db.new"); !ok {
 		t.Fatal("new namespace tool missing")
 	}
-	if _, ok := registry.Lookup("read_file"); !ok {
+	if _, ok := registry.Lookup("read"); !ok {
 		t.Fatal("unrelated tool removed")
 	}
 
@@ -150,29 +150,33 @@ func TestRegistryReplaceNamespaceIsAtomic(t *testing.T) {
 }
 
 func TestRegistryReplaceNamespaceCanRemoveAllTools(t *testing.T) {
-	registry, _ := NewRegistry(namedSchemaHandler{name: "mcp.db.old"}, namedSchemaHandler{name: "read_file"})
+	registry, _ := NewRegistry(namedSchemaHandler{name: "mcp.db.old"}, namedSchemaHandler{name: "read"})
 	if err := registry.ReplaceNamespace("mcp.db.", nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := registry.Lookup("mcp.db.old"); ok {
 		t.Fatal("namespace tool not removed")
 	}
-	if _, ok := registry.Lookup("read_file"); !ok {
+	if _, ok := registry.Lookup("read"); !ok {
 		t.Fatal("unrelated tool removed")
 	}
 }
 
-func TestRegistryResolvesLegacyReadFileAliasWithoutPublishingIt(t *testing.T) {
-	registry, err := NewRegistry(namedSchemaHandler{name: "read"})
+func TestRegistryPublishesCanonicalReadTool(t *testing.T) {
+	registry, err := NewRegistry(namedSchemaHandler{name: tool.NameRead})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := registry.Lookup("read_file"); !ok {
-		t.Fatal("legacy read_file alias did not resolve canonical read handler")
+	if _, ok := registry.Lookup(tool.NameRead); !ok {
+		t.Fatal("canonical read handler did not resolve")
 	}
+	found := false
 	for _, definition := range registry.Definitions() {
-		if definition.Name == "read_file" {
-			t.Fatal("legacy read_file alias leaked into model-facing definitions")
+		if definition.Name == tool.NameRead {
+			found = true
 		}
+	}
+	if !found {
+		t.Fatal("canonical read definition was not published")
 	}
 }

@@ -12,17 +12,17 @@ func TestE2EFullBuiltinTools(t *testing.T) {
 	home := newTestHome(t)
 	env := []string{"PROTONMAN_HOME=" + home}
 
-	// 1. read_file byte pagination returns a usable continuation offset.
+	// 1. read byte pagination returns a usable continuation offset.
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call read {"path":"hello.txt","limit":17}`},
 		dir:  ws,
 		env:  env,
 	})
 	if res.exitCode != 0 || !strings.Contains(res.stdout, "Hello Coding E2E") || strings.Contains(res.stdout, "Line 2") {
-		t.Fatalf("read_file first page failed: %s %s", res.stdout, res.stderr)
+		t.Fatalf("read first page failed: %s %s", res.stdout, res.stderr)
 	}
 	if !strings.Contains(res.stdout, "continue with offset=17") {
-		t.Fatalf("read_file first page missing continuation: %s", res.stdout)
+		t.Fatalf("read first page missing continuation: %s", res.stdout)
 	}
 
 	res = runProton(t, runOptions{
@@ -31,10 +31,10 @@ func TestE2EFullBuiltinTools(t *testing.T) {
 		env:  env,
 	})
 	if res.exitCode != 0 || !strings.Contains(res.stdout, "Line 2") || strings.Contains(res.stdout, "Hello Coding E2E") {
-		t.Fatalf("read_file continuation failed: %s %s", res.stdout, res.stderr)
+		t.Fatalf("read continuation failed: %s %s", res.stdout, res.stderr)
 	}
 
-	// 2. read_file non-existent file
+	// 2. read non-existent file
 	res = runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call read {"path":"non_existent.txt"}`},
 		dir:  ws,
@@ -88,14 +88,14 @@ func TestE2EFullBuiltinTools(t *testing.T) {
 		t.Fatalf("grep failed to find nested file: %s %s", res.stdout, res.stderr)
 	}
 
-	// 7. list_dir nested directory
+	// 7. ls nested directory
 	res = runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call ls {"path":"nested/deep"}`},
 		dir:  ws,
 		env:  env,
 	})
 	if res.exitCode != 0 || !strings.Contains(res.stdout, "dir") {
-		t.Fatalf("list_dir nested failed: %s %s", res.stdout, res.stderr)
+		t.Fatalf("ls nested failed: %s %s", res.stdout, res.stderr)
 	}
 }
 

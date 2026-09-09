@@ -94,7 +94,7 @@ func TestPermissionEscParksForScroll(t *testing.T) {
 	response := make(chan permissionResponse, 1)
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
-	model.modal = &permissionRequest{request: permission.Request{ToolName: "read_file", ToolKind: permission.ToolRead, Detail: "README.md"}, response: response}
+	model.modal = &permissionRequest{request: permission.Request{ToolName: "read", ToolKind: permission.ToolRead, Detail: "README.md"}, response: response}
 	updated, command := model.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if command != nil {
 		t.Fatalf("esc review command = %v, want nil", command)
@@ -367,7 +367,7 @@ func TestBubbleModelPermissionModalAllowsAndSavesGlobalRule(t *testing.T) {
 	response := make(chan permissionResponse, 1)
 	model.modal = &permissionRequest{
 		request: permission.Request{
-			ToolName: "read_file",
+			ToolName: "read",
 			ToolKind: permission.ToolRead,
 			Detail:   "README.md",
 			Effect:   tool.CommandEffectReadOnly,
@@ -399,7 +399,7 @@ func TestBubbleModelPermissionModalAllowsAndSavesGlobalRule(t *testing.T) {
 
 	// Verify live policy was updated
 	d := service.Policy().Evaluate(permission.Request{
-		ToolName: "read_file",
+		ToolName: "read",
 		ToolKind: permission.ToolRead,
 		Detail:   "README.md",
 	})

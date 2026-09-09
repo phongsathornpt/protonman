@@ -36,24 +36,24 @@ func TestExtractToolTarget(t *testing.T) {
 			wantKind:   tool.KindWeb,
 		},
 		{
-			name:       "read_file path",
-			toolName:   "read_file",
+			name:       "read path",
+			toolName:   "read",
 			kind:       tool.KindRead,
 			args:       `{"path":"internal/tui/theme.go"}`,
 			wantTarget: "internal/tui/theme.go",
 			wantKind:   tool.KindRead,
 		},
 		{
-			name:       "list_dir with path",
-			toolName:   "list_dir",
+			name:       "ls with path",
+			toolName:   "ls",
 			kind:       tool.KindRead,
 			args:       `{"path":"cmd/protonman"}`,
 			wantTarget: "cmd/protonman",
 			wantKind:   tool.KindRead,
 		},
 		{
-			name:       "list_dir default path",
-			toolName:   "list_dir",
+			name:       "ls default path",
+			toolName:   "ls",
 			kind:       tool.KindRead,
 			args:       `{}`,
 			wantTarget: ".",
@@ -92,8 +92,8 @@ func TestExtractToolTarget(t *testing.T) {
 			wantKind:   tool.KindEdit,
 		},
 		{
-			name:       "activate_skill name",
-			toolName:   "activate_skill",
+			name:       "skill name",
+			toolName:   "skill",
 			kind:       "",
 			args:       `{"name":"golang-pro"}`,
 			wantTarget: `"golang-pro"`,
@@ -186,7 +186,7 @@ func TestSummarizeListDir(t *testing.T) {
 	dirContent := "dir  cmd/\ndir  internal/\nfile main.go\nfile go.mod\nfile README.md\n"
 	summary := summarizeListDir(dirContent, false)
 	if !strings.Contains(summary, "5 items") || !strings.Contains(summary, "2 dirs") || !strings.Contains(summary, "3 files") {
-		t.Fatalf("unexpected list_dir summary: %s", summary)
+		t.Fatalf("unexpected ls summary: %s", summary)
 	}
 
 	truncatedSummary := summarizeListDir(dirContent, true)

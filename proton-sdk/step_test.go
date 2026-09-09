@@ -37,7 +37,7 @@ func TestCollectStep(t *testing.T) {
 		{Kind: EventTextStart},
 		{Kind: EventTextDelta, Text: "hello "},
 		{Kind: EventTextDelta, Text: "world"},
-		{Kind: EventToolCall, ToolCall: ToolCall{ID: "call-1", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
+		{Kind: EventToolCall, ToolCall: ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
 		{Kind: EventFinish, FinishReason: FinishStop},
 	}}
 	result, err := CollectStep(context.Background(), stream)
@@ -47,7 +47,7 @@ func TestCollectStep(t *testing.T) {
 	if result.Text != "hello world" {
 		t.Fatalf("Text = %q", result.Text)
 	}
-	if len(result.ToolCalls) != 1 || result.ToolCalls[0].Name != "read_file" {
+	if len(result.ToolCalls) != 1 || result.ToolCalls[0].Name != "read" {
 		t.Fatalf("ToolCalls = %#v", result.ToolCalls)
 	}
 	if stream.closeCalls != 1 {

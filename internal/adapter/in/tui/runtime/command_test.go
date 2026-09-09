@@ -48,7 +48,7 @@ func TestColonAliasDispatchesHelp(t *testing.T) {
 }
 
 func TestSlashAgent(t *testing.T) {
-	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read_file", Kind: tool.KindRead, Description: "read"}}}
+	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read", Kind: tool.KindRead, Description: "read"}}}
 	service := newBehaviorService(t, registry, permission.ModeAsk)
 	bModel := newBubbleModel(context.Background(), service, registry, nil, nil, newPermissionBridge(), "")
 	t.Run("default agent display", func(t *testing.T) {
@@ -299,7 +299,7 @@ func TestSetReasoningEffortValidatesModelProfile(t *testing.T) {
 }
 
 func TestSlashSkills(t *testing.T) {
-	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read_file", Kind: tool.KindRead, Description: "read"}}}
+	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read", Kind: tool.KindRead, Description: "read"}}}
 	service := newBehaviorService(t, registry, permission.ModeAsk)
 	model := newBubbleModel(context.Background(), service, registry, nil, nil, newPermissionBridge(), "")
 	t.Run("no skills registered", func(t *testing.T) {
@@ -555,7 +555,7 @@ func TestSlashSkills(t *testing.T) {
 }
 
 func TestSlashSubagentsToggle(t *testing.T) {
-	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read_file", Kind: tool.KindRead, Description: "read"}}}
+	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read", Kind: tool.KindRead, Description: "read"}}}
 	service := newBehaviorService(t, registry, permission.ModeAsk)
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
 	defer coord.Close()
@@ -580,7 +580,7 @@ func TestSlashSubagentsToggle(t *testing.T) {
 
 func newTestSkillsModel(t *testing.T, count int) *bubbleModel {
 	t.Helper()
-	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read_file", Kind: tool.KindRead}}}
+	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read", Kind: tool.KindRead}}}
 	service := newBehaviorService(t, registry, permission.ModeAsk)
 	model := newBubbleModel(context.Background(), service, registry, nil, nil, newPermissionBridge(), "")
 	model.resize(80, 24)
@@ -861,7 +861,7 @@ func TestHistoryStateTrimO1(t *testing.T) {
 		total += c.LineCount()
 	}
 	if state.LineCount() != total {
-		t.Fatalf("cached line count %d != calculated %d", state.LineCount(), total)
+		t.Fatalf("cached line count %d != mathd %d", state.LineCount(), total)
 	}
 }
 

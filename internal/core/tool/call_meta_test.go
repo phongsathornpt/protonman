@@ -24,18 +24,18 @@ func TestCallTitle(t *testing.T) {
 		want string
 	}{
 		{
-			name: "read_file with path",
-			call: makeTestCall("read_file", map[string]any{"path": "main.go"}),
+			name: "read with path",
+			call: makeTestCall("read", map[string]any{"path": "main.go"}),
 			want: "Read main.go",
 		},
 		{
-			name: "read_file with file_path alias",
-			call: makeTestCall("read_file", map[string]any{"file_path": "main.go"}),
+			name: "read with file_path alias",
+			call: makeTestCall("read", map[string]any{"file_path": "main.go"}),
 			want: "Read main.go",
 		},
 		{
-			name: "read_file empty",
-			call: makeTestCall("read_file", map[string]any{}),
+			name: "read empty",
+			call: makeTestCall("read", map[string]any{}),
 			want: "Read file",
 		},
 		{
@@ -68,8 +68,8 @@ func TestCallTitle(t *testing.T) {
 			want: "Patch a.go (+1 files)",
 		},
 		{
-			name: "list_dir with dir_path",
-			call: makeTestCall("list_dir", map[string]any{"dir_path": "cmd"}),
+			name: "ls with dir_path",
+			call: makeTestCall("ls", map[string]any{"dir_path": "cmd"}),
 			want: "List cmd",
 		},
 		{
@@ -123,8 +123,8 @@ func TestCallTitle(t *testing.T) {
 			want: "Update tasks (2 changes)",
 		},
 		{
-			name: "activate_skill with name",
-			call: makeTestCall("activate_skill", map[string]any{"name": "tester"}),
+			name: "skill with name",
+			call: makeTestCall("skill", map[string]any{"name": "tester"}),
 			want: "Activate skill tester",
 		},
 		{
@@ -194,8 +194,8 @@ func TestCallTarget(t *testing.T) {
 			want: `"golang"`,
 		},
 		{
-			name: "read_file path",
-			call: makeTestCall("read_file", map[string]any{"path": "main.go"}),
+			name: "read path",
+			call: makeTestCall("read", map[string]any{"path": "main.go"}),
 			want: "main.go",
 		},
 		{
@@ -216,13 +216,13 @@ func TestCallTarget(t *testing.T) {
 			want: "lib.go",
 		},
 		{
-			name: "list_dir path",
-			call: makeTestCall("list_dir", map[string]any{"path": "docs"}),
+			name: "ls path",
+			call: makeTestCall("ls", map[string]any{"path": "docs"}),
 			want: "docs",
 		},
 		{
-			name: "list_dir default",
-			call: makeTestCall("list_dir", map[string]any{}),
+			name: "ls default",
+			call: makeTestCall("ls", map[string]any{}),
 			want: ".",
 		},
 		{
@@ -269,8 +269,8 @@ func TestCallAffectedPaths(t *testing.T) {
 		want []string
 	}{
 		{
-			name: "read_file with path",
-			call: makeTestCall("read_file", map[string]any{"path": "a.txt"}),
+			name: "read with path",
+			call: makeTestCall("read", map[string]any{"path": "a.txt"}),
 			want: []string{"a.txt"},
 		},
 		{
@@ -319,8 +319,8 @@ func TestKindForName(t *testing.T) {
 		name string
 		want Kind
 	}{
-		{"read_file", KindRead},
-		{"list_dir", KindRead},
+		{"read", KindRead},
+		{"ls", KindRead},
 		{"git_status", KindGit},
 		{"write_file", KindEdit},
 		{"search_replace", KindEdit},
@@ -380,8 +380,8 @@ func TestDisplayName(t *testing.T) {
 		name string
 		want string
 	}{
-		{"read_file", "Read"},
-		{"list_dir", "List"},
+		{"read", "Read"},
+		{"ls", "List"},
 		{"write_file", "Edit"},
 		{"search_replace", "Edit"},
 		{"apply_patch", "Edit"},
@@ -392,7 +392,7 @@ func TestDisplayName(t *testing.T) {
 		{"git_status", "Git"},
 		{"get_todo", "Tasks"},
 		{"update_todo", "Tasks"},
-		{"activate_skill", "Skill"},
+		{"skill", "Skill"},
 		{"delegate_task", "Subagent"},
 		{"wait_agent", "Subagent"},
 		{"get_agent", "Subagent"},

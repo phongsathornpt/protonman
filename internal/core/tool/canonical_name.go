@@ -11,10 +11,6 @@ type legacyToolAlias struct {
 }
 
 var legacyToolAliases = map[string]legacyToolAlias{
-	"read_file":          {Canonical: NameRead},
-	"list_dir":           {Canonical: NameLS},
-	"find_files":         {Canonical: NameFind},
-	"calculate":          {Canonical: NameMath},
 	"web_fetch":          {Canonical: NameWeb, Action: ActionFetch},
 	"web_search":         {Canonical: NameWeb, Action: ActionSearch},
 	"git_status":         {Canonical: NameGit, Action: ActionStatus},
@@ -24,7 +20,6 @@ var legacyToolAliases = map[string]legacyToolAlias{
 	"checkpoint_restore": {Canonical: NameEdit, Action: ActionRestore},
 	"get_todo":           {Canonical: NameTodo, Action: ActionGet},
 	"update_todo":        {Canonical: NameTodo, Action: ActionUpdate},
-	"activate_skill":     {Canonical: NameSkill},
 	"delegate_task":      {Canonical: NameSubagent, Action: ActionSpawn},
 	"wait_agent":         {Canonical: NameSubagent, Action: ActionWait},
 	"get_agent":          {Canonical: NameSubagent, Action: ActionGet},

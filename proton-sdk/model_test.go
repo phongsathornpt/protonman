@@ -7,7 +7,7 @@ import (
 )
 
 func TestRequestValidate(t *testing.T) {
-	validTool := Tool{Name: "read_file", Description: "read a file"}
+	validTool := Tool{Name: "read", Description: "read a file"}
 	tests := []struct {
 		name    string
 		request Request
@@ -16,7 +16,7 @@ func TestRequestValidate(t *testing.T) {
 		{name: "valid", request: Request{Messages: []Message{{Role: RoleUser, Content: "inspect"}}, Tools: []Tool{validTool}}},
 		{name: "missing messages", request: Request{Tools: []Tool{validTool}}, wantErr: ErrInvalidRequest},
 		{name: "unknown role", request: Request{Messages: []Message{{Role: "provider"}}}, wantErr: ErrInvalidRequest},
-		{name: "invalid tool", request: Request{Messages: []Message{{Role: RoleUser}}, Tools: []Tool{{Name: "read_file"}}}, wantErr: ErrInvalidRequest},
+		{name: "invalid tool", request: Request{Messages: []Message{{Role: RoleUser}}, Tools: []Tool{{Name: "read"}}}, wantErr: ErrInvalidRequest},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -32,7 +32,7 @@ func TestRequestValidate(t *testing.T) {
 }
 
 func TestCloneMessagesCopiesToolArguments(t *testing.T) {
-	original := []Message{{Role: RoleAssistant, ToolCalls: []ToolCall{{ID: "call-1", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`)}}}}
+	original := []Message{{Role: RoleAssistant, ToolCalls: []ToolCall{{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}}}}
 	clone := CloneMessages(original)
 	clone[0].ToolCalls[0].Arguments[0] = 'X'
 	if string(original[0].ToolCalls[0].Arguments) != `{"path":"README.md"}` {
@@ -56,10 +56,10 @@ func TestAgentStreamEventLifecycle(t *testing.T) {
 		{name: "text start", event: Event{Kind: EventTextStart}},
 		{name: "text delta", event: Event{Kind: EventTextDelta, Text: "hi"}},
 		{name: "text end", event: Event{Kind: EventTextEnd}},
-		{name: "tool start", event: Event{Kind: EventToolCallStart, ToolCallID: "call-1", ToolName: "read_file"}},
+		{name: "tool start", event: Event{Kind: EventToolCallStart, ToolCallID: "call-1", ToolName: "read"}},
 		{name: "tool delta", event: Event{Kind: EventToolCallDelta, ToolCallID: "call-1", ArgumentsDelta: `{"path"`}},
 		{name: "tool end", event: Event{Kind: EventToolCallEnd, ToolCallID: "call-1"}},
-		{name: "complete tool call", event: Event{Kind: EventToolCall, ToolCall: ToolCall{ID: "call-1", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`)}}},
+		{name: "complete tool call", event: Event{Kind: EventToolCall, ToolCall: ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}}},
 		{name: "missing tool id", event: Event{Kind: EventToolCallDelta}, wantErr: true},
 	}
 	for _, tt := range tests {

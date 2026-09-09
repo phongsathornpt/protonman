@@ -235,7 +235,7 @@ func TestStatusViewCombinesRootAndSubagentProgress(t *testing.T) {
 
 func TestApplyTurnEventTracksRoundAndToolCount(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Round: 2, Call: tool.Call{ID: "c1", Name: "read_file"}})
+	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Round: 2, Call: tool.Call{ID: "c1", Name: "read"}})
 	if m.turnProgress.Round != 2 || m.turnProgress.ToolCalls != 1 {
 		t.Fatalf("turn progress=%+v, want round 2 and 1 tool", m.turnProgress)
 	}

@@ -624,19 +624,19 @@ func TestPermissionDetailProviders(t *testing.T) {
 		t.Fatalf("apply_patch PermissionDetail = %q, want add summary", detail)
 	}
 
-	// Test list_dir detail extraction with aliases and default
+	// Test ls detail extraction with aliases and default
 	listTool := NewListDir(workspaceRoot)
 	detailedList, ok := listTool.(tool.DetailProvider)
 	if !ok {
-		t.Fatal("list_dir does not implement tool.DetailProvider")
+		t.Fatal("ls does not implement tool.DetailProvider")
 	}
 	argsDir, _ := json.Marshal(map[string]any{"dir_path": "src/lib"})
 	if detail := detailedList.PermissionDetail(argsDir); detail != "src/lib" {
-		t.Fatalf("list_dir with dir_path PermissionDetail = %q, want src/lib", detail)
+		t.Fatalf("ls with dir_path PermissionDetail = %q, want src/lib", detail)
 	}
 	argsEmpty, _ := json.Marshal(map[string]any{})
 	if detail := detailedList.PermissionDetail(argsEmpty); detail != "." {
-		t.Fatalf("list_dir empty PermissionDetail = %q, want .", detail)
+		t.Fatalf("ls empty PermissionDetail = %q, want .", detail)
 	}
 
 	// Test grep detail extraction default

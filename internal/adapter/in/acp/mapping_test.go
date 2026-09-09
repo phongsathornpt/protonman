@@ -24,8 +24,8 @@ func TestToolKindForName(t *testing.T) {
 		name string
 		want ToolKind
 	}{
-		{"read_file", ToolKindRead},
-		{"list_dir", ToolKindRead},
+		{"read", ToolKindRead},
+		{"ls", ToolKindRead},
 		{"git_status", ToolKindExecute},
 		{"get_todo", ToolKindRead},
 		{"write_file", ToolKindEdit},
@@ -42,7 +42,7 @@ func TestToolKindForName(t *testing.T) {
 		{"list_agents", ToolKindExecute},
 		{"cancel_agent", ToolKindExecute},
 		{"web_fetch", ToolKindFetch},
-		{"activate_skill", ToolKindRead},
+		{"skill", ToolKindRead},
 		{"unknown_tool", ToolKindOther},
 	}
 
@@ -62,20 +62,20 @@ func TestTitleForToolCall(t *testing.T) {
 		call tool.Call
 		want string
 	}{
-		// read_file
+		// read
 		{
-			name: "read_file with path",
-			call: makeCall("read_file", map[string]any{"path": "src/main.go"}),
+			name: "read with path",
+			call: makeCall("read", map[string]any{"path": "src/main.go"}),
 			want: "Read src/main.go",
 		},
 		{
-			name: "read_file with file_path alias",
-			call: makeCall("read_file", map[string]any{"file_path": "src/main.go"}),
+			name: "read with file_path alias",
+			call: makeCall("read", map[string]any{"file_path": "src/main.go"}),
 			want: "Read src/main.go",
 		},
 		{
-			name: "read_file empty",
-			call: makeCall("read_file", map[string]any{}),
+			name: "read empty",
+			call: makeCall("read", map[string]any{}),
 			want: "Read file",
 		},
 
@@ -139,25 +139,25 @@ func TestTitleForToolCall(t *testing.T) {
 			want: "Apply patch",
 		},
 
-		// list_dir (schema uses path, dir_path, directory)
+		// ls (schema uses path, dir_path, directory)
 		{
-			name: "list_dir with path",
-			call: makeCall("list_dir", map[string]any{"path": "pkg/api"}),
+			name: "ls with path",
+			call: makeCall("ls", map[string]any{"path": "pkg/api"}),
 			want: "List pkg/api",
 		},
 		{
-			name: "list_dir with dir_path",
-			call: makeCall("list_dir", map[string]any{"dir_path": "pkg/api"}),
+			name: "ls with dir_path",
+			call: makeCall("ls", map[string]any{"dir_path": "pkg/api"}),
 			want: "List pkg/api",
 		},
 		{
-			name: "list_dir with directory",
-			call: makeCall("list_dir", map[string]any{"directory": "pkg/api"}),
+			name: "ls with directory",
+			call: makeCall("ls", map[string]any{"directory": "pkg/api"}),
 			want: "List pkg/api",
 		},
 		{
-			name: "list_dir empty",
-			call: makeCall("list_dir", map[string]any{}),
+			name: "ls empty",
+			call: makeCall("ls", map[string]any{}),
 			want: "List directory",
 		},
 
@@ -265,13 +265,13 @@ func TestTitleForToolCall(t *testing.T) {
 
 		// skills
 		{
-			name: "activate_skill with name",
-			call: makeCall("activate_skill", map[string]any{"name": "git-commit"}),
+			name: "skill with name",
+			call: makeCall("skill", map[string]any{"name": "git-commit"}),
 			want: "Activate skill git-commit",
 		},
 		{
-			name: "activate_skill empty",
-			call: makeCall("activate_skill", map[string]any{}),
+			name: "skill empty",
+			call: makeCall("skill", map[string]any{}),
 			want: "Activate skill",
 		},
 
@@ -354,13 +354,13 @@ func TestLocationsForToolCall(t *testing.T) {
 		want []ToolCallLocation
 	}{
 		{
-			name: "read_file with path",
-			call: makeCall("read_file", map[string]any{"path": "main.go"}),
+			name: "read with path",
+			call: makeCall("read", map[string]any{"path": "main.go"}),
 			want: []ToolCallLocation{{Path: "main.go"}},
 		},
 		{
-			name: "read_file with file_path",
-			call: makeCall("read_file", map[string]any{"file_path": "main.go"}),
+			name: "read with file_path",
+			call: makeCall("read", map[string]any{"file_path": "main.go"}),
 			want: []ToolCallLocation{{Path: "main.go"}},
 		},
 		{

@@ -1176,24 +1176,24 @@ func TestDedicatedToolRecoveryRespectsTargetPermission(t *testing.T) {
 	}
 }
 
-func TestServiceCanonicalizesLegacyNameBeforeTelemetry(t *testing.T) {
+func TestServiceRecordsCanonicalToolNameInTelemetry(t *testing.T) {
 	handler := &fakeHandler{definition: tool.Definition{
-		Name: "read", Description: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
+		Name: tool.NameRead, Description: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}, "required": []string{"path"}, "additionalProperties": false},
 	}}
 	observer := &recordingObserver{}
 	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAlwaysApprove), WithObserver(observer))
-	call, _ := tool.NewCall("legacy-read", "read_file", json.RawMessage(`{"path":"README.md"}`))
+	call, _ := tool.NewCall("read-call", tool.NameRead, json.RawMessage(`{"path":"README.md"}`))
 	result, err := service.Call(context.Background(), call)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ToolName != "read" {
+	if result.ToolName != tool.NameRead {
 		t.Fatalf("result tool name = %q, want read", result.ToolName)
 	}
 	for _, event := range observer.Events() {
-		if event.ToolName == "read_file" {
-			t.Fatalf("legacy tool leaked into telemetry: %#v", event)
+		if event.ToolName != "" && event.ToolName != tool.NameRead {
+			t.Fatalf("non-canonical tool name in telemetry: %#v", event)
 		}
 	}
 }

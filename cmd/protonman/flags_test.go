@@ -14,11 +14,11 @@ func TestParseArgsPromptAliases(t *testing.T) {
 		t.Fatalf("prompt = %q, want hello", options.prompt)
 	}
 
-	options, err = parseArgs([]string{"--prompt", "/call read_file {}"})
+	options, err = parseArgs([]string{"--prompt", "/call read {}"})
 	if err != nil {
 		t.Fatalf("parseArgs() error = %v", err)
 	}
-	if options.prompt != "/call read_file {}" {
+	if options.prompt != "/call read {}" {
 		t.Fatalf("prompt = %q", options.prompt)
 	}
 }

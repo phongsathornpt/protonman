@@ -12,14 +12,14 @@ func TestE2EFileAndProcessTools(t *testing.T) {
 	home := newTestHome(t)
 	env := []string{"PROTONMAN_HOME=" + home}
 
-	// 1. read_file
+	// 1. read
 	readRes := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call read {"path":"hello.txt"}`},
 		dir:  ws,
 		env:  env,
 	})
 	if readRes.exitCode != 0 || !strings.Contains(readRes.stdout, "Hello Coding E2E") {
-		t.Fatalf("read_file failed (code %d): %s\n%s", readRes.exitCode, readRes.stdout, readRes.stderr)
+		t.Fatalf("read failed (code %d): %s\n%s", readRes.exitCode, readRes.stdout, readRes.stderr)
 	}
 
 	// 2. edit action=write
@@ -66,14 +66,14 @@ func TestE2EFileAndProcessTools(t *testing.T) {
 		t.Fatalf("grep failed (code %d): %s\n%s", grepRes.exitCode, grepRes.stdout, grepRes.stderr)
 	}
 
-	// 5. list_dir
+	// 5. ls
 	listRes := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call ls {"path":"."}`},
 		dir:  ws,
 		env:  env,
 	})
 	if listRes.exitCode != 0 || !strings.Contains(listRes.stdout, "hello.txt") || !strings.Contains(listRes.stdout, "created.txt") {
-		t.Fatalf("list_dir failed (code %d): %s\n%s", listRes.exitCode, listRes.stdout, listRes.stderr)
+		t.Fatalf("ls failed (code %d): %s\n%s", listRes.exitCode, listRes.stdout, listRes.stderr)
 	}
 
 	// 6. bash
@@ -174,7 +174,7 @@ protected_paths = [".env", "secrets/*"]
 		t.Fatalf("write .env: %v", err)
 	}
 
-	// With PROTON_TRUST_PROJECT=1, read_file on .env should fail with protected_path
+	// With PROTON_TRUST_PROJECT=1, read on .env should fail with protected_path
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call read {"path":".env"}`},
 		dir:  ws,

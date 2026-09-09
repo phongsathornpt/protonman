@@ -60,7 +60,7 @@ func TestACPInitializeAndPrompt(t *testing.T) {
 	if !strings.Contains(output.String(), "session/update") {
 		t.Fatalf("missing session/update: %s", output.String())
 	}
-	if !strings.Contains(output.String(), "read_file") {
+	if !strings.Contains(output.String(), "read") {
 		t.Fatalf("prompt output missing tools: %s", output.String())
 	}
 	if !strings.Contains(output.String(), `"stopReason":"end_turn"`) {
@@ -81,7 +81,7 @@ func TestACPDirectCall(t *testing.T) {
 	sessionID := extractSessionID(t, output.Bytes())
 	output.Reset()
 
-	prompt := `{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":"` + sessionID + `","prompt":[{"type":"text","text":"/call read_file {\"path\":\"test.txt\"}"}]}}` + "\n"
+	prompt := `{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":"` + sessionID + `","prompt":[{"type":"text","text":"/call read {\"path\":\"test.txt\"}"}]}}` + "\n"
 	if err := server.Serve(context.Background(), strings.NewReader(prompt), &output); err != nil {
 		t.Fatalf("prompt Serve() error = %v", err)
 	}
@@ -575,7 +575,7 @@ type failingAfterToolCallRunner struct{}
 func (r *failingAfterToolCallRunner) Run(ctx context.Context, _ []model.Message, sink applicationturn.Sink) (applicationturn.Result, error) {
 	call := tool.Call{
 		ID:        "call-fail",
-		Name:      "read_file",
+		Name:      "read",
 		Arguments: json.RawMessage(`{"path":"test.go"}`),
 	}
 	if err := sink(ctx, applicationturn.Event{Kind: applicationturn.EventToolCall, Call: call}); err != nil {
@@ -594,7 +594,7 @@ func (r *failingAfterToolCallRunner) Run(ctx context.Context, _ []model.Message,
 func (r *cancelAfterToolCallRunner) Run(ctx context.Context, _ []model.Message, sink applicationturn.Sink) (applicationturn.Result, error) {
 	call := tool.Call{
 		ID:        "call-cancel",
-		Name:      "read_file",
+		Name:      "read",
 		Arguments: json.RawMessage(`{"path":"test.go"}`),
 	}
 	if err := sink(ctx, applicationturn.Event{Kind: applicationturn.EventToolCall, Call: call}); err != nil {
@@ -630,7 +630,7 @@ func (r *streamingACPRunner) Run(ctx context.Context, _ []model.Message, sink ap
 
 	call := tool.Call{
 		ID:        "call-123",
-		Name:      "read_file",
+		Name:      "read",
 		Arguments: json.RawMessage(`{"path":"test.go"}`),
 	}
 
@@ -646,7 +646,7 @@ func (r *streamingACPRunner) Run(ctx context.Context, _ []model.Message, sink ap
 		Call: call,
 		Result: tool.Result{
 			CallID:   "call-123",
-			ToolName: "read_file",
+			ToolName: "read",
 			Output:   "package main",
 		},
 	})
@@ -676,7 +676,7 @@ func newTestServer(t *testing.T, mode permission.Mode) *Server {
 func newTestServerWithRunner(t *testing.T, mode permission.Mode, runner applicationturn.Runner) *Server {
 	t.Helper()
 	registry := acpRegistry{handler: acpHandler{definition: tool.Definition{
-		Name:        "read_file",
+		Name:        "read",
 		Description: "read a file",
 		Kind:        tool.KindRead,
 	}}}
@@ -778,7 +778,7 @@ func TestACPSessionLoadRestoresReasoningEffort(t *testing.T) {
 
 func newACPReasoningLoop(t *testing.T, modelID string) *applicationturn.Loop {
 	t.Helper()
-	registry := acpRegistry{handler: acpHandler{definition: tool.Definition{Name: "read_file", Description: "read", Kind: tool.KindRead}}}
+	registry := acpRegistry{handler: acpHandler{definition: tool.Definition{Name: "read", Description: "read", Kind: tool.KindRead}}}
 	policy, err := permission.NewPolicy(permission.Config{})
 	if err != nil {
 		t.Fatal(err)

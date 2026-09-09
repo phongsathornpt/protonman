@@ -37,7 +37,7 @@ func TestAnthropicStreamTextAndRequestMapping(t *testing.T) {
 		if body.Messages[0].Content[1].Type != "image" || body.Messages[0].Content[1].Source == nil || body.Messages[0].Content[1].Source.MediaType != "image/png" {
 			t.Fatalf("unexpected image block: %#v", body.Messages[0].Content[1])
 		}
-		if len(body.Tools) != 1 || body.Tools[0].Name != "read_file" {
+		if len(body.Tools) != 1 || body.Tools[0].Name != "read" {
 			t.Fatalf("unexpected tools: %#v", body.Tools)
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -54,7 +54,7 @@ func TestAnthropicStreamTextAndRequestMapping(t *testing.T) {
 	model := NewProvider(ProviderOptions{BaseURL: server.URL, APIKey: "secret"}).Model("claude-test")
 	stream, err := model.Stream(context.Background(), sdk.Request{
 		Messages: []sdk.Message{{Role: sdk.RoleSystem, Content: "system instruction"}, {Role: sdk.RoleUser, Parts: []sdk.ContentPart{{Type: sdk.ContentPartText, Text: "look"}, {Type: sdk.ContentPartImage, MIMEType: "image/png", Data: "abc"}}}},
-		Tools:    []sdk.Tool{{Name: "read_file", Description: "read file", InputSchema: map[string]any{"type": "object"}}},
+		Tools:    []sdk.Tool{{Name: "read", Description: "read file", InputSchema: map[string]any{"type": "object"}}},
 		Options:  sdk.ModelOptions{MaxOutputTokens: 321},
 	})
 	if err != nil {
@@ -77,7 +77,7 @@ func TestAnthropicStreamToolCall(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = w.Write([]byte("data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":5,\"output_tokens\":0}}}\n\n"))
-		_, _ = w.Write([]byte("data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"read_file\",\"input\":{}}}\n\n"))
+		_, _ = w.Write([]byte("data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"read\",\"input\":{}}}\n\n"))
 		_, _ = w.Write([]byte("data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"path\\\":\"}}\n\n"))
 		_, _ = w.Write([]byte("data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"\\\"README.md\\\"}\"}}\n\n"))
 		_, _ = w.Write([]byte("data: {\"type\":\"content_block_stop\",\"index\":0}\n\n"))
@@ -100,15 +100,15 @@ func TestAnthropicStreamToolCall(t *testing.T) {
 		t.Fatalf("unexpected result: %#v", result)
 	}
 	call := result.ToolCalls[0]
-	if call.ID != "toolu_1" || call.Name != "read_file" || string(call.Arguments) != `{"path":"README.md"}` {
+	if call.ID != "toolu_1" || call.Name != "read" || string(call.Arguments) != `{"path":"README.md"}` {
 		t.Fatalf("unexpected call: %#v", call)
 	}
 }
 
 func TestAnthropicMapsToolResultToUserBlock(t *testing.T) {
 	body, err := buildRequest("claude-test", sdk.Request{Messages: []sdk.Message{
-		{Role: sdk.RoleAssistant, ToolCalls: []sdk.ToolCall{{ID: "toolu_1", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`)}}},
-		{Role: sdk.RoleTool, ToolCallID: "toolu_1", ToolName: "read_file", Content: "failed", ToolResultIsError: true},
+		{Role: sdk.RoleAssistant, ToolCalls: []sdk.ToolCall{{ID: "toolu_1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}}},
+		{Role: sdk.RoleTool, ToolCallID: "toolu_1", ToolName: "read", Content: "failed", ToolResultIsError: true},
 	}}, DefaultMaxTokens)
 	if err != nil {
 		t.Fatal(err)
@@ -276,7 +276,7 @@ func TestAnthropicIncludesRawChunksOnRequest(t *testing.T) {
 func TestBuildRequestRequiresInitialToolUse(t *testing.T) {
 	body, err := buildRequest("claude-test", sdk.Request{
 		Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "inspect"}},
-		Tools:    []sdk.Tool{{Name: "read_file", Description: "read file", InputSchema: map[string]any{"type": "object"}}},
+		Tools:    []sdk.Tool{{Name: "read", Description: "read file", InputSchema: map[string]any{"type": "object"}}},
 		Options:  sdk.ModelOptions{ToolChoice: sdk.ToolChoiceRequired},
 	}, 1024)
 	if err != nil {

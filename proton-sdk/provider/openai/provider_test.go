@@ -68,12 +68,12 @@ func TestChatStreamTextAndHeaders(t *testing.T) {
 func TestChatStreamToolLifecycle(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
-		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-1\",\"function\":{\"name\":\"read_file\",\"arguments\":\"{\\\"path\\\":\"}}]},\"finish_reason\":null}]}\n\n")
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-1\",\"function\":{\"name\":\"read\",\"arguments\":\"{\\\"path\\\":\"}}]},\"finish_reason\":null}]}\n\n")
 		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"README.md\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\n")
 	}))
 	defer server.Close()
 
-	stream, err := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("test-model").Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "inspect"}}, Tools: []sdk.Tool{{Name: "read_file", Description: "read a file", InputSchema: map[string]any{"type": "object"}}}})
+	stream, err := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("test-model").Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "inspect"}}, Tools: []sdk.Tool{{Name: "read", Description: "read a file", InputSchema: map[string]any{"type": "object"}}}})
 	if err != nil {
 		t.Fatalf("Stream() error = %v", err)
 	}
@@ -94,7 +94,7 @@ func TestChatStreamToolLifecycle(t *testing.T) {
 	if !sawStart || !sawDelta || complete == nil {
 		t.Fatalf("tool lifecycle events = %#v", events)
 	}
-	if complete.ID != "call-1" || complete.Name != "read_file" || string(complete.Arguments) != `{"path":"README.md"}` {
+	if complete.ID != "call-1" || complete.Name != "read" || string(complete.Arguments) != `{"path":"README.md"}` {
 		t.Fatalf("complete tool call = %#v", complete)
 	}
 }
@@ -188,11 +188,11 @@ func TestOpenAIReportsIncompleteStream(t *testing.T) {
 func TestOpenAIGeneratesFallbackToolCallID(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
-		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"name\":\"read_file\",\"arguments\":\"{}\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\n")
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"name\":\"read\",\"arguments\":\"{}\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\n")
 	}))
 	defer server.Close()
 
-	stream, err := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("test-model").Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "inspect"}}, Tools: []sdk.Tool{{Name: "read_file", Description: "read file"}}})
+	stream, err := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("test-model").Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "inspect"}}, Tools: []sdk.Tool{{Name: "read", Description: "read file"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,7 +7,7 @@ import (
 )
 
 func TestValidateToolInput(t *testing.T) {
-	tool := Tool{Name: "read_file", InputSchema: map[string]any{
+	tool := Tool{Name: "read", InputSchema: map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"path": map[string]any{"type": "string"},

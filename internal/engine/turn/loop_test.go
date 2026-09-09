@@ -148,12 +148,12 @@ func TestLoopRejectsDuplicateToolCallIDs(t *testing.T) {
 		events: []sdk.Event{
 			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "duplicate",
-				Name:      "read_file",
+				Name:      "read",
 				Arguments: json.RawMessage(`{"path":"a.txt"}`),
 			}},
 			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "duplicate",
-				Name:      "read_file",
+				Name:      "read",
 				Arguments: json.RawMessage(`{"path":"b.txt"}`),
 			}},
 			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
@@ -179,7 +179,7 @@ func TestLoopReportsToolCallWhenNoToolsAreAvailable(t *testing.T) {
 		events: []sdk.Event{
 			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "unavailable-call",
-				Name:      "read_file",
+				Name:      "read",
 				Arguments: json.RawMessage(`{"path":"a.txt"}`),
 			}},
 			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
@@ -223,12 +223,12 @@ func TestLoopStopsWhenToolCallBatchExceedsCumulativeLimit(t *testing.T) {
 		events: []sdk.Event{
 			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "over-budget-1",
-				Name:      "read_file",
+				Name:      "read",
 				Arguments: json.RawMessage(`{"path":"a.txt"}`),
 			}},
 			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "over-budget-2",
-				Name:      "read_file",
+				Name:      "read",
 				Arguments: json.RawMessage(`{"path":"b.txt"}`),
 			}},
 			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
@@ -260,7 +260,7 @@ func TestLoopAppliesCumulativeToolCallLimitAcrossRounds(t *testing.T) {
 		{events: []sdk.Event{
 			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "budgeted-call",
-				Name:      "read_file",
+				Name:      "read",
 				Arguments: json.RawMessage(`{"path":"a.txt"}`),
 			}},
 			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
@@ -305,7 +305,7 @@ func TestLoopTranslatesToolCallsAndFeedsResultsBack(t *testing.T) {
 				Kind: sdk.EventToolCall,
 				ToolCall: model.ToolCall{
 					ID:        "call-1",
-					Name:      "read_file",
+					Name:      "read",
 					Arguments: json.RawMessage(`{"path":"README.md"}`),
 				},
 			},
@@ -379,7 +379,7 @@ func TestLoopKeepsPermissionDenialInsideToolConversation(t *testing.T) {
 				Kind: sdk.EventToolCall,
 				ToolCall: model.ToolCall{
 					ID:        "call-denied",
-					Name:      "read_file",
+					Name:      "read",
 					Arguments: json.RawMessage(`{"path":".env"}`),
 				},
 			},
@@ -430,7 +430,7 @@ func TestLoopContinuesAcrossMultipleRounds(t *testing.T) {
 					Kind: sdk.EventToolCall,
 					ToolCall: model.ToolCall{
 						ID:        "call-1",
-						Name:      "read_file",
+						Name:      "read",
 						Arguments: json.RawMessage(`{"path":"a.txt"}`),
 					},
 				},
@@ -443,7 +443,7 @@ func TestLoopContinuesAcrossMultipleRounds(t *testing.T) {
 					Kind: sdk.EventToolCall,
 					ToolCall: model.ToolCall{
 						ID:        "call-2",
-						Name:      "read_file",
+						Name:      "read",
 						Arguments: json.RawMessage(`{"path":"b.txt"}`),
 					},
 				},
@@ -456,7 +456,7 @@ func TestLoopContinuesAcrossMultipleRounds(t *testing.T) {
 					Kind: sdk.EventToolCall,
 					ToolCall: model.ToolCall{
 						ID:        "call-3",
-						Name:      "read_file",
+						Name:      "read",
 						Arguments: json.RawMessage(`{"path":"c.txt"}`),
 					},
 				},
@@ -502,7 +502,7 @@ func TestLoopTimesOutIndividualToolCall(t *testing.T) {
 				Kind: sdk.EventToolCall,
 				ToolCall: model.ToolCall{
 					ID:        "call-timeout",
-					Name:      "read_file",
+					Name:      "read",
 					Arguments: json.RawMessage(`{"path":"slow.txt"}`),
 				},
 			},
@@ -584,7 +584,7 @@ func TestLoopRunsApprovedReadCallsWithBoundedConcurrency(t *testing.T) {
 				Kind: sdk.EventToolCall,
 				ToolCall: model.ToolCall{
 					ID:        "call-read-1",
-					Name:      "read_file",
+					Name:      "read",
 					Arguments: json.RawMessage(`{"path":"one.txt"}`),
 				},
 			},
@@ -592,7 +592,7 @@ func TestLoopRunsApprovedReadCallsWithBoundedConcurrency(t *testing.T) {
 				Kind: sdk.EventToolCall,
 				ToolCall: model.ToolCall{
 					ID:        "call-read-2",
-					Name:      "read_file",
+					Name:      "read",
 					Arguments: json.RawMessage(`{"path":"two.txt"}`),
 				},
 			},
@@ -664,7 +664,7 @@ type recordingHandler struct {
 
 func readFileDefinition() tool.Definition {
 	return tool.Definition{
-		Name:                "read_file",
+		Name:                "read",
 		Description:         "read a file",
 		Kind:                tool.KindRead,
 		Evidence:            tool.EvidenceWorkspace,
@@ -1263,7 +1263,7 @@ func TestFailUsesBoundedDetachedContextForTerminalEvent(t *testing.T) {
 func TestLoopPreservesStructuredToolOutputAsNestedJSON(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "structured", Name: "read_file", Arguments: json.RawMessage(`{"path":"TODO.md"}`)}},
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "structured", Name: "read", Arguments: json.RawMessage(`{"path":"TODO.md"}`)}},
 			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
 		}},
 		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
@@ -1291,7 +1291,7 @@ func TestLoopPreservesStructuredToolOutputAsNestedJSON(t *testing.T) {
 func TestLoopAppliesAggregateToolResultBudgetBeforeHistory(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "read-big", Name: "read_file", Arguments: json.RawMessage(`{"path":"big.txt"}`)}},
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "read-big", Name: "read", Arguments: json.RawMessage(`{"path":"big.txt"}`)}},
 			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
 		}},
 		{events: []sdk.Event{
@@ -1321,7 +1321,7 @@ func TestLoopAppliesAggregateToolResultBudgetBeforeHistory(t *testing.T) {
 func TestLoopRequiresWorkspaceEvidenceUntilGrounded(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "ground", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "ground", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
 			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
 		}},
 		{events: []sdk.Event{
@@ -1454,14 +1454,14 @@ func TestLoopPublishesUnifiedReadFileSourceSchemaForGemini(t *testing.T) {
 		t.Fatalf("published tools = %#v", client.requests)
 	}
 	published := client.requests[0].Tools[0]
-	if published.Name != "read_file" {
-		t.Fatalf("published tool name = %q, want read_file", published.Name)
+	if published.Name != "read" {
+		t.Fatalf("published tool name = %q, want read", published.Name)
 	}
 	props := published.InputSchema["properties"].(map[string]any)
 	view := props["view"].(map[string]any)
 	values, ok := view["enum"].([]string)
 	if !ok || !slices.Contains(values, "source") {
-		t.Fatalf("published read_file view enum = %#v", view["enum"])
+		t.Fatalf("published read view enum = %#v", view["enum"])
 	}
 	contextSchema, ok := props["context"].(map[string]any)
 	if !ok || contextSchema["properties"] == nil || props["query"] == nil || props["mode"] == nil {

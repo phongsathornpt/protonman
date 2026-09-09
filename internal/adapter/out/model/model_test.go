@@ -9,7 +9,7 @@ import (
 func TestCloneMessagesCopiesToolArguments(t *testing.T) {
 	original := []Message{{
 		Role:      RoleAssistant,
-		ToolCalls: []ToolCall{{ID: "call-1", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
+		ToolCalls: []ToolCall{{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
 	}}
 	clone := CloneMessages(original)
 	clone[0].ToolCalls[0].Arguments[0] = 'X'

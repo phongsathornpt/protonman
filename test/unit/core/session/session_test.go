@@ -82,7 +82,7 @@ func TestManagedSystemPromptFiltering(t *testing.T) {
 
 func TestToolCallCompactionInHistory(t *testing.T) {
 	rawResult, _ := json.Marshal(tool.Result{
-		ToolName: "read_file",
+		ToolName: "read",
 		CallID:   "call-1",
 		Output:   "package main",
 	})
@@ -90,13 +90,13 @@ func TestToolCallCompactionInHistory(t *testing.T) {
 		{
 			Role: sdk.RoleAssistant,
 			ToolCalls: []session.ToolCall{
-				{ID: "call-1", Name: "read_file"},
+				{ID: "call-1", Name: "read"},
 			},
 		},
 		{
 			Role:       sdk.RoleTool,
 			ToolCallID: "call-1",
-			ToolName:   "read_file",
+			ToolName:   "read",
 			Content:    string(rawResult),
 		},
 	}

@@ -24,7 +24,7 @@ compatibility: Requires python3
 metadata:
   author: thorn
   version: "1.0"
-allowed-tools: bash read_file
+allowed-tools: bash read
 ---
 # PDF Processing Guide
 
@@ -61,7 +61,7 @@ Step-by-step instructions for extracting text.
 	if parsed.Metadata["author"] != "thorn" {
 		t.Errorf("got metadata author %q", parsed.Metadata["author"])
 	}
-	if len(parsed.AllowedTools) != 2 || parsed.AllowedTools[0] != "bash" || parsed.AllowedTools[1] != "read_file" {
+	if len(parsed.AllowedTools) != 2 || parsed.AllowedTools[0] != "bash" || parsed.AllowedTools[1] != "read" {
 		t.Errorf("got allowed tools %v", parsed.AllowedTools)
 	}
 	if parsed.Instructions != "# PDF Processing Guide\n\nStep-by-step instructions for extracting text." {

@@ -11,10 +11,6 @@ func TestLegacyToolAliasesNormalizeToCanonicalCapabilities(t *testing.T) {
 		want   string
 		action string
 	}{
-		{"read_file", "read", ""},
-		{"list_dir", "ls", ""},
-		{"find_files", "find", ""},
-		{"calculate", "math", ""},
 		{"web_fetch", "web", "fetch"},
 		{"web_search", "web", "search"},
 		{"git_status", "git", "status"},
@@ -24,7 +20,6 @@ func TestLegacyToolAliasesNormalizeToCanonicalCapabilities(t *testing.T) {
 		{"checkpoint_restore", "edit", "restore"},
 		{"get_todo", "todo", "get"},
 		{"update_todo", "todo", "update"},
-		{"activate_skill", "skill", ""},
 		{"delegate_task", "subagent", "spawn"},
 		{"wait_agent", "subagent", "wait"},
 		{"get_agent", "subagent", "get"},

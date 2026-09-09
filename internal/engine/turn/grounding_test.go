@@ -64,16 +64,16 @@ func newGroundingLoop(t *testing.T, client sdk.LanguageModel, handlers grounding
 func TestGroundingRestrictsToolsUntilSuccessfulWorkspaceEvidence(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "read-1", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "read-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
 			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
 		}},
 		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
 	}}
 	client.profile.Capabilities.ToolChoiceRequired = modelprofile.SupportYes
 	loop := newGroundingLoop(t, client, groundingRegistry{
-		"read_file": groundingHandler{definition: tool.Definition{Name: "read_file", Description: "read", Kind: tool.KindRead, Evidence: tool.EvidenceWorkspace}},
-		"get_todo":  groundingHandler{definition: tool.Definition{Name: "get_todo", Description: "tasks", Kind: tool.KindTask}},
-		"bash":      groundingHandler{definition: tool.Definition{Name: "bash", Description: "shell", Kind: tool.KindBash, Mutability: tool.MutabilityMutating}},
+		"read":     groundingHandler{definition: tool.Definition{Name: "read", Description: "read", Kind: tool.KindRead, Evidence: tool.EvidenceWorkspace}},
+		"get_todo": groundingHandler{definition: tool.Definition{Name: "get_todo", Description: "tasks", Kind: tool.KindTask}},
+		"bash":     groundingHandler{definition: tool.Definition{Name: "bash", Description: "shell", Kind: tool.KindBash, Mutability: tool.MutabilityMutating}},
 	}, WithGroundingEvidence(tool.EvidenceWorkspace))
 
 	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect repo"}}, nil); err != nil {
@@ -82,13 +82,13 @@ func TestGroundingRestrictsToolsUntilSuccessfulWorkspaceEvidence(t *testing.T) {
 	if len(client.requests) != 2 {
 		t.Fatalf("requests = %d, want 2", len(client.requests))
 	}
-	if got := toolNames(client.requests[0].Tools); len(got) != 1 || got[0] != "read_file" {
-		t.Fatalf("grounding tools = %#v, want only read_file", got)
+	if got := toolNames(client.requests[0].Tools); len(got) != 1 || got[0] != "read" {
+		t.Fatalf("grounding tools = %#v, want only read", got)
 	}
 	if client.requests[0].Options.ToolChoice != sdk.ToolChoiceRequired {
 		t.Fatalf("grounding tool choice = %q, want required", client.requests[0].Options.ToolChoice)
 	}
-	if got := toolNames(client.requests[1].Tools); !containsTool(got, "get_todo") || !containsTool(got, "bash") || !containsTool(got, "read_file") {
+	if got := toolNames(client.requests[1].Tools); !containsTool(got, "get_todo") || !containsTool(got, "bash") || !containsTool(got, "read") {
 		t.Fatalf("post-grounding tools = %#v, want full registry", got)
 	}
 	if client.requests[1].Options.ToolChoice != sdk.ToolChoiceAuto {
@@ -100,14 +100,14 @@ func TestGroundingDefersFinalTextWhenProviderIgnoresRequiredToolChoice(t *testin
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "I think it is fine"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
 		{events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "read-2", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "read-2", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
 			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
 		}},
 		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "grounded answer"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
 	}}
 	client.profile.Capabilities.ToolChoiceRequired = modelprofile.SupportYes
 	loop := newGroundingLoop(t, client, groundingRegistry{
-		"read_file": groundingHandler{definition: tool.Definition{Name: "read_file", Description: "read", Kind: tool.KindRead, Evidence: tool.EvidenceWorkspace}},
+		"read": groundingHandler{definition: tool.Definition{Name: "read", Description: "read", Kind: tool.KindRead, Evidence: tool.EvidenceWorkspace}},
 	}, WithGroundingEvidence(tool.EvidenceWorkspace))
 
 	result, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect"}}, nil)
@@ -125,13 +125,13 @@ func TestGroundingDefersFinalTextWhenProviderIgnoresRequiredToolChoice(t *testin
 func TestGroundingUsesAutoWhenRequiredToolChoiceIsUnknown(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "read-auto", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "read-auto", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
 			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
 		}},
 		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
 	}}
 	loop := newGroundingLoop(t, client, groundingRegistry{
-		"read_file": groundingHandler{definition: tool.Definition{Name: "read_file", Description: "read", Kind: tool.KindRead, Evidence: tool.EvidenceWorkspace}},
+		"read": groundingHandler{definition: tool.Definition{Name: "read", Description: "read", Kind: tool.KindRead, Evidence: tool.EvidenceWorkspace}},
 	}, WithGroundingEvidence(tool.EvidenceWorkspace))
 	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect"}}, nil); err != nil {
 		t.Fatal(err)
@@ -147,7 +147,7 @@ func TestGroundingStopsAfterRepeatedUngroundedFinalResponses(t *testing.T) {
 		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "guess two"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
 	}}
 	loop := newGroundingLoop(t, client, groundingRegistry{
-		"read_file": groundingHandler{definition: tool.Definition{Name: "read_file", Description: "read", Kind: tool.KindRead, Evidence: tool.EvidenceWorkspace}},
+		"read": groundingHandler{definition: tool.Definition{Name: "read", Description: "read", Kind: tool.KindRead, Evidence: tool.EvidenceWorkspace}},
 	}, WithGroundingEvidence(tool.EvidenceWorkspace))
 	_, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect"}}, nil)
 	if !errors.Is(err, ErrGroundingUnavailable) {
@@ -160,10 +160,10 @@ func TestGroundingStopsAfterRepeatedUngroundedFinalResponses(t *testing.T) {
 
 func TestGroundingFailedEvidenceDoesNotSatisfyState(t *testing.T) {
 	state := newGroundingState(tool.EvidenceWorkspace)
-	definitions := []tool.Definition{{Name: "read_file", Description: "read", Kind: tool.KindRead, Evidence: tool.EvidenceWorkspace}}
+	definitions := []tool.Definition{{Name: "read", Description: "read", Kind: tool.KindRead, Evidence: tool.EvidenceWorkspace}}
 	executions := []executedCall{{
-		call:   tool.Call{ID: "read", Name: "read_file"},
-		result: tool.Result{CallID: "read", ToolName: "read_file", Failure: &tool.Failure{Code: tool.ErrorCodeExecution, Message: "failed"}},
+		call:   tool.Call{ID: "read", Name: "read"},
+		result: tool.Result{CallID: "read", ToolName: "read", Failure: &tool.Failure{Code: tool.ErrorCodeExecution, Message: "failed"}},
 		err:    errors.New("failed"),
 	}}
 	if state.observe(executions, definitions) || !state.pending() {

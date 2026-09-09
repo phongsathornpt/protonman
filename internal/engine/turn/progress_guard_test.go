@@ -18,13 +18,13 @@ func TestLoopForcesSynthesisAfterRepeatedNoProgressRead(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: []sdk.Event{
 			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
-				ID: "read-1", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`),
+				ID: "read-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`),
 			}},
 			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
 		{events: []sdk.Event{
 			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
-				ID: "read-2", Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`),
+				ID: "read-2", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`),
 			}},
 			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 		}},
@@ -83,12 +83,12 @@ func TestLoopIgnoresToolCallAfterNoProgressDetection(t *testing.T) {
 
 func TestProgressGuardMutationResetsReadObservation(t *testing.T) {
 	guard := newProgressGuard([]tool.Definition{
-		{Name: "read_file", Kind: tool.KindRead},
+		{Name: "read", Kind: tool.KindRead},
 		{Name: "write_file", Kind: tool.KindEdit},
 	}, 2)
 	read := executedCall{
-		call:   tool.Call{ID: "r1", Name: "read_file", Arguments: json.RawMessage(`{"path":"a.txt"}`)},
-		result: tool.Result{CallID: "r1", ToolName: "read_file", Output: "same"},
+		call:   tool.Call{ID: "r1", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)},
+		result: tool.Result{CallID: "r1", ToolName: "read", Output: "same"},
 	}
 
 	if stalled, err := guard.observeRound([]executedCall{read}); err != nil || stalled {
@@ -114,14 +114,14 @@ func TestProgressGuardMutationResetsReadObservation(t *testing.T) {
 }
 
 func TestProgressGuardChangedResultIsProgress(t *testing.T) {
-	guard := newProgressGuard([]tool.Definition{{Name: "read_file", Kind: tool.KindRead}}, 2)
-	call := tool.Call{ID: "r1", Name: "read_file", Arguments: json.RawMessage(`{"path":"a.txt"}`)}
-	first := executedCall{call: call, result: tool.Result{CallID: "r1", ToolName: "read_file", Output: "v1"}}
+	guard := newProgressGuard([]tool.Definition{{Name: "read", Kind: tool.KindRead}}, 2)
+	call := tool.Call{ID: "r1", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)}
+	first := executedCall{call: call, result: tool.Result{CallID: "r1", ToolName: "read", Output: "v1"}}
 	if stalled, err := guard.observeRound([]executedCall{first}); err != nil || stalled {
 		t.Fatalf("first read stalled=%v err=%v", stalled, err)
 	}
 	call.ID = "r2"
-	second := executedCall{call: call, result: tool.Result{CallID: "r2", ToolName: "read_file", Output: "v2"}}
+	second := executedCall{call: call, result: tool.Result{CallID: "r2", ToolName: "read", Output: "v2"}}
 	if stalled, err := guard.observeRound([]executedCall{second}); err != nil || stalled {
 		t.Fatalf("changed result stalled=%v err=%v", stalled, err)
 	}
@@ -130,31 +130,31 @@ func TestProgressGuardChangedResultIsProgress(t *testing.T) {
 func repeatedReadEvents(id string) []sdk.Event {
 	return []sdk.Event{
 		{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
-			ID: id, Name: "read_file", Arguments: json.RawMessage(`{"path":"README.md"}`),
+			ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`),
 		}},
 		{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 	}
 }
 
 func TestProgressGuardTracksRepeatedNonRetryableFailure(t *testing.T) {
-	guard := newProgressGuard([]tool.Definition{{Name: "read_file", Kind: tool.KindRead}}, 2)
-	call := tool.Call{ID: "r1", Name: "read_file", Arguments: json.RawMessage(`{"path":"missing.txt"}`)}
+	guard := newProgressGuard([]tool.Definition{{Name: "read", Kind: tool.KindRead}}, 2)
+	call := tool.Call{ID: "r1", Name: "read", Arguments: json.RawMessage(`{"path":"missing.txt"}`)}
 	failure := &tool.Failure{Code: tool.ErrorCodeNotFound, Message: "missing"}
-	first := executedCall{call: call, result: tool.Result{CallID: "r1", ToolName: "read_file", Failure: failure}}
+	first := executedCall{call: call, result: tool.Result{CallID: "r1", ToolName: "read", Failure: failure}}
 	if stalled, err := guard.observeRound([]executedCall{first}); err != nil || stalled {
 		t.Fatalf("first failure stalled=%v err=%v", stalled, err)
 	}
 	call.ID = "r2"
-	second := executedCall{call: call, result: tool.Result{CallID: "r2", ToolName: "read_file", Failure: failure}}
+	second := executedCall{call: call, result: tool.Result{CallID: "r2", ToolName: "read", Failure: failure}}
 	if stalled, err := guard.observeRound([]executedCall{second}); err != nil || !stalled {
 		t.Fatalf("second identical failure stalled=%v err=%v, want stalled", stalled, err)
 	}
 }
 
 func TestProgressGuardBoundsRetryableFailure(t *testing.T) {
-	guard := newProgressGuard([]tool.Definition{{Name: "read_file", Kind: tool.KindRead}}, 2)
+	guard := newProgressGuard([]tool.Definition{{Name: "read", Kind: tool.KindRead}}, 2)
 	for i := 1; i <= defaultMaxIdenticalRetryableFailures; i++ {
-		call := tool.Call{ID: fmt.Sprintf("retry-%d", i), Name: "read_file", Arguments: json.RawMessage(`{"path":"slow.txt"}`)}
+		call := tool.Call{ID: fmt.Sprintf("retry-%d", i), Name: "read", Arguments: json.RawMessage(`{"path":"slow.txt"}`)}
 		failure := &tool.Failure{
 			Code:      tool.ErrorCodeDeadlineExceeded,
 			Message:   fmt.Sprintf("timeout attempt %d", i),
@@ -285,10 +285,10 @@ func TestLoopSuppressesRepeatedPermissionPrompt(t *testing.T) {
 
 func TestProgressGuardSuppressesOnlyStalledCall(t *testing.T) {
 	guard := newProgressGuard([]tool.Definition{
-		{Name: "read_file", Kind: tool.KindRead},
+		{Name: "read", Kind: tool.KindRead},
 		{Name: "grep", Kind: tool.KindGrep},
 	}, 2)
-	dead := tool.Call{ID: "dead-1", Name: "read_file", Arguments: json.RawMessage(`{"path":"a.txt"}`)}
+	dead := tool.Call{ID: "dead-1", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)}
 	for i := 0; i < 2; i++ {
 		dead.ID = fmt.Sprintf("dead-%d", i+1)
 		execution := executedCall{call: dead, result: tool.Result{CallID: dead.ID, ToolName: dead.Name, Output: "same"}}
@@ -317,12 +317,12 @@ func TestProgressGuardSuppressesOnlyStalledCall(t *testing.T) {
 
 func TestProgressGuardExplicitReadOnlyToolDoesNotResetEpoch(t *testing.T) {
 	guard := newProgressGuard([]tool.Definition{
-		{Name: "read_file", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly},
+		{Name: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly},
 		{Name: "inspect_command", Kind: tool.KindBash, Mutability: tool.MutabilityReadOnly},
 	}, 2)
 	read := executedCall{
-		call:   tool.Call{ID: "r1", Name: "read_file", Arguments: json.RawMessage(`{"path":"a.txt"}`)},
-		result: tool.Result{CallID: "r1", ToolName: "read_file", Output: "same"},
+		call:   tool.Call{ID: "r1", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)},
+		result: tool.Result{CallID: "r1", ToolName: "read", Output: "same"},
 	}
 	if stalled, err := guard.observeRound([]executedCall{read}); err != nil || stalled {
 		t.Fatalf("first read stalled=%v err=%v", stalled, err)
@@ -342,10 +342,10 @@ func TestProgressGuardExplicitReadOnlyToolDoesNotResetEpoch(t *testing.T) {
 
 func TestProgressGuardReadOnlyBashDoesNotResetEpoch(t *testing.T) {
 	guard := newProgressGuard([]tool.Definition{
-		{Name: "read_file", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly},
+		{Name: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly},
 		{Name: "bash", Kind: tool.KindBash, Mutability: tool.MutabilityMutating},
 	}, 2)
-	read := executedCall{call: tool.Call{ID: "r1", Name: "read_file", Arguments: json.RawMessage(`{"path":"a.txt"}`)}, result: tool.Result{CallID: "r1", ToolName: "read_file", Output: "same"}}
+	read := executedCall{call: tool.Call{ID: "r1", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)}, result: tool.Result{CallID: "r1", ToolName: "read", Output: "same"}}
 	if stalled, err := guard.observeRound([]executedCall{read}); err != nil || stalled {
 		t.Fatalf("first read stalled=%v err=%v", stalled, err)
 	}
@@ -361,10 +361,10 @@ func TestProgressGuardReadOnlyBashDoesNotResetEpoch(t *testing.T) {
 
 func TestProgressGuardMutatingBashResetsEpoch(t *testing.T) {
 	guard := newProgressGuard([]tool.Definition{
-		{Name: "read_file", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly},
+		{Name: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly},
 		{Name: "bash", Kind: tool.KindBash, Mutability: tool.MutabilityMutating},
 	}, 2)
-	read := executedCall{call: tool.Call{ID: "r1", Name: "read_file", Arguments: json.RawMessage(`{"path":"a.txt"}`)}, result: tool.Result{CallID: "r1", ToolName: "read_file", Output: "same"}}
+	read := executedCall{call: tool.Call{ID: "r1", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)}, result: tool.Result{CallID: "r1", ToolName: "read", Output: "same"}}
 	_, _ = guard.observeRound([]executedCall{read})
 	mutate := executedCall{call: tool.Call{ID: "b1", Name: "bash", Arguments: json.RawMessage(`{"command":"touch a.txt"}`)}, result: tool.Result{CallID: "b1", ToolName: "bash"}}
 	if stalled, err := guard.observeRound([]executedCall{mutate}); err != nil || stalled {
@@ -425,7 +425,7 @@ func TestLoopEmitsPermissionRetrySuppressionTelemetry(t *testing.T) {
 	if !ok {
 		t.Fatalf("events = %#v, missing permission suppression", observer.events)
 	}
-	if permissionEvent.Fingerprint == "" || permissionEvent.ToolName != "read_file" || permissionEvent.Reason != "permission_retry" {
+	if permissionEvent.Fingerprint == "" || permissionEvent.ToolName != "read" || permissionEvent.Reason != "permission_retry" {
 		t.Fatalf("permission event = %#v", permissionEvent)
 	}
 }

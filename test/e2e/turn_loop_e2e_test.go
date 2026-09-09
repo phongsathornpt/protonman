@@ -71,9 +71,9 @@ func TestE2ETurnLoopMultiRoundChain(t *testing.T) {
 	server := newMockLLMServer(t)
 	server.SetupWorkspaceConfig(t, home)
 
-	// Round 1: list_dir
+	// Round 1: ls
 	server.AddToolCallResponse("call_list_1", "ls", `{"path":"."}`)
-	// Round 2: read_file
+	// Round 2: read
 	server.AddToolCallResponse("call_read_2", "read", `{"path":"hello.txt"}`)
 	// Round 3: final answer
 	server.AddTextResponse("The file contains Hello Coding E2E.")
@@ -106,7 +106,7 @@ func TestE2ETurnLoopContinuesBeyondLegacyRoundLimit(t *testing.T) {
 		}
 		server.AddToolCallResponse(
 			fmt.Sprintf("read-%02d", i),
-			"read_file",
+			"read",
 			fmt.Sprintf(`{"path":%q}`, name),
 		)
 	}
@@ -333,16 +333,16 @@ func TestE2ETurnLoopSuppressesDeadCallInsideProductiveBatch(t *testing.T) {
 	server := newMockLLMServer(t)
 	server.SetupWorkspaceConfig(t, home)
 	server.AddToolCallsResponse(
-		mockToolCall{ID: "dead-1", Name: "read_file", Args: `{"path":"hello.txt"}`},
-		mockToolCall{ID: "live-1", Name: "read_file", Args: `{"path":"second.txt"}`},
+		mockToolCall{ID: "dead-1", Name: "read", Args: `{"path":"hello.txt"}`},
+		mockToolCall{ID: "live-1", Name: "read", Args: `{"path":"second.txt"}`},
 	)
 	server.AddToolCallsResponse(
-		mockToolCall{ID: "dead-2", Name: "read_file", Args: `{"path":"hello.txt"}`},
-		mockToolCall{ID: "live-2", Name: "read_file", Args: `{"path":"third.txt"}`},
+		mockToolCall{ID: "dead-2", Name: "read", Args: `{"path":"hello.txt"}`},
+		mockToolCall{ID: "live-2", Name: "read", Args: `{"path":"third.txt"}`},
 	)
 	server.AddToolCallsResponse(
-		mockToolCall{ID: "dead-3", Name: "read_file", Args: `{"path":"hello.txt"}`},
-		mockToolCall{ID: "live-3", Name: "read_file", Args: `{"path":"second.txt","offset":1}`},
+		mockToolCall{ID: "dead-3", Name: "read", Args: `{"path":"hello.txt"}`},
+		mockToolCall{ID: "live-3", Name: "read", Args: `{"path":"second.txt","offset":1}`},
 	)
 	server.AddTextResponse("The productive branch completed while the repeated read was suppressed.")
 

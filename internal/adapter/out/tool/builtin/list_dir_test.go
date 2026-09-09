@@ -171,7 +171,7 @@ func TestListDirContinuationSurvivesDirectoryMutation(t *testing.T) {
 		t.Fatalf("continuation = %q next=%v", first.Continuation, first.NextOffset)
 	}
 	writeTestFile(t, ws.Root(), "d.txt", "d")
-	second, err := handler.Execute(context.Background(), newJSONCall(t, "list-token-2", "list_dir", map[string]any{
+	second, err := handler.Execute(context.Background(), newJSONCall(t, "list-token-2", "ls", map[string]any{
 		"path": ".", "offset": *first.NextOffset, "limit": 1, "continuation": first.Continuation,
 	}))
 	if err != nil {

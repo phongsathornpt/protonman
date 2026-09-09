@@ -28,7 +28,7 @@ func BenchmarkReadFile_64KB(b *testing.B) {
 
 	call := tool.Call{
 		ID:        "bench-1",
-		Name:      "read_file",
+		Name:      "read",
 		Arguments: json.RawMessage(`{"path":"test.txt"}`),
 	}
 	ctx := context.Background()
@@ -100,7 +100,7 @@ func BenchmarkListDir_500Entries(b *testing.B) {
 
 	call := tool.Call{
 		ID:        "bench-listdir",
-		Name:      "list_dir",
+		Name:      "ls",
 		Arguments: json.RawMessage(`{"path":"."}`),
 	}
 	ctx := context.Background()
@@ -110,7 +110,7 @@ func BenchmarkListDir_500Entries(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := handler.Execute(ctx, call)
 		if err != nil {
-			b.Fatalf("list_dir: %v", err)
+			b.Fatalf("ls: %v", err)
 		}
 	}
 }

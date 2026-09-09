@@ -71,7 +71,7 @@ func TestScrollMetadataReusesCommittedRenderCache(t *testing.T) {
 }
 func TestSpinnerFrameUpdatesCommittedCacheInPlace(t *testing.T) {
 	state := NewHistoryState(100)
-	state.StartTool("read_file")
+	state.StartTool("read")
 	state.StartTool("grep")
 	_ = state.RenderContent()
 	if !state.cacheValid {

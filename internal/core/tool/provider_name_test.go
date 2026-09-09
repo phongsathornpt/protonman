@@ -3,7 +3,7 @@ package tool
 import "testing"
 
 func TestProviderSafeName(t *testing.T) {
-	if got := ProviderSafeName("read_file"); got != "read_file" {
+	if got := ProviderSafeName("read"); got != "read" {
 		t.Fatalf("safe name = %q", got)
 	}
 	first := ProviderSafeName("mcp.github.issue/search")

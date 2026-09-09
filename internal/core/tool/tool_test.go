@@ -13,7 +13,7 @@ import (
 
 func TestNewCallCopiesArguments(t *testing.T) {
 	arguments := []byte(`{"path":"README.md"}`)
-	call, err := NewCall("call-1", "read_file", arguments)
+	call, err := NewCall("call-1", "read", arguments)
 	if err != nil {
 		t.Fatalf("NewCall() error = %v", err)
 	}
@@ -24,7 +24,7 @@ func TestNewCallCopiesArguments(t *testing.T) {
 }
 
 func TestNewCallDefaultsEmptyArguments(t *testing.T) {
-	call, err := NewCall("call-1", "read_file", nil)
+	call, err := NewCall("call-1", "read", nil)
 	if err != nil {
 		t.Fatalf("NewCall() error = %v", err)
 	}
@@ -101,14 +101,14 @@ func TestFailureFromErrorClassifiesStableCodes(t *testing.T) {
 func TestResultFailureHasStableJSONShape(t *testing.T) {
 	result := Result{
 		CallID:   "call-1",
-		ToolName: "read_file",
+		ToolName: "read",
 		Failure:  &Failure{Code: ErrorCodeNotFound, Message: "missing"},
 	}
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		t.Fatalf("Marshal() error = %v", err)
 	}
-	if got, want := string(encoded), `{"call_id":"call-1","tool_name":"read_file","error":{"code":"not_found","message":"missing"}}`; got != want {
+	if got, want := string(encoded), `{"call_id":"call-1","tool_name":"read","error":{"code":"not_found","message":"missing"}}`; got != want {
 		t.Fatalf("JSON = %s, want %s", got, want)
 	}
 }
@@ -117,7 +117,7 @@ func TestResultContinuationHasStableJSONShape(t *testing.T) {
 	next := int64(42)
 	result := Result{
 		CallID:     "call-1",
-		ToolName:   "read_file",
+		ToolName:   "read",
 		Output:     "page",
 		Truncated:  true,
 		NextOffset: &next,
@@ -126,7 +126,7 @@ func TestResultContinuationHasStableJSONShape(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal() error = %v", err)
 	}
-	if got, want := string(encoded), `{"call_id":"call-1","tool_name":"read_file","output":"page","truncated":true,"next_offset":42}`; got != want {
+	if got, want := string(encoded), `{"call_id":"call-1","tool_name":"read","output":"page","truncated":true,"next_offset":42}`; got != want {
 		t.Fatalf("JSON = %s, want %s", got, want)
 	}
 }
@@ -225,12 +225,12 @@ func TestEffectiveCallMutabilityRefinesBash(t *testing.T) {
 
 func TestResultSnapshotContinuationHasStableJSONShape(t *testing.T) {
 	next := int64(42)
-	result := Result{CallID: "call-1", ToolName: "read_file", Output: "page", Truncated: true, NextOffset: &next, Continuation: "abc123"}
+	result := Result{CallID: "call-1", ToolName: "read", Output: "page", Truncated: true, NextOffset: &next, Continuation: "abc123"}
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		t.Fatalf("Marshal() error = %v", err)
 	}
-	if got, want := string(encoded), `{"call_id":"call-1","tool_name":"read_file","output":"page","truncated":true,"next_offset":42,"continuation":"abc123"}`; got != want {
+	if got, want := string(encoded), `{"call_id":"call-1","tool_name":"read","output":"page","truncated":true,"next_offset":42,"continuation":"abc123"}`; got != want {
 		t.Fatalf("JSON = %s, want %s", got, want)
 	}
 }
@@ -367,7 +367,7 @@ func TestNormalizeArgumentsDropsObjectMetadataForNoArgumentTools(t *testing.T) {
 }
 
 func TestNormalizeArgumentsCanonicalizesInputAliases(t *testing.T) {
-	definition := Definition{Name: "list_dir", Description: "list", Kind: KindRead, InputSchema: map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}, "additionalProperties": false}, InputAliases: map[string][]string{"path": {"dir_path", "directory"}}}
+	definition := Definition{Name: "ls", Description: "list", Kind: KindRead, InputSchema: map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}, "additionalProperties": false}, InputAliases: map[string][]string{"path": {"dir_path", "directory"}}}
 	for _, raw := range []string{`{"dir_path":"cmd"}`, `{"directory":"cmd"}`, `{"path":"cmd","dir_path":"cmd"}`} {
 		got := NormalizeArguments(definition, json.RawMessage(raw))
 		var values map[string]any

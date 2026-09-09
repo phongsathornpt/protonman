@@ -79,7 +79,7 @@ func (r *bubbleTestRegistry) Definitions() []tool.Definition {
 }
 
 func newBubbleTestRegistry() (*bubbleTestRegistry, *bubbleTestHandler) {
-	registry := newNamedTestRegistry(tool.Definition{Name: "read_file", Description: "read a file", Kind: tool.KindRead, PermissionDetailKey: "path"})
+	registry := newNamedTestRegistry(tool.Definition{Name: "read", Description: "read a file", Kind: tool.KindRead, PermissionDetailKey: "path"})
 	return registry, registry.handler
 }
 
@@ -193,7 +193,7 @@ func TestCtrlCCancelsDirectToolWithoutQuitting(t *testing.T) {
 
 func TestTurnCancellationRendersNeutralTerminalState(t *testing.T) {
 	runner := &blockingRunner{started: make(chan struct{})}
-	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read_file", Description: "read file", Kind: tool.KindRead}}}
+	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read", Description: "read file", Kind: tool.KindRead}}}
 	service := newBehaviorService(t, registry, permission.ModeAsk)
 	model := newBubbleModel(context.Background(), service, registry, nil, runner, newPermissionBridge(), "")
 	command := model.startTurn("wait")
@@ -223,7 +223,7 @@ func TestTurnCancellationRendersNeutralTerminalState(t *testing.T) {
 }
 
 func TestTurnWorkerPanicRendersTerminalFailure(t *testing.T) {
-	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read_file", Description: "read file", Kind: tool.KindRead}}}
+	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read", Description: "read file", Kind: tool.KindRead}}}
 	service := newBehaviorService(t, registry, permission.ModeAsk)
 	model := newBubbleModel(context.Background(), service, registry, nil, panicRunner{}, newPermissionBridge(), "")
 	message := model.startTurn("panic")()
@@ -239,7 +239,7 @@ func TestTurnWorkerPanicRendersTerminalFailure(t *testing.T) {
 
 func TestTurnFailureFinalizesRunningToolCells(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAlwaysApprove, emptyTodoItems())
-	call, err := tool.NewCall("cancel-tool", "read_file", []byte(`{"path":"README.md"}`))
+	call, err := tool.NewCall("cancel-tool", "read", []byte(`{"path":"README.md"}`))
 	if err != nil {
 		t.Fatalf("NewCall() error = %v", err)
 	}
@@ -284,7 +284,7 @@ func TestFailedToolReplacesRunningBlock(t *testing.T) {
 
 func TestModelToolFailureRendersReason(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAlwaysApprove, emptyTodoItems())
-	call, err := tool.NewCall("denied-tool", "read_file", []byte(`{"path":".env"}`))
+	call, err := tool.NewCall("denied-tool", "read", []byte(`{"path":".env"}`))
 	if err != nil {
 		t.Fatalf("NewCall() error = %v", err)
 	}

@@ -16,7 +16,7 @@ func TestReadOnlyToolsClassifyMissingTargets(t *testing.T) {
 		args    map[string]any
 	}{
 		{name: "grep", handler: NewGrep(ws), args: map[string]any{"path": "missing/src", "pattern": "main"}},
-		{name: "list_dir", handler: NewListDir(ws), args: map[string]any{"path": "missing/src"}},
+		{name: "ls", handler: NewListDir(ws), args: map[string]any{"path": "missing/src"}},
 		{name: "find", handler: NewFindFiles(ws), args: map[string]any{"path": "missing/src", "pattern": "*.go"}},
 	}
 

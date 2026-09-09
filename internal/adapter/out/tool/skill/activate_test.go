@@ -33,7 +33,7 @@ func TestActivateSkill_Execute(t *testing.T) {
 
 	t.Run("successful activation", func(t *testing.T) {
 		args, _ := json.Marshal(map[string]any{"name": "pdf-processing"})
-		call, err := tool.NewCall("call-1", "activate_skill", args)
+		call, err := tool.NewCall("call-1", "skill", args)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -71,7 +71,7 @@ func TestActivateSkill_Execute(t *testing.T) {
 
 	t.Run("skill not found", func(t *testing.T) {
 		args, _ := json.Marshal(map[string]any{"name": "non-existent"})
-		call, _ := tool.NewCall("call-2", "activate_skill", args)
+		call, _ := tool.NewCall("call-2", "skill", args)
 
 		_, err := handler.Execute(ctx, call)
 		if err == nil {
@@ -84,7 +84,7 @@ func TestActivateSkill_Execute(t *testing.T) {
 
 	t.Run("invalid arguments", func(t *testing.T) {
 		args := []byte(`{"invalid": true}`)
-		call, _ := tool.NewCall("call-3", "activate_skill", args)
+		call, _ := tool.NewCall("call-3", "skill", args)
 
 		_, err := handler.Execute(ctx, call)
 		if err == nil {
@@ -125,38 +125,38 @@ func TestActivateSkill_AuthorizesReadRootsForFileTools(t *testing.T) {
 
 	// 1. Before activation, reading reference.txt fails with outside workspace
 	readArgs, _ := json.Marshal(map[string]any{"path": skillFilePath})
-	readCall, _ := tool.NewCall("read-before", "read_file", readArgs)
+	readCall, _ := tool.NewCall("read-before", "read", readArgs)
 	_, err = readHandler.Execute(ctx, readCall)
 	if err == nil {
-		t.Fatal("expected read_file before activation to fail")
+		t.Fatal("expected read before activation to fail")
 	}
 
 	// 2. Activate the skill
 	activateArgs, _ := json.Marshal(map[string]any{"name": "doc-helper"})
-	activateCall, _ := tool.NewCall("act-1", "activate_skill", activateArgs)
+	activateCall, _ := tool.NewCall("act-1", "skill", activateArgs)
 	actRes, err := activateHandler.Execute(ctx, activateCall)
 	if err != nil || actRes.Failure != nil {
-		t.Fatalf("activate_skill failed: %v, failure: %+v", err, actRes.Failure)
+		t.Fatalf("skill failed: %v, failure: %+v", err, actRes.Failure)
 	}
 
-	// 3. After activation, read_file succeeds with absolute path
+	// 3. After activation, read succeeds with absolute path
 	readRes, err := readHandler.Execute(ctx, readCall)
 	if err != nil || readRes.Failure != nil {
-		t.Fatalf("read_file after activation failed: %v, failure: %+v", err, readRes.Failure)
+		t.Fatalf("read after activation failed: %v, failure: %+v", err, readRes.Failure)
 	}
 	if !strings.Contains(readRes.Output, "skill reference text") {
-		t.Errorf("read_file output = %q, want 'skill reference text'", readRes.Output)
+		t.Errorf("read output = %q, want 'skill reference text'", readRes.Output)
 	}
 
-	// 4. After activation, read_file succeeds with relative path fallback
+	// 4. After activation, read succeeds with relative path fallback
 	relReadArgs, _ := json.Marshal(map[string]any{"path": "reference.txt"})
-	relReadCall, _ := tool.NewCall("read-rel", "read_file", relReadArgs)
+	relReadCall, _ := tool.NewCall("read-rel", "read", relReadArgs)
 	relReadRes, err := readHandler.Execute(ctx, relReadCall)
 	if err != nil || relReadRes.Failure != nil {
-		t.Fatalf("read_file with relative path failed: %v, failure: %+v", err, relReadRes.Failure)
+		t.Fatalf("read with relative path failed: %v, failure: %+v", err, relReadRes.Failure)
 	}
 	if !strings.Contains(relReadRes.Output, "skill reference text") {
-		t.Errorf("relative read_file output = %q, want 'skill reference text'", relReadRes.Output)
+		t.Errorf("relative read output = %q, want 'skill reference text'", relReadRes.Output)
 	}
 
 	// 5. write_file must STILL fail with outside workspace (read-only confinement!)
@@ -195,10 +195,10 @@ func TestActivateSkill_FailsIfSkillDirNotFound(t *testing.T) {
 	activateHandler := NewActivateSkill(skillReg, ws)
 
 	activateArgs, _ := json.Marshal(map[string]any{"name": "ghost-skill"})
-	activateCall, _ := tool.NewCall("act-ghost", "activate_skill", activateArgs)
+	activateCall, _ := tool.NewCall("act-ghost", "skill", activateArgs)
 	_, err = activateHandler.Execute(ctx, activateCall)
 	if err == nil {
-		t.Fatal("expected activate_skill to fail for nonexistent BaseDir, got nil")
+		t.Fatal("expected skill to fail for nonexistent BaseDir, got nil")
 	}
 
 	if skillReg.IsActivated("ghost-skill") {
@@ -218,7 +218,7 @@ func TestActivateSkillCanBindIsolatedChildRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	call, err := tool.NewCall("skill-child", "activate_skill", args)
+	call, err := tool.NewCall("skill-child", "skill", args)
 	if err != nil {
 		t.Fatal(err)
 	}

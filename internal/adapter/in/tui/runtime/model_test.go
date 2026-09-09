@@ -568,7 +568,7 @@ func TestBubbleModelRunsToolCommandThroughService(t *testing.T) {
 	service := newBubbleTestService(t, registry, permission.ModeAlwaysApprove, permission.Config{})
 	model := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, newPermissionBridge(), "")
 	model.resize(80, 24)
-	model.prompt.SetValue(`:call read_file {"path":"README.md"}`)
+	model.prompt.SetValue(`:call read {"path":"README.md"}`)
 	command := model.submit()
 	if command == nil {
 		t.Fatal("submit() command = nil, want tool command")
@@ -631,7 +631,7 @@ func TestAppendTurnResultCoalescesAssistantText(t *testing.T) {
 
 func TestAppendTurnResultPreservesToolNewlines(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	model.appendTurnResult([]applicationturn.Event{{Kind: applicationturn.EventToolResult, Call: tool.Call{Name: "read_file"}, Result: tool.Result{Output: "alpha\nbeta\ngamma"}}}, applicationturn.Result{}, nil)
+	model.appendTurnResult([]applicationturn.Event{{Kind: applicationturn.EventToolResult, Call: tool.Call{Name: "read"}, Result: tool.Result{Output: "alpha\nbeta\ngamma"}}}, applicationturn.Result{}, nil)
 	plain := plainTranscript(model)
 	if !strings.Contains(plain, "alpha\nbeta\ngamma") {
 		t.Fatalf("tool output newlines were flattened: %q", plain)
@@ -685,7 +685,7 @@ func TestClosedTurnEventsRenderTerminalFailure(t *testing.T) {
 }
 
 func TestTurnDoneAppendsProducedToolHistory(t *testing.T) {
-	runner := &scriptedRunner{result: applicationturn.Result{Message: domainmodel.Message{Role: domainmodel.RoleAssistant, Content: "done"}, Messages: []domainmodel.Message{{Role: domainmodel.RoleAssistant, ToolCalls: []domainmodel.ToolCall{{ID: "call-1", Name: "read_file", Arguments: []byte(`{"path":"README.md"}`)}}}, {Role: domainmodel.RoleTool, ToolCallID: "call-1", ToolName: "read_file", Content: `{"output":"ok"}`}, {Role: domainmodel.RoleAssistant, Content: "done"}}}}
+	runner := &scriptedRunner{result: applicationturn.Result{Message: domainmodel.Message{Role: domainmodel.RoleAssistant, Content: "done"}, Messages: []domainmodel.Message{{Role: domainmodel.RoleAssistant, ToolCalls: []domainmodel.ToolCall{{ID: "call-1", Name: "read", Arguments: []byte(`{"path":"README.md"}`)}}}, {Role: domainmodel.RoleTool, ToolCallID: "call-1", ToolName: "read", Content: `{"output":"ok"}`}, {Role: domainmodel.RoleAssistant, Content: "done"}}}}
 	registry, _ := newBubbleTestRegistry()
 	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
 	m := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), runner, newPermissionBridge(), "")
@@ -804,9 +804,9 @@ func TestTUI_CycleModeUpdatesCoordinator(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected plan mode guard to block bash execution")
 	}
-	err = guard(context.Background(), permission.Request{ToolKind: permission.ToolRead, ToolName: "read_file"})
+	err = guard(context.Background(), permission.Request{ToolKind: permission.ToolRead, ToolName: "read"})
 	if err != nil {
-		t.Fatalf("expected plan mode guard to allow read_file, got: %v", err)
+		t.Fatalf("expected plan mode guard to allow read, got: %v", err)
 	}
 	model.cycleMode()
 	if model.planMode {

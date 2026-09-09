@@ -13,7 +13,7 @@ func TestE2ECanonicalProtonmanHomeWritesNewNamespace(t *testing.T) {
 	sessionID := "protonman-home-session"
 
 	result := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call read_file {"path":"hello.txt"}`},
+		args: []string{"-y", "-p", `/call read {"path":"hello.txt"}`},
 		dir:  ws,
 		env: []string{
 			"PROTONMAN_HOME=" + home,
@@ -45,7 +45,7 @@ func TestE2EStartupFromUserHomeUsesUserScopeOnly(t *testing.T) {
 	sessionID := "home-workspace-session"
 
 	result := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call read_file {"path":"hello.txt"}`},
+		args: []string{"-y", "-p", `/call read {"path":"hello.txt"}`},
 		dir:  home,
 		env: []string{
 			"PROTONMAN_HOME=" + home,

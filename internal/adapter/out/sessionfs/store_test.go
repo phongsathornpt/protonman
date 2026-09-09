@@ -93,8 +93,8 @@ func TestFileStoreCompactsToolProtocolWithoutArguments(t *testing.T) {
 		PermissionMode: permission.ModeAsk.String(),
 		Messages: []Message{
 			{Role: model.RoleUser, Content: "list tools"},
-			{Role: model.RoleAssistant, Content: "use /tools", ToolCalls: []ToolCall{{ID: "c1", Name: "read_file"}}},
-			{Role: model.RoleTool, Content: "ok", ToolName: "read_file", ToolCallID: "c1"},
+			{Role: model.RoleAssistant, Content: "use /tools", ToolCalls: []ToolCall{{ID: "c1", Name: "read"}}},
+			{Role: model.RoleTool, Content: "ok", ToolName: "read", ToolCallID: "c1"},
 		},
 	}
 	if err := store.Save(context.Background(), "chat-1", want); err != nil {
@@ -170,7 +170,7 @@ func TestFileStoreCompactsStructuredToolResultBeforeTruncation(t *testing.T) {
 		ToolName string `json:"tool_name"`
 		Output   string `json:"output"`
 	}{
-		CallID: "c1", ToolName: "read_file", Output: strings.Repeat("界", maxStoredContent),
+		CallID: "c1", ToolName: "read", Output: strings.Repeat("界", maxStoredContent),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -178,8 +178,8 @@ func TestFileStoreCompactsStructuredToolResultBeforeTruncation(t *testing.T) {
 	state := State{
 		PermissionMode: permission.ModeAsk.String(),
 		Messages: []Message{
-			{Role: model.RoleAssistant, ToolCalls: []ToolCall{{ID: "c1", Name: "read_file"}}},
-			{Role: model.RoleTool, ToolCallID: "c1", ToolName: "read_file", Content: string(resultJSON)},
+			{Role: model.RoleAssistant, ToolCalls: []ToolCall{{ID: "c1", Name: "read"}}},
+			{Role: model.RoleTool, ToolCallID: "c1", ToolName: "read", Content: string(resultJSON)},
 		},
 	}
 	if err := store.Save(context.Background(), "large-result", state); err != nil {
@@ -244,8 +244,8 @@ func TestLoadCompactsLegacyToolProtocol(t *testing.T) {
 		Version:        currentStateVersion,
 		PermissionMode: permission.ModeAsk.String(),
 		Messages: []Message{
-			{Role: model.RoleAssistant, ToolCalls: []ToolCall{{ID: "legacy-1", Name: "read_file"}}},
-			{Role: model.RoleTool, ToolCallID: "legacy-1", ToolName: "read_file", Content: "legacy output"},
+			{Role: model.RoleAssistant, ToolCalls: []ToolCall{{ID: "legacy-1", Name: "read"}}},
+			{Role: model.RoleTool, ToolCallID: "legacy-1", ToolName: "read", Content: "legacy output"},
 		},
 	}
 	if err := os.MkdirAll(store.root, 0o700); err != nil {
