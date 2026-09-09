@@ -3,6 +3,7 @@ package runtime
 import (
 	"encoding/json"
 	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
+	tuipresentation "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/presentation"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/toolview"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
@@ -61,6 +62,10 @@ func summarizeToolOutput(name string, kind tool.Kind, target, body string, exitC
 
 func shouldSuppressBody(kind tool.Kind, name string) bool {
 	return toolview.ShouldSuppressBody(kind, name)
+}
+
+func minimalToolShowsDetail(kind tool.Kind, denied bool, failed bool) bool {
+	return tuipresentation.MinimalPolicy().ToolDetail(kind, denied, failed) != tuipresentation.DetailSummary
 }
 
 func formatOutputFold(lines []string, maxVisible int) []string {

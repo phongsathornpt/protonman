@@ -133,7 +133,7 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 		}
 	}
 	summary := summarizeToolOutput(name, toolKind, target, body, result.ExitCode, result.Truncated)
-	return &ToolCell{CallID: callID, Name: name, Body: body, Target: target, ToolKind: toolKind, Summary: summary, ExitCode: result.ExitCode, Truncated: result.Truncated, Denied: result.Denied, FailureCode: failureCode}
+	return &ToolCell{CallID: callID, Name: name, Body: body, Target: target, ToolKind: toolKind, Summary: summary, ExitCode: result.ExitCode, Truncated: result.Truncated, Denied: result.Denied, FailureCode: failureCode, ShowDetail: minimalToolShowsDetail(toolKind, result.Denied, failureCode != "")}
 }
 
 func (m *bubbleModel) runningToolCell(callID string, name string) HistoryCell {

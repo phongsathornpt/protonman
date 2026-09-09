@@ -149,7 +149,7 @@ func (m *bubbleModel) loadInitialMessages(messages []model.Message) {
 			if text != "" || message.ToolName != "" {
 				kind := tool.KindForName(message.ToolName)
 				summary := summarizeToolOutput(message.ToolName, kind, "", message.Content, nil, false)
-				state.Append(&ToolCell{Name: message.ToolName, Body: message.Content, ToolKind: kind, Summary: summary})
+				state.Append(&ToolCell{Name: message.ToolName, Body: message.Content, ToolKind: kind, Summary: summary, ShowDetail: minimalToolShowsDetail(kind, false, false)})
 			}
 		case model.RoleSystem:
 			if text != "" {

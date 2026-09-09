@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	presentationpolicy "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/presentation"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/toolview"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -93,8 +92,7 @@ func (c ToolCell) RenderWidth(width int) []string {
 		out = append(out, line)
 	}
 
-	detailLevel := presentationpolicy.MinimalPolicy().ToolDetail(c.ToolKind, c.Denied, c.FailureCode != "")
-	showDetail := !c.Running && (c.ShowDetail || detailLevel != presentationpolicy.DetailSummary)
+	showDetail := !c.Running && (c.ShowDetail || c.Denied || c.FailureCode != "")
 	if showDetail {
 		if c.ShowDetail && strings.TrimSpace(c.Name) == tool.NameRead && !c.Denied && c.FailureCode == "" && c.Body != "" {
 			if excerpt := toolview.ExtractReadFileExcerpt(c.Body); excerpt != "" {
