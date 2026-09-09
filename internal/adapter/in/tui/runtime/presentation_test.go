@@ -150,24 +150,19 @@ func TestWelcomeCardContainsBrandOnly(t *testing.T) {
 	}
 }
 
-func TestWelcomeCardNormalModeRendersRichHero(t *testing.T) {
+func TestWelcomeCardNormalModeStaysMinimal(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.workDir = "/tmp/test-workspace"
 	m.activeModel = "provider/some-model"
-	m.activeProvider = "provider-name"
 	m.resize(80, 24)
 	card := m.welcomeCard()
-	if !strings.Contains(card, glyphBrand) || !strings.Contains(card, "█▀█") {
-		t.Fatalf("hero missing brand: %q", card)
+	if !strings.Contains(card, glyphBrand+" protonman") || !strings.Contains(card, "/tmp/test-workspace") {
+		t.Fatalf("minimal welcome missing identity or workspace: %q", card)
 	}
-	if !strings.Contains(card, "Workspace") || !strings.Contains(card, "/tmp/test-workspace") {
-		t.Fatalf("hero missing workspace: %q", card)
-	}
-	if !strings.Contains(card, "Quick Actions") || !strings.Contains(card, "/help") || !strings.Contains(card, "/model") {
-		t.Fatalf("hero missing quick actions: %q", card)
-	}
-	if strings.Contains(card, "some-model") {
-		t.Fatalf("hero should not duplicate active model from status bar: %q", card)
+	for _, unwanted := range []string{"█▀█", "Quick Actions", "/help", "/model", "Tip:", "some-model"} {
+		if strings.Contains(card, unwanted) {
+			t.Fatalf("minimal welcome leaked %q: %q", unwanted, card)
+		}
 	}
 }
 
@@ -1036,7 +1031,7 @@ func TestBubbleModelRendersComponentLayout(t *testing.T) {
 	model.appendLine("assistant: ready")
 	model.refreshViewport()
 	view := testPlain(model.View().Content)
-	for _, expected := range []string{glyphBrand, "█▀█", "assistant: ready", "ask", "›", "/help"} {
+	for _, expected := range []string{glyphBrand, "/tmp/proton", "assistant: ready", "›"} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("Bubble Tea view does not contain %q: %s", expected, view)
 		}
@@ -1078,7 +1073,7 @@ func TestEmptyStateWithoutRunnerGuidesSlashCommands(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
 	view := testPlain(model.View().Content)
-	for _, expected := range []string{"Type a message or /command", glyphBrand, "█▀█"} {
+	for _, expected := range []string{"Type a message or /command", glyphBrand + " protonman"} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("empty state view does not contain %q: %s", expected, view)
 		}
@@ -1118,7 +1113,7 @@ func TestWelcomeCardReprintsAfterClear(t *testing.T) {
 	if strings.Contains(plainTranscript(model), "gone") {
 		t.Fatal("clear left transcript body")
 	}
-	if !strings.Contains(view, glyphBrand) || !strings.Contains(view, "█▀█") {
+	if !strings.Contains(view, glyphBrand+" protonman") {
 		t.Fatalf("clear did not reprint welcome: %s", view)
 	}
 }

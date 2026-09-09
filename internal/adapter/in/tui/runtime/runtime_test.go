@@ -716,17 +716,17 @@ func TestWelcomeCardCachesGitBranchUntilInvalidated(t *testing.T) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), workDir)
 	m.resize(80, 24)
 	first := testPlain(m.welcomeCard())
-	if !strings.Contains(first, "git:(main)") {
+	if !strings.Contains(first, "· main") {
 		t.Fatalf("initial welcome branch missing: %q", first)
 	}
 	if err := os.WriteFile(head, []byte("ref: refs/heads/dev\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if cached := testPlain(m.welcomeCard()); !strings.Contains(cached, "git:(main)") {
+	if cached := testPlain(m.welcomeCard()); !strings.Contains(cached, "· main") {
 		t.Fatalf("welcome card unexpectedly reread git metadata: %q", cached)
 	}
 	m.invalidateWelcomeBranch()
-	if refreshed := testPlain(m.welcomeCard()); !strings.Contains(refreshed, "git:(dev)") {
+	if refreshed := testPlain(m.welcomeCard()); !strings.Contains(refreshed, "· dev") {
 		t.Fatalf("invalidated welcome branch did not refresh: %q", refreshed)
 	}
 }

@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -65,34 +64,15 @@ func (m *bubbleModel) invalidateWelcomeBranch() {
 }
 
 func (m *bubbleModel) renderWelcomeCard(branch string) string {
-	mode := layoutModeForHeight(m.height)
-	if mode != layoutNormal || m.width < 60 {
-		return brandLockup(m.width)
-	}
-	rows := []string{brandLockup(m.width), ""}
+	rows := []string{brandStyle.Render(glyphBrand + " protonman")}
 	if ws := formatWorkspaceDisplay(m.workDir); ws != "" {
-		branchBadge := ""
+		workspace := ws
 		if branch != "" {
-			branchBadge = " " + mutedStyle.Render("git:(") + systemStyle.Render(branch) + mutedStyle.Render(")")
+			workspace += " · " + branch
 		}
-		rows = append(rows, heroLabelStyle.Render("Workspace ")+bodyStyle.Render(ws)+branchBadge, "")
+		rows = append(rows, mutedStyle.Render(truncateWithEllipsis(workspace, maxInt(1, m.width-2))))
 	}
-	if m.width >= 80 {
-		colWidth := 36
-		rows = append(rows, heroLabelStyle.Render("Quick Actions"), "  "+padToWidth(heroKeyStyle.Render("› /help")+"   "+mutedStyle.Render("Command palette"), colWidth)+heroKeyStyle.Render("› Ctrl+P")+"  "+mutedStyle.Render("Switch model"), "  "+padToWidth(heroKeyStyle.Render("› /model")+"  "+mutedStyle.Render("Choose AI provider"), colWidth)+heroKeyStyle.Render("› Ctrl+T")+"  "+mutedStyle.Render("View transcript"), "  "+padToWidth(heroKeyStyle.Render("› /skills")+" "+mutedStyle.Render("Active capabilities"), colWidth)+heroKeyStyle.Render("› ! <cmd>")+" "+mutedStyle.Render("Run bash command"))
-	} else {
-		rows = append(rows, heroLabelStyle.Render("Quick Actions"), "  "+heroKeyStyle.Render("› /help")+"     "+mutedStyle.Render("Command palette & shortcuts"), "  "+heroKeyStyle.Render("› /model")+"    "+mutedStyle.Render("Switch AI model (Ctrl+P)"), "  "+heroKeyStyle.Render("› /skills")+"   "+mutedStyle.Render("Inspect loaded capabilities"), "  "+heroKeyStyle.Render("› ! <cmd>")+"   "+mutedStyle.Render("Run bash command directly"))
-	}
-	rows = append(rows, "", mutedStyle.Render("Tip: Type a prompt to inspect or change this project, or ask for guidance."))
 	return strings.Join(rows, "\n")
-}
-
-func padToWidth(s string, targetWidth int) string {
-	w := ansi.StringWidth(s)
-	if w >= targetWidth {
-		return s
-	}
-	return s + strings.Repeat(" ", targetWidth-w)
 }
 
 func formatWorkspaceDisplay(dir string) string {
