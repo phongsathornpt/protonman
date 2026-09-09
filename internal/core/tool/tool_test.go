@@ -386,7 +386,7 @@ func TestNormalizeArgumentsCanonicalizesInputAliases(t *testing.T) {
 
 func TestNewCallNormalizesBlankArguments(t *testing.T) {
 	for _, raw := range []string{"", "   ", "\n\t"} {
-		call, err := NewCall("call-1", "get_todo", []byte(raw))
+		call, err := NewCall("call-1", "todo", []byte(raw))
 		if err != nil {
 			t.Fatalf("NewCall(%q) error = %v", raw, err)
 		}

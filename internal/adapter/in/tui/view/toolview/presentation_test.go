@@ -20,18 +20,18 @@ func TestExtractToolTarget(t *testing.T) {
 		wantKind   tool.Kind
 	}{
 		{
-			name:       "web_fetch url",
-			toolName:   "web_fetch",
+			name:       "web fetch url",
+			toolName:   "web",
 			kind:       tool.KindWeb,
-			args:       `{"url":"https://protonman.dev"}`,
+			args:       `{"action":"fetch","url":"https://protonman.dev"}`,
 			wantTarget: "https://protonman.dev",
 			wantKind:   tool.KindWeb,
 		},
 		{
-			name:       "web_search query",
-			toolName:   "web_search",
+			name:       "web search query",
+			toolName:   "web",
 			kind:       tool.KindWeb,
-			args:       `{"query":"proton AI"}`,
+			args:       `{"action":"search","query":"proton AI"}`,
 			wantTarget: `"proton AI"`,
 			wantKind:   tool.KindWeb,
 		},
@@ -84,10 +84,10 @@ func TestExtractToolTarget(t *testing.T) {
 			wantKind:   tool.KindBash,
 		},
 		{
-			name:       "write_file path",
-			toolName:   "write_file",
+			name:       "edit write path",
+			toolName:   "edit",
 			kind:       tool.KindEdit,
-			args:       `{"path":"main.go","content":"package main"}`,
+			args:       `{"action":"write","path":"main.go","content":"package main"}`,
 			wantTarget: "main.go",
 			wantKind:   tool.KindEdit,
 		},
@@ -100,18 +100,18 @@ func TestExtractToolTarget(t *testing.T) {
 			wantKind:   "",
 		},
 		{
-			name:       "delegate_task profile and task",
-			toolName:   "delegate_task",
+			name:       "subagent spawn profile and task",
+			toolName:   "subagent",
 			kind:       "",
-			args:       `{"profile":"int","task":"find all authentication handlers"}`,
+			args:       `{"action":"spawn","profile":"int","task":"find all authentication handlers"}`,
 			wantTarget: "[int] find all authentication handlers",
 			wantKind:   "",
 		},
 		{
-			name:       "checkpoint_restore id",
-			toolName:   "checkpoint_restore",
+			name:       "edit restore id",
+			toolName:   "edit",
 			kind:       "",
-			args:       `{"checkpoint_id":"chk-12345"}`,
+			args:       `{"action":"restore","checkpoint_id":"chk-12345"}`,
 			wantTarget: "chk-12345",
 			wantKind:   "",
 		},
@@ -279,16 +279,16 @@ func TestStyleDiffLine(t *testing.T) {
 
 func TestSummarizeEdit(t *testing.T) {
 	if got := summarizeEdit("edit", "Wrote file successfully to /path/to/main.go."); got != "saved" {
-		t.Fatalf("expected 'saved' for write_file, got: %s", got)
+		t.Fatalf("expected 'saved' for edit write, got: %s", got)
 	}
 	if got := summarizeEdit("edit", "The file foo.go has been updated."); got != "1 replacement applied" {
-		t.Fatalf("expected '1 replacement applied' for search_replace, got: %s", got)
+		t.Fatalf("expected '1 replacement applied' for edit replace, got: %s", got)
 	}
 	if got := summarizeEdit("edit", "Success. Updated the following files:"); got != "patch applied" {
-		t.Fatalf("expected 'patch applied' for apply_patch, got: %s", got)
+		t.Fatalf("expected 'patch applied' for edit patch, got: %s", got)
 	}
 	if got := summarizeEdit("edit", "Restored checkpoint cp-1."); got != "restored checkpoint" {
-		t.Fatalf("expected 'restored checkpoint' for checkpoint_restore, got: %s", got)
+		t.Fatalf("expected 'restored checkpoint' for edit restore, got: %s", got)
 	}
 }
 

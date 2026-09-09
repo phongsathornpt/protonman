@@ -574,7 +574,7 @@ func TestCoordinator_ReadOnlyProfileInheritsAskModeForNetworkTools(t *testing.T)
 		}),
 		WithRunnerFactory(func(_ Profile, tools *toolcall.Service) (turn.Runner, error) {
 			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
-				call, _ := tool.NewCall("fetch-1", "web_fetch", []byte(`{"url":"https://example.com"}`))
+				call, _ := tool.NewCall("fetch-1", "web", []byte(`{"action":"fetch","url":"https://example.com"}`))
 				_, callErr = tools.Call(ctx, call)
 				return turn.Result{Message: model.Message{Content: "done"}}, nil
 			}}, nil

@@ -38,10 +38,10 @@ func TestTodoToolsValidateStructuredOutputThroughService(t *testing.T) {
 	getCall, _ := tool.NewCall("todo-get", "todo", json.RawMessage(`{"action":"get"}`))
 	getResult, err := service.Call(context.Background(), getCall)
 	if err != nil {
-		t.Fatalf("get_todo through service: %v", err)
+		t.Fatalf("todo get through service: %v", err)
 	}
 	if len(getResult.StructuredOutput) == 0 {
-		t.Fatal("get_todo structured output is empty")
+		t.Fatal("todo get structured output is empty")
 	}
 
 	updateCall, _ := tool.NewCall("todo-update", "todo", todoCapabilityPatchArgs(0,
@@ -49,10 +49,10 @@ func TestTodoToolsValidateStructuredOutputThroughService(t *testing.T) {
 	))
 	updateResult, err := service.Call(context.Background(), updateCall)
 	if err != nil {
-		t.Fatalf("update_todo through service: %v", err)
+		t.Fatalf("todo update through service: %v", err)
 	}
 	if len(updateResult.StructuredOutput) == 0 {
-		t.Fatal("update_todo structured output is empty")
+		t.Fatal("todo update structured output is empty")
 	}
 }
 
@@ -76,7 +76,7 @@ func TestGetTodoEmptySnapshotValidatesStructuredOutputThroughService(t *testing.
 	call, _ := tool.NewCall("todo-empty", "todo", json.RawMessage(`{"action":"get"}`))
 	result, err := service.Call(context.Background(), call)
 	if err != nil {
-		t.Fatalf("empty get_todo through service: %v", err)
+		t.Fatalf("empty todo get through service: %v", err)
 	}
 	if got := string(result.StructuredOutput); got != `{"revision":0,"items":[]}` {
 		t.Fatalf("structured output = %s, want empty items array", got)
