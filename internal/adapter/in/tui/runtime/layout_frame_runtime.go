@@ -126,6 +126,7 @@ func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame fram
 	if m.viewport.Width() != m.layout.width || m.viewport.Height() != viewportHeight {
 		m.viewport.SetWidth(m.layout.width)
 		m.viewport.SetHeight(viewportHeight)
+		m.invalidateViewportRender()
 	}
 	m.refreshViewportWithScroll(scroll)
 }

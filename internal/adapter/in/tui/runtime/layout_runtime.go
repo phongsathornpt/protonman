@@ -23,7 +23,12 @@ func (m *bubbleModel) renderedViewport() string {
 	if m == nil {
 		return ""
 	}
-	return m.viewport.View()
+	if m.conversationViewport.renderValid {
+		return m.conversationViewport.renderedViewport
+	}
+	m.conversationViewport.renderedViewport = m.viewport.View()
+	m.conversationViewport.renderValid = true
+	return m.conversationViewport.renderedViewport
 }
 
 func (m *bubbleModel) liveView() string {

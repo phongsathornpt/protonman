@@ -378,6 +378,37 @@ func newBehaviorService(t *testing.T, registry tool.Registry, mode permission.Mo
 	return service
 }
 
+func TestRenderedViewportCacheInvalidatesOnContentAndScroll(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.showWelcome = false
+	m.resize(80, 12)
+	for i := 0; i < 30; i++ {
+		m.appendLine(fmt.Sprintf("cache-line-%02d", i))
+	}
+	m.refreshViewport()
+	m.viewport.GotoBottom()
+	m.invalidateViewportRender()
+	bottom := ansi.Strip(m.renderedViewport())
+	if !strings.Contains(bottom, "cache-line-29") {
+		t.Fatalf("bottom render missing newest content: %q", bottom)
+	}
+	m.scrollConversationLines(-3)
+	scrolled := ansi.Strip(m.renderedViewport())
+	if scrolled == bottom {
+		t.Fatal("scroll reused stale rendered viewport")
+	}
+	m.scrollConversationLines(1 << 20)
+	if !m.conversationViewport.following() {
+		t.Fatal("scroll to bottom did not restore follow mode")
+	}
+	m.appendLine("cache-new-tail")
+	m.refreshViewport()
+	refreshed := ansi.Strip(m.renderedViewport())
+	if !strings.Contains(refreshed, "cache-new-tail") {
+		t.Fatalf("content refresh reused stale rendered viewport: %q", refreshed)
+	}
+}
+
 func TestSpinnerTickSkipsViewportRefreshForStreamingAssistant(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.resize(80, 24)
