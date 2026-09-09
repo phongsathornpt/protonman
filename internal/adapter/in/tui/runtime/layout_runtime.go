@@ -336,7 +336,7 @@ func (m *bubbleModel) syncComponentsToLegacy() {
 	}
 	m.prompt = m.bottom.prompt()
 	if view := m.slashState(); view != nil {
-		m.slashIndex = view.index
+		m.slashIndex = view.picker.Index()
 	} else {
 		m.slashIndex = 0
 	}

@@ -29,7 +29,6 @@ func (i reasoningListItem) Title() string {
 func (i reasoningListItem) Description() string { return reasoningEffortDescription(i.effort) }
 
 type reasoningPaneView struct {
-	index   int
 	picker  list.Model
 	choices []sdk.ReasoningEffort
 }
@@ -95,7 +94,7 @@ func newReasoningPaneView(m *bubbleModel) *reasoningPaneView {
 	picker.SetShowPagination(false)
 	picker.SetStatusBarItemName("level", "levels")
 	picker.Select(selected)
-	return &reasoningPaneView{index: selected, picker: picker, choices: choices}
+	return &reasoningPaneView{picker: picker, choices: choices}
 }
 
 func reasoningChoices(profile modelprofile.Resolved) []sdk.ReasoningEffort {
@@ -121,9 +120,6 @@ func (v *reasoningPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (
 	if len(v.choices) == 0 {
 		return true, nil
 	}
-	if v.index != v.picker.Index() {
-		v.picker.Select(maxInt(0, minInt(v.index, len(v.choices)-1)))
-	}
 	switch message.String() {
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		idx := int(message.String()[0] - '1')
@@ -147,7 +143,6 @@ func (v *reasoningPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (
 	case "up", "k", "down", "j", "home", "g", "end", "G", "pgup", "pgdown":
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
-		v.index = v.picker.Index()
 		return true, cmd
 	default:
 		return false, nil

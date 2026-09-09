@@ -173,7 +173,7 @@ func TestReasoningPickerSelectsLevel(t *testing.T) {
 	if !ok || view == nil {
 		t.Fatal("reasoning picker missing")
 	}
-	view.index = 3
+	view.picker.Select(3)
 	handled, _ := view.HandleKey(m, testKey(tea.KeyEnter))
 	if !handled {
 		t.Fatal("enter was not handled")
@@ -697,12 +697,12 @@ func TestSlashAutocompleteWrapAround(t *testing.T) {
 	model.moveSlash(-1)
 	matches := model.slashMatches()
 	state := model.slashState()
-	if state.index != len(matches)-1 {
-		t.Fatalf("expected wrapped index %d, got %d", len(matches)-1, state.index)
+	if state.picker.Index() != len(matches)-1 {
+		t.Fatalf("expected wrapped index %d, got %d", len(matches)-1, state.picker.Index())
 	}
 	model.moveSlash(1)
-	if state.index != 0 {
-		t.Fatalf("expected wrapped index 0, got %d", state.index)
+	if state.picker.Index() != 0 {
+		t.Fatalf("expected wrapped index 0, got %d", state.picker.Index())
 	}
 }
 

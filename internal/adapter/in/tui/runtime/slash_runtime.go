@@ -37,7 +37,6 @@ func (i slashListItem) Description() string {
 }
 
 type slashPaneView struct {
-	index   int
 	picker  list.Model
 	ready   bool
 	matches []slashCommand
@@ -69,11 +68,10 @@ func (v *slashPaneView) sync(m *bubbleModel) {
 		_ = v.picker.SetItems(items)
 	}
 	if len(matches) == 0 {
-		v.index = 0
 		return
 	}
-	v.index = maxInt(0, minInt(v.index, len(matches)-1))
-	v.picker.Select(v.index)
+	selected := maxInt(0, minInt(v.picker.Index(), len(matches)-1))
+	v.picker.Select(selected)
 }
 
 func (v *slashPaneView) Render(m *bubbleModel) string {
@@ -95,7 +93,6 @@ func (v *slashPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool
 	case "up", "k", "down", "j", "pgup", "pgdown", "home", "g", "end", "G":
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
-		v.index = v.picker.Index()
 		return true, cmd
 	case "tab":
 		_, command := m.acceptSlash(false)
@@ -219,7 +216,6 @@ func (m *bubbleModel) moveSlash(delta int) {
 	} else if delta > 0 {
 		view.picker.CursorDown()
 	}
-	view.index = view.picker.Index()
 }
 
 func (m *bubbleModel) acceptSlash(run bool) (applied bool, command tea.Cmd) {
@@ -234,8 +230,7 @@ func (m *bubbleModel) acceptSlash(run bool) (applied bool, command tea.Cmd) {
 	if view == nil || len(view.matches) == 0 {
 		return false, nil
 	}
-	view.index = view.picker.Index()
-	selected := view.matches[view.index]
+	selected := view.matches[view.picker.Index()]
 	context, _ := m.parseSlashContext()
 	prompt := m.bottom.prompt()
 	var insertion string
@@ -267,7 +262,11 @@ func truncateWithEllipsis(s string, maxLen int) string {
 }
 
 func (m bubbleModel) renderSlash(index int) string {
-	view := &slashPaneView{index: index}
+	view := &slashPaneView{}
+	view.sync(&m)
+	if len(view.matches) > 0 {
+		view.picker.Select(maxInt(0, minInt(index, len(view.matches)-1)))
+	}
 	return view.Render(&m)
 }
 
