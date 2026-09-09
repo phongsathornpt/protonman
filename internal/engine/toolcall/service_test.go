@@ -447,14 +447,14 @@ func TestAuthorizeDowngradesIneligibleSessionScope(t *testing.T) {
 }
 
 func TestCallSessionGrantFingerprintIncludesArguments(t *testing.T) {
-	handler := &fakeHandler{definition: tool.Definition{Name: "read_file", Description: "fake reader", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly, PermissionDetailKey: "path"}}
+	handler := &fakeHandler{definition: tool.Definition{Name: "read", Description: "fake reader", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly, PermissionDetailKey: "path"}}
 	promptCalls := 0
 	service := newTestService(t, handler, permission.Config{}, WithPrompt(func(context.Context, permission.Request) (permission.Resolution, error) {
 		promptCalls++
 		return permission.Resolution{Action: permission.ActionAllow, Scope: permission.GrantScopeSession}, nil
 	}))
-	first, _ := tool.NewCall("read-1", "read_file", json.RawMessage(`{"path":"main.go","offset":0}`))
-	second, _ := tool.NewCall("read-2", "read_file", json.RawMessage(`{"path":"main.go","offset":128}`))
+	first, _ := tool.NewCall("read-1", "read", json.RawMessage(`{"path":"main.go","offset":0}`))
+	second, _ := tool.NewCall("read-2", "read", json.RawMessage(`{"path":"main.go","offset":128}`))
 	if _, err := service.Call(context.Background(), first); err != nil {
 		t.Fatal(err)
 	}
@@ -535,7 +535,7 @@ func TestCloneDoesNotCopySessionGrants(t *testing.T) {
 func TestCallPropagatesStructuredHandlerFailure(t *testing.T) {
 	handler := &fakeHandler{
 		definition: tool.Definition{
-			Name:                "read_file",
+			Name:                "read",
 			Description:         "fake reader",
 			Kind:                tool.KindRead,
 			PermissionDetailKey: "path",
@@ -548,7 +548,7 @@ func TestCallPropagatesStructuredHandlerFailure(t *testing.T) {
 			Tool:   permission.ToolRead,
 		}},
 	})
-	call, err := tool.NewCall("call-1", "read_file", json.RawMessage(`{"path":"missing.txt"}`))
+	call, err := tool.NewCall("call-1", "read", json.RawMessage(`{"path":"missing.txt"}`))
 	if err != nil {
 		t.Fatalf("NewCall() error = %v", err)
 	}
@@ -575,7 +575,7 @@ func TestCallUsesDetailProvider(t *testing.T) {
 	handler := &fakeDetailedHandler{
 		fakeHandler: fakeHandler{
 			definition: tool.Definition{
-				Name:                "apply_patch",
+				Name:                "edit",
 				Description:         "fake patch",
 				Kind:                tool.KindEdit,
 				PermissionDetailKey: "patch",
@@ -596,7 +596,7 @@ func TestCallUsesDetailProvider(t *testing.T) {
 	}
 
 	// Supply handler via a registry that returns fakeDetailedHandler
-	call, err := tool.NewCall("call-patch", "apply_patch", json.RawMessage(`{"patch":"*** Begin Patch\n*** End Patch"}`))
+	call, err := tool.NewCall("call-patch", "edit", json.RawMessage(`{"action":"patch","patch":"*** Begin Patch\n*** End Patch"}`))
 	if err != nil {
 		t.Fatalf("NewCall() error = %v", err)
 	}
@@ -705,7 +705,7 @@ type slowCallerBoundedHandler struct{}
 
 func (slowCallerBoundedHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                   "delegate_task",
+		Name:                   "subagent",
 		Description:            "long-running orchestration",
 		Kind:                   tool.KindRead,
 		Mutability:             tool.MutabilityMutating,
@@ -743,7 +743,7 @@ func TestCallerBoundedToolBypassesGenericExecutionTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	call, err := tool.NewCall("delegate-1", "delegate_task", json.RawMessage(`{}`))
+	call, err := tool.NewCall("delegate-1", "subagent", json.RawMessage(`{"action":"wait"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -760,7 +760,7 @@ func TestCallerBoundedToolBypassesGenericExecutionTimeout(t *testing.T) {
 
 func TestServiceValidatesInputSchemaBeforePermissionAndExecution(t *testing.T) {
 	handler := &fakeHandler{definition: tool.Definition{
-		Name: "read_file", Description: "read file", Kind: tool.KindRead,
+		Name: "read", Description: "read file", Kind: tool.KindRead,
 		InputSchema: map[string]any{
 			"type":                 "object",
 			"properties":           map[string]any{"path": map[string]any{"type": "string"}},
@@ -773,7 +773,7 @@ func TestServiceValidatesInputSchemaBeforePermissionAndExecution(t *testing.T) {
 		prompted++
 		return permission.Resolution{Action: permission.ActionAllow}, nil
 	}))
-	invalid, _ := tool.NewCall("bad-input", "read_file", json.RawMessage(`{}`))
+	invalid, _ := tool.NewCall("bad-input", "read", json.RawMessage(`{}`))
 	result, err := service.Call(context.Background(), invalid)
 	var toolErr *tool.ToolError
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeInvalidArguments {
@@ -786,7 +786,7 @@ func TestServiceValidatesInputSchemaBeforePermissionAndExecution(t *testing.T) {
 		t.Fatalf("invalid input prompted=%d handler_calls=%d, want both 0", prompted, handler.calls)
 	}
 
-	valid, _ := tool.NewCall("good-input", "read_file", json.RawMessage(`{"path":"README.md"}`))
+	valid, _ := tool.NewCall("good-input", "read", json.RawMessage(`{"path":"README.md"}`))
 	if _, err := service.Call(context.Background(), valid); err != nil {
 		t.Fatalf("valid input call: %v", err)
 	}
@@ -908,9 +908,9 @@ func TestServiceWorkspaceMutationGateDoesNotBlockReadOnlyCall(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer release()
-	handler := &fakeHandler{definition: tool.Definition{Name: "read_file", Description: "fake read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly, PermissionDetailKey: "path"}}
+	handler := &fakeHandler{definition: tool.Definition{Name: "read", Description: "fake read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly, PermissionDetailKey: "path"}}
 	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAlwaysApprove), WithWorkspaceMutationGate(ws))
-	call, _ := tool.NewCall("gate-read", "read_file", json.RawMessage(`{"path":"file.txt"}`))
+	call, _ := tool.NewCall("gate-read", "read", json.RawMessage(`{"path":"file.txt"}`))
 	if _, err := service.Call(context.Background(), call); err != nil {
 		t.Fatalf("read-only call blocked by mutation gate: %v", err)
 	}
@@ -964,11 +964,11 @@ func TestCallRejectsNonObjectZeroArgumentPayloads(t *testing.T) {
 func TestServiceRecoversReadOnlyPaginationOnce(t *testing.T) {
 	recoveryArgs := json.RawMessage(`{"path":"file.txt"}`)
 	handler := &fakeHandler{definition: tool.Definition{
-		Name: "read_file", Description: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
+		Name: "read", Description: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}, "required": []string{"path"}, "additionalProperties": false},
-	}, firstErr: tool.NewToolError(tool.ErrorCodeStaleContinuation, "stale").WithRecovery(tool.Recovery{Action: tool.RecoveryRestartPagination, Tool: "read_file", Arguments: recoveryArgs})}
+	}, firstErr: tool.NewToolError(tool.ErrorCodeStaleContinuation, "stale").WithRecovery(tool.Recovery{Action: tool.RecoveryRestartPagination, Tool: "read", Arguments: recoveryArgs})}
 	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAlwaysApprove))
-	call, err := tool.NewCall("read-1", "read_file", json.RawMessage(`{"path":"file.txt"}`))
+	call, err := tool.NewCall("read-1", "read", json.RawMessage(`{"path":"file.txt"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -987,12 +987,12 @@ func TestServiceRecoversReadOnlyPaginationOnce(t *testing.T) {
 func TestServiceEmitsRecoveryLifecycleEvents(t *testing.T) {
 	recoveryArgs := json.RawMessage(`{"path":"file.txt"}`)
 	handler := &fakeHandler{definition: tool.Definition{
-		Name: "read_file", Description: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
+		Name: "read", Description: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}, "required": []string{"path"}, "additionalProperties": false},
-	}, firstErr: tool.NewToolError(tool.ErrorCodeStaleContinuation, "stale").WithRecovery(tool.Recovery{Action: tool.RecoveryRestartPagination, Tool: "read_file", Arguments: recoveryArgs})}
+	}, firstErr: tool.NewToolError(tool.ErrorCodeStaleContinuation, "stale").WithRecovery(tool.Recovery{Action: tool.RecoveryRestartPagination, Tool: "read", Arguments: recoveryArgs})}
 	observer := &recordingObserver{}
 	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAlwaysApprove), WithObserver(observer))
-	call, _ := tool.NewCall("read-recovery-events", "read_file", json.RawMessage(`{"path":"file.txt"}`))
+	call, _ := tool.NewCall("read-recovery-events", "read", json.RawMessage(`{"path":"file.txt"}`))
 	if _, err := service.Call(context.Background(), call); err != nil {
 		t.Fatal(err)
 	}
@@ -1013,12 +1013,12 @@ func TestServiceEmitsRecoveryLifecycleEvents(t *testing.T) {
 
 func TestServiceAddRuleDynamicallyAllowsSubsequentCalls(t *testing.T) {
 	handler := &fakeHandler{definition: tool.Definition{
-		Name: "read_file", Description: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
+		Name: "read", Description: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
 		PermissionDetailKey: "path",
 	}}
 	// Default ask mode, no prompt configured -> fails closed with ErrPermissionDenied
 	service := newTestService(t, handler, permission.Config{Default: permission.ActionAsk}, WithMode(permission.ModeAsk))
-	call, _ := tool.NewCall("read-1", "read_file", json.RawMessage(`{"path":"src/safe.go"}`))
+	call, _ := tool.NewCall("read-1", "read", json.RawMessage(`{"path":"src/safe.go"}`))
 
 	// First call denied because mode is ask and no prompt is set
 	result, err := service.Call(context.Background(), call)
@@ -1041,7 +1041,7 @@ func TestServiceAddRuleDynamicallyAllowsSubsequentCalls(t *testing.T) {
 	}
 
 	// Second call with same target now succeeds immediately without asking
-	call2, _ := tool.NewCall("read-2", "read_file", json.RawMessage(`{"path":"src/safe.go"}`))
+	call2, _ := tool.NewCall("read-2", "read", json.RawMessage(`{"path":"src/safe.go"}`))
 	result2, err := service.Call(context.Background(), call2)
 	if err != nil || result2.Denied {
 		t.Fatalf("expected second call to be allowed by dynamically added rule, got: result=%#v, err=%v", result2, err)
@@ -1051,7 +1051,7 @@ func TestServiceAddRuleDynamicallyAllowsSubsequentCalls(t *testing.T) {
 	}
 
 	// Different target still asks (denies without prompt)
-	call3, _ := tool.NewCall("read-3", "read_file", json.RawMessage(`{"path":"src/other.go"}`))
+	call3, _ := tool.NewCall("read-3", "read", json.RawMessage(`{"path":"src/other.go"}`))
 	result3, err := service.Call(context.Background(), call3)
 	if err == nil || !result3.Denied {
 		t.Fatalf("expected different target to be denied, got: result=%#v, err=%v", result3, err)
@@ -1094,11 +1094,11 @@ func TestServiceRecoversWithDedicatedWorkspaceReadTool(t *testing.T) {
 	bash := &fakeHandler{definition: tool.Definition{
 		Name: "bash", Description: "fake shell", Kind: tool.KindBash,
 		Mutability: tool.MutabilityMutating, PermissionDetailKey: "command",
-	}, firstErr: tool.NewToolError(tool.ErrorCodeInvalidArguments, "use read_file").WithRecovery(tool.Recovery{
-		Action: tool.RecoveryUseDedicatedTool, Tool: "read_file", Arguments: recoveryArgs,
+	}, firstErr: tool.NewToolError(tool.ErrorCodeInvalidArguments, "use read").WithRecovery(tool.Recovery{
+		Action: tool.RecoveryUseDedicatedTool, Tool: "read", Arguments: recoveryArgs,
 	})}
 	reader := &fakeHandler{definition: tool.Definition{
-		Name: "read_file", Description: "fake reader", Kind: tool.KindRead,
+		Name: "read", Description: "fake reader", Kind: tool.KindRead,
 		Mutability: tool.MutabilityReadOnly, Safety: workspaceReadSafety(), PermissionDetailKey: "path",
 		InputSchema: map[string]any{
 			"type": "object", "properties": map[string]any{
@@ -1144,11 +1144,11 @@ func TestDedicatedToolRecoveryRespectsTargetPermission(t *testing.T) {
 	recoveryArgs := json.RawMessage(`{"path":"secret.txt"}`)
 	bash := &fakeHandler{definition: tool.Definition{
 		Name: "bash", Description: "fake shell", Kind: tool.KindBash, Mutability: tool.MutabilityMutating,
-	}, firstErr: tool.NewToolError(tool.ErrorCodeInvalidArguments, "use read_file").WithRecovery(tool.Recovery{
-		Action: tool.RecoveryUseDedicatedTool, Tool: "read_file", Arguments: recoveryArgs,
+	}, firstErr: tool.NewToolError(tool.ErrorCodeInvalidArguments, "use read").WithRecovery(tool.Recovery{
+		Action: tool.RecoveryUseDedicatedTool, Tool: "read", Arguments: recoveryArgs,
 	})}
 	reader := &fakeHandler{definition: tool.Definition{
-		Name: "read_file", Description: "fake reader", Kind: tool.KindRead,
+		Name: "read", Description: "fake reader", Kind: tool.KindRead,
 		Mutability: tool.MutabilityReadOnly, Safety: workspaceReadSafety(), PermissionDetailKey: "path",
 		InputSchema: map[string]any{
 			"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}},
@@ -1173,5 +1173,27 @@ func TestDedicatedToolRecoveryRespectsTargetPermission(t *testing.T) {
 	}
 	if reader.calls != 0 || !result.Denied {
 		t.Fatalf("reader calls=%d result=%#v, want denied before target execution", reader.calls, result)
+	}
+}
+
+func TestServiceCanonicalizesLegacyNameBeforeTelemetry(t *testing.T) {
+	handler := &fakeHandler{definition: tool.Definition{
+		Name: "read", Description: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
+		InputSchema: map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}, "required": []string{"path"}, "additionalProperties": false},
+	}}
+	observer := &recordingObserver{}
+	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAlwaysApprove), WithObserver(observer))
+	call, _ := tool.NewCall("legacy-read", "read_file", json.RawMessage(`{"path":"README.md"}`))
+	result, err := service.Call(context.Background(), call)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ToolName != "read" {
+		t.Fatalf("result tool name = %q, want read", result.ToolName)
+	}
+	for _, event := range observer.Events() {
+		if event.ToolName == "read_file" {
+			t.Fatalf("legacy tool leaked into telemetry: %#v", event)
+		}
 	}
 }
