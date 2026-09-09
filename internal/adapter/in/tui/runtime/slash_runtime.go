@@ -103,19 +103,6 @@ func (m *bubbleModel) clampSlashIndex() {
 	}
 }
 
-func (m *bubbleModel) moveSlash(delta int) {
-	m.syncSlashView()
-	view := m.slashState()
-	if view == nil || len(view.matches) == 0 {
-		return
-	}
-	if delta < 0 {
-		view.picker.CursorUp()
-	} else if delta > 0 {
-		view.picker.CursorDown()
-	}
-}
-
 func (m *bubbleModel) acceptSlash(run bool) (applied bool, command tea.Cmd) {
 	m.syncSlashView()
 	view := m.slashState()

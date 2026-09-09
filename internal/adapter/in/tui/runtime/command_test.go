@@ -681,13 +681,17 @@ func TestSlashAutocompleteWrapAround(t *testing.T) {
 	if !model.slashOpen() {
 		t.Fatal("expected slash open for /skill ")
 	}
-	model.moveSlash(-1)
-	matches := model.slashMatches()
+	model.syncSlashView()
 	state := model.slashState()
+	if state == nil {
+		t.Fatal("expected slash pane state")
+	}
+	_, _ = state.HandleKey(model, testKey(tea.KeyUp))
+	matches := model.slashMatches()
 	if state.picker.Index() != len(matches)-1 {
 		t.Fatalf("expected wrapped index %d, got %d", len(matches)-1, state.picker.Index())
 	}
-	model.moveSlash(1)
+	_, _ = state.HandleKey(model, testKey(tea.KeyDown))
 	if state.picker.Index() != 0 {
 		t.Fatalf("expected wrapped index 0, got %d", state.picker.Index())
 	}
