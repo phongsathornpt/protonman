@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
@@ -67,5 +68,45 @@ func TestMinimalScrollKeepsSingleComposer(t *testing.T) {
 	plain := ansi.Strip(m.View().Content)
 	if got := strings.Count(plain, "Message Protonman"); got != 1 {
 		t.Fatalf("composer count=%d, want 1; view=%q", got, plain)
+	}
+}
+
+func TestMinimalBusyChromeStaysWithinThreeRows(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.showWelcome = false
+	m.busy = true
+	m.activity = "running tests"
+	frame := m.buildFrameChrome()
+	if got := lipgloss.Height(frame.status); got != 1 {
+		t.Fatalf("busy activity rows=%d, want 1: %q", got, frame.status)
+	}
+	if frame.top != "" || frame.footer != "" {
+		t.Fatalf("busy frame leaked persistent pane/footer: top=%q footer=%q", frame.top, frame.footer)
+	}
+	if frame.height > 3 {
+		t.Fatalf("busy chrome height=%d, want <=3", frame.height)
+	}
+}
+
+func TestProviderEditorModelPickerFitsResponsiveTerminals(t *testing.T) {
+	models := make([]model.RemoteModel, 15)
+	for i := range models {
+		models[i] = model.RemoteModel{ID: "model-" + string(rune('a'+i))}
+	}
+	for _, size := range [][2]int{{80, 24}, {60, 18}, {40, 14}, {24, 12}} {
+		m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+		m.resize(size[0], size[1])
+		v := newProviderPaneView()
+		v.models = models
+		v.state = providerStateSelectModel
+		m.bottom.push(v)
+		rendered := v.Render(m)
+		if got := lipgloss.Height(rendered); got > size[1] {
+			t.Fatalf("provider model picker height=%d exceeds %d at %dx%d", got, size[1], size[0], size[1])
+		}
+		if got := lipgloss.Width(rendered); got > size[0] {
+			t.Fatalf("provider model picker width=%d exceeds %d at %dx%d", got, size[0], size[0], size[1])
+		}
 	}
 }
