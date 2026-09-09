@@ -183,7 +183,9 @@ type Result struct {
 	Rounds       int
 	Verification VerificationState
 	// Messages contains the assistant/tool messages produced during this run.
-	// It excludes caller-supplied history and generated system prompt material.
+	// Ownership transfers to the caller on return; the runner must not mutate
+	// this slice or its nested payloads afterward. It excludes caller-supplied
+	// history and generated system prompt material.
 	Messages []model.Message
 }
 

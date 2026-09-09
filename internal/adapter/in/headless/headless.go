@@ -443,7 +443,7 @@ func (r *Runner) runTurn(
 	}
 	if err == nil {
 		if len(result.Messages) > 0 {
-			r.messages = append(r.messages, model.CloneMessages(result.Messages)...)
+			r.messages = append(r.messages, result.Messages...)
 		} else if result.Message.Content != "" {
 			r.messages = append(r.messages, result.Message)
 		}

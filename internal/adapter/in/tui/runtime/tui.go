@@ -181,7 +181,7 @@ func NewBubbleTea(
 			return nil, err
 		}
 	}
-	ui.finalMessages = model.CloneMessages(ui.initialMessages)
+	ui.finalMessages = model.SnapshotMessages(ui.initialMessages)
 	ui.finalAgentProfile = ui.agentConfig.Profile
 	ui.finalReasoningEffort = ui.agentConfig.ReasoningEffort
 	return ui, nil
@@ -237,7 +237,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 	defer cancel()
 	defer ui.bridge.Close()
 
-	currentMessages := model.CloneMessages(ui.initialMessages)
+	currentMessages := model.SnapshotMessages(ui.initialMessages)
 	agentRuntime := newAgentRuntimeState(ui.agentConfig, ui.hasAgentConfig)
 
 	for {
@@ -331,10 +331,10 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		}
 
 		if modelState, ok := finalModel.(*bubbleModel); ok {
-			ui.finalMessages = model.CloneMessages(modelState.messages)
+			ui.finalMessages = model.SnapshotMessages(modelState.messages)
 			ui.finalAgentProfile = modelState.agentProfile
 			ui.finalReasoningEffort = modelState.reasoningEffort
-			currentMessages = model.CloneMessages(modelState.messages)
+			currentMessages = model.SnapshotMessages(modelState.messages)
 			slog.DebugContext(ctx, "tui program returned",
 				"duration_ms", time.Since(startedAt).Milliseconds(),
 				"message_count", len(modelState.messages),

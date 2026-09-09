@@ -150,7 +150,7 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	messages := []model.Message(nil)
 	retention := conversation.DefaultRetentionPolicy()
 	if len(initialMessages) > 0 {
-		messages = conversation.Retain(model.CloneMessages(initialMessages[0]), retention)
+		messages = conversation.Retain(model.SnapshotMessages(initialMessages[0]), retention)
 	}
 	ui := &bubbleModel{ctx: ctx, service: service, registry: registry, runner: runner, bridge: bridge, workDir: workDir, viewport: pane, transcriptViewport: transcriptPane, spinner: spin, keys: newBubbleKeyMap(), bottom: bottom, historyState: NewHistoryState(maxBubbleScrollback), queue: make([]string, 0), todo: append([]TodoItem{}, todo...), activity: "ready", followTail: true, showWelcome: true, width: defaultBubbleWidth, height: defaultBubbleHeight, messages: messages, conversationRetention: retention, maxToolCalls: config.DefaultMaxToolCalls, subagentsEnabled: true, runtimeConfig: config.DefaultRuntimeConfig(), agentActivity: make(map[string]AgentActivity)}
 	if allTodoCompleted(ui.todo) {
@@ -1100,7 +1100,7 @@ func (m *bubbleModel) updateTurnDone(message turnDoneMsg) (tea.Model, tea.Cmd) {
 	m.historyState.CommitActive()
 	if message.err == nil {
 		if len(message.result.Messages) > 0 {
-			m.messages = append(m.messages, model.CloneMessages(message.result.Messages)...)
+			m.messages = append(m.messages, message.result.Messages...)
 		} else if message.result.Message.Content != "" {
 			m.messages = append(m.messages, message.result.Message)
 		}
