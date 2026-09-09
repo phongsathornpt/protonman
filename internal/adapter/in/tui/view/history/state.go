@@ -608,6 +608,12 @@ func (s *HistoryState) invalidateAlternateRenderCache() {
 	s.altRenderWidth = 0
 }
 
+func releaseCommittedCellRenderCache(cell HistoryCell) {
+	if assistant, ok := cell.(*AssistantCell); ok {
+		assistant.releaseRenderCache()
+	}
+}
+
 func (s *HistoryState) buildCommittedCache() {
 	if s.cacheValid && s.cachedWidth == s.renderWidth {
 		return
@@ -628,6 +634,7 @@ func (s *HistoryState) buildCommittedCache() {
 			anchors = append(anchors, ScrollAnchor{cell: cell, cellIndex: index, line: line, valid: true})
 		}
 		render = append(render, cellLines...)
+		releaseCommittedCellRenderCache(cell)
 		cells = append(cells, renderedCellIndex{cell: cell, startLine: startLine, lineCount: len(cellLines)})
 	}
 	s.committedLines = committedLines
@@ -819,7 +826,9 @@ func (s *HistoryState) buildAlternateRenderCache(width int) {
 		if index > 0 {
 			render = append(render, "")
 		}
-		render = append(render, renderHistoryCell(cell, width)...)
+		cellLines := renderHistoryCell(cell, width)
+		render = append(render, cellLines...)
+		releaseCommittedCellRenderCache(cell)
 	}
 	s.altRender = render
 	s.altRenderWidth = width

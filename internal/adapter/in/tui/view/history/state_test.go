@@ -115,6 +115,29 @@ func TestDiscardToolCallClearsRemovedBackingSlot(t *testing.T) {
 	}
 }
 
+func TestCommittedAssistantReleasesPerCellRenderCache(t *testing.T) {
+	state := NewHistoryState(100)
+	assistant := &AssistantCell{Text: "first line\nsecond line\nthird line"}
+	state.Append(assistant)
+
+	first := state.RenderContent()
+	if first == "" {
+		t.Fatal("expected rendered assistant content")
+	}
+	if len(assistant.renderCache.lines) != 0 || len(assistant.renderCache.decorated) != 0 || assistant.renderCache.processed != 0 {
+		t.Fatalf("committed assistant retained render cache: %+v", assistant.renderCache)
+	}
+
+	state.SetWidth(40)
+	second := state.RenderContent()
+	if second == "" {
+		t.Fatal("expected rerendered assistant content after width change")
+	}
+	if len(assistant.renderCache.lines) != 0 || len(assistant.renderCache.decorated) != 0 || assistant.renderCache.processed != 0 {
+		t.Fatalf("width rerender retained per-cell cache: %+v", assistant.renderCache)
+	}
+}
+
 func TestReleaseAlternateRenderCacheDropsRenderedTranscript(t *testing.T) {
 	state := NewHistoryState(100)
 	state.Append(&AssistantCell{Text: "cached alternate transcript"})

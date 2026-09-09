@@ -221,5 +221,12 @@ func assistantCacheTail(text string) string {
 	return text[start:]
 }
 
+func (c *AssistantCell) releaseRenderCache() {
+	if c == nil {
+		return
+	}
+	c.renderCache = assistantRenderCache{}
+}
+
 func (c *AssistantCell) RawLines() []string { return rawTextLines(c.Text) }
 func (c *AssistantCell) LineCount() int     { return len(c.RawLines()) }
