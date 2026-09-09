@@ -164,7 +164,7 @@ func TestStatusViewShowsSubagentCoordinationDuringBusyTurn(t *testing.T) {
 	m.activity = "thinking"
 	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", State: agent.StateRunning}, {ID: "reviewer-2", State: agent.StateQueued}}
 	got := m.statusView()
-	if !strings.Contains(got, "coordinating") || !strings.Contains(got, "2 agents") {
+	if !strings.Contains(got, "working") || !strings.Contains(got, "2 agents") {
 		t.Fatalf("status view=%q", got)
 	}
 }
@@ -178,7 +178,7 @@ func TestStatusViewKeepsAgentCoordinationVisibleInTinyLayout(t *testing.T) {
 	if got := m.agentsView(); got != "" {
 		t.Fatalf("tiny agents view=%q, want hidden panel", got)
 	}
-	if got := m.statusView(); !strings.Contains(got, "coordinating") {
+	if got := m.statusView(); !strings.Contains(got, "working") {
 		t.Fatalf("tiny status view=%q, want coordination state", got)
 	}
 }
@@ -226,7 +226,7 @@ func TestStatusViewCombinesRootAndSubagentProgress(t *testing.T) {
 	m.turnProgress = turnProgress{Round: 3, ToolCalls: 8}
 	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", State: agent.StateRunning}}
 	got := m.statusView()
-	for _, want := range []string{"coordinating", "1 agent"} {
+	for _, want := range []string{"working", "1 agent"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("status view=%q, want %q", got, want)
 		}
@@ -256,7 +256,7 @@ func TestStatusViewAvoidsDuplicatingAgentPaneDetail(t *testing.T) {
 	m.busy = true
 	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", State: agent.StateRunning}, {ID: "reviewer-2", State: agent.StateQueued}}
 	got := m.statusView()
-	if !strings.Contains(got, "coordinating 2 agents") {
+	if !strings.Contains(got, "2 agents working") {
 		t.Fatalf("status=%q", got)
 	}
 	for _, duplicate := range []string{"1 running", "1 queued", "using grep", "round", "tools"} {
@@ -310,7 +310,7 @@ func TestCancelActiveTurnCancelsOnlyOwnedSubagents(t *testing.T) {
 	if otherStatus.State == agent.StateCanceling || otherStatus.State == agent.StateCanceled {
 		t.Fatalf("other state=%s, want unaffected", otherStatus.State)
 	}
-	if got := m.statusView(); !strings.Contains(got, "canceling") || !strings.Contains(got, "stopping 1 agents") {
+	if got := m.statusView(); !strings.Contains(got, "stopping 1 agent") {
 		t.Fatalf("status=%q", got)
 	}
 }
@@ -489,7 +489,7 @@ func TestLongTurnWithSubagentsKeepsProgressCoherent(t *testing.T) {
 	wait, _ := tool.NewCall("w1", "subagent", json.RawMessage(`{"action":"wait"}`))
 	m.applyTurnEvents([]turn.Event{{Kind: turn.EventToolCall, Round: 1, Call: delegate}, {Kind: turn.EventToolResult, Round: 1, Call: delegate, Result: tool.Result{CallID: "d1", ToolName: "subagent", Output: `{"agent_id":"explorer-1","status":"queued"}`}}, {Kind: turn.EventToolCall, Round: 2, Call: wait}})
 	status := m.statusView()
-	for _, want := range []string{"coordinating", "3 agents"} {
+	for _, want := range []string{"working", "3 agents"} {
 		if !strings.Contains(status, want) {
 			t.Fatalf("status=%q, want %q", status, want)
 		}
@@ -660,7 +660,7 @@ func TestScrolledViewportSurvivesLiveAgentChromeStress(t *testing.T) {
 		if got := firstSemanticLine(); got != firstVisible {
 			t.Fatalf("%s moved logical anchor: before=%q after=%q", stage, firstVisible, got)
 		}
-		if strings.Contains(ansi.Strip(m.historyState.RenderContent()), "coordinating 1 agent") {
+		if strings.Contains(ansi.Strip(m.historyState.RenderContent()), "1 agent working") {
 			t.Fatalf("%s persisted ephemeral coordination status into history", stage)
 		}
 	}

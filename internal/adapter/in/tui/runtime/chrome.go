@@ -369,40 +369,27 @@ func (m bubbleModel) statusView() string {
 	if !m.busy {
 		return ""
 	}
-	turnAgents := m.turnAgentSnapshot()
-	activeAgents, _, _, _ := agentActivityCounts(turnAgents)
-	parts := make([]string, 0, 4)
-	activity := m.activity
+	activeAgents, _, _, _ := agentActivityCounts(m.turnAgentSnapshot())
+	activity := strings.TrimSpace(m.activity)
 	if activeAgents > 0 {
+		label := "agent"
+		if activeAgents != 1 {
+			label = "agents"
+		}
 		if activity == "canceling" {
-			parts = append(parts, "canceling", fmt.Sprintf("stopping %d agents", activeAgents))
+			activity = fmt.Sprintf("stopping %d %s", activeAgents, label)
 		} else {
-			label := fmt.Sprintf("%d agent", activeAgents)
-			if activeAgents != 1 {
-				label += "s"
-			}
-			parts = append(parts, "coordinating "+label)
-		}
-	} else {
-		if activity == "" {
-			activity = "analyzing"
-		}
-		parts = append(parts, activity)
-		if m.turnProgress.Round > 0 {
-			parts = append(parts, fmt.Sprintf("round %d", m.turnProgress.Round))
-		}
-		if m.turnProgress.ToolCalls > 0 {
-			parts = append(parts, fmt.Sprintf("%d tools", m.turnProgress.ToolCalls))
+			activity = fmt.Sprintf("%d %s working", activeAgents, label)
 		}
 	}
-	if !m.busyStarted.IsZero() {
-		parts = append(parts, formatElapsed(time.Since(m.busyStarted)))
+	if activity == "" || activity == "ready" {
+		activity = "analyzing"
 	}
-	indicator := "• "
+	indicator := "● "
 	if spin := m.spinner.View(); spin != "" {
 		indicator = spin + " "
 	}
-	return statusStyle.Render(truncateWithEllipsis(indicator+strings.Join(parts, " · "), maxInt(1, m.width-2)))
+	return statusStyle.Render(truncateWithEllipsis(indicator+activity, maxInt(1, m.width-2)))
 }
 
 func (m bubbleModel) turnAgentSnapshot() []agent.AgentStatus {
