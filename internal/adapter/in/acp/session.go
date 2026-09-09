@@ -200,7 +200,7 @@ func (s *Session) ExecutePrompt(
 	s.mu.Lock()
 	s.messages = append(s.messages, userMsg)
 	s.messages = conversation.Retain(s.messages, s.retention)
-	history := model.CloneMessages(s.messages)
+	history := model.SnapshotMessages(s.messages)
 	s.mu.Unlock()
 
 	var assistantText strings.Builder
@@ -362,7 +362,7 @@ func (s *Session) Cancel() {
 // ReplayHistory streams previous conversation messages via session/update.
 func (s *Session) ReplayHistory(notifier func(RPCNotification) error) error {
 	s.mu.Lock()
-	messages := append([]model.Message(nil), s.messages...)
+	messages := model.SnapshotMessages(s.messages)
 	s.mu.Unlock()
 
 	for _, msg := range messages {
@@ -783,7 +783,7 @@ func (s *Session) saveState(ctx context.Context) error {
 		return nil
 	}
 	s.mu.Lock()
-	messages := append([]model.Message(nil), s.messages...)
+	messages := model.SnapshotMessages(s.messages)
 	reasoningEffort := s.reasoningEffort
 	stateRevision := s.stateRevision
 	s.mu.Unlock()

@@ -7,17 +7,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/phongsathornpt/protonman/internal/feature/agent"
-	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
-	"github.com/phongsathornpt/protonman/internal/feature/skill"
+	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
+	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 // Conversation executes one model/tool turn over an existing message history.
-// Inbound adapters depend on this port instead of the concrete turn loop.
+// Run treats the supplied messages and nested payloads as immutable; implementations
+// must snapshot before retaining or mutating them. Inbound adapters depend on this
+// port instead of the concrete turn loop.
 type Conversation interface {
 	Run(context.Context, []model.Message, turn.Sink) (turn.Result, error)
 }

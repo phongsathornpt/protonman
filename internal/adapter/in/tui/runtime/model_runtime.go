@@ -447,7 +447,7 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 	ctx = agent.WithTurnRef(ctx, agent.TurnRef{SessionID: m.sessionID, TurnID: m.activeTurnOwner})
 	m.turnCancel = cancel
 	events := make(chan tea.Msg, 32)
-	history := model.CloneMessages(m.messages)
+	history := model.SnapshotMessages(m.messages)
 	startedAt := time.Now()
 	slog.DebugContext(ctx, "tui turn started", "prompt_bytes", len(prompt), "history_messages", len(history))
 	go func() {

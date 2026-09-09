@@ -422,7 +422,7 @@ func (r *Runner) runTurn(
 	r.turnSeq++
 	turnID := fmt.Sprintf("headless-turn-%d", r.turnSeq)
 	turnCtx := agent.WithTurnRef(ctx, agent.TurnRef{SessionID: r.sessionID, TurnID: turnID})
-	result, err := r.runner.Run(turnCtx, r.Messages(), func(_ context.Context, event app.Event) error {
+	result, err := r.runner.Run(turnCtx, model.SnapshotMessages(r.messages), func(_ context.Context, event app.Event) error {
 		switch event.Kind {
 		case app.EventTextDelta:
 			return writeEvent(output, format, Event{Kind: EventKindText, Text: event.Text})

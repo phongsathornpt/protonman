@@ -31,6 +31,13 @@ type Message = sdk.Message
 
 func CloneMessages(messages []Message) []Message { return sdk.CloneMessages(messages) }
 
+// SnapshotMessages copies only the top-level message slice. Message payloads are
+// immutable after publication, so callers can isolate append/re-slice ownership
+// without duplicating content parts or tool-call argument buffers.
+func SnapshotMessages(messages []Message) []Message {
+	return append([]Message(nil), messages...)
+}
+
 type ResolvedRemoteMetadata struct {
 	ID       string
 	Name     string
