@@ -362,7 +362,7 @@ func (s *Session) Cancel() {
 // ReplayHistory streams previous conversation messages via session/update.
 func (s *Session) ReplayHistory(notifier func(RPCNotification) error) error {
 	s.mu.Lock()
-	messages := model.CloneMessages(s.messages)
+	messages := append([]model.Message(nil), s.messages...)
 	s.mu.Unlock()
 
 	for _, msg := range messages {
@@ -783,7 +783,7 @@ func (s *Session) saveState(ctx context.Context) error {
 		return nil
 	}
 	s.mu.Lock()
-	messages := model.CloneMessages(s.messages)
+	messages := append([]model.Message(nil), s.messages...)
 	reasoningEffort := s.reasoningEffort
 	stateRevision := s.stateRevision
 	s.mu.Unlock()
