@@ -1,106 +1,163 @@
 # Clean Architecture Blueprint
 
-Protonman follows **Clean Architecture** (Hexagonal / Ports and Adapters) principles. The codebase maintains strict concentric dependency boundaries where dependencies point inward toward the core domain.
+Protonman follows Clean Architecture / Ports and Adapters. Dependencies point toward
+stable application and domain contracts; concrete protocol, persistence, provider,
+terminal, and operating-system details remain at the edges.
 
-```
-       +-------------------------------------------------------------+
-       |                  cmd/protonman (Composition Root)              |
-       |  +-------------------------------------------------------+  |
-       |  |     Inbound Adapters (Driving / Presentation)         |  |
-       |  |  internal/tui  |  internal/acp  |  internal/headless  |  |
-       |  |  +-------------------------------------------------+  |  |
-       |  |  |         Application Layer (internal/app)        |  |  |
-       |  |  |  conversation.go  agents.go   models.go        |  |  |
-       |  |  |  providers.go     projects.go sessions.go      |  |  |
-       |  |  |  +-------------------------------------------+  |  |  |
-       |  |  |  |          Core Domain Entities             |  |  |  |
-       |  |  |  |   modelprofile/  permission/   session/   |  |  |  |
-       |  |  |  |   tool/          workspace/               |  |  |  |
-       |  |  |  +-------------------------------------------+  |  |  |
-       |  |  +-------------------------------------------------+  |  |
-       |  |     Outbound Adapters (Driven / Infrastructure)       |  |
-       |  |  internal/adapter/sessionfs                           |  |
-       |  |  internal/adapter/tool/{agent,builtin,mcp,skill,todo,web}|
-       |  |  internal/model                                       |  |
-       |  |  internal/config                                      |  |
-       |  |  internal/turn (Orchestration Engine)                 |  |
-       |  |  +-------------------------------------------------+  |  |
-       |  |  |          Foundational Group (internal/base)     |  |  |
-       |  |  |  buildinfo/ contextutil/ envconfig/ failure/    |  |  |
-       |  |  |  glob/      runtimepolicy/                      |  |  |
-       |  |  +-------------------------------------------------+  |  |
-       |  +-------------------------------------------------------+  |
-       +-------------------------------------------------------------+
-```
+```text
+cmd/protonman/                    composition root and mode selection
+        |
+        +--> internal/adapter/in/           driving adapters
+        |      acp/                          ACP JSON-RPC over stdio
+        |      headless/                     non-interactive CLI
+        |      tui/                          Bubble Tea TUI
+        |
+        +--> internal/app/                  application use-case ports
+        |
+        +--> internal/engine/               orchestration
+        |      prompt/                       capability-driven system prompt
+        |      toolcall/                     tool execution boundary
+        |      turn/                         model/tool state machine
+        |
+        +--> internal/core/                 domain contracts and policies
+        |      conversation/                 retention/history policy
+        |      modelprofile/                 model capability policy
+        |      permission/                   authorization policy
+        |      session/                      session aggregate and repository port
+        |      tool/                         tool contracts and metadata
+        |      workspace/                    workspace safety and mutation policy
+        |
+        +--> internal/feature/              cohesive domain features
+        |      agent/ project/ skill/ todo/
+        |
+        +--> internal/adapter/out/          driven adapters
+        |      config/ model/ sessionfs/ tool/
+        |
+        +--> internal/platform/             OS/runtime infrastructure
+               checkpoint/ sandbox/ telemetry/
 
----
+internal/base/                    dependency-free internal leaf utilities
+proton-sdk/                       provider-neutral model SDK
+```
 
 ## 1. Composition Root (`cmd/protonman/`)
-The single assembly point of the application:
-- `main.go`: Process entry point, signal trapping, and presentation mode selection (`tui`, `acp`, `headless`, `session`).
-- `bootstrap.go`: Instantiates infrastructure stores, domain policies, and wires outbound adapters into application services (`app.BuildConversation`, `app.NewSessions`, `app.NewAgents`).
-- `headless_mode.go`: Headless CLI dispatch consuming `app.Conversation`.
-- `session_commands.go`: CLI subcommands for session inspection, resume, and cleanup.
 
----
+`cmd/protonman` is the application assembly boundary. It selects TUI, headless, ACP,
+and session-oriented command modes, resolves effective configuration/workspace policy,
+and wires concrete adapters into application and engine contracts.
 
-## 2. Application Layer (`internal/app/`)
-Defines the primary application use cases and boundaries for inbound driving adapters:
-- `conversation.go`: `Conversation` interface port (`Run(ctx, messages, sink) (Result, error)`) and `BuildConversation` factory.
-- `agents.go`: Subagent lifecycle management plus construction of provider-neutral per-profile model/reasoning resolvers from effective config.
-- `models.go`: Remote provider model discovery use cases.
-- `providers.go`: User provider settings mutations and persistence use cases.
-- `projects.go`: Project-local configuration mutations and project discovery / initialization.
-- `sessions.go`: Persisted session loading, listing, and deletion use cases.
-- `appdirs/`: Filesystem layout resolution (`.protonman/`, `config.toml`, `sessions/`, etc.).
+`bootstrap.go` is the primary assembly point. Cross-layer construction belongs here,
+not inside the core domain or inbound presentation packages.
 
-*Rule*: Inbound adapters interact exclusively through `internal/app` and never touch concrete turn loops, config persistence, or direct database/filesystem stores.
+## 2. Inbound Adapters (`internal/adapter/in/`)
 
-*Subagent routing*: Universal owns the active primary model. `strength`, `agility`, and `intelligence` may bind explicit provider/model and reasoning overrides from the effective user/trusted-project configuration. Missing model overrides inherit Universal dynamically at child admission; admitted children retain their bound model/reasoning snapshot. Subagent ownership is session + parent-turn scoped. Versioned lifecycle events are durably appended before acknowledged transitions, the in-memory status is a projection of those events, ordered activity streams wake waiters, and restart recovery replays the per-session journal before marking process-owned live states as interrupted. Provider credentials and protocol construction stay outside `internal/feature/agent`.
+Driving adapters translate external interaction into application operations:
 
----
+- `acp/`: ACP JSON-RPC/stdin-stdout protocol handling.
+- `headless/`: non-interactive CLI output for scripts and CI.
+- `tui/`: Bubble Tea terminal presentation and interaction.
 
-## 3. Core Domain Entities (`internal/*`)
-Pure business rules and domain definitions. No `domain-ish` parent folder is created to maintain idiomatic, flat Go packaging:
-- `internal/modelprofile/`: Model capability schemas, token limit calculations, reasoning profile definitions.
-- `internal/permission/`: Security modes (`ask`, `always-approve`, `deny`), path permission rules, evaluation policies.
-- `internal/core/session/`: Session identity, aggregate resource paths, state models, durable revision policy, message conversions, and repository port `session.Repository`.
-- `internal/tool/`: Pure domain contracts for tools: `Handler` interface, `Registry`, `Specification`, parameter metadata, call context. Contains zero tool implementations.
-- `internal/workspace/`: Filesystem root isolation, directory safety gates, mutation boundaries.
+Inbound adapters consume application ports such as `app.Conversation`, `app.Agents`,
+`app.Models`, `app.Projects`, `app.Providers`, and `app.Sessions`. They must not bypass
+those boundaries to persist configuration, discover provider models, access session
+filesystem stores, or control concrete coordinator/turn implementations directly.
 
-*Rule*: Core domain packages never import outer layers (`cmd/protonman`, `app`, `turn`, `tui`, `acp`, `headless`, or adapters).
+## 3. Application Layer (`internal/app/`)
 
----
+The application layer exposes use cases needed by inbound adapters and hides concrete
+engine/infrastructure implementations.
 
-## 4. Interface Adapters (`internal/adapter/`, `internal/model/`, `internal/config/`, `internal/turn/`)
+Important boundaries include:
 
-### Inbound (Driving) Presentation Adapters
-- `internal/tui/`: Presentation-only terminal user interface built with Bubble Tea. Modularized across view components, slash commands, and history cell formatters.
-- `internal/acp/`: Agent Client Protocol (ACP) JSON-RPC 2.0 protocol adapter.
-- `internal/headless/`: Non-interactive output adapter for CI/CD and scripts (text/NDJSON stream).
+- `Conversation`: provider-neutral conversation execution port.
+- `Agents`: subagent lifecycle/application operations.
+- `Models`: remote provider model discovery.
+- `Providers`: user provider configuration mutations and persistence.
+- `Projects`: project discovery, trust, and project settings.
+- `Sessions`: persisted session discovery/load/delete operations.
+- `appdirs/`: canonical Protonman filesystem namespace resolution.
 
-### Outbound (Driven) Infrastructure Adapters
-- `internal/adapter/out/sessionfs/`: File-backed storage implementation of `session.Repository` plus the subagent lifecycle event store; each session is an aggregate directory containing `state.json`, `todo.md`, the compacted agent projection, and the append-only lifecycle journal.
-- `internal/adapter/tool/`: Unified home for **all tool implementations** satisfying `tool.Handler`:
-  - `agent/`: Subagent orchestration capability (`subagent`) with spawn/wait/get/list/cancel/resume actions.
-  - `builtin/`: Core developer tools (`read`, `edit`, `bash`, `grep`, `find`, `ls`, `git`, `math`).
-  - `mcp/`: External Model Context Protocol server discovery and tool registration.
-  - `skill/`: Agent skill activation (`skill`).
-  - `todo/`: Session-bound work tracking capability (`todo action=get|update`) using durable optimistic concurrency.
-  - `web/`: Network web fetching with sandbox isolation (`web`).
-- `internal/model/`: Provider integration and SDK translation:
-  - `provider_preset.go`: Endpoint and protocol presets.
-  - `provider_discovery.go`: Dynamic model discovery over provider APIs.
-  - `provider_catalog.go`: Provider model catalog normalization.
-  - `model_profile.go`: Profile resolution and SDK model type aliases.
-  - `client_factory.go`: Client instantiation and options (`ClientOption`).
-  - `sdk_adapter.go`: `proton-sdk` provider model adapter with capability overrides.
-- `internal/config/`: TOML configuration loading, merging (user/project), and persistence (`config.go`, `document.go`, `merge.go`, `load.go`, `user_save.go`, `project_save.go`).
-- `internal/turn/`: Turn orchestration engine and loop state machine driving model streaming, tool execution, grounding, and verification.
+## 4. Engine (`internal/engine/`)
 
-### Session Aggregate Ownership
+The engine is orchestration, not an outbound adapter:
 
-A session ID is the ownership boundary for conversation state and the agent task plan:
+- `prompt/` composes capability-driven system prompts.
+- `toolcall/` validates and authorizes model-originated tool calls before execution.
+- `turn/` owns the bounded multi-round model/tool state machine, streaming, grounding,
+  tool-result budgets, repeated-call protection, reasoning policy, and verification state.
+
+Inbound adapters must use `app.Conversation` rather than importing `engine/turn` directly.
+
+## 5. Core Domain (`internal/core/`)
+
+Core packages define stable policies and contracts and do not import adapters, features,
+engines, or the composition root.
+
+- `conversation/`: provider-neutral retention, compaction, and historical tool-message policy.
+- `modelprofile/`: model metadata, limits, modalities, reasoning and schema compatibility.
+- `permission/`: permission modes, rules, grants, and evaluation.
+- `session/`: session identity, aggregate resources, revisions, state, and repository port.
+- `tool/`: tool definitions, registry contracts, calls/results, risk/effect/mutability metadata.
+- `workspace/`: authorized root, protected paths, mutation synchronization and path policy.
+
+## 6. Features (`internal/feature/`)
+
+Feature packages own cohesive product behavior built on core contracts:
+
+- `agent/`: canonical profiles, scheduling, lifecycle/events, delegation policy.
+- `project/`: project discovery/trust behavior.
+- `skill/`: skill discovery and activation domain behavior.
+- `todo/`: session task-plan state and optimistic concurrency.
+
+Feature packages are not presentation or persistence dumping grounds. Concrete filesystem,
+network, provider, and terminal concerns remain in adapters/platform packages.
+
+## 7. Outbound Adapters (`internal/adapter/out/`)
+
+Driven adapters implement infrastructure-facing ports:
+
+- `config/`: layered TOML loading, merge, provenance, and persistence.
+- `model/`: provider presets, discovery, catalog normalization, SDK adaptation.
+- `sessionfs/`: file-backed session repository and agent lifecycle persistence.
+- `tool/agent/`: subagent lifecycle tool and capability publication.
+- `tool/builtin/`: workspace coding tools (`read`, `math`, `grep`, `find`, `ls`, `git`, `bash`, `edit`).
+- `tool/mcp/`: external MCP discovery, validation, and registration.
+- `tool/skill/`: skill activation tool.
+- `tool/todo/`: session-bound task tool.
+- `tool/web/`: network web capability.
+
+All concrete tool handlers live under `internal/adapter/out/tool/*`; pure tool contracts
+remain in `internal/core/tool`.
+
+## 8. Platform (`internal/platform/`)
+
+Platform packages own operating-system/runtime infrastructure that is neither domain logic
+nor a protocol adapter:
+
+- `checkpoint/`: bounded pre-mutation checkpoint persistence.
+- `sandbox/`: OS-specific confinement and process launch behavior.
+- `telemetry/`: runtime telemetry infrastructure.
+
+## 9. Foundational Utilities (`internal/base/`)
+
+`internal/base/*` packages are internal leaves with zero dependencies on other internal
+or `cmd/*` packages. Current responsibilities include:
+
+- `analysis/`
+- `buildinfo/`
+- `contextutil/`
+- `envconfig/`
+- `failure/`
+- `glob/`
+- `pathutil/`
+- `runtimepolicy/`
+
+Only truly dependency-free reusable policy/helpers belong here.
+
+## 10. Session Aggregate Ownership
+
+A session ID is the durable ownership boundary for conversation state and task state.
+At minimum, session resources include:
 
 ```text
 ~/.protonman/sessions/<session-id>/
@@ -108,47 +165,44 @@ A session ID is the ownership boundary for conversation state and the agent task
   todo.md
 ```
 
-The CLI resolves the session before constructing stateful tools. TUI/headless bind `todo action=get|update` to that session's repository; ACP creates a registry overlay per ACP session so task state cannot leak between concurrent sessions. Workspace file tools cannot mutate this private task state. Both session saves and todo patches use durable revisions plus filesystem serialization to reject stale writers.
+`sessionfs` may also maintain session-owned agent lifecycle projection/journal resources.
+Their filenames are persistence details, but their ownership is not: concurrent sessions
+must never share TODO or lifecycle state.
 
-Runtime namespace resolution is centralized in `internal/app/appdirs` and `internal/base/envconfig`. User-global state uses `~/.protonman/`; project-local state uses `<workspace>/.protonman/`. The filesystem namespace has no `.proton/` fallback.
+TUI/headless bind task tools to the active session. ACP creates session-specific registry
+overlays. Workspace file tools cannot mutate private session resources.
 
----
+User-global state lives under `~/.protonman/`; trusted project-local state lives under
+`<workspace>/.protonman/`. Namespace resolution is centralized in `internal/app/appdirs`.
 
-## 5. Foundational Grouping (`internal/base/`)
-Pure leaf packages with **zero dependencies on any other internal package**:
-- `internal/base/buildinfo`: Application version and User-Agent construction.
-- `internal/base/contextutil`: Detached timeout context helper (`DetachedTimeout`).
-- `internal/base/envconfig`: Environment variable names (`PROTON_*`) and boolean parser.
-- `internal/base/failure`: Domain error classification codes and failure traits.
-- `internal/base/glob`: Pure in-memory string wildcard matching (`*`, `?`).
-- `internal/base/runtimepolicy`: Global runtime defaults, timeout durations, and buffer limits.
+## 11. Architectural Enforcement
 
----
+`test/architecture/dependency_test.go` enforces the dependency rules. Do not weaken the
+guards to make an architectural violation pass.
 
-## 6. Architectural Enforcement
-Architecture boundaries are permanently enforced by automated tests in `test/architecture/dependency_test.go`:
+Key invariants include:
+
 1. Core packages do not depend on outer layers.
-2. Base packages (`internal/base/*`) have zero internal dependencies.
-3. Inbound adapters (`tui`, `acp`, `headless`) depend on `app.Conversation`, never on `turn`.
-4. Inbound adapters do not perform config persistence or provider discovery directly.
-5. TUI does not depend directly on session persistence or project discovery.
-6. All tool implementations reside exclusively in `internal/adapter/tool/`.
-7. `internal/app` and `internal/model` file sets conform strictly to the architecture blueprint.
-8. The `proton-sdk` has zero dependencies on internal CLI packages.
+2. Base packages have zero internal dependencies.
+3. Inbound adapters use application ports rather than concrete turn/config/session/model implementations.
+4. Tool implementations live under `internal/adapter/out/tool/`.
+5. `proton-sdk` has zero dependencies on CLI-owned `internal/*` or `cmd/*` packages.
+6. Composition/wiring remains in `cmd/protonman` rather than leaking into domain packages.
 
----
+Run `go test ./test/architecture` whenever moving packages or changing dependency direction.
 
-## 7. Tool Safety and Resource Invariants
+## 12. Safety and Resource Invariants
 
-Tool limits are enforced at the resource boundary, not after expensive work has already completed:
+Resource and security limits are enforced at the owning boundary, while work occurs:
 
-- `web` with `action=fetch` resolves and validates every destination IP, then dials only an approved address. Redirects repeat the same destination check; proxy environment variables cannot bypass it.
-- model streams consumed by `proton-sdk.CollectStep` are closed exactly once on success, cancellation, validation failure, provider failure, or incomplete EOF.
-- subagent terminal retention applies its TTL and hard-count limits independently. Disabling one bound never disables the other.
-- session permission grants are reusable only for normal-risk read-only calls and are fingerprinted by normalized arguments plus their effective risk/effect/scope. Mutating or uncertain calls remain one-shot.
-- checkpoint persistence is bounded per workspace by retained count, total bytes, and age. A new checkpoint is preserved while older records are pruned deterministically.
-- `find` pagination stops after the current page boundary and validates continuation state against the matched prefix before the cursor instead of hashing the unread remainder of the tree.
-- `read` opens through a pinned authorized root so policy validation and file opening share the same filesystem boundary. Line-range reads also have a scan-byte ceiling independent of their output-byte ceiling.
-- `git` bounds stdout and stderr while the subprocess is running. Oversized stdout cancels execution rather than buffering unbounded output and checking its size afterward.
+- `web` validates resolved destinations and redirects against SSRF policy.
+- model streams are closed exactly once across success, error, and cancellation paths.
+- subagent live/retained state and result retention remain bounded.
+- session grants are reusable only for matching normal-risk read-only semantics.
+- checkpoints are bounded by count, bytes, and age.
+- `read`, `find`, and `git` enforce scan/output/process limits before unbounded buffering.
+- workspace file authorization and opening must not introduce symlink/TOCTOU escapes.
+- model-originated tools execute through `internal/engine/toolcall.Service`.
 
-These invariants are covered by package-level regression tests and are expected to remain true even when tool presentation, pagination formats, or sandbox implementations evolve.
+These invariants are architecture, not presentation details. UI, pagination, provider, or
+sandbox refactors must preserve them.
