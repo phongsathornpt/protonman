@@ -186,3 +186,29 @@ func TestProviderEditorModelPickerFitsResponsiveTerminals(t *testing.T) {
 		}
 	}
 }
+
+func TestMinimalBusyStatusPrefersActiveToolName(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.showWelcome = false
+	m.busy = true
+	m.activity = "analyzing"
+	m.ensureHistoryState().StartToolCall("tool-1", "read")
+	plain := ansi.Strip(m.statusView())
+	if !strings.Contains(strings.ToLower(plain), "read") {
+		t.Fatalf("busy status did not expose active tool: %q", plain)
+	}
+}
+
+func TestMinimalPromptMetadataUsesDisplayWidth(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeModel = "模型-ภาษาไทย"
+	m.agentProfile = "工程"
+	m.workDir = "/tmp/โครงการ"
+	m.resize(32, 12)
+	for _, line := range strings.Split(m.promptMetadataView(), "\n") {
+		if got := lipgloss.Width(line); got > 32 {
+			t.Fatalf("metadata width=%d exceeds 32: %q", got, line)
+		}
+	}
+}

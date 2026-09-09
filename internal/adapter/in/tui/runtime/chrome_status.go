@@ -7,6 +7,7 @@ import (
 
 	agentpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/agent"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
@@ -33,12 +34,17 @@ func (m bubbleModel) statusView() string {
 	if activity == "" || activity == "ready" {
 		activity = "analyzing"
 	}
-	if activeAgents == 0 && m.turnProgress.ToolCalls > 0 {
-		label := "tool"
-		if m.turnProgress.ToolCalls != 1 {
-			label = "tools"
+	if activeAgents == 0 {
+		if toolName := strings.TrimSpace(m.lastRunningToolName()); toolName != "" && activity == "analyzing" {
+			activity = tool.DisplayName(toolName)
 		}
-		activity += fmt.Sprintf(" · %d %s", m.turnProgress.ToolCalls, label)
+		if m.turnProgress.ToolCalls > 0 {
+			label := "tool"
+			if m.turnProgress.ToolCalls != 1 {
+				label = "tools"
+			}
+			activity += fmt.Sprintf(" · %d %s", m.turnProgress.ToolCalls, label)
+		}
 	}
 	indicator := "● "
 	if spin := m.spinner.View(); spin != "" {

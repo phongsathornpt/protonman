@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"charm.land/bubbles/v2/key"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
@@ -88,7 +89,7 @@ func (m *bubbleModel) promptMetadataView() string {
 		return mutedStyle.Render(truncateWithEllipsis(mode, available))
 	}
 	suffix := " · " + mode
-	leftWidth := available - len(suffix)
+	leftWidth := available - ansi.StringWidth(suffix)
 	if leftWidth <= 0 {
 		return mutedStyle.Render(truncateWithEllipsis(mode, available))
 	}
