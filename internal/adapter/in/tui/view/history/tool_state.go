@@ -81,6 +81,7 @@ func (s *HistoryState) CompleteToolCall(callID string, name string, completed Hi
 type RunningTool struct {
 	CallID string
 	Name   string
+	Target string
 }
 
 // RunningTools returns all currently running tool calls in transcript order.
@@ -95,7 +96,7 @@ func (s *HistoryState) RunningTools() []RunningTool {
 		if !ok || !running.historyToolRunning() {
 			continue
 		}
-		out = append(out, RunningTool{CallID: running.historyToolID(), Name: running.historyToolName()})
+		out = append(out, RunningTool{CallID: running.historyToolID(), Name: running.historyToolName(), Target: runningToolTarget(cell)})
 	}
 	return out
 }
@@ -116,17 +117,42 @@ func (s *HistoryState) FindRunningTool(callID, name string) HistoryCell {
 	return nil
 }
 
-// LastRunningToolName returns the newest running tool name, if any.
-func (s *HistoryState) LastRunningToolName() string {
+// LastRunningTool returns the newest running tool with presentation metadata.
+func (s *HistoryState) LastRunningTool() (RunningTool, bool) {
 	if s == nil {
-		return ""
+		return RunningTool{}, false
 	}
 	if running, ok := s.active.(runningHistoryTool); ok && running.historyToolRunning() {
-		return running.historyToolName()
+		return RunningTool{CallID: running.historyToolID(), Name: running.historyToolName(), Target: runningToolTarget(s.active)}, true
 	}
 	for i := len(s.committed) - 1; i >= 0; i-- {
 		if running, ok := s.committed[i].(runningHistoryTool); ok && running.historyToolRunning() {
-			return running.historyToolName()
+			return RunningTool{CallID: running.historyToolID(), Name: running.historyToolName(), Target: runningToolTarget(s.committed[i])}, true
+		}
+	}
+	return RunningTool{}, false
+}
+
+// LastRunningToolName returns the newest running tool name, if any.
+func (s *HistoryState) LastRunningToolName() string {
+	running, ok := s.LastRunningTool()
+	if !ok {
+		return ""
+	}
+	return running.Name
+}
+
+func runningToolTarget(cell HistoryCell) string {
+	switch typed := cell.(type) {
+	case *ToolCell:
+		return typed.Target
+	case *AgentToolCell:
+		return typed.Target
+	case *ExecCell:
+		return typed.Command
+	case *PatchCell:
+		if len(typed.Paths) > 0 {
+			return typed.Paths[0]
 		}
 	}
 	return ""

@@ -193,10 +193,12 @@ func TestMinimalBusyStatusPrefersActiveToolName(t *testing.T) {
 	m.showWelcome = false
 	m.busy = true
 	m.activity = "analyzing"
-	m.ensureHistoryState().StartToolCall("tool-1", "read")
+	m.ensureHistoryState().StartToolCell(&ToolCell{CallID: "tool-1", Name: "read", Target: "internal/tui.go", Running: true})
 	plain := ansi.Strip(m.statusView())
-	if !strings.Contains(strings.ToLower(plain), "read") {
-		t.Fatalf("busy status did not expose active tool: %q", plain)
+	for _, want := range []string{"read", "internal/tui.go"} {
+		if !strings.Contains(strings.ToLower(plain), strings.ToLower(want)) {
+			t.Fatalf("busy status missing %q: %q", want, plain)
+		}
 	}
 }
 

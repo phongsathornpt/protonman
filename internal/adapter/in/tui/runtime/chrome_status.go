@@ -35,8 +35,11 @@ func (m bubbleModel) statusView() string {
 		activity = "analyzing"
 	}
 	if activeAgents == 0 {
-		if toolName := strings.TrimSpace(m.lastRunningToolName()); toolName != "" && activity == "analyzing" {
-			activity = tool.DisplayName(toolName)
+		if running, ok := m.ensureHistoryState().LastRunningTool(); ok && activity == "analyzing" {
+			activity = tool.DisplayName(strings.TrimSpace(running.Name))
+			if target := strings.TrimSpace(running.Target); target != "" {
+				activity += " " + target
+			}
 		}
 		if m.turnProgress.ToolCalls > 0 {
 			label := "tool"
