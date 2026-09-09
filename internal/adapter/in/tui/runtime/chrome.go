@@ -870,54 +870,9 @@ func (m *bubbleModel) appendTodo() {
 	}
 }
 
-type promptBoxChromeCache struct {
-	width  int
-	bash   bool
-	top    string
-	bottom string
-	side   string
-}
-
 func (m *bubbleModel) promptView() string {
 	if m.bottom == nil || m.bottom.prompt() == nil {
 		return ""
 	}
-	if layoutModeForHeight(m.height) == layoutTiny {
-		return m.bottom.prompt().View()
-	}
-	boxWidth := maxInt(3, m.width)
-	innerWidth := maxInt(1, boxWidth-4)
-	bash := m.bottom.bashMode()
-	chrome := &m.promptBoxCache
-	if chrome.width != boxWidth || chrome.bash != bash || chrome.top == "" {
-		border := promptBorder
-		if bash {
-			border = commandColor
-		}
-		style := lipgloss.NewStyle().Foreground(border)
-		chrome.width = boxWidth
-		chrome.bash = bash
-		chrome.top = style.Render("╭" + strings.Repeat("─", boxWidth-2) + "╮")
-		chrome.bottom = style.Render("╰" + strings.Repeat("─", boxWidth-2) + "╯")
-		chrome.side = style.Render("│")
-	}
-
-	content := strings.Split(m.bottom.prompt().View(), "\n")
-	var out strings.Builder
-	out.Grow(len(chrome.top) + len(chrome.bottom) + len(content)*(boxWidth+8))
-	out.WriteString(chrome.top)
-	for _, line := range content {
-		out.WriteByte('\n')
-		out.WriteString(chrome.side)
-		out.WriteByte(' ')
-		out.WriteString(line)
-		if pad := innerWidth - ansi.StringWidth(line); pad > 0 {
-			out.WriteString(strings.Repeat(" ", pad))
-		}
-		out.WriteByte(' ')
-		out.WriteString(chrome.side)
-	}
-	out.WriteByte('\n')
-	out.WriteString(chrome.bottom)
-	return out.String()
+	return m.bottom.prompt().View()
 }
