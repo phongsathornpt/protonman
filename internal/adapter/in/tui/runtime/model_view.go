@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"context"
@@ -501,6 +502,8 @@ type modelSelectedMsg struct {
 }
 
 type modelSelectPaneView struct {
+	picker         list.Model
+	pickerReady    bool
 	index          int
 	offset         int
 	models         []model.RemoteModel
@@ -550,13 +553,58 @@ func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
 	if !hasFreshCatalog {
 		modelsList = nil
 	}
+	delegate := list.NewDefaultDelegate()
+	delegate.SetSpacing(0)
 	view := &modelSelectPaneView{providerNames: providers, providerIndex: providerIdx}
+	view.initPicker(delegate)
 	activeModel := ""
 	if m != nil {
 		activeModel = m.activeModel
 	}
 	view.setModels(modelsList, activeModel)
 	return view
+}
+
+type modelListItem struct {
+	model   model.RemoteModel
+	current bool
+}
+
+func (i modelListItem) FilterValue() string {
+	return strings.Join([]string{i.model.ID, i.model.Name, i.model.Provider, strings.Join(i.model.Features, " ")}, " ")
+}
+
+func (i modelListItem) Title() string {
+	label := strings.TrimSpace(i.model.Name)
+	if label == "" {
+		label = i.model.ID
+	}
+	if model.IsFreeModel(i.model.ID) {
+		label += " · FREE"
+	}
+	if i.current {
+		label = "✓ " + label
+	}
+	return label
+}
+
+func (i modelListItem) Description() string {
+	return strings.TrimSpace(i.model.ID)
+}
+
+func (v *modelSelectPaneView) initPicker(delegates ...list.DefaultDelegate) {
+	if v == nil || v.pickerReady {
+		return
+	}
+	delegate := list.NewDefaultDelegate()
+	if len(delegates) > 0 {
+		delegate = delegates[0]
+	}
+	delegate.SetSpacing(0)
+	v.picker = list.New(nil, delegate, defaultBubbleWidth-8, defaultBubbleHeight-8)
+	v.picker.DisableQuitKeybindings()
+	v.picker.SetStatusBarItemName("model", "models")
+	v.pickerReady = true
 }
 
 func (*modelSelectPaneView) ID() string {
@@ -571,7 +619,13 @@ func (v *modelSelectPaneView) setModels(models []model.RemoteModel, activeModel 
 	if v == nil {
 		return
 	}
+	v.initPicker()
 	v.allModels = append([]model.RemoteModel(nil), models...)
+	items := make([]list.Item, 0, len(v.allModels))
+	for _, md := range v.allModels {
+		items = append(items, modelListItem{model: md, current: strings.EqualFold(md.ID, activeModel)})
+	}
+	_ = v.picker.SetItems(items)
 	v.applyFilter(activeModel)
 }
 
@@ -579,40 +633,55 @@ func (v *modelSelectPaneView) applyFilter(activeModel string) {
 	if v == nil {
 		return
 	}
-	query := strings.ToLower(strings.TrimSpace(v.filter))
-	if query == "" {
-		v.models = append([]model.RemoteModel(nil), v.allModels...)
-		v.resetSelection(activeModel)
-		return
+	if strings.TrimSpace(v.filter) == "" {
+		v.picker.ResetFilter()
+	} else {
+		v.picker.SetFilterText(v.filter)
 	}
-	filtered := make([]model.RemoteModel, 0, len(v.allModels))
-	for _, md := range v.allModels {
-		haystack := strings.ToLower(strings.Join([]string{md.ID, md.Name, md.Provider, strings.Join(md.Features, " ")}, " "))
-		if strings.Contains(haystack, query) {
-			filtered = append(filtered, md)
-		}
-	}
-	v.models = filtered
-	if len(filtered) == 0 {
-		v.index = 0
-		v.offset = 0
-	} else if v.index >= len(filtered) {
-		v.index = len(filtered) - 1
-	}
+	v.resetSelection(activeModel)
 }
 
 func (v *modelSelectPaneView) resetSelection(activeModel string) {
 	if v == nil {
 		return
 	}
-	v.index = 0
-	v.offset = 0
-	for i, md := range v.models {
-		if strings.EqualFold(md.ID, activeModel) {
-			v.index = i
-			return
+	if !v.pickerReady {
+		source := v.allModels
+		if len(source) == 0 {
+			source = v.models
+		}
+		v.initPicker()
+		items := make([]list.Item, 0, len(source))
+		for _, md := range source {
+			items = append(items, modelListItem{model: md, current: strings.EqualFold(md.ID, activeModel)})
+		}
+		_ = v.picker.SetItems(items)
+	}
+	v.picker.GoToStart()
+	for i, item := range v.picker.VisibleItems() {
+		md, ok := item.(modelListItem)
+		if ok && strings.EqualFold(md.model.ID, activeModel) {
+			v.picker.Select(i)
+			break
 		}
 	}
+	v.syncPickerProjection()
+}
+
+func (v *modelSelectPaneView) syncPickerProjection() {
+	if v == nil {
+		return
+	}
+	visible := v.picker.VisibleItems()
+	v.models = make([]model.RemoteModel, 0, len(visible))
+	for _, item := range visible {
+		if md, ok := item.(modelListItem); ok {
+			v.models = append(v.models, md.model)
+		}
+	}
+	v.index = v.picker.Index()
+	v.offset = v.picker.Paginator.Page * v.picker.Paginator.PerPage
+	v.filter = v.picker.FilterValue()
 }
 
 func (v *modelSelectPaneView) activeProviderName() string {
@@ -808,36 +877,11 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg)
 			return true, v.loadProvider(m, false)
 		}
 		return true, nil
-	case "up", "k":
-		if v.index > 0 {
-			v.index--
-		}
-		return true, nil
-	case "down", "j":
-		if v.index < len(v.models)-1 {
-			v.index++
-		}
-		return true, nil
-	case "pgup":
-		v.index -= pickerVisibleRows(m.height, maxModelSelectRows)
-		if v.index < 0 {
-			v.index = 0
-		}
-		return true, nil
-	case "pgdown":
-		v.index += pickerVisibleRows(m.height, maxModelSelectRows)
-		if v.index >= len(v.models) {
-			v.index = len(v.models) - 1
-		}
-		return true, nil
-	case "home", "g":
-		v.index = 0
-		return true, nil
-	case "end", "G":
-		if len(v.models) > 0 {
-			v.index = len(v.models) - 1
-		}
-		return true, nil
+	case "up", "k", "down", "j", "pgup", "pgdown", "home", "g", "end", "G":
+		updated, cmd := v.picker.Update(message)
+		v.picker = updated
+		v.syncPickerProjection()
+		return true, cmd
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		targetIdx := int(message.String()[0]-'1') + v.offset
 		if targetIdx >= 0 && targetIdx < len(v.models) {
