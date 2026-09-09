@@ -1,9 +1,10 @@
-package pane
+package permission
 
 import (
 	"fmt"
 	"strings"
 
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 )
@@ -14,7 +15,7 @@ type PermissionSnapshot struct {
 	Parked       bool
 	Index        int
 	Title        string
-	Tone         Tone
+	Tone         panecommon.Tone
 	ToolName     string
 	ToolKind     string
 	Detail       string
@@ -26,7 +27,7 @@ type PermissionSnapshot struct {
 type PermissionRender struct {
 	Inline string
 	Rows   []string
-	Tone   Tone
+	Tone   panecommon.Tone
 }
 
 func PermissionView(snapshot PermissionSnapshot) PermissionRender {
@@ -43,12 +44,12 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 	}
 	titleStyle := tuistyle.WarningStyle
 	switch snapshot.Tone {
-	case ToneUser:
+	case panecommon.ToneUser:
 		titleStyle = tuistyle.UserStyle
-	case ToneError:
+	case panecommon.ToneError:
 		titleStyle = tuistyle.ErrorStyle
 	}
-	if ModeForHeight(snapshot.Height) == LayoutTiny {
+	if panecommon.ModeForHeight(snapshot.Height) == panecommon.LayoutTiny {
 		contentWidth := max(8, snapshot.Width-8)
 		selected := ""
 		if len(snapshot.Options) > 0 {
@@ -71,7 +72,7 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 		detailLines = append(detailLines, textview.WrapLines(extra, max(1, maxWidth-6))...)
 	}
 	maxDetailLines := 6
-	if ModeForHeight(snapshot.Height) == LayoutCompact {
+	if panecommon.ModeForHeight(snapshot.Height) == panecommon.LayoutCompact {
 		maxDetailLines = 2
 	}
 	if len(detailLines) > maxDetailLines {
@@ -94,8 +95,8 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 	} else {
 		rows = append(rows, tuistyle.MutedStyle.Render(fmt.Sprintf("j/k move   1-%d select   %s   esc review transcript", len(snapshot.Options), snapshot.ShortcutHint)))
 	}
-	if ModeForHeight(snapshot.Height) == LayoutCompact {
-		rows = CompactRows(rows)
+	if panecommon.ModeForHeight(snapshot.Height) == panecommon.LayoutCompact {
+		rows = panecommon.CompactRows(rows)
 	}
 	return PermissionRender{Rows: rows, Tone: snapshot.Tone}
 }

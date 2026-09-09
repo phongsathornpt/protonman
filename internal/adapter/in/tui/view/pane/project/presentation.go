@@ -1,9 +1,10 @@
-package pane
+package project
 
 import (
 	"fmt"
 	"strings"
 
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 )
@@ -98,8 +99,8 @@ func ProjectRows(snapshot ProjectSnapshot) []string {
 		rows = append(rows, tuistyle.MutedStyle.Render("No project-local Protonman settings are configured."))
 	}
 	rows = append(rows, tuistyle.MutedStyle.Render("/project set <setting> <value> · r reload · esc close"))
-	if ModeForHeight(snapshot.Height) == LayoutTiny {
-		rows = CompactRows(rows)
+	if panecommon.ModeForHeight(snapshot.Height) == panecommon.LayoutTiny {
+		rows = panecommon.CompactRows(rows)
 	}
 	return rows
 }

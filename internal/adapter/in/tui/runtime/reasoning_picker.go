@@ -5,7 +5,7 @@ import (
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
+	reasoningpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/reasoning"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
@@ -99,7 +99,7 @@ func newReasoningPaneView(m *bubbleModel) *reasoningPaneView {
 }
 
 func reasoningChoices(profile modelprofile.Resolved) []sdk.ReasoningEffort {
-	return pane.ReasoningChoices(profile)
+	return reasoningpane.ReasoningChoices(profile)
 }
 
 func (v *reasoningPaneView) Render(m *bubbleModel) string {
@@ -155,7 +155,7 @@ func (v *reasoningPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (
 }
 
 func reasoningEffortDescription(effort sdk.ReasoningEffort) string {
-	return pane.ReasoningEffortDescription(effort)
+	return reasoningpane.ReasoningEffortDescription(effort)
 }
 
 func (m *bubbleModel) activeResolvedModelProfile() modelprofile.Resolved {
@@ -168,7 +168,7 @@ func (m *bubbleModel) activeResolvedModelProfile() modelprofile.Resolved {
 }
 
 func reasoningEffortLabel(effort sdk.ReasoningEffort) string {
-	return pane.ReasoningEffortLabel(effort)
+	return reasoningpane.ReasoningEffortLabel(effort)
 }
 
 func remoteModelReasoningSummary(providerName string, md model.RemoteModel, includeDefault bool) string {

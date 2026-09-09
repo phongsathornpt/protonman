@@ -6,7 +6,7 @@ import (
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
+	todopane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/todo"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 	"slices"
 )
@@ -130,7 +130,7 @@ func (v *todoPaneView) syncTitle(m *bubbleModel) {
 	if !v.initialized || m == nil {
 		return
 	}
-	completed, active, pending := pane.TodoCounts(m.todo)
+	completed, active, pending := todopane.TodoCounts(m.todo)
 	v.picker.Title = fmt.Sprintf("Tasks %d/%d · %d active · %d pending", completed, len(m.todo), active, pending)
 }
 

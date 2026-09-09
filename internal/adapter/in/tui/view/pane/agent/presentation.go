@@ -1,4 +1,4 @@
-package pane
+package agent
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
@@ -35,7 +36,7 @@ func AgentRows(snapshot AgentsSnapshot) []string {
 		return AgentDisplayPriority(retained[i].State) < AgentDisplayPriority(retained[j].State)
 	})
 	limit := 8
-	if ModeForHeight(snapshot.Height) == LayoutCompact {
+	if panecommon.ModeForHeight(snapshot.Height) == panecommon.LayoutCompact {
 		limit = 4
 	}
 	visible := retained

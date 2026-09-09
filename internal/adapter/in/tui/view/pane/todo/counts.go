@@ -1,4 +1,4 @@
-package pane
+package todo
 
 import tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 

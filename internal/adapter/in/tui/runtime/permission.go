@@ -10,7 +10,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
+	permissionpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/permission"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -368,7 +369,7 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 	}
 	shortcutHint := shortcutHintFor(options)
 	title := "Permission required"
-	tone := pane.ToneWarning
+	tone := panecommon.ToneWarning
 	detailExtras := make([]string, 0, 3)
 	switch request.ToolKind {
 	case permission.ToolRead, permission.ToolGrep, permission.ToolTask, permission.ToolAgent:
@@ -380,10 +381,10 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 		default:
 			title = "Permission request — read only"
 		}
-		tone = pane.ToneUser
+		tone = panecommon.ToneUser
 	case permission.ToolEdit:
 		title = "Permission required — modifies workspace"
-		tone = pane.ToneError
+		tone = panecommon.ToneError
 	case permission.ToolBash:
 		var input struct {
 			Command string `json:"command"`
@@ -393,27 +394,27 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 		analysis := tool.AnalyzeCommand(input.Command)
 		switch analysis.Scope {
 		case tool.CommandScopePublish:
-			title, tone = "Permission required — publishes package", pane.ToneError
+			title, tone = "Permission required — publishes package", panecommon.ToneError
 		case tool.CommandScopeDeployment:
 			if analysis.Risk == tool.CommandRiskRemoteDestructive {
 				title = "Permission required — destructive deployment change"
 			} else {
 				title = "Permission required — changes deployment"
 			}
-			tone = pane.ToneError
+			tone = panecommon.ToneError
 		case tool.CommandScopeRemote:
 			if analysis.Risk == tool.CommandRiskRemoteDestructive {
 				title = "Permission required — destructively modifies remote"
 			} else {
 				title = "Permission required — modifies remote"
 			}
-			tone = pane.ToneError
+			tone = panecommon.ToneError
 		default:
 			switch analysis.Effect {
 			case tool.CommandEffectReadOnly:
-				title, tone = "Permission request — shell read only", pane.ToneUser
+				title, tone = "Permission request — shell read only", panecommon.ToneUser
 			case tool.CommandEffectMutating:
-				title, tone = "Permission required — shell modifies state", pane.ToneError
+				title, tone = "Permission required — shell modifies state", panecommon.ToneError
 			default:
 				title = "Permission required — shell effects unknown"
 			}
@@ -430,7 +431,7 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 			detailExtras = append(detailExtras, fmt.Sprintf("Effect: %s · %s", analysis.Effect, analysis.Reason))
 		}
 	}
-	result := pane.PermissionView(pane.PermissionSnapshot{
+	result := permissionpane.PermissionView(permissionpane.PermissionSnapshot{
 		Width:        m.width,
 		Height:       m.height,
 		Parked:       v.parked,

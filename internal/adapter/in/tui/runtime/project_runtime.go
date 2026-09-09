@@ -4,7 +4,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"errors"
 	"fmt"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
+	projectpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/project"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
@@ -47,12 +47,12 @@ func (*projectPaneView) ReplacesComposer() bool {
 
 func (v *projectPaneView) Render(m *bubbleModel) string {
 	state := v.state
-	facts := []pane.ProjectFact{{Label: "Model", Value: fallbackProjectValue(m.activeModel, "not selected"), Source: string(m.projectSource(config.FieldModelDefault))}, {Label: "Provider", Value: fallbackProjectValue(m.activeProvider, "not selected"), Source: string(m.projectSource(config.FieldModelProvider))}, {Label: "Agent", Value: fallbackProjectValue(m.agentProfile, "universal"), Source: string(m.projectSource(config.FieldAgentProfile))}, {Label: "Thinking", Value: reasoningEffortLabel(m.reasoningEffort), Source: string(m.projectSource(config.FieldAgentReasoningEffort))}, {Label: "Subagents", Value: subagentsEnabledLabel(m.subagentsEnabled), Source: string(m.projectSource(config.FieldAgentSubagentsEnabled))}, {Label: "Permission", Value: m.service.Mode().String(), Source: string(m.projectSource(config.FieldUIPermissionMode))}, {Label: "Tool calls", Value: formatProjectLimit(m.maxToolCalls), Source: string(m.projectSource(config.FieldAgentMaxToolCalls))}}
+	facts := []projectpane.ProjectFact{{Label: "Model", Value: fallbackProjectValue(m.activeModel, "not selected"), Source: string(m.projectSource(config.FieldModelDefault))}, {Label: "Provider", Value: fallbackProjectValue(m.activeProvider, "not selected"), Source: string(m.projectSource(config.FieldModelProvider))}, {Label: "Agent", Value: fallbackProjectValue(m.agentProfile, "universal"), Source: string(m.projectSource(config.FieldAgentProfile))}, {Label: "Thinking", Value: reasoningEffortLabel(m.reasoningEffort), Source: string(m.projectSource(config.FieldAgentReasoningEffort))}, {Label: "Subagents", Value: subagentsEnabledLabel(m.subagentsEnabled), Source: string(m.projectSource(config.FieldAgentSubagentsEnabled))}, {Label: "Permission", Value: m.service.Mode().String(), Source: string(m.projectSource(config.FieldUIPermissionMode))}, {Label: "Tool calls", Value: formatProjectLimit(m.maxToolCalls), Source: string(m.projectSource(config.FieldAgentMaxToolCalls))}}
 	errorText := ""
 	if v.err != nil {
 		errorText = v.err.Error()
 	}
-	rows := pane.ProjectRows(pane.ProjectSnapshot{Width: m.width, Height: m.height, WorkDir: m.workDir, RootName: appdirs.RootDirName, ConfigName: appdirs.ConfigFileName, TrustEnv: envconfig.TrustProject, Loading: v.loading, ErrorText: errorText, Exists: state.Exists, ConfigExists: state.ConfigExists, ConfigLoaded: state.ConfigLoaded, Trusted: state.Trusted, SkillsExists: state.SkillsExists, SkillCount: state.SkillCount, Facts: facts, Notice: v.notice})
+	rows := projectpane.ProjectRows(projectpane.ProjectSnapshot{Width: m.width, Height: m.height, WorkDir: m.workDir, RootName: appdirs.RootDirName, ConfigName: appdirs.ConfigFileName, TrustEnv: envconfig.TrustProject, Loading: v.loading, ErrorText: errorText, Exists: state.Exists, ConfigExists: state.ConfigExists, ConfigLoaded: state.ConfigLoaded, Trusted: state.Trusted, SkillsExists: state.SkillsExists, SkillCount: state.SkillCount, Facts: facts, Notice: v.notice})
 	return renderModalRows(m, accentAssistant, rows)
 }
 
@@ -140,15 +140,15 @@ func (m *bubbleModel) updateProjectLoaded(message projectLoadedMsg) (tea.Model, 
 }
 
 func projectFact(label, value string) string {
-	return pane.ProjectFactLine(label, value)
+	return projectpane.ProjectFactLine(label, value)
 }
 
 func fallbackProjectValue(value, fallback string) string {
-	return pane.FallbackValue(value, fallback)
+	return projectpane.FallbackValue(value, fallback)
 }
 
 func formatProjectLimit(value int) string {
-	return pane.FormatLimit(value)
+	return projectpane.FormatLimit(value)
 }
 
 func cloneProjectProvenance(in map[string]config.ValueSource) map[string]config.ValueSource {

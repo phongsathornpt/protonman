@@ -1,19 +1,11 @@
-package pane
+package provider
 
 import (
 	"fmt"
 	"strings"
 
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
-)
-
-type Tone uint8
-
-const (
-	ToneAssistant Tone = iota
-	ToneUser
-	ToneError
-	ToneWarning
 )
 
 type ProviderEditorState uint8
@@ -62,7 +54,7 @@ type ProviderEditorSnapshot struct {
 	TotalModels    int
 }
 
-func ProviderEditorRows(snapshot ProviderEditorSnapshot) ([]string, Tone) {
+func ProviderEditorRows(snapshot ProviderEditorSnapshot) ([]string, panecommon.Tone) {
 	switch snapshot.State {
 	case ProviderEditorFetching:
 		return []string{
@@ -72,9 +64,9 @@ func ProviderEditorRows(snapshot ProviderEditorSnapshot) ([]string, Tone) {
 			tuistyle.MutedStyle.Render("  Checking endpoint & discovering model catalog"),
 			"",
 			tuistyle.MutedStyle.Render("esc cancel"),
-		}, ToneAssistant
+		}, panecommon.ToneAssistant
 	case ProviderEditorSelectModel:
-		return providerModelRows(snapshot), ToneUser
+		return providerModelRows(snapshot), panecommon.ToneUser
 	case ProviderEditorSaving:
 		description := "  Applying the selected model as active"
 		if snapshot.IsEditing && !snapshot.ActivateOnSave {
@@ -85,28 +77,28 @@ func ProviderEditorRows(snapshot ProviderEditorSnapshot) ([]string, Tone) {
 			"",
 			fmt.Sprintf("  Writing %s to %s", snapshot.Name, snapshot.UserConfigPath),
 			tuistyle.MutedStyle.Render(description),
-		}, ToneAssistant
+		}, panecommon.ToneAssistant
 	case ProviderEditorSaveError:
 		return []string{
 			tuistyle.ErrorStyle.Render("✕ Provider Save Failed"), "",
 			"  " + snapshot.ErrorMessage, "",
 			tuistyle.MutedStyle.Render("enter retry save · esc back to models · ctrl+c cancel"),
-		}, ToneError
+		}, panecommon.ToneError
 	case ProviderEditorConfirmOverwrite:
 		return []string{
 			tuistyle.WarningStyle.Render("Provider Already Exists"), "",
 			fmt.Sprintf("  %q is already configured.", strings.TrimSpace(snapshot.Name)),
 			tuistyle.MutedStyle.Render("  Continuing will replace its endpoint and API key."), "",
 			tuistyle.MutedStyle.Render("enter overwrite · esc back · ctrl+c cancel"),
-		}, ToneWarning
+		}, panecommon.ToneWarning
 	case ProviderEditorError:
 		return []string{
 			tuistyle.ErrorStyle.Render("✕ Connection Failed"), "",
 			"  " + snapshot.ErrorMessage, "",
 			tuistyle.MutedStyle.Render("enter / esc return to credentials"),
-		}, ToneError
+		}, panecommon.ToneError
 	default:
-		return providerInputRows(snapshot), ToneAssistant
+		return providerInputRows(snapshot), panecommon.ToneAssistant
 	}
 }
 
@@ -130,7 +122,7 @@ func providerModelRows(snapshot ProviderEditorSnapshot) []string {
 			tuistyle.MutedStyle.Render("f toggle filter · esc back"),
 		}
 	}
-	selected, offset, end := NormalizedWindow(snapshot.SelectedIndex, snapshot.ScrollOffset, len(snapshot.Models), 8)
+	selected, offset, end := panecommon.NormalizedWindow(snapshot.SelectedIndex, snapshot.ScrollOffset, len(snapshot.Models), 8)
 	rows := []string{tuistyle.BrandStyle.Render(title), ""}
 	if offset > 0 {
 		rows = append(rows, tuistyle.MutedStyle.Render(fmt.Sprintf("  ▲ %d more above", offset)))

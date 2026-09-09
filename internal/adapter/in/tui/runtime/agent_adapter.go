@@ -4,7 +4,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
+	agentpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/agent"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
@@ -84,7 +84,7 @@ func agentInspectionRows(m *bubbleModel) []string {
 	for id, state := range m.agentActivity {
 		activity[id] = state.String()
 	}
-	return pane.AgentRows(pane.AgentsSnapshot{Width: m.width, Height: m.height, Retained: m.agentSnapshot, SubagentsEnabled: m.subagentsEnabled, Activity: activity})
+	return agentpane.AgentRows(agentpane.AgentsSnapshot{Width: m.width, Height: m.height, Retained: m.agentSnapshot, SubagentsEnabled: m.subagentsEnabled, Activity: activity})
 }
 func (m *bubbleModel) openAgentsPane() tea.Cmd {
 	if m.bottom.has(agentsViewID) {
@@ -98,4 +98,4 @@ func (m *bubbleModel) openAgentsPane() tea.Cmd {
 	m.relayout()
 	return nil
 }
-func agentModelLabel(st agent.AgentStatus) string { return pane.AgentModelLabel(st) }
+func agentModelLabel(st agent.AgentStatus) string { return agentpane.AgentModelLabel(st) }

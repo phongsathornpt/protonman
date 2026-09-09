@@ -1,11 +1,20 @@
 // Package pane contains presentation-only TUI pane renderers and layout policy.
-package pane
+package common
 
 import (
 	"image/color"
 	"strings"
 
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
+)
+
+type Tone uint8
+
+const (
+	ToneAssistant Tone = iota
+	ToneUser
+	ToneError
+	ToneWarning
 )
 
 // LayoutMode describes vertical-space constraints for transient panes.

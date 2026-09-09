@@ -8,7 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
+	agentpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/agent"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
@@ -545,7 +545,7 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 }
 
 func formatElapsed(duration time.Duration) string {
-	return pane.FormatElapsed(duration)
+	return agentpane.FormatElapsed(duration)
 }
 
 func (m *bubbleModel) promptView() string {

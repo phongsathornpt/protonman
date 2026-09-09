@@ -6,7 +6,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/diagnostic"
 	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/toolview"
@@ -217,7 +217,7 @@ func maxInt(left int, right int) int {
 }
 
 func normalizedPickerWindow(index, offset, count, visible int) (int, int, int) {
-	return pane.NormalizedWindow(index, offset, count, visible)
+	return panecommon.NormalizedWindow(index, offset, count, visible)
 }
 
 type HistoryCellKind = tuihistory.HistoryCellKind
@@ -332,40 +332,40 @@ func FormatErrorSummary(classified ClassifiedError) string {
 	return diagnostic.FormatSummary(classified)
 }
 
-type terminalLayoutMode = pane.LayoutMode
+type terminalLayoutMode = panecommon.LayoutMode
 
 const (
-	layoutNormal  = pane.LayoutNormal
-	layoutCompact = pane.LayoutCompact
-	layoutTiny    = pane.LayoutTiny
+	layoutNormal  = panecommon.LayoutNormal
+	layoutCompact = panecommon.LayoutCompact
+	layoutTiny    = panecommon.LayoutTiny
 )
 
 func layoutModeForHeight(height int) terminalLayoutMode {
-	return pane.ModeForHeight(height)
+	return panecommon.ModeForHeight(height)
 }
 
 func pickerVisibleRows(height, maximum int) int {
-	return pane.PickerVisibleRows(height, maximum)
+	return panecommon.PickerVisibleRows(height, maximum)
 }
 
 func compactPickerRows(rows []string) []string {
-	return pane.CompactRows(rows)
+	return panecommon.CompactRows(rows)
 }
 
 func renderModalRows(m *bubbleModel, border color.Color, rows []string) string {
 	if m == nil {
-		return pane.RenderModal(defaultBubbleWidth, defaultBubbleHeight, border, rows)
+		return panecommon.RenderModal(defaultBubbleWidth, defaultBubbleHeight, border, rows)
 	}
-	return pane.RenderModal(m.width, m.height, border, rows)
+	return panecommon.RenderModal(m.width, m.height, border, rows)
 }
 
-func paneToneColor(tone pane.Tone) color.Color {
+func paneToneColor(tone panecommon.Tone) color.Color {
 	switch tone {
-	case pane.ToneUser:
+	case panecommon.ToneUser:
 		return accentUser
-	case pane.ToneError:
+	case panecommon.ToneError:
 		return accentError
-	case pane.ToneWarning:
+	case panecommon.ToneWarning:
 		return warningColor
 	default:
 		return accentAssistant

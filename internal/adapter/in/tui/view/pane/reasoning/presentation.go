@@ -1,9 +1,10 @@
-package pane
+package reasoning
 
 import (
 	"fmt"
 	"strings"
 
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
@@ -94,8 +95,8 @@ func ReasoningRows(snapshot ReasoningSnapshot) []string {
 		rows = append(rows, "", tuistyle.MutedStyle.Render("This model does not publish selectable thinking levels."))
 	}
 	rows = append(rows, "", tuistyle.MutedStyle.Render("1-5 select · ↑/↓ move · enter select · esc close · /reasoning <level>"))
-	if ModeForHeight(snapshot.Height) == LayoutTiny {
-		rows = CompactRows(rows)
+	if panecommon.ModeForHeight(snapshot.Height) == panecommon.LayoutTiny {
+		rows = panecommon.CompactRows(rows)
 	}
 	return rows
 }
