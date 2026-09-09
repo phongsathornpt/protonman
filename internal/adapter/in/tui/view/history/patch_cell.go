@@ -52,11 +52,15 @@ func (c PatchCell) RenderWidth(width int) []string {
 		header = tuistyle.GlyphToolSuccess + title
 		headerStyle = tuistyle.SuccessStyle
 	}
+	visiblePaths := c.Paths
+	if len(visiblePaths) == 1 && strings.TrimSpace(visiblePaths[0]) != "" {
+		header += " " + toolview.FormatPath(visiblePaths[0])
+		visiblePaths = nil
+	}
 	out := make([]string, 0, 1)
 	for _, line := range safeWrappedLines(header, max(1, width)) {
 		out = append(out, headerStyle.Render(line))
 	}
-	visiblePaths := c.Paths
 	hiddenPaths := 0
 	if len(visiblePaths) > 4 {
 		hiddenPaths = len(visiblePaths) - 3

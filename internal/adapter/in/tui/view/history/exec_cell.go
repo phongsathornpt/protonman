@@ -84,12 +84,24 @@ func (c ExecCell) RenderWidth(width int) []string {
 			}
 		}
 
-		if summary == "" && c.Duration > 0 {
-			header = alignExecDuration(header, execview.FormatDuration(c.Duration), width)
-		}
-		out = append(out, wrapStyledLines(header, width)...)
-		if summary != "" {
-			out = append(out, renderExecMetaLine(summary, c.Duration, width))
+		if !failed && !c.Denied {
+			meta := strings.TrimSpace(summary)
+			if duration := execview.FormatDuration(c.Duration); duration != "" {
+				if meta != "" {
+					meta += tuistyle.GlyphSep + duration
+				} else {
+					meta = duration
+				}
+			}
+			if meta != "" {
+				header += tuistyle.ToolSummaryStyle.Render(tuistyle.GlyphSep + meta)
+			}
+			out = append(out, wrapStyledLines(header, width)...)
+		} else {
+			out = append(out, wrapStyledLines(header, width)...)
+			if summary != "" {
+				out = append(out, renderExecMetaLine(summary, c.Duration, width))
+			}
 		}
 	}
 
