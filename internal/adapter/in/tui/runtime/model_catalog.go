@@ -4,72 +4,32 @@ import (
 	"strings"
 	"time"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 )
 
-type providerModelCatalog struct {
-	models    []model.RemoteModel
-	fetchedAt time.Time
-}
-
 type modelCatalogState struct {
-	entries map[string]providerModelCatalog
+	modelcatalog.State
 }
 
-func normalizeProviderKey(name string) string {
-	return strings.ToLower(strings.TrimSpace(name))
-}
-
-func (s *modelCatalogState) set(provider string, models []model.RemoteModel) {
-	s.setAt(provider, models, time.Now())
-}
-
+func normalizeProviderKey(name string) string                                { return modelcatalog.NormalizeProviderKey(name) }
+func (s *modelCatalogState) set(provider string, models []model.RemoteModel) { s.Set(provider, models) }
 func (s *modelCatalogState) setAt(provider string, models []model.RemoteModel, fetchedAt time.Time) {
-	key := normalizeProviderKey(provider)
-	if key == "" {
-		return
-	}
-	if s.entries == nil {
-		s.entries = make(map[string]providerModelCatalog)
-	}
-	s.entries[key] = providerModelCatalog{models: append([]model.RemoteModel(nil), models...), fetchedAt: fetchedAt}
+	s.SetAt(provider, models, fetchedAt)
 }
-
-func (s *modelCatalogState) delete(provider string) {
-	if s == nil || s.entries == nil {
-		return
-	}
-	delete(s.entries, normalizeProviderKey(provider))
-}
-
-func (s *modelCatalogState) models(provider string) []model.RemoteModel {
-	if s == nil || s.entries == nil {
-		return nil
-	}
-	entry, ok := s.entries[normalizeProviderKey(provider)]
-	if !ok {
-		return nil
-	}
-	return append([]model.RemoteModel(nil), entry.models...)
-}
-
+func (s *modelCatalogState) len() int                                   { return s.Len() }
+func (s *modelCatalogState) has(provider string) bool                   { return s.Has(provider) }
+func (s *modelCatalogState) delete(provider string)                     { s.Delete(provider) }
+func (s *modelCatalogState) models(provider string) []model.RemoteModel { return s.Models(provider) }
 func (s *modelCatalogState) freshModels(provider string, now time.Time, ttl time.Duration) ([]model.RemoteModel, bool) {
-	if s == nil || s.entries == nil {
-		return nil, false
-	}
-	entry, ok := s.entries[normalizeProviderKey(provider)]
-	if !ok || entry.fetchedAt.IsZero() || ttl <= 0 || now.Sub(entry.fetchedAt) >= ttl {
-		return nil, false
-	}
-	return append([]model.RemoteModel(nil), entry.models...), true
+	return s.FreshModels(provider, now, ttl)
 }
 
 func (m *bubbleModel) modelIDKnown(provider, modelID string) bool {
 	if m == nil {
 		return false
 	}
-	models := m.modelCatalogs.models(provider)
-	for _, candidate := range models {
+	for _, candidate := range m.modelCatalogs.models(provider) {
 		if strings.EqualFold(strings.TrimSpace(candidate.ID), strings.TrimSpace(modelID)) {
 			return true
 		}

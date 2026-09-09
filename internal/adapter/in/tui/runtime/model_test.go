@@ -25,12 +25,12 @@ import (
 func TestModelCatalogDeleteReleasesProviderEntry(t *testing.T) {
 	var catalogs modelCatalogState
 	catalogs.set("Alpha", []model.RemoteModel{{ID: "large-model", Name: strings.Repeat("x", 4096)}})
-	if len(catalogs.entries) != 1 {
-		t.Fatalf("entries before delete = %d, want 1", len(catalogs.entries))
+	if catalogs.len() != 1 {
+		t.Fatalf("entries before delete = %d, want 1", catalogs.len())
 	}
 	catalogs.delete(" alpha ")
-	if len(catalogs.entries) != 0 {
-		t.Fatalf("entries after delete = %d, want 0", len(catalogs.entries))
+	if catalogs.len() != 0 {
+		t.Fatalf("entries after delete = %d, want 0", catalogs.len())
 	}
 	if got := catalogs.models("alpha"); len(got) != 0 {
 		t.Fatalf("deleted provider models = %#v, want none", got)

@@ -955,7 +955,7 @@ func TestProviderDeletedDeterministicFallbackAndRunnerCleanup(t *testing.T) {
 	updated, _ := bModel.Update(providerDeletedMsg{providerName: "zeta"})
 	bModel = updated.(*bubbleModel)
 
-	if _, exists := bModel.modelCatalogs.entries["zeta"]; exists {
+	if bModel.modelCatalogs.has("zeta") {
 		t.Fatal("deleted provider catalog retained")
 	}
 	if bModel.activeProvider != "alpha" {
