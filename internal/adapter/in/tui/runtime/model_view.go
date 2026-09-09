@@ -566,8 +566,9 @@ func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
 }
 
 type modelListItem struct {
-	model   model.RemoteModel
-	current bool
+	model        model.RemoteModel
+	providerName string
+	current      bool
 }
 
 func (i modelListItem) FilterValue() string {
@@ -589,7 +590,21 @@ func (i modelListItem) Title() string {
 }
 
 func (i modelListItem) Description() string {
-	return strings.TrimSpace(i.model.ID)
+	parts := make([]string, 0, 4)
+	if name := strings.TrimSpace(i.model.Name); name != "" && !strings.EqualFold(name, i.model.ID) {
+		parts = append(parts, i.model.ID)
+	}
+	resolved := model.ResolveRemoteMetadata(i.providerName, i.model)
+	if limits := formatModelTokenLimits(resolved.Profile.ContextWindow, resolved.Profile.MaxInputTokens, resolved.Profile.MaxOutputTokens); limits != "" {
+		parts = append(parts, limits)
+	}
+	if len(resolved.Features) > 0 {
+		parts = append(parts, strings.Join(resolved.Features, " · "))
+	}
+	if reasoning := remoteModelReasoningSummary(i.providerName, i.model, true); reasoning != "" {
+		parts = append(parts, reasoning)
+	}
+	return strings.Join(parts, " · ")
 }
 
 func (v *modelSelectPaneView) initPicker(delegates ...list.DefaultDelegate) {
@@ -604,6 +619,7 @@ func (v *modelSelectPaneView) initPicker(delegates ...list.DefaultDelegate) {
 	v.picker = list.New(nil, delegate, defaultBubbleWidth-8, defaultBubbleHeight-8)
 	v.picker.DisableQuitKeybindings()
 	v.picker.SetStatusBarItemName("model", "models")
+	v.picker.FilterInput.Prompt = "Search: "
 	v.pickerReady = true
 }
 
@@ -623,7 +639,7 @@ func (v *modelSelectPaneView) setModels(models []model.RemoteModel, activeModel 
 	v.allModels = append([]model.RemoteModel(nil), models...)
 	items := make([]list.Item, 0, len(v.allModels))
 	for _, md := range v.allModels {
-		items = append(items, modelListItem{model: md, current: strings.EqualFold(md.ID, activeModel)})
+		items = append(items, modelListItem{model: md, providerName: v.activeProviderName(), current: strings.EqualFold(md.ID, activeModel)})
 	}
 	_ = v.picker.SetItems(items)
 	v.applyFilter(activeModel)
@@ -637,6 +653,9 @@ func (v *modelSelectPaneView) applyFilter(activeModel string) {
 		v.picker.ResetFilter()
 	} else {
 		v.picker.SetFilterText(v.filter)
+		if v.filtering {
+			v.picker.SetFilterState(list.Filtering)
+		}
 	}
 	v.resetSelection(activeModel)
 }
@@ -653,7 +672,7 @@ func (v *modelSelectPaneView) resetSelection(activeModel string) {
 		v.initPicker()
 		items := make([]list.Item, 0, len(source))
 		for _, md := range source {
-			items = append(items, modelListItem{model: md, current: strings.EqualFold(md.ID, activeModel)})
+			items = append(items, modelListItem{model: md, providerName: v.activeProviderName(), current: strings.EqualFold(md.ID, activeModel)})
 		}
 		_ = v.picker.SetItems(items)
 	}
@@ -682,6 +701,7 @@ func (v *modelSelectPaneView) syncPickerProjection() {
 	v.index = v.picker.Index()
 	v.offset = v.picker.Paginator.Page * v.picker.Paginator.PerPage
 	v.filter = v.picker.FilterValue()
+	v.filtering = v.picker.SettingFilter()
 }
 
 func (v *modelSelectPaneView) activeProviderName() string {
@@ -755,36 +775,41 @@ func (m *bubbleModel) openModelSelectPane() tea.Cmd {
 }
 
 func (v *modelSelectPaneView) Render(m *bubbleModel) string {
-	items := make([]pane.ModelItem, 0, len(v.models))
+	v.initPicker()
+	if m == nil {
+		return ""
+	}
 	providerName := v.activeProviderName()
-	for _, md := range v.models {
-		label := strings.TrimSpace(md.Name)
-		if label == "" {
-			label = md.ID
-		}
-		details := make([]string, 0, 4)
-		resolved := model.ResolveRemoteMetadata(providerName, md)
-		if label != md.ID && strings.TrimSpace(md.ID) != "" {
-			details = append(details, md.ID)
-		}
-		if limits := formatModelTokenLimits(resolved.Profile.ContextWindow, resolved.Profile.MaxInputTokens, resolved.Profile.MaxOutputTokens); limits != "" {
-			details = append(details, limits)
-		}
-		if len(resolved.Features) > 0 {
-			details = append(details, strings.Join(resolved.Features, " · "))
-		}
-		if reasoning := remoteModelReasoningSummary(providerName, md, true); reasoning != "" {
-			details = append(details, reasoning)
-		}
-		isCurrent := m != nil && strings.EqualFold(md.ID, m.activeModel) && strings.EqualFold(providerName, m.activeProvider)
-		items = append(items, pane.ModelItem{ID: md.ID, Label: label, Free: model.IsFreeModel(md.ID), Current: isCurrent, Details: strings.Join(details, " · ")})
+	v.picker.Title = "Select Model · " + providerName
+	if len(v.providerNames) > 1 {
+		v.picker.Title += " · tab provider"
 	}
-	errorText := ""
+	v.picker.SetSize(maxInt(12, m.width-8), maxInt(5, min(16, m.height-4)))
+	mode := layoutModeForHeight(m.height)
+	v.picker.SetShowStatusBar(mode == layoutNormal)
+	v.picker.SetShowPagination(mode != layoutTiny)
+	v.picker.SetShowHelp(mode != layoutTiny)
+	delegate := list.NewDefaultDelegate()
+	delegate.SetSpacing(0)
+	delegate.ShowDescription = mode == layoutNormal
+	v.picker.SetDelegate(delegate)
+	if v.loading {
+		rows := []string{brandStyle.Render("Select Model · " + providerName), "", mutedStyle.Render("Loading models..."), "", mutedStyle.Render("esc close")}
+		return renderModalRows(m, accentAssistant, rows)
+	}
 	if v.err != nil {
-		errorText = v.err.Error()
+		rows := []string{brandStyle.Render("Select Model · " + providerName), "", errorStyle.Render("Failed to load models"), mutedStyle.Render(truncateWithEllipsis(v.err.Error(), maxInt(8, m.width-8))), "", mutedStyle.Render("r retry · p providers · esc close")}
+		return renderModalRows(m, accentAssistant, rows)
 	}
-	rows := pane.ModelRows(pane.ModelSnapshot{Width: m.width, Height: m.height, Index: v.index, Offset: v.offset, ProviderName: providerName, ProviderCount: len(v.providerNames), Models: items, Filter: v.filter, Filtering: v.filtering, Loading: v.loading, ErrorText: errorText})
-	return renderModalRows(m, accentAssistant, rows)
+	if len(v.picker.Items()) == 0 && !v.picker.SettingFilter() && !v.picker.IsFiltered() {
+		rows := []string{brandStyle.Render("Select Model · " + providerName), "", mutedStyle.Render("No models available for the selected provider."), "", mutedStyle.Render("a add provider · r retry · esc close")}
+		return renderModalRows(m, accentAssistant, rows)
+	}
+	if len(v.picker.VisibleItems()) == 0 && strings.TrimSpace(v.picker.FilterValue()) != "" {
+		rows := []string{brandStyle.Render("Select Model · " + providerName), mutedStyle.Render("Search: " + v.picker.FilterValue()), "", mutedStyle.Render("No models match the current search."), "", mutedStyle.Render("esc clear filter")}
+		return renderModalRows(m, accentAssistant, rows)
+	}
+	return renderModalRows(m, accentAssistant, strings.Split(v.picker.View(), "\n"))
 }
 
 func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
@@ -793,59 +818,32 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg)
 		m.bottom.remove(modelSelectViewID)
 		return true, nil
 	}
-	defer func() {
-		visible := pickerVisibleRows(m.height, maxModelSelectRows)
-		v.index, v.offset, _ = normalizedPickerWindow(v.index, v.offset, len(v.models), visible)
-	}()
-	if v.filtering {
-		switch message.String() {
-		case "esc":
-			if v.filter != "" {
-				v.filter = ""
-				v.filtering = false
-				v.applyFilter(m.activeModel)
-				return true, nil
-			}
-			v.filtering = false
-			return true, nil
-		case "backspace", "ctrl+h", "delete":
-			runes := []rune(v.filter)
-			if len(runes) > 0 {
-				v.filter = string(runes[:len(runes)-1])
-				v.applyFilter(m.activeModel)
-			}
-			return true, nil
-		case "enter":
-			if len(v.models) > 0 && v.index >= 0 && v.index < len(v.models) {
-				selected := v.models[v.index]
-				provName := model.DefaultProtonmanName
-				if v.providerIndex >= 0 && v.providerIndex < len(v.providerNames) {
-					provName = v.providerNames[v.providerIndex]
-				}
-				cmd := saveDefaultModelCmd(provName, selected.ID)
-				m.bottom.remove(modelSelectViewID)
-				return true, cmd
-			}
-			v.filtering = false
-			return true, nil
-		default:
-			if message.Text != "" {
-				v.filter += message.Text
-				v.applyFilter(m.activeModel)
-				return true, nil
-			}
-		}
+	v.initPicker()
+	if v.picker.SettingFilter() {
+		updated, cmd := v.picker.Update(message)
+		v.picker = updated
+		v.syncPickerProjection()
+		return true, cmd
 	}
 	switch message.String() {
 	case "/":
-		v.filtering = true
+		v.picker.SetFilterState(list.Filtering)
+		v.syncPickerProjection()
 		return true, nil
 	case "ctrl+u":
-		v.filter = ""
-		v.filtering = false
-		v.applyFilter(m.activeModel)
+		v.picker.ResetFilter()
+		v.syncPickerProjection()
 		return true, nil
-	case "esc", "q":
+	case "esc":
+		if v.picker.IsFiltered() {
+			v.picker.ResetFilter()
+			v.syncPickerProjection()
+			return true, nil
+		}
+		v.cancelFetch()
+		m.bottom.remove(modelSelectViewID)
+		return true, nil
+	case "q":
 		v.cancelFetch()
 		m.bottom.remove(modelSelectViewID)
 		return true, nil
