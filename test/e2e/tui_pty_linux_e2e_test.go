@@ -335,6 +335,71 @@ func TestE2ETUIBracketedUnicodePasteSurvivesResize(t *testing.T) {
 	}
 }
 
+func TestE2ETUIExitsWhenPTYDetachesDuringRunningTool(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+	master, slave := openLinuxPTY(t, 80, 24)
+	defer slave.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, protonBin, "-y")
+	cmd.Dir = ws
+	cmd.Env = append(os.Environ(), "PROTONMAN_HOME="+home, "TERM=xterm-256color")
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start Protonman on PTY: %v", err)
+	}
+	_ = slave.Close()
+
+	var output bytes.Buffer
+	ready := make(chan struct{})
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			n, err := master.Read(buf)
+			if n > 0 {
+				_, _ = output.Write(buf[:n])
+				if strings.Contains(output.String(), "\x1b[?2004h") {
+					select {
+					case <-ready:
+					default:
+						close(ready)
+					}
+				}
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	select {
+	case <-ready:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for TUI raw mode")
+	}
+	if _, err := master.Write([]byte("!sleep 3; echo should-not-survive\r")); err != nil {
+		t.Fatalf("start running tool: %v", err)
+	}
+	time.Sleep(150 * time.Millisecond)
+	if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
+		t.Fatalf("TUI exited before detach: %v", err)
+	}
+	_ = master.Close()
+
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("TUI remained alive after PTY detached during running tool")
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("PTY detach required context timeout: %v", ctx.Err())
+	}
+}
+
 func TestE2ETUIExitsWhenPTYDetaches(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
