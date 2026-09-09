@@ -72,7 +72,7 @@ func (m *bubbleModel) promptMetadataView() string {
 	if m == nil {
 		return ""
 	}
-	parts := make([]string, 0, 4)
+	parts := make([]string, 0, 3)
 	if model := strings.TrimSpace(m.activeModel); model != "" {
 		parts = append(parts, model)
 	}
@@ -82,9 +82,18 @@ func (m *bubbleModel) promptMetadataView() string {
 	if workspace := formatWorkspaceDisplay(m.workDir); workspace != "" {
 		parts = append(parts, workspace)
 	}
-	parts = append(parts, m.promptModeLabel())
-	line := strings.Join(parts, " · ")
-	return mutedStyle.Render(truncateWithEllipsis(line, maxInt(1, m.width-2)))
+	available := maxInt(1, m.width-2)
+	mode := m.promptModeLabel()
+	if len(parts) == 0 {
+		return mutedStyle.Render(truncateWithEllipsis(mode, available))
+	}
+	suffix := " · " + mode
+	leftWidth := available - len(suffix)
+	if leftWidth <= 0 {
+		return mutedStyle.Render(truncateWithEllipsis(mode, available))
+	}
+	left := truncateWithEllipsis(strings.Join(parts, " · "), leftWidth)
+	return mutedStyle.Render(left + suffix)
 }
 
 func (m *bubbleModel) promptModeLabel() string {

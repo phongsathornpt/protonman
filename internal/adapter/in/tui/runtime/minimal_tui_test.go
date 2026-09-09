@@ -114,6 +114,10 @@ func TestMinimalPromptMetadataFitsNarrowTerminal(t *testing.T) {
 	m.agentProfile = "engineer"
 	m.workDir = "/workspace/a/very/long/path"
 	m.resize(40, 12)
+	plain := ansi.Strip(m.promptMetadataView())
+	if !strings.Contains(plain, "ask") {
+		t.Fatalf("narrow prompt metadata dropped mode: %q", plain)
+	}
 	for _, line := range strings.Split(m.promptView(), "\n") {
 		if got := lipgloss.Width(line); got > 40 {
 			t.Fatalf("prompt line width=%d exceeds 40: %q", got, line)
