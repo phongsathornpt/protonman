@@ -400,7 +400,7 @@ tool_permission_timeout = "2m"
 tool_execution_timeout = "2m"
 model_request_timeout = "5m"
 model_discovery_timeout = "10s"
-web_fetch_timeout = "10s"
+webFetchTimeout = "10s"
 model_catalog_ttl = "2m"
 
 # Active model preferences

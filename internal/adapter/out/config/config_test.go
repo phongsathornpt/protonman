@@ -548,7 +548,7 @@ tool_permission_timeout = "30s"
 tool_execution_timeout = "90s"
 model_request_timeout = "4m"
 model_discovery_timeout = "8s"
-web_fetch_timeout = "12s"
+webFetchTimeout = "12s"
 model_catalog_ttl = "75s"
 `)
 	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})

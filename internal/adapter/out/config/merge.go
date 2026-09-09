@@ -173,7 +173,7 @@ func mergeDocument(document fileDocument, snapshot *Snapshot, source ValueSource
 		"runtime.tool_execution_timeout":  {document.Runtime.ToolExecutionTimeout, func(d time.Duration) { snapshot.Runtime.ToolExecutionTimeout = d }},
 		"runtime.model_request_timeout":   {document.Runtime.ModelRequestTimeout, func(d time.Duration) { snapshot.Runtime.ModelRequestTimeout = d }},
 		"runtime.model_discovery_timeout": {document.Runtime.ModelDiscoveryTimeout, func(d time.Duration) { snapshot.Runtime.ModelDiscoveryTimeout = d }},
-		"runtime.web_fetch_timeout":       {document.Runtime.WebFetchTimeout, func(d time.Duration) { snapshot.Runtime.WebFetchTimeout = d }},
+		"runtime.webFetchTimeout":         {document.Runtime.WebFetchTimeout, func(d time.Duration) { snapshot.Runtime.WebFetchTimeout = d }},
 		"runtime.model_catalog_ttl":       {document.Runtime.ModelCatalogTTL, func(d time.Duration) { snapshot.Runtime.ModelCatalogTTL = d }},
 	} {
 		if target.raw == nil {

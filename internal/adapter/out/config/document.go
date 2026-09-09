@@ -39,7 +39,7 @@ type fileRuntime struct {
 	ToolExecutionTimeout  *string `toml:"tool_execution_timeout,omitempty"`
 	ModelRequestTimeout   *string `toml:"model_request_timeout,omitempty"`
 	ModelDiscoveryTimeout *string `toml:"model_discovery_timeout,omitempty"`
-	WebFetchTimeout       *string `toml:"web_fetch_timeout,omitempty"`
+	WebFetchTimeout       *string `toml:"webFetchTimeout,omitempty"`
 	ModelCatalogTTL       *string `toml:"model_catalog_ttl,omitempty"`
 }
 
