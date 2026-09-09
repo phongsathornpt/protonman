@@ -62,6 +62,12 @@ Inbound adapters consume application ports such as `app.Conversation`, `app.Agen
 those boundaries to persist configuration, discover provider models, access session
 filesystem stores, or control concrete coordinator/turn implementations directly.
 
+The TUI root model is an event orchestrator. Bubble Tea `Update` owns state transitions and
+layout reconciliation; `View` is pure rendering. Layout, pane, and conversation-viewport
+state are grouped by ownership. Pane renderers consume immutable presentation snapshots
+instead of the root runtime model, and transcript cells use one width-aware render contract
+so viewport width remains the rendering source of truth.
+
 ## 3. Application Layer (`internal/app/`)
 
 The application layer exposes use cases needed by inbound adapters and hides concrete

@@ -573,6 +573,14 @@ active tool and target. Scrolling must preserve a single composer and semantic
 transcript position while streaming updates continue. Idle footer help should expose
 primary actions only; secondary shortcuts belong in contextual views or `/help`.
 
+TUI rendering is intentionally side-effect free. `View()` and pane `Render` methods must
+only read presentation snapshots; they must not resize viewports, alter scroll position,
+change pane stacks, or mutate runtime/domain state. Runtime events request layout changes,
+and the root Bubble Tea `Update` boundary reconciles layout once per event. Conversation
+viewport state explicitly distinguishes following the live tail from reading older content,
+so streaming updates preserve semantic scroll anchors. Pane rendering receives
+`paneRenderContext` rather than the root model; new panes should preserve that boundary.
+
 When changing TUI behavior, test at the smallest useful layer:
 
 - pure renderer/state unit tests
