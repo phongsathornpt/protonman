@@ -125,10 +125,6 @@ func (s toolDispatchState) canonicalToolName(name string) string {
 	if _, ok := s.canonicalNames[name]; ok {
 		return name
 	}
-	legacyCanonical := tool.CanonicalName(name)
-	if _, ok := s.canonicalNames[legacyCanonical]; ok {
-		return legacyCanonical
-	}
 	return name
 }
 

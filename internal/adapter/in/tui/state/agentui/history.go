@@ -123,7 +123,6 @@ func ParseToolResult(body string) ToolResult {
 }
 
 func (t *Tracker) TouchOperation(name string, call tool.Call, state *history.HistoryState) {
-	call = tool.NormalizeLegacyCall(call)
 	if call.Name != "subagent" {
 		return
 	}
@@ -158,7 +157,7 @@ func (t *Tracker) TouchOperation(name string, call tool.Call, state *history.His
 }
 
 func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, state *history.HistoryState) bool {
-	publicName := tool.CanonicalName(name)
+	publicName := strings.TrimSpace(name)
 	parsed := ParseToolResult(body)
 	action := strings.ToLower(strings.TrimSpace(parsed.Action))
 	if action == "" {
@@ -311,7 +310,7 @@ func (t *Tracker) ApplyToolFailure(name string, result tool.Result, err error, s
 	}
 	delete(t.pendingActions, result.CallID)
 	delete(t.pendingRuns, result.CallID)
-	if tool.CanonicalName(name) != "subagent" || action == "" {
+	if strings.TrimSpace(name) != tool.NameSubagent || action == "" {
 		return false
 	}
 	id := t.pendingOps[result.CallID]
@@ -340,7 +339,7 @@ func (t *Tracker) ApplyToolFailure(name string, result tool.Result, err error, s
 }
 
 func legacySubagentAction(name string) string {
-	call := tool.NormalizeLegacyCall(tool.Call{Name: name, Arguments: json.RawMessage(`{}`)})
+	call := tool.Call{Name: strings.TrimSpace(name), Arguments: json.RawMessage(`{}`)}
 	if call.Name != "subagent" {
 		return ""
 	}

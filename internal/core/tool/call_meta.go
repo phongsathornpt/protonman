@@ -26,7 +26,7 @@ func (c Call) Kind() Kind {
 
 // Title produces a human-readable title describing what the tool call is doing.
 func (c Call) Title() string {
-	canonical := NormalizeLegacyCall(c)
+	canonical := c
 	if spec, ok := metadataForName(canonical.Name); ok && spec.title != nil {
 		return spec.title(canonical.ArgumentsMap())
 	}
@@ -36,7 +36,7 @@ func (c Call) Title() string {
 // Target inspects the tool call and returns a human-facing target
 // string (e.g. URL, filepath, pattern, command, subagent ID).
 func (c Call) Target() string {
-	canonical := NormalizeLegacyCall(c)
+	canonical := c
 	args := canonical.ArgumentsMap()
 	if spec, ok := metadataForName(canonical.Name); ok && spec.target != nil {
 		return spec.target(args)
@@ -69,7 +69,7 @@ func (d Definition) DisplayName() string {
 
 // AffectedPaths returns all file paths affected or accessed by the tool call.
 func (c Call) AffectedPaths() []string {
-	canonical := NormalizeLegacyCall(c)
+	canonical := c
 	args := canonical.ArgumentsMap()
 	if spec, ok := metadataForName(canonical.Name); ok && spec.affectedPaths != nil {
 		return spec.affectedPaths(args)

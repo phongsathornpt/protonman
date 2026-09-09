@@ -4,6 +4,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"strings"
 )
 
 // CapabilityRegistry filters the primary agent tool surface according to the
@@ -60,7 +61,7 @@ func (r *CapabilityRegistry) Definitions() []tool.Definition {
 		if !visibleSubagentTool(def.Name, enabled, hasAgents) {
 			continue
 		}
-		if tool.CanonicalName(def.Name) == "subagent" && !enabled {
+		if strings.TrimSpace(def.Name) == tool.NameSubagent && !enabled {
 			def = lifecycleOnlySubagentDefinition(def)
 		}
 		out = append(out, def)
@@ -99,7 +100,7 @@ func (r *CapabilityRegistry) capabilityState() (enabled, hasAgents bool) {
 }
 
 func visibleSubagentTool(name string, enabled, hasAgents bool) bool {
-	if tool.CanonicalName(name) != "subagent" {
+	if strings.TrimSpace(name) != tool.NameSubagent {
 		return true
 	}
 	return enabled || hasAgents

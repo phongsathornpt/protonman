@@ -283,7 +283,7 @@ func (r *Registry) Lookup(name string) (tool.Handler, bool) {
 	if ok {
 		return handler, true
 	}
-	handler, ok = r.handlers[tool.CanonicalName(name)]
+	handler, ok = r.handlers[name]
 	return handler, ok
 }
 
@@ -293,7 +293,7 @@ func (r *Registry) CompiledValidators(name string) (input, output *sdk.ToolSchem
 	defer r.mu.RUnlock()
 	validators, ok := r.validators[name]
 	if !ok {
-		validators, ok = r.validators[tool.CanonicalName(name)]
+		validators, ok = r.validators[name]
 	}
 	if !ok {
 		return nil, nil, false

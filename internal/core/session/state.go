@@ -216,7 +216,7 @@ func compactToolHistory(messages []Message) []Message {
 }
 
 func compactToolResult(toolName string, message Message, found bool) string {
-	toolName = tool.CanonicalName(strings.TrimSpace(toolName))
+	toolName = strings.TrimSpace(toolName)
 	if toolName == "" {
 		toolName = "unknown"
 	}
@@ -227,7 +227,7 @@ func compactToolResult(toolName string, message Message, found bool) string {
 	var result tool.Result
 	if err := json.Unmarshal([]byte(message.Content), &result); err == nil && (result.ToolName != "" || result.CallID != "" || result.Failure != nil) {
 		if result.ToolName != "" {
-			toolName = tool.CanonicalName(result.ToolName)
+			toolName = strings.TrimSpace(result.ToolName)
 		}
 		if result.Failure != nil {
 			return fmt.Sprintf("Historical tool %s failed [%s]: %s", toolName, result.Failure.Code, result.Failure.Message)
@@ -323,7 +323,7 @@ func fromModelToolCalls(calls []sdk.ToolCall) []ToolCall {
 	}
 	redacted := make([]ToolCall, 0, len(calls))
 	for _, call := range calls {
-		redacted = append(redacted, ToolCall{ID: call.ID, Name: tool.CanonicalName(call.Name)})
+		redacted = append(redacted, ToolCall{ID: call.ID, Name: strings.TrimSpace(call.Name)})
 	}
 	return redacted
 }

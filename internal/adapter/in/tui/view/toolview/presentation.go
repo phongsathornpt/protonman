@@ -33,7 +33,7 @@ func KindGlyph(kind tool.Kind, name string) string {
 	case tool.KindWeb:
 		return tuistyle.GlyphWeb
 	case tool.KindRead:
-		if tool.CanonicalName(name) == "ls" {
+		if strings.TrimSpace(name) == tool.NameLS {
 			return tuistyle.GlyphDir
 		}
 		return tuistyle.GlyphRead
@@ -51,7 +51,7 @@ func KindGlyph(kind tool.Kind, name string) string {
 		return tuistyle.GlyphAgent
 	}
 
-	if tool.CanonicalName(name) == "skill" {
+	if strings.TrimSpace(name) == tool.NameSkill {
 		return tuistyle.GlyphSkill
 	}
 	return tuistyle.GlyphGeneric
@@ -79,12 +79,12 @@ func SummarizeOutput(name string, kind tool.Kind, target string, body string, ex
 
 	switch kind {
 	case tool.KindWeb:
-		if tool.CanonicalName(name) == "web" && strings.HasPrefix(strings.TrimSpace(target), `"`) {
+		if strings.TrimSpace(name) == tool.NameWeb && strings.HasPrefix(strings.TrimSpace(target), `"`) {
 			return summarizeWebSearch(bodyTrimmed)
 		}
 		return summarizeWebFetch(bodyTrimmed, truncated)
 	case tool.KindRead:
-		if tool.CanonicalName(name) == "ls" {
+		if strings.TrimSpace(name) == tool.NameLS {
 			return summarizeListDir(bodyTrimmed, truncated)
 		}
 		return summarizeReadFileTarget(target, bodyTrimmed, truncated)
@@ -95,7 +95,7 @@ func SummarizeOutput(name string, kind tool.Kind, target string, body string, ex
 	case tool.KindEdit:
 		return summarizeEdit(name, bodyTrimmed)
 	case tool.KindTask:
-		if tool.CanonicalName(name) == "todo" {
+		if strings.TrimSpace(name) == tool.NameTodo {
 			var payload map[string]any
 			if json.Unmarshal([]byte(bodyTrimmed), &payload) == nil {
 				if _, ok := payload["items"]; ok {
@@ -112,7 +112,7 @@ func SummarizeOutput(name string, kind tool.Kind, target string, body string, ex
 		}
 	}
 
-	if tool.CanonicalName(name) == "skill" {
+	if strings.TrimSpace(name) == tool.NameSkill {
 		if skillName := ExtractSkillContentName(body); skillName != "" {
 			return fmt.Sprintf("Activated skill %q", skillName)
 		}
@@ -138,7 +138,7 @@ func summarizeAgentTool(name, body string) string {
 	action, _ := payload["action"].(string)
 	action = strings.ToLower(strings.TrimSpace(action))
 	if action == "" {
-		call := tool.NormalizeLegacyCall(tool.Call{Name: name, Arguments: json.RawMessage(`{}`)})
+		call := tool.Call{Name: strings.TrimSpace(name), Arguments: json.RawMessage(`{}`)}
 		if call.Name == "subagent" {
 			action = strings.ToLower(strings.TrimSpace(tool.ExtractString(call.ArgumentsMap(), "action")))
 		}
@@ -619,7 +619,7 @@ func ShouldSuppressBody(kind tool.Kind, name string) bool {
 	case tool.KindWeb, tool.KindRead, tool.KindGit, tool.KindAgent, tool.KindTask, tool.KindEdit:
 		return true
 	}
-	switch tool.CanonicalName(name) {
+	switch strings.TrimSpace(name) {
 	case "skill", "subagent", "todo", "edit":
 		return true
 	default:

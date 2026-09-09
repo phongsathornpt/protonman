@@ -16,7 +16,6 @@ func ToolKindForName(name string) ToolKind {
 
 // ToolKindForCall classifies canonical capability actions without depending on legacy tool names.
 func ToolKindForCall(call tool.Call) ToolKind {
-	call = tool.NormalizeLegacyCall(call)
 	args := call.ArgumentsMap()
 	if call.Name == "web" {
 		if strings.EqualFold(tool.ExtractString(args, "action"), "search") {

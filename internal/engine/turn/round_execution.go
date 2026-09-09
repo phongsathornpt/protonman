@@ -93,7 +93,7 @@ func (l *Loop) runRound(
 		call, err := tool.NewCall(
 			requestedCall.ID,
 			canonicalName,
-			tool.NormalizeLegacyArguments(requestedCall.Name, requestedCall.Arguments),
+			requestedCall.Arguments,
 		)
 		if err != nil {
 			slog.DebugContext(roundContext, "turn tool-call translation failed",

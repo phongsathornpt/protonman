@@ -315,7 +315,7 @@ func TestDefaultRegistryContainsCodingTools(t *testing.T) {
 	}
 }
 
-func TestDefaultRegistryDoesNotPublishLegacyToolNames(t *testing.T) {
+func TestDefaultRegistryPublishesCanonicalToolNames(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
 	defer coord.Close()
@@ -325,9 +325,14 @@ func TestDefaultRegistryDoesNotPublishLegacyToolNames(t *testing.T) {
 	}
 	definitions := registry.Definitions()
 	definitions = append(definitions, todotool.NewTodo(nil).Definition(), skilltool.NewActivateSkill(nil, workspaceRoot).Definition())
+	allowed := map[string]bool{
+		tool.NameRead: true, tool.NameLS: true, tool.NameFind: true, tool.NameMath: true,
+		tool.NameGit: true, tool.NameEdit: true, tool.NameWeb: true, tool.NameTodo: true,
+		tool.NameSkill: true, tool.NameSubagent: true, tool.NameBash: true, "grep": true,
+	}
 	for _, definition := range definitions {
-		if tool.IsLegacyName(definition.Name) {
-			t.Fatalf("legacy tool leaked into public registry: %q", definition.Name)
+		if !allowed[definition.Name] {
+			t.Fatalf("unexpected public tool name: %q", definition.Name)
 		}
 	}
 }

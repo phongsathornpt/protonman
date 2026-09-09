@@ -104,7 +104,7 @@ func (c ToolCell) RenderWidth(width int) []string {
 			targetStr = " " + toolview.FormatPath(c.Target)
 		}
 		headerLine = tuistyle.ErrorStyle.Render(tuistyle.GlyphToolError) + tuistyle.MutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + tuistyle.ErrorStyle.Render(tuistyle.GlyphSep+string(c.FailureCode))
-	} else if tool.CanonicalName(c.Name) == "skill" {
+	} else if strings.TrimSpace(c.Name) == tool.NameSkill {
 		target := c.Target
 		if target == "" {
 			if skillName := toolview.ExtractSkillContentName(c.Body); skillName != "" {
@@ -138,7 +138,7 @@ func (c ToolCell) RenderWidth(width int) []string {
 	}
 
 	// Read file excerpt preview
-	if !c.Running && tool.CanonicalName(c.Name) == "read" && !c.Denied && c.FailureCode == "" && c.Body != "" {
+	if !c.Running && strings.TrimSpace(c.Name) == tool.NameRead && !c.Denied && c.FailureCode == "" && c.Body != "" {
 		if excerpt := toolview.ExtractReadFileExcerpt(c.Body); excerpt != "" {
 			out = append(out, tuistyle.ToolExcerptStyle.Render("  ↳ "+excerpt))
 		}
@@ -177,7 +177,7 @@ func (c ToolCell) historyToolID() string    { return c.CallID }
 func (c ToolCell) historyToolName() string  { return c.Name }
 func (c ToolCell) historyToolRunning() bool { return c.Running }
 func (c ToolCell) bodyLines() []string {
-	if tool.CanonicalName(c.Name) == "skill" {
+	if strings.TrimSpace(c.Name) == tool.NameSkill {
 		return formatSkillToolBody(c.Body, c.ExitCode, c.Truncated, c.Denied, c.FailureCode)
 	}
 	return resultBodyLines(c.Body, c.ExitCode, c.Truncated, c.Denied, c.FailureCode)

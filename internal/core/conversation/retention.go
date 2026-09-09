@@ -186,7 +186,7 @@ func toolResultIndex(results []sdk.Message, callID string) int {
 }
 
 func historicalToolMessage(toolName string, message sdk.Message, found bool, limit int) sdk.Message {
-	name := tool.CanonicalName(strings.TrimSpace(toolName))
+	name := strings.TrimSpace(toolName)
 	if name == "" {
 		name = "unknown"
 	}
@@ -199,7 +199,7 @@ func historicalToolMessage(toolName string, message sdk.Message, found bool, lim
 func historicalToolResultText(name, content string, limit int) string {
 	if rawToolName, ok := canonicalJSONStringField(content, "tool_name"); ok {
 		if decodedName, err := strconv.Unquote(rawToolName); err == nil {
-			if canonical := tool.CanonicalName(strings.TrimSpace(decodedName)); canonical != "" {
+			if canonical := strings.TrimSpace(decodedName); canonical != "" {
 				name = canonical
 			}
 		}
@@ -213,7 +213,7 @@ func historicalToolResultText(name, content string, limit int) string {
 	}
 	var result tool.Result
 	if err := json.Unmarshal([]byte(content), &result); err == nil && (result.ToolName != "" || result.CallID != "" || result.Failure != nil) {
-		if canonical := tool.CanonicalName(strings.TrimSpace(result.ToolName)); canonical != "" {
+		if canonical := strings.TrimSpace(result.ToolName); canonical != "" {
 			name = canonical
 		}
 		if result.Failure != nil {

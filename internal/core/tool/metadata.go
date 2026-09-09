@@ -40,7 +40,7 @@ func metadataForName(name string) (callMetadata, bool) {
 	if spec, ok := builtinMetadata[name]; ok {
 		return spec, true
 	}
-	spec, ok := builtinMetadata[CanonicalName(name)]
+	spec, ok := builtinMetadata[strings.TrimSpace(name)]
 	return spec, ok
 }
 

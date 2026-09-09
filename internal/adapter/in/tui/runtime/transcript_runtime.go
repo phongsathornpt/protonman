@@ -60,7 +60,7 @@ func toolFailureSuggestions(toolName string, code tool.ErrorCode) []string {
 	var suggestions []string
 	switch code {
 	case tool.ErrorCodeNotFound:
-		if tool.CanonicalName(toolName) == "read" {
+		if strings.TrimSpace(toolName) == tool.NameRead {
 			suggestions = append(suggestions, "ls the parent directory or find the filename")
 		}
 	case tool.ErrorCodeProtectedPath:
@@ -76,7 +76,6 @@ func toolFailureSuggestions(toolName string, code tool.ErrorCode) []string {
 }
 
 func (m *bubbleModel) appendToolCall(call tool.Call) {
-	call = tool.NormalizeLegacyCall(call)
 	state := m.ensureHistoryState()
 	var kind tool.Kind
 	if handler, ok := m.registry.Lookup(call.Name); ok {
@@ -131,7 +130,7 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 	}
 	state := m.ensureHistoryState()
 	body := result.Output
-	name = tool.CanonicalName(name)
+	name = strings.TrimSpace(name)
 	if len(result.StructuredOutput) > 0 && (name == "todo" || name == "subagent") {
 		body = string(result.StructuredOutput)
 	}
