@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"context"
 	"errors"
@@ -183,21 +184,21 @@ func TestModelPickerCustomProviderDoesNotUseProtonmanFallback(t *testing.T) {
 
 func TestModelPickerResetSelectionAnchorsActiveModel(t *testing.T) {
 	view := &modelSelectPaneView{models: []model.RemoteModel{{ID: "one"}, {ID: "two"}, {ID: "three"}}}
-	view.index = 2
-	view.offset = 2
+	view.resetSelection("")
+	view.picker.Select(2)
 	view.resetSelection("two")
-	if view.index != 1 || view.offset != 0 {
-		t.Fatalf("selection = index:%d offset:%d, want 1/0", view.index, view.offset)
+	if view.picker.Index() != 1 || (view.picker.Paginator.Page*view.picker.Paginator.PerPage) != 0 {
+		t.Fatalf("selection = index:%d offset:%d, want 1/0", view.picker.Index(), (view.picker.Paginator.Page * view.picker.Paginator.PerPage))
 	}
 }
 
 func TestModelPickerResetSelectionFallsBackToFirstModel(t *testing.T) {
 	view := &modelSelectPaneView{models: []model.RemoteModel{{ID: "one"}, {ID: "two"}}}
-	view.index = 1
-	view.offset = 1
+	view.resetSelection("")
+	view.picker.Select(1)
 	view.resetSelection("missing")
-	if view.index != 0 || view.offset != 0 {
-		t.Fatalf("selection = index:%d offset:%d, want 0/0", view.index, view.offset)
+	if view.picker.Index() != 0 || (view.picker.Paginator.Page*view.picker.Paginator.PerPage) != 0 {
+		t.Fatalf("selection = index:%d offset:%d, want 0/0", view.picker.Index(), (view.picker.Paginator.Page * view.picker.Paginator.PerPage))
 	}
 }
 
@@ -275,8 +276,8 @@ func TestModelPickerFilterMatchesIDNameVendorAndFeatures(t *testing.T) {
 	view := &modelSelectPaneView{}
 	view.setModels([]model.RemoteModel{{ID: "deepseek-v4", Name: "DeepSeek V4", Provider: "DeepSeek", Features: []string{"tools", "vision"}}, {ID: "qwen-flash", Name: "Qwen Flash", Provider: "Qwen", Features: []string{"text"}}}, "")
 	for _, query := range []string{"deepseek-v4", "DeepSeek V4", "deepseek", "vision"} {
-		view.filter = query
-		view.applyFilter("")
+		view.picker.SetFilterText(query)
+		view.syncPickerProjection()
 		if len(view.models) != 1 || view.models[0].ID != "deepseek-v4" {
 			t.Fatalf("filter %q = %#v", query, view.models)
 		}
@@ -286,8 +287,8 @@ func TestModelPickerFilterMatchesIDNameVendorAndFeatures(t *testing.T) {
 func TestModelPickerFilterCanReturnNoResults(t *testing.T) {
 	view := &modelSelectPaneView{}
 	view.setModels([]model.RemoteModel{{ID: "one"}, {ID: "two"}}, "")
-	view.filter = "missing"
-	view.applyFilter("")
+	view.picker.SetFilterText("missing")
+	view.syncPickerProjection()
 	if len(view.models) != 0 || len(view.allModels) != 2 {
 		t.Fatalf("filtered/all models = %#v / %#v", view.models, view.allModels)
 	}
@@ -302,8 +303,8 @@ func TestModelPickerSearchModeAcceptsReservedLetters(t *testing.T) {
 	updated, _ = m.Update(testText("qwen"))
 	m = updated.(*bubbleModel)
 	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
-	if view.filter != "qwen" {
-		t.Fatalf("filter = %q, want qwen", view.filter)
+	if view.picker.FilterValue() != "qwen" {
+		t.Fatalf("filter = %q, want qwen", view.picker.FilterValue())
 	}
 	if !m.bottom.has(modelSelectViewID) {
 		t.Fatal("reserved q closed picker while search mode was active")
@@ -354,8 +355,8 @@ func TestModelSelectViewLaunchViaSlashCommand(t *testing.T) {
 	if len(view.models) == 0 {
 		t.Fatal("expected models in catalog")
 	}
-	if view.models[view.index].ID != "MiniMax-M3" {
-		t.Fatalf("expected focused model 'MiniMax-M3', got %s", view.models[view.index].ID)
+	if view.models[view.picker.Index()].ID != "MiniMax-M3" {
+		t.Fatalf("expected focused model 'MiniMax-M3', got %s", view.models[view.picker.Index()].ID)
 	}
 	rendered := bModel.View().Content
 	if !strings.Contains(rendered, "Select Model") {
@@ -409,31 +410,31 @@ func TestModelSelectViewNavigationAndConfirm(t *testing.T) {
 	bModel.activeProvider = "protonman"
 	bModel.executeCommand("/model")
 	view := bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
-	if view.index != 0 {
-		t.Fatalf("expected initial index 0, got %d", view.index)
+	if view.picker.Index() != 0 {
+		t.Fatalf("expected initial index 0, got %d", view.picker.Index())
 	}
 	updated, _ := bModel.Update(testText("j"))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
-	if view.index != 1 {
-		t.Fatalf("expected index 1 after 'j', got %d", view.index)
+	if view.picker.Index() != 1 {
+		t.Fatalf("expected index 1 after 'j', got %d", view.picker.Index())
 	}
 	updated, _ = bModel.Update(testText("k"))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
-	if view.index != 0 {
-		t.Fatalf("expected index 0 after 'k', got %d", view.index)
+	if view.picker.Index() != 0 {
+		t.Fatalf("expected index 0 after 'k', got %d", view.picker.Index())
 	}
 	updated, _ = bModel.Update(testKey(tea.KeyDown))
 	bModel = updated.(*bubbleModel)
 	updated, _ = bModel.Update(testKey(tea.KeyDown))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
-	if view.index != 2 {
-		t.Fatalf("expected index 2 after moving down twice, got %d", view.index)
+	if view.picker.Index() != 2 {
+		t.Fatalf("expected index 2 after moving down twice, got %d", view.picker.Index())
 	}
-	if view.models[view.index].ID != "Qwen3.8-Flash" {
-		t.Fatalf("expected Qwen3.8-Flash at index 2, got %s", view.models[view.index].ID)
+	if view.models[view.picker.Index()].ID != "Qwen3.8-Flash" {
+		t.Fatalf("expected Qwen3.8-Flash at index 2, got %s", view.models[view.picker.Index()].ID)
 	}
 	t.Setenv("PROTONMAN_HOME", t.TempDir())
 	updated, cmd := bModel.Update(testKey(tea.KeyEnter))
@@ -542,23 +543,23 @@ func TestModelSelectPagedNavigation(t *testing.T) {
 	m.resize(40, 14)
 	m.executeCommand("/model")
 	view := m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
-	view.index = 0
+	view.picker.Select(0)
 	updated, _ := m.Update(testKey(tea.KeyPgDown))
 	m = updated.(*bubbleModel)
-	if view.index <= 0 {
-		t.Fatalf("pgdown did not advance selection: index=%d", view.index)
+	if view.picker.Index() <= 0 {
+		t.Fatalf("pgdown did not advance selection: index=%d", view.picker.Index())
 	}
 	updated, _ = m.Update(testKey(tea.KeyEnd))
 	m = updated.(*bubbleModel)
 	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
-	if view.index != len(view.models)-1 {
-		t.Fatalf("end index = %d, want %d", view.index, len(view.models)-1)
+	if view.picker.Index() != len(view.models)-1 {
+		t.Fatalf("end index = %d, want %d", view.picker.Index(), len(view.models)-1)
 	}
 	updated, _ = m.Update(testKey(tea.KeyHome))
 	m = updated.(*bubbleModel)
 	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
-	if view.index != 0 {
-		t.Fatalf("home index = %d, want 0", view.index)
+	if view.picker.Index() != 0 {
+		t.Fatalf("home index = %d, want 0", view.picker.Index())
 	}
 }
 
@@ -981,9 +982,9 @@ func TestModelPickerEmptyFilterShowsSearchInput(t *testing.T) {
 	if !ok || view == nil {
 		t.Fatal("expected modelSelectViewID open")
 	}
-	view.filter = "nonexistent-model-xyz"
-	view.filtering = true
-	view.applyFilter(bModel.activeModel)
+	view.picker.SetFilterText("nonexistent-model-xyz")
+	view.picker.SetFilterState(list.Filtering)
+	view.syncPickerProjection()
 	rendered := view.Render(bModel)
 	if !strings.Contains(rendered, "Search: nonexistent-model-xyz") {
 		t.Fatalf("expected search query in rendered output: %s", rendered)
@@ -1026,11 +1027,9 @@ func TestModelPickerEnterWhileFilteringSelectsModel(t *testing.T) {
 	if !ok || view == nil {
 		t.Fatal("expected modelSelectViewID open")
 	}
-	view.models = []domainmodel.RemoteModel{
-		{ID: "deepseek-chat", Name: "DeepSeek Chat"},
-	}
-	view.filtering = true
-	view.index = 0
+	view.setModels([]domainmodel.RemoteModel{{ID: "deepseek-chat", Name: "DeepSeek Chat"}}, "")
+	view.picker.SetFilterText("deepseek")
+	view.picker.Select(0)
 
 	handled, cmd := view.HandleKey(bModel, testKey(tea.KeyEnter))
 	if !handled {
@@ -1051,8 +1050,7 @@ func TestModelPickerEnterOnZeroMatchesDoesNotOpenProviderEditor(t *testing.T) {
 	if !ok || view == nil {
 		t.Fatal("expected modelSelectViewID open")
 	}
-	view.models = nil
-	view.filtering = false
+	view.setModels(nil, "")
 
 	handled, cmd := view.HandleKey(bModel, testKey(tea.KeyEnter))
 	if !handled {

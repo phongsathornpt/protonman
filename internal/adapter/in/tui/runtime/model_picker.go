@@ -30,12 +30,8 @@ type modelSelectedMsg struct {
 type modelSelectPaneView struct {
 	picker         list.Model
 	pickerReady    bool
-	index          int
-	offset         int
 	models         []model.RemoteModel
 	allModels      []model.RemoteModel
-	filter         string
-	filtering      bool
 	providerNames  []string
 	providerIndex  int
 	fetchRequestID uint64
@@ -167,19 +163,12 @@ func (v *modelSelectPaneView) setModels(models []model.RemoteModel, activeModel 
 	for _, md := range v.allModels {
 		items = append(items, modelListItem{model: md, providerName: v.activeProviderName(), current: strings.EqualFold(md.ID, activeModel)})
 	}
+	filterValue := v.picker.FilterValue()
+	filtering := v.picker.SettingFilter()
 	_ = v.picker.SetItems(items)
-	v.applyFilter(activeModel)
-}
-
-func (v *modelSelectPaneView) applyFilter(activeModel string) {
-	if v == nil {
-		return
-	}
-	if strings.TrimSpace(v.filter) == "" {
-		v.picker.ResetFilter()
-	} else {
-		v.picker.SetFilterText(v.filter)
-		if v.filtering {
+	if strings.TrimSpace(filterValue) != "" {
+		v.picker.SetFilterText(filterValue)
+		if filtering {
 			v.picker.SetFilterState(list.Filtering)
 		}
 	}
@@ -224,10 +213,6 @@ func (v *modelSelectPaneView) syncPickerProjection() {
 			v.models = append(v.models, md.model)
 		}
 	}
-	v.index = v.picker.Index()
-	v.offset = v.picker.Paginator.Page * v.picker.Paginator.PerPage
-	v.filter = v.picker.FilterValue()
-	v.filtering = v.picker.SettingFilter()
 }
 
 func (v *modelSelectPaneView) activeProviderName() string {
@@ -253,8 +238,7 @@ func (v *modelSelectPaneView) beginFetch(parent context.Context, providerName st
 	v.err = nil
 	v.models = nil
 	v.allModels = nil
-	v.index = 0
-	v.offset = 0
+	v.picker.GoToStart()
 	return fetchProviderModelsCmd(providerFetchRequest{ctx: ctx, requestID: v.fetchRequestID, providerName: providerName, providerType: cfg.Type, baseURL: cfg.BaseURL, apiKey: cfg.APIKey, discoveryTimeout: discoveryTimeout})
 }
 
@@ -407,7 +391,8 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg)
 		v.syncPickerProjection()
 		return true, cmd
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		targetIdx := int(message.String()[0]-'1') + v.offset
+		pageOffset := v.picker.Paginator.Page * v.picker.Paginator.PerPage
+		targetIdx := int(message.String()[0]-'1') + pageOffset
 		if targetIdx >= 0 && targetIdx < len(v.models) {
 			selected := v.models[targetIdx]
 			provName := model.DefaultProtonmanName
@@ -420,20 +405,17 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg)
 		}
 		return true, nil
 	case "enter":
-		if len(v.models) == 0 {
+		item, ok := v.picker.SelectedItem().(modelListItem)
+		if !ok {
 			return true, nil
 		}
-		if v.index >= 0 && v.index < len(v.models) {
-			selected := v.models[v.index]
-			provName := model.DefaultProtonmanName
-			if v.providerIndex >= 0 && v.providerIndex < len(v.providerNames) {
-				provName = v.providerNames[v.providerIndex]
-			}
-			cmd := saveDefaultModelCmd(provName, selected.ID)
-			m.bottom.remove(modelSelectViewID)
-			return true, cmd
+		provName := model.DefaultProtonmanName
+		if v.providerIndex >= 0 && v.providerIndex < len(v.providerNames) {
+			provName = v.providerNames[v.providerIndex]
 		}
-		return true, nil
+		cmd := saveDefaultModelCmd(provName, item.model.ID)
+		m.bottom.remove(modelSelectViewID)
+		return true, cmd
 	default:
 		return false, nil
 	}

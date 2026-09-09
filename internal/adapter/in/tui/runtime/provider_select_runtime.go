@@ -78,8 +78,6 @@ func (i providerSelectItem) Description() string {
 }
 
 type providerSelectPaneView struct {
-	index         int
-	offset        int
 	picker        list.Model
 	pickerReady   bool
 	items         []providerSelectItem
@@ -111,14 +109,6 @@ func (v *providerSelectPaneView) initPicker() {
 		}
 	}
 	v.pickerReady = true
-}
-
-func (v *providerSelectPaneView) syncPickerProjection() {
-	if v == nil || !v.pickerReady {
-		return
-	}
-	v.index = v.picker.Index()
-	v.offset = v.picker.Paginator.Page * v.picker.Paginator.PerPage
 }
 
 func newProviderSelectPaneView(m *bubbleModel) *providerSelectPaneView {
@@ -162,7 +152,6 @@ func newProviderSelectPaneView(m *bubbleModel) *providerSelectPaneView {
 	view := &providerSelectPaneView{items: items}
 	view.initPicker()
 	view.picker.Select(selectedIndex)
-	view.syncPickerProjection()
 	return view
 }
 
@@ -213,10 +202,6 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 
 func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	v.initPicker()
-	if v.index != v.picker.Index() {
-		v.picker.Select(v.index)
-		v.syncPickerProjection()
-	}
 	if v.deleteConfirm {
 		item, ok := v.selectedItem()
 		if !ok || !item.isConfigured {
@@ -226,7 +211,6 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 	if v.picker.SettingFilter() {
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
-		v.syncPickerProjection()
 		return true, cmd
 	}
 	if v.deleteConfirm {
@@ -313,12 +297,10 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 		return true, nil
 	case "/":
 		v.picker.SetFilterState(list.Filtering)
-		v.syncPickerProjection()
 		return true, nil
 	case "up", "k", "down", "j", "pgup", "pgdown", "home", "g", "end", "G":
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
-		v.syncPickerProjection()
 		return true, cmd
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		return true, nil

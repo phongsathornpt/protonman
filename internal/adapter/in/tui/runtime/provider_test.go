@@ -24,8 +24,8 @@ func TestProviderSelectViewLaunchViaSlashCommand(t *testing.T) {
 	if len(view.items) != 6 {
 		t.Fatalf("expected 6 items in hub, got %d", len(view.items))
 	}
-	if view.items[view.index].name != "protonman" {
-		t.Fatalf("expected active provider 'protonman' focused, got %s", view.items[view.index].name)
+	if view.items[view.picker.Index()].name != "protonman" {
+		t.Fatalf("expected active provider 'protonman' focused, got %s", view.items[view.picker.Index()].name)
 	}
 	rendered := bModel.View().Content
 	if !strings.Contains(rendered, "Providers") {
@@ -71,26 +71,26 @@ func TestProviderSelectViewNavigationAndConfirm(t *testing.T) {
 	bModel.activeProvider = "protonman"
 	bModel.executeCommand("/provider")
 	view := bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView)
-	if view.index != 1 {
-		t.Fatalf("expected initial index 1, got %d", view.index)
+	if view.picker.Index() != 1 {
+		t.Fatalf("expected initial index 1, got %d", view.picker.Index())
 	}
 	updated, _ := bModel.Update(testKey(tea.KeyUp))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView)
-	if view.index != 0 {
-		t.Fatalf("expected index 0 after Up, got %d", view.index)
+	if view.picker.Index() != 0 {
+		t.Fatalf("expected index 0 after Up, got %d", view.picker.Index())
 	}
 	updated, _ = bModel.Update(testKey(tea.KeyDown))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView)
-	if view.index != 1 {
-		t.Fatalf("expected index 1 after Down, got %d", view.index)
+	if view.picker.Index() != 1 {
+		t.Fatalf("expected index 1 after Down, got %d", view.picker.Index())
 	}
 	updated, _ = bModel.Update(testText("1"))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView)
-	if view.index != 1 {
-		t.Fatalf("number shortcut changed provider index to %d", view.index)
+	if view.picker.Index() != 1 {
+		t.Fatalf("number shortcut changed provider index to %d", view.picker.Index())
 	}
 	updated, _ = bModel.Update(testKey(tea.KeyUp))
 	bModel = updated.(*bubbleModel)
@@ -174,7 +174,7 @@ func TestProviderSelectViewSetupPreset(t *testing.T) {
 	if ollamaIdx == -1 {
 		t.Fatal("expected ollama preset in items")
 	}
-	view.index = ollamaIdx
+	view.picker.Select(ollamaIdx)
 	updated, _ := bModel.Update(testKey(tea.KeyEnter))
 	bModel = updated.(*bubbleModel)
 	if !bModel.bottom.has(providerViewID) {
@@ -339,8 +339,8 @@ func TestProviderSelectWindowing(t *testing.T) {
 		bModel = updated.(*bubbleModel)
 	}
 	view = bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView)
-	if view.index < 8 {
-		t.Fatalf("expected selection to advance through paginated list, got index %d", view.index)
+	if view.picker.Index() < 8 {
+		t.Fatalf("expected selection to advance through paginated list, got index %d", view.picker.Index())
 	}
 }
 
@@ -358,20 +358,20 @@ func TestProviderSelectPagedNavigation(t *testing.T) {
 	updated, _ := m.Update(testKey(tea.KeyPgDown))
 	m = updated.(*bubbleModel)
 	view := m.bottom.find(providerSelectViewID).(*providerSelectPaneView)
-	if view.index <= 0 {
-		t.Fatalf("pgdown did not advance selection: index=%d", view.index)
+	if view.picker.Index() <= 0 {
+		t.Fatalf("pgdown did not advance selection: index=%d", view.picker.Index())
 	}
 	updated, _ = m.Update(testKey(tea.KeyEnd))
 	m = updated.(*bubbleModel)
 	view = m.bottom.find(providerSelectViewID).(*providerSelectPaneView)
-	if view.index != len(view.items)-1 {
-		t.Fatalf("end index = %d, want %d", view.index, len(view.items)-1)
+	if view.picker.Index() != len(view.items)-1 {
+		t.Fatalf("end index = %d, want %d", view.picker.Index(), len(view.items)-1)
 	}
 	updated, _ = m.Update(testKey(tea.KeyHome))
 	m = updated.(*bubbleModel)
 	view = m.bottom.find(providerSelectViewID).(*providerSelectPaneView)
-	if view.index != 0 {
-		t.Fatalf("home index = %d, want 0", view.index)
+	if view.picker.Index() != 0 {
+		t.Fatalf("home index = %d, want 0", view.picker.Index())
 	}
 }
 
@@ -598,7 +598,7 @@ func TestProviderViewInactiveEditKeepsActiveProvider(t *testing.T) {
 	hub := bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView)
 	for i, item := range hub.items {
 		if item.name == "protonman" {
-			hub.index = i
+			hub.picker.Select(i)
 			break
 		}
 	}
@@ -1004,8 +1004,8 @@ func TestProviderSelectPresetIsActiveWhenMatchesActiveProvider(t *testing.T) {
 	if !protonmanItem.isActive {
 		t.Fatal("expected protonman preset item to be active")
 	}
-	if view.items[view.index].name != "protonman" {
-		t.Fatalf("expected view cursor focused on active protonman preset, got %q", view.items[view.index].name)
+	if view.items[view.picker.Index()].name != "protonman" {
+		t.Fatalf("expected view cursor focused on active protonman preset, got %q", view.items[view.picker.Index()].name)
 	}
 }
 
@@ -1019,7 +1019,6 @@ func TestProviderSelectFilteredSelectionUsesVisibleItem(t *testing.T) {
 	bModel.executeCommand("/provider")
 	view := bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView)
 	view.picker.SetFilterText("beta")
-	view.syncPickerProjection()
 	item, ok := view.selectedItem()
 	if !ok || item.name != "beta" {
 		t.Fatalf("filtered selection = %#v, %t; want beta", item, ok)
