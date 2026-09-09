@@ -47,7 +47,7 @@ func (findFilesHandler) Definition() tool.Definition {
 			"type": "object",
 			"properties": map[string]any{
 				"pattern":      map[string]any{"type": "string", "description": "Glob matched against workspace-relative path and basename; defaults to *"},
-				"path":         map[string]any{"type": "string", "description": "Directory to search recursively; defaults to workspace root"},
+				"path":         map[string]any{"type": "string", "default": ".", "description": "Workspace-relative directory to search recursively; use . or omit path for the workspace root. Absolute paths are outside the workspace"},
 				"type":         map[string]any{"type": "string", "enum": []string{"any", "file", "dir"}, "description": "Path type filter; defaults to file"},
 				"max_depth":    map[string]any{"type": "integer", "minimum": 0, "description": "Maximum depth below path; 0 means unlimited"},
 				"offset":       map[string]any{"type": "integer", "minimum": 0, "description": "Match offset to skip; use next_offset from a truncated result"},

@@ -46,7 +46,8 @@ func (listDirHandler) Definition() tool.Definition {
 			"properties": map[string]any{
 				"path": map[string]any{
 					"type":        "string",
-					"description": "Directory path, defaulting to the workspace root",
+					"default":     ".",
+					"description": "Workspace-relative directory path; use . or omit path for the workspace root. Absolute paths such as / are outside the workspace",
 				},
 				"offset": map[string]any{
 					"type":        "integer",

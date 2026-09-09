@@ -130,6 +130,9 @@ func toolDisciplineSection(spec Spec) string {
 		"# Tool Discipline",
 		"- Prefer the narrowest dedicated capability that directly represents the operation; use a tool only when it materially changes evidence, state, implementation, or verification.",
 	}
+	if hasTool(spec, "read") || hasTool(spec, "grep") || hasTool(spec, "find") || hasTool(spec, "ls") || hasTool(spec, "edit") {
+		lines = append(lines, "- Workspace filesystem paths are relative to the workspace root. Use . for the workspace root; never use / or another absolute filesystem path with workspace tools.")
+	}
 	if hasTool(spec, "read") {
 		lines = append(lines, "- Use read for known workspace artifacts and read with view=source for bounded multi-file source inspection.")
 	}

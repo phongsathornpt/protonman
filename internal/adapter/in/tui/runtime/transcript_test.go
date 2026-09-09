@@ -359,8 +359,8 @@ func TestToolFailureSuggestions(t *testing.T) {
 		t.Fatalf("expected suggestions for protected path error")
 	}
 	escapeSugg := toolFailureSuggestions("read_file", tool.ErrorCodeOutsideWorkspace)
-	if len(escapeSugg) == 0 || !strings.Contains(escapeSugg[0], "workspace root") {
-		t.Fatalf("expected suggestions for outside workspace error")
+	if len(escapeSugg) == 0 || !strings.Contains(escapeSugg[0], "Use . for the workspace root") || !strings.Contains(escapeSugg[0], "absolute paths") {
+		t.Fatalf("expected actionable suggestions for outside workspace error: %#v", escapeSugg)
 	}
 }
 

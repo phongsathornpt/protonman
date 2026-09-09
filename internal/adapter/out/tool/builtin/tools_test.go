@@ -715,6 +715,20 @@ func TestReadFileContinuationRejectsChangedFile(t *testing.T) {
 	}
 }
 
+func TestWorkspaceObservationToolSchemasExplainRelativePaths(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	handlers := []tool.Handler{readfile.New(ws), NewListDir(ws), NewFindFiles(ws), NewGrep(ws)}
+	for _, handler := range handlers {
+		definition := handler.Definition()
+		properties, _ := definition.InputSchema["properties"].(map[string]any)
+		pathSchema, _ := properties["path"].(map[string]any)
+		description, _ := pathSchema["description"].(string)
+		if !strings.Contains(strings.ToLower(description), "workspace-relative") || !strings.Contains(strings.ToLower(description), "absolute") {
+			t.Fatalf("%s path schema description = %q, want workspace-relative/absolute guidance", definition.Name, description)
+		}
+	}
+}
+
 func TestWorkspaceObservationToolsDeclareGroundingEvidence(t *testing.T) {
 	ws := newTestWorkspace(t, nil)
 	for _, handler := range []tool.Handler{readfile.New(ws), NewListDir(ws), NewGrep(ws)} {

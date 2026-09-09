@@ -36,7 +36,7 @@ func (readFileHandler) Definition() tool.Definition {
 			"properties": map[string]any{
 				"path": map[string]any{
 					"type":        "string",
-					"description": "Path to the file to read",
+					"description": "Workspace-relative path to read; use . only for directory-oriented source inspection. Absolute paths are outside the workspace",
 				},
 				"view": map[string]any{
 					"type":        "string",

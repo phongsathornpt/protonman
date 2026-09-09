@@ -68,7 +68,7 @@ func toolFailureSuggestions(toolName string, code tool.ErrorCode) []string {
 	case tool.ErrorCodeInternalPath:
 		suggestions = append(suggestions, "Protonman internal state is reserved and unavailable to workspace tools")
 	case tool.ErrorCodeOutsideWorkspace:
-		suggestions = append(suggestions, "Tool operations are confined to the workspace root directory")
+		suggestions = append(suggestions, "Use . for the workspace root and workspace-relative paths for files or directories; absolute paths are not available to workspace tools")
 	case tool.ErrorCodePermissionDenied:
 		suggestions = append(suggestions, "Use shift+tab to cycle permission mode or allow the request")
 	}

@@ -142,6 +142,15 @@ func TestRenderToolDisciplineDoesNotBanLanguageRuntimes(t *testing.T) {
 	}
 }
 
+func TestToolDisciplineDefinesWorkspacePathConvention(t *testing.T) {
+	got := Render(Spec{Workspace: "/repo", AvailableTools: []string{"read", "grep", "find", "ls", "edit"}})
+	for _, want := range []string{"paths are relative to the workspace root", "Use . for the workspace root", "never use / or another absolute filesystem path"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("tool discipline missing workspace path guidance %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestToolDisciplineUsesUnifiedSourceInspection(t *testing.T) {
 	got := Render(Spec{AvailableTools: []string{"read"}})
 	if !strings.Contains(got, "read with view=source") {

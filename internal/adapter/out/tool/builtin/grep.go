@@ -92,7 +92,7 @@ func (grepHandler) Definition() tool.Definition {
 			"type": "object",
 			"properties": map[string]any{
 				"pattern": map[string]any{"type": "string"},
-				"path":    map[string]any{"type": "string"},
+				"path":    map[string]any{"type": "string", "default": ".", "description": "Workspace-relative file or directory path; use . or omit path to search the workspace root. Absolute paths are outside the workspace"},
 				"include": map[string]any{
 					"type":        "string",
 					"description": "Optional filename glob, such as *.go",
