@@ -2,7 +2,10 @@ package readfile
 
 import "github.com/phongsathornpt/protonman/internal/core/tool"
 
-const MaxReadFileBytes = 2 * 1024 * 1024
+const (
+	DefaultReadFileBytes = 64 * 1024
+	MaxReadFileBytes     = 2 * 1024 * 1024
+)
 
 type readFileInput struct {
 	Path         string `json:"path"`
@@ -50,7 +53,7 @@ func (readFileHandler) Definition() tool.Definition {
 					"type":        "integer",
 					"minimum":     0,
 					"maximum":     MaxReadFileBytes,
-					"description": "Target page size in bytes; defaults to 2 MiB and may extend to finish one UTF-8 code point",
+					"description": "Target page size in bytes; defaults to 64 KiB, may be increased up to 2 MiB, and may extend to finish one UTF-8 code point",
 				},
 				"start_line": map[string]any{
 					"type":        "integer",

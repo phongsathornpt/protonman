@@ -167,7 +167,7 @@ func TestGrepReportsTruncation(t *testing.T) {
 
 func TestReadFileReportsTruncation(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
-	contents := strings.Repeat("x", readfile.MaxReadFileBytes+1)
+	contents := strings.Repeat("x", readfile.DefaultReadFileBytes+1)
 	writeTestFile(t, workspaceRoot.Root(), "large.txt", contents)
 
 	result := executeJSON(t, readfile.New(workspaceRoot), "read-limit", map[string]any{"path": "large.txt"})
@@ -177,11 +177,11 @@ func TestReadFileReportsTruncation(t *testing.T) {
 	if !strings.Contains(result.Output, "output truncated") {
 		t.Fatalf("read output does not contain truncation marker")
 	}
-	if result.NextOffset == nil || *result.NextOffset != int64(readfile.MaxReadFileBytes) {
-		t.Fatalf("read next_offset = %v, want %d", result.NextOffset, readfile.MaxReadFileBytes)
+	if result.NextOffset == nil || *result.NextOffset != int64(readfile.DefaultReadFileBytes) {
+		t.Fatalf("read next_offset = %v, want %d", result.NextOffset, readfile.DefaultReadFileBytes)
 	}
-	marker := fmt.Sprintf("\n[output truncated; continue with offset=%d]", readfile.MaxReadFileBytes)
-	if got, want := len(result.Output), readfile.MaxReadFileBytes+len(marker); got != want {
+	marker := fmt.Sprintf("\n[output truncated; continue with offset=%d]", readfile.DefaultReadFileBytes)
+	if got, want := len(result.Output), readfile.DefaultReadFileBytes+len(marker); got != want {
 		t.Fatalf("read output length = %d, want %d", got, want)
 	}
 }

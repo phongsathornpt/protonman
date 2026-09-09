@@ -69,7 +69,7 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read limit must be between 1 byte and 2 MiB")
 	}
 	if input.Limit == 0 {
-		input.Limit = MaxReadFileBytes
+		input.Limit = DefaultReadFileBytes
 	}
 	path, err := h.workspace.ResolveExistingRead(ctx, input.Path)
 	if err != nil {
