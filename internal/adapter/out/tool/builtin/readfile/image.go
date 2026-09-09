@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	maxImagePixels   = 32 * 1024 * 1024
+	maxImagePixels   = 12 * 1024 * 1024
 	maxImageSamples  = 64 * 1024
 	maxImageColors   = 8
 	imageRegionCols  = 4
@@ -66,7 +66,7 @@ func readImageArtifact(ctx context.Context, file *os.File, info os.FileInfo, inp
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode image metadata", err)
 	}
 	pixels := int64(config.Width) * int64(config.Height)
-	if config.Width <= 0 || config.Height <= 0 || pixels > maxImagePixels {
+	if !imageDimensionsWithinLimit(config.Width, config.Height) {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeExecution, fmt.Sprintf("read image dimensions %dx%d exceed the safe analysis limit", config.Width, config.Height))
 	}
 	if _, err := file.Seek(0, 0); err != nil {
@@ -181,6 +181,13 @@ func readImageArtifact(ctx context.Context, file *os.File, info os.FileInfo, inp
 		Kind: artifactImage, Path: input.Path, MIMEType: artifact.MIMEType,
 		SizeBytes: info.Size(), Metadata: metadata, Analysis: analysis,
 	}, output)
+}
+
+func imageDimensionsWithinLimit(width, height int) bool {
+	if width <= 0 || height <= 0 {
+		return false
+	}
+	return int64(width)*int64(height) <= int64(maxImagePixels)
 }
 
 func imageASCIIPreview(img image.Image, width, height int) string {

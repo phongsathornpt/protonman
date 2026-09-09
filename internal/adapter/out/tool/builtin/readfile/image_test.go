@@ -75,3 +75,21 @@ func TestReadFileAutoReturnsBinaryMetadata(t *testing.T) {
 		t.Fatalf("binary result = %+v", result)
 	}
 }
+
+func TestImageDimensionsWithinSafeAnalysisLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		width, height int
+		want          bool
+	}{
+		{name: "zero-width", width: 0, height: 10, want: false},
+		{name: "at-limit", width: 4096, height: 3072, want: true},
+		{name: "over-limit", width: 4096, height: 3073, want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := imageDimensionsWithinLimit(tc.width, tc.height); got != tc.want {
+				t.Fatalf("imageDimensionsWithinLimit(%d, %d) = %v, want %v", tc.width, tc.height, got, tc.want)
+			}
+		})
+	}
+}
