@@ -84,7 +84,7 @@ func TestPickersFitResponsiveTerminalHeights(t *testing.T) {
 }
 
 func TestCompactLayoutReducesChrome(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
+	m := newTestBubbleModel(t, permission.ModeAsk, []tododomain.Item{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
 	m.activeModel = "provider/a-very-long-model-name"
 	m.resize(60, 18)
 	if strings.Contains(m.promptView(), "╭") || strings.Contains(m.promptView(), "╰") {
@@ -181,7 +181,7 @@ func TestDetectGitBranch(t *testing.T) {
 }
 
 func TestTodoToggleOpensFocusedPaneInCompactLayout(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
+	m := newTestBubbleModel(t, permission.ModeAsk, []tododomain.Item{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
 	m.resize(24, 12)
 	updated, _ := m.Update(testCtrl('o'))
 	m = updated.(*bubbleModel)
@@ -199,9 +199,9 @@ func TestTodoToggleOpensFocusedPaneInCompactLayout(t *testing.T) {
 }
 
 func TestFocusedTodoPaneBoundsAndScrollsLargePlans(t *testing.T) {
-	items := make([]TodoItem, 100)
+	items := make([]tododomain.Item, 100)
 	for i := range items {
-		items[i] = TodoItem{ID: fmt.Sprintf("task-%03d", i), Text: fmt.Sprintf("Task %03d with enough text to exercise truncation", i), Status: tododomain.StatusPending}
+		items[i] = tododomain.Item{ID: fmt.Sprintf("task-%03d", i), Text: fmt.Sprintf("Task %03d with enough text to exercise truncation", i), Status: tododomain.StatusPending}
 	}
 	m := newTestBubbleModel(t, permission.ModeAsk, items)
 	m.resize(32, 14)
@@ -942,7 +942,7 @@ func TestLongActivityStatusFitsTerminal(t *testing.T) {
 }
 
 func TestCompletedTodoPaneIsHidden(t *testing.T) {
-	model := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "done", Text: "done", Status: tododomain.StatusCompleted}, {ID: "also-done", Text: "also done", Status: tododomain.StatusCompleted}})
+	model := newTestBubbleModel(t, permission.ModeAsk, []tododomain.Item{{ID: "done", Text: "done", Status: tododomain.StatusCompleted}, {ID: "also-done", Text: "also done", Status: tododomain.StatusCompleted}})
 	model.resize(80, 24)
 	if strings.Contains(model.View().Content, "TODO") {
 		t.Fatalf("completed TODO pane still visible: %s", model.View().Content)
@@ -963,7 +963,7 @@ func TestWelcomeSitsAtTopWithoutFloatingBox(t *testing.T) {
 }
 
 func TestTodoPaneShowsPendingBeforeCompleted(t *testing.T) {
-	model := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "already-done", Text: "already done", Status: tododomain.StatusCompleted}, {ID: "still-open", Text: "still open", Status: tododomain.StatusPending}, {ID: "also-done", Text: "also done", Status: tododomain.StatusCompleted}})
+	model := newTestBubbleModel(t, permission.ModeAsk, []tododomain.Item{{ID: "already-done", Text: "already done", Status: tododomain.StatusCompleted}, {ID: "still-open", Text: "still open", Status: tododomain.StatusPending}, {ID: "also-done", Text: "also done", Status: tododomain.StatusCompleted}})
 	model.resize(80, 24)
 	model.toggleTodoPane()
 	view := testPlain(model.View().Content)
@@ -989,7 +989,7 @@ func TestPromptIsSingleRow(t *testing.T) {
 }
 
 func TestLiveViewFitsTerminal(t *testing.T) {
-	model := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
+	model := newTestBubbleModel(t, permission.ModeAsk, []tododomain.Item{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
 	model.resize(80, 24)
 	height := lipgloss.Height(model.View().Content)
 	if height > 24 {
@@ -1014,7 +1014,7 @@ func TestBubbleModelAcceptsTypedRunes(t *testing.T) {
 func TestBubbleModelRendersComponentLayout(t *testing.T) {
 	registry, _ := newBubbleTestRegistry()
 	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
-	model := newBubbleModel(context.Background(), service, registry, []TodoItem{{ID: "ship", Text: "ship Bubble Tea", Status: tododomain.StatusPending}}, nil, newPermissionBridge(), "/tmp/proton")
+	model := newBubbleModel(context.Background(), service, registry, []tododomain.Item{{ID: "ship", Text: "ship Bubble Tea", Status: tododomain.StatusPending}}, nil, newPermissionBridge(), "/tmp/proton")
 	model.resize(80, 24)
 	model.appendLine("assistant: ready")
 	model.refreshViewport()

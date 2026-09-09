@@ -61,7 +61,7 @@ type bubbleModel struct {
 	bottom                    *bottomPane
 	historyState              *HistoryState
 	queue                     []string
-	todo                      []TodoItem
+	todo                      []tododomain.Item
 	todoStore                 tododomain.Repository
 	todoRevision              uint64
 	todoLifecycle             todoLifecycleState
@@ -126,7 +126,7 @@ type bubbleKeyMap struct {
 	ToggleModel  key.Binding
 }
 
-func newBubbleModel(ctx context.Context, service *toolcall.Service, registry tool.Registry, todo []TodoItem, runner app.Conversation, bridge *permissionBridge, workDir string, initialMessages ...[]model.Message) *bubbleModel {
+func newBubbleModel(ctx context.Context, service *toolcall.Service, registry tool.Registry, todo []tododomain.Item, runner app.Conversation, bridge *permissionBridge, workDir string, initialMessages ...[]model.Message) *bubbleModel {
 	spin := spinner.New()
 	spin.Spinner = spinner.Dot
 	spin.Style = brandStyle
@@ -143,7 +143,7 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	if len(initialMessages) > 0 {
 		messages = conversation.Retain(model.SnapshotMessages(initialMessages[0]), retention)
 	}
-	ui := &bubbleModel{ctx: ctx, service: service, registry: registry, runner: runner, bridge: bridge, workDir: workDir, viewport: pane, transcriptViewport: transcriptPane, spinner: spin, help: helpView, keys: newBubbleKeyMap(), bottom: bottom, historyState: NewHistoryState(maxBubbleScrollback), queue: make([]string, 0), todo: append([]TodoItem{}, todo...), activity: "ready", followTail: true, showWelcome: true, width: defaultBubbleWidth, height: defaultBubbleHeight, messages: messages, conversationRetention: retention, maxToolCalls: config.DefaultMaxToolCalls, subagentsEnabled: true, runtimeConfig: config.DefaultRuntimeConfig(), agentActivity: make(map[string]AgentActivity)}
+	ui := &bubbleModel{ctx: ctx, service: service, registry: registry, runner: runner, bridge: bridge, workDir: workDir, viewport: pane, transcriptViewport: transcriptPane, spinner: spin, help: helpView, keys: newBubbleKeyMap(), bottom: bottom, historyState: NewHistoryState(maxBubbleScrollback), queue: make([]string, 0), todo: append([]tododomain.Item{}, todo...), activity: "ready", followTail: true, showWelcome: true, width: defaultBubbleWidth, height: defaultBubbleHeight, messages: messages, conversationRetention: retention, maxToolCalls: config.DefaultMaxToolCalls, subagentsEnabled: true, runtimeConfig: config.DefaultRuntimeConfig(), agentActivity: make(map[string]AgentActivity)}
 	if allTodoCompleted(ui.todo) {
 		ui.todoLifecycle.CompletionFresh = true
 	}

@@ -19,7 +19,7 @@ func (r *fixedTodoRepository) CompareAndReplace(context.Context, uint64, []todod
 
 func TestSyncTodoSnapshotDetectsContentChangeAtStableRevision(t *testing.T) {
 	repo := &fixedTodoRepository{snapshot: tododomain.Snapshot{Revision: 4, Items: []tododomain.Item{{ID: "a", Text: "new text", Status: tododomain.StatusPending}}}}
-	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "a", Text: "old text", Status: tododomain.StatusPending}})
+	m := newTestBubbleModel(t, permission.ModeAsk, []tododomain.Item{{ID: "a", Text: "old text", Status: tododomain.StatusPending}})
 	m.todoStore = repo
 	m.todoRevision = 4
 	if !m.syncTodoSnapshot() {

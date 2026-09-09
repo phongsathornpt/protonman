@@ -727,7 +727,7 @@ func TestBangPrefixSubmitsBashCall(t *testing.T) {
 }
 
 func TestTodoStoreRevisionSyncsAfterToolResult(t *testing.T) {
-	initial := []TodoItem{{ID: "a", Text: "inspect", Status: tododomain.StatusPending}}
+	initial := []tododomain.Item{{ID: "a", Text: "inspect", Status: tododomain.StatusPending}}
 	store, err := tododomain.NewStore(initial)
 	if err != nil {
 		t.Fatal(err)

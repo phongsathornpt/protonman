@@ -19,6 +19,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,15 +42,15 @@ func (r *scriptedRunner) Run(ctx context.Context, _ []domainmodel.Message, sink 
 	return r.result, r.err
 }
 
-func newTestBubbleModel(t *testing.T, mode permission.Mode, todo []TodoItem) *bubbleModel {
+func newTestBubbleModel(t *testing.T, mode permission.Mode, todo []tododomain.Item) *bubbleModel {
 	t.Helper()
 	registry, _ := newBubbleTestRegistry()
 	service := newBubbleTestService(t, registry, mode, permission.Config{})
 	return newBubbleModel(context.Background(), service, registry, todo, nil, newPermissionBridge(), "/tmp/proton")
 }
 
-func emptyTodoItems() []TodoItem {
-	return []TodoItem{}
+func emptyTodoItems() []tododomain.Item {
+	return []tododomain.Item{}
 }
 
 type bubbleTestHandler struct {

@@ -11,7 +11,6 @@ import (
 	"slices"
 )
 
-type TodoItem = tododomain.Item // TodoItem is kept as a compatibility alias while TODO ownership lives in the
 // domain package rather than the terminal adapter.
 
 type todoLifecycleState struct {
@@ -41,7 +40,7 @@ func (m *bubbleModel) syncTodoSnapshot() bool {
 	return true
 }
 
-func allTodoCompleted(items []TodoItem) bool {
+func allTodoCompleted(items []tododomain.Item) bool {
 	if len(items) == 0 {
 		return false
 	}
@@ -64,7 +63,7 @@ func (m *bubbleModel) retireCompletedTodoForNextTurn() {
 const todoInspectViewID = "todo-inspect"
 
 type todoListItem struct {
-	item TodoItem
+	item tododomain.Item
 }
 
 func (i todoListItem) FilterValue() string { return i.item.Text + " " + i.item.ID }
@@ -103,9 +102,9 @@ func (v *todoPaneView) ensurePicker(m *bubbleModel) {
 	v.syncTitle(m)
 }
 
-func todoListItems(items []TodoItem) []list.Item {
+func todoListItems(items []tododomain.Item) []list.Item {
 	ordered := tododomain.CloneItems(items)
-	slices.SortStableFunc(ordered, func(a, b TodoItem) int {
+	slices.SortStableFunc(ordered, func(a, b tododomain.Item) int {
 		return todoStatusPriority(a.Status) - todoStatusPriority(b.Status)
 	})
 	out := make([]list.Item, 0, len(ordered))

@@ -411,7 +411,7 @@ func TestRelayoutDoesNotReenableFollowTailAfterUserScroll(t *testing.T) {
 	for i := 0; i < 80; i++ {
 		m.appendLine(fmt.Sprintf("line-%02d", i))
 	}
-	m.todo = []TodoItem{{ID: "a", Text: "dynamic chrome", Status: tododomain.StatusInProgress}}
+	m.todo = []tododomain.Item{{ID: "a", Text: "dynamic chrome", Status: tododomain.StatusInProgress}}
 	m.relayout()
 	m.viewport.GotoBottom()
 	m.viewport.ScrollUp(1)
@@ -506,7 +506,7 @@ func TestScrolledViewportSurvivesLiveAgentChromeStress(t *testing.T) {
 	m = updated.(*bubbleModel)
 	assertStable("spinner tick")
 
-	m.todo = []TodoItem{{ID: "fix", Text: "ตรวจสอบผลแก้ไข", Status: tododomain.StatusInProgress}}
+	m.todo = []tododomain.Item{{ID: "fix", Text: "ตรวจสอบผลแก้ไข", Status: tododomain.StatusInProgress}}
 	m.relayout()
 	assertStable("todo expanded")
 	m.todo = nil
