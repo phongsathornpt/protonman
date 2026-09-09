@@ -101,11 +101,8 @@ func (v *providerPaneView) validateDraft() bool {
 	return true
 }
 
-func (v *providerPaneView) hasNameConflict(m *bubbleModel) bool {
-	if m == nil {
-		return false
-	}
-	return providerdomain.HasNameConflict(m.providers, v.nameInput.Value(), v.originalName)
+func (v *providerPaneView) hasNameConflict(ctx paneRenderContext) bool {
+	return providerdomain.HasNameConflict(ctx.providers, v.nameInput.Value(), v.originalName)
 }
 
 func (v *providerPaneView) setFetchedModels(models []model.RemoteModel) {

@@ -28,6 +28,8 @@ const (
 	paneActionProviderActivate
 	paneActionProviderModels
 	paneActionProviderEdit
+	paneActionProviderFetch
+	paneActionProviderSave
 )
 
 type paneAction struct {
@@ -43,6 +45,7 @@ type paneAction struct {
 	scrollLines  int
 	key          tea.KeyPressMsg
 	providerItem providerSelectItem
+	providerSave providerSaveRequest
 }
 
 type paneKeyResult struct {
@@ -54,10 +57,6 @@ type paneKeyResult struct {
 
 type isolatedPaneKeyHandler interface {
 	HandlePaneKey(paneRenderContext, tea.KeyPressMsg) paneKeyResult
-}
-
-type modelPaneKeyHandler interface {
-	HandleKey(*bubbleModel, tea.KeyPressMsg) (bool, tea.Cmd)
 }
 
 func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
@@ -149,6 +148,12 @@ func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
 				m.pushProviderPane(newProviderPaneView())
 			}
 		}
+	case paneActionProviderFetch:
+		if view, _ := m.panes.bottom.find(providerViewID).(*providerPaneView); view != nil {
+			return view.beginFetch(m.ctx, m.runtimeConfig.ModelDiscoveryTimeout)
+		}
+	case paneActionProviderSave:
+		return m.beginProviderSave(action.providerSave)
 	}
 	return nil
 }

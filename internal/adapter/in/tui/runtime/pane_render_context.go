@@ -23,6 +23,7 @@ type paneRenderContext struct {
 	agentSnapshot    []agent.AgentStatus
 	agentActivity    map[string]string
 	subagentsEnabled bool
+	providers        map[string]config.ProviderConfig
 }
 
 func newPaneRenderContext(m *bubbleModel) paneRenderContext {
@@ -41,6 +42,10 @@ func newPaneRenderContext(m *bubbleModel) paneRenderContext {
 	ctx.slashMatches = append([]slashCommand(nil), m.slashMatches()...)
 	ctx.agentSnapshot = append([]agent.AgentStatus(nil), m.agentSnapshot...)
 	ctx.subagentsEnabled = m.subagentsEnabled
+	ctx.providers = make(map[string]config.ProviderConfig, len(m.providers))
+	for name, cfg := range m.providers {
+		ctx.providers[name] = cfg
+	}
 	ctx.agentActivity = make(map[string]string, len(m.agentActivity))
 	for id, state := range m.agentActivity {
 		ctx.agentActivity[id] = state.String()

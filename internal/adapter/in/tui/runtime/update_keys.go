@@ -69,15 +69,7 @@ func (m *bubbleModel) handleModalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 		}
 		return handled, command
 	}
-	legacy, ok := top.(modelPaneKeyHandler)
-	if !ok {
-		return false, nil
-	}
-	handled, command := legacy.HandleKey(m, message)
-	if handled {
-		m.requestRelayout()
-	}
-	return handled, command
+	return false, nil
 }
 
 func (m *bubbleModel) handleGlobalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
