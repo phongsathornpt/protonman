@@ -1,6 +1,7 @@
 package textview
 
 import (
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -59,5 +60,29 @@ func TestWrapLinesKeepsThaiGraphemeClustersIntact(t *testing.T) {
 		if got[i] != want[i] || !utf8.ValidString(got[i]) || Width(got[i]) > 1 {
 			t.Fatalf("WrapLines[%d]=%q want=%q width=%d", i, got[i], want[i], Width(got[i]))
 		}
+	}
+}
+
+func TestWrapLinesPreservesANSISequencesAcrossNarrowWrap(t *testing.T) {
+	styled := "\x1b[90m/workspace/project/internal/\x1b[m\x1b[1;36ma-very-long-file-name.go\x1b[m\x1b[90m …\x1b[m"
+	lines := WrapLines(styled, 24)
+	plain := ansi.Strip(strings.Join(lines, ""))
+	if plain != "/workspace/project/internal/a-very-long-file-name.go …" {
+		t.Fatalf("wrapped ANSI text corrupted visible content: %q", plain)
+	}
+	for _, line := range lines {
+		if width := Width(line); width > 24 {
+			t.Fatalf("wrapped ANSI line width=%d want <=24: %q", width, line)
+		}
+	}
+}
+
+func TestTruncateLeftEllipsisPreservesUsefulSuffix(t *testing.T) {
+	got := TruncateLeftEllipsis("/workspace/project/file.go", 12)
+	if got != "…ect/file.go" {
+		t.Fatalf("left truncation = %q", got)
+	}
+	if Width(got) > 12 {
+		t.Fatalf("left truncation width=%d", Width(got))
 	}
 }

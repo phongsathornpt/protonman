@@ -201,3 +201,15 @@ func TestRoutineToolAggregationPreservesScrollAnchor(t *testing.T) {
 		t.Fatalf("anchor resolve=(%d,%v), want %d", resolved, ok, len(lines)-1)
 	}
 }
+
+func TestToolHeaderKeepsLongTargetCompactWhenNarrow(t *testing.T) {
+	cell := &ToolCell{Name: "read", ToolKind: tool.KindRead, Target: "/workspace/project/internal/adapter/in/tui/runtime/a-very-long-file-name.go", Running: true}
+	lines := cell.RenderWidth(24)
+	if len(lines) > 2 {
+		t.Fatalf("narrow tool header uses %d lines, want <= 2: %#v", len(lines), lines)
+	}
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(joined, "file-name.go") {
+		t.Fatalf("narrow tool header lost useful target suffix: %q", joined)
+	}
+}

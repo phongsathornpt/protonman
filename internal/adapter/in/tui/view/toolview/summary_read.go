@@ -140,6 +140,33 @@ func FormatPath(target string) string {
 	return tuistyle.ToolDirStyle.Render(dir) + tuistyle.ToolTargetStyle.Render(base)
 }
 
+// FormatPathWidth renders a target within a fixed terminal-cell budget, preserving path suffixes.
+func FormatPathWidth(target string, width int) string {
+	target = strings.TrimSpace(target)
+	if target == "" || width <= 0 {
+		return ""
+	}
+	if ansi.StringWidth(target) <= width {
+		return FormatPath(target)
+	}
+	if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") ||
+		(strings.HasPrefix(target, `"`) && strings.HasSuffix(target, `"`)) || strings.Contains(target, " in ") {
+		return tuistyle.ToolTargetStyle.Render(textview.TruncateEllipsis(target, width))
+	}
+	idx := strings.LastIndexAny(target, `/\\`)
+	if idx < 0 {
+		return tuistyle.ToolTargetStyle.Render(textview.TruncateLeftEllipsis(target, width))
+	}
+	base := target[idx+1:]
+	if base == "" {
+		return tuistyle.ToolDirStyle.Render(textview.TruncateLeftEllipsis(target, width))
+	}
+	if ansi.StringWidth(base) >= width-2 {
+		return tuistyle.ToolTargetStyle.Render(textview.TruncateLeftEllipsis(base, width))
+	}
+	return tuistyle.ToolDirStyle.Render("…/") + tuistyle.ToolTargetStyle.Render(base)
+}
+
 // extractReadFileExcerpt extracts a 1-line structural header preview (e.g. package, shebang, title).
 func ExtractReadFileExcerpt(body string) string {
 	body = strings.TrimSpace(body)

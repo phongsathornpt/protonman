@@ -2,6 +2,7 @@ package history
 
 import (
 	"fmt"
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
@@ -43,19 +44,19 @@ func (c ToolCell) RenderWidth(width int) []string {
 		}
 		targetStr := ""
 		if strings.TrimSpace(c.Target) != "" {
-			targetStr = " " + toolview.FormatPath(c.Target)
+			targetStr = " " + toolview.FormatPathWidth(c.Target, toolTargetWidth(width, c.Name, indicator))
 		}
 		headerLine = tuistyle.ToolStyle.Render(glyph) + tuistyle.MutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + tuistyle.ToolStyle.Render(indicator)
 	} else if c.Denied {
 		targetStr := ""
 		if strings.TrimSpace(c.Target) != "" {
-			targetStr = " " + toolview.FormatPath(c.Target)
+			targetStr = " " + toolview.FormatPathWidth(c.Target, toolTargetWidth(width, c.Name, tuistyle.GlyphSep+"denied"))
 		}
 		headerLine = tuistyle.WarningStyle.Render(tuistyle.GlyphToolDenied) + tuistyle.MutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + tuistyle.WarningStyle.Render(tuistyle.GlyphSep+"denied")
 	} else if c.FailureCode != "" {
 		targetStr := ""
 		if strings.TrimSpace(c.Target) != "" {
-			targetStr = " " + toolview.FormatPath(c.Target)
+			targetStr = " " + toolview.FormatPathWidth(c.Target, toolTargetWidth(width, c.Name, tuistyle.GlyphSep+string(c.FailureCode)))
 		}
 		headerLine = tuistyle.ErrorStyle.Render(tuistyle.GlyphToolError) + tuistyle.MutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + tuistyle.ErrorStyle.Render(tuistyle.GlyphSep+string(c.FailureCode))
 	} else if strings.TrimSpace(c.Name) == tool.NameSkill {
@@ -77,7 +78,7 @@ func (c ToolCell) RenderWidth(width int) []string {
 		}
 		targetStr := ""
 		if strings.TrimSpace(c.Target) != "" {
-			targetStr = " " + toolview.FormatPath(c.Target)
+			targetStr = " " + toolview.FormatPathWidth(c.Target, toolTargetWidth(width, c.Name, ""))
 		}
 		summaryStr := ""
 		if summary != "" {
@@ -117,6 +118,11 @@ func (c ToolCell) RenderWidth(width int) []string {
 
 	return out
 }
+func toolTargetWidth(width int, name, suffix string) int {
+	reserved := ansi.StringWidth(tool.DisplayName(name)) + ansi.StringWidth(suffix) + 4
+	return max(6, width-reserved)
+}
+
 func routineToolAggregationKey(cell HistoryCell) string {
 	c, ok := cell.(*ToolCell)
 	if !ok || c.Running || c.Denied || c.FailureCode != "" || c.ShowDetail {
