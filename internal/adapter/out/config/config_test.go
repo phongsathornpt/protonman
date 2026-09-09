@@ -216,6 +216,25 @@ func TestSaveUserDefaultModel(t *testing.T) {
 	}
 }
 
+func TestSaveUserDefaultProviderPreservesExistingModel(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	provider := ProviderConfig{Name: "protonman", Type: "openai", BaseURL: "https://protonman.dev/api/v1"}
+	if err := SaveUserProviderConfig(homeDir, provider, "MiniMax-M3"); err != nil {
+		t.Fatalf("SaveUserProviderConfig() error = %v", err)
+	}
+	if err := SaveUserDefaultProvider(homeDir, "opencode"); err != nil {
+		t.Fatalf("SaveUserDefaultProvider() error = %v", err)
+	}
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if snapshot.Model.Provider != "opencode" || snapshot.Model.Default != "MiniMax-M3" {
+		t.Fatalf("provider switch changed model unexpectedly: %+v", snapshot.Model)
+	}
+}
+
 func TestSaveUserProviderConfigWithOptionsPreservesActiveProvider(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
