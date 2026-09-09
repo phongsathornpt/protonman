@@ -1,8 +1,8 @@
 package runtime
 
 import (
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
@@ -39,7 +39,7 @@ func (v *skillsPaneView) Render(m *bubbleModel) string {
 	return renderModalRows(m, accentAssistant, rows)
 }
 
-func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	defer func() {
 		if m != nil && m.skills != nil {
 			visible := pickerVisibleRows(m.height, maxSkillsRows)
@@ -77,13 +77,13 @@ func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, te
 	case "end", "G":
 		v.index = len(skills) - 1
 		return true, nil
-	case " ", "t":
+	case "space", " ", "t":
 		if v.index >= 0 && v.index < len(skills) {
 			_, _ = m.skills.Toggle(skills[v.index].Name)
 		}
 		return true, nil
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		num := int(message.Runes[0] - '1')
+		num := int(message.String()[0] - '1')
 		if num >= 0 && num < len(skills) {
 			v.index = num
 		}

@@ -2,9 +2,9 @@
 package pane
 
 import (
+	"image/color"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 )
 
@@ -57,7 +57,7 @@ func CompactRows(rows []string) []string {
 	return compact
 }
 
-func RenderModal(width, height int, border lipgloss.TerminalColor, rows []string) string {
+func RenderModal(width, height int, border color.Color, rows []string) string {
 	style := tuistyle.ModalStyle.BorderForeground(border).MaxWidth(max(1, width-4))
 	if ModeForHeight(height) != LayoutNormal {
 		style = style.Padding(0, 1)

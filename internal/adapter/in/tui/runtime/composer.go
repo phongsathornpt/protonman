@@ -1,16 +1,16 @@
 package runtime
 
 import (
-	"github.com/charmbracelet/bubbles/textarea"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textarea"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
 type bottomPaneView interface {
 	ID() string
 	Render(*bubbleModel) string
-	HandleKey(*bubbleModel, tea.KeyMsg) (handled bool, cmd tea.Cmd)
+	HandleKey(*bubbleModel, tea.KeyPressMsg) (handled bool, cmd tea.Cmd)
 	ReplacesComposer() bool
 } // bottomPaneView is a transient interaction surface that can replace or augment
 // the composer. Permission prompts and slash completion are the first users;
@@ -192,8 +192,10 @@ func newPrompt(hasRunner bool) textarea.Model {
 	prompt.EndOfBufferCharacter = ' '
 	prompt.KeyMap.InsertNewline.SetKeys("ctrl+j")
 	prompt.KeyMap.InsertNewline.SetEnabled(true)
-	prompt.FocusedStyle.CursorLine = lipgloss.NewStyle()
-	prompt.BlurredStyle.CursorLine = lipgloss.NewStyle()
+	styles := prompt.Styles()
+	styles.Focused.CursorLine = lipgloss.NewStyle()
+	styles.Blurred.CursorLine = lipgloss.NewStyle()
+	prompt.SetStyles(styles)
 	applyPromptChrome(&prompt, false)
 	_ = prompt.Focus()
 	return prompt
@@ -207,11 +209,13 @@ func applyPromptChrome(prompt *textarea.Model, bash bool) {
 		accent = commandColor
 	}
 	prompt.Prompt = prefix
-	prompt.FocusedStyle.Prompt = lipgloss.NewStyle().Foreground(accent)
-	prompt.FocusedStyle.Text = bodyStyle
-	prompt.FocusedStyle.Placeholder = mutedStyle
-	prompt.BlurredStyle = prompt.FocusedStyle
-	prompt.BlurredStyle.CursorLine = lipgloss.NewStyle()
+	styles := prompt.Styles()
+	styles.Focused.Prompt = lipgloss.NewStyle().Foreground(accent)
+	styles.Focused.Text = bodyStyle
+	styles.Focused.Placeholder = mutedStyle
+	styles.Blurred = styles.Focused
+	styles.Blurred.CursorLine = lipgloss.NewStyle()
+	prompt.SetStyles(styles)
 }
 
 func (m *bubbleModel) setBashMode(on bool) {

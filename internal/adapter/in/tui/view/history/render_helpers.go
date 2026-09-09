@@ -3,7 +3,7 @@ package history
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 )
 

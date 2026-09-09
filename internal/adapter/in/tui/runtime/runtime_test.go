@@ -1,12 +1,12 @@
 package runtime
 
 import (
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	domainmodel "github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -161,7 +161,7 @@ func TestCtrlCCancelsDirectToolWithoutQuitting(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("tool did not start")
 	}
-	updated, cancelCommand := model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	updated, cancelCommand := model.Update(testCtrl('c'))
 	model = updated.(*bubbleModel)
 	if cancelCommand != nil {
 		t.Fatal("ctrl+c while a tool is active should cancel, not quit")
@@ -202,7 +202,7 @@ func TestTurnCancellationRendersNeutralTerminalState(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("turn did not start")
 	}
-	updated, cancelCommand := model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	updated, cancelCommand := model.Update(testCtrl('c'))
 	model = updated.(*bubbleModel)
 	if cancelCommand != nil {
 		t.Fatal("ctrl+c while a turn is active should cancel, not quit")
@@ -404,10 +404,10 @@ func TestViewportTailOnlyHydratesBeforePageUp(t *testing.T) {
 		t.Fatal("expected streaming follow-tail viewport to use bounded tail content")
 	}
 	tailLines := m.viewport.TotalLineCount()
-	if tailLines > m.viewport.Height {
-		t.Fatalf("tail viewport has %d lines, height %d", tailLines, m.viewport.Height)
+	if tailLines > m.viewport.Height() {
+		t.Fatalf("tail viewport has %d lines, height %d", tailLines, m.viewport.Height())
 	}
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	updated, _ := m.Update(testKey(tea.KeyPgUp))
 	m = updated.(*bubbleModel)
 	if m.viewportTailOnly {
 		t.Fatal("page up should hydrate full scrollback")
@@ -497,7 +497,7 @@ func TestMultilinePromptUpMovesCursorInsteadOfRecallingHistory(t *testing.T) {
 	prompt := m.bottom.prompt()
 	prompt.SetValue("first line\nsecond line")
 	prompt.CursorEnd()
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	updated, _ := m.Update(testKey(tea.KeyUp))
 	m = updated.(*bubbleModel)
 	if got := m.bottom.prompt().Value(); got != "first line\nsecond line" {
 		t.Fatalf("up changed multiline draft to %q", got)
@@ -568,7 +568,7 @@ func TestLiveViewFitsNarrowTerminal(t *testing.T) {
 	m.resize(24, 12)
 	m.appendAssistant("# Heading\n\nA very long response with a path /workspace/project/that/keeps/going")
 	m.refreshViewport()
-	for _, line := range strings.Split(m.View(), "\n") {
+	for _, line := range strings.Split(m.View().Content, "\n") {
 		if width := ansi.StringWidth(line); width > 24 {
 			t.Fatalf("narrow view line width = %d, want <= 24: %q", width, line)
 		}
@@ -645,16 +645,16 @@ func TestMouseWheelOnlyScrollsInsideTranscriptViewport(t *testing.T) {
 	m.refreshViewport()
 	m.viewport.GotoBottom()
 	m.followTail = true
-	bottom := m.viewport.YOffset
-	updated, _ := m.Update(tea.MouseMsg{X: 4, Y: m.viewport.Height + 1, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	bottom := m.viewport.YOffset()
+	updated, _ := m.Update(tea.MouseWheelMsg{X: 4, Y: m.viewport.Height() + 1, Button: tea.MouseWheelUp})
 	m = updated.(*bubbleModel)
-	if m.viewport.YOffset != bottom || !m.followTail {
-		t.Fatalf("wheel over chrome changed viewport: offset=%d want=%d follow=%v", m.viewport.YOffset, bottom, m.followTail)
+	if m.viewport.YOffset() != bottom || !m.followTail {
+		t.Fatalf("wheel over chrome changed viewport: offset=%d want=%d follow=%v", m.viewport.YOffset(), bottom, m.followTail)
 	}
-	updated, _ = m.Update(tea.MouseMsg{X: 4, Y: maxInt(0, m.viewport.Height-1), Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	updated, _ = m.Update(tea.MouseWheelMsg{X: 4, Y: maxInt(0, m.viewport.Height()-1), Button: tea.MouseWheelUp})
 	m = updated.(*bubbleModel)
-	if m.viewport.YOffset >= bottom || m.followTail {
-		t.Fatalf("wheel inside transcript did not scroll: offset=%d bottom=%d follow=%v", m.viewport.YOffset, bottom, m.followTail)
+	if m.viewport.YOffset() >= bottom || m.followTail {
+		t.Fatalf("wheel inside transcript did not scroll: offset=%d bottom=%d follow=%v", m.viewport.YOffset(), bottom, m.followTail)
 	}
 }
 
@@ -669,15 +669,15 @@ func TestScrolledViewportDefersActiveTailRefreshUntilScroll(t *testing.T) {
 	m.followTail = false
 	m.viewport.SetYOffset(maxInt(1, m.viewport.TotalLineCount()/3))
 	beforeLines := m.viewport.TotalLineCount()
-	beforeOffset := m.viewport.YOffset
+	beforeOffset := m.viewport.YOffset()
 
 	m.historyState.AppendAssistantDelta("live one\nlive two\nlive three")
 	m.refreshViewport()
 	if !m.viewportStaleTail {
 		t.Fatal("expected off-screen active tail to be deferred while scrolled")
 	}
-	if m.viewport.TotalLineCount() != beforeLines || m.viewport.YOffset != beforeOffset {
-		t.Fatalf("deferred refresh changed viewport: lines %d->%d offset %d->%d", beforeLines, m.viewport.TotalLineCount(), beforeOffset, m.viewport.YOffset)
+	if m.viewport.TotalLineCount() != beforeLines || m.viewport.YOffset() != beforeOffset {
+		t.Fatalf("deferred refresh changed viewport: lines %d->%d offset %d->%d", beforeLines, m.viewport.TotalLineCount(), beforeOffset, m.viewport.YOffset())
 	}
 }
 func TestPageDownHydratesDeferredTail(t *testing.T) {
@@ -694,7 +694,7 @@ func TestPageDownHydratesDeferredTail(t *testing.T) {
 	m.historyState.AppendAssistantDelta("live one\nlive two\nlive three")
 	m.refreshViewport()
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	updated, _ := m.Update(testKey(tea.KeyPgDown))
 	m = updated.(*bubbleModel)
 	if m.viewportStaleTail || m.viewportTailOnly {
 		t.Fatal("page down should hydrate deferred full scrollback")
@@ -715,18 +715,18 @@ func TestWelcomeCardCachesGitBranchUntilInvalidated(t *testing.T) {
 	}
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), workDir)
 	m.resize(80, 24)
-	first := m.welcomeCard()
+	first := testPlain(m.welcomeCard())
 	if !strings.Contains(first, "git:(main)") {
 		t.Fatalf("initial welcome branch missing: %q", first)
 	}
 	if err := os.WriteFile(head, []byte("ref: refs/heads/dev\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if cached := m.welcomeCard(); !strings.Contains(cached, "git:(main)") {
+	if cached := testPlain(m.welcomeCard()); !strings.Contains(cached, "git:(main)") {
 		t.Fatalf("welcome card unexpectedly reread git metadata: %q", cached)
 	}
 	m.invalidateWelcomeBranch()
-	if refreshed := m.welcomeCard(); !strings.Contains(refreshed, "git:(dev)") {
+	if refreshed := testPlain(m.welcomeCard()); !strings.Contains(refreshed, "git:(dev)") {
 		t.Fatalf("invalidated welcome branch did not refresh: %q", refreshed)
 	}
 }
@@ -744,14 +744,14 @@ func TestScrollingRendersSingleComposer(t *testing.T) {
 	m.viewport.GotoBottom()
 	m.followTail = true
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	updated, _ := m.Update(testKey(tea.KeyPgUp))
 	m = updated.(*bubbleModel)
-	plain := ansi.Strip(m.View())
+	plain := ansi.Strip(m.View().Content)
 	placeholder := "Ask Protonman to inspect or change this workspace"
 	if got := strings.Count(plain, placeholder); got != 1 {
 		t.Fatalf("composer rendered %d times after page-up; view=%q", got, plain)
 	}
-	if got := lipgloss.Height(m.View()); got > m.height {
+	if got := lipgloss.Height(m.View().Content); got > m.height {
 		t.Fatalf("scrolled live view height=%d exceeds terminal height=%d", got, m.height)
 	}
 }

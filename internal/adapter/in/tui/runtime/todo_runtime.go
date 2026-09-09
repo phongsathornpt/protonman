@@ -1,7 +1,7 @@
 package runtime
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 	"slices"
@@ -83,7 +83,7 @@ func (*todoPaneView) ReplacesComposer() bool {
 	return false
 }
 
-func (v *todoPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+func (v *todoPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	limit := todoInspectionLimit(m.height)
 	maxOffset := maxInt(0, len(m.todo)-limit)
 	switch message.String() {

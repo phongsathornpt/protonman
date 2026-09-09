@@ -1,7 +1,7 @@
 package runtime
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
@@ -67,7 +67,7 @@ type agentsPaneView struct{}
 
 func (*agentsPaneView) ID() string             { return agentsViewID }
 func (*agentsPaneView) ReplacesComposer() bool { return false }
-func (*agentsPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+func (*agentsPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch message.String() {
 	case "esc", "enter":
 		m.bottom.remove(agentsViewID)

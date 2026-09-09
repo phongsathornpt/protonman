@@ -1,9 +1,9 @@
 package runtime
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"context"
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -99,7 +99,7 @@ func TestSlashEscapePreservesComposerDraft(t *testing.T) {
 	if !m.slashOpen() {
 		t.Fatal("slash view did not open")
 	}
-	updated, command := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	updated, command := m.Update(testKey(tea.KeyEsc))
 	m = updated.(*bubbleModel)
 	if command != nil {
 		t.Fatalf("escape command = %v, want nil", command)
@@ -174,7 +174,7 @@ func TestReasoningPickerSelectsLevel(t *testing.T) {
 		t.Fatal("reasoning picker missing")
 	}
 	view.index = 3
-	handled, _ := view.HandleKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	handled, _ := view.HandleKey(m, testKey(tea.KeyEnter))
 	if !handled {
 		t.Fatal("enter was not handled")
 	}
@@ -196,9 +196,9 @@ func TestReasoningPickerShiftTabDoesNotLeak(t *testing.T) {
 		t.Fatal("reasoning picker missing")
 	}
 	initialMode := m.service.Mode()
-	handled, _ := view.HandleKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	handled, _ := view.HandleKey(m, testText("s"))
 	// Test shift+tab directly:
-	handledShiftTab, _ := view.HandleKey(m, tea.KeyMsg{Type: tea.KeyShiftTab})
+	handledShiftTab, _ := view.HandleKey(m, testShiftTab())
 	if !handledShiftTab {
 		t.Fatal("shift+tab was not handled by reasoning picker")
 	}
@@ -218,7 +218,7 @@ func TestReasoningPickerNumberKeySelects(t *testing.T) {
 		t.Fatal("reasoning picker missing")
 	}
 	// Pressing '2' selects choice index 1 (low)
-	handled, _ := view.HandleKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	handled, _ := view.HandleKey(m, testText("2"))
 	if !handled {
 		t.Fatal("key 2 was not handled")
 	}
@@ -466,12 +466,12 @@ func TestSlashSkills(t *testing.T) {
 			t.Fatalf("unexpected picker render: %s", rendered)
 		}
 		wasActive := model.skills.IsActivated("pdf-processing")
-		updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
+		updated, _ := model.Update(testText(" "))
 		model = updated.(*bubbleModel)
 		if model.skills.IsActivated("pdf-processing") == wasActive {
 			t.Fatalf("spacebar did not toggle skill active status")
 		}
-		updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyEsc})
+		updated, _ = model.Update(testKey(tea.KeyEsc))
 		model = updated.(*bubbleModel)
 		if model.bottom.has(skillsViewID) {
 			t.Fatal("esc did not close skills picker")
@@ -479,12 +479,12 @@ func TestSlashSkills(t *testing.T) {
 	})
 	t.Run("ctrl+s shortcut toggles skills picker", func(t *testing.T) {
 		model.bottom.remove(skillsViewID)
-		updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+		updated, _ := model.Update(testCtrl('s'))
 		model = updated.(*bubbleModel)
 		if !model.bottom.has(skillsViewID) {
 			t.Fatal("ctrl+s did not open skills picker")
 		}
-		updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+		updated, _ = model.Update(testCtrl('s'))
 		model = updated.(*bubbleModel)
 		if model.bottom.has(skillsViewID) {
 			t.Fatal("second ctrl+s did not close skills picker")
@@ -519,7 +519,7 @@ func TestSlashSkills(t *testing.T) {
 		model.bottom.remove(skillsViewID)
 		model.executeCommand("/skills")
 		wasActive := model.skills.IsActivated("pdf-processing")
-		updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+		updated, _ := model.Update(testText("t"))
 		model = updated.(*bubbleModel)
 		if model.skills.IsActivated("pdf-processing") == wasActive {
 			t.Fatalf("'t' key did not toggle skill active status")
@@ -594,7 +594,7 @@ func newTestSkillsModel(t *testing.T, count int) *bubbleModel {
 
 func TestSkillsPickerWindowingLargeList(t *testing.T) {
 	model := newTestSkillsModel(t, 15)
-	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	updated, _ := model.Update(testCtrl('s'))
 	model = updated.(*bubbleModel)
 	if !model.bottom.has(skillsViewID) {
 		t.Fatal("expected skills picker to be open")
@@ -610,7 +610,7 @@ func TestSkillsPickerWindowingLargeList(t *testing.T) {
 		t.Fatalf("expected no up arrow at top, got: %s", render)
 	}
 	for range 8 {
-		updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyDown})
+		updated, _ = model.Update(testKey(tea.KeyDown))
 		model = updated.(*bubbleModel)
 	}
 	render = model.bottom.renderTop(model)
@@ -627,15 +627,15 @@ func TestSkillsPickerWindowingLargeList(t *testing.T) {
 
 func TestSkillsPickerWrapAround(t *testing.T) {
 	model := newTestSkillsModel(t, 5)
-	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	updated, _ := model.Update(testCtrl('s'))
 	model = updated.(*bubbleModel)
-	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyUp})
+	updated, _ = model.Update(testKey(tea.KeyUp))
 	model = updated.(*bubbleModel)
 	render := model.bottom.renderTop(model)
 	if !strings.Contains(render, "item 5 of 5") {
 		t.Fatalf("expected wrap-around to item 5 of 5, got: %s", render)
 	}
-	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyDown})
+	updated, _ = model.Update(testKey(tea.KeyDown))
 	model = updated.(*bubbleModel)
 	render = model.bottom.renderTop(model)
 	if !strings.Contains(render, "item 1 of 5") {
@@ -645,27 +645,27 @@ func TestSkillsPickerWrapAround(t *testing.T) {
 
 func TestSkillsPickerFastNavigation(t *testing.T) {
 	model := newTestSkillsModel(t, 12)
-	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	updated, _ := model.Update(testCtrl('s'))
 	model = updated.(*bubbleModel)
-	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	updated, _ = model.Update(testKey(tea.KeyPgDown))
 	model = updated.(*bubbleModel)
 	render := model.bottom.renderTop(model)
 	if !strings.Contains(render, "item 6 of 12") {
 		t.Fatalf("expected item 6 after pgdown, got: %s", render)
 	}
-	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
+	updated, _ = model.Update(testText("G"))
 	model = updated.(*bubbleModel)
 	render = model.bottom.renderTop(model)
 	if !strings.Contains(render, "item 12 of 12") {
 		t.Fatalf("expected item 12 after G, got: %s", render)
 	}
-	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+	updated, _ = model.Update(testText("g"))
 	model = updated.(*bubbleModel)
 	render = model.bottom.renderTop(model)
 	if !strings.Contains(render, "item 1 of 12") {
 		t.Fatalf("expected item 1 after g, got: %s", render)
 	}
-	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	updated, _ = model.Update(testText("3"))
 	model = updated.(*bubbleModel)
 	render = model.bottom.renderTop(model)
 	if !strings.Contains(render, "item 3 of 12") {
@@ -679,22 +679,22 @@ func TestComposerDraftPreservedOnHistoryNavigation(t *testing.T) {
 	model.bottom.recordHistory("docker ps")
 	draftText := "my half-written complex query"
 	model.bottom.prompt().SetValue(draftText)
-	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyUp})
+	updated, _ := model.Update(testKey(tea.KeyUp))
 	model = updated.(*bubbleModel)
 	if model.bottom.prompt().Value() != "docker ps" {
 		t.Fatalf("expected 'docker ps' from history, got: %q", model.bottom.prompt().Value())
 	}
-	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyUp})
+	updated, _ = model.Update(testKey(tea.KeyUp))
 	model = updated.(*bubbleModel)
 	if model.bottom.prompt().Value() != "git status" {
 		t.Fatalf("expected 'git status' from history, got: %q", model.bottom.prompt().Value())
 	}
-	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyDown})
+	updated, _ = model.Update(testKey(tea.KeyDown))
 	model = updated.(*bubbleModel)
 	if model.bottom.prompt().Value() != "docker ps" {
 		t.Fatalf("expected 'docker ps', got: %q", model.bottom.prompt().Value())
 	}
-	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyDown})
+	updated, _ = model.Update(testKey(tea.KeyDown))
 	model = updated.(*bubbleModel)
 	if model.bottom.prompt().Value() != draftText {
 		t.Fatalf("expected restored draft %q, got: %q", draftText, model.bottom.prompt().Value())
@@ -751,12 +751,12 @@ func TestSkillsCommandBoundedOutput(t *testing.T) {
 
 func TestSkillsPickerCtrlCEscapesModal(t *testing.T) {
 	model := newTestSkillsModel(t, 5)
-	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	updated, _ := model.Update(testCtrl('s'))
 	model = updated.(*bubbleModel)
 	if !model.bottom.has(skillsViewID) {
 		t.Fatal("expected skills picker open")
 	}
-	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	updated, _ = model.Update(testCtrl('c'))
 	model = updated.(*bubbleModel)
 	if model.bottom.has(skillsViewID) {
 		t.Fatal("expected ctrl+c to close skills picker")
@@ -766,13 +766,13 @@ func TestSkillsPickerCtrlCEscapesModal(t *testing.T) {
 func TestTranscriptOverlayQAndCtrlC(t *testing.T) {
 	model := newTestSkillsModel(t, 2)
 	model.showTranscript = true
-	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	updated, _ := model.Update(testText("q"))
 	model = updated.(*bubbleModel)
 	if model.showTranscript {
 		t.Fatal("expected 'q' to close transcript overlay")
 	}
 	model.showTranscript = true
-	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	updated, _ = model.Update(testCtrl('c'))
 	model = updated.(*bubbleModel)
 	if model.showTranscript {
 		t.Fatal("expected ctrl+c to close transcript overlay")
@@ -797,7 +797,7 @@ func TestQueueClearedOnTurnCancel(t *testing.T) {
 		cancelled = true
 	}
 	model.queue = []string{"next queued command 1", "next queued command 2"}
-	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	updated, _ := model.Update(testCtrl('c'))
 	model = updated.(*bubbleModel)
 	if !cancelled {
 		t.Fatal("expected turnCancel to be called")
@@ -829,15 +829,15 @@ func TestMultilineTextareaDynamicExpansion(t *testing.T) {
 
 func TestSkillsPickerMouseWheelNavigation(t *testing.T) {
 	model := newTestSkillsModel(t, 10)
-	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	updated, _ := model.Update(testCtrl('s'))
 	model = updated.(*bubbleModel)
-	updated, _ = model.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
+	updated, _ = model.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
 	model = updated.(*bubbleModel)
 	render := model.bottom.renderTop(model)
 	if !strings.Contains(render, "item 2 of 10") {
 		t.Fatalf("expected item 2 after wheel down, got: %s", render)
 	}
-	updated, _ = model.Update(tea.MouseMsg{Button: tea.MouseButtonWheelUp})
+	updated, _ = model.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
 	model = updated.(*bubbleModel)
 	render = model.bottom.renderTop(model)
 	if !strings.Contains(render, "item 1 of 10") {
@@ -884,7 +884,7 @@ func TestShortcutMatrixGlobalKeysSurviveModalRouting(t *testing.T) {
 	t.Run("permission lets transcript shortcut bubble", func(t *testing.T) {
 		m := newTestBubbleModel(t, permission.ModeAsk, nil)
 		m.bottom.push(&permissionPaneView{})
-		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+		updated, _ := m.Update(testCtrl('t'))
 		m = updated.(*bubbleModel)
 		if !m.showTranscript {
 			t.Fatal("ctrl+t did not open transcript above permission pane")
@@ -896,7 +896,7 @@ func TestShortcutMatrixGlobalKeysSurviveModalRouting(t *testing.T) {
 	t.Run("provider lets transcript shortcut bubble", func(t *testing.T) {
 		m := newTestBubbleModel(t, permission.ModeAsk, nil)
 		m.bottom.push(newProviderPaneView())
-		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+		updated, _ := m.Update(testCtrl('t'))
 		m = updated.(*bubbleModel)
 		if !m.showTranscript {
 			t.Fatal("ctrl+t did not open transcript above provider pane")
@@ -911,7 +911,7 @@ func TestShortcutMatrixGlobalKeysSurviveModalRouting(t *testing.T) {
 		view.focusIndex = 1
 		view.syncInputFocus()
 		m.bottom.push(view)
-		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+		updated, _ := m.Update(testShiftTab())
 		m = updated.(*bubbleModel)
 		if view.focusIndex != 0 {
 			t.Fatalf("shift+tab focus = %d, want previous provider field", view.focusIndex)
@@ -926,7 +926,7 @@ func TestShortcutMatrixInterruptAndToggleSemantics(t *testing.T) {
 	t.Run("ctrl-c closes modal before quitting", func(t *testing.T) {
 		m := newTestBubbleModel(t, permission.ModeAsk, nil)
 		m.bottom.push(&skillsPaneView{})
-		updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+		updated, cmd := m.Update(testCtrl('c'))
 		m = updated.(*bubbleModel)
 		if cmd != nil {
 			t.Fatal("ctrl+c on modal returned quit command")
@@ -938,7 +938,7 @@ func TestShortcutMatrixInterruptAndToggleSemantics(t *testing.T) {
 	t.Run("ctrl-p closes model picker through binding", func(t *testing.T) {
 		m := newTestBubbleModel(t, permission.ModeAsk, nil)
 		m.bottom.push(&modelSelectPaneView{})
-		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+		updated, _ := m.Update(testCtrl('p'))
 		m = updated.(*bubbleModel)
 		if m.bottom.has(modelSelectViewID) {
 			t.Fatal("ctrl+p did not close model picker")
@@ -947,7 +947,7 @@ func TestShortcutMatrixInterruptAndToggleSemantics(t *testing.T) {
 	t.Run("ctrl-c closes transcript overlay", func(t *testing.T) {
 		m := newTestBubbleModel(t, permission.ModeAsk, nil)
 		m.showTranscript = true
-		updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+		updated, cmd := m.Update(testCtrl('c'))
 		m = updated.(*bubbleModel)
 		if cmd != nil {
 			t.Fatal("ctrl+c on transcript returned quit command")

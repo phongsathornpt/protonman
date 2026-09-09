@@ -1,16 +1,16 @@
 package runtime
 
 import (
+	"charm.land/bubbles/v2/cursor"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/charmbracelet/bubbles/cursor"
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -142,9 +142,9 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	spin := spinner.New()
 	spin.Spinner = spinner.Dot
 	spin.Style = brandStyle
-	pane := viewport.New(defaultBubbleWidth, defaultBubbleHeight-6)
+	pane := viewport.New(viewport.WithWidth(defaultBubbleWidth), viewport.WithHeight(defaultBubbleHeight-6))
 	disableViewportKeys(&pane)
-	transcriptPane := viewport.New(defaultBubbleWidth-8, defaultBubbleHeight-8)
+	transcriptPane := viewport.New(viewport.WithWidth(defaultBubbleWidth-8), viewport.WithHeight(defaultBubbleHeight-8))
 	disableViewportKeys(&transcriptPane)
 	bottom := newBottomPane(runner != nil)
 	messages := []model.Message(nil)
@@ -540,7 +540,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.resize(message.Width, message.Height)
 		return m, nil
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if key.Matches(message, m.keys.Quit) {
 			return m.handleInterruptKey()
 		}
@@ -549,6 +549,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.updateKey(message)
 	case tea.MouseMsg:
+		mouse := message.Mouse()
 		var command tea.Cmd
 		if m.showTranscript {
 			m.transcriptViewport, command = m.transcriptViewport.Update(message)
@@ -556,27 +557,27 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.bottom.has(skillsViewID) {
 			if view, ok := m.bottom.find(skillsViewID).(*skillsPaneView); ok {
-				switch message.Button {
-				case tea.MouseButtonWheelUp:
-					view.HandleKey(m, tea.KeyMsg{Type: tea.KeyUp})
+				switch mouse.Button {
+				case tea.MouseWheelUp:
+					view.HandleKey(m, tea.KeyPressMsg{Code: tea.KeyUp})
 					m.relayout()
 					return m, nil
-				case tea.MouseButtonWheelDown:
-					view.HandleKey(m, tea.KeyMsg{Type: tea.KeyDown})
+				case tea.MouseWheelDown:
+					view.HandleKey(m, tea.KeyPressMsg{Code: tea.KeyDown})
 					m.relayout()
 					return m, nil
 				}
 			}
 		}
-		if message.Y < 0 || message.Y >= m.viewport.Height {
+		if mouse.Y < 0 || mouse.Y >= m.viewport.Height() {
 			return m, nil
 		}
-		if (m.viewportTailOnly || m.viewportStaleTail) && (message.Button == tea.MouseButtonWheelUp || message.Button == tea.MouseButtonWheelDown) {
+		if (m.viewportTailOnly || m.viewportStaleTail) && (mouse.Button == tea.MouseWheelUp || mouse.Button == tea.MouseWheelDown) {
 			m.hydrateViewportForScroll()
 		}
-		beforeOffset := m.viewport.YOffset
+		beforeOffset := m.viewport.YOffset()
 		m.viewport, command = m.viewport.Update(message)
-		if m.viewport.YOffset != beforeOffset {
+		if m.viewport.YOffset() != beforeOffset {
 			m.markViewportViewDirty()
 		}
 		m.followTail = m.viewport.AtBottom()
@@ -632,7 +633,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *bubbleModel) matchesGlobalShortcut(message tea.KeyMsg) bool {
+func (m *bubbleModel) matchesGlobalShortcut(message tea.KeyPressMsg) bool {
 	return key.Matches(message, m.keys.Clear) || key.Matches(message, m.keys.ToggleTodo) || key.Matches(message, m.keys.Transcript) || key.Matches(message, m.keys.CycleMode) || key.Matches(message, m.keys.ToggleSkills) || key.Matches(message, m.keys.ToggleModel)
 }
 
@@ -666,7 +667,7 @@ func (m *bubbleModel) handleInterruptKey() (tea.Model, tea.Cmd) {
 	return m, tea.Quit
 }
 
-func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) updateKey(message tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if handled, command := m.handleModalKey(message); handled {
 		return m, m.withSpinner(command)
 	}
@@ -676,7 +677,7 @@ func (m *bubbleModel) updateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, m.handlePromptKey(message)
 }
 
-func (m *bubbleModel) handleModalKey(message tea.KeyMsg) (bool, tea.Cmd) {
+func (m *bubbleModel) handleModalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 	top := m.bottom.top()
 	if top == nil {
 		return false, nil
@@ -688,7 +689,7 @@ func (m *bubbleModel) handleModalKey(message tea.KeyMsg) (bool, tea.Cmd) {
 	return handled, command
 }
 
-func (m *bubbleModel) handleGlobalKey(message tea.KeyMsg) (bool, tea.Cmd) {
+func (m *bubbleModel) handleGlobalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch {
 	case key.Matches(message, m.keys.CycleMode):
 		m.cycleMode()
@@ -734,18 +735,18 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyMsg) (bool, tea.Cmd) {
 		return true, nil
 	case key.Matches(message, m.keys.PageUp):
 		m.hydrateViewportForScroll()
-		before := m.viewport.YOffset
+		before := m.viewport.YOffset()
 		m.viewport.PageUp()
-		if m.viewport.YOffset != before {
+		if m.viewport.YOffset() != before {
 			m.markViewportViewDirty()
 		}
 		m.followTail = m.viewport.AtBottom()
 		return true, nil
 	case key.Matches(message, m.keys.PageDown):
 		m.hydrateViewportForScroll()
-		before := m.viewport.YOffset
+		before := m.viewport.YOffset()
 		m.viewport.PageDown()
-		if m.viewport.YOffset != before {
+		if m.viewport.YOffset() != before {
 			m.markViewportViewDirty()
 		}
 		m.followTail = m.viewport.AtBottom()
@@ -755,7 +756,7 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyMsg) (bool, tea.Cmd) {
 	}
 }
 
-func (m *bubbleModel) handlePromptKey(message tea.KeyMsg) tea.Cmd {
+func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 	if message.String() == "tab" && m.busy {
 		return m.withSpinner(m.submit())
 	}
@@ -777,8 +778,8 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	if m.bottom.bashMode() && prompt.Value() == "" {
-		switch message.Type {
-		case tea.KeyBackspace, tea.KeyCtrlH, tea.KeyDelete:
+		switch message.String() {
+		case "backspace", "ctrl+h", "delete":
 			m.setBashMode(false)
 			return nil
 		}

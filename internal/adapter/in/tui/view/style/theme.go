@@ -1,7 +1,7 @@
 package style
 
 import (
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 const (
@@ -31,16 +31,16 @@ const (
 // dark and customized terminal themes. Primary body text intentionally uses
 // the terminal's default foreground.
 var (
-	AccentAssistant = lipgloss.Color("5")                             // magenta: Protonman identity
-	AccentUser      = lipgloss.Color("6")                             // cyan: input/selection
-	AccentTool      = lipgloss.AdaptiveColor{Light: "240", Dark: "8"} // dim tool chrome
-	AccentSystem    = lipgloss.Color("6")                             // cyan: status/info
+	AccentAssistant = lipgloss.Color("5") // magenta: Protonman identity
+	AccentUser      = lipgloss.Color("6") // cyan: input/selection
+	AccentTool      = lipgloss.Color("8") // dim tool chrome
+	AccentSystem    = lipgloss.Color("6") // cyan: status/info
 	AccentPlan      = lipgloss.Color("6")
 	AccentError     = lipgloss.Color("1") // red
 	AccentSuccess   = lipgloss.Color("2") // green
 	CommandColor    = lipgloss.Color("6")
 	WarningColor    = lipgloss.Color("3") // yellow: warnings, attention, denied
-	PromptBorder    = lipgloss.AdaptiveColor{Light: "242", Dark: "8"}
+	PromptBorder    = lipgloss.Color("8")
 )
 
 var (
@@ -50,7 +50,7 @@ var (
 	AssistantStyle       = lipgloss.NewStyle()
 	ToolStyle            = lipgloss.NewStyle().Foreground(AccentTool)
 	SystemStyle          = lipgloss.NewStyle().Foreground(AccentSystem)
-	MutedStyle           = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "238", Dark: "7"})
+	MutedStyle           = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	StatusStyle          = lipgloss.NewStyle().Foreground(AccentSystem)
 	WarningStyle         = lipgloss.NewStyle().Foreground(WarningColor)
 	SuccessStyle         = lipgloss.NewStyle().Foreground(AccentSuccess)
@@ -59,11 +59,11 @@ var (
 	CommandStyle         = lipgloss.NewStyle().Foreground(CommandColor)
 	ToolTargetStyle      = lipgloss.NewStyle().Bold(true).Foreground(AccentUser)
 	ToolDirStyle         = lipgloss.NewStyle().Foreground(AccentTool)
-	ToolSummaryStyle     = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "240", Dark: "8"})
-	FileBadgeStyle       = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "244", Dark: "8"})
-	ToolExcerptStyle     = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "244", Dark: "8"}).Italic(true)
-	ToolFoldStyle        = lipgloss.NewStyle().Italic(true).Foreground(lipgloss.AdaptiveColor{Light: "244", Dark: "8"})
-	HeroLabelStyle       = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "240", Dark: "8"}).Bold(true)
+	ToolSummaryStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	FileBadgeStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	ToolExcerptStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Italic(true)
+	ToolFoldStyle        = lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("8"))
+	HeroLabelStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Bold(true)
 	HeroKeyStyle         = lipgloss.NewStyle().Foreground(AccentUser).Bold(true)
 	DiffAddStyle         = lipgloss.NewStyle().Foreground(AccentSuccess)
 	DiffDeleteStyle      = lipgloss.NewStyle().Foreground(AccentError)

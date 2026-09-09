@@ -1,11 +1,11 @@
 package runtime
 
 import (
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"context"
 	"errors"
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"strings"
@@ -27,7 +27,7 @@ func TestProviderSelectViewLaunchViaSlashCommand(t *testing.T) {
 	if view.items[view.index].name != "protonman" {
 		t.Fatalf("expected active provider 'protonman' focused, got %s", view.items[view.index].name)
 	}
-	rendered := bModel.View()
+	rendered := bModel.View().Content
 	if !strings.Contains(rendered, "Providers") {
 		t.Fatalf("expected provider title in view, got:\n%s", rendered)
 	}
@@ -37,7 +37,7 @@ func TestProviderSelectViewLaunchViaSlashCommand(t *testing.T) {
 	if !strings.Contains(rendered, "https://api.protonman.dev/v1") {
 		t.Fatalf("expected endpoint in view, got:\n%s", rendered)
 	}
-	updated, _ := bModel.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	updated, _ := bModel.Update(testKey(tea.KeyEsc))
 	bModel = updated.(*bubbleModel)
 	if bModel.bottom.has(providerSelectViewID) {
 		t.Fatal("expected provider select modal closed after Esc")
@@ -74,27 +74,27 @@ func TestProviderSelectViewNavigationAndConfirm(t *testing.T) {
 	if view.index != 1 {
 		t.Fatalf("expected initial index 1, got %d", view.index)
 	}
-	updated, _ := bModel.Update(tea.KeyMsg{Type: tea.KeyUp})
+	updated, _ := bModel.Update(testKey(tea.KeyUp))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView)
 	if view.index != 0 {
 		t.Fatalf("expected index 0 after Up, got %d", view.index)
 	}
-	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyDown})
+	updated, _ = bModel.Update(testKey(tea.KeyDown))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView)
 	if view.index != 1 {
 		t.Fatalf("expected index 1 after Down, got %d", view.index)
 	}
-	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	updated, _ = bModel.Update(testText("1"))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView)
 	if view.index != 1 {
 		t.Fatalf("number shortcut changed provider index to %d", view.index)
 	}
-	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyUp})
+	updated, _ = bModel.Update(testKey(tea.KeyUp))
 	bModel = updated.(*bubbleModel)
-	updated, cmd := bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, cmd := bModel.Update(testKey(tea.KeyEnter))
 	bModel = updated.(*bubbleModel)
 	if cmd == nil {
 		t.Fatal("expected non-nil cmd on Enter")
@@ -132,7 +132,7 @@ func TestProviderSelectViewEditDetails(t *testing.T) {
 	bModel.providers = map[string]config.ProviderConfig{"protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-secret-key-999", Type: "openai"}}
 	bModel.activeProvider = "protonman"
 	bModel.executeCommand("/provider")
-	updated, _ := bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	updated, _ := bModel.Update(testText("e"))
 	bModel = updated.(*bubbleModel)
 	if bModel.bottom.has(providerSelectViewID) {
 		t.Fatal("expected provider select view closed")
@@ -153,7 +153,7 @@ func TestProviderSelectViewEditDetails(t *testing.T) {
 	if pv.apiKeyInput.Value() != "pm-secret-key-999" {
 		t.Fatalf("expected api key prefilled, got %q", pv.apiKeyInput.Value())
 	}
-	rendered := bModel.View()
+	rendered := bModel.View().Content
 	if !strings.Contains(rendered, "Edit Provider: protonman") {
 		t.Fatalf("expected 'Edit Provider: protonman' in rendered view, got:\n%s", rendered)
 	}
@@ -175,7 +175,7 @@ func TestProviderSelectViewSetupPreset(t *testing.T) {
 		t.Fatal("expected ollama preset in items")
 	}
 	view.index = ollamaIdx
-	updated, _ := bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, _ := bModel.Update(testKey(tea.KeyEnter))
 	bModel = updated.(*bubbleModel)
 	if !bModel.bottom.has(providerViewID) {
 		t.Fatal("expected provider view opened for preset setup")
@@ -196,7 +196,7 @@ func TestProviderSelectViewDelete(t *testing.T) {
 	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: "https://opencode.ai/zen/v1", Type: "openai"}, "protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-key", Type: "openai"}}
 	bModel.activeProvider = "protonman"
 	bModel.executeCommand("/provider")
-	updated, cmd := bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	updated, cmd := bModel.Update(testText("d"))
 	bModel = updated.(*bubbleModel)
 	if cmd != nil {
 		t.Fatal("expected delete confirmation before running a command")
@@ -205,17 +205,17 @@ func TestProviderSelectViewDelete(t *testing.T) {
 	if !view.deleteConfirm {
 		t.Fatal("expected delete confirmation state after 'd'")
 	}
-	if !strings.Contains(bModel.View(), "Remove Provider?") || !strings.Contains(bModel.View(), "protonman") {
-		t.Fatalf("expected provider delete confirmation in view, got:\n%s", bModel.View())
+	if !strings.Contains(bModel.View().Content, "Remove Provider?") || !strings.Contains(bModel.View().Content, "protonman") {
+		t.Fatalf("expected provider delete confirmation in view, got:\n%s", bModel.View().Content)
 	}
-	updated, cmd = bModel.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	updated, cmd = bModel.Update(testKey(tea.KeyEsc))
 	bModel = updated.(*bubbleModel)
 	if cmd != nil || bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView).deleteConfirm {
 		t.Fatal("expected Esc to cancel delete confirmation")
 	}
-	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	updated, _ = bModel.Update(testText("d"))
 	bModel = updated.(*bubbleModel)
-	updated, cmd = bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, cmd = bModel.Update(testKey(tea.KeyEnter))
 	bModel = updated.(*bubbleModel)
 	if cmd == nil {
 		t.Fatal("expected delete cmd after confirming with Enter")
@@ -268,7 +268,7 @@ func TestProviderSelectDirectSlashCommand(t *testing.T) {
 	}
 	bModel.bottom.remove(providerViewID)
 	bModel.executeCommand("/provider non-existent")
-	rendered := bModel.View()
+	rendered := bModel.View().Content
 	if !strings.Contains(rendered, "unknown provider") {
 		t.Fatalf("expected 'unknown provider' error in view, got:\n%s", rendered)
 	}
@@ -279,7 +279,7 @@ func TestProviderSelectSwitchToModels(t *testing.T) {
 	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: "https://opencode.ai/zen/v1", Type: "openai"}, "protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-test-key", Type: "openai"}}
 	bModel.activeProvider = "opencode"
 	bModel.executeCommand("/provider")
-	updated, _ := bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
+	updated, _ := bModel.Update(testText("m"))
 	bModel = updated.(*bubbleModel)
 	if bModel.bottom.has(providerSelectViewID) {
 		t.Fatal("expected provider select view removed after pressing 'm'")
@@ -296,7 +296,7 @@ func TestModelSelectSwitchToProviders(t *testing.T) {
 	if !bModel.bottom.has(modelSelectViewID) {
 		t.Fatal("expected model select view open")
 	}
-	updated, _ := bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	updated, _ := bModel.Update(testText("p"))
 	bModel = updated.(*bubbleModel)
 	if bModel.bottom.has(modelSelectViewID) {
 		t.Fatal("expected model select view removed after pressing 'p'")
@@ -310,7 +310,7 @@ func TestProviderSelectAddShortcut(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.providers = map[string]config.ProviderConfig{"protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-test-key", Type: "openai"}}
 	bModel.executeCommand("/provider")
-	updated, _ := bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	updated, _ := bModel.Update(testText("a"))
 	bModel = updated.(*bubbleModel)
 	if bModel.bottom.has(providerSelectViewID) {
 		t.Fatal("expected provider select view removed after pressing 'a'")
@@ -330,15 +330,15 @@ func TestProviderSelectWindowing(t *testing.T) {
 	bModel.providers = providers
 	bModel.activeProvider = "provider-01"
 	bModel.executeCommand("/provider")
-	rendered := bModel.View()
+	rendered := bModel.View().Content
 	if !strings.Contains(rendered, "↓") || !strings.Contains(rendered, "more") {
 		t.Fatalf("expected downward scroll indicator for 10 providers, got:\n%s", rendered)
 	}
 	for i := 0; i < 8; i++ {
-		updated, _ := bModel.Update(tea.KeyMsg{Type: tea.KeyDown})
+		updated, _ := bModel.Update(testKey(tea.KeyDown))
 		bModel = updated.(*bubbleModel)
 	}
-	rendered = bModel.View()
+	rendered = bModel.View().Content
 	if !strings.Contains(rendered, "↑") || !strings.Contains(rendered, "more") {
 		t.Fatalf("expected upward scroll indicator after scrolling down, got:\n%s", rendered)
 	}
@@ -355,19 +355,19 @@ func TestProviderSelectPagedNavigation(t *testing.T) {
 	m.activeProvider = "provider-00"
 	m.resize(40, 14)
 	m.executeCommand("/provider")
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	updated, _ := m.Update(testKey(tea.KeyPgDown))
 	m = updated.(*bubbleModel)
 	view := m.bottom.find(providerSelectViewID).(*providerSelectPaneView)
 	if view.index != pickerVisibleRows(m.height, maxProviderListRows) {
 		t.Fatalf("pgdown index = %d", view.index)
 	}
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	updated, _ = m.Update(testKey(tea.KeyEnd))
 	m = updated.(*bubbleModel)
 	view = m.bottom.find(providerSelectViewID).(*providerSelectPaneView)
 	if view.index != len(view.items)-1 {
 		t.Fatalf("end index = %d, want %d", view.index, len(view.items)-1)
 	}
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyHome})
+	updated, _ = m.Update(testKey(tea.KeyHome))
 	m = updated.(*bubbleModel)
 	view = m.bottom.find(providerSelectViewID).(*providerSelectPaneView)
 	if view.index != 0 {
@@ -388,7 +388,7 @@ func TestProviderViewLaunchViaSlashCommand(t *testing.T) {
 	if view.endpointInput.Value() != "" {
 		t.Fatalf("expected blank endpoint, got: %s", view.endpointInput.Value())
 	}
-	rendered := bModel.View()
+	rendered := testPlain(bModel.View().Content)
 	if !strings.Contains(rendered, "Add Model Provider") {
 		t.Fatalf("expected 'Add Model Provider' in rendered view, got:\n%s", rendered)
 	}
@@ -410,7 +410,7 @@ func TestProviderModalsFitSmallTerminals(t *testing.T) {
 		if got := lipgloss.Height(rendered); got > size[1] {
 			t.Errorf("provider form height %d exceeds terminal height %d at %dx%d", got, size[1], size[0], size[1])
 		}
-		if strings.Contains(bModel.View(), "enter send") {
+		if strings.Contains(bModel.View().Content, "enter send") {
 			t.Errorf("provider modal still shows the composer footer at %dx%d", size[0], size[1])
 		}
 	}
@@ -434,19 +434,19 @@ func TestProviderViewTabCycleAndEsc(t *testing.T) {
 	if view.focusIndex != 0 {
 		t.Fatalf("expected initial focusIndex 0, got %d", view.focusIndex)
 	}
-	updated, _ := bModel.Update(tea.KeyMsg{Type: tea.KeyTab})
+	updated, _ := bModel.Update(testKey(tea.KeyTab))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerViewID).(*providerPaneView)
 	if view.focusIndex != 1 {
 		t.Fatalf("expected focusIndex 1 after Tab, got %d", view.focusIndex)
 	}
-	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyTab})
+	updated, _ = bModel.Update(testKey(tea.KeyTab))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerViewID).(*providerPaneView)
 	if view.focusIndex != 2 {
 		t.Fatalf("expected focusIndex 2 after Tab, got %d", view.focusIndex)
 	}
-	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	updated, _ = bModel.Update(testKey(tea.KeyEsc))
 	bModel = updated.(*bubbleModel)
 	if bModel.bottom.has(providerViewID) {
 		t.Fatal("expected modal closed on Esc")
@@ -456,7 +456,7 @@ func TestProviderViewTabCycleAndEsc(t *testing.T) {
 func TestProviderViewValidationBeforeFetch(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.executeCommand("/provider add")
-	updated, cmd := bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, cmd := bModel.Update(testKey(tea.KeyEnter))
 	bModel = updated.(*bubbleModel)
 	view := bModel.bottom.find(providerViewID).(*providerPaneView)
 	if cmd != nil {
@@ -474,7 +474,7 @@ func TestProviderViewValidationBeforeFetch(t *testing.T) {
 	view.nameInput.SetValue("custom")
 	view.endpointInput.SetValue("ftp://provider.example.com/v1")
 	view.apiKeyInput.SetValue("key")
-	updated, cmd = bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, cmd = bModel.Update(testKey(tea.KeyEnter))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerViewID).(*providerPaneView)
 	if cmd != nil {
@@ -496,7 +496,7 @@ func TestProviderViewDuplicateNameConfirmation(t *testing.T) {
 	view.nameInput.SetValue("protonman")
 	view.endpointInput.SetValue("https://replacement.example.com/v1")
 	view.apiKeyInput.SetValue("replacement-key")
-	updated, cmd := bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, cmd := bModel.Update(testKey(tea.KeyEnter))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerViewID).(*providerPaneView)
 	if cmd != nil {
@@ -505,10 +505,10 @@ func TestProviderViewDuplicateNameConfirmation(t *testing.T) {
 	if view.state != providerStateConfirmOverwrite {
 		t.Fatalf("expected overwrite confirmation state, got %v", view.state)
 	}
-	if !strings.Contains(bModel.View(), "Provider Already Exists") {
-		t.Fatalf("expected overwrite warning in view, got:\n%s", bModel.View())
+	if !strings.Contains(bModel.View().Content, "Provider Already Exists") {
+		t.Fatalf("expected overwrite warning in view, got:\n%s", bModel.View().Content)
 	}
-	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	updated, _ = bModel.Update(testKey(tea.KeyEsc))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerViewID).(*providerPaneView)
 	if view.state != providerStateInput {
@@ -535,7 +535,7 @@ func TestProviderViewFetchAndModelSelectionFlow(t *testing.T) {
 	view.nameInput.SetValue("protonman")
 	view.endpointInput.SetValue("https://protonman.dev/api/v1")
 	view.apiKeyInput.SetValue("plk_test_mock_key")
-	updated, cmd := bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, cmd := bModel.Update(testKey(tea.KeyEnter))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerViewID).(*providerPaneView)
 	if view.state != providerStateFetching {
@@ -554,17 +554,17 @@ func TestProviderViewFetchAndModelSelectionFlow(t *testing.T) {
 	if len(view.models) != 2 {
 		t.Fatalf("expected 2 models, got %d", len(view.models))
 	}
-	rendered := bModel.View()
+	rendered := bModel.View().Content
 	if !strings.Contains(rendered, "deepseek-v4-flash-vision-exp") || !strings.Contains(rendered, "1.0M context") {
 		t.Fatalf("expected models in view, got:\n%s", rendered)
 	}
-	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyDown})
+	updated, _ = bModel.Update(testKey(tea.KeyDown))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerViewID).(*providerPaneView)
 	if view.selectedIndex != 1 {
 		t.Fatalf("expected selectedIndex 1, got %d", view.selectedIndex)
 	}
-	updated, saveCmd := bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, saveCmd := bModel.Update(testKey(tea.KeyEnter))
 	bModel = updated.(*bubbleModel)
 	if saveCmd == nil {
 		t.Fatal("expected saveProviderCmd on selection Enter")
@@ -602,20 +602,20 @@ func TestProviderViewInactiveEditKeepsActiveProvider(t *testing.T) {
 			break
 		}
 	}
-	updated, _ := bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	updated, _ := bModel.Update(testText("e"))
 	bModel = updated.(*bubbleModel)
 	view := bModel.bottom.find(providerViewID).(*providerPaneView)
 	if view.activateOnSave {
 		t.Fatal("expected editing an inactive provider to preserve the active provider")
 	}
-	if !strings.Contains(bModel.View(), "active provider stays") {
-		t.Fatalf("expected inactive edit hint in view, got:\n%s", bModel.View())
+	if !strings.Contains(bModel.View().Content, "active provider stays") {
+		t.Fatalf("expected inactive edit hint in view, got:\n%s", bModel.View().Content)
 	}
 	view.endpointInput.SetValue("https://protonman.dev/v2")
 	view.apiKeyInput.SetValue("new-key")
 	view.state = providerStateSelectModel
 	view.models = []model.RemoteModel{{ID: "unused-model", Name: "Unused Model"}}
-	updated, saveCmd := bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, saveCmd := bModel.Update(testKey(tea.KeyEnter))
 	bModel = updated.(*bubbleModel)
 	if saveCmd == nil || view.state != providerStateSaving {
 		t.Fatalf("expected inactive edit to enter saving state, got state=%v cmd=%v", view.state, saveCmd != nil)
@@ -658,10 +658,10 @@ func TestProviderViewSaveFailureKeepsPane(t *testing.T) {
 	if view.nameInput.Value() != "custom" || view.apiKeyInput.Value() != "key" {
 		t.Fatal("expected provider draft to remain after save failure")
 	}
-	if !strings.Contains(bModel.View(), "permission denied") {
-		t.Fatalf("expected save error in view, got:\n%s", bModel.View())
+	if !strings.Contains(bModel.View().Content, "permission denied") {
+		t.Fatalf("expected save error in view, got:\n%s", bModel.View().Content)
 	}
-	updated, cmd := bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, cmd := bModel.Update(testKey(tea.KeyEnter))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerViewID).(*providerPaneView)
 	if cmd == nil || view.state != providerStateSaving {
@@ -721,11 +721,11 @@ func TestProviderViewErrorDisplayAndRetry(t *testing.T) {
 	if view.state != providerStateError {
 		t.Fatalf("expected providerStateError, got %v", view.state)
 	}
-	rendered := bModel.View()
+	rendered := bModel.View().Content
 	if !strings.Contains(rendered, "Connection Failed") || !strings.Contains(rendered, "invalid API key") {
 		t.Fatalf("expected error banner in view, got:\n%s", rendered)
 	}
-	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, _ = bModel.Update(testKey(tea.KeyEnter))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerViewID).(*providerPaneView)
 	if view.state != providerStateInput {
@@ -749,7 +749,7 @@ func TestProviderViewOpenCodePresetLaunch(t *testing.T) {
 	if !strings.Contains(strings.ToLower(view.apiKeyInput.Placeholder), "optional") {
 		t.Fatalf("expected placeholder with 'Optional', got: %s", view.apiKeyInput.Placeholder)
 	}
-	rendered := bModel.View()
+	rendered := bModel.View().Content
 	if !strings.Contains(rendered, "opencode") || !strings.Contains(rendered, "https://opencode.ai/zen/v1") {
 		t.Fatalf("expected opencode in rendered view, got:\n%s", rendered)
 	}
@@ -760,7 +760,7 @@ func TestProviderViewEmptyKeyAllowedForOpenCode(t *testing.T) {
 	bModel.executeCommand("/provider add opencode")
 	view := bModel.bottom.find(providerViewID).(*providerPaneView)
 	view.apiKeyInput.SetValue("")
-	updated, cmd := bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, cmd := bModel.Update(testKey(tea.KeyEnter))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerViewID).(*providerPaneView)
 	if view.state != providerStateFetching {
@@ -784,7 +784,7 @@ func TestProviderViewFreeBadgeAndFiltering(t *testing.T) {
 	if !view.filterFreeOnly {
 		t.Fatal("expected filterFreeOnly true by default for opencode")
 	}
-	rendered := bModel.View()
+	rendered := bModel.View().Content
 	if !strings.Contains(rendered, "[FREE]") {
 		t.Fatalf("expected [FREE] badge in view, got:\n%s", rendered)
 	}
@@ -794,13 +794,13 @@ func TestProviderViewFreeBadgeAndFiltering(t *testing.T) {
 	if strings.Contains(rendered, "claude-sonnet-5") {
 		t.Fatalf("expected paid models filtered out when filterFreeOnly is true, got:\n%s", rendered)
 	}
-	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	updated, _ = bModel.Update(testText("f"))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerViewID).(*providerPaneView)
 	if view.filterFreeOnly {
 		t.Fatal("expected filterFreeOnly toggled to false after 'f'")
 	}
-	renderedAll := bModel.View()
+	renderedAll := bModel.View().Content
 	if !strings.Contains(renderedAll, "claude-sonnet-5") || !strings.Contains(renderedAll, "gpt-5.5") {
 		t.Fatalf("expected all models shown after 'f' toggle, got:\n%s", renderedAll)
 	}
@@ -822,12 +822,12 @@ func TestProviderViewWindowingWithManyModels(t *testing.T) {
 	if len(view.models) != 15 {
 		t.Fatalf("expected 15 models, got %d", len(view.models))
 	}
-	rendered := bModel.View()
+	rendered := bModel.View().Content
 	if !strings.Contains(rendered, "more below") {
 		t.Fatalf("expected 'more below' indicator for 15 models, got:\n%s", rendered)
 	}
 	for i := 0; i < 8; i++ {
-		updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyDown})
+		updated, _ = bModel.Update(testKey(tea.KeyDown))
 		bModel = updated.(*bubbleModel)
 	}
 	view = bModel.bottom.find(providerViewID).(*providerPaneView)
@@ -837,7 +837,7 @@ func TestProviderViewWindowingWithManyModels(t *testing.T) {
 	if view.scrollOffset == 0 {
 		t.Fatalf("expected scrollOffset > 0 after scrolling down past 8 rows, got %d", view.scrollOffset)
 	}
-	scrolledView := bModel.View()
+	scrolledView := bModel.View().Content
 	if !strings.Contains(scrolledView, "more above") {
 		t.Fatalf("expected 'more above' indicator after scrolling down, got:\n%s", scrolledView)
 	}
@@ -931,7 +931,7 @@ func TestProviderSwitchReconcilesIncompatibleModel(t *testing.T) {
 	if bModel.activeModel != "opencode-default-model" {
 		t.Fatalf("activeModel = %q, want 'opencode-default-model'", bModel.activeModel)
 	}
-	rendered := bModel.View()
+	rendered := bModel.View().Content
 	if !strings.Contains(rendered, "Reconciled active model to opencode-default-model") {
 		t.Fatalf("expected reconciliation notice in view, got:\n%s", rendered)
 	}

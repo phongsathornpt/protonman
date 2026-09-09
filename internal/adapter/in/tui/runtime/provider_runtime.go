@@ -1,16 +1,17 @@
 package runtime
 
 import (
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"context"
 	"fmt"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"image/color"
 	"net/url"
 	"sort"
 	"strings"
@@ -344,9 +345,9 @@ func (v *providerPaneView) Render(m *bubbleModel) string {
 
 func (v *providerPaneView) resizeInputs(width int) {
 	inputWidth := maxInt(8, width-18)
-	v.nameInput.Width = inputWidth
-	v.endpointInput.Width = inputWidth
-	v.apiKeyInput.Width = inputWidth
+	v.nameInput.SetWidth(inputWidth)
+	v.endpointInput.SetWidth(inputWidth)
+	v.apiKeyInput.SetWidth(inputWidth)
 }
 
 func providerEditorSnapshot(m *bubbleModel, v *providerPaneView) pane.ProviderEditorSnapshot {
@@ -413,7 +414,7 @@ func renderProviderInput(m *bubbleModel) string {
 	return renderProviderModal(m, paneToneColor(tone), rows)
 }
 
-func renderProviderModal(m *bubbleModel, border lipgloss.TerminalColor, rows []string) string {
+func renderProviderModal(m *bubbleModel, border color.Color, rows []string) string {
 	contentWidth := providerModalContentWidth(m)
 	wrappedRows := make([]string, 0, len(rows))
 	for _, row := range rows {
@@ -433,7 +434,7 @@ func providerModalContentWidth(m *bubbleModel) int {
 	return maxInt(1, maxInt(1, m.width-4)-6)
 }
 
-func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	defer v.normalizeModelSelection()
 	switch v.state {
 	case providerStateFetching:
@@ -575,7 +576,7 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 	return renderProviderModal(m, border, rows)
 }
 
-func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	defer func() {
 		visible := pickerVisibleRows(m.height, maxProviderListRows)
 		v.index, v.offset, _ = normalizedPickerWindow(v.index, v.offset, len(v.items), visible)
@@ -740,7 +741,7 @@ func (v *providerPaneView) normalizeModelSelection() {
 	v.selectedIndex, v.scrollOffset, _ = normalizedPickerWindow(v.selectedIndex, v.scrollOffset, len(models), maxProviderSelectRows)
 }
 
-func (v *providerPaneView) handleFetchingKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+func (v *providerPaneView) handleFetchingKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	if message.String() == "esc" {
 		v.cancelFetch()
 		m.bottom.remove(providerViewID)
@@ -748,7 +749,7 @@ func (v *providerPaneView) handleFetchingKey(m *bubbleModel, message tea.KeyMsg)
 	return true, nil
 }
 
-func (v *providerPaneView) handleModelSelectKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+func (v *providerPaneView) handleModelSelectKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	models := v.currentModels()
 	switch message.String() {
 	case "esc":
@@ -773,7 +774,7 @@ func (v *providerPaneView) handleModelSelectKey(m *bubbleModel, message tea.KeyM
 		}
 		return true, nil
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		num := v.scrollOffset + int(message.Runes[0]-'1')
+		num := v.scrollOffset + int(message.String()[0]-'1')
 		if num >= 0 && num < len(models) {
 			v.selectedIndex = num
 		}
@@ -791,7 +792,7 @@ func (v *providerPaneView) handleModelSelectKey(m *bubbleModel, message tea.KeyM
 	}
 }
 
-func (v *providerPaneView) handleSaveErrorKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+func (v *providerPaneView) handleSaveErrorKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch message.String() {
 	case "enter":
 		v.state = providerStateSaving
@@ -805,7 +806,7 @@ func (v *providerPaneView) handleSaveErrorKey(m *bubbleModel, message tea.KeyMsg
 	}
 }
 
-func (v *providerPaneView) handleOverwriteKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+func (v *providerPaneView) handleOverwriteKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch message.String() {
 	case "enter":
 		return true, v.beginFetch(m.ctx, m.runtimeConfig.ModelDiscoveryTimeout)
@@ -819,7 +820,7 @@ func (v *providerPaneView) handleOverwriteKey(m *bubbleModel, message tea.KeyMsg
 	}
 }
 
-func (v *providerPaneView) handleProviderErrorKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+func (v *providerPaneView) handleProviderErrorKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch message.String() {
 	case "enter", "esc":
 		v.state = providerStateInput
@@ -832,7 +833,7 @@ func (v *providerPaneView) handleProviderErrorKey(m *bubbleModel, message tea.Ke
 	}
 }
 
-func (v *providerPaneView) handleInputKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+func (v *providerPaneView) handleInputKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch message.String() {
 	case "esc":
 		m.bottom.remove(providerViewID)
@@ -880,7 +881,7 @@ func (v *providerPaneView) handleInputKey(m *bubbleModel, message tea.KeyMsg) (b
 	}
 }
 
-func (v *providerPaneView) updateFocusedInput(message tea.KeyMsg) tea.Cmd {
+func (v *providerPaneView) updateFocusedInput(message tea.KeyPressMsg) tea.Cmd {
 	var cmd tea.Cmd
 	switch v.focusIndex {
 	case int(providerFieldName):

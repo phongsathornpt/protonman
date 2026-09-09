@@ -1,9 +1,9 @@
 package runtime
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"context"
 	"errors"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	domainmodel "github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -161,7 +161,7 @@ func TestModelPickerCloseCancelsFetch(t *testing.T) {
 	view.fetchCancel = func() {
 		canceled = true
 	}
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	updated, _ := m.Update(testKey(tea.KeyEsc))
 	m = updated.(*bubbleModel)
 	if !canceled {
 		t.Fatal("closing model picker did not cancel fetch")
@@ -297,9 +297,9 @@ func TestModelPickerSearchModeAcceptsReservedLetters(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	view := newModelSelectPaneView(m)
 	m.bottom.push(view)
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	updated, _ := m.Update(testText("/"))
 	m = updated.(*bubbleModel)
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q', 'w', 'e', 'n'}})
+	updated, _ = m.Update(testText("qwen"))
 	m = updated.(*bubbleModel)
 	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
 	if view.filter != "qwen" {
@@ -357,7 +357,7 @@ func TestModelSelectViewLaunchViaSlashCommand(t *testing.T) {
 	if view.models[view.index].ID != "MiniMax-M3" {
 		t.Fatalf("expected focused model 'MiniMax-M3', got %s", view.models[view.index].ID)
 	}
-	rendered := bModel.View()
+	rendered := bModel.View().Content
 	if !strings.Contains(rendered, "Select Model") {
 		t.Fatalf("expected 'Select Model' in view, got:\n%s", rendered)
 	}
@@ -367,7 +367,7 @@ func TestModelSelectViewLaunchViaSlashCommand(t *testing.T) {
 	if !strings.Contains(rendered, "MiniMax-M3") {
 		t.Fatalf("expected 'MiniMax-M3' in view, got:\n%s", rendered)
 	}
-	updated, _ := bModel.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	updated, _ := bModel.Update(testKey(tea.KeyEsc))
 	bModel = updated.(*bubbleModel)
 	if bModel.bottom.has(modelSelectViewID) {
 		t.Fatal("expected model select modal closed after Esc")
@@ -385,17 +385,17 @@ func TestModelSelectViewLaunchViaSlashCommand(t *testing.T) {
 
 func TestModelSelectViewToggleKeybinding(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
-	updated, _ := bModel.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	updated, _ := bModel.Update(testCtrl('p'))
 	bModel = updated.(*bubbleModel)
 	if !bModel.bottom.has(modelSelectViewID) {
 		t.Fatal("expected model select modal open after Ctrl+P")
 	}
-	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	updated, _ = bModel.Update(testCtrl('p'))
 	bModel = updated.(*bubbleModel)
 	if bModel.bottom.has(modelSelectViewID) {
 		t.Fatal("expected model select modal closed after second Ctrl+P")
 	}
-	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}, Alt: true})
+	updated, _ = bModel.Update(testAltText("m"))
 	bModel = updated.(*bubbleModel)
 	if !bModel.bottom.has(modelSelectViewID) {
 		t.Fatal("expected model select modal open after Alt+M")
@@ -412,21 +412,21 @@ func TestModelSelectViewNavigationAndConfirm(t *testing.T) {
 	if view.index != 0 {
 		t.Fatalf("expected initial index 0, got %d", view.index)
 	}
-	updated, _ := bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	updated, _ := bModel.Update(testText("j"))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
 	if view.index != 1 {
 		t.Fatalf("expected index 1 after 'j', got %d", view.index)
 	}
-	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	updated, _ = bModel.Update(testText("k"))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
 	if view.index != 0 {
 		t.Fatalf("expected index 0 after 'k', got %d", view.index)
 	}
-	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyDown})
+	updated, _ = bModel.Update(testKey(tea.KeyDown))
 	bModel = updated.(*bubbleModel)
-	updated, _ = bModel.Update(tea.KeyMsg{Type: tea.KeyDown})
+	updated, _ = bModel.Update(testKey(tea.KeyDown))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
 	if view.index != 2 {
@@ -436,7 +436,7 @@ func TestModelSelectViewNavigationAndConfirm(t *testing.T) {
 		t.Fatalf("expected Qwen3.8-Flash at index 2, got %s", view.models[view.index].ID)
 	}
 	t.Setenv("PROTONMAN_HOME", t.TempDir())
-	updated, cmd := bModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, cmd := bModel.Update(testKey(tea.KeyEnter))
 	bModel = updated.(*bubbleModel)
 	if bModel.bottom.has(modelSelectViewID) {
 		t.Fatal("expected modelSelectViewID removed on Enter")
@@ -491,7 +491,7 @@ func TestModelSelectViewSwitchToAddProvider(t *testing.T) {
 	if !bModel.bottom.has(modelSelectViewID) {
 		t.Fatal("expected model select modal open")
 	}
-	updated, _ := bModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	updated, _ := bModel.Update(testText("a"))
 	bModel = updated.(*bubbleModel)
 	if bModel.bottom.has(modelSelectViewID) {
 		t.Fatal("expected modelSelectViewID removed after 'a'")
@@ -524,7 +524,7 @@ func TestProviderListSlashCommand(t *testing.T) {
 	bModel.activeProvider = "protonman"
 	bModel.activeModel = "MiniMax-M3"
 	bModel.executeCommand("/provider list")
-	rendered := bModel.View()
+	rendered := bModel.View().Content
 	if !strings.Contains(rendered, "Configured Providers") {
 		t.Fatalf("expected 'Configured Providers' in view, got:\n%s", rendered)
 	}
@@ -543,19 +543,19 @@ func TestModelSelectPagedNavigation(t *testing.T) {
 	m.executeCommand("/model")
 	view := m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
 	view.index = 0
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	updated, _ := m.Update(testKey(tea.KeyPgDown))
 	m = updated.(*bubbleModel)
 	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
 	if view.index != pickerVisibleRows(m.height, maxModelSelectRows) {
 		t.Fatalf("pgdown index = %d", view.index)
 	}
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	updated, _ = m.Update(testKey(tea.KeyEnd))
 	m = updated.(*bubbleModel)
 	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
 	if view.index != len(view.models)-1 {
 		t.Fatalf("end index = %d, want %d", view.index, len(view.models)-1)
 	}
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyHome})
+	updated, _ = m.Update(testKey(tea.KeyHome))
 	m = updated.(*bubbleModel)
 	view = m.bottom.find(modelSelectViewID).(*modelSelectPaneView)
 	if view.index != 0 {
@@ -1008,7 +1008,7 @@ func TestModelPickerShiftTabCyclesProvidersWithoutLeaking(t *testing.T) {
 	initialIdx := view.providerIndex
 	initialMode := bModel.service.Mode()
 
-	handled, _ := view.HandleKey(bModel, tea.KeyMsg{Type: tea.KeyShiftTab})
+	handled, _ := view.HandleKey(bModel, testShiftTab())
 	if !handled {
 		t.Fatal("shift+tab was not handled by model picker")
 	}
@@ -1033,7 +1033,7 @@ func TestModelPickerEnterWhileFilteringSelectsModel(t *testing.T) {
 	view.filtering = true
 	view.index = 0
 
-	handled, cmd := view.HandleKey(bModel, tea.KeyMsg{Type: tea.KeyEnter})
+	handled, cmd := view.HandleKey(bModel, testKey(tea.KeyEnter))
 	if !handled {
 		t.Fatal("enter while filtering was not handled")
 	}
@@ -1055,7 +1055,7 @@ func TestModelPickerEnterOnZeroMatchesDoesNotOpenProviderEditor(t *testing.T) {
 	view.models = nil
 	view.filtering = false
 
-	handled, cmd := view.HandleKey(bModel, tea.KeyMsg{Type: tea.KeyEnter})
+	handled, cmd := view.HandleKey(bModel, testKey(tea.KeyEnter))
 	if !handled {
 		t.Fatal("enter on 0 matches was not handled")
 	}

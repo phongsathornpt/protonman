@@ -1,13 +1,13 @@
 package runtime
 
 import (
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/execview"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -112,7 +112,7 @@ func TestCompactLayoutReducesChrome(t *testing.T) {
 	if strings.Contains(m.promptView(), "╭") || strings.Contains(m.promptView(), "╰") {
 		t.Fatalf("tiny prompt still renders box chrome: %q", m.promptView())
 	}
-	if got := lipgloss.Height(m.View()); got > 12 {
+	if got := lipgloss.Height(m.View().Content); got > 12 {
 		t.Fatalf("tiny live view height = %d, want <= 12", got)
 	}
 }
@@ -140,7 +140,7 @@ func TestTodoDefaultsToSummaryAndCtrlOExpands(t *testing.T) {
 	if got := m.todoView(); !strings.Contains(got, "Tasks 0/2") || strings.Contains(got, "first") {
 		t.Fatalf("default todo = %q, want summary", got)
 	}
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
+	updated, _ := m.Update(testCtrl('o'))
 	m = updated.(*bubbleModel)
 	if got := m.todoView(); !strings.Contains(got, "first") || !strings.Contains(got, "second") {
 		t.Fatalf("expanded todo missing details: %q", got)
@@ -305,7 +305,7 @@ func TestTodoExpandedViewHidesProtocolIDs(t *testing.T) {
 func TestTodoToggleOpensFocusedPaneInCompactLayout(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
 	m.resize(24, 12)
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
+	updated, _ := m.Update(testCtrl('o'))
 	m = updated.(*bubbleModel)
 	view := m.bottom.find(todoInspectViewID)
 	if view == nil {
@@ -372,7 +372,7 @@ func TestFocusedTodoPaneBoundsAndScrollsLargePlans(t *testing.T) {
 		t.Fatalf("pane exceeds terminal: %dx%d", lipgloss.Width(first), lipgloss.Height(first))
 	}
 	for range 5 {
-		_, _ = view.HandleKey(m, tea.KeyMsg{Type: tea.KeyDown})
+		_, _ = view.HandleKey(m, testKey(tea.KeyDown))
 	}
 	after := view.Render(m)
 	if first == after || !strings.Contains(after, "task-005") {
@@ -932,7 +932,7 @@ func TestCrashModelNavigation(t *testing.T) {
 	m := NewCrashModel("test failure", []byte(stack))
 	m.width = 80
 	m.height = 24
-	rendered := m.View()
+	rendered := m.View().Content
 	if !strings.Contains(rendered, "Protonman crashed") {
 		t.Fatalf("expected headline in view, got: %s", rendered)
 	}
@@ -942,19 +942,19 @@ func TestCrashModelNavigation(t *testing.T) {
 	if !strings.Contains(rendered, "[c] Copy report") {
 		t.Fatalf("expected copy report action in view, got: %s", rendered)
 	}
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	_, _ = m.Update(testKey(tea.KeyDown))
 	if m.scrollOffset != 1 {
 		t.Fatalf("expected scrollOffset 1, got %d", m.scrollOffset)
 	}
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	_, _ = m.Update(testKey(tea.KeyUp))
 	if m.scrollOffset != 0 {
 		t.Fatalf("expected scrollOffset 0, got %d", m.scrollOffset)
 	}
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	_, _ = m.Update(testText("c"))
 	if !m.copied {
 		t.Fatal("expected copied flag to be set")
 	}
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	_, cmd := m.Update(testText("r"))
 	if !m.restart {
 		t.Fatal("expected restart flag to be set")
 	}
@@ -1044,7 +1044,7 @@ func TestRenderProviderInputMissingViewIsSafe(t *testing.T) {
 func assertBubbleViewFits(t *testing.T, m *bubbleModel, width, height int) {
 	t.Helper()
 	m.resize(width, height)
-	view := m.View()
+	view := m.View().Content
 	if got := lipgloss.Height(view); got > height {
 		t.Fatalf("view height %d exceeds %d at %dx%d:\n%s", got, height, width, height, view)
 	}
@@ -1076,13 +1076,13 @@ func TestPermissionReviewFlowFitsNarrowTerminal(t *testing.T) {
 	m.busy = true
 	m.modal = &permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "git status --short --branch", Arguments: json.RawMessage(`{"command":"git status --short --branch"}`)}, response: make(chan permissionResponse, 1)}
 	assertBubbleViewFits(t, m, 24, 12)
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	updated, _ := m.Update(testKey(tea.KeyEsc))
 	m = updated.(*bubbleModel)
 	assertBubbleViewFits(t, m, 24, 12)
 	if !m.modalParked {
 		t.Fatal("esc did not enter transcript review mode")
 	}
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	updated, _ = m.Update(testKey(tea.KeyTab))
 	m = updated.(*bubbleModel)
 	assertBubbleViewFits(t, m, 24, 12)
 	if m.modalParked {
@@ -1105,15 +1105,15 @@ func TestLongActivityStatusFitsTerminal(t *testing.T) {
 func TestCompletedTodoPaneIsHidden(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "done", Text: "done", Status: tododomain.StatusCompleted}, {ID: "also-done", Text: "also done", Status: tododomain.StatusCompleted}})
 	model.resize(80, 24)
-	if strings.Contains(model.View(), "TODO") {
-		t.Fatalf("completed TODO pane still visible: %s", model.View())
+	if strings.Contains(model.View().Content, "TODO") {
+		t.Fatalf("completed TODO pane still visible: %s", model.View().Content)
 	}
 }
 
 func TestWelcomeSitsAtTopWithoutFloatingBox(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
-	view := model.View()
+	view := testPlain(model.View().Content)
 	plain := sanitizeBubbleText(view)
 	if idx := strings.Index(plain, glyphBrand); idx < 0 || idx > 8 {
 		t.Fatalf("welcome is not at the top of the view: %q", plain[:minInt(80, len(plain))])
@@ -1127,7 +1127,7 @@ func TestTodoPaneShowsPendingBeforeCompleted(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "already-done", Text: "already done", Status: tododomain.StatusCompleted}, {ID: "still-open", Text: "still open", Status: tododomain.StatusPending}, {ID: "also-done", Text: "also done", Status: tododomain.StatusCompleted}})
 	model.resize(80, 24)
 	model.todoViewState.Expanded = true
-	view := model.View()
+	view := testPlain(model.View().Content)
 	if !strings.Contains(view, "still open") {
 		t.Fatalf("todo pane hid the pending item: %s", view)
 	}
@@ -1152,9 +1152,9 @@ func TestPromptIsSingleRow(t *testing.T) {
 func TestLiveViewFitsTerminal(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
 	model.resize(80, 24)
-	height := lipgloss.Height(model.View())
+	height := lipgloss.Height(model.View().Content)
 	if height > 24 {
-		t.Fatalf("view height = %d, want <= 24:\n%s", height, model.View())
+		t.Fatalf("view height = %d, want <= 24:\n%s", height, model.View().Content)
 	}
 }
 
@@ -1163,9 +1163,9 @@ func TestBubbleModelAcceptsTypedRunes(t *testing.T) {
 	if !model.prompt.Focused() {
 		t.Fatal("prompt is not focused; textarea will drop every key")
 	}
-	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	updated, _ := model.Update(testText("h"))
 	model = updated.(*bubbleModel)
-	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	updated, _ = model.Update(testText("i"))
 	model = updated.(*bubbleModel)
 	if got, want := model.prompt.Value(), "hi"; got != want {
 		t.Fatalf("typed value = %q, want %q", got, want)
@@ -1179,7 +1179,7 @@ func TestBubbleModelRendersComponentLayout(t *testing.T) {
 	model.resize(80, 24)
 	model.appendLine("assistant: ready")
 	model.refreshViewport()
-	view := model.View()
+	view := testPlain(model.View().Content)
 	for _, expected := range []string{glyphBrand, "█▀█", "assistant: ready", "Tasks 0/1", "ask", "›", "/help"} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("Bubble Tea view does not contain %q: %s", expected, view)
@@ -1218,7 +1218,7 @@ func TestSanitizeBubbleTextRemovesControlCharacters(t *testing.T) {
 func TestEmptyStateWithoutRunnerGuidesSlashCommands(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
-	view := model.View()
+	view := testPlain(model.View().Content)
 	for _, expected := range []string{"Type a message or /command", glyphBrand, "█▀█"} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("empty state view does not contain %q: %s", expected, view)
@@ -1255,7 +1255,7 @@ func TestWelcomeCardReprintsAfterClear(t *testing.T) {
 	model.prompt.SetValue("/clear")
 	_ = model.submit()
 	model.refreshViewport()
-	view := model.View()
+	view := testPlain(model.View().Content)
 	if strings.Contains(plainTranscript(model), "gone") {
 		t.Fatal("clear left transcript body")
 	}

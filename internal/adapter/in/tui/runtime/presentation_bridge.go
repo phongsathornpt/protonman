@@ -1,8 +1,8 @@
 package runtime
 
 import (
+	"charm.land/lipgloss/v2"
 	"encoding/json"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/diagnostic"
 	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
@@ -12,6 +12,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/toolview"
 	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"image/color"
 	"strings"
 )
 
@@ -351,14 +352,14 @@ func compactPickerRows(rows []string) []string {
 	return pane.CompactRows(rows)
 }
 
-func renderModalRows(m *bubbleModel, border lipgloss.TerminalColor, rows []string) string {
+func renderModalRows(m *bubbleModel, border color.Color, rows []string) string {
 	if m == nil {
 		return pane.RenderModal(defaultBubbleWidth, defaultBubbleHeight, border, rows)
 	}
 	return pane.RenderModal(m.width, m.height, border, rows)
 }
 
-func paneToneColor(tone pane.Tone) lipgloss.TerminalColor {
+func paneToneColor(tone pane.Tone) color.Color {
 	switch tone {
 	case pane.ToneUser:
 		return accentUser

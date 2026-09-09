@@ -1,9 +1,9 @@
 package runtime
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"errors"
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -56,7 +56,7 @@ func (v *projectPaneView) Render(m *bubbleModel) string {
 	return renderModalRows(m, accentAssistant, rows)
 }
 
-func (v *projectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+func (v *projectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch message.String() {
 	case "r":
 		return true, v.reload(m)

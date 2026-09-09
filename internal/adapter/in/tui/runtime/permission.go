@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -164,7 +164,7 @@ func (v *permissionPaneView) Render(m *bubbleModel) string {
 	return v.card(m)
 }
 
-func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	options := v.options(m)
 	if v.index >= len(options) {
 		v.index = len(options) - 1
@@ -277,7 +277,7 @@ func (m *bubbleModel) openPermission(request permissionRequest) {
 	m.activity = "waiting for permission"
 }
 
-func (m *bubbleModel) updatePermission(message tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) updatePermission(message tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	view := m.permissionView()
 	if view == nil {
 		return m, nil

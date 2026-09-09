@@ -1,13 +1,13 @@
 package runtime
 
 import (
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -456,7 +456,7 @@ func (m *bubbleModel) refreshTranscriptViewport(forceTail bool) {
 	follow := forceTail || m.transcriptViewport.AtBottom()
 	content := m.historyState.Raw()
 	if !m.rawTranscript {
-		content = strings.Join(m.historyState.RenderLinesAt(maxInt(8, m.transcriptViewport.Width)), "\n")
+		content = strings.Join(m.historyState.RenderLinesAt(maxInt(8, m.transcriptViewport.Width())), "\n")
 	}
 	if strings.TrimSpace(content) == "" {
 		content = mutedStyle.Render("No transcript yet.")
@@ -479,7 +479,7 @@ func (m *bubbleModel) transcriptOverlayView() string {
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accentAssistant).Padding(0, 1).Width(width).Render(body)
 }
 
-func (m *bubbleModel) updateTranscriptKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) updateTranscriptKey(message tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(message, m.keys.Transcript) {
 		m.closeTranscriptOverlay()
 		return m, nil

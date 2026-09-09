@@ -1,12 +1,12 @@
 package runtime
 
 import (
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -562,13 +562,13 @@ func TestAgentProgressKeepsFrameWithinTerminal(t *testing.T) {
 	m.busy = true
 	m.agentSnapshot = []agent.AgentStatus{{ID: "worker-1", Profile: agent.ProfileStrength, Task: "fix failures", State: agent.StateRunning, StartedAt: time.Now()}}
 	m.relayout()
-	if got := lipgloss.Height(m.View()); got > m.height {
+	if got := lipgloss.Height(m.View().Content); got > m.height {
 		t.Fatalf("initial frame height=%d terminal=%d", got, m.height)
 	}
 	call, _ := tool.NewCall("grep-1", "grep", []byte(`{"pattern":"TDZ","path":"."}`))
 	updated, _ := m.Update(agentLifecycleMsg{event: agent.Event{Kind: agent.EventAgentProgress, AgentID: "worker-1", Call: &call}})
 	m = updated.(*bubbleModel)
-	if got := lipgloss.Height(m.View()); got > m.height {
+	if got := lipgloss.Height(m.View().Content); got > m.height {
 		t.Fatalf("agent progress frame height=%d terminal=%d", got, m.height)
 	}
 }
@@ -645,7 +645,7 @@ func TestScrolledViewportSurvivesLiveAgentChromeStress(t *testing.T) {
 
 	assertStable := func(stage string) {
 		t.Helper()
-		view := m.View()
+		view := m.View().Content
 		if got := lipgloss.Height(view); got > m.height {
 			t.Fatalf("%s frame height=%d terminal=%d", stage, got, m.height)
 		}
@@ -690,7 +690,7 @@ func TestScrolledViewportSurvivesLiveAgentChromeStress(t *testing.T) {
 	assertStable("agent completed")
 
 	for !m.viewport.AtBottom() {
-		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+		updated, _ = m.Update(testKey(tea.KeyPgDown))
 		m = updated.(*bubbleModel)
 	}
 	if !m.followTail {

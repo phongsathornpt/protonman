@@ -1,11 +1,11 @@
 package runtime
 
 import (
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"context"
 	"fmt"
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -133,8 +133,8 @@ func (m *bubbleModel) resize(width int, height int) {
 	prompt := m.bottom.prompt()
 	prompt.SetWidth(maxInt(1, width-4))
 	m.syncPromptHeight()
-	m.transcriptViewport.Width = maxInt(1, width-10)
-	m.transcriptViewport.Height = maxInt(1, height-10)
+	m.transcriptViewport.SetWidth(maxInt(1, width-10))
+	m.transcriptViewport.SetHeight(maxInt(1, height-10))
 	if m.historyState != nil {
 		m.historyState.SetWidth(width)
 	}
@@ -228,9 +228,9 @@ func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame fram
 	if viewportHeight < 1 {
 		viewportHeight = 1
 	}
-	if m.viewport.Width != m.width || m.viewport.Height != viewportHeight {
-		m.viewport.Width = m.width
-		m.viewport.Height = viewportHeight
+	if m.viewport.Width() != m.width || m.viewport.Height() != viewportHeight {
+		m.viewport.SetWidth(m.width)
+		m.viewport.SetHeight(viewportHeight)
 		m.markViewportViewDirty()
 	}
 	m.refreshViewportWithScroll(scroll)
@@ -275,7 +275,7 @@ func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
 	content := ""
 	tailOnly := false
 	if scroll.follow && m.busy && m.historyState.Active() != nil {
-		content, tailOnly = m.historyState.RenderTailContent(maxInt(1, m.viewport.Height))
+		content, tailOnly = m.historyState.RenderTailContent(maxInt(1, m.viewport.Height()))
 	}
 	if !tailOnly {
 		content = m.fullViewportContent()
@@ -309,18 +309,18 @@ func (m *bubbleModel) setViewportContent(content string, fullHistory bool) {
 }
 
 func (m *bubbleModel) captureViewportScroll() viewportScrollSnapshot {
-	scroll := viewportScrollSnapshot{follow: m.followTail, yOffset: m.viewport.YOffset}
+	scroll := viewportScrollSnapshot{follow: m.followTail, yOffset: m.viewport.YOffset()}
 	if scroll.follow || m.viewportTailOnly || m.historyState == nil {
 		return scroll
 	}
-	if m.viewport.YOffset >= 0 && m.viewport.YOffset < len(m.viewportLineAnchors) {
-		scroll.anchor = m.viewportLineAnchors[m.viewport.YOffset]
+	if m.viewport.YOffset() >= 0 && m.viewport.YOffset() < len(m.viewportLineAnchors) {
+		scroll.anchor = m.viewportLineAnchors[m.viewport.YOffset()]
 		_, scroll.anchorValid = m.historyState.ResolveScrollAnchor(scroll.anchor)
 		if scroll.anchorValid {
 			return scroll
 		}
 	}
-	historyLine := m.viewport.YOffset - m.historyViewportPrefixLines()
+	historyLine := m.viewport.YOffset() - m.historyViewportPrefixLines()
 	if historyLine < 0 {
 		return scroll
 	}
@@ -331,9 +331,9 @@ func (m *bubbleModel) captureViewportScroll() viewportScrollSnapshot {
 
 func (m *bubbleModel) restoreViewportScroll(scroll viewportScrollSnapshot) {
 	if scroll.follow {
-		before := m.viewport.YOffset
+		before := m.viewport.YOffset()
 		m.viewport.GotoBottom()
-		if m.viewport.YOffset != before {
+		if m.viewport.YOffset() != before {
 			m.markViewportViewDirty()
 		}
 		m.followTail = true
@@ -346,7 +346,7 @@ func (m *bubbleModel) restoreViewportScroll(scroll viewportScrollSnapshot) {
 			yOffset = m.historyViewportPrefixLines() + historyLine
 		}
 	}
-	if m.viewport.YOffset != yOffset {
+	if m.viewport.YOffset() != yOffset {
 		m.viewport.SetYOffset(yOffset)
 		m.markViewportViewDirty()
 	}
@@ -381,15 +381,18 @@ func (m *bubbleModel) hydrateViewportForScroll() {
 	m.restoreViewportScroll(scroll)
 }
 
-func (m *bubbleModel) View() string {
+func (m *bubbleModel) View() tea.View {
 	if m.width == 0 || m.height == 0 {
-		return "Starting Protonman…"
+		return tea.NewView("Starting Protonman…")
 	}
 	base := m.liveView()
 	if m.showTranscript {
-		return overlayCenter(base, m.transcriptOverlayView(), m.width, m.height)
+		base = overlayCenter(base, m.transcriptOverlayView(), m.width, m.height)
 	}
-	return base
+	view := tea.NewView(base)
+	view.AltScreen = true
+	view.MouseMode = tea.MouseModeCellMotion
+	return view
 }
 
 func (m *bubbleModel) markViewportViewDirty() {
@@ -714,7 +717,7 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 	return renderModalRows(m, accentAssistant, rows)
 }
 
-func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	if key.Matches(message, m.keys.ToggleModel) {
 		v.cancelFetch()
 		m.bottom.remove(modelSelectViewID)
@@ -725,8 +728,8 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 		v.index, v.offset, _ = normalizedPickerWindow(v.index, v.offset, len(v.models), visible)
 	}()
 	if v.filtering {
-		switch message.Type {
-		case tea.KeyEsc:
+		switch message.String() {
+		case "esc":
 			if v.filter != "" {
 				v.filter = ""
 				v.filtering = false
@@ -735,14 +738,14 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 			}
 			v.filtering = false
 			return true, nil
-		case tea.KeyBackspace, tea.KeyCtrlH, tea.KeyDelete:
+		case "backspace", "ctrl+h", "delete":
 			runes := []rune(v.filter)
 			if len(runes) > 0 {
 				v.filter = string(runes[:len(runes)-1])
 				v.applyFilter(m.activeModel)
 			}
 			return true, nil
-		case tea.KeyEnter:
+		case "enter":
 			if len(v.models) > 0 && v.index >= 0 && v.index < len(v.models) {
 				selected := v.models[v.index]
 				provName := model.DefaultProtonmanName
@@ -755,10 +758,12 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (boo
 			}
 			v.filtering = false
 			return true, nil
-		case tea.KeyRunes:
-			v.filter += string(message.Runes)
-			v.applyFilter(m.activeModel)
-			return true, nil
+		default:
+			if message.Text != "" {
+				v.filter += message.Text
+				v.applyFilter(m.activeModel)
+				return true, nil
+			}
 		}
 	}
 	switch message.String() {
@@ -968,7 +973,7 @@ func (v *reasoningPaneView) Render(m *bubbleModel) string {
 	return renderModalRows(m, accentAssistant, rows)
 }
 
-func (v *reasoningPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+func (v *reasoningPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	choices := reasoningChoices(m.activeResolvedModelProfile())
 	if len(choices) == 0 {
 		choices = []sdk.ReasoningEffort{sdk.ReasoningDefault}

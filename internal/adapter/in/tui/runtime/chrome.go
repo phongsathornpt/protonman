@@ -1,13 +1,13 @@
 package runtime
 
 import (
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -256,7 +256,7 @@ func (m *CrashModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = maxInt(24, msg.Width)
 		m.height = maxInt(10, msg.Height)
 		return m, nil
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c", "q", "esc":
 			m.quitting = true
@@ -294,7 +294,7 @@ func (m *CrashModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *CrashModel) View() string {
+func (m *CrashModel) View() tea.View {
 	contentWidth := minInt(84, maxInt(24, m.width-4))
 	innerWidth := contentWidth - 4
 	var parts []string
@@ -322,14 +322,16 @@ func (m *CrashModel) View() string {
 	for i := start; i < end; i++ {
 		visibleLines = append(visibleLines, stackLines[i])
 	}
-	stackBoxStyle := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.AdaptiveColor{Light: "240", Dark: "8"}).Padding(0, 1).Width(contentWidth)
+	stackBoxStyle := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8")).Padding(0, 1).Width(contentWidth)
 	stackHeader := mutedStyle.Render(fmt.Sprintf("Stack trace (lines %d-%d of %d, ↑/↓ scroll):", start+1, end, len(stackLines)))
 	stackBody := strings.Join(visibleLines, "\n")
 	parts = append(parts, stackBoxStyle.Render(lipgloss.JoinVertical(lipgloss.Left, stackHeader, mutedStyle.Render(stackBody))))
 	footer := mutedStyle.Render(fmt.Sprintf("Protonman %s · %s/%s", appVersion, runtime.GOOS, runtime.GOARCH))
 	parts = append(parts, footer)
 	mainContent := lipgloss.JoinVertical(lipgloss.Center, parts...)
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, mainContent)
+	view := tea.NewView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, mainContent))
+	view.AltScreen = true
+	return view
 }
 
 func copyToClipboard(text string) error {
@@ -905,7 +907,7 @@ func (m *bubbleModel) promptView() string {
 	bash := m.bottom.bashMode()
 	chrome := &m.promptBoxCache
 	if chrome.width != boxWidth || chrome.bash != bash || chrome.top == "" {
-		var border lipgloss.TerminalColor = promptBorder
+		border := promptBorder
 		if bash {
 			border = commandColor
 		}

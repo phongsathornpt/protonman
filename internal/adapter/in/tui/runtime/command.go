@@ -1,8 +1,8 @@
 package runtime
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -36,7 +36,7 @@ func (v *slashPaneView) Render(m *bubbleModel) string {
 	return m.renderSlash(v.index)
 }
 
-func (v *slashPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
+func (v *slashPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch message.String() {
 	case "up":
 		m.moveSlash(-1)

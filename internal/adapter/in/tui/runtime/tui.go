@@ -9,7 +9,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -282,8 +282,6 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 
 		program := tea.NewProgram(
 			bModel,
-			tea.WithAltScreen(),
-			tea.WithMouseCellMotion(),
 			tea.WithContext(runCtx),
 		)
 
@@ -318,7 +316,6 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 			crash := NewCrashModel(panicVal, panicStack)
 			crashProg := tea.NewProgram(
 				crash,
-				tea.WithAltScreen(),
 				tea.WithContext(runCtx),
 			)
 			finalCrash, _ := crashProg.Run()

@@ -3,7 +3,6 @@ package runtime
 import (
 	"context"
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -201,7 +200,7 @@ func TestActivateSkillToolCellCompactRendering(t *testing.T) {
 		}
 	}
 	rendered := cell.Render()
-	joined := strings.Join(rendered, "\n")
+	joined := testPlain(strings.Join(rendered, "\n"))
 	if !strings.Contains(joined, `Activated skill "golang-performance"`) {
 		t.Fatalf("expected compact activation badge in render, got: %s", joined)
 	}
@@ -213,7 +212,7 @@ func TestActivateSkillToolCellCompactRendering(t *testing.T) {
 func TestLoadInitialMessagesCompactsSkillDetail(t *testing.T) {
 	bm := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "")
 	bm.loadInitialMessages([]model.Message{{Role: model.RoleTool, ToolName: "skill", Content: `<skill_content name="golang-code-style">\n# Full instructions...\n</skill_content>`}, {Role: model.RoleUser, Content: "Activated skill pdf-tool [user]:\n# PDF Guide\nLong content here..."}})
-	rendered := strings.Join(bm.historyState.RenderLines(), "\n")
+	rendered := testPlain(strings.Join(bm.historyState.RenderLines(), "\n"))
 	if strings.Contains(rendered, "Full instructions") {
 		t.Fatalf("history rendered full skill instructions from tool message: %s", rendered)
 	}
@@ -266,7 +265,7 @@ func TestToolCellRefinedRenderingWebFetch(t *testing.T) {
 func TestToolCellRefinedRenderingReadFile(t *testing.T) {
 	fileContent := strings.Repeat("fmt.Println(\"code\")\n", 50)
 	cell := &ToolCell{Name: "read", Target: "internal/tui/theme.go", ToolKind: tool.KindRead, Body: fileContent, Summary: summarizeToolOutput("read", tool.KindRead, "internal/tui/theme.go", fileContent, nil, false)}
-	rendered := strings.Join(cell.Render(), "\n")
+	rendered := testPlain(strings.Join(cell.Render(), "\n"))
 	if !strings.Contains(rendered, "50 lines") || !strings.Contains(rendered, "internal/tui/theme.go") {
 		t.Fatalf("expected summary with line count and target, got: %s", rendered)
 	}
@@ -292,7 +291,7 @@ func TestExecCellFolding(t *testing.T) {
 	exit0 := 0
 	longOutput := "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\n"
 	cell := &ExecCell{Command: "npm test", Body: longOutput, ExitCode: &exit0}
-	rendered := strings.Join(cell.Render(), "\n")
+	rendered := testPlain(strings.Join(cell.Render(), "\n"))
 	if !strings.Contains(rendered, "Npm test") || strings.Contains(rendered, "exit 0") {
 		t.Fatalf("expected semantic command title without redundant exit 0, got: %s", rendered)
 	}
@@ -495,7 +494,7 @@ func TestAgentToolCellRawLinesUseOrchestrationLabel(t *testing.T) {
 func TestPatchCellRenderingPolish(t *testing.T) {
 	patch := &PatchCell{Name: "edit", Summary: "1 file", Paths: []string{"cmd/protonman/main.go"}, Body: "Wrote file successfully to cmd/protonman/main.go."}
 	rendered := patch.RenderWidth(80)
-	joined := strings.Join(rendered, "\n")
+	joined := testPlain(strings.Join(rendered, "\n"))
 	if strings.Contains(joined, "✓ +") {
 		t.Fatalf("unexpected glyph stutter '✓ +' in patch cell header:\n%s", joined)
 	}
@@ -523,7 +522,7 @@ func TestExecCellClampsLongLinesAndHighlightsDiff(t *testing.T) {
 	longLine := "data: " + strings.Repeat("x", 200)
 	cell := &ExecCell{Name: "bash", Command: "curl https://api.example.com", Stdout: longLine}
 	rendered := cell.RenderWidth(60)
-	joined := strings.Join(rendered, "\n")
+	joined := testPlain(strings.Join(rendered, "\n"))
 	if strings.Contains(joined, strings.Repeat("x", 200)) {
 		t.Fatalf("expected 200-char line to be clamped horizontally in viewport:\n%s", joined)
 	}
@@ -541,7 +540,7 @@ func TestExecCellClampsLongLinesAndHighlightsDiff(t *testing.T) {
 func TestActivateSkillFallbackToTarget(t *testing.T) {
 	cell := &ToolCell{Name: "skill", Target: `"pdf-processing"`, Body: "Loaded skill instructions successfully.", ToolKind: tool.KindRead}
 	rendered := cell.RenderWidth(80)
-	joined := strings.Join(rendered, "\n")
+	joined := testPlain(strings.Join(rendered, "\n"))
 	if !strings.Contains(joined, `"pdf-processing"`) {
 		t.Fatalf("expected target skill name to appear in header:\n%s", joined)
 	}
@@ -589,7 +588,7 @@ func TestTranscriptOverlayIncludesLiveAssistantTail(t *testing.T) {
 	if !strings.Contains(m.transcriptOverlayView(), "streaming now") {
 		t.Fatalf("transcript overlay omitted active cell: %s", m.transcriptOverlayView())
 	}
-	updated, _ := m.updateTranscriptKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	updated, _ := m.updateTranscriptKey(testText("r"))
 	m = updated.(*bubbleModel)
 	if !m.rawTranscript {
 		t.Fatal("r did not toggle raw transcript mode")

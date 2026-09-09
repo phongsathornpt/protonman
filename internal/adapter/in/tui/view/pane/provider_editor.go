@@ -177,6 +177,7 @@ func providerModelRows(snapshot ProviderEditorSnapshot) []string {
 }
 
 func providerInputRows(snapshot ProviderEditorSnapshot) []string {
+	tiny := snapshot.Height < 14
 	compact := snapshot.Height <= 20
 	rows := []string{tuistyle.BrandStyle.Render(providerInputTitle(snapshot, compact))}
 	if !compact {
@@ -187,6 +188,9 @@ func providerInputRows(snapshot ProviderEditorSnapshot) []string {
 		)
 	}
 	rows = append(rows, providerInputFields(snapshot, compact)...)
+	if tiny {
+		return append(rows, tuistyle.MutedStyle.Render("enter · esc"))
+	}
 	rows = append(rows, "")
 	if compact {
 		footer := fmt.Sprintf("%s · ctrl+r · tab fields · enter connect · esc", strings.ToLower(strings.TrimSpace(snapshot.ProviderType)))
