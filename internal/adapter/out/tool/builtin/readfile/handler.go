@@ -54,6 +54,11 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	if lineMode && (input.Offset != 0 || input.Continuation != "") {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read line selection cannot be combined with offset or continuation")
 	}
+	if input.View == "image" || input.View == "structured" || input.View == "metadata" {
+		if input.Offset != 0 || input.Continuation != "" || input.Limit != 0 {
+			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read image, structured, and metadata views do not accept text pagination arguments")
+		}
+	}
 	if input.StartLine == 0 && input.EndLine > 0 {
 		input.StartLine = 1
 	}
@@ -112,10 +117,6 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	}
 
 	artifactView := input.View
-	if artifactView != "auto" && artifactView != "text" && (input.Offset != 0 || input.Continuation != "") {
-		_ = file.Close()
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read artifact views cannot be combined with offset or continuation")
-	}
 	if artifactView != "text" && input.Offset == 0 && input.Continuation == "" {
 		artifact, detectErr := detectArtifact(file, input.Path)
 		if detectErr != nil {

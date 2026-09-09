@@ -61,6 +61,28 @@ func TestReadFileRejectsMixedByteAndLinePagination(t *testing.T) {
 	}
 }
 
+func TestReadFileRejectsTextPaginationForArtifactViews(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	if err := os.WriteFile(filepath.Join(ws.Root(), "data.json"), []byte(`{"value":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		args map[string]any
+	}{
+		{name: "structured-limit", args: map[string]any{"path": "data.json", "view": "structured", "limit": 128}},
+		{name: "metadata-offset", args: map[string]any{"path": "data.json", "view": "metadata", "offset": 1}},
+		{name: "metadata-continuation", args: map[string]any{"path": "data.json", "view": "metadata", "continuation": "stale"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := New(ws).Execute(context.Background(), newJSONCall(t, tc.name, "read", tc.args))
+			if err == nil || !strings.Contains(err.Error(), "do not accept text pagination") {
+				t.Fatalf("Execute() error = %v, want artifact pagination rejection", err)
+			}
+		})
+	}
+}
+
 func TestReadFileLineRangeHonorsOutputLimit(t *testing.T) {
 	ws := newTestWorkspace(t, nil)
 	if err := os.WriteFile(filepath.Join(ws.Root(), "lines.txt"), []byte("alpha\nbeta\ngamma\n"), 0o644); err != nil {
