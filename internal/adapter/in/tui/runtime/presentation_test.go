@@ -976,6 +976,31 @@ func TestCommandHistoryIsBounded(t *testing.T) {
 	}
 }
 
+func TestDrainQueueClearsDequeuedBackingSlot(t *testing.T) {
+	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
+	m.queue = make([]string, 2, 4)
+	m.queue[0] = "/help"
+	m.queue[1] = "keep"
+	backing := m.queue[:cap(m.queue)]
+
+	_ = m.drainQueue()
+	if backing[0] != "" {
+		t.Fatalf("dequeued queue slot retained %q", backing[0])
+	}
+	if len(m.queue) != 1 || m.queue[0] != "keep" {
+		t.Fatalf("queue after drain = %#v", m.queue)
+	}
+}
+
+func TestDrainQueueReleasesBackingWhenEmpty(t *testing.T) {
+	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
+	m.queue = []string{"/help"}
+	_ = m.drainQueue()
+	if m.queue != nil {
+		t.Fatalf("empty queue retained backing slice: %#v", m.queue)
+	}
+}
+
 func TestQueueFullPreservesDraft(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.busy = true

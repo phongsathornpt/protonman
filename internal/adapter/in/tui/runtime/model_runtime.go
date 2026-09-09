@@ -276,7 +276,12 @@ func (m *bubbleModel) drainQueue() tea.Cmd {
 		return nil
 	}
 	line := m.queue[0]
-	m.queue = m.queue[1:]
+	m.queue[0] = ""
+	if len(m.queue) == 1 {
+		m.queue = nil
+	} else {
+		m.queue = m.queue[1:]
+	}
 	if strings.HasPrefix(line, "!") && !isCommandLine(line) {
 		return m.dispatchBang(strings.TrimPrefix(line, "!"))
 	}
