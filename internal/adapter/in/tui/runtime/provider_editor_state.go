@@ -2,10 +2,10 @@ package runtime
 
 import (
 	"context"
-	"net/url"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
+	providerdomain "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/provider"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 )
@@ -24,13 +24,13 @@ const (
 	providerStateError
 )
 
-type providerField int
+type providerField = providerdomain.Field
 
 const (
-	providerFieldName providerField = iota
-	providerFieldEndpoint
-	providerFieldAPIKey
-	providerFieldCount
+	providerFieldName     = providerdomain.FieldName
+	providerFieldEndpoint = providerdomain.FieldEndpoint
+	providerFieldAPIKey   = providerdomain.FieldAPIKey
+	providerFieldCount    = providerdomain.FieldCount
 )
 
 const maxProviderSelectRows = 8
@@ -227,102 +227,32 @@ func (v *providerPaneView) clearFieldError(field providerField) {
 
 func (v *providerPaneView) validateDraft() bool {
 	v.clearValidation()
-	firstInvalid := providerFieldCount
-	name := strings.TrimSpace(v.nameInput.Value())
-	if name == "" {
-		v.fieldErrors[providerFieldName] = "required"
-		firstInvalid = providerFieldName
-	}
-	endpoint := strings.TrimSpace(v.endpointInput.Value())
-	if endpoint == "" {
-		v.fieldErrors[providerFieldEndpoint] = "required"
-		if firstInvalid == providerFieldCount {
-			firstInvalid = providerFieldEndpoint
-		}
-	} else if !isValidProviderEndpoint(endpoint) {
-		v.fieldErrors[providerFieldEndpoint] = "use an HTTP(S) URL"
-		if firstInvalid == providerFieldCount {
-			firstInvalid = providerFieldEndpoint
-		}
-	}
-	key := strings.TrimSpace(v.apiKeyInput.Value())
-	if v.requiresAPIKey && key == "" {
-		v.fieldErrors[providerFieldAPIKey] = "required for this provider"
-		if firstInvalid == providerFieldCount {
-			firstInvalid = providerFieldAPIKey
-		}
-	}
-	if firstInvalid != providerFieldCount {
-		v.focusIndex = int(firstInvalid)
+	validation := providerdomain.Validate(v.nameInput.Value(), v.endpointInput.Value(), v.apiKeyInput.Value(), v.requiresAPIKey)
+	v.fieldErrors = validation.Errors
+	if !validation.Valid {
+		v.focusIndex = int(validation.FirstError)
 		v.syncInputFocus()
 		return false
 	}
-	v.nameInput.SetValue(name)
-	v.endpointInput.SetValue(strings.TrimRight(endpoint, "/"))
-	v.apiKeyInput.SetValue(key)
+	v.nameInput.SetValue(validation.Name)
+	v.endpointInput.SetValue(validation.Endpoint)
+	v.apiKeyInput.SetValue(validation.APIKey)
 	return true
-}
-
-func isValidProviderEndpoint(raw string) bool {
-	parsed, err := url.Parse(raw)
-	if err != nil || parsed.Hostname() == "" {
-		return false
-	}
-	scheme := strings.ToLower(parsed.Scheme)
-	return scheme == "http" || scheme == "https"
 }
 
 func (v *providerPaneView) hasNameConflict(m *bubbleModel) bool {
 	if m == nil {
 		return false
 	}
-	name := strings.TrimSpace(v.nameInput.Value())
-	original := strings.TrimSpace(v.originalName)
-	for providerKey, cfg := range m.providers {
-		existingName := strings.TrimSpace(cfg.Name)
-		if existingName == "" {
-			existingName = providerKey
-		}
-		if strings.EqualFold(existingName, name) && !strings.EqualFold(existingName, original) {
-			return true
-		}
-	}
-	return false
+	return providerdomain.HasNameConflict(m.providers, v.nameInput.Value(), v.originalName)
 }
 
 func (v *providerPaneView) setFetchedModels(models []model.RemoteModel) {
-	if v.isOpenCode() {
-		freeList := make([]model.RemoteModel, 0)
-		paidList := make([]model.RemoteModel, 0)
-		for _, m := range models {
-			if model.IsFreeModel(m.ID) {
-				freeList = append(freeList, m)
-			} else {
-				paidList = append(paidList, m)
-			}
-		}
-		v.models = append(freeList, paidList...)
-		v.filterFreeOnly = len(freeList) > 0
-	} else {
-		v.models = models
-		v.filterFreeOnly = false
-	}
+	v.models, v.filterFreeOnly = providerdomain.SortFetchedModels(models, v.isOpenCode())
 	v.selectedIndex = 0
 	v.scrollOffset = 0
 }
 
 func (v *providerPaneView) currentModels() []model.RemoteModel {
-	if !v.filterFreeOnly {
-		return v.models
-	}
-	var filtered []model.RemoteModel
-	for _, m := range v.models {
-		if model.IsFreeModel(m.ID) {
-			filtered = append(filtered, m)
-		}
-	}
-	if len(filtered) == 0 {
-		return v.models
-	}
-	return filtered
+	return providerdomain.CurrentModels(v.models, v.filterFreeOnly)
 }
