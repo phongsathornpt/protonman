@@ -141,3 +141,20 @@ func (m *bubbleModel) updateConversationViewport(message tea.Msg) tea.Cmd {
 	m.followTail = m.viewport.AtBottom()
 	return command
 }
+
+func (m *bubbleModel) scrollConversationLines(delta int) {
+	if delta == 0 {
+		return
+	}
+	m.hydrateViewportForScroll()
+	before := m.viewport.YOffset()
+	if delta < 0 {
+		m.viewport.ScrollUp(-delta)
+	} else {
+		m.viewport.ScrollDown(delta)
+	}
+	if m.viewport.YOffset() != before {
+		m.markViewportViewDirty()
+	}
+	m.followTail = m.viewport.AtBottom()
+}

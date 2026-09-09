@@ -68,13 +68,10 @@ func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) 
 		case "pgup", "pgdown":
 			return true, m.updateConversationViewport(message)
 		case "up", "k":
-			m.hydrateViewportForScroll()
-			m.viewport.ScrollUp(1)
-			m.followTail = m.viewport.AtBottom()
+			m.scrollConversationLines(-1)
 			return true, nil
 		case "down", "j":
-			m.viewport.ScrollDown(1)
-			m.followTail = m.viewport.AtBottom()
+			m.scrollConversationLines(1)
 			return true, nil
 		case "y", "s", "p", "g", "n", "1", "2", "3", "4", "5", "enter":
 			// Decisions remain available while reviewing the transcript.
