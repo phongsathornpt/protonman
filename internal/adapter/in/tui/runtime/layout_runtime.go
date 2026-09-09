@@ -61,7 +61,7 @@ func (m *bubbleModel) footerView() string {
 		}
 		return m.shortcutHint()
 	}
-	if m.busy || !m.bottom.composerVisible() {
+	if !m.bottom.composerVisible() {
 		return ""
 	}
 	return m.shortcutHint()

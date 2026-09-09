@@ -96,7 +96,7 @@ func TestMinimalScrollKeepsSingleComposer(t *testing.T) {
 	}
 }
 
-func TestMinimalBusyChromeStaysWithinThreeRows(t *testing.T) {
+func TestMinimalBusyChromeKeepsActionableHelpCompact(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
 	m.showWelcome = false
@@ -106,11 +106,29 @@ func TestMinimalBusyChromeStaysWithinThreeRows(t *testing.T) {
 	if got := lipgloss.Height(frame.status); got != 1 {
 		t.Fatalf("busy activity rows=%d, want 1: %q", got, frame.status)
 	}
-	if frame.top != "" || frame.footer != "" {
-		t.Fatalf("busy frame leaked persistent pane/footer: top=%q footer=%q", frame.top, frame.footer)
+	if frame.top != "" {
+		t.Fatalf("busy frame leaked persistent pane: top=%q", frame.top)
 	}
-	if frame.height > 3 {
-		t.Fatalf("busy chrome height=%d, want <=3", frame.height)
+	footer := ansi.Strip(frame.footer)
+	for _, want := range []string{"tab", "queue", "ctrl+c", "stop"} {
+		if !strings.Contains(footer, want) {
+			t.Fatalf("busy help missing %q: %q", want, footer)
+		}
+	}
+	if frame.height > 4 {
+		t.Fatalf("busy chrome height=%d, want <=4", frame.height)
+	}
+}
+
+func TestScrolledFooterPrioritizesReturnToLatest(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.followTail = false
+	footer := ansi.Strip(m.footerView())
+	for _, want := range []string{"enter", "send", "pgdn", "scroll"} {
+		if !strings.Contains(footer, want) {
+			t.Fatalf("scrolled footer missing %q: %q", want, footer)
+		}
 	}
 }
 
