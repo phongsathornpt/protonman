@@ -358,8 +358,8 @@ func TestProviderSelectPagedNavigation(t *testing.T) {
 	updated, _ := m.Update(testKey(tea.KeyPgDown))
 	m = updated.(*bubbleModel)
 	view := m.bottom.find(providerSelectViewID).(*providerSelectPaneView)
-	if view.index != pickerVisibleRows(m.height, maxProviderListRows) {
-		t.Fatalf("pgdown index = %d", view.index)
+	if view.index <= 0 {
+		t.Fatalf("pgdown did not advance selection: index=%d", view.index)
 	}
 	updated, _ = m.Update(testKey(tea.KeyEnd))
 	m = updated.(*bubbleModel)

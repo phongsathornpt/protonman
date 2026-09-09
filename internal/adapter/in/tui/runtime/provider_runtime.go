@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -503,11 +504,70 @@ type providerSelectItem struct {
 	isFree       bool
 }
 
+func (i providerSelectItem) FilterValue() string {
+	return strings.Join([]string{i.name, i.displayName, i.baseURL, i.description}, " ")
+}
+
+func (i providerSelectItem) Title() string {
+	label := i.displayName
+	status := "setup"
+	if i.isActive {
+		status = "active"
+	} else if i.isConfigured {
+		status = "saved"
+	} else if i.kind == providerItemCustom {
+		status = "custom"
+	}
+	label += " · " + status
+	if i.isFree {
+		label += " · free"
+	}
+	if i.isActive {
+		label = "✓ " + label
+	}
+	return label
+}
+
+func (i providerSelectItem) Description() string {
+	if strings.TrimSpace(i.baseURL) != "" {
+		return i.baseURL
+	}
+	return i.description
+}
+
 type providerSelectPaneView struct {
 	index         int
 	offset        int
+	picker        list.Model
+	pickerReady   bool
 	items         []providerSelectItem
 	deleteConfirm bool
+}
+
+func (v *providerSelectPaneView) initPicker() {
+	if v == nil || v.pickerReady {
+		return
+	}
+	delegate := list.NewDefaultDelegate()
+	delegate.ShowDescription = false
+	delegate.SetSpacing(0)
+	items := make([]list.Item, 0, len(v.items))
+	for _, item := range v.items {
+		items = append(items, item)
+	}
+	v.picker = list.New(items, delegate, defaultBubbleWidth-8, defaultBubbleHeight-8)
+	v.picker.DisableQuitKeybindings()
+	v.picker.SetStatusBarItemName("provider", "providers")
+	v.picker.InfiniteScrolling = false
+	v.pickerReady = true
+}
+
+func (v *providerSelectPaneView) syncPickerProjection() {
+	if v == nil || !v.pickerReady {
+		return
+	}
+	v.index = v.picker.Index()
+	v.offset = v.picker.Paginator.Page * v.picker.Paginator.PerPage
 }
 
 func newProviderSelectPaneView(m *bubbleModel) *providerSelectPaneView {
@@ -548,7 +608,11 @@ func newProviderSelectPaneView(m *bubbleModel) *providerSelectPaneView {
 			break
 		}
 	}
-	return &providerSelectPaneView{index: selectedIndex, offset: 0, items: items}
+	view := &providerSelectPaneView{items: items}
+	view.initPicker()
+	view.picker.Select(selectedIndex)
+	view.syncPickerProjection()
+	return view
 }
 
 func (*providerSelectPaneView) ID() string {
@@ -577,13 +641,14 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 }
 
 func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
-	defer func() {
-		visible := pickerVisibleRows(m.height, maxProviderListRows)
-		v.index, v.offset, _ = normalizedPickerWindow(v.index, v.offset, len(v.items), visible)
-		if v.deleteConfirm && (len(v.items) == 0 || !v.items[v.index].isConfigured) {
-			v.deleteConfirm = false
-		}
-	}()
+	v.initPicker()
+	if v.index != v.picker.Index() {
+		v.picker.Select(v.index)
+		v.syncPickerProjection()
+	}
+	if v.deleteConfirm && (len(v.items) == 0 || v.index < 0 || v.index >= len(v.items) || !v.items[v.index].isConfigured) {
+		v.deleteConfirm = false
+	}
 	if v.deleteConfirm {
 		switch message.String() {
 		case "enter":
@@ -666,36 +731,11 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 			}
 		}
 		return true, nil
-	case "up", "k":
-		if v.index > 0 {
-			v.index--
-		}
-		return true, nil
-	case "down", "j":
-		if v.index < len(v.items)-1 {
-			v.index++
-		}
-		return true, nil
-	case "pgup":
-		v.index -= pickerVisibleRows(m.height, maxProviderListRows)
-		if v.index < 0 {
-			v.index = 0
-		}
-		return true, nil
-	case "pgdown":
-		v.index += pickerVisibleRows(m.height, maxProviderListRows)
-		if v.index >= len(v.items) {
-			v.index = len(v.items) - 1
-		}
-		return true, nil
-	case "home", "g":
-		v.index = 0
-		return true, nil
-	case "end", "G":
-		if len(v.items) > 0 {
-			v.index = len(v.items) - 1
-		}
-		return true, nil
+	case "up", "k", "down", "j", "pgup", "pgdown", "home", "g", "end", "G":
+		updated, cmd := v.picker.Update(message)
+		v.picker = updated
+		v.syncPickerProjection()
+		return true, cmd
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		return true, nil
 	case "enter":
