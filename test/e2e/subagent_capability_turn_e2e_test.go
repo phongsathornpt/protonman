@@ -72,7 +72,7 @@ func TestE2ESubagentCapabilityChangesPublishedToolsBetweenTurns(t *testing.T) {
 		t.Fatalf("enabled turn missing delegation prompt: %#v", requests[0]["messages"])
 	}
 
-	for _, name := range []string{"delegate_task", "wait_agent", "get_agent", "list_agents", "cancel_agent"} {
+	for _, name := range []string{"subagent spawn", "subagent wait", "subagent get", "subagent list", "subagent cancel"} {
 		if tools := requestToolNames(requests[1]); containsString(tools, name) {
 			t.Fatalf("disabled turn published %s: %#v", name, tools)
 		}

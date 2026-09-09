@@ -400,12 +400,12 @@ func TestE2EBashExit128IsCommandFailure(t *testing.T) {
 	}
 }
 
-func TestE2EGetTodoAcceptsEmptyProviderArguments(t *testing.T) {
+func TestE2ETodoGetProviderCall(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 	server := newMockLLMServer(t)
 	server.SetupWorkspaceConfig(t, home)
-	server.AddToolCallResponse("todo-empty-args", "get_todo", "")
+	server.AddToolCallResponse("todo-get", "todo", `{"action":"get"}`)
 	server.AddTextResponse("Task snapshot loaded successfully.")
 
 	res := runProton(t, runOptions{
@@ -414,7 +414,7 @@ func TestE2EGetTodoAcceptsEmptyProviderArguments(t *testing.T) {
 		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
-		t.Fatalf("get_todo empty-argument turn failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)
+		t.Fatalf("todo get empty-argument turn failed (code %d): %s %s", res.exitCode, res.stdout, res.stderr)
 	}
 	if !strings.Contains(res.stdout, "Task snapshot loaded successfully.") {
 		t.Fatalf("stdout missing final response: %s", res.stdout)

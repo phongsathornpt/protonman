@@ -95,7 +95,7 @@ func TestE2ECheckpointsAndRestore(t *testing.T) {
 		env: env,
 	})
 	if srRes.exitCode != 0 {
-		t.Fatalf("search_replace failed: %s\n%s", srRes.stdout, srRes.stderr)
+		t.Fatalf("edit replace failed: %s\n%s", srRes.stdout, srRes.stderr)
 	}
 
 	// Find the created checkpoint file on disk under .protonman/checkpoints/
@@ -127,7 +127,7 @@ func TestE2ECheckpointsAndRestore(t *testing.T) {
 		env: env,
 	})
 	if restoreRes.exitCode != 0 {
-		t.Fatalf("checkpoint_restore failed: %s\n%s", restoreRes.stdout, restoreRes.stderr)
+		t.Fatalf("edit restore failed: %s\n%s", restoreRes.stdout, restoreRes.stderr)
 	}
 
 	// 3. Verify file on disk is restored to original content

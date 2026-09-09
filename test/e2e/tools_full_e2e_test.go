@@ -51,7 +51,7 @@ func TestE2EFullBuiltinTools(t *testing.T) {
 		env:  env,
 	})
 	if res.exitCode != 0 {
-		t.Fatalf("write_file nested failed: %s %s", res.stdout, res.stderr)
+		t.Fatalf("edit write nested failed: %s %s", res.stdout, res.stderr)
 	}
 	nestedBytes, err := os.ReadFile(filepath.Join(ws, "nested", "deep", "dir", "file.txt"))
 	if err != nil || string(nestedBytes) != "deeply nested content" {
@@ -65,7 +65,7 @@ func TestE2EFullBuiltinTools(t *testing.T) {
 		env:  env,
 	})
 	if res.exitCode == 0 || !strings.Contains(res.stdout+res.stderr, "not found") {
-		t.Fatalf("expected search_replace string not found error, got: %s %s", res.stdout, res.stderr)
+		t.Fatalf("expected edit replace string not found error, got: %s %s", res.stdout, res.stderr)
 	}
 
 	// 5. bash execution with non-zero exit code
@@ -103,14 +103,14 @@ func TestE2EWebFetchTool(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 
-	// web_fetch blocks loopback / internal IPs for SSRF defense
+	// web fetch blocks loopback / internal IPs for SSRF defense
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call web {"action":"fetch","url":"http://127.0.0.1:8080/internal-data"}`},
 		dir:  ws,
 		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode == 0 {
-		t.Fatalf("expected loopback web_fetch to fail, got exit 0: %s", res.stdout)
+		t.Fatalf("expected loopback web fetch to fail, got exit 0: %s", res.stdout)
 	}
 	combined := res.stdout + res.stderr
 	if !strings.Contains(combined, "network denied") && !strings.Contains(combined, "loopback") {

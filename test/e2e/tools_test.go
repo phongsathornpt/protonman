@@ -29,7 +29,7 @@ func TestE2EFileAndProcessTools(t *testing.T) {
 		env:  env,
 	})
 	if writeRes.exitCode != 0 {
-		t.Fatalf("write_file failed (code %d): %s\n%s", writeRes.exitCode, writeRes.stdout, writeRes.stderr)
+		t.Fatalf("edit write failed (code %d): %s\n%s", writeRes.exitCode, writeRes.stdout, writeRes.stderr)
 	}
 	createdDisk, err := os.ReadFile(filepath.Join(ws, "created.txt"))
 	if err != nil {
@@ -46,11 +46,11 @@ func TestE2EFileAndProcessTools(t *testing.T) {
 		env:  env,
 	})
 	if srRes.exitCode != 0 {
-		t.Fatalf("search_replace failed (code %d): %s\n%s", srRes.exitCode, srRes.stdout, srRes.stderr)
+		t.Fatalf("edit replace failed (code %d): %s\n%s", srRes.exitCode, srRes.stdout, srRes.stderr)
 	}
 	updatedDisk, err := os.ReadFile(filepath.Join(ws, "created.txt"))
 	if err != nil {
-		t.Fatalf("read created.txt after search_replace: %v", err)
+		t.Fatalf("read created.txt after edit replace: %v", err)
 	}
 	if string(updatedDisk) != "Updated Content" {
 		t.Fatalf("updated disk content = %q, want 'Updated Content'", string(updatedDisk))
@@ -86,17 +86,17 @@ func TestE2EFileAndProcessTools(t *testing.T) {
 		t.Fatalf("bash failed (code %d): %s\n%s", bashRes.exitCode, bashRes.stdout, bashRes.stderr)
 	}
 
-	// 7. git_status
+	// 7. git status
 	gitRes := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call git {"action":"status"}`},
 		dir:  ws,
 		env:  env,
 	})
 	if gitRes.exitCode != 0 {
-		t.Fatalf("git_status failed (code %d): %s\n%s", gitRes.exitCode, gitRes.stdout, gitRes.stderr)
+		t.Fatalf("git status failed (code %d): %s\n%s", gitRes.exitCode, gitRes.stdout, gitRes.stderr)
 	}
 	if !strings.Contains(gitRes.stdout, "Untracked files") && !strings.Contains(gitRes.stdout, "hello.txt") {
-		t.Fatalf("git_status output unexpected: %s", gitRes.stdout)
+		t.Fatalf("git status output unexpected: %s", gitRes.stdout)
 	}
 }
 
@@ -122,7 +122,7 @@ func TestE2EApplyPatch(t *testing.T) {
 		env:  env,
 	})
 	if res.exitCode != 0 {
-		t.Fatalf("apply_patch failed (code %d): %s\n%s", res.exitCode, res.stdout, res.stderr)
+		t.Fatalf("edit patch failed (code %d): %s\n%s", res.exitCode, res.stdout, res.stderr)
 	}
 
 	content, err := os.ReadFile(filepath.Join(ws, "hello.txt"))

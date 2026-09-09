@@ -9,7 +9,7 @@ func TestE2ESandboxReadOnlyWriteRejection(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 
-	// In read-only sandbox mode, file writes via bash redirection or write_file in confined launcher
+	// In read-only sandbox mode, file writes via bash redirection or edit write in confined launcher
 	res := runProton(t, runOptions{
 		args: []string{"--sandbox", "read-only", "-y", "-p", `/call bash {"command":"touch read_only_probe.txt"}`},
 		dir:  ws,

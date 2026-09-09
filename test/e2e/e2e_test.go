@@ -150,7 +150,7 @@ func newTestWorkspace(t *testing.T) string {
 		t.Fatalf("create test file: %v", err)
 	}
 
-	// Initialize git repo so git_status can function
+	// Initialize git repo so git status can function
 	gitInit := exec.Command("git", "init")
 	gitInit.Dir = dir
 	_ = gitInit.Run()

@@ -10,7 +10,7 @@ func TestE2ESandboxFlagNetworkRestriction(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 
-	// In strict mode, network is blocked for web_fetch
+	// In strict mode, network is blocked for web fetch
 	res := runProton(t, runOptions{
 		args: []string{
 			"--sandbox", "strict",
@@ -21,7 +21,7 @@ func TestE2ESandboxFlagNetworkRestriction(t *testing.T) {
 		env: []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode == 0 {
-		t.Fatalf("expected strict sandbox to block web_fetch, got exit 0: %s", res.stdout)
+		t.Fatalf("expected strict sandbox to block web fetch, got exit 0: %s", res.stdout)
 	}
 	combined := res.stdout + res.stderr
 	if !strings.Contains(combined, "child network is blocked") && !strings.Contains(combined, "network denied") {
