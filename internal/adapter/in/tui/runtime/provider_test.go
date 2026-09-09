@@ -561,8 +561,8 @@ func TestProviderViewFetchAndModelSelectionFlow(t *testing.T) {
 	updated, _ = bModel.Update(testKey(tea.KeyDown))
 	bModel = updated.(*bubbleModel)
 	view = bModel.bottom.find(providerViewID).(*providerPaneView)
-	if view.selectedIndex != 1 {
-		t.Fatalf("expected selectedIndex 1, got %d", view.selectedIndex)
+	if view.modelPicker.Index() != 1 {
+		t.Fatalf("expected model picker index 1, got %d", view.modelPicker.Index())
 	}
 	updated, saveCmd := bModel.Update(testKey(tea.KeyEnter))
 	bModel = updated.(*bubbleModel)
@@ -785,8 +785,8 @@ func TestProviderViewFreeBadgeAndFiltering(t *testing.T) {
 		t.Fatal("expected filterFreeOnly true by default for opencode")
 	}
 	rendered := bModel.View().Content
-	if !strings.Contains(rendered, "[FREE]") {
-		t.Fatalf("expected [FREE] badge in view, got:\n%s", rendered)
+	if !strings.Contains(strings.ToLower(rendered), "free") {
+		t.Fatalf("expected free model annotation in view, got:\n%s", rendered)
 	}
 	if !strings.Contains(rendered, "nemotron-3.5-lightning-free") || !strings.Contains(rendered, "big-pickle") {
 		t.Fatalf("expected free models in view, got:\n%s", rendered)
@@ -804,8 +804,8 @@ func TestProviderViewFreeBadgeAndFiltering(t *testing.T) {
 	if !strings.Contains(renderedAll, "claude-sonnet-5") || !strings.Contains(renderedAll, "gpt-5.5") {
 		t.Fatalf("expected all models shown after 'f' toggle, got:\n%s", renderedAll)
 	}
-	if !strings.Contains(renderedAll, "[FREE]") {
-		t.Fatalf("expected [FREE] badge in full view, got:\n%s", renderedAll)
+	if !strings.Contains(strings.ToLower(renderedAll), "free") {
+		t.Fatalf("expected free model annotation in full view, got:\n%s", renderedAll)
 	}
 }
 
@@ -822,24 +822,23 @@ func TestProviderViewWindowingWithManyModels(t *testing.T) {
 	if len(view.models) != 15 {
 		t.Fatalf("expected 15 models, got %d", len(view.models))
 	}
-	rendered := bModel.View().Content
-	if !strings.Contains(rendered, "more below") {
-		t.Fatalf("expected 'more below' indicator for 15 models, got:\n%s", rendered)
+	_ = bModel.View().Content
+	if pages := view.modelPicker.Paginator.TotalPages; pages <= 1 {
+		t.Fatalf("expected paginated model picker, got %d page(s)", pages)
 	}
 	for i := 0; i < 8; i++ {
 		updated, _ = bModel.Update(testKey(tea.KeyDown))
 		bModel = updated.(*bubbleModel)
 	}
 	view = bModel.bottom.find(providerViewID).(*providerPaneView)
-	if view.selectedIndex != 8 {
-		t.Fatalf("expected selectedIndex 8, got %d", view.selectedIndex)
+	if view.modelPicker.Index() != 8 {
+		t.Fatalf("expected model picker index 8, got %d", view.modelPicker.Index())
 	}
-	if view.scrollOffset == 0 {
-		t.Fatalf("expected scrollOffset > 0 after scrolling down past 8 rows, got %d", view.scrollOffset)
+	if view.modelPicker.Paginator.Page == 0 {
+		t.Fatalf("expected paginator to advance after scrolling, page=%d", view.modelPicker.Paginator.Page)
 	}
-	scrolledView := bModel.View().Content
-	if !strings.Contains(scrolledView, "more above") {
-		t.Fatalf("expected 'more above' indicator after scrolling down, got:\n%s", scrolledView)
+	if got := bModel.View().Content; !strings.Contains(got, manyModels[8].ID) {
+		t.Fatalf("selected model missing after scrolling:\n%s", got)
 	}
 }
 

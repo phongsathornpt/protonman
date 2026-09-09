@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/list"
 	"charm.land/lipgloss/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelpicker"
 	providerpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/provider"
@@ -12,11 +13,92 @@ import (
 	"image/color"
 )
 
+type providerEditorModelItem struct {
+	model       model.RemoteModel
+	title       string
+	description string
+}
+
+func (i providerEditorModelItem) FilterValue() string { return i.title + " " + i.description }
+func (i providerEditorModelItem) Title() string       { return i.title }
+func (i providerEditorModelItem) Description() string { return i.description }
+
+func providerEditorListItems(v *providerPaneView) []list.Item {
+	if v == nil {
+		return nil
+	}
+	models := v.currentModels()
+	items := make([]list.Item, 0, len(models))
+	providerName := strings.TrimSpace(v.nameInput.Value())
+	for _, md := range models {
+		resolved := model.ResolveRemoteMetadata(providerName, md)
+		title := strings.TrimSpace(md.ID)
+		if name := strings.TrimSpace(md.Name); name != "" && !strings.EqualFold(name, title) {
+			if title == "" {
+				title = name
+			} else {
+				title = fmt.Sprintf("%s (%s)", name, title)
+			}
+		}
+		parts := make([]string, 0, 4)
+		if model.IsFreeModel(md.ID) {
+			parts = append(parts, "free")
+		}
+		if limits := modelpicker.FormatTokenLimits(resolved.Profile.ContextWindow, resolved.Profile.MaxInputTokens, resolved.Profile.MaxOutputTokens); limits != "" {
+			parts = append(parts, limits)
+		}
+		if len(resolved.Features) > 0 {
+			parts = append(parts, strings.Join(resolved.Features, ", "))
+		}
+		if reasoning := remoteModelReasoningSummary(providerName, md, false); reasoning != "" {
+			parts = append(parts, reasoning)
+		}
+		items = append(items, providerEditorModelItem{model: md, title: title, description: strings.Join(parts, " · ")})
+	}
+	return items
+}
+
+func (v *providerPaneView) ensureModelPicker(m *bubbleModel) {
+	if v == nil || m == nil {
+		return
+	}
+	items := providerEditorListItems(v)
+	if !v.modelPickerSet {
+		delegate := list.NewDefaultDelegate()
+		delegate.SetSpacing(0)
+		v.modelPicker = list.New(items, delegate, maxInt(20, m.width-8), maxInt(6, minInt(20, m.height-4)))
+		v.modelPicker.DisableQuitKeybindings()
+		v.modelPicker.SetFilteringEnabled(false)
+		v.modelPicker.SetShowStatusBar(false)
+		v.modelPicker.SetStatusBarItemName("model", "models")
+		v.modelPicker.InfiniteScrolling = true
+		v.modelPickerSet = true
+	} else {
+		_ = v.modelPicker.SetItems(items)
+	}
+	v.modelPicker.Title = "Select model"
+	if v.filterFreeOnly {
+		v.modelPicker.Title += " · free"
+	}
+	v.modelPicker.SetSize(maxInt(20, m.width-8), maxInt(6, minInt(20, m.height-4)))
+	mode := layoutModeForHeight(m.height)
+	v.modelPicker.SetShowHelp(mode != layoutTiny)
+	v.modelPicker.SetShowPagination(mode == layoutNormal)
+	delegate := list.NewDefaultDelegate()
+	delegate.SetSpacing(0)
+	delegate.ShowDescription = mode == layoutNormal
+	v.modelPicker.SetDelegate(delegate)
+}
+
 func (v *providerPaneView) Render(m *bubbleModel) string {
 	if m == nil {
 		return ""
 	}
 	v.resizeInputs(m.width)
+	if v.state == providerStateSelectModel {
+		v.ensureModelPicker(m)
+		return renderProviderModal(m, accentAssistant, strings.Split(v.modelPicker.View(), "\n"))
+	}
 	rows, tone := providerpane.ProviderEditorRows(providerEditorSnapshot(m, v))
 	return renderProviderModal(m, paneToneColor(tone), rows)
 }
@@ -55,7 +137,13 @@ func providerEditorSnapshot(m *bubbleModel, v *providerPaneView) providerpane.Pr
 		}
 	}
 	fieldErrors := [3]string{v.fieldErrors[providerFieldName], v.fieldErrors[providerFieldEndpoint], v.fieldErrors[providerFieldAPIKey]}
-	return providerpane.ProviderEditorSnapshot{Width: m.width, Height: m.height, State: providerEditorPaneState(v.state), Name: v.nameInput.Value(), Endpoint: v.endpointInput.Value(), Spinner: m.spinner.View(), UserConfigPath: appdirs.UserConfigDisplay(), ErrorMessage: v.errorMessage, IsEditing: v.isEditing, ActivateOnSave: v.activateOnSave, ProviderType: v.providerType, ProtocolLabel: v.protocolLabel(), RequiresAPIKey: v.requiresAPIKey, NameInput: v.nameInput.View(), EndpointInput: v.endpointInput.View(), APIKeyInput: v.apiKeyInput.View(), FieldErrors: fieldErrors, Models: items, SelectedIndex: v.selectedIndex, ScrollOffset: v.scrollOffset, FilterFreeOnly: v.filterFreeOnly, HasFreeModels: hasFreeModels, TotalModels: len(v.models)}
+	selectedIndex := 0
+	scrollOffset := 0
+	if v.modelPickerSet {
+		selectedIndex = v.modelPicker.Index()
+		scrollOffset = v.modelPicker.Paginator.Page * v.modelPicker.Paginator.PerPage
+	}
+	return providerpane.ProviderEditorSnapshot{Width: m.width, Height: m.height, State: providerEditorPaneState(v.state), Name: v.nameInput.Value(), Endpoint: v.endpointInput.Value(), Spinner: m.spinner.View(), UserConfigPath: appdirs.UserConfigDisplay(), ErrorMessage: v.errorMessage, IsEditing: v.isEditing, ActivateOnSave: v.activateOnSave, ProviderType: v.providerType, ProtocolLabel: v.protocolLabel(), RequiresAPIKey: v.requiresAPIKey, NameInput: v.nameInput.View(), EndpointInput: v.endpointInput.View(), APIKeyInput: v.apiKeyInput.View(), FieldErrors: fieldErrors, Models: items, SelectedIndex: selectedIndex, ScrollOffset: scrollOffset, FilterFreeOnly: v.filterFreeOnly, HasFreeModels: hasFreeModels, TotalModels: len(v.models)}
 }
 
 func providerEditorPaneState(state providerPaneState) providerpane.ProviderEditorState {

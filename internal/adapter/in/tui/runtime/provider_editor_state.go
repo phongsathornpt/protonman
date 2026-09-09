@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/textinput"
 	providerdomain "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/provider"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
@@ -47,8 +48,8 @@ type providerPaneView struct {
 	endpointInput  textinput.Model
 	apiKeyInput    textinput.Model
 	models         []model.RemoteModel
-	selectedIndex  int
-	scrollOffset   int
+	modelPicker    list.Model
+	modelPickerSet bool
 	filterFreeOnly bool
 	errorMessage   string
 	fieldErrors    [providerFieldCount]string

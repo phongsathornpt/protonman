@@ -110,8 +110,7 @@ func (v *providerPaneView) hasNameConflict(m *bubbleModel) bool {
 
 func (v *providerPaneView) setFetchedModels(models []model.RemoteModel) {
 	v.models, v.filterFreeOnly = providerdomain.SortFetchedModels(models, v.isOpenCode())
-	v.selectedIndex = 0
-	v.scrollOffset = 0
+	v.modelPickerSet = false
 }
 
 func (v *providerPaneView) currentModels() []model.RemoteModel {

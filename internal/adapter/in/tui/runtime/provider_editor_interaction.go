@@ -8,7 +8,6 @@ import (
 )
 
 func (v *providerPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
-	defer v.normalizeModelSelection()
 	switch v.state {
 	case providerStateFetching:
 		return v.handleFetchingKey(m, message)
@@ -41,11 +40,6 @@ func (v *providerPaneView) syncInputFocus() {
 	}
 }
 
-func (v *providerPaneView) normalizeModelSelection() {
-	models := v.currentModels()
-	v.selectedIndex, v.scrollOffset, _ = normalizedPickerWindow(v.selectedIndex, v.scrollOffset, len(models), maxProviderSelectRows)
-}
-
 func (v *providerPaneView) handleFetchingKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	if message.String() == "esc" {
 		v.cancelFetch()
@@ -55,7 +49,7 @@ func (v *providerPaneView) handleFetchingKey(m *bubbleModel, message tea.KeyPres
 }
 
 func (v *providerPaneView) handleModelSelectKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
-	models := v.currentModels()
+	v.ensureModelPicker(m)
 	switch message.String() {
 	case "esc":
 		v.state = providerStateInput
@@ -65,33 +59,29 @@ func (v *providerPaneView) handleModelSelectKey(m *bubbleModel, message tea.KeyP
 	case "f":
 		if v.isOpenCode() {
 			v.filterFreeOnly = !v.filterFreeOnly
-			v.selectedIndex, v.scrollOffset = 0, 0
-		}
-		return true, nil
-	case "up", "k":
-		if len(models) > 0 {
-			v.selectedIndex = (v.selectedIndex - 1 + len(models)) % len(models)
-		}
-		return true, nil
-	case "down", "j":
-		if len(models) > 0 {
-			v.selectedIndex = (v.selectedIndex + 1) % len(models)
+			v.modelPickerSet = false
+			v.ensureModelPicker(m)
 		}
 		return true, nil
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		num := v.scrollOffset + int(message.String()[0]-'1')
-		if num >= 0 && num < len(models) {
-			v.selectedIndex = num
+		pageOffset := v.modelPicker.Paginator.Page * v.modelPicker.Paginator.PerPage
+		idx := pageOffset + int(message.String()[0]-'1')
+		if idx >= 0 && idx < len(v.currentModels()) {
+			v.modelPicker.Select(idx)
 		}
 		return true, nil
 	case "enter":
-		if len(models) == 0 || v.selectedIndex < 0 || v.selectedIndex >= len(models) {
+		item, ok := v.modelPicker.SelectedItem().(providerEditorModelItem)
+		if !ok {
 			return true, nil
 		}
-		selected := models[v.selectedIndex]
-		v.selectedModel = selected.ID
+		v.selectedModel = item.model.ID
 		v.state = providerStateSaving
-		return true, v.saveSelectedModelCmd(selected.ID)
+		return true, v.saveSelectedModelCmd(item.model.ID)
+	case "up", "k", "down", "j", "home", "g", "end", "G", "pgup", "pgdown":
+		updated, cmd := v.modelPicker.Update(message)
+		v.modelPicker = updated
+		return true, cmd
 	default:
 		return !m.matchesGlobalShortcut(message), nil
 	}
