@@ -49,7 +49,7 @@ func (c ErrorCell) RenderWidth(width int) []string {
 		return c.renderCard(width)
 	}
 
-	// Simple fallback rendering for legacy or simple tool errors
+	// Compact fallback rendering for simple tool errors
 	text := c.Text
 	if c.Title != "" {
 		text = c.Title + ": " + text

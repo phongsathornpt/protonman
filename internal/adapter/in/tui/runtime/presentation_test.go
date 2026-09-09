@@ -460,9 +460,9 @@ func TestExecPresentationDocker(t *testing.T) {
 	if compose.Title != "Docker compose up" || compose.Summary != "2 services running" {
 		t.Fatalf("docker compose = %#v", compose)
 	}
-	legacy := execview.Present("docker-compose down", "", "")
-	if legacy.Title != "Docker compose down" {
-		t.Fatalf("docker-compose = %#v", legacy)
+	presentation := execview.Present("docker-compose down", "", "")
+	if presentation.Title != "Docker compose down" {
+		t.Fatalf("docker-compose = %#v", presentation)
 	}
 }
 
