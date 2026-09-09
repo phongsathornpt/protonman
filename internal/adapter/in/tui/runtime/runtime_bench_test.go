@@ -205,3 +205,15 @@ func BenchmarkViewBusyLongHistory(b *testing.B) {
 		_ = m.View().Content
 	}
 }
+
+func BenchmarkRelayoutLongPrompt(b *testing.B) {
+	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
+	m.resize(80, 24)
+	m.panes.bottom.prompt().SetValue(strings.Repeat("long prompt with unicode ภาษาไทย 東京 and enough text to wrap ", 12))
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		m.requestRelayout()
+		m.reconcileLayout()
+	}
+}

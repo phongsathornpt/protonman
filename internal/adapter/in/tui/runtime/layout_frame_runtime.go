@@ -49,18 +49,17 @@ func (m *bubbleModel) buildFrameChrome() frameChrome {
 	frame := frameChrome{}
 	frame.status = m.statusView()
 	frame.top = m.panes.bottom.renderTop(m)
-	if m.panes.bottom.composerVisible() {
-		// The composer is small and stateful (cursor, focus, placeholder, bash mode).
-		// Render it from the textarea model every frame instead of reusing terminal
-		// output from a previous frame. Caching this string can leave stale prompt
-		// rows behind when the transcript scrolls while the textarea changes.
-		frame.composer = m.promptView()
-	}
 	frame.footer = m.footerView()
-	for _, part := range []string{frame.status, frame.top, frame.composer} {
+	for _, part := range []string{frame.status, frame.top} {
 		if part != "" {
 			frame.height += lipgloss.Height(part)
 		}
+	}
+	if m.panes.bottom.composerVisible() {
+		// Layout only needs the textarea's measured height. Rendering the full
+		// composer here would duplicate the expensive textarea render that View
+		// performs immediately after reconciliation.
+		frame.height += 1 + m.panes.bottom.prompt().Height()
 	}
 	if frame.footer != "" {
 		frame.height += lipgloss.Height(frame.footer)
@@ -107,6 +106,9 @@ func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame fram
 
 func (m *bubbleModel) frameChromeForView() frameChrome {
 	frame := m.buildFrameChrome()
+	if m.panes.bottom.composerVisible() {
+		frame.composer = m.promptView()
+	}
 	frame.generation = m.layout.frame.generation
 	return frame
 }
