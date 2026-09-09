@@ -633,13 +633,36 @@ func (s *HistoryState) buildCommittedCache() {
 	anchors := make([]ScrollAnchor, 0, len(s.committed)*4)
 	cells := make([]renderedCellIndex, 0, len(s.committed))
 	committedLines := 0
-	for index, cell := range s.committed {
+	for index := 0; index < len(s.committed); {
+		cell := s.committed[index]
+		key := routineToolAggregationKey(cell)
+		groupEnd := index + 1
+		if key != "" {
+			for groupEnd < len(s.committed) && routineToolAggregationKey(s.committed[groupEnd]) == key {
+				groupEnd++
+			}
+		}
 		if index > 0 {
 			render = append(render, "")
 			anchors = append(anchors, ScrollAnchor{cell: cell, cellIndex: index, line: 0, valid: true})
 		}
-		cellLines := renderHistoryCell(cell, s.renderWidth)
 		startLine := len(render)
+		if groupEnd-index >= 2 {
+			groupLines := renderRoutineToolAggregate(key, groupEnd-index, s.renderWidth)
+			committedLines += len(groupLines)
+			for line := range groupLines {
+				anchors = append(anchors, ScrollAnchor{cell: cell, cellIndex: index, line: line, valid: true})
+			}
+			render = append(render, groupLines...)
+			for member := index; member < groupEnd; member++ {
+				memberCell := s.committed[member]
+				releaseCommittedCellRenderCache(memberCell)
+				cells = append(cells, renderedCellIndex{cell: memberCell, startLine: startLine, lineCount: len(groupLines)})
+			}
+			index = groupEnd
+			continue
+		}
+		cellLines := renderHistoryCell(cell, s.renderWidth)
 		committedLines += len(cellLines)
 		for line := range cellLines {
 			anchors = append(anchors, ScrollAnchor{cell: cell, cellIndex: index, line: line, valid: true})
@@ -647,6 +670,7 @@ func (s *HistoryState) buildCommittedCache() {
 		render = append(render, cellLines...)
 		releaseCommittedCellRenderCache(cell)
 		cells = append(cells, renderedCellIndex{cell: cell, startLine: startLine, lineCount: len(cellLines)})
+		index++
 	}
 	s.committedLines = committedLines
 	s.cachedRender = render
@@ -833,13 +857,29 @@ func (s *HistoryState) buildAlternateRenderCache(width int) {
 		return
 	}
 	render := make([]string, 0, len(s.committed)*4)
-	for index, cell := range s.committed {
+	for index := 0; index < len(s.committed); {
+		cell := s.committed[index]
+		key := routineToolAggregationKey(cell)
+		groupEnd := index + 1
+		if key != "" {
+			for groupEnd < len(s.committed) && routineToolAggregationKey(s.committed[groupEnd]) == key {
+				groupEnd++
+			}
+		}
 		if index > 0 {
 			render = append(render, "")
 		}
-		cellLines := renderHistoryCell(cell, width)
-		render = append(render, cellLines...)
+		if groupEnd-index >= 2 {
+			render = append(render, renderRoutineToolAggregate(key, groupEnd-index, width)...)
+			for member := index; member < groupEnd; member++ {
+				releaseCommittedCellRenderCache(s.committed[member])
+			}
+			index = groupEnd
+			continue
+		}
+		render = append(render, renderHistoryCell(cell, width)...)
 		releaseCommittedCellRenderCache(cell)
+		index++
 	}
 	s.altRender = render
 	s.altRenderWidth = width

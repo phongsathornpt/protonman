@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
@@ -177,5 +178,51 @@ func TestResetReleasesCommittedBackingStore(t *testing.T) {
 	state.Reset()
 	if state.committed != nil || cap(state.committed) != 0 {
 		t.Fatalf("reset retained committed backing storage: len=%d cap=%d", len(state.committed), cap(state.committed))
+	}
+}
+
+func TestRoutineToolAggregationKeepsRawFidelity(t *testing.T) {
+	state := NewHistoryState(100)
+	state.Append(&ToolCell{Name: "read", Target: "a.go", ToolKind: tool.KindRead, Body: "a"})
+	state.Append(&ToolCell{Name: "read", Target: "b.go", ToolKind: tool.KindRead, Body: "b"})
+	state.Append(&ToolCell{Name: "read", Target: "c.go", ToolKind: tool.KindRead, Body: "c"})
+	rich := state.RenderContent()
+	if !strings.Contains(rich, "Read 3 files") || strings.Contains(rich, "a.go") {
+		t.Fatalf("rich aggregation=%q", rich)
+	}
+	raw := state.Raw()
+	for _, target := range []string{"a.go", "b.go", "c.go"} {
+		if !strings.Contains(raw, target) {
+			t.Fatalf("raw transcript lost %s: %q", target, raw)
+		}
+	}
+}
+
+func TestRoutineToolAggregationStopsAtFailure(t *testing.T) {
+	state := NewHistoryState(100)
+	state.Append(&ToolCell{Name: "read", Target: "a.go", ToolKind: tool.KindRead})
+	state.Append(&ToolCell{Name: "read", Target: "bad.go", ToolKind: tool.KindRead, FailureCode: tool.ErrorCodeNotFound, Body: "missing"})
+	state.Append(&ToolCell{Name: "read", Target: "c.go", ToolKind: tool.KindRead})
+	rich := state.RenderContent()
+	if strings.Contains(rich, "Read 3 files") || !strings.Contains(rich, "bad.go") {
+		t.Fatalf("failure was incorrectly aggregated: %q", rich)
+	}
+}
+
+func TestRoutineToolAggregationPreservesScrollAnchor(t *testing.T) {
+	state := NewHistoryState(100)
+	first := &ToolCell{Name: "read", Target: "a.go", ToolKind: tool.KindRead}
+	second := &ToolCell{Name: "read", Target: "b.go", ToolKind: tool.KindRead}
+	after := &SystemCell{Text: "after"}
+	state.Append(first)
+	state.Append(second)
+	state.Append(after)
+	lines := state.RenderLines()
+	if len(lines) < 3 {
+		t.Fatalf("unexpected aggregated render: %#v", lines)
+	}
+	anchor := state.CaptureScrollAnchor(len(lines) - 1)
+	if resolved, ok := state.ResolveScrollAnchor(anchor); !ok || resolved != len(lines)-1 {
+		t.Fatalf("anchor resolve=(%d,%v), want %d", resolved, ok, len(lines)-1)
 	}
 }

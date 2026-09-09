@@ -164,6 +164,40 @@ func (c ToolCell) RenderWidth(width int) []string {
 
 	return out
 }
+func routineToolAggregationKey(cell HistoryCell) string {
+	c, ok := cell.(*ToolCell)
+	if !ok || c.Running || c.Denied || c.FailureCode != "" || c.ShowDetail {
+		return ""
+	}
+	switch strings.ToLower(strings.TrimSpace(c.Name)) {
+	case "read":
+		return "read"
+	case "ls", "list":
+		return "list"
+	case "find", "grep", "search":
+		return "search"
+	default:
+		return ""
+	}
+}
+
+func renderRoutineToolAggregate(key string, count, width int) []string {
+	if count < 2 {
+		return nil
+	}
+	label := "Operations"
+	switch key {
+	case "read":
+		label = fmt.Sprintf("Read %d files", count)
+	case "list":
+		label = fmt.Sprintf("Listed %d locations", count)
+	case "search":
+		label = fmt.Sprintf("Search %d queries", count)
+	}
+	line := tuistyle.SuccessStyle.Render(tuistyle.GlyphToolSuccess) + tuistyle.MutedStyle.Render(label)
+	return wrapStyledLines(line, max(1, width))
+}
+
 func (c ToolCell) RawLines() []string {
 	header := sanitizeBubbleText(tool.DisplayName(c.Name))
 	if c.Target != "" {
