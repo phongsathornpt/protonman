@@ -102,8 +102,8 @@ func TestCompactLayoutReducesChrome(t *testing.T) {
 	if got := m.todoView(); !strings.Contains(got, "Tasks 0/2") || strings.Contains(got, "one") {
 		t.Fatalf("compact todo = %q, want summary only", got)
 	}
-	if got := m.infoView(); strings.Contains(got, "ctrl+t transcript") || !strings.Contains(got, "ctrl+p model") {
-		t.Fatalf("compact info = %q", got)
+	if got := m.infoView(); strings.Contains(got, "ctrl+p") || strings.Contains(got, "/help") {
+		t.Fatalf("compact info leaked shortcut chrome: %q", got)
 	}
 	m.resize(24, 12)
 	if got := m.todoView(); !strings.Contains(got, "Tasks 0/2") || strings.Contains(got, "one") {

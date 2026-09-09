@@ -420,25 +420,6 @@ func agentActivityCounts(snapshot []agent.AgentStatus) (active, running, queued,
 	return active, running, queued, canceling
 }
 
-type infoViewCacheKey struct {
-	width            int
-	height           int
-	planMode         bool
-	permissionMode   permission.Mode
-	activeModel      string
-	reasoningEffort  sdk.ReasoningEffort
-	queueLen         int
-	subagentsEnabled bool
-	activeSkillCount int
-	activeSkill      string
-}
-
-type infoViewCache struct {
-	key   infoViewCacheKey
-	value string
-	valid bool
-}
-
 func (m *bubbleModel) infoView() string {
 	if view := m.permissionView(); view != nil {
 		if view.parked {
@@ -446,80 +427,20 @@ func (m *bubbleModel) infoView() string {
 		}
 		return mutedStyle.Render("y once · s session · n deny · esc review")
 	}
-	permissionMode := permission.ModeAsk
-	if m.service != nil {
-		permissionMode = m.service.Mode()
+	targetWidth := maxInt(1, m.width-2)
+	parts := make([]string, 0, 3)
+	if modelID := strings.TrimSpace(m.activeModel); modelID != "" {
+		parts = append(parts, brandStyle.Render(truncateWithEllipsis(modelID, maxInt(8, targetWidth/2))))
 	}
-	activeSkillCount := 0
-	activeSkill := ""
-	if layoutModeForHeight(m.height) == layoutNormal && m.skills != nil {
-		active := m.skills.ActivatedList()
-		activeSkillCount = len(active)
-		if len(active) == 1 {
-			activeSkill = active[0]
-		}
-	}
-	key := infoViewCacheKey{width: m.width, height: m.height, planMode: m.planMode, permissionMode: permissionMode, activeModel: m.activeModel, reasoningEffort: m.reasoningEffort, queueLen: len(m.queue), subagentsEnabled: m.subagentsEnabled, activeSkillCount: activeSkillCount, activeSkill: activeSkill}
-	if m.infoCache.valid && m.infoCache.key == key {
-		return m.infoCache.value
-	}
-	targetWidth := m.width - 2
-	if targetWidth <= 0 {
-		targetWidth = 80
-	}
-	mode := layoutModeForHeight(m.height)
-	sepStr := glyphSep
-	sepWidth := ansi.StringWidth(sepStr)
-	parts := make([]string, 0, 4)
-	currentWidth := 0
-	addPart := func(item string) bool {
-		w := ansi.StringWidth(item)
-		needed := w
-		if len(parts) > 0 {
-			needed += sepWidth
-		}
-		if len(parts) == 0 || currentWidth+needed <= targetWidth {
-			parts = append(parts, item)
-			currentWidth += needed
-			return true
-		}
-		return false
-	}
-	addPart(m.modeChipFor(permissionMode))
-	if m.activeModel != "" {
-		cleanModel := truncateWithEllipsis(m.activeModel, maxInt(8, targetWidth/3))
-		addPart(brandStyle.Render("model: " + cleanModel))
+	if m.planMode {
+		parts = append(parts, planStyle.Render("plan"))
+	} else if m.service != nil && m.service.Mode() == permission.ModeAlwaysApprove {
+		parts = append(parts, warningStyle.Render("auto"))
 	}
 	if m.reasoningEffort != sdk.ReasoningDefault && m.reasoningEffort != "" {
-		addPart(brandStyle.Render("thinking: " + string(m.reasoningEffort)))
+		parts = append(parts, mutedStyle.Render(string(m.reasoningEffort)))
 	}
-	if n := len(m.queue); n > 0 {
-		addPart(mutedStyle.Render(fmt.Sprintf("%d queued", n)))
-	}
-	if !m.subagentsEnabled {
-		addPart(warningStyle.Render("subagents off"))
-	}
-	if mode == layoutNormal {
-		if activeSkillCount == 1 {
-			cleanSkill := truncateWithEllipsis(activeSkill, maxInt(14, targetWidth/3))
-			addPart(successStyle.Render("skill: " + cleanSkill))
-		} else if activeSkillCount > 1 {
-			addPart(successStyle.Render(fmt.Sprintf("%d skills active", activeSkillCount)))
-		}
-	}
-	candidates := make([]string, 0, 2)
-	switch mode {
-	case layoutNormal:
-		candidates = append(candidates, shortcutHelp(m.keys.ToggleModel), "/help")
-	case layoutCompact:
-		candidates = append(candidates, shortcutHelp(m.keys.ToggleModel))
-	}
-	for _, cand := range candidates {
-		addPart(mutedStyle.Render(cand))
-	}
-	value := strings.Join(parts, mutedStyle.Render(sepStr))
-	m.infoCache = infoViewCache{key: key, value: value, valid: true}
-	return value
+	return truncateWithEllipsis(strings.Join(parts, mutedStyle.Render(glyphSep)), targetWidth)
 }
 
 func (m *bubbleModel) modeChip() string {

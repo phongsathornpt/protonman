@@ -96,7 +96,6 @@ type bubbleModel struct {
 	height                    int
 	frameChrome               frameChrome
 	welcomeCache              welcomeCardCache
-	infoCache                 infoViewCache
 	layoutGeneration          uint64
 	busyStarted               time.Time
 	turnCancel                context.CancelFunc

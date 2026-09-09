@@ -89,8 +89,8 @@ func TestDisabledSubagentsAppearInFooterAndAgentsPane(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.resize(100, 30)
 	m.subagentsEnabled = false
-	if got := m.infoView(); !strings.Contains(got, "subagents off") {
-		t.Fatalf("info view=%q, want disabled subagent indicator", got)
+	if got := m.infoView(); strings.Contains(got, "subagents") {
+		t.Fatalf("minimal info view leaked subagent state: %q", got)
 	}
 	rows := agentInspectionRows(m)
 	joined := strings.Join(rows, "\n")

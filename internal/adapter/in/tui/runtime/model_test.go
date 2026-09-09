@@ -509,8 +509,8 @@ func TestModelSelectInfoViewAndWelcome(t *testing.T) {
 	if !strings.Contains(info, "deepseek-v4") {
 		t.Fatalf("expected model in infoView, got: %s", info)
 	}
-	if !strings.Contains(info, "ctrl+p model") {
-		t.Fatalf("expected 'ctrl+p model' in infoView, got: %s", info)
+	if strings.Contains(info, "ctrl+p") {
+		t.Fatalf("minimal infoView leaked shortcut chrome: %s", info)
 	}
 	welcome := bModel.welcomeCard()
 	if strings.Contains(welcome, "deepseek-v4-flash-vision-exp") {

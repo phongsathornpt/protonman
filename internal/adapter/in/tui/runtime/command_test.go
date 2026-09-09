@@ -235,12 +235,12 @@ func TestInfoViewDisplaysThinkingChipWhenNonDefault(t *testing.T) {
 	m.resize(100, 30)
 	m.activeModel = "claude-3-7-sonnet"
 	m.reasoningEffort = sdk.ReasoningDefault
-	if strings.Contains(m.infoView(), "thinking:") {
-		t.Fatalf("infoView should not display thinking chip when effort is default: %s", m.infoView())
+	if strings.Contains(m.infoView(), "high") {
+		t.Fatalf("infoView should not display reasoning when effort is default: %s", m.infoView())
 	}
 	m.reasoningEffort = sdk.ReasoningHigh
-	if !strings.Contains(m.infoView(), "thinking: high") {
-		t.Fatalf("infoView missing thinking: high chip: %s", m.infoView())
+	if !strings.Contains(m.infoView(), "high") {
+		t.Fatalf("infoView missing non-default reasoning: %s", m.infoView())
 	}
 }
 
@@ -384,22 +384,10 @@ func TestSlashSkills(t *testing.T) {
 			t.Fatalf("expected skill to be activated again")
 		}
 	})
-	t.Run("status bar info view shows active skills chip", func(t *testing.T) {
+	t.Run("status bar omits active skills", func(t *testing.T) {
 		info := model.infoView()
-		if !strings.Contains(info, "skill: pdf-processing") {
-			t.Fatalf("expected 'skill: pdf-processing' in infoView(), got: %s", info)
-		}
-		_ = model.skills.Register(skill.Skill{Name: "zz-helper", Description: "git", Scope: skill.ScopeUser})
-		model.skills.MarkActivated("zz-helper")
-		info = model.infoView()
-		if !strings.Contains(info, "2 skills active") {
-			t.Fatalf("expected '2 skills active' in infoView(), got: %s", info)
-		}
-		model.skills.Deactivate("pdf-processing")
-		model.skills.Deactivate("zz-helper")
-		info = model.infoView()
-		if strings.Contains(info, "active") {
-			t.Fatalf("expected no active skill chip when 0 skills active, got: %s", info)
+		if strings.Contains(info, "pdf-processing") || strings.Contains(info, "skills active") {
+			t.Fatalf("minimal infoView leaked skill state: %s", info)
 		}
 	})
 	t.Run("unified skill commands and deactivation verbs", func(t *testing.T) {
