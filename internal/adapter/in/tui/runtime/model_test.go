@@ -568,7 +568,7 @@ func TestBubbleModelRunsToolCommandThroughService(t *testing.T) {
 	service := newBubbleTestService(t, registry, permission.ModeAlwaysApprove, permission.Config{})
 	model := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, newPermissionBridge(), "")
 	model.resize(80, 24)
-	model.prompt.SetValue(`:call read {"path":"README.md"}`)
+	model.bottom.prompt().SetValue(`:call read {"path":"README.md"}`)
 	command := model.submit()
 	if command == nil {
 		t.Fatal("submit() command = nil, want tool command")
@@ -592,11 +592,11 @@ func TestSubmitWhileBusyQueuesDraft(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAlwaysApprove, emptyTodoItems())
 	model.resize(80, 24)
 	model.busy = true
-	model.prompt.SetValue(":help")
+	model.bottom.prompt().SetValue(":help")
 	if command := model.submit(); command != nil {
 		t.Fatalf("busy submit command = %v, want nil", command)
 	}
-	if got := model.prompt.Value(); got != "" {
+	if got := model.bottom.prompt().Value(); got != "" {
 		t.Fatalf("busy submit cleared prompt = %q, want empty", got)
 	}
 	if len(model.queue) != 1 || model.queue[0] != ":help" {
@@ -705,7 +705,7 @@ func TestBangPrefixSubmitsBashCall(t *testing.T) {
 	service := newBubbleTestService(t, registry, permission.ModeAlwaysApprove, permission.Config{})
 	model := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, newPermissionBridge(), "")
 	model.setBashMode(true)
-	model.prompt.SetValue("pwd")
+	model.bottom.prompt().SetValue("pwd")
 	command := model.submit()
 	if command == nil {
 		t.Fatal("bash submit command = nil")

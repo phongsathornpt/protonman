@@ -107,11 +107,9 @@ type bubbleModel struct {
 	projectConfigSources      []string
 	projectConfigProvenance   map[string]config.ValueSource
 
-	prompt      *textarea.Model
 	modal       *permissionRequest
 	modalParked bool
 	permIndex   int
-	slashIndex  int
 }
 
 type bubbleKeyMap struct {
@@ -149,9 +147,7 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	if allTodoCompleted(ui.todo) {
 		ui.todoLifecycle.CompletionFresh = true
 	}
-	ui.prompt = bottom.prompt()
 	ui.loadInitialMessages(messages)
-	ui.syncComponentsToLegacy()
 	ui.syncPromptPlaceholder()
 	ui.relayout()
 	return ui

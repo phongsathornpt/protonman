@@ -20,7 +20,7 @@ import (
 func TestSlashDropdownFiltersAndTabAccepts(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
-	model.prompt.SetValue("/he")
+	model.bottom.prompt().SetValue("/he")
 	if !model.slashOpen() {
 		t.Fatal("slash dropdown did not open for /he")
 	}
@@ -32,14 +32,14 @@ func TestSlashDropdownFiltersAndTabAccepts(t *testing.T) {
 	if !applied || command != nil {
 		t.Fatalf("tab accept applied=%v command=%v", applied, command)
 	}
-	if got := model.prompt.Value(); got != "/help" {
+	if got := model.bottom.prompt().Value(); got != "/help" {
 		t.Fatalf("tab accept value = %q, want /help", got)
 	}
 }
 
 func TestColonAliasDispatchesHelp(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	model.prompt.SetValue(":help")
+	model.bottom.prompt().SetValue(":help")
 	if command := model.submit(); command != nil {
 		t.Fatalf("colon help command = %v, want nil", command)
 	}

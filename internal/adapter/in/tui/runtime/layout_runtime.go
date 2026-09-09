@@ -65,9 +65,6 @@ func (m *bubbleModel) syncLegacyToComponents() {
 	if m.bottom == nil {
 		return
 	}
-	if m.prompt == nil {
-		m.prompt = m.bottom.prompt()
-	}
 	if m.modal != nil && !m.hasPermissionView() {
 		m.openPermission(*m.modal)
 		if view := m.permissionView(); view != nil {
@@ -80,12 +77,6 @@ func (m *bubbleModel) syncLegacyToComponents() {
 func (m *bubbleModel) syncComponentsToLegacy() {
 	if m.bottom == nil {
 		return
-	}
-	m.prompt = m.bottom.prompt()
-	if view := m.slashState(); view != nil {
-		m.slashIndex = view.picker.Index()
-	} else {
-		m.slashIndex = 0
 	}
 	if view := m.permissionView(); view != nil {
 		pending := view.pending
