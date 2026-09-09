@@ -150,7 +150,6 @@ func (m *bubbleModel) relayoutIfSlashChanged(bool) {
 
 type frameChrome struct {
 	generation uint64
-	agents     string
 	status     string
 	top        string
 	composer   string
@@ -160,7 +159,6 @@ type frameChrome struct {
 
 func (m *bubbleModel) buildFrameChrome() frameChrome {
 	frame := frameChrome{}
-	frame.agents = m.agentsView()
 	frame.status = m.statusView()
 	frame.top = m.bottom.renderTop(m)
 	if m.bottom.composerVisible() {
@@ -171,7 +169,7 @@ func (m *bubbleModel) buildFrameChrome() frameChrome {
 		frame.composer = m.promptView()
 	}
 	frame.footer = m.footerView()
-	for _, part := range []string{frame.agents, frame.status, frame.top, frame.composer} {
+	for _, part := range []string{frame.status, frame.top, frame.composer} {
 		if part != "" {
 			frame.height += lipgloss.Height(part)
 		}
@@ -392,7 +390,7 @@ func (m *bubbleModel) renderedViewport() string {
 func (m *bubbleModel) liveView() string {
 	frame := m.frameChromeForView()
 	parts := []string{m.renderedViewport()}
-	for _, part := range []string{frame.agents, frame.status, frame.top, frame.composer} {
+	for _, part := range []string{frame.status, frame.top, frame.composer} {
 		if part != "" {
 			parts = append(parts, part)
 		}
