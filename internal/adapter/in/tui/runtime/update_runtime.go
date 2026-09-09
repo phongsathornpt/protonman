@@ -47,15 +47,7 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if mouse.Y < 0 || mouse.Y >= m.viewport.Height() {
 			return m, nil
 		}
-		if (m.viewportTailOnly || m.viewportStaleTail) && (mouse.Button == tea.MouseWheelUp || mouse.Button == tea.MouseWheelDown) {
-			m.hydrateViewportForScroll()
-		}
-		beforeOffset := m.viewport.YOffset()
-		m.viewport, command = m.viewport.Update(message)
-		if m.viewport.YOffset() != beforeOffset {
-			m.markViewportViewDirty()
-		}
-		m.followTail = m.viewport.AtBottom()
+		command = m.updateConversationViewport(message)
 		return m, command
 	case spinner.TickMsg:
 		var command tea.Cmd

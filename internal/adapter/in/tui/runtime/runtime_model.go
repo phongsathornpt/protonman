@@ -154,8 +154,9 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 }
 
 func disableViewportKeys(pane *viewport.Model) {
-	pane.KeyMap.PageDown.SetEnabled(false)
-	pane.KeyMap.PageUp.SetEnabled(false)
+	// Keep page navigation owned by bubbles/viewport. Prompt-oriented arrows and
+	// half-page bindings remain disabled so they cannot compete with textarea
+	// cursor/history behavior.
 	pane.KeyMap.HalfPageUp.SetEnabled(false)
 	pane.KeyMap.HalfPageDown.SetEnabled(false)
 	pane.KeyMap.Up.SetEnabled(false)

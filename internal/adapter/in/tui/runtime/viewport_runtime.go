@@ -1,6 +1,9 @@
 package runtime
 
-import "charm.land/lipgloss/v2"
+import (
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+)
 
 func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
 	if m.historyState != nil && !scroll.follow && !m.viewportTailOnly {
@@ -125,4 +128,16 @@ func (m *bubbleModel) hydrateViewportForScroll() {
 	m.setViewportContent(m.fullViewportContent(), true)
 	m.viewportTailOnly = false
 	m.restoreViewportScroll(scroll)
+}
+
+func (m *bubbleModel) updateConversationViewport(message tea.Msg) tea.Cmd {
+	m.hydrateViewportForScroll()
+	before := m.viewport.YOffset()
+	updated, command := m.viewport.Update(message)
+	m.viewport = updated
+	if m.viewport.YOffset() != before {
+		m.markViewportViewDirty()
+	}
+	m.followTail = m.viewport.AtBottom()
+	return command
 }

@@ -98,23 +98,9 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 		m.toggleTodoPane()
 		return true, nil
 	case key.Matches(message, m.keys.PageUp):
-		m.hydrateViewportForScroll()
-		before := m.viewport.YOffset()
-		m.viewport.PageUp()
-		if m.viewport.YOffset() != before {
-			m.markViewportViewDirty()
-		}
-		m.followTail = m.viewport.AtBottom()
-		return true, nil
+		return true, m.updateConversationViewport(message)
 	case key.Matches(message, m.keys.PageDown):
-		m.hydrateViewportForScroll()
-		before := m.viewport.YOffset()
-		m.viewport.PageDown()
-		if m.viewport.YOffset() != before {
-			m.markViewportViewDirty()
-		}
-		m.followTail = m.viewport.AtBottom()
-		return true, nil
+		return true, m.updateConversationViewport(message)
 	default:
 		return false, nil
 	}
