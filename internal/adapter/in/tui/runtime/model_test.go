@@ -3,8 +3,10 @@ package runtime
 import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"context"
 	"errors"
+	"fmt"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelpicker"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
@@ -1017,6 +1019,28 @@ func TestModelPickerShiftTabCyclesProvidersWithoutLeaking(t *testing.T) {
 	}
 	if view.providerIndex == initialIdx && len(view.providerNames) > 1 {
 		t.Fatalf("providerIndex did not change on shift+tab: %d", view.providerIndex)
+	}
+}
+
+func TestModelPickerKeepsSelectionAcrossResponsiveResize(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	models := make([]domainmodel.RemoteModel, 30)
+	for i := range models {
+		models[i] = domainmodel.RemoteModel{ID: fmt.Sprintf("model-%02d", i), Name: fmt.Sprintf("Model %02d", i)}
+	}
+	view := newModelSelectPaneView(m)
+	view.setModels(models, "model-20")
+	m.panes.bottom.push(view)
+	for _, size := range [][2]int{{120, 32}, {40, 12}, {24, 8}, {80, 24}} {
+		m.resize(size[0], size[1])
+		_ = view.Render(newPaneRenderContext(m))
+		selected, ok := view.picker.SelectedItem().(modelListItem)
+		if !ok || selected.model.ID != "model-20" {
+			t.Fatalf("selected model after resize %dx%d = %#v, want model-20", size[0], size[1], view.picker.SelectedItem())
+		}
+		if got := lipgloss.Width(view.Render(newPaneRenderContext(m))); got > size[0] {
+			t.Fatalf("model picker width=%d exceeds %d at %dx%d", got, size[0], size[0], size[1])
+		}
 	}
 }
 
