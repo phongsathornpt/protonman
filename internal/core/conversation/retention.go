@@ -39,14 +39,19 @@ type messageSpan struct {
 	bytes int
 }
 
-// Retain returns a fresh top-level slice containing a protocol-safe bounded
-// history. Assistant tool-call messages and their following tool results are
-// retained or dropped as one unit so providers never receive half a tool group.
+// Retain returns protocol-safe bounded history. When no compaction or trimming
+// is required it returns the input slice unchanged; callers that need ownership
+// isolation should clone before calling. Assistant tool-call messages and their
+// following tool results are retained or dropped as one unit.
 func Retain(messages []sdk.Message, policy RetentionPolicy) []sdk.Message {
 	if len(messages) == 0 {
 		return nil
 	}
 	messages = compactHistoricalToolGroups(messages, policy.RecentMessages, policy.MaxHistoricalToolResultBytes)
+	retainedBytes := EstimatedBytes(messages)
+	if !exceeds(policy, len(messages), retainedBytes) {
+		return messages
+	}
 	leadingSystems := 0
 	protectedBytes := 0
 	for leadingSystems < len(messages) && messages[leadingSystems].Role == sdk.RoleSystem {
@@ -59,7 +64,7 @@ func Retain(messages []sdk.Message, policy RetentionPolicy) []sdk.Message {
 	}
 
 	retainedMessages := len(messages)
-	retainedBytes := protectedBytes
+	retainedBytes = protectedBytes
 	for _, span := range spans {
 		retainedBytes += span.bytes
 	}
@@ -99,6 +104,17 @@ func compactHistoricalToolGroups(messages []sdk.Message, recentMessages, resultL
 		recentStart--
 	}
 	if recentStart <= leadingSystems {
+		return messages
+	}
+	hasCompactableToolHistory := false
+	for index := leadingSystems; index < recentStart; index++ {
+		message := messages[index]
+		if message.Role == sdk.RoleTool || message.Role == sdk.RoleAssistant && len(message.ToolCalls) > 0 {
+			hasCompactableToolHistory = true
+			break
+		}
+	}
+	if !hasCompactableToolHistory {
 		return messages
 	}
 

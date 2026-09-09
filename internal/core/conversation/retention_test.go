@@ -62,14 +62,6 @@ func TestRetainEnforcesByteBudgetByDroppingWholeSpans(t *testing.T) {
 	}
 }
 
-func TestRetainReturnsFreshTopLevelSlice(t *testing.T) {
-	messages := []sdk.Message{{Role: sdk.RoleUser, Content: "one"}, {Role: sdk.RoleAssistant, Content: "two"}}
-	got := Retain(messages, RetentionPolicy{})
-	got[0].Content = "changed"
-	if messages[0].Content != "one" {
-		t.Fatalf("Retain reused top-level backing slice: %#v", messages)
-	}
-}
 func TestRetainCompactsStaleToolGroups(t *testing.T) {
 	messages := []sdk.Message{
 		{Role: sdk.RoleAssistant, ToolCalls: []sdk.ToolCall{{ID: "old-call", Name: "read", Arguments: []byte(`{"path":"large"}`)}}},
