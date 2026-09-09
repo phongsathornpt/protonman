@@ -738,7 +738,7 @@ func TestTodoStoreRevisionSyncsAfterToolResult(t *testing.T) {
 	if _, err := store.Replace(context.Background(), []tododomain.Item{{ID: "a", Text: "inspect", Status: tododomain.StatusCompleted}}); err != nil {
 		t.Fatal(err)
 	}
-	m.applyTurnEvent(applicationturn.Event{Kind: applicationturn.EventToolResult, Call: tool.Call{ID: "todo-1", Name: "update_todo"}, Result: tool.Result{CallID: "todo-1", ToolName: "update_todo"}})
+	m.applyTurnEvent(applicationturn.Event{Kind: applicationturn.EventToolResult, Call: tool.Call{ID: "todo-1", Name: "todo"}, Result: tool.Result{CallID: "todo-1", ToolName: "todo"}})
 	if len(m.todo) != 1 || m.todo[0].Status != tododomain.StatusCompleted {
 		t.Fatalf("todo = %#v", m.todo)
 	}
@@ -893,7 +893,7 @@ func TestPlanModeAllowsTaskMetadataButBlocksWorkspaceEdit(t *testing.T) {
 		name       string
 		kind       tool.Kind
 		wantDenied bool
-	}{{name: "update_todo", kind: tool.KindTask, wantDenied: false}, {name: "write_file", kind: tool.KindEdit, wantDenied: true}} {
+	}{{name: "todo", kind: tool.KindTask, wantDenied: false}, {name: "write_file", kind: tool.KindEdit, wantDenied: true}} {
 		t.Run(tc.name, func(t *testing.T) {
 			registry := newNamedTestRegistry(tool.Definition{Name: tc.name, Description: tc.name, Kind: tc.kind, Mutability: tool.MutabilityMutating})
 			service := newBubbleTestService(t, registry, permission.ModeAlwaysApprove, permission.Config{})

@@ -455,9 +455,9 @@ func TestPlanModeBlocksUnknownBash(t *testing.T) {
 
 func TestTodoConflictRendersTaskSpecificGuidance(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	call, _ := tool.NewCall("todo-conflict", "update_todo", []byte(`{"expected_revision":1,"operations":[{"op":"set_status","id":"a","status":"completed"}]}`))
+	call, _ := tool.NewCall("todo-conflict", "todo", []byte(`{"action":"update","expected_revision":1,"operations":[{"op":"set_status","id":"a","status":"completed"}]}`))
 	m.appendToolCall(call)
-	m.applyToolResult("update_todo", tool.Result{CallID: "todo-conflict", ToolName: "update_todo", Failure: &tool.Failure{Code: tool.ErrorCodeConflict, Message: "todo snapshot is stale"}}, nil)
+	m.applyToolResult("todo", tool.Result{CallID: "todo-conflict", ToolName: "todo", Failure: &tool.Failure{Code: tool.ErrorCodeConflict, Message: "todo snapshot is stale"}}, nil)
 	plain := plainTranscript(m)
 	for _, want := range []string{"Task plan changed", "task plan changed while this update was being prepared", "todo action=get"} {
 		if !strings.Contains(plain, want) {
