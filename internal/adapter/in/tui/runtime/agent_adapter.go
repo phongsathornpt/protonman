@@ -76,15 +76,11 @@ func (*agentsPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool,
 		return false, nil
 	}
 }
-func (*agentsPaneView) Render(m *bubbleModel) string {
-	return renderModalRows(m, promptBorder, agentInspectionRows(m))
+func (*agentsPaneView) Render(ctx paneRenderContext) string {
+	return renderModalRows(ctx, promptBorder, agentInspectionRows(ctx))
 }
-func agentInspectionRows(m *bubbleModel) []string {
-	activity := make(map[string]string, len(m.agentActivity))
-	for id, state := range m.agentActivity {
-		activity[id] = state.String()
-	}
-	return agentpane.AgentRows(agentpane.AgentsSnapshot{Width: m.layout.width, Height: m.layout.height, Retained: m.agentSnapshot, SubagentsEnabled: m.subagentsEnabled, Activity: activity})
+func agentInspectionRows(ctx paneRenderContext) []string {
+	return agentpane.AgentRows(agentpane.AgentsSnapshot{Width: ctx.width, Height: ctx.height, Retained: ctx.agentSnapshot, SubagentsEnabled: ctx.subagentsEnabled, Activity: ctx.agentActivity})
 }
 func (m *bubbleModel) openAgentsPane() tea.Cmd {
 	if m.panes.bottom.has(agentsViewID) {

@@ -176,13 +176,10 @@ func (v *providerSelectPaneView) selectedItem() (providerSelectItem, bool) {
 	return item, ok
 }
 
-func (v *providerSelectPaneView) Render(m *bubbleModel) string {
+func (v *providerSelectPaneView) Render(ctx paneRenderContext) string {
 	v.initPicker()
-	if m == nil {
-		return ""
-	}
-	mode := layoutModeForHeight(m.layout.height)
-	v.picker.SetSize(maxInt(12, m.layout.width-8), maxInt(4, minInt(8, m.layout.height-6)))
+	mode := layoutModeForHeight(ctx.height)
+	v.picker.SetSize(maxInt(12, ctx.width-8), maxInt(4, minInt(8, ctx.height-6)))
 	v.picker.Title = "Providers"
 	v.picker.SetShowStatusBar(false)
 	// Keep pagination presentation hidden; Bubbles list still owns navigation and selection state.
@@ -200,8 +197,8 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 				rows = append(rows, warningStyle.Render("This is the active provider."))
 			}
 			rows = append(rows, mutedStyle.Render("enter remove · esc cancel"))
-			return renderProviderModal(m, warningColor, rows)
+			return renderProviderModal(ctx, warningColor, rows)
 		}
 	}
-	return renderProviderModal(m, accentAssistant, strings.Split(v.picker.View(), "\n"))
+	return renderProviderModal(ctx, accentAssistant, strings.Split(v.picker.View(), "\n"))
 }

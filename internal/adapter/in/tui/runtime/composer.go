@@ -10,7 +10,7 @@ import (
 
 type bottomPaneView interface {
 	ID() string
-	Render(*bubbleModel) string
+	Render(paneRenderContext) string
 	HandleKey(*bubbleModel, tea.KeyPressMsg) (handled bool, cmd tea.Cmd)
 	ReplacesComposer() bool
 } // bottomPaneView is a transient interaction surface that can replace or augment
@@ -179,7 +179,7 @@ func (p *bottomPane) renderTop(m *bubbleModel) string {
 		return ""
 	}
 	if top := p.top(); top != nil {
-		return top.Render(m)
+		return top.Render(newPaneRenderContext(m))
 	}
 	return ""
 }

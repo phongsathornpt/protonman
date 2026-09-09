@@ -403,7 +403,7 @@ func TestProviderModalsFitSmallTerminals(t *testing.T) {
 	view := bModel.panes.bottom.find(providerViewID).(*providerPaneView)
 	for _, size := range [][2]int{{80, 24}, {60, 18}, {40, 14}, {24, 12}} {
 		bModel.resize(size[0], size[1])
-		rendered := view.Render(bModel)
+		rendered := view.Render(newPaneRenderContext(bModel))
 		if got := lipgloss.Width(rendered); got > size[0] {
 			t.Errorf("provider form width %d exceeds terminal width %d at %dx%d", got, size[0], size[0], size[1])
 		}
@@ -418,7 +418,7 @@ func TestProviderModalsFitSmallTerminals(t *testing.T) {
 	bModel.executeCommand("/provider")
 	viewHub := bModel.panes.bottom.find(providerSelectViewID).(*providerSelectPaneView)
 	bModel.resize(40, 14)
-	rendered := viewHub.Render(bModel)
+	rendered := viewHub.Render(newPaneRenderContext(bModel))
 	if got := lipgloss.Width(rendered); got > 40 {
 		t.Fatalf("provider hub width %d exceeds terminal width 40", got)
 	}

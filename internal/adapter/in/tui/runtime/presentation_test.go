@@ -66,14 +66,14 @@ func TestPickersFitResponsiveTerminalHeights(t *testing.T) {
 	for _, size := range [][2]int{{80, 24}, {60, 18}, {40, 14}, {24, 12}} {
 		m := newTestSkillsModel(t, 10)
 		m.resize(size[0], size[1])
-		modelView := newModelSelectPaneView(m).Render(m)
+		modelView := newModelSelectPaneView(m).Render(newPaneRenderContext(m))
 		if got := lipgloss.Height(modelView); got > size[1] {
 			t.Fatalf("model picker height %d exceeds %d at %dx%d", got, size[1], size[0], size[1])
 		}
 		if got := lipgloss.Width(modelView); got > size[0] {
 			t.Fatalf("model picker width %d exceeds %d at %dx%d", got, size[0], size[0], size[1])
 		}
-		skillsView := (&skillsPaneView{}).Render(m)
+		skillsView := (&skillsPaneView{}).Render(newPaneRenderContext(m))
 		if got := lipgloss.Height(skillsView); got > size[1] {
 			t.Fatalf("skills picker height %d exceeds %d at %dx%d", got, size[1], size[0], size[1])
 		}
@@ -189,7 +189,7 @@ func TestTodoToggleOpensFocusedPaneInCompactLayout(t *testing.T) {
 	if view == nil {
 		t.Fatal("compact todo toggle did not open focused pane")
 	}
-	got := view.Render(m)
+	got := view.Render(newPaneRenderContext(m))
 	if !strings.Contains(got, "one") || !strings.Contains(got, "id: one") {
 		t.Fatalf("focused todo pane=%q", got)
 	}
@@ -206,14 +206,14 @@ func TestFocusedTodoPaneBoundsAndScrollsLargePlans(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, items)
 	m.resize(32, 14)
 	view := &todoPaneView{}
-	first := view.Render(m)
+	first := view.Render(newPaneRenderContext(m))
 	if lipgloss.Height(first) > 14 || lipgloss.Width(first) > 32 {
 		t.Fatalf("pane exceeds terminal: %dx%d", lipgloss.Width(first), lipgloss.Height(first))
 	}
 	for range 5 {
 		_, _ = view.HandleKey(m, testKey(tea.KeyDown))
 	}
-	after := view.Render(m)
+	after := view.Render(newPaneRenderContext(m))
 	if first == after || !strings.Contains(after, "task-005") {
 		t.Fatalf("pane did not scroll: %q", after)
 	}
@@ -748,7 +748,7 @@ func TestPickerRenderDoesNotMutateNavigationState(t *testing.T) {
 		v.resetSelection("two")
 		beforeIndex := v.picker.Index()
 		beforePage := v.picker.Paginator.Page
-		_ = v.Render(m)
+		_ = v.Render(newPaneRenderContext(m))
 		if v.picker.Index() != beforeIndex || v.picker.Paginator.Page != beforePage {
 			t.Fatalf("Render mutated navigation: index %d→%d page %d→%d", beforeIndex, v.picker.Index(), beforePage, v.picker.Paginator.Page)
 		}

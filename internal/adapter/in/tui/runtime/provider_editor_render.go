@@ -58,15 +58,15 @@ func providerEditorListItems(v *providerPaneView) []list.Item {
 	return items
 }
 
-func (v *providerPaneView) ensureModelPicker(m *bubbleModel) {
-	if v == nil || m == nil {
+func (v *providerPaneView) ensureModelPicker(ctx paneRenderContext) {
+	if v == nil {
 		return
 	}
 	items := providerEditorListItems(v)
 	if !v.modelPickerSet {
 		delegate := list.NewDefaultDelegate()
 		delegate.SetSpacing(0)
-		v.modelPicker = list.New(items, delegate, maxInt(20, m.layout.width-8), maxInt(6, minInt(20, m.layout.height-4)))
+		v.modelPicker = list.New(items, delegate, maxInt(20, ctx.width-8), maxInt(6, minInt(20, ctx.height-4)))
 		v.modelPicker.DisableQuitKeybindings()
 		v.modelPicker.SetFilteringEnabled(false)
 		v.modelPicker.SetShowStatusBar(false)
@@ -80,8 +80,8 @@ func (v *providerPaneView) ensureModelPicker(m *bubbleModel) {
 	if v.filterFreeOnly {
 		v.modelPicker.Title += " · free"
 	}
-	v.modelPicker.SetSize(maxInt(20, m.layout.width-8), maxInt(6, minInt(20, m.layout.height-4)))
-	mode := layoutModeForHeight(m.layout.height)
+	v.modelPicker.SetSize(maxInt(20, ctx.width-8), maxInt(6, minInt(20, ctx.height-4)))
+	mode := layoutModeForHeight(ctx.height)
 	v.modelPicker.SetShowHelp(mode != layoutTiny)
 	v.modelPicker.SetShowPagination(mode == layoutNormal)
 	delegate := list.NewDefaultDelegate()
@@ -90,17 +90,14 @@ func (v *providerPaneView) ensureModelPicker(m *bubbleModel) {
 	v.modelPicker.SetDelegate(delegate)
 }
 
-func (v *providerPaneView) Render(m *bubbleModel) string {
-	if m == nil {
-		return ""
-	}
-	v.resizeInputs(m.layout.width)
+func (v *providerPaneView) Render(ctx paneRenderContext) string {
+	v.resizeInputs(ctx.width)
 	if v.state == providerStateSelectModel {
-		v.ensureModelPicker(m)
-		return renderProviderModal(m, accentAssistant, strings.Split(v.modelPicker.View(), "\n"))
+		v.ensureModelPicker(ctx)
+		return renderProviderModal(ctx, accentAssistant, strings.Split(v.modelPicker.View(), "\n"))
 	}
-	rows, tone := providerpane.ProviderEditorRows(providerEditorSnapshot(m, v))
-	return renderProviderModal(m, paneToneColor(tone), rows)
+	rows, tone := providerpane.ProviderEditorRows(providerEditorSnapshot(ctx, v))
+	return renderProviderModal(ctx, paneToneColor(tone), rows)
 }
 
 func (v *providerPaneView) resizeInputs(width int) {
@@ -110,12 +107,12 @@ func (v *providerPaneView) resizeInputs(width int) {
 	v.apiKeyInput.SetWidth(inputWidth)
 }
 
-func providerEditorSnapshot(m *bubbleModel, v *providerPaneView) providerpane.ProviderEditorSnapshot {
-	if m == nil || v == nil {
+func providerEditorSnapshot(ctx paneRenderContext, v *providerPaneView) providerpane.ProviderEditorSnapshot {
+	if v == nil {
 		return providerpane.ProviderEditorSnapshot{}
 	}
 	fieldErrors := [3]string{v.fieldErrors[providerFieldName], v.fieldErrors[providerFieldEndpoint], v.fieldErrors[providerFieldAPIKey]}
-	return providerpane.ProviderEditorSnapshot{Width: m.layout.width, Height: m.layout.height, State: providerEditorPaneState(v.state), Name: v.nameInput.Value(), Endpoint: v.endpointInput.Value(), Spinner: m.spinner.View(), UserConfigPath: appdirs.UserConfigDisplay(), ErrorMessage: v.errorMessage, IsEditing: v.isEditing, ActivateOnSave: v.activateOnSave, ProviderType: v.providerType, ProtocolLabel: v.protocolLabel(), RequiresAPIKey: v.requiresAPIKey, NameInput: v.nameInput.View(), EndpointInput: v.endpointInput.View(), APIKeyInput: v.apiKeyInput.View(), FieldErrors: fieldErrors}
+	return providerpane.ProviderEditorSnapshot{Width: ctx.width, Height: ctx.height, State: providerEditorPaneState(v.state), Name: v.nameInput.Value(), Endpoint: v.endpointInput.Value(), Spinner: ctx.spinner, UserConfigPath: appdirs.UserConfigDisplay(), ErrorMessage: v.errorMessage, IsEditing: v.isEditing, ActivateOnSave: v.activateOnSave, ProviderType: v.providerType, ProtocolLabel: v.protocolLabel(), RequiresAPIKey: v.requiresAPIKey, NameInput: v.nameInput.View(), EndpointInput: v.endpointInput.View(), APIKeyInput: v.apiKeyInput.View(), FieldErrors: fieldErrors}
 }
 
 func providerEditorPaneState(state providerPaneState) providerpane.ProviderEditorState {
@@ -139,19 +136,20 @@ func renderProviderInput(m *bubbleModel) string {
 	if m == nil || m.panes.bottom == nil {
 		return ""
 	}
+	ctx := newPaneRenderContext(m)
 	view, ok := m.panes.bottom.find(providerViewID).(*providerPaneView)
 	if !ok || view == nil {
 		return ""
 	}
-	view.resizeInputs(m.layout.width)
-	snapshot := providerEditorSnapshot(m, view)
+	view.resizeInputs(ctx.width)
+	snapshot := providerEditorSnapshot(ctx, view)
 	snapshot.State = providerpane.ProviderEditorInput
 	rows, tone := providerpane.ProviderEditorRows(snapshot)
-	return renderProviderModal(m, paneToneColor(tone), rows)
+	return renderProviderModal(ctx, paneToneColor(tone), rows)
 }
 
-func renderProviderModal(m *bubbleModel, border color.Color, rows []string) string {
-	contentWidth := providerModalContentWidth(m)
+func renderProviderModal(ctx paneRenderContext, border color.Color, rows []string) string {
+	contentWidth := providerModalContentWidth(ctx)
 	wrappedRows := make([]string, 0, len(rows))
 	for _, row := range rows {
 		if row == "" || lipgloss.Width(row) <= contentWidth {
@@ -160,12 +158,9 @@ func renderProviderModal(m *bubbleModel, border color.Color, rows []string) stri
 		}
 		wrappedRows = append(wrappedRows, strings.Split(wrapWords(row, contentWidth), "\n")...)
 	}
-	return renderModalRows(m, border, wrappedRows)
+	return renderModalRows(ctx, border, wrappedRows)
 }
 
-func providerModalContentWidth(m *bubbleModel) int {
-	if m == nil {
-		return maxInt(1, defaultBubbleWidth-10)
-	}
-	return maxInt(1, maxInt(1, m.layout.width-4)-6)
+func providerModalContentWidth(ctx paneRenderContext) int {
+	return maxInt(1, maxInt(1, ctx.width-4)-6)
 }

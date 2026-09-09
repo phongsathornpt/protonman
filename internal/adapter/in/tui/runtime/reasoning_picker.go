@@ -102,19 +102,19 @@ func reasoningChoices(profile modelprofile.Resolved) []sdk.ReasoningEffort {
 	return reasoningpane.ReasoningChoices(profile)
 }
 
-func (v *reasoningPaneView) Render(m *bubbleModel) string {
-	v.picker.SetSize(maxInt(20, m.layout.width-8), maxInt(6, minInt(18, m.layout.height-4)))
+func (v *reasoningPaneView) Render(ctx paneRenderContext) string {
+	v.picker.SetSize(maxInt(20, ctx.width-8), maxInt(6, minInt(18, ctx.height-4)))
 	v.picker.Title = "Thinking level"
-	if modelName := strings.TrimSpace(m.activeModel); modelName != "" {
+	if modelName := strings.TrimSpace(ctx.activeModel); modelName != "" {
 		v.picker.Title += " · " + modelName
 	}
-	mode := layoutModeForHeight(m.layout.height)
+	mode := layoutModeForHeight(ctx.height)
 	v.picker.SetShowHelp(mode != layoutTiny)
 	delegate := list.NewDefaultDelegate()
 	delegate.SetSpacing(0)
 	delegate.ShowDescription = mode == layoutNormal
 	v.picker.SetDelegate(delegate)
-	return renderModalRows(m, accentAssistant, strings.Split(v.picker.View(), "\n"))
+	return renderModalRows(ctx, accentAssistant, strings.Split(v.picker.View(), "\n"))
 }
 
 func (v *reasoningPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {

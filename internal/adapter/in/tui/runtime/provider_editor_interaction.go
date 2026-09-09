@@ -49,7 +49,7 @@ func (v *providerPaneView) handleFetchingKey(m *bubbleModel, message tea.KeyPres
 }
 
 func (v *providerPaneView) handleModelSelectKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
-	v.ensureModelPicker(m)
+	v.ensureModelPicker(newPaneRenderContext(m))
 	switch message.String() {
 	case "esc":
 		v.state = providerStateInput
@@ -60,7 +60,7 @@ func (v *providerPaneView) handleModelSelectKey(m *bubbleModel, message tea.KeyP
 		if v.isOpenCode() {
 			v.filterFreeOnly = !v.filterFreeOnly
 			v.modelPickerSet = false
-			v.ensureModelPicker(m)
+			v.ensureModelPicker(newPaneRenderContext(m))
 		}
 		return true, nil
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":

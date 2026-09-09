@@ -89,7 +89,7 @@ func (m *bubbleModel) syncSlashView() {
 		view = &slashPaneView{}
 		m.panes.bottom.push(view)
 	}
-	view.sync(m)
+	view.sync(newPaneRenderContext(m))
 }
 
 func (m bubbleModel) slashOpen() bool {
@@ -99,7 +99,7 @@ func (m bubbleModel) slashOpen() bool {
 func (m *bubbleModel) clampSlashIndex() {
 	m.syncSlashView()
 	if view := m.slashState(); view != nil {
-		view.sync(m)
+		view.sync(newPaneRenderContext(m))
 	}
 }
 
@@ -148,16 +148,16 @@ func truncateWithEllipsis(s string, maxLen int) string {
 
 func (m bubbleModel) renderSlash(index int) string {
 	view := &slashPaneView{}
-	view.sync(&m)
+	view.sync(newPaneRenderContext(&m))
 	if len(view.matches) > 0 {
 		view.picker.Select(maxInt(0, minInt(index, len(view.matches)-1)))
 	}
-	return view.Render(&m)
+	return view.Render(newPaneRenderContext(&m))
 }
 
 func (m bubbleModel) slashView() string {
 	if view := m.slashState(); view != nil {
-		return view.Render(&m)
+		return view.Render(newPaneRenderContext(&m))
 	}
 	return ""
 }

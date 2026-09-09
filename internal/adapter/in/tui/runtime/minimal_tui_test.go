@@ -177,7 +177,7 @@ func TestProviderEditorModelPickerFitsResponsiveTerminals(t *testing.T) {
 		v.models = models
 		v.state = providerStateSelectModel
 		m.panes.bottom.push(v)
-		rendered := v.Render(m)
+		rendered := v.Render(newPaneRenderContext(m))
 		if got := lipgloss.Height(rendered); got > size[1] {
 			t.Fatalf("provider model picker height=%d exceeds %d at %dx%d", got, size[1], size[0], size[1])
 		}

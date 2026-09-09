@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionpolicy"
 	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	permissionpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/permission"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -17,12 +18,12 @@ func (m bubbleModel) permissionCard() string {
 	if view == nil {
 		return ""
 	}
-	return view.card(&m)
+	return view.card(newPaneRenderContext(&m))
 }
 
-func (v *permissionPaneView) card(m *bubbleModel) string {
+func (v *permissionPaneView) card(ctx paneRenderContext) string {
 	request := v.pending.request
-	options := v.options(m)
+	options := permissionpolicy.Options(v.pending.request, ctx.projectTrusted, ctx.hasWorkDir)
 	labels := make([]string, 0, len(options))
 	for _, option := range options {
 		labels = append(labels, option.Label)
@@ -92,8 +93,8 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 		}
 	}
 	result := permissionpane.PermissionView(permissionpane.PermissionSnapshot{
-		Width:        m.layout.width,
-		Height:       m.layout.height,
+		Width:        ctx.width,
+		Height:       ctx.height,
 		Parked:       v.parked,
 		Index:        v.index,
 		Title:        title,
@@ -108,7 +109,7 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 	if result.Inline != "" {
 		return result.Inline
 	}
-	return renderModalRows(m, paneToneColor(result.Tone), result.Rows)
+	return renderModalRows(ctx, paneToneColor(result.Tone), result.Rows)
 }
 
 type permissionRequestMsg struct{ request permissionRequest }

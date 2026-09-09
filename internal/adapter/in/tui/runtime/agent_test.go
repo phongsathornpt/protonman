@@ -65,7 +65,7 @@ func TestDisabledSubagentsAppearInFooterAndAgentsPane(t *testing.T) {
 	if got := m.infoView(); strings.Contains(got, "subagents") {
 		t.Fatalf("minimal info view leaked subagent state: %q", got)
 	}
-	rows := agentInspectionRows(m)
+	rows := agentInspectionRows(newPaneRenderContext(m))
 	joined := strings.Join(rows, "\n")
 	if !strings.Contains(joined, "Subagents disabled") || !strings.Contains(joined, "Universal handles work directly") {
 		t.Fatalf("agents pane=%q", joined)
@@ -77,7 +77,7 @@ func TestDisabledSubagentsKeepExistingAgentsManageableInPane(t *testing.T) {
 	m.resize(100, 30)
 	m.subagentsEnabled = false
 	m.agentSnapshot = []agent.AgentStatus{{ID: "int-1", Profile: agent.ProfileAgility, Task: "inspect", State: agent.StateRunning, StartedAt: time.Now()}}
-	joined := strings.Join(agentInspectionRows(m), "\n")
+	joined := strings.Join(agentInspectionRows(newPaneRenderContext(m)), "\n")
 	if !strings.Contains(joined, "New delegation disabled") || !strings.Contains(joined, "AGI") {
 		t.Fatalf("agents pane=%q", joined)
 	}
@@ -217,7 +217,7 @@ func TestAgentsCommandOpensFocusedInspectionPane(t *testing.T) {
 	if pane == nil {
 		t.Fatal("/agents did not open inspection pane")
 	}
-	got := pane.Render(m)
+	got := pane.Render(newPaneRenderContext(m))
 	for _, want := range []string{"AGI", "inspect router", "int-7", "INT", "review concurrency", "dex-8", "timed out"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("agents pane=%q, want %q", got, want)
@@ -229,7 +229,7 @@ func TestAgentsPaneShowsBoundModelIdentity(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.resize(100, 30)
 	m.agentSnapshot = []agent.AgentStatus{{ID: "agility-1", Profile: agent.ProfileAgility, Provider: "openai", Model: "fast-model", Task: "inspect router", State: agent.StateRunning, StartedAt: time.Now()}}
-	joined := strings.Join(agentInspectionRows(m), "\n")
+	joined := strings.Join(agentInspectionRows(newPaneRenderContext(m)), "\n")
 	if !strings.Contains(joined, "openai · fast-model") {
 		t.Fatalf("agents pane=%q, want bound model identity", joined)
 	}

@@ -55,11 +55,8 @@ func compactPickerRows(rows []string) []string {
 	return panecommon.CompactRows(rows)
 }
 
-func renderModalRows(m *bubbleModel, border color.Color, rows []string) string {
-	if m == nil {
-		return panecommon.RenderModal(defaultBubbleWidth, defaultBubbleHeight, border, rows)
-	}
-	return panecommon.RenderModal(m.layout.width, m.layout.height, border, rows)
+func renderModalRows(ctx paneRenderContext, border color.Color, rows []string) string {
+	return panecommon.RenderModal(ctx.width, ctx.height, border, rows)
 }
 
 func paneToneColor(tone panecommon.Tone) color.Color {

@@ -44,8 +44,8 @@ type slashPaneView struct {
 func (*slashPaneView) ID() string             { return slashViewID }
 func (*slashPaneView) ReplacesComposer() bool { return false }
 
-func (v *slashPaneView) sync(m *bubbleModel) {
-	matches := m.slashMatches()
+func (v *slashPaneView) sync(ctx paneRenderContext) {
+	matches := ctx.slashMatches
 	v.matches = append(v.matches[:0], matches...)
 	items := make([]list.Item, 0, len(matches))
 	for _, command := range matches {
@@ -54,7 +54,7 @@ func (v *slashPaneView) sync(m *bubbleModel) {
 	if !v.ready {
 		delegate := list.NewDefaultDelegate()
 		delegate.SetSpacing(0)
-		v.picker = list.New(items, delegate, maxInt(20, m.layout.width-4), maxInt(4, minInt(12, m.layout.height/2)))
+		v.picker = list.New(items, delegate, maxInt(20, ctx.width-4), maxInt(4, minInt(12, ctx.height/2)))
 		v.picker.DisableQuitKeybindings()
 		v.picker.SetFilteringEnabled(false)
 		v.picker.SetShowTitle(false)
@@ -74,21 +74,22 @@ func (v *slashPaneView) sync(m *bubbleModel) {
 	v.picker.Select(selected)
 }
 
-func (v *slashPaneView) Render(m *bubbleModel) string {
-	v.sync(m)
+func (v *slashPaneView) Render(ctx paneRenderContext) string {
+	v.sync(ctx)
 	if len(v.matches) == 0 {
 		return ""
 	}
-	v.picker.SetSize(maxInt(20, m.layout.width-4), maxInt(4, minInt(12, m.layout.height/2)))
+	v.picker.SetSize(maxInt(20, ctx.width-4), maxInt(4, minInt(12, ctx.height/2)))
 	delegate := list.NewDefaultDelegate()
 	delegate.SetSpacing(0)
-	delegate.ShowDescription = layoutModeForHeight(m.layout.height) == layoutNormal
+	delegate.ShowDescription = layoutModeForHeight(ctx.height) == layoutNormal
 	v.picker.SetDelegate(delegate)
 	return v.picker.View()
 }
 
 func (v *slashPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
-	v.sync(m)
+	ctx := newPaneRenderContext(m)
+	v.sync(ctx)
 	switch message.String() {
 	case "up", "k", "down", "j", "pgup", "pgdown", "home", "g", "end", "G":
 		updated, cmd := v.picker.Update(message)

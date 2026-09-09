@@ -2,7 +2,6 @@ package runtime
 
 import (
 	tea "charm.land/bubbletea/v2"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/commandutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/projectpolicy"
 	projectpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/project"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
@@ -40,15 +39,15 @@ func (*projectPaneView) ReplacesComposer() bool {
 	return true
 }
 
-func (v *projectPaneView) Render(m *bubbleModel) string {
+func (v *projectPaneView) Render(ctx paneRenderContext) string {
 	state := v.state
-	facts := []projectpane.ProjectFact{{Label: "Model", Value: projectpane.FallbackValue(m.activeModel, "not selected"), Source: string(m.projectSource(config.FieldModelDefault))}, {Label: "Provider", Value: projectpane.FallbackValue(m.activeProvider, "not selected"), Source: string(m.projectSource(config.FieldModelProvider))}, {Label: "Agent", Value: projectpane.FallbackValue(m.agentProfile, "universal"), Source: string(m.projectSource(config.FieldAgentProfile))}, {Label: "Thinking", Value: reasoningEffortLabel(m.reasoningEffort), Source: string(m.projectSource(config.FieldAgentReasoningEffort))}, {Label: "Subagents", Value: commandutil.SubagentsEnabledLabel(m.subagentsEnabled), Source: string(m.projectSource(config.FieldAgentSubagentsEnabled))}, {Label: "Permission", Value: m.service.Mode().String(), Source: string(m.projectSource(config.FieldUIPermissionMode))}, {Label: "Tool calls", Value: projectpane.FormatLimit(m.maxToolCalls), Source: string(m.projectSource(config.FieldAgentMaxToolCalls))}}
+	facts := ctx.projectFacts
 	errorText := ""
 	if v.err != nil {
 		errorText = v.err.Error()
 	}
-	rows := projectpane.ProjectRows(projectpane.ProjectSnapshot{Width: m.layout.width, Height: m.layout.height, WorkDir: m.workDir, RootName: appdirs.RootDirName, ConfigName: appdirs.ConfigFileName, TrustEnv: envconfig.TrustProject, Loading: v.loading, ErrorText: errorText, Exists: state.Exists, ConfigExists: state.ConfigExists, ConfigLoaded: state.ConfigLoaded, Trusted: state.Trusted, SkillsExists: state.SkillsExists, SkillCount: state.SkillCount, Facts: facts, Notice: v.notice})
-	return renderModalRows(m, accentAssistant, rows)
+	rows := projectpane.ProjectRows(projectpane.ProjectSnapshot{Width: ctx.width, Height: ctx.height, WorkDir: ctx.workDir, RootName: appdirs.RootDirName, ConfigName: appdirs.ConfigFileName, TrustEnv: envconfig.TrustProject, Loading: v.loading, ErrorText: errorText, Exists: state.Exists, ConfigExists: state.ConfigExists, ConfigLoaded: state.ConfigLoaded, Trusted: state.Trusted, SkillsExists: state.SkillsExists, SkillCount: state.SkillCount, Facts: facts, Notice: v.notice})
+	return renderModalRows(ctx, accentAssistant, rows)
 }
 
 func (v *projectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {

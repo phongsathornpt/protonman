@@ -9,18 +9,15 @@ import (
 	"strings"
 )
 
-func (v *modelSelectPaneView) Render(m *bubbleModel) string {
+func (v *modelSelectPaneView) Render(ctx paneRenderContext) string {
 	v.initPicker()
-	if m == nil {
-		return ""
-	}
 	providerName := v.activeProviderName()
 	v.picker.Title = "Models · " + providerName
 	if len(v.providerNames) > 1 {
 		v.picker.Title += " · tab switch"
 	}
-	v.picker.SetSize(maxInt(12, m.layout.width-8), maxInt(4, min(8, m.layout.height-6)))
-	mode := layoutModeForHeight(m.layout.height)
+	v.picker.SetSize(maxInt(12, ctx.width-8), maxInt(4, min(8, ctx.height-6)))
+	mode := layoutModeForHeight(ctx.height)
 	v.picker.SetShowStatusBar(false)
 	// Pagination stays hidden: resizing Bubbles list during Render can recompute paginator state.
 	// Navigation still belongs to list.Update; this only suppresses the mutable presentation row.
@@ -32,21 +29,21 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 	v.picker.SetDelegate(delegate)
 	if v.loading {
 		rows := []string{brandStyle.Render("Models · " + providerName), mutedStyle.Render("Loading…"), mutedStyle.Render("esc close")}
-		return renderModalRows(m, accentAssistant, rows)
+		return renderModalRows(ctx, accentAssistant, rows)
 	}
 	if v.err != nil {
-		rows := []string{brandStyle.Render("Models · " + providerName), errorStyle.Render("Failed to load models"), mutedStyle.Render(truncateWithEllipsis(v.err.Error(), maxInt(8, m.layout.width-8))), mutedStyle.Render("r retry · p providers · esc close")}
-		return renderModalRows(m, accentAssistant, rows)
+		rows := []string{brandStyle.Render("Models · " + providerName), errorStyle.Render("Failed to load models"), mutedStyle.Render(truncateWithEllipsis(v.err.Error(), maxInt(8, ctx.width-8))), mutedStyle.Render("r retry · p providers · esc close")}
+		return renderModalRows(ctx, accentAssistant, rows)
 	}
 	if len(v.picker.Items()) == 0 && !v.picker.SettingFilter() && !v.picker.IsFiltered() {
 		rows := []string{brandStyle.Render("Models · " + providerName), mutedStyle.Render("No models available."), mutedStyle.Render("a add provider · r retry · esc close")}
-		return renderModalRows(m, accentAssistant, rows)
+		return renderModalRows(ctx, accentAssistant, rows)
 	}
 	if len(v.picker.VisibleItems()) == 0 && strings.TrimSpace(v.picker.FilterValue()) != "" {
 		rows := []string{brandStyle.Render("Models · " + providerName), mutedStyle.Render("Search: " + v.picker.FilterValue()), mutedStyle.Render("No matches."), mutedStyle.Render("esc clear filter")}
-		return renderModalRows(m, accentAssistant, rows)
+		return renderModalRows(ctx, accentAssistant, rows)
 	}
-	return renderModalRows(m, accentAssistant, strings.Split(v.picker.View(), "\n"))
+	return renderModalRows(ctx, accentAssistant, strings.Split(v.picker.View(), "\n"))
 }
 
 func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {

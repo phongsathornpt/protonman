@@ -105,7 +105,7 @@ func TestModelPickerLoadingHidesPreviousProviderModels(t *testing.T) {
 	m.panes.bottom.push(view)
 	view.providerIndex = 1
 	_ = view.beginFetch(m.ctx, "beta", m.providers["beta"])
-	rendered := view.Render(m)
+	rendered := view.Render(newPaneRenderContext(m))
 	if !strings.Contains(rendered, "Loading") {
 		t.Fatalf("loading state not rendered: %q", rendered)
 	}
@@ -119,7 +119,7 @@ func TestModelPickerRendersFetchError(t *testing.T) {
 	view := newModelSelectPaneView(m)
 	view.loading = false
 	view.err = errors.New("authentication failed (401)")
-	rendered := view.Render(m)
+	rendered := view.Render(newPaneRenderContext(m))
 	if !strings.Contains(rendered, "Failed to load models") || !strings.Contains(rendered, "authentication failed") {
 		t.Fatalf("error state not rendered: %q", rendered)
 	}
@@ -985,7 +985,7 @@ func TestModelPickerEmptyFilterShowsSearchInput(t *testing.T) {
 	view.picker.SetFilterText("nonexistent-model-xyz")
 	view.picker.SetFilterState(list.Filtering)
 	view.syncPickerProjection()
-	rendered := view.Render(bModel)
+	rendered := view.Render(newPaneRenderContext(bModel))
 	if !strings.Contains(rendered, "Search: nonexistent-model-xyz") {
 		t.Fatalf("expected search query in rendered output: %s", rendered)
 	}

@@ -47,8 +47,8 @@ type permissionPaneView struct {
 
 func (*permissionPaneView) ID() string             { return permissionViewID }
 func (*permissionPaneView) ReplacesComposer() bool { return true }
-func (v *permissionPaneView) Render(m *bubbleModel) string {
-	return v.card(m)
+func (v *permissionPaneView) Render(ctx paneRenderContext) string {
+	return v.card(ctx)
 }
 
 func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {

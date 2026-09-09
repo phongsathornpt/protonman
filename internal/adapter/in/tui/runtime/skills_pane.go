@@ -34,15 +34,15 @@ type skillsPaneView struct {
 func (*skillsPaneView) ID() string             { return skillsViewID }
 func (*skillsPaneView) ReplacesComposer() bool { return true }
 
-func (v *skillsPaneView) ensurePicker(m *bubbleModel) {
-	if v.initialized || m == nil || m.skills == nil {
+func (v *skillsPaneView) ensurePicker(ctx paneRenderContext) {
+	if v.initialized {
 		return
 	}
-	items := skillListItems(m)
+	items := skillListItems(ctx.skillItems)
 	delegate := list.NewDefaultDelegate()
 	delegate.ShowDescription = false
 	delegate.SetSpacing(0)
-	v.picker = list.New(items, delegate, skillsListWidth(m), skillsListHeight(m))
+	v.picker = list.New(items, delegate, skillsListWidth(ctx), skillsListHeight(ctx))
 	v.picker.InfiniteScrolling = true
 	v.picker.DisableQuitKeybindings()
 	v.picker.SetStatusBarItemName("skill", "skills")
@@ -53,37 +53,30 @@ func (v *skillsPaneView) ensurePicker(m *bubbleModel) {
 		}
 	}
 	v.initialized = true
-	v.syncTitle(m)
+	v.syncTitle(ctx)
 }
-func skillListItems(m *bubbleModel) []list.Item {
-	if m == nil || m.skills == nil {
-		return nil
+func skillListItems(items []skillListItem) []list.Item {
+	out := make([]list.Item, 0, len(items))
+	for _, item := range items {
+		out = append(out, item)
 	}
-	skills := m.skills.List()
-	items := make([]list.Item, 0, len(skills))
-	for _, skill := range skills {
-		items = append(items, skillListItem{
-			name:   skill.Name,
-			active: m.skills.IsActivated(skill.Name),
-		})
-	}
-	return items
+	return out
 }
 
-func skillsListWidth(m *bubbleModel) int {
-	return maxInt(12, m.layout.width-8)
+func skillsListWidth(ctx paneRenderContext) int {
+	return maxInt(12, ctx.width-8)
 }
 
-func skillsListHeight(m *bubbleModel) int {
-	return maxInt(4, min(8, m.layout.height-6))
+func skillsListHeight(ctx paneRenderContext) int {
+	return maxInt(4, min(8, ctx.height-6))
 }
-func (v *skillsPaneView) syncTitle(m *bubbleModel) {
-	if !v.initialized || m == nil || m.skills == nil {
+func (v *skillsPaneView) syncTitle(ctx paneRenderContext) {
+	if !v.initialized {
 		return
 	}
 	active := 0
-	for _, skill := range m.skills.List() {
-		if m.skills.IsActivated(skill.Name) {
+	for _, skill := range ctx.skillItems {
+		if skill.active {
 			active++
 		}
 	}
@@ -91,25 +84,26 @@ func (v *skillsPaneView) syncTitle(m *bubbleModel) {
 	v.picker.Title = fmt.Sprintf("Skills · %d/%d active", active, count)
 }
 
-func (v *skillsPaneView) Render(m *bubbleModel) string {
-	v.ensurePicker(m)
+func (v *skillsPaneView) Render(ctx paneRenderContext) string {
+	v.ensurePicker(ctx)
 	if !v.initialized {
 		return ""
 	}
-	v.picker.SetSize(skillsListWidth(m), skillsListHeight(m))
-	v.configureDensity(m)
-	v.syncTitle(m)
-	return renderModalRows(m, accentAssistant, strings.Split(v.picker.View(), "\n"))
+	v.picker.SetSize(skillsListWidth(ctx), skillsListHeight(ctx))
+	v.configureDensity(ctx)
+	v.syncTitle(ctx)
+	return renderModalRows(ctx, accentAssistant, strings.Split(v.picker.View(), "\n"))
 }
 
-func (v *skillsPaneView) configureDensity(m *bubbleModel) {
+func (v *skillsPaneView) configureDensity(ctx paneRenderContext) {
 	v.picker.SetShowStatusBar(false)
 	// Keep pagination presentation hidden; the list component still owns navigation.
 	v.picker.SetShowPagination(false)
-	v.picker.SetShowHelp(m != nil && layoutModeForHeight(m.layout.height) != layoutTiny)
+	v.picker.SetShowHelp(layoutModeForHeight(ctx.height) != layoutTiny)
 }
 func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
-	v.ensurePicker(m)
+	ctx := newPaneRenderContext(m)
+	v.ensurePicker(ctx)
 	if !v.initialized || m == nil || m.skills == nil {
 		if m != nil {
 			m.panes.bottom.remove(skillsViewID)
@@ -128,7 +122,7 @@ func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (boo
 		index := int(message.String()[0] - '1')
 		if index < len(v.picker.Items()) {
 			v.picker.Select(index)
-			v.syncTitle(m)
+			v.syncTitle(ctx)
 		}
 		return true, nil
 	case "enter":
@@ -150,7 +144,7 @@ func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (boo
 
 	updated, cmd := v.picker.Update(message)
 	v.picker = updated
-	v.syncTitle(m)
+	v.syncTitle(ctx)
 	return true, cmd
 }
 func (v *skillsPaneView) toggleSelected(m *bubbleModel) tea.Cmd {
@@ -161,6 +155,6 @@ func (v *skillsPaneView) toggleSelected(m *bubbleModel) tea.Cmd {
 	_, _ = m.skills.Toggle(selected.name)
 	selected.active = m.skills.IsActivated(selected.name)
 	cmd := v.picker.SetItem(v.picker.GlobalIndex(), selected)
-	v.syncTitle(m)
+	v.syncTitle(newPaneRenderContext(m))
 	return cmd
 }

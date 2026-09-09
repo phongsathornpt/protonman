@@ -87,19 +87,19 @@ type todoPaneView struct {
 func (*todoPaneView) ID() string             { return todoInspectViewID }
 func (*todoPaneView) ReplacesComposer() bool { return false }
 
-func (v *todoPaneView) ensurePicker(m *bubbleModel) {
-	if v.initialized || m == nil {
+func (v *todoPaneView) ensurePicker(ctx paneRenderContext) {
+	if v.initialized {
 		return
 	}
 	delegate := list.NewDefaultDelegate()
 	delegate.SetSpacing(0)
 	delegate.ShowDescription = true
-	v.picker = list.New(todoListItems(m.todo), delegate, maxInt(12, m.layout.width-8), maxInt(5, minInt(14, m.layout.height-4)))
+	v.picker = list.New(todoListItems(ctx.todos), delegate, maxInt(12, ctx.width-8), maxInt(5, minInt(14, ctx.height-4)))
 	v.picker.DisableQuitKeybindings()
 	v.picker.SetFilteringEnabled(false)
 	v.picker.SetStatusBarItemName("task", "tasks")
 	v.initialized = true
-	v.syncTitle(m)
+	v.syncTitle(ctx)
 }
 
 func todoListItems(items []tododomain.Item) []list.Item {
@@ -125,16 +125,17 @@ func todoStatusPriority(status tododomain.Status) int {
 	}
 }
 
-func (v *todoPaneView) syncTitle(m *bubbleModel) {
-	if !v.initialized || m == nil {
+func (v *todoPaneView) syncTitle(ctx paneRenderContext) {
+	if !v.initialized {
 		return
 	}
-	completed, _, _ := todopane.TodoCounts(m.todo)
-	v.picker.Title = fmt.Sprintf("Tasks · %d/%d done", completed, len(m.todo))
+	completed, _, _ := todopane.TodoCounts(ctx.todos)
+	v.picker.Title = fmt.Sprintf("Tasks · %d/%d done", completed, len(ctx.todos))
 }
 
 func (v *todoPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
-	v.ensurePicker(m)
+	ctx := newPaneRenderContext(m)
+	v.ensurePicker(ctx)
 	switch message.String() {
 	case "esc", "enter":
 		m.panes.bottom.remove(todoInspectViewID)
@@ -145,20 +146,20 @@ func (v *todoPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool,
 	return true, cmd
 }
 
-func (v *todoPaneView) Render(m *bubbleModel) string {
-	v.ensurePicker(m)
+func (v *todoPaneView) Render(ctx paneRenderContext) string {
+	v.ensurePicker(ctx)
 	if !v.initialized {
 		return ""
 	}
-	v.picker.SetItems(todoListItems(m.todo))
-	v.syncTitle(m)
-	v.picker.SetSize(maxInt(12, m.layout.width-8), maxInt(4, minInt(8, m.layout.height-6)))
+	v.picker.SetItems(todoListItems(ctx.todos))
+	v.syncTitle(ctx)
+	v.picker.SetSize(maxInt(12, ctx.width-8), maxInt(4, minInt(8, ctx.height-6)))
 	v.picker.SetShowStatusBar(false)
 	// TODO inspection keeps list navigation but renders contextual help in the shared footer.
 	// Pagination is hidden to avoid mutable paginator presentation during resize/render.
 	v.picker.SetShowPagination(false)
 	v.picker.SetShowHelp(false)
-	return renderModalRows(m, promptBorder, strings.Split(v.picker.View(), "\n"))
+	return renderModalRows(ctx, promptBorder, strings.Split(v.picker.View(), "\n"))
 }
 
 func (m *bubbleModel) toggleTodoPane() {

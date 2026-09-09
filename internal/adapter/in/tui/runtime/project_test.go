@@ -39,7 +39,7 @@ func TestProjectCommandLoadsTrustedWorkspaceState(t *testing.T) {
 	loaded := cmd()
 	updated, _ := m.Update(loaded)
 	m = updated.(*bubbleModel)
-	rendered := m.panes.bottom.find(projectViewID).(*projectPaneView).Render(m)
+	rendered := m.panes.bottom.find(projectViewID).(*projectPaneView).Render(newPaneRenderContext(m))
 	for _, want := range []string{"Project Settings", "loaded · trusted", "1 detected", "gemini-3.8-flash", "intelligence"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("project pane missing %q: %q", want, rendered)
@@ -66,7 +66,7 @@ func TestProjectCommandShowsUntrustedLocalResources(t *testing.T) {
 	}
 	updated, _ := m.Update(cmd())
 	m = updated.(*bubbleModel)
-	rendered := m.panes.bottom.find(projectViewID).(*projectPaneView).Render(m)
+	rendered := m.panes.bottom.find(projectViewID).(*projectPaneView).Render(newPaneRenderContext(m))
 	for _, want := range []string{"ignored · untrusted", "1 detected · inactive until trusted", "not trusted"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("project pane missing %q: %q", want, rendered)
@@ -118,8 +118,8 @@ func TestProjectInitCreatesConfigAndReloadsPane(t *testing.T) {
 	if !view.state.ConfigExists || view.loading {
 		t.Fatalf("project pane not refreshed after init: %#v", view)
 	}
-	if !strings.Contains(view.Render(m), "Created "+appdirs.RootDirName+"/"+appdirs.ConfigFileName) {
-		t.Fatalf("project pane missing init confirmation: %q", view.Render(m))
+	if !strings.Contains(view.Render(newPaneRenderContext(m)), "Created "+appdirs.RootDirName+"/"+appdirs.ConfigFileName) {
+		t.Fatalf("project pane missing init confirmation: %q", view.Render(newPaneRenderContext(m)))
 	}
 }
 
@@ -130,7 +130,7 @@ func TestProjectPaneShowsConfigurationProvenance(t *testing.T) {
 	m.activeProvider = "provider-x"
 	m.agentProfile = "intelligence"
 	view := &projectPaneView{state: app.ProjectState{Trusted: true}}
-	rendered := view.Render(m)
+	rendered := view.Render(newPaneRenderContext(m))
 	for _, want := range []string{"model-x · project", "provider-x · user", "intelligence · project", "auto · user", "enabled · project", "ask · user", "default"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("project pane missing provenance %q: %q", want, rendered)
@@ -192,7 +192,7 @@ func TestProjectPaneDistinguishesDetectedFromLoadedConfig(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.projectTrusted = true
 	view := &projectPaneView{state: app.ProjectState{Trusted: true, ConfigExists: true, ConfigLoaded: false}}
-	if got := view.Render(m); !strings.Contains(got, "detected · restart for full reload") {
+	if got := view.Render(newPaneRenderContext(m)); !strings.Contains(got, "detected · restart for full reload") {
 		t.Fatalf("project pane did not distinguish detected config from loaded config: %q", got)
 	}
 }
