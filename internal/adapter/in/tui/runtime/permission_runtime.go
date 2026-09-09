@@ -1,63 +1,29 @@
 package runtime
 
 import (
-	"strings"
-
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionpolicy"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
 const permissionViewID = "permission"
 
-type permissionOption int
+type permissionOption = permissionpolicy.Option
 
 const (
-	optionAllowOnce permissionOption = iota
-	optionAllowSession
-	optionAllowProject
-	optionAllowGlobal
-	optionDeny
+	optionAllowOnce    = permissionpolicy.AllowOnce
+	optionAllowSession = permissionpolicy.AllowSession
+	optionAllowProject = permissionpolicy.AllowProject
+	optionAllowGlobal  = permissionpolicy.AllowGlobal
+	optionDeny         = permissionpolicy.Deny
 )
 
-type permissionOptionItem struct {
-	option   permissionOption
-	label    string
-	shortcut string
-}
+type permissionOptionItem = permissionpolicy.Item
 
 func permissionOptionsFor(request permission.Request, projectTrusted bool, hasWorkDir bool) []permissionOptionItem {
-	items := []permissionOptionItem{
-		{option: optionAllowOnce, label: "Allow once", shortcut: "y"},
-	}
-	if permission.SessionGrantEligible(request) {
-		items = append(items, permissionOptionItem{
-			option:   optionAllowSession,
-			label:    "Allow for this request this session",
-			shortcut: "s",
-		})
-	}
-	if permission.PersistentRuleEligible(request) {
-		if projectTrusted && hasWorkDir {
-			items = append(items, permissionOptionItem{
-				option:   optionAllowProject,
-				label:    "Allow and save to project (.protonman/config.toml)",
-				shortcut: "p",
-			})
-		}
-		items = append(items, permissionOptionItem{
-			option:   optionAllowGlobal,
-			label:    "Allow and save globally (~/.protonman/config.toml)",
-			shortcut: "g",
-		})
-	}
-	items = append(items, permissionOptionItem{
-		option:   optionDeny,
-		label:    "Deny",
-		shortcut: "n",
-	})
-	return items
+	return permissionpolicy.Options(request, projectTrusted, hasWorkDir)
 }
 
 func (v *permissionPaneView) options(m *bubbleModel) []permissionOptionItem {
@@ -67,26 +33,11 @@ func (v *permissionPaneView) options(m *bubbleModel) []permissionOptionItem {
 		projectTrusted = m.projectTrusted
 		hasWorkDir = m.workDir != ""
 	}
-	return permissionOptionsFor(v.pending.request, projectTrusted, hasWorkDir)
+	return permissionpolicy.Options(v.pending.request, projectTrusted, hasWorkDir)
 }
 
 func shortcutHintFor(options []permissionOptionItem) string {
-	parts := make([]string, 0, len(options))
-	for _, opt := range options {
-		switch opt.option {
-		case optionAllowOnce:
-			parts = append(parts, "y once")
-		case optionAllowSession:
-			parts = append(parts, "s session")
-		case optionAllowProject:
-			parts = append(parts, "p project")
-		case optionAllowGlobal:
-			parts = append(parts, "g global")
-		case optionDeny:
-			parts = append(parts, "n deny")
-		}
-	}
-	return strings.Join(parts, " · ")
+	return permissionpolicy.ShortcutHint(options)
 }
 
 type permissionPaneView struct {
@@ -158,28 +109,28 @@ func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) 
 	case "1", "2", "3", "4", "5":
 		idx := int(message.String()[0] - '1')
 		if idx >= 0 && idx < len(options) {
-			return true, m.resolvePermission(options[idx].option)
+			return true, m.resolvePermission(options[idx].Option)
 		}
 		return true, nil
 	case "y":
 		return true, m.resolvePermission(optionAllowOnce)
 	case "s":
 		for _, item := range options {
-			if item.option == optionAllowSession {
+			if item.Option == optionAllowSession {
 				return true, m.resolvePermission(optionAllowSession)
 			}
 		}
 		return true, nil
 	case "p":
 		for _, item := range options {
-			if item.option == optionAllowProject {
+			if item.Option == optionAllowProject {
 				return true, m.resolvePermission(optionAllowProject)
 			}
 		}
 		return true, nil
 	case "g":
 		for _, item := range options {
-			if item.option == optionAllowGlobal {
+			if item.Option == optionAllowGlobal {
 				return true, m.resolvePermission(optionAllowGlobal)
 			}
 		}
@@ -187,7 +138,7 @@ func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) 
 	case "n":
 		return true, m.resolvePermission(optionDeny)
 	case "enter":
-		return true, m.resolvePermission(options[v.index].option)
+		return true, m.resolvePermission(options[v.index].Option)
 	default:
 		return !m.matchesGlobalShortcut(message), nil
 	}

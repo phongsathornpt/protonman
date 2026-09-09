@@ -25,7 +25,7 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 	options := v.options(m)
 	labels := make([]string, 0, len(options))
 	for _, option := range options {
-		labels = append(labels, option.label)
+		labels = append(labels, option.Label)
 	}
 	shortcutHint := shortcutHintFor(options)
 	title := "Permission required"
