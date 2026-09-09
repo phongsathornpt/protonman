@@ -340,11 +340,15 @@ func TestErrorCellFallbackRendering(t *testing.T) {
 	}
 }
 
-func TestToolCellRenderReadFileExcerpt(t *testing.T) {
-	cell := &ToolCell{Name: "read", Target: "internal/tui/theme.go", ToolKind: tool.KindRead, Body: "// Package tui\npackage tui\n\nimport \"fmt\"\n", Summary: "4 lines (45 B)"}
-	rendered := strings.Join(cell.RenderWidth(80), "\n")
-	if !strings.Contains(rendered, "package tui") || !strings.Contains(rendered, "↳") {
-		t.Fatalf("expected rendered cell to contain excerpt '↳ package tui', got:\n%s", rendered)
+func TestToolCellReadDetailFollowsDensity(t *testing.T) {
+	minimal := &ToolCell{Name: "read", Target: "internal/tui/theme.go", ToolKind: tool.KindRead, Body: "// Package tui\npackage tui\n\nimport \"fmt\"\n", Summary: "4 lines (45 B)"}
+	if rendered := strings.Join(minimal.RenderWidth(80), "\n"); strings.Contains(rendered, "↳") {
+		t.Fatalf("minimal read leaked excerpt:\n%s", rendered)
+	}
+	detailed := *minimal
+	detailed.ShowDetail = true
+	if rendered := strings.Join(detailed.RenderWidth(80), "\n"); !strings.Contains(rendered, "package tui") || !strings.Contains(rendered, "↳") {
+		t.Fatalf("detailed read missing excerpt:\n%s", rendered)
 	}
 }
 

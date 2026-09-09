@@ -74,6 +74,7 @@ type ToolCell struct {
 	Target          string
 	ToolKind        tool.Kind
 	Summary         string
+	ShowDetail      bool
 }
 
 func (ToolCell) Kind() HistoryCellKind { return HistoryCellTool }
@@ -137,14 +138,13 @@ func (c ToolCell) RenderWidth(width int) []string {
 		out = append(out, line)
 	}
 
-	// Read file excerpt preview
-	if !c.Running && strings.TrimSpace(c.Name) == tool.NameRead && !c.Denied && c.FailureCode == "" && c.Body != "" {
-		if excerpt := toolview.ExtractReadFileExcerpt(c.Body); excerpt != "" {
-			out = append(out, tuistyle.ToolExcerptStyle.Render("  ↳ "+excerpt))
+	showDetail := !c.Running && (c.ShowDetail || c.Denied || c.FailureCode != "")
+	if showDetail {
+		if c.ShowDetail && strings.TrimSpace(c.Name) == tool.NameRead && !c.Denied && c.FailureCode == "" && c.Body != "" {
+			if excerpt := toolview.ExtractReadFileExcerpt(c.Body); excerpt != "" {
+				out = append(out, tuistyle.ToolExcerptStyle.Render("  ↳ "+excerpt))
+			}
 		}
-	}
-
-	if !c.Running && !toolview.ShouldSuppressBody(c.ToolKind, c.Name) {
 		if c.ToolKind == tool.KindGrep || c.Name == "grep" {
 			for _, line := range toolview.FormatGrepView(c.bodyLines(), c.Target, width) {
 				out = append(out, "  "+line)
@@ -161,6 +161,7 @@ func (c ToolCell) RenderWidth(width int) []string {
 			}
 		}
 	}
+
 	return out
 }
 func (c ToolCell) RawLines() []string {
