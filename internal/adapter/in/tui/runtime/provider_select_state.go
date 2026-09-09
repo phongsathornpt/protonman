@@ -186,7 +186,7 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 	v.picker.Title = "Providers"
 	v.picker.SetShowStatusBar(false)
 	v.picker.SetShowPagination(false)
-	v.picker.SetShowHelp(false)
+	v.picker.SetShowHelp(mode != layoutTiny)
 	delegate := list.NewDefaultDelegate()
 	delegate.SetSpacing(0)
 	delegate.ShowDescription = mode == layoutNormal
