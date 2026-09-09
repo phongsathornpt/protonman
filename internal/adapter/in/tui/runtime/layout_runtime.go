@@ -1,8 +1,9 @@
 package runtime
 
 import (
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 )
 
 func (m *bubbleModel) View() tea.View {
@@ -42,7 +43,7 @@ func (m *bubbleModel) liveView() string {
 	if frame.footer != "" {
 		parts = append(parts, frame.footer)
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+	return strings.Join(parts, "\n")
 }
 
 func (m *bubbleModel) footerView() string {
