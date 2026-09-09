@@ -1,6 +1,10 @@
 package runtime
 
 import (
+	"fmt"
+	"strings"
+
+	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
@@ -73,41 +77,87 @@ func (m *bubbleModel) revealRetiredTodo() {
 
 const todoInspectViewID = "todo-inspect"
 
-type todoPaneView struct{ offset int }
-
-func (*todoPaneView) ID() string {
-	return todoInspectViewID
+type todoListItem struct {
+	item TodoItem
 }
 
-func (*todoPaneView) ReplacesComposer() bool {
-	return false
+func (i todoListItem) FilterValue() string { return i.item.Text + " " + i.item.ID }
+func (i todoListItem) Description() string { return "id: " + strings.TrimSpace(i.item.ID) }
+func (i todoListItem) Title() string {
+	glyph := "○ "
+	switch i.item.Status {
+	case tododomain.StatusInProgress:
+		glyph = "● "
+	case tododomain.StatusCompleted:
+		glyph = "✓ "
+	}
+	return glyph + i.item.Text
+}
+
+type todoPaneView struct {
+	picker      list.Model
+	initialized bool
+}
+
+func (*todoPaneView) ID() string             { return todoInspectViewID }
+func (*todoPaneView) ReplacesComposer() bool { return false }
+
+func (v *todoPaneView) ensurePicker(m *bubbleModel) {
+	if v.initialized || m == nil {
+		return
+	}
+	delegate := list.NewDefaultDelegate()
+	delegate.SetSpacing(0)
+	delegate.ShowDescription = true
+	v.picker = list.New(todoListItems(m.todo), delegate, maxInt(12, m.width-8), maxInt(5, minInt(14, m.height-4)))
+	v.picker.DisableQuitKeybindings()
+	v.picker.SetFilteringEnabled(false)
+	v.picker.SetStatusBarItemName("task", "tasks")
+	v.initialized = true
+	v.syncTitle(m)
+}
+
+func todoListItems(items []TodoItem) []list.Item {
+	out := make([]list.Item, 0, len(items))
+	for _, item := range items {
+		out = append(out, todoListItem{item: item})
+	}
+	return out
+}
+
+func (v *todoPaneView) syncTitle(m *bubbleModel) {
+	if !v.initialized || m == nil {
+		return
+	}
+	completed, active, pending := pane.TodoCounts(m.todo)
+	v.picker.Title = fmt.Sprintf("Tasks %d/%d · %d active · %d pending", completed, len(m.todo), active, pending)
 }
 
 func (v *todoPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
-	limit := todoInspectionLimit(m.height)
-	maxOffset := maxInt(0, len(m.todo)-limit)
+	v.ensurePicker(m)
 	switch message.String() {
 	case "esc", "enter":
 		m.bottom.remove(todoInspectViewID)
 		return true, nil
-	case "up", "k":
-		v.offset = maxInt(0, v.offset-1)
-		return true, nil
-	case "down", "j":
-		v.offset = minInt(maxOffset, v.offset+1)
-		return true, nil
-	default:
-		return false, nil
 	}
+	updated, cmd := v.picker.Update(message)
+	v.picker = updated
+	return true, cmd
 }
 
 func (v *todoPaneView) Render(m *bubbleModel) string {
-	rows := pane.TodoRows(pane.TodoSnapshot{Width: m.width, Height: m.height, Offset: v.offset, Items: m.todo})
-	return renderModalRows(m, promptBorder, rows)
-}
-
-func todoInspectionLimit(height int) int {
-	return pane.TodoInspectionLimit(height)
+	v.ensurePicker(m)
+	if !v.initialized {
+		return ""
+	}
+	v.picker.SetItems(todoListItems(m.todo))
+	v.syncTitle(m)
+	mode := layoutModeForHeight(m.height)
+	v.picker.SetSize(maxInt(12, m.width-8), maxInt(5, minInt(14, m.height-4)))
+	v.picker.SetShowStatusBar(mode != layoutTiny)
+	v.picker.SetShowPagination(mode != layoutTiny)
+	v.picker.SetShowHelp(mode != layoutTiny)
+	return renderModalRows(m, promptBorder, strings.Split(v.picker.View(), "\n"))
 }
 
 func (m *bubbleModel) toggleTodoPane() {
