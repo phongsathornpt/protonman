@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -911,6 +912,34 @@ func newLoopForHandler(
 		t.Fatalf("NewLoop() error = %v", err)
 	}
 	return loop
+}
+
+func TestCanceledModelStreamsReturnGoroutinesToBaseline(t *testing.T) {
+	runtime.GC()
+	baseline := runtime.NumGoroutine()
+	client := &blockingModelClient{started: make(chan struct{})}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow)
+
+	for i := 0; i < 20; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Millisecond)
+		_, err := loop.Run(ctx, []model.Message{{Role: model.RoleUser, Content: "cancel stream"}}, nil)
+		cancel()
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("Run() error = %v, want deadline exceeded", err)
+		}
+	}
+
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		runtime.GC()
+		if runtime.NumGoroutine() <= baseline+2 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := runtime.NumGoroutine(); got > baseline+2 {
+		t.Fatalf("goroutines after canceled streams = %d, baseline = %d", got, baseline)
+	}
 }
 
 type blockingModelClient struct {
