@@ -74,8 +74,5 @@ var (
 	MarkdownQuoteStyle   = lipgloss.NewStyle().Foreground(AccentTool)
 	MarkdownBulletStyle  = lipgloss.NewStyle().Foreground(AccentAssistant)
 	MarkdownBoldStyle    = lipgloss.NewStyle().Bold(true)
-	ModalStyle           = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(WarningColor).
-				Padding(1, 2)
+	ModalStyle           = lipgloss.NewStyle().Padding(0, 1)
 )

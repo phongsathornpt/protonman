@@ -58,11 +58,8 @@ func ProviderEditorRows(snapshot ProviderEditorSnapshot) ([]string, panecommon.T
 	switch snapshot.State {
 	case ProviderEditorFetching:
 		return []string{
-			tuistyle.BrandStyle.Render("Connecting to " + snapshot.Name),
-			"",
-			fmt.Sprintf("  %s Querying %s/models…", snapshot.Spinner, snapshot.Endpoint),
-			tuistyle.MutedStyle.Render("  Checking endpoint & discovering model catalog"),
-			"",
+			tuistyle.BrandStyle.Render("Connecting · " + snapshot.Name),
+			fmt.Sprintf("%s %s", snapshot.Spinner, snapshot.Endpoint),
 			tuistyle.MutedStyle.Render("esc cancel"),
 		}, panecommon.ToneAssistant
 	case ProviderEditorSelectModel:
@@ -73,29 +70,26 @@ func ProviderEditorRows(snapshot ProviderEditorSnapshot) ([]string, panecommon.T
 			description = "  Keeping the current active provider and model"
 		}
 		return []string{
-			tuistyle.BrandStyle.Render("Saving Provider…"),
-			"",
-			fmt.Sprintf("  Writing %s to %s", snapshot.Name, snapshot.UserConfigPath),
-			tuistyle.MutedStyle.Render(description),
+			tuistyle.BrandStyle.Render("Saving · " + snapshot.Name),
+			tuistyle.MutedStyle.Render(strings.TrimSpace(description)),
 		}, panecommon.ToneAssistant
 	case ProviderEditorSaveError:
 		return []string{
-			tuistyle.ErrorStyle.Render("✕ Provider Save Failed"), "",
-			"  " + snapshot.ErrorMessage, "",
-			tuistyle.MutedStyle.Render("enter retry save · esc back to models · ctrl+c cancel"),
+			tuistyle.ErrorStyle.Render("Save failed"),
+			snapshot.ErrorMessage,
+			tuistyle.MutedStyle.Render("enter retry · esc back · ctrl+c cancel"),
 		}, panecommon.ToneError
 	case ProviderEditorConfirmOverwrite:
 		return []string{
-			tuistyle.WarningStyle.Render("Provider Already Exists"), "",
-			fmt.Sprintf("  %q is already configured.", strings.TrimSpace(snapshot.Name)),
-			tuistyle.MutedStyle.Render("  Continuing will replace its endpoint and API key."), "",
+			tuistyle.WarningStyle.Render("Provider exists · " + strings.TrimSpace(snapshot.Name)),
+			tuistyle.MutedStyle.Render("Continuing replaces endpoint and API key."),
 			tuistyle.MutedStyle.Render("enter overwrite · esc back · ctrl+c cancel"),
 		}, panecommon.ToneWarning
 	case ProviderEditorError:
 		return []string{
-			tuistyle.ErrorStyle.Render("✕ Connection Failed"), "",
-			"  " + snapshot.ErrorMessage, "",
-			tuistyle.MutedStyle.Render("enter / esc return to credentials"),
+			tuistyle.ErrorStyle.Render("Connection failed"),
+			snapshot.ErrorMessage,
+			tuistyle.MutedStyle.Render("enter or esc back"),
 		}, panecommon.ToneError
 	default:
 		return providerInputRows(snapshot), panecommon.ToneAssistant
@@ -103,27 +97,27 @@ func ProviderEditorRows(snapshot ProviderEditorSnapshot) ([]string, panecommon.T
 }
 
 func providerModelRows(snapshot ProviderEditorSnapshot) []string {
-	titlePrefix := "✓ Select Active Model"
+	titlePrefix := "Models"
 	if snapshot.IsEditing && !snapshot.ActivateOnSave {
-		titlePrefix = "✓ Select Model · active provider unchanged"
+		titlePrefix = "Models · active unchanged"
 	}
-	title := fmt.Sprintf("%s (%d discovered) [Step 2/2]", titlePrefix, len(snapshot.Models))
+	title := fmt.Sprintf("%s · %d", titlePrefix, len(snapshot.Models))
 	if snapshot.HasFreeModels {
 		if snapshot.FilterFreeOnly {
-			title = fmt.Sprintf("%s (%d free models · [f] show all %d) [Step 2/2]", titlePrefix, len(snapshot.Models), snapshot.TotalModels)
+			title = fmt.Sprintf("%s · %d free · f all %d", titlePrefix, len(snapshot.Models), snapshot.TotalModels)
 		} else {
-			title = fmt.Sprintf("%s (%d discovered · [f] show free only) [Step 2/2]", titlePrefix, snapshot.TotalModels)
+			title = fmt.Sprintf("%s · %d · f free", titlePrefix, snapshot.TotalModels)
 		}
 	}
 	if len(snapshot.Models) == 0 {
 		return []string{
-			tuistyle.BrandStyle.Render(title), "",
-			tuistyle.MutedStyle.Render("No matching models found."), "",
+			tuistyle.BrandStyle.Render(title),
+			tuistyle.MutedStyle.Render("No matching models."),
 			tuistyle.MutedStyle.Render("f toggle filter · esc back"),
 		}
 	}
 	selected, offset, end := panecommon.NormalizedWindow(snapshot.SelectedIndex, snapshot.ScrollOffset, len(snapshot.Models), 8)
-	rows := []string{tuistyle.BrandStyle.Render(title), ""}
+	rows := []string{tuistyle.BrandStyle.Render(title)}
 	if offset > 0 {
 		rows = append(rows, tuistyle.MutedStyle.Render(fmt.Sprintf("  ▲ %d more above", offset)))
 	}
@@ -165,35 +159,15 @@ func providerModelRows(snapshot ProviderEditorSnapshot) []string {
 			footer = "↑/↓ move · 1-9 select · f free only · enter save · esc back"
 		}
 	}
-	return append(rows, "", tuistyle.MutedStyle.Render(footer))
+	return append(rows, tuistyle.MutedStyle.Render(footer))
 }
 
 func providerInputRows(snapshot ProviderEditorSnapshot) []string {
-	tiny := snapshot.Height < 14
-	compact := snapshot.Height <= 20
-	rows := []string{tuistyle.BrandStyle.Render(providerInputTitle(snapshot, compact))}
-	if !compact {
-		rows = append(rows,
-			"",
-			tuistyle.MutedStyle.Render("Presets: alt+1 Protonman · alt+2 OpenCode · alt+3 Ollama · alt+4 OpenAI · alt+5 Anthropic"),
-			"",
-		)
-	}
-	rows = append(rows, providerInputFields(snapshot, compact)...)
-	if tiny {
-		return append(rows, tuistyle.MutedStyle.Render("enter · esc"))
-	}
-	rows = append(rows, "")
-	if compact {
-		footer := fmt.Sprintf("%s · ctrl+r · tab fields · enter connect · esc", strings.ToLower(strings.TrimSpace(snapshot.ProviderType)))
-		if snapshot.IsEditing && !snapshot.ActivateOnSave {
-			footer = "enter save · active stays · esc cancel"
-		}
-		return append(rows, tuistyle.MutedStyle.Render(footer))
-	}
-	footer := "tab/shift+tab cycle · ctrl+r protocol · enter connect & fetch · esc cancel"
+	rows := []string{tuistyle.BrandStyle.Render(providerInputTitle(snapshot, true))}
+	rows = append(rows, providerInputFields(snapshot, true)...)
+	footer := "tab fields · ctrl+r protocol · enter connect · esc"
 	if snapshot.IsEditing && !snapshot.ActivateOnSave {
-		footer = "tab/shift+tab cycle · enter save · active provider stays · esc cancel"
+		footer = "tab fields · enter save · active stays · esc"
 	}
 	return append(rows, tuistyle.MutedStyle.Render(footer))
 }
@@ -201,12 +175,12 @@ func providerInputRows(snapshot ProviderEditorSnapshot) []string {
 func providerInputTitle(snapshot ProviderEditorSnapshot, compact bool) string {
 	if snapshot.IsEditing {
 		if compact {
-			return fmt.Sprintf("✓ Edit %s", snapshot.Name)
+			return fmt.Sprintf("Edit provider · %s", snapshot.Name)
 		}
 		return fmt.Sprintf("✓ Edit Provider: %s [Step 1/2: Connection]", snapshot.Name)
 	}
 	if compact {
-		return "+ Add Provider"
+		return "Add provider"
 	}
 	return "+ Add Model Provider [Step 1/2: Connection]"
 }

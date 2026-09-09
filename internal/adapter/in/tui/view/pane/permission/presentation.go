@@ -79,7 +79,7 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 		omitted := len(detailLines) - maxDetailLines
 		detailLines = append(detailLines[:maxDetailLines], fmt.Sprintf("... (%d more lines truncated)", omitted))
 	}
-	rows = append(rows, tuistyle.MutedStyle.Render(strings.Join(detailLines, "\n")), "")
+	rows = append(rows, tuistyle.MutedStyle.Render(strings.Join(detailLines, "\n")))
 	for i, option := range snapshot.Options {
 		marker := "  "
 		if i == index {
@@ -89,11 +89,10 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 		}
 		rows = append(rows, tuistyle.MutedStyle.Render(marker+option))
 	}
-	rows = append(rows, "")
 	if snapshot.Parked {
-		rows = append(rows, tuistyle.MutedStyle.Render("tab review approval   "+snapshot.ShortcutHint+"   pgup/pgdn scroll"))
+		rows = append(rows, tuistyle.MutedStyle.Render("tab review · "+snapshot.ShortcutHint+" · pgup/pgdn"))
 	} else {
-		rows = append(rows, tuistyle.MutedStyle.Render(fmt.Sprintf("j/k move   1-%d select   %s   esc review transcript", len(snapshot.Options), snapshot.ShortcutHint)))
+		rows = append(rows, tuistyle.MutedStyle.Render(fmt.Sprintf("j/k · 1-%d · %s · esc review", len(snapshot.Options), snapshot.ShortcutHint)))
 	}
 	if panecommon.ModeForHeight(snapshot.Height) == panecommon.LayoutCompact {
 		rows = panecommon.CompactRows(rows)

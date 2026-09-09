@@ -154,8 +154,8 @@ func TestProviderSelectViewEditDetails(t *testing.T) {
 		t.Fatalf("expected api key prefilled, got %q", pv.apiKeyInput.Value())
 	}
 	rendered := bModel.View().Content
-	if !strings.Contains(rendered, "Edit Provider: protonman") {
-		t.Fatalf("expected 'Edit Provider: protonman' in rendered view, got:\n%s", rendered)
+	if !strings.Contains(rendered, "Edit provider · protonman") {
+		t.Fatalf("expected 'Edit provider · protonman' in rendered view, got:\n%s", rendered)
 	}
 }
 
@@ -389,8 +389,8 @@ func TestProviderViewLaunchViaSlashCommand(t *testing.T) {
 		t.Fatalf("expected blank endpoint, got: %s", view.endpointInput.Value())
 	}
 	rendered := testPlain(bModel.View().Content)
-	if !strings.Contains(rendered, "Add Model Provider") {
-		t.Fatalf("expected 'Add Model Provider' in rendered view, got:\n%s", rendered)
+	if !strings.Contains(rendered, "Add provider") {
+		t.Fatalf("expected 'Add provider' in rendered view, got:\n%s", rendered)
 	}
 	if !strings.Contains(rendered, "https://api.example.com/v1") {
 		t.Fatalf("expected endpoint placeholder in rendered view, got:\n%s", rendered)
@@ -505,7 +505,7 @@ func TestProviderViewDuplicateNameConfirmation(t *testing.T) {
 	if view.state != providerStateConfirmOverwrite {
 		t.Fatalf("expected overwrite confirmation state, got %v", view.state)
 	}
-	if !strings.Contains(bModel.View().Content, "Provider Already Exists") {
+	if !strings.Contains(bModel.View().Content, "Provider exists") {
 		t.Fatalf("expected overwrite warning in view, got:\n%s", bModel.View().Content)
 	}
 	updated, _ = bModel.Update(testKey(tea.KeyEsc))
@@ -608,7 +608,7 @@ func TestProviderViewInactiveEditKeepsActiveProvider(t *testing.T) {
 	if view.activateOnSave {
 		t.Fatal("expected editing an inactive provider to preserve the active provider")
 	}
-	if !strings.Contains(bModel.View().Content, "active provider stays") {
+	if !strings.Contains(bModel.View().Content, "active stays") {
 		t.Fatalf("expected inactive edit hint in view, got:\n%s", bModel.View().Content)
 	}
 	view.endpointInput.SetValue("https://protonman.dev/v2")
@@ -722,7 +722,7 @@ func TestProviderViewErrorDisplayAndRetry(t *testing.T) {
 		t.Fatalf("expected providerStateError, got %v", view.state)
 	}
 	rendered := bModel.View().Content
-	if !strings.Contains(rendered, "Connection Failed") || !strings.Contains(rendered, "invalid API key") {
+	if !strings.Contains(rendered, "Connection failed") || !strings.Contains(rendered, "invalid API key") {
 		t.Fatalf("expected error banner in view, got:\n%s", rendered)
 	}
 	updated, _ = bModel.Update(testKey(tea.KeyEnter))
