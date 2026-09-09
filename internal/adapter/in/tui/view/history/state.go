@@ -699,6 +699,11 @@ func (s *HistoryState) committedRenderText() string {
 		return s.cachedRenderText
 	}
 	s.cachedRenderText = strings.Join(s.cachedRender, "\n")
+	if len(s.cachedRender) > 0 {
+		// Re-slice the joined render so the line cache and full-text cache share
+		// one backing allocation instead of retaining both representations.
+		s.cachedRender = strings.Split(s.cachedRenderText, "\n")
+	}
 	s.renderTextValid = true
 	return s.cachedRenderText
 }
