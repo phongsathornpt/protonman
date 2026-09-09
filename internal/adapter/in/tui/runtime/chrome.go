@@ -13,7 +13,6 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
-	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"os"
 	"os/exec"
@@ -667,128 +666,6 @@ func agentDisplayPriority(state agent.State) int {
 
 func agentDisplayDuration(st agent.AgentStatus, now time.Time) time.Duration {
 	return pane.AgentDisplayDuration(st, now)
-}
-
-func (m bubbleModel) todoView() string {
-	if len(m.todo) == 0 {
-		return ""
-	}
-	if m.todoLifecycle.CompletionDismissed && !m.todoViewState.ShowRetired {
-		return ""
-	}
-	completed, active, pending := todoCounts(m.todo)
-	summary := fmt.Sprintf("Tasks %d/%d", completed, len(m.todo))
-	if active > 0 {
-		summary += fmt.Sprintf(" · %d active", active)
-	}
-	if pending > 0 {
-		summary += fmt.Sprintf(" · %d pending", pending)
-	}
-	if completed == len(m.todo) {
-		summary += " ✓"
-	}
-	renderSummary := func(value string) string {
-		return brandStyle.Render(truncateWithEllipsis(value, maxInt(1, m.width-2)))
-	}
-	switch layoutModeForHeight(m.height) {
-	case layoutTiny, layoutCompact:
-		return renderSummary(summary)
-	}
-	if m.busy {
-		lines := []string{renderSummary(summary)}
-		for _, item := range m.todo {
-			if item.Status != tododomain.StatusInProgress {
-				continue
-			}
-			activeLabel := glyphTodoActive + truncateWithEllipsis(item.Text, maxInt(1, m.width-4))
-			lines = append(lines, brandStyle.Render("  "+activeLabel))
-			break
-		}
-		return strings.Join(lines, "\n")
-	}
-	if !m.todoViewState.Expanded {
-		return renderSummary(summary + " · " + shortcutHelp(m.keys.ToggleTodo))
-	}
-	limit := todoVisibleRows(m.height)
-	header := summary + " · " + shortcutHelp(m.keys.ToggleTodo)
-	headerWidth := ansi.StringWidth(header)
-	divLen := maxInt(0, m.width-headerWidth-6)
-	divider := ""
-	if divLen > 0 {
-		divider = " " + strings.Repeat("─", divLen)
-	}
-	lines := []string{brandStyle.Render(truncateWithEllipsis("── "+header+divider, maxInt(1, m.width-2)))}
-	shown := 0
-	for _, status := range []tododomain.Status{tododomain.StatusInProgress, tododomain.StatusPending, tododomain.StatusCompleted} {
-		for _, item := range m.todo {
-			if item.Status != status || shown >= limit {
-				continue
-			}
-			lines = append(lines, renderTodoItem(item, maxInt(8, m.width-6))...)
-			shown++
-		}
-	}
-	if more := len(m.todo) - shown; more > 0 {
-		lines = append(lines, mutedStyle.Render(fmt.Sprintf("  … %d more", more)))
-	}
-	return strings.Join(lines, "\n")
-}
-
-func todoCounts(items []TodoItem) (completed, active, pending int) {
-	return pane.TodoCounts(items)
-}
-
-func todoVisibleRows(height int) int {
-	rows := (height - 14) / 2
-	if rows < 3 {
-		rows = 3
-	}
-	if rows > 8 {
-		rows = 8
-	}
-	return rows
-}
-
-func renderTodoItem(item TodoItem, width int) []string {
-	prefix := glyphTodoPending
-	style := mutedStyle
-	switch item.Status {
-	case tododomain.StatusInProgress:
-		prefix = glyphTodoActive
-		style = brandStyle
-	case tododomain.StatusCompleted:
-		prefix = glyphToolSuccess
-		style = successStyle
-	}
-	label := item.Text
-	wrapped := wrapLines(label, maxInt(1, width-2))
-	out := make([]string, 0, len(wrapped))
-	for i, line := range wrapped {
-		if i == 0 {
-			out = append(out, style.Render("  "+prefix+line))
-		} else {
-			out = append(out, style.Render("    "+line))
-		}
-	}
-	return out
-}
-
-func (m *bubbleModel) appendTodo() {
-	if len(m.todo) == 0 {
-		m.appendLine("TODO pane is empty")
-		return
-	}
-	m.appendLine("TODO:")
-	for _, item := range m.todo {
-		mark := " "
-		if item.Status == tododomain.StatusInProgress {
-			mark = "~"
-		}
-		if item.Status == tododomain.StatusCompleted {
-			mark = "x"
-		}
-		m.appendLine(fmt.Sprintf("[%s] %s", mark, item.Text))
-	}
 }
 
 func (m *bubbleModel) promptView() string {

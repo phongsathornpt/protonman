@@ -74,7 +74,6 @@ type bubbleModel struct {
 	todo                      []TodoItem
 	todoStore                 tododomain.Repository
 	todoRevision              uint64
-	todoViewState             todoViewState
 	todoLifecycle             todoLifecycleState
 	busy                      bool
 	activity                  string
@@ -735,15 +734,7 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 		m.refreshViewport()
 		return true, nil
 	case key.Matches(message, m.keys.ToggleTodo):
-		if layoutModeForHeight(m.height) != layoutNormal {
-			m.toggleTodoPane()
-			return true, nil
-		}
-		m.todoViewState.Expanded = !m.todoViewState.Expanded
-		if m.todoViewState.Expanded {
-			m.revealRetiredTodo()
-		}
-		m.relayout()
+		m.toggleTodoPane()
 		return true, nil
 	case key.Matches(message, m.keys.PageUp):
 		m.hydrateViewportForScroll()

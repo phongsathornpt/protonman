@@ -326,36 +326,20 @@ func (m *bubbleModel) executeConversationCommand(name, argument string) tea.Cmd 
 		m.showTranscript = true
 		m.refreshTranscriptViewport(true)
 	case "todo":
-		if layoutModeForHeight(m.height) != layoutNormal {
-			verb := strings.ToLower(strings.TrimSpace(argument))
-			if verb == "hide" {
-				m.bottom.remove(todoInspectViewID)
-				m.relayout()
-				return nil
-			}
-			if verb == "" || verb == "show" {
-				if !m.bottom.has(todoInspectViewID) {
-					m.bottom.push(&todoPaneView{})
-				}
-				m.relayout()
-				return nil
-			}
-		}
 		switch strings.ToLower(strings.TrimSpace(argument)) {
 		case "":
-			m.todoViewState.Expanded = !m.todoViewState.Expanded
-			if m.todoViewState.Expanded {
-				m.revealRetiredTodo()
-			}
+			m.toggleTodoPane()
 		case "show":
-			m.todoViewState.Expanded = true
-			m.revealRetiredTodo()
+			if !m.bottom.has(todoInspectViewID) {
+				m.bottom.push(&todoPaneView{})
+			}
+			m.relayout()
 		case "hide":
-			m.todoViewState.Expanded = false
+			m.bottom.remove(todoInspectViewID)
+			m.relayout()
 		default:
 			m.appendError("usage: /todo [show|hide]")
 		}
-		m.resize(m.width, m.height)
 	case "clear":
 		m.resetTranscript()
 		m.refreshViewport()

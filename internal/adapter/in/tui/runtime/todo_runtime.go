@@ -14,11 +14,6 @@ import (
 type TodoItem = tododomain.Item // TodoItem is kept as a compatibility alias while TODO ownership lives in the
 // domain package rather than the terminal adapter.
 
-type todoViewState struct {
-	Expanded    bool
-	ShowRetired bool
-}
-
 type todoLifecycleState struct {
 	CompletionFresh     bool
 	CompletionDismissed bool
@@ -39,11 +34,9 @@ func (m *bubbleModel) syncTodoSnapshot() bool {
 	if isComplete && !wasComplete {
 		m.todoLifecycle.CompletionFresh = true
 		m.todoLifecycle.CompletionDismissed = false
-		m.todoViewState.Expanded = false
 	} else if !isComplete {
 		m.todoLifecycle.CompletionFresh = false
 		m.todoLifecycle.CompletionDismissed = false
-		m.todoViewState.ShowRetired = false
 	}
 	return true
 }
@@ -66,13 +59,6 @@ func (m *bubbleModel) retireCompletedTodoForNextTurn() {
 	}
 	m.todoLifecycle.CompletionFresh = false
 	m.todoLifecycle.CompletionDismissed = true
-	m.todoViewState.ShowRetired = false
-}
-
-func (m *bubbleModel) revealRetiredTodo() {
-	if m != nil && m.todoLifecycle.CompletionDismissed {
-		m.todoViewState.ShowRetired = true
-	}
 }
 
 const todoInspectViewID = "todo-inspect"
