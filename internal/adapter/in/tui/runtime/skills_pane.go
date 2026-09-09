@@ -1,97 +1,163 @@
 package runtime
 
 import (
-	"charm.land/bubbles/v2/key"
-	tea "charm.land/bubbletea/v2"
+	"fmt"
+	"strings"
 
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 )
 
 const skillsViewID = "skills"
-const maxSkillsRows = 6
+
+type skillListItem struct {
+	name   string
+	active bool
+}
+
+func (i skillListItem) FilterValue() string { return i.name }
+func (i skillListItem) Description() string { return "" }
+
+func (i skillListItem) Title() string {
+	if i.active {
+		return "[x] " + i.name
+	}
+	return "[ ] " + i.name
+}
 
 type skillsPaneView struct {
-	index  int
-	offset int
+	picker      list.Model
+	initialized bool
 }
 
 func (*skillsPaneView) ID() string             { return skillsViewID }
 func (*skillsPaneView) ReplacesComposer() bool { return true }
 
-func (v *skillsPaneView) Render(m *bubbleModel) string {
-	items := make([]pane.SkillItem, 0)
-	if m != nil && m.skills != nil {
-		skills := m.skills.List()
-		items = make([]pane.SkillItem, 0, len(skills))
-		for _, skill := range skills {
-			items = append(items, pane.SkillItem{Name: skill.Name, Active: m.skills.IsActivated(skill.Name)})
-		}
+func (v *skillsPaneView) ensurePicker(m *bubbleModel) {
+	if v.initialized || m == nil || m.skills == nil {
+		return
 	}
-	rows := pane.SkillsRows(pane.SkillsSnapshot{
-		Width:             m.width,
-		Height:            m.height,
-		Index:             v.index,
-		Offset:            v.offset,
-		Items:             items,
-		UserSkillsDisplay: appdirs.UserSkillsDisplay(),
-	})
-	return renderModalRows(m, accentAssistant, rows)
+	items := skillListItems(m)
+	delegate := list.NewDefaultDelegate()
+	delegate.ShowDescription = false
+	delegate.SetSpacing(0)
+	v.picker = list.New(items, delegate, skillsListWidth(m), skillsListHeight(m))
+	v.picker.InfiniteScrolling = true
+	v.picker.DisableQuitKeybindings()
+	v.picker.SetStatusBarItemName("skill", "skills")
+	v.initialized = true
+	v.syncTitle(m)
 }
-
-func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
-	defer func() {
-		if m != nil && m.skills != nil {
-			visible := pickerVisibleRows(m.height, maxSkillsRows)
-			v.index, v.offset, _ = normalizedPickerWindow(v.index, v.offset, len(m.skills.List()), visible)
-		}
-	}()
-	if key.Matches(message, m.keys.ToggleSkills) {
-		m.bottom.remove(skillsViewID)
-		return true, nil
+func skillListItems(m *bubbleModel) []list.Item {
+	if m == nil || m.skills == nil {
+		return nil
 	}
 	skills := m.skills.List()
-	if len(skills) == 0 {
+	items := make([]list.Item, 0, len(skills))
+	for _, skill := range skills {
+		items = append(items, skillListItem{
+			name:   skill.Name,
+			active: m.skills.IsActivated(skill.Name),
+		})
+	}
+	return items
+}
+
+func skillsListWidth(m *bubbleModel) int {
+	return maxInt(12, m.width-8)
+}
+
+func skillsListHeight(m *bubbleModel) int {
+	return maxInt(6, min(12, m.height-4))
+}
+func (v *skillsPaneView) syncTitle(m *bubbleModel) {
+	if !v.initialized || m == nil || m.skills == nil {
+		return
+	}
+	active := 0
+	for _, skill := range m.skills.List() {
+		if m.skills.IsActivated(skill.Name) {
+			active++
+		}
+	}
+	index := v.picker.GlobalIndex() + 1
+	count := len(v.picker.Items())
+	if count == 0 {
+		index = 0
+	}
+	v.picker.Title = fmt.Sprintf("Agent Skills (%d/%d active · item %d of %d)", active, count, index, count)
+}
+
+func (v *skillsPaneView) Render(m *bubbleModel) string {
+	v.ensurePicker(m)
+	if !v.initialized {
+		return ""
+	}
+	v.picker.SetSize(skillsListWidth(m), skillsListHeight(m))
+	v.configureDensity(m)
+	v.syncTitle(m)
+	return renderModalRows(m, accentAssistant, strings.Split(v.picker.View(), "\n"))
+}
+
+func (v *skillsPaneView) configureDensity(m *bubbleModel) {
+	tiny := layoutModeForHeight(m.height) == layoutTiny
+	v.picker.SetShowStatusBar(!tiny)
+	v.picker.SetShowPagination(!tiny)
+	v.picker.SetShowHelp(!tiny)
+}
+func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
+	v.ensurePicker(m)
+	if !v.initialized || m == nil || m.skills == nil {
+		if m != nil {
+			m.bottom.remove(skillsViewID)
+		}
+		return true, nil
+	}
+	if message.String() == "ctrl+s" {
 		m.bottom.remove(skillsViewID)
 		return true, nil
 	}
+
 	switch message.String() {
-	case "up", "k":
-		v.index--
-		if v.index < 0 {
-			v.index = len(skills) - 1
-		}
-		return true, nil
-	case "down", "j":
-		v.index = (v.index + 1) % len(skills)
-		return true, nil
-	case "pgup":
-		v.index = max(0, v.index-5)
-		return true, nil
-	case "pgdown":
-		v.index = min(len(skills)-1, v.index+5)
-		return true, nil
-	case "home", "g":
-		v.index = 0
-		return true, nil
-	case "end", "G":
-		v.index = len(skills) - 1
-		return true, nil
-	case "space", " ", "t":
-		if v.index >= 0 && v.index < len(skills) {
-			_, _ = m.skills.Toggle(skills[v.index].Name)
-		}
-		return true, nil
+	case "space", "t":
+		return true, v.toggleSelected(m)
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		num := int(message.String()[0] - '1')
-		if num >= 0 && num < len(skills) {
-			v.index = num
+		index := int(message.String()[0] - '1')
+		if index < len(v.picker.Items()) {
+			v.picker.Select(index)
+			v.syncTitle(m)
 		}
 		return true, nil
-	case "esc", "enter", "q":
-		m.bottom.remove(skillsViewID)
-		return true, nil
-	default:
-		return false, nil
+	case "enter":
+		if !v.picker.SettingFilter() {
+			m.bottom.remove(skillsViewID)
+			return true, nil
+		}
+	case "esc":
+		if !v.picker.SettingFilter() && !v.picker.IsFiltered() {
+			m.bottom.remove(skillsViewID)
+			return true, nil
+		}
+	case "q":
+		if !v.picker.SettingFilter() {
+			m.bottom.remove(skillsViewID)
+			return true, nil
+		}
 	}
+
+	updated, cmd := v.picker.Update(message)
+	v.picker = updated
+	v.syncTitle(m)
+	return true, cmd
+}
+func (v *skillsPaneView) toggleSelected(m *bubbleModel) tea.Cmd {
+	selected, ok := v.picker.SelectedItem().(skillListItem)
+	if !ok {
+		return nil
+	}
+	_, _ = m.skills.Toggle(selected.name)
+	selected.active = m.skills.IsActivated(selected.name)
+	cmd := v.picker.SetItem(v.picker.GlobalIndex(), selected)
+	v.syncTitle(m)
+	return cmd
 }

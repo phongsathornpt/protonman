@@ -603,11 +603,9 @@ func TestSkillsPickerWindowingLargeList(t *testing.T) {
 	if !strings.Contains(render, "item 1 of 15") {
 		t.Fatalf("expected 'item 1 of 15' in header, got: %s", render)
 	}
-	if !strings.Contains(render, "▼ 9 more below") {
-		t.Fatalf("expected '▼ 9 more below' indicator, got: %s", render)
-	}
-	if strings.Contains(render, "▲") {
-		t.Fatalf("expected no up arrow at top, got: %s", render)
+	view := model.bottom.find(skillsViewID).(*skillsPaneView)
+	if got := view.picker.GlobalIndex(); got != 0 {
+		t.Fatalf("expected initial selected index 0, got %d", got)
 	}
 	for range 8 {
 		updated, _ = model.Update(testKey(tea.KeyDown))
@@ -617,8 +615,8 @@ func TestSkillsPickerWindowingLargeList(t *testing.T) {
 	if !strings.Contains(render, "item 9 of 15") {
 		t.Fatalf("expected 'item 9 of 15', got: %s", render)
 	}
-	if !strings.Contains(render, "▲") {
-		t.Fatalf("expected up arrow when scrolled down, got: %s", render)
+	if got := view.picker.GlobalIndex(); got != 8 {
+		t.Fatalf("expected selected index 8 after navigation, got %d", got)
 	}
 	if !strings.Contains(render, "skill-09") {
 		t.Fatalf("expected skill-09 to be visible in window, got: %s", render)
@@ -650,8 +648,9 @@ func TestSkillsPickerFastNavigation(t *testing.T) {
 	updated, _ = model.Update(testKey(tea.KeyPgDown))
 	model = updated.(*bubbleModel)
 	render := model.bottom.renderTop(model)
-	if !strings.Contains(render, "item 6 of 12") {
-		t.Fatalf("expected item 6 after pgdown, got: %s", render)
+	view := model.bottom.find(skillsViewID).(*skillsPaneView)
+	if got := view.picker.GlobalIndex(); got <= 0 {
+		t.Fatalf("expected pgdown to advance selection, got index %d", got)
 	}
 	updated, _ = model.Update(testText("G"))
 	model = updated.(*bubbleModel)
