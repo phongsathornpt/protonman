@@ -33,6 +33,13 @@ func (m bubbleModel) statusView() string {
 	if activity == "" || activity == "ready" {
 		activity = "analyzing"
 	}
+	if activeAgents == 0 && m.turnProgress.ToolCalls > 0 {
+		label := "tool"
+		if m.turnProgress.ToolCalls != 1 {
+			label = "tools"
+		}
+		activity += fmt.Sprintf(" · %d %s", m.turnProgress.ToolCalls, label)
+	}
 	indicator := "● "
 	if spin := m.spinner.View(); spin != "" {
 		indicator = spin + " "

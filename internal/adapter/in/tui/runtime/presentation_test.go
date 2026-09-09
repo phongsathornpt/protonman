@@ -106,8 +106,8 @@ func TestRunningToolUsesTranscriptAsProgressSurface(t *testing.T) {
 	m.activity = "running read"
 	m.turnProgress = turnProgress{Round: 2, ToolCalls: 3}
 	m.historyState.StartTool("read")
-	if got := m.statusView(); got == "" || !strings.Contains(got, "running read") || strings.Contains(got, "round 2") || strings.Contains(got, "3 tools") {
-		t.Fatalf("running tool status is not minimal activity: %q", got)
+	if got := m.statusView(); got == "" || !strings.Contains(got, "running read") || !strings.Contains(got, "3 tools") || strings.Contains(got, "round 2") {
+		t.Fatalf("running tool status is missing compact progress: %q", got)
 	}
 	m.historyState.CommitActive()
 	m.historyState.StartThinking()
