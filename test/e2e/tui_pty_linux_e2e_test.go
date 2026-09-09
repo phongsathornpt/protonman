@@ -101,6 +101,80 @@ func TestE2ETUIStartupAndExitWithRealPTY(t *testing.T) {
 	}
 }
 
+func TestE2ETUIRapidResizeWithRealPTY(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+	master, slave := openLinuxPTY(t, 80, 24)
+	defer master.Close()
+	defer slave.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, protonBin)
+	cmd.Dir = ws
+	cmd.Env = append(os.Environ(), "PROTONMAN_HOME="+home, "TERM=xterm-256color")
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start Protonman on PTY: %v", err)
+	}
+	_ = slave.Close()
+
+	var output bytes.Buffer
+	firstOutput := make(chan struct{})
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		buf := make([]byte, 4096)
+		signaled := false
+		for {
+			n, err := master.Read(buf)
+			if n > 0 {
+				_, _ = output.Write(buf[:n])
+				if !signaled {
+					close(firstOutput)
+					signaled = true
+				}
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	select {
+	case <-firstOutput:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for initial TUI output")
+	}
+
+	for _, size := range []struct{ cols, rows uint16 }{{40, 12}, {120, 40}, {24, 8}, {100, 30}, {60, 16}} {
+		if err := unix.IoctlSetWinsize(int(master.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Col: size.cols, Row: size.rows}); err != nil {
+			t.Fatalf("resize PTY to %dx%d: %v", size.cols, size.rows, err)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
+		t.Fatalf("TUI exited during resize sequence: %v\noutput: %q", err, output.String())
+	}
+	if _, err := master.Write([]byte{3}); err != nil {
+		t.Fatalf("send Ctrl+C after resize sequence: %v", err)
+	}
+	if err := cmd.Wait(); err != nil && ctx.Err() != nil {
+		t.Fatalf("TUI did not exit after resize sequence: %v", err)
+	}
+	_ = master.Close()
+	select {
+	case <-readDone:
+	case <-time.After(time.Second):
+		t.Fatal("timed out draining resized PTY output")
+	}
+	for _, unwanted := range []string{"Protonman crashed", "panic:"} {
+		if strings.Contains(output.String(), unwanted) {
+			t.Fatalf("PTY resize output contains %q: %q", unwanted, output.String())
+		}
+	}
+}
+
 func TestE2ETUISlashHelpWithRealPTY(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
