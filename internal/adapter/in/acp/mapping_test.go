@@ -82,60 +82,60 @@ func TestTitleForToolCall(t *testing.T) {
 		// write_file (schema uses file_path)
 		{
 			name: "write_file with file_path",
-			call: makeCall("write_file", map[string]any{"file_path": "config.json"}),
+			call: makeCall("edit", map[string]any{"action": "write", "file_path": "config.json"}),
 			want: "Write config.json",
 		},
 		{
 			name: "write_file with path fallback",
-			call: makeCall("write_file", map[string]any{"path": "config.json"}),
+			call: makeCall("edit", map[string]any{"action": "write", "path": "config.json"}),
 			want: "Write config.json",
 		},
 		{
 			name: "write_file empty",
-			call: makeCall("write_file", map[string]any{}),
+			call: makeCall("edit", map[string]any{"action": "write"}),
 			want: "Write file",
 		},
 
 		// search_replace (schema uses file_path)
 		{
 			name: "search_replace with file_path",
-			call: makeCall("search_replace", map[string]any{"file_path": "server.go"}),
+			call: makeCall("edit", map[string]any{"action": "replace", "file_path": "server.go"}),
 			want: "Edit server.go",
 		},
 		{
 			name: "search_replace with path fallback",
-			call: makeCall("search_replace", map[string]any{"path": "server.go"}),
+			call: makeCall("edit", map[string]any{"action": "replace", "path": "server.go"}),
 			want: "Edit server.go",
 		},
 		{
 			name: "search_replace empty",
-			call: makeCall("search_replace", map[string]any{}),
+			call: makeCall("edit", map[string]any{"action": "replace"}),
 			want: "Search and replace",
 		},
 
 		// apply_patch (schema uses patch)
 		{
 			name: "apply_patch with patch single file",
-			call: makeCall("apply_patch", map[string]any{
+			call: makeCall("edit", map[string]any{"action": "patch",
 				"patch": "*** Begin Patch\n*** Update File: internal/acp/mapping.go\n@@ -1,2 +1,2 @@\n*** End Patch",
 			}),
 			want: "Patch internal/acp/mapping.go",
 		},
 		{
 			name: "apply_patch with patch multi file",
-			call: makeCall("apply_patch", map[string]any{
+			call: makeCall("edit", map[string]any{"action": "patch",
 				"patch": "*** Begin Patch\n*** Update File: file1.go\n*** Update File: file2.go\n*** Update File: file3.go\n*** End Patch",
 			}),
 			want: "Patch file1.go (+2 files)",
 		},
 		{
 			name: "apply_patch with path argument fallback",
-			call: makeCall("apply_patch", map[string]any{"path": "file1.go"}),
+			call: makeCall("edit", map[string]any{"action": "patch", "path": "file1.go"}),
 			want: "Patch file1.go",
 		},
 		{
 			name: "apply_patch empty",
-			call: makeCall("apply_patch", map[string]any{}),
+			call: makeCall("edit", map[string]any{"action": "patch"}),
 			want: "Apply patch",
 		},
 
@@ -208,58 +208,58 @@ func TestTitleForToolCall(t *testing.T) {
 		// web_fetch (clamped URL)
 		{
 			name: "web_fetch short url",
-			call: makeCall("web_fetch", map[string]any{"url": "https://example.com"}),
+			call: makeCall("web", map[string]any{"action": "fetch", "url": "https://example.com"}),
 			want: "Fetch https://example.com",
 		},
 		{
 			name: "web_fetch long url",
-			call: makeCall("web_fetch", map[string]any{"url": "https://github.com/phongsathornpt/protonman/blob/main/internal/acp/mapping.go#L1-L100"}),
+			call: makeCall("web", map[string]any{"action": "fetch", "url": "https://github.com/phongsathornpt/protonman/blob/main/internal/acp/mapping.go#L1-L100"}),
 			want: "Fetch https://github.com/phongsathornpt/protonman/…",
 		},
 		{
 			name: "web_fetch empty",
-			call: makeCall("web_fetch", map[string]any{}),
+			call: makeCall("web", map[string]any{"action": "fetch"}),
 			want: "Fetch URL",
 		},
 
 		// web_search
 		{
 			name: "web_search with query",
-			call: makeCall("web_search", map[string]any{"query": "agent client protocol specification and guidelines"}),
+			call: makeCall("web", map[string]any{"action": "search", "query": "agent client protocol specification and guidelines"}),
 			want: "Search web: agent client protocol specificatio…",
 		},
 		{
 			name: "web_search empty",
-			call: makeCall("web_search", map[string]any{}),
+			call: makeCall("web", map[string]any{"action": "search"}),
 			want: "Search web",
 		},
 
 		// git_status
 		{
 			name: "git_status default",
-			call: makeCall("git_status", map[string]any{}),
+			call: makeCall("git", map[string]any{"action": "status"}),
 			want: "Check git status",
 		},
 		{
 			name: "git_status with path",
-			call: makeCall("git_status", map[string]any{"path": "internal/acp"}),
+			call: makeCall("git", map[string]any{"action": "status", "path": "internal/acp"}),
 			want: "Git status (internal/acp)",
 		},
 
 		// todo tools
 		{
 			name: "get_todo",
-			call: makeCall("get_todo", map[string]any{}),
+			call: makeCall("todo", map[string]any{"action": "get"}),
 			want: "Check task list",
 		},
 		{
 			name: "update_todo with operations",
-			call: makeCall("update_todo", map[string]any{"operations": []any{map[string]any{"op": "add"}, map[string]any{"op": "remove"}}}),
+			call: makeCall("todo", map[string]any{"action": "update", "operations": []any{map[string]any{"op": "add"}, map[string]any{"op": "remove"}}}),
 			want: "Update tasks (2 changes)",
 		},
 		{
 			name: "update_todo without operations",
-			call: makeCall("update_todo", map[string]any{}),
+			call: makeCall("todo", map[string]any{"action": "update"}),
 			want: "Update tasks",
 		},
 
@@ -278,51 +278,51 @@ func TestTitleForToolCall(t *testing.T) {
 		// delegate_task
 		{
 			name: "delegate_task with task and profile",
-			call: makeCall("delegate_task", map[string]any{"profile": "researcher", "task": "Investigate unit tests"}),
+			call: makeCall("subagent", map[string]any{"action": "spawn", "profile": "researcher", "task": "Investigate unit tests"}),
 			want: "Delegate [researcher]: Investigate unit tests",
 		},
 		{
 			name: "delegate_task with long unicode task",
-			call: makeCall("delegate_task", map[string]any{"task": "ตรวจสอบระบบและปรับปรุงการทำงานของโปรโตคอลให้สมบูรณ์"}),
+			call: makeCall("subagent", map[string]any{"action": "spawn", "task": "ตรวจสอบระบบและปรับปรุงการทำงานของโปรโตคอลให้สมบูรณ์"}),
 			want: "Delegate: ตรวจสอบระบบและปรับปรุงการทำงา…",
 		},
 		{
 			name: "delegate_task empty",
-			call: makeCall("delegate_task", map[string]any{}),
+			call: makeCall("subagent", map[string]any{"action": "spawn"}),
 			want: "Delegate subtask",
 		},
 
 		// subagents
 		{
 			name: "wait_agent",
-			call: makeCall("wait_agent", map[string]any{"timeout_seconds": 30}),
+			call: makeCall("subagent", map[string]any{"action": "wait", "timeout_seconds": 30}),
 			want: "Wait for agent activity",
 		},
 		{
 			name: "get_agent with id",
-			call: makeCall("get_agent", map[string]any{"agent_id": "agent-42"}),
+			call: makeCall("subagent", map[string]any{"action": "get", "agent_id": "agent-42"}),
 			want: "Get agent status agent-42",
 		},
 		{
 			name: "list_agents",
-			call: makeCall("list_agents", map[string]any{}),
+			call: makeCall("subagent", map[string]any{"action": "list"}),
 			want: "List subagents",
 		},
 		{
 			name: "cancel_agent with id",
-			call: makeCall("cancel_agent", map[string]any{"agent_id": "agent-42"}),
+			call: makeCall("subagent", map[string]any{"action": "cancel", "agent_id": "agent-42"}),
 			want: "Cancel agent agent-42",
 		},
 
 		// checkpoint_restore
 		{
 			name: "checkpoint_restore with id",
-			call: makeCall("checkpoint_restore", map[string]any{"checkpoint_id": "chk-99"}),
+			call: makeCall("edit", map[string]any{"action": "restore", "checkpoint_id": "chk-99"}),
 			want: "Restore checkpoint chk-99",
 		},
 		{
 			name: "checkpoint_restore empty",
-			call: makeCall("checkpoint_restore", map[string]any{}),
+			call: makeCall("edit", map[string]any{"action": "restore"}),
 			want: "Restore checkpoint",
 		},
 
@@ -365,24 +365,24 @@ func TestLocationsForToolCall(t *testing.T) {
 		},
 		{
 			name: "write_file with file_path (schema key)",
-			call: makeCall("write_file", map[string]any{"file_path": "lib.go"}),
+			call: makeCall("edit", map[string]any{"action": "write", "file_path": "lib.go"}),
 			want: []ToolCallLocation{{Path: "lib.go"}},
 		},
 		{
 			name: "search_replace with file_path (schema key)",
-			call: makeCall("search_replace", map[string]any{"file_path": "cmd/app.go"}),
+			call: makeCall("edit", map[string]any{"action": "replace", "file_path": "cmd/app.go"}),
 			want: []ToolCallLocation{{Path: "cmd/app.go"}},
 		},
 		{
 			name: "apply_patch with patch single file",
-			call: makeCall("apply_patch", map[string]any{
+			call: makeCall("edit", map[string]any{"action": "patch",
 				"patch": "*** Begin Patch\n*** Update File: internal/acp/mapping.go\n@@ -1 +1 @@\n*** End Patch",
 			}),
 			want: []ToolCallLocation{{Path: "internal/acp/mapping.go"}},
 		},
 		{
 			name: "apply_patch with patch multi file",
-			call: makeCall("apply_patch", map[string]any{
+			call: makeCall("edit", map[string]any{"action": "patch",
 				"patch": strings.Join([]string{
 					"*** Begin Patch",
 					"*** Add File: pkg/a.go",
@@ -402,7 +402,7 @@ func TestLocationsForToolCall(t *testing.T) {
 		},
 		{
 			name: "apply_patch with unified diff format",
-			call: makeCall("apply_patch", map[string]any{
+			call: makeCall("edit", map[string]any{"action": "patch",
 				"patch": strings.Join([]string{
 					"--- a/old.go",
 					"+++ b/new.go",
@@ -416,7 +416,7 @@ func TestLocationsForToolCall(t *testing.T) {
 		},
 		{
 			name: "apply_patch fallback path",
-			call: makeCall("apply_patch", map[string]any{"path": "fallback.go"}),
+			call: makeCall("edit", map[string]any{"action": "patch", "path": "fallback.go"}),
 			want: []ToolCallLocation{{Path: "fallback.go"}},
 		},
 		{

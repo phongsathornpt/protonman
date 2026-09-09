@@ -40,29 +40,29 @@ func TestCallTitle(t *testing.T) {
 		},
 		{
 			name: "write_file with file_path",
-			call: makeTestCall("write_file", map[string]any{"file_path": "server.go"}),
+			call: makeTestCall("edit", map[string]any{"action": "write", "file_path": "server.go"}),
 			want: "Write server.go",
 		},
 		{
 			name: "write_file with path fallback",
-			call: makeTestCall("write_file", map[string]any{"path": "server.go"}),
+			call: makeTestCall("edit", map[string]any{"action": "write", "path": "server.go"}),
 			want: "Write server.go",
 		},
 		{
 			name: "search_replace with file_path",
-			call: makeTestCall("search_replace", map[string]any{"file_path": "handler.go"}),
+			call: makeTestCall("edit", map[string]any{"action": "replace", "file_path": "handler.go"}),
 			want: "Edit handler.go",
 		},
 		{
 			name: "apply_patch with patch single file",
-			call: makeTestCall("apply_patch", map[string]any{
+			call: makeTestCall("edit", map[string]any{"action": "patch",
 				"patch": "*** Begin Patch\n*** Update File: config.yaml\n@@ -1 +1 @@\n*** End Patch",
 			}),
 			want: "Patch config.yaml",
 		},
 		{
 			name: "apply_patch with patch multi file",
-			call: makeTestCall("apply_patch", map[string]any{
+			call: makeTestCall("edit", map[string]any{"action": "patch",
 				"patch": "*** Begin Patch\n*** Update File: a.go\n*** Update File: b.go\n*** End Patch",
 			}),
 			want: "Patch a.go (+1 files)",
@@ -94,32 +94,32 @@ func TestCallTitle(t *testing.T) {
 		},
 		{
 			name: "web_fetch url",
-			call: makeTestCall("web_fetch", map[string]any{"url": "https://protonman.dev"}),
+			call: makeTestCall("web", map[string]any{"action": "fetch", "url": "https://protonman.dev"}),
 			want: "Fetch https://protonman.dev",
 		},
 		{
 			name: "web_search query",
-			call: makeTestCall("web_search", map[string]any{"query": "agent client protocol specification and guidelines"}),
+			call: makeTestCall("web", map[string]any{"action": "search", "query": "agent client protocol specification and guidelines"}),
 			want: "Search web: agent client protocol specificatio…",
 		},
 		{
 			name: "git_status with path",
-			call: makeTestCall("git_status", map[string]any{"path": "pkg"}),
+			call: makeTestCall("git", map[string]any{"action": "status", "path": "pkg"}),
 			want: "Git status (pkg)",
 		},
 		{
 			name: "git_status default",
-			call: makeTestCall("git_status", map[string]any{}),
+			call: makeTestCall("git", map[string]any{"action": "status"}),
 			want: "Check git status",
 		},
 		{
 			name: "get_todo",
-			call: makeTestCall("get_todo", map[string]any{}),
+			call: makeTestCall("todo", map[string]any{"action": "get"}),
 			want: "Check task list",
 		},
 		{
 			name: "update_todo with ops",
-			call: makeTestCall("update_todo", map[string]any{"operations": []any{"op1", "op2"}}),
+			call: makeTestCall("todo", map[string]any{"action": "update", "operations": []any{"op1", "op2"}}),
 			want: "Update tasks (2 changes)",
 		},
 		{
@@ -129,32 +129,32 @@ func TestCallTitle(t *testing.T) {
 		},
 		{
 			name: "delegate_task with profile and task",
-			call: makeTestCall("delegate_task", map[string]any{"profile": "researcher", "task": "run analysis"}),
+			call: makeTestCall("subagent", map[string]any{"action": "spawn", "profile": "researcher", "task": "run analysis"}),
 			want: "Delegate [researcher]: run analysis",
 		},
 		{
 			name: "wait_agent",
-			call: makeTestCall("wait_agent", map[string]any{"timeout_seconds": 30}),
+			call: makeTestCall("subagent", map[string]any{"action": "wait", "timeout_seconds": 30}),
 			want: "Wait for agent activity",
 		},
 		{
 			name: "get_agent with id",
-			call: makeTestCall("get_agent", map[string]any{"agent_id": "agent-101"}),
+			call: makeTestCall("subagent", map[string]any{"action": "get", "agent_id": "agent-101"}),
 			want: "Get agent status agent-101",
 		},
 		{
 			name: "list_agents",
-			call: makeTestCall("list_agents", map[string]any{}),
+			call: makeTestCall("subagent", map[string]any{"action": "list"}),
 			want: "List subagents",
 		},
 		{
 			name: "cancel_agent with id",
-			call: makeTestCall("cancel_agent", map[string]any{"agent_id": "agent-101"}),
+			call: makeTestCall("subagent", map[string]any{"action": "cancel", "agent_id": "agent-101"}),
 			want: "Cancel agent agent-101",
 		},
 		{
 			name: "checkpoint_restore with id",
-			call: makeTestCall("checkpoint_restore", map[string]any{"checkpoint_id": "cp-1"}),
+			call: makeTestCall("edit", map[string]any{"action": "restore", "checkpoint_id": "cp-1"}),
 			want: "Restore checkpoint cp-1",
 		},
 		{
@@ -185,12 +185,12 @@ func TestCallTarget(t *testing.T) {
 	}{
 		{
 			name: "web_fetch url",
-			call: makeTestCall("web_fetch", map[string]any{"url": "https://example.com"}),
+			call: makeTestCall("web", map[string]any{"action": "fetch", "url": "https://example.com"}),
 			want: "https://example.com",
 		},
 		{
 			name: "web_search query",
-			call: makeTestCall("web_search", map[string]any{"query": "golang"}),
+			call: makeTestCall("web", map[string]any{"action": "search", "query": "golang"}),
 			want: `"golang"`,
 		},
 		{
@@ -200,17 +200,17 @@ func TestCallTarget(t *testing.T) {
 		},
 		{
 			name: "write_file file_path (canonical)",
-			call: makeTestCall("write_file", map[string]any{"file_path": "out.txt"}),
+			call: makeTestCall("edit", map[string]any{"action": "write", "file_path": "out.txt"}),
 			want: "out.txt",
 		},
 		{
 			name: "write_file path (fallback)",
-			call: makeTestCall("write_file", map[string]any{"path": "out.txt"}),
+			call: makeTestCall("edit", map[string]any{"action": "write", "path": "out.txt"}),
 			want: "out.txt",
 		},
 		{
 			name: "apply_patch patch target",
-			call: makeTestCall("apply_patch", map[string]any{
+			call: makeTestCall("edit", map[string]any{"action": "patch",
 				"patch": "*** Begin Patch\n*** Update File: lib.go\n@@ -1 +1 @@\n*** End Patch",
 			}),
 			want: "lib.go",
@@ -237,12 +237,12 @@ func TestCallTarget(t *testing.T) {
 		},
 		{
 			name: "delegate_task profile and task",
-			call: makeTestCall("delegate_task", map[string]any{"profile": "audit", "task": "check security"}),
+			call: makeTestCall("subagent", map[string]any{"action": "spawn", "profile": "audit", "task": "check security"}),
 			want: "[audit] check security",
 		},
 		{
 			name: "checkpoint_restore id",
-			call: makeTestCall("checkpoint_restore", map[string]any{"checkpoint_id": "chk-1"}),
+			call: makeTestCall("edit", map[string]any{"action": "restore", "checkpoint_id": "chk-1"}),
 			want: "chk-1",
 		},
 		{
@@ -275,17 +275,17 @@ func TestCallAffectedPaths(t *testing.T) {
 		},
 		{
 			name: "write_file with file_path",
-			call: makeTestCall("write_file", map[string]any{"file_path": "b.txt"}),
+			call: makeTestCall("edit", map[string]any{"action": "write", "file_path": "b.txt"}),
 			want: []string{"b.txt"},
 		},
 		{
 			name: "search_replace with file_path",
-			call: makeTestCall("search_replace", map[string]any{"file_path": "c.txt"}),
+			call: makeTestCall("edit", map[string]any{"action": "replace", "file_path": "c.txt"}),
 			want: []string{"c.txt"},
 		},
 		{
 			name: "apply_patch multi-file patch",
-			call: makeTestCall("apply_patch", map[string]any{
+			call: makeTestCall("edit", map[string]any{"action": "patch",
 				"patch": strings.Join([]string{
 					"*** Begin Patch",
 					"*** Add File: f1.go",

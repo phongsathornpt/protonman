@@ -278,16 +278,16 @@ func TestStyleDiffLine(t *testing.T) {
 }
 
 func TestSummarizeEdit(t *testing.T) {
-	if got := summarizeEdit("write_file", "Wrote file successfully to /path/to/main.go."); got != "saved" {
+	if got := summarizeEdit("edit", "Wrote file successfully to /path/to/main.go."); got != "saved" {
 		t.Fatalf("expected 'saved' for write_file, got: %s", got)
 	}
-	if got := summarizeEdit("search_replace", "The file foo.go has been updated."); got != "1 replacement applied" {
+	if got := summarizeEdit("edit", "The file foo.go has been updated."); got != "1 replacement applied" {
 		t.Fatalf("expected '1 replacement applied' for search_replace, got: %s", got)
 	}
-	if got := summarizeEdit("apply_patch", "Success. Updated the following files:"); got != "patch applied" {
+	if got := summarizeEdit("edit", "Success. Updated the following files:"); got != "patch applied" {
 		t.Fatalf("expected 'patch applied' for apply_patch, got: %s", got)
 	}
-	if got := summarizeEdit("checkpoint_restore", "Restored checkpoint cp-1."); got != "restored checkpoint" {
+	if got := summarizeEdit("edit", "Restored checkpoint cp-1."); got != "restored checkpoint" {
 		t.Fatalf("expected 'restored checkpoint' for checkpoint_restore, got: %s", got)
 	}
 }
@@ -384,14 +384,14 @@ func TestSummarizeReadFileTarget(t *testing.T) {
 }
 
 func TestTodoToolPresentation(t *testing.T) {
-	target, kind := ExtractTarget("update_todo", "", json.RawMessage(`{"operations":[{"op":"set_status","id":"a","status":"in_progress"},{"op":"set_status","id":"b","status":"completed"}]}`))
+	target, kind := ExtractTarget("todo", "", json.RawMessage(`{"action":"update","operations":[{"op":"set_status","id":"a","status":"in_progress"},{"op":"set_status","id":"b","status":"completed"}]}`))
 	if kind != tool.KindTask || target != "2 task operations" {
 		t.Fatalf("target=%q kind=%q", target, kind)
 	}
-	if glyph := KindGlyph(kind, "update_todo"); glyph != tuistyle.GlyphTodoActive {
+	if glyph := KindGlyph(kind, "todo"); glyph != tuistyle.GlyphTodoActive {
 		t.Fatalf("glyph = %q", glyph)
 	}
-	summary := SummarizeOutput("update_todo", kind, target, `{"total":2,"completed":1,"in_progress":1}`, nil, false)
+	summary := SummarizeOutput("todo", kind, target, `{"total":2,"completed":1,"in_progress":1}`, nil, false)
 	if got := summarizeTodoUpdate(`{"total":3,"completed":1,"in_progress":1,"changes":{"completed":1,"started":1,"removed":1}}`); got != "Tasks updated · 1 completed · 1 started · 1 removed" {
 		t.Fatalf("todo diff summary=%q", got)
 	}
@@ -401,29 +401,29 @@ func TestTodoToolPresentation(t *testing.T) {
 }
 
 func TestAgentToolPresentation(t *testing.T) {
-	target, kind := ExtractTarget("delegate_task", "", json.RawMessage(`{"profile":"int","task":"inspect router behavior"}`))
+	target, kind := ExtractTarget("subagent", "", json.RawMessage(`{"action":"spawn","profile":"int","task":"inspect router behavior"}`))
 	if kind != tool.KindAgent || !strings.Contains(target, "[int]") {
 		t.Fatalf("target=%q kind=%q", target, kind)
 	}
-	if glyph := KindGlyph(kind, "delegate_task"); glyph != tuistyle.GlyphAgent {
+	if glyph := KindGlyph(kind, "subagent"); glyph != tuistyle.GlyphAgent {
 		t.Fatalf("glyph=%q", glyph)
 	}
-	if got := SummarizeOutput("delegate_task", kind, target, `{"agent_id":"explorer-7","status":"queued"}`, nil, false); got != "spawned explorer-7 · queued" {
+	if got := SummarizeOutput("subagent", kind, target, `{"action":"spawn","agent_id":"explorer-7","status":"queued"}`, nil, false); got != "spawned explorer-7 · queued" {
 		t.Fatalf("spawn summary=%q", got)
 	}
-	if got := SummarizeOutput("wait_agent", kind, "", `{"timed_out":true,"event":null,"agents":[]}`, nil, false); got != "no new agent activity" {
+	if got := SummarizeOutput("subagent", kind, "", `{"action":"wait","timed_out":true,"event":null,"agents":[]}`, nil, false); got != "no new agent activity" {
 		t.Fatalf("wait timeout summary=%q", got)
 	}
-	if got := SummarizeOutput("wait_agent", kind, "", `{"timed_out":false,"event":{"kind":"agent_completed","agent_id":"explorer-7"},"agents":[]}`, nil, false); got != "explorer-7 · agent_completed" {
+	if got := SummarizeOutput("subagent", kind, "", `{"action":"wait","timed_out":false,"event":{"kind":"agent_completed","agent_id":"explorer-7"},"agents":[]}`, nil, false); got != "explorer-7 · agent_completed" {
 		t.Fatalf("completed wait summary=%q", got)
 	}
-	if got := SummarizeOutput("wait_agent", kind, "", `{"timed_out":false,"event":{"kind":"agent_failed","agent_id":"strength-8"},"events":[{"kind":"agent_completed","agent_id":"explorer-7"},{"kind":"agent_failed","agent_id":"strength-8"}],"agents":[]}`, nil, false); got != "2 agent lifecycle events" {
+	if got := SummarizeOutput("subagent", kind, "", `{"action":"wait","timed_out":false,"event":{"kind":"agent_failed","agent_id":"strength-8"},"events":[{"kind":"agent_completed","agent_id":"explorer-7"},{"kind":"agent_failed","agent_id":"strength-8"}],"agents":[]}`, nil, false); got != "2 agent lifecycle events" {
 		t.Fatalf("batched wait summary=%q", got)
 	}
-	if got := SummarizeOutput("list_agents", kind, "subagents", `{"agents":[{"id":"a","state":"canceling"},{"id":"b","state":"completed"}]}`, nil, false); got != "2 agents · 1 active" {
+	if got := SummarizeOutput("subagent", kind, "subagents", `{"action":"list","agents":[{"id":"a","state":"canceling"},{"id":"b","state":"completed"}]}`, nil, false); got != "2 agents · 1 active" {
 		t.Fatalf("canceling list summary=%q", got)
 	}
-	if got := SummarizeOutput("list_agents", kind, "subagents", `{"agents":[{"id":"a","state":"running"},{"id":"b","state":"completed"}]}`, nil, false); got != "2 agents · 1 active" {
+	if got := SummarizeOutput("subagent", kind, "subagents", `{"action":"list","agents":[{"id":"a","state":"running"},{"id":"b","state":"completed"}]}`, nil, false); got != "2 agents · 1 active" {
 		t.Fatalf("list summary=%q", got)
 	}
 }
@@ -459,7 +459,7 @@ func TestLongPatternTruncation(t *testing.T) {
 }
 
 func TestSummarizeAgentResume(t *testing.T) {
-	got := SummarizeOutput("resume_agent", tool.KindAgent, "strength-4", `{"resumed_from":"strength-4","agent_id":"strength-9","profile":"strength","status":"queued"}`, nil, false)
+	got := SummarizeOutput("subagent", tool.KindAgent, "strength-4", `{"action":"resume","resumed_from":"strength-4","agent_id":"strength-9","profile":"strength","status":"queued"}`, nil, false)
 	if got != "resumed strength-4 as strength-9 · queued" {
 		t.Fatalf("summary = %q", got)
 	}
