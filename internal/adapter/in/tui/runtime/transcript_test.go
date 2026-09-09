@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transcriptutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -353,15 +354,15 @@ func TestToolCellReadDetailFollowsDensity(t *testing.T) {
 }
 
 func TestToolFailureSuggestions(t *testing.T) {
-	notFoundSugg := toolFailureSuggestions("read", tool.ErrorCodeNotFound)
+	notFoundSugg := transcriptutil.ToolFailureSuggestions("read", tool.ErrorCodeNotFound)
 	if len(notFoundSugg) == 0 {
 		t.Fatalf("expected suggestions for read not found error")
 	}
-	protectedSugg := toolFailureSuggestions("read", tool.ErrorCodeProtectedPath)
+	protectedSugg := transcriptutil.ToolFailureSuggestions("read", tool.ErrorCodeProtectedPath)
 	if len(protectedSugg) == 0 || !strings.Contains(protectedSugg[0], "workspace protection rules") {
 		t.Fatalf("expected suggestions for protected path error")
 	}
-	escapeSugg := toolFailureSuggestions("read", tool.ErrorCodeOutsideWorkspace)
+	escapeSugg := transcriptutil.ToolFailureSuggestions("read", tool.ErrorCodeOutsideWorkspace)
 	if len(escapeSugg) != 1 || escapeSugg[0] != "use . or a workspace-relative path" {
 		t.Fatalf("expected actionable suggestions for outside workspace error: %#v", escapeSugg)
 	}

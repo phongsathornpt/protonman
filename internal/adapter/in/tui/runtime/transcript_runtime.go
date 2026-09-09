@@ -5,7 +5,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"encoding/json"
-	"fmt"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -123,16 +122,6 @@ func (m bubbleModel) renderBlocks() []string {
 	return m.historyState.RenderLines()
 }
 
-func joinBody(existing string, extra string) string {
-	if existing == "" {
-		return extra
-	}
-	if extra == "" {
-		return existing
-	}
-	return existing + "\n" + extra
-}
-
 func plainTranscript(model *bubbleModel) string {
 	if model == nil || model.historyState == nil {
 		return ""
@@ -175,17 +164,6 @@ func (m *bubbleModel) loadInitialMessages(messages []model.Message) {
 func extractStringArg(raw json.RawMessage, key string) string {
 	call := tool.Call{Arguments: raw}
 	return tool.ExtractString(call.ArgumentsMap(), key)
-}
-
-func editPresentation(call tool.Call) (string, []string) {
-	paths := call.AffectedPaths()
-	summary := "editing workspace"
-	if len(paths) == 1 {
-		summary = "1 file"
-	} else if len(paths) > 1 {
-		summary = fmt.Sprintf("%d files", len(paths))
-	}
-	return summary, paths
 }
 
 func (m *bubbleModel) closeTranscriptOverlay() {

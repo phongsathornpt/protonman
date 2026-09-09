@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transcriptutil"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"strings"
 	"time"
@@ -50,25 +51,6 @@ func (m *bubbleModel) appendToolRunning(name string) {
 	m.ensureHistoryState().StartTool(name)
 }
 
-func toolFailureSuggestions(toolName string, code tool.ErrorCode) []string {
-	var suggestions []string
-	switch code {
-	case tool.ErrorCodeNotFound:
-		if strings.TrimSpace(toolName) == tool.NameRead {
-			suggestions = append(suggestions, "ls the parent directory or find the filename")
-		}
-	case tool.ErrorCodeProtectedPath:
-		suggestions = append(suggestions, "This path is shielded by workspace protection rules")
-	case tool.ErrorCodeInternalPath:
-		suggestions = append(suggestions, "Protonman internal state is reserved and unavailable to workspace tools")
-	case tool.ErrorCodeOutsideWorkspace:
-		suggestions = append(suggestions, "use . or a workspace-relative path")
-	case tool.ErrorCodePermissionDenied:
-		suggestions = append(suggestions, "Use shift+tab to cycle permission mode or allow the request")
-	}
-	return suggestions
-}
-
 func (m *bubbleModel) appendToolCall(call tool.Call) {
 	state := m.ensureHistoryState()
 	var kind tool.Kind
@@ -103,7 +85,7 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 			state.StartToolCell(&ToolCell{CallID: call.ID, Name: call.Name, Target: target, ToolKind: resolvedKind, Running: true})
 			return
 		}
-		summary, paths := editPresentation(call)
+		summary, paths := transcriptutil.EditPresentation(call)
 		state.StartToolCell(&PatchCell{CallID: call.ID, Name: call.Name, Summary: summary, Paths: paths, Running: true})
 	default:
 		state.StartToolCell(&ToolCell{CallID: call.ID, Name: call.Name, Target: target, ToolKind: resolvedKind, Running: true})
@@ -129,7 +111,7 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 		body = string(result.StructuredOutput)
 	}
 	if result.CheckpointID != "" {
-		body = joinBody(body, "checkpoint: "+result.CheckpointID)
+		body = transcriptutil.JoinBody(body, "checkpoint: "+result.CheckpointID)
 	}
 	if result.Failure == nil && err == nil && m.applyAgentToolResult(name, result, body) {
 		return
@@ -138,12 +120,12 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 		return
 	}
 	if result.Failure != nil && result.Failure.Message != "" && result.Failure.Code != tool.ErrorCodeCanceled {
-		if name == "bash" && execFailureUsesExecCell(result.Failure.Code) {
+		if name == "bash" && transcriptutil.ExecFailureUsesExecCell(result.Failure.Code) {
 			completed := m.completedToolCell(result.CallID, name, body, result)
 			state.CompleteToolCall(result.CallID, name, completed)
 			return
 		}
-		suggestions := toolFailureSuggestions(name, result.Failure.Code)
+		suggestions := transcriptutil.ToolFailureSuggestions(name, result.Failure.Code)
 		title := tool.DisplayName(name)
 		badge := string(result.Failure.Code)
 		text := result.Failure.Message
@@ -157,7 +139,7 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 		state.CompleteToolCall(result.CallID, name, errorCell)
 		return
 	}
-	if err != nil && !errors.Is(err, context.Canceled) && failureCode(result) != tool.ErrorCodeCanceled {
+	if err != nil && !errors.Is(err, context.Canceled) && transcriptutil.FailureCode(result) != tool.ErrorCodeCanceled {
 		errorCell := &ErrorCell{ErrorKind: ErrorKindToolFailed, Title: tool.DisplayName(name), Text: err.Error()}
 		if result.Failure != nil {
 			errorCell.Badge = string(result.Failure.Code)
@@ -167,7 +149,7 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 		state.CompleteToolCall(result.CallID, name, errorCell)
 		return
 	}
-	if errors.Is(err, context.Canceled) || failureCode(result) == tool.ErrorCodeCanceled {
+	if errors.Is(err, context.Canceled) || transcriptutil.FailureCode(result) == tool.ErrorCodeCanceled {
 		body = "cancelled"
 	}
 	if name == "todo" && result.Failure == nil && err == nil && !result.Denied {
@@ -176,15 +158,6 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 	}
 	completed := m.completedToolCell(result.CallID, name, body, result)
 	state.CompleteToolCall(result.CallID, name, completed)
-}
-
-func execFailureUsesExecCell(code tool.ErrorCode) bool {
-	switch code {
-	case tool.ErrorCodeCommandFailed, tool.ErrorCodeDeadlineExceeded:
-		return true
-	default:
-		return false
-	}
 }
 
 func (m *bubbleModel) finalizeRunningTools(err error) {
@@ -250,11 +223,4 @@ func (m *bubbleModel) runningToolCell(callID string, name string) HistoryCell {
 
 func (m *bubbleModel) lastRunningToolName() string {
 	return m.ensureHistoryState().LastRunningToolName()
-}
-
-func failureCode(result tool.Result) tool.ErrorCode {
-	if result.Failure == nil {
-		return ""
-	}
-	return result.Failure.Code
 }
