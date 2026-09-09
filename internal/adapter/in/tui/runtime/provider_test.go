@@ -330,17 +330,17 @@ func TestProviderSelectWindowing(t *testing.T) {
 	bModel.providers = providers
 	bModel.activeProvider = "provider-01"
 	bModel.executeCommand("/provider")
-	rendered := bModel.View().Content
-	if !strings.Contains(rendered, "↓") || !strings.Contains(rendered, "more") {
-		t.Fatalf("expected downward scroll indicator for 10 providers, got:\n%s", rendered)
+	view := bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView)
+	if pages := view.picker.Paginator.TotalPages; pages <= 1 {
+		t.Fatalf("expected provider list to paginate, got %d page(s)", pages)
 	}
 	for i := 0; i < 8; i++ {
 		updated, _ := bModel.Update(testKey(tea.KeyDown))
 		bModel = updated.(*bubbleModel)
 	}
-	rendered = bModel.View().Content
-	if !strings.Contains(rendered, "↑") || !strings.Contains(rendered, "more") {
-		t.Fatalf("expected upward scroll indicator after scrolling down, got:\n%s", rendered)
+	view = bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView)
+	if view.index < 8 {
+		t.Fatalf("expected selection to advance through paginated list, got index %d", view.index)
 	}
 }
 
@@ -1006,5 +1006,32 @@ func TestProviderSelectPresetIsActiveWhenMatchesActiveProvider(t *testing.T) {
 	}
 	if view.items[view.index].name != "protonman" {
 		t.Fatalf("expected view cursor focused on active protonman preset, got %q", view.items[view.index].name)
+	}
+}
+
+func TestProviderSelectFilteredSelectionUsesVisibleItem(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.providers = map[string]config.ProviderConfig{
+		"alpha": {Name: "alpha", BaseURL: "https://alpha.example.com", Type: "openai"},
+		"beta":  {Name: "beta", BaseURL: "https://beta.example.com", Type: "openai"},
+	}
+	bModel.activeProvider = "alpha"
+	bModel.executeCommand("/provider")
+	view := bModel.bottom.find(providerSelectViewID).(*providerSelectPaneView)
+	view.picker.SetFilterText("beta")
+	view.syncPickerProjection()
+	item, ok := view.selectedItem()
+	if !ok || item.name != "beta" {
+		t.Fatalf("filtered selection = %#v, %t; want beta", item, ok)
+	}
+	updated, cmd := bModel.Update(testKey(tea.KeyEnter))
+	bModel = updated.(*bubbleModel)
+	if cmd == nil {
+		t.Fatal("expected provider selection command")
+	}
+	msg := cmd()
+	selected, ok := msg.(providerActiveSelectedMsg)
+	if !ok || selected.providerName != "beta" {
+		t.Fatalf("filtered enter selected %#v; want beta", msg)
 	}
 }

@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -558,7 +559,16 @@ func (v *providerSelectPaneView) initPicker() {
 	v.picker = list.New(items, delegate, defaultBubbleWidth-8, defaultBubbleHeight-8)
 	v.picker.DisableQuitKeybindings()
 	v.picker.SetStatusBarItemName("provider", "providers")
+	v.picker.FilterInput.Prompt = "Search: "
 	v.picker.InfiniteScrolling = false
+	v.picker.AdditionalShortHelpKeys = func() []key.Binding {
+		return []key.Binding{
+			key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "select")),
+			key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit")),
+			key.NewBinding(key.WithKeys("m"), key.WithHelp("m", "models")),
+			key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "remove")),
+		}
+	}
 	v.pickerReady = true
 }
 
@@ -623,21 +633,41 @@ func (*providerSelectPaneView) ReplacesComposer() bool {
 	return true
 }
 
+func (v *providerSelectPaneView) selectedItem() (providerSelectItem, bool) {
+	if v == nil || !v.pickerReady {
+		return providerSelectItem{}, false
+	}
+	item, ok := v.picker.SelectedItem().(providerSelectItem)
+	return item, ok
+}
+
 func (v *providerSelectPaneView) Render(m *bubbleModel) string {
-	items := make([]pane.ProviderItem, 0, len(v.items))
-	for _, item := range v.items {
-		items = append(items, pane.ProviderItem{DisplayName: item.displayName, BaseURL: item.baseURL, Description: item.description, Configured: item.isConfigured, Active: item.isActive, Free: item.isFree, Custom: item.kind == providerItemCustom})
+	v.initPicker()
+	if m == nil {
+		return ""
 	}
-	activeName := ""
-	if m != nil {
-		activeName = m.activeProvider
+	mode := layoutModeForHeight(m.height)
+	v.picker.SetSize(maxInt(12, m.width-8), maxInt(5, minInt(14, m.height-4)))
+	v.picker.Title = "Providers"
+	v.picker.SetShowStatusBar(mode != layoutTiny)
+	v.picker.SetShowPagination(mode != layoutTiny)
+	v.picker.SetShowHelp(mode != layoutTiny)
+	delegate := list.NewDefaultDelegate()
+	delegate.SetSpacing(0)
+	delegate.ShowDescription = mode == layoutNormal
+	v.picker.SetDelegate(delegate)
+	if v.deleteConfirm {
+		item, ok := v.selectedItem()
+		if ok && item.isConfigured {
+			rows := []string{warningStyle.Render("Remove Provider?"), "", item.displayName, mutedStyle.Render(item.baseURL)}
+			if item.isActive {
+				rows = append(rows, warningStyle.Render("This is the active provider."))
+			}
+			rows = append(rows, "", mutedStyle.Render("enter remove permanently · esc cancel"))
+			return renderProviderModal(m, warningColor, rows)
+		}
 	}
-	rows, warning := pane.ProviderRows(pane.ProviderSnapshot{Width: m.width, Height: m.height, ContentWidth: providerModalContentWidth(m), Index: v.index, Offset: v.offset, ActiveName: activeName, DeleteConfirm: v.deleteConfirm, Items: items})
-	border := accentAssistant
-	if warning {
-		border = warningColor
-	}
-	return renderProviderModal(m, border, rows)
+	return renderProviderModal(m, accentAssistant, strings.Split(v.picker.View(), "\n"))
 }
 
 func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
@@ -646,14 +676,26 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 		v.picker.Select(v.index)
 		v.syncPickerProjection()
 	}
-	if v.deleteConfirm && (len(v.items) == 0 || v.index < 0 || v.index >= len(v.items) || !v.items[v.index].isConfigured) {
-		v.deleteConfirm = false
+	if v.deleteConfirm {
+		item, ok := v.selectedItem()
+		if !ok || !item.isConfigured {
+			v.deleteConfirm = false
+		}
+	}
+	if v.picker.SettingFilter() {
+		updated, cmd := v.picker.Update(message)
+		v.picker = updated
+		v.syncPickerProjection()
+		return true, cmd
 	}
 	if v.deleteConfirm {
 		switch message.String() {
 		case "enter":
+			item, ok := v.selectedItem()
 			v.deleteConfirm = false
-			item := v.items[v.index]
+			if !ok {
+				return true, nil
+			}
 			m.bottom.remove(providerSelectViewID)
 			return true, deleteProviderCmd(item.name)
 		case "esc":
@@ -678,8 +720,7 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 		}
 		return true, nil
 	case "m":
-		if len(v.items) > 0 && v.index >= 0 && v.index < len(v.items) {
-			item := v.items[v.index]
+		if item, ok := v.selectedItem(); ok {
 			if item.isConfigured {
 				m.bottom.remove(providerSelectViewID)
 				if !m.bottom.has(modelSelectViewID) {
@@ -700,8 +741,7 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 		}
 		return true, nil
 	case "e":
-		if len(v.items) > 0 && v.index >= 0 && v.index < len(v.items) {
-			item := v.items[v.index]
+		if item, ok := v.selectedItem(); ok {
 			m.bottom.remove(providerSelectViewID)
 			if !m.bottom.has(providerViewID) {
 				if item.isConfigured {
@@ -724,12 +764,15 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 		}
 		return true, nil
 	case "d":
-		if len(v.items) > 0 && v.index >= 0 && v.index < len(v.items) {
-			item := v.items[v.index]
+		if item, ok := v.selectedItem(); ok {
 			if item.isConfigured {
 				v.deleteConfirm = true
 			}
 		}
+		return true, nil
+	case "/":
+		v.picker.SetFilterState(list.Filtering)
+		v.syncPickerProjection()
 		return true, nil
 	case "up", "k", "down", "j", "pgup", "pgdown", "home", "g", "end", "G":
 		updated, cmd := v.picker.Update(message)
@@ -739,8 +782,7 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		return true, nil
 	case "enter":
-		if len(v.items) > 0 && v.index >= 0 && v.index < len(v.items) {
-			item := v.items[v.index]
+		if item, ok := v.selectedItem(); ok {
 			m.bottom.remove(providerSelectViewID)
 			if item.isConfigured {
 				return true, saveActiveProviderCmd(item.name)
