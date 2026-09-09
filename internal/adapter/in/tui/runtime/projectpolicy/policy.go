@@ -1,13 +1,6 @@
 package projectpolicy
 
-import (
-	projectpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/project"
-	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
-)
-
-func Fact(label, value string) string             { return projectpane.ProjectFactLine(label, value) }
-func FallbackValue(value, fallback string) string { return projectpane.FallbackValue(value, fallback) }
-func FormatLimit(value int) string                { return projectpane.FormatLimit(value) }
+import "github.com/phongsathornpt/protonman/internal/adapter/out/config"
 
 func CloneProvenance(in map[string]config.ValueSource) map[string]config.ValueSource {
 	if len(in) == 0 {
