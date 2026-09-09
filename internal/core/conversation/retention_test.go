@@ -2,6 +2,7 @@ package conversation
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -130,5 +131,65 @@ func BenchmarkRetainRecentConversation(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		_ = Retain(messages, policy)
+	}
+}
+
+func TestLongSessionRetentionBoundsRetainedPayload(t *testing.T) {
+	policy := RetentionPolicy{
+		MaxMessages:                  128,
+		MaxBytes:                     2 * 1024 * 1024,
+		RecentMessages:               16,
+		MaxHistoricalToolResultBytes: 4 * 1024,
+	}
+	var messages []sdk.Message
+	for i := 0; i < 200; i++ {
+		id := fmt.Sprintf("call-%d", i)
+		messages = append(messages,
+			sdk.Message{Role: sdk.RoleUser, Content: fmt.Sprintf("question-%d", i)},
+			sdk.Message{Role: sdk.RoleAssistant, ToolCalls: []sdk.ToolCall{{ID: id, Name: "read", Arguments: []byte(`{"path":"large.log"}`)}}},
+			sdk.Message{Role: sdk.RoleTool, ToolCallID: id, ToolName: "read", Content: `{"call_id":"` + id + `","tool_name":"read","output":"` + strings.Repeat("x", 128*1024) + `"}`},
+			sdk.Message{Role: sdk.RoleAssistant, Content: "done"},
+		)
+		messages = Retain(messages, policy)
+	}
+	if len(messages) > policy.MaxMessages {
+		t.Fatalf("retained messages=%d, want <=%d", len(messages), policy.MaxMessages)
+	}
+	if got := EstimatedBytes(messages); got > policy.MaxBytes {
+		t.Fatalf("retained payload=%d bytes, want <=%d", got, policy.MaxBytes)
+	}
+}
+
+func TestLongSessionRetentionBoundsHeapGrowth(t *testing.T) {
+	policy := RetentionPolicy{
+		MaxMessages:                  96,
+		MaxBytes:                     4 * 1024 * 1024,
+		RecentMessages:               8,
+		MaxHistoricalToolResultBytes: 8 * 1024,
+	}
+	runtime.GC()
+	var before runtime.MemStats
+	runtime.ReadMemStats(&before)
+
+	var messages []sdk.Message
+	for i := 0; i < 96; i++ {
+		id := fmt.Sprintf("heap-call-%d", i)
+		messages = append(messages,
+			sdk.Message{Role: sdk.RoleUser, Content: "inspect"},
+			sdk.Message{Role: sdk.RoleAssistant, ToolCalls: []sdk.ToolCall{{ID: id, Name: "read", Arguments: []byte(`{"path":"heap.log"}`)}}},
+			sdk.Message{Role: sdk.RoleTool, ToolCallID: id, ToolName: "read", Content: `{"call_id":"` + id + `","tool_name":"read","output":"` + strings.Repeat("y", 256*1024) + `"}`},
+			sdk.Message{Role: sdk.RoleAssistant, Content: "done"},
+		)
+		messages = Retain(messages, policy)
+	}
+	runtime.GC()
+	var after runtime.MemStats
+	runtime.ReadMemStats(&after)
+	runtime.KeepAlive(messages)
+
+	const maxGrowth = 10 * 1024 * 1024
+	growth := int64(after.HeapAlloc) - int64(before.HeapAlloc)
+	if growth > maxGrowth {
+		t.Fatalf("retained heap grew by %d bytes after bounded session; want <=%d", growth, maxGrowth)
 	}
 }
