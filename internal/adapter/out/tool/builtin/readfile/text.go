@@ -81,6 +81,9 @@ func readTextBytes(ctx context.Context, file *os.File, fileInfo os.FileInfo, inp
 	} else if !utf8.Valid(contents) {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, fmt.Sprintf("%q is not valid UTF-8", input.Path))
 	}
+	if bytes.IndexByte(contents, 0) >= 0 {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, fmt.Sprintf("%q contains NUL bytes and is not a text artifact; use metadata view for binary files", input.Path))
+	}
 
 	var nextOffset *int64
 	if truncated {
@@ -160,6 +163,10 @@ func readFileLinesBounded(ctx context.Context, file *os.File, input readFileInpu
 				tool.ErrorCodeInvalidArguments,
 				fmt.Sprintf("%q is not valid UTF-8 near line %d", input.Path, lineNumber),
 			)
+		}
+		if bytes.IndexByte(line, byte(0)) >= 0 {
+			_ = file.Close()
+			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, fmt.Sprintf("%q contains NUL bytes near line %d and is not a text artifact", input.Path, lineNumber))
 		}
 		prefix := ""
 		if input.LineNumbers {

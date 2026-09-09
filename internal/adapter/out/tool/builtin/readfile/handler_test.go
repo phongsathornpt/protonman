@@ -126,6 +126,35 @@ func TestReadFileLineRangeHonorsOutputLimit(t *testing.T) {
 	}
 }
 
+func TestReadFileRejectsBinaryNULBeyondDetectionHeader(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	data := append([]byte(strings.Repeat("a", 600)), 0, 'b')
+	if err := os.WriteFile(filepath.Join(ws.Root(), "binary-ish.dat"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := New(ws).Execute(context.Background(), newJSONCall(t, "read-binary-nul", "read", map[string]any{
+		"path": "binary-ish.dat",
+	}))
+	if err == nil || !strings.Contains(err.Error(), "contains NUL bytes") {
+		t.Fatalf("Execute() error = %v, want binary NUL rejection", err)
+	}
+}
+
+func TestReadFileLineRangeRejectsBinaryNUL(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	data := append([]byte("a\nb"), byte(0))
+	data = append(data, []byte("c\n")...)
+	if err := os.WriteFile(filepath.Join(ws.Root(), "binary-lines.dat"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := New(ws).Execute(context.Background(), newJSONCall(t, "read-lines-nul", "read", map[string]any{
+		"path": "binary-lines.dat", "start_line": 2, "end_line": 2,
+	}))
+	if err == nil || !strings.Contains(err.Error(), "contains NUL bytes") {
+		t.Fatalf("Execute() error = %v, want binary NUL rejection", err)
+	}
+}
+
 func TestReadFileLineRangeRejectsInvalidUTF8(t *testing.T) {
 	ws := newTestWorkspace(t, nil)
 	if err := os.WriteFile(filepath.Join(ws.Root(), "invalid.txt"), []byte{'a', '\n', 0xff, '\n'}, 0o644); err != nil {
