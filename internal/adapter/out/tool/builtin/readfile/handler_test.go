@@ -12,6 +12,30 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
+func TestReadSchemaKeepsArtifactContractCompact(t *testing.T) {
+	definition := readFileHandler{}.Definition()
+	properties, ok := definition.InputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %#v", definition.InputSchema["properties"])
+	}
+	for _, removed := range []string{"query", "mode", "include", "exclude", "context", "max_files", "max_matches"} {
+		if _, exists := properties[removed]; exists {
+			t.Fatalf("read schema leaked search field %q", removed)
+		}
+	}
+	view, _ := properties["view"].(map[string]any)
+	if view["default"] != "auto" {
+		t.Fatalf("view default = %#v, want auto", view["default"])
+	}
+	for _, field := range []string{"offset", "limit", "continuation", "start_line", "end_line", "line_numbers"} {
+		schema, _ := properties[field].(map[string]any)
+		description, _ := schema["description"].(string)
+		if !strings.Contains(strings.ToLower(description), "text-only") {
+			t.Fatalf("%s description = %q, want text-only semantics", field, description)
+		}
+	}
+}
+
 func TestReadFileSupportsLineRangesAndNumbers(t *testing.T) {
 	ws := newTestWorkspace(t, nil)
 	path := filepath.Join(ws.Root(), "lines.txt")

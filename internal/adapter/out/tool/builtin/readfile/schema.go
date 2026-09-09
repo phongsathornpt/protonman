@@ -21,7 +21,7 @@ type readFileInput struct {
 func (readFileHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                "read",
-		Description:         "Read and inspect workspace artifacts. Text keeps byte/line pagination and SHA-256 evidence; image and structured views provide bounded pure-Go analysis.",
+		Description:         "Read a known workspace artifact. Text supports bounded byte or line ranges; image, structured, and metadata views provide bounded inspection.",
 		Kind:                tool.KindForName("read"),
 		Mutability:          tool.MutabilityReadOnly,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead},
@@ -32,42 +32,43 @@ func (readFileHandler) Definition() tool.Definition {
 			"properties": map[string]any{
 				"path": map[string]any{
 					"type":        "string",
-					"description": "Workspace-relative path to read; use . only for directory-oriented source inspection. Absolute paths are outside the workspace",
+					"description": "Workspace-relative artifact path. Use ls/find/grep to discover files; absolute paths are outside the workspace",
 				},
 				"view": map[string]any{
 					"type":        "string",
 					"enum":        []string{"auto", "text", "image", "structured", "metadata"},
-					"description": "Artifact view; auto preserves text-like files while inspecting supported images and binary metadata; structured analyzes JSON/JSONL/CSV/TSV",
+					"default":     "auto",
+					"description": "Inspection mode; auto is the default, text reads UTF-8 content, image analyzes supported images, structured analyzes JSON/JSONL/CSV/TSV, metadata reports artifact type and size",
 				},
 
 				"offset": map[string]any{
 					"type":        "integer",
 					"minimum":     0,
-					"description": "Byte offset to start reading from; use next_offset from a truncated result",
+					"description": "Text-only byte offset; use next_offset from a truncated text result",
 				},
 				"continuation": map[string]any{
 					"type":        "string",
-					"description": "Snapshot token from a truncated result; send it with next_offset to detect file changes",
+					"description": "Text-only snapshot token from a truncated result; send it with next_offset to detect file changes",
 				},
 				"limit": map[string]any{
 					"type":        "integer",
 					"minimum":     0,
 					"maximum":     MaxReadFileBytes,
-					"description": "Target page size in bytes; defaults to 64 KiB, may be increased up to 2 MiB, and may extend to finish one UTF-8 code point",
+					"description": "Text-only output page size; defaults to 64 KiB, may be increased up to 2 MiB, and may extend to finish one UTF-8 code point",
 				},
 				"start_line": map[string]any{
 					"type":        "integer",
 					"minimum":     0,
-					"description": "Optional 1-based first line to read; use with end_line for narrow source inspection",
+					"description": "Text-only 1-based first line; use with end_line for a narrow known-file read",
 				},
 				"end_line": map[string]any{
 					"type":        "integer",
 					"minimum":     0,
-					"description": "Optional 1-based inclusive last line; 0 reads through EOF",
+					"description": "Text-only 1-based inclusive last line; 0 reads through EOF",
 				},
 				"line_numbers": map[string]any{
 					"type":        "boolean",
-					"description": "Prefix selected lines with their 1-based line number",
+					"description": "Text-only; prefix selected lines with their 1-based line number",
 				},
 			},
 			"required":             []string{"path"},
