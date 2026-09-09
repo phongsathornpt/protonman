@@ -19,12 +19,6 @@ func (m *bubbleModel) View() tea.View {
 	return view
 }
 
-func (m *bubbleModel) markViewportViewDirty() {
-	if m != nil {
-		m.viewportViewDirty = true
-	}
-}
-
 func (m *bubbleModel) renderedViewport() string {
 	if m == nil {
 		return ""

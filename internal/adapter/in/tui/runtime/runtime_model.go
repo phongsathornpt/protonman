@@ -78,8 +78,6 @@ type bubbleModel struct {
 	viewportCommittedRevision uint64
 	viewportActiveRevision    uint64
 	viewportLineAnchors       []ScrollAnchor
-	viewportViewCache         string
-	viewportViewDirty         bool
 	nextID                    uint64
 	width                     int
 	height                    int

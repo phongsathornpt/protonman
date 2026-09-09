@@ -39,7 +39,6 @@ func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
 
 func (m *bubbleModel) setViewportContent(content string, fullHistory bool) {
 	m.viewport.SetContent(content)
-	m.markViewportViewDirty()
 	m.viewportStaleTail = false
 	m.viewportLineAnchors = nil
 	if m.historyState != nil {
@@ -83,7 +82,6 @@ func (m *bubbleModel) restoreViewportScroll(scroll viewportScrollSnapshot) {
 		before := m.viewport.YOffset()
 		m.viewport.GotoBottom()
 		if m.viewport.YOffset() != before {
-			m.markViewportViewDirty()
 		}
 		m.followTail = true
 		return
@@ -97,7 +95,6 @@ func (m *bubbleModel) restoreViewportScroll(scroll viewportScrollSnapshot) {
 	}
 	if m.viewport.YOffset() != yOffset {
 		m.viewport.SetYOffset(yOffset)
-		m.markViewportViewDirty()
 	}
 }
 
@@ -136,7 +133,6 @@ func (m *bubbleModel) updateConversationViewport(message tea.Msg) tea.Cmd {
 	updated, command := m.viewport.Update(message)
 	m.viewport = updated
 	if m.viewport.YOffset() != before {
-		m.markViewportViewDirty()
 	}
 	m.followTail = m.viewport.AtBottom()
 	return command
@@ -154,7 +150,6 @@ func (m *bubbleModel) scrollConversationLines(delta int) {
 		m.viewport.ScrollDown(delta)
 	}
 	if m.viewport.YOffset() != before {
-		m.markViewportViewDirty()
 	}
 	m.followTail = m.viewport.AtBottom()
 }
