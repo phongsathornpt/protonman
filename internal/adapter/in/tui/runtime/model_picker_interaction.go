@@ -1,11 +1,9 @@
 package runtime
 
 import (
-	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/providerio"
-	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"strings"
 )
 
@@ -46,102 +44,79 @@ func (v *modelSelectPaneView) Render(ctx paneRenderContext) string {
 	return renderModalRows(ctx, accentAssistant, strings.Split(v.picker.View(), "\n"))
 }
 
-func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
-	if key.Matches(message, m.keys.ToggleModel) {
+func (v *modelSelectPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
+	if message.String() == "ctrl+p" || message.String() == "alt+m" {
 		v.cancelFetch()
-		m.panes.bottom.remove(modelSelectViewID)
-		return true, nil
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: modelSelectViewID}}
 	}
 	v.initPicker()
 	if v.picker.SettingFilter() {
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
 		v.syncPickerProjection()
-		return true, cmd
+		return paneKeyResult{handled: true, cmd: cmd}
 	}
 	switch message.String() {
 	case "/":
 		v.picker.SetFilterState(list.Filtering)
 		v.syncPickerProjection()
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "ctrl+u":
 		v.picker.ResetFilter()
 		v.syncPickerProjection()
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "esc":
 		if v.picker.IsFiltered() {
 			v.picker.ResetFilter()
 			v.syncPickerProjection()
-			return true, nil
+			return paneKeyResult{handled: true}
 		}
 		v.cancelFetch()
-		m.panes.bottom.remove(modelSelectViewID)
-		return true, nil
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: modelSelectViewID}}
 	case "q":
 		v.cancelFetch()
-		m.panes.bottom.remove(modelSelectViewID)
-		return true, nil
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: modelSelectViewID}}
 	case "p":
 		v.cancelFetch()
-		m.panes.bottom.remove(modelSelectViewID)
-		if !m.panes.bottom.has(providerSelectViewID) {
-			m.panes.bottom.push(newProviderSelectPaneView(m))
-		}
-		return true, nil
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionOpenProviderSelect}}
 	case "a":
 		v.cancelFetch()
-		m.panes.bottom.remove(modelSelectViewID)
-		if !m.panes.bottom.has(providerViewID) {
-			m.pushProviderPane(newProviderPaneView())
-		}
-		return true, nil
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionOpenProviderEditor}}
 	case "r":
-		return true, v.loadProvider(m, true)
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionReloadModels, runSlash: true}}
 	case "tab":
 		if len(v.providerNames) > 1 {
 			v.providerIndex = (v.providerIndex + 1) % len(v.providerNames)
-			return true, v.loadProvider(m, false)
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionReloadModels}}
 		}
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "shift+tab":
 		if len(v.providerNames) > 1 {
 			v.providerIndex = (v.providerIndex - 1 + len(v.providerNames)) % len(v.providerNames)
-			return true, v.loadProvider(m, false)
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionReloadModels}}
 		}
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "pgup", "pgdown", "up", "k", "down", "j", "home", "g", "end", "G":
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
 		v.syncPickerProjection()
-		return true, cmd
+		return paneKeyResult{handled: true, cmd: cmd}
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		pageOffset := v.picker.Paginator.Page * v.picker.Paginator.PerPage
 		targetIdx := int(message.String()[0]-'1') + pageOffset
 		if targetIdx >= 0 && targetIdx < len(v.models) {
 			selected := v.models[targetIdx]
-			provName := model.DefaultProtonmanName
-			if v.providerIndex >= 0 && v.providerIndex < len(v.providerNames) {
-				provName = v.providerNames[v.providerIndex]
-			}
-			cmd := m.beginModelSelect(provName, selected.ID, false)
-			m.panes.bottom.remove(modelSelectViewID)
-			return true, cmd
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionSelectModel, providerName: v.activeProviderName(), modelID: selected.ID}}
 		}
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "enter":
 		item, ok := v.picker.SelectedItem().(modelListItem)
 		if !ok {
-			return true, nil
+			return paneKeyResult{handled: true}
 		}
-		provName := model.DefaultProtonmanName
-		if v.providerIndex >= 0 && v.providerIndex < len(v.providerNames) {
-			provName = v.providerNames[v.providerIndex]
-		}
-		cmd := m.beginModelSelect(provName, item.model.ID, false)
-		m.panes.bottom.remove(modelSelectViewID)
-		return true, cmd
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionSelectModel, providerName: v.activeProviderName(), modelID: item.model.ID}}
 	default:
-		return false, nil
+		return paneKeyResult{}
 	}
 }
 

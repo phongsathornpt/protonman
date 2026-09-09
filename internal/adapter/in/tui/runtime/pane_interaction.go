@@ -14,14 +14,20 @@ const (
 	paneActionAcceptSlash
 	paneActionToggleSkill
 	paneActionReloadProject
+	paneActionReloadModels
+	paneActionSelectModel
+	paneActionOpenProviderSelect
+	paneActionOpenProviderEditor
 )
 
 type paneAction struct {
-	kind      paneActionKind
-	paneID    string
-	reasoning sdk.ReasoningEffort
-	runSlash  bool
-	skillName string
+	kind         paneActionKind
+	paneID       string
+	reasoning    sdk.ReasoningEffort
+	runSlash     bool
+	skillName    string
+	providerName string
+	modelID      string
 }
 
 type paneKeyResult struct {
@@ -59,6 +65,23 @@ func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
 	case paneActionReloadProject:
 		if view, _ := m.panes.bottom.find(projectViewID).(*projectPaneView); view != nil {
 			return view.reload(m)
+		}
+	case paneActionReloadModels:
+		if view, _ := m.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView); view != nil {
+			return view.loadProvider(m, action.runSlash)
+		}
+	case paneActionSelectModel:
+		m.panes.bottom.remove(modelSelectViewID)
+		return m.beginModelSelect(action.providerName, action.modelID, false)
+	case paneActionOpenProviderSelect:
+		m.panes.bottom.remove(modelSelectViewID)
+		if !m.panes.bottom.has(providerSelectViewID) {
+			m.panes.bottom.push(newProviderSelectPaneView(m))
+		}
+	case paneActionOpenProviderEditor:
+		m.panes.bottom.remove(modelSelectViewID)
+		if !m.panes.bottom.has(providerViewID) {
+			m.pushProviderPane(newProviderPaneView())
 		}
 	}
 	return nil

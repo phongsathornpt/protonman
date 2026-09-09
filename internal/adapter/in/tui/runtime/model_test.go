@@ -1008,7 +1008,7 @@ func TestModelPickerShiftTabCyclesProvidersWithoutLeaking(t *testing.T) {
 	initialIdx := view.providerIndex
 	initialMode := bModel.service.Mode()
 
-	handled, _ := view.HandleKey(bModel, testShiftTab())
+	handled, _ := bModel.handleModalKey(testShiftTab())
 	if !handled {
 		t.Fatal("shift+tab was not handled by model picker")
 	}
@@ -1031,7 +1031,7 @@ func TestModelPickerEnterWhileFilteringSelectsModel(t *testing.T) {
 	view.picker.SetFilterText("deepseek")
 	view.picker.Select(0)
 
-	handled, cmd := view.HandleKey(bModel, testKey(tea.KeyEnter))
+	handled, cmd := bModel.handleModalKey(testKey(tea.KeyEnter))
 	if !handled {
 		t.Fatal("enter while filtering was not handled")
 	}
@@ -1052,7 +1052,7 @@ func TestModelPickerEnterOnZeroMatchesDoesNotOpenProviderEditor(t *testing.T) {
 	}
 	view.setModels(nil, "")
 
-	handled, cmd := view.HandleKey(bModel, testKey(tea.KeyEnter))
+	handled, cmd := bModel.handleModalKey(testKey(tea.KeyEnter))
 	if !handled {
 		t.Fatal("enter on 0 matches was not handled")
 	}
