@@ -7,10 +7,7 @@ import (
 )
 
 func TestConstants(t *testing.T) {
-	tests := []struct {
-		got  string
-		want string
-	}{
+	tests := []struct{ got, want string }{
 		{envconfig.Home, "PROTONMAN_HOME"},
 		{envconfig.TrustProject, "PROTONMAN_TRUST_PROJECT"},
 		{envconfig.SessionID, "PROTONMAN_SESSION_ID"},
@@ -18,12 +15,6 @@ func TestConstants(t *testing.T) {
 		{envconfig.Telemetry, "PROTONMAN_TELEMETRY"},
 		{envconfig.DebugLog, "PROTONMAN_DEBUG_LOG"},
 		{envconfig.ForceTTY, "PROTONMAN_FORCE_TTY"},
-		{envconfig.LegacyTrustProject, "PROTON_TRUST_PROJECT"},
-		{envconfig.LegacySessionID, "PROTON_SESSION_ID"},
-		{envconfig.LegacySandbox, "PROTON_SANDBOX"},
-		{envconfig.LegacyTelemetry, "PROTON_TELEMETRY"},
-		{envconfig.LegacyDebugLog, "PROTON_DEBUG_LOG"},
-		{envconfig.LegacyForceTTY, "PROTON_FORCE_TTY"},
 	}
 	for _, tc := range tests {
 		if tc.got != tc.want {
@@ -58,16 +49,14 @@ func TestValueForUnmappedVariableIsDirect(t *testing.T) {
 	}
 }
 
-func TestBoolUsesLegacyFallback(t *testing.T) {
-	t.Setenv(envconfig.TrustProject, "")
-	t.Setenv(envconfig.LegacyTrustProject, "true")
+func TestBoolUsesCanonicalVariableOnly(t *testing.T) {
+	t.Setenv(envconfig.TrustProject, "true")
 	if !envconfig.Bool(envconfig.TrustProject) {
-		t.Fatal("Bool(TrustProject) = false, want legacy true fallback")
+		t.Fatal("Bool(TrustProject) = false, want true")
 	}
-
 	t.Setenv(envconfig.TrustProject, "0")
 	if envconfig.Bool(envconfig.TrustProject) {
-		t.Fatal("Bool(TrustProject) ignored canonical false value")
+		t.Fatal("Bool(TrustProject) = true, want false")
 	}
 }
 

@@ -16,9 +16,6 @@ func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, 
 	if action == "" {
 		action = strings.ToLower(strings.TrimSpace(t.pendingActions[result.CallID]))
 	}
-	if action == "" {
-		action = legacySubagentAction(name)
-	}
 	delete(t.pendingActions, result.CallID)
 	if publicName != "subagent" || action == "" {
 		return false
@@ -119,9 +116,6 @@ func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, 
 
 func (t *Tracker) ApplyToolFailure(name string, result tool.Result, err error, state *history.HistoryState) bool {
 	action := strings.ToLower(strings.TrimSpace(t.pendingActions[result.CallID]))
-	if action == "" {
-		action = legacySubagentAction(name)
-	}
 	delete(t.pendingActions, result.CallID)
 	delete(t.pendingRuns, result.CallID)
 	if strings.TrimSpace(name) != tool.NameSubagent || action == "" {

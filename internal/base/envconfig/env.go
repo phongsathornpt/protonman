@@ -13,39 +13,17 @@ const (
 	Telemetry    = "PROTONMAN_TELEMETRY"
 	DebugLog     = "PROTONMAN_DEBUG_LOG"
 	ForceTTY     = "PROTONMAN_FORCE_TTY"
-
-	LegacyTrustProject = "PROTON_TRUST_PROJECT"
-	LegacySessionID    = "PROTON_SESSION_ID"
-	LegacySandbox      = "PROTON_SANDBOX"
-	LegacyTelemetry    = "PROTON_TELEMETRY"
-	LegacyDebugLog     = "PROTON_DEBUG_LOG"
-	LegacyForceTTY     = "PROTON_FORCE_TTY"
 )
 
-var legacyNames = map[string]string{
-	TrustProject: LegacyTrustProject,
-	SessionID:    LegacySessionID,
-	Sandbox:      LegacySandbox,
-	Telemetry:    LegacyTelemetry,
-	DebugLog:     LegacyDebugLog,
-	ForceTTY:     LegacyForceTTY,
-}
-
-// DirectValue reads one environment variable without compatibility fallback.
-func DirectValue(name string) string {
+// Value reads one canonical Protonman environment variable.
+func Value(name string) string {
 	return strings.TrimSpace(os.Getenv(name))
 }
 
-// Value returns the canonical Protonman environment value, falling back to the
-// corresponding legacy PROTON_* variable when the canonical value is unset.
-func Value(name string) string {
-	if value := DirectValue(name); value != "" {
-		return value
-	}
-	if legacy := legacyNames[name]; legacy != "" {
-		return DirectValue(legacy)
-	}
-	return ""
+// DirectValue is retained as the explicit raw-name accessor for callers that
+// intentionally supply an environment variable name at runtime.
+func DirectValue(name string) string {
+	return Value(name)
 }
 
 func Bool(name string) bool {
