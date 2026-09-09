@@ -49,7 +49,7 @@ func (m bubbleModel) statusView() string {
 			activity += fmt.Sprintf(" · %d %s", m.turnProgress.ToolCalls, label)
 		}
 	}
-	indicator := "● "
+	indicator := "◌ "
 	if spin := m.spinner.View(); spin != "" {
 		indicator = spin + " "
 	}

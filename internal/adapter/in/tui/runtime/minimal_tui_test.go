@@ -214,3 +214,45 @@ func TestMinimalPromptMetadataUsesDisplayWidth(t *testing.T) {
 		}
 	}
 }
+
+func TestMinimalIdleStatusDoesNotReuseAssistantGlyph(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.busy = true
+	m.activity = "analyzing"
+	m.spinner.Spinner.Frames = nil
+	plain := ansi.Strip(m.statusView())
+	if strings.HasPrefix(plain, "● ") {
+		t.Fatalf("busy status reused assistant glyph: %q", plain)
+	}
+}
+
+func TestMinimalLayoutFitsCommonTerminalWidths(t *testing.T) {
+	for _, size := range [][2]int{{40, 12}, {60, 16}, {80, 24}, {120, 32}} {
+		m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+		m.runner = fakeConversation{}
+		m.bottom.setHasRunner(true)
+		m.activeModel = "glm-5.3-flash"
+		m.agentProfile = "engineer"
+		m.workDir = "/workspace/protonman"
+		m.resize(size[0], size[1])
+		view := m.View().Content
+		if got := lipgloss.Width(view); got > size[0] {
+			t.Fatalf("view width=%d exceeds %d at %dx%d", got, size[0], size[0], size[1])
+		}
+		if got := lipgloss.Height(view); got > size[1] {
+			t.Fatalf("view height=%d exceeds %d at %dx%d", got, size[1], size[0], size[1])
+		}
+	}
+}
+
+func TestMinimalIdleFooterHidesSecondaryShortcuts(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	footer := ansi.Strip(m.footerView())
+	for _, noise := range []string{"clear", "quit", "todos", "transcript", "mode", "skills", "model"} {
+		if strings.Contains(footer, noise) {
+			t.Fatalf("idle footer leaked secondary shortcut %q: %q", noise, footer)
+		}
+	}
+}

@@ -81,7 +81,10 @@ func (m bubbleModel) shortcutHint() string {
 			m.keys.PageDown,
 		})
 	}
-	return helpView.View(m.keys)
+	return helpView.View(contextualHelp{
+		m.keys.Submit,
+		m.keys.Newline,
+	})
 }
 
 func (m *bubbleModel) cycleMode() {
