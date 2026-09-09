@@ -31,7 +31,7 @@ func TestProjectCommandLoadsTrustedWorkspaceState(t *testing.T) {
 	m.projectTrusted = true
 	m.projectConfigSources = []string{configPath}
 	m.activeModel = "gemini-3.8-flash"
-	m.agentProfile = "dex"
+	m.agentProfile = "intelligence"
 	cmd := m.executeCommand("/project")
 	if cmd == nil || !m.bottom.has(projectViewID) {
 		t.Fatal("/project did not open async project pane")
@@ -40,7 +40,7 @@ func TestProjectCommandLoadsTrustedWorkspaceState(t *testing.T) {
 	updated, _ := m.Update(loaded)
 	m = updated.(*bubbleModel)
 	rendered := m.bottom.find(projectViewID).(*projectPaneView).Render(m)
-	for _, want := range []string{"Project Settings", "loaded · trusted", "1 detected", "gemini-3.8-flash", "dex"} {
+	for _, want := range []string{"Project Settings", "loaded · trusted", "1 detected", "gemini-3.8-flash", "intelligence"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("project pane missing %q: %q", want, rendered)
 		}
@@ -136,10 +136,10 @@ func TestProjectPaneShowsConfigurationProvenance(t *testing.T) {
 	m.projectConfigProvenance = map[string]config.ValueSource{config.FieldModelDefault: config.SourceProject, config.FieldModelProvider: config.SourceUser, config.FieldAgentProfile: config.SourceProject, config.FieldAgentReasoningEffort: config.SourceUser, config.FieldAgentSubagentsEnabled: config.SourceProject, config.FieldAgentMaxToolCalls: config.SourceDefault, config.FieldUIPermissionMode: config.SourceUser}
 	m.activeModel = "model-x"
 	m.activeProvider = "provider-x"
-	m.agentProfile = "dex"
+	m.agentProfile = "intelligence"
 	view := &projectPaneView{state: app.ProjectState{Trusted: true}}
 	rendered := view.Render(m)
-	for _, want := range []string{"model-x · project", "provider-x · user", "dex · project", "auto · user", "enabled · project", "ask · user", "default"} {
+	for _, want := range []string{"model-x · project", "provider-x · user", "intelligence · project", "auto · user", "enabled · project", "ask · user", "default"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("project pane missing provenance %q: %q", want, rendered)
 		}
@@ -155,7 +155,7 @@ func TestProjectSetUpdatesTrustedRuntimeAndConfig(t *testing.T) {
 	for _, tc := range []struct {
 		command string
 		field   string
-	}{{"/project set agent dex", config.FieldAgentProfile}, {"/project set thinking high", config.FieldAgentReasoningEffort}, {"/project set subagents off", config.FieldAgentSubagentsEnabled}, {"/project set tool-calls 33", config.FieldAgentMaxToolCalls}, {"/project set permission always-approve", config.FieldUIPermissionMode}} {
+	}{{"/project set agent intelligence", config.FieldAgentProfile}, {"/project set thinking high", config.FieldAgentReasoningEffort}, {"/project set subagents off", config.FieldAgentSubagentsEnabled}, {"/project set tool-calls 33", config.FieldAgentMaxToolCalls}, {"/project set permission always-approve", config.FieldUIPermissionMode}} {
 		cmd := m.executeCommand(tc.command)
 		if cmd == nil {
 			t.Fatalf("%s returned nil", tc.command)

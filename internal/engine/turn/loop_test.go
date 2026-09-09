@@ -35,7 +35,7 @@ func TestLoopBuildsEffectiveSystemPromptFromRuntime(t *testing.T) {
 		{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
 	}}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithSystemPromptSpec(prompt.Spec{
-		Role: "Inspect the assigned code carefully.", Profile: "int", Workspace: workspace,
+		Role: "Inspect the assigned code carefully.", Profile: "agility", Workspace: workspace,
 	}))
 	_, err := loop.Run(context.Background(), []model.Message{
 		{Role: model.RoleSystem, Content: "custom project instruction"},

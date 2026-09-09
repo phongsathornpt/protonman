@@ -28,7 +28,7 @@ func TestApplyAgentProfilePreservesCustomSystemInstruction(t *testing.T) {
 		{Role: model.RoleSystem, Content: "custom system"},
 		{Role: model.RoleUser, Content: "hello"},
 	}}
-	if err := applyAgentProfile(cfg, state, "dex"); err != nil {
+	if err := applyAgentProfile(cfg, state, "intelligence"); err != nil {
 		t.Fatal(err)
 	}
 	if len(state.Messages) != 2 || state.Messages[0].Content != "custom system" {
@@ -41,17 +41,17 @@ func TestApplyAgentProfilePreservesCustomSystemInstruction(t *testing.T) {
 
 func TestApplyAgentProfilePrecedence(t *testing.T) {
 	cfg := &config.Snapshot{}
-	cfg.Agent.Profile = "worker"
-	state := &session.State{AgentProfile: "dex"}
-	if err := applyAgentProfile(cfg, state, "pow"); err != nil {
+	cfg.Agent.Profile = "strength"
+	state := &session.State{AgentProfile: "intelligence"}
+	if err := applyAgentProfile(cfg, state, "strength"); err != nil {
 		t.Fatal(err)
 	}
 	if state.AgentProfile != "strength" || cfg.Agent.Profile != "strength" {
 		t.Fatalf("explicit profile did not win: state=%q config=%q", state.AgentProfile, cfg.Agent.Profile)
 	}
 
-	cfg.Agent.Profile = "worker"
-	state.AgentProfile = "dex"
+	cfg.Agent.Profile = "strength"
+	state.AgentProfile = "intelligence"
 	if err := applyAgentProfile(cfg, state, ""); err != nil {
 		t.Fatal(err)
 	}

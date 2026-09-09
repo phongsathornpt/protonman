@@ -377,7 +377,7 @@ func TestLoadAgentProfileConfig(t *testing.T) {
 	homeDir := t.TempDir()
 	configPath := filepath.Join(homeDir, ".protonman", "config.toml")
 	writeConfig(t, configPath, `[agent]
-profile = "dex"
+profile = "intelligence"
 `)
 
 	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: t.TempDir()})
@@ -385,8 +385,8 @@ profile = "dex"
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	if snapshot.Agent.Profile != "dex" {
-		t.Errorf("Agent.Profile = %q, want 'dex'", snapshot.Agent.Profile)
+	if snapshot.Agent.Profile != "intelligence" {
+		t.Errorf("Agent.Profile = %q, want 'intelligence'", snapshot.Agent.Profile)
 	}
 }
 
@@ -614,7 +614,7 @@ default = "user-model"
 provider = "user-provider"
 
 [agent]
-profile = "pow"
+profile = "strength"
 max_tool_calls = 11
 reasoning_effort = "low"
 
@@ -625,7 +625,7 @@ permission_mode = "ask"
 default = "project-model"
 
 [agent]
-profile = "dex"
+profile = "intelligence"
 reasoning_effort = "high"
 `)
 

@@ -9,7 +9,7 @@ func TestE2ETUIWithoutForcedTTYFails(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 
-	// Without PROTON_FORCE_TTY, running in non-terminal must fail
+	// Without PROTONMAN_FORCE_TTY, running in non-terminal must fail
 	res := runProton(t, runOptions{
 		args: []string{},
 		dir:  ws,

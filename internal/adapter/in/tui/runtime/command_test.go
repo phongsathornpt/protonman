@@ -63,7 +63,7 @@ func TestSlashAgent(t *testing.T) {
 		}
 	})
 	t.Run("switch to dex profile", func(t *testing.T) {
-		bModel.executeCommand("/agent dex")
+		bModel.executeCommand("/agent intelligence")
 		if got, want := bModel.agentProfile, "intelligence"; got != want {
 			t.Fatalf("bModel.agentProfile = %q, want %q", got, want)
 		}
@@ -75,8 +75,8 @@ func TestSlashAgent(t *testing.T) {
 			t.Fatalf("profile switch mutated transcript: %+v", bModel.messages)
 		}
 	})
-	t.Run("switch to pow profile", func(t *testing.T) {
-		bModel.executeCommand("/agent pow")
+	t.Run("switch to strength profile", func(t *testing.T) {
+		bModel.executeCommand("/agent strength")
 		if got, want := bModel.agentProfile, "strength"; got != want {
 			t.Fatalf("bModel.agentProfile = %q, want %q", got, want)
 		}
@@ -147,7 +147,7 @@ func TestSlashReasoningOpensCapabilityAwarePicker(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeProvider = "protonman"
 	m.activeModel = "gemini-3.8-flash"
-	m.agentProfile = "dex"
+	m.agentProfile = "intelligence"
 	m.executeCommand("/reasoning")
 	if !m.bottom.has(reasoningViewID) {
 		t.Fatal("/reasoning did not open thinking picker")

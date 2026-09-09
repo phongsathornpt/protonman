@@ -15,7 +15,7 @@ import (
 
 func TestSaveProjectSettingsRoundTrip(t *testing.T) {
 	workDir := t.TempDir()
-	if err := SaveProjectAgentProfile(workDir, "dex"); err != nil {
+	if err := SaveProjectAgentProfile(workDir, "intelligence"); err != nil {
 		t.Fatal(err)
 	}
 	if err := SaveProjectReasoningEffort(workDir, sdk.ReasoningHigh); err != nil {
@@ -31,7 +31,7 @@ func TestSaveProjectSettingsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.Agent.Profile != "dex" || snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh || snapshot.Agent.MaxToolCalls != 44 || snapshot.Mode != permission.ModeAlwaysApprove {
+	if snapshot.Agent.Profile != "intelligence" || snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh || snapshot.Agent.MaxToolCalls != 44 || snapshot.Mode != permission.ModeAlwaysApprove {
 		t.Fatalf("project settings did not round trip: %#v", snapshot)
 	}
 	for _, field := range []string{FieldAgentProfile, FieldAgentReasoningEffort, FieldAgentMaxToolCalls, FieldUIPermissionMode} {

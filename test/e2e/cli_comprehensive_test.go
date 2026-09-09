@@ -137,7 +137,7 @@ func TestE2ECLIAgentProfiles(t *testing.T) {
 	home := newTestHome(t)
 	env := []string{"PROTONMAN_HOME=" + home}
 
-	profiles := []string{"pow", "int", "dex"}
+	profiles := []string{"strength", "agility", "intelligence"}
 	for _, prof := range profiles {
 		res := runProton(t, runOptions{
 			args: []string{"-y", "-a", prof, "-p", `/call bash {"command":"echo '` + prof + `'"}`},
@@ -164,39 +164,39 @@ func TestE2ECLISandboxAndTelemetryEnv(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 
-	// PROTON_SANDBOX env
+	// PROTONMAN_SANDBOX env
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call bash {"command":"echo 'sandbox-env'"}`},
 		dir:  ws,
 		env: []string{
 			"PROTONMAN_HOME=" + home,
-			"PROTON_SANDBOX=workspace",
+			"PROTONMAN_SANDBOX=workspace",
 		},
 	})
 	if res.exitCode != 0 || !strings.Contains(res.stdout, "sandbox-env") {
-		t.Fatalf("PROTON_SANDBOX run failed: %s %s", res.stdout, res.stderr)
+		t.Fatalf("PROTONMAN_SANDBOX run failed: %s %s", res.stdout, res.stderr)
 	}
 
-	// PROTON_TELEMETRY=stderr
+	// PROTONMAN_TELEMETRY=stderr
 	res = runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call bash {"command":"echo 'telemetry-env'"}`},
 		dir:  ws,
 		env: []string{
 			"PROTONMAN_HOME=" + home,
-			"PROTON_TELEMETRY=stderr",
+			"PROTONMAN_TELEMETRY=stderr",
 		},
 	})
 	if res.exitCode != 0 || !strings.Contains(res.stdout, "telemetry-env") {
-		t.Fatalf("PROTON_TELEMETRY=stderr run failed: %s %s", res.stdout, res.stderr)
+		t.Fatalf("PROTONMAN_TELEMETRY=stderr run failed: %s %s", res.stdout, res.stderr)
 	}
 
-	// Invalid PROTON_TELEMETRY
+	// Invalid PROTONMAN_TELEMETRY
 	res = runProton(t, runOptions{
 		args: []string{"-y", "-p", "test"},
 		dir:  ws,
 		env: []string{
 			"PROTONMAN_HOME=" + home,
-			"PROTON_TELEMETRY=invalid_sink_xyz",
+			"PROTONMAN_TELEMETRY=invalid_sink_xyz",
 		},
 	})
 	if res.exitCode == 0 || !strings.Contains(res.stdout+res.stderr, "unsupported PROTONMAN_TELEMETRY") {

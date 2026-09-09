@@ -618,7 +618,7 @@ func TestSessionCommandsExposeIdentityAndWorkspaceSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Save(context.Background(), "current-session", session.State{PermissionMode: permission.ModeAsk.String(), WorkspaceKey: "workspace-key", AgentProfile: "dex", Messages: []session.Message{{Role: model.RoleUser, Content: "resume this work"}}}); err != nil {
+	if err := store.Save(context.Background(), "current-session", session.State{PermissionMode: permission.ModeAsk.String(), WorkspaceKey: "workspace-key", AgentProfile: "intelligence", Messages: []session.Message{{Role: model.RoleUser, Content: "resume this work"}}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.Save(context.Background(), "other-session", session.State{PermissionMode: permission.ModeAsk.String(), WorkspaceKey: "other", Messages: []session.Message{{Role: model.RoleUser, Content: "do not show"}}}); err != nil {

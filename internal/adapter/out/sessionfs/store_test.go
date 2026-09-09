@@ -414,7 +414,7 @@ func TestFileStoreLatestSession(t *testing.T) {
 }
 
 func TestSessionConversionsStripManagedSystemPrompts(t *testing.T) {
-	managed := prompt.Render(prompt.Spec{Profile: "dex"})
+	managed := prompt.Render(prompt.Spec{Profile: "intelligence"})
 	custom := "custom project system instruction"
 	stored := FromModelMessages([]model.Message{
 		{Role: model.RoleSystem, Content: managed},
@@ -439,14 +439,14 @@ func TestFileStoreRoundTripsAgentProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Save(context.Background(), "profile", State{PermissionMode: permission.ModeAsk.String(), AgentProfile: "dex"}); err != nil {
+	if err := store.Save(context.Background(), "profile", State{PermissionMode: permission.ModeAsk.String(), AgentProfile: "intelligence"}); err != nil {
 		t.Fatal(err)
 	}
 	loaded, found, err := store.Load(context.Background(), "profile")
 	if err != nil || !found {
 		t.Fatalf("Load() = found %v, err %v", found, err)
 	}
-	if loaded.AgentProfile != "dex" {
+	if loaded.AgentProfile != "intelligence" {
 		t.Fatalf("AgentProfile = %q, want dex", loaded.AgentProfile)
 	}
 }
@@ -495,7 +495,7 @@ func TestFileStorePersistsIdentityAndListsSummaries(t *testing.T) {
 		PermissionMode:  permission.ModeAsk.String(),
 		WorkspaceKey:    "abc",
 		WorkspaceName:   "proton",
-		AgentProfile:    "dex",
+		AgentProfile:    "intelligence",
 		ReasoningEffort: "high",
 		Messages:        []Message{{Role: model.RoleUser, Content: "  Refactor   the session store safely  "}},
 	}); err != nil {
@@ -631,11 +631,11 @@ func TestFileStoreRejectsStaleConcurrentSessionSave(t *testing.T) {
 		t.Fatalf("first load found=%v err=%v", found, err)
 	}
 	second := first
-	first.AgentProfile = "dex"
+	first.AgentProfile = "intelligence"
 	if err := store.Save(ctx, "shared", first); err != nil {
 		t.Fatal(err)
 	}
-	second.AgentProfile = "pow"
+	second.AgentProfile = "strength"
 	if err := store.Save(ctx, "shared", second); !errors.Is(err, session.ErrRevisionConflict) {
 		t.Fatalf("stale save error=%v, want revision conflict", err)
 	}
@@ -643,7 +643,7 @@ func TestFileStoreRejectsStaleConcurrentSessionSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.AgentProfile != "dex" || loaded.Revision != first.Revision+1 {
+	if loaded.AgentProfile != "intelligence" || loaded.Revision != first.Revision+1 {
 		t.Fatalf("loaded after conflict=%+v", loaded)
 	}
 }

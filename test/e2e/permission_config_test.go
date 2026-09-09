@@ -83,7 +83,7 @@ pattern = "*"
 		t.Fatalf("write project config: %v", err)
 	}
 
-	// Case 1: Untrusted (PROTON_TRUST_PROJECT unset)
+	// Case 1: Untrusted (PROTONMAN_TRUST_PROJECT unset)
 	// Project config is ignored with a warning; bash succeeds with -y
 	untrustedRes := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call bash {"command":"echo untrusted-ok"}`},
@@ -101,14 +101,14 @@ pattern = "*"
 		t.Fatalf("expected warning on stderr about untrusted project config, got: %s", untrustedRes.stderr)
 	}
 
-	// Case 2: Trusted (PROTON_TRUST_PROJECT=1)
+	// Case 2: Trusted (PROTONMAN_TRUST_PROJECT=1)
 	// Project config is loaded, bash is denied
 	trustedRes := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call bash {"command":"echo should-deny"}`},
 		dir:  ws,
 		env: []string{
 			"PROTONMAN_HOME=" + home,
-			"PROTON_TRUST_PROJECT=1",
+			"PROTONMAN_TRUST_PROJECT=1",
 		},
 	})
 	if trustedRes.exitCode == 0 {

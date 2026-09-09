@@ -60,7 +60,7 @@ func TestE2ETelemetryEmissionAndRedaction(t *testing.T) {
 		dir:  ws,
 		env: []string{
 			"PROTONMAN_HOME=" + home,
-			"PROTON_TELEMETRY=stderr",
+			"PROTONMAN_TELEMETRY=stderr",
 		},
 	})
 	if res.exitCode != 0 {

@@ -109,7 +109,7 @@ func TestSandboxIntegrationStrictBlocksHostNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Command() error = %v", err)
 	}
-	cmd.Env = append(os.Environ(), "PROTON_SANDBOX_NET_PROBE="+listener.Addr().String())
+	cmd.Env = append(os.Environ(), "PROTONMAN_SANDBOX_NET_PROBE="+listener.Addr().String())
 	output, runErr := cmd.CombinedOutput()
 	if runErr == nil {
 		t.Fatalf("strict sandbox reached host TCP listener; output=%s", output)
@@ -120,7 +120,7 @@ func TestSandboxIntegrationStrictBlocksHostNetwork(t *testing.T) {
 }
 
 func TestSandboxNetworkProbeHelper(t *testing.T) {
-	address := strings.TrimSpace(os.Getenv("PROTON_SANDBOX_NET_PROBE"))
+	address := strings.TrimSpace(os.Getenv("PROTONMAN_SANDBOX_NET_PROBE"))
 	if address == "" {
 		t.Skip("sandbox network probe helper")
 	}

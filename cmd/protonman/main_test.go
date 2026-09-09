@@ -73,9 +73,9 @@ func TestMainRunInvalidConfigurations(t *testing.T) {
 	}
 
 	// Invalid telemetry
-	origTelem := os.Getenv("PROTON_TELEMETRY")
-	defer func() { _ = os.Setenv("PROTON_TELEMETRY", origTelem) }()
-	_ = os.Setenv("PROTON_TELEMETRY", "invalid_telemetry_sink")
+	origTelem := os.Getenv("PROTONMAN_TELEMETRY")
+	defer func() { _ = os.Setenv("PROTONMAN_TELEMETRY", origTelem) }()
+	_ = os.Setenv("PROTONMAN_TELEMETRY", "invalid_telemetry_sink")
 	err = run(ctx, []string{"-y", "-p", `/call bash {"command":"echo hi"}`})
 	if err == nil || !strings.Contains(err.Error(), "unsupported PROTONMAN_TELEMETRY") {
 		t.Fatalf("expected unsupported telemetry error, got: %v", err)
@@ -98,9 +98,9 @@ func TestMainRunHeadlessRefusalAndExecution(t *testing.T) {
 	defer func() { _ = os.Chdir(origWd) }()
 
 	// Without TTY and without prompt, should refuse TUI
-	origTTY := os.Getenv("PROTON_FORCE_TTY")
-	defer func() { _ = os.Setenv("PROTON_FORCE_TTY", origTTY) }()
-	_ = os.Unsetenv("PROTON_FORCE_TTY")
+	origTTY := os.Getenv("PROTONMAN_FORCE_TTY")
+	defer func() { _ = os.Setenv("PROTONMAN_FORCE_TTY", origTTY) }()
+	_ = os.Unsetenv("PROTONMAN_FORCE_TTY")
 
 	err := run(ctx, []string{})
 	if err == nil || !strings.Contains(err.Error(), "refusing to start the TUI without a terminal") {
@@ -126,26 +126,26 @@ func TestMainRunHeadlessRefusalAndExecution(t *testing.T) {
 	}
 
 	// Agent profiles (pow, dex, int, worker, explorer, reviewer)
-	for _, profile := range []string{"pow", "int", "dex"} {
+	for _, profile := range []string{"strength", "agility", "intelligence"} {
 		err = run(ctx, []string{"-y", "--agent", profile, "-p", `/call bash {"command":"echo 'profile-ok'"}`})
 		if err != nil {
 			t.Fatalf("run with --agent %s failed: %v", profile, err)
 		}
 	}
 
-	// Environment variable overrides: PROTON_SANDBOX, PROTON_SESSION_ID, PROTON_TRUST_PROJECT
-	origSandbox := os.Getenv("PROTON_SANDBOX")
-	origSessionID := os.Getenv("PROTON_SESSION_ID")
-	origTrust := os.Getenv("PROTON_TRUST_PROJECT")
+	// Environment variable overrides: PROTONMAN_SANDBOX, PROTONMAN_SESSION_ID, PROTONMAN_TRUST_PROJECT
+	origSandbox := os.Getenv("PROTONMAN_SANDBOX")
+	origSessionID := os.Getenv("PROTONMAN_SESSION_ID")
+	origTrust := os.Getenv("PROTONMAN_TRUST_PROJECT")
 	defer func() {
-		_ = os.Setenv("PROTON_SANDBOX", origSandbox)
-		_ = os.Setenv("PROTON_SESSION_ID", origSessionID)
-		_ = os.Setenv("PROTON_TRUST_PROJECT", origTrust)
+		_ = os.Setenv("PROTONMAN_SANDBOX", origSandbox)
+		_ = os.Setenv("PROTONMAN_SESSION_ID", origSessionID)
+		_ = os.Setenv("PROTONMAN_TRUST_PROJECT", origTrust)
 	}()
 
-	_ = os.Setenv("PROTON_SANDBOX", "workspace")
-	_ = os.Setenv("PROTON_SESSION_ID", "env-session-id-456")
-	_ = os.Setenv("PROTON_TRUST_PROJECT", "1")
+	_ = os.Setenv("PROTONMAN_SANDBOX", "workspace")
+	_ = os.Setenv("PROTONMAN_SESSION_ID", "env-session-id-456")
+	_ = os.Setenv("PROTONMAN_TRUST_PROJECT", "1")
 	err = run(ctx, []string{"-y", "-p", `/call bash {"command":"echo 'env-ok'"}`})
 	if err != nil {
 		t.Fatalf("run with env overrides failed: %v", err)
@@ -198,16 +198,16 @@ func TestMainHelpers(t *testing.T) {
 }
 
 func TestMainConfiguredTelemetryObserver(t *testing.T) {
-	orig := os.Getenv("PROTON_TELEMETRY")
-	defer func() { _ = os.Setenv("PROTON_TELEMETRY", orig) }()
+	orig := os.Getenv("PROTONMAN_TELEMETRY")
+	defer func() { _ = os.Setenv("PROTONMAN_TELEMETRY", orig) }()
 
-	_ = os.Setenv("PROTON_TELEMETRY", "off")
+	_ = os.Setenv("PROTONMAN_TELEMETRY", "off")
 	obs, err := configuredTelemetryObserver()
 	if err != nil || obs != nil {
 		t.Errorf("expected nil observer for off, got err=%v, obs=%v", err, obs)
 	}
 
-	_ = os.Setenv("PROTON_TELEMETRY", "stderr")
+	_ = os.Setenv("PROTONMAN_TELEMETRY", "stderr")
 	obs, err = configuredTelemetryObserver()
 	if err != nil || obs == nil {
 		t.Errorf("expected non-nil observer for stderr, got err=%v, obs=%v", err, obs)

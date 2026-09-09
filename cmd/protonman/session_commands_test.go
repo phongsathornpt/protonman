@@ -46,7 +46,7 @@ func TestRunSessionListFiltersCurrentWorkspaceAndSupportsJSON(t *testing.T) {
 	}
 	ctx := context.Background()
 	key := workspaceKey(work)
-	if err := store.Save(ctx, "current", session.State{PermissionMode: permission.ModeAsk.String(), WorkspaceKey: key, AgentProfile: "dex", Messages: []session.Message{{Role: "user", Content: "current task"}}}); err != nil {
+	if err := store.Save(ctx, "current", session.State{PermissionMode: permission.ModeAsk.String(), WorkspaceKey: key, AgentProfile: "intelligence", Messages: []session.Message{{Role: "user", Content: "current task"}}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.Save(ctx, "other", session.State{PermissionMode: permission.ModeAsk.String(), WorkspaceKey: "other", Messages: []session.Message{{Role: "user", Content: "other task"}}}); err != nil {

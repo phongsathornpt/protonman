@@ -26,7 +26,7 @@ import (
 func TestAgentRuntimeStateSurvivesBubbleModelRestart(t *testing.T) {
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
 	defer coord.Close()
-	state := newAgentRuntimeState(config.AgentConfig{MaxToolCalls: 17, Profile: "dex", SubagentsEnabled: true, ReasoningEffort: sdk.ReasoningHigh}, true)
+	state := newAgentRuntimeState(config.AgentConfig{MaxToolCalls: 17, Profile: "intelligence", SubagentsEnabled: true, ReasoningEffort: sdk.ReasoningHigh}, true)
 	first := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "")
 	first.agents = app.NewAgents(coord)
 	state.apply(first)
@@ -237,7 +237,7 @@ func TestAgentsPaneShowsBoundModelIdentity(t *testing.T) {
 
 func TestSubagentLifecycleCollapsesIntoOneRunCell(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	delegate, _ := tool.NewCall("d1", "subagent", json.RawMessage(`{"action":"spawn","profile":"int","task":"inspect router"}`))
+	delegate, _ := tool.NewCall("d1", "subagent", json.RawMessage(`{"action":"spawn","profile":"agility","task":"inspect router"}`))
 	wait, _ := tool.NewCall("w1", "subagent", json.RawMessage(`{"action":"wait"}`))
 	m.applyTurnEvents([]turn.Event{{Kind: turn.EventToolCall, Call: delegate}, {Kind: turn.EventToolResult, Call: delegate, Result: tool.Result{CallID: "d1", ToolName: "subagent", StructuredOutput: json.RawMessage(`{"agent_id":"int-7","status":"queued"}`)}}, {Kind: turn.EventToolCall, Call: wait}, {Kind: turn.EventToolResult, Call: wait, Result: tool.Result{CallID: "w1", ToolName: "subagent", StructuredOutput: json.RawMessage(`{"timed_out":false,"event":{"kind":"agent_completed","agent_id":"int-7","message":"found routing issue"},"agents":[{"id":"int-7","state":"completed"}]}`)}}})
 	cells := m.historyState.Cells()
@@ -259,7 +259,7 @@ func TestSubagentLifecycleCollapsesIntoOneRunCell(t *testing.T) {
 func TestSubagentRunsStayDistinctByAgentID(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	for _, tc := range []struct{ callID, agentID, task string }{{"d1", "int-1", "inspect router"}, {"d2", "int-2", "inspect cache"}} {
-		call, _ := tool.NewCall(tc.callID, "subagent", json.RawMessage(`{"action":"spawn","profile":"int","task":"`+tc.task+`"}`))
+		call, _ := tool.NewCall(tc.callID, "subagent", json.RawMessage(`{"action":"spawn","profile":"agility","task":"`+tc.task+`"}`))
 		m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: call})
 		m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: call, Result: tool.Result{CallID: tc.callID, ToolName: "subagent", StructuredOutput: json.RawMessage(`{"agent_id":"` + tc.agentID + `","status":"queued"}`)}})
 	}
@@ -273,7 +273,7 @@ func TestSubagentRunsStayDistinctByAgentID(t *testing.T) {
 
 func TestAgentWaitTimeoutDoesNotLeakRPCTranscript(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	delegate, _ := tool.NewCall("d1", "subagent", json.RawMessage(`{"action":"spawn","profile":"int","task":"inspect router"}`))
+	delegate, _ := tool.NewCall("d1", "subagent", json.RawMessage(`{"action":"spawn","profile":"agility","task":"inspect router"}`))
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: delegate})
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: delegate, Result: tool.Result{CallID: "d1", ToolName: "subagent", StructuredOutput: json.RawMessage(`{"agent_id":"int-7","status":"running"}`)}})
 	wait, _ := tool.NewCall("w1", "subagent", json.RawMessage(`{"action":"wait"}`))
@@ -293,7 +293,7 @@ func TestAgentWaitTimeoutDoesNotLeakRPCTranscript(t *testing.T) {
 
 func TestOutOfOrderAgentResultMergesIntoDelegateRun(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	delegate, _ := tool.NewCall("d1", "subagent", json.RawMessage(`{"action":"spawn","profile":"int","task":"inspect router"}`))
+	delegate, _ := tool.NewCall("d1", "subagent", json.RawMessage(`{"action":"spawn","profile":"agility","task":"inspect router"}`))
 	get, _ := tool.NewCall("g1", "subagent", json.RawMessage(`{"action":"get"}`))
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: delegate})
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: get})
@@ -311,7 +311,7 @@ func TestOutOfOrderAgentResultMergesIntoDelegateRun(t *testing.T) {
 
 func TestCancelAgentUpdatesExistingRunWithoutExtraCell(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	delegate, _ := tool.NewCall("d1", "subagent", json.RawMessage(`{"action":"spawn","profile":"dex","task":"review concurrency"}`))
+	delegate, _ := tool.NewCall("d1", "subagent", json.RawMessage(`{"action":"spawn","profile":"intelligence","task":"review concurrency"}`))
 	cancel, _ := tool.NewCall("c1", "subagent", json.RawMessage(`{"action":"cancel","agent_id":"dex-7"}`))
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: delegate})
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: delegate, Result: tool.Result{CallID: "d1", ToolName: "subagent", StructuredOutput: json.RawMessage(`{"agent_id":"dex-7","status":"running"}`)}})
@@ -329,7 +329,7 @@ func TestCancelAgentUpdatesExistingRunWithoutExtraCell(t *testing.T) {
 
 func TestDelegateMissingAgentIDFallsBackWithoutCorruptingHistory(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	delegate, _ := tool.NewCall("d-missing", "subagent", json.RawMessage(`{"action":"spawn","profile":"int","task":"inspect router"}`))
+	delegate, _ := tool.NewCall("d-missing", "subagent", json.RawMessage(`{"action":"spawn","profile":"agility","task":"inspect router"}`))
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Call: delegate})
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolResult, Call: delegate, Result: tool.Result{CallID: "d-missing", ToolName: "subagent", StructuredOutput: json.RawMessage(`{"status":"queued"}`)}})
 	cells := m.historyState.Cells()

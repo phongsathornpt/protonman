@@ -42,14 +42,6 @@ func (p Profile) IsMutating() bool {
 // ParseProfile converts a raw string into a validated Profile.
 func ParseProfile(raw string) (Profile, error) {
 	p := Profile(strings.TrimSpace(strings.ToLower(raw)))
-	switch p {
-	case "pow", "worker":
-		p = ProfileStrength
-	case "int", "explorer", "reviewer":
-		p = ProfileAgility
-	case "dex":
-		p = ProfileIntelligence
-	}
 	if !p.Valid() {
 		return "", fmt.Errorf("unknown agent profile %q: supported profiles are %s", raw, ProfileList(", "))
 	}

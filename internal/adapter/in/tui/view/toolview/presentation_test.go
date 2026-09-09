@@ -103,8 +103,8 @@ func TestExtractToolTarget(t *testing.T) {
 			name:       "subagent spawn profile and task",
 			toolName:   "subagent",
 			kind:       "",
-			args:       `{"action":"spawn","profile":"int","task":"find all authentication handlers"}`,
-			wantTarget: "[int] find all authentication handlers",
+			args:       `{"action":"spawn","profile":"agility","task":"find all authentication handlers"}`,
+			wantTarget: "[agility] find all authentication handlers",
 			wantKind:   "",
 		},
 		{
@@ -401,8 +401,8 @@ func TestTodoToolPresentation(t *testing.T) {
 }
 
 func TestAgentToolPresentation(t *testing.T) {
-	target, kind := ExtractTarget("subagent", "", json.RawMessage(`{"action":"spawn","profile":"int","task":"inspect router behavior"}`))
-	if kind != tool.KindAgent || !strings.Contains(target, "[int]") {
+	target, kind := ExtractTarget("subagent", "", json.RawMessage(`{"action":"spawn","profile":"agility","task":"inspect router behavior"}`))
+	if kind != tool.KindAgent || !strings.Contains(target, "[agility]") {
 		t.Fatalf("target=%q kind=%q", target, kind)
 	}
 	if glyph := KindGlyph(kind, "subagent"); glyph != tuistyle.GlyphAgent {
