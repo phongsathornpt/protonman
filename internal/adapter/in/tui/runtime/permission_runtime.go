@@ -22,6 +22,8 @@ func (m *bubbleModel) openPermission(request permissionRequest) {
 		return
 	}
 	m.panes.bottom.push(&permissionPaneView{pending: request})
+	m.requestRelayout()
+	m.reconcileLayout()
 	if m.activity != "waiting for permission" {
 		m.pendingActivity = m.activity
 	}
@@ -82,6 +84,8 @@ func (m *bubbleModel) resolvePermission(option permissionOption) tea.Cmd {
 	}
 	view.pending.response <- permissionResponse{resolution: resolution}
 	m.panes.bottom.remove(permissionViewID)
+	m.requestRelayout()
+	m.reconcileLayout()
 	m.activity = m.pendingActivity
 	if m.activity == "" || m.activity == "waiting for permission" {
 		m.activity = "running tool"

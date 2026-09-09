@@ -2,9 +2,11 @@ package runtime
 
 import (
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"strings"
@@ -156,6 +158,26 @@ func TestPermissionCtrlCCancelsTurnInsteadOfDenying(t *testing.T) {
 	case got := <-response:
 		t.Fatalf("ctrl+c resolved permission unexpectedly: %+v", got)
 	default:
+	}
+}
+
+func TestPermissionPaneFitsNarrowResponsiveTerminals(t *testing.T) {
+	for _, size := range [][2]int{{24, 8}, {40, 12}, {60, 16}} {
+		m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+		m.resize(size[0], size[1])
+		command := "rm -rf /workspace/project/a/very/long/path/that/should/not/overflow/the/terminal"
+		m.openPermission(permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: command, Arguments: json.RawMessage(fmt.Sprintf(`{"command":%q}`, command))}, response: make(chan permissionResponse, 1)})
+		view := m.View().Content
+		if got := lipgloss.Width(view); got > size[0] {
+			t.Fatalf("permission frame width=%d exceeds %d at %dx%d", got, size[0], size[0], size[1])
+		}
+		if got := lipgloss.Height(view); got > size[1] {
+			t.Fatalf("permission frame height=%d exceeds %d at %dx%d", got, size[1], size[0], size[1])
+		}
+		plain := ansi.Strip(view)
+		if !strings.Contains(plain, "Permission") || !strings.Contains(plain, "Allow once") {
+			t.Fatalf("permission frame lost essential action at %dx%d: %q", size[0], size[1], plain)
+		}
 	}
 }
 
