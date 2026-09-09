@@ -19,7 +19,7 @@ func TestE2ESessionPersistenceAndRedaction(t *testing.T) {
 
 	// First run with -y (sets mode to always-approve) and calls read_file
 	firstRes := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call read_file {"path":"hello.txt"}`},
+		args: []string{"-y", "-p", `/call read {"path":"hello.txt"}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -63,7 +63,7 @@ func TestE2ESessionPersistenceAndRedaction(t *testing.T) {
 
 	// Second run: do NOT pass -y. Since session restored mode always-approve, this should succeed!
 	secondRes := runProton(t, runOptions{
-		args: []string{"-p", `/call read_file {"path":"hello.txt"}`},
+		args: []string{"-p", `/call read {"path":"hello.txt"}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -147,7 +147,7 @@ func TestE2ENewSessionByDefaultAndResume(t *testing.T) {
 
 	// 1. Resume in a workspace with no previous session should fail
 	noRes := runProton(t, runOptions{
-		args: []string{"--resume", "-p", `/call read_file {"path":"hello.txt"}`},
+		args: []string{"--resume", "-p", `/call read {"path":"hello.txt"}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -161,7 +161,7 @@ func TestE2ENewSessionByDefaultAndResume(t *testing.T) {
 
 	// 2. First normal run (starts clean new session)
 	res1 := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call read_file {"path":"hello.txt"}`},
+		args: []string{"-y", "-p", `/call read {"path":"hello.txt"}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -181,7 +181,7 @@ func TestE2ENewSessionByDefaultAndResume(t *testing.T) {
 
 	// 3. Second normal run without --resume: should create a SECOND new session file
 	res2 := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call read_file {"path":"hello.txt"}`},
+		args: []string{"-y", "-p", `/call read {"path":"hello.txt"}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -211,7 +211,7 @@ func TestE2ENewSessionByDefaultAndResume(t *testing.T) {
 
 	// 4. Third run with --resume: should resume the most recent session rather than creating a third
 	res3 := runProton(t, runOptions{
-		args: []string{"-y", "--resume", "-p", `/call read_file {"path":"hello.txt"}`},
+		args: []string{"-y", "--resume", "-p", `/call read {"path":"hello.txt"}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -230,7 +230,7 @@ func TestE2ENewSessionByDefaultAndResume(t *testing.T) {
 	// 5. Run with explicit --session flag
 	customSess := "custom-test-session"
 	res4 := runProton(t, runOptions{
-		args: []string{"-y", "-s", customSess, "-p", `/call read_file {"path":"hello.txt"}`},
+		args: []string{"-y", "-s", customSess, "-p", `/call read {"path":"hello.txt"}`},
 		dir:  ws,
 		env:  env,
 	})

@@ -87,7 +87,7 @@ func TestE2EAsyncSubagentWaitDoesNotCancel(t *testing.T) {
 	defer coord.Close()
 	service := agentLifecycleService(t, coord)
 
-	spawn := callAgentTool(t, service, "spawn", "delegate_task", map[string]any{"profile": "agility", "task": "inspect asynchronously"})
+	spawn := callAgentTool(t, service, "spawn", "subagent", map[string]any{"action": "spawn", "profile": "agility", "task": "inspect asynchronously"})
 	var handle struct {
 		AgentID string `json:"agent_id"`
 	}
@@ -95,7 +95,7 @@ func TestE2EAsyncSubagentWaitDoesNotCancel(t *testing.T) {
 		t.Fatalf("spawn=%s err=%v", spawn.Output, err)
 	}
 
-	wait := callAgentTool(t, service, "wait-1", "wait_agent", map[string]any{})
+	wait := callAgentTool(t, service, "wait-1", "subagent", map[string]any{"action": "wait"})
 	if !strings.Contains(string(wait.StructuredOutput), `"timed_out":true`) {
 		t.Fatalf("first wait=%s structured=%s", wait.Output, wait.StructuredOutput)
 	}
@@ -104,15 +104,15 @@ func TestE2EAsyncSubagentWaitDoesNotCancel(t *testing.T) {
 	}
 
 	close(release)
-	wait = callAgentTool(t, service, "wait-2", "wait_agent", map[string]any{"timeout_seconds": 10})
+	wait = callAgentTool(t, service, "wait-2", "subagent", map[string]any{"action": "wait", "timeout_seconds": 10})
 	if !strings.Contains(string(wait.StructuredOutput), `"timed_out":false`) || !strings.Contains(string(wait.StructuredOutput), "persistent result") || !strings.Contains(string(wait.StructuredOutput), handle.AgentID) {
 		t.Fatalf("completed wait=%s structured=%s", wait.Output, wait.StructuredOutput)
 	}
-	get := callAgentTool(t, service, "get", "get_agent", map[string]any{"agent_id": handle.AgentID})
+	get := callAgentTool(t, service, "get", "subagent", map[string]any{"action": "get", "agent_id": handle.AgentID})
 	if !strings.Contains(string(get.StructuredOutput), `"state":"completed"`) || !strings.Contains(string(get.StructuredOutput), "persistent result") {
 		t.Fatalf("get=%s", get.Output)
 	}
-	list := callAgentTool(t, service, "list", "list_agents", map[string]any{})
+	list := callAgentTool(t, service, "list", "subagent", map[string]any{"action": "list"})
 	if !strings.Contains(string(list.StructuredOutput), handle.AgentID) || !strings.Contains(string(list.StructuredOutput), `"state":"completed"`) {
 		t.Fatalf("list=%s", list.Output)
 	}
@@ -126,13 +126,13 @@ func TestE2EAsyncSubagentExplicitCancel(t *testing.T) {
 	)
 	defer coord.Close()
 	service := agentLifecycleService(t, coord)
-	spawn := callAgentTool(t, service, "spawn", "delegate_task", map[string]any{"profile": "agility", "task": "cancel me"})
+	spawn := callAgentTool(t, service, "spawn", "subagent", map[string]any{"action": "spawn", "profile": "agility", "task": "cancel me"})
 	var handle struct {
 		AgentID string `json:"agent_id"`
 	}
 	_ = json.Unmarshal(spawn.StructuredOutput, &handle)
-	callAgentTool(t, service, "cancel", "cancel_agent", map[string]any{"agent_id": handle.AgentID})
-	wait := callAgentTool(t, service, "wait", "wait_agent", map[string]any{"timeout_seconds": 10})
+	callAgentTool(t, service, "cancel", "subagent", map[string]any{"action": "cancel", "agent_id": handle.AgentID})
+	wait := callAgentTool(t, service, "wait", "subagent", map[string]any{"action": "wait", "timeout_seconds": 10})
 	if !strings.Contains(string(wait.StructuredOutput), `"agent_failed"`) || !strings.Contains(string(wait.StructuredOutput), handle.AgentID) {
 		t.Fatalf("wait after cancel=%s structured=%s", wait.Output, wait.StructuredOutput)
 	}
@@ -169,8 +169,8 @@ func TestE2EAgentWaitIsScopedToParentTurn(t *testing.T) {
 	ctxA := agent.WithParentID(context.Background(), "turn-a")
 	ctxB := agent.WithParentID(context.Background(), "turn-b")
 
-	spawnA := callAgentToolContext(t, ctxA, service, "spawn-a", "delegate_task", map[string]any{"profile": "agility", "task": "parent A"})
-	spawnB := callAgentToolContext(t, ctxB, service, "spawn-b", "delegate_task", map[string]any{"profile": "agility", "task": "parent B"})
+	spawnA := callAgentToolContext(t, ctxA, service, "spawn-a", "subagent", map[string]any{"action": "spawn", "profile": "agility", "task": "parent A"})
+	spawnB := callAgentToolContext(t, ctxB, service, "spawn-b", "subagent", map[string]any{"action": "spawn", "profile": "agility", "task": "parent B"})
 	if !strings.Contains(string(spawnA.StructuredOutput), `"agent_id"`) || !strings.Contains(string(spawnB.StructuredOutput), `"agent_id"`) {
 		t.Fatalf("spawn outputs missing agent ids: A=%s B=%s", spawnA.StructuredOutput, spawnB.StructuredOutput)
 	}
@@ -191,13 +191,13 @@ func TestE2EAgentWaitIsScopedToParentTurn(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
-	waitA := callAgentToolContext(t, ctxA, service, "wait-a-1", "wait_agent", map[string]any{})
+	waitA := callAgentToolContext(t, ctxA, service, "wait-a-1", "subagent", map[string]any{"action": "wait"})
 	if !strings.Contains(string(waitA.StructuredOutput), `"timed_out":true`) || strings.Contains(string(waitA.StructuredOutput), "parent B done") {
 		t.Fatalf("unrelated child woke parent A: %s", waitA.StructuredOutput)
 	}
 
 	close(releaseA)
-	waitA = callAgentToolContext(t, ctxA, service, "wait-a-2", "wait_agent", map[string]any{})
+	waitA = callAgentToolContext(t, ctxA, service, "wait-a-2", "subagent", map[string]any{"action": "wait"})
 	if !strings.Contains(string(waitA.StructuredOutput), `"timed_out":false`) || !strings.Contains(string(waitA.StructuredOutput), "parent A done") || strings.Contains(string(waitA.StructuredOutput), "parent B done") {
 		t.Fatalf("parent A completion wait=%s", waitA.StructuredOutput)
 	}

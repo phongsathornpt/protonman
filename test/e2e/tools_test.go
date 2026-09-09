@@ -14,7 +14,7 @@ func TestE2EFileAndProcessTools(t *testing.T) {
 
 	// 1. read_file
 	readRes := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call read_file {"path":"hello.txt"}`},
+		args: []string{"-y", "-p", `/call read {"path":"hello.txt"}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -68,7 +68,7 @@ func TestE2EFileAndProcessTools(t *testing.T) {
 
 	// 5. list_dir
 	listRes := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call list_dir {"path":"."}`},
+		args: []string{"-y", "-p", `/call ls {"path":"."}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -88,7 +88,7 @@ func TestE2EFileAndProcessTools(t *testing.T) {
 
 	// 7. git_status
 	gitRes := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call git_status {}`},
+		args: []string{"-y", "-p", `/call git {"action":"status"}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -139,7 +139,7 @@ func TestE2EWorkspaceEscapeRejection(t *testing.T) {
 	home := newTestHome(t)
 
 	res := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call read_file {"path":"../../../../etc/passwd"}`},
+		args: []string{"-y", "-p", `/call read {"path":"../../../../etc/passwd"}`},
 		dir:  ws,
 		env:  []string{"PROTONMAN_HOME=" + home},
 	})
@@ -176,7 +176,7 @@ protected_paths = [".env", "secrets/*"]
 
 	// With PROTON_TRUST_PROJECT=1, read_file on .env should fail with protected_path
 	res := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call read_file {"path":".env"}`},
+		args: []string{"-y", "-p", `/call read {"path":".env"}`},
 		dir:  ws,
 		env: []string{
 			"PROTONMAN_HOME=" + home,

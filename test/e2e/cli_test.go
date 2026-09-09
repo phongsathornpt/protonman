@@ -62,7 +62,7 @@ func TestCLIHeadlessOutputFormats(t *testing.T) {
 
 	// 1. Plain Text output (default)
 	textRes := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call read_file {"path":"hello.txt"}`},
+		args: []string{"-y", "-p", `/call read {"path":"hello.txt"}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -75,7 +75,7 @@ func TestCLIHeadlessOutputFormats(t *testing.T) {
 
 	// 2. JSON output
 	jsonRes := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call read_file {"path":"hello.txt"}`, "--output", "json"},
+		args: []string{"-y", "-p", `/call read {"path":"hello.txt"}`, "--output", "json"},
 		dir:  ws,
 		env:  env,
 	})
@@ -121,7 +121,7 @@ func TestCLIHeadlessPromptFromStdin(t *testing.T) {
 	res := runProton(t, runOptions{
 		args:  []string{"--headless", "-y"},
 		dir:   ws,
-		stdin: `/call read_file {"path":"hello.txt"}` + "\n",
+		stdin: `/call read {"path":"hello.txt"}` + "\n",
 		env:   []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode != 0 {
@@ -139,7 +139,7 @@ func TestCLIModeFlags(t *testing.T) {
 
 	// Mode deny should reject call
 	denyRes := runProton(t, runOptions{
-		args: []string{"--permission-mode", "deny", "-p", `/call read_file {"path":"hello.txt"}`},
+		args: []string{"--permission-mode", "deny", "-p", `/call read {"path":"hello.txt"}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -153,7 +153,7 @@ func TestCLIModeFlags(t *testing.T) {
 
 	// Mode always-approve should succeed
 	allowRes := runProton(t, runOptions{
-		args: []string{"--permission-mode", "always-approve", "-p", `/call read_file {"path":"hello.txt"}`},
+		args: []string{"--permission-mode", "always-approve", "-p", `/call read {"path":"hello.txt"}`},
 		dir:  ws,
 		env:  env,
 	})

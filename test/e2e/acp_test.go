@@ -107,7 +107,7 @@ func TestE2EACPServerSessionFlow(t *testing.T) {
 
 	// 3. Send session/prompt calling read_file
 	promptReq := fmt.Sprintf(
-		`{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":%q,"prompt":[{"type":"text","text":"/call read_file {\"path\":\"hello.txt\"}"}]}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":%q,"prompt":[{"type":"text","text":"/call read {\"path\":\"hello.txt\"}"}]}}`,
 		sessionID,
 	)
 	send(promptReq)

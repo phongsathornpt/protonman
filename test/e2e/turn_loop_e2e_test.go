@@ -72,9 +72,9 @@ func TestE2ETurnLoopMultiRoundChain(t *testing.T) {
 	server.SetupWorkspaceConfig(t, home)
 
 	// Round 1: list_dir
-	server.AddToolCallResponse("call_list_1", "list_dir", `{"path":"."}`)
+	server.AddToolCallResponse("call_list_1", "ls", `{"path":"."}`)
 	// Round 2: read_file
-	server.AddToolCallResponse("call_read_2", "read_file", `{"path":"hello.txt"}`)
+	server.AddToolCallResponse("call_read_2", "read", `{"path":"hello.txt"}`)
 	// Round 3: final answer
 	server.AddTextResponse("The file contains Hello Coding E2E.")
 
@@ -168,8 +168,8 @@ func TestE2ETurnLoopForcesSynthesisAfterRepeatedRead(t *testing.T) {
 
 	server := newMockLLMServer(t)
 	server.SetupWorkspaceConfig(t, home)
-	server.AddToolCallResponse("call_read_loop_1", "read_file", `{"path":"hello.txt"}`)
-	server.AddToolCallResponse("call_read_loop_2", "read_file", `{"path":"hello.txt"}`)
+	server.AddToolCallResponse("call_read_loop_1", "read", `{"path":"hello.txt"}`)
+	server.AddToolCallResponse("call_read_loop_2", "read", `{"path":"hello.txt"}`)
 	server.AddTextResponse("I already have enough information from the repeated read.")
 
 	res := runProton(t, runOptions{
@@ -205,9 +205,9 @@ func TestE2ETurnLoopIgnoresRepeatedToolAfterLoopDetected(t *testing.T) {
 
 	server := newMockLLMServer(t)
 	server.SetupWorkspaceConfig(t, home)
-	server.AddToolCallResponse("call_read_ignore_1", "read_file", `{"path":"hello.txt"}`)
-	server.AddToolCallResponse("call_read_ignore_2", "read_file", `{"path":"hello.txt"}`)
-	server.AddToolCallResponse("call_read_ignore_3", "read_file", `{"path":"hello.txt"}`)
+	server.AddToolCallResponse("call_read_ignore_1", "read", `{"path":"hello.txt"}`)
+	server.AddToolCallResponse("call_read_ignore_2", "read", `{"path":"hello.txt"}`)
+	server.AddToolCallResponse("call_read_ignore_3", "read", `{"path":"hello.txt"}`)
 
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Keep reading hello.txt"},
@@ -235,7 +235,7 @@ func TestE2EResumeCompactsHistoricalToolProtocol(t *testing.T) {
 
 	server := newMockLLMServer(t)
 	server.SetupWorkspaceConfig(t, home)
-	server.AddToolCallResponse("call_resume_read", "read_file", `{"path":"hello.txt"}`)
+	server.AddToolCallResponse("call_resume_read", "read", `{"path":"hello.txt"}`)
 	server.AddTextResponse("I inspected hello.txt.")
 
 	res1 := runProton(t, runOptions{

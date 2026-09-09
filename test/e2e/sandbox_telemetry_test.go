@@ -15,7 +15,7 @@ func TestE2ESandboxFlagNetworkRestriction(t *testing.T) {
 		args: []string{
 			"--sandbox", "strict",
 			"-y",
-			"-p", `/call web_fetch {"url":"http://example.com"}`,
+			"-p", `/call web {"action":"fetch","url":"http://example.com"}`,
 		},
 		dir: ws,
 		env: []string{"PROTONMAN_HOME=" + home},
@@ -56,7 +56,7 @@ func TestE2ETelemetryEmissionAndRedaction(t *testing.T) {
 	home := newTestHome(t)
 
 	res := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call read_file {"path":"hello.txt"}`},
+		args: []string{"-y", "-p", `/call read {"path":"hello.txt"}`},
 		dir:  ws,
 		env: []string{
 			"PROTONMAN_HOME=" + home,

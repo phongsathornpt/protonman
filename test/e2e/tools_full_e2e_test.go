@@ -14,7 +14,7 @@ func TestE2EFullBuiltinTools(t *testing.T) {
 
 	// 1. read_file byte pagination returns a usable continuation offset.
 	res := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call read_file {"path":"hello.txt","limit":17}`},
+		args: []string{"-y", "-p", `/call read {"path":"hello.txt","limit":17}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -26,7 +26,7 @@ func TestE2EFullBuiltinTools(t *testing.T) {
 	}
 
 	res = runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call read_file {"path":"hello.txt","offset":17,"limit":7}`},
+		args: []string{"-y", "-p", `/call read {"path":"hello.txt","offset":17,"limit":7}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -36,7 +36,7 @@ func TestE2EFullBuiltinTools(t *testing.T) {
 
 	// 2. read_file non-existent file
 	res = runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call read_file {"path":"non_existent.txt"}`},
+		args: []string{"-y", "-p", `/call read {"path":"non_existent.txt"}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -90,7 +90,7 @@ func TestE2EFullBuiltinTools(t *testing.T) {
 
 	// 7. list_dir nested directory
 	res = runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call list_dir {"path":"nested/deep"}`},
+		args: []string{"-y", "-p", `/call ls {"path":"nested/deep"}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -105,7 +105,7 @@ func TestE2EWebFetchTool(t *testing.T) {
 
 	// web_fetch blocks loopback / internal IPs for SSRF defense
 	res := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call web_fetch {"url":"http://127.0.0.1:8080/internal-data"}`},
+		args: []string{"-y", "-p", `/call web {"action":"fetch","url":"http://127.0.0.1:8080/internal-data"}`},
 		dir:  ws,
 		env:  []string{"PROTONMAN_HOME=" + home},
 	})
