@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
@@ -22,6 +24,10 @@ const (
 	paneActionPermissionResolve
 	paneActionScrollLines
 	paneActionScrollPage
+	paneActionProviderDelete
+	paneActionProviderActivate
+	paneActionProviderModels
+	paneActionProviderEdit
 )
 
 type paneAction struct {
@@ -36,6 +42,7 @@ type paneAction struct {
 	permission   permissionOption
 	scrollLines  int
 	key          tea.KeyPressMsg
+	providerItem providerSelectItem
 }
 
 type paneKeyResult struct {
@@ -89,6 +96,7 @@ func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
 		}
 	case paneActionOpenProviderEditor:
 		m.panes.bottom.remove(modelSelectViewID)
+		m.panes.bottom.remove(providerSelectViewID)
 		if !m.panes.bottom.has(providerViewID) {
 			m.pushProviderPane(newProviderPaneView())
 		}
@@ -100,6 +108,47 @@ func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
 		m.scrollConversationLines(action.scrollLines)
 	case paneActionScrollPage:
 		return m.updateConversationViewport(action.key)
+	case paneActionProviderDelete:
+		m.panes.bottom.remove(providerSelectViewID)
+		return m.beginProviderDelete(action.providerItem.name)
+	case paneActionProviderActivate:
+		m.panes.bottom.remove(providerSelectViewID)
+		return m.beginProviderSelect(action.providerItem.name)
+	case paneActionProviderModels:
+		m.panes.bottom.remove(providerSelectViewID)
+		if !m.panes.bottom.has(modelSelectViewID) {
+			mv := newModelSelectPaneView(m)
+			for i, name := range mv.providerNames {
+				if strings.EqualFold(name, action.providerItem.name) {
+					mv.providerIndex = i
+					break
+				}
+			}
+			m.panes.bottom.push(mv)
+			if _, ok := m.providers[strings.ToLower(action.providerItem.name)]; ok {
+				return mv.loadProvider(m, false)
+			}
+		}
+	case paneActionProviderEdit:
+		m.panes.bottom.remove(providerSelectViewID)
+		if !m.panes.bottom.has(providerViewID) {
+			item := action.providerItem
+			if item.isConfigured {
+				if cfg, ok := m.providers[strings.ToLower(item.name)]; ok {
+					pv := newProviderPaneViewWithConfig(cfg)
+					pv.activateOnSave = item.isActive
+					m.pushProviderPane(pv)
+				} else {
+					pv := newProviderPaneViewWithPreset(item.name)
+					pv.activateOnSave = item.isActive
+					m.pushProviderPane(pv)
+				}
+			} else if item.kind == providerItemPreset {
+				m.pushProviderPane(newProviderPaneViewWithPreset(item.presetID))
+			} else {
+				m.pushProviderPane(newProviderPaneView())
+			}
+		}
 	}
 	return nil
 }

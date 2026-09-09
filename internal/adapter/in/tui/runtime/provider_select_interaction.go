@@ -1,14 +1,12 @@
 package runtime
 
 import (
-	"strings"
-
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/app"
 )
 
-func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
+func (v *providerSelectPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	v.initPicker()
 	if v.deleteConfirm {
 		item, ok := v.selectedItem()
@@ -19,7 +17,7 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 	if v.picker.SettingFilter() {
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
-		return true, cmd
+		return paneKeyResult{handled: true, cmd: cmd}
 	}
 	if v.deleteConfirm {
 		switch message.String() {
@@ -27,111 +25,59 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 			item, ok := v.selectedItem()
 			v.deleteConfirm = false
 			if !ok {
-				return true, nil
+				return paneKeyResult{handled: true}
 			}
-			m.panes.bottom.remove(providerSelectViewID)
-			return true, m.beginProviderDelete(item.name)
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionProviderDelete, providerItem: item}}
 		case "esc":
 			v.deleteConfirm = false
-			return true, nil
+			return paneKeyResult{handled: true}
 		case "ctrl+c":
 			v.deleteConfirm = false
-			m.panes.bottom.remove(providerSelectViewID)
-			return true, nil
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: providerSelectViewID}}
 		default:
-			return !m.matchesGlobalShortcut(message), nil
+			return paneKeyResult{handled: true, allowGlobal: true}
 		}
 	}
 	switch message.String() {
 	case "esc", "q":
-		m.panes.bottom.remove(providerSelectViewID)
-		return true, nil
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: providerSelectViewID}}
 	case "a", "c":
-		m.panes.bottom.remove(providerSelectViewID)
-		if !m.panes.bottom.has(providerViewID) {
-			m.pushProviderPane(newProviderPaneView())
-		}
-		return true, nil
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionOpenProviderEditor}}
 	case "m":
-		if item, ok := v.selectedItem(); ok {
-			if item.isConfigured {
-				m.panes.bottom.remove(providerSelectViewID)
-				if !m.panes.bottom.has(modelSelectViewID) {
-					mv := newModelSelectPaneView(m)
-					for i, name := range mv.providerNames {
-						if strings.EqualFold(name, item.name) {
-							mv.providerIndex = i
-							break
-						}
-					}
-					m.panes.bottom.push(mv)
-					if _, ok := m.providers[strings.ToLower(item.name)]; ok {
-						return true, mv.loadProvider(m, false)
-					}
-				}
-				return true, nil
-			}
+		if item, ok := v.selectedItem(); ok && item.isConfigured {
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionProviderModels, providerItem: item}}
 		}
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "e":
 		if item, ok := v.selectedItem(); ok {
-			m.panes.bottom.remove(providerSelectViewID)
-			if !m.panes.bottom.has(providerViewID) {
-				if item.isConfigured {
-					if cfg, ok := m.providers[strings.ToLower(item.name)]; ok {
-						pv := newProviderPaneViewWithConfig(cfg)
-						pv.activateOnSave = item.isActive
-						m.pushProviderPane(pv)
-					} else {
-						pv := newProviderPaneViewWithPreset(item.name)
-						pv.activateOnSave = item.isActive
-						m.pushProviderPane(pv)
-					}
-				} else if item.kind == providerItemPreset {
-					m.pushProviderPane(newProviderPaneViewWithPreset(item.presetID))
-				} else {
-					m.pushProviderPane(newProviderPaneView())
-				}
-			}
-			return true, nil
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionProviderEdit, providerItem: item}}
 		}
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "d":
-		if item, ok := v.selectedItem(); ok {
-			if item.isConfigured {
-				v.deleteConfirm = true
-			}
+		if item, ok := v.selectedItem(); ok && item.isConfigured {
+			v.deleteConfirm = true
 		}
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "/":
 		v.picker.SetFilterState(list.Filtering)
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "up", "k", "down", "j", "pgup", "pgdown", "home", "g", "end", "G":
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
-		return true, cmd
+		return paneKeyResult{handled: true, cmd: cmd}
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "enter":
-		if item, ok := v.selectedItem(); ok {
-			m.panes.bottom.remove(providerSelectViewID)
-			if item.isConfigured {
-				return true, m.beginProviderSelect(item.name)
-			}
-			if item.kind == providerItemPreset {
-				if !m.panes.bottom.has(providerViewID) {
-					m.pushProviderPane(newProviderPaneViewWithPreset(item.presetID))
-				}
-				return true, nil
-			}
-			if !m.panes.bottom.has(providerViewID) {
-				m.pushProviderPane(newProviderPaneView())
-			}
-			return true, nil
+		item, ok := v.selectedItem()
+		if !ok {
+			return paneKeyResult{handled: true}
 		}
-		return true, nil
+		if item.isConfigured {
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionProviderActivate, providerItem: item}}
+		}
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionProviderEdit, providerItem: item}}
 	default:
-		return false, nil
+		return paneKeyResult{}
 	}
 }
 
