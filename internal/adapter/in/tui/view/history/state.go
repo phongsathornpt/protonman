@@ -163,7 +163,6 @@ type HistoryState struct {
 	cachedCells       []renderedCellIndex
 	cachedRenderText  string
 	renderTextValid   bool
-	cachedRaw         []string
 	cachedRawText     string
 	rawTextValid      bool
 	cacheValid        bool
@@ -582,7 +581,6 @@ func (s *HistoryState) Reset() {
 	s.cachedRenderText = ""
 	s.renderTextValid = false
 	s.altRender = nil
-	s.cachedRaw = nil
 	s.cachedRawText = ""
 	s.rawTextValid = false
 	s.committedLines = 0
@@ -601,7 +599,6 @@ func (s *HistoryState) buildCommittedCache() {
 	render := make([]string, 0, len(s.committed)*4)
 	anchors := make([]ScrollAnchor, 0, len(s.committed)*4)
 	cells := make([]renderedCellIndex, 0, len(s.committed))
-	raw := make([]string, 0, len(s.committed)*2)
 	committedLines := 0
 	for index, cell := range s.committed {
 		if index > 0 {
@@ -616,7 +613,6 @@ func (s *HistoryState) buildCommittedCache() {
 		}
 		render = append(render, cellLines...)
 		cells = append(cells, renderedCellIndex{cell: cell, startLine: startLine, lineCount: len(cellLines)})
-		raw = append(raw, cell.RawLines()...)
 	}
 	s.committedLines = committedLines
 	s.cachedRender = render
@@ -624,7 +620,6 @@ func (s *HistoryState) buildCommittedCache() {
 	s.cachedCells = cells
 	s.cachedRenderText = ""
 	s.renderTextValid = false
-	s.cachedRaw = raw
 	s.cachedRawText = ""
 	s.rawTextValid = false
 	s.cachedWidth = s.renderWidth
@@ -835,7 +830,18 @@ func (s *HistoryState) committedRawText() string {
 	if s.rawTextValid {
 		return s.cachedRawText
 	}
-	s.cachedRawText = strings.Join(s.cachedRaw, "\n")
+	var out strings.Builder
+	first := true
+	for _, cell := range s.committed {
+		for _, line := range cell.RawLines() {
+			if !first {
+				out.WriteByte('\n')
+			}
+			out.WriteString(line)
+			first = false
+		}
+	}
+	s.cachedRawText = out.String()
 	s.rawTextValid = true
 	return s.cachedRawText
 }
