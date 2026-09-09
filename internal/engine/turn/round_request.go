@@ -24,7 +24,7 @@ func resolvedModelStateFor(languageModel sdk.LanguageModel) resolvedModelState {
 }
 
 func (l *Loop) prepareTurnInput(ctx context.Context, messages []model.Message) ([]model.Message, []string, string) {
-	history := model.CloneMessages(messages)
+	history := append([]model.Message(nil), messages...)
 	var promptExtras []string
 	if l.promptSpec != nil {
 		filtered := make([]model.Message, 0, len(history))
@@ -85,7 +85,7 @@ func (l *Loop) prepareRoundRequest(
 	resolved resolvedModelState,
 ) (sdk.Request, toolDispatchState, bool, error) {
 	var tools []tool.Definition
-	reqMessages := model.CloneMessages(history)
+	reqMessages := append([]model.Message(nil), history...)
 	dispatch := toolDispatchState{reason: toolDispatchDisabledNoTools}
 
 	if forceNoProgressSynthesis {

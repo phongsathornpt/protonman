@@ -674,7 +674,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				Message:      assistant,
 				Rounds:       round,
 				Verification: verification,
-				Messages:     model.CloneMessages(turnMessages),
+				Messages:     turnMessages,
 			}
 			if err := emit(ctx, sink, Event{
 				Kind:    EventCompleted,
