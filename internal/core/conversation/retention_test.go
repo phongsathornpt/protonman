@@ -1,6 +1,7 @@
 package conversation
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -94,5 +95,40 @@ func TestRetainDoesNotSplitRecentToolGroupAtWindowBoundary(t *testing.T) {
 	}
 	if got[1].Role != sdk.RoleAssistant || len(got[1].ToolCalls) != 1 || got[2].Role != sdk.RoleTool {
 		t.Fatalf("recent tool protocol group was compacted or split: %#v", got)
+	}
+}
+
+func BenchmarkRetainLongToolHeavyConversation(b *testing.B) {
+	messages := make([]sdk.Message, 0, 800)
+	for i := 0; i < 200; i++ {
+		id := fmt.Sprintf("call-%d", i)
+		messages = append(messages,
+			sdk.Message{Role: sdk.RoleUser, Content: fmt.Sprintf("question-%d", i)},
+			sdk.Message{Role: sdk.RoleAssistant, ToolCalls: []sdk.ToolCall{{ID: id, Name: "read", Arguments: []byte(`{"path":"large.log"}`)}}},
+			sdk.Message{Role: sdk.RoleTool, ToolCallID: id, ToolName: "read", Content: `{"call_id":"` + id + `","tool_name":"read","output":"` + strings.Repeat("x", 8*1024) + `"}`},
+			sdk.Message{Role: sdk.RoleAssistant, Content: "done"},
+		)
+	}
+	policy := DefaultRetentionPolicy()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		retained := Retain(messages, policy)
+		if len(retained) > policy.MaxMessages {
+			b.Fatalf("retained %d messages > %d", len(retained), policy.MaxMessages)
+		}
+	}
+}
+
+func BenchmarkRetainRecentConversation(b *testing.B) {
+	messages := make([]sdk.Message, 0, 64)
+	for i := 0; i < 64; i++ {
+		messages = append(messages, sdk.Message{Role: sdk.RoleUser, Content: fmt.Sprintf("message-%d", i)})
+	}
+	policy := DefaultRetentionPolicy()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = Retain(messages, policy)
 	}
 }
