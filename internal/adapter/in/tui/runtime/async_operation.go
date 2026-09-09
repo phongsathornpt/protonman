@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"strings"
 	"sync/atomic"
 
@@ -10,6 +11,8 @@ import (
 type asyncOperationID uint64
 
 var asyncOperationSequence atomic.Uint64
+
+var errMissingRuntimeContext = errors.New("tui async operation requires runtime context")
 
 func nextAsyncOperationID() asyncOperationID {
 	return asyncOperationID(asyncOperationSequence.Add(1))

@@ -1083,3 +1083,15 @@ func TestStaleModelSelectionDoesNotMutateReopenedPicker(t *testing.T) {
 		t.Fatal("stale model selection closed reopened picker")
 	}
 }
+
+func TestModelFetchRequiresRuntimeContext(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	v := newModelSelectPaneView(m)
+	cmd := v.beginFetch(nil, "protonman", config.ProviderConfig{Name: "protonman"})
+	if cmd != nil {
+		t.Fatalf("nil-context model fetch command = %v, want nil", cmd)
+	}
+	if v.err == nil || !strings.Contains(v.err.Error(), "runtime context") {
+		t.Fatalf("nil-context model fetch error = %v", v.err)
+	}
+}

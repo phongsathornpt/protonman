@@ -52,7 +52,10 @@ func (v *providerPaneView) beginFetch(parent context.Context, timeouts ...time.D
 		v.fetchCancel()
 	}
 	if parent == nil {
-		parent = context.Background()
+		v.fetchRequestID = 0
+		v.state = providerStateError
+		v.errorMessage = errMissingRuntimeContext.Error()
+		return nil
 	}
 	ctx, cancel := context.WithCancel(parent)
 	v.fetchCancel = cancel

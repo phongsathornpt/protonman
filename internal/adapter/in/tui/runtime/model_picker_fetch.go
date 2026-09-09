@@ -18,7 +18,10 @@ func (v *modelSelectPaneView) beginFetch(parent context.Context, providerName st
 	}
 	v.cancelFetch()
 	if parent == nil {
-		parent = context.Background()
+		v.fetchRequestID = 0
+		v.loading = false
+		v.err = errMissingRuntimeContext
+		return nil
 	}
 	ctx, cancel := context.WithCancel(parent)
 	v.fetchCancel = cancel

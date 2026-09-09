@@ -1116,3 +1116,13 @@ func TestProviderActivationFailureDoesNotMutateRuntimeState(t *testing.T) {
 		t.Fatalf("failed activation mutated runtime: provider=%q model=%q", m.activeProvider, m.activeModel)
 	}
 }
+
+func TestProviderFetchRequiresRuntimeContext(t *testing.T) {
+	v := newProviderPaneView()
+	if cmd := v.beginFetch(nil); cmd != nil {
+		t.Fatalf("nil-context fetch command = %v, want nil", cmd)
+	}
+	if v.state != providerStateError || !strings.Contains(v.errorMessage, "runtime context") {
+		t.Fatalf("nil-context fetch state=%v error=%q", v.state, v.errorMessage)
+	}
+}

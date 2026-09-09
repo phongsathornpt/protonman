@@ -453,3 +453,65 @@ func TestBubbleModelPermissionModalProjectOptionHiddenWhenUntrusted(t *testing.T
 		t.Fatal("permission modal should remain open after invalid shortcut 'p'")
 	}
 }
+
+func TestPermissionBridgeConcurrentPrompts(t *testing.T) {
+	bridge := newPermissionBridge()
+	defer bridge.Close()
+
+	type result struct {
+		callID string
+		err    error
+	}
+	results := make(chan result, 2)
+	for _, id := range []string{"a", "b"} {
+		id := id
+		go func() {
+			_, err := bridge.Prompt(context.Background(), permission.Request{CallID: id, ToolName: "read", ToolKind: permission.ToolRead})
+			results <- result{callID: id, err: err}
+		}()
+	}
+
+	seen := map[string]bool{}
+	for range 2 {
+		msg := bridge.Next()()
+		pending, ok := msg.(permissionRequestMsg)
+		if !ok {
+			t.Fatalf("bridge message = %T, want permissionRequestMsg", msg)
+		}
+		seen[pending.request.request.CallID] = true
+		pending.request.response <- permissionResponse{resolution: permission.Resolution{Action: permission.ActionAllow}}
+	}
+	if !seen["a"] || !seen["b"] {
+		t.Fatalf("concurrent prompts lost request: %#v", seen)
+	}
+	for range 2 {
+		if got := <-results; got.err != nil {
+			t.Fatalf("prompt %s failed: %v", got.callID, got.err)
+		}
+	}
+}
+
+func TestPermissionBridgeCloseReleasesPendingPrompt(t *testing.T) {
+	bridge := newPermissionBridge()
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := bridge.Prompt(context.Background(), permission.Request{CallID: "pending", ToolName: "read", ToolKind: permission.ToolRead})
+		errCh <- err
+	}()
+	msg := bridge.Next()()
+	if _, ok := msg.(permissionRequestMsg); !ok {
+		t.Fatalf("bridge message = %T, want permissionRequestMsg", msg)
+	}
+	bridge.Close()
+	select {
+	case err := <-errCh:
+		if err == nil || !strings.Contains(err.Error(), "closed") {
+			t.Fatalf("pending prompt error = %v, want closed error", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("pending permission prompt did not unblock after Close")
+	}
+	if msg := bridge.Next()(); msg != (permissionBridgeClosedMsg{}) {
+		t.Fatalf("Next after close = %T, want permissionBridgeClosedMsg", msg)
+	}
+}
