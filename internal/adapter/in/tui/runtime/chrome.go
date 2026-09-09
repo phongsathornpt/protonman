@@ -19,7 +19,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
-	"sort"
 	"strings"
 	"time"
 )
@@ -567,105 +566,6 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 
 func formatElapsed(duration time.Duration) string {
 	return pane.FormatElapsed(duration)
-}
-
-func (m bubbleModel) agentsView() string {
-	snapshot := m.agentSnapshot
-	if m.busy && m.activeTurnOwner != "" {
-		snapshot = m.turnAgentSnapshot()
-	}
-	live := make([]agent.AgentStatus, 0, len(snapshot))
-	for _, st := range snapshot {
-		if !st.State.Terminal() {
-			live = append(live, st)
-		}
-	}
-	snapshot = live
-	if layoutModeForHeight(m.height) == layoutTiny || len(snapshot) == 0 {
-		return ""
-	}
-	queued, running, canceling := 0, 0, 0
-	for _, st := range snapshot {
-		switch st.State {
-		case agent.StateQueued:
-			queued++
-		case agent.StateRunning:
-			running++
-		case agent.StateCanceling:
-			canceling++
-		}
-	}
-	active := queued + running + canceling
-	summary := fmt.Sprintf("Agents %d active", active)
-	if running > 0 {
-		summary += fmt.Sprintf(" · %d running", running)
-	}
-	if queued > 0 {
-		summary += fmt.Sprintf(" · %d queued", queued)
-	}
-	if canceling > 0 {
-		summary += fmt.Sprintf(" · %d canceling", canceling)
-	}
-	mode := layoutModeForHeight(m.height)
-	visible := append([]agent.AgentStatus(nil), snapshot...)
-	sort.SliceStable(visible, func(i, j int) bool {
-		return agentDisplayPriority(visible[i].State) < agentDisplayPriority(visible[j].State)
-	})
-	limit := 3
-	if mode == layoutCompact {
-		limit = 1
-	}
-	if len(visible) > limit {
-		visible = visible[:limit]
-	}
-	lines := []string{brandStyle.Render(summary)}
-	for _, st := range visible {
-		stateGlyph := glyphAgent
-		style := mutedStyle
-		switch st.State {
-		case agent.StateCompleted:
-			stateGlyph = glyphToolSuccess
-			style = successStyle
-		case agent.StateFailed, agent.StateCanceled:
-			stateGlyph = glyphToolError
-			style = errorStyle
-		case agent.StateCanceling:
-			style = warningStyle
-		}
-		elapsed := formatElapsed(agentDisplayDuration(st, time.Now()))
-		task := strings.TrimSpace(st.Task)
-		if task == "" {
-			task = st.ID
-		}
-		identity := agentDisplayProfile(st)
-		line := fmt.Sprintf("  %s%s · %s · %s", stateGlyph, identity, elapsed, truncateWithEllipsis(task, maxInt(12, m.width-30)))
-		lines = append(lines, style.Render(truncateWithEllipsis(line, maxInt(1, m.width-2))))
-		detail := ""
-		if st.State.Terminal() {
-			detail = strings.TrimSpace(st.Reason)
-		} else {
-			detail = m.agentActivity[st.ID].String()
-		}
-		if detail != "" && mode == layoutNormal {
-			lines = append(lines, mutedStyle.Render("    "+truncateWithEllipsis(detail, maxInt(8, m.width-6))))
-		}
-	}
-	if more := len(snapshot) - len(visible); more > 0 {
-		lines = append(lines, mutedStyle.Render(fmt.Sprintf("  … %d older", more)))
-	}
-	return strings.Join(lines, "\n")
-}
-
-func agentDisplayProfile(st agent.AgentStatus) string {
-	return pane.AgentDisplayProfile(st)
-}
-
-func agentDisplayPriority(state agent.State) int {
-	return pane.AgentDisplayPriority(state)
-}
-
-func agentDisplayDuration(st agent.AgentStatus, now time.Time) time.Duration {
-	return pane.AgentDisplayDuration(st, now)
 }
 
 func (m *bubbleModel) promptView() string {

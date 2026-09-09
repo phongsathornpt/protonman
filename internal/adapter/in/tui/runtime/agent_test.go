@@ -58,33 +58,6 @@ func (r blockingAgentViewRunner) Run(ctx context.Context, _ []model.Message, _ t
 	}
 }
 
-func TestAgentsViewShowsActiveAndRespectsLayout(t *testing.T) {
-	release := make(chan struct{})
-	coord := agent.NewCoordinator(nil, nil, nil, nil, agent.WithRunnerFactory(func(agent.Profile, *toolcall.Service) (turn.Runner, error) {
-		return blockingAgentViewRunner{release: release}, nil
-	}))
-	defer coord.Close()
-	if _, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileAgility, Task: "inspect router"}); err != nil {
-		t.Fatal(err)
-	}
-	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.agents = app.NewAgents(coord)
-	m.agentSnapshot = coord.List()
-	m.resize(80, 24)
-	if got := m.agentsView(); !strings.Contains(got, "Agents 1 active") || !strings.Contains(got, "inspect router") {
-		t.Fatalf("agents view=%q", got)
-	}
-	m.resize(60, 18)
-	if got := m.agentsView(); !strings.Contains(got, "Agents 1 active") || !strings.Contains(got, "inspect router") {
-		t.Fatalf("compact agents view=%q", got)
-	}
-	m.resize(24, 12)
-	if got := m.agentsView(); got != "" {
-		t.Fatalf("tiny agents view=%q", got)
-	}
-	close(release)
-}
-
 func TestDisabledSubagentsAppearInFooterAndAgentsPane(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.resize(100, 30)
@@ -133,29 +106,6 @@ func TestAgentLifecycleMessageRefreshesSnapshot(t *testing.T) {
 	close(release)
 }
 
-func TestAgentsViewPrioritizesActiveAndShowsCanceling(t *testing.T) {
-	now := time.Now()
-	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.agentSnapshot = []agent.AgentStatus{{ID: "done-1", Task: "old result", State: agent.StateCompleted, StartedAt: now.Add(-20 * time.Second), FinishedAt: now.Add(-15 * time.Second)}, {ID: "done-2", Task: "new result", State: agent.StateCompleted, StartedAt: now.Add(-10 * time.Second), FinishedAt: now.Add(-9 * time.Second)}, {ID: "run-1", Profile: agent.ProfileAgility, Task: "inspect active", State: agent.StateRunning, StartedAt: now.Add(-3 * time.Second)}, {ID: "cancel-1", Profile: agent.ProfileIntelligence, Task: "stop active", State: agent.StateCanceling, StartedAt: now.Add(-4 * time.Second)}}
-	m.resize(100, 30)
-	got := m.agentsView()
-	if !strings.Contains(got, "Agents 2 active") || !strings.Contains(got, "1 running") || !strings.Contains(got, "1 canceling") {
-		t.Fatalf("agents view summary=%q", got)
-	}
-	if !strings.Contains(got, "AGI") || !strings.Contains(got, "INT") || strings.Contains(got, "run-1") || strings.Contains(got, "cancel-1") {
-		t.Fatalf("agent identities were not normalized: %q", got)
-	}
-}
-
-func TestAgentDisplayDurationUsesExecutionDurationForTerminalState(t *testing.T) {
-	started := time.Unix(100, 0)
-	finished := started.Add(7 * time.Second)
-	st := agent.AgentStatus{State: agent.StateCompleted, StartedAt: started, FinishedAt: finished}
-	if got := agentDisplayDuration(st, finished.Add(time.Hour)); got != 7*time.Second {
-		t.Fatalf("terminal display duration=%v, want 7s", got)
-	}
-}
-
 func TestStatusViewShowsSubagentCoordinationDuringBusyTurn(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.resize(80, 24)
@@ -166,55 +116,6 @@ func TestStatusViewShowsSubagentCoordinationDuringBusyTurn(t *testing.T) {
 	got := m.statusView()
 	if !strings.Contains(got, "working") || !strings.Contains(got, "2 agents") {
 		t.Fatalf("status view=%q", got)
-	}
-}
-
-func TestStatusViewKeepsAgentCoordinationVisibleInTinyLayout(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.resize(24, 12)
-	m.busy = true
-	m.busyStarted = time.Now()
-	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", State: agent.StateRunning}}
-	if got := m.agentsView(); got != "" {
-		t.Fatalf("tiny agents view=%q, want hidden panel", got)
-	}
-	if got := m.statusView(); !strings.Contains(got, "working") {
-		t.Fatalf("tiny status view=%q, want coordination state", got)
-	}
-}
-
-func TestAgentLifecycleProgressShowsCurrentActivity(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", Task: "inspect router", State: agent.StateRunning, StartedAt: time.Now()}}
-	m.resize(100, 30)
-	call, _ := tool.NewCall("grep-1", "grep", []byte(`{"pattern":"routeRequest","path":"internal"}`))
-	updated, _ := m.Update(agentLifecycleMsg{event: agent.Event{Kind: agent.EventAgentProgress, AgentID: "explorer-1", Call: &call}})
-	m = updated.(*bubbleModel)
-	if len(m.agentSnapshot) != 1 {
-		t.Fatalf("progress event unexpectedly replaced agent snapshot: %#v", m.agentSnapshot)
-	}
-	got := m.agentsView()
-	if !strings.Contains(got, "routeRequest") || strings.Contains(got, "using grep") {
-		t.Fatalf("agents view=%q, want structured tool activity", got)
-	}
-	updated, _ = m.Update(agentLifecycleMsg{event: agent.Event{Kind: agent.EventAgentCompleted, AgentID: "explorer-1"}})
-	m = updated.(*bubbleModel)
-	if _, ok := m.agentActivity["explorer-1"]; ok {
-		t.Fatal("terminal lifecycle event did not clear transient activity")
-	}
-}
-
-func TestAgentsViewShowsActiveWorkDuringBusyRootTurn(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.resize(100, 30)
-	m.busy = true
-	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", Task: "inspect router", State: agent.StateRunning, StartedAt: time.Now()}, {ID: "reviewer-2", Task: "review risks", State: agent.StateQueued}}
-	got := m.agentsView()
-	if !strings.Contains(got, "Agents 2 active") {
-		t.Fatalf("busy agents view=%q", got)
-	}
-	if !strings.Contains(got, "inspect router") || !strings.Contains(got, "review risks") {
-		t.Fatalf("busy agents view hid delegated work: %q", got)
 	}
 }
 
@@ -238,15 +139,6 @@ func TestApplyTurnEventTracksRoundAndToolCount(t *testing.T) {
 	m.applyTurnEvent(turn.Event{Kind: turn.EventToolCall, Round: 2, Call: tool.Call{ID: "c1", Name: "read"}})
 	if m.turnProgress.Round != 2 || m.turnProgress.ToolCalls != 1 {
 		t.Fatalf("turn progress=%+v, want round 2 and 1 tool", m.turnProgress)
-	}
-}
-
-func TestAgentsViewHidesTerminalAgents(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.resize(100, 30)
-	m.agentSnapshot = []agent.AgentStatus{{ID: "reviewer-2", Task: "review security", State: agent.StateFailed, StartedAt: time.Now().Add(-10 * time.Second), FinishedAt: time.Now(), Reason: "timed out"}}
-	if got := m.agentsView(); got != "" {
-		t.Fatalf("terminal agent leaked into live pane: %q", got)
 	}
 }
 
@@ -312,18 +204,6 @@ func TestCancelActiveTurnCancelsOnlyOwnedSubagents(t *testing.T) {
 	}
 	if got := m.statusView(); !strings.Contains(got, "stopping 1 agent") {
 		t.Fatalf("status=%q", got)
-	}
-}
-
-func TestBusyAgentPanelScopesToActiveTurnOwner(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.resize(100, 30)
-	m.busy = true
-	m.activeTurnOwner = "turn-current"
-	m.agentSnapshot = []agent.AgentStatus{{ID: "current", ParentID: "turn-current", Task: "current task", State: agent.StateRunning}, {ID: "old", ParentID: "turn-old", Task: "old task", State: agent.StateRunning}}
-	got := m.agentsView()
-	if !strings.Contains(got, "Agents 1 active") || strings.Contains(got, "old task") {
-		t.Fatalf("agents view=%q", got)
 	}
 }
 
@@ -411,23 +291,6 @@ func TestAgentWaitTimeoutDoesNotLeakRPCTranscript(t *testing.T) {
 	}
 }
 
-func TestTerminalAgentLeavesLivePaneButStaysInTranscript(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.resize(100, 30)
-	started := time.Now().Add(-5 * time.Second)
-	run := &AgentRunCell{AgentID: "dex-9", Profile: agent.ProfileIntelligence, Task: "review concurrency", State: agent.StateRunning, StartedAt: started}
-	m.historyState.Append(run)
-	m.agentSnapshot = []agent.AgentStatus{{ID: "dex-9", Profile: agent.ProfileIntelligence, Task: "review concurrency", State: agent.StateFailed, StartedAt: started, FinishedAt: time.Now(), Reason: "timed out"}}
-	m.syncAgentRunSnapshot("dex-9")
-	if got := m.agentsView(); got != "" {
-		t.Fatalf("terminal agent leaked into live pane: %q", got)
-	}
-	plain := m.historyState.Raw()
-	if !strings.Contains(plain, "review concurrency") || !strings.Contains(plain, "timed out") {
-		t.Fatalf("terminal run missing from transcript: %q", plain)
-	}
-}
-
 func TestOutOfOrderAgentResultMergesIntoDelegateRun(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	delegate, _ := tool.NewCall("d1", "subagent", json.RawMessage(`{"action":"spawn","profile":"int","task":"inspect router"}`))
@@ -475,38 +338,6 @@ func TestDelegateMissingAgentIDFallsBackWithoutCorruptingHistory(t *testing.T) {
 	}
 	if run, ok := cells[0].(*AgentRunCell); ok && run.AgentID == "" {
 		t.Fatalf("malformed response created unaddressable run cell: %#v", run)
-	}
-}
-
-func TestLongTurnWithSubagentsKeepsProgressCoherent(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.resize(110, 30)
-	m.busy = true
-	m.busyStarted = time.Now().Add(-12 * time.Second)
-	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", Task: "inspect router", State: agent.StateRunning, StartedAt: time.Now().Add(-10 * time.Second)}, {ID: "reviewer-2", Task: "review safety", State: agent.StateRunning, StartedAt: time.Now().Add(-9 * time.Second)}, {ID: "int-3", Task: "analyze boundaries", State: agent.StateQueued, StartTime: time.Now().Add(-8 * time.Second)}}
-	m.agentActivity["explorer-1"] = AgentActivity{Label: "using grep"}
-	delegate, _ := tool.NewCall("d1", "subagent", json.RawMessage(`{"action":"spawn","profile":"int","task":"inspect router"}`))
-	wait, _ := tool.NewCall("w1", "subagent", json.RawMessage(`{"action":"wait"}`))
-	m.applyTurnEvents([]turn.Event{{Kind: turn.EventToolCall, Round: 1, Call: delegate}, {Kind: turn.EventToolResult, Round: 1, Call: delegate, Result: tool.Result{CallID: "d1", ToolName: "subagent", Output: `{"agent_id":"explorer-1","status":"queued"}`}}, {Kind: turn.EventToolCall, Round: 2, Call: wait}})
-	status := m.statusView()
-	for _, want := range []string{"working", "3 agents"} {
-		if !strings.Contains(status, want) {
-			t.Fatalf("status=%q, want %q", status, want)
-		}
-	}
-	if panel := m.agentsView(); !strings.Contains(panel, "inspect router") || !strings.Contains(panel, "using grep") {
-		t.Fatalf("busy agent panel lost active work: %q", panel)
-	}
-	if active := m.historyState.Active(); active != nil {
-		t.Fatalf("wait action leaked an active orchestration cell=%T %#v", active, active)
-	}
-	if run := m.historyState.AgentRun("explorer-1"); run == nil || run.Task != "inspect router" {
-		t.Fatalf("delegated run was not retained as one lifecycle cell: %#v", run)
-	}
-	m.busy = false
-	panel := m.agentsView()
-	if !strings.Contains(panel, "using grep") {
-		t.Fatalf("idle agent panel lost live activity: %q", panel)
 	}
 }
 
