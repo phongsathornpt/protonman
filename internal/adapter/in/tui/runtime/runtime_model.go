@@ -49,6 +49,17 @@ type agentModelState struct {
 	reasoningEffort  sdk.ReasoningEffort
 }
 
+type turnModelState struct {
+	turnProgress    turnProgress
+	activeTurnOwner string
+	busy            bool
+	activity        string
+	pendingActivity string
+	busyStarted     time.Time
+	turnCancel      context.CancelFunc
+	turnEvents      <-chan tea.Msg
+}
+
 type bubbleModel struct {
 	ctx      context.Context
 	service  *toolcall.Service
@@ -57,8 +68,7 @@ type bubbleModel struct {
 	runner   app.Conversation
 	bridge   *permissionBridge
 	agentModelState
-	turnProgress            turnProgress
-	activeTurnOwner         string
+	turnModelState
 	workDir                 string
 	viewport                viewport.Model
 	spinner                 spinner.Model
@@ -70,9 +80,6 @@ type bubbleModel struct {
 	todoStore               tododomain.Repository
 	todoRevision            uint64
 	todoLifecycle           todoLifecycleState
-	busy                    bool
-	activity                string
-	pendingActivity         string
 	planMode                bool
 	conversationViewport    conversationViewportState
 	panes                   paneState
@@ -80,9 +87,6 @@ type bubbleModel struct {
 	nextID                  uint64
 	layout                  layoutState
 	welcomeCache            welcomeCardCache
-	busyStarted             time.Time
-	turnCancel              context.CancelFunc
-	turnEvents              <-chan tea.Msg
 	messages                []model.Message
 	conversationRetention   conversation.RetentionPolicy
 	activeModel             string
@@ -134,7 +138,7 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	if len(initialMessages) > 0 {
 		messages = conversation.Retain(model.SnapshotMessages(initialMessages[0]), retention)
 	}
-	ui := &bubbleModel{ctx: ctx, service: service, registry: registry, runner: runner, bridge: bridge, workDir: workDir, viewport: pane, spinner: spin, help: helpView, keys: newBubbleKeyMap(), panes: paneState{bottom: bottom, transcript: transcriptPane}, historyState: NewHistoryState(maxBubbleScrollback), queue: make([]string, 0), todo: append([]tododomain.Item{}, todo...), activity: "ready", conversationViewport: conversationViewportState{mode: viewportFollowing}, showWelcome: true, layout: layoutState{width: defaultBubbleWidth, height: defaultBubbleHeight}, messages: messages, conversationRetention: retention, maxToolCalls: config.DefaultMaxToolCalls, agentModelState: agentModelState{subagentsEnabled: true, agentActivity: make(map[string]AgentActivity)}, runtimeConfig: config.DefaultRuntimeConfig()}
+	ui := &bubbleModel{ctx: ctx, service: service, registry: registry, runner: runner, bridge: bridge, workDir: workDir, viewport: pane, spinner: spin, help: helpView, keys: newBubbleKeyMap(), panes: paneState{bottom: bottom, transcript: transcriptPane}, historyState: NewHistoryState(maxBubbleScrollback), queue: make([]string, 0), todo: append([]tododomain.Item{}, todo...), conversationViewport: conversationViewportState{mode: viewportFollowing}, showWelcome: true, layout: layoutState{width: defaultBubbleWidth, height: defaultBubbleHeight}, messages: messages, conversationRetention: retention, maxToolCalls: config.DefaultMaxToolCalls, agentModelState: agentModelState{subagentsEnabled: true, agentActivity: make(map[string]AgentActivity)}, turnModelState: turnModelState{activity: "ready"}, runtimeConfig: config.DefaultRuntimeConfig()}
 	if allTodoCompleted(ui.todo) {
 		ui.todoLifecycle.CompletionFresh = true
 	}
