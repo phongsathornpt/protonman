@@ -22,7 +22,7 @@ func TestWriteFileRejectsDirtyUnownedPath(t *testing.T) {
 	}
 	ctx := workspace.WithMutationSession(context.Background())
 	_, err := NewWriteFile(ws, &recordingCheckpointStore{id: "guard"}).Execute(ctx,
-		newJSONCall(t, "write-guard", "write_file", map[string]any{"file_path": "tracked.txt", "content": "agent overwrite\n"}))
+		newJSONCall(t, "write-guard", "edit", map[string]any{"file_path": "tracked.txt", "content": "agent overwrite\n"}))
 	var toolErr *tool.ToolError
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodePreexistingWorkspaceChange {
 		t.Fatalf("write error = %v, want preexisting workspace change", err)
@@ -39,7 +39,7 @@ func TestContextualEditClaimsDirtyPathForLaterOverwrite(t *testing.T) {
 	}
 	ctx := workspace.WithMutationSession(context.Background())
 	replace := NewSearchReplace(ws, &recordingCheckpointStore{id: "replace"})
-	if _, err := replace.Execute(ctx, newJSONCall(t, "replace-claim", "search_replace", map[string]any{
+	if _, err := replace.Execute(ctx, newJSONCall(t, "replace-claim", "edit", map[string]any{
 		"file_path": "tracked.txt", "old_string": "user", "new_string": "agent+user",
 	})); err != nil {
 		t.Fatalf("contextual edit failed: %v", err)
@@ -47,7 +47,7 @@ func TestContextualEditClaimsDirtyPathForLaterOverwrite(t *testing.T) {
 	write := NewWriteFile(ws, &recordingCheckpointStore{id: "write"})
 	current := readTestFile(t, ws.Root(), "tracked.txt")
 	digest := sha256.Sum256(current)
-	if _, err := write.Execute(ctx, newJSONCall(t, "write-owned", "write_file", map[string]any{
+	if _, err := write.Execute(ctx, newJSONCall(t, "write-owned", "edit", map[string]any{
 		"file_path": "tracked.txt", "content": "owned overwrite\n", "expected_sha256": fmt.Sprintf("%x", digest[:]),
 	})); err != nil {
 		t.Fatalf("owned overwrite blocked: %v", err)
@@ -63,7 +63,7 @@ func TestApplyPatchDeleteRejectsDirtyUnownedPath(t *testing.T) {
 	ctx := workspace.WithMutationSession(context.Background())
 	patch := "*** Begin Patch\n*** Delete File: tracked.txt\n*** End Patch"
 	_, err := NewApplyPatch(ws, &recordingCheckpointStore{id: "patch"}).Execute(ctx,
-		newJSONCall(t, "patch-delete", "apply_patch", map[string]any{"patch": patch}))
+		newJSONCall(t, "patch-delete", "edit", map[string]any{"patch": patch}))
 	if !errors.Is(err, workspace.ErrPreexistingWorkspaceChange) {
 		t.Fatalf("delete error = %v, want pre-existing workspace change", err)
 	}

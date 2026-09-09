@@ -40,7 +40,7 @@ func TestWriteFileAndSearchReplace(t *testing.T) {
 		t.Fatalf("write output = %q", result.Output)
 	}
 
-	_, err := replaceHandler.Execute(context.Background(), newJSONCall(t, "replace-1", "search_replace", map[string]any{
+	_, err := replaceHandler.Execute(context.Background(), newJSONCall(t, "replace-1", "edit", map[string]any{
 		"file_path":  "notes.txt",
 		"old_string": "hello",
 		"new_string": "goodbye",
@@ -281,7 +281,7 @@ func TestApplyPatchSupportsFileOperationsAndPlansBeforeWriting(t *testing.T) {
 		"-missing\n" +
 		"+bad\n" +
 		"*** End Patch"
-	_, err := handler.Execute(context.Background(), newJSONCall(t, "patch-3", "apply_patch", map[string]any{"patch": badPatch}))
+	_, err := handler.Execute(context.Background(), newJSONCall(t, "patch-3", "edit", map[string]any{"patch": badPatch}))
 	if err == nil {
 		t.Fatal("bad patch error = nil, want planning error")
 	}
@@ -409,10 +409,10 @@ func TestGitStatusRejectsNonRepository(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	_, err := NewGitStatus(workspaceRoot, &recordingLauncher{}).Execute(
 		context.Background(),
-		newJSONCall(t, "status-2", "git_status", map[string]any{}),
+		newJSONCall(t, "status-2", "git", map[string]any{}),
 	)
 	if err == nil {
-		t.Fatal("git_status error = nil, want non-repository error")
+		t.Fatal("git error = nil, want non-repository error")
 	}
 }
 
@@ -434,11 +434,11 @@ func TestGitStatusCancelsWhenStdoutExceedsLimit(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	_, err := NewGitStatus(workspaceRoot, scriptedGitLauncher{script: "yes x | head -c 2097152"}).Execute(
 		context.Background(),
-		newJSONCall(t, "status-large", "git_status", map[string]any{}),
+		newJSONCall(t, "status-large", "git", map[string]any{}),
 	)
 	var toolErr *tool.ToolError
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeOutputTooLarge {
-		t.Fatalf("git_status large output error = %v, want output_too_large", err)
+		t.Fatalf("git large output error = %v, want output_too_large", err)
 	}
 }
 
@@ -446,10 +446,10 @@ func TestGitStatusIncludesBoundedStderrDiagnostic(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	_, err := NewGitStatus(workspaceRoot, scriptedGitLauncher{script: "printf 'not a git repository' >&2; exit 128"}).Execute(
 		context.Background(),
-		newJSONCall(t, "status-stderr", "git_status", map[string]any{}),
+		newJSONCall(t, "status-stderr", "git", map[string]any{}),
 	)
 	if err == nil || !strings.Contains(err.Error(), "not a git repository") {
-		t.Fatalf("git_status stderr diagnostic = %v", err)
+		t.Fatalf("git stderr diagnostic = %v", err)
 	}
 }
 
@@ -457,10 +457,10 @@ func TestGitStatusRequiresLauncherFailClosed(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	_, err := NewGitStatus(workspaceRoot).Execute(
 		context.Background(),
-		newJSONCall(t, "status-nil", "git_status", map[string]any{}),
+		newJSONCall(t, "status-nil", "git", map[string]any{}),
 	)
 	if err == nil {
-		t.Fatal("git_status error = nil, want launcher-required error")
+		t.Fatal("git error = nil, want launcher-required error")
 	}
 }
 
@@ -481,13 +481,13 @@ func TestWriteWithoutCheckpointFailsClosed(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	_, err := NewWriteFile(workspaceRoot).Execute(
 		context.Background(),
-		newJSONCall(t, "write-nostore", "write_file", map[string]any{
+		newJSONCall(t, "write-nostore", "edit", map[string]any{
 			"file_path": "nostore.txt",
 			"content":   "should not be written",
 		}),
 	)
 	if err == nil {
-		t.Fatal("write_file without store error = nil, want checkpoint error")
+		t.Fatal("edit without store error = nil, want checkpoint error")
 	}
 }
 
@@ -519,7 +519,7 @@ func TestGitStatusUsesLauncher(t *testing.T) {
 	launcher := &mockGitLauncher{}
 	result, err := NewGitStatus(workspaceRoot, launcher).Execute(
 		context.Background(),
-		newJSONCall(t, "status-launcher", "git_status", map[string]any{"path": "sub"}),
+		newJSONCall(t, "status-launcher", "git", map[string]any{"path": "sub"}),
 	)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -609,11 +609,11 @@ func newJSONCall(t *testing.T, id string, name string, input map[string]any) too
 func TestPermissionDetailProviders(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 
-	// Test apply_patch detail extraction
+	// Test edit detail extraction
 	patchTool := NewApplyPatch(workspaceRoot, &recordingCheckpointStore{id: "detail"})
 	detailedPatch, ok := patchTool.(tool.DetailProvider)
 	if !ok {
-		t.Fatal("apply_patch does not implement tool.DetailProvider")
+		t.Fatal("edit does not implement tool.DetailProvider")
 	}
 	patchPayload := `*** Begin Patch
 *** Add File: pkg/math.go
@@ -621,7 +621,7 @@ func TestPermissionDetailProviders(t *testing.T) {
 *** End Patch`
 	args, _ := json.Marshal(map[string]any{"patch": patchPayload})
 	if detail := detailedPatch.PermissionDetail(args); detail != "add 1 · pkg/math.go" {
-		t.Fatalf("apply_patch PermissionDetail = %q, want add summary", detail)
+		t.Fatalf("edit PermissionDetail = %q, want add summary", detail)
 	}
 
 	// Test ls detail extraction with aliases and default

@@ -16,7 +16,7 @@ func TestGetTodoReturnsStructuredSnapshotRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := NewGetTodo(store)
-	call, _ := tool.NewCall("todo-get", "get_todo", []byte(`{}`))
+	call, _ := tool.NewCall("todo-get", "todo", []byte(`{}`))
 	res, err := h.Execute(context.Background(), call)
 	if err != nil {
 		t.Fatal(err)
@@ -44,15 +44,15 @@ func TestGetTodoArgumentContract(t *testing.T) {
 	}
 	h := NewGetTodo(store)
 	for _, raw := range []string{`{}`, ``, `   `, `null`, `{"reason":"checking tasks"}`, `{"foo":1}`} {
-		call := tool.Call{ID: "todo-get", Name: "get_todo", Arguments: json.RawMessage(raw)}
+		call := tool.Call{ID: "todo-get", Name: "todo", Arguments: json.RawMessage(raw)}
 		if _, err := h.Execute(context.Background(), call); err != nil {
-			t.Fatalf("get_todo(%q) error = %v", raw, err)
+			t.Fatalf("todo(%q) error = %v", raw, err)
 		}
 	}
 	for _, raw := range []string{`[]`, `""`, `1`, `true`, `{} {`} {
-		call := tool.Call{ID: "todo-get", Name: "get_todo", Arguments: json.RawMessage(raw)}
+		call := tool.Call{ID: "todo-get", Name: "todo", Arguments: json.RawMessage(raw)}
 		if _, err := h.Execute(context.Background(), call); err == nil {
-			t.Fatalf("get_todo(%q) error = nil, want invalid arguments", raw)
+			t.Fatalf("todo(%q) error = nil, want invalid arguments", raw)
 		}
 	}
 }
@@ -63,7 +63,7 @@ func TestGetTodoForSessionIncludesSessionIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := NewGetTodoForSession(store, "session-123")
-	call, err := tool.NewCall("get-session", "get_todo", json.RawMessage(`{}`))
+	call, err := tool.NewCall("get-session", "todo", json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatal(err)
 	}

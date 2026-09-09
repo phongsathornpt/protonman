@@ -30,7 +30,7 @@ func TestResumeAgentStartsFreshChild(t *testing.T) {
 	}
 
 	handler := NewResumeAgent(coord)
-	call, _ := tool.NewCall("resume-1", "resume_agent", json.RawMessage(`{"agent_id":"strength-2"}`))
+	call, _ := tool.NewCall("resume-1", "subagent", json.RawMessage(`{"agent_id":"strength-2"}`))
 	ctx := agent.WithParentID(context.Background(), "new-turn")
 	res, err := handler.Execute(ctx, call)
 	if err != nil {
@@ -62,7 +62,7 @@ func TestResumeAgentRejectsCompletedRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := NewResumeAgent(coord)
-	call, _ := tool.NewCall("resume-complete", "resume_agent", json.RawMessage(`{"agent_id":"agility-1"}`))
+	call, _ := tool.NewCall("resume-complete", "subagent", json.RawMessage(`{"agent_id":"agility-1"}`))
 	_, err := handler.Execute(context.Background(), call)
 	if err == nil || !strings.Contains(err.Error(), "not resumable") {
 		t.Fatalf("Execute() error = %v", err)

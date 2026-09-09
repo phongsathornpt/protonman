@@ -25,7 +25,7 @@ func TestLifecycleToolsEnforceSessionOwnership(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	listCall, _ := tool.NewCall("list-a", "list_agents", json.RawMessage(`{}`))
+	listCall, _ := tool.NewCall("list-a", "subagent", json.RawMessage(`{}`))
 	list, err := NewListAgents(coord).Execute(sessionCtx("session-a", "turn-1"), listCall)
 	if err != nil {
 		t.Fatal(err)
@@ -34,12 +34,12 @@ func TestLifecycleToolsEnforceSessionOwnership(t *testing.T) {
 		t.Fatalf("session-a list leaked ownership: %s", list.StructuredOutput)
 	}
 
-	getCall, _ := tool.NewCall("get-b", "get_agent", json.RawMessage(`{"agent_id":"agent-session-b"}`))
+	getCall, _ := tool.NewCall("get-b", "subagent", json.RawMessage(`{"agent_id":"agent-session-b"}`))
 	if _, err := NewGetAgent(coord).Execute(sessionCtx("session-a", "turn-1"), getCall); err == nil {
 		t.Fatal("session-a read session-b agent without error")
 	}
 
-	cancelCall, _ := tool.NewCall("cancel-b", "cancel_agent", json.RawMessage(`{"agent_id":"agent-session-b"}`))
+	cancelCall, _ := tool.NewCall("cancel-b", "subagent", json.RawMessage(`{"agent_id":"agent-session-b"}`))
 	if _, err := NewCancelAgent(coord).Execute(sessionCtx("session-a", "turn-1"), cancelCall); err == nil {
 		t.Fatal("session-a canceled session-b agent without error")
 	}
@@ -53,7 +53,7 @@ func TestResumeAgentCannotCrossSessionBoundary(t *testing.T) {
 	}}}); err != nil {
 		t.Fatal(err)
 	}
-	call, _ := tool.NewCall("resume-b", "resume_agent", json.RawMessage(`{"agent_id":"strength-9"}`))
+	call, _ := tool.NewCall("resume-b", "subagent", json.RawMessage(`{"agent_id":"strength-9"}`))
 	if _, err := NewResumeAgent(coord).Execute(sessionCtx("session-a", "turn-1"), call); err == nil {
 		t.Fatal("session-a resumed session-b agent without error")
 	}

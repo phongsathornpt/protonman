@@ -159,15 +159,15 @@ func TestActivateSkill_AuthorizesReadRootsForFileTools(t *testing.T) {
 		t.Errorf("relative read output = %q, want 'skill reference text'", relReadRes.Output)
 	}
 
-	// 5. write_file must STILL fail with outside workspace (read-only confinement!)
+	// 5. edit must STILL fail with outside workspace (read-only confinement!)
 	writeArgs, _ := json.Marshal(map[string]any{
 		"file_path": skillFilePath,
 		"content":   "malicious overwrite",
 	})
-	writeCall, _ := tool.NewCall("write-skill", "write_file", writeArgs)
+	writeCall, _ := tool.NewCall("write-skill", "edit", writeArgs)
 	_, err = writeHandler.Execute(ctx, writeCall)
 	if err == nil {
-		t.Fatal("expected write_file to skill directory to fail, but it succeeded")
+		t.Fatal("expected edit to skill directory to fail, but it succeeded")
 	}
 	if !errors.Is(err, workspace.ErrOutsideWorkspace) {
 		t.Errorf("expected ErrOutsideWorkspace, got: %v", err)

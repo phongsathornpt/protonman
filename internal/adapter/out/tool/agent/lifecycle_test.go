@@ -37,7 +37,7 @@ func TestWaitAgentTimeoutDoesNotCancelChild(t *testing.T) {
 		t.Fatal(err)
 	}
 	wait := NewWaitAgent(coord)
-	call, _ := tool.NewCall("wait-1", "wait_agent", json.RawMessage(`{}`))
+	call, _ := tool.NewCall("wait-1", "subagent", json.RawMessage(`{}`))
 	res, err := wait.Execute(context.Background(), call)
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +50,7 @@ func TestWaitAgentTimeoutDoesNotCancelChild(t *testing.T) {
 	}
 
 	close(release)
-	call2, _ := tool.NewCall("wait-2", "wait_agent", json.RawMessage(`{"timeout_seconds":10}`))
+	call2, _ := tool.NewCall("wait-2", "subagent", json.RawMessage(`{"timeout_seconds":10}`))
 	res, err = wait.Execute(context.Background(), call2)
 	if err != nil {
 		t.Fatal(err)
@@ -75,15 +75,15 @@ func TestAgentLifecycleGetListCancel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	getCall, _ := tool.NewCall("get", "get_agent", json.RawMessage(`{"agent_id":"`+h.ID+`"}`))
+	getCall, _ := tool.NewCall("get", "subagent", json.RawMessage(`{"agent_id":"`+h.ID+`"}`))
 	if res, err := NewGetAgent(coord).Execute(context.Background(), getCall); err != nil || !strings.Contains(string(res.StructuredOutput), h.ID) {
 		t.Fatalf("get output=%s err=%v", res.Output, err)
 	}
-	listCall, _ := tool.NewCall("list", "list_agents", json.RawMessage(`{}`))
+	listCall, _ := tool.NewCall("list", "subagent", json.RawMessage(`{}`))
 	if res, err := NewListAgents(coord).Execute(context.Background(), listCall); err != nil || !strings.Contains(string(res.StructuredOutput), h.ID) {
 		t.Fatalf("list output=%s err=%v", res.Output, err)
 	}
-	cancelCall, _ := tool.NewCall("cancel", "cancel_agent", json.RawMessage(`{"agent_id":"`+h.ID+`"}`))
+	cancelCall, _ := tool.NewCall("cancel", "subagent", json.RawMessage(`{"agent_id":"`+h.ID+`"}`))
 	if _, err := NewCancelAgent(coord).Execute(context.Background(), cancelCall); err != nil {
 		t.Fatal(err)
 	}

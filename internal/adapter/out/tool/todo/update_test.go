@@ -22,7 +22,7 @@ func TestUpdateTodoPatchesSnapshotWithoutOmissionDeletes(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := NewUpdateTodo(store)
-	call, _ := tool.NewCall("todo-1", "update_todo", todoPatchArgs(0,
+	call, _ := tool.NewCall("todo-1", "todo", todoPatchArgs(0,
 		map[string]any{"op": "add", "id": "a", "text": "inspect", "status": "completed"},
 		map[string]any{"op": "add", "id": "b", "text": "fix", "status": "in_progress"},
 	))
@@ -49,7 +49,7 @@ func TestUpdateTodoPatchesSnapshotWithoutOmissionDeletes(t *testing.T) {
 func TestUpdateTodoRejectsDuplicateAddID(t *testing.T) {
 	store, _ := tododomain.NewStore(nil)
 	h := NewUpdateTodo(store)
-	call, _ := tool.NewCall("todo-1", "update_todo", todoPatchArgs(0,
+	call, _ := tool.NewCall("todo-1", "todo", todoPatchArgs(0,
 		map[string]any{"op": "add", "id": "a", "text": "one", "status": "pending"},
 		map[string]any{"op": "add", "id": "a", "text": "two", "status": "pending"},
 	))
@@ -69,7 +69,7 @@ func TestUpdateTodoReportsStructuredChanges(t *testing.T) {
 		{ID: "remove", Text: "remove", Status: tododomain.StatusPending},
 	})
 	h := NewUpdateTodo(store)
-	call, _ := tool.NewCall("todo-diff", "update_todo", todoPatchArgs(0,
+	call, _ := tool.NewCall("todo-diff", "todo", todoPatchArgs(0,
 		map[string]any{"op": "set_status", "id": "start", "status": "in_progress"},
 		map[string]any{"op": "set_status", "id": "complete", "status": "completed"},
 		map[string]any{"op": "set_status", "id": "reopen", "status": "pending"},
@@ -91,7 +91,7 @@ func TestUpdateTodoReportsStructuredChanges(t *testing.T) {
 func TestUpdateTodoReportsTextUpdates(t *testing.T) {
 	store, _ := tododomain.NewStore([]tododomain.Item{{ID: "a", Text: "old", Status: tododomain.StatusPending}})
 	h := NewUpdateTodo(store)
-	call, _ := tool.NewCall("todo-text", "update_todo", todoPatchArgs(0, map[string]any{"op": "set_text", "id": "a", "text": "new"}))
+	call, _ := tool.NewCall("todo-text", "todo", todoPatchArgs(0, map[string]any{"op": "set_text", "id": "a", "text": "new"}))
 	result, err := h.Execute(context.Background(), call)
 	if err != nil {
 		t.Fatal(err)
@@ -130,11 +130,11 @@ func TestUpdateTodoDefinitionUsesPatchSchema(t *testing.T) {
 func TestUpdateTodoRejectsStaleRevisionEvenWhenPatchWouldApply(t *testing.T) {
 	store, _ := tododomain.NewStore(nil)
 	h := NewUpdateTodo(store)
-	first, _ := tool.NewCall("todo-first", "update_todo", todoPatchArgs(0, map[string]any{"op": "add", "id": "a", "text": "one", "status": "pending"}))
+	first, _ := tool.NewCall("todo-first", "todo", todoPatchArgs(0, map[string]any{"op": "add", "id": "a", "text": "one", "status": "pending"}))
 	if _, err := h.Execute(context.Background(), first); err != nil {
 		t.Fatal(err)
 	}
-	stale, _ := tool.NewCall("todo-stale", "update_todo", todoPatchArgs(0, map[string]any{"op": "add", "id": "b", "text": "two", "status": "pending"}))
+	stale, _ := tool.NewCall("todo-stale", "todo", todoPatchArgs(0, map[string]any{"op": "add", "id": "b", "text": "two", "status": "pending"}))
 	_, err := h.Execute(context.Background(), stale)
 	var toolErr *tool.ToolError
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeConflict {
@@ -149,11 +149,11 @@ func TestUpdateTodoRejectsStaleRevisionEvenWhenPatchWouldApply(t *testing.T) {
 func TestUpdateTodoStaleRevisionReturnsStructuredRefreshRecovery(t *testing.T) {
 	store, _ := tododomain.NewStore(nil)
 	h := NewUpdateTodo(store)
-	first, _ := tool.NewCall("todo-first", "update_todo", todoPatchArgs(0, map[string]any{"op": "add", "id": "a", "text": "one", "status": "pending"}))
+	first, _ := tool.NewCall("todo-first", "todo", todoPatchArgs(0, map[string]any{"op": "add", "id": "a", "text": "one", "status": "pending"}))
 	if _, err := h.Execute(context.Background(), first); err != nil {
 		t.Fatal(err)
 	}
-	stale, _ := tool.NewCall("todo-stale", "update_todo", todoPatchArgs(0, map[string]any{"op": "add", "id": "a", "text": "two", "status": "pending"}))
+	stale, _ := tool.NewCall("todo-stale", "todo", todoPatchArgs(0, map[string]any{"op": "add", "id": "a", "text": "two", "status": "pending"}))
 	_, err := h.Execute(context.Background(), stale)
 	var toolErr *tool.ToolError
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeConflict {
@@ -171,7 +171,7 @@ func TestUpdateTodoRequiresExpectedRevisionAndOperations(t *testing.T) {
 		json.RawMessage(`{"operations":[{"op":"add","id":"a","text":"a","status":"pending"}]}`),
 		json.RawMessage(`{"expected_revision":0,"operations":[]}`),
 	} {
-		call, _ := tool.NewCall("todo-invalid", "update_todo", args)
+		call, _ := tool.NewCall("todo-invalid", "todo", args)
 		_, err := h.Execute(context.Background(), call)
 		var toolErr *tool.ToolError
 		if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeInvalidArguments {
@@ -187,7 +187,7 @@ func TestUpdateTodoRejectsLegacySnapshotAndUnknownFields(t *testing.T) {
 		json.RawMessage(`{"expected_revision":0,"items":[]}`),
 		json.RawMessage(`{"expected_revision":0,"operations":[{"op":"add","id":"a","text":"a","status":"pending","banana":true}]}`),
 	} {
-		call, _ := tool.NewCall("todo-legacy", "update_todo", args)
+		call, _ := tool.NewCall("todo-legacy", "todo", args)
 		if _, err := h.Execute(context.Background(), call); err == nil {
 			t.Fatalf("arguments %s unexpectedly accepted", args)
 		}
@@ -241,7 +241,7 @@ func TestUpdateTodoForSessionIncludesSessionIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := NewUpdateTodoForSession(store, "session-123")
-	call, err := tool.NewCall("update-session", "update_todo", todoPatchArgs(0, map[string]any{
+	call, err := tool.NewCall("update-session", "todo", todoPatchArgs(0, map[string]any{
 		"op": "add", "id": "a", "text": "one", "status": "pending",
 	}))
 	if err != nil {

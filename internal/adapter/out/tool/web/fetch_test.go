@@ -49,7 +49,7 @@ func newJSONCall(t *testing.T, id, name string, input map[string]any) tool.Call 
 
 func TestWebFetchHonorsBlockedNetworkPolicy(t *testing.T) {
 	handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkBlocked})
-	_, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-1", "web_fetch", map[string]any{
+	_, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-1", "web", map[string]any{
 		"url": "https://example.com",
 	}))
 	if !errors.Is(err, sandbox.ErrNetworkDenied) {
@@ -82,7 +82,7 @@ func TestWebFetchTransportPinsValidatedResolvedIP(t *testing.T) {
 		dialer,
 	)
 	if transport.Proxy != nil {
-		t.Fatal("web_fetch transport must ignore environment HTTP proxies")
+		t.Fatal("web transport must ignore environment HTTP proxies")
 	}
 	_, err := transport.DialContext(context.Background(), "tcp", "example.com:443")
 	if !errors.Is(err, sentinel) {
@@ -100,7 +100,7 @@ func TestWebFetchReadsAllowedLocalServer(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted, AllowLocalhost: true})
-	result, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-2", "web_fetch", map[string]any{
+	result, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-2", "web", map[string]any{
 		"url": server.URL,
 	}))
 	if err != nil {
@@ -132,7 +132,7 @@ func TestWebFetchRejectsInvalidSchemes(t *testing.T) {
 	}
 	for _, u := range invalidURLs {
 		t.Run(u, func(t *testing.T) {
-			_, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-scheme", "web_fetch", map[string]any{
+			_, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-scheme", "web", map[string]any{
 				"url": u,
 			}))
 			if err == nil {
@@ -161,7 +161,7 @@ func TestWebFetchHaltsRedirectLoops(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted, AllowLocalhost: true})
-	_, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-loop", "web_fetch", map[string]any{
+	_, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-loop", "web", map[string]any{
 		"url": server.URL,
 	}))
 	if err == nil || !strings.Contains(err.Error(), "stopped after 10 redirects") {
@@ -179,7 +179,7 @@ func TestWebFetchSendsDefaultHeaders(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted, AllowLocalhost: true})
-	_, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-headers", "web_fetch", map[string]any{
+	_, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-headers", "web", map[string]any{
 		"url": server.URL,
 	}))
 	if err != nil {
@@ -202,7 +202,7 @@ func TestWebFetchTruncationNotice(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted, AllowLocalhost: true})
-	result, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-trunc", "web_fetch", map[string]any{
+	result, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-trunc", "web", map[string]any{
 		"url": server.URL,
 	}))
 	if err != nil {
@@ -223,7 +223,7 @@ func TestWebFetchStatusErrorText(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted, AllowLocalhost: true})
-	result, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-404", "web_fetch", map[string]any{
+	result, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-404", "web", map[string]any{
 		"url": server.URL,
 	}))
 	if err == nil || !strings.Contains(err.Error(), "web status 404: Not Found") {
@@ -243,7 +243,7 @@ func TestWebFetchOmitsBinaryContent(t *testing.T) {
 		t.Cleanup(server.Close)
 
 		handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted, AllowLocalhost: true})
-		result, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-bin-type", "web_fetch", map[string]any{
+		result, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-bin-type", "web", map[string]any{
 			"url": server.URL,
 		}))
 		if err != nil {
@@ -262,7 +262,7 @@ func TestWebFetchOmitsBinaryContent(t *testing.T) {
 		t.Cleanup(server.Close)
 
 		handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted, AllowLocalhost: true})
-		result, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-bin-sniff", "web_fetch", map[string]any{
+		result, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-bin-sniff", "web", map[string]any{
 			"url": server.URL,
 		}))
 		if err != nil {
@@ -289,7 +289,7 @@ func TestWebFetchBlocksPrivateAndMetadataSSRF(t *testing.T) {
 
 	for _, target := range blockedTargets {
 		t.Run(target, func(t *testing.T) {
-			_, err := handler.Execute(context.Background(), newJSONCall(t, "ssrf-test", "web_fetch", map[string]any{
+			_, err := handler.Execute(context.Background(), newJSONCall(t, "ssrf-test", "web", map[string]any{
 				"url": target,
 			}))
 			if err == nil || !errors.Is(err, sandbox.ErrNetworkDenied) {
@@ -300,7 +300,7 @@ func TestWebFetchBlocksPrivateAndMetadataSSRF(t *testing.T) {
 
 	// Cloud metadata must be blocked even if AllowLocalhost is true
 	localHandler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted, AllowLocalhost: true})
-	_, err := localHandler.Execute(context.Background(), newJSONCall(t, "meta-test", "web_fetch", map[string]any{
+	_, err := localHandler.Execute(context.Background(), newJSONCall(t, "meta-test", "web", map[string]any{
 		"url": "http://169.254.169.254/latest/meta-data",
 	}))
 	if err == nil || !errors.Is(err, sandbox.ErrNetworkDenied) {

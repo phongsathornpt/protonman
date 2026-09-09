@@ -35,7 +35,7 @@ func TestWriteFileRequiresExpectedSHA256ForOverwrite(t *testing.T) {
 	ws := newTestWorkspace(t, nil)
 	writeTestFile(t, ws.Root(), "file.txt", "old\n")
 	_, err := NewWriteFile(ws, &recordingCheckpointStore{id: "hash"}).Execute(context.Background(),
-		newJSONCall(t, "write-missing-hash", "write_file", map[string]any{"file_path": "file.txt", "content": "new\n"}))
+		newJSONCall(t, "write-missing-hash", "edit", map[string]any{"file_path": "file.txt", "content": "new\n"}))
 	var toolErr *tool.ToolError
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeInvalidArguments {
 		t.Fatalf("missing hash error = %v, want invalid arguments", err)
@@ -47,7 +47,7 @@ func TestWriteFileRejectsStaleExpectedSHA256(t *testing.T) {
 	writeTestFile(t, ws.Root(), "file.txt", "current\n")
 	stale := sha256.Sum256([]byte("stale\n"))
 	_, err := NewWriteFile(ws, &recordingCheckpointStore{id: "hash"}).Execute(context.Background(),
-		newJSONCall(t, "write-stale-hash", "write_file", map[string]any{
+		newJSONCall(t, "write-stale-hash", "edit", map[string]any{
 			"file_path": "file.txt", "content": "new\n", "expected_sha256": fmt.Sprintf("%x", stale[:]),
 		}))
 	var toolErr *tool.ToolError

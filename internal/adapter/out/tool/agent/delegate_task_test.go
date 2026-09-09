@@ -57,7 +57,7 @@ func TestDelegateTask_Execute(t *testing.T) {
 			"profile": "agility",
 			"task":    "search for auth middleware",
 		})
-		call, err := tool.NewCall("call-1", "delegate_task", args)
+		call, err := tool.NewCall("call-1", "subagent", args)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -105,7 +105,7 @@ func TestDelegateTask_Execute(t *testing.T) {
 			"profile": "invalid_profile",
 			"task":    "some task",
 		})
-		call, _ := tool.NewCall("call-2", "delegate_task", args)
+		call, _ := tool.NewCall("call-2", "subagent", args)
 
 		_, err := handler.Execute(ctx, call)
 		if err == nil {
@@ -121,7 +121,7 @@ func TestDelegateTask_Execute(t *testing.T) {
 			"profile": "agility",
 			"task":    "",
 		})
-		call, _ := tool.NewCall("call-3", "delegate_task", args)
+		call, _ := tool.NewCall("call-3", "subagent", args)
 
 		_, err := handler.Execute(ctx, call)
 		if err == nil {
@@ -137,7 +137,7 @@ func TestDelegateTask_Execute(t *testing.T) {
 		cancelCtx, cancel := context.WithCancel(context.Background())
 		cancel()
 		args, _ := json.Marshal(map[string]any{"profile": "agility", "task": "hang task"})
-		call, _ := tool.NewCall("call-4", "delegate_task", args)
+		call, _ := tool.NewCall("call-4", "subagent", args)
 		if _, err := cHandler.Execute(cancelCtx, call); err == nil {
 			t.Fatal("expected canceled submission error")
 		}
@@ -160,7 +160,7 @@ func TestDelegateTask_Execute(t *testing.T) {
 			"profile": "agility",
 			"task":    "test task",
 		})
-		call, _ := tool.NewCall("call-parent", "delegate_task", args)
+		call, _ := tool.NewCall("call-parent", "subagent", args)
 		res, err := pHandler.Execute(ctx, call)
 		if err != nil {
 			t.Fatal(err)
@@ -198,7 +198,7 @@ func TestDelegateTask_Execute(t *testing.T) {
 		}
 		for _, expected := range []string{"strength", "intelligence", "agility"} {
 			if !enumMap[expected] {
-				t.Errorf("delegate_task enum missing %q", expected)
+				t.Errorf("subagent enum missing %q", expected)
 			}
 		}
 
@@ -207,7 +207,7 @@ func TestDelegateTask_Execute(t *testing.T) {
 				"profile": prof,
 				"task":    "task for " + prof,
 			})
-			call, _ := tool.NewCall("call-"+prof, "delegate_task", args)
+			call, _ := tool.NewCall("call-"+prof, "subagent", args)
 			res, err := handler.Execute(ctx, call)
 			if err != nil {
 				t.Fatalf("unexpected error for profile %s: %v", prof, err)
@@ -245,7 +245,7 @@ func TestDelegateTaskAppliesRequestedShorterTimeout(t *testing.T) {
 	defer coord.Close()
 	handler := NewDelegateTask(coord)
 	args, _ := json.Marshal(map[string]any{"profile": "agility", "task": "short", "timeout_seconds": 1})
-	call, _ := tool.NewCall("short-timeout", "delegate_task", args)
+	call, _ := tool.NewCall("short-timeout", "subagent", args)
 	if _, err := handler.Execute(context.Background(), call); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -258,7 +258,7 @@ func TestDelegateTaskAppliesRequestedShorterTimeout(t *testing.T) {
 func TestDelegateTaskRejectsExcessiveTimeoutSeconds(t *testing.T) {
 	handler := NewDelegateTask(agent.NewCoordinator(nil, nil, nil, nil))
 	args, _ := json.Marshal(map[string]any{"profile": "agility", "task": "too long", "timeout_seconds": 86401})
-	call, _ := tool.NewCall("bad-timeout", "delegate_task", args)
+	call, _ := tool.NewCall("bad-timeout", "subagent", args)
 	if _, err := handler.Execute(context.Background(), call); err == nil || !strings.Contains(err.Error(), "timeout_seconds") {
 		t.Fatalf("Execute() error = %v, want timeout validation error", err)
 	}
@@ -275,7 +275,7 @@ func TestDelegateTaskPrefersContextParentID(t *testing.T) {
 	handler := NewDelegateTask(coord, "fallback-parent")
 	ctx := agent.WithParentID(context.Background(), "turn-7")
 	args, _ := json.Marshal(map[string]any{"profile": "agility", "task": "inspect"})
-	call, _ := tool.NewCall("call-context-parent", "delegate_task", args)
+	call, _ := tool.NewCall("call-context-parent", "subagent", args)
 	res, err := handler.Execute(ctx, call)
 	if err != nil {
 		t.Fatal(err)
