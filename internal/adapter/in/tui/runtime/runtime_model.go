@@ -110,10 +110,6 @@ type bubbleModel struct {
 	activeProviderSelect      asyncOperationID
 	activeProviderDelete      asyncOperationID
 	activeModelSelect         asyncOperationID
-
-	modal       *permissionRequest
-	modalParked bool
-	permIndex   int
 }
 
 type bubbleKeyMap struct {

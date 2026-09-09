@@ -186,7 +186,7 @@ func TestPermissionOptionListEnterAndNumbers(t *testing.T) {
 	updated, _ := model.Update(testKey(tea.KeyDown))
 	model = updated.(*bubbleModel)
 	if model.permissionView().index != 1 {
-		t.Fatalf("permIndex after down = %d, want 1", model.permissionView().index)
+		t.Fatalf("permission index after down = %d, want 1", model.permissionView().index)
 	}
 	updated, _ = model.Update(testKey(tea.KeyEnter))
 	model = updated.(*bubbleModel)
