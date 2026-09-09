@@ -569,7 +569,7 @@ func TestBubbleModelRunsToolCommandThroughService(t *testing.T) {
 		t.Fatalf("handler calls = %d, want 1", handler.calls)
 	}
 	if !strings.Contains(plainTranscript(model), "file contents") {
-		t.Fatalf("scrollback does not contain tool output: %#v", model.blocks)
+		t.Fatalf("scrollback does not contain tool output: %#v", model.historyState.Cells())
 	}
 }
 
@@ -588,7 +588,7 @@ func TestSubmitWhileBusyQueuesDraft(t *testing.T) {
 		t.Fatalf("queue = %#v, want [:help]", model.queue)
 	}
 	if !strings.Contains(plainTranscript(model), "queued (1): :help") {
-		t.Fatalf("scrollback missing queue notice: %#v", model.blocks)
+		t.Fatalf("scrollback missing queue notice: %#v", model.historyState.Cells())
 	}
 	model.busy = false
 	if command := model.drainQueue(); command != nil {
@@ -598,7 +598,7 @@ func TestSubmitWhileBusyQueuesDraft(t *testing.T) {
 		t.Fatalf("queue after drain = %#v, want empty", model.queue)
 	}
 	if !strings.Contains(plainTranscript(model), "/help") {
-		t.Fatalf("drained :help did not render: %#v", model.blocks)
+		t.Fatalf("drained :help did not render: %#v", model.historyState.Cells())
 	}
 }
 

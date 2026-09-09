@@ -179,7 +179,6 @@ func promptPlaceholder(hasRunner bool, mode permission.Mode, planMode bool) stri
 
 func (m *bubbleModel) resetTranscript() {
 	m.ensureHistoryState().Reset()
-	m.syncLegacyBlocks()
 	m.followTail = true
 	m.showWelcome = true
 	m.refreshTranscriptViewport(true)

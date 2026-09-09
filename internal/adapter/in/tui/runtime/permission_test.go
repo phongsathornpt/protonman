@@ -77,7 +77,7 @@ func TestPermissionCardOverlaysTranscript(t *testing.T) {
 	model.refreshViewport()
 	model.modal = &permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "rm -rf tmp", Arguments: json.RawMessage(`{"command":"rm -rf tmp"}`)}, response: make(chan permissionResponse, 1)}
 	if !strings.Contains(plainTranscript(model), "assistant: ready") {
-		t.Fatalf("overlay replaced the transcript: %#v", model.blocks)
+		t.Fatalf("overlay replaced the transcript: %#v", model.historyState.Cells())
 	}
 	view := model.View()
 	for _, expected := range []string{"Permission required — shell modifies state", "bash", "Allow once", "Deny", "esc review"} {

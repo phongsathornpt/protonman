@@ -165,7 +165,6 @@ func BenchmarkApplyTurnTextDeltaLongHistory(b *testing.B) {
 		m.historyState.Append(&UserCell{Text: fmt.Sprintf("question %d", i)})
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("answer %d", i)})
 	}
-	m.syncLegacyBlocks()
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {

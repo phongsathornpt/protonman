@@ -17,26 +17,6 @@ import (
 
 const maxBubbleScrollback = 1000
 
-type blockKind = HistoryCellKind // Block remains as a derived compatibility snapshot for the existing package
-// tests while the TUI migrates to HistoryCell. Runtime rendering no longer uses
-// Block as its source of truth.
-
-const (
-	blockUser      = HistoryCellUser
-	blockAssistant = HistoryCellAssistant
-	blockTool      = HistoryCellTool
-	blockSystem    = HistoryCellSystem
-	blockError     = HistoryCellError
-)
-
-type Block struct {
-	Kind    blockKind
-	Title   string
-	Body    string
-	Running bool
-	Code    tool.ErrorCode
-}
-
 func (m *bubbleModel) ensureHistoryState() *HistoryState {
 	if m.historyState == nil {
 		m.historyState = NewHistoryState(maxBubbleScrollback)
@@ -44,75 +24,12 @@ func (m *bubbleModel) ensureHistoryState() *HistoryState {
 	return m.historyState
 }
 
-func (m *bubbleModel) syncLegacyBlocks() {
-	cells := m.ensureHistoryState().Cells()
-	blocks := make([]Block, 0, len(cells))
-	for _, cell := range cells {
-		switch typed := cell.(type) {
-		case *UserCell:
-			blocks = append(blocks, Block{Kind: blockUser, Body: typed.Text})
-		case *AssistantCell:
-			blocks = append(blocks, Block{Kind: blockAssistant, Body: typed.Text})
-		case *ToolCell:
-			blocks = append(blocks, Block{Kind: blockTool, Title: typed.Name, Body: typed.Body, Running: typed.Running, Code: typed.FailureCode})
-		case *ExecCell:
-			blocks = append(blocks, Block{Kind: blockTool, Title: typed.Name, Body: typed.Body, Running: typed.Running, Code: typed.FailureCode})
-		case *PatchCell:
-			blocks = append(blocks, Block{Kind: blockTool, Title: typed.Name, Body: typed.Body, Running: typed.Running, Code: typed.FailureCode})
-		case *SystemCell:
-			blocks = append(blocks, Block{Kind: blockSystem, Body: typed.Text})
-		case *ErrorCell:
-			blocks = append(blocks, Block{Kind: blockError, Title: typed.Title, Body: typed.Text, Code: typed.Code})
-		}
-	}
-	m.blocks = blocks
-}
-
-func (m *bubbleModel) pushBlock(block Block) {
-	state := m.ensureHistoryState()
-	switch block.Kind {
-	case blockUser:
-		state.Append(&UserCell{Text: block.Body})
-	case blockAssistant:
-		state.Append(&AssistantCell{Text: block.Body})
-	case blockTool:
-		cell := &ToolCell{Name: block.Title, Body: block.Body, Running: block.Running, FailureCode: block.Code}
-		if block.Running {
-			state.StartToolCell(cell)
-		} else {
-			state.Append(cell)
-		}
-	case blockError:
-		state.Append(&ErrorCell{Title: block.Title, Text: block.Body, Code: block.Code})
-	default:
-		state.Append(&SystemCell{Text: block.Body})
-	}
-	m.syncLegacyBlocks()
-}
-
-func (m *bubbleModel) trimBlocks() {
-	m.syncLegacyBlocks()
-}
-
-func lineCount(blocks []Block) int {
-	total := 0
-	for _, block := range blocks {
-		total += 1 + strings.Count(block.Body, "\n")
-		if block.Title != "" && block.Kind == blockTool {
-			total++
-		}
-	}
-	return total
-}
-
 func (m *bubbleModel) appendLine(line string) {
 	m.ensureHistoryState().Append(&SystemCell{Text: line})
-	m.syncLegacyBlocks()
 }
 
 func (m *bubbleModel) appendUser(line string) {
 	m.ensureHistoryState().Append(&UserCell{Text: line})
-	m.syncLegacyBlocks()
 }
 
 func (m *bubbleModel) appendAssistant(text string) {
@@ -121,7 +38,6 @@ func (m *bubbleModel) appendAssistant(text string) {
 		return
 	}
 	m.ensureHistoryState().Append(&AssistantCell{Text: text})
-	m.syncLegacyBlocks()
 }
 
 func (m *bubbleModel) appendAssistantDelta(text string) {
@@ -130,17 +46,14 @@ func (m *bubbleModel) appendAssistantDelta(text string) {
 
 func (m *bubbleModel) appendError(text string) {
 	m.ensureHistoryState().Append(&ErrorCell{Text: text})
-	m.syncLegacyBlocks()
 }
 
 func (m *bubbleModel) appendMuted(text string) {
 	m.ensureHistoryState().Append(&SystemCell{Text: text})
-	m.syncLegacyBlocks()
 }
 
 func (m *bubbleModel) appendToolRunning(name string) {
 	m.ensureHistoryState().StartTool(name)
-	m.syncLegacyBlocks()
 }
 
 func toolFailureSuggestions(toolName string, code tool.ErrorCode) []string {
@@ -183,7 +96,6 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 		} else {
 			m.touchAgentOperation(call.Name, call)
 		}
-		m.syncLegacyBlocks()
 		return
 	}
 	switch resolvedKind {
@@ -196,7 +108,6 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 	case tool.KindEdit:
 		if call.Name == "edit" && strings.EqualFold(extractStringArg(call.Arguments, "action"), "restore") {
 			state.StartToolCell(&ToolCell{CallID: call.ID, Name: call.Name, Target: target, ToolKind: resolvedKind, Running: true})
-			m.syncLegacyBlocks()
 			return
 		}
 		summary, paths := editPresentation(call)
@@ -204,7 +115,6 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 	default:
 		state.StartToolCell(&ToolCell{CallID: call.ID, Name: call.Name, Target: target, ToolKind: resolvedKind, Running: true})
 	}
-	m.syncLegacyBlocks()
 }
 
 func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error) {
@@ -229,18 +139,15 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 		body = joinBody(body, "checkpoint: "+result.CheckpointID)
 	}
 	if result.Failure == nil && err == nil && m.applyAgentToolResult(name, result, body) {
-		m.syncLegacyBlocks()
 		return
 	}
 	if (result.Failure != nil || err != nil) && m.applyAgentToolFailure(name, result, err) {
-		m.syncLegacyBlocks()
 		return
 	}
 	if result.Failure != nil && result.Failure.Message != "" && result.Failure.Code != tool.ErrorCodeCanceled {
 		if name == "bash" && execFailureUsesExecCell(result.Failure.Code) {
 			completed := m.completedToolCell(result.CallID, name, body, result)
 			state.CompleteToolCall(result.CallID, name, completed)
-			m.syncLegacyBlocks()
 			return
 		}
 		suggestions := toolFailureSuggestions(name, result.Failure.Code)
@@ -255,7 +162,6 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 		}
 		errorCell := &ErrorCell{ErrorKind: ErrorKindToolFailed, Title: title, Badge: badge, Text: text, Code: result.Failure.Code, Suggestions: suggestions}
 		state.CompleteToolCall(result.CallID, name, errorCell)
-		m.syncLegacyBlocks()
 		return
 	}
 	if err != nil && !errors.Is(err, context.Canceled) && failureCode(result) != tool.ErrorCodeCanceled {
@@ -266,7 +172,6 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 			errorCell.Code = result.Failure.Code
 		}
 		state.CompleteToolCall(result.CallID, name, errorCell)
-		m.syncLegacyBlocks()
 		return
 	}
 	if errors.Is(err, context.Canceled) || failureCode(result) == tool.ErrorCodeCanceled {
@@ -274,7 +179,6 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 	}
 	completed := m.completedToolCell(result.CallID, name, body, result)
 	state.CompleteToolCall(result.CallID, name, completed)
-	m.syncLegacyBlocks()
 }
 
 func execFailureUsesExecCell(code tool.ErrorCode) bool {
@@ -358,22 +262,6 @@ func failureCode(result tool.Result) tool.ErrorCode {
 	return result.Failure.Code
 }
 
-func (m *bubbleModel) replaceRunningTool(name string, replacement Block) bool {
-	if m.runningToolCell("", name) == nil {
-		return false
-	}
-	var cell HistoryCell
-	switch replacement.Kind {
-	case blockError:
-		cell = &ErrorCell{Title: replacement.Title, Text: replacement.Body, Code: replacement.Code}
-	default:
-		cell = &ToolCell{Name: replacement.Title, Body: replacement.Body, Running: replacement.Running, FailureCode: replacement.Code}
-	}
-	m.ensureHistoryState().CompleteToolCell(name, cell)
-	m.syncLegacyBlocks()
-	return true
-}
-
 func (m *bubbleModel) applyTurnEvents(events []app.Event) {
 	if len(events) == 0 {
 		return
@@ -426,7 +314,6 @@ func (m *bubbleModel) applyTurnEvent(event app.Event) {
 		m.activity = "analyzing"
 	case app.EventCompleted:
 		m.ensureHistoryState().CommitActive()
-		m.syncLegacyBlocks()
 	case app.EventFailed:
 		m.appendTurnFailure(event.Err)
 	}
@@ -446,7 +333,6 @@ func (m *bubbleModel) appendTurnFailure(err error) {
 			}
 		}
 		m.ensureHistoryState().Append(&SystemCell{Text: text})
-		m.syncLegacyBlocks()
 		return
 	}
 	cells := m.ensureHistoryState().Cells()
@@ -456,7 +342,6 @@ func (m *bubbleModel) appendTurnFailure(err error) {
 		}
 	}
 	m.ensureHistoryState().Append(&ErrorCell{ErrorKind: classified.Kind, Title: classified.Title, Badge: classified.Badge, Text: classified.Message, Suggestions: classified.Suggestions, RawDetails: classified.RawDetails, Retryable: classified.Retryable})
-	m.syncLegacyBlocks()
 }
 
 func (m *bubbleModel) appendTurnResult(events []app.Event, result app.Result, err error) {
@@ -471,7 +356,6 @@ func (m *bubbleModel) appendTurnResult(events []app.Event, result app.Result, er
 		m.appendAssistant(result.Message.Content)
 	}
 	m.ensureHistoryState().CommitActive()
-	m.syncLegacyBlocks()
 	m.appendTurnFailure(err)
 }
 
@@ -487,21 +371,6 @@ func (m bubbleModel) renderBlocks() []string {
 		return nil
 	}
 	return m.historyState.RenderLines()
-}
-
-func renderBlock(block Block) []string {
-	switch block.Kind {
-	case blockUser:
-		return (&UserCell{Text: block.Body}).Render()
-	case blockAssistant:
-		return (&AssistantCell{Text: block.Body}).Render()
-	case blockTool:
-		return (&ToolCell{Name: block.Title, Body: block.Body, Running: block.Running, FailureCode: block.Code}).Render()
-	case blockError:
-		return (&ErrorCell{Title: block.Title, Text: block.Body, Code: block.Code}).Render()
-	default:
-		return (&SystemCell{Text: block.Body}).Render()
-	}
 }
 
 func joinBody(existing string, extra string) string {
@@ -551,7 +420,6 @@ func (m *bubbleModel) loadInitialMessages(messages []model.Message) {
 			}
 		}
 	}
-	m.syncLegacyBlocks()
 }
 
 func extractStringArg(raw json.RawMessage, key string) string {

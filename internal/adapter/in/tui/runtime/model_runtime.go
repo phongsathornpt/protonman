@@ -115,8 +115,6 @@ type bubbleModel struct {
 	projectTrusted            bool
 	projectConfigSources      []string
 	projectConfigProvenance   map[string]config.ValueSource
-	blocks                    []Block // Compatibility snapshots for existing in-package tests during the
-	// migration. Runtime ownership lives in bottom/historyState.
 
 	prompt      *textarea.Model
 	modal       *permissionRequest
@@ -1087,7 +1085,6 @@ func (m *bubbleModel) updateTurnDone(message turnDoneMsg) (tea.Model, tea.Cmd) {
 		m.finalizeRunningTools(message.err)
 	}
 	m.historyState.CommitActive()
-	m.syncLegacyBlocks()
 	if message.err == nil {
 		if len(message.result.Messages) > 0 {
 			m.messages = append(m.messages, model.CloneMessages(message.result.Messages)...)

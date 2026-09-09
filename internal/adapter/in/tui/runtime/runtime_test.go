@@ -252,15 +252,17 @@ func TestTurnFailureFinalizesRunningToolCells(t *testing.T) {
 	}
 }
 
-func TestCompletedTurnSyncsLegacyAssistantBlock(t *testing.T) {
+func TestCompletedTurnCommitsAssistantCell(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.applyTurnEvent(applicationturn.Event{Kind: applicationturn.EventTextDelta, Text: "streamed answer"})
 	model.applyTurnEvent(applicationturn.Event{Kind: applicationturn.EventCompleted})
-	if len(model.blocks) != 1 {
-		t.Fatalf("completed turn legacy blocks = %#v, want one assistant block", model.blocks)
+	cells := model.historyState.Cells()
+	if len(cells) != 1 {
+		t.Fatalf("completed turn cells = %#v, want one assistant cell", cells)
 	}
-	if got := model.blocks[0]; got.Kind != blockAssistant || got.Body != "streamed answer" {
-		t.Fatalf("completed assistant block = %#v", got)
+	got, ok := cells[0].(*AssistantCell)
+	if !ok || got.Text != "streamed answer" {
+		t.Fatalf("completed assistant cell = %#v", cells[0])
 	}
 }
 
@@ -270,11 +272,12 @@ func TestFailedToolReplacesRunningBlock(t *testing.T) {
 	result := tool.Result{ToolName: "bash", Failure: &tool.Failure{Code: tool.ErrorCodePermissionDenied, Message: "permission denied"}}
 	model.appendToolResult(result, toolcall.ErrPermissionDenied)
 	assertNoRunningTool(t, model)
-	if len(model.blocks) != 1 {
-		t.Fatalf("failure left duplicate blocks: %#v", model.blocks)
+	cells := model.historyState.Cells()
+	if len(cells) != 1 {
+		t.Fatalf("failure left duplicate cells: %#v", cells)
 	}
-	if model.blocks[0].Kind != blockError {
-		t.Fatalf("failed running block kind = %v, want error", model.blocks[0].Kind)
+	if _, ok := cells[0].(*ErrorCell); !ok {
+		t.Fatalf("failed running cell = %#v, want error cell", cells[0])
 	}
 }
 
@@ -295,10 +298,8 @@ func TestModelToolFailureRendersReason(t *testing.T) {
 
 func assertNoRunningTool(t *testing.T, model *bubbleModel) {
 	t.Helper()
-	for _, block := range model.blocks {
-		if block.Kind == blockTool && block.Running {
-			t.Fatalf("running tool block remained after terminal result: %#v", model.blocks)
-		}
+	if running := model.historyState.RunningTools(); len(running) != 0 {
+		t.Fatalf("running tool remained after terminal result: %#v", running)
 	}
 }
 
