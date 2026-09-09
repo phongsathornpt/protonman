@@ -240,15 +240,13 @@ func ParseToolKind(value string) (ToolKind, error) {
 		return ToolGit, nil
 	case "mcp":
 		return ToolMCP, nil
-	case "web", "web_fetch", "web-fetch", "webfetch":
-		return ToolWeb, nil
-	case "web_search", "web-search", "websearch":
+	case "web":
 		return ToolWeb, nil
 	case "task", "todo":
 		return ToolTask, nil
 	case "agent", "subagent":
 		return ToolAgent, nil
-	case "compute", "calculate", "math":
+	case "compute", "math":
 		return ToolCompute, nil
 	default:
 		return "", fmt.Errorf("unknown permission tool %q", value)
