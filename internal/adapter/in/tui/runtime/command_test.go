@@ -706,21 +706,17 @@ func TestSlashAutocompleteWrapAround(t *testing.T) {
 	}
 }
 
-func TestSlashAutocompleteAlignedColumns(t *testing.T) {
+func TestSlashAutocompleteUsesBubblesListPresentation(t *testing.T) {
 	model := newTestSkillsModel(t, 5)
 	model.bottom.prompt().SetValue("/skill ")
 	if !model.slashOpen() {
 		t.Fatal("expected slash open for /skill ")
 	}
 	rendered := model.renderSlash(0)
-	if !strings.Contains(rendered, "› [ ] skill-01") {
-		t.Fatalf("expected aligned cursor and checkbox '› [ ] skill-01', got:\n%s", rendered)
-	}
-	if !strings.Contains(rendered, "  [ ] skill-02") {
-		t.Fatalf("expected aligned unselected row '  [ ] skill-02', got:\n%s", rendered)
-	}
-	if !strings.Contains(rendered, "[user   ]") {
-		t.Fatalf("expected aligned scope tag '[user   ]', got:\n%s", rendered)
+	for _, want := range []string{"[ ] skill-01", "[ ] skill-02", "Description for skill 01", "user"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("bubbles slash list missing %q:\n%s", want, rendered)
+		}
 	}
 }
 
