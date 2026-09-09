@@ -119,10 +119,6 @@ func SummarizeOutput(name string, kind tool.Kind, target string, body string, ex
 		return "activated"
 	}
 
-	if name == "checkpoint_restore" {
-		return "restored checkpoint"
-	}
-
 	// Fallback for MCP or generic tools
 	if bodyTrimmed == "" {
 		return "completed"
@@ -597,32 +593,20 @@ func summarizeGitStatus(body string) string {
 	return strings.Join(parts, ", ")
 }
 
-func summarizeEdit(name string, body string) string {
+func summarizeEdit(_ string, body string) string {
 	if body == "" {
 		return "updated"
 	}
-	if tool.CanonicalName(name) == "edit" && name == "edit" {
-		lower := strings.ToLower(body)
-		switch {
-		case strings.Contains(lower, "restored checkpoint"):
-			return "restored checkpoint"
-		case strings.Contains(lower, "wrote file successfully"):
-			return "saved"
-		case strings.Contains(lower, "success. updated"), strings.Contains(lower, "success. added"), strings.Contains(lower, "success. deleted"):
-			return "patch applied"
-		case strings.Contains(lower, "has been updated"), strings.Contains(lower, "has been created"):
-			return "1 replacement applied"
-		}
-	}
-	switch name {
-	case "write_file":
-		return "saved"
-	case "search_replace":
-		return "1 replacement applied"
-	case "apply_patch":
-		return "patch applied"
-	case "checkpoint_restore":
+	lower := strings.ToLower(body)
+	switch {
+	case strings.Contains(lower, "restored checkpoint"):
 		return "restored checkpoint"
+	case strings.Contains(lower, "wrote file successfully"):
+		return "saved"
+	case strings.Contains(lower, "success. updated"), strings.Contains(lower, "success. added"), strings.Contains(lower, "success. deleted"):
+		return "patch applied"
+	case strings.Contains(lower, "has been updated"), strings.Contains(lower, "has been created"):
+		return "1 replacement applied"
 	default:
 		return "file updated"
 	}
