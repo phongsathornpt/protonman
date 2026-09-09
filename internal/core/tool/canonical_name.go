@@ -43,6 +43,12 @@ func CanonicalName(name string) string {
 	return name
 }
 
+// IsLegacyName reports whether name belongs to the compatibility-only tool namespace.
+func IsLegacyName(name string) bool {
+	_, ok := legacyToolAliases[strings.TrimSpace(name)]
+	return ok
+}
+
 // NormalizeLegacyArguments injects compatibility fields required by a
 // capability facade while preserving already-canonical arguments unchanged.
 func NormalizeLegacyArguments(name string, arguments json.RawMessage) json.RawMessage {

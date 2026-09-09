@@ -315,6 +315,23 @@ func TestDefaultRegistryContainsCodingTools(t *testing.T) {
 	}
 }
 
+func TestDefaultRegistryDoesNotPublishLegacyToolNames(t *testing.T) {
+	workspaceRoot := newTestWorkspace(t, nil)
+	coord := agent.NewCoordinator(nil, nil, nil, nil)
+	defer coord.Close()
+	registry, err := NewDefaultRegistry(workspaceRoot, testSandboxOption(), testCheckpointOption(), withAgentTools(coord))
+	if err != nil {
+		t.Fatal(err)
+	}
+	definitions := registry.Definitions()
+	definitions = append(definitions, todotool.NewTodo(nil).Definition(), skilltool.NewActivateSkill(nil, workspaceRoot).Definition())
+	for _, definition := range definitions {
+		if tool.IsLegacyName(definition.Name) {
+			t.Fatalf("legacy tool leaked into public registry: %q", definition.Name)
+		}
+	}
+}
+
 func TestBuiltinInputSchemasRejectUnknownProperties(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
