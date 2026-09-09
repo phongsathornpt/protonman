@@ -394,3 +394,29 @@ func TestNewCallNormalizesBlankArguments(t *testing.T) {
 		}
 	}
 }
+
+func TestResultModelPayloadDropsRedundantStreams(t *testing.T) {
+	original := Result{
+		CallID: "call-1", ToolName: "bash", Output: "stdout\nstderr",
+		Stdout: "stdout", Stderr: "stderr", StdoutBytes: 6, StderrBytes: 6,
+		StdoutTruncated: true, Truncated: true,
+	}
+	payload := original.ModelPayload()
+	if payload.Stdout != "" || payload.Stderr != "" {
+		t.Fatalf("model payload retained duplicate streams: %#v", payload)
+	}
+	if payload.Output != original.Output || payload.StdoutBytes != 6 || !payload.StdoutTruncated || !payload.Truncated {
+		t.Fatalf("model payload lost stream metadata: %#v", payload)
+	}
+	if original.Stdout != "stdout" || original.Stderr != "stderr" {
+		t.Fatalf("ModelPayload mutated original result: %#v", original)
+	}
+}
+
+func TestResultModelPayloadKeepsStreamsWithoutCompatibilityOutput(t *testing.T) {
+	original := Result{ToolName: "custom", Stdout: "stdout", Stderr: "stderr"}
+	payload := original.ModelPayload()
+	if payload.Stdout != "stdout" || payload.Stderr != "stderr" {
+		t.Fatalf("model payload dropped sole stream content: %#v", payload)
+	}
+}

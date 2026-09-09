@@ -67,7 +67,7 @@ func toolMessagesForExecutions(executions []executedCall) ([]model.Message, erro
 	messages := make([]model.Message, 0, len(executions))
 	for _, execution := range executions {
 		toolResult := execution.result
-		content, err := json.Marshal(toolResult)
+		content, err := json.Marshal(toolResult.ModelPayload())
 		if err != nil {
 			return nil, fmt.Errorf("encode tool result %q: %w", execution.call.Name, err)
 		}

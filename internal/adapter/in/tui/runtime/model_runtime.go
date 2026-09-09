@@ -342,7 +342,7 @@ func (m *bubbleModel) appendModelToolResult(call tool.Call, result tool.Result) 
 	if result.ToolName == "" {
 		result.ToolName = call.Name
 	}
-	content, err := json.Marshal(result)
+	content, err := json.Marshal(result.ModelPayload())
 	if err != nil {
 		content = []byte(fmt.Sprintf(`{"call_id":%q,"tool_name":%q,"error":{"code":"execution_error","message":%q}}`, call.ID, call.Name, err.Error()))
 	}

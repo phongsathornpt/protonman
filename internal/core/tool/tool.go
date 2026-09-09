@@ -590,6 +590,18 @@ type Result struct {
 	AffectedPaths []string `json:"affected_paths,omitempty"`
 }
 
+// ModelPayload returns a model-facing copy without duplicate process stream text.
+// Output is already the compatibility view of stdout/stderr for process-backed
+// tools; keeping all three strings in conversation history needlessly multiplies
+// retained payload bytes. Stream metadata and truncation flags are preserved.
+func (r Result) ModelPayload() Result {
+	if r.Output != "" {
+		r.Stdout = ""
+		r.Stderr = ""
+	}
+	return r
+}
+
 // Handler executes one registered tool call.
 type Handler interface {
 	// Definition returns the stable manifest and permission category.
