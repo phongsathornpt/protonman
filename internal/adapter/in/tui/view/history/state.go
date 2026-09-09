@@ -602,6 +602,17 @@ func (s *HistoryState) ReleaseAlternateRenderCache() {
 	s.invalidateAlternateRenderCache()
 }
 
+// ReleaseRawTextCache drops the full raw transcript materialization. Raw text is
+// only needed while the transcript overlay is in raw mode and should not retain
+// a duplicate transcript after the overlay is closed or switched back to rich.
+func (s *HistoryState) ReleaseRawTextCache() {
+	if s == nil {
+		return
+	}
+	s.cachedRawText = ""
+	s.rawTextValid = false
+}
+
 func (s *HistoryState) invalidateAlternateRenderCache() {
 	s.altRender = nil
 	s.altRenderValid = false

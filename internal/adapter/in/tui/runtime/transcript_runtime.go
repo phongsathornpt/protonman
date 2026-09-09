@@ -445,6 +445,7 @@ func (m *bubbleModel) closeTranscriptOverlay() {
 	m.showTranscript = false
 	if m.historyState != nil {
 		m.historyState.ReleaseAlternateRenderCache()
+		m.historyState.ReleaseRawTextCache()
 	}
 	m.transcriptViewport.SetContent("")
 }
@@ -490,8 +491,12 @@ func (m *bubbleModel) updateTranscriptKey(message tea.KeyMsg) (tea.Model, tea.Cm
 		return m, nil
 	case "r":
 		m.rawTranscript = !m.rawTranscript
-		if m.rawTranscript && m.historyState != nil {
-			m.historyState.ReleaseAlternateRenderCache()
+		if m.historyState != nil {
+			if m.rawTranscript {
+				m.historyState.ReleaseAlternateRenderCache()
+			} else {
+				m.historyState.ReleaseRawTextCache()
+			}
 		}
 		m.refreshTranscriptViewport(false)
 		return m, nil

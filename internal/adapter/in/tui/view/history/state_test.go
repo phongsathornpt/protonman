@@ -138,6 +138,21 @@ func TestCommittedAssistantReleasesPerCellRenderCache(t *testing.T) {
 	}
 }
 
+func TestReleaseRawTextCacheDropsMaterializedTranscript(t *testing.T) {
+	state := NewHistoryState(100)
+	state.Append(&AssistantCell{Text: strings.Repeat("raw transcript ", 256)})
+	if got := state.Raw(); got == "" {
+		t.Fatal("expected raw transcript")
+	}
+	if !state.rawTextValid || state.cachedRawText == "" {
+		t.Fatal("expected raw transcript cache to be populated")
+	}
+	state.ReleaseRawTextCache()
+	if state.rawTextValid || state.cachedRawText != "" {
+		t.Fatalf("raw transcript cache retained state: valid=%v bytes=%d", state.rawTextValid, len(state.cachedRawText))
+	}
+}
+
 func TestReleaseAlternateRenderCacheDropsRenderedTranscript(t *testing.T) {
 	state := NewHistoryState(100)
 	state.Append(&AssistantCell{Text: "cached alternate transcript"})
