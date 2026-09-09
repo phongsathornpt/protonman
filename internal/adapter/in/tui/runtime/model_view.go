@@ -922,15 +922,29 @@ func saveModelSelectionCmd(providerName, modelID string, unverified bool) tea.Cm
 
 const reasoningViewID = "reasoning"
 
-type reasoningPaneView struct{ index int }
-
-func (*reasoningPaneView) ID() string {
-	return reasoningViewID
+type reasoningListItem struct {
+	effort  sdk.ReasoningEffort
+	current bool
 }
 
-func (*reasoningPaneView) ReplacesComposer() bool {
-	return true
+func (i reasoningListItem) FilterValue() string { return reasoningEffortLabel(i.effort) }
+func (i reasoningListItem) Title() string {
+	label := reasoningEffortLabel(i.effort)
+	if i.current {
+		return "✓ " + label
+	}
+	return label
 }
+func (i reasoningListItem) Description() string { return reasoningEffortDescription(i.effort) }
+
+type reasoningPaneView struct {
+	index   int
+	picker  list.Model
+	choices []sdk.ReasoningEffort
+}
+
+func (*reasoningPaneView) ID() string             { return reasoningViewID }
+func (*reasoningPaneView) ReplacesComposer() bool { return true }
 
 func (m *bubbleModel) handleReasoningCommand(argument string) tea.Cmd {
 	argument = strings.TrimSpace(argument)
@@ -968,15 +982,29 @@ func (m *bubbleModel) setReasoningEffort(effort sdk.ReasoningEffort) tea.Cmd {
 }
 
 func newReasoningPaneView(m *bubbleModel) *reasoningPaneView {
-	view := &reasoningPaneView{}
 	choices := reasoningChoices(m.activeResolvedModelProfile())
+	if len(choices) == 0 {
+		choices = []sdk.ReasoningEffort{sdk.ReasoningDefault}
+	}
+	items := make([]list.Item, 0, len(choices))
+	selected := 0
 	for i, effort := range choices {
-		if effort == m.reasoningEffort {
-			view.index = i
-			break
+		current := effort == m.reasoningEffort
+		items = append(items, reasoningListItem{effort: effort, current: current})
+		if current {
+			selected = i
 		}
 	}
-	return view
+	delegate := list.NewDefaultDelegate()
+	delegate.SetSpacing(0)
+	picker := list.New(items, delegate, maxInt(20, m.width-8), maxInt(6, minInt(18, m.height-4)))
+	picker.DisableQuitKeybindings()
+	picker.SetFilteringEnabled(false)
+	picker.SetShowStatusBar(false)
+	picker.SetShowPagination(false)
+	picker.SetStatusBarItemName("level", "levels")
+	picker.Select(selected)
+	return &reasoningPaneView{index: selected, picker: picker, choices: choices}
 }
 
 func reasoningChoices(profile modelprofile.Resolved) []sdk.ReasoningEffort {
@@ -984,50 +1012,52 @@ func reasoningChoices(profile modelprofile.Resolved) []sdk.ReasoningEffort {
 }
 
 func (v *reasoningPaneView) Render(m *bubbleModel) string {
-	rows := pane.ReasoningRows(pane.ReasoningSnapshot{Height: m.height, Index: v.index, ModelName: m.activeModel, Current: m.reasoningEffort, ModelProfile: m.activeResolvedModelProfile()})
-	return renderModalRows(m, accentAssistant, rows)
+	v.picker.SetSize(maxInt(20, m.width-8), maxInt(6, minInt(18, m.height-4)))
+	v.picker.Title = "Thinking level"
+	if modelName := strings.TrimSpace(m.activeModel); modelName != "" {
+		v.picker.Title += " · " + modelName
+	}
+	mode := layoutModeForHeight(m.height)
+	v.picker.SetShowHelp(mode != layoutTiny)
+	delegate := list.NewDefaultDelegate()
+	delegate.SetSpacing(0)
+	delegate.ShowDescription = mode == layoutNormal
+	v.picker.SetDelegate(delegate)
+	return renderModalRows(m, accentAssistant, strings.Split(v.picker.View(), "\n"))
 }
 
 func (v *reasoningPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
-	choices := reasoningChoices(m.activeResolvedModelProfile())
-	if len(choices) == 0 {
-		choices = []sdk.ReasoningEffort{sdk.ReasoningDefault}
+	if len(v.choices) == 0 {
+		return true, nil
 	}
-	v.index, _, _ = normalizedPickerWindow(v.index, 0, len(choices), len(choices))
+	if v.index != v.picker.Index() {
+		v.picker.Select(maxInt(0, minInt(v.index, len(v.choices)-1)))
+	}
 	switch message.String() {
-	case "up", "k":
-		if v.index > 0 {
-			v.index--
-		}
-		return true, nil
-	case "down", "j":
-		if v.index < len(choices)-1 {
-			v.index++
-		}
-		return true, nil
-	case "home", "g":
-		v.index = 0
-		return true, nil
-	case "end", "G":
-		v.index = len(choices) - 1
-		return true, nil
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		idx := int(message.String()[0] - '1')
-		if idx >= 0 && idx < len(choices) {
-			effort := choices[idx]
+		if idx >= 0 && idx < len(v.choices) {
 			m.bottom.remove(reasoningViewID)
-			return true, m.setReasoningEffort(effort)
+			return true, m.setReasoningEffort(v.choices[idx])
 		}
 		return true, nil
 	case "tab", "shift+tab":
 		return true, nil
 	case "enter":
-		effort := choices[v.index]
+		idx := v.picker.Index()
+		if idx < 0 || idx >= len(v.choices) {
+			return true, nil
+		}
 		m.bottom.remove(reasoningViewID)
-		return true, m.setReasoningEffort(effort)
+		return true, m.setReasoningEffort(v.choices[idx])
 	case "esc", "q":
 		m.bottom.remove(reasoningViewID)
 		return true, nil
+	case "up", "k", "down", "j", "home", "g", "end", "G", "pgup", "pgdown":
+		updated, cmd := v.picker.Update(message)
+		v.picker = updated
+		v.index = v.picker.Index()
+		return true, cmd
 	default:
 		return false, nil
 	}
