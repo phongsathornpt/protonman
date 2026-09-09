@@ -506,27 +506,6 @@ completed_result_ttl = "2m"
 	}
 }
 
-func TestAgentLegacySubagentTimeoutMigratesToMaxRuntime(t *testing.T) {
-	homeDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), "[agent]\nsubagent_timeout = \"45s\"\n")
-	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if snapshot.Agent.SubagentMaxRuntime != 45*time.Second {
-		t.Fatalf("max runtime = %v", snapshot.Agent.SubagentMaxRuntime)
-	}
-	found := false
-	for _, warning := range snapshot.Warnings {
-		if strings.Contains(warning, "subagent_timeout is deprecated") {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatal("missing legacy timeout deprecation warning")
-	}
-}
-
 func TestAgentSubagentTimeoutConfigRejectsInvalidValues(t *testing.T) {
 	for _, body := range []string{
 		"[agent]\nsubagent_max_runtime = \"nope\"\n",

@@ -23,7 +23,6 @@ type fileAgent struct {
 	SubagentWaitTimeout  *string                 `toml:"subagent_wait_timeout,omitempty"`
 	SubagentQueueTimeout *string                 `toml:"subagent_queue_timeout,omitempty"`
 	CompletedResultTTL   *string                 `toml:"completed_result_ttl,omitempty"`
-	SubagentTimeout      *string                 `toml:"subagent_timeout,omitempty"` // legacy
 }
 
 type fileSubagent struct {
