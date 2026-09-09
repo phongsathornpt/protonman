@@ -8,6 +8,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
+	"math"
 	"strings"
 	"testing"
 )
@@ -559,6 +560,35 @@ func TestEditToolUsesStructuredPatchCell(t *testing.T) {
 	}
 	if len(cell.Paths) != 1 || cell.Paths[0] != "internal/a.go" {
 		t.Fatalf("patch paths = %#v, want internal/a.go", cell.Paths)
+	}
+}
+
+func TestTranscriptRawRichTogglePreservesRelativeScrollPosition(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.showWelcome = false
+	for i := 0; i < 80; i++ {
+		m.appendUser(fmt.Sprintf("question %02d", i))
+		m.appendAssistant("answer with **markdown** and some detail")
+	}
+	m.panes.showTranscript = true
+	m.refreshTranscriptViewport(true)
+	m.panes.transcript.SetYOffset(m.panes.transcript.YOffset() / 2)
+	before := m.panes.transcript.ScrollPercent()
+	if before <= 0 || before >= 1 {
+		t.Fatalf("test setup scroll percent=%f, want middle position", before)
+	}
+	updated, _ := m.updateTranscriptKey(testText("r"))
+	m = updated.(*bubbleModel)
+	afterRaw := m.panes.transcript.ScrollPercent()
+	if diff := math.Abs(afterRaw - before); diff > 0.08 {
+		t.Fatalf("raw toggle scroll percent jumped from %.3f to %.3f", before, afterRaw)
+	}
+	updated, _ = m.updateTranscriptKey(testText("r"))
+	m = updated.(*bubbleModel)
+	afterRich := m.panes.transcript.ScrollPercent()
+	if diff := math.Abs(afterRich - before); diff > 0.08 {
+		t.Fatalf("rich toggle scroll percent jumped from %.3f to %.3f", before, afterRich)
 	}
 }
 

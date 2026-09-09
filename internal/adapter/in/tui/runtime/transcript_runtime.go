@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"math"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -25,6 +26,7 @@ func (m *bubbleModel) refreshTranscriptViewport(forceTail bool) {
 		return
 	}
 	follow := forceTail || m.panes.transcript.AtBottom()
+	scrollPercent := m.panes.transcript.ScrollPercent()
 	content := m.historyState.Raw()
 	if !m.panes.rawTranscript {
 		content = strings.Join(m.historyState.RenderLinesAt(maxInt(8, m.panes.transcript.Width())), "\n")
@@ -35,7 +37,16 @@ func (m *bubbleModel) refreshTranscriptViewport(forceTail bool) {
 	m.panes.transcript.SetContent(content)
 	if follow {
 		m.panes.transcript.GotoBottom()
+		return
 	}
+
+	// Raw and rich transcript modes can have very different line counts.
+	// Preserve the reader's relative position instead of letting SetContent
+	// clamp an old absolute offset to the new bottom.
+	m.panes.transcript.GotoBottom()
+	maxOffset := m.panes.transcript.YOffset()
+	target := int(math.Round(scrollPercent * float64(maxOffset)))
+	m.panes.transcript.SetYOffset(target)
 }
 
 func (m *bubbleModel) transcriptOverlayView() string {
