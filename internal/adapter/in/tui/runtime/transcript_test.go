@@ -237,7 +237,7 @@ func TestToolCellRefinedRenderingWebFetch(t *testing.T) {
 </html>`
 	state := NewHistoryState(100)
 	state.SetSpinnerFrame("⠋")
-	runningCell := &ToolCell{CallID: "call-web-1", Name: "web_fetch", Target: "https://protonman.dev", ToolKind: tool.KindWebFetch, Running: true}
+	runningCell := &ToolCell{CallID: "call-web-1", Name: "web_fetch", Target: "https://protonman.dev", ToolKind: tool.KindWeb, Running: true}
 	state.StartToolCell(runningCell)
 	rendered := state.RenderLines()
 	joinedRunning := strings.Join(rendered, "\n")
@@ -247,7 +247,7 @@ func TestToolCellRefinedRenderingWebFetch(t *testing.T) {
 	if strings.Contains(joinedRunning, "web_fetch") {
 		t.Fatalf("raw 'web_fetch' should not appear in rendered output: %s", joinedRunning)
 	}
-	completedCell := &ToolCell{CallID: "call-web-1", Name: "web_fetch", Target: "https://protonman.dev", ToolKind: tool.KindWebFetch, Body: htmlPayload, Summary: summarizeToolOutput("web_fetch", tool.KindWebFetch, "https://protonman.dev", htmlPayload, nil, false)}
+	completedCell := &ToolCell{CallID: "call-web-1", Name: "web_fetch", Target: "https://protonman.dev", ToolKind: tool.KindWeb, Body: htmlPayload, Summary: summarizeToolOutput("web_fetch", tool.KindWeb, "https://protonman.dev", htmlPayload, nil, false)}
 	state.CompleteToolCall("call-web-1", "web_fetch", completedCell)
 	rendered = state.RenderLines()
 	joinedCompleted := strings.Join(rendered, "\n")

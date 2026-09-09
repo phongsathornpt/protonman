@@ -30,7 +30,7 @@ func ExtractTarget(name string, kind tool.Kind, args json.RawMessage) (string, t
 // KindGlyph returns the appropriate category glyph for a tool.
 func KindGlyph(kind tool.Kind, name string) string {
 	switch kind {
-	case tool.KindWebFetch:
+	case tool.KindWeb:
 		return tuistyle.GlyphWeb
 	case tool.KindRead:
 		if tool.CanonicalName(name) == "ls" {
@@ -78,7 +78,7 @@ func SummarizeOutput(name string, kind tool.Kind, target string, body string, ex
 	bodyTrimmed := strings.TrimSpace(body)
 
 	switch kind {
-	case tool.KindWebFetch:
+	case tool.KindWeb:
 		if tool.CanonicalName(name) == "web" && strings.HasPrefix(strings.TrimSpace(target), `"`) {
 			return summarizeWebSearch(bodyTrimmed)
 		}
@@ -616,7 +616,7 @@ func summarizeEdit(_ string, body string) string {
 // in the primary conversation viewport because the semantic header already summarizes it.
 func ShouldSuppressBody(kind tool.Kind, name string) bool {
 	switch kind {
-	case tool.KindWebFetch, tool.KindRead, tool.KindGit, tool.KindAgent, tool.KindTask, tool.KindEdit:
+	case tool.KindWeb, tool.KindRead, tool.KindGit, tool.KindAgent, tool.KindTask, tool.KindEdit:
 		return true
 	}
 	switch tool.CanonicalName(name) {

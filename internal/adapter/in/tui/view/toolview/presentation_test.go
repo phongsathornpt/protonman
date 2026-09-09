@@ -22,18 +22,18 @@ func TestExtractToolTarget(t *testing.T) {
 		{
 			name:       "web_fetch url",
 			toolName:   "web_fetch",
-			kind:       tool.KindWebFetch,
+			kind:       tool.KindWeb,
 			args:       `{"url":"https://protonman.dev"}`,
 			wantTarget: "https://protonman.dev",
-			wantKind:   tool.KindWebFetch,
+			wantKind:   tool.KindWeb,
 		},
 		{
 			name:       "web_search query",
 			toolName:   "web_search",
-			kind:       tool.KindWebFetch,
+			kind:       tool.KindWeb,
 			args:       `{"query":"proton AI"}`,
 			wantTarget: `"proton AI"`,
-			wantKind:   tool.KindWebFetch,
+			wantKind:   tool.KindWeb,
 		},
 		{
 			name:       "read_file path",

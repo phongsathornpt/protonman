@@ -28,7 +28,7 @@ var builtinMetadata = map[string]callMetadata{
 	"find":     {Metadata: Metadata{Name: "find", Kind: KindRead, DisplayName: "Find files"}, title: titleFindFiles, target: targetFindFiles},
 	"grep":     {Metadata: Metadata{Name: "grep", Kind: KindGrep, DisplayName: "Search"}, title: titleGrep, target: targetGrep},
 	"bash":     {Metadata: Metadata{Name: "bash", Kind: KindBash, DisplayName: "Run"}, title: titleBash, target: targetBash},
-	"web":      {Metadata: Metadata{Name: "web", Kind: KindWebFetch, DisplayName: "Web"}, title: titleWeb, target: targetWeb},
+	"web":      {Metadata: Metadata{Name: "web", Kind: KindWeb, DisplayName: "Web"}, title: titleWeb, target: targetWeb},
 	"git":      {Metadata: Metadata{Name: "git", Kind: KindGit, DisplayName: "Git"}, title: titleGitStatus, target: targetGitStatus},
 	"todo":     {Metadata: Metadata{Name: "todo", Kind: KindTask, DisplayName: "Tasks"}, title: titleTodo, target: targetTodo},
 	"skill":    {Metadata: Metadata{Name: "skill", Kind: KindRead, DisplayName: "Skill"}, title: titleActivateSkill, target: targetActivateSkill},

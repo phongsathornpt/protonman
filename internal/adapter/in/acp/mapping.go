@@ -39,7 +39,7 @@ func ToolKindForCall(call tool.Call) ToolKind {
 		return ToolKindSearch
 	case tool.KindBash, tool.KindAgent, tool.KindGit:
 		return ToolKindExecute
-	case tool.KindWebFetch:
+	case tool.KindWeb:
 		return ToolKindFetch
 	case tool.KindTask:
 		return ToolKindEdit

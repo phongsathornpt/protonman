@@ -636,7 +636,7 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 			return nil
 		}
 		switch request.ToolKind {
-		case permission.ToolRead, permission.ToolGrep, permission.ToolWebFetch, permission.ToolTask:
+		case permission.ToolRead, permission.ToolGrep, permission.ToolWeb, permission.ToolTask:
 			return nil
 		case permission.ToolBash:
 			var input struct {

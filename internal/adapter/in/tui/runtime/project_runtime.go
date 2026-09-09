@@ -440,7 +440,7 @@ func parsePermissionRuleArgs(args []string) (permission.Rule, error) {
 		return permission.Rule{}, err
 	}
 	patternMode := permission.PatternModeGlob
-	if toolKind == permission.ToolWebFetch {
+	if toolKind == permission.ToolWeb {
 		patternMode = permission.PatternModeDomain
 	}
 	pattern := "*"

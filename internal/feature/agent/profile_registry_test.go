@@ -43,7 +43,7 @@ func TestFilterRegistryForCanonicalProfiles(t *testing.T) {
 		"read_file":     dummyHandler{def: tool.Definition{Name: "read_file", Kind: tool.KindRead}},
 		"find_files":    dummyHandler{def: tool.Definition{Name: "find_files", Kind: tool.KindRead}},
 		"grep":          dummyHandler{def: tool.Definition{Name: "grep", Kind: tool.KindGrep}},
-		"web":           dummyHandler{def: tool.Definition{Name: "web", Kind: tool.KindWebFetch}},
+		"web":           dummyHandler{def: tool.Definition{Name: "web", Kind: tool.KindWeb}},
 		"write_file":    dummyHandler{def: tool.Definition{Name: "write_file", Kind: tool.KindEdit}},
 		"bash":          dummyHandler{def: tool.Definition{Name: "bash", Kind: tool.KindBash}},
 		"delegate_task": dummyHandler{def: tool.Definition{Name: "delegate_task", Kind: tool.KindAgent}},

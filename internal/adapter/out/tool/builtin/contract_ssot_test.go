@@ -86,7 +86,7 @@ func TestBuiltinToolSSOTContract(t *testing.T) {
 		{
 			name:            "web",
 			args:            map[string]any{"action": "fetch", "url": "https://example.com/api"},
-			wantKind:        tool.KindWebFetch,
+			wantKind:        tool.KindWeb,
 			wantDisplayName: "Web",
 			targetSub:       "https://example.com/api",
 			titlePrefix:     "Fetch https://example.com/api",
@@ -94,7 +94,7 @@ func TestBuiltinToolSSOTContract(t *testing.T) {
 		{
 			name:            "web",
 			args:            map[string]any{"action": "search", "query": "golang testing"},
-			wantKind:        tool.KindWebFetch,
+			wantKind:        tool.KindWeb,
 			wantDisplayName: "Web",
 			targetSub:       `"golang testing"`,
 			titlePrefix:     "Search web: golang testing",

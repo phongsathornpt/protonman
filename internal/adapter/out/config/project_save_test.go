@@ -64,7 +64,7 @@ func TestSaveProjectPermissionRuleRoundTrip(t *testing.T) {
 	// Saving domain rule
 	domainRule := permission.Rule{
 		Action:      permission.ActionAllow,
-		Tool:        permission.ToolWebFetch,
+		Tool:        permission.ToolWeb,
 		Pattern:     "api.github.com",
 		PatternMode: permission.PatternModeDomain,
 	}
@@ -91,7 +91,7 @@ func TestSaveProjectPermissionRuleRoundTrip(t *testing.T) {
 	}
 
 	r1 := snapshot.Permission.Rules[1]
-	if r1.Action != permission.ActionAllow || r1.Tool != permission.ToolWebFetch || r1.Pattern != "api.github.com" || r1.PatternMode != permission.PatternModeDomain {
+	if r1.Action != permission.ActionAllow || r1.Tool != permission.ToolWeb || r1.Pattern != "api.github.com" || r1.PatternMode != permission.PatternModeDomain {
 		t.Fatalf("rule 1 mismatch: %+v", r1)
 	}
 }

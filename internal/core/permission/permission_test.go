@@ -89,7 +89,7 @@ func TestPolicyDomainPatternNormalizesHost(t *testing.T) {
 		Rules: []Rule{
 			{
 				Action:      ActionAllow,
-				Tool:        ToolWebFetch,
+				Tool:        ToolWeb,
 				Pattern:     "*.example.com",
 				PatternMode: PatternModeDomain,
 			},
@@ -101,7 +101,7 @@ func TestPolicyDomainPatternNormalizesHost(t *testing.T) {
 
 	decision := policy.Evaluate(Request{
 		ToolName: "web_fetch",
-		ToolKind: ToolWebFetch,
+		ToolKind: ToolWeb,
 		Detail:   "https://API.Example.COM/v1/status",
 	})
 	if decision.Action != ActionAllow {
@@ -114,7 +114,7 @@ func TestPolicyDomainPatternIsCaseInsensitive(t *testing.T) {
 		Rules: []Rule{
 			{
 				Action:      ActionDeny,
-				Tool:        ToolWebFetch,
+				Tool:        ToolWeb,
 				Pattern:     "*.Example.COM",
 				PatternMode: PatternModeDomain,
 			},
@@ -127,7 +127,7 @@ func TestPolicyDomainPatternIsCaseInsensitive(t *testing.T) {
 
 	decision := policy.Evaluate(Request{
 		ToolName: "web_fetch",
-		ToolKind: ToolWebFetch,
+		ToolKind: ToolWeb,
 		Detail:   "https://api.example.com/v1/status",
 	})
 	if decision.Action != ActionDeny {
@@ -280,7 +280,7 @@ func TestGrantScopeEnumAndTextMarshaling(t *testing.T) {
 func TestToolKindValidationAndParsing(t *testing.T) {
 	kinds := []ToolKind{
 		ToolAny, ToolRead, ToolEdit, ToolBash,
-		ToolGrep, ToolMCP, ToolWebFetch,
+		ToolGrep, ToolMCP, ToolWeb,
 		ToolTask, ToolAgent, ToolCompute,
 	}
 	for _, k := range kinds {
@@ -474,14 +474,14 @@ func TestRuleFromRequestAndPersistentEligibility(t *testing.T) {
 			name: "web_fetch normalizes domain",
 			req: Request{
 				ToolName: "web_fetch",
-				ToolKind: ToolWebFetch,
+				ToolKind: ToolWeb,
 				Detail:   "https://API.GitHub.COM/repos/owner/repo",
 				Effect:   tool.CommandEffectReadOnly,
 				Risk:     tool.CommandRiskNormal,
 			},
 			wantEligible: true,
 			wantRuleOK:   true,
-			wantRuleTool: ToolWebFetch,
+			wantRuleTool: ToolWeb,
 			wantRulePat:  "api.github.com",
 			wantRuleMode: PatternModeDomain,
 		},
@@ -619,8 +619,8 @@ func TestNormalizePatternAndWildcardAll(t *testing.T) {
 		{ToolBash, PatternModeGlob, "*", "*"},
 		{ToolBash, PatternModeGlob, "", "*"},
 		{ToolBash, PatternModeGlob, "git status", "git status"},
-		{ToolWebFetch, PatternModeDomain, "all", "*"},
-		{ToolWebFetch, PatternModeDomain, "API.GitHub.COM", "api.github.com"},
+		{ToolWeb, PatternModeDomain, "all", "*"},
+		{ToolWeb, PatternModeDomain, "API.GitHub.COM", "api.github.com"},
 		{ToolMCP, PatternModeGlob, "all", "*"},
 		{ToolMCP, PatternModeGlob, "github.search", "mcp.github.search"},
 	}

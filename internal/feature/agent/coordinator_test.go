@@ -556,7 +556,7 @@ func TestCoordinator_ResilientEmitOnCancel(t *testing.T) {
 func TestCoordinator_ReadOnlyProfileInheritsAskModeForNetworkTools(t *testing.T) {
 	baseReg := staticRegistry{
 		handlers: map[string]tool.Handler{
-			"web_fetch": dummyHandler{def: tool.Definition{Name: "web_fetch", Kind: tool.KindWebFetch, Description: "fetch"}},
+			"web_fetch": dummyHandler{def: tool.Definition{Name: "web_fetch", Kind: tool.KindWeb, Description: "fetch"}},
 		},
 	}
 

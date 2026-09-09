@@ -113,8 +113,8 @@ func TestWebFetchReadsAllowedLocalServer(t *testing.T) {
 
 func TestWebFetchDefinitionKind(t *testing.T) {
 	handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted})
-	if handler.Definition().Kind != "web_fetch" {
-		t.Fatalf("kind = %s", handler.Definition().Kind)
+	if handler.Definition().Kind != tool.KindWeb {
+		t.Fatalf("kind = %s, want %s", handler.Definition().Kind, tool.KindWeb)
 	}
 	if _, err := json.Marshal(handler.Definition().InputSchema); err != nil {
 		t.Fatalf("schema marshal error = %v", err)

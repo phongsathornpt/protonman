@@ -56,7 +56,7 @@ func BenchmarkPolicyEvaluate(b *testing.B) {
 			{Action: ActionAllow, Tool: ToolRead, Pattern: "*.md"},
 			{Action: ActionAllow, Tool: ToolRead, Pattern: "*.go"},
 			{Action: ActionAllow, Tool: ToolGrep, Pattern: "*"},
-			{Action: ActionAllow, Tool: ToolWebFetch, Pattern: "github.com", PatternMode: PatternModeDomain},
+			{Action: ActionAllow, Tool: ToolWeb, Pattern: "github.com", PatternMode: PatternModeDomain},
 		},
 	}
 	policy, err := NewPolicy(config)
