@@ -1126,7 +1126,7 @@ func TestWelcomeSitsAtTopWithoutFloatingBox(t *testing.T) {
 func TestTodoPaneShowsPendingBeforeCompleted(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "already-done", Text: "already done", Status: tododomain.StatusCompleted}, {ID: "still-open", Text: "still open", Status: tododomain.StatusPending}, {ID: "also-done", Text: "also done", Status: tododomain.StatusCompleted}})
 	model.resize(80, 24)
-	model.todoViewState.Expanded = true
+	model.toggleTodoPane()
 	view := testPlain(model.View().Content)
 	if !strings.Contains(view, "still open") {
 		t.Fatalf("todo pane hid the pending item: %s", view)
@@ -1180,10 +1180,13 @@ func TestBubbleModelRendersComponentLayout(t *testing.T) {
 	model.appendLine("assistant: ready")
 	model.refreshViewport()
 	view := testPlain(model.View().Content)
-	for _, expected := range []string{glyphBrand, "█▀█", "assistant: ready", "Tasks 0/1", "ask", "›", "/help"} {
+	for _, expected := range []string{glyphBrand, "█▀█", "assistant: ready", "ask", "›", "/help"} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("Bubble Tea view does not contain %q: %s", expected, view)
 		}
+	}
+	if strings.Contains(view, "Tasks 0/1") || strings.Contains(view, "ship Bubble Tea") {
+		t.Fatalf("main frame still renders persistent task chrome: %s", view)
 	}
 }
 

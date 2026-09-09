@@ -139,7 +139,7 @@ func TestTUIFolderOrganization(t *testing.T) {
 	}
 	allowedViews := map[string]bool{
 		"diagnostic": true, "execview": true, "history": true, "pane": true,
-		"slashview": true, "style": true, "textview": true, "toolview": true,
+		"presentation": true, "slashview": true, "style": true, "textview": true, "toolview": true,
 	}
 	for _, entry := range viewEntries {
 		if !entry.IsDir() || !allowedViews[entry.Name()] {

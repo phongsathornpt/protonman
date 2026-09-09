@@ -118,11 +118,26 @@ func (v *todoPaneView) ensurePicker(m *bubbleModel) {
 }
 
 func todoListItems(items []TodoItem) []list.Item {
-	out := make([]list.Item, 0, len(items))
-	for _, item := range items {
+	ordered := tododomain.CloneItems(items)
+	slices.SortStableFunc(ordered, func(a, b TodoItem) int {
+		return todoStatusPriority(a.Status) - todoStatusPriority(b.Status)
+	})
+	out := make([]list.Item, 0, len(ordered))
+	for _, item := range ordered {
 		out = append(out, todoListItem{item: item})
 	}
 	return out
+}
+
+func todoStatusPriority(status tododomain.Status) int {
+	switch status {
+	case tododomain.StatusInProgress:
+		return 0
+	case tododomain.StatusPending:
+		return 1
+	default:
+		return 2
+	}
 }
 
 func (v *todoPaneView) syncTitle(m *bubbleModel) {

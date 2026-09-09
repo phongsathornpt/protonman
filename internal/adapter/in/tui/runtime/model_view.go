@@ -150,7 +150,6 @@ func (m *bubbleModel) relayoutIfSlashChanged(bool) {
 
 type frameChrome struct {
 	generation uint64
-	todo       string
 	agents     string
 	status     string
 	top        string
@@ -161,7 +160,6 @@ type frameChrome struct {
 
 func (m *bubbleModel) buildFrameChrome() frameChrome {
 	frame := frameChrome{}
-	frame.todo = m.todoView()
 	frame.agents = m.agentsView()
 	frame.status = m.statusView()
 	frame.top = m.bottom.renderTop(m)
@@ -173,7 +171,7 @@ func (m *bubbleModel) buildFrameChrome() frameChrome {
 		frame.composer = m.promptView()
 	}
 	frame.footer = m.footerView()
-	for _, part := range []string{frame.todo, frame.agents, frame.status, frame.top, frame.composer} {
+	for _, part := range []string{frame.agents, frame.status, frame.top, frame.composer} {
 		if part != "" {
 			frame.height += lipgloss.Height(part)
 		}
@@ -181,30 +179,6 @@ func (m *bubbleModel) buildFrameChrome() frameChrome {
 	// The footer is always joined into the live view; even an empty footer
 	// occupies one physical row in lipgloss.JoinVertical.
 	frame.height += lipgloss.Height(frame.footer)
-
-	// Guard against viewport starvation: if the chrome consumes so much height that the
-	// scrollable transcript has fewer than 4 rows in a normal terminal, collapse the expanded
-	// todo widget to its compact summary line.
-	minViewport := 4
-	if m.height >= 14 && m.height-frame.height < minViewport && m.todoViewState.Expanded && len(m.todo) > 0 {
-		completed, active, pending := todoCounts(m.todo)
-		summary := fmt.Sprintf("Tasks %d/%d", completed, len(m.todo))
-		if active > 0 {
-			summary += fmt.Sprintf(" · %d active", active)
-		}
-		if pending > 0 {
-			summary += fmt.Sprintf(" · %d pending", pending)
-		}
-		if completed == len(m.todo) {
-			summary += " ✓"
-		}
-		compactTodo := brandStyle.Render(truncateWithEllipsis(summary+" · "+shortcutHelp(m.keys.ToggleTodo), maxInt(1, m.width-2)))
-		saved := lipgloss.Height(frame.todo) - lipgloss.Height(compactTodo)
-		if saved > 0 {
-			frame.todo = compactTodo
-			frame.height -= saved
-		}
-	}
 
 	return frame
 }
@@ -418,7 +392,7 @@ func (m *bubbleModel) renderedViewport() string {
 func (m *bubbleModel) liveView() string {
 	frame := m.frameChromeForView()
 	parts := []string{m.renderedViewport()}
-	for _, part := range []string{frame.todo, frame.agents, frame.status, frame.top, frame.composer} {
+	for _, part := range []string{frame.agents, frame.status, frame.top, frame.composer} {
 		if part != "" {
 			parts = append(parts, part)
 		}
