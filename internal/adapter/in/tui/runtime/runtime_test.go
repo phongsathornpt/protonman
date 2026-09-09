@@ -25,6 +25,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 type scriptedRunner struct {
@@ -450,6 +451,58 @@ func TestViewportTailOnlyHydratesBeforePageUp(t *testing.T) {
 	}
 	if m.viewport.AtBottom() {
 		t.Fatal("page up should leave the viewport above the tail")
+	}
+}
+
+func TestStreamingAssistantResizeStressPreservesViewportMode(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.showWelcome = false
+	m.busy = true
+	m.resize(80, 24)
+	for i := 0; i < 50; i++ {
+		m.appendAssistant(fmt.Sprintf("history %02d with detail", i))
+	}
+	m.refreshViewport()
+	m.conversationViewport.setFollowing(true)
+	m.viewport.GotoBottom()
+
+	sizes := [][2]int{{40, 12}, {120, 32}, {24, 8}, {60, 16}, {80, 24}}
+	chunks := []string{"```go\n", "fmt.Println(\"สวัสดี 東京 👨‍💻\")\n", "// streaming chunk\n", "```\n", "final text"}
+	for i, size := range sizes {
+		m.appendAssistantDelta(chunks[i])
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+		m = updated.(*bubbleModel)
+		view := m.View().Content
+		if !utf8.ValidString(view) {
+			t.Fatalf("invalid UTF-8 after resize %dx%d", size[0], size[1])
+		}
+		if got := lipgloss.Width(view); got > size[0] {
+			t.Fatalf("streaming frame width=%d exceeds %d at %dx%d", got, size[0], size[0], size[1])
+		}
+		if got := lipgloss.Height(view); got > size[1] {
+			t.Fatalf("streaming frame height=%d exceeds %d at %dx%d", got, size[1], size[0], size[1])
+		}
+		if !m.conversationViewport.following() {
+			t.Fatalf("resize %dx%d disabled follow mode during streaming", size[0], size[1])
+		}
+	}
+
+	m.scrollConversationLines(-4)
+	if m.conversationViewport.following() {
+		t.Fatal("scroll up did not enter reading mode")
+	}
+	anchor := m.captureViewportScroll()
+	m.appendAssistantDelta("\nmore while reading")
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 48, Height: 14})
+	m = updated.(*bubbleModel)
+	if m.conversationViewport.following() {
+		t.Fatal("stream+resize yanked reading viewport back to follow mode")
+	}
+	if anchor.anchorValid {
+		resolved, ok := m.historyState.ResolveScrollAnchor(anchor.anchor)
+		if !ok || resolved < 0 {
+			t.Fatalf("reading anchor was lost after streaming resize: resolved=%d ok=%v", resolved, ok)
+		}
 	}
 }
 
