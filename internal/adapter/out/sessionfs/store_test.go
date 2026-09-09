@@ -110,7 +110,7 @@ func TestFileStoreCompactsToolProtocolWithoutArguments(t *testing.T) {
 	if got.Messages[1].Role != model.RoleAssistant || got.Messages[1].Content != "use /tools" {
 		t.Fatalf("assistant context = %+v", got.Messages[1])
 	}
-	if got.Messages[2].Role != model.RoleAssistant || !strings.Contains(got.Messages[2].Content, "Historical tool read_file result") {
+	if got.Messages[2].Role != model.RoleAssistant || !strings.Contains(got.Messages[2].Content, "Historical tool read result") {
 		t.Fatalf("compacted tool history = %+v", got.Messages[2])
 	}
 	for _, message := range got.Messages {
@@ -199,7 +199,7 @@ func TestFileStoreCompactsStructuredToolResultBeforeTruncation(t *testing.T) {
 	if len(message.Content) > maxStoredContent || !utf8.ValidString(message.Content) {
 		t.Fatalf("content bytes=%d valid_utf8=%v", len(message.Content), utf8.ValidString(message.Content))
 	}
-	if !strings.HasPrefix(message.Content, "Historical tool read_file result:") {
+	if !strings.HasPrefix(message.Content, "Historical tool read result:") {
 		t.Fatalf("content prefix = %q", message.Content[:min(40, len(message.Content))])
 	}
 }
