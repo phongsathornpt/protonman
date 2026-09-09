@@ -335,6 +335,43 @@ func TestE2ETUIBracketedUnicodePasteSurvivesResize(t *testing.T) {
 	}
 }
 
+func TestE2ETUIExitsWhenPTYDetaches(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+	master, slave := openLinuxPTY(t, 80, 24)
+	defer slave.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, protonBin)
+	cmd.Dir = ws
+	cmd.Env = append(os.Environ(), "PROTONMAN_HOME="+home, "TERM=xterm-256color")
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start Protonman on PTY: %v", err)
+	}
+	_ = slave.Close()
+
+	buf := make([]byte, 4096)
+	_ = master.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if _, err := master.Read(buf); err != nil {
+		t.Fatalf("wait for initial TUI output: %v", err)
+	}
+	if err := master.Close(); err != nil {
+		t.Fatalf("detach PTY master: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		_ = cmd.Process.Kill()
+		t.Fatal("TUI stayed alive after PTY detached")
+	}
+}
+
 func TestE2ETUISlashHelpWithRealPTY(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)

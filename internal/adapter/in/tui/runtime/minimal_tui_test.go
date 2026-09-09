@@ -277,3 +277,21 @@ func TestViewIsPureAndIdempotent(t *testing.T) {
 		t.Fatal("View mutated runtime state")
 	}
 }
+
+func TestMinimalVeryNarrowUnicodeFrameStaysWithinTerminal(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.showWelcome = false
+	m.resize(16, 8)
+	m.appendUser("ภาษาไทย 👨‍💻 e\u0301 東京")
+	m.appendAssistant("ตอบกลับ テスト café")
+	m.refreshViewport()
+	view := m.View().Content
+	if got := lipgloss.Height(view); got > 8 {
+		t.Fatalf("height=%d exceeds terminal height 8", got)
+	}
+	for _, line := range strings.Split(view, "\n") {
+		if got := ansi.StringWidth(line); got > 16 {
+			t.Fatalf("line width=%d exceeds terminal width 16: %q", got, line)
+		}
+	}
+}
