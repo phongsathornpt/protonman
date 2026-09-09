@@ -100,7 +100,7 @@ func TestHeadlessPersistsTranscriptWithoutToolArguments(t *testing.T) {
 	if stored[1].Role != model.RoleAssistant || len(stored[1].ToolCalls) != 0 {
 		t.Fatalf("compacted assistant history = %+v", stored[1])
 	}
-	if !strings.Contains(stored[1].Content, "Historical tool read_file result") {
+	if !strings.Contains(stored[1].Content, "Historical tool read result") {
 		t.Fatalf("compacted history = %q", stored[1].Content)
 	}
 	if strings.Contains(stored[1].Content, "secret") {

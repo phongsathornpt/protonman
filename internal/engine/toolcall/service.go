@@ -299,6 +299,7 @@ func (s *Service) Call(ctx context.Context, call tool.Call) (tool.Result, error)
 }
 
 func (s *Service) call(ctx context.Context, call tool.Call, recoveryDepth int) (tool.Result, error) {
+	originalName := call.Name
 	call = tool.NormalizeLegacyCall(call)
 	telemetry := callTelemetry{
 		started: time.Now(),
@@ -325,6 +326,9 @@ func (s *Service) call(ctx context.Context, call tool.Call, recoveryDepth int) (
 		return result, wrappedErr
 	}
 	handler, ok := s.registry.Lookup(call.Name)
+	if !ok && originalName != call.Name {
+		handler, ok = s.registry.Lookup(originalName)
+	}
 	if !ok {
 		unknownErr := fmt.Errorf("%w: %s", ErrUnknownTool, call.Name)
 		result := tool.Result{
@@ -363,7 +367,7 @@ func (s *Service) call(ctx context.Context, call tool.Call, recoveryDepth int) (
 	}
 	request := permission.Request{
 		CallID:    call.ID,
-		ToolName:  definition.Name,
+		ToolName:  call.Name,
 		ToolKind:  definition.Kind,
 		Detail:    detail,
 		Arguments: append(json.RawMessage(nil), call.Arguments...),
