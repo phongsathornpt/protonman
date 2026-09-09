@@ -22,6 +22,8 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 	v.picker.SetSize(maxInt(12, m.width-8), maxInt(4, min(8, m.height-6)))
 	mode := layoutModeForHeight(m.height)
 	v.picker.SetShowStatusBar(false)
+	// Pagination stays hidden: resizing Bubbles list during Render can recompute paginator state.
+	// Navigation still belongs to list.Update; this only suppresses the mutable presentation row.
 	v.picker.SetShowPagination(false)
 	v.picker.SetShowHelp(mode != layoutTiny)
 	delegate := list.NewDefaultDelegate()

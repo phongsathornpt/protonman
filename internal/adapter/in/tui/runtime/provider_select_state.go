@@ -185,6 +185,7 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 	v.picker.SetSize(maxInt(12, m.width-8), maxInt(4, minInt(8, m.height-6)))
 	v.picker.Title = "Providers"
 	v.picker.SetShowStatusBar(false)
+	// Keep pagination presentation hidden; Bubbles list still owns navigation and selection state.
 	v.picker.SetShowPagination(false)
 	v.picker.SetShowHelp(mode != layoutTiny)
 	delegate := list.NewDefaultDelegate()

@@ -91,6 +91,7 @@ func newReasoningPaneView(m *bubbleModel) *reasoningPaneView {
 	picker.DisableQuitKeybindings()
 	picker.SetFilteringEnabled(false)
 	picker.SetShowStatusBar(false)
+	// Keep pagination presentation hidden; the list component still owns navigation.
 	picker.SetShowPagination(false)
 	picker.SetStatusBarItemName("level", "levels")
 	picker.Select(selected)

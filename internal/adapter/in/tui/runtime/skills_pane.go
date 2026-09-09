@@ -104,6 +104,7 @@ func (v *skillsPaneView) Render(m *bubbleModel) string {
 
 func (v *skillsPaneView) configureDensity(m *bubbleModel) {
 	v.picker.SetShowStatusBar(false)
+	// Keep pagination presentation hidden; the list component still owns navigation.
 	v.picker.SetShowPagination(false)
 	v.picker.SetShowHelp(m != nil && layoutModeForHeight(m.height) != layoutTiny)
 }

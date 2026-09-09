@@ -59,6 +59,7 @@ func (v *slashPaneView) sync(m *bubbleModel) {
 		v.picker.SetFilteringEnabled(false)
 		v.picker.SetShowTitle(false)
 		v.picker.SetShowStatusBar(false)
+		// Slash completion owns navigation through list.Update; help lives in the shared composer footer.
 		v.picker.SetShowPagination(false)
 		v.picker.SetShowHelp(false)
 		v.picker.InfiniteScrolling = true

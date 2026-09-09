@@ -154,6 +154,8 @@ func (v *todoPaneView) Render(m *bubbleModel) string {
 	v.syncTitle(m)
 	v.picker.SetSize(maxInt(12, m.width-8), maxInt(4, minInt(8, m.height-6)))
 	v.picker.SetShowStatusBar(false)
+	// TODO inspection keeps list navigation but renders contextual help in the shared footer.
+	// Pagination is hidden to avoid mutable paginator presentation during resize/render.
 	v.picker.SetShowPagination(false)
 	v.picker.SetShowHelp(false)
 	return renderModalRows(m, promptBorder, strings.Split(v.picker.View(), "\n"))
