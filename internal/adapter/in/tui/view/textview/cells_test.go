@@ -86,3 +86,19 @@ func TestTruncateLeftEllipsisPreservesUsefulSuffix(t *testing.T) {
 		t.Fatalf("left truncation width=%d", Width(got))
 	}
 }
+
+func TestSanitizeNeutralizesProgressControlSequences(t *testing.T) {
+	input := "10%\r20%\r\x1b[2K100%"
+	got := Sanitize(input)
+	if strings.ContainsAny(got, "\r\x1b") {
+		t.Fatalf("sanitized progress retained terminal control bytes: %q", got)
+	}
+	for _, want := range []string{"10%", "20%", "100%"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("sanitized progress lost %q: %q", want, got)
+		}
+	}
+	if !utf8.ValidString(got) {
+		t.Fatalf("sanitized progress is invalid UTF-8: %q", got)
+	}
+}
