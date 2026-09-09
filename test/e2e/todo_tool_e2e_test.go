@@ -28,7 +28,7 @@ func TestE2ETodoToolPersistsAcrossRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	registry, err := builtin.NewRegistry(todotool.NewUpdateTodo(store))
+	registry, err := builtin.NewRegistry(todotool.NewTodo(store))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestE2ETodoToolPersistsAcrossRestart(t *testing.T) {
 		t.Fatalf("restart snapshot = %#v", snapshot)
 	}
 
-	registry2, err := builtin.NewRegistry(todotool.NewUpdateTodo(restarted))
+	registry2, err := builtin.NewRegistry(todotool.NewTodo(restarted))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -18,14 +18,7 @@ func TestE2ESubagentCapabilityChangesPublishedToolsBetweenTurns(t *testing.T) {
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
 	defer coord.Close()
 
-	base, err := builtin.NewRegistry(
-		agenttool.NewDelegateTask(coord),
-		agenttool.NewWaitAgent(coord),
-		agenttool.NewGetAgent(coord),
-		agenttool.NewListAgents(coord),
-		agenttool.NewCancelAgent(coord),
-		agenttool.NewResumeAgent(coord),
-	)
+	base, err := builtin.NewRegistry(agenttool.NewSubagent(coord))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,8 +65,8 @@ func TestE2ESubagentCapabilityChangesPublishedToolsBetweenTurns(t *testing.T) {
 		t.Fatalf("request count = %d, want 3: %#v", len(requests), requests)
 	}
 
-	if tools := requestToolNames(requests[0]); !containsString(tools, "delegate_task") {
-		t.Fatalf("enabled turn missing delegate_task: %#v", tools)
+	if tools := requestToolNames(requests[0]); !containsString(tools, "subagent") {
+		t.Fatalf("enabled turn missing subagent: %#v", tools)
 	}
 	if !requestMessagesContain(requests[0], "# Delegation Protocol") {
 		t.Fatalf("enabled turn missing delegation prompt: %#v", requests[0]["messages"])
@@ -88,8 +81,8 @@ func TestE2ESubagentCapabilityChangesPublishedToolsBetweenTurns(t *testing.T) {
 		t.Fatalf("disabled turn retained delegation prompt: %#v", requests[1]["messages"])
 	}
 
-	if tools := requestToolNames(requests[2]); !containsString(tools, "delegate_task") {
-		t.Fatalf("re-enabled turn missing delegate_task: %#v", tools)
+	if tools := requestToolNames(requests[2]); !containsString(tools, "subagent") {
+		t.Fatalf("re-enabled turn missing subagent: %#v", tools)
 	}
 	if !requestMessagesContain(requests[2], "# Delegation Protocol") {
 		t.Fatalf("re-enabled turn missing delegation prompt: %#v", requests[2]["messages"])

@@ -41,14 +41,7 @@ func (r asyncLifecycleRunner) Run(ctx context.Context, _ []model.Message, _ turn
 
 func agentLifecycleService(t *testing.T, coord *agent.Coordinator) *toolcall.Service {
 	t.Helper()
-	registry, err := builtin.NewRegistry(
-		agenttool.NewDelegateTask(coord),
-		agenttool.NewWaitAgent(coord),
-		agenttool.NewGetAgent(coord),
-		agenttool.NewListAgents(coord),
-		agenttool.NewCancelAgent(coord),
-		agenttool.NewResumeAgent(coord),
-	)
+	registry, err := builtin.NewRegistry(agenttool.NewSubagent(coord))
 	if err != nil {
 		t.Fatal(err)
 	}
