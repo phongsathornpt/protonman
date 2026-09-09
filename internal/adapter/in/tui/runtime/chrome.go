@@ -60,5 +60,46 @@ func (m *bubbleModel) promptView() string {
 	if m.bottom == nil || m.bottom.prompt() == nil {
 		return ""
 	}
-	return m.bottom.prompt().View()
+	prompt := m.bottom.prompt().View()
+	meta := m.promptMetadataView()
+	if meta == "" {
+		return prompt
+	}
+	return meta + "\n" + prompt
+}
+
+func (m *bubbleModel) promptMetadataView() string {
+	if m == nil {
+		return ""
+	}
+	parts := make([]string, 0, 4)
+	if model := strings.TrimSpace(m.activeModel); model != "" {
+		parts = append(parts, model)
+	}
+	if agent := strings.TrimSpace(m.agentProfile); agent != "" {
+		parts = append(parts, agent)
+	}
+	if workspace := formatWorkspaceDisplay(m.workDir); workspace != "" {
+		parts = append(parts, workspace)
+	}
+	parts = append(parts, m.promptModeLabel())
+	line := strings.Join(parts, " · ")
+	return mutedStyle.Render(truncateWithEllipsis(line, maxInt(1, m.width-2)))
+}
+
+func (m *bubbleModel) promptModeLabel() string {
+	if m.planMode {
+		return "plan"
+	}
+	if m.service == nil {
+		return "ask"
+	}
+	switch m.service.Mode() {
+	case permission.ModeAlwaysApprove:
+		return "auto"
+	case permission.ModeDeny:
+		return "deny"
+	default:
+		return "ask"
+	}
 }

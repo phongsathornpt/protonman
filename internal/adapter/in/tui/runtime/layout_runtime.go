@@ -52,11 +52,17 @@ func (m *bubbleModel) liveView() string {
 }
 
 func (m *bubbleModel) footerView() string {
+	if m == nil || m.bottom == nil {
+		return ""
+	}
 	if top := m.bottom.top(); top != nil {
 		if top.ReplacesComposer() {
 			return ""
 		}
 		return m.shortcutHint()
 	}
-	return ""
+	if m.busy || !m.bottom.composerVisible() {
+		return ""
+	}
+	return m.shortcutHint()
 }

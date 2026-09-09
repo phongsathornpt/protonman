@@ -10,14 +10,17 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
-func TestMinimalIdleChromeUsesNoPersistentFooter(t *testing.T) {
+func TestMinimalIdleChromeUsesBubblesHelp(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
 	if got := m.statusView(); got != "" {
 		t.Fatalf("idle status = %q, want empty", got)
 	}
-	if got := m.footerView(); got != "" {
-		t.Fatalf("idle footer = %q, want empty", got)
+	footer := ansi.Strip(m.footerView())
+	for _, want := range []string{"enter", "send", "ctrl+j", "newline"} {
+		if !strings.Contains(footer, want) {
+			t.Fatalf("idle bubbles help missing %q: %q", want, footer)
+		}
 	}
 	if got := m.infoView(); got != "" {
 		t.Fatalf("idle info = %q, want empty", got)
@@ -86,6 +89,35 @@ func TestMinimalBusyChromeStaysWithinThreeRows(t *testing.T) {
 	}
 	if frame.height > 3 {
 		t.Fatalf("busy chrome height=%d, want <=3", frame.height)
+	}
+}
+
+func TestMinimalPromptRestoresEssentialContext(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.runner = fakeConversation{}
+	m.bottom.setHasRunner(true)
+	m.activeModel = "glm-5.3-flash"
+	m.agentProfile = "engineer"
+	m.workDir = "/tmp/protonman"
+	m.resize(80, 24)
+	plain := ansi.Strip(m.promptView())
+	for _, want := range []string{"glm-5.3-flash", "engineer", "/tmp/protonman", "ask", "Message Protonman"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("prompt context %q missing from %q", want, plain)
+		}
+	}
+}
+
+func TestMinimalPromptMetadataFitsNarrowTerminal(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeModel = "provider/a-very-long-model-name"
+	m.agentProfile = "engineer"
+	m.workDir = "/workspace/a/very/long/path"
+	m.resize(40, 12)
+	for _, line := range strings.Split(m.promptView(), "\n") {
+		if got := lipgloss.Width(line); got > 40 {
+			t.Fatalf("prompt line width=%d exceeds 40: %q", got, line)
+		}
 	}
 }
 
