@@ -14,21 +14,21 @@ import (
 
 const maxCalculateExpressionBytes = 64 * 1024
 
-type calculateHandler struct{}
+type mathHandler struct{}
 
-type calculateInput struct {
+type mathInput struct {
 	Expression string `json:"expression"`
 }
 
-type calculateOutput struct {
+type mathOutput struct {
 	Expression string  `json:"expression"`
 	Value      float64 `json:"value"`
 	Formatted  string  `json:"formatted"`
 }
 
-func NewCalculate() tool.Handler { return calculateHandler{} }
+func NewMath() tool.Handler { return mathHandler{} }
 
-func (calculateHandler) Definition() tool.Definition {
+func (mathHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:        "math",
 		Description: "Evaluate deterministic numeric expressions locally in pure Go. Supports +, -, *, /, %, ^, parentheses, pi, e, and common functions such as sqrt, abs, min, max, pow, round, floor, ceil, ln, log10, exp, sin, cos, and tan.",
@@ -60,11 +60,11 @@ func (calculateHandler) Definition() tool.Definition {
 	}
 }
 
-func (calculateHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
+func (mathHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
 	if err := ctx.Err(); err != nil {
 		return tool.Result{}, err
 	}
-	var input calculateInput
+	var input mathInput
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode math arguments", err)
 	}
@@ -84,7 +84,7 @@ func (calculateHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "math result is not finite")
 	}
 	formatted := strconv.FormatFloat(value, 'g', -1, 64)
-	payload := calculateOutput{Expression: input.Expression, Value: value, Formatted: formatted}
+	payload := mathOutput{Expression: input.Expression, Value: value, Formatted: formatted}
 	structured, err := json.Marshal(payload)
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("encode math result: %w", err)

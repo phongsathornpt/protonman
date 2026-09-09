@@ -23,11 +23,11 @@ func TestCalculateEvaluatesExpressions(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.expression, func(t *testing.T) {
-			result, err := NewCalculate().Execute(context.Background(), newJSONCall(t, "calc", "math", map[string]any{"expression": tt.expression}))
+			result, err := NewMath().Execute(context.Background(), newJSONCall(t, "calc", "math", map[string]any{"expression": tt.expression}))
 			if err != nil {
 				t.Fatal(err)
 			}
-			var out calculateOutput
+			var out mathOutput
 			if err := json.Unmarshal(result.StructuredOutput, &out); err != nil {
 				t.Fatal(err)
 			}
@@ -41,7 +41,7 @@ func TestCalculateEvaluatesExpressions(t *testing.T) {
 func TestCalculateRejectsInvalidAndNonFiniteExpressions(t *testing.T) {
 	for _, expression := range []string{"", "1/0", "sqrt(-1)", "unknown(1)", "1 +"} {
 		t.Run(expression, func(t *testing.T) {
-			_, err := NewCalculate().Execute(context.Background(), newJSONCall(t, "calc", "math", map[string]any{"expression": expression}))
+			_, err := NewMath().Execute(context.Background(), newJSONCall(t, "calc", "math", map[string]any{"expression": expression}))
 			if err == nil {
 				t.Fatal("expected error")
 			}
