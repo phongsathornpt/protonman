@@ -84,7 +84,7 @@ func agentInspectionRows(m *bubbleModel) []string {
 	for id, state := range m.agentActivity {
 		activity[id] = state.String()
 	}
-	return agentpane.AgentRows(agentpane.AgentsSnapshot{Width: m.width, Height: m.height, Retained: m.agentSnapshot, SubagentsEnabled: m.subagentsEnabled, Activity: activity})
+	return agentpane.AgentRows(agentpane.AgentsSnapshot{Width: m.layout.width, Height: m.layout.height, Retained: m.agentSnapshot, SubagentsEnabled: m.subagentsEnabled, Activity: activity})
 }
 func (m *bubbleModel) openAgentsPane() tea.Cmd {
 	if m.bottom.has(agentsViewID) {

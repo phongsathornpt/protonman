@@ -393,14 +393,14 @@ func TestAgentProgressKeepsFrameWithinTerminal(t *testing.T) {
 	m.busy = true
 	m.agentSnapshot = []agent.AgentStatus{{ID: "worker-1", Profile: agent.ProfileStrength, Task: "fix failures", State: agent.StateRunning, StartedAt: time.Now()}}
 	m.relayout()
-	if got := lipgloss.Height(m.View().Content); got > m.height {
-		t.Fatalf("initial frame height=%d terminal=%d", got, m.height)
+	if got := lipgloss.Height(m.View().Content); got > m.layout.height {
+		t.Fatalf("initial frame height=%d terminal=%d", got, m.layout.height)
 	}
 	call, _ := tool.NewCall("grep-1", "grep", []byte(`{"pattern":"TDZ","path":"."}`))
 	updated, _ := m.Update(agentLifecycleMsg{event: agent.Event{Kind: agent.EventAgentProgress, AgentID: "worker-1", Call: &call}})
 	m = updated.(*bubbleModel)
-	if got := lipgloss.Height(m.View().Content); got > m.height {
-		t.Fatalf("agent progress frame height=%d terminal=%d", got, m.height)
+	if got := lipgloss.Height(m.View().Content); got > m.layout.height {
+		t.Fatalf("agent progress frame height=%d terminal=%d", got, m.layout.height)
 	}
 }
 
@@ -477,12 +477,12 @@ func TestScrolledViewportSurvivesLiveAgentChromeStress(t *testing.T) {
 	assertStable := func(stage string) {
 		t.Helper()
 		view := m.View().Content
-		if got := lipgloss.Height(view); got > m.height {
-			t.Fatalf("%s frame height=%d terminal=%d", stage, got, m.height)
+		if got := lipgloss.Height(view); got > m.layout.height {
+			t.Fatalf("%s frame height=%d terminal=%d", stage, got, m.layout.height)
 		}
 		for _, line := range strings.Split(view, "\n") {
-			if got := ansi.StringWidth(line); got > m.width {
-				t.Fatalf("%s line width=%d terminal=%d: %q", stage, got, m.width, line)
+			if got := ansi.StringWidth(line); got > m.layout.width {
+				t.Fatalf("%s line width=%d terminal=%d: %q", stage, got, m.layout.width, line)
 			}
 		}
 		if m.conversationViewport.following() {

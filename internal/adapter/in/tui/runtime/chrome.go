@@ -83,7 +83,7 @@ func (m *bubbleModel) promptMetadataView() string {
 	if workspace := formatWorkspaceDisplay(m.workDir); workspace != "" {
 		parts = append(parts, workspace)
 	}
-	available := maxInt(1, m.width-2)
+	available := maxInt(1, m.layout.width-2)
 	mode := m.promptModeLabel()
 	if len(parts) == 0 {
 		return mutedStyle.Render(truncateWithEllipsis(mode, available))

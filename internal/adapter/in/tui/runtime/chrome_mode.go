@@ -23,7 +23,7 @@ func (m *bubbleModel) modeChipFor(mode permission.Mode) string {
 	if m.planMode {
 		return planStyle.Render("mode: plan · read-only")
 	}
-	if m.width < 40 {
+	if m.layout.width < 40 {
 		switch mode {
 		case permission.ModeAlwaysApprove:
 			return warningStyle.Render("auto")
@@ -54,7 +54,7 @@ func (m bubbleModel) shortcutHint() string {
 	}
 	helpView := m.help
 	helpView.ShowAll = false
-	helpView.SetWidth(maxInt(1, m.width-2))
+	helpView.SetWidth(maxInt(1, m.layout.width-2))
 	if m.slashOpen() {
 		return helpView.View(contextualHelp{
 			key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "accept")),

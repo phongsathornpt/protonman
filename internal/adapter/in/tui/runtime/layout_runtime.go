@@ -6,12 +6,12 @@ import (
 )
 
 func (m *bubbleModel) View() tea.View {
-	if m.width == 0 || m.height == 0 {
+	if m.layout.width == 0 || m.layout.height == 0 {
 		return tea.NewView("Starting Protonman…")
 	}
 	base := m.liveView()
 	if m.showTranscript {
-		base = overlayCenter(base, m.transcriptOverlayView(), m.width, m.height)
+		base = overlayCenter(base, m.transcriptOverlayView(), m.layout.width, m.layout.height)
 	}
 	view := tea.NewView(base)
 	view.AltScreen = true

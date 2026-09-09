@@ -13,7 +13,7 @@ import (
 
 func (m bubbleModel) statusView() string {
 	if m.hasPermissionView() {
-		return warningStyle.Render(truncateWithEllipsis("action required · permission", maxInt(1, m.width-2)))
+		return warningStyle.Render(truncateWithEllipsis("action required · permission", maxInt(1, m.layout.width-2)))
 	}
 	if !m.busy {
 		return ""
@@ -53,7 +53,7 @@ func (m bubbleModel) statusView() string {
 	if spin := m.spinner.View(); spin != "" {
 		indicator = spin + " "
 	}
-	return statusStyle.Render(truncateWithEllipsis(indicator+activity, maxInt(1, m.width-2)))
+	return statusStyle.Render(truncateWithEllipsis(indicator+activity, maxInt(1, m.layout.width-2)))
 }
 
 func (m bubbleModel) turnAgentSnapshot() []agent.AgentStatus {

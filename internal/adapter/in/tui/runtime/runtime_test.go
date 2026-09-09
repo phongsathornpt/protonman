@@ -753,8 +753,8 @@ func TestScrollingRendersSingleComposer(t *testing.T) {
 	if got := strings.Count(plain, placeholder); got != 1 {
 		t.Fatalf("composer rendered %d times after page-up; view=%q", got, plain)
 	}
-	if got := lipgloss.Height(m.View().Content); got > m.height {
-		t.Fatalf("scrolled live view height=%d exceeds terminal height=%d", got, m.height)
+	if got := lipgloss.Height(m.View().Content); got > m.layout.height {
+		t.Fatalf("scrolled live view height=%d exceeds terminal height=%d", got, m.layout.height)
 	}
 }
 

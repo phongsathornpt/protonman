@@ -19,8 +19,8 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 	if len(v.providerNames) > 1 {
 		v.picker.Title += " · tab switch"
 	}
-	v.picker.SetSize(maxInt(12, m.width-8), maxInt(4, min(8, m.height-6)))
-	mode := layoutModeForHeight(m.height)
+	v.picker.SetSize(maxInt(12, m.layout.width-8), maxInt(4, min(8, m.layout.height-6)))
+	mode := layoutModeForHeight(m.layout.height)
 	v.picker.SetShowStatusBar(false)
 	// Pagination stays hidden: resizing Bubbles list during Render can recompute paginator state.
 	// Navigation still belongs to list.Update; this only suppresses the mutable presentation row.
@@ -35,7 +35,7 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 		return renderModalRows(m, accentAssistant, rows)
 	}
 	if v.err != nil {
-		rows := []string{brandStyle.Render("Models · " + providerName), errorStyle.Render("Failed to load models"), mutedStyle.Render(truncateWithEllipsis(v.err.Error(), maxInt(8, m.width-8))), mutedStyle.Render("r retry · p providers · esc close")}
+		rows := []string{brandStyle.Render("Models · " + providerName), errorStyle.Render("Failed to load models"), mutedStyle.Render(truncateWithEllipsis(v.err.Error(), maxInt(8, m.layout.width-8))), mutedStyle.Render("r retry · p providers · esc close")}
 		return renderModalRows(m, accentAssistant, rows)
 	}
 	if len(v.picker.Items()) == 0 && !v.picker.SettingFilter() && !v.picker.IsFiltered() {

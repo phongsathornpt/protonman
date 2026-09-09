@@ -92,8 +92,8 @@ func (v *permissionPaneView) card(m *bubbleModel) string {
 		}
 	}
 	result := permissionpane.PermissionView(permissionpane.PermissionSnapshot{
-		Width:        m.width,
-		Height:       m.height,
+		Width:        m.layout.width,
+		Height:       m.layout.height,
 		Parked:       v.parked,
 		Index:        v.index,
 		Title:        title,

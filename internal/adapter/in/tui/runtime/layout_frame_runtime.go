@@ -33,8 +33,8 @@ func (m *bubbleModel) resize(width int, height int) {
 	if height <= 0 {
 		height = defaultBubbleHeight
 	}
-	m.width = width
-	m.height = height
+	m.layout.width = width
+	m.layout.height = height
 	m.help.SetWidth(maxInt(1, width-2))
 	prompt := m.bottom.prompt()
 	prompt.SetWidth(maxInt(1, width-4))
@@ -51,6 +51,14 @@ func (m *bubbleModel) resize(width int, height int) {
 
 func (m *bubbleModel) relayoutIfSlashChanged(bool) {
 	m.requestRelayout()
+}
+
+type layoutState struct {
+	width      int
+	height     int
+	frame      frameChrome
+	generation uint64
+	dirty      bool
 }
 
 type frameChrome struct {
@@ -94,14 +102,14 @@ type viewportScrollSnapshot struct {
 }
 
 func (m *bubbleModel) requestRelayout() {
-	m.layoutDirty = true
+	m.layout.dirty = true
 }
 
 func (m *bubbleModel) reconcileLayout() {
-	if m == nil || !m.layoutDirty {
+	if m == nil || !m.layout.dirty {
 		return
 	}
-	m.layoutDirty = false
+	m.layout.dirty = false
 	scroll := m.captureViewportScroll()
 	m.syncPromptHeight()
 	m.applyFrameLayout(scroll, m.buildFrameChrome())
@@ -115,15 +123,15 @@ func (m *bubbleModel) relayout() {
 }
 
 func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame frameChrome) {
-	m.layoutGeneration++
-	frame.generation = m.layoutGeneration
-	m.frameChrome = frame
-	viewportHeight := m.height - frame.height
+	m.layout.generation++
+	frame.generation = m.layout.generation
+	m.layout.frame = frame
+	viewportHeight := m.layout.height - frame.height
 	if viewportHeight < 1 {
 		viewportHeight = 1
 	}
-	if m.viewport.Width() != m.width || m.viewport.Height() != viewportHeight {
-		m.viewport.SetWidth(m.width)
+	if m.viewport.Width() != m.layout.width || m.viewport.Height() != viewportHeight {
+		m.viewport.SetWidth(m.layout.width)
 		m.viewport.SetHeight(viewportHeight)
 	}
 	m.refreshViewportWithScroll(scroll)
@@ -131,7 +139,7 @@ func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame fram
 
 func (m *bubbleModel) frameChromeForView() frameChrome {
 	frame := m.buildFrameChrome()
-	frame.generation = m.frameChrome.generation
+	frame.generation = m.layout.frame.generation
 	return frame
 }
 

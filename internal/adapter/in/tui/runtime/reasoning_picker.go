@@ -87,7 +87,7 @@ func newReasoningPaneView(m *bubbleModel) *reasoningPaneView {
 	}
 	delegate := list.NewDefaultDelegate()
 	delegate.SetSpacing(0)
-	picker := list.New(items, delegate, maxInt(20, m.width-8), maxInt(6, minInt(18, m.height-4)))
+	picker := list.New(items, delegate, maxInt(20, m.layout.width-8), maxInt(6, minInt(18, m.layout.height-4)))
 	picker.DisableQuitKeybindings()
 	picker.SetFilteringEnabled(false)
 	picker.SetShowStatusBar(false)
@@ -103,12 +103,12 @@ func reasoningChoices(profile modelprofile.Resolved) []sdk.ReasoningEffort {
 }
 
 func (v *reasoningPaneView) Render(m *bubbleModel) string {
-	v.picker.SetSize(maxInt(20, m.width-8), maxInt(6, minInt(18, m.height-4)))
+	v.picker.SetSize(maxInt(20, m.layout.width-8), maxInt(6, minInt(18, m.layout.height-4)))
 	v.picker.Title = "Thinking level"
 	if modelName := strings.TrimSpace(m.activeModel); modelName != "" {
 		v.picker.Title += " · " + modelName
 	}
-	mode := layoutModeForHeight(m.height)
+	mode := layoutModeForHeight(m.layout.height)
 	v.picker.SetShowHelp(mode != layoutTiny)
 	delegate := list.NewDefaultDelegate()
 	delegate.SetSpacing(0)

@@ -58,7 +58,7 @@ func renderModalRows(m *bubbleModel, border color.Color, rows []string) string {
 	if m == nil {
 		return panecommon.RenderModal(defaultBubbleWidth, defaultBubbleHeight, border, rows)
 	}
-	return panecommon.RenderModal(m.width, m.height, border, rows)
+	return panecommon.RenderModal(m.layout.width, m.layout.height, border, rows)
 }
 
 func paneToneColor(tone panecommon.Tone) color.Color {

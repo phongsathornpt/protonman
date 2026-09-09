@@ -71,11 +71,11 @@ func skillListItems(m *bubbleModel) []list.Item {
 }
 
 func skillsListWidth(m *bubbleModel) int {
-	return maxInt(12, m.width-8)
+	return maxInt(12, m.layout.width-8)
 }
 
 func skillsListHeight(m *bubbleModel) int {
-	return maxInt(4, min(8, m.height-6))
+	return maxInt(4, min(8, m.layout.height-6))
 }
 func (v *skillsPaneView) syncTitle(m *bubbleModel) {
 	if !v.initialized || m == nil || m.skills == nil {
@@ -106,7 +106,7 @@ func (v *skillsPaneView) configureDensity(m *bubbleModel) {
 	v.picker.SetShowStatusBar(false)
 	// Keep pagination presentation hidden; the list component still owns navigation.
 	v.picker.SetShowPagination(false)
-	v.picker.SetShowHelp(m != nil && layoutModeForHeight(m.height) != layoutTiny)
+	v.picker.SetShowHelp(m != nil && layoutModeForHeight(m.layout.height) != layoutTiny)
 }
 func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	v.ensurePicker(m)

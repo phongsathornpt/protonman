@@ -47,7 +47,7 @@ func (v *projectPaneView) Render(m *bubbleModel) string {
 	if v.err != nil {
 		errorText = v.err.Error()
 	}
-	rows := projectpane.ProjectRows(projectpane.ProjectSnapshot{Width: m.width, Height: m.height, WorkDir: m.workDir, RootName: appdirs.RootDirName, ConfigName: appdirs.ConfigFileName, TrustEnv: envconfig.TrustProject, Loading: v.loading, ErrorText: errorText, Exists: state.Exists, ConfigExists: state.ConfigExists, ConfigLoaded: state.ConfigLoaded, Trusted: state.Trusted, SkillsExists: state.SkillsExists, SkillCount: state.SkillCount, Facts: facts, Notice: v.notice})
+	rows := projectpane.ProjectRows(projectpane.ProjectSnapshot{Width: m.layout.width, Height: m.layout.height, WorkDir: m.workDir, RootName: appdirs.RootDirName, ConfigName: appdirs.ConfigFileName, TrustEnv: envconfig.TrustProject, Loading: v.loading, ErrorText: errorText, Exists: state.Exists, ConfigExists: state.ConfigExists, ConfigLoaded: state.ConfigLoaded, Trusted: state.Trusted, SkillsExists: state.SkillsExists, SkillCount: state.SkillCount, Facts: facts, Notice: v.notice})
 	return renderModalRows(m, accentAssistant, rows)
 }
 

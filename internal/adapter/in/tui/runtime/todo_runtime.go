@@ -94,7 +94,7 @@ func (v *todoPaneView) ensurePicker(m *bubbleModel) {
 	delegate := list.NewDefaultDelegate()
 	delegate.SetSpacing(0)
 	delegate.ShowDescription = true
-	v.picker = list.New(todoListItems(m.todo), delegate, maxInt(12, m.width-8), maxInt(5, minInt(14, m.height-4)))
+	v.picker = list.New(todoListItems(m.todo), delegate, maxInt(12, m.layout.width-8), maxInt(5, minInt(14, m.layout.height-4)))
 	v.picker.DisableQuitKeybindings()
 	v.picker.SetFilteringEnabled(false)
 	v.picker.SetStatusBarItemName("task", "tasks")
@@ -152,7 +152,7 @@ func (v *todoPaneView) Render(m *bubbleModel) string {
 	}
 	v.picker.SetItems(todoListItems(m.todo))
 	v.syncTitle(m)
-	v.picker.SetSize(maxInt(12, m.width-8), maxInt(4, minInt(8, m.height-6)))
+	v.picker.SetSize(maxInt(12, m.layout.width-8), maxInt(4, minInt(8, m.layout.height-6)))
 	v.picker.SetShowStatusBar(false)
 	// TODO inspection keeps list navigation but renders contextual help in the shared footer.
 	// Pagination is hidden to avoid mutable paginator presentation during resize/render.

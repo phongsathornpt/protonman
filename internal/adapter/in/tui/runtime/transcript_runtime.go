@@ -46,7 +46,7 @@ func (m *bubbleModel) transcriptOverlayView() string {
 	header := brandStyle.Render("Transcript") + mutedStyle.Render(" · "+mode)
 	footer := mutedStyle.Render("esc/ctrl+t close · r raw/rich · pgup/pgdn scroll")
 	body := lipgloss.JoinVertical(lipgloss.Left, header, m.transcriptViewport.View(), footer)
-	width := maxInt(1, m.width-6)
+	width := maxInt(1, m.layout.width-6)
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accentAssistant).Padding(0, 1).Width(width).Render(body)
 }
 

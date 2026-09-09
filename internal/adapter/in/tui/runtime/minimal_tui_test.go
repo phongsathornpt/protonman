@@ -264,8 +264,8 @@ func TestViewIsPureAndIdempotent(t *testing.T) {
 	m.appendLine("history")
 	m.refreshViewport()
 
-	generation := m.layoutGeneration
-	frame := m.frameChrome
+	generation := m.layout.generation
+	frame := m.layout.frame
 	yOffset := m.viewport.YOffset()
 
 	first := m.View().Content
@@ -273,7 +273,7 @@ func TestViewIsPureAndIdempotent(t *testing.T) {
 	if first != second {
 		t.Fatal("repeated View calls produced different output")
 	}
-	if m.layoutGeneration != generation || m.frameChrome != frame || m.viewport.YOffset() != yOffset {
+	if m.layout.generation != generation || m.layout.frame != frame || m.viewport.YOffset() != yOffset {
 		t.Fatal("View mutated runtime state")
 	}
 }

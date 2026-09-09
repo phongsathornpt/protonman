@@ -29,12 +29,12 @@ func (m *bubbleModel) welcomeCard() string {
 		cache.branchValid = true
 		cache.renderValid = false
 	}
-	if cache.renderValid && cache.width == m.width && cache.height == m.height {
+	if cache.renderValid && cache.width == m.layout.width && cache.height == m.layout.height {
 		return cache.rendered
 	}
 	cache.rendered = m.renderWelcomeCard(cache.branch)
-	cache.width = m.width
-	cache.height = m.height
+	cache.width = m.layout.width
+	cache.height = m.layout.height
 	cache.renderValid = true
 	return cache.rendered
 }
@@ -54,7 +54,7 @@ func (m *bubbleModel) renderWelcomeCard(branch string) string {
 		if branch != "" {
 			workspace += " · " + branch
 		}
-		rows = append(rows, mutedStyle.Render(truncateWithEllipsis(workspace, maxInt(1, m.width-2))))
+		rows = append(rows, mutedStyle.Render(truncateWithEllipsis(workspace, maxInt(1, m.layout.width-2))))
 	}
 	return strings.Join(rows, "\n")
 }

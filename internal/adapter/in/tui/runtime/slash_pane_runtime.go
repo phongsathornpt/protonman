@@ -54,7 +54,7 @@ func (v *slashPaneView) sync(m *bubbleModel) {
 	if !v.ready {
 		delegate := list.NewDefaultDelegate()
 		delegate.SetSpacing(0)
-		v.picker = list.New(items, delegate, maxInt(20, m.width-4), maxInt(4, minInt(12, m.height/2)))
+		v.picker = list.New(items, delegate, maxInt(20, m.layout.width-4), maxInt(4, minInt(12, m.layout.height/2)))
 		v.picker.DisableQuitKeybindings()
 		v.picker.SetFilteringEnabled(false)
 		v.picker.SetShowTitle(false)
@@ -79,10 +79,10 @@ func (v *slashPaneView) Render(m *bubbleModel) string {
 	if len(v.matches) == 0 {
 		return ""
 	}
-	v.picker.SetSize(maxInt(20, m.width-4), maxInt(4, minInt(12, m.height/2)))
+	v.picker.SetSize(maxInt(20, m.layout.width-4), maxInt(4, minInt(12, m.layout.height/2)))
 	delegate := list.NewDefaultDelegate()
 	delegate.SetSpacing(0)
-	delegate.ShowDescription = layoutModeForHeight(m.height) == layoutNormal
+	delegate.ShowDescription = layoutModeForHeight(m.layout.height) == layoutNormal
 	v.picker.SetDelegate(delegate)
 	return v.picker.View()
 }
