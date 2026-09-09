@@ -237,18 +237,15 @@ func TestToolCellRefinedRenderingWebFetch(t *testing.T) {
 </html>`
 	state := NewHistoryState(100)
 	state.SetSpinnerFrame("⠋")
-	runningCell := &ToolCell{CallID: "call-web-1", Name: "web_fetch", Target: "https://protonman.dev", ToolKind: tool.KindWeb, Running: true}
+	runningCell := &ToolCell{CallID: "call-web-1", Name: "web", Target: "https://protonman.dev", ToolKind: tool.KindWeb, Running: true}
 	state.StartToolCell(runningCell)
 	rendered := state.RenderLines()
 	joinedRunning := strings.Join(rendered, "\n")
 	if !strings.Contains(joinedRunning, "↗") || !strings.Contains(joinedRunning, "Web") || !strings.Contains(joinedRunning, "https://protonman.dev") {
 		t.Fatalf("expected running cell to show category icon and target, got: %s", joinedRunning)
 	}
-	if strings.Contains(joinedRunning, "web_fetch") {
-		t.Fatalf("raw 'web_fetch' should not appear in rendered output: %s", joinedRunning)
-	}
-	completedCell := &ToolCell{CallID: "call-web-1", Name: "web_fetch", Target: "https://protonman.dev", ToolKind: tool.KindWeb, Body: htmlPayload, Summary: summarizeToolOutput("web_fetch", tool.KindWeb, "https://protonman.dev", htmlPayload, nil, false)}
-	state.CompleteToolCall("call-web-1", "web_fetch", completedCell)
+	completedCell := &ToolCell{CallID: "call-web-1", Name: "web", Target: "https://protonman.dev", ToolKind: tool.KindWeb, Body: htmlPayload, Summary: summarizeToolOutput("web", tool.KindWeb, "https://protonman.dev", htmlPayload, nil, false)}
+	state.CompleteToolCall("call-web-1", "web", completedCell)
 	rendered = state.RenderLines()
 	joinedCompleted := strings.Join(rendered, "\n")
 	if !strings.Contains(joinedCompleted, "✓") || !strings.Contains(joinedCompleted, "https://protonman.dev") {
@@ -463,7 +460,7 @@ func TestExecCellSeparatesStderrAndStreamTruncation(t *testing.T) {
 
 func TestAgentToolCellRendersOrchestrationSemantics(t *testing.T) {
 	running := (&AgentToolCell{Name: "subagent", Target: "explorer-7", Running: true, Spinner: "⠋"}).RenderWidth(80)
-	if got := strings.Join(running, "\n"); !strings.Contains(got, "Coordinating subagents") || strings.Contains(got, "wait_agent") {
+	if got := strings.Join(running, "\n"); !strings.Contains(got, "Coordinating subagents") || strings.Contains(got, "wait agent") {
 		t.Fatalf("running agent cell=%q", got)
 	}
 	completed := (&AgentToolCell{Name: "subagent", Target: "explorer-7", Summary: "explorer-7 · completed · found routing issue"}).RenderWidth(80)
@@ -496,7 +493,7 @@ func TestAgentToolCellRawLinesUseOrchestrationLabel(t *testing.T) {
 }
 
 func TestPatchCellRenderingPolish(t *testing.T) {
-	patch := &PatchCell{Name: "write_file", Summary: "1 file", Paths: []string{"cmd/protonman/main.go"}, Body: "Wrote file successfully to cmd/protonman/main.go."}
+	patch := &PatchCell{Name: "edit", Summary: "1 file", Paths: []string{"cmd/protonman/main.go"}, Body: "Wrote file successfully to cmd/protonman/main.go."}
 	rendered := patch.RenderWidth(80)
 	joined := strings.Join(rendered, "\n")
 	if strings.Contains(joined, "✓ +") {
@@ -505,13 +502,10 @@ func TestPatchCellRenderingPolish(t *testing.T) {
 	if !strings.Contains(joined, "✓") || !strings.Contains(joined, "Edit") {
 		t.Fatalf("expected clean checkmark and tool display name 'Edit' in patch cell header:\n%s", joined)
 	}
-	if strings.Contains(joined, "write_file") {
-		t.Fatalf("expected raw tool name 'write_file' to NOT appear in patch cell header:\n%s", joined)
-	}
 	if strings.Contains(joined, "Wrote file successfully to") {
 		t.Fatalf("expected redundant body to be suppressed in patch cell:\n%s", joined)
 	}
-	multiPatch := &PatchCell{Name: "apply_patch", Summary: "6 files", Paths: []string{"file1.go", "file2.go", "file3.go", "file4.go", "file5.go", "file6.go"}}
+	multiPatch := &PatchCell{Name: "edit", Summary: "6 files", Paths: []string{"file1.go", "file2.go", "file3.go", "file4.go", "file5.go", "file6.go"}}
 	multiRendered := multiPatch.RenderWidth(80)
 	multiJoined := strings.Join(multiRendered, "\n")
 	if !strings.Contains(multiJoined, "file1.go") || !strings.Contains(multiJoined, "file3.go") {
@@ -557,22 +551,22 @@ func TestActivateSkillFallbackToTarget(t *testing.T) {
 }
 
 func TestTaskBodySuppressionInTranscript(t *testing.T) {
-	if !shouldSuppressBody(tool.KindTask, "update_todo") {
+	if !shouldSuppressBody(tool.KindTask, "todo") {
 		t.Fatal("expected KindTask to suppress body in transcript")
 	}
-	if !shouldSuppressBody(tool.KindTask, "get_todo") {
-		t.Fatal("expected get_todo to suppress body in transcript")
+	if !shouldSuppressBody(tool.KindTask, "todo") {
+		t.Fatal("expected todo to suppress body in transcript")
 	}
-	if !shouldSuppressBody(tool.KindEdit, "write_file") {
+	if !shouldSuppressBody(tool.KindEdit, "edit") {
 		t.Fatal("expected KindEdit to suppress body in transcript")
 	}
 }
 
 func TestEditToolUsesStructuredPatchCell(t *testing.T) {
-	registry := newNamedTestRegistry(tool.Definition{Name: "apply_patch", Description: "apply a workspace patch", Kind: tool.KindEdit, PermissionDetailKey: "patch"})
+	registry := newNamedTestRegistry(tool.Definition{Name: "edit", Description: "apply a workspace patch", Kind: tool.KindEdit, PermissionDetailKey: "patch"})
 	service := newBubbleTestService(t, registry, permission.ModeAlwaysApprove, permission.Config{})
 	m := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, newPermissionBridge(), "")
-	call, err := tool.NewCall("edit-1", "apply_patch", []byte(`{"patch":"*** Begin Patch\n*** Update File: internal/a.go\n*** End Patch"}`))
+	call, err := tool.NewCall("edit-1", "edit", []byte(`{"action":"patch","patch":"*** Begin Patch\n*** Update File: internal/a.go\n*** End Patch"}`))
 	if err != nil {
 		t.Fatalf("NewCall() error = %v", err)
 	}

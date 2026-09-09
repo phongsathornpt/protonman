@@ -893,7 +893,7 @@ func TestPlanModeAllowsTaskMetadataButBlocksWorkspaceEdit(t *testing.T) {
 		name       string
 		kind       tool.Kind
 		wantDenied bool
-	}{{name: "todo", kind: tool.KindTask, wantDenied: false}, {name: "write_file", kind: tool.KindEdit, wantDenied: true}} {
+	}{{name: "todo", kind: tool.KindTask, wantDenied: false}, {name: "edit", kind: tool.KindEdit, wantDenied: true}} {
 		t.Run(tc.name, func(t *testing.T) {
 			registry := newNamedTestRegistry(tool.Definition{Name: tc.name, Description: tc.name, Kind: tc.kind, Mutability: tool.MutabilityMutating})
 			service := newBubbleTestService(t, registry, permission.ModeAlwaysApprove, permission.Config{})
