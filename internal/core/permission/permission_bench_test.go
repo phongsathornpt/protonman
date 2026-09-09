@@ -64,7 +64,7 @@ func BenchmarkPolicyEvaluate(b *testing.B) {
 		b.Fatalf("NewPolicy: %v", err)
 	}
 	req := Request{
-		ToolName: "read_file",
+		ToolName: "read",
 		ToolKind: ToolRead,
 		Detail:   "README.md",
 	}

@@ -556,7 +556,7 @@ func TestCoordinator_ResilientEmitOnCancel(t *testing.T) {
 func TestCoordinator_ReadOnlyProfileInheritsAskModeForNetworkTools(t *testing.T) {
 	baseReg := staticRegistry{
 		handlers: map[string]tool.Handler{
-			"web_fetch": dummyHandler{def: tool.Definition{Name: "web_fetch", Kind: tool.KindWeb, Description: "fetch"}},
+			"web": dummyHandler{def: tool.Definition{Name: "web", Kind: tool.KindWeb, Description: "web"}},
 		},
 	}
 
@@ -589,14 +589,14 @@ func TestCoordinator_ReadOnlyProfileInheritsAskModeForNetworkTools(t *testing.T)
 		t.Fatalf("permission prompt calls = %d, want 1", promptCalls)
 	}
 	if !errors.Is(callErr, toolcall.ErrPermissionDenied) {
-		t.Fatalf("web_fetch error = %v, want permission denied", callErr)
+		t.Fatalf("web error = %v, want permission denied", callErr)
 	}
 }
 
 func TestCoordinator_WorkerInheritsAlwaysApproveMode(t *testing.T) {
 	baseReg := staticRegistry{
 		handlers: map[string]tool.Handler{
-			"write_file": dummyHandler{def: tool.Definition{Name: "write_file", Kind: tool.KindEdit}},
+			"edit": dummyHandler{def: tool.Definition{Name: "edit", Kind: tool.KindEdit}},
 		},
 	}
 
@@ -610,7 +610,7 @@ func TestCoordinator_WorkerInheritsAlwaysApproveMode(t *testing.T) {
 		WithRunnerFactory(func(p Profile, tools *toolcall.Service) (turn.Runner, error) {
 			return &mockRunner{
 				runFunc: func(ctx context.Context, messages []model.Message, sink turn.Sink) (turn.Result, error) {
-					call, _ := tool.NewCall("c-1", "write_file", []byte(`{}`))
+					call, _ := tool.NewCall("c-1", "edit", []byte(`{"action":"write"}`))
 					_, callErr = tools.Call(ctx, call)
 					return turn.Result{Message: model.Message{Content: "wrote file"}}, nil
 				},
@@ -637,7 +637,7 @@ func TestCoordinator_WorkerInheritsAlwaysApproveMode(t *testing.T) {
 func TestCoordinator_SubagentInheritsCallGuard(t *testing.T) {
 	baseReg := staticRegistry{
 		handlers: map[string]tool.Handler{
-			"write_file": dummyHandler{def: tool.Definition{Name: "write_file", Kind: tool.KindEdit}},
+			"edit": dummyHandler{def: tool.Definition{Name: "edit", Kind: tool.KindEdit}},
 		},
 	}
 
@@ -659,7 +659,7 @@ func TestCoordinator_SubagentInheritsCallGuard(t *testing.T) {
 		WithRunnerFactory(func(p Profile, tools *toolcall.Service) (turn.Runner, error) {
 			return &mockRunner{
 				runFunc: func(ctx context.Context, messages []model.Message, sink turn.Sink) (turn.Result, error) {
-					call, _ := tool.NewCall("c-1", "write_file", []byte(`{}`))
+					call, _ := tool.NewCall("c-1", "edit", []byte(`{"action":"write"}`))
 					_, callErr = tools.Call(ctx, call)
 					return turn.Result{Message: model.Message{Content: "done"}}, nil
 				},

@@ -28,7 +28,7 @@ func TestPolicyPrecedence(t *testing.T) {
 				{Action: ActionAllow, Tool: ToolRead},
 				{Action: ActionAsk, Tool: ToolAny, Pattern: "*.env"},
 			},
-			request:    Request{ToolName: "read_file", ToolKind: ToolRead, Detail: ".env"},
+			request:    Request{ToolName: "read", ToolKind: ToolRead, Detail: ".env"},
 			wantAction: ActionAsk,
 		},
 		{
@@ -36,7 +36,7 @@ func TestPolicyPrecedence(t *testing.T) {
 			rules: []Rule{
 				{Action: ActionAllow, Tool: ToolRead, Pattern: "*.md"},
 			},
-			request:    Request{ToolName: "read_file", ToolKind: ToolRead, Detail: "README.md"},
+			request:    Request{ToolName: "read", ToolKind: ToolRead, Detail: "README.md"},
 			wantAction: ActionAllow,
 		},
 		{
@@ -100,7 +100,7 @@ func TestPolicyDomainPatternNormalizesHost(t *testing.T) {
 	}
 
 	decision := policy.Evaluate(Request{
-		ToolName: "web_fetch",
+		ToolName: "web",
 		ToolKind: ToolWeb,
 		Detail:   "https://API.Example.COM/v1/status",
 	})
@@ -126,7 +126,7 @@ func TestPolicyDomainPatternIsCaseInsensitive(t *testing.T) {
 	}
 
 	decision := policy.Evaluate(Request{
-		ToolName: "web_fetch",
+		ToolName: "web",
 		ToolKind: ToolWeb,
 		Detail:   "https://api.example.com/v1/status",
 	})
@@ -308,7 +308,7 @@ func TestComputeIsAllowedByDefaultButExplicitRulesWin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := Request{ToolName: "calculate", ToolKind: ToolCompute, Detail: "sqrt(144)"}
+	request := Request{ToolName: "math", ToolKind: ToolCompute, Detail: "sqrt(144)"}
 	if got := policy.Evaluate(request); got.Action != ActionAllow {
 		t.Fatalf("default compute action = %v, want allow", got.Action)
 	}
@@ -441,9 +441,9 @@ func TestRuleFromRequestAndPersistentEligibility(t *testing.T) {
 			wantRuleOK:   true,
 		},
 		{
-			name: "read_file is eligible",
+			name: "read is eligible",
 			req: Request{
-				ToolName: "read_file",
+				ToolName: "read",
 				ToolKind: ToolRead,
 				Detail:   "internal/tui/theme.go",
 				Effect:   tool.CommandEffectReadOnly,
@@ -471,9 +471,9 @@ func TestRuleFromRequestAndPersistentEligibility(t *testing.T) {
 			wantRuleMode: PatternModeGlob,
 		},
 		{
-			name: "web_fetch normalizes domain",
+			name: "web normalizes domain",
 			req: Request{
-				ToolName: "web_fetch",
+				ToolName: "web",
 				ToolKind: ToolWeb,
 				Detail:   "https://API.GitHub.COM/repos/owner/repo",
 				Effect:   tool.CommandEffectReadOnly,
