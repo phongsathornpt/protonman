@@ -28,15 +28,6 @@ func (m *bubbleModel) openPermission(request permissionRequest) {
 	m.activity = "waiting for permission"
 }
 
-func (m *bubbleModel) updatePermission(message tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	view := m.permissionView()
-	if view == nil {
-		return m, nil
-	}
-	_, command := view.HandleKey(m, message)
-	return m, command
-}
-
 func (m *bubbleModel) resolvePermission(option permissionOption) tea.Cmd {
 	view := m.permissionView()
 	if view == nil {

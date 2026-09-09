@@ -18,6 +18,10 @@ const (
 	paneActionSelectModel
 	paneActionOpenProviderSelect
 	paneActionOpenProviderEditor
+	paneActionPermissionActivity
+	paneActionPermissionResolve
+	paneActionScrollLines
+	paneActionScrollPage
 )
 
 type paneAction struct {
@@ -28,12 +32,17 @@ type paneAction struct {
 	skillName    string
 	providerName string
 	modelID      string
+	activity     string
+	permission   permissionOption
+	scrollLines  int
+	key          tea.KeyPressMsg
 }
 
 type paneKeyResult struct {
-	handled bool
-	cmd     tea.Cmd
-	action  paneAction
+	handled     bool
+	cmd         tea.Cmd
+	action      paneAction
+	allowGlobal bool
 }
 
 type isolatedPaneKeyHandler interface {
@@ -83,6 +92,14 @@ func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
 		if !m.panes.bottom.has(providerViewID) {
 			m.pushProviderPane(newProviderPaneView())
 		}
+	case paneActionPermissionActivity:
+		m.activity = action.activity
+	case paneActionPermissionResolve:
+		return m.resolvePermission(action.permission)
+	case paneActionScrollLines:
+		m.scrollConversationLines(action.scrollLines)
+	case paneActionScrollPage:
+		return m.updateConversationViewport(action.key)
 	}
 	return nil
 }

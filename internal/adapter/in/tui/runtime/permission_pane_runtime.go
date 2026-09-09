@@ -51,8 +51,8 @@ func (v *permissionPaneView) Render(ctx paneRenderContext) string {
 	return v.card(ctx)
 }
 
-func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
-	options := v.options(m)
+func (v *permissionPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
+	options := permissionpolicy.Options(v.pending.request, ctx.projectTrusted, ctx.hasWorkDir)
 	if v.index >= len(options) {
 		v.index = len(options) - 1
 	}
@@ -63,72 +63,74 @@ func (v *permissionPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) 
 		switch message.String() {
 		case "tab":
 			v.parked = false
-			m.activity = "waiting for permission"
-			return true, nil
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionPermissionActivity, activity: "waiting for permission"}}
 		case "pgup", "pgdown":
-			return true, m.updateConversationViewport(message)
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionScrollPage, key: message}}
 		case "up", "k":
-			m.scrollConversationLines(-1)
-			return true, nil
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionScrollLines, scrollLines: -1}}
 		case "down", "j":
-			m.scrollConversationLines(1)
-			return true, nil
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionScrollLines, scrollLines: 1}}
 		case "y", "s", "p", "g", "n", "1", "2", "3", "4", "5", "enter":
 			// Decisions remain available while reviewing the transcript.
 		default:
-			return !m.matchesGlobalShortcut(message), nil
+			return paneKeyResult{handled: true, allowGlobal: true}
 		}
 	}
 
+	resolve := func(option permissionOption) paneKeyResult {
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionPermissionResolve, permission: option}}
+	}
 	switch message.String() {
 	case "esc":
 		v.parked = true
-		m.activity = "permission pending — tab to review"
-		return true, nil
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionPermissionActivity, activity: "permission pending — tab to review"}}
 	case "up", "k":
 		if v.index > 0 {
 			v.index--
 		}
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "down", "j":
 		if v.index < len(options)-1 {
 			v.index++
 		}
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "1", "2", "3", "4", "5":
 		idx := int(message.String()[0] - '1')
 		if idx >= 0 && idx < len(options) {
-			return true, m.resolvePermission(options[idx].Option)
+			return resolve(options[idx].Option)
 		}
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "y":
-		return true, m.resolvePermission(optionAllowOnce)
+		return resolve(optionAllowOnce)
 	case "s":
 		for _, item := range options {
 			if item.Option == optionAllowSession {
-				return true, m.resolvePermission(optionAllowSession)
+				return resolve(optionAllowSession)
 			}
 		}
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "p":
 		for _, item := range options {
 			if item.Option == optionAllowProject {
-				return true, m.resolvePermission(optionAllowProject)
+				return resolve(optionAllowProject)
 			}
 		}
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "g":
 		for _, item := range options {
 			if item.Option == optionAllowGlobal {
-				return true, m.resolvePermission(optionAllowGlobal)
+				return resolve(optionAllowGlobal)
 			}
 		}
-		return true, nil
+		return paneKeyResult{handled: true}
 	case "n":
-		return true, m.resolvePermission(optionDeny)
+		return resolve(optionDeny)
 	case "enter":
-		return true, m.resolvePermission(options[v.index].Option)
+		if len(options) == 0 {
+			return paneKeyResult{handled: true}
+		}
+		return resolve(options[v.index].Option)
 	default:
-		return !m.matchesGlobalShortcut(message), nil
+		return paneKeyResult{handled: true, allowGlobal: true}
 	}
 }

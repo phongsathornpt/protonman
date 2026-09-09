@@ -60,10 +60,14 @@ func (m *bubbleModel) handleModalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 		if result.action.kind != paneActionNone {
 			command = tea.Batch(command, m.applyPaneAction(result.action))
 		}
-		if result.handled {
+		handled := result.handled
+		if result.allowGlobal && m.matchesGlobalShortcut(message) {
+			handled = false
+		}
+		if handled {
 			m.requestRelayout()
 		}
-		return result.handled, command
+		return handled, command
 	}
 	legacy, ok := top.(modelPaneKeyHandler)
 	if !ok {
