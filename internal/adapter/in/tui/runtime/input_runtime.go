@@ -14,12 +14,12 @@ const (
 )
 
 func (m *bubbleModel) submit() tea.Cmd {
-	prompt := m.bottom.prompt()
+	prompt := m.panes.bottom.prompt()
 	line := strings.TrimSpace(prompt.Value())
-	if m.bottom.bashMode() {
+	if m.panes.bottom.bashMode() {
 		if line == "" {
 			m.resetPrompt()
-			m.bottom.remove(slashViewID)
+			m.panes.bottom.remove(slashViewID)
 			m.setBashMode(false)
 			return nil
 		}
@@ -28,12 +28,12 @@ func (m *bubbleModel) submit() tea.Cmd {
 				return nil
 			}
 			m.resetPrompt()
-			m.bottom.remove(slashViewID)
+			m.panes.bottom.remove(slashViewID)
 			m.refreshViewport()
 			return nil
 		}
 		m.resetPrompt()
-		m.bottom.remove(slashViewID)
+		m.panes.bottom.remove(slashViewID)
 		m.setBashMode(false)
 		return m.dispatchBang(line)
 	}
@@ -45,12 +45,12 @@ func (m *bubbleModel) submit() tea.Cmd {
 			return nil
 		}
 		m.resetPrompt()
-		m.bottom.remove(slashViewID)
+		m.panes.bottom.remove(slashViewID)
 		m.refreshViewport()
 		return nil
 	}
 	m.resetPrompt()
-	m.bottom.remove(slashViewID)
+	m.panes.bottom.remove(slashViewID)
 	return m.dispatch(line)
 }
 
@@ -91,7 +91,7 @@ func (m *bubbleModel) drainQueue() tea.Cmd {
 }
 
 func (m *bubbleModel) dispatch(line string) tea.Cmd {
-	m.bottom.recordHistory(line)
+	m.panes.bottom.recordHistory(line)
 	if isCommandLine(line) {
 		name, _, _ := splitCommand(line)
 		if name != "clear" && name != "new" && name != "quit" && name != "exit" {
@@ -106,7 +106,7 @@ func (m *bubbleModel) dispatch(line string) tea.Cmd {
 
 func (m *bubbleModel) dispatchBang(command string) tea.Cmd {
 	slog.DebugContext(m.ctx, "tui direct bash submitted", "command_bytes", len(command))
-	m.bottom.recordHistory("!" + command)
+	m.panes.bottom.recordHistory("!" + command)
 	m.showWelcome = false
 	m.appendUser("!" + command)
 	return m.startBash(command)

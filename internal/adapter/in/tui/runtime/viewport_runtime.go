@@ -42,7 +42,7 @@ func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
 			// rebuilding the entire transcript for invisible streaming deltas.
 			m.conversationViewport.staleTail = activeRevision != m.conversationViewport.activeRevision
 			m.conversationViewport.setFollowing(false)
-			if m.showTranscript {
+			if m.panes.showTranscript {
 				m.refreshTranscriptViewport(false)
 			}
 			return
@@ -60,7 +60,7 @@ func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
 	m.setViewportContent(content, !tailOnly)
 	m.conversationViewport.tailOnly = tailOnly
 	m.restoreViewportScroll(scroll)
-	if m.showTranscript {
+	if m.panes.showTranscript {
 		m.refreshTranscriptViewport(false)
 	}
 }

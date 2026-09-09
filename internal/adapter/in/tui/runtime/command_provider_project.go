@@ -20,7 +20,7 @@ func (m *bubbleModel) executeProviderCommand(line, rawName string) tea.Cmd {
 		preset = fields[1]
 	}
 	if subCmd == "add" {
-		if !m.bottom.has(providerViewID) {
+		if !m.panes.bottom.has(providerViewID) {
 			if preset != "" {
 				m.pushProviderPane(newProviderPaneViewWithPreset(preset))
 			} else {
@@ -31,8 +31,8 @@ func (m *bubbleModel) executeProviderCommand(line, rawName string) tea.Cmd {
 		return nil
 	}
 	if subCmd == "" || subCmd == "select" {
-		if !m.bottom.has(providerSelectViewID) {
-			m.bottom.push(newProviderSelectPaneView(m))
+		if !m.panes.bottom.has(providerSelectViewID) {
+			m.panes.bottom.push(newProviderSelectPaneView(m))
 			m.requestRelayout()
 		}
 		return nil
@@ -47,7 +47,7 @@ func (m *bubbleModel) executeProviderCommand(line, rawName string) tea.Cmd {
 		}
 	}
 	if p := model.LookupPreset(subCmd); p != nil {
-		if !m.bottom.has(providerViewID) {
+		if !m.panes.bottom.has(providerViewID) {
 			m.pushProviderPane(newProviderPaneViewWithPreset(p.ID))
 			m.requestRelayout()
 		}

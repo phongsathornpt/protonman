@@ -43,7 +43,7 @@ func (v *providerPaneView) syncInputFocus() {
 func (v *providerPaneView) handleFetchingKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	if message.String() == "esc" {
 		v.cancelFetch()
-		m.bottom.remove(providerViewID)
+		m.panes.bottom.remove(providerViewID)
 	}
 	return true, nil
 }
@@ -131,7 +131,7 @@ func (v *providerPaneView) handleProviderErrorKey(m *bubbleModel, message tea.Ke
 func (v *providerPaneView) handleInputKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch message.String() {
 	case "esc":
-		m.bottom.remove(providerViewID)
+		m.panes.bottom.remove(providerViewID)
 		return true, nil
 	case "alt+1", "alt+p":
 		v.applyPreset(model.DefaultProtonmanName)

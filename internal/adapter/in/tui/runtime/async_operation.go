@@ -58,5 +58,5 @@ func (m *bubbleModel) beginModelSelect(providerName, modelID string, unverified 
 
 func (m *bubbleModel) pushProviderPane(view *providerPaneView) {
 	m.activeProviderSave = 0
-	m.bottom.push(view)
+	m.panes.bottom.push(view)
 }

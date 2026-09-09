@@ -39,8 +39,8 @@ func (*reasoningPaneView) ReplacesComposer() bool { return true }
 func (m *bubbleModel) handleReasoningCommand(argument string) tea.Cmd {
 	argument = strings.TrimSpace(argument)
 	if argument == "" {
-		if !m.bottom.has(reasoningViewID) {
-			m.bottom.push(newReasoningPaneView(m))
+		if !m.panes.bottom.has(reasoningViewID) {
+			m.panes.bottom.push(newReasoningPaneView(m))
 		}
 		m.requestRelayout()
 		return nil
@@ -125,7 +125,7 @@ func (v *reasoningPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		idx := int(message.String()[0] - '1')
 		if idx >= 0 && idx < len(v.choices) {
-			m.bottom.remove(reasoningViewID)
+			m.panes.bottom.remove(reasoningViewID)
 			return true, m.setReasoningEffort(v.choices[idx])
 		}
 		return true, nil
@@ -136,10 +136,10 @@ func (v *reasoningPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (
 		if idx < 0 || idx >= len(v.choices) {
 			return true, nil
 		}
-		m.bottom.remove(reasoningViewID)
+		m.panes.bottom.remove(reasoningViewID)
 		return true, m.setReasoningEffort(v.choices[idx])
 	case "esc", "q":
-		m.bottom.remove(reasoningViewID)
+		m.panes.bottom.remove(reasoningViewID)
 		return true, nil
 	case "up", "k", "down", "j", "home", "g", "end", "G", "pgup", "pgdown":
 		updated, cmd := v.picker.Update(message)

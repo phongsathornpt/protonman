@@ -70,7 +70,7 @@ func (*agentsPaneView) ReplacesComposer() bool { return false }
 func (*agentsPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch message.String() {
 	case "esc", "enter":
-		m.bottom.remove(agentsViewID)
+		m.panes.bottom.remove(agentsViewID)
 		return true, nil
 	default:
 		return false, nil
@@ -87,13 +87,13 @@ func agentInspectionRows(m *bubbleModel) []string {
 	return agentpane.AgentRows(agentpane.AgentsSnapshot{Width: m.layout.width, Height: m.layout.height, Retained: m.agentSnapshot, SubagentsEnabled: m.subagentsEnabled, Activity: activity})
 }
 func (m *bubbleModel) openAgentsPane() tea.Cmd {
-	if m.bottom.has(agentsViewID) {
-		m.bottom.remove(agentsViewID)
+	if m.panes.bottom.has(agentsViewID) {
+		m.panes.bottom.remove(agentsViewID)
 	} else {
 		if m.agents.Available() {
 			m.syncAgentSnapshot()
 		}
-		m.bottom.push(&agentsPaneView{})
+		m.panes.bottom.push(&agentsPaneView{})
 	}
 	m.requestRelayout()
 	return nil

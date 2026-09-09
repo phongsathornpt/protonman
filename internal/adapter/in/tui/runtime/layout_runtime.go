@@ -10,7 +10,7 @@ func (m *bubbleModel) View() tea.View {
 		return tea.NewView("Starting Protonman…")
 	}
 	base := m.liveView()
-	if m.showTranscript {
+	if m.panes.showTranscript {
 		base = overlayCenter(base, m.transcriptOverlayView(), m.layout.width, m.layout.height)
 	}
 	view := tea.NewView(base)
@@ -41,16 +41,16 @@ func (m *bubbleModel) liveView() string {
 }
 
 func (m *bubbleModel) footerView() string {
-	if m == nil || m.bottom == nil {
+	if m == nil || m.panes.bottom == nil {
 		return ""
 	}
-	if top := m.bottom.top(); top != nil {
+	if top := m.panes.bottom.top(); top != nil {
 		if top.ReplacesComposer() {
 			return ""
 		}
 		return m.shortcutHint()
 	}
-	if !m.bottom.composerVisible() {
+	if !m.panes.bottom.composerVisible() {
 		return ""
 	}
 	return m.shortcutHint()

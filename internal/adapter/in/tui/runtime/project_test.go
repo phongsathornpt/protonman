@@ -33,13 +33,13 @@ func TestProjectCommandLoadsTrustedWorkspaceState(t *testing.T) {
 	m.activeModel = "gemini-3.8-flash"
 	m.agentProfile = "intelligence"
 	cmd := m.executeCommand("/project")
-	if cmd == nil || !m.bottom.has(projectViewID) {
+	if cmd == nil || !m.panes.bottom.has(projectViewID) {
 		t.Fatal("/project did not open async project pane")
 	}
 	loaded := cmd()
 	updated, _ := m.Update(loaded)
 	m = updated.(*bubbleModel)
-	rendered := m.bottom.find(projectViewID).(*projectPaneView).Render(m)
+	rendered := m.panes.bottom.find(projectViewID).(*projectPaneView).Render(m)
 	for _, want := range []string{"Project Settings", "loaded · trusted", "1 detected", "gemini-3.8-flash", "intelligence"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("project pane missing %q: %q", want, rendered)
@@ -66,7 +66,7 @@ func TestProjectCommandShowsUntrustedLocalResources(t *testing.T) {
 	}
 	updated, _ := m.Update(cmd())
 	m = updated.(*bubbleModel)
-	rendered := m.bottom.find(projectViewID).(*projectPaneView).Render(m)
+	rendered := m.panes.bottom.find(projectViewID).(*projectPaneView).Render(m)
 	for _, want := range []string{"ignored · untrusted", "1 detected · inactive until trusted", "not trusted"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("project pane missing %q: %q", want, rendered)
@@ -78,7 +78,7 @@ func TestProjectReloadIgnoresStaleResult(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.workDir = t.TempDir()
 	first := m.openProjectPane()
-	view := m.bottom.find(projectViewID).(*projectPaneView)
+	view := m.panes.bottom.find(projectViewID).(*projectPaneView)
 	firstID := view.requestID
 	second := view.reload(m)
 	if view.requestID == firstID {
@@ -86,13 +86,13 @@ func TestProjectReloadIgnoresStaleResult(t *testing.T) {
 	}
 	updated, _ := m.Update(first())
 	m = updated.(*bubbleModel)
-	view = m.bottom.find(projectViewID).(*projectPaneView)
+	view = m.panes.bottom.find(projectViewID).(*projectPaneView)
 	if !view.loading {
 		t.Fatal("stale project result cleared active reload")
 	}
 	updated, _ = m.Update(second())
 	m = updated.(*bubbleModel)
-	if m.bottom.find(projectViewID).(*projectPaneView).loading {
+	if m.panes.bottom.find(projectViewID).(*projectPaneView).loading {
 		t.Fatal("latest project result did not finish reload")
 	}
 }
@@ -114,7 +114,7 @@ func TestProjectInitCreatesConfigAndReloadsPane(t *testing.T) {
 	if _, err := os.Stat(appdirs.ProjectConfig(m.workDir)); err != nil {
 		t.Fatalf("project config not created: %v", err)
 	}
-	view := m.bottom.find(projectViewID).(*projectPaneView)
+	view := m.panes.bottom.find(projectViewID).(*projectPaneView)
 	if !view.state.ConfigExists || view.loading {
 		t.Fatalf("project pane not refreshed after init: %#v", view)
 	}

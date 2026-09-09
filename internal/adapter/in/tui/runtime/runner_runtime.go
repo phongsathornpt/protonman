@@ -129,7 +129,7 @@ func (m *bubbleModel) setPermissionMode(mode permission.Mode) error {
 }
 
 func (m *bubbleModel) syncPromptPlaceholder() {
-	if m == nil || m.bottom == nil {
+	if m == nil || m.panes.bottom == nil {
 		return
 	}
 	mode := permission.ModeAsk
@@ -137,5 +137,5 @@ func (m *bubbleModel) syncPromptPlaceholder() {
 		mode = m.service.Mode()
 	}
 	hasRunner := m.runner != nil
-	m.bottom.setPlaceholder(promptPlaceholder(hasRunner, mode, m.planMode))
+	m.panes.bottom.setPlaceholder(promptPlaceholder(hasRunner, mode, m.planMode))
 }

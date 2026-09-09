@@ -169,7 +169,7 @@ func TestPermissionBashRiskPresentationUsesCommandEffect(t *testing.T) {
 	}{{name: "read only", command: "pwd", want: "Permission request — shell read only"}, {name: "mutating", command: "rm -rf tmp", want: "Permission required — shell modifies state"}, {name: "unknown", command: "make test", want: "Permission required — shell effects unknown"}, {name: "composed mutation", command: "pwd && rm tmp", want: "Permission required — shell modifies state"}, {name: "remote", command: "git push origin main", want: "Permission required — modifies remote"}, {name: "publish", command: "npm publish", want: "Permission required — publishes package"}, {name: "deployment", command: "wrangler deploy", want: "Permission required — changes deployment"}, {name: "destructive deployment", command: "terraform destroy", want: "Permission required — destructive deployment change"}}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			model.bottom.remove(permissionViewID)
+			model.panes.bottom.remove(permissionViewID)
 			model.openPermission(permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: tc.command, Arguments: json.RawMessage(fmt.Sprintf(`{"command":%q}`, tc.command))}, response: make(chan permissionResponse, 1)})
 			view := model.View().Content
 			if !strings.Contains(view, tc.want) {
@@ -255,10 +255,10 @@ func TestPermissionBashPresentationShowsCwdAndEffectReason(t *testing.T) {
 func TestPermissionRequestLivesInBottomPane(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.openPermission(permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "pwd"}, response: make(chan permissionResponse, 1)})
-	if top := m.bottom.top(); top == nil || top.ID() != permissionViewID {
+	if top := m.panes.bottom.top(); top == nil || top.ID() != permissionViewID {
 		t.Fatalf("top view = %#v, want permission", top)
 	}
-	if m.bottom.composerVisible() {
+	if m.panes.bottom.composerVisible() {
 		t.Fatal("composer remained visible while approval view owns input")
 	}
 }

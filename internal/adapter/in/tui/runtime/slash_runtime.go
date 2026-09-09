@@ -30,10 +30,10 @@ const (
 )
 
 func (m bubbleModel) parseSlashContext() (slashContext, bool) {
-	if m.bottom == nil || m.bottom.bashMode() || m.bottom.has(permissionViewID) || m.bottom.has(skillsViewID) {
+	if m.panes.bottom == nil || m.panes.bottom.bashMode() || m.panes.bottom.has(permissionViewID) || m.panes.bottom.has(skillsViewID) {
 		return slashContext{}, false
 	}
-	prompt := m.bottom.prompt()
+	prompt := m.panes.bottom.prompt()
 	if prompt == nil {
 		return slashContext{}, false
 	}
@@ -68,26 +68,26 @@ func (m bubbleModel) slashMatches() []slashCommand {
 }
 
 func (m *bubbleModel) slashState() *slashPaneView {
-	if m.bottom == nil {
+	if m.panes.bottom == nil {
 		return nil
 	}
-	view, _ := m.bottom.find(slashViewID).(*slashPaneView)
+	view, _ := m.panes.bottom.find(slashViewID).(*slashPaneView)
 	return view
 }
 
 func (m *bubbleModel) syncSlashView() {
-	if m.bottom == nil {
+	if m.panes.bottom == nil {
 		return
 	}
 	matches := m.slashMatches()
 	if len(matches) == 0 {
-		m.bottom.remove(slashViewID)
+		m.panes.bottom.remove(slashViewID)
 		return
 	}
 	view := m.slashState()
 	if view == nil {
 		view = &slashPaneView{}
-		m.bottom.push(view)
+		m.panes.bottom.push(view)
 	}
 	view.sync(m)
 }
@@ -117,7 +117,7 @@ func (m *bubbleModel) acceptSlash(run bool) (applied bool, command tea.Cmd) {
 	}
 	selected := view.matches[view.picker.Index()]
 	context, _ := m.parseSlashContext()
-	prompt := m.bottom.prompt()
+	prompt := m.panes.bottom.prompt()
 	var insertion string
 	if context.Kind == slashKindSkill {
 		insertion = context.Lead + selected.Name
@@ -127,18 +127,18 @@ func (m *bubbleModel) acceptSlash(run bool) (applied bool, command tea.Cmd) {
 			insertion += " "
 			prompt.SetValue(insertion)
 			prompt.CursorEnd()
-			m.bottom.remove(slashViewID)
+			m.panes.bottom.remove(slashViewID)
 			return true, nil
 		}
 	}
 	if !run {
 		prompt.SetValue(insertion)
 		prompt.CursorEnd()
-		m.bottom.remove(slashViewID)
+		m.panes.bottom.remove(slashViewID)
 		return true, nil
 	}
 	m.resetPrompt()
-	m.bottom.remove(slashViewID)
+	m.panes.bottom.remove(slashViewID)
 	return true, m.dispatch(insertion)
 }
 

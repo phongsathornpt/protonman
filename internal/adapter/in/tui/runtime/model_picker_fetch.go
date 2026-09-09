@@ -67,11 +67,11 @@ func (v *modelSelectPaneView) loadProvider(m *bubbleModel, force bool) tea.Cmd {
 }
 
 func (m *bubbleModel) openModelSelectPane() tea.Cmd {
-	if m == nil || m.bottom.has(modelSelectViewID) {
+	if m == nil || m.panes.bottom.has(modelSelectViewID) {
 		return nil
 	}
 	view := newModelSelectPaneView(m)
-	m.bottom.push(view)
+	m.panes.bottom.push(view)
 	m.requestRelayout()
 	return view.loadProvider(m, false)
 }

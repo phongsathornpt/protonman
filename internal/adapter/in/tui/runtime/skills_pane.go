@@ -112,12 +112,12 @@ func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (boo
 	v.ensurePicker(m)
 	if !v.initialized || m == nil || m.skills == nil {
 		if m != nil {
-			m.bottom.remove(skillsViewID)
+			m.panes.bottom.remove(skillsViewID)
 		}
 		return true, nil
 	}
 	if message.String() == "ctrl+s" {
-		m.bottom.remove(skillsViewID)
+		m.panes.bottom.remove(skillsViewID)
 		return true, nil
 	}
 
@@ -133,17 +133,17 @@ func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (boo
 		return true, nil
 	case "enter":
 		if !v.picker.SettingFilter() {
-			m.bottom.remove(skillsViewID)
+			m.panes.bottom.remove(skillsViewID)
 			return true, nil
 		}
 	case "esc":
 		if !v.picker.SettingFilter() && !v.picker.IsFiltered() {
-			m.bottom.remove(skillsViewID)
+			m.panes.bottom.remove(skillsViewID)
 			return true, nil
 		}
 	case "q":
 		if !v.picker.SettingFilter() {
-			m.bottom.remove(skillsViewID)
+			m.panes.bottom.remove(skillsViewID)
 			return true, nil
 		}
 	}

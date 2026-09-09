@@ -496,15 +496,15 @@ func TestClearTranscriptPreservesProviderHistory(t *testing.T) {
 
 func TestMultilinePromptUpMovesCursorInsteadOfRecallingHistory(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	prompt := m.bottom.prompt()
+	prompt := m.panes.bottom.prompt()
 	prompt.SetValue("first line\nsecond line")
 	prompt.CursorEnd()
 	updated, _ := m.Update(testKey(tea.KeyUp))
 	m = updated.(*bubbleModel)
-	if got := m.bottom.prompt().Value(); got != "first line\nsecond line" {
+	if got := m.panes.bottom.prompt().Value(); got != "first line\nsecond line" {
 		t.Fatalf("up changed multiline draft to %q", got)
 	}
-	if line := m.bottom.prompt().Line(); line != 0 {
+	if line := m.panes.bottom.prompt().Line(); line != 0 {
 		t.Fatalf("up moved to logical line %d, want 0", line)
 	}
 }
@@ -593,11 +593,11 @@ func spinnerTickMessage() tea.Msg {
 func TestRefreshViewportDoesNotRenderHiddenTranscriptOverlay(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
-	m.transcriptViewport.SetContent("overlay sentinel")
-	m.showTranscript = false
+	m.panes.transcript.SetContent("overlay sentinel")
+	m.panes.showTranscript = false
 	m.appendAssistant("new visible transcript content")
 	m.refreshViewport()
-	if got := m.transcriptViewport.View(); !strings.Contains(got, "overlay sentinel") {
+	if got := m.panes.transcript.View(); !strings.Contains(got, "overlay sentinel") {
 		t.Fatalf("hidden transcript overlay was refreshed: %q", got)
 	}
 }
@@ -780,17 +780,17 @@ func TestCommandHistoryClearsDroppedBackingSlots(t *testing.T) {
 func TestClosingTranscriptOverlayReleasesViewportContent(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.appendAssistant("retained transcript sentinel")
-	m.showTranscript = true
-	m.rawTranscript = true
+	m.panes.showTranscript = true
+	m.panes.rawTranscript = true
 	m.refreshTranscriptViewport(true)
-	if got := m.transcriptViewport.View(); !strings.Contains(got, "retained transcript sentinel") {
+	if got := m.panes.transcript.View(); !strings.Contains(got, "retained transcript sentinel") {
 		t.Fatalf("transcript overlay missing content before close: %q", got)
 	}
 	m.closeTranscriptOverlay()
-	if m.showTranscript {
+	if m.panes.showTranscript {
 		t.Fatal("transcript overlay remained open")
 	}
-	if got := m.transcriptViewport.View(); strings.Contains(got, "retained transcript sentinel") {
+	if got := m.panes.transcript.View(); strings.Contains(got, "retained transcript sentinel") {
 		t.Fatalf("closed transcript overlay retained content: %q", got)
 	}
 }

@@ -213,7 +213,7 @@ func TestAgentsCommandOpensFocusedInspectionPane(t *testing.T) {
 	m.agentSnapshot = []agent.AgentStatus{{ID: "int-7", Profile: agent.ProfileAgility, Task: "inspect router", State: agent.StateRunning, StartedAt: time.Now().Add(-4 * time.Second)}, {ID: "dex-8", Profile: agent.ProfileIntelligence, Task: "review concurrency", State: agent.StateFailed, StartedAt: time.Now().Add(-6 * time.Second), FinishedAt: time.Now(), Reason: "timed out"}}
 	m.agentActivity["int-7"] = AgentActivity{Label: `Search "routeRequest"`}
 	_ = m.executeCommand("/agents")
-	pane := m.bottom.find(agentsViewID)
+	pane := m.panes.bottom.find(agentsViewID)
 	if pane == nil {
 		t.Fatal("/agents did not open inspection pane")
 	}

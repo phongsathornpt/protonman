@@ -7,10 +7,10 @@ import (
 )
 
 func (m *bubbleModel) syncPromptHeight() {
-	if m.bottom == nil {
+	if m.panes.bottom == nil {
 		return
 	}
-	prompt := m.bottom.prompt()
+	prompt := m.panes.bottom.prompt()
 	if prompt == nil {
 		return
 	}
@@ -36,11 +36,11 @@ func (m *bubbleModel) resize(width int, height int) {
 	m.layout.width = width
 	m.layout.height = height
 	m.help.SetWidth(maxInt(1, width-2))
-	prompt := m.bottom.prompt()
+	prompt := m.panes.bottom.prompt()
 	prompt.SetWidth(maxInt(1, width-4))
 	m.syncPromptHeight()
-	m.transcriptViewport.SetWidth(maxInt(1, width-10))
-	m.transcriptViewport.SetHeight(maxInt(1, height-10))
+	m.panes.transcript.SetWidth(maxInt(1, width-10))
+	m.panes.transcript.SetHeight(maxInt(1, height-10))
 	if m.historyState != nil {
 		m.historyState.SetWidth(width)
 	}
@@ -73,8 +73,8 @@ type frameChrome struct {
 func (m *bubbleModel) buildFrameChrome() frameChrome {
 	frame := frameChrome{}
 	frame.status = m.statusView()
-	frame.top = m.bottom.renderTop(m)
-	if m.bottom.composerVisible() {
+	frame.top = m.panes.bottom.renderTop(m)
+	if m.panes.bottom.composerVisible() {
 		// The composer is small and stateful (cursor, focus, placeholder, bash mode).
 		// Render it from the textarea model every frame instead of reusing terminal
 		// output from a previous frame. Caching this string can leave stale prompt

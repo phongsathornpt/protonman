@@ -101,7 +101,7 @@ func (v *slashPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool
 		_, command := m.acceptSlash(true)
 		return true, command
 	case "esc":
-		m.bottom.remove(slashViewID)
+		m.panes.bottom.remove(slashViewID)
 		return true, nil
 	default:
 		return false, nil

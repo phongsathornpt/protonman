@@ -51,7 +51,7 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 				m.appendLine(fmt.Sprintf("  … and %d more skills. (Browse all in picker below, or use /skills <name>)", remaining))
 			}
 		}
-		m.bottom.push(&skillsPaneView{})
+		m.panes.bottom.push(&skillsPaneView{})
 		m.requestRelayout()
 		return nil
 	}

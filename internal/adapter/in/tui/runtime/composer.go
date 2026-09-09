@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -24,6 +25,13 @@ type composerState struct {
 	historyPos int
 	draft      string
 	bashMode   bool
+}
+
+type paneState struct {
+	bottom         *bottomPane
+	transcript     viewport.Model
+	showTranscript bool
+	rawTranscript  bool
 }
 
 type bottomPane struct {
@@ -216,21 +224,21 @@ func applyPromptChrome(prompt *textarea.Model, bash bool) {
 }
 
 func (m *bubbleModel) setBashMode(on bool) {
-	m.bottom.setBashMode(on)
+	m.panes.bottom.setBashMode(on)
 	m.syncSlashView()
 }
 
 func (m *bubbleModel) resetPrompt() {
-	if m == nil || m.bottom == nil || m.bottom.prompt() == nil {
+	if m == nil || m.panes.bottom == nil || m.panes.bottom.prompt() == nil {
 		return
 	}
-	m.bottom.prompt().Reset()
+	m.panes.bottom.prompt().Reset()
 }
 
 func (m *bubbleModel) historyPrevious() {
-	m.bottom.historyPrevious()
+	m.panes.bottom.historyPrevious()
 }
 
 func (m *bubbleModel) historyNext() {
-	m.bottom.historyNext()
+	m.panes.bottom.historyNext()
 }

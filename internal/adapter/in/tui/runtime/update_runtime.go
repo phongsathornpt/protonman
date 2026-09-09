@@ -32,7 +32,7 @@ func (m *bubbleModel) updateTerminalEvent(msg tea.Msg) (tea.Cmd, bool) {
 			_, command := m.handleInterruptKey()
 			return command, true
 		}
-		if m.showTranscript {
+		if m.panes.showTranscript {
 			_, command := m.updateTranscriptKey(message)
 			return command, true
 		}
@@ -47,13 +47,13 @@ func (m *bubbleModel) updateTerminalEvent(msg tea.Msg) (tea.Cmd, bool) {
 
 func (m *bubbleModel) updateMouseEvent(message tea.MouseMsg) tea.Cmd {
 	mouse := message.Mouse()
-	if m.showTranscript {
+	if m.panes.showTranscript {
 		var command tea.Cmd
-		m.transcriptViewport, command = m.transcriptViewport.Update(message)
+		m.panes.transcript, command = m.panes.transcript.Update(message)
 		return command
 	}
-	if m.bottom.has(skillsViewID) {
-		if view, ok := m.bottom.find(skillsViewID).(*skillsPaneView); ok {
+	if m.panes.bottom.has(skillsViewID) {
+		if view, ok := m.panes.bottom.find(skillsViewID).(*skillsPaneView); ok {
 			switch mouse.Button {
 			case tea.MouseWheelUp:
 				view.HandleKey(m, tea.KeyPressMsg{Code: tea.KeyUp})
@@ -82,7 +82,7 @@ func (m *bubbleModel) updateAnimationEvent(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		return command, true
 	case cursor.BlinkMsg:
-		prompt := m.bottom.prompt()
+		prompt := m.panes.bottom.prompt()
 		updated, command := prompt.Update(message)
 		*prompt = updated
 		return command, true

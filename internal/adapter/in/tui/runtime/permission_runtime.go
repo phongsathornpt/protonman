@@ -8,20 +8,20 @@ import (
 )
 
 func (m *bubbleModel) permissionView() *permissionPaneView {
-	if m.bottom == nil {
+	if m.panes.bottom == nil {
 		return nil
 	}
-	view, _ := m.bottom.find(permissionViewID).(*permissionPaneView)
+	view, _ := m.panes.bottom.find(permissionViewID).(*permissionPaneView)
 	return view
 }
 
 func (m *bubbleModel) hasPermissionView() bool { return m.permissionView() != nil }
 
 func (m *bubbleModel) openPermission(request permissionRequest) {
-	if m.bottom == nil {
+	if m.panes.bottom == nil {
 		return
 	}
-	m.bottom.push(&permissionPaneView{pending: request})
+	m.panes.bottom.push(&permissionPaneView{pending: request})
 	if m.activity != "waiting for permission" {
 		m.pendingActivity = m.activity
 	}
@@ -90,7 +90,7 @@ func (m *bubbleModel) resolvePermission(option permissionOption) tea.Cmd {
 		resolution = permission.Resolution{Action: permission.ActionDeny, Reason: "user denied one call"}
 	}
 	view.pending.response <- permissionResponse{resolution: resolution}
-	m.bottom.remove(permissionViewID)
+	m.panes.bottom.remove(permissionViewID)
 	m.activity = m.pendingActivity
 	if m.activity == "" || m.activity == "waiting for permission" {
 		m.activity = "running tool"

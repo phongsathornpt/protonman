@@ -137,7 +137,7 @@ func (v *todoPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool,
 	v.ensurePicker(m)
 	switch message.String() {
 	case "esc", "enter":
-		m.bottom.remove(todoInspectViewID)
+		m.panes.bottom.remove(todoInspectViewID)
 		return true, nil
 	}
 	updated, cmd := v.picker.Update(message)
@@ -162,10 +162,10 @@ func (v *todoPaneView) Render(m *bubbleModel) string {
 }
 
 func (m *bubbleModel) toggleTodoPane() {
-	if m.bottom.has(todoInspectViewID) {
-		m.bottom.remove(todoInspectViewID)
+	if m.panes.bottom.has(todoInspectViewID) {
+		m.panes.bottom.remove(todoInspectViewID)
 	} else {
-		m.bottom.push(&todoPaneView{})
+		m.panes.bottom.push(&todoPaneView{})
 	}
 	m.requestRelayout()
 }

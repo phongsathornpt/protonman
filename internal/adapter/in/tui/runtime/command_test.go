@@ -20,7 +20,7 @@ import (
 func TestSlashDropdownFiltersAndTabAccepts(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
-	model.bottom.prompt().SetValue("/he")
+	model.panes.bottom.prompt().SetValue("/he")
 	if !model.slashOpen() {
 		t.Fatal("slash dropdown did not open for /he")
 	}
@@ -32,14 +32,14 @@ func TestSlashDropdownFiltersAndTabAccepts(t *testing.T) {
 	if !applied || command != nil {
 		t.Fatalf("tab accept applied=%v command=%v", applied, command)
 	}
-	if got := model.bottom.prompt().Value(); got != "/help" {
+	if got := model.panes.bottom.prompt().Value(); got != "/help" {
 		t.Fatalf("tab accept value = %q, want /help", got)
 	}
 }
 
 func TestColonAliasDispatchesHelp(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	model.bottom.prompt().SetValue(":help")
+	model.panes.bottom.prompt().SetValue(":help")
 	if command := model.submit(); command != nil {
 		t.Fatalf("colon help command = %v, want nil", command)
 	}
@@ -95,7 +95,7 @@ func TestSlashAgent(t *testing.T) {
 
 func TestSlashEscapePreservesComposerDraft(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.bottom.prompt().SetValue("/he")
+	m.panes.bottom.prompt().SetValue("/he")
 	m.syncSlashView()
 	if !m.slashOpen() {
 		t.Fatal("slash view did not open")
@@ -105,10 +105,10 @@ func TestSlashEscapePreservesComposerDraft(t *testing.T) {
 	if command != nil {
 		t.Fatalf("escape command = %v, want nil", command)
 	}
-	if got := m.bottom.prompt().Value(); got != "/he" {
+	if got := m.panes.bottom.prompt().Value(); got != "/he" {
 		t.Fatalf("draft = %q, want /he", got)
 	}
-	if m.bottom.has(slashViewID) {
+	if m.panes.bottom.has(slashViewID) {
 		t.Fatal("slash view remained on stack after escape")
 	}
 }
@@ -149,10 +149,10 @@ func TestSlashReasoningOpensCapabilityAwarePicker(t *testing.T) {
 	m.activeModel = "gemini-3.8-flash"
 	m.agentProfile = "intelligence"
 	m.executeCommand("/reasoning")
-	if !m.bottom.has(reasoningViewID) {
+	if !m.panes.bottom.has(reasoningViewID) {
 		t.Fatal("/reasoning did not open thinking picker")
 	}
-	got := m.bottom.renderTop(m)
+	got := m.panes.bottom.renderTop(m)
 	for _, want := range []string{"Thinking level", "gemini-3.8-flash", "auto", "low", "medium", "high", "model default"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("picker missing %q: %q", want, got)
@@ -170,7 +170,7 @@ func TestReasoningPickerSelectsLevel(t *testing.T) {
 	m.activeProvider = "protonman"
 	m.activeModel = "gemini-3.8-flash"
 	m.executeCommand("/reasoning")
-	view, ok := m.bottom.find(reasoningViewID).(*reasoningPaneView)
+	view, ok := m.panes.bottom.find(reasoningViewID).(*reasoningPaneView)
 	if !ok || view == nil {
 		t.Fatal("reasoning picker missing")
 	}
@@ -182,7 +182,7 @@ func TestReasoningPickerSelectsLevel(t *testing.T) {
 	if got := m.reasoningEffort; got != sdk.ReasoningHigh {
 		t.Fatalf("reasoningEffort = %q, want high", got)
 	}
-	if m.bottom.has(reasoningViewID) {
+	if m.panes.bottom.has(reasoningViewID) {
 		t.Fatal("picker stayed open after selection")
 	}
 }
@@ -192,7 +192,7 @@ func TestReasoningPickerShiftTabDoesNotLeak(t *testing.T) {
 	m.activeProvider = "protonman"
 	m.activeModel = "gemini-3.8-flash"
 	m.executeCommand("/reasoning")
-	view, ok := m.bottom.find(reasoningViewID).(*reasoningPaneView)
+	view, ok := m.panes.bottom.find(reasoningViewID).(*reasoningPaneView)
 	if !ok || view == nil {
 		t.Fatal("reasoning picker missing")
 	}
@@ -214,7 +214,7 @@ func TestReasoningPickerNumberKeySelects(t *testing.T) {
 	m.activeProvider = "protonman"
 	m.activeModel = "gemini-3.8-flash"
 	m.executeCommand("/reasoning")
-	view, ok := m.bottom.find(reasoningViewID).(*reasoningPaneView)
+	view, ok := m.panes.bottom.find(reasoningViewID).(*reasoningPaneView)
 	if !ok || view == nil {
 		t.Fatal("reasoning picker missing")
 	}
@@ -226,7 +226,7 @@ func TestReasoningPickerNumberKeySelects(t *testing.T) {
 	if got := m.reasoningEffort; got != sdk.ReasoningLow {
 		t.Fatalf("reasoningEffort = %q, want low", got)
 	}
-	if m.bottom.has(reasoningViewID) {
+	if m.panes.bottom.has(reasoningViewID) {
 		t.Fatal("picker stayed open after number selection")
 	}
 }
@@ -276,7 +276,7 @@ func TestSlashReasoningPickerUsesCatalogResolvedProfile(t *testing.T) {
 	yes := true
 	m.modelCatalogs.Set("protonman", []model.RemoteModel{{ID: "gemini-3.8-flash", ToolSupport: &yes}})
 	m.executeCommand("/reasoning")
-	got := m.bottom.renderTop(m)
+	got := m.panes.bottom.renderTop(m)
 	for _, want := range []string{"low", "medium", "high"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("picker missing catalog-resolved level %q: %q", want, got)
@@ -317,7 +317,7 @@ func TestSlashSkills(t *testing.T) {
 		if strings.Contains(content, "Extract PDF text") || strings.Contains(content, "[user]") {
 			t.Fatalf("expected viewport skill list to show skill name only, got: %s", content)
 		}
-		pickerRender := model.bottom.renderTop(model)
+		pickerRender := model.panes.bottom.renderTop(model)
 		if !strings.Contains(pickerRender, "pdf-processing") {
 			t.Fatalf("expected picker to contain pdf-processing, got: %s", pickerRender)
 		}
@@ -326,12 +326,12 @@ func TestSlashSkills(t *testing.T) {
 		}
 	})
 	t.Run("skill activation", func(t *testing.T) {
-		model.bottom.remove(skillsViewID)
+		model.panes.bottom.remove(skillsViewID)
 		model.executeCommand("/skill")
-		if !model.bottom.has(skillsViewID) {
+		if !model.panes.bottom.has(skillsViewID) {
 			t.Fatalf("expected /skill without args to open skills picker")
 		}
-		model.bottom.remove(skillsViewID)
+		model.panes.bottom.remove(skillsViewID)
 		model.executeCommand("/skill nonexistent")
 		if !strings.Contains(model.viewport.View(), "skill \"nonexistent\" not found") {
 			t.Fatalf("expected not found error")
@@ -418,8 +418,8 @@ func TestSlashSkills(t *testing.T) {
 		}
 	})
 	t.Run("skill name autocomplete in composer", func(t *testing.T) {
-		model.bottom.remove(skillsViewID)
-		model.bottom.prompt().SetValue("/skill ")
+		model.panes.bottom.remove(skillsViewID)
+		model.panes.bottom.prompt().SetValue("/skill ")
 		if !model.slashOpen() {
 			t.Fatal("slash dropdown did not open for /skill ")
 		}
@@ -427,7 +427,7 @@ func TestSlashSkills(t *testing.T) {
 		if len(matches) == 0 {
 			t.Fatal("expected matches for /skill ")
 		}
-		model.bottom.prompt().SetValue("/skill pd")
+		model.panes.bottom.prompt().SetValue("/skill pd")
 		matches = model.slashMatches()
 		if len(matches) != 1 || matches[0].Name != "pdf-processing" {
 			t.Fatalf("expected pdf-processing match, got: %#v", matches)
@@ -436,17 +436,17 @@ func TestSlashSkills(t *testing.T) {
 		if !applied || cmd != nil {
 			t.Fatalf("acceptSlash failed: applied=%v, cmd=%v", applied, cmd)
 		}
-		if got := model.bottom.prompt().Value(); got != "/skill pdf-processing" {
+		if got := model.panes.bottom.prompt().Value(); got != "/skill pdf-processing" {
 			t.Fatalf("prompt value after accept = %q, want /skill pdf-processing", got)
 		}
 	})
 	t.Run("interactive bottom-pane skills picker", func(t *testing.T) {
-		model.bottom.remove(skillsViewID)
+		model.panes.bottom.remove(skillsViewID)
 		model.executeCommand("/skills")
-		if !model.bottom.has(skillsViewID) {
+		if !model.panes.bottom.has(skillsViewID) {
 			t.Fatal("expected skills picker in bottom pane after /skills")
 		}
-		rendered := model.bottom.renderTop(model)
+		rendered := model.panes.bottom.renderTop(model)
 		if !strings.Contains(rendered, "Skills") || !strings.Contains(rendered, "pdf-processing") {
 			t.Fatalf("unexpected picker render: %s", rendered)
 		}
@@ -458,20 +458,20 @@ func TestSlashSkills(t *testing.T) {
 		}
 		updated, _ = model.Update(testKey(tea.KeyEsc))
 		model = updated.(*bubbleModel)
-		if model.bottom.has(skillsViewID) {
+		if model.panes.bottom.has(skillsViewID) {
 			t.Fatal("esc did not close skills picker")
 		}
 	})
 	t.Run("ctrl+s shortcut toggles skills picker", func(t *testing.T) {
-		model.bottom.remove(skillsViewID)
+		model.panes.bottom.remove(skillsViewID)
 		updated, _ := model.Update(testCtrl('s'))
 		model = updated.(*bubbleModel)
-		if !model.bottom.has(skillsViewID) {
+		if !model.panes.bottom.has(skillsViewID) {
 			t.Fatal("ctrl+s did not open skills picker")
 		}
 		updated, _ = model.Update(testCtrl('s'))
 		model = updated.(*bubbleModel)
-		if model.bottom.has(skillsViewID) {
+		if model.panes.bottom.has(skillsViewID) {
 			t.Fatal("second ctrl+s did not close skills picker")
 		}
 	})
@@ -501,7 +501,7 @@ func TestSlashSkills(t *testing.T) {
 		}
 	})
 	t.Run("t shortcut toggles skill in bottom-pane picker", func(t *testing.T) {
-		model.bottom.remove(skillsViewID)
+		model.panes.bottom.remove(skillsViewID)
 		model.executeCommand("/skills")
 		wasActive := model.skills.IsActivated("pdf-processing")
 		updated, _ := model.Update(testText("t"))
@@ -509,7 +509,7 @@ func TestSlashSkills(t *testing.T) {
 		if model.skills.IsActivated("pdf-processing") == wasActive {
 			t.Fatalf("'t' key did not toggle skill active status")
 		}
-		model.bottom.remove(skillsViewID)
+		model.panes.bottom.remove(skillsViewID)
 	})
 	t.Run("slashCatalog contains single unified skills command with skill alias", func(t *testing.T) {
 		var foundSkills *slashCommand
@@ -581,11 +581,11 @@ func TestSkillsPickerWindowingLargeList(t *testing.T) {
 	model := newTestSkillsModel(t, 15)
 	updated, _ := model.Update(testCtrl('s'))
 	model = updated.(*bubbleModel)
-	if !model.bottom.has(skillsViewID) {
+	if !model.panes.bottom.has(skillsViewID) {
 		t.Fatal("expected skills picker to be open")
 	}
-	render := model.bottom.renderTop(model)
-	view := model.bottom.find(skillsViewID).(*skillsPaneView)
+	render := model.panes.bottom.renderTop(model)
+	view := model.panes.bottom.find(skillsViewID).(*skillsPaneView)
 	if got := view.picker.GlobalIndex(); got != 0 {
 		t.Fatalf("expected initial selected index 0, got %d", got)
 	}
@@ -593,7 +593,7 @@ func TestSkillsPickerWindowingLargeList(t *testing.T) {
 		updated, _ = model.Update(testKey(tea.KeyDown))
 		model = updated.(*bubbleModel)
 	}
-	render = model.bottom.renderTop(model)
+	render = model.panes.bottom.renderTop(model)
 	if got := view.picker.GlobalIndex(); got != 8 {
 		t.Fatalf("expected selected index 8 after navigation, got %d", got)
 	}
@@ -608,7 +608,7 @@ func TestSkillsPickerWrapAround(t *testing.T) {
 	model = updated.(*bubbleModel)
 	updated, _ = model.Update(testKey(tea.KeyUp))
 	model = updated.(*bubbleModel)
-	view := model.bottom.find(skillsViewID).(*skillsPaneView)
+	view := model.panes.bottom.find(skillsViewID).(*skillsPaneView)
 	if got := view.picker.GlobalIndex(); got != 4 {
 		t.Fatalf("expected wrap-around index 4, got %d", got)
 	}
@@ -625,8 +625,8 @@ func TestSkillsPickerFastNavigation(t *testing.T) {
 	model = updated.(*bubbleModel)
 	updated, _ = model.Update(testKey(tea.KeyPgDown))
 	model = updated.(*bubbleModel)
-	render := model.bottom.renderTop(model)
-	view := model.bottom.find(skillsViewID).(*skillsPaneView)
+	render := model.panes.bottom.renderTop(model)
+	view := model.panes.bottom.find(skillsViewID).(*skillsPaneView)
 	if got := view.picker.GlobalIndex(); got <= 0 {
 		t.Fatalf("expected pgdown to advance selection, got index %d", got)
 	}
@@ -649,35 +649,35 @@ func TestSkillsPickerFastNavigation(t *testing.T) {
 
 func TestComposerDraftPreservedOnHistoryNavigation(t *testing.T) {
 	model := newTestSkillsModel(t, 2)
-	model.bottom.recordHistory("git status")
-	model.bottom.recordHistory("docker ps")
+	model.panes.bottom.recordHistory("git status")
+	model.panes.bottom.recordHistory("docker ps")
 	draftText := "my half-written complex query"
-	model.bottom.prompt().SetValue(draftText)
+	model.panes.bottom.prompt().SetValue(draftText)
 	updated, _ := model.Update(testKey(tea.KeyUp))
 	model = updated.(*bubbleModel)
-	if model.bottom.prompt().Value() != "docker ps" {
-		t.Fatalf("expected 'docker ps' from history, got: %q", model.bottom.prompt().Value())
+	if model.panes.bottom.prompt().Value() != "docker ps" {
+		t.Fatalf("expected 'docker ps' from history, got: %q", model.panes.bottom.prompt().Value())
 	}
 	updated, _ = model.Update(testKey(tea.KeyUp))
 	model = updated.(*bubbleModel)
-	if model.bottom.prompt().Value() != "git status" {
-		t.Fatalf("expected 'git status' from history, got: %q", model.bottom.prompt().Value())
+	if model.panes.bottom.prompt().Value() != "git status" {
+		t.Fatalf("expected 'git status' from history, got: %q", model.panes.bottom.prompt().Value())
 	}
 	updated, _ = model.Update(testKey(tea.KeyDown))
 	model = updated.(*bubbleModel)
-	if model.bottom.prompt().Value() != "docker ps" {
-		t.Fatalf("expected 'docker ps', got: %q", model.bottom.prompt().Value())
+	if model.panes.bottom.prompt().Value() != "docker ps" {
+		t.Fatalf("expected 'docker ps', got: %q", model.panes.bottom.prompt().Value())
 	}
 	updated, _ = model.Update(testKey(tea.KeyDown))
 	model = updated.(*bubbleModel)
-	if model.bottom.prompt().Value() != draftText {
-		t.Fatalf("expected restored draft %q, got: %q", draftText, model.bottom.prompt().Value())
+	if model.panes.bottom.prompt().Value() != draftText {
+		t.Fatalf("expected restored draft %q, got: %q", draftText, model.panes.bottom.prompt().Value())
 	}
 }
 
 func TestSlashAutocompleteWrapAround(t *testing.T) {
 	model := newTestSkillsModel(t, 8)
-	model.bottom.prompt().SetValue("/skill ")
+	model.panes.bottom.prompt().SetValue("/skill ")
 	if !model.slashOpen() {
 		t.Fatal("expected slash open for /skill ")
 	}
@@ -699,7 +699,7 @@ func TestSlashAutocompleteWrapAround(t *testing.T) {
 
 func TestSlashAutocompleteUsesBubblesListPresentation(t *testing.T) {
 	model := newTestSkillsModel(t, 5)
-	model.bottom.prompt().SetValue("/skill ")
+	model.panes.bottom.prompt().SetValue("/skill ")
 	if !model.slashOpen() {
 		t.Fatal("expected slash open for /skill ")
 	}
@@ -727,28 +727,28 @@ func TestSkillsPickerCtrlCEscapesModal(t *testing.T) {
 	model := newTestSkillsModel(t, 5)
 	updated, _ := model.Update(testCtrl('s'))
 	model = updated.(*bubbleModel)
-	if !model.bottom.has(skillsViewID) {
+	if !model.panes.bottom.has(skillsViewID) {
 		t.Fatal("expected skills picker open")
 	}
 	updated, _ = model.Update(testCtrl('c'))
 	model = updated.(*bubbleModel)
-	if model.bottom.has(skillsViewID) {
+	if model.panes.bottom.has(skillsViewID) {
 		t.Fatal("expected ctrl+c to close skills picker")
 	}
 }
 
 func TestTranscriptOverlayQAndCtrlC(t *testing.T) {
 	model := newTestSkillsModel(t, 2)
-	model.showTranscript = true
+	model.panes.showTranscript = true
 	updated, _ := model.Update(testText("q"))
 	model = updated.(*bubbleModel)
-	if model.showTranscript {
+	if model.panes.showTranscript {
 		t.Fatal("expected 'q' to close transcript overlay")
 	}
-	model.showTranscript = true
+	model.panes.showTranscript = true
 	updated, _ = model.Update(testCtrl('c'))
 	model = updated.(*bubbleModel)
-	if model.showTranscript {
+	if model.panes.showTranscript {
 		t.Fatal("expected ctrl+c to close transcript overlay")
 	}
 }
@@ -784,20 +784,20 @@ func TestQueueClearedOnTurnCancel(t *testing.T) {
 func TestMultilineTextareaDynamicExpansion(t *testing.T) {
 	model := newTestSkillsModel(t, 1)
 	model.resize(80, 24)
-	model.bottom.prompt().SetValue("hello")
+	model.panes.bottom.prompt().SetValue("hello")
 	model.relayout()
-	if model.bottom.prompt().Height() != 1 {
-		t.Fatalf("expected height 1 for single line, got %d", model.bottom.prompt().Height())
+	if model.panes.bottom.prompt().Height() != 1 {
+		t.Fatalf("expected height 1 for single line, got %d", model.panes.bottom.prompt().Height())
 	}
-	model.bottom.prompt().SetValue("line 1\nline 2\nline 3")
+	model.panes.bottom.prompt().SetValue("line 1\nline 2\nline 3")
 	model.relayout()
-	if model.bottom.prompt().Height() != 3 {
-		t.Fatalf("expected height 3 for 3 lines, got %d", model.bottom.prompt().Height())
+	if model.panes.bottom.prompt().Height() != 3 {
+		t.Fatalf("expected height 3 for 3 lines, got %d", model.panes.bottom.prompt().Height())
 	}
-	model.bottom.prompt().SetValue("1\n2\n3\n4\n5\n6")
+	model.panes.bottom.prompt().SetValue("1\n2\n3\n4\n5\n6")
 	model.relayout()
-	if model.bottom.prompt().Height() != 4 {
-		t.Fatalf("expected height 4 for 6 lines, got %d", model.bottom.prompt().Height())
+	if model.panes.bottom.prompt().Height() != 4 {
+		t.Fatalf("expected height 4 for 6 lines, got %d", model.panes.bottom.prompt().Height())
 	}
 }
 
@@ -807,7 +807,7 @@ func TestSkillsPickerMouseWheelNavigation(t *testing.T) {
 	model = updated.(*bubbleModel)
 	updated, _ = model.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
 	model = updated.(*bubbleModel)
-	view := model.bottom.find(skillsViewID).(*skillsPaneView)
+	view := model.panes.bottom.find(skillsViewID).(*skillsPaneView)
 	if got := view.picker.GlobalIndex(); got != 1 {
 		t.Fatalf("expected index 1 after wheel down, got %d", got)
 	}
@@ -856,25 +856,25 @@ func TestStatusBarNeverWrapsOn80Columns(t *testing.T) {
 func TestShortcutMatrixGlobalKeysSurviveModalRouting(t *testing.T) {
 	t.Run("permission lets transcript shortcut bubble", func(t *testing.T) {
 		m := newTestBubbleModel(t, permission.ModeAsk, nil)
-		m.bottom.push(&permissionPaneView{})
+		m.panes.bottom.push(&permissionPaneView{})
 		updated, _ := m.Update(testCtrl('t'))
 		m = updated.(*bubbleModel)
-		if !m.showTranscript {
+		if !m.panes.showTranscript {
 			t.Fatal("ctrl+t did not open transcript above permission pane")
 		}
-		if !m.bottom.has(permissionViewID) {
+		if !m.panes.bottom.has(permissionViewID) {
 			t.Fatal("transcript shortcut removed pending permission pane")
 		}
 	})
 	t.Run("provider lets transcript shortcut bubble", func(t *testing.T) {
 		m := newTestBubbleModel(t, permission.ModeAsk, nil)
-		m.bottom.push(newProviderPaneView())
+		m.panes.bottom.push(newProviderPaneView())
 		updated, _ := m.Update(testCtrl('t'))
 		m = updated.(*bubbleModel)
-		if !m.showTranscript {
+		if !m.panes.showTranscript {
 			t.Fatal("ctrl+t did not open transcript above provider pane")
 		}
-		if !m.bottom.has(providerViewID) {
+		if !m.panes.bottom.has(providerViewID) {
 			t.Fatal("transcript shortcut unexpectedly closed provider pane")
 		}
 	})
@@ -883,7 +883,7 @@ func TestShortcutMatrixGlobalKeysSurviveModalRouting(t *testing.T) {
 		view := newProviderPaneView()
 		view.focusIndex = 1
 		view.syncInputFocus()
-		m.bottom.push(view)
+		m.panes.bottom.push(view)
 		updated, _ := m.Update(testShiftTab())
 		m = updated.(*bubbleModel)
 		if view.focusIndex != 0 {
@@ -898,34 +898,34 @@ func TestShortcutMatrixGlobalKeysSurviveModalRouting(t *testing.T) {
 func TestShortcutMatrixInterruptAndToggleSemantics(t *testing.T) {
 	t.Run("ctrl-c closes modal before quitting", func(t *testing.T) {
 		m := newTestBubbleModel(t, permission.ModeAsk, nil)
-		m.bottom.push(&skillsPaneView{})
+		m.panes.bottom.push(&skillsPaneView{})
 		updated, cmd := m.Update(testCtrl('c'))
 		m = updated.(*bubbleModel)
 		if cmd != nil {
 			t.Fatal("ctrl+c on modal returned quit command")
 		}
-		if m.bottom.has(skillsViewID) {
+		if m.panes.bottom.has(skillsViewID) {
 			t.Fatal("ctrl+c did not close skills pane")
 		}
 	})
 	t.Run("ctrl-p closes model picker through binding", func(t *testing.T) {
 		m := newTestBubbleModel(t, permission.ModeAsk, nil)
-		m.bottom.push(&modelSelectPaneView{})
+		m.panes.bottom.push(&modelSelectPaneView{})
 		updated, _ := m.Update(testCtrl('p'))
 		m = updated.(*bubbleModel)
-		if m.bottom.has(modelSelectViewID) {
+		if m.panes.bottom.has(modelSelectViewID) {
 			t.Fatal("ctrl+p did not close model picker")
 		}
 	})
 	t.Run("ctrl-c closes transcript overlay", func(t *testing.T) {
 		m := newTestBubbleModel(t, permission.ModeAsk, nil)
-		m.showTranscript = true
+		m.panes.showTranscript = true
 		updated, cmd := m.Update(testCtrl('c'))
 		m = updated.(*bubbleModel)
 		if cmd != nil {
 			t.Fatal("ctrl+c on transcript returned quit command")
 		}
-		if m.showTranscript {
+		if m.panes.showTranscript {
 			t.Fatal("ctrl+c did not close transcript overlay")
 		}
 	})

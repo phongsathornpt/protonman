@@ -29,14 +29,14 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 			if !ok {
 				return true, nil
 			}
-			m.bottom.remove(providerSelectViewID)
+			m.panes.bottom.remove(providerSelectViewID)
 			return true, m.beginProviderDelete(item.name)
 		case "esc":
 			v.deleteConfirm = false
 			return true, nil
 		case "ctrl+c":
 			v.deleteConfirm = false
-			m.bottom.remove(providerSelectViewID)
+			m.panes.bottom.remove(providerSelectViewID)
 			return true, nil
 		default:
 			return !m.matchesGlobalShortcut(message), nil
@@ -44,19 +44,19 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 	}
 	switch message.String() {
 	case "esc", "q":
-		m.bottom.remove(providerSelectViewID)
+		m.panes.bottom.remove(providerSelectViewID)
 		return true, nil
 	case "a", "c":
-		m.bottom.remove(providerSelectViewID)
-		if !m.bottom.has(providerViewID) {
+		m.panes.bottom.remove(providerSelectViewID)
+		if !m.panes.bottom.has(providerViewID) {
 			m.pushProviderPane(newProviderPaneView())
 		}
 		return true, nil
 	case "m":
 		if item, ok := v.selectedItem(); ok {
 			if item.isConfigured {
-				m.bottom.remove(providerSelectViewID)
-				if !m.bottom.has(modelSelectViewID) {
+				m.panes.bottom.remove(providerSelectViewID)
+				if !m.panes.bottom.has(modelSelectViewID) {
 					mv := newModelSelectPaneView(m)
 					for i, name := range mv.providerNames {
 						if strings.EqualFold(name, item.name) {
@@ -64,7 +64,7 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 							break
 						}
 					}
-					m.bottom.push(mv)
+					m.panes.bottom.push(mv)
 					if _, ok := m.providers[strings.ToLower(item.name)]; ok {
 						return true, mv.loadProvider(m, false)
 					}
@@ -75,8 +75,8 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 		return true, nil
 	case "e":
 		if item, ok := v.selectedItem(); ok {
-			m.bottom.remove(providerSelectViewID)
-			if !m.bottom.has(providerViewID) {
+			m.panes.bottom.remove(providerSelectViewID)
+			if !m.panes.bottom.has(providerViewID) {
 				if item.isConfigured {
 					if cfg, ok := m.providers[strings.ToLower(item.name)]; ok {
 						pv := newProviderPaneViewWithConfig(cfg)
@@ -114,17 +114,17 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 		return true, nil
 	case "enter":
 		if item, ok := v.selectedItem(); ok {
-			m.bottom.remove(providerSelectViewID)
+			m.panes.bottom.remove(providerSelectViewID)
 			if item.isConfigured {
 				return true, m.beginProviderSelect(item.name)
 			}
 			if item.kind == providerItemPreset {
-				if !m.bottom.has(providerViewID) {
+				if !m.panes.bottom.has(providerViewID) {
 					m.pushProviderPane(newProviderPaneViewWithPreset(item.presetID))
 				}
 				return true, nil
 			}
-			if !m.bottom.has(providerViewID) {
+			if !m.panes.bottom.has(providerViewID) {
 				m.pushProviderPane(newProviderPaneView())
 			}
 			return true, nil

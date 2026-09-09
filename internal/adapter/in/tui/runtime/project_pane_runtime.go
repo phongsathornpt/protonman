@@ -56,7 +56,7 @@ func (v *projectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bo
 	case "r":
 		return true, v.reload(m)
 	case "esc", "q":
-		m.bottom.remove(projectViewID)
+		m.panes.bottom.remove(projectViewID)
 		return true, nil
 	default:
 		return false, nil
@@ -76,10 +76,10 @@ func (v *projectPaneView) reload(m *bubbleModel) tea.Cmd {
 }
 
 func (m *bubbleModel) initProject() tea.Cmd {
-	view, _ := m.bottom.find(projectViewID).(*projectPaneView)
+	view, _ := m.panes.bottom.find(projectViewID).(*projectPaneView)
 	if view == nil {
 		view = &projectPaneView{}
-		m.bottom.push(view)
+		m.panes.bottom.push(view)
 	}
 	view.loading = true
 	view.err = nil
@@ -92,7 +92,7 @@ func (m *bubbleModel) initProject() tea.Cmd {
 }
 
 func (m *bubbleModel) updateProjectInitialized(message projectInitializedMsg) (tea.Model, tea.Cmd) {
-	view, _ := m.bottom.find(projectViewID).(*projectPaneView)
+	view, _ := m.panes.bottom.find(projectViewID).(*projectPaneView)
 	if view == nil {
 		return m, nil
 	}
@@ -111,17 +111,17 @@ func (m *bubbleModel) updateProjectInitialized(message projectInitializedMsg) (t
 }
 
 func (m *bubbleModel) openProjectPane() tea.Cmd {
-	view, _ := m.bottom.find(projectViewID).(*projectPaneView)
+	view, _ := m.panes.bottom.find(projectViewID).(*projectPaneView)
 	if view == nil {
 		view = &projectPaneView{}
-		m.bottom.push(view)
+		m.panes.bottom.push(view)
 	}
 	m.requestRelayout()
 	return view.reload(m)
 }
 
 func (m *bubbleModel) updateProjectLoaded(message projectLoadedMsg) (tea.Model, tea.Cmd) {
-	view, _ := m.bottom.find(projectViewID).(*projectPaneView)
+	view, _ := m.panes.bottom.find(projectViewID).(*projectPaneView)
 	if view == nil || message.requestID != view.requestID {
 		return m, nil
 	}

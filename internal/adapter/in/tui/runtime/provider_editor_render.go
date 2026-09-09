@@ -136,10 +136,10 @@ func providerEditorPaneState(state providerPaneState) providerpane.ProviderEdito
 }
 
 func renderProviderInput(m *bubbleModel) string {
-	if m == nil || m.bottom == nil {
+	if m == nil || m.panes.bottom == nil {
 		return ""
 	}
-	view, ok := m.bottom.find(providerViewID).(*providerPaneView)
+	view, ok := m.panes.bottom.find(providerViewID).(*providerPaneView)
 	if !ok || view == nil {
 		return ""
 	}

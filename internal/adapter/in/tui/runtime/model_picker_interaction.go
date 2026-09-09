@@ -52,7 +52,7 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	if key.Matches(message, m.keys.ToggleModel) {
 		v.cancelFetch()
-		m.bottom.remove(modelSelectViewID)
+		m.panes.bottom.remove(modelSelectViewID)
 		return true, nil
 	}
 	v.initPicker()
@@ -78,23 +78,23 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg)
 			return true, nil
 		}
 		v.cancelFetch()
-		m.bottom.remove(modelSelectViewID)
+		m.panes.bottom.remove(modelSelectViewID)
 		return true, nil
 	case "q":
 		v.cancelFetch()
-		m.bottom.remove(modelSelectViewID)
+		m.panes.bottom.remove(modelSelectViewID)
 		return true, nil
 	case "p":
 		v.cancelFetch()
-		m.bottom.remove(modelSelectViewID)
-		if !m.bottom.has(providerSelectViewID) {
-			m.bottom.push(newProviderSelectPaneView(m))
+		m.panes.bottom.remove(modelSelectViewID)
+		if !m.panes.bottom.has(providerSelectViewID) {
+			m.panes.bottom.push(newProviderSelectPaneView(m))
 		}
 		return true, nil
 	case "a":
 		v.cancelFetch()
-		m.bottom.remove(modelSelectViewID)
-		if !m.bottom.has(providerViewID) {
+		m.panes.bottom.remove(modelSelectViewID)
+		if !m.panes.bottom.has(providerViewID) {
 			m.pushProviderPane(newProviderPaneView())
 		}
 		return true, nil
@@ -127,7 +127,7 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg)
 				provName = v.providerNames[v.providerIndex]
 			}
 			cmd := m.beginModelSelect(provName, selected.ID, false)
-			m.bottom.remove(modelSelectViewID)
+			m.panes.bottom.remove(modelSelectViewID)
 			return true, cmd
 		}
 		return true, nil
@@ -141,7 +141,7 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg)
 			provName = v.providerNames[v.providerIndex]
 		}
 		cmd := m.beginModelSelect(provName, item.model.ID, false)
-		m.bottom.remove(modelSelectViewID)
+		m.panes.bottom.remove(modelSelectViewID)
 		return true, cmd
 	default:
 		return false, nil

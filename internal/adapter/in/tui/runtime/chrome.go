@@ -58,10 +58,10 @@ func shortcutHelp(binding key.Binding) string {
 	return strings.TrimSpace(help.Key + " " + help.Desc)
 }
 func (m *bubbleModel) promptView() string {
-	if m.bottom == nil || m.bottom.prompt() == nil {
+	if m.panes.bottom == nil || m.panes.bottom.prompt() == nil {
 		return ""
 	}
-	prompt := m.bottom.prompt().View()
+	prompt := m.panes.bottom.prompt().View()
 	meta := m.promptMetadataView()
 	if meta == "" {
 		return prompt

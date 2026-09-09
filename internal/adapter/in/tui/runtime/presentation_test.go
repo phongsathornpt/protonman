@@ -185,7 +185,7 @@ func TestTodoToggleOpensFocusedPaneInCompactLayout(t *testing.T) {
 	m.resize(24, 12)
 	updated, _ := m.Update(testCtrl('o'))
 	m = updated.(*bubbleModel)
-	view := m.bottom.find(todoInspectViewID)
+	view := m.panes.bottom.find(todoInspectViewID)
 	if view == nil {
 		t.Fatal("compact todo toggle did not open focused pane")
 	}
@@ -846,11 +846,11 @@ func TestQueueFullPreservesDraft(t *testing.T) {
 	for i := 0; i < maxQueuedPrompts; i++ {
 		m.queue = append(m.queue, fmt.Sprintf("queued-%d", i))
 	}
-	m.bottom.prompt().SetValue("keep this draft")
+	m.panes.bottom.prompt().SetValue("keep this draft")
 	if cmd := m.submit(); cmd != nil {
 		t.Fatalf("submit() command = %v, want nil", cmd)
 	}
-	if got := m.bottom.prompt().Value(); got != "keep this draft" {
+	if got := m.panes.bottom.prompt().Value(); got != "keep this draft" {
 		t.Fatalf("draft = %q, want preserved input", got)
 	}
 	if got := len(m.queue); got != maxQueuedPrompts {
@@ -862,7 +862,7 @@ func TestQueueEchoTruncatesLongPrompt(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.busy = true
 	long := strings.Repeat("x", maxQueuePreviewRunes+200)
-	m.bottom.prompt().SetValue(long)
+	m.panes.bottom.prompt().SetValue(long)
 	_ = m.submit()
 	plain := plainTranscript(m)
 	if strings.Contains(plain, long) {
@@ -901,12 +901,12 @@ func TestResponsiveUXSurfacesFitTerminal(t *testing.T) {
 		m.activeModel = "provider/a-very-long-model-identifier-for-layout-testing"
 		m.activeProvider = "provider-with-a-long-name"
 		assertBubbleViewFits(t, m, size[0], size[1])
-		m.bottom.push(newModelSelectPaneView(m))
+		m.panes.bottom.push(newModelSelectPaneView(m))
 		assertBubbleViewFits(t, m, size[0], size[1])
-		m.bottom.remove(modelSelectViewID)
-		m.bottom.push(&skillsPaneView{})
+		m.panes.bottom.remove(modelSelectViewID)
+		m.panes.bottom.push(&skillsPaneView{})
 		assertBubbleViewFits(t, m, size[0], size[1])
-		m.bottom.remove(skillsViewID)
+		m.panes.bottom.remove(skillsViewID)
 	}
 }
 
@@ -980,8 +980,8 @@ func TestTodoPaneShowsPendingBeforeCompleted(t *testing.T) {
 func TestPromptIsSingleRow(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
-	if model.bottom.prompt().Height() != 1 {
-		t.Fatalf("prompt height = %d, want 1", model.bottom.prompt().Height())
+	if model.panes.bottom.prompt().Height() != 1 {
+		t.Fatalf("prompt height = %d, want 1", model.panes.bottom.prompt().Height())
 	}
 	if strings.Count(model.promptView(), "›") != 1 {
 		t.Fatalf("prompt chrome repeated:\n%s", model.promptView())
@@ -999,14 +999,14 @@ func TestLiveViewFitsTerminal(t *testing.T) {
 
 func TestBubbleModelAcceptsTypedRunes(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	if !model.bottom.prompt().Focused() {
+	if !model.panes.bottom.prompt().Focused() {
 		t.Fatal("prompt is not focused; textarea will drop every key")
 	}
 	updated, _ := model.Update(testText("h"))
 	model = updated.(*bubbleModel)
 	updated, _ = model.Update(testText("i"))
 	model = updated.(*bubbleModel)
-	if got, want := model.bottom.prompt().Value(), "hi"; got != want {
+	if got, want := model.panes.bottom.prompt().Value(), "hi"; got != want {
 		t.Fatalf("typed value = %q, want %q", got, want)
 	}
 }
@@ -1033,16 +1033,16 @@ func TestBubbleModelHistoryUsesTextarea(t *testing.T) {
 	registry, _ := newBubbleTestRegistry()
 	service := newBubbleTestService(t, registry, permission.ModeAlwaysApprove, permission.Config{})
 	model := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, newPermissionBridge(), "")
-	model.bottom.prompt().SetValue(":help")
+	model.panes.bottom.prompt().SetValue(":help")
 	if command := model.submit(); command != nil {
 		t.Fatal("help submit command != nil")
 	}
 	model.historyPrevious()
-	if got, want := model.bottom.prompt().Value(), ":help"; got != want {
+	if got, want := model.panes.bottom.prompt().Value(), ":help"; got != want {
 		t.Fatalf("history value = %q, want %q", got, want)
 	}
 	model.historyNext()
-	if got := model.bottom.prompt().Value(); got != "" {
+	if got := model.panes.bottom.prompt().Value(); got != "" {
 		t.Fatalf("history next value = %q, want empty", got)
 	}
 }
@@ -1066,7 +1066,7 @@ func TestEmptyStateWithoutRunnerGuidesSlashCommands(t *testing.T) {
 			t.Fatalf("empty state view does not contain %q: %s", expected, view)
 		}
 	}
-	if got, want := model.bottom.prompt().Placeholder, "Message or /command…"; got != want {
+	if got, want := model.panes.bottom.prompt().Placeholder, "Message or /command…"; got != want {
 		t.Fatalf("placeholder = %q, want %q", got, want)
 	}
 }
@@ -1094,7 +1094,7 @@ func TestWelcomeCardReprintsAfterClear(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
 	model.appendLine("gone")
-	model.bottom.prompt().SetValue("/clear")
+	model.panes.bottom.prompt().SetValue("/clear")
 	_ = model.submit()
 	model.refreshViewport()
 	view := testPlain(model.View().Content)
@@ -1170,17 +1170,17 @@ func TestPromptPlaceholderReflectsPermissionAndPlanMode(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.runner = fakeConversation{}
 	m.syncPromptPlaceholder()
-	if got := m.bottom.prompt().Placeholder; got != "Message Protonman…" {
+	if got := m.panes.bottom.prompt().Placeholder; got != "Message Protonman…" {
 		t.Fatalf("initial placeholder = %q", got)
 	}
 
 	_ = m.setPermissionMode(permission.ModeAlwaysApprove)
-	if got := m.bottom.prompt().Placeholder; got != "Message Protonman…" {
+	if got := m.panes.bottom.prompt().Placeholder; got != "Message Protonman…" {
 		t.Fatalf("placeholder after mode always-approve = %q", got)
 	}
 
 	m.setPlanEnabled(true)
-	if got := m.bottom.prompt().Placeholder; got != "Plan or inspect…" {
-		t.Fatalf("placeholder after plan mode = %q", m.bottom.prompt().Placeholder)
+	if got := m.panes.bottom.prompt().Placeholder; got != "Plan or inspect…" {
+		t.Fatalf("placeholder after plan mode = %q", m.panes.bottom.prompt().Placeholder)
 	}
 }

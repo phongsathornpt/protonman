@@ -10,16 +10,16 @@ func (m *bubbleModel) matchesGlobalShortcut(message tea.KeyPressMsg) bool {
 }
 
 func (m *bubbleModel) handleInterruptKey() (tea.Model, tea.Cmd) {
-	if m.showTranscript {
+	if m.panes.showTranscript {
 		m.closeTranscriptOverlay()
 		m.requestRelayout()
 		return m, nil
 	}
-	if top := m.bottom.top(); top != nil && top.ID() != permissionViewID && top.ID() != slashViewID {
+	if top := m.panes.bottom.top(); top != nil && top.ID() != permissionViewID && top.ID() != slashViewID {
 		if provider, ok := top.(*providerPaneView); ok {
 			provider.cancelFetch()
 		}
-		m.bottom.remove(top.ID())
+		m.panes.bottom.remove(top.ID())
 		m.requestRelayout()
 		return m, nil
 	}
@@ -28,8 +28,8 @@ func (m *bubbleModel) handleInterruptKey() (tea.Model, tea.Cmd) {
 		m.queue = nil
 		return m, nil
 	}
-	prompt := m.bottom.prompt()
-	if prompt.Value() != "" || m.bottom.bashMode() {
+	prompt := m.panes.bottom.prompt()
+	if prompt.Value() != "" || m.panes.bottom.bashMode() {
 		m.resetPrompt()
 		m.setBashMode(false)
 		m.syncSlashView()
@@ -50,7 +50,7 @@ func (m *bubbleModel) updateKey(message tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *bubbleModel) handleModalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
-	top := m.bottom.top()
+	top := m.panes.bottom.top()
 	if top == nil {
 		return false, nil
 	}
@@ -67,25 +67,25 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 		m.cycleMode()
 		return true, nil
 	case key.Matches(message, m.keys.Transcript):
-		m.showTranscript = true
+		m.panes.showTranscript = true
 		m.refreshTranscriptViewport(true)
 		return true, nil
 	case key.Matches(message, m.keys.ToggleSkills):
-		if m.bottom.has(skillsViewID) {
-			m.bottom.remove(skillsViewID)
+		if m.panes.bottom.has(skillsViewID) {
+			m.panes.bottom.remove(skillsViewID)
 			m.requestRelayout()
 			return true, nil
 		}
 		if m.skills != nil && len(m.skills.List()) > 0 {
-			m.bottom.push(&skillsPaneView{})
+			m.panes.bottom.push(&skillsPaneView{})
 			m.requestRelayout()
 			return true, nil
 		}
 		m.executeCommand("/skills")
 		return true, nil
 	case key.Matches(message, m.keys.ToggleModel):
-		if m.bottom.has(modelSelectViewID) {
-			m.bottom.remove(modelSelectViewID)
+		if m.panes.bottom.has(modelSelectViewID) {
+			m.panes.bottom.remove(modelSelectViewID)
 			m.requestRelayout()
 			return true, nil
 		}
@@ -110,9 +110,9 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 	if message.String() == "tab" && m.busy {
 		return m.withSpinner(m.submit())
 	}
-	prompt := m.bottom.prompt()
+	prompt := m.panes.bottom.prompt()
 	if message.String() == "esc" {
-		if m.bottom.bashMode() {
+		if m.panes.bottom.bashMode() {
 			m.setBashMode(false)
 		}
 		m.resetPrompt()
@@ -123,11 +123,11 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 	if message.String() == "enter" {
 		return m.withSpinner(m.submit())
 	}
-	if !m.bottom.bashMode() && prompt.Value() == "" && message.String() == "!" {
+	if !m.panes.bottom.bashMode() && prompt.Value() == "" && message.String() == "!" {
 		m.setBashMode(true)
 		return nil
 	}
-	if m.bottom.bashMode() && prompt.Value() == "" {
+	if m.panes.bottom.bashMode() && prompt.Value() == "" {
 		switch message.String() {
 		case "backspace", "ctrl+h", "delete":
 			m.setBashMode(false)
@@ -142,7 +142,7 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 	}
-	if message.String() == "down" && m.bottom.historyNavigating() {
+	if message.String() == "down" && m.panes.bottom.historyNavigating() {
 		m.historyNext()
 		m.syncSlashView()
 		return nil

@@ -63,7 +63,7 @@ func (m bubbleModel) shortcutHint() string {
 			key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "close")),
 		})
 	}
-	if m.bottom != nil && m.bottom.has(todoInspectViewID) {
+	if m.panes.bottom != nil && m.panes.bottom.has(todoInspectViewID) {
 		return helpView.View(contextualHelp{
 			key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑↓", "move")),
 			key.NewBinding(key.WithKeys("enter", "esc"), key.WithHelp("enter/esc", "close")),

@@ -41,19 +41,19 @@ func (m *bubbleModel) handleAgentCommand(argument string) tea.Cmd {
 func (m *bubbleModel) executeConversationCommand(name, argument string) tea.Cmd {
 	switch name {
 	case "transcript":
-		m.showTranscript = true
+		m.panes.showTranscript = true
 		m.refreshTranscriptViewport(true)
 	case "todo":
 		switch strings.ToLower(strings.TrimSpace(argument)) {
 		case "":
 			m.toggleTodoPane()
 		case "show":
-			if !m.bottom.has(todoInspectViewID) {
-				m.bottom.push(&todoPaneView{})
+			if !m.panes.bottom.has(todoInspectViewID) {
+				m.panes.bottom.push(&todoPaneView{})
 			}
 			m.requestRelayout()
 		case "hide":
-			m.bottom.remove(todoInspectViewID)
+			m.panes.bottom.remove(todoInspectViewID)
 			m.requestRelayout()
 		default:
 			m.appendError("usage: /todo [show|hide]")
@@ -87,13 +87,13 @@ func (m *bubbleModel) executeModelCommand(argument string) tea.Cmd {
 	arg := strings.TrimSpace(argument)
 	switch arg {
 	case "add":
-		if !m.bottom.has(providerViewID) {
+		if !m.panes.bottom.has(providerViewID) {
 			m.pushProviderPane(newProviderPaneView())
 			m.requestRelayout()
 		}
 		return nil
 	case "free":
-		if !m.bottom.has(providerViewID) {
+		if !m.panes.bottom.has(providerViewID) {
 			m.pushProviderPane(newProviderPaneViewWithPreset(model.DefaultOpenCodeName))
 			m.requestRelayout()
 		}

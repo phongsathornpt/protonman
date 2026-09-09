@@ -30,7 +30,7 @@ func TestMinimalIdleChromeUsesBubblesHelp(t *testing.T) {
 func TestContextualHelpUsesBubblesBindings(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
-	m.bottom.prompt().SetValue("/he")
+	m.panes.bottom.prompt().SetValue("/he")
 	m.syncSlashView()
 	slashHelp := ansi.Strip(m.shortcutHint())
 	for _, want := range []string{"tab", "accept", "enter", "run", "esc", "close"} {
@@ -38,9 +38,9 @@ func TestContextualHelpUsesBubblesBindings(t *testing.T) {
 			t.Fatalf("slash help missing %q: %q", want, slashHelp)
 		}
 	}
-	m.bottom.prompt().Reset()
+	m.panes.bottom.prompt().Reset()
 	m.syncSlashView()
-	m.bottom.push(&todoPaneView{})
+	m.panes.bottom.push(&todoPaneView{})
 	todoHelp := ansi.Strip(m.shortcutHint())
 	for _, want := range []string{"move", "enter/esc", "close"} {
 		if !strings.Contains(todoHelp, want) {
@@ -53,7 +53,7 @@ func TestMinimalWelcomeHidesAfterConversationStarts(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
 	m.runner = fakeConversation{}
-	m.bottom.prompt().SetValue("hello")
+	m.panes.bottom.prompt().SetValue("hello")
 	_ = m.submit()
 	if m.showWelcome {
 		t.Fatal("welcome remained visible after conversation started")
@@ -135,7 +135,7 @@ func TestScrolledFooterPrioritizesReturnToLatest(t *testing.T) {
 func TestMinimalPromptRestoresEssentialContext(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.runner = fakeConversation{}
-	m.bottom.setHasRunner(true)
+	m.panes.bottom.setHasRunner(true)
 	m.activeModel = "glm-5.3-flash"
 	m.agentProfile = "engineer"
 	m.workDir = "/tmp/protonman"
@@ -176,7 +176,7 @@ func TestProviderEditorModelPickerFitsResponsiveTerminals(t *testing.T) {
 		v := newProviderPaneView()
 		v.models = models
 		v.state = providerStateSelectModel
-		m.bottom.push(v)
+		m.panes.bottom.push(v)
 		rendered := v.Render(m)
 		if got := lipgloss.Height(rendered); got > size[1] {
 			t.Fatalf("provider model picker height=%d exceeds %d at %dx%d", got, size[1], size[0], size[1])
@@ -231,7 +231,7 @@ func TestMinimalLayoutFitsCommonTerminalWidths(t *testing.T) {
 	for _, size := range [][2]int{{40, 12}, {60, 16}, {80, 24}, {120, 32}} {
 		m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 		m.runner = fakeConversation{}
-		m.bottom.setHasRunner(true)
+		m.panes.bottom.setHasRunner(true)
 		m.activeModel = "glm-5.3-flash"
 		m.agentProfile = "engineer"
 		m.workDir = "/workspace/protonman"

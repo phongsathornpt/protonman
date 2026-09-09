@@ -129,7 +129,7 @@ func (m *bubbleModel) updatePermissionRuleSaved(message permissionRuleSavedMsg) 
 	m.appendLine(successStyle.Render(fmt.Sprintf("Saved %s rule to %s config (%s: %s).", message.rule.Action, message.scope, message.rule.Tool, message.rule.Pattern)))
 	m.refreshViewport()
 	if message.scope == "project" {
-		if view, _ := m.bottom.find(projectViewID).(*projectPaneView); view != nil {
+		if view, _ := m.panes.bottom.find(projectViewID).(*projectPaneView); view != nil {
 			view.notice = "Permission rule saved"
 			return m, view.reload(m)
 		}

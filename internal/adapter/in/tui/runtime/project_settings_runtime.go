@@ -161,7 +161,7 @@ func (m *bubbleModel) updateProjectSettingSaved(message projectSettingSavedMsg) 
 	}
 	m.appendLine(successStyle.Render("Project setting saved."))
 	m.refreshViewport()
-	if view, _ := m.bottom.find(projectViewID).(*projectPaneView); view != nil {
+	if view, _ := m.panes.bottom.find(projectViewID).(*projectPaneView); view != nil {
 		view.notice = "Project setting saved"
 		return m, view.reload(m)
 	}

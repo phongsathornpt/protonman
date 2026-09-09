@@ -11,7 +11,7 @@ import (
 )
 
 func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) (tea.Model, tea.Cmd) {
-	if pane := m.bottom.find(providerViewID); pane != nil {
+	if pane := m.panes.bottom.find(providerViewID); pane != nil {
 		if pv, ok := pane.(*providerPaneView); ok {
 			if message.requestID != pv.fetchRequestID {
 				return m, nil
@@ -31,7 +31,7 @@ func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) (tea.Model, 
 		}
 		return m, nil
 	}
-	if pane := m.bottom.find(modelSelectViewID); pane != nil {
+	if pane := m.panes.bottom.find(modelSelectViewID); pane != nil {
 		if mv, ok := pane.(*modelSelectPaneView); ok {
 			currentProvider := mv.activeProviderName()
 			if message.requestID != mv.fetchRequestID || !strings.EqualFold(message.providerName, currentProvider) {
@@ -56,7 +56,7 @@ func (m *bubbleModel) updateProviderSaved(message providerSavedMsg) (tea.Model, 
 	}
 	m.activeProviderSave = 0
 	if message.err != nil {
-		if pane := m.bottom.find(providerViewID); pane != nil {
+		if pane := m.panes.bottom.find(providerViewID); pane != nil {
 			if pv, ok := pane.(*providerPaneView); ok {
 				pv.state = providerStateSaveError
 				pv.errorMessage = message.err.Error()
@@ -93,7 +93,7 @@ func (m *bubbleModel) updateProviderSaved(message providerSavedMsg) (tea.Model, 
 			m.appendLine(successStyle.Render(label))
 		}
 	}
-	m.bottom.remove(providerViewID)
+	m.panes.bottom.remove(providerViewID)
 	m.requestRelayout()
 	return m, nil
 }
@@ -125,7 +125,7 @@ func (m *bubbleModel) updateModelSelected(message modelSelectedMsg) (tea.Model, 
 			m.appendLine(mutedStyle.Render("  Model ID was not present in the discovered catalog; using it as a custom model."))
 		}
 	}
-	m.bottom.remove(modelSelectViewID)
+	m.panes.bottom.remove(modelSelectViewID)
 	m.requestRelayout()
 	return m, nil
 }
@@ -159,7 +159,7 @@ func (m *bubbleModel) updateProviderActiveSelected(message providerActiveSelecte
 		}
 		m.appendLine(successStyle.Render(label))
 	}
-	m.bottom.remove(providerSelectViewID)
+	m.panes.bottom.remove(providerSelectViewID)
 	m.requestRelayout()
 	return m, nil
 }
@@ -193,7 +193,7 @@ func (m *bubbleModel) updateProviderDeleted(message providerDeletedMsg) (tea.Mod
 			} else {
 				m.activeModel = ""
 				m.runner = nil
-				m.bottom.setHasRunner(false)
+				m.panes.bottom.setHasRunner(false)
 			}
 		}
 		label := "provider removed · " + message.providerName
@@ -202,7 +202,7 @@ func (m *bubbleModel) updateProviderDeleted(message providerDeletedMsg) (tea.Mod
 		}
 		m.appendLine(successStyle.Render(label))
 	}
-	m.bottom.remove(providerSelectViewID)
+	m.panes.bottom.remove(providerSelectViewID)
 	m.requestRelayout()
 	return m, nil
 }
