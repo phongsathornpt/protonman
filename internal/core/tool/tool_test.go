@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -418,5 +419,34 @@ func TestResultModelPayloadKeepsStreamsWithoutCompatibilityOutput(t *testing.T) 
 	payload := original.ModelPayload()
 	if payload.Stdout != "stdout" || payload.Stderr != "stderr" {
 		t.Fatalf("model payload dropped sole stream content: %#v", payload)
+	}
+}
+
+func TestFailureFromErrorUsesSemanticToolMessage(t *testing.T) {
+	err := fmt.Errorf("execute read: %w", WrapToolError(ErrorCodeNotFound, `not found: "src/missing.go"`, os.ErrNotExist))
+	failure := FailureFromError(err)
+	if failure == nil {
+		t.Fatal("FailureFromError() = nil")
+	}
+	if failure.Message != `not found: "src/missing.go"` {
+		t.Fatalf("failure message = %q", failure.Message)
+	}
+	if strings.Contains(failure.Message, "execute read") || strings.Contains(failure.Message, os.ErrNotExist.Error()) {
+		t.Fatalf("failure leaked wrapper/cause: %q", failure.Message)
+	}
+}
+
+func TestResultModelPayloadCompactsFailureMessage(t *testing.T) {
+	message := "  first line\n\t" + strings.Repeat("x", 300)
+	original := Result{ToolName: "read", Failure: &Failure{Code: ErrorCodeNotFound, Message: message}}
+	payload := original.ModelPayload()
+	if payload.Failure == original.Failure {
+		t.Fatal("ModelPayload reused failure pointer")
+	}
+	if strings.Contains(payload.Failure.Message, "\n") || len([]rune(payload.Failure.Message)) > maxModelFailureMessageChars {
+		t.Fatalf("model failure was not compacted: %q", payload.Failure.Message)
+	}
+	if original.Failure.Message != message {
+		t.Fatal("ModelPayload mutated original failure")
 	}
 }

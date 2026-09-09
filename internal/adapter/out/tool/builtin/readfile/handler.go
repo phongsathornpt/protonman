@@ -80,7 +80,7 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	if err != nil {
 		switch {
 		case errors.Is(err, os.ErrNotExist):
-			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeNotFound, fmt.Sprintf("path does not exist: %q", input.Path), err)
+			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeNotFound, fmt.Sprintf("not found: %q", input.Path), err)
 		case errors.Is(err, os.ErrPermission):
 			return tool.Result{}, tool.WrapToolError(tool.ErrorCodePermissionDenied, fmt.Sprintf("cannot read path: %q", input.Path), err)
 		default:

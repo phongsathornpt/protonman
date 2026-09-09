@@ -271,7 +271,7 @@ func (w *Workspace) ResolveExistingRead(ctx context.Context, input string) (stri
 	}
 	if _, err := os.Stat(path); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return "", tool.WrapToolError(tool.ErrorCodeNotFound, fmt.Sprintf("path does not exist: %q", input), err)
+			return "", tool.WrapToolError(tool.ErrorCodeNotFound, fmt.Sprintf("not found: %q", input), err)
 		}
 		if errors.Is(err, os.ErrPermission) {
 			return "", tool.WrapToolError(tool.ErrorCodePermissionDenied, fmt.Sprintf("cannot access path: %q", input), err)

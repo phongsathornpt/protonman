@@ -61,14 +61,14 @@ func toolFailureSuggestions(toolName string, code tool.ErrorCode) []string {
 	switch code {
 	case tool.ErrorCodeNotFound:
 		if tool.CanonicalName(toolName) == "read" {
-			suggestions = append(suggestions, "Verify workspace relative path spelling", "Use ls to inspect directory contents", "Use grep to locate the symbol or filename across the project")
+			suggestions = append(suggestions, "ls the parent directory or find the filename")
 		}
 	case tool.ErrorCodeProtectedPath:
 		suggestions = append(suggestions, "This path is shielded by workspace protection rules")
 	case tool.ErrorCodeInternalPath:
 		suggestions = append(suggestions, "Protonman internal state is reserved and unavailable to workspace tools")
 	case tool.ErrorCodeOutsideWorkspace:
-		suggestions = append(suggestions, "Use . for the workspace root and workspace-relative paths for files or directories; absolute paths are not available to workspace tools")
+		suggestions = append(suggestions, "use . or a workspace-relative path")
 	case tool.ErrorCodePermissionDenied:
 		suggestions = append(suggestions, "Use shift+tab to cycle permission mode or allow the request")
 	}

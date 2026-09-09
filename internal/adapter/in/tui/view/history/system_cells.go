@@ -41,8 +41,12 @@ func (c ErrorCell) RenderWidth(width int) []string {
 		width = defaultHistoryWidth
 	}
 
-	// If this has structured error attributes (ErrorKind, Badge, or Suggestions),
-	// render it as an OpenCode-style bordered error card.
+	if c.ErrorKind == diagnostic.KindToolFailed {
+		return c.renderCompactToolFailure(width)
+	}
+
+	// Non-tool diagnostics keep the bordered card because they may contain
+	// provider/account guidance that benefits from stronger visual grouping.
 	if c.Badge != "" || len(c.Suggestions) > 0 || (c.ErrorKind != "" && c.ErrorKind != diagnostic.KindGeneric) {
 		return c.renderCard(width)
 	}
@@ -53,6 +57,32 @@ func (c ErrorCell) RenderWidth(width int) []string {
 		text = c.Title + ": " + text
 	}
 	return styledWrappedLines(tuistyle.GlyphToolError+text, width, tuistyle.ErrorStyle)
+}
+
+func (c ErrorCell) renderCompactToolFailure(width int) []string {
+	badge := c.Badge
+	if badge == "" && c.Code != "" {
+		badge = string(c.Code)
+	}
+	title := c.Title
+	if title == "" {
+		title = "tool"
+	}
+
+	header := tuistyle.GlyphToolError
+	if badge != "" {
+		header += "[" + badge + "] "
+	}
+	header += title
+	if text := strings.TrimSpace(c.Text); text != "" {
+		header += ": " + text
+	}
+
+	lines := styledWrappedLines(header, width, tuistyle.ErrorStyle)
+	for _, suggestion := range c.Suggestions {
+		lines = append(lines, styledWrappedLines("→ "+suggestion, width, tuistyle.MutedStyle)...)
+	}
+	return lines
 }
 
 func (c ErrorCell) renderCard(width int) []string {
@@ -84,12 +114,10 @@ func (c ErrorCell) renderCard(width int) []string {
 
 	if len(c.Suggestions) > 0 {
 		cardContent = append(cardContent, "")
-		suggestHeader := lipgloss.NewStyle().Bold(true).Foreground(tuistyle.WarningColor).Render("💡 Suggestions:")
-		cardContent = append(cardContent, suggestHeader)
 		for _, s := range c.Suggestions {
-			wrappedS := safeWrappedLines("• "+s, innerWidth-2)
+			wrappedS := safeWrappedLines("→ "+s, innerWidth)
 			for _, w := range wrappedS {
-				cardContent = append(cardContent, tuistyle.MutedStyle.Render("  "+w))
+				cardContent = append(cardContent, tuistyle.MutedStyle.Render(w))
 			}
 		}
 	}

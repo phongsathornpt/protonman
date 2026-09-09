@@ -335,6 +335,7 @@ func FailureFromError(err error) *Failure {
 	switch {
 	case errors.As(err, &toolErr):
 		result.Code = toolErr.Code
+		result.Message = toolErr.Message
 		result.Recovery = toolErr.Recovery
 	case errors.As(err, &failureCoder):
 		result.Code = failureCoder.FailureCode()
@@ -599,7 +600,23 @@ func (r Result) ModelPayload() Result {
 		r.Stdout = ""
 		r.Stderr = ""
 	}
+	if r.Failure != nil {
+		failure := *r.Failure
+		failure.Message = compactModelFailureMessage(failure.Message)
+		r.Failure = &failure
+	}
 	return r
+}
+
+const maxModelFailureMessageChars = 240
+
+func compactModelFailureMessage(message string) string {
+	message = strings.Join(strings.Fields(message), " ")
+	runes := []rune(message)
+	if len(runes) <= maxModelFailureMessageChars {
+		return message
+	}
+	return strings.TrimSpace(string(runes[:maxModelFailureMessageChars-1])) + "…"
 }
 
 // Handler executes one registered tool call.

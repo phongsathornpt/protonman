@@ -309,7 +309,7 @@ func (h grepHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	if walkErr != nil {
 		switch {
 		case errors.Is(walkErr, os.ErrNotExist):
-			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeNotFound, fmt.Sprintf("grep path does not exist: %q", searchPath), walkErr)
+			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeNotFound, fmt.Sprintf("not found: %q", searchPath), walkErr)
 		case errors.Is(walkErr, os.ErrPermission):
 			return tool.Result{}, tool.WrapToolError(tool.ErrorCodePermissionDenied, fmt.Sprintf("cannot search path: %q", searchPath), walkErr)
 		default:

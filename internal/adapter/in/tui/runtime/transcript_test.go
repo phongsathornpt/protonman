@@ -317,8 +317,11 @@ func TestErrorCellCardRendering(t *testing.T) {
 	if !strings.Contains(rendered, "Model Not Supported") {
 		t.Fatalf("expected rendered card to contain title, got:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "Suggestions:") {
-		t.Fatalf("expected rendered card to contain Suggestions header, got:\n%s", rendered)
+	if strings.Contains(rendered, "Suggestions:") {
+		t.Fatalf("expected compact recovery hints without Suggestions header, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "→ Did you mean: nemotron-3.5-lightning-free") {
+		t.Fatalf("expected compact recovery hint, got:\n%s", rendered)
 	}
 	if !strings.Contains(rendered, "Did you mean: nemotron-3.5-lightning-free") {
 		t.Fatalf("expected rendered card to contain model suggestions, got:\n%s", rendered)
@@ -359,7 +362,7 @@ func TestToolFailureSuggestions(t *testing.T) {
 		t.Fatalf("expected suggestions for protected path error")
 	}
 	escapeSugg := toolFailureSuggestions("read_file", tool.ErrorCodeOutsideWorkspace)
-	if len(escapeSugg) == 0 || !strings.Contains(escapeSugg[0], "Use . for the workspace root") || !strings.Contains(escapeSugg[0], "absolute paths") {
+	if len(escapeSugg) != 1 || escapeSugg[0] != "use . or a workspace-relative path" {
 		t.Fatalf("expected actionable suggestions for outside workspace error: %#v", escapeSugg)
 	}
 }
