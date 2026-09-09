@@ -68,7 +68,7 @@ func skillsListWidth(m *bubbleModel) int {
 }
 
 func skillsListHeight(m *bubbleModel) int {
-	return maxInt(6, min(12, m.height-4))
+	return maxInt(4, min(8, m.height-6))
 }
 func (v *skillsPaneView) syncTitle(m *bubbleModel) {
 	if !v.initialized || m == nil || m.skills == nil {
@@ -80,12 +80,8 @@ func (v *skillsPaneView) syncTitle(m *bubbleModel) {
 			active++
 		}
 	}
-	index := v.picker.GlobalIndex() + 1
 	count := len(v.picker.Items())
-	if count == 0 {
-		index = 0
-	}
-	v.picker.Title = fmt.Sprintf("Agent Skills (%d/%d active · item %d of %d)", active, count, index, count)
+	v.picker.Title = fmt.Sprintf("Skills · %d/%d active", active, count)
 }
 
 func (v *skillsPaneView) Render(m *bubbleModel) string {
@@ -99,11 +95,10 @@ func (v *skillsPaneView) Render(m *bubbleModel) string {
 	return renderModalRows(m, accentAssistant, strings.Split(v.picker.View(), "\n"))
 }
 
-func (v *skillsPaneView) configureDensity(m *bubbleModel) {
-	tiny := layoutModeForHeight(m.height) == layoutTiny
-	v.picker.SetShowStatusBar(!tiny)
-	v.picker.SetShowPagination(!tiny)
-	v.picker.SetShowHelp(!tiny)
+func (v *skillsPaneView) configureDensity(_ *bubbleModel) {
+	v.picker.SetShowStatusBar(false)
+	v.picker.SetShowPagination(false)
+	v.picker.SetShowHelp(false)
 }
 func (v *skillsPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
 	v.ensurePicker(m)

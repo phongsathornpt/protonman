@@ -447,7 +447,7 @@ func TestSlashSkills(t *testing.T) {
 			t.Fatal("expected skills picker in bottom pane after /skills")
 		}
 		rendered := model.bottom.renderTop(model)
-		if !strings.Contains(rendered, "Agent Skills") || !strings.Contains(rendered, "pdf-processing") {
+		if !strings.Contains(rendered, "Skills") || !strings.Contains(rendered, "pdf-processing") {
 			t.Fatalf("unexpected picker render: %s", rendered)
 		}
 		wasActive := model.skills.IsActivated("pdf-processing")
@@ -585,9 +585,6 @@ func TestSkillsPickerWindowingLargeList(t *testing.T) {
 		t.Fatal("expected skills picker to be open")
 	}
 	render := model.bottom.renderTop(model)
-	if !strings.Contains(render, "item 1 of 15") {
-		t.Fatalf("expected 'item 1 of 15' in header, got: %s", render)
-	}
 	view := model.bottom.find(skillsViewID).(*skillsPaneView)
 	if got := view.picker.GlobalIndex(); got != 0 {
 		t.Fatalf("expected initial selected index 0, got %d", got)
@@ -597,9 +594,6 @@ func TestSkillsPickerWindowingLargeList(t *testing.T) {
 		model = updated.(*bubbleModel)
 	}
 	render = model.bottom.renderTop(model)
-	if !strings.Contains(render, "item 9 of 15") {
-		t.Fatalf("expected 'item 9 of 15', got: %s", render)
-	}
 	if got := view.picker.GlobalIndex(); got != 8 {
 		t.Fatalf("expected selected index 8 after navigation, got %d", got)
 	}
@@ -614,15 +608,14 @@ func TestSkillsPickerWrapAround(t *testing.T) {
 	model = updated.(*bubbleModel)
 	updated, _ = model.Update(testKey(tea.KeyUp))
 	model = updated.(*bubbleModel)
-	render := model.bottom.renderTop(model)
-	if !strings.Contains(render, "item 5 of 5") {
-		t.Fatalf("expected wrap-around to item 5 of 5, got: %s", render)
+	view := model.bottom.find(skillsViewID).(*skillsPaneView)
+	if got := view.picker.GlobalIndex(); got != 4 {
+		t.Fatalf("expected wrap-around index 4, got %d", got)
 	}
 	updated, _ = model.Update(testKey(tea.KeyDown))
 	model = updated.(*bubbleModel)
-	render = model.bottom.renderTop(model)
-	if !strings.Contains(render, "item 1 of 5") {
-		t.Fatalf("expected wrap-around to item 1 of 5, got: %s", render)
+	if got := view.picker.GlobalIndex(); got != 0 {
+		t.Fatalf("expected wrap-around index 0, got %d", got)
 	}
 }
 
@@ -639,20 +632,17 @@ func TestSkillsPickerFastNavigation(t *testing.T) {
 	}
 	updated, _ = model.Update(testText("G"))
 	model = updated.(*bubbleModel)
-	render = model.bottom.renderTop(model)
-	if !strings.Contains(render, "item 12 of 12") {
-		t.Fatalf("expected item 12 after G, got: %s", render)
+	if got := view.picker.GlobalIndex(); got != 11 {
+		t.Fatalf("expected index 11 after G, got %d", got)
 	}
 	updated, _ = model.Update(testText("g"))
 	model = updated.(*bubbleModel)
-	render = model.bottom.renderTop(model)
-	if !strings.Contains(render, "item 1 of 12") {
-		t.Fatalf("expected item 1 after g, got: %s", render)
+	if got := view.picker.GlobalIndex(); got != 0 {
+		t.Fatalf("expected index 0 after g, got %d", got)
 	}
 	updated, _ = model.Update(testText("3"))
 	model = updated.(*bubbleModel)
-	render = model.bottom.renderTop(model)
-	if !strings.Contains(render, "item 3 of 12") {
+	if got := view.picker.GlobalIndex(); got != 2 {
 		t.Fatalf("expected item 3 after number 3, got: %s", render)
 	}
 }
@@ -813,15 +803,14 @@ func TestSkillsPickerMouseWheelNavigation(t *testing.T) {
 	model = updated.(*bubbleModel)
 	updated, _ = model.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
 	model = updated.(*bubbleModel)
-	render := model.bottom.renderTop(model)
-	if !strings.Contains(render, "item 2 of 10") {
-		t.Fatalf("expected item 2 after wheel down, got: %s", render)
+	view := model.bottom.find(skillsViewID).(*skillsPaneView)
+	if got := view.picker.GlobalIndex(); got != 1 {
+		t.Fatalf("expected index 1 after wheel down, got %d", got)
 	}
 	updated, _ = model.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
 	model = updated.(*bubbleModel)
-	render = model.bottom.renderTop(model)
-	if !strings.Contains(render, "item 1 of 10") {
-		t.Fatalf("expected item 1 after wheel up, got: %s", render)
+	if got := view.picker.GlobalIndex(); got != 0 {
+		t.Fatalf("expected index 0 after wheel up, got %d", got)
 	}
 }
 

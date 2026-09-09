@@ -15,33 +15,33 @@ func (v *modelSelectPaneView) Render(m *bubbleModel) string {
 		return ""
 	}
 	providerName := v.activeProviderName()
-	v.picker.Title = "Select Model · " + providerName
+	v.picker.Title = "Models · " + providerName
 	if len(v.providerNames) > 1 {
-		v.picker.Title += " · tab provider"
+		v.picker.Title += " · tab switch"
 	}
-	v.picker.SetSize(maxInt(12, m.width-8), maxInt(5, min(16, m.height-4)))
+	v.picker.SetSize(maxInt(12, m.width-8), maxInt(4, min(8, m.height-6)))
 	mode := layoutModeForHeight(m.height)
-	v.picker.SetShowStatusBar(mode == layoutNormal)
-	v.picker.SetShowPagination(mode != layoutTiny)
-	v.picker.SetShowHelp(mode != layoutTiny)
+	v.picker.SetShowStatusBar(false)
+	v.picker.SetShowPagination(false)
+	v.picker.SetShowHelp(false)
 	delegate := list.NewDefaultDelegate()
 	delegate.SetSpacing(0)
 	delegate.ShowDescription = mode == layoutNormal
 	v.picker.SetDelegate(delegate)
 	if v.loading {
-		rows := []string{brandStyle.Render("Select Model · " + providerName), "", mutedStyle.Render("Loading models..."), "", mutedStyle.Render("esc close")}
+		rows := []string{brandStyle.Render("Models · " + providerName), mutedStyle.Render("Loading…"), mutedStyle.Render("esc close")}
 		return renderModalRows(m, accentAssistant, rows)
 	}
 	if v.err != nil {
-		rows := []string{brandStyle.Render("Select Model · " + providerName), "", errorStyle.Render("Failed to load models"), mutedStyle.Render(truncateWithEllipsis(v.err.Error(), maxInt(8, m.width-8))), "", mutedStyle.Render("r retry · p providers · esc close")}
+		rows := []string{brandStyle.Render("Models · " + providerName), errorStyle.Render("Failed to load models"), mutedStyle.Render(truncateWithEllipsis(v.err.Error(), maxInt(8, m.width-8))), mutedStyle.Render("r retry · p providers · esc close")}
 		return renderModalRows(m, accentAssistant, rows)
 	}
 	if len(v.picker.Items()) == 0 && !v.picker.SettingFilter() && !v.picker.IsFiltered() {
-		rows := []string{brandStyle.Render("Select Model · " + providerName), "", mutedStyle.Render("No models available for the selected provider."), "", mutedStyle.Render("a add provider · r retry · esc close")}
+		rows := []string{brandStyle.Render("Models · " + providerName), mutedStyle.Render("No models available."), mutedStyle.Render("a add provider · r retry · esc close")}
 		return renderModalRows(m, accentAssistant, rows)
 	}
 	if len(v.picker.VisibleItems()) == 0 && strings.TrimSpace(v.picker.FilterValue()) != "" {
-		rows := []string{brandStyle.Render("Select Model · " + providerName), mutedStyle.Render("Search: " + v.picker.FilterValue()), "", mutedStyle.Render("No models match the current search."), "", mutedStyle.Render("esc clear filter")}
+		rows := []string{brandStyle.Render("Models · " + providerName), mutedStyle.Render("Search: " + v.picker.FilterValue()), mutedStyle.Render("No matches."), mutedStyle.Render("esc clear filter")}
 		return renderModalRows(m, accentAssistant, rows)
 	}
 	return renderModalRows(m, accentAssistant, strings.Split(v.picker.View(), "\n"))
@@ -110,7 +110,24 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg)
 			return true, v.loadProvider(m, false)
 		}
 		return true, nil
-	case "up", "k", "down", "j", "pgup", "pgdown", "home", "g", "end", "G":
+	case "pgup", "pgdown":
+		step := maxInt(1, v.picker.Paginator.PerPage)
+		target := v.picker.GlobalIndex()
+		if message.String() == "pgup" {
+			target -= step
+		} else {
+			target += step
+		}
+		if target < 0 {
+			target = 0
+		}
+		if maxIndex := len(v.picker.Items()) - 1; target > maxIndex {
+			target = maxIndex
+		}
+		v.picker.Select(target)
+		v.syncPickerProjection()
+		return true, nil
+	case "up", "k", "down", "j", "home", "g", "end", "G":
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
 		v.syncPickerProjection()

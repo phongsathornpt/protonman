@@ -130,8 +130,8 @@ func (v *todoPaneView) syncTitle(m *bubbleModel) {
 	if !v.initialized || m == nil {
 		return
 	}
-	completed, active, pending := todopane.TodoCounts(m.todo)
-	v.picker.Title = fmt.Sprintf("Tasks %d/%d · %d active · %d pending", completed, len(m.todo), active, pending)
+	completed, _, _ := todopane.TodoCounts(m.todo)
+	v.picker.Title = fmt.Sprintf("Tasks · %d/%d done", completed, len(m.todo))
 }
 
 func (v *todoPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg) (bool, tea.Cmd) {
@@ -153,11 +153,10 @@ func (v *todoPaneView) Render(m *bubbleModel) string {
 	}
 	v.picker.SetItems(todoListItems(m.todo))
 	v.syncTitle(m)
-	mode := layoutModeForHeight(m.height)
-	v.picker.SetSize(maxInt(12, m.width-8), maxInt(5, minInt(14, m.height-4)))
-	v.picker.SetShowStatusBar(mode != layoutTiny)
-	v.picker.SetShowPagination(mode != layoutTiny)
-	v.picker.SetShowHelp(mode != layoutTiny)
+	v.picker.SetSize(maxInt(12, m.width-8), maxInt(4, minInt(8, m.height-6)))
+	v.picker.SetShowStatusBar(false)
+	v.picker.SetShowPagination(false)
+	v.picker.SetShowHelp(false)
 	return renderModalRows(m, promptBorder, strings.Split(v.picker.View(), "\n"))
 }
 

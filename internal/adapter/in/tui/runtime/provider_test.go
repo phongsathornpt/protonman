@@ -205,7 +205,7 @@ func TestProviderSelectViewDelete(t *testing.T) {
 	if !view.deleteConfirm {
 		t.Fatal("expected delete confirmation state after 'd'")
 	}
-	if !strings.Contains(bModel.View().Content, "Remove Provider?") || !strings.Contains(bModel.View().Content, "protonman") {
+	if !strings.Contains(bModel.View().Content, "Remove provider?") || !strings.Contains(bModel.View().Content, "protonman") {
 		t.Fatalf("expected provider delete confirmation in view, got:\n%s", bModel.View().Content)
 	}
 	updated, cmd = bModel.Update(testKey(tea.KeyEsc))

@@ -106,7 +106,7 @@ func TestModelPickerLoadingHidesPreviousProviderModels(t *testing.T) {
 	view.providerIndex = 1
 	_ = view.beginFetch(m.ctx, "beta", m.providers["beta"])
 	rendered := view.Render(m)
-	if !strings.Contains(rendered, "Loading models") {
+	if !strings.Contains(rendered, "Loading") {
 		t.Fatalf("loading state not rendered: %q", rendered)
 	}
 	if strings.Contains(rendered, "Alpha Only") {
@@ -362,8 +362,8 @@ func TestModelSelectViewLaunchViaSlashCommand(t *testing.T) {
 		t.Fatalf("expected focused model 'MiniMax-M3', got %s", view.models[view.picker.Index()].ID)
 	}
 	rendered := bModel.View().Content
-	if !strings.Contains(rendered, "Select Model") {
-		t.Fatalf("expected 'Select Model' in view, got:\n%s", rendered)
+	if !strings.Contains(rendered, "Models") {
+		t.Fatalf("expected 'Models' in view, got:\n%s", rendered)
 	}
 	if !strings.Contains(rendered, "✓") {
 		t.Fatalf("expected active model checkmark in view, got:\n%s", rendered)
@@ -989,8 +989,8 @@ func TestModelPickerEmptyFilterShowsSearchInput(t *testing.T) {
 	if !strings.Contains(rendered, "Search: nonexistent-model-xyz") {
 		t.Fatalf("expected search query in rendered output: %s", rendered)
 	}
-	if !strings.Contains(rendered, "No models match") {
-		t.Fatalf("expected 'No models match' in rendered output: %s", rendered)
+	if !strings.Contains(rendered, "No matches") {
+		t.Fatalf("expected 'No matches' in rendered output: %s", rendered)
 	}
 }
 

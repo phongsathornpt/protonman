@@ -175,11 +175,11 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 		return ""
 	}
 	mode := layoutModeForHeight(m.height)
-	v.picker.SetSize(maxInt(12, m.width-8), maxInt(5, minInt(14, m.height-4)))
+	v.picker.SetSize(maxInt(12, m.width-8), maxInt(4, minInt(8, m.height-6)))
 	v.picker.Title = "Providers"
-	v.picker.SetShowStatusBar(mode != layoutTiny)
-	v.picker.SetShowPagination(mode != layoutTiny)
-	v.picker.SetShowHelp(mode != layoutTiny)
+	v.picker.SetShowStatusBar(false)
+	v.picker.SetShowPagination(false)
+	v.picker.SetShowHelp(false)
 	delegate := list.NewDefaultDelegate()
 	delegate.SetSpacing(0)
 	delegate.ShowDescription = mode == layoutNormal
@@ -187,11 +187,11 @@ func (v *providerSelectPaneView) Render(m *bubbleModel) string {
 	if v.deleteConfirm {
 		item, ok := v.selectedItem()
 		if ok && item.isConfigured {
-			rows := []string{warningStyle.Render("Remove Provider?"), "", item.displayName, mutedStyle.Render(item.baseURL)}
+			rows := []string{warningStyle.Render("Remove provider?"), item.displayName, mutedStyle.Render(item.baseURL)}
 			if item.isActive {
 				rows = append(rows, warningStyle.Render("This is the active provider."))
 			}
-			rows = append(rows, "", mutedStyle.Render("enter remove permanently · esc cancel"))
+			rows = append(rows, mutedStyle.Render("enter remove · esc cancel"))
 			return renderProviderModal(m, warningColor, rows)
 		}
 	}
