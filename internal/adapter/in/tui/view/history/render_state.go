@@ -212,7 +212,11 @@ func joinRenderedTail(committed []string, blankSeparator bool, active []string) 
 		bytes += len(active) - 1
 	}
 	if blankSeparator {
-		bytes += 2
+		if len(committed) == 0 {
+			bytes++
+		} else {
+			bytes += 2
+		}
 	}
 	var out strings.Builder
 	out.Grow(bytes)
@@ -223,7 +227,11 @@ func joinRenderedTail(committed []string, blankSeparator bool, active []string) 
 		out.WriteString(line)
 	}
 	if blankSeparator {
-		out.WriteString("\n\n")
+		if len(committed) == 0 {
+			out.WriteByte('\n')
+		} else {
+			out.WriteString("\n\n")
+		}
 	}
 	for index, line := range active {
 		if index > 0 {

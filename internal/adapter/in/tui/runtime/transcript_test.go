@@ -403,6 +403,23 @@ func TestHistoryStateRenderTailContentMatchesFullSuffix(t *testing.T) {
 	}
 }
 
+func TestHistoryStateRenderTailContentMatchesFullSuffixInsideOpenFence(t *testing.T) {
+	state := NewHistoryState(50000)
+	for i := 0; i < 12; i++ {
+		state.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nsecond line", i)})
+	}
+	state.AppendAssistantDelta("```go\npackage main\nfunc main() {\nprintln(\"streaming\")")
+	full := strings.Split(state.RenderContent(), "\n")
+	got, truncated := state.RenderTailContent(6)
+	if !truncated {
+		t.Fatal("expected fenced tail render to truncate older content")
+	}
+	want := strings.Join(full[len(full)-6:], "\n")
+	if got != want {
+		t.Fatalf("fenced tail mismatch\nwant: %q\n got: %q", want, got)
+	}
+}
+
 func TestExecCellSeparatesStderrAndStreamTruncation(t *testing.T) {
 	exit1 := 1
 	cell := &ExecCell{Command: "go test ./...", Stdout: "package a ok\n", Stderr: "package b failed\n", ExitCode: &exit1, StdoutTruncated: true, Truncated: true, FailureCode: tool.ErrorCodeCommandFailed}
