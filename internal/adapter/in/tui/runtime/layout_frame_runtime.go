@@ -115,13 +115,6 @@ func (m *bubbleModel) reconcileLayout() {
 	m.applyFrameLayout(scroll, m.buildFrameChrome())
 }
 
-// relayout remains as an eager test/helper boundary while runtime event handlers
-// only request layout and let Update reconcile once per event.
-func (m *bubbleModel) relayout() {
-	m.requestRelayout()
-	m.reconcileLayout()
-}
-
 func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame frameChrome) {
 	m.layout.generation++
 	frame.generation = m.layout.generation

@@ -392,7 +392,8 @@ func TestAgentProgressKeepsFrameWithinTerminal(t *testing.T) {
 	m.resize(100, 30)
 	m.busy = true
 	m.agentSnapshot = []agent.AgentStatus{{ID: "worker-1", Profile: agent.ProfileStrength, Task: "fix failures", State: agent.StateRunning, StartedAt: time.Now()}}
-	m.relayout()
+	m.requestRelayout()
+	m.reconcileLayout()
 	if got := lipgloss.Height(m.View().Content); got > m.layout.height {
 		t.Fatalf("initial frame height=%d terminal=%d", got, m.layout.height)
 	}
@@ -412,12 +413,14 @@ func TestRelayoutDoesNotReenableFollowTailAfterUserScroll(t *testing.T) {
 		m.appendLine(fmt.Sprintf("line-%02d", i))
 	}
 	m.todo = []tododomain.Item{{ID: "a", Text: "dynamic chrome", Status: tododomain.StatusInProgress}}
-	m.relayout()
+	m.requestRelayout()
+	m.reconcileLayout()
 	m.viewport.GotoBottom()
 	m.viewport.ScrollUp(1)
 	m.conversationViewport.setFollowing(false)
 	m.todo = nil
-	m.relayout()
+	m.requestRelayout()
+	m.reconcileLayout()
 	if m.conversationViewport.following() {
 		t.Fatal("relayout re-enabled follow tail after explicit user scroll")
 	}
@@ -460,7 +463,8 @@ func TestScrolledViewportSurvivesLiveAgentChromeStress(t *testing.T) {
 	m.busy = true
 	m.busyStarted = time.Now().Add(-5 * time.Minute)
 	m.agentSnapshot = []agent.AgentStatus{{ID: "worker-1", Profile: agent.ProfileStrength, Task: "fix TDZ and bun adapter", State: agent.StateRunning, StartedAt: time.Now().Add(-5 * time.Minute)}}
-	m.relayout()
+	m.requestRelayout()
+	m.reconcileLayout()
 	m.viewport.GotoBottom()
 	m.viewport.ScrollUp(7)
 	m.conversationViewport.setFollowing(false)
@@ -499,7 +503,8 @@ func TestScrolledViewportSurvivesLiveAgentChromeStress(t *testing.T) {
 	run.Activity = "กำลังแยกกลุ่ม failure ว่าเป็น TDZ, bun-adapter, หรือ logic จริง"
 	m.agentActivity["worker-1"] = AgentActivity{Label: run.Activity}
 	m.historyState.TouchAgentRun("worker-1")
-	m.relayout()
+	m.requestRelayout()
+	m.reconcileLayout()
 	assertStable("thai agent progress")
 
 	updated, _ := m.Update(spinner.TickMsg{})
@@ -507,17 +512,20 @@ func TestScrolledViewportSurvivesLiveAgentChromeStress(t *testing.T) {
 	assertStable("spinner tick")
 
 	m.todo = []tododomain.Item{{ID: "fix", Text: "ตรวจสอบผลแก้ไข", Status: tododomain.StatusInProgress}}
-	m.relayout()
+	m.requestRelayout()
+	m.reconcileLayout()
 	assertStable("todo expanded")
 	m.todo = nil
-	m.relayout()
+	m.requestRelayout()
+	m.reconcileLayout()
 	assertStable("todo collapsed")
 
 	m.agentSnapshot = nil
 	run.State = agent.StateCompleted
 	run.FinishedAt = time.Now()
 	m.historyState.TouchAgentRun("worker-1")
-	m.relayout()
+	m.requestRelayout()
+	m.reconcileLayout()
 	assertStable("agent completed")
 
 	for !m.viewport.AtBottom() {
