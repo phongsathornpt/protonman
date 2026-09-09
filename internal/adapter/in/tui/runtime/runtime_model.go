@@ -79,6 +79,13 @@ type conversationModelState struct {
 	conversationRetention conversation.RetentionPolicy
 }
 
+type todoModelState struct {
+	todo          []tododomain.Item
+	todoStore     tododomain.Repository
+	todoRevision  uint64
+	todoLifecycle todoLifecycleState
+}
+
 type sessionModelState struct {
 	sessionID    string
 	sessions     *app.Sessions
@@ -105,14 +112,11 @@ type bubbleModel struct {
 	sessionModelState
 	projectModelState
 	conversationModelState
+	todoModelState
 	viewport      viewport.Model
 	spinner       spinner.Model
 	help          help.Model
 	keys          bubbleKeyMap
-	todo          []tododomain.Item
-	todoStore     tododomain.Repository
-	todoRevision  uint64
-	todoLifecycle todoLifecycleState
 	planMode      bool
 	panes         paneState
 	showWelcome   bool
@@ -154,7 +158,7 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	if len(initialMessages) > 0 {
 		messages = conversation.Retain(model.SnapshotMessages(initialMessages[0]), retention)
 	}
-	ui := &bubbleModel{ctx: ctx, service: service, registry: registry, runner: runner, bridge: bridge, projectModelState: projectModelState{workDir: workDir}, viewport: pane, spinner: spin, help: helpView, keys: newBubbleKeyMap(), panes: paneState{bottom: bottom, transcript: transcriptPane}, conversationModelState: conversationModelState{historyState: NewHistoryState(maxBubbleScrollback), queue: make([]string, 0), conversationViewport: conversationViewportState{mode: viewportFollowing}, messages: messages, conversationRetention: retention}, todo: append([]tododomain.Item{}, todo...), showWelcome: true, layout: layoutState{width: defaultBubbleWidth, height: defaultBubbleHeight}, maxToolCalls: config.DefaultMaxToolCalls, agentModelState: agentModelState{subagentsEnabled: true, agentActivity: make(map[string]AgentActivity)}, turnModelState: turnModelState{activity: "ready"}, runtimeConfig: config.DefaultRuntimeConfig()}
+	ui := &bubbleModel{ctx: ctx, service: service, registry: registry, runner: runner, bridge: bridge, projectModelState: projectModelState{workDir: workDir}, viewport: pane, spinner: spin, help: helpView, keys: newBubbleKeyMap(), panes: paneState{bottom: bottom, transcript: transcriptPane}, conversationModelState: conversationModelState{historyState: NewHistoryState(maxBubbleScrollback), queue: make([]string, 0), conversationViewport: conversationViewportState{mode: viewportFollowing}, messages: messages, conversationRetention: retention}, todoModelState: todoModelState{todo: append([]tododomain.Item{}, todo...)}, showWelcome: true, layout: layoutState{width: defaultBubbleWidth, height: defaultBubbleHeight}, maxToolCalls: config.DefaultMaxToolCalls, agentModelState: agentModelState{subagentsEnabled: true, agentActivity: make(map[string]AgentActivity)}, turnModelState: turnModelState{activity: "ready"}, runtimeConfig: config.DefaultRuntimeConfig()}
 	if allTodoCompleted(ui.todo) {
 		ui.todoLifecycle.CompletionFresh = true
 	}
