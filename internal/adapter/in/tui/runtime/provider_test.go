@@ -907,7 +907,7 @@ func TestProviderSavedMessagePreservesAnthropicTypeInMemory(t *testing.T) {
 	}
 }
 
-func TestProviderSwitch_ReconcilesIncompatibleModel(t *testing.T) {
+func TestProviderSwitchReconcilesIncompatibleModel(t *testing.T) {
 	tempHome := t.TempDir()
 	t.Setenv("PROTONMAN_HOME", tempHome)
 	bModel := newTestSkillsModel(t, 1)
@@ -937,7 +937,7 @@ func TestProviderSwitch_ReconcilesIncompatibleModel(t *testing.T) {
 	}
 }
 
-func TestProviderDeleted_DeterministicFallbackAndRunnerCleanup(t *testing.T) {
+func TestProviderDeletedDeterministicFallbackAndRunnerCleanup(t *testing.T) {
 	tempHome := t.TempDir()
 	t.Setenv("PROTONMAN_HOME", tempHome)
 	bModel := newTestSkillsModel(t, 1)
@@ -980,7 +980,7 @@ func TestProviderDeleted_DeterministicFallbackAndRunnerCleanup(t *testing.T) {
 	}
 }
 
-func TestProviderSelect_PresetIsActiveWhenMatchesActiveProvider(t *testing.T) {
+func TestProviderSelectPresetIsActiveWhenMatchesActiveProvider(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.providers = make(map[string]config.ProviderConfig)
 	bModel.activeProvider = "protonman"

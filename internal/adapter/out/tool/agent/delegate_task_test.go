@@ -36,7 +36,7 @@ func (m *mockDelegateRunner) Run(ctx context.Context, messages []model.Message, 
 	return turn.Result{}, nil
 }
 
-func TestDelegateTask_Execute(t *testing.T) {
+func TestDelegateTaskExecute(t *testing.T) {
 	ctx := context.Background()
 
 	coord := agent.NewCoordinator(

@@ -88,7 +88,7 @@ func TestCoordinatorSubagentCapabilityToggle(t *testing.T) {
 	}
 }
 
-func TestCoordinator_RunsSubagentInGoroutine(t *testing.T) {
+func TestCoordinatorRunsSubagentInGoroutine(t *testing.T) {
 	coord := NewCoordinator(
 		nil,
 		emptyRegistry{},
@@ -125,7 +125,7 @@ func TestCoordinator_RunsSubagentInGoroutine(t *testing.T) {
 	}
 }
 
-func TestCoordinator_EnforcesConcurrencySemaphore(t *testing.T) {
+func TestCoordinatorEnforcesConcurrencySemaphore(t *testing.T) {
 	maxConcurrency := 2
 	var currentActive atomic.Int32
 	var peakActive atomic.Int32
@@ -184,7 +184,7 @@ func TestCoordinator_EnforcesConcurrencySemaphore(t *testing.T) {
 	}
 }
 
-func TestCoordinator_CancelsChildWhenParentContextCancels(t *testing.T) {
+func TestCoordinatorCancelsChildWhenParentContextCancels(t *testing.T) {
 	childStarted := make(chan struct{})
 	coord := NewCoordinator(
 		nil,
@@ -223,7 +223,7 @@ func TestCoordinator_CancelsChildWhenParentContextCancels(t *testing.T) {
 	}
 }
 
-func TestCoordinator_SerializesMutatingWorkers(t *testing.T) {
+func TestCoordinatorSerializesMutatingWorkers(t *testing.T) {
 	var currentWorkers atomic.Int32
 	var peakWorkers atomic.Int32
 
@@ -281,7 +281,7 @@ func TestCoordinator_SerializesMutatingWorkers(t *testing.T) {
 	}
 }
 
-func TestCoordinator_ZeroGoroutineLeaks(t *testing.T) {
+func TestCoordinatorZeroGoroutineLeaks(t *testing.T) {
 	coord := NewCoordinator(
 		nil,
 		emptyRegistry{},
@@ -413,7 +413,7 @@ func TestCoordinatorTerminalEventsReplaceDroppedSinkWakeups(t *testing.T) {
 	}
 }
 
-func TestCoordinator_EmitsLifecycleEvents(t *testing.T) {
+func TestCoordinatorEmitsLifecycleEvents(t *testing.T) {
 	var events []Event
 	var mu sync.Mutex
 
@@ -466,7 +466,7 @@ func TestCoordinator_EmitsLifecycleEvents(t *testing.T) {
 	}
 }
 
-func TestCoordinator_ConcurrentCloseAndRun(t *testing.T) {
+func TestCoordinatorConcurrentCloseAndRun(t *testing.T) {
 	coord := NewCoordinator(
 		nil,
 		emptyRegistry{},
@@ -509,7 +509,7 @@ func TestCoordinator_ConcurrentCloseAndRun(t *testing.T) {
 	wg.Wait()
 }
 
-func TestCoordinator_ResilientEmitOnCancel(t *testing.T) {
+func TestCoordinatorResilientEmitOnCancel(t *testing.T) {
 	var failedEmitted atomic.Bool
 	coord := NewCoordinator(
 		nil,
@@ -553,7 +553,7 @@ func TestCoordinator_ResilientEmitOnCancel(t *testing.T) {
 	}
 }
 
-func TestCoordinator_ReadOnlyProfileInheritsAskModeForNetworkTools(t *testing.T) {
+func TestCoordinatorReadOnlyProfileInheritsAskModeForNetworkTools(t *testing.T) {
 	baseReg := staticRegistry{
 		handlers: map[string]tool.Handler{
 			"web": dummyHandler{def: tool.Definition{Name: "web", Kind: tool.KindWeb, Description: "web"}},
@@ -593,7 +593,7 @@ func TestCoordinator_ReadOnlyProfileInheritsAskModeForNetworkTools(t *testing.T)
 	}
 }
 
-func TestCoordinator_WorkerInheritsAlwaysApproveMode(t *testing.T) {
+func TestCoordinatorWorkerInheritsAlwaysApproveMode(t *testing.T) {
 	baseReg := staticRegistry{
 		handlers: map[string]tool.Handler{
 			"edit": dummyHandler{def: tool.Definition{Name: "edit", Kind: tool.KindEdit}},
@@ -634,7 +634,7 @@ func TestCoordinator_WorkerInheritsAlwaysApproveMode(t *testing.T) {
 	}
 }
 
-func TestCoordinator_SubagentInheritsCallGuard(t *testing.T) {
+func TestCoordinatorSubagentInheritsCallGuard(t *testing.T) {
 	baseReg := staticRegistry{
 		handlers: map[string]tool.Handler{
 			"edit": dummyHandler{def: tool.Definition{Name: "edit", Kind: tool.KindEdit}},

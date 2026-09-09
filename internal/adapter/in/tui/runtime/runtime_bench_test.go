@@ -9,7 +9,7 @@ import (
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
 )
 
-func BenchmarkHistoryStateRenderLines_50Cells(b *testing.B) {
+func BenchmarkHistoryStateRenderLines50Cells(b *testing.B) {
 	state := NewHistoryState(1000)
 	for i := 0; i < 25; i++ {
 		state.Append(&UserCell{Text: fmt.Sprintf("User query number %d asking for assistance", i)})
@@ -35,7 +35,7 @@ func BenchmarkSanitizeBubbleText(b *testing.B) {
 	}
 }
 
-func BenchmarkHistoryStateRenderLines_ActiveMarkdown20KB(b *testing.B) {
+func BenchmarkHistoryStateRenderLinesActiveMarkdown20KB(b *testing.B) {
 	state := NewHistoryState(50000)
 	for i := 0; i < 100; i++ {
 		state.Append(&AssistantCell{Text: fmt.Sprintf("Committed response %d with **bold** and `code`.", i)})
@@ -48,7 +48,7 @@ func BenchmarkHistoryStateRenderLines_ActiveMarkdown20KB(b *testing.B) {
 	}
 }
 
-func BenchmarkHistoryStateRenderLinesAt_100Cells(b *testing.B) {
+func BenchmarkHistoryStateRenderLinesAt100Cells(b *testing.B) {
 	state := NewHistoryState(50000)
 	for i := 0; i < 50; i++ {
 		state.Append(&UserCell{Text: fmt.Sprintf("Question %d", i)})
@@ -61,7 +61,7 @@ func BenchmarkHistoryStateRenderLinesAt_100Cells(b *testing.B) {
 	}
 }
 
-func BenchmarkRefreshViewport_100Cells(b *testing.B) {
+func BenchmarkRefreshViewport100Cells(b *testing.B) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
 	m.resize(80, 24)
 	m.showWelcome = false
@@ -88,7 +88,7 @@ func BenchmarkAssistantStreamingMarkdown20KB(b *testing.B) {
 	}
 }
 
-func BenchmarkHistoryStateRaw_100Cells(b *testing.B) {
+func BenchmarkHistoryStateRaw100Cells(b *testing.B) {
 	state := NewHistoryState(50000)
 	for i := 0; i < 100; i++ {
 		state.Append(&AssistantCell{Text: fmt.Sprintf("raw transcript line %d", i)})
@@ -101,7 +101,7 @@ func BenchmarkHistoryStateRaw_100Cells(b *testing.B) {
 	}
 }
 
-func BenchmarkHistoryStateRenderContent_ActiveMarkdown20KB(b *testing.B) {
+func BenchmarkHistoryStateRenderContentActiveMarkdown20KB(b *testing.B) {
 	state := NewHistoryState(50000)
 	for i := 0; i < 100; i++ {
 		state.Append(&AssistantCell{Text: fmt.Sprintf("Committed response %d with **bold** and `code`.", i)})
@@ -115,7 +115,7 @@ func BenchmarkHistoryStateRenderContent_ActiveMarkdown20KB(b *testing.B) {
 	}
 }
 
-func BenchmarkHistoryStateRenderJoined_ActiveMarkdown20KB(b *testing.B) {
+func BenchmarkHistoryStateRenderJoinedActiveMarkdown20KB(b *testing.B) {
 	state := NewHistoryState(50000)
 	for i := 0; i < 100; i++ {
 		state.Append(&AssistantCell{Text: fmt.Sprintf("Committed response %d with **bold** and `code`.", i)})

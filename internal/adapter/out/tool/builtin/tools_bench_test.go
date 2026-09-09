@@ -14,7 +14,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 )
 
-func BenchmarkReadFile_64KB(b *testing.B) {
+func BenchmarkReadFile64KB(b *testing.B) {
 	dir := b.TempDir()
 	ws, err := workspace.New(dir, nil)
 	if err != nil {
@@ -43,7 +43,7 @@ func BenchmarkReadFile_64KB(b *testing.B) {
 	}
 }
 
-func BenchmarkGrep_100Files(b *testing.B) {
+func BenchmarkGrep100Files(b *testing.B) {
 	dir := b.TempDir()
 	ws, err := workspace.New(dir, nil)
 	if err != nil {
@@ -85,7 +85,7 @@ func BenchmarkGrep_100Files(b *testing.B) {
 	}
 }
 
-func BenchmarkListDir_500Entries(b *testing.B) {
+func BenchmarkListDir500Entries(b *testing.B) {
 	dir := b.TempDir()
 	ws, err := workspace.New(dir, nil)
 	if err != nil {

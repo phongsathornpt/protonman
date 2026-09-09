@@ -20,7 +20,7 @@ func createSkill(t *testing.T, dir string, name string, desc string) {
 	}
 }
 
-func TestDiscover_UserAndProjectSkills(t *testing.T) {
+func TestDiscoverUserAndProjectSkills(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
 

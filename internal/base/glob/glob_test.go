@@ -37,7 +37,7 @@ func TestMatch(t *testing.T) {
 	}
 }
 
-func BenchmarkGlobMatch_Wildcard(b *testing.B) {
+func BenchmarkGlobMatchWildcard(b *testing.B) {
 	pattern := "*"
 	value := "some/long/nested/path/to/a/workspace/file.go"
 	b.ResetTimer()
@@ -47,7 +47,7 @@ func BenchmarkGlobMatch_Wildcard(b *testing.B) {
 	}
 }
 
-func BenchmarkGlobMatch_Prefix(b *testing.B) {
+func BenchmarkGlobMatchPrefix(b *testing.B) {
 	pattern := "rm *"
 	value := "rm -rf /tmp/test-dir/created-file.txt"
 	b.ResetTimer()
@@ -57,7 +57,7 @@ func BenchmarkGlobMatch_Prefix(b *testing.B) {
 	}
 }
 
-func BenchmarkGlobMatch_Suffix(b *testing.B) {
+func BenchmarkGlobMatchSuffix(b *testing.B) {
 	pattern := "*.go"
 	value := "internal/permission/permission.go"
 	b.ResetTimer()
@@ -67,7 +67,7 @@ func BenchmarkGlobMatch_Suffix(b *testing.B) {
 	}
 }
 
-func BenchmarkGlobMatch_Complex(b *testing.B) {
+func BenchmarkGlobMatchComplex(b *testing.B) {
 	pattern := "*perm*.*go"
 	value := "internal/permission/permission.go"
 	b.ResetTimer()

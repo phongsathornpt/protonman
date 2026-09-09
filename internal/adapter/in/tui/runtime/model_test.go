@@ -750,7 +750,7 @@ func TestTodoStoreRevisionSyncsAfterToolResult(t *testing.T) {
 	}
 }
 
-func TestTUI_WithCoordinatorOption(t *testing.T) {
+func TestTUIWithCoordinatorOption(t *testing.T) {
 	registry, _ := newBubbleTestRegistry()
 	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
 	policy, err := permission.NewPolicy(permission.Config{})
@@ -774,7 +774,7 @@ func TestTUI_WithCoordinatorOption(t *testing.T) {
 	}
 }
 
-func TestTUI_CycleModeUpdatesCoordinator(t *testing.T) {
+func TestTUICycleModeUpdatesCoordinator(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	policy, err := permission.NewPolicy(permission.Config{})
 	if err != nil {
@@ -824,7 +824,7 @@ func TestTUI_CycleModeUpdatesCoordinator(t *testing.T) {
 	}
 }
 
-func TestTUI_SlashModeUpdatesCoordinator(t *testing.T) {
+func TestTUISlashModeUpdatesCoordinator(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	policy, err := permission.NewPolicy(permission.Config{})
 	if err != nil {
@@ -861,7 +861,7 @@ func TestTUI_SlashModeUpdatesCoordinator(t *testing.T) {
 	}
 }
 
-func TestTUI_ReconfigureRunnerUpdatesCoordinatorClient(t *testing.T) {
+func TestTUIReconfigureRunnerUpdatesCoordinatorClient(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	policy, err := permission.NewPolicy(permission.Config{})
 	if err != nil {
@@ -914,7 +914,7 @@ func TestPlanModeAllowsTaskMetadataButBlocksWorkspaceEdit(t *testing.T) {
 	}
 }
 
-func TestModelSelect_ReconcilesIncompatibleReasoningEffort(t *testing.T) {
+func TestModelSelectReconcilesIncompatibleReasoningEffort(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.activeProvider = "openai"
 	bModel.activeModel = "o3-mini"
@@ -944,7 +944,7 @@ func TestModelSelect_ReconcilesIncompatibleReasoningEffort(t *testing.T) {
 	}
 }
 
-func TestReconfigureRunner_InvalidatesRunnerOnError(t *testing.T) {
+func TestReconfigureRunnerInvalidatesRunnerOnError(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.activeProvider = "openai"
 	bModel.activeModel = "non-existent-model"
@@ -957,7 +957,7 @@ func TestReconfigureRunner_InvalidatesRunnerOnError(t *testing.T) {
 	}
 }
 
-func TestModelPicker_OllamaKeylessDiscovery(t *testing.T) {
+func TestModelPickerOllamaKeylessDiscovery(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.providers = map[string]config.ProviderConfig{
 		"ollama": {Name: "ollama", BaseURL: "http://localhost:11434", APIKey: ""},
@@ -975,7 +975,7 @@ func TestModelPicker_OllamaKeylessDiscovery(t *testing.T) {
 	}
 }
 
-func TestModelPicker_EmptyFilterShowsSearchInput(t *testing.T) {
+func TestModelPickerEmptyFilterShowsSearchInput(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.executeCommand("/model")
 	view, ok := bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
@@ -994,7 +994,7 @@ func TestModelPicker_EmptyFilterShowsSearchInput(t *testing.T) {
 	}
 }
 
-func TestModelPicker_ShiftTabCyclesProvidersWithoutLeaking(t *testing.T) {
+func TestModelPickerShiftTabCyclesProvidersWithoutLeaking(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.providers = map[string]config.ProviderConfig{
 		"alpha": {Name: "alpha", BaseURL: "https://alpha.example.com", APIKey: "k1"},
@@ -1020,7 +1020,7 @@ func TestModelPicker_ShiftTabCyclesProvidersWithoutLeaking(t *testing.T) {
 	}
 }
 
-func TestModelPicker_EnterWhileFilteringSelectsModel(t *testing.T) {
+func TestModelPickerEnterWhileFilteringSelectsModel(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.executeCommand("/model")
 	view, ok := bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)
@@ -1045,7 +1045,7 @@ func TestModelPicker_EnterWhileFilteringSelectsModel(t *testing.T) {
 	}
 }
 
-func TestModelPicker_EnterOnZeroMatchesDoesNotOpenProviderEditor(t *testing.T) {
+func TestModelPickerEnterOnZeroMatchesDoesNotOpenProviderEditor(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.executeCommand("/model")
 	view, ok := bModel.bottom.find(modelSelectViewID).(*modelSelectPaneView)

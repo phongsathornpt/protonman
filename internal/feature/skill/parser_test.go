@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestParseSkillFile_Valid(t *testing.T) {
+func TestParseSkillFileValid(t *testing.T) {
 	tempDir := t.TempDir()
 	skillDir := filepath.Join(tempDir, "pdf-processing")
 	if err := os.MkdirAll(filepath.Join(skillDir, "scripts"), 0o755); err != nil {
@@ -85,7 +85,7 @@ Step-by-step instructions for extracting text.
 	}
 }
 
-func TestParseSkillFile_LenientDescription(t *testing.T) {
+func TestParseSkillFileLenientDescription(t *testing.T) {
 	tempDir := t.TempDir()
 	skillDir := filepath.Join(tempDir, "data-cleaner")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
@@ -113,7 +113,7 @@ Instructions here.
 	}
 }
 
-func TestParseSkillFile_Errors(t *testing.T) {
+func TestParseSkillFileErrors(t *testing.T) {
 	tempDir := t.TempDir()
 
 	t.Run("missing frontmatter", func(t *testing.T) {
@@ -144,7 +144,7 @@ func TestParseSkillFile_Errors(t *testing.T) {
 	})
 }
 
-func TestParseSkillFile_NestedMetadata(t *testing.T) {
+func TestParseSkillFileNestedMetadata(t *testing.T) {
 	tempDir := t.TempDir()
 	skillDir := filepath.Join(tempDir, "golang-code-style")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {

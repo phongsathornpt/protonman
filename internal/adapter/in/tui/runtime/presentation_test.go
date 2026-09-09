@@ -741,7 +741,7 @@ func TestExecProfileWrappersAndEnvPrefixes(t *testing.T) {
 	}
 }
 
-func TestClassifyOpenCodeError_Cancellation(t *testing.T) {
+func TestClassifyOpenCodeErrorCancellation(t *testing.T) {
 	err := context.Canceled
 	classified := ClassifyOpenCodeError(err, "opencode", "nemotron-3.5-lightning-free")
 	if classified.Kind != ErrorKindCancelled {
@@ -752,7 +752,7 @@ func TestClassifyOpenCodeError_Cancellation(t *testing.T) {
 	}
 }
 
-func TestClassifyOpenCodeError_UnresolvedToolCall(t *testing.T) {
+func TestClassifyOpenCodeErrorUnresolvedToolCall(t *testing.T) {
 	err := fmt.Errorf("turn failed: %w: model requested another tool", applicationturn.ErrUnresolvedToolCall)
 	classified := ClassifyOpenCodeError(err, "opencode", "model")
 	if classified.Kind != ErrorKindToolDispatch {
@@ -766,7 +766,7 @@ func TestClassifyOpenCodeError_UnresolvedToolCall(t *testing.T) {
 	}
 }
 
-func TestClassifyOpenCodeError_ToolDispatchUnavailable(t *testing.T) {
+func TestClassifyOpenCodeErrorToolDispatchUnavailable(t *testing.T) {
 	err := fmt.Errorf("turn failed: %w: model requested 1 tool call while no tools were available", applicationturn.ErrToolDispatchUnavailable)
 	classified := ClassifyOpenCodeError(err, "opencode", "model")
 	if classified.Kind != ErrorKindToolDispatch {
@@ -780,7 +780,7 @@ func TestClassifyOpenCodeError_ToolDispatchUnavailable(t *testing.T) {
 	}
 }
 
-func TestClassifyOpenCodeError_OpenCodeModelError(t *testing.T) {
+func TestClassifyOpenCodeErrorOpenCodeModelError(t *testing.T) {
 	raw := `provider returned status 401: {"type":"error","error":{"type":"ModelError","message":"Model nonexistent is not supported"}}`
 	classified := ClassifyOpenCodeError(errors.New(raw), "opencode", "nonexistent")
 	if classified.Kind != ErrorKindModelNotFound {
@@ -797,7 +797,7 @@ func TestClassifyOpenCodeError_OpenCodeModelError(t *testing.T) {
 	}
 }
 
-func TestClassifyOpenCodeError_ContextOverflow(t *testing.T) {
+func TestClassifyOpenCodeErrorContextOverflow(t *testing.T) {
 	tests := []string{"provider returned status 413: request entity too large", `provider returned status 400: {"error":{"code":"context_length_exceeded","message":"Input exceeds context window"}}`, "model error: prompt is too long; exceeded max context length of 128000 tokens", "maximum context length is 128000 tokens, but your request resulted in 130000 tokens", "tokens in request more than max tokens allowed"}
 	for _, raw := range tests {
 		classified := ClassifyOpenCodeError(errors.New(raw), "opencode", "nemotron-3.5-lightning-free")
@@ -820,7 +820,7 @@ func TestClassifyOpenCodeError_ContextOverflow(t *testing.T) {
 	}
 }
 
-func TestClassifyOpenCodeError_Authentication(t *testing.T) {
+func TestClassifyOpenCodeErrorAuthentication(t *testing.T) {
 	raw := "provider returned status 401: unauthorized: invalid api key"
 	classified := ClassifyOpenCodeError(errors.New(raw), "openai", "gpt-4o")
 	if classified.Kind != ErrorKindAuthentication {
@@ -831,7 +831,7 @@ func TestClassifyOpenCodeError_Authentication(t *testing.T) {
 	}
 }
 
-func TestClassifyOpenCodeError_HTMLGateway(t *testing.T) {
+func TestClassifyOpenCodeErrorHTMLGateway(t *testing.T) {
 	raw := "provider returned status 401: <!DOCTYPE html><html><head><title>401 Authorization Required</title></head><body><h1>401 Authorization Required</h1></body></html>"
 	classified := ClassifyOpenCodeError(errors.New(raw), "opencode", "nemotron-3.5-lightning-free")
 	if classified.Kind != ErrorKindAuthentication {
@@ -842,7 +842,7 @@ func TestClassifyOpenCodeError_HTMLGateway(t *testing.T) {
 	}
 }
 
-func TestClassifyOpenCodeError_Forbidden(t *testing.T) {
+func TestClassifyOpenCodeErrorForbidden(t *testing.T) {
 	raw := "provider returned status 403: access_denied for requested resource"
 	classified := ClassifyOpenCodeError(errors.New(raw), "opencode", "claude-sonnet-4")
 	if classified.Kind != ErrorKindForbidden {
@@ -850,7 +850,7 @@ func TestClassifyOpenCodeError_Forbidden(t *testing.T) {
 	}
 }
 
-func TestClassifyOpenCodeError_RateLimitAndQuota(t *testing.T) {
+func TestClassifyOpenCodeErrorRateLimitAndQuota(t *testing.T) {
 	rawRate := "provider returned status 429: rate limit exceeded. please wait 10 seconds"
 	cRate := ClassifyOpenCodeError(errors.New(rawRate), "opencode", "nemotron-3.5-lightning-free")
 	if cRate.Kind != ErrorKindRateLimit {
@@ -863,7 +863,7 @@ func TestClassifyOpenCodeError_RateLimitAndQuota(t *testing.T) {
 	}
 }
 
-func TestClassifyOpenCodeError_ServerOverloaded(t *testing.T) {
+func TestClassifyOpenCodeErrorServerOverloaded(t *testing.T) {
 	raw := "provider returned status 503: Upstream request failed"
 	classified := ClassifyOpenCodeError(errors.New(raw), "opencode", "nemotron-3.5-lightning-free")
 	if classified.Kind != ErrorKindServerOverloaded {
@@ -874,7 +874,7 @@ func TestClassifyOpenCodeError_ServerOverloaded(t *testing.T) {
 	}
 }
 
-func TestClassifyOpenCodeError_Timeout(t *testing.T) {
+func TestClassifyOpenCodeErrorTimeout(t *testing.T) {
 	raw := "ProviderHeaderTimeoutError: headers timed out after 30000ms"
 	classified := ClassifyOpenCodeError(errors.New(raw), "opencode", "nemotron-3.5-lightning-free")
 	if classified.Kind != ErrorKindStreamTimeout {
@@ -882,7 +882,7 @@ func TestClassifyOpenCodeError_Timeout(t *testing.T) {
 	}
 }
 
-func TestClassifyOpenCodeError_MCPFailed(t *testing.T) {
+func TestClassifyOpenCodeErrorMCPFailed(t *testing.T) {
 	raw := `MCP server "weather" failed to start`
 	classified := ClassifyOpenCodeError(errors.New(raw), "opencode", "nemotron-3.5-lightning-free")
 	if classified.Kind != ErrorKindMCPFailed {
@@ -893,7 +893,7 @@ func TestClassifyOpenCodeError_MCPFailed(t *testing.T) {
 	}
 }
 
-func TestClassifyOpenCodeError_ConfigErrors(t *testing.T) {
+func TestClassifyOpenCodeErrorConfigErrors(t *testing.T) {
 	raw := `ConfigDirectoryTypoError: Directory "prompt" in /path is not valid. Rename the directory to "prompts"`
 	classified := ClassifyOpenCodeError(errors.New(raw), "opencode", "nemotron-3.5-lightning-free")
 	if classified.Kind != ErrorKindConfigTypo {

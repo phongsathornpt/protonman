@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestMainRun_Help(t *testing.T) {
+func TestMainRunHelp(t *testing.T) {
 	ctx := context.Background()
 	if err := run(ctx, []string{"--help"}); err != nil {
 		t.Fatalf("run(--help) failed: %v", err)
@@ -17,13 +17,13 @@ func TestMainRun_Help(t *testing.T) {
 	}
 }
 
-func TestMainRun_Version(t *testing.T) {
+func TestMainRunVersion(t *testing.T) {
 	if err := run(context.Background(), []string{"--version"}); err != nil {
 		t.Fatalf("run(--version) failed: %v", err)
 	}
 }
 
-func TestMainRun_InvalidFlags(t *testing.T) {
+func TestMainRunInvalidFlags(t *testing.T) {
 	ctx := context.Background()
 
 	// Unknown flag
@@ -39,7 +39,7 @@ func TestMainRun_InvalidFlags(t *testing.T) {
 	}
 }
 
-func TestMainRun_InvalidConfigurations(t *testing.T) {
+func TestMainRunInvalidConfigurations(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
 	work := t.TempDir()
@@ -82,7 +82,7 @@ func TestMainRun_InvalidConfigurations(t *testing.T) {
 	}
 }
 
-func TestMainRun_HeadlessRefusalAndExecution(t *testing.T) {
+func TestMainRunHeadlessRefusalAndExecution(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
 	work := t.TempDir()

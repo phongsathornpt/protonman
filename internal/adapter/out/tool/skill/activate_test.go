@@ -16,7 +16,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
 )
 
-func TestActivateSkill_Execute(t *testing.T) {
+func TestActivateSkillExecute(t *testing.T) {
 	ctx := context.Background()
 
 	s := skill.Skill{
@@ -93,7 +93,7 @@ func TestActivateSkill_Execute(t *testing.T) {
 	})
 }
 
-func TestActivateSkill_AuthorizesReadRootsForFileTools(t *testing.T) {
+func TestActivateSkillAuthorizesReadRootsForFileTools(t *testing.T) {
 	ctx := context.Background()
 
 	wsRoot := t.TempDir()
@@ -174,7 +174,7 @@ func TestActivateSkill_AuthorizesReadRootsForFileTools(t *testing.T) {
 	}
 }
 
-func TestActivateSkill_FailsIfSkillDirNotFound(t *testing.T) {
+func TestActivateSkillFailsIfSkillDirNotFound(t *testing.T) {
 	ctx := context.Background()
 	wsRoot := t.TempDir()
 	ws, err := workspace.New(wsRoot, nil)
