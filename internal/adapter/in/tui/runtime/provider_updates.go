@@ -7,7 +7,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -81,18 +80,18 @@ func (m *bubbleModel) updateProviderSaved(message providerSavedMsg) (tea.Model, 
 			m.activeModel = message.modelID
 			m.activeProvider = providerName
 			m.reconfigureRunner()
-			m.appendLine(successStyle.Render(fmt.Sprintf("✓ Configured provider %s", providerName)))
-		} else {
-			m.appendLine(successStyle.Render(fmt.Sprintf("✓ Updated provider %s", providerName)))
-			if m.activeProvider != "" {
-				m.appendLine(mutedStyle.Render(fmt.Sprintf("  Active provider remains %s", m.activeProvider)))
+			label := "provider " + providerName
+			if message.modelID != "" {
+				label += " · " + message.modelID
 			}
+			m.appendLine(successStyle.Render(label))
+		} else {
+			label := "provider " + providerName + " updated"
+			if m.activeProvider != "" {
+				label += " · active " + m.activeProvider
+			}
+			m.appendLine(successStyle.Render(label))
 		}
-		m.appendLine(mutedStyle.Render(fmt.Sprintf("  Endpoint: %s", message.baseURL)))
-		if message.activated && message.modelID != "" {
-			m.appendLine(mutedStyle.Render(fmt.Sprintf("  Default Model: %s", message.modelID)))
-		}
-		m.appendLine(mutedStyle.Render("  Saved to " + appdirs.UserConfigDisplay()))
 	}
 	m.bottom.remove(providerViewID)
 	m.relayout()
@@ -121,11 +120,10 @@ func (m *bubbleModel) updateModelSelected(message modelSelectedMsg) (tea.Model, 
 			}
 		}
 		m.reconfigureRunner()
-		m.appendLine(successStyle.Render(fmt.Sprintf("✓ Active model set to %s (%s)", message.modelID, m.activeProvider)))
+		m.appendLine(successStyle.Render(fmt.Sprintf("model → %s · %s", message.modelID, m.activeProvider)))
 		if message.unverified {
 			m.appendLine(mutedStyle.Render("  Model ID was not present in the discovered catalog; using it as a custom model."))
 		}
-		m.appendLine(mutedStyle.Render("  Saved to " + appdirs.UserConfigDisplay()))
 	}
 	m.bottom.remove(modelSelectViewID)
 	m.relayout()
@@ -155,16 +153,11 @@ func (m *bubbleModel) updateProviderActiveSelected(message providerActiveSelecte
 			}
 		}
 		m.reconfigureRunner()
-		m.appendLine(successStyle.Render(fmt.Sprintf("✓ Switched active provider to %s", message.providerName)))
-		if p, ok := m.providers[strings.ToLower(message.providerName)]; ok && p.BaseURL != "" {
-			m.appendLine(mutedStyle.Render(fmt.Sprintf("  Endpoint: %s", p.BaseURL)))
-		}
+		label := "provider → " + message.providerName
 		if m.activeModel != "" {
-			m.appendLine(mutedStyle.Render(fmt.Sprintf("  Active model: %s", m.activeModel)))
-		} else {
-			m.appendLine(mutedStyle.Render("  Use /model to choose a model for this provider"))
+			label += " · " + m.activeModel
 		}
-		m.appendLine(mutedStyle.Render("  Saved to " + appdirs.UserConfigDisplay()))
+		m.appendLine(successStyle.Render(label))
 	}
 	m.bottom.remove(providerSelectViewID)
 	m.relayout()
@@ -203,11 +196,11 @@ func (m *bubbleModel) updateProviderDeleted(message providerDeletedMsg) (tea.Mod
 				m.bottom.setHasRunner(false)
 			}
 		}
-		m.appendLine(successStyle.Render(fmt.Sprintf("✓ Removed provider %s", message.providerName)))
+		label := "provider removed · " + message.providerName
 		if m.activeProvider != "" {
-			m.appendLine(mutedStyle.Render(fmt.Sprintf("  Active provider is now %s", m.activeProvider)))
+			label += " · active " + m.activeProvider
 		}
-		m.appendLine(mutedStyle.Render("  Updated " + appdirs.UserConfigDisplay()))
+		m.appendLine(successStyle.Render(label))
 	}
 	m.bottom.remove(providerSelectViewID)
 	m.relayout()

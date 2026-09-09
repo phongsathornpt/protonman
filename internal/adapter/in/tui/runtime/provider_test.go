@@ -576,7 +576,7 @@ func TestProviderViewFetchAndModelSelectionFlow(t *testing.T) {
 	updated, _ = bModel.Update(providerSavedMsg{operationID: bModel.activeProviderSave, providerName: "protonman", baseURL: "https://protonman.dev/api/v1", modelID: "glm-5.3-flash", activated: true})
 	bModel = updated.(*bubbleModel)
 	transcript := bModel.viewport.View()
-	if !strings.Contains(transcript, "Configured provider protonman") || !strings.Contains(transcript, "glm-5.3-flash") {
+	if !strings.Contains(transcript, "provider protonman") || !strings.Contains(transcript, "glm-5.3-flash") {
 		t.Fatalf("expected confirmation in transcript, got:\n%s", transcript)
 	}
 }
@@ -635,7 +635,7 @@ func TestProviderViewInactiveEditKeepsActiveProvider(t *testing.T) {
 	if snapshot.Model.Provider != "opencode" || snapshot.Model.Default != "free-model" {
 		t.Fatalf("inactive edit changed persisted active defaults: %+v", snapshot.Model)
 	}
-	if !strings.Contains(bModel.viewport.View(), "Active provider remains opencode") {
+	if !strings.Contains(bModel.viewport.View(), "active opencode") {
 		t.Fatalf("expected active provider preservation message, got:\n%s", bModel.viewport.View())
 	}
 }
