@@ -70,30 +70,6 @@ func TestScrollMetadataReusesCommittedRenderCache(t *testing.T) {
 		t.Fatalf("scroll metadata rerendered committed cell: before=%d after=%d", renders, cell.renders)
 	}
 }
-func TestSpinnerFrameUpdatesCommittedCacheInPlace(t *testing.T) {
-	state := NewHistoryState(100)
-	state.StartTool("read")
-	state.StartTool("grep")
-	_ = state.RenderContent()
-	if !state.cacheValid {
-		t.Fatal("expected committed render cache to be valid")
-	}
-	beforeRevision, _ := state.Revisions()
-	if !state.SetSpinnerFrame("⠙") {
-		t.Fatal("expected running committed tool to consume spinner frame")
-	}
-	if !state.cacheValid {
-		t.Fatal("spinner frame invalidated full committed render cache")
-	}
-	afterRevision, _ := state.Revisions()
-	if afterRevision != beforeRevision {
-		t.Fatalf("spinner changed committed semantic revision: before=%d after=%d", beforeRevision, afterRevision)
-	}
-	if content := state.RenderContent(); !strings.Contains(content, "⠙") {
-		t.Fatalf("cached transcript did not reflect spinner update: %q", content)
-	}
-}
-
 func TestDiscardToolCallClearsRemovedBackingSlot(t *testing.T) {
 	state := NewHistoryState(100)
 	state.committed = make([]HistoryCell, 0, 4)

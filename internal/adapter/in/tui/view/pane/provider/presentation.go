@@ -13,20 +13,11 @@ type ProviderEditorState uint8
 const (
 	ProviderEditorInput ProviderEditorState = iota
 	ProviderEditorFetching
-	ProviderEditorSelectModel
 	ProviderEditorConfirmOverwrite
 	ProviderEditorSaving
 	ProviderEditorSaveError
 	ProviderEditorError
 )
-
-type ProviderEditorModel struct {
-	Label     string
-	Free      bool
-	Limits    string
-	Features  string
-	Reasoning string
-}
 
 type ProviderEditorSnapshot struct {
 	Width          int
@@ -46,12 +37,6 @@ type ProviderEditorSnapshot struct {
 	EndpointInput  string
 	APIKeyInput    string
 	FieldErrors    [3]string
-	Models         []ProviderEditorModel
-	SelectedIndex  int
-	ScrollOffset   int
-	FilterFreeOnly bool
-	HasFreeModels  bool
-	TotalModels    int
 }
 
 func ProviderEditorRows(snapshot ProviderEditorSnapshot) ([]string, panecommon.Tone) {
@@ -62,8 +47,6 @@ func ProviderEditorRows(snapshot ProviderEditorSnapshot) ([]string, panecommon.T
 			fmt.Sprintf("%s %s", snapshot.Spinner, snapshot.Endpoint),
 			tuistyle.MutedStyle.Render("esc cancel"),
 		}, panecommon.ToneAssistant
-	case ProviderEditorSelectModel:
-		return providerModelRows(snapshot), panecommon.ToneUser
 	case ProviderEditorSaving:
 		description := "  Applying the selected model as active"
 		if snapshot.IsEditing && !snapshot.ActivateOnSave {
@@ -94,72 +77,6 @@ func ProviderEditorRows(snapshot ProviderEditorSnapshot) ([]string, panecommon.T
 	default:
 		return providerInputRows(snapshot), panecommon.ToneAssistant
 	}
-}
-
-func providerModelRows(snapshot ProviderEditorSnapshot) []string {
-	titlePrefix := "Models"
-	if snapshot.IsEditing && !snapshot.ActivateOnSave {
-		titlePrefix = "Models · active unchanged"
-	}
-	title := fmt.Sprintf("%s · %d", titlePrefix, len(snapshot.Models))
-	if snapshot.HasFreeModels {
-		if snapshot.FilterFreeOnly {
-			title = fmt.Sprintf("%s · %d free · f all %d", titlePrefix, len(snapshot.Models), snapshot.TotalModels)
-		} else {
-			title = fmt.Sprintf("%s · %d · f free", titlePrefix, snapshot.TotalModels)
-		}
-	}
-	if len(snapshot.Models) == 0 {
-		return []string{
-			tuistyle.BrandStyle.Render(title),
-			tuistyle.MutedStyle.Render("No matching models."),
-			tuistyle.MutedStyle.Render("f toggle filter · esc back"),
-		}
-	}
-	selected, offset, end := panecommon.NormalizedWindow(snapshot.SelectedIndex, snapshot.ScrollOffset, len(snapshot.Models), 8)
-	rows := []string{tuistyle.BrandStyle.Render(title)}
-	if offset > 0 {
-		rows = append(rows, tuistyle.MutedStyle.Render(fmt.Sprintf("  ▲ %d more above", offset)))
-	}
-	for i, md := range snapshot.Models[offset:end] {
-		idx := offset + i
-		prefix := "    "
-		if idx == selected {
-			prefix = tuistyle.BrandStyle.Render("  ❯ ")
-		}
-		line := fmt.Sprintf("%d. %s", idx+1, md.Label)
-		if md.Free {
-			line += " " + tuistyle.SuccessStyle.Render("[FREE]")
-		}
-		if md.Limits != "" {
-			line += " [" + md.Limits + "]"
-		}
-		if md.Features != "" {
-			line += " (" + md.Features + ")"
-		}
-		if md.Reasoning != "" {
-			line += " [" + md.Reasoning + "]"
-		}
-		if idx == selected {
-			rows = append(rows, prefix+tuistyle.BrandStyle.Render(line))
-		} else {
-			rows = append(rows, prefix+tuistyle.MutedStyle.Render(line))
-		}
-	}
-	if end < len(snapshot.Models) {
-		rows = append(rows, tuistyle.MutedStyle.Render(fmt.Sprintf("  ▼ %d more below", len(snapshot.Models)-end)))
-	}
-	footer := "↑/↓ or j/k move · 1-9 select · enter confirm & save · esc back"
-	if snapshot.IsEditing && !snapshot.ActivateOnSave {
-		footer = "↑/↓ move · 1-9 select · enter save details · esc back"
-	}
-	if snapshot.HasFreeModels {
-		footer = "↑/↓ move · 1-9 select · f toggle free only · enter confirm · esc back"
-		if snapshot.IsEditing && !snapshot.ActivateOnSave {
-			footer = "↑/↓ move · 1-9 select · f free only · enter save · esc back"
-		}
-	}
-	return append(rows, tuistyle.MutedStyle.Render(footer))
 }
 
 func providerInputRows(snapshot ProviderEditorSnapshot) []string {

@@ -50,10 +50,6 @@ func layoutModeForHeight(height int) terminalLayoutMode {
 	return presentationpolicy.LayoutModeForHeight(height)
 }
 
-func pickerVisibleRows(height, maximum int) int {
-	return presentationpolicy.PickerVisibleRows(height, maximum)
-}
-
 func compactPickerRows(rows []string) []string {
 	return presentationpolicy.CompactPickerRows(rows)
 }

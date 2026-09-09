@@ -131,30 +131,9 @@ func TestHistoryCellKindEnum(t *testing.T) {
 	}
 }
 
-func TestHistoryStateRunningToolSpinner(t *testing.T) {
-	state := NewHistoryState(100)
-	state.SetSpinnerFrame("⠋")
-	state.StartTool("read")
-	lines := state.RenderLines()
-	if len(lines) == 0 || !strings.Contains(lines[len(lines)-1], "⠋") {
-		t.Fatalf("expected running tool to contain spinner frame ⠋, got: %v", lines)
-	}
-	state.SetSpinnerFrame("⠙")
-	lines = state.RenderLines()
-	if len(lines) == 0 || !strings.Contains(lines[len(lines)-1], "⠙") {
-		t.Fatalf("expected running tool to contain updated spinner frame ⠙, got: %v", lines)
-	}
-	state.CompleteTool(ToolCell{Name: "read", Body: "done"})
-	lines = state.RenderLines()
-	if len(lines) == 0 || strings.Contains(lines[0], "⠙") || strings.Contains(lines[0], "…") {
-		t.Fatalf("completed tool should not contain spinner, got: %v", lines)
-	}
-}
-
 func TestHistoryStateThinkingCellLifecycle(t *testing.T) {
 	t.Run("converts to assistant on first delta", func(t *testing.T) {
 		state := NewHistoryState(100)
-		state.SetSpinnerFrame("⠋")
 		state.StartThinking()
 		active := state.Active()
 		if _, ok := active.(*ThinkingCell); !ok {
@@ -236,7 +215,6 @@ func TestToolCellRefinedRenderingWebFetch(t *testing.T) {
   <body><h1>Protonman</h1><p>Many lines of HTML...</p></body>
 </html>`
 	state := NewHistoryState(100)
-	state.SetSpinnerFrame("⠋")
 	runningCell := &ToolCell{CallID: "call-web-1", Name: "web", Target: "https://protonman.dev", ToolKind: tool.KindWeb, Running: true}
 	state.StartToolCell(runningCell)
 	rendered := state.RenderLines()
@@ -389,23 +367,6 @@ func TestHistoryStateAlternateRenderCacheTracksWidth(t *testing.T) {
 	narrow := state.RenderLinesAt(20)
 	if len(narrow) <= len(wide) {
 		t.Fatalf("narrow alternate render lines = %d, want more than wide %d", len(narrow), len(wide))
-	}
-}
-
-func TestHistoryStateSpinnerFrameReportsVisualChanges(t *testing.T) {
-	state := NewHistoryState(1000)
-	state.AppendAssistantDelta("streaming")
-	if state.SetSpinnerFrame("a") {
-		t.Fatal("assistant cell reported a visual spinner change")
-	}
-	state.CommitActive()
-	state.StartThinking()
-	if !state.SetSpinnerFrame("b") {
-		t.Fatal("thinking cell did not report spinner change")
-	}
-	state.StartTool("read")
-	if !state.SetSpinnerFrame("c") {
-		t.Fatal("running tool did not report spinner change")
 	}
 }
 

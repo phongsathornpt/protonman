@@ -13,9 +13,6 @@ func (s *HistoryState) StartToolCell(cell HistoryCell) {
 		return
 	}
 	s.CommitActive()
-	if s.spinnerFrame != "" {
-		setCellSpinner(cell, s.spinnerFrame)
-	}
 	s.active = cell
 	s.touchActive()
 }

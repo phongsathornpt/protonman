@@ -114,44 +114,14 @@ func providerEditorSnapshot(m *bubbleModel, v *providerPaneView) providerpane.Pr
 	if m == nil || v == nil {
 		return providerpane.ProviderEditorSnapshot{}
 	}
-	models := v.currentModels()
-	items := make([]providerpane.ProviderEditorModel, 0, len(models))
-	providerName := strings.TrimSpace(v.nameInput.Value())
-	for _, md := range models {
-		resolved := model.ResolveRemoteMetadata(providerName, md)
-		label := strings.TrimSpace(md.ID)
-		if name := strings.TrimSpace(md.Name); name != "" && !strings.EqualFold(name, label) {
-			if label == "" {
-				label = name
-			} else {
-				label = fmt.Sprintf("%s (%s)", name, label)
-			}
-		}
-		items = append(items, providerpane.ProviderEditorModel{Label: label, Free: model.IsFreeModel(md.ID), Limits: modelpicker.FormatTokenLimits(resolved.Profile.ContextWindow, resolved.Profile.MaxInputTokens, resolved.Profile.MaxOutputTokens), Features: strings.Join(resolved.Features, ", "), Reasoning: remoteModelReasoningSummary(providerName, md, false)})
-	}
-	hasFreeModels := false
-	for _, md := range v.models {
-		if model.IsFreeModel(md.ID) {
-			hasFreeModels = true
-			break
-		}
-	}
 	fieldErrors := [3]string{v.fieldErrors[providerFieldName], v.fieldErrors[providerFieldEndpoint], v.fieldErrors[providerFieldAPIKey]}
-	selectedIndex := 0
-	scrollOffset := 0
-	if v.modelPickerSet {
-		selectedIndex = v.modelPicker.Index()
-		scrollOffset = v.modelPicker.Paginator.Page * v.modelPicker.Paginator.PerPage
-	}
-	return providerpane.ProviderEditorSnapshot{Width: m.width, Height: m.height, State: providerEditorPaneState(v.state), Name: v.nameInput.Value(), Endpoint: v.endpointInput.Value(), Spinner: m.spinner.View(), UserConfigPath: appdirs.UserConfigDisplay(), ErrorMessage: v.errorMessage, IsEditing: v.isEditing, ActivateOnSave: v.activateOnSave, ProviderType: v.providerType, ProtocolLabel: v.protocolLabel(), RequiresAPIKey: v.requiresAPIKey, NameInput: v.nameInput.View(), EndpointInput: v.endpointInput.View(), APIKeyInput: v.apiKeyInput.View(), FieldErrors: fieldErrors, Models: items, SelectedIndex: selectedIndex, ScrollOffset: scrollOffset, FilterFreeOnly: v.filterFreeOnly, HasFreeModels: hasFreeModels, TotalModels: len(v.models)}
+	return providerpane.ProviderEditorSnapshot{Width: m.width, Height: m.height, State: providerEditorPaneState(v.state), Name: v.nameInput.Value(), Endpoint: v.endpointInput.Value(), Spinner: m.spinner.View(), UserConfigPath: appdirs.UserConfigDisplay(), ErrorMessage: v.errorMessage, IsEditing: v.isEditing, ActivateOnSave: v.activateOnSave, ProviderType: v.providerType, ProtocolLabel: v.protocolLabel(), RequiresAPIKey: v.requiresAPIKey, NameInput: v.nameInput.View(), EndpointInput: v.endpointInput.View(), APIKeyInput: v.apiKeyInput.View(), FieldErrors: fieldErrors}
 }
 
 func providerEditorPaneState(state providerPaneState) providerpane.ProviderEditorState {
 	switch state {
 	case providerStateFetching:
 		return providerpane.ProviderEditorFetching
-	case providerStateSelectModel:
-		return providerpane.ProviderEditorSelectModel
 	case providerStateConfirmOverwrite:
 		return providerpane.ProviderEditorConfirmOverwrite
 	case providerStateSaving:

@@ -3,7 +3,6 @@ package runtime
 import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
@@ -208,8 +207,4 @@ func maxInt(left int, right int) int {
 		return left
 	}
 	return right
-}
-
-func normalizedPickerWindow(index, offset, count, visible int) (int, int, int) {
-	return panecommon.NormalizedWindow(index, offset, count, visible)
 }

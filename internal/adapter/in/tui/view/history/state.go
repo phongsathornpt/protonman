@@ -26,7 +26,6 @@ type HistoryState struct {
 	altRender         []string
 	altRenderValid    bool
 	altRenderWidth    int
-	spinnerFrame      string
 	committedLines    int
 	committedRevision uint64
 	activeRevision    uint64
@@ -100,7 +99,7 @@ func (s *HistoryState) Append(cell HistoryCell) {
 
 func (s *HistoryState) StartThinking() {
 	s.CommitActive()
-	s.active = &ThinkingCell{Spinner: s.spinnerFrame}
+	s.active = &ThinkingCell{}
 	s.touchActive()
 }
 

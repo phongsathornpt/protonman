@@ -50,19 +50,6 @@ func TestBrandMarkIsSingleCell(t *testing.T) {
 	}
 }
 
-func TestPickerVisibleRows(t *testing.T) {
-	tests := []struct {
-		height  int
-		maximum int
-		want    int
-	}{{height: 12, maximum: 6, want: 2}, {height: 14, maximum: 6, want: 3}, {height: 18, maximum: 6, want: 4}, {height: 24, maximum: 6, want: 6}, {height: 24, maximum: 5, want: 5}}
-	for _, tc := range tests {
-		if got := pickerVisibleRows(tc.height, tc.maximum); got != tc.want {
-			t.Fatalf("pickerVisibleRows(%d, %d) = %d, want %d", tc.height, tc.maximum, got, tc.want)
-		}
-	}
-}
-
 func TestLayoutModeBreakpoints(t *testing.T) {
 	if got := layoutModeForHeight(24); got != layoutNormal {
 		t.Fatalf("24 rows mode = %v", got)
