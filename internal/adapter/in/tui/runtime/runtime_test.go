@@ -525,6 +525,44 @@ func TestClearTranscriptPreservesProviderHistory(t *testing.T) {
 	}
 }
 
+func TestPromptDynamicHeightAccountsForSoftWrap(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(28, 14)
+	prompt := m.panes.bottom.prompt()
+	prompt.SetValue(strings.Repeat("wrapped text ", 8))
+	if prompt.Height() <= 1 {
+		t.Fatalf("soft-wrapped prompt height = %d, want > 1", prompt.Height())
+	}
+	if prompt.Height() > 4 {
+		t.Fatalf("soft-wrapped prompt height = %d, want <= 4", prompt.Height())
+	}
+	m.requestRelayout()
+	m.reconcileLayout()
+	if got := lipgloss.Height(m.View().Content); got > m.layout.height {
+		t.Fatalf("soft-wrapped prompt frame height=%d terminal=%d", got, m.layout.height)
+	}
+}
+
+func TestBracketedPasteUpdatesVisibleComposerWithoutSubmitting(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	paste := "ภาษาไทย café 東京\nsecond line\nthird line"
+	updated, _ := m.Update(tea.PasteMsg{Content: paste})
+	m = updated.(*bubbleModel)
+	if got := m.panes.bottom.prompt().Value(); got != paste {
+		t.Fatalf("pasted value = %q, want %q", got, paste)
+	}
+	rendered := ansi.Strip(m.promptView())
+	for _, want := range []string{"ภาษาไทย", "café", "東京", "second line", "third line"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("rendered pasted draft missing %q: %q", want, rendered)
+		}
+	}
+	if len(m.historyState.Cells()) != 0 {
+		t.Fatalf("paste submitted transcript cells: %#v", m.historyState.Cells())
+	}
+}
+
 func TestMultilinePromptUpMovesCursorInsteadOfRecallingHistory(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	prompt := m.panes.bottom.prompt()

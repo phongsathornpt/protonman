@@ -27,6 +27,19 @@ func (m *bubbleModel) updateTerminalEvent(msg tea.Msg) (tea.Cmd, bool) {
 	case tea.WindowSizeMsg:
 		m.resize(message.Width, message.Height)
 		return nil, true
+	case tea.PasteMsg:
+		if m.panes.showTranscript || m.panes.bottom == nil || !m.panes.bottom.composerVisible() {
+			return nil, true
+		}
+		prompt := m.panes.bottom.prompt()
+		if prompt == nil {
+			return nil, true
+		}
+		updated, command := prompt.Update(message)
+		*prompt = updated
+		m.syncSlashView()
+		m.requestRelayout()
+		return command, true
 	case tea.KeyPressMsg:
 		if key.Matches(message, m.keys.Quit) {
 			_, command := m.handleInterruptKey()

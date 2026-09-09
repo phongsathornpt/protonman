@@ -175,6 +175,78 @@ func TestE2ETUIRapidResizeWithRealPTY(t *testing.T) {
 	}
 }
 
+func TestE2ETUIBracketedUnicodePasteSurvivesResize(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+	master, slave := openLinuxPTY(t, 72, 18)
+	defer master.Close()
+	defer slave.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, protonBin)
+	cmd.Dir = ws
+	cmd.Env = append(os.Environ(), "PROTONMAN_HOME="+home, "TERM=xterm-256color")
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start Protonman on PTY: %v", err)
+	}
+	_ = slave.Close()
+
+	var output bytes.Buffer
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		buf := make([]byte, 4096)
+		for {
+			n, err := master.Read(buf)
+			if n > 0 {
+				_, _ = output.Write(buf[:n])
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	paste := "\x1b[200~ภาษาไทย café 東京\nsecond line\nthird line\x1b[201~"
+	if _, err := master.Write([]byte(paste)); err != nil {
+		t.Fatalf("paste unicode multiline draft: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if err := unix.IoctlSetWinsize(int(master.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Col: 36, Row: 10}); err != nil {
+		t.Fatalf("resize PTY after paste: %v", err)
+	}
+	time.Sleep(150 * time.Millisecond)
+	view := output.String()
+	for _, want := range []string{"ภาษาไทย", "café", "東京", "second line", "third line"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("pasted PTY output missing %q: %q", want, view)
+		}
+	}
+	for _, unwanted := range []string{"Protonman crashed", "panic:"} {
+		if strings.Contains(view, unwanted) {
+			t.Fatalf("unicode paste output contains %q: %q", unwanted, view)
+		}
+	}
+
+	// First Ctrl+C clears the draft; the second exits the now-idle TUI.
+	_, _ = master.Write([]byte{3})
+	time.Sleep(50 * time.Millisecond)
+	_, _ = master.Write([]byte{3})
+	if err := cmd.Wait(); err != nil && ctx.Err() != nil {
+		t.Fatalf("TUI did not exit after unicode paste: %v", err)
+	}
+	_ = master.Close()
+	select {
+	case <-readDone:
+	case <-time.After(time.Second):
+		t.Fatal("timed out draining unicode paste PTY output")
+	}
+}
+
 func TestE2ETUISlashHelpWithRealPTY(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)

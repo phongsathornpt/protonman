@@ -191,6 +191,9 @@ func newPrompt(hasRunner bool) textarea.Model {
 	prompt := textarea.New()
 	prompt.Placeholder = promptPlaceholder(hasRunner, permission.ModeAsk, false)
 	prompt.CharLimit = 20_000
+	prompt.DynamicHeight = true
+	prompt.MinHeight = 1
+	prompt.MaxHeight = 4
 	prompt.ShowLineNumbers = false
 	prompt.EndOfBufferCharacter = ' '
 	prompt.KeyMap.InsertNewline.SetKeys("ctrl+j")

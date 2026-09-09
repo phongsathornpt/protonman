@@ -1,30 +1,6 @@
 package runtime
 
-import (
-	"strings"
-
-	"charm.land/lipgloss/v2"
-)
-
-func (m *bubbleModel) syncPromptHeight() {
-	if m.panes.bottom == nil {
-		return
-	}
-	prompt := m.panes.bottom.prompt()
-	if prompt == nil {
-		return
-	}
-	lines := strings.Count(prompt.Value(), "\n") + 1
-	if lines < 1 {
-		lines = 1
-	}
-	if lines > 4 {
-		lines = 4
-	}
-	if prompt.Height() != lines {
-		prompt.SetHeight(lines)
-	}
-}
+import "charm.land/lipgloss/v2"
 
 func (m *bubbleModel) resize(width int, height int) {
 	if width <= 0 {
@@ -38,7 +14,6 @@ func (m *bubbleModel) resize(width int, height int) {
 	m.help.SetWidth(maxInt(1, width-2))
 	prompt := m.panes.bottom.prompt()
 	prompt.SetWidth(maxInt(1, width-4))
-	m.syncPromptHeight()
 	m.panes.transcript.SetWidth(maxInt(1, width-10))
 	m.panes.transcript.SetHeight(maxInt(1, height-10))
 	if m.historyState != nil {
@@ -111,7 +86,6 @@ func (m *bubbleModel) reconcileLayout() {
 	}
 	m.layout.dirty = false
 	scroll := m.captureViewportScroll()
-	m.syncPromptHeight()
 	m.applyFrameLayout(scroll, m.buildFrameChrome())
 }
 
