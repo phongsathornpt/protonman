@@ -60,6 +60,17 @@ type turnModelState struct {
 	turnEvents      <-chan tea.Msg
 }
 
+type modelSelectionState struct {
+	activeModel          string
+	activeProvider       string
+	providers            map[string]config.ProviderConfig
+	modelCatalogs        modelcatalog.State
+	activeProviderSave   asyncOperationID
+	activeProviderSelect asyncOperationID
+	activeProviderDelete asyncOperationID
+	activeModelSelect    asyncOperationID
+}
+
 type bubbleModel struct {
 	ctx      context.Context
 	service  *toolcall.Service
@@ -69,6 +80,7 @@ type bubbleModel struct {
 	bridge   *permissionBridge
 	agentModelState
 	turnModelState
+	modelSelectionState
 	workDir                 string
 	viewport                viewport.Model
 	spinner                 spinner.Model
@@ -89,22 +101,14 @@ type bubbleModel struct {
 	welcomeCache            welcomeCardCache
 	messages                []model.Message
 	conversationRetention   conversation.RetentionPolicy
-	activeModel             string
-	activeProvider          string
-	providers               map[string]config.ProviderConfig
 	maxToolCalls            int
 	sessionID               string
 	sessions                *app.Sessions
 	workspaceKey            string
-	modelCatalogs           modelcatalog.State
 	runtimeConfig           config.RuntimeConfig
 	projectTrusted          bool
 	projectConfigSources    []string
 	projectConfigProvenance map[string]config.ValueSource
-	activeProviderSave      asyncOperationID
-	activeProviderSelect    asyncOperationID
-	activeProviderDelete    asyncOperationID
-	activeModelSelect       asyncOperationID
 }
 
 type bubbleKeyMap struct {
