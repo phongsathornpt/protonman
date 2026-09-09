@@ -176,6 +176,10 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 	if errors.Is(err, context.Canceled) || failureCode(result) == tool.ErrorCodeCanceled {
 		body = "cancelled"
 	}
+	if name == "todo" && result.Failure == nil && err == nil && !result.Denied {
+		state.DiscardToolCall(result.CallID, name)
+		return
+	}
 	completed := m.completedToolCell(result.CallID, name, body, result)
 	state.CompleteToolCall(result.CallID, name, completed)
 }
