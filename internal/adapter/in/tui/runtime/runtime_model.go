@@ -166,7 +166,45 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	if len(initialMessages) > 0 {
 		messages = conversation.Retain(model.SnapshotMessages(initialMessages[0]), retention)
 	}
-	ui := &bubbleModel{ctx: ctx, service: service, registry: registry, runner: runner, bridge: bridge, projectModelState: projectModelState{workDir: workDir}, presentationModelState: presentationModelState{viewport: pane, spinner: spin, help: helpView, keys: newBubbleKeyMap(), panes: paneState{bottom: bottom, transcript: transcriptPane}, showWelcome: true, layout: layoutState{width: defaultBubbleWidth, height: defaultBubbleHeight}}, conversationModelState: conversationModelState{historyState: NewHistoryState(maxBubbleScrollback), queue: make([]string, 0), conversationViewport: conversationViewportState{mode: viewportFollowing}, messages: messages, conversationRetention: retention}, todoModelState: todoModelState{todo: append([]tododomain.Item{}, todo...)}, executionPolicyState: executionPolicyState{maxToolCalls: config.DefaultMaxToolCalls, runtimeConfig: config.DefaultRuntimeConfig()}, agentModelState: agentModelState{subagentsEnabled: true, agentActivity: make(map[string]AgentActivity)}, turnModelState: turnModelState{activity: "ready"}}
+	ui := &bubbleModel{
+		ctx:      ctx,
+		service:  service,
+		registry: registry,
+		runner:   runner,
+		bridge:   bridge,
+		projectModelState: projectModelState{
+			workDir: workDir,
+		},
+		presentationModelState: presentationModelState{
+			viewport:    pane,
+			spinner:     spin,
+			help:        helpView,
+			keys:        newBubbleKeyMap(),
+			panes:       paneState{bottom: bottom, transcript: transcriptPane},
+			showWelcome: true,
+			layout:      layoutState{width: defaultBubbleWidth, height: defaultBubbleHeight},
+		},
+		conversationModelState: conversationModelState{
+			historyState:          NewHistoryState(maxBubbleScrollback),
+			queue:                 make([]string, 0),
+			conversationViewport:  conversationViewportState{mode: viewportFollowing},
+			messages:              messages,
+			conversationRetention: retention,
+		},
+		todoModelState: todoModelState{
+			todo: append([]tododomain.Item{}, todo...),
+		},
+		executionPolicyState: executionPolicyState{
+			maxToolCalls:  config.DefaultMaxToolCalls,
+			runtimeConfig: config.DefaultRuntimeConfig(),
+		},
+		agentModelState: agentModelState{
+			subagentsEnabled: true,
+			agentActivity:    make(map[string]AgentActivity),
+		},
+		turnModelState: turnModelState{activity: "ready"},
+	}
+
 	if allTodoCompleted(ui.todo) {
 		ui.todoLifecycle.CompletionFresh = true
 	}
