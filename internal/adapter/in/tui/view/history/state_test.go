@@ -127,3 +127,17 @@ func TestReleaseAlternateRenderCacheDropsRenderedTranscript(t *testing.T) {
 		t.Fatalf("alternate render cache retained state: len=%d valid=%v width=%d", len(state.altRender), state.altRenderValid, state.altRenderWidth)
 	}
 }
+
+func TestResetReleasesCommittedBackingStore(t *testing.T) {
+	state := NewHistoryState(100)
+	state.committed = make([]HistoryCell, 0, 64)
+	state.Append(&AssistantCell{Text: strings.Repeat("x", 1024)})
+	state.Append(&ToolCell{Name: "read", Body: strings.Repeat("y", 1024)})
+	if cap(state.committed) == 0 {
+		t.Fatal("expected committed backing storage before reset")
+	}
+	state.Reset()
+	if state.committed != nil || cap(state.committed) != 0 {
+		t.Fatalf("reset retained committed backing storage: len=%d cap=%d", len(state.committed), cap(state.committed))
+	}
+}

@@ -569,7 +569,7 @@ func (s *HistoryState) CommitActive() {
 }
 
 func (s *HistoryState) Reset() {
-	s.committed = s.committed[:0]
+	s.committed = nil
 	s.active = nil
 	s.touchCommitted()
 	s.touchActive()
