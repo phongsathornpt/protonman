@@ -1014,6 +1014,7 @@ func (m *bubbleModel) updateProviderDeleted(message providerDeletedMsg) (tea.Mod
 		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to remove provider %s: %v", message.providerName, message.err)))
 	} else {
 		delete(m.providers, strings.ToLower(message.providerName))
+		m.modelCatalogs.delete(message.providerName)
 		if strings.EqualFold(m.activeProvider, message.providerName) {
 			m.activeProvider = ""
 			if len(m.providers) > 0 {

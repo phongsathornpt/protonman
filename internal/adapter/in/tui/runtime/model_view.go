@@ -47,6 +47,13 @@ func (s *modelCatalogState) setAt(provider string, models []model.RemoteModel, f
 	s.entries[key] = providerModelCatalog{models: append([]model.RemoteModel(nil), models...), fetchedAt: fetchedAt}
 }
 
+func (s *modelCatalogState) delete(provider string) {
+	if s == nil || s.entries == nil {
+		return
+	}
+	delete(s.entries, normalizeProviderKey(provider))
+}
+
 func (s *modelCatalogState) models(provider string) []model.RemoteModel {
 	if s == nil || s.entries == nil {
 		return nil
