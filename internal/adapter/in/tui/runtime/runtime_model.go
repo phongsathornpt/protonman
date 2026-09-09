@@ -39,76 +39,71 @@ type turnProgress struct {
 }
 
 type bubbleModel struct {
-	ctx                       context.Context
-	service                   *toolcall.Service
-	registry                  tool.Registry
-	skills                    *skill.Registry
-	runner                    app.Conversation
-	bridge                    *permissionBridge
-	agents                    app.Agents
-	agentEvents               <-chan agent.Event
-	agentSnapshot             []agent.AgentStatus
-	agentActivity             map[string]AgentActivity
-	agentHistory              agentui.Tracker
-	turnProgress              turnProgress
-	activeTurnOwner           string
-	workDir                   string
-	viewport                  viewport.Model
-	transcriptViewport        viewport.Model
-	spinner                   spinner.Model
-	help                      help.Model
-	keys                      bubbleKeyMap
-	bottom                    *bottomPane
-	historyState              *HistoryState
-	queue                     []string
-	todo                      []tododomain.Item
-	todoStore                 tododomain.Repository
-	todoRevision              uint64
-	todoLifecycle             todoLifecycleState
-	busy                      bool
-	activity                  string
-	pendingActivity           string
-	planMode                  bool
-	followTail                bool
-	showWelcome               bool
-	showTranscript            bool
-	rawTranscript             bool
-	viewportTailOnly          bool
-	viewportStaleTail         bool
-	viewportCommittedRevision uint64
-	viewportActiveRevision    uint64
-	viewportLineAnchors       []ScrollAnchor
-	nextID                    uint64
-	width                     int
-	height                    int
-	frameChrome               frameChrome
-	welcomeCache              welcomeCardCache
-	layoutGeneration          uint64
-	layoutDirty               bool
-	busyStarted               time.Time
-	turnCancel                context.CancelFunc
-	turnEvents                <-chan tea.Msg
-	messages                  []model.Message
-	conversationRetention     conversation.RetentionPolicy
-	activeModel               string
-	activeProvider            string
-	providers                 map[string]config.ProviderConfig
-	maxToolCalls              int
-	agentProfile              string
-	subagentsEnabled          bool
-	reasoningEffort           sdk.ReasoningEffort
-	sessionID                 string
-	sessions                  *app.Sessions
-	workspaceKey              string
-	modelCatalogs             modelcatalog.State
-	runtimeConfig             config.RuntimeConfig
-	projectTrusted            bool
-	projectConfigSources      []string
-	projectConfigProvenance   map[string]config.ValueSource
-	activeProviderSave        asyncOperationID
-	activeProviderSelect      asyncOperationID
-	activeProviderDelete      asyncOperationID
-	activeModelSelect         asyncOperationID
+	ctx                     context.Context
+	service                 *toolcall.Service
+	registry                tool.Registry
+	skills                  *skill.Registry
+	runner                  app.Conversation
+	bridge                  *permissionBridge
+	agents                  app.Agents
+	agentEvents             <-chan agent.Event
+	agentSnapshot           []agent.AgentStatus
+	agentActivity           map[string]AgentActivity
+	agentHistory            agentui.Tracker
+	turnProgress            turnProgress
+	activeTurnOwner         string
+	workDir                 string
+	viewport                viewport.Model
+	transcriptViewport      viewport.Model
+	spinner                 spinner.Model
+	help                    help.Model
+	keys                    bubbleKeyMap
+	bottom                  *bottomPane
+	historyState            *HistoryState
+	queue                   []string
+	todo                    []tododomain.Item
+	todoStore               tododomain.Repository
+	todoRevision            uint64
+	todoLifecycle           todoLifecycleState
+	busy                    bool
+	activity                string
+	pendingActivity         string
+	planMode                bool
+	conversationViewport    conversationViewportState
+	showWelcome             bool
+	showTranscript          bool
+	rawTranscript           bool
+	nextID                  uint64
+	width                   int
+	height                  int
+	frameChrome             frameChrome
+	welcomeCache            welcomeCardCache
+	layoutGeneration        uint64
+	layoutDirty             bool
+	busyStarted             time.Time
+	turnCancel              context.CancelFunc
+	turnEvents              <-chan tea.Msg
+	messages                []model.Message
+	conversationRetention   conversation.RetentionPolicy
+	activeModel             string
+	activeProvider          string
+	providers               map[string]config.ProviderConfig
+	maxToolCalls            int
+	agentProfile            string
+	subagentsEnabled        bool
+	reasoningEffort         sdk.ReasoningEffort
+	sessionID               string
+	sessions                *app.Sessions
+	workspaceKey            string
+	modelCatalogs           modelcatalog.State
+	runtimeConfig           config.RuntimeConfig
+	projectTrusted          bool
+	projectConfigSources    []string
+	projectConfigProvenance map[string]config.ValueSource
+	activeProviderSave      asyncOperationID
+	activeProviderSelect    asyncOperationID
+	activeProviderDelete    asyncOperationID
+	activeModelSelect       asyncOperationID
 }
 
 type bubbleKeyMap struct {
@@ -142,7 +137,7 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	if len(initialMessages) > 0 {
 		messages = conversation.Retain(model.SnapshotMessages(initialMessages[0]), retention)
 	}
-	ui := &bubbleModel{ctx: ctx, service: service, registry: registry, runner: runner, bridge: bridge, workDir: workDir, viewport: pane, transcriptViewport: transcriptPane, spinner: spin, help: helpView, keys: newBubbleKeyMap(), bottom: bottom, historyState: NewHistoryState(maxBubbleScrollback), queue: make([]string, 0), todo: append([]tododomain.Item{}, todo...), activity: "ready", followTail: true, showWelcome: true, width: defaultBubbleWidth, height: defaultBubbleHeight, messages: messages, conversationRetention: retention, maxToolCalls: config.DefaultMaxToolCalls, subagentsEnabled: true, runtimeConfig: config.DefaultRuntimeConfig(), agentActivity: make(map[string]AgentActivity)}
+	ui := &bubbleModel{ctx: ctx, service: service, registry: registry, runner: runner, bridge: bridge, workDir: workDir, viewport: pane, transcriptViewport: transcriptPane, spinner: spin, help: helpView, keys: newBubbleKeyMap(), bottom: bottom, historyState: NewHistoryState(maxBubbleScrollback), queue: make([]string, 0), todo: append([]tododomain.Item{}, todo...), activity: "ready", conversationViewport: conversationViewportState{followTail: true}, showWelcome: true, width: defaultBubbleWidth, height: defaultBubbleHeight, messages: messages, conversationRetention: retention, maxToolCalls: config.DefaultMaxToolCalls, subagentsEnabled: true, runtimeConfig: config.DefaultRuntimeConfig(), agentActivity: make(map[string]AgentActivity)}
 	if allTodoCompleted(ui.todo) {
 		ui.todoLifecycle.CompletionFresh = true
 	}

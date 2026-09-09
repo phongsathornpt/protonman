@@ -133,7 +133,7 @@ func BenchmarkRefreshViewportStreamingLongHistory(b *testing.B) {
 	m.resize(100, 30)
 	m.showWelcome = false
 	m.busy = true
-	m.followTail = true
+	m.conversationViewport.followTail = true
 	for i := 0; i < 500; i++ {
 		m.historyState.Append(&UserCell{Text: fmt.Sprintf("Question %d with enough text to represent a realistic long session", i)})
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("Answer %d with **markdown**, `code`, and a second line.\nMore detail here.", i)})
@@ -181,7 +181,7 @@ func BenchmarkRefreshViewportScrolledLongHistory(b *testing.B) {
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("Answer %d with **markdown** and `code`.\nMore detail.", i)})
 	}
 	m.refreshViewport()
-	m.followTail = false
+	m.conversationViewport.followTail = false
 	m.viewport.SetYOffset(maxInt(0, m.viewport.TotalLineCount()/2))
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -194,7 +194,7 @@ func BenchmarkViewBusyLongHistory(b *testing.B) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
 	m.resize(100, 30)
 	m.busy = true
-	m.followTail = true
+	m.conversationViewport.followTail = true
 	for i := 0; i < 500; i++ {
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("Answer %d with **markdown** and `code`.", i)})
 	}

@@ -1079,13 +1079,13 @@ func TestRefreshViewportPreservesScrollWhenNotFollowing(t *testing.T) {
 	}
 	model.refreshViewport()
 	model.viewport.GotoTop()
-	model.followTail = false
+	model.conversationViewport.followTail = false
 	model.appendLine("tail")
 	model.refreshViewport()
 	if model.viewport.AtBottom() {
 		t.Fatal("refreshViewport followed the tail after the user scrolled up")
 	}
-	if model.followTail {
+	if model.conversationViewport.followTail {
 		t.Fatal("followTail was re-enabled after a mid-scroll append")
 	}
 }

@@ -396,13 +396,13 @@ func TestViewportTailOnlyHydratesBeforePageUp(t *testing.T) {
 	m.resize(80, 18)
 	m.showWelcome = false
 	m.busy = true
-	m.followTail = true
+	m.conversationViewport.followTail = true
 	for i := 0; i < 40; i++ {
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nmore detail", i)})
 	}
 	m.historyState.AppendAssistantDelta("live one\nlive two\nlive three")
 	m.refreshViewport()
-	if !m.viewportTailOnly {
+	if !m.conversationViewport.tailOnly {
 		t.Fatal("expected streaming follow-tail viewport to use bounded tail content")
 	}
 	tailLines := m.viewport.TotalLineCount()
@@ -411,7 +411,7 @@ func TestViewportTailOnlyHydratesBeforePageUp(t *testing.T) {
 	}
 	updated, _ := m.Update(testKey(tea.KeyPgUp))
 	m = updated.(*bubbleModel)
-	if m.viewportTailOnly {
+	if m.conversationViewport.tailOnly {
 		t.Fatal("page up should hydrate full scrollback")
 	}
 	if m.viewport.TotalLineCount() <= tailLines {
@@ -646,17 +646,17 @@ func TestMouseWheelOnlyScrollsInsideTranscriptViewport(t *testing.T) {
 	}
 	m.refreshViewport()
 	m.viewport.GotoBottom()
-	m.followTail = true
+	m.conversationViewport.followTail = true
 	bottom := m.viewport.YOffset()
 	updated, _ := m.Update(tea.MouseWheelMsg{X: 4, Y: m.viewport.Height() + 1, Button: tea.MouseWheelUp})
 	m = updated.(*bubbleModel)
-	if m.viewport.YOffset() != bottom || !m.followTail {
-		t.Fatalf("wheel over chrome changed viewport: offset=%d want=%d follow=%v", m.viewport.YOffset(), bottom, m.followTail)
+	if m.viewport.YOffset() != bottom || !m.conversationViewport.followTail {
+		t.Fatalf("wheel over chrome changed viewport: offset=%d want=%d follow=%v", m.viewport.YOffset(), bottom, m.conversationViewport.followTail)
 	}
 	updated, _ = m.Update(tea.MouseWheelMsg{X: 4, Y: maxInt(0, m.viewport.Height()-1), Button: tea.MouseWheelUp})
 	m = updated.(*bubbleModel)
-	if m.viewport.YOffset() >= bottom || m.followTail {
-		t.Fatalf("wheel inside transcript did not scroll: offset=%d bottom=%d follow=%v", m.viewport.YOffset(), bottom, m.followTail)
+	if m.viewport.YOffset() >= bottom || m.conversationViewport.followTail {
+		t.Fatalf("wheel inside transcript did not scroll: offset=%d bottom=%d follow=%v", m.viewport.YOffset(), bottom, m.conversationViewport.followTail)
 	}
 }
 
@@ -668,14 +668,14 @@ func TestScrolledViewportDefersActiveTailRefreshUntilScroll(t *testing.T) {
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nmore detail", i)})
 	}
 	m.refreshViewport()
-	m.followTail = false
+	m.conversationViewport.followTail = false
 	m.viewport.SetYOffset(maxInt(1, m.viewport.TotalLineCount()/3))
 	beforeLines := m.viewport.TotalLineCount()
 	beforeOffset := m.viewport.YOffset()
 
 	m.historyState.AppendAssistantDelta("live one\nlive two\nlive three")
 	m.refreshViewport()
-	if !m.viewportStaleTail {
+	if !m.conversationViewport.staleTail {
 		t.Fatal("expected off-screen active tail to be deferred while scrolled")
 	}
 	if m.viewport.TotalLineCount() != beforeLines || m.viewport.YOffset() != beforeOffset {
@@ -690,7 +690,7 @@ func TestPageDownHydratesDeferredTail(t *testing.T) {
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nmore detail", i)})
 	}
 	m.refreshViewport()
-	m.followTail = false
+	m.conversationViewport.followTail = false
 	m.viewport.SetYOffset(maxInt(1, m.viewport.TotalLineCount()/3))
 	beforeLines := m.viewport.TotalLineCount()
 	m.historyState.AppendAssistantDelta("live one\nlive two\nlive three")
@@ -698,7 +698,7 @@ func TestPageDownHydratesDeferredTail(t *testing.T) {
 
 	updated, _ := m.Update(testKey(tea.KeyPgDown))
 	m = updated.(*bubbleModel)
-	if m.viewportStaleTail || m.viewportTailOnly {
+	if m.conversationViewport.staleTail || m.conversationViewport.tailOnly {
 		t.Fatal("page down should hydrate deferred full scrollback")
 	}
 	if m.viewport.TotalLineCount() <= beforeLines {
@@ -744,7 +744,7 @@ func TestScrollingRendersSingleComposer(t *testing.T) {
 	}
 	m.refreshViewport()
 	m.viewport.GotoBottom()
-	m.followTail = true
+	m.conversationViewport.followTail = true
 
 	updated, _ := m.Update(testKey(tea.KeyPgUp))
 	m = updated.(*bubbleModel)

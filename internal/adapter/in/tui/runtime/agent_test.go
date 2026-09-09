@@ -415,10 +415,10 @@ func TestRelayoutDoesNotReenableFollowTailAfterUserScroll(t *testing.T) {
 	m.relayout()
 	m.viewport.GotoBottom()
 	m.viewport.ScrollUp(1)
-	m.followTail = false
+	m.conversationViewport.followTail = false
 	m.todo = nil
 	m.relayout()
-	if m.followTail {
+	if m.conversationViewport.followTail {
 		t.Fatal("relayout re-enabled follow tail after explicit user scroll")
 	}
 }
@@ -434,7 +434,7 @@ func TestRefreshViewportPreservesLogicalAnchorAcrossCellExpansion(t *testing.T) 
 	}
 	m.refreshViewport()
 	m.viewport.SetYOffset(10)
-	m.followTail = false
+	m.conversationViewport.followTail = false
 	before := strings.Split(ansi.Strip(m.viewport.View()), "\n")[0]
 	run.Activity = "search TDZ"
 	m.historyState.TouchAgentRun("worker-1")
@@ -443,7 +443,7 @@ func TestRefreshViewportPreservesLogicalAnchorAcrossCellExpansion(t *testing.T) 
 	if after != before {
 		t.Fatalf("logical scroll anchor moved: before=%q after=%q", before, after)
 	}
-	if m.followTail {
+	if m.conversationViewport.followTail {
 		t.Fatal("content expansion re-enabled follow tail")
 	}
 }
@@ -463,7 +463,7 @@ func TestScrolledViewportSurvivesLiveAgentChromeStress(t *testing.T) {
 	m.relayout()
 	m.viewport.GotoBottom()
 	m.viewport.ScrollUp(7)
-	m.followTail = false
+	m.conversationViewport.followTail = false
 	firstSemanticLine := func() string {
 		for _, line := range strings.Split(ansi.Strip(m.viewport.View()), "\n") {
 			if trimmed := strings.TrimSpace(line); trimmed != "" {
@@ -485,7 +485,7 @@ func TestScrolledViewportSurvivesLiveAgentChromeStress(t *testing.T) {
 				t.Fatalf("%s line width=%d terminal=%d: %q", stage, got, m.width, line)
 			}
 		}
-		if m.followTail {
+		if m.conversationViewport.followTail {
 			t.Fatalf("%s unexpectedly re-enabled follow tail", stage)
 		}
 		if got := firstSemanticLine(); got != firstVisible {
@@ -524,7 +524,7 @@ func TestScrolledViewportSurvivesLiveAgentChromeStress(t *testing.T) {
 		updated, _ = m.Update(testKey(tea.KeyPgDown))
 		m = updated.(*bubbleModel)
 	}
-	if !m.followTail {
+	if !m.conversationViewport.followTail {
 		t.Fatal("explicit page down to bottom did not re-enable follow tail")
 	}
 }

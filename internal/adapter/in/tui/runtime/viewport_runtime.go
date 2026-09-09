@@ -5,15 +5,24 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+type conversationViewportState struct {
+	followTail        bool
+	tailOnly          bool
+	staleTail         bool
+	committedRevision uint64
+	activeRevision    uint64
+	lineAnchors       []ScrollAnchor
+}
+
 func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
-	if m.historyState != nil && !scroll.follow && !m.viewportTailOnly {
+	if m.historyState != nil && !scroll.follow && !m.conversationViewport.tailOnly {
 		committedRevision, activeRevision := m.historyState.Revisions()
-		if committedRevision == m.viewportCommittedRevision {
+		if committedRevision == m.conversationViewport.committedRevision {
 			// The user is reading older content and only the mutable tail changed.
 			// Keep the viewport buffer stable until they scroll again instead of
 			// rebuilding the entire transcript for invisible streaming deltas.
-			m.viewportStaleTail = activeRevision != m.viewportActiveRevision
-			m.followTail = false
+			m.conversationViewport.staleTail = activeRevision != m.conversationViewport.activeRevision
+			m.conversationViewport.followTail = false
 			if m.showTranscript {
 				m.refreshTranscriptViewport(false)
 			}
@@ -30,7 +39,7 @@ func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
 		content = m.fullViewportContent()
 	}
 	m.setViewportContent(content, !tailOnly)
-	m.viewportTailOnly = tailOnly
+	m.conversationViewport.tailOnly = tailOnly
 	m.restoreViewportScroll(scroll)
 	if m.showTranscript {
 		m.refreshTranscriptViewport(false)
@@ -39,10 +48,10 @@ func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
 
 func (m *bubbleModel) setViewportContent(content string, fullHistory bool) {
 	m.viewport.SetContent(content)
-	m.viewportStaleTail = false
-	m.viewportLineAnchors = nil
+	m.conversationViewport.staleTail = false
+	m.conversationViewport.lineAnchors = nil
 	if m.historyState != nil {
-		m.viewportCommittedRevision, m.viewportActiveRevision = m.historyState.Revisions()
+		m.conversationViewport.committedRevision, m.conversationViewport.activeRevision = m.historyState.Revisions()
 	}
 	if !fullHistory || m.historyState == nil {
 		return
@@ -52,17 +61,17 @@ func (m *bubbleModel) setViewportContent(content string, fullHistory bool) {
 		return
 	}
 	prefix := m.historyViewportPrefixLines()
-	m.viewportLineAnchors = make([]ScrollAnchor, prefix+len(historyAnchors))
-	copy(m.viewportLineAnchors[prefix:], historyAnchors)
+	m.conversationViewport.lineAnchors = make([]ScrollAnchor, prefix+len(historyAnchors))
+	copy(m.conversationViewport.lineAnchors[prefix:], historyAnchors)
 }
 
 func (m *bubbleModel) captureViewportScroll() viewportScrollSnapshot {
-	scroll := viewportScrollSnapshot{follow: m.followTail, yOffset: m.viewport.YOffset()}
-	if scroll.follow || m.viewportTailOnly || m.historyState == nil {
+	scroll := viewportScrollSnapshot{follow: m.conversationViewport.followTail, yOffset: m.viewport.YOffset()}
+	if scroll.follow || m.conversationViewport.tailOnly || m.historyState == nil {
 		return scroll
 	}
-	if m.viewport.YOffset() >= 0 && m.viewport.YOffset() < len(m.viewportLineAnchors) {
-		scroll.anchor = m.viewportLineAnchors[m.viewport.YOffset()]
+	if m.viewport.YOffset() >= 0 && m.viewport.YOffset() < len(m.conversationViewport.lineAnchors) {
+		scroll.anchor = m.conversationViewport.lineAnchors[m.viewport.YOffset()]
 		_, scroll.anchorValid = m.historyState.ResolveScrollAnchor(scroll.anchor)
 		if scroll.anchorValid {
 			return scroll
@@ -79,14 +88,11 @@ func (m *bubbleModel) captureViewportScroll() viewportScrollSnapshot {
 
 func (m *bubbleModel) restoreViewportScroll(scroll viewportScrollSnapshot) {
 	if scroll.follow {
-		before := m.viewport.YOffset()
 		m.viewport.GotoBottom()
-		if m.viewport.YOffset() != before {
-		}
-		m.followTail = true
+		m.conversationViewport.followTail = true
 		return
 	}
-	m.followTail = false
+	m.conversationViewport.followTail = false
 	yOffset := scroll.yOffset
 	if scroll.anchorValid && m.historyState != nil {
 		if historyLine, ok := m.historyState.ResolveScrollAnchor(scroll.anchor); ok {
@@ -118,23 +124,20 @@ func (m *bubbleModel) fullViewportContent() string {
 }
 
 func (m *bubbleModel) hydrateViewportForScroll() {
-	if !m.viewportTailOnly && !m.viewportStaleTail {
+	if !m.conversationViewport.tailOnly && !m.conversationViewport.staleTail {
 		return
 	}
 	scroll := m.captureViewportScroll()
 	m.setViewportContent(m.fullViewportContent(), true)
-	m.viewportTailOnly = false
+	m.conversationViewport.tailOnly = false
 	m.restoreViewportScroll(scroll)
 }
 
 func (m *bubbleModel) updateConversationViewport(message tea.Msg) tea.Cmd {
 	m.hydrateViewportForScroll()
-	before := m.viewport.YOffset()
 	updated, command := m.viewport.Update(message)
 	m.viewport = updated
-	if m.viewport.YOffset() != before {
-	}
-	m.followTail = m.viewport.AtBottom()
+	m.conversationViewport.followTail = m.viewport.AtBottom()
 	return command
 }
 
@@ -143,13 +146,10 @@ func (m *bubbleModel) scrollConversationLines(delta int) {
 		return
 	}
 	m.hydrateViewportForScroll()
-	before := m.viewport.YOffset()
 	if delta < 0 {
 		m.viewport.ScrollUp(-delta)
 	} else {
 		m.viewport.ScrollDown(delta)
 	}
-	if m.viewport.YOffset() != before {
-	}
-	m.followTail = m.viewport.AtBottom()
+	m.conversationViewport.followTail = m.viewport.AtBottom()
 }
