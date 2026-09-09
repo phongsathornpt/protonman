@@ -273,7 +273,7 @@ func TestDelegateTaskPrefersContextParentID(t *testing.T) {
 	defer coord.Close()
 
 	handler := NewDelegateTask(coord, "fallback-parent")
-	ctx := agent.WithParentID(context.Background(), "turn-7")
+	ctx := agent.WithTurnRef(context.Background(), agent.TurnRef{TurnID: "turn-7"})
 	args, _ := json.Marshal(map[string]any{"profile": "agility", "task": "inspect"})
 	call, _ := tool.NewCall("call-context-parent", "subagent", args)
 	res, err := handler.Execute(ctx, call)

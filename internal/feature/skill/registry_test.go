@@ -58,7 +58,7 @@ func TestRegistry(t *testing.T) {
 	if reg.IsActivated("pdf-tool") {
 		t.Errorf("skill should not be activated initially")
 	}
-	reg.MarkActivated("pdf-tool")
+	reg.Activate("pdf-tool")
 	if !reg.IsActivated("pdf-tool") {
 		t.Errorf("skill should be marked activated")
 	}
@@ -91,7 +91,7 @@ func TestRegistry(t *testing.T) {
 	}
 
 	// Test ActiveSkills and ResetActivated
-	reg.MarkActivated("PDF-TOOL")
+	reg.Activate("PDF-TOOL")
 	if !reg.IsActivated("pdf-tool") {
 		t.Errorf("expected skill to be active via case-insensitive check")
 	}
@@ -114,7 +114,7 @@ func TestRegistryForkIsolatesActivationState(t *testing.T) {
 		Name: "go-review", Description: "Review Go code", Scope: ScopeUser,
 		Instructions: "Run focused Go checks.",
 	})
-	parent.MarkActivated("go-review")
+	parent.Activate("go-review")
 
 	child := parent.Fork()
 	if child == nil {
@@ -127,7 +127,7 @@ func TestRegistryForkIsolatesActivationState(t *testing.T) {
 		t.Fatal("child lost shared skill catalog")
 	}
 
-	child.MarkActivated("go-review")
+	child.Activate("go-review")
 	child.Deactivate("go-review")
 	if !parent.IsActivated("go-review") {
 		t.Fatal("child activation changes leaked to parent")

@@ -339,6 +339,9 @@ func TestDeleteUserProviderConfig(t *testing.T) {
 	if snapshot.Model.Provider != "opencode" {
 		t.Fatalf("expected default provider to fall back to opencode, got: %q", snapshot.Model.Provider)
 	}
+	if snapshot.Model.Default != "" {
+		t.Fatalf("expected stale model to be cleared after active provider deletion, got: %q", snapshot.Model.Default)
+	}
 
 	// Verify permissions
 	configFile := filepath.Join(homeDir, ".protonman", "config.toml")

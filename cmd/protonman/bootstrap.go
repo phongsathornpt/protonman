@@ -66,6 +66,10 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	if err != nil {
 		return nil, fmt.Errorf("load configuration: %w", err)
 	}
+	if reconciled, changed := config.ReconcileModelSelection(loadedConfig.Model, loadedConfig.Providers); changed {
+		fmt.Fprintf(os.Stderr, "warning: saved model provider %q is unavailable; using provider %q and requiring model selection\n", loadedConfig.Model.Provider, reconciled.Provider)
+		loadedConfig.Model = reconciled
+	}
 	for _, warning := range loadedConfig.Warnings {
 		fmt.Fprintln(os.Stderr, "warning:", warning)
 	}
@@ -240,7 +244,9 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 			return nil, fmt.Errorf("restore session %q: %w", sessionID, err)
 		}
 		for _, name := range state.ActiveSkills {
-			skillRegistry.MarkActivated(name)
+			if activateErr := skillRegistry.Activate(name); activateErr != nil {
+				return nil, fmt.Errorf("restore active skill %q: %w", name, activateErr)
+			}
 		}
 	}
 	if options.yolo {

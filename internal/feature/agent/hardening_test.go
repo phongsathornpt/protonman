@@ -56,7 +56,7 @@ func TestCoordinatorStressParentMailboxIsolation(t *testing.T) {
 	}
 	for parent := 0; parent < 8; parent++ {
 		parentID := fmt.Sprintf("turn-%d", parent)
-		result, err := coord.WaitActivityForParent(context.Background(), parentID, time.Second)
+		result, err := coord.WaitActivityForTurn(context.Background(), TurnRef{TurnID: parentID}, time.Second)
 		if err != nil {
 			t.Fatalf("wait %s: %v", parentID, err)
 		}
@@ -132,7 +132,7 @@ func TestCoordinatorEmitsRedactedLifecycleMetrics(t *testing.T) {
 		}),
 	)
 	defer coord.Close()
-	if _, err := coord.WaitActivityForParent(context.Background(), "empty-parent", 5*time.Millisecond); err != nil {
+	if _, err := coord.WaitActivityForTurn(context.Background(), TurnRef{TurnID: "empty-parent"}, 5*time.Millisecond); err != nil {
 		t.Fatalf("wait timeout: %v", err)
 	}
 	handle, err := coord.Spawn(context.Background(), Request{ParentID: "metrics", Profile: ProfileAgility, Task: "finish"})

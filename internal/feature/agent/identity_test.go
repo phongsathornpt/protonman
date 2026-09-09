@@ -9,9 +9,9 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
 )
 
-func TestTurnRefContextPreservesSessionThroughParentCompatibility(t *testing.T) {
+func TestTurnRefContextPreservesSessionAndTurn(t *testing.T) {
 	ctx := WithTurnRef(context.Background(), TurnRef{SessionID: " session-a ", TurnID: " turn-1 "})
-	ctx = WithParentID(ctx, "turn-2")
+	ctx = WithTurnRef(ctx, TurnRef{SessionID: "session-a", TurnID: "turn-2"})
 	got := TurnRefFromContext(ctx)
 	if got != (TurnRef{SessionID: "session-a", TurnID: "turn-2"}) {
 		t.Fatalf("TurnRefFromContext() = %#v", got)

@@ -22,13 +22,6 @@ func (s *HistoryState) CompleteTool(completed ToolCell) {
 	s.CompleteToolCall(completed.CallID, completed.Name, &completed)
 }
 
-// CompleteToolCell is the name-based compatibility path used by legacy tests.
-// Runtime tool events should use CompleteToolCall so parallel calls of the same
-// tool cannot be confused.
-func (s *HistoryState) CompleteToolCell(name string, completed HistoryCell) {
-	s.CompleteToolCall("", name, completed)
-}
-
 func (s *HistoryState) DiscardToolCall(callID string, name string) bool {
 	if s == nil {
 		return false

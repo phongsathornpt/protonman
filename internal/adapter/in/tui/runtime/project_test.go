@@ -54,7 +54,7 @@ func TestProjectCommandShowsUntrustedLocalResources(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(protonDir, "skills", "local"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(appdirs.ProjectConfig(m.workDir), []byte("[agent]\nprofile = \"dex\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(appdirs.ProjectConfig(m.workDir), []byte("[agent]\nprofile = \"intelligence\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(protonDir, "skills", "local", "SKILL.md"), []byte("# Local"), 0o644); err != nil {
@@ -71,14 +71,6 @@ func TestProjectCommandShowsUntrustedLocalResources(t *testing.T) {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("project pane missing %q: %q", want, rendered)
 		}
-	}
-}
-
-func TestProjectLegacyProtonAliasStillWorks(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.workDir = t.TempDir()
-	if cmd := m.executeCommand("/proton status"); cmd == nil {
-		t.Fatal("legacy /proton alias did not start project discovery")
 	}
 }
 

@@ -1430,7 +1430,7 @@ func TestCoordinatorCancelByParentScopesCancellation(t *testing.T) {
 }
 
 func TestParentIDContextRoundTrip(t *testing.T) {
-	ctx := WithParentID(context.Background(), " turn-42 ")
+	ctx := WithTurnRef(context.Background(), TurnRef{TurnID: " turn-42 "})
 	if got := ParentIDFromContext(ctx); got != "turn-42" {
 		t.Fatalf("ParentIDFromContext()=%q", got)
 	}
@@ -1591,7 +1591,7 @@ func TestWaitActivityForParentIgnoresUnrelatedActivity(t *testing.T) {
 	defer coord.Close()
 
 	coord.recordActivity(Event{Kind: EventAgentCompleted, AgentID: "agent-a", ParentID: "turn-a"})
-	wr, err := coord.WaitActivityForParent(context.Background(), "turn-b", 20*time.Millisecond)
+	wr, err := coord.WaitActivityForTurn(context.Background(), TurnRef{TurnID: "turn-b"}, 20*time.Millisecond)
 	if err != nil {
 		t.Fatalf("WaitActivityForParent() error = %v", err)
 	}
@@ -1599,7 +1599,7 @@ func TestWaitActivityForParentIgnoresUnrelatedActivity(t *testing.T) {
 		t.Fatalf("unrelated activity woke scoped wait: %+v", wr)
 	}
 
-	wr, err = coord.WaitActivityForParent(context.Background(), "turn-a", time.Second)
+	wr, err = coord.WaitActivityForTurn(context.Background(), TurnRef{TurnID: "turn-a"}, time.Second)
 	if err != nil {
 		t.Fatalf("WaitActivityForParent() error = %v", err)
 	}

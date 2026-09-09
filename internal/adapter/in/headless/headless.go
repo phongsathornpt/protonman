@@ -315,7 +315,9 @@ func (r *Runner) handleSkillsCommand(argument string, parts []string, output io.
 		})
 	}
 
-	r.skills.MarkActivated(s.Name)
+	if err := r.skills.Activate(s.Name); err != nil {
+		return err
+	}
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "[x] Activated skill %s [%s]: %s", s.Name, s.Scope, s.Description)
 	if len(s.Resources) > 0 {

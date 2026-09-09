@@ -129,7 +129,11 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 		m.refreshViewport()
 		return nil
 	}
-	m.skills.MarkActivated(s.Name)
+	if err := m.skills.Activate(s.Name); err != nil {
+		m.appendError(err.Error())
+		m.refreshViewport()
+		return nil
+	}
 	m.appendLine(fmt.Sprintf("[x] Activated skill %s [%s]: %s", s.Name, s.Scope, s.Description))
 	if len(s.Resources) > 0 {
 		m.appendLine("Bundled resources:")

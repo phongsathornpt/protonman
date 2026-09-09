@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
@@ -72,9 +73,14 @@ func DeleteUserProviderConfig(homeDir string, providerName string) error {
 
 		if strings.EqualFold(doc.Model.Provider, providerKey) {
 			doc.Model.Provider = ""
-			for remaining := range doc.Providers {
-				doc.Model.Provider = remaining
-				break
+			doc.Model.Default = ""
+			remaining := make([]string, 0, len(doc.Providers))
+			for name := range doc.Providers {
+				remaining = append(remaining, name)
+			}
+			sort.Strings(remaining)
+			if len(remaining) > 0 {
+				doc.Model.Provider = remaining[0]
 			}
 		}
 	})

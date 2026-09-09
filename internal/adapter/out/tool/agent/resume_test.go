@@ -31,7 +31,7 @@ func TestResumeAgentStartsFreshChild(t *testing.T) {
 
 	handler := NewResumeAgent(coord)
 	call, _ := tool.NewCall("resume-1", "subagent", json.RawMessage(`{"agent_id":"strength-2"}`))
-	ctx := agent.WithParentID(context.Background(), "new-turn")
+	ctx := agent.WithTurnRef(context.Background(), agent.TurnRef{TurnID: "new-turn"})
 	res, err := handler.Execute(ctx, call)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)

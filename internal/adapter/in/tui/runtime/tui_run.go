@@ -105,6 +105,8 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		// latest controls even when Bubble Tea exits through the crash screen so a
 		// restart cannot silently restore stale config defaults.
 		agentRuntime.capture(bModel)
+		ui.modelConfig.Default = bModel.activeModel
+		ui.modelConfig.Provider = bModel.activeProvider
 		ui.finalAgentProfile = bModel.agentProfile
 		ui.finalReasoningEffort = bModel.reasoningEffort
 

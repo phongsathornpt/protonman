@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -87,7 +88,7 @@ func TestSystemPromptForProfileBehaviorContracts(t *testing.T) {
 		ProfileIntelligence: {"deep engineering and reasoning subagent", "invariants and constraints", "Compare viable solutions", "material risks"},
 	}
 	for profile, markers := range checks {
-		prompt := SystemPromptForProfile(profile)
+		prompt := prompt.Render(prompt.Spec{Role: RolePromptForProfile(profile), Profile: string(profile)})
 		for _, marker := range markers {
 			if !strings.Contains(prompt, marker) {
 				t.Errorf("profile %s missing behavior marker %q", profile, marker)
@@ -137,7 +138,7 @@ func TestDefaultSystemPromptGroundsCodingToolUse(t *testing.T) {
 
 func TestProfilePromptsIncludeSharedToolContract(t *testing.T) {
 	for _, profile := range SupportedProfiles() {
-		prompt := SystemPromptForProfile(profile)
+		prompt := prompt.Render(prompt.Spec{Role: RolePromptForProfile(profile), Profile: string(profile)})
 		if !strings.Contains(prompt, "Tool identifiers are exact") {
 			t.Fatalf("profile %q missing shared tool contract", profile)
 		}

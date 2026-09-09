@@ -1115,7 +1115,7 @@ func TestLoopDynamicActiveSkillsWithRegistry(t *testing.T) {
 	}
 
 	reg := skill.NewRegistry(s1, s2)
-	reg.MarkActivated("active-skill")
+	reg.Activate("active-skill")
 
 	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithSkillRegistry(reg))
 

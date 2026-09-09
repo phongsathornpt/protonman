@@ -59,11 +59,6 @@ func (c *Coordinator) WaitActivity(ctx context.Context, timeout time.Duration) (
 	return c.waitActivity(ctx, TurnRef{}, nil, timeout)
 }
 
-// WaitActivityForParent is the compatibility wrapper for turn-only callers.
-func (c *Coordinator) WaitActivityForParent(ctx context.Context, parentID string, timeout time.Duration) (ActivityWaitResult, error) {
-	return c.WaitActivityForTurn(ctx, TurnRef{TurnID: parentID}, timeout)
-}
-
 // WaitActivityForTurn consumes the next ordered activity batch for one turn.
 func (c *Coordinator) WaitActivityForTurn(ctx context.Context, ref TurnRef, timeout time.Duration) (ActivityWaitResult, error) {
 	return c.waitActivity(ctx, ref.normalized(), nil, timeout)

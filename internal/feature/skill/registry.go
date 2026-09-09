@@ -152,11 +152,6 @@ func (r *Registry) Activate(name string) error {
 	return nil
 }
 
-// MarkActivated records a skill using legacy unreported activation semantics.
-func (r *Registry) MarkActivated(name string) {
-	_ = r.Activate(name)
-}
-
 func activeSkillCount(active map[string]bool) int {
 	count := 0
 	for _, enabled := range active {

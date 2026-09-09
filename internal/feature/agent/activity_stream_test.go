@@ -150,7 +150,7 @@ func TestRecordActivityCompactsRetainedPayload(t *testing.T) {
 		Message: strings.Repeat("m", runtimepolicy.AgentActivityMessageBytes+1024),
 		Call:    &call, Err: errors.New(strings.Repeat("e", runtimepolicy.AgentActivityErrorBytes+1024)),
 	})
-	result, err := coord.WaitActivityForParent(context.Background(), "turn-1", time.Second)
+	result, err := coord.WaitActivityForTurn(context.Background(), TurnRef{TurnID: "turn-1"}, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}

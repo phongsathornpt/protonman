@@ -166,8 +166,8 @@ func TestE2EAgentWaitIsScopedToParentTurn(t *testing.T) {
 	)
 	defer coord.Close()
 	service := agentLifecycleService(t, coord)
-	ctxA := agent.WithParentID(context.Background(), "turn-a")
-	ctxB := agent.WithParentID(context.Background(), "turn-b")
+	ctxA := agent.WithTurnRef(context.Background(), agent.TurnRef{TurnID: "turn-a"})
+	ctxB := agent.WithTurnRef(context.Background(), agent.TurnRef{TurnID: "turn-b"})
 
 	spawnA := callAgentToolContext(t, ctxA, service, "spawn-a", "subagent", map[string]any{"action": "spawn", "profile": "agility", "task": "parent A"})
 	spawnB := callAgentToolContext(t, ctxB, service, "spawn-b", "subagent", map[string]any{"action": "spawn", "profile": "agility", "task": "parent B"})

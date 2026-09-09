@@ -388,7 +388,7 @@ func TestSlashSkills(t *testing.T) {
 		}
 	})
 	t.Run("unified skill commands and deactivation verbs", func(t *testing.T) {
-		model.skills.MarkActivated("pdf-processing")
+		model.skills.Activate("pdf-processing")
 		model.executeCommand("/skill active")
 		if !strings.Contains(model.viewport.View(), "Active Agent Skills (1):") {
 			t.Fatalf("expected /skill active to list active skills")
@@ -476,7 +476,7 @@ func TestSlashSkills(t *testing.T) {
 		}
 	})
 	t.Run("new command resets active skills", func(t *testing.T) {
-		model.skills.MarkActivated("pdf-processing")
+		model.skills.Activate("pdf-processing")
 		if !model.skills.IsActivated("pdf-processing") {
 			t.Fatal("expected skill to be active")
 		}
@@ -841,7 +841,7 @@ func TestHistoryStateTrimO1(t *testing.T) {
 func TestStatusBarNeverWrapsOn80Columns(t *testing.T) {
 	model := newTestSkillsModel(t, 5)
 	model.resize(80, 24)
-	model.skills.MarkActivated("skill-with-a-very-long-descriptive-name")
+	model.skills.Activate("skill-with-a-very-long-descriptive-name")
 	info := model.infoView()
 	lines := strings.Split(info, "\n")
 	if len(lines) > 1 {
