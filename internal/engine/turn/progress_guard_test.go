@@ -84,7 +84,7 @@ func TestLoopIgnoresToolCallAfterNoProgressDetection(t *testing.T) {
 func TestProgressGuardMutationResetsReadObservation(t *testing.T) {
 	guard := newProgressGuard([]tool.Definition{
 		{Name: "read", Kind: tool.KindRead},
-		{Name: "write_file", Kind: tool.KindEdit},
+		{Name: "edit", Kind: tool.KindEdit},
 	}, 2)
 	read := executedCall{
 		call:   tool.Call{ID: "r1", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)},
@@ -100,8 +100,8 @@ func TestProgressGuardMutationResetsReadObservation(t *testing.T) {
 	}
 
 	write := executedCall{
-		call:   tool.Call{ID: "w1", Name: "write_file", Arguments: json.RawMessage(`{"path":"a.txt","content":"new"}`)},
-		result: tool.Result{CallID: "w1", ToolName: "write_file", Output: "written"},
+		call:   tool.Call{ID: "w1", Name: "edit", Arguments: json.RawMessage(`{"action":"write","path":"a.txt","content":"new"}`)},
+		result: tool.Result{CallID: "w1", ToolName: "edit", Output: "written"},
 	}
 	if stalled, err := guard.observeRound([]executedCall{write}); err != nil || stalled {
 		t.Fatalf("write stalled=%v err=%v", stalled, err)

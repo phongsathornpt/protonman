@@ -10,7 +10,7 @@ import (
 
 func TestVerificationStateTracksMutationAndVerifierOrder(t *testing.T) {
 	defs := []tool.Definition{
-		{Name: "write_file", Kind: tool.KindEdit, Mutability: tool.MutabilityMutating},
+		{Name: "edit", Kind: tool.KindEdit, Mutability: tool.MutabilityMutating},
 		{Name: "bash", Kind: tool.KindBash, Mutability: tool.MutabilityMutating},
 	}
 	state := VerificationState{}
@@ -18,7 +18,7 @@ func TestVerificationStateTracksMutationAndVerifierOrder(t *testing.T) {
 	if state.Mutated || state.Verified {
 		t.Fatalf("pre-mutation verifier changed state: %#v", state)
 	}
-	state.observe([]executedCall{successfulToolCall(t, "write_file", `{}`)}, defs)
+	state.observe([]executedCall{successfulToolCall(t, "edit", `{"action":"write"}`)}, defs)
 	if !state.Mutated || state.Verified {
 		t.Fatalf("mutation state = %#v, want mutated/unverified", state)
 	}
@@ -29,11 +29,11 @@ func TestVerificationStateTracksMutationAndVerifierOrder(t *testing.T) {
 }
 func TestVerificationStateFailedVerifierAndLaterMutationReset(t *testing.T) {
 	defs := []tool.Definition{
-		{Name: "write_file", Kind: tool.KindEdit, Mutability: tool.MutabilityMutating},
+		{Name: "edit", Kind: tool.KindEdit, Mutability: tool.MutabilityMutating},
 		{Name: "bash", Kind: tool.KindBash, Mutability: tool.MutabilityMutating},
 	}
 	state := VerificationState{}
-	state.observe([]executedCall{successfulToolCall(t, "write_file", `{}`)}, defs)
+	state.observe([]executedCall{successfulToolCall(t, "edit", `{"action":"write"}`)}, defs)
 	failed := successfulBashCall(t, "go test ./...")
 	failed.err = errors.New("tests failed")
 	state.observe([]executedCall{failed}, defs)
@@ -44,7 +44,7 @@ func TestVerificationStateFailedVerifierAndLaterMutationReset(t *testing.T) {
 	if !state.Verified {
 		t.Fatalf("successful verifier did not verify: %#v", state)
 	}
-	state.observe([]executedCall{successfulToolCall(t, "write_file", `{}`)}, defs)
+	state.observe([]executedCall{successfulToolCall(t, "edit", `{"action":"write"}`)}, defs)
 	if state.Verified || state.Verifier != "" {
 		t.Fatalf("later mutation did not reset verifier: %#v", state)
 	}

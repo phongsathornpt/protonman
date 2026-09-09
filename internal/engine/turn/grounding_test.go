@@ -71,9 +71,9 @@ func TestGroundingRestrictsToolsUntilSuccessfulWorkspaceEvidence(t *testing.T) {
 	}}
 	client.profile.Capabilities.ToolChoiceRequired = modelprofile.SupportYes
 	loop := newGroundingLoop(t, client, groundingRegistry{
-		"read":     groundingHandler{definition: tool.Definition{Name: "read", Description: "read", Kind: tool.KindRead, Evidence: tool.EvidenceWorkspace}},
-		"get_todo": groundingHandler{definition: tool.Definition{Name: "get_todo", Description: "tasks", Kind: tool.KindTask}},
-		"bash":     groundingHandler{definition: tool.Definition{Name: "bash", Description: "shell", Kind: tool.KindBash, Mutability: tool.MutabilityMutating}},
+		"read": groundingHandler{definition: tool.Definition{Name: "read", Description: "read", Kind: tool.KindRead, Evidence: tool.EvidenceWorkspace}},
+		"todo": groundingHandler{definition: tool.Definition{Name: "todo", Description: "tasks", Kind: tool.KindTask}},
+		"bash": groundingHandler{definition: tool.Definition{Name: "bash", Description: "shell", Kind: tool.KindBash, Mutability: tool.MutabilityMutating}},
 	}, WithGroundingEvidence(tool.EvidenceWorkspace))
 
 	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect repo"}}, nil); err != nil {
@@ -88,7 +88,7 @@ func TestGroundingRestrictsToolsUntilSuccessfulWorkspaceEvidence(t *testing.T) {
 	if client.requests[0].Options.ToolChoice != sdk.ToolChoiceRequired {
 		t.Fatalf("grounding tool choice = %q, want required", client.requests[0].Options.ToolChoice)
 	}
-	if got := toolNames(client.requests[1].Tools); !containsTool(got, "get_todo") || !containsTool(got, "bash") || !containsTool(got, "read") {
+	if got := toolNames(client.requests[1].Tools); !containsTool(got, "todo") || !containsTool(got, "bash") || !containsTool(got, "read") {
 		t.Fatalf("post-grounding tools = %#v, want full registry", got)
 	}
 	if client.requests[1].Options.ToolChoice != sdk.ToolChoiceAuto {
@@ -174,7 +174,7 @@ func TestGroundingFailedEvidenceDoesNotSatisfyState(t *testing.T) {
 func TestGroundingRequiresAvailableEvidenceTools(t *testing.T) {
 	client := &scriptedClient{}
 	loop := newGroundingLoop(t, client, groundingRegistry{
-		"get_todo": groundingHandler{definition: tool.Definition{Name: "get_todo", Description: "tasks", Kind: tool.KindTask}},
+		"todo": groundingHandler{definition: tool.Definition{Name: "todo", Description: "tasks", Kind: tool.KindTask}},
 	}, WithGroundingEvidence(tool.EvidenceWorkspace))
 	_, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect"}}, nil)
 	if !errors.Is(err, ErrGroundingUnavailable) {
