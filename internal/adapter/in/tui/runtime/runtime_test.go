@@ -753,3 +753,22 @@ func TestScrollingRendersSingleComposer(t *testing.T) {
 		t.Fatalf("scrolled live view height=%d exceeds terminal height=%d", got, m.height)
 	}
 }
+
+func TestCommandHistoryClearsDroppedBackingSlots(t *testing.T) {
+	pane := newBottomPane(false)
+	for i := 0; i <= maxCommandHistory; i++ {
+		pane.recordHistory(fmt.Sprintf("cmd-%d", i))
+	}
+	if got := len(pane.composer.history); got != maxCommandHistory {
+		t.Fatalf("history len=%d, want %d", got, maxCommandHistory)
+	}
+	if got := pane.composer.history[0]; got != "cmd-1" {
+		t.Fatalf("oldest retained history=%q, want cmd-1", got)
+	}
+	if cap(pane.composer.history) > len(pane.composer.history) {
+		backing := pane.composer.history[:len(pane.composer.history)+1]
+		if backing[len(pane.composer.history)] != "" {
+			t.Fatalf("dropped backing slot still retains %q", backing[len(pane.composer.history)])
+		}
+	}
+}

@@ -127,7 +127,9 @@ func (p *bottomPane) recordHistory(line string) {
 	p.composer.history = append(p.composer.history, line)
 	if overflow := len(p.composer.history) - maxCommandHistory; overflow > 0 {
 		copy(p.composer.history, p.composer.history[overflow:])
-		p.composer.history = p.composer.history[:maxCommandHistory]
+		newLen := len(p.composer.history) - overflow
+		clear(p.composer.history[newLen:])
+		p.composer.history = p.composer.history[:newLen]
 	}
 	p.composer.historyPos = len(p.composer.history)
 	p.composer.draft = ""
