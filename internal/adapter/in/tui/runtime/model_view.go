@@ -130,6 +130,7 @@ func (m *bubbleModel) resize(width int, height int) {
 	}
 	m.width = width
 	m.height = height
+	m.help.SetWidth(maxInt(1, width-2))
 	prompt := m.bottom.prompt()
 	prompt.SetWidth(maxInt(1, width-4))
 	m.syncPromptHeight()

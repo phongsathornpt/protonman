@@ -574,14 +574,10 @@ func (m bubbleModel) shortcutHint() string {
 	if m.slashOpen() {
 		return mutedStyle.Render("tab accept · enter run · esc close · ↑↓ move")
 	}
-	switch layoutModeForHeight(m.height) {
-	case layoutTiny:
-		return mutedStyle.Render(shortcutHelp(m.keys.Submit) + " · " + shortcutHelp(m.keys.Quit))
-	case layoutCompact:
-		return mutedStyle.Render(shortcutHelp(m.keys.Submit) + " · " + shortcutHelp(m.keys.ToggleModel) + " · " + shortcutHelp(m.keys.Quit))
-	default:
-		return mutedStyle.Render("enter send · ctrl+j newline · /help")
-	}
+	helpView := m.help
+	helpView.ShowAll = false
+	helpView.SetWidth(maxInt(1, m.width-2))
+	return helpView.View(m.keys)
 }
 
 func (m *bubbleModel) cycleMode() {

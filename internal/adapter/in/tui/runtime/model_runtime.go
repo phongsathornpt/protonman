@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"charm.land/bubbles/v2/cursor"
+	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textarea"
@@ -65,6 +66,7 @@ type bubbleModel struct {
 	viewport                  viewport.Model
 	transcriptViewport        viewport.Model
 	spinner                   spinner.Model
+	help                      help.Model
 	keys                      bubbleKeyMap
 	bottom                    *bottomPane
 	historyState              *HistoryState
@@ -127,6 +129,7 @@ type bubbleModel struct {
 
 type bubbleKeyMap struct {
 	Submit       key.Binding
+	Newline      key.Binding
 	Clear        key.Binding
 	Quit         key.Binding
 	PageUp       key.Binding
@@ -147,12 +150,15 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	transcriptPane := viewport.New(viewport.WithWidth(defaultBubbleWidth-8), viewport.WithHeight(defaultBubbleHeight-8))
 	disableViewportKeys(&transcriptPane)
 	bottom := newBottomPane(runner != nil)
+	helpView := help.New()
+	helpView.SetWidth(defaultBubbleWidth - 2)
+	helpView.ShortSeparator = glyphSep
 	messages := []model.Message(nil)
 	retention := conversation.DefaultRetentionPolicy()
 	if len(initialMessages) > 0 {
 		messages = conversation.Retain(model.SnapshotMessages(initialMessages[0]), retention)
 	}
-	ui := &bubbleModel{ctx: ctx, service: service, registry: registry, runner: runner, bridge: bridge, workDir: workDir, viewport: pane, transcriptViewport: transcriptPane, spinner: spin, keys: newBubbleKeyMap(), bottom: bottom, historyState: NewHistoryState(maxBubbleScrollback), queue: make([]string, 0), todo: append([]TodoItem{}, todo...), activity: "ready", followTail: true, showWelcome: true, width: defaultBubbleWidth, height: defaultBubbleHeight, messages: messages, conversationRetention: retention, maxToolCalls: config.DefaultMaxToolCalls, subagentsEnabled: true, runtimeConfig: config.DefaultRuntimeConfig(), agentActivity: make(map[string]AgentActivity)}
+	ui := &bubbleModel{ctx: ctx, service: service, registry: registry, runner: runner, bridge: bridge, workDir: workDir, viewport: pane, transcriptViewport: transcriptPane, spinner: spin, help: helpView, keys: newBubbleKeyMap(), bottom: bottom, historyState: NewHistoryState(maxBubbleScrollback), queue: make([]string, 0), todo: append([]TodoItem{}, todo...), activity: "ready", followTail: true, showWelcome: true, width: defaultBubbleWidth, height: defaultBubbleHeight, messages: messages, conversationRetention: retention, maxToolCalls: config.DefaultMaxToolCalls, subagentsEnabled: true, runtimeConfig: config.DefaultRuntimeConfig(), agentActivity: make(map[string]AgentActivity)}
 	if allTodoCompleted(ui.todo) {
 		ui.todoLifecycle.CompletionFresh = true
 	}
@@ -176,7 +182,15 @@ func disableViewportKeys(pane *viewport.Model) {
 }
 
 func newBubbleKeyMap() bubbleKeyMap {
-	return bubbleKeyMap{Submit: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send")), Clear: key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear")), Quit: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")), PageUp: key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "scroll")), PageDown: key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "scroll")), ToggleTodo: key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o", "todos")), Transcript: key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "transcript")), CycleMode: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "mode")), ToggleSkills: key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "skills")), ToggleModel: key.NewBinding(key.WithKeys("ctrl+p", "alt+m"), key.WithHelp("ctrl+p", "model"))}
+	return bubbleKeyMap{Submit: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send")), Newline: key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("ctrl+j", "newline")), Clear: key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear")), Quit: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")), PageUp: key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "scroll")), PageDown: key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "scroll")), ToggleTodo: key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o", "todos")), Transcript: key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "transcript")), CycleMode: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "mode")), ToggleSkills: key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "skills")), ToggleModel: key.NewBinding(key.WithKeys("ctrl+p", "alt+m"), key.WithHelp("ctrl+p", "model"))}
+}
+
+func (k bubbleKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Submit, k.Newline, k.ToggleModel, k.Quit}
+}
+
+func (k bubbleKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{{k.Submit, k.Newline, k.Clear, k.Quit}, {k.PageUp, k.PageDown, k.ToggleTodo, k.Transcript}, {k.CycleMode, k.ToggleSkills, k.ToggleModel}}
 }
 
 func (m *bubbleModel) Init() tea.Cmd {
