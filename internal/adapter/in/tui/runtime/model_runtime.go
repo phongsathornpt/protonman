@@ -620,7 +620,7 @@ func (m *bubbleModel) matchesGlobalShortcut(message tea.KeyMsg) bool {
 
 func (m *bubbleModel) handleInterruptKey() (tea.Model, tea.Cmd) {
 	if m.showTranscript {
-		m.showTranscript = false
+		m.closeTranscriptOverlay()
 		m.relayout()
 		return m, nil
 	}

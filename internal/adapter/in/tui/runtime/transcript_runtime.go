@@ -438,6 +438,17 @@ func editPresentation(call tool.Call) (string, []string) {
 	return summary, paths
 }
 
+func (m *bubbleModel) closeTranscriptOverlay() {
+	if m == nil {
+		return
+	}
+	m.showTranscript = false
+	if m.historyState != nil {
+		m.historyState.ReleaseAlternateRenderCache()
+	}
+	m.transcriptViewport.SetContent("")
+}
+
 func (m *bubbleModel) refreshTranscriptViewport(forceTail bool) {
 	if m.historyState == nil {
 		return
@@ -470,15 +481,18 @@ func (m *bubbleModel) transcriptOverlayView() string {
 
 func (m *bubbleModel) updateTranscriptKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(message, m.keys.Transcript) {
-		m.showTranscript = false
+		m.closeTranscriptOverlay()
 		return m, nil
 	}
 	switch message.String() {
 	case "esc", "q":
-		m.showTranscript = false
+		m.closeTranscriptOverlay()
 		return m, nil
 	case "r":
 		m.rawTranscript = !m.rawTranscript
+		if m.rawTranscript && m.historyState != nil {
+			m.historyState.ReleaseAlternateRenderCache()
+		}
 		m.refreshTranscriptViewport(false)
 		return m, nil
 	case "pgup":

@@ -773,3 +773,20 @@ func TestCommandHistoryClearsDroppedBackingSlots(t *testing.T) {
 		}
 	}
 }
+
+func TestClosingTranscriptOverlayReleasesViewportContent(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.appendAssistant("retained transcript sentinel")
+	m.showTranscript = true
+	m.refreshTranscriptViewport(true)
+	if got := m.transcriptViewport.View(); !strings.Contains(got, "retained transcript sentinel") {
+		t.Fatalf("transcript overlay missing content before close: %q", got)
+	}
+	m.closeTranscriptOverlay()
+	if m.showTranscript {
+		t.Fatal("transcript overlay remained open")
+	}
+	if got := m.transcriptViewport.View(); strings.Contains(got, "retained transcript sentinel") {
+		t.Fatalf("closed transcript overlay retained content: %q", got)
+	}
+}

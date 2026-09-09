@@ -114,3 +114,16 @@ func TestDiscardToolCallClearsRemovedBackingSlot(t *testing.T) {
 		t.Fatalf("removed backing slot still retains %#v", backing[2])
 	}
 }
+
+func TestReleaseAlternateRenderCacheDropsRenderedTranscript(t *testing.T) {
+	state := NewHistoryState(100)
+	state.Append(&AssistantCell{Text: "cached alternate transcript"})
+	_ = state.RenderLinesAt(40)
+	if len(state.altRender) == 0 || !state.altRenderValid {
+		t.Fatal("expected alternate render cache to be populated")
+	}
+	state.ReleaseAlternateRenderCache()
+	if state.altRender != nil || state.altRenderValid || state.altRenderWidth != 0 {
+		t.Fatalf("alternate render cache retained state: len=%d valid=%v width=%d", len(state.altRender), state.altRenderValid, state.altRenderWidth)
+	}
+}

@@ -230,7 +230,7 @@ func (s *HistoryState) SetSpinnerFrame(frame string) bool {
 			if s.cacheValid && s.cachedWidth == s.renderWidth {
 				s.refreshCachedCommittedCell(index)
 			}
-			s.altRenderValid = false
+			s.invalidateAlternateRenderCache()
 			changed = true
 		}
 	}
@@ -345,7 +345,7 @@ func (s *HistoryState) TouchAgentRun(agentID string) bool {
 		s.touchCommitted()
 	}
 	s.cacheValid = false
-	s.altRenderValid = false
+	s.invalidateAlternateRenderCache()
 	s.renderTextValid = false
 	s.rawTextValid = false
 	return true
@@ -360,7 +360,7 @@ func (s *HistoryState) Append(cell HistoryCell) {
 	s.committedLines += historyCellLineCount(cell, s.renderWidth)
 	s.touchCommitted()
 	s.cacheValid = false
-	s.altRenderValid = false
+	s.invalidateAlternateRenderCache()
 	s.trim()
 }
 
@@ -433,7 +433,7 @@ func (s *HistoryState) DiscardToolCall(callID string, name string) bool {
 		s.active = nil
 		s.touchActive()
 		s.cacheValid = false
-		s.altRenderValid = false
+		s.invalidateAlternateRenderCache()
 		return true
 	}
 	for i := len(s.committed) - 1; i >= 0; i-- {
@@ -447,7 +447,7 @@ func (s *HistoryState) DiscardToolCall(callID string, name string) bool {
 		s.committed = s.committed[:last]
 		s.touchCommitted()
 		s.cacheValid = false
-		s.altRenderValid = false
+		s.invalidateAlternateRenderCache()
 		s.renderTextValid = false
 		s.rawTextValid = false
 		return true
@@ -473,7 +473,7 @@ func (s *HistoryState) CompleteToolCall(callID string, name string, completed Hi
 		s.committedLines += historyCellLineCount(completed, s.renderWidth)
 		s.touchCommitted()
 		s.cacheValid = false
-		s.altRenderValid = false
+		s.invalidateAlternateRenderCache()
 		s.trim()
 		return
 	}
@@ -564,7 +564,7 @@ func (s *HistoryState) CommitActive() {
 	s.touchCommitted()
 	s.touchActive()
 	s.cacheValid = false
-	s.altRenderValid = false
+	s.invalidateAlternateRenderCache()
 	s.trim()
 }
 
@@ -574,7 +574,7 @@ func (s *HistoryState) Reset() {
 	s.touchCommitted()
 	s.touchActive()
 	s.cacheValid = false
-	s.altRenderValid = false
+	s.invalidateAlternateRenderCache()
 	s.cachedRender = nil
 	s.cachedAnchors = nil
 	s.cachedCells = nil
@@ -589,7 +589,23 @@ func (s *HistoryState) Reset() {
 func (s *HistoryState) InvalidateCache() {
 	s.touchCommitted()
 	s.cacheValid = false
+	s.invalidateAlternateRenderCache()
+}
+
+// ReleaseAlternateRenderCache drops the width-specific transcript render cache.
+// The cache only exists to accelerate the transcript overlay and should not
+// retain a second full rendered transcript while that overlay is closed.
+func (s *HistoryState) ReleaseAlternateRenderCache() {
+	if s == nil {
+		return
+	}
+	s.invalidateAlternateRenderCache()
+}
+
+func (s *HistoryState) invalidateAlternateRenderCache() {
+	s.altRender = nil
 	s.altRenderValid = false
+	s.altRenderWidth = 0
 }
 
 func (s *HistoryState) buildCommittedCache() {
@@ -857,7 +873,7 @@ func (s *HistoryState) trim() {
 		s.committed = s.committed[1:]
 		s.committedLines -= historyCellLineCount(popped, s.renderWidth)
 		s.cacheValid = false
-		s.altRenderValid = false
+		s.invalidateAlternateRenderCache()
 	}
 	if s.committedLines < 0 {
 		s.committedLines = 0
