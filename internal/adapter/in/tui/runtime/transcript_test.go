@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transcriptutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -438,6 +439,32 @@ func TestExecCellSeparatesStderrAndStreamTruncation(t *testing.T) {
 	}
 	if strings.Contains(raw, "failure: command_failed") {
 		t.Fatalf("raw redundantly exposes command_failed next to exit code:\n%s", raw)
+	}
+}
+
+func TestExecCellHugeMixedOutputStaysBoundedButRawRemainsComplete(t *testing.T) {
+	exit := 1
+	stdout := strings.Repeat("stdout payload ไทย 東京 "+strings.Repeat("x", 80)+"\n", 2000)
+	stderr := strings.Repeat("stderr payload "+strings.Repeat("y", 80)+"\n", 1200)
+	cell := &ExecCell{Name: "bash", Command: "stress-output", Stdout: stdout, Stderr: stderr, ExitCode: &exit}
+	rendered := cell.RenderWidth(40)
+	if len(rendered) > 16 {
+		t.Fatalf("huge mixed output rendered %d viewport lines, want bounded presentation", len(rendered))
+	}
+	joined := testPlain(strings.Join(rendered, "\n"))
+	for _, want := range []string{"more · ctrl+t", "stderr:", "exit 1"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("bounded mixed output missing %q: %q", want, joined)
+		}
+	}
+	for _, line := range rendered {
+		if got := ansi.StringWidth(line); got > 40 {
+			t.Fatalf("huge mixed output line width=%d exceeds 40: %q", got, line)
+		}
+	}
+	raw := strings.Join(cell.RawLines(), "\n")
+	if !strings.Contains(raw, "stdout payload ไทย 東京") || !strings.Contains(raw, "stderr payload") {
+		t.Fatal("raw transcript lost huge stdout/stderr content")
 	}
 }
 

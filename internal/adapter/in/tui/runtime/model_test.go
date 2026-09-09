@@ -1044,6 +1044,38 @@ func TestModelPickerKeepsSelectionAcrossResponsiveResize(t *testing.T) {
 	}
 }
 
+func TestModelPickerFilteredSelectionSurvivesResize(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.resize(100, 28)
+	m.panes.bottom.push(newModelSelectPaneView(m))
+	view := m.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	models := make([]domainmodel.RemoteModel, 24)
+	for i := range models {
+		models[i] = domainmodel.RemoteModel{ID: fmt.Sprintf("model-%02d", i), Name: fmt.Sprintf("Model %02d", i)}
+	}
+	view.setModels(models, "")
+	view.picker.SetFilterText("model-1")
+	view.picker.SetFilterState(list.FilterApplied)
+	view.syncPickerProjection()
+	view.picker.Select(4)
+	selected, ok := view.picker.SelectedItem().(modelListItem)
+	if !ok {
+		t.Fatal("filtered picker has no selection")
+	}
+	want := selected.model.ID
+	for _, size := range [][2]int{{40, 12}, {24, 8}, {120, 32}} {
+		m.resize(size[0], size[1])
+		_ = view.Render(newPaneRenderContext(m))
+		selected, ok = view.picker.SelectedItem().(modelListItem)
+		if !ok || selected.model.ID != want {
+			t.Fatalf("filtered selection after resize %dx%d=%v want %q", size[0], size[1], selected.model.ID, want)
+		}
+		if got := lipgloss.Width(view.Render(newPaneRenderContext(m))); got > size[0] {
+			t.Fatalf("filtered model picker width=%d exceeds %d", got, size[0])
+		}
+	}
+}
+
 func TestModelPickerEnterWhileFilteringSelectsModel(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.executeCommand("/model")

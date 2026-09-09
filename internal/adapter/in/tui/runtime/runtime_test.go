@@ -638,6 +638,45 @@ func TestLargeUnicodePasteRespectsComposerLimitWithoutSubmitting(t *testing.T) {
 	}
 }
 
+func TestComposerUnicodeGraphemeEditingStaysValid(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(28, 12)
+	prompt := m.panes.bottom.prompt()
+	prompt.SetValue("ไทย กั 👨‍💻 東京")
+	prompt.CursorEnd()
+	for i := 0; i < 3; i++ {
+		updated, _ := m.Update(testKey(tea.KeyBackspace))
+		m = updated.(*bubbleModel)
+		if !utf8.ValidString(m.panes.bottom.prompt().Value()) {
+			t.Fatalf("backspace produced invalid UTF-8: %q", m.panes.bottom.prompt().Value())
+		}
+	}
+	if got := lipgloss.Height(m.View().Content); got > 12 {
+		t.Fatalf("unicode edit frame height=%d exceeds terminal", got)
+	}
+}
+
+func TestBashModeBracketedPasteRemainsDraft(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	updated, _ := m.Update(testText("!"))
+	m = updated.(*bubbleModel)
+	if !m.panes.bottom.bashMode() {
+		t.Fatal("! did not enter bash mode")
+	}
+	paste := "printf 'ไทย 東京'\nprintf done"
+	updated, _ = m.Update(tea.PasteMsg{Content: paste})
+	m = updated.(*bubbleModel)
+	if !m.panes.bottom.bashMode() {
+		t.Fatal("paste unexpectedly left bash mode")
+	}
+	if got := m.panes.bottom.prompt().Value(); got != paste {
+		t.Fatalf("bash pasted draft=%q want=%q", got, paste)
+	}
+	if len(m.historyState.Cells()) != 0 {
+		t.Fatalf("bash paste submitted unexpectedly: %#v", m.historyState.Cells())
+	}
+}
+
 func TestMultilinePromptUpMovesCursorInsteadOfRecallingHistory(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	prompt := m.panes.bottom.prompt()

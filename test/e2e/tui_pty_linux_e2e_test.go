@@ -263,6 +263,79 @@ func TestE2ETUIResizeDuringRunningTool(t *testing.T) {
 	}
 }
 
+func TestE2ETUIResizeAndPasteDuringRunningTool(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+	master, slave := openLinuxPTY(t, 72, 18)
+	defer master.Close()
+	defer slave.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, protonBin, "-y")
+	cmd.Dir = ws
+	cmd.Env = append(os.Environ(), "PROTONMAN_HOME="+home, "TERM=xterm-256color")
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start Protonman on PTY: %v", err)
+	}
+	_ = slave.Close()
+
+	var output bytes.Buffer
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		buf := make([]byte, 4096)
+		for {
+			n, err := master.Read(buf)
+			if n > 0 {
+				_, _ = output.Write(buf[:n])
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	time.Sleep(150 * time.Millisecond)
+	_, _ = master.Write([]byte("!for i in $(seq 1 20); do printf 'tick-%02d\\r' $i; sleep 0.03; done; echo live-done"))
+	time.Sleep(30 * time.Millisecond)
+	_, _ = master.Write([]byte{'\r'})
+	time.Sleep(120 * time.Millisecond)
+	_, _ = master.Write([]byte("\x1b[200~draft ไทย 東京\nsecond line\x1b[201~"))
+	for _, size := range []struct{ cols, rows uint16 }{{40, 10}, {100, 30}, {24, 8}, {80, 20}} {
+		if err := unix.IoctlSetWinsize(int(master.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Col: size.cols, Row: size.rows}); err != nil {
+			t.Fatalf("resize PTY during paste/tool to %dx%d: %v", size.cols, size.rows, err)
+		}
+		time.Sleep(35 * time.Millisecond)
+	}
+	time.Sleep(650 * time.Millisecond)
+	view := output.String()
+	for _, want := range []string{"live-done", "draft ไทย 東京", "second line"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("combined PTY stress missing %q: %q", want, view)
+		}
+	}
+	for _, unwanted := range []string{"Protonman crashed", "panic:"} {
+		if strings.Contains(view, unwanted) {
+			t.Fatalf("combined PTY stress contains %q", unwanted)
+		}
+	}
+	_, _ = master.Write([]byte{3})
+	time.Sleep(40 * time.Millisecond)
+	_, _ = master.Write([]byte{3})
+	_ = cmd.Wait()
+	_ = master.Close()
+	select {
+	case <-readDone:
+	case <-time.After(time.Second):
+		t.Fatal("timed out draining combined PTY stress")
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("combined PTY stress timed out: %v", ctx.Err())
+	}
+}
+
 func TestE2ETUIBracketedUnicodePasteSurvivesResize(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
