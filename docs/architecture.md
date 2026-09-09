@@ -82,11 +82,11 @@ Pure business rules and domain definitions. No `domain-ish` parent folder is cre
 ### Outbound (Driven) Infrastructure Adapters
 - `internal/adapter/out/sessionfs/`: File-backed storage implementation of `session.Repository` plus the subagent lifecycle event store; each session is an aggregate directory containing `state.json`, `todo.md`, the compacted agent projection, and the append-only lifecycle journal.
 - `internal/adapter/tool/`: Unified home for **all tool implementations** satisfying `tool.Handler`:
-  - `agent/`: Subagent orchestration tools (`delegate_task`, `wait_agent`, etc.).
+  - `agent/`: Subagent orchestration capability (`subagent`) with spawn/wait/get/list/cancel/resume actions.
   - `builtin/`: Core developer tools (`read`, `edit`, `bash`, `grep`, `find`, `ls`, `git`, `math`).
   - `mcp/`: External Model Context Protocol server discovery and tool registration.
-  - `skill/`: Agent skill activation (`activate_skill`).
-  - `todo/`: Session-bound work tracking tools (`get_todo`, `update_todo`) using durable optimistic concurrency.
+  - `skill/`: Agent skill activation (`skill`).
+  - `todo/`: Session-bound work tracking capability (`todo action=get|update`) using durable optimistic concurrency.
   - `web/`: Network web fetching with sandbox isolation (`web`).
 - `internal/model/`: Provider integration and SDK translation:
   - `provider_preset.go`: Endpoint and protocol presets.
@@ -108,7 +108,7 @@ A session ID is the ownership boundary for conversation state and the agent task
   todo.md
 ```
 
-The CLI resolves the session before constructing stateful tools. TUI/headless bind `get_todo` and `update_todo` to that session's repository; ACP creates a registry overlay per ACP session so task state cannot leak between concurrent sessions. Workspace file tools cannot mutate this private task state. Both session saves and todo patches use durable revisions plus filesystem serialization to reject stale writers.
+The CLI resolves the session before constructing stateful tools. TUI/headless bind `todo action=get|update` to that session's repository; ACP creates a registry overlay per ACP session so task state cannot leak between concurrent sessions. Workspace file tools cannot mutate this private task state. Both session saves and todo patches use durable revisions plus filesystem serialization to reject stale writers.
 
 Runtime namespace resolution is centralized in `internal/app/appdirs` and `internal/base/envconfig`. User-global state uses `~/.protonman/`; project-local state uses `<workspace>/.protonman/`. The filesystem namespace has no `.proton/` fallback.
 

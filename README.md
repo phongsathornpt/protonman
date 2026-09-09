@@ -277,7 +277,7 @@ Protonman uses Dota-style engineering attributes as a single agent vocabulary:
 | `agility` | `AGI` | Fast read-only exploration, tracing, and focused investigation |
 | `intelligence` | `INT` | Deep reasoning, architecture, difficult debugging, concurrency, performance, and high-risk engineering |
 
-`Universal` is the root identity even when subagents are disabled. `delegate_task` accepts only `strength`, `agility`, or `intelligence`; legacy CLI/config/session profile names (`pow`, `int`, `dex`, `worker`, `explorer`, `reviewer`) are normalized for compatibility but are not published in the new tool schema.
+`Universal` is the root identity even when subagents are disabled. `subagent action=spawn` accepts only `strength`, `agility`, or `intelligence`; legacy CLI/config/session profile names (`pow`, `int`, `dex`, `worker`, `explorer`, `reviewer`) are normalized for compatibility but are not published in the new tool schema.
 
 Protonman registers a suite of workspace-safe tools:
 
@@ -290,15 +290,15 @@ Protonman registers a suite of workspace-safe tools:
 | `ls` | Search | List visible directory entries with protected-path filtering and snapshot-bound pagination |
 | `git` | Version Control | Git capability; `action=status` inspects working tree state |
 | `bash` | Execution | Run bounded shell commands with workspace-relative `cwd`, optional `timeout_seconds`, effect analysis, and structured stdout/stderr |
-| `web` | Network | Retrieve remote web pages conforming to sandbox network policy |
-| `activate_skill` | Skills | Dynamically load an Agent Skill's full context into the session |
-| `get_todo` | Tasks | Read the current session-owned task snapshot, durable revision, and session identity |
-| `update_todo` | Tasks | Atomically patch session-owned task state using `expected_revision` from `get_todo`; stale cross-process updates are rejected |
-| `delegate_task` | Multi-Agent | Spawn a persistent background subagent and return its `agent_id` immediately |
-| `wait_agent` | Multi-Agent | Wait briefly for a subagent; wait timeout leaves the child running |
-| `get_agent` | Multi-Agent | Inspect one retained subagent and terminal result |
-| `list_agents` | Multi-Agent | List queued, running, and retained terminal subagents |
-| `cancel_agent` | Multi-Agent | Explicitly cancel a queued or running subagent |
+| `web` | Network | Search the web with `action=search` or fetch a known URL with `action=fetch` under sandbox network policy |
+| `skill` | Skills | Dynamically load an Agent Skill's full context into the session |
+| `todo action=get` | Tasks | Read the current session-owned task snapshot, durable revision, and session identity |
+| `todo action=update` | Tasks | Atomically patch session-owned task state using `expected_revision` from `todo action=get`; stale cross-process updates are rejected |
+| `subagent action=spawn` | Multi-Agent | Spawn a persistent background subagent and return its `agent_id` immediately |
+| `subagent action=wait` | Multi-Agent | Wait briefly for a subagent; wait timeout leaves the child running |
+| `subagent action=get` | Multi-Agent | Inspect one retained subagent and terminal result |
+| `subagent action=list` | Multi-Agent | List queued, running, and retained terminal subagents |
+| `subagent action=cancel` | Multi-Agent | Explicitly cancel a queued or running subagent |
 
 Session state and task plans are private user data, not workspace files. Each session owns an aggregate under `~/.protonman/sessions/<session-id>/`. When `PROTONMAN_HOME` overrides the effective home directory, the same `.protonman/sessions/<session-id>/` layout is created beneath that home:
 
@@ -327,7 +327,7 @@ User-global state lives under `~/.protonman/` and project-local state under `<wo
 
 ### Progressive Disclosure
 1. **Catalog (Tier 1)**: Available skills are summarized as `<available_skills>` in the system prompt (~50-100 tokens per skill).
-2. **Activation (Tier 2)**: When a task matches a skill, the model invokes `activate_skill`, loading full instructions, scripts, and asset references into context on demand.
+2. **Activation (Tier 2)**: When a task matches a skill, the model invokes `skill`, loading full instructions, scripts, and asset references into context on demand.
 3. **Manual Control**: Use `/skills` in the TUI to browse skills, or `/skill <name>` to view and activate a skill manually.
 
 ---
@@ -441,7 +441,7 @@ Execution safety notes:
 - `bash` accepts `command`, optional workspace-relative `cwd`, and optional `timeout_seconds` (1-120). A per-call timeout can shorten but never extend the caller/tool-service deadline.
 - Bash effect analysis is conservative: proven read-only shell commands may run in plan mode, while mutating or unknown commands remain blocked. Simple redirections/composition and common filesystem/git commands publish proven `affected_paths`; unknown scripts remain fail-closed.
 - Bash results preserve compatibility `output` while also exposing bounded `stdout`, `stderr`, per-stream byte counts/truncation flags, exit code, and stable failure codes. Cancellation terminates the command process tree through the sandbox launcher.
-- `subagents_enabled = false` disables new delegation by default. The model no longer sees `delegate_task`; existing children remain inspectable/waitable/cancelable until their retained lifecycle records expire.
+- `subagents_enabled = false` disables new delegation by default. The model cannot use `subagent action=spawn`; existing children remain inspectable/waitable/cancelable through `subagent` lifecycle actions until their retained lifecycle records expire.
 - `/subagents off` applies the same rule at runtime without canceling existing children; `/subagents on` re-enables delegation.
 - `/config set subagents off` persists the user-level default. A trusted project setting still has higher precedence; `/project set subagents ...` controls that project override.
 - Per-profile `[agent.subagents.strength|agility|intelligence]` tables may route children to a different configured provider/model. `provider` and `model` must either both be present or both be omitted.
@@ -449,10 +449,10 @@ Execution safety notes:
 - `reasoning_effort` may be configured with or without a model override. Precedence is profile override -> current global `agent.reasoning_effort`/runtime reasoning -> profile default; `auto`/`default` means inherit.
 - User and trusted-project subagent tables merge field-wise by canonical profile. Project reasoning-only overrides do not erase a user-level model route, and project model-only overrides do not erase user-level reasoning.
 - Configured subagent providers are validated during runtime bootstrap. Missing providers or required credentials fail before delegation starts.
-- `delegate_task` starts work asynchronously. The returned `agent_id` can be used with `wait_agent`, `get_agent`, or `cancel_agent` in the same Protonman session.
+- `subagent action=spawn` starts work asynchronously. The returned `agent_id` can be used with `subagent action=wait`, `subagent action=get`, or `subagent action=cancel` in the same Protonman session.
 - `subagent_queue_timeout` bounds only admission to concurrency/workspace capacity; queueing never consumes the child runtime budget.
-- `subagent_wait_timeout` bounds one `wait_agent` call. Reaching it returns the current `queued`/`running` state and does **not** cancel the child.
-- `subagent_max_runtime` is the hard child-lifetime safety ceiling after execution starts. `delegate_task.timeout_seconds` may request a shorter ceiling but cannot extend the configured maximum.
+- `subagent_wait_timeout` bounds one `subagent action=wait` call. Reaching it returns the current `queued`/`running` state and does **not** cancel the child.
+- `subagent_max_runtime` is the hard child-lifetime safety ceiling after execution starts. `subagent action=spawn` `timeout_seconds` may request a shorter ceiling but cannot extend the configured maximum.
 - `max_live_subagents` prevents unbounded queued/running work; `max_retained_subagents` caps terminal records even inside the TTL window, while `completed_result_ttl` bounds how long results remain queryable.
 - Legacy `subagent_timeout` is accepted as an alias for `subagent_max_runtime` with a deprecation warning.
 - `[runtime]` centralizes model, tool, discovery, web-fetch, and catalog-cache time bounds. The loop refuses construction if every global termination bound is disabled.

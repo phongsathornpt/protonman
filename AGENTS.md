@@ -218,11 +218,11 @@ URLs, provider protocols, or config persistence details.
 
 `internal/adapter/out/tool/agent/CapabilityRegistry` controls what the model sees:
 
-- enabled: publish `delegate_task` and all lifecycle tools
-- disabled with existing live/retained agents: hide `delegate_task`, keep lifecycle tools
+- enabled: publish `subagent`
+- disabled with existing live/retained agents: keep `subagent` visible for lifecycle actions but reject new `action=spawn` work
 - disabled with no existing agents: hide all subagent tools
 
-Lifecycle tools are `wait_agent`, `get_agent`, `list_agents`, `cancel_agent`, and `resume_agent`.
+Lifecycle operations are `subagent action=wait|get|list|cancel|resume`.
 This preserves control over work that existed before delegation was disabled.
 
 The execution boundary also rejects `Spawn` while disabled. Tool visibility is
@@ -235,7 +235,7 @@ Children are coordinator-owned asynchronous runs scoped by session and parent tu
 Lifecycle state is derived from versioned domain events. Durable events are appended
 before lifecycle admission or transition is acknowledged, and restart recovery replays
 the per-session journal before converting process-owned live states to `interrupted`.
-Parent wait timeout does not cancel a child. `wait_agent` observes ordered lifecycle
+Parent wait timeout does not cancel a child. `subagent action=wait` observes ordered lifecycle
 activity for the current turn and reconciles against the current child snapshot.
 Explicit cancellation uses coordinator lifecycle operations. Subagent-scoped registries
 remove agent and task tools, so children cannot spawn nested children or mutate the
@@ -428,7 +428,7 @@ A session ID is the durable ownership boundary for conversation state and tasks:
   todo.md
 ```
 
-`get_todo` and `update_todo` are bound to the active session repository. ACP uses
+`todo action=get|update` is bound to the active session repository. ACP uses
 session-specific registry overlays so concurrent sessions cannot share task state.
 Workspace file tools must not mutate private session task resources.
 
