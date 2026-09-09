@@ -14,7 +14,6 @@ const (
 )
 
 func (m *bubbleModel) submit() tea.Cmd {
-	m.syncLegacyToComponents()
 	prompt := m.bottom.prompt()
 	line := strings.TrimSpace(prompt.Value())
 	if m.bottom.bashMode() {

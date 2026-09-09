@@ -9,8 +9,6 @@ import (
 )
 
 func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	m.syncLegacyToComponents()
-	defer m.syncComponentsToLegacy()
 	switch message := msg.(type) {
 	case agentLifecycleMsg:
 		return m.updateAgentLifecycle(message)

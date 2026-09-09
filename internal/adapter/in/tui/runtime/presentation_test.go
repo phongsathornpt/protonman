@@ -913,18 +913,18 @@ func TestResponsiveUXSurfacesFitTerminal(t *testing.T) {
 func TestPermissionReviewFlowFitsNarrowTerminal(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.busy = true
-	m.modal = &permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "git status --short --branch", Arguments: json.RawMessage(`{"command":"git status --short --branch"}`)}, response: make(chan permissionResponse, 1)}
+	m.openPermission(permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "git status --short --branch", Arguments: json.RawMessage(`{"command":"git status --short --branch"}`)}, response: make(chan permissionResponse, 1)})
 	assertBubbleViewFits(t, m, 24, 12)
 	updated, _ := m.Update(testKey(tea.KeyEsc))
 	m = updated.(*bubbleModel)
 	assertBubbleViewFits(t, m, 24, 12)
-	if !m.modalParked {
+	if !m.permissionView().parked {
 		t.Fatal("esc did not enter transcript review mode")
 	}
 	updated, _ = m.Update(testKey(tea.KeyTab))
 	m = updated.(*bubbleModel)
 	assertBubbleViewFits(t, m, 24, 12)
-	if m.modalParked {
+	if m.permissionView().parked {
 		t.Fatal("tab did not return to permission review")
 	}
 }

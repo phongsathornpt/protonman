@@ -91,9 +91,6 @@ func (m *bubbleModel) resolvePermission(option permissionOption) tea.Cmd {
 	}
 	view.pending.response <- permissionResponse{resolution: resolution}
 	m.bottom.remove(permissionViewID)
-	m.modal = nil
-	m.modalParked = false
-	m.permIndex = 0
 	m.activity = m.pendingActivity
 	if m.activity == "" || m.activity == "waiting for permission" {
 		m.activity = "running tool"

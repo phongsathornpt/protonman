@@ -60,32 +60,3 @@ func (m *bubbleModel) footerView() string {
 	}
 	return ""
 }
-
-func (m *bubbleModel) syncLegacyToComponents() {
-	if m.bottom == nil {
-		return
-	}
-	if m.modal != nil && !m.hasPermissionView() {
-		m.openPermission(*m.modal)
-		if view := m.permissionView(); view != nil {
-			view.parked = m.modalParked
-			view.index = m.permIndex
-		}
-	}
-}
-
-func (m *bubbleModel) syncComponentsToLegacy() {
-	if m.bottom == nil {
-		return
-	}
-	if view := m.permissionView(); view != nil {
-		pending := view.pending
-		m.modal = &pending
-		m.modalParked = view.parked
-		m.permIndex = view.index
-	} else {
-		m.modal = nil
-		m.modalParked = false
-		m.permIndex = 0
-	}
-}

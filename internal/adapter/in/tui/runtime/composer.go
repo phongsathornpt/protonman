@@ -170,9 +170,6 @@ func (p *bottomPane) renderTop(m *bubbleModel) string {
 	if p == nil {
 		return ""
 	}
-	if p.top() == nil && m != nil && m.modal != nil {
-		m.openPermission(*m.modal)
-	}
 	if top := p.top(); top != nil {
 		return top.Render(m)
 	}
