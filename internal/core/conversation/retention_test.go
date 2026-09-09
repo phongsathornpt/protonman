@@ -99,6 +99,35 @@ func TestRetainDoesNotSplitRecentToolGroupAtWindowBoundary(t *testing.T) {
 	}
 }
 
+func TestHistoricalToolResultFastPathDecodesEscapedOutput(t *testing.T) {
+	content := `{"call_id":"c1","tool_name":"read","output":"line 1\nquoted: \"hello\"\tไทย"}`
+	got := historicalToolResultText("read", content, 64*1024)
+	want := "Historical tool read result:\nline 1\nquoted: \"hello\"\tไทย"
+	if got != want {
+		t.Fatalf("historical output = %q, want %q", got, want)
+	}
+}
+
+func TestHistoricalToolResultFastPathHonorsByteLimit(t *testing.T) {
+	const limit = 96
+	content := `{"call_id":"c1","tool_name":"read","output":"` + strings.Repeat("x", 512) + `"}`
+	got := historicalToolResultText("read", content, limit)
+	if len(got) > limit {
+		t.Fatalf("historical output bytes=%d, want <=%d", len(got), limit)
+	}
+	if !strings.Contains(got, "[historical tool output truncated]") {
+		t.Fatalf("historical output missing truncation marker: %q", got)
+	}
+}
+
+func TestHistoricalToolResultFallsBackForFailurePayload(t *testing.T) {
+	content := `{"call_id":"c1","tool_name":"read","error":{"code":"execution_error","message":"boom"}}`
+	got := historicalToolResultText("read", content, 64*1024)
+	if got != "Historical tool read failed [execution_error]: boom" {
+		t.Fatalf("historical failure = %q", got)
+	}
+}
+
 func BenchmarkRetainLongToolHeavyConversation(b *testing.B) {
 	messages := make([]sdk.Message, 0, 800)
 	for i := 0; i < 200; i++ {

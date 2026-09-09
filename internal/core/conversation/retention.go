@@ -4,6 +4,7 @@ package conversation
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -48,8 +49,12 @@ func Retain(messages []sdk.Message, policy RetentionPolicy) []sdk.Message {
 		return nil
 	}
 	messages = compactHistoricalToolGroups(messages, policy.RecentMessages, policy.MaxHistoricalToolResultBytes)
-	retainedBytes := EstimatedBytes(messages)
-	if !exceeds(policy, len(messages), retainedBytes) {
+	countExceeded := policy.MaxMessages > 0 && len(messages) > policy.MaxMessages
+	retainedBytes := 0
+	if !countExceeded && policy.MaxBytes > 0 {
+		retainedBytes = EstimatedBytes(messages)
+	}
+	if !countExceeded && (policy.MaxBytes <= 0 || retainedBytes <= policy.MaxBytes) {
 		return messages
 	}
 	leadingSystems := 0
@@ -129,25 +134,23 @@ func compactHistoricalToolGroups(messages []sdk.Message, recentMessages, resultL
 				out = append(out, text)
 			}
 			next := index + 1
-			results := make(map[string]sdk.Message, len(message.ToolCalls))
-			orderedResults := make([]sdk.Message, 0, len(message.ToolCalls))
 			for next < recentStart && messages[next].Role == sdk.RoleTool {
-				result := messages[next]
-				results[result.ToolCallID] = result
-				orderedResults = append(orderedResults, result)
 				next++
 			}
+			results := messages[index+1 : next]
 			for _, call := range message.ToolCalls {
-				result, found := results[call.ID]
-				out = append(out, historicalToolMessage(call.Name, result, found, resultLimit))
-				delete(results, call.ID)
+				resultIndex := toolResultIndex(results, call.ID)
+				if resultIndex < 0 {
+					out = append(out, historicalToolMessage(call.Name, sdk.Message{}, false, resultLimit))
+					continue
+				}
+				out = append(out, historicalToolMessage(call.Name, results[resultIndex], true, resultLimit))
 			}
-			for _, result := range orderedResults {
-				if _, ok := results[result.ToolCallID]; !ok {
+			for _, result := range results {
+				if toolCallIndex(message.ToolCalls, result.ToolCallID) >= 0 {
 					continue
 				}
 				out = append(out, historicalToolMessage(result.ToolName, result, true, resultLimit))
-				delete(results, result.ToolCallID)
 			}
 			index = next
 			continue
@@ -164,6 +167,24 @@ func compactHistoricalToolGroups(messages []sdk.Message, recentMessages, resultL
 	return out
 }
 
+func toolCallIndex(calls []sdk.ToolCall, callID string) int {
+	for index, call := range calls {
+		if call.ID == callID {
+			return index
+		}
+	}
+	return -1
+}
+
+func toolResultIndex(results []sdk.Message, callID string) int {
+	for index, result := range results {
+		if result.ToolCallID == callID {
+			return index
+		}
+	}
+	return -1
+}
+
 func historicalToolMessage(toolName string, message sdk.Message, found bool, limit int) sdk.Message {
 	name := tool.CanonicalName(strings.TrimSpace(toolName))
 	if name == "" {
@@ -172,21 +193,31 @@ func historicalToolMessage(toolName string, message sdk.Message, found bool, lim
 	if !found {
 		return sdk.Message{Role: sdk.RoleAssistant, Content: fmt.Sprintf("Historical tool %s was requested, but its result is no longer retained.", name)}
 	}
-	content := historicalToolResultText(name, message.Content)
-	if limit > 0 {
-		content = truncateUTF8(content, limit, "[historical tool output truncated]")
-	}
-	return sdk.Message{Role: sdk.RoleAssistant, Content: content}
+	return sdk.Message{Role: sdk.RoleAssistant, Content: historicalToolResultText(name, message.Content, limit)}
 }
 
-func historicalToolResultText(name, content string) string {
+func historicalToolResultText(name, content string, limit int) string {
+	if rawToolName, ok := canonicalJSONStringField(content, "tool_name"); ok {
+		if decodedName, err := strconv.Unquote(rawToolName); err == nil {
+			if canonical := tool.CanonicalName(strings.TrimSpace(decodedName)); canonical != "" {
+				name = canonical
+			}
+		}
+	}
+	if !canonicalJSONHasNonNullField(content, "error") {
+		if rawOutput, ok := canonicalJSONStringField(content, "output"); ok {
+			if output, ok := historicalOutputFromJSONString(name, rawOutput, limit); ok {
+				return output
+			}
+		}
+	}
 	var result tool.Result
 	if err := json.Unmarshal([]byte(content), &result); err == nil && (result.ToolName != "" || result.CallID != "" || result.Failure != nil) {
 		if canonical := tool.CanonicalName(strings.TrimSpace(result.ToolName)); canonical != "" {
 			name = canonical
 		}
 		if result.Failure != nil {
-			return fmt.Sprintf("Historical tool %s failed [%s]: %s", name, result.Failure.Code, result.Failure.Message)
+			return truncateUTF8(fmt.Sprintf("Historical tool %s failed [%s]: %s", name, result.Failure.Code, result.Failure.Message), limit, "[historical tool output truncated]")
 		}
 		output := strings.TrimSpace(result.Output)
 		if output == "" {
@@ -198,12 +229,188 @@ func historicalToolResultText(name, content string) string {
 		if output == "" {
 			return fmt.Sprintf("Historical tool %s completed with no text output.", name)
 		}
-		return fmt.Sprintf("Historical tool %s result:\n%s", name, output)
+		return truncateUTF8(fmt.Sprintf("Historical tool %s result:\n%s", name, output), limit, "[historical tool output truncated]")
 	}
 	if text := strings.TrimSpace(content); text != "" {
-		return fmt.Sprintf("Historical tool %s result:\n%s", name, text)
+		return truncateUTF8(fmt.Sprintf("Historical tool %s result:\n%s", name, text), limit, "[historical tool output truncated]")
 	}
 	return fmt.Sprintf("Historical tool %s completed with no text output.", name)
+}
+
+func canonicalJSONFieldValueStart(content, field string) (int, bool) {
+	needle := `"` + field + `":`
+	searchFrom := 0
+	for searchFrom < len(content) {
+		relative := strings.Index(content[searchFrom:], needle)
+		if relative < 0 {
+			return 0, false
+		}
+		index := searchFrom + relative
+		before := index - 1
+		for before >= 0 && (content[before] == ' ' || content[before] == '\t' || content[before] == '\n' || content[before] == '\r') {
+			before--
+		}
+		if before < 0 || content[before] == '{' || content[before] == ',' {
+			start := index + len(needle)
+			for start < len(content) && (content[start] == ' ' || content[start] == '\t' || content[start] == '\n' || content[start] == '\r') {
+				start++
+			}
+			return start, start < len(content)
+		}
+		searchFrom = index + len(needle)
+	}
+	return 0, false
+}
+
+func canonicalJSONStringField(content, field string) (string, bool) {
+	start, ok := canonicalJSONFieldValueStart(content, field)
+	if !ok || content[start] != '"' {
+		return "", false
+	}
+	for end := start + 1; end < len(content); end++ {
+		if content[end] == '\\' {
+			end++
+			continue
+		}
+		if content[end] == '"' {
+			return content[start : end+1], true
+		}
+	}
+	return "", false
+}
+
+func canonicalJSONHasNonNullField(content, field string) bool {
+	start, ok := canonicalJSONFieldValueStart(content, field)
+	if !ok {
+		return false
+	}
+	return !strings.HasPrefix(content[start:], "null")
+}
+
+func historicalOutputFromJSONString(name, raw string, limit int) (string, bool) {
+	if len(raw) < 2 || raw[0] != '"' || raw[len(raw)-1] != '"' {
+		return "", false
+	}
+	prefix := "Historical tool " + name + " result:\n"
+	marker := "[historical tool output truncated]"
+	decodedLen, valid := decodedJSONStringLen(raw)
+	if !valid {
+		return "", false
+	}
+	maxOutput := 0
+	if limit > 0 {
+		maxOutput = limit - len(prefix)
+		if maxOutput <= 0 {
+			return truncateUTF8(prefix, limit, marker), true
+		}
+	}
+	willTruncate := maxOutput > 0 && decodedLen > maxOutput
+	var out strings.Builder
+	grow := len(prefix) + decodedLen
+	if limit > 0 && grow > limit {
+		grow = limit
+	}
+	if grow > 0 {
+		out.Grow(grow)
+	}
+	out.WriteString(prefix)
+	written := 0
+	truncated := false
+	rest := raw[1 : len(raw)-1]
+	for rest != "" {
+		escape := strings.IndexByte(rest, '\\')
+		plain := rest
+		if escape >= 0 {
+			plain = rest[:escape]
+		}
+		if plain != "" {
+			room := len(plain)
+			if willTruncate {
+				room = maxOutput - written - len(marker) - 1
+			} else if maxOutput > 0 {
+				room = maxOutput - written
+			}
+			if room < len(plain) {
+				if room <= 0 {
+					truncated = true
+					break
+				}
+				cut := room
+				for cut > 0 && !utf8.ValidString(plain[:cut]) {
+					cut--
+				}
+				out.WriteString(plain[:cut])
+				written += cut
+				truncated = true
+				break
+			}
+			out.WriteString(plain)
+			written += len(plain)
+			rest = rest[len(plain):]
+		}
+		if rest == "" {
+			break
+		}
+		r, _, tail, err := strconv.UnquoteChar(rest, '"')
+		if err != nil {
+			return "", false
+		}
+		runeBytes := utf8.RuneLen(r)
+		if runeBytes < 0 {
+			runeBytes = 3
+		}
+		reserve := 0
+		if willTruncate {
+			reserve = len(marker) + 1
+		}
+		if maxOutput > 0 && written+runeBytes+reserve > maxOutput {
+			truncated = true
+			break
+		}
+		out.WriteRune(r)
+		written += runeBytes
+		rest = tail
+	}
+	if truncated {
+		out.WriteByte('\n')
+		out.WriteString(marker)
+	}
+	value := out.String()
+	body := strings.TrimSpace(value[len(prefix):])
+	if body == "" {
+		return "", false
+	}
+	if len(body) == len(value)-len(prefix) {
+		return value, true
+	}
+	return prefix + body, true
+}
+
+func decodedJSONStringLen(raw string) (int, bool) {
+	if len(raw) < 2 || raw[0] != '"' || raw[len(raw)-1] != '"' {
+		return 0, false
+	}
+	rest := raw[1 : len(raw)-1]
+	total := 0
+	for rest != "" {
+		escape := strings.IndexByte(rest, '\\')
+		if escape < 0 {
+			return total + len(rest), true
+		}
+		total += escape
+		rest = rest[escape:]
+		r, _, tail, err := strconv.UnquoteChar(rest, '"')
+		if err != nil {
+			return 0, false
+		}
+		runeBytes := utf8.RuneLen(r)
+		if runeBytes < 0 {
+			runeBytes = 3
+		}
+		total += runeBytes
+		rest = tail
+	}
+	return total, true
 }
 
 func truncateUTF8(value string, limit int, marker string) string {
