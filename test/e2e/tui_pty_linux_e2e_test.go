@@ -17,71 +17,87 @@ import (
 )
 
 func TestE2ETUIStartupAndExitWithRealPTY(t *testing.T) {
-	ws := newTestWorkspace(t)
-	home := newTestHome(t)
-	master, slave := openLinuxPTY(t, 120, 40)
-	defer master.Close()
-	defer slave.Close()
+	for _, size := range []struct {
+		name       string
+		cols, rows uint16
+	}{
+		{name: "narrow", cols: 40, rows: 12},
+		{name: "normal", cols: 80, rows: 24},
+		{name: "wide", cols: 120, rows: 40},
+	} {
+		t.Run(size.name, func(t *testing.T) {
+			ws := newTestWorkspace(t)
+			home := newTestHome(t)
+			master, slave := openLinuxPTY(t, size.cols, size.rows)
+			defer master.Close()
+			defer slave.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, protonBin)
-	cmd.Dir = ws
-	cmd.Env = append(os.Environ(), "PROTONMAN_HOME="+home, "TERM=xterm-256color")
-	if coverDir != "" {
-		cmd.Env = append(cmd.Env, "GOCOVERDIR="+coverDir)
-	}
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, protonBin)
+			cmd.Dir = ws
+			cmd.Env = append(os.Environ(), "PROTONMAN_HOME="+home, "TERM=xterm-256color")
+			if coverDir != "" {
+				cmd.Env = append(cmd.Env, "GOCOVERDIR="+coverDir)
+			}
+			cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
+			cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
 
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("start Protonman on PTY: %v", err)
-	}
-	_ = slave.Close()
+			if err := cmd.Start(); err != nil {
+				t.Fatalf("start Protonman on PTY: %v", err)
+			}
+			_ = slave.Close()
 
-	var output bytes.Buffer
-	firstOutput := make(chan struct{})
-	readDone := make(chan struct{})
-	go func() {
-		defer close(readDone)
-		buf := make([]byte, 4096)
-		signaled := false
-		for {
-			n, err := master.Read(buf)
-			if n > 0 {
-				_, _ = output.Write(buf[:n])
-				if !signaled {
-					close(firstOutput)
-					signaled = true
+			var output bytes.Buffer
+			firstOutput := make(chan struct{})
+			readDone := make(chan struct{})
+			go func() {
+				defer close(readDone)
+				buf := make([]byte, 4096)
+				signaled := false
+				for {
+					n, err := master.Read(buf)
+					if n > 0 {
+						_, _ = output.Write(buf[:n])
+						if !signaled {
+							close(firstOutput)
+							signaled = true
+						}
+					}
+					if err != nil {
+						return
+					}
+				}
+			}()
+
+			select {
+			case <-firstOutput:
+			case <-time.After(2 * time.Second):
+				t.Fatal("timed out waiting for TUI output on PTY")
+			}
+			if _, err := master.Write([]byte{3}); err != nil {
+				t.Fatalf("send Ctrl+C to PTY: %v", err)
+			}
+			if err := cmd.Wait(); err != nil && ctx.Err() != nil {
+				t.Fatalf("TUI did not exit before timeout: %v", err)
+			}
+			_ = master.Close()
+			select {
+			case <-readDone:
+			case <-time.After(time.Second):
+				t.Fatal("timed out draining PTY output")
+			}
+
+			view := output.String()
+			if !strings.Contains(view, "Protonman") && !strings.Contains(view, "\x1b[") {
+				t.Fatalf("PTY did not receive TUI output: %q", view)
+			}
+			for _, unwanted := range []string{"Protonman crashed", "panic:"} {
+				if strings.Contains(view, unwanted) {
+					t.Fatalf("PTY output contains %q at %dx%d: %q", unwanted, size.cols, size.rows, view)
 				}
 			}
-			if err != nil {
-				return
-			}
-		}
-	}()
-
-	select {
-	case <-firstOutput:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for TUI output on PTY")
-	}
-	if _, err := master.Write([]byte{3}); err != nil {
-		t.Fatalf("send Ctrl+C to PTY: %v", err)
-	}
-	if err := cmd.Wait(); err != nil && ctx.Err() != nil {
-		t.Fatalf("TUI did not exit before timeout: %v", err)
-	}
-	_ = master.Close()
-	select {
-	case <-readDone:
-	case <-time.After(time.Second):
-		t.Fatal("timed out draining PTY output")
-	}
-
-	view := output.String()
-	if !strings.Contains(view, "Protonman") && !strings.Contains(view, "\x1b[") {
-		t.Fatalf("PTY did not receive TUI output: %q", view)
+		})
 	}
 }
 
