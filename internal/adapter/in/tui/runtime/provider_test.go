@@ -573,7 +573,7 @@ func TestProviderViewFetchAndModelSelectionFlow(t *testing.T) {
 	if view.state != providerStateSaving {
 		t.Fatalf("expected saving state on selection Enter, got %v", view.state)
 	}
-	updated, _ = bModel.Update(providerSavedMsg{providerName: "protonman", baseURL: "https://protonman.dev/api/v1", modelID: "glm-5.3-flash", activated: true})
+	updated, _ = bModel.Update(providerSavedMsg{operationID: bModel.activeProviderSave, providerName: "protonman", baseURL: "https://protonman.dev/api/v1", modelID: "glm-5.3-flash", activated: true})
 	bModel = updated.(*bubbleModel)
 	transcript := bModel.viewport.View()
 	if !strings.Contains(transcript, "Configured provider protonman") || !strings.Contains(transcript, "glm-5.3-flash") {
@@ -1031,5 +1031,69 @@ func TestProviderSelectFilteredSelectionUsesVisibleItem(t *testing.T) {
 	selected, ok := msg.(providerActiveSelectedMsg)
 	if !ok || selected.providerName != "beta" {
 		t.Fatalf("filtered enter selected %#v; want beta", msg)
+	}
+}
+
+func TestProviderFetchResultDoesNotCrossReopenedPane(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	old := newProviderPaneView()
+	m.bottom.push(old)
+	_ = old.beginFetch(m.ctx)
+	oldID := old.fetchRequestID
+	m.bottom.remove(providerViewID)
+
+	fresh := newProviderPaneView()
+	m.bottom.push(fresh)
+	if fresh.fetchRequestID != 0 {
+		t.Fatalf("new pane fetch id = %d, want 0", fresh.fetchRequestID)
+	}
+
+	updated, _ := m.Update(modelsFetchedMsg{
+		providerName: "stale",
+		requestID:    oldID,
+		models:       []model.RemoteModel{{ID: "stale-model"}},
+	})
+	m = updated.(*bubbleModel)
+	fresh = m.bottom.find(providerViewID).(*providerPaneView)
+	if fresh.state != providerStateInput || len(fresh.models) != 0 {
+		t.Fatalf("stale result mutated reopened pane: state=%v models=%v", fresh.state, fresh.models)
+	}
+}
+
+func TestStaleProviderSaveDoesNotCloseReopenedEditor(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	oldID := nextAsyncOperationID()
+	m.activeProviderSave = oldID
+	m.pushProviderPane(newProviderPaneView())
+	if m.activeProviderSave != 0 {
+		t.Fatalf("reopened editor did not invalidate prior save: %d", m.activeProviderSave)
+	}
+
+	updated, _ := m.Update(providerSavedMsg{operationID: oldID, providerName: "stale", activated: true})
+	m = updated.(*bubbleModel)
+	if m.activeProvider == "stale" {
+		t.Fatal("stale provider save changed active provider")
+	}
+	if !m.bottom.has(providerViewID) {
+		t.Fatal("stale provider save closed reopened editor")
+	}
+}
+
+func TestStaleProviderSelectionDoesNotCloseReopenedPicker(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	oldID := nextAsyncOperationID()
+	m.activeProviderSelect = oldID
+	m.bottom.push(newProviderSelectPaneView(m))
+	if m.activeProviderSelect != 0 {
+		t.Fatalf("reopened provider picker did not invalidate prior selection: %d", m.activeProviderSelect)
+	}
+
+	updated, _ := m.Update(providerActiveSelectedMsg{operationID: oldID, providerName: "stale"})
+	m = updated.(*bubbleModel)
+	if m.activeProvider == "stale" {
+		t.Fatal("stale provider selection changed active provider")
+	}
+	if !m.bottom.has(providerSelectViewID) {
+		t.Fatal("stale provider selection closed reopened picker")
 	}
 }

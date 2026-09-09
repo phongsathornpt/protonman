@@ -22,7 +22,7 @@ func (v *modelSelectPaneView) beginFetch(parent context.Context, providerName st
 	}
 	ctx, cancel := context.WithCancel(parent)
 	v.fetchCancel = cancel
-	v.fetchRequestID++
+	v.fetchRequestID = nextAsyncOperationID()
 	v.loading = true
 	v.err = nil
 	v.models = nil

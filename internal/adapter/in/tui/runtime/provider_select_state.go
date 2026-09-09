@@ -14,11 +14,13 @@ const providerSelectViewID = "provider_select"
 const maxProviderListRows = 5
 
 type providerActiveSelectedMsg struct {
+	operationID  asyncOperationID
 	providerName string
 	err          error
 }
 
 type providerDeletedMsg struct {
+	operationID  asyncOperationID
 	providerName string
 	err          error
 }
@@ -110,6 +112,10 @@ func (v *providerSelectPaneView) initPicker() {
 }
 
 func newProviderSelectPaneView(m *bubbleModel) *providerSelectPaneView {
+	if m != nil {
+		m.activeProviderSelect = 0
+		m.activeProviderDelete = 0
+	}
 	items := make([]providerSelectItem, 0)
 	configuredMap := make(map[string]bool)
 	if m != nil && len(m.providers) > 0 {

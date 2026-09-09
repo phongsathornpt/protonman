@@ -53,7 +53,7 @@ type providerPaneView struct {
 	filterFreeOnly bool
 	errorMessage   string
 	fieldErrors    [providerFieldCount]string
-	fetchRequestID uint64
+	fetchRequestID asyncOperationID
 	fetchCancel    context.CancelFunc
 	selectedModel  string
 	activateOnSave bool

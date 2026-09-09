@@ -30,7 +30,7 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 				return true, nil
 			}
 			m.bottom.remove(providerSelectViewID)
-			return true, deleteProviderCmd(item.name)
+			return true, m.beginProviderDelete(item.name)
 		case "esc":
 			v.deleteConfirm = false
 			return true, nil
@@ -49,7 +49,7 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 	case "a", "c":
 		m.bottom.remove(providerSelectViewID)
 		if !m.bottom.has(providerViewID) {
-			m.bottom.push(newProviderPaneView())
+			m.pushProviderPane(newProviderPaneView())
 		}
 		return true, nil
 	case "m":
@@ -81,16 +81,16 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 					if cfg, ok := m.providers[strings.ToLower(item.name)]; ok {
 						pv := newProviderPaneViewWithConfig(cfg)
 						pv.activateOnSave = item.isActive
-						m.bottom.push(pv)
+						m.pushProviderPane(pv)
 					} else {
 						pv := newProviderPaneViewWithPreset(item.name)
 						pv.activateOnSave = item.isActive
-						m.bottom.push(pv)
+						m.pushProviderPane(pv)
 					}
 				} else if item.kind == providerItemPreset {
-					m.bottom.push(newProviderPaneViewWithPreset(item.presetID))
+					m.pushProviderPane(newProviderPaneViewWithPreset(item.presetID))
 				} else {
-					m.bottom.push(newProviderPaneView())
+					m.pushProviderPane(newProviderPaneView())
 				}
 			}
 			return true, nil
@@ -116,16 +116,16 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 		if item, ok := v.selectedItem(); ok {
 			m.bottom.remove(providerSelectViewID)
 			if item.isConfigured {
-				return true, saveActiveProviderCmd(item.name)
+				return true, m.beginProviderSelect(item.name)
 			}
 			if item.kind == providerItemPreset {
 				if !m.bottom.has(providerViewID) {
-					m.bottom.push(newProviderPaneViewWithPreset(item.presetID))
+					m.pushProviderPane(newProviderPaneViewWithPreset(item.presetID))
 				}
 				return true, nil
 			}
 			if !m.bottom.has(providerViewID) {
-				m.bottom.push(newProviderPaneView())
+				m.pushProviderPane(newProviderPaneView())
 			}
 			return true, nil
 		}
@@ -135,16 +135,16 @@ func (v *providerSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressM
 	}
 }
 
-func saveActiveProviderCmd(providerName string) tea.Cmd {
+func saveActiveProviderCmd(operationID asyncOperationID, providerName string) tea.Cmd {
 	return func() tea.Msg {
 		err := (app.Providers{}).Select(providerName)
-		return providerActiveSelectedMsg{providerName: providerName, err: err}
+		return providerActiveSelectedMsg{operationID: operationID, providerName: providerName, err: err}
 	}
 }
 
-func deleteProviderCmd(providerName string) tea.Cmd {
+func deleteProviderCmd(operationID asyncOperationID, providerName string) tea.Cmd {
 	return func() tea.Msg {
 		err := (app.Providers{}).Delete(providerName)
-		return providerDeletedMsg{providerName: providerName, err: err}
+		return providerDeletedMsg{operationID: operationID, providerName: providerName, err: err}
 	}
 }

@@ -93,7 +93,7 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg)
 		v.cancelFetch()
 		m.bottom.remove(modelSelectViewID)
 		if !m.bottom.has(providerViewID) {
-			m.bottom.push(newProviderPaneView())
+			m.pushProviderPane(newProviderPaneView())
 		}
 		return true, nil
 	case "r":
@@ -141,7 +141,7 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg)
 			if v.providerIndex >= 0 && v.providerIndex < len(v.providerNames) {
 				provName = v.providerNames[v.providerIndex]
 			}
-			cmd := saveDefaultModelCmd(provName, selected.ID)
+			cmd := m.beginModelSelect(provName, selected.ID, false)
 			m.bottom.remove(modelSelectViewID)
 			return true, cmd
 		}
@@ -155,7 +155,7 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg)
 		if v.providerIndex >= 0 && v.providerIndex < len(v.providerNames) {
 			provName = v.providerNames[v.providerIndex]
 		}
-		cmd := saveDefaultModelCmd(provName, item.model.ID)
+		cmd := m.beginModelSelect(provName, item.model.ID, false)
 		m.bottom.remove(modelSelectViewID)
 		return true, cmd
 	default:
@@ -163,13 +163,13 @@ func (v *modelSelectPaneView) HandleKey(m *bubbleModel, message tea.KeyPressMsg)
 	}
 }
 
-func saveDefaultModelCmd(providerName, modelID string) tea.Cmd {
-	return saveModelSelectionCmd(providerName, modelID, false)
+func saveDefaultModelCmd(operationID asyncOperationID, providerName, modelID string) tea.Cmd {
+	return saveModelSelectionCmd(operationID, providerName, modelID, false)
 }
 
-func saveModelSelectionCmd(providerName, modelID string, unverified bool) tea.Cmd {
+func saveModelSelectionCmd(operationID asyncOperationID, providerName, modelID string, unverified bool) tea.Cmd {
 	return func() tea.Msg {
 		err := providerio.SelectModel(providerName, modelID)
-		return modelSelectedMsg{providerName: providerName, modelID: modelID, unverified: unverified, err: err}
+		return modelSelectedMsg{operationID: operationID, providerName: providerName, modelID: modelID, unverified: unverified, err: err}
 	}
 }

@@ -17,11 +17,12 @@ type modelsFetchedMsg struct {
 	baseURL      string
 	apiKey       string
 	models       []model.RemoteModel
-	requestID    uint64
+	requestID    asyncOperationID
 	err          error
 }
 
 type providerSavedMsg struct {
+	operationID  asyncOperationID
 	providerName string
 	providerType string
 	previousName string
@@ -34,7 +35,7 @@ type providerSavedMsg struct {
 
 type providerFetchRequest struct {
 	ctx              context.Context
-	requestID        uint64
+	requestID        asyncOperationID
 	providerName     string
 	providerType     string
 	baseURL          string
@@ -55,7 +56,7 @@ func (v *providerPaneView) beginFetch(parent context.Context, timeouts ...time.D
 	}
 	ctx, cancel := context.WithCancel(parent)
 	v.fetchCancel = cancel
-	v.fetchRequestID++
+	v.fetchRequestID = nextAsyncOperationID()
 	v.state = providerStateFetching
 	return fetchProviderModelsCmd(providerFetchRequest{
 		ctx:              ctx,
@@ -106,7 +107,7 @@ type providerSaveRequest struct {
 	activate     bool
 }
 
-func saveProviderCmd(request providerSaveRequest) tea.Cmd {
+func saveProviderCmd(operationID asyncOperationID, request providerSaveRequest) tea.Cmd {
 	return func() tea.Msg {
 		err := providerio.Save(providerio.SaveRequest{
 			ProviderName: request.providerName,
@@ -118,6 +119,7 @@ func saveProviderCmd(request providerSaveRequest) tea.Cmd {
 			Activate:     request.activate,
 		})
 		return providerSavedMsg{
+			operationID:  operationID,
 			providerName: request.providerName,
 			providerType: request.providerType,
 			previousName: request.previousName,

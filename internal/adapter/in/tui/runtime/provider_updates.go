@@ -15,7 +15,7 @@ import (
 func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) (tea.Model, tea.Cmd) {
 	if pane := m.bottom.find(providerViewID); pane != nil {
 		if pv, ok := pane.(*providerPaneView); ok {
-			if pv.fetchRequestID != 0 && message.requestID != pv.fetchRequestID {
+			if message.requestID != pv.fetchRequestID {
 				return m, nil
 			}
 			pv.fetchCancel = nil
@@ -53,6 +53,10 @@ func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) (tea.Model, 
 }
 
 func (m *bubbleModel) updateProviderSaved(message providerSavedMsg) (tea.Model, tea.Cmd) {
+	if message.operationID != m.activeProviderSave {
+		return m, nil
+	}
+	m.activeProviderSave = 0
 	if message.err != nil {
 		if pane := m.bottom.find(providerViewID); pane != nil {
 			if pv, ok := pane.(*providerPaneView); ok {
@@ -97,6 +101,10 @@ func (m *bubbleModel) updateProviderSaved(message providerSavedMsg) (tea.Model, 
 }
 
 func (m *bubbleModel) updateModelSelected(message modelSelectedMsg) (tea.Model, tea.Cmd) {
+	if message.operationID != m.activeModelSelect {
+		return m, nil
+	}
+	m.activeModelSelect = 0
 	if message.err != nil {
 		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to set active model: %v", message.err)))
 	} else {
@@ -126,6 +134,10 @@ func (m *bubbleModel) updateModelSelected(message modelSelectedMsg) (tea.Model, 
 }
 
 func (m *bubbleModel) updateProviderActiveSelected(message providerActiveSelectedMsg) (tea.Model, tea.Cmd) {
+	if message.operationID != m.activeProviderSelect {
+		return m, nil
+	}
+	m.activeProviderSelect = 0
 	if message.err != nil {
 		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to switch provider: %v", message.err)))
 	} else {
@@ -173,6 +185,10 @@ func (m *bubbleModel) updateProviderActiveSelected(message providerActiveSelecte
 }
 
 func (m *bubbleModel) updateProviderDeleted(message providerDeletedMsg) (tea.Model, tea.Cmd) {
+	if message.operationID != m.activeProviderDelete {
+		return m, nil
+	}
+	m.activeProviderDelete = 0
 	if message.err != nil {
 		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to remove provider %s: %v", message.providerName, message.err)))
 	} else {

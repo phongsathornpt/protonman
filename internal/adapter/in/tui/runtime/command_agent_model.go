@@ -80,7 +80,7 @@ func (m *bubbleModel) selectModelDirect(modelID string) tea.Cmd {
 			prov = model.DefaultProtonmanName
 		}
 	}
-	return saveModelSelectionCmd(prov, modelID, !m.modelIDKnown(prov, modelID))
+	return m.beginModelSelect(prov, modelID, !m.modelIDKnown(prov, modelID))
 }
 
 func (m *bubbleModel) executeModelCommand(argument string) tea.Cmd {
@@ -88,13 +88,13 @@ func (m *bubbleModel) executeModelCommand(argument string) tea.Cmd {
 	switch arg {
 	case "add":
 		if !m.bottom.has(providerViewID) {
-			m.bottom.push(newProviderPaneView())
+			m.pushProviderPane(newProviderPaneView())
 			m.relayout()
 		}
 		return nil
 	case "free":
 		if !m.bottom.has(providerViewID) {
-			m.bottom.push(newProviderPaneViewWithPreset(model.DefaultOpenCodeName))
+			m.pushProviderPane(newProviderPaneViewWithPreset(model.DefaultOpenCodeName))
 			m.relayout()
 		}
 		return nil

@@ -1063,3 +1063,23 @@ func TestModelPickerEnterOnZeroMatchesDoesNotOpenProviderEditor(t *testing.T) {
 		t.Fatal("enter on 0 models should not open providerViewID")
 	}
 }
+
+func TestStaleModelSelectionDoesNotMutateReopenedPicker(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.activeModel = "before"
+	oldID := nextAsyncOperationID()
+	m.activeModelSelect = oldID
+	m.bottom.push(newModelSelectPaneView(m))
+	if m.activeModelSelect != 0 {
+		t.Fatalf("reopened picker did not invalidate prior selection: %d", m.activeModelSelect)
+	}
+
+	updated, _ := m.Update(modelSelectedMsg{operationID: oldID, providerName: "protonman", modelID: "stale"})
+	m = updated.(*bubbleModel)
+	if m.activeModel != "before" {
+		t.Fatalf("stale model selection changed active model to %q", m.activeModel)
+	}
+	if !m.bottom.has(modelSelectViewID) {
+		t.Fatal("stale model selection closed reopened picker")
+	}
+}

@@ -77,7 +77,7 @@ func (v *providerPaneView) handleModelSelectKey(m *bubbleModel, message tea.KeyP
 		}
 		v.selectedModel = item.model.ID
 		v.state = providerStateSaving
-		return true, v.saveSelectedModelCmd(item.model.ID)
+		return true, v.saveSelectedModelCmd(m, item.model.ID)
 	case "up", "k", "down", "j", "home", "g", "end", "G", "pgup", "pgdown":
 		updated, cmd := v.modelPicker.Update(message)
 		v.modelPicker = updated
@@ -91,7 +91,7 @@ func (v *providerPaneView) handleSaveErrorKey(m *bubbleModel, message tea.KeyPre
 	switch message.String() {
 	case "enter":
 		v.state = providerStateSaving
-		return true, v.saveSelectedModelCmd(v.selectedModel)
+		return true, v.saveSelectedModelCmd(m, v.selectedModel)
 	case "esc":
 		v.state = providerStateSelectModel
 		v.errorMessage = ""
@@ -192,6 +192,6 @@ func (v *providerPaneView) updateFocusedInput(message tea.KeyPressMsg) tea.Cmd {
 	return cmd
 }
 
-func (v *providerPaneView) saveSelectedModelCmd(modelID string) tea.Cmd {
-	return saveProviderCmd(providerSaveRequest{providerName: strings.TrimSpace(v.nameInput.Value()), providerType: v.providerType, previousName: v.originalName, baseURL: strings.TrimSpace(v.endpointInput.Value()), apiKey: strings.TrimSpace(v.apiKeyInput.Value()), defaultModel: modelID, activate: v.activateOnSave})
+func (v *providerPaneView) saveSelectedModelCmd(m *bubbleModel, modelID string) tea.Cmd {
+	return m.beginProviderSave(providerSaveRequest{providerName: strings.TrimSpace(v.nameInput.Value()), providerType: v.providerType, previousName: v.originalName, baseURL: strings.TrimSpace(v.endpointInput.Value()), apiKey: strings.TrimSpace(v.apiKeyInput.Value()), defaultModel: modelID, activate: v.activateOnSave})
 }

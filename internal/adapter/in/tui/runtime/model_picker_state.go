@@ -15,6 +15,7 @@ const modelSelectViewID = "model_select"
 const maxModelSelectRows = 6
 
 type modelSelectedMsg struct {
+	operationID  asyncOperationID
 	providerName string
 	modelID      string
 	unverified   bool
@@ -28,13 +29,16 @@ type modelSelectPaneView struct {
 	allModels      []model.RemoteModel
 	providerNames  []string
 	providerIndex  int
-	fetchRequestID uint64
+	fetchRequestID asyncOperationID
 	fetchCancel    context.CancelFunc
 	loading        bool
 	err            error
 }
 
 func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
+	if m != nil {
+		m.activeModelSelect = 0
+	}
 	providers, providerIdx := modelpicker.ProviderNames(m.providers, m.activeProvider)
 	var modelsList []model.RemoteModel
 	hasFreshCatalog := false

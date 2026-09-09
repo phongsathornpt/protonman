@@ -106,6 +106,10 @@ type bubbleModel struct {
 	projectTrusted            bool
 	projectConfigSources      []string
 	projectConfigProvenance   map[string]config.ValueSource
+	activeProviderSave        asyncOperationID
+	activeProviderSelect      asyncOperationID
+	activeProviderDelete      asyncOperationID
+	activeModelSelect         asyncOperationID
 
 	modal       *permissionRequest
 	modalParked bool
