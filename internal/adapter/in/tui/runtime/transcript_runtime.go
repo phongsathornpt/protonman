@@ -70,24 +70,10 @@ func (m *bubbleModel) updateTranscriptKey(message tea.KeyPressMsg) (tea.Model, t
 		}
 		m.refreshTranscriptViewport(false)
 		return m, nil
-	case "pgup":
-		m.transcriptViewport.PageUp()
-		return m, nil
-	case "pgdown":
-		m.transcriptViewport.PageDown()
-		return m, nil
-	case "up", "k":
-		m.transcriptViewport.ScrollUp(1)
-		return m, nil
-	case "down", "j":
-		m.transcriptViewport.ScrollDown(1)
-		return m, nil
-	case "home", "g":
-		m.transcriptViewport.GotoTop()
-		return m, nil
-	case "end", "G":
-		m.transcriptViewport.GotoBottom()
-		return m, nil
+	case "pgup", "pgdown", "up", "k", "down", "j", "home", "g", "end", "G":
+		updated, command := m.transcriptViewport.Update(message)
+		m.transcriptViewport = updated
+		return m, command
 	default:
 		return m, nil
 	}
