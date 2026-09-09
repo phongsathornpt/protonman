@@ -177,20 +177,20 @@ func TestToolDisciplineUsesCompactCapabilityActions(t *testing.T) {
 	}
 }
 
-func TestRenderTaskContractAvoidsLegacyTodoToolNames(t *testing.T) {
+func TestRenderTaskContractUsesCanonicalTodoCapability(t *testing.T) {
 	got := Render(Spec{Capabilities: ToolCapabilities{Tasks: true}})
-	for _, legacy := range []string{"get_todo", "update_todo", "Task tools"} {
-		if strings.Contains(got, legacy) {
-			t.Fatalf("task contract exposes legacy todo wording %q:\n%s", legacy, got)
+	for _, want := range []string{"todo action=get", "todo action=update"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("task contract missing canonical capability %q:\n%s", want, got)
 		}
 	}
 }
 
-func TestRenderDelegationAvoidsLegacySubagentToolNames(t *testing.T) {
+func TestRenderDelegationUsesCanonicalSubagentCapability(t *testing.T) {
 	got := Render(Spec{Capabilities: ToolCapabilities{Agents: true}})
-	for _, legacy := range []string{"delegate_task", "wait_agent", "get_agent", "list_agents", "cancel_agent", "resume_agent"} {
-		if strings.Contains(got, legacy) {
-			t.Fatalf("delegation contract exposes legacy subagent tool %q:\n%s", legacy, got)
+	for _, want := range []string{"subagent action=spawn", "subagent action=wait", "subagent action=get", "subagent action=list", "subagent action=cancel", "subagent action=resume"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("delegation contract missing canonical capability %q:\n%s", want, got)
 		}
 	}
 }

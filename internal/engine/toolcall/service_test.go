@@ -682,7 +682,7 @@ func TestTaskMetadataPermissionDistinguishesStatusFromStructuralChanges(t *testi
 	}
 }
 
-func TestGetTodoMetadataAutoAllowedInAskMode(t *testing.T) {
+func TestTodoGetMetadataAutoAllowedInAskMode(t *testing.T) {
 	handler := &fakeHandler{definition: tool.Definition{Name: "todo", Description: "read tasks", Kind: tool.KindTask, Mutability: tool.MutabilityReadOnly}}
 	prompted := 0
 	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAsk), WithPrompt(func(context.Context, permission.Request) (permission.Resolution, error) {
@@ -694,10 +694,10 @@ func TestGetTodoMetadataAutoAllowedInAskMode(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := service.Call(context.Background(), call); err != nil {
-		t.Fatalf("get_todo: %v", err)
+		t.Fatalf("todo get: %v", err)
 	}
 	if prompted != 0 {
-		t.Fatalf("get_todo prompted %d times, want 0", prompted)
+		t.Fatalf("todo get prompted %d times, want 0", prompted)
 	}
 }
 
