@@ -85,7 +85,7 @@ func consumeSDKStream(ctx context.Context, round int, stream sdk.Stream, sink Si
 			if text.Len() == 0 && len(calls) == 0 {
 				return model.Message{}, nil, fmt.Errorf("model stream round %d: %w", round, ErrEmptyResponse)
 			}
-			return model.Message{Role: model.RoleAssistant, Content: text.String(), ToolCalls: calls}, calls, nil
+			return model.Message{ID: model.NewMessageID(), Role: model.RoleAssistant, Content: text.String(), ToolCalls: calls}, calls, nil
 		}
 	}
 	return model.Message{}, nil, fmt.Errorf("read model stream round %d: %w", round, sdk.ErrIncompleteStream)

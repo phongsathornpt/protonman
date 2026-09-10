@@ -24,7 +24,7 @@ func resolvedModelStateFor(languageModel sdk.LanguageModel) resolvedModelState {
 }
 
 func (l *Loop) prepareTurnInput(ctx context.Context, messages []model.Message) ([]model.Message, []string, string) {
-	history := append([]model.Message(nil), messages...)
+	history := model.EnsureMessageIDs(messages)
 	var promptExtras []string
 	if l.promptSpec != nil {
 		filtered := make([]model.Message, 0, len(history))

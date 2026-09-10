@@ -68,6 +68,7 @@ func LocationsForToolCall(call tool.Call) []ToolCallLocation {
 // ContentBlocksToModelMessage converts ACP prompt content blocks into a model.Message.
 func ContentBlocksToModelMessage(blocks []ContentBlock) model.Message {
 	msg := model.Message{
+		ID:   model.NewMessageID(),
 		Role: model.RoleUser,
 	}
 

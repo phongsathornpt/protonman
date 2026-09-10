@@ -29,7 +29,9 @@ type ContentPart = sdk.ContentPart
 type ToolCall = sdk.ToolCall
 type Message = sdk.Message
 
-func CloneMessages(messages []Message) []Message { return sdk.CloneMessages(messages) }
+func CloneMessages(messages []Message) []Message    { return sdk.CloneMessages(messages) }
+func EnsureMessageIDs(messages []Message) []Message { return sdk.EnsureMessageIDs(messages) }
+func NewMessageID() string                          { return sdk.NewMessageID() }
 
 // SnapshotMessages copies only the top-level message slice. Message payloads are
 // immutable after publication, so callers can isolate append/re-slice ownership

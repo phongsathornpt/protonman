@@ -20,3 +20,27 @@ func TestFromModelMessagesPreservesCanonicalToolNames(t *testing.T) {
 		t.Fatalf("canonical tool history missing: %q", persisted[0].Content)
 	}
 }
+
+func TestMessageIdentitySurvivesSessionConversion(t *testing.T) {
+	input := []sdk.Message{{ID: "msg_keep", Role: sdk.RoleUser, Content: "hello"}}
+	stored := FromModelMessages(input)
+	if len(stored) != 1 || stored[0].ID != "msg_keep" {
+		t.Fatalf("stored messages = %+v", stored)
+	}
+	restored := ToModelMessages(stored)
+	if len(restored) != 1 || restored[0].ID != "msg_keep" {
+		t.Fatalf("restored messages = %+v", restored)
+	}
+}
+
+func TestLegacySessionMessagesReceiveStableIdentity(t *testing.T) {
+	stored := FromModelMessages([]sdk.Message{{Role: sdk.RoleUser, Content: "legacy"}})
+	if len(stored) != 1 || stored[0].ID == "" {
+		t.Fatalf("legacy stored message id = %q", stored[0].ID)
+	}
+	first := ToModelMessages(stored)
+	second := ToModelMessages(stored)
+	if first[0].ID != stored[0].ID || second[0].ID != stored[0].ID {
+		t.Fatalf("legacy identity changed: stored=%q first=%q second=%q", stored[0].ID, first[0].ID, second[0].ID)
+	}
+}
