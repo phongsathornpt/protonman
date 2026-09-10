@@ -8,13 +8,6 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
-func (m *bubbleModel) appendRegisteredTools() {
-	m.appendLine("Registered tools:")
-	for _, definition := range m.registry.Definitions() {
-		m.appendLine(fmt.Sprintf("- %s [%s]: %s", definition.Name, definition.Kind, definition.Description))
-	}
-}
-
 func (m *bubbleModel) startCall(parts []string) tea.Cmd {
 	if len(parts) < 2 || strings.TrimSpace(parts[1]) == "" {
 		m.appendError("usage: /call <tool> <json>")

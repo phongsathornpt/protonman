@@ -16,8 +16,6 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 	switch name {
 	case "help":
 		m.appendHelp()
-	case "tools":
-		m.appendRegisteredTools()
 	case "skills":
 		return m.handleSkillsCommand(argument, parts)
 	case "project":

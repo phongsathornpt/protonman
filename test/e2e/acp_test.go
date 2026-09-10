@@ -120,18 +120,6 @@ func TestE2EACPServerSessionFlow(t *testing.T) {
 		t.Fatalf("session/prompt unexpected stopReason: %v", promptResult["stopReason"])
 	}
 
-	// 4. Send session/prompt calling /tools
-	toolsReq := fmt.Sprintf(
-		`{"jsonrpc":"2.0","id":4,"method":"session/prompt","params":{"sessionId":%q,"prompt":[{"type":"text","text":"/tools"}]}}`,
-		sessionID,
-	)
-	send(toolsReq)
-	toolsResp := readResponse(4)
-	if toolsResult, ok := toolsResp["result"].(map[string]any); !ok {
-		t.Fatalf("session/prompt /tools missing result: %+v", toolsResp)
-	} else if stopReason, ok := toolsResult["stopReason"].(string); !ok || (stopReason != "end_turn" && stopReason != "completed") {
-		t.Fatalf("session/prompt /tools unexpected stopReason: %v", toolsResult["stopReason"])
-	}
 }
 
 func TestE2EACPCancellation(t *testing.T) {

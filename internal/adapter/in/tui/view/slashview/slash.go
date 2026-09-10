@@ -16,7 +16,6 @@ type Command struct {
 func Catalog(agentProfiles string) []Command {
 	return []Command{
 		{Name: "help", Description: "list commands"},
-		{Name: "tools", Description: "list tools"},
 		{Name: "skills", Aliases: []string{"skill"}, Description: "browse, activate, or toggle agent skills (/skills [name|active|toggle])", TakesArgs: true},
 		{Name: "project", Aliases: []string{"protonman"}, Description: "inspect or edit project-local Protonman settings (/project [status|init|set ...|permission ...])", TakesArgs: true},
 		{Name: "config", Description: "edit user-level Protonman settings (/config set <subagents|thinking|tool-calls> <value>, /config permission <allow|deny|ask> <tool> [pattern])", TakesArgs: true},

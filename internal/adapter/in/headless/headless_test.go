@@ -388,6 +388,24 @@ func TestHeadlessSkillsCommands(t *testing.T) {
 		}
 	})
 
+	t.Run("tools command removed", func(t *testing.T) {
+		runner, err := New(service, registry, nil)
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+		var out bytes.Buffer
+		if err := runner.Run(context.Background(), "/help", &out, FormatText); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		if strings.Contains(out.String(), "/tools") {
+			t.Fatalf("help still advertises removed /tools command: %q", out.String())
+		}
+		out.Reset()
+		if err := runner.Run(context.Background(), "/tools", &out, FormatText); err == nil || !strings.Contains(err.Error(), `unknown command "tools"`) {
+			t.Fatalf("removed /tools error = %v, want unknown command", err)
+		}
+	})
+
 	t.Run("help lists skill commands", func(t *testing.T) {
 		runner, err := New(service, registry, nil)
 		if err != nil {

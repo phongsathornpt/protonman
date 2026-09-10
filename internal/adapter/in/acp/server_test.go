@@ -51,21 +51,10 @@ func TestACPInitializeAndPrompt(t *testing.T) {
 		t.Fatalf("session/new missing sessionId: %s", outStr)
 	}
 
-	sessionID := extractSessionID(t, output.Bytes())
-	output.Reset()
-	prompt := `{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":"` + sessionID + `","prompt":[{"type":"text","text":"/tools"}]}}` + "\n"
-	if err := server.Serve(context.Background(), strings.NewReader(prompt), &output); err != nil {
-		t.Fatalf("prompt Serve() error = %v", err)
+	if strings.Contains(outStr, `"name":"tools"`) {
+		t.Fatalf("session/new still advertises removed tools command: %s", outStr)
 	}
-	if !strings.Contains(output.String(), "session/update") {
-		t.Fatalf("missing session/update: %s", output.String())
-	}
-	if !strings.Contains(output.String(), "read") {
-		t.Fatalf("prompt output missing tools: %s", output.String())
-	}
-	if !strings.Contains(output.String(), `"stopReason":"end_turn"`) {
-		t.Fatalf("missing end_turn: %s", output.String())
-	}
+
 }
 
 func TestACPDirectCall(t *testing.T) {

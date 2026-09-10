@@ -38,6 +38,18 @@ func TestSlashDropdownFiltersAndTabAccepts(t *testing.T) {
 	}
 }
 
+func TestToolsCommandRemovedFromTUI(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.executeCommand("/help")
+	if strings.Contains(plainTranscript(model), "/tools") {
+		t.Fatalf("help still advertises removed /tools command: %q", plainTranscript(model))
+	}
+	model.executeCommand("/tools")
+	if !strings.Contains(plainTranscript(model), `unknown command "tools"`) {
+		t.Fatalf("removed /tools command did not resolve as unknown: %q", plainTranscript(model))
+	}
+}
+
 func TestColonAliasDispatchesHelp(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.panes.bottom.prompt().SetValue(":help")

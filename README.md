@@ -162,7 +162,6 @@ Type `/` at the prompt to trigger autocomplete, or prefix with a colon (`:help`)
 | `/model [name]` | Open unified Model Setup or switch active model (`/models` is an alias) | `/model glm-5.3-flash` |
 | `/provider [cmd]` | Manage and configure AI model providers | `/provider list`, `/provider opencode` |
 | `/reasoning [level]` | Open Model Setup with no argument, or set session thinking directly | `/reasoning high` |
-| `/tools` | List registered tools and parameter schemas | `/tools` |
 | `/agents` | Inspect live and retained subagents | `/agents` |
 | `/subagents [on|off]` | Toggle new subagent delegation for the current runtime | `/subagents off` |
 | `/config set subagents <on|off>` | Persist the user-level default | `/config set subagents off` |

@@ -528,7 +528,6 @@ Current important slash commands include:
 
 ```text
 /help
-/tools
 /skills
 /project
 /config

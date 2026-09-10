@@ -184,12 +184,6 @@ func (r *Runner) runCommand(
 	switch name {
 	case "help":
 		return writeEvent(output, format, Event{Kind: "text", Text: commandHelp()})
-	case "tools":
-		var builder strings.Builder
-		for _, definition := range r.registry.Definitions() {
-			fmt.Fprintf(&builder, "- %s [%s]: %s\n", definition.Name, definition.Kind, definition.Description)
-		}
-		return writeEvent(output, format, Event{Kind: "text", Text: strings.TrimRight(builder.String(), "\n")})
 	case "mode":
 		if argument == "" {
 			return writeEvent(output, format, Event{
@@ -548,7 +542,6 @@ func splitCommand(line string) (name string, argument string, parts []string) {
 func commandHelp() string {
 	return strings.Join([]string{
 		"/call <tool> <json>   run a registered tool",
-		"/tools                list tools",
 		"/skills [name]        browse, activate, or toggle skills (alias: /skill)",
 		"/mode [ask|always-approve|deny]",
 		"/help                 list commands",

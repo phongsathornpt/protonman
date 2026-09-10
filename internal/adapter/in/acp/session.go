@@ -583,28 +583,6 @@ func (s *Session) handleSlashCommand(
 		_ = notifier(agentMessageNotification(s.id, "Reasoning override set to **"+label+"**."))
 		return true, SessionPromptResult{StopReason: StopReasonEndTurn}, nil
 
-	case "/tools":
-		var b strings.Builder
-		b.WriteString("### Registered Tools\n\n")
-		for _, def := range s.registry.Definitions() {
-			b.WriteString(fmt.Sprintf("- **`%s`**: %s\n", def.Name, def.Description))
-		}
-		_ = notifier(RPCNotification{
-			JSONRPC: "2.0",
-			Method:  "session/update",
-			Params: map[string]any{
-				"sessionId": s.id,
-				"update": map[string]any{
-					"sessionUpdate": "agent_message_chunk",
-					"content": map[string]any{
-						"type": string(BlockTypeText),
-						"text": b.String(),
-					},
-				},
-			},
-		})
-		return true, SessionPromptResult{StopReason: StopReasonEndTurn}, nil
-
 	case "/call":
 		body := strings.TrimSpace(strings.TrimPrefix(cmd, "/"))
 		cmdParts := strings.SplitN(body, " ", 3)

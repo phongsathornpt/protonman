@@ -126,7 +126,6 @@ func ContentBlocksToModelMessage(blocks []ContentBlock) model.Message {
 // DefaultAvailableCommands returns slash commands advertised to Zed.
 func DefaultAvailableCommands() []AvailableCommand {
 	return []AvailableCommand{
-		{Name: "tools", Description: "List registered tools and schemas"},
 		{Name: "skills", Description: "List discovered Agent Skills"},
 		{Name: "skill", Description: "Inspect or activate an Agent Skill", Input: &AvailableCommandInput{Hint: "skill-name"}},
 		{Name: "mode", Description: "Switch permission mode", Input: &AvailableCommandInput{Hint: "ask | plan | always-approve"}},

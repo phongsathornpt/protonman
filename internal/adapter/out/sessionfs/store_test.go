@@ -93,7 +93,7 @@ func TestFileStoreCompactsToolProtocolWithoutArguments(t *testing.T) {
 		PermissionMode: permission.ModeAsk.String(),
 		Messages: []Message{
 			{Role: model.RoleUser, Content: "list tools"},
-			{Role: model.RoleAssistant, Content: "use /tools", ToolCalls: []ToolCall{{ID: "c1", Name: "read"}}},
+			{Role: model.RoleAssistant, Content: "inspect available tools", ToolCalls: []ToolCall{{ID: "c1", Name: "read"}}},
 			{Role: model.RoleTool, Content: "ok", ToolName: "read", ToolCallID: "c1"},
 		},
 	}
@@ -107,7 +107,7 @@ func TestFileStoreCompactsToolProtocolWithoutArguments(t *testing.T) {
 	if len(got.Messages) != 3 {
 		t.Fatalf("messages = %d, want 3", len(got.Messages))
 	}
-	if got.Messages[1].Role != model.RoleAssistant || got.Messages[1].Content != "use /tools" {
+	if got.Messages[1].Role != model.RoleAssistant || got.Messages[1].Content != "inspect available tools" {
 		t.Fatalf("assistant context = %+v", got.Messages[1])
 	}
 	if got.Messages[2].Role != model.RoleAssistant || !strings.Contains(got.Messages[2].Content, "Historical tool read result") {
