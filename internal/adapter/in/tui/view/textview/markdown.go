@@ -122,7 +122,7 @@ func RenderMarkdownLine(raw string, width int, state *MarkdownState) []string {
 			if index == 0 {
 				prefix = markdownBulletStyle.Render("  "+marker) + " "
 			}
-			out = append(out, prefix+styleInlineMarkdown(part))
+			out = append(out, prefix+tuistyle.BodyStyle.Render(styleInlineMarkdown(part)))
 		}
 		return out
 	}
@@ -132,7 +132,7 @@ func RenderMarkdownLine(raw string, width int, state *MarkdownState) []string {
 func RenderMarkdownBodyWrapped(text string, width int) []string {
 	wrapped := WrapLines(text, width)
 	for index := range wrapped {
-		wrapped[index] = styleInlineMarkdown(wrapped[index])
+		wrapped[index] = tuistyle.BodyStyle.Render(styleInlineMarkdown(wrapped[index]))
 	}
 	return wrapped
 }

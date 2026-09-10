@@ -133,7 +133,7 @@ func (m *CrashModel) View() tea.View {
 	for i := start; i < end; i++ {
 		visibleLines = append(visibleLines, stackLines[i])
 	}
-	stackBoxStyle := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8")).Padding(0, 1).Width(contentWidth)
+	stackBoxStyle := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(tuistyle.ColorBorderSubtle).Padding(0, 1).Width(contentWidth)
 	stackHeader := tuistyle.MutedStyle.Render(fmt.Sprintf("Stack trace (lines %d-%d of %d, ↑/↓ scroll):", start+1, end, len(stackLines)))
 	stackBody := strings.Join(visibleLines, "\n")
 	parts = append(parts, stackBoxStyle.Render(lipgloss.JoinVertical(lipgloss.Left, stackHeader, tuistyle.MutedStyle.Render(stackBody))))
