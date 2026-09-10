@@ -15,6 +15,7 @@ type Command struct {
 func Catalog() []Command {
 	return []Command{
 		{Name: "help", Description: "list commands"},
+		{Name: "permission", Description: "select permission mode"},
 		{Name: "model", Description: "open model setup or select active model (/model [id|free|add])", TakesArgs: true},
 		{Name: "provider", Description: "select or configure model providers (/provider [name|add|list])", TakesArgs: true},
 		{Name: "skills", Description: "browse, activate, or toggle agent skills (/skills [name|active|toggle])", TakesArgs: true},

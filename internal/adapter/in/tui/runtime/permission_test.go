@@ -537,3 +537,32 @@ func TestPermissionBridgeCloseReleasesPendingPrompt(t *testing.T) {
 		t.Fatalf("Next after close = %T, want permissionBridgeClosedMsg", msg)
 	}
 }
+
+func TestPermissionCommandOpensModePickerAndAppliesPlan(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+	_ = model.executeCommand("/permission")
+	view, ok := model.panes.bottom.find(permissionModeViewID).(*permissionModePaneView)
+	if !ok || view == nil {
+		t.Fatal("/permission did not open permission mode picker")
+	}
+	view.index = int(permissionModePlan)
+	result := view.HandlePaneKey(newPaneRenderContext(model), testKey(tea.KeyEnter))
+	_ = model.applyPaneAction(result.action)
+	if !model.planMode || model.service.Mode() != permission.ModeAsk {
+		t.Fatalf("plan selection = plan=%v mode=%s, want plan=true mode=ask", model.planMode, model.service.Mode())
+	}
+}
+
+func TestPermissionModePickerAppliesAlwaysApprove(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+	model.openPermissionModePane()
+	view := model.panes.bottom.find(permissionModeViewID).(*permissionModePaneView)
+	view.index = int(permissionModeAlwaysApprove)
+	result := view.HandlePaneKey(newPaneRenderContext(model), testKey(tea.KeyEnter))
+	_ = model.applyPaneAction(result.action)
+	if model.planMode || model.service.Mode() != permission.ModeAlwaysApprove {
+		t.Fatalf("always approve selection = plan=%v mode=%s", model.planMode, model.service.Mode())
+	}
+}

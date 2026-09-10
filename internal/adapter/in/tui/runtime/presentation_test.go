@@ -16,6 +16,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1243,5 +1244,16 @@ func TestPromptPlaceholderReflectsRunnerState(t *testing.T) {
 	m.setPlanEnabled(true)
 	if got := m.panes.bottom.prompt().Placeholder; got != "" {
 		t.Fatalf("runner placeholder after mode changes = %q, want empty", got)
+	}
+}
+
+func TestIdleFooterShowsModelReasoningAndPermissionMode(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeModel = "nemotron-3.5-lightning-free"
+	m.reasoningEffort = sdk.ReasoningDefault
+	m.resize(80, 24)
+	footer := ansi.Strip(m.idleContextFooter())
+	if !strings.Contains(footer, "nemotron-3.5-lightning-free · auto · ask") {
+		t.Fatalf("footer missing model/reasoning/permission context: %q", footer)
 	}
 }

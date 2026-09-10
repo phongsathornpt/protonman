@@ -93,7 +93,7 @@ func (m *bubbleModel) idleContextFooter() string {
 	if right == "" {
 		right = "unselected"
 	}
-	right += " · " + reasoningEffortLabel(m.reasoningEffort)
+	right += " · " + reasoningEffortLabel(m.reasoningEffort) + " · " + m.permissionModeLabel()
 	if ansi.StringWidth(left)+ansi.StringWidth(right)+2 > width {
 		return inset + mutedStyle.Render(truncateWithEllipsis(right, width))
 	}

@@ -20,6 +20,7 @@ const (
 	paneActionOpenProviderEditor
 	paneActionPermissionActivity
 	paneActionPermissionResolve
+	paneActionSetPermissionMode
 	paneActionScrollLines
 	paneActionScrollPage
 	paneActionProviderDelete
@@ -31,19 +32,20 @@ const (
 )
 
 type paneAction struct {
-	kind         paneActionKind
-	paneID       string
-	reasoning    sdk.ReasoningEffort
-	runSlash     bool
-	skillName    string
-	providerName string
-	modelID      string
-	activity     string
-	permission   permissionOption
-	scrollLines  int
-	key          tea.KeyPressMsg
-	providerItem providerSelectItem
-	providerSave providerSaveRequest
+	kind           paneActionKind
+	paneID         string
+	reasoning      sdk.ReasoningEffort
+	runSlash       bool
+	skillName      string
+	providerName   string
+	modelID        string
+	activity       string
+	permission     permissionOption
+	permissionMode permissionModeChoice
+	scrollLines    int
+	key            tea.KeyPressMsg
+	providerItem   providerSelectItem
+	providerSave   providerSaveRequest
 }
 
 type paneKeyResult struct {
@@ -94,6 +96,9 @@ func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
 		m.activity = action.activity
 	case paneActionPermissionResolve:
 		return m.resolvePermission(action.permission)
+	case paneActionSetPermissionMode:
+		m.panes.bottom.remove(permissionModeViewID)
+		m.applyPermissionModeChoice(action.permissionMode)
 	case paneActionScrollLines:
 		m.scrollConversationLines(action.scrollLines)
 	case paneActionScrollPage:
