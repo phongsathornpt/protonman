@@ -34,13 +34,13 @@ func (v *permissionModePaneView) Render(ctx paneRenderContext) string {
 		}
 		rows = append(rows, marker+style.Render(label))
 	}
-	help := paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "enter", "Select", "esc", "Go Back")
+	help := paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "enter", "Select", "esc/q", "Go Back")
 	return renderModalRows(ctx, accentAssistant, paneSection("Permission Mode", rows, help, "", ctx.width))
 }
 
 func (v *permissionModePaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	switch message.String() {
-	case "esc":
+	case "esc", "q":
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: permissionModeViewID}}
 	case "up", "k":
 		if v.index > 0 {

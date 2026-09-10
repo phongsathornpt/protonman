@@ -132,7 +132,7 @@ The fullscreen TUI is built on [Bubble Tea](https://github.com/charmbracelet/bub
 ├────────────────────────────────────────────────────────────────────────┤
 │ > Type a message or '/' for commands...                                │
 ├────────────────────────────────────────────────────────────────────────┤
-│ [Enter] send  [Shift+Tab] mode  [^P] setup  [^S] skills  [^C] quit   │
+│ [Enter] send  [Shift+Tab] permission  [^P] setup  [^S] skills  [^C] quit   │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -147,7 +147,6 @@ The fullscreen TUI is built on [Bubble Tea](https://github.com/charmbracelet/bub
 | `Ctrl+S` | Toggle Agent Skills browser pane |
 | `Ctrl+O` | Toggle Tasks / TODO checklist pane |
 | `Ctrl+T` | Open transcript overlay (toggle raw view with `r`) |
-| `Ctrl+L` | Clear the visible viewport transcript |
 | `PgUp` / `PgDn` | Scroll transcript viewport up/down |
 | `Esc` | Park active permission modal or dismiss overlays |
 | `Ctrl+C` | Cancel active operation or exit |
@@ -159,12 +158,13 @@ Type `/` at the prompt to trigger autocomplete, or prefix a canonical command wi
 | Command | Description | Example |
 | :--- | :--- | :--- |
 | `/help` | Display available commands | `/help` |
+| `/permission` | Select permission mode | `/permission` |
 | `/model [name]` | Open unified Model Setup or switch active model | `/model glm-5.3-flash` |
 | `/provider [cmd]` | Manage and configure AI model providers | `/provider list`, `/provider opencode` |
 | `/skills [name|active|toggle]` | Browse, activate, or toggle Agent Skills | `/skills pdf-processing` |
 | `/agents` | Inspect live and retained subagents | `/agents` |
 | `/todo [show|hide]` | Show or hide the task-plan pane | `/todo` |
-| `/transcript [clear]` | Open the transcript or clear its visible contents | `/transcript clear` |
+| `/transcript [clear]` | Open or clear the transcript | `/transcript clear` |
 | `/call <tool> <json>` | Directly execute a tool with JSON arguments | `/call read {"path":"README.md"}` |
 | `/quit` | Exit Protonman cleanly | `/quit` |
 | `!<command>` | Execute a shell command directly through the `bash` tool | `!git status` |

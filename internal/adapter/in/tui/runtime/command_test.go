@@ -716,7 +716,7 @@ func TestShortcutMatrixBlockingPanesOwnGlobalKeys(t *testing.T) {
 			t.Fatalf("shift+tab focus = %d, want previous provider field", view.focusIndex)
 		}
 		if m.planMode {
-			t.Fatal("provider-local shift+tab leaked into global mode cycling")
+			t.Fatal("provider-local shift+tab leaked into global permission cycling")
 		}
 	})
 }

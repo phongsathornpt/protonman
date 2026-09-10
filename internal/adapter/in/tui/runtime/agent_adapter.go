@@ -91,7 +91,7 @@ func (*agentsPaneView) ID() string                             { return agentsVi
 func (*agentsPaneView) PresentationMode() panePresentationMode { return paneBelowComposer }
 func (*agentsPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	switch message.String() {
-	case "esc", "enter":
+	case "esc", "q", "enter":
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: agentsViewID}}
 	default:
 		return paneKeyResult{}
@@ -104,7 +104,7 @@ func (*agentsPaneView) Render(ctx paneRenderContext) string {
 	}
 	help := ""
 	if layoutModeForHeight(ctx.height) != layoutTiny {
-		help = paneKeyboardHelp(ctx.width-4, "esc", "Go Back")
+		help = paneKeyboardHelp(ctx.width-4, "esc/q", "Go Back")
 	}
 	status := ""
 	if count := len(ctx.agentSnapshot); count > 0 {

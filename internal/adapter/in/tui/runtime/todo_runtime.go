@@ -190,7 +190,7 @@ func (v *todoPaneView) syncTitle(ctx paneRenderContext) {
 func (v *todoPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	v.ensurePicker(ctx)
 	switch message.String() {
-	case "esc", "enter":
+	case "esc", "q", "enter":
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: todoInspectViewID}}
 	}
 	updated, cmd := v.picker.Update(message)
@@ -209,7 +209,7 @@ func (v *todoPaneView) Render(ctx paneRenderContext) string {
 	completed, _, _ := todopane.TodoCounts(ctx.todos)
 	help := ""
 	if layoutModeForHeight(ctx.height) != layoutTiny {
-		help = paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "enter", "Close", "esc", "Go Back")
+		help = paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "enter", "Close", "esc/q", "Go Back")
 	}
 	items := v.picker.VisibleItems()
 	start, end := paneWindow(len(items), v.picker.Index(), 7, layoutModeForHeight(ctx.height))

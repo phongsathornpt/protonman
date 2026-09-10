@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
 type shortcutRoutingPane struct {
@@ -97,5 +98,24 @@ func TestLegacyShortcutAliasesAreInactive(t *testing.T) {
 	m = updated.(*bubbleModel)
 	if m.panes.bottom.has(modelSetupViewID) {
 		t.Fatal("legacy alt+m alias still opens model setup")
+	}
+}
+
+func TestPermissionPickerTracksShiftTabCycle(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.openPermissionModePane()
+	view := m.panes.bottom.find(permissionModeViewID).(*permissionModePaneView)
+	if view.index != int(permissionModeAsk) {
+		t.Fatalf("initial permission index=%d, want ask", view.index)
+	}
+	updated, _ := m.Update(testShiftTab())
+	m = updated.(*bubbleModel)
+	if !m.planMode || view.index != int(permissionModePlan) {
+		t.Fatalf("first cycle = plan=%v index=%d", m.planMode, view.index)
+	}
+	updated, _ = m.Update(testShiftTab())
+	m = updated.(*bubbleModel)
+	if m.planMode || m.service.Mode() != permission.ModeAlwaysApprove || view.index != int(permissionModeAlwaysApprove) {
+		t.Fatalf("second cycle = plan=%v mode=%s index=%d", m.planMode, m.service.Mode(), view.index)
 	}
 }
