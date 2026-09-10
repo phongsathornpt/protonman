@@ -120,7 +120,7 @@ func BuildConversation(service *toolcall.Service, skills *skill.Registry, agents
 		return nil, nil
 	}
 	baseURL := model.ResolveProviderBaseURLForProtocol(providerName, spec.ProviderType, spec.BaseURL)
-	clientOptions := []model.ClientOption{model.WithRequestTimeout(spec.RequestTimeout)}
+	clientOptions := []model.ClientOption{model.WithRequestTimeout(spec.RequestTimeout), model.WithAgentProfile(spec.AgentProfile)}
 	if spec.RemoteModel != nil {
 		clientOptions = append(clientOptions, model.WithRemoteModelProfile(providerName, *spec.RemoteModel))
 	}

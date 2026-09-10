@@ -80,6 +80,39 @@ func TestAnthropicStreamTextAndRequestMapping(t *testing.T) {
 	}
 }
 
+func TestAnthropicSessionIDHeaderPersistsAcrossRetries(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if got := r.Header.Get("X-Session-Id"); got != "session-456" {
+			t.Fatalf("attempt %d X-Session-Id = %q", attempts, got)
+		}
+		if attempts == 1 {
+			http.Error(w, "temporary", http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {\"type\":\"message_stop\"}\n\n")
+	}))
+	defer server.Close()
+
+	model := NewProvider(ProviderOptions{
+		BaseURL: server.URL, MaxRetries: 1, RetryBackoff: time.Millisecond,
+		Headers: http.Header{"X-Session-Id": []string{"wrong-session"}},
+	}).Model("claude-test")
+	stream, err := model.Stream(context.Background(), sdk.Request{
+		Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}},
+		Metadata: sdk.RequestMetadata{SessionID: " session-456 "},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+}
+
 func TestAnthropicStreamToolCall(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
