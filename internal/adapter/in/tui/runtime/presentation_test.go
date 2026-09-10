@@ -36,8 +36,8 @@ func TestBrandLockupResponsive(t *testing.T) {
 		t.Fatalf("wide brand width = %d, terminal width 80", got)
 	}
 	narrow := ansi.Strip(brandLockup(20))
-	if strings.Contains(narrow, "█") || !strings.Contains(narrow, "protonman") {
-		t.Fatalf("narrow brand = %q, want compact protonman fallback", narrow)
+	if strings.Contains(narrow, "█") || !strings.Contains(narrow, "protonMAN") {
+		t.Fatalf("narrow brand = %q, want compact protonMAN fallback", narrow)
 	}
 	if got := brandLockupWidth(20); got > 20 {
 		t.Fatalf("narrow brand width = %d, terminal width 20", got)
@@ -123,7 +123,7 @@ func TestWelcomeCardContainsBrandOnly(t *testing.T) {
 	m.activeProvider = "provider-name"
 	m.resize(32, 14)
 	card := m.welcomeCard()
-	if !strings.Contains(card, glyphBrand) || !strings.Contains(strings.ToLower(card), "protonman") {
+	if !strings.Contains(card, glyphBrand) || !strings.Contains(card, "protonMAN") {
 		t.Fatalf("welcome card missing Protonman brand: %q", card)
 	}
 	for _, unwanted := range []string{m.workDir, m.activeModel, m.activeProvider, "Ask anything", "No model selected"} {
@@ -144,10 +144,10 @@ func TestWelcomeCardNormalModeStaysMinimal(t *testing.T) {
 	m.activeModel = "provider/some-model"
 	m.resize(80, 24)
 	card := m.welcomeCard()
-	if !strings.Contains(card, glyphBrand+" protonman") || !strings.Contains(card, "/tmp/test-workspace") {
+	if !strings.Contains(card, glyphBrand) || !strings.Contains(card, "█▀█") || !strings.Contains(card, "/tmp/test-workspace") {
 		t.Fatalf("minimal welcome missing identity or workspace: %q", card)
 	}
-	for _, unwanted := range []string{"█▀█", "Quick Actions", "/help", "/model", "Tip:", "some-model"} {
+	for _, unwanted := range []string{"Quick Actions", "/help", "/model", "Tip:", "some-model"} {
 		if strings.Contains(card, unwanted) {
 			t.Fatalf("minimal welcome leaked %q: %q", unwanted, card)
 		}
@@ -983,7 +983,7 @@ func TestPromptIsSingleRow(t *testing.T) {
 	if model.panes.bottom.prompt().Height() != 1 {
 		t.Fatalf("prompt height = %d, want 1", model.panes.bottom.prompt().Height())
 	}
-	if strings.Count(model.promptView(), "›") != 1 {
+	if strings.Count(ansi.Strip(model.promptView()), "> ") != 1 {
 		t.Fatalf("prompt chrome repeated:\n%s", model.promptView())
 	}
 }
@@ -1019,7 +1019,7 @@ func TestBubbleModelRendersComponentLayout(t *testing.T) {
 	model.appendLine("assistant: ready")
 	model.refreshViewport()
 	view := testPlain(model.View().Content)
-	for _, expected := range []string{glyphBrand, "/tmp/proton", "assistant: ready", "›"} {
+	for _, expected := range []string{glyphBrand, "█▀█", "/tmp/proton", "assistant: ready", "> "} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("Bubble Tea view does not contain %q: %s", expected, view)
 		}
@@ -1061,7 +1061,7 @@ func TestEmptyStateWithoutRunnerGuidesSlashCommands(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
 	view := testPlain(model.View().Content)
-	for _, expected := range []string{"Message or /command", glyphBrand + " protonman"} {
+	for _, expected := range []string{"Message or /command", glyphBrand, "█▀█"} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("empty state view does not contain %q: %s", expected, view)
 		}
@@ -1101,7 +1101,7 @@ func TestWelcomeCardReprintsAfterClear(t *testing.T) {
 	if strings.Contains(plainTranscript(model), "gone") {
 		t.Fatal("clear left transcript body")
 	}
-	if !strings.Contains(view, glyphBrand+" protonman") {
+	if !strings.Contains(view, glyphBrand) || !strings.Contains(view, "█▀█") {
 		t.Fatalf("clear did not reprint welcome: %s", view)
 	}
 }
@@ -1140,47 +1140,35 @@ func (fakeConversation) Run(context.Context, []model.Message, applicationturn.Si
 	return applicationturn.Result{}, nil
 }
 
-func TestPromptPlaceholderReflectsPermissionAndPlanMode(t *testing.T) {
-	// Without runner
+func TestPromptPlaceholderReflectsRunnerState(t *testing.T) {
 	if got := promptPlaceholder(false, permission.ModeAsk, false); got != "Message or /command…" {
 		t.Fatalf("no runner placeholder = %q", got)
 	}
 
-	// Normal ask mode
-	if got := promptPlaceholder(true, permission.ModeAsk, false); got != "Message Protonman…" {
-		t.Fatalf("ask mode placeholder = %q", got)
+	for _, tc := range []struct {
+		mode permission.Mode
+		plan bool
+	}{
+		{permission.ModeAsk, false},
+		{permission.ModeAlwaysApprove, false},
+		{permission.ModeDeny, false},
+		{permission.ModeAsk, true},
+	} {
+		if got := promptPlaceholder(true, tc.mode, tc.plan); got != "" {
+			t.Fatalf("runner placeholder = %q, want empty", got)
+		}
 	}
 
-	// Auto-approve mode stays visually quiet; mode context is shown separately.
-	if got := promptPlaceholder(true, permission.ModeAlwaysApprove, false); got != "Message Protonman…" {
-		t.Fatalf("auto-approve placeholder = %q", got)
-	}
-
-	// Plan mode
-	if got := promptPlaceholder(true, permission.ModeAsk, true); got != "Plan or inspect…" {
-		t.Fatalf("plan mode placeholder = %q", got)
-	}
-
-	// Deny mode
-	if got := promptPlaceholder(true, permission.ModeDeny, false); got != "Inspect workspace…" {
-		t.Fatalf("deny mode placeholder = %q", got)
-	}
-
-	// Dynamic update on bubbleModel
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.runner = fakeConversation{}
 	m.syncPromptPlaceholder()
-	if got := m.panes.bottom.prompt().Placeholder; got != "Message Protonman…" {
-		t.Fatalf("initial placeholder = %q", got)
+	if got := m.panes.bottom.prompt().Placeholder; got != "" {
+		t.Fatalf("initial runner placeholder = %q, want empty", got)
 	}
 
 	_ = m.setPermissionMode(permission.ModeAlwaysApprove)
-	if got := m.panes.bottom.prompt().Placeholder; got != "Message Protonman…" {
-		t.Fatalf("placeholder after mode always-approve = %q", got)
-	}
-
 	m.setPlanEnabled(true)
-	if got := m.panes.bottom.prompt().Placeholder; got != "Plan or inspect…" {
-		t.Fatalf("placeholder after plan mode = %q", m.panes.bottom.prompt().Placeholder)
+	if got := m.panes.bottom.prompt().Placeholder; got != "" {
+		t.Fatalf("runner placeholder after mode changes = %q, want empty", got)
 	}
 }

@@ -70,7 +70,8 @@ func (m *bubbleModel) footerView() string {
 }
 
 func (m *bubbleModel) idleContextFooter() string {
-	width := maxInt(1, m.layout.width-2)
+	const inset = " "
+	width := maxInt(1, m.layout.width-len(inset)*3)
 	left := "? for shortcuts"
 	right := strings.TrimSpace(m.activeModel)
 	if right == "" {
@@ -78,8 +79,8 @@ func (m *bubbleModel) idleContextFooter() string {
 	}
 	right += " · " + reasoningEffortLabel(m.reasoningEffort)
 	if ansi.StringWidth(left)+ansi.StringWidth(right)+2 > width {
-		return mutedStyle.Render(truncateWithEllipsis(right, width))
+		return inset + mutedStyle.Render(truncateWithEllipsis(right, width))
 	}
 	spaces := strings.Repeat(" ", width-ansi.StringWidth(left)-ansi.StringWidth(right))
-	return mutedStyle.Render(left + spaces + right)
+	return inset + mutedStyle.Render(left+spaces+right)
 }

@@ -13,7 +13,7 @@ func (m *bubbleModel) resize(width int, height int) {
 	m.layout.height = height
 	m.help.SetWidth(maxInt(1, width-2))
 	prompt := m.panes.bottom.prompt()
-	prompt.SetWidth(maxInt(1, width-4))
+	prompt.SetWidth(maxInt(1, width-2))
 	m.panes.transcript.SetWidth(maxInt(1, width-10))
 	m.panes.transcript.SetHeight(maxInt(1, height-10))
 	if view, _ := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView); view != nil {
@@ -59,10 +59,8 @@ func (m *bubbleModel) buildFrameChrome() frameChrome {
 		}
 	}
 	if m.panes.bottom.composerVisible() {
-		// Layout only needs the textarea's measured height. Rendering the full
-		// composer here would duplicate the expensive textarea render that View
-		// performs immediately after reconciliation.
-		frame.height += m.panes.bottom.prompt().Height()
+		// The composer has one separator row above and below the textarea.
+		frame.height += m.panes.bottom.prompt().Height() + 2
 	}
 	if frame.footer != "" {
 		frame.height += lipgloss.Height(frame.footer)

@@ -17,10 +17,10 @@ var asciiBrandLines = [...]string{
 // fallback that cannot wrap on cramped terminals.
 func BrandLockup(width int) string {
 	if width < MinASCIIBrandWidth {
-		if width >= ansi.StringWidth(GlyphBrand+" protonman") {
-			return BrandMarkStyle.Render(GlyphBrand) + " " + BrandStyle.Render("protonman")
+		if width >= ansi.StringWidth(GlyphBrand+" protonMAN") {
+			return BrandMarkStyle.Render(GlyphBrand) + " " + BrandStyle.Render("protonMAN")
 		}
-		return BrandStyle.Render("protonman")
+		return BrandStyle.Render("protonMAN")
 	}
 
 	first := BrandMarkStyle.Render(GlyphBrand) + "  " + BrandStyle.Render(asciiBrandLines[0])

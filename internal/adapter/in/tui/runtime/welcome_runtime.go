@@ -48,13 +48,15 @@ func (m *bubbleModel) invalidateWelcomeBranch() {
 }
 
 func (m *bubbleModel) renderWelcomeCard(branch string) string {
-	rows := []string{brandStyle.Render(glyphBrand + " protonman")}
+	rows := []string{brandLockup(maxInt(1, m.layout.width-2))}
 	if ws := formatWorkspaceDisplay(m.workDir); ws != "" {
-		workspace := ws
+		width := maxInt(1, m.layout.width-2)
+		workspace := truncateWithEllipsis(ws, width)
 		if branch != "" {
-			workspace += " · " + branch
+			suffix := " · " + branch
+			workspace = truncateWithEllipsis(ws, maxInt(1, width-len(suffix))) + suffix
 		}
-		rows = append(rows, mutedStyle.Render(truncateWithEllipsis(workspace, maxInt(1, m.layout.width-2))))
+		rows = append(rows, mutedStyle.Render(workspace))
 	}
 	return strings.Join(rows, "\n")
 }

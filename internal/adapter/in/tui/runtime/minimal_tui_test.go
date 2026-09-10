@@ -89,7 +89,7 @@ func TestMinimalScrollKeepsSingleComposer(t *testing.T) {
 	m.refreshViewport()
 	m.viewport.PageUp()
 	plain := ansi.Strip(m.View().Content)
-	if got := strings.Count(plain, "Message Protonman"); got != 1 {
+	if got := strings.Count(plain, "> "); got != 1 {
 		t.Fatalf("composer count=%d, want 1; view=%q", got, plain)
 	}
 }
@@ -113,8 +113,8 @@ func TestMinimalBusyChromeKeepsActionableHelpCompact(t *testing.T) {
 			t.Fatalf("busy help missing %q: %q", want, footer)
 		}
 	}
-	if frame.height > 4 {
-		t.Fatalf("busy chrome height=%d, want <=4", frame.height)
+	if frame.height > 6 {
+		t.Fatalf("busy chrome height=%d, want <=6", frame.height)
 	}
 }
 
@@ -138,8 +138,8 @@ func TestMinimalComposerKeepsContextInFooter(t *testing.T) {
 	m.reasoningEffort = sdk.ReasoningHigh
 	m.resize(80, 24)
 	prompt := ansi.Strip(m.promptView())
-	if !strings.Contains(prompt, "Message Protonman") || strings.Contains(prompt, "glm-5.3-flash") {
-		t.Fatalf("composer should stay focused on input: %q", prompt)
+	if !strings.Contains(prompt, "> ") || strings.Contains(prompt, "Message Protonman") || strings.Contains(prompt, "glm-5.3-flash") {
+		t.Fatalf("composer should stay visually empty and focused on input: %q", prompt)
 	}
 	footer := ansi.Strip(m.footerView())
 	for _, want := range []string{"? for shortcuts", "glm-5.3-flash", "high"} {

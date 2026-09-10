@@ -208,7 +208,7 @@ func newPrompt(hasRunner bool) textarea.Model {
 }
 
 func applyPromptChrome(prompt *textarea.Model, bash bool) {
-	prefix := glyphPrompt
+	prefix := "> "
 	accent := accentAssistant
 	if bash {
 		prefix = "! "
