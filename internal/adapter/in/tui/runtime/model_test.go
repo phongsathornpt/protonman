@@ -1429,6 +1429,31 @@ func TestModelSetupZaiFamilyExposesThinkingToggle(t *testing.T) {
 	}
 }
 
+func TestModelSetupDeepSeekV4FamilyExposesNativeEffortLevels(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.resize(100, 30)
+	m.activeProvider = "protonman"
+	m.activeModel = "deepseek-v4-flash-free"
+	m.modelCatalogs.Set("protonman", []domainmodel.RemoteModel{{ID: m.activeModel}})
+	view := newModelSetupPaneView(m)
+	want := []sdk.ReasoningEffort{sdk.ReasoningDefault, sdk.ReasoningNone, sdk.ReasoningLow, sdk.ReasoningHigh, sdk.ReasoningMax}
+	if got := view.reasoningChoices; len(got) != len(want) {
+		t.Fatalf("DeepSeek V4 choices = %#v, want %#v", got, want)
+	} else {
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("DeepSeek V4 choices = %#v, want %#v", got, want)
+			}
+		}
+	}
+	plain := testPlain(view.Render(newPaneRenderContext(m)))
+	for _, label := range []string{"auto", "none", "low", "high", "max", "←/→ Effort"} {
+		if !strings.Contains(plain, label) {
+			t.Fatalf("DeepSeek V4 picker missing %q:\n%s", label, plain)
+		}
+	}
+}
+
 func TestModelSetupUnknownFamilyExposesAutoOnly(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.resize(100, 30)

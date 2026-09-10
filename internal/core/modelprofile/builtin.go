@@ -33,6 +33,20 @@ var builtinRegistry = mustRegistry(
 		},
 	},
 	Profile{
+		Name:  "deepseek-v4-family",
+		Match: Matcher{Prefixes: []string{"deepseek-v4"}},
+		Capabilities: Capabilities{
+			Reasoning: SupportYes,
+		},
+		Reasoning: Reasoning{
+			Support: SupportYes,
+			Levels: []sdk.ReasoningEffort{
+				sdk.ReasoningNone, sdk.ReasoningLow, sdk.ReasoningHigh, sdk.ReasoningMax,
+			},
+			Default: sdk.ReasoningHigh,
+		},
+	},
+	Profile{
 		Name:  "muse-spark-1.3-family",
 		Match: Matcher{Prefixes: []string{"muse-spark-1.3"}},
 		Capabilities: Capabilities{

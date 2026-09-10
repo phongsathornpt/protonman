@@ -17,6 +17,9 @@ func TestResolveBuiltinKnownFamilies(t *testing.T) {
 	}{
 		{model: "gemini-3.8-flash", profile: "gemini-3.8-flash", wantDefault: sdk.ReasoningMedium, wantLevels: 3, wantContext: 1_048_576},
 		{model: "muse-spark-1.3-contributor-free", profile: "muse-spark-1.3-family", wantDefault: sdk.ReasoningMedium, wantLevels: 5},
+		{model: "deepseek-v4-flash-free", profile: "deepseek-v4-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
+		{model: "deepseek-v4-pro", profile: "deepseek-v4-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
+		{model: "router/deepseek-v4-flash-vision-exp", profile: "deepseek-v4-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
 		{model: "glm-5.3-flash", profile: "zai-glm-thinking", wantLevels: 1},
 		{model: "glm-4.7", profile: "zai-glm-thinking", wantLevels: 1},
 		{model: "gpt-5.6-sol", profile: "gpt-5.6-family", wantDefault: sdk.ReasoningMedium, wantLevels: 6, wantContext: 1_050_000},
