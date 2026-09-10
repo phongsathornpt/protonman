@@ -970,6 +970,29 @@ func TestTodoPaneShowsPendingBeforeCompleted(t *testing.T) {
 	}
 }
 
+func TestResetPromptCollapsesMultilineComposerDuringBusyTurn(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+	prompt := model.panes.bottom.prompt()
+	prompt.SetValue("one\ntwo\nthree\nfour")
+	model.requestRelayout()
+	model.reconcileLayout()
+	if prompt.Height() != 4 {
+		t.Fatalf("multiline prompt height = %d, want 4", prompt.Height())
+	}
+	model.resetPrompt()
+	model.busy = true
+	model.activity = "analyzing"
+	model.reconcileLayout()
+	plain := ansi.Strip(model.promptView())
+	if got := strings.Count(plain, "> "); got != 1 {
+		t.Fatalf("busy composer prompt count = %d, want 1: %q", got, plain)
+	}
+	if prompt.Height() != 1 {
+		t.Fatalf("reset prompt height = %d, want 1", prompt.Height())
+	}
+}
+
 func TestPromptIsSingleRow(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)

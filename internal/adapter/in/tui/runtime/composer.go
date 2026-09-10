@@ -241,7 +241,13 @@ func (m *bubbleModel) resetPrompt() {
 	if m == nil || m.panes.bottom == nil || m.panes.bottom.prompt() == nil {
 		return
 	}
-	m.panes.bottom.prompt().Reset()
+	prompt := m.panes.bottom.prompt()
+	prompt.Reset()
+	// bubbles/textarea Reset clears the value but intentionally preserves the
+	// current visual height. Collapse it so an empty composer cannot render the
+	// prompt glyph once per stale multiline row.
+	prompt.SetHeight(1)
+	m.requestRelayout()
 }
 
 func (m *bubbleModel) historyPrevious() {
