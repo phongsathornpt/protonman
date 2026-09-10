@@ -367,11 +367,11 @@ func TestModelSetupLaunchViaSlashCommand(t *testing.T) {
 	if !strings.Contains(rendered, "Switch Model") {
 		t.Fatalf("expected 'Switch Model' in view, got:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "✓") {
-		t.Fatalf("expected active model checkmark in view, got:\n%s", rendered)
+	if !strings.Contains(rendered, "current") {
+		t.Fatalf("expected active model current badge in view, got:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "MiniMax-M3") {
-		t.Fatalf("expected 'MiniMax-M3' in view, got:\n%s", rendered)
+	if !strings.Contains(rendered, "MiniMax M3") {
+		t.Fatalf("expected display name 'MiniMax M3' in view, got:\n%s", rendered)
 	}
 	updated, _ := bModel.Update(testKey(tea.KeyEsc))
 	bModel = updated.(*bubbleModel)
@@ -1278,5 +1278,46 @@ func TestModelSetupCurrentMarkerUsesProviderModelPair(t *testing.T) {
 	}
 	if item.current {
 		t.Fatal("same model id on another provider was marked current")
+	}
+}
+
+func TestModelDisplayNameHumanizesIdentifier(t *testing.T) {
+	got := modelDisplayName(domainmodel.RemoteModel{ID: "nemotron-3.5-lightning-free"})
+	if got != "Nemotron 3.5 Lightning" {
+		t.Fatalf("display name = %q", got)
+	}
+}
+
+func TestModelSetupSingleItemKeepsThinkingNearModel(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.resize(100, 30)
+	m.activeProvider = "opencode"
+	m.activeModel = "nemotron-3.5-lightning-free"
+	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: m.activeModel}})
+	view := newModelSetupPaneView(m)
+	rendered := strings.Split(view.Render(newPaneRenderContext(m)), "\n")
+	modelLine, thinkingLine := -1, -1
+	for index, line := range rendered {
+		if strings.Contains(line, "Nemotron 3.5 Lightning") {
+			modelLine = index
+		}
+		if strings.Contains(line, "Thinking") {
+			thinkingLine = index
+		}
+	}
+	if modelLine < 0 || thinkingLine < 0 || thinkingLine-modelLine > 2 {
+		t.Fatalf("excessive vertical gap: model=%d thinking=%d", modelLine, thinkingLine)
+	}
+}
+
+func TestModelSetupHelpUsesWholeResponsiveLabels(t *testing.T) {
+	for _, width := range []int{100, 70, 50, 30} {
+		help := modelSetupHelp(width)
+		if lipgloss.Width(help) > width {
+			t.Fatalf("help width=%d exceeds width=%d: %q", lipgloss.Width(help), width, help)
+		}
+		if strings.HasSuffix(help, " b") || strings.HasSuffix(help, " bac") {
+			t.Fatalf("help clipped mid-label at width %d: %q", width, help)
+		}
 	}
 }

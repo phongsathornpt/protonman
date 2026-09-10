@@ -2,17 +2,21 @@ package runtime
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelpicker"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 const modelSetupViewID = "model_setup"
+const maxModelSetupRows = 6
 
 type modelSetupAppliedMsg struct {
 	operationID  asyncOperationID
@@ -37,6 +41,8 @@ type modelSetupPaneView struct {
 	reasoningChoices    []sdk.ReasoningEffort
 	reasoningIndex      int
 	reasoningPreference sdk.ReasoningEffort
+	layoutWidth         int
+	layoutHeight        int
 }
 
 func newModelSetupPaneView(m *bubbleModel) *modelSetupPaneView {
@@ -53,19 +59,20 @@ func newModelSetupPaneView(m *bubbleModel) *modelSetupPaneView {
 	if !hasFreshCatalog {
 		modelsList = nil
 	}
-	delegate := list.NewDefaultDelegate()
-	delegate.SetSpacing(0)
 	view := &modelSetupPaneView{providerNames: providers, providerIndex: providerIdx}
 	if m != nil {
 		view.reasoningPreference = m.reasoningPreferenceValue()
 	}
-	view.initPicker(delegate)
+	view.initPicker()
 	activeModel := ""
 	if m != nil {
 		activeModel = m.activeModel
 	}
 	view.setModels(modelsList, m.activeProvider, activeModel)
 	view.syncReasoningForSelection(view.reasoningPreference)
+	if m != nil {
+		view.resize(m.layout.width, m.layout.height)
+	}
 	return view
 }
 
@@ -80,17 +87,61 @@ func (i modelListItem) FilterValue() string {
 }
 
 func (i modelListItem) Title() string {
-	label := strings.TrimSpace(i.model.Name)
-	if label == "" {
-		label = i.model.ID
-	}
+	label := modelDisplayName(i.model)
+	badges := make([]string, 0, 2)
 	if model.IsFreeModel(i.model.ID) {
-		label += " · FREE"
+		badges = append(badges, "FREE")
 	}
 	if i.current {
-		label = "✓ " + label
+		badges = append(badges, "current")
+	}
+	if len(badges) > 0 {
+		label += "  " + strings.Join(badges, " · ")
 	}
 	return label
+}
+
+func modelDisplayName(md model.RemoteModel) string {
+	if name := strings.TrimSpace(md.Name); name != "" {
+		return name
+	}
+	id := strings.TrimSpace(md.ID)
+	if model.IsFreeModel(id) {
+		id = strings.TrimSuffix(strings.TrimSuffix(id, "-free"), "_free")
+	}
+	parts := strings.FieldsFunc(id, func(r rune) bool { return r == '-' || r == '_' })
+	for index, part := range parts {
+		runes := []rune(part)
+		if len(runes) == 0 {
+			continue
+		}
+		runes[0] = []rune(strings.ToUpper(string(runes[0])))[0]
+		parts[index] = string(runes)
+	}
+	if label := strings.Join(parts, " "); label != "" {
+		return label
+	}
+	return md.ID
+}
+
+type modelSetupDelegate struct{}
+
+func (modelSetupDelegate) Height() int                         { return 1 }
+func (modelSetupDelegate) Spacing() int                        { return 0 }
+func (modelSetupDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
+func (modelSetupDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	entry, ok := item.(modelListItem)
+	if !ok {
+		return
+	}
+	prefix := "  "
+	style := bodyStyle
+	if index == m.Index() {
+		prefix = glyphPrompt
+		style = brandStyle
+	}
+	width := maxInt(1, m.Width()-2)
+	_, _ = fmt.Fprint(w, prefix+style.Render(truncateWithEllipsis(entry.Title(), width)))
 }
 
 func (i modelListItem) Description() string {
@@ -111,19 +162,18 @@ func (i modelListItem) Description() string {
 	return strings.Join(parts, " · ")
 }
 
-func (v *modelSetupPaneView) initPicker(delegates ...list.DefaultDelegate) {
+func (v *modelSetupPaneView) initPicker() {
 	if v == nil || v.pickerReady {
 		return
 	}
-	delegate := list.NewDefaultDelegate()
-	if len(delegates) > 0 {
-		delegate = delegates[0]
-	}
-	delegate.SetSpacing(0)
-	v.picker = list.New(nil, delegate, defaultBubbleWidth-8, defaultBubbleHeight-8)
+	v.picker = list.New(nil, modelSetupDelegate{}, defaultBubbleWidth-8, maxModelSetupRows)
 	v.picker.DisableQuitKeybindings()
 	v.picker.SetStatusBarItemName("model", "models")
 	v.picker.FilterInput.Prompt = "Search: "
+	v.picker.SetShowTitle(false)
+	v.picker.SetShowStatusBar(false)
+	v.picker.SetShowPagination(false)
+	v.picker.SetShowHelp(false)
 	v.picker.AdditionalShortHelpKeys = func() []key.Binding {
 		return []key.Binding{
 			key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
@@ -140,6 +190,24 @@ func (*modelSetupPaneView) ID() string {
 
 func (*modelSetupPaneView) ReplacesComposer() bool {
 	return true
+}
+
+func (v *modelSetupPaneView) resize(width, height int) {
+	if v == nil {
+		return
+	}
+	v.initPicker()
+	v.layoutWidth = width
+	v.layoutHeight = height
+	visibleRows := len(v.picker.VisibleItems())
+	if visibleRows == 0 {
+		visibleRows = 1
+	}
+	visibleRows = minInt(maxModelSetupRows, visibleRows)
+	if v.picker.SettingFilter() {
+		visibleRows++
+	}
+	v.picker.SetSize(maxInt(12, width-8), visibleRows)
 }
 
 func (v *modelSetupPaneView) setModels(models []model.RemoteModel, activeProvider, activeModel string) {
@@ -166,6 +234,9 @@ func (v *modelSetupPaneView) setModels(models []model.RemoteModel, activeProvide
 		v.resetSelection(activeModel)
 	} else {
 		v.resetSelection("")
+	}
+	if v.layoutWidth > 0 && v.layoutHeight > 0 {
+		v.resize(v.layoutWidth, v.layoutHeight)
 	}
 }
 

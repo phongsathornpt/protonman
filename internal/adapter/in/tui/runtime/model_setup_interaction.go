@@ -11,16 +11,11 @@ import (
 func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 	v.initPicker()
 	providerName := v.activeProviderName()
-	v.picker.SetSize(maxInt(12, ctx.width-8), maxInt(4, min(8, ctx.height-10)))
 	mode := layoutModeForHeight(ctx.height)
 	v.picker.SetShowTitle(false)
 	v.picker.SetShowStatusBar(false)
 	v.picker.SetShowPagination(false)
 	v.picker.SetShowHelp(false)
-	delegate := list.NewDefaultDelegate()
-	delegate.SetSpacing(0)
-	delegate.ShowDescription = mode == layoutNormal
-	v.picker.SetDelegate(delegate)
 
 	rows := []string{brandStyle.Render("Switch Model")}
 	if len(v.providerNames) > 1 {
@@ -45,9 +40,22 @@ func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 
 	rows = append(rows, "", v.reasoningRow())
 	if mode != layoutTiny {
-		rows = append(rows, mutedStyle.Render("↑↓ model · ←→ thinking · tab provider · enter apply · esc back"))
+		rows = append(rows, mutedStyle.Render(modelSetupHelp(ctx.width)))
 	}
 	return renderModalRows(ctx, accentAssistant, rows)
+}
+
+func modelSetupHelp(width int) string {
+	switch {
+	case width >= 74:
+		return "↑↓ model · ←→ thinking · tab provider · enter apply · esc back"
+	case width >= 54:
+		return "↑↓ model · ←→ thinking · enter apply · esc back"
+	case width >= 34:
+		return "↑↓ model · ←→ think · enter · esc"
+	default:
+		return "↑↓ · ←→ · enter · esc"
+	}
 }
 
 func (v *modelSetupPaneView) reasoningRow() string {
@@ -77,6 +85,7 @@ func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyP
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
 		v.syncPickerProjection()
+		v.resize(v.layoutWidth, v.layoutHeight)
 		v.syncReasoningForSelection(v.reasoningPreference)
 		return paneKeyResult{handled: true, cmd: cmd}
 	}
@@ -84,10 +93,12 @@ func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyP
 	case "/":
 		v.picker.SetFilterState(list.Filtering)
 		v.syncPickerProjection()
+		v.resize(v.layoutWidth, v.layoutHeight)
 		return paneKeyResult{handled: true}
 	case "ctrl+u":
 		v.picker.ResetFilter()
 		v.syncPickerProjection()
+		v.resize(v.layoutWidth, v.layoutHeight)
 		v.syncReasoningForSelection(v.reasoningPreference)
 		return paneKeyResult{handled: true}
 	case "left", "h":
@@ -100,6 +111,7 @@ func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyP
 		if v.picker.IsFiltered() {
 			v.picker.ResetFilter()
 			v.syncPickerProjection()
+			v.resize(v.layoutWidth, v.layoutHeight)
 			v.syncReasoningForSelection(v.reasoningPreference)
 			return paneKeyResult{handled: true}
 		}

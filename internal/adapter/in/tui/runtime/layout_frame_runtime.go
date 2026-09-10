@@ -16,6 +16,9 @@ func (m *bubbleModel) resize(width int, height int) {
 	prompt.SetWidth(maxInt(1, width-4))
 	m.panes.transcript.SetWidth(maxInt(1, width-10))
 	m.panes.transcript.SetHeight(maxInt(1, height-10))
+	if view, _ := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView); view != nil {
+		view.resize(width, height)
+	}
 	if m.historyState != nil {
 		m.historyState.SetWidth(width)
 	}
