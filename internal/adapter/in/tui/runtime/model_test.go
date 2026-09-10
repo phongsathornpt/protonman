@@ -1407,6 +1407,28 @@ func TestModelSetupMatchesReferenceHierarchy(t *testing.T) {
 	}
 }
 
+func TestModelSetupZaiFamilyExposesThinkingToggle(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.resize(100, 30)
+	m.activeProvider = "protonman"
+	m.activeModel = "glm-5.3-flash"
+	m.modelCatalogs.Set("protonman", []domainmodel.RemoteModel{{ID: m.activeModel}})
+	view := newModelSetupPaneView(m)
+	if got := view.reasoningChoices; len(got) != 2 || got[0] != sdk.ReasoningDefault || got[1] != sdk.ReasoningNone {
+		t.Fatalf("Z.ai family choices = %#v, want auto/none", got)
+	}
+	plain := testPlain(view.Render(newPaneRenderContext(m)))
+	for _, want := range []string{"Effort", "auto", "none", "←/→ Effort"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("Z.ai family picker missing %q:\n%s", want, plain)
+		}
+	}
+	view.moveReasoning(1)
+	if got := view.selectedReasoning(); got != sdk.ReasoningNone {
+		t.Fatalf("Z.ai family selected reasoning = %q, want none", got)
+	}
+}
+
 func TestModelSetupUnknownFamilyExposesAutoOnly(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.resize(100, 30)

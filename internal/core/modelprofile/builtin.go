@@ -22,6 +22,17 @@ var builtinRegistry = mustRegistry(
 		}},
 	},
 	Profile{
+		Name: "zai-glm-thinking",
+		Match: Matcher{Prefixes: []string{
+			"glm-4.5", "glm-4.6", "glm-4.7", "glm-5",
+		}},
+		Capabilities: Capabilities{Reasoning: SupportYes},
+		Reasoning: Reasoning{
+			Support: SupportYes,
+			Levels:  []sdk.ReasoningEffort{sdk.ReasoningNone},
+		},
+	},
+	Profile{
 		Name:  "muse-spark-1.3-family",
 		Match: Matcher{Prefixes: []string{"muse-spark-1.3"}},
 		Capabilities: Capabilities{

@@ -17,6 +17,8 @@ func TestResolveBuiltinKnownFamilies(t *testing.T) {
 	}{
 		{model: "gemini-3.8-flash", profile: "gemini-3.8-flash", wantDefault: sdk.ReasoningMedium, wantLevels: 3, wantContext: 1_048_576},
 		{model: "muse-spark-1.3-contributor-free", profile: "muse-spark-1.3-family", wantDefault: sdk.ReasoningMedium, wantLevels: 5},
+		{model: "glm-5.3-flash", profile: "zai-glm-thinking", wantLevels: 1},
+		{model: "glm-4.7", profile: "zai-glm-thinking", wantLevels: 1},
 		{model: "gpt-5.6-sol", profile: "gpt-5.6-family", wantDefault: sdk.ReasoningMedium, wantLevels: 6, wantContext: 1_050_000},
 		{model: "grok-4.6-fast", profile: "grok-4.6", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
 		{model: "claude-opus-5", profile: "claude-adaptive-thinking", wantLevels: 0},
