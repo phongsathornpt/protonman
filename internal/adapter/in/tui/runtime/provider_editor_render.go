@@ -69,35 +69,96 @@ func (v *providerPaneView) ensureModelPicker(ctx paneRenderContext) {
 		v.modelPicker = list.New(items, delegate, maxInt(20, ctx.width-8), maxInt(6, minInt(20, ctx.height-4)))
 		v.modelPicker.DisableQuitKeybindings()
 		v.modelPicker.SetFilteringEnabled(false)
+		v.modelPicker.SetShowTitle(false)
 		v.modelPicker.SetShowStatusBar(false)
+		v.modelPicker.SetShowPagination(false)
+		v.modelPicker.SetShowHelp(false)
 		v.modelPicker.SetStatusBarItemName("model", "models")
 		v.modelPicker.InfiniteScrolling = true
 		v.modelPickerSet = true
 	} else {
 		_ = v.modelPicker.SetItems(items)
 	}
-	v.modelPicker.Title = "Select model"
-	if v.filterFreeOnly {
-		v.modelPicker.Title += " · free"
+	visibleRows := 7
+	switch layoutModeForHeight(ctx.height) {
+	case layoutTiny:
+		visibleRows = 2
+	case layoutCompact:
+		visibleRows = 4
 	}
-	v.modelPicker.SetSize(maxInt(20, ctx.width-8), maxInt(6, minInt(20, ctx.height-4)))
-	mode := layoutModeForHeight(ctx.height)
-	v.modelPicker.SetShowHelp(mode != layoutTiny)
-	v.modelPicker.SetShowPagination(mode == layoutNormal)
-	delegate := list.NewDefaultDelegate()
-	delegate.SetSpacing(0)
-	delegate.ShowDescription = mode == layoutNormal
-	v.modelPicker.SetDelegate(delegate)
+	v.modelPicker.SetSize(maxInt(20, ctx.width-8), visibleRows)
+	v.modelPicker.SetShowTitle(false)
+	v.modelPicker.SetShowStatusBar(false)
+	v.modelPicker.SetShowPagination(false)
+	v.modelPicker.SetShowHelp(false)
 }
 
 func (v *providerPaneView) Render(ctx paneRenderContext) string {
 	v.resizeInputs(ctx.width)
 	if v.state == providerStateSelectModel {
 		v.ensureModelPicker(ctx)
-		return renderProviderModal(ctx, accentAssistant, strings.Split(v.modelPicker.View(), "\n"))
+		items := v.modelPicker.VisibleItems()
+		start, end := paneWindow(len(items), v.modelPicker.Index(), 7, layoutModeForHeight(ctx.height))
+		listRows := make([]string, 0, end-start)
+		for index := start; index < end; index++ {
+			item, ok := items[index].(providerEditorModelItem)
+			if !ok {
+				continue
+			}
+			prefix, style := "  ", bodyStyle
+			if index == v.modelPicker.Index() {
+				prefix, style = "> ", brandStyle
+			}
+			listRows = append(listRows, prefix+style.Render(truncateWithEllipsis(item.title, maxInt(1, providerModalContentWidth(ctx)-4))))
+		}
+		help := paneKeyboardHelp(providerModalContentWidth(ctx), "↑/↓", "Navigate", "enter", "Select", "esc", "Go Back")
+		status := ""
+		if item, ok := v.modelPicker.SelectedItem().(providerEditorModelItem); ok {
+			status = item.title
+		}
+		title := "Select Model"
+		if v.filterFreeOnly {
+			title += " · Free"
+		}
+		return renderProviderModal(ctx, accentAssistant, paneSection(title, listRows, help, status, providerModalContentWidth(ctx)+4))
 	}
 	rows, tone := providerpane.ProviderEditorRows(providerEditorSnapshot(ctx, v))
+	if len(rows) > 1 && layoutModeForHeight(ctx.height) != layoutTiny {
+		rows = append(rows[:1], append([]string{""}, rows[1:]...)...)
+	}
+	help := providerEditorKeyboardHelp(ctx.width, v.state, v.isEditing, v.activateOnSave)
+	if help != "" {
+		rows = append(rows, "", help)
+	}
+	status := strings.TrimSpace(v.nameInput.Value())
+	if v.isEditing && !v.activateOnSave && v.state == providerStateInput {
+		status = strings.TrimSpace(status + " · active stays")
+	}
+	if status != "" {
+		rows = append(rows, paneRightStatus(providerModalContentWidth(ctx)+4, status))
+	}
 	return renderProviderModal(ctx, paneToneColor(tone), rows)
+}
+
+func providerEditorKeyboardHelp(width int, state providerPaneState, editing, activateOnSave bool) string {
+	switch state {
+	case providerStateFetching:
+		return paneKeyboardHelp(width-4, "esc", "Cancel")
+	case providerStateConfirmOverwrite:
+		return paneKeyboardHelp(width-4, "enter", "Overwrite", "esc", "Go Back", "ctrl+c", "Cancel")
+	case providerStateSaveError:
+		return paneKeyboardHelp(width-4, "enter", "Retry", "esc", "Go Back", "ctrl+c", "Cancel")
+	case providerStateError:
+		return paneKeyboardHelp(width-4, "enter", "Go Back", "esc", "Go Back")
+	case providerStateSaving:
+		return ""
+	default:
+		action := "Connect"
+		if editing && !activateOnSave {
+			action = "Save"
+		}
+		return paneKeyboardHelp(width-4, "tab", "Fields", "ctrl+r", "Protocol", "enter", action, "esc", "Go Back")
+	}
 }
 
 func (v *providerPaneView) resizeInputs(width int) {

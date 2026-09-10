@@ -7,18 +7,21 @@ const shortcutsViewID = "shortcuts"
 type shortcutsPaneView struct{}
 
 func (*shortcutsPaneView) ID() string                             { return shortcutsViewID }
-func (*shortcutsPaneView) PresentationMode() panePresentationMode { return paneOverlay }
+func (*shortcutsPaneView) PresentationMode() panePresentationMode { return paneBelowComposer }
 
 func (*shortcutsPaneView) Render(ctx paneRenderContext) string {
 	rows := []string{
-		brandStyle.Render("Shortcuts"),
-		mutedStyle.Render("enter send · ctrl+j newline"),
-		mutedStyle.Render("ctrl+p model setup · ctrl+t transcript"),
-		mutedStyle.Render("shift+tab mode · ctrl+o todos · ctrl+s skills"),
-		mutedStyle.Render("ctrl+c cancel or quit"),
-		mutedStyle.Render("esc or ? close"),
+		userStyle.Render("enter") + mutedStyle.Render("  Send message"),
+		userStyle.Render("ctrl+j") + mutedStyle.Render("  New line"),
+		userStyle.Render("ctrl+p") + mutedStyle.Render("  Switch model"),
+		userStyle.Render("ctrl+t") + mutedStyle.Render("  Transcript"),
+		userStyle.Render("ctrl+o") + mutedStyle.Render("  Tasks"),
+		userStyle.Render("ctrl+s") + mutedStyle.Render("  Skills"),
+		userStyle.Render("shift+tab") + mutedStyle.Render("  Cycle mode"),
+		userStyle.Render("ctrl+c") + mutedStyle.Render("  Cancel or quit"),
 	}
-	return renderModalRows(ctx, accentAssistant, rows)
+	help := paneKeyboardHelp(ctx.width-4, "esc/?", "Go Back")
+	return renderModalRows(ctx, accentAssistant, paneSection("Shortcuts", rows, help, "", ctx.width))
 }
 
 func (*shortcutsPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {

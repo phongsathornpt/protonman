@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"fmt"
+
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
@@ -86,7 +88,7 @@ func (m *bubbleModel) applyAgentToolFailure(name string, result tool.Result, err
 type agentsPaneView struct{}
 
 func (*agentsPaneView) ID() string                             { return agentsViewID }
-func (*agentsPaneView) PresentationMode() panePresentationMode { return paneOverlay }
+func (*agentsPaneView) PresentationMode() panePresentationMode { return paneBelowComposer }
 func (*agentsPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	switch message.String() {
 	case "esc", "enter":
@@ -96,7 +98,19 @@ func (*agentsPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMs
 	}
 }
 func (*agentsPaneView) Render(ctx paneRenderContext) string {
-	return renderModalRows(ctx, promptBorder, agentInspectionRows(ctx))
+	rows := agentInspectionRows(ctx)
+	if len(rows) > 0 {
+		rows = rows[1:]
+	}
+	help := ""
+	if layoutModeForHeight(ctx.height) != layoutTiny {
+		help = paneKeyboardHelp(ctx.width-4, "esc", "Go Back")
+	}
+	status := ""
+	if count := len(ctx.agentSnapshot); count > 0 {
+		status = fmt.Sprintf("%d retained", count)
+	}
+	return renderModalRows(ctx, accentAssistant, paneSection("Agents", rows, help, status, ctx.width))
 }
 func agentInspectionRows(ctx paneRenderContext) []string {
 	return agentpane.AgentRows(agentpane.AgentsSnapshot{Width: ctx.width, Height: ctx.height, Retained: ctx.agentSnapshot, SubagentsEnabled: ctx.subagentsEnabled, Activity: ctx.agentActivity})

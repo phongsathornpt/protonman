@@ -30,7 +30,7 @@ func AgentRows(snapshot AgentsSnapshot) []string {
 		} else {
 			rows = append(rows, tuistyle.MutedStyle.Render("No subagents in this session."))
 		}
-		return append(rows, tuistyle.MutedStyle.Render("esc close"))
+		return rows
 	}
 	sort.SliceStable(retained, func(i, j int) bool {
 		return AgentDisplayPriority(retained[i].State) < AgentDisplayPriority(retained[j].State)
@@ -70,7 +70,7 @@ func AgentRows(snapshot AgentsSnapshot) []string {
 	if hidden := len(retained) - len(visible); hidden > 0 {
 		rows = append(rows, tuistyle.MutedStyle.Render(fmt.Sprintf("… %d more retained", hidden)))
 	}
-	return append(rows, tuistyle.MutedStyle.Render("esc close"))
+	return rows
 }
 
 func AgentDisplayProfile(st agent.AgentStatus) string {

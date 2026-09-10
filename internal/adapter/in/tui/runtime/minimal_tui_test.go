@@ -286,7 +286,7 @@ func TestIdleQuestionMarkOpensShortcutPane(t *testing.T) {
 		t.Fatal("? did not open shortcuts pane")
 	}
 	plain := ansi.Strip(m.View().Content)
-	for _, want := range []string{"Shortcuts", "ctrl+p model setup", "ctrl+t transcript"} {
+	for _, want := range []string{"Shortcuts", "ctrl+p", "Switch model", "ctrl+t", "Transcript", "Keyboard:", "Go Back"} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("shortcut pane missing %q: %q", want, plain)
 		}

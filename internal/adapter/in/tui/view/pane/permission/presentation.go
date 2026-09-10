@@ -59,8 +59,6 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 			titleStyle.Render(textview.TruncateEllipsis(snapshot.Title, contentWidth)),
 			tuistyle.MutedStyle.Render(textview.TruncateEllipsis(snapshot.ToolName+" · "+snapshot.Detail, contentWidth)),
 			tuistyle.BrandStyle.Render(tuistyle.GlyphPrompt + selected),
-			tuistyle.MutedStyle.Render(snapshot.ShortcutHint),
-			tuistyle.MutedStyle.Render("esc review"),
 		}, Tone: snapshot.Tone}
 	}
 	maxWidth := max(1, snapshot.Width-8)
@@ -88,11 +86,6 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 			continue
 		}
 		rows = append(rows, tuistyle.MutedStyle.Render(marker+option))
-	}
-	if snapshot.Parked {
-		rows = append(rows, tuistyle.MutedStyle.Render("tab review · "+snapshot.ShortcutHint+" · pgup/pgdn"))
-	} else {
-		rows = append(rows, tuistyle.MutedStyle.Render(fmt.Sprintf("j/k · 1-%d · %s · esc review", len(snapshot.Options), snapshot.ShortcutHint)))
 	}
 	if panecommon.ModeForHeight(snapshot.Height) == panecommon.LayoutCompact {
 		rows = panecommon.CompactRows(rows)

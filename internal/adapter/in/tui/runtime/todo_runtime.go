@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"charm.land/bubbles/v2/list"
@@ -79,25 +80,43 @@ func (i todoListItem) Title() string {
 	return glyph + i.item.Text
 }
 
+type todoSetupDelegate struct{}
+
+func (todoSetupDelegate) Height() int                         { return 1 }
+func (todoSetupDelegate) Spacing() int                        { return 0 }
+func (todoSetupDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
+func (todoSetupDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	entry, ok := item.(todoListItem)
+	if !ok {
+		return
+	}
+	prefix, style := "  ", bodyStyle
+	if index == m.Index() {
+		prefix, style = "> ", brandStyle
+	}
+	_, _ = fmt.Fprint(w, prefix+style.Render(truncateWithEllipsis(entry.Title(), maxInt(1, m.Width()-2))))
+}
+
 type todoPaneView struct {
 	picker      list.Model
 	initialized bool
 }
 
 func (*todoPaneView) ID() string                             { return todoInspectViewID }
-func (*todoPaneView) PresentationMode() panePresentationMode { return paneOverlay }
+func (*todoPaneView) PresentationMode() panePresentationMode { return paneBelowComposer }
 
 func (v *todoPaneView) ensurePicker(ctx paneRenderContext) {
 	if v.initialized {
 		return
 	}
-	delegate := list.NewDefaultDelegate()
-	delegate.SetSpacing(0)
-	delegate.ShowDescription = true
-	v.picker = list.New(todoListItems(ctx.todos), delegate, maxInt(12, ctx.width-8), maxInt(5, minInt(14, ctx.height-4)))
+	v.picker = list.New(todoListItems(ctx.todos), todoSetupDelegate{}, maxInt(12, ctx.width-8), maxInt(5, minInt(14, ctx.height-4)))
 	v.picker.DisableQuitKeybindings()
 	v.picker.SetFilteringEnabled(false)
 	v.picker.SetStatusBarItemName("task", "tasks")
+	v.picker.SetShowTitle(false)
+	v.picker.SetShowStatusBar(false)
+	v.picker.SetShowPagination(false)
+	v.picker.SetShowHelp(false)
 	v.initialized = true
 	v.syncTitle(ctx)
 }
@@ -149,15 +168,34 @@ func (v *todoPaneView) Render(ctx paneRenderContext) string {
 	if !v.initialized {
 		return ""
 	}
-	v.picker.SetItems(todoListItems(ctx.todos))
+	_ = v.picker.SetItems(todoListItems(ctx.todos))
 	v.syncTitle(ctx)
 	v.picker.SetSize(maxInt(12, ctx.width-8), maxInt(4, minInt(8, ctx.height-6)))
-	v.picker.SetShowStatusBar(false)
-	// TODO inspection keeps list navigation but renders contextual help in the shared footer.
-	// Pagination is hidden to avoid mutable paginator presentation during resize/render.
-	v.picker.SetShowPagination(false)
-	v.picker.SetShowHelp(false)
-	return renderModalRows(ctx, promptBorder, strings.Split(v.picker.View(), "\n"))
+	completed, _, _ := todopane.TodoCounts(ctx.todos)
+	help := ""
+	if layoutModeForHeight(ctx.height) != layoutTiny {
+		help = paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "enter", "Close", "esc", "Go Back")
+	}
+	items := v.picker.VisibleItems()
+	start, end := paneWindow(len(items), v.picker.Index(), 7, layoutModeForHeight(ctx.height))
+	listRows := make([]string, 0, end-start)
+	for index := start; index < end; index++ {
+		item, ok := items[index].(todoListItem)
+		if !ok {
+			continue
+		}
+		prefix, style := "  ", bodyStyle
+		if index == v.picker.Index() {
+			prefix, style = "> ", brandStyle
+		}
+		listRows = append(listRows, prefix+style.Render(truncateWithEllipsis(item.Title(), maxInt(1, ctx.width-8))))
+	}
+	status := fmt.Sprintf("%d/%d done", completed, len(ctx.todos))
+	if selected, ok := v.picker.SelectedItem().(todoListItem); ok {
+		status = selected.item.ID + " · " + status
+	}
+	rows := paneSection("Tasks", listRows, help, status, ctx.width)
+	return renderModalRows(ctx, accentAssistant, rows)
 }
 
 func (m *bubbleModel) toggleTodoPane() {

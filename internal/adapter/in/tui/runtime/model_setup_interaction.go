@@ -51,15 +51,7 @@ func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 }
 
 func modelSetupHelp(width int) string {
-	label := brandStyle.Render("Keyboard:") + " "
-	switch {
-	case width >= 78:
-		return label + userStyle.Render("↑/↓") + mutedStyle.Render(" Navigate   ") + userStyle.Render("←/→") + mutedStyle.Render(" Effort   ") + userStyle.Render("enter") + mutedStyle.Render(" Select   ") + userStyle.Render("esc") + mutedStyle.Render(" Go Back")
-	case width >= 54:
-		return label + userStyle.Render("↑/↓") + mutedStyle.Render(" model   ") + userStyle.Render("←/→") + mutedStyle.Render(" effort   ") + userStyle.Render("enter") + mutedStyle.Render(" select   ") + userStyle.Render("esc")
-	default:
-		return brandStyle.Render("Keys:") + " " + mutedStyle.Render("↑↓ ←→ enter esc")
-	}
+	return paneKeyboardHelp(width, "↑/↓", "Navigate", "←/→", "Effort", "enter", "Select", "esc", "Go Back")
 }
 
 func (v *modelSetupPaneView) effortRow() string {
@@ -104,11 +96,7 @@ func (v *modelSetupPaneView) selectionStatus(width int) string {
 	if !ok {
 		return ""
 	}
-	status := modelDisplayName(md) + " · " + reasoningEffortLabel(v.selectedReasoning())
-	available := maxInt(1, width-6)
-	status = truncateWithEllipsis(status, available)
-	padding := maxInt(0, available-len([]rune(status)))
-	return strings.Repeat(" ", padding) + mutedStyle.Render(status)
+	return paneRightStatus(width, modelDisplayName(md)+" · "+reasoningEffortLabel(v.selectedReasoning()))
 }
 
 func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {

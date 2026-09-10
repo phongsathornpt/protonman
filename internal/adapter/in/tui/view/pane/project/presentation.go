@@ -42,15 +42,13 @@ func ProjectRows(snapshot ProjectSnapshot) []string {
 	}
 	rows = append(rows, tuistyle.MutedStyle.Render(textview.TruncateEllipsis(root, max(12, snapshot.Width-10))), "")
 	if snapshot.Loading {
-		rows = append(rows, tuistyle.MutedStyle.Render("Loading "+snapshot.RootName+" workspace state..."), "", tuistyle.MutedStyle.Render("esc close"))
+		rows = append(rows, tuistyle.MutedStyle.Render("Loading "+snapshot.RootName+" workspace state..."))
 		return rows
 	}
 	if snapshot.ErrorText != "" {
 		rows = append(rows,
 			tuistyle.ErrorStyle.Render("Failed to inspect "+snapshot.RootName),
 			tuistyle.MutedStyle.Render(textview.TruncateEllipsis(snapshot.ErrorText, max(12, snapshot.Width-10))),
-			"",
-			tuistyle.MutedStyle.Render("r retry · esc close"),
 		)
 		return rows
 	}
@@ -98,7 +96,6 @@ func ProjectRows(snapshot ProjectSnapshot) []string {
 	} else if !snapshot.Exists {
 		rows = append(rows, tuistyle.MutedStyle.Render("No project-local Protonman settings are configured."))
 	}
-	rows = append(rows, tuistyle.MutedStyle.Render("/project set <setting> <value> · r reload · esc close"))
 	if panecommon.ModeForHeight(snapshot.Height) == panecommon.LayoutTiny {
 		rows = panecommon.CompactRows(rows)
 	}

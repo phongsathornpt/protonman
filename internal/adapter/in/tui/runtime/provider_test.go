@@ -33,11 +33,10 @@ func TestProviderSelectViewLaunchViaSlashCommand(t *testing.T) {
 	if !strings.Contains(rendered, "Providers") {
 		t.Fatalf("expected provider title in view, got:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "✓ Protonman · active") {
-		t.Fatalf("expected active provider marker in view, got:\n%s", rendered)
-	}
-	if !strings.Contains(rendered, "https://api.protonman.dev/v1") {
-		t.Fatalf("expected endpoint in view, got:\n%s", rendered)
+	for _, want := range []string{"Protonman", "(current)", "Keyboard:"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected provider reference element %q in view, got:\n%s", want, rendered)
+		}
 	}
 	updated, _ := bModel.Update(testKey(tea.KeyEsc))
 	bModel = updated.(*bubbleModel)
@@ -207,7 +206,7 @@ func TestProviderSelectViewDelete(t *testing.T) {
 	if !view.deleteConfirm {
 		t.Fatal("expected delete confirmation state after 'd'")
 	}
-	if !strings.Contains(bModel.View().Content, "Remove provider?") || !strings.Contains(bModel.View().Content, "protonman") {
+	if !strings.Contains(bModel.View().Content, "Remove Provider?") || !strings.Contains(bModel.View().Content, "protonman") {
 		t.Fatalf("expected provider delete confirmation in view, got:\n%s", bModel.View().Content)
 	}
 	updated, cmd = bModel.Update(testKey(tea.KeyEsc))
@@ -557,7 +556,7 @@ func TestProviderViewFetchAndModelSelectionFlow(t *testing.T) {
 		t.Fatalf("expected 2 models, got %d", len(view.models))
 	}
 	rendered := bModel.View().Content
-	if !strings.Contains(rendered, "deepseek-v4-flash-vision-exp") || !strings.Contains(rendered, "1.0M context") {
+	if !strings.Contains(rendered, "deepseek-v4-flash-vision-exp") || !strings.Contains(rendered, "GLM-5.3 Flash") || !strings.Contains(rendered, "Keyboard:") {
 		t.Fatalf("expected models in view, got:\n%s", rendered)
 	}
 	updated, _ = bModel.Update(testKey(tea.KeyDown))

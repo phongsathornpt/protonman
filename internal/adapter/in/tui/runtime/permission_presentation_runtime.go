@@ -109,7 +109,22 @@ func (v *permissionPaneView) card(ctx paneRenderContext) string {
 	if result.Inline != "" {
 		return result.Inline
 	}
-	return renderModalRows(ctx, paneToneColor(result.Tone), result.Rows)
+	rows := result.Rows
+	if len(rows) > 1 && layoutModeForHeight(ctx.height) == layoutNormal {
+		rows = append(rows[:1], append([]string{""}, rows[1:]...)...)
+	}
+	helpBindings := []string{"↑/↓", "Navigate", "enter", "Choose", "esc", "Review"}
+	if v.parked {
+		helpBindings = []string{"tab", "Review", "pgup/pgdn", "Scroll", "esc", "Back"}
+	}
+	rows = append(rows, "", paneKeyboardHelp(ctx.width-4, helpBindings...))
+	status := tool.DisplayName(request.ToolName)
+	if len(labels) > 0 {
+		index := maxInt(0, minInt(v.index, len(labels)-1))
+		status += " · " + labels[index]
+	}
+	rows = append(rows, paneRightStatus(ctx.width, status))
+	return renderModalRows(ctx, paneToneColor(result.Tone), rows)
 }
 
 type permissionRequestMsg struct{ request permissionRequest }

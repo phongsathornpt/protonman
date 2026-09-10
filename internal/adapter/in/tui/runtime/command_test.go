@@ -310,7 +310,7 @@ func TestSlashSkills(t *testing.T) {
 			t.Fatalf("expected not found error")
 		}
 		model.executeCommand("/skill pdf-processing")
-		content := model.viewport.View()
+		content := plainTranscript(model)
 		if !strings.Contains(content, "[x] Activated skill pdf-processing [user]:") {
 			t.Fatalf("expected activation message in viewport, got: %s", content)
 		}
@@ -321,7 +321,7 @@ func TestSlashSkills(t *testing.T) {
 			t.Fatalf("expected skill to be marked activated")
 		}
 		model.executeCommand("/skills")
-		if rendered := model.panes.bottom.renderTop(model); !strings.Contains(rendered, "Skills · 1/1 active") || !strings.Contains(rendered, "[x] pdf-processing") {
+		if rendered := model.panes.bottom.renderTop(model); !strings.Contains(rendered, "Skills") || !strings.Contains(rendered, "1/1 active") || !strings.Contains(rendered, "[x] pdf-processing") {
 			t.Fatalf("expected active skill state in picker, got: %s", rendered)
 		}
 		model.panes.bottom.remove(skillsViewID)
@@ -692,7 +692,7 @@ func TestSkillsCommandUsesPickerAsOnlyListSurface(t *testing.T) {
 		t.Fatalf("bare /skills should not dump list state into transcript, got:\n%s", view)
 	}
 	picker := model.panes.bottom.renderTop(model)
-	if !strings.Contains(picker, "Skills · 0/25 active") || !strings.Contains(picker, "skill-01") {
+	if !strings.Contains(picker, "Skills") || !strings.Contains(picker, "0/25 active") || !strings.Contains(picker, "skill-01") {
 		t.Fatalf("skills picker should own list presentation, got:\n%s", picker)
 	}
 }
@@ -711,7 +711,7 @@ func TestSkillsPickerKeepsComposerVisibleAndDraft(t *testing.T) {
 		t.Fatal("skills picker must not replace the composer")
 	}
 	view := testPlain(model.View().Content)
-	if !strings.Contains(view, draft) || !strings.Contains(view, "Skills · 0/5 active") {
+	if !strings.Contains(view, draft) || !strings.Contains(view, "Skills") || !strings.Contains(view, "0/5 active") {
 		t.Fatalf("skills picker and composer must render together: %q", view)
 	}
 

@@ -190,7 +190,7 @@ func TestTodoToggleOpensFocusedPaneInCompactLayout(t *testing.T) {
 		t.Fatal("compact todo toggle did not open focused pane")
 	}
 	got := view.Render(newPaneRenderContext(m))
-	if !strings.Contains(got, "one") || !strings.Contains(got, "id: one") {
+	if !strings.Contains(got, "one") || !strings.Contains(got, "0/1 done") {
 		t.Fatalf("focused todo pane=%q", got)
 	}
 	if lipgloss.Height(got) > 12 || lipgloss.Width(got) > 24 {

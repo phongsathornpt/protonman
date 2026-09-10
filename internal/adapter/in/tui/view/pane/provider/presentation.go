@@ -45,7 +45,6 @@ func ProviderEditorRows(snapshot ProviderEditorSnapshot) ([]string, panecommon.T
 		return []string{
 			tuistyle.BrandStyle.Render("Connecting · " + snapshot.Name),
 			fmt.Sprintf("%s %s", snapshot.Spinner, snapshot.Endpoint),
-			tuistyle.MutedStyle.Render("esc cancel"),
 		}, panecommon.ToneAssistant
 	case ProviderEditorSaving:
 		description := "  Applying the selected model as active"
@@ -60,19 +59,16 @@ func ProviderEditorRows(snapshot ProviderEditorSnapshot) ([]string, panecommon.T
 		return []string{
 			tuistyle.ErrorStyle.Render("Save failed"),
 			snapshot.ErrorMessage,
-			tuistyle.MutedStyle.Render("enter retry · esc back · ctrl+c cancel"),
 		}, panecommon.ToneError
 	case ProviderEditorConfirmOverwrite:
 		return []string{
 			tuistyle.WarningStyle.Render("Provider exists · " + strings.TrimSpace(snapshot.Name)),
 			tuistyle.MutedStyle.Render("Continuing replaces endpoint and API key."),
-			tuistyle.MutedStyle.Render("enter overwrite · esc back · ctrl+c cancel"),
 		}, panecommon.ToneWarning
 	case ProviderEditorError:
 		return []string{
 			tuistyle.ErrorStyle.Render("Connection failed"),
 			snapshot.ErrorMessage,
-			tuistyle.MutedStyle.Render("enter or esc back"),
 		}, panecommon.ToneError
 	default:
 		return providerInputRows(snapshot), panecommon.ToneAssistant
@@ -81,12 +77,7 @@ func ProviderEditorRows(snapshot ProviderEditorSnapshot) ([]string, panecommon.T
 
 func providerInputRows(snapshot ProviderEditorSnapshot) []string {
 	rows := []string{tuistyle.BrandStyle.Render(providerInputTitle(snapshot, true))}
-	rows = append(rows, providerInputFields(snapshot, true)...)
-	footer := "tab fields · ctrl+r protocol · enter connect · esc"
-	if snapshot.IsEditing && !snapshot.ActivateOnSave {
-		footer = "tab fields · enter save · active stays · esc"
-	}
-	return append(rows, tuistyle.MutedStyle.Render(footer))
+	return append(rows, providerInputFields(snapshot, true)...)
 }
 
 func providerInputTitle(snapshot ProviderEditorSnapshot, compact bool) string {

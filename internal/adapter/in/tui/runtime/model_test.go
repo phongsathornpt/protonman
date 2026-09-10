@@ -413,17 +413,14 @@ func TestModelSetupPreservesComposerDraft(t *testing.T) {
 }
 
 func TestBottomPanePresentationPolicy(t *testing.T) {
-	overlays := []bottomPaneView{
-		&skillsPaneView{}, &todoPaneView{}, &agentsPaneView{},
-		&shortcutsPaneView{}, &projectPaneView{}, &providerSelectPaneView{},
+	belowComposer := []bottomPaneView{
+		&skillsPaneView{}, &todoPaneView{}, &slashPaneView{}, &agentsPaneView{},
+		&shortcutsPaneView{}, &projectPaneView{}, &modelSetupPaneView{}, &providerSelectPaneView{},
 	}
-	for _, view := range overlays {
-		if view.PresentationMode() != paneOverlay {
-			t.Fatalf("%T presentation mode = %v, want overlay", view, view.PresentationMode())
+	for _, view := range belowComposer {
+		if view.PresentationMode() != paneBelowComposer {
+			t.Fatalf("%T presentation mode = %v, want below composer", view, view.PresentationMode())
 		}
-	}
-	if mode := (&modelSetupPaneView{}).PresentationMode(); mode != paneBelowComposer {
-		t.Fatalf("model setup presentation mode = %v, want below composer", mode)
 	}
 	blocking := []bottomPaneView{&permissionPaneView{}, &providerPaneView{}}
 	for _, view := range blocking {

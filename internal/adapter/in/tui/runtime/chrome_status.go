@@ -87,9 +87,9 @@ func agentActivityCounts(snapshot []agent.AgentStatus) (active, running, queued,
 func (m *bubbleModel) infoView() string {
 	if view := m.permissionView(); view != nil {
 		if view.parked {
-			return mutedStyle.Render("tab review · y once · s session · n deny")
+			return paneKeyboardHelp(maxInt(1, m.layout.width-2), "tab", "Review", "y", "Once", "s", "Session", "n", "Deny")
 		}
-		return mutedStyle.Render("y once · s session · n deny · esc review")
+		return paneKeyboardHelp(maxInt(1, m.layout.width-2), "y", "Once", "s", "Session", "n", "Deny", "esc", "Review")
 	}
 	if m.planMode {
 		return planStyle.Render("plan · read-only")

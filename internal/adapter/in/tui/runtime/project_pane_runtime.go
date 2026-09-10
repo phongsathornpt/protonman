@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
 	projectpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/project"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
@@ -35,7 +37,7 @@ func (*projectPaneView) ID() string {
 }
 
 func (*projectPaneView) PresentationMode() panePresentationMode {
-	return paneOverlay
+	return paneBelowComposer
 }
 
 func (v *projectPaneView) Render(ctx paneRenderContext) string {
@@ -46,7 +48,14 @@ func (v *projectPaneView) Render(ctx paneRenderContext) string {
 		errorText = v.err.Error()
 	}
 	rows := projectpane.ProjectRows(projectpane.ProjectSnapshot{Width: ctx.width, Height: ctx.height, WorkDir: ctx.workDir, RootName: appdirs.RootDirName, ConfigName: appdirs.ConfigFileName, TrustEnv: envconfig.TrustProject, Loading: v.loading, ErrorText: errorText, Exists: state.Exists, ConfigExists: state.ConfigExists, ConfigLoaded: state.ConfigLoaded, Trusted: state.Trusted, SkillsExists: state.SkillsExists, SkillCount: state.SkillCount, Facts: facts, Notice: v.notice})
-	return renderModalRows(ctx, accentAssistant, rows)
+	if len(rows) > 0 {
+		rows = rows[1:]
+	}
+	help := ""
+	if layoutModeForHeight(ctx.height) != layoutTiny {
+		help = paneKeyboardHelp(ctx.width-4, "r", "Reload", "esc", "Go Back")
+	}
+	return renderModalRows(ctx, accentAssistant, paneSection("Project Settings", rows, help, strings.TrimSpace(ctx.workDir), ctx.width))
 }
 
 func (v *projectPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {

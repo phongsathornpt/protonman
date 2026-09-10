@@ -1,11 +1,14 @@
 package runtime
 
 import (
+	"fmt"
+	"io"
 	"sort"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 )
 
@@ -78,6 +81,42 @@ func (i providerSelectItem) Description() string {
 	return i.description
 }
 
+type providerSelectDelegate struct{}
+
+func (providerSelectDelegate) Height() int                         { return 1 }
+func (providerSelectDelegate) Spacing() int                        { return 0 }
+func (providerSelectDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
+func (providerSelectDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	entry, ok := item.(providerSelectItem)
+	if !ok {
+		return
+	}
+	prefix, style := "  ", bodyStyle
+	if index == m.Index() {
+		prefix, style = "> ", brandStyle
+	}
+	label := entry.displayName
+	if entry.isFree {
+		label += "  FREE"
+	}
+	marker := ""
+	if entry.isActive {
+		marker = "(current)"
+	} else if entry.isConfigured {
+		marker = "saved"
+	}
+	width := maxInt(1, m.Width()-2)
+	if marker != "" {
+		markerWidth := len([]rune(marker))
+		label = truncateWithEllipsis(label, maxInt(1, width-markerWidth-2))
+		gap := maxInt(2, width-len([]rune(label))-markerWidth)
+		label += strings.Repeat(" ", gap) + mutedStyle.Render(marker)
+	} else {
+		label = truncateWithEllipsis(label, width)
+	}
+	_, _ = fmt.Fprint(w, prefix+style.Render(label))
+}
+
 type providerSelectPaneView struct {
 	picker        list.Model
 	pickerReady   bool
@@ -89,16 +128,17 @@ func (v *providerSelectPaneView) initPicker() {
 	if v == nil || v.pickerReady {
 		return
 	}
-	delegate := list.NewDefaultDelegate()
-	delegate.ShowDescription = false
-	delegate.SetSpacing(0)
 	items := make([]list.Item, 0, len(v.items))
 	for _, item := range v.items {
 		items = append(items, item)
 	}
-	v.picker = list.New(items, delegate, defaultBubbleWidth-8, defaultBubbleHeight-8)
+	v.picker = list.New(items, providerSelectDelegate{}, defaultBubbleWidth-8, defaultBubbleHeight-8)
 	v.picker.DisableQuitKeybindings()
 	v.picker.SetStatusBarItemName("provider", "providers")
+	v.picker.SetShowTitle(false)
+	v.picker.SetShowStatusBar(false)
+	v.picker.SetShowPagination(false)
+	v.picker.SetShowHelp(false)
 	v.picker.FilterInput.Prompt = "Search: "
 	v.picker.InfiniteScrolling = false
 	v.picker.AdditionalShortHelpKeys = func() []key.Binding {
@@ -166,7 +206,7 @@ func (*providerSelectPaneView) ID() string {
 }
 
 func (*providerSelectPaneView) PresentationMode() panePresentationMode {
-	return paneOverlay
+	return paneBelowComposer
 }
 
 func (v *providerSelectPaneView) selectedItem() (providerSelectItem, bool) {
@@ -179,27 +219,65 @@ func (v *providerSelectPaneView) selectedItem() (providerSelectItem, bool) {
 
 func (v *providerSelectPaneView) Render(ctx paneRenderContext) string {
 	v.initPicker()
-	mode := layoutModeForHeight(ctx.height)
-	v.picker.SetSize(maxInt(12, ctx.width-8), maxInt(4, minInt(8, ctx.height-6)))
-	v.picker.Title = "Providers"
-	v.picker.SetShowStatusBar(false)
-	// Keep pagination presentation hidden; Bubbles list still owns navigation and selection state.
-	v.picker.SetShowPagination(false)
-	v.picker.SetShowHelp(mode != layoutTiny)
-	delegate := list.NewDefaultDelegate()
-	delegate.SetSpacing(0)
-	delegate.ShowDescription = mode == layoutNormal
-	v.picker.SetDelegate(delegate)
+	v.picker.SetSize(maxInt(12, ctx.width-8), maxInt(4, minInt(maxProviderListRows, ctx.height-6)))
 	if v.deleteConfirm {
 		item, ok := v.selectedItem()
 		if ok && item.isConfigured {
-			rows := []string{warningStyle.Render("Remove provider?"), item.displayName, mutedStyle.Render(item.baseURL)}
+			rows := []string{item.displayName, mutedStyle.Render(item.baseURL)}
 			if item.isActive {
 				rows = append(rows, warningStyle.Render("This is the active provider."))
 			}
-			rows = append(rows, mutedStyle.Render("enter remove · esc cancel"))
-			return renderProviderModal(ctx, warningColor, rows)
+			help := paneKeyboardHelp(ctx.width-4, "enter", "Remove", "esc", "Cancel")
+			return renderProviderModal(ctx, warningColor, paneSection("Remove Provider?", rows, help, "", ctx.width))
 		}
 	}
-	return renderProviderModal(ctx, accentAssistant, strings.Split(v.picker.View(), "\n"))
+	help := ""
+	if layoutModeForHeight(ctx.height) != layoutTiny {
+		help = paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "enter", "Select", "e", "Edit", "m", "Models", "d", "Remove", "esc", "Go Back")
+	}
+	status := ""
+	if item, ok := v.selectedItem(); ok {
+		status = item.displayName
+		if item.isActive {
+			status += " · current"
+		} else if item.isConfigured {
+			status += " · saved"
+		}
+	}
+	items := v.picker.VisibleItems()
+	start, end := paneWindow(len(items), v.picker.Index(), maxProviderListRows, layoutModeForHeight(ctx.height))
+	listRows := make([]string, 0, end-start+1)
+	if v.picker.SettingFilter() || v.picker.IsFiltered() {
+		listRows = append(listRows, mutedStyle.Render("Search: ")+userStyle.Render(v.picker.FilterValue()))
+	}
+	for index := start; index < end; index++ {
+		item, ok := items[index].(providerSelectItem)
+		if !ok {
+			continue
+		}
+		prefix, style := "  ", bodyStyle
+		if index == v.picker.Index() {
+			prefix, style = "> ", brandStyle
+		}
+		label := item.displayName
+		if item.isFree {
+			label += "  FREE"
+		}
+		marker := ""
+		if item.isActive {
+			marker = "(current)"
+		} else if item.isConfigured {
+			marker = "saved"
+		}
+		lineWidth := maxInt(1, providerModalContentWidth(ctx)-2)
+		if marker != "" {
+			markerWidth := len([]rune(marker))
+			label = truncateWithEllipsis(label, maxInt(1, lineWidth-markerWidth-2))
+			gap := maxInt(2, lineWidth-len([]rune(label))-markerWidth)
+			listRows = append(listRows, prefix+style.Render(label)+strings.Repeat(" ", gap)+mutedStyle.Render(marker))
+		} else {
+			listRows = append(listRows, prefix+style.Render(truncateWithEllipsis(label, lineWidth)))
+		}
+	}
+	return renderProviderModal(ctx, accentAssistant, paneSection("Providers", listRows, help, status, providerModalContentWidth(ctx)+4))
 }

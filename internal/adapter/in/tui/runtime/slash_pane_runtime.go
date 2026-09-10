@@ -122,15 +122,7 @@ func (v *slashPaneView) Render(ctx paneRenderContext) string {
 }
 
 func slashPickerHelp(width int) string {
-	label := brandStyle.Render("Keyboard:") + " "
-	switch {
-	case width >= 78:
-		return label + userStyle.Render("↑/↓") + mutedStyle.Render(" Navigate   ") + userStyle.Render("enter") + mutedStyle.Render(" Select   ") + userStyle.Render("tab") + mutedStyle.Render(" Complete   ") + userStyle.Render("esc") + mutedStyle.Render(" Go Back")
-	case width >= 54:
-		return label + userStyle.Render("↑/↓") + mutedStyle.Render(" Navigate   ") + userStyle.Render("enter") + mutedStyle.Render(" Select   ") + userStyle.Render("esc") + mutedStyle.Render(" Back")
-	default:
-		return mutedStyle.Render("↑↓ · enter · tab · esc")
-	}
+	return paneKeyboardHelp(width, "↑/↓", "Navigate", "enter", "Select", "tab", "Complete", "esc", "Go Back")
 }
 
 func (v *slashPaneView) selectionStatus(width int) string {
@@ -144,10 +136,7 @@ func (v *slashPaneView) selectionStatus(width int) string {
 	if remaining := len(v.matches) - minInt(maxSlashRows, len(v.matches)); remaining > 0 {
 		status += fmt.Sprintf(" · %d more", remaining)
 	}
-	available := maxInt(1, width-4)
-	status = truncateWithEllipsis(status, available)
-	padding := maxInt(0, available-len([]rune(status)))
-	return strings.Repeat(" ", padding) + mutedStyle.Render(status)
+	return paneRightStatus(width, status)
 }
 
 func (v *slashPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
