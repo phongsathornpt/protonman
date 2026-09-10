@@ -108,7 +108,7 @@ func (m *bubbleModel) reconfigureRunner() {
 	if resolved, ok := m.activeRemoteModel(); ok {
 		remote = &resolved
 	}
-	conversation, err := app.BuildConversation(m.service, m.skills, m.agents, app.ConversationSpec{ProviderName: provName, ProviderType: prov.Type, BaseURL: prov.BaseURL, APIKey: prov.APIKey, ModelID: m.activeModel, SessionID: sessID, Workspace: m.workDir, AgentProfile: m.agentProfile, ReasoningEffort: m.reasoningEffort, MaxToolCalls: m.maxToolCalls, RequestTimeout: m.runtimeConfig.ModelRequestTimeout, TurnTimeout: m.runtimeConfig.TurnTimeout, RoundTimeout: m.runtimeConfig.RoundTimeout, RemoteModel: remote})
+	conversation, err := app.BuildConversation(m.service, m.skills, m.agents, app.ConversationSpec{ProviderName: provName, ProviderType: prov.Type, BaseURL: prov.BaseURL, APIKey: prov.APIKey, ModelID: m.activeModel, SessionID: sessID, Workspace: m.workDir, ActiveGoal: m.activeGoal, AgentProfile: m.agentProfile, ReasoningEffort: m.reasoningEffort, MaxToolCalls: m.maxToolCalls, RequestTimeout: m.runtimeConfig.ModelRequestTimeout, TurnTimeout: m.runtimeConfig.TurnTimeout, RoundTimeout: m.runtimeConfig.RoundTimeout, RemoteModel: remote})
 	if err != nil {
 		m.appendError("failed to configure model runner: " + err.Error())
 		m.runner = nil

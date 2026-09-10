@@ -4,6 +4,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"fmt"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
+	"strings"
 )
 
 func (m *bubbleModel) executeCommand(line string) tea.Cmd {
@@ -18,7 +19,9 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		m.openPermissionModePane()
 	case "skills":
 		return m.handleSkillsCommand(argument, parts)
-	case "transcript", "todo":
+	case "goal":
+		return m.executeConversationCommand(name, fullSlashArgument(line, rawName))
+	case "clear", "transcript", "todo":
 		return m.executeConversationCommand(name, argument)
 	case "model":
 		return m.executeModelCommand(argument)
@@ -41,4 +44,16 @@ func (m *bubbleModel) appendHelp() {
 	for _, command := range slashCatalog {
 		m.appendLine("/" + textview.PadRight(command.Name, 16) + " " + command.Description)
 	}
+}
+
+func fullSlashArgument(line, rawName string) string {
+	trimmed := strings.TrimSpace(line)
+	if len(trimmed) == 0 {
+		return ""
+	}
+	body := strings.TrimSpace(trimmed[1:])
+	if len(body) < len(rawName) {
+		return ""
+	}
+	return strings.TrimSpace(body[len(rawName):])
 }

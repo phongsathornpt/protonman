@@ -89,6 +89,7 @@ type conversationModelState struct {
 	conversationViewport  conversationViewportState
 	messages              []model.Message
 	conversationRetention conversation.RetentionPolicy
+	activeGoal            string
 }
 
 type todoModelState struct {

@@ -82,6 +82,7 @@ type ConversationSpec struct {
 	ModelID         string
 	SessionID       string
 	Workspace       string
+	ActiveGoal      string
 	AgentProfile    string
 	ReasoningEffort sdk.ReasoningEffort
 	MaxToolCalls    int
@@ -130,7 +131,7 @@ func BuildConversation(service *toolcall.Service, skills *skill.Registry, agents
 }
 
 func primaryConversationPolicy(spec ConversationSpec) (prompt.Spec, []turn.Option, error) {
-	promptSpec := prompt.Spec{Workspace: spec.Workspace}
+	promptSpec := prompt.Spec{Workspace: spec.Workspace, ActiveGoal: strings.TrimSpace(spec.ActiveGoal)}
 	options := []turn.Option{
 		turn.WithMaxToolCalls(spec.MaxToolCalls),
 		turn.WithTurnTimeout(spec.TurnTimeout),

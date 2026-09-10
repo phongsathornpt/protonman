@@ -24,6 +24,7 @@ type MutationCapabilities struct {
 
 type Spec struct {
 	Role                string
+	ActiveGoal          string
 	Profile             string
 	Workspace           string
 	ModelPromptHints    []string
@@ -41,6 +42,9 @@ func Render(spec Spec) string {
 		identitySection(spec),
 		executionSection(),
 		toolDisciplineSection(spec),
+	}
+	if goal := strings.TrimSpace(spec.ActiveGoal); goal != "" {
+		sections = append(sections, activeGoalSection(goal))
 	}
 	if project := strings.TrimSpace(spec.ProjectInstructions); project != "" {
 		sections = append(sections, projectSection(project))
@@ -204,6 +208,12 @@ func groundingSection(evidence string) string {
 - Repository-dependent conclusions require successful empirical ` + evidence + ` evidence before final synthesis.
 - When grounding is pending, call an eligible evidence tool before final synthesis.
 - Failed, denied, planning, orchestration, and status-only calls do not satisfy grounding.`
+}
+
+func activeGoalSection(goal string) string {
+	return `# Active Goal
+- ` + goal + `
+- Keep this goal stable across conversation compaction and use it to resolve ambiguity in older compacted context.`
 }
 
 func projectSection(project string) string {
