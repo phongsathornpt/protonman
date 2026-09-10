@@ -54,6 +54,24 @@ func (s *SynthesisCoordinator) stateFor(ref TurnRef) *synthesisConsumerState {
 	return state
 }
 
+// DrainReady resolves all currently retained, previously unseen results for one
+// parent turn without waiting for a new event. The retained projection is the
+// authoritative recovery path when delivery raced the caller between rounds.
+func (s *SynthesisCoordinator) DrainReady(ref TurnRef) (SynthesisBatch, error) {
+	if s == nil || s.source == nil {
+		return SynthesisBatch{}, fmt.Errorf("synthesis coordinator source is required")
+	}
+	ref = ref.normalized()
+	state := s.stateFor(ref)
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	results, err := s.resolveUnseenLocked(state, s.source.ResultRefsForTurn(ref))
+	if err != nil {
+		return SynthesisBatch{}, err
+	}
+	return SynthesisBatch{Turn: ref, Cursor: state.cursor, Results: results}, nil
+}
+
 // Drain waits for new result references and resolves each unseen result exactly
 // once for this synthesis consumer. A timeout is non-fatal and returns no work.
 func (s *SynthesisCoordinator) Drain(ctx context.Context, ref TurnRef, timeout time.Duration) (SynthesisBatch, error) {
@@ -74,17 +92,9 @@ func (s *SynthesisCoordinator) Drain(ctx context.Context, ref TurnRef, timeout t
 		refs = mergeResultRefs(refs, s.source.ResultRefsForTurn(ref))
 	}
 
-	results := make([]SynthesisResult, 0, len(refs))
-	for _, resultRef := range refs {
-		if _, seen := state.delivered[resultRef]; seen {
-			continue
-		}
-		result, ok := s.source.LookupResult(resultRef)
-		if !ok {
-			return SynthesisBatch{}, fmt.Errorf("subagent result %s@%d is unavailable", resultRef.AgentID, resultRef.Version)
-		}
-		state.delivered[resultRef] = struct{}{}
-		results = append(results, SynthesisResult{Ref: resultRef, Result: result})
+	results, err := s.resolveUnseenLocked(state, refs)
+	if err != nil {
+		return SynthesisBatch{}, err
 	}
 	state.cursor = stream.Cursor
 	return SynthesisBatch{
@@ -121,4 +131,20 @@ func mergeResultRefs(primary, fallback []ResultRef) []ResultRef {
 		}
 	}
 	return out
+}
+func (s *SynthesisCoordinator) resolveUnseenLocked(state *synthesisConsumerState, refs []ResultRef) ([]SynthesisResult, error) {
+	results := make([]SynthesisResult, 0, len(refs))
+	for _, resultRef := range refs {
+		resultRef = resultRef.normalized()
+		if _, seen := state.delivered[resultRef]; seen {
+			continue
+		}
+		result, ok := s.source.LookupResult(resultRef)
+		if !ok {
+			return nil, fmt.Errorf("subagent result %s@%d is unavailable", resultRef.AgentID, resultRef.Version)
+		}
+		state.delivered[resultRef] = struct{}{}
+		results = append(results, SynthesisResult{Ref: resultRef, Result: result})
+	}
+	return results, nil
 }

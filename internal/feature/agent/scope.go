@@ -51,6 +51,29 @@ func (c *Coordinator) ListSession(sessionID string) []AgentStatus {
 	return out
 }
 
+// HasLiveForTurn reports whether one parent turn still owns non-terminal children.
+func (c *Coordinator) HasLiveForTurn(ref TurnRef) bool {
+	if c == nil {
+		return false
+	}
+	ref = ref.normalized()
+	c.pruneExpired()
+	c.agentsMu.RLock()
+	defer c.agentsMu.RUnlock()
+	for _, entry := range c.agents {
+		if ref.SessionID != "" && entry.status.SessionID != ref.SessionID {
+			continue
+		}
+		if ref.TurnID != "" && entry.status.ParentID != ref.TurnID {
+			continue
+		}
+		if !entry.status.State.Terminal() {
+			return true
+		}
+	}
+	return false
+}
+
 // CancelRef requests cancellation only when the agent belongs to ref.SessionID.
 func (c *Coordinator) CancelRef(ref AgentRef) error {
 	ref = ref.normalized()
