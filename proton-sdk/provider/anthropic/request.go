@@ -89,6 +89,9 @@ func buildRequest(modelID string, request sdk.Request, defaultMaxTokens int) (re
 		if effort == sdk.ReasoningNone {
 			return requestBody{}, fmt.Errorf("%w: anthropic adaptive thinking does not support reasoning effort %q", sdk.ErrInvalidRequest, effort)
 		}
+		if !supportsAdaptiveThinking(modelID) {
+			return requestBody{}, fmt.Errorf("%w: model %q does not support adaptive thinking; use provider-native extended thinking options for older models", sdk.ErrInvalidRequest, modelID)
+		}
 		body.Thinking = &thinking{Type: "adaptive"}
 		body.OutputConfig = &outputConfig{Effort: effort}
 	}
@@ -111,6 +114,9 @@ func buildRequest(modelID string, request sdk.Request, defaultMaxTokens int) (re
 	}
 	body.System = strings.Join(systems, "\n\n")
 	if len(request.Tools) > 0 && request.Options.ToolChoice == sdk.ToolChoiceRequired {
+		if !supportsForcedToolChoice(modelID) {
+			return requestBody{}, fmt.Errorf("%w: model %q does not support forced tool choice", sdk.ErrInvalidRequest, modelID)
+		}
 		body.ToolChoice = &toolChoice{Type: "any"}
 	}
 	for _, tool := range request.Tools {
@@ -158,4 +164,33 @@ func assistantContent(source sdk.Message) []contentBlock {
 		blocks = append(blocks, contentBlock{Type: "tool_use", ID: call.ID, Name: call.Name, Input: input})
 	}
 	return blocks
+}
+
+func normalizedModelID(modelID string) string {
+	id := strings.ToLower(strings.TrimSpace(modelID))
+	if slash := strings.LastIndexByte(id, '/'); slash >= 0 {
+		id = id[slash+1:]
+	}
+	return id
+}
+
+func supportsAdaptiveThinking(modelID string) bool {
+	id := normalizedModelID(modelID)
+	if strings.Contains(id, "mythos-preview") {
+		return true
+	}
+	for _, marker := range []string{
+		"claude-opus-5", "claude-sonnet-5", "claude-fable-5", "claude-mythos-5",
+		"-4-6", "-4.6", "-4-7", "-4.7", "-4-8", "-4.8",
+	} {
+		if strings.Contains(id, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func supportsForcedToolChoice(modelID string) bool {
+	id := normalizedModelID(modelID)
+	return !strings.HasPrefix(id, "claude-fable-5-1") && !strings.HasPrefix(id, "claude-mythos-5-1")
 }

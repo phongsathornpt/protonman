@@ -551,7 +551,7 @@ func TestE2ETUISlashHelpWithRealPTY(t *testing.T) {
 	}
 	time.Sleep(150 * time.Millisecond)
 	view := output.String()
-	for _, want := range []string{"Commands", "tab", "Complete", "enter", "Select", "Go Back"} {
+	for _, want := range []string{"/help", "tab", "complete", "enter", "select", "go back"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("slash PTY output missing %q: %q", want, view)
 		}
@@ -598,4 +598,72 @@ func openLinuxPTY(t *testing.T, cols, rows uint16) (*os.File, *os.File) {
 		t.Fatalf("set PTY size: %v", err)
 	}
 	return os.NewFile(uintptr(masterFD), "ptmx"), os.NewFile(uintptr(slaveFD), slavePath)
+}
+
+func TestE2ETUIKeyboardProtocolFromRealPTY(t *testing.T) {
+	ws := newTestWorkspace(t)
+	home := newTestHome(t)
+	master, slave := openLinuxPTY(t, 80, 24)
+	defer master.Close()
+	defer slave.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, protonBin)
+	cmd.Dir = ws
+	cmd.Env = append(os.Environ(), "PROTONMAN_HOME="+home, "PROTONMAN_DEBUG_KEYS=1", "TERM=xterm-256color")
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start Protonman on PTY: %v", err)
+	}
+	_ = slave.Close()
+
+	var output bytes.Buffer
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		buf := make([]byte, 4096)
+		for {
+			n, err := master.Read(buf)
+			if n > 0 {
+				_, _ = output.Write(buf[:n])
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	time.Sleep(150 * time.Millisecond)
+	// Simulate a terminal acknowledging basic Kitty keyboard disambiguation.
+	_, _ = master.Write([]byte("\x1b[?1u"))
+	time.Sleep(75 * time.Millisecond)
+	_, _ = master.Write([]byte("\x1b[13;5u"))
+	time.Sleep(75 * time.Millisecond)
+	_, _ = master.Write([]byte{10})
+	time.Sleep(75 * time.Millisecond)
+	_, _ = master.Write([]byte{'\r'})
+	time.Sleep(75 * time.Millisecond)
+	_, _ = master.Write([]byte{3})
+	if err := cmd.Wait(); err != nil && ctx.Err() != nil {
+		t.Fatalf("TUI did not exit before timeout: %v", err)
+	}
+	_ = master.Close()
+	select {
+	case <-readDone:
+	case <-time.After(time.Second):
+		t.Fatal("timed out draining keyboard diagnostic output")
+	}
+	plain := output.String()
+	for _, want := range []string{
+		"tui keyboard capability changed from=unknown to=disambiguated",
+		"key=ctrl+enter",
+		"keyboard=disambiguated",
+		"key=ctrl+j",
+		"key=enter",
+	} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("PTY keyboard diagnostics missing %q: %q", want, plain)
+		}
+	}
 }

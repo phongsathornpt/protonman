@@ -1084,15 +1084,38 @@ func TestComposerNewlineKeyContract(t *testing.T) {
 	})
 }
 
+func TestComposerKeyActionContract(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	for _, tc := range []struct {
+		name string
+		key  tea.KeyPressMsg
+		want composerKeyAction
+	}{
+		{name: "enter", key: testKey(tea.KeyEnter), want: composerKeyActionSubmit},
+		{name: "ctrl-enter", key: tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModCtrl}, want: composerKeyActionNewline},
+		{name: "ctrl-j", key: testCtrl('j'), want: composerKeyActionNewline},
+		{name: "ctrl-m", key: testCtrl('m'), want: composerKeyActionNone},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := model.composerAction(tc.key); got != tc.want {
+				t.Fatalf("composer action = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestKeyboardEnhancementsPreferCtrlEnterHelp(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	if model.keyboardCapability != keyboardCapabilityUnknown {
+		t.Fatalf("initial keyboard capability = %s, want unknown", model.keyboardCapability)
+	}
 	if got := model.keys.Newline.Help().Key; got != "ctrl+j" {
 		t.Fatalf("fallback newline help = %q, want ctrl+j", got)
 	}
 	updated, _ := model.Update(tea.KeyboardEnhancementsMsg{Flags: 1})
 	model = updated.(*bubbleModel)
-	if !model.keyboardDisambiguation {
-		t.Fatal("keyboard disambiguation capability was not recorded")
+	if model.keyboardCapability != keyboardCapabilityDisambiguated {
+		t.Fatalf("keyboard capability = %s, want disambiguated", model.keyboardCapability)
 	}
 	if got := model.keys.Newline.Help().Key; got != "ctrl+enter" {
 		t.Fatalf("enhanced newline help = %q, want ctrl+enter", got)
@@ -1100,6 +1123,39 @@ func TestKeyboardEnhancementsPreferCtrlEnterHelp(t *testing.T) {
 	pane := (&shortcutsPaneView{}).Render(newPaneRenderContext(model))
 	if plain := ansi.Strip(pane); !strings.Contains(plain, "ctrl+enter") || strings.Contains(plain, "ctrl+j  New line") {
 		t.Fatalf("enhanced shortcuts pane did not prefer ctrl+enter: %q", plain)
+	}
+}
+
+func TestKeyboardEnhancementsRecordLegacyFallback(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	updated, _ := model.Update(tea.KeyboardEnhancementsMsg{})
+	model = updated.(*bubbleModel)
+	if model.keyboardCapability != keyboardCapabilityLegacy {
+		t.Fatalf("keyboard capability = %s, want legacy", model.keyboardCapability)
+	}
+	if got := model.keys.Newline.Help().Key; got != composerNewlineFallback {
+		t.Fatalf("legacy newline help = %q, want %q", got, composerNewlineFallback)
+	}
+}
+
+func TestNormalizeBlankComposerPolicy(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	prompt := model.panes.bottom.prompt()
+	for _, value := range []string{"\n", "   \n", "\n\n\t"} {
+		prompt.SetValue(value)
+		if !model.normalizeBlankComposer() {
+			t.Fatalf("blank composer %q was not normalized", value)
+		}
+		if prompt.Value() != "" || prompt.Height() != 1 {
+			t.Fatalf("normalized composer value=%q height=%d", prompt.Value(), prompt.Height())
+		}
+	}
+	prompt.SetValue("hello\n")
+	if model.normalizeBlankComposer() {
+		t.Fatal("non-blank multiline composer was normalized")
+	}
+	if got := prompt.Value(); got != "hello\n" {
+		t.Fatalf("non-blank composer changed to %q", got)
 	}
 }
 

@@ -3,7 +3,6 @@ package runtime
 import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"strings"
 )
 
 var composerKeys = struct {
@@ -134,7 +133,15 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 		m.requestRelayout()
 		return nil
 	}
-	if key.Matches(message, m.keys.Submit) {
+	switch m.composerAction(message) {
+	case composerKeyActionNewline:
+		updated, command := prompt.Update(message)
+		*prompt = updated
+		m.normalizeBlankComposer()
+		m.syncSlashView()
+		m.requestRelayout()
+		return command
+	case composerKeyActionSubmit:
 		return m.withSpinner(m.submit())
 	}
 	if !m.panes.bottom.bashMode() && prompt.Value() == "" && message.Text == "!" {

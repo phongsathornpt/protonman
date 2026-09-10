@@ -234,15 +234,16 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 	messages := make([]chatMessage, 0, len(request.Messages))
 	for _, message := range request.Messages {
 		if message.Role == sdk.RoleAssistant && len(message.ToolCalls) > 0 {
-			if text := strings.TrimSpace(message.TextContent()); text != "" {
-				content := text
-				messages = append(messages, chatMessage{Role: "assistant", Content: &content})
-			}
 			calls := make([]chatToolCall, 0, len(message.ToolCalls))
 			for _, call := range message.ToolCalls {
 				calls = append(calls, chatToolCall{ID: call.ID, Type: "function", Function: chatFunctionCall{Name: call.Name, Arguments: string(call.Arguments)}})
 			}
-			messages = append(messages, chatMessage{Role: "assistant", ToolCalls: calls})
+			msg := chatMessage{Role: "assistant", ToolCalls: calls}
+			if text := strings.TrimSpace(message.TextContent()); text != "" {
+				content := text
+				msg.Content = &content
+			}
+			messages = append(messages, msg)
 			continue
 		}
 		msg := chatMessage{Role: string(message.Role)}

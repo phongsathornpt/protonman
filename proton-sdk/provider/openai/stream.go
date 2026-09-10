@@ -32,6 +32,7 @@ type stream struct {
 	metadata      sdk.ProviderMetadata
 	includeRaw    bool
 	provider      string
+	hasToolCalls  bool
 }
 
 func newStream(body io.ReadCloser, metadata sdk.ProviderMetadata, includeRaw bool, provider string) *stream {
@@ -279,7 +280,11 @@ func (s *stream) processResponses(payload string) error {
 			u := chunk.Response.Usage
 			s.queue = append(s.queue, sdk.Event{Kind: sdk.EventUsage, Usage: sdk.Usage{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens, TotalTokens: u.TotalTokens}})
 		}
-		s.finish(sdk.FinishStop)
+		reason := sdk.FinishStop
+		if s.hasToolCalls || len(s.responseCalls) > 0 {
+			reason = sdk.FinishToolCalls
+		}
+		s.finish(reason)
 	}
 	return nil
 }
@@ -309,6 +314,7 @@ func (s *stream) finishResponseCall(chunk responsesChunk) {
 	if arguments == "" {
 		arguments = "{}"
 	}
+	s.hasToolCalls = true
 	s.queue = append(s.queue, sdk.Event{Kind: sdk.EventToolCallEnd, ToolCallID: callID}, sdk.Event{Kind: sdk.EventToolCall, ToolCall: sdk.ToolCall{ID: callID, Name: name, Arguments: json.RawMessage(arguments)}})
 }
 
@@ -360,6 +366,7 @@ func (s *stream) emitCompleteCall(call *accumulatedToolCall) {
 	if call.started {
 		s.queue = append(s.queue, sdk.Event{Kind: sdk.EventToolCallEnd, ToolCallID: call.id})
 	}
+	s.hasToolCalls = true
 	s.queue = append(s.queue, sdk.Event{Kind: sdk.EventToolCall, ToolCall: sdk.ToolCall{ID: call.id, Name: call.name, Arguments: json.RawMessage(arguments)}})
 }
 

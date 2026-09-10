@@ -49,14 +49,18 @@ type ToolCall struct {
 }
 
 func (c ToolCall) Validate() error {
+	return validateToolCall(c, ErrInvalidEvent)
+}
+
+func validateToolCall(c ToolCall, sentinel error) error {
 	if strings.TrimSpace(c.ID) == "" {
-		return fmt.Errorf("%w: tool call id is required", ErrInvalidEvent)
+		return fmt.Errorf("%w: tool call id is required", sentinel)
 	}
 	if strings.TrimSpace(c.Name) == "" {
-		return fmt.Errorf("%w: tool name is required", ErrInvalidEvent)
+		return fmt.Errorf("%w: tool name is required", sentinel)
 	}
 	if len(c.Arguments) > 0 && !json.Valid(c.Arguments) {
-		return fmt.Errorf("%w: tool arguments must be valid JSON", ErrInvalidEvent)
+		return fmt.Errorf("%w: tool arguments must be valid JSON", sentinel)
 	}
 	return nil
 }
@@ -187,8 +191,11 @@ func (m Message) Validate() error {
 	if m.Role != RoleTool && m.ToolResultIsError {
 		return fmt.Errorf("%w: only tool messages can be marked as tool errors", ErrInvalidRequest)
 	}
+	if m.Role == RoleTool && strings.TrimSpace(m.ToolCallID) == "" {
+		return fmt.Errorf("%w: tool message call id is required", ErrInvalidRequest)
+	}
 	for _, call := range m.ToolCalls {
-		if err := call.Validate(); err != nil {
+		if err := validateToolCall(call, ErrInvalidRequest); err != nil {
 			return err
 		}
 	}

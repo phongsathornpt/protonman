@@ -24,6 +24,8 @@ type ProviderOptions struct {
 	Headers          http.Header
 	MaxRetries       int
 	RetryBackoff     time.Duration
+	MaxRetryBackoff  time.Duration
+	MaxRetryAfter    time.Duration
 	DefaultMaxTokens int
 }
 
@@ -45,6 +47,12 @@ func NewProvider(options ProviderOptions) *Provider {
 	}
 	if options.RetryBackoff <= 0 {
 		options.RetryBackoff = 500 * time.Millisecond
+	}
+	if options.MaxRetryBackoff <= 0 {
+		options.MaxRetryBackoff = 8 * time.Second
+	}
+	if options.MaxRetryAfter <= 0 {
+		options.MaxRetryAfter = 30 * time.Second
 	}
 	if options.DefaultMaxTokens <= 0 {
 		options.DefaultMaxTokens = DefaultMaxTokens

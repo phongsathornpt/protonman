@@ -659,3 +659,57 @@ func TestQwenHybridGatewayDoesNotRewriteReasoning(t *testing.T) {
 		t.Fatalf("gateway mapping = effort %q enabled %#v", effort, enabled)
 	}
 }
+
+func TestChatAssistantTextAndToolCallsRemainOneMessage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Messages []chatMessage `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if len(body.Messages) != 1 {
+			t.Fatalf("messages = %#v, want one assistant message", body.Messages)
+		}
+		msg := body.Messages[0]
+		if msg.Role != "assistant" || len(msg.ToolCalls) != 1 {
+			t.Fatalf("message = %#v", msg)
+		}
+		content, ok := msg.Content.(string)
+		if !ok || content != "I'll inspect it." {
+			t.Fatalf("content = %#v", msg.Content)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
+	}))
+	defer server.Close()
+
+	stream, err := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("test-model").Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{
+		Role: sdk.RoleAssistant, Content: "I'll inspect it.", ToolCalls: []sdk.ToolCall{{ID: "call_1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+}
+
+func TestResponsesFunctionCallNormalizesFinishReason(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"type\":\"response.output_item.added\",\"item\":{\"id\":\"item_1\",\"type\":\"function_call\",\"call_id\":\"call_1\",\"name\":\"read\"}}\n\n")
+		_, _ = io.WriteString(w, "data: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"item_1\",\"type\":\"function_call\",\"call_id\":\"call_1\",\"name\":\"read\",\"arguments\":\"{}\"}}\n\n")
+		_, _ = io.WriteString(w, "data: {\"type\":\"response.completed\",\"response\":{}}\n\n")
+	}))
+	defer server.Close()
+	stream, err := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("response-model", WithResponsesAPI()).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := sdk.CollectStep(context.Background(), stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.FinishReason != sdk.FinishToolCalls || len(result.ToolCalls) != 1 {
+		t.Fatalf("result = %#v", result)
+	}
+}
