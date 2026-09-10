@@ -5,7 +5,7 @@ import sdk "github.com/phongsathornpt/protonman/proton-sdk"
 var builtinRegistry = mustRegistry(
 	Profile{
 		Name:  "gemini-3.8-flash",
-		Match: Matcher{ExactIDs: []string{"gemini-3.8-flash"}},
+		Match: Matcher{ExactIDs: []string{"gemini-3.8-flash"}, Prefixes: []string{"gemini-3.8-flash"}},
 		Capabilities: Capabilities{
 			Tools: SupportYes, Vision: SupportYes, Reasoning: SupportYes,
 		},

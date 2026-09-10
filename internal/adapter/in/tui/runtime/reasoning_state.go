@@ -99,9 +99,9 @@ func reasoningChoices(profile modelprofile.Resolved) []sdk.ReasoningEffort {
 		}
 		return choices
 	}
-	if profile.Reasoning.Support == modelprofile.SupportUnknown {
-		return []sdk.ReasoningEffort{sdk.ReasoningDefault, sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningHigh}
-	}
+	// Unknown model metadata must not fabricate portable effort levels. The
+	// catalog or a known family profile is the authority for selectable levels;
+	// otherwise only provider/model default (auto) is safe to expose.
 	return choices
 }
 

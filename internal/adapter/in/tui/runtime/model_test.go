@@ -1379,9 +1379,42 @@ func TestModelSetupMatchesReferenceHierarchy(t *testing.T) {
 	}
 }
 
+func TestModelSetupUnknownFamilyExposesAutoOnly(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.resize(100, 30)
+	m.activeProvider = "opencode"
+	m.activeModel = "muse-spark-1.3-contributor-free"
+	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: m.activeModel}})
+	view := newModelSetupPaneView(m)
+	if len(view.reasoningChoices) != 1 || view.reasoningChoices[0] != sdk.ReasoningDefault {
+		t.Fatalf("unknown family choices = %#v, want auto only", view.reasoningChoices)
+	}
+	plain := testPlain(view.Render(newPaneRenderContext(m)))
+	if !strings.Contains(plain, "Effort    auto") || strings.Contains(plain, "←/→ Effort") {
+		t.Fatalf("unknown family effort UI is not auto-only:\n%s", plain)
+	}
+}
+
+func TestModelSetupCatalogReasoningOverridesUnknownFamily(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.resize(100, 30)
+	m.activeProvider = "opencode"
+	m.activeModel = "future-reasoner"
+	yes := true
+	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: m.activeModel, Reasoning: &modelprofile.CatalogReasoning{Supported: &yes, Levels: []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningHigh}}}})
+	view := newModelSetupPaneView(m)
+	if got := view.reasoningChoices; len(got) != 3 || got[0] != sdk.ReasoningDefault || got[1] != sdk.ReasoningLow || got[2] != sdk.ReasoningHigh {
+		t.Fatalf("catalog reasoning choices = %#v", got)
+	}
+	plain := testPlain(view.Render(newPaneRenderContext(m)))
+	if !strings.Contains(plain, "low") || !strings.Contains(plain, "high") || !strings.Contains(plain, "←/→") {
+		t.Fatalf("catalog effort UI missing levels:\n%s", plain)
+	}
+}
+
 func TestModelSetupHelpUsesWholeResponsiveLabels(t *testing.T) {
 	for _, width := range []int{100, 70, 50, 30} {
-		help := modelSetupHelp(width)
+		help := modelSetupHelp(width, true)
 		if lipgloss.Width(help) > width {
 			t.Fatalf("help width=%d exceeds width=%d: %q", lipgloss.Width(help), width, help)
 		}

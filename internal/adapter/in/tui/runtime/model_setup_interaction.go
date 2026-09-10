@@ -38,9 +38,12 @@ func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 		showSelectionStatus = true
 	}
 
-	rows = append(rows, "", v.effortRow(), v.effortLabels())
+	rows = append(rows, "", v.effortRow())
+	if labels := v.effortLabels(); labels != "" {
+		rows = append(rows, labels)
+	}
 	if mode != layoutTiny {
-		rows = append(rows, "", modelSetupHelp(ctx.width))
+		rows = append(rows, "", modelSetupHelp(ctx.width, len(v.reasoningChoices) > 1))
 	}
 	if showSelectionStatus {
 		if status := v.selectionStatus(ctx.width); status != "" {
@@ -88,14 +91,20 @@ func (v *modelSetupPaneView) modelRows(ctx paneRenderContext) []string {
 	return rows
 }
 
-func modelSetupHelp(width int) string {
-	return paneKeyboardHelp(width, "↑/↓", "Navigate", "←/→", "Effort", "enter", "Select", "esc", "Go Back")
+func modelSetupHelp(width int, adjustableEffort bool) string {
+	if adjustableEffort {
+		return paneKeyboardHelp(width, "↑/↓", "Navigate", "←/→", "Effort", "enter", "Select", "esc", "Go Back")
+	}
+	return paneKeyboardHelp(width, "↑/↓", "Navigate", "enter", "Select", "esc", "Go Back")
 }
 
 func (v *modelSetupPaneView) effortRow() string {
 	choices := v.reasoningChoices
 	if len(choices) == 0 {
 		choices = []sdk.ReasoningEffort{sdk.ReasoningDefault}
+	}
+	if len(choices) <= 1 {
+		return "Effort    " + brandStyle.Render(reasoningEffortLabel(choices[0]))
 	}
 	parts := make([]string, 0, len(choices)*2-1)
 	for i := range choices {
@@ -115,6 +124,9 @@ func (v *modelSetupPaneView) effortLabels() string {
 	choices := v.reasoningChoices
 	if len(choices) == 0 {
 		choices = []sdk.ReasoningEffort{sdk.ReasoningDefault}
+	}
+	if len(choices) <= 1 {
+		return ""
 	}
 	labels := make([]string, 0, len(choices))
 	for i, effort := range choices {
