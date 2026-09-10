@@ -43,11 +43,6 @@ func TestProviderSelectViewLaunchViaSlashCommand(t *testing.T) {
 	if bModel.panes.bottom.has(providerSelectViewID) {
 		t.Fatal("expected provider select modal closed after Esc")
 	}
-	bModel.executeCommand("/providers")
-	if !bModel.panes.bottom.has(providerSelectViewID) {
-		t.Fatal("expected provider select modal open after /providers")
-	}
-	bModel.panes.bottom.remove(providerSelectViewID)
 	bModel.executeCommand("/provider select")
 	if !bModel.panes.bottom.has(providerSelectViewID) {
 		t.Fatal("expected provider select modal open after /provider select")

@@ -3,26 +3,10 @@ package runtime
 import (
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
-
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
-
-func (m *bubbleModel) handleReasoningCommand(argument string) tea.Cmd {
-	argument = strings.TrimSpace(argument)
-	if argument == "" {
-		return m.openModelSetupPane()
-	}
-	effort, err := sdk.ParseReasoningEffort(argument)
-	if err != nil {
-		m.appendError("invalid reasoning effort: use auto, none, minimal, low, medium, high, xhigh, or max")
-		m.refreshViewport()
-		return nil
-	}
-	return m.setReasoningEffort(effort)
-}
 
 func (m *bubbleModel) validateReasoningEffort(effort sdk.ReasoningEffort) error {
 	if effort == sdk.ReasoningDefault {
@@ -74,19 +58,6 @@ func (m *bubbleModel) reconcileReasoningForActiveModel() bool {
 	m.agents.SetReasoningEffort(sdk.ReasoningDefault)
 	m.appendLine(mutedStyle.Render("  Reset thinking level to auto (requested level " + reasoningEffortLabel(desired) + " is unsupported by " + m.activeModel + ")"))
 	return true
-}
-
-func (m *bubbleModel) setReasoningEffort(effort sdk.ReasoningEffort) tea.Cmd {
-	if err := m.validateReasoningEffort(effort); err != nil {
-		m.appendError(err.Error())
-		m.refreshViewport()
-		return nil
-	}
-	m.applyReasoningPreference(effort, reasoningPreferenceSession)
-	m.reconfigureRunner()
-	m.appendLine(successStyle.Render("Thinking level set to " + reasoningEffortLabel(effort) + " for this session."))
-	m.refreshViewport()
-	return nil
 }
 
 func reasoningChoices(profile modelprofile.Resolved) []sdk.ReasoningEffort {

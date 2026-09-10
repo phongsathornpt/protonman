@@ -5,7 +5,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"fmt"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
-	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	"io"
 	"strings"
 )
@@ -16,12 +15,12 @@ const slashViewID = "slash"
 
 type slashCommand = slashview.Command
 
-var slashCatalog = slashview.Catalog(agent.ProfileList("|"))
+var slashCatalog = slashview.Catalog()
 
 type slashListItem struct{ command slashCommand }
 
 func (i slashListItem) FilterValue() string {
-	return i.command.Name + " " + strings.Join(i.command.Aliases, " ") + " " + i.command.Description
+	return i.command.Name + " " + i.command.Description
 }
 func (i slashListItem) Title() string {
 	prefix := i.command.PrefixTag

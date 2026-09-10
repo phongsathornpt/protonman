@@ -316,15 +316,6 @@ func TestModelSetupSearchModeAcceptsReservedLetters(t *testing.T) {
 	}
 }
 
-func TestCanonicalSlashNameNormalizesModelAlias(t *testing.T) {
-	if got := canonicalSlashName("models"); got != "model" {
-		t.Fatalf("canonical name = %q, want model", got)
-	}
-	if got := canonicalSlashName("MODEL"); got != "model" {
-		t.Fatalf("canonical uppercase name = %q, want model", got)
-	}
-}
-
 func TestActiveRemoteModelFindsSelectedCatalogModel(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeProvider = "protonman"
@@ -378,11 +369,6 @@ func TestModelSetupLaunchViaSlashCommand(t *testing.T) {
 	if bModel.panes.bottom.has(modelSetupViewID) {
 		t.Fatal("expected model select modal closed after Esc")
 	}
-	bModel.executeCommand("/models")
-	if !bModel.panes.bottom.has(modelSetupViewID) {
-		t.Fatal("expected model select modal open after /models")
-	}
-	bModel.panes.bottom.remove(modelSetupViewID)
 	bModel.executeCommand("/model select")
 	if !bModel.panes.bottom.has(modelSetupViewID) {
 		t.Fatal("expected model select modal open after /model select")
@@ -415,7 +401,7 @@ func TestModelSetupPreservesComposerDraft(t *testing.T) {
 func TestBottomPanePresentationPolicy(t *testing.T) {
 	belowComposer := []bottomPaneView{
 		&skillsPaneView{}, &todoPaneView{}, &slashPaneView{}, &agentsPaneView{},
-		&shortcutsPaneView{}, &projectPaneView{}, &modelSetupPaneView{}, &providerSelectPaneView{},
+		&shortcutsPaneView{}, &modelSetupPaneView{}, &providerSelectPaneView{},
 	}
 	for _, view := range belowComposer {
 		if view.PresentationMode() != paneBelowComposer {
@@ -871,43 +857,6 @@ func TestTUICycleModeUpdatesCoordinator(t *testing.T) {
 	}
 }
 
-func TestTUISlashModeUpdatesCoordinator(t *testing.T) {
-	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	policy, err := permission.NewPolicy(permission.Config{})
-	if err != nil {
-		t.Fatalf("NewPolicy() error = %v", err)
-	}
-	ws, err := workspace.New(t.TempDir(), nil)
-	if err != nil {
-		t.Fatalf("workspace.New() error = %v", err)
-	}
-	coordinator := agent.NewCoordinator(nil, model.registry, ws, policy)
-	defer func() {
-		_ = coordinator.Close()
-	}()
-	model.agents = app.NewAgents(coordinator)
-	_ = model.executeCommand("/mode always-approve")
-	if coordinator.PermissionMode() != permission.ModeAlwaysApprove {
-		t.Fatalf("expected coordinator mode %v, got %v", permission.ModeAlwaysApprove, coordinator.PermissionMode())
-	}
-	_ = model.executeCommand("/mode ask")
-	if coordinator.PermissionMode() != permission.ModeAsk {
-		t.Fatalf("expected coordinator mode %v, got %v", permission.ModeAsk, coordinator.PermissionMode())
-	}
-	_ = model.executeCommand("/yolo")
-	if coordinator.PermissionMode() != permission.ModeAlwaysApprove {
-		t.Fatalf("expected coordinator mode %v, got %v", permission.ModeAlwaysApprove, coordinator.PermissionMode())
-	}
-	_ = model.executeCommand("/plan on")
-	if coordinator.CallGuard() == nil {
-		t.Fatal("expected coordinator call guard to be set after /plan on")
-	}
-	_ = model.executeCommand("/plan off")
-	if coordinator.CallGuard() != nil {
-		t.Fatal("expected coordinator call guard to be cleared after /plan off")
-	}
-}
-
 func TestTUIReconfigureRunnerUpdatesCoordinatorClient(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	policy, err := permission.NewPolicy(permission.Config{})
@@ -1222,9 +1171,6 @@ func TestReasoningCompatibilityFallbackPreservesAndRestoresPreference(t *testing
 	if m.reasoningEffort != sdk.ReasoningDefault || m.reasoningPreference != sdk.ReasoningHigh {
 		t.Fatalf("fallback effective=%q preference=%q, want auto/high", m.reasoningEffort, m.reasoningPreference)
 	}
-	if got := m.reasoningSourceLabel(); got != "compatibility ← user" {
-		t.Fatalf("fallback source = %q, want compatibility ← user", got)
-	}
 
 	yes := true
 	m.activeModel = "reasoning-model"
@@ -1234,9 +1180,6 @@ func TestReasoningCompatibilityFallbackPreservesAndRestoresPreference(t *testing
 	}
 	if m.reasoningEffort != sdk.ReasoningHigh || m.reasoningCompatibilityFallback {
 		t.Fatalf("restored effective=%q fallback=%v, want high/false", m.reasoningEffort, m.reasoningCompatibilityFallback)
-	}
-	if got := m.reasoningSourceLabel(); got != "user" {
-		t.Fatalf("restored source = %q, want user", got)
 	}
 }
 

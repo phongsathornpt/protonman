@@ -15,7 +15,7 @@ func splitCommand(line string) (string, string, []string) {
 }
 
 func canonicalSlashName(name string) string {
-	return slashview.CanonicalName(slashCatalog, name)
+	return slashview.CanonicalName(name)
 }
 
 func fuzzyContains(target, query string) bool {

@@ -8,10 +8,8 @@ import (
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
-	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
-	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"strings"
@@ -38,15 +36,24 @@ func TestSlashDropdownFiltersAndTabAccepts(t *testing.T) {
 	}
 }
 
-func TestToolsCommandRemovedFromTUI(t *testing.T) {
+func TestTUICommandSurfaceIsCanonical(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.executeCommand("/help")
-	if strings.Contains(plainTranscript(model), "/tools") {
-		t.Fatalf("help still advertises removed /tools command: %q", plainTranscript(model))
+	help := plainTranscript(model)
+	for _, keep := range []string{"/help", "/model", "/provider", "/skills", "/agents", "/todo", "/transcript", "/call", "/quit"} {
+		if !strings.Contains(help, keep) {
+			t.Fatalf("help missing canonical command %q: %q", keep, help)
+		}
 	}
-	model.executeCommand("/tools")
-	if !strings.Contains(plainTranscript(model), `unknown command "tools"`) {
-		t.Fatalf("removed /tools command did not resolve as unknown: %q", plainTranscript(model))
+	removed := []string{"tools", "project", "protonman", "config", "session", "sessions", "new", "agent", "profile", "subagent", "subagents", "reasoning", "thinking", "mode", "ask", "plan", "always-approve", "yolo", "clear", "models", "providers", "skill", "history", "exit"}
+	for _, name := range removed {
+		if strings.Contains(help, "/"+name+" ") {
+			t.Fatalf("help still advertises removed command /%s: %q", name, help)
+		}
+		model.executeCommand("/" + name)
+		if !strings.Contains(plainTranscript(model), `unknown command "`+name+`"`) {
+			t.Fatalf("removed /%s did not resolve as unknown", name)
+		}
 	}
 }
 
@@ -59,51 +66,6 @@ func TestColonAliasDispatchesHelp(t *testing.T) {
 	if !strings.Contains(plainTranscript(model), "/call") {
 		t.Fatalf("colon alias did not render help: %q", plainTranscript(model))
 	}
-}
-
-func TestSlashAgent(t *testing.T) {
-	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read", Kind: tool.KindRead, Description: "read"}}}
-	service := newBehaviorService(t, registry, permission.ModeAsk)
-	bModel := newBubbleModel(context.Background(), service, registry, nil, nil, newPermissionBridge(), "")
-	t.Run("default agent display", func(t *testing.T) {
-		bModel.executeCommand("/agent")
-		content := bModel.viewport.View()
-		if !strings.Contains(content, "Active agent profile") {
-			t.Fatalf("expected 'Active agent profile', got: %s", content)
-		}
-		if !strings.Contains(content, "universal") || !strings.Contains(content, "strength") || !strings.Contains(content, "agility") || !strings.Contains(content, "intelligence") {
-			t.Fatalf("expected Dota attribute profiles in list, got: %s", content)
-		}
-	})
-	t.Run("switch to dex profile", func(t *testing.T) {
-		bModel.executeCommand("/agent intelligence")
-		if got, want := bModel.agentProfile, "intelligence"; got != want {
-			t.Fatalf("bModel.agentProfile = %q, want %q", got, want)
-		}
-		content := bModel.viewport.View()
-		if !strings.Contains(content, "Agent profile switched to intelligence") {
-			t.Fatalf("expected switch confirmation, got: %s", content)
-		}
-		if len(bModel.messages) != 0 {
-			t.Fatalf("profile switch mutated transcript: %+v", bModel.messages)
-		}
-	})
-	t.Run("switch to strength profile", func(t *testing.T) {
-		bModel.executeCommand("/agent strength")
-		if got, want := bModel.agentProfile, "strength"; got != want {
-			t.Fatalf("bModel.agentProfile = %q, want %q", got, want)
-		}
-		if len(bModel.messages) != 0 {
-			t.Fatalf("profile switch mutated transcript: %+v", bModel.messages)
-		}
-	})
-	t.Run("reject invalid profile", func(t *testing.T) {
-		bModel.executeCommand("/agent invalid_profile")
-		content := bModel.viewport.View()
-		if !strings.Contains(content, "unknown agent profile") {
-			t.Fatalf("expected unknown agent profile error, got: %s", content)
-		}
-	})
 }
 
 func TestSlashEscapePreservesComposerDraft(t *testing.T) {
@@ -123,54 +85,6 @@ func TestSlashEscapePreservesComposerDraft(t *testing.T) {
 	}
 	if m.panes.bottom.has(slashViewID) {
 		t.Fatal("slash view remained on stack after escape")
-	}
-}
-
-func TestSlashReasoningUsesActiveModelProfile(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.activeProvider = "protonman"
-	m.activeModel = "gemini-3.8-flash"
-	m.executeCommand("/reasoning high")
-	if got := m.reasoningEffort; got != sdk.ReasoningHigh {
-		t.Fatalf("reasoningEffort = %q, want high", got)
-	}
-	m.executeCommand("/reasoning xhigh")
-	if got := m.reasoningEffort; got != sdk.ReasoningHigh {
-		t.Fatalf("unsupported xhigh changed reasoningEffort to %q", got)
-	}
-	if got := plainTranscript(m); !strings.Contains(got, "does not support reasoning effort") || !strings.Contains(got, "low, medium, high") {
-		t.Fatalf("transcript missing model-profile rejection: %q", got)
-	}
-}
-
-func TestSlashReasoningAutoResetsSessionOverride(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.activeModel = "gemini-3.8-flash"
-	m.reasoningEffort = sdk.ReasoningHigh
-	m.executeCommand("/reasoning auto")
-	if got := m.reasoningEffort; got != sdk.ReasoningDefault {
-		t.Fatalf("reasoningEffort = %q, want auto/default", got)
-	}
-	if got := plainTranscript(m); !strings.Contains(got, "Thinking level set to auto") {
-		t.Fatalf("transcript = %q", got)
-	}
-}
-
-func TestSlashReasoningOpensUnifiedModelSetup(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.activeProvider = "protonman"
-	m.activeModel = "gemini-3.8-flash"
-	m.providers = map[string]config.ProviderConfig{"protonman": {Name: "protonman", Type: "openai", BaseURL: "https://protonman.dev/api/v1"}}
-	m.modelCatalogs.Set("protonman", []model.RemoteModel{{ID: "gemini-3.8-flash", Name: "Gemini 3.8 Flash"}})
-	m.executeCommand("/reasoning")
-	if !m.panes.bottom.has(modelSetupViewID) {
-		t.Fatal("/reasoning did not open unified model setup")
-	}
-	got := m.panes.bottom.renderTop(m)
-	for _, want := range []string{"Switch Model", "Gemini 3.8 Flash", "Effort", "low", "medium", "high"} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("model setup missing %q: %q", want, got)
-		}
 	}
 }
 
@@ -229,24 +143,6 @@ func TestInfoViewKeepsIdleChromeEmpty(t *testing.T) {
 	}
 }
 
-func TestSlashReasoningSyncsCoordinator(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.activeModel = "gemini-3.8-flash"
-	coord := agent.NewCoordinator(nil, nil, nil, nil)
-	defer func() {
-		_ = coord.Close()
-	}()
-	m.agents = app.NewAgents(coord)
-	m.executeCommand("/reasoning low")
-	if got := coord.ReasoningEffort(); got != sdk.ReasoningLow {
-		t.Fatalf("coordinator reasoning = %q, want low", got)
-	}
-	m.executeCommand("/reasoning auto")
-	if got := coord.ReasoningEffort(); got != sdk.ReasoningDefault {
-		t.Fatalf("coordinator reasoning = %q, want auto/default", got)
-	}
-}
-
 func TestRemoteModelReasoningSummaryUsesResolvedProfile(t *testing.T) {
 	md := model.RemoteModel{ID: "gemini-3.8-flash"}
 	if got := remoteModelReasoningSummary("protonman", md, true); got != "reasoning low/medium/high (default medium)" {
@@ -254,32 +150,6 @@ func TestRemoteModelReasoningSummaryUsesResolvedProfile(t *testing.T) {
 	}
 	if got := remoteModelReasoningSummary("custom", model.RemoteModel{ID: "future-model"}, true); got != "" {
 		t.Fatalf("unknown summary = %q, want empty", got)
-	}
-}
-
-func TestSlashReasoningPickerUsesCatalogResolvedProfile(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.activeProvider = "protonman"
-	m.activeModel = "gemini-3.8-flash"
-	yes := true
-	m.modelCatalogs.Set("protonman", []model.RemoteModel{{ID: "gemini-3.8-flash", ToolSupport: &yes}})
-	m.executeCommand("/reasoning")
-	got := m.panes.bottom.renderTop(m)
-	for _, want := range []string{"low", "medium", "high"} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("picker missing catalog-resolved level %q: %q", want, got)
-		}
-	}
-}
-
-func TestSetReasoningEffortValidatesModelProfile(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.activeProvider = "protonman"
-	m.activeModel = "gemini-3.8-flash"
-	m.reasoningEffort = sdk.ReasoningMedium
-	m.setReasoningEffort(sdk.ReasoningXHigh)
-	if got := m.reasoningEffort; got != sdk.ReasoningMedium {
-		t.Fatalf("invalid picker-style selection changed effort to %q", got)
 	}
 }
 
@@ -312,16 +182,16 @@ func TestSlashSkills(t *testing.T) {
 	})
 	t.Run("skill activation", func(t *testing.T) {
 		model.panes.bottom.remove(skillsViewID)
-		model.executeCommand("/skill")
+		model.executeCommand("/skills")
 		if !model.panes.bottom.has(skillsViewID) {
-			t.Fatalf("expected /skill without args to open skills picker")
+			t.Fatalf("expected /skills without args to open skills picker")
 		}
 		model.panes.bottom.remove(skillsViewID)
-		model.executeCommand("/skill nonexistent")
+		model.executeCommand("/skills nonexistent")
 		if !strings.Contains(model.viewport.View(), "skill \"nonexistent\" not found") {
 			t.Fatalf("expected not found error")
 		}
-		model.executeCommand("/skill pdf-processing")
+		model.executeCommand("/skills pdf-processing")
 		content := plainTranscript(model)
 		if !strings.Contains(content, "[x] Activated skill pdf-processing [user]:") {
 			t.Fatalf("expected activation message in viewport, got: %s", content)
@@ -344,7 +214,7 @@ func TestSlashSkills(t *testing.T) {
 		}
 	})
 	t.Run("skill toggle", func(t *testing.T) {
-		model.executeCommand("/skill toggle pdf-processing")
+		model.executeCommand("/skills toggle pdf-processing")
 		content := model.viewport.View()
 		if !strings.Contains(content, "[ ] Skill \"pdf-processing\" deactivated.") {
 			t.Fatalf("expected deactivated message, got: %s", content)
@@ -357,7 +227,7 @@ func TestSlashSkills(t *testing.T) {
 		if !strings.Contains(content, "No active agent skills in this session.") {
 			t.Fatalf("expected no active skills message, got: %s", content)
 		}
-		model.executeCommand("/skill toggle pdf-processing")
+		model.executeCommand("/skills toggle pdf-processing")
 		content = model.viewport.View()
 		if !strings.Contains(content, "[x] Skill \"pdf-processing\" activated.") {
 			t.Fatalf("expected activated message, got: %s", content)
@@ -374,19 +244,19 @@ func TestSlashSkills(t *testing.T) {
 	})
 	t.Run("unified skill commands and deactivation verbs", func(t *testing.T) {
 		model.skills.Activate("pdf-processing")
-		model.executeCommand("/skill active")
+		model.executeCommand("/skills active")
 		if !strings.Contains(model.viewport.View(), "Active Agent Skills (1):") {
-			t.Fatalf("expected /skill active to list active skills")
+			t.Fatalf("expected /skills active to list active skills")
 		}
 		initialMsgCount := len(model.messages)
-		model.executeCommand("/skill pdf-processing")
+		model.executeCommand("/skills pdf-processing")
 		if !strings.Contains(model.viewport.View(), "is already active") {
 			t.Fatalf("expected already active message on duplicate activation")
 		}
 		if len(model.messages) != initialMsgCount {
 			t.Fatalf("messages count increased on duplicate activation: %d != %d", len(model.messages), initialMsgCount)
 		}
-		model.executeCommand("/skill deactivate pdf-processing")
+		model.executeCommand("/skills deactivate pdf-processing")
 		if model.skills.IsActivated("pdf-processing") {
 			t.Fatalf("expected skill to be deactivated")
 		}
@@ -397,22 +267,22 @@ func TestSlashSkills(t *testing.T) {
 		if !model.skills.IsActivated("pdf-processing") {
 			t.Fatalf("expected skill to be activated via /skills toggle")
 		}
-		model.executeCommand("/skill disable pdf-processing")
+		model.executeCommand("/skills disable pdf-processing")
 		if model.skills.IsActivated("pdf-processing") {
-			t.Fatalf("expected skill to be deactivated via /skill disable")
+			t.Fatalf("expected skill to be deactivated via /skills disable")
 		}
 	})
 	t.Run("skill name autocomplete in composer", func(t *testing.T) {
 		model.panes.bottom.remove(skillsViewID)
-		model.panes.bottom.prompt().SetValue("/skill ")
+		model.panes.bottom.prompt().SetValue("/skills ")
 		if !model.slashOpen() {
-			t.Fatal("slash dropdown did not open for /skill ")
+			t.Fatal("slash dropdown did not open for /skills ")
 		}
 		matches := model.slashMatches()
 		if len(matches) == 0 {
-			t.Fatal("expected matches for /skill ")
+			t.Fatal("expected matches for /skills ")
 		}
-		model.panes.bottom.prompt().SetValue("/skill pd")
+		model.panes.bottom.prompt().SetValue("/skills pd")
 		matches = model.slashMatches()
 		if len(matches) != 1 || matches[0].Name != "pdf-processing" {
 			t.Fatalf("expected pdf-processing match, got: %#v", matches)
@@ -421,8 +291,8 @@ func TestSlashSkills(t *testing.T) {
 		if !applied || cmd != nil {
 			t.Fatalf("acceptSlash failed: applied=%v, cmd=%v", applied, cmd)
 		}
-		if got := model.panes.bottom.prompt().Value(); got != "/skill pdf-processing" {
-			t.Fatalf("prompt value after accept = %q, want /skill pdf-processing", got)
+		if got := model.panes.bottom.prompt().Value(); got != "/skills pdf-processing" {
+			t.Fatalf("prompt value after accept = %q, want /skills pdf-processing", got)
 		}
 	})
 	t.Run("interactive bottom-pane skills picker", func(t *testing.T) {
@@ -460,20 +330,10 @@ func TestSlashSkills(t *testing.T) {
 			t.Fatal("second ctrl+s did not close skills picker")
 		}
 	})
-	t.Run("new command resets active skills", func(t *testing.T) {
-		model.skills.Activate("pdf-processing")
-		if !model.skills.IsActivated("pdf-processing") {
-			t.Fatal("expected skill to be active")
-		}
-		model.executeCommand("/new")
-		if model.skills.IsActivated("pdf-processing") {
-			t.Fatal("expected /new to clear active skills")
-		}
-	})
 	t.Run("skill activation does not append user message and does not flood instructions", func(t *testing.T) {
 		model.messages = nil
 		model.skills.Deactivate("pdf-processing")
-		model.executeCommand("/skill pdf-processing")
+		model.executeCommand("/skills pdf-processing")
 		content := model.viewport.View()
 		if !strings.Contains(content, "[x] Activated skill pdf-processing [user]: Extract PDF text") {
 			t.Fatalf("expected activation message with description, got: %s", content)
@@ -496,56 +356,6 @@ func TestSlashSkills(t *testing.T) {
 		}
 		model.panes.bottom.remove(skillsViewID)
 	})
-	t.Run("slashCatalog contains single unified skills command with skill alias", func(t *testing.T) {
-		var foundSkills *slashCommand
-		count := 0
-		for i, cmd := range slashCatalog {
-			if cmd.Name == "skills" || cmd.Name == "skill" {
-				foundSkills = &slashCatalog[i]
-				count++
-			}
-		}
-		if count != 1 {
-			t.Fatalf("expected exactly 1 catalog entry for skills, found %d", count)
-		}
-		if foundSkills == nil || foundSkills.Name != "skills" {
-			t.Fatalf("expected primary command name to be 'skills', got %v", foundSkills)
-		}
-		hasAlias := false
-		for _, a := range foundSkills.Aliases {
-			if a == "skill" {
-				hasAlias = true
-				break
-			}
-		}
-		if !hasAlias {
-			t.Fatalf("expected 'skill' alias in skills command, got %v", foundSkills.Aliases)
-		}
-	})
-}
-
-func TestSlashSubagentsToggle(t *testing.T) {
-	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read", Kind: tool.KindRead, Description: "read"}}}
-	service := newBehaviorService(t, registry, permission.ModeAsk)
-	coord := agent.NewCoordinator(nil, nil, nil, nil)
-	defer coord.Close()
-	m := newBubbleModel(context.Background(), service, registry, nil, nil, newPermissionBridge(), "")
-	m.agents = app.NewAgents(coord)
-	m.executeCommand("/subagents off")
-	if m.subagentsEnabled || coord.Enabled() {
-		t.Fatal("/subagents off did not disable runtime capability")
-	}
-	if !strings.Contains(m.viewport.View(), "Subagents disabled") {
-		t.Fatalf("missing disable confirmation: %q", m.viewport.View())
-	}
-	m.executeCommand("/subagents on")
-	if !m.subagentsEnabled || !coord.Enabled() {
-		t.Fatal("/subagents on did not enable runtime capability")
-	}
-	m.executeCommand("/subagents nope")
-	if !strings.Contains(m.viewport.View(), "subagents must be on or off") {
-		t.Fatalf("missing invalid toggle error: %q", m.viewport.View())
-	}
 }
 
 func newTestSkillsModel(t *testing.T, count int) *bubbleModel {
@@ -662,9 +472,9 @@ func TestComposerDraftPreservedOnHistoryNavigation(t *testing.T) {
 
 func TestSlashAutocompleteWrapAround(t *testing.T) {
 	model := newTestSkillsModel(t, 8)
-	model.panes.bottom.prompt().SetValue("/skill ")
+	model.panes.bottom.prompt().SetValue("/skills ")
 	if !model.slashOpen() {
-		t.Fatal("expected slash open for /skill ")
+		t.Fatal("expected slash open for /skills ")
 	}
 	model.syncSlashView()
 	state := model.slashState()
@@ -684,9 +494,9 @@ func TestSlashAutocompleteWrapAround(t *testing.T) {
 
 func TestSlashAutocompleteUsesBubblesListPresentation(t *testing.T) {
 	model := newTestSkillsModel(t, 5)
-	model.panes.bottom.prompt().SetValue("/skill ")
+	model.panes.bottom.prompt().SetValue("/skills ")
 	if !model.slashOpen() {
-		t.Fatal("expected slash open for /skill ")
+		t.Fatal("expected slash open for /skills ")
 	}
 	view := &slashPaneView{}
 	view.sync(newPaneRenderContext(model))

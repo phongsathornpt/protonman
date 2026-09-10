@@ -6,37 +6,23 @@ import (
 
 type Command struct {
 	Name        string
-	Aliases     []string
 	Description string
 	TakesArgs   bool
 	PrefixTag   string
 	Scope       string
 }
 
-func Catalog(agentProfiles string) []Command {
+func Catalog() []Command {
 	return []Command{
 		{Name: "help", Description: "list commands"},
-		{Name: "skills", Aliases: []string{"skill"}, Description: "browse, activate, or toggle agent skills (/skills [name|active|toggle])", TakesArgs: true},
-		{Name: "project", Aliases: []string{"protonman"}, Description: "inspect or edit project-local Protonman settings (/project [status|init|set ...|permission ...])", TakesArgs: true},
-		{Name: "config", Description: "edit user-level Protonman settings (/config set <subagents|thinking|tool-calls> <value>, /config permission <allow|deny|ask> <tool> [pattern])", TakesArgs: true},
-		{Name: "session", Description: "show the active session"},
-		{Name: "sessions", Description: "list resumable sessions for this workspace"},
+		{Name: "model", Description: "open model setup or select active model (/model [id|free|add])", TakesArgs: true},
+		{Name: "provider", Description: "select or configure model providers (/provider [name|add|list])", TakesArgs: true},
+		{Name: "skills", Description: "browse, activate, or toggle agent skills (/skills [name|active|toggle])", TakesArgs: true},
 		{Name: "agents", Description: "inspect live and retained subagents"},
-		{Name: "subagents", Description: "show or toggle subagent delegation (/subagents [on|off])", TakesArgs: true},
-		{Name: "agent", Aliases: []string{"profile"}, Description: "show or set agent profile (/agent [" + agentProfiles + "])", TakesArgs: true},
-		{Name: "reasoning", Aliases: []string{"thinking"}, Description: "open model setup or set session thinking (/reasoning [auto|none|minimal|low|medium|high|xhigh|max])", TakesArgs: true},
-		{Name: "mode", Description: "show or set permission mode", TakesArgs: true},
-		{Name: "ask", Description: "switch to ask permission mode"},
-		{Name: "always-approve", Aliases: []string{"yolo"}, Description: "allow non-denied calls"},
-		{Name: "plan", Description: "toggle plan flag", TakesArgs: true},
-		{Name: "transcript", Aliases: []string{"history"}, Description: "open transcript"},
-		{Name: "todo", Description: "show the TODO pane"},
-		{Name: "clear", Description: "clear the visible transcript"},
-		{Name: "new", Description: "start a new conversation"},
-		{Name: "model", Aliases: []string{"models"}, Description: "open model setup or select active model (/model, /model <id>, /model free, /model add)", TakesArgs: true},
-		{Name: "provider", Aliases: []string{"providers"}, Description: "select or configure model providers (/provider, /provider <name>, /provider add, /provider list)", TakesArgs: true},
+		{Name: "todo", Description: "show the TODO pane", TakesArgs: true},
+		{Name: "transcript", Description: "open or clear transcript (/transcript [clear])", TakesArgs: true},
 		{Name: "call", Description: "run a registered tool", TakesArgs: true},
-		{Name: "quit", Aliases: []string{"exit"}, Description: "leave Protonman"},
+		{Name: "quit", Description: "leave Protonman"},
 	}
 }
 
@@ -62,19 +48,8 @@ func SplitCommand(line string) (name string, argument string, rest []string) {
 	return name, argument, parts
 }
 
-func CanonicalName(catalog []Command, name string) string {
-	clean := strings.ToLower(strings.TrimSpace(name))
-	for _, command := range catalog {
-		if clean == command.Name {
-			return command.Name
-		}
-		for _, alias := range command.Aliases {
-			if clean == alias {
-				return command.Name
-			}
-		}
-	}
-	return clean
+func CanonicalName(name string) string {
+	return strings.ToLower(strings.TrimSpace(name))
 }
 
 func FuzzyContains(target, query string) bool {
@@ -105,11 +80,6 @@ func (c Command) Matches(query string) bool {
 	if query == "" || FuzzyContains(c.Name, query) {
 		return true
 	}
-	for _, alias := range c.Aliases {
-		if FuzzyContains(alias, query) {
-			return true
-		}
-	}
 	return false
 }
 
@@ -133,7 +103,7 @@ func ParseContext(value string) (Context, bool) {
 	}
 	prefix := value[:1]
 	body := value[1:]
-	for _, cmd := range []string{"skill", "skills"} {
+	for _, cmd := range []string{"skills"} {
 		if !strings.HasPrefix(body, cmd+" ") {
 			continue
 		}

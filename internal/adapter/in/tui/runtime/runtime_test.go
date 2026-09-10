@@ -11,11 +11,8 @@ import (
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	domainmodel "github.com/phongsathornpt/protonman/internal/adapter/out/model"
-	"github.com/phongsathornpt/protonman/internal/adapter/out/sessionfs"
-	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
-	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
@@ -107,14 +104,11 @@ func newBubbleTestService(t *testing.T, registry tool.Registry, mode permission.
 func TestPlanModeBlocksBashBeforeAlwaysApprove(t *testing.T) {
 	handler := &countingHandler{definition: tool.Definition{Name: "bash", Description: "run shell command", Kind: tool.KindBash, PermissionDetailKey: "command"}}
 	registry := behaviorRegistry{handler: handler}
-	service := newBehaviorService(t, registry, permission.ModeAlwaysApprove)
+	service := newBehaviorService(t, registry, permission.ModeAsk)
 	model := newBubbleModel(context.Background(), service, registry, nil, nil, newPermissionBridge(), "")
-	model.setPlanMode("on")
+	model.setPlanEnabled(true)
 	if !model.planMode {
 		t.Fatal("plan mode was not enabled")
-	}
-	if service.Mode() != permission.ModeAsk {
-		t.Fatalf("plan mode left service mode = %s, want ask", service.Mode())
 	}
 	if !strings.Contains(model.modeChip(), "read-only") {
 		t.Fatalf("plan chip does not communicate read-only behavior: %q", model.modeChip())
@@ -552,27 +546,11 @@ func TestTodoConflictRendersTaskSpecificGuidance(t *testing.T) {
 	}
 }
 
-func TestNewConversationClearsProviderHistory(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.messages = []model.Message{{Role: model.RoleUser, Content: "old context"}}
-	m.appendUser("visible old context")
-	m.queue = []string{"queued"}
-	if command := m.executeCommand("/new"); command != nil {
-		t.Fatalf("/new command = %v, want nil", command)
-	}
-	if len(m.messages) != 0 {
-		t.Fatalf("provider history length = %d, want 0", len(m.messages))
-	}
-	if len(m.queue) != 0 || len(m.historyState.Cells()) != 0 {
-		t.Fatalf("new conversation retained state: queue=%v cells=%v", m.queue, m.historyState.Cells())
-	}
-}
-
 func TestClearTranscriptPreservesProviderHistory(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.messages = []model.Message{{Role: model.RoleUser, Content: "keep context"}}
 	m.appendUser("visible message")
-	m.resetTranscript()
+	m.executeCommand("/transcript clear")
 	if len(m.messages) != 1 {
 		t.Fatalf("clear changed provider history length = %d, want 1", len(m.messages))
 	}
@@ -782,41 +760,6 @@ func TestRefreshViewportDoesNotRenderHiddenTranscriptOverlay(t *testing.T) {
 	m.refreshViewport()
 	if got := m.panes.transcript.View(); !strings.Contains(got, "overlay sentinel") {
 		t.Fatalf("hidden transcript overlay was refreshed: %q", got)
-	}
-}
-
-func TestSessionCommandsExposeIdentityAndWorkspaceSessions(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.sessionID = "current-session"
-	m.workspaceKey = "workspace-key"
-	m.messages = []model.Message{{Role: model.RoleUser, Content: "hello"}}
-	m.executeCommand("/session")
-	content := m.historyState.RenderContent()
-	for _, want := range []string{"current-session", "workspace-key", "messages: 1"} {
-		if !strings.Contains(content, want) {
-			t.Fatalf("/session missing %q: %s", want, content)
-		}
-	}
-	store, err := sessionfs.NewFileStore(filepath.Join(t.TempDir(), "sessions"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Save(context.Background(), "current-session", session.State{PermissionMode: permission.ModeAsk.String(), WorkspaceKey: "workspace-key", AgentProfile: "intelligence", Messages: []session.Message{{Role: model.RoleUser, Content: "resume this work"}}}); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Save(context.Background(), "other-session", session.State{PermissionMode: permission.ModeAsk.String(), WorkspaceKey: "other", Messages: []session.Message{{Role: model.RoleUser, Content: "do not show"}}}); err != nil {
-		t.Fatal(err)
-	}
-	m.sessions = app.NewSessions(store)
-	m.executeCommand("/sessions")
-	content = m.historyState.RenderContent()
-	for _, want := range []string{"Recent sessions:", "current-session", "resume this work", "protonman session resume"} {
-		if !strings.Contains(content, want) {
-			t.Fatalf("/sessions missing %q: %s", want, content)
-		}
-	}
-	if strings.Contains(content, "other-session") {
-		t.Fatalf("cross-workspace session leaked: %s", content)
 	}
 }
 

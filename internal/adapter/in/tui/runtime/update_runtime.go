@@ -132,20 +132,8 @@ func (m *bubbleModel) updateRuntimeEvent(msg tea.Msg) (tea.Cmd, bool) {
 	case providerDeletedMsg:
 		_, command := m.updateProviderDeleted(message)
 		return command, true
-	case projectInitializedMsg:
-		_, command := m.updateProjectInitialized(message)
-		return command, true
-	case projectSettingSavedMsg:
-		_, command := m.updateProjectSettingSaved(message)
-		return command, true
-	case userSettingSavedMsg:
-		_, command := m.updateUserSettingSaved(message)
-		return command, true
 	case permissionRuleSavedMsg:
 		_, command := m.updatePermissionRuleSaved(message)
-		return command, true
-	case projectLoadedMsg:
-		_, command := m.updateProjectLoaded(message)
 		return command, true
 	case turnmsg.Delta:
 		_, command := m.updateTurnDelta(message)

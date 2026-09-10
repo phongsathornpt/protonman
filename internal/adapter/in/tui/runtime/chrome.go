@@ -28,20 +28,6 @@ func (m *bubbleModel) resetTranscript() {
 	m.refreshTranscriptViewport(true)
 }
 
-func (m *bubbleModel) resetConversation() {
-	m.ensureHistoryState().Reset()
-	m.messages = nil
-	m.queue = nil
-	m.conversationViewport.setFollowing(true)
-	m.showWelcome = true
-	if m.skills != nil {
-		m.skills.ResetActivated()
-	}
-	m.refreshTranscriptViewport(true)
-} // resetConversation clears both the visible transcript and provider history.
-// Keeping this separate from resetTranscript makes Ctrl+L a safe display-only
-// action while /new has the explicit semantics users expect from its name.
-
 func minInt(left int, right int) int {
 	if left < right {
 		return left

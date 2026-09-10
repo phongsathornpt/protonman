@@ -184,16 +184,7 @@ Subagent profile tables merge field-wise by canonical profile. Provider/model mu
 specified together; reasoning may be specified independently. Configured providers must
 already exist in the effective provider map and satisfy their authentication requirements.
 
-Runtime controls:
-
-```text
-/subagents             show current runtime state
-/subagents on|off      change current runtime state
-/config set subagents on|off
-                       persist user-level default
-/project set subagents on|off
-                       persist trusted project override
-```
+Runtime policy is loaded from user and trusted-project configuration. The TUI does not expose slash commands that mutate subagent, project, user-config, permission-mode, agent-profile, session, or reasoning policy; those capabilities remain available through their owning configuration/runtime layers.
 
 Disabling subagents prevents **new admission only**. It never cancels running
 children and does not discard retained lifecycle records.
@@ -524,28 +515,16 @@ TUI is presentation logic under `internal/adapter/in/tui`. Keep domain semantics
 outside it. In particular, do not let TUI directly own config persistence,
 provider discovery, session storage, or concrete coordinator control.
 
-Current important slash commands include:
+Current important slash commands are intentionally canonical and small:
 
 ```text
 /help
-/skills
-/project
-/config
-/session
-/sessions
-/agents
-/subagents [on|off]
-/agent [universal|strength|agility|intelligence]
-/reasoning [auto|none|minimal|low|medium|high|xhigh|max]  # no arg opens unified Model Setup
-/mode
-/ask
-/always-approve
-/plan
-/transcript
-/todo
-/new
 /model
 /provider
+/skills
+/agents
+/todo
+/transcript [clear]
 /call
 /quit
 ```

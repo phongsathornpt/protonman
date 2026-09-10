@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"charm.land/bubbles/v2/key"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -101,30 +100,6 @@ func (m *bubbleModel) cycleMode() {
 		}
 		m.setPlanEnabled(true)
 	}
-}
-
-func (m *bubbleModel) setPlanMode(argument string) {
-	enabled := m.planMode
-	switch strings.ToLower(argument) {
-	case "":
-		enabled = !enabled
-	case "on", "true":
-		enabled = true
-	case "off", "false":
-		enabled = false
-	default:
-		m.appendError("usage: /plan [on|off]")
-		return
-	}
-	if enabled && m.service.Mode() != permission.ModeAsk && m.service.Mode() != permission.ModeAuto {
-		_ = m.setPermissionMode(permission.ModeAsk)
-	}
-	m.setPlanEnabled(enabled)
-	state := "off"
-	if m.planMode {
-		state = "on (read-only)"
-	}
-	m.appendLine("plan mode: " + state)
 }
 
 func (m *bubbleModel) setPlanEnabled(enabled bool) {

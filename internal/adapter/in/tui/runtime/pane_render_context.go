@@ -1,8 +1,6 @@
 package runtime
 
 import (
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/commandutil"
-	projectpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/project"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
@@ -19,7 +17,6 @@ type paneRenderContext struct {
 	skillItems       []skillListItem
 	todos            []tododomain.Item
 	slashMatches     []slashCommand
-	projectFacts     []projectpane.ProjectFact
 	agentSnapshot    []agent.AgentStatus
 	agentActivity    map[string]string
 	subagentsEnabled bool
@@ -55,18 +52,6 @@ func newPaneRenderContext(m *bubbleModel) paneRenderContext {
 			ctx.skillItems = append(ctx.skillItems, skillListItem{name: item.Name, active: m.skills.IsActivated(item.Name)})
 		}
 	}
-	permissionMode := "ask"
-	if m.service != nil {
-		permissionMode = m.service.Mode().String()
-	}
-	ctx.projectFacts = []projectpane.ProjectFact{
-		{Label: "Model", Value: projectpane.FallbackValue(m.activeModel, "not selected"), Source: string(m.projectSource(config.FieldModelDefault))},
-		{Label: "Provider", Value: projectpane.FallbackValue(m.activeProvider, "not selected"), Source: string(m.projectSource(config.FieldModelProvider))},
-		{Label: "Agent", Value: projectpane.FallbackValue(m.agentProfile, "universal"), Source: string(m.projectSource(config.FieldAgentProfile))},
-		{Label: "Thinking", Value: reasoningEffortLabel(m.reasoningEffort), Source: m.reasoningSourceLabel()},
-		{Label: "Subagents", Value: commandutil.SubagentsEnabledLabel(m.subagentsEnabled), Source: string(m.projectSource(config.FieldAgentSubagentsEnabled))},
-		{Label: "Permission", Value: permissionMode, Source: string(m.projectSource(config.FieldUIPermissionMode))},
-		{Label: "Tool calls", Value: projectpane.FormatLimit(m.maxToolCalls), Source: string(m.projectSource(config.FieldAgentMaxToolCalls))},
-	}
+
 	return ctx
 }

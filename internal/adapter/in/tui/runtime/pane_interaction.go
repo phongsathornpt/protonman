@@ -14,7 +14,6 @@ const (
 	paneActionClose
 	paneActionAcceptSlash
 	paneActionToggleSkill
-	paneActionReloadProject
 	paneActionReloadModels
 	paneActionApplyModelSetup
 	paneActionOpenProviderSelect
@@ -72,10 +71,6 @@ func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
 		_, _ = m.skills.Toggle(action.skillName)
 		if view, _ := m.panes.bottom.find(skillsViewID).(*skillsPaneView); view != nil {
 			return view.refreshItems(newPaneRenderContext(m))
-		}
-	case paneActionReloadProject:
-		if view, _ := m.panes.bottom.find(projectViewID).(*projectPaneView); view != nil {
-			return view.reload(m)
 		}
 	case paneActionReloadModels:
 		if view, _ := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView); view != nil {

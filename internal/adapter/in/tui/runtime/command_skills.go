@@ -40,7 +40,7 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 	}
 	if trimmedArg == "toggle" {
 		if len(parts) < 3 || strings.TrimSpace(parts[2]) == "" {
-			m.appendError("usage: /skill toggle <name>")
+			m.appendError("usage: /skills toggle <name>")
 			m.refreshViewport()
 			return nil
 		}
@@ -63,7 +63,7 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 	}
 	if trimmedArg == "deactivate" || trimmedArg == "disable" || trimmedArg == "remove" || trimmedArg == "off" {
 		if len(parts) < 3 || strings.TrimSpace(parts[2]) == "" {
-			m.appendError(fmt.Sprintf("usage: /skill %s <name>", trimmedArg))
+			m.appendError(fmt.Sprintf("usage: /skills %s <name>", trimmedArg))
 			m.refreshViewport()
 			return nil
 		}
@@ -94,7 +94,7 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 		return nil
 	}
 	if m.skills.IsActivated(s.Name) {
-		m.appendLine(fmt.Sprintf("[x] Skill %q is already active. Use /skill toggle %s to deactivate.", s.Name, s.Name))
+		m.appendLine(fmt.Sprintf("[x] Skill %q is already active. Use /skills toggle %s to deactivate.", s.Name, s.Name))
 		m.refreshViewport()
 		return nil
 	}

@@ -43,7 +43,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 			Suggestions: []string{
 				"Check that the active runner has a registered tool set",
 				"Verify the selected provider/model supports the configured tools",
-				"Run /new after correcting the tool configuration",
+				"Retry after correcting the tool configuration",
 			},
 			RawDetails: raw,
 			Retryable:  true,
@@ -57,7 +57,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 			Badge:   "TOOL_PROTOCOL",
 			Message: "The model returned a tool call that the turn loop could not resolve.",
 			Suggestions: []string{
-				"Run /new to start a fresh turn",
+				"Retry the request in a fresh turn",
 				"Retry with a model that supports the configured tool protocol",
 			},
 			RawDetails: raw,
@@ -72,7 +72,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 			Title:       "Permission Denied",
 			Badge:       "DENIED",
 			Message:     "Execution was blocked by permission policy or user rejection.",
-			Suggestions: []string{"Change permission mode using Shift+Tab or run /mode always-approve"},
+			Suggestions: []string{"Change permission mode using Shift+Tab"},
 			RawDetails:  raw,
 			Retryable:   false,
 		}
@@ -183,7 +183,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 			Message: "Input token count exceeds the maximum context length for this model.",
 			Suggestions: []string{
 				"Run /compact to summarize conversation history and free up tokens",
-				"Run /new to start a fresh conversation session",
+				"Start a fresh conversation from the session launcher",
 				"Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)",
 			},
 			RawDetails: raw,
@@ -398,7 +398,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		Title:       "Operation Failed",
 		Badge:       "ERROR",
 		Message:     cleanMsg,
-		Suggestions: []string{"Review the error details above or retry with /new"},
+		Suggestions: []string{"Review the error details above, then retry"},
 		RawDetails:  raw,
 	}
 }
