@@ -48,10 +48,7 @@ func Render(spec Spec) string {
 	if role := strings.TrimSpace(spec.Role); role != "" {
 		sections = append(sections, "# Role\n"+role)
 	}
-	sections = append(sections,
-		toolSection(),
-		workspaceSection(spec),
-	)
+	sections = append(sections, workspaceSection(spec))
 	if evidence := strings.TrimSpace(spec.GroundingEvidence); evidence != "" && evidence != "none" {
 		sections = append(sections, groundingSection(evidence))
 	}
@@ -122,17 +119,11 @@ func executionSection() string {
 - Communicate through assistant text, not shell output, generated files, or code comments.`
 }
 
-func toolSection() string {
-	return `# Tool Protocol
-- Use tools whenever the answer depends on current workspace, repository, command, test, or external state.
-- Use only tools exposed in the current request. Tool identifiers are exact; never prefix, rename, qualify, or invent them.
-- Treat tool errors as observations. Correct the call when possible instead of repeating an invalid request.
-- Planning, status, and orchestration metadata are not evidence about source code or runtime behavior.`
-}
-
 func toolDisciplineSection(spec Spec) string {
 	lines := []string{
-		"# Tool Discipline",
+		"# Tool Use",
+		"- Use only tools exposed in the current request. Tool and action identifiers are exact; never prefix, rename, qualify, or invent them.",
+		"- Treat tool errors as observations. Correct invalid calls when possible instead of repeating them blindly.",
 		"- Prefer the narrowest dedicated capability that directly represents the operation; use a tool only when it materially changes evidence, state, implementation, or verification.",
 	}
 	if hasTool(spec, "read") || hasTool(spec, tool.NameGrep) || hasTool(spec, "find") || hasTool(spec, "ls") || hasTool(spec, "edit") {
@@ -170,6 +161,7 @@ func toolDisciplineSection(spec Spec) string {
 		lines = append(lines, "- Use bash for actual programs, builds, tests, package managers, language runtimes, transformations, and shell workflows not represented by an available dedicated capability.")
 	}
 	lines = append(lines,
+		"- Planning, status, and orchestration metadata are not evidence about source code or runtime behavior.",
 		"- Reuse existing evidence and do not repeat equivalent reads, searches, commands, or verification without new information that justifies the retry.",
 		"- After every tool result, reassess whether the requested outcome is already complete.",
 		"- If repeated attempts are not producing new progress, change strategy or report the blocker instead of looping.",

@@ -1,7 +1,6 @@
 package modelprofile
 
 import (
-	"strings"
 	"testing"
 
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
@@ -247,7 +246,7 @@ func TestResolvedProfileTracksFieldProvenance(t *testing.T) {
 	if got.Provenance.Vision != MetadataSourceBuiltin || got.Provenance.ContextWindow != MetadataSourceBuiltin {
 		t.Fatalf("builtin provenance = %+v", got.Provenance)
 	}
-	if got.Provenance.ToolSchemaDialect != MetadataSourceBuiltin || got.Provenance.PromptHints != MetadataSourceBuiltin {
+	if got.Provenance.ToolSchemaDialect != MetadataSourceBuiltin || got.Provenance.PromptHints != MetadataSourceUnknown {
 		t.Fatalf("policy provenance = %+v", got.Provenance)
 	}
 }
@@ -277,17 +276,9 @@ func TestMetadataProvenanceSummaryIsDeterministic(t *testing.T) {
 	}
 }
 
-func TestGeminiToolHintsContainOnlyModelSpecificDiscipline(t *testing.T) {
+func TestGeminiDoesNotDuplicateGenericPromptHints(t *testing.T) {
 	got := ResolveBuiltin("gateway", "gemini-3.8-flash", CatalogMetadata{})
-	joined := strings.Join(got.AgentPolicy.PromptHints, "\n")
-	for _, want := range []string{"structured capabilities", "tool and action names exactly as provided", "do not invent namespaces"} {
-		if !strings.Contains(joined, want) {
-			t.Fatalf("Gemini prompt hints missing model-specific guidance %q: %q", want, joined)
-		}
-	}
-	for _, duplicated := range []string{"read with view=source", "grep, find", "Use math", "reserve bash", "inspect_code"} {
-		if strings.Contains(joined, duplicated) {
-			t.Fatalf("Gemini prompt hints duplicate generic tool policy %q: %q", duplicated, joined)
-		}
+	if len(got.AgentPolicy.PromptHints) != 0 {
+		t.Fatalf("Gemini prompt hints = %v, want generic tool policy only", got.AgentPolicy.PromptHints)
 	}
 }

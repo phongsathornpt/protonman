@@ -158,7 +158,7 @@ func (h webFetchHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	}
 	input.Action = strings.ToLower(strings.TrimSpace(input.Action))
 	if input.Action == "" {
-		input.Action = "fetch"
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "web action is required")
 	}
 	if input.Action == "search" {
 		return h.search(ctx, call, input)

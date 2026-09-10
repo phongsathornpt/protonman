@@ -16,10 +16,6 @@ var builtinRegistry = mustRegistry(
 		},
 		ContextWindow: 1_048_576,
 		Compatibility: CompatibilityPolicy{ToolSchemaDialect: ToolSchemaGeminiSubset},
-		AgentPolicy: AgentPolicy{PromptHints: []string{
-			"Prefer provided structured capabilities over ad-hoc scripts when a capability directly represents the operation.",
-			"Use tool and action names exactly as provided; do not invent namespaces, prefixes, or operation names.",
-		}},
 	},
 	Profile{
 		Name:         "zai-glm-5.3-family",
@@ -143,9 +139,6 @@ var builtinRegistry = mustRegistry(
 			Levels:  []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningHigh, sdk.ReasoningXHigh},
 			Default: sdk.ReasoningHigh,
 		},
-		AgentPolicy: AgentPolicy{PromptHints: []string{
-			"Verify tool-dependent claims with the relevant tool result before presenting them as facts.",
-		}},
 	},
 	Profile{
 		Name: "claude-adaptive-thinking",

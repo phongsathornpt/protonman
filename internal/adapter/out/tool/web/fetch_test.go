@@ -50,7 +50,8 @@ func newJSONCall(t *testing.T, id, name string, input map[string]any) tool.Call 
 func TestWebFetchHonorsBlockedNetworkPolicy(t *testing.T) {
 	handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkBlocked})
 	_, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-1", "web", map[string]any{
-		"url": "https://example.com",
+		"action": "fetch",
+		"url":    "https://example.com",
 	}))
 	if !errors.Is(err, sandbox.ErrNetworkDenied) {
 		t.Fatalf("Execute() error = %v, want network denied", err)
@@ -101,7 +102,8 @@ func TestWebFetchReadsAllowedLocalServer(t *testing.T) {
 
 	handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted, AllowLocalhost: true})
 	result, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-2", "web", map[string]any{
-		"url": server.URL,
+		"action": "fetch",
+		"url":    server.URL,
 	}))
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -162,7 +164,8 @@ func TestWebFetchHaltsRedirectLoops(t *testing.T) {
 
 	handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted, AllowLocalhost: true})
 	_, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-loop", "web", map[string]any{
-		"url": server.URL,
+		"action": "fetch",
+		"url":    server.URL,
 	}))
 	if err == nil || !strings.Contains(err.Error(), "stopped after 10 redirects") {
 		t.Fatalf("expected redirect loop error, got: %v", err)
@@ -180,7 +183,8 @@ func TestWebFetchSendsDefaultHeaders(t *testing.T) {
 
 	handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted, AllowLocalhost: true})
 	_, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-headers", "web", map[string]any{
-		"url": server.URL,
+		"action": "fetch",
+		"url":    server.URL,
 	}))
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -203,7 +207,8 @@ func TestWebFetchTruncationNotice(t *testing.T) {
 
 	handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted, AllowLocalhost: true})
 	result, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-trunc", "web", map[string]any{
-		"url": server.URL,
+		"action": "fetch",
+		"url":    server.URL,
 	}))
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -224,7 +229,8 @@ func TestWebFetchStatusErrorText(t *testing.T) {
 
 	handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted, AllowLocalhost: true})
 	result, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-404", "web", map[string]any{
-		"url": server.URL,
+		"action": "fetch",
+		"url":    server.URL,
 	}))
 	if err == nil || !strings.Contains(err.Error(), "web status 404: Not Found") {
 		t.Fatalf("expected status 404: Not Found error, got: %v", err)
@@ -244,7 +250,8 @@ func TestWebFetchOmitsBinaryContent(t *testing.T) {
 
 		handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted, AllowLocalhost: true})
 		result, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-bin-type", "web", map[string]any{
-			"url": server.URL,
+			"action": "fetch",
+			"url":    server.URL,
 		}))
 		if err != nil {
 			t.Fatalf("Execute() error = %v", err)
@@ -263,7 +270,8 @@ func TestWebFetchOmitsBinaryContent(t *testing.T) {
 
 		handler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted, AllowLocalhost: true})
 		result, err := handler.Execute(context.Background(), newJSONCall(t, "fetch-bin-sniff", "web", map[string]any{
-			"url": server.URL,
+			"action": "fetch",
+			"url":    server.URL,
 		}))
 		if err != nil {
 			t.Fatalf("Execute() error = %v", err)
@@ -290,7 +298,8 @@ func TestWebFetchBlocksPrivateAndMetadataSSRF(t *testing.T) {
 	for _, target := range blockedTargets {
 		t.Run(target, func(t *testing.T) {
 			_, err := handler.Execute(context.Background(), newJSONCall(t, "ssrf-test", "web", map[string]any{
-				"url": target,
+				"action": "fetch",
+				"url":    target,
 			}))
 			if err == nil || !errors.Is(err, sandbox.ErrNetworkDenied) {
 				t.Fatalf("expected ErrNetworkDenied for %q, got: %v", target, err)
@@ -301,7 +310,8 @@ func TestWebFetchBlocksPrivateAndMetadataSSRF(t *testing.T) {
 	// Cloud metadata must be blocked even if AllowLocalhost is true
 	localHandler := NewWebFetch(sandbox.NetworkPolicy{Mode: sandbox.NetworkUnrestricted, AllowLocalhost: true})
 	_, err := localHandler.Execute(context.Background(), newJSONCall(t, "meta-test", "web", map[string]any{
-		"url": "http://169.254.169.254/latest/meta-data",
+		"action": "fetch",
+		"url":    "http://169.254.169.254/latest/meta-data",
 	}))
 	if err == nil || !errors.Is(err, sandbox.ErrNetworkDenied) {
 		t.Fatalf("expected ErrNetworkDenied for cloud metadata even with AllowLocalhost, got: %v", err)
