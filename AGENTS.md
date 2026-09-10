@@ -223,9 +223,9 @@ Children are coordinator-owned asynchronous runs scoped by session and parent tu
 Lifecycle state is derived from versioned domain events. Durable events are appended
 before lifecycle admission or transition is acknowledged, and restart recovery replays
 the per-session journal before converting process-owned live states to `interrupted`.
-Parent wait timeout does not cancel a child. `subagent action=wait` observes ordered lifecycle
-activity for the current turn and reconciles against the current child snapshot.
-Explicit cancellation uses coordinator lifecycle operations. Subagent-scoped registries
+Normal parent turns do not poll child completion. Versioned result references are published to a turn-scoped event stream, consumed with independent cursors, deduplicated by the synthesis coordinator, and delivered to the parent as ephemeral runtime context. A pending child forms a completion barrier so tentative final text is not committed before required delegated results arrive.
+
+`subagent action=wait|get|list` remain explicit lifecycle inspection capabilities and compatibility surfaces. A wait timeout never cancels a child. Explicit cancellation uses coordinator lifecycle operations. Subagent-scoped registries
 remove agent and task tools, so children cannot spawn nested children or mutate the
 parent's task plan.
 
@@ -239,7 +239,7 @@ waiting writer. Preserve this fairness property when touching scheduler code.
 
 System prompt composition lives in `internal/engine/prompt` and is capability-driven.
 Do not maintain separate large root prompts per provider or agent mode. The managed
-prompt currently uses Prompt ABI v8 and deterministic cache-aware section ordering;
+prompt currently uses Prompt ABI v9 and deterministic cache-aware section ordering;
 `docs/system-prompt.md` is the source of truth for prompt topology and prefix-cache
 invariants.
 
@@ -513,6 +513,7 @@ Important turn responsibilities include:
 - deadline propagation
 - reasoning policy
 - mutation verification state
+- event-driven subagent result delivery and completion barriers
 
 At least one global termination bound must remain active. Do not accidentally
 construct an unbounded model/tool loop by disabling both tool-count and time bounds.

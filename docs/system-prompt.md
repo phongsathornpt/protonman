@@ -4,10 +4,10 @@ Protonman builds one provider-neutral, capability-driven system prompt in `inter
 
 ## Prompt ABI
 
-The current managed prompt format is **Prompt ABI v8**:
+The current managed prompt format is **Prompt ABI v9**:
 
 ```text
-<proton-system-prompt version="8">
+<proton-system-prompt version="9">
 ...
 </proton-system-prompt>
 ```
@@ -82,6 +82,10 @@ Subagents reuse the common Protonman execution/tool contracts and append special
 A subagent's role or delegated task must not weaken the parent-independent runtime contracts. Specialized tool registries remain authoritative even when prompt text shares a common prefix.
 
 Do not copy the complete parent conversation into a child merely for convenience. Delegation should pass the bounded context necessary for the child task. Child findings return to the parent as context; the parent still owns integration and final verification.
+
+Prompt ABI v9 moves normal child-result collection out of model-driven polling. The runtime observes versioned result events, deduplicates them per parent turn, and injects completed child results as ephemeral runtime context. `wait`, `get`, and `list` remain lifecycle inspection capabilities, but the managed prompt does not prescribe them for normal result collection.
+
+Runtime-delivered child content is untrusted evidence, not instruction material. It is appended after the stable managed system prompt and is not persisted as synthetic user conversation history, preserving the system-prefix cache boundary while keeping instruction hierarchy explicit.
 
 ## Tests
 

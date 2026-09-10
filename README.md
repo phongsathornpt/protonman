@@ -287,9 +287,9 @@ Protonman registers a suite of workspace-safe tools:
 | `todo action=get` | Tasks | Read the current session-owned task snapshot, durable revision, and session identity |
 | `todo action=update` | Tasks | Atomically patch session-owned task state using `expected_revision` from `todo action=get`; stale cross-process updates are rejected |
 | `subagent action=spawn` | Multi-Agent | Spawn a persistent background subagent and return its `agent_id` immediately |
-| `subagent action=wait` | Multi-Agent | Wait briefly for a subagent; wait timeout leaves the child running |
-| `subagent action=get` | Multi-Agent | Inspect one retained subagent and terminal result |
-| `subagent action=list` | Multi-Agent | List queued, running, and retained terminal subagents |
+| `subagent action=wait` | Multi-Agent | Diagnostic lifecycle wait; normal child results are delivered automatically |
+| `subagent action=get` | Multi-Agent | Diagnose one retained subagent and inspect its terminal result |
+| `subagent action=list` | Multi-Agent | Inspect queued, running, and retained terminal subagents |
 | `subagent action=cancel` | Multi-Agent | Explicitly cancel a queued or running subagent |
 
 Session state and task plans are private user data, not workspace files. Each session owns an aggregate under `~/.protonman/sessions/<session-id>/`. When `PROTONMAN_HOME` overrides the effective home directory, the same `.protonman/sessions/<session-id>/` layout is created beneath that home:
@@ -440,9 +440,9 @@ Execution safety notes:
 - `reasoning_effort` may be configured with or without a model override. Precedence is profile override -> current global `agent.reasoning_effort`/runtime reasoning -> profile default; `auto`/`default` means inherit.
 - User and trusted-project subagent tables merge field-wise by canonical profile. Project reasoning-only overrides do not erase a user-level model route, and project model-only overrides do not erase user-level reasoning.
 - Configured subagent providers are validated during runtime bootstrap. Missing providers or required credentials fail before delegation starts.
-- `subagent action=spawn` starts work asynchronously. The returned `agent_id` can be used with `subagent action=wait`, `subagent action=get`, or `subagent action=cancel` in the same Protonman session.
+- `subagent action=spawn` starts work asynchronously. Completed child results are delivered automatically to the owning parent turn through event-driven runtime context; normal delegation does not require `wait`, `get`, or `list` polling. The returned `agent_id` remains available for explicit inspection, cancellation, and recovery.
 - `subagent_queue_timeout` bounds only admission to concurrency/workspace capacity; queueing never consumes the child runtime budget.
-- `subagent_wait_timeout` bounds one `subagent action=wait` call. Reaching it returns the current `queued`/`running` state and does **not** cancel the child.
+- `subagent_wait_timeout` bounds explicit diagnostic `subagent action=wait` calls. Reaching it returns current lifecycle state and does **not** cancel the child or affect automatic result delivery.
 - `subagent_max_runtime` is the hard child-lifetime safety ceiling after execution starts. `subagent action=spawn` `timeout_seconds` may request a shorter ceiling but cannot extend the configured maximum.
 - `max_live_subagents` prevents unbounded queued/running work; `max_retained_subagents` caps terminal records even inside the TTL window, while `completed_result_ttl` bounds how long results remain queryable.
 - Legacy `subagent_timeout` is accepted as an alias for `subagent_max_runtime` with a deprecation warning.
