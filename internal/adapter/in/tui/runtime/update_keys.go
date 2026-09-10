@@ -3,6 +3,7 @@ package runtime
 import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"strings"
 )
 
 func (m *bubbleModel) matchesGlobalShortcut(message tea.KeyPressMsg) bool {
@@ -163,6 +164,9 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 	}
 	updated, command := prompt.Update(message)
 	*prompt = updated
+	if strings.TrimSpace(prompt.Value()) == "" && prompt.Value() != "" {
+		m.resetPrompt()
+	}
 	m.syncSlashView()
 	m.requestRelayout()
 	return command

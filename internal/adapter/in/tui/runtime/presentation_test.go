@@ -1008,7 +1008,6 @@ func TestPromptWidthFitsTerminalAcrossResponsiveSizes(t *testing.T) {
 	}
 }
 
-
 func TestBlankMultilineSubmitCollapsesComposer(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
@@ -1027,6 +1026,27 @@ func TestBlankMultilineSubmitCollapsesComposer(t *testing.T) {
 	}
 	if got := strings.Count(ansi.Strip(model.promptView()), "> "); got != 1 {
 		t.Fatalf("prompt count=%d, want 1: %q", got, ansi.Strip(model.promptView()))
+	}
+}
+
+func TestBlankComposerNewlinesDoNotCreateBorderGap(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+
+	for i := 0; i < 3; i++ {
+		updated, _ := model.Update(tea.KeyPressMsg{Code: 'j', Mod: tea.ModCtrl})
+		model = updated.(*bubbleModel)
+	}
+
+	if got := model.panes.bottom.prompt().Value(); got != "" {
+		t.Fatalf("blank multiline value = %q, want empty", got)
+	}
+	if got := model.panes.bottom.prompt().Height(); got != 1 {
+		t.Fatalf("blank multiline height = %d, want 1", got)
+	}
+	plain := ansi.Strip(model.promptView())
+	if got := strings.Count(plain, "> "); got != 1 {
+		t.Fatalf("prompt count = %d, want 1: %q", got, plain)
 	}
 }
 
