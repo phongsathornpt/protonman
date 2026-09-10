@@ -69,16 +69,14 @@ func (m *bubbleModel) transcriptOverlayView() string {
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accentAssistant).Padding(0, 1).Width(width).Render(body)
 }
 
+var transcriptRawToggleKey = key.NewBinding(key.WithKeys("r"))
+
 func (m *bubbleModel) updateTranscriptKey(message tea.KeyPressMsg) tea.Cmd {
-	if key.Matches(message, m.keys.Transcript) {
+	if key.Matches(message, m.keys.Transcript, paneKeys.Close) {
 		m.closeTranscriptOverlay()
 		return nil
 	}
-	switch message.String() {
-	case "esc", "q":
-		m.closeTranscriptOverlay()
-		return nil
-	case "r":
+	if key.Matches(message, transcriptRawToggleKey) {
 		m.panes.rawTranscript = !m.panes.rawTranscript
 		if m.historyState != nil {
 			if m.panes.rawTranscript {
@@ -89,11 +87,11 @@ func (m *bubbleModel) updateTranscriptKey(message tea.KeyPressMsg) tea.Cmd {
 		}
 		m.refreshTranscriptViewport(false)
 		return nil
-	case "pgup", "pgdown", "up", "k", "down", "j", "home", "g", "end", "G":
+	}
+	if key.Matches(message, paneKeys.Nav) {
 		updated, command := m.panes.transcript.Update(message)
 		m.panes.transcript = updated
 		return command
-	default:
-		return nil
 	}
+	return nil
 }

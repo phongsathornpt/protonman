@@ -172,7 +172,7 @@ func (v *slashPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPres
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
 		return paneKeyResult{handled: true, cmd: cmd}
-	case message.String() == "tab":
+	case key.Matches(message, paneKeys.Tab):
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionAcceptSlash}}
 	case key.Matches(message, paneKeys.Confirm):
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionAcceptSlash, runSlash: true}}

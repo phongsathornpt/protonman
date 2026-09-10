@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionpolicy"
@@ -60,17 +61,18 @@ func (v *permissionPaneView) HandlePaneKey(ctx paneRenderContext, message tea.Ke
 		v.index = 0
 	}
 	if v.parked {
-		switch message.String() {
-		case "tab":
+		switch {
+		case key.Matches(message, paneKeys.Tab):
 			v.parked = false
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionPermissionActivity, activity: "waiting for permission"}}
-		case "pgup", "pgdown":
+		case key.Matches(message, paneKeys.Page):
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionScrollPage, key: message}}
-		case "up", "k":
+		case key.Matches(message, paneKeys.Up):
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionScrollLines, scrollLines: -1}}
-		case "down", "j":
+		case key.Matches(message, paneKeys.Down):
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionScrollLines, scrollLines: 1}}
-		case "y", "s", "p", "g", "n", "1", "2", "3", "4", "5", "enter":
+		case message.Text == "y" || message.Text == "s" || message.Text == "p" || message.Text == "g" || message.Text == "n" ||
+			(message.Text >= "1" && message.Text <= "5") || key.Matches(message, paneKeys.Confirm):
 			// Decisions remain available while reviewing the transcript.
 		default:
 			return paneKeyResult{handled: true}
@@ -80,52 +82,52 @@ func (v *permissionPaneView) HandlePaneKey(ctx paneRenderContext, message tea.Ke
 	resolve := func(option permissionOption) paneKeyResult {
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionPermissionResolve, permission: option}}
 	}
-	switch message.String() {
-	case "esc":
+	switch {
+	case key.Matches(message, paneKeys.Escape):
 		v.parked = true
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionPermissionActivity, activity: "permission pending — tab to review"}}
-	case "up", "k":
+	case key.Matches(message, paneKeys.Up):
 		if v.index > 0 {
 			v.index--
 		}
 		return paneKeyResult{handled: true}
-	case "down", "j":
+	case key.Matches(message, paneKeys.Down):
 		if v.index < len(options)-1 {
 			v.index++
 		}
 		return paneKeyResult{handled: true}
-	case "1", "2", "3", "4", "5":
-		idx := int(message.String()[0] - '1')
+	case message.Text >= "1" && message.Text <= "5":
+		idx := int(message.Text[0] - '1')
 		if idx >= 0 && idx < len(options) {
 			return resolve(options[idx].Option)
 		}
 		return paneKeyResult{handled: true}
-	case "y":
+	case message.Text == "y":
 		return resolve(optionAllowOnce)
-	case "s":
+	case message.Text == "s":
 		for _, item := range options {
 			if item.Option == optionAllowSession {
 				return resolve(optionAllowSession)
 			}
 		}
 		return paneKeyResult{handled: true}
-	case "p":
+	case message.Text == "p":
 		for _, item := range options {
 			if item.Option == optionAllowProject {
 				return resolve(optionAllowProject)
 			}
 		}
 		return paneKeyResult{handled: true}
-	case "g":
+	case message.Text == "g":
 		for _, item := range options {
 			if item.Option == optionAllowGlobal {
 				return resolve(optionAllowGlobal)
 			}
 		}
 		return paneKeyResult{handled: true}
-	case "n":
+	case message.Text == "n":
 		return resolve(optionDeny)
-	case "enter":
+	case key.Matches(message, paneKeys.Confirm):
 		if len(options) == 0 {
 			return paneKeyResult{handled: true}
 		}

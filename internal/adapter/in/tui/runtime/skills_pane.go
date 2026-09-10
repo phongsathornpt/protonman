@@ -11,6 +11,8 @@ import (
 
 const skillsViewID = "skills"
 
+var skillPaneToggleKey = key.NewBinding(key.WithKeys("space", "t"))
+
 type skillListItem struct {
 	name   string
 	active bool
@@ -143,29 +145,29 @@ func (v *skillsPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPre
 	if !v.initialized || len(ctx.skillItems) == 0 {
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: skillsViewID}}
 	}
-	switch message.String() {
-	case "space", "t":
+	switch {
+	case key.Matches(message, skillPaneToggleKey):
 		selected, ok := v.picker.SelectedItem().(skillListItem)
 		if !ok {
 			return paneKeyResult{handled: true}
 		}
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionToggleSkill, skillName: selected.name}}
-	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		index := int(message.String()[0] - "1"[0])
+	case message.Text >= "1" && message.Text <= "9":
+		index := int(message.Text[0] - '1')
 		if index < len(v.picker.Items()) {
 			v.picker.Select(index)
 			v.syncTitle(ctx)
 		}
 		return paneKeyResult{handled: true}
-	case "enter":
+	case key.Matches(message, paneKeys.Confirm):
 		if !v.picker.SettingFilter() {
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: skillsViewID}}
 		}
-	case "esc":
+	case key.Matches(message, paneKeys.Escape):
 		if !v.picker.SettingFilter() && !v.picker.IsFiltered() {
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: skillsViewID}}
 		}
-	case "q":
+	case message.Text == "q":
 		if !v.picker.SettingFilter() {
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: skillsViewID}}
 		}

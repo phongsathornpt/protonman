@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/providerio"
@@ -8,6 +9,22 @@ import (
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"strings"
 )
+
+var modelSetupKeys = struct {
+	Filter, ClearFilter, ReasoningLeft, ReasoningRight         key.Binding
+	Escape, Quit, Providers, AddProvider, Reload, NextProvider key.Binding
+}{
+	Filter:         key.NewBinding(key.WithKeys("/")),
+	ClearFilter:    key.NewBinding(key.WithKeys("ctrl+u")),
+	ReasoningLeft:  key.NewBinding(key.WithKeys("left", "h")),
+	ReasoningRight: key.NewBinding(key.WithKeys("right", "l")),
+	Escape:         key.NewBinding(key.WithKeys("esc")),
+	Quit:           key.NewBinding(key.WithKeys("q")),
+	Providers:      key.NewBinding(key.WithKeys("p")),
+	AddProvider:    key.NewBinding(key.WithKeys("a")),
+	Reload:         key.NewBinding(key.WithKeys("r")),
+	NextProvider:   key.NewBinding(key.WithKeys("tab")),
+}
 
 func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 	v.initPicker()
@@ -207,25 +224,25 @@ func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyP
 		v.syncReasoningForSelection(v.reasoningPreference)
 		return paneKeyResult{handled: true, cmd: cmd}
 	}
-	switch message.String() {
-	case "/":
+	switch {
+	case key.Matches(message, modelSetupKeys.Filter):
 		v.picker.SetFilterState(list.Filtering)
 		v.syncPickerProjection()
 		v.resize(v.layoutWidth, v.layoutHeight)
 		return paneKeyResult{handled: true}
-	case "ctrl+u":
+	case key.Matches(message, modelSetupKeys.ClearFilter):
 		v.picker.ResetFilter()
 		v.syncPickerProjection()
 		v.resize(v.layoutWidth, v.layoutHeight)
 		v.syncReasoningForSelection(v.reasoningPreference)
 		return paneKeyResult{handled: true}
-	case "left", "h":
+	case key.Matches(message, modelSetupKeys.ReasoningLeft):
 		v.moveReasoning(-1)
 		return paneKeyResult{handled: true}
-	case "right", "l":
+	case key.Matches(message, modelSetupKeys.ReasoningRight):
 		v.moveReasoning(1)
 		return paneKeyResult{handled: true}
-	case "esc":
+	case key.Matches(message, modelSetupKeys.Escape):
 		if v.picker.IsFiltered() {
 			v.picker.ResetFilter()
 			v.syncPickerProjection()
@@ -235,40 +252,40 @@ func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyP
 		}
 		v.cancelFetch()
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: modelSetupViewID}}
-	case "q":
+	case key.Matches(message, modelSetupKeys.Quit):
 		v.cancelFetch()
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: modelSetupViewID}}
-	case "p":
+	case key.Matches(message, modelSetupKeys.Providers):
 		v.cancelFetch()
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionOpenProviderSelect}}
-	case "a":
+	case key.Matches(message, modelSetupKeys.AddProvider):
 		v.cancelFetch()
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionOpenProviderEditor}}
-	case "r":
+	case key.Matches(message, modelSetupKeys.Reload):
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionReloadModels, runSlash: true}}
-	case "tab":
+	case key.Matches(message, modelSetupKeys.NextProvider):
 		if len(v.providerNames) > 1 {
 			v.providerIndex = (v.providerIndex + 1) % len(v.providerNames)
 			v.reasoningPreference = v.selectedReasoning()
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionReloadModels}}
 		}
 		return paneKeyResult{handled: true}
-	case "pgup", "pgdown", "up", "k", "down", "j", "home", "g", "end", "G":
+	case key.Matches(message, paneKeys.Nav):
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
 		v.syncPickerProjection()
 		v.syncReasoningForSelection(v.reasoningPreference)
 		return paneKeyResult{handled: true, cmd: cmd}
-	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+	case message.Text >= "1" && message.Text <= "9":
 		pageOffset := v.picker.Paginator.Page * v.picker.Paginator.PerPage
-		targetIdx := int(message.String()[0]-'1') + pageOffset
+		targetIdx := int(message.Text[0]-'1') + pageOffset
 		if targetIdx >= 0 && targetIdx < len(v.models) {
 			selected := v.models[targetIdx]
 			reasoning := reasoningForModel(v.activeProviderName(), selected, v.reasoningPreference)
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionApplyModelSetup, providerName: v.activeProviderName(), modelID: selected.ID, reasoning: reasoning}}
 		}
 		return paneKeyResult{handled: true}
-	case "enter":
+	case key.Matches(message, paneKeys.Confirm):
 		item, ok := v.picker.SelectedItem().(modelListItem)
 		if !ok {
 			return paneKeyResult{handled: true}
