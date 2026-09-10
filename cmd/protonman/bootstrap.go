@@ -65,11 +65,20 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	if err != nil {
 		return nil, fmt.Errorf("load configuration: %w", err)
 	}
-	originalProvider := loadedConfig.Model.Provider
-	reconciled, selectionChanged := config.ReconcileModelSelection(loadedConfig.Model, loadedConfig.Providers)
+	originalSelection := loadedConfig.Model
+	reconciled, selectionChanged := config.ReconcileModelSelection(originalSelection, loadedConfig.Providers)
 	loadedConfig.Model, loadedConfig.Providers = app.ResolvePrimaryModelDefaults(reconciled, loadedConfig.Providers)
 	if selectionChanged {
-		fmt.Fprintf(os.Stderr, "warning: saved model provider %q is unavailable; using provider %q\n", originalProvider, loadedConfig.Model.Provider)
+		loadedConfig.Provenance[config.FieldModelProvider] = config.SourceDefault
+		loadedConfig.Provenance[config.FieldModelDefault] = config.SourceDefault
+		fmt.Fprintf(os.Stderr, "warning: saved model provider %q is unavailable; using provider %q\n", originalSelection.Provider, loadedConfig.Model.Provider)
+	} else {
+		if strings.TrimSpace(originalSelection.Provider) == "" && loadedConfig.Model.Provider != "" {
+			loadedConfig.Provenance[config.FieldModelProvider] = config.SourceDefault
+		}
+		if strings.TrimSpace(originalSelection.Default) == "" && loadedConfig.Model.Default != "" {
+			loadedConfig.Provenance[config.FieldModelDefault] = config.SourceDefault
+		}
 	}
 	for _, warning := range loadedConfig.Warnings {
 		fmt.Fprintln(os.Stderr, "warning:", warning)

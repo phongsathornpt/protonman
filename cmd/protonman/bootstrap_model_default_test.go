@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 )
 
@@ -41,6 +42,9 @@ func TestBuildRuntimeUsesOpenCodeDefaultModelOnFirstRun(t *testing.T) {
 	}
 	if runtime.runner == nil {
 		t.Fatal("default OpenCode model did not create a conversation runner")
+	}
+	if runtime.config.Provenance[config.FieldModelProvider] != config.SourceDefault || runtime.config.Provenance[config.FieldModelDefault] != config.SourceDefault {
+		t.Fatalf("default provenance = provider:%q model:%q", runtime.config.Provenance[config.FieldModelProvider], runtime.config.Provenance[config.FieldModelDefault])
 	}
 }
 
@@ -85,6 +89,12 @@ provider = "opencode"
 	defer runtime.Close()
 	if runtime.config.Model.Default != model.DefaultOpenCodeModel || runtime.runner == nil {
 		t.Fatalf("repaired model=%q runnerNil=%v", runtime.config.Model.Default, runtime.runner == nil)
+	}
+	if runtime.config.Provenance[config.FieldModelProvider] != config.SourceUser {
+		t.Fatalf("provider provenance = %q, want user", runtime.config.Provenance[config.FieldModelProvider])
+	}
+	if runtime.config.Provenance[config.FieldModelDefault] != config.SourceDefault {
+		t.Fatalf("model provenance = %q, want default", runtime.config.Provenance[config.FieldModelDefault])
 	}
 }
 
@@ -148,6 +158,9 @@ provider = "beta"
 	if runtime.runner == nil {
 		t.Fatal("missing saved provider fallback did not create OpenCode runner")
 	}
+	if runtime.config.Provenance[config.FieldModelProvider] != config.SourceDefault || runtime.config.Provenance[config.FieldModelDefault] != config.SourceDefault {
+		t.Fatalf("fallback provenance = provider:%q model:%q", runtime.config.Provenance[config.FieldModelProvider], runtime.config.Provenance[config.FieldModelDefault])
+	}
 }
 
 func TestBuildRuntimePreservesConfiguredModelFromProtonmanHome(t *testing.T) {
@@ -198,5 +211,8 @@ provider = "custom"
 	}
 	if runtime.runner == nil {
 		t.Fatal("configured .protonman model did not create a conversation runner")
+	}
+	if runtime.config.Provenance[config.FieldModelProvider] != config.SourceUser || runtime.config.Provenance[config.FieldModelDefault] != config.SourceUser {
+		t.Fatalf("configured provenance = provider:%q model:%q", runtime.config.Provenance[config.FieldModelProvider], runtime.config.Provenance[config.FieldModelDefault])
 	}
 }
