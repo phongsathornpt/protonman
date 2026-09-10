@@ -111,9 +111,12 @@ func TestRunningToolUsesTranscriptAsProgressSurface(t *testing.T) {
 		t.Fatalf("running tool status is missing compact progress: %q", got)
 	}
 	m.historyState.CommitActive()
-	m.historyState.StartThinking()
-	if got := m.statusView(); got == "" {
-		t.Fatal("thinking state should retain the global status row")
+	m.activity = "analyzing"
+	if got := m.statusView(); got == "" || strings.Contains(got, "Thinking") {
+		t.Fatalf("busy state should use only the global status row: %q", got)
+	}
+	if transcript := plainTranscript(m); strings.Contains(transcript, "Thinking") {
+		t.Fatalf("ephemeral thinking state leaked into transcript: %q", transcript)
 	}
 }
 

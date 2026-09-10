@@ -133,39 +133,19 @@ func TestHistoryCellKindEnum(t *testing.T) {
 	}
 }
 
-func TestHistoryStateThinkingCellLifecycle(t *testing.T) {
-	t.Run("converts to assistant on first delta", func(t *testing.T) {
-		state := NewHistoryState(100)
-		state.StartThinking()
-		active := state.Active()
-		if _, ok := active.(*ThinkingCell); !ok {
-			t.Fatalf("active cell = %T, want *ThinkingCell", active)
-		}
-		rendered := state.RenderLines()
-		if len(rendered) == 0 || !strings.Contains(rendered[0], "Thinking…") {
-			t.Fatalf("expected thinking render, got: %v", rendered)
-		}
-		state.AppendAssistantDelta("Hello world")
-		active = state.Active()
-		assistant, ok := active.(*AssistantCell)
-		if !ok {
-			t.Fatalf("active cell = %T, want *AssistantCell", active)
-		}
-		if assistant.Text != "Hello world" {
-			t.Fatalf("assistant text = %q, want Hello world", assistant.Text)
-		}
-	})
-	t.Run("discarded on commit if no text", func(t *testing.T) {
-		state := NewHistoryState(100)
-		state.StartThinking()
-		state.CommitActive()
-		if state.Active() != nil {
-			t.Fatalf("active cell = %T after commit, want nil", state.Active())
-		}
-		if len(state.Cells()) != 0 {
-			t.Fatalf("cells length = %d, want 0 (thinking cell should not be committed)", len(state.Cells()))
-		}
-	})
+func TestHistoryStateStartsAssistantOnlyOnFirstDelta(t *testing.T) {
+	state := NewHistoryState(100)
+	if active := state.Active(); active != nil {
+		t.Fatalf("active cell before model output = %T, want nil", active)
+	}
+	state.AppendAssistantDelta("Hello world")
+	assistant, ok := state.Active().(*AssistantCell)
+	if !ok {
+		t.Fatalf("active cell = %T, want *AssistantCell", state.Active())
+	}
+	if assistant.Text != "Hello world" {
+		t.Fatalf("assistant text = %q, want Hello world", assistant.Text)
+	}
 }
 
 func TestActivateSkillToolCellCompactRendering(t *testing.T) {

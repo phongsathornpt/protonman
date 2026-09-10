@@ -14,7 +14,6 @@ import (
 func TestTurnDeltaDrainsBufferedTerminalInOrder(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.busy = true
-	m.historyState.StartThinking()
 	events := make(chan tea.Msg, 2)
 	events <- turnmsg.Delta{Event: app.Event{Kind: app.EventTextDelta, Text: " world"}}
 	events <- turnmsg.Done{Result: app.Result{Message: domainmodel.Message{Role: domainmodel.RoleAssistant, Content: "hello world"}}}

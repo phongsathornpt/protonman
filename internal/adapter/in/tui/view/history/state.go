@@ -97,21 +97,8 @@ func (s *HistoryState) Append(cell HistoryCell) {
 	s.trim()
 }
 
-func (s *HistoryState) StartThinking() {
-	s.CommitActive()
-	s.active = &ThinkingCell{}
-	s.touchActive()
-}
-
 func (s *HistoryState) AppendAssistantDelta(delta string) {
 	if delta == "" {
-		return
-	}
-	if _, ok := s.active.(*ThinkingCell); ok {
-		cell := &AssistantCell{}
-		cell.appendDelta(delta)
-		s.active = cell
-		s.touchActive()
 		return
 	}
 	if assistant, ok := s.active.(*AssistantCell); ok {
@@ -132,11 +119,6 @@ func (s *HistoryState) CommitActive() {
 	}
 	if assistant, ok := s.active.(*AssistantCell); ok {
 		assistant.sealStream()
-	}
-	if _, ok := s.active.(*ThinkingCell); ok {
-		s.active = nil
-		s.touchActive()
-		return
 	}
 	s.committed = append(s.committed, s.active)
 	s.committedLines += historyCellLineCount(s.active, s.renderWidth)

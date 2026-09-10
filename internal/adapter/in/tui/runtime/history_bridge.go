@@ -33,8 +33,6 @@ type SystemCell = tuihistory.SystemCell
 
 type ErrorCell = tuihistory.ErrorCell
 
-type ThinkingCell = tuihistory.ThinkingCell
-
 const (
 	HistoryCellUnknown   = tuihistory.HistoryCellUnknown
 	HistoryCellUser      = tuihistory.HistoryCellUser

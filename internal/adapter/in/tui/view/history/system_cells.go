@@ -120,20 +120,3 @@ func (c ErrorCell) RawLines() []string {
 }
 
 func (c ErrorCell) LineCount() int { return len(c.RawLines()) }
-
-// ThinkingCell represents an in-flight thought state in the transcript before
-// any tokens stream from the model.
-type ThinkingCell struct {
-	Spinner string
-}
-
-func (ThinkingCell) Kind() HistoryCellKind { return HistoryCellAssistant }
-func (c ThinkingCell) RenderWidth(_ int) []string {
-	indicator := "…"
-	if c.Spinner != "" {
-		indicator = c.Spinner
-	}
-	return []string{tuistyle.AssistantStyle.Render(indicator + " Thinking…")}
-}
-func (ThinkingCell) RawLines() []string { return []string{"Thinking…"} }
-func (ThinkingCell) LineCount() int     { return 1 }

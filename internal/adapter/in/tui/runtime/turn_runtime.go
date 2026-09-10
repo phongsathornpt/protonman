@@ -38,7 +38,6 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 	m.turnProgress = turnProgress{}
 	m.activeTurnOwner = fmt.Sprintf("tui-turn-%d", tuiTurnOwnerSeq.Add(1))
 	m.activity = "analyzing"
-	m.historyState.StartThinking()
 	m.requestRelayout()
 	ctx, cancel := context.WithCancel(m.ctx)
 	ctx = agent.WithTurnRef(ctx, agent.TurnRef{SessionID: m.sessionID, TurnID: m.activeTurnOwner})
