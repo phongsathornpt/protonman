@@ -415,9 +415,11 @@ func TestCoordinatorTerminalEventsReplaceDroppedSinkWakeups(t *testing.T) {
 
 func TestCoordinatorEmitsLifecycleEvents(t *testing.T) {
 	var events []Event
+	var missingAvailableResult bool
 	var mu sync.Mutex
+	var coord *Coordinator
 
-	coord := NewCoordinator(
+	coord = NewCoordinator(
 		nil,
 		emptyRegistry{},
 		nil,
@@ -425,6 +427,11 @@ func TestCoordinatorEmitsLifecycleEvents(t *testing.T) {
 		WithEventSink(func(ctx context.Context, ev Event) error {
 			mu.Lock()
 			events = append(events, ev)
+			if ev.Kind == EventAgentResultAvailable {
+				ref := ResultRef{SessionID: ev.SessionID, AgentID: ev.AgentID, Version: ev.ResultVersion}
+				_, ok := coord.resultStore.Get(ref)
+				missingAvailableResult = !ok
+			}
 			mu.Unlock()
 			return nil
 		}),
@@ -451,7 +458,7 @@ func TestCoordinatorEmitsLifecycleEvents(t *testing.T) {
 	waitForTest(t, 250*time.Millisecond, func() bool {
 		mu.Lock()
 		defer mu.Unlock()
-		return len(events) >= 3
+		return len(events) >= 4
 	})
 	mu.Lock()
 	defer mu.Unlock()
@@ -460,6 +467,12 @@ func TestCoordinatorEmitsLifecycleEvents(t *testing.T) {
 	}
 	if events[1].Kind != EventAgentStarted {
 		t.Errorf("second event = %v, want EventAgentStarted", events[1].Kind)
+	}
+	if events[2].Kind != EventAgentResultAvailable || events[2].ResultVersion == 0 {
+		t.Errorf("third event = %+v, want versioned EventAgentResultAvailable", events[2])
+	}
+	if missingAvailableResult {
+		t.Fatal("result_available was emitted before its result was readable")
 	}
 	if events[len(events)-1].Kind != EventAgentCompleted {
 		t.Errorf("last event = %v, want EventAgentCompleted", events[len(events)-1].Kind)

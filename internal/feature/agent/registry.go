@@ -185,6 +185,11 @@ func (c *Coordinator) waitSnapshot(id string) (WaitResult, error) {
 	wr := WaitResult{State: entry.status.State}
 	if entry.status.State.Terminal() {
 		res := entry.result
+		if c.resultStore != nil {
+			if stored, ok := c.resultStore.Get(entry.resultRef); ok {
+				res = stored
+			}
+		}
 		wr.Result = &res
 	}
 	return wr, nil
@@ -203,6 +208,9 @@ func (c *Coordinator) pruneExpiredLocked(now time.Time) {
 	if c.resultTTL > 0 {
 		for id, entry := range c.agents {
 			if entry.status.State.Terminal() && !entry.status.FinishedAt.IsZero() && now.Sub(entry.status.FinishedAt) >= c.resultTTL {
+				if c.resultStore != nil {
+					c.resultStore.Delete(entry.resultRef)
+				}
 				delete(c.agents, id)
 			}
 		}
@@ -230,6 +238,9 @@ func (c *Coordinator) pruneExpiredLocked(now time.Time) {
 		return terminal[i].finished.Before(terminal[j].finished)
 	})
 	for _, item := range terminal[:len(terminal)-c.maxRetainedAgents] {
+		if entry := c.agents[item.id]; entry != nil && c.resultStore != nil {
+			c.resultStore.Delete(entry.resultRef)
+		}
 		delete(c.agents, item.id)
 	}
 }
@@ -260,6 +271,11 @@ func (c *Coordinator) Lookup(id string) (AgentStatus, *Result, bool) {
 		return status, nil, true
 	}
 	res := entry.result
+	if c.resultStore != nil {
+		if stored, ok := c.resultStore.Get(entry.resultRef); ok {
+			res = stored
+		}
+	}
 	return status, &res, true
 }
 

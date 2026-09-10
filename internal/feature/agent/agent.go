@@ -198,6 +198,8 @@ const (
 	EventAgentStarted EventKind = "agent_started"
 	// EventAgentProgress forwards intermediate text or activity updates.
 	EventAgentProgress EventKind = "agent_progress"
+	// EventAgentResultAvailable announces that a versioned immutable result can be loaded.
+	EventAgentResultAvailable EventKind = "agent_result_available"
 	// EventAgentCompleted marks successful completion of a subagent run.
 	EventAgentCompleted EventKind = "agent_completed"
 	// EventAgentFailed marks a terminal failure or cancellation.
@@ -213,6 +215,7 @@ type Event struct {
 	Profile       Profile       `json:"profile"`
 	Message       string        `json:"message,omitempty"`
 	Call          *tool.Call    `json:"call,omitempty"`
+	ResultVersion uint64        `json:"result_version,omitempty"`
 	QueueDuration time.Duration `json:"queue_duration,omitempty"`
 	Duration      time.Duration `json:"duration,omitempty"`
 	TotalDuration time.Duration `json:"total_duration,omitempty"`

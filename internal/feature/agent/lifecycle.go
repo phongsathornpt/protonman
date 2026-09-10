@@ -195,6 +195,13 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 		res.Err = transitionErr
 	}
 
+	c.agentsMu.RLock()
+	resultVersion := entry.resultRef.Version
+	c.agentsMu.RUnlock()
+	if resultVersion > 0 {
+		c.emit(execCtx, Event{Kind: EventAgentResultAvailable, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, ResultVersion: resultVersion, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration})
+	}
+
 	eventKind := EventAgentCompleted
 	if runErr != nil {
 		eventKind = EventAgentFailed
@@ -242,6 +249,10 @@ func (c *Coordinator) storeTerminal(ctx context.Context, entry *agentEntry, res 
 	}
 	entry.result = compactRetainedResult(res)
 	entry.err = err
+	entry.resultRef = ResultRef{SessionID: event.SessionID, AgentID: event.AgentID, Version: event.Version}
+	if c.resultStore != nil {
+		c.resultStore.Put(entry.resultRef, entry.result)
+	}
 	return nil
 }
 

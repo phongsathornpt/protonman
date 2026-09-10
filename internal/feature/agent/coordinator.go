@@ -137,6 +137,7 @@ type agentEntry struct {
 	done            chan struct{}
 	started         chan struct{}
 	result          Result
+	resultRef       ResultRef
 	err             error
 }
 
@@ -180,6 +181,7 @@ type Coordinator struct {
 	runnerFactory       RunnerFactory
 	metricObserver      MetricObserver
 	lifecycleStore      LifecycleEventStore
+	resultStore         ResultStore
 	eventQueue          chan Event
 	closeOnce           sync.Once
 	closeDone           chan struct{}
@@ -325,6 +327,15 @@ func WithLifecycleEventStore(store LifecycleEventStore) Option {
 	return func(c *Coordinator) { c.lifecycleStore = store }
 }
 
+// WithResultStore configures the canonical immutable subagent result store.
+func WithResultStore(store ResultStore) Option {
+	return func(c *Coordinator) {
+		if store != nil {
+			c.resultStore = store
+		}
+	}
+}
+
 // WithEventSink attaches an observer for subagent lifecycle events.
 func WithEventSink(sink EventSink) Option {
 	return func(c *Coordinator) {
@@ -402,6 +413,7 @@ func NewCoordinator(
 		toolExecutionTimeout:  toolcall.DefaultExecutionTimeout,
 		subscribers:           make(map[uint64]chan Event),
 		activityMailboxes:     make(map[string]*activityMailbox),
+		resultStore:           newMemoryResultStore(),
 		eventQueue:            make(chan Event, defaultEventQueueSize),
 		closeDone:             make(chan struct{}),
 	}
