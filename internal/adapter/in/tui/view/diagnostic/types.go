@@ -35,3 +35,47 @@ type Error struct {
 	Code        string
 	Retryable   bool
 }
+
+// UserCode returns the stable, provider-independent code shown in the TUI.
+// Transport status and provider-specific codes remain available through Error.Code,
+// Badge, and RawDetails for diagnostics without leaking unstable upstream wording.
+func UserCode(kind Kind) string {
+	switch kind {
+	case KindModelNotFound:
+		return "MODEL_NOT_FOUND"
+	case KindContextOverflow:
+		return "CONTEXT_OVERFLOW"
+	case KindAuthentication:
+		return "AUTH_FAILED"
+	case KindForbidden:
+		return "FORBIDDEN"
+	case KindRateLimit:
+		return "RATE_LIMITED"
+	case KindQuotaExceeded:
+		return "QUOTA_EXCEEDED"
+	case KindServerOverloaded:
+		return "PROVIDER_OVERLOADED"
+	case KindStreamTimeout:
+		return "STREAM_TIMEOUT"
+	case KindRuntimeTimeout:
+		return "OPERATION_TIMEOUT"
+	case KindInvalidPrompt:
+		return "INVALID_PROMPT"
+	case KindMCPFailed:
+		return "MCP_FAILED"
+	case KindConfigInvalid:
+		return "CONFIG_INVALID"
+	case KindConfigTypo:
+		return "CONFIG_TYPO"
+	case KindToolFailed:
+		return "TOOL_FAILED"
+	case KindToolDispatch:
+		return "TOOL_DISPATCH"
+	case KindPermissionDenied:
+		return "PERMISSION_DENIED"
+	case KindCancelled:
+		return "CANCELLED"
+	default:
+		return "ERROR"
+	}
+}

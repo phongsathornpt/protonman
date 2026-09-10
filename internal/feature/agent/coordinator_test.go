@@ -792,8 +792,8 @@ func TestCoordinatorExecutionTimeoutReturnsForNonCooperativeRunner(t *testing.T)
 	started := time.Now()
 	_, err := coord.Run(context.Background(), Request{Profile: ProfileAgility, Task: "ignore cancellation"})
 	elapsed := time.Since(started)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("Run() error = %v, want deadline exceeded", err)
+	if !errors.Is(err, context.DeadlineExceeded) || !errors.Is(err, ErrExecutionTimeout) {
+		t.Fatalf("Run() error = %v, want typed execution deadline", err)
 	}
 	if elapsed > 150*time.Millisecond {
 		t.Fatalf("Run() elapsed = %v, hard timeout did not return promptly", elapsed)
@@ -1008,11 +1008,15 @@ func TestCoordinatorQueueTimeoutReportsLifecycleMetrics(t *testing.T) {
 	}()
 	time.Sleep(10 * time.Millisecond)
 	res, err := coord.Run(context.Background(), Request{Profile: ProfileAgility, Task: "queued timeout"})
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("queued Run() error = %v, want deadline exceeded", err)
+	if !errors.Is(err, context.DeadlineExceeded) || !errors.Is(err, ErrQueueTimeout) {
+		t.Fatalf("queued Run() error = %v, want typed queue deadline", err)
 	}
 	if res.QueueDuration <= 0 || res.TotalDuration < res.QueueDuration || res.Duration != 0 {
 		t.Fatalf("queue timeout metrics = %+v", res)
+	}
+	status, ok := coord.Get(res.AgentID)
+	if !ok || status.Reason != "queue timed out" {
+		t.Fatalf("queue timeout status = %+v, ok=%v", status, ok)
 	}
 	var failure Event
 	waitForTest(t, 250*time.Millisecond, func() bool {

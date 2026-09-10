@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/lipgloss/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/diagnostic"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -43,18 +42,29 @@ func (c ErrorCell) RenderWidth(width int) []string {
 		return c.renderCompactToolFailure(width)
 	}
 
-	// Non-tool diagnostics keep the bordered card because they may contain
-	// provider/account guidance that benefits from stronger visual grouping.
-	if c.Badge != "" || len(c.Suggestions) > 0 || (c.ErrorKind != "" && c.ErrorKind != diagnostic.KindGeneric) {
-		return c.renderCard(width)
+	return c.renderCompactDiagnostic(width)
+}
+
+func (c ErrorCell) renderCompactDiagnostic(width int) []string {
+	title := strings.TrimSpace(c.Title)
+	if title == "" {
+		title = "Error"
+	}
+	code := ""
+	if c.ErrorKind != "" && c.ErrorKind != diagnostic.KindGeneric {
+		code = diagnostic.UserCode(c.ErrorKind)
 	}
 
-	// Compact fallback rendering for simple tool errors
-	text := c.Text
-	if c.Title != "" {
-		text = c.Title + ": " + text
+	header := tuistyle.GlyphToolError + title
+	if code != "" {
+		header += tuistyle.GlyphSep + code
 	}
-	return styledWrappedLines(tuistyle.GlyphToolError+text, width, tuistyle.ErrorStyle)
+	if c.ErrorKind == "" || c.ErrorKind == diagnostic.KindGeneric {
+		if text := strings.TrimSpace(c.Text); text != "" {
+			header += ": " + text
+		}
+	}
+	return styledWrappedLines(header, width, tuistyle.ErrorStyle)
 }
 
 func (c ErrorCell) renderCompactToolFailure(width int) []string {
@@ -81,54 +91,6 @@ func (c ErrorCell) renderCompactToolFailure(width int) []string {
 		lines = append(lines, styledWrappedLines("→ "+suggestion, width, tuistyle.MutedStyle)...)
 	}
 	return lines
-}
-
-func (c ErrorCell) renderCard(width int) []string {
-	cardWidth := max(24, width-2)
-	innerWidth := cardWidth - 4 // Account for border (2) and padding (2)
-
-	badge := c.Badge
-	if badge == "" {
-		badge = "ERROR"
-	}
-	title := c.Title
-	if title == "" {
-		title = "Error"
-	}
-
-	header := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(tuistyle.AccentError).
-		Render(fmt.Sprintf("%s[%s] %s", tuistyle.GlyphToolError, badge, title))
-
-	bodyLines := safeWrappedLines(c.Text, innerWidth)
-	cardContent := []string{header}
-	if len(bodyLines) > 0 {
-		cardContent = append(cardContent, "")
-		for _, bLine := range bodyLines {
-			cardContent = append(cardContent, tuistyle.BodyStyle.Render(bLine))
-		}
-	}
-
-	if len(c.Suggestions) > 0 {
-		cardContent = append(cardContent, "")
-		for _, s := range c.Suggestions {
-			wrappedS := safeWrappedLines("→ "+s, innerWidth)
-			for _, w := range wrappedS {
-				cardContent = append(cardContent, tuistyle.MutedStyle.Render(w))
-			}
-		}
-	}
-
-	joined := strings.Join(cardContent, "\n")
-	cardStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(tuistyle.AccentError).
-		Padding(0, 1).
-		Width(cardWidth)
-
-	rendered := cardStyle.Render(joined)
-	return strings.Split(rendered, "\n")
 }
 
 func (c ErrorCell) RawLines() []string {

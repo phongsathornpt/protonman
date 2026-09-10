@@ -27,20 +27,32 @@ const (
 	GlyphBrand = "◆"
 )
 
-// Prefer terminal-native ANSI colors so Protonman remains readable across light,
-// dark and customized terminal themes. Primary body text intentionally uses
-// the terminal's default foreground.
+// Protonman CLI follows the dark product palette used by protonman-rs.
+// Keep these as semantic tokens so presentation code does not grow its own
+// collection of nearly-identical oranges and grays.
 var (
-	AccentAssistant = lipgloss.Color("5") // magenta: Protonman identity
-	AccentUser      = lipgloss.Color("6") // cyan: input/selection
-	AccentTool      = lipgloss.Color("8") // dim tool chrome
-	AccentSystem    = lipgloss.Color("6") // cyan: status/info
-	AccentPlan      = lipgloss.Color("6")
-	AccentError     = lipgloss.Color("1") // red
-	AccentSuccess   = lipgloss.Color("2") // green
-	CommandColor    = lipgloss.Color("6")
-	WarningColor    = lipgloss.Color("3") // yellow: warnings, attention, denied
-	PromptBorder    = lipgloss.Color("8")
+	ColorTextPrimary   = lipgloss.Color("#f5f5f6")
+	ColorTextSecondary = lipgloss.Color("#a8adb8")
+	ColorTextTertiary  = lipgloss.Color("#8f96a3")
+	ColorPrimary       = lipgloss.Color("#f0983c")
+	ColorPrimaryHover  = lipgloss.Color("#ffab5c")
+	ColorPrimaryDark   = lipgloss.Color("#ea580c")
+	ColorSuccess       = lipgloss.Color("#22c55e")
+	ColorWarning       = lipgloss.Color("#eab308")
+	ColorDanger        = lipgloss.Color("#f87171")
+	ColorBorder        = lipgloss.Color("#2a2a2f")
+	ColorBorderSubtle  = lipgloss.Color("#1d1d21")
+
+	AccentAssistant = ColorPrimary
+	AccentUser      = ColorPrimaryHover
+	AccentTool      = ColorTextTertiary
+	AccentSystem    = ColorTextSecondary
+	AccentPlan      = ColorPrimary
+	AccentError     = ColorDanger
+	AccentSuccess   = ColorSuccess
+	CommandColor    = ColorPrimaryHover
+	WarningColor    = ColorWarning
+	PromptBorder    = ColorBorder
 )
 
 var (
@@ -50,7 +62,7 @@ var (
 	AssistantStyle       = lipgloss.NewStyle()
 	ToolStyle            = lipgloss.NewStyle().Foreground(AccentTool)
 	SystemStyle          = lipgloss.NewStyle().Foreground(AccentSystem)
-	MutedStyle           = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	MutedStyle           = lipgloss.NewStyle().Foreground(ColorTextTertiary)
 	StatusStyle          = lipgloss.NewStyle().Foreground(AccentSystem)
 	WarningStyle         = lipgloss.NewStyle().Foreground(WarningColor)
 	SuccessStyle         = lipgloss.NewStyle().Foreground(AccentSuccess)
@@ -59,19 +71,19 @@ var (
 	CommandStyle         = lipgloss.NewStyle().Foreground(CommandColor)
 	ToolTargetStyle      = lipgloss.NewStyle().Bold(true).Foreground(AccentUser)
 	ToolDirStyle         = lipgloss.NewStyle().Foreground(AccentTool)
-	ToolSummaryStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	FileBadgeStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	ToolExcerptStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Italic(true)
-	ToolFoldStyle        = lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("8"))
-	HeroLabelStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Bold(true)
+	ToolSummaryStyle     = lipgloss.NewStyle().Foreground(ColorTextTertiary)
+	FileBadgeStyle       = lipgloss.NewStyle().Foreground(ColorTextTertiary)
+	ToolExcerptStyle     = lipgloss.NewStyle().Foreground(ColorTextTertiary).Italic(true)
+	ToolFoldStyle        = lipgloss.NewStyle().Italic(true).Foreground(ColorTextTertiary)
+	HeroLabelStyle       = lipgloss.NewStyle().Foreground(ColorTextTertiary).Bold(true)
 	HeroKeyStyle         = lipgloss.NewStyle().Foreground(AccentUser).Bold(true)
 	DiffAddStyle         = lipgloss.NewStyle().Foreground(AccentSuccess)
 	DiffDeleteStyle      = lipgloss.NewStyle().Foreground(AccentError)
 	DiffHunkStyle        = lipgloss.NewStyle().Foreground(AccentUser)
 	BodyStyle            = lipgloss.NewStyle()
 	MarkdownHeadingStyle = lipgloss.NewStyle().Bold(true).Foreground(AccentAssistant)
-	MarkdownCodeStyle    = lipgloss.NewStyle().Foreground(AccentSystem)
-	MarkdownQuoteStyle   = lipgloss.NewStyle().Foreground(AccentTool)
+	MarkdownCodeStyle    = lipgloss.NewStyle().Foreground(CommandColor)
+	MarkdownQuoteStyle   = lipgloss.NewStyle().Foreground(ColorTextSecondary)
 	MarkdownBulletStyle  = lipgloss.NewStyle().Foreground(AccentAssistant)
 	MarkdownBoldStyle    = lipgloss.NewStyle().Bold(true)
 	ModalStyle           = lipgloss.NewStyle().Padding(0, 1)

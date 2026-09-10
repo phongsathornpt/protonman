@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/execview"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
@@ -28,13 +29,21 @@ type AgentRunCell struct {
 
 func (AgentRunCell) Kind() HistoryCellKind { return HistoryCellTool }
 func (c AgentRunCell) RenderWidth(width int) []string {
-	label := c.title()
 	indicator, style := c.statePresentation()
-	header := style.Render(indicator + label)
+	durationText := ""
 	if duration := c.duration(); duration > 0 {
-		header += tuistyle.ToolSummaryStyle.Render(tuistyle.GlyphSep + execview.FormatDuration(duration))
+		durationText = tuistyle.GlyphSep + execview.FormatDuration(duration)
 	}
-	out := wrapStyledLines(header, max(1, width))
+	reserved := len([]rune(indicator)) + 1
+	if durationText != "" {
+		reserved += len([]rune(durationText))
+	}
+	label := textview.TruncateEllipsis(c.title(), max(8, width-reserved))
+	header := style.Render(indicator + label)
+	if durationText != "" {
+		header += tuistyle.ToolSummaryStyle.Render(durationText)
+	}
+	out := []string{textview.TruncateEllipsis(header, max(1, width))}
 	if detail := c.detail(); detail != "" {
 		for _, line := range wrapStyledLines(tuistyle.BodyStyle.Render("  "+detail), max(1, width)) {
 			out = append(out, line)

@@ -285,27 +285,29 @@ func TestExecCellFolding(t *testing.T) {
 	}
 }
 
-func TestErrorCellCardRendering(t *testing.T) {
-	cell := &ErrorCell{ErrorKind: ErrorKindModelNotFound, Title: "Model Not Supported", Badge: "MODEL_NOT_FOUND", Text: "Model 'gpt-nonexistent' is not supported by provider 'opencode'.", Suggestions: []string{"Did you mean: nemotron-3.5-lightning-free", "Run /provider to configure an available model"}}
-	rendered := strings.Join(cell.RenderWidth(80), "\n")
-	if !strings.Contains(rendered, "MODEL_NOT_FOUND") {
-		t.Fatalf("expected rendered card to contain badge, got:\n%s", rendered)
+func TestErrorCellDiagnosticRenderingIsInline(t *testing.T) {
+	cell := &ErrorCell{ErrorKind: ErrorKindModelNotFound, Title: "Model Not Supported", Badge: "MODEL_NOT_FOUND", Text: "Model not supported detail", Suggestions: []string{"Did you mean: fallback-model"}}
+	rendered := ansi.Strip(strings.Join(cell.RenderWidth(80), "\n"))
+	if rendered != "× Model Not Supported · MODEL_NOT_FOUND" {
+		t.Fatalf("inline diagnostic = %q", rendered)
 	}
-	if !strings.Contains(rendered, "Model Not Supported") {
-		t.Fatalf("expected rendered card to contain title, got:\n%s", rendered)
-	}
-	if strings.Contains(rendered, "Suggestions:") {
-		t.Fatalf("expected compact recovery hints without Suggestions header, got:\n%s", rendered)
-	}
-	if !strings.Contains(rendered, "→ Did you mean: nemotron-3.5-lightning-free") {
-		t.Fatalf("expected compact recovery hint, got:\n%s", rendered)
-	}
-	if !strings.Contains(rendered, "Did you mean: nemotron-3.5-lightning-free") {
-		t.Fatalf("expected rendered card to contain model suggestions, got:\n%s", rendered)
+	if strings.Contains(rendered, "Did you mean") || strings.Contains(rendered, "detail") {
+		t.Fatalf("inline diagnostic leaked verbose detail: %q", rendered)
 	}
 	raw := strings.Join(cell.RawLines(), "\n")
-	if !strings.Contains(raw, "[MODEL_NOT_FOUND] Model Not Supported") {
-		t.Fatalf("raw lines missing formatted header, got:\n%s", raw)
+	if !strings.Contains(raw, "Model not supported detail") || !strings.Contains(raw, "Did you mean: fallback-model") {
+		t.Fatalf("raw diagnostic lost details: %q", raw)
+	}
+}
+
+func TestErrorCellServerOverloadedUsesStableCode(t *testing.T) {
+	cell := &ErrorCell{ErrorKind: ErrorKindServerOverloaded, Title: "Provider Server Overloaded", Badge: "503 SERVER_ERROR", Text: "upstream unavailable"}
+	rendered := ansi.Strip(strings.Join(cell.RenderWidth(80), "\n"))
+	if rendered != "× Provider Server Overloaded · PROVIDER_OVERLOADED" {
+		t.Fatalf("server overload diagnostic = %q", rendered)
+	}
+	if strings.Contains(rendered, "503") || strings.Contains(rendered, "SERVER_ERROR") {
+		t.Fatalf("stable diagnostic leaked provider transport code: %q", rendered)
 	}
 }
 

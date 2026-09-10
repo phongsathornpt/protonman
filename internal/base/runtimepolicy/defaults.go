@@ -5,7 +5,7 @@ import "time"
 const (
 	AgentMaxRuntime                       = 30 * time.Minute
 	AgentWaitTimeout                      = 30 * time.Second
-	AgentQueueTimeout                     = 30 * time.Second
+	AgentQueueTimeout                     = 2 * time.Minute
 	AgentMaxLive                          = 16
 	AgentMaxRetained                      = 64
 	AgentRetainedResultBytes              = 128 * 1024

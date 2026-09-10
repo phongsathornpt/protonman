@@ -352,6 +352,18 @@ func TestAgentRunCellKeepsTaskAndFailureReason(t *testing.T) {
 	}
 }
 
+func TestAgentRunCellLongTaskStaysSingleLine(t *testing.T) {
+	started := time.Unix(100, 0)
+	cell := AgentRunCell{AgentID: "str-7", Profile: agent.ProfileStrength, Task: strings.Repeat("Analyze inbound/outbound surface ", 12), State: agent.StateFailed, Reason: "queue timed out", StartedAt: started, FinishedAt: started.Add(30 * time.Second)}
+	lines := cell.RenderWidth(80)
+	if len(lines) != 2 {
+		t.Fatalf("long terminal agent rendered %d lines, want header + reason: %#v", len(lines), lines)
+	}
+	if !strings.Contains(lines[0], "STR") || !strings.Contains(lines[0], "30.0s") || !strings.Contains(lines[1], "queue timed out") {
+		t.Fatalf("long terminal agent render=%q", strings.Join(lines, "\n"))
+	}
+}
+
 func TestAgentRunCellCompletedShowsSummary(t *testing.T) {
 	started := time.Unix(200, 0)
 	cell := AgentRunCell{AgentID: "int-2", Profile: agent.ProfileAgility, Task: "inspect router", State: agent.StateCompleted, Summary: "found routing boundary", StartedAt: started, FinishedAt: started.Add(8*time.Second + 400*time.Millisecond)}
