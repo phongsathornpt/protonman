@@ -45,5 +45,5 @@ func (m *bubbleModel) promptView() string {
 	}
 	usableWidth := composerUsableWidth(m.layout.width)
 	border := promptBorderStyle.Render(strings.Repeat("─", usableWidth))
-	return border + "\n" + m.panes.bottom.prompt().View() + "\n" + border
+	return m.panes.bottom.prompt().View() + "\n" + border
 }
