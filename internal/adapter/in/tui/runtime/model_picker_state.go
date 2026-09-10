@@ -199,7 +199,7 @@ func (v *modelSelectPaneView) syncPickerProjection() {
 
 func (v *modelSelectPaneView) activeProviderName() string {
 	if v == nil || v.providerIndex < 0 || v.providerIndex >= len(v.providerNames) {
-		return model.DefaultProtonmanName
+		return model.DefaultOpenCodeName
 	}
 	return v.providerNames[v.providerIndex]
 }

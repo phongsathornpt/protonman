@@ -1193,3 +1193,27 @@ func TestStaleProviderSelectionCannotOverwriteNewerDiskSelection(t *testing.T) {
 		t.Fatalf("persisted selection = %q/%q, want beta/beta-model", snapshot.Model.Provider, snapshot.Model.Default)
 	}
 }
+
+func TestProviderRenameInvalidatesOldCatalogOnly(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.providers = map[string]config.ProviderConfig{
+		"old": {Name: "old", BaseURL: "https://old.example/v1", APIKey: "key", Type: "openai"},
+	}
+	m.modelCatalogs.Set("old", []model.RemoteModel{{ID: "old-model"}})
+	m.modelCatalogs.Set("new", []model.RemoteModel{{ID: "new-model"}})
+	id := nextAsyncOperationID()
+	m.activeProviderSave = id
+	m.configMutationGate.activate(id)
+	updated, _ := m.Update(providerSavedMsg{
+		operationID: id, providerName: "new", previousName: "old", providerType: "openai",
+		baseURL: "https://new.example/v1", apiKey: "key", activated: false,
+	})
+	m = updated.(*bubbleModel)
+	if m.modelCatalogs.Has("old") {
+		t.Fatal("renamed provider retained stale catalog under old name")
+	}
+	models := m.modelCatalogs.Models("new")
+	if len(models) != 1 || models[0].ID != "new-model" {
+		t.Fatalf("fresh renamed catalog = %#v, want new-model", models)
+	}
+}

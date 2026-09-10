@@ -1151,3 +1151,13 @@ func TestModelFetchRequiresRuntimeContext(t *testing.T) {
 		t.Fatalf("nil-context model fetch error = %v", v.err)
 	}
 }
+
+func TestModelPickerDefaultsToOpenCodeWhenNoProviderConfigured(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.providers = nil
+	m.activeProvider = ""
+	view := newModelSelectPaneView(m)
+	if got := view.activeProviderName(); got != model.DefaultOpenCodeName {
+		t.Fatalf("default picker provider = %q, want %q", got, model.DefaultOpenCodeName)
+	}
+}

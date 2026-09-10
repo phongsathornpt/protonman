@@ -70,6 +70,7 @@ func (m *bubbleModel) updateProviderSaved(message providerSavedMsg) (tea.Model, 
 		previousKey := strings.ToLower(strings.TrimSpace(message.previousName))
 		if previousKey != "" && previousKey != providerKey {
 			delete(m.providers, previousKey)
+			m.modelCatalogs.Delete(previousKey)
 		}
 		if m.providers == nil {
 			m.providers = make(map[string]config.ProviderConfig)

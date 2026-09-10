@@ -21,7 +21,7 @@ func ProviderNames(providers map[string]config.ProviderConfig, active string) ([
 		names = append([]string{active}, names...)
 	}
 	if active == "" && len(names) == 0 {
-		names = append(names, model.DefaultProtonmanName)
+		names = append(names, model.DefaultOpenCodeName)
 	}
 	index := 0
 	for i, name := range names {
