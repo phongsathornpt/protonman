@@ -13,14 +13,6 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
-func (m bubbleModel) permissionCard() string {
-	view := m.permissionView()
-	if view == nil {
-		return ""
-	}
-	return view.card(newPaneRenderContext(&m))
-}
-
 func (v *permissionPaneView) card(ctx paneRenderContext) string {
 	request := v.pending.request
 	options := permissionpolicy.Options(v.pending.request, ctx.projectTrusted, ctx.hasWorkDir)

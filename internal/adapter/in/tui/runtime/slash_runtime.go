@@ -145,19 +145,3 @@ func (m *bubbleModel) acceptSlash(run bool) (applied bool, command tea.Cmd) {
 func truncateWithEllipsis(s string, maxLen int) string {
 	return textview.TruncateEllipsis(s, maxLen)
 }
-
-func (m bubbleModel) renderSlash(index int) string {
-	view := &slashPaneView{}
-	view.sync(newPaneRenderContext(&m))
-	if len(view.matches) > 0 {
-		view.picker.Select(maxInt(0, minInt(index, len(view.matches)-1)))
-	}
-	return view.Render(newPaneRenderContext(&m))
-}
-
-func (m bubbleModel) slashView() string {
-	if view := m.slashState(); view != nil {
-		return view.Render(newPaneRenderContext(&m))
-	}
-	return ""
-}

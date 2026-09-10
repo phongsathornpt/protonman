@@ -1,12 +1,7 @@
 package slashview
 
 import (
-	"fmt"
 	"strings"
-
-	"charm.land/lipgloss/v2"
-	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 )
 
 type Command struct {
@@ -190,75 +185,4 @@ func Matches(context Context, catalog []Command, skills []Skill) []Command {
 		}
 	}
 	return matches
-}
-
-func Render(matches []Command, index, width, maxRows int, kind ContextKind) string {
-	if len(matches) == 0 {
-		return ""
-	}
-	if index < 0 {
-		index = 0
-	}
-	if index >= len(matches) {
-		index = len(matches) - 1
-	}
-	if maxRows <= 0 {
-		maxRows = 1
-	}
-	visible := matches
-	offset := 0
-	if len(visible) > maxRows {
-		if index >= maxRows {
-			offset = index - maxRows + 1
-		}
-		visible = matches[offset : offset+maxRows]
-	}
-	isSkill := kind == ContextSkill
-	lines := make([]string, 0, len(visible)+1)
-	maxName := 16
-	if isSkill {
-		for _, command := range visible {
-			if len(command.Name) > maxName {
-				maxName = len(command.Name)
-			}
-		}
-		if maxName > 26 {
-			maxName = 26
-		}
-	}
-	for i, command := range visible {
-		selected := offset+i == index
-		cursor := "  "
-		if selected {
-			cursor = tuistyle.GlyphPrompt
-		}
-		var row string
-		if isSkill {
-			box := command.PrefixTag
-			if box == "" {
-				box = "[ ]"
-			}
-			name := textview.TruncateEllipsis(command.Name, maxName)
-			scope := ""
-			if command.Scope != "" {
-				scope = "[" + textview.PadRight(command.Scope, 7) + "]"
-			}
-			consumed := 2 + len(box) + 1 + maxName + 1 + 9 + 1
-			remaining := max(10, width-consumed-2)
-			row = cursor + box + " " + textview.PadRight(name, maxName) + " " + textview.PadRight(scope, 9) + " " + textview.TruncateEllipsis(command.Description, remaining)
-		} else {
-			label := "/" + command.Name
-			remaining := max(10, width-20)
-			row = cursor + textview.PadRight(label, 16) + " " + textview.TruncateEllipsis(command.Description, remaining)
-		}
-		if selected {
-			lines = append(lines, lipgloss.NewStyle().Bold(true).Foreground(tuistyle.AccentAssistant).Render(row))
-		} else {
-			lines = append(lines, tuistyle.MutedStyle.Render(row))
-		}
-	}
-	if len(matches) > maxRows {
-		lines = append(lines, tuistyle.MutedStyle.Render(fmt.Sprintf("  (item %d of %d)", index+1, len(matches))))
-	}
-	return strings.Join(lines, "\n")
 }

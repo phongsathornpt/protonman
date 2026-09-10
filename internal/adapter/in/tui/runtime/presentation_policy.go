@@ -54,10 +54,6 @@ func layoutModeForHeight(height int) terminalLayoutMode {
 	return panecommon.ModeForHeight(height)
 }
 
-func compactPickerRows(rows []string) []string {
-	return panecommon.CompactRows(rows)
-}
-
 func renderModalRows(ctx paneRenderContext, border color.Color, rows []string) string {
 	return panecommon.RenderModal(ctx.width, ctx.height, border, rows)
 }

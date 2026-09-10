@@ -173,7 +173,7 @@ func TestUnifiedModelSetupAdjustsThinkingBeforeApply(t *testing.T) {
 	if got := view.selectedReasoning(); got != sdk.ReasoningDefault {
 		t.Fatalf("initial thinking = %q, want auto", got)
 	}
-	handled, _ := m.handleModalKey(testKey(tea.KeyRight))
+	handled, _ := m.handlePaneKey(testKey(tea.KeyRight))
 	if !handled || view.selectedReasoning() != sdk.ReasoningLow {
 		t.Fatalf("right did not move thinking to low: %q", view.selectedReasoning())
 	}
@@ -195,7 +195,7 @@ func TestUnifiedModelSetupShiftTabCyclesProviderWithoutPermissionLeak(t *testing
 	view := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	initialProvider := view.activeProviderName()
 	initialMode := m.service.Mode()
-	handled, _ := m.handleModalKey(testShiftTab())
+	handled, _ := m.handlePaneKey(testShiftTab())
 	if !handled {
 		t.Fatal("shift+tab was not handled by model setup")
 	}
@@ -676,7 +676,9 @@ func TestSlashAutocompleteUsesBubblesListPresentation(t *testing.T) {
 	if !model.slashOpen() {
 		t.Fatal("expected slash open for /skill ")
 	}
-	rendered := model.renderSlash(0)
+	view := &slashPaneView{}
+	view.sync(newPaneRenderContext(model))
+	rendered := view.Render(newPaneRenderContext(model))
 	for _, want := range []string{"[ ] skill-01", "[ ] skill-02", "Description for skill 01", "user"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("bubbles slash list missing %q:\n%s", want, rendered)

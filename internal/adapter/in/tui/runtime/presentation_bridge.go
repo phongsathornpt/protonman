@@ -76,7 +76,6 @@ var (
 	diffDeleteStyle  = tuistyle.DiffDeleteStyle
 	diffHunkStyle    = tuistyle.DiffHunkStyle
 	bodyStyle        = tuistyle.BodyStyle
-	modalStyle       = tuistyle.ModalStyle
 )
 
 var (

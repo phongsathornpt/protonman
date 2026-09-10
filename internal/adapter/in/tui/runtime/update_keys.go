@@ -40,7 +40,7 @@ func (m *bubbleModel) handleInterruptKey() (tea.Model, tea.Cmd) {
 }
 
 func (m *bubbleModel) updateKey(message tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if handled, command := m.handleModalKey(message); handled {
+	if handled, command := m.handlePaneKey(message); handled {
 		return m, m.withSpinner(command)
 	}
 	if handled, command := m.handleGlobalKey(message); handled {
@@ -49,7 +49,7 @@ func (m *bubbleModel) updateKey(message tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, m.handlePromptKey(message)
 }
 
-func (m *bubbleModel) handleModalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
+func (m *bubbleModel) handlePaneKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 	top := m.panes.bottom.top()
 	if top == nil {
 		return false, nil

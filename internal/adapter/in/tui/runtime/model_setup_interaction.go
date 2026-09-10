@@ -34,7 +34,7 @@ func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 	case len(v.picker.VisibleItems()) == 0 && strings.TrimSpace(v.picker.FilterValue()) != "":
 		rows = append(rows, mutedStyle.Render("Search: "+v.picker.FilterValue()), mutedStyle.Render("No matches."))
 	default:
-		rows = append(rows, strings.Split(v.picker.View(), "\n")...)
+		rows = append(rows, v.modelRows(ctx)...)
 		showSelectionStatus = true
 	}
 
@@ -48,6 +48,44 @@ func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 		}
 	}
 	return renderModalRows(ctx, accentAssistant, rows)
+}
+
+func (v *modelSetupPaneView) modelRows(ctx paneRenderContext) []string {
+	items := v.picker.VisibleItems()
+	if len(items) == 0 {
+		return nil
+	}
+	start, end := paneWindow(len(items), v.picker.Index(), maxModelSetupRows, layoutModeForHeight(ctx.height))
+	rows := make([]string, 0, end-start+1)
+	if v.picker.SettingFilter() || v.picker.IsFiltered() {
+		rows = append(rows, mutedStyle.Render("Search: ")+userStyle.Render(v.picker.FilterValue()))
+	}
+	width := maxInt(1, ctx.width-8)
+	for i := start; i < end; i++ {
+		entry, ok := items[i].(modelListItem)
+		if !ok {
+			continue
+		}
+		prefix := "  "
+		style := bodyStyle
+		if i == v.picker.Index() {
+			prefix = glyphPrompt
+			style = brandStyle
+		}
+		label := truncateWithEllipsis(entry.Title(), maxInt(1, width-2))
+		if entry.current {
+			const marker = "(current)"
+			markerWidth := len(marker)
+			labelWidth := len([]rune(label))
+			if gap := width - labelWidth - markerWidth - 2; gap >= 2 {
+				label += strings.Repeat(" ", gap) + mutedStyle.Render(marker)
+			} else {
+				label = truncateWithEllipsis(label, maxInt(1, width-markerWidth-4)) + "  " + mutedStyle.Render(marker)
+			}
+		}
+		rows = append(rows, prefix+style.Render(label))
+	}
+	return rows
 }
 
 func modelSetupHelp(width int) string {

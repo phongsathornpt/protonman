@@ -1,10 +1,7 @@
 package slashview
 
 import (
-	"strings"
 	"testing"
-
-	"github.com/charmbracelet/x/ansi"
 )
 
 func TestCatalogKeepsCanonicalSkillsCommand(t *testing.T) {
@@ -83,20 +80,5 @@ func TestSkillMatchesCarryPresentationMetadata(t *testing.T) {
 	}
 	if matches[0].Name != "pdf-processing" || matches[0].PrefixTag != "[x]" || matches[0].Scope != "user" {
 		t.Fatalf("match = %#v", matches[0])
-	}
-}
-
-func TestRenderShowsSelectedWindow(t *testing.T) {
-	matches := []Command{
-		{Name: "one", Description: "first"},
-		{Name: "two", Description: "second"},
-		{Name: "three", Description: "third"},
-	}
-	plain := ansi.Strip(Render(matches, 2, 80, 2, ContextCommand))
-	if strings.Contains(plain, "/one") || !strings.Contains(plain, "/two") || !strings.Contains(plain, "/three") {
-		t.Fatalf("unexpected render window: %q", plain)
-	}
-	if !strings.Contains(plain, "item 3 of 3") {
-		t.Fatalf("missing position hint: %q", plain)
 	}
 }

@@ -193,22 +193,6 @@ func providerEditorPaneState(state providerPaneState) providerpane.ProviderEdito
 	}
 }
 
-func renderProviderInput(m *bubbleModel) string {
-	if m == nil || m.panes.bottom == nil {
-		return ""
-	}
-	ctx := newPaneRenderContext(m)
-	view, ok := m.panes.bottom.find(providerViewID).(*providerPaneView)
-	if !ok || view == nil {
-		return ""
-	}
-	view.resizeInputs(ctx.width)
-	snapshot := providerEditorSnapshot(ctx, view)
-	snapshot.State = providerpane.ProviderEditorInput
-	rows, tone := providerpane.ProviderEditorRows(snapshot)
-	return renderProviderModal(ctx, paneToneColor(tone), rows)
-}
-
 func renderProviderModal(ctx paneRenderContext, border color.Color, rows []string) string {
 	contentWidth := providerModalContentWidth(ctx)
 	wrappedRows := make([]string, 0, len(rows))

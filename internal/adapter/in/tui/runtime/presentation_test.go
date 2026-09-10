@@ -873,13 +873,6 @@ func TestQueueEchoTruncatesLongPrompt(t *testing.T) {
 	}
 }
 
-func TestRenderProviderInputMissingViewIsSafe(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	if got := renderProviderInput(m); got != "" {
-		t.Fatalf("renderProviderInput() = %q, want empty without provider pane", got)
-	}
-}
-
 func assertBubbleViewFits(t *testing.T, m *bubbleModel, width, height int) {
 	t.Helper()
 	m.resize(width, height)
