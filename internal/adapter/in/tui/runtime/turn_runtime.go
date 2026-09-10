@@ -109,7 +109,7 @@ func (m *bubbleModel) cancelActiveTurn() int {
 	return stopping
 }
 
-func (m *bubbleModel) updateTurnDelta(message turnmsg.Delta) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) updateTurnDelta(message turnmsg.Delta) tea.Cmd {
 	batch := []app.Event{message.Event}
 	for {
 		select {
@@ -118,37 +118,44 @@ func (m *bubbleModel) updateTurnDelta(message turnmsg.Delta) (tea.Model, tea.Cmd
 				m.applyTurnEvents(batch)
 				slog.DebugContext(m.ctx, "tui turn event channel closed before terminal message", "busy", m.busy)
 				if m.busy && m.ctx.Err() == nil {
-					return m.Update(turnmsg.EventsClosed{})
+					return m.updateTurnEventsClosed(turnmsg.EventsClosed{})
 				}
 				m.refreshViewport()
-				return m, nil
+				return nil
 			}
 			if delta, isDelta := next.(turnmsg.Delta); isDelta {
 				batch = append(batch, delta.Event)
 				continue
 			}
 			m.applyTurnEvents(batch)
-			// The terminal message performs its own relayout/viewport refresh.
-			// Avoid rendering the just-drained deltas twice at turn completion.
-			return m.Update(next)
+			switch terminal := next.(type) {
+			case turnmsg.Done:
+				return m.updateTurnDone(terminal)
+			case turnmsg.EventsClosed:
+				return m.updateTurnEventsClosed(terminal)
+			default:
+				slog.DebugContext(m.ctx, "tui turn ignored unexpected event", "event_type", fmt.Sprintf("%T", next))
+				m.refreshViewport()
+				return m.withSpinner(turnmsg.Wait(m.turnEvents))
+			}
 		default:
 		}
 		break
 	}
 	m.applyTurnEvents(batch)
 	m.refreshViewport()
-	return m, m.withSpinner(turnmsg.Wait(m.turnEvents))
+	return m.withSpinner(turnmsg.Wait(m.turnEvents))
 }
 
-func (m *bubbleModel) updateTurnEventsClosed(message turnmsg.EventsClosed) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) updateTurnEventsClosed(_ turnmsg.EventsClosed) tea.Cmd {
 	slog.DebugContext(m.ctx, "tui turn event channel closed unexpectedly", "busy", m.busy, "context_error", m.ctx.Err() != nil)
 	if !m.busy || m.ctx.Err() != nil {
-		return m, nil
+		return nil
 	}
-	return m.Update(turnmsg.Done{Err: errTurnEventsClosed})
+	return m.updateTurnDone(turnmsg.Done{Err: errTurnEventsClosed})
 }
 
-func (m *bubbleModel) updateTurnDone(message turnmsg.Done) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) updateTurnDone(message turnmsg.Done) tea.Cmd {
 	slog.DebugContext(m.ctx, "tui turn terminal message received", "success", message.Err == nil, "error_type", errorType(message.Err), "rounds", message.Result.Rounds, "message_count", len(message.Result.Messages), "assistant_bytes", len(message.Result.Message.Content))
 	m.busy = false
 	m.busyStarted = time.Time{}
@@ -176,7 +183,7 @@ func (m *bubbleModel) updateTurnDone(message turnmsg.Done) (tea.Model, tea.Cmd) 
 	m.requestRelayout()
 	if message.Err != nil {
 		m.queue = nil
-		return m, nil
+		return nil
 	}
-	return m, m.withSpinner(m.drainQueue())
+	return m.withSpinner(m.drainQueue())
 }

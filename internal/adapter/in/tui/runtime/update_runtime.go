@@ -126,14 +126,11 @@ func (m *bubbleModel) updateRuntimeEvent(msg tea.Msg) (tea.Cmd, bool) {
 	case permissionRuleSavedMsg:
 		return m.updatePermissionRuleSaved(message), true
 	case turnmsg.Delta:
-		_, command := m.updateTurnDelta(message)
-		return command, true
+		return m.updateTurnDelta(message), true
 	case turnmsg.EventsClosed:
-		_, command := m.updateTurnEventsClosed(message)
-		return command, true
+		return m.updateTurnEventsClosed(message), true
 	case turnmsg.Done:
-		_, command := m.updateTurnDone(message)
-		return command, true
+		return m.updateTurnDone(message), true
 	default:
 		return nil, false
 	}
