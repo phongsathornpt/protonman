@@ -26,13 +26,10 @@ func (m *bubbleModel) startTool(call tool.Call) tea.Cmd {
 	m.showWelcome = false
 	slog.DebugContext(m.ctx, "tui direct tool started", "call_id", call.ID, "tool_name", call.Name, "argument_bytes", len(call.Arguments))
 	m.conversationModelState.appendMessages(model.Message{ID: model.NewMessageID(), Role: model.RoleAssistant, ToolCalls: []model.ToolCall{{ID: call.ID, Name: call.Name, Arguments: append([]byte(nil), call.Arguments...)}}})
-	m.busy = true
-	m.busyStarted = time.Now()
-	m.activity = "running " + call.Name
+	ctx, cancel := context.WithCancel(m.ctx)
+	m.turnModelState.beginTool("running "+call.Name, time.Now(), cancel)
 	m.appendToolCall(call)
 	m.requestRelayout()
-	ctx, cancel := context.WithCancel(m.ctx)
-	m.turnCancel = cancel
 	return func() tea.Msg {
 		defer cancel()
 		startedAt := time.Now()

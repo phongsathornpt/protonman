@@ -3,7 +3,6 @@ package runtime
 import (
 	"context"
 	"log/slog"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -47,11 +46,7 @@ func (m *bubbleModel) updatePermissionRequest(message permissionRequestMsg) tea.
 
 func (m *bubbleModel) updateToolResult(message toolResultMsg) tea.Cmd {
 	slog.DebugContext(m.ctx, "tui direct tool completed", "call_id", message.call.ID, "tool_name", message.call.Name, "success", message.err == nil, "error_type", errorType(message.err))
-	m.busy = false
-	m.busyStarted = time.Time{}
-	m.turnProgress = turnProgress{}
-	m.activity = "ready"
-	m.turnCancel = nil
+	m.turnModelState.finishTool()
 	m.appendToolResult(message.result, message.err)
 	m.syncTodoSnapshot()
 	if message.call.ID != "" {
