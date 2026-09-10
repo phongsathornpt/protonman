@@ -537,7 +537,7 @@ Current important slash commands include:
 /agents
 /subagents [on|off]
 /agent [universal|strength|agility|intelligence]
-/reasoning [auto|none|low|medium|high|xhigh|max]
+/reasoning [auto|none|low|medium|high|xhigh|max]  # no arg opens unified Model Setup
 /mode
 /ask
 /always-approve

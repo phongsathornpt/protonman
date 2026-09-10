@@ -132,7 +132,7 @@ The fullscreen TUI is built on [Bubble Tea](https://github.com/charmbracelet/bub
 ├────────────────────────────────────────────────────────────────────────┤
 │ > Type a message or '/' for commands...                                │
 ├────────────────────────────────────────────────────────────────────────┤
-│ [Enter] send  [Shift+Tab] mode  [^P] models  [^S] skills  [^C] quit   │
+│ [Enter] send  [Shift+Tab] mode  [^P] setup  [^S] skills  [^C] quit   │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -141,8 +141,9 @@ The fullscreen TUI is built on [Bubble Tea](https://github.com/charmbracelet/bub
 | Key | Action |
 | :--- | :--- |
 | `Enter` | Submit current prompt / execute command |
+| `?` | Open the compact shortcut reference when the composer is empty |
 | `Shift+Tab` | Cycle permission mode (`ask` → `plan` → `always-approve`) |
-| `Ctrl+P` | Toggle Model & Provider selector pane |
+| `Ctrl+P` | Toggle unified Model Setup (provider, model, thinking) |
 | `Ctrl+S` | Toggle Agent Skills browser pane |
 | `Ctrl+O` | Toggle Tasks / TODO checklist pane |
 | `Ctrl+T` | Open transcript overlay (toggle raw view with `r`) |
@@ -158,8 +159,9 @@ Type `/` at the prompt to trigger autocomplete, or prefix with a colon (`:help`)
 | Command | Description | Example |
 | :--- | :--- | :--- |
 | `/help`, `:help` | Display available commands and keybindings | `/help` |
-| `/model [name]` | Open model selector or switch active model (`/models` is an alias) | `/model glm-5.3-flash` |
+| `/model [name]` | Open unified Model Setup or switch active model (`/models` is an alias) | `/model glm-5.3-flash` |
 | `/provider [cmd]` | Manage and configure AI model providers | `/provider list`, `/provider opencode` |
+| `/reasoning [level]` | Open Model Setup with no argument, or set session thinking directly | `/reasoning high` |
 | `/tools` | List registered tools and parameter schemas | `/tools` |
 | `/agents` | Inspect live and retained subagents | `/agents` |
 | `/subagents [on|off]` | Toggle new subagent delegation for the current runtime | `/subagents off` |
@@ -177,7 +179,7 @@ Type `/` at the prompt to trigger autocomplete, or prefix with a colon (`:help`)
 | `!<command>` | Execute a shell command directly through the `bash` tool | `!git status` |
 | `/quit`, `:quit` | Exit Protonman cleanly | `/quit` |
 
-The model picker keeps catalogs scoped per configured provider. Fresh catalogs are cached briefly, stale or missing catalogs are refreshed, obsolete requests are canceled, and late responses from an older provider selection are ignored. Press `/` inside the model picker to filter by model ID, name, vendor, or feature; `r` forces a refresh. Direct `/model <id>` selection still permits custom/unlisted model IDs and marks them as unverified instead of rejecting them.
+Model Setup combines provider, model, and thinking selection in one interaction. Use `↑/↓` to move through models, `←/→` to adjust thinking, `tab` to switch provider, and `enter` to apply the selection. Model catalogs stay scoped per provider; stale or missing catalogs refresh automatically and stale async results are ignored. Press `/` inside Model Setup to filter by model ID, name, vendor, or feature; `r` forces a refresh. Provider credentials remain managed through `/provider`. Direct `/model <id>` still permits custom or unlisted IDs and marks them as unverified instead of rejecting them.
 
 ---
 
