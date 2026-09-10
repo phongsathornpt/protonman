@@ -195,12 +195,7 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 		res.Err = transitionErr
 	}
 
-	c.agentsMu.RLock()
-	resultVersion := entry.resultRef.Version
-	c.agentsMu.RUnlock()
-	if resultVersion > 0 {
-		c.emit(execCtx, Event{Kind: EventAgentResultAvailable, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, ResultVersion: resultVersion, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration})
-	}
+	c.emitStoredResult(execCtx, entry, req, res)
 
 	eventKind := EventAgentCompleted
 	if runErr != nil {
@@ -221,10 +216,25 @@ func (c *Coordinator) finishEntry(entry *agentEntry, req Request, queuedAt, star
 		err = transitionErr
 		res.Err = transitionErr
 	}
+	c.emitStoredResult(c.rootCtx, entry, req, res)
 	c.emit(c.rootCtx, Event{Kind: EventAgentFailed, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: err})
 	if startedAt.IsZero() {
 		close(entry.started)
 	}
+}
+
+func (c *Coordinator) emitStoredResult(ctx context.Context, entry *agentEntry, req Request, res Result) {
+	c.agentsMu.RLock()
+	version := entry.resultRef.Version
+	c.agentsMu.RUnlock()
+	if version == 0 {
+		return
+	}
+	c.emit(ctx, Event{
+		Kind: EventAgentResultAvailable, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID,
+		Profile: req.Profile, ResultVersion: version, QueueDuration: res.QueueDuration,
+		Duration: res.Duration, TotalDuration: res.TotalDuration,
+	})
 }
 
 func (c *Coordinator) storeTerminal(ctx context.Context, entry *agentEntry, res Result, err error) error {

@@ -1031,6 +1031,20 @@ func TestCoordinatorQueueTimeoutReportsLifecycleMetrics(t *testing.T) {
 	if !ok || status.Reason != "queue timed out" {
 		t.Fatalf("queue timeout status = %+v, ok=%v", status, ok)
 	}
+	resultEvents, streamErr := coord.WaitResultEventsAfter(context.Background(), TurnRef{}, 0, time.Second)
+	if streamErr != nil {
+		t.Fatalf("wait for queue-timeout result event: %v", streamErr)
+	}
+	foundResult := false
+	for _, ev := range resultEvents.Events {
+		if ev.Kind == EventAgentResultAvailable && ev.AgentID == res.AgentID && ev.ResultVersion > 0 {
+			foundResult = true
+			break
+		}
+	}
+	if !foundResult {
+		t.Fatalf("queue timeout did not publish result availability: %+v", resultEvents.Events)
+	}
 	var failure Event
 	waitForTest(t, 250*time.Millisecond, func() bool {
 		for {
