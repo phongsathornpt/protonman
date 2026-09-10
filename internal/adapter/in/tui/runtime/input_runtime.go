@@ -38,6 +38,9 @@ func (m *bubbleModel) submit() tea.Cmd {
 		return m.dispatchBang(line)
 	}
 	if line == "" {
+		if prompt.Value() != "" {
+			m.resetPrompt()
+		}
 		return nil
 	}
 	if m.busy || m.hasPermissionView() {

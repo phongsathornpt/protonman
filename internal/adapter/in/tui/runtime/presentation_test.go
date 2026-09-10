@@ -1008,6 +1008,28 @@ func TestPromptWidthFitsTerminalAcrossResponsiveSizes(t *testing.T) {
 	}
 }
 
+
+func TestBlankMultilineSubmitCollapsesComposer(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+	prompt := model.panes.bottom.prompt()
+	prompt.SetValue("\n\n\n")
+	model.requestRelayout()
+	model.reconcileLayout()
+	if prompt.Height() != 4 {
+		t.Fatalf("precondition height=%d, want 4", prompt.Height())
+	}
+	if cmd := model.submit(); cmd != nil {
+		t.Fatalf("blank submit command=%v, want nil", cmd)
+	}
+	if prompt.Value() != "" || prompt.Height() != 1 {
+		t.Fatalf("blank submit left value=%q height=%d", prompt.Value(), prompt.Height())
+	}
+	if got := strings.Count(ansi.Strip(model.promptView()), "> "); got != 1 {
+		t.Fatalf("prompt count=%d, want 1: %q", got, ansi.Strip(model.promptView()))
+	}
+}
+
 func TestPromptIsSingleRow(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
