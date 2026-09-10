@@ -3,8 +3,34 @@ package app
 import (
 	"context"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"strings"
 )
+
+// ResolvePrimaryModelDefaults guarantees a usable built-in default when the
+// persisted primary model selection is incomplete. Explicit selections win.
+func ResolvePrimaryModelDefaults(selection config.ModelConfig, providers map[string]config.ProviderConfig) (config.ModelConfig, map[string]config.ProviderConfig) {
+	if providers == nil {
+		providers = make(map[string]config.ProviderConfig)
+	}
+	providerName := strings.ToLower(strings.TrimSpace(selection.Provider))
+	if providerName == "" {
+		providerName = model.DefaultOpenCodeName
+	}
+	if providerName == model.DefaultOpenCodeName {
+		if _, ok := providers[providerName]; !ok {
+			providers[providerName] = config.ProviderConfig{
+				Name: model.DefaultOpenCodeName, Type: string(model.ProviderProtocolOpenAI), BaseURL: model.DefaultOpenCodeEndpoint,
+			}
+		}
+		if strings.TrimSpace(selection.Default) == "" {
+			selection.Default = model.DefaultOpenCodeModel
+		}
+	}
+	selection.Provider = providerName
+	return selection, providers
+}
 
 // ProviderSaveRequest describes a persisted user provider update.
 type ProviderSaveRequest struct {

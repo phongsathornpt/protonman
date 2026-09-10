@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
-	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/sessionfs"
 	agenttool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/agent"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin"
@@ -67,9 +66,10 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		return nil, fmt.Errorf("load configuration: %w", err)
 	}
 	if reconciled, changed := config.ReconcileModelSelection(loadedConfig.Model, loadedConfig.Providers); changed {
-		fmt.Fprintf(os.Stderr, "warning: saved model provider %q is unavailable; using provider %q and requiring model selection\n", loadedConfig.Model.Provider, reconciled.Provider)
+		fmt.Fprintf(os.Stderr, "warning: saved model provider %q is unavailable; using provider %q\n", loadedConfig.Model.Provider, reconciled.Provider)
 		loadedConfig.Model = reconciled
 	}
+	loadedConfig.Model, loadedConfig.Providers = app.ResolvePrimaryModelDefaults(loadedConfig.Model, loadedConfig.Providers)
 	for _, warning := range loadedConfig.Warnings {
 		fmt.Fprintln(os.Stderr, "warning:", warning)
 	}
@@ -283,9 +283,6 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		return nil, fmt.Errorf("create tool-call service: %w", err)
 	}
 	providerKey := strings.ToLower(strings.TrimSpace(loadedConfig.Model.Provider))
-	if providerKey == "" {
-		providerKey = model.DefaultProtonmanName
-	}
 	provider := loadedConfig.Providers[providerKey]
 	initialRunner, _ := app.BuildConversation(service, skillRegistry, app.NewAgentsForSession(coordinator, sessionID), app.ConversationSpec{
 		ProviderName: providerKey, ProviderType: provider.Type, BaseURL: provider.BaseURL, APIKey: provider.APIKey,

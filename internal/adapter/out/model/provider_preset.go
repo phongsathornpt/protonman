@@ -15,6 +15,7 @@ const (
 	// DefaultOpenCodeName is the canonical provider label for OpenCode Zen.
 	DefaultOpenCodeName     = "opencode"
 	DefaultOpenCodeEndpoint = "https://opencode.ai/zen/v1"
+	DefaultOpenCodeModel    = "nemotron-3.5-lightning-free"
 
 	// DefaultOllamaName is the canonical provider label for local Ollama.
 	DefaultOllamaName     = "ollama"
