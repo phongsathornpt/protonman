@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -422,6 +423,23 @@ func NewLoop(languageModel sdk.LanguageModel, tools *toolcall.Service, options .
 }
 
 // ReasoningPolicy returns the configured reasoning preference and whether it is an explicit override.
+// CloneWithActiveGoal creates an independent loop with the same model and
+// execution policy while replacing only the managed prompt goal.
+func (l *Loop) CloneWithActiveGoal(goal string) (*Loop, error) {
+	if l == nil {
+		return nil, fmt.Errorf("%w: loop is required", ErrInvalidLoop)
+	}
+	clone, err := l.CloneWithTools(l.tools)
+	if err != nil {
+		return nil, err
+	}
+	if clone.promptSpec == nil {
+		return nil, fmt.Errorf("%w: conversation does not use a managed prompt", ErrInvalidLoop)
+	}
+	clone.promptSpec.ActiveGoal = strings.TrimSpace(goal)
+	return clone, nil
+}
+
 func (l *Loop) ReasoningPolicy() (sdk.ReasoningEffort, bool) {
 	if l == nil {
 		return sdk.ReasoningDefault, false

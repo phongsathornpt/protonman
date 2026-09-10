@@ -594,15 +594,18 @@ func TestBracketedPasteUpdatesVisibleComposerWithoutSubmitting(t *testing.T) {
 	}
 }
 
-func TestLargeUnicodePasteRespectsComposerLimitWithoutSubmitting(t *testing.T) {
+func TestLargeUnicodePasteIsNotArtificiallyCappedOrSubmitted(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
 	paste := strings.Repeat("ก", 25_000)
 	updated, _ := m.Update(tea.PasteMsg{Content: paste})
 	m = updated.(*bubbleModel)
 	prompt := m.panes.bottom.prompt()
-	if got := len([]rune(prompt.Value())); got > prompt.CharLimit {
-		t.Fatalf("unicode paste runes=%d exceeds char limit=%d", got, prompt.CharLimit)
+	if prompt.CharLimit != 0 {
+		t.Fatalf("composer char limit = %d, want unlimited", prompt.CharLimit)
+	}
+	if got := prompt.Value(); got != paste {
+		t.Fatalf("unicode paste runes=%d, want %d", len([]rune(got)), len([]rune(paste)))
 	}
 	if len(m.historyState.Cells()) != 0 || m.busy {
 		t.Fatalf("large paste submitted unexpectedly: cells=%d busy=%v", len(m.historyState.Cells()), m.busy)
