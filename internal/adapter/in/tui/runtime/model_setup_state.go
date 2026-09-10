@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelpicker"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
@@ -54,7 +55,11 @@ func newModelSetupPaneView(m *bubbleModel) *modelSetupPaneView {
 	var modelsList []model.RemoteModel
 	hasFreshCatalog := false
 	if m != nil && providerIdx < len(providers) {
-		modelsList, hasFreshCatalog = m.modelCatalogs.FreshModels(providers[providerIdx], time.Now(), m.runtimeConfig.ModelCatalogTTL)
+		providerName := providers[providerIdx]
+		modelsList, hasFreshCatalog = m.modelCatalogs.FreshModels(providerName, time.Now(), m.runtimeConfig.ModelCatalogTTL)
+		if cfg, ok := m.providers[modelcatalog.NormalizeProviderKey(providerName)]; ok {
+			modelsList = visibleModelsForAccess(providerName, cfg.BaseURL, cfg.APIKey, modelsList)
+		}
 	}
 	if !hasFreshCatalog {
 		modelsList = nil

@@ -52,6 +52,9 @@ func (v *modelSetupPaneView) loadProvider(m *bubbleModel, force bool) tea.Cmd {
 	v.err = nil
 	if !force {
 		if models, ok := m.modelCatalogs.FreshModels(providerName, time.Now(), m.runtimeConfig.ModelCatalogTTL); ok {
+			if cfg, configured := m.providers[modelcatalog.NormalizeProviderKey(providerName)]; configured {
+				models = visibleModelsForAccess(providerName, cfg.BaseURL, cfg.APIKey, models)
+			}
 			v.setModels(models, m.activeProvider, m.activeModel)
 			v.syncReasoningForSelection(v.reasoningPreference)
 			return nil

@@ -79,6 +79,7 @@ func newProviderPaneViewWithConfig(cfg config.ProviderConfig) *providerPaneView 
 	if cfg.APIKey != "" {
 		pv.apiKeyInput.SetValue(cfg.APIKey)
 	}
+	pv.filterFreeOnly = pv.isOpenCode() && strings.TrimSpace(cfg.APIKey) == ""
 	return pv
 }
 

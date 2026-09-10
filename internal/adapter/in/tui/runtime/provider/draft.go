@@ -92,9 +92,6 @@ func CurrentModels(models []model.RemoteModel, freeOnly bool) []model.RemoteMode
 			filtered = append(filtered, candidate)
 		}
 	}
-	if len(filtered) == 0 {
-		return models
-	}
 	return filtered
 }
 

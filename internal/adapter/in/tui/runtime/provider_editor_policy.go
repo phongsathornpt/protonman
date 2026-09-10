@@ -106,7 +106,8 @@ func (v *providerPaneView) hasNameConflict(ctx paneRenderContext) bool {
 }
 
 func (v *providerPaneView) setFetchedModels(models []model.RemoteModel) {
-	v.models, v.filterFreeOnly = providerdomain.SortFetchedModels(models, v.isOpenCode())
+	v.models, _ = providerdomain.SortFetchedModels(models, v.isOpenCode())
+	v.filterFreeOnly = v.isOpenCode() && strings.TrimSpace(v.apiKeyInput.Value()) == ""
 	v.modelPickerSet = false
 }
 

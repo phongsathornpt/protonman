@@ -69,7 +69,7 @@ func (v *providerPaneView) handleModelSelectKey(ctx paneRenderContext, message t
 		v.syncInputFocus()
 		return paneKeyResult{handled: true}
 	case key.Matches(message, providerEditorKeys.ToggleFree):
-		if v.isOpenCode() {
+		if v.isOpenCode() && strings.TrimSpace(v.apiKeyInput.Value()) != "" {
 			v.filterFreeOnly = !v.filterFreeOnly
 			v.modelPickerSet = false
 			v.ensureModelPicker(ctx)

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/app"
 )
@@ -41,7 +42,11 @@ func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) tea.Cmd {
 			mv.err = message.err
 			if message.err == nil {
 				m.modelCatalogs.Set(message.providerName, message.models)
-				mv.setModels(m.modelCatalogs.Models(message.providerName), m.activeProvider, m.activeModel)
+				models := m.modelCatalogs.Models(message.providerName)
+				if cfg, configured := m.providers[modelcatalog.NormalizeProviderKey(message.providerName)]; configured {
+					models = visibleModelsForAccess(message.providerName, cfg.BaseURL, cfg.APIKey, models)
+				}
+				mv.setModels(models, m.activeProvider, m.activeModel)
 				mv.syncReasoningForSelection(mv.reasoningPreference)
 			}
 			m.requestRelayout()

@@ -793,15 +793,12 @@ func TestProviderViewFreeBadgeAndFiltering(t *testing.T) {
 	updated, _ = bModel.Update(testText("f"))
 	bModel = updated.(*bubbleModel)
 	view = bModel.panes.bottom.find(providerViewID).(*providerPaneView)
-	if view.filterFreeOnly {
-		t.Fatal("expected filterFreeOnly toggled to false after 'f'")
+	if !view.filterFreeOnly {
+		t.Fatal("empty OpenCode key must keep free-only filtering enabled")
 	}
-	renderedAll := bModel.View().Content
-	if !strings.Contains(renderedAll, "claude-sonnet-5") || !strings.Contains(renderedAll, "gpt-5.5") {
-		t.Fatalf("expected all models shown after 'f' toggle, got:\n%s", renderedAll)
-	}
-	if !strings.Contains(strings.ToLower(renderedAll), "free") {
-		t.Fatalf("expected free model annotation in full view, got:\n%s", renderedAll)
+	renderedAfterToggle := bModel.View().Content
+	if strings.Contains(renderedAfterToggle, "claude-sonnet-5") || strings.Contains(renderedAfterToggle, "gpt-5.5") {
+		t.Fatalf("paid models became visible without OpenCode key:\n%s", renderedAfterToggle)
 	}
 }
 
