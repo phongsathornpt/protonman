@@ -49,6 +49,7 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 		if m.provider.options.UserAgent != "" {
 			req.Header.Set("User-Agent", m.provider.options.UserAgent)
 		}
+		providerutil.ApplySessionID(req.Header, request.Metadata.SessionID)
 		resp, err := m.provider.options.HTTPClient.Do(req)
 		if err != nil {
 			if ctx.Err() != nil {

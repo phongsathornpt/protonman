@@ -5,11 +5,35 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	sdkanthropic "github.com/phongsathornpt/protonman/proton-sdk/provider/anthropic"
 	sdkopenai "github.com/phongsathornpt/protonman/proton-sdk/provider/openai"
 )
+
+type sessionBoundModel struct {
+	base      sdk.LanguageModel
+	sessionID string
+}
+
+func withSessionID(base sdk.LanguageModel, sessionID string) sdk.LanguageModel {
+	sessionID = strings.TrimSpace(sessionID)
+	if base == nil || sessionID == "" {
+		return base
+	}
+	return &sessionBoundModel{base: base, sessionID: sessionID}
+}
+
+func (m *sessionBoundModel) Provider() string                    { return m.base.Provider() }
+func (m *sessionBoundModel) ModelID() string                     { return m.base.ModelID() }
+func (m *sessionBoundModel) Capabilities() sdk.ModelCapabilities { return m.base.Capabilities() }
+func (m *sessionBoundModel) ContextWindow() int                  { return sdk.ModelContextWindow(m.base) }
+func (m *sessionBoundModel) TokenLimits() sdk.TokenLimits        { return sdk.ModelTokenLimits(m.base) }
+func (m *sessionBoundModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
+	request.Metadata.SessionID = m.sessionID
+	return m.base.Stream(ctx, request)
+}
 
 type capabilityOverrideModel struct {
 	base          sdk.LanguageModel
@@ -79,13 +103,13 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 			opt(&cfg)
 		}
 	}
-	headers := make(http.Header)
+	headers := agentHeaders(cfg)
 	isOpenCode := IsProvider(DefaultOpenCodeName, providerName, cfg.baseURL)
-	if cfg.sessionID != "" {
-		headers.Set("x-session-affinity", cfg.sessionID)
-		headers.Set("X-Session-Id", cfg.sessionID)
+	sessionID := strings.TrimSpace(cfg.sessionID)
+	if sessionID != "" {
+		headers.Set("x-session-affinity", sessionID)
 		if isOpenCode {
-			headers.Set("x-opencode-session", cfg.sessionID)
+			headers.Set("x-opencode-session", sessionID)
 		}
 	}
 	if isOpenCode {
@@ -117,7 +141,7 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 	if cfg.contextWindow != nil {
 		model = withContextWindow(model, *cfg.contextWindow)
 	}
-	return withModelProfile(model, cfg.profile)
+	return withModelProfile(withSessionID(model, sessionID), cfg.profile)
 }
 
 func newSDKAnthropicLanguageModel(baseURL, apiKey, modelID string, opts ...ClientOption) sdk.LanguageModel {
@@ -127,8 +151,9 @@ func newSDKAnthropicLanguageModel(baseURL, apiKey, modelID string, opts ...Clien
 			opt(&cfg)
 		}
 	}
+	sessionID := strings.TrimSpace(cfg.sessionID)
 	provider := sdkanthropic.NewProvider(sdkanthropic.ProviderOptions{
-		BaseURL: cfg.baseURL, APIKey: cfg.apiKey, HTTPClient: cfg.httpClient,
+		BaseURL: cfg.baseURL, APIKey: cfg.apiKey, HTTPClient: cfg.httpClient, Headers: agentHeaders(cfg),
 		UserAgent: cfg.userAgent, MaxRetries: 2, RetryBackoff: runtimepolicy.ModelRetryBackoffStep,
 	})
 	var model sdk.LanguageModel = provider.Model(cfg.modelID)
@@ -144,10 +169,24 @@ func newSDKAnthropicLanguageModel(baseURL, apiKey, modelID string, opts ...Clien
 	if cfg.contextWindow != nil {
 		model = withContextWindow(model, *cfg.contextWindow)
 	}
-	return withModelProfile(model, cfg.profile)
+	return withModelProfile(withSessionID(model, sessionID), cfg.profile)
 }
 
 func usesResponsesAPI(modelID, baseURL string) bool {
 	id := strings.ToLower(strings.TrimSpace(modelID))
 	return strings.HasPrefix(id, "muse-spark") || strings.Contains(id, "responses") || strings.HasSuffix(strings.TrimSpace(baseURL), "/responses")
+}
+
+func agentHeaders(cfg clientConfig) http.Header {
+	headers := make(http.Header)
+	if cfg.agentType != "" {
+		headers.Set("X-Agent-Type", cfg.agentType.String())
+	}
+	if version := strings.TrimSpace(buildinfo.Version()); version != "" {
+		headers.Set("X-Agent-Version", version)
+	}
+	if profile := strings.TrimSpace(cfg.agentProfile); profile != "" {
+		headers.Set("X-Agent-Profile", profile)
+	}
+	return headers
 }

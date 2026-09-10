@@ -52,7 +52,7 @@ func BuildSubagentModelResolver(spec SubagentModelResolverSpec) (*agent.ModelRes
 		if !model.ProviderHasUsableAuth(providerKey, provider.BaseURL, provider.APIKey) {
 			return nil, fmt.Errorf("agent.subagents.%s: provider %q requires credentials", profile, providerKey)
 		}
-		opts := []model.ClientOption{model.WithRequestTimeout(spec.RequestTimeout)}
+		opts := []model.ClientOption{model.WithRequestTimeout(spec.RequestTimeout), model.WithAgentProfile(string(profile))}
 		if strings.TrimSpace(spec.SessionID) != "" {
 			opts = append(opts, model.WithSessionID(spec.SessionID))
 		}

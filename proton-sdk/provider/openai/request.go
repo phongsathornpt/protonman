@@ -125,6 +125,7 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 				httpReq.Header.Add(key, value)
 			}
 		}
+		providerutil.ApplySessionID(httpReq.Header, request.Metadata.SessionID)
 
 		resp, requestErr := m.provider.options.HTTPClient.Do(httpReq)
 		var providerErr error

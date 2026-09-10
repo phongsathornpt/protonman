@@ -256,10 +256,17 @@ type ModelOptions struct {
 	IncludeRawChunks bool
 }
 
+// RequestMetadata carries provider-neutral, request-scoped transport metadata.
+// Providers may map these values to protocol headers, but callers own the identity.
+type RequestMetadata struct {
+	SessionID string
+}
+
 type Request struct {
 	Messages []Message
 	Tools    []Tool
 	Options  ModelOptions
+	Metadata RequestMetadata
 }
 
 func (r Request) Validate() error {
