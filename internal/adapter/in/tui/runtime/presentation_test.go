@@ -1034,6 +1034,75 @@ func TestBlankMultilineSubmitCollapsesComposer(t *testing.T) {
 	}
 }
 
+func TestComposerNewlineKeyContract(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		key  tea.KeyPressMsg
+	}{
+		{name: "ctrl-enter", key: tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModCtrl}},
+		{name: "ctrl-j", key: testCtrl('j')},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+			model.resize(80, 24)
+			model.panes.bottom.prompt().SetValue("hello")
+			updated, _ := model.Update(tc.key)
+			model = updated.(*bubbleModel)
+			if got := model.panes.bottom.prompt().Value(); got != "hello\n" {
+				t.Fatalf("composer value = %q, want %q", got, "hello\\n")
+			}
+			if got := model.panes.bottom.prompt().Height(); got != 2 {
+				t.Fatalf("composer height = %d, want 2", got)
+			}
+			if len(model.panes.bottom.composer.history) != 0 {
+				t.Fatalf("newline shortcut submitted composer history: %#v", model.panes.bottom.composer.history)
+			}
+		})
+	}
+
+	t.Run("ctrl-m-is-not-newline", func(t *testing.T) {
+		model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+		model.panes.bottom.prompt().SetValue("hello")
+		updated, _ := model.Update(testCtrl('m'))
+		model = updated.(*bubbleModel)
+		if got := model.panes.bottom.prompt().Value(); got != "hello" {
+			t.Fatalf("ctrl+m changed composer value to %q", got)
+		}
+	})
+
+	t.Run("enter-submits", func(t *testing.T) {
+		model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+		model.panes.bottom.prompt().SetValue("hello")
+		updated, _ := model.Update(testKey(tea.KeyEnter))
+		model = updated.(*bubbleModel)
+		if got := model.panes.bottom.prompt().Value(); got != "" {
+			t.Fatalf("enter left composer value %q", got)
+		}
+		if got := model.panes.bottom.composer.history; len(got) != 1 || got[0] != "hello" {
+			t.Fatalf("enter did not submit composer history: %#v", got)
+		}
+	})
+}
+
+func TestKeyboardEnhancementsPreferCtrlEnterHelp(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	if got := model.keys.Newline.Help().Key; got != "ctrl+j" {
+		t.Fatalf("fallback newline help = %q, want ctrl+j", got)
+	}
+	updated, _ := model.Update(tea.KeyboardEnhancementsMsg{Flags: 1})
+	model = updated.(*bubbleModel)
+	if !model.keyboardDisambiguation {
+		t.Fatal("keyboard disambiguation capability was not recorded")
+	}
+	if got := model.keys.Newline.Help().Key; got != "ctrl+enter" {
+		t.Fatalf("enhanced newline help = %q, want ctrl+enter", got)
+	}
+	pane := (&shortcutsPaneView{}).Render(newPaneRenderContext(model))
+	if plain := ansi.Strip(pane); !strings.Contains(plain, "ctrl+enter") || strings.Contains(plain, "ctrl+j  New line") {
+		t.Fatalf("enhanced shortcuts pane did not prefer ctrl+enter: %q", plain)
+	}
+}
+
 func TestBlankComposerNewlinesDoNotCreateBorderGap(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
@@ -1172,7 +1241,7 @@ func TestWelcomeCardReprintsAfterClear(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
 	model.appendLine("gone")
-	model.panes.bottom.prompt().SetValue("/transcript clear")
+	model.panes.bottom.prompt().SetValue("/clear")
 	_ = model.submit()
 	model.refreshViewport()
 	view := testPlain(model.View().Content)
@@ -1216,6 +1285,20 @@ type fakeConversation struct{}
 
 func (fakeConversation) Run(context.Context, []model.Message, applicationturn.Sink) (applicationturn.Result, error) {
 	return applicationturn.Result{}, nil
+}
+
+func TestAppendPaneGroupPreservesOverlappingSlices(t *testing.T) {
+	rows := []string{"Title", "Run (bash)", "Target: tmp"}
+	got := appendPaneGroup(rows[:1], rows[1:]...)
+	want := []string{"Title", "", "Run (bash)", "Target: tmp"}
+	if len(got) != len(want) {
+		t.Fatalf("group length=%d, want %d: %#v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("group[%d]=%q, want %q: %#v", i, got[i], want[i], got)
+		}
+	}
 }
 
 func TestPromptPlaceholderReflectsRunnerState(t *testing.T) {
@@ -1273,5 +1356,17 @@ func TestIdleFooterKeepsShortcutHintInAlwaysApprove(t *testing.T) {
 	}
 	if !strings.Contains(footer, " · auto · auto") {
 		t.Fatalf("footer did not use compact permission label: %q", footer)
+	}
+}
+
+func TestPaneKeyboardHelpStaysSingleLine(t *testing.T) {
+	for _, width := range []int{24, 32, 40, 60, 80, 120} {
+		help := paneKeyboardHelp(width, "↑/↓", "Navigate", "enter", "Select", "tab", "Complete", "esc", "Go Back")
+		if got := lipgloss.Height(help); got != 1 {
+			t.Fatalf("help height=%d at width=%d, want 1: %q", got, width, help)
+		}
+		if got := ansi.StringWidth(help); got > width {
+			t.Fatalf("help width=%d exceeds %d: %q", got, width, help)
+		}
 	}
 }

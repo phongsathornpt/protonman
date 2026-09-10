@@ -7,20 +7,21 @@ import (
 )
 
 type paneRenderContext struct {
-	width            int
-	height           int
-	activeModel      string
-	spinner          string
-	projectTrusted   bool
-	hasWorkDir       bool
-	workDir          string
-	skillItems       []skillListItem
-	todos            []tododomain.Item
-	slashMatches     []slashCommand
-	agentSnapshot    []agent.AgentStatus
-	agentActivity    map[string]string
-	subagentsEnabled bool
-	providers        map[string]config.ProviderConfig
+	width              int
+	height             int
+	activeModel        string
+	spinner            string
+	projectTrusted     bool
+	hasWorkDir         bool
+	workDir            string
+	skillItems         []skillListItem
+	todos              []tododomain.Item
+	slashMatches       []slashCommand
+	agentSnapshot      []agent.AgentStatus
+	agentActivity      map[string]string
+	subagentsEnabled   bool
+	keyboardCapability keyboardCapability
+	providers          map[string]config.ProviderConfig
 }
 
 func newPaneRenderContext(m *bubbleModel) paneRenderContext {
@@ -39,6 +40,7 @@ func newPaneRenderContext(m *bubbleModel) paneRenderContext {
 	ctx.slashMatches = append([]slashCommand(nil), m.slashMatches()...)
 	ctx.agentSnapshot = append([]agent.AgentStatus(nil), m.agentSnapshot...)
 	ctx.subagentsEnabled = m.subagentsEnabled
+	ctx.keyboardCapability = m.keyboardCapability
 	ctx.providers = make(map[string]config.ProviderConfig, len(m.providers))
 	for name, cfg := range m.providers {
 		ctx.providers[name] = cfg

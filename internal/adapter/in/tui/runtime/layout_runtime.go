@@ -83,19 +83,26 @@ func (m *bubbleModel) footerView() string {
 func (m *bubbleModel) idleContextFooter() string {
 	const inset = " "
 	width := maxInt(1, m.layout.width-len(inset)*3)
-	left := "? for shortcuts"
-	right := strings.TrimSpace(m.activeModel)
-	if right == "" {
-		right = "unselected"
+	model := strings.TrimSpace(m.activeModel)
+	if model == "" {
+		model = "unselected"
 	}
-	right += " · " + reasoningEffortLabel(m.reasoningEffort) + " · " + m.permissionModeLabel()
-	if ansi.StringWidth(left)+ansi.StringWidth(right)+2 > width {
-		rightWidth := maxInt(1, width-ansi.StringWidth(left)-1)
-		if rightWidth <= 1 {
-			return inset + mutedStyle.Render(truncateWithEllipsis(left, width))
+	suffix := " · " + reasoningEffortLabel(m.reasoningEffort) + " · " + m.permissionModeLabel()
+	for _, left := range []string{"? for shortcuts", "? shortcuts", "?"} {
+		modelWidth := width - ansi.StringWidth(left) - ansi.StringWidth(suffix) - 1
+		if modelWidth < 8 {
+			continue
 		}
-		right = truncateWithEllipsis(right, rightWidth)
+		right := truncateWithEllipsis(model, modelWidth) + suffix
+		spaces := strings.Repeat(" ", maxInt(1, width-ansi.StringWidth(left)-ansi.StringWidth(right)))
+		return inset + mutedStyle.Render(left+spaces+right)
 	}
+	if width <= 2 {
+		return inset + mutedStyle.Render(truncateWithEllipsis("?", width))
+	}
+	left := "?"
+	modelWidth := maxInt(1, width-ansi.StringWidth(left)-1)
+	right := truncateWithEllipsis(model, modelWidth)
 	spaces := strings.Repeat(" ", maxInt(1, width-ansi.StringWidth(left)-ansi.StringWidth(right)))
 	return inset + mutedStyle.Render(left+spaces+right)
 }

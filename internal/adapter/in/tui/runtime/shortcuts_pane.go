@@ -25,6 +25,7 @@ func shortcutRow(binding key.Binding) string {
 
 func (*shortcutsPaneView) Render(ctx paneRenderContext) string {
 	keys := newBubbleKeyMap()
+	setComposerNewlineHelp(&keys.Newline, ctx.keyboardCapability)
 	rows := []string{
 		shortcutRow(keys.Submit),
 		shortcutRow(keys.Newline),

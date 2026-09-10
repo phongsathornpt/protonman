@@ -40,12 +40,12 @@ func TestTUICommandSurfaceIsCanonical(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.executeCommand("/help")
 	help := plainTranscript(model)
-	for _, keep := range []string{"/help", "/model", "/provider", "/skills", "/agents", "/goal", "/todo", "/clear", "/transcript", "/call", "/quit"} {
+	for _, keep := range []string{"/help", "/model", "/provider", "/skills", "/agents", "/goal", "/todo", "/clear", "/call", "/quit"} {
 		if !strings.Contains(help, keep) {
 			t.Fatalf("help missing canonical command %q: %q", keep, help)
 		}
 	}
-	removed := []string{"tools", "project", "protonman", "config", "session", "sessions", "new", "agent", "profile", "subagent", "subagents", "reasoning", "thinking", "mode", "ask", "plan", "always-approve", "yolo", "models", "providers", "skill", "history", "exit"}
+	removed := []string{"tools", "project", "protonman", "config", "session", "sessions", "new", "agent", "profile", "subagent", "subagents", "reasoning", "thinking", "mode", "ask", "plan", "always-approve", "yolo", "models", "providers", "skill", "history", "transcript", "exit"}
 	for _, name := range removed {
 		if strings.Contains(help, "/"+name+" ") {
 			t.Fatalf("help still advertises removed command /%s: %q", name, help)
@@ -818,7 +818,7 @@ func TestSlashCompletionUsesInlineCommandGrammar(t *testing.T) {
 		t.Fatal("slash completion did not open")
 	}
 	plain := ansi.Strip(view.Render(newPaneRenderContext(m)))
-	for _, want := range []string{"Commands", "/help", "more", "Keyboard:", "Navigate", "Complete", "Go Back"} {
+	for _, want := range []string{"/help", "/permission", "↑/↓", "navigate", "tab", "complete", fmt.Sprintf("1/%d", len(slashCatalog))} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("slash completion missing %q: %q", want, plain)
 		}
@@ -834,11 +834,11 @@ func TestSlashPickerRendersBelowComposerLikeModelPicker(t *testing.T) {
 	m.reconcileLayout()
 	plain := ansi.Strip(m.View().Content)
 	composer := strings.Index(plain, "> /")
-	commands := strings.Index(plain, "Commands")
+	commands := strings.Index(plain, "/help")
 	if composer < 0 || commands < 0 || composer >= commands {
 		t.Fatalf("slash picker should render below composer: composer=%d commands=%d\n%s", composer, commands, plain)
 	}
-	for _, want := range []string{"Keyboard:", "Navigate", "Select", "Complete", "Go Back", "/help · 1/"} {
+	for _, want := range []string{"↑/↓", "navigate", "enter", "select", "tab", "complete", "esc", "go back", fmt.Sprintf("1/%d", len(slashCatalog))} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("slash picker missing reference element %q:\n%s", want, plain)
 		}
@@ -855,4 +855,30 @@ func TestControlCommandsDoNotEchoAsUserConversation(t *testing.T) {
 			t.Fatalf("control command leaked into user transcript: %q", user.Text)
 		}
 	}
+}
+
+func TestSlashPickerHelpAndPagingShareOneLine(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.panes.bottom.prompt().SetValue("/")
+	m.syncSlashView()
+	view := m.panes.bottom.find(slashViewID)
+	if view == nil {
+		t.Fatal("slash completion did not open")
+	}
+	plain := ansi.Strip(view.Render(newPaneRenderContext(m)))
+	lines := strings.Split(plain, "\n")
+	for i, line := range lines {
+		if !strings.Contains(line, "↑/↓") {
+			continue
+		}
+		if !strings.Contains(line, fmt.Sprintf("1/%d", len(slashCatalog))) {
+			t.Fatalf("slash help and paging split across lines: %q", plain)
+		}
+		if i > 0 && strings.TrimSpace(lines[i-1]) == "" {
+			t.Fatalf("blank row before slash help: %q", plain)
+		}
+		return
+	}
+	t.Fatalf("slash help line missing: %q", plain)
 }

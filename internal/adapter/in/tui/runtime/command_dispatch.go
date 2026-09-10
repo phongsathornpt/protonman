@@ -22,7 +22,7 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		return m.handleSkillsCommand(argument, parts)
 	case "goal":
 		return m.executeConversationCommand(name, parsed.Rest)
-	case "clear", "transcript", "todo":
+	case "clear", "todo":
 		return m.executeConversationCommand(name, argument)
 	case "model":
 		return m.executeModelCommand(argument)

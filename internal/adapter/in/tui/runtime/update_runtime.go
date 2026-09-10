@@ -24,6 +24,10 @@ func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *bubbleModel) updateTerminalEvent(msg tea.Msg) (tea.Cmd, bool) {
 	switch message := msg.(type) {
+	case tea.KeyboardEnhancementsMsg:
+		m.updateKeyboardCapability(message)
+		m.requestRelayout()
+		return nil, true
 	case tea.WindowSizeMsg:
 		m.resize(message.Width, message.Height)
 		return nil, true
@@ -41,6 +45,7 @@ func (m *bubbleModel) updateTerminalEvent(msg tea.Msg) (tea.Cmd, bool) {
 		m.requestRelayout()
 		return command, true
 	case tea.KeyPressMsg:
+		m.debugKeyPress(message)
 		if key.Matches(message, m.keys.Quit) {
 			return m.handleInterruptKey(), true
 		}
