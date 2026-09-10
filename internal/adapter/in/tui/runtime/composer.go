@@ -243,7 +243,6 @@ func (m *bubbleModel) resetPrompt() {
 	}
 	prompt := m.panes.bottom.prompt()
 	prompt.Reset()
-	prompt.SetHeight(1)
 	m.requestRelayout()
 }
 
