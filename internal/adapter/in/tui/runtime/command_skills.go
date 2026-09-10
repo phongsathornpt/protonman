@@ -17,40 +17,9 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 		return nil
 	}
 	if trimmedArg == "" {
-		skillsList := m.skills.List()
-		activeCount := len(m.skills.ActivatedList())
-		m.appendLine(fmt.Sprintf("Agent Skills (%d/%d active):", activeCount, len(skillsList)))
-		maxPrint := 8
-		if len(skillsList) <= maxPrint {
-			for _, s := range skillsList {
-				box := "[ ]"
-				if m.skills.IsActivated(s.Name) {
-					box = "[x]"
-				}
-				m.appendLine(fmt.Sprintf("  %s %s", box, s.Name))
-			}
-		} else {
-			printed := 0
-			for _, s := range skillsList {
-				if m.skills.IsActivated(s.Name) {
-					m.appendLine(fmt.Sprintf("  [x] %s", s.Name))
-					printed++
-				}
-			}
-			for _, s := range skillsList {
-				if printed >= maxPrint {
-					break
-				}
-				if !m.skills.IsActivated(s.Name) {
-					m.appendLine(fmt.Sprintf("  [ ] %s", s.Name))
-					printed++
-				}
-			}
-			remaining := len(skillsList) - printed
-			if remaining > 0 {
-				m.appendLine(fmt.Sprintf("  … and %d more skills. (Browse all in picker below, or use /skills <name>)", remaining))
-			}
-		}
+		// The interactive picker is the only list surface for bare /skills.
+		// Duplicating the same skills into transcript wastes viewport space and
+		// leaves stale state behind after the picker is closed or toggled.
 		m.panes.bottom.push(&skillsPaneView{})
 		m.requestRelayout()
 		return nil

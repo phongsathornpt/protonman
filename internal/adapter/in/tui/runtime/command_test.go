@@ -287,11 +287,8 @@ func TestSlashSkills(t *testing.T) {
 		model.skills = skill.NewRegistry(s)
 		model.executeCommand("/skills")
 		content := model.viewport.View()
-		if !strings.Contains(content, "Agent Skills (0/1 active):") || !strings.Contains(content, "[ ] pdf-processing") {
-			t.Fatalf("expected unchecked skill in viewport, got: %s", content)
-		}
-		if strings.Contains(content, "Extract PDF text") || strings.Contains(content, "[user]") {
-			t.Fatalf("expected viewport skill list to show skill name only, got: %s", content)
+		if strings.Contains(content, "Agent Skills") || strings.Contains(content, "[ ] pdf-processing") {
+			t.Fatalf("bare /skills duplicated picker content into transcript: %s", content)
 		}
 		pickerRender := model.panes.bottom.renderTop(model)
 		if !strings.Contains(pickerRender, "pdf-processing") {
@@ -324,10 +321,10 @@ func TestSlashSkills(t *testing.T) {
 			t.Fatalf("expected skill to be marked activated")
 		}
 		model.executeCommand("/skills")
-		content = model.viewport.View()
-		if !strings.Contains(content, "Agent Skills (1/1 active):") || !strings.Contains(content, "[x] pdf-processing") {
-			t.Fatalf("expected checked skill in /skills, got: %s", content)
+		if rendered := model.panes.bottom.renderTop(model); !strings.Contains(rendered, "Skills · 1/1 active") || !strings.Contains(rendered, "[x] pdf-processing") {
+			t.Fatalf("expected active skill state in picker, got: %s", rendered)
 		}
+		model.panes.bottom.remove(skillsViewID)
 		model.executeCommand("/skills active")
 		content = model.viewport.View()
 		if !strings.Contains(content, "Active Agent Skills (1):") || !strings.Contains(content, "[x] pdf-processing") {
@@ -687,15 +684,16 @@ func TestSlashAutocompleteUsesBubblesListPresentation(t *testing.T) {
 	}
 }
 
-func TestSkillsCommandBoundedOutput(t *testing.T) {
+func TestSkillsCommandUsesPickerAsOnlyListSurface(t *testing.T) {
 	model := newTestSkillsModel(t, 25)
 	model.executeCommand("/skills")
 	view := model.viewport.View()
-	if strings.Contains(view, "skill-25") {
-		t.Fatalf("skill-25 should not be dumped into transcript for large list, got:\n%s", view)
+	if strings.Contains(view, "skill-01") || strings.Contains(view, "more skills") || strings.Contains(view, "Agent Skills") {
+		t.Fatalf("bare /skills should not dump list state into transcript, got:\n%s", view)
 	}
-	if !strings.Contains(view, "more skills") {
-		t.Fatalf("expected bounded summary 'more skills' in transcript, got:\n%s", view)
+	picker := model.panes.bottom.renderTop(model)
+	if !strings.Contains(picker, "Skills · 0/25 active") || !strings.Contains(picker, "skill-01") {
+		t.Fatalf("skills picker should own list presentation, got:\n%s", picker)
 	}
 }
 
