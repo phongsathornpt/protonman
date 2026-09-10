@@ -128,13 +128,13 @@ type permissionRuleSavedMsg struct {
 	err   error
 }
 
-func (m *bubbleModel) updatePermissionRuleSaved(message permissionRuleSavedMsg) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) updatePermissionRuleSaved(message permissionRuleSavedMsg) tea.Cmd {
 	if message.err != nil {
 		m.appendError(fmt.Sprintf("Failed to save permission rule to %s: %s", message.scope, message.err))
 		m.refreshViewport()
-		return m, nil
+		return nil
 	}
 	m.appendLine(successStyle.Render(fmt.Sprintf("Saved %s rule to %s config (%s: %s).", message.rule.Action, message.scope, message.rule.Tool, message.rule.Pattern)))
 	m.refreshViewport()
-	return m, nil
+	return nil
 }

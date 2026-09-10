@@ -10,7 +10,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
-func (m *bubbleModel) updateAgentLifecycle(message agentLifecycleMsg) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) updateAgentLifecycle(message agentLifecycleMsg) tea.Cmd {
 	if m.agentActivity == nil {
 		m.agentActivity = make(map[string]AgentActivity)
 	}
@@ -24,7 +24,7 @@ func (m *bubbleModel) updateAgentLifecycle(message agentLifecycleMsg) (tea.Model
 			}
 			m.requestRelayout()
 		}
-		return m, m.nextAgentEvent()
+		return m.nextAgentEvent()
 	}
 	if message.event.Kind == agent.EventAgentCompleted || message.event.Kind == agent.EventAgentFailed {
 		delete(m.agentActivity, message.event.AgentID)
@@ -32,20 +32,20 @@ func (m *bubbleModel) updateAgentLifecycle(message agentLifecycleMsg) (tea.Model
 	m.syncAgentSnapshot()
 	m.syncAgentRunSnapshot(message.event.AgentID)
 	m.requestRelayout()
-	return m, m.nextAgentEvent()
+	return m.nextAgentEvent()
 }
 
-func (m *bubbleModel) updatePermissionRequest(message permissionRequestMsg) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) updatePermissionRequest(message permissionRequestMsg) tea.Cmd {
 	if !m.busy {
 		message.request.response <- permissionResponse{resolution: permission.Resolution{Action: permission.ActionDeny, Reason: "turn is no longer active"}, err: context.Canceled}
-		return m, m.bridge.Next()
+		return m.bridge.Next()
 	}
 	m.openPermission(message.request)
 	m.requestRelayout()
-	return m, m.bridge.Next()
+	return m.bridge.Next()
 }
 
-func (m *bubbleModel) updateToolResult(message toolResultMsg) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) updateToolResult(message toolResultMsg) tea.Cmd {
 	slog.DebugContext(m.ctx, "tui direct tool completed", "call_id", message.call.ID, "tool_name", message.call.Name, "success", message.err == nil, "error_type", errorType(message.err))
 	m.busy = false
 	m.busyStarted = time.Time{}
@@ -58,5 +58,5 @@ func (m *bubbleModel) updateToolResult(message toolResultMsg) (tea.Model, tea.Cm
 		m.appendModelToolResult(message.call, message.result)
 	}
 	m.requestRelayout()
-	return m, m.withSpinner(m.drainQueue())
+	return m.withSpinner(m.drainQueue())
 }

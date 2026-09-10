@@ -107,37 +107,27 @@ func (m *bubbleModel) updateAnimationEvent(msg tea.Msg) (tea.Cmd, bool) {
 func (m *bubbleModel) updateRuntimeEvent(msg tea.Msg) (tea.Cmd, bool) {
 	switch message := msg.(type) {
 	case agentLifecycleMsg:
-		_, command := m.updateAgentLifecycle(message)
-		return command, true
+		return m.updateAgentLifecycle(message), true
 	case permissionRequestMsg:
-		_, command := m.updatePermissionRequest(message)
-		return command, true
+		return m.updatePermissionRequest(message), true
 	case permissionBridgeClosedMsg:
 		return nil, true
 	case toolResultMsg:
-		_, command := m.updateToolResult(message)
-		return command, true
+		return m.updateToolResult(message), true
 	case todoReloadedMsg:
-		_, command := m.updateTodoReloaded(message)
-		return command, true
+		return m.updateTodoReloaded(message), true
 	case modelsFetchedMsg:
-		_, command := m.updateModelsFetched(message)
-		return command, true
+		return m.updateModelsFetched(message), true
 	case providerSavedMsg:
-		_, command := m.updateProviderSaved(message)
-		return command, true
+		return m.updateProviderSaved(message), true
 	case modelSetupAppliedMsg:
-		_, command := m.updateModelSetupApplied(message)
-		return command, true
+		return m.updateModelSetupApplied(message), true
 	case providerActiveSelectedMsg:
-		_, command := m.updateProviderActiveSelected(message)
-		return command, true
+		return m.updateProviderActiveSelected(message), true
 	case providerDeletedMsg:
-		_, command := m.updateProviderDeleted(message)
-		return command, true
+		return m.updateProviderDeleted(message), true
 	case permissionRuleSavedMsg:
-		_, command := m.updatePermissionRuleSaved(message)
-		return command, true
+		return m.updatePermissionRuleSaved(message), true
 	case turnmsg.Delta:
 		_, command := m.updateTurnDelta(message)
 		return command, true

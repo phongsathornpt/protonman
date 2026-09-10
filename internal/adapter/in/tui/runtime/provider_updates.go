@@ -9,11 +9,11 @@ import (
 	"github.com/phongsathornpt/protonman/internal/app"
 )
 
-func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) tea.Cmd {
 	if pane := m.panes.bottom.find(providerViewID); pane != nil {
 		if pv, ok := pane.(*providerPaneView); ok {
 			if message.requestID != pv.fetchRequestID {
-				return m, nil
+				return nil
 			}
 			pv.fetchCancel = nil
 			if message.err == nil && len(message.models) > 0 {
@@ -28,13 +28,13 @@ func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) (tea.Model, 
 			}
 			m.requestRelayout()
 		}
-		return m, nil
+		return nil
 	}
 	if pane := m.panes.bottom.find(modelSetupViewID); pane != nil {
 		if mv, ok := pane.(*modelSetupPaneView); ok {
 			currentProvider := mv.activeProviderName()
 			if message.requestID != mv.fetchRequestID || !strings.EqualFold(message.providerName, currentProvider) {
-				return m, nil
+				return nil
 			}
 			mv.fetchCancel = nil
 			mv.loading = false
@@ -47,12 +47,12 @@ func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) (tea.Model, 
 			m.requestRelayout()
 		}
 	}
-	return m, nil
+	return nil
 }
 
-func (m *bubbleModel) updateProviderSaved(message providerSavedMsg) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) updateProviderSaved(message providerSavedMsg) tea.Cmd {
 	if message.operationID != m.activeProviderSave {
-		return m, nil
+		return nil
 	}
 	m.activeProviderSave = 0
 	if message.err != nil {
@@ -61,7 +61,7 @@ func (m *bubbleModel) updateProviderSaved(message providerSavedMsg) (tea.Model, 
 				pv.state = providerStateSaveError
 				pv.errorMessage = message.err.Error()
 				m.requestRelayout()
-				return m, nil
+				return nil
 			}
 		}
 		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to save provider: %v", message.err)))
@@ -97,12 +97,12 @@ func (m *bubbleModel) updateProviderSaved(message providerSavedMsg) (tea.Model, 
 	}
 	m.panes.bottom.remove(providerViewID)
 	m.requestRelayout()
-	return m, nil
+	return nil
 }
 
-func (m *bubbleModel) updateModelSetupApplied(message modelSetupAppliedMsg) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) updateModelSetupApplied(message modelSetupAppliedMsg) tea.Cmd {
 	if message.operationID != m.activeModelSetup {
-		return m, nil
+		return nil
 	}
 	m.activeModelSetup = 0
 	if message.err != nil {
@@ -125,12 +125,12 @@ func (m *bubbleModel) updateModelSetupApplied(message modelSetupAppliedMsg) (tea
 	}
 	m.panes.bottom.remove(modelSetupViewID)
 	m.requestRelayout()
-	return m, nil
+	return nil
 }
 
-func (m *bubbleModel) updateProviderActiveSelected(message providerActiveSelectedMsg) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) updateProviderActiveSelected(message providerActiveSelectedMsg) tea.Cmd {
 	if message.operationID != m.activeProviderSelect {
-		return m, nil
+		return nil
 	}
 	m.activeProviderSelect = 0
 	if message.err != nil {
@@ -152,15 +152,15 @@ func (m *bubbleModel) updateProviderActiveSelected(message providerActiveSelecte
 	}
 	m.panes.bottom.remove(providerSelectViewID)
 	if message.err == nil && m.activeModel == "" {
-		return m, m.openModelSetupPane()
+		return m.openModelSetupPane()
 	}
 	m.requestRelayout()
-	return m, nil
+	return nil
 }
 
-func (m *bubbleModel) updateProviderDeleted(message providerDeletedMsg) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) updateProviderDeleted(message providerDeletedMsg) tea.Cmd {
 	if message.operationID != m.activeProviderDelete {
-		return m, nil
+		return nil
 	}
 	m.activeProviderDelete = 0
 	if message.err != nil {
@@ -184,5 +184,5 @@ func (m *bubbleModel) updateProviderDeleted(message providerDeletedMsg) (tea.Mod
 	}
 	m.panes.bottom.remove(providerSelectViewID)
 	m.requestRelayout()
-	return m, nil
+	return nil
 }

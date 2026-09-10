@@ -65,16 +65,16 @@ func (m *bubbleModel) reloadTodoSnapshotCmd() tea.Cmd {
 	}
 }
 
-func (m *bubbleModel) updateTodoReloaded(message todoReloadedMsg) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) updateTodoReloaded(message todoReloadedMsg) tea.Cmd {
 	if message.err != nil {
 		m.appendError("refresh tasks: " + message.err.Error())
 		m.refreshViewport()
-		return m, nil
+		return nil
 	}
 	if m.applyTodoSnapshot(message.snapshot) {
 		m.requestRelayout()
 	}
-	return m, nil
+	return nil
 }
 
 func allTodoCompleted(items []tododomain.Item) bool {
