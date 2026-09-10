@@ -78,7 +78,7 @@ func (m *bubbleModel) reconfigureRunner() {
 	}
 	provName := m.activeProvider
 	if provName == "" {
-		provName = model.DefaultProtonmanName
+		provName = model.DefaultOpenCodeName
 	}
 	prov, ok := m.providers[strings.ToLower(provName)]
 	hasValidAuth := ok && model.ProviderHasUsableAuth(provName, prov.BaseURL, prov.APIKey)

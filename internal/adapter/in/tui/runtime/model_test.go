@@ -1195,3 +1195,32 @@ func TestReasoningCompatibilityFallbackPreservesAndRestoresPreference(t *testing
 		t.Fatalf("restored source = %q, want user", got)
 	}
 }
+
+func TestSelectModelDirectDefaultsToOpenCodeWhenProviderUnset(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("PROTONMAN_HOME", homeDir)
+	m := newTestSkillsModel(t, 1)
+	m.activeProvider = ""
+	cmd := m.selectModelDirect("custom-model")
+	if cmd == nil {
+		t.Fatal("direct model selection returned nil command")
+	}
+	msg := cmd().(modelSelectedMsg)
+	if msg.providerName != model.DefaultOpenCodeName {
+		t.Fatalf("provider = %q, want %q", msg.providerName, model.DefaultOpenCodeName)
+	}
+}
+
+func TestReconfigureRunnerUsesOpenCodeFallbackWhenProviderUnset(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.activeProvider = ""
+	m.activeModel = model.DefaultOpenCodeModel
+	m.providers = map[string]config.ProviderConfig{
+		model.DefaultOpenCodeName:  {Name: model.DefaultOpenCodeName, Type: "openai", BaseURL: model.DefaultOpenCodeEndpoint},
+		model.DefaultProtonmanName: {Name: model.DefaultProtonmanName, Type: "openai", BaseURL: "https://protonman.dev/api/v1"},
+	}
+	m.reconfigureRunner()
+	if m.runner == nil {
+		t.Fatal("provider-less runner did not use OpenCode fallback")
+	}
+}

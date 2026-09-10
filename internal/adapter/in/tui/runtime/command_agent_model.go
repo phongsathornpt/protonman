@@ -69,16 +69,9 @@ func (m *bubbleModel) executeConversationCommand(name, argument string) tea.Cmd 
 }
 
 func (m *bubbleModel) selectModelDirect(modelID string) tea.Cmd {
-	prov := m.activeProvider
+	prov := strings.TrimSpace(m.activeProvider)
 	if prov == "" {
-		if len(m.providers) > 0 {
-			for name := range m.providers {
-				prov = name
-				break
-			}
-		} else {
-			prov = model.DefaultProtonmanName
-		}
+		prov = model.DefaultOpenCodeName
 	}
 	return m.beginModelSelect(prov, modelID, !m.modelIDKnown(prov, modelID))
 }
