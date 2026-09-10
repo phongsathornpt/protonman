@@ -9,6 +9,7 @@ func AppendAssistantStep(messages []Message, result StepResult) []Message {
 		return next
 	}
 	assistant := Message{
+		ID:        NewMessageID(),
 		Role:      RoleAssistant,
 		Content:   result.Text,
 		ToolCalls: make([]ToolCall, 0, len(result.ToolCalls)),
@@ -27,6 +28,7 @@ func AppendToolResults(messages []Message, results []ToolResult) ([]Message, err
 			return nil, err
 		}
 		next = append(next, Message{
+			ID:                NewMessageID(),
 			Role:              RoleTool,
 			Content:           result.Content,
 			Parts:             append([]ContentPart(nil), result.Parts...),

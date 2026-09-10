@@ -311,6 +311,7 @@ func (s *Session) ExecutePrompt(
 		s.messages = append(s.messages, turnMessages...)
 	} else if assistantText.Len() > 0 || len(assistantCalls) > 0 {
 		s.messages = append(s.messages, model.Message{
+			ID:        model.NewMessageID(),
 			Role:      model.RoleAssistant,
 			Content:   assistantText.String(),
 			ToolCalls: toModelToolCalls(assistantCalls),
@@ -665,6 +666,7 @@ func (s *Session) handleSlashCommand(
 		s.messages = append(s.messages,
 			userMsg,
 			model.Message{
+				ID:   model.NewMessageID(),
 				Role: model.RoleAssistant,
 				ToolCalls: []model.ToolCall{
 					{
@@ -675,6 +677,7 @@ func (s *Session) handleSlashCommand(
 				},
 			},
 			model.Message{
+				ID:         model.NewMessageID(),
 				Role:       model.RoleTool,
 				ToolCallID: call.ID,
 				ToolName:   call.Name,

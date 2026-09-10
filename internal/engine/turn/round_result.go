@@ -76,6 +76,7 @@ func toolMessagesForExecutions(executions []executedCall) ([]model.Message, erro
 			modelToolName = execution.call.Name
 		}
 		messages = append(messages, model.Message{
+			ID:                model.NewMessageID(),
 			Role:              model.RoleTool,
 			Content:           string(content),
 			ToolCallID:        execution.call.ID,

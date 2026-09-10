@@ -117,3 +117,38 @@ func TestRawEventValidation(t *testing.T) {
 		t.Fatalf("empty raw event error = %v", err)
 	}
 }
+
+func TestMessageIDsAreStableAndOpaque(t *testing.T) {
+	first := NewMessageID()
+	second := NewMessageID()
+	if first == "" || second == "" || first == second {
+		t.Fatalf("message ids = %q, %q", first, second)
+	}
+	if !ValidMessageID(first) || !ValidMessageID(second) {
+		t.Fatalf("generated message ids are invalid: %q %q", first, second)
+	}
+}
+
+func TestEnsureMessageIDsPreservesExistingIdentity(t *testing.T) {
+	messages := []Message{{ID: "msg_existing", Role: RoleUser, Content: "one"}, {Role: RoleAssistant, Content: "two"}}
+	first := EnsureMessageIDs(messages)
+	second := EnsureMessageIDs(first)
+	if first[0].ID != "msg_existing" || second[0].ID != "msg_existing" {
+		t.Fatalf("existing id changed: first=%q second=%q", first[0].ID, second[0].ID)
+	}
+	if first[1].ID == "" || second[1].ID != first[1].ID {
+		t.Fatalf("assigned id was not stable: first=%q second=%q", first[1].ID, second[1].ID)
+	}
+	if messages[1].ID != "" {
+		t.Fatalf("EnsureMessageIDs mutated input: %q", messages[1].ID)
+	}
+}
+
+func TestMessageValidateRejectsUnsafeIdentity(t *testing.T) {
+	if err := (Message{ID: "bad id", Role: RoleUser}).Validate(); !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("invalid id error = %v", err)
+	}
+	if err := (Message{Role: RoleUser}).Validate(); err != nil {
+		t.Fatalf("legacy message without id rejected: %v", err)
+	}
+}

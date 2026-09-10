@@ -38,6 +38,9 @@ func mergeProfile(dst *Resolved, src Profile) {
 		dst.AgentPolicy.PromptHints = append([]string(nil), src.AgentPolicy.PromptHints...)
 		dst.Provenance.PromptHints = MetadataSourceBuiltin
 	}
+	if src.Compaction != (CompactionPolicy{}) {
+		dst.Compaction = src.Compaction
+	}
 	if src.Compatibility.ToolSchemaDialect != ToolSchemaDefault {
 		dst.Compatibility.ToolSchemaDialect = src.Compatibility.ToolSchemaDialect
 		dst.Provenance.ToolSchemaDialect = MetadataSourceBuiltin

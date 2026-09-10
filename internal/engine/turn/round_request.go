@@ -24,7 +24,7 @@ func resolvedModelStateFor(languageModel sdk.LanguageModel) resolvedModelState {
 }
 
 func (l *Loop) prepareTurnInput(ctx context.Context, messages []model.Message) ([]model.Message, []string, string) {
-	history := append([]model.Message(nil), messages...)
+	history := model.EnsureMessageIDs(messages)
 	var promptExtras []string
 	if l.promptSpec != nil {
 		filtered := make([]model.Message, 0, len(history))
@@ -178,6 +178,30 @@ func (l *Loop) prepareRoundRequest(
 		request.Options.ToolChoice = sdk.ToolChoiceRequired
 	}
 	request.Options.ReasoningEffort = reasoning.Effective
+	limits := sdk.ModelTokenLimits(l.languageModel)
+	compactionProfile := modelprofile.Resolved{
+		ContextWindow:   limits.ContextWindow,
+		MaxInputTokens:  limits.MaxInputTokens,
+		MaxOutputTokens: limits.MaxOutputTokens,
+	}
+	if resolved.has {
+		compactionProfile = resolved.profile
+	}
+	compactionPolicy := modelprofile.EffectiveCompactionPolicy(compactionProfile)
+	compactedRequest, compaction, err := compactRequestToModelBudget(request, limits, compactionPolicy)
+	if err != nil {
+		return sdk.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("compact model context: %w", err)
+	}
+	request = compactedRequest
+	if compaction.Required() {
+		slog.DebugContext(ctx, "turn conversation compacted",
+			"stage", compaction.Stage,
+			"estimated_input_tokens", compaction.InputTokens,
+			"input_budget_tokens", compaction.BudgetTokens,
+			"target_tokens", compaction.TargetTokens,
+			"message_count", len(request.Messages),
+		)
+	}
 	if err := request.Validate(); err != nil {
 		return sdk.Request{}, dispatch, softToolBudgetWarned, err
 	}

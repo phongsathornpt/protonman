@@ -191,9 +191,9 @@ func historicalToolMessage(toolName string, message sdk.Message, found bool, lim
 		name = "unknown"
 	}
 	if !found {
-		return sdk.Message{Role: sdk.RoleAssistant, Content: fmt.Sprintf("Historical tool %s was requested, but its result is no longer retained.", name)}
+		return sdk.Message{ID: sdk.NewMessageID(), Role: sdk.RoleAssistant, Content: fmt.Sprintf("Historical tool %s was requested, but its result is no longer retained.", name)}
 	}
-	return sdk.Message{Role: sdk.RoleAssistant, Content: historicalToolResultText(name, message.Content, limit)}
+	return sdk.Message{ID: message.ID, Role: sdk.RoleAssistant, Content: historicalToolResultText(name, message.Content, limit)}
 }
 
 func historicalToolResultText(name, content string, limit int) string {

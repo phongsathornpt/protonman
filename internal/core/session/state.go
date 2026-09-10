@@ -58,6 +58,7 @@ type ToolCall struct {
 
 // Message is one persisted conversation turn without tool arguments.
 type Message struct {
+	ID         string     `json:"id,omitempty"`
 	Role       sdk.Role   `json:"role"`
 	Content    string     `json:"content,omitempty"`
 	ToolName   string     `json:"tool_name,omitempty"`
@@ -69,6 +70,7 @@ type Message struct {
 // Legacy redacted tool protocol groups are compacted to plain assistant history
 // so resume never fabricates empty tool arguments.
 func ToModelMessages(stored []Message) []sdk.Message {
+	stored = ensureStoredMessageIDs(stored)
 	stored = compactToolHistory(stored)
 	messages := make([]sdk.Message, 0, len(stored))
 	for _, message := range stored {
@@ -76,6 +78,7 @@ func ToModelMessages(stored []Message) []sdk.Message {
 			continue
 		}
 		messages = append(messages, sdk.Message{
+			ID:      message.ID,
 			Role:    message.Role,
 			Content: message.Content,
 		})
@@ -87,12 +90,14 @@ func ToModelMessages(stored []Message) []sdk.Message {
 // Tool arguments are never copied into the stored representation. Tool protocol
 // groups are compacted to plain text before they leave process memory.
 func FromModelMessages(messages []sdk.Message) []Message {
+	messages = sdk.EnsureMessageIDs(messages)
 	out := make([]Message, 0, len(messages))
 	for _, message := range messages {
 		if message.Role == sdk.RoleSystem && isManagedSystemPrompt(message.Content) {
 			continue
 		}
 		out = append(out, Message{
+			ID:         message.ID,
 			Role:       message.Role,
 			Content:    message.Content,
 			ToolName:   message.ToolName,
@@ -162,6 +167,16 @@ func inferWorkspaceKeyFromSessionID(sessionID string) string {
 	return ""
 }
 
+func ensureStoredMessageIDs(messages []Message) []Message {
+	out := append([]Message(nil), messages...)
+	for i := range out {
+		if strings.TrimSpace(out[i].ID) == "" {
+			out[i].ID = sdk.NewMessageID()
+		}
+	}
+	return out
+}
+
 func compactToolHistory(messages []Message) []Message {
 	if len(messages) == 0 {
 		return []Message{}
@@ -172,7 +187,7 @@ func compactToolHistory(messages []Message) []Message {
 		message := messages[index]
 		if message.Role == sdk.RoleAssistant && len(message.ToolCalls) > 0 {
 			if text := strings.TrimSpace(message.Content); text != "" {
-				compacted = append(compacted, Message{Role: sdk.RoleAssistant, Content: text})
+				compacted = append(compacted, Message{ID: message.ID, Role: sdk.RoleAssistant, Content: text})
 			}
 
 			results := make(map[string]Message, len(message.ToolCalls))
@@ -183,7 +198,12 @@ func compactToolHistory(messages []Message) []Message {
 			}
 			for _, call := range message.ToolCalls {
 				result, ok := results[call.ID]
+				resultID := result.ID
+				if resultID == "" {
+					resultID = sdk.NewMessageID()
+				}
 				compacted = append(compacted, Message{
+					ID:      resultID,
 					Role:    sdk.RoleAssistant,
 					Content: compactToolResult(call.Name, result, ok),
 				})
@@ -191,6 +211,7 @@ func compactToolHistory(messages []Message) []Message {
 			}
 			for _, result := range results {
 				compacted = append(compacted, Message{
+					ID:      result.ID,
 					Role:    sdk.RoleAssistant,
 					Content: compactToolResult(result.ToolName, result, true),
 				})
@@ -200,6 +221,7 @@ func compactToolHistory(messages []Message) []Message {
 		}
 		if message.Role == sdk.RoleTool {
 			compacted = append(compacted, Message{
+				ID:      message.ID,
 				Role:    sdk.RoleAssistant,
 				Content: compactToolResult(message.ToolName, message, true),
 			})
@@ -253,6 +275,7 @@ func compactToolResult(toolName string, message Message, found bool) string {
 }
 
 func sanitizeMessages(messages []Message) []Message {
+	messages = ensureStoredMessageIDs(messages)
 	messages = compactToolHistory(messages)
 	if len(messages) == 0 {
 		return []Message{}
@@ -290,6 +313,7 @@ func validateReasoningSetting(value string) error {
 func validateMessages(messages []Message) error {
 	for _, message := range messages {
 		if err := (sdk.Message{
+			ID:         message.ID,
 			Role:       message.Role,
 			Content:    message.Content,
 			ToolName:   message.ToolName,

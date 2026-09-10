@@ -129,6 +129,17 @@ type AgentPolicy struct {
 	PromptHints []string
 }
 
+// CompactionPolicy controls when conversation history is compacted relative to
+// the model's effective input budget. Zero-valued ratios inherit tier defaults.
+type CompactionPolicy struct {
+	SoftThresholdRatio       float64
+	MediumThresholdRatio     float64
+	AggressiveThresholdRatio float64
+	EmergencyThresholdRatio  float64
+	TargetRatio              float64
+	MinRecentMessages        int
+}
+
 type Profile struct {
 	Name            string
 	Match           Matcher
@@ -140,6 +151,7 @@ type Profile struct {
 	MaxOutputTokens int
 	Compatibility   CompatibilityPolicy
 	AgentPolicy     AgentPolicy
+	Compaction      CompactionPolicy
 }
 
 type CatalogReasoning struct {
@@ -197,6 +209,7 @@ type Resolved struct {
 	MaxOutputTokens int
 	Compatibility   CompatibilityPolicy
 	AgentPolicy     AgentPolicy
+	Compaction      CompactionPolicy
 	Provenance      MetadataProvenance
 }
 

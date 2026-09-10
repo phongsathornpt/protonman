@@ -3,10 +3,14 @@ package protonsdk
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
+	"time"
 )
 
 var (
@@ -97,6 +101,10 @@ func (t Tool) Validate() error {
 }
 
 type Message struct {
+	// ID is a stable provider-neutral identity for this logical conversation message.
+	// Providers may ignore it on the wire; runtimes should preserve it across cloning,
+	// persistence, retention, and compaction. Legacy messages may omit it.
+	ID                string
 	Role              Role
 	Content           string
 	Parts             []ContentPart
@@ -104,6 +112,33 @@ type Message struct {
 	ToolName          string
 	ToolResultIsError bool
 	ToolCalls         []ToolCall
+}
+
+const messageIDPrefix = "msg_"
+
+var messageIDFallbackSeq atomic.Uint64
+
+// NewMessageID returns a stable opaque identity suitable for one logical message.
+func NewMessageID() string {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err == nil {
+		return messageIDPrefix + hex.EncodeToString(raw[:])
+	}
+	// crypto/rand failure is exceptionally rare. Preserve API infallibility with
+	// a process-unique fallback rather than returning an empty identity.
+	return fmt.Sprintf("%sf%016x%016x", messageIDPrefix, uint64(time.Now().UnixNano()), messageIDFallbackSeq.Add(1))
+}
+
+// EnsureMessageIDs clones messages and fills IDs only where they are missing.
+// Existing IDs are never rewritten.
+func EnsureMessageIDs(messages []Message) []Message {
+	cloned := CloneMessages(messages)
+	for i := range cloned {
+		if strings.TrimSpace(cloned[i].ID) == "" {
+			cloned[i].ID = NewMessageID()
+		}
+	}
+	return cloned
 }
 
 func (m Message) TextContent() string {
@@ -122,7 +157,27 @@ func (m Message) TextContent() string {
 	return builder.String()
 }
 
+func ValidMessageID(id string) bool {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return true // legacy messages are accepted and can be upgraded at runtime boundaries
+	}
+	if len(id) > 128 {
+		return false
+	}
+	for _, r := range id {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-' || r == '.' || r == ':' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 func (m Message) Validate() error {
+	if !ValidMessageID(m.ID) {
+		return fmt.Errorf("%w: invalid message id %q", ErrInvalidRequest, m.ID)
+	}
 	if !validRole(m.Role) {
 		return fmt.Errorf("%w: unsupported message role %q", ErrInvalidRequest, m.Role)
 	}

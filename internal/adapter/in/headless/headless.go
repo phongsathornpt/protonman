@@ -365,9 +365,11 @@ func (r *Runner) runCall(
 		marshalErr = fmt.Errorf("encode headless tool result: %w", marshalErr)
 	}
 	r.messages = append(r.messages, model.Message{
+		ID:      model.NewMessageID(),
 		Role:    model.RoleUser,
 		Content: fmt.Sprintf("/call %s", call.Name),
 	}, model.Message{
+		ID:   model.NewMessageID(),
 		Role: model.RoleAssistant,
 		ToolCalls: []model.ToolCall{{
 			ID:        call.ID,
@@ -375,6 +377,7 @@ func (r *Runner) runCall(
 			Arguments: append(json.RawMessage(nil), call.Arguments...),
 		}},
 	}, model.Message{
+		ID:         model.NewMessageID(),
 		Role:       model.RoleTool,
 		Content:    string(resultContent),
 		ToolName:   call.Name,
@@ -413,7 +416,7 @@ func (r *Runner) runTurn(
 	if r.runner == nil {
 		return fmt.Errorf("model client is not configured; use /help or /call")
 	}
-	r.messages = append(r.messages, model.Message{Role: model.RoleUser, Content: prompt})
+	r.messages = append(r.messages, model.Message{ID: model.NewMessageID(), Role: model.RoleUser, Content: prompt})
 	r.retainMessages()
 	r.turnSeq++
 	turnID := fmt.Sprintf("headless-turn-%d", r.turnSeq)

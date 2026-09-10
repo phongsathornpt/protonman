@@ -33,7 +33,7 @@ func (m *bubbleModel) retainConversationMessages() {
 func (m *bubbleModel) startTool(call tool.Call) tea.Cmd {
 	m.showWelcome = false
 	slog.DebugContext(m.ctx, "tui direct tool started", "call_id", call.ID, "tool_name", call.Name, "argument_bytes", len(call.Arguments))
-	m.messages = append(m.messages, model.Message{Role: model.RoleAssistant, ToolCalls: []model.ToolCall{{ID: call.ID, Name: call.Name, Arguments: append([]byte(nil), call.Arguments...)}}})
+	m.messages = append(m.messages, model.Message{ID: model.NewMessageID(), Role: model.RoleAssistant, ToolCalls: []model.ToolCall{{ID: call.ID, Name: call.Name, Arguments: append([]byte(nil), call.Arguments...)}}})
 	m.retainConversationMessages()
 	m.busy = true
 	m.busyStarted = time.Now()
@@ -66,7 +66,7 @@ func (m *bubbleModel) appendModelToolResult(call tool.Call, result tool.Result) 
 	if err != nil {
 		content = []byte(fmt.Sprintf(`{"call_id":%q,"tool_name":%q,"error":{"code":"execution_error","message":%q}}`, call.ID, call.Name, err.Error()))
 	}
-	m.messages = append(m.messages, model.Message{Role: model.RoleTool, Content: string(content), ToolCallID: result.CallID, ToolName: result.ToolName})
+	m.messages = append(m.messages, model.Message{ID: model.NewMessageID(), Role: model.RoleTool, Content: string(content), ToolCallID: result.CallID, ToolName: result.ToolName})
 	m.retainConversationMessages()
 }
 

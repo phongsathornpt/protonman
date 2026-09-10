@@ -31,7 +31,7 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 		return nil
 	}
 	m.retireCompletedTodoForNextTurn()
-	m.messages = append(m.messages, model.Message{Role: model.RoleUser, Content: prompt})
+	m.messages = append(m.messages, model.Message{ID: model.NewMessageID(), Role: model.RoleUser, Content: prompt})
 	m.retainConversationMessages()
 	m.busy = true
 	m.busyStarted = time.Now()
