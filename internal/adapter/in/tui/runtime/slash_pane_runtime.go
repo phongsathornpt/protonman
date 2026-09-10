@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
+	"io"
 	"strings"
 )
 
@@ -36,6 +37,34 @@ func (i slashListItem) Description() string {
 	return i.command.Description
 }
 
+type slashCommandDelegate struct{}
+
+func (slashCommandDelegate) Height() int                         { return 1 }
+func (slashCommandDelegate) Spacing() int                        { return 0 }
+func (slashCommandDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
+func (slashCommandDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	entry, ok := item.(slashListItem)
+	if !ok {
+		return
+	}
+	prefix := "  "
+	nameStyle := bodyStyle
+	if index == m.Index() {
+		prefix = glyphPrompt
+		nameStyle = brandStyle
+	}
+	name := entry.Title()
+	description := entry.Description()
+	available := maxInt(1, m.Width()-2)
+	nameWidth := len([]rune(name))
+	if description == "" || available-nameWidth < 8 {
+		_, _ = fmt.Fprint(w, prefix+nameStyle.Render(truncateWithEllipsis(name, available)))
+		return
+	}
+	description = truncateWithEllipsis(description, maxInt(1, available-nameWidth-2))
+	_, _ = fmt.Fprint(w, prefix+nameStyle.Render(name)+"  "+mutedStyle.Render(description))
+}
+
 type slashPaneView struct {
 	picker  list.Model
 	ready   bool
@@ -43,7 +72,7 @@ type slashPaneView struct {
 }
 
 func (*slashPaneView) ID() string                             { return slashViewID }
-func (*slashPaneView) PresentationMode() panePresentationMode { return paneOverlay }
+func (*slashPaneView) PresentationMode() panePresentationMode { return paneBelowComposer }
 
 func (v *slashPaneView) sync(ctx paneRenderContext) {
 	matches := ctx.slashMatches
@@ -53,9 +82,7 @@ func (v *slashPaneView) sync(ctx paneRenderContext) {
 		items = append(items, slashListItem{command: command})
 	}
 	if !v.ready {
-		delegate := list.NewDefaultDelegate()
-		delegate.SetSpacing(0)
-		v.picker = list.New(items, delegate, maxInt(20, ctx.width-4), maxInt(4, minInt(12, ctx.height/2)))
+		v.picker = list.New(items, slashCommandDelegate{}, maxInt(20, ctx.width-4), maxSlashRows)
 		v.picker.DisableQuitKeybindings()
 		v.picker.SetFilteringEnabled(false)
 		v.picker.SetShowTitle(false)
@@ -80,19 +107,47 @@ func (v *slashPaneView) Render(ctx paneRenderContext) string {
 	if len(v.matches) == 0 {
 		return ""
 	}
-	v.picker.SetSize(maxInt(20, ctx.width-4), maxInt(4, minInt(12, ctx.height/2)))
-	delegate := list.NewDefaultDelegate()
-	delegate.SetSpacing(0)
-	delegate.ShowDescription = layoutModeForHeight(ctx.height) == layoutNormal
-	v.picker.SetDelegate(delegate)
-	rows := strings.Split(v.picker.View(), "\n")
-	if remaining := len(v.matches) - minInt(maxSlashRows, len(v.matches)); remaining > 0 {
-		rows = append(rows, mutedStyle.Render(fmt.Sprintf("↓ %d more", remaining)))
-	}
+	visibleRows := minInt(maxSlashRows, len(v.matches))
+	v.picker.SetSize(maxInt(20, ctx.width-4), maxInt(1, visibleRows))
+	v.picker.SetDelegate(slashCommandDelegate{})
+	rows := []string{brandStyle.Render("Commands"), ""}
+	rows = append(rows, strings.Split(v.picker.View(), "\n")...)
 	if layoutModeForHeight(ctx.height) != layoutTiny {
-		rows = append(rows, mutedStyle.Render("↑↓ navigate · enter select · tab complete · esc close"))
+		rows = append(rows, "", slashPickerHelp(ctx.width))
+	}
+	if status := v.selectionStatus(ctx.width); status != "" {
+		rows = append(rows, status)
 	}
 	return strings.Join(rows, "\n")
+}
+
+func slashPickerHelp(width int) string {
+	label := brandStyle.Render("Keyboard:") + " "
+	switch {
+	case width >= 78:
+		return label + userStyle.Render("↑/↓") + mutedStyle.Render(" Navigate   ") + userStyle.Render("enter") + mutedStyle.Render(" Select   ") + userStyle.Render("tab") + mutedStyle.Render(" Complete   ") + userStyle.Render("esc") + mutedStyle.Render(" Go Back")
+	case width >= 54:
+		return label + userStyle.Render("↑/↓") + mutedStyle.Render(" Navigate   ") + userStyle.Render("enter") + mutedStyle.Render(" Select   ") + userStyle.Render("esc") + mutedStyle.Render(" Back")
+	default:
+		return mutedStyle.Render("↑↓ · enter · tab · esc")
+	}
+}
+
+func (v *slashPaneView) selectionStatus(width int) string {
+	if len(v.matches) == 0 {
+		return ""
+	}
+	index := maxInt(0, minInt(v.picker.GlobalIndex(), len(v.matches)-1))
+	selected := v.matches[index]
+	name := "/" + selected.Name
+	status := fmt.Sprintf("%s · %d/%d", name, index+1, len(v.matches))
+	if remaining := len(v.matches) - minInt(maxSlashRows, len(v.matches)); remaining > 0 {
+		status += fmt.Sprintf(" · %d more", remaining)
+	}
+	available := maxInt(1, width-4)
+	status = truncateWithEllipsis(status, available)
+	padding := maxInt(0, available-len([]rune(status)))
+	return strings.Repeat(" ", padding) + mutedStyle.Render(status)
 }
 
 func (v *slashPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {

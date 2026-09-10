@@ -414,7 +414,7 @@ func TestModelSetupPreservesComposerDraft(t *testing.T) {
 
 func TestBottomPanePresentationPolicy(t *testing.T) {
 	overlays := []bottomPaneView{
-		&skillsPaneView{}, &todoPaneView{}, &slashPaneView{}, &agentsPaneView{},
+		&skillsPaneView{}, &todoPaneView{}, &agentsPaneView{},
 		&shortcutsPaneView{}, &projectPaneView{}, &providerSelectPaneView{},
 	}
 	for _, view := range overlays {

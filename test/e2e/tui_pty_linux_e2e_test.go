@@ -551,7 +551,7 @@ func TestE2ETUISlashHelpWithRealPTY(t *testing.T) {
 	}
 	time.Sleep(150 * time.Millisecond)
 	view := output.String()
-	for _, want := range []string{"tab", "complete", "enter", "select"} {
+	for _, want := range []string{"Commands", "tab", "Complete", "enter", "Select", "Go Back"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("slash PTY output missing %q: %q", want, view)
 		}

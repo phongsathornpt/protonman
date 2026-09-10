@@ -946,9 +946,29 @@ func TestSlashCompletionUsesInlineCommandGrammar(t *testing.T) {
 		t.Fatal("slash completion did not open")
 	}
 	plain := ansi.Strip(view.Render(newPaneRenderContext(m)))
-	for _, want := range []string{"/help", "more", "↑↓ navigate", "tab complete", "esc close"} {
+	for _, want := range []string{"Commands", "/help", "more", "Keyboard:", "Navigate", "Complete", "Go Back"} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("slash completion missing %q: %q", want, plain)
+		}
+	}
+}
+
+func TestSlashPickerRendersBelowComposerLikeModelPicker(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(100, 30)
+	m.panes.bottom.prompt().SetValue("/")
+	m.syncSlashView()
+	m.requestRelayout()
+	m.reconcileLayout()
+	plain := ansi.Strip(m.View().Content)
+	composer := strings.Index(plain, "> /")
+	commands := strings.Index(plain, "Commands")
+	if composer < 0 || commands < 0 || composer >= commands {
+		t.Fatalf("slash picker should render below composer: composer=%d commands=%d\n%s", composer, commands, plain)
+	}
+	for _, want := range []string{"Keyboard:", "Navigate", "Select", "Complete", "Go Back", "/help · 1/"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("slash picker missing reference element %q:\n%s", want, plain)
 		}
 	}
 }
