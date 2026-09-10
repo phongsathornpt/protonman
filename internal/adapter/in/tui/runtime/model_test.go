@@ -1339,7 +1339,7 @@ func TestModelSetupMuseSparkUsesFamilyReasoningLevels(t *testing.T) {
 	m.activeModel = "muse-spark-1.3-contributor-free"
 	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: m.activeModel, Name: "Muse Spark 1.3 Contributor"}})
 	view := newModelSetupPaneView(m)
-	want := []sdk.ReasoningEffort{sdk.ReasoningDefault, sdk.ReasoningMinimal, sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningHigh, sdk.ReasoningXHigh}
+	want := []sdk.ReasoningEffort{sdk.ReasoningDefault, sdk.ReasoningMinimal, sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningHigh, sdk.ReasoningXHigh, sdk.ReasoningMax}
 	if len(view.reasoningChoices) != len(want) {
 		t.Fatalf("muse reasoning choices = %v, want %v", view.reasoningChoices, want)
 	}
@@ -1349,11 +1349,11 @@ func TestModelSetupMuseSparkUsesFamilyReasoningLevels(t *testing.T) {
 		}
 	}
 	profile := domainmodel.ResolveModelProfile("opencode", m.activeModel, nil)
-	if profile.Reasoning.Default != sdk.ReasoningMedium {
-		t.Fatalf("muse default reasoning = %q, want medium", profile.Reasoning.Default)
+	if profile.Reasoning.Default != sdk.ReasoningHigh {
+		t.Fatalf("muse default reasoning = %q, want high", profile.Reasoning.Default)
 	}
 	rendered := testPlain(view.Render(newPaneRenderContext(m)))
-	for _, level := range []string{"minimal", "low", "medium", "high", "xhigh"} {
+	for _, level := range []string{"minimal", "low", "medium", "high", "xhigh", "max"} {
 		if !strings.Contains(rendered, level) {
 			t.Fatalf("muse picker missing %q: %s", level, rendered)
 		}
@@ -1439,56 +1439,62 @@ func TestModelRowDropsMetadataBeforeTruncatingUsefulNameSpace(t *testing.T) {
 	}
 }
 
-func TestModelSetupZaiFamilyExposesThinkingToggle(t *testing.T) {
+func TestModelSetupGLM53FamilyExposesNativeEffortLevels(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.resize(100, 30)
 	m.activeProvider = "protonman"
 	m.activeModel = "glm-5.3-flash"
 	m.modelCatalogs.Set("protonman", []domainmodel.RemoteModel{{ID: m.activeModel}})
 	view := newModelSetupPaneView(m)
-	if got := view.reasoningChoices; len(got) != 2 || got[0] != sdk.ReasoningDefault || got[1] != sdk.ReasoningNone {
-		t.Fatalf("Z.ai family choices = %#v, want auto/none", got)
-	}
-	plain := testPlain(view.Render(newPaneRenderContext(m)))
-	for _, want := range []string{"Effort", "auto", "none", "←/→ Effort"} {
-		if !strings.Contains(plain, want) {
-			t.Fatalf("Z.ai family picker missing %q:\n%s", want, plain)
-		}
-	}
-	view.moveReasoning(1)
-	if got := view.selectedReasoning(); got != sdk.ReasoningNone {
-		t.Fatalf("Z.ai family selected reasoning = %q, want none", got)
-	}
-}
-
-func TestModelSetupQwen38MaxExposesNativeEffortLevels(t *testing.T) {
-	m := newTestSkillsModel(t, 1)
-	m.resize(100, 30)
-	m.activeProvider = "protonman"
-	m.activeModel = "qwen3.8-max-latest"
-	m.modelCatalogs.Set("protonman", []domainmodel.RemoteModel{{ID: m.activeModel}})
-	view := newModelSetupPaneView(m)
-	want := []sdk.ReasoningEffort{sdk.ReasoningDefault, sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningXHigh}
+	want := []sdk.ReasoningEffort{sdk.ReasoningDefault, sdk.ReasoningLow, sdk.ReasoningHigh, sdk.ReasoningMax}
 	if got := view.reasoningChoices; len(got) != len(want) {
-		t.Fatalf("Qwen 3.8 Max choices = %#v, want %#v", got, want)
+		t.Fatalf("GLM-5.3 choices = %#v, want %#v", got, want)
 	} else {
 		for i := range want {
 			if got[i] != want[i] {
-				t.Fatalf("Qwen 3.8 Max choices = %#v, want %#v", got, want)
+				t.Fatalf("GLM-5.3 choices = %#v, want %#v", got, want)
+			}
+		}
+	}
+	plain := testPlain(view.Render(newPaneRenderContext(m)))
+	for _, label := range []string{"auto", "low", "high", "max", "←/→ Effort"} {
+		if !strings.Contains(plain, label) {
+			t.Fatalf("GLM-5.3 picker missing %q:\n%s", label, plain)
+		}
+	}
+	if strings.Contains(plain, "none") {
+		t.Fatalf("GLM-5.3 picker exposed unsupported none level:\n%s", plain)
+	}
+}
+
+func TestModelSetupQwen38FlashExposesNativeEffortLevels(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.resize(100, 30)
+	m.activeProvider = "protonman"
+	m.activeModel = "qwen3.8-flash"
+	m.modelCatalogs.Set("protonman", []domainmodel.RemoteModel{{ID: m.activeModel}})
+	view := newModelSetupPaneView(m)
+	want := []sdk.ReasoningEffort{sdk.ReasoningDefault, sdk.ReasoningNone, sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningXHigh}
+	if got := view.reasoningChoices; len(got) != len(want) {
+		t.Fatalf("Qwen3.8 Flash choices = %#v, want %#v", got, want)
+	} else {
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("Qwen3.8 Flash choices = %#v, want %#v", got, want)
 			}
 		}
 	}
 }
 
-func TestModelSetupQwenHybridExposesThinkingToggle(t *testing.T) {
+func TestModelSetupMiniMaxM3ExposesThinkingToggle(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.resize(100, 30)
-	m.activeProvider = "opencode"
-	m.activeModel = "qwen3.6-plus"
-	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: m.activeModel}})
+	m.activeProvider = "protonman"
+	m.activeModel = "minimax-m3"
+	m.modelCatalogs.Set("protonman", []domainmodel.RemoteModel{{ID: m.activeModel}})
 	view := newModelSetupPaneView(m)
 	if got := view.reasoningChoices; len(got) != 2 || got[0] != sdk.ReasoningDefault || got[1] != sdk.ReasoningNone {
-		t.Fatalf("Qwen hybrid choices = %#v, want auto/none", got)
+		t.Fatalf("MiniMax M3 choices = %#v, want auto/none", got)
 	}
 }
 

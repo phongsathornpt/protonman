@@ -287,7 +287,7 @@ func isQwenHybridThinkingModel(modelID string) bool {
 	if slash := strings.LastIndexByte(id, '/'); slash >= 0 {
 		id = id[slash+1:]
 	}
-	for _, prefix := range []string{"qwen3.5-plus", "qwen3.6-plus", "qwen3.6-flash", "qwen3.7-plus", "qwen3.7-max"} {
+	for _, prefix := range []string{"qwen3.5-plus", "qwen3.6-plus", "qwen3.6-flash", "qwen3.7-plus", "qwen3.7-max", "qwen3.8-flash"} {
 		if strings.HasPrefix(id, prefix) {
 			return true
 		}

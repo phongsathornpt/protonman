@@ -22,6 +22,16 @@ var builtinRegistry = mustRegistry(
 		}},
 	},
 	Profile{
+		Name:         "zai-glm-5.3-family",
+		Match:        Matcher{Prefixes: []string{"glm-5.3"}},
+		Capabilities: Capabilities{Reasoning: SupportYes},
+		Reasoning: Reasoning{
+			Support: SupportYes,
+			Levels:  []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningHigh, sdk.ReasoningMax},
+			Default: sdk.ReasoningMax,
+		},
+	},
+	Profile{
 		Name: "zai-glm-thinking",
 		Match: Matcher{Prefixes: []string{
 			"glm-4.5", "glm-4.6", "glm-4.7", "glm-5",
@@ -30,6 +40,16 @@ var builtinRegistry = mustRegistry(
 		Reasoning: Reasoning{
 			Support: SupportYes,
 			Levels:  []sdk.ReasoningEffort{sdk.ReasoningNone},
+		},
+	},
+	Profile{
+		Name:         "qwen3.8-flash-family",
+		Match:        Matcher{Prefixes: []string{"qwen3.8-flash"}},
+		Capabilities: Capabilities{Reasoning: SupportYes},
+		Reasoning: Reasoning{
+			Support: SupportYes,
+			Levels:  []sdk.ReasoningEffort{sdk.ReasoningNone, sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningXHigh},
+			Default: sdk.ReasoningXHigh,
 		},
 	},
 	Profile{
@@ -52,6 +72,15 @@ var builtinRegistry = mustRegistry(
 			"qwen3.5-plus", "qwen3.6-plus", "qwen3.6-flash",
 			"qwen3.7-plus", "qwen3.7-max",
 		}},
+		Capabilities: Capabilities{Reasoning: SupportYes},
+		Reasoning: Reasoning{
+			Support: SupportYes,
+			Levels:  []sdk.ReasoningEffort{sdk.ReasoningNone},
+		},
+	},
+	Profile{
+		Name:         "minimax-m3-family",
+		Match:        Matcher{Prefixes: []string{"minimax-m3"}},
 		Capabilities: Capabilities{Reasoning: SupportYes},
 		Reasoning: Reasoning{
 			Support: SupportYes,
@@ -82,9 +111,9 @@ var builtinRegistry = mustRegistry(
 			Support: SupportYes,
 			Levels: []sdk.ReasoningEffort{
 				sdk.ReasoningMinimal, sdk.ReasoningLow, sdk.ReasoningMedium,
-				sdk.ReasoningHigh, sdk.ReasoningXHigh,
+				sdk.ReasoningHigh, sdk.ReasoningXHigh, sdk.ReasoningMax,
 			},
-			Default: sdk.ReasoningMedium,
+			Default: sdk.ReasoningHigh,
 		},
 	},
 	Profile{
