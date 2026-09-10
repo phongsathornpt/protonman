@@ -291,3 +291,26 @@ func TestDelegateTaskPrefersContextParentID(t *testing.T) {
 		t.Fatalf("status=%+v, want parent turn-7", status)
 	}
 }
+
+func TestSubagentDefinitionDescribesEventDrivenResultDelivery(t *testing.T) {
+	def := NewSubagent(nil).Definition()
+	for _, want := range []string{"completed results are delivered automatically", "wait/get/list are diagnostic", "cancel/resume"} {
+		if !strings.Contains(def.Description, want) {
+			t.Fatalf("subagent description missing %q: %q", want, def.Description)
+		}
+	}
+	props, ok := def.InputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("subagent input schema properties missing")
+	}
+	action, ok := props["action"].(map[string]any)
+	if !ok {
+		t.Fatal("subagent action schema missing")
+	}
+	description, _ := action["description"].(string)
+	for _, want := range []string{"automatic result delivery", "diagnostic inspection"} {
+		if !strings.Contains(description, want) {
+			t.Fatalf("subagent action description missing %q: %q", want, description)
+		}
+	}
+}
