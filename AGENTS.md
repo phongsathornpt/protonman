@@ -238,7 +238,10 @@ waiting writer. Preserve this fairness property when touching scheduler code.
 ## Prompt Architecture
 
 System prompt composition lives in `internal/engine/prompt` and is capability-driven.
-Do not maintain separate large root prompts per provider or agent mode.
+Do not maintain separate large root prompts per provider or agent mode. The managed
+prompt currently uses Prompt ABI v8 and deterministic cache-aware section ordering;
+`docs/system-prompt.md` is the source of truth for prompt topology and prefix-cache
+invariants.
 
 The root identity is Universal. When agent tools are published, the prompt adds
 orchestration guidance. When they are absent, the prompt becomes a clean
@@ -257,6 +260,11 @@ Prompt sections are derived from the effective tool surface:
 
 Do not hard-code claims that a capability exists. If the model cannot call a
 capability, the prompt should normally omit instructions for it.
+
+Keep reusable prompt material before dynamic material when semantics allow. Workspace,
+role, active-goal, and skill changes must not accidentally invalidate unrelated earlier
+prompt bytes. Preserve deterministic section ordering and add divergence-boundary tests
+when changing prompt topology.
 
 Prefer positive semantic tool guidance. Python, Node, shell, Go, Rust, and other
 runtimes are valid engineering tools when they are the appropriate operation;

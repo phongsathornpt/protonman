@@ -89,7 +89,7 @@ Important boundaries include:
 
 The engine is orchestration, not an outbound adapter:
 
-- `prompt/` composes capability-driven system prompts.
+- `prompt/` composes capability-driven system prompts using deterministic, cache-aware ordered sections. The managed prompt currently uses Prompt ABI v8; see [`system-prompt.md`](system-prompt.md) for ordering and prefix-cache invariants.
 - `toolcall/` validates and authorizes model-originated tool calls before execution.
 - `turn/` owns the bounded multi-round model/tool state machine, streaming, grounding,
   tool-result budgets, repeated-call protection, reasoning policy, and verification state.
