@@ -17,9 +17,9 @@ type getTodoHandler struct {
 	sessionID string
 }
 
-func NewGetTodo(store tododomain.Repository) tool.Handler { return getTodoHandler{store: store} }
+func newGetTodo(store tododomain.Repository) tool.Handler { return getTodoHandler{store: store} }
 
-func NewGetTodoForSession(store tododomain.Repository, sessionID string) tool.Handler {
+func newGetTodoForSession(store tododomain.Repository, sessionID string) tool.Handler {
 	return getTodoHandler{store: store, sessionID: sessionID}
 }
 

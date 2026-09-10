@@ -277,3 +277,29 @@ func TestMarkdownStoreConcurrentWritersAllowSingleRevisionWinner(t *testing.T) {
 		t.Fatalf("snapshot=%+v", got)
 	}
 }
+
+func TestMarkdownStoreCompareAndPatchRefreshesAndCommitsAtomically(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session", "todo.md")
+	first, err := OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, after, err := first.CompareAndPatch(context.Background(), 0, []Operation{{Op: PatchAdd, ID: "a", Text: "one", Status: StatusPending}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.Revision != 0 || after.Revision != 1 || len(after.Items) != 1 || after.Items[0].ID != "a" {
+		t.Fatalf("before=%+v after=%+v", before, after)
+	}
+	staleBefore, staleAfter, err := second.CompareAndPatch(context.Background(), 0, []Operation{{Op: PatchAdd, ID: "b", Text: "two", Status: StatusPending}})
+	if !errors.Is(err, ErrRevisionConflict) {
+		t.Fatalf("error=%v, want revision conflict", err)
+	}
+	if staleBefore.Revision != 1 || staleAfter.Revision != 1 || len(second.Snapshot().Items) != 1 || second.Snapshot().Items[0].ID != "a" {
+		t.Fatalf("stale before=%+v after=%+v snapshot=%+v", staleBefore, staleAfter, second.Snapshot())
+	}
+}

@@ -21,12 +21,9 @@ func (m *bubbleModel) executeConversationCommand(name, argument string) tea.Cmd 
 	case "todo":
 		switch strings.ToLower(strings.TrimSpace(argument)) {
 		case "":
-			m.toggleTodoPane()
+			return m.toggleTodoPane()
 		case "show":
-			if !m.panes.bottom.has(todoInspectViewID) {
-				m.panes.bottom.push(&todoPaneView{})
-			}
-			m.requestRelayout()
+			return m.openTodoPane()
 		case "hide":
 			m.panes.bottom.remove(todoInspectViewID)
 			m.requestRelayout()

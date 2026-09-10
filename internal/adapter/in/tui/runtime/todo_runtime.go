@@ -19,11 +19,12 @@ type todoLifecycleState struct {
 	CompletionDismissed bool
 }
 
-func (m *bubbleModel) syncTodoSnapshot() bool {
-	if m == nil || m.todoStore == nil {
-		return false
-	}
-	snapshot := m.todoStore.Snapshot()
+type todoReloadedMsg struct {
+	snapshot tododomain.Snapshot
+	err      error
+}
+
+func (m *bubbleModel) applyTodoSnapshot(snapshot tododomain.Snapshot) bool {
 	if snapshot.Revision == m.todoRevision && slices.Equal(snapshot.Items, m.todo) {
 		return false
 	}
@@ -39,6 +40,40 @@ func (m *bubbleModel) syncTodoSnapshot() bool {
 		m.todoLifecycle.CompletionDismissed = false
 	}
 	return true
+}
+
+func (m *bubbleModel) syncTodoSnapshot() bool {
+	if m == nil || m.todoStore == nil {
+		return false
+	}
+	return m.applyTodoSnapshot(m.todoStore.Snapshot())
+}
+
+func (m *bubbleModel) reloadTodoSnapshotCmd() tea.Cmd {
+	if m == nil || m.todoStore == nil {
+		return nil
+	}
+	reloader, ok := m.todoStore.(tododomain.ReloadableRepository)
+	if !ok {
+		return nil
+	}
+	ctx := m.ctx
+	return func() tea.Msg {
+		snapshot, err := reloader.Reload(ctx)
+		return todoReloadedMsg{snapshot: snapshot, err: err}
+	}
+}
+
+func (m *bubbleModel) updateTodoReloaded(message todoReloadedMsg) (tea.Model, tea.Cmd) {
+	if message.err != nil {
+		m.appendError("refresh tasks: " + message.err.Error())
+		m.refreshViewport()
+		return m, nil
+	}
+	if m.applyTodoSnapshot(message.snapshot) {
+		m.requestRelayout()
+	}
+	return m, nil
 }
 
 func allTodoCompleted(items []tododomain.Item) bool {
@@ -198,11 +233,19 @@ func (v *todoPaneView) Render(ctx paneRenderContext) string {
 	return renderModalRows(ctx, accentAssistant, rows)
 }
 
-func (m *bubbleModel) toggleTodoPane() {
-	if m.panes.bottom.has(todoInspectViewID) {
-		m.panes.bottom.remove(todoInspectViewID)
-	} else {
+func (m *bubbleModel) openTodoPane() tea.Cmd {
+	if !m.panes.bottom.has(todoInspectViewID) {
 		m.panes.bottom.push(&todoPaneView{})
 	}
 	m.requestRelayout()
+	return m.reloadTodoSnapshotCmd()
+}
+
+func (m *bubbleModel) toggleTodoPane() tea.Cmd {
+	if m.panes.bottom.has(todoInspectViewID) {
+		m.panes.bottom.remove(todoInspectViewID)
+		m.requestRelayout()
+		return nil
+	}
+	return m.openTodoPane()
 }

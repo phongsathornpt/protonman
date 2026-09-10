@@ -21,7 +21,7 @@ func TestUpdateTodoPatchesSnapshotWithoutOmissionDeletes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := NewUpdateTodo(store)
+	h := newUpdateTodo(store)
 	call, _ := tool.NewCall("todo-1", "todo", todoPatchArgs(0,
 		map[string]any{"op": "add", "id": "a", "text": "inspect", "status": "completed"},
 		map[string]any{"op": "add", "id": "b", "text": "fix", "status": "in_progress"},
@@ -48,7 +48,7 @@ func TestUpdateTodoPatchesSnapshotWithoutOmissionDeletes(t *testing.T) {
 
 func TestUpdateTodoRejectsDuplicateAddID(t *testing.T) {
 	store, _ := tododomain.NewStore(nil)
-	h := NewUpdateTodo(store)
+	h := newUpdateTodo(store)
 	call, _ := tool.NewCall("todo-1", "todo", todoPatchArgs(0,
 		map[string]any{"op": "add", "id": "a", "text": "one", "status": "pending"},
 		map[string]any{"op": "add", "id": "a", "text": "two", "status": "pending"},
@@ -68,7 +68,7 @@ func TestUpdateTodoReportsStructuredChanges(t *testing.T) {
 		{ID: "reopen", Text: "reopen", Status: tododomain.StatusCompleted},
 		{ID: "remove", Text: "remove", Status: tododomain.StatusPending},
 	})
-	h := NewUpdateTodo(store)
+	h := newUpdateTodo(store)
 	call, _ := tool.NewCall("todo-diff", "todo", todoPatchArgs(0,
 		map[string]any{"op": "set_status", "id": "start", "status": "in_progress"},
 		map[string]any{"op": "set_status", "id": "complete", "status": "completed"},
@@ -88,9 +88,18 @@ func TestUpdateTodoReportsStructuredChanges(t *testing.T) {
 	}
 }
 
+func TestTodoChangesReopenDoesNotAlsoCountStarted(t *testing.T) {
+	before := []tododomain.Item{{ID: "a", Text: "a", Status: tododomain.StatusCompleted}}
+	after := []tododomain.Item{{ID: "a", Text: "a", Status: tododomain.StatusInProgress}}
+	changes := todoChanges(before, after)
+	if changes.Reopened != 1 || changes.Started != 0 || changes.Completed != 0 {
+		t.Fatalf("changes=%+v, want reopened only", changes)
+	}
+}
+
 func TestUpdateTodoReportsTextUpdates(t *testing.T) {
 	store, _ := tododomain.NewStore([]tododomain.Item{{ID: "a", Text: "old", Status: tododomain.StatusPending}})
-	h := NewUpdateTodo(store)
+	h := newUpdateTodo(store)
 	call, _ := tool.NewCall("todo-text", "todo", todoPatchArgs(0, map[string]any{"op": "set_text", "id": "a", "text": "new"}))
 	result, err := h.Execute(context.Background(), call)
 	if err != nil {
@@ -105,7 +114,7 @@ func TestUpdateTodoReportsTextUpdates(t *testing.T) {
 }
 
 func TestUpdateTodoDefinitionUsesPatchSchema(t *testing.T) {
-	def := NewUpdateTodo(nil).Definition()
+	def := newUpdateTodo(nil).Definition()
 	if def.Kind != tool.KindTask || def.Mutability != tool.MutabilityMutating || len(def.OutputSchema) == 0 {
 		t.Fatalf("definition = %#v", def)
 	}
@@ -118,9 +127,12 @@ func TestUpdateTodoDefinitionUsesPatchSchema(t *testing.T) {
 	}
 	operations := props["operations"].(map[string]any)
 	items := operations["items"].(map[string]any)
-	oneOf, ok := items["oneOf"].([]any)
-	if !ok || len(oneOf) != 4 {
-		t.Fatalf("operation schema oneOf = %#v, want four exact operation shapes", items["oneOf"])
+	if _, legacy := items["oneOf"]; legacy {
+		t.Fatalf("operation schema still publishes oneOf: %#v", items)
+	}
+	op := items["properties"].(map[string]any)["op"].(map[string]any)
+	if got := len(op["enum"].([]any)); got != 4 {
+		t.Fatalf("operation enum size = %d, want 4", got)
 	}
 	if err := def.Validate(); err != nil {
 		t.Fatal(err)
@@ -129,7 +141,7 @@ func TestUpdateTodoDefinitionUsesPatchSchema(t *testing.T) {
 
 func TestUpdateTodoRejectsStaleRevisionEvenWhenPatchWouldApply(t *testing.T) {
 	store, _ := tododomain.NewStore(nil)
-	h := NewUpdateTodo(store)
+	h := newUpdateTodo(store)
 	first, _ := tool.NewCall("todo-first", "todo", todoPatchArgs(0, map[string]any{"op": "add", "id": "a", "text": "one", "status": "pending"}))
 	if _, err := h.Execute(context.Background(), first); err != nil {
 		t.Fatal(err)
@@ -148,7 +160,7 @@ func TestUpdateTodoRejectsStaleRevisionEvenWhenPatchWouldApply(t *testing.T) {
 
 func TestUpdateTodoStaleRevisionReturnsStructuredRefreshRecovery(t *testing.T) {
 	store, _ := tododomain.NewStore(nil)
-	h := NewUpdateTodo(store)
+	h := newUpdateTodo(store)
 	first, _ := tool.NewCall("todo-first", "todo", todoPatchArgs(0, map[string]any{"op": "add", "id": "a", "text": "one", "status": "pending"}))
 	if _, err := h.Execute(context.Background(), first); err != nil {
 		t.Fatal(err)
@@ -166,7 +178,7 @@ func TestUpdateTodoStaleRevisionReturnsStructuredRefreshRecovery(t *testing.T) {
 
 func TestUpdateTodoRequiresExpectedRevisionAndOperations(t *testing.T) {
 	store, _ := tododomain.NewStore(nil)
-	h := NewUpdateTodo(store)
+	h := newUpdateTodo(store)
 	for _, args := range []json.RawMessage{
 		json.RawMessage(`{"operations":[{"op":"add","id":"a","text":"a","status":"pending"}]}`),
 		json.RawMessage(`{"expected_revision":0,"operations":[]}`),
@@ -182,7 +194,7 @@ func TestUpdateTodoRequiresExpectedRevisionAndOperations(t *testing.T) {
 
 func TestUpdateTodoRejectsLegacySnapshotAndUnknownFields(t *testing.T) {
 	store, _ := tododomain.NewStore(nil)
-	h := NewUpdateTodo(store)
+	h := newUpdateTodo(store)
 	for _, args := range []json.RawMessage{
 		json.RawMessage(`{"expected_revision":0,"items":[]}`),
 		json.RawMessage(`{"expected_revision":0,"operations":[{"op":"add","id":"a","text":"a","status":"pending","banana":true}]}`),
@@ -194,44 +206,15 @@ func TestUpdateTodoRejectsLegacySnapshotAndUnknownFields(t *testing.T) {
 	}
 }
 
-func TestUpdateTodoPermissionDetailSummarizesPatch(t *testing.T) {
-	store, _ := tododomain.NewStore([]tododomain.Item{
-		{ID: "done", Text: "done", Status: tododomain.StatusInProgress},
-		{ID: "remove", Text: "remove", Status: tododomain.StatusPending},
-	})
-	h := NewUpdateTodo(store).(updateTodoHandler)
-	args := todoPatchArgs(0,
-		map[string]any{"op": "set_status", "id": "done", "status": "completed"},
-		map[string]any{"op": "remove", "id": "remove"},
-		map[string]any{"op": "add", "id": "add", "text": "add", "status": "pending"},
-	)
-	got := h.PermissionDetail(args)
-	for _, want := range []string{"1 completed", "1 added", "1 removed"} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("permission detail=%q missing %q", got, want)
-		}
-	}
-}
-
-func TestUpdateTodoPermissionDetailFlagsStaleRevision(t *testing.T) {
+func TestUpdateTodoPermissionDetailDoesNotClaimDurableState(t *testing.T) {
 	store, _ := tododomain.NewStore([]tododomain.Item{{ID: "a", Text: "a", Status: tododomain.StatusPending}})
-	if _, err := store.CompareAndReplace(context.Background(), 0, []tododomain.Item{{ID: "a", Text: "a", Status: tododomain.StatusInProgress}}); err != nil {
-		t.Fatal(err)
-	}
-	h := NewUpdateTodo(store).(updateTodoHandler)
-	args := todoPatchArgs(0, map[string]any{"op": "set_status", "id": "a", "status": "completed"})
-	if got := h.PermissionDetail(args); !strings.Contains(got, "stale task patch") {
-		t.Fatalf("permission detail=%q, want stale task patch", got)
-	}
-}
-
-func TestUpdateTodoPermissionDetailShowsNoChanges(t *testing.T) {
-	items := []tododomain.Item{{ID: "a", Text: "a", Status: tododomain.StatusPending}}
-	store, _ := tododomain.NewStore(items)
-	h := NewUpdateTodo(store).(updateTodoHandler)
-	args := todoPatchArgs(0, map[string]any{"op": "set_status", "id": "a", "status": "pending"})
-	if got := h.PermissionDetail(args); !strings.Contains(got, "no changes") {
-		t.Fatalf("permission detail=%q, want no changes", got)
+	h := newUpdateTodo(store).(updateTodoHandler)
+	args := todoPatchArgs(7,
+		map[string]any{"op": "set_status", "id": "a", "status": "completed"},
+		map[string]any{"op": "add", "id": "b", "text": "b", "status": "pending"},
+	)
+	if got := h.PermissionDetail(args); got != "2 task operations · expected revision 7" {
+		t.Fatalf("permission detail=%q", got)
 	}
 }
 
@@ -240,7 +223,7 @@ func TestUpdateTodoForSessionIncludesSessionIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewUpdateTodoForSession(store, "session-123")
+	handler := newUpdateTodoForSession(store, "session-123")
 	call, err := tool.NewCall("update-session", "todo", todoPatchArgs(0, map[string]any{
 		"op": "add", "id": "a", "text": "one", "status": "pending",
 	}))

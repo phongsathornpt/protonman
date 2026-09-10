@@ -1,39 +1,24 @@
 package todotool
 
 func todoUpdateInputSchema() map[string]any {
-	operation := func(op string, required []any, properties map[string]any) map[string]any {
-		base := map[string]any{
-			"op": map[string]any{"const": op},
-			"id": map[string]any{"type": "string"},
-		}
-		for key, value := range properties {
-			base[key] = value
-		}
-		return map[string]any{
-			"type":                 "object",
-			"properties":           base,
-			"required":             append([]any{"op", "id"}, required...),
-			"additionalProperties": false,
-		}
-	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"expected_revision": map[string]any{"type": "integer", "minimum": 0, "description": "Revision from the latest todo action=get snapshot; stale revisions are rejected."},
 			"operations": map[string]any{
 				"type": "array", "minItems": 1, "maxItems": 256,
-				"description": "Ordered patch operations. Unmentioned tasks are preserved. Removing a task requires an explicit remove operation.",
-				"items": map[string]any{"oneOf": []any{
-					operation("add", []any{"text", "status"}, map[string]any{
+				"description": "Ordered patch operations. Unmentioned tasks are preserved. Operation-specific fields are validated by the todo runtime.",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"op":     map[string]any{"type": "string", "enum": []any{"add", "set_status", "set_text", "remove"}},
+						"id":     map[string]any{"type": "string"},
 						"text":   map[string]any{"type": "string"},
 						"status": map[string]any{"type": "string", "enum": []any{"pending", "in_progress", "completed"}},
-					}),
-					operation("set_status", []any{"status"}, map[string]any{
-						"status": map[string]any{"type": "string", "enum": []any{"pending", "in_progress", "completed"}},
-					}),
-					operation("set_text", []any{"text"}, map[string]any{"text": map[string]any{"type": "string"}}),
-					operation("remove", nil, nil),
-				}},
+					},
+					"required":             []any{"op", "id"},
+					"additionalProperties": false,
+				},
 			},
 		},
 		"required":             []any{"expected_revision", "operations"},

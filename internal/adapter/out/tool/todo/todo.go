@@ -17,12 +17,12 @@ type todoHandler struct {
 
 // NewTodo exposes task planning as one compact capability.
 func NewTodo(store tododomain.Repository) tool.Handler {
-	return todoHandler{get: NewGetTodo(store), update: NewUpdateTodo(store)}
+	return todoHandler{get: newGetTodo(store), update: newUpdateTodo(store)}
 }
 
 // NewTodoForSession exposes session-scoped task planning as one compact capability.
 func NewTodoForSession(store tododomain.Repository, sessionID string) tool.Handler {
-	return todoHandler{get: NewGetTodoForSession(store, sessionID), update: NewUpdateTodoForSession(store, sessionID)}
+	return todoHandler{get: newGetTodoForSession(store, sessionID), update: newUpdateTodoForSession(store, sessionID)}
 }
 
 func (h todoHandler) Definition() tool.Definition {
@@ -82,7 +82,7 @@ func (h todoHandler) callSemantics(arguments json.RawMessage) tool.CallSemantics
 }
 
 func (h todoHandler) PermissionDetail(arguments json.RawMessage) string {
-	_, childArgs, child, err := h.resolve(arguments)
+	childArgs, child, err := h.resolve(arguments)
 	if err != nil {
 		return ""
 	}
@@ -93,7 +93,7 @@ func (h todoHandler) PermissionDetail(arguments json.RawMessage) string {
 }
 
 func (h todoHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
-	_, childArgs, child, err := h.resolve(call.Arguments)
+	childArgs, child, err := h.resolve(call.Arguments)
 	if err != nil {
 		return tool.Result{}, err
 	}
@@ -104,10 +104,10 @@ func (h todoHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 	return result, err
 }
 
-func (h todoHandler) resolve(arguments json.RawMessage) (string, json.RawMessage, tool.Handler, error) {
+func (h todoHandler) resolve(arguments json.RawMessage) (json.RawMessage, tool.Handler, error) {
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(arguments, &object); err != nil {
-		return "", nil, nil, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode todo arguments", err)
+		return nil, nil, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode todo arguments", err)
 	}
 	var action string
 	if raw, ok := object["action"]; ok {
@@ -116,17 +116,17 @@ func (h todoHandler) resolve(arguments json.RawMessage) (string, json.RawMessage
 	action = strings.ToLower(strings.TrimSpace(action))
 	child, ok := h.child(action)
 	if !ok {
-		return "", nil, nil, tool.NewToolError(tool.ErrorCodeInvalidArguments, "todo action must be get or update")
+		return nil, nil, tool.NewToolError(tool.ErrorCodeInvalidArguments, "todo action must be get or update")
 	}
 	delete(object, "action")
 	if action == "get" {
 		if len(object) != 0 {
-			return "", nil, nil, tool.NewToolError(tool.ErrorCodeInvalidArguments, "todo action=get does not accept update arguments")
+			return nil, nil, tool.NewToolError(tool.ErrorCodeInvalidArguments, "todo action=get does not accept update arguments")
 		}
 	}
 	childArgs, err := json.Marshal(object)
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("encode todo %s arguments: %w", action, err)
+		return nil, nil, fmt.Errorf("encode todo %s arguments: %w", action, err)
 	}
-	return action, childArgs, child, nil
+	return childArgs, child, nil
 }

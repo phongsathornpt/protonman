@@ -23,11 +23,11 @@ type updateTodoInput struct {
 	Operations       []tododomain.Operation `json:"operations"`
 }
 
-func NewUpdateTodo(store tododomain.Repository) tool.Handler {
+func newUpdateTodo(store tododomain.Repository) tool.Handler {
 	return updateTodoHandler{store: store}
 }
 
-func NewUpdateTodoForSession(store tododomain.Repository, sessionID string) tool.Handler {
+func newUpdateTodoForSession(store tododomain.Repository, sessionID string) tool.Handler {
 	return updateTodoHandler{store: store, sessionID: sessionID}
 }
 
@@ -48,22 +48,10 @@ func (h updateTodoHandler) PermissionDetail(arguments json.RawMessage) string {
 	if err := json.Unmarshal(arguments, &input); err != nil {
 		return "task patch"
 	}
-	if h.store == nil {
+	if input.ExpectedRevision == nil {
 		return fmt.Sprintf("%d task operations", len(input.Operations))
 	}
-	current := h.store.Snapshot()
-	if input.ExpectedRevision == nil || *input.ExpectedRevision != current.Revision {
-		return fmt.Sprintf("stale task patch · %d operations", len(input.Operations))
-	}
-	next, err := tododomain.ApplyPatch(current.Items, input.Operations)
-	if err != nil {
-		return fmt.Sprintf("invalid task patch · %d operations", len(input.Operations))
-	}
-	changes := todoChanges(current.Items, next)
-	if detail := summarizeTodoChanges(changes); detail != "" {
-		return detail
-	}
-	return fmt.Sprintf("%d task operations · no changes", len(input.Operations))
+	return fmt.Sprintf("%d task operations · expected revision %d", len(input.Operations), *input.ExpectedRevision)
 }
 
 func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
@@ -83,32 +71,45 @@ func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 	if len(input.Operations) > 256 {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "operations exceed the 256-operation limit")
 	}
-	before := h.store.Snapshot()
-	if reloader, ok := h.store.(tododomain.ReloadableRepository); ok {
-		before, err = reloader.Reload(ctx)
-		if err != nil {
-			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "reload todo snapshot", err)
+	expected := *input.ExpectedRevision
+	var before, snapshot tododomain.Snapshot
+	usedAtomicPatch := false
+	if patcher, ok := h.store.(tododomain.PatchRepository); ok {
+		usedAtomicPatch = true
+		before, snapshot, err = patcher.CompareAndPatch(ctx, expected, input.Operations)
+	} else {
+		before = h.store.Snapshot()
+		if reloader, ok := h.store.(tododomain.ReloadableRepository); ok {
+			before, err = reloader.Reload(ctx)
+			if err != nil {
+				return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "reload todo snapshot", err)
+			}
+		}
+		if before.Revision != expected {
+			err = tododomain.ErrRevisionConflict
+		} else {
+			var next []tododomain.Item
+			next, err = tododomain.ApplyPatch(before.Items, input.Operations)
+			if err == nil {
+				snapshot, err = h.store.CompareAndReplace(ctx, expected, next)
+			}
 		}
 	}
-	expected := *input.ExpectedRevision
-	if before.Revision != expected {
-		return tool.Result{}, todoConflictError(input.Operations, tododomain.ErrRevisionConflict)
-	}
-	next, err := tododomain.ApplyPatch(before.Items, input.Operations)
-	if err != nil {
-		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "apply todo patch", err)
-	}
-	snapshot, err := h.store.CompareAndReplace(ctx, expected, next)
 	if err != nil {
 		if errors.Is(err, tododomain.ErrRevisionConflict) {
-			return tool.Result{}, todoConflictError(input.Operations, err)
+			return tool.Result{}, todoConflictError(err)
+		}
+		if usedAtomicPatch && before.Revision == expected {
+			if _, patchErr := tododomain.ApplyPatch(before.Items, input.Operations); patchErr != nil {
+				return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "apply todo patch", patchErr)
+			}
 		}
 		return tool.Result{}, err
 	}
 	return encodeTodoUpdateResult(call, before.Items, snapshot, h.sessionID)
 }
 
-func todoConflictError(_ []tododomain.Operation, cause error) error {
+func todoConflictError(cause error) error {
 	return tool.WrapToolError(tool.ErrorCodeConflict, "todo snapshot changed; refresh tasks before applying this patch", cause).WithRecovery(tool.Recovery{
 		Action: tool.RecoveryRefreshResource, Tool: "todo", Arguments: json.RawMessage(`{"action":"get"}`),
 	})
@@ -186,14 +187,13 @@ func todoChanges(before, after []tododomain.Item) todoChangeSummary {
 		if prev.Text != item.Text {
 			out.Updated++
 		}
-		if prev.Status != tododomain.StatusInProgress && item.Status == tododomain.StatusInProgress {
-			out.Started++
-		}
-		if prev.Status != tododomain.StatusCompleted && item.Status == tododomain.StatusCompleted {
-			out.Completed++
-		}
-		if prev.Status == tododomain.StatusCompleted && item.Status != tododomain.StatusCompleted {
+		switch {
+		case prev.Status == tododomain.StatusCompleted && item.Status != tododomain.StatusCompleted:
 			out.Reopened++
+		case prev.Status != tododomain.StatusCompleted && item.Status == tododomain.StatusCompleted:
+			out.Completed++
+		case prev.Status != tododomain.StatusInProgress && item.Status == tododomain.StatusInProgress:
+			out.Started++
 		}
 	}
 	for _, item := range before {

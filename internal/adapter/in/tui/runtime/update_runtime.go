@@ -117,6 +117,9 @@ func (m *bubbleModel) updateRuntimeEvent(msg tea.Msg) (tea.Cmd, bool) {
 	case toolResultMsg:
 		_, command := m.updateToolResult(message)
 		return command, true
+	case todoReloadedMsg:
+		_, command := m.updateTodoReloaded(message)
+		return command, true
 	case modelsFetchedMsg:
 		_, command := m.updateModelsFetched(message)
 		return command, true

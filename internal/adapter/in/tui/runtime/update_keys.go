@@ -106,8 +106,7 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 		m.refreshViewport()
 		return true, nil
 	case key.Matches(message, m.keys.ToggleTodo):
-		m.toggleTodoPane()
-		return true, nil
+		return true, m.toggleTodoPane()
 	case key.Matches(message, m.keys.PageUp):
 		return true, m.updateConversationViewport(message)
 	case key.Matches(message, m.keys.PageDown):
