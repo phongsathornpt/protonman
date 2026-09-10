@@ -57,7 +57,7 @@ func (m *bubbleModel) debugKeyboardCapability(previous keyboardCapability) {
 	if !keyboardDebugEnabled() || previous == m.keyboardCapability {
 		return
 	}
-	slog.DebugContext(m.ctx, "tui keyboard capability changed",
+	slog.InfoContext(m.ctx, "tui keyboard capability changed",
 		"from", previous.String(),
 		"to", m.keyboardCapability.String(),
 		"ssh", os.Getenv("SSH_TTY") != "" || os.Getenv("SSH_CONNECTION") != "",
@@ -71,8 +71,9 @@ func (m *bubbleModel) debugKeyPress(message tea.KeyPressMsg) {
 	if !keyboardDebugEnabled() || (message.Mod == 0 && message.Text != "") {
 		return
 	}
-	slog.DebugContext(m.ctx, "tui key event",
+	slog.InfoContext(m.ctx, "tui key event",
 		"key", message.Keystroke(),
+		"action", m.composerAction(message),
 		"code", int64(message.Code),
 		"mod", uint64(message.Mod),
 		"keyboard", m.keyboardCapability.String(),

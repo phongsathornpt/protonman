@@ -152,3 +152,17 @@ func TestMessageValidateRejectsUnsafeIdentity(t *testing.T) {
 		t.Fatalf("legacy message without id rejected: %v", err)
 	}
 }
+
+func TestToolMessageRequiresToolCallID(t *testing.T) {
+	err := (Message{Role: RoleTool, ToolName: "read", Content: "ok"}).Validate()
+	if err == nil || !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("error = %v, want invalid request", err)
+	}
+}
+
+func TestRequestToolCallValidationUsesInvalidRequest(t *testing.T) {
+	err := (Request{Messages: []Message{{Role: RoleAssistant, ToolCalls: []ToolCall{{Name: "read", Arguments: json.RawMessage(`{}`)}}}}}).Validate()
+	if err == nil || !errors.Is(err, ErrInvalidRequest) || errors.Is(err, ErrInvalidEvent) {
+		t.Fatalf("error = %v, want only invalid request", err)
+	}
+}

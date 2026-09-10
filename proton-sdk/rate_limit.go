@@ -57,10 +57,10 @@ func ParseRateLimitHeaders(headers http.Header, now time.Time) *RateLimitInfo {
 			}
 		}
 	}
-	info.Limit = firstHeaderInt(headers, "X-RateLimit-Limit", "X-RateLimit-Limit-Requests")
-	info.Remaining = firstHeaderInt(headers, "X-RateLimit-Remaining", "X-RateLimit-Remaining-Requests")
+	info.Limit = firstHeaderInt(headers, "X-RateLimit-Limit", "X-RateLimit-Limit-Requests", "Anthropic-RateLimit-Requests-Limit", "Anthropic-RateLimit-Tokens-Limit")
+	info.Remaining = firstHeaderInt(headers, "X-RateLimit-Remaining", "X-RateLimit-Remaining-Requests", "Anthropic-RateLimit-Requests-Remaining", "Anthropic-RateLimit-Tokens-Remaining")
 	if info.ResetAt.IsZero() {
-		for _, key := range []string{"X-RateLimit-Reset", "X-RateLimit-Reset-Requests", "X-RateLimit-Reset-Tokens"} {
+		for _, key := range []string{"X-RateLimit-Reset", "X-RateLimit-Reset-Requests", "X-RateLimit-Reset-Tokens", "Anthropic-RateLimit-Requests-Reset", "Anthropic-RateLimit-Tokens-Reset"} {
 			if when, ok := parseRateLimitReset(headerValue(headers, key), now); ok {
 				info.ResetAt = when
 				if when.After(now) {
@@ -107,6 +107,9 @@ func parseRateLimitReset(value string, now time.Time) (time.Time, bool) {
 		return now.Add(duration), true
 	}
 	if when, err := http.ParseTime(value); err == nil {
+		return when, true
+	}
+	if when, err := time.Parse(time.RFC3339, value); err == nil {
 		return when, true
 	}
 	return time.Time{}, false

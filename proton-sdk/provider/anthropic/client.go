@@ -24,15 +24,13 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 		return nil, fmt.Errorf("marshal anthropic request: %w", err)
 	}
 	endpoint := messagesEndpoint(m.provider.options.BaseURL)
+	policy := sdk.RetryPolicy{
+		BaseBackoff:   m.provider.options.RetryBackoff,
+		MaxBackoff:    m.provider.options.MaxRetryBackoff,
+		MaxRetryAfter: m.provider.options.MaxRetryAfter,
+	}
 	var lastErr error
-	for attempt := 0; attempt <= m.provider.options.MaxRetries; attempt++ {
-		if attempt > 0 {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(time.Duration(attempt) * m.provider.options.RetryBackoff):
-			}
-		}
+	for attempt := 0; ; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
 		if err != nil {
 			return nil, fmt.Errorf("create anthropic request: %w", err)
@@ -53,31 +51,62 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 		}
 		resp, err := m.provider.options.HTTPClient.Do(req)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			lastErr = sdk.NewTransportError("anthropic", err)
-			continue
-		}
-		if resp.StatusCode == http.StatusOK {
+		} else if resp.StatusCode == http.StatusOK {
 			return newStream(resp.Body, anthropicResponseMetadata(resp.Header), request.Options.IncludeRawChunks), nil
+		} else {
+			data, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+			resp.Body.Close()
+			providerErr := anthropicHTTPError(resp.StatusCode, data)
+			providerErr.RateLimit = sdk.ParseRateLimitHeaders(resp.Header, time.Now())
+			lastErr = providerErr
 		}
-		data, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
-		resp.Body.Close()
-		lastErr = anthropicHTTPError(resp.StatusCode, data)
-		if !retryableStatus(resp.StatusCode) {
+		if attempt >= m.provider.options.MaxRetries {
 			return nil, lastErr
 		}
+		decision := sdk.DecideRetry(lastErr, attempt+1, policy)
+		if !decision.Retry {
+			return nil, lastErr
+		}
+		if err := waitForRetry(ctx, decision.Delay); err != nil {
+			return nil, err
+		}
 	}
-	return nil, lastErr
+}
+
+func waitForRetry(ctx context.Context, delay time.Duration) error {
+	if delay <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func anthropicResponseMetadata(headers http.Header) sdk.ProviderMetadata {
+	values := map[string]any{}
 	requestID := strings.TrimSpace(headers.Get("request-id"))
 	if requestID == "" {
 		requestID = strings.TrimSpace(headers.Get("x-request-id"))
 	}
-	if requestID == "" {
+	if requestID != "" {
+		values["request_id"] = requestID
+	}
+	if rateLimit := sdk.ParseRateLimitHeaders(headers, time.Now()); rateLimit != nil {
+		values["rate_limit"] = rateLimit
+	}
+	if len(values) == 0 {
 		return nil
 	}
-	raw, err := json.Marshal(map[string]string{"request_id": requestID})
+	raw, err := json.Marshal(values)
 	if err != nil {
 		return nil
 	}
@@ -95,10 +124,7 @@ func messagesEndpoint(baseURL string) string {
 	return baseURL + "/v1/messages"
 }
 
-func retryableStatus(status int) bool {
-	return status == http.StatusTooManyRequests || status == http.StatusInternalServerError || status == http.StatusBadGateway || status == http.StatusServiceUnavailable || status == http.StatusGatewayTimeout
-}
-func anthropicHTTPError(status int, body []byte) error {
+func anthropicHTTPError(status int, body []byte) *sdk.ProviderError {
 	var payload struct {
 		Error struct {
 			Type    string `json:"type"`

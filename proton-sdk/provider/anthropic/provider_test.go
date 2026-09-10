@@ -9,9 +9,16 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
 
 func TestAnthropicStreamTextAndRequestMapping(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -322,5 +329,87 @@ func TestAnthropicRejectsReasoningNone(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "does not support reasoning effort") {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestAnthropicRetryHonorsRetryAfter(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts == 1 {
+			w.Header().Set("Retry-After", "0")
+			http.Error(w, `{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}`, http.StatusTooManyRequests)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"type\":\"message_stop\"}\n\n")
+	}))
+	defer server.Close()
+
+	model := NewProvider(ProviderOptions{BaseURL: server.URL, MaxRetries: 1, RetryBackoff: time.Millisecond}).Model("claude-test")
+	stream, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+}
+
+func TestAnthropicCancellationPreservesContextError(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		<-r.Context().Done()
+		return nil, r.Context().Err()
+	})}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	_, err := NewProvider(ProviderOptions{BaseURL: "https://example.test", HTTPClient: client}).Model("claude-test").Stream(ctx, sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v, want context deadline exceeded", err)
+	}
+}
+
+func TestAnthropicResponseMetadataIncludesRateLimit(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	headers := http.Header{
+		"Request-Id":                             []string{"req_123"},
+		"Anthropic-Ratelimit-Requests-Limit":     []string{"50"},
+		"Anthropic-Ratelimit-Requests-Remaining": []string{"7"},
+		"Anthropic-Ratelimit-Requests-Reset":     []string{now.Add(time.Minute).Format(time.RFC3339)},
+	}
+	metadata := anthropicResponseMetadata(headers)
+	var payload struct {
+		RequestID string             `json:"request_id"`
+		RateLimit *sdk.RateLimitInfo `json:"rate_limit"`
+	}
+	if err := json.Unmarshal(metadata["anthropic"], &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.RequestID != "req_123" || payload.RateLimit == nil || payload.RateLimit.Limit == nil || *payload.RateLimit.Limit != 50 || payload.RateLimit.Remaining == nil || *payload.RateLimit.Remaining != 7 {
+		t.Fatalf("metadata = %#v", payload)
+	}
+}
+
+func TestAnthropicRejectsAdaptiveReasoningOnLegacyModel(t *testing.T) {
+	_, err := buildRequest("claude-sonnet-4-5-20250929", sdk.Request{
+		Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}},
+		Options:  sdk.ModelOptions{ReasoningEffort: sdk.ReasoningHigh},
+	}, 1024)
+	if err == nil || !strings.Contains(err.Error(), "does not support adaptive thinking") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestAnthropicRejectsForcedToolChoiceOnUnsupportedModels(t *testing.T) {
+	for _, modelID := range []string{"claude-fable-5-1", "claude-mythos-5-1"} {
+		_, err := buildRequest(modelID, sdk.Request{
+			Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "inspect"}},
+			Tools:    []sdk.Tool{{Name: "read", Description: "read file", InputSchema: map[string]any{"type": "object"}}},
+			Options:  sdk.ModelOptions{ToolChoice: sdk.ToolChoiceRequired},
+		}, 1024)
+		if err == nil || !strings.Contains(err.Error(), "does not support forced tool choice") {
+			t.Fatalf("model %s error = %v", modelID, err)
+		}
 	}
 }
