@@ -48,6 +48,7 @@ func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, 
 		if resumed.State == "" {
 			resumed.State = agent.StateQueued
 		}
+		resumed.Activity = ActivityForState(resumed.Profile, resumed.State).String()
 		state.DiscardToolCall(result.CallID, publicName)
 		state.Append(resumed)
 		state.TouchAgentRun(parsed.AgentID)
@@ -84,6 +85,7 @@ func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, 
 		if cell.State == "" {
 			cell.State = agent.StateQueued
 		}
+		cell.Activity = ActivityForState(cell.Profile, cell.State).String()
 		state.DiscardToolCall(result.CallID, publicName)
 		state.Append(cell)
 		state.TouchAgentRun(parsed.AgentID)
@@ -99,6 +101,7 @@ func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, 
 	}
 	if parsed.State != "" {
 		cell.State = parsed.State
+		cell.Activity = ActivityForState(cell.Profile, cell.State).String()
 	}
 	if parsed.Summary != "" {
 		cell.Summary = parsed.Summary

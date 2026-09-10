@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	agentuistate "github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
 	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
@@ -52,7 +53,14 @@ func AgentRows(snapshot AgentsSnapshot) []string {
 		now = time.Now()
 	}
 	for _, st := range visible {
-		header := AgentDisplayProfile(st) + "  " + textview.PadRight(string(st.State), 9) + " " + FormatElapsed(AgentDisplayDuration(st, now))
+		activityLabel := agentuistate.ActivityForState(st.Profile, st.State).String()
+		if current := strings.TrimSpace(snapshot.Activity[st.ID]); current != "" && !st.State.Terminal() {
+			activityLabel = strings.TrimSpace(strings.SplitN(current, " · ", 2)[0])
+		}
+		if activityLabel == "" {
+			activityLabel = string(st.State)
+		}
+		header := AgentDisplayProfile(st) + "  " + textview.PadRight(activityLabel, 10) + " " + FormatElapsed(AgentDisplayDuration(st, now))
 		rows = append(rows, tuistyle.CommandStyle.Render(strings.TrimSpace(header)))
 		if task := strings.TrimSpace(st.Task); task != "" {
 			rows = append(rows, "  "+textview.TruncateEllipsis(task, max(12, snapshot.Width-8)))

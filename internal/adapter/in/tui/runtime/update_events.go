@@ -13,7 +13,8 @@ func (m *bubbleModel) updateAgentLifecycle(message agentLifecycleMsg) tea.Cmd {
 	if m.agentActivity == nil {
 		m.agentActivity = make(map[string]AgentActivity)
 	}
-	if message.event.Kind == agent.EventAgentProgress {
+	switch message.event.Kind {
+	case agent.EventAgentQueued, agent.EventAgentStarted, agent.EventAgentProgress, agent.EventAgentResultAvailable:
 		activity := agentActivityFromEvent(message.event)
 		if activity.String() != "" {
 			m.agentActivity[message.event.AgentID] = activity
@@ -21,11 +22,8 @@ func (m *bubbleModel) updateAgentLifecycle(message agentLifecycleMsg) tea.Cmd {
 				run.Activity = activity.String()
 				m.ensureHistoryState().TouchAgentRun(message.event.AgentID)
 			}
-			m.requestRelayout()
 		}
-		return m.nextAgentEvent()
-	}
-	if message.event.Kind == agent.EventAgentCompleted || message.event.Kind == agent.EventAgentFailed {
+	case agent.EventAgentCompleted, agent.EventAgentFailed:
 		delete(m.agentActivity, message.event.AgentID)
 	}
 	m.syncAgentSnapshot()

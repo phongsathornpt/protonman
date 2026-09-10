@@ -171,6 +171,8 @@ Type `/` at the prompt to trigger autocomplete, or prefix a canonical command wi
 
 Model Setup combines provider, model, and thinking selection in one interaction. Use `↑/↓` to move through models, `←/→` to adjust thinking, `tab` to switch provider, and `enter` to apply the selection. Model catalogs stay scoped per provider; stale or missing catalogs refresh automatically and stale async results are ignored. Press `/` inside Model Setup to filter by model ID, name, vendor, or feature; `r` forces a refresh. Provider credentials remain managed through `/provider`. Direct `/model <id>` still permits custom or unlisted IDs and marks them as unverified instead of rejecting them.
 
+Live subagent activity uses a compact Dota-style vocabulary in the status row and `/agents` view. These labels are presentation only; runtime lifecycle state remains `queued`, `running`, `completed`, and related domain states. Current mappings include `W8` for queued work, `Roaming` for AGI exploration, `Farming` for evidence gathering, `Skilling` for INT reasoning, `Ganking` for focused search, `Pushing` for implementation, `Defending` for verification, `Sticking` when a result becomes available for integration, `Care` for failed/interrupted work, and `B` for cancellation/retreat.
+
 ---
 
 ## Security & Policy Engine

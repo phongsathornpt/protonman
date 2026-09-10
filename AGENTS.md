@@ -543,6 +543,8 @@ raw orchestration RPC noise. Active work belongs in live status/panes; terminal
 results remain useful in transcript/history. Internal IDs are appropriate in the
 detailed `/agents` inspection view, not as constant visual clutter.
 
+The TUI projects lifecycle/tool activity into Dota-style presentation intents without changing domain state. Keep `queued`, `running`, `completed`, `failed`, and related lifecycle values authoritative in `internal/feature/agent`; labels such as `W8`, `Roaming`, `Farming`, `Skilling`, `Ganking`, `Pushing`, `Defending`, `Sticking`, `Care`, `B`, and `Ready` belong under `internal/adapter/in/tui/state/agentui`. Prefer deterministic signals such as profile, tool kind, and lifecycle event over guessing activity from free-form model prose.
+
 Subagent-off is a non-default state and should be visible without permanently
 spending footer space on the default enabled state. Existing children must remain
 inspectable when delegation is disabled.
