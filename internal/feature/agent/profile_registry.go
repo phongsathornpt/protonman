@@ -139,4 +139,3 @@ Deliverable:
 func DefaultSystemPrompt() string {
 	return prompt.Render(prompt.Spec{})
 }
-

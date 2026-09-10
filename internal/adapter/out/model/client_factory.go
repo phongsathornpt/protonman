@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
-	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
+	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
