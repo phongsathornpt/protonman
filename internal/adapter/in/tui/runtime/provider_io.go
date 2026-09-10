@@ -110,8 +110,11 @@ type providerSaveRequest struct {
 	activate     bool
 }
 
-func saveProviderCmd(operationID asyncOperationID, request providerSaveRequest) tea.Cmd {
+func saveProviderCmd(operationID asyncOperationID, gate *asyncOperationGate, request providerSaveRequest) tea.Cmd {
 	return func() tea.Msg {
+		if !gate.current(operationID) {
+			return providerSavedMsg{operationID: operationID, err: errStaleConfigMutation}
+		}
 		err := providerio.Save(providerio.SaveRequest{
 			ProviderName: request.providerName,
 			ProviderType: request.providerType,

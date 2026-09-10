@@ -39,6 +39,7 @@ type modelSelectPaneView struct {
 func newModelSelectPaneView(m *bubbleModel) *modelSelectPaneView {
 	if m != nil {
 		m.activeModelSelect = 0
+		m.configMutationGate.invalidate()
 	}
 	providers, providerIdx := modelpicker.ProviderNames(m.providers, m.activeProvider)
 	var modelsList []model.RemoteModel

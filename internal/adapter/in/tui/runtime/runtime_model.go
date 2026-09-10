@@ -69,6 +69,7 @@ type modelSelectionState struct {
 	activeProviderSelect asyncOperationID
 	activeProviderDelete asyncOperationID
 	activeModelSelect    asyncOperationID
+	configMutationGate   *asyncOperationGate
 }
 
 type conversationModelState struct {
@@ -202,7 +203,8 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 			subagentsEnabled: true,
 			agentActivity:    make(map[string]AgentActivity),
 		},
-		turnModelState: turnModelState{activity: "ready"},
+		turnModelState:      turnModelState{activity: "ready"},
+		modelSelectionState: modelSelectionState{configMutationGate: &asyncOperationGate{}},
 	}
 
 	if allTodoCompleted(ui.todo) {

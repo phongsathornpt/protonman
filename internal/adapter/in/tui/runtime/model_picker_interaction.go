@@ -121,11 +121,14 @@ func (v *modelSelectPaneView) HandlePaneKey(_ paneRenderContext, message tea.Key
 }
 
 func saveDefaultModelCmd(operationID asyncOperationID, providerName, modelID string) tea.Cmd {
-	return saveModelSelectionCmd(operationID, providerName, modelID, false)
+	return saveModelSelectionCmd(operationID, nil, providerName, modelID, false)
 }
 
-func saveModelSelectionCmd(operationID asyncOperationID, providerName, modelID string, unverified bool) tea.Cmd {
+func saveModelSelectionCmd(operationID asyncOperationID, gate *asyncOperationGate, providerName, modelID string, unverified bool) tea.Cmd {
 	return func() tea.Msg {
+		if gate != nil && !gate.current(operationID) {
+			return modelSelectedMsg{operationID: operationID, providerName: providerName, modelID: modelID, unverified: unverified, err: errStaleConfigMutation}
+		}
 		err := providerio.SelectModel(providerName, modelID)
 		return modelSelectedMsg{operationID: operationID, providerName: providerName, modelID: modelID, unverified: unverified, err: err}
 	}

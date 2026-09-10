@@ -116,6 +116,7 @@ func newProviderSelectPaneView(m *bubbleModel) *providerSelectPaneView {
 	if m != nil {
 		m.activeProviderSelect = 0
 		m.activeProviderDelete = 0
+		m.configMutationGate.invalidate()
 	}
 	items := make([]providerSelectItem, 0)
 	configuredMap := make(map[string]bool)

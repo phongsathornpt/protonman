@@ -1162,3 +1162,34 @@ func TestActivatedProviderReconcilesUnsupportedThinking(t *testing.T) {
 		t.Fatalf("reasoning = %q, want auto after provider activation", m.reasoningEffort)
 	}
 }
+
+func TestStaleProviderSelectionCannotOverwriteNewerDiskSelection(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("PROTONMAN_HOME", homeDir)
+	m := newTestSkillsModel(t, 1)
+	m.providers = map[string]config.ProviderConfig{
+		"alpha": {Name: "alpha", BaseURL: "https://alpha.example/v1", APIKey: "key", Type: "openai"},
+		"beta":  {Name: "beta", BaseURL: "https://beta.example/v1", APIKey: "key", Type: "openai"},
+	}
+	m.modelCatalogs.Set("alpha", []model.RemoteModel{{ID: "alpha-model"}})
+	m.modelCatalogs.Set("beta", []model.RemoteModel{{ID: "beta-model"}})
+
+	oldCmd := m.beginProviderSelect("alpha")
+	newCmd := m.beginProviderSelect("beta")
+	newMsg := newCmd().(providerActiveSelectedMsg)
+	if newMsg.err != nil {
+		t.Fatalf("new selection failed: %v", newMsg.err)
+	}
+	oldMsg := oldCmd().(providerActiveSelectedMsg)
+	if !errors.Is(oldMsg.err, errStaleConfigMutation) {
+		t.Fatalf("old selection error = %v, want stale mutation", oldMsg.err)
+	}
+
+	snapshot, err := config.Load(context.Background(), config.Options{HomeDir: homeDir, WorkDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Model.Provider != "beta" || snapshot.Model.Default != "beta-model" {
+		t.Fatalf("persisted selection = %q/%q, want beta/beta-model", snapshot.Model.Provider, snapshot.Model.Default)
+	}
+}

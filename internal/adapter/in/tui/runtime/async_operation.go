@@ -14,6 +14,27 @@ type asyncOperationID uint64
 var asyncOperationSequence atomic.Uint64
 
 var errMissingRuntimeContext = errors.New("tui async operation requires runtime context")
+var errStaleConfigMutation = errors.New("stale tui config mutation")
+
+type asyncOperationGate struct {
+	latest atomic.Uint64
+}
+
+func (g *asyncOperationGate) activate(id asyncOperationID) {
+	if g != nil {
+		g.latest.Store(uint64(id))
+	}
+}
+
+func (g *asyncOperationGate) current(id asyncOperationID) bool {
+	return g == nil || g.latest.Load() == uint64(id)
+}
+
+func (g *asyncOperationGate) invalidate() {
+	if g != nil {
+		g.latest.Store(0)
+	}
+}
 
 func nextAsyncOperationID() asyncOperationID {
 	return asyncOperationID(asyncOperationSequence.Add(1))
@@ -22,14 +43,16 @@ func nextAsyncOperationID() asyncOperationID {
 func (m *bubbleModel) beginProviderSave(request providerSaveRequest) tea.Cmd {
 	id := nextAsyncOperationID()
 	m.activeProviderSave = id
-	return saveProviderCmd(id, request)
+	m.configMutationGate.activate(id)
+	return saveProviderCmd(id, m.configMutationGate, request)
 }
 
 func (m *bubbleModel) beginProviderSelect(providerName string) tea.Cmd {
 	id := nextAsyncOperationID()
 	m.activeProviderSelect = id
+	m.configMutationGate.activate(id)
 	reconciledModel := m.reconciledModelForProvider(providerName)
-	return saveActiveProviderCmd(id, providerName, reconciledModel)
+	return saveActiveProviderCmd(id, m.configMutationGate, providerName, reconciledModel)
 }
 
 func (m *bubbleModel) reconciledModelForProvider(providerName string) string {
@@ -55,16 +78,19 @@ func (m *bubbleModel) reconciledModelForProvider(providerName string) string {
 func (m *bubbleModel) beginProviderDelete(providerName string) tea.Cmd {
 	id := nextAsyncOperationID()
 	m.activeProviderDelete = id
-	return deleteProviderCmd(id, providerName)
+	m.configMutationGate.activate(id)
+	return deleteProviderCmd(id, m.configMutationGate, providerName)
 }
 
 func (m *bubbleModel) beginModelSelect(providerName, modelID string, unverified bool) tea.Cmd {
 	id := nextAsyncOperationID()
 	m.activeModelSelect = id
-	return saveModelSelectionCmd(id, providerName, modelID, unverified)
+	m.configMutationGate.activate(id)
+	return saveModelSelectionCmd(id, m.configMutationGate, providerName, modelID, unverified)
 }
 
 func (m *bubbleModel) pushProviderPane(view *providerPaneView) {
 	m.activeProviderSave = 0
+	m.configMutationGate.invalidate()
 	m.panes.bottom.push(view)
 }
