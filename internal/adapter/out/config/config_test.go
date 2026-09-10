@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -726,5 +727,37 @@ func TestSaveUserModelSelectionClearsStaleModel(t *testing.T) {
 	}
 	if snapshot.Model.Provider != "beta" || snapshot.Model.Default != "" {
 		t.Fatalf("selection = %+v, want exact beta with empty model", snapshot.Model)
+	}
+}
+
+func TestConcurrentUserConfigMutationsDoNotLoseFields(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	for i := 0; i < 50; i++ {
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			if err := SaveUserReasoningEffort(homeDir, sdk.ReasoningHigh); err != nil {
+				t.Errorf("save reasoning: %v", err)
+			}
+		}()
+		go func(value int) {
+			defer wg.Done()
+			if err := SaveUserMaxToolCalls(homeDir, value); err != nil {
+				t.Errorf("save tool calls: %v", err)
+			}
+		}(40 + i)
+		wg.Wait()
+	}
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh {
+		t.Fatalf("reasoning = %q, want high", snapshot.Agent.ReasoningEffort)
+	}
+	if snapshot.Agent.MaxToolCalls < 40 {
+		t.Fatalf("max tool calls = %d, want concurrent update preserved", snapshot.Agent.MaxToolCalls)
 	}
 }

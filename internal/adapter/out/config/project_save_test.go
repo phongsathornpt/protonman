@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
@@ -151,5 +152,38 @@ func TestSaveProjectSettingsRejectsUserHomeAlias(t *testing.T) {
 	}
 	if string(contents) != "[agent]\nmax_tool_calls = 7\n" {
 		t.Fatalf("user config was modified: %q", contents)
+	}
+}
+
+func TestConcurrentProjectConfigMutationsDoNotLoseFields(t *testing.T) {
+	workDir := t.TempDir()
+	homeDir := t.TempDir()
+	t.Setenv("PROTONMAN_HOME", homeDir)
+	for i := 0; i < 50; i++ {
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			if err := SaveProjectReasoningEffort(workDir, sdk.ReasoningHigh); err != nil {
+				t.Errorf("save project reasoning: %v", err)
+			}
+		}()
+		go func(value int) {
+			defer wg.Done()
+			if err := SaveProjectMaxToolCalls(workDir, value); err != nil {
+				t.Errorf("save project tool calls: %v", err)
+			}
+		}(60 + i)
+		wg.Wait()
+	}
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir, ProjectTrusted: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh {
+		t.Fatalf("reasoning = %q, want high", snapshot.Agent.ReasoningEffort)
+	}
+	if snapshot.Agent.MaxToolCalls < 60 {
+		t.Fatalf("max tool calls = %d, want concurrent update preserved", snapshot.Agent.MaxToolCalls)
 	}
 }

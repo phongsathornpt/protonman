@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/pelletier/go-toml/v2"
 
@@ -12,6 +13,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
+
+var userConfigMutationMu sync.Mutex
 
 func SaveUserProviderConfig(homeDir string, provider ProviderConfig, defaultModel string) error {
 	return SaveUserProviderConfigWithOptions(homeDir, provider, ProviderSaveOptions{
@@ -131,6 +134,8 @@ func SaveUserPermissionRule(homeDir string, rule permission.Rule) error {
 }
 
 func modifyUserConfigFile(homeDir string, returnIfNotExist bool, mutate func(*fileDocument)) error {
+	userConfigMutationMu.Lock()
+	defer userConfigMutationMu.Unlock()
 	if homeDir == "" {
 		resolvedHome, err := os.UserHomeDir()
 		if err != nil {
