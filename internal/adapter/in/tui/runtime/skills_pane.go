@@ -56,14 +56,9 @@ func (v *skillsPaneView) ensurePicker(ctx paneRenderContext) {
 		return
 	}
 	items := skillListItems(ctx.skillItems)
-	v.picker = list.New(items, skillSetupDelegate{}, skillsListWidth(ctx), skillsListHeight(ctx))
+	v.picker = newMinimalList(items, skillSetupDelegate{}, skillsListWidth(ctx), skillsListHeight(ctx))
 	v.picker.InfiniteScrolling = true
-	v.picker.DisableQuitKeybindings()
 	v.picker.SetStatusBarItemName("skill", "skills")
-	v.picker.SetShowTitle(false)
-	v.picker.SetShowStatusBar(false)
-	v.picker.SetShowPagination(false)
-	v.picker.SetShowHelp(false)
 	v.picker.AdditionalShortHelpKeys = func() []key.Binding {
 		return []key.Binding{
 			key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "toggle")),

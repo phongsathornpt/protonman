@@ -81,14 +81,9 @@ func (v *slashPaneView) sync(ctx paneRenderContext) {
 		items = append(items, slashListItem{command: command})
 	}
 	if !v.ready {
-		v.picker = list.New(items, slashCommandDelegate{}, maxInt(20, ctx.width-4), maxSlashRows)
-		v.picker.DisableQuitKeybindings()
+		v.picker = newMinimalList(items, slashCommandDelegate{}, maxInt(20, ctx.width-4), maxSlashRows)
 		v.picker.SetFilteringEnabled(false)
-		v.picker.SetShowTitle(false)
-		v.picker.SetShowStatusBar(false)
 		// Slash completion owns navigation through list.Update; help lives in the shared composer footer.
-		v.picker.SetShowPagination(false)
-		v.picker.SetShowHelp(false)
 		v.picker.InfiniteScrolling = true
 		v.ready = true
 	} else {

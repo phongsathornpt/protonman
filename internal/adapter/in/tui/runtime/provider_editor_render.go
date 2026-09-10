@@ -66,13 +66,8 @@ func (v *providerPaneView) ensureModelPicker(ctx paneRenderContext) {
 	if !v.modelPickerSet {
 		delegate := list.NewDefaultDelegate()
 		delegate.SetSpacing(0)
-		v.modelPicker = list.New(items, delegate, maxInt(20, ctx.width-8), maxInt(6, minInt(20, ctx.height-4)))
-		v.modelPicker.DisableQuitKeybindings()
+		v.modelPicker = newMinimalList(items, delegate, maxInt(20, ctx.width-8), maxInt(6, minInt(20, ctx.height-4)))
 		v.modelPicker.SetFilteringEnabled(false)
-		v.modelPicker.SetShowTitle(false)
-		v.modelPicker.SetShowStatusBar(false)
-		v.modelPicker.SetShowPagination(false)
-		v.modelPicker.SetShowHelp(false)
 		v.modelPicker.SetStatusBarItemName("model", "models")
 		v.modelPicker.InfiniteScrolling = true
 		v.modelPickerSet = true
@@ -87,10 +82,6 @@ func (v *providerPaneView) ensureModelPicker(ctx paneRenderContext) {
 		visibleRows = 4
 	}
 	v.modelPicker.SetSize(maxInt(20, ctx.width-8), visibleRows)
-	v.modelPicker.SetShowTitle(false)
-	v.modelPicker.SetShowStatusBar(false)
-	v.modelPicker.SetShowPagination(false)
-	v.modelPicker.SetShowHelp(false)
 }
 
 func (v *providerPaneView) Render(ctx paneRenderContext) string {

@@ -177,15 +177,10 @@ func (v *modelSetupPaneView) initPicker() {
 	if v == nil || v.pickerReady {
 		return
 	}
-	v.picker = list.New(nil, modelSetupDelegate{}, defaultBubbleWidth-8, maxModelSetupRows)
-	v.picker.DisableQuitKeybindings()
+	v.picker = newMinimalList(nil, modelSetupDelegate{}, defaultBubbleWidth-8, maxModelSetupRows)
 	v.picker.SetStatusBarItemName("model", "models")
 	v.picker.FilterInput.Prompt = "Search: "
-	v.picker.SetShowTitle(false)
 	v.picker.SetShowFilter(false)
-	v.picker.SetShowStatusBar(false)
-	v.picker.SetShowPagination(false)
-	v.picker.SetShowHelp(false)
 	v.picker.AdditionalShortHelpKeys = func() []key.Binding {
 		return []key.Binding{
 			key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),

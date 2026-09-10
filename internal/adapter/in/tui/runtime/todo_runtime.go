@@ -144,14 +144,9 @@ func (v *todoPaneView) ensurePicker(ctx paneRenderContext) {
 	if v.initialized {
 		return
 	}
-	v.picker = list.New(todoListItems(ctx.todos), todoSetupDelegate{}, maxInt(12, ctx.width-8), maxInt(5, minInt(14, ctx.height-4)))
-	v.picker.DisableQuitKeybindings()
+	v.picker = newMinimalList(todoListItems(ctx.todos), todoSetupDelegate{}, maxInt(12, ctx.width-8), maxInt(5, minInt(14, ctx.height-4)))
 	v.picker.SetFilteringEnabled(false)
 	v.picker.SetStatusBarItemName("task", "tasks")
-	v.picker.SetShowTitle(false)
-	v.picker.SetShowStatusBar(false)
-	v.picker.SetShowPagination(false)
-	v.picker.SetShowHelp(false)
 	v.initialized = true
 	v.syncTitle(ctx)
 }

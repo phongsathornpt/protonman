@@ -132,13 +132,8 @@ func (v *providerSelectPaneView) initPicker() {
 	for _, item := range v.items {
 		items = append(items, item)
 	}
-	v.picker = list.New(items, providerSelectDelegate{}, defaultBubbleWidth-8, defaultBubbleHeight-8)
-	v.picker.DisableQuitKeybindings()
+	v.picker = newMinimalList(items, providerSelectDelegate{}, defaultBubbleWidth-8, defaultBubbleHeight-8)
 	v.picker.SetStatusBarItemName("provider", "providers")
-	v.picker.SetShowTitle(false)
-	v.picker.SetShowStatusBar(false)
-	v.picker.SetShowPagination(false)
-	v.picker.SetShowHelp(false)
 	v.picker.FilterInput.Prompt = "Search: "
 	v.picker.InfiniteScrolling = false
 	v.picker.AdditionalShortHelpKeys = func() []key.Binding {
