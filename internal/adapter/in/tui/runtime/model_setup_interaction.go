@@ -98,47 +98,61 @@ func modelSetupHelp(width int, adjustableEffort bool) string {
 	return paneKeyboardHelp(width, "↑/↓", "Navigate", "enter", "Select", "esc", "Go Back")
 }
 
-func (v *modelSetupPaneView) effortRow() string {
+func (v *modelSetupPaneView) effortLayout() (string, string) {
 	choices := v.reasoningChoices
 	if len(choices) == 0 {
 		choices = []sdk.ReasoningEffort{sdk.ReasoningDefault}
 	}
 	if len(choices) <= 1 {
-		return "Effort    " + brandStyle.Render(reasoningEffortLabel(choices[0]))
+		return "Effort    " + brandStyle.Render(reasoningEffortLabel(choices[0])), ""
 	}
-	parts := make([]string, 0, len(choices)*2-1)
-	for i := range choices {
+
+	labels := make([]string, len(choices))
+	slotWidth := 5
+	for i, effort := range choices {
+		labels[i] = reasoningEffortLabel(effort)
+		if width := len([]rune(labels[i])) + 2; width > slotWidth {
+			slotWidth = width
+		}
+	}
+
+	dots := make([]string, len(choices))
+	styledLabels := make([]string, len(choices))
+	for i, label := range labels {
+		left := (slotWidth - 1) / 2
+		right := slotWidth - left - 1
 		dot := mutedStyle.Render("●")
 		if i == v.reasoningIndex {
 			dot = brandStyle.Render("●")
 		}
-		parts = append(parts, dot)
-		if i+1 < len(choices) {
-			parts = append(parts, mutedStyle.Render("──────"))
+		dots[i] = strings.Repeat(" ", left) + dot + strings.Repeat(" ", right)
+
+		labelLeft := (slotWidth - len([]rune(label))) / 2
+		labelRight := slotWidth - labelLeft - len([]rune(label))
+		styled := mutedStyle.Render(label)
+		if i == v.reasoningIndex {
+			styled = brandStyle.Render(label)
 		}
+		styledLabels[i] = strings.Repeat(" ", labelLeft) + styled + strings.Repeat(" ", labelRight)
 	}
-	return "Effort    " + userStyle.Render("◀") + "   " + strings.Join(parts, "") + "   " + userStyle.Render("▶")
+
+	connector := mutedStyle.Render(strings.Repeat("─", 2))
+	track := strings.Join(dots, connector)
+	labelRow := strings.Join(styledLabels, "  ")
+	const effortPrefix = "Effort    "
+	controlPrefix := effortPrefix + userStyle.Render("◀") + " "
+	labelPrefix := strings.Repeat(" ", len([]rune(effortPrefix))+2)
+	return controlPrefix + track + " " + userStyle.Render("▶"), labelPrefix + labelRow
+}
+
+func (v *modelSetupPaneView) effortRow() string {
+	row, _ := v.effortLayout()
+	return row
 }
 
 func (v *modelSetupPaneView) effortLabels() string {
-	choices := v.reasoningChoices
-	if len(choices) == 0 {
-		choices = []sdk.ReasoningEffort{sdk.ReasoningDefault}
-	}
-	if len(choices) <= 1 {
-		return ""
-	}
-	labels := make([]string, 0, len(choices))
-	for i, effort := range choices {
-		label := reasoningEffortLabel(effort)
-		if i == v.reasoningIndex {
-			label = brandStyle.Render(label)
-		} else {
-			label = mutedStyle.Render(label)
-		}
-		labels = append(labels, label)
-	}
-	return "          " + strings.Join(labels, "     ")
+	_, labels := v.effortLayout()
+	return labels
 }
 
 func (v *modelSetupPaneView) selectionStatus(width int) string {

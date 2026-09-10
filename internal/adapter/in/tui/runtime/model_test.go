@@ -1498,3 +1498,38 @@ func TestModelSetupHelpUsesWholeResponsiveLabels(t *testing.T) {
 		}
 	}
 }
+
+func TestEffortLayoutAlignsLabelsWithTrackSlots(t *testing.T) {
+	view := &modelSetupPaneView{
+		reasoningChoices: []sdk.ReasoningEffort{
+			sdk.ReasoningDefault, sdk.ReasoningMinimal, sdk.ReasoningLow,
+			sdk.ReasoningMedium, sdk.ReasoningHigh, sdk.ReasoningXHigh,
+		},
+		reasoningIndex: 5,
+	}
+	track := testPlain(view.effortRow())
+	labels := testPlain(view.effortLabels())
+	trackRunes := []rune(track)
+	labelRunes := []rune(labels)
+	dots := make([]int, 0, len(view.reasoningChoices))
+	for i, r := range trackRunes {
+		if r == '●' {
+			dots = append(dots, i)
+		}
+	}
+	if len(dots) != len(view.reasoningChoices) {
+		t.Fatalf("dot positions = %v in %q", dots, track)
+	}
+	for i, effort := range view.reasoningChoices {
+		label := reasoningEffortLabel(effort)
+		start := strings.Index(string(labelRunes), label)
+		if start < 0 {
+			t.Fatalf("label %q missing from %q", label, labels)
+		}
+		center := start + len([]rune(label))/2
+		if delta := center - dots[i]; delta < -1 || delta > 1 {
+			t.Fatalf("label %q center=%d dot=%d: track=%q labels=%q", label, center, dots[i], track, labels)
+		}
+		labelRunes[start] = ' '
+	}
+}
