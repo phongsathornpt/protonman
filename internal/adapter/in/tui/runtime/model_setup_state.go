@@ -188,8 +188,8 @@ func (*modelSetupPaneView) ID() string {
 	return modelSetupViewID
 }
 
-func (*modelSetupPaneView) ReplacesComposer() bool {
-	return true
+func (*modelSetupPaneView) PresentationMode() panePresentationMode {
+	return paneOverlay
 }
 
 func (v *modelSetupPaneView) resize(width, height int) {

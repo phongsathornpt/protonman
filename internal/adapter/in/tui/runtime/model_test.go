@@ -389,6 +389,47 @@ func TestModelSetupLaunchViaSlashCommand(t *testing.T) {
 	}
 }
 
+func TestModelSetupPreservesComposerDraft(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	seedModelSetupCatalog(bModel)
+	bModel.activeModel = "MiniMax-M3"
+	bModel.activeProvider = "protonman"
+	bModel.panes.bottom.prompt().SetValue("draft before model picker")
+	bModel.executeCommand("/model")
+	if !bModel.panes.bottom.composerVisible() {
+		t.Fatal("model setup should overlay the composer, not replace it")
+	}
+	rendered := testPlain(bModel.View().Content)
+	for _, want := range []string{"Switch Model", "> draft before model picker"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("model setup view missing %q:\n%s", want, rendered)
+		}
+	}
+	updated, _ := bModel.Update(testKey(tea.KeyEsc))
+	bModel = updated.(*bubbleModel)
+	if got := bModel.panes.bottom.prompt().Value(); got != "draft before model picker" {
+		t.Fatalf("composer draft after model setup close = %q", got)
+	}
+}
+
+func TestBottomPanePresentationPolicy(t *testing.T) {
+	overlays := []bottomPaneView{
+		&skillsPaneView{}, &todoPaneView{}, &slashPaneView{}, &agentsPaneView{},
+		&shortcutsPaneView{}, &projectPaneView{}, &modelSetupPaneView{}, &providerSelectPaneView{},
+	}
+	for _, view := range overlays {
+		if view.PresentationMode() != paneOverlay {
+			t.Fatalf("%T presentation mode = %v, want overlay", view, view.PresentationMode())
+		}
+	}
+	blocking := []bottomPaneView{&permissionPaneView{}, &providerPaneView{}}
+	for _, view := range blocking {
+		if view.PresentationMode() != paneBlocking {
+			t.Fatalf("%T presentation mode = %v, want blocking", view, view.PresentationMode())
+		}
+	}
+}
+
 func TestModelSetupToggleKeybinding(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	updated, _ := bModel.Update(testCtrl('p'))

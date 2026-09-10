@@ -45,8 +45,8 @@ type permissionPaneView struct {
 	index   int
 }
 
-func (*permissionPaneView) ID() string             { return permissionViewID }
-func (*permissionPaneView) ReplacesComposer() bool { return true }
+func (*permissionPaneView) ID() string                             { return permissionViewID }
+func (*permissionPaneView) PresentationMode() panePresentationMode { return paneBlocking }
 func (v *permissionPaneView) Render(ctx paneRenderContext) string {
 	return v.card(ctx)
 }

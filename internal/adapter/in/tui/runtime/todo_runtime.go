@@ -84,8 +84,8 @@ type todoPaneView struct {
 	initialized bool
 }
 
-func (*todoPaneView) ID() string             { return todoInspectViewID }
-func (*todoPaneView) ReplacesComposer() bool { return false }
+func (*todoPaneView) ID() string                             { return todoInspectViewID }
+func (*todoPaneView) PresentationMode() panePresentationMode { return paneOverlay }
 
 func (v *todoPaneView) ensurePicker(ctx paneRenderContext) {
 	if v.initialized {

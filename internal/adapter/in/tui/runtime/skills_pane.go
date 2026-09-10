@@ -31,8 +31,8 @@ type skillsPaneView struct {
 	initialized bool
 }
 
-func (*skillsPaneView) ID() string             { return skillsViewID }
-func (*skillsPaneView) ReplacesComposer() bool { return false }
+func (*skillsPaneView) ID() string                             { return skillsViewID }
+func (*skillsPaneView) PresentationMode() panePresentationMode { return paneOverlay }
 
 func (v *skillsPaneView) ensurePicker(ctx paneRenderContext) {
 	if v.initialized {

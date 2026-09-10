@@ -42,8 +42,8 @@ type slashPaneView struct {
 	matches []slashCommand
 }
 
-func (*slashPaneView) ID() string             { return slashViewID }
-func (*slashPaneView) ReplacesComposer() bool { return false }
+func (*slashPaneView) ID() string                             { return slashViewID }
+func (*slashPaneView) PresentationMode() panePresentationMode { return paneOverlay }
 
 func (v *slashPaneView) sync(ctx paneRenderContext) {
 	matches := ctx.slashMatches

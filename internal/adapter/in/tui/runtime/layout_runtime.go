@@ -52,7 +52,7 @@ func (m *bubbleModel) footerView() string {
 		return ""
 	}
 	if top := m.panes.bottom.top(); top != nil {
-		if top.ReplacesComposer() {
+		if top.PresentationMode() == paneBlocking {
 			return ""
 		}
 		if m.slashOpen() {

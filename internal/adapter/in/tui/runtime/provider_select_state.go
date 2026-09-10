@@ -165,8 +165,8 @@ func (*providerSelectPaneView) ID() string {
 	return providerSelectViewID
 }
 
-func (*providerSelectPaneView) ReplacesComposer() bool {
-	return true
+func (*providerSelectPaneView) PresentationMode() panePresentationMode {
+	return paneOverlay
 }
 
 func (v *providerSelectPaneView) selectedItem() (providerSelectItem, bool) {

@@ -143,6 +143,6 @@ func (*providerPaneView) ID() string {
 	return providerViewID
 }
 
-func (*providerPaneView) ReplacesComposer() bool {
-	return true
+func (*providerPaneView) PresentationMode() panePresentationMode {
+	return paneBlocking
 }

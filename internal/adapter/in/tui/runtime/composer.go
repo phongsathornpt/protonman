@@ -7,10 +7,17 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
+type panePresentationMode uint8
+
+const (
+	paneOverlay panePresentationMode = iota
+	paneBlocking
+)
+
 type bottomPaneView interface {
 	ID() string
 	Render(paneRenderContext) string
-	ReplacesComposer() bool
+	PresentationMode() panePresentationMode
 } // bottomPaneView is a transient interaction surface that can replace or augment
 // the composer. Permission prompts and slash completion are the first users;
 // pickers and MCP elicitation can implement the same contract later.
@@ -184,7 +191,7 @@ func (p *bottomPane) renderTop(m *bubbleModel) string {
 
 func (p *bottomPane) composerVisible() bool {
 	top := p.top()
-	return top == nil || !top.ReplacesComposer()
+	return top == nil || top.PresentationMode() != paneBlocking
 }
 
 func newPrompt(hasRunner bool) textarea.Model {

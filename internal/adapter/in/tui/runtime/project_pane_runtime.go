@@ -34,8 +34,8 @@ func (*projectPaneView) ID() string {
 	return projectViewID
 }
 
-func (*projectPaneView) ReplacesComposer() bool {
-	return true
+func (*projectPaneView) PresentationMode() panePresentationMode {
+	return paneOverlay
 }
 
 func (v *projectPaneView) Render(ctx paneRenderContext) string {

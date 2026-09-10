@@ -6,8 +6,8 @@ const shortcutsViewID = "shortcuts"
 
 type shortcutsPaneView struct{}
 
-func (*shortcutsPaneView) ID() string             { return shortcutsViewID }
-func (*shortcutsPaneView) ReplacesComposer() bool { return true }
+func (*shortcutsPaneView) ID() string                             { return shortcutsViewID }
+func (*shortcutsPaneView) PresentationMode() panePresentationMode { return paneOverlay }
 
 func (*shortcutsPaneView) Render(ctx paneRenderContext) string {
 	rows := []string{

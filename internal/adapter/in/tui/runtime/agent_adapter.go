@@ -85,8 +85,8 @@ func (m *bubbleModel) applyAgentToolFailure(name string, result tool.Result, err
 
 type agentsPaneView struct{}
 
-func (*agentsPaneView) ID() string             { return agentsViewID }
-func (*agentsPaneView) ReplacesComposer() bool { return false }
+func (*agentsPaneView) ID() string                             { return agentsViewID }
+func (*agentsPaneView) PresentationMode() panePresentationMode { return paneOverlay }
 func (*agentsPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	switch message.String() {
 	case "esc", "enter":
