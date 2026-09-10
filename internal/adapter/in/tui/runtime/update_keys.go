@@ -73,14 +73,10 @@ func (m *bubbleModel) handlePaneKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 		if result.action.kind != paneActionNone {
 			command = tea.Batch(command, m.applyPaneAction(result.action))
 		}
-		handled := result.handled
-		if result.allowGlobal && m.matchesGlobalShortcut(message) {
-			handled = false
-		}
-		if handled {
+		if result.handled {
 			m.requestRelayout()
 		}
-		return handled, command
+		return result.handled, command
 	}
 	return false, nil
 }
@@ -94,25 +90,9 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 		m.openTranscriptOverlay()
 		return true, nil
 	case key.Matches(message, m.keys.ToggleSkills):
-		if m.panes.bottom.has(skillsViewID) {
-			m.panes.bottom.remove(skillsViewID)
-			m.requestRelayout()
-			return true, nil
-		}
-		if m.skills != nil && len(m.skills.List()) > 0 {
-			m.panes.bottom.push(&skillsPaneView{})
-			m.requestRelayout()
-			return true, nil
-		}
-		m.executeCommand("/skills")
-		return true, nil
+		return true, m.toggleSkillsPane()
 	case key.Matches(message, m.keys.ToggleModel):
-		if m.panes.bottom.has(modelSetupViewID) {
-			m.panes.bottom.remove(modelSetupViewID)
-			m.requestRelayout()
-			return true, nil
-		}
-		return true, m.openModelSetupPane()
+		return true, m.toggleModelSetupPane()
 	case key.Matches(message, m.keys.ToggleTodo):
 		return true, m.toggleTodoPane()
 	case key.Matches(message, m.keys.PageUp):

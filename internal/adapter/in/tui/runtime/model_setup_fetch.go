@@ -77,3 +77,12 @@ func (m *bubbleModel) openModelSetupPane() tea.Cmd {
 	m.requestRelayout()
 	return view.loadProvider(m, false)
 }
+
+func (m *bubbleModel) toggleModelSetupPane() tea.Cmd {
+	if m.panes.bottom.has(modelSetupViewID) {
+		m.panes.bottom.remove(modelSetupViewID)
+		m.requestRelayout()
+		return nil
+	}
+	return m.openModelSetupPane()
+}

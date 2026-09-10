@@ -49,10 +49,9 @@ type paneAction struct {
 }
 
 type paneKeyResult struct {
-	handled     bool
-	cmd         tea.Cmd
-	action      paneAction
-	allowGlobal bool
+	handled bool
+	cmd     tea.Cmd
+	action  paneAction
 }
 
 type isolatedPaneKeyHandler interface {

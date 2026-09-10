@@ -73,7 +73,7 @@ func (v *permissionPaneView) HandlePaneKey(ctx paneRenderContext, message tea.Ke
 		case "y", "s", "p", "g", "n", "1", "2", "3", "4", "5", "enter":
 			// Decisions remain available while reviewing the transcript.
 		default:
-			return paneKeyResult{handled: true, allowGlobal: true}
+			return paneKeyResult{handled: true}
 		}
 	}
 
@@ -131,6 +131,6 @@ func (v *permissionPaneView) HandlePaneKey(ctx paneRenderContext, message tea.Ke
 		}
 		return resolve(options[v.index].Option)
 	default:
-		return paneKeyResult{handled: true, allowGlobal: true}
+		return paneKeyResult{handled: true}
 	}
 }

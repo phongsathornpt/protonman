@@ -8,6 +8,29 @@ import (
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 )
 
+func (m *bubbleModel) openSkillsPane() tea.Cmd {
+	if m.skills == nil || len(m.skills.List()) == 0 {
+		m.appendLine("No agent skills discovered.")
+		m.appendLine(fmt.Sprintf("Place skills in %s or .protonman/skills/ (with PROTONMAN_TRUST_PROJECT=1).", appdirs.UserSkillsDisplay()))
+		m.refreshViewport()
+		return nil
+	}
+	if !m.panes.bottom.has(skillsViewID) {
+		m.panes.bottom.push(&skillsPaneView{})
+	}
+	m.requestRelayout()
+	return nil
+}
+
+func (m *bubbleModel) toggleSkillsPane() tea.Cmd {
+	if m.panes.bottom.has(skillsViewID) {
+		m.panes.bottom.remove(skillsViewID)
+		m.requestRelayout()
+		return nil
+	}
+	return m.openSkillsPane()
+}
+
 func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.Cmd {
 	trimmedArg := strings.TrimSpace(argument)
 	if m.skills == nil || len(m.skills.List()) == 0 {
@@ -17,12 +40,7 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 		return nil
 	}
 	if trimmedArg == "" {
-		// The interactive picker is the only list surface for bare /skills.
-		// Duplicating the same skills into transcript wastes viewport space and
-		// leaves stale state behind after the picker is closed or toggled.
-		m.panes.bottom.push(&skillsPaneView{})
-		m.requestRelayout()
-		return nil
+		return m.openSkillsPane()
 	}
 	if trimmedArg == "active" {
 		active := m.skills.ActivatedList()

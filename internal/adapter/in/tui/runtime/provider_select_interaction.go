@@ -35,7 +35,7 @@ func (v *providerSelectPaneView) HandlePaneKey(_ paneRenderContext, message tea.
 			v.deleteConfirm = false
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: providerSelectViewID}}
 		default:
-			return paneKeyResult{handled: true, allowGlobal: true}
+			return paneKeyResult{handled: true}
 		}
 	}
 	switch message.String() {

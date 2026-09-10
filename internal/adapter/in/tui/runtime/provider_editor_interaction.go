@@ -79,7 +79,7 @@ func (v *providerPaneView) handleModelSelectKey(ctx paneRenderContext, message t
 		v.modelPicker = updated
 		return paneKeyResult{handled: true, cmd: cmd}
 	default:
-		return paneKeyResult{handled: true, allowGlobal: true}
+		return paneKeyResult{handled: true}
 	}
 }
 
@@ -93,7 +93,7 @@ func (v *providerPaneView) handleSaveErrorKey(message tea.KeyPressMsg) paneKeyRe
 		v.errorMessage = ""
 		return paneKeyResult{handled: true}
 	default:
-		return paneKeyResult{handled: true, allowGlobal: true}
+		return paneKeyResult{handled: true}
 	}
 }
 
@@ -107,7 +107,7 @@ func (v *providerPaneView) handleOverwriteKey(message tea.KeyPressMsg) paneKeyRe
 		v.syncInputFocus()
 		return paneKeyResult{handled: true}
 	default:
-		return paneKeyResult{handled: true, allowGlobal: true}
+		return paneKeyResult{handled: true}
 	}
 }
 
@@ -120,7 +120,7 @@ func (v *providerPaneView) handleProviderErrorKey(message tea.KeyPressMsg) paneK
 		v.syncInputFocus()
 		return paneKeyResult{handled: true}
 	default:
-		return paneKeyResult{handled: true, allowGlobal: true}
+		return paneKeyResult{handled: true}
 	}
 }
 
@@ -164,7 +164,7 @@ func (v *providerPaneView) handleInputKey(ctx paneRenderContext, message tea.Key
 		}
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionProviderFetch}}
 	default:
-		return paneKeyResult{handled: true, allowGlobal: true, cmd: v.updateFocusedInput(message)}
+		return paneKeyResult{handled: true, cmd: v.updateFocusedInput(message)}
 	}
 }
 
