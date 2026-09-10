@@ -34,7 +34,7 @@ func (m *bubbleModel) handleInterruptKey() tea.Cmd {
 	}
 	if m.busy && m.turnCancel != nil {
 		m.cancelActiveTurn()
-		m.queue = nil
+		m.conversationModelState.clearQueue()
 		return nil
 	}
 	prompt := m.panes.bottom.prompt()

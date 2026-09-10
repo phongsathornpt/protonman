@@ -19,20 +19,10 @@ type conversationViewportState struct {
 	committedRevision uint64
 	activeRevision    uint64
 	lineAnchors       []ScrollAnchor
-	renderedViewport  string
-	renderValid       bool
 }
 
 func (s conversationViewportState) following() bool {
 	return s.mode == viewportFollowing
-}
-
-func (m *bubbleModel) invalidateViewportRender() {
-	if m == nil {
-		return
-	}
-	m.conversationViewport.renderedViewport = ""
-	m.conversationViewport.renderValid = false
 }
 
 func (s *conversationViewportState) setFollowing(follow bool) {
@@ -77,7 +67,6 @@ func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
 
 func (m *bubbleModel) setViewportContent(content string, fullHistory bool) {
 	m.viewport.SetContent(content)
-	m.invalidateViewportRender()
 	m.conversationViewport.staleTail = false
 	m.conversationViewport.lineAnchors = nil
 	if m.historyState != nil {
@@ -131,7 +120,6 @@ func (m *bubbleModel) restoreViewportScroll(scroll viewportScrollSnapshot) {
 	}
 	if m.viewport.YOffset() != yOffset {
 		m.viewport.SetYOffset(yOffset)
-		m.invalidateViewportRender()
 	}
 }
 
@@ -168,7 +156,6 @@ func (m *bubbleModel) updateConversationViewport(message tea.Msg) tea.Cmd {
 	m.hydrateViewportForScroll()
 	updated, command := m.viewport.Update(message)
 	m.viewport = updated
-	m.invalidateViewportRender()
 	m.conversationViewport.setFollowing(m.viewport.AtBottom())
 	return command
 }
@@ -183,6 +170,5 @@ func (m *bubbleModel) scrollConversationLines(delta int) {
 	} else {
 		m.viewport.ScrollDown(delta)
 	}
-	m.invalidateViewportRender()
 	m.conversationViewport.setFollowing(m.viewport.AtBottom())
 }

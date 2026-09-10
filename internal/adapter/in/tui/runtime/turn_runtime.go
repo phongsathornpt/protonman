@@ -31,8 +31,7 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 		return nil
 	}
 	m.retireCompletedTodoForNextTurn()
-	m.messages = append(m.messages, model.Message{ID: model.NewMessageID(), Role: model.RoleUser, Content: prompt})
-	m.retainConversationMessages()
+	m.conversationModelState.appendMessages(model.Message{ID: model.NewMessageID(), Role: model.RoleUser, Content: prompt})
 	m.busy = true
 	m.busyStarted = time.Now()
 	m.turnProgress = turnProgress{}
@@ -168,20 +167,17 @@ func (m *bubbleModel) updateTurnDone(message turnmsg.Done) tea.Cmd {
 	m.historyState.CommitActive()
 	if message.Err == nil {
 		if len(message.Result.Messages) > 0 {
-			m.messages = append(m.messages, message.Result.Messages...)
+			m.conversationModelState.appendMessages(message.Result.Messages...)
 		} else if message.Result.Message.Content != "" {
-			m.messages = append(m.messages, message.Result.Message)
+			m.conversationModelState.appendMessages(message.Result.Message)
 		}
-	} else if message.Err != nil && len(m.messages) > 0 && m.messages[len(m.messages)-1].Role == model.RoleUser {
-		messages := m.messages
-		messages[len(messages)-1] = model.Message{}
-		m.messages = messages[:len(messages)-1]
+	} else if message.Err != nil {
+		m.conversationModelState.dropTrailingUserMessage()
 	}
-	m.retainConversationMessages()
 	m.appendTurnFailure(message.Err)
 	m.requestRelayout()
 	if message.Err != nil {
-		m.queue = nil
+		m.conversationModelState.clearQueue()
 		return nil
 	}
 	return m.withSpinner(m.drainQueue())

@@ -27,10 +27,6 @@ func (m *bubbleModel) resize(width int, height int) {
 	m.refreshTranscriptViewport(false)
 }
 
-func (m *bubbleModel) relayoutIfSlashChanged(bool) {
-	m.requestRelayout()
-}
-
 type layoutState struct {
 	width      int
 	height     int
@@ -100,7 +96,6 @@ func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame fram
 	if m.viewport.Width() != m.layout.width || m.viewport.Height() != viewportHeight {
 		m.viewport.SetWidth(m.layout.width)
 		m.viewport.SetHeight(viewportHeight)
-		m.invalidateViewportRender()
 	}
 	m.refreshViewportWithScroll(scroll)
 }
@@ -117,14 +112,6 @@ func (m *bubbleModel) refreshFrameChromeOnly() {
 	m.layout.generation++
 	frame.generation = m.layout.generation
 	m.layout.frame = frame
-}
-
-func (m *bubbleModel) frameChromeForView() frameChrome {
-	return m.layout.frame
-}
-
-func (m *bubbleModel) chromeHeight() int {
-	return m.buildFrameChrome().height
 }
 
 func (m *bubbleModel) refreshViewport() {

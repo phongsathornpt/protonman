@@ -83,7 +83,6 @@ func TestClearCommandResetsConversationButPreservesSessionControls(t *testing.T)
 	m.queue = []string{"queued prompt"}
 	m.conversationViewport.tailOnly = true
 	m.conversationViewport.staleTail = true
-	m.conversationViewport.renderValid = true
 	m.conversationViewport.lineAnchors = []ScrollAnchor{{}}
 	m.panes.showTranscript = true
 	m.appendUser("old context")
@@ -95,7 +94,7 @@ func TestClearCommandResetsConversationButPreservesSessionControls(t *testing.T)
 	if m.activeGoal != "finish compaction" || m.activeProvider != "opencode" || m.activeModel != "model-x" || m.reasoningEffort != sdk.ReasoningHigh {
 		t.Fatalf("session controls changed: goal=%q provider=%q model=%q reasoning=%q", m.activeGoal, m.activeProvider, m.activeModel, m.reasoningEffort)
 	}
-	if m.conversationViewport.tailOnly || m.conversationViewport.staleTail || m.conversationViewport.renderValid || len(m.conversationViewport.lineAnchors) != 0 || !m.conversationViewport.following() {
+	if m.conversationViewport.tailOnly || m.conversationViewport.staleTail || len(m.conversationViewport.lineAnchors) != 0 || !m.conversationViewport.following() {
 		t.Fatalf("derived viewport state survived clear: %+v", m.conversationViewport)
 	}
 	if m.panes.showTranscript {

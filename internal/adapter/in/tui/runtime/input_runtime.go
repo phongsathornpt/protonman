@@ -59,12 +59,11 @@ func (m *bubbleModel) submit() tea.Cmd {
 }
 
 func (m *bubbleModel) enqueuePrompt(line string) bool {
-	if len(m.queue) >= maxQueuedPrompts {
+	if !m.conversationModelState.enqueue(line) {
 		m.appendMuted(fmt.Sprintf("queue full (%d); finish or cancel the active turn before adding more", maxQueuedPrompts))
 		m.refreshViewport()
 		return false
 	}
-	m.queue = append(m.queue, line)
 	m.appendMuted(fmt.Sprintf("queued (%d): %s", len(m.queue), queuePreview(line)))
 	return true
 }
@@ -81,12 +80,9 @@ func (m *bubbleModel) drainQueue() tea.Cmd {
 	if m.busy || m.hasPermissionView() || len(m.queue) == 0 {
 		return nil
 	}
-	line := m.queue[0]
-	m.queue[0] = ""
-	if len(m.queue) == 1 {
-		m.queue = nil
-	} else {
-		m.queue = m.queue[1:]
+	line, ok := m.conversationModelState.dequeue()
+	if !ok {
+		return nil
 	}
 	if strings.HasPrefix(line, "!") && !isCommandLine(line) {
 		return m.dispatchBang(strings.TrimPrefix(line, "!"))

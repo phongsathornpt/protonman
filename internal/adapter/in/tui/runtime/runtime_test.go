@@ -373,7 +373,7 @@ func newBehaviorService(t *testing.T, registry tool.Registry, mode permission.Mo
 	return service
 }
 
-func TestRenderedViewportCacheInvalidatesOnContentAndScroll(t *testing.T) {
+func TestRenderedViewportReflectsContentAndScroll(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.showWelcome = false
 	m.resize(80, 12)
@@ -382,7 +382,6 @@ func TestRenderedViewportCacheInvalidatesOnContentAndScroll(t *testing.T) {
 	}
 	m.refreshViewport()
 	m.viewport.GotoBottom()
-	m.invalidateViewportRender()
 	bottom := ansi.Strip(m.renderedViewport())
 	if !strings.Contains(bottom, "cache-line-29") {
 		t.Fatalf("bottom render missing newest content: %q", bottom)
@@ -934,7 +933,7 @@ func TestLiveConversationRetentionKeepsToolProtocolGroup(t *testing.T) {
 		{Role: model.RoleTool, ToolCallID: "call-1", ToolName: "read", Content: "result"},
 		{Role: model.RoleUser, Content: "latest"},
 	}
-	m.retainConversationMessages()
+	m.conversationModelState.retainMessages()
 	if len(m.messages) != 3 {
 		t.Fatalf("retained message count=%d, want 3: %#v", len(m.messages), m.messages)
 	}

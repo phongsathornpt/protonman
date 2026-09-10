@@ -81,10 +81,8 @@ func (m *bubbleModel) setActiveGoal(goal string) error {
 }
 
 func (m *bubbleModel) clearConversation() {
-	m.messages = nil
-	m.queue = nil
+	m.conversationModelState.resetConversationData()
 	m.ensureHistoryState().Reset()
-	m.conversationViewport = conversationViewportState{mode: viewportFollowing}
 	m.showWelcome = true
 	m.panes.showTranscript = false
 	m.refreshTranscriptViewport(true)
