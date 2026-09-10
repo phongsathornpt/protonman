@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/phongsathornpt/protonman/internal/core/conversation"
+	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -67,4 +69,50 @@ func contextOutputReserve(window, requested int) int {
 		reserve = window / 4
 	}
 	return reserve
+}
+
+func effectiveInputBudget(limits sdk.TokenLimits, requestedOutput int) int {
+	budget := limits.MaxInputTokens
+	if limits.ContextWindow > 0 {
+		reserve := contextOutputReserve(limits.ContextWindow, requestedOutput)
+		if requestedOutput == 0 && limits.MaxOutputTokens > 0 && reserve > limits.MaxOutputTokens {
+			reserve = limits.MaxOutputTokens
+		}
+		contextBudget := limits.ContextWindow - reserve
+		if contextBudget < 0 {
+			contextBudget = 0
+		}
+		if budget <= 0 || contextBudget < budget {
+			budget = contextBudget
+		}
+	}
+	return budget
+}
+
+func compactRequestToModelBudget(request sdk.Request, limits sdk.TokenLimits, policy modelprofile.CompactionPolicy) (sdk.Request, conversation.CompactionDecision, error) {
+	estimated, err := estimateRequestTokens(request)
+	if err != nil {
+		return request, conversation.CompactionDecision{}, err
+	}
+	budget := effectiveInputBudget(limits, request.Options.MaxOutputTokens)
+	decision := conversation.PlanCompaction(estimated, budget, policy)
+	if !decision.Required() || len(request.Messages) == 0 {
+		return request, decision, nil
+	}
+	fixed := request
+	fixed.Messages = nil
+	fixedTokens, err := estimateRequestTokens(fixed)
+	if err != nil {
+		return request, decision, err
+	}
+	messageTarget := decision.TargetTokens - fixedTokens
+	if messageTarget < 1 {
+		messageTarget = 1
+	}
+	request.Messages = conversation.Retain(request.Messages, conversation.RetentionPolicy{
+		MaxBytes:                     messageTarget * estimatedBytesPerToken,
+		RecentMessages:               policy.MinRecentMessages,
+		MaxHistoricalToolResultBytes: 2048,
+	})
+	return request, decision, nil
 }

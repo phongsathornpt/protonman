@@ -282,3 +282,27 @@ func TestGeminiDoesNotDuplicateGenericPromptHints(t *testing.T) {
 		t.Fatalf("Gemini prompt hints = %v, want generic tool policy only", got.AgentPolicy.PromptHints)
 	}
 }
+
+func TestEffectiveCompactionPolicyScalesWithContextLength(t *testing.T) {
+	small := EffectiveCompactionPolicy(Resolved{MaxInputTokens: 128_000})
+	large := EffectiveCompactionPolicy(Resolved{MaxInputTokens: 1_050_000})
+	if small.SoftThresholdRatio >= large.SoftThresholdRatio {
+		t.Fatalf("small soft threshold = %.2f, large = %.2f", small.SoftThresholdRatio, large.SoftThresholdRatio)
+	}
+	if small.TargetRatio >= large.TargetRatio {
+		t.Fatalf("small target = %.2f, large = %.2f", small.TargetRatio, large.TargetRatio)
+	}
+}
+
+func TestEffectiveCompactionPolicyUsesProfileOverride(t *testing.T) {
+	got := EffectiveCompactionPolicy(Resolved{
+		MaxInputTokens: 200_000,
+		Compaction:     CompactionPolicy{SoftThresholdRatio: 0.75, TargetRatio: 0.58, MinRecentMessages: 12},
+	})
+	if got.SoftThresholdRatio != 0.75 || got.TargetRatio != 0.58 || got.MinRecentMessages != 12 {
+		t.Fatalf("policy = %+v", got)
+	}
+	if got.MediumThresholdRatio == 0 || got.EmergencyThresholdRatio == 0 {
+		t.Fatalf("tier defaults were not retained: %+v", got)
+	}
+}
