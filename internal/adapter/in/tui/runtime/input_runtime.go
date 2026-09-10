@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
 )
 
 const (
@@ -96,8 +97,8 @@ func (m *bubbleModel) drainQueue() tea.Cmd {
 func (m *bubbleModel) dispatch(line string) tea.Cmd {
 	m.panes.bottom.recordHistory(line)
 	if isCommandLine(line) {
-		name, _, _ := splitCommand(line)
-		if name != "clear" && name != "new" && name != "quit" && name != "exit" {
+		parsed := parseCommand(line)
+		if spec, ok := slashview.LookupCommand(parsed.Name); ok && spec.EchoUser {
 			m.appendUser(line)
 		}
 		return m.executeCommand(line)

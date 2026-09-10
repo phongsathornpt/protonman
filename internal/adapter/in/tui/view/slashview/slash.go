@@ -4,10 +4,19 @@ import (
 	"strings"
 )
 
+type ArgumentMode uint8
+
+const (
+	ArgumentNone ArgumentMode = iota
+	ArgumentWord
+	ArgumentRest
+)
+
 type Command struct {
 	Name        string
 	Description string
-	TakesArgs   bool
+	Argument    ArgumentMode
+	EchoUser    bool
 	PrefixTag   string
 	Scope       string
 }
@@ -16,15 +25,15 @@ func Catalog() []Command {
 	return []Command{
 		{Name: "help", Description: "list commands"},
 		{Name: "permission", Description: "select permission mode"},
-		{Name: "model", Description: "open model setup or select active model (/model [id|free|add])", TakesArgs: true},
-		{Name: "provider", Description: "select or configure model providers (/provider [name|add|list])", TakesArgs: true},
-		{Name: "skills", Description: "browse, activate, or toggle agent skills (/skills [name|active|toggle])", TakesArgs: true},
+		{Name: "model", Description: "open model setup or select active model (/model [id|free|add])", Argument: ArgumentWord},
+		{Name: "provider", Description: "select or configure model providers (/provider [name|add|list])", Argument: ArgumentRest},
+		{Name: "skills", Description: "browse, activate, or toggle agent skills (/skills [name|active|toggle])", Argument: ArgumentRest},
 		{Name: "agents", Description: "inspect live and retained subagents"},
-		{Name: "goal", Description: "show or set the active conversation goal (/goal [text|clear])", TakesArgs: true},
-		{Name: "todo", Description: "show the TODO pane", TakesArgs: true},
+		{Name: "goal", Description: "show or set the active conversation goal (/goal [text|clear])", Argument: ArgumentRest},
+		{Name: "todo", Description: "show the TODO pane", Argument: ArgumentWord},
 		{Name: "clear", Description: "clear conversation history while preserving session settings"},
-		{Name: "transcript", Description: "open or clear transcript (/transcript [clear])", TakesArgs: true},
-		{Name: "call", Description: "run a registered tool", TakesArgs: true},
+		{Name: "transcript", Description: "open or clear transcript (/transcript [clear])", Argument: ArgumentWord},
+		{Name: "call", Description: "run a registered tool", Argument: ArgumentRest},
 		{Name: "quit", Description: "leave Protonman"},
 	}
 }
@@ -34,21 +43,46 @@ func IsCommandLine(line string) bool {
 	return strings.HasPrefix(trimmed, "/") || strings.HasPrefix(trimmed, ":")
 }
 
-func SplitCommand(line string) (name string, argument string, rest []string) {
+type ParsedCommand struct {
+	Name     string
+	Argument string
+	Rest     string
+	Parts    []string
+}
+
+func ParseCommand(line string) ParsedCommand {
 	trimmed := strings.TrimSpace(line)
-	if len(trimmed) == 0 {
-		return "", "", nil
+	if len(trimmed) < 2 || trimmed[0] != '/' && trimmed[0] != ':' {
+		return ParsedCommand{}
 	}
 	body := strings.TrimSpace(trimmed[1:])
 	parts := strings.SplitN(body, " ", 3)
 	if len(parts) == 0 {
-		return "", "", nil
+		return ParsedCommand{}
 	}
-	name = strings.TrimSpace(parts[0])
+	parsed := ParsedCommand{Name: CanonicalName(parts[0]), Parts: parts}
 	if len(parts) > 1 {
-		argument = strings.TrimSpace(parts[1])
+		parsed.Argument = strings.TrimSpace(parts[1])
 	}
-	return name, argument, parts
+	if len(body) > len(parts[0]) {
+		parsed.Rest = strings.TrimSpace(body[len(parts[0]):])
+	}
+	return parsed
+}
+
+func SplitCommand(line string) (name string, argument string, rest []string) {
+	parsed := ParseCommand(line)
+	return parsed.Name, parsed.Argument, parsed.Parts
+}
+
+func LookupCommand(name string) (Command, bool) {
+	name = CanonicalName(name)
+	for _, command := range Catalog() {
+		if command.Name == name {
+			return command, true
+		}
+	}
+	return Command{}, false
 }
 
 func CanonicalName(name string) string {

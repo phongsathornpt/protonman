@@ -845,3 +845,15 @@ func TestSlashPickerRendersBelowComposerLikeModelPicker(t *testing.T) {
 		}
 	}
 }
+
+func TestControlCommandsDoNotEchoAsUserConversation(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	for _, line := range []string{"/goal compact safely", "/goal", "/permission", "/model"} {
+		m.dispatch(line)
+	}
+	for _, cell := range m.ensureHistoryState().Cells() {
+		if user, ok := cell.(*UserCell); ok && strings.HasPrefix(strings.TrimSpace(user.Text), "/") {
+			t.Fatalf("control command leaked into user transcript: %q", user.Text)
+		}
+	}
+}

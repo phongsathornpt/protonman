@@ -59,7 +59,7 @@ func (m *bubbleModel) buildFrameChrome() frameChrome {
 		}
 	}
 	if m.panes.bottom.composerVisible() {
-		// The composer is the textarea plus one bottom separator row.
+		frame.composer = m.promptView()
 		frame.height += m.panes.bottom.prompt().Height() + 2
 	}
 	if frame.footer != "" {
@@ -105,13 +105,22 @@ func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame fram
 	m.refreshViewportWithScroll(scroll)
 }
 
-func (m *bubbleModel) frameChromeForView() frameChrome {
-	frame := m.buildFrameChrome()
-	if m.panes.bottom.composerVisible() {
-		frame.composer = m.promptView()
+func (m *bubbleModel) refreshFrameChromeOnly() {
+	if m == nil {
+		return
 	}
-	frame.generation = m.layout.frame.generation
-	return frame
+	frame := m.buildFrameChrome()
+	if frame.height != m.layout.frame.height {
+		m.requestRelayout()
+		return
+	}
+	m.layout.generation++
+	frame.generation = m.layout.generation
+	m.layout.frame = frame
+}
+
+func (m *bubbleModel) frameChromeForView() frameChrome {
+	return m.layout.frame
 }
 
 func (m *bubbleModel) chromeHeight() int {

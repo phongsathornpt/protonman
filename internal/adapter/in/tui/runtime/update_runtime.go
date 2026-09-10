@@ -90,11 +90,13 @@ func (m *bubbleModel) updateAnimationEvent(msg tea.Msg) (tea.Cmd, bool) {
 		if !m.busy {
 			return nil, true
 		}
+		m.refreshFrameChromeOnly()
 		return command, true
 	case cursor.BlinkMsg:
 		prompt := m.panes.bottom.prompt()
 		updated, command := prompt.Update(message)
 		*prompt = updated
+		m.refreshFrameChromeOnly()
 		return command, true
 	default:
 		return nil, false

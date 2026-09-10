@@ -14,6 +14,10 @@ func splitCommand(line string) (string, string, []string) {
 	return slashview.SplitCommand(line)
 }
 
+func parseCommand(line string) slashview.ParsedCommand {
+	return slashview.ParseCommand(line)
+}
+
 func canonicalSlashName(name string) string {
 	return slashview.CanonicalName(name)
 }
@@ -123,7 +127,7 @@ func (m *bubbleModel) acceptSlash(run bool) (applied bool, command tea.Cmd) {
 		insertion = context.Lead + selected.Name
 	} else {
 		insertion = context.Prefix + selected.Name
-		if selected.TakesArgs {
+		if selected.Argument != slashview.ArgumentNone {
 			insertion += " "
 			prompt.SetValue(insertion)
 			prompt.CursorEnd()

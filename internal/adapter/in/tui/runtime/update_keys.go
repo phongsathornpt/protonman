@@ -14,7 +14,7 @@ var composerKeys = struct {
 	HistoryDown: key.NewBinding(key.WithKeys("down")),
 }
 
-func (m *bubbleModel) matchesGlobalShortcut(message tea.KeyPressMsg) bool {
+func (m *bubbleModel) matchesPriorityGlobalShortcut(message tea.KeyPressMsg) bool {
 	return key.Matches(message, m.keys.ToggleTodo) || key.Matches(message, m.keys.Transcript) || key.Matches(message, m.keys.CyclePermission) || key.Matches(message, m.keys.ToggleSkills) || key.Matches(message, m.keys.ToggleModel)
 }
 
@@ -61,7 +61,7 @@ func (m *bubbleModel) updateKey(message tea.KeyPressMsg) tea.Cmd {
 		}
 		return nil
 	}
-	if m.matchesGlobalShortcut(message) {
+	if m.matchesPriorityGlobalShortcut(message) {
 		if handled, command := m.handleGlobalKey(message); handled {
 			return m.withSpinner(command)
 		}
@@ -69,8 +69,10 @@ func (m *bubbleModel) updateKey(message tea.KeyPressMsg) tea.Cmd {
 	if handled, command := m.handlePaneKey(message); handled {
 		return m.withSpinner(command)
 	}
-	if handled, command := m.handleGlobalKey(message); handled {
-		return m.withSpinner(command)
+	if key.Matches(message, m.keys.PageUp) || key.Matches(message, m.keys.PageDown) {
+		if handled, command := m.handleGlobalKey(message); handled {
+			return m.withSpinner(command)
+		}
 	}
 	return m.handlePromptKey(message)
 }

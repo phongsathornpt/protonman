@@ -409,6 +409,8 @@ func TestSpinnerTickSkipsViewportRefreshForStreamingAssistant(t *testing.T) {
 	m.resize(80, 24)
 	m.busy = true
 	m.historyState.AppendAssistantDelta("streaming assistant text")
+	m.requestRelayout()
+	m.reconcileLayout()
 	m.viewport.SetContent("viewport sentinel")
 	updated, _ := m.Update(spinner.TickMsg{})
 	m = updated.(*bubbleModel)

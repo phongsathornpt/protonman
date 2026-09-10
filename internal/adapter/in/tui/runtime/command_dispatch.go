@@ -4,14 +4,15 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"fmt"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
-	"strings"
 )
 
 func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 	defer m.reconcileLayout()
 
-	rawName, argument, parts := splitCommand(line)
-	name := canonicalSlashName(rawName)
+	parsed := parseCommand(line)
+	name := parsed.Name
+	argument := parsed.Argument
+	parts := parsed.Parts
 	switch name {
 	case "help":
 		m.appendHelp()
@@ -20,13 +21,13 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 	case "skills":
 		return m.handleSkillsCommand(argument, parts)
 	case "goal":
-		return m.executeConversationCommand(name, fullSlashArgument(line, rawName))
+		return m.executeConversationCommand(name, parsed.Rest)
 	case "clear", "transcript", "todo":
 		return m.executeConversationCommand(name, argument)
 	case "model":
 		return m.executeModelCommand(argument)
 	case "provider":
-		return m.executeProviderCommand(line, rawName)
+		return m.executeProviderCommand(line, parsed.Name)
 	case "agents":
 		return m.openAgentsPane()
 	case "call":
@@ -44,16 +45,4 @@ func (m *bubbleModel) appendHelp() {
 	for _, command := range slashCatalog {
 		m.appendLine("/" + textview.PadRight(command.Name, 16) + " " + command.Description)
 	}
-}
-
-func fullSlashArgument(line, rawName string) string {
-	trimmed := strings.TrimSpace(line)
-	if len(trimmed) == 0 {
-		return ""
-	}
-	body := strings.TrimSpace(trimmed[1:])
-	if len(body) < len(rawName) {
-		return ""
-	}
-	return strings.TrimSpace(body[len(rawName):])
 }

@@ -963,6 +963,7 @@ func TestTodoPaneShowsPendingBeforeCompleted(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, []tododomain.Item{{ID: "already-done", Text: "already done", Status: tododomain.StatusCompleted}, {ID: "still-open", Text: "still open", Status: tododomain.StatusPending}, {ID: "also-done", Text: "also done", Status: tododomain.StatusCompleted}})
 	model.resize(80, 24)
 	model.toggleTodoPane()
+	model.reconcileLayout()
 	view := testPlain(model.View().Content)
 	if !strings.Contains(view, "still open") {
 		t.Fatalf("todo pane hid the pending item: %s", view)
