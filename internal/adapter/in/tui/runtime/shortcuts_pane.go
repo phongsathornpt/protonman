@@ -40,7 +40,7 @@ func (*shortcutsPaneView) Render(ctx paneRenderContext) string {
 }
 
 func (*shortcutsPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
-	if key.Matches(message, paneKeys.Close, paneKeys.Confirm) || message.String() == "?" {
+	if key.Matches(message, paneKeys.Close, paneKeys.Confirm) || message.Text == "?" {
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: shortcutsViewID}}
 	}
 	return paneKeyResult{handled: true}

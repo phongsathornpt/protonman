@@ -3,14 +3,30 @@ package runtime
 import (
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 )
 
+var providerEditorKeys = struct {
+	ToggleFree, Protocol, NextField, PreviousField key.Binding
+	Protonman, OpenCode, Ollama, OpenAI, Anthropic key.Binding
+}{
+	ToggleFree:    key.NewBinding(key.WithKeys("f")),
+	Protocol:      key.NewBinding(key.WithKeys("ctrl+r")),
+	NextField:     key.NewBinding(key.WithKeys("tab", "down")),
+	PreviousField: key.NewBinding(key.WithKeys("shift+tab", "up")),
+	Protonman:     key.NewBinding(key.WithKeys("alt+1", "alt+p")),
+	OpenCode:      key.NewBinding(key.WithKeys("alt+2", "alt+o")),
+	Ollama:        key.NewBinding(key.WithKeys("alt+3", "alt+l")),
+	OpenAI:        key.NewBinding(key.WithKeys("alt+4")),
+	Anthropic:     key.NewBinding(key.WithKeys("alt+5")),
+}
+
 func (v *providerPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	switch v.state {
 	case providerStateFetching:
-		if message.String() == "esc" {
+		if key.Matches(message, paneKeys.Escape) {
 			v.cancelFetch()
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: providerViewID}}
 		}
@@ -46,27 +62,27 @@ func (v *providerPaneView) syncInputFocus() {
 
 func (v *providerPaneView) handleModelSelectKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	v.ensureModelPicker(ctx)
-	switch message.String() {
-	case "esc":
+	switch {
+	case key.Matches(message, paneKeys.Escape):
 		v.state = providerStateInput
 		v.focusIndex = int(providerFieldAPIKey)
 		v.syncInputFocus()
 		return paneKeyResult{handled: true}
-	case "f":
+	case key.Matches(message, providerEditorKeys.ToggleFree):
 		if v.isOpenCode() {
 			v.filterFreeOnly = !v.filterFreeOnly
 			v.modelPickerSet = false
 			v.ensureModelPicker(ctx)
 		}
 		return paneKeyResult{handled: true}
-	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+	case message.Text >= "1" && message.Text <= "9":
 		pageOffset := v.modelPicker.Paginator.Page * v.modelPicker.Paginator.PerPage
-		idx := pageOffset + int(message.String()[0]-'1')
+		idx := pageOffset + int(message.Text[0]-'1')
 		if idx >= 0 && idx < len(v.currentModels()) {
 			v.modelPicker.Select(idx)
 		}
 		return paneKeyResult{handled: true}
-	case "enter":
+	case key.Matches(message, paneKeys.Confirm):
 		item, ok := v.modelPicker.SelectedItem().(providerEditorModelItem)
 		if !ok {
 			return paneKeyResult{handled: true}
@@ -74,7 +90,7 @@ func (v *providerPaneView) handleModelSelectKey(ctx paneRenderContext, message t
 		v.selectedModel = item.model.ID
 		v.state = providerStateSaving
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionProviderSave, providerSave: v.providerSaveRequest(item.model.ID)}}
-	case "up", "k", "down", "j", "home", "g", "end", "G", "pgup", "pgdown":
+	case key.Matches(message, paneKeys.Nav):
 		updated, cmd := v.modelPicker.Update(message)
 		v.modelPicker = updated
 		return paneKeyResult{handled: true, cmd: cmd}
@@ -84,11 +100,11 @@ func (v *providerPaneView) handleModelSelectKey(ctx paneRenderContext, message t
 }
 
 func (v *providerPaneView) handleSaveErrorKey(message tea.KeyPressMsg) paneKeyResult {
-	switch message.String() {
-	case "enter":
+	switch {
+	case key.Matches(message, paneKeys.Confirm):
 		v.state = providerStateSaving
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionProviderSave, providerSave: v.providerSaveRequest(v.selectedModel)}}
-	case "esc":
+	case key.Matches(message, paneKeys.Escape):
 		v.state = providerStateSelectModel
 		v.errorMessage = ""
 		return paneKeyResult{handled: true}
@@ -98,10 +114,10 @@ func (v *providerPaneView) handleSaveErrorKey(message tea.KeyPressMsg) paneKeyRe
 }
 
 func (v *providerPaneView) handleOverwriteKey(message tea.KeyPressMsg) paneKeyResult {
-	switch message.String() {
-	case "enter":
+	switch {
+	case key.Matches(message, paneKeys.Confirm):
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionProviderFetch}}
-	case "esc":
+	case key.Matches(message, paneKeys.Escape):
 		v.state = providerStateInput
 		v.focusIndex = int(providerFieldName)
 		v.syncInputFocus()
@@ -112,49 +128,46 @@ func (v *providerPaneView) handleOverwriteKey(message tea.KeyPressMsg) paneKeyRe
 }
 
 func (v *providerPaneView) handleProviderErrorKey(message tea.KeyPressMsg) paneKeyResult {
-	switch message.String() {
-	case "enter", "esc":
+	if key.Matches(message, paneKeys.Confirm, paneKeys.Escape) {
 		v.state = providerStateInput
 		v.clearValidation()
 		v.focusIndex = int(providerFieldAPIKey)
 		v.syncInputFocus()
-		return paneKeyResult{handled: true}
-	default:
-		return paneKeyResult{handled: true}
 	}
+	return paneKeyResult{handled: true}
 }
 
 func (v *providerPaneView) handleInputKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
-	switch message.String() {
-	case "esc":
+	switch {
+	case key.Matches(message, paneKeys.Escape):
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: providerViewID}}
-	case "alt+1", "alt+p":
+	case key.Matches(message, providerEditorKeys.Protonman):
 		v.applyPreset(model.DefaultProtonmanName)
 		return paneKeyResult{handled: true}
-	case "alt+2", "alt+o":
+	case key.Matches(message, providerEditorKeys.OpenCode):
 		v.applyPreset(model.DefaultOpenCodeName)
 		return paneKeyResult{handled: true}
-	case "alt+3", "alt+l":
+	case key.Matches(message, providerEditorKeys.Ollama):
 		v.applyPreset(model.DefaultOllamaName)
 		return paneKeyResult{handled: true}
-	case "alt+4":
+	case key.Matches(message, providerEditorKeys.OpenAI):
 		v.applyPreset(model.DefaultOpenAIName)
 		return paneKeyResult{handled: true}
-	case "alt+5":
+	case key.Matches(message, providerEditorKeys.Anthropic):
 		v.applyPreset(model.DefaultAnthropicName)
 		return paneKeyResult{handled: true}
-	case "ctrl+r":
+	case key.Matches(message, providerEditorKeys.Protocol):
 		v.toggleProtocol()
 		return paneKeyResult{handled: true}
-	case "tab", "down":
+	case key.Matches(message, providerEditorKeys.NextField):
 		v.focusIndex = (v.focusIndex + 1) % 3
 		v.syncInputFocus()
 		return paneKeyResult{handled: true}
-	case "shift+tab", "up":
+	case key.Matches(message, providerEditorKeys.PreviousField):
 		v.focusIndex = (v.focusIndex + 2) % 3
 		v.syncInputFocus()
 		return paneKeyResult{handled: true}
-	case "enter":
+	case key.Matches(message, paneKeys.Confirm):
 		if !v.validateDraft() {
 			return paneKeyResult{handled: true}
 		}

@@ -6,6 +6,14 @@ import (
 	"strings"
 )
 
+var composerKeys = struct {
+	ExitBash, HistoryUp, HistoryDown key.Binding
+}{
+	ExitBash:    key.NewBinding(key.WithKeys("backspace", "ctrl+h", "delete")),
+	HistoryUp:   key.NewBinding(key.WithKeys("up")),
+	HistoryDown: key.NewBinding(key.WithKeys("down")),
+}
+
 func (m *bubbleModel) matchesGlobalShortcut(message tea.KeyPressMsg) bool {
 	return key.Matches(message, m.keys.ToggleTodo) || key.Matches(message, m.keys.Transcript) || key.Matches(message, m.keys.CyclePermission) || key.Matches(message, m.keys.ToggleSkills) || key.Matches(message, m.keys.ToggleModel)
 }
@@ -106,14 +114,14 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 
 func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 	prompt := m.panes.bottom.prompt()
-	if message.String() == "?" && prompt.Value() == "" && !m.panes.bottom.bashMode() {
+	if message.Text == "?" && prompt.Value() == "" && !m.panes.bottom.bashMode() {
 		m.openShortcutsPane()
 		return nil
 	}
-	if message.String() == "tab" && m.busy {
+	if key.Matches(message, paneKeys.Tab) && m.busy {
 		return m.withSpinner(m.submit())
 	}
-	if message.String() == "esc" {
+	if key.Matches(message, paneKeys.Escape) {
 		if m.panes.bottom.bashMode() {
 			m.setBashMode(false)
 		}
@@ -122,21 +130,18 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 		m.requestRelayout()
 		return nil
 	}
-	if message.String() == "enter" {
+	if key.Matches(message, m.keys.Submit) {
 		return m.withSpinner(m.submit())
 	}
-	if !m.panes.bottom.bashMode() && prompt.Value() == "" && message.String() == "!" {
+	if !m.panes.bottom.bashMode() && prompt.Value() == "" && message.Text == "!" {
 		m.setBashMode(true)
 		return nil
 	}
-	if m.panes.bottom.bashMode() && prompt.Value() == "" {
-		switch message.String() {
-		case "backspace", "ctrl+h", "delete":
-			m.setBashMode(false)
-			return nil
-		}
+	if m.panes.bottom.bashMode() && prompt.Value() == "" && key.Matches(message, composerKeys.ExitBash) {
+		m.setBashMode(false)
+		return nil
 	}
-	if message.String() == "up" {
+	if key.Matches(message, composerKeys.HistoryUp) {
 		lineInfo := prompt.LineInfo()
 		if prompt.LineCount() == 1 || (prompt.Line() == 0 && lineInfo.RowOffset == 0 && lineInfo.ColumnOffset == 0) {
 			m.historyPrevious()
@@ -144,7 +149,7 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 	}
-	if message.String() == "down" && m.panes.bottom.historyNavigating() {
+	if key.Matches(message, composerKeys.HistoryDown) && m.panes.bottom.historyNavigating() {
 		m.historyNext()
 		m.syncSlashView()
 		return nil
