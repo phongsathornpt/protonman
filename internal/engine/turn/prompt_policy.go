@@ -49,8 +49,10 @@ func (l *Loop) effectivePromptSpec(definitions []tool.Definition, extras []strin
 		}
 		if tool.EffectiveMutability(definition) == tool.MutabilityMutating {
 			switch definition.Safety.MutationDomain {
-			case tool.MutationDomainWorkspace, tool.MutationDomainWorkspacePolicy:
-				spec.Mutations.Workspace = true
+			case tool.MutationDomainWorkspace:
+				spec.Mutations.Source = true
+			case tool.MutationDomainWorkspacePolicy:
+				spec.Mutations.Context = true
 			case tool.MutationDomainTaskState:
 				spec.Mutations.Task = true
 			case tool.MutationDomainAgentState:

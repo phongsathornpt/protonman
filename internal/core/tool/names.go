@@ -6,6 +6,7 @@ const (
 	NameRead     = "read"
 	NameLS       = "ls"
 	NameFind     = "find"
+	NameGrep     = "grep"
 	NameMath     = "math"
 	NameGit      = "git"
 	NameEdit     = "edit"

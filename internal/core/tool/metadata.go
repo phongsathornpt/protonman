@@ -26,7 +26,7 @@ var builtinMetadata = map[string]callMetadata{
 	NameEdit:     {Metadata: Metadata{Name: NameEdit, Kind: KindEdit, DisplayName: "Edit"}, title: titleEdit, target: targetEdit, affectedPaths: affectedEdit},
 	NameLS:       {Metadata: Metadata{Name: NameLS, Kind: KindRead, DisplayName: "List"}, title: titleListDir, target: targetListDir},
 	NameFind:     {Metadata: Metadata{Name: NameFind, Kind: KindRead, DisplayName: "Find files"}, title: titleFindFiles, target: targetFindFiles},
-	"grep":       {Metadata: Metadata{Name: "grep", Kind: KindGrep, DisplayName: "Search"}, title: titleGrep, target: targetGrep},
+	NameGrep:     {Metadata: Metadata{Name: NameGrep, Kind: KindGrep, DisplayName: "Search"}, title: titleGrep, target: targetGrep},
 	NameBash:     {Metadata: Metadata{Name: NameBash, Kind: KindBash, DisplayName: "Run"}, title: titleBash, target: targetBash},
 	NameWeb:      {Metadata: Metadata{Name: NameWeb, Kind: KindWeb, DisplayName: "Web"}, title: titleWeb, target: targetWeb},
 	NameGit:      {Metadata: Metadata{Name: NameGit, Kind: KindGit, DisplayName: "Git"}, title: titleGitStatus, target: targetGitStatus},

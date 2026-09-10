@@ -24,7 +24,7 @@ func TestEffectivePromptSpecDerivesCapabilitiesAndMutationDomains(t *testing.T) 
 	if joined := strings.Join(got.AvailableTools, ","); joined != "tasks,agents,edit,mcp.read,mcp.write" {
 		t.Fatalf("available tools = %q", joined)
 	}
-	if !got.Mutations.Task || !got.Mutations.Agent || !got.Mutations.Workspace || !got.Mutations.External {
+	if !got.Mutations.Task || !got.Mutations.Agent || !got.Mutations.Source || !got.Mutations.External {
 		t.Fatalf("mutations = %+v", got.Mutations)
 	}
 }
@@ -35,5 +35,23 @@ func TestNonWorkspaceMutationDoesNotEnableEditingVerificationPrompt(t *testing.T
 	got := prompt.Render(loop.effectivePromptSpec(defs, nil))
 	if strings.Contains(got, "# Editing And Verification") {
 		t.Fatalf("agent-state mutation enabled workspace verification contract:\n%s", got)
+	}
+}
+
+func TestWorkspacePolicyMutationDoesNotEnableEditingVerificationPrompt(t *testing.T) {
+	loop := &Loop{promptSpec: &prompt.Spec{}, languageModel: &scriptedClient{}}
+	defs := []tool.Definition{{
+		Name:       tool.NameSkill,
+		Kind:       tool.KindRead,
+		Mutability: tool.MutabilityMutating,
+		Safety:     tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspacePolicy},
+	}}
+	spec := loop.effectivePromptSpec(defs, nil)
+	if !spec.Mutations.Context || spec.Mutations.Source {
+		t.Fatalf("mutations = %+v, want context-only mutation", spec.Mutations)
+	}
+	got := prompt.Render(spec)
+	if strings.Contains(got, "# Editing And Verification") {
+		t.Fatalf("workspace-policy mutation enabled source verification contract:\n%s", got)
 	}
 }

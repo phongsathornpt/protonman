@@ -81,9 +81,9 @@ func NewGrep(workspaceRoot *workspace.Workspace) tool.Handler {
 
 func (grepHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:                "grep",
+		Name:                tool.NameGrep,
 		Description:         "Search workspace file contents with a regular expression and return bounded match evidence.",
-		Kind:                tool.KindForName("grep"),
+		Kind:                tool.KindForName(tool.NameGrep),
 		Mutability:          tool.MutabilityReadOnly,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead},
 		Evidence:            tool.EvidenceWorkspace,

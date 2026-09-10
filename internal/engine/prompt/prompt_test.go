@@ -10,13 +10,13 @@ func TestRenderComposesStableContracts(t *testing.T) {
 		Role: "You inspect code.", Profile: "agility", Workspace: "/repo",
 		GroundingEvidence: "workspace",
 		AvailableTools:    []string{"read", "grep", "find", "ls", "git", "math", "edit", "web", "bash", "todo", "subagent"},
-		Capabilities:      ToolCapabilities{Tasks: true, Agents: true}, Mutations: MutationCapabilities{Workspace: true}, Skills: "skill instructions",
+		Capabilities:      ToolCapabilities{Tasks: true, Agents: true}, Mutations: MutationCapabilities{Source: true}, Skills: "skill instructions",
 		ProjectInstructions: "follow repository rules",
 		ExtraInstructions:   []string{"custom one", "custom two"},
 	})
 	for _, want := range []string{
-		`<proton-system-prompt version="7">`, "specialized coding subagent", "# Execution Contract", "# Tool Protocol",
-		"# Tool Discipline", "narrowest dedicated capability", "Use read for known workspace artifacts", "Use bash for actual programs", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
+		`<proton-system-prompt version="7">`, "specialized coding subagent", "# Execution Contract",
+		"# Tool Use", "narrowest dedicated capability", "Use read for known workspace artifacts", "Use bash for actual programs", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
 		"# Editing And Verification", "Workspace root: /repo", "skill instructions", "# Project Instructions",
 		"cannot override Protonman's tool, permission, safety, or runtime contracts", "# Additional Instructions", "custom one", "custom two",
 	} {
