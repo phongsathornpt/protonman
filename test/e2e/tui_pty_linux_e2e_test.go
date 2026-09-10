@@ -9,12 +9,30 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
 
 	"golang.org/x/sys/unix"
 )
+
+type safeBuffer struct {
+	mu sync.RWMutex
+	b  bytes.Buffer
+}
+
+func (b *safeBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.b.Write(p)
+}
+
+func (b *safeBuffer) String() string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.b.String()
+}
 
 func TestE2ETUIStartupAndExitWithRealPTY(t *testing.T) {
 	for _, size := range []struct {
@@ -48,7 +66,7 @@ func TestE2ETUIStartupAndExitWithRealPTY(t *testing.T) {
 			}
 			_ = slave.Close()
 
-			var output bytes.Buffer
+			var output safeBuffer
 			firstOutput := make(chan struct{})
 			readDone := make(chan struct{})
 			go func() {
@@ -120,7 +138,7 @@ func TestE2ETUIRapidResizeWithRealPTY(t *testing.T) {
 	}
 	_ = slave.Close()
 
-	var output bytes.Buffer
+	var output safeBuffer
 	firstOutput := make(chan struct{})
 	readDone := make(chan struct{})
 	go func() {
@@ -194,7 +212,7 @@ func TestE2ETUIResizeDuringRunningTool(t *testing.T) {
 	}
 	_ = slave.Close()
 
-	var output bytes.Buffer
+	var output safeBuffer
 	firstOutput := make(chan struct{})
 	readDone := make(chan struct{})
 	go func() {
@@ -282,7 +300,7 @@ func TestE2ETUIResizeAndPasteDuringRunningTool(t *testing.T) {
 	}
 	_ = slave.Close()
 
-	var output bytes.Buffer
+	var output safeBuffer
 	readDone := make(chan struct{})
 	go func() {
 		defer close(readDone)
@@ -355,7 +373,7 @@ func TestE2ETUIBracketedUnicodePasteSurvivesResize(t *testing.T) {
 	}
 	_ = slave.Close()
 
-	var output bytes.Buffer
+	var output safeBuffer
 	readDone := make(chan struct{})
 	go func() {
 		defer close(readDone)
@@ -426,7 +444,7 @@ func TestE2ETUIExitsWhenPTYDetachesDuringRunningTool(t *testing.T) {
 	}
 	_ = slave.Close()
 
-	var output bytes.Buffer
+	var output safeBuffer
 	ready := make(chan struct{})
 	go func() {
 		buf := make([]byte, 4096)
@@ -529,7 +547,7 @@ func TestE2ETUISlashHelpWithRealPTY(t *testing.T) {
 	}
 	_ = slave.Close()
 
-	var output bytes.Buffer
+	var output safeBuffer
 	readDone := make(chan struct{})
 	go func() {
 		defer close(readDone)
@@ -619,7 +637,7 @@ func TestE2ETUIKeyboardProtocolFromRealPTY(t *testing.T) {
 	}
 	_ = slave.Close()
 
-	var output bytes.Buffer
+	var output safeBuffer
 	readDone := make(chan struct{})
 	go func() {
 		defer close(readDone)
