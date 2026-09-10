@@ -35,18 +35,15 @@ func minInt(left int, right int) int {
 	return right
 }
 
-const composerHorizontalInset = 1
-
 func composerUsableWidth(terminalWidth int) int {
-	return maxInt(1, terminalWidth-composerHorizontalInset*2)
+	return maxInt(1, terminalWidth)
 }
 
 func (m *bubbleModel) promptView() string {
 	if m.panes.bottom == nil || m.panes.bottom.prompt() == nil {
 		return ""
 	}
-	inset := strings.Repeat(" ", composerHorizontalInset)
 	usableWidth := composerUsableWidth(m.layout.width)
 	border := promptBorderStyle.Render(strings.Repeat("─", usableWidth))
-	return inset + border + "\n" + inset + m.panes.bottom.prompt().View() + "\n" + inset + border
+	return border + "\n" + m.panes.bottom.prompt().View() + "\n" + border
 }
