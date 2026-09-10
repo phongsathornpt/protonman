@@ -6,7 +6,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
-const Version = "7"
+const Version = "8"
 
 type ToolCapabilities struct {
 	Tasks  bool
@@ -38,46 +38,47 @@ type Spec struct {
 }
 
 func Render(spec Spec) string {
-	sections := []string{
-		identitySection(spec),
-		executionSection(),
-		toolDisciplineSection(spec),
+	sections := []Section{
+		{Name: "identity", Order: orderIdentity, Text: identitySection(spec)},
+		{Name: "execution", Order: orderExecution, Text: executionSection()},
+		{Name: "tool-discipline", Order: orderToolDiscipline, Text: toolDisciplineSection(spec)},
+		{Name: "workspace", Order: orderWorkspace, Text: workspaceSection(spec)},
 	}
-	if goal := strings.TrimSpace(spec.ActiveGoal); goal != "" {
-		sections = append(sections, activeGoalSection(goal))
-	}
-	if project := strings.TrimSpace(spec.ProjectInstructions); project != "" {
-		sections = append(sections, projectSection(project))
-	}
-	if role := strings.TrimSpace(spec.Role); role != "" {
-		sections = append(sections, "# Role\n"+role)
-	}
-	sections = append(sections, workspaceSection(spec))
 	if evidence := strings.TrimSpace(spec.GroundingEvidence); evidence != "" && evidence != "none" {
-		sections = append(sections, groundingSection(evidence))
+		sections = append(sections, Section{Name: "grounding", Order: orderGrounding, Text: groundingSection(evidence)})
 	}
 	if spec.Capabilities.Tasks {
-		sections = append(sections, taskSection(spec))
+		sections = append(sections, Section{Name: "task-coordination", Order: orderTaskCoordination, Text: taskSection(spec)})
 	}
 	if spec.Capabilities.Agents {
-		sections = append(sections, delegationSection(spec))
+		sections = append(sections, Section{Name: "delegation", Order: orderDelegation, Text: delegationSection(spec)})
 	}
 	if spec.Capabilities.MCP {
-		sections = append(sections, mcpSection())
+		sections = append(sections, Section{Name: "mcp", Order: orderMCP, Text: mcpSection()})
 	}
 	if spec.Mutations.Source {
-		sections = append(sections, verificationSection())
+		sections = append(sections, Section{Name: "verification", Order: orderVerification, Text: verificationSection()})
 	}
 	if section := modelSection(spec); section != "" {
-		sections = append(sections, section)
+		sections = append(sections, Section{Name: "model-guidance", Order: orderModelGuidance, Text: section})
+	}
+	if project := strings.TrimSpace(spec.ProjectInstructions); project != "" {
+		sections = append(sections, Section{Name: "project-instructions", Order: orderProjectInstructions, Text: projectSection(project)})
 	}
 	if extras := additionalInstructionsSection(spec.ExtraInstructions); extras != "" {
-		sections = append(sections, extras)
+		sections = append(sections, Section{Name: "additional-instructions", Order: orderAdditionalInstructions, Text: extras})
 	}
 	if skills := strings.TrimSpace(spec.Skills); skills != "" {
-		sections = append(sections, "# Skills\n"+skills)
+		sections = append(sections, Section{Name: "skills", Order: orderSkills, Text: "# Skills\n" + skills})
 	}
-	return "<proton-system-prompt version=\"" + Version + "\">\n" + strings.Join(sections, "\n\n") + "\n</proton-system-prompt>"
+	if role := strings.TrimSpace(spec.Role); role != "" {
+		sections = append(sections, Section{Name: "role", Order: orderRole, Text: "# Role\n" + role})
+	}
+	if goal := strings.TrimSpace(spec.ActiveGoal); goal != "" {
+		sections = append(sections, Section{Name: "active-goal", Order: orderActiveGoal, Text: activeGoalSection(goal)})
+	}
+	body := renderSections(sections)
+	return "<proton-system-prompt version=\"" + Version + "\">\n" + body + "\n</proton-system-prompt>"
 }
 
 func IsManaged(text string) bool {
