@@ -1218,6 +1218,20 @@ func (fakeConversation) Run(context.Context, []model.Message, applicationturn.Si
 	return applicationturn.Result{}, nil
 }
 
+func TestAppendPaneGroupPreservesOverlappingSlices(t *testing.T) {
+	rows := []string{"Title", "Run (bash)", "Target: tmp"}
+	got := appendPaneGroup(rows[:1], rows[1:]...)
+	want := []string{"Title", "", "Run (bash)", "Target: tmp"}
+	if len(got) != len(want) {
+		t.Fatalf("group length=%d, want %d: %#v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("group[%d]=%q, want %q: %#v", i, got[i], want[i], got)
+		}
+	}
+}
+
 func TestPromptPlaceholderReflectsRunnerState(t *testing.T) {
 	if got := promptPlaceholder(false, permission.ModeAsk, false); got != "Message or /command…" {
 		t.Fatalf("no runner placeholder = %q", got)
@@ -1273,5 +1287,17 @@ func TestIdleFooterKeepsShortcutHintInAlwaysApprove(t *testing.T) {
 	}
 	if !strings.Contains(footer, " · auto · auto") {
 		t.Fatalf("footer did not use compact permission label: %q", footer)
+	}
+}
+
+func TestPaneKeyboardHelpStaysSingleLine(t *testing.T) {
+	for _, width := range []int{24, 32, 40, 60, 80, 120} {
+		help := paneKeyboardHelp(width, "↑/↓", "Navigate", "enter", "Select", "tab", "Complete", "esc", "Go Back")
+		if got := lipgloss.Height(help); got != 1 {
+			t.Fatalf("help height=%d at width=%d, want 1: %q", got, width, help)
+		}
+		if got := ansi.StringWidth(help); got > width {
+			t.Fatalf("help width=%d exceeds %d: %q", got, width, help)
+		}
 	}
 }

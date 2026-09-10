@@ -106,9 +106,9 @@ func (v *slashPaneView) Render(ctx paneRenderContext) string {
 	v.picker.SetSize(maxInt(20, ctx.width-4), maxInt(1, visibleRows))
 	rows := v.commandRows(ctx)
 	if layoutModeForHeight(ctx.height) != layoutTiny {
-		rows = append(rows, "", slashPickerHelp(ctx.width))
-	}
-	if status := v.selectionStatus(ctx.width); status != "" {
+		width := maxInt(1, ctx.width-6)
+		rows = append(rows, paneHelpStatusLine(width, slashPickerHelp(width), v.selectionStatusText()))
+	} else if status := v.selectionStatus(ctx.width); status != "" {
 		rows = append(rows, status)
 	}
 	return strings.Join(rows, "\n")
@@ -160,13 +160,16 @@ func slashPickerHelp(width int) string {
 	return paneKeyboardHelp(width, "↑/↓", "Navigate", "enter", "Select", "tab", "Complete", "esc", "Go Back")
 }
 
-func (v *slashPaneView) selectionStatus(width int) string {
+func (v *slashPaneView) selectionStatusText() string {
 	if len(v.matches) == 0 {
 		return ""
 	}
 	index := maxInt(0, minInt(v.picker.GlobalIndex(), len(v.matches)-1))
-	status := fmt.Sprintf("%d/%d", index+1, len(v.matches))
-	return paneRightStatus(width, status)
+	return fmt.Sprintf("%d/%d", index+1, len(v.matches))
+}
+
+func (v *slashPaneView) selectionStatus(width int) string {
+	return paneRightStatus(width, v.selectionStatusText())
 }
 
 func (v *slashPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {

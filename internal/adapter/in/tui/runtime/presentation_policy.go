@@ -105,6 +105,28 @@ func paneKeyboardHelp(width int, bindings ...string) string {
 	return mutedStyle.Render(truncateWithEllipsis(ansi.Strip(line), maxInt(1, width)))
 }
 
+func paneHelpStatusLine(width int, help string, status string) string {
+	help = strings.TrimSpace(strings.ReplaceAll(help, "\n", " "))
+	status = strings.TrimSpace(strings.ReplaceAll(status, "\n", " "))
+	if width <= 0 {
+		return ""
+	}
+	if status == "" {
+		return truncateWithEllipsis(help, width)
+	}
+	if help == "" {
+		return paneRightStatus(width, status)
+	}
+	statusWidth := ansi.StringWidth(status)
+	helpWidth := width - statusWidth - 1
+	if helpWidth < 4 {
+		return paneRightStatus(width, status)
+	}
+	help = truncateWithEllipsis(help, helpWidth)
+	gap := maxInt(1, width-ansi.StringWidth(help)-statusWidth)
+	return help + strings.Repeat(" ", gap) + mutedStyle.Render(status)
+}
+
 func paneRightStatus(width int, text string) string {
 	text = strings.TrimSpace(text)
 	if text == "" || width <= 0 {
@@ -116,14 +138,33 @@ func paneRightStatus(width int, text string) string {
 	return strings.Repeat(" ", padding) + mutedStyle.Render(text)
 }
 
+func appendPaneGroup(out []string, group ...string) []string {
+	// Callers commonly pass overlapping slices such as rows[:1], rows[1:]....
+	// Copy the group before appending so inserting the separator cannot clobber it.
+	group = append([]string(nil), group...)
+	for len(out) > 0 && strings.TrimSpace(out[len(out)-1]) == "" {
+		out = out[:len(out)-1]
+	}
+	for len(group) > 0 && strings.TrimSpace(group[0]) == "" {
+		group = group[1:]
+	}
+	for len(group) > 0 && strings.TrimSpace(group[len(group)-1]) == "" {
+		group = group[:len(group)-1]
+	}
+	if len(group) == 0 {
+		return out
+	}
+	if len(out) > 0 {
+		out = append(out, "")
+	}
+	return append(out, group...)
+}
+
 func paneSection(title string, rows []string, help string, status string, width int) []string {
 	out := []string{brandStyle.Render(title)}
-	if len(rows) > 0 {
-		out = append(out, "")
-		out = append(out, rows...)
-	}
+	out = appendPaneGroup(out, rows...)
 	if help != "" {
-		out = append(out, "", help)
+		out = appendPaneGroup(out, help)
 	}
 	if status != "" {
 		out = append(out, paneRightStatus(width, status))

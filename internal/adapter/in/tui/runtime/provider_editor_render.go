@@ -115,11 +115,11 @@ func (v *providerPaneView) Render(ctx paneRenderContext) string {
 	}
 	rows, tone := providerpane.ProviderEditorRows(providerEditorSnapshot(ctx, v))
 	if len(rows) > 1 && layoutModeForHeight(ctx.height) != layoutTiny {
-		rows = append(rows[:1], append([]string{""}, rows[1:]...)...)
+		rows = appendPaneGroup(rows[:1], rows[1:]...)
 	}
-	help := providerEditorKeyboardHelp(ctx.width, v.state, v.isEditing, v.activateOnSave)
+	help := providerEditorKeyboardHelp(providerModalContentWidth(ctx), v.state, v.isEditing, v.activateOnSave)
 	if help != "" {
-		rows = append(rows, "", help)
+		rows = appendPaneGroup(rows, help)
 	}
 	status := strings.TrimSpace(v.nameInput.Value())
 	if v.isEditing && !v.activateOnSave && v.state == providerStateInput {
@@ -134,13 +134,13 @@ func (v *providerPaneView) Render(ctx paneRenderContext) string {
 func providerEditorKeyboardHelp(width int, state providerPaneState, editing, activateOnSave bool) string {
 	switch state {
 	case providerStateFetching:
-		return paneKeyboardHelp(width-4, "esc", "Cancel")
+		return paneKeyboardHelp(width, "esc", "Cancel")
 	case providerStateConfirmOverwrite:
-		return paneKeyboardHelp(width-4, "enter", "Overwrite", "esc", "Go Back", "ctrl+c", "Cancel")
+		return paneKeyboardHelp(width, "enter", "Overwrite", "esc", "Go Back", "ctrl+c", "Cancel")
 	case providerStateSaveError:
-		return paneKeyboardHelp(width-4, "enter", "Retry", "esc", "Go Back", "ctrl+c", "Cancel")
+		return paneKeyboardHelp(width, "enter", "Retry", "esc", "Go Back", "ctrl+c", "Cancel")
 	case providerStateError:
-		return paneKeyboardHelp(width-4, "enter", "Go Back", "esc", "Go Back")
+		return paneKeyboardHelp(width, "enter", "Go Back", "esc", "Go Back")
 	case providerStateSaving:
 		return ""
 	default:
@@ -148,7 +148,7 @@ func providerEditorKeyboardHelp(width int, state providerPaneState, editing, act
 		if editing && !activateOnSave {
 			action = "Save"
 		}
-		return paneKeyboardHelp(width-4, "tab", "Fields", "ctrl+r", "Protocol", "enter", action, "esc", "Go Back")
+		return paneKeyboardHelp(width, "tab", "Fields", "ctrl+r", "Protocol", "enter", action, "esc", "Go Back")
 	}
 }
 

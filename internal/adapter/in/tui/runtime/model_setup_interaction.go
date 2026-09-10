@@ -39,7 +39,6 @@ func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 	if len(v.providerNames) > 1 {
 		rows = append(rows, mutedStyle.Render("Provider: "+v.activeProviderName()+" · tab switch"))
 	}
-	rows = append(rows, "")
 	showSelectionStatus := false
 
 	switch {
@@ -56,15 +55,15 @@ func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 		showSelectionStatus = true
 	}
 
-	rows = append(rows, "", v.effortRow())
+	rows = appendPaneGroup(rows, v.effortRow())
 	if labels := v.effortLabels(); labels != "" {
 		rows = append(rows, labels)
 	}
 	if mode != layoutTiny {
-		rows = append(rows, "", modelSetupHelp(ctx.width, len(v.reasoningChoices) > 1))
+		rows = appendPaneGroup(rows, modelSetupHelp(maxInt(1, ctx.width-6), len(v.reasoningChoices) > 1))
 	}
 	if showSelectionStatus {
-		if status := v.selectionStatus(ctx.width); status != "" {
+		if status := v.selectionStatus(maxInt(1, ctx.width-6)); status != "" {
 			rows = append(rows, status)
 		}
 	}

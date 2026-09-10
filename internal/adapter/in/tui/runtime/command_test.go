@@ -856,3 +856,29 @@ func TestControlCommandsDoNotEchoAsUserConversation(t *testing.T) {
 		}
 	}
 }
+
+func TestSlashPickerHelpAndPagingShareOneLine(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.panes.bottom.prompt().SetValue("/")
+	m.syncSlashView()
+	view := m.panes.bottom.find(slashViewID)
+	if view == nil {
+		t.Fatal("slash completion did not open")
+	}
+	plain := ansi.Strip(view.Render(newPaneRenderContext(m)))
+	lines := strings.Split(plain, "\n")
+	for i, line := range lines {
+		if !strings.Contains(line, "↑/↓") {
+			continue
+		}
+		if !strings.Contains(line, "1/12") {
+			t.Fatalf("slash help and paging split across lines: %q", plain)
+		}
+		if i > 0 && strings.TrimSpace(lines[i-1]) == "" {
+			t.Fatalf("blank row before slash help: %q", plain)
+		}
+		return
+	}
+	t.Fatalf("slash help line missing: %q", plain)
+}
