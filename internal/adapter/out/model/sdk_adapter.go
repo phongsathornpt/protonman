@@ -141,7 +141,7 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 	if cfg.contextWindow != nil {
 		model = withContextWindow(model, *cfg.contextWindow)
 	}
-	return withSessionID(withModelProfile(model, cfg.profile), sessionID)
+	return withModelProfile(withSessionID(model, sessionID), cfg.profile)
 }
 
 func newSDKAnthropicLanguageModel(baseURL, apiKey, modelID string, opts ...ClientOption) sdk.LanguageModel {
@@ -169,7 +169,7 @@ func newSDKAnthropicLanguageModel(baseURL, apiKey, modelID string, opts ...Clien
 	if cfg.contextWindow != nil {
 		model = withContextWindow(model, *cfg.contextWindow)
 	}
-	return withSessionID(withModelProfile(model, cfg.profile), sessionID)
+	return withModelProfile(withSessionID(model, sessionID), cfg.profile)
 }
 
 func usesResponsesAPI(modelID, baseURL string) bool {
