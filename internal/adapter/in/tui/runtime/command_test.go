@@ -818,7 +818,7 @@ func TestSlashCompletionUsesInlineCommandGrammar(t *testing.T) {
 		t.Fatal("slash completion did not open")
 	}
 	plain := ansi.Strip(view.Render(newPaneRenderContext(m)))
-	for _, want := range []string{"/help", "/permission", "↑/↓", "navigate", "tab", "complete", "1/12"} {
+	for _, want := range []string{"/help", "/permission", "↑/↓", "navigate", "tab", "complete", fmt.Sprintf("1/%d", len(slashCatalog))} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("slash completion missing %q: %q", want, plain)
 		}
@@ -838,7 +838,7 @@ func TestSlashPickerRendersBelowComposerLikeModelPicker(t *testing.T) {
 	if composer < 0 || commands < 0 || composer >= commands {
 		t.Fatalf("slash picker should render below composer: composer=%d commands=%d\n%s", composer, commands, plain)
 	}
-	for _, want := range []string{"↑/↓", "navigate", "enter", "select", "tab", "complete", "esc", "go back", "1/12"} {
+	for _, want := range []string{"↑/↓", "navigate", "enter", "select", "tab", "complete", "esc", "go back", fmt.Sprintf("1/%d", len(slashCatalog))} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("slash picker missing reference element %q:\n%s", want, plain)
 		}
@@ -872,7 +872,7 @@ func TestSlashPickerHelpAndPagingShareOneLine(t *testing.T) {
 		if !strings.Contains(line, "↑/↓") {
 			continue
 		}
-		if !strings.Contains(line, "1/12") {
+		if !strings.Contains(line, fmt.Sprintf("1/%d", len(slashCatalog))) {
 			t.Fatalf("slash help and paging split across lines: %q", plain)
 		}
 		if i > 0 && strings.TrimSpace(lines[i-1]) == "" {

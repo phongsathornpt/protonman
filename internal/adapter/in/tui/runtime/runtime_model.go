@@ -26,10 +26,24 @@ import (
 )
 
 const (
-	defaultBubbleWidth  = 80
-	defaultBubbleHeight = 24
-	promptRows          = 1
+	defaultBubbleWidth      = 80
+	defaultBubbleHeight     = 24
+	promptRows              = 1
+	composerNewlineEnhanced = "ctrl+enter"
+	composerNewlineFallback = "ctrl+j"
 )
+
+type keyboardCapability uint8
+
+const (
+	keyboardCapabilityUnknown keyboardCapability = iota
+	keyboardCapabilityLegacy
+	keyboardCapabilityDisambiguated
+)
+
+func composerNewlineKeyNames() []string {
+	return []string{composerNewlineEnhanced, composerNewlineFallback}
+}
 
 type agentLifecycleMsg struct{ event agent.Event }
 
@@ -118,16 +132,17 @@ type executionPolicyState struct {
 }
 
 type presentationModelState struct {
-	viewport     viewport.Model
-	spinner      spinner.Model
-	help         help.Model
-	keys         bubbleKeyMap
-	planMode     bool
-	panes        paneState
-	showWelcome  bool
-	nextID       uint64
-	layout       layoutState
-	welcomeCache welcomeCardCache
+	viewport           viewport.Model
+	spinner            spinner.Model
+	help               help.Model
+	keys               bubbleKeyMap
+	planMode           bool
+	panes              paneState
+	showWelcome        bool
+	nextID             uint64
+	layout             layoutState
+	welcomeCache       welcomeCardCache
+	keyboardCapability keyboardCapability
 }
 
 type bubbleModel struct {
@@ -241,7 +256,18 @@ func disableViewportKeys(pane *viewport.Model) {
 }
 
 func newBubbleKeyMap() bubbleKeyMap {
-	return bubbleKeyMap{Submit: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send message")), Newline: key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("ctrl+j", "new line")), Quit: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "cancel or quit")), PageUp: key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "scroll")), PageDown: key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "scroll")), ToggleTodo: key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o", "tasks")), Transcript: key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "transcript")), CyclePermission: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "cycle permission")), ToggleSkills: key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "skills")), ToggleModel: key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "switch model"))}
+	return bubbleKeyMap{Submit: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send message")), Newline: newComposerNewlineBinding(keyboardCapabilityUnknown), Quit: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "cancel or quit")), PageUp: key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "scroll")), PageDown: key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "scroll")), ToggleTodo: key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o", "tasks")), Transcript: key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "transcript")), CyclePermission: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "cycle permission")), ToggleSkills: key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "skills")), ToggleModel: key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "switch model"))}
+}
+
+func setComposerNewlineHelp(binding *key.Binding, capability keyboardCapability) {
+	if binding == nil {
+		return
+	}
+	if capability == keyboardCapabilityDisambiguated {
+		binding.SetHelp(composerNewlineEnhanced, "new line")
+		return
+	}
+	binding.SetHelp(composerNewlineFallback, "new line")
 }
 
 func (k bubbleKeyMap) ShortHelp() []key.Binding {

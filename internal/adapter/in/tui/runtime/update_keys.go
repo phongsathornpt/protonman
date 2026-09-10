@@ -160,9 +160,7 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 	}
 	updated, command := prompt.Update(message)
 	*prompt = updated
-	if strings.TrimSpace(prompt.Value()) == "" && prompt.Value() != "" {
-		m.resetPrompt()
-	}
+	m.normalizeBlankComposer()
 	m.syncSlashView()
 	m.requestRelayout()
 	return command

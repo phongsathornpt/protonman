@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"strings"
+
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
@@ -208,8 +210,7 @@ func newPrompt(hasRunner bool) textarea.Model {
 	prompt.MaxHeight = 4
 	prompt.ShowLineNumbers = false
 	prompt.EndOfBufferCharacter = ' '
-	prompt.KeyMap.InsertNewline.SetKeys("ctrl+j")
-	prompt.KeyMap.InsertNewline.SetEnabled(true)
+	configureComposerNewline(&prompt, nil, keyboardCapabilityUnknown)
 	styles := prompt.Styles()
 	styles.Focused.CursorLine = lipgloss.NewStyle()
 	styles.Blurred.CursorLine = lipgloss.NewStyle()
@@ -248,6 +249,18 @@ func (m *bubbleModel) resetPrompt() {
 	prompt := m.panes.bottom.prompt()
 	prompt.Reset()
 	m.requestRelayout()
+}
+
+func (m *bubbleModel) normalizeBlankComposer() bool {
+	if m == nil || m.panes.bottom == nil || m.panes.bottom.prompt() == nil {
+		return false
+	}
+	prompt := m.panes.bottom.prompt()
+	if prompt.Value() == "" || strings.TrimSpace(prompt.Value()) != "" {
+		return false
+	}
+	m.resetPrompt()
+	return true
 }
 
 func (m *bubbleModel) historyPrevious() {
