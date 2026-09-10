@@ -14,7 +14,7 @@ func TestE2ESessionPersistenceAndRedaction(t *testing.T) {
 	sessionID := "e2e-test-session"
 	env := []string{
 		"PROTONMAN_HOME=" + home,
-		"PROTON_SESSION_ID=" + sessionID,
+		"PROTONMAN_SESSION_ID=" + sessionID,
 	}
 
 	// First run with -y (sets mode to always-approve) and calls read

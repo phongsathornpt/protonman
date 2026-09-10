@@ -15,15 +15,15 @@ func TestProfile(t *testing.T) {
 		{"strength", ProfileStrength, false, true},
 		{"agility", ProfileAgility, false, false},
 		{"intelligence", ProfileIntelligence, false, true},
-		{"explorer", ProfileAgility, false, false},
-		{"reviewer", ProfileAgility, false, false},
-		{"worker", ProfileStrength, false, true},
-		{"pow", ProfileStrength, false, true},
-		{"dex", ProfileIntelligence, false, true},
-		{"int", ProfileAgility, false, false},
-		{"  POW  ", ProfileStrength, false, true},
-		{"  Dex  ", ProfileIntelligence, false, true},
-		{"  INT  ", ProfileAgility, false, false},
+		{"  STRENGTH  ", ProfileStrength, false, true},
+		{"  Agility  ", ProfileAgility, false, false},
+		{"  INTELLIGENCE  ", ProfileIntelligence, false, true},
+		{"pow", "", true, false},
+		{"dex", "", true, false},
+		{"int", "", true, false},
+		{"worker", "", true, false},
+		{"explorer", "", true, false},
+		{"reviewer", "", true, false},
 		{"invalid", "", true, false},
 		{"", "", true, false},
 	}
@@ -61,7 +61,7 @@ func TestUniversalCannotBeDelegated(t *testing.T) {
 	if _, err := ParseSubagentProfile("universal"); err == nil {
 		t.Fatal("universal should not be a delegated subagent profile")
 	}
-	for _, name := range []string{"strength", "agility", "intelligence", "pow", "int", "dex"} {
+	for _, name := range []string{"strength", "agility", "intelligence"} {
 		if _, err := ParseSubagentProfile(name); err != nil {
 			t.Fatalf("ParseSubagentProfile(%q) error = %v", name, err)
 		}

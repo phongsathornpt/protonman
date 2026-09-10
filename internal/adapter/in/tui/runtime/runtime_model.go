@@ -1,0 +1,302 @@
+package runtime
+
+import (
+	"context"
+	"strings"
+	"time"
+
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/core/conversation"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
+	"github.com/phongsathornpt/protonman/internal/feature/skill"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+)
+
+const (
+	defaultBubbleWidth  = 80
+	defaultBubbleHeight = 24
+	promptRows          = 1
+)
+
+type agentLifecycleMsg struct{ event agent.Event }
+
+type turnProgress struct {
+	Round     int
+	ToolCalls int
+}
+
+type reasoningPreferenceSource uint8
+
+const (
+	reasoningPreferenceConfig reasoningPreferenceSource = iota
+	reasoningPreferenceSession
+)
+
+type agentModelState struct {
+	agents                         app.Agents
+	agentEvents                    <-chan agent.Event
+	agentSnapshot                  []agent.AgentStatus
+	agentActivity                  map[string]AgentActivity
+	agentHistory                   agentui.Tracker
+	agentProfile                   string
+	subagentsEnabled               bool
+	reasoningEffort                sdk.ReasoningEffort
+	reasoningPreference            sdk.ReasoningEffort
+	reasoningPreferenceSet         bool
+	reasoningPreferenceSource      reasoningPreferenceSource
+	reasoningCompatibilityFallback bool
+}
+
+type turnModelState struct {
+	turnProgress    turnProgress
+	activeTurnOwner string
+	busy            bool
+	activity        string
+	pendingActivity string
+	busyStarted     time.Time
+	turnCancel      context.CancelFunc
+	turnEvents      <-chan tea.Msg
+}
+
+type modelSetupState struct {
+	activeModel          string
+	activeProvider       string
+	providers            map[string]config.ProviderConfig
+	modelCatalogs        modelcatalog.State
+	activeProviderSave   asyncOperationID
+	activeProviderSelect asyncOperationID
+	activeProviderDelete asyncOperationID
+	activeModelSetup     asyncOperationID
+	configMutationGate   *asyncOperationGate
+}
+
+type conversationModelState struct {
+	historyState          *HistoryState
+	queue                 []string
+	conversationViewport  conversationViewportState
+	messages              []model.Message
+	conversationRetention conversation.RetentionPolicy
+}
+
+type todoModelState struct {
+	todo          []tododomain.Item
+	todoStore     tododomain.Repository
+	todoRevision  uint64
+	todoLifecycle todoLifecycleState
+}
+
+type sessionModelState struct {
+	sessionID    string
+	sessions     *app.Sessions
+	workspaceKey string
+}
+
+type projectModelState struct {
+	workDir                 string
+	projectTrusted          bool
+	projectConfigSources    []string
+	projectConfigProvenance map[string]config.ValueSource
+}
+
+type executionPolicyState struct {
+	maxToolCalls  int
+	runtimeConfig config.RuntimeConfig
+}
+
+type presentationModelState struct {
+	viewport     viewport.Model
+	spinner      spinner.Model
+	help         help.Model
+	keys         bubbleKeyMap
+	planMode     bool
+	panes        paneState
+	showWelcome  bool
+	nextID       uint64
+	layout       layoutState
+	welcomeCache welcomeCardCache
+}
+
+type bubbleModel struct {
+	ctx      context.Context
+	service  *toolcall.Service
+	registry tool.Registry
+	skills   *skill.Registry
+	runner   app.Conversation
+	bridge   *permissionBridge
+	agentModelState
+	turnModelState
+	modelSetupState
+	sessionModelState
+	projectModelState
+	conversationModelState
+	todoModelState
+	presentationModelState
+	executionPolicyState
+}
+
+type bubbleKeyMap struct {
+	Submit          key.Binding
+	Newline         key.Binding
+	Quit            key.Binding
+	PageUp          key.Binding
+	PageDown        key.Binding
+	ToggleTodo      key.Binding
+	Transcript      key.Binding
+	CyclePermission key.Binding
+	ToggleSkills    key.Binding
+	ToggleModel     key.Binding
+}
+
+func newBubbleModel(ctx context.Context, service *toolcall.Service, registry tool.Registry, todo []tododomain.Item, runner app.Conversation, bridge *permissionBridge, workDir string, initialMessages ...[]model.Message) *bubbleModel {
+	spin := spinner.New()
+	spin.Spinner = spinner.Dot
+	spin.Style = brandStyle
+	pane := viewport.New(viewport.WithWidth(defaultBubbleWidth), viewport.WithHeight(defaultBubbleHeight-6))
+	disableViewportKeys(&pane)
+	transcriptPane := viewport.New(viewport.WithWidth(defaultBubbleWidth-8), viewport.WithHeight(defaultBubbleHeight-8))
+	disableViewportKeys(&transcriptPane)
+	bottom := newBottomPane(runner != nil)
+	helpView := help.New()
+	helpView.SetWidth(defaultBubbleWidth - 2)
+	helpView.ShortSeparator = glyphSep
+	messages := []model.Message(nil)
+	retention := conversation.DefaultRetentionPolicy()
+	if len(initialMessages) > 0 {
+		messages = conversation.Retain(model.SnapshotMessages(initialMessages[0]), retention)
+	}
+	ui := &bubbleModel{
+		ctx:      ctx,
+		service:  service,
+		registry: registry,
+		runner:   runner,
+		bridge:   bridge,
+		projectModelState: projectModelState{
+			workDir: workDir,
+		},
+		presentationModelState: presentationModelState{
+			viewport:    pane,
+			spinner:     spin,
+			help:        helpView,
+			keys:        newBubbleKeyMap(),
+			panes:       paneState{bottom: bottom, transcript: transcriptPane},
+			showWelcome: true,
+			layout:      layoutState{width: defaultBubbleWidth, height: defaultBubbleHeight},
+		},
+		conversationModelState: conversationModelState{
+			historyState:          NewHistoryState(maxBubbleScrollback),
+			queue:                 make([]string, 0),
+			conversationViewport:  conversationViewportState{mode: viewportFollowing},
+			messages:              messages,
+			conversationRetention: retention,
+		},
+		todoModelState: todoModelState{
+			todo: append([]tododomain.Item{}, todo...),
+		},
+		executionPolicyState: executionPolicyState{
+			maxToolCalls:  config.DefaultMaxToolCalls,
+			runtimeConfig: config.DefaultRuntimeConfig(),
+		},
+		agentModelState: agentModelState{
+			subagentsEnabled: true,
+			agentActivity:    make(map[string]AgentActivity),
+		},
+		turnModelState:  turnModelState{activity: "ready"},
+		modelSetupState: modelSetupState{configMutationGate: &asyncOperationGate{}},
+	}
+
+	if allTodoCompleted(ui.todo) {
+		ui.todoLifecycle.CompletionFresh = true
+	}
+	ui.loadInitialMessages(messages)
+	ui.syncPromptPlaceholder()
+	ui.requestRelayout()
+	ui.reconcileLayout()
+	return ui
+}
+
+func disableViewportKeys(pane *viewport.Model) {
+	// Keep page navigation owned by bubbles/viewport. Prompt-oriented arrows and
+	// half-page bindings remain disabled so they cannot compete with textarea
+	// cursor/history behavior.
+	pane.KeyMap.HalfPageUp.SetEnabled(false)
+	pane.KeyMap.HalfPageDown.SetEnabled(false)
+	pane.KeyMap.Up.SetEnabled(false)
+	pane.KeyMap.Down.SetEnabled(false)
+	pane.KeyMap.Left.SetEnabled(false)
+	pane.KeyMap.Right.SetEnabled(false)
+}
+
+func newBubbleKeyMap() bubbleKeyMap {
+	return bubbleKeyMap{Submit: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send message")), Newline: key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("ctrl+j", "new line")), Quit: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "cancel or quit")), PageUp: key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "scroll")), PageDown: key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "scroll")), ToggleTodo: key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o", "tasks")), Transcript: key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "transcript")), CyclePermission: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "cycle permission")), ToggleSkills: key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "skills")), ToggleModel: key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "switch model"))}
+}
+
+func (k bubbleKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Submit, k.Newline, k.ToggleModel, k.Quit}
+}
+
+func (k bubbleKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{{k.Submit, k.Newline, k.Quit}, {k.PageUp, k.PageDown, k.ToggleTodo, k.Transcript}, {k.CyclePermission, k.ToggleSkills, k.ToggleModel}}
+}
+
+func (m *bubbleModel) Init() tea.Cmd {
+	return tea.Batch(m.bridge.Next(), textarea.Blink, m.nextAgentEvent())
+}
+
+func (m *bubbleModel) nextAgentEvent() tea.Cmd {
+	if m.agentEvents == nil {
+		return nil
+	}
+	events := m.agentEvents
+	return func() tea.Msg {
+		ev, ok := <-events
+		if !ok {
+			return nil
+		}
+		return agentLifecycleMsg{event: ev}
+	}
+}
+
+func (m *bubbleModel) syncAgentSnapshot() {
+	if !m.agents.Available() {
+		m.agentSnapshot = nil
+		return
+	}
+	m.agentSnapshot = m.agents.List()
+}
+
+func (m *bubbleModel) modelIDKnown(provider, modelID string) bool {
+	if m == nil {
+		return false
+	}
+	for _, candidate := range m.modelCatalogs.Models(provider) {
+		if strings.EqualFold(strings.TrimSpace(candidate.ID), strings.TrimSpace(modelID)) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *bubbleModel) activeRemoteModel() (model.RemoteModel, bool) {
+	if m == nil {
+		return model.RemoteModel{}, false
+	}
+	for _, candidate := range m.modelCatalogs.Models(m.activeProvider) {
+		if strings.EqualFold(strings.TrimSpace(candidate.ID), strings.TrimSpace(m.activeModel)) {
+			return candidate, true
+		}
+	}
+	return model.RemoteModel{}, false
+}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/pelletier/go-toml/v2"
 
@@ -13,6 +14,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
+
+var projectConfigMutationMu sync.Mutex
 
 // ErrProjectScopeUnavailable indicates that project-local state aliases user-global state.
 var ErrProjectScopeUnavailable = errors.New("project scope is unavailable")
@@ -118,6 +121,8 @@ func appendRuleToDocument(doc *fileDocument, rule permission.Rule) {
 }
 
 func modifyProjectConfigFile(workDir string, mutate func(*fileDocument)) error {
+	projectConfigMutationMu.Lock()
+	defer projectConfigMutationMu.Unlock()
 	absWorkDir, err := filepath.Abs(strings.TrimSpace(workDir))
 	if err != nil {
 		return fmt.Errorf("resolve project work directory: %w", err)

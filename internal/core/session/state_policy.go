@@ -37,7 +37,7 @@ func NormalizeLoadedState(sessionID string, state State) (State, error) {
 		state.SessionID = sessionID
 	}
 	if state.WorkspaceKey == "" {
-		state.WorkspaceKey = legacyWorkspaceKey(sessionID)
+		state.WorkspaceKey = inferWorkspaceKeyFromSessionID(sessionID)
 	}
 	if state.CreatedAt.IsZero() && !state.UpdatedAt.IsZero() {
 		state.CreatedAt = state.UpdatedAt
@@ -56,7 +56,7 @@ func PrepareStateForSave(sessionID string, state State, existing *State, now tim
 	}
 	state.SessionID = sessionID
 	if state.WorkspaceKey == "" {
-		state.WorkspaceKey = legacyWorkspaceKey(sessionID)
+		state.WorkspaceKey = inferWorkspaceKeyFromSessionID(sessionID)
 	}
 	if existing != nil {
 		if state.Revision != existing.Revision {

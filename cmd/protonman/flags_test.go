@@ -44,11 +44,11 @@ func TestUsageMentionsHeadless(t *testing.T) {
 
 func TestParseArgsAgentFlags(t *testing.T) {
 	for _, flag := range []string{"-a", "--agent", "--profile"} {
-		opts, err := parseArgs([]string{flag, "dex"})
+		opts, err := parseArgs([]string{flag, "intelligence"})
 		if err != nil {
 			t.Fatalf("parseArgs(%q) error = %v", flag, err)
 		}
-		if opts.agentProfile != "dex" {
+		if opts.agentProfile != "intelligence" {
 			t.Errorf("parseArgs(%q) agentProfile = %q, want 'dex'", flag, opts.agentProfile)
 		}
 	}

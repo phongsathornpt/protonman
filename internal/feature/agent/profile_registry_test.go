@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -87,7 +88,7 @@ func TestSystemPromptForProfileBehaviorContracts(t *testing.T) {
 		ProfileIntelligence: {"deep engineering and reasoning subagent", "invariants and constraints", "Compare viable solutions", "material risks"},
 	}
 	for profile, markers := range checks {
-		prompt := SystemPromptForProfile(profile)
+		prompt := prompt.Render(prompt.Spec{Role: RolePromptForProfile(profile), Profile: string(profile)})
 		for _, marker := range markers {
 			if !strings.Contains(prompt, marker) {
 				t.Errorf("profile %s missing behavior marker %q", profile, marker)
@@ -109,12 +110,10 @@ func TestProfileSpecsAreCanonicalAndComplete(t *testing.T) {
 	}
 }
 
-func TestParseProfileNormalizesLegacyAliases(t *testing.T) {
-	cases := map[string]Profile{"pow": ProfileStrength, "worker": ProfileStrength, "int": ProfileAgility, "explorer": ProfileAgility, "reviewer": ProfileAgility, "dex": ProfileIntelligence}
-	for raw, want := range cases {
-		got, err := ParseProfile(raw)
-		if err != nil || got != want {
-			t.Fatalf("ParseProfile(%q) = %q, %v; want %q", raw, got, err, want)
+func TestParseProfileRejectsOldNames(t *testing.T) {
+	for _, raw := range []string{"pow", "worker", "int", "explorer", "reviewer", "dex"} {
+		if _, err := ParseProfile(raw); err == nil {
+			t.Fatalf("ParseProfile(%q) error = nil, want error", raw)
 		}
 	}
 }
@@ -139,7 +138,7 @@ func TestDefaultSystemPromptGroundsCodingToolUse(t *testing.T) {
 
 func TestProfilePromptsIncludeSharedToolContract(t *testing.T) {
 	for _, profile := range SupportedProfiles() {
-		prompt := SystemPromptForProfile(profile)
+		prompt := prompt.Render(prompt.Spec{Role: RolePromptForProfile(profile), Profile: string(profile)})
 		if !strings.Contains(prompt, "Tool identifiers are exact") {
 			t.Fatalf("profile %q missing shared tool contract", profile)
 		}

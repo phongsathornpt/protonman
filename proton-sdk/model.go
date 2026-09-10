@@ -157,6 +157,7 @@ type ReasoningEffort string
 const (
 	ReasoningDefault ReasoningEffort = ""
 	ReasoningNone    ReasoningEffort = "none"
+	ReasoningMinimal ReasoningEffort = "minimal"
 	ReasoningLow     ReasoningEffort = "low"
 	ReasoningMedium  ReasoningEffort = "medium"
 	ReasoningHigh    ReasoningEffort = "high"
@@ -178,7 +179,7 @@ func ParseReasoningEffort(value string) (ReasoningEffort, error) {
 
 func (e ReasoningEffort) Valid() bool {
 	switch e {
-	case ReasoningDefault, ReasoningNone, ReasoningLow, ReasoningMedium, ReasoningHigh, ReasoningXHigh, ReasoningMax:
+	case ReasoningDefault, ReasoningNone, ReasoningMinimal, ReasoningLow, ReasoningMedium, ReasoningHigh, ReasoningXHigh, ReasoningMax:
 		return true
 	default:
 		return false

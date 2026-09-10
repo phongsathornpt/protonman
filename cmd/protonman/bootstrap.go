@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
-	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/sessionfs"
 	agenttool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/agent"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin"
@@ -65,6 +64,21 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	loadedConfig, err := config.Load(ctx, config.Options{HomeDir: homeDir, WorkDir: workDir, ProjectTrusted: envconfig.Bool(envconfig.TrustProject), ProjectScope: &layout.Project})
 	if err != nil {
 		return nil, fmt.Errorf("load configuration: %w", err)
+	}
+	originalSelection := loadedConfig.Model
+	reconciled, selectionChanged := config.ReconcileModelSelection(originalSelection, loadedConfig.Providers)
+	loadedConfig.Model, loadedConfig.Providers = app.ResolvePrimaryModelDefaults(reconciled, loadedConfig.Providers)
+	if selectionChanged {
+		loadedConfig.Provenance[config.FieldModelProvider] = config.SourceDefault
+		loadedConfig.Provenance[config.FieldModelDefault] = config.SourceDefault
+		fmt.Fprintf(os.Stderr, "warning: saved model provider %q is unavailable; using provider %q\n", originalSelection.Provider, loadedConfig.Model.Provider)
+	} else {
+		if strings.TrimSpace(originalSelection.Provider) == "" && loadedConfig.Model.Provider != "" {
+			loadedConfig.Provenance[config.FieldModelProvider] = config.SourceDefault
+		}
+		if strings.TrimSpace(originalSelection.Default) == "" && loadedConfig.Model.Default != "" {
+			loadedConfig.Provenance[config.FieldModelDefault] = config.SourceDefault
+		}
 	}
 	for _, warning := range loadedConfig.Warnings {
 		fmt.Fprintln(os.Stderr, "warning:", warning)
@@ -240,7 +254,9 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 			return nil, fmt.Errorf("restore session %q: %w", sessionID, err)
 		}
 		for _, name := range state.ActiveSkills {
-			skillRegistry.MarkActivated(name)
+			if activateErr := skillRegistry.Activate(name); activateErr != nil {
+				return nil, fmt.Errorf("restore active skill %q: %w", name, activateErr)
+			}
 		}
 	}
 	if options.yolo {
@@ -277,9 +293,6 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		return nil, fmt.Errorf("create tool-call service: %w", err)
 	}
 	providerKey := strings.ToLower(strings.TrimSpace(loadedConfig.Model.Provider))
-	if providerKey == "" {
-		providerKey = model.DefaultProtonmanName
-	}
 	provider := loadedConfig.Providers[providerKey]
 	initialRunner, _ := app.BuildConversation(service, skillRegistry, app.NewAgentsForSession(coordinator, sessionID), app.ConversationSpec{
 		ProviderName: providerKey, ProviderType: provider.Type, BaseURL: provider.BaseURL, APIKey: provider.APIKey,

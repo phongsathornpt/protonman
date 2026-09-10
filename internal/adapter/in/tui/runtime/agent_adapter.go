@@ -1,23 +1,38 @@
 package runtime
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	"fmt"
+
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane"
+	agentpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/agent"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 const agentsViewID = "agents"
 
 type AgentActivity = agentui.Activity
 
-type agentRuntimeState struct{ state agentui.RuntimeState }
+type agentRuntimeState struct {
+	state                          agentui.RuntimeState
+	reasoningPreference            sdk.ReasoningEffort
+	reasoningPreferenceSet         bool
+	reasoningPreferenceSource      reasoningPreferenceSource
+	reasoningCompatibilityFallback bool
+}
 
 func newAgentRuntimeState(cfg config.AgentConfig, configured bool) agentRuntimeState {
-	return agentRuntimeState{state: agentui.NewRuntimeState(cfg, configured)}
+	state := agentRuntimeState{state: agentui.NewRuntimeState(cfg, configured)}
+	if configured {
+		state.reasoningPreference = cfg.ReasoningEffort
+		state.reasoningPreferenceSet = true
+	}
+	return state
 }
 
 func (s agentRuntimeState) apply(m *bubbleModel) {
@@ -28,6 +43,10 @@ func (s agentRuntimeState) apply(m *bubbleModel) {
 	m.agentProfile = s.state.Profile
 	m.subagentsEnabled = s.state.SubagentsEnabled
 	m.reasoningEffort = s.state.ReasoningEffort
+	m.reasoningPreference = s.reasoningPreference
+	m.reasoningPreferenceSet = s.reasoningPreferenceSet
+	m.reasoningPreferenceSource = s.reasoningPreferenceSource
+	m.reasoningCompatibilityFallback = s.reasoningCompatibilityFallback
 	m.agents.SetEnabled(s.state.SubagentsEnabled)
 }
 
@@ -39,6 +58,10 @@ func (s *agentRuntimeState) capture(m *bubbleModel) {
 	s.state.Profile = m.agentProfile
 	s.state.SubagentsEnabled = m.subagentsEnabled
 	s.state.ReasoningEffort = m.reasoningEffort
+	s.reasoningPreference = m.reasoningPreference
+	s.reasoningPreferenceSet = m.reasoningPreferenceSet
+	s.reasoningPreferenceSource = m.reasoningPreferenceSource
+	s.reasoningCompatibilityFallback = m.reasoningCompatibilityFallback
 }
 
 func agentActivityFromEvent(ev agent.Event) AgentActivity { return agentui.ActivityFromEvent(ev) }
@@ -65,37 +88,42 @@ func (m *bubbleModel) applyAgentToolFailure(name string, result tool.Result, err
 
 type agentsPaneView struct{}
 
-func (*agentsPaneView) ID() string             { return agentsViewID }
-func (*agentsPaneView) ReplacesComposer() bool { return false }
-func (*agentsPaneView) HandleKey(m *bubbleModel, message tea.KeyMsg) (bool, tea.Cmd) {
-	switch message.String() {
-	case "esc", "enter":
-		m.bottom.remove(agentsViewID)
-		return true, nil
-	default:
-		return false, nil
+func (*agentsPaneView) ID() string                             { return agentsViewID }
+func (*agentsPaneView) PresentationMode() panePresentationMode { return paneBelowComposer }
+func (*agentsPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
+	if key.Matches(message, paneKeys.Close, paneKeys.Confirm) {
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: agentsViewID}}
 	}
+	return paneKeyResult{}
 }
-func (*agentsPaneView) Render(m *bubbleModel) string {
-	return renderModalRows(m, promptBorder, agentInspectionRows(m))
-}
-func agentInspectionRows(m *bubbleModel) []string {
-	activity := make(map[string]string, len(m.agentActivity))
-	for id, state := range m.agentActivity {
-		activity[id] = state.String()
+func (*agentsPaneView) Render(ctx paneRenderContext) string {
+	rows := agentInspectionRows(ctx)
+	if len(rows) > 0 {
+		rows = rows[1:]
 	}
-	return pane.AgentRows(pane.AgentsSnapshot{Width: m.width, Height: m.height, Retained: m.agentSnapshot, SubagentsEnabled: m.subagentsEnabled, Activity: activity})
+	help := ""
+	if layoutModeForHeight(ctx.height) != layoutTiny {
+		help = paneKeyboardHelp(ctx.width-4, "esc/q", "Go Back")
+	}
+	status := ""
+	if count := len(ctx.agentSnapshot); count > 0 {
+		status = fmt.Sprintf("%d retained", count)
+	}
+	return renderModalRows(ctx, accentAssistant, paneSection("Agents", rows, help, status, ctx.width))
+}
+func agentInspectionRows(ctx paneRenderContext) []string {
+	return agentpane.AgentRows(agentpane.AgentsSnapshot{Width: ctx.width, Height: ctx.height, Retained: ctx.agentSnapshot, SubagentsEnabled: ctx.subagentsEnabled, Activity: ctx.agentActivity})
 }
 func (m *bubbleModel) openAgentsPane() tea.Cmd {
-	if m.bottom.has(agentsViewID) {
-		m.bottom.remove(agentsViewID)
+	if m.panes.bottom.has(agentsViewID) {
+		m.panes.bottom.remove(agentsViewID)
 	} else {
 		if m.agents.Available() {
 			m.syncAgentSnapshot()
 		}
-		m.bottom.push(&agentsPaneView{})
+		m.panes.bottom.push(&agentsPaneView{})
 	}
-	m.relayout()
+	m.requestRelayout()
 	return nil
 }
-func agentModelLabel(st agent.AgentStatus) string { return pane.AgentModelLabel(st) }
+func agentModelLabel(st agent.AgentStatus) string { return agentpane.AgentModelLabel(st) }

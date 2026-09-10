@@ -36,6 +36,23 @@ func TruncateEllipsis(text string, width int) string {
 	return ansi.Truncate(text, width-ellipsisWidth, "") + ellipsis
 }
 
+// TruncateLeftEllipsis clips text from the left while preserving its most useful suffix.
+func TruncateLeftEllipsis(text string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	total := Width(text)
+	if total <= width {
+		return text
+	}
+	ellipsis := "…"
+	ellipsisWidth := Width(ellipsis)
+	if width <= ellipsisWidth {
+		return Truncate(ellipsis, width)
+	}
+	return ellipsis + ansi.Cut(text, total-(width-ellipsisWidth), total)
+}
+
 // PadRight pads text with spaces until it occupies width terminal cells.
 func PadRight(text string, width int) string {
 	if width <= 0 {

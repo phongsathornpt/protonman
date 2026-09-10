@@ -65,6 +65,31 @@ func (s *Store) Replace(ctx context.Context, items []Item) (Snapshot, error) {
 	return Snapshot{Revision: s.revision, Items: CloneItems(s.items)}, nil
 }
 
+func (s *Store) CompareAndPatch(ctx context.Context, expectedRevision uint64, operations []Operation) (Snapshot, Snapshot, error) {
+	if err := ctx.Err(); err != nil {
+		return Snapshot{}, Snapshot{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return Snapshot{}, Snapshot{}, err
+	}
+	before := Snapshot{Revision: s.revision, Items: CloneItems(s.items)}
+	if s.revision != expectedRevision {
+		return before, before, fmt.Errorf("%w: expected %d, current %d", ErrRevisionConflict, expectedRevision, s.revision)
+	}
+	next, err := ApplyPatch(s.items, operations)
+	if err != nil {
+		return before, before, err
+	}
+	if !slices.Equal(s.items, next) {
+		s.items = CloneItems(next)
+		s.revision++
+	}
+	after := Snapshot{Revision: s.revision, Items: CloneItems(s.items)}
+	return before, after, nil
+}
+
 func (s *Store) CompareAndReplace(ctx context.Context, expectedRevision uint64, items []Item) (Snapshot, error) {
 	if err := ctx.Err(); err != nil {
 		return Snapshot{}, err

@@ -16,6 +16,20 @@ func TestResolveBuiltinKnownFamilies(t *testing.T) {
 		wantContext int
 	}{
 		{model: "gemini-3.8-flash", profile: "gemini-3.8-flash", wantDefault: sdk.ReasoningMedium, wantLevels: 3, wantContext: 1_048_576},
+		{model: "muse-spark-1.3-contributor-free", profile: "muse-spark-1.3-family", wantDefault: sdk.ReasoningHigh, wantLevels: 6},
+		{model: "qwen3.8-max", profile: "qwen3.8-max-family", wantDefault: sdk.ReasoningMedium, wantLevels: 3},
+		{model: "qwen3.8-max-latest", profile: "qwen3.8-max-family", wantDefault: sdk.ReasoningMedium, wantLevels: 3},
+		{model: "qwen3.8-flash", profile: "qwen3.8-flash-family", wantDefault: sdk.ReasoningXHigh, wantLevels: 4},
+		{model: "proton/qwen3.8-flash", profile: "qwen3.8-flash-family", wantDefault: sdk.ReasoningXHigh, wantLevels: 4},
+		{model: "minimax-m3", profile: "minimax-m3-family", wantLevels: 1},
+		{model: "qwen3.6-plus", profile: "qwen3-hybrid-thinking", wantLevels: 1},
+		{model: "qwen3.6-flash", profile: "qwen3-hybrid-thinking", wantLevels: 1},
+		{model: "qwen3.7-max", profile: "qwen3-hybrid-thinking", wantLevels: 1},
+		{model: "deepseek-v4-flash-free", profile: "deepseek-v4-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
+		{model: "deepseek-v4-pro", profile: "deepseek-v4-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
+		{model: "router/deepseek-v4-flash-vision-exp", profile: "deepseek-v4-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
+		{model: "glm-5.3-flash", profile: "zai-glm-5.3-family", wantDefault: sdk.ReasoningMax, wantLevels: 3},
+		{model: "glm-4.7", profile: "zai-glm-thinking", wantLevels: 1},
 		{model: "gpt-5.6-sol", profile: "gpt-5.6-family", wantDefault: sdk.ReasoningMedium, wantLevels: 6, wantContext: 1_050_000},
 		{model: "grok-4.6-fast", profile: "grok-4.6", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
 		{model: "claude-opus-5", profile: "claude-adaptive-thinking", wantLevels: 0},
@@ -41,6 +55,8 @@ func TestResolveBuiltinMatchesNamespacedModelIDs(t *testing.T) {
 	}{
 		{model: "ag/gemini-3.8-flash", profile: "gemini-3.8-flash", kind: MatchExact},
 		{model: "bai/gemini-3.8-flash", profile: "gemini-3.8-flash", kind: MatchExact},
+		{model: "dashscope/qwen3.8-max-latest", profile: "qwen3.8-max-family", kind: MatchFamily},
+		{model: "router/qwen3.6-plus", profile: "qwen3-hybrid-thinking", kind: MatchFamily},
 		{model: "router/gpt-5.6-sol", profile: "gpt-5.6-family", kind: MatchFamily},
 	}
 	for _, tt := range tests {

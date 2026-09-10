@@ -132,7 +132,7 @@ The fullscreen TUI is built on [Bubble Tea](https://github.com/charmbracelet/bub
 ├────────────────────────────────────────────────────────────────────────┤
 │ > Type a message or '/' for commands...                                │
 ├────────────────────────────────────────────────────────────────────────┤
-│ [Enter] send  [Shift+Tab] mode  [^P] models  [^S] skills  [^C] quit   │
+│ [Enter] send  [Shift+Tab] permission  [^P] setup  [^S] skills  [^C] quit   │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -141,43 +141,35 @@ The fullscreen TUI is built on [Bubble Tea](https://github.com/charmbracelet/bub
 | Key | Action |
 | :--- | :--- |
 | `Enter` | Submit current prompt / execute command |
+| `?` | Open the compact shortcut reference when the composer is empty |
 | `Shift+Tab` | Cycle permission mode (`ask` → `plan` → `always-approve`) |
-| `Ctrl+P` | Toggle Model & Provider selector pane |
+| `Ctrl+P` | Toggle unified Model Setup (provider, model, thinking) |
 | `Ctrl+S` | Toggle Agent Skills browser pane |
 | `Ctrl+O` | Toggle Tasks / TODO checklist pane |
 | `Ctrl+T` | Open transcript overlay (toggle raw view with `r`) |
-| `Ctrl+L` | Clear the visible viewport transcript |
 | `PgUp` / `PgDn` | Scroll transcript viewport up/down |
 | `Esc` | Park active permission modal or dismiss overlays |
 | `Ctrl+C` | Cancel active operation or exit |
 
 ### In-TUI Slash Commands
 
-Type `/` at the prompt to trigger autocomplete, or prefix with a colon (`:help`):
+Type `/` at the prompt to trigger autocomplete, or prefix a canonical command with a colon (for example `:help`):
 
 | Command | Description | Example |
 | :--- | :--- | :--- |
-| `/help`, `:help` | Display available commands and keybindings | `/help` |
-| `/model [name]` | Open model selector or switch active model (`/models` is an alias) | `/model glm-5.3-flash` |
+| `/help` | Display available commands | `/help` |
+| `/permission` | Select permission mode | `/permission` |
+| `/model [name]` | Open unified Model Setup or switch active model | `/model glm-5.3-flash` |
 | `/provider [cmd]` | Manage and configure AI model providers | `/provider list`, `/provider opencode` |
-| `/tools` | List registered tools and parameter schemas | `/tools` |
+| `/skills [name|active|toggle]` | Browse, activate, or toggle Agent Skills | `/skills pdf-processing` |
 | `/agents` | Inspect live and retained subagents | `/agents` |
-| `/subagents [on|off]` | Toggle new subagent delegation for the current runtime | `/subagents off` |
-| `/config set subagents <on|off>` | Persist the user-level default | `/config set subagents off` |
-| `/project set subagents <on|off>` | Persist the subagent capability for a trusted project | `/project set subagents off` |
-| `/agent [profile]` | Show or set the primary agent profile/posture | `/agent universal` |
-| `/skills` | List discovered Agent Skills | `/skills` |
-| `/skill <name>` | Inspect or activate a specific Agent Skill | `/skill pdf-processing` |
+| `/todo [show|hide]` | Show or hide the task-plan pane | `/todo` |
+| `/transcript [clear]` | Open or clear the transcript | `/transcript clear` |
 | `/call <tool> <json>` | Directly execute a tool with JSON arguments | `/call read {"path":"README.md"}` |
-| `/mode <mode>` | Switch permission mode (`ask`, `plan`, `always-approve`) | `/mode plan` |
-| `/ask` | Switch directly to `ask` mode | `/ask` |
-| `/plan` | Switch directly to read-only `plan` mode | `/plan` |
-| `/always-approve` | Switch directly to `always-approve` mode | `/always-approve` |
-| `/new` | Clear conversation history inside the current persisted session | `/new` |
+| `/quit` | Exit Protonman cleanly | `/quit` |
 | `!<command>` | Execute a shell command directly through the `bash` tool | `!git status` |
-| `/quit`, `:quit` | Exit Protonman cleanly | `/quit` |
 
-The model picker keeps catalogs scoped per configured provider. Fresh catalogs are cached briefly, stale or missing catalogs are refreshed, obsolete requests are canceled, and late responses from an older provider selection are ignored. Press `/` inside the model picker to filter by model ID, name, vendor, or feature; `r` forces a refresh. Direct `/model <id>` selection still permits custom/unlisted model IDs and marks them as unverified instead of rejecting them.
+Model Setup combines provider, model, and thinking selection in one interaction. Use `↑/↓` to move through models, `←/→` to adjust thinking, `tab` to switch provider, and `enter` to apply the selection. Model catalogs stay scoped per provider; stale or missing catalogs refresh automatically and stale async results are ignored. Press `/` inside Model Setup to filter by model ID, name, vendor, or feature; `r` forces a refresh. Provider credentials remain managed through `/provider`. Direct `/model <id>` still permits custom or unlisted IDs and marks them as unverified instead of rejecting them.
 
 ---
 
@@ -328,7 +320,7 @@ User-global state lives under `~/.protonman/` and project-local state under `<wo
 ### Progressive Disclosure
 1. **Catalog (Tier 1)**: Available skills are summarized as `<available_skills>` in the system prompt (~50-100 tokens per skill).
 2. **Activation (Tier 2)**: When a task matches a skill, the model invokes `skill`, loading full instructions, scripts, and asset references into context on demand.
-3. **Manual Control**: Use `/skills` in the TUI to browse skills, or `/skill <name>` to view and activate a skill manually.
+3. **Manual Control**: Use `/skills` in the TUI to browse skills, or `/skills <name>` to view and activate a skill manually.
 
 ---
 
@@ -442,8 +434,7 @@ Execution safety notes:
 - Bash effect analysis is conservative: proven read-only shell commands may run in plan mode, while mutating or unknown commands remain blocked. Simple redirections/composition and common filesystem/git commands publish proven `affected_paths`; unknown scripts remain fail-closed.
 - Bash results preserve compatibility `output` while also exposing bounded `stdout`, `stderr`, per-stream byte counts/truncation flags, exit code, and stable failure codes. Cancellation terminates the command process tree through the sandbox launcher.
 - `subagents_enabled = false` disables new delegation by default. The model cannot use `subagent action=spawn`; existing children remain inspectable/waitable/cancelable through `subagent` lifecycle actions until their retained lifecycle records expire.
-- `/subagents off` applies the same rule at runtime without canceling existing children; `/subagents on` re-enables delegation.
-- `/config set subagents off` persists the user-level default. A trusted project setting still has higher precedence; `/project set subagents ...` controls that project override.
+- `subagents_enabled` is configured through user or trusted-project TOML; changing that policy is intentionally outside the TUI slash-command surface.
 - Per-profile `[agent.subagents.strength|agility|intelligence]` tables may route children to a different configured provider/model. `provider` and `model` must either both be present or both be omitted.
 - A profile without an explicit provider/model inherits the **current** Universal language model when the child is admitted. Changing `/model` affects future inherited children only; already queued/running children keep their bound model.
 - `reasoning_effort` may be configured with or without a model override. Precedence is profile override -> current global `agent.reasoning_effort`/runtime reasoning -> profile default; `auto`/`default` means inherit.

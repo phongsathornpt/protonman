@@ -11,7 +11,7 @@ import (
 func TestE2EReasoningGeminiProfileReachesWire(t *testing.T) {
 	ws, home := newTestWorkspace(t), newTestHome(t)
 	server := newMockLLMServer(t)
-	writeReasoningConfig(t, home, server.URL(), "openai", "gemini-3.8-flash", "dex", "")
+	writeReasoningConfig(t, home, server.URL(), "openai", "gemini-3.8-flash", "intelligence", "")
 	server.AddToolCallResponse("reason-read", "read", `{"path":"hello.txt"}`)
 	server.AddTextResponse("done")
 
@@ -70,7 +70,7 @@ func TestE2EReasoningGeminiProfileReachesWire(t *testing.T) {
 func TestE2EGeminiOpenAIGetTodoEmptySnapshot(t *testing.T) {
 	ws, home := newTestWorkspace(t), newTestHome(t)
 	server := newMockLLMServer(t)
-	writeReasoningConfig(t, home, server.URL(), "openai", "gemini-3.8-flash", "dex", "")
+	writeReasoningConfig(t, home, server.URL(), "openai", "gemini-3.8-flash", "intelligence", "")
 	server.AddToolCallResponse("todo-ground", "read", `{"path":"hello.txt"}`)
 	server.AddToolCallResponse("todo-empty", "todo", `{"action":"get"}`)
 	server.AddTextResponse("done")

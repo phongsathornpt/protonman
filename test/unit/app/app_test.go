@@ -151,7 +151,7 @@ func TestProjectsUseCase(t *testing.T) {
 	}
 
 	// Config saves
-	if err := projects.SaveAgentProfile(tmpDir, "pow"); err != nil {
+	if err := projects.SaveAgentProfile(tmpDir, "strength"); err != nil {
 		t.Fatalf("SaveAgentProfile error = %v", err)
 	}
 	if err := projects.SavePermissionMode(tmpDir, permission.ModeAsk); err != nil {

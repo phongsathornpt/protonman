@@ -1,20 +1,22 @@
 package runtime
 
 import (
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	crashview "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/crash"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/execview"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,8 +37,8 @@ func TestBrandLockupResponsive(t *testing.T) {
 		t.Fatalf("wide brand width = %d, terminal width 80", got)
 	}
 	narrow := ansi.Strip(brandLockup(20))
-	if strings.Contains(narrow, "█") || !strings.Contains(narrow, "protonman") {
-		t.Fatalf("narrow brand = %q, want compact protonman fallback", narrow)
+	if strings.Contains(narrow, "█") || !strings.Contains(narrow, "protonMAN") {
+		t.Fatalf("narrow brand = %q, want compact protonMAN fallback", narrow)
 	}
 	if got := brandLockupWidth(20); got > 20 {
 		t.Fatalf("narrow brand width = %d, terminal width 20", got)
@@ -46,19 +48,6 @@ func TestBrandLockupResponsive(t *testing.T) {
 func TestBrandMarkIsSingleCell(t *testing.T) {
 	if got := ansi.StringWidth(glyphBrand); got != 1 {
 		t.Fatalf("brand mark width = %d, want 1", got)
-	}
-}
-
-func TestPickerVisibleRows(t *testing.T) {
-	tests := []struct {
-		height  int
-		maximum int
-		want    int
-	}{{height: 12, maximum: 6, want: 2}, {height: 14, maximum: 6, want: 3}, {height: 18, maximum: 6, want: 4}, {height: 24, maximum: 6, want: 6}, {height: 24, maximum: 5, want: 5}}
-	for _, tc := range tests {
-		if got := pickerVisibleRows(tc.height, tc.maximum); got != tc.want {
-			t.Fatalf("pickerVisibleRows(%d, %d) = %d, want %d", tc.height, tc.maximum, got, tc.want)
-		}
 	}
 }
 
@@ -78,14 +67,14 @@ func TestPickersFitResponsiveTerminalHeights(t *testing.T) {
 	for _, size := range [][2]int{{80, 24}, {60, 18}, {40, 14}, {24, 12}} {
 		m := newTestSkillsModel(t, 10)
 		m.resize(size[0], size[1])
-		modelView := newModelSelectPaneView(m).Render(m)
+		modelView := newModelSetupPaneView(m).Render(newPaneRenderContext(m))
 		if got := lipgloss.Height(modelView); got > size[1] {
-			t.Fatalf("model picker height %d exceeds %d at %dx%d", got, size[1], size[0], size[1])
+			t.Fatalf("model setup height %d exceeds %d at %dx%d", got, size[1], size[0], size[1])
 		}
 		if got := lipgloss.Width(modelView); got > size[0] {
-			t.Fatalf("model picker width %d exceeds %d at %dx%d", got, size[0], size[0], size[1])
+			t.Fatalf("model setup width %d exceeds %d at %dx%d", got, size[0], size[0], size[1])
 		}
-		skillsView := (&skillsPaneView{}).Render(m)
+		skillsView := (&skillsPaneView{}).Render(newPaneRenderContext(m))
 		if got := lipgloss.Height(skillsView); got > size[1] {
 			t.Fatalf("skills picker height %d exceeds %d at %dx%d", got, size[1], size[0], size[1])
 		}
@@ -96,23 +85,17 @@ func TestPickersFitResponsiveTerminalHeights(t *testing.T) {
 }
 
 func TestCompactLayoutReducesChrome(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "one", Text: "one", Status: tododomain.StatusPending}, {ID: "two", Text: "two", Status: tododomain.StatusPending}})
+	m := newTestBubbleModel(t, permission.ModeAsk, []tododomain.Item{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
 	m.activeModel = "provider/a-very-long-model-name"
 	m.resize(60, 18)
-	if got := m.todoView(); !strings.Contains(got, "Tasks 0/2") || strings.Contains(got, "one") {
-		t.Fatalf("compact todo = %q, want summary only", got)
+	if strings.Contains(m.promptView(), "╭") || strings.Contains(m.promptView(), "╰") {
+		t.Fatalf("compact prompt renders box chrome: %q", m.promptView())
 	}
-	if got := m.infoView(); strings.Contains(got, "ctrl+t transcript") || !strings.Contains(got, "ctrl+p model") {
-		t.Fatalf("compact info = %q", got)
+	if got := m.infoView(); strings.Contains(got, "ctrl+p") || strings.Contains(got, "/help") {
+		t.Fatalf("compact info leaked shortcut chrome: %q", got)
 	}
 	m.resize(24, 12)
-	if got := m.todoView(); !strings.Contains(got, "Tasks 0/2") || strings.Contains(got, "one") {
-		t.Fatalf("tiny todo = %q, want summary only", got)
-	}
-	if strings.Contains(m.promptView(), "╭") || strings.Contains(m.promptView(), "╰") {
-		t.Fatalf("tiny prompt still renders box chrome: %q", m.promptView())
-	}
-	if got := lipgloss.Height(m.View()); got > 12 {
+	if got := lipgloss.Height(m.View().Content); got > 12 {
 		t.Fatalf("tiny live view height = %d, want <= 12", got)
 	}
 }
@@ -124,46 +107,16 @@ func TestRunningToolUsesTranscriptAsProgressSurface(t *testing.T) {
 	m.activity = "running read"
 	m.turnProgress = turnProgress{Round: 2, ToolCalls: 3}
 	m.historyState.StartTool("read")
-	if got := m.statusView(); got == "" || !strings.Contains(got, "round 2") || !strings.Contains(got, "3 tools") {
-		t.Fatalf("running tool status lost global turn progress: %q", got)
+	if got := m.statusView(); got == "" || !strings.Contains(got, "running read") || !strings.Contains(got, "3 tools") || strings.Contains(got, "round 2") {
+		t.Fatalf("running tool status is missing compact progress: %q", got)
 	}
 	m.historyState.CommitActive()
-	m.historyState.StartThinking()
-	if got := m.statusView(); got == "" {
-		t.Fatal("thinking state should retain the global status row")
+	m.activity = "analyzing"
+	if got := m.statusView(); got == "" || strings.Contains(got, "Thinking") {
+		t.Fatalf("busy state should use only the global status row: %q", got)
 	}
-}
-
-func TestTodoDefaultsToSummaryAndCtrlOExpands(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "first", Text: "first", Status: tododomain.StatusPending}, {ID: "second", Text: "second", Status: tododomain.StatusPending}})
-	m.resize(80, 24)
-	if got := m.todoView(); !strings.Contains(got, "Tasks 0/2") || strings.Contains(got, "first") {
-		t.Fatalf("default todo = %q, want summary", got)
-	}
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
-	m = updated.(*bubbleModel)
-	if got := m.todoView(); !strings.Contains(got, "first") || !strings.Contains(got, "second") {
-		t.Fatalf("expanded todo missing details: %q", got)
-	}
-}
-
-func TestTodoExpandedAutoCollapsesWhileBusyWithoutLosingPreference(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "active", Text: "active task", Status: tododomain.StatusInProgress}, {ID: "pending", Text: "pending task", Status: tododomain.StatusPending}, {ID: "done", Text: "done task", Status: tododomain.StatusCompleted}})
-	m.resize(80, 24)
-	m.todoViewState.Expanded = true
-	if got := m.todoView(); !strings.Contains(got, "active task") {
-		t.Fatalf("idle expanded todo missing details: %q", got)
-	}
-	m.busy = true
-	if got := m.todoView(); !strings.Contains(got, "active task") || !strings.Contains(got, "1 active") || !strings.Contains(got, "1 pending") {
-		t.Fatalf("busy todo=%q, want active work plus progress summary", got)
-	}
-	if !m.todoViewState.Expanded {
-		t.Fatal("busy auto-collapse mutated expansion preference")
-	}
-	m.busy = false
-	if got := m.todoView(); !strings.Contains(got, "active task") {
-		t.Fatalf("idle todo did not restore expanded details: %q", got)
+	if transcript := plainTranscript(m); strings.Contains(transcript, "Thinking") {
+		t.Fatalf("ephemeral thinking state leaked into transcript: %q", transcript)
 	}
 }
 
@@ -174,7 +127,7 @@ func TestWelcomeCardContainsBrandOnly(t *testing.T) {
 	m.activeProvider = "provider-name"
 	m.resize(32, 14)
 	card := m.welcomeCard()
-	if !strings.Contains(card, glyphBrand) || !strings.Contains(strings.ToLower(card), "protonman") {
+	if !strings.Contains(card, glyphBrand) || !strings.Contains(card, "protonMAN") {
 		t.Fatalf("welcome card missing Protonman brand: %q", card)
 	}
 	for _, unwanted := range []string{m.workDir, m.activeModel, m.activeProvider, "Ask anything", "No model selected"} {
@@ -189,24 +142,19 @@ func TestWelcomeCardContainsBrandOnly(t *testing.T) {
 	}
 }
 
-func TestWelcomeCardNormalModeRendersRichHero(t *testing.T) {
+func TestWelcomeCardNormalModeStaysMinimal(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.workDir = "/tmp/test-workspace"
 	m.activeModel = "provider/some-model"
-	m.activeProvider = "provider-name"
 	m.resize(80, 24)
 	card := m.welcomeCard()
-	if !strings.Contains(card, glyphBrand) || !strings.Contains(card, "█▀█") {
-		t.Fatalf("hero missing brand: %q", card)
+	if !strings.Contains(card, glyphBrand) || !strings.Contains(card, "█▀█") || !strings.Contains(card, "/tmp/test-workspace") {
+		t.Fatalf("minimal welcome missing identity or workspace: %q", card)
 	}
-	if !strings.Contains(card, "Workspace") || !strings.Contains(card, "/tmp/test-workspace") {
-		t.Fatalf("hero missing workspace: %q", card)
-	}
-	if !strings.Contains(card, "Quick Actions") || !strings.Contains(card, "/help") || !strings.Contains(card, "/model") {
-		t.Fatalf("hero missing quick actions: %q", card)
-	}
-	if strings.Contains(card, "some-model") {
-		t.Fatalf("hero should not duplicate active model from status bar: %q", card)
+	for _, unwanted := range []string{"Quick Actions", "/help", "/model", "Tip:", "some-model"} {
+		if strings.Contains(card, unwanted) {
+			t.Fatalf("minimal welcome leaked %q: %q", unwanted, card)
+		}
 	}
 }
 
@@ -236,83 +184,17 @@ func TestDetectGitBranch(t *testing.T) {
 	}
 }
 
-func TestTodoAllCompletedStillShowsSummaryAndDetails(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "one", Text: "one", Status: tododomain.StatusCompleted}, {ID: "two", Text: "two", Status: tododomain.StatusCompleted}})
-	m.resize(80, 24)
-	if got := m.todoView(); !strings.Contains(got, "Tasks 2/2 ✓") {
-		t.Fatalf("completed summary = %q", got)
-	}
-	m.todoViewState.Expanded = true
-	if got := m.todoView(); !strings.Contains(got, "one") || !strings.Contains(got, "two") {
-		t.Fatalf("completed details = %q", got)
-	}
-}
-
-func TestTodoViewOrdersActivePendingCompletedAndFitsWidth(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "done", Text: "completed task", Status: tododomain.StatusCompleted}, {ID: "pending", Text: "pending task", Status: tododomain.StatusPending}, {ID: "active", Text: "active task with a deliberately long description that should wrap safely on narrow terminals", Status: tododomain.StatusInProgress}})
-	m.resize(32, 24)
-	m.todoViewState.Expanded = true
-	got := m.todoView()
-	if !(strings.Index(got, "active task") < strings.Index(got, "pending task") && strings.Index(got, "pending task") < strings.Index(got, "completed task")) {
-		t.Fatalf("todo order = %q", got)
-	}
-	for _, line := range strings.Split(got, "\n") {
-		if width := lipgloss.Width(line); width > 30 {
-			t.Fatalf("todo line width = %d: %q", width, line)
-		}
-	}
-}
-
-func TestTodoVisibleRowsGrowWithTerminalHeight(t *testing.T) {
-	if small, large := todoVisibleRows(20), todoVisibleRows(30); large <= small {
-		t.Fatalf("rows did not grow: %d -> %d", small, large)
-	}
-}
-
-func TestTodoSlashCommandTogglesAndSupportsShowHide(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
-	if m.todoViewState.Expanded {
-		t.Fatal("todo unexpectedly expanded")
-	}
-	m.executeCommand("/todo")
-	if !m.todoViewState.Expanded {
-		t.Fatal("/todo did not toggle open")
-	}
-	m.executeCommand("/todo")
-	if m.todoViewState.Expanded {
-		t.Fatal("/todo did not toggle closed")
-	}
-	m.executeCommand("/todo show")
-	if !m.todoViewState.Expanded {
-		t.Fatal("/todo show did not expand")
-	}
-	m.executeCommand("/todo hide")
-	if m.todoViewState.Expanded {
-		t.Fatal("/todo hide did not collapse")
-	}
-}
-
-func TestTodoExpandedViewHidesProtocolIDs(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "router-race", Text: "Fix router race", Status: tododomain.StatusInProgress}})
-	m.resize(80, 24)
-	m.todoViewState.Expanded = true
-	got := m.todoView()
-	if !strings.Contains(got, "Fix router race") || strings.Contains(got, "router-race") {
-		t.Fatalf("expanded todo leaked protocol id: %q", got)
-	}
-}
-
 func TestTodoToggleOpensFocusedPaneInCompactLayout(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
+	m := newTestBubbleModel(t, permission.ModeAsk, []tododomain.Item{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
 	m.resize(24, 12)
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
+	updated, _ := m.Update(testCtrl('o'))
 	m = updated.(*bubbleModel)
-	view := m.bottom.find(todoInspectViewID)
+	view := m.panes.bottom.find(todoInspectViewID)
 	if view == nil {
 		t.Fatal("compact todo toggle did not open focused pane")
 	}
-	got := view.Render(m)
-	if !strings.Contains(got, "one") || !strings.Contains(got, "id: one") {
+	got := view.Render(newPaneRenderContext(m))
+	if !strings.Contains(got, "one") || !strings.Contains(got, "0/1 done") {
 		t.Fatalf("focused todo pane=%q", got)
 	}
 	if lipgloss.Height(got) > 12 || lipgloss.Width(got) > 24 {
@@ -320,61 +202,22 @@ func TestTodoToggleOpensFocusedPaneInCompactLayout(t *testing.T) {
 	}
 }
 
-func TestFreshCompletedTodoRetiresOnNextTurnButCanReopen(t *testing.T) {
-	store, err := tododomain.NewStore([]tododomain.Item{{ID: "ship", Text: "ship", Status: tododomain.StatusPending}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	m := newTestBubbleModel(t, permission.ModeAsk, store.Snapshot().Items)
-	m.todoStore = store
-	m.todoRevision = store.Snapshot().Revision
-	if _, err := store.CompareAndReplace(context.Background(), m.todoRevision, []tododomain.Item{{ID: "ship", Text: "ship", Status: tododomain.StatusCompleted}}); err != nil {
-		t.Fatal(err)
-	}
-	if !m.syncTodoSnapshot() || !m.todoLifecycle.CompletionFresh {
-		t.Fatalf("completion state fresh=%v todo=%#v", m.todoLifecycle.CompletionFresh, m.todo)
-	}
-	if got := m.todoView(); !strings.Contains(got, "Tasks 1/1") {
-		t.Fatalf("fresh completion feedback missing: %q", got)
-	}
-	m.retireCompletedTodoForNextTurn()
-	if got := m.todoView(); got != "" {
-		t.Fatalf("completed task chrome not retired on next turn: %q", got)
-	}
-	m.executeCommand("/todo show")
-	if got := m.todoView(); !strings.Contains(got, "ship") {
-		t.Fatalf("retired completed todo could not be reopened: %q", got)
-	}
-}
-
-func TestInitialCompletedTodoRetiresOnFirstSubmittedTurn(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "ship", Text: "ship", Status: tododomain.StatusCompleted}})
-	m.resize(80, 24)
-	if !m.todoLifecycle.CompletionFresh || !strings.Contains(m.todoView(), "Tasks 1/1") {
-		t.Fatalf("initial completed todo not announced: lifecycle=%+v view=%q", m.todoLifecycle, m.todoView())
-	}
-	m.retireCompletedTodoForNextTurn()
-	if got := m.todoView(); got != "" {
-		t.Fatalf("initial completed todo did not retire: %q", got)
-	}
-}
-
 func TestFocusedTodoPaneBoundsAndScrollsLargePlans(t *testing.T) {
-	items := make([]TodoItem, 100)
+	items := make([]tododomain.Item, 100)
 	for i := range items {
-		items[i] = TodoItem{ID: fmt.Sprintf("task-%03d", i), Text: fmt.Sprintf("Task %03d with enough text to exercise truncation", i), Status: tododomain.StatusPending}
+		items[i] = tododomain.Item{ID: fmt.Sprintf("task-%03d", i), Text: fmt.Sprintf("Task %03d with enough text to exercise truncation", i), Status: tododomain.StatusPending}
 	}
 	m := newTestBubbleModel(t, permission.ModeAsk, items)
 	m.resize(32, 14)
 	view := &todoPaneView{}
-	first := view.Render(m)
+	first := view.Render(newPaneRenderContext(m))
 	if lipgloss.Height(first) > 14 || lipgloss.Width(first) > 32 {
 		t.Fatalf("pane exceeds terminal: %dx%d", lipgloss.Width(first), lipgloss.Height(first))
 	}
 	for range 5 {
-		_, _ = view.HandleKey(m, tea.KeyMsg{Type: tea.KeyDown})
+		_ = view.HandlePaneKey(newPaneRenderContext(m), testKey(tea.KeyDown))
 	}
-	after := view.Render(m)
+	after := view.Render(newPaneRenderContext(m))
 	if first == after || !strings.Contains(after, "task-005") {
 		t.Fatalf("pane did not scroll: %q", after)
 	}
@@ -621,9 +464,9 @@ func TestExecPresentationDocker(t *testing.T) {
 	if compose.Title != "Docker compose up" || compose.Summary != "2 services running" {
 		t.Fatalf("docker compose = %#v", compose)
 	}
-	legacy := execview.Present("docker-compose down", "", "")
-	if legacy.Title != "Docker compose down" {
-		t.Fatalf("docker-compose = %#v", legacy)
+	presentation := execview.Present("docker-compose down", "", "")
+	if presentation.Title != "Docker compose down" {
+		t.Fatalf("docker-compose = %#v", presentation)
 	}
 }
 
@@ -905,17 +748,19 @@ func TestPickerRenderDoesNotMutateNavigationState(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.resize(80, 24)
 	t.Run("model selector", func(t *testing.T) {
-		v := &modelSelectPaneView{index: 99, offset: 77, models: []model.RemoteModel{{ID: "one"}, {ID: "two"}}}
-		beforeIndex, beforeOffset := v.index, v.offset
-		_ = v.Render(m)
-		if v.index != beforeIndex || v.offset != beforeOffset {
-			t.Fatalf("Render mutated navigation: index %d→%d offset %d→%d", beforeIndex, v.index, beforeOffset, v.offset)
+		v := &modelSetupPaneView{models: []model.RemoteModel{{ID: "one"}, {ID: "two"}}}
+		v.resetSelection("two")
+		beforeIndex := v.picker.Index()
+		beforePage := v.picker.Paginator.Page
+		_ = v.Render(newPaneRenderContext(m))
+		if v.picker.Index() != beforeIndex || v.picker.Paginator.Page != beforePage {
+			t.Fatalf("Render mutated navigation: index %d→%d page %d→%d", beforeIndex, v.picker.Index(), beforePage, v.picker.Paginator.Page)
 		}
 	})
 }
 
 func TestBuildCrashReport(t *testing.T) {
-	report := BuildCrashReport("nil pointer dereference", "goroutine 1 [running]:\nmain.go:123")
+	report := crashview.BuildCrashReport("nil pointer dereference", "goroutine 1 [running]:\nmain.go:123")
 	if !strings.Contains(report, "Protonman Crash Report") {
 		t.Fatalf("expected report header, got: %s", report)
 	}
@@ -929,10 +774,8 @@ func TestBuildCrashReport(t *testing.T) {
 
 func TestCrashModelNavigation(t *testing.T) {
 	stack := "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10"
-	m := NewCrashModel("test failure", []byte(stack))
-	m.width = 80
-	m.height = 24
-	rendered := m.View()
+	m := crashview.NewCrashModel("test failure", []byte(stack))
+	rendered := m.View().Content
 	if !strings.Contains(rendered, "Protonman crashed") {
 		t.Fatalf("expected headline in view, got: %s", rendered)
 	}
@@ -942,20 +785,20 @@ func TestCrashModelNavigation(t *testing.T) {
 	if !strings.Contains(rendered, "[c] Copy report") {
 		t.Fatalf("expected copy report action in view, got: %s", rendered)
 	}
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	if m.scrollOffset != 1 {
-		t.Fatalf("expected scrollOffset 1, got %d", m.scrollOffset)
+	_, _ = m.Update(testKey(tea.KeyDown))
+	if m.ScrollOffset() != 1 {
+		t.Fatalf("expected scrollOffset 1, got %d", m.ScrollOffset())
 	}
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
-	if m.scrollOffset != 0 {
-		t.Fatalf("expected scrollOffset 0, got %d", m.scrollOffset)
+	_, _ = m.Update(testKey(tea.KeyUp))
+	if m.ScrollOffset() != 0 {
+		t.Fatalf("expected scrollOffset 0, got %d", m.ScrollOffset())
 	}
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
-	if !m.copied {
+	_, _ = m.Update(testText("c"))
+	if !m.Copied() {
 		t.Fatal("expected copied flag to be set")
 	}
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
-	if !m.restart {
+	_, cmd := m.Update(testText("r"))
+	if !m.RestartRequested() {
 		t.Fatal("expected restart flag to be set")
 	}
 	if cmd == nil {
@@ -1007,11 +850,11 @@ func TestQueueFullPreservesDraft(t *testing.T) {
 	for i := 0; i < maxQueuedPrompts; i++ {
 		m.queue = append(m.queue, fmt.Sprintf("queued-%d", i))
 	}
-	m.prompt.SetValue("keep this draft")
+	m.panes.bottom.prompt().SetValue("keep this draft")
 	if cmd := m.submit(); cmd != nil {
 		t.Fatalf("submit() command = %v, want nil", cmd)
 	}
-	if got := m.prompt.Value(); got != "keep this draft" {
+	if got := m.panes.bottom.prompt().Value(); got != "keep this draft" {
 		t.Fatalf("draft = %q, want preserved input", got)
 	}
 	if got := len(m.queue); got != maxQueuedPrompts {
@@ -1023,7 +866,7 @@ func TestQueueEchoTruncatesLongPrompt(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.busy = true
 	long := strings.Repeat("x", maxQueuePreviewRunes+200)
-	m.prompt.SetValue(long)
+	m.panes.bottom.prompt().SetValue(long)
 	_ = m.submit()
 	plain := plainTranscript(m)
 	if strings.Contains(plain, long) {
@@ -1034,17 +877,10 @@ func TestQueueEchoTruncatesLongPrompt(t *testing.T) {
 	}
 }
 
-func TestRenderProviderInputMissingViewIsSafe(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	if got := renderProviderInput(m); got != "" {
-		t.Fatalf("renderProviderInput() = %q, want empty without provider pane", got)
-	}
-}
-
 func assertBubbleViewFits(t *testing.T, m *bubbleModel, width, height int) {
 	t.Helper()
 	m.resize(width, height)
-	view := m.View()
+	view := m.View().Content
 	if got := lipgloss.Height(view); got > height {
 		t.Fatalf("view height %d exceeds %d at %dx%d:\n%s", got, height, width, height, view)
 	}
@@ -1062,30 +898,30 @@ func TestResponsiveUXSurfacesFitTerminal(t *testing.T) {
 		m.activeModel = "provider/a-very-long-model-identifier-for-layout-testing"
 		m.activeProvider = "provider-with-a-long-name"
 		assertBubbleViewFits(t, m, size[0], size[1])
-		m.bottom.push(newModelSelectPaneView(m))
+		m.panes.bottom.push(newModelSetupPaneView(m))
 		assertBubbleViewFits(t, m, size[0], size[1])
-		m.bottom.remove(modelSelectViewID)
-		m.bottom.push(&skillsPaneView{})
+		m.panes.bottom.remove(modelSetupViewID)
+		m.panes.bottom.push(&skillsPaneView{})
 		assertBubbleViewFits(t, m, size[0], size[1])
-		m.bottom.remove(skillsViewID)
+		m.panes.bottom.remove(skillsViewID)
 	}
 }
 
 func TestPermissionReviewFlowFitsNarrowTerminal(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.busy = true
-	m.modal = &permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "git status --short --branch", Arguments: json.RawMessage(`{"command":"git status --short --branch"}`)}, response: make(chan permissionResponse, 1)}
+	m.openPermission(permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "git status --short --branch", Arguments: json.RawMessage(`{"command":"git status --short --branch"}`)}, response: make(chan permissionResponse, 1)})
 	assertBubbleViewFits(t, m, 24, 12)
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	updated, _ := m.Update(testKey(tea.KeyEsc))
 	m = updated.(*bubbleModel)
 	assertBubbleViewFits(t, m, 24, 12)
-	if !m.modalParked {
+	if !m.permissionView().parked {
 		t.Fatal("esc did not enter transcript review mode")
 	}
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	updated, _ = m.Update(testKey(tea.KeyTab))
 	m = updated.(*bubbleModel)
 	assertBubbleViewFits(t, m, 24, 12)
-	if m.modalParked {
+	if m.permissionView().parked {
 		t.Fatal("tab did not return to permission review")
 	}
 }
@@ -1103,17 +939,17 @@ func TestLongActivityStatusFitsTerminal(t *testing.T) {
 }
 
 func TestCompletedTodoPaneIsHidden(t *testing.T) {
-	model := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "done", Text: "done", Status: tododomain.StatusCompleted}, {ID: "also-done", Text: "also done", Status: tododomain.StatusCompleted}})
+	model := newTestBubbleModel(t, permission.ModeAsk, []tododomain.Item{{ID: "done", Text: "done", Status: tododomain.StatusCompleted}, {ID: "also-done", Text: "also done", Status: tododomain.StatusCompleted}})
 	model.resize(80, 24)
-	if strings.Contains(model.View(), "TODO") {
-		t.Fatalf("completed TODO pane still visible: %s", model.View())
+	if strings.Contains(model.View().Content, "TODO") {
+		t.Fatalf("completed TODO pane still visible: %s", model.View().Content)
 	}
 }
 
 func TestWelcomeSitsAtTopWithoutFloatingBox(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
-	view := model.View()
+	view := testPlain(model.View().Content)
 	plain := sanitizeBubbleText(view)
 	if idx := strings.Index(plain, glyphBrand); idx < 0 || idx > 8 {
 		t.Fatalf("welcome is not at the top of the view: %q", plain[:minInt(80, len(plain))])
@@ -1124,10 +960,10 @@ func TestWelcomeSitsAtTopWithoutFloatingBox(t *testing.T) {
 }
 
 func TestTodoPaneShowsPendingBeforeCompleted(t *testing.T) {
-	model := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "already-done", Text: "already done", Status: tododomain.StatusCompleted}, {ID: "still-open", Text: "still open", Status: tododomain.StatusPending}, {ID: "also-done", Text: "also done", Status: tododomain.StatusCompleted}})
+	model := newTestBubbleModel(t, permission.ModeAsk, []tododomain.Item{{ID: "already-done", Text: "already done", Status: tododomain.StatusCompleted}, {ID: "still-open", Text: "still open", Status: tododomain.StatusPending}, {ID: "also-done", Text: "also done", Status: tododomain.StatusCompleted}})
 	model.resize(80, 24)
-	model.todoViewState.Expanded = true
-	view := model.View()
+	model.toggleTodoPane()
+	view := testPlain(model.View().Content)
 	if !strings.Contains(view, "still open") {
 		t.Fatalf("todo pane hid the pending item: %s", view)
 	}
@@ -1138,36 +974,116 @@ func TestTodoPaneShowsPendingBeforeCompleted(t *testing.T) {
 	}
 }
 
+func TestResetPromptCollapsesMultilineComposerDuringBusyTurn(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+	prompt := model.panes.bottom.prompt()
+	prompt.SetValue("one\ntwo\nthree\nfour")
+	model.requestRelayout()
+	model.reconcileLayout()
+	if prompt.Height() != 4 {
+		t.Fatalf("multiline prompt height = %d, want 4", prompt.Height())
+	}
+	model.resetPrompt()
+	model.busy = true
+	model.activity = "analyzing"
+	model.reconcileLayout()
+	plain := ansi.Strip(model.promptView())
+	if got := strings.Count(plain, "> "); got != 1 {
+		t.Fatalf("busy composer prompt count = %d, want 1: %q", got, plain)
+	}
+	if prompt.Height() != 1 {
+		t.Fatalf("reset prompt height = %d, want 1", prompt.Height())
+	}
+}
+
+func TestPromptWidthFitsTerminalAcrossResponsiveSizes(t *testing.T) {
+	for _, width := range []int{24, 40, 80, 120} {
+		model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+		model.resize(width, 16)
+		view := model.promptView()
+		if got := lipgloss.Width(view); got > width {
+			t.Fatalf("prompt width=%d exceeds terminal width=%d: %q", got, width, ansi.Strip(view))
+		}
+		want := composerUsableWidth(width)
+		if got := model.panes.bottom.prompt().Width(); got != want-len(model.panes.bottom.prompt().Prompt) {
+			t.Fatalf("textarea content width=%d, want %d at terminal width %d", got, want-len(model.panes.bottom.prompt().Prompt), width)
+		}
+	}
+}
+
+func TestBlankMultilineSubmitCollapsesComposer(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+	prompt := model.panes.bottom.prompt()
+	prompt.SetValue("\n\n\n")
+	model.requestRelayout()
+	model.reconcileLayout()
+	if prompt.Height() != 4 {
+		t.Fatalf("precondition height=%d, want 4", prompt.Height())
+	}
+	if cmd := model.submit(); cmd != nil {
+		t.Fatalf("blank submit command=%v, want nil", cmd)
+	}
+	if prompt.Value() != "" || prompt.Height() != 1 {
+		t.Fatalf("blank submit left value=%q height=%d", prompt.Value(), prompt.Height())
+	}
+	if got := strings.Count(ansi.Strip(model.promptView()), "> "); got != 1 {
+		t.Fatalf("prompt count=%d, want 1: %q", got, ansi.Strip(model.promptView()))
+	}
+}
+
+func TestBlankComposerNewlinesDoNotCreateBorderGap(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+
+	for i := 0; i < 3; i++ {
+		updated, _ := model.Update(tea.KeyPressMsg{Code: 'j', Mod: tea.ModCtrl})
+		model = updated.(*bubbleModel)
+	}
+
+	if got := model.panes.bottom.prompt().Value(); got != "" {
+		t.Fatalf("blank multiline value = %q, want empty", got)
+	}
+	if got := model.panes.bottom.prompt().Height(); got != 1 {
+		t.Fatalf("blank multiline height = %d, want 1", got)
+	}
+	plain := ansi.Strip(model.promptView())
+	if got := strings.Count(plain, "> "); got != 1 {
+		t.Fatalf("prompt count = %d, want 1: %q", got, plain)
+	}
+}
+
 func TestPromptIsSingleRow(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
-	if model.prompt.Height() != 1 {
-		t.Fatalf("prompt height = %d, want 1", model.prompt.Height())
+	if model.panes.bottom.prompt().Height() != 1 {
+		t.Fatalf("prompt height = %d, want 1", model.panes.bottom.prompt().Height())
 	}
-	if strings.Count(model.promptView(), "›") != 1 {
+	if strings.Count(ansi.Strip(model.promptView()), "> ") != 1 {
 		t.Fatalf("prompt chrome repeated:\n%s", model.promptView())
 	}
 }
 
 func TestLiveViewFitsTerminal(t *testing.T) {
-	model := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
+	model := newTestBubbleModel(t, permission.ModeAsk, []tododomain.Item{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
 	model.resize(80, 24)
-	height := lipgloss.Height(model.View())
+	height := lipgloss.Height(model.View().Content)
 	if height > 24 {
-		t.Fatalf("view height = %d, want <= 24:\n%s", height, model.View())
+		t.Fatalf("view height = %d, want <= 24:\n%s", height, model.View().Content)
 	}
 }
 
 func TestBubbleModelAcceptsTypedRunes(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	if !model.prompt.Focused() {
+	if !model.panes.bottom.prompt().Focused() {
 		t.Fatal("prompt is not focused; textarea will drop every key")
 	}
-	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	updated, _ := model.Update(testText("h"))
 	model = updated.(*bubbleModel)
-	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	updated, _ = model.Update(testText("i"))
 	model = updated.(*bubbleModel)
-	if got, want := model.prompt.Value(), "hi"; got != want {
+	if got, want := model.panes.bottom.prompt().Value(), "hi"; got != want {
 		t.Fatalf("typed value = %q, want %q", got, want)
 	}
 }
@@ -1175,15 +1091,18 @@ func TestBubbleModelAcceptsTypedRunes(t *testing.T) {
 func TestBubbleModelRendersComponentLayout(t *testing.T) {
 	registry, _ := newBubbleTestRegistry()
 	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
-	model := newBubbleModel(context.Background(), service, registry, []TodoItem{{ID: "ship", Text: "ship Bubble Tea", Status: tododomain.StatusPending}}, nil, newPermissionBridge(), "/tmp/proton")
+	model := newBubbleModel(context.Background(), service, registry, []tododomain.Item{{ID: "ship", Text: "ship Bubble Tea", Status: tododomain.StatusPending}}, nil, newPermissionBridge(), "/tmp/proton")
 	model.resize(80, 24)
 	model.appendLine("assistant: ready")
 	model.refreshViewport()
-	view := model.View()
-	for _, expected := range []string{glyphBrand, "█▀█", "assistant: ready", "Tasks 0/1", "ask", "›", "/help"} {
+	view := testPlain(model.View().Content)
+	for _, expected := range []string{glyphBrand, "█▀█", "/tmp/proton", "assistant: ready", "> "} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("Bubble Tea view does not contain %q: %s", expected, view)
 		}
+	}
+	if strings.Contains(view, "Tasks 0/1") || strings.Contains(view, "ship Bubble Tea") {
+		t.Fatalf("main frame still renders persistent task chrome: %s", view)
 	}
 }
 
@@ -1191,16 +1110,16 @@ func TestBubbleModelHistoryUsesTextarea(t *testing.T) {
 	registry, _ := newBubbleTestRegistry()
 	service := newBubbleTestService(t, registry, permission.ModeAlwaysApprove, permission.Config{})
 	model := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, newPermissionBridge(), "")
-	model.prompt.SetValue(":help")
+	model.panes.bottom.prompt().SetValue(":help")
 	if command := model.submit(); command != nil {
 		t.Fatal("help submit command != nil")
 	}
 	model.historyPrevious()
-	if got, want := model.prompt.Value(), ":help"; got != want {
+	if got, want := model.panes.bottom.prompt().Value(), ":help"; got != want {
 		t.Fatalf("history value = %q, want %q", got, want)
 	}
 	model.historyNext()
-	if got := model.prompt.Value(); got != "" {
+	if got := model.panes.bottom.prompt().Value(); got != "" {
 		t.Fatalf("history next value = %q, want empty", got)
 	}
 }
@@ -1218,13 +1137,13 @@ func TestSanitizeBubbleTextRemovesControlCharacters(t *testing.T) {
 func TestEmptyStateWithoutRunnerGuidesSlashCommands(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
-	view := model.View()
-	for _, expected := range []string{"Type a message or /command", glyphBrand, "█▀█"} {
+	view := testPlain(model.View().Content)
+	for _, expected := range []string{"Message or /command", glyphBrand, "█▀█"} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("empty state view does not contain %q: %s", expected, view)
 		}
 	}
-	if got, want := model.prompt.Placeholder, "Type a message or /command…"; got != want {
+	if got, want := model.panes.bottom.prompt().Placeholder, "Message or /command…"; got != want {
 		t.Fatalf("placeholder = %q, want %q", got, want)
 	}
 }
@@ -1237,13 +1156,13 @@ func TestRefreshViewportPreservesScrollWhenNotFollowing(t *testing.T) {
 	}
 	model.refreshViewport()
 	model.viewport.GotoTop()
-	model.followTail = false
+	model.conversationViewport.setFollowing(false)
 	model.appendLine("tail")
 	model.refreshViewport()
 	if model.viewport.AtBottom() {
 		t.Fatal("refreshViewport followed the tail after the user scrolled up")
 	}
-	if model.followTail {
+	if model.conversationViewport.following() {
 		t.Fatal("followTail was re-enabled after a mid-scroll append")
 	}
 }
@@ -1252,10 +1171,10 @@ func TestWelcomeCardReprintsAfterClear(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
 	model.appendLine("gone")
-	model.prompt.SetValue("/clear")
+	model.panes.bottom.prompt().SetValue("/transcript clear")
 	_ = model.submit()
 	model.refreshViewport()
-	view := model.View()
+	view := testPlain(model.View().Content)
 	if strings.Contains(plainTranscript(model), "gone") {
 		t.Fatal("clear left transcript body")
 	}
@@ -1292,140 +1211,52 @@ func TestFormatElapsed(t *testing.T) {
 	}
 }
 
-func TestTodoAutoCollapsesWhenAllTasksComplete(t *testing.T) {
-	store, err := tododomain.NewStore([]tododomain.Item{
-		{ID: "task-1", Text: "first step", Status: tododomain.StatusInProgress},
-		{ID: "task-2", Text: "second step", Status: tododomain.StatusPending},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	m := newTestBubbleModel(t, permission.ModeAsk, store.Snapshot().Items)
-	m.todoStore = store
-	m.todoRevision = store.Snapshot().Revision
-	m.todoViewState.Expanded = true
-
-	// While in progress and expanded, it shows task text
-	if got := m.todoView(); !strings.Contains(got, "first step") {
-		t.Fatalf("expected expanded view with active task: %s", got)
-	}
-
-	// Transition all tasks to complete
-	if _, err := store.CompareAndReplace(context.Background(), m.todoRevision, []tododomain.Item{
-		{ID: "task-1", Text: "first step", Status: tododomain.StatusCompleted},
-		{ID: "task-2", Text: "second step", Status: tododomain.StatusCompleted},
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	if !m.syncTodoSnapshot() {
-		t.Fatal("syncTodoSnapshot returned false")
-	}
-
-	// Must auto-collapse Expanded state to false
-	if m.todoViewState.Expanded {
-		t.Fatal("expected todoViewState.Expanded to be false after all tasks completed")
-	}
-
-	// Must show compact single-line summary without task item details
-	got := m.todoView()
-	if !strings.Contains(got, "Tasks 2/2 ✓") {
-		t.Fatalf("missing completed summary: %s", got)
-	}
-	if strings.Contains(got, "first step") || strings.Contains(got, "second step") {
-		t.Fatalf("auto-collapsed completed view should not contain item details: %s", got)
-	}
-
-	// User can still explicitly expand via ctrl+o
-	m.todoViewState.Expanded = true
-	gotExpanded := m.todoView()
-	if !strings.Contains(gotExpanded, "first step") || !strings.Contains(gotExpanded, "second step") {
-		t.Fatalf("explicitly expanded view missing completed items: %s", gotExpanded)
-	}
-}
-
-func TestTodoExpandedRendersDividerLine(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, []TodoItem{
-		{ID: "a", Text: "active item", Status: tododomain.StatusInProgress},
-	})
-	m.resize(80, 24)
-	m.todoViewState.Expanded = true
-
-	got := m.todoView()
-	if !strings.Contains(got, "── Tasks") || !strings.Contains(got, "active item") {
-		t.Fatalf("expected divider header in expanded view, got: %s", got)
-	}
-}
-
-func TestBuildFrameChromeProtectsViewportFloor(t *testing.T) {
-	// Create many tasks that would otherwise consume many rows
-	items := make([]TodoItem, 10)
-	for i := range items {
-		items[i] = TodoItem{
-			ID:     fmt.Sprintf("t-%d", i),
-			Text:   fmt.Sprintf("task number %d", i),
-			Status: tododomain.StatusPending,
-		}
-	}
-	m := newTestBubbleModel(t, permission.ModeAsk, items)
-	// Set small height of 15
-	m.resize(80, 15)
-	m.todoViewState.Expanded = true
-
-	frame := m.buildFrameChrome()
-	viewportHeight := m.height - frame.height
-	if viewportHeight < 4 {
-		t.Fatalf("viewport starved: height=%d, frame.height=%d, viewportHeight=%d (want >= 4)", m.height, frame.height, viewportHeight)
-	}
-}
-
 type fakeConversation struct{}
 
 func (fakeConversation) Run(context.Context, []model.Message, applicationturn.Sink) (applicationturn.Result, error) {
 	return applicationturn.Result{}, nil
 }
 
-func TestPromptPlaceholderReflectsPermissionAndPlanMode(t *testing.T) {
-	// Without runner
-	if got := promptPlaceholder(false, permission.ModeAsk, false); got != "Type a message or /command…" {
+func TestPromptPlaceholderReflectsRunnerState(t *testing.T) {
+	if got := promptPlaceholder(false, permission.ModeAsk, false); got != "Message or /command…" {
 		t.Fatalf("no runner placeholder = %q", got)
 	}
 
-	// Normal ask mode
-	if got := promptPlaceholder(true, permission.ModeAsk, false); got != "Ask Protonman to inspect or change this workspace…" {
-		t.Fatalf("ask mode placeholder = %q", got)
+	for _, tc := range []struct {
+		mode permission.Mode
+		plan bool
+	}{
+		{permission.ModeAsk, false},
+		{permission.ModeAlwaysApprove, false},
+		{permission.ModeDeny, false},
+		{permission.ModeAsk, true},
+	} {
+		if got := promptPlaceholder(true, tc.mode, tc.plan); got != "" {
+			t.Fatalf("runner placeholder = %q, want empty", got)
+		}
 	}
 
-	// Auto-approve mode
-	if got := promptPlaceholder(true, permission.ModeAlwaysApprove, false); !strings.Contains(got, "auto-approve active") {
-		t.Fatalf("auto-approve placeholder = %q", got)
-	}
-
-	// Plan mode
-	if got := promptPlaceholder(true, permission.ModeAsk, true); !strings.Contains(got, "plan mode") {
-		t.Fatalf("plan mode placeholder = %q", got)
-	}
-
-	// Deny mode
-	if got := promptPlaceholder(true, permission.ModeDeny, false); !strings.Contains(got, "deny mode") {
-		t.Fatalf("deny mode placeholder = %q", got)
-	}
-
-	// Dynamic update on bubbleModel
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.runner = fakeConversation{}
 	m.syncPromptPlaceholder()
-	if !strings.Contains(m.prompt.Placeholder, "inspect or change") {
-		t.Fatalf("initial placeholder = %q", m.prompt.Placeholder)
+	if got := m.panes.bottom.prompt().Placeholder; got != "" {
+		t.Fatalf("initial runner placeholder = %q, want empty", got)
 	}
 
 	_ = m.setPermissionMode(permission.ModeAlwaysApprove)
-	if !strings.Contains(m.prompt.Placeholder, "auto-approve active") {
-		t.Fatalf("placeholder after mode always-approve = %q", m.prompt.Placeholder)
-	}
-
 	m.setPlanEnabled(true)
-	if !strings.Contains(m.prompt.Placeholder, "plan mode") {
-		t.Fatalf("placeholder after plan mode = %q", m.prompt.Placeholder)
+	if got := m.panes.bottom.prompt().Placeholder; got != "" {
+		t.Fatalf("runner placeholder after mode changes = %q, want empty", got)
+	}
+}
+
+func TestIdleFooterShowsModelReasoningAndPermissionMode(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeModel = "nemotron-3.5-lightning-free"
+	m.reasoningEffort = sdk.ReasoningDefault
+	m.resize(80, 24)
+	footer := ansi.Strip(m.idleContextFooter())
+	if !strings.Contains(footer, "nemotron-3.5-lightning-free · auto · ask") {
+		t.Fatalf("footer missing model/reasoning/permission context: %q", footer)
 	}
 }

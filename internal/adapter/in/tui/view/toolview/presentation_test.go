@@ -103,8 +103,8 @@ func TestExtractToolTarget(t *testing.T) {
 			name:       "subagent spawn profile and task",
 			toolName:   "subagent",
 			kind:       "",
-			args:       `{"action":"spawn","profile":"int","task":"find all authentication handlers"}`,
-			wantTarget: "[int] find all authentication handlers",
+			args:       `{"action":"spawn","profile":"agility","task":"find all authentication handlers"}`,
+			wantTarget: "[agility] find all authentication handlers",
 			wantKind:   "",
 		},
 		{
@@ -232,8 +232,8 @@ func TestFormatOutputFold(t *testing.T) {
 	if len(fourFolded) != 4 {
 		t.Fatalf("expected 4 folded items, got: %d", len(fourFolded))
 	}
-	if !strings.Contains(fourFolded[2], "1 line hidden") {
-		t.Fatalf("expected '1 line hidden', got: %s", fourFolded[2])
+	if !strings.Contains(fourFolded[2], "1 more") {
+		t.Fatalf("expected '1 more', got: %s", fourFolded[2])
 	}
 
 	fiveLines := []string{"one", "two", "three", "four", "five"}
@@ -241,8 +241,8 @@ func TestFormatOutputFold(t *testing.T) {
 	if len(fiveFolded) != 4 {
 		t.Fatalf("expected 5 lines to fold to 4 items, got: %d", len(fiveFolded))
 	}
-	if !strings.Contains(fiveFolded[2], "2 lines hidden") {
-		t.Fatalf("expected '2 lines hidden', got: %s", fiveFolded[2])
+	if !strings.Contains(fiveFolded[2], "2 more") {
+		t.Fatalf("expected '2 more', got: %s", fiveFolded[2])
 	}
 
 	longLines := []string{"line1", "line2", "line3", "line4", "line5", "line6", "line7", "line8"}
@@ -250,8 +250,24 @@ func TestFormatOutputFold(t *testing.T) {
 	if len(folded) != 4 { // first 2 + fold indicator + last 1
 		t.Fatalf("expected 4 folded items, got: %d (%v)", len(folded), folded)
 	}
-	if !strings.Contains(folded[2], "5 lines hidden") || !strings.Contains(folded[2], "ctrl+t") {
+	if !strings.Contains(folded[2], "5 more") || !strings.Contains(folded[2], "ctrl+t") {
 		t.Fatalf("expected fold indicator with hidden count, got: %s", folded[2])
+	}
+}
+
+func TestFormatOutputFoldHintStaysCompact(t *testing.T) {
+	folded := FormatOutputFold([]string{"one", "two", "three", "four", "five", "six", "seven", "eight"}, 3)
+	if len(folded) != 4 {
+		t.Fatalf("folded items = %d, want 4", len(folded))
+	}
+	hint := ansi.Strip(folded[2])
+	if got := ansi.StringWidth(hint); got > 22 {
+		t.Fatalf("fold hint width = %d, want <= 22: %q", got, hint)
+	}
+	for _, want := range []string{"5", "ctrl+t"} {
+		if !strings.Contains(hint, want) {
+			t.Fatalf("fold hint missing %q: %q", want, hint)
+		}
 	}
 }
 
@@ -401,8 +417,8 @@ func TestTodoToolPresentation(t *testing.T) {
 }
 
 func TestAgentToolPresentation(t *testing.T) {
-	target, kind := ExtractTarget("subagent", "", json.RawMessage(`{"action":"spawn","profile":"int","task":"inspect router behavior"}`))
-	if kind != tool.KindAgent || !strings.Contains(target, "[int]") {
+	target, kind := ExtractTarget("subagent", "", json.RawMessage(`{"action":"spawn","profile":"agility","task":"inspect router behavior"}`))
+	if kind != tool.KindAgent || !strings.Contains(target, "[agility]") {
 		t.Fatalf("target=%q kind=%q", target, kind)
 	}
 	if glyph := KindGlyph(kind, "subagent"); glyph != tuistyle.GlyphAgent {
@@ -445,7 +461,7 @@ func TestFormatGrepToolView(t *testing.T) {
 	if !strings.Contains(first, "internal/tui/brand.go") || !strings.Contains(first, ":18:") {
 		t.Fatalf("unexpected first line: %q", first)
 	}
-	if !strings.Contains(view[3], "line hidden") && !strings.Contains(view[3], "lines hidden") {
+	if !strings.Contains(view[3], "line hidden") && !strings.Contains(view[3], "more") {
 		t.Fatalf("expected fold hint, got %q", view[3])
 	}
 }

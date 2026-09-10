@@ -174,13 +174,13 @@ protected_paths = [".env", "secrets/*"]
 		t.Fatalf("write .env: %v", err)
 	}
 
-	// With PROTON_TRUST_PROJECT=1, read on .env should fail with protected_path
+	// With PROTONMAN_TRUST_PROJECT=1, read on .env should fail with protected_path
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call read {"path":".env"}`},
 		dir:  ws,
 		env: []string{
 			"PROTONMAN_HOME=" + home,
-			"PROTON_TRUST_PROJECT=1",
+			"PROTONMAN_TRUST_PROJECT=1",
 		},
 	})
 	if res.exitCode == 0 {

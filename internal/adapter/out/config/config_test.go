@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -216,6 +217,25 @@ func TestSaveUserDefaultModel(t *testing.T) {
 	}
 }
 
+func TestSaveUserDefaultProviderPreservesExistingModel(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	provider := ProviderConfig{Name: "protonman", Type: "openai", BaseURL: "https://protonman.dev/api/v1"}
+	if err := SaveUserProviderConfig(homeDir, provider, "MiniMax-M3"); err != nil {
+		t.Fatalf("SaveUserProviderConfig() error = %v", err)
+	}
+	if err := SaveUserDefaultProvider(homeDir, "opencode"); err != nil {
+		t.Fatalf("SaveUserDefaultProvider() error = %v", err)
+	}
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if snapshot.Model.Provider != "opencode" || snapshot.Model.Default != "MiniMax-M3" {
+		t.Fatalf("provider switch changed model unexpectedly: %+v", snapshot.Model)
+	}
+}
+
 func TestSaveUserProviderConfigWithOptionsPreservesActiveProvider(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
@@ -317,8 +337,11 @@ func TestDeleteUserProviderConfig(t *testing.T) {
 	if _, exists := snapshot.Providers["opencode"]; !exists {
 		t.Fatal("expected opencode to be preserved")
 	}
-	if snapshot.Model.Provider != "opencode" {
-		t.Fatalf("expected default provider to fall back to opencode, got: %q", snapshot.Model.Provider)
+	if snapshot.Model.Provider != "" {
+		t.Fatalf("expected low-level delete to clear active provider for application fallback, got: %q", snapshot.Model.Provider)
+	}
+	if snapshot.Model.Default != "" {
+		t.Fatalf("expected stale model to be cleared after active provider deletion, got: %q", snapshot.Model.Default)
 	}
 
 	// Verify permissions
@@ -358,7 +381,7 @@ func TestLoadAgentProfileConfig(t *testing.T) {
 	homeDir := t.TempDir()
 	configPath := filepath.Join(homeDir, ".protonman", "config.toml")
 	writeConfig(t, configPath, `[agent]
-profile = "dex"
+profile = "intelligence"
 `)
 
 	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: t.TempDir()})
@@ -366,8 +389,8 @@ profile = "dex"
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	if snapshot.Agent.Profile != "dex" {
-		t.Errorf("Agent.Profile = %q, want 'dex'", snapshot.Agent.Profile)
+	if snapshot.Agent.Profile != "intelligence" {
+		t.Errorf("Agent.Profile = %q, want 'intelligence'", snapshot.Agent.Profile)
 	}
 }
 
@@ -487,27 +510,6 @@ completed_result_ttl = "2m"
 	}
 }
 
-func TestAgentLegacySubagentTimeoutMigratesToMaxRuntime(t *testing.T) {
-	homeDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), "[agent]\nsubagent_timeout = \"45s\"\n")
-	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if snapshot.Agent.SubagentMaxRuntime != 45*time.Second {
-		t.Fatalf("max runtime = %v", snapshot.Agent.SubagentMaxRuntime)
-	}
-	found := false
-	for _, warning := range snapshot.Warnings {
-		if strings.Contains(warning, "subagent_timeout is deprecated") {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatal("missing legacy timeout deprecation warning")
-	}
-}
-
 func TestAgentSubagentTimeoutConfigRejectsInvalidValues(t *testing.T) {
 	for _, body := range []string{
 		"[agent]\nsubagent_max_runtime = \"nope\"\n",
@@ -616,7 +618,7 @@ default = "user-model"
 provider = "user-provider"
 
 [agent]
-profile = "pow"
+profile = "strength"
 max_tool_calls = 11
 reasoning_effort = "low"
 
@@ -627,7 +629,7 @@ permission_mode = "ask"
 default = "project-model"
 
 [agent]
-profile = "dex"
+profile = "intelligence"
 reasoning_effort = "high"
 `)
 
@@ -707,5 +709,55 @@ pattern = "all"
 	r := snapshot.Permission.Rules[0]
 	if r.Action != permission.ActionAllow || r.Tool != permission.ToolBash || r.Pattern != "*" {
 		t.Fatalf("unexpected rule decoded: %+v", r)
+	}
+}
+
+func TestSaveUserModelSelectionClearsStaleModel(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	if err := SaveUserProviderConfig(homeDir, ProviderConfig{Name: "alpha", Type: "openai", BaseURL: "https://alpha.example/v1"}, "alpha-model"); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveUserModelSelection(homeDir, "beta", ""); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Model.Provider != "beta" || snapshot.Model.Default != "" {
+		t.Fatalf("selection = %+v, want exact beta with empty model", snapshot.Model)
+	}
+}
+
+func TestConcurrentUserConfigMutationsDoNotLoseFields(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	for i := 0; i < 50; i++ {
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			if err := SaveUserReasoningEffort(homeDir, sdk.ReasoningHigh); err != nil {
+				t.Errorf("save reasoning: %v", err)
+			}
+		}()
+		go func(value int) {
+			defer wg.Done()
+			if err := SaveUserMaxToolCalls(homeDir, value); err != nil {
+				t.Errorf("save tool calls: %v", err)
+			}
+		}(40 + i)
+		wg.Wait()
+	}
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh {
+		t.Fatalf("reasoning = %q, want high", snapshot.Agent.ReasoningEffort)
+	}
+	if snapshot.Agent.MaxToolCalls < 40 {
+		t.Fatalf("max tool calls = %d, want concurrent update preserved", snapshot.Agent.MaxToolCalls)
 	}
 }

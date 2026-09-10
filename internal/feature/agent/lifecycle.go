@@ -127,13 +127,20 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 	select {
 	case c.sem <- struct{}{}:
 	case <-queueCtx.Done():
-		c.finishEntry(entry, req, queuedAt, time.Time{}, queueCtx.Err())
+		err := queueCtx.Err()
+		if errors.Is(err, context.DeadlineExceeded) && runCtx.Err() == nil {
+			err = queueTimeoutError()
+		}
+		c.finishEntry(entry, req, queuedAt, time.Time{}, err)
 		return
 	}
 	defer func() { <-c.sem }()
 
 	releaseWorkspace, err := c.acquireWorkspace(queueCtx, req.Profile.IsMutating())
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) && runCtx.Err() == nil {
+			err = queueTimeoutError()
+		}
 		c.finishEntry(entry, req, queuedAt, time.Time{}, err)
 		return
 	}
@@ -169,6 +176,9 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 
 	c.emit(execCtx, Event{Kind: EventAgentStarted, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task, QueueDuration: queueDuration})
 	res, runErr := c.executeWithRuntime(execCtx, req, entry.languageModel, entry.reasoningEffort, entry.toolRuntime)
+	if errors.Is(runErr, context.DeadlineExceeded) && runCtx.Err() == nil && execCtx.Err() != nil {
+		runErr = executionTimeoutError()
+	}
 	c.agentsMu.RLock()
 	provider, modelID := entry.status.Provider, entry.status.Model
 	c.agentsMu.RUnlock()
@@ -246,6 +256,10 @@ func terminalReason(err error) string {
 	switch {
 	case err == nil:
 		return ""
+	case errors.Is(err, ErrQueueTimeout):
+		return "queue timed out"
+	case errors.Is(err, ErrExecutionTimeout):
+		return "execution timed out"
 	case errors.Is(err, context.DeadlineExceeded):
 		return "timed out"
 	case errors.Is(err, context.Canceled):
@@ -363,6 +377,9 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 	case <-wctx.Done():
 		_ = c.Cancel(h.ID)
 		err := wctx.Err()
+		if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+			err = executionTimeoutError()
+		}
 		return Result{SessionID: h.SessionID, AgentID: h.ID, Profile: h.Profile, Err: err}, err
 	}
 }

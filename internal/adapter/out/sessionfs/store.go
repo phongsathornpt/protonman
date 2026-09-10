@@ -21,9 +21,8 @@ type ListOptions = session.ListOptions
 
 var _ session.Repository = (*FileStore)(nil)
 
-// FileStore stores each session as an aggregate directory below root.
-// New layout: <root>/<session-id>/state.json. Legacy <root>/<session-id>.json
-// files remain readable and are removed after the next successful save.
+// FileStore stores each session as an aggregate directory below root:
+// <root>/<session-id>/state.json.
 type FileStore struct{ root string }
 
 func NewFileStore(root string) (*FileStore, error) {
@@ -40,12 +39,7 @@ func (s *FileStore) Load(ctx context.Context, sessionID string) (State, bool, er
 	if err := ctx.Err(); err != nil {
 		return State{}, false, fmt.Errorf("before loading session: %w", err)
 	}
-	path := s.path(sessionID)
-	file, err := os.Open(path)
-	if errors.Is(err, os.ErrNotExist) {
-		path = s.legacyPath(sessionID)
-		file, err = os.Open(path)
-	}
+	file, err := os.Open(s.path(sessionID))
 	if errors.Is(err, os.ErrNotExist) {
 		return State{}, false, nil
 	}
@@ -148,7 +142,6 @@ func (s *FileStore) saveLocked(ctx context.Context, sessionID string, state Stat
 	if err := os.Rename(temporaryPath, resources.State); err != nil {
 		return fmt.Errorf("install session state: %w", err)
 	}
-	_ = os.Remove(s.legacyPath(sessionID))
 	return nil
 }
 
@@ -166,9 +159,6 @@ func (s *FileStore) Delete(ctx context.Context, sessionID string) error {
 		}
 		if err := os.RemoveAll(resources.Root); err != nil {
 			return fmt.Errorf("delete session directory: %w", err)
-		}
-		if err := os.Remove(s.legacyPath(sessionID)); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("delete legacy session state: %w", err)
 		}
 		return nil
 	})
@@ -226,18 +216,12 @@ func (s *FileStore) List(ctx context.Context, prefix string) ([]string, error) {
 	}
 	byID := make(map[string]candidate, len(entries))
 	for _, entry := range entries {
-		id := ""
-		statePath := ""
-		if entry.IsDir() {
-			id = entry.Name()
-			statePath = filepath.Join(s.root, id, session.StateFileName)
-			if _, statErr := os.Stat(statePath); statErr != nil {
-				continue
-			}
-		} else if strings.HasSuffix(entry.Name(), ".json") {
-			id = strings.TrimSuffix(entry.Name(), ".json")
-			statePath = filepath.Join(s.root, entry.Name())
-		} else {
+		if !entry.IsDir() {
+			continue
+		}
+		id := entry.Name()
+		statePath := filepath.Join(s.root, id, session.StateFileName)
+		if _, statErr := os.Stat(statePath); statErr != nil {
 			continue
 		}
 		if err := session.ValidateID(id); err != nil {
@@ -315,8 +299,4 @@ func (s *FileStore) ListSummaries(ctx context.Context, options ListOptions) ([]S
 func (s *FileStore) path(sessionID string) string {
 	resources, _ := session.ResolveResources(s.root, sessionID)
 	return resources.State
-}
-
-func (s *FileStore) legacyPath(sessionID string) string {
-	return filepath.Join(s.root, sessionID+".json")
 }

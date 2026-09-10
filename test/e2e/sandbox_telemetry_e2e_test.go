@@ -46,7 +46,7 @@ func TestE2ETelemetryExplicitOff(t *testing.T) {
 		dir:  ws,
 		env: []string{
 			"PROTONMAN_HOME=" + home,
-			"PROTON_TELEMETRY=off",
+			"PROTONMAN_TELEMETRY=off",
 		},
 	})
 	if res.exitCode != 0 {

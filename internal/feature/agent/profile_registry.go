@@ -140,7 +140,3 @@ func DefaultSystemPrompt() string {
 	return prompt.Render(prompt.Spec{})
 }
 
-// SystemPromptForProfile returns a compatibility rendering for callers without runtime context.
-func SystemPromptForProfile(profile Profile) string {
-	return prompt.Render(prompt.Spec{Role: RolePromptForProfile(profile), Profile: string(profile)})
-}

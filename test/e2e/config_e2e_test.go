@@ -34,7 +34,7 @@ default = "project-model"
 		t.Fatalf("write project config: %v", err)
 	}
 
-	// Without PROTON_TRUST_PROJECT, a warning should be emitted on stderr about untrusted project config
+	// Without PROTONMAN_TRUST_PROJECT, a warning should be emitted on stderr about untrusted project config
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call bash {"command":"echo 'untrusted-check'"}`},
 		dir:  ws,
@@ -47,13 +47,13 @@ default = "project-model"
 		t.Fatalf("expected untrusted project warning on stderr, got: %s", res.stderr)
 	}
 
-	// With PROTON_TRUST_PROJECT=1, project config is trusted and loaded
+	// With PROTONMAN_TRUST_PROJECT=1, project config is trusted and loaded
 	resTrusted := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call bash {"command":"echo 'trusted-check'"}`},
 		dir:  ws,
 		env: []string{
 			"PROTONMAN_HOME=" + home,
-			"PROTON_TRUST_PROJECT=1",
+			"PROTONMAN_TRUST_PROJECT=1",
 		},
 	})
 	if resTrusted.exitCode != 0 {

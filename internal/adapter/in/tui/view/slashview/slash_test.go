@@ -1,26 +1,17 @@
 package slashview
 
-import (
-	"strings"
-	"testing"
+import "testing"
 
-	"github.com/charmbracelet/x/ansi"
-)
-
-func TestCatalogKeepsCanonicalSkillsCommand(t *testing.T) {
-	catalog := Catalog("strength|agility|intelligence")
-	count := 0
-	for _, command := range catalog {
-		if command.Name != "skills" {
-			continue
-		}
-		count++
-		if len(command.Aliases) != 1 || command.Aliases[0] != "skill" {
-			t.Fatalf("skills aliases = %#v", command.Aliases)
-		}
+func TestCatalogContainsCanonicalCommandsOnly(t *testing.T) {
+	catalog := Catalog()
+	want := []string{"help", "permission", "model", "provider", "skills", "agents", "todo", "transcript", "call", "quit"}
+	if len(catalog) != len(want) {
+		t.Fatalf("catalog size = %d, want %d: %#v", len(catalog), len(want), catalog)
 	}
-	if count != 1 {
-		t.Fatalf("skills command count = %d, want 1", count)
+	for i, name := range want {
+		if catalog[i].Name != name {
+			t.Fatalf("catalog[%d] = %q, want %q", i, catalog[i].Name, name)
+		}
 	}
 }
 
@@ -33,23 +24,24 @@ func TestParseContext(t *testing.T) {
 		query string
 	}{
 		{value: "/he", ok: true, kind: ContextCommand, lead: "/", query: "he"},
-		{value: ":models", ok: true, kind: ContextCommand, lead: ":", query: "models"},
-		{value: "/skill pd", ok: true, kind: ContextSkill, lead: "/skill ", query: "pd"},
+		{value: ":model", ok: true, kind: ContextCommand, lead: ":", query: "model"},
+		{value: "/skills pd", ok: true, kind: ContextSkill, lead: "/skills ", query: "pd"},
 		{value: "/skills toggle pdf", ok: true, kind: ContextSkill, lead: "/skills toggle ", query: "pdf"},
 		{value: "/skills toggle", ok: false},
+		{value: "/skill pd", ok: false},
 		{value: "/model free", ok: false},
 		{value: "plain", ok: false},
 	}
-	for _, test := range tests {
-		t.Run(test.value, func(t *testing.T) {
-			got, ok := ParseContext(test.value)
-			if ok != test.ok {
-				t.Fatalf("ok = %v, want %v", ok, test.ok)
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			got, ok := ParseContext(tt.value)
+			if ok != tt.ok {
+				t.Fatalf("ok = %v, want %v", ok, tt.ok)
 			}
 			if !ok {
 				return
 			}
-			if got.Kind != test.kind || got.Lead != test.lead || got.Query != test.query {
+			if got.Kind != tt.kind || got.Lead != tt.lead || got.Query != tt.query {
 				t.Fatalf("context = %#v", got)
 			}
 		})
@@ -57,9 +49,8 @@ func TestParseContext(t *testing.T) {
 }
 
 func TestCanonicalAndFuzzyMatching(t *testing.T) {
-	catalog := Catalog("strength|agility|intelligence")
-	if got := CanonicalName(catalog, "MODELS"); got != "model" {
-		t.Fatalf("CanonicalName(models) = %q", got)
+	if got := CanonicalName("MODEL"); got != "model" {
+		t.Fatalf("CanonicalName = %q", got)
 	}
 	if !FuzzyContains("provider", "pvd") {
 		t.Fatal("expected subsequence fuzzy match")
@@ -83,20 +74,5 @@ func TestSkillMatchesCarryPresentationMetadata(t *testing.T) {
 	}
 	if matches[0].Name != "pdf-processing" || matches[0].PrefixTag != "[x]" || matches[0].Scope != "user" {
 		t.Fatalf("match = %#v", matches[0])
-	}
-}
-
-func TestRenderShowsSelectedWindow(t *testing.T) {
-	matches := []Command{
-		{Name: "one", Description: "first"},
-		{Name: "two", Description: "second"},
-		{Name: "three", Description: "third"},
-	}
-	plain := ansi.Strip(Render(matches, 2, 80, 2, ContextCommand))
-	if strings.Contains(plain, "/one") || !strings.Contains(plain, "/two") || !strings.Contains(plain, "/three") {
-		t.Fatalf("unexpected render window: %q", plain)
-	}
-	if !strings.Contains(plain, "item 3 of 3") {
-		t.Fatalf("missing position hint: %q", plain)
 	}
 }

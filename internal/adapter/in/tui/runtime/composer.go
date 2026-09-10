@@ -1,17 +1,24 @@
 package runtime
 
 import (
-	"github.com/charmbracelet/bubbles/textarea"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/viewport"
+	"charm.land/lipgloss/v2"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
+)
+
+type panePresentationMode uint8
+
+const (
+	paneOverlay panePresentationMode = iota
+	paneBelowComposer
+	paneBlocking
 )
 
 type bottomPaneView interface {
 	ID() string
-	Render(*bubbleModel) string
-	HandleKey(*bubbleModel, tea.KeyMsg) (handled bool, cmd tea.Cmd)
-	ReplacesComposer() bool
+	Render(paneRenderContext) string
+	PresentationMode() panePresentationMode
 } // bottomPaneView is a transient interaction surface that can replace or augment
 // the composer. Permission prompts and slash completion are the first users;
 // pickers and MCP elicitation can implement the same contract later.
@@ -24,6 +31,13 @@ type composerState struct {
 	historyPos int
 	draft      string
 	bashMode   bool
+}
+
+type paneState struct {
+	bottom         *bottomPane
+	transcript     viewport.Model
+	showTranscript bool
+	rawTranscript  bool
 }
 
 type bottomPane struct {
@@ -170,66 +184,72 @@ func (p *bottomPane) renderTop(m *bubbleModel) string {
 	if p == nil {
 		return ""
 	}
-	if p.top() == nil && m != nil && m.modal != nil {
-		m.openPermission(*m.modal)
-	}
 	if top := p.top(); top != nil {
-		return top.Render(m)
+		return top.Render(newPaneRenderContext(m))
 	}
 	return ""
 }
 
 func (p *bottomPane) composerVisible() bool {
 	top := p.top()
-	return top == nil || !top.ReplacesComposer()
+	return top == nil || top.PresentationMode() != paneBlocking
 }
 
 func newPrompt(hasRunner bool) textarea.Model {
 	prompt := textarea.New()
 	prompt.Placeholder = promptPlaceholder(hasRunner, permission.ModeAsk, false)
 	prompt.CharLimit = 20_000
+	prompt.DynamicHeight = true
+	prompt.MinHeight = 1
+	prompt.MaxHeight = 4
 	prompt.ShowLineNumbers = false
 	prompt.EndOfBufferCharacter = ' '
 	prompt.KeyMap.InsertNewline.SetKeys("ctrl+j")
 	prompt.KeyMap.InsertNewline.SetEnabled(true)
-	prompt.FocusedStyle.CursorLine = lipgloss.NewStyle()
-	prompt.BlurredStyle.CursorLine = lipgloss.NewStyle()
+	styles := prompt.Styles()
+	styles.Focused.CursorLine = lipgloss.NewStyle()
+	styles.Blurred.CursorLine = lipgloss.NewStyle()
+	prompt.SetStyles(styles)
 	applyPromptChrome(&prompt, false)
 	_ = prompt.Focus()
 	return prompt
 }
 
 func applyPromptChrome(prompt *textarea.Model, bash bool) {
-	prefix := glyphPrompt
+	prefix := "> "
 	accent := accentAssistant
 	if bash {
 		prefix = "! "
 		accent = commandColor
 	}
 	prompt.Prompt = prefix
-	prompt.FocusedStyle.Prompt = lipgloss.NewStyle().Foreground(accent)
-	prompt.FocusedStyle.Text = bodyStyle
-	prompt.FocusedStyle.Placeholder = mutedStyle
-	prompt.BlurredStyle = prompt.FocusedStyle
-	prompt.BlurredStyle.CursorLine = lipgloss.NewStyle()
+	styles := prompt.Styles()
+	styles.Focused.Prompt = lipgloss.NewStyle().Foreground(accent)
+	styles.Focused.Text = bodyStyle
+	styles.Focused.Placeholder = mutedStyle
+	styles.Blurred = styles.Focused
+	styles.Blurred.CursorLine = lipgloss.NewStyle()
+	prompt.SetStyles(styles)
 }
 
 func (m *bubbleModel) setBashMode(on bool) {
-	m.bottom.setBashMode(on)
+	m.panes.bottom.setBashMode(on)
 	m.syncSlashView()
 }
 
 func (m *bubbleModel) resetPrompt() {
-	if m == nil || m.bottom == nil || m.bottom.prompt() == nil {
+	if m == nil || m.panes.bottom == nil || m.panes.bottom.prompt() == nil {
 		return
 	}
-	m.bottom.prompt().Reset()
+	prompt := m.panes.bottom.prompt()
+	prompt.Reset()
+	m.requestRelayout()
 }
 
 func (m *bubbleModel) historyPrevious() {
-	m.bottom.historyPrevious()
+	m.panes.bottom.historyPrevious()
 }
 
 func (m *bubbleModel) historyNext() {
-	m.bottom.historyNext()
+	m.panes.bottom.historyNext()
 }

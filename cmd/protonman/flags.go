@@ -93,7 +93,7 @@ Session flags:
   -n, --new-session, --new    start a new session (default)
 
 Agent flags:
-  -a, --agent, --profile string  agent profile: universal | strength | agility | intelligence (legacy aliases: pow | int | dex | worker | explorer | reviewer)
+  -a, --agent, --profile string  agent profile: universal | strength | agility | intelligence
 
 General flags:
   --version                   print the binary version and exit

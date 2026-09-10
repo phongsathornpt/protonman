@@ -150,7 +150,7 @@ var ErrInvalidSessionID = errors.New("invalid session id")
 // ErrRevisionConflict indicates that a stale session snapshot attempted to overwrite newer state.
 var ErrRevisionConflict = errors.New("session revision conflict")
 
-func legacyWorkspaceKey(sessionID string) string {
+func inferWorkspaceKeyFromSessionID(sessionID string) string {
 	const prefix = "workspace-"
 	if !strings.HasPrefix(sessionID, prefix) {
 		return ""

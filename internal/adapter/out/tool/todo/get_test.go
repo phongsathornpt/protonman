@@ -15,7 +15,7 @@ func TestGetTodoReturnsStructuredSnapshotRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := NewGetTodo(store)
+	h := newGetTodo(store)
 	call, _ := tool.NewCall("todo-get", "todo", []byte(`{}`))
 	res, err := h.Execute(context.Background(), call)
 	if err != nil {
@@ -42,7 +42,7 @@ func TestGetTodoArgumentContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := NewGetTodo(store)
+	h := newGetTodo(store)
 	for _, raw := range []string{`{}`, ``, `   `, `null`, `{"reason":"checking tasks"}`, `{"foo":1}`} {
 		call := tool.Call{ID: "todo-get", Name: "todo", Arguments: json.RawMessage(raw)}
 		if _, err := h.Execute(context.Background(), call); err != nil {
@@ -62,7 +62,7 @@ func TestGetTodoForSessionIncludesSessionIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGetTodoForSession(store, "session-123")
+	handler := newGetTodoForSession(store, "session-123")
 	call, err := tool.NewCall("get-session", "todo", json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatal(err)

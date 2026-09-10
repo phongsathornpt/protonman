@@ -77,6 +77,7 @@ parsing, failure classification, glob matching, and global runtime defaults.
 
 Pure domain contracts and policies:
 
+- `conversation`: provider-neutral conversation retention and historical tool-message policy
 - `modelprofile`: model metadata/capability policy
 - `permission`: permission modes, rules, grants, request evaluation
 - `session`: session aggregate, repository port, state/resource ownership
@@ -144,14 +145,10 @@ through evidence. `Intelligence` reasons deeply.
 Only `strength`, `agility`, and `intelligence` are valid delegated profiles.
 `universal` is the primary/root profile and cannot be spawned as a child.
 
-Legacy profile names are accepted only for migration/compatibility and normalize
-immediately:
-
-- `pow`, `worker` -> `strength`
-- `int`, `explorer`, `reviewer` -> `agility`
-- `dex` -> `intelligence`
-
-Do not add new behavior keyed to legacy names. Use canonical profiles internally.
+Legacy profile identifiers are no longer accepted. Only `universal`, `strength`,
+`agility`, and `intelligence` are valid profile names. Persisted user/project
+configuration using removed identifiers must be updated rather than normalized at
+runtime.
 
 Profile policy is centralized in `internal/feature/agent/profile_spec.go`; avoid
 scattering profile-specific permissions, reasoning defaults, or descriptions.
@@ -187,16 +184,7 @@ Subagent profile tables merge field-wise by canonical profile. Provider/model mu
 specified together; reasoning may be specified independently. Configured providers must
 already exist in the effective provider map and satisfy their authentication requirements.
 
-Runtime controls:
-
-```text
-/subagents             show current runtime state
-/subagents on|off      change current runtime state
-/config set subagents on|off
-                       persist user-level default
-/project set subagents on|off
-                       persist trusted project override
-```
+Runtime policy is loaded from user and trusted-project configuration. The TUI does not expose slash commands that mutate subagent, project, user-config, permission-mode, agent-profile, session, or reasoning policy; those capabilities remain available through their owning configuration/runtime layers.
 
 Disabling subagents prevents **new admission only**. It never cancels running
 children and does not discard retained lifecycle records.
@@ -291,13 +279,13 @@ batch.
 Built-in workspace tools include:
 
 - `read`
-- `edit`
+- `math`
 - `grep`
-- `inspect_code`
 - `find`
 - `ls`
-- `bash`
 - `git`
+- `bash`
+- `edit`
 
 Feature tools add `web`, task tools, skill activation, agent lifecycle
 operations, and dynamically discovered MCP tools.
@@ -527,29 +515,16 @@ TUI is presentation logic under `internal/adapter/in/tui`. Keep domain semantics
 outside it. In particular, do not let TUI directly own config persistence,
 provider discovery, session storage, or concrete coordinator control.
 
-Current important slash commands include:
+Current important slash commands are intentionally canonical and small:
 
 ```text
 /help
-/tools
-/skills
-/project
-/config
-/session
-/sessions
-/agents
-/subagents [on|off]
-/agent [universal|strength|agility|intelligence]
-/reasoning [auto|none|low|medium|high|xhigh|max]
-/mode
-/ask
-/always-approve
-/plan
-/transcript
-/todo
-/new
 /model
 /provider
+/skills
+/agents
+/todo
+/transcript [clear]
 /call
 /quit
 ```
@@ -567,6 +542,26 @@ Shell result presentation should be generic and semantic rather than special-cas
 one ecosystem. Python, Node, Cargo/Rust, Make, Docker, Java/Gradle/Maven, PHP,
 Ruby, .NET, Terraform, Kubernetes, and future command families should reuse the
 same execution/result model where possible.
+
+Minimal TUI presentation follows semantic density rather than blanket suppression.
+Routine read/search operations stay compact, mutations retain material effects, and
+denied/failed operations retain diagnostic detail. The composer metadata owns the
+active model/profile/workspace/mode context; transient busy status should prefer the
+active tool and target. Scrolling must preserve a single composer and semantic
+transcript position while streaming updates continue. Idle footer help should expose
+primary actions only; secondary shortcuts belong in contextual views or `/help`.
+
+TUI rendering is intentionally side-effect free. `View()` and pane `Render` methods must
+only read presentation snapshots; they must not resize viewports, alter scroll position,
+change pane stacks, or mutate runtime/domain state. Runtime events request layout changes,
+and the root Bubble Tea `Update` boundary reconciles layout once per event. Conversation
+viewport state explicitly distinguishes following the live tail from reading older content,
+so streaming updates preserve semantic scroll anchors. Pane rendering receives
+`paneRenderContext` rather than the root model; pane key handlers return typed actions for
+the root to apply instead of mutating the root model directly. Root runtime state is grouped
+by ownership: agent, turn, model selection, session, project, conversation, TODO,
+presentation, and execution policy. Preserve these boundaries instead of adding new flat
+fields to `bubbleModel` without a clear orchestration-level reason.
 
 When changing TUI behavior, test at the smallest useful layer:
 
@@ -738,8 +733,9 @@ Keep these roles distinct. When behavior changes, update the smallest relevant
 document rather than duplicating the same prose everywhere.
 
 Documentation must describe current behavior, not planned behavior as if already
-implemented. Prefer canonical identifiers and current package paths. Mention
-legacy agent profile names only when documenting compatibility/migration.
+implemented. Prefer canonical identifiers and current package paths. Removed agent
+profile names should be mentioned only when documenting migration from older
+configuration; current runtime behavior rejects them.
 
 ## Completion Checklist
 

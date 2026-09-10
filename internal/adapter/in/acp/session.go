@@ -568,7 +568,7 @@ func (s *Session) handleSlashCommand(
 		}
 		effort, err := sdk.ParseReasoningEffort(parts[1])
 		if err != nil {
-			return true, SessionPromptResult{}, fmt.Errorf("invalid reasoning effort: use auto, none, low, medium, high, xhigh, or max")
+			return true, SessionPromptResult{}, fmt.Errorf("invalid reasoning effort: use auto, none, minimal, low, medium, high, xhigh, or max")
 		}
 		if err := s.SetReasoningEffort(effort); err != nil {
 			return true, SessionPromptResult{}, err
@@ -581,28 +581,6 @@ func (s *Session) handleSlashCommand(
 			label = string(effort)
 		}
 		_ = notifier(agentMessageNotification(s.id, "Reasoning override set to **"+label+"**."))
-		return true, SessionPromptResult{StopReason: StopReasonEndTurn}, nil
-
-	case "/tools":
-		var b strings.Builder
-		b.WriteString("### Registered Tools\n\n")
-		for _, def := range s.registry.Definitions() {
-			b.WriteString(fmt.Sprintf("- **`%s`**: %s\n", def.Name, def.Description))
-		}
-		_ = notifier(RPCNotification{
-			JSONRPC: "2.0",
-			Method:  "session/update",
-			Params: map[string]any{
-				"sessionId": s.id,
-				"update": map[string]any{
-					"sessionUpdate": "agent_message_chunk",
-					"content": map[string]any{
-						"type": string(BlockTypeText),
-						"text": b.String(),
-					},
-				},
-			},
-		})
 		return true, SessionPromptResult{StopReason: StopReasonEndTurn}, nil
 
 	case "/call":

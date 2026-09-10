@@ -13,8 +13,8 @@ func TestSelectSubagentSkillsFiltersByTaskAndProfile(t *testing.T) {
 		testSkill("go-review", "Review Go concurrency and correctness", skill.ScopeUser, nil),
 		testSkill("postgres", "Inspect PostgreSQL transactions", skill.ScopeProject, nil),
 		testSkill("pdf-tools", "Work with PDF documents", skill.ScopeProject, nil),
-		testSkill("dex-only", "Audit security regressions", skill.ScopeUser, map[string]any{
-			"proton": map[string]any{"profiles": []any{"dex"}},
+		testSkill("intelligence-only", "Audit security regressions", skill.ScopeUser, map[string]any{
+			"proton": map[string]any{"profiles": []any{"intelligence"}},
 		}),
 	)
 	selected := selectSubagentSkills(catalog, Request{
@@ -23,7 +23,7 @@ func TestSelectSubagentSkillsFiltersByTaskAndProfile(t *testing.T) {
 		Context: "internal/store/tx.go",
 	})
 	names := selectedSkillNames(selected)
-	for _, want := range []string{"go-review", "dex-only"} {
+	for _, want := range []string{"go-review", "intelligence-only"} {
 		if !containsString(names, want) {
 			t.Fatalf("selected skills = %v, missing %q", names, want)
 		}
@@ -33,7 +33,7 @@ func TestSelectSubagentSkillsFiltersByTaskAndProfile(t *testing.T) {
 	}
 
 	pow := selectSubagentSkills(catalog, Request{Profile: ProfileStrength, Task: "security regression"})
-	if containsString(selectedSkillNames(pow), "dex-only") {
+	if containsString(selectedSkillNames(pow), "intelligence-only") {
 		t.Fatalf("profile-incompatible skill leaked into POW catalog: %v", selectedSkillNames(pow))
 	}
 }
@@ -64,8 +64,8 @@ func TestSelectSubagentSkillsEnforcesCatalogLimits(t *testing.T) {
 
 func TestSkillBudgetForProfile(t *testing.T) {
 	cases := map[Profile]subagentSkillBudget{
-		ProfileStrength: {maxActive: 2, maxInstructionBytes: 8 * 1024},
-		ProfileAgility: {maxActive: 3, maxInstructionBytes: 12 * 1024},
+		ProfileStrength:     {maxActive: 2, maxInstructionBytes: 8 * 1024},
+		ProfileAgility:      {maxActive: 3, maxInstructionBytes: 12 * 1024},
 		ProfileIntelligence: {maxActive: 3, maxInstructionBytes: 16 * 1024},
 	}
 	for profile, want := range cases {

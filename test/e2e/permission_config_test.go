@@ -9,6 +9,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
 )
 
 func TestE2EHeadlessAskModeFailsClosedWithoutPrompt(t *testing.T) {
@@ -83,7 +84,7 @@ pattern = "*"
 		t.Fatalf("write project config: %v", err)
 	}
 
-	// Case 1: Untrusted (PROTON_TRUST_PROJECT unset)
+	// Case 1: Untrusted (PROTONMAN_TRUST_PROJECT unset)
 	// Project config is ignored with a warning; bash succeeds with -y
 	untrustedRes := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call bash {"command":"echo untrusted-ok"}`},
@@ -101,14 +102,14 @@ pattern = "*"
 		t.Fatalf("expected warning on stderr about untrusted project config, got: %s", untrustedRes.stderr)
 	}
 
-	// Case 2: Trusted (PROTON_TRUST_PROJECT=1)
+	// Case 2: Trusted (PROTONMAN_TRUST_PROJECT=1)
 	// Project config is loaded, bash is denied
 	trustedRes := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call bash {"command":"echo should-deny"}`},
 		dir:  ws,
 		env: []string{
 			"PROTONMAN_HOME=" + home,
-			"PROTON_TRUST_PROJECT=1",
+			"PROTONMAN_TRUST_PROJECT=1",
 		},
 	})
 	if trustedRes.exitCode == 0 {
@@ -379,8 +380,12 @@ func TestE2EProviderSwitchAndSelect(t *testing.T) {
 	if _, exists := snap4.Providers["protonman"]; exists {
 		t.Fatal("expected protonman removed")
 	}
-	if snap4.Model.Provider != "opencode" {
-		t.Fatalf("expected fallback active provider 'opencode', got %s", snap4.Model.Provider)
+	if snap4.Model.Provider != "" || snap4.Model.Default != "" {
+		t.Fatalf("expected low-level delete to clear active selection, got %+v", snap4.Model)
+	}
+	resolved, _ := app.ResolvePrimaryModelDefaults(snap4.Model, snap4.Providers)
+	if resolved.Provider != model.DefaultOpenCodeName || resolved.Default != model.DefaultOpenCodeModel {
+		t.Fatalf("application fallback = %+v, want OpenCode default", resolved)
 	}
 
 	// Verify permissions remain 0600

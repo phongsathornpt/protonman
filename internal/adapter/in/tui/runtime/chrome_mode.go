@@ -1,0 +1,137 @@
+package runtime
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"charm.land/bubbles/v2/key"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+)
+
+func (m *bubbleModel) modeChip() string {
+	mode := permission.ModeAsk
+	if m.service != nil {
+		mode = m.service.Mode()
+	}
+	return m.modeChipFor(mode)
+}
+
+func (m *bubbleModel) modeChipFor(mode permission.Mode) string {
+	if m.planMode {
+		return planStyle.Render("mode: plan · read-only")
+	}
+	if m.layout.width < 40 {
+		switch mode {
+		case permission.ModeAlwaysApprove:
+			return warningStyle.Render("auto")
+		case permission.ModeDeny:
+			return errorStyle.Render("deny")
+		default:
+			return mutedStyle.Render("ask")
+		}
+	}
+	switch mode {
+	case permission.ModeAlwaysApprove:
+		return warningStyle.Render("mode: auto-approve")
+	case permission.ModeDeny:
+		return errorStyle.Render("mode: deny")
+	default:
+		return mutedStyle.Render("mode: ask")
+	}
+}
+
+type contextualHelp []key.Binding
+
+func (h contextualHelp) ShortHelp() []key.Binding  { return h }
+func (h contextualHelp) FullHelp() [][]key.Binding { return [][]key.Binding{h} }
+
+func (m bubbleModel) shortcutHint() string {
+	if view := m.permissionView(); view != nil {
+		return m.infoView()
+	}
+	helpView := m.help
+	helpView.ShowAll = false
+	helpView.SetWidth(maxInt(1, m.layout.width-2))
+	if m.slashOpen() {
+		return helpView.View(contextualHelp{
+			key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "accept")),
+			key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "run")),
+			key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑↓", "move")),
+			key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "close")),
+		})
+	}
+	if m.panes.bottom != nil && m.panes.bottom.has(todoInspectViewID) {
+		return helpView.View(contextualHelp{
+			key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑↓", "move")),
+			key.NewBinding(key.WithKeys("enter", "esc"), key.WithHelp("enter/esc", "close")),
+		})
+	}
+	if !m.conversationViewport.following() {
+		return helpView.View(contextualHelp{
+			m.keys.Submit,
+			m.keys.PageDown,
+		})
+	}
+	return helpView.View(contextualHelp{
+		m.keys.Submit,
+		m.keys.Newline,
+	})
+}
+
+func (m *bubbleModel) cyclePermission() {
+	mode := m.service.Mode()
+	switch {
+	case m.planMode:
+		m.setPlanEnabled(false)
+		_ = m.setPermissionMode(permission.ModeAlwaysApprove)
+	case mode == permission.ModeAlwaysApprove:
+		_ = m.setPermissionMode(permission.ModeAsk)
+	default:
+		if mode != permission.ModeAsk && mode != permission.ModeAuto {
+			_ = m.setPermissionMode(permission.ModeAsk)
+		}
+		m.setPlanEnabled(true)
+	}
+	m.syncPermissionModePane()
+	m.requestRelayout()
+}
+
+func (m *bubbleModel) setPlanEnabled(enabled bool) {
+	m.planMode = enabled
+	m.syncPromptPlaceholder()
+	if !enabled {
+		m.service.SetCallGuard(nil)
+		m.agents.SetCallGuard(nil)
+		return
+	}
+	guard := func(_ context.Context, request permission.Request) error {
+		if !m.planMode {
+			return nil
+		}
+		switch request.ToolKind {
+		case permission.ToolRead, permission.ToolGrep, permission.ToolWeb, permission.ToolTask:
+			return nil
+		case permission.ToolBash:
+			var input struct {
+				Command string `json:"command"`
+			}
+			if json.Unmarshal(request.Arguments, &input) == nil && tool.AnalyzeCommand(input.Command).Effect == tool.CommandEffectReadOnly {
+				return nil
+			}
+		case permission.ToolAgent:
+			if request.ToolName == "subagent" {
+				var input struct {
+					Action string `json:"action"`
+				}
+				if json.Unmarshal(request.Arguments, &input) == nil && (input.Action == "wait" || input.Action == "get" || input.Action == "list") {
+					return nil
+				}
+			}
+		}
+		return fmt.Errorf("plan mode is read-only; %s tool %q is blocked", request.ToolKind, request.ToolName)
+	}
+	m.service.SetCallGuard(guard)
+	m.agents.SetCallGuard(guard)
+}

@@ -133,13 +133,6 @@ func mergeDocument(document fileDocument, snapshot *Snapshot, source ValueSource
 			return err
 		}
 		snapshot.Agent.SubagentMaxRuntime = d
-	} else if document.Agent.SubagentTimeout != nil {
-		d, err := parsePositiveDuration("agent.subagent_timeout", *document.Agent.SubagentTimeout)
-		if err != nil {
-			return err
-		}
-		snapshot.Agent.SubagentMaxRuntime = d
-		snapshot.Warnings = append(snapshot.Warnings, "agent.subagent_timeout is deprecated; use agent.subagent_max_runtime")
 	}
 	if document.Agent.SubagentWaitTimeout != nil {
 		d, err := parsePositiveDuration("agent.subagent_wait_timeout", *document.Agent.SubagentWaitTimeout)

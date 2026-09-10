@@ -12,7 +12,6 @@ import (
 type UserCell struct{ Text string }
 
 func (UserCell) Kind() HistoryCellKind { return HistoryCellUser }
-func (c UserCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c UserCell) RenderWidth(width int) []string {
 	lines := safeWrappedLines(strings.TrimRight(c.Text, "\n"), max(1, width-2))
 	if len(lines) == 0 {
@@ -78,7 +77,6 @@ func (c *AssistantCell) sealStream() {
 }
 
 func (*AssistantCell) Kind() HistoryCellKind { return HistoryCellAssistant }
-func (c *AssistantCell) Render() []string    { return c.RenderWidth(defaultHistoryWidth) }
 func (c *AssistantCell) RenderWidth(width int) []string {
 	text := assistantIncrementalText(c.Text)
 	if text == "" {

@@ -2,9 +2,35 @@ package app
 
 import (
 	"context"
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"strings"
 )
+
+// ResolvePrimaryModelDefaults guarantees a usable built-in default when the
+// persisted primary model selection is incomplete. Explicit selections win.
+func ResolvePrimaryModelDefaults(selection config.ModelConfig, providers map[string]config.ProviderConfig) (config.ModelConfig, map[string]config.ProviderConfig) {
+	if providers == nil {
+		providers = make(map[string]config.ProviderConfig)
+	}
+	providerName := strings.ToLower(strings.TrimSpace(selection.Provider))
+	if providerName == "" {
+		providerName = model.DefaultOpenCodeName
+	}
+	if providerName == model.DefaultOpenCodeName {
+		if _, ok := providers[providerName]; !ok {
+			providers[providerName] = config.ProviderConfig{
+				Name: model.DefaultOpenCodeName, Type: string(model.ProviderProtocolOpenAI), BaseURL: model.DefaultOpenCodeEndpoint,
+			}
+		}
+		if strings.TrimSpace(selection.Default) == "" {
+			selection.Default = model.DefaultOpenCodeModel
+		}
+	}
+	selection.Provider = providerName
+	return selection, providers
+}
 
 // ProviderSaveRequest describes a persisted user provider update.
 type ProviderSaveRequest struct {
@@ -30,11 +56,16 @@ func (Providers) Save(request ProviderSaveRequest) error {
 }
 
 func (Providers) Select(providerName string) error {
+	return (Providers{}).Activate(providerName, "")
+}
+
+// Activate atomically persists the active provider and an optional reconciled model.
+func (Providers) Activate(providerName, modelID string) error {
 	homeDir, err := userHomeDir()
 	if err != nil {
 		return err
 	}
-	return config.SaveUserDefaultProvider(homeDir, providerName)
+	return config.SaveUserModelSelection(homeDir, providerName, modelID)
 }
 
 func (Providers) SelectModel(providerName, modelID string) error {
@@ -42,7 +73,7 @@ func (Providers) SelectModel(providerName, modelID string) error {
 	if err != nil {
 		return err
 	}
-	return config.SaveUserDefaultModel(homeDir, providerName, modelID)
+	return config.SaveUserModelSelection(homeDir, providerName, modelID)
 }
 
 func (Providers) Delete(providerName string) error {

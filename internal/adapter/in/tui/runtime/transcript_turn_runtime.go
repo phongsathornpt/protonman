@@ -1,0 +1,165 @@
+package runtime
+
+import (
+	"encoding/json"
+	"strings"
+
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+)
+
+func (m *bubbleModel) applyTurnEvents(events []app.Event) {
+	if len(events) == 0 {
+		return
+	}
+	var pending strings.Builder
+	pendingRound := 0
+	flushText := func() {
+		if pending.Len() == 0 {
+			return
+		}
+		m.applyTurnEvent(app.Event{Kind: app.EventTextDelta, Round: pendingRound, Text: pending.String()})
+		pending.Reset()
+		pendingRound = 0
+	}
+	for _, event := range events {
+		if event.Kind == app.EventTextDelta {
+			pending.WriteString(event.Text)
+			if event.Round > pendingRound {
+				pendingRound = event.Round
+			}
+			continue
+		}
+		flushText()
+		m.applyTurnEvent(event)
+	}
+	flushText()
+}
+
+func (m *bubbleModel) applyTurnEvent(event app.Event) {
+	if event.Round > 0 {
+		m.turnProgress.Round = event.Round
+	}
+	switch event.Kind {
+	case app.EventTextDelta:
+		m.activity = "synthesizing"
+		m.appendAssistantDelta(event.Text)
+	case app.EventToolCall:
+		m.turnProgress.ToolCalls++
+		m.appendToolCall(event.Call)
+	case app.EventToolResult:
+		result := event.Result
+		if result.CallID == "" {
+			result.CallID = event.Call.ID
+		}
+		if result.ToolName == "" {
+			result.ToolName = event.Call.Name
+		}
+		m.applyToolResult(event.Call.Name, result, event.Err)
+		m.syncTodoSnapshot()
+		m.activity = "analyzing"
+	case app.EventCompleted:
+		m.ensureHistoryState().CommitActive()
+	case app.EventFailed:
+		m.appendTurnFailure(event.Err)
+	}
+}
+
+func (m *bubbleModel) appendTurnFailure(err error) {
+	if err == nil {
+		return
+	}
+	classified := ClassifyOpenCodeError(err, m.activeProvider, m.activeModel)
+	if classified.Kind == ErrorKindCancelled {
+		text := "turn cancelled"
+		cells := m.ensureHistoryState().Cells()
+		if n := len(cells); n > 0 {
+			if last, ok := cells[n-1].(*SystemCell); ok && last.Text == text {
+				return
+			}
+		}
+		m.ensureHistoryState().Append(&SystemCell{Text: text})
+		return
+	}
+	cells := m.ensureHistoryState().Cells()
+	if n := len(cells); n > 0 {
+		if last, ok := cells[n-1].(*ErrorCell); ok && last.Text == classified.Message && last.Title == classified.Title {
+			return
+		}
+	}
+	m.ensureHistoryState().Append(&ErrorCell{ErrorKind: classified.Kind, Title: classified.Title, Badge: classified.Badge, Text: classified.Message, Suggestions: classified.Suggestions, RawDetails: classified.RawDetails, Retryable: classified.Retryable})
+}
+
+func (m *bubbleModel) appendTurnResult(events []app.Event, result app.Result, err error) {
+	sawAssistant := false
+	for _, event := range events {
+		if event.Kind == app.EventTextDelta && event.Text != "" {
+			sawAssistant = true
+		}
+		m.applyTurnEvent(event)
+	}
+	if !sawAssistant && result.Message.Content != "" {
+		m.appendAssistant(result.Message.Content)
+	}
+	m.ensureHistoryState().CommitActive()
+	m.appendTurnFailure(err)
+}
+
+func (m *bubbleModel) appendToolResult(result tool.Result, err error) {
+	m.applyToolResult(result.ToolName, result, err)
+	if err == nil {
+		m.appendMuted("tool completed")
+	}
+}
+
+func (m bubbleModel) renderBlocks() []string {
+	if m.historyState == nil {
+		return nil
+	}
+	return m.historyState.RenderLines()
+}
+
+func plainTranscript(model *bubbleModel) string {
+	if model == nil || model.historyState == nil {
+		return ""
+	}
+	return model.historyState.Raw()
+}
+
+func (m *bubbleModel) loadInitialMessages(messages []model.Message) {
+	state := m.ensureHistoryState()
+	for _, message := range messages {
+		text := strings.TrimSpace(message.Content)
+		switch message.Role {
+		case model.RoleUser:
+			if text != "" {
+				if strings.HasPrefix(text, "Activated skill ") {
+					if idx := strings.Index(text, "\n"); idx != -1 {
+						text = text[:idx]
+					}
+				}
+				state.Append(&UserCell{Text: text})
+			}
+		case model.RoleAssistant:
+			if text != "" {
+				state.Append(&AssistantCell{Text: message.Content})
+			}
+		case model.RoleTool:
+			if text != "" || message.ToolName != "" {
+				kind := tool.KindForName(message.ToolName)
+				summary := summarizeToolOutput(message.ToolName, kind, "", message.Content, nil, false)
+				state.Append(&ToolCell{Name: message.ToolName, Body: message.Content, ToolKind: kind, Summary: summary, ShowDetail: minimalToolShowsDetail(kind, false, false)})
+			}
+		case model.RoleSystem:
+			if text != "" {
+				state.Append(&SystemCell{Text: message.Content})
+			}
+		}
+	}
+}
+
+func extractStringArg(raw json.RawMessage, key string) string {
+	call := tool.Call{Arguments: raw}
+	return tool.ExtractString(call.ArgumentsMap(), key)
+}

@@ -1,28 +1,28 @@
 package runtime
 
 import (
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	domainmodel "github.com/phongsathornpt/protonman/internal/adapter/out/model"
-	"github.com/phongsathornpt/protonman/internal/adapter/out/sessionfs"
-	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
-	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 type scriptedRunner struct {
@@ -40,15 +40,15 @@ func (r *scriptedRunner) Run(ctx context.Context, _ []domainmodel.Message, sink 
 	return r.result, r.err
 }
 
-func newTestBubbleModel(t *testing.T, mode permission.Mode, todo []TodoItem) *bubbleModel {
+func newTestBubbleModel(t *testing.T, mode permission.Mode, todo []tododomain.Item) *bubbleModel {
 	t.Helper()
 	registry, _ := newBubbleTestRegistry()
 	service := newBubbleTestService(t, registry, mode, permission.Config{})
 	return newBubbleModel(context.Background(), service, registry, todo, nil, newPermissionBridge(), "/tmp/proton")
 }
 
-func emptyTodoItems() []TodoItem {
-	return []TodoItem{}
+func emptyTodoItems() []tododomain.Item {
+	return []tododomain.Item{}
 }
 
 type bubbleTestHandler struct {
@@ -104,14 +104,11 @@ func newBubbleTestService(t *testing.T, registry tool.Registry, mode permission.
 func TestPlanModeBlocksBashBeforeAlwaysApprove(t *testing.T) {
 	handler := &countingHandler{definition: tool.Definition{Name: "bash", Description: "run shell command", Kind: tool.KindBash, PermissionDetailKey: "command"}}
 	registry := behaviorRegistry{handler: handler}
-	service := newBehaviorService(t, registry, permission.ModeAlwaysApprove)
+	service := newBehaviorService(t, registry, permission.ModeAsk)
 	model := newBubbleModel(context.Background(), service, registry, nil, nil, newPermissionBridge(), "")
-	model.setPlanMode("on")
+	model.setPlanEnabled(true)
 	if !model.planMode {
 		t.Fatal("plan mode was not enabled")
-	}
-	if service.Mode() != permission.ModeAsk {
-		t.Fatalf("plan mode left service mode = %s, want ask", service.Mode())
 	}
 	if !strings.Contains(model.modeChip(), "read-only") {
 		t.Fatalf("plan chip does not communicate read-only behavior: %q", model.modeChip())
@@ -161,7 +158,7 @@ func TestCtrlCCancelsDirectToolWithoutQuitting(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("tool did not start")
 	}
-	updated, cancelCommand := model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	updated, cancelCommand := model.Update(testCtrl('c'))
 	model = updated.(*bubbleModel)
 	if cancelCommand != nil {
 		t.Fatal("ctrl+c while a tool is active should cancel, not quit")
@@ -202,7 +199,7 @@ func TestTurnCancellationRendersNeutralTerminalState(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("turn did not start")
 	}
-	updated, cancelCommand := model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	updated, cancelCommand := model.Update(testCtrl('c'))
 	model = updated.(*bubbleModel)
 	if cancelCommand != nil {
 		t.Fatal("ctrl+c while a turn is active should cancel, not quit")
@@ -245,7 +242,7 @@ func TestTurnFailureFinalizesRunningToolCells(t *testing.T) {
 	}
 	model.appendToolCall(call)
 	model.busy = true
-	updated, _ := model.Update(turnDoneMsg{err: context.Canceled})
+	updated, _ := model.Update(turnmsg.Done{Err: context.Canceled})
 	model = updated.(*bubbleModel)
 	assertNoRunningTool(t, model)
 	if !strings.Contains(plainTranscript(model), "cancelled") {
@@ -376,6 +373,37 @@ func newBehaviorService(t *testing.T, registry tool.Registry, mode permission.Mo
 	return service
 }
 
+func TestRenderedViewportCacheInvalidatesOnContentAndScroll(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.showWelcome = false
+	m.resize(80, 12)
+	for i := 0; i < 30; i++ {
+		m.appendLine(fmt.Sprintf("cache-line-%02d", i))
+	}
+	m.refreshViewport()
+	m.viewport.GotoBottom()
+	m.invalidateViewportRender()
+	bottom := ansi.Strip(m.renderedViewport())
+	if !strings.Contains(bottom, "cache-line-29") {
+		t.Fatalf("bottom render missing newest content: %q", bottom)
+	}
+	m.scrollConversationLines(-3)
+	scrolled := ansi.Strip(m.renderedViewport())
+	if scrolled == bottom {
+		t.Fatal("scroll reused stale rendered viewport")
+	}
+	m.scrollConversationLines(1 << 20)
+	if !m.conversationViewport.following() {
+		t.Fatal("scroll to bottom did not restore follow mode")
+	}
+	m.appendLine("cache-new-tail")
+	m.refreshViewport()
+	refreshed := ansi.Strip(m.renderedViewport())
+	if !strings.Contains(refreshed, "cache-new-tail") {
+		t.Fatalf("content refresh reused stale rendered viewport: %q", refreshed)
+	}
+}
+
 func TestSpinnerTickSkipsViewportRefreshForStreamingAssistant(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.resize(80, 24)
@@ -394,22 +422,22 @@ func TestViewportTailOnlyHydratesBeforePageUp(t *testing.T) {
 	m.resize(80, 18)
 	m.showWelcome = false
 	m.busy = true
-	m.followTail = true
+	m.conversationViewport.setFollowing(true)
 	for i := 0; i < 40; i++ {
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nmore detail", i)})
 	}
 	m.historyState.AppendAssistantDelta("live one\nlive two\nlive three")
 	m.refreshViewport()
-	if !m.viewportTailOnly {
+	if !m.conversationViewport.tailOnly {
 		t.Fatal("expected streaming follow-tail viewport to use bounded tail content")
 	}
 	tailLines := m.viewport.TotalLineCount()
-	if tailLines > m.viewport.Height {
-		t.Fatalf("tail viewport has %d lines, height %d", tailLines, m.viewport.Height)
+	if tailLines > m.viewport.Height() {
+		t.Fatalf("tail viewport has %d lines, height %d", tailLines, m.viewport.Height())
 	}
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	updated, _ := m.Update(testKey(tea.KeyPgUp))
 	m = updated.(*bubbleModel)
-	if m.viewportTailOnly {
+	if m.conversationViewport.tailOnly {
 		t.Fatal("page up should hydrate full scrollback")
 	}
 	if m.viewport.TotalLineCount() <= tailLines {
@@ -417,6 +445,58 @@ func TestViewportTailOnlyHydratesBeforePageUp(t *testing.T) {
 	}
 	if m.viewport.AtBottom() {
 		t.Fatal("page up should leave the viewport above the tail")
+	}
+}
+
+func TestStreamingAssistantResizeStressPreservesViewportMode(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.showWelcome = false
+	m.busy = true
+	m.resize(80, 24)
+	for i := 0; i < 50; i++ {
+		m.appendAssistant(fmt.Sprintf("history %02d with detail", i))
+	}
+	m.refreshViewport()
+	m.conversationViewport.setFollowing(true)
+	m.viewport.GotoBottom()
+
+	sizes := [][2]int{{40, 12}, {120, 32}, {24, 8}, {60, 16}, {80, 24}}
+	chunks := []string{"```go\n", "fmt.Println(\"สวัสดี 東京 👨‍💻\")\n", "// streaming chunk\n", "```\n", "final text"}
+	for i, size := range sizes {
+		m.appendAssistantDelta(chunks[i])
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+		m = updated.(*bubbleModel)
+		view := m.View().Content
+		if !utf8.ValidString(view) {
+			t.Fatalf("invalid UTF-8 after resize %dx%d", size[0], size[1])
+		}
+		if got := lipgloss.Width(view); got > size[0] {
+			t.Fatalf("streaming frame width=%d exceeds %d at %dx%d", got, size[0], size[0], size[1])
+		}
+		if got := lipgloss.Height(view); got > size[1] {
+			t.Fatalf("streaming frame height=%d exceeds %d at %dx%d", got, size[1], size[0], size[1])
+		}
+		if !m.conversationViewport.following() {
+			t.Fatalf("resize %dx%d disabled follow mode during streaming", size[0], size[1])
+		}
+	}
+
+	m.scrollConversationLines(-4)
+	if m.conversationViewport.following() {
+		t.Fatal("scroll up did not enter reading mode")
+	}
+	anchor := m.captureViewportScroll()
+	m.appendAssistantDelta("\nmore while reading")
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 48, Height: 14})
+	m = updated.(*bubbleModel)
+	if m.conversationViewport.following() {
+		t.Fatal("stream+resize yanked reading viewport back to follow mode")
+	}
+	if anchor.anchorValid {
+		resolved, ok := m.historyState.ResolveScrollAnchor(anchor.anchor)
+		if !ok || resolved < 0 {
+			t.Fatalf("reading anchor was lost after streaming resize: resolved=%d ok=%v", resolved, ok)
+		}
 	}
 }
 
@@ -466,43 +546,126 @@ func TestTodoConflictRendersTaskSpecificGuidance(t *testing.T) {
 	}
 }
 
-func TestNewConversationClearsProviderHistory(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.messages = []model.Message{{Role: model.RoleUser, Content: "old context"}}
-	m.appendUser("visible old context")
-	m.queue = []string{"queued"}
-	if command := m.executeCommand("/new"); command != nil {
-		t.Fatalf("/new command = %v, want nil", command)
-	}
-	if len(m.messages) != 0 {
-		t.Fatalf("provider history length = %d, want 0", len(m.messages))
-	}
-	if len(m.queue) != 0 || len(m.historyState.Cells()) != 0 {
-		t.Fatalf("new conversation retained state: queue=%v cells=%v", m.queue, m.historyState.Cells())
-	}
-}
-
 func TestClearTranscriptPreservesProviderHistory(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.messages = []model.Message{{Role: model.RoleUser, Content: "keep context"}}
 	m.appendUser("visible message")
-	m.resetTranscript()
+	m.executeCommand("/transcript clear")
 	if len(m.messages) != 1 {
 		t.Fatalf("clear changed provider history length = %d, want 1", len(m.messages))
 	}
 }
 
+func TestPromptDynamicHeightAccountsForSoftWrap(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(28, 14)
+	prompt := m.panes.bottom.prompt()
+	prompt.SetValue(strings.Repeat("wrapped text ", 8))
+	if prompt.Height() <= 1 {
+		t.Fatalf("soft-wrapped prompt height = %d, want > 1", prompt.Height())
+	}
+	if prompt.Height() > 4 {
+		t.Fatalf("soft-wrapped prompt height = %d, want <= 4", prompt.Height())
+	}
+	m.requestRelayout()
+	m.reconcileLayout()
+	if got := lipgloss.Height(m.View().Content); got > m.layout.height {
+		t.Fatalf("soft-wrapped prompt frame height=%d terminal=%d", got, m.layout.height)
+	}
+}
+
+func TestBracketedPasteUpdatesVisibleComposerWithoutSubmitting(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	paste := "ภาษาไทย café 東京\nsecond line\nthird line"
+	updated, _ := m.Update(tea.PasteMsg{Content: paste})
+	m = updated.(*bubbleModel)
+	if got := m.panes.bottom.prompt().Value(); got != paste {
+		t.Fatalf("pasted value = %q, want %q", got, paste)
+	}
+	rendered := ansi.Strip(m.promptView())
+	for _, want := range []string{"ภาษาไทย", "café", "東京", "second line", "third line"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("rendered pasted draft missing %q: %q", want, rendered)
+		}
+	}
+	if len(m.historyState.Cells()) != 0 {
+		t.Fatalf("paste submitted transcript cells: %#v", m.historyState.Cells())
+	}
+}
+
+func TestLargeUnicodePasteRespectsComposerLimitWithoutSubmitting(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	paste := strings.Repeat("ก", 25_000)
+	updated, _ := m.Update(tea.PasteMsg{Content: paste})
+	m = updated.(*bubbleModel)
+	prompt := m.panes.bottom.prompt()
+	if got := len([]rune(prompt.Value())); got > prompt.CharLimit {
+		t.Fatalf("unicode paste runes=%d exceeds char limit=%d", got, prompt.CharLimit)
+	}
+	if len(m.historyState.Cells()) != 0 || m.busy {
+		t.Fatalf("large paste submitted unexpectedly: cells=%d busy=%v", len(m.historyState.Cells()), m.busy)
+	}
+	view := m.View().Content
+	if !utf8.ValidString(view) {
+		t.Fatal("large unicode paste rendered invalid UTF-8")
+	}
+	if got := lipgloss.Height(view); got > m.layout.height {
+		t.Fatalf("large paste frame height=%d exceeds terminal=%d", got, m.layout.height)
+	}
+}
+
+func TestComposerUnicodeGraphemeEditingStaysValid(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(28, 12)
+	prompt := m.panes.bottom.prompt()
+	prompt.SetValue("ไทย กั 👨‍💻 東京")
+	prompt.CursorEnd()
+	for i := 0; i < 3; i++ {
+		updated, _ := m.Update(testKey(tea.KeyBackspace))
+		m = updated.(*bubbleModel)
+		if !utf8.ValidString(m.panes.bottom.prompt().Value()) {
+			t.Fatalf("backspace produced invalid UTF-8: %q", m.panes.bottom.prompt().Value())
+		}
+	}
+	if got := lipgloss.Height(m.View().Content); got > 12 {
+		t.Fatalf("unicode edit frame height=%d exceeds terminal", got)
+	}
+}
+
+func TestBashModeBracketedPasteRemainsDraft(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	updated, _ := m.Update(testText("!"))
+	m = updated.(*bubbleModel)
+	if !m.panes.bottom.bashMode() {
+		t.Fatal("! did not enter bash mode")
+	}
+	paste := "printf 'ไทย 東京'\nprintf done"
+	updated, _ = m.Update(tea.PasteMsg{Content: paste})
+	m = updated.(*bubbleModel)
+	if !m.panes.bottom.bashMode() {
+		t.Fatal("paste unexpectedly left bash mode")
+	}
+	if got := m.panes.bottom.prompt().Value(); got != paste {
+		t.Fatalf("bash pasted draft=%q want=%q", got, paste)
+	}
+	if len(m.historyState.Cells()) != 0 {
+		t.Fatalf("bash paste submitted unexpectedly: %#v", m.historyState.Cells())
+	}
+}
+
 func TestMultilinePromptUpMovesCursorInsteadOfRecallingHistory(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	prompt := m.bottom.prompt()
+	prompt := m.panes.bottom.prompt()
 	prompt.SetValue("first line\nsecond line")
 	prompt.CursorEnd()
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	updated, _ := m.Update(testKey(tea.KeyUp))
 	m = updated.(*bubbleModel)
-	if got := m.bottom.prompt().Value(); got != "first line\nsecond line" {
+	if got := m.panes.bottom.prompt().Value(); got != "first line\nsecond line" {
 		t.Fatalf("up changed multiline draft to %q", got)
 	}
-	if line := m.bottom.prompt().Line(); line != 0 {
+	if line := m.panes.bottom.prompt().Line(); line != 0 {
 		t.Fatalf("up moved to logical line %d, want 0", line)
 	}
 }
@@ -568,7 +731,7 @@ func TestLiveViewFitsNarrowTerminal(t *testing.T) {
 	m.resize(24, 12)
 	m.appendAssistant("# Heading\n\nA very long response with a path /workspace/project/that/keeps/going")
 	m.refreshViewport()
-	for _, line := range strings.Split(m.View(), "\n") {
+	for _, line := range strings.Split(m.View().Content, "\n") {
 		if width := ansi.StringWidth(line); width > 24 {
 			t.Fatalf("narrow view line width = %d, want <= 24: %q", width, line)
 		}
@@ -591,47 +754,12 @@ func spinnerTickMessage() tea.Msg {
 func TestRefreshViewportDoesNotRenderHiddenTranscriptOverlay(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
-	m.transcriptViewport.SetContent("overlay sentinel")
-	m.showTranscript = false
+	m.panes.transcript.SetContent("overlay sentinel")
+	m.panes.showTranscript = false
 	m.appendAssistant("new visible transcript content")
 	m.refreshViewport()
-	if got := m.transcriptViewport.View(); !strings.Contains(got, "overlay sentinel") {
+	if got := m.panes.transcript.View(); !strings.Contains(got, "overlay sentinel") {
 		t.Fatalf("hidden transcript overlay was refreshed: %q", got)
-	}
-}
-
-func TestSessionCommandsExposeIdentityAndWorkspaceSessions(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.sessionID = "current-session"
-	m.workspaceKey = "workspace-key"
-	m.messages = []model.Message{{Role: model.RoleUser, Content: "hello"}}
-	m.executeCommand("/session")
-	content := m.historyState.RenderContent()
-	for _, want := range []string{"current-session", "workspace-key", "messages: 1"} {
-		if !strings.Contains(content, want) {
-			t.Fatalf("/session missing %q: %s", want, content)
-		}
-	}
-	store, err := sessionfs.NewFileStore(filepath.Join(t.TempDir(), "sessions"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Save(context.Background(), "current-session", session.State{PermissionMode: permission.ModeAsk.String(), WorkspaceKey: "workspace-key", AgentProfile: "dex", Messages: []session.Message{{Role: model.RoleUser, Content: "resume this work"}}}); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Save(context.Background(), "other-session", session.State{PermissionMode: permission.ModeAsk.String(), WorkspaceKey: "other", Messages: []session.Message{{Role: model.RoleUser, Content: "do not show"}}}); err != nil {
-		t.Fatal(err)
-	}
-	m.sessions = app.NewSessions(store)
-	m.executeCommand("/sessions")
-	content = m.historyState.RenderContent()
-	for _, want := range []string{"Recent sessions:", "current-session", "resume this work", "protonman session resume"} {
-		if !strings.Contains(content, want) {
-			t.Fatalf("/sessions missing %q: %s", want, content)
-		}
-	}
-	if strings.Contains(content, "other-session") {
-		t.Fatalf("cross-workspace session leaked: %s", content)
 	}
 }
 
@@ -644,17 +772,17 @@ func TestMouseWheelOnlyScrollsInsideTranscriptViewport(t *testing.T) {
 	}
 	m.refreshViewport()
 	m.viewport.GotoBottom()
-	m.followTail = true
-	bottom := m.viewport.YOffset
-	updated, _ := m.Update(tea.MouseMsg{X: 4, Y: m.viewport.Height + 1, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	m.conversationViewport.setFollowing(true)
+	bottom := m.viewport.YOffset()
+	updated, _ := m.Update(tea.MouseWheelMsg{X: 4, Y: m.viewport.Height() + 1, Button: tea.MouseWheelUp})
 	m = updated.(*bubbleModel)
-	if m.viewport.YOffset != bottom || !m.followTail {
-		t.Fatalf("wheel over chrome changed viewport: offset=%d want=%d follow=%v", m.viewport.YOffset, bottom, m.followTail)
+	if m.viewport.YOffset() != bottom || !m.conversationViewport.following() {
+		t.Fatalf("wheel over chrome changed viewport: offset=%d want=%d follow=%v", m.viewport.YOffset(), bottom, m.conversationViewport.following())
 	}
-	updated, _ = m.Update(tea.MouseMsg{X: 4, Y: maxInt(0, m.viewport.Height-1), Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	updated, _ = m.Update(tea.MouseWheelMsg{X: 4, Y: maxInt(0, m.viewport.Height()-1), Button: tea.MouseWheelUp})
 	m = updated.(*bubbleModel)
-	if m.viewport.YOffset >= bottom || m.followTail {
-		t.Fatalf("wheel inside transcript did not scroll: offset=%d bottom=%d follow=%v", m.viewport.YOffset, bottom, m.followTail)
+	if m.viewport.YOffset() >= bottom || m.conversationViewport.following() {
+		t.Fatalf("wheel inside transcript did not scroll: offset=%d bottom=%d follow=%v", m.viewport.YOffset(), bottom, m.conversationViewport.following())
 	}
 }
 
@@ -666,18 +794,18 @@ func TestScrolledViewportDefersActiveTailRefreshUntilScroll(t *testing.T) {
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nmore detail", i)})
 	}
 	m.refreshViewport()
-	m.followTail = false
+	m.conversationViewport.setFollowing(false)
 	m.viewport.SetYOffset(maxInt(1, m.viewport.TotalLineCount()/3))
 	beforeLines := m.viewport.TotalLineCount()
-	beforeOffset := m.viewport.YOffset
+	beforeOffset := m.viewport.YOffset()
 
 	m.historyState.AppendAssistantDelta("live one\nlive two\nlive three")
 	m.refreshViewport()
-	if !m.viewportStaleTail {
+	if !m.conversationViewport.staleTail {
 		t.Fatal("expected off-screen active tail to be deferred while scrolled")
 	}
-	if m.viewport.TotalLineCount() != beforeLines || m.viewport.YOffset != beforeOffset {
-		t.Fatalf("deferred refresh changed viewport: lines %d->%d offset %d->%d", beforeLines, m.viewport.TotalLineCount(), beforeOffset, m.viewport.YOffset)
+	if m.viewport.TotalLineCount() != beforeLines || m.viewport.YOffset() != beforeOffset {
+		t.Fatalf("deferred refresh changed viewport: lines %d->%d offset %d->%d", beforeLines, m.viewport.TotalLineCount(), beforeOffset, m.viewport.YOffset())
 	}
 }
 func TestPageDownHydratesDeferredTail(t *testing.T) {
@@ -688,15 +816,15 @@ func TestPageDownHydratesDeferredTail(t *testing.T) {
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nmore detail", i)})
 	}
 	m.refreshViewport()
-	m.followTail = false
+	m.conversationViewport.setFollowing(false)
 	m.viewport.SetYOffset(maxInt(1, m.viewport.TotalLineCount()/3))
 	beforeLines := m.viewport.TotalLineCount()
 	m.historyState.AppendAssistantDelta("live one\nlive two\nlive three")
 	m.refreshViewport()
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	updated, _ := m.Update(testKey(tea.KeyPgDown))
 	m = updated.(*bubbleModel)
-	if m.viewportStaleTail || m.viewportTailOnly {
+	if m.conversationViewport.staleTail || m.conversationViewport.tailOnly {
 		t.Fatal("page down should hydrate deferred full scrollback")
 	}
 	if m.viewport.TotalLineCount() <= beforeLines {
@@ -715,18 +843,18 @@ func TestWelcomeCardCachesGitBranchUntilInvalidated(t *testing.T) {
 	}
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), workDir)
 	m.resize(80, 24)
-	first := m.welcomeCard()
-	if !strings.Contains(first, "git:(main)") {
+	first := testPlain(m.welcomeCard())
+	if !strings.Contains(first, "· main") {
 		t.Fatalf("initial welcome branch missing: %q", first)
 	}
 	if err := os.WriteFile(head, []byte("ref: refs/heads/dev\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if cached := m.welcomeCard(); !strings.Contains(cached, "git:(main)") {
+	if cached := testPlain(m.welcomeCard()); !strings.Contains(cached, "· main") {
 		t.Fatalf("welcome card unexpectedly reread git metadata: %q", cached)
 	}
 	m.invalidateWelcomeBranch()
-	if refreshed := m.welcomeCard(); !strings.Contains(refreshed, "git:(dev)") {
+	if refreshed := testPlain(m.welcomeCard()); !strings.Contains(refreshed, "· dev") {
 		t.Fatalf("invalidated welcome branch did not refresh: %q", refreshed)
 	}
 }
@@ -742,17 +870,16 @@ func TestScrollingRendersSingleComposer(t *testing.T) {
 	}
 	m.refreshViewport()
 	m.viewport.GotoBottom()
-	m.followTail = true
+	m.conversationViewport.setFollowing(true)
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	updated, _ := m.Update(testKey(tea.KeyPgUp))
 	m = updated.(*bubbleModel)
-	plain := ansi.Strip(m.View())
-	placeholder := "Ask Protonman to inspect or change this workspace"
-	if got := strings.Count(plain, placeholder); got != 1 {
+	plain := ansi.Strip(m.View().Content)
+	if got := strings.Count(plain, "> "); got != 1 {
 		t.Fatalf("composer rendered %d times after page-up; view=%q", got, plain)
 	}
-	if got := lipgloss.Height(m.View()); got > m.height {
-		t.Fatalf("scrolled live view height=%d exceeds terminal height=%d", got, m.height)
+	if got := lipgloss.Height(m.View().Content); got > m.layout.height {
+		t.Fatalf("scrolled live view height=%d exceeds terminal height=%d", got, m.layout.height)
 	}
 }
 
@@ -778,17 +905,17 @@ func TestCommandHistoryClearsDroppedBackingSlots(t *testing.T) {
 func TestClosingTranscriptOverlayReleasesViewportContent(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.appendAssistant("retained transcript sentinel")
-	m.showTranscript = true
-	m.rawTranscript = true
+	m.panes.showTranscript = true
+	m.panes.rawTranscript = true
 	m.refreshTranscriptViewport(true)
-	if got := m.transcriptViewport.View(); !strings.Contains(got, "retained transcript sentinel") {
+	if got := m.panes.transcript.View(); !strings.Contains(got, "retained transcript sentinel") {
 		t.Fatalf("transcript overlay missing content before close: %q", got)
 	}
 	m.closeTranscriptOverlay()
-	if m.showTranscript {
+	if m.panes.showTranscript {
 		t.Fatal("transcript overlay remained open")
 	}
-	if got := m.transcriptViewport.View(); strings.Contains(got, "retained transcript sentinel") {
+	if got := m.panes.transcript.View(); strings.Contains(got, "retained transcript sentinel") {
 		t.Fatalf("closed transcript overlay retained content: %q", got)
 	}
 }

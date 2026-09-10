@@ -93,7 +93,7 @@ func TestFileStoreCompactsToolProtocolWithoutArguments(t *testing.T) {
 		PermissionMode: permission.ModeAsk.String(),
 		Messages: []Message{
 			{Role: model.RoleUser, Content: "list tools"},
-			{Role: model.RoleAssistant, Content: "use /tools", ToolCalls: []ToolCall{{ID: "c1", Name: "read"}}},
+			{Role: model.RoleAssistant, Content: "inspect available tools", ToolCalls: []ToolCall{{ID: "c1", Name: "read"}}},
 			{Role: model.RoleTool, Content: "ok", ToolName: "read", ToolCallID: "c1"},
 		},
 	}
@@ -107,7 +107,7 @@ func TestFileStoreCompactsToolProtocolWithoutArguments(t *testing.T) {
 	if len(got.Messages) != 3 {
 		t.Fatalf("messages = %d, want 3", len(got.Messages))
 	}
-	if got.Messages[1].Role != model.RoleAssistant || got.Messages[1].Content != "use /tools" {
+	if got.Messages[1].Role != model.RoleAssistant || got.Messages[1].Content != "inspect available tools" {
 		t.Fatalf("assistant context = %+v", got.Messages[1])
 	}
 	if got.Messages[2].Role != model.RoleAssistant || !strings.Contains(got.Messages[2].Content, "Historical tool read result") {
@@ -232,41 +232,6 @@ func TestFileStoreMessageLimitCannotSplitToolProtocol(t *testing.T) {
 		if message.Role == model.RoleTool || len(message.ToolCalls) > 0 {
 			t.Fatalf("message limit split tool protocol: %+v", message)
 		}
-	}
-}
-
-func TestLoadCompactsLegacyToolProtocol(t *testing.T) {
-	store, err := NewFileStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewFileStore() error = %v", err)
-	}
-	legacy := State{
-		Version:        currentStateVersion,
-		PermissionMode: permission.ModeAsk.String(),
-		Messages: []Message{
-			{Role: model.RoleAssistant, ToolCalls: []ToolCall{{ID: "legacy-1", Name: "read"}}},
-			{Role: model.RoleTool, ToolCallID: "legacy-1", ToolName: "read", Content: "legacy output"},
-		},
-	}
-	if err := os.MkdirAll(store.root, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	payload, err := json.Marshal(legacy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(store.legacyPath("legacy"), payload, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	loaded, found, err := store.Load(context.Background(), "legacy")
-	if err != nil || !found {
-		t.Fatalf("Load() = found %v, err %v", found, err)
-	}
-	if len(loaded.Messages) != 1 || loaded.Messages[0].Role != model.RoleAssistant {
-		t.Fatalf("legacy messages = %+v", loaded.Messages)
-	}
-	if len(loaded.Messages[0].ToolCalls) != 0 || !strings.Contains(loaded.Messages[0].Content, "legacy output") {
-		t.Fatalf("legacy compacted message = %+v", loaded.Messages[0])
 	}
 }
 
@@ -414,7 +379,7 @@ func TestFileStoreLatestSession(t *testing.T) {
 }
 
 func TestSessionConversionsStripManagedSystemPrompts(t *testing.T) {
-	managed := prompt.Render(prompt.Spec{Profile: "dex"})
+	managed := prompt.Render(prompt.Spec{Profile: "intelligence"})
 	custom := "custom project system instruction"
 	stored := FromModelMessages([]model.Message{
 		{Role: model.RoleSystem, Content: managed},
@@ -439,14 +404,14 @@ func TestFileStoreRoundTripsAgentProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Save(context.Background(), "profile", State{PermissionMode: permission.ModeAsk.String(), AgentProfile: "dex"}); err != nil {
+	if err := store.Save(context.Background(), "profile", State{PermissionMode: permission.ModeAsk.String(), AgentProfile: "intelligence"}); err != nil {
 		t.Fatal(err)
 	}
 	loaded, found, err := store.Load(context.Background(), "profile")
 	if err != nil || !found {
 		t.Fatalf("Load() = found %v, err %v", found, err)
 	}
-	if loaded.AgentProfile != "dex" {
+	if loaded.AgentProfile != "intelligence" {
 		t.Fatalf("AgentProfile = %q, want dex", loaded.AgentProfile)
 	}
 }
@@ -495,7 +460,7 @@ func TestFileStorePersistsIdentityAndListsSummaries(t *testing.T) {
 		PermissionMode:  permission.ModeAsk.String(),
 		WorkspaceKey:    "abc",
 		WorkspaceName:   "proton",
-		AgentProfile:    "dex",
+		AgentProfile:    "intelligence",
 		ReasoningEffort: "high",
 		Messages:        []Message{{Role: model.RoleUser, Content: "  Refactor   the session store safely  "}},
 	}); err != nil {
@@ -521,28 +486,6 @@ func TestFileStorePersistsIdentityAndListsSummaries(t *testing.T) {
 	}
 }
 
-func TestFileStoreLoadsLegacyWorkspaceIdentity(t *testing.T) {
-	store, err := NewFileStore(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	legacy := State{Version: currentStateVersion, PermissionMode: permission.ModeAsk.String()}
-	payload, err := json.Marshal(legacy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(store.legacyPath("workspace-deadbeef-20260101"), payload, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	loaded, found, err := store.Load(context.Background(), "workspace-deadbeef-20260101")
-	if err != nil || !found {
-		t.Fatalf("Load() = found %v, err %v", found, err)
-	}
-	if loaded.SessionID != "workspace-deadbeef-20260101" || loaded.WorkspaceKey != "deadbeef" {
-		t.Fatalf("legacy identity = %+v", loaded)
-	}
-}
-
 func TestFileStoreUsesSessionAggregateLayout(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "sessions")
 	store, err := NewFileStore(root)
@@ -557,39 +500,7 @@ func TestFileStoreUsesSessionAggregateLayout(t *testing.T) {
 		t.Fatalf("state path %s: %v", statePath, err)
 	}
 	if _, err := os.Stat(filepath.Join(root, "aggregate.json")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("legacy flat state unexpectedly exists: %v", err)
-	}
-}
-
-func TestFileStoreMigratesLegacyFlatStateOnSave(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions")
-	store, err := NewFileStore(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(root, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	legacy := State{Version: currentStateVersion, PermissionMode: permission.ModeAsk.String()}
-	payload, err := json.Marshal(legacy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(store.legacyPath("legacy-flat"), payload, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	loaded, found, err := store.Load(context.Background(), "legacy-flat")
-	if err != nil || !found {
-		t.Fatalf("legacy load found=%v err=%v", found, err)
-	}
-	if err := store.Save(context.Background(), "legacy-flat", loaded); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(store.legacyPath("legacy-flat")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("legacy file still exists: %v", err)
-	}
-	if _, err := os.Stat(store.path("legacy-flat")); err != nil {
-		t.Fatalf("aggregate state missing: %v", err)
+		t.Fatalf("flat state unexpectedly exists: %v", err)
 	}
 }
 
@@ -631,11 +542,11 @@ func TestFileStoreRejectsStaleConcurrentSessionSave(t *testing.T) {
 		t.Fatalf("first load found=%v err=%v", found, err)
 	}
 	second := first
-	first.AgentProfile = "dex"
+	first.AgentProfile = "intelligence"
 	if err := store.Save(ctx, "shared", first); err != nil {
 		t.Fatal(err)
 	}
-	second.AgentProfile = "pow"
+	second.AgentProfile = "strength"
 	if err := store.Save(ctx, "shared", second); !errors.Is(err, session.ErrRevisionConflict) {
 		t.Fatalf("stale save error=%v, want revision conflict", err)
 	}
@@ -643,7 +554,7 @@ func TestFileStoreRejectsStaleConcurrentSessionSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.AgentProfile != "dex" || loaded.Revision != first.Revision+1 {
+	if loaded.AgentProfile != "intelligence" || loaded.Revision != first.Revision+1 {
 		t.Fatalf("loaded after conflict=%+v", loaded)
 	}
 }

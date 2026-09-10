@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"errors"
 	"fmt"
 )
@@ -13,6 +14,8 @@ var (
 	ErrNotResumable      = errors.New("subagent is not resumable")
 	ErrInvalidTransition = errors.New("invalid subagent lifecycle transition")
 	ErrShutdownTimeout   = errors.New("subagent coordinator shutdown timed out")
+	ErrQueueTimeout      = errors.New("subagent queue timed out")
+	ErrExecutionTimeout  = errors.New("subagent execution timed out")
 )
 
 type ShutdownTimeoutError struct {
@@ -24,3 +27,11 @@ func (e *ShutdownTimeoutError) Error() string {
 }
 
 func (e *ShutdownTimeoutError) Unwrap() error { return ErrShutdownTimeout }
+
+func queueTimeoutError() error {
+	return fmt.Errorf("%w: %w", ErrQueueTimeout, context.DeadlineExceeded)
+}
+
+func executionTimeoutError() error {
+	return fmt.Errorf("%w: %w", ErrExecutionTimeout, context.DeadlineExceeded)
+}

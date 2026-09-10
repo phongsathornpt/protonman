@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/pelletier/go-toml/v2"
 
@@ -12,6 +13,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
+
+var userConfigMutationMu sync.Mutex
 
 func SaveUserProviderConfig(homeDir string, provider ProviderConfig, defaultModel string) error {
 	return SaveUserProviderConfigWithOptions(homeDir, provider, ProviderSaveOptions{
@@ -62,6 +65,15 @@ func SaveUserDefaultModel(homeDir string, provider string, modelID string) error
 	})
 }
 
+// SaveUserModelSelection atomically persists the exact active provider/model pair.
+// Unlike SaveUserDefaultModel, an empty model intentionally clears stale model state.
+func SaveUserModelSelection(homeDir string, provider string, modelID string) error {
+	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
+		doc.Model.Provider = strings.ToLower(strings.TrimSpace(provider))
+		doc.Model.Default = strings.TrimSpace(modelID)
+	})
+}
+
 // DeleteUserProviderConfig removes a provider configuration from ~/.protonman/config.toml.
 func DeleteUserProviderConfig(homeDir string, providerName string) error {
 	return modifyUserConfigFile(homeDir, true, func(doc *fileDocument) {
@@ -72,10 +84,7 @@ func DeleteUserProviderConfig(homeDir string, providerName string) error {
 
 		if strings.EqualFold(doc.Model.Provider, providerKey) {
 			doc.Model.Provider = ""
-			for remaining := range doc.Providers {
-				doc.Model.Provider = remaining
-				break
-			}
+			doc.Model.Default = ""
 		}
 	})
 }
@@ -125,6 +134,8 @@ func SaveUserPermissionRule(homeDir string, rule permission.Rule) error {
 }
 
 func modifyUserConfigFile(homeDir string, returnIfNotExist bool, mutate func(*fileDocument)) error {
+	userConfigMutationMu.Lock()
+	defer userConfigMutationMu.Unlock()
 	if homeDir == "" {
 		resolvedHome, err := os.UserHomeDir()
 		if err != nil {

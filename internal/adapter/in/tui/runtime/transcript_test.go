@@ -3,11 +3,13 @@ package runtime
 import (
 	"context"
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transcriptutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
+	"math"
 	"strings"
 	"testing"
 )
@@ -131,60 +133,19 @@ func TestHistoryCellKindEnum(t *testing.T) {
 	}
 }
 
-func TestHistoryStateRunningToolSpinner(t *testing.T) {
+func TestHistoryStateStartsAssistantOnlyOnFirstDelta(t *testing.T) {
 	state := NewHistoryState(100)
-	state.SetSpinnerFrame("⠋")
-	state.StartTool("read")
-	lines := state.RenderLines()
-	if len(lines) == 0 || !strings.Contains(lines[len(lines)-1], "⠋") {
-		t.Fatalf("expected running tool to contain spinner frame ⠋, got: %v", lines)
+	if active := state.Active(); active != nil {
+		t.Fatalf("active cell before model output = %T, want nil", active)
 	}
-	state.SetSpinnerFrame("⠙")
-	lines = state.RenderLines()
-	if len(lines) == 0 || !strings.Contains(lines[len(lines)-1], "⠙") {
-		t.Fatalf("expected running tool to contain updated spinner frame ⠙, got: %v", lines)
+	state.AppendAssistantDelta("Hello world")
+	assistant, ok := state.Active().(*AssistantCell)
+	if !ok {
+		t.Fatalf("active cell = %T, want *AssistantCell", state.Active())
 	}
-	state.CompleteTool(ToolCell{Name: "read", Body: "done"})
-	lines = state.RenderLines()
-	if len(lines) == 0 || strings.Contains(lines[0], "⠙") || strings.Contains(lines[0], "…") {
-		t.Fatalf("completed tool should not contain spinner, got: %v", lines)
+	if assistant.Text != "Hello world" {
+		t.Fatalf("assistant text = %q, want Hello world", assistant.Text)
 	}
-}
-
-func TestHistoryStateThinkingCellLifecycle(t *testing.T) {
-	t.Run("converts to assistant on first delta", func(t *testing.T) {
-		state := NewHistoryState(100)
-		state.SetSpinnerFrame("⠋")
-		state.StartThinking()
-		active := state.Active()
-		if _, ok := active.(*ThinkingCell); !ok {
-			t.Fatalf("active cell = %T, want *ThinkingCell", active)
-		}
-		rendered := state.RenderLines()
-		if len(rendered) == 0 || !strings.Contains(rendered[0], "Thinking…") {
-			t.Fatalf("expected thinking render, got: %v", rendered)
-		}
-		state.AppendAssistantDelta("Hello world")
-		active = state.Active()
-		assistant, ok := active.(*AssistantCell)
-		if !ok {
-			t.Fatalf("active cell = %T, want *AssistantCell", active)
-		}
-		if assistant.Text != "Hello world" {
-			t.Fatalf("assistant text = %q, want Hello world", assistant.Text)
-		}
-	})
-	t.Run("discarded on commit if no text", func(t *testing.T) {
-		state := NewHistoryState(100)
-		state.StartThinking()
-		state.CommitActive()
-		if state.Active() != nil {
-			t.Fatalf("active cell = %T after commit, want nil", state.Active())
-		}
-		if len(state.Cells()) != 0 {
-			t.Fatalf("cells length = %d, want 0 (thinking cell should not be committed)", len(state.Cells()))
-		}
-	})
 }
 
 func TestActivateSkillToolCellCompactRendering(t *testing.T) {
@@ -200,8 +161,8 @@ func TestActivateSkillToolCellCompactRendering(t *testing.T) {
 			t.Fatalf("RawLines should not contain raw instruction markdown, got: %v", raw)
 		}
 	}
-	rendered := cell.Render()
-	joined := strings.Join(rendered, "\n")
+	rendered := cell.RenderWidth(80)
+	joined := testPlain(strings.Join(rendered, "\n"))
 	if !strings.Contains(joined, `Activated skill "golang-performance"`) {
 		t.Fatalf("expected compact activation badge in render, got: %s", joined)
 	}
@@ -213,7 +174,7 @@ func TestActivateSkillToolCellCompactRendering(t *testing.T) {
 func TestLoadInitialMessagesCompactsSkillDetail(t *testing.T) {
 	bm := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "")
 	bm.loadInitialMessages([]model.Message{{Role: model.RoleTool, ToolName: "skill", Content: `<skill_content name="golang-code-style">\n# Full instructions...\n</skill_content>`}, {Role: model.RoleUser, Content: "Activated skill pdf-tool [user]:\n# PDF Guide\nLong content here..."}})
-	rendered := strings.Join(bm.historyState.RenderLines(), "\n")
+	rendered := testPlain(strings.Join(bm.historyState.RenderLines(), "\n"))
 	if strings.Contains(rendered, "Full instructions") {
 		t.Fatalf("history rendered full skill instructions from tool message: %s", rendered)
 	}
@@ -236,7 +197,6 @@ func TestToolCellRefinedRenderingWebFetch(t *testing.T) {
   <body><h1>Protonman</h1><p>Many lines of HTML...</p></body>
 </html>`
 	state := NewHistoryState(100)
-	state.SetSpinnerFrame("⠋")
 	runningCell := &ToolCell{CallID: "call-web-1", Name: "web", Target: "https://protonman.dev", ToolKind: tool.KindWeb, Running: true}
 	state.StartToolCell(runningCell)
 	rendered := state.RenderLines()
@@ -266,7 +226,7 @@ func TestToolCellRefinedRenderingWebFetch(t *testing.T) {
 func TestToolCellRefinedRenderingReadFile(t *testing.T) {
 	fileContent := strings.Repeat("fmt.Println(\"code\")\n", 50)
 	cell := &ToolCell{Name: "read", Target: "internal/tui/theme.go", ToolKind: tool.KindRead, Body: fileContent, Summary: summarizeToolOutput("read", tool.KindRead, "internal/tui/theme.go", fileContent, nil, false)}
-	rendered := strings.Join(cell.Render(), "\n")
+	rendered := testPlain(strings.Join(cell.RenderWidth(80), "\n"))
 	if !strings.Contains(rendered, "50 lines") || !strings.Contains(rendered, "internal/tui/theme.go") {
 		t.Fatalf("expected summary with line count and target, got: %s", rendered)
 	}
@@ -292,11 +252,11 @@ func TestExecCellFolding(t *testing.T) {
 	exit0 := 0
 	longOutput := "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\n"
 	cell := &ExecCell{Command: "npm test", Body: longOutput, ExitCode: &exit0}
-	rendered := strings.Join(cell.Render(), "\n")
+	rendered := testPlain(strings.Join(cell.RenderWidth(80), "\n"))
 	if !strings.Contains(rendered, "Npm test") || strings.Contains(rendered, "exit 0") {
 		t.Fatalf("expected semantic command title without redundant exit 0, got: %s", rendered)
 	}
-	if !strings.Contains(rendered, "lines hidden") || !strings.Contains(rendered, "ctrl+t") {
+	if !strings.Contains(rendered, "more") || !strings.Contains(rendered, "ctrl+t") {
 		t.Fatalf("expected fold indicator in long exec output, got: %s", rendered)
 	}
 	raw := strings.Join(cell.RawLines(), "\n")
@@ -305,27 +265,29 @@ func TestExecCellFolding(t *testing.T) {
 	}
 }
 
-func TestErrorCellCardRendering(t *testing.T) {
-	cell := &ErrorCell{ErrorKind: ErrorKindModelNotFound, Title: "Model Not Supported", Badge: "MODEL_NOT_FOUND", Text: "Model 'gpt-nonexistent' is not supported by provider 'opencode'.", Suggestions: []string{"Did you mean: nemotron-3.5-lightning-free", "Run /provider to configure an available model"}}
-	rendered := strings.Join(cell.RenderWidth(80), "\n")
-	if !strings.Contains(rendered, "MODEL_NOT_FOUND") {
-		t.Fatalf("expected rendered card to contain badge, got:\n%s", rendered)
+func TestErrorCellDiagnosticRenderingIsInline(t *testing.T) {
+	cell := &ErrorCell{ErrorKind: ErrorKindModelNotFound, Title: "Model Not Supported", Badge: "MODEL_NOT_FOUND", Text: "Model not supported detail", Suggestions: []string{"Did you mean: fallback-model"}}
+	rendered := ansi.Strip(strings.Join(cell.RenderWidth(80), "\n"))
+	if rendered != "× Model Not Supported · MODEL_NOT_FOUND" {
+		t.Fatalf("inline diagnostic = %q", rendered)
 	}
-	if !strings.Contains(rendered, "Model Not Supported") {
-		t.Fatalf("expected rendered card to contain title, got:\n%s", rendered)
-	}
-	if strings.Contains(rendered, "Suggestions:") {
-		t.Fatalf("expected compact recovery hints without Suggestions header, got:\n%s", rendered)
-	}
-	if !strings.Contains(rendered, "→ Did you mean: nemotron-3.5-lightning-free") {
-		t.Fatalf("expected compact recovery hint, got:\n%s", rendered)
-	}
-	if !strings.Contains(rendered, "Did you mean: nemotron-3.5-lightning-free") {
-		t.Fatalf("expected rendered card to contain model suggestions, got:\n%s", rendered)
+	if strings.Contains(rendered, "Did you mean") || strings.Contains(rendered, "detail") {
+		t.Fatalf("inline diagnostic leaked verbose detail: %q", rendered)
 	}
 	raw := strings.Join(cell.RawLines(), "\n")
-	if !strings.Contains(raw, "[MODEL_NOT_FOUND] Model Not Supported") {
-		t.Fatalf("raw lines missing formatted header, got:\n%s", raw)
+	if !strings.Contains(raw, "Model not supported detail") || !strings.Contains(raw, "Did you mean: fallback-model") {
+		t.Fatalf("raw diagnostic lost details: %q", raw)
+	}
+}
+
+func TestErrorCellServerOverloadedUsesStableCode(t *testing.T) {
+	cell := &ErrorCell{ErrorKind: ErrorKindServerOverloaded, Title: "Provider Server Overloaded", Badge: "503 SERVER_ERROR", Text: "upstream unavailable"}
+	rendered := ansi.Strip(strings.Join(cell.RenderWidth(80), "\n"))
+	if rendered != "× Provider Server Overloaded · PROVIDER_OVERLOADED" {
+		t.Fatalf("server overload diagnostic = %q", rendered)
+	}
+	if strings.Contains(rendered, "503") || strings.Contains(rendered, "SERVER_ERROR") {
+		t.Fatalf("stable diagnostic leaked provider transport code: %q", rendered)
 	}
 }
 
@@ -341,24 +303,28 @@ func TestErrorCellFallbackRendering(t *testing.T) {
 	}
 }
 
-func TestToolCellRenderReadFileExcerpt(t *testing.T) {
-	cell := &ToolCell{Name: "read", Target: "internal/tui/theme.go", ToolKind: tool.KindRead, Body: "// Package tui\npackage tui\n\nimport \"fmt\"\n", Summary: "4 lines (45 B)"}
-	rendered := strings.Join(cell.RenderWidth(80), "\n")
-	if !strings.Contains(rendered, "package tui") || !strings.Contains(rendered, "↳") {
-		t.Fatalf("expected rendered cell to contain excerpt '↳ package tui', got:\n%s", rendered)
+func TestToolCellReadDetailFollowsDensity(t *testing.T) {
+	minimal := &ToolCell{Name: "read", Target: "internal/tui/theme.go", ToolKind: tool.KindRead, Body: "// Package tui\npackage tui\n\nimport \"fmt\"\n", Summary: "4 lines (45 B)"}
+	if rendered := strings.Join(minimal.RenderWidth(80), "\n"); strings.Contains(rendered, "↳") {
+		t.Fatalf("minimal read leaked excerpt:\n%s", rendered)
+	}
+	detailed := *minimal
+	detailed.ShowDetail = true
+	if rendered := strings.Join(detailed.RenderWidth(80), "\n"); !strings.Contains(rendered, "package tui") || !strings.Contains(rendered, "↳") {
+		t.Fatalf("detailed read missing excerpt:\n%s", rendered)
 	}
 }
 
 func TestToolFailureSuggestions(t *testing.T) {
-	notFoundSugg := toolFailureSuggestions("read", tool.ErrorCodeNotFound)
+	notFoundSugg := transcriptutil.ToolFailureSuggestions("read", tool.ErrorCodeNotFound)
 	if len(notFoundSugg) == 0 {
 		t.Fatalf("expected suggestions for read not found error")
 	}
-	protectedSugg := toolFailureSuggestions("read", tool.ErrorCodeProtectedPath)
+	protectedSugg := transcriptutil.ToolFailureSuggestions("read", tool.ErrorCodeProtectedPath)
 	if len(protectedSugg) == 0 || !strings.Contains(protectedSugg[0], "workspace protection rules") {
 		t.Fatalf("expected suggestions for protected path error")
 	}
-	escapeSugg := toolFailureSuggestions("read", tool.ErrorCodeOutsideWorkspace)
+	escapeSugg := transcriptutil.ToolFailureSuggestions("read", tool.ErrorCodeOutsideWorkspace)
 	if len(escapeSugg) != 1 || escapeSugg[0] != "use . or a workspace-relative path" {
 		t.Fatalf("expected actionable suggestions for outside workspace error: %#v", escapeSugg)
 	}
@@ -385,23 +351,6 @@ func TestHistoryStateAlternateRenderCacheTracksWidth(t *testing.T) {
 	narrow := state.RenderLinesAt(20)
 	if len(narrow) <= len(wide) {
 		t.Fatalf("narrow alternate render lines = %d, want more than wide %d", len(narrow), len(wide))
-	}
-}
-
-func TestHistoryStateSpinnerFrameReportsVisualChanges(t *testing.T) {
-	state := NewHistoryState(1000)
-	state.AppendAssistantDelta("streaming")
-	if state.SetSpinnerFrame("a") {
-		t.Fatal("assistant cell reported a visual spinner change")
-	}
-	state.CommitActive()
-	state.StartThinking()
-	if !state.SetSpinnerFrame("b") {
-		t.Fatal("thinking cell did not report spinner change")
-	}
-	state.StartTool("read")
-	if !state.SetSpinnerFrame("c") {
-		t.Fatal("running tool did not report spinner change")
 	}
 }
 
@@ -438,6 +387,23 @@ func TestHistoryStateRenderTailContentMatchesFullSuffix(t *testing.T) {
 	}
 }
 
+func TestHistoryStateRenderTailContentMatchesFullSuffixInsideOpenFence(t *testing.T) {
+	state := NewHistoryState(50000)
+	for i := 0; i < 12; i++ {
+		state.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nsecond line", i)})
+	}
+	state.AppendAssistantDelta("```go\npackage main\nfunc main() {\nprintln(\"streaming\")")
+	full := strings.Split(state.RenderContent(), "\n")
+	got, truncated := state.RenderTailContent(6)
+	if !truncated {
+		t.Fatal("expected fenced tail render to truncate older content")
+	}
+	want := strings.Join(full[len(full)-6:], "\n")
+	if got != want {
+		t.Fatalf("fenced tail mismatch\nwant: %q\n got: %q", want, got)
+	}
+}
+
 func TestExecCellSeparatesStderrAndStreamTruncation(t *testing.T) {
 	exit1 := 1
 	cell := &ExecCell{Command: "go test ./...", Stdout: "package a ok\n", Stderr: "package b failed\n", ExitCode: &exit1, StdoutTruncated: true, Truncated: true, FailureCode: tool.ErrorCodeCommandFailed}
@@ -455,6 +421,32 @@ func TestExecCellSeparatesStderrAndStreamTruncation(t *testing.T) {
 	}
 	if strings.Contains(raw, "failure: command_failed") {
 		t.Fatalf("raw redundantly exposes command_failed next to exit code:\n%s", raw)
+	}
+}
+
+func TestExecCellHugeMixedOutputStaysBoundedButRawRemainsComplete(t *testing.T) {
+	exit := 1
+	stdout := strings.Repeat("stdout payload ไทย 東京 "+strings.Repeat("x", 80)+"\n", 2000)
+	stderr := strings.Repeat("stderr payload "+strings.Repeat("y", 80)+"\n", 1200)
+	cell := &ExecCell{Name: "bash", Command: "stress-output", Stdout: stdout, Stderr: stderr, ExitCode: &exit}
+	rendered := cell.RenderWidth(40)
+	if len(rendered) > 16 {
+		t.Fatalf("huge mixed output rendered %d viewport lines, want bounded presentation", len(rendered))
+	}
+	joined := testPlain(strings.Join(rendered, "\n"))
+	for _, want := range []string{"more · ctrl+t", "stderr:", "exit 1"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("bounded mixed output missing %q: %q", want, joined)
+		}
+	}
+	for _, line := range rendered {
+		if got := ansi.StringWidth(line); got > 40 {
+			t.Fatalf("huge mixed output line width=%d exceeds 40: %q", got, line)
+		}
+	}
+	raw := strings.Join(cell.RawLines(), "\n")
+	if !strings.Contains(raw, "stdout payload ไทย 東京") || !strings.Contains(raw, "stderr payload") {
+		t.Fatal("raw transcript lost huge stdout/stderr content")
 	}
 }
 
@@ -495,7 +487,7 @@ func TestAgentToolCellRawLinesUseOrchestrationLabel(t *testing.T) {
 func TestPatchCellRenderingPolish(t *testing.T) {
 	patch := &PatchCell{Name: "edit", Summary: "1 file", Paths: []string{"cmd/protonman/main.go"}, Body: "Wrote file successfully to cmd/protonman/main.go."}
 	rendered := patch.RenderWidth(80)
-	joined := strings.Join(rendered, "\n")
+	joined := testPlain(strings.Join(rendered, "\n"))
 	if strings.Contains(joined, "✓ +") {
 		t.Fatalf("unexpected glyph stutter '✓ +' in patch cell header:\n%s", joined)
 	}
@@ -523,7 +515,7 @@ func TestExecCellClampsLongLinesAndHighlightsDiff(t *testing.T) {
 	longLine := "data: " + strings.Repeat("x", 200)
 	cell := &ExecCell{Name: "bash", Command: "curl https://api.example.com", Stdout: longLine}
 	rendered := cell.RenderWidth(60)
-	joined := strings.Join(rendered, "\n")
+	joined := testPlain(strings.Join(rendered, "\n"))
 	if strings.Contains(joined, strings.Repeat("x", 200)) {
 		t.Fatalf("expected 200-char line to be clamped horizontally in viewport:\n%s", joined)
 	}
@@ -541,7 +533,7 @@ func TestExecCellClampsLongLinesAndHighlightsDiff(t *testing.T) {
 func TestActivateSkillFallbackToTarget(t *testing.T) {
 	cell := &ToolCell{Name: "skill", Target: `"pdf-processing"`, Body: "Loaded skill instructions successfully.", ToolKind: tool.KindRead}
 	rendered := cell.RenderWidth(80)
-	joined := strings.Join(rendered, "\n")
+	joined := testPlain(strings.Join(rendered, "\n"))
 	if !strings.Contains(joined, `"pdf-processing"`) {
 		t.Fatalf("expected target skill name to appear in header:\n%s", joined)
 	}
@@ -580,18 +572,44 @@ func TestEditToolUsesStructuredPatchCell(t *testing.T) {
 	}
 }
 
+func TestTranscriptRawRichTogglePreservesRelativeScrollPosition(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.showWelcome = false
+	for i := 0; i < 80; i++ {
+		m.appendUser(fmt.Sprintf("question %02d", i))
+		m.appendAssistant("answer with **markdown** and some detail")
+	}
+	m.panes.showTranscript = true
+	m.refreshTranscriptViewport(true)
+	m.panes.transcript.SetYOffset(m.panes.transcript.YOffset() / 2)
+	before := m.panes.transcript.ScrollPercent()
+	if before <= 0 || before >= 1 {
+		t.Fatalf("test setup scroll percent=%f, want middle position", before)
+	}
+	_ = m.updateTranscriptKey(testText("r"))
+	afterRaw := m.panes.transcript.ScrollPercent()
+	if diff := math.Abs(afterRaw - before); diff > 0.08 {
+		t.Fatalf("raw toggle scroll percent jumped from %.3f to %.3f", before, afterRaw)
+	}
+	_ = m.updateTranscriptKey(testText("r"))
+	afterRich := m.panes.transcript.ScrollPercent()
+	if diff := math.Abs(afterRich - before); diff > 0.08 {
+		t.Fatalf("rich toggle scroll percent jumped from %.3f to %.3f", before, afterRich)
+	}
+}
+
 func TestTranscriptOverlayIncludesLiveAssistantTail(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
 	m.appendAssistantDelta("streaming now")
-	m.showTranscript = true
+	m.panes.showTranscript = true
 	m.refreshTranscriptViewport(true)
 	if !strings.Contains(m.transcriptOverlayView(), "streaming now") {
 		t.Fatalf("transcript overlay omitted active cell: %s", m.transcriptOverlayView())
 	}
-	updated, _ := m.updateTranscriptKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
-	m = updated.(*bubbleModel)
-	if !m.rawTranscript {
+	_ = m.updateTranscriptKey(testText("r"))
+	if !m.panes.rawTranscript {
 		t.Fatal("r did not toggle raw transcript mode")
 	}
 }

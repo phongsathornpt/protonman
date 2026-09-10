@@ -13,3 +13,11 @@ type ReloadableRepository interface {
 	Repository
 	Reload(context.Context) (Snapshot, error)
 }
+
+// PatchRepository atomically validates and applies a patch against one revision.
+// Implementations with durable backing should perform read, compare, patch, and write
+// inside the same critical section.
+type PatchRepository interface {
+	Repository
+	CompareAndPatch(context.Context, uint64, []Operation) (before Snapshot, after Snapshot, err error)
+}

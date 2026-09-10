@@ -2,210 +2,15 @@ package diagnostic
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/phongsathornpt/protonman/internal/app"
-	"math"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 )
-
-// Kind classifies provider/runtime failures for user-facing presentation.
-type Kind string
-
-const (
-	KindModelNotFound    Kind = "model_not_found"
-	KindContextOverflow  Kind = "context_overflow"
-	KindAuthentication   Kind = "authentication"
-	KindForbidden        Kind = "forbidden"
-	KindRateLimit        Kind = "rate_limit"
-	KindQuotaExceeded    Kind = "quota_exceeded"
-	KindServerOverloaded Kind = "server_overloaded"
-	KindStreamTimeout    Kind = "stream_timeout"
-	KindRuntimeTimeout   Kind = "runtime_timeout"
-	KindInvalidPrompt    Kind = "invalid_prompt"
-	KindMCPFailed        Kind = "mcp_failed"
-	KindConfigInvalid    Kind = "config_invalid"
-	KindConfigTypo       Kind = "config_typo"
-	KindToolFailed       Kind = "tool_failed"
-	KindToolDispatch     Kind = "tool_dispatch"
-	KindPermissionDenied Kind = "permission_denied"
-	KindCancelled        Kind = "cancelled"
-	KindGeneric          Kind = "generic"
-)
-
-// Error is a structured, user-friendly failure with actionable guidance.
-type Error struct {
-	Kind        Kind
-	Title       string
-	Badge       string
-	Message     string
-	Suggestions []string
-	RawDetails  string
-	Code        string
-	Retryable   bool
-}
-
-var overflowPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)prompt is too long`),
-	regexp.MustCompile(`(?i)request_too_large`),
-	regexp.MustCompile(`(?i)input is too long for requested model`),
-	regexp.MustCompile(`(?i)exceeds the context window`),
-	regexp.MustCompile(`(?i)exceeds (?:the )?(?:model'?s )?maximum context length(?: of [\d,]+ tokens?|\s*\([\d,]+\))`),
-	regexp.MustCompile(`(?i)input token count.*exceeds the maximum`),
-	regexp.MustCompile(`(?i)tokens in request more than max tokens allowed`),
-	regexp.MustCompile(`(?i)maximum prompt length is \d+`),
-	regexp.MustCompile(`(?i)reduce the length of the messages`),
-	regexp.MustCompile(`(?i)maximum context length is \d+ tokens`),
-	regexp.MustCompile(`(?i)exceeds (?:the )?maximum allowed input length of [\d,]+ tokens?`),
-	regexp.MustCompile(`(?i)input \(\d+ tokens\) is longer than the model'?s context length \(\d+ tokens\)`),
-	regexp.MustCompile(`(?i)exceeds the limit of \d+`),
-	regexp.MustCompile(`(?i)exceeds the available context size`),
-	regexp.MustCompile(`(?i)greater than the context length`),
-	regexp.MustCompile(`(?i)context window exceeds limit`),
-	regexp.MustCompile(`(?i)exceeded model token limit`),
-	regexp.MustCompile(`(?i)context[_ ]length[_ ]exceeded`),
-	regexp.MustCompile(`(?i)request entity too large`),
-	regexp.MustCompile(`(?i)context length is only \d+ tokens`),
-	regexp.MustCompile(`(?i)input length.*exceeds.*context length`),
-	regexp.MustCompile(`(?i)prompt too long; exceeded (?:max )?context length`),
-	regexp.MustCompile(`(?i)too large for model with \d+ maximum context length`),
-	regexp.MustCompile(`(?i)prompt has [\d,]+ tokens?, but the configured context size is [\d,]+ tokens?`),
-	regexp.MustCompile(`(?i)model_context_window_exceeded`),
-	regexp.MustCompile(`(?i)too many tokens`),
-	regexp.MustCompile(`(?i)token limit exceeded`),
-}
-
-var overflowExclusions = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)^(throttling error|service unavailable):`),
-	regexp.MustCompile(`(?i)rate limit`),
-	regexp.MustCompile(`(?i)too many requests`),
-}
-
-var statusPattern = regexp.MustCompile(`(?i)(?:status|code)\s*[:=]?\s*(\d{3})`)
-var modelErrorPattern = regexp.MustCompile(`(?i)model\s+([a-zA-Z0-9_.:/-]+)\s+is not supported`)
-var modelNotFoundPattern = regexp.MustCompile(`(?i)model\s+['"]?([a-zA-Z0-9_.:/-]+)['"]?\s+(?:not found|does not exist)`)
-
-// parsedBody stores extracted fields from an API error payload.
-type parsedBody struct {
-	ErrorType string
-	ErrorCode string
-	Message   string
-}
-
-func parseAPIErrorPayload(body string) (parsedBody, bool) {
-	trimmed := strings.TrimSpace(body)
-	if !strings.HasPrefix(trimmed, "{") {
-		return parsedBody{}, false
-	}
-
-	// 1. Try OpenCode Zen schema: {"type":"error","error":{"type":"ModelError","message":"..."}}
-	var openCodeResp struct {
-		Type  string `json:"type"`
-		Error struct {
-			Type    string `json:"type"`
-			Message string `json:"message"`
-			Code    string `json:"code"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal([]byte(trimmed), &openCodeResp); err == nil && (openCodeResp.Type == "error" || openCodeResp.Error.Type != "" || openCodeResp.Error.Message != "") {
-		return parsedBody{
-			ErrorType: openCodeResp.Error.Type,
-			ErrorCode: openCodeResp.Error.Code,
-			Message:   openCodeResp.Error.Message,
-		}, true
-	}
-
-	// 2. Try OpenAI standard schema: {"error":{"message":"...","type":"...","code":"..."}}
-	var openAIResp struct {
-		Error struct {
-			Message string `json:"message"`
-			Type    string `json:"type"`
-			Code    any    `json:"code"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal([]byte(trimmed), &openAIResp); err == nil && openAIResp.Error.Message != "" {
-		codeStr := ""
-		if openAIResp.Error.Code != nil {
-			codeStr = fmt.Sprintf("%v", openAIResp.Error.Code)
-		}
-		return parsedBody{
-			ErrorType: openAIResp.Error.Type,
-			ErrorCode: codeStr,
-			Message:   openAIResp.Error.Message,
-		}, true
-	}
-
-	// 3. Try direct {"message":"..."} or {"detail":"..."}
-	var genericResp struct {
-		Message string `json:"message"`
-		Detail  string `json:"detail"`
-		Error   string `json:"error"`
-	}
-	if err := json.Unmarshal([]byte(trimmed), &genericResp); err == nil {
-		msg := genericResp.Message
-		if msg == "" {
-			msg = genericResp.Detail
-		}
-		if msg == "" {
-			msg = genericResp.Error
-		}
-		if msg != "" {
-			return parsedBody{Message: msg}, true
-		}
-	}
-
-	return parsedBody{}, false
-}
-
-func isContextOverflow(msg string) bool {
-	for _, ex := range overflowExclusions {
-		if ex.MatchString(msg) {
-			return false
-		}
-	}
-	for _, re := range overflowPatterns {
-		if re.MatchString(msg) {
-			return true
-		}
-	}
-	return false
-}
-
-// FindModelSuggestions finds nearest matching model names from known catalogs using Levenshtein distance.
-func levenshteinDistance(s1, s2 string) int {
-	r1, r2 := []rune(s1), []rune(s2)
-	l1, l2 := len(r1), len(r2)
-	matrix := make([][]int, l1+1)
-	for i := range matrix {
-		matrix[i] = make([]int, l2+1)
-		matrix[i][0] = i
-	}
-	for j := 0; j <= l2; j++ {
-		matrix[0][j] = j
-	}
-
-	for i := 1; i <= l1; i++ {
-		for j := 1; j <= l2; j++ {
-			cost := 1
-			if r1[i-1] == r2[j-1] {
-				cost = 0
-			}
-			matrix[i][j] = int(math.Min(
-				float64(matrix[i-1][j]+1),
-				math.Min(
-					float64(matrix[i][j-1]+1),
-					float64(matrix[i-1][j-1]+cost),
-				),
-			))
-		}
-	}
-	return matrix[l1][l2]
-}
 
 // Classify maps an arbitrary runtime/provider error into a structured presentation error.
 func Classify(err error, activeProvider string, activeModel string) Error {
@@ -238,7 +43,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 			Suggestions: []string{
 				"Check that the active runner has a registered tool set",
 				"Verify the selected provider/model supports the configured tools",
-				"Run /new after correcting the tool configuration",
+				"Retry after correcting the tool configuration",
 			},
 			RawDetails: raw,
 			Retryable:  true,
@@ -252,7 +57,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 			Badge:   "TOOL_PROTOCOL",
 			Message: "The model returned a tool call that the turn loop could not resolve.",
 			Suggestions: []string{
-				"Run /new to start a fresh turn",
+				"Retry the request in a fresh turn",
 				"Retry with a model that supports the configured tool protocol",
 			},
 			RawDetails: raw,
@@ -267,7 +72,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 			Title:       "Permission Denied",
 			Badge:       "DENIED",
 			Message:     "Execution was blocked by permission policy or user rejection.",
-			Suggestions: []string{"Change permission mode using Shift+Tab or run /mode always-approve"},
+			Suggestions: []string{"Change permission mode using Shift+Tab"},
 			RawDetails:  raw,
 			Retryable:   false,
 		}
@@ -378,7 +183,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 			Message: "Input token count exceeds the maximum context length for this model.",
 			Suggestions: []string{
 				"Run /compact to summarize conversation history and free up tokens",
-				"Run /new to start a fresh conversation session",
+				"Start a fresh conversation from the session launcher",
 				"Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)",
 			},
 			RawDetails: raw,
@@ -593,15 +398,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		Title:       "Operation Failed",
 		Badge:       "ERROR",
 		Message:     cleanMsg,
-		Suggestions: []string{"Review the error details above or retry with /new"},
+		Suggestions: []string{"Review the error details above, then retry"},
 		RawDetails:  raw,
 	}
-}
-
-// FormatSummary produces a concise one-line summary of a classified error.
-func FormatSummary(c Error) string {
-	if c.Badge != "" {
-		return fmt.Sprintf("[%s] %s: %s", c.Badge, c.Title, c.Message)
-	}
-	return fmt.Sprintf("%s: %s", c.Title, c.Message)
 }

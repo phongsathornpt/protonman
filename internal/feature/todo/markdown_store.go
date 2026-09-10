@@ -84,6 +84,42 @@ func (s *MarkdownStore) Reload(ctx context.Context) (Snapshot, error) {
 	return s.mem.setSnapshot(revision, items), nil
 }
 
+func (s *MarkdownStore) CompareAndPatch(ctx context.Context, expectedRevision uint64, operations []Operation) (Snapshot, Snapshot, error) {
+	if err := ctx.Err(); err != nil {
+		return Snapshot{}, Snapshot{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var before, after Snapshot
+	err := withFileLock(ctx, s.path, func() error {
+		revision, diskItems, content, err := readMarkdownSnapshot(s.path)
+		if err != nil {
+			return err
+		}
+		before = Snapshot{Revision: revision, Items: CloneItems(diskItems)}
+		if revision != expectedRevision {
+			after = s.mem.setSnapshot(revision, diskItems)
+			return fmt.Errorf("%w: expected %d, current %d", ErrRevisionConflict, expectedRevision, revision)
+		}
+		next, err := ApplyPatch(diskItems, operations)
+		if err != nil {
+			return err
+		}
+		if itemsEqual(diskItems, next) {
+			after = s.mem.setSnapshot(revision, diskItems)
+			return nil
+		}
+		nextRevision := revision + 1
+		nextContent := renderDocumentState(content, nextRevision, next)
+		if err := writeAtomic(ctx, s.path, []byte(nextContent)); err != nil {
+			return err
+		}
+		after = s.mem.setSnapshot(nextRevision, next)
+		return nil
+	})
+	return before, after, err
+}
+
 func (s *MarkdownStore) CompareAndReplace(ctx context.Context, expectedRevision uint64, items []Item) (Snapshot, error) {
 	if err := ctx.Err(); err != nil {
 		return Snapshot{}, err

@@ -20,6 +20,10 @@ func WrapLines(text string, width int) []string {
 	if width <= 0 {
 		return []string{text}
 	}
+	if strings.ContainsRune(text, '\x1b') {
+		wrapped := ansi.Wrap(strings.ReplaceAll(text, "\r\n", "\n"), width, " \t")
+		return strings.Split(wrapped, "\n")
+	}
 	if isSingleLinePrintableASCII(text) {
 		return wrapASCIILine(text, width)
 	}

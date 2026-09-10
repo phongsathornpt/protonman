@@ -5,11 +5,10 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
-	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/providerio"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
-	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 )
 
@@ -18,11 +17,12 @@ type modelsFetchedMsg struct {
 	baseURL      string
 	apiKey       string
 	models       []model.RemoteModel
-	requestID    uint64
+	requestID    asyncOperationID
 	err          error
 }
 
 type providerSavedMsg struct {
+	operationID  asyncOperationID
 	providerName string
 	providerType string
 	previousName string
@@ -35,7 +35,7 @@ type providerSavedMsg struct {
 
 type providerFetchRequest struct {
 	ctx              context.Context
-	requestID        uint64
+	requestID        asyncOperationID
 	providerName     string
 	providerType     string
 	baseURL          string
@@ -52,11 +52,14 @@ func (v *providerPaneView) beginFetch(parent context.Context, timeouts ...time.D
 		v.fetchCancel()
 	}
 	if parent == nil {
-		parent = context.Background()
+		v.fetchRequestID = 0
+		v.state = providerStateError
+		v.errorMessage = errMissingRuntimeContext.Error()
+		return nil
 	}
 	ctx, cancel := context.WithCancel(parent)
 	v.fetchCancel = cancel
-	v.fetchRequestID++
+	v.fetchRequestID = nextAsyncOperationID()
 	v.state = providerStateFetching
 	return fetchProviderModelsCmd(providerFetchRequest{
 		ctx:              ctx,
@@ -79,22 +82,12 @@ func (v *providerPaneView) cancelFetch() {
 
 func fetchProviderModelsCmd(request providerFetchRequest) tea.Cmd {
 	return func() tea.Msg {
-		parent := request.ctx
-		if parent == nil {
-			parent = context.Background()
-		}
-		timeout := request.discoveryTimeout
-		if timeout <= 0 {
-			timeout = runtimepolicy.ModelDiscoveryTimeout
-		}
-		ctx, cancel := context.WithTimeout(parent, timeout)
-		defer cancel()
-		models, err := (app.Models{}).Discover(ctx, app.ModelDiscoveryRequest{
+		models, err := providerio.Discover(request.ctx, providerio.FetchRequest{
 			ProviderName: request.providerName,
 			ProviderType: request.providerType,
 			BaseURL:      request.baseURL,
 			APIKey:       request.apiKey,
-			Timeout:      timeout,
+			Timeout:      request.discoveryTimeout,
 		})
 		return modelsFetchedMsg{
 			providerName: request.providerName,
@@ -117,21 +110,22 @@ type providerSaveRequest struct {
 	activate     bool
 }
 
-func saveProviderCmd(request providerSaveRequest) tea.Cmd {
+func saveProviderCmd(operationID asyncOperationID, gate *asyncOperationGate, request providerSaveRequest) tea.Cmd {
 	return func() tea.Msg {
-		prov := config.ProviderConfig{
-			Name:    request.providerName,
-			Type:    request.providerType,
-			BaseURL: request.baseURL,
-			APIKey:  request.apiKey,
+		if !gate.current(operationID) {
+			return providerSavedMsg{operationID: operationID, err: errStaleConfigMutation}
 		}
-		err := (app.Providers{}).Save(app.ProviderSaveRequest{
-			Provider:     prov,
-			DefaultModel: request.defaultModel,
+		err := providerio.Save(providerio.SaveRequest{
+			ProviderName: request.providerName,
+			ProviderType: request.providerType,
 			PreviousName: request.previousName,
+			BaseURL:      request.baseURL,
+			APIKey:       request.apiKey,
+			DefaultModel: request.defaultModel,
 			Activate:     request.activate,
 		})
 		return providerSavedMsg{
+			operationID:  operationID,
 			providerName: request.providerName,
 			providerType: request.providerType,
 			previousName: request.previousName,
