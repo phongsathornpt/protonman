@@ -1,21 +1,28 @@
 name: CodeQL
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
+    paths:
+      - '**/*.go'
+      - go.mod
+      - go.sum
   schedule:
-    - cron: "23 3 * * 1"
+    - cron: '23 3 * * 1'
 
 permissions:
   contents: read
   security-events: write
 
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
     name: codeql
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - uses: github/codeql-action/init@v4
