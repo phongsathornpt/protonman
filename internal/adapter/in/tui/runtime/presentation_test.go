@@ -1172,7 +1172,7 @@ func TestWelcomeCardReprintsAfterClear(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
 	model.appendLine("gone")
-	model.panes.bottom.prompt().SetValue("/transcript clear")
+	model.panes.bottom.prompt().SetValue("/clear")
 	_ = model.submit()
 	model.refreshViewport()
 	view := testPlain(model.View().Content)

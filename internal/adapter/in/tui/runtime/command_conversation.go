@@ -18,15 +18,6 @@ func (m *bubbleModel) executeConversationCommand(name, argument string) tea.Cmd 
 			break
 		}
 		m.clearConversation()
-	case "transcript":
-		switch strings.ToLower(strings.TrimSpace(argument)) {
-		case "":
-			m.openTranscriptOverlay()
-		case "clear":
-			m.resetTranscript()
-		default:
-			m.appendError("usage: /transcript [clear]")
-		}
 	case "todo":
 		switch strings.ToLower(strings.TrimSpace(argument)) {
 		case "":

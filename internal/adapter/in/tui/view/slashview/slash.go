@@ -32,7 +32,6 @@ func Catalog() []Command {
 		{Name: "goal", Description: "show or set the active conversation goal", Argument: ArgumentRest},
 		{Name: "todo", Description: "show the TODO pane", Argument: ArgumentWord},
 		{Name: "clear", Description: "clear conversation history while preserving session settings"},
-		{Name: "transcript", Description: "open or clear transcript", Argument: ArgumentWord},
 		{Name: "call", Description: "run a registered tool", Argument: ArgumentRest},
 		{Name: "quit", Description: "leave Protonman"},
 	}

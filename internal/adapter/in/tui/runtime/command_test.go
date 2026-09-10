@@ -40,12 +40,12 @@ func TestTUICommandSurfaceIsCanonical(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.executeCommand("/help")
 	help := plainTranscript(model)
-	for _, keep := range []string{"/help", "/model", "/provider", "/skills", "/agents", "/goal", "/todo", "/clear", "/transcript", "/call", "/quit"} {
+	for _, keep := range []string{"/help", "/model", "/provider", "/skills", "/agents", "/goal", "/todo", "/clear", "/call", "/quit"} {
 		if !strings.Contains(help, keep) {
 			t.Fatalf("help missing canonical command %q: %q", keep, help)
 		}
 	}
-	removed := []string{"tools", "project", "protonman", "config", "session", "sessions", "new", "agent", "profile", "subagent", "subagents", "reasoning", "thinking", "mode", "ask", "plan", "always-approve", "yolo", "models", "providers", "skill", "history", "exit"}
+	removed := []string{"tools", "project", "protonman", "config", "session", "sessions", "new", "agent", "profile", "subagent", "subagents", "reasoning", "thinking", "mode", "ask", "plan", "always-approve", "yolo", "models", "providers", "skill", "history", "transcript", "exit"}
 	for _, name := range removed {
 		if strings.Contains(help, "/"+name+" ") {
 			t.Fatalf("help still advertises removed command /%s: %q", name, help)

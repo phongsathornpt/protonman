@@ -551,7 +551,7 @@ func TestClearTranscriptPreservesProviderHistory(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.messages = []model.Message{{Role: model.RoleUser, Content: "keep context"}}
 	m.appendUser("visible message")
-	m.executeCommand("/transcript clear")
+	m.resetTranscript()
 	if len(m.messages) != 1 {
 		t.Fatalf("clear changed provider history length = %d, want 1", len(m.messages))
 	}
