@@ -568,7 +568,7 @@ func (s *Session) handleSlashCommand(
 		}
 		effort, err := sdk.ParseReasoningEffort(parts[1])
 		if err != nil {
-			return true, SessionPromptResult{}, fmt.Errorf("invalid reasoning effort: use auto, none, low, medium, high, xhigh, or max")
+			return true, SessionPromptResult{}, fmt.Errorf("invalid reasoning effort: use auto, none, minimal, low, medium, high, xhigh, or max")
 		}
 		if err := s.SetReasoningEffort(effort); err != nil {
 			return true, SessionPromptResult{}, err

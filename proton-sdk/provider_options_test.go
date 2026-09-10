@@ -27,7 +27,7 @@ func TestCollectStepCopiesProviderMetadata(t *testing.T) {
 
 func TestRequestValidatesReasoningEffort(t *testing.T) {
 	for _, effort := range []ReasoningEffort{
-		ReasoningDefault, ReasoningNone, ReasoningLow, ReasoningMedium,
+		ReasoningDefault, ReasoningNone, ReasoningMinimal, ReasoningLow, ReasoningMedium,
 		ReasoningHigh, ReasoningXHigh, ReasoningMax,
 	} {
 		req := Request{Messages: []Message{{Role: RoleUser, Content: "hi"}}, Options: ModelOptions{ReasoningEffort: effort}}
@@ -43,7 +43,7 @@ func TestRequestValidatesReasoningEffort(t *testing.T) {
 
 func TestParseReasoningEffort(t *testing.T) {
 	for input, want := range map[string]ReasoningEffort{
-		"auto": ReasoningDefault, "DEFAULT": ReasoningDefault, "low": ReasoningLow,
+		"auto": ReasoningDefault, "DEFAULT": ReasoningDefault, "minimal": ReasoningMinimal, "low": ReasoningLow,
 		"medium": ReasoningMedium, "high": ReasoningHigh, "xhigh": ReasoningXHigh, "max": ReasoningMax,
 	} {
 		got, err := ParseReasoningEffort(input)

@@ -22,6 +22,21 @@ var builtinRegistry = mustRegistry(
 		}},
 	},
 	Profile{
+		Name:  "muse-spark-1.3-family",
+		Match: Matcher{Prefixes: []string{"muse-spark-1.3"}},
+		Capabilities: Capabilities{
+			Reasoning: SupportYes,
+		},
+		Reasoning: Reasoning{
+			Support: SupportYes,
+			Levels: []sdk.ReasoningEffort{
+				sdk.ReasoningMinimal, sdk.ReasoningLow, sdk.ReasoningMedium,
+				sdk.ReasoningHigh, sdk.ReasoningXHigh,
+			},
+			Default: sdk.ReasoningMedium,
+		},
+	},
+	Profile{
 		Name:  "gpt-5.6-family",
 		Match: Matcher{Prefixes: []string{"gpt-5.6"}},
 		Capabilities: Capabilities{

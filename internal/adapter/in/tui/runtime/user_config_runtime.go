@@ -48,7 +48,7 @@ func (m *bubbleModel) executeUserConfigCommand(line, rawName string) tea.Cmd {
 	case "thinking", "reasoning":
 		effort, err := sdk.ParseReasoningEffort(fields[2])
 		if err != nil {
-			m.appendError("invalid reasoning effort: use auto, none, low, medium, high, xhigh, or max")
+			m.appendError("invalid reasoning effort: use auto, none, minimal, low, medium, high, xhigh, or max")
 			m.refreshViewport()
 			return nil
 		}

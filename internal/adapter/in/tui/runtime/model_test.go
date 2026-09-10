@@ -1332,6 +1332,34 @@ func TestModelDisplayNameHumanizesIdentifier(t *testing.T) {
 	}
 }
 
+func TestModelSetupMuseSparkUsesFamilyReasoningLevels(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.resize(100, 30)
+	m.activeProvider = "opencode"
+	m.activeModel = "muse-spark-1.3-contributor-free"
+	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: m.activeModel, Name: "Muse Spark 1.3 Contributor"}})
+	view := newModelSetupPaneView(m)
+	want := []sdk.ReasoningEffort{sdk.ReasoningDefault, sdk.ReasoningMinimal, sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningHigh, sdk.ReasoningXHigh}
+	if len(view.reasoningChoices) != len(want) {
+		t.Fatalf("muse reasoning choices = %v, want %v", view.reasoningChoices, want)
+	}
+	for i := range want {
+		if view.reasoningChoices[i] != want[i] {
+			t.Fatalf("muse reasoning choices = %v, want %v", view.reasoningChoices, want)
+		}
+	}
+	profile := domainmodel.ResolveModelProfile("opencode", m.activeModel, nil)
+	if profile.Reasoning.Default != sdk.ReasoningMedium {
+		t.Fatalf("muse default reasoning = %q, want medium", profile.Reasoning.Default)
+	}
+	rendered := testPlain(view.Render(newPaneRenderContext(m)))
+	for _, level := range []string{"minimal", "low", "medium", "high", "xhigh"} {
+		if !strings.Contains(rendered, level) {
+			t.Fatalf("muse picker missing %q: %s", level, rendered)
+		}
+	}
+}
+
 func TestModelSetupSingleItemKeepsThinkingNearModel(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.resize(100, 30)
@@ -1383,7 +1411,7 @@ func TestModelSetupUnknownFamilyExposesAutoOnly(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.resize(100, 30)
 	m.activeProvider = "opencode"
-	m.activeModel = "muse-spark-1.3-contributor-free"
+	m.activeModel = "future-unknown-model"
 	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: m.activeModel}})
 	view := newModelSetupPaneView(m)
 	if len(view.reasoningChoices) != 1 || view.reasoningChoices[0] != sdk.ReasoningDefault {

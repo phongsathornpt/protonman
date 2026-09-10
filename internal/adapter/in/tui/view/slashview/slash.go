@@ -24,7 +24,7 @@ func Catalog(agentProfiles string) []Command {
 		{Name: "agents", Description: "inspect live and retained subagents"},
 		{Name: "subagents", Description: "show or toggle subagent delegation (/subagents [on|off])", TakesArgs: true},
 		{Name: "agent", Aliases: []string{"profile"}, Description: "show or set agent profile (/agent [" + agentProfiles + "])", TakesArgs: true},
-		{Name: "reasoning", Aliases: []string{"thinking"}, Description: "open model setup or set session thinking (/reasoning [auto|none|low|medium|high|xhigh|max])", TakesArgs: true},
+		{Name: "reasoning", Aliases: []string{"thinking"}, Description: "open model setup or set session thinking (/reasoning [auto|none|minimal|low|medium|high|xhigh|max])", TakesArgs: true},
 		{Name: "mode", Description: "show or set permission mode", TakesArgs: true},
 		{Name: "ask", Description: "switch to ask permission mode"},
 		{Name: "always-approve", Aliases: []string{"yolo"}, Description: "allow non-denied calls"},
