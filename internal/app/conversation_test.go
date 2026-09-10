@@ -24,3 +24,13 @@ func TestPrimaryConversationRejectsUnknownProfile(t *testing.T) {
 		t.Fatal("expected invalid profile error")
 	}
 }
+
+func TestPrimaryConversationPolicyCarriesActiveGoal(t *testing.T) {
+	got, _, err := primaryConversationPolicy(ConversationSpec{ActiveGoal: "  preserve this goal  "})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ActiveGoal != "preserve this goal" {
+		t.Fatalf("active goal = %q", got.ActiveGoal)
+	}
+}

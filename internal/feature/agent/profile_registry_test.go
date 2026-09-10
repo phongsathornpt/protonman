@@ -126,7 +126,7 @@ func TestDefaultSystemPromptGroundsCodingToolUse(t *testing.T) {
 		"Never guess workspace contents",
 		"Inspect relevant code",
 		"perform the edits",
-		"Tool identifiers are exact",
+		"Tool and action identifiers are exact",
 		"never prefix, rename, qualify, or invent",
 		"verify the result",
 	} {
@@ -139,7 +139,7 @@ func TestDefaultSystemPromptGroundsCodingToolUse(t *testing.T) {
 func TestProfilePromptsIncludeSharedToolContract(t *testing.T) {
 	for _, profile := range SupportedProfiles() {
 		prompt := prompt.Render(prompt.Spec{Role: RolePromptForProfile(profile), Profile: string(profile)})
-		if !strings.Contains(prompt, "Tool identifiers are exact") {
+		if !strings.Contains(prompt, "Tool and action identifiers are exact") {
 			t.Fatalf("profile %q missing shared tool contract", profile)
 		}
 	}

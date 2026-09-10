@@ -208,3 +208,20 @@ func TestToolDisciplineMentionsOnlyAvailableCapabilities(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderIncludesActiveGoalOnce(t *testing.T) {
+	got := Render(Spec{Workspace: "/repo", ActiveGoal: "finish model-aware compaction"})
+	if count := strings.Count(got, "# Active Goal"); count != 1 {
+		t.Fatalf("active goal section count = %d:\n%s", count, got)
+	}
+	if !strings.Contains(got, "finish model-aware compaction") {
+		t.Fatalf("active goal missing:\n%s", got)
+	}
+}
+
+func TestRenderOmitsEmptyActiveGoal(t *testing.T) {
+	got := Render(Spec{Workspace: "/repo"})
+	if strings.Contains(got, "# Active Goal") {
+		t.Fatalf("empty active goal rendered:\n%s", got)
+	}
+}

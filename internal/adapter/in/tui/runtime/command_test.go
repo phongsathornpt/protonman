@@ -40,12 +40,12 @@ func TestTUICommandSurfaceIsCanonical(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.executeCommand("/help")
 	help := plainTranscript(model)
-	for _, keep := range []string{"/help", "/model", "/provider", "/skills", "/agents", "/todo", "/transcript", "/call", "/quit"} {
+	for _, keep := range []string{"/help", "/model", "/provider", "/skills", "/agents", "/goal", "/todo", "/clear", "/transcript", "/call", "/quit"} {
 		if !strings.Contains(help, keep) {
 			t.Fatalf("help missing canonical command %q: %q", keep, help)
 		}
 	}
-	removed := []string{"tools", "project", "protonman", "config", "session", "sessions", "new", "agent", "profile", "subagent", "subagents", "reasoning", "thinking", "mode", "ask", "plan", "always-approve", "yolo", "clear", "models", "providers", "skill", "history", "exit"}
+	removed := []string{"tools", "project", "protonman", "config", "session", "sessions", "new", "agent", "profile", "subagent", "subagents", "reasoning", "thinking", "mode", "ask", "plan", "always-approve", "yolo", "models", "providers", "skill", "history", "exit"}
 	for _, name := range removed {
 		if strings.Contains(help, "/"+name+" ") {
 			t.Fatalf("help still advertises removed command /%s: %q", name, help)
@@ -54,6 +54,47 @@ func TestTUICommandSurfaceIsCanonical(t *testing.T) {
 		if !strings.Contains(plainTranscript(model), `unknown command "`+name+`"`) {
 			t.Fatalf("removed /%s did not resolve as unknown", name)
 		}
+	}
+}
+
+func TestGoalCommandSetsShowsAndClearsFullGoal(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.executeCommand("/goal implement model-aware conversation compaction")
+	if got := m.activeGoal; got != "implement model-aware conversation compaction" {
+		t.Fatalf("active goal = %q", got)
+	}
+	m.executeCommand("/goal")
+	if got := plainTranscript(m); !strings.Contains(got, "goal · implement model-aware conversation compaction") {
+		t.Fatalf("goal transcript = %q", got)
+	}
+	m.executeCommand("/goal clear")
+	if m.activeGoal != "" {
+		t.Fatalf("active goal after clear = %q", m.activeGoal)
+	}
+}
+
+func TestClearCommandResetsConversationButPreservesSessionControls(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeGoal = "finish compaction"
+	m.activeProvider = "opencode"
+	m.activeModel = "model-x"
+	m.reasoningEffort = sdk.ReasoningHigh
+	m.messages = []model.Message{{Role: model.RoleUser, Content: "old context"}}
+	m.queue = []string{"queued prompt"}
+	m.appendUser("old context")
+
+	m.executeCommand("/clear")
+	if len(m.messages) != 0 || len(m.queue) != 0 {
+		t.Fatalf("conversation state not cleared: messages=%d queue=%d", len(m.messages), len(m.queue))
+	}
+	if m.activeGoal != "finish compaction" || m.activeProvider != "opencode" || m.activeModel != "model-x" || m.reasoningEffort != sdk.ReasoningHigh {
+		t.Fatalf("session controls changed: goal=%q provider=%q model=%q reasoning=%q", m.activeGoal, m.activeProvider, m.activeModel, m.reasoningEffort)
+	}
+	if got := plainTranscript(m); strings.Contains(got, "old context") || !strings.Contains(got, "conversation cleared") {
+		t.Fatalf("transcript after clear = %q", got)
+	}
+	if m.service.Mode() != permission.ModeAsk {
+		t.Fatalf("permission changed to %q", m.service.Mode())
 	}
 }
 
