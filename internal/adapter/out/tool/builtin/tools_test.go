@@ -401,7 +401,7 @@ func TestGitStatusReportsWorkspaceRepository(t *testing.T) {
 	}
 	writeTestFile(t, workspaceRoot.Root(), "status.txt", "changed\n")
 
-	result := executeJSON(t, NewGitStatus(workspaceRoot, &recordingLauncher{}), "status-1", map[string]any{})
+	result := executeJSON(t, NewGit(workspaceRoot, &recordingLauncher{}), "status-1", map[string]any{"action": "status"})
 	if !strings.Contains(result.Output, "status.txt") {
 		t.Fatalf("git status output = %q, want status.txt", result.Output)
 	}
@@ -410,11 +410,48 @@ func TestGitStatusReportsWorkspaceRepository(t *testing.T) {
 	}
 }
 
+func TestGitArgumentsSupportsReadOnlyActions(t *testing.T) {
+	tests := []struct {
+		name  string
+		input gitInput
+		path  string
+		want  []string
+	}{
+		{name: "status", input: gitInput{Action: "status"}, want: []string{"status", "--short"}},
+		{name: "diff", input: gitInput{Action: "diff", Ref: "HEAD~1"}, path: "src", want: []string{"diff", "--no-ext-diff", "HEAD~1", "--", "src"}},
+		{name: "log", input: gitInput{Action: "log", Limit: 12}, want: []string{"log", "-n12"}},
+		{name: "show", input: gitInput{Action: "show", Ref: "HEAD"}, want: []string{"show", "HEAD"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args, err := gitArguments(tt.input, tt.path)
+			if err != nil {
+				t.Fatalf("gitArguments() error = %v", err)
+			}
+			joined := strings.Join(args, " ")
+			for _, want := range tt.want {
+				if !strings.Contains(joined, want) {
+					t.Fatalf("args = %q, want %q", joined, want)
+				}
+			}
+		})
+	}
+}
+
+func TestGitArgumentsRequiresShowRef(t *testing.T) {
+	_, err := gitArguments(gitInput{Action: "show"}, "")
+	var toolErr *tool.ToolError
+	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeInvalidArguments {
+		t.Fatalf("error = %v, want invalid_arguments", err)
+	}
+}
+
 func TestGitStatusRejectsNonRepository(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
-	_, err := NewGitStatus(workspaceRoot, &recordingLauncher{}).Execute(
+	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(workspaceRoot.Root()))
+	_, err := NewGit(workspaceRoot, &recordingLauncher{}).Execute(
 		context.Background(),
-		newJSONCall(t, "status-2", "git", map[string]any{}),
+		newJSONCall(t, "status-2", "git", map[string]any{"action": "status"}),
 	)
 	if err == nil {
 		t.Fatal("git error = nil, want non-repository error")
@@ -437,9 +474,9 @@ func TestGitStatusBoundedBufferCapsMemoryAndSignalsLimit(t *testing.T) {
 
 func TestGitStatusCancelsWhenStdoutExceedsLimit(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
-	_, err := NewGitStatus(workspaceRoot, scriptedGitLauncher{script: "yes x | head -c 2097152"}).Execute(
+	_, err := NewGit(workspaceRoot, scriptedGitLauncher{script: "yes x | head -c 2097152"}).Execute(
 		context.Background(),
-		newJSONCall(t, "status-large", "git", map[string]any{}),
+		newJSONCall(t, "status-large", "git", map[string]any{"action": "status"}),
 	)
 	var toolErr *tool.ToolError
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeOutputTooLarge {
@@ -449,9 +486,9 @@ func TestGitStatusCancelsWhenStdoutExceedsLimit(t *testing.T) {
 
 func TestGitStatusIncludesBoundedStderrDiagnostic(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
-	_, err := NewGitStatus(workspaceRoot, scriptedGitLauncher{script: "printf 'not a git repository' >&2; exit 128"}).Execute(
+	_, err := NewGit(workspaceRoot, scriptedGitLauncher{script: "printf 'not a git repository' >&2; exit 128"}).Execute(
 		context.Background(),
-		newJSONCall(t, "status-stderr", "git", map[string]any{}),
+		newJSONCall(t, "status-stderr", "git", map[string]any{"action": "status"}),
 	)
 	if err == nil || !strings.Contains(err.Error(), "not a git repository") {
 		t.Fatalf("git stderr diagnostic = %v", err)
@@ -460,9 +497,9 @@ func TestGitStatusIncludesBoundedStderrDiagnostic(t *testing.T) {
 
 func TestGitStatusRequiresLauncherFailClosed(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
-	_, err := NewGitStatus(workspaceRoot).Execute(
+	_, err := NewGit(workspaceRoot).Execute(
 		context.Background(),
-		newJSONCall(t, "status-nil", "git", map[string]any{}),
+		newJSONCall(t, "status-nil", "git", map[string]any{"action": "status"}),
 	)
 	if err == nil {
 		t.Fatal("git error = nil, want launcher-required error")
@@ -522,9 +559,9 @@ func (m *mockGitLauncher) Command(_ context.Context, dir string, command string)
 func TestGitStatusUsesLauncher(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	launcher := &mockGitLauncher{}
-	result, err := NewGitStatus(workspaceRoot, launcher).Execute(
+	result, err := NewGit(workspaceRoot, launcher).Execute(
 		context.Background(),
-		newJSONCall(t, "status-launcher", "git", map[string]any{"path": "sub"}),
+		newJSONCall(t, "status-launcher", "git", map[string]any{"action": "status", "path": "sub"}),
 	)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)

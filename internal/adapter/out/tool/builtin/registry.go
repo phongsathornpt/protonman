@@ -127,7 +127,7 @@ func NewDefaultRegistry(workspaceRoot *workspace.Workspace, options ...RegistryO
 		NewGrep(workspaceRoot),
 		NewFindFiles(workspaceRoot),
 		NewListDir(workspaceRoot),
-		NewGitStatus(workspaceRoot, cfg.launcher),
+		NewGit(workspaceRoot, cfg.launcher),
 		NewBashWithCheckpoint(workspaceRoot, cfg.launcher, checkpointStore),
 		NewEdit(workspaceRoot, checkpointStore),
 	}

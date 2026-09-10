@@ -1,6 +1,10 @@
 package prompt
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+)
 
 const Version = "7"
 
@@ -11,10 +15,11 @@ type ToolCapabilities struct {
 }
 
 type MutationCapabilities struct {
-	Workspace bool
-	Task      bool
-	Agent     bool
-	External  bool
+	Source   bool
+	Context  bool
+	Task     bool
+	Agent    bool
+	External bool
 }
 
 type Spec struct {
@@ -59,7 +64,7 @@ func Render(spec Spec) string {
 	if spec.Capabilities.MCP {
 		sections = append(sections, mcpSection())
 	}
-	if spec.Mutations.Workspace {
+	if spec.Mutations.Source {
 		sections = append(sections, verificationSection())
 	}
 	if section := modelSection(spec); section != "" {
@@ -130,15 +135,15 @@ func toolDisciplineSection(spec Spec) string {
 		"# Tool Discipline",
 		"- Prefer the narrowest dedicated capability that directly represents the operation; use a tool only when it materially changes evidence, state, implementation, or verification.",
 	}
-	if hasTool(spec, "read") || hasTool(spec, "grep") || hasTool(spec, "find") || hasTool(spec, "ls") || hasTool(spec, "edit") {
+	if hasTool(spec, "read") || hasTool(spec, tool.NameGrep) || hasTool(spec, "find") || hasTool(spec, "ls") || hasTool(spec, "edit") {
 		lines = append(lines, "- Workspace filesystem paths are relative to the workspace root. Use . for the workspace root; never use / or another absolute filesystem path with workspace tools.")
 	}
 	if hasTool(spec, "read") {
 		lines = append(lines, "- Use read for known workspace artifacts. Use grep for workspace content search and find for path discovery.")
 	}
-	if hasTool(spec, "grep") || hasTool(spec, "find") || hasTool(spec, "ls") {
+	if hasTool(spec, tool.NameGrep) || hasTool(spec, "find") || hasTool(spec, "ls") {
 		parts := make([]string, 0, 3)
-		if hasTool(spec, "grep") {
+		if hasTool(spec, tool.NameGrep) {
 			parts = append(parts, "grep searches file contents")
 		}
 		if hasTool(spec, "find") {
@@ -150,7 +155,7 @@ func toolDisciplineSection(spec Spec) string {
 		lines = append(lines, "- Repository discovery capabilities: "+strings.Join(parts, "; ")+".")
 	}
 	if hasTool(spec, "git") {
-		lines = append(lines, "- Use git action=status for compact branch and working-tree state; use bash for Git operations not exposed by git when bash is available.")
+		lines = append(lines, "- Use git action=status for branch/worktree state, diff for changes, log for bounded history, and show for one revision; use bash only for Git operations not exposed by git when bash is available.")
 	}
 	if hasTool(spec, "math") {
 		lines = append(lines, "- Use math for deterministic numeric computation.")
@@ -170,7 +175,7 @@ func toolDisciplineSection(spec Spec) string {
 		"- If repeated attempts are not producing new progress, change strategy or report the blocker instead of looping.",
 		"- Do not continue optional exploration after the user's requested work is complete.",
 	)
-	if spec.Mutations.Workspace {
+	if spec.Mutations.Source {
 		lines = append(lines,
 			"- For implementation work, finish once the requested behavior is implemented, relevant verification passes, and no required work remains.",
 		)
