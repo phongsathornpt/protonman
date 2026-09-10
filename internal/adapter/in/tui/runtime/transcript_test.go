@@ -605,14 +605,12 @@ func TestTranscriptRawRichTogglePreservesRelativeScrollPosition(t *testing.T) {
 	if before <= 0 || before >= 1 {
 		t.Fatalf("test setup scroll percent=%f, want middle position", before)
 	}
-	updated, _ := m.updateTranscriptKey(testText("r"))
-	m = updated.(*bubbleModel)
+	_ = m.updateTranscriptKey(testText("r"))
 	afterRaw := m.panes.transcript.ScrollPercent()
 	if diff := math.Abs(afterRaw - before); diff > 0.08 {
 		t.Fatalf("raw toggle scroll percent jumped from %.3f to %.3f", before, afterRaw)
 	}
-	updated, _ = m.updateTranscriptKey(testText("r"))
-	m = updated.(*bubbleModel)
+	_ = m.updateTranscriptKey(testText("r"))
 	afterRich := m.panes.transcript.ScrollPercent()
 	if diff := math.Abs(afterRich - before); diff > 0.08 {
 		t.Fatalf("rich toggle scroll percent jumped from %.3f to %.3f", before, afterRich)
@@ -628,8 +626,7 @@ func TestTranscriptOverlayIncludesLiveAssistantTail(t *testing.T) {
 	if !strings.Contains(m.transcriptOverlayView(), "streaming now") {
 		t.Fatalf("transcript overlay omitted active cell: %s", m.transcriptOverlayView())
 	}
-	updated, _ := m.updateTranscriptKey(testText("r"))
-	m = updated.(*bubbleModel)
+	_ = m.updateTranscriptKey(testText("r"))
 	if !m.panes.rawTranscript {
 		t.Fatal("r did not toggle raw transcript mode")
 	}

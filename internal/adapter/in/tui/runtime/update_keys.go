@@ -10,11 +10,11 @@ func (m *bubbleModel) matchesGlobalShortcut(message tea.KeyPressMsg) bool {
 	return key.Matches(message, m.keys.ToggleTodo) || key.Matches(message, m.keys.Transcript) || key.Matches(message, m.keys.CyclePermission) || key.Matches(message, m.keys.ToggleSkills) || key.Matches(message, m.keys.ToggleModel)
 }
 
-func (m *bubbleModel) handleInterruptKey() (tea.Model, tea.Cmd) {
+func (m *bubbleModel) handleInterruptKey() tea.Cmd {
 	if m.panes.showTranscript {
 		m.closeTranscriptOverlay()
 		m.requestRelayout()
-		return m, nil
+		return nil
 	}
 	if top := m.panes.bottom.top(); top != nil && top.ID() != permissionViewID && top.ID() != slashViewID {
 		if provider, ok := top.(*providerPaneView); ok {
@@ -22,12 +22,12 @@ func (m *bubbleModel) handleInterruptKey() (tea.Model, tea.Cmd) {
 		}
 		m.panes.bottom.remove(top.ID())
 		m.requestRelayout()
-		return m, nil
+		return nil
 	}
 	if m.busy && m.turnCancel != nil {
 		m.cancelActiveTurn()
 		m.queue = nil
-		return m, nil
+		return nil
 	}
 	prompt := m.panes.bottom.prompt()
 	if prompt.Value() != "" || m.panes.bottom.bashMode() {
@@ -35,31 +35,31 @@ func (m *bubbleModel) handleInterruptKey() (tea.Model, tea.Cmd) {
 		m.setBashMode(false)
 		m.syncSlashView()
 		m.requestRelayout()
-		return m, nil
+		return nil
 	}
-	return m, tea.Quit
+	return tea.Quit
 }
 
-func (m *bubbleModel) updateKey(message tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+func (m *bubbleModel) updateKey(message tea.KeyPressMsg) tea.Cmd {
 	top := m.panes.bottom.top()
 	if top != nil && top.PresentationMode() == paneBlocking {
 		if handled, command := m.handlePaneKey(message); handled {
-			return m, m.withSpinner(command)
+			return m.withSpinner(command)
 		}
-		return m, nil
+		return nil
 	}
 	if m.matchesGlobalShortcut(message) {
 		if handled, command := m.handleGlobalKey(message); handled {
-			return m, m.withSpinner(command)
+			return m.withSpinner(command)
 		}
 	}
 	if handled, command := m.handlePaneKey(message); handled {
-		return m, m.withSpinner(command)
+		return m.withSpinner(command)
 	}
 	if handled, command := m.handleGlobalKey(message); handled {
-		return m, m.withSpinner(command)
+		return m.withSpinner(command)
 	}
-	return m, m.handlePromptKey(message)
+	return m.handlePromptKey(message)
 }
 
 func (m *bubbleModel) handlePaneKey(message tea.KeyPressMsg) (bool, tea.Cmd) {

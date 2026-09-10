@@ -42,15 +42,12 @@ func (m *bubbleModel) updateTerminalEvent(msg tea.Msg) (tea.Cmd, bool) {
 		return command, true
 	case tea.KeyPressMsg:
 		if key.Matches(message, m.keys.Quit) {
-			_, command := m.handleInterruptKey()
-			return command, true
+			return m.handleInterruptKey(), true
 		}
 		if m.panes.showTranscript {
-			_, command := m.updateTranscriptKey(message)
-			return command, true
+			return m.updateTranscriptKey(message), true
 		}
-		_, command := m.updateKey(message)
-		return command, true
+		return m.updateKey(message), true
 	case tea.MouseMsg:
 		return m.updateMouseEvent(message), true
 	default:
