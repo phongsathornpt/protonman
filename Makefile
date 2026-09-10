@@ -50,9 +50,9 @@ install: build
 ## run-bin: Alias for run
 run-bin: run
 
-## test: Run unit and adapter tests
+## test: Run the complete repository test suite
 test:
-	go test ./cmd/... ./internal/...
+	go test ./...
 
 ## test-race: Run all tests with race detector
 test-race:
