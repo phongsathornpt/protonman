@@ -60,7 +60,7 @@ func (m *bubbleModel) buildFrameChrome() frameChrome {
 	}
 	if m.panes.bottom.composerVisible() {
 		// The composer is the textarea plus one bottom separator row.
-		frame.height += m.panes.bottom.prompt().Height() + 1
+		frame.height += m.panes.bottom.prompt().Height() + 2
 	}
 	if frame.footer != "" {
 		frame.height += lipgloss.Height(frame.footer)
