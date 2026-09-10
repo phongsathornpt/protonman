@@ -7,6 +7,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
+	"github.com/phongsathornpt/protonman/internal/core/agentidentity"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
@@ -19,6 +20,8 @@ type clientConfig struct {
 	sessionID     string
 	clientName    string
 	userAgent     string
+	agentType     agentidentity.Type
+	agentProfile  string
 	httpClient    *http.Client
 	vision        *bool
 	tools         *bool
@@ -40,6 +43,14 @@ func WithClientName(clientName string) ClientOption {
 
 func WithUserAgent(userAgent string) ClientOption {
 	return func(c *clientConfig) { c.userAgent = userAgent }
+}
+
+func WithAgentType(agentType agentidentity.Type) ClientOption {
+	return func(c *clientConfig) { c.agentType = agentType }
+}
+
+func WithAgentProfile(profile string) ClientOption {
+	return func(c *clientConfig) { c.agentProfile = strings.TrimSpace(profile) }
 }
 
 func WithVisionSupport(supported bool) ClientOption {
@@ -77,6 +88,7 @@ func newClientConfig(baseURL, apiKey, modelID string) clientConfig {
 		modelID:    strings.TrimSpace(modelID),
 		clientName: "proton",
 		userAgent:  buildinfo.UserAgent(),
+		agentType:  agentidentity.TypeProtonman,
 		httpClient: &http.Client{Timeout: runtimepolicy.ModelRequestTimeout},
 	}
 }
