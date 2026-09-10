@@ -430,8 +430,8 @@ func TestModelSetupToggleKeybinding(t *testing.T) {
 	}
 	updated, _ = bModel.Update(testAltText("m"))
 	bModel = updated.(*bubbleModel)
-	if !bModel.panes.bottom.has(modelSetupViewID) {
-		t.Fatal("expected model select modal open after Alt+M")
+	if bModel.panes.bottom.has(modelSetupViewID) {
+		t.Fatal("legacy Alt+M alias reopened model setup")
 	}
 }
 
@@ -807,7 +807,7 @@ func TestTUIWithCoordinatorOption(t *testing.T) {
 	}
 }
 
-func TestTUICycleModeUpdatesCoordinator(t *testing.T) {
+func TestTUICyclePermissionUpdatesCoordinator(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	policy, err := permission.NewPolicy(permission.Config{})
 	if err != nil {
@@ -825,7 +825,7 @@ func TestTUICycleModeUpdatesCoordinator(t *testing.T) {
 	if model.planMode {
 		t.Fatal("expected planMode initially false")
 	}
-	model.cycleMode()
+	model.cyclePermission()
 	if !model.planMode {
 		t.Fatal("expected planMode to be true after first cycle")
 	}
@@ -841,7 +841,7 @@ func TestTUICycleModeUpdatesCoordinator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected plan mode guard to allow read, got: %v", err)
 	}
-	model.cycleMode()
+	model.cyclePermission()
 	if model.planMode {
 		t.Fatal("expected planMode to be false after second cycle")
 	}
@@ -851,7 +851,7 @@ func TestTUICycleModeUpdatesCoordinator(t *testing.T) {
 	if coordinator.PermissionMode() != permission.ModeAlwaysApprove {
 		t.Fatalf("expected coordinator mode %v, got %v", permission.ModeAlwaysApprove, coordinator.PermissionMode())
 	}
-	model.cycleMode()
+	model.cyclePermission()
 	if coordinator.PermissionMode() != permission.ModeAsk {
 		t.Fatalf("expected coordinator mode %v, got %v", permission.ModeAsk, coordinator.PermissionMode())
 	}
@@ -990,7 +990,7 @@ func TestModelSetupEmptyFilterShowsSearchInput(t *testing.T) {
 	}
 }
 
-func TestModelSetupShiftTabCyclesProvidersWithoutLeaking(t *testing.T) {
+func TestModelSetupShiftTabCyclesPermissionWithoutChangingProvider(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.providers = map[string]config.ProviderConfig{
 		"alpha": {Name: "alpha", BaseURL: "https://alpha.example.com", APIKey: "k1"},
@@ -1002,17 +1002,13 @@ func TestModelSetupShiftTabCyclesProvidersWithoutLeaking(t *testing.T) {
 		t.Fatal("expected modelSetupViewID open")
 	}
 	initialIdx := view.providerIndex
-	initialMode := bModel.service.Mode()
-
-	handled, _ := bModel.handlePaneKey(testShiftTab())
-	if !handled {
-		t.Fatal("shift+tab was not handled by model setup")
+	updated, _ := bModel.Update(testShiftTab())
+	bModel = updated.(*bubbleModel)
+	if !bModel.planMode {
+		t.Fatal("shift+tab did not cycle permission into plan mode")
 	}
-	if bModel.service.Mode() != initialMode {
-		t.Fatalf("permission mode changed from %s to %s on shift+tab", initialMode, bModel.service.Mode())
-	}
-	if view.providerIndex == initialIdx && len(view.providerNames) > 1 {
-		t.Fatalf("providerIndex did not change on shift+tab: %d", view.providerIndex)
+	if view.providerIndex != initialIdx {
+		t.Fatalf("shift+tab changed provider index from %d to %d", initialIdx, view.providerIndex)
 	}
 }
 

@@ -86,7 +86,7 @@ func (m bubbleModel) shortcutHint() string {
 	})
 }
 
-func (m *bubbleModel) cycleMode() {
+func (m *bubbleModel) cyclePermission() {
 	mode := m.service.Mode()
 	switch {
 	case m.planMode:
@@ -100,6 +100,8 @@ func (m *bubbleModel) cycleMode() {
 		}
 		m.setPlanEnabled(true)
 	}
+	m.syncPermissionModePane()
+	m.requestRelayout()
 }
 
 func (m *bubbleModel) setPlanEnabled(enabled bool) {

@@ -198,7 +198,7 @@ func (v *modelSetupPaneView) selectionStatus(width int) string {
 }
 
 func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
-	if message.String() == "ctrl+p" || message.String() == "alt+m" {
+	if message.String() == "ctrl+p" {
 		v.cancelFetch()
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: modelSetupViewID}}
 	}
@@ -253,13 +253,6 @@ func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyP
 	case "tab":
 		if len(v.providerNames) > 1 {
 			v.providerIndex = (v.providerIndex + 1) % len(v.providerNames)
-			v.reasoningPreference = v.selectedReasoning()
-			return paneKeyResult{handled: true, action: paneAction{kind: paneActionReloadModels}}
-		}
-		return paneKeyResult{handled: true}
-	case "shift+tab":
-		if len(v.providerNames) > 1 {
-			v.providerIndex = (v.providerIndex - 1 + len(v.providerNames)) % len(v.providerNames)
 			v.reasoningPreference = v.selectedReasoning()
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionReloadModels}}
 		}

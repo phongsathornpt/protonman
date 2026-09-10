@@ -148,17 +148,16 @@ type bubbleModel struct {
 }
 
 type bubbleKeyMap struct {
-	Submit       key.Binding
-	Newline      key.Binding
-	Clear        key.Binding
-	Quit         key.Binding
-	PageUp       key.Binding
-	PageDown     key.Binding
-	ToggleTodo   key.Binding
-	Transcript   key.Binding
-	CycleMode    key.Binding
-	ToggleSkills key.Binding
-	ToggleModel  key.Binding
+	Submit          key.Binding
+	Newline         key.Binding
+	Quit            key.Binding
+	PageUp          key.Binding
+	PageDown        key.Binding
+	ToggleTodo      key.Binding
+	Transcript      key.Binding
+	CyclePermission key.Binding
+	ToggleSkills    key.Binding
+	ToggleModel     key.Binding
 }
 
 func newBubbleModel(ctx context.Context, service *toolcall.Service, registry tool.Registry, todo []tododomain.Item, runner app.Conversation, bridge *permissionBridge, workDir string, initialMessages ...[]model.Message) *bubbleModel {
@@ -241,7 +240,7 @@ func disableViewportKeys(pane *viewport.Model) {
 }
 
 func newBubbleKeyMap() bubbleKeyMap {
-	return bubbleKeyMap{Submit: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send")), Newline: key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("ctrl+j", "newline")), Clear: key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear")), Quit: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")), PageUp: key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "scroll")), PageDown: key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "scroll")), ToggleTodo: key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o", "todos")), Transcript: key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "transcript")), CycleMode: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "mode")), ToggleSkills: key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "skills")), ToggleModel: key.NewBinding(key.WithKeys("ctrl+p", "alt+m"), key.WithHelp("ctrl+p", "model"))}
+	return bubbleKeyMap{Submit: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send")), Newline: key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("ctrl+j", "newline")), Quit: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")), PageUp: key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "scroll")), PageDown: key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "scroll")), ToggleTodo: key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o", "todos")), Transcript: key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "transcript")), CyclePermission: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "permission")), ToggleSkills: key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "skills")), ToggleModel: key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "model"))}
 }
 
 func (k bubbleKeyMap) ShortHelp() []key.Binding {
@@ -249,7 +248,7 @@ func (k bubbleKeyMap) ShortHelp() []key.Binding {
 }
 
 func (k bubbleKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Submit, k.Newline, k.Clear, k.Quit}, {k.PageUp, k.PageDown, k.ToggleTodo, k.Transcript}, {k.CycleMode, k.ToggleSkills, k.ToggleModel}}
+	return [][]key.Binding{{k.Submit, k.Newline, k.Quit}, {k.PageUp, k.PageDown, k.ToggleTodo, k.Transcript}, {k.CyclePermission, k.ToggleSkills, k.ToggleModel}}
 }
 
 func (m *bubbleModel) Init() tea.Cmd {

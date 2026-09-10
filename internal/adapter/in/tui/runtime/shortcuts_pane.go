@@ -17,7 +17,7 @@ func (*shortcutsPaneView) Render(ctx paneRenderContext) string {
 		userStyle.Render("ctrl+t") + mutedStyle.Render("  Transcript"),
 		userStyle.Render("ctrl+o") + mutedStyle.Render("  Tasks"),
 		userStyle.Render("ctrl+s") + mutedStyle.Render("  Skills"),
-		userStyle.Render("shift+tab") + mutedStyle.Render("  Cycle mode"),
+		userStyle.Render("shift+tab") + mutedStyle.Render("  Cycle permission"),
 		userStyle.Render("ctrl+c") + mutedStyle.Render("  Cancel or quit"),
 	}
 	help := paneKeyboardHelp(ctx.width-4, "esc/?", "Go Back")

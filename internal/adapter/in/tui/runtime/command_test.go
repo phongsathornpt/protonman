@@ -108,7 +108,7 @@ func TestUnifiedModelSetupAdjustsThinkingBeforeApply(t *testing.T) {
 	}
 }
 
-func TestUnifiedModelSetupShiftTabCyclesProviderWithoutPermissionLeak(t *testing.T) {
+func TestUnifiedModelSetupShiftTabCyclesPermissionWithoutProviderLeak(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.providers = map[string]config.ProviderConfig{
 		"alpha": {Name: "alpha", Type: "openai", BaseURL: "https://alpha.example/v1", APIKey: "x"},
@@ -120,16 +120,13 @@ func TestUnifiedModelSetupShiftTabCyclesProviderWithoutPermissionLeak(t *testing
 	m.executeCommand("/model")
 	view := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	initialProvider := view.activeProviderName()
-	initialMode := m.service.Mode()
-	handled, _ := m.handlePaneKey(testShiftTab())
-	if !handled {
-		t.Fatal("shift+tab was not handled by model setup")
+	updated, _ := m.Update(testShiftTab())
+	m = updated.(*bubbleModel)
+	if !m.planMode {
+		t.Fatal("shift+tab did not cycle permission into plan mode")
 	}
-	if view.activeProviderName() == initialProvider {
-		t.Fatal("shift+tab did not cycle provider")
-	}
-	if m.service.Mode() != initialMode {
-		t.Fatalf("permission mode changed from %s to %s", initialMode, m.service.Mode())
+	if view.activeProviderName() != initialProvider {
+		t.Fatalf("shift+tab changed provider from %q to %q", initialProvider, view.activeProviderName())
 	}
 }
 
@@ -682,26 +679,26 @@ func TestStatusBarNeverWrapsOn80Columns(t *testing.T) {
 	}
 }
 
-func TestShortcutMatrixGlobalKeysSurviveModalRouting(t *testing.T) {
-	t.Run("permission lets transcript shortcut bubble", func(t *testing.T) {
+func TestShortcutMatrixBlockingPanesOwnGlobalKeys(t *testing.T) {
+	t.Run("permission blocks transcript shortcut", func(t *testing.T) {
 		m := newTestBubbleModel(t, permission.ModeAsk, nil)
 		m.panes.bottom.push(&permissionPaneView{})
 		updated, _ := m.Update(testCtrl('t'))
 		m = updated.(*bubbleModel)
-		if !m.panes.showTranscript {
-			t.Fatal("ctrl+t did not open transcript above permission pane")
+		if m.panes.showTranscript {
+			t.Fatal("ctrl+t escaped pending permission pane")
 		}
 		if !m.panes.bottom.has(permissionViewID) {
 			t.Fatal("transcript shortcut removed pending permission pane")
 		}
 	})
-	t.Run("provider lets transcript shortcut bubble", func(t *testing.T) {
+	t.Run("provider blocks transcript shortcut", func(t *testing.T) {
 		m := newTestBubbleModel(t, permission.ModeAsk, nil)
 		m.panes.bottom.push(newProviderPaneView())
 		updated, _ := m.Update(testCtrl('t'))
 		m = updated.(*bubbleModel)
-		if !m.panes.showTranscript {
-			t.Fatal("ctrl+t did not open transcript above provider pane")
+		if m.panes.showTranscript {
+			t.Fatal("ctrl+t escaped provider editor")
 		}
 		if !m.panes.bottom.has(providerViewID) {
 			t.Fatal("transcript shortcut unexpectedly closed provider pane")

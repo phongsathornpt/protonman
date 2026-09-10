@@ -7,7 +7,7 @@ import (
 )
 
 func (m *bubbleModel) matchesGlobalShortcut(message tea.KeyPressMsg) bool {
-	return key.Matches(message, m.keys.Clear) || key.Matches(message, m.keys.ToggleTodo) || key.Matches(message, m.keys.Transcript) || key.Matches(message, m.keys.CycleMode) || key.Matches(message, m.keys.ToggleSkills) || key.Matches(message, m.keys.ToggleModel)
+	return key.Matches(message, m.keys.ToggleTodo) || key.Matches(message, m.keys.Transcript) || key.Matches(message, m.keys.CyclePermission) || key.Matches(message, m.keys.ToggleSkills) || key.Matches(message, m.keys.ToggleModel)
 }
 
 func (m *bubbleModel) handleInterruptKey() (tea.Model, tea.Cmd) {
@@ -41,6 +41,18 @@ func (m *bubbleModel) handleInterruptKey() (tea.Model, tea.Cmd) {
 }
 
 func (m *bubbleModel) updateKey(message tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	top := m.panes.bottom.top()
+	if top != nil && top.PresentationMode() == paneBlocking {
+		if handled, command := m.handlePaneKey(message); handled {
+			return m, m.withSpinner(command)
+		}
+		return m, nil
+	}
+	if m.matchesGlobalShortcut(message) {
+		if handled, command := m.handleGlobalKey(message); handled {
+			return m, m.withSpinner(command)
+		}
+	}
 	if handled, command := m.handlePaneKey(message); handled {
 		return m, m.withSpinner(command)
 	}
@@ -75,12 +87,11 @@ func (m *bubbleModel) handlePaneKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 
 func (m *bubbleModel) handleGlobalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch {
-	case key.Matches(message, m.keys.CycleMode):
-		m.cycleMode()
+	case key.Matches(message, m.keys.CyclePermission):
+		m.cyclePermission()
 		return true, nil
 	case key.Matches(message, m.keys.Transcript):
-		m.panes.showTranscript = true
-		m.refreshTranscriptViewport(true)
+		m.openTranscriptOverlay()
 		return true, nil
 	case key.Matches(message, m.keys.ToggleSkills):
 		if m.panes.bottom.has(skillsViewID) {
@@ -102,10 +113,6 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 			return true, nil
 		}
 		return true, m.openModelSetupPane()
-	case key.Matches(message, m.keys.Clear):
-		m.resetTranscript()
-		m.refreshViewport()
-		return true, nil
 	case key.Matches(message, m.keys.ToggleTodo):
 		return true, m.toggleTodoPane()
 	case key.Matches(message, m.keys.PageUp):

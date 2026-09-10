@@ -11,8 +11,7 @@ func (m *bubbleModel) executeConversationCommand(name, argument string) tea.Cmd 
 	case "transcript":
 		switch strings.ToLower(strings.TrimSpace(argument)) {
 		case "":
-			m.panes.showTranscript = true
-			m.refreshTranscriptViewport(true)
+			m.openTranscriptOverlay()
 		case "clear":
 			m.resetTranscript()
 		default:

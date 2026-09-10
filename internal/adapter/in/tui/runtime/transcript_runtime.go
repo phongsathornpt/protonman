@@ -9,6 +9,14 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+func (m *bubbleModel) openTranscriptOverlay() {
+	if m == nil {
+		return
+	}
+	m.panes.showTranscript = true
+	m.refreshTranscriptViewport(true)
+}
+
 func (m *bubbleModel) closeTranscriptOverlay() {
 	if m == nil {
 		return

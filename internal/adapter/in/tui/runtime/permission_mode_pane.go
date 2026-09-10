@@ -59,19 +59,29 @@ func (v *permissionModePaneView) HandlePaneKey(_ paneRenderContext, message tea.
 	}
 }
 
+func currentPermissionModeChoice(m *bubbleModel) permissionModeChoice {
+	if m != nil && m.planMode {
+		return permissionModePlan
+	}
+	if m != nil && m.service != nil && m.service.Mode() == permission.ModeAlwaysApprove {
+		return permissionModeAlwaysApprove
+	}
+	return permissionModeAsk
+}
+
+func (m *bubbleModel) syncPermissionModePane() {
+	if view, _ := m.panes.bottom.find(permissionModeViewID).(*permissionModePaneView); view != nil {
+		view.index = int(currentPermissionModeChoice(m))
+	}
+}
+
 func (m *bubbleModel) openPermissionModePane() {
 	if m.panes.bottom.has(permissionModeViewID) {
 		m.panes.bottom.remove(permissionModeViewID)
 		m.requestRelayout()
 		return
 	}
-	index := 0
-	if m.planMode {
-		index = 1
-	} else if m.service != nil && m.service.Mode() == permission.ModeAlwaysApprove {
-		index = 2
-	}
-	m.panes.bottom.push(&permissionModePaneView{index: index})
+	m.panes.bottom.push(&permissionModePaneView{index: int(currentPermissionModeChoice(m))})
 	m.requestRelayout()
 }
 
@@ -86,6 +96,7 @@ func (m *bubbleModel) applyPermissionModeChoice(choice permissionModeChoice) {
 	default:
 		_ = m.setPermissionMode(permission.ModeAsk)
 	}
+	m.syncPermissionModePane()
 	m.requestRelayout()
 }
 
