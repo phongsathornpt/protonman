@@ -536,3 +536,24 @@ func TestScrolledViewportSurvivesLiveAgentChromeStress(t *testing.T) {
 		t.Fatal("explicit page down to bottom did not re-enable follow tail")
 	}
 }
+
+func TestAgentRuntimeStatePreservesReasoningPreferenceAcrossRestart(t *testing.T) {
+	state := newAgentRuntimeState(config.AgentConfig{ReasoningEffort: sdk.ReasoningHigh}, true)
+	first := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "")
+	state.apply(first)
+	first.reasoningEffort = sdk.ReasoningDefault
+	first.reasoningPreference = sdk.ReasoningHigh
+	first.reasoningPreferenceSet = true
+	first.reasoningPreferenceSource = reasoningPreferenceSession
+	first.reasoningCompatibilityFallback = true
+	state.capture(first)
+
+	restarted := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "")
+	state.apply(restarted)
+	if restarted.reasoningEffort != sdk.ReasoningDefault || restarted.reasoningPreference != sdk.ReasoningHigh {
+		t.Fatalf("restart effective=%q preference=%q, want auto/high", restarted.reasoningEffort, restarted.reasoningPreference)
+	}
+	if !restarted.reasoningPreferenceSet || restarted.reasoningPreferenceSource != reasoningPreferenceSession || !restarted.reasoningCompatibilityFallback {
+		t.Fatalf("restart preference metadata lost: set=%v source=%v fallback=%v", restarted.reasoningPreferenceSet, restarted.reasoningPreferenceSource, restarted.reasoningCompatibilityFallback)
+	}
+}

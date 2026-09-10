@@ -541,6 +541,7 @@ func TestProviderListSlashCommand(t *testing.T) {
 
 func TestModelSelectPagedNavigation(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
+	m.activeProvider = model.DefaultProtonmanName
 	seedModelSelectCatalog(m)
 	m.resize(40, 14)
 	m.executeCommand("/model")
@@ -1159,5 +1160,38 @@ func TestModelPickerDefaultsToOpenCodeWhenNoProviderConfigured(t *testing.T) {
 	view := newModelSelectPaneView(m)
 	if got := view.activeProviderName(); got != model.DefaultOpenCodeName {
 		t.Fatalf("default picker provider = %q, want %q", got, model.DefaultOpenCodeName)
+	}
+}
+
+func TestReasoningCompatibilityFallbackPreservesAndRestoresPreference(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.activeProvider = "custom"
+	m.projectConfigProvenance = map[string]config.ValueSource{config.FieldAgentReasoningEffort: config.SourceUser}
+	m.applyReasoningPreference(sdk.ReasoningHigh, reasoningPreferenceConfig)
+
+	no := false
+	m.activeModel = "plain-model"
+	m.modelCatalogs.Set("custom", []model.RemoteModel{{ID: "plain-model", Reasoning: &modelprofile.CatalogReasoning{Supported: &no}}})
+	if !m.reconcileReasoningForActiveModel() {
+		t.Fatal("unsupported model did not trigger compatibility fallback")
+	}
+	if m.reasoningEffort != sdk.ReasoningDefault || m.reasoningPreference != sdk.ReasoningHigh {
+		t.Fatalf("fallback effective=%q preference=%q, want auto/high", m.reasoningEffort, m.reasoningPreference)
+	}
+	if got := m.reasoningSourceLabel(); got != "compatibility ← user" {
+		t.Fatalf("fallback source = %q, want compatibility ← user", got)
+	}
+
+	yes := true
+	m.activeModel = "reasoning-model"
+	m.modelCatalogs.Set("custom", []model.RemoteModel{{ID: "reasoning-model", Reasoning: &modelprofile.CatalogReasoning{Supported: &yes, Levels: []sdk.ReasoningEffort{sdk.ReasoningHigh}}}})
+	if !m.reconcileReasoningForActiveModel() {
+		t.Fatal("compatible model did not restore requested reasoning")
+	}
+	if m.reasoningEffort != sdk.ReasoningHigh || m.reasoningCompatibilityFallback {
+		t.Fatalf("restored effective=%q fallback=%v, want high/false", m.reasoningEffort, m.reasoningCompatibilityFallback)
+	}
+	if got := m.reasoningSourceLabel(); got != "user" {
+		t.Fatalf("restored source = %q, want user", got)
 	}
 }

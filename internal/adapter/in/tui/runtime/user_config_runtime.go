@@ -152,8 +152,7 @@ func (m *bubbleModel) updateUserSettingSaved(message userSettingSavedMsg) (tea.M
 			m.refreshViewport()
 			return m, nil
 		}
-		m.reasoningEffort = effort
-		m.agents.SetReasoningEffort(effort)
+		m.applyReasoningPreference(effort, reasoningPreferenceConfig)
 		if m.projectConfigProvenance == nil {
 			m.projectConfigProvenance = make(map[string]config.ValueSource)
 		}

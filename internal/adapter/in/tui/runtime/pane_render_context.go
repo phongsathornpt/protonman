@@ -63,7 +63,7 @@ func newPaneRenderContext(m *bubbleModel) paneRenderContext {
 		{Label: "Model", Value: projectpane.FallbackValue(m.activeModel, "not selected"), Source: string(m.projectSource(config.FieldModelDefault))},
 		{Label: "Provider", Value: projectpane.FallbackValue(m.activeProvider, "not selected"), Source: string(m.projectSource(config.FieldModelProvider))},
 		{Label: "Agent", Value: projectpane.FallbackValue(m.agentProfile, "universal"), Source: string(m.projectSource(config.FieldAgentProfile))},
-		{Label: "Thinking", Value: reasoningEffortLabel(m.reasoningEffort), Source: string(m.projectSource(config.FieldAgentReasoningEffort))},
+		{Label: "Thinking", Value: reasoningEffortLabel(m.reasoningEffort), Source: m.reasoningSourceLabel()},
 		{Label: "Subagents", Value: commandutil.SubagentsEnabledLabel(m.subagentsEnabled), Source: string(m.projectSource(config.FieldAgentSubagentsEnabled))},
 		{Label: "Permission", Value: permissionMode, Source: string(m.projectSource(config.FieldUIPermissionMode))},
 		{Label: "Tool calls", Value: projectpane.FormatLimit(m.maxToolCalls), Source: string(m.projectSource(config.FieldAgentMaxToolCalls))},

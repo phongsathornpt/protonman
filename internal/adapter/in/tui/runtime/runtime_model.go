@@ -38,15 +38,26 @@ type turnProgress struct {
 	ToolCalls int
 }
 
+type reasoningPreferenceSource uint8
+
+const (
+	reasoningPreferenceConfig reasoningPreferenceSource = iota
+	reasoningPreferenceSession
+)
+
 type agentModelState struct {
-	agents           app.Agents
-	agentEvents      <-chan agent.Event
-	agentSnapshot    []agent.AgentStatus
-	agentActivity    map[string]AgentActivity
-	agentHistory     agentui.Tracker
-	agentProfile     string
-	subagentsEnabled bool
-	reasoningEffort  sdk.ReasoningEffort
+	agents                         app.Agents
+	agentEvents                    <-chan agent.Event
+	agentSnapshot                  []agent.AgentStatus
+	agentActivity                  map[string]AgentActivity
+	agentHistory                   agentui.Tracker
+	agentProfile                   string
+	subagentsEnabled               bool
+	reasoningEffort                sdk.ReasoningEffort
+	reasoningPreference            sdk.ReasoningEffort
+	reasoningPreferenceSet         bool
+	reasoningPreferenceSource      reasoningPreferenceSource
+	reasoningCompatibilityFallback bool
 }
 
 type turnModelState struct {

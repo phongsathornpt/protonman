@@ -137,3 +137,17 @@ func (m *bubbleModel) projectSource(field string) config.ValueSource {
 	}
 	return projectConfigSource(m.projectConfigProvenance, field)
 }
+
+func (m *bubbleModel) reasoningSourceLabel() string {
+	if m == nil {
+		return string(config.SourceDefault)
+	}
+	source := string(m.projectSource(config.FieldAgentReasoningEffort))
+	if m.reasoningPreferenceSet && m.reasoningPreferenceSource == reasoningPreferenceSession {
+		source = "session"
+	}
+	if m.reasoningCompatibilityFallback {
+		return "compatibility ← " + source
+	}
+	return source
+}

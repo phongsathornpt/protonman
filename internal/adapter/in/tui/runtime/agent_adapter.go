@@ -8,16 +8,28 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 const agentsViewID = "agents"
 
 type AgentActivity = agentui.Activity
 
-type agentRuntimeState struct{ state agentui.RuntimeState }
+type agentRuntimeState struct {
+	state                          agentui.RuntimeState
+	reasoningPreference            sdk.ReasoningEffort
+	reasoningPreferenceSet         bool
+	reasoningPreferenceSource      reasoningPreferenceSource
+	reasoningCompatibilityFallback bool
+}
 
 func newAgentRuntimeState(cfg config.AgentConfig, configured bool) agentRuntimeState {
-	return agentRuntimeState{state: agentui.NewRuntimeState(cfg, configured)}
+	state := agentRuntimeState{state: agentui.NewRuntimeState(cfg, configured)}
+	if configured {
+		state.reasoningPreference = cfg.ReasoningEffort
+		state.reasoningPreferenceSet = true
+	}
+	return state
 }
 
 func (s agentRuntimeState) apply(m *bubbleModel) {
@@ -28,6 +40,10 @@ func (s agentRuntimeState) apply(m *bubbleModel) {
 	m.agentProfile = s.state.Profile
 	m.subagentsEnabled = s.state.SubagentsEnabled
 	m.reasoningEffort = s.state.ReasoningEffort
+	m.reasoningPreference = s.reasoningPreference
+	m.reasoningPreferenceSet = s.reasoningPreferenceSet
+	m.reasoningPreferenceSource = s.reasoningPreferenceSource
+	m.reasoningCompatibilityFallback = s.reasoningCompatibilityFallback
 	m.agents.SetEnabled(s.state.SubagentsEnabled)
 }
 
@@ -39,6 +55,10 @@ func (s *agentRuntimeState) capture(m *bubbleModel) {
 	s.state.Profile = m.agentProfile
 	s.state.SubagentsEnabled = m.subagentsEnabled
 	s.state.ReasoningEffort = m.reasoningEffort
+	s.reasoningPreference = m.reasoningPreference
+	s.reasoningPreferenceSet = m.reasoningPreferenceSet
+	s.reasoningPreferenceSource = m.reasoningPreferenceSource
+	s.reasoningCompatibilityFallback = m.reasoningCompatibilityFallback
 }
 
 func agentActivityFromEvent(ev agent.Event) AgentActivity { return agentui.ActivityFromEvent(ev) }

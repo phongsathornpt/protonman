@@ -62,17 +62,47 @@ func (m *bubbleModel) validateReasoningEffort(effort sdk.ReasoningEffort) error 
 	return err
 }
 
+func (m *bubbleModel) reasoningPreferenceValue() sdk.ReasoningEffort {
+	if m.reasoningPreferenceSet {
+		return m.reasoningPreference
+	}
+	return m.reasoningEffort
+}
+
+func (m *bubbleModel) applyReasoningPreference(effort sdk.ReasoningEffort, source reasoningPreferenceSource) {
+	m.reasoningPreference = effort
+	m.reasoningPreferenceSet = true
+	m.reasoningPreferenceSource = source
+	m.reasoningCompatibilityFallback = false
+	m.reasoningEffort = effort
+	m.agents.SetReasoningEffort(effort)
+}
+
 func (m *bubbleModel) reconcileReasoningForActiveModel() bool {
-	if m.reasoningEffort == sdk.ReasoningDefault {
+	if !m.reasoningPreferenceSet {
+		m.reasoningPreference = m.reasoningEffort
+		m.reasoningPreferenceSet = true
+		m.reasoningPreferenceSource = reasoningPreferenceConfig
+	}
+	desired := m.reasoningPreference
+	if err := m.validateReasoningEffort(desired); err == nil {
+		if m.reasoningCompatibilityFallback && m.reasoningEffort != desired {
+			m.reasoningEffort = desired
+			m.reasoningCompatibilityFallback = false
+			m.agents.SetReasoningEffort(desired)
+			m.appendLine(mutedStyle.Render("  Restored thinking level to " + reasoningEffortLabel(desired) + " for " + m.activeModel))
+			return true
+		}
+		m.reasoningCompatibilityFallback = false
 		return false
 	}
-	if err := m.validateReasoningEffort(m.reasoningEffort); err == nil {
+	if m.reasoningCompatibilityFallback && m.reasoningEffort == sdk.ReasoningDefault {
 		return false
 	}
-	previous := m.reasoningEffort
 	m.reasoningEffort = sdk.ReasoningDefault
+	m.reasoningCompatibilityFallback = true
 	m.agents.SetReasoningEffort(sdk.ReasoningDefault)
-	m.appendLine(mutedStyle.Render("  Reset thinking level to auto (previous level " + string(previous) + " is unsupported by " + m.activeModel + ")"))
+	m.appendLine(mutedStyle.Render("  Reset thinking level to auto (requested level " + reasoningEffortLabel(desired) + " is unsupported by " + m.activeModel + ")"))
 	return true
 }
 
@@ -82,8 +112,7 @@ func (m *bubbleModel) setReasoningEffort(effort sdk.ReasoningEffort) tea.Cmd {
 		m.refreshViewport()
 		return nil
 	}
-	m.reasoningEffort = effort
-	m.agents.SetReasoningEffort(effort)
+	m.applyReasoningPreference(effort, reasoningPreferenceSession)
 	m.reconfigureRunner()
 	m.appendLine(successStyle.Render("Thinking level set to " + reasoningEffortLabel(effort) + " for this session."))
 	m.refreshViewport()
