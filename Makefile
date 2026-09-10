@@ -14,6 +14,8 @@ VERSION_LDFLAGS := -X github.com/phongsathornpt/protonman/internal/base/buildinf
 BUILD_LDFLAGS := $(strip $(LDFLAGS) $(VERSION_LDFLAGS))
 VERSION_KEY := $(subst /,_,$(VERSION))
 VERSION_STAMP := $(BIN_DIR)/.version-$(VERSION_KEY)
+GO_TMPDIR ?= $(HOME)/.cache/protonman/tmp
+GO_ENV := GOTMPDIR="$(GO_TMPDIR)"
 
 ## tui: Run Protonman TUI from the cached binary (default)
 tui: run
@@ -24,7 +26,8 @@ run: $(BINARY)
 
 ## dev: Run Protonman through go run (always invokes the Go toolchain)
 dev:
-	go run -ldflags "$(BUILD_LDFLAGS)" ./cmd/protonman
+	@mkdir -p "$(GO_TMPDIR)"
+	$(GO_ENV) go run -ldflags "$(BUILD_LDFLAGS)" ./cmd/protonman
 
 ## build: Build the protonman binary when sources or resolved version changed
 build: $(BINARY)
@@ -35,8 +38,8 @@ $(VERSION_STAMP):
 	@touch "$@"
 
 $(BINARY): $(GO_SOURCES) go.mod go.sum Makefile $(VERSION_STAMP)
-	@mkdir -p $(BIN_DIR)
-	go build -trimpath -ldflags "$(BUILD_LDFLAGS)" -o $(BINARY) ./cmd/protonman
+	@mkdir -p $(BIN_DIR) "$(GO_TMPDIR)"
+	$(GO_ENV) go build -trimpath -ldflags "$(BUILD_LDFLAGS)" -o $(BINARY) ./cmd/protonman
 
 ## install: Build from the current source tree and install into ~/.local/bin by default
 install: build
