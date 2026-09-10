@@ -65,11 +65,12 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	if err != nil {
 		return nil, fmt.Errorf("load configuration: %w", err)
 	}
-	if reconciled, changed := config.ReconcileModelSelection(loadedConfig.Model, loadedConfig.Providers); changed {
-		fmt.Fprintf(os.Stderr, "warning: saved model provider %q is unavailable; using provider %q\n", loadedConfig.Model.Provider, reconciled.Provider)
-		loadedConfig.Model = reconciled
+	originalProvider := loadedConfig.Model.Provider
+	reconciled, selectionChanged := config.ReconcileModelSelection(loadedConfig.Model, loadedConfig.Providers)
+	loadedConfig.Model, loadedConfig.Providers = app.ResolvePrimaryModelDefaults(reconciled, loadedConfig.Providers)
+	if selectionChanged {
+		fmt.Fprintf(os.Stderr, "warning: saved model provider %q is unavailable; using provider %q\n", originalProvider, loadedConfig.Model.Provider)
 	}
-	loadedConfig.Model, loadedConfig.Providers = app.ResolvePrimaryModelDefaults(loadedConfig.Model, loadedConfig.Providers)
 	for _, warning := range loadedConfig.Warnings {
 		fmt.Fprintln(os.Stderr, "warning:", warning)
 	}

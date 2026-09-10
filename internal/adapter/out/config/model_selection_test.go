@@ -17,7 +17,7 @@ func TestReconcileModelSelectionDropsModelForMissingProvider(t *testing.T) {
 	if !changed {
 		t.Fatal("expected stale selection to be reconciled")
 	}
-	if got.Provider != "opencode" || got.Default != "" {
-		t.Fatalf("got %+v, want deterministic opencode fallback with empty model", got)
+	if got.Provider != "" || got.Default != "" {
+		t.Fatalf("got %+v, want unresolved selection cleared for application fallback", got)
 	}
 }
