@@ -33,6 +33,32 @@ var builtinRegistry = mustRegistry(
 		},
 	},
 	Profile{
+		Name:  "qwen3.8-max-family",
+		Match: Matcher{Prefixes: []string{"qwen3.8-max"}},
+		Capabilities: Capabilities{
+			Reasoning: SupportYes,
+		},
+		Reasoning: Reasoning{
+			Support: SupportYes,
+			Levels: []sdk.ReasoningEffort{
+				sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningXHigh,
+			},
+			Default: sdk.ReasoningMedium,
+		},
+	},
+	Profile{
+		Name: "qwen3-hybrid-thinking",
+		Match: Matcher{Prefixes: []string{
+			"qwen3.5-plus", "qwen3.6-plus", "qwen3.6-flash",
+			"qwen3.7-plus", "qwen3.7-max",
+		}},
+		Capabilities: Capabilities{Reasoning: SupportYes},
+		Reasoning: Reasoning{
+			Support: SupportYes,
+			Levels:  []sdk.ReasoningEffort{sdk.ReasoningNone},
+		},
+	},
+	Profile{
 		Name:  "deepseek-v4-family",
 		Match: Matcher{Prefixes: []string{"deepseek-v4"}},
 		Capabilities: Capabilities{

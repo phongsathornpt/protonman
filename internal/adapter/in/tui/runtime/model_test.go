@@ -1461,6 +1461,37 @@ func TestModelSetupZaiFamilyExposesThinkingToggle(t *testing.T) {
 	}
 }
 
+func TestModelSetupQwen38MaxExposesNativeEffortLevels(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.resize(100, 30)
+	m.activeProvider = "protonman"
+	m.activeModel = "qwen3.8-max-latest"
+	m.modelCatalogs.Set("protonman", []domainmodel.RemoteModel{{ID: m.activeModel}})
+	view := newModelSetupPaneView(m)
+	want := []sdk.ReasoningEffort{sdk.ReasoningDefault, sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningXHigh}
+	if got := view.reasoningChoices; len(got) != len(want) {
+		t.Fatalf("Qwen 3.8 Max choices = %#v, want %#v", got, want)
+	} else {
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("Qwen 3.8 Max choices = %#v, want %#v", got, want)
+			}
+		}
+	}
+}
+
+func TestModelSetupQwenHybridExposesThinkingToggle(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.resize(100, 30)
+	m.activeProvider = "opencode"
+	m.activeModel = "qwen3.6-plus"
+	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: m.activeModel}})
+	view := newModelSetupPaneView(m)
+	if got := view.reasoningChoices; len(got) != 2 || got[0] != sdk.ReasoningDefault || got[1] != sdk.ReasoningNone {
+		t.Fatalf("Qwen hybrid choices = %#v, want auto/none", got)
+	}
+}
+
 func TestModelSetupDeepSeekV4FamilyExposesNativeEffortLevels(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.resize(100, 30)

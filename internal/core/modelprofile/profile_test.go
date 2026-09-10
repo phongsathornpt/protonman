@@ -17,6 +17,11 @@ func TestResolveBuiltinKnownFamilies(t *testing.T) {
 	}{
 		{model: "gemini-3.8-flash", profile: "gemini-3.8-flash", wantDefault: sdk.ReasoningMedium, wantLevels: 3, wantContext: 1_048_576},
 		{model: "muse-spark-1.3-contributor-free", profile: "muse-spark-1.3-family", wantDefault: sdk.ReasoningMedium, wantLevels: 5},
+		{model: "qwen3.8-max", profile: "qwen3.8-max-family", wantDefault: sdk.ReasoningMedium, wantLevels: 3},
+		{model: "qwen3.8-max-latest", profile: "qwen3.8-max-family", wantDefault: sdk.ReasoningMedium, wantLevels: 3},
+		{model: "qwen3.6-plus", profile: "qwen3-hybrid-thinking", wantLevels: 1},
+		{model: "qwen3.6-flash", profile: "qwen3-hybrid-thinking", wantLevels: 1},
+		{model: "qwen3.7-max", profile: "qwen3-hybrid-thinking", wantLevels: 1},
 		{model: "deepseek-v4-flash-free", profile: "deepseek-v4-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
 		{model: "deepseek-v4-pro", profile: "deepseek-v4-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
 		{model: "router/deepseek-v4-flash-vision-exp", profile: "deepseek-v4-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
@@ -47,6 +52,8 @@ func TestResolveBuiltinMatchesNamespacedModelIDs(t *testing.T) {
 	}{
 		{model: "ag/gemini-3.8-flash", profile: "gemini-3.8-flash", kind: MatchExact},
 		{model: "bai/gemini-3.8-flash", profile: "gemini-3.8-flash", kind: MatchExact},
+		{model: "dashscope/qwen3.8-max-latest", profile: "qwen3.8-max-family", kind: MatchFamily},
+		{model: "router/qwen3.6-plus", profile: "qwen3-hybrid-thinking", kind: MatchFamily},
 		{model: "router/gpt-5.6-sol", profile: "gpt-5.6-family", kind: MatchFamily},
 	}
 	for _, tt := range tests {

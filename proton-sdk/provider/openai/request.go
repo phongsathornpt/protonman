@@ -57,6 +57,7 @@ type chatRequest struct {
 	ToolChoice      string              `json:"tool_choice,omitempty"`
 	MaxTokens       int                 `json:"max_tokens,omitempty"`
 	ReasoningEffort sdk.ReasoningEffort `json:"reasoning_effort,omitempty"`
+	EnableThinking  *bool               `json:"enable_thinking,omitempty"`
 }
 type responsesTool struct {
 	Type            string          `json:"type"`
@@ -260,11 +261,38 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 	for _, tool := range request.Tools {
 		tools = append(tools, chatTool{Type: "function", Function: chatFunction{Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema, ProviderOptions: tool.ProviderOptions["openai"]}})
 	}
-	encoded, err := providerutil.MarshalWithOptions(chatRequest{Model: m.modelID, Messages: messages, Stream: true, Tools: tools, ToolChoice: toolChoice(len(tools), request.Options.ToolChoice), MaxTokens: request.Options.MaxOutputTokens, ReasoningEffort: request.Options.ReasoningEffort}, request.Options.ProviderOptions["openai"], "model", "messages", "stream", "tools", "tool_choice", "max_tokens", "reasoning_effort")
+	reasoningEffort, enableThinking := m.qwenChatReasoning(request.Options.ReasoningEffort)
+	encoded, err := providerutil.MarshalWithOptions(chatRequest{Model: m.modelID, Messages: messages, Stream: true, Tools: tools, ToolChoice: toolChoice(len(tools), request.Options.ToolChoice), MaxTokens: request.Options.MaxOutputTokens, ReasoningEffort: reasoningEffort, EnableThinking: enableThinking}, request.Options.ProviderOptions["openai"], "model", "messages", "stream", "tools", "tool_choice", "max_tokens", "reasoning_effort", "enable_thinking")
 	if err != nil {
 		return "", nil, fmt.Errorf("marshal chat request: %w", err)
 	}
 	return endpoint, encoded, nil
+}
+
+func (m *LanguageModel) qwenChatReasoning(effort sdk.ReasoningEffort) (sdk.ReasoningEffort, *bool) {
+	if effort != sdk.ReasoningNone || !isDashScopeBaseURL(m.provider.options.BaseURL) || !isQwenHybridThinkingModel(m.modelID) {
+		return effort, nil
+	}
+	disabled := false
+	return sdk.ReasoningDefault, &disabled
+}
+
+func isDashScopeBaseURL(baseURL string) bool {
+	host := strings.ToLower(strings.TrimSpace(baseURL))
+	return strings.Contains(host, "dashscope.aliyuncs.com") || strings.Contains(host, "dashscope-intl.aliyuncs.com")
+}
+
+func isQwenHybridThinkingModel(modelID string) bool {
+	id := strings.ToLower(strings.TrimSpace(modelID))
+	if slash := strings.LastIndexByte(id, '/'); slash >= 0 {
+		id = id[slash+1:]
+	}
+	for _, prefix := range []string{"qwen3.5-plus", "qwen3.6-plus", "qwen3.6-flash", "qwen3.7-plus", "qwen3.7-max"} {
+		if strings.HasPrefix(id, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func chatContentParts(parts []sdk.ContentPart) []map[string]any {

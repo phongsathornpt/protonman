@@ -635,3 +635,27 @@ func TestOpenCodeProviderLimitRetriesWithinHorizon(t *testing.T) {
 		t.Fatalf("attempts = %d, want 2", attempts)
 	}
 }
+
+func TestQwenHybridDashScopeDisablesThinkingNatively(t *testing.T) {
+	model := NewProvider(ProviderOptions{BaseURL: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"}).Model("qwen3.6-plus")
+	effort, enabled := model.qwenChatReasoning(sdk.ReasoningNone)
+	if effort != sdk.ReasoningDefault || enabled == nil || *enabled {
+		t.Fatalf("qwen hybrid mapping = effort %q enabled %#v", effort, enabled)
+	}
+}
+
+func TestQwen38MaxKeepsReasoningEffort(t *testing.T) {
+	model := NewProvider(ProviderOptions{BaseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"}).Model("qwen3.8-max-latest")
+	effort, enabled := model.qwenChatReasoning(sdk.ReasoningXHigh)
+	if effort != sdk.ReasoningXHigh || enabled != nil {
+		t.Fatalf("qwen3.8 max mapping = effort %q enabled %#v", effort, enabled)
+	}
+}
+
+func TestQwenHybridGatewayDoesNotRewriteReasoning(t *testing.T) {
+	model := NewProvider(ProviderOptions{BaseURL: "https://protonman.dev/api/v1"}).Model("qwen3.6-plus")
+	effort, enabled := model.qwenChatReasoning(sdk.ReasoningNone)
+	if effort != sdk.ReasoningNone || enabled != nil {
+		t.Fatalf("gateway mapping = effort %q enabled %#v", effort, enabled)
+	}
+}
