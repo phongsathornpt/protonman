@@ -74,3 +74,11 @@ func (s *memoryResultStore) Delete(ref ResultRef) {
 	delete(s.results, ref)
 	s.mu.Unlock()
 }
+
+// LookupResult returns one immutable result by versioned reference.
+func (c *Coordinator) LookupResult(ref ResultRef) (Result, bool) {
+	if c == nil || c.resultStore == nil {
+		return Result{}, false
+	}
+	return c.resultStore.Get(ref)
+}

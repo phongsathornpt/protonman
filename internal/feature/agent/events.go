@@ -80,6 +80,7 @@ func (c *Coordinator) broadcast(ev Event) {
 
 func (c *Coordinator) emit(ctx context.Context, ev Event) {
 	c.recordActivity(ev)
+	c.recordResultEvent(ev)
 	switch ev.Kind {
 	case EventAgentCompleted:
 		c.observeMetric(ctx, MetricEvent{Kind: MetricCompleted, SessionID: ev.SessionID, AgentID: ev.AgentID, ParentID: ev.ParentID, Profile: ev.Profile})
