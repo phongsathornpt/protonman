@@ -40,12 +40,10 @@ func (*shortcutsPaneView) Render(ctx paneRenderContext) string {
 }
 
 func (*shortcutsPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
-	switch message.String() {
-	case "esc", "?", "q", "enter":
+	if key.Matches(message, paneKeys.Close, paneKeys.Confirm) || message.String() == "?" {
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: shortcutsViewID}}
-	default:
-		return paneKeyResult{handled: true}
 	}
+	return paneKeyResult{handled: true}
 }
 
 func (m *bubbleModel) openShortcutsPane() {

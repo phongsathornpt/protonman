@@ -143,10 +143,6 @@ func (v *skillsPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPre
 	if !v.initialized || len(ctx.skillItems) == 0 {
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: skillsViewID}}
 	}
-	if message.String() == "ctrl+s" {
-		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: skillsViewID}}
-	}
-
 	switch message.String() {
 	case "space", "t":
 		selected, ok := v.picker.SelectedItem().(skillListItem)

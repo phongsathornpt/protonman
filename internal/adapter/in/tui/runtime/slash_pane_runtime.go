@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"fmt"
@@ -166,16 +167,16 @@ func (v *slashPaneView) selectionStatus(width int) string {
 
 func (v *slashPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	v.sync(ctx)
-	switch message.String() {
-	case "up", "k", "down", "j", "pgup", "pgdown", "home", "g", "end", "G":
+	switch {
+	case key.Matches(message, paneKeys.Nav):
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
 		return paneKeyResult{handled: true, cmd: cmd}
-	case "tab":
+	case message.String() == "tab":
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionAcceptSlash}}
-	case "enter":
+	case key.Matches(message, paneKeys.Confirm):
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionAcceptSlash, runSlash: true}}
-	case "esc":
+	case key.Matches(message, paneKeys.Close):
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: slashViewID}}
 	default:
 		return paneKeyResult{}

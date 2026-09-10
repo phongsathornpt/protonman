@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
@@ -90,12 +91,10 @@ type agentsPaneView struct{}
 func (*agentsPaneView) ID() string                             { return agentsViewID }
 func (*agentsPaneView) PresentationMode() panePresentationMode { return paneBelowComposer }
 func (*agentsPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
-	switch message.String() {
-	case "esc", "q", "enter":
+	if key.Matches(message, paneKeys.Close, paneKeys.Confirm) {
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: agentsViewID}}
-	default:
-		return paneKeyResult{}
 	}
+	return paneKeyResult{}
 }
 func (*agentsPaneView) Render(ctx paneRenderContext) string {
 	rows := agentInspectionRows(ctx)

@@ -3,6 +3,7 @@ package runtime
 import (
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
@@ -39,20 +40,20 @@ func (v *permissionModePaneView) Render(ctx paneRenderContext) string {
 }
 
 func (v *permissionModePaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
-	switch message.String() {
-	case "esc", "q":
+	switch {
+	case key.Matches(message, paneKeys.Close):
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: permissionModeViewID}}
-	case "up", "k":
+	case key.Matches(message, paneKeys.Up):
 		if v.index > 0 {
 			v.index--
 		}
 		return paneKeyResult{handled: true}
-	case "down", "j":
+	case key.Matches(message, paneKeys.Down):
 		if v.index < 2 {
 			v.index++
 		}
 		return paneKeyResult{handled: true}
-	case "enter":
+	case key.Matches(message, paneKeys.Confirm):
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionSetPermissionMode, permissionMode: permissionModeChoice(v.index)}}
 	default:
 		return paneKeyResult{handled: true}

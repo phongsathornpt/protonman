@@ -198,10 +198,6 @@ func (v *modelSetupPaneView) selectionStatus(width int) string {
 }
 
 func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
-	if message.String() == "ctrl+p" {
-		v.cancelFetch()
-		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: modelSetupViewID}}
-	}
 	v.initPicker()
 	if v.picker.SettingFilter() {
 		updated, cmd := v.picker.Update(message)

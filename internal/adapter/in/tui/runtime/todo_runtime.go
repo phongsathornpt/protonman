@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	todopane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/todo"
@@ -184,8 +185,7 @@ func (v *todoPaneView) syncTitle(ctx paneRenderContext) {
 
 func (v *todoPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	v.ensurePicker(ctx)
-	switch message.String() {
-	case "esc", "q", "enter":
+	if key.Matches(message, paneKeys.Close, paneKeys.Confirm) {
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: todoInspectViewID}}
 	}
 	updated, cmd := v.picker.Update(message)
