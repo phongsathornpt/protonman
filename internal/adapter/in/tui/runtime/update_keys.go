@@ -95,12 +95,12 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 		m.executeCommand("/skills")
 		return true, nil
 	case key.Matches(message, m.keys.ToggleModel):
-		if m.panes.bottom.has(modelSelectViewID) {
-			m.panes.bottom.remove(modelSelectViewID)
+		if m.panes.bottom.has(modelSetupViewID) {
+			m.panes.bottom.remove(modelSetupViewID)
 			m.requestRelayout()
 			return true, nil
 		}
-		return true, m.openModelSelectPane()
+		return true, m.openModelSetupPane()
 	case key.Matches(message, m.keys.Clear):
 		m.resetTranscript()
 		m.refreshViewport()
@@ -118,10 +118,14 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 }
 
 func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
+	prompt := m.panes.bottom.prompt()
+	if message.String() == "?" && prompt.Value() == "" && !m.panes.bottom.bashMode() {
+		m.openShortcutsPane()
+		return nil
+	}
 	if message.String() == "tab" && m.busy {
 		return m.withSpinner(m.submit())
 	}
-	prompt := m.panes.bottom.prompt()
 	if message.String() == "esc" {
 		if m.panes.bottom.bashMode() {
 			m.setBashMode(false)

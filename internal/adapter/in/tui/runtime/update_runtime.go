@@ -123,8 +123,8 @@ func (m *bubbleModel) updateRuntimeEvent(msg tea.Msg) (tea.Cmd, bool) {
 	case providerSavedMsg:
 		_, command := m.updateProviderSaved(message)
 		return command, true
-	case modelSelectedMsg:
-		_, command := m.updateModelSelected(message)
+	case modelSetupAppliedMsg:
+		_, command := m.updateModelSetupApplied(message)
 		return command, true
 	case providerActiveSelectedMsg:
 		_, command := m.updateProviderActiveSelected(message)

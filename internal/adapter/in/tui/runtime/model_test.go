@@ -64,17 +64,17 @@ func TestModelCatalogStateReturnsCopies(t *testing.T) {
 	}
 }
 
-func TestModelPickerRejectsStaleProviderResponse(t *testing.T) {
+func TestModelSetupRejectsStaleProviderResponse(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.providers = map[string]config.ProviderConfig{"alpha": {Name: "alpha", APIKey: "a"}, "beta": {Name: "beta", APIKey: "b"}}
 	m.activeProvider = "alpha"
-	view := newModelSelectPaneView(m)
+	view := newModelSetupPaneView(m)
 	m.panes.bottom.push(view)
 	view.fetchRequestID = 2
 	view.providerIndex = 1
 	updated, _ := m.Update(modelsFetchedMsg{providerName: "alpha", requestID: 1, models: []model.RemoteModel{{ID: "stale-alpha"}}})
 	m = updated.(*bubbleModel)
-	view = m.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	view = m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	if got := m.modelCatalogs.Models("alpha"); len(got) != 0 {
 		t.Fatalf("stale alpha response mutated catalog: %#v", got)
 	}
@@ -83,27 +83,27 @@ func TestModelPickerRejectsStaleProviderResponse(t *testing.T) {
 	}
 }
 
-func TestModelPickerAcceptsCurrentProviderResponse(t *testing.T) {
+func TestModelSetupAcceptsCurrentProviderResponse(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.providers = map[string]config.ProviderConfig{"alpha": {Name: "alpha", APIKey: "a"}, "beta": {Name: "beta", APIKey: "b"}}
 	m.activeProvider = "beta"
-	view := newModelSelectPaneView(m)
+	view := newModelSetupPaneView(m)
 	m.panes.bottom.push(view)
 	view.fetchRequestID = 3
 	updated, _ := m.Update(modelsFetchedMsg{providerName: "beta", requestID: 3, models: []model.RemoteModel{{ID: "beta-model"}}})
 	m = updated.(*bubbleModel)
-	view = m.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	view = m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	if len(view.models) != 1 || view.models[0].ID != "beta-model" {
 		t.Fatalf("current response not applied: %#v", view.models)
 	}
 }
 
-func TestModelPickerLoadingHidesPreviousProviderModels(t *testing.T) {
+func TestModelSetupLoadingHidesPreviousProviderModels(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.providers = map[string]config.ProviderConfig{"alpha": {Name: "alpha", APIKey: "a"}, "beta": {Name: "beta", APIKey: "b"}}
 	m.activeProvider = "alpha"
 	m.modelCatalogs.Set("alpha", []model.RemoteModel{{ID: "alpha-only", Name: "Alpha Only"}})
-	view := newModelSelectPaneView(m)
+	view := newModelSetupPaneView(m)
 	m.panes.bottom.push(view)
 	view.providerIndex = 1
 	_ = view.beginFetch(m.ctx, "beta", m.providers["beta"])
@@ -116,9 +116,9 @@ func TestModelPickerLoadingHidesPreviousProviderModels(t *testing.T) {
 	}
 }
 
-func TestModelPickerRendersFetchError(t *testing.T) {
+func TestModelSetupRendersFetchError(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
-	view := newModelSelectPaneView(m)
+	view := newModelSetupPaneView(m)
 	view.loading = false
 	view.err = errors.New("authentication failed (401)")
 	rendered := view.Render(newPaneRenderContext(m))
@@ -127,25 +127,25 @@ func TestModelPickerRendersFetchError(t *testing.T) {
 	}
 }
 
-func TestModelPickerAcceptsEmptyCurrentCatalog(t *testing.T) {
+func TestModelSetupAcceptsEmptyCurrentCatalog(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.providers = map[string]config.ProviderConfig{"alpha": {Name: "alpha", APIKey: "a"}}
 	m.activeProvider = "alpha"
-	view := newModelSelectPaneView(m)
+	view := newModelSetupPaneView(m)
 	m.panes.bottom.push(view)
 	view.fetchRequestID = 4
 	view.loading = true
 	updated, _ := m.Update(modelsFetchedMsg{providerName: "alpha", requestID: 4})
 	m = updated.(*bubbleModel)
-	view = m.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	view = m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	if view.loading || view.err != nil || len(view.models) != 0 {
 		t.Fatalf("empty current catalog state = loading:%t err:%v models:%#v", view.loading, view.err, view.models)
 	}
 }
 
-func TestModelPickerBeginFetchCancelsPreviousRequest(t *testing.T) {
+func TestModelSetupBeginFetchCancelsPreviousRequest(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
-	view := newModelSelectPaneView(m)
+	view := newModelSetupPaneView(m)
 	canceled := false
 	view.fetchCancel = func() {
 		canceled = true
@@ -159,9 +159,9 @@ func TestModelPickerBeginFetchCancelsPreviousRequest(t *testing.T) {
 	}
 }
 
-func TestModelPickerCloseCancelsFetch(t *testing.T) {
+func TestModelSetupCloseCancelsFetch(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
-	view := newModelSelectPaneView(m)
+	view := newModelSetupPaneView(m)
 	m.panes.bottom.push(view)
 	canceled := false
 	view.fetchCancel = func() {
@@ -170,25 +170,25 @@ func TestModelPickerCloseCancelsFetch(t *testing.T) {
 	updated, _ := m.Update(testKey(tea.KeyEsc))
 	m = updated.(*bubbleModel)
 	if !canceled {
-		t.Fatal("closing model picker did not cancel fetch")
+		t.Fatal("closing model setup did not cancel fetch")
 	}
-	if m.panes.bottom.has(modelSelectViewID) {
-		t.Fatal("model picker remained open after escape")
+	if m.panes.bottom.has(modelSetupViewID) {
+		t.Fatal("model setup remained open after escape")
 	}
 }
 
-func TestModelPickerCustomProviderDoesNotUseProtonmanFallback(t *testing.T) {
+func TestModelSetupCustomProviderDoesNotUseProtonmanFallback(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.providers = map[string]config.ProviderConfig{"custom": {Name: "custom", BaseURL: "https://api.example.com/v1", APIKey: "key"}}
 	m.activeProvider = "custom"
-	view := newModelSelectPaneView(m)
+	view := newModelSetupPaneView(m)
 	if len(view.models) != 0 {
 		t.Fatalf("custom provider inherited fallback models: %#v", view.models)
 	}
 }
 
-func TestModelPickerResetSelectionAnchorsActiveModel(t *testing.T) {
-	view := &modelSelectPaneView{models: []model.RemoteModel{{ID: "one"}, {ID: "two"}, {ID: "three"}}}
+func TestModelSetupResetSelectionAnchorsActiveModel(t *testing.T) {
+	view := &modelSetupPaneView{models: []model.RemoteModel{{ID: "one"}, {ID: "two"}, {ID: "three"}}}
 	view.resetSelection("")
 	view.picker.Select(2)
 	view.resetSelection("two")
@@ -197,8 +197,8 @@ func TestModelPickerResetSelectionAnchorsActiveModel(t *testing.T) {
 	}
 }
 
-func TestModelPickerResetSelectionFallsBackToFirstModel(t *testing.T) {
-	view := &modelSelectPaneView{models: []model.RemoteModel{{ID: "one"}, {ID: "two"}}}
+func TestModelSetupResetSelectionFallsBackToFirstModel(t *testing.T) {
+	view := &modelSetupPaneView{models: []model.RemoteModel{{ID: "one"}, {ID: "two"}}}
 	view.resetSelection("")
 	view.picker.Select(1)
 	view.resetSelection("missing")
@@ -219,12 +219,12 @@ func TestModelCatalogFreshness(t *testing.T) {
 	}
 }
 
-func TestModelPickerUsesFreshCacheWithoutFetch(t *testing.T) {
+func TestModelSetupUsesFreshCacheWithoutFetch(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.providers = map[string]config.ProviderConfig{"custom": {Name: "custom", BaseURL: "https://api.example.com/v1", APIKey: "key"}}
 	m.activeProvider = "custom"
 	m.modelCatalogs.Set("custom", []model.RemoteModel{{ID: "cached"}})
-	view := newModelSelectPaneView(m)
+	view := newModelSetupPaneView(m)
 	if cmd := view.loadProvider(m, false); cmd != nil {
 		t.Fatal("fresh catalog triggered a network fetch")
 	}
@@ -233,12 +233,12 @@ func TestModelPickerUsesFreshCacheWithoutFetch(t *testing.T) {
 	}
 }
 
-func TestModelPickerRefreshBypassesFreshCache(t *testing.T) {
+func TestModelSetupRefreshBypassesFreshCache(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.providers = map[string]config.ProviderConfig{"custom": {Name: "custom", BaseURL: "https://api.example.com/v1", APIKey: "key"}}
 	m.activeProvider = "custom"
 	m.modelCatalogs.Set("custom", []model.RemoteModel{{ID: "cached"}})
-	view := newModelSelectPaneView(m)
+	view := newModelSetupPaneView(m)
 	if cmd := view.loadProvider(m, true); cmd == nil {
 		t.Fatal("forced refresh did not start a network fetch")
 	}
@@ -256,9 +256,9 @@ func TestDirectModelSelectionMarksUnknownModelUnverified(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("direct model selection returned nil command")
 	}
-	msg, ok := cmd().(modelSelectedMsg)
+	msg, ok := cmd().(modelSetupAppliedMsg)
 	if !ok {
-		t.Fatalf("expected modelSelectedMsg")
+		t.Fatalf("expected modelSetupAppliedMsg")
 	}
 	if !msg.unverified {
 		t.Fatal("unknown model was not marked unverified")
@@ -271,15 +271,15 @@ func TestDirectModelSelectionRecognizesDiscoveredModel(t *testing.T) {
 	m.activeProvider = model.DefaultProtonmanName
 	m.modelCatalogs.Set(model.DefaultProtonmanName, []model.RemoteModel{{ID: "glm-5.3-flash"}})
 	cmd := m.selectModelDirect("glm-5.3-flash")
-	msg := cmd().(modelSelectedMsg)
+	msg := cmd().(modelSetupAppliedMsg)
 	if msg.unverified {
 		t.Fatal("discovered model was marked unverified")
 	}
 }
 
-func TestModelPickerFilterMatchesIDNameVendorAndFeatures(t *testing.T) {
-	view := &modelSelectPaneView{}
-	view.setModels([]model.RemoteModel{{ID: "deepseek-v4", Name: "DeepSeek V4", Provider: "DeepSeek", Features: []string{"tools", "vision"}}, {ID: "qwen-flash", Name: "Qwen Flash", Provider: "Qwen", Features: []string{"text"}}}, "")
+func TestModelSetupFilterMatchesIDNameVendorAndFeatures(t *testing.T) {
+	view := &modelSetupPaneView{}
+	view.setModels([]model.RemoteModel{{ID: "deepseek-v4", Name: "DeepSeek V4", Provider: "DeepSeek", Features: []string{"tools", "vision"}}, {ID: "qwen-flash", Name: "Qwen Flash", Provider: "Qwen", Features: []string{"text"}}}, view.activeProviderName(), "")
 	for _, query := range []string{"deepseek-v4", "DeepSeek V4", "deepseek", "vision"} {
 		view.picker.SetFilterText(query)
 		view.syncPickerProjection()
@@ -289,9 +289,9 @@ func TestModelPickerFilterMatchesIDNameVendorAndFeatures(t *testing.T) {
 	}
 }
 
-func TestModelPickerFilterCanReturnNoResults(t *testing.T) {
-	view := &modelSelectPaneView{}
-	view.setModels([]model.RemoteModel{{ID: "one"}, {ID: "two"}}, "")
+func TestModelSetupFilterCanReturnNoResults(t *testing.T) {
+	view := &modelSetupPaneView{}
+	view.setModels([]model.RemoteModel{{ID: "one"}, {ID: "two"}}, view.activeProviderName(), "")
 	view.picker.SetFilterText("missing")
 	view.syncPickerProjection()
 	if len(view.models) != 0 || len(view.allModels) != 2 {
@@ -299,19 +299,19 @@ func TestModelPickerFilterCanReturnNoResults(t *testing.T) {
 	}
 }
 
-func TestModelPickerSearchModeAcceptsReservedLetters(t *testing.T) {
+func TestModelSetupSearchModeAcceptsReservedLetters(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
-	view := newModelSelectPaneView(m)
+	view := newModelSetupPaneView(m)
 	m.panes.bottom.push(view)
 	updated, _ := m.Update(testText("/"))
 	m = updated.(*bubbleModel)
 	updated, _ = m.Update(testText("qwen"))
 	m = updated.(*bubbleModel)
-	view = m.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	view = m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	if view.picker.FilterValue() != "qwen" {
 		t.Fatalf("filter = %q, want qwen", view.picker.FilterValue())
 	}
-	if !m.panes.bottom.has(modelSelectViewID) {
+	if !m.panes.bottom.has(modelSetupViewID) {
 		t.Fatal("reserved q closed picker while search mode was active")
 	}
 }
@@ -343,20 +343,20 @@ func TestFormatModelTokenLimitsRendersIndependentLimits(t *testing.T) {
 	}
 }
 
-func seedModelSelectCatalog(m *bubbleModel) {
+func seedModelSetupCatalog(m *bubbleModel) {
 	m.modelCatalogs.Set(model.DefaultProtonmanName, []model.RemoteModel{{ID: "deepseek-v4-flash-vision-exp", Name: "DeepSeek V4 Flash Vision"}, {ID: "glm-5.3-flash", Name: "GLM 5.3 Flash"}, {ID: "Qwen3.8-Flash", Name: "Qwen 3.8 Flash"}, {ID: "muse-spark", Name: "Muse Spark"}, {ID: "MiniMax-M3", Name: "MiniMax M3"}, {ID: "fixture-six", Name: "Fixture Six"}})
 }
 
-func TestModelSelectViewLaunchViaSlashCommand(t *testing.T) {
+func TestModelSetupLaunchViaSlashCommand(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
-	seedModelSelectCatalog(bModel)
+	seedModelSetupCatalog(bModel)
 	bModel.activeModel = "MiniMax-M3"
 	bModel.activeProvider = "protonman"
 	bModel.executeCommand("/model")
-	if !bModel.panes.bottom.has(modelSelectViewID) {
+	if !bModel.panes.bottom.has(modelSetupViewID) {
 		t.Fatal("expected model select modal open after /model")
 	}
-	view := bModel.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	view := bModel.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	if len(view.models) == 0 {
 		t.Fatal("expected models in catalog")
 	}
@@ -364,8 +364,8 @@ func TestModelSelectViewLaunchViaSlashCommand(t *testing.T) {
 		t.Fatalf("expected focused model 'MiniMax-M3', got %s", view.models[view.picker.Index()].ID)
 	}
 	rendered := bModel.View().Content
-	if !strings.Contains(rendered, "Models") {
-		t.Fatalf("expected 'Models' in view, got:\n%s", rendered)
+	if !strings.Contains(rendered, "Switch Model") {
+		t.Fatalf("expected 'Switch Model' in view, got:\n%s", rendered)
 	}
 	if !strings.Contains(rendered, "✓") {
 		t.Fatalf("expected active model checkmark in view, got:\n%s", rendered)
@@ -375,58 +375,58 @@ func TestModelSelectViewLaunchViaSlashCommand(t *testing.T) {
 	}
 	updated, _ := bModel.Update(testKey(tea.KeyEsc))
 	bModel = updated.(*bubbleModel)
-	if bModel.panes.bottom.has(modelSelectViewID) {
+	if bModel.panes.bottom.has(modelSetupViewID) {
 		t.Fatal("expected model select modal closed after Esc")
 	}
 	bModel.executeCommand("/models")
-	if !bModel.panes.bottom.has(modelSelectViewID) {
+	if !bModel.panes.bottom.has(modelSetupViewID) {
 		t.Fatal("expected model select modal open after /models")
 	}
-	bModel.panes.bottom.remove(modelSelectViewID)
+	bModel.panes.bottom.remove(modelSetupViewID)
 	bModel.executeCommand("/model select")
-	if !bModel.panes.bottom.has(modelSelectViewID) {
+	if !bModel.panes.bottom.has(modelSetupViewID) {
 		t.Fatal("expected model select modal open after /model select")
 	}
 }
 
-func TestModelSelectViewToggleKeybinding(t *testing.T) {
+func TestModelSetupToggleKeybinding(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	updated, _ := bModel.Update(testCtrl('p'))
 	bModel = updated.(*bubbleModel)
-	if !bModel.panes.bottom.has(modelSelectViewID) {
+	if !bModel.panes.bottom.has(modelSetupViewID) {
 		t.Fatal("expected model select modal open after Ctrl+P")
 	}
 	updated, _ = bModel.Update(testCtrl('p'))
 	bModel = updated.(*bubbleModel)
-	if bModel.panes.bottom.has(modelSelectViewID) {
+	if bModel.panes.bottom.has(modelSetupViewID) {
 		t.Fatal("expected model select modal closed after second Ctrl+P")
 	}
 	updated, _ = bModel.Update(testAltText("m"))
 	bModel = updated.(*bubbleModel)
-	if !bModel.panes.bottom.has(modelSelectViewID) {
+	if !bModel.panes.bottom.has(modelSetupViewID) {
 		t.Fatal("expected model select modal open after Alt+M")
 	}
 }
 
-func TestModelSelectViewNavigationAndConfirm(t *testing.T) {
+func TestModelSetupNavigationAndConfirm(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
-	seedModelSelectCatalog(bModel)
+	seedModelSetupCatalog(bModel)
 	bModel.activeModel = "deepseek-v4-flash-vision-exp"
 	bModel.activeProvider = "protonman"
 	bModel.executeCommand("/model")
-	view := bModel.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	view := bModel.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	if view.picker.Index() != 0 {
 		t.Fatalf("expected initial index 0, got %d", view.picker.Index())
 	}
 	updated, _ := bModel.Update(testText("j"))
 	bModel = updated.(*bubbleModel)
-	view = bModel.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	view = bModel.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	if view.picker.Index() != 1 {
 		t.Fatalf("expected index 1 after 'j', got %d", view.picker.Index())
 	}
 	updated, _ = bModel.Update(testText("k"))
 	bModel = updated.(*bubbleModel)
-	view = bModel.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	view = bModel.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	if view.picker.Index() != 0 {
 		t.Fatalf("expected index 0 after 'k', got %d", view.picker.Index())
 	}
@@ -434,7 +434,7 @@ func TestModelSelectViewNavigationAndConfirm(t *testing.T) {
 	bModel = updated.(*bubbleModel)
 	updated, _ = bModel.Update(testKey(tea.KeyDown))
 	bModel = updated.(*bubbleModel)
-	view = bModel.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	view = bModel.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	if view.picker.Index() != 2 {
 		t.Fatalf("expected index 2 after moving down twice, got %d", view.picker.Index())
 	}
@@ -444,16 +444,16 @@ func TestModelSelectViewNavigationAndConfirm(t *testing.T) {
 	t.Setenv("PROTONMAN_HOME", t.TempDir())
 	updated, cmd := bModel.Update(testKey(tea.KeyEnter))
 	bModel = updated.(*bubbleModel)
-	if bModel.panes.bottom.has(modelSelectViewID) {
-		t.Fatal("expected modelSelectViewID removed on Enter")
+	if bModel.panes.bottom.has(modelSetupViewID) {
+		t.Fatal("expected modelSetupViewID removed on Enter")
 	}
 	if cmd == nil {
 		t.Fatal("expected non-nil cmd on Enter")
 	}
 	msg := cmd()
-	selectedMsg, ok := msg.(modelSelectedMsg)
+	selectedMsg, ok := msg.(modelSetupAppliedMsg)
 	if !ok {
-		t.Fatalf("expected modelSelectedMsg, got %T", msg)
+		t.Fatalf("expected modelSetupAppliedMsg, got %T", msg)
 	}
 	if selectedMsg.modelID != "Qwen3.8-Flash" {
 		t.Fatalf("expected selected model 'Qwen3.8-Flash', got: %s", selectedMsg.modelID)
@@ -469,7 +469,7 @@ func TestModelSelectViewNavigationAndConfirm(t *testing.T) {
 	}
 }
 
-func TestModelSelectViewDirectModelCommand(t *testing.T) {
+func TestModelSetupDirectModelCommand(t *testing.T) {
 	t.Setenv("PROTONMAN_HOME", t.TempDir())
 	bModel := newTestSkillsModel(t, 1)
 	cmd := bModel.executeCommand("/model glm-5.3-flash")
@@ -477,9 +477,9 @@ func TestModelSelectViewDirectModelCommand(t *testing.T) {
 		t.Fatal("expected cmd from /model <id>")
 	}
 	msg := cmd()
-	selectedMsg, ok := msg.(modelSelectedMsg)
+	selectedMsg, ok := msg.(modelSetupAppliedMsg)
 	if !ok {
-		t.Fatalf("expected modelSelectedMsg, got %T", msg)
+		t.Fatalf("expected modelSetupAppliedMsg, got %T", msg)
 	}
 	if selectedMsg.modelID != "glm-5.3-flash" {
 		t.Fatalf("expected modelID 'glm-5.3-flash', got: %s", selectedMsg.modelID)
@@ -491,23 +491,23 @@ func TestModelSelectViewDirectModelCommand(t *testing.T) {
 	}
 }
 
-func TestModelSelectViewSwitchToAddProvider(t *testing.T) {
+func TestModelSetupSwitchToAddProvider(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.executeCommand("/model")
-	if !bModel.panes.bottom.has(modelSelectViewID) {
+	if !bModel.panes.bottom.has(modelSetupViewID) {
 		t.Fatal("expected model select modal open")
 	}
 	updated, _ := bModel.Update(testText("a"))
 	bModel = updated.(*bubbleModel)
-	if bModel.panes.bottom.has(modelSelectViewID) {
-		t.Fatal("expected modelSelectViewID removed after 'a'")
+	if bModel.panes.bottom.has(modelSetupViewID) {
+		t.Fatal("expected modelSetupViewID removed after 'a'")
 	}
 	if !bModel.panes.bottom.has(providerViewID) {
 		t.Fatal("expected providerViewID added after 'a'")
 	}
 }
 
-func TestModelSelectInfoViewAndWelcome(t *testing.T) {
+func TestModelSetupInfoViewAndWelcome(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.activeModel = "deepseek-v4-flash-vision-exp"
 	bModel.activeProvider = "protonman"
@@ -539,13 +539,13 @@ func TestProviderListSlashCommand(t *testing.T) {
 	}
 }
 
-func TestModelSelectPagedNavigation(t *testing.T) {
+func TestModelSetupPagedNavigation(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.activeProvider = model.DefaultProtonmanName
-	seedModelSelectCatalog(m)
+	seedModelSetupCatalog(m)
 	m.resize(40, 14)
 	m.executeCommand("/model")
-	view := m.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	view := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	view.picker.Select(0)
 	updated, _ := m.Update(testKey(tea.KeyPgDown))
 	m = updated.(*bubbleModel)
@@ -554,13 +554,13 @@ func TestModelSelectPagedNavigation(t *testing.T) {
 	}
 	updated, _ = m.Update(testKey(tea.KeyEnd))
 	m = updated.(*bubbleModel)
-	view = m.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	view = m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	if view.picker.Index() != len(view.models)-1 {
 		t.Fatalf("end index = %d, want %d", view.picker.Index(), len(view.models)-1)
 	}
 	updated, _ = m.Update(testKey(tea.KeyHome))
 	m = updated.(*bubbleModel)
-	view = m.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	view = m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	if view.picker.Index() != 0 {
 		t.Fatalf("home index = %d, want 0", view.picker.Index())
 	}
@@ -917,7 +917,7 @@ func TestPlanModeAllowsTaskMetadataButBlocksWorkspaceEdit(t *testing.T) {
 	}
 }
 
-func TestModelSelectReconcilesIncompatibleReasoningEffort(t *testing.T) {
+func TestModelSetupReconcilesIncompatibleReasoningEffort(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.activeProvider = "openai"
 	bModel.activeModel = "o3-mini"
@@ -932,7 +932,7 @@ func TestModelSelectReconcilesIncompatibleReasoningEffort(t *testing.T) {
 	})
 
 	// Switch to gpt-4o which does not support reasoning
-	msg := modelSelectedMsg{
+	msg := modelSetupAppliedMsg{
 		providerName: "openai",
 		modelID:      "gpt-4o",
 	}
@@ -960,12 +960,12 @@ func TestReconfigureRunnerInvalidatesRunnerOnError(t *testing.T) {
 	}
 }
 
-func TestModelPickerOllamaKeylessDiscovery(t *testing.T) {
+func TestModelSetupOllamaKeylessDiscovery(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.providers = map[string]config.ProviderConfig{
 		"ollama": {Name: "ollama", BaseURL: "http://localhost:11434", APIKey: ""},
 	}
-	view := newModelSelectPaneView(bModel)
+	view := newModelSetupPaneView(bModel)
 	for i, name := range view.providerNames {
 		if strings.EqualFold(name, "ollama") {
 			view.providerIndex = i
@@ -978,12 +978,12 @@ func TestModelPickerOllamaKeylessDiscovery(t *testing.T) {
 	}
 }
 
-func TestModelPickerEmptyFilterShowsSearchInput(t *testing.T) {
+func TestModelSetupEmptyFilterShowsSearchInput(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.executeCommand("/model")
-	view, ok := bModel.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	view, ok := bModel.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	if !ok || view == nil {
-		t.Fatal("expected modelSelectViewID open")
+		t.Fatal("expected modelSetupViewID open")
 	}
 	view.picker.SetFilterText("nonexistent-model-xyz")
 	view.picker.SetFilterState(list.Filtering)
@@ -997,23 +997,23 @@ func TestModelPickerEmptyFilterShowsSearchInput(t *testing.T) {
 	}
 }
 
-func TestModelPickerShiftTabCyclesProvidersWithoutLeaking(t *testing.T) {
+func TestModelSetupShiftTabCyclesProvidersWithoutLeaking(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.providers = map[string]config.ProviderConfig{
 		"alpha": {Name: "alpha", BaseURL: "https://alpha.example.com", APIKey: "k1"},
 		"beta":  {Name: "beta", BaseURL: "https://beta.example.com", APIKey: "k2"},
 	}
 	bModel.executeCommand("/model")
-	view, ok := bModel.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	view, ok := bModel.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	if !ok || view == nil {
-		t.Fatal("expected modelSelectViewID open")
+		t.Fatal("expected modelSetupViewID open")
 	}
 	initialIdx := view.providerIndex
 	initialMode := bModel.service.Mode()
 
 	handled, _ := bModel.handleModalKey(testShiftTab())
 	if !handled {
-		t.Fatal("shift+tab was not handled by model picker")
+		t.Fatal("shift+tab was not handled by model setup")
 	}
 	if bModel.service.Mode() != initialMode {
 		t.Fatalf("permission mode changed from %s to %s on shift+tab", initialMode, bModel.service.Mode())
@@ -1023,14 +1023,14 @@ func TestModelPickerShiftTabCyclesProvidersWithoutLeaking(t *testing.T) {
 	}
 }
 
-func TestModelPickerKeepsSelectionAcrossResponsiveResize(t *testing.T) {
+func TestModelSetupKeepsSelectionAcrossResponsiveResize(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	models := make([]domainmodel.RemoteModel, 30)
 	for i := range models {
 		models[i] = domainmodel.RemoteModel{ID: fmt.Sprintf("model-%02d", i), Name: fmt.Sprintf("Model %02d", i)}
 	}
-	view := newModelSelectPaneView(m)
-	view.setModels(models, "model-20")
+	view := newModelSetupPaneView(m)
+	view.setModels(models, view.activeProviderName(), "model-20")
 	m.panes.bottom.push(view)
 	for _, size := range [][2]int{{120, 32}, {40, 12}, {24, 8}, {80, 24}} {
 		m.resize(size[0], size[1])
@@ -1040,21 +1040,21 @@ func TestModelPickerKeepsSelectionAcrossResponsiveResize(t *testing.T) {
 			t.Fatalf("selected model after resize %dx%d = %#v, want model-20", size[0], size[1], view.picker.SelectedItem())
 		}
 		if got := lipgloss.Width(view.Render(newPaneRenderContext(m))); got > size[0] {
-			t.Fatalf("model picker width=%d exceeds %d at %dx%d", got, size[0], size[0], size[1])
+			t.Fatalf("model setup width=%d exceeds %d at %dx%d", got, size[0], size[0], size[1])
 		}
 	}
 }
 
-func TestModelPickerFilteredSelectionSurvivesResize(t *testing.T) {
+func TestModelSetupFilteredSelectionSurvivesResize(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.resize(100, 28)
-	m.panes.bottom.push(newModelSelectPaneView(m))
-	view := m.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	m.panes.bottom.push(newModelSetupPaneView(m))
+	view := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	models := make([]domainmodel.RemoteModel, 24)
 	for i := range models {
 		models[i] = domainmodel.RemoteModel{ID: fmt.Sprintf("model-%02d", i), Name: fmt.Sprintf("Model %02d", i)}
 	}
-	view.setModels(models, "")
+	view.setModels(models, view.activeProviderName(), "")
 	view.picker.SetFilterText("model-1")
 	view.picker.SetFilterState(list.FilterApplied)
 	view.syncPickerProjection()
@@ -1072,19 +1072,19 @@ func TestModelPickerFilteredSelectionSurvivesResize(t *testing.T) {
 			t.Fatalf("filtered selection after resize %dx%d=%v want %q", size[0], size[1], selected.model.ID, want)
 		}
 		if got := lipgloss.Width(view.Render(newPaneRenderContext(m))); got > size[0] {
-			t.Fatalf("filtered model picker width=%d exceeds %d", got, size[0])
+			t.Fatalf("filtered model setup width=%d exceeds %d", got, size[0])
 		}
 	}
 }
 
-func TestModelPickerEnterWhileFilteringSelectsModel(t *testing.T) {
+func TestModelSetupEnterWhileFilteringSelectsModel(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.executeCommand("/model")
-	view, ok := bModel.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	view, ok := bModel.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	if !ok || view == nil {
-		t.Fatal("expected modelSelectViewID open")
+		t.Fatal("expected modelSetupViewID open")
 	}
-	view.setModels([]domainmodel.RemoteModel{{ID: "deepseek-chat", Name: "DeepSeek Chat"}}, "")
+	view.setModels([]domainmodel.RemoteModel{{ID: "deepseek-chat", Name: "DeepSeek Chat"}}, view.activeProviderName(), "")
 	view.picker.SetFilterText("deepseek")
 	view.picker.Select(0)
 
@@ -1093,21 +1093,21 @@ func TestModelPickerEnterWhileFilteringSelectsModel(t *testing.T) {
 		t.Fatal("enter while filtering was not handled")
 	}
 	if cmd == nil {
-		t.Fatal("expected saveDefaultModelCmd returned on enter while filtering")
+		t.Fatal("expected model setup apply command returned on enter while filtering")
 	}
-	if bModel.panes.bottom.has(modelSelectViewID) {
-		t.Fatal("expected model picker closed after enter selection")
+	if bModel.panes.bottom.has(modelSetupViewID) {
+		t.Fatal("expected model setup closed after enter selection")
 	}
 }
 
-func TestModelPickerEnterOnZeroMatchesDoesNotOpenProviderEditor(t *testing.T) {
+func TestModelSetupEnterOnZeroMatchesDoesNotOpenProviderEditor(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.executeCommand("/model")
-	view, ok := bModel.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView)
+	view, ok := bModel.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	if !ok || view == nil {
-		t.Fatal("expected modelSelectViewID open")
+		t.Fatal("expected modelSetupViewID open")
 	}
-	view.setModels(nil, "")
+	view.setModels(nil, view.activeProviderName(), "")
 
 	handled, cmd := bModel.handleModalKey(testKey(tea.KeyEnter))
 	if !handled {
@@ -1121,29 +1121,29 @@ func TestModelPickerEnterOnZeroMatchesDoesNotOpenProviderEditor(t *testing.T) {
 	}
 }
 
-func TestStaleModelSelectionDoesNotMutateReopenedPicker(t *testing.T) {
+func TestStaleModelSetupDoesNotMutateReopenedPane(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.activeModel = "before"
 	oldID := nextAsyncOperationID()
-	m.activeModelSelect = oldID
-	m.panes.bottom.push(newModelSelectPaneView(m))
-	if m.activeModelSelect != 0 {
-		t.Fatalf("reopened picker did not invalidate prior selection: %d", m.activeModelSelect)
+	m.activeModelSetup = oldID
+	m.panes.bottom.push(newModelSetupPaneView(m))
+	if m.activeModelSetup != 0 {
+		t.Fatalf("reopened picker did not invalidate prior selection: %d", m.activeModelSetup)
 	}
 
-	updated, _ := m.Update(modelSelectedMsg{operationID: oldID, providerName: "protonman", modelID: "stale"})
+	updated, _ := m.Update(modelSetupAppliedMsg{operationID: oldID, providerName: "protonman", modelID: "stale"})
 	m = updated.(*bubbleModel)
 	if m.activeModel != "before" {
 		t.Fatalf("stale model selection changed active model to %q", m.activeModel)
 	}
-	if !m.panes.bottom.has(modelSelectViewID) {
+	if !m.panes.bottom.has(modelSetupViewID) {
 		t.Fatal("stale model selection closed reopened picker")
 	}
 }
 
 func TestModelFetchRequiresRuntimeContext(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
-	v := newModelSelectPaneView(m)
+	v := newModelSetupPaneView(m)
 	cmd := v.beginFetch(nil, "protonman", config.ProviderConfig{Name: "protonman"})
 	if cmd != nil {
 		t.Fatalf("nil-context model fetch command = %v, want nil", cmd)
@@ -1153,11 +1153,11 @@ func TestModelFetchRequiresRuntimeContext(t *testing.T) {
 	}
 }
 
-func TestModelPickerDefaultsToOpenCodeWhenNoProviderConfigured(t *testing.T) {
+func TestModelSetupDefaultsToOpenCodeWhenNoProviderConfigured(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.providers = nil
 	m.activeProvider = ""
-	view := newModelSelectPaneView(m)
+	view := newModelSetupPaneView(m)
 	if got := view.activeProviderName(); got != model.DefaultOpenCodeName {
 		t.Fatalf("default picker provider = %q, want %q", got, model.DefaultOpenCodeName)
 	}
@@ -1205,7 +1205,7 @@ func TestSelectModelDirectDefaultsToOpenCodeWhenProviderUnset(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("direct model selection returned nil command")
 	}
-	msg := cmd().(modelSelectedMsg)
+	msg := cmd().(modelSetupAppliedMsg)
 	if msg.providerName != model.DefaultOpenCodeName {
 		t.Fatalf("provider = %q, want %q", msg.providerName, model.DefaultOpenCodeName)
 	}
@@ -1222,5 +1222,61 @@ func TestReconfigureRunnerUsesOpenCodeFallbackWhenProviderUnset(t *testing.T) {
 	m.reconfigureRunner()
 	if m.runner == nil {
 		t.Fatal("provider-less runner did not use OpenCode fallback")
+	}
+}
+
+func TestUnifiedModelSetupAppliesModelAndThinkingTogether(t *testing.T) {
+	t.Setenv("PROTONMAN_HOME", t.TempDir())
+	m := newTestSkillsModel(t, 1)
+	m.activeProvider = "protonman"
+	m.activeModel = "gemini-3.8-flash"
+	m.providers = map[string]config.ProviderConfig{"protonman": {Name: "protonman", Type: "openai", BaseURL: "https://protonman.dev/api/v1", APIKey: "key"}}
+	m.modelCatalogs.Set("protonman", []domainmodel.RemoteModel{{ID: "gemini-3.8-flash", Name: "Gemini 3.8 Flash"}})
+	m.executeCommand("/model")
+	view := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
+	view.reasoningIndex = 3 // high: auto, low, medium, high
+	updated, cmd := m.Update(testKey(tea.KeyEnter))
+	m = updated.(*bubbleModel)
+	if cmd == nil {
+		t.Fatal("enter did not produce model setup apply command")
+	}
+	msg, ok := cmd().(modelSetupAppliedMsg)
+	if !ok {
+		t.Fatalf("apply message = %T, want modelSetupAppliedMsg", cmd())
+	}
+	if msg.modelID != "gemini-3.8-flash" || msg.reasoning != sdk.ReasoningHigh {
+		t.Fatalf("selection = %q/%q, want gemini-3.8-flash/high", msg.modelID, msg.reasoning)
+	}
+	updated, _ = m.Update(msg)
+	m = updated.(*bubbleModel)
+	if m.activeModel != "gemini-3.8-flash" || m.reasoningEffort != sdk.ReasoningHigh {
+		t.Fatalf("effective selection = %q/%q", m.activeModel, m.reasoningEffort)
+	}
+}
+
+func TestModelSetupCurrentMarkerUsesProviderModelPair(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.providers = map[string]config.ProviderConfig{
+		"alpha": {Name: "alpha", Type: "openai", BaseURL: "https://alpha.example/v1", APIKey: "x"},
+		"beta":  {Name: "beta", Type: "openai", BaseURL: "https://beta.example/v1", APIKey: "x"},
+	}
+	m.activeProvider = "alpha"
+	m.activeModel = "shared-model"
+	m.modelCatalogs.Set("alpha", []domainmodel.RemoteModel{{ID: "shared-model", Name: "Alpha Shared"}})
+	m.modelCatalogs.Set("beta", []domainmodel.RemoteModel{{ID: "shared-model", Name: "Beta Shared"}})
+	view := newModelSetupPaneView(m)
+	for i, name := range view.providerNames {
+		if name == "beta" {
+			view.providerIndex = i
+			break
+		}
+	}
+	view.setModels(m.modelCatalogs.Models("beta"), m.activeProvider, m.activeModel)
+	item, ok := view.picker.SelectedItem().(modelListItem)
+	if !ok {
+		t.Fatal("expected beta model item")
+	}
+	if item.current {
+		t.Fatal("same model id on another provider was marked current")
 	}
 }

@@ -73,7 +73,7 @@ func (m *bubbleModel) selectModelDirect(modelID string) tea.Cmd {
 	if prov == "" {
 		prov = model.DefaultOpenCodeName
 	}
-	return m.beginModelSelect(prov, modelID, !m.modelIDKnown(prov, modelID))
+	return m.beginModelSetup(prov, modelID, !m.modelIDKnown(prov, modelID))
 }
 
 func (m *bubbleModel) executeModelCommand(argument string) tea.Cmd {
@@ -92,7 +92,7 @@ func (m *bubbleModel) executeModelCommand(argument string) tea.Cmd {
 		}
 		return nil
 	case "", "select":
-		return m.openModelSelectPane()
+		return m.openModelSetupPane()
 	default:
 		return m.selectModelDirect(arg)
 	}

@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 type asyncOperationID uint64
@@ -82,11 +83,15 @@ func (m *bubbleModel) beginProviderDelete(providerName string) tea.Cmd {
 	return deleteProviderCmd(id, m.configMutationGate, providerName)
 }
 
-func (m *bubbleModel) beginModelSelect(providerName, modelID string, unverified bool) tea.Cmd {
+func (m *bubbleModel) beginModelSetup(providerName, modelID string, unverified bool) tea.Cmd {
+	return m.beginModelSetupSelect(providerName, modelID, m.reasoningPreferenceValue(), unverified)
+}
+
+func (m *bubbleModel) beginModelSetupSelect(providerName, modelID string, reasoning sdk.ReasoningEffort, unverified bool) tea.Cmd {
 	id := nextAsyncOperationID()
-	m.activeModelSelect = id
+	m.activeModelSetup = id
 	m.configMutationGate.activate(id)
-	return saveModelSelectionCmd(id, m.configMutationGate, providerName, modelID, unverified)
+	return persistModelSetupCmd(id, m.configMutationGate, providerName, modelID, reasoning, unverified)
 }
 
 func (m *bubbleModel) pushProviderPane(view *providerPaneView) {

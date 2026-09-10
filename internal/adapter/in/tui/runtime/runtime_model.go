@@ -71,7 +71,7 @@ type turnModelState struct {
 	turnEvents      <-chan tea.Msg
 }
 
-type modelSelectionState struct {
+type modelSetupState struct {
 	activeModel          string
 	activeProvider       string
 	providers            map[string]config.ProviderConfig
@@ -79,7 +79,7 @@ type modelSelectionState struct {
 	activeProviderSave   asyncOperationID
 	activeProviderSelect asyncOperationID
 	activeProviderDelete asyncOperationID
-	activeModelSelect    asyncOperationID
+	activeModelSetup     asyncOperationID
 	configMutationGate   *asyncOperationGate
 }
 
@@ -138,7 +138,7 @@ type bubbleModel struct {
 	bridge   *permissionBridge
 	agentModelState
 	turnModelState
-	modelSelectionState
+	modelSetupState
 	sessionModelState
 	projectModelState
 	conversationModelState
@@ -214,8 +214,8 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 			subagentsEnabled: true,
 			agentActivity:    make(map[string]AgentActivity),
 		},
-		turnModelState:      turnModelState{activity: "ready"},
-		modelSelectionState: modelSelectionState{configMutationGate: &asyncOperationGate{}},
+		turnModelState:  turnModelState{activity: "ready"},
+		modelSetupState: modelSetupState{configMutationGate: &asyncOperationGate{}},
 	}
 
 	if allTodoCompleted(ui.todo) {

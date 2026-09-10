@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func (m *bubbleModel) View() tea.View {
@@ -54,10 +55,31 @@ func (m *bubbleModel) footerView() string {
 		if top.ReplacesComposer() {
 			return ""
 		}
+		if m.slashOpen() {
+			return m.idleContextFooter()
+		}
 		return m.shortcutHint()
 	}
 	if !m.panes.bottom.composerVisible() {
 		return ""
 	}
-	return m.shortcutHint()
+	if m.busy || !m.conversationViewport.following() || m.permissionView() != nil || m.planMode {
+		return m.shortcutHint()
+	}
+	return m.idleContextFooter()
+}
+
+func (m *bubbleModel) idleContextFooter() string {
+	width := maxInt(1, m.layout.width-2)
+	left := "? for shortcuts"
+	right := strings.TrimSpace(m.activeModel)
+	if right == "" {
+		right = "unselected"
+	}
+	right += " · " + reasoningEffortLabel(m.reasoningEffort)
+	if ansi.StringWidth(left)+ansi.StringWidth(right)+2 > width {
+		return mutedStyle.Render(truncateWithEllipsis(right, width))
+	}
+	spaces := strings.Repeat(" ", width-ansi.StringWidth(left)-ansi.StringWidth(right))
+	return mutedStyle.Render(left + spaces + right)
 }

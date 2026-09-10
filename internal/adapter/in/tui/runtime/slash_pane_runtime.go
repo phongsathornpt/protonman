@@ -3,6 +3,7 @@ package runtime
 import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+	"fmt"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	"strings"
@@ -24,9 +25,9 @@ func (i slashListItem) FilterValue() string {
 func (i slashListItem) Title() string {
 	prefix := i.command.PrefixTag
 	if prefix != "" {
-		prefix += " "
+		return prefix + " " + i.command.Name
 	}
-	return prefix + i.command.Name
+	return "/" + i.command.Name
 }
 func (i slashListItem) Description() string {
 	if i.command.Scope != "" {
@@ -84,7 +85,14 @@ func (v *slashPaneView) Render(ctx paneRenderContext) string {
 	delegate.SetSpacing(0)
 	delegate.ShowDescription = layoutModeForHeight(ctx.height) == layoutNormal
 	v.picker.SetDelegate(delegate)
-	return v.picker.View()
+	rows := strings.Split(v.picker.View(), "\n")
+	if remaining := len(v.matches) - minInt(maxSlashRows, len(v.matches)); remaining > 0 {
+		rows = append(rows, mutedStyle.Render(fmt.Sprintf("↓ %d more", remaining)))
+	}
+	if layoutModeForHeight(ctx.height) != layoutTiny {
+		rows = append(rows, mutedStyle.Render("↑↓ navigate · enter select · tab complete · esc close"))
+	}
+	return strings.Join(rows, "\n")
 }
 
 func (v *slashPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {

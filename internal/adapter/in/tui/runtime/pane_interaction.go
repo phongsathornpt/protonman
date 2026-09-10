@@ -12,12 +12,11 @@ type paneActionKind uint8
 const (
 	paneActionNone paneActionKind = iota
 	paneActionClose
-	paneActionSetReasoning
 	paneActionAcceptSlash
 	paneActionToggleSkill
 	paneActionReloadProject
 	paneActionReloadModels
-	paneActionSelectModel
+	paneActionApplyModelSetup
 	paneActionOpenProviderSelect
 	paneActionOpenProviderEditor
 	paneActionPermissionActivity
@@ -63,9 +62,6 @@ func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
 	switch action.kind {
 	case paneActionClose:
 		m.panes.bottom.remove(action.paneID)
-	case paneActionSetReasoning:
-		m.panes.bottom.remove(action.paneID)
-		return m.setReasoningEffort(action.reasoning)
 	case paneActionAcceptSlash:
 		_, cmd := m.acceptSlash(action.runSlash)
 		return cmd
@@ -82,19 +78,19 @@ func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
 			return view.reload(m)
 		}
 	case paneActionReloadModels:
-		if view, _ := m.panes.bottom.find(modelSelectViewID).(*modelSelectPaneView); view != nil {
+		if view, _ := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView); view != nil {
 			return view.loadProvider(m, action.runSlash)
 		}
-	case paneActionSelectModel:
-		m.panes.bottom.remove(modelSelectViewID)
-		return m.beginModelSelect(action.providerName, action.modelID, false)
+	case paneActionApplyModelSetup:
+		m.panes.bottom.remove(modelSetupViewID)
+		return m.beginModelSetupSelect(action.providerName, action.modelID, action.reasoning, false)
 	case paneActionOpenProviderSelect:
-		m.panes.bottom.remove(modelSelectViewID)
+		m.panes.bottom.remove(modelSetupViewID)
 		if !m.panes.bottom.has(providerSelectViewID) {
 			m.panes.bottom.push(newProviderSelectPaneView(m))
 		}
 	case paneActionOpenProviderEditor:
-		m.panes.bottom.remove(modelSelectViewID)
+		m.panes.bottom.remove(modelSetupViewID)
 		m.panes.bottom.remove(providerSelectViewID)
 		if !m.panes.bottom.has(providerViewID) {
 			m.pushProviderPane(newProviderPaneView())
@@ -115,8 +111,8 @@ func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
 		return m.beginProviderSelect(action.providerItem.name)
 	case paneActionProviderModels:
 		m.panes.bottom.remove(providerSelectViewID)
-		if !m.panes.bottom.has(modelSelectViewID) {
-			mv := newModelSelectPaneView(m)
+		if !m.panes.bottom.has(modelSetupViewID) {
+			mv := newModelSetupPaneView(m)
 			for i, name := range mv.providerNames {
 				if strings.EqualFold(name, action.providerItem.name) {
 					mv.providerIndex = i

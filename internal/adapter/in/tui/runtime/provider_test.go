@@ -286,22 +286,22 @@ func TestProviderSelectSwitchToModels(t *testing.T) {
 	if bModel.panes.bottom.has(providerSelectViewID) {
 		t.Fatal("expected provider select view removed after pressing 'm'")
 	}
-	if !bModel.panes.bottom.has(modelSelectViewID) {
-		t.Fatal("expected model select view opened after pressing 'm'")
+	if !bModel.panes.bottom.has(modelSetupViewID) {
+		t.Fatal("expected model setup view opened after pressing 'm'")
 	}
 }
 
-func TestModelSelectSwitchToProviders(t *testing.T) {
+func TestModelSetupSwitchToProviders(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: "https://opencode.ai/zen/v1", Type: "openai"}, "protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-test-key", Type: "openai"}}
 	bModel.executeCommand("/model")
-	if !bModel.panes.bottom.has(modelSelectViewID) {
-		t.Fatal("expected model select view open")
+	if !bModel.panes.bottom.has(modelSetupViewID) {
+		t.Fatal("expected model setup view open")
 	}
 	updated, _ := bModel.Update(testText("p"))
 	bModel = updated.(*bubbleModel)
-	if bModel.panes.bottom.has(modelSelectViewID) {
-		t.Fatal("expected model select view removed after pressing 'p'")
+	if bModel.panes.bottom.has(modelSetupViewID) {
+		t.Fatal("expected model setup view removed after pressing 'p'")
 	}
 	if !bModel.panes.bottom.has(providerSelectViewID) {
 		t.Fatal("expected provider select view opened after pressing 'p'")

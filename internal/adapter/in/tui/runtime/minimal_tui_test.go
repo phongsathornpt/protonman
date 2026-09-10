@@ -8,22 +8,20 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
-func TestMinimalIdleChromeUsesBubblesHelp(t *testing.T) {
+func TestMinimalIdleChromeUsesContextFooter(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
 	if got := m.statusView(); got != "" {
 		t.Fatalf("idle status = %q, want empty", got)
 	}
 	footer := ansi.Strip(m.footerView())
-	for _, want := range []string{"enter", "send", "ctrl+j", "newline"} {
+	for _, want := range []string{"? for shortcuts", "unselected", "auto"} {
 		if !strings.Contains(footer, want) {
-			t.Fatalf("idle bubbles help missing %q: %q", want, footer)
+			t.Fatalf("idle context footer missing %q: %q", want, footer)
 		}
-	}
-	if got := m.infoView(); got != "" {
-		t.Fatalf("idle info = %q, want empty", got)
 	}
 }
 
@@ -132,38 +130,32 @@ func TestScrolledFooterPrioritizesReturnToLatest(t *testing.T) {
 	}
 }
 
-func TestMinimalPromptRestoresEssentialContext(t *testing.T) {
+func TestMinimalComposerKeepsContextInFooter(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.runner = fakeConversation{}
 	m.panes.bottom.setHasRunner(true)
 	m.activeModel = "glm-5.3-flash"
-	m.agentProfile = "engineer"
-	m.workDir = "/tmp/protonman"
+	m.reasoningEffort = sdk.ReasoningHigh
 	m.resize(80, 24)
-	plain := ansi.Strip(m.promptView())
-	for _, want := range []string{"glm-5.3-flash", "engineer", "/tmp/protonman", "ask", "Message Protonman"} {
-		if !strings.Contains(plain, want) {
-			t.Fatalf("prompt context %q missing from %q", want, plain)
+	prompt := ansi.Strip(m.promptView())
+	if !strings.Contains(prompt, "Message Protonman") || strings.Contains(prompt, "glm-5.3-flash") {
+		t.Fatalf("composer should stay focused on input: %q", prompt)
+	}
+	footer := ansi.Strip(m.footerView())
+	for _, want := range []string{"? for shortcuts", "glm-5.3-flash", "high"} {
+		if !strings.Contains(footer, want) {
+			t.Fatalf("context footer missing %q: %q", want, footer)
 		}
 	}
 }
 
-func TestMinimalPromptMetadataFitsNarrowTerminal(t *testing.T) {
+func TestMinimalContextFooterFitsNarrowTerminal(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeModel = "provider/a-very-long-model-name"
-	m.agentProfile = "engineer"
-	m.workDir = "/workspace/a/very/long/path"
-	m.resize(40, 12)
-	plain := ansi.Strip(m.promptMetadataView())
-	for _, want := range []string{"a-very-long-model-name", "path", "ask"} {
-		if !strings.Contains(plain, want) {
-			t.Fatalf("narrow prompt metadata dropped %q: %q", want, plain)
-		}
-	}
-	for _, line := range strings.Split(m.promptView(), "\n") {
-		if got := lipgloss.Width(line); got > 40 {
-			t.Fatalf("prompt line width=%d exceeds 40: %q", got, line)
-		}
+	m.reasoningEffort = sdk.ReasoningMedium
+	m.resize(24, 12)
+	if got := lipgloss.Width(m.footerView()); got > 22 {
+		t.Fatalf("footer width=%d exceeds available width: %q", got, m.footerView())
 	}
 }
 
@@ -204,19 +196,6 @@ func TestMinimalBusyStatusPrefersActiveToolName(t *testing.T) {
 	}
 }
 
-func TestMinimalPromptMetadataUsesDisplayWidth(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.activeModel = "模型-ภาษาไทย"
-	m.agentProfile = "工程"
-	m.workDir = "/tmp/โครงการ"
-	m.resize(32, 12)
-	for _, line := range strings.Split(m.promptMetadataView(), "\n") {
-		if got := lipgloss.Width(line); got > 32 {
-			t.Fatalf("metadata width=%d exceeds 32: %q", got, line)
-		}
-	}
-}
-
 func TestMinimalIdleStatusDoesNotReuseAssistantGlyph(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
@@ -252,7 +231,7 @@ func TestMinimalIdleFooterHidesSecondaryShortcuts(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
 	footer := ansi.Strip(m.footerView())
-	for _, noise := range []string{"clear", "quit", "todos", "transcript", "mode", "skills", "model"} {
+	for _, noise := range []string{"clear", "quit", "todos", "transcript", "mode:", "skills"} {
 		if strings.Contains(footer, noise) {
 			t.Fatalf("idle footer leaked secondary shortcut %q: %q", noise, footer)
 		}
@@ -295,5 +274,24 @@ func TestMinimalVeryNarrowUnicodeFrameStaysWithinTerminal(t *testing.T) {
 		if got := ansi.StringWidth(line); got > 16 {
 			t.Fatalf("line width=%d exceeds terminal width 16: %q", got, line)
 		}
+	}
+}
+
+func TestIdleQuestionMarkOpensShortcutPane(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	updated, _ := m.Update(testText("?"))
+	m = updated.(*bubbleModel)
+	if !m.panes.bottom.has(shortcutsViewID) {
+		t.Fatal("? did not open shortcuts pane")
+	}
+	plain := ansi.Strip(m.View().Content)
+	for _, want := range []string{"Shortcuts", "ctrl+p model setup", "ctrl+t transcript"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("shortcut pane missing %q: %q", want, plain)
+		}
+	}
+	if got := m.panes.bottom.prompt().Value(); got != "" {
+		t.Fatalf("? leaked into composer: %q", got)
 	}
 }

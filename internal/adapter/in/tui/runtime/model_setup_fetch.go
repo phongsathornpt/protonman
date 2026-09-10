@@ -11,7 +11,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 )
 
-func (v *modelSelectPaneView) beginFetch(parent context.Context, providerName string, cfg config.ProviderConfig, timeouts ...time.Duration) tea.Cmd {
+func (v *modelSetupPaneView) beginFetch(parent context.Context, providerName string, cfg config.ProviderConfig, timeouts ...time.Duration) tea.Cmd {
 	discoveryTimeout := runtimepolicy.ModelDiscoveryTimeout
 	if len(timeouts) > 0 && timeouts[0] > 0 {
 		discoveryTimeout = timeouts[0]
@@ -34,7 +34,7 @@ func (v *modelSelectPaneView) beginFetch(parent context.Context, providerName st
 	return fetchProviderModelsCmd(providerFetchRequest{ctx: ctx, requestID: v.fetchRequestID, providerName: providerName, providerType: cfg.Type, baseURL: cfg.BaseURL, apiKey: cfg.APIKey, discoveryTimeout: discoveryTimeout})
 }
 
-func (v *modelSelectPaneView) cancelFetch() {
+func (v *modelSetupPaneView) cancelFetch() {
 	if v == nil || v.fetchCancel == nil {
 		return
 	}
@@ -42,7 +42,7 @@ func (v *modelSelectPaneView) cancelFetch() {
 	v.fetchCancel = nil
 }
 
-func (v *modelSelectPaneView) loadProvider(m *bubbleModel, force bool) tea.Cmd {
+func (v *modelSetupPaneView) loadProvider(m *bubbleModel, force bool) tea.Cmd {
 	if v == nil || m == nil {
 		return nil
 	}
@@ -52,7 +52,8 @@ func (v *modelSelectPaneView) loadProvider(m *bubbleModel, force bool) tea.Cmd {
 	v.err = nil
 	if !force {
 		if models, ok := m.modelCatalogs.FreshModels(providerName, time.Now(), m.runtimeConfig.ModelCatalogTTL); ok {
-			v.setModels(models, m.activeModel)
+			v.setModels(models, m.activeProvider, m.activeModel)
+			v.syncReasoningForSelection(v.reasoningPreference)
 			return nil
 		}
 	}
@@ -62,15 +63,16 @@ func (v *modelSelectPaneView) loadProvider(m *bubbleModel, force bool) tea.Cmd {
 			return v.beginFetch(m.ctx, providerName, cfg, m.runtimeConfig.ModelDiscoveryTimeout)
 		}
 	}
-	v.setModels(nil, m.activeModel)
+	v.setModels(nil, m.activeProvider, m.activeModel)
+	v.syncReasoningForSelection(v.reasoningPreference)
 	return nil
 }
 
-func (m *bubbleModel) openModelSelectPane() tea.Cmd {
-	if m == nil || m.panes.bottom.has(modelSelectViewID) {
+func (m *bubbleModel) openModelSetupPane() tea.Cmd {
+	if m == nil || m.panes.bottom.has(modelSetupViewID) {
 		return nil
 	}
-	view := newModelSelectPaneView(m)
+	view := newModelSetupPaneView(m)
 	m.panes.bottom.push(view)
 	m.requestRelayout()
 	return view.loadProvider(m, false)

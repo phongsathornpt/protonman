@@ -66,12 +66,12 @@ func TestPickersFitResponsiveTerminalHeights(t *testing.T) {
 	for _, size := range [][2]int{{80, 24}, {60, 18}, {40, 14}, {24, 12}} {
 		m := newTestSkillsModel(t, 10)
 		m.resize(size[0], size[1])
-		modelView := newModelSelectPaneView(m).Render(newPaneRenderContext(m))
+		modelView := newModelSetupPaneView(m).Render(newPaneRenderContext(m))
 		if got := lipgloss.Height(modelView); got > size[1] {
-			t.Fatalf("model picker height %d exceeds %d at %dx%d", got, size[1], size[0], size[1])
+			t.Fatalf("model setup height %d exceeds %d at %dx%d", got, size[1], size[0], size[1])
 		}
 		if got := lipgloss.Width(modelView); got > size[0] {
-			t.Fatalf("model picker width %d exceeds %d at %dx%d", got, size[0], size[0], size[1])
+			t.Fatalf("model setup width %d exceeds %d at %dx%d", got, size[0], size[0], size[1])
 		}
 		skillsView := (&skillsPaneView{}).Render(newPaneRenderContext(m))
 		if got := lipgloss.Height(skillsView); got > size[1] {
@@ -744,7 +744,7 @@ func TestPickerRenderDoesNotMutateNavigationState(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.resize(80, 24)
 	t.Run("model selector", func(t *testing.T) {
-		v := &modelSelectPaneView{models: []model.RemoteModel{{ID: "one"}, {ID: "two"}}}
+		v := &modelSetupPaneView{models: []model.RemoteModel{{ID: "one"}, {ID: "two"}}}
 		v.resetSelection("two")
 		beforeIndex := v.picker.Index()
 		beforePage := v.picker.Paginator.Page
@@ -901,9 +901,9 @@ func TestResponsiveUXSurfacesFitTerminal(t *testing.T) {
 		m.activeModel = "provider/a-very-long-model-identifier-for-layout-testing"
 		m.activeProvider = "provider-with-a-long-name"
 		assertBubbleViewFits(t, m, size[0], size[1])
-		m.panes.bottom.push(newModelSelectPaneView(m))
+		m.panes.bottom.push(newModelSetupPaneView(m))
 		assertBubbleViewFits(t, m, size[0], size[1])
-		m.panes.bottom.remove(modelSelectViewID)
+		m.panes.bottom.remove(modelSetupViewID)
 		m.panes.bottom.push(&skillsPaneView{})
 		assertBubbleViewFits(t, m, size[0], size[1])
 		m.panes.bottom.remove(skillsViewID)

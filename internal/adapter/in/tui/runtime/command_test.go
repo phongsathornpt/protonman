@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -143,91 +144,66 @@ func TestSlashReasoningAutoResetsSessionOverride(t *testing.T) {
 	}
 }
 
-func TestSlashReasoningOpensCapabilityAwarePicker(t *testing.T) {
+func TestSlashReasoningOpensUnifiedModelSetup(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeProvider = "protonman"
 	m.activeModel = "gemini-3.8-flash"
-	m.agentProfile = "intelligence"
+	m.providers = map[string]config.ProviderConfig{"protonman": {Name: "protonman", Type: "openai", BaseURL: "https://protonman.dev/api/v1"}}
+	m.modelCatalogs.Set("protonman", []model.RemoteModel{{ID: "gemini-3.8-flash", Name: "Gemini 3.8 Flash"}})
 	m.executeCommand("/reasoning")
-	if !m.panes.bottom.has(reasoningViewID) {
-		t.Fatal("/reasoning did not open thinking picker")
+	if !m.panes.bottom.has(modelSetupViewID) {
+		t.Fatal("/reasoning did not open unified model setup")
 	}
 	got := m.panes.bottom.renderTop(m)
-	for _, want := range []string{"Thinking level", "gemini-3.8-flash", "auto", "low", "medium", "high", "model default"} {
+	for _, want := range []string{"Switch Model", "Gemini 3.8 Flash", "Thinking", "low", "medium", "high"} {
 		if !strings.Contains(got, want) {
-			t.Fatalf("picker missing %q: %q", want, got)
-		}
-	}
-	for _, unsupported := range []string{"xhigh", "max"} {
-		if strings.Contains(got, unsupported) {
-			t.Fatalf("picker exposed unsupported level %q: %q", unsupported, got)
+			t.Fatalf("model setup missing %q: %q", want, got)
 		}
 	}
 }
 
-func TestReasoningPickerSelectsLevel(t *testing.T) {
+func TestUnifiedModelSetupAdjustsThinkingBeforeApply(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeProvider = "protonman"
 	m.activeModel = "gemini-3.8-flash"
-	m.executeCommand("/reasoning")
-	view, ok := m.panes.bottom.find(reasoningViewID).(*reasoningPaneView)
-	if !ok || view == nil {
-		t.Fatal("reasoning picker missing")
+	m.providers = map[string]config.ProviderConfig{"protonman": {Name: "protonman", Type: "openai", BaseURL: "https://protonman.dev/api/v1"}}
+	m.modelCatalogs.Set("protonman", []model.RemoteModel{{ID: "gemini-3.8-flash", Name: "Gemini 3.8 Flash"}})
+	m.executeCommand("/model")
+	view := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
+	if got := view.selectedReasoning(); got != sdk.ReasoningDefault {
+		t.Fatalf("initial thinking = %q, want auto", got)
 	}
-	view.picker.Select(3)
-	handled, _ := m.handleModalKey(testKey(tea.KeyEnter))
-	if !handled {
-		t.Fatal("enter was not handled")
+	handled, _ := m.handleModalKey(testKey(tea.KeyRight))
+	if !handled || view.selectedReasoning() != sdk.ReasoningLow {
+		t.Fatalf("right did not move thinking to low: %q", view.selectedReasoning())
 	}
-	if got := m.reasoningEffort; got != sdk.ReasoningHigh {
-		t.Fatalf("reasoningEffort = %q, want high", got)
-	}
-	if m.panes.bottom.has(reasoningViewID) {
-		t.Fatal("picker stayed open after selection")
+	if m.reasoningEffort != sdk.ReasoningDefault {
+		t.Fatalf("pending setup mutated runtime before apply: %q", m.reasoningEffort)
 	}
 }
 
-func TestReasoningPickerShiftTabDoesNotLeak(t *testing.T) {
+func TestUnifiedModelSetupShiftTabCyclesProviderWithoutPermissionLeak(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.activeProvider = "protonman"
-	m.activeModel = "gemini-3.8-flash"
-	m.executeCommand("/reasoning")
-	view, ok := m.panes.bottom.find(reasoningViewID).(*reasoningPaneView)
-	if !ok || view == nil {
-		t.Fatal("reasoning picker missing")
+	m.providers = map[string]config.ProviderConfig{
+		"alpha": {Name: "alpha", Type: "openai", BaseURL: "https://alpha.example/v1", APIKey: "x"},
+		"beta":  {Name: "beta", Type: "openai", BaseURL: "https://beta.example/v1", APIKey: "x"},
 	}
+	m.activeProvider = "alpha"
+	m.modelCatalogs.Set("alpha", []model.RemoteModel{{ID: "a"}})
+	m.modelCatalogs.Set("beta", []model.RemoteModel{{ID: "b"}})
+	m.executeCommand("/model")
+	view := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
+	initialProvider := view.activeProviderName()
 	initialMode := m.service.Mode()
-	handled, _ := m.handleModalKey(testText("s"))
-	// Test shift+tab directly:
-	handledShiftTab, _ := m.handleModalKey(testShiftTab())
-	if !handledShiftTab {
-		t.Fatal("shift+tab was not handled by reasoning picker")
+	handled, _ := m.handleModalKey(testShiftTab())
+	if !handled {
+		t.Fatal("shift+tab was not handled by model setup")
+	}
+	if view.activeProviderName() == initialProvider {
+		t.Fatal("shift+tab did not cycle provider")
 	}
 	if m.service.Mode() != initialMode {
-		t.Fatalf("permission mode changed from %s to %s on shift+tab", initialMode, m.service.Mode())
-	}
-	_ = handled
-}
-
-func TestReasoningPickerNumberKeySelects(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.activeProvider = "protonman"
-	m.activeModel = "gemini-3.8-flash"
-	m.executeCommand("/reasoning")
-	view, ok := m.panes.bottom.find(reasoningViewID).(*reasoningPaneView)
-	if !ok || view == nil {
-		t.Fatal("reasoning picker missing")
-	}
-	// Pressing '2' selects choice index 1 (low)
-	handled, _ := m.handleModalKey(testText("2"))
-	if !handled {
-		t.Fatal("key 2 was not handled")
-	}
-	if got := m.reasoningEffort; got != sdk.ReasoningLow {
-		t.Fatalf("reasoningEffort = %q, want low", got)
-	}
-	if m.panes.bottom.has(reasoningViewID) {
-		t.Fatal("picker stayed open after number selection")
+		t.Fatalf("permission mode changed from %s to %s", initialMode, m.service.Mode())
 	}
 }
 
@@ -911,13 +887,13 @@ func TestShortcutMatrixInterruptAndToggleSemantics(t *testing.T) {
 			t.Fatal("ctrl+c did not close skills pane")
 		}
 	})
-	t.Run("ctrl-p closes model picker through binding", func(t *testing.T) {
+	t.Run("ctrl-p closes model setup through binding", func(t *testing.T) {
 		m := newTestBubbleModel(t, permission.ModeAsk, nil)
-		m.panes.bottom.push(&modelSelectPaneView{})
+		m.panes.bottom.push(&modelSetupPaneView{})
 		updated, _ := m.Update(testCtrl('p'))
 		m = updated.(*bubbleModel)
-		if m.panes.bottom.has(modelSelectViewID) {
-			t.Fatal("ctrl+p did not close model picker")
+		if m.panes.bottom.has(modelSetupViewID) {
+			t.Fatal("ctrl+p did not close model setup")
 		}
 	})
 	t.Run("ctrl-c closes transcript overlay", func(t *testing.T) {
@@ -932,4 +908,21 @@ func TestShortcutMatrixInterruptAndToggleSemantics(t *testing.T) {
 			t.Fatal("ctrl+c did not close transcript overlay")
 		}
 	})
+}
+
+func TestSlashCompletionUsesInlineCommandGrammar(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.panes.bottom.prompt().SetValue("/")
+	m.syncSlashView()
+	view := m.panes.bottom.find(slashViewID)
+	if view == nil {
+		t.Fatal("slash completion did not open")
+	}
+	plain := ansi.Strip(view.Render(newPaneRenderContext(m)))
+	for _, want := range []string{"/help", "more", "↑↓ navigate", "tab complete", "esc close"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("slash completion missing %q: %q", want, plain)
+		}
+	}
 }

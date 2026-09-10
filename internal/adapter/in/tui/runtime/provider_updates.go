@@ -30,8 +30,8 @@ func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) (tea.Model, 
 		}
 		return m, nil
 	}
-	if pane := m.panes.bottom.find(modelSelectViewID); pane != nil {
-		if mv, ok := pane.(*modelSelectPaneView); ok {
+	if pane := m.panes.bottom.find(modelSetupViewID); pane != nil {
+		if mv, ok := pane.(*modelSetupPaneView); ok {
 			currentProvider := mv.activeProviderName()
 			if message.requestID != mv.fetchRequestID || !strings.EqualFold(message.providerName, currentProvider) {
 				return m, nil
@@ -41,7 +41,8 @@ func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) (tea.Model, 
 			mv.err = message.err
 			if message.err == nil {
 				m.modelCatalogs.Set(message.providerName, message.models)
-				mv.setModels(m.modelCatalogs.Models(message.providerName), m.activeModel)
+				mv.setModels(m.modelCatalogs.Models(message.providerName), m.activeProvider, m.activeModel)
+				mv.syncReasoningForSelection(mv.reasoningPreference)
 			}
 			m.requestRelayout()
 		}
@@ -99,11 +100,11 @@ func (m *bubbleModel) updateProviderSaved(message providerSavedMsg) (tea.Model, 
 	return m, nil
 }
 
-func (m *bubbleModel) updateModelSelected(message modelSelectedMsg) (tea.Model, tea.Cmd) {
-	if message.operationID != m.activeModelSelect {
+func (m *bubbleModel) updateModelSetupApplied(message modelSetupAppliedMsg) (tea.Model, tea.Cmd) {
+	if message.operationID != m.activeModelSetup {
 		return m, nil
 	}
-	m.activeModelSelect = 0
+	m.activeModelSetup = 0
 	if message.err != nil {
 		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to set active model: %v", message.err)))
 	} else {
@@ -111,14 +112,18 @@ func (m *bubbleModel) updateModelSelected(message modelSelectedMsg) (tea.Model, 
 		if message.providerName != "" {
 			m.activeProvider = message.providerName
 		}
-		m.reconcileReasoningForActiveModel()
+		if err := m.validateReasoningEffort(message.reasoning); err == nil {
+			m.applyReasoningPreference(message.reasoning, reasoningPreferenceSession)
+		} else {
+			m.reconcileReasoningForActiveModel()
+		}
 		m.reconfigureRunner()
 		m.appendLine(successStyle.Render(fmt.Sprintf("model → %s · %s", message.modelID, m.activeProvider)))
 		if message.unverified {
 			m.appendLine(mutedStyle.Render("  Model ID was not present in the discovered catalog; using it as a custom model."))
 		}
 	}
-	m.panes.bottom.remove(modelSelectViewID)
+	m.panes.bottom.remove(modelSetupViewID)
 	m.requestRelayout()
 	return m, nil
 }
@@ -147,7 +152,7 @@ func (m *bubbleModel) updateProviderActiveSelected(message providerActiveSelecte
 	}
 	m.panes.bottom.remove(providerSelectViewID)
 	if message.err == nil && m.activeModel == "" {
-		return m, m.openModelSelectPane()
+		return m, m.openModelSetupPane()
 	}
 	m.requestRelayout()
 	return m, nil

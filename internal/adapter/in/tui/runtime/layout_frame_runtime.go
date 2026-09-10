@@ -59,7 +59,7 @@ func (m *bubbleModel) buildFrameChrome() frameChrome {
 		// Layout only needs the textarea's measured height. Rendering the full
 		// composer here would duplicate the expensive textarea render that View
 		// performs immediately after reconciliation.
-		frame.height += 1 + m.panes.bottom.prompt().Height()
+		frame.height += m.panes.bottom.prompt().Height()
 	}
 	if frame.footer != "" {
 		frame.height += lipgloss.Height(frame.footer)
