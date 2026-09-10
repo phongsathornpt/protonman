@@ -86,12 +86,11 @@ func paneKeyboardHelp(width int, bindings ...string) string {
 	if width <= 0 || len(bindings) == 0 {
 		return ""
 	}
-	label := systemStyle.Bold(true).Render("Keyboard:")
 	parts := make([]string, 0, len(bindings)/2)
 	for i := 0; i+1 < len(bindings); i += 2 {
-		parts = append(parts, systemStyle.Render(bindings[i])+mutedStyle.Render(" "+bindings[i+1]))
+		parts = append(parts, systemStyle.Render(bindings[i])+mutedStyle.Render(" "+strings.ToLower(bindings[i+1])))
 	}
-	line := label + " " + strings.Join(parts, mutedStyle.Render("   "))
+	line := strings.Join(parts, mutedStyle.Render("   "))
 	if ansi.StringWidth(line) <= width {
 		return line
 	}
@@ -99,7 +98,7 @@ func paneKeyboardHelp(width int, bindings ...string) string {
 	for i := 0; i+1 < len(bindings); i += 2 {
 		compact = append(compact, systemStyle.Render(bindings[i]))
 	}
-	line = label + " " + strings.Join(compact, mutedStyle.Render(" · "))
+	line = strings.Join(compact, mutedStyle.Render(" · "))
 	if ansi.StringWidth(line) <= width {
 		return line
 	}

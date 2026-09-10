@@ -34,6 +34,7 @@ func (m bubbleModel) statusView() string {
 	if activity == "" || activity == "ready" {
 		activity = "analyzing"
 	}
+	meta := ""
 	if activeAgents == 0 {
 		if running, ok := m.ensureHistoryState().LastRunningTool(); ok && activity == "analyzing" {
 			activity = tool.DisplayName(strings.TrimSpace(running.Name))
@@ -46,14 +47,17 @@ func (m bubbleModel) statusView() string {
 			if m.turnProgress.ToolCalls != 1 {
 				label = "tools"
 			}
-			activity += fmt.Sprintf(" · %d %s", m.turnProgress.ToolCalls, label)
+			meta = fmt.Sprintf(" · %d %s", m.turnProgress.ToolCalls, label)
 		}
 	}
-	indicator := "◌ "
+	indicator := brandMarkStyle.Render("◌")
 	if spin := m.spinner.View(); spin != "" {
-		indicator = spin + " "
+		indicator = spin
 	}
-	return statusStyle.Render(truncateWithEllipsis(indicator+activity, maxInt(1, m.layout.width-2)))
+	maxWidth := maxInt(1, m.layout.width-2)
+	contentWidth := maxInt(1, maxWidth-2-len([]rune(meta)))
+	activity = truncateWithEllipsis(activity, contentWidth)
+	return indicator + " " + systemStyle.Render(activity) + mutedStyle.Render(meta)
 }
 
 func (m bubbleModel) turnAgentSnapshot() []agent.AgentStatus {

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
@@ -33,7 +34,7 @@ func TestProviderSelectViewLaunchViaSlashCommand(t *testing.T) {
 	if !strings.Contains(rendered, "Providers") {
 		t.Fatalf("expected provider title in view, got:\n%s", rendered)
 	}
-	for _, want := range []string{"Protonman", "(current)", "Keyboard:"} {
+	for _, want := range []string{"Protonman", "(current)", "↑/↓", "navigate", "enter", "select"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected provider reference element %q in view, got:\n%s", want, rendered)
 		}
@@ -551,7 +552,8 @@ func TestProviderViewFetchAndModelSelectionFlow(t *testing.T) {
 		t.Fatalf("expected 2 models, got %d", len(view.models))
 	}
 	rendered := bModel.View().Content
-	if !strings.Contains(rendered, "deepseek-v4-flash-vision-exp") || !strings.Contains(rendered, "GLM-5.3 Flash") || !strings.Contains(rendered, "Keyboard:") {
+	plain := ansi.Strip(rendered)
+	if !strings.Contains(plain, "deepseek-v4-flash-vision-exp") || !strings.Contains(plain, "GLM-5.3 Flash") || !strings.Contains(plain, "↑/↓ navigate") {
 		t.Fatalf("expected models in view, got:\n%s", rendered)
 	}
 	updated, _ = bModel.Update(testKey(tea.KeyDown))

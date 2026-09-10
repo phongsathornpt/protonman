@@ -104,8 +104,7 @@ func (v *slashPaneView) Render(ctx paneRenderContext) string {
 	}
 	visibleRows := minInt(maxSlashRows, len(v.matches))
 	v.picker.SetSize(maxInt(20, ctx.width-4), maxInt(1, visibleRows))
-	rows := []string{brandStyle.Render("Commands"), ""}
-	rows = append(rows, v.commandRows(ctx)...)
+	rows := v.commandRows(ctx)
 	if layoutModeForHeight(ctx.height) != layoutTiny {
 		rows = append(rows, "", slashPickerHelp(ctx.width))
 	}
@@ -123,6 +122,14 @@ func (v *slashPaneView) commandRows(ctx paneRenderContext) []string {
 	start, end := paneWindow(len(items), v.picker.Index(), maxSlashRows, layoutModeForHeight(ctx.height))
 	rows := make([]string, 0, end-start)
 	available := maxInt(1, ctx.width-6)
+	nameColumnWidth := 0
+	for i := start; i < end; i++ {
+		entry, ok := items[i].(slashListItem)
+		if !ok {
+			continue
+		}
+		nameColumnWidth = maxInt(nameColumnWidth, len([]rune(entry.Title())))
+	}
 	for i := start; i < end; i++ {
 		entry, ok := items[i].(slashListItem)
 		if !ok {
@@ -137,12 +144,14 @@ func (v *slashPaneView) commandRows(ctx paneRenderContext) []string {
 		name := entry.Title()
 		description := entry.Description()
 		nameWidth := len([]rune(name))
-		if description == "" || available-nameWidth < 8 {
+		if description == "" || available-nameColumnWidth < 8 {
 			rows = append(rows, prefix+nameStyle.Render(truncateWithEllipsis(name, available)))
 			continue
 		}
-		description = truncateWithEllipsis(description, maxInt(1, available-nameWidth-2))
-		rows = append(rows, prefix+nameStyle.Render(name)+"  "+mutedStyle.Render(description))
+		descriptionWidth := maxInt(1, available-nameColumnWidth-2)
+		description = truncateWithEllipsis(description, descriptionWidth)
+		gap := strings.Repeat(" ", maxInt(2, nameColumnWidth-nameWidth+2))
+		rows = append(rows, prefix+nameStyle.Render(name)+gap+mutedStyle.Render(description))
 	}
 	return rows
 }
@@ -156,12 +165,7 @@ func (v *slashPaneView) selectionStatus(width int) string {
 		return ""
 	}
 	index := maxInt(0, minInt(v.picker.GlobalIndex(), len(v.matches)-1))
-	selected := v.matches[index]
-	name := "/" + selected.Name
-	status := fmt.Sprintf("%s · %d/%d", name, index+1, len(v.matches))
-	if remaining := len(v.matches) - minInt(maxSlashRows, len(v.matches)); remaining > 0 {
-		status += fmt.Sprintf(" · %d more", remaining)
-	}
+	status := fmt.Sprintf("%d/%d", index+1, len(v.matches))
 	return paneRightStatus(width, status)
 }
 

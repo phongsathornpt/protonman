@@ -82,7 +82,7 @@ func TestPermissionCardOverlaysTranscript(t *testing.T) {
 		t.Fatalf("overlay replaced the transcript: %#v", model.historyState.Cells())
 	}
 	view := model.View().Content
-	for _, expected := range []string{"Permission required — shell modifies state", "bash", "Allow once", "Deny", "Keyboard:", "Review"} {
+	for _, expected := range []string{"Permission required — shell modifies state", "bash", "Allow once", "Deny", "↑/↓", "navigate", "esc", "review"} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("overlay view does not contain %q: %s", expected, view)
 		}

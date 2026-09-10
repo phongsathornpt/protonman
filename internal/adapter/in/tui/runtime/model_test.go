@@ -1336,7 +1336,7 @@ func TestModelSetupMatchesReferenceHierarchy(t *testing.T) {
 	if composer < 0 || panel < 0 || composer > panel {
 		t.Fatalf("reference hierarchy requires composer before model panel:\n%s", plain)
 	}
-	for _, want := range []string{"(current)", "Effort", "Keyboard:", "Qwen3.6 Plus · auto"} {
+	for _, want := range []string{"(current)", "Effort", "↑/↓ navigate", "Qwen3.6 Plus · auto"} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("reference model panel missing %q:\n%s", want, plain)
 		}
@@ -1396,7 +1396,7 @@ func TestModelSetupGLM53FamilyExposesNativeEffortLevels(t *testing.T) {
 		}
 	}
 	plain := testPlain(view.Render(newPaneRenderContext(m)))
-	for _, label := range []string{"auto", "low", "high", "max", "←/→ Effort"} {
+	for _, label := range []string{"auto", "low", "high", "max", "←/→ effort"} {
 		if !strings.Contains(plain, label) {
 			t.Fatalf("GLM-5.3 picker missing %q:\n%s", label, plain)
 		}
@@ -1455,7 +1455,7 @@ func TestModelSetupDeepSeekV4FamilyExposesNativeEffortLevels(t *testing.T) {
 		}
 	}
 	plain := testPlain(view.Render(newPaneRenderContext(m)))
-	for _, label := range []string{"auto", "none", "low", "high", "max", "←/→ Effort"} {
+	for _, label := range []string{"auto", "none", "low", "high", "max", "←/→ effort"} {
 		if !strings.Contains(plain, label) {
 			t.Fatalf("DeepSeek V4 picker missing %q:\n%s", label, plain)
 		}
@@ -1473,7 +1473,7 @@ func TestModelSetupUnknownFamilyExposesAutoOnly(t *testing.T) {
 		t.Fatalf("unknown family choices = %#v, want auto only", view.reasoningChoices)
 	}
 	plain := testPlain(view.Render(newPaneRenderContext(m)))
-	if !strings.Contains(plain, "Effort    auto") || strings.Contains(plain, "←/→ Effort") {
+	if !strings.Contains(plain, "Effort    auto") || strings.Contains(plain, "←/→ effort") {
 		t.Fatalf("unknown family effort UI is not auto-only:\n%s", plain)
 	}
 }
