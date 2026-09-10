@@ -4,6 +4,7 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/providerio"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"strings"
 )
@@ -69,26 +70,59 @@ func (v *modelSetupPaneView) modelRows(ctx paneRenderContext) []string {
 		if !ok {
 			continue
 		}
-		prefix := "  "
-		style := bodyStyle
-		if i == v.picker.Index() {
-			prefix = glyphPrompt
-			style = brandStyle
-		}
-		label := truncateWithEllipsis(entry.Title(), maxInt(1, width-2))
-		if entry.current {
-			const marker = "(current)"
-			markerWidth := len(marker)
-			labelWidth := len([]rune(label))
-			if gap := width - labelWidth - markerWidth - 2; gap >= 2 {
-				label += strings.Repeat(" ", gap) + mutedStyle.Render(marker)
-			} else {
-				label = truncateWithEllipsis(label, maxInt(1, width-markerWidth-4)) + "  " + mutedStyle.Render(marker)
-			}
-		}
-		rows = append(rows, prefix+style.Render(label))
+		selected := i == v.picker.Index()
+		rows = append(rows, renderModelRow(entry, selected, width))
 	}
 	return rows
+}
+
+func renderModelRow(entry modelListItem, selected bool, width int) string {
+	const (
+		markerWidth   = 2
+		freeWidth     = 4
+		currentWidth  = 9
+		metadataGap   = 2
+		nameMetaGap   = 3
+		metadataWidth = freeWidth + metadataGap + currentWidth
+	)
+	prefix := "  "
+	nameStyle := bodyStyle
+	if selected {
+		prefix = "> "
+		nameStyle = brandStyle
+	}
+
+	available := maxInt(1, width-markerWidth)
+	showMetadata := available-metadataWidth-nameMetaGap >= 8
+	nameWidth := available
+	if showMetadata {
+		nameWidth = available - metadataWidth - nameMetaGap
+	}
+	name := truncateWithEllipsis(entry.Title(), nameWidth)
+	row := prefix + nameStyle.Render(name)
+	if !showMetadata {
+		return row
+	}
+
+	free := ""
+	current := ""
+	if model.IsFreeModel(entry.model.ID) {
+		free = "FREE"
+	}
+	if entry.current {
+		current = "(current)"
+	}
+	gap := nameWidth - len([]rune(name)) + nameMetaGap
+	metadata := strings.TrimRight(padRight(free, freeWidth)+strings.Repeat(" ", metadataGap)+padRight(current, currentWidth), " ")
+	return row + strings.Repeat(" ", gap) + mutedStyle.Render(metadata)
+}
+
+func padRight(value string, width int) string {
+	valueWidth := len([]rune(value))
+	if valueWidth >= width {
+		return value
+	}
+	return value + strings.Repeat(" ", width-valueWidth)
 }
 
 func modelSetupHelp(width int, adjustableEffort bool) string {

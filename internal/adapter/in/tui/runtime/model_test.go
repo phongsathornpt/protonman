@@ -1407,6 +1407,38 @@ func TestModelSetupMatchesReferenceHierarchy(t *testing.T) {
 	}
 }
 
+func TestModelRowsAlignMetadataColumnAndSelectionMarker(t *testing.T) {
+	freeShort := modelListItem{model: domainmodel.RemoteModel{ID: "big-pickle", Name: "Big Pickle"}}
+	freeSelected := modelListItem{model: domainmodel.RemoteModel{ID: "muse-spark-1.3-contributor-free", Name: "Muse Spark 1.3 Contributor"}, current: true}
+	plainShort := testPlain(renderModelRow(freeShort, false, 56))
+	plainSelected := testPlain(renderModelRow(freeSelected, true, 56))
+	if !strings.HasPrefix(plainShort, "  Big Pickle") {
+		t.Fatalf("unselected row marker/padding = %q", plainShort)
+	}
+	if !strings.HasPrefix(plainSelected, "> Muse Spark") {
+		t.Fatalf("selected row marker = %q, want ASCII >", plainSelected)
+	}
+	if !strings.HasSuffix(plainShort, "FREE") || !strings.HasSuffix(plainSelected, "FREE  (current)") {
+		t.Fatalf("metadata column missing: short=%q selected=%q", plainShort, plainSelected)
+	}
+	shortFree := strings.Index(plainShort, "FREE")
+	selectedFree := strings.Index(plainSelected, "FREE")
+	if shortFree != selectedFree {
+		t.Fatalf("FREE column drifted: short=%d selected=%d\nshort=%q\nselected=%q", shortFree, selectedFree, plainShort, plainSelected)
+	}
+}
+
+func TestModelRowDropsMetadataBeforeTruncatingUsefulNameSpace(t *testing.T) {
+	entry := modelListItem{model: domainmodel.RemoteModel{ID: "muse-spark-1.3-contributor-free", Name: "Muse Spark 1.3 Contributor"}, current: true}
+	plain := testPlain(renderModelRow(entry, true, 22))
+	if strings.Contains(plain, "FREE") || strings.Contains(plain, "current") {
+		t.Fatalf("narrow row kept metadata instead of prioritizing model name: %q", plain)
+	}
+	if !strings.HasPrefix(plain, "> Muse") {
+		t.Fatalf("narrow row lost selected model identity: %q", plain)
+	}
+}
+
 func TestModelSetupZaiFamilyExposesThinkingToggle(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.resize(100, 30)

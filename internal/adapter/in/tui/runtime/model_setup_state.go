@@ -87,15 +87,18 @@ func (i modelListItem) FilterValue() string {
 }
 
 func (i modelListItem) Title() string {
-	label := modelDisplayName(i.model)
-	badges := make([]string, 0, 2)
+	return modelDisplayName(i.model)
+}
+
+func (i modelListItem) Metadata() []string {
+	metadata := make([]string, 0, 2)
 	if model.IsFreeModel(i.model.ID) {
-		badges = append(badges, "FREE")
+		metadata = append(metadata, "FREE")
 	}
-	if len(badges) > 0 {
-		label += "  " + strings.Join(badges, " · ")
+	if i.current {
+		metadata = append(metadata, "(current)")
 	}
-	return label
+	return metadata
 }
 
 func modelDisplayName(md model.RemoteModel) string {
