@@ -507,6 +507,12 @@ make vet
 
 ---
 
+## Contributing
+
+Contributions are welcome through pull requests targeting `main`. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for branch naming, verification, and review expectations. Report suspected vulnerabilities privately as described in [`SECURITY.md`](SECURITY.md).
+
+---
+
 ## License
 
-MIT License. See `LICENSE` for details.
+Apache License 2.0. See `LICENSE` for details.

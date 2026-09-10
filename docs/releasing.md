@@ -29,7 +29,7 @@ make build VERSION=v1.2.3
 
 ## Publishing a GitHub Release
 
-Create and push a version tag after the release commit is on the remote:
+Create and push a version tag only after the release commit is merged to and synchronized with `main`:
 
 ```sh
 make tag TAG=v1.2.3
@@ -37,7 +37,7 @@ make tag-push TAG=v1.2.3
 ```
 
 `make tag` validates the release-tag format, requires a clean working tree, rejects
-duplicate local tags, and creates an annotated `Protonman <tag>` tag. `make tag-push`
+duplicate local tags, and creates an annotated `Protonman <tag>` tag. Releases are cut from `main`; feature and maintenance branches must merge through a pull request before tagging. `make tag-push`
 only pushes an already-created local tag to `origin`.
 
 `.github/workflows/release.yml` then:
