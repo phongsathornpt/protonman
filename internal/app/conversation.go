@@ -62,6 +62,16 @@ func CloneConversationWithReasoning(conversation Conversation, effort sdk.Reason
 	return loop.CloneWithReasoningEffort(effort, explicit)
 }
 
+// CloneConversationWithGoal returns an independent conversation with only the
+// managed active goal changed. The model client and tool service are reused.
+func CloneConversationWithGoal(conversation Conversation, goal string) (Conversation, error) {
+	loop, ok := conversation.(*turn.Loop)
+	if !ok || loop == nil {
+		return nil, fmt.Errorf("conversation does not support active goals")
+	}
+	return loop.CloneWithActiveGoal(goal)
+}
+
 // CloneConversationWithTools returns an independent conversation bound to a
 // different tool-call service.
 func CloneConversationWithTools(conversation Conversation, tools *toolcall.Service) (Conversation, error) {

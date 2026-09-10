@@ -27,10 +27,6 @@ func (m *bubbleModel) resize(width int, height int) {
 	m.refreshTranscriptViewport(false)
 }
 
-func (m *bubbleModel) relayoutIfSlashChanged(bool) {
-	m.requestRelayout()
-}
-
 type layoutState struct {
 	width      int
 	height     int
@@ -59,7 +55,7 @@ func (m *bubbleModel) buildFrameChrome() frameChrome {
 		}
 	}
 	if m.panes.bottom.composerVisible() {
-		// The composer is the textarea plus one bottom separator row.
+		frame.composer = m.promptView()
 		frame.height += m.panes.bottom.prompt().Height() + 2
 	}
 	if frame.footer != "" {
@@ -100,22 +96,22 @@ func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame fram
 	if m.viewport.Width() != m.layout.width || m.viewport.Height() != viewportHeight {
 		m.viewport.SetWidth(m.layout.width)
 		m.viewport.SetHeight(viewportHeight)
-		m.invalidateViewportRender()
 	}
 	m.refreshViewportWithScroll(scroll)
 }
 
-func (m *bubbleModel) frameChromeForView() frameChrome {
-	frame := m.buildFrameChrome()
-	if m.panes.bottom.composerVisible() {
-		frame.composer = m.promptView()
+func (m *bubbleModel) refreshFrameChromeOnly() {
+	if m == nil {
+		return
 	}
-	frame.generation = m.layout.frame.generation
-	return frame
-}
-
-func (m *bubbleModel) chromeHeight() int {
-	return m.buildFrameChrome().height
+	frame := m.buildFrameChrome()
+	if frame.height != m.layout.frame.height {
+		m.requestRelayout()
+		return
+	}
+	m.layout.generation++
+	frame.generation = m.layout.generation
+	m.layout.frame = frame
 }
 
 func (m *bubbleModel) refreshViewport() {

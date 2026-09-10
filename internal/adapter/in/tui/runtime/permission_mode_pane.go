@@ -110,7 +110,10 @@ func (m *bubbleModel) permissionModeLabel() string {
 	}
 	mode := strings.TrimSpace(m.service.Mode().String())
 	if mode == "always-approve" {
-		return mode
+		return "auto"
+	}
+	if mode == "deny" {
+		return "deny"
 	}
 	return "ask"
 }

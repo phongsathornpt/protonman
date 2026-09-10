@@ -373,7 +373,7 @@ func newBehaviorService(t *testing.T, registry tool.Registry, mode permission.Mo
 	return service
 }
 
-func TestRenderedViewportCacheInvalidatesOnContentAndScroll(t *testing.T) {
+func TestRenderedViewportReflectsContentAndScroll(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.showWelcome = false
 	m.resize(80, 12)
@@ -382,7 +382,6 @@ func TestRenderedViewportCacheInvalidatesOnContentAndScroll(t *testing.T) {
 	}
 	m.refreshViewport()
 	m.viewport.GotoBottom()
-	m.invalidateViewportRender()
 	bottom := ansi.Strip(m.renderedViewport())
 	if !strings.Contains(bottom, "cache-line-29") {
 		t.Fatalf("bottom render missing newest content: %q", bottom)
@@ -409,6 +408,8 @@ func TestSpinnerTickSkipsViewportRefreshForStreamingAssistant(t *testing.T) {
 	m.resize(80, 24)
 	m.busy = true
 	m.historyState.AppendAssistantDelta("streaming assistant text")
+	m.requestRelayout()
+	m.reconcileLayout()
 	m.viewport.SetContent("viewport sentinel")
 	updated, _ := m.Update(spinner.TickMsg{})
 	m = updated.(*bubbleModel)
@@ -594,15 +595,18 @@ func TestBracketedPasteUpdatesVisibleComposerWithoutSubmitting(t *testing.T) {
 	}
 }
 
-func TestLargeUnicodePasteRespectsComposerLimitWithoutSubmitting(t *testing.T) {
+func TestLargeUnicodePasteIsNotArtificiallyCappedOrSubmitted(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
 	paste := strings.Repeat("ก", 25_000)
 	updated, _ := m.Update(tea.PasteMsg{Content: paste})
 	m = updated.(*bubbleModel)
 	prompt := m.panes.bottom.prompt()
-	if got := len([]rune(prompt.Value())); got > prompt.CharLimit {
-		t.Fatalf("unicode paste runes=%d exceeds char limit=%d", got, prompt.CharLimit)
+	if prompt.CharLimit != 0 {
+		t.Fatalf("composer char limit = %d, want unlimited", prompt.CharLimit)
+	}
+	if got := prompt.Value(); got != paste {
+		t.Fatalf("unicode paste runes=%d, want %d", len([]rune(got)), len([]rune(paste)))
 	}
 	if len(m.historyState.Cells()) != 0 || m.busy {
 		t.Fatalf("large paste submitted unexpectedly: cells=%d busy=%v", len(m.historyState.Cells()), m.busy)
@@ -929,7 +933,7 @@ func TestLiveConversationRetentionKeepsToolProtocolGroup(t *testing.T) {
 		{Role: model.RoleTool, ToolCallID: "call-1", ToolName: "read", Content: "result"},
 		{Role: model.RoleUser, Content: "latest"},
 	}
-	m.retainConversationMessages()
+	m.conversationModelState.retainMessages()
 	if len(m.messages) != 3 {
 		t.Fatalf("retained message count=%d, want 3: %#v", len(m.messages), m.messages)
 	}

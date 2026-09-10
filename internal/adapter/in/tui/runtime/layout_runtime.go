@@ -25,16 +25,11 @@ func (m *bubbleModel) renderedViewport() string {
 	if m == nil {
 		return ""
 	}
-	if m.conversationViewport.renderValid {
-		return m.conversationViewport.renderedViewport
-	}
-	m.conversationViewport.renderedViewport = m.viewport.View()
-	m.conversationViewport.renderValid = true
-	return m.conversationViewport.renderedViewport
+	return m.viewport.View()
 }
 
 func (m *bubbleModel) liveView() string {
-	frame := m.frameChromeForView()
+	frame := m.layout.frame
 	parts := []string{m.renderedViewport()}
 	if frame.status != "" {
 		parts = append(parts, frame.status)
@@ -69,7 +64,7 @@ func (m *bubbleModel) footerView() string {
 			return ""
 		}
 		if m.slashOpen() {
-			return m.idleContextFooter()
+			return ""
 		}
 		// Overlay panes own keyboard focus and render their own contextual help.
 		// Keep the composer visible for continuity, but do not show send/newline
@@ -95,8 +90,12 @@ func (m *bubbleModel) idleContextFooter() string {
 	}
 	right += " · " + reasoningEffortLabel(m.reasoningEffort) + " · " + m.permissionModeLabel()
 	if ansi.StringWidth(left)+ansi.StringWidth(right)+2 > width {
-		return inset + mutedStyle.Render(truncateWithEllipsis(right, width))
+		rightWidth := maxInt(1, width-ansi.StringWidth(left)-1)
+		if rightWidth <= 1 {
+			return inset + mutedStyle.Render(truncateWithEllipsis(left, width))
+		}
+		right = truncateWithEllipsis(right, rightWidth)
 	}
-	spaces := strings.Repeat(" ", width-ansi.StringWidth(left)-ansi.StringWidth(right))
+	spaces := strings.Repeat(" ", maxInt(1, width-ansi.StringWidth(left)-ansi.StringWidth(right)))
 	return inset + mutedStyle.Render(left+spaces+right)
 }

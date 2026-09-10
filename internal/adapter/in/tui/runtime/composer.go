@@ -61,6 +61,10 @@ func (p *bottomPane) push(view bottomPaneView) {
 	if p == nil || view == nil {
 		return
 	}
+	id := view.ID()
+	if id != "" {
+		p.remove(id)
+	}
 	p.views = append(p.views, view)
 }
 
@@ -198,7 +202,7 @@ func (p *bottomPane) composerVisible() bool {
 func newPrompt(hasRunner bool) textarea.Model {
 	prompt := textarea.New()
 	prompt.Placeholder = promptPlaceholder(hasRunner, permission.ModeAsk, false)
-	prompt.CharLimit = 20_000
+	prompt.CharLimit = 0
 	prompt.DynamicHeight = true
 	prompt.MinHeight = 1
 	prompt.MaxHeight = 4

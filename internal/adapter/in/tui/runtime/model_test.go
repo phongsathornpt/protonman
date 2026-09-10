@@ -1541,3 +1541,17 @@ func TestEffortLayoutAlignsLabelsWithTrackSlots(t *testing.T) {
 		labelRunes[start] = ' '
 	}
 }
+
+func TestBottomPanePushReplacesExistingViewWithSameID(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	first := &skillsPaneView{}
+	second := &skillsPaneView{}
+	m.panes.bottom.push(first)
+	m.panes.bottom.push(second)
+	if got := len(m.panes.bottom.views); got != 1 {
+		t.Fatalf("pane stack size = %d, want 1", got)
+	}
+	if got := m.panes.bottom.find(skillsViewID); got != second {
+		t.Fatalf("active skills pane = %p, want latest %p", got, second)
+	}
+}

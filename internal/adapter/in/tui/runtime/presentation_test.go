@@ -963,6 +963,7 @@ func TestTodoPaneShowsPendingBeforeCompleted(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, []tododomain.Item{{ID: "already-done", Text: "already done", Status: tododomain.StatusCompleted}, {ID: "still-open", Text: "still open", Status: tododomain.StatusPending}, {ID: "also-done", Text: "also done", Status: tododomain.StatusCompleted}})
 	model.resize(80, 24)
 	model.toggleTodoPane()
+	model.reconcileLayout()
 	view := testPlain(model.View().Content)
 	if !strings.Contains(view, "still open") {
 		t.Fatalf("todo pane hid the pending item: %s", view)
@@ -1258,5 +1259,19 @@ func TestIdleFooterShowsModelReasoningAndPermissionMode(t *testing.T) {
 	footer := ansi.Strip(m.idleContextFooter())
 	if !strings.Contains(footer, "nemotron-3.5-lightning-free · auto · ask") {
 		t.Fatalf("footer missing model/reasoning/permission context: %q", footer)
+	}
+}
+
+func TestIdleFooterKeepsShortcutHintInAlwaysApprove(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAlwaysApprove, emptyTodoItems())
+	m.activeModel = "muse-spark-1.3-contributor-free"
+	m.reasoningEffort = sdk.ReasoningDefault
+	m.resize(72, 24)
+	footer := ansi.Strip(m.idleContextFooter())
+	if !strings.Contains(footer, "? for shortcuts") {
+		t.Fatalf("footer dropped shortcut hint in always-approve mode: %q", footer)
+	}
+	if !strings.Contains(footer, " · auto · auto") {
+		t.Fatalf("footer did not use compact permission label: %q", footer)
 	}
 }

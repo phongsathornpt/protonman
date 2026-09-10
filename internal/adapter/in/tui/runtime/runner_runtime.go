@@ -12,7 +12,6 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
-	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
@@ -23,25 +22,14 @@ type toolResultMsg struct {
 	err    error
 }
 
-func (m *bubbleModel) retainConversationMessages() {
-	if m == nil {
-		return
-	}
-	m.messages = conversation.Retain(m.messages, m.conversationRetention)
-}
-
 func (m *bubbleModel) startTool(call tool.Call) tea.Cmd {
 	m.showWelcome = false
 	slog.DebugContext(m.ctx, "tui direct tool started", "call_id", call.ID, "tool_name", call.Name, "argument_bytes", len(call.Arguments))
-	m.messages = append(m.messages, model.Message{ID: model.NewMessageID(), Role: model.RoleAssistant, ToolCalls: []model.ToolCall{{ID: call.ID, Name: call.Name, Arguments: append([]byte(nil), call.Arguments...)}}})
-	m.retainConversationMessages()
-	m.busy = true
-	m.busyStarted = time.Now()
-	m.activity = "running " + call.Name
+	m.conversationModelState.appendMessages(model.Message{ID: model.NewMessageID(), Role: model.RoleAssistant, ToolCalls: []model.ToolCall{{ID: call.ID, Name: call.Name, Arguments: append([]byte(nil), call.Arguments...)}}})
+	ctx, cancel := context.WithCancel(m.ctx)
+	m.turnModelState.beginTool("running "+call.Name, time.Now(), cancel)
 	m.appendToolCall(call)
 	m.requestRelayout()
-	ctx, cancel := context.WithCancel(m.ctx)
-	m.turnCancel = cancel
 	return func() tea.Msg {
 		defer cancel()
 		startedAt := time.Now()
@@ -66,8 +54,7 @@ func (m *bubbleModel) appendModelToolResult(call tool.Call, result tool.Result) 
 	if err != nil {
 		content = []byte(fmt.Sprintf(`{"call_id":%q,"tool_name":%q,"error":{"code":"execution_error","message":%q}}`, call.ID, call.Name, err.Error()))
 	}
-	m.messages = append(m.messages, model.Message{ID: model.NewMessageID(), Role: model.RoleTool, Content: string(content), ToolCallID: result.CallID, ToolName: result.ToolName})
-	m.retainConversationMessages()
+	m.conversationModelState.appendMessages(model.Message{ID: model.NewMessageID(), Role: model.RoleTool, Content: string(content), ToolCallID: result.CallID, ToolName: result.ToolName})
 }
 
 func (m *bubbleModel) reconfigureRunner() {

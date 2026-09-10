@@ -76,3 +76,21 @@ func TestSkillMatchesCarryPresentationMetadata(t *testing.T) {
 		t.Fatalf("match = %#v", matches[0])
 	}
 }
+
+func TestParseCommandPreservesFullTrailingArgument(t *testing.T) {
+	parsed := ParseCommand("/goal implement model-aware compaction safely")
+	if parsed.Name != "goal" || parsed.Argument != "implement" || parsed.Rest != "implement model-aware compaction safely" {
+		t.Fatalf("parsed command = %#v", parsed)
+	}
+}
+
+func TestCatalogDeclaresArgumentModes(t *testing.T) {
+	goal, ok := LookupCommand("GOAL")
+	if !ok || goal.Argument != ArgumentRest {
+		t.Fatalf("goal spec = %#v, ok=%v", goal, ok)
+	}
+	clear, ok := LookupCommand("clear")
+	if !ok || clear.Argument != ArgumentNone {
+		t.Fatalf("clear spec = %#v, ok=%v", clear, ok)
+	}
+}

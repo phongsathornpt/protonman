@@ -31,17 +31,11 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 		return nil
 	}
 	m.retireCompletedTodoForNextTurn()
-	m.messages = append(m.messages, model.Message{ID: model.NewMessageID(), Role: model.RoleUser, Content: prompt})
-	m.retainConversationMessages()
-	m.busy = true
-	m.busyStarted = time.Now()
-	m.turnProgress = turnProgress{}
-	m.activeTurnOwner = fmt.Sprintf("tui-turn-%d", tuiTurnOwnerSeq.Add(1))
-	m.activity = "analyzing"
+	m.conversationModelState.appendMessages(model.Message{ID: model.NewMessageID(), Role: model.RoleUser, Content: prompt})
+	m.turnModelState.beginTurn(fmt.Sprintf("tui-turn-%d", tuiTurnOwnerSeq.Add(1)), time.Now())
 	m.requestRelayout()
 	ctx, cancel := context.WithCancel(m.ctx)
 	ctx = agent.WithTurnRef(ctx, agent.TurnRef{SessionID: m.sessionID, TurnID: m.activeTurnOwner})
-	m.turnCancel = cancel
 	events := make(chan tea.Msg, 32)
 	history := model.SnapshotMessages(m.messages)
 	startedAt := time.Now()
@@ -75,7 +69,7 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 		slog.DebugContext(ctx, "tui turn runner returned", "duration_ms", time.Since(startedAt).Milliseconds(), "success", err == nil, "error_type", errorType(err), "rounds", result.Rounds, "message_count", len(result.Messages))
 		queueTerminal(result, err)
 	}()
-	m.turnEvents = events
+	m.turnModelState.bindTurn(cancel, events)
 	return turnmsg.Wait(events)
 }
 
@@ -156,32 +150,24 @@ func (m *bubbleModel) updateTurnEventsClosed(_ turnmsg.EventsClosed) tea.Cmd {
 
 func (m *bubbleModel) updateTurnDone(message turnmsg.Done) tea.Cmd {
 	slog.DebugContext(m.ctx, "tui turn terminal message received", "success", message.Err == nil, "error_type", errorType(message.Err), "rounds", message.Result.Rounds, "message_count", len(message.Result.Messages), "assistant_bytes", len(message.Result.Message.Content))
-	m.busy = false
-	m.busyStarted = time.Time{}
-	m.activity = "ready"
-	m.turnCancel = nil
-	m.turnEvents = nil
-	m.activeTurnOwner = ""
+	m.turnModelState.finishTurn()
 	if message.Err != nil {
 		m.finalizeRunningTools(message.Err)
 	}
 	m.historyState.CommitActive()
 	if message.Err == nil {
 		if len(message.Result.Messages) > 0 {
-			m.messages = append(m.messages, message.Result.Messages...)
+			m.conversationModelState.appendMessages(message.Result.Messages...)
 		} else if message.Result.Message.Content != "" {
-			m.messages = append(m.messages, message.Result.Message)
+			m.conversationModelState.appendMessages(message.Result.Message)
 		}
-	} else if message.Err != nil && len(m.messages) > 0 && m.messages[len(m.messages)-1].Role == model.RoleUser {
-		messages := m.messages
-		messages[len(messages)-1] = model.Message{}
-		m.messages = messages[:len(messages)-1]
+	} else if message.Err != nil {
+		m.conversationModelState.dropTrailingUserMessage()
 	}
-	m.retainConversationMessages()
 	m.appendTurnFailure(message.Err)
 	m.requestRelayout()
 	if message.Err != nil {
-		m.queue = nil
+		m.conversationModelState.clearQueue()
 		return nil
 	}
 	return m.withSpinner(m.drainQueue())

@@ -81,6 +81,10 @@ func TestClearCommandResetsConversationButPreservesSessionControls(t *testing.T)
 	m.reasoningEffort = sdk.ReasoningHigh
 	m.messages = []model.Message{{Role: model.RoleUser, Content: "old context"}}
 	m.queue = []string{"queued prompt"}
+	m.conversationViewport.tailOnly = true
+	m.conversationViewport.staleTail = true
+	m.conversationViewport.lineAnchors = []ScrollAnchor{{}}
+	m.panes.showTranscript = true
 	m.appendUser("old context")
 
 	m.executeCommand("/clear")
@@ -89,6 +93,12 @@ func TestClearCommandResetsConversationButPreservesSessionControls(t *testing.T)
 	}
 	if m.activeGoal != "finish compaction" || m.activeProvider != "opencode" || m.activeModel != "model-x" || m.reasoningEffort != sdk.ReasoningHigh {
 		t.Fatalf("session controls changed: goal=%q provider=%q model=%q reasoning=%q", m.activeGoal, m.activeProvider, m.activeModel, m.reasoningEffort)
+	}
+	if m.conversationViewport.tailOnly || m.conversationViewport.staleTail || len(m.conversationViewport.lineAnchors) != 0 || !m.conversationViewport.following() {
+		t.Fatalf("derived viewport state survived clear: %+v", m.conversationViewport)
+	}
+	if m.panes.showTranscript {
+		t.Fatal("transcript overlay remained open after clear")
 	}
 	if got := plainTranscript(m); strings.Contains(got, "old context") || !strings.Contains(got, "conversation cleared") {
 		t.Fatalf("transcript after clear = %q", got)
@@ -831,6 +841,18 @@ func TestSlashPickerRendersBelowComposerLikeModelPicker(t *testing.T) {
 	for _, want := range []string{"Keyboard:", "Navigate", "Select", "Complete", "Go Back", "/help · 1/"} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("slash picker missing reference element %q:\n%s", want, plain)
+		}
+	}
+}
+
+func TestControlCommandsDoNotEchoAsUserConversation(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	for _, line := range []string{"/goal compact safely", "/goal", "/permission", "/model"} {
+		m.dispatch(line)
+	}
+	for _, cell := range m.ensureHistoryState().Cells() {
+		if user, ok := cell.(*UserCell); ok && strings.HasPrefix(strings.TrimSpace(user.Text), "/") {
+			t.Fatalf("control command leaked into user transcript: %q", user.Text)
 		}
 	}
 }
