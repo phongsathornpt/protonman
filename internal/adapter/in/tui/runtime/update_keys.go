@@ -49,6 +49,11 @@ func (m *bubbleModel) handleInterruptKey() tea.Cmd {
 }
 
 func (m *bubbleModel) updateKey(message tea.KeyPressMsg) tea.Cmd {
+	// Shift+Tab is reserved for global permission cycling, even in blocking panes.
+	if key.Matches(message, m.keys.CyclePermission) {
+		m.cyclePermission()
+		return nil
+	}
 	top := m.panes.bottom.top()
 	if top != nil && top.PresentationMode() == paneBlocking {
 		if handled, command := m.handlePaneKey(message); handled {
@@ -91,9 +96,6 @@ func (m *bubbleModel) handlePaneKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 
 func (m *bubbleModel) handleGlobalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch {
-	case key.Matches(message, m.keys.CyclePermission):
-		m.cyclePermission()
-		return true, nil
 	case key.Matches(message, m.keys.Transcript):
 		m.openTranscriptOverlay()
 		return true, nil

@@ -25,6 +25,24 @@ func TestMinimalIdleChromeUsesContextFooter(t *testing.T) {
 	}
 }
 
+func TestPlanModeKeepsIdleContextFooter(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeModel = "glm-5.3-flash"
+	m.reasoningEffort = sdk.ReasoningDefault
+	m.resize(80, 24)
+	m.setPlanEnabled(true)
+
+	footer := ansi.Strip(m.footerView())
+	for _, want := range []string{"? for shortcuts", "glm-5.3-flash", "auto", "plan"} {
+		if !strings.Contains(footer, want) {
+			t.Fatalf("plan context footer missing %q: %q", want, footer)
+		}
+	}
+	if strings.Contains(footer, "enter") || strings.Contains(footer, "new line") {
+		t.Fatalf("plan mode replaced context footer with shortcut help: %q", footer)
+	}
+}
+
 func TestContextualHelpUsesBubblesBindings(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
@@ -94,10 +112,11 @@ func TestMinimalScrollKeepsSingleComposer(t *testing.T) {
 	}
 }
 
-func TestMinimalBusyChromeKeepsActionableHelpCompact(t *testing.T) {
+func TestMinimalBusyChromeKeepsContextFooterStable(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
 	m.showWelcome = false
+	m.activeModel = "glm-5.3-flash"
 	m.busy = true
 	m.activity = "running tests"
 	frame := m.buildFrameChrome()
@@ -108,9 +127,14 @@ func TestMinimalBusyChromeKeepsActionableHelpCompact(t *testing.T) {
 		t.Fatalf("busy frame leaked persistent pane: top=%q", frame.top)
 	}
 	footer := ansi.Strip(frame.footer)
-	for _, want := range []string{"tab", "queue", "ctrl+c", "stop"} {
+	for _, want := range []string{"? for shortcuts", "glm-5.3-flash", "auto", "ask"} {
 		if !strings.Contains(footer, want) {
-			t.Fatalf("busy help missing %q: %q", want, footer)
+			t.Fatalf("busy context footer missing %q: %q", want, footer)
+		}
+	}
+	for _, noise := range []string{"tab queue", "ctrl+c stop"} {
+		if strings.Contains(footer, noise) {
+			t.Fatalf("busy footer leaked transient help %q: %q", noise, footer)
 		}
 	}
 	if frame.height > 6 {

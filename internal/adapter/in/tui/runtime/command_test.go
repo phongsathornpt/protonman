@@ -704,7 +704,7 @@ func TestShortcutMatrixBlockingPanesOwnGlobalKeys(t *testing.T) {
 			t.Fatal("transcript shortcut unexpectedly closed provider pane")
 		}
 	})
-	t.Run("provider keeps shift-tab local", func(t *testing.T) {
+	t.Run("provider reserves shift-tab for permission", func(t *testing.T) {
 		m := newTestBubbleModel(t, permission.ModeAsk, nil)
 		view := newProviderPaneView()
 		view.focusIndex = 1
@@ -712,11 +712,11 @@ func TestShortcutMatrixBlockingPanesOwnGlobalKeys(t *testing.T) {
 		m.panes.bottom.push(view)
 		updated, _ := m.Update(testShiftTab())
 		m = updated.(*bubbleModel)
-		if view.focusIndex != 0 {
-			t.Fatalf("shift+tab focus = %d, want previous provider field", view.focusIndex)
+		if view.focusIndex != 1 {
+			t.Fatalf("shift+tab changed provider focus to %d", view.focusIndex)
 		}
-		if m.planMode {
-			t.Fatal("provider-local shift+tab leaked into global permission cycling")
+		if !m.planMode {
+			t.Fatal("shift+tab did not cycle global permission")
 		}
 	})
 }

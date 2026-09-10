@@ -68,12 +68,6 @@ func (m bubbleModel) shortcutHint() string {
 			key.NewBinding(key.WithKeys("enter", "esc"), key.WithHelp("enter/esc", "close")),
 		})
 	}
-	if m.busy {
-		return helpView.View(contextualHelp{
-			key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "queue")),
-			key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "stop")),
-		})
-	}
 	if !m.conversationViewport.following() {
 		return helpView.View(contextualHelp{
 			m.keys.Submit,

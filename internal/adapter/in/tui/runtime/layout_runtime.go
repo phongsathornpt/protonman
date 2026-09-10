@@ -79,7 +79,7 @@ func (m *bubbleModel) footerView() string {
 	if !m.panes.bottom.composerVisible() {
 		return ""
 	}
-	if m.busy || !m.conversationViewport.following() || m.permissionView() != nil || m.planMode {
+	if !m.conversationViewport.following() || m.permissionView() != nil {
 		return m.shortcutHint()
 	}
 	return m.idleContextFooter()

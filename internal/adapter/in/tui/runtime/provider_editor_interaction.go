@@ -15,7 +15,7 @@ var providerEditorKeys = struct {
 	ToggleFree:    key.NewBinding(key.WithKeys("f")),
 	Protocol:      key.NewBinding(key.WithKeys("ctrl+r")),
 	NextField:     key.NewBinding(key.WithKeys("tab", "down")),
-	PreviousField: key.NewBinding(key.WithKeys("shift+tab", "up")),
+	PreviousField: key.NewBinding(key.WithKeys("up")),
 	Protonman:     key.NewBinding(key.WithKeys("alt+1", "alt+p")),
 	OpenCode:      key.NewBinding(key.WithKeys("alt+2", "alt+o")),
 	Ollama:        key.NewBinding(key.WithKeys("alt+3", "alt+l")),

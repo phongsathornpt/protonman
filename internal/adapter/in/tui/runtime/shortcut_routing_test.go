@@ -73,12 +73,12 @@ func TestBlockingPaneOwnsGlobalShortcuts(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	pane := &shortcutRoutingPane{id: "blocking-test", mode: paneBlocking}
 	m.panes.bottom.push(pane)
-	for _, key := range []tea.KeyPressMsg{testShiftTab(), testCtrl('p'), testCtrl('s'), testCtrl('o'), testCtrl('t')} {
+	for _, key := range []tea.KeyPressMsg{testCtrl('p'), testCtrl('s'), testCtrl('o'), testCtrl('t')} {
 		updated, _ := m.Update(key)
 		m = updated.(*bubbleModel)
 	}
-	if pane.handled != 5 {
-		t.Fatalf("blocking pane handled=%d, want 5", pane.handled)
+	if pane.handled != 4 {
+		t.Fatalf("blocking pane handled=%d, want 4", pane.handled)
 	}
 	if m.planMode || m.panes.showTranscript || m.panes.bottom.has(modelSetupViewID) || m.panes.bottom.has(skillsViewID) || m.panes.bottom.has(todoInspectViewID) {
 		t.Fatal("global shortcut escaped blocking pane")
