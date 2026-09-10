@@ -1261,3 +1261,17 @@ func TestIdleFooterShowsModelReasoningAndPermissionMode(t *testing.T) {
 		t.Fatalf("footer missing model/reasoning/permission context: %q", footer)
 	}
 }
+
+func TestIdleFooterKeepsShortcutHintInAlwaysApprove(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAlwaysApprove, emptyTodoItems())
+	m.activeModel = "muse-spark-1.3-contributor-free"
+	m.reasoningEffort = sdk.ReasoningDefault
+	m.resize(72, 24)
+	footer := ansi.Strip(m.idleContextFooter())
+	if !strings.Contains(footer, "? for shortcuts") {
+		t.Fatalf("footer dropped shortcut hint in always-approve mode: %q", footer)
+	}
+	if !strings.Contains(footer, " · auto · auto") {
+		t.Fatalf("footer did not use compact permission label: %q", footer)
+	}
+}
