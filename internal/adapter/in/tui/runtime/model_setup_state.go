@@ -171,6 +171,7 @@ func (v *modelSetupPaneView) initPicker() {
 	v.picker.SetStatusBarItemName("model", "models")
 	v.picker.FilterInput.Prompt = "Search: "
 	v.picker.SetShowTitle(false)
+	v.picker.SetShowFilter(false)
 	v.picker.SetShowStatusBar(false)
 	v.picker.SetShowPagination(false)
 	v.picker.SetShowHelp(false)

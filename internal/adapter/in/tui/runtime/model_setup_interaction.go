@@ -13,6 +13,7 @@ func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 	providerName := v.activeProviderName()
 	mode := layoutModeForHeight(ctx.height)
 	v.picker.SetShowTitle(false)
+	v.picker.SetShowFilter(v.picker.SettingFilter())
 	v.picker.SetShowStatusBar(false)
 	v.picker.SetShowPagination(false)
 	v.picker.SetShowHelp(false)
@@ -26,19 +27,18 @@ func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 
 	switch {
 	case v.loading:
-		rows = append(rows, "", mutedStyle.Render("Loading models…"))
+		rows = append(rows, mutedStyle.Render("Loading models…"))
 	case v.err != nil:
-		rows = append(rows, "", errorStyle.Render("Failed to load models"), mutedStyle.Render(truncateWithEllipsis(v.err.Error(), maxInt(8, ctx.width-8))))
+		rows = append(rows, errorStyle.Render("Failed to load models"), mutedStyle.Render(truncateWithEllipsis(v.err.Error(), maxInt(8, ctx.width-8))))
 	case len(v.picker.Items()) == 0 && !v.picker.SettingFilter() && !v.picker.IsFiltered():
-		rows = append(rows, "", mutedStyle.Render("No models available."))
+		rows = append(rows, mutedStyle.Render("No models available."))
 	case len(v.picker.VisibleItems()) == 0 && strings.TrimSpace(v.picker.FilterValue()) != "":
-		rows = append(rows, "", mutedStyle.Render("Search: "+v.picker.FilterValue()), mutedStyle.Render("No matches."))
+		rows = append(rows, mutedStyle.Render("Search: "+v.picker.FilterValue()), mutedStyle.Render("No matches."))
 	default:
-		rows = append(rows, "")
 		rows = append(rows, strings.Split(v.picker.View(), "\n")...)
 	}
 
-	rows = append(rows, "", v.reasoningRow())
+	rows = append(rows, v.reasoningRow())
 	if mode != layoutTiny {
 		rows = append(rows, mutedStyle.Render(modelSetupHelp(ctx.width)))
 	}

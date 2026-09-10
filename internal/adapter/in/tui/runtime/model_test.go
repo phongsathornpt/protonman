@@ -584,6 +584,9 @@ func TestModelSetupPagedNavigation(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.activeProvider = model.DefaultProtonmanName
 	seedModelSetupCatalog(m)
+	models := m.modelCatalogs.Models(model.DefaultProtonmanName)
+	models = append(models, domainmodel.RemoteModel{ID: "fixture-seven", Name: "Fixture Seven"})
+	m.modelCatalogs.Set(model.DefaultProtonmanName, models)
 	m.resize(40, 14)
 	m.executeCommand("/model")
 	view := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
@@ -1348,6 +1351,42 @@ func TestModelSetupSingleItemKeepsThinkingNearModel(t *testing.T) {
 	}
 	if modelLine < 0 || thinkingLine < 0 || thinkingLine-modelLine > 2 {
 		t.Fatalf("excessive vertical gap: model=%d thinking=%d", modelLine, thinkingLine)
+	}
+}
+
+func TestModelSetupOverlayUsesCompactVerticalRhythm(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.resize(100, 30)
+	m.activeProvider = "opencode"
+	m.activeModel = "qwen3.6-plus"
+	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: "qwen3.6-plus"}, {ID: "qwen3.5-plus"}})
+	view := newModelSetupPaneView(m)
+	m.panes.bottom.push(view)
+	m.requestRelayout()
+	m.reconcileLayout()
+
+	lines := strings.Split(testPlain(view.Render(newPaneRenderContext(m))), "\n")
+	providerLine, firstModelLine, lastModelLine, thinkingLine := -1, -1, -1, -1
+	for index, line := range lines {
+		switch {
+		case strings.Contains(line, "Provider:"):
+			providerLine = index
+		case strings.Contains(line, "Qwen3.6 Plus"):
+			firstModelLine = index
+		case strings.Contains(line, "Qwen3.5 Plus"):
+			lastModelLine = index
+		case strings.Contains(line, "Thinking"):
+			thinkingLine = index
+		}
+	}
+	if providerLine < 0 || firstModelLine != providerLine+1 {
+		t.Fatalf("provider/model spacing is not compact: provider=%d firstModel=%d\n%s", providerLine, firstModelLine, strings.Join(lines, "\n"))
+	}
+	if lastModelLine < 0 || thinkingLine != lastModelLine+1 {
+		t.Fatalf("model/thinking spacing is not compact: lastModel=%d thinking=%d\n%s", lastModelLine, thinkingLine, strings.Join(lines, "\n"))
+	}
+	if footer := testPlain(m.footerView()); footer != "" {
+		t.Fatalf("model overlay leaked composer footer help: %q", footer)
 	}
 }
 
