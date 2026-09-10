@@ -50,12 +50,10 @@ func (m *bubbleModel) handleProjectSet(argument string) tea.Cmd {
 			m.refreshViewport()
 			return nil
 		}
-		if effort != sdk.ReasoningDefault {
-			if _, err := m.activeResolvedModelProfile().ResolveExplicitReasoning(effort); err != nil {
-				m.appendError(err.Error())
-				m.refreshViewport()
-				return nil
-			}
+		if err := m.validateReasoningEffort(effort); err != nil {
+			m.appendError(err.Error())
+			m.refreshViewport()
+			return nil
 		}
 		return saveProjectReasoningCmd(m.workDir, effort)
 	case "subagents":

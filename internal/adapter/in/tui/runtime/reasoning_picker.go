@@ -54,14 +54,33 @@ func (m *bubbleModel) handleReasoningCommand(argument string) tea.Cmd {
 	return m.setReasoningEffort(effort)
 }
 
+func (m *bubbleModel) validateReasoningEffort(effort sdk.ReasoningEffort) error {
+	if effort == sdk.ReasoningDefault {
+		return nil
+	}
+	_, err := m.activeResolvedModelProfile().ResolveExplicitReasoning(effort)
+	return err
+}
+
+func (m *bubbleModel) reconcileReasoningForActiveModel() bool {
+	if m.reasoningEffort == sdk.ReasoningDefault {
+		return false
+	}
+	if err := m.validateReasoningEffort(m.reasoningEffort); err == nil {
+		return false
+	}
+	previous := m.reasoningEffort
+	m.reasoningEffort = sdk.ReasoningDefault
+	m.agents.SetReasoningEffort(sdk.ReasoningDefault)
+	m.appendLine(mutedStyle.Render("  Reset thinking level to auto (previous level " + string(previous) + " is unsupported by " + m.activeModel + ")"))
+	return true
+}
+
 func (m *bubbleModel) setReasoningEffort(effort sdk.ReasoningEffort) tea.Cmd {
-	if effort != sdk.ReasoningDefault {
-		profile := m.activeResolvedModelProfile()
-		if _, err := profile.ResolveExplicitReasoning(effort); err != nil {
-			m.appendError(err.Error())
-			m.refreshViewport()
-			return nil
-		}
+	if err := m.validateReasoningEffort(effort); err != nil {
+		m.appendError(err.Error())
+		m.refreshViewport()
+		return nil
 	}
 	m.reasoningEffort = effort
 	m.agents.SetReasoningEffort(effort)

@@ -72,6 +72,8 @@ func (m *bubbleModel) appendModelToolResult(call tool.Call, result tool.Result) 
 
 func (m *bubbleModel) reconfigureRunner() {
 	if m.activeModel == "" || m.service == nil {
+		m.runner = nil
+		m.syncPromptPlaceholder()
 		return
 	}
 	provName := m.activeProvider

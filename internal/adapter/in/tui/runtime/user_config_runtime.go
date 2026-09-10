@@ -52,6 +52,11 @@ func (m *bubbleModel) executeUserConfigCommand(line, rawName string) tea.Cmd {
 			m.refreshViewport()
 			return nil
 		}
+		if err := m.validateReasoningEffort(effort); err != nil {
+			m.appendError(err.Error())
+			m.refreshViewport()
+			return nil
+		}
 		return func() tea.Msg {
 			err := (app.UserSettings{}).SaveReasoningEffort(effort)
 			return userSettingSavedMsg{field: config.FieldAgentReasoningEffort, value: effort, err: err}

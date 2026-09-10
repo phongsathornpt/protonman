@@ -336,8 +336,8 @@ func TestDeleteUserProviderConfig(t *testing.T) {
 	if _, exists := snapshot.Providers["opencode"]; !exists {
 		t.Fatal("expected opencode to be preserved")
 	}
-	if snapshot.Model.Provider != "opencode" {
-		t.Fatalf("expected default provider to fall back to opencode, got: %q", snapshot.Model.Provider)
+	if snapshot.Model.Provider != "" {
+		t.Fatalf("expected low-level delete to clear active provider for application fallback, got: %q", snapshot.Model.Provider)
 	}
 	if snapshot.Model.Default != "" {
 		t.Fatalf("expected stale model to be cleared after active provider deletion, got: %q", snapshot.Model.Default)
@@ -708,5 +708,23 @@ pattern = "all"
 	r := snapshot.Permission.Rules[0]
 	if r.Action != permission.ActionAllow || r.Tool != permission.ToolBash || r.Pattern != "*" {
 		t.Fatalf("unexpected rule decoded: %+v", r)
+	}
+}
+
+func TestSaveUserModelSelectionClearsStaleModel(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	if err := SaveUserProviderConfig(homeDir, ProviderConfig{Name: "alpha", Type: "openai", BaseURL: "https://alpha.example/v1"}, "alpha-model"); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveUserModelSelection(homeDir, "beta", ""); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Model.Provider != "beta" || snapshot.Model.Default != "" {
+		t.Fatalf("selection = %+v, want exact beta with empty model", snapshot.Model)
 	}
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
 )
 
 func TestE2EHeadlessAskModeFailsClosedWithoutPrompt(t *testing.T) {
@@ -379,8 +380,12 @@ func TestE2EProviderSwitchAndSelect(t *testing.T) {
 	if _, exists := snap4.Providers["protonman"]; exists {
 		t.Fatal("expected protonman removed")
 	}
-	if snap4.Model.Provider != "opencode" {
-		t.Fatalf("expected fallback active provider 'opencode', got %s", snap4.Model.Provider)
+	if snap4.Model.Provider != "" || snap4.Model.Default != "" {
+		t.Fatalf("expected low-level delete to clear active selection, got %+v", snap4.Model)
+	}
+	resolved, _ := app.ResolvePrimaryModelDefaults(snap4.Model, snap4.Providers)
+	if resolved.Provider != model.DefaultOpenCodeName || resolved.Default != model.DefaultOpenCodeModel {
+		t.Fatalf("application fallback = %+v, want OpenCode default", resolved)
 	}
 
 	// Verify permissions remain 0600

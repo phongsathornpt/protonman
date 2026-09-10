@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 )
 
 type asyncOperationID uint64
@@ -32,16 +33,23 @@ func (m *bubbleModel) beginProviderSelect(providerName string) tea.Cmd {
 }
 
 func (m *bubbleModel) reconciledModelForProvider(providerName string) string {
+	providerName = strings.TrimSpace(providerName)
 	models := m.modelCatalogs.Models(providerName)
-	if len(models) == 0 {
-		return ""
-	}
 	for _, candidate := range models {
 		if strings.EqualFold(candidate.ID, m.activeModel) {
-			return ""
+			return m.activeModel
 		}
 	}
-	return models[0].ID
+	if len(models) > 0 {
+		return models[0].ID
+	}
+	if strings.EqualFold(providerName, model.DefaultOpenCodeName) {
+		return model.DefaultOpenCodeModel
+	}
+	if strings.EqualFold(providerName, m.activeProvider) {
+		return m.activeModel
+	}
+	return ""
 }
 
 func (m *bubbleModel) beginProviderDelete(providerName string) tea.Cmd {

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"strings"
 	"testing"
 )
@@ -950,32 +952,18 @@ func TestProviderDeletedDeterministicFallbackAndRunnerCleanup(t *testing.T) {
 		{ID: "alpha-model"},
 	})
 
-	// Deleting active provider 'zeta' should deterministically fall back to alphabetically first 'alpha'
+	// Deleting the active provider should use the same OpenCode default policy as startup.
 	updated, _ := bModel.Update(providerDeletedMsg{providerName: "zeta"})
 	bModel = updated.(*bubbleModel)
 
 	if bModel.modelCatalogs.Has("zeta") {
 		t.Fatal("deleted provider catalog retained")
 	}
-	if bModel.activeProvider != "alpha" {
-		t.Fatalf("activeProvider = %q, want 'alpha'", bModel.activeProvider)
+	if bModel.activeProvider != model.DefaultOpenCodeName {
+		t.Fatalf("activeProvider = %q, want %q", bModel.activeProvider, model.DefaultOpenCodeName)
 	}
-	if bModel.activeModel != "alpha-model" {
-		t.Fatalf("activeModel = %q, want 'alpha-model'", bModel.activeModel)
-	}
-
-	// Now delete remaining provider 'alpha' -> no providers remain
-	updated, _ = bModel.Update(providerDeletedMsg{providerName: "alpha"})
-	bModel = updated.(*bubbleModel)
-
-	if bModel.activeProvider != "" {
-		t.Fatalf("activeProvider = %q, want empty", bModel.activeProvider)
-	}
-	if bModel.activeModel != "" {
-		t.Fatalf("activeModel = %q, want empty", bModel.activeModel)
-	}
-	if bModel.runner != nil {
-		t.Fatal("expected runner cleared when all providers deleted")
+	if bModel.activeModel != model.DefaultOpenCodeModel {
+		t.Fatalf("activeModel = %q, want %q", bModel.activeModel, model.DefaultOpenCodeModel)
 	}
 }
 
@@ -1124,5 +1112,53 @@ func TestProviderFetchRequiresRuntimeContext(t *testing.T) {
 	}
 	if v.state != providerStateError || !strings.Contains(v.errorMessage, "runtime context") {
 		t.Fatalf("nil-context fetch state=%v error=%q", v.state, v.errorMessage)
+	}
+}
+
+func TestProviderSwitchWithoutCatalogClearsStaleModelAndRunner(t *testing.T) {
+	t.Setenv("PROTONMAN_HOME", t.TempDir())
+	m := newTestSkillsModel(t, 1)
+	m.providers = map[string]config.ProviderConfig{
+		"alpha": {Name: "alpha", BaseURL: "https://alpha.example/v1", APIKey: "key", Type: "openai"},
+		"beta":  {Name: "beta", BaseURL: "https://beta.example/v1", APIKey: "key", Type: "openai"},
+	}
+	m.activeProvider = "alpha"
+	m.activeModel = "alpha-model"
+	m.reconfigureRunner()
+	if m.runner == nil {
+		t.Fatal("expected initial runner")
+	}
+	id := nextAsyncOperationID()
+	m.activeProviderSelect = id
+	updated, _ := m.Update(providerActiveSelectedMsg{operationID: id, providerName: "beta"})
+	m = updated.(*bubbleModel)
+	if m.activeProvider != "beta" || m.activeModel != "" {
+		t.Fatalf("selection = %q/%q, want beta with no stale model", m.activeProvider, m.activeModel)
+	}
+	if m.runner != nil {
+		t.Fatal("stale runner survived provider switch without a model")
+	}
+}
+
+func TestProviderSwitchToOpenCodeUsesBuiltInDefaultWithoutCatalog(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.activeProvider = "protonman"
+	m.activeModel = "pm-model"
+	if got := m.reconciledModelForProvider(model.DefaultOpenCodeName); got != model.DefaultOpenCodeModel {
+		t.Fatalf("reconciled model = %q, want %q", got, model.DefaultOpenCodeModel)
+	}
+}
+
+func TestActivatedProviderReconcilesUnsupportedThinking(t *testing.T) {
+	m := newTestSkillsModel(t, 1)
+	m.reasoningEffort = sdk.ReasoningHigh
+	noReasoning := false
+	m.modelCatalogs.Set("custom", []model.RemoteModel{{ID: "plain-model", Reasoning: &modelprofile.CatalogReasoning{Supported: &noReasoning}}})
+	id := nextAsyncOperationID()
+	m.activeProviderSave = id
+	updated, _ := m.Update(providerSavedMsg{operationID: id, providerName: "custom", providerType: "openai", baseURL: "https://custom.example/v1", apiKey: "key", modelID: "plain-model", activated: true})
+	m = updated.(*bubbleModel)
+	if m.reasoningEffort != sdk.ReasoningDefault {
+		t.Fatalf("reasoning = %q, want auto after provider activation", m.reasoningEffort)
 	}
 }

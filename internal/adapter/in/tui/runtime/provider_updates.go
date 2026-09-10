@@ -2,12 +2,11 @@ package runtime
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/app"
 )
 
 func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) (tea.Model, tea.Cmd) {
@@ -79,6 +78,7 @@ func (m *bubbleModel) updateProviderSaved(message providerSavedMsg) (tea.Model, 
 		if message.activated {
 			m.activeModel = message.modelID
 			m.activeProvider = providerName
+			m.reconcileReasoningForActiveModel()
 			m.reconfigureRunner()
 			label := "provider " + providerName
 			if message.modelID != "" {
@@ -110,15 +110,7 @@ func (m *bubbleModel) updateModelSelected(message modelSelectedMsg) (tea.Model, 
 		if message.providerName != "" {
 			m.activeProvider = message.providerName
 		}
-		if m.reasoningEffort != sdk.ReasoningDefault {
-			profile := m.activeResolvedModelProfile()
-			if _, err := profile.ResolveExplicitReasoning(m.reasoningEffort); err != nil {
-				previous := m.reasoningEffort
-				m.reasoningEffort = sdk.ReasoningDefault
-				m.agents.SetReasoningEffort(sdk.ReasoningDefault)
-				m.appendLine(mutedStyle.Render(fmt.Sprintf("  Reset thinking level to auto (previous level %q is unsupported by %s)", previous, message.modelID)))
-			}
-		}
+		m.reconcileReasoningForActiveModel()
 		m.reconfigureRunner()
 		m.appendLine(successStyle.Render(fmt.Sprintf("model → %s · %s", message.modelID, m.activeProvider)))
 		if message.unverified {
@@ -138,20 +130,13 @@ func (m *bubbleModel) updateProviderActiveSelected(message providerActiveSelecte
 	if message.err != nil {
 		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to switch provider: %v", message.err)))
 	} else {
+		previousModel := m.activeModel
 		m.activeProvider = message.providerName
-		if message.reconciledModel != "" {
-			m.activeModel = message.reconciledModel
+		m.activeModel = message.reconciledModel
+		if message.reconciledModel != "" && !strings.EqualFold(previousModel, message.reconciledModel) {
 			m.appendLine(mutedStyle.Render(fmt.Sprintf("  Reconciled active model to %s", message.reconciledModel)))
 		}
-		if m.reasoningEffort != sdk.ReasoningDefault {
-			profile := m.activeResolvedModelProfile()
-			if _, err := profile.ResolveExplicitReasoning(m.reasoningEffort); err != nil {
-				previous := m.reasoningEffort
-				m.reasoningEffort = sdk.ReasoningDefault
-				m.agents.SetReasoningEffort(sdk.ReasoningDefault)
-				m.appendLine(mutedStyle.Render(fmt.Sprintf("  Reset thinking level to auto (previous level %q is unsupported by %s)", previous, m.activeModel)))
-			}
-		}
+		m.reconcileReasoningForActiveModel()
 		m.reconfigureRunner()
 		label := "provider → " + message.providerName
 		if m.activeModel != "" {
@@ -160,6 +145,9 @@ func (m *bubbleModel) updateProviderActiveSelected(message providerActiveSelecte
 		m.appendLine(successStyle.Render(label))
 	}
 	m.panes.bottom.remove(providerSelectViewID)
+	if message.err == nil && m.activeModel == "" {
+		return m, m.openModelSelectPane()
+	}
 	m.requestRelayout()
 	return m, nil
 }
@@ -175,26 +163,12 @@ func (m *bubbleModel) updateProviderDeleted(message providerDeletedMsg) (tea.Mod
 		delete(m.providers, strings.ToLower(message.providerName))
 		m.modelCatalogs.Delete(message.providerName)
 		if strings.EqualFold(m.activeProvider, message.providerName) {
-			m.activeProvider = ""
-			if len(m.providers) > 0 {
-				keys := make([]string, 0, len(m.providers))
-				for k := range m.providers {
-					keys = append(keys, k)
-				}
-				sort.Strings(keys)
-				m.activeProvider = keys[0]
-				models := m.modelCatalogs.Models(m.activeProvider)
-				if len(models) > 0 {
-					m.activeModel = models[0].ID
-				} else {
-					m.activeModel = ""
-				}
-				m.reconfigureRunner()
-			} else {
-				m.activeModel = ""
-				m.runner = nil
-				m.panes.bottom.setHasRunner(false)
-			}
+			selection, providers := app.ResolvePrimaryModelDefaults(config.ModelConfig{}, m.providers)
+			m.providers = providers
+			m.activeProvider = selection.Provider
+			m.activeModel = selection.Default
+			m.reconcileReasoningForActiveModel()
+			m.reconfigureRunner()
 		}
 		label := "provider removed · " + message.providerName
 		if m.activeProvider != "" {

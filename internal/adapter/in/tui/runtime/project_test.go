@@ -519,3 +519,28 @@ func TestConfigPermissionSyntaxErrors(t *testing.T) {
 		t.Fatalf("unexpected transcript: %s", plainTranscript(m))
 	}
 }
+
+func TestUserConfigRejectsUnsupportedThinkingBeforePersist(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	t.Setenv("PROTONMAN_HOME", homeDir)
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.workDir = workDir
+	m.activeProvider = "protonman"
+	m.activeModel = "gemini-3.8-flash"
+	m.reasoningEffort = sdk.ReasoningMedium
+	cmd := m.executeCommand("/config set thinking xhigh")
+	if cmd != nil {
+		t.Fatal("unsupported thinking returned persistence command")
+	}
+	if m.reasoningEffort != sdk.ReasoningMedium {
+		t.Fatalf("reasoning changed to %q", m.reasoningEffort)
+	}
+	snapshot, err := config.Load(context.Background(), config.Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Agent.ReasoningEffort != sdk.ReasoningDefault {
+		t.Fatalf("unsupported thinking persisted as %q", snapshot.Agent.ReasoningEffort)
+	}
+}

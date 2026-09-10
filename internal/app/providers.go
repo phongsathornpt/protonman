@@ -65,7 +65,7 @@ func (Providers) Activate(providerName, modelID string) error {
 	if err != nil {
 		return err
 	}
-	return config.SaveUserDefaultModel(homeDir, providerName, modelID)
+	return config.SaveUserModelSelection(homeDir, providerName, modelID)
 }
 
 func (Providers) SelectModel(providerName, modelID string) error {
@@ -73,7 +73,7 @@ func (Providers) SelectModel(providerName, modelID string) error {
 	if err != nil {
 		return err
 	}
-	return config.SaveUserDefaultModel(homeDir, providerName, modelID)
+	return config.SaveUserModelSelection(homeDir, providerName, modelID)
 }
 
 func (Providers) Delete(providerName string) error {
