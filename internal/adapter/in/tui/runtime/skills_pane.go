@@ -32,7 +32,7 @@ type skillsPaneView struct {
 }
 
 func (*skillsPaneView) ID() string             { return skillsViewID }
-func (*skillsPaneView) ReplacesComposer() bool { return true }
+func (*skillsPaneView) ReplacesComposer() bool { return false }
 
 func (v *skillsPaneView) ensurePicker(ctx paneRenderContext) {
 	if v.initialized {

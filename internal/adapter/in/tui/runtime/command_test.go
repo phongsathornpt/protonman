@@ -697,6 +697,34 @@ func TestSkillsCommandUsesPickerAsOnlyListSurface(t *testing.T) {
 	}
 }
 
+func TestSkillsPickerKeepsComposerVisibleAndDraft(t *testing.T) {
+	model := newTestSkillsModel(t, 5)
+	draft := "keep this draft"
+	model.panes.bottom.prompt().SetValue(draft)
+
+	updated, _ := model.Update(testCtrl('s'))
+	model = updated.(*bubbleModel)
+	if !model.panes.bottom.has(skillsViewID) {
+		t.Fatal("expected skills picker open")
+	}
+	if !model.panes.bottom.composerVisible() {
+		t.Fatal("skills picker must not replace the composer")
+	}
+	view := testPlain(model.View().Content)
+	if !strings.Contains(view, draft) || !strings.Contains(view, "Skills · 0/5 active") {
+		t.Fatalf("skills picker and composer must render together: %q", view)
+	}
+
+	updated, _ = model.Update(testKey(tea.KeyEsc))
+	model = updated.(*bubbleModel)
+	if model.panes.bottom.has(skillsViewID) {
+		t.Fatal("esc did not close skills picker")
+	}
+	if got := model.panes.bottom.prompt().Value(); got != draft {
+		t.Fatalf("composer draft = %q, want %q", got, draft)
+	}
+}
+
 func TestSkillsPickerCtrlCEscapesModal(t *testing.T) {
 	model := newTestSkillsModel(t, 5)
 	updated, _ := model.Update(testCtrl('s'))
