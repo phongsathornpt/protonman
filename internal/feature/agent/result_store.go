@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"sort"
 	"strings"
 	"sync"
 )
@@ -81,4 +82,34 @@ func (c *Coordinator) LookupResult(ref ResultRef) (Result, bool) {
 		return Result{}, false
 	}
 	return c.resultStore.Get(ref)
+}
+
+// ResultRefsForTurn returns retained terminal result references in stable agent order.
+func (c *Coordinator) ResultRefsForTurn(ref TurnRef) []ResultRef {
+	if c == nil {
+		return nil
+	}
+	ref = ref.normalized()
+	c.pruneExpired()
+	c.agentsMu.RLock()
+	out := make([]ResultRef, 0, len(c.agents))
+	for _, entry := range c.agents {
+		if ref.SessionID != "" && entry.status.SessionID != ref.SessionID {
+			continue
+		}
+		if ref.TurnID != "" && entry.status.ParentID != ref.TurnID {
+			continue
+		}
+		if entry.status.State.Terminal() && entry.resultRef.valid() {
+			out = append(out, entry.resultRef.normalized())
+		}
+	}
+	c.agentsMu.RUnlock()
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].AgentID == out[j].AgentID {
+			return out[i].Version < out[j].Version
+		}
+		return out[i].AgentID < out[j].AgentID
+	})
+	return out
 }
