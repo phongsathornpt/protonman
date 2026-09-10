@@ -1,0 +1,58 @@
+name: Bug report
+description: Report a reproducible Protonman defect
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting a bug. Remove secrets from logs and examples.
+  - type: input
+    id: version
+    attributes:
+      label: Protonman version
+      placeholder: v0.0.5 or commit SHA
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, architecture, and terminal/editor terminal if applicable.
+      placeholder: macOS arm64, Zed terminal
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Execution mode
+      options: [TUI, Headless, ACP]
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Provider and model
+      placeholder: OpenCode / glm-5.3-flash
+  - type: input
+    id: policy
+    attributes:
+      label: Permission mode and sandbox profile
+      placeholder: ask / workspace
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and sanitized logs
+    validations:
+      required: true

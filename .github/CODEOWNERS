@@ -1,0 +1,9 @@
+# Security-sensitive and release-critical surfaces
+/.github/workflows/ @phongsathornpt
+/install.sh @phongsathornpt
+/proton-sdk/ @phongsathornpt
+/internal/core/permission/ @phongsathornpt
+/internal/core/workspace/ @phongsathornpt
+/internal/engine/toolcall/ @phongsathornpt
+/internal/adapter/out/tool/ @phongsathornpt
+/internal/platform/sandbox/ @phongsathornpt
