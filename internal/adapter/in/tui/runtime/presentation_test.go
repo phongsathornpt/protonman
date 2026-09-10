@@ -993,6 +993,21 @@ func TestResetPromptCollapsesMultilineComposerDuringBusyTurn(t *testing.T) {
 	}
 }
 
+func TestPromptWidthFitsTerminalAcrossResponsiveSizes(t *testing.T) {
+	for _, width := range []int{24, 40, 80, 120} {
+		model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+		model.resize(width, 16)
+		view := model.promptView()
+		if got := lipgloss.Width(view); got > width {
+			t.Fatalf("prompt width=%d exceeds terminal width=%d: %q", got, width, ansi.Strip(view))
+		}
+		want := composerUsableWidth(width)
+		if got := model.panes.bottom.prompt().Width(); got != want-len(model.panes.bottom.prompt().Prompt) {
+			t.Fatalf("textarea content width=%d, want %d at terminal width %d", got, want-len(model.panes.bottom.prompt().Prompt), width)
+		}
+	}
+}
+
 func TestPromptIsSingleRow(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)

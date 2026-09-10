@@ -13,7 +13,7 @@ func (m *bubbleModel) resize(width int, height int) {
 	m.layout.height = height
 	m.help.SetWidth(maxInt(1, width-2))
 	prompt := m.panes.bottom.prompt()
-	prompt.SetWidth(maxInt(1, width-2))
+	prompt.SetWidth(composerUsableWidth(width))
 	m.panes.transcript.SetWidth(maxInt(1, width-10))
 	m.panes.transcript.SetHeight(maxInt(1, height-10))
 	if view, _ := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView); view != nil {
