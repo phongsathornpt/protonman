@@ -36,9 +36,22 @@ func (m *bubbleModel) renderedViewport() string {
 func (m *bubbleModel) liveView() string {
 	frame := m.frameChromeForView()
 	parts := []string{m.renderedViewport()}
-	for _, part := range []string{frame.status, frame.top, frame.composer} {
-		if part != "" {
-			parts = append(parts, part)
+	if frame.status != "" {
+		parts = append(parts, frame.status)
+	}
+	top := m.panes.bottom.top()
+	if top != nil && top.PresentationMode() == paneBelowComposer {
+		if frame.composer != "" {
+			parts = append(parts, frame.composer)
+		}
+		if frame.top != "" {
+			parts = append(parts, frame.top)
+		}
+	} else {
+		for _, part := range []string{frame.top, frame.composer} {
+			if part != "" {
+				parts = append(parts, part)
+			}
 		}
 	}
 	if frame.footer != "" {

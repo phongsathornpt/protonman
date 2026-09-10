@@ -92,9 +92,6 @@ func (i modelListItem) Title() string {
 	if model.IsFreeModel(i.model.ID) {
 		badges = append(badges, "FREE")
 	}
-	if i.current {
-		badges = append(badges, "current")
-	}
 	if len(badges) > 0 {
 		label += "  " + strings.Join(badges, " · ")
 	}
@@ -141,7 +138,18 @@ func (modelSetupDelegate) Render(w io.Writer, m list.Model, index int, item list
 		style = brandStyle
 	}
 	width := maxInt(1, m.Width()-2)
-	_, _ = fmt.Fprint(w, prefix+style.Render(truncateWithEllipsis(entry.Title(), width)))
+	label := truncateWithEllipsis(entry.Title(), width)
+	if entry.current {
+		const marker = "(current)"
+		markerWidth := len(marker)
+		labelWidth := len([]rune(label))
+		if gap := width - labelWidth - markerWidth; gap >= 2 {
+			label += strings.Repeat(" ", gap) + mutedStyle.Render(marker)
+		} else {
+			label = truncateWithEllipsis(label, maxInt(1, width-markerWidth-2)) + "  " + mutedStyle.Render(marker)
+		}
+	}
+	_, _ = fmt.Fprint(w, prefix+style.Render(label))
 }
 
 func (i modelListItem) Description() string {
@@ -190,7 +198,7 @@ func (*modelSetupPaneView) ID() string {
 }
 
 func (*modelSetupPaneView) PresentationMode() panePresentationMode {
-	return paneOverlay
+	return paneBelowComposer
 }
 
 func (v *modelSetupPaneView) resize(width, height int) {

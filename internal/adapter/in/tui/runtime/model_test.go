@@ -415,12 +415,15 @@ func TestModelSetupPreservesComposerDraft(t *testing.T) {
 func TestBottomPanePresentationPolicy(t *testing.T) {
 	overlays := []bottomPaneView{
 		&skillsPaneView{}, &todoPaneView{}, &slashPaneView{}, &agentsPaneView{},
-		&shortcutsPaneView{}, &projectPaneView{}, &modelSetupPaneView{}, &providerSelectPaneView{},
+		&shortcutsPaneView{}, &projectPaneView{}, &providerSelectPaneView{},
 	}
 	for _, view := range overlays {
 		if view.PresentationMode() != paneOverlay {
 			t.Fatalf("%T presentation mode = %v, want overlay", view, view.PresentationMode())
 		}
+	}
+	if mode := (&modelSetupPaneView{}).PresentationMode(); mode != paneBelowComposer {
+		t.Fatalf("model setup presentation mode = %v, want below composer", mode)
 	}
 	blocking := []bottomPaneView{&permissionPaneView{}, &providerPaneView{}}
 	for _, view := range blocking {
@@ -1340,53 +1343,42 @@ func TestModelSetupSingleItemKeepsThinkingNearModel(t *testing.T) {
 	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: m.activeModel}})
 	view := newModelSetupPaneView(m)
 	rendered := strings.Split(view.Render(newPaneRenderContext(m)), "\n")
-	modelLine, thinkingLine := -1, -1
+	modelLine, effortLine := -1, -1
 	for index, line := range rendered {
 		if strings.Contains(line, "Nemotron 3.5 Lightning") {
 			modelLine = index
 		}
-		if strings.Contains(line, "Thinking") {
-			thinkingLine = index
+		if strings.Contains(line, "Effort") {
+			effortLine = index
 		}
 	}
-	if modelLine < 0 || thinkingLine < 0 || thinkingLine-modelLine > 2 {
-		t.Fatalf("excessive vertical gap: model=%d thinking=%d", modelLine, thinkingLine)
+	if modelLine < 0 || effortLine < 0 || effortLine-modelLine > 3 {
+		t.Fatalf("excessive vertical gap: model=%d effort=%d", modelLine, effortLine)
 	}
 }
 
-func TestModelSetupOverlayUsesCompactVerticalRhythm(t *testing.T) {
+func TestModelSetupMatchesReferenceHierarchy(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	m.resize(100, 30)
 	m.activeProvider = "opencode"
 	m.activeModel = "qwen3.6-plus"
 	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: "qwen3.6-plus"}, {ID: "qwen3.5-plus"}})
-	view := newModelSetupPaneView(m)
-	m.panes.bottom.push(view)
-	m.requestRelayout()
-	m.reconcileLayout()
+	m.panes.bottom.prompt().SetValue("draft")
+	m.executeCommand("/model")
 
-	lines := strings.Split(testPlain(view.Render(newPaneRenderContext(m))), "\n")
-	providerLine, firstModelLine, lastModelLine, thinkingLine := -1, -1, -1, -1
-	for index, line := range lines {
-		switch {
-		case strings.Contains(line, "Provider:"):
-			providerLine = index
-		case strings.Contains(line, "Qwen3.6 Plus"):
-			firstModelLine = index
-		case strings.Contains(line, "Qwen3.5 Plus"):
-			lastModelLine = index
-		case strings.Contains(line, "Thinking"):
-			thinkingLine = index
+	plain := testPlain(m.View().Content)
+	composer := strings.Index(plain, "> draft")
+	panel := strings.Index(plain, "Switch Model")
+	if composer < 0 || panel < 0 || composer > panel {
+		t.Fatalf("reference hierarchy requires composer before model panel:\n%s", plain)
+	}
+	for _, want := range []string{"(current)", "Effort", "Keyboard:", "Qwen3.6 Plus · auto"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("reference model panel missing %q:\n%s", want, plain)
 		}
 	}
-	if providerLine < 0 || firstModelLine != providerLine+1 {
-		t.Fatalf("provider/model spacing is not compact: provider=%d firstModel=%d\n%s", providerLine, firstModelLine, strings.Join(lines, "\n"))
-	}
-	if lastModelLine < 0 || thinkingLine != lastModelLine+1 {
-		t.Fatalf("model/thinking spacing is not compact: lastModel=%d thinking=%d\n%s", lastModelLine, thinkingLine, strings.Join(lines, "\n"))
-	}
 	if footer := testPlain(m.footerView()); footer != "" {
-		t.Fatalf("model overlay leaked composer footer help: %q", footer)
+		t.Fatalf("model panel leaked generic composer footer: %q", footer)
 	}
 }
 

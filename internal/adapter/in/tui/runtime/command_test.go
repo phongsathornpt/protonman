@@ -155,7 +155,7 @@ func TestSlashReasoningOpensUnifiedModelSetup(t *testing.T) {
 		t.Fatal("/reasoning did not open unified model setup")
 	}
 	got := m.panes.bottom.renderTop(m)
-	for _, want := range []string{"Switch Model", "Gemini 3.8 Flash", "Thinking", "low", "medium", "high"} {
+	for _, want := range []string{"Switch Model", "Gemini 3.8 Flash", "Effort", "low", "medium", "high"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("model setup missing %q: %q", want, got)
 		}

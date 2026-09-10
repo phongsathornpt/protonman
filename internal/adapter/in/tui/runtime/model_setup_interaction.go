@@ -10,7 +10,6 @@ import (
 
 func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 	v.initPicker()
-	providerName := v.activeProviderName()
 	mode := layoutModeForHeight(ctx.height)
 	v.picker.SetShowTitle(false)
 	v.picker.SetShowFilter(v.picker.SettingFilter())
@@ -20,10 +19,10 @@ func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 
 	rows := []string{brandStyle.Render("Switch Model")}
 	if len(v.providerNames) > 1 {
-		rows = append(rows, mutedStyle.Render("Provider: "+providerName+" · tab switch"))
-	} else {
-		rows = append(rows, mutedStyle.Render("Provider: "+providerName))
+		rows = append(rows, mutedStyle.Render("Provider: "+v.activeProviderName()+" · tab switch"))
 	}
+	rows = append(rows, "")
+	showSelectionStatus := false
 
 	switch {
 	case v.loading:
@@ -36,43 +35,80 @@ func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 		rows = append(rows, mutedStyle.Render("Search: "+v.picker.FilterValue()), mutedStyle.Render("No matches."))
 	default:
 		rows = append(rows, strings.Split(v.picker.View(), "\n")...)
+		showSelectionStatus = true
 	}
 
-	rows = append(rows, v.reasoningRow())
+	rows = append(rows, "", v.effortRow(), v.effortLabels())
 	if mode != layoutTiny {
-		rows = append(rows, mutedStyle.Render(modelSetupHelp(ctx.width)))
+		rows = append(rows, "", modelSetupHelp(ctx.width))
+	}
+	if showSelectionStatus {
+		if status := v.selectionStatus(ctx.width); status != "" {
+			rows = append(rows, status)
+		}
 	}
 	return renderModalRows(ctx, accentAssistant, rows)
 }
 
 func modelSetupHelp(width int) string {
+	label := brandStyle.Render("Keyboard:") + " "
 	switch {
-	case width >= 74:
-		return "↑↓ model · ←→ thinking · tab provider · enter apply · esc back"
+	case width >= 78:
+		return label + userStyle.Render("↑/↓") + mutedStyle.Render(" Navigate   ") + userStyle.Render("←/→") + mutedStyle.Render(" Effort   ") + userStyle.Render("enter") + mutedStyle.Render(" Select   ") + userStyle.Render("esc") + mutedStyle.Render(" Go Back")
 	case width >= 54:
-		return "↑↓ model · ←→ thinking · enter apply · esc back"
-	case width >= 34:
-		return "↑↓ model · ←→ think · enter · esc"
+		return label + userStyle.Render("↑/↓") + mutedStyle.Render(" model   ") + userStyle.Render("←/→") + mutedStyle.Render(" effort   ") + userStyle.Render("enter") + mutedStyle.Render(" select   ") + userStyle.Render("esc")
 	default:
-		return "↑↓ · ←→ · enter · esc"
+		return brandStyle.Render("Keys:") + " " + mutedStyle.Render("↑↓ ←→ enter esc")
 	}
 }
 
-func (v *modelSetupPaneView) reasoningRow() string {
-	if len(v.reasoningChoices) == 0 {
-		return mutedStyle.Render("Thinking  auto")
+func (v *modelSetupPaneView) effortRow() string {
+	choices := v.reasoningChoices
+	if len(choices) == 0 {
+		choices = []sdk.ReasoningEffort{sdk.ReasoningDefault}
 	}
-	parts := make([]string, 0, len(v.reasoningChoices))
-	for i, effort := range v.reasoningChoices {
+	parts := make([]string, 0, len(choices)*2-1)
+	for i := range choices {
+		dot := mutedStyle.Render("●")
+		if i == v.reasoningIndex {
+			dot = brandStyle.Render("●")
+		}
+		parts = append(parts, dot)
+		if i+1 < len(choices) {
+			parts = append(parts, mutedStyle.Render("──────"))
+		}
+	}
+	return "Effort    " + userStyle.Render("◀") + "   " + strings.Join(parts, "") + "   " + userStyle.Render("▶")
+}
+
+func (v *modelSetupPaneView) effortLabels() string {
+	choices := v.reasoningChoices
+	if len(choices) == 0 {
+		choices = []sdk.ReasoningEffort{sdk.ReasoningDefault}
+	}
+	labels := make([]string, 0, len(choices))
+	for i, effort := range choices {
 		label := reasoningEffortLabel(effort)
 		if i == v.reasoningIndex {
 			label = brandStyle.Render(label)
 		} else {
 			label = mutedStyle.Render(label)
 		}
-		parts = append(parts, label)
+		labels = append(labels, label)
 	}
-	return "Thinking  " + mutedStyle.Render("‹") + "  " + strings.Join(parts, "  ") + "  " + mutedStyle.Render("›")
+	return "          " + strings.Join(labels, "     ")
+}
+
+func (v *modelSetupPaneView) selectionStatus(width int) string {
+	md, ok := v.selectedRemoteModel()
+	if !ok {
+		return ""
+	}
+	status := modelDisplayName(md) + " · " + reasoningEffortLabel(v.selectedReasoning())
+	available := maxInt(1, width-6)
+	status = truncateWithEllipsis(status, available)
+	padding := maxInt(0, available-len([]rune(status)))
+	return strings.Repeat(" ", padding) + mutedStyle.Render(status)
 }
 
 func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {

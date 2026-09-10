@@ -11,6 +11,7 @@ type panePresentationMode uint8
 
 const (
 	paneOverlay panePresentationMode = iota
+	paneBelowComposer
 	paneBlocking
 )
 
