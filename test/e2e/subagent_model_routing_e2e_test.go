@@ -1,9 +1,11 @@
 package e2e_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -14,8 +16,8 @@ func TestE2ESubagentUsesConfiguredProjectModelRoute(t *testing.T) {
 	child := newMockLLMServer(t)
 
 	primary.AddToolCallResponse("delegate-1", "subagent", `{"action":"spawn","task":"Inspect hello.txt","profile":"agility","timeout_seconds":30}`)
-	primary.AddToolCallResponse("wait-1", "subagent", `{"action":"wait","timeout_seconds":30}`)
-	primary.AddTextResponse("Delegation complete.")
+	primary.AddTextResponse("Delegation complete from automatic child result.")
+	primary.AddTextResponse("Delegation complete from automatic child result.")
 
 	child.AddToolCallResponse("child-read-1", "read", `{"path":"hello.txt"}`)
 	child.AddTextResponse("Child inspected hello.txt.")
@@ -74,8 +76,12 @@ reasoning_effort = "low"
 	}
 
 	primaryRequests := primary.Requests()
-	if len(primaryRequests) < 3 {
-		t.Fatalf("primary requests = %d, want at least 3", len(primaryRequests))
+	if len(primaryRequests) < 2 || len(primaryRequests) > 3 {
+		t.Fatalf("primary requests = %d, want 2-3 event-driven rounds without lifecycle polling", len(primaryRequests))
+	}
+	finalRequest := primaryRequests[len(primaryRequests)-1]
+	if !requestMessagesContain(finalRequest, "Child inspected hello.txt.") || !requestMessagesContain(finalRequest, "proton-runtime-context") {
+		t.Fatalf("final primary request missing automatically delivered child result: %#v", finalRequest["messages"])
 	}
 	for i, request := range primaryRequests {
 		if got, _ := request["model"].(string); got != "universal-model" {
@@ -83,6 +89,17 @@ reasoning_effort = "low"
 		}
 		if got, exists := request["reasoning_effort"]; exists {
 			t.Fatalf("primary request %d unexpectedly inherited child reasoning: %#v", i, got)
+		}
+	}
+	for i, request := range primaryRequests {
+		payload, err := json.Marshal(request["messages"])
+		if err != nil {
+			t.Fatalf("marshal primary request %d messages: %v", i, err)
+		}
+		for _, action := range []string{`\"action\":\"wait\"`, `\"action\":\"get\"`, `\"action\":\"list\"`} {
+			if strings.Contains(string(payload), action) {
+				t.Fatalf("primary request %d contains lifecycle polling action %s: %s", i, action, payload)
+			}
 		}
 	}
 }
