@@ -413,6 +413,31 @@ func TestCoordinatorTerminalEventsReplaceDroppedSinkWakeups(t *testing.T) {
 	}
 }
 
+func TestCoordinatorConsumedResultBroadcastsWithoutLifecycleSinkDelivery(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil)
+	defer coord.Close()
+	coord.eventSink = func(context.Context, Event) error { return nil }
+	coord.eventQueue = make(chan Event, 1)
+	events, unsubscribe := coord.Subscribe(1)
+	defer unsubscribe()
+
+	coord.emit(context.Background(), Event{Kind: EventAgentResultConsumed, AgentID: "a-1", ResultVersion: 1})
+
+	select {
+	case ev := <-events:
+		if ev.Kind != EventAgentResultConsumed {
+			t.Fatalf("subscriber event = %s, want consumed result", ev.Kind)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("consumed result was not broadcast to subscribers")
+	}
+	select {
+	case ev := <-coord.eventQueue:
+		t.Fatalf("consumed result leaked into lifecycle sink queue: %s", ev.Kind)
+	default:
+	}
+}
+
 func TestCoordinatorEmitsLifecycleEvents(t *testing.T) {
 	var events []Event
 	var missingAvailableResult bool

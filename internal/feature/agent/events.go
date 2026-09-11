@@ -92,7 +92,7 @@ func (c *Coordinator) emit(ctx context.Context, ev Event) {
 		c.observeMetric(ctx, MetricEvent{Kind: kind, SessionID: ev.SessionID, AgentID: ev.AgentID, ParentID: ev.ParentID, Profile: ev.Profile})
 	}
 	c.broadcast(ev)
-	if c.eventSink == nil || ev.Kind == EventAgentProgress {
+	if c.eventSink == nil || ev.Kind == EventAgentProgress || ev.Kind == EventAgentResultConsumed {
 		return
 	}
 	enqueueLifecycleEvent(c.eventQueue, ev)
