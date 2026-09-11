@@ -81,37 +81,39 @@ func TestPublishInputSchemaLowersZeroArgumentToolForGemini(t *testing.T) {
 	}
 }
 
-func TestPublishInputSchemaPreservesUnifiedReadFileSourceFieldsForGemini(t *testing.T) {
+func TestPublishInputSchemaPreservesReadArtifactFieldsForGemini(t *testing.T) {
 	canonical := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"path":  map[string]any{"type": "string"},
-			"view":  map[string]any{"type": "string", "enum": []string{"auto", "text", "source", "image", "structured", "metadata"}},
-			"query": map[string]any{"type": "string"},
-			"mode":  map[string]any{"type": "string", "enum": []string{"literal", "regex"}},
-			"context": map[string]any{"type": "object", "properties": map[string]any{
-				"before": map[string]any{"type": "integer"},
-				"after":  map[string]any{"type": "integer"},
-			}},
+			"path": map[string]any{"type": "string"},
+			"view": map[string]any{
+				"type": "string",
+				"enum": []string{"auto", "text", "image", "structured", "metadata"},
+			},
+			"offset": map[string]any{"type": "integer", "minimum": 0},
+			"limit":  map[string]any{"type": "integer", "minimum": 0},
 		},
-		"required": []string{"path"},
+		"required":             []string{"path"},
+		"additionalProperties": false,
 	}
 	published := PublishInputSchema(Resolved{Compatibility: CompatibilityPolicy{ToolSchemaDialect: ToolSchemaGeminiSubset}}, canonical)
 	props := published["properties"].(map[string]any)
 	view := props["view"].(map[string]any)
 	values, ok := view["enum"].([]string)
-	if !ok || !reflect.DeepEqual(values, []string{"auto", "text", "source", "image", "structured", "metadata"}) {
+	if !ok || !reflect.DeepEqual(values, []string{"auto", "text", "image", "structured", "metadata"}) {
 		t.Fatalf("published view enum = %#v", view["enum"])
 	}
-	contextSchema, ok := props["context"].(map[string]any)
-	if !ok {
-		t.Fatalf("published context schema = %#v", props["context"])
+	for _, field := range []string{"path", "offset", "limit"} {
+		if props[field] == nil {
+			t.Fatalf("published read field %q missing: %#v", field, props)
+		}
 	}
-	contextProps, ok := contextSchema["properties"].(map[string]any)
-	if !ok || contextProps["before"] == nil || contextProps["after"] == nil {
-		t.Fatalf("published context properties = %#v", contextSchema["properties"])
+	for _, legacy := range []string{"source", "query", "mode", "context"} {
+		if props[legacy] != nil {
+			t.Fatalf("published schema leaked legacy field %q: %#v", legacy, props)
+		}
 	}
-	if props["query"] == nil || props["mode"] == nil {
-		t.Fatalf("published source fields missing: %#v", props)
+	if _, forbidden := published["additionalProperties"]; forbidden {
+		t.Fatalf("Gemini schema retained unsupported additionalProperties: %#v", published)
 	}
 }
