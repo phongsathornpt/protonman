@@ -155,12 +155,10 @@ func (m *bubbleModel) updateTurnDone(message turnmsg.Done) tea.Cmd {
 		m.finalizeRunningTools(message.Err)
 	}
 	m.historyState.CommitActive()
-	if message.Err == nil {
-		if len(message.Result.Messages) > 0 {
-			m.conversationModelState.appendMessages(message.Result.Messages...)
-		} else if message.Result.Message.Content != "" {
-			m.conversationModelState.appendMessages(message.Result.Message)
-		}
+	if len(message.Result.Messages) > 0 && (message.Err == nil || message.Result.ReplaySafe) {
+		m.conversationModelState.appendMessages(message.Result.Messages...)
+	} else if message.Err == nil && message.Result.Message.Content != "" {
+		m.conversationModelState.appendMessages(message.Result.Message)
 	} else if message.Err != nil {
 		m.conversationModelState.dropTrailingUserMessage()
 	}

@@ -127,6 +127,41 @@ func TestLoopRejectsIncompleteModelStream(t *testing.T) {
 	}
 }
 
+func TestLoopPreservesCommittedRoundsWhenLaterStreamFails(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{events: []sdk.Event{
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "read-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		}},
+		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "partial synthesis"}}},
+	}}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow)
+
+	result, err := loop.Run(
+		context.Background(),
+		[]model.Message{{Role: model.RoleUser, Content: "inspect README"}},
+		func(context.Context, Event) error { return nil },
+	)
+	if !errors.Is(err, sdk.ErrIncompleteStream) {
+		t.Fatalf("Run() error = %v, want incomplete stream", err)
+	}
+	if result.Rounds != 1 {
+		t.Fatalf("committed rounds = %d, want 1", result.Rounds)
+	}
+	if !result.ReplaySafe {
+		t.Fatal("committed checkpoint is not marked replay-safe")
+	}
+	if len(result.Messages) != 2 {
+		t.Fatalf("committed messages = %d, want assistant+tool result", len(result.Messages))
+	}
+	if len(result.Messages[0].ToolCalls) != 1 || result.Messages[0].ToolCalls[0].ID != "read-1" {
+		t.Fatalf("assistant checkpoint = %#v", result.Messages[0])
+	}
+	if result.Messages[1].Role != model.RoleTool {
+		t.Fatalf("checkpoint tail role = %q, want tool", result.Messages[1].Role)
+	}
+}
+
 func TestLoopRejectsEmptyModelResponse(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
 		events: []sdk.Event{{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}},
