@@ -382,6 +382,8 @@ func TestModelLayerFileStructure(t *testing.T) {
 		"provider_test.go":       true,
 		"sdk_adapter.go":         true,
 		"sdk_adapter_test.go":    true,
+		"slow_mode.go":           true,
+		"slow_mode_test.go":      true,
 	}
 	for _, entry := range entries {
 		if !expected[entry.Name()] {
