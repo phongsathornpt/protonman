@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"strings"
+
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -53,6 +55,14 @@ func WithWorkDir(dir string) BubbleTeaOption {
 func WithInitialMessages(messages []model.Message) BubbleTeaOption {
 	return func(ui *BubbleTeaUI) error {
 		ui.initialMessages = model.CloneMessages(messages)
+		return nil
+	}
+}
+
+// WithActiveGoal restores the persistent objective for the active session.
+func WithActiveGoal(goal string) BubbleTeaOption {
+	return func(ui *BubbleTeaUI) error {
+		ui.activeGoal = strings.TrimSpace(goal)
 		return nil
 	}
 }

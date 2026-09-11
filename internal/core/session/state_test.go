@@ -3,6 +3,7 @@ package session
 import (
 	"strings"
 	"testing"
+	"time"
 
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
@@ -42,5 +43,23 @@ func TestLegacySessionMessagesReceiveStableIdentity(t *testing.T) {
 	second := ToModelMessages(stored)
 	if first[0].ID != stored[0].ID || second[0].ID != stored[0].ID {
 		t.Fatalf("legacy identity changed: stored=%q first=%q second=%q", stored[0].ID, first[0].ID, second[0].ID)
+	}
+}
+
+func TestSessionStatePreservesActiveGoal(t *testing.T) {
+	now := time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC)
+	prepared, err := PrepareStateForSave("goal-session", State{
+		PermissionMode: "ask",
+		ActiveGoal:     "  finish retry recovery  ",
+	}, nil, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := NormalizeLoadedState("goal-session", prepared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.ActiveGoal != "finish retry recovery" {
+		t.Fatalf("active goal = %q", loaded.ActiveGoal)
 	}
 }

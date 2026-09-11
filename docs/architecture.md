@@ -89,7 +89,7 @@ Important boundaries include:
 
 The engine is orchestration, not an outbound adapter:
 
-- `prompt/` composes capability-driven system prompts using deterministic, cache-aware ordered sections. The managed prompt currently uses Prompt ABI v11; see [`system-prompt.md`](system-prompt.md) for ordering and prefix-cache invariants.
+- `prompt/` composes capability-driven system prompts using deterministic, cache-aware ordered sections. The managed prompt currently uses Prompt ABI v12; see [`system-prompt.md`](system-prompt.md) for ordering and prefix-cache invariants.
 - `toolcall/` validates and authorizes model-originated tool calls before execution.
 - `turn/` owns the bounded multi-round model/tool state machine, streaming, grounding,
   tool-result budgets, repeated-call protection, reasoning policy, verification state, and ephemeral event-driven runtime context delivery. Runtime-context finalization is a terminal-turn invariant: it runs on success, failure, and cancellation so turn-owned asynchronous work and consumer state cannot outlive their parent.
@@ -164,14 +164,24 @@ Only truly dependency-free reusable policy/helpers belong here.
 
 ## 10. Session Aggregate Ownership
 
-A session ID is the durable ownership boundary for conversation state and task state.
-At minimum, session resources include:
+A session ID is the durable ownership boundary for conversation state, the active goal,
+and task state. At minimum, session resources include:
 
 ```text
 ~/.protonman/sessions/<session-id>/
-  state.json
-  todo.md
+  state.json   # conversation/session controls, including ActiveGoal
+  todo.md      # durable task-plan state
 ```
+
+The composition root restores `ActiveGoal` into the initial `app.Conversation`, and the TUI
+preserves it across Bubble Tea program restarts before rebuilding the runner. Setting a goal
+through `/goal <detail>` is an execution entry point: it updates the managed conversation goal
+and immediately starts a normal model/tool turn with the goal text as the user objective.
+Inspecting or clearing the goal does not start a turn.
+
+The current TODO repository remains session-scoped rather than goal-scoped. Goal-to-plan
+binding, plan supersession, and goal-completion gating are therefore not architectural
+invariants yet and must not be assumed by adapters or documentation.
 
 `sessionfs` may also maintain session-owned agent lifecycle projection/journal resources.
 Their filenames are persistence details, but their ownership is not: concurrent sessions

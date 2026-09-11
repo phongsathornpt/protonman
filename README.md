@@ -163,6 +163,7 @@ Type `/` at the prompt to trigger autocomplete, or prefix a canonical command wi
 | `/provider [cmd]` | Manage and configure AI model providers | `/provider list`, `/provider opencode` |
 | `/skills [name|active|toggle]` | Browse, activate, or toggle Agent Skills | `/skills pdf-processing` |
 | `/agents` | Inspect live and retained subagents | `/agents` |
+| `/goal [detail|clear]` | Show, set, and execute the persistent session goal | `/goal finish retry recovery` |
 | `/todo [show|hide]` | Show or hide the task-plan pane | `/todo` |
 | `/transcript [clear]` | Open or clear the transcript | `/transcript clear` |
 | `/call <tool> <json>` | Directly execute a tool with JSON arguments | `/call read {"path":"README.md"}` |

@@ -29,6 +29,7 @@ func NormalizeLoadedState(sessionID string, state State) (State, error) {
 	if err := validateMessages(state.Messages); err != nil {
 		return State{}, fmt.Errorf("session messages: %w", err)
 	}
+	state.ActiveGoal = normalizeActiveGoal(state.ActiveGoal)
 	state.Messages = sanitizeMessages(state.Messages)
 	if err := validateMessages(state.Messages); err != nil {
 		return State{}, fmt.Errorf("session messages: %w", err)
@@ -87,6 +88,7 @@ func PrepareStateForSave(sessionID string, state State, existing *State, now tim
 	if err := validateMessages(state.Messages); err != nil {
 		return State{}, fmt.Errorf("session messages: %w", err)
 	}
+	state.ActiveGoal = normalizeActiveGoal(state.ActiveGoal)
 	state.Messages = sanitizeMessages(state.Messages)
 	if err := validateMessages(state.Messages); err != nil {
 		return State{}, fmt.Errorf("session messages: %w", err)

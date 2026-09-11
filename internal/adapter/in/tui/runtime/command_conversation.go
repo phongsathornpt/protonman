@@ -11,7 +11,7 @@ import (
 func (m *bubbleModel) executeConversationCommand(name, argument string) tea.Cmd {
 	switch name {
 	case "goal":
-		m.handleGoalCommand(argument)
+		return m.handleGoalCommand(argument)
 	case "clear":
 		if strings.TrimSpace(argument) != "" {
 			m.appendError("usage: /clear")
@@ -34,27 +34,31 @@ func (m *bubbleModel) executeConversationCommand(name, argument string) tea.Cmd 
 	return nil
 }
 
-func (m *bubbleModel) handleGoalCommand(argument string) {
+func (m *bubbleModel) handleGoalCommand(argument string) tea.Cmd {
 	goal := strings.TrimSpace(argument)
 	switch strings.ToLower(goal) {
 	case "":
 		if m.activeGoal == "" {
 			m.appendMuted("no active goal")
-			return
+			return nil
 		}
 		m.appendMuted("goal · " + m.activeGoal)
+		return nil
 	case "clear":
 		if err := m.setActiveGoal(""); err != nil {
 			m.appendError("failed to clear goal: " + err.Error())
-			return
+			return nil
 		}
 		m.appendMuted("goal cleared")
+		return nil
 	default:
 		if err := m.setActiveGoal(goal); err != nil {
 			m.appendError("failed to set goal: " + err.Error())
-			return
+			return nil
 		}
 		m.appendMuted("goal · " + goal)
+		m.showWelcome = false
+		return m.startTurn(goal)
 	}
 }
 
