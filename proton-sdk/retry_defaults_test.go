@@ -7,9 +7,8 @@ import (
 	protonsdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
-// TestRetryZeroPolicyUsesCanonicalDefaults pins the zero-value fallbacks in
-// DecideRetry/RetryDelay to the SDK-owned canonical constants. The CLI runtime
-// policy mirrors these values; change both sides together.
+// TestRetryZeroPolicyUsesCanonicalDefaults pins the SDK's zero-value fallbacks
+// in DecideRetry/RetryDelay to its library defaults.
 func TestRetryZeroPolicyUsesCanonicalDefaults(t *testing.T) {
 	if protonsdk.DefaultRetryBaseBackoff != 500*time.Millisecond {
 		t.Fatalf("DefaultRetryBaseBackoff = %v", protonsdk.DefaultRetryBaseBackoff)

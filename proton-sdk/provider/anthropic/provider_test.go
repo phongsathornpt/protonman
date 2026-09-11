@@ -194,6 +194,24 @@ func TestAnthropicStreamErrorIsNormalized(t *testing.T) {
 		t.Fatalf("stream error = %#v (%v)", providerErr, err)
 	}
 }
+func TestAnthropicStreamServerErrorIsRetryableOverload(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"type\":\"error\",\"error\":{\"type\":\"server_error\",\"message\":\"Upstream request failed\"}}\n\n"))
+	}))
+	defer server.Close()
+
+	stream, err := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("claude-test").Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	_, err = stream.Next(context.Background())
+	var providerErr *sdk.ProviderError
+	if !errors.As(err, &providerErr) || providerErr.Kind != sdk.ErrorOverloaded || !providerErr.Retryable {
+		t.Fatalf("stream error = %#v (%v)", providerErr, err)
+	}
+}
 func TestAnthropicAppliesProviderOptions(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any

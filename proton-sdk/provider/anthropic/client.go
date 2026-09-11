@@ -77,23 +77,9 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 			Provider: m.Provider(), ModelID: m.modelID, Reason: string(decision.Reason),
 			Attempt: attempt + 1, MaxRetries: m.provider.options.MaxRetries, Delay: decision.Delay,
 		})
-		if err := waitForRetry(ctx, decision.Delay); err != nil {
+		if err := sdk.WaitForRetry(ctx, decision.Delay); err != nil {
 			return nil, err
 		}
-	}
-}
-
-func waitForRetry(ctx context.Context, delay time.Duration) error {
-	if delay <= 0 {
-		return nil
-	}
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
 	}
 }
 

@@ -1,6 +1,6 @@
 // Package runtimepolicy owns the canonical CLI runtime defaults.
 //
-// Retry timing mirrors the SDK-owned canonical defaults
-// (protonsdk.DefaultRetryBaseBackoff/MaxBackoff/MaxAfter); change both sides
-// together. Pinned by protonsdk_test.TestRetryZeroPolicyUsesCanonicalDefaults.
+// The model retry values are the application policy passed explicitly to the
+// provider-neutral SDK at composition time. The SDK retains independent
+// library fallbacks for callers that do not provide a policy.
 package runtimepolicy

@@ -41,6 +41,7 @@ const (
 	SandboxCommandWaitDelay       = 2 * time.Second
 	TerminalEmitTimeout           = 5 * time.Second
 	ProtectionObserverTimeout     = time.Second
+	ModelRetryMaxRetries          = 2
 	ModelRetryBackoffStep         = 500 * time.Millisecond
 	ModelRetryPostFirstGap        = 1 * time.Second
 	ModelRetryMaxBackoff          = 8 * time.Second

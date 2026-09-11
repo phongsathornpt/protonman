@@ -61,7 +61,7 @@ func providerError(provider string, status int, body []byte, headers http.Header
 	err := sdk.NewProviderError(provider, status, payload.Code, payload.Message)
 	if strings.EqualFold(provider, "opencode") {
 		classifyOpenCodeRateLimit(err, payload, headers)
-	} else if err.Kind == sdk.ErrorRateLimit {
+	} else if err.Kind == sdk.ErrorRateLimit || err.Kind == sdk.ErrorOverloaded {
 		err.RateLimit = sdk.ParseRateLimitHeaders(headers, time.Now())
 	}
 	return err

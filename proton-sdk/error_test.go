@@ -1,6 +1,7 @@
 package protonsdk
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -29,6 +30,38 @@ func TestProviderErrorClassification(t *testing.T) {
 	}
 }
 
+func TestProviderOverloadKeywordsWithoutStatusAreRetryable(t *testing.T) {
+	for _, tc := range []struct {
+		code    string
+		message string
+	}{
+		{"server_error", "Upstream request failed"},
+		{"server_error", "service unavailable"},
+		{"server_is_overloaded", "busy"},
+		{"api_error", "bad gateway"},
+		{"api_error", "gateway timeout"},
+		{"overloaded_error", "busy"},
+	} {
+		err := NewProviderError("test", 0, tc.code, tc.message)
+		if err.Kind != ErrorOverloaded || !err.Retryable {
+			t.Fatalf("code=%q message=%q error=%#v, want retryable overloaded", tc.code, tc.message, err)
+		}
+	}
+}
+
+func TestProviderOverloadWinsOverModelErrorPrefix(t *testing.T) {
+	err := NewProviderError("opencode", 503, "ModelError", "Model glm-4.7-free is overloaded")
+	if err.Kind != ErrorOverloaded || !err.Retryable {
+		t.Fatalf("error=%#v, want retryable overloaded", err)
+	}
+}
+
+func TestProviderModelNotFoundStillNotRetryable(t *testing.T) {
+	err := NewProviderError("opencode", 404, "ModelError", `Model "nope" is not supported`)
+	if err.Kind != ErrorModelNotFound || err.Retryable {
+		t.Fatalf("error=%#v, want non-retryable model_not_found", err)
+	}
+}
 func TestProviderStreamErrorsAreRetryableTransport(t *testing.T) {
 	for _, code := range []string{"ProviderHeaderTimeoutError", "ProviderResponseStreamError"} {
 		err := NewProviderError("opencode", 0, code, code)
@@ -86,6 +119,15 @@ func TestDecideRetryUsesRetryAfterAndRejectsLongWait(t *testing.T) {
 	}
 }
 
+func TestDecideRetryHonorsImmediateRetryAfter(t *testing.T) {
+	err := NewProviderError("test", http.StatusTooManyRequests, "rate_limit_error", "slow down")
+	err.RateLimit = &RateLimitInfo{RetryAfter: 0, ResetAt: time.Now()}
+	policy := RetryPolicy{BaseBackoff: time.Hour, MaxRetryAfter: time.Minute}
+	if got := DecideRetry(err, 1, policy); !got.Retry || got.Delay != 0 {
+		t.Fatalf("decision = %#v, want immediate retry", got)
+	}
+}
+
 func TestRetryDelayAddsCooldownAfterFirstRetry(t *testing.T) {
 	policy := RetryPolicy{BaseBackoff: 500 * time.Millisecond, PostFirstRetryGap: time.Second, MaxBackoff: 8 * time.Second}
 	if got := RetryDelay(1, policy); got != 500*time.Millisecond {
@@ -93,6 +135,28 @@ func TestRetryDelayAddsCooldownAfterFirstRetry(t *testing.T) {
 	}
 	if got := RetryDelay(2, policy); got != 2*time.Second {
 		t.Fatalf("retry 2 delay = %s, want 2s", got)
+	}
+}
+
+func TestRetryDelayCapsInitialBackoff(t *testing.T) {
+	policy := RetryPolicy{BaseBackoff: 5 * time.Second, MaxBackoff: time.Second}
+	if got := RetryDelay(1, policy); got != time.Second {
+		t.Fatalf("RetryDelay(1) = %s, want 1s", got)
+	}
+}
+
+func TestRetryDelayDoesNotOverflowAtLargeRetryIndex(t *testing.T) {
+	policy := RetryPolicy{BaseBackoff: time.Second, MaxBackoff: 8 * time.Second}
+	if got := RetryDelay(int(^uint(0)>>1), policy); got != policy.MaxBackoff {
+		t.Fatalf("RetryDelay(max index) = %s, want %s", got, policy.MaxBackoff)
+	}
+}
+
+func TestWaitForRetryHonorsCancellationWithoutDelay(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := WaitForRetry(ctx, 0); !errors.Is(err, context.Canceled) {
+		t.Fatalf("WaitForRetry() = %v, want context canceled", err)
 	}
 }
 

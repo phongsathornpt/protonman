@@ -278,6 +278,42 @@ func TestOpenAIStreamErrorIsNormalized(t *testing.T) {
 		t.Fatalf("stream error = %#v (%v)", providerErr, err)
 	}
 }
+func TestOpenAIStreamServerErrorIsRetryableOverload(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"error\":{\"message\":\"Upstream request failed\",\"type\":\"server_error\",\"code\":\"server_error\"}}\n\n")
+	}))
+	defer server.Close()
+
+	stream, err := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("test-model").Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	_, err = stream.Next(context.Background())
+	var providerErr *sdk.ProviderError
+	if !errors.As(err, &providerErr) || providerErr.Kind != sdk.ErrorOverloaded || !providerErr.Retryable {
+		t.Fatalf("stream error = %#v (%v)", providerErr, err)
+	}
+}
+func TestOpenAIOverloadPreservesRetryAfterHeader(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "2")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = io.WriteString(w, `{"error":{"message":"Upstream request failed","type":"server_error","code":"server_error"}}`)
+	}))
+	defer server.Close()
+
+	model := NewProvider(ProviderOptions{BaseURL: server.URL, MaxRetries: 0}).Model("test-model")
+	_, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	var providerErr *sdk.ProviderError
+	if !errors.As(err, &providerErr) || providerErr.Kind != sdk.ErrorOverloaded || !providerErr.Retryable {
+		t.Fatalf("provider error = %#v (%v)", providerErr, err)
+	}
+	if providerErr.RateLimit == nil || providerErr.RateLimit.RetryAfter != 2*time.Second {
+		t.Fatalf("rate limit = %#v, want 2s retry-after", providerErr.RateLimit)
+	}
+}
 func TestOpenAIChatAppliesModelAndProviderOptions(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any

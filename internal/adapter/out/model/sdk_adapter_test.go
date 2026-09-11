@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -238,6 +239,26 @@ func TestStreamRetryDoesNotReplayRetryableProviderErrorAfterVisibleText(t *testi
 		t.Fatal(err)
 	}
 	_, err = sdk.CollectStep(context.Background(), stream)
+	if !errors.Is(err, providerErr) || base.requests != 1 {
+		t.Fatalf("err=%v requests=%d, want original provider error/1", err, base.requests)
+	}
+}
+
+func TestStreamRetryUsesSDKRetryAfterLimit(t *testing.T) {
+	providerErr := sdk.NewProviderError(DefaultOpenCodeName, http.StatusTooManyRequests, "rate_limit_error", "slow down")
+	providerErr.RateLimit = &sdk.RateLimitInfo{RetryAfter: 10 * time.Second}
+	base := &emptyRetryTestModel{streams: []sdk.Stream{
+		&emptyRetryTestStream{err: providerErr},
+		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "should not replay"}}},
+	}}
+	policy := streamRetryPolicy(0, 0)
+	policy.MaxRetryAfter = 5 * time.Second
+	stream, err := withStreamRetryPolicyConfig(base, 2, policy, 0, 0, 0).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	_, err = stream.Next(context.Background())
 	if !errors.Is(err, providerErr) || base.requests != 1 {
 		t.Fatalf("err=%v requests=%d, want original provider error/1", err, base.requests)
 	}
@@ -583,12 +604,33 @@ func TestStreamIdleTimeoutDoesNotBlindReplayCommittedText(t *testing.T) {
 
 func TestOpenCodeFreeModelFactoryEnablesEmptyStreamRetry(t *testing.T) {
 	model := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "nemotron-3.5-lightning-free", WithSessionID("session-1"))
-	if _, ok := model.(*emptyStreamRetryModel); !ok {
+	retryModel, ok := model.(*emptyStreamRetryModel)
+	if !ok {
 		t.Fatalf("model type = %T, want *emptyStreamRetryModel", model)
+	}
+	if retryModel.maxRetries != runtimepolicy.ModelRetryMaxRetries {
+		t.Fatalf("free model max retries = %d, want runtime policy %d", retryModel.maxRetries, runtimepolicy.ModelRetryMaxRetries)
 	}
 	paid := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "paid-model", WithSessionID("session-1"))
 	if _, ok := paid.(*emptyStreamRetryModel); ok {
 		t.Fatalf("paid model unexpectedly enabled empty stream retry: %T", paid)
+	}
+}
+
+func TestOpenCodeFreeFactoryUsesOneRetryBudget(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.Header().Set("Retry-After", "0")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(w, `{"error":{"type":"rate_limit_error","message":"slow down"}}`)
+	}))
+	defer server.Close()
+
+	model := newSDKOpenAILanguageModel(DefaultOpenCodeName, server.URL, "", "nemotron-3.5-lightning-free")
+	_, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err == nil || attempts != runtimepolicy.ModelRetryMaxRetries+1 {
+		t.Fatalf("err=%v attempts=%d, want error after %d total attempts", err, attempts, runtimepolicy.ModelRetryMaxRetries+1)
 	}
 }
 
