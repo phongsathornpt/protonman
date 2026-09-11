@@ -91,7 +91,10 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		expected := strings.ToLower(strings.TrimSpace(input.ExpectedSHA256))
 		decoded, decodeErr := hex.DecodeString(expected)
 		if expected == "" {
-			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_sha256 is required when overwriting an existing file; call read first")
+			recoveryArgs, _ := json.Marshal(map[string]any{"path": input.FilePath})
+			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_sha256 is required when overwriting an existing file; call read first").WithRecovery(tool.Recovery{
+				Action: tool.RecoveryRefreshResource, Tool: tool.NameRead, Arguments: recoveryArgs,
+			})
 		}
 		if decodeErr != nil || len(decoded) != sha256.Size {
 			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_sha256 must be a 64-character SHA-256 hex digest")

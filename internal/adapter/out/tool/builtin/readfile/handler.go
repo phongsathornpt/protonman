@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -20,7 +21,24 @@ func New(workspaceRoot *workspace.Workspace) tool.Handler {
 	return readFileHandler{workspace: workspaceRoot}
 }
 
+func missingReadPathError(path string, cause error) error {
+	parent := filepath.Dir(filepath.Clean(path))
+	if strings.TrimSpace(parent) == "" {
+		parent = "."
+	}
+	recoveryArgs, err := json.Marshal(map[string]any{"path": parent})
+	if err != nil {
+		return tool.WrapToolError(tool.ErrorCodeNotFound, fmt.Sprintf("not found: %q", path), cause)
+	}
+	return tool.WrapToolError(tool.ErrorCodeNotFound, fmt.Sprintf("not found: %q", path), cause).WithRecovery(tool.Recovery{
+		Action: tool.RecoveryDiscoverResource, Tool: tool.NameLS, Arguments: recoveryArgs,
+	})
+}
+
 func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
+	if err := ctx.Err(); err != nil {
+		return tool.Result{}, err
+	}
 	if h.workspace == nil {
 		return tool.Result{}, fmt.Errorf("read workspace is required")
 	}
@@ -51,8 +69,12 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	if lineMode && input.View != "auto" && input.View != "text" {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read line selection requires text view")
 	}
-	if lineMode && (input.Offset != 0 || input.Continuation != "") {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read line selection cannot be combined with offset or continuation")
+	if lineMode {
+		// Line selection is the stronger read intent. Models can legitimately carry
+		// byte-pagination metadata from an earlier page while narrowing to known
+		// lines; discard that stale mode instead of failing the read.
+		input.Offset = 0
+		input.Continuation = ""
 	}
 	if input.View == "image" || input.View == "structured" || input.View == "metadata" {
 		if input.Offset != 0 || input.Continuation != "" || input.Limit != 0 {
@@ -73,6 +95,9 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	}
 	path, err := h.workspace.ResolveExistingRead(ctx, input.Path)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return tool.Result{}, missingReadPathError(input.Path, err)
+		}
 		return tool.Result{}, err
 	}
 

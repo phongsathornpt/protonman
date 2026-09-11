@@ -75,7 +75,7 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 	}
 	if len(detailLines) > maxDetailLines {
 		omitted := len(detailLines) - maxDetailLines
-		detailLines = append(detailLines[:maxDetailLines], fmt.Sprintf("... (%d more lines truncated)", omitted))
+		detailLines = append(detailLines[:maxDetailLines], fmt.Sprintf("… (%d more lines truncated)", omitted))
 	}
 	rows = append(rows, tuistyle.MutedStyle.Render(strings.Join(detailLines, "\n")))
 	for i, option := range snapshot.Options {

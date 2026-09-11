@@ -443,7 +443,9 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 	case "session/list":
 		var params SessionListParams
 		if len(request.Params) > 0 {
-			_ = json.Unmarshal(request.Params, &params)
+			if err := json.Unmarshal(request.Params, &params); err != nil {
+				return nil, nil, fmt.Errorf("decode session/list: %w", err)
+			}
 		}
 		sessions, err := s.listSessions(ctx, params.Cwd)
 		if err != nil {

@@ -348,7 +348,7 @@ func (s *Service) call(ctx context.Context, call tool.Call, recoveryDepth int) (
 	if validators.input != nil {
 		validationErr := validators.input.Validate(call.Arguments)
 		if validationErr != nil {
-			inputErr := tool.WrapToolError(tool.ErrorCodeInvalidArguments, fmt.Sprintf("tool %q arguments do not match its input schema", call.Name), validationErr)
+			inputErr := tool.WrapToolError(tool.ErrorCodeInvalidArguments, fmt.Sprintf("tool %q arguments do not match its input schema", call.Name), validationErr).WithDiagnostic(validationErr.Error())
 			result := tool.Result{CallID: call.ID, ToolName: call.Name, Failure: tool.FailureFromError(inputErr)}
 			s.observeCallResult(ctx, telemetry, result, inputErr)
 			return result, inputErr
@@ -485,6 +485,8 @@ func (s *Service) recoverCall(ctx context.Context, telemetry callTelemetry, hand
 	switch failure.Recovery.Action {
 	case tool.RecoveryRestartPagination:
 		return s.recoverPagination(ctx, telemetry, handler, definition, validators, call, failure.Recovery)
+	case tool.RecoveryRefreshResource, tool.RecoveryDiscoverResource:
+		return s.recoverResourceEvidence(ctx, telemetry, call, err, failure.Recovery, recoveryDepth)
 	case tool.RecoveryUseDedicatedTool:
 		return s.recoverDedicatedTool(ctx, telemetry, call, failure.Recovery, recoveryDepth)
 	default:
@@ -512,6 +514,54 @@ func (s *Service) recoverPagination(ctx context.Context, telemetry callTelemetry
 		s.observeRecovery(ctx, telemetry, EventRecoverySucceeded, recovery.Action, nil)
 	}
 	return result, retryErr, true
+}
+
+func (s *Service) recoverResourceEvidence(ctx context.Context, telemetry callTelemetry, call tool.Call, originalErr error, recovery *tool.Recovery, recoveryDepth int) (tool.Result, error, bool) {
+	if recoveryDepth > 0 || recovery == nil || strings.TrimSpace(recovery.Tool) == "" {
+		return tool.Result{}, nil, false
+	}
+	handler, ok := s.registry.Lookup(recovery.Tool)
+	if !ok {
+		return tool.Result{}, nil, false
+	}
+	definition := handler.Definition()
+	recoveryArgs := tool.NormalizeArguments(definition, recovery.Arguments)
+	if tool.EffectiveCallMutability(definition, recoveryArgs) != tool.MutabilityReadOnly {
+		return tool.Result{}, nil, false
+	}
+	validators, err := s.validatorsFor(definition)
+	if err != nil || validators.input != nil && validators.input.Validate(recoveryArgs) != nil {
+		return tool.Result{}, nil, false
+	}
+	recoveryCall, err := tool.NewCall(call.ID+":refresh", definition.Name, recoveryArgs)
+	if err != nil {
+		return tool.Result{}, nil, false
+	}
+	s.observeRecovery(ctx, telemetry, EventRecoveryAttempted, recovery.Action, nil)
+	refreshed, refreshErr := s.call(ctx, recoveryCall, recoveryDepth+1)
+	if refreshErr != nil || refreshed.Failure != nil || refreshed.Denied {
+		if refreshErr == nil {
+			refreshErr = errors.New("resource refresh failed")
+		}
+		s.observeRecovery(ctx, telemetry, EventRecoveryFailed, recovery.Action, refreshErr)
+		return tool.Result{}, nil, false
+	}
+	s.observeRecovery(ctx, telemetry, EventRecoverySucceeded, recovery.Action, nil)
+	failure := tool.FailureFromError(originalErr)
+	if failure == nil {
+		return tool.Result{}, nil, false
+	}
+	payload := refreshed.ModelPayload()
+	failure.RecoveryEvidence = &tool.RecoveryEvidence{
+		Action:           recovery.Action,
+		Tool:             definition.Name,
+		Output:           payload.Output,
+		StructuredOutput: append(json.RawMessage(nil), payload.StructuredOutput...),
+		SHA256:           payload.SHA256,
+		Truncated:        payload.Truncated,
+		Pagination:       payload.Pagination,
+	}
+	return tool.Result{CallID: call.ID, ToolName: call.Name, Failure: failure}, originalErr, true
 }
 
 func (s *Service) recoverDedicatedTool(ctx context.Context, telemetry callTelemetry, call tool.Call, recovery *tool.Recovery, recoveryDepth int) (tool.Result, error, bool) {

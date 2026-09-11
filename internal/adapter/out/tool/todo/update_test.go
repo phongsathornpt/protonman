@@ -113,6 +113,30 @@ func TestUpdateTodoReportsTextUpdates(t *testing.T) {
 	}
 }
 
+func TestTodoCapabilityDefinitionUsesClosedTypedRootSchema(t *testing.T) {
+	def := NewTodo(nil).Definition()
+	if def.InputSchema["type"] != "object" {
+		t.Fatalf("input schema type = %#v, want object", def.InputSchema["type"])
+	}
+	if def.InputSchema["additionalProperties"] != false {
+		t.Fatalf("additionalProperties = %#v, want false", def.InputSchema["additionalProperties"])
+	}
+	props := def.InputSchema["properties"].(map[string]any)
+	if got := props["expected_revision"].(map[string]any)["type"]; got != "integer" {
+		t.Fatalf("expected_revision type = %#v, want integer", got)
+	}
+	if got := props["operations"].(map[string]any)["type"]; got != "array" {
+		t.Fatalf("operations type = %#v, want array", got)
+	}
+	branches, ok := def.InputSchema["oneOf"].([]any)
+	if !ok || len(branches) != 2 {
+		t.Fatalf("oneOf = %#v, want get/update branches", def.InputSchema["oneOf"])
+	}
+	if err := def.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestUpdateTodoDefinitionUsesPatchSchema(t *testing.T) {
 	def := newUpdateTodo(nil).Definition()
 	if def.Kind != tool.KindTask || def.Mutability != tool.MutabilityMutating || len(def.OutputSchema) == 0 {
@@ -127,12 +151,24 @@ func TestUpdateTodoDefinitionUsesPatchSchema(t *testing.T) {
 	}
 	operations := props["operations"].(map[string]any)
 	items := operations["items"].(map[string]any)
-	if _, legacy := items["oneOf"]; legacy {
-		t.Fatalf("operation schema still publishes oneOf: %#v", items)
+	branches, ok := items["oneOf"].([]any)
+	if !ok || len(branches) != 4 {
+		t.Fatalf("operation oneOf = %#v, want 4 branches", items["oneOf"])
 	}
-	op := items["properties"].(map[string]any)["op"].(map[string]any)
-	if got := len(op["enum"].([]any)); got != 4 {
-		t.Fatalf("operation enum size = %d, want 4", got)
+	wantRequired := map[string][]string{
+		"add":        {"op", "id", "text", "status"},
+		"set_status": {"op", "id", "status"},
+		"set_text":   {"op", "id", "text"},
+		"remove":     {"op", "id"},
+	}
+	for _, raw := range branches {
+		branch := raw.(map[string]any)
+		branchProps := branch["properties"].(map[string]any)
+		op := branchProps["op"].(map[string]any)["const"].(string)
+		required := branch["required"].([]any)
+		if len(required) != len(wantRequired[op]) {
+			t.Fatalf("%s required = %#v", op, required)
+		}
 	}
 	if err := def.Validate(); err != nil {
 		t.Fatal(err)
@@ -240,5 +276,28 @@ func TestUpdateTodoForSessionIncludesSessionIdentity(t *testing.T) {
 	}
 	if payload["session_id"] != "session-123" {
 		t.Fatalf("session_id=%v", payload["session_id"])
+	}
+}
+
+func TestUpdateTodoInvalidPatchPublishesActionableDiagnostic(t *testing.T) {
+	store, err := tododomain.NewStore([]tododomain.Item{{ID: "a", Text: "keep", Status: tododomain.StatusPending}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newUpdateTodo(store)
+	call, _ := tool.NewCall("todo-invalid-patch", "todo", todoPatchArgs(0, map[string]any{
+		"op": "set_status", "id": "a", "status": "completed", "text": "not allowed",
+	}))
+	_, err = h.Execute(context.Background(), call)
+	var toolErr *tool.ToolError
+	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeInvalidArguments {
+		t.Fatalf("error=%v, want invalid arguments", err)
+	}
+	if !strings.Contains(toolErr.Diagnostic, "set_status does not accept text") {
+		t.Fatalf("diagnostic=%q", toolErr.Diagnostic)
+	}
+	failure := tool.FailureFromError(err)
+	if failure == nil || !strings.Contains(failure.Diagnostic, "set_status does not accept text") {
+		t.Fatalf("failure=%#v", failure)
 	}
 }

@@ -278,6 +278,42 @@ func TestOpenAIStreamErrorIsNormalized(t *testing.T) {
 		t.Fatalf("stream error = %#v (%v)", providerErr, err)
 	}
 }
+func TestOpenAIStreamServerErrorIsRetryableOverload(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"error\":{\"message\":\"Upstream request failed\",\"type\":\"server_error\",\"code\":\"server_error\"}}\n\n")
+	}))
+	defer server.Close()
+
+	stream, err := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("test-model").Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	_, err = stream.Next(context.Background())
+	var providerErr *sdk.ProviderError
+	if !errors.As(err, &providerErr) || providerErr.Kind != sdk.ErrorOverloaded || !providerErr.Retryable {
+		t.Fatalf("stream error = %#v (%v)", providerErr, err)
+	}
+}
+func TestOpenAIOverloadPreservesRetryAfterHeader(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "2")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = io.WriteString(w, `{"error":{"message":"Upstream request failed","type":"server_error","code":"server_error"}}`)
+	}))
+	defer server.Close()
+
+	model := NewProvider(ProviderOptions{BaseURL: server.URL, MaxRetries: 0}).Model("test-model")
+	_, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	var providerErr *sdk.ProviderError
+	if !errors.As(err, &providerErr) || providerErr.Kind != sdk.ErrorOverloaded || !providerErr.Retryable {
+		t.Fatalf("provider error = %#v (%v)", providerErr, err)
+	}
+	if providerErr.RateLimit == nil || providerErr.RateLimit.RetryAfter != 2*time.Second {
+		t.Fatalf("rate limit = %#v, want 2s retry-after", providerErr.RateLimit)
+	}
+}
 func TestOpenAIChatAppliesModelAndProviderOptions(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
@@ -744,5 +780,37 @@ func TestResponsesFunctionCallNormalizesFinishReason(t *testing.T) {
 	}
 	if result.FinishReason != sdk.FinishToolCalls || len(result.ToolCalls) != 1 {
 		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestOpenAIRetryPublishesRetryObserverEvent(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts == 1 {
+			http.Error(w, "temporary", http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
+	}))
+	defer server.Close()
+
+	var retries []sdk.RetryEvent
+	ctx := sdk.WithRetryObserver(context.Background(), func(_ context.Context, event sdk.RetryEvent) {
+		retries = append(retries, event)
+	})
+	model := NewProvider(ProviderOptions{ProviderName: "opencode", BaseURL: server.URL, MaxRetries: 1, RetryBackoff: 5 * time.Millisecond}).Model("test-model")
+	stream, err := model.Stream(ctx, sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	if attempts != 2 || len(retries) != 1 {
+		t.Fatalf("attempts=%d retries=%+v", attempts, retries)
+	}
+	got := retries[0]
+	if got.Provider != "opencode" || got.ModelID != "test-model" || got.Reason != string(sdk.ErrorOverloaded) || got.Attempt != 1 || got.MaxRetries != 1 || got.Delay != 5*time.Millisecond || got.RetryAt.IsZero() {
+		t.Fatalf("retry event = %+v", got)
 	}
 }

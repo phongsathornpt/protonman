@@ -1,24 +1,40 @@
 package todotool
 
 func todoUpdateInputSchema() map[string]any {
+	operation := func(op string, fields map[string]any, required ...string) map[string]any {
+		properties := map[string]any{
+			"op": map[string]any{"type": "string", "const": op, "description": "Patch operation kind."},
+			"id": map[string]any{"type": "string", "description": "Stable task id from the current snapshot, or a new stable id when op=add."},
+		}
+		for name, schema := range fields {
+			properties[name] = schema
+		}
+		requiredFields := []any{"op", "id"}
+		for _, field := range required {
+			requiredFields = append(requiredFields, field)
+		}
+		return map[string]any{
+			"type":                 "object",
+			"properties":           properties,
+			"required":             requiredFields,
+			"additionalProperties": false,
+		}
+	}
+	text := map[string]any{"type": "string", "description": "Task text as a single safe markdown line."}
+	status := map[string]any{"type": "string", "enum": []any{"pending", "in_progress", "completed"}, "description": "Task status."}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"expected_revision": map[string]any{"type": "integer", "minimum": 0, "description": "Revision from the latest todo action=get snapshot; stale revisions are rejected."},
+			"expected_revision": map[string]any{"type": "integer", "minimum": 0, "description": "Integer revision from the latest todo action=get snapshot. Send this as a JSON number, never a quoted string; stale revisions are rejected."},
 			"operations": map[string]any{
 				"type": "array", "minItems": 1, "maxItems": 256,
-				"description": "Ordered patch operations. Unmentioned tasks are preserved. Operation-specific fields are validated by the todo runtime.",
-				"items": map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"op":     map[string]any{"type": "string", "enum": []any{"add", "set_status", "set_text", "remove"}},
-						"id":     map[string]any{"type": "string"},
-						"text":   map[string]any{"type": "string"},
-						"status": map[string]any{"type": "string", "enum": []any{"pending", "in_progress", "completed"}},
-					},
-					"required":             []any{"op", "id"},
-					"additionalProperties": false,
-				},
+				"description": "JSON array of patch-operation objects, never a JSON-encoded string. Unmentioned tasks are preserved.",
+				"items": map[string]any{"oneOf": []any{
+					operation("add", map[string]any{"text": text, "status": status}, "text", "status"),
+					operation("set_status", map[string]any{"status": status}, "status"),
+					operation("set_text", map[string]any{"text": text}, "text"),
+					operation("remove", nil),
+				}},
 			},
 		},
 		"required":             []any{"expected_revision", "operations"},

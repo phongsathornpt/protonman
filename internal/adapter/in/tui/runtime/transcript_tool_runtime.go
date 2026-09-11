@@ -44,10 +44,13 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 			state.CompleteToolCall(result.CallID, name, completed)
 			return
 		}
-		suggestions := transcriptutil.ToolFailureSuggestions(name, result.Failure.Code)
+		suggestions := transcriptutil.ToolFailureSuggestions(name, result.Failure)
 		title := tool.DisplayName(name)
 		badge := string(result.Failure.Code)
 		text := result.Failure.Message
+		if strings.TrimSpace(result.Failure.Diagnostic) != "" {
+			text = result.Failure.Diagnostic
+		}
 		if name == "todo" && result.Failure.Code == tool.ErrorCodeConflict {
 			title = "Task plan changed"
 			badge = "stale"
@@ -62,7 +65,11 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 		errorCell := &ErrorCell{ErrorKind: ErrorKindToolFailed, Title: tool.DisplayName(name), Text: err.Error()}
 		if result.Failure != nil {
 			errorCell.Badge = string(result.Failure.Code)
-			errorCell.Text = fmt.Sprintf("[%s]: %s", result.Failure.Code, result.Failure.Message)
+			detail := result.Failure.Message
+			if strings.TrimSpace(result.Failure.Diagnostic) != "" {
+				detail = result.Failure.Diagnostic
+			}
+			errorCell.Text = fmt.Sprintf("[%s]: %s", result.Failure.Code, detail)
 			errorCell.Code = result.Failure.Code
 		}
 		state.CompleteToolCall(result.CallID, name, errorCell)

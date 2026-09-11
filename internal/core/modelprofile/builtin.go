@@ -156,6 +156,9 @@ func ResolveBuiltin(provider, modelID string, catalog CatalogMetadata) Resolved 
 }
 
 func mustRegistry(profiles ...Profile) *Registry {
+	// Built-in profiles are a compile-time constant exercised by the
+	// TestResolveBuiltin* suite; a construction failure here is a programmer
+	// error, not a runtime condition, so fail fast at package init.
 	registry, err := NewRegistry(profiles...)
 	if err != nil {
 		panic(err)

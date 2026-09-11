@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
@@ -45,13 +46,53 @@ func TestClassifyEmptyModelResponseIsActionable(t *testing.T) {
 	}
 }
 
-func TestClassifyIncompleteModelStreamIsRetryableStreamFailure(t *testing.T) {
+func TestClassifyIncompleteModelStreamIsDistinctFromTimeout(t *testing.T) {
 	err := fmt.Errorf("read model stream: %w", sdk.ErrIncompleteStream)
+	got := Classify(err, "opencode", "nemotron-3.5-lightning-free")
+	if got.Kind != KindStreamIncomplete || !got.Retryable {
+		t.Fatalf("classification = %+v, want retryable incomplete stream", got)
+	}
+	if got.Badge != "STREAM_INCOMPLETE" || UserCode(got.Kind) != "STREAM_INCOMPLETE" {
+		t.Fatalf("badge=%q user_code=%q", got.Badge, UserCode(got.Kind))
+	}
+}
+
+func TestClassifyBoundedIncompleteStreamTimeoutRemainsTimeout(t *testing.T) {
+	err := fmt.Errorf("read model stream: %w: opencode free model stream became idle before completion", sdk.ErrIncompleteStream)
 	got := Classify(err, "opencode", "nemotron-3.5-lightning-free")
 	if got.Kind != KindStreamTimeout || !got.Retryable {
 		t.Fatalf("classification = %+v, want retryable stream timeout", got)
 	}
-	if got.Badge != "STREAM_INCOMPLETE" {
-		t.Fatalf("badge = %q", got.Badge)
+	if UserCode(got.Kind) != "STREAM_TIMEOUT" {
+		t.Fatalf("user code = %q", UserCode(got.Kind))
+	}
+}
+
+func TestClassifySuggestionsReferenceKnownSlashCommands(t *testing.T) {
+	known := map[string]bool{}
+	for _, command := range []string{
+		"help", "permission", "model", "provider", "skills",
+		"agents", "goal", "todo", "clear", "call", "quit",
+	} {
+		known[command] = true
+	}
+	cases := []error{
+		errors.New("model foobar is not supported by provider test"),
+		errors.New("input token count exceeds the maximum context length"),
+		errors.New("unauthorized: invalid api key"),
+	}
+	for _, err := range cases {
+		got := Classify(err, "test", "test-model")
+		for _, suggestion := range got.Suggestions {
+			for _, word := range strings.Fields(suggestion) {
+				if !strings.HasPrefix(word, "/") {
+					continue
+				}
+				name := strings.Trim(strings.TrimPrefix(word, "/"), ".,:;()")
+				if !known[name] {
+					t.Errorf("Classify(%v) suggests unknown command %q", err, word)
+				}
+			}
+		}
 	}
 }

@@ -151,6 +151,64 @@ func TestProgressGuardTracksRepeatedNonRetryableFailure(t *testing.T) {
 	}
 }
 
+func TestProgressGuardSuppressionPreservesActionableFailureRecovery(t *testing.T) {
+	guard := newProgressGuard([]tool.Definition{{Name: "edit", Kind: tool.KindEdit}}, 2)
+	call := tool.Call{ID: "edit-1", Name: "edit", Arguments: json.RawMessage(`{"file_path":"a.txt","content":"new"}`)}
+	failure := &tool.Failure{
+		Code:       tool.ErrorCodeInvalidArguments,
+		Message:    "expected_sha256 is required when overwriting an existing file; call read first",
+		Diagnostic: "read the current file before retrying the edit",
+		Recovery: &tool.Recovery{
+			Action: tool.RecoveryRefreshResource, Tool: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`),
+		},
+		RecoveryEvidence: &tool.RecoveryEvidence{
+			Action: tool.RecoveryRefreshResource, Tool: "read", Output: "old", SHA256: "abc123",
+		},
+	}
+	first := executedCall{call: call, result: tool.Result{CallID: call.ID, ToolName: call.Name, Failure: failure}, err: fmt.Errorf("edit failed")}
+	if stalled, err := guard.observeRound([]executedCall{first}); err != nil || stalled {
+		t.Fatalf("first failure stalled=%v err=%v", stalled, err)
+	}
+	call.ID = "edit-2"
+	suppressed, err := guard.suppress(call)
+	if err != nil || suppressed == nil {
+		t.Fatalf("suppress = %#v err=%v", suppressed, err)
+	}
+	got := suppressed.result.Failure
+	if got == nil || got.Code != failure.Code || got.Message != failure.Message || got.Diagnostic != failure.Diagnostic {
+		t.Fatalf("suppressed failure = %#v, want original actionable failure", got)
+	}
+	if got.Recovery == nil || got.Recovery.Action != tool.RecoveryRefreshResource || string(got.Recovery.Arguments) != `{"path":"a.txt"}` {
+		t.Fatalf("suppressed recovery = %#v", got.Recovery)
+	}
+	if got.RecoveryEvidence == nil || got.RecoveryEvidence.Output != "old" || got.RecoveryEvidence.SHA256 != "abc123" {
+		t.Fatalf("suppressed recovery evidence = %#v", got.RecoveryEvidence)
+	}
+	if got == failure || got.Recovery == failure.Recovery || got.RecoveryEvidence == failure.RecoveryEvidence {
+		t.Fatal("suppression reused mutable failure pointers")
+	}
+}
+
+func TestNoProgressFailureHashIncludesRecoverySemantics(t *testing.T) {
+	left, err := noProgressResultHash(tool.Result{Failure: &tool.Failure{
+		Code:     tool.ErrorCodeInvalidArguments,
+		Recovery: &tool.Recovery{Action: tool.RecoveryRefreshResource, Tool: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	right, err := noProgressResultHash(tool.Result{Failure: &tool.Failure{
+		Code:     tool.ErrorCodeInvalidArguments,
+		Recovery: &tool.Recovery{Action: tool.RecoveryRefreshResource, Tool: "read", Arguments: json.RawMessage(`{"path":"b.txt"}`)},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if left == right {
+		t.Fatal("failure hashes ignored distinct recovery arguments")
+	}
+}
+
 func TestProgressGuardBoundsRetryableFailure(t *testing.T) {
 	guard := newProgressGuard([]tool.Definition{{Name: "read", Kind: tool.KindRead}}, 2)
 	for i := 1; i <= defaultMaxIdenticalRetryableFailures; i++ {

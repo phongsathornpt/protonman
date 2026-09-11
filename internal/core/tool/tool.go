@@ -242,6 +242,7 @@ type RecoveryAction string
 const (
 	RecoveryRestartPagination RecoveryAction = "restart_pagination"
 	RecoveryRefreshResource   RecoveryAction = "refresh_resource"
+	RecoveryDiscoverResource  RecoveryAction = "discover_resource"
 	RecoveryUseDedicatedTool  RecoveryAction = "use_dedicated_tool"
 )
 
@@ -253,10 +254,11 @@ type Recovery struct {
 }
 
 type ToolError struct {
-	Code     ErrorCode
-	Message  string
-	Cause    error
-	Recovery *Recovery
+	Code       ErrorCode
+	Message    string
+	Diagnostic string
+	Cause      error
+	Recovery   *Recovery
 }
 
 // FailureCoder lets adapters classify an error without depending on a concrete
@@ -305,6 +307,14 @@ func (e *ToolError) WithRecovery(recovery Recovery) *ToolError {
 	return e
 }
 
+func (e *ToolError) WithDiagnostic(diagnostic string) *ToolError {
+	if e == nil {
+		return nil
+	}
+	e.Diagnostic = strings.TrimSpace(diagnostic)
+	return e
+}
+
 func (e *ToolError) Unwrap() error {
 	if e == nil {
 		return nil
@@ -313,11 +323,23 @@ func (e *ToolError) Unwrap() error {
 }
 
 // Failure is the serializable failure portion of a tool result.
+type RecoveryEvidence struct {
+	Action           RecoveryAction  `json:"action"`
+	Tool             string          `json:"tool"`
+	Output           string          `json:"output,omitempty"`
+	StructuredOutput json.RawMessage `json:"structured_output,omitempty"`
+	SHA256           string          `json:"sha256,omitempty"`
+	Truncated        bool            `json:"truncated,omitempty"`
+	Pagination       *Pagination     `json:"pagination,omitempty"`
+}
+
 type Failure struct {
-	Code      ErrorCode `json:"code"`
-	Message   string    `json:"message"`
-	Retryable bool      `json:"retryable,omitempty"`
-	Recovery  *Recovery `json:"recovery,omitempty"`
+	Code             ErrorCode         `json:"code"`
+	Message          string            `json:"message"`
+	Diagnostic       string            `json:"diagnostic,omitempty"`
+	Retryable        bool              `json:"retryable,omitempty"`
+	Recovery         *Recovery         `json:"recovery,omitempty"`
+	RecoveryEvidence *RecoveryEvidence `json:"recovery_evidence,omitempty"`
 }
 
 // FailureFromError converts an internal error into a stable result failure.
@@ -336,6 +358,7 @@ func FailureFromError(err error) *Failure {
 	case errors.As(err, &toolErr):
 		result.Code = toolErr.Code
 		result.Message = toolErr.Message
+		result.Diagnostic = toolErr.Diagnostic
 		result.Recovery = toolErr.Recovery
 	case errors.As(err, &failureCoder):
 		result.Code = failureCoder.FailureCode()
@@ -603,6 +626,7 @@ func (r Result) ModelPayload() Result {
 	if r.Failure != nil {
 		failure := *r.Failure
 		failure.Message = compactModelFailureMessage(failure.Message)
+		failure.Diagnostic = compactModelFailureMessage(failure.Diagnostic)
 		r.Failure = &failure
 	}
 	return r

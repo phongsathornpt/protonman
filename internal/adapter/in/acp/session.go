@@ -300,7 +300,9 @@ func (s *Session) ExecutePrompt(
 	s.mu.Lock()
 	wasCancelled := s.cancelled || promptCtx.Err() != nil
 	if err != nil || wasCancelled {
-		if len(s.messages) > 0 && s.messages[len(s.messages)-1].Role == model.RoleUser {
+		if result.ReplaySafe && len(result.Messages) > 0 {
+			s.messages = append(s.messages, result.Messages...)
+		} else if len(s.messages) > 0 && s.messages[len(s.messages)-1].Role == model.RoleUser {
 			last := len(s.messages) - 1
 			s.messages[last] = model.Message{}
 			s.messages = s.messages[:last]

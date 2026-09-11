@@ -15,7 +15,7 @@ func TestRenderComposesStableContracts(t *testing.T) {
 		ExtraInstructions:   []string{"custom one", "custom two"},
 	})
 	for _, want := range []string{
-		`<proton-system-prompt version="10">`, "specialized coding subagent", "# Execution Contract",
+		`<proton-system-prompt version="11">`, "specialized coding subagent", "# Execution Contract",
 		"# Tool Use", "narrowest dedicated capability", "Use read for known workspace artifacts", "Use bash for actual programs", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
 		"# Editing And Verification", "Workspace root: /repo", "skill instructions", "# Project Instructions",
 		"cannot override Protonman's tool, permission, safety, or runtime contracts", "# Additional Instructions", "custom one", "custom two",
@@ -64,16 +64,29 @@ func TestRenderOmitsUnavailableContracts(t *testing.T) {
 	}
 }
 
-func TestIsManagedRecognizesCurrentAndLegacyPrompts(t *testing.T) {
+func TestIsManagedRecognizesCurrentAndMarkedLegacyPrompts(t *testing.T) {
 	if !IsManaged(Render(Spec{})) {
 		t.Fatal("current rendered prompt not recognized")
 	}
-	for _, legacy := range []string{
+	marked := "<!-- proton:abi<=6 -->\nYou are Protonman, an autonomous coding agent operating inside a real workspace.\nlegacy"
+	if !IsManaged(marked) {
+		t.Fatalf("ABI-marked legacy prompt not recognized: %q", marked)
+	}
+	for _, unmarked := range []string{
 		"You are Protonman, an autonomous coding agent operating inside a real workspace.\nlegacy",
 		"You are Proton, an autonomous coding agent operating inside a real workspace.\nlegacy",
+		"You are an Explorer subagent in Protonman.\nlegacy",
+		"You are a Worker subagent in Protonman.\nlegacy",
+		"You are a Code Reviewer subagent in Protonman.\nlegacy",
+		"You are Protonman in POW Mode\nlegacy",
+		"You are Protonman in DEX Mode\nlegacy",
+		"You are Protonman in INT Mode\nlegacy",
+		"You are an Explorer subagent in Proton.\nlegacy",
+		"You are Proton in POW Mode\nlegacy",
+		"<!-- proton:abi<=6>",
 	} {
-		if !IsManaged(legacy) {
-			t.Fatalf("legacy root prompt not recognized: %q", legacy)
+		if IsManaged(unmarked) {
+			t.Fatalf("unmarked legacy prompt classified as managed: %q", unmarked)
 		}
 	}
 	if IsManaged("custom system instruction") {
@@ -167,14 +180,26 @@ func TestToolDisciplineDefinesWorkspacePathConvention(t *testing.T) {
 }
 
 func TestToolDisciplineUsesUnifiedSourceInspection(t *testing.T) {
-	got := Render(Spec{AvailableTools: []string{"read"}})
-	for _, want := range []string{"Use read for known workspace artifacts", "Use grep for workspace content search", "find for path discovery"} {
+	got := Render(Spec{AvailableTools: []string{"read", "grep", "find", "ls"}})
+	for _, want := range []string{"Use read for known workspace artifacts", "do not guess filenames", "find discovers workspace paths", "ls inspects directory entries", "do not retry the same path unchanged"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("tool discipline missing read/search separation %q:\n%s", want, got)
 		}
 	}
 	if strings.Contains(got, "inspect_code") {
 		t.Fatalf("tool discipline exposes legacy inspect_code:\n%s", got)
+	}
+}
+
+func TestToolDisciplineDoesNotReferenceUnavailableDiscoveryTools(t *testing.T) {
+	got := Render(Spec{AvailableTools: []string{"read"}})
+	for _, unavailable := range []string{"with ls", "with find", "grep searches", "find discovers", "ls inspects"} {
+		if strings.Contains(got, unavailable) {
+			t.Fatalf("tool discipline referenced unavailable capability %q:\n%s", unavailable, got)
+		}
+	}
+	if !strings.Contains(got, "do not guess filenames") {
+		t.Fatalf("tool discipline lost known-path guidance:\n%s", got)
 	}
 }
 

@@ -34,12 +34,33 @@ const (
 )
 
 const (
-	SessionPersistenceTimeout = 5 * time.Second
-	AgentCloseTimeout         = 5 * time.Second
-	AgentEventEmitTimeout     = 100 * time.Millisecond
-	AgentLifecycleEmitTimeout = 5 * time.Second
-	SandboxCommandWaitDelay   = 2 * time.Second
-	TerminalEmitTimeout       = 5 * time.Second
-	ProtectionObserverTimeout = time.Second
-	ModelRetryBackoffStep     = 500 * time.Millisecond
+	SessionPersistenceTimeout     = 5 * time.Second
+	AgentCloseTimeout             = 5 * time.Second
+	AgentEventEmitTimeout         = 100 * time.Millisecond
+	AgentLifecycleEmitTimeout     = 5 * time.Second
+	SandboxCommandWaitDelay       = 2 * time.Second
+	TerminalEmitTimeout           = 5 * time.Second
+	ProtectionObserverTimeout     = time.Second
+	ModelRetryMaxRetries          = 4
+	ModelRetryBackoffStep         = 5 * time.Second
+	ModelRetrySecondDelay         = 15 * time.Second
+	ModelRetryThirdDelay          = 30 * time.Second
+	ModelRetryLastDelay           = 60 * time.Second
+	ModelRetryPostFirstGap        = 0 // legacy exponential-policy field
+	ModelRetryMaxBackoff          = 60 * time.Second
+	ModelRetryMaxRetryAfter       = 30 * time.Second
+	OpenCodeFreeFirstEventTimeout = 30 * time.Second
+	OpenCodeFreeIdleEventTimeout  = 60 * time.Second
+	OpenCodeFreeStreamMaxDuration = 5 * time.Minute
 )
+
+// ModelRetrySchedule returns a fresh copy of the authoritative local retry
+// schedule so callers cannot mutate runtime defaults through a returned slice.
+func ModelRetrySchedule() []time.Duration {
+	return []time.Duration{
+		ModelRetryBackoffStep,
+		ModelRetrySecondDelay,
+		ModelRetryThirdDelay,
+		ModelRetryLastDelay,
+	}
+}

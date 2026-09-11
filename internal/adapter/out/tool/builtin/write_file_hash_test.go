@@ -40,6 +40,13 @@ func TestWriteFileRequiresExpectedSHA256ForOverwrite(t *testing.T) {
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeInvalidArguments {
 		t.Fatalf("missing hash error = %v, want invalid arguments", err)
 	}
+	if toolErr.Recovery == nil || toolErr.Recovery.Action != tool.RecoveryRefreshResource || toolErr.Recovery.Tool != tool.NameRead {
+		t.Fatalf("missing hash recovery = %#v", toolErr.Recovery)
+	}
+	var recoveryArgs map[string]any
+	if err := json.Unmarshal(toolErr.Recovery.Arguments, &recoveryArgs); err != nil || recoveryArgs["path"] != "file.txt" {
+		t.Fatalf("missing hash recovery args = %s err=%v", toolErr.Recovery.Arguments, err)
+	}
 }
 
 func TestWriteFileRejectsStaleExpectedSHA256(t *testing.T) {

@@ -440,15 +440,13 @@ func (r *Runner) runTurn(
 	if turnCtx.Err() != nil {
 		r.agents.CancelTurn(turnID, agent.CancelTurnAndChildren)
 	}
-	if err == nil {
-		if len(result.Messages) > 0 {
-			r.messages = append(r.messages, result.Messages...)
-		} else if result.Message.Content != "" {
-			r.messages = append(r.messages, result.Message)
-		}
+	if len(result.Messages) > 0 && (err == nil || result.ReplaySafe) {
+		r.messages = append(r.messages, result.Messages...)
+	} else if err == nil && result.Message.Content != "" {
+		r.messages = append(r.messages, result.Message)
 	}
 	if err != nil {
-		if len(r.messages) > 0 && r.messages[len(r.messages)-1].Role == model.RoleUser && r.messages[len(r.messages)-1].Content == prompt {
+		if (!result.ReplaySafe || len(result.Messages) == 0) && len(r.messages) > 0 && r.messages[len(r.messages)-1].Role == model.RoleUser && r.messages[len(r.messages)-1].Content == prompt {
 			last := len(r.messages) - 1
 			r.messages[last] = model.Message{}
 			r.messages = r.messages[:last]

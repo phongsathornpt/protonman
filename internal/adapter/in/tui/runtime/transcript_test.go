@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transcriptutil"
@@ -9,9 +10,11 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"math"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestHistoryStateStreamsAssistantIntoActiveCell(t *testing.T) {
@@ -280,6 +283,17 @@ func TestErrorCellDiagnosticRenderingIsInline(t *testing.T) {
 	}
 }
 
+func TestErrorCellIncompleteStreamUsesDistinctStableCode(t *testing.T) {
+	cell := &ErrorCell{ErrorKind: ErrorKindStreamIncomplete, Title: "Provider Stream Ended Early", Badge: "STREAM_INCOMPLETE", Text: "provider closed before terminal event"}
+	rendered := ansi.Strip(strings.Join(cell.RenderWidth(80), "\n"))
+	if rendered != "× Provider Stream Ended Early · STREAM_INCOMPLETE" {
+		t.Fatalf("incomplete stream diagnostic = %q", rendered)
+	}
+	if strings.Contains(rendered, "STREAM_TIMEOUT") {
+		t.Fatalf("incomplete stream rendered as timeout: %q", rendered)
+	}
+}
+
 func TestErrorCellServerOverloadedUsesStableCode(t *testing.T) {
 	cell := &ErrorCell{ErrorKind: ErrorKindServerOverloaded, Title: "Provider Server Overloaded", Badge: "503 SERVER_ERROR", Text: "upstream unavailable"}
 	rendered := ansi.Strip(strings.Join(cell.RenderWidth(80), "\n"))
@@ -316,17 +330,32 @@ func TestToolCellReadDetailFollowsDensity(t *testing.T) {
 }
 
 func TestToolFailureSuggestions(t *testing.T) {
-	notFoundSugg := transcriptutil.ToolFailureSuggestions("read", tool.ErrorCodeNotFound)
+	notFoundSugg := transcriptutil.ToolFailureSuggestions("read", &tool.Failure{Code: tool.ErrorCodeNotFound})
 	if len(notFoundSugg) == 0 {
 		t.Fatalf("expected suggestions for read not found error")
 	}
-	protectedSugg := transcriptutil.ToolFailureSuggestions("read", tool.ErrorCodeProtectedPath)
+	protectedSugg := transcriptutil.ToolFailureSuggestions("read", &tool.Failure{Code: tool.ErrorCodeProtectedPath})
 	if len(protectedSugg) == 0 || !strings.Contains(protectedSugg[0], "workspace protection rules") {
 		t.Fatalf("expected suggestions for protected path error")
 	}
-	escapeSugg := transcriptutil.ToolFailureSuggestions("read", tool.ErrorCodeOutsideWorkspace)
+	escapeSugg := transcriptutil.ToolFailureSuggestions("read", &tool.Failure{Code: tool.ErrorCodeOutsideWorkspace})
 	if len(escapeSugg) != 1 || escapeSugg[0] != "use . or a workspace-relative path" {
 		t.Fatalf("expected actionable suggestions for outside workspace error: %#v", escapeSugg)
+	}
+}
+
+func TestToolFailureSuggestionsUseDiscoveryEvidence(t *testing.T) {
+	failure := &tool.Failure{
+		Code: tool.ErrorCodeNotFound,
+		Recovery: &tool.Recovery{
+			Action: tool.RecoveryDiscoverResource, Tool: tool.NameLS,
+			Arguments: json.RawMessage(`{"path":"internal/base/runtimepolicy"}`),
+		},
+		RecoveryEvidence: &tool.RecoveryEvidence{Action: tool.RecoveryDiscoverResource, Tool: tool.NameLS, Output: "defaults.go"},
+	}
+	suggestions := transcriptutil.ToolFailureSuggestions(tool.NameRead, failure)
+	if len(suggestions) != 1 || !strings.Contains(suggestions[0], `inspected "internal/base/runtimepolicy"`) || !strings.Contains(suggestions[0], "use a discovered path") {
+		t.Fatalf("discovery suggestions = %#v", suggestions)
 	}
 }
 
@@ -625,5 +654,18 @@ func TestInitialMessagesRestoreIntoHistoryAndNextTurn(t *testing.T) {
 	}
 	if len(m.messages) != 2 {
 		t.Fatalf("provider history length = %d, want 2", len(m.messages))
+	}
+}
+
+func TestRetryLifecycleUpdatesAndClearsTUIProgress(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	retry := sdk.RetryEvent{Reason: "overloaded", Attempt: 1, MaxRetries: 2, RetryAt: time.Now().Add(2 * time.Second)}
+	m.applyTurnEvent(turn.Event{Kind: turn.EventRetryScheduled, Round: 1, Retry: retry})
+	if m.activity != "retrying" || m.turnProgress.Retry.Attempt != 1 {
+		t.Fatalf("retry progress = %+v activity=%q", m.turnProgress.Retry, m.activity)
+	}
+	m.applyTurnEvent(turn.Event{Kind: turn.EventTextDelta, Round: 1, Text: "recovered"})
+	if !m.turnProgress.Retry.RetryAt.IsZero() || m.activity != "" {
+		t.Fatalf("retry state not cleared after model output: %+v activity=%q", m.turnProgress.Retry, m.activity)
 	}
 }

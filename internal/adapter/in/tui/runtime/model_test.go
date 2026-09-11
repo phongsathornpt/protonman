@@ -733,6 +733,28 @@ func TestTurnDoneAppendsProducedToolHistory(t *testing.T) {
 	}
 }
 
+func TestTurnDonePreservesReplaySafeCheckpointOnFailure(t *testing.T) {
+	runner := &scriptedRunner{
+		result: applicationturn.Result{ReplaySafe: true, Rounds: 1, Messages: []domainmodel.Message{
+			{Role: domainmodel.RoleAssistant, ToolCalls: []domainmodel.ToolCall{{ID: "call-safe", Name: "read", Arguments: []byte(`{"path":"README.md"}`)}}},
+			{Role: domainmodel.RoleTool, ToolCallID: "call-safe", ToolName: "read", Content: `{"output":"ok"}`},
+		}},
+		err: errors.New("later stream failed"),
+	}
+	registry, _ := newBubbleTestRegistry()
+	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
+	m := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), runner, newPermissionBridge(), "")
+	message := m.startTurn("inspect")()
+	updated, _ := m.Update(message)
+	m = updated.(*bubbleModel)
+	if got, want := len(m.messages), 3; got != want {
+		t.Fatalf("provider history length = %d, want %d", got, want)
+	}
+	if m.messages[0].Role != domainmodel.RoleUser || m.messages[1].Role != domainmodel.RoleAssistant || m.messages[2].Role != domainmodel.RoleTool {
+		t.Fatalf("provider history = %#v, want user plus replay-safe assistant/tool checkpoint", m.messages)
+	}
+}
+
 func TestBangPrefixSubmitsBashCall(t *testing.T) {
 	registry := newNamedTestRegistry(tool.Definition{Name: "bash", Description: "run a shell command", Kind: tool.KindBash, PermissionDetailKey: "command"})
 	service := newBubbleTestService(t, registry, permission.ModeAlwaysApprove, permission.Config{})

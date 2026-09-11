@@ -82,3 +82,123 @@ func TestGetTodoEmptySnapshotValidatesStructuredOutputThroughService(t *testing.
 		t.Fatalf("structured output = %s, want empty items array", got)
 	}
 }
+
+func TestTodoServiceRejectsOperationFieldsOutsideSelectedOp(t *testing.T) {
+	store, err := tododomain.NewStore([]tododomain.Item{{ID: "a", Text: "inspect", Status: tododomain.StatusPending}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := builtin.NewRegistry(NewTodo(store))
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := permission.NewPolicy(permission.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := toolcall.NewService(registry, policy, toolcall.WithMode(permission.ModeAlwaysApprove))
+	if err != nil {
+		t.Fatal(err)
+	}
+	call, _ := tool.NewCall("todo-invalid-shape", "todo", todoCapabilityPatchArgs(0, map[string]any{
+		"op": "set_status", "id": "a", "status": "completed", "text": "forbidden",
+	}))
+	result, err := service.Call(context.Background(), call)
+	if err == nil || result.Failure == nil || result.Failure.Code != tool.ErrorCodeInvalidArguments {
+		t.Fatalf("result=%#v err=%v, want invalid arguments", result, err)
+	}
+	if result.Failure.Diagnostic == "" {
+		t.Fatalf("missing schema diagnostic: %#v", result.Failure)
+	}
+}
+
+func TestTodoServiceRejectsStringEncodedUpdateFields(t *testing.T) {
+	store, _ := tododomain.NewStore(nil)
+	registry, err := builtin.NewRegistry(NewTodo(store))
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, _ := permission.NewPolicy(permission.Config{})
+	service, err := toolcall.NewService(registry, policy, toolcall.WithMode(permission.ModeAlwaysApprove))
+	if err != nil {
+		t.Fatal(err)
+	}
+	call, _ := tool.NewCall("todo-string-fields", "todo", json.RawMessage(`{"action":"update","expected_revision":"0","operations":"[{\"op\":\"add\",\"id\":\"a\",\"text\":\"inspect\",\"status\":\"pending\"}]"}`))
+	result, err := service.Call(context.Background(), call)
+	if err == nil || result.Failure == nil || result.Failure.Code != tool.ErrorCodeInvalidArguments {
+		t.Fatalf("result=%#v err=%v, want invalid arguments", result, err)
+	}
+	if result.Failure.Diagnostic == "" {
+		t.Fatalf("missing schema diagnostic: %#v", result.Failure)
+	}
+}
+
+func TestTodoServiceRejectsUpdateWithoutRevisionBeforeExecution(t *testing.T) {
+	store, _ := tododomain.NewStore(nil)
+	registry, err := builtin.NewRegistry(NewTodo(store))
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, _ := permission.NewPolicy(permission.Config{})
+	service, err := toolcall.NewService(registry, policy, toolcall.WithMode(permission.ModeAlwaysApprove))
+	if err != nil {
+		t.Fatal(err)
+	}
+	call, _ := tool.NewCall("todo-missing-revision", "todo", json.RawMessage(`{"action":"update","operations":[{"op":"add","id":"a","text":"inspect","status":"pending"}]}`))
+	result, err := service.Call(context.Background(), call)
+	if err == nil || result.Failure == nil || result.Failure.Code != tool.ErrorCodeInvalidArguments {
+		t.Fatalf("result=%#v err=%v, want invalid arguments", result, err)
+	}
+}
+
+func TestTodoConflictRefreshesSnapshotWithoutMasqueradingAsUpdateSuccess(t *testing.T) {
+	store, err := tododomain.NewStore([]tododomain.Item{{ID: "a", Text: "inspect", Status: tododomain.StatusPending}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := builtin.NewRegistry(NewTodo(store))
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := permission.NewPolicy(permission.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := toolcall.NewService(registry, policy, toolcall.WithMode(permission.ModeAlwaysApprove))
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, _ := tool.NewCall("todo-first", "todo", todoCapabilityPatchArgs(0,
+		map[string]any{"op": "set_status", "id": "a", "status": "in_progress"},
+	))
+	if _, err := service.Call(context.Background(), first); err != nil {
+		t.Fatal(err)
+	}
+	stale, _ := tool.NewCall("todo-stale", "todo", todoCapabilityPatchArgs(0,
+		map[string]any{"op": "set_status", "id": "a", "status": "completed"},
+	))
+	result, err := service.Call(context.Background(), stale)
+	if err == nil {
+		t.Fatal("stale update unexpectedly succeeded")
+	}
+	if result.Failure == nil || result.Failure.Code != tool.ErrorCodeConflict {
+		t.Fatalf("failure = %#v", result.Failure)
+	}
+	evidence := result.Failure.RecoveryEvidence
+	if evidence == nil || evidence.Tool != "todo" || evidence.Action != tool.RecoveryRefreshResource {
+		t.Fatalf("recovery evidence = %#v", evidence)
+	}
+	var snapshot struct {
+		Revision uint64            `json:"revision"`
+		Items    []tododomain.Item `json:"items"`
+	}
+	if err := json.Unmarshal(evidence.StructuredOutput, &snapshot); err != nil {
+		t.Fatalf("decode recovery snapshot: %v", err)
+	}
+	if snapshot.Revision != 1 || len(snapshot.Items) != 1 || snapshot.Items[0].Status != tododomain.StatusInProgress {
+		t.Fatalf("recovery snapshot = %#v", snapshot)
+	}
+	if store.Snapshot().Revision != 1 {
+		t.Fatalf("stale update mutated store: %#v", store.Snapshot())
+	}
+}

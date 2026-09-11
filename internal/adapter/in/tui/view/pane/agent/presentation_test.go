@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	featureagent "github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
@@ -42,5 +43,24 @@ func TestAgentRowsShowsIntegratedCompletedResult(t *testing.T) {
 	joined := strings.Join(rows, "\n")
 	if !strings.Contains(joined, "Integrated") {
 		t.Fatalf("rows missing integrated result state: %s", joined)
+	}
+}
+
+func TestAgentRowsTruncatesOverlongIdentifier(t *testing.T) {
+	longID := strings.Repeat("agility-", 20)
+	rows := AgentRows(AgentsSnapshot{
+		Width: 40, Height: 30, SubagentsEnabled: true, Now: time.Now(),
+		Retained: []featureagent.AgentStatus{{
+			ID: longID, Profile: featureagent.ProfileAgility, Task: "inspect",
+			State: featureagent.StateRunning, StartTime: time.Now(),
+		}},
+	})
+	for _, row := range rows {
+		if width := ansi.StringWidth(row); width > 40 {
+			t.Fatalf("agent row exceeded snapshot width (%d): %q", width, row)
+		}
+		if strings.Contains(row, longID) {
+			t.Fatalf("agent identifier was not truncated: %q", row)
+		}
 	}
 }

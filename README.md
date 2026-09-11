@@ -258,7 +258,7 @@ Configure providers directly inside the TUI with `/provider` or via `~/.protonma
 
 `proton-sdk` owns provider-neutral agent messages, tools, streaming events, usage/finish metadata, model registry, middleware, and provider wire adapters. The Protonman CLI keeps permission policy, tool execution, sessions, and turn orchestration outside the SDK. See [`docs/proton-sdk.md`](docs/proton-sdk.md) for the agent-first SDK contract and provider extension boundaries.
 
-For OpenCode free models, Protonman retries a stream only when no visible text or tool call has been emitted yet. Recovery is bounded to two retries with backoff and a 30-second no-output watchdog per attempt; once visible output has started, an incomplete stream is surfaced instead of replayed to avoid duplicate output or tool calls. The TUI exposes exhausted empty-response recovery as `EMPTY_RESPONSE` and an abruptly terminated provider stream as `STREAM_INCOMPLETE`; both are presented as retryable provider failures.
+For OpenCode free models, Protonman retries a stream only when no visible text or tool call has been emitted yet. Recovery is bounded to four retries with waits of 5s, 15s, 30s, and 60s, plus a 30-second no-output watchdog per attempt; once visible output has started, an incomplete stream is surfaced instead of replayed to avoid duplicate output or tool calls. During provider or replay-safe stream backoff, the TUI shows user-facing state such as `retrying in 5s · retry 1/4 · provider slow` and `cooling down 60s · retry 4/4 · provider slow`, driven by the retry deadline used by the request itself. Internal retry diagnostics stay out of the interactive transcript unless debug logging is explicitly enabled. Exhausted empty-response recovery is exposed as `EMPTY_RESPONSE`, while an abruptly terminated provider stream is `STREAM_INCOMPLETE`; both are presented as retryable provider failures.
 
 ---
 
@@ -279,7 +279,7 @@ Protonman registers a suite of workspace-safe tools:
 
 | Tool | Category | Description |
 | :--- | :--- | :--- |
-| `read` | File System | Read UTF-8 workspace files with byte pagination or bounded 1-based line ranges/line numbers, plus snapshot-bound byte continuations |
+| `read` | File System | Read UTF-8 workspace files with bounded byte/line pagination, or inspect image, structured-data, and metadata views; image analysis supports PNG, JPEG, GIF first-frame, and WebP with bounded decode/sample budgets |
 | `edit` | File System | Workspace edits via `write`, `replace`, `patch`, and `restore` actions with existing checkpoint safeguards |
 | `grep` | Search | Regex search with include globs plus snapshot-bound cursor pagination that resumes from the prior match location |
 | `find` | Search | Recursive workspace path discovery by glob with type/depth filters and snapshot-bound pagination |
@@ -365,7 +365,7 @@ subagents_enabled = true
 max_tool_calls = 100
 max_live_subagents = 16
 max_retained_subagents = 64
-subagent_queue_timeout = "30s"
+subagent_queue_timeout = "2m"
 subagent_wait_timeout = "30s"
 subagent_max_runtime = "30m"
 completed_result_ttl = "24h"
@@ -455,7 +455,7 @@ Execution safety notes:
 - Legacy `subagent_timeout` is accepted as an alias for `subagent_max_runtime` with a deprecation warning.
 - `[runtime]` centralizes model, tool, discovery, web-fetch, and catalog-cache time bounds. The loop refuses construction if every global termination bound is disabled.
 - Repeating the same deterministic tool call with the same semantic arguments and result twice without an intervening mutation triggers a text-only synthesis round instead of continuing the tool loop; identical retryable failures are capped at three attempts.
-- Truncated `read`, `grep`, `find`, and `ls` results include `next_offset` plus a snapshot-bound `continuation`; send both on the next page to detect stale file, query, or directory state. `grep` continuations also carry a validated cursor so deep pages resume near the prior match instead of rescanning earlier files. Plain `offset` remains supported for compatibility. `read` also supports bounded 1-based `start_line`/`end_line` selection with optional `line_numbers` for source inspection without shell `nl`/`sed`.
+- Truncated `read`, `grep`, `find`, and `ls` results include `next_offset` plus a snapshot-bound `continuation`; send both on the next page to detect stale file, query, or directory state. `grep` continuations also carry a validated cursor so deep pages resume near the prior match instead of rescanning earlier files. Plain `offset` remains supported for compatibility. `read` also supports bounded 1-based `start_line`/`end_line` selection with optional `line_numbers`, plus `image`, `structured`, and `metadata` artifact views. Image inspection uses bounded encoded-size, pixel, and sample budgets; GIF analysis is explicitly first-frame only.
 
 ### Environment Variables
 

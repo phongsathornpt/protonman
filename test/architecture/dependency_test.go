@@ -36,6 +36,8 @@ func TestCorePackagesDoNotDependOnOuterLayers(t *testing.T) {
 		modulePath + "/internal/engine/turn",
 	}
 	for _, core := range []string{
+		modulePath + "/internal/core/agentidentity",
+		modulePath + "/internal/core/conversation",
 		modulePath + "/internal/core/modelprofile",
 		modulePath + "/internal/core/permission",
 		modulePath + "/internal/core/session",
@@ -436,11 +438,13 @@ func TestNoRootMCPDirectory(t *testing.T) {
 func TestBasePackagesHaveZeroInternalDependencies(t *testing.T) {
 	packages := listPackages(t)
 	basePackages := []string{
+		modulePath + "/internal/base/analysis",
 		modulePath + "/internal/base/buildinfo",
 		modulePath + "/internal/base/contextutil",
 		modulePath + "/internal/base/envconfig",
 		modulePath + "/internal/base/failure",
 		modulePath + "/internal/base/glob",
+		modulePath + "/internal/base/pathutil",
 		modulePath + "/internal/base/runtimepolicy",
 	}
 	for _, basePkg := range basePackages {

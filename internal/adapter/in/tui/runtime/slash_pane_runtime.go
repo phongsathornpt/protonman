@@ -97,9 +97,10 @@ func (v *slashPaneView) sync(ctx paneRenderContext) {
 	v.picker.Select(selected)
 }
 
+// Render reads the last synced picker snapshot; callers must sync through the
+// Update boundary (syncSlashView) before rendering so View stays side-effect free.
 func (v *slashPaneView) Render(ctx paneRenderContext) string {
-	v.sync(ctx)
-	if len(v.matches) == 0 {
+	if !v.ready || len(v.matches) == 0 {
 		return ""
 	}
 	visibleRows := minInt(maxSlashRows, len(v.matches))

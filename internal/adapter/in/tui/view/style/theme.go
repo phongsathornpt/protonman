@@ -27,19 +27,28 @@ const (
 	GlyphBrand = "◆"
 )
 
+// MeasureProse caps prose line length so long model output stays readable on
+// ultra-wide terminals. Fenced code, tables, and tool output keep the full
+// available width because their alignment carries meaning.
+const MeasureProse = 100
+
 // Protonman CLI follows the dark product palette used by protonman-rs.
 // Keep these as semantic tokens so presentation code does not grow its own
 // collection of nearly-identical oranges and grays.
+//
+// Contrast is calibrated against a dark terminal canvas (near-black, ~#0d0d0d).
+// The text ramp clears the APCA label floor (Lc 60) and the state colors share
+// roughly matched legibility, so an error never reads dimmer than a success.
 var (
 	ColorTextPrimary   = lipgloss.Color("#f5f5f6")
-	ColorTextSecondary = lipgloss.Color("#a8adb8")
-	ColorTextTertiary  = lipgloss.Color("#8f96a3")
+	ColorTextSecondary = lipgloss.Color("#bcc1cb")
+	ColorTextTertiary  = lipgloss.Color("#a2a9b6")
 	ColorPrimary       = lipgloss.Color("#f0983c")
 	ColorPrimaryHover  = lipgloss.Color("#ffab5c")
 	ColorPrimaryDark   = lipgloss.Color("#ea580c")
 	ColorSuccess       = lipgloss.Color("#22c55e")
 	ColorWarning       = lipgloss.Color("#eab308")
-	ColorDanger        = lipgloss.Color("#f87171")
+	ColorDanger        = lipgloss.Color("#fca5a5")
 	ColorBorder        = lipgloss.Color("#2a2a2f")
 	ColorBorderSubtle  = lipgloss.Color("#1d1d21")
 
@@ -87,4 +96,13 @@ var (
 	MarkdownBulletStyle  = lipgloss.NewStyle().Foreground(ColorTextSecondary)
 	MarkdownBoldStyle    = lipgloss.NewStyle().Bold(true)
 	ModalStyle           = lipgloss.NewStyle().Padding(0, 1)
+)
+
+// Heading scale. Type size is fixed by the terminal, so hierarchy comes from
+// weight plus the text-color ladder: MarkdownHeadingStyle is the level-one
+// heading, and levels two and three step down that ladder.
+var (
+	MarkdownH2Style     = lipgloss.NewStyle().Bold(true).Foreground(ColorTextSecondary)
+	MarkdownH3Style     = lipgloss.NewStyle().Bold(true).Foreground(ColorTextTertiary)
+	MarkdownItalicStyle = lipgloss.NewStyle().Italic(true).Foreground(ColorTextSecondary)
 )

@@ -16,17 +16,19 @@ const (
 )
 
 type ProviderOptions struct {
-	BaseURL          string
-	APIKey           string
-	APIVersion       string
-	HTTPClient       *http.Client
-	UserAgent        string
-	Headers          http.Header
-	MaxRetries       int
-	RetryBackoff     time.Duration
-	MaxRetryBackoff  time.Duration
-	MaxRetryAfter    time.Duration
-	DefaultMaxTokens int
+	BaseURL           string
+	APIKey            string
+	APIVersion        string
+	HTTPClient        *http.Client
+	UserAgent         string
+	Headers           http.Header
+	MaxRetries        int
+	RetryBackoff      time.Duration
+	RetryPostFirstGap time.Duration
+	MaxRetryBackoff   time.Duration
+	MaxRetryAfter     time.Duration
+	RetryDelays       []time.Duration
+	DefaultMaxTokens  int
 }
 
 type Provider struct{ options ProviderOptions }
@@ -46,18 +48,19 @@ func NewProvider(options ProviderOptions) *Provider {
 		options.MaxRetries = 0
 	}
 	if options.RetryBackoff <= 0 {
-		options.RetryBackoff = 500 * time.Millisecond
+		options.RetryBackoff = sdk.DefaultRetryBaseBackoff
 	}
 	if options.MaxRetryBackoff <= 0 {
-		options.MaxRetryBackoff = 8 * time.Second
+		options.MaxRetryBackoff = sdk.DefaultRetryMaxBackoff
 	}
 	if options.MaxRetryAfter <= 0 {
-		options.MaxRetryAfter = 30 * time.Second
+		options.MaxRetryAfter = sdk.DefaultRetryMaxAfter
 	}
 	if options.DefaultMaxTokens <= 0 {
 		options.DefaultMaxTokens = DefaultMaxTokens
 	}
 	options.Headers = options.Headers.Clone()
+	options.RetryDelays = append([]time.Duration(nil), options.RetryDelays...)
 	return &Provider{options: options}
 }
 

@@ -103,9 +103,11 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 		return nil, err
 	}
 	policy := sdk.RetryPolicy{
-		BaseBackoff:   m.provider.options.RetryBackoff,
-		MaxBackoff:    m.provider.options.MaxRetryBackoff,
-		MaxRetryAfter: m.provider.options.MaxRetryAfter,
+		BaseBackoff:       m.provider.options.RetryBackoff,
+		PostFirstRetryGap: m.provider.options.RetryPostFirstGap,
+		MaxBackoff:        m.provider.options.MaxRetryBackoff,
+		MaxRetryAfter:     m.provider.options.MaxRetryAfter,
+		RetryDelays:       m.provider.options.RetryDelays,
 	}
 	for attempt := 0; ; attempt++ {
 		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
@@ -148,23 +150,13 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 		if !decision.Retry {
 			return nil, providerErr
 		}
-		if err := waitForRetry(ctx, decision.Delay); err != nil {
+		sdk.ObserveRetry(ctx, sdk.RetryEvent{
+			Provider: m.Provider(), ModelID: m.modelID, Reason: string(decision.Reason),
+			Attempt: attempt + 1, MaxRetries: m.provider.options.MaxRetries, Delay: decision.Delay,
+		})
+		if err := sdk.WaitForRetry(ctx, decision.Delay); err != nil {
 			return nil, err
 		}
-	}
-}
-
-func waitForRetry(ctx context.Context, delay time.Duration) error {
-	if delay <= 0 {
-		return nil
-	}
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
 	}
 }
 

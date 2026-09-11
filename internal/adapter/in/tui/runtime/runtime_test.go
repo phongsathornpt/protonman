@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"charm.land/bubbles/v2/cursor"
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -11,6 +12,7 @@ import (
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	domainmodel "github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/base/envconfig"
 	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -742,11 +744,129 @@ func TestLiveViewFitsNarrowTerminal(t *testing.T) {
 	}
 }
 
+func TestBusyStatusUsesProfileIntentNotGenericWords(t *testing.T) {
+	for _, tc := range []struct {
+		profile string
+		want    string
+	}{
+		{"universal", "Roaming"},
+		{"strength", "Pushing"},
+		{"intelligence", "Skilling"},
+	} {
+		t.Run(tc.profile, func(t *testing.T) {
+			m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+			m.resize(80, 24)
+			m.agentProfile = tc.profile
+			m.busy = true
+			m.activity = ""
+
+			plain := ansi.Strip(m.statusView())
+			if !strings.Contains(plain, tc.want) {
+				t.Fatalf("status missing profile intent %q: %q", tc.want, plain)
+			}
+			for _, generic := range []string{"analyzing", "synthesizing", "thinking", "processing"} {
+				if strings.Contains(strings.ToLower(plain), generic) {
+					t.Fatalf("status leaked generic busy word %q: %q", generic, plain)
+				}
+			}
+		})
+	}
+}
+
+func TestBusyStatusPrefersRunningToolOverProfileIntent(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.busy = true
+	m.activity = ""
+	m.ensureHistoryState().StartToolCell(&ToolCell{CallID: "tool-1", Name: "read", Target: "internal/tui.go", Running: true})
+
+	plain := ansi.Strip(m.statusView())
+	if !strings.Contains(plain, "internal/tui.go") {
+		t.Fatalf("status did not prefer the running tool: %q", plain)
+	}
+	if strings.Contains(plain, "Roaming") {
+		t.Fatalf("status showed the profile intent while a tool was running: %q", plain)
+	}
+}
+
+func TestTodoPaneEmptyStateTeachesTheSpace(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, nil)
+	model.resize(80, 24)
+	model.toggleTodoPane()
+	model.reconcileLayout()
+
+	view := testPlain(model.View().Content)
+	if !strings.Contains(view, "No tasks in this session.") {
+		t.Fatalf("todo pane missing empty-state guidance: %s", view)
+	}
+	if strings.Contains(view, "0/0 done") {
+		t.Fatalf("todo pane showed a meaningless count when empty: %s", view)
+	}
+}
+
 func TestSpinnerStopsSchedulingWhenIdle(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	_, command := m.Update(spinnerTickMessage())
 	if command != nil {
 		t.Fatalf("idle spinner unexpectedly scheduled another tick: %v", command)
+	}
+}
+
+func TestReducedMotionKeepsBusyIndicatorStatic(t *testing.T) {
+	t.Setenv(envconfig.ReducedMotion, "1")
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.busy = true
+
+	first := ansi.Strip(m.statusView())
+	if !strings.Contains(first, "◌") {
+		t.Fatalf("reduced motion status missing static indicator: %q", first)
+	}
+	for _, frame := range spinner.Dot.Frames {
+		if strings.Contains(first, frame) {
+			t.Fatalf("reduced motion status rendered animated frame %q: %q", frame, first)
+		}
+	}
+
+	updated, _ := m.Update(spinnerTickMessage())
+	m = updated.(*bubbleModel)
+	second := ansi.Strip(m.statusView())
+	if second != first {
+		t.Fatalf("reduced motion indicator changed across ticks: %q -> %q", first, second)
+	}
+}
+
+func TestReducedMotionDisablesCaretBlink(t *testing.T) {
+	t.Setenv(envconfig.ReducedMotion, "1")
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+
+	prompt := m.panes.bottom.prompt()
+	if prompt.Styles().Cursor.Blink {
+		t.Fatal("reduced motion left the caret blink enabled")
+	}
+	if _, command := m.Update(cursor.BlinkMsg{}); command != nil {
+		t.Fatalf("reduced motion re-armed caret blink: %v", command)
+	}
+}
+
+func TestMotionEnabledAnimatesSpinnerAndBlinksCaret(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	if m.reducedMotion {
+		t.Fatal("reduced motion unexpectedly enabled by default")
+	}
+	if !m.panes.bottom.prompt().Styles().Cursor.Blink {
+		t.Fatal("default caret blink should stay enabled")
+	}
+
+	m.busy = true
+	first := ansi.Strip(m.statusView())
+	updated, _ := m.Update(spinnerTickMessage())
+	m = updated.(*bubbleModel)
+	second := ansi.Strip(m.statusView())
+	if first == second {
+		t.Fatalf("busy spinner did not advance: %q", first)
 	}
 }
 
@@ -888,7 +1008,7 @@ func TestScrollingRendersSingleComposer(t *testing.T) {
 }
 
 func TestCommandHistoryClearsDroppedBackingSlots(t *testing.T) {
-	pane := newBottomPane(false)
+	pane := newBottomPane(false, false)
 	for i := 0; i <= maxCommandHistory; i++ {
 		pane.recordHistory(fmt.Sprintf("cmd-%d", i))
 	}

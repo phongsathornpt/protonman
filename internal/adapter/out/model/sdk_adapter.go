@@ -109,6 +109,15 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 	}
 	headers := agentHeaders(cfg)
 	isOpenCode := IsProvider(DefaultOpenCodeName, providerName, cfg.baseURL)
+	freeStreamRecovery := isOpenCode && IsFreeModel(cfg.modelID)
+	retryPolicy := modelRetryPolicy()
+	providerMaxRetries := runtimepolicy.ModelRetryMaxRetries
+	if freeStreamRecovery {
+		// The stream wrapper owns the complete retry budget for free models.
+		// Leaving provider retries enabled here would retry the same logical
+		// request once in the provider and again in the wrapper.
+		providerMaxRetries = 0
+	}
 	sessionID := strings.TrimSpace(cfg.sessionID)
 	if sessionID != "" {
 		headers.Set("x-session-affinity", sessionID)
@@ -126,7 +135,10 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 	provider := sdkopenai.NewProvider(sdkopenai.ProviderOptions{
 		ProviderName: strings.ToLower(strings.TrimSpace(providerName)),
 		BaseURL:      cfg.baseURL, APIKey: cfg.apiKey, HTTPClient: cfg.httpClient,
-		UserAgent: cfg.userAgent, Headers: headers, MaxRetries: 2, RetryBackoff: runtimepolicy.ModelRetryBackoffStep,
+		UserAgent: cfg.userAgent, Headers: headers, MaxRetries: providerMaxRetries,
+		RetryBackoff: retryPolicy.BaseBackoff, RetryPostFirstGap: retryPolicy.PostFirstRetryGap,
+		MaxRetryBackoff: retryPolicy.MaxBackoff, MaxRetryAfter: retryPolicy.MaxRetryAfter,
+		RetryDelays: retryPolicy.RetryDelays,
 	})
 	modelOptions := make([]sdkopenai.ModelOption, 0, 1)
 	if usesResponsesAPI(cfg.modelID, cfg.baseURL) {
@@ -146,8 +158,11 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 		model = withContextWindow(model, *cfg.contextWindow)
 	}
 	model = withSessionID(model, sessionID)
-	if isOpenCode && IsFreeModel(cfg.modelID) {
-		model = withEmptyStreamRetry(model, openCodeFreeEmptyStreamMaxRetries, runtimepolicy.ModelRetryBackoffStep)
+	if freeStreamRecovery {
+		model = withStreamRetryPolicyConfig(model, runtimepolicy.ModelRetryMaxRetries, retryPolicy,
+			runtimepolicy.OpenCodeFreeFirstEventTimeout,
+			runtimepolicy.OpenCodeFreeIdleEventTimeout,
+			runtimepolicy.OpenCodeFreeStreamMaxDuration)
 	}
 	return withModelProfile(model, cfg.profile)
 }
@@ -160,9 +175,13 @@ func newSDKAnthropicLanguageModel(baseURL, apiKey, modelID string, opts ...Clien
 		}
 	}
 	sessionID := strings.TrimSpace(cfg.sessionID)
+	retryPolicy := modelRetryPolicy()
 	provider := sdkanthropic.NewProvider(sdkanthropic.ProviderOptions{
 		BaseURL: cfg.baseURL, APIKey: cfg.apiKey, HTTPClient: cfg.httpClient, Headers: agentHeaders(cfg),
-		UserAgent: cfg.userAgent, MaxRetries: 2, RetryBackoff: runtimepolicy.ModelRetryBackoffStep,
+		UserAgent: cfg.userAgent, MaxRetries: runtimepolicy.ModelRetryMaxRetries,
+		RetryBackoff: retryPolicy.BaseBackoff, RetryPostFirstGap: retryPolicy.PostFirstRetryGap,
+		MaxRetryBackoff: retryPolicy.MaxBackoff, MaxRetryAfter: retryPolicy.MaxRetryAfter,
+		RetryDelays: retryPolicy.RetryDelays,
 	})
 	var model sdk.LanguageModel = provider.Model(cfg.modelID)
 	if cfg.vision != nil {
@@ -199,30 +218,83 @@ func agentHeaders(cfg clientConfig) http.Header {
 	return headers
 }
 
-const (
-	openCodeFreeEmptyStreamMaxRetries = 2
-	openCodeFreeNoOutputTimeout       = 30 * time.Second
+var (
+	errOpenCodeFreeNoOutputTimeout = errors.New("opencode free model produced no output before timeout")
+	errOpenCodeFreeIdleTimeout     = errors.New("opencode free model stream became idle before completion")
+	errOpenCodeFreeMaxDuration     = errors.New("opencode free model stream exceeded maximum duration")
 )
 
-var errOpenCodeFreeNoOutputTimeout = errors.New("opencode free model produced no output before timeout")
+func modelRetryPolicy() sdk.RetryPolicy {
+	return sdk.RetryPolicy{
+		BaseBackoff:       runtimepolicy.ModelRetryBackoffStep,
+		PostFirstRetryGap: runtimepolicy.ModelRetryPostFirstGap,
+		MaxBackoff:        runtimepolicy.ModelRetryMaxBackoff,
+		MaxRetryAfter:     runtimepolicy.ModelRetryMaxRetryAfter,
+		RetryDelays:       runtimepolicy.ModelRetrySchedule(),
+	}
+}
+
+type streamRetryProgress uint8
+
+const (
+	streamProgressEmpty streamRetryProgress = iota
+	streamProgressBufferedTool
+	streamProgressCommittedText
+)
+
+func (p streamRetryProgress) replaySafe() bool {
+	return p != streamProgressCommittedText
+}
 
 type emptyStreamRetryModel struct {
-	base            sdk.LanguageModel
-	maxRetries      int
-	backoff         time.Duration
-	noOutputTimeout time.Duration
+	base              sdk.LanguageModel
+	maxRetries        int
+	retryPolicy       sdk.RetryPolicy
+	firstEventTimeout time.Duration
+	idleEventTimeout  time.Duration
+	maxStreamDuration time.Duration
 }
 
 func withEmptyStreamRetry(base sdk.LanguageModel, maxRetries int, backoff time.Duration) sdk.LanguageModel {
-	return withEmptyStreamRetryPolicy(base, maxRetries, backoff, openCodeFreeNoOutputTimeout)
+	policy := modelRetryPolicy()
+	policy.BaseBackoff = backoff
+	policy.RetryDelays = nil
+	return withStreamRetryPolicyConfig(base, maxRetries, policy,
+		runtimepolicy.OpenCodeFreeFirstEventTimeout,
+		runtimepolicy.OpenCodeFreeIdleEventTimeout,
+		runtimepolicy.OpenCodeFreeStreamMaxDuration,
+	)
 }
 
 func withEmptyStreamRetryPolicy(base sdk.LanguageModel, maxRetries int, backoff, noOutputTimeout time.Duration) sdk.LanguageModel {
+	return withStreamRetryPolicyConfig(base, maxRetries, streamRetryPolicy(backoff, 0), noOutputTimeout, 0, 0)
+}
+
+func withStreamRetryPolicy(base sdk.LanguageModel, maxRetries int, backoff, firstEventTimeout, idleEventTimeout, maxStreamDuration time.Duration) sdk.LanguageModel {
+	return withStreamRetryPolicyConfig(base, maxRetries, streamRetryPolicy(backoff, 0), firstEventTimeout, idleEventTimeout, maxStreamDuration)
+}
+
+func withStreamRetryPolicyAndGap(base sdk.LanguageModel, maxRetries int, backoff, postFirstRetryGap, firstEventTimeout, idleEventTimeout, maxStreamDuration time.Duration) sdk.LanguageModel {
+	return withStreamRetryPolicyConfig(base, maxRetries, streamRetryPolicy(backoff, postFirstRetryGap), firstEventTimeout, idleEventTimeout, maxStreamDuration)
+}
+
+func streamRetryPolicy(backoff, postFirstRetryGap time.Duration) sdk.RetryPolicy {
+	policy := modelRetryPolicy()
+	policy.BaseBackoff = backoff
+	policy.PostFirstRetryGap = postFirstRetryGap
+	// Test and explicit stream callers that override the backoff use the
+	// legacy formula; the production model policy keeps the exact schedule.
+	policy.RetryDelays = nil
+	return policy
+}
+
+func withStreamRetryPolicyConfig(base sdk.LanguageModel, maxRetries int, policy sdk.RetryPolicy, firstEventTimeout, idleEventTimeout, maxStreamDuration time.Duration) sdk.LanguageModel {
 	if base == nil || maxRetries <= 0 {
 		return base
 	}
 	return &emptyStreamRetryModel{
-		base: base, maxRetries: maxRetries, backoff: backoff, noOutputTimeout: noOutputTimeout,
+		base: base, maxRetries: maxRetries, retryPolicy: policy,
+		firstEventTimeout: firstEventTimeout, idleEventTimeout: idleEventTimeout, maxStreamDuration: maxStreamDuration,
 	}
 }
 
@@ -235,29 +307,34 @@ func (m *emptyStreamRetryModel) TokenLimits() sdk.TokenLimits        { return sd
 func (m *emptyStreamRetryModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
 	retry := &emptyStreamRetry{
 		base: m.base, request: request, parentCtx: ctx,
-		maxRetries: m.maxRetries, backoff: m.backoff, noOutputTimeout: m.noOutputTimeout,
+		maxRetries: m.maxRetries, retryPolicy: m.retryPolicy,
+		firstEventTimeout: m.firstEventTimeout, idleEventTimeout: m.idleEventTimeout, maxStreamDuration: m.maxStreamDuration,
 	}
-	if err := retry.openAttempt(); err != nil {
+	if err := retry.openWithRetry(ctx); err != nil {
 		return nil, err
 	}
 	return retry, nil
 }
 
 type emptyStreamRetry struct {
-	base            sdk.LanguageModel
-	request         sdk.Request
-	parentCtx       context.Context
-	attemptCtx      context.Context
-	cancelAttempt   context.CancelCauseFunc
-	noOutputTimer   *time.Timer
-	stream          sdk.Stream
-	maxRetries      int
-	backoff         time.Duration
-	noOutputTimeout time.Duration
-	retries         int
-	observedOutput  bool
-	pending         []sdk.Event
-	queue           []sdk.Event
+	base              sdk.LanguageModel
+	request           sdk.Request
+	parentCtx         context.Context
+	attemptCtx        context.Context
+	cancelAttempt     context.CancelCauseFunc
+	firstEventTimer   *time.Timer
+	idleEventTimer    *time.Timer
+	maxStreamTimer    *time.Timer
+	stream            sdk.Stream
+	maxRetries        int
+	retryPolicy       sdk.RetryPolicy
+	firstEventTimeout time.Duration
+	idleEventTimeout  time.Duration
+	maxStreamDuration time.Duration
+	retries           int
+	progress          streamRetryProgress
+	pending           []sdk.Event
+	queue             []sdk.Event
 }
 
 func (s *emptyStreamRetry) Next(ctx context.Context) (sdk.Event, error) {
@@ -273,47 +350,68 @@ func (s *emptyStreamRetry) Next(ctx context.Context) (sdk.Event, error) {
 
 		event, err := s.stream.Next(s.attemptCtx)
 		if err != nil {
-			if s.noOutputTimedOut() && !s.observedOutput {
-				if s.retries < s.maxRetries {
-					if retryErr := s.retry(ctx, "no_output_timeout"); retryErr != nil {
+			if timeoutCause := s.streamTimeoutCause(); timeoutCause != nil {
+				if s.progress.replaySafe() && s.retries < s.maxRetries && s.canRetry(timeoutCause, s.retries+1) {
+					if retryErr := s.retry(ctx, streamTimeoutReason(timeoutCause), timeoutCause); retryErr != nil {
 						return sdk.Event{}, retryErr
+					}
+					if retryErr := s.openWithRetry(ctx); retryErr != nil {
+						return sdk.Event{}, fmt.Errorf("retry empty model stream: %w", retryErr)
 					}
 					continue
 				}
-				s.stopNoOutputTimer()
-				return sdk.Event{}, fmt.Errorf("%w: %v", sdk.ErrIncompleteStream, errOpenCodeFreeNoOutputTimeout)
+				s.stopAttemptTimers()
+				return sdk.Event{}, fmt.Errorf("%w: %w", sdk.ErrIncompleteStream, timeoutCause)
 			}
-			if errors.Is(err, sdk.ErrIncompleteStream) && !s.observedOutput && s.retries < s.maxRetries {
-				if retryErr := s.retry(ctx, "incomplete_stream"); retryErr != nil {
+			if reason, retryable := retryableStreamError(err); retryable && s.progress.replaySafe() && s.retries < s.maxRetries && s.canRetry(err, s.retries+1) {
+				if retryErr := s.retry(ctx, reason, err); retryErr != nil {
 					return sdk.Event{}, retryErr
+				}
+				if retryErr := s.openWithRetry(ctx); retryErr != nil {
+					return sdk.Event{}, fmt.Errorf("retry empty model stream: %w", retryErr)
 				}
 				continue
 			}
-			s.stopNoOutputTimer()
+			s.stopAttemptTimers()
 			return sdk.Event{}, err
 		}
+		s.observeStreamActivity()
 
-		if !s.observedOutput && !streamEventHasOutput(event) && event.Kind != sdk.EventFinish {
-			s.pending = append(s.pending, event)
-			continue
-		}
-		if streamEventHasOutput(event) {
-			s.observedOutput = true
-			s.stopNoOutputTimer()
-			if len(s.pending) > 0 {
-				s.queue = append(s.queue, s.pending...)
-				s.pending = nil
-				s.queue = append(s.queue, event)
+		switch streamEventProgress(event) {
+		case streamProgressCommittedText:
+			if s.progress != streamProgressCommittedText {
+				s.progress = streamProgressCommittedText
+				if len(s.pending) > 0 {
+					s.queue = append(s.queue, s.pending...)
+					s.pending = nil
+					s.queue = append(s.queue, event)
+					continue
+				}
+			}
+		case streamProgressBufferedTool:
+			if s.progress != streamProgressCommittedText {
+				s.progress = streamProgressBufferedTool
+				s.pending = append(s.pending, event)
+				continue
+			}
+		default:
+			if s.progress != streamProgressCommittedText && event.Kind != sdk.EventFinish {
+				s.pending = append(s.pending, event)
 				continue
 			}
 		}
+
 		if event.Kind == sdk.EventFinish {
-			s.stopNoOutputTimer()
-			if !s.observedOutput {
-				if event.FinishReason == sdk.FinishStop && s.retries < s.maxRetries {
+			s.stopAttemptTimers()
+			switch s.progress {
+			case streamProgressEmpty:
+				if event.FinishReason == sdk.FinishStop && s.retries < s.maxRetries && s.canRetry(nil, s.retries+1) {
 					s.pending = nil
-					if retryErr := s.retry(ctx, "empty_finish"); retryErr != nil {
+					if retryErr := s.retry(ctx, "empty_finish", nil); retryErr != nil {
 						return sdk.Event{}, retryErr
+					}
+					if retryErr := s.openWithRetry(ctx); retryErr != nil {
+						return sdk.Event{}, fmt.Errorf("retry empty model stream: %w", retryErr)
 					}
 					continue
 				}
@@ -323,80 +421,221 @@ func (s *emptyStreamRetry) Next(ctx context.Context) (sdk.Event, error) {
 					s.queue = append(s.queue, event)
 					continue
 				}
+			case streamProgressBufferedTool:
+				s.queue = append(s.queue, s.pending...)
+				s.pending = nil
+				s.queue = append(s.queue, event)
+				continue
 			}
 		}
 		return event, nil
 	}
 }
 
-func (s *emptyStreamRetry) retry(ctx context.Context, reason string) error {
+func (s *emptyStreamRetry) retry(ctx context.Context, reason string, cause error) error {
+	retryIndex := s.retries + 1
+	decision := s.retryDecision(cause, retryIndex)
+	if !decision.Retry {
+		return cause
+	}
 	_ = s.closeAttempt()
-	s.retries++
-	delay := time.Duration(s.retries) * s.backoff
-	slog.WarnContext(ctx, "opencode free model returned no output; retrying stream",
+	s.progress = streamProgressEmpty
+	s.pending = nil
+	s.queue = nil
+	s.retries = retryIndex
+	if err := s.scheduleRetry(ctx, reason, decision); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *emptyStreamRetry) openWithRetry(ctx context.Context) error {
+	for {
+		err := s.openAttempt()
+		if err == nil {
+			return nil
+		}
+		reason, retryable := retryableStreamError(err)
+		if !retryable || s.retries >= s.maxRetries || !s.canRetry(err, s.retries+1) {
+			return err
+		}
+		if retryErr := s.retry(ctx, reason, err); retryErr != nil {
+			return retryErr
+		}
+	}
+}
+
+func (s *emptyStreamRetry) canRetry(cause error, retryIndex int) bool {
+	return s.retryDecision(cause, retryIndex).Retry
+}
+
+func (s *emptyStreamRetry) retryDecision(cause error, retryIndex int) sdk.RetryDecision {
+	var providerErr *sdk.ProviderError
+	if errors.As(cause, &providerErr) && providerErr != nil {
+		decision := sdk.DecideRetry(cause, retryIndex, s.retryPolicy)
+		// A zero backoff is useful for tests and explicit callers. Preserve an
+		// explicit provider Retry-After, but do not replace disabled local
+		// backoff with the SDK fallback.
+		if decision.Retry && s.retryPolicy.BaseBackoff <= 0 && (providerErr.RateLimit == nil || providerErr.RateLimit.RetryAfter <= 0) {
+			decision.Delay = 0
+		}
+		return decision
+	}
+	if s.retryPolicy.BaseBackoff <= 0 {
+		return sdk.RetryDecision{Retry: true}
+	}
+	return sdk.RetryDecision{Retry: true, Delay: sdk.RetryDelay(retryIndex, s.retryPolicy)}
+}
+
+func (s *emptyStreamRetry) scheduleRetry(ctx context.Context, reason string, decision sdk.RetryDecision) error {
+	delay := decision.Delay
+	slog.DebugContext(ctx, "opencode free model stream is replay-safe; retrying",
 		"provider", s.base.Provider(), "model", s.base.ModelID(),
 		"reason", reason, "retry", s.retries, "max_retries", s.maxRetries,
 		"delay_ms", delay.Milliseconds(),
 	)
-	if err := waitForEmptyStreamRetry(ctx, delay); err != nil {
+	sdk.ObserveRetry(ctx, sdk.RetryEvent{
+		Provider: s.base.Provider(), ModelID: s.base.ModelID(), Reason: reason,
+		Attempt: s.retries, MaxRetries: s.maxRetries, Delay: delay,
+	})
+	if err := sdk.WaitForRetry(ctx, delay); err != nil {
 		return fmt.Errorf("wait to retry empty model stream: %w", err)
 	}
-	if err := s.openAttempt(); err != nil {
-		return fmt.Errorf("retry empty model stream: %w", err)
-	}
-	s.observedOutput = false
-	s.pending = nil
-	s.queue = nil
 	return nil
+}
+
+func retryableStreamError(err error) (string, bool) {
+	if err == nil {
+		return "", false
+	}
+	if isStreamTimeoutCause(err) {
+		return streamTimeoutReason(err), true
+	}
+	if errors.Is(err, sdk.ErrIncompleteStream) {
+		return "incomplete_stream", true
+	}
+	var providerErr *sdk.ProviderError
+	if !errors.As(err, &providerErr) || providerErr == nil || !providerErr.Retryable {
+		return "", false
+	}
+	switch providerErr.Kind {
+	case sdk.ErrorTransport:
+		return "provider_transport", true
+	case sdk.ErrorOverloaded:
+		return "provider_overloaded", true
+	case sdk.ErrorRateLimit:
+		return "provider_rate_limit", true
+	default:
+		return "provider_stream_error", true
+	}
 }
 
 func (s *emptyStreamRetry) openAttempt() error {
 	attemptCtx, cancel := context.WithCancelCause(s.parentCtx)
-	var timer *time.Timer
-	if s.noOutputTimeout > 0 {
-		timer = time.AfterFunc(s.noOutputTimeout, func() {
+	var firstTimer, maxTimer *time.Timer
+	if s.firstEventTimeout > 0 {
+		firstTimer = time.AfterFunc(s.firstEventTimeout, func() {
 			cancel(errOpenCodeFreeNoOutputTimeout)
+		})
+	}
+	if s.maxStreamDuration > 0 {
+		maxTimer = time.AfterFunc(s.maxStreamDuration, func() {
+			cancel(errOpenCodeFreeMaxDuration)
 		})
 	}
 	stream, err := s.base.Stream(attemptCtx, s.request)
 	if err != nil {
-		if timer != nil {
-			timer.Stop()
+		if firstTimer != nil {
+			firstTimer.Stop()
+		}
+		if maxTimer != nil {
+			maxTimer.Stop()
 		}
 		cause := context.Cause(attemptCtx)
 		cancel(nil)
-		if errors.Is(cause, errOpenCodeFreeNoOutputTimeout) {
-			return fmt.Errorf("%w: %v", sdk.ErrIncompleteStream, errOpenCodeFreeNoOutputTimeout)
+		if isStreamTimeoutCause(cause) {
+			return fmt.Errorf("%w: %w", sdk.ErrIncompleteStream, cause)
 		}
 		return err
 	}
 	if stream == nil {
-		if timer != nil {
-			timer.Stop()
+		if firstTimer != nil {
+			firstTimer.Stop()
+		}
+		if maxTimer != nil {
+			maxTimer.Stop()
 		}
 		cancel(nil)
 		return fmt.Errorf("open model stream: nil stream")
 	}
 	s.attemptCtx = attemptCtx
 	s.cancelAttempt = cancel
-	s.noOutputTimer = timer
+	s.firstEventTimer = firstTimer
+	s.maxStreamTimer = maxTimer
 	s.stream = stream
 	return nil
 }
 
-func (s *emptyStreamRetry) noOutputTimedOut() bool {
-	return s.attemptCtx != nil && errors.Is(context.Cause(s.attemptCtx), errOpenCodeFreeNoOutputTimeout)
+func (s *emptyStreamRetry) observeStreamActivity() {
+	if s.firstEventTimer != nil {
+		s.firstEventTimer.Stop()
+		s.firstEventTimer = nil
+	}
+	if s.idleEventTimeout <= 0 || s.cancelAttempt == nil {
+		return
+	}
+	if s.idleEventTimer != nil {
+		s.idleEventTimer.Stop()
+	}
+	cancel := s.cancelAttempt
+	s.idleEventTimer = time.AfterFunc(s.idleEventTimeout, func() {
+		cancel(errOpenCodeFreeIdleTimeout)
+	})
 }
 
-func (s *emptyStreamRetry) stopNoOutputTimer() {
-	if s.noOutputTimer != nil {
-		s.noOutputTimer.Stop()
-		s.noOutputTimer = nil
+func (s *emptyStreamRetry) streamTimeoutCause() error {
+	if s.attemptCtx == nil {
+		return nil
+	}
+	cause := context.Cause(s.attemptCtx)
+	if isStreamTimeoutCause(cause) {
+		return cause
+	}
+	return nil
+}
+
+func isStreamTimeoutCause(err error) bool {
+	return errors.Is(err, errOpenCodeFreeNoOutputTimeout) ||
+		errors.Is(err, errOpenCodeFreeIdleTimeout) ||
+		errors.Is(err, errOpenCodeFreeMaxDuration)
+}
+
+func streamTimeoutReason(err error) string {
+	switch {
+	case errors.Is(err, errOpenCodeFreeNoOutputTimeout):
+		return "first_event_timeout"
+	case errors.Is(err, errOpenCodeFreeIdleTimeout):
+		return "idle_event_timeout"
+	case errors.Is(err, errOpenCodeFreeMaxDuration):
+		return "max_stream_duration"
+	default:
+		return "stream_timeout"
 	}
 }
 
+func (s *emptyStreamRetry) stopAttemptTimers() {
+	for _, timer := range []*time.Timer{s.firstEventTimer, s.idleEventTimer, s.maxStreamTimer} {
+		if timer != nil {
+			timer.Stop()
+		}
+	}
+	s.firstEventTimer = nil
+	s.idleEventTimer = nil
+	s.maxStreamTimer = nil
+}
+
 func (s *emptyStreamRetry) closeAttempt() error {
-	s.stopNoOutputTimer()
+	s.stopAttemptTimers()
 	if s.cancelAttempt != nil {
 		s.cancelAttempt(nil)
 		s.cancelAttempt = nil
@@ -414,27 +653,14 @@ func (s *emptyStreamRetry) Close() error {
 	return s.closeAttempt()
 }
 
-func streamEventHasOutput(event sdk.Event) bool {
+func streamEventProgress(event sdk.Event) streamRetryProgress {
 	switch event.Kind {
 	case sdk.EventTextDelta:
-		return event.Text != ""
+		if event.Text != "" {
+			return streamProgressCommittedText
+		}
 	case sdk.EventToolCallStart, sdk.EventToolCallDelta, sdk.EventToolCallEnd, sdk.EventToolCall:
-		return true
-	default:
-		return false
+		return streamProgressBufferedTool
 	}
-}
-
-func waitForEmptyStreamRetry(ctx context.Context, delay time.Duration) error {
-	if delay <= 0 {
-		return ctx.Err()
-	}
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
-	}
+	return streamProgressEmpty
 }

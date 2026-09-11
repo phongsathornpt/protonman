@@ -32,7 +32,7 @@ func newPaneRenderContext(m *bubbleModel) paneRenderContext {
 	ctx.width = m.layout.width
 	ctx.height = m.layout.height
 	ctx.activeModel = m.activeModel
-	ctx.spinner = m.spinner.View()
+	ctx.spinner = m.spinnerIndicator()
 	ctx.projectTrusted = m.projectTrusted
 	ctx.hasWorkDir = m.workDir != ""
 	ctx.workDir = m.workDir

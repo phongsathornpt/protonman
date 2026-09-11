@@ -9,6 +9,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"sync"
 
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
@@ -33,6 +34,8 @@ type stream struct {
 	includeRaw    bool
 	provider      string
 	hasToolCalls  bool
+	closeOnce     sync.Once
+	closeErr      error
 }
 
 func newStream(body io.ReadCloser, metadata sdk.ProviderMetadata, includeRaw bool, provider string) *stream {
@@ -375,10 +378,12 @@ func (s *stream) nextCallID() string {
 	return fmt.Sprintf("generated_call_%d", s.generatedSeq)
 }
 func (s *stream) Close() error {
-	if s.closer != nil {
-		return s.closer.Close()
-	}
-	return nil
+	s.closeOnce.Do(func() {
+		if s.closer != nil {
+			s.closeErr = s.closer.Close()
+		}
+	})
+	return s.closeErr
 }
 
 func mapFinishReason(reason string) sdk.FinishReason {

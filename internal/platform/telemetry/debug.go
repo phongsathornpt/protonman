@@ -8,12 +8,13 @@ import (
 	"sync"
 )
 
-// ConfigureDebugLogger installs a process-wide debug logger for development diagnostics.
-// An empty, off, false, or 0 destination leaves the current logger unchanged.
+// ConfigureDebugLogger installs a process-wide logger for development diagnostics.
+// When diagnostics are disabled, it installs a discard logger so internal slog
+// records cannot leak onto an interactive terminal through slog.Default().
 func ConfigureDebugLogger(destination string) (func(), error) {
 	destination = strings.TrimSpace(destination)
 	if isDebugLoggingDisabled(destination) {
-		return func() {}, nil
+		return installDebugLogger(io.Discard, nil), nil
 	}
 
 	writer, closer, err := debugWriter(destination)
@@ -21,6 +22,10 @@ func ConfigureDebugLogger(destination string) (func(), error) {
 		return nil, err
 	}
 
+	return installDebugLogger(writer, closer), nil
+}
+
+func installDebugLogger(writer io.Writer, closer io.Closer) func() {
 	previous := slog.Default()
 	slog.SetDefault(slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
@@ -34,7 +39,7 @@ func ConfigureDebugLogger(destination string) (func(), error) {
 				_ = closer.Close()
 			}
 		})
-	}, nil
+	}
 }
 
 func isDebugLoggingDisabled(destination string) bool {

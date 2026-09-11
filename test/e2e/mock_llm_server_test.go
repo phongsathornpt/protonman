@@ -15,6 +15,7 @@ import (
 type mockLLMResponse struct {
 	status      int
 	contentType string
+	headers     map[string]string
 	rawBody     string
 	sseChunks   []string
 }
@@ -50,6 +51,10 @@ func newMockLLMServer(t *testing.T) *mockLLMServer {
 
 		if resp.status == 0 {
 			resp.status = http.StatusOK
+		}
+
+		for key, value := range resp.headers {
+			w.Header().Set(key, value)
 		}
 
 		if resp.contentType != "" {
@@ -164,6 +169,10 @@ func (m *mockLLMServer) AddErrorResponse(status int, body string, contentType st
 }
 
 func (m *mockLLMServer) AddPersistentErrorResponse(status int, body string, contentType string) {
+	m.AddPersistentErrorResponseWithHeaders(status, body, contentType, nil)
+}
+
+func (m *mockLLMServer) AddPersistentErrorResponseWithHeaders(status int, body string, contentType string, headers map[string]string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -174,6 +183,7 @@ func (m *mockLLMServer) AddPersistentErrorResponse(status int, body string, cont
 		m.responses = append(m.responses, mockLLMResponse{
 			status:      status,
 			contentType: contentType,
+			headers:     headers,
 			rawBody:     body,
 		})
 	}

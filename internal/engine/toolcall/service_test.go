@@ -23,6 +23,7 @@ type fakeHandler struct {
 	waitForContext   bool
 	shouldPanic      bool
 	structuredOutput json.RawMessage
+	sha256           string
 }
 
 func (h *fakeHandler) Definition() tool.Definition {
@@ -36,6 +37,7 @@ func (h *fakeHandler) Execute(ctx context.Context, call tool.Call) (tool.Result,
 		ToolName:         call.Name,
 		Output:           "executed",
 		StructuredOutput: append(json.RawMessage(nil), h.structuredOutput...),
+		SHA256:           h.sha256,
 	}
 	if h.shouldPanic {
 		panic("handler secret")
@@ -1089,6 +1091,101 @@ func workspaceReadSafety() tool.SafetyContract {
 	}
 }
 
+func TestServiceRefreshResourcePreservesOriginalFailureAndAttachesEvidence(t *testing.T) {
+	recoveryArgs := json.RawMessage(`{"path":"file.txt"}`)
+	edit := &fakeHandler{definition: tool.Definition{
+		Name: "edit", Description: "fake edit", Kind: tool.KindEdit, Mutability: tool.MutabilityMutating,
+	}, firstErr: tool.NewToolError(tool.ErrorCodeInvalidArguments, "read before overwrite").WithRecovery(tool.Recovery{
+		Action: tool.RecoveryRefreshResource, Tool: "read", Arguments: recoveryArgs,
+	})}
+	reader := &fakeHandler{definition: tool.Definition{
+		Name: "read", Description: "fake reader", Kind: tool.KindRead,
+		Mutability: tool.MutabilityReadOnly, Safety: workspaceReadSafety(), PermissionDetailKey: "path",
+		InputSchema: map[string]any{
+			"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}},
+			"required": []string{"path"}, "additionalProperties": false,
+		},
+	}, sha256: strings.Repeat("a", 64)}
+	policy, err := permission.NewPolicy(permission.Config{Default: permission.ActionAllow})
+	if err != nil {
+		t.Fatal(err)
+	}
+	observer := &recordingObserver{}
+	service, err := NewService(recoveryRegistry{handlers: []tool.Handler{edit, reader}}, policy, WithMode(permission.ModeAlwaysApprove), WithObserver(observer))
+	if err != nil {
+		t.Fatal(err)
+	}
+	call, _ := tool.NewCall("edit-refresh", "edit", json.RawMessage(`{}`))
+	result, err := service.Call(context.Background(), call)
+	if err == nil {
+		t.Fatal("Call() error = nil, want original edit failure")
+	}
+	if edit.calls != 1 || reader.calls != 1 {
+		t.Fatalf("handler calls edit=%d read=%d, want 1 and 1", edit.calls, reader.calls)
+	}
+	if result.Failure == nil || result.Failure.Code != tool.ErrorCodeInvalidArguments {
+		t.Fatalf("result failure = %#v", result.Failure)
+	}
+	evidence := result.Failure.RecoveryEvidence
+	if evidence == nil || evidence.Action != tool.RecoveryRefreshResource || evidence.Tool != "read" || evidence.Output != "executed" || evidence.SHA256 != strings.Repeat("a", 64) {
+		t.Fatalf("recovery evidence = %#v", evidence)
+	}
+	if result.Output != "" || result.ToolName != "edit" || result.CallID != call.ID {
+		t.Fatalf("refresh masqueraded as edit success: %#v", result)
+	}
+	var succeeded bool
+	for _, event := range observer.Events() {
+		succeeded = succeeded || event.Kind == EventRecoverySucceeded && event.RecoveryAction == tool.RecoveryRefreshResource
+	}
+	if !succeeded {
+		t.Fatalf("refresh recovery events = %#v", observer.Events())
+	}
+}
+
+func TestServiceDiscoverResourcePreservesNotFoundAndAttachesEvidence(t *testing.T) {
+	recoveryArgs := json.RawMessage(`{"path":"internal/base/runtimepolicy"}`)
+	reader := &fakeHandler{definition: tool.Definition{
+		Name: "read", Description: "fake reader", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
+		Safety: workspaceReadSafety(),
+	}, firstErr: tool.NewToolError(tool.ErrorCodeNotFound, `not found: "internal/base/runtimepolicy/runtimepolicy.go"`).WithRecovery(tool.Recovery{
+		Action: tool.RecoveryDiscoverResource, Tool: "ls", Arguments: recoveryArgs,
+	})}
+	lister := &fakeHandler{definition: tool.Definition{
+		Name: "ls", Description: "fake lister", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
+		Safety: workspaceReadSafety(), PermissionDetailKey: "path",
+		InputSchema: map[string]any{
+			"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}},
+			"additionalProperties": false,
+		},
+	}}
+	policy, err := permission.NewPolicy(permission.Config{Default: permission.ActionAllow})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewService(recoveryRegistry{handlers: []tool.Handler{reader, lister}}, policy, WithMode(permission.ModeAlwaysApprove))
+	if err != nil {
+		t.Fatal(err)
+	}
+	call, _ := tool.NewCall("read-missing", "read", json.RawMessage(`{"path":"internal/base/runtimepolicy/runtimepolicy.go"}`))
+	result, err := service.Call(context.Background(), call)
+	if err == nil {
+		t.Fatal("Call() error = nil, want original not_found")
+	}
+	if reader.calls != 1 || lister.calls != 1 {
+		t.Fatalf("handler calls read=%d ls=%d, want 1 and 1", reader.calls, lister.calls)
+	}
+	if result.Failure == nil || result.Failure.Code != tool.ErrorCodeNotFound {
+		t.Fatalf("result failure = %#v, want not_found", result.Failure)
+	}
+	evidence := result.Failure.RecoveryEvidence
+	if evidence == nil || evidence.Action != tool.RecoveryDiscoverResource || evidence.Tool != "ls" || evidence.Output != "executed" {
+		t.Fatalf("discovery evidence = %#v", evidence)
+	}
+	if result.Output != "" || result.ToolName != "read" || result.CallID != call.ID {
+		t.Fatalf("discovery masqueraded as read success: %#v", result)
+	}
+}
+
 func TestServiceRecoversWithDedicatedWorkspaceReadTool(t *testing.T) {
 	recoveryArgs := json.RawMessage(`{"path":"screen.png","view":"image"}`)
 	bash := &fakeHandler{definition: tool.Definition{
@@ -1195,5 +1292,38 @@ func TestServiceRecordsCanonicalToolNameInTelemetry(t *testing.T) {
 		if event.ToolName != "" && event.ToolName != tool.NameRead {
 			t.Fatalf("non-canonical tool name in telemetry: %#v", event)
 		}
+	}
+}
+
+func TestCallSchemaFailurePublishesActionableDiagnostic(t *testing.T) {
+	handler := &fakeHandler{definition: tool.Definition{
+		Name: "typed", Description: "typed input", Kind: tool.KindRead,
+		Mutability: tool.MutabilityReadOnly,
+		InputSchema: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"path": map[string]any{"type": "string"}},
+			"required":   []string{"path"}, "additionalProperties": false,
+		},
+	}}
+	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAlwaysApprove))
+	call, err := tool.NewCall("typed-1", "typed", json.RawMessage(`{"path":42}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.Call(context.Background(), call)
+	if err == nil || result.Failure == nil {
+		t.Fatalf("Call() result=%#v err=%v, want schema failure", result, err)
+	}
+	if result.Failure.Code != tool.ErrorCodeInvalidArguments {
+		t.Fatalf("failure code=%q", result.Failure.Code)
+	}
+	if strings.TrimSpace(result.Failure.Diagnostic) == "" {
+		t.Fatalf("failure diagnostic missing: %#v", result.Failure)
+	}
+	if result.Failure.Diagnostic == result.Failure.Message {
+		t.Fatalf("diagnostic did not add schema detail: %#v", result.Failure)
+	}
+	if handler.calls != 0 {
+		t.Fatalf("handler calls=%d, want 0", handler.calls)
 	}
 }

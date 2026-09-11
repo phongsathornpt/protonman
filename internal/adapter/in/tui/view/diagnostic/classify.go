@@ -51,8 +51,25 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 	}
 
 	if errors.Is(err, sdk.ErrIncompleteStream) {
+		lower := strings.ToLower(raw)
+		if strings.Contains(lower, "produced no output before timeout") ||
+			strings.Contains(lower, "stream became idle before completion") ||
+			strings.Contains(lower, "stream exceeded maximum duration") {
+			return Error{
+				Kind:    KindStreamTimeout,
+				Title:   "Provider Stream Timed Out",
+				Badge:   "STREAM_TIMEOUT",
+				Message: "The provider stream exceeded its bounded response window before completing.",
+				Suggestions: []string{
+					"Retry the request; transient provider stalls can recover",
+					"Switch models if stream timeouts keep recurring",
+				},
+				RawDetails: raw,
+				Retryable:  true,
+			}
+		}
 		return Error{
-			Kind:    KindStreamTimeout,
+			Kind:    KindStreamIncomplete,
 			Title:   "Provider Stream Ended Early",
 			Badge:   "STREAM_INCOMPLETE",
 			Message: "The provider closed the response stream before sending a terminal completion event.",
@@ -213,8 +230,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 			Badge:   "CONTEXT_OVERFLOW",
 			Message: "Input token count exceeds the maximum context length for this model.",
 			Suggestions: []string{
-				"Run /compact to summarize conversation history and free up tokens",
-				"Start a fresh conversation from the session launcher",
+				"Run /clear to start a fresh conversation while preserving session settings",
 				"Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)",
 			},
 			RawDetails: raw,

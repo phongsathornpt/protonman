@@ -450,3 +450,36 @@ func TestResultModelPayloadCompactsFailureMessage(t *testing.T) {
 		t.Fatal("ModelPayload mutated original failure")
 	}
 }
+
+func TestFailureFromErrorPreservesExplicitDiagnostic(t *testing.T) {
+	cause := errors.New("todo operation 2: set_status does not accept text")
+	err := fmt.Errorf("execute todo: %w", WrapToolError(ErrorCodeInvalidArguments, "apply todo patch", cause).WithDiagnostic(cause.Error()))
+	failure := FailureFromError(err)
+	if failure == nil {
+		t.Fatal("FailureFromError() = nil")
+	}
+	if failure.Message != "apply todo patch" {
+		t.Fatalf("failure message = %q", failure.Message)
+	}
+	if failure.Diagnostic != cause.Error() {
+		t.Fatalf("failure diagnostic = %q, want %q", failure.Diagnostic, cause.Error())
+	}
+	if strings.Contains(failure.Diagnostic, "execute todo") {
+		t.Fatalf("failure diagnostic leaked wrapper: %q", failure.Diagnostic)
+	}
+}
+
+func TestResultModelPayloadCompactsFailureDiagnostic(t *testing.T) {
+	diagnostic := "  detail\n\t" + strings.Repeat("x", 300)
+	original := Result{ToolName: "todo", Failure: &Failure{Code: ErrorCodeInvalidArguments, Message: "invalid task patch", Diagnostic: diagnostic}}
+	payload := original.ModelPayload()
+	if payload.Failure == original.Failure {
+		t.Fatal("ModelPayload reused failure pointer")
+	}
+	if strings.Contains(payload.Failure.Diagnostic, "\n") || len([]rune(payload.Failure.Diagnostic)) > maxModelFailureMessageChars {
+		t.Fatalf("model failure diagnostic was not compacted: %q", payload.Failure.Diagnostic)
+	}
+	if original.Failure.Diagnostic != diagnostic {
+		t.Fatal("ModelPayload mutated original failure diagnostic")
+	}
+}

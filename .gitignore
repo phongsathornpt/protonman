@@ -56,3 +56,4 @@ scratch/
 
 # Local datasets
 data/
+.commandcode/

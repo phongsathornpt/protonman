@@ -12,7 +12,7 @@ func (s *turnModelState) beginTurn(owner string, started time.Time) {
 	s.activeTurnOwner = owner
 	s.busy = true
 	s.busyStarted = started
-	s.activity = "analyzing"
+	s.activity = ""
 }
 
 func (s *turnModelState) bindTurn(cancel context.CancelFunc, events <-chan tea.Msg) {

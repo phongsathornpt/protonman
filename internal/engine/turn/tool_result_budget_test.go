@@ -95,6 +95,34 @@ func TestToolResultBudgetPreservesStructuredOutputBeforeHumanText(t *testing.T) 
 	}
 }
 
+func TestToolResultBudgetBoundsRecoveryEvidenceAndClearsHashWhenTruncated(t *testing.T) {
+	budget := newToolResultBudget(64, 64)
+	result := tool.Result{Failure: &tool.Failure{
+		Code:    tool.ErrorCodeInvalidArguments,
+		Message: "read before overwrite",
+		RecoveryEvidence: &tool.RecoveryEvidence{
+			Action: tool.RecoveryRefreshResource,
+			Tool:   "read",
+			Output: strings.Repeat("content ", 30),
+			SHA256: strings.Repeat("a", 64),
+		},
+	}}
+	got := budget.applyRound([]executedCall{{result: result}})[0].result
+	if got.Failure == nil || got.Failure.RecoveryEvidence == nil {
+		t.Fatalf("recovery evidence missing: %#v", got)
+	}
+	evidence := got.Failure.RecoveryEvidence
+	if !evidence.Truncated || evidence.SHA256 != "" || !strings.Contains(evidence.Output, toolBudgetMarker) {
+		t.Fatalf("truncated evidence = %#v", evidence)
+	}
+	if toolResultTextBytes(got) > 64 {
+		t.Fatalf("result text bytes = %d, want <= 64", toolResultTextBytes(got))
+	}
+	if result.Failure.RecoveryEvidence.SHA256 == "" {
+		t.Fatal("budget mutation leaked into original recovery evidence")
+	}
+}
+
 func TestToolResultBudgetTurnsOversizedStructuredOutputIntoTypedFailure(t *testing.T) {
 	budget := newToolResultBudget(16, 16)
 	got := budget.applyRound([]executedCall{{result: tool.Result{

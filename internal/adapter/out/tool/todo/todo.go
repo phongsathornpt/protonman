@@ -43,15 +43,39 @@ func (h todoHandler) Definition() tool.Definition {
 func todoCapabilityInputSchema() map[string]any {
 	update := todoUpdateInputSchema()
 	props, _ := update["properties"].(map[string]any)
-	return map[string]any{
+	action := map[string]any{
+		"type":        "string",
+		"enum":        []any{"get", "update"},
+		"description": "Use get first to read the current revision and tasks; use update only with that integer revision and an operations JSON array.",
+	}
+	get := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"action":            map[string]any{"type": "string", "enum": []string{"get", "update"}, "description": "Task-plan operation to perform"},
+			"action": map[string]any{"type": "string", "const": "get", "description": "Read the current task snapshot and revision."},
+		},
+		"required":             []any{"action"},
+		"additionalProperties": false,
+	}
+	updateBranch := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"action":            map[string]any{"type": "string", "const": "update", "description": "Atomically patch the task plan."},
 			"expected_revision": props["expected_revision"],
 			"operations":        props["operations"],
 		},
-		"required":             []string{"action"},
+		"required":             []any{"action", "expected_revision", "operations"},
 		"additionalProperties": false,
+	}
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"action":            action,
+			"expected_revision": props["expected_revision"],
+			"operations":        props["operations"],
+		},
+		"required":             []any{"action"},
+		"additionalProperties": false,
+		"oneOf":                []any{get, updateBranch},
 	}
 }
 

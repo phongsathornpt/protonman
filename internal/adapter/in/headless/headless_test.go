@@ -3,6 +3,8 @@ package headless
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -177,6 +179,7 @@ func ioDiscard() *bytes.Buffer {
 type scriptedTurn struct {
 	events   []applicationturn.Event
 	result   applicationturn.Result
+	err      error
 	parentID string
 }
 
@@ -191,7 +194,30 @@ func (s *scriptedTurn) Run(
 			return applicationturn.Result{}, err
 		}
 	}
-	return s.result, nil
+	return s.result, s.err
+}
+
+func TestHeadlessPreservesReplaySafeCheckpointOnFailure(t *testing.T) {
+	registry, _ := newTestRegistry()
+	service := newTestService(t, registry, permission.ModeAsk)
+	loop := &scriptedTurn{
+		result: applicationturn.Result{ReplaySafe: true, Rounds: 1, Messages: []model.Message{
+			{Role: model.RoleAssistant, ToolCalls: []model.ToolCall{{ID: "read-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}}},
+			{Role: model.RoleTool, ToolCallID: "read-1", ToolName: "read", Content: `{"output":"ok"}`},
+		}},
+		err: errors.New("later stream failed"),
+	}
+	runner, err := New(service, registry, loop)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runner.Run(context.Background(), "inspect", ioDiscard(), FormatText); err == nil {
+		t.Fatal("Run() error = nil, want failure")
+	}
+	messages := runner.Messages()
+	if len(messages) != 3 || messages[0].Role != model.RoleUser || messages[1].Role != model.RoleAssistant || messages[2].Role != model.RoleTool {
+		t.Fatalf("messages = %#v, want user plus replay-safe assistant/tool checkpoint", messages)
+	}
 }
 
 type testHandler struct {

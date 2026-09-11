@@ -1,6 +1,7 @@
 package telemetry
 
 import (
+	"bytes"
 	"log/slog"
 	"os"
 	"strings"
@@ -38,17 +39,30 @@ func TestConfigureDebugLoggerWritesJSONAndRestores(t *testing.T) {
 	}
 }
 
-func TestConfigureDebugLoggerDisabled(t *testing.T) {
-	previous := slog.Default()
+func TestConfigureDebugLoggerDisabledSuppressesDefaultStderrLogging(t *testing.T) {
+	original := slog.Default()
+	defer slog.SetDefault(original)
 
 	for _, destination := range []string{"", "off", "false", "0"} {
+		var output bytes.Buffer
+		previous := slog.New(slog.NewTextHandler(&output, nil))
+		slog.SetDefault(previous)
+
 		restore, err := ConfigureDebugLogger(destination)
 		if err != nil {
 			t.Fatalf("ConfigureDebugLogger(%q) error = %v", destination, err)
 		}
+		if slog.Default() == previous {
+			t.Fatalf("ConfigureDebugLogger(%q) left the default stderr-capable logger installed", destination)
+		}
+		slog.Warn("must stay silent")
+		if output.Len() != 0 {
+			t.Fatalf("ConfigureDebugLogger(%q) leaked disabled log output: %q", destination, output.String())
+		}
+
 		restore()
 		if slog.Default() != previous {
-			t.Fatalf("ConfigureDebugLogger(%q) changed the logger", destination)
+			t.Fatalf("ConfigureDebugLogger(%q) did not restore the previous logger", destination)
 		}
 	}
 }

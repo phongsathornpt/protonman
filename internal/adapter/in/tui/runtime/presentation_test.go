@@ -111,7 +111,7 @@ func TestRunningToolUsesTranscriptAsProgressSurface(t *testing.T) {
 		t.Fatalf("running tool status is missing compact progress: %q", got)
 	}
 	m.historyState.CommitActive()
-	m.activity = "analyzing"
+	m.activity = ""
 	if got := m.statusView(); got == "" || strings.Contains(got, "Thinking") {
 		t.Fatalf("busy state should use only the global status row: %q", got)
 	}
@@ -650,15 +650,15 @@ func TestClassifyOpenCodeErrorContextOverflow(t *testing.T) {
 		if len(classified.Suggestions) == 0 {
 			t.Errorf("for %q: expected suggestions for context overflow", raw)
 		}
-		foundCompact := false
+		foundClear := false
 		for _, s := range classified.Suggestions {
-			if strings.Contains(s, "/compact") {
-				foundCompact = true
+			if strings.Contains(s, "/clear") {
+				foundClear = true
 				break
 			}
 		}
-		if !foundCompact {
-			t.Errorf("for %q: expected suggestion mentioning /compact", raw)
+		if !foundClear {
+			t.Errorf("for %q: expected suggestion mentioning /clear", raw)
 		}
 	}
 }
@@ -807,7 +807,7 @@ func TestCrashModelNavigation(t *testing.T) {
 }
 
 func TestCommandHistoryIsBounded(t *testing.T) {
-	pane := newBottomPane(true)
+	pane := newBottomPane(true, false)
 	for i := 0; i < maxCommandHistory+25; i++ {
 		pane.recordHistory(fmt.Sprintf("command-%d", i))
 	}
@@ -987,7 +987,7 @@ func TestResetPromptCollapsesMultilineComposerDuringBusyTurn(t *testing.T) {
 	}
 	model.resetPrompt()
 	model.busy = true
-	model.activity = "analyzing"
+	model.activity = ""
 	model.reconcileLayout()
 	plain := ansi.Strip(model.promptView())
 	if got := strings.Count(plain, "> "); got != 1 {
@@ -1424,5 +1424,33 @@ func TestPaneKeyboardHelpStaysSingleLine(t *testing.T) {
 		if got := ansi.StringWidth(help); got > width {
 			t.Fatalf("help width=%d exceeds %d: %q", got, width, help)
 		}
+	}
+}
+
+func TestModelRetryStatusCountsDownFromRetryDeadline(t *testing.T) {
+	now := time.Now()
+	retry := sdk.RetryEvent{Phase: sdk.RetryPhaseWaiting, Reason: "incomplete_stream", Attempt: 1, MaxRetries: 2, RetryAt: now.Add(2500 * time.Millisecond)}
+	activity, meta, ok := modelRetryStatus(retry, now)
+	if !ok || activity != "retrying in 3s" {
+		t.Fatalf("activity=%q ok=%v, want countdown", activity, ok)
+	}
+	if meta != " · retry 1/2 · stream interrupted" {
+		t.Fatalf("meta=%q", meta)
+	}
+	activity, _, ok = modelRetryStatus(retry, now.Add(2200*time.Millisecond))
+	if !ok || activity != "retrying in <1s" {
+		t.Fatalf("subsecond activity=%q ok=%v", activity, ok)
+	}
+}
+
+func TestModelRetryStatusShowsCooldownAfterFirstRetry(t *testing.T) {
+	now := time.Now()
+	retry := sdk.RetryEvent{Phase: sdk.RetryPhaseCooldown, Reason: "first_event_timeout", Attempt: 2, MaxRetries: 2, RetryAt: now.Add(2 * time.Second)}
+	activity, meta, ok := modelRetryStatus(retry, now)
+	if !ok || activity != "cooling down 2s" {
+		t.Fatalf("activity=%q ok=%v, want cooldown countdown", activity, ok)
+	}
+	if meta != " · retry 2/2 · provider slow" {
+		t.Fatalf("meta=%q", meta)
 	}
 }

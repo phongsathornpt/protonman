@@ -210,7 +210,7 @@ func TestMinimalBusyStatusPrefersActiveToolName(t *testing.T) {
 	m.resize(80, 24)
 	m.showWelcome = false
 	m.busy = true
-	m.activity = "analyzing"
+	m.activity = ""
 	m.ensureHistoryState().StartToolCell(&ToolCell{CallID: "tool-1", Name: "read", Target: "internal/tui.go", Running: true})
 	plain := ansi.Strip(m.statusView())
 	for _, want := range []string{"read", "internal/tui.go"} {
@@ -224,7 +224,7 @@ func TestMinimalIdleStatusDoesNotReuseAssistantGlyph(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
 	m.busy = true
-	m.activity = "analyzing"
+	m.activity = ""
 	m.spinner.Spinner.Frames = nil
 	plain := ansi.Strip(m.statusView())
 	if strings.HasPrefix(plain, "● ") {

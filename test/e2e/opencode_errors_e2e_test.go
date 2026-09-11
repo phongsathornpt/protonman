@@ -103,7 +103,7 @@ func TestE2EOpenCodeRateLimitAndOverloadErrors(t *testing.T) {
 	// 1. 429 Rate Limit (persistent to exhaust retries)
 	server429 := newMockLLMServer(t)
 	server429.SetupWorkspaceConfig(t, home)
-	server429.AddPersistentErrorResponse(429, `{"error":{"message":"Rate limit reached: 60 requests per minute"}}`, "application/json")
+	server429.AddPersistentErrorResponseWithHeaders(429, `{"error":{"message":"Rate limit reached: 60 requests per minute"}}`, "application/json", map[string]string{"X-RateLimit-Reset": "1ms"})
 
 	res429 := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Trigger 429"},
@@ -121,7 +121,9 @@ func TestE2EOpenCodeRateLimitAndOverloadErrors(t *testing.T) {
 	// 2. 503 Overloaded (persistent to exhaust retries)
 	server503 := newMockLLMServer(t)
 	server503.SetupWorkspaceConfig(t, home)
-	server503.AddPersistentErrorResponse(503, `{"error":{"message":"The server is temporarily overloaded"}}`, "application/json")
+	// Keep this classification test fast while the production retry schedule
+	// remains intentionally bounded at 5s/15s/30s/60s.
+	server503.AddPersistentErrorResponseWithHeaders(503, `{"error":{"message":"The server is temporarily overloaded"}}`, "application/json", map[string]string{"Retry-After": "0"})
 
 	res503 := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Trigger 503"},
@@ -146,7 +148,7 @@ func TestE2EOpenCodeHTMLProxyGatewayError(t *testing.T) {
 
 	// Cloudflare 502 Bad Gateway HTML page (persistent to exhaust retries)
 	htmlBody := `<!DOCTYPE html><html><head><title>502 Bad Gateway</title></head><body><center><h1>502 Bad Gateway</h1></center><hr><center>cloudflare</center></body></html>`
-	server.AddPersistentErrorResponse(502, htmlBody, "text/html")
+	server.AddPersistentErrorResponseWithHeaders(502, htmlBody, "text/html", map[string]string{"Retry-After": "0"})
 
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Trigger 502 HTML"},

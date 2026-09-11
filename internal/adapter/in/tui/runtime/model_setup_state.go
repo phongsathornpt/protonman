@@ -170,7 +170,7 @@ func (i modelListItem) Description() string {
 		parts = append(parts, limits)
 	}
 	if len(resolved.Features) > 0 {
-		parts = append(parts, strings.Join(resolved.Features, " · "))
+		parts = append(parts, strings.Join(resolved.Features, ", "))
 	}
 	if reasoning := remoteModelReasoningSummary(i.providerName, i.model, true); reasoning != "" {
 		parts = append(parts, reasoning)

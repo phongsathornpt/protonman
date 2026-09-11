@@ -79,7 +79,7 @@ func AgentRows(snapshot AgentsSnapshot) []string {
 		} else if reason := strings.TrimSpace(st.Reason); reason != "" {
 			rows = append(rows, tuistyle.ErrorStyle.Render("  "+textview.TruncateEllipsis(reason, max(12, snapshot.Width-8))))
 		}
-		rows = append(rows, tuistyle.MutedStyle.Render("  id: "+st.ID))
+		rows = append(rows, tuistyle.MutedStyle.Render(textview.TruncateEllipsis("  id: "+st.ID, max(12, snapshot.Width-8))))
 	}
 	if hidden := len(retained) - len(visible); hidden > 0 {
 		rows = append(rows, tuistyle.MutedStyle.Render(fmt.Sprintf("… %d more retained", hidden)))

@@ -244,7 +244,7 @@ waiting writer. Preserve this fairness property when touching scheduler code.
 
 System prompt composition lives in `internal/engine/prompt` and is capability-driven.
 Do not maintain separate large root prompts per provider or agent mode. The managed
-prompt currently uses Prompt ABI v10 and deterministic cache-aware section ordering;
+prompt currently uses Prompt ABI v11 and deterministic cache-aware section ordering;
 `docs/system-prompt.md` is the source of truth for prompt topology and prefix-cache
 invariants.
 
@@ -310,6 +310,12 @@ Canonical argument names for common tools are intentionally stable:
 - `edit` (`write`/`replace`) -> `file_path`
 - `grep` -> `pattern`
 - `web` (`action=fetch`) -> `url`
+
+Workspace discovery is evidence-driven: use `read` only for a known artifact, `ls`
+for a known directory, `find` for path discovery, and `grep` for content search. Do
+not invent a filename from a package or directory name. If `read` returns
+`not_found`, do not retry the same guessed path unchanged; inspect the parent with
+`ls` or discover the filename with `find` first.
 
 ### Tool-call service
 
@@ -535,12 +541,14 @@ Current important slash commands are intentionally canonical and small:
 
 ```text
 /help
+/permission
 /model
 /provider
 /skills
 /agents
+/goal
 /todo
-/transcript [clear]
+/clear
 /call
 /quit
 ```
@@ -603,7 +611,7 @@ Important current defaults include:
 - model request timeout: 5m
 - subagent max runtime: 30m
 - subagent wait timeout: 30s
-- subagent queue timeout: 30s
+- subagent queue timeout: 2m
 - max live subagents: 16
 - max retained subagents: 64
 - retained subagent result TTL: 24h
@@ -620,10 +628,10 @@ cross-cutting change complete.
 Common commands:
 
 ```sh
-# Fast package tests
+# Full repository suite, including architecture and E2E
 make test
 
-# Full repository suite, including architecture and E2E
+# Equivalent direct Go invocation
 go test ./...
 
 # E2E only

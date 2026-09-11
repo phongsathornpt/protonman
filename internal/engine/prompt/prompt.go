@@ -6,7 +6,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
-const Version = "10"
+const Version = "11"
 
 type ToolCapabilities struct {
 	Tasks  bool
@@ -83,21 +83,26 @@ func Render(spec Spec) string {
 
 func IsManaged(text string) bool {
 	trimmed := strings.TrimSpace(text)
-	return strings.HasPrefix(trimmed, "<proton-system-prompt ") ||
-		strings.HasPrefix(trimmed, "You are Protonman, an autonomous coding agent operating inside a real workspace.") ||
-		strings.HasPrefix(trimmed, "You are an Explorer subagent in Protonman.") ||
-		strings.HasPrefix(trimmed, "You are a Code Reviewer subagent in Protonman.") ||
-		strings.HasPrefix(trimmed, "You are a Worker subagent in Protonman.") ||
-		strings.HasPrefix(trimmed, "You are Protonman in POW Mode") ||
-		strings.HasPrefix(trimmed, "You are Protonman in DEX Mode") ||
-		strings.HasPrefix(trimmed, "You are Protonman in INT Mode") ||
-		strings.HasPrefix(trimmed, "You are Proton, an autonomous coding agent operating inside a real workspace.") ||
-		strings.HasPrefix(trimmed, "You are an Explorer subagent in Proton.") ||
-		strings.HasPrefix(trimmed, "You are a Code Reviewer subagent in Proton.") ||
-		strings.HasPrefix(trimmed, "You are a Worker subagent in Proton.") ||
-		strings.HasPrefix(trimmed, "You are Proton in POW Mode") ||
-		strings.HasPrefix(trimmed, "You are Proton in DEX Mode") ||
-		strings.HasPrefix(trimmed, "You are Proton in INT Mode")
+	if strings.HasPrefix(trimmed, "<proton-system-prompt ") {
+		return true
+	}
+	// Pre-envelope prompt shapes are recognized only with an explicit ABI
+	// marker: the text must open with a "<!-- proton:abi<=N -->" comment
+	// followed by non-empty legacy prose, where the envelope format started
+	// at ABI v7. Unmarked legacy prose (Explorer/Worker/Code Reviewer/POW/
+	// DEX/INT prefixes, pre-rename "Proton" branding) is treated as user
+	// content so ancient shapes can never masquerade as a current managed
+	// prompt. The marker alone is not sufficient: versioned legacy prose
+	// must follow it.
+	const abiMarker = "<!-- proton:abi<="
+	if !strings.HasPrefix(trimmed, abiMarker) {
+		return false
+	}
+	end := strings.Index(trimmed, "-->")
+	if end < 0 {
+		return false
+	}
+	return strings.TrimSpace(trimmed[end+len("-->"):]) != ""
 }
 
 func identitySection(spec Spec) string {
@@ -135,7 +140,17 @@ func toolDisciplineSection(spec Spec) string {
 		lines = append(lines, "- Workspace filesystem paths are relative to the workspace root. Use . for the workspace root; never use / or another absolute filesystem path with workspace tools.")
 	}
 	if hasTool(spec, "read") {
-		lines = append(lines, "- Use read for known workspace artifacts. Use grep for workspace content search and find for path discovery.")
+		lines = append(lines, "- Use read for known workspace artifacts; do not guess filenames from package or directory names.")
+		discovery := make([]string, 0, 2)
+		if hasTool(spec, "ls") {
+			discovery = append(discovery, "inspect the parent directory with ls")
+		}
+		if hasTool(spec, "find") {
+			discovery = append(discovery, "discover the filename with find")
+		}
+		if len(discovery) > 0 {
+			lines = append(lines, "- If read returns not_found for a guessed path, do not retry the same path unchanged; "+strings.Join(discovery, " or ")+" before reading again.")
+		}
 	}
 	if hasTool(spec, tool.NameGrep) || hasTool(spec, "find") || hasTool(spec, "ls") {
 		parts := make([]string, 0, 3)

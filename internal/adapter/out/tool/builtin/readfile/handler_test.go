@@ -72,16 +72,25 @@ func TestReadFileLineRangeCanReadFromStartThroughEndLine(t *testing.T) {
 	}
 }
 
-func TestReadFileRejectsMixedByteAndLinePagination(t *testing.T) {
+func TestReadFileLineSelectionTakesPrecedenceOverBytePagination(t *testing.T) {
 	ws := newTestWorkspace(t, nil)
-	if err := os.WriteFile(filepath.Join(ws.Root(), "lines.txt"), []byte("a\nb\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ws.Root(), "lines.txt"), []byte("a\nb\nc\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := New(ws).Execute(context.Background(), newJSONCall(t, "read-lines-bad", "read", map[string]any{
-		"path": "lines.txt", "offset": 1, "start_line": 2,
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "read-lines-mixed", "read", map[string]any{
+		"path": "lines.txt", "offset": 1, "continuation": "stale-page-token", "start_line": 2, "end_line": 2,
 	}))
-	if err == nil || !strings.Contains(err.Error(), "cannot be combined") {
-		t.Fatalf("Execute() error = %v, want mixed pagination rejection", err)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result.Output != "b\n" {
+		t.Fatalf("Output = %q, want line-selection result", result.Output)
+	}
+	if result.NextOffset != nil || result.Continuation != "" {
+		t.Fatalf("mixed read leaked byte-pagination metadata: %+v", result)
+	}
+	if result.Pagination != nil && result.Pagination.Kind != "line" {
+		t.Fatalf("mixed read did not normalize to line mode: %+v", result.Pagination)
 	}
 }
 
@@ -217,6 +226,16 @@ func TestReadFileMissingTargetIsNotFound(t *testing.T) {
 	if strings.Contains(failure.Message, "execution_error") {
 		t.Fatalf("missing path leaked execution_error semantics: %q", failure.Message)
 	}
+	if failure.Recovery == nil || failure.Recovery.Action != tool.RecoveryDiscoverResource || failure.Recovery.Tool != tool.NameLS {
+		t.Fatalf("recovery = %#v, want parent-directory discovery", failure.Recovery)
+	}
+	var args map[string]any
+	if err := json.Unmarshal(failure.Recovery.Arguments, &args); err != nil {
+		t.Fatalf("decode recovery arguments: %v", err)
+	}
+	if got := args["path"]; got != "worker/src/infrastructure" {
+		t.Fatalf("recovery parent = %#v, want worker/src/infrastructure", got)
+	}
 }
 
 func TestReadFileDirectorySuggestsListDirRecovery(t *testing.T) {
@@ -246,5 +265,34 @@ func TestReadFileDirectorySuggestsListDirRecovery(t *testing.T) {
 	}
 	if got := args["path"]; got != "internal/base/runtimepolicy" {
 		t.Fatalf("recovery path = %#v", got)
+	}
+}
+
+func TestReadFileHonorsCanceledContextBeforeFilesystemWork(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := New(ws).Execute(ctx, newJSONCall(t, "read-canceled", "read", map[string]any{"path": "missing.png", "view": "image"}))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Execute() error = %v, want context.Canceled", err)
+	}
+	failure := tool.FailureFromError(err)
+	if failure == nil || failure.Code != tool.ErrorCodeCanceled {
+		t.Fatalf("failure = %#v, want canceled", failure)
+	}
+}
+
+func TestReadFileRejectsMalformedArguments(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	call := tool.Call{ID: "read-malformed", Name: "read", Arguments: json.RawMessage(`{"path":`)}
+
+	_, err := New(ws).Execute(context.Background(), call)
+	if err == nil {
+		t.Fatal("Execute() error = nil, want malformed argument rejection")
+	}
+	failure := tool.FailureFromError(err)
+	if failure == nil || failure.Code != tool.ErrorCodeInvalidArguments {
+		t.Fatalf("failure = %#v, want invalid_arguments", failure)
 	}
 }

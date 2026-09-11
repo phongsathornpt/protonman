@@ -237,6 +237,27 @@ func TestACPSessionListAndDelete(t *testing.T) {
 	}
 }
 
+func TestACPSessionListRejectsMalformedParams(t *testing.T) {
+	server := newTestServer(t, permission.ModeAsk)
+
+	_, _, err := server.dispatch(context.Background(), RPCRequest{
+		Method: "session/list",
+		Params: json.RawMessage(`{"cwd":`),
+	}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "decode session/list") {
+		t.Fatalf("session/list error = %v, want decode failure", err)
+	}
+
+	for _, params := range []json.RawMessage{nil, json.RawMessage(`{}`)} {
+		if _, _, err := server.dispatch(context.Background(), RPCRequest{
+			Method: "session/list",
+			Params: params,
+		}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("session/list with params %q error = %v, want success", string(params), err)
+		}
+	}
+}
+
 func TestACPSessionLoadAndReplay(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "acp-replay-*")
 	if err != nil {
@@ -462,6 +483,26 @@ func TestACPFailedPromptRollsBackPartialToolTranscript(t *testing.T) {
 	}
 }
 
+func TestACPPreservesReplaySafeCheckpointOnFailure(t *testing.T) {
+	server := newTestServerWithRunner(t, permission.ModeAlwaysApprove, &replaySafeFailureRunner{})
+	created, _, err := server.dispatch(context.Background(), RPCRequest{Method: "session/new"}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, ok := server.lookupSession(created.(SessionNewResult).SessionID)
+	if !ok {
+		t.Fatal("session not found")
+	}
+	_, err = sess.ExecutePrompt(context.Background(), []ContentBlock{{Type: BlockTypeText, Text: "inspect"}}, func(RPCNotification) error { return nil })
+	if err == nil {
+		t.Fatal("ExecutePrompt() error = nil, want failure")
+	}
+	messages := sess.Messages()
+	if len(messages) != 3 || messages[0].Role != model.RoleUser || messages[1].Role != model.RoleAssistant || messages[2].Role != model.RoleTool {
+		t.Fatalf("messages = %#v, want user plus replay-safe assistant/tool checkpoint", messages)
+	}
+}
+
 func TestACPUnknownMethod(t *testing.T) {
 	server := newTestServer(t, permission.ModeAsk)
 	var output bytes.Buffer
@@ -560,6 +601,15 @@ type cancelAfterToolCallRunner struct {
 }
 
 type failingAfterToolCallRunner struct{}
+
+type replaySafeFailureRunner struct{}
+
+func (r *replaySafeFailureRunner) Run(context.Context, []model.Message, applicationturn.Sink) (applicationturn.Result, error) {
+	return applicationturn.Result{ReplaySafe: true, Rounds: 1, Messages: []model.Message{
+		{Role: model.RoleAssistant, ToolCalls: []model.ToolCall{{ID: "read-safe", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}}},
+		{Role: model.RoleTool, ToolCallID: "read-safe", ToolName: "read", Content: `{"output":"ok"}`},
+	}}, errors.New("later stream failed")
+}
 
 func (r *failingAfterToolCallRunner) Run(ctx context.Context, _ []model.Message, sink applicationturn.Sink) (applicationturn.Result, error) {
 	call := tool.Call{

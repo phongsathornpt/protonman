@@ -149,6 +149,8 @@ const (
 	EventToolCall EventKind = "tool_call"
 	// EventToolResult reports the terminal result of a permission-aware call.
 	EventToolResult EventKind = "tool_result"
+	// EventRetryScheduled reports a bounded model/provider retry before its wait begins.
+	EventRetryScheduled EventKind = "retry_scheduled"
 	// EventCompleted marks a final model response with no further tool calls.
 	EventCompleted EventKind = "completed"
 	// EventFailed reports a terminal loop failure.
@@ -162,6 +164,7 @@ type Event struct {
 	Text    string
 	Call    tool.Call
 	Result  tool.Result
+	Retry   sdk.RetryEvent
 	Message model.Message
 	Err     error
 }
@@ -174,11 +177,14 @@ type Runner interface {
 	Run(context.Context, []model.Message, Sink) (Result, error)
 }
 
-// Result is the final assistant response from a completed turn.
+// Result contains the latest replay-safe turn checkpoint. On success, Message is the final assistant response. On failure, Message may be empty while Messages, Rounds, and Verification describe only fully committed rounds.
 type Result struct {
 	Message      model.Message
 	Rounds       int
 	Verification VerificationState
+	// ReplaySafe is true when Messages is a complete checkpoint that may be
+	// persisted even if Run returns an error.
+	ReplaySafe bool
 	// Messages contains the assistant/tool messages produced during this run.
 	// Ownership transfers to the caller on return; the runner must not mutate
 	// this slice or its nested payloads afterward. It excludes caller-supplied
@@ -199,6 +205,17 @@ func WithSystemPromptSpec(spec prompt.Spec) Option {
 		clone.AvailableTools = append([]string(nil), spec.AvailableTools...)
 		clone.ExtraInstructions = append([]string(nil), spec.ExtraInstructions...)
 		loop.promptSpec = &clone
+		return nil
+	}
+}
+
+// WithWorkspacePolicy supplies the workspace safety boundary used for
+// policy-checked reads that the turn performs itself, such as loading
+// project instructions. The loop never mutates through this policy; tool
+// execution keeps its own mutation gate in the tool-call service.
+func WithWorkspacePolicy(policy *workspace.Workspace) Option {
+	return func(loop *Loop) error {
+		loop.workspacePolicy = policy
 		return nil
 	}
 }
@@ -380,6 +397,7 @@ type Loop struct {
 	reasoningEffort               sdk.ReasoningEffort
 	reasoningExplicit             bool
 	promptSpec                    *prompt.Spec
+	workspacePolicy               *workspace.Workspace
 	skills                        []skill.CatalogItem
 	skillRegistry                 *skill.Registry
 	runtimeContext                RuntimeContextProvider
@@ -541,6 +559,11 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 
 	history, promptExtras, projectInstructions := l.prepareTurnInput(ctx, messages)
 	turnMessages := make([]model.Message, 0, 4)
+	committedRounds := 0
+	committedVerification := VerificationState{}
+	checkpoint := func() Result {
+		return Result{Rounds: committedRounds, Verification: committedVerification, Messages: turnMessages, ReplaySafe: len(turnMessages) > 0}
+	}
 	toolCallsUsed := 0
 	softToolBudgetWarned := false
 	definitions := l.tools.Definitions()
@@ -593,7 +616,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			runtimeMessages, runtimeErr := l.runtimeContext.Drain(ctx)
 			if runtimeErr != nil {
 				terminalReason = "runtime_context_failed"
-				return l.fail(ctx, sink, round, fmt.Errorf("drain runtime context: %w", runtimeErr))
+				return l.failWithResult(ctx, sink, round, checkpoint(), fmt.Errorf("drain runtime context: %w", runtimeErr))
 			}
 			if len(runtimeMessages) > 0 {
 				history = append(history, model.EnsureMessageIDs(runtimeMessages)...)
@@ -617,7 +640,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			} else {
 				terminalReason = "request_validation_failed"
 			}
-			return l.fail(ctx, sink, round, err)
+			return l.failWithResult(ctx, sink, round, checkpoint(), err)
 		}
 
 		roundSink := sink
@@ -630,10 +653,10 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		if err != nil {
 			if flushErr := bufferedEvents.flush(ctx, sink); flushErr != nil {
 				terminalReason = "runtime_event_flush_failed"
-				return l.fail(ctx, sink, round, flushErr)
+				return l.failWithResult(ctx, sink, round, checkpoint(), flushErr)
 			}
 			terminalReason = "round_failed"
-			return l.fail(ctx, sink, round, err)
+			return l.failWithResult(ctx, sink, round, checkpoint(), err)
 		}
 		assistant := outcome.assistant
 		executions := outcome.executions
@@ -645,7 +668,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				assistant, err = finalizeMaxToolCallResponse(ctx, sink, round, assistant)
 				if err != nil {
 					terminalReason = "max_tool_calls_fallback_failed"
-					return l.fail(ctx, sink, round, err)
+					return l.failWithResult(ctx, sink, round, checkpoint(), err)
 				}
 				maxToolCallsFallback = true
 				terminalReason = "max_tool_calls_fallback"
@@ -653,23 +676,23 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				assistant, err = finalizeNoProgressToolCallResponse(ctx, sink, round, assistant)
 				if err != nil {
 					terminalReason = "no_progress_fallback_failed"
-					return l.fail(ctx, sink, round, err)
+					return l.failWithResult(ctx, sink, round, checkpoint(), err)
 				}
 				noProgressFallback = true
 				terminalReason = "no_progress_fallback"
 			case toolDispatchDisabledNoTools:
 				err := fmt.Errorf("%w: model requested %d tool calls while no tools were available", ErrToolDispatchUnavailable, len(assistant.ToolCalls))
 				terminalReason = "tool_dispatch_unavailable"
-				return l.fail(ctx, sink, round, err)
+				return l.failWithResult(ctx, sink, round, checkpoint(), err)
 			case toolDispatchDisabledModelTools:
 				err := fmt.Errorf("%w: model %q requested tool calls despite declaring tools unsupported", ErrUnsupportedModelCapability, l.languageModel.ModelID())
 				terminalReason = "model_tools_unsupported"
-				return l.fail(ctx, sink, round, err)
+				return l.failWithResult(ctx, sink, round, checkpoint(), err)
 			}
 		} else if len(assistant.ToolCalls) > 0 && len(executions) == 0 {
 			err := fmt.Errorf("%w: model requested %d tool calls after dispatch completed", ErrUnresolvedToolCall, len(assistant.ToolCalls))
 			terminalReason = "unresolved_tool_call"
-			return l.fail(ctx, sink, round, err)
+			return l.failWithResult(ctx, sink, round, checkpoint(), err)
 		}
 		toolCallsUsed += len(executions)
 		if grounding.observe(executions, definitions) {
@@ -678,7 +701,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		verification.observe(executions, definitions)
 		if stalled, observeErr := progress.observeRound(executions); observeErr != nil {
 			terminalReason = "progress_guard_failed"
-			return l.fail(ctx, sink, round, observeErr)
+			return l.failWithResult(ctx, sink, round, checkpoint(), observeErr)
 		} else if stalled {
 			forceNoProgressSynthesis = !grounding.pending()
 			l.observeProtection(ctx, toolcall.ProtectionEvent{Kind: toolcall.ProtectionLoopDetected, Time: time.Now(), Round: round, Reason: "semantic_no_progress"})
@@ -691,13 +714,15 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		if grounding.pending() && len(executions) == 0 && !maxToolCallsFallback && !noProgressFallback {
 			if err := bufferedEvents.flush(ctx, sink); err != nil {
 				terminalReason = "runtime_event_flush_failed"
-				return l.fail(ctx, sink, round, err)
+				return l.failWithResult(ctx, sink, round, checkpoint(), err)
 			}
 			history = append(history, assistant)
 			turnMessages = append(turnMessages, assistant)
+			committedRounds = round
+			committedVerification = verification
 			if grounding.recordMiss() {
 				terminalReason = "grounding_not_observed"
-				return l.fail(ctx, sink, round, fmt.Errorf("%w: model %q did not gather required %s evidence", ErrGroundingUnavailable, l.languageModel.ModelID(), grounding.evidence))
+				return l.failWithResult(ctx, sink, round, checkpoint(), fmt.Errorf("%w: model %q did not gather required %s evidence", ErrGroundingUnavailable, l.languageModel.ModelID(), grounding.evidence))
 			}
 			slog.DebugContext(ctx, "turn final synthesis deferred for grounding", "round", round, "evidence", grounding.evidence)
 			continue
@@ -706,7 +731,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			runtimeMessages, deferred, runtimeErr := l.completionRuntimeContext(ctx)
 			if runtimeErr != nil {
 				terminalReason = "runtime_context_failed"
-				return l.fail(ctx, sink, round, fmt.Errorf("await runtime context: %w", runtimeErr))
+				return l.failWithResult(ctx, sink, round, checkpoint(), fmt.Errorf("await runtime context: %w", runtimeErr))
 			}
 			if deferred {
 				if len(runtimeMessages) > 0 {
@@ -717,7 +742,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			}
 			if err := bufferedEvents.flush(ctx, sink); err != nil {
 				terminalReason = "runtime_event_flush_failed"
-				return l.fail(ctx, sink, round, err)
+				return l.failWithResult(ctx, sink, round, checkpoint(), err)
 			}
 			history = append(history, assistant)
 			turnMessages = append(turnMessages, assistant)
@@ -737,6 +762,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				Message:      assistant,
 				Rounds:       round,
 				Verification: verification,
+				ReplaySafe:   true,
 				Messages:     turnMessages,
 			}
 			if err := emit(ctx, sink, Event{
@@ -745,25 +771,26 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				Message: assistant,
 			}); err != nil {
 				terminalReason = "completion_sink_failed"
-				return Result{}, err
+				return result, err
 			}
 			return result, nil
 		}
 
 		if err := bufferedEvents.flush(ctx, sink); err != nil {
 			terminalReason = "runtime_event_flush_failed"
-			return l.fail(ctx, sink, round, err)
+			return l.failWithResult(ctx, sink, round, checkpoint(), err)
 		}
-		history = append(history, assistant)
-		turnMessages = append(turnMessages, assistant)
-
 		toolMessages, err := toolMessagesForExecutions(executions)
 		if err != nil {
 			terminalReason = "tool_result_encoding_failed"
-			return l.fail(ctx, sink, round, err)
+			return l.failWithResult(ctx, sink, round, checkpoint(), err)
 		}
+		history = append(history, assistant)
 		history = append(history, toolMessages...)
+		turnMessages = append(turnMessages, assistant)
 		turnMessages = append(turnMessages, toolMessages...)
+		committedRounds = round
+		committedVerification = verification
 	}
 }
 
@@ -818,6 +845,10 @@ func (l *Loop) observeProtection(ctx context.Context, event toolcall.ProtectionE
 }
 
 func (l *Loop) fail(ctx context.Context, sink Sink, round int, err error) (Result, error) {
+	return l.failWithResult(ctx, sink, round, Result{}, err)
+}
+
+func (l *Loop) failWithResult(ctx context.Context, sink Sink, round int, result Result, err error) (Result, error) {
 	if errors.Is(err, context.DeadlineExceeded) && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		observeCtx, observeCancel := contextutil.DetachedTimeout(ctx, protectionObserverTimeout)
 		l.observeProtection(observeCtx, toolcall.ProtectionEvent{Kind: toolcall.ProtectionTurnDeadlineExceeded, Time: time.Now(), Round: round, Reason: "turn_deadline"})
@@ -845,9 +876,9 @@ func (l *Loop) fail(ctx context.Context, sink Sink, round int, err error) (Resul
 			"round", round,
 			"error_type", fmt.Sprintf("%T", emitErr),
 		)
-		return Result{}, emitErr
+		return result, emitErr
 	}
-	return Result{}, err
+	return result, err
 }
 
 func emit(ctx context.Context, sink Sink, event Event) error {

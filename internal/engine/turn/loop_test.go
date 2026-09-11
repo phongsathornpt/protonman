@@ -52,7 +52,7 @@ func TestLoopBuildsEffectiveSystemPromptFromRuntime(t *testing.T) {
 		t.Fatalf("first role = %q, want system", system.Role)
 	}
 	for _, want := range []string{
-		`<proton-system-prompt version="10">`, "specialized coding subagent",
+		`<proton-system-prompt version="11">`, "specialized coding subagent",
 		"Workspace root: " + workspace, "custom project instruction", "Inspect the assigned code carefully.", "follow project rules",
 	} {
 		if !strings.Contains(system.Content, want) {
@@ -124,6 +124,41 @@ func TestLoopRejectsIncompleteModelStream(t *testing.T) {
 	}
 	if got := events[len(events)-1].Kind; got != EventFailed {
 		t.Fatalf("last event kind = %q, want failed", got)
+	}
+}
+
+func TestLoopPreservesCommittedRoundsWhenLaterStreamFails(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{events: []sdk.Event{
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "read-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		}},
+		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "partial synthesis"}}},
+	}}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow)
+
+	result, err := loop.Run(
+		context.Background(),
+		[]model.Message{{Role: model.RoleUser, Content: "inspect README"}},
+		func(context.Context, Event) error { return nil },
+	)
+	if !errors.Is(err, sdk.ErrIncompleteStream) {
+		t.Fatalf("Run() error = %v, want incomplete stream", err)
+	}
+	if result.Rounds != 1 {
+		t.Fatalf("committed rounds = %d, want 1", result.Rounds)
+	}
+	if !result.ReplaySafe {
+		t.Fatal("committed checkpoint is not marked replay-safe")
+	}
+	if len(result.Messages) != 2 {
+		t.Fatalf("committed messages = %d, want assistant+tool result", len(result.Messages))
+	}
+	if len(result.Messages[0].ToolCalls) != 1 || result.Messages[0].ToolCalls[0].ID != "read-1" {
+		t.Fatalf("assistant checkpoint = %#v", result.Messages[0])
+	}
+	if result.Messages[1].Role != model.RoleTool {
+		t.Fatalf("checkpoint tail role = %q, want tool", result.Messages[1].Role)
 	}
 }
 
@@ -1469,5 +1504,33 @@ func TestLoopPublishesUnifiedReadFileSourceSchemaForGemini(t *testing.T) {
 	}
 	if _, forbidden := published.InputSchema["additionalProperties"]; forbidden {
 		t.Fatalf("Gemini schema retained unsupported additionalProperties: %#v", published.InputSchema)
+	}
+}
+
+type retryObserverClient struct{}
+
+func (*retryObserverClient) Provider() string { return "test" }
+func (*retryObserverClient) ModelID() string  { return "retry-observer" }
+func (*retryObserverClient) Capabilities() sdk.ModelCapabilities {
+	return sdk.ModelCapabilities{Streaming: true}
+}
+func (*retryObserverClient) Stream(ctx context.Context, _ sdk.Request) (sdk.Stream, error) {
+	sdk.ObserveRetry(ctx, sdk.RetryEvent{Provider: "test", ModelID: "retry-observer", Reason: "overloaded", Attempt: 1, MaxRetries: 2, Delay: time.Second})
+	return &scriptedStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "ok"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}}, nil
+}
+
+func TestLoopForwardsModelRetryLifecycleEvent(t *testing.T) {
+	loop, _ := newTestLoop(t, &retryObserverClient{}, permission.ActionAllow)
+	var events []Event
+	_, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "hi"}}, func(_ context.Context, event Event) error {
+		events = append(events, event)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	retry := findEvent(events, EventRetryScheduled)
+	if retry.Kind != EventRetryScheduled || retry.Retry.Attempt != 1 || retry.Retry.MaxRetries != 2 || retry.Retry.Reason != "overloaded" || retry.Retry.RetryAt.IsZero() {
+		t.Fatalf("retry event = %+v", retry)
 	}
 }
