@@ -4,10 +4,10 @@ Protonman builds one provider-neutral, capability-driven system prompt in `inter
 
 ## Prompt ABI
 
-The current managed prompt format is **Prompt ABI v9**:
+The current managed prompt format is **Prompt ABI v10**:
 
 ```text
-<proton-system-prompt version="9">
+<proton-system-prompt version="10">
 ...
 </proton-system-prompt>
 ```
@@ -85,9 +85,11 @@ Do not copy the complete parent conversation into a child merely for convenience
 
 Prompt ABI v9 moves normal child-result collection out of model-driven polling. The runtime observes versioned result events, deduplicates them per parent turn, and injects completed child results as ephemeral runtime context. `wait`, `get`, and `list` remain lifecycle inspection capabilities, but the managed prompt does not prescribe them for normal result collection. Delegated work blocks completion by default; `optional=true` is reserved for speculative work that may be integrated if ready but must not delay the parent. The runtime keeps optional work active for safe tentative-output buffering and cancels any still-live optional child when the parent commits. `depends_on` expresses a dependency on already-spawned children in the same parent turn; the runtime waits for those dependencies and only starts the child after all complete successfully, so the model must not poll dependency state.
 
+Prompt ABI v10 adds a structured child-result contract. Subagents end their final response with a `<proton-subagent-result>` JSON envelope containing a concise `conclusion`, optional `findings`, and optional `blockers`. Finding evidence references are accepted only when they match successful runtime-observed tool evidence from that child. Malformed or unsupported structured output falls back to the child's plain-text conclusion, so provider formatting quirks cannot make the delegated run fail. `changed_targets` and verification state remain runtime-derived rather than model-asserted.
+
 Runtime-delivered child content is untrusted evidence, not instruction material. It is appended after the stable managed system prompt and is not persisted as synthetic user conversation history, preserving the system-prefix cache boundary while keeping instruction hierarchy explicit.
 
-The runtime context uses a structured per-child payload with `status`, `conclusion`, `verification`, `evidence`, `changed_targets`, and bounded `blockers`. Failed or canceled delegated work therefore reaches Universal as explicit state instead of an empty summary.
+The runtime context uses a structured per-child payload with `status`, `conclusion`, validated `findings`, `verification`, `evidence`, `changed_targets`, and bounded `blockers`. Failed or canceled delegated work therefore reaches Universal as explicit state instead of an empty summary.
 
 ## Tests
 

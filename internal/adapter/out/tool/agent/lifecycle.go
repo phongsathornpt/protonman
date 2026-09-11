@@ -224,7 +224,20 @@ func resultPayload(result *agent.Result) any {
 	if changedTargets == nil {
 		changedTargets = []string{}
 	}
+	conclusion := strings.TrimSpace(result.Conclusion)
+	if conclusion == "" {
+		conclusion = strings.TrimSpace(result.Summary)
+	}
+	findings := result.Findings
+	if findings == nil {
+		findings = []agent.Finding{}
+	}
+	blockers := result.Blockers
+	if blockers == nil {
+		blockers = []string{}
+	}
 	payload := map[string]any{
+		"conclusion": conclusion, "findings": findings, "blockers": blockers,
 		"summary": result.Summary, "rounds": result.Rounds,
 		"verification": result.Verification, "evidence": evidence, "changed_targets": changedTargets,
 		"queue_duration_ms": result.QueueDuration.Milliseconds(), "execution_duration_ms": result.Duration.Milliseconds(), "total_duration_ms": result.TotalDuration.Milliseconds(),

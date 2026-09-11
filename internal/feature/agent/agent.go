@@ -177,6 +177,13 @@ type EvidenceRef struct {
 	Target string `json:"target,omitempty"`
 }
 
+// Finding is one semantic child conclusion tied to runtime-observed evidence.
+type Finding struct {
+	Claim      string        `json:"claim"`
+	Confidence string        `json:"confidence,omitempty"`
+	Evidence   []EvidenceRef `json:"evidence,omitempty"`
+}
+
 // Result is the bounded final output returned from a subagent to its caller.
 type Result struct {
 	SessionID      string                 `json:"session_id,omitempty"`
@@ -184,7 +191,10 @@ type Result struct {
 	Profile        Profile                `json:"profile"`
 	Provider       string                 `json:"provider,omitempty"`
 	Model          string                 `json:"model,omitempty"`
-	Summary        string                 `json:"summary"`
+	Conclusion     string                 `json:"conclusion,omitempty"`
+	Findings       []Finding              `json:"findings,omitempty"`
+	Blockers       []string               `json:"blockers,omitempty"`
+	Summary        string                 `json:"summary,omitempty"` // Deprecated compatibility alias for Conclusion.
 	Rounds         int                    `json:"rounds"`
 	Verification   turn.VerificationState `json:"verification"`
 	Evidence       []EvidenceRef          `json:"evidence"`

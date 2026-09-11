@@ -46,8 +46,9 @@ func TestSynthesisBatchMessagesUseStructuredResultPayload(t *testing.T) {
 	batch := agent.SynthesisBatch{Results: []agent.SynthesisResult{{
 		Result: agent.Result{
 			AgentID: "agility-1", Profile: agent.ProfileAgility,
-			Summary: "found reconnect race", Evidence: []agent.EvidenceRef{{Tool: "read", Target: "session.go"}},
-			ChangedTargets: []string{"session.go"},
+			Conclusion: "found reconnect race",
+			Findings:   []agent.Finding{{Claim: "listener registers twice", Confidence: "high", Evidence: []agent.EvidenceRef{{Tool: "read", Target: "session.go"}}}},
+			Evidence:   []agent.EvidenceRef{{Tool: "read", Target: "session.go"}}, ChangedTargets: []string{"session.go"},
 		},
 	}}}
 	messages, err := synthesisBatchMessages(batch)
@@ -64,6 +65,19 @@ func TestSynthesisBatchMessagesUseStructuredResultPayload(t *testing.T) {
 	}
 	if strings.Contains(messages[0].Content, `"summary"`) {
 		t.Fatalf("runtime context retained legacy summary field: %s", messages[0].Content)
+	}
+}
+
+func TestSynthesisBatchMessagesAcceptLegacySummaryOnly(t *testing.T) {
+	batch := agent.SynthesisBatch{Results: []agent.SynthesisResult{{Result: agent.Result{
+		AgentID: "agility-legacy", Profile: agent.ProfileAgility, Summary: "legacy conclusion",
+	}}}}
+	messages, err := synthesisBatchMessages(batch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 1 || !strings.Contains(messages[0].Content, `"conclusion":"legacy conclusion"`) {
+		t.Fatalf("legacy synthesis context=%#v", messages)
 	}
 }
 

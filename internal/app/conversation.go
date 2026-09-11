@@ -263,6 +263,7 @@ type runtimeSubagentResult struct {
 	Profile        agent.Profile          `json:"profile"`
 	Status         string                 `json:"status"`
 	Conclusion     string                 `json:"conclusion,omitempty"`
+	Findings       []agent.Finding        `json:"findings,omitempty"`
 	Verification   turn.VerificationState `json:"verification"`
 	Evidence       []agent.EvidenceRef    `json:"evidence"`
 	ChangedTargets []string               `json:"changed_targets"`
@@ -282,21 +283,42 @@ func runtimeSubagentStatus(result agent.Result) string {
 }
 
 func runtimeSubagentBlockers(result agent.Result) []string {
-	if result.Err == nil {
+	values := append([]string(nil), result.Blockers...)
+	if result.Err != nil {
+		text := strings.TrimSpace(strings.ToValidUTF8(result.Err.Error(), ""))
+		if text == "" {
+			text = "delegated work failed"
+		}
+		values = append(values, text)
+	}
+	if len(values) == 0 {
 		return nil
 	}
-	text := strings.TrimSpace(strings.ToValidUTF8(result.Err.Error(), ""))
-	if text == "" {
-		return []string{"delegated work failed"}
-	}
-	if len(text) > runtimeSubagentBlockerBytes {
-		cut := runtimeSubagentBlockerBytes - len("...")
-		for cut > 0 && !utf8.ValidString(text[:cut]) {
-			cut--
+	budget := runtimeSubagentBlockerBytes
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(strings.ToValidUTF8(value, ""))
+		if value == "" || budget <= 0 {
+			continue
 		}
-		text = text[:cut] + "..."
+		if len(value) > budget {
+			cut := max(0, budget-len("..."))
+			for cut > 0 && !utf8.ValidString(value[:cut]) {
+				cut--
+			}
+			value = value[:cut] + "..."
+		}
+		out = append(out, value)
+		budget -= len(value)
 	}
-	return []string{text}
+	return out
+}
+
+func runtimeSubagentConclusion(result agent.Result) string {
+	if conclusion := strings.TrimSpace(result.Conclusion); conclusion != "" {
+		return conclusion
+	}
+	return strings.TrimSpace(result.Summary)
 }
 
 func synthesisBatchMessages(batch agent.SynthesisBatch) ([]model.Message, error) {
@@ -307,8 +329,8 @@ func synthesisBatchMessages(batch agent.SynthesisBatch) ([]model.Message, error)
 	for _, item := range batch.Results {
 		results = append(results, runtimeSubagentResult{
 			AgentID: item.Result.AgentID, Profile: item.Result.Profile,
-			Status: runtimeSubagentStatus(item.Result), Conclusion: item.Result.Summary,
-			Verification: item.Result.Verification, Evidence: item.Result.Evidence,
+			Status: runtimeSubagentStatus(item.Result), Conclusion: runtimeSubagentConclusion(item.Result),
+			Findings: item.Result.Findings, Verification: item.Result.Verification, Evidence: item.Result.Evidence,
 			ChangedTargets: item.Result.ChangedTargets, Blockers: runtimeSubagentBlockers(item.Result),
 		})
 	}

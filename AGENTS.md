@@ -225,7 +225,8 @@ before lifecycle admission or transition is acknowledged, and restart recovery r
 the per-session journal before converting process-owned live states to `interrupted`.
 Normal parent turns do not poll child completion. Versioned result references are published to a turn-scoped event stream, consumed with independent cursors, deduplicated by the synthesis coordinator, and delivered to the parent as ephemeral runtime context. Delegated work is completion-blocking by default. `optional=true` marks speculative work: it remains active for safe event buffering and can be integrated if its result becomes ready, but it does not hold the parent's completion barrier and any still-live optional child is canceled when the parent commits its final response. `depends_on` forms same-turn dependency edges to already-admitted children; dependency waiting occurs before concurrency/workspace admission and does not consume queue-timeout budget. Downstream execution requires every dependency to reach `completed`.
 
-The synthesis payload carries child status, conclusion, verification, evidence, changed targets, and bounded blockers. Child fields remain runtime evidence and do not replace parent verification.
+The synthesis payload carries child status, conclusion, runtime-validated findings, verification, evidence, changed targets, and bounded blockers. Child fields remain runtime evidence and do not replace parent verification.
+Child final text may include a `<proton-subagent-result>` JSON envelope. The runtime accepts only evidence references matching successful child tool observations, derives changed targets and verification independently, and safely falls back to plain text when the envelope is malformed or absent.
 
 `subagent action=wait|get|list` remain explicit lifecycle inspection capabilities and compatibility surfaces. A wait timeout never cancels a child. Explicit cancellation uses coordinator lifecycle operations. Subagent-scoped registries
 remove agent and task tools, so children cannot spawn nested children or mutate the
@@ -241,7 +242,7 @@ waiting writer. Preserve this fairness property when touching scheduler code.
 
 System prompt composition lives in `internal/engine/prompt` and is capability-driven.
 Do not maintain separate large root prompts per provider or agent mode. The managed
-prompt currently uses Prompt ABI v9 and deterministic cache-aware section ordering;
+prompt currently uses Prompt ABI v10 and deterministic cache-aware section ordering;
 `docs/system-prompt.md` is the source of truth for prompt topology and prefix-cache
 invariants.
 

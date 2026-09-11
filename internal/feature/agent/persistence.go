@@ -154,10 +154,25 @@ func (c *Coordinator) RestorePersistentSnapshot(snapshot PersistentSnapshot) err
 }
 
 func cloneResult(result Result) Result {
+	result = normalizeResultCompatibility(result)
+	result.Findings = cloneFindings(result.Findings)
+	result.Blockers = append([]string(nil), result.Blockers...)
 	result.Evidence = append([]EvidenceRef(nil), result.Evidence...)
 	result.ChangedTargets = append([]string(nil), result.ChangedTargets...)
 	result.Err = nil
 	return result
+}
+
+func cloneFindings(values []Finding) []Finding {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]Finding, len(values))
+	for i, value := range values {
+		out[i] = value
+		out[i].Evidence = append([]EvidenceRef(nil), value.Evidence...)
+	}
+	return out
 }
 
 func (c *Coordinator) raiseSequenceForID(id string) {

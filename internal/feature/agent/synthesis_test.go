@@ -13,10 +13,10 @@ func TestSynthesisCoordinatorDrainsEachResultOnce(t *testing.T) {
 	turnRef := TurnRef{SessionID: "session-a", TurnID: "turn-1"}
 	resultRef := ResultRef{SessionID: turnRef.SessionID, AgentID: "agility-1", Version: 2}
 	coord.resultStore.Put(resultRef, Result{
-		SessionID: turnRef.SessionID,
-		AgentID:   resultRef.AgentID,
-		Profile:   ProfileAgility,
-		Summary:   "found the lifecycle edge",
+		SessionID:  turnRef.SessionID,
+		AgentID:    resultRef.AgentID,
+		Profile:    ProfileAgility,
+		Conclusion: "found the lifecycle edge",
 	})
 	event := Event{
 		Kind: EventAgentResultAvailable, SessionID: turnRef.SessionID,
@@ -34,7 +34,7 @@ func TestSynthesisCoordinatorDrainsEachResultOnce(t *testing.T) {
 	if len(batch.Results) != 1 {
 		t.Fatalf("results = %+v, want one deduplicated result", batch.Results)
 	}
-	if batch.Results[0].Ref != resultRef || batch.Results[0].Result.Summary != "found the lifecycle edge" {
+	if batch.Results[0].Ref != resultRef || batch.Results[0].Result.Conclusion != "found the lifecycle edge" {
 		t.Fatalf("unexpected synthesis result: %+v", batch.Results[0])
 	}
 
@@ -54,7 +54,7 @@ func TestSynthesisCoordinatorKeepsTurnsIsolated(t *testing.T) {
 
 	for _, turnID := range []string{"turn-a", "turn-b"} {
 		ref := ResultRef{SessionID: "session-a", AgentID: "agility-" + turnID, Version: 1}
-		coord.resultStore.Put(ref, Result{SessionID: ref.SessionID, AgentID: ref.AgentID, Profile: ProfileAgility, Summary: turnID})
+		coord.resultStore.Put(ref, Result{SessionID: ref.SessionID, AgentID: ref.AgentID, Profile: ProfileAgility, Conclusion: turnID})
 		coord.recordResultEvent(Event{Kind: EventAgentResultAvailable, SessionID: ref.SessionID, ParentID: turnID, AgentID: ref.AgentID, Profile: ProfileAgility, ResultVersion: ref.Version})
 	}
 
@@ -62,7 +62,7 @@ func TestSynthesisCoordinatorKeepsTurnsIsolated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(batch.Results) != 1 || batch.Results[0].Result.Summary != "turn-a" {
+	if len(batch.Results) != 1 || batch.Results[0].Result.Conclusion != "turn-a" {
 		t.Fatalf("cross-turn synthesis leak: %+v", batch.Results)
 	}
 }
@@ -77,7 +77,7 @@ func TestSynthesisCoordinatorRecoversWhenResultStreamTruncates(t *testing.T) {
 	for i := 0; i < count; i++ {
 		id := fmt.Sprintf("agility-%03d", i)
 		ref := ResultRef{SessionID: turnRef.SessionID, AgentID: id, Version: 1}
-		result := Result{SessionID: turnRef.SessionID, AgentID: id, Profile: ProfileAgility, Summary: id}
+		result := Result{SessionID: turnRef.SessionID, AgentID: id, Profile: ProfileAgility, Conclusion: id}
 		coord.resultStore.Put(ref, result)
 		coord.agents[id] = &agentEntry{
 			status: AgentStatus{SessionID: turnRef.SessionID, ID: id, ParentID: turnRef.TurnID, Profile: ProfileAgility, Task: "inspect", State: StateCompleted, Version: 1},

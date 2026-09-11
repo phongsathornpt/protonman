@@ -6,7 +6,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
-const Version = "9"
+const Version = "10"
 
 type ToolCapabilities struct {
 	Tasks  bool

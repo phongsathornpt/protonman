@@ -178,32 +178,32 @@ func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, langu
 		}
 		return nil
 	})
-	if err != nil {
-		return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile, Rounds: turnResult.Rounds, Verification: turnResult.Verification}, err
+	base := Result{
+		SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile,
+		Rounds: turnResult.Rounds, Verification: turnResult.Verification,
+		Evidence: evidence, ChangedTargets: changedTargets,
 	}
-	if req.Profile == ProfileIntelligence && turnResult.Verification.Mutated && !turnResult.Verification.Verified {
-		return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile, Rounds: turnResult.Rounds, Verification: turnResult.Verification}, ErrUnverifiedChanges
+	if err != nil {
+		return base, err
 	}
 
-	summary := strings.TrimSpace(turnResult.Message.Content)
-	if summary == "" {
-		summary = "Task completed with no final text response."
+	conclusion, findings, blockers := parseChildSemanticResult(turnResult.Message.Content, evidence)
+	base.Conclusion = conclusion
+	base.Findings = findings
+	base.Blockers = blockers
+	base.Summary = conclusion
+
+	if req.Profile == ProfileIntelligence && turnResult.Verification.Mutated && !turnResult.Verification.Verified {
+		base.Blockers = append(base.Blockers, "changes were not verified after the final mutation")
+		return base, ErrUnverifiedChanges
 	}
 	if req.Profile == ProfileStrength && turnResult.Verification.Mutated && !turnResult.Verification.Verified {
-		summary += "\n\nWarning: changes were not verified after the final mutation."
+		const warning = "Warning: changes were not verified after the final mutation."
+		base.Blockers = append(base.Blockers, "changes were not verified after the final mutation")
+		base.Summary = truncateSummary(base.Conclusion+"\n\n"+warning, maxSummaryBytes)
 	}
-	summary = truncateSummary(summary, maxSummaryBytes)
 
-	return Result{
-		SessionID:      req.SessionID,
-		AgentID:        req.ID,
-		Profile:        req.Profile,
-		Summary:        summary,
-		Rounds:         turnResult.Rounds,
-		Verification:   turnResult.Verification,
-		Evidence:       evidence,
-		ChangedTargets: changedTargets,
-	}, nil
+	return base, nil
 }
 
 type skillRegistryBinder interface {
