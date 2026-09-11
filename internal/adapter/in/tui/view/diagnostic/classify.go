@@ -10,6 +10,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 // Classify maps an arbitrary runtime/provider error into a structured presentation error.
@@ -33,6 +34,36 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 	}
 
 	raw := err.Error()
+
+	if errors.Is(err, app.ErrEmptyResponse) {
+		return Error{
+			Kind:    KindEmptyResponse,
+			Title:   "Provider Returned No Output",
+			Badge:   "EMPTY_RESPONSE",
+			Message: "The provider completed the request without returning text or a tool call after bounded recovery attempts.",
+			Suggestions: []string{
+				"Retry the request; transient free-model streams can recover on a later call",
+				"Switch models if the provider repeatedly returns an empty response",
+			},
+			RawDetails: raw,
+			Retryable:  true,
+		}
+	}
+
+	if errors.Is(err, sdk.ErrIncompleteStream) {
+		return Error{
+			Kind:    KindStreamTimeout,
+			Title:   "Provider Stream Ended Early",
+			Badge:   "STREAM_INCOMPLETE",
+			Message: "The provider closed the response stream before sending a terminal completion event.",
+			Suggestions: []string{
+				"Retry the request; transient provider disconnects can recover",
+				"Switch models if the stream repeatedly closes early",
+			},
+			RawDetails: raw,
+			Retryable:  true,
+		}
+	}
 
 	if errors.Is(err, app.ErrToolDispatchUnavailable) {
 		return Error{

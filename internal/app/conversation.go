@@ -41,6 +41,7 @@ const (
 )
 
 var (
+	ErrEmptyResponse           = turn.ErrEmptyResponse
 	ErrToolDispatchUnavailable = turn.ErrToolDispatchUnavailable
 	ErrUnresolvedToolCall      = turn.ErrUnresolvedToolCall
 )
