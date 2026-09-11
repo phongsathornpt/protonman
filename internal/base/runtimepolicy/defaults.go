@@ -34,12 +34,15 @@ const (
 )
 
 const (
-	SessionPersistenceTimeout = 5 * time.Second
-	AgentCloseTimeout         = 5 * time.Second
-	AgentEventEmitTimeout     = 100 * time.Millisecond
-	AgentLifecycleEmitTimeout = 5 * time.Second
-	SandboxCommandWaitDelay   = 2 * time.Second
-	TerminalEmitTimeout       = 5 * time.Second
-	ProtectionObserverTimeout = time.Second
-	ModelRetryBackoffStep     = 500 * time.Millisecond
+	SessionPersistenceTimeout     = 5 * time.Second
+	AgentCloseTimeout             = 5 * time.Second
+	AgentEventEmitTimeout         = 100 * time.Millisecond
+	AgentLifecycleEmitTimeout     = 5 * time.Second
+	SandboxCommandWaitDelay       = 2 * time.Second
+	TerminalEmitTimeout           = 5 * time.Second
+	ProtectionObserverTimeout     = time.Second
+	ModelRetryBackoffStep         = 500 * time.Millisecond
+	OpenCodeFreeFirstEventTimeout = 30 * time.Second
+	OpenCodeFreeIdleEventTimeout  = 60 * time.Second
+	OpenCodeFreeStreamMaxDuration = 5 * time.Minute
 )
