@@ -198,7 +198,7 @@ type openCodeFreeLowConcurrencyModel struct {
 	controller *openCodeFreeLowConcurrencyController
 }
 
-func withOpenCodeFreeLowConcurrencyMode(base sdk.LanguageModel, route string, policy runtimepolicy.LowConcurrencyPolicy) sdk.LanguageModel {
+func withLowConcurrencyMode(base sdk.LanguageModel, route string, policy runtimepolicy.LowConcurrencyPolicy) sdk.LanguageModel {
 	if base == nil {
 		return nil
 	}

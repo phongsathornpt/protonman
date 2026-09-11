@@ -80,7 +80,7 @@ type LowConcurrencyPolicy struct {
 	BackoffPercent  int
 }
 
-func OpenCodeFreeLowConcurrencyMode() LowConcurrencyPolicy {
+func LowConcurrencyMode() LowConcurrencyPolicy {
 	return LowConcurrencyPolicy{
 		InitialInterval: time.Second,
 		MinInterval:     600 * time.Millisecond,

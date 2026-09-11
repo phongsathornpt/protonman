@@ -75,7 +75,7 @@ func testLowConcurrencyPolicy() runtimepolicy.LowConcurrencyPolicy {
 	}
 }
 
-func TestOpenCodeFreeLowConcurrencyModeStartsAtOneConcurrentGeneration(t *testing.T) {
+func TestLowConcurrencyModeStartsAtOneConcurrentGeneration(t *testing.T) {
 	base := &lowConcurrencyBlockingModel{started: make(chan *lowConcurrencyBlockingStream, 2)}
 	policy := testLowConcurrencyPolicy()
 	policy.QueueCapacity = 2
@@ -114,7 +114,7 @@ func TestOpenCodeFreeLowConcurrencyModeStartsAtOneConcurrentGeneration(t *testin
 	}
 }
 
-func TestOpenCodeFreeLowConcurrencyModeBoundsWaitingQueue(t *testing.T) {
+func TestLowConcurrencyModeBoundsWaitingQueue(t *testing.T) {
 	base := &lowConcurrencyBlockingModel{started: make(chan *lowConcurrencyBlockingStream, 2)}
 	controller := newOpenCodeFreeLowConcurrencyController(testLowConcurrencyPolicy())
 	model := &openCodeFreeLowConcurrencyModel{base: base, controller: controller}
@@ -175,7 +175,7 @@ func (m *lowConcurrencySequenceModel) Stream(context.Context, sdk.Request) (sdk.
 	return &emptyRetryTestStream{err: io.EOF}, nil
 }
 
-func TestOpenCodeFreeLowConcurrencyModeBacksOffAfterRateLimit(t *testing.T) {
+func TestLowConcurrencyModeBacksOffAfterRateLimit(t *testing.T) {
 	policy := testLowConcurrencyPolicy()
 	policy.InitialInterval = 5 * time.Millisecond
 	policy.MinInterval = 5 * time.Millisecond
