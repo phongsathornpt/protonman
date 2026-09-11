@@ -12,16 +12,17 @@ import (
 const DefaultBaseURL = "https://api.openai.com/v1"
 
 type ProviderOptions struct {
-	ProviderName    string
-	BaseURL         string
-	APIKey          string
-	HTTPClient      *http.Client
-	UserAgent       string
-	Headers         http.Header
-	MaxRetries      int
-	RetryBackoff    time.Duration
-	MaxRetryBackoff time.Duration
-	MaxRetryAfter   time.Duration
+	ProviderName      string
+	BaseURL           string
+	APIKey            string
+	HTTPClient        *http.Client
+	UserAgent         string
+	Headers           http.Header
+	MaxRetries        int
+	RetryBackoff      time.Duration
+	RetryPostFirstGap time.Duration
+	MaxRetryBackoff   time.Duration
+	MaxRetryAfter     time.Duration
 }
 
 type Provider struct {

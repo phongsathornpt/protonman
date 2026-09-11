@@ -525,13 +525,14 @@ func TestOpenCodeFreeModelFactoryEnablesEmptyStreamRetry(t *testing.T) {
 func TestEmptyStreamRetryPublishesCountdownMetadata(t *testing.T) {
 	base := &emptyRetryTestModel{streams: []sdk.Stream{
 		&emptyRetryTestStream{err: sdk.ErrIncompleteStream},
+		&emptyRetryTestStream{err: sdk.ErrIncompleteStream},
 		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "ok"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
 	}}
 	var retries []sdk.RetryEvent
 	ctx := sdk.WithRetryObserver(context.Background(), func(_ context.Context, event sdk.RetryEvent) {
 		retries = append(retries, event)
 	})
-	stream, err := withEmptyStreamRetry(base, 2, 5*time.Millisecond).Stream(ctx, sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := withStreamRetryPolicyAndGap(base, 2, 5*time.Millisecond, 10*time.Millisecond, 0, 0, 0).Stream(ctx, sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -539,11 +540,13 @@ func TestEmptyStreamRetryPublishesCountdownMetadata(t *testing.T) {
 	if err != nil || result.Text != "ok" {
 		t.Fatalf("result=%q err=%v", result.Text, err)
 	}
-	if len(retries) != 1 {
-		t.Fatalf("retry events = %+v, want one", retries)
+	if len(retries) != 2 {
+		t.Fatalf("retry events = %+v, want two", retries)
 	}
-	got := retries[0]
-	if got.Provider != DefaultOpenCodeName || got.Reason != "incomplete_stream" || got.Attempt != 1 || got.MaxRetries != 2 || got.Delay != 5*time.Millisecond || got.RetryAt.IsZero() {
-		t.Fatalf("retry event = %+v", got)
+	if got := retries[0]; got.Provider != DefaultOpenCodeName || got.Reason != "incomplete_stream" || got.Attempt != 1 || got.MaxRetries != 2 || got.Delay != 5*time.Millisecond || got.RetryAt.IsZero() {
+		t.Fatalf("retry 1 event = %+v", got)
+	}
+	if got := retries[1]; got.Attempt != 2 || got.Delay != 20*time.Millisecond || got.RetryAt.IsZero() {
+		t.Fatalf("retry 2 event = %+v, want 20ms cooldown", got)
 	}
 }

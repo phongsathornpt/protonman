@@ -67,13 +67,23 @@ func TestParseRateLimitHeadersSupportsHTTPDateAndDurationReset(t *testing.T) {
 func TestDecideRetryUsesRetryAfterAndRejectsLongWait(t *testing.T) {
 	err := NewProviderError("test", http.StatusTooManyRequests, "rate_limit_error", "slow down")
 	err.RateLimit = &RateLimitInfo{Kind: RateLimitTransient, RetryAfter: 2 * time.Second}
-	policy := RetryPolicy{BaseBackoff: time.Millisecond, MaxBackoff: time.Second, MaxRetryAfter: 5 * time.Second}
+	policy := RetryPolicy{BaseBackoff: time.Millisecond, PostFirstRetryGap: 750 * time.Millisecond, MaxBackoff: time.Second, MaxRetryAfter: 5 * time.Second}
 	if got := DecideRetry(err, 1, policy); !got.Retry || got.Delay != 2*time.Second {
 		t.Fatalf("decision = %#v", got)
 	}
 	err.RateLimit.RetryAfter = 10 * time.Second
 	if got := DecideRetry(err, 1, policy); got.Retry {
 		t.Fatalf("long retry-after decision = %#v", got)
+	}
+}
+
+func TestRetryDelayAddsCooldownAfterFirstRetry(t *testing.T) {
+	policy := RetryPolicy{BaseBackoff: 500 * time.Millisecond, PostFirstRetryGap: time.Second, MaxBackoff: 8 * time.Second}
+	if got := RetryDelay(1, policy); got != 500*time.Millisecond {
+		t.Fatalf("retry 1 delay = %s, want 500ms", got)
+	}
+	if got := RetryDelay(2, policy); got != 2*time.Second {
+		t.Fatalf("retry 2 delay = %s, want 2s", got)
 	}
 }
 

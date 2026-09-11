@@ -42,6 +42,9 @@ const (
 	TerminalEmitTimeout           = 5 * time.Second
 	ProtectionObserverTimeout     = time.Second
 	ModelRetryBackoffStep         = 500 * time.Millisecond
+	ModelRetryPostFirstGap        = 1 * time.Second
+	ModelRetryMaxBackoff          = 8 * time.Second
+	ModelRetryMaxRetryAfter       = 30 * time.Second
 	OpenCodeFreeFirstEventTimeout = 30 * time.Second
 	OpenCodeFreeIdleEventTimeout  = 60 * time.Second
 	OpenCodeFreeStreamMaxDuration = 5 * time.Minute

@@ -16,17 +16,18 @@ const (
 )
 
 type ProviderOptions struct {
-	BaseURL          string
-	APIKey           string
-	APIVersion       string
-	HTTPClient       *http.Client
-	UserAgent        string
-	Headers          http.Header
-	MaxRetries       int
-	RetryBackoff     time.Duration
-	MaxRetryBackoff  time.Duration
-	MaxRetryAfter    time.Duration
-	DefaultMaxTokens int
+	BaseURL           string
+	APIKey            string
+	APIVersion        string
+	HTTPClient        *http.Client
+	UserAgent         string
+	Headers           http.Header
+	MaxRetries        int
+	RetryBackoff      time.Duration
+	RetryPostFirstGap time.Duration
+	MaxRetryBackoff   time.Duration
+	MaxRetryAfter     time.Duration
+	DefaultMaxTokens  int
 }
 
 type Provider struct{ options ProviderOptions }

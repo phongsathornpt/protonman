@@ -25,9 +25,10 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 	}
 	endpoint := messagesEndpoint(m.provider.options.BaseURL)
 	policy := sdk.RetryPolicy{
-		BaseBackoff:   m.provider.options.RetryBackoff,
-		MaxBackoff:    m.provider.options.MaxRetryBackoff,
-		MaxRetryAfter: m.provider.options.MaxRetryAfter,
+		BaseBackoff:       m.provider.options.RetryBackoff,
+		PostFirstRetryGap: m.provider.options.RetryPostFirstGap,
+		MaxBackoff:        m.provider.options.MaxRetryBackoff,
+		MaxRetryAfter:     m.provider.options.MaxRetryAfter,
 	}
 	var lastErr error
 	for attempt := 0; ; attempt++ {

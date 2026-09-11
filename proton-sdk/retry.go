@@ -6,9 +6,10 @@ import (
 )
 
 type RetryPolicy struct {
-	BaseBackoff   time.Duration
-	MaxBackoff    time.Duration
-	MaxRetryAfter time.Duration
+	BaseBackoff       time.Duration
+	PostFirstRetryGap time.Duration
+	MaxBackoff        time.Duration
+	MaxRetryAfter     time.Duration
 }
 
 type RetryDecision struct {
@@ -40,6 +41,23 @@ func DecideRetry(err error, retryIndex int, policy RetryPolicy) RetryDecision {
 		}
 		return RetryDecision{Retry: true, Delay: providerErr.RateLimit.RetryAfter, Reason: providerErr.Kind}
 	}
+	return RetryDecision{Retry: true, Delay: RetryDelay(retryIndex, policy), Reason: providerErr.Kind}
+}
+
+// RetryDelay returns the bounded local retry delay for a 1-based retry index.
+// PostFirstRetryGap is added only after the first retry, allowing callers to
+// create an explicit cooldown before subsequent attempts without affecting the
+// first recovery attempt.
+func RetryDelay(retryIndex int, policy RetryPolicy) time.Duration {
+	if retryIndex < 1 {
+		retryIndex = 1
+	}
+	if policy.BaseBackoff <= 0 {
+		policy.BaseBackoff = 500 * time.Millisecond
+	}
+	if policy.MaxBackoff <= 0 {
+		policy.MaxBackoff = 8 * time.Second
+	}
 	delay := policy.BaseBackoff
 	for i := 1; i < retryIndex && delay < policy.MaxBackoff; i++ {
 		delay *= 2
@@ -47,5 +65,11 @@ func DecideRetry(err error, retryIndex int, policy RetryPolicy) RetryDecision {
 			delay = policy.MaxBackoff
 		}
 	}
-	return RetryDecision{Retry: true, Delay: delay, Reason: providerErr.Kind}
+	if retryIndex > 1 && policy.PostFirstRetryGap > 0 {
+		delay += policy.PostFirstRetryGap
+		if delay > policy.MaxBackoff {
+			delay = policy.MaxBackoff
+		}
+	}
+	return delay
 }

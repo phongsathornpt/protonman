@@ -126,7 +126,7 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 	provider := sdkopenai.NewProvider(sdkopenai.ProviderOptions{
 		ProviderName: strings.ToLower(strings.TrimSpace(providerName)),
 		BaseURL:      cfg.baseURL, APIKey: cfg.apiKey, HTTPClient: cfg.httpClient,
-		UserAgent: cfg.userAgent, Headers: headers, MaxRetries: 2, RetryBackoff: runtimepolicy.ModelRetryBackoffStep,
+		UserAgent: cfg.userAgent, Headers: headers, MaxRetries: 2, RetryBackoff: runtimepolicy.ModelRetryBackoffStep, RetryPostFirstGap: runtimepolicy.ModelRetryPostFirstGap, MaxRetryBackoff: runtimepolicy.ModelRetryMaxBackoff, MaxRetryAfter: runtimepolicy.ModelRetryMaxRetryAfter,
 	})
 	modelOptions := make([]sdkopenai.ModelOption, 0, 1)
 	if usesResponsesAPI(cfg.modelID, cfg.baseURL) {
@@ -162,7 +162,7 @@ func newSDKAnthropicLanguageModel(baseURL, apiKey, modelID string, opts ...Clien
 	sessionID := strings.TrimSpace(cfg.sessionID)
 	provider := sdkanthropic.NewProvider(sdkanthropic.ProviderOptions{
 		BaseURL: cfg.baseURL, APIKey: cfg.apiKey, HTTPClient: cfg.httpClient, Headers: agentHeaders(cfg),
-		UserAgent: cfg.userAgent, MaxRetries: 2, RetryBackoff: runtimepolicy.ModelRetryBackoffStep,
+		UserAgent: cfg.userAgent, MaxRetries: 2, RetryBackoff: runtimepolicy.ModelRetryBackoffStep, RetryPostFirstGap: runtimepolicy.ModelRetryPostFirstGap, MaxRetryBackoff: runtimepolicy.ModelRetryMaxBackoff, MaxRetryAfter: runtimepolicy.ModelRetryMaxRetryAfter,
 	})
 	var model sdk.LanguageModel = provider.Model(cfg.modelID)
 	if cfg.vision != nil {
@@ -223,13 +223,14 @@ type emptyStreamRetryModel struct {
 	base              sdk.LanguageModel
 	maxRetries        int
 	backoff           time.Duration
+	postFirstRetryGap time.Duration
 	firstEventTimeout time.Duration
 	idleEventTimeout  time.Duration
 	maxStreamDuration time.Duration
 }
 
 func withEmptyStreamRetry(base sdk.LanguageModel, maxRetries int, backoff time.Duration) sdk.LanguageModel {
-	return withStreamRetryPolicy(base, maxRetries, backoff,
+	return withStreamRetryPolicyAndGap(base, maxRetries, backoff, runtimepolicy.ModelRetryPostFirstGap,
 		runtimepolicy.OpenCodeFreeFirstEventTimeout,
 		runtimepolicy.OpenCodeFreeIdleEventTimeout,
 		runtimepolicy.OpenCodeFreeStreamMaxDuration,
@@ -241,11 +242,15 @@ func withEmptyStreamRetryPolicy(base sdk.LanguageModel, maxRetries int, backoff,
 }
 
 func withStreamRetryPolicy(base sdk.LanguageModel, maxRetries int, backoff, firstEventTimeout, idleEventTimeout, maxStreamDuration time.Duration) sdk.LanguageModel {
+	return withStreamRetryPolicyAndGap(base, maxRetries, backoff, 0, firstEventTimeout, idleEventTimeout, maxStreamDuration)
+}
+
+func withStreamRetryPolicyAndGap(base sdk.LanguageModel, maxRetries int, backoff, postFirstRetryGap, firstEventTimeout, idleEventTimeout, maxStreamDuration time.Duration) sdk.LanguageModel {
 	if base == nil || maxRetries <= 0 {
 		return base
 	}
 	return &emptyStreamRetryModel{
-		base: base, maxRetries: maxRetries, backoff: backoff,
+		base: base, maxRetries: maxRetries, backoff: backoff, postFirstRetryGap: postFirstRetryGap,
 		firstEventTimeout: firstEventTimeout, idleEventTimeout: idleEventTimeout, maxStreamDuration: maxStreamDuration,
 	}
 }
@@ -259,7 +264,7 @@ func (m *emptyStreamRetryModel) TokenLimits() sdk.TokenLimits        { return sd
 func (m *emptyStreamRetryModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
 	retry := &emptyStreamRetry{
 		base: m.base, request: request, parentCtx: ctx,
-		maxRetries: m.maxRetries, backoff: m.backoff,
+		maxRetries: m.maxRetries, backoff: m.backoff, postFirstRetryGap: m.postFirstRetryGap,
 		firstEventTimeout: m.firstEventTimeout, idleEventTimeout: m.idleEventTimeout, maxStreamDuration: m.maxStreamDuration,
 	}
 	if err := retry.openAttempt(); err != nil {
@@ -280,6 +285,7 @@ type emptyStreamRetry struct {
 	stream            sdk.Stream
 	maxRetries        int
 	backoff           time.Duration
+	postFirstRetryGap time.Duration
 	firstEventTimeout time.Duration
 	idleEventTimeout  time.Duration
 	maxStreamDuration time.Duration
@@ -378,7 +384,12 @@ func (s *emptyStreamRetry) Next(ctx context.Context) (sdk.Event, error) {
 func (s *emptyStreamRetry) retry(ctx context.Context, reason string) error {
 	_ = s.closeAttempt()
 	s.retries++
-	delay := time.Duration(s.retries) * s.backoff
+	delay := time.Duration(0)
+	if s.backoff > 0 {
+		delay = sdk.RetryDelay(s.retries, sdk.RetryPolicy{
+			BaseBackoff: s.backoff, PostFirstRetryGap: s.postFirstRetryGap, MaxBackoff: runtimepolicy.ModelRetryMaxBackoff,
+		})
+	}
 	slog.DebugContext(ctx, "opencode free model stream is replay-safe; retrying",
 		"provider", s.base.Provider(), "model", s.base.ModelID(),
 		"reason", reason, "retry", s.retries, "max_retries", s.maxRetries,

@@ -103,9 +103,10 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 		return nil, err
 	}
 	policy := sdk.RetryPolicy{
-		BaseBackoff:   m.provider.options.RetryBackoff,
-		MaxBackoff:    m.provider.options.MaxRetryBackoff,
-		MaxRetryAfter: m.provider.options.MaxRetryAfter,
+		BaseBackoff:       m.provider.options.RetryBackoff,
+		PostFirstRetryGap: m.provider.options.RetryPostFirstGap,
+		MaxBackoff:        m.provider.options.MaxRetryBackoff,
+		MaxRetryAfter:     m.provider.options.MaxRetryAfter,
 	}
 	for attempt := 0; ; attempt++ {
 		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
