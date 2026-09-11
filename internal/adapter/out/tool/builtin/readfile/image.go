@@ -7,6 +7,7 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"io"
 	"math"
 	"os"
 	"sort"
@@ -17,13 +18,14 @@ import (
 )
 
 const (
-	maxImagePixels   = 12 * 1024 * 1024
-	maxImageSamples  = 64 * 1024
-	maxImageColors   = 8
-	imageRegionCols  = 4
-	imageRegionRows  = 4
-	imageASCIIWidth  = 48
-	imageASCIIHeight = 16
+	maxImagePixels       = 12 * 1024 * 1024
+	maxImageSamples      = 64 * 1024
+	maxEncodedImageBytes = 32 * 1024 * 1024
+	maxImageColors       = 8
+	imageRegionCols      = 4
+	imageRegionRows      = 4
+	imageASCIIWidth      = 48
+	imageASCIIHeight     = 16
 )
 
 type imageMetadata struct {
@@ -61,56 +63,47 @@ type colorBucket struct {
 
 func readImageArtifact(ctx context.Context, file *os.File, info os.FileInfo, input readFileInput, artifact artifactInfo, call tool.Call) (tool.Result, error) {
 	defer file.Close()
-	config, format, err := image.DecodeConfig(file)
+	if info.Size() > maxEncodedImageBytes {
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeExecution, fmt.Sprintf("read image size %d bytes exceeds the safe decode limit", info.Size()))
+	}
+	config, format, err := image.DecodeConfig(&contextReader{ctx: ctx, reader: file})
 	if err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode image metadata", err)
 	}
-	pixels := int64(config.Width) * int64(config.Height)
 	if !imageDimensionsWithinLimit(config.Width, config.Height) {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeExecution, fmt.Sprintf("read image dimensions %dx%d exceed the safe analysis limit", config.Width, config.Height))
 	}
 	if _, err := file.Seek(0, 0); err != nil {
 		return tool.Result{}, fmt.Errorf("rewind %q: %w", input.Path, err)
 	}
-	img, _, err := image.Decode(file)
+	img, _, err := image.Decode(&contextReader{ctx: ctx, reader: file})
 	if err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode image", err)
 	}
 	bounds := img.Bounds()
-	step := 1
-	if pixels > maxImageSamples {
-		step = int(math.Ceil(math.Sqrt(float64(pixels) / float64(maxImageSamples))))
-	}
+	cols, rows := imageSampleGrid(bounds.Dx(), bounds.Dy(), maxImageSamples)
 
 	var histogram [4096]int
 	samples := 0
-	opaque := true
 	var brightnessStats baseanalysis.RunningStats
 	regionStats := make([]baseanalysis.RunningStats, imageRegionRows*imageRegionCols)
 	edgeComparisons, edgeHits := 0, 0
 	var previousRow []float64
-	for y := bounds.Min.Y; y < bounds.Max.Y; y += step {
+	for row := 0; row < rows; row++ {
 		if err := ctx.Err(); err != nil {
 			return tool.Result{}, fmt.Errorf("analyze image %q: %w", input.Path, err)
 		}
-		currentRow := make([]float64, 0, (bounds.Dx()+step-1)/step)
-		for x := bounds.Min.X; x < bounds.Max.X; x += step {
+		currentRow := make([]float64, 0, cols)
+		for col := 0; col < cols; col++ {
+			x := bounds.Min.X + stratifiedCoordinate(bounds.Dx(), cols, col, row, 0x9e3779b97f4a7c15)
+			y := bounds.Min.Y + stratifiedCoordinate(bounds.Dy(), rows, row, col, 0xbf58476d1ce4e5b9)
 			r16, g16, b16, a16 := img.At(x, y).RGBA()
-			r, g, b := uint8(r16>>8), uint8(g16>>8), uint8(b16>>8)
-			if a16 != 0xffff {
-				opaque = false
-			}
+			r, g, b := unpremultiplyRGBA(r16, g16, b16, a16)
 			brightness := 0.2126*float64(r) + 0.7152*float64(g) + 0.0722*float64(b)
 			samples++
 			brightnessStats.Add(brightness)
-			regionCol := (x - bounds.Min.X) * imageRegionCols / bounds.Dx()
-			regionRow := (y - bounds.Min.Y) * imageRegionRows / bounds.Dy()
-			if regionCol >= imageRegionCols {
-				regionCol = imageRegionCols - 1
-			}
-			if regionRow >= imageRegionRows {
-				regionRow = imageRegionRows - 1
-			}
+			regionCol := col * imageRegionCols / cols
+			regionRow := row * imageRegionRows / rows
 			regionStats[regionRow*imageRegionCols+regionCol].Add(brightness)
 			index := len(currentRow)
 			if index > 0 {
@@ -152,35 +145,112 @@ func readImageArtifact(ctx context.Context, file *os.File, info os.FileInfo, inp
 		g := uint8(((bucket.key >> 4) & 0xf) << 4)
 		b := uint8((bucket.key & 0xf) << 4)
 		r, g, b = r+8, g+8, b+8
-		colors = append(colors, dominantColor{
-			Hex: fmt.Sprintf("#%02x%02x%02x", r, g, b),
-			RGB: [3]uint8{r, g, b}, Count: bucket.count,
-		})
+		colors = append(colors, dominantColor{Hex: fmt.Sprintf("#%02x%02x%02x", r, g, b), RGB: [3]uint8{r, g, b}, Count: bucket.count})
+	}
+	opaque, err := imageOpaque(ctx, img)
+	if err != nil {
+		return tool.Result{}, fmt.Errorf("inspect image opacity %q: %w", input.Path, err)
 	}
 	summary := brightnessStats.Summary()
 	regions := make([]imageRegion, 0, len(regionStats))
 	for index, stats := range regionStats {
-		regions = append(regions, imageRegion{
-			Row: index / imageRegionCols, Column: index % imageRegionCols, Brightness: stats.Summary(),
-		})
+		regions = append(regions, imageRegion{Row: index / imageRegionCols, Column: index % imageRegionCols, Brightness: stats.Summary()})
 	}
 	edgeDensity := 0.0
 	if edgeComparisons > 0 {
 		edgeDensity = float64(edgeHits) / float64(edgeComparisons)
 	}
-	analysis := imageAnalysis{
-		Samples: samples, Brightness: summary, DominantColors: colors, Regions: regions,
-		EdgeDensity: edgeDensity, ASCIIPreview: imageASCIIPreview(img, imageASCIIWidth, imageASCIIHeight),
-	}
+	analysis := imageAnalysis{Samples: samples, Brightness: summary, DominantColors: colors, Regions: regions, EdgeDensity: edgeDensity, ASCIIPreview: imageASCIIPreview(img, imageASCIIWidth, imageASCIIHeight)}
 	metadata := imageMetadata{Format: format, Width: config.Width, Height: config.Height, Opaque: opaque}
 	output := fmt.Sprintf("image %s %dx%d · sampled %d px · brightness mean %.1f min %.1f max %.1f", format, config.Width, config.Height, samples, summary.Mean, summary.Min, summary.Max)
 	if len(colors) > 0 {
 		output += fmt.Sprintf(" · dominant %s", colors[0].Hex)
 	}
-	return artifactResult(call, artifactEnvelope{
-		Kind: artifactImage, Path: input.Path, MIMEType: artifact.MIMEType,
-		SizeBytes: info.Size(), Metadata: metadata, Analysis: analysis,
-	}, output)
+	return artifactResult(call, artifactEnvelope{Kind: artifactImage, Path: input.Path, MIMEType: artifact.MIMEType, SizeBytes: info.Size(), Metadata: metadata, Analysis: analysis}, output)
+}
+
+type contextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r *contextReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.reader.Read(p)
+}
+
+func imageSampleGrid(width, height, budget int) (int, int) {
+	if width <= 0 || height <= 0 || budget <= 0 {
+		return 0, 0
+	}
+	if int64(width)*int64(height) <= int64(budget) {
+		return width, height
+	}
+	aspect := float64(width) / float64(height)
+	cols := int(math.Sqrt(float64(budget) * aspect))
+	if cols < 1 {
+		cols = 1
+	}
+	if cols > width {
+		cols = width
+	}
+	if cols > budget {
+		cols = budget
+	}
+	rows := budget / cols
+	if rows < 1 {
+		rows = 1
+	}
+	if rows > height {
+		rows = height
+		cols = budget / rows
+		if cols > width {
+			cols = width
+		}
+	}
+	return cols, rows
+}
+
+func stratifiedCoordinate(size, cells, index, phase int, salt uint64) int {
+	start := index * size / cells
+	end := (index + 1) * size / cells
+	span := end - start
+	if span <= 1 {
+		return start
+	}
+	h := uint64(index+1)*0x9e3779b97f4a7c15 ^ uint64(phase+1)*0xbf58476d1ce4e5b9 ^ salt
+	h ^= h >> 30
+	h *= 0xbf58476d1ce4e5b9
+	h ^= h >> 27
+	return start + int(h%uint64(span))
+}
+
+func unpremultiplyRGBA(r16, g16, b16, a16 uint32) (uint8, uint8, uint8) {
+	if a16 == 0 {
+		return 0, 0, 0
+	}
+	if a16 == 0xffff {
+		return uint8(r16 >> 8), uint8(g16 >> 8), uint8(b16 >> 8)
+	}
+	return uint8(min(uint32(0xffff), r16*0xffff/a16) >> 8), uint8(min(uint32(0xffff), g16*0xffff/a16) >> 8), uint8(min(uint32(0xffff), b16*0xffff/a16) >> 8)
+}
+
+func imageOpaque(ctx context.Context, img image.Image) (bool, error) {
+	bounds := img.Bounds()
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			_, _, _, a := img.At(x, y).RGBA()
+			if a != 0xffff {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
 }
 
 func imageDimensionsWithinLimit(width, height int) bool {
