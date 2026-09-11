@@ -47,10 +47,18 @@ func (b *toolResultBudget) applyRound(executions []executedCall) []executedCall 
 }
 
 func toolResultTextBytes(result tool.Result) int {
-	return len(result.Output) + len(result.Stdout) + len(result.Stderr) + len(result.StructuredOutput)
+	size := len(result.Output) + len(result.Stdout) + len(result.Stderr) + len(result.StructuredOutput)
+	if result.Failure != nil && result.Failure.RecoveryEvidence != nil {
+		size += len(result.Failure.RecoveryEvidence.Output) + len(result.Failure.RecoveryEvidence.StructuredOutput)
+	}
+	return size
 }
 
 func truncateToolResultPayload(result tool.Result, allowed int) tool.Result {
+	if result.Failure != nil && result.Failure.RecoveryEvidence != nil &&
+		len(result.Output)+len(result.Stdout)+len(result.Stderr)+len(result.StructuredOutput) == 0 {
+		return truncateRecoveryEvidenceResult(result, allowed)
+	}
 	source := result.Output
 	if source == "" {
 		source = result.Stdout
@@ -91,6 +99,32 @@ func truncateToolResultPayload(result tool.Result, allowed int) tool.Result {
 
 	result.StructuredOutput = nil
 	result.Output = truncateUTF8WithMarker(source, allowed, toolBudgetMarker)
+	return result
+}
+
+func truncateRecoveryEvidenceResult(result tool.Result, allowed int) tool.Result {
+	failure := *result.Failure
+	evidence := *failure.RecoveryEvidence
+	structuredBytes := len(evidence.StructuredOutput)
+	if structuredBytes > allowed {
+		evidence.StructuredOutput = nil
+		evidence.Output = truncateUTF8WithMarker("", allowed, toolBudgetMarker)
+		evidence.SHA256 = ""
+		evidence.Truncated = true
+		failure.RecoveryEvidence = &evidence
+		result.Failure = &failure
+		result.Truncated = true
+		return result
+	}
+	remaining := allowed - structuredBytes
+	if len(evidence.Output) > remaining {
+		evidence.Output = truncateUTF8WithMarker(evidence.Output, remaining, toolBudgetMarker)
+		evidence.SHA256 = ""
+		evidence.Truncated = true
+		result.Truncated = true
+	}
+	failure.RecoveryEvidence = &evidence
+	result.Failure = &failure
 	return result
 }
 

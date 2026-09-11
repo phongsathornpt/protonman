@@ -23,6 +23,7 @@ type fakeHandler struct {
 	waitForContext   bool
 	shouldPanic      bool
 	structuredOutput json.RawMessage
+	sha256           string
 }
 
 func (h *fakeHandler) Definition() tool.Definition {
@@ -36,6 +37,7 @@ func (h *fakeHandler) Execute(ctx context.Context, call tool.Call) (tool.Result,
 		ToolName:         call.Name,
 		Output:           "executed",
 		StructuredOutput: append(json.RawMessage(nil), h.structuredOutput...),
+		SHA256:           h.sha256,
 	}
 	if h.shouldPanic {
 		panic("handler secret")
@@ -1086,6 +1088,57 @@ func workspaceReadSafety() tool.SafetyContract {
 	return tool.SafetyContract{
 		MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone,
 		CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead,
+	}
+}
+
+func TestServiceRefreshResourcePreservesOriginalFailureAndAttachesEvidence(t *testing.T) {
+	recoveryArgs := json.RawMessage(`{"path":"file.txt"}`)
+	edit := &fakeHandler{definition: tool.Definition{
+		Name: "edit", Description: "fake edit", Kind: tool.KindEdit, Mutability: tool.MutabilityMutating,
+	}, firstErr: tool.NewToolError(tool.ErrorCodeInvalidArguments, "read before overwrite").WithRecovery(tool.Recovery{
+		Action: tool.RecoveryRefreshResource, Tool: "read", Arguments: recoveryArgs,
+	})}
+	reader := &fakeHandler{definition: tool.Definition{
+		Name: "read", Description: "fake reader", Kind: tool.KindRead,
+		Mutability: tool.MutabilityReadOnly, Safety: workspaceReadSafety(), PermissionDetailKey: "path",
+		InputSchema: map[string]any{
+			"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}},
+			"required": []string{"path"}, "additionalProperties": false,
+		},
+	}, sha256: strings.Repeat("a", 64)}
+	policy, err := permission.NewPolicy(permission.Config{Default: permission.ActionAllow})
+	if err != nil {
+		t.Fatal(err)
+	}
+	observer := &recordingObserver{}
+	service, err := NewService(recoveryRegistry{handlers: []tool.Handler{edit, reader}}, policy, WithMode(permission.ModeAlwaysApprove), WithObserver(observer))
+	if err != nil {
+		t.Fatal(err)
+	}
+	call, _ := tool.NewCall("edit-refresh", "edit", json.RawMessage(`{}`))
+	result, err := service.Call(context.Background(), call)
+	if err == nil {
+		t.Fatal("Call() error = nil, want original edit failure")
+	}
+	if edit.calls != 1 || reader.calls != 1 {
+		t.Fatalf("handler calls edit=%d read=%d, want 1 and 1", edit.calls, reader.calls)
+	}
+	if result.Failure == nil || result.Failure.Code != tool.ErrorCodeInvalidArguments {
+		t.Fatalf("result failure = %#v", result.Failure)
+	}
+	evidence := result.Failure.RecoveryEvidence
+	if evidence == nil || evidence.Action != tool.RecoveryRefreshResource || evidence.Tool != "read" || evidence.Output != "executed" || evidence.SHA256 != strings.Repeat("a", 64) {
+		t.Fatalf("recovery evidence = %#v", evidence)
+	}
+	if result.Output != "" || result.ToolName != "edit" || result.CallID != call.ID {
+		t.Fatalf("refresh masqueraded as edit success: %#v", result)
+	}
+	var succeeded bool
+	for _, event := range observer.Events() {
+		succeeded = succeeded || event.Kind == EventRecoverySucceeded && event.RecoveryAction == tool.RecoveryRefreshResource
+	}
+	if !succeeded {
+		t.Fatalf("refresh recovery events = %#v", observer.Events())
 	}
 }
 

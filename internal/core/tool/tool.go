@@ -322,12 +322,23 @@ func (e *ToolError) Unwrap() error {
 }
 
 // Failure is the serializable failure portion of a tool result.
+type RecoveryEvidence struct {
+	Action           RecoveryAction  `json:"action"`
+	Tool             string          `json:"tool"`
+	Output           string          `json:"output,omitempty"`
+	StructuredOutput json.RawMessage `json:"structured_output,omitempty"`
+	SHA256           string          `json:"sha256,omitempty"`
+	Truncated        bool            `json:"truncated,omitempty"`
+	Pagination       *Pagination     `json:"pagination,omitempty"`
+}
+
 type Failure struct {
-	Code       ErrorCode `json:"code"`
-	Message    string    `json:"message"`
-	Diagnostic string    `json:"diagnostic,omitempty"`
-	Retryable  bool      `json:"retryable,omitempty"`
-	Recovery   *Recovery `json:"recovery,omitempty"`
+	Code             ErrorCode         `json:"code"`
+	Message          string            `json:"message"`
+	Diagnostic       string            `json:"diagnostic,omitempty"`
+	Retryable        bool              `json:"retryable,omitempty"`
+	Recovery         *Recovery         `json:"recovery,omitempty"`
+	RecoveryEvidence *RecoveryEvidence `json:"recovery_evidence,omitempty"`
 }
 
 // FailureFromError converts an internal error into a stable result failure.
