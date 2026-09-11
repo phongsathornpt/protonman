@@ -187,12 +187,20 @@ func newSubagentRuntimeContextProvider(agents Agents) *subagentRuntimeContextPro
 	}
 }
 
-func (p *subagentRuntimeContextProvider) Pending(ctx context.Context) bool {
+func (p *subagentRuntimeContextProvider) Active(ctx context.Context) bool {
 	if p == nil || p.coordinator == nil {
 		return false
 	}
 	ref := agent.TurnRefFromContext(ctx)
 	return ref.TurnID != "" && p.coordinator.HasLiveForTurn(ref)
+}
+
+func (p *subagentRuntimeContextProvider) Pending(ctx context.Context) bool {
+	if p == nil || p.coordinator == nil {
+		return false
+	}
+	ref := agent.TurnRefFromContext(ctx)
+	return ref.TurnID != "" && p.coordinator.HasBlockingLiveForTurn(ref)
 }
 
 func (p *subagentRuntimeContextProvider) Drain(ctx context.Context) ([]model.Message, error) {
@@ -226,7 +234,7 @@ func (p *subagentRuntimeContextProvider) Await(ctx context.Context) ([]model.Mes
 		if len(ready.Results) > 0 {
 			return synthesisBatchMessages(ready)
 		}
-		if !p.coordinator.HasLiveForTurn(ref) {
+		if !p.coordinator.HasBlockingLiveForTurn(ref) {
 			return nil, nil
 		}
 		batch, err := p.synthesis.Drain(ctx, ref, time.Hour)
@@ -237,6 +245,17 @@ func (p *subagentRuntimeContextProvider) Await(ctx context.Context) ([]model.Mes
 			return synthesisBatchMessages(batch)
 		}
 	}
+}
+
+func (p *subagentRuntimeContextProvider) Finalize(ctx context.Context) {
+	if p == nil || p.coordinator == nil {
+		return
+	}
+	ref := agent.TurnRefFromContext(ctx)
+	if ref.TurnID == "" {
+		return
+	}
+	p.coordinator.CancelOptionalByTurn(ref)
 }
 
 type runtimeSubagentResult struct {

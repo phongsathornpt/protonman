@@ -1,10 +1,15 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
+	"github.com/phongsathornpt/protonman/internal/engine/turn"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
@@ -76,4 +81,47 @@ func TestSynthesisBatchMessagesExposeBoundedFailureBlocker(t *testing.T) {
 	if len(messages[0].Content) > runtimeSubagentBlockerBytes+1024 {
 		t.Fatalf("failure context is unexpectedly large: %d bytes", len(messages[0].Content))
 	}
+}
+
+type blockingRuntimeAgentRunner struct{}
+
+func (blockingRuntimeAgentRunner) Run(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+	<-ctx.Done()
+	return turn.Result{}, ctx.Err()
+}
+
+func TestSubagentRuntimeContextOptionalChildIsNonBlockingAndFinalized(t *testing.T) {
+	coord := agent.NewCoordinator(nil, nil, nil, nil,
+		agent.WithRunnerFactory(func(agent.Profile, *toolcall.Service) (turn.Runner, error) {
+			return blockingRuntimeAgentRunner{}, nil
+		}),
+	)
+	defer coord.Close()
+	ref := agent.TurnRef{SessionID: "session-a", TurnID: "turn-a"}
+	ctx := agent.WithTurnRef(context.Background(), ref)
+	handle, err := coord.Spawn(ctx, agent.Request{
+		SessionID: ref.SessionID, ParentID: ref.TurnID, Profile: agent.ProfileAgility,
+		Task: "speculative", Optional: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := newSubagentRuntimeContextProvider(NewAgents(coord))
+	if !provider.Active(ctx) {
+		t.Fatal("optional child should keep runtime context active for safe buffering")
+	}
+	if provider.Pending(ctx) {
+		t.Fatal("optional child must not hold the completion barrier")
+	}
+	provider.Finalize(ctx)
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		status, ok := coord.Get(handle.ID)
+		if ok && status.State.Terminal() {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	status, _ := coord.Get(handle.ID)
+	t.Fatalf("optional child remained live after finalization: %+v", status)
 }

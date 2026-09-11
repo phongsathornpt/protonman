@@ -71,7 +71,7 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	runCtx, runCancel := context.WithCancel(c.rootCtx)
 	queuedEvent := LifecycleEvent{
 		Kind: LifecycleAgentQueued, Version: 1, At: queuedAt, SessionID: req.SessionID, ParentID: req.ParentID,
-		AgentID: id, Profile: req.Profile, Task: req.Task, Provider: providerName, Model: modelID, ResumedFrom: req.ResumedFrom,
+		AgentID: id, Profile: req.Profile, Task: req.Task, Optional: req.Optional, Provider: providerName, Model: modelID, ResumedFrom: req.ResumedFrom,
 		Request: &req,
 	}
 	if err := c.persistLifecycleEvent(ctx, queuedEvent); err != nil {

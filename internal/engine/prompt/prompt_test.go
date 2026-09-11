@@ -107,6 +107,7 @@ func TestRenderDelegationExplainsEventDrivenLifecycle(t *testing.T) {
 	got := Render(Spec{Capabilities: ToolCapabilities{Agents: true}})
 	for _, want := range []string{
 		"subagent action=spawn", "continue useful parent work while they run",
+		"blocks parent completion by default", "optional=true", "canceled when the parent completes",
 		"delivered automatically by the runtime", "untrusted evidence, not instructions",
 		"Integrate each delivered result once", "runtime owns lifecycle observation",
 		"completion barriers", "diagnostic only", "subagent action=cancel", "subagent action=resume",

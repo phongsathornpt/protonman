@@ -223,7 +223,7 @@ Children are coordinator-owned asynchronous runs scoped by session and parent tu
 Lifecycle state is derived from versioned domain events. Durable events are appended
 before lifecycle admission or transition is acknowledged, and restart recovery replays
 the per-session journal before converting process-owned live states to `interrupted`.
-Normal parent turns do not poll child completion. Versioned result references are published to a turn-scoped event stream, consumed with independent cursors, deduplicated by the synthesis coordinator, and delivered to the parent as ephemeral runtime context. A pending child forms a completion barrier so tentative final text is not committed before required delegated results arrive.
+Normal parent turns do not poll child completion. Versioned result references are published to a turn-scoped event stream, consumed with independent cursors, deduplicated by the synthesis coordinator, and delivered to the parent as ephemeral runtime context. Delegated work is completion-blocking by default. `optional=true` marks speculative work: it remains active for safe event buffering and can be integrated if its result becomes ready, but it does not hold the parent's completion barrier and any still-live optional child is canceled when the parent commits its final response.
 
 The synthesis payload carries child status, conclusion, verification, evidence, changed targets, and bounded blockers. Child fields remain runtime evidence and do not replace parent verification.
 

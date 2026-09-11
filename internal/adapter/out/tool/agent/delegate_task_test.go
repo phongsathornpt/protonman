@@ -85,6 +85,30 @@ func TestDelegateTaskExecute(t *testing.T) {
 		}
 	})
 
+	t.Run("optional delegation propagates barrier policy", func(t *testing.T) {
+		args, _ := json.Marshal(map[string]any{
+			"profile":  "agility",
+			"task":     "speculative lookup",
+			"optional": true,
+		})
+		call, _ := tool.NewCall("call-optional", "subagent", args)
+		res, err := handler.Execute(ctx, call)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var spawned struct {
+			AgentID  string `json:"agent_id"`
+			Optional bool   `json:"optional"`
+		}
+		if err := json.Unmarshal(res.StructuredOutput, &spawned); err != nil {
+			t.Fatal(err)
+		}
+		status, ok := coord.Get(spawned.AgentID)
+		if !ok || !spawned.Optional || !status.Optional {
+			t.Fatalf("spawned=%+v status=%+v", spawned, status)
+		}
+	})
+
 	t.Run("permission detail provider", func(t *testing.T) {
 		provider, ok := handler.(tool.DetailProvider)
 		if !ok {
@@ -187,6 +211,9 @@ func TestDelegateTaskExecute(t *testing.T) {
 		profileProp, ok := props["profile"].(map[string]any)
 		if !ok {
 			t.Fatal("expected profile in properties")
+		}
+		if optional, ok := props["optional"].(map[string]any); !ok || optional["type"] != "boolean" {
+			t.Fatalf("optional schema = %#v, want boolean", props["optional"])
 		}
 		enums, ok := profileProp["enum"].([]string)
 		if !ok {

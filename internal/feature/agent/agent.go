@@ -138,6 +138,7 @@ type Request struct {
 	Profile      Profile       `json:"profile"`
 	Task         string        `json:"task"`
 	Context      string        `json:"context,omitempty"`
+	Optional     bool          `json:"optional,omitempty"`
 	Timeout      time.Duration `json:"timeout,omitempty"`
 	QueueTimeout time.Duration `json:"queue_timeout,omitempty"`
 	ResumedFrom  string        `json:"resumed_from,omitempty"`

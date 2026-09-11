@@ -619,7 +619,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 
 		roundSink := sink
 		var bufferedEvents *runtimeEventBuffer
-		if l.runtimeContext != nil && l.runtimeContext.Pending(ctx) {
+		if l.runtimeContext != nil && l.runtimeContext.Active(ctx) {
 			bufferedEvents = &runtimeEventBuffer{}
 			roundSink = bufferedEvents.sink
 		}
@@ -735,6 +735,9 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				Rounds:       round,
 				Verification: verification,
 				Messages:     turnMessages,
+			}
+			if l.runtimeContext != nil {
+				l.runtimeContext.Finalize(ctx)
 			}
 			if err := emit(ctx, sink, Event{
 				Kind:    EventCompleted,

@@ -15,9 +15,16 @@ type RuntimeContextProvider interface {
 	// Await waits until meaningful runtime context becomes available or the
 	// caller context ends. It should return promptly when no work is pending.
 	Await(context.Context) ([]model.Message, error)
+	// Active reports whether asynchronous work can still produce runtime context
+	// during the current model round. Active work causes tentative model events
+	// to be buffered so a newly-ready result can safely trigger another round.
+	Active(context.Context) bool
 	// Pending reports whether the current turn still owns asynchronous work
-	// whose result may need integration before final completion.
+	// whose result is required before final completion.
 	Pending(context.Context) bool
+	// Finalize releases non-blocking asynchronous work after the parent response
+	// has been committed and no consumer remains for late speculative results.
+	Finalize(context.Context)
 }
 
 // WithRuntimeContextProvider enables event-driven runtime context delivery.

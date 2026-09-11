@@ -112,7 +112,7 @@ engines, or the composition root.
 
 Feature packages own cohesive product behavior built on core contracts:
 
-- `agent/`: canonical profiles, scheduling, lifecycle/events, delegation policy.
+- `agent/`: canonical profiles, scheduling, lifecycle/events, delegation policy, and required-vs-optional completion barriers.
 - `project/`: project discovery/trust behavior.
 - `skill/`: skill discovery and activation domain behavior.
 - `todo/`: session task-plan state and optimistic concurrency.

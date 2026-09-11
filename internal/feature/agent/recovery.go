@@ -140,7 +140,7 @@ func requestFromLifecycleEvent(event LifecycleEvent, status AgentStatus) Request
 	}
 	return Request{
 		SessionID: status.SessionID, ID: status.ID, ParentID: status.ParentID,
-		Profile: status.Profile, Task: status.Task, ResumedFrom: status.ResumedFrom,
+		Profile: status.Profile, Task: status.Task, Optional: status.Optional, ResumedFrom: status.ResumedFrom,
 	}
 }
 func resultFromLifecycleEvent(event LifecycleEvent, status AgentStatus) (Result, error) {
