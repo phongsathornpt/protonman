@@ -628,3 +628,15 @@ func TestConsumedResultProjectsIntegratedActivityForCompletedAgent(t *testing.T)
 		t.Fatalf("activity=%q, want integrated", got)
 	}
 }
+
+func TestSyncAgentSnapshotPrunesStaleIntegratedActivity(t *testing.T) {
+	coord := agent.NewCoordinator(nil, nil, nil, nil)
+	defer coord.Close()
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.agents = app.NewAgents(coord)
+	m.agentActivity["expired-agent"] = AgentActivity{Intent: agentui.ActivityIntegrated, Label: "Integrated"}
+	m.syncAgentSnapshot()
+	if _, ok := m.agentActivity["expired-agent"]; ok {
+		t.Fatal("stale integrated activity survived authoritative snapshot pruning")
+	}
+}
