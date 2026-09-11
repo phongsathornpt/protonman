@@ -8,8 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pelletier/go-toml/v2"
-
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
@@ -155,46 +153,10 @@ func modifyProjectConfigFile(workDir string, mutate func(*fileDocument)) error {
 	}
 
 	path := scope.Config
-	var doc fileDocument
-	if info, statErr := os.Lstat(path); statErr == nil {
-		if info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("refusing project config write through symlink: %s", path)
-		}
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return fmt.Errorf("read project config %q: %w", path, readErr)
-		}
-		if err := toml.Unmarshal(data, &doc); err != nil {
-			return fmt.Errorf("decode existing project config %q: %w", path, err)
-		}
-	} else if !errors.Is(statErr, os.ErrNotExist) {
-		return fmt.Errorf("inspect project config %q: %w", path, statErr)
+	doc, _, err := readDocument(path, "project config", true)
+	if err != nil {
+		return err
 	}
-
 	mutate(&doc)
-	encoded, err := toml.Marshal(doc)
-	if err != nil {
-		return fmt.Errorf("encode project config toml: %w", err)
-	}
-	temp, err := os.CreateTemp(root, ".config-*.tmp")
-	if err != nil {
-		return fmt.Errorf("create temporary project config: %w", err)
-	}
-	tempPath := temp.Name()
-	defer func() { _ = os.Remove(tempPath) }()
-	if _, err := temp.Write(encoded); err != nil {
-		_ = temp.Close()
-		return fmt.Errorf("write temporary project config: %w", err)
-	}
-	if err := temp.Chmod(0o644); err != nil {
-		_ = temp.Close()
-		return fmt.Errorf("set project config permissions: %w", err)
-	}
-	if err := temp.Close(); err != nil {
-		return fmt.Errorf("close temporary project config: %w", err)
-	}
-	if err := os.Rename(tempPath, path); err != nil {
-		return fmt.Errorf("persist project config: %w", err)
-	}
-	return nil
+	return writeDocumentAtomic(root, path, "project config", 0o644, doc)
 }

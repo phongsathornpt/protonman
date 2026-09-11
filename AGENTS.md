@@ -706,6 +706,12 @@ When implementing a change, place it according to ownership:
 | reusable low-level defaults/helpers | `internal/base/*` only if truly dependency-free |
 | composition/wiring | `cmd/protonman` |
 
+### Configuration invariants
+
+`internal/base/runtimepolicy` is the single source of truth for product runtime defaults. `internal/adapter/out/config.DefaultSnapshot()` is the only constructor for a fresh effective config snapshot; do not add alias constants for runtime defaults inside config or TUI packages.
+
+User and project TOML mutation must reuse the shared atomic document persistence primitive in `internal/adapter/out/config/store.go`, while preserving scope-specific security checks and file modes. Persisted TOML structs are a compatibility boundary: never embed runtime `ProviderConfig` or `ModelConfig` directly in `fileDocument`; use explicit conversion at load/save boundaries. See `docs/settings.md` for the current settings architecture and migration rules.
+
 ## Implementation Style
 
 Prefer idiomatic Go and explicit contracts:

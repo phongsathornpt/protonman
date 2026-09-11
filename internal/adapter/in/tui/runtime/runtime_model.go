@@ -17,6 +17,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/base/envconfig"
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
@@ -227,7 +228,7 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 			todo: append([]tododomain.Item{}, todo...),
 		},
 		executionPolicyState: executionPolicyState{
-			maxToolCalls:  config.DefaultMaxToolCalls,
+			maxToolCalls:  runtimepolicy.TurnMaxToolCalls,
 			runtimeConfig: config.DefaultRuntimeConfig(),
 		},
 		agentModelState: agentModelState{

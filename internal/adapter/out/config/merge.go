@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"maps"
 	"strings"
 	"time"
 
@@ -52,7 +51,9 @@ func mergeDocument(document fileDocument, snapshot *Snapshot, source ValueSource
 		if snapshot.Providers == nil {
 			snapshot.Providers = make(map[string]ProviderConfig)
 		}
-		maps.Copy(snapshot.Providers, document.Providers)
+		for name, provider := range document.Providers {
+			snapshot.Providers[name] = provider.config()
+		}
 	}
 	if document.Model.Default != "" {
 		snapshot.Model.Default = document.Model.Default
