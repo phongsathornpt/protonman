@@ -1197,3 +1197,36 @@ func TestServiceRecordsCanonicalToolNameInTelemetry(t *testing.T) {
 		}
 	}
 }
+
+func TestCallSchemaFailurePublishesActionableDiagnostic(t *testing.T) {
+	handler := &fakeHandler{definition: tool.Definition{
+		Name: "typed", Description: "typed input", Kind: tool.KindRead,
+		Mutability: tool.MutabilityReadOnly,
+		InputSchema: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"path": map[string]any{"type": "string"}},
+			"required":   []string{"path"}, "additionalProperties": false,
+		},
+	}}
+	service := newTestService(t, handler, permission.Config{}, WithMode(permission.ModeAlwaysApprove))
+	call, err := tool.NewCall("typed-1", "typed", json.RawMessage(`{"path":42}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.Call(context.Background(), call)
+	if err == nil || result.Failure == nil {
+		t.Fatalf("Call() result=%#v err=%v, want schema failure", result, err)
+	}
+	if result.Failure.Code != tool.ErrorCodeInvalidArguments {
+		t.Fatalf("failure code=%q", result.Failure.Code)
+	}
+	if strings.TrimSpace(result.Failure.Diagnostic) == "" {
+		t.Fatalf("failure diagnostic missing: %#v", result.Failure)
+	}
+	if result.Failure.Diagnostic == result.Failure.Message {
+		t.Fatalf("diagnostic did not add schema detail: %#v", result.Failure)
+	}
+	if handler.calls != 0 {
+		t.Fatalf("handler calls=%d, want 0", handler.calls)
+	}
+}

@@ -242,3 +242,26 @@ func TestUpdateTodoForSessionIncludesSessionIdentity(t *testing.T) {
 		t.Fatalf("session_id=%v", payload["session_id"])
 	}
 }
+
+func TestUpdateTodoInvalidPatchPublishesActionableDiagnostic(t *testing.T) {
+	store, err := tododomain.NewStore([]tododomain.Item{{ID: "a", Text: "keep", Status: tododomain.StatusPending}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newUpdateTodo(store)
+	call, _ := tool.NewCall("todo-invalid-patch", "todo", todoPatchArgs(0, map[string]any{
+		"op": "set_status", "id": "a", "status": "completed", "text": "not allowed",
+	}))
+	_, err = h.Execute(context.Background(), call)
+	var toolErr *tool.ToolError
+	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeInvalidArguments {
+		t.Fatalf("error=%v, want invalid arguments", err)
+	}
+	if !strings.Contains(toolErr.Diagnostic, "set_status does not accept text") {
+		t.Fatalf("diagnostic=%q", toolErr.Diagnostic)
+	}
+	failure := tool.FailureFromError(err)
+	if failure == nil || !strings.Contains(failure.Diagnostic, "set_status does not accept text") {
+		t.Fatalf("failure=%#v", failure)
+	}
+}

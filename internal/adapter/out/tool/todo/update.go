@@ -101,7 +101,7 @@ func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 		}
 		if usedAtomicPatch && before.Revision == expected {
 			if _, patchErr := tododomain.ApplyPatch(before.Items, input.Operations); patchErr != nil {
-				return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "apply todo patch", patchErr)
+				return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "apply todo patch", patchErr).WithDiagnostic(patchErr.Error())
 			}
 		}
 		return tool.Result{}, err

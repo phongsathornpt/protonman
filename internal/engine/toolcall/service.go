@@ -348,7 +348,7 @@ func (s *Service) call(ctx context.Context, call tool.Call, recoveryDepth int) (
 	if validators.input != nil {
 		validationErr := validators.input.Validate(call.Arguments)
 		if validationErr != nil {
-			inputErr := tool.WrapToolError(tool.ErrorCodeInvalidArguments, fmt.Sprintf("tool %q arguments do not match its input schema", call.Name), validationErr)
+			inputErr := tool.WrapToolError(tool.ErrorCodeInvalidArguments, fmt.Sprintf("tool %q arguments do not match its input schema", call.Name), validationErr).WithDiagnostic(validationErr.Error())
 			result := tool.Result{CallID: call.ID, ToolName: call.Name, Failure: tool.FailureFromError(inputErr)}
 			s.observeCallResult(ctx, telemetry, result, inputErr)
 			return result, inputErr
