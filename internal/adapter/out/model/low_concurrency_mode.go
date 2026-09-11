@@ -31,7 +31,7 @@ type lowConcurrencyRequest struct {
 }
 
 type openCodeFreeLowConcurrencyController struct {
-	policy    runtimepolicy.OpenCodeFreeLowConcurrencyPolicy
+	policy    runtimepolicy.LowConcurrencyPolicy
 	admission chan struct{}
 	requests  chan *lowConcurrencyRequest
 	done      chan lowConcurrencyCompletion
@@ -42,7 +42,7 @@ var openCodeFreeLowConcurrencyControllers = struct {
 	byRoute map[string]*openCodeFreeLowConcurrencyController
 }{byRoute: make(map[string]*openCodeFreeLowConcurrencyController)}
 
-func openCodeFreeLowConcurrencyControllerFor(route string, policy runtimepolicy.OpenCodeFreeLowConcurrencyPolicy) *openCodeFreeLowConcurrencyController {
+func openCodeFreeLowConcurrencyControllerFor(route string, policy runtimepolicy.LowConcurrencyPolicy) *openCodeFreeLowConcurrencyController {
 	openCodeFreeLowConcurrencyControllers.Lock()
 	defer openCodeFreeLowConcurrencyControllers.Unlock()
 	if controller := openCodeFreeLowConcurrencyControllers.byRoute[route]; controller != nil {
@@ -53,7 +53,7 @@ func openCodeFreeLowConcurrencyControllerFor(route string, policy runtimepolicy.
 	return controller
 }
 
-func newOpenCodeFreeLowConcurrencyController(policy runtimepolicy.OpenCodeFreeLowConcurrencyPolicy) *openCodeFreeLowConcurrencyController {
+func newOpenCodeFreeLowConcurrencyController(policy runtimepolicy.LowConcurrencyPolicy) *openCodeFreeLowConcurrencyController {
 	controller := &openCodeFreeLowConcurrencyController{
 		policy:    policy,
 		admission: make(chan struct{}, policy.QueueCapacity),
@@ -198,7 +198,7 @@ type openCodeFreeLowConcurrencyModel struct {
 	controller *openCodeFreeLowConcurrencyController
 }
 
-func withOpenCodeFreeLowConcurrencyMode(base sdk.LanguageModel, route string, policy runtimepolicy.OpenCodeFreeLowConcurrencyPolicy) sdk.LanguageModel {
+func withOpenCodeFreeLowConcurrencyMode(base sdk.LanguageModel, route string, policy runtimepolicy.LowConcurrencyPolicy) sdk.LanguageModel {
 	if base == nil {
 		return nil
 	}

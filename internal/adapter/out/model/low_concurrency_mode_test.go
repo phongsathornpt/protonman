@@ -60,8 +60,8 @@ func (s *lowConcurrencyBlockingStream) Close() error {
 	return nil
 }
 
-func testLowConcurrencyPolicy() runtimepolicy.OpenCodeFreeLowConcurrencyPolicy {
-	return runtimepolicy.OpenCodeFreeLowConcurrencyPolicy{
+func testLowConcurrencyPolicy() runtimepolicy.LowConcurrencyPolicy {
+	return runtimepolicy.LowConcurrencyPolicy{
 		InitialInterval: time.Millisecond,
 		MinInterval:     time.Millisecond,
 		MaxInterval:     50 * time.Millisecond,

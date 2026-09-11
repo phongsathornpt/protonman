@@ -75,9 +75,9 @@ func ModelRetrySchedule() []time.Duration {
 	}
 }
 
-// OpenCodeFreeLowConcurrencyPolicy is the single source of truth for OpenCode free-model
+// LowConcurrencyPolicy is the single source of truth for OpenCode free-model
 // admission and pacing. Keep product tuning here rather than in adapters/tests.
-type OpenCodeFreeLowConcurrencyPolicy struct {
+type LowConcurrencyPolicy struct {
 	InitialInterval time.Duration
 	MinInterval     time.Duration
 	MaxInterval     time.Duration
@@ -90,8 +90,8 @@ type OpenCodeFreeLowConcurrencyPolicy struct {
 	BackoffPercent  int
 }
 
-func OpenCodeFreeLowConcurrencyMode() OpenCodeFreeLowConcurrencyPolicy {
-	return OpenCodeFreeLowConcurrencyPolicy{
+func OpenCodeFreeLowConcurrencyMode() LowConcurrencyPolicy {
+	return LowConcurrencyPolicy{
 		InitialInterval: OpenCodeFreeLowConcurrencyInitialInterval,
 		MinInterval:     OpenCodeFreeLowConcurrencyMinInterval,
 		MaxInterval:     OpenCodeFreeLowConcurrencyMaxInterval,
