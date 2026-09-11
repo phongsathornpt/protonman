@@ -21,6 +21,11 @@ var errTurnEventsClosed = errors.New("turn event stream closed before completion
 var tuiTurnOwnerSeq atomic.Uint64
 
 func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
+	if m.busy {
+		m.appendError("a turn is already running")
+		m.requestRelayout()
+		return nil
+	}
 	if m.runner == nil {
 		m.reconfigureRunner()
 	}

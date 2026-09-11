@@ -52,6 +52,10 @@ func (m *bubbleModel) handleGoalCommand(argument string) tea.Cmd {
 		m.appendMuted("goal cleared")
 		return nil
 	default:
+		if m.busy {
+			m.appendError("cannot change goal while a turn is running")
+			return nil
+		}
 		if err := m.setActiveGoal(goal); err != nil {
 			m.appendError("failed to set goal: " + err.Error())
 			return nil

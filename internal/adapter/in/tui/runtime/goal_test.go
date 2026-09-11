@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"context"
+
+	tea "charm.land/bubbletea/v2"
 	"io"
 	"testing"
 
@@ -56,5 +58,40 @@ func TestGoalCommandStartsExecutionTurn(t *testing.T) {
 	}
 	if len(m.messages) != 1 || m.messages[0].Content != "implement retry recovery" {
 		t.Fatalf("goal execution messages = %#v", m.messages)
+	}
+}
+
+func TestGoalCommandDoesNotMutateGoalDuringActiveTurn(t *testing.T) {
+	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read", Kind: tool.KindRead}}}
+	service := newBehaviorService(t, registry, permission.ModeAsk)
+	runner, err := turn.NewLoop(&goalTestModel{}, service, turn.WithSystemPromptSpec(prompt.Spec{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := newBubbleModel(context.Background(), service, registry, nil, runner, newPermissionBridge(), "")
+	m.activeGoal = "existing goal"
+	m.busy = true
+	m.activeTurnOwner = "turn-existing"
+	if cmd := m.executeCommand("/goal replacement goal"); cmd != nil {
+		t.Fatalf("busy /goal returned command: %v", cmd)
+	}
+	if m.activeGoal != "existing goal" || m.activeTurnOwner != "turn-existing" {
+		t.Fatalf("busy /goal mutated state: goal=%q owner=%q", m.activeGoal, m.activeTurnOwner)
+	}
+}
+
+func TestStartTurnPreservesActiveTurnOwnership(t *testing.T) {
+	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read", Kind: tool.KindRead}}}
+	service := newBehaviorService(t, registry, permission.ModeAsk)
+	m := newBubbleModel(context.Background(), service, registry, nil, nil, newPermissionBridge(), "")
+	m.busy = true
+	m.activeTurnOwner = "turn-existing"
+	originalEvents := make(chan tea.Msg)
+	m.turnEvents = originalEvents
+	if cmd := m.startTurn("second turn"); cmd != nil {
+		t.Fatalf("busy startTurn returned command: %v", cmd)
+	}
+	if m.activeTurnOwner != "turn-existing" || m.turnEvents != originalEvents {
+		t.Fatalf("startTurn overwrote active ownership: owner=%q events_same=%v", m.activeTurnOwner, m.turnEvents == originalEvents)
 	}
 }
