@@ -379,7 +379,7 @@ func (s *emptyStreamRetry) retry(ctx context.Context, reason string) error {
 	_ = s.closeAttempt()
 	s.retries++
 	delay := time.Duration(s.retries) * s.backoff
-	slog.WarnContext(ctx, "opencode free model stream is replay-safe; retrying",
+	slog.DebugContext(ctx, "opencode free model stream is replay-safe; retrying",
 		"provider", s.base.Provider(), "model", s.base.ModelID(),
 		"reason", reason, "retry", s.retries, "max_retries", s.maxRetries,
 		"delay_ms", delay.Milliseconds(),
