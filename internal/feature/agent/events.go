@@ -80,6 +80,7 @@ func (c *Coordinator) broadcast(ev Event) {
 
 func (c *Coordinator) emit(ctx context.Context, ev Event) {
 	c.recordActivity(ev)
+	c.recordResultEvent(ev)
 	switch ev.Kind {
 	case EventAgentCompleted:
 		c.observeMetric(ctx, MetricEvent{Kind: MetricCompleted, SessionID: ev.SessionID, AgentID: ev.AgentID, ParentID: ev.ParentID, Profile: ev.Profile})
@@ -91,7 +92,7 @@ func (c *Coordinator) emit(ctx context.Context, ev Event) {
 		c.observeMetric(ctx, MetricEvent{Kind: kind, SessionID: ev.SessionID, AgentID: ev.AgentID, ParentID: ev.ParentID, Profile: ev.Profile})
 	}
 	c.broadcast(ev)
-	if c.eventSink == nil || ev.Kind == EventAgentProgress {
+	if c.eventSink == nil || ev.Kind == EventAgentProgress || ev.Kind == EventAgentResultConsumed {
 		return
 	}
 	enqueueLifecycleEvent(c.eventQueue, ev)
@@ -113,7 +114,7 @@ func (c *Coordinator) recordActivity(ev Event) {
 }
 
 func compactActivityEvent(ev Event) Event {
-	ev.Message = truncatePersistentText(ev.Message, runtimepolicy.AgentActivityMessageBytes)
+	ev.Message = ""
 	if ev.Call != nil {
 		call := *ev.Call
 		call.Arguments = nil

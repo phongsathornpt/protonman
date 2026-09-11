@@ -84,7 +84,7 @@ func TestFilterRegistryForCanonicalProfiles(t *testing.T) {
 func TestSystemPromptForProfileBehaviorContracts(t *testing.T) {
 	checks := map[Profile][]string{
 		ProfileStrength:     {"implementation subagent", "smallest coherent change", "project conventions", "validation"},
-		ProfileAgility:      {"fast read-only exploration subagent", "minimum evidence", "Do not modify workspace files", "confidence"},
+		ProfileAgility:      {"fast read-only exploration subagent", "minimum evidence", "Do not modify workspace files", "confidence", "<proton-subagent-result>"},
 		ProfileIntelligence: {"deep engineering and reasoning subagent", "invariants and constraints", "Compare viable solutions", "material risks"},
 	}
 	for profile, markers := range checks {

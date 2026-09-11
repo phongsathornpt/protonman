@@ -382,6 +382,7 @@ type Loop struct {
 	promptSpec                    *prompt.Spec
 	skills                        []skill.CatalogItem
 	skillRegistry                 *skill.Registry
+	runtimeContext                RuntimeContextProvider
 }
 
 var _ Runner = (*Loop)(nil)
@@ -506,6 +507,9 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	turnContext, cancelTurn := l.newTurnContext(ctx)
 	defer cancelTurn()
 	ctx = workspace.WithMutationSession(turnContext)
+	if l.runtimeContext != nil {
+		defer l.runtimeContext.Finalize(ctx)
+	}
 	if sink == nil {
 		sink = func(context.Context, Event) error { return nil }
 	}
@@ -585,6 +589,17 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 
 	for round := 1; ; round++ {
 		roundsCompleted = round
+		if l.runtimeContext != nil {
+			runtimeMessages, runtimeErr := l.runtimeContext.Drain(ctx)
+			if runtimeErr != nil {
+				terminalReason = "runtime_context_failed"
+				return l.fail(ctx, sink, round, fmt.Errorf("drain runtime context: %w", runtimeErr))
+			}
+			if len(runtimeMessages) > 0 {
+				history = append(history, model.EnsureMessageIDs(runtimeMessages)...)
+				slog.DebugContext(ctx, "turn runtime context injected", "round", round, "message_count", len(runtimeMessages))
+			}
+		}
 		slog.DebugContext(ctx, "turn round started",
 			"round", round,
 			"history_messages", len(history),
@@ -605,8 +620,18 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			return l.fail(ctx, sink, round, err)
 		}
 
-		outcome, err := l.runRound(ctx, round, request, dispatch, progress, resultBudget, sink)
+		roundSink := sink
+		var bufferedEvents *runtimeEventBuffer
+		if l.runtimeContext != nil && l.runtimeContext.Active(ctx) {
+			bufferedEvents = &runtimeEventBuffer{}
+			roundSink = bufferedEvents.sink
+		}
+		outcome, err := l.runRound(ctx, round, request, dispatch, progress, resultBudget, roundSink)
 		if err != nil {
+			if flushErr := bufferedEvents.flush(ctx, sink); flushErr != nil {
+				terminalReason = "runtime_event_flush_failed"
+				return l.fail(ctx, sink, round, flushErr)
+			}
 			terminalReason = "round_failed"
 			return l.fail(ctx, sink, round, err)
 		}
@@ -663,9 +688,13 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				"tool_calls", len(executions),
 			)
 		}
-		history = append(history, assistant)
-		turnMessages = append(turnMessages, assistant)
 		if grounding.pending() && len(executions) == 0 && !maxToolCallsFallback && !noProgressFallback {
+			if err := bufferedEvents.flush(ctx, sink); err != nil {
+				terminalReason = "runtime_event_flush_failed"
+				return l.fail(ctx, sink, round, err)
+			}
+			history = append(history, assistant)
+			turnMessages = append(turnMessages, assistant)
 			if grounding.recordMiss() {
 				terminalReason = "grounding_not_observed"
 				return l.fail(ctx, sink, round, fmt.Errorf("%w: model %q did not gather required %s evidence", ErrGroundingUnavailable, l.languageModel.ModelID(), grounding.evidence))
@@ -674,6 +703,24 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			continue
 		}
 		if len(executions) == 0 {
+			runtimeMessages, deferred, runtimeErr := l.completionRuntimeContext(ctx)
+			if runtimeErr != nil {
+				terminalReason = "runtime_context_failed"
+				return l.fail(ctx, sink, round, fmt.Errorf("await runtime context: %w", runtimeErr))
+			}
+			if deferred {
+				if len(runtimeMessages) > 0 {
+					history = append(history, runtimeMessages...)
+				}
+				slog.DebugContext(ctx, "turn final synthesis deferred for runtime context", "round", round, "message_count", len(runtimeMessages))
+				continue
+			}
+			if err := bufferedEvents.flush(ctx, sink); err != nil {
+				terminalReason = "runtime_event_flush_failed"
+				return l.fail(ctx, sink, round, err)
+			}
+			history = append(history, assistant)
+			turnMessages = append(turnMessages, assistant)
 			terminalReason = "completed"
 			if maxToolCallsFallback {
 				terminalReason = "max_tool_calls_fallback"
@@ -702,6 +749,13 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			}
 			return result, nil
 		}
+
+		if err := bufferedEvents.flush(ctx, sink); err != nil {
+			terminalReason = "runtime_event_flush_failed"
+			return l.fail(ctx, sink, round, err)
+		}
+		history = append(history, assistant)
+		turnMessages = append(turnMessages, assistant)
 
 		toolMessages, err := toolMessagesForExecutions(executions)
 		if err != nil {

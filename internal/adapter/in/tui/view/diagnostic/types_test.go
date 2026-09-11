@@ -8,6 +8,7 @@ func TestUserCodeMapping(t *testing.T) {
 		KindAuthentication: "AUTH_FAILED", KindForbidden: "FORBIDDEN",
 		KindRateLimit: "RATE_LIMITED", KindQuotaExceeded: "QUOTA_EXCEEDED",
 		KindServerOverloaded: "PROVIDER_OVERLOADED", KindStreamTimeout: "STREAM_TIMEOUT",
+		KindEmptyResponse:  "EMPTY_RESPONSE",
 		KindRuntimeTimeout: "OPERATION_TIMEOUT", KindInvalidPrompt: "INVALID_PROMPT",
 		KindMCPFailed: "MCP_FAILED", KindConfigInvalid: "CONFIG_INVALID",
 		KindConfigTypo: "CONFIG_TYPO", KindToolFailed: "TOOL_FAILED",

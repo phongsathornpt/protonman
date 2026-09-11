@@ -45,20 +45,20 @@ func (h agentLifecycleHandler) Definition() tool.Definition {
 	def := tool.Definition{Name: tool.NameSubagent, Kind: tool.KindAgent, ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded}
 	switch h.action {
 	case subagentActionWait:
-		def.Description = "Wait for the next subagent completion/failure activity. A wait timeout is non-fatal and never cancels children."
+		def.Description = "Diagnostic lifecycle wait for the next subagent completion/failure activity. Normal delegated results are delivered automatically; a wait timeout is non-fatal and never cancels children."
 		def.Mutability = tool.MutabilityReadOnly
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
 		def.InputSchema = map[string]any{"type": "object", "properties": map[string]any{
 			"timeout_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 3600},
 		}, "additionalProperties": false}
 	case subagentActionGet:
-		def.Description = "Inspect one retained subagent and its terminal result when available."
+		def.Description = "Diagnostically inspect one retained subagent and its terminal result when available; normal result collection is automatic."
 		def.Mutability = tool.MutabilityReadOnly
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
 		def.PermissionDetailKey = "agent_id"
 		def.InputSchema = agentIDSchema()
 	case subagentActionList:
-		def.Description = "List retained subagents and their lifecycle states."
+		def.Description = "Diagnostically list retained subagents and their lifecycle states; normal orchestration does not require polling this list."
 		def.Mutability = tool.MutabilityReadOnly
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
 		def.InputSchema = tool.NoArgumentsSchema()
@@ -121,7 +121,7 @@ func (h agentLifecycleHandler) wait(ctx context.Context, call tool.Call) (tool.R
 		}
 	}
 	turnRef := agent.TurnRefFromContext(ctx)
-	wr, err := h.coordinator.WaitActivityForTurn(ctx, turnRef, timeout)
+	wr, err := h.coordinator.WaitActivityDeltaForTurn(ctx, turnRef, timeout)
 	if err != nil {
 		return tool.Result{}, classifyAgentError("wait for subagent activity", err)
 	}
@@ -131,7 +131,7 @@ func (h agentLifecycleHandler) wait(ctx context.Context, call tool.Call) (tool.R
 	}
 	return agentJSONResult(call, summary, map[string]any{
 		"timed_out": wr.TimedOut, "event": wr.Event, "events": wr.Events,
-		"cursor": wr.Cursor, "truncated": wr.Truncated, "agents": wr.Agents,
+		"cursor": wr.Cursor, "truncated": wr.Truncated,
 	})
 }
 
@@ -224,7 +224,20 @@ func resultPayload(result *agent.Result) any {
 	if changedTargets == nil {
 		changedTargets = []string{}
 	}
+	conclusion := strings.TrimSpace(result.Conclusion)
+	if conclusion == "" {
+		conclusion = strings.TrimSpace(result.Summary)
+	}
+	findings := result.Findings
+	if findings == nil {
+		findings = []agent.Finding{}
+	}
+	blockers := result.Blockers
+	if blockers == nil {
+		blockers = []string{}
+	}
 	payload := map[string]any{
+		"conclusion": conclusion, "findings": findings, "blockers": blockers,
 		"summary": result.Summary, "rounds": result.Rounds,
 		"verification": result.Verification, "evidence": evidence, "changed_targets": changedTargets,
 		"queue_duration_ms": result.QueueDuration.Milliseconds(), "execution_duration_ms": result.Duration.Milliseconds(), "total_duration_ms": result.TotalDuration.Milliseconds(),

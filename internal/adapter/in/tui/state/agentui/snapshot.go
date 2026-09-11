@@ -29,6 +29,7 @@ func (t *Tracker) SyncSnapshot(agentID string, snapshot []agent.AgentStatus, sta
 	if strings.TrimSpace(status.Task) != "" {
 		cell.Task = status.Task
 	}
+	previousState := cell.State
 	cell.State, cell.Reason = status.State, status.Reason
 	startedAt := status.StartedAt
 	if startedAt.IsZero() {
@@ -42,6 +43,8 @@ func (t *Tracker) SyncSnapshot(agentID string, snapshot []agent.AgentStatus, sta
 	}
 	if status.State.Terminal() {
 		cell.Activity = ""
+	} else if previousState != status.State || strings.TrimSpace(cell.Activity) == "" {
+		cell.Activity = ActivityForState(status.Profile, status.State).String()
 	}
 	state.TouchAgentRun(agentID)
 }

@@ -223,9 +223,14 @@ Children are coordinator-owned asynchronous runs scoped by session and parent tu
 Lifecycle state is derived from versioned domain events. Durable events are appended
 before lifecycle admission or transition is acknowledged, and restart recovery replays
 the per-session journal before converting process-owned live states to `interrupted`.
-Parent wait timeout does not cancel a child. `subagent action=wait` observes ordered lifecycle
-activity for the current turn and reconciles against the current child snapshot.
-Explicit cancellation uses coordinator lifecycle operations. Subagent-scoped registries
+Normal parent turns do not poll child completion. Versioned result references are published to a turn-scoped event stream, consumed with independent cursors, deduplicated by the synthesis coordinator, and delivered to the parent as ephemeral runtime context. After that context is encoded successfully, the synthesis consumer acknowledges the version exactly once with `agent_result_consumed`; this acknowledgement is presentation/telemetry state and never re-enters the result-availability stream. Delegated work is completion-blocking by default. `optional=true` marks speculative work: it remains active for safe event buffering and can be integrated if its result becomes ready, but it does not hold the parent's completion barrier and any still-live optional child is canceled when the parent commits its final response. `depends_on` forms same-turn dependency edges to already-admitted children; dependency waiting occurs before concurrency/workspace admission and does not consume queue-timeout budget. Downstream execution requires every dependency to reach `completed`.
+
+Parent-turn termination is also the ownership boundary for asynchronous children. Runtime-context finalization runs on successful completion, failure, and cancellation; it cancels any remaining live children for that turn and releases turn-scoped synthesis cursor/deduplication state. Retained terminal results remain available through explicit inspection until normal retention pruning.
+
+The synthesis payload carries child status, conclusion, runtime-validated findings, verification, evidence, changed targets, and bounded blockers. Child fields remain runtime evidence and do not replace parent verification.
+Child final text may include a `<proton-subagent-result>` JSON envelope. The runtime accepts only evidence references matching successful child tool observations, derives changed targets and verification independently, and safely falls back to plain text when the envelope is malformed or absent.
+
+`subagent action=wait|get|list` remain explicit lifecycle inspection capabilities and compatibility surfaces. A wait timeout never cancels a child. Explicit cancellation uses coordinator lifecycle operations. Subagent-scoped registries
 remove agent and task tools, so children cannot spawn nested children or mutate the
 parent's task plan.
 
@@ -239,7 +244,7 @@ waiting writer. Preserve this fairness property when touching scheduler code.
 
 System prompt composition lives in `internal/engine/prompt` and is capability-driven.
 Do not maintain separate large root prompts per provider or agent mode. The managed
-prompt currently uses Prompt ABI v8 and deterministic cache-aware section ordering;
+prompt currently uses Prompt ABI v10 and deterministic cache-aware section ordering;
 `docs/system-prompt.md` is the source of truth for prompt topology and prefix-cache
 invariants.
 
@@ -496,6 +501,8 @@ Streams must be closed exactly once on success and every failure/cancellation
 path. Preserve the original processing error over a secondary close error when
 both occur.
 
+`internal/adapter/out/model` may add provider-specific recovery around an SDK model when the behavior cannot be expressed as a provider-neutral SDK invariant. OpenCode free-model empty-stream recovery is intentionally narrow: retry only before any visible text/tool-call output, preserve the same session identity on every attempt, cap recovery at two retries with bounded backoff and a 30-second no-output watchdog, discard metadata from abandoned attempts, and surface the final incomplete/empty response instead of replaying after visible output. User-facing diagnostics distinguish exhausted empty output (`EMPTY_RESPONSE`) from an incomplete stream (`STREAM_INCOMPLETE`).
+
 ## Turn Engine
 
 `internal/engine/turn` owns the multi-round model/tool state machine. Inbound
@@ -513,6 +520,7 @@ Important turn responsibilities include:
 - deadline propagation
 - reasoning policy
 - mutation verification state
+- event-driven subagent result delivery, completion barriers, and redacted synthesis-efficiency telemetry (`subagent_result_bytes`, consumed/duplicate bytes, synthesis agents, and wait-snapshot bytes)
 
 At least one global termination bound must remain active. Do not accidentally
 construct an unbounded model/tool loop by disabling both tool-count and time bounds.
@@ -541,6 +549,8 @@ Agent lifecycle presentation should aggregate by agent identity rather than dump
 raw orchestration RPC noise. Active work belongs in live status/panes; terminal
 results remain useful in transcript/history. Internal IDs are appropriate in the
 detailed `/agents` inspection view, not as constant visual clutter.
+
+The TUI projects lifecycle/tool activity into Dota-style presentation intents without changing domain state. Keep `queued`, `running`, `completed`, `failed`, and related lifecycle values authoritative in `internal/feature/agent`; labels such as `W8`, `Roaming`, `Farming`, `Skilling`, `Ganking`, `Pushing`, `Defending`, `Sticking`, `Integrated`, `Care`, `B`, and `Ready` belong under `internal/adapter/in/tui/state/agentui`. `Sticking` means a result is available; `Integrated` means that result version was successfully encoded into parent runtime context. Prefer deterministic signals such as profile, tool kind, and lifecycle event over guessing activity from free-form model prose.
 
 Subagent-off is a non-default state and should be visible without permanently
 spending footer space on the default enabled state. Existing children must remain

@@ -85,6 +85,30 @@ func TestDelegateTaskExecute(t *testing.T) {
 		}
 	})
 
+	t.Run("optional delegation propagates barrier policy", func(t *testing.T) {
+		args, _ := json.Marshal(map[string]any{
+			"profile":  "agility",
+			"task":     "speculative lookup",
+			"optional": true,
+		})
+		call, _ := tool.NewCall("call-optional", "subagent", args)
+		res, err := handler.Execute(ctx, call)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var spawned struct {
+			AgentID  string `json:"agent_id"`
+			Optional bool   `json:"optional"`
+		}
+		if err := json.Unmarshal(res.StructuredOutput, &spawned); err != nil {
+			t.Fatal(err)
+		}
+		status, ok := coord.Get(spawned.AgentID)
+		if !ok || !spawned.Optional || !status.Optional {
+			t.Fatalf("spawned=%+v status=%+v", spawned, status)
+		}
+	})
+
 	t.Run("permission detail provider", func(t *testing.T) {
 		provider, ok := handler.(tool.DetailProvider)
 		if !ok {
@@ -188,6 +212,13 @@ func TestDelegateTaskExecute(t *testing.T) {
 		if !ok {
 			t.Fatal("expected profile in properties")
 		}
+		if optional, ok := props["optional"].(map[string]any); !ok || optional["type"] != "boolean" {
+			t.Fatalf("optional schema = %#v, want boolean", props["optional"])
+		}
+		dependsOn, ok := props["depends_on"].(map[string]any)
+		if !ok || dependsOn["type"] != "array" || dependsOn["maxItems"] != agent.MaxAgentDependencies {
+			t.Fatalf("depends_on schema = %#v", props["depends_on"])
+		}
 		enums, ok := profileProp["enum"].([]string)
 		if !ok {
 			t.Fatal("expected enum slice in profile property")
@@ -289,5 +320,28 @@ func TestDelegateTaskPrefersContextParentID(t *testing.T) {
 	status, ok := coord.Get(spawned.AgentID)
 	if !ok || status.ParentID != "turn-7" {
 		t.Fatalf("status=%+v, want parent turn-7", status)
+	}
+}
+
+func TestSubagentDefinitionDescribesEventDrivenResultDelivery(t *testing.T) {
+	def := NewSubagent(nil).Definition()
+	for _, want := range []string{"completed results are delivered automatically", "wait/get/list are diagnostic", "cancel/resume"} {
+		if !strings.Contains(def.Description, want) {
+			t.Fatalf("subagent description missing %q: %q", want, def.Description)
+		}
+	}
+	props, ok := def.InputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("subagent input schema properties missing")
+	}
+	action, ok := props["action"].(map[string]any)
+	if !ok {
+		t.Fatal("subagent action schema missing")
+	}
+	description, _ := action["description"].(string)
+	for _, want := range []string{"automatic result delivery", "diagnostic inspection"} {
+		if !strings.Contains(description, want) {
+			t.Fatalf("subagent action description missing %q: %q", want, description)
+		}
 	}
 }

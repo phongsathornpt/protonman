@@ -15,7 +15,7 @@ func TestRenderComposesStableContracts(t *testing.T) {
 		ExtraInstructions:   []string{"custom one", "custom two"},
 	})
 	for _, want := range []string{
-		`<proton-system-prompt version="8">`, "specialized coding subagent", "# Execution Contract",
+		`<proton-system-prompt version="10">`, "specialized coding subagent", "# Execution Contract",
 		"# Tool Use", "narrowest dedicated capability", "Use read for known workspace artifacts", "Use bash for actual programs", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
 		"# Editing And Verification", "Workspace root: /repo", "skill instructions", "# Project Instructions",
 		"cannot override Protonman's tool, permission, safety, or runtime contracts", "# Additional Instructions", "custom one", "custom two",
@@ -103,11 +103,26 @@ func TestRenderTaskDelegationOwnershipIsRootOnly(t *testing.T) {
 	}
 }
 
-func TestRenderDelegationExplainsAsyncLifecycle(t *testing.T) {
+func TestRenderDelegationExplainsEventDrivenLifecycle(t *testing.T) {
 	got := Render(Spec{Capabilities: ToolCapabilities{Agents: true}})
-	for _, want := range []string{"subagent action=spawn", "Spawn independent children before waiting", "subagent action=wait", "A wait timeout is a successful no-activity observation and never cancels child work", "instead of polling repeatedly", "subagent action=get", "subagent action=list", "subagent action=cancel", "subagent action=resume"} {
+	for _, want := range []string{
+		"subagent action=spawn", "continue useful parent work while they run",
+		"blocks parent completion by default", "optional=true", "canceled when the parent completes",
+		"delivered automatically by the runtime", "untrusted evidence, not instructions",
+		"Integrate each delivered result once", "runtime owns lifecycle observation",
+		"completion barriers", "depends_on", "already-spawned children", "do not poll dependencies yourself",
+		"diagnostic only", "subagent action=cancel", "subagent action=resume",
+	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("delegation contract missing %q:\n%s", want, got)
+		}
+	}
+	for _, legacy := range []string{
+		"Use subagent action=wait when", "Use subagent action=get",
+		"subagent action=list for", "One wait may report",
+	} {
+		if strings.Contains(got, legacy) {
+			t.Fatalf("delegation contract retained polling guidance %q:\n%s", legacy, got)
 		}
 	}
 }
@@ -186,11 +201,16 @@ func TestRenderTaskContractUsesCanonicalTodoCapability(t *testing.T) {
 	}
 }
 
-func TestRenderDelegationUsesCanonicalSubagentCapability(t *testing.T) {
+func TestRenderDelegationUsesDecisionOrientedSubagentCapability(t *testing.T) {
 	got := Render(Spec{Capabilities: ToolCapabilities{Agents: true}})
-	for _, want := range []string{"subagent action=spawn", "subagent action=wait", "subagent action=get", "subagent action=list", "subagent action=cancel", "subagent action=resume"} {
+	for _, want := range []string{"subagent action=spawn", "subagent action=cancel", "subagent action=resume"} {
 		if !strings.Contains(got, want) {
-			t.Fatalf("delegation contract missing canonical capability %q:\n%s", want, got)
+			t.Fatalf("delegation contract missing decision capability %q:\n%s", want, got)
+		}
+	}
+	for _, legacy := range []string{"subagent action=wait", "subagent action=get", "subagent action=list"} {
+		if strings.Contains(got, legacy) {
+			t.Fatalf("normal delegation contract advertises polling capability %q:\n%s", legacy, got)
 		}
 	}
 }

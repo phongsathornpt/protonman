@@ -56,18 +56,25 @@ func (c *Coordinator) Wait(ctx context.Context, id string, timeout time.Duration
 // WaitActivity waits for the next terminal subagent lifecycle activity across all parents.
 // Observation timeout is non-fatal and never mutates child state.
 func (c *Coordinator) WaitActivity(ctx context.Context, timeout time.Duration) (ActivityWaitResult, error) {
-	return c.waitActivity(ctx, TurnRef{}, nil, timeout)
+	return c.waitActivity(ctx, TurnRef{}, nil, timeout, true)
 }
 
 // WaitActivityForTurn consumes the next ordered activity batch for one turn.
 func (c *Coordinator) WaitActivityForTurn(ctx context.Context, ref TurnRef, timeout time.Duration) (ActivityWaitResult, error) {
-	return c.waitActivity(ctx, ref.normalized(), nil, timeout)
+	return c.waitActivity(ctx, ref.normalized(), nil, timeout, true)
+}
+
+// WaitActivityDeltaForTurn consumes lifecycle deltas without attaching a full
+// retained-agent snapshot. Model-facing diagnostic wait uses this path to avoid
+// re-sending state that list/get can inspect explicitly.
+func (c *Coordinator) WaitActivityDeltaForTurn(ctx context.Context, ref TurnRef, timeout time.Duration) (ActivityWaitResult, error) {
+	return c.waitActivity(ctx, ref.normalized(), nil, timeout, false)
 }
 
 // WaitActivityAfter reads activity after an explicit cursor without advancing the
 // compatibility cursor. Independent waiters can therefore observe the same stream.
 func (c *Coordinator) WaitActivityAfter(ctx context.Context, ref TurnRef, after uint64, timeout time.Duration) (ActivityWaitResult, error) {
-	return c.waitActivity(ctx, ref.normalized(), &after, timeout)
+	return c.waitActivity(ctx, ref.normalized(), &after, timeout, true)
 }
 
 func activityScopeKey(ref TurnRef) string {
@@ -78,7 +85,7 @@ func activityScopeKey(ref TurnRef) string {
 	return ref.SessionID + "\x00" + ref.TurnID
 }
 
-func (c *Coordinator) waitActivity(ctx context.Context, ref TurnRef, after *uint64, timeout time.Duration) (ActivityWaitResult, error) {
+func (c *Coordinator) waitActivity(ctx context.Context, ref TurnRef, after *uint64, timeout time.Duration, includeSnapshot bool) (ActivityWaitResult, error) {
 	defer c.pruneActivityMailboxes(time.Now())
 	if ctx == nil {
 		ctx = context.Background()
@@ -113,7 +120,9 @@ func (c *Coordinator) waitActivity(ctx context.Context, ref TurnRef, after *uint
 	}
 
 	if result, notify := consume(); len(result.Events) > 0 {
-		result.Agents = c.activitySnapshot(ref)
+		if includeSnapshot {
+			c.attachActivitySnapshot(ctx, ref, &result)
+		}
 		return result, nil
 	} else {
 		waitCtx := ctx
@@ -125,18 +134,33 @@ func (c *Coordinator) waitActivity(ctx context.Context, ref TurnRef, after *uint
 		select {
 		case <-notify:
 			result, _ := consume()
-			result.Agents = c.activitySnapshot(ref)
+			if includeSnapshot {
+				c.attachActivitySnapshot(ctx, ref, &result)
+			}
 			return result, nil
 		case <-waitCtx.Done():
 			if errors.Is(waitCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
 				c.observeMetric(ctx, MetricEvent{Kind: MetricWaitTimeout, SessionID: ref.SessionID, ParentID: ref.TurnID})
-				result.Agents = c.activitySnapshot(ref)
+				if includeSnapshot {
+					c.attachActivitySnapshot(ctx, ref, &result)
+				}
 				result.TimedOut = true
 				return result, nil
 			}
 			return ActivityWaitResult{}, waitCtx.Err()
 		}
 	}
+}
+
+func (c *Coordinator) attachActivitySnapshot(ctx context.Context, ref TurnRef, result *ActivityWaitResult) {
+	if result == nil {
+		return
+	}
+	result.Agents = c.activitySnapshot(ref)
+	c.observeMetric(ctx, MetricEvent{
+		Kind: MetricWaitSnapshotBytes, SessionID: ref.SessionID, ParentID: ref.TurnID,
+		Bytes: metricJSONBytes(result.Agents), Count: len(result.Agents),
+	})
 }
 
 func activityEventsAfter(mailbox *activityMailbox, after uint64) ([]Event, uint64, bool) {
@@ -185,6 +209,11 @@ func (c *Coordinator) waitSnapshot(id string) (WaitResult, error) {
 	wr := WaitResult{State: entry.status.State}
 	if entry.status.State.Terminal() {
 		res := entry.result
+		if c.resultStore != nil {
+			if stored, ok := c.resultStore.Get(entry.resultRef); ok {
+				res = stored
+			}
+		}
 		wr.Result = &res
 	}
 	return wr, nil
@@ -203,6 +232,9 @@ func (c *Coordinator) pruneExpiredLocked(now time.Time) {
 	if c.resultTTL > 0 {
 		for id, entry := range c.agents {
 			if entry.status.State.Terminal() && !entry.status.FinishedAt.IsZero() && now.Sub(entry.status.FinishedAt) >= c.resultTTL {
+				if c.resultStore != nil {
+					c.resultStore.Delete(entry.resultRef)
+				}
 				delete(c.agents, id)
 			}
 		}
@@ -230,6 +262,9 @@ func (c *Coordinator) pruneExpiredLocked(now time.Time) {
 		return terminal[i].finished.Before(terminal[j].finished)
 	})
 	for _, item := range terminal[:len(terminal)-c.maxRetainedAgents] {
+		if entry := c.agents[item.id]; entry != nil && c.resultStore != nil {
+			c.resultStore.Delete(entry.resultRef)
+		}
 		delete(c.agents, item.id)
 	}
 }
@@ -243,7 +278,7 @@ func (c *Coordinator) Get(id string) (AgentStatus, bool) {
 	if !ok {
 		return AgentStatus{}, false
 	}
-	return entry.status, true
+	return cloneAgentStatus(entry.status), true
 }
 
 // Lookup returns one retained status and, when terminal, its result.
@@ -255,11 +290,16 @@ func (c *Coordinator) Lookup(id string) (AgentStatus, *Result, bool) {
 	if !ok {
 		return AgentStatus{}, nil, false
 	}
-	status := entry.status
+	status := cloneAgentStatus(entry.status)
 	if !status.State.Terminal() {
 		return status, nil, true
 	}
 	res := entry.result
+	if c.resultStore != nil {
+		if stored, ok := c.resultStore.Get(entry.resultRef); ok {
+			res = stored
+		}
+	}
 	return status, &res, true
 }
 
@@ -271,7 +311,7 @@ func (c *Coordinator) Active() []AgentStatus {
 	out := make([]AgentStatus, 0, len(c.agents))
 	for _, entry := range c.agents {
 		if !entry.status.State.Terminal() {
-			out = append(out, entry.status)
+			out = append(out, cloneAgentStatus(entry.status))
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -290,7 +330,7 @@ func (c *Coordinator) List() []AgentStatus {
 	defer c.agentsMu.RUnlock()
 	out := make([]AgentStatus, 0, len(c.agents))
 	for _, entry := range c.agents {
-		out = append(out, entry.status)
+		out = append(out, cloneAgentStatus(entry.status))
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].StartTime.Equal(out[j].StartTime) {

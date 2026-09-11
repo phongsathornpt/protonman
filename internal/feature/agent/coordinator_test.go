@@ -413,11 +413,38 @@ func TestCoordinatorTerminalEventsReplaceDroppedSinkWakeups(t *testing.T) {
 	}
 }
 
+func TestCoordinatorConsumedResultBroadcastsWithoutLifecycleSinkDelivery(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil)
+	defer coord.Close()
+	coord.eventSink = func(context.Context, Event) error { return nil }
+	coord.eventQueue = make(chan Event, 1)
+	events, unsubscribe := coord.Subscribe(1)
+	defer unsubscribe()
+
+	coord.emit(context.Background(), Event{Kind: EventAgentResultConsumed, AgentID: "a-1", ResultVersion: 1})
+
+	select {
+	case ev := <-events:
+		if ev.Kind != EventAgentResultConsumed {
+			t.Fatalf("subscriber event = %s, want consumed result", ev.Kind)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("consumed result was not broadcast to subscribers")
+	}
+	select {
+	case ev := <-coord.eventQueue:
+		t.Fatalf("consumed result leaked into lifecycle sink queue: %s", ev.Kind)
+	default:
+	}
+}
+
 func TestCoordinatorEmitsLifecycleEvents(t *testing.T) {
 	var events []Event
+	var missingAvailableResult bool
 	var mu sync.Mutex
+	var coord *Coordinator
 
-	coord := NewCoordinator(
+	coord = NewCoordinator(
 		nil,
 		emptyRegistry{},
 		nil,
@@ -425,6 +452,11 @@ func TestCoordinatorEmitsLifecycleEvents(t *testing.T) {
 		WithEventSink(func(ctx context.Context, ev Event) error {
 			mu.Lock()
 			events = append(events, ev)
+			if ev.Kind == EventAgentResultAvailable {
+				ref := ResultRef{SessionID: ev.SessionID, AgentID: ev.AgentID, Version: ev.ResultVersion}
+				_, ok := coord.resultStore.Get(ref)
+				missingAvailableResult = !ok
+			}
 			mu.Unlock()
 			return nil
 		}),
@@ -451,7 +483,7 @@ func TestCoordinatorEmitsLifecycleEvents(t *testing.T) {
 	waitForTest(t, 250*time.Millisecond, func() bool {
 		mu.Lock()
 		defer mu.Unlock()
-		return len(events) >= 3
+		return len(events) >= 4
 	})
 	mu.Lock()
 	defer mu.Unlock()
@@ -460,6 +492,12 @@ func TestCoordinatorEmitsLifecycleEvents(t *testing.T) {
 	}
 	if events[1].Kind != EventAgentStarted {
 		t.Errorf("second event = %v, want EventAgentStarted", events[1].Kind)
+	}
+	if events[2].Kind != EventAgentResultAvailable || events[2].ResultVersion == 0 {
+		t.Errorf("third event = %+v, want versioned EventAgentResultAvailable", events[2])
+	}
+	if missingAvailableResult {
+		t.Fatal("result_available was emitted before its result was readable")
 	}
 	if events[len(events)-1].Kind != EventAgentCompleted {
 		t.Errorf("last event = %v, want EventAgentCompleted", events[len(events)-1].Kind)
@@ -1017,6 +1055,20 @@ func TestCoordinatorQueueTimeoutReportsLifecycleMetrics(t *testing.T) {
 	status, ok := coord.Get(res.AgentID)
 	if !ok || status.Reason != "queue timed out" {
 		t.Fatalf("queue timeout status = %+v, ok=%v", status, ok)
+	}
+	resultEvents, streamErr := coord.WaitResultEventsAfter(context.Background(), TurnRef{}, 0, time.Second)
+	if streamErr != nil {
+		t.Fatalf("wait for queue-timeout result event: %v", streamErr)
+	}
+	foundResult := false
+	for _, ev := range resultEvents.Events {
+		if ev.Kind == EventAgentResultAvailable && ev.AgentID == res.AgentID && ev.ResultVersion > 0 {
+			foundResult = true
+			break
+		}
+	}
+	if !foundResult {
+		t.Fatalf("queue timeout did not publish result availability: %+v", resultEvents.Events)
 	}
 	var failure Event
 	waitForTest(t, 250*time.Millisecond, func() bool {

@@ -14,8 +14,8 @@ func TestPersistentSnapshotRestoresLiveRunAsInterrupted(t *testing.T) {
 	defer coord.Close()
 
 	snapshot := PersistentSnapshot{Version: PersistentSnapshotVersion, Agents: []PersistentAgent{{
-		Status:  AgentStatus{ID: "strength-7", ParentID: "turn-1", Profile: ProfileStrength, Task: "finish refactor", State: StateRunning, StartTime: time.Now().Add(-time.Minute)},
-		Request: Request{ID: "strength-7", ParentID: "turn-1", Profile: ProfileStrength, Task: "finish refactor", Context: "focus on router"},
+		Status:  AgentStatus{ID: "strength-7", ParentID: "turn-1", Profile: ProfileStrength, Task: "finish refactor", Optional: true, State: StateRunning, StartTime: time.Now().Add(-time.Minute)},
+		Request: Request{ID: "strength-7", ParentID: "turn-1", Profile: ProfileStrength, Task: "finish refactor", Context: "focus on router", DependsOn: []string{"agility-2"}, Optional: true},
 	}}}
 	if err := coord.RestorePersistentSnapshot(snapshot); err != nil {
 		t.Fatalf("RestorePersistentSnapshot() error = %v", err)
@@ -26,6 +26,15 @@ func TestPersistentSnapshotRestoresLiveRunAsInterrupted(t *testing.T) {
 	}
 	if !strings.Contains(status.Reason, "previous process") {
 		t.Fatalf("reason = %q", status.Reason)
+	}
+	if !status.Optional {
+		t.Fatal("restored optional barrier policy was lost")
+	}
+	coord.agentsMu.RLock()
+	restoredDeps := append([]string(nil), coord.agents["strength-7"].request.DependsOn...)
+	coord.agentsMu.RUnlock()
+	if len(restoredDeps) != 1 || restoredDeps[0] != "agility-2" {
+		t.Fatalf("restored dependencies = %v", restoredDeps)
 	}
 	if coord.seq < 7 {
 		t.Fatalf("sequence = %d, want >= 7", coord.seq)
@@ -64,7 +73,7 @@ func TestResumeStartsFreshChildFromInterruptedRecord(t *testing.T) {
 	defer coord.Close()
 	snapshot := PersistentSnapshot{Version: PersistentSnapshotVersion, Agents: []PersistentAgent{{
 		Status:  AgentStatus{ID: "strength-3", ParentID: "old-turn", Profile: ProfileStrength, Task: "finish migration", State: StateRunning},
-		Request: Request{ID: "strength-3", ParentID: "old-turn", Profile: ProfileStrength, Task: "finish migration", Context: "check adapters"},
+		Request: Request{ID: "strength-3", ParentID: "old-turn", Profile: ProfileStrength, Task: "finish migration", Context: "check adapters", DependsOn: []string{"agility-1"}},
 	}}}
 	if err := coord.RestorePersistentSnapshot(snapshot); err != nil {
 		t.Fatal(err)
@@ -81,5 +90,8 @@ func TestResumeStartsFreshChildFromInterruptedRecord(t *testing.T) {
 	coord.agentsMu.RUnlock()
 	if req.ParentID != "new-turn" || !strings.Contains(req.Context, "Re-inspect current state") || !strings.Contains(req.Context, "check adapters") {
 		t.Fatalf("resumed request = %#v", req)
+	}
+	if len(req.DependsOn) != 0 {
+		t.Fatalf("resumed request retained stale dependencies: %v", req.DependsOn)
 	}
 }

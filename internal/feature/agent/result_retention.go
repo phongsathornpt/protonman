@@ -11,9 +11,20 @@ func compactRetainedResult(result Result) Result {
 	result = cloneResult(result)
 	result.Err = err
 	budget := runtimepolicy.AgentRetainedResultBytes
-	result.Summary = retainText(result.Summary, &budget)
+	conclusion := result.Conclusion
+	if strings.TrimSpace(conclusion) == "" {
+		conclusion = result.Summary
+	}
+	result.Conclusion = retainText(conclusion, &budget)
+	result.Findings = retainFindings(result.Findings, &budget)
+	result.Blockers = retainStrings(result.Blockers, &budget)
 	result.Evidence = retainEvidence(result.Evidence, &budget)
 	result.ChangedTargets = retainStrings(result.ChangedTargets, &budget)
+	if result.Summary == "" || result.Summary == conclusion {
+		result.Summary = result.Conclusion
+	} else {
+		result.Summary = retainText(result.Summary, &budget)
+	}
 	return result
 }
 
@@ -27,6 +38,26 @@ func retainText(value string, budget *int) string {
 	}
 	*budget -= len(value)
 	return value
+}
+
+func retainFindings(values []Finding, budget *int) []Finding {
+	if len(values) == 0 || budget == nil || *budget <= 0 {
+		return nil
+	}
+	out := make([]Finding, 0, len(values))
+	for _, value := range values {
+		claim := retainText(value.Claim, budget)
+		if claim == "" {
+			break
+		}
+		confidence := retainText(value.Confidence, budget)
+		evidence := retainEvidence(value.Evidence, budget)
+		out = append(out, Finding{Claim: claim, Confidence: confidence, Evidence: evidence})
+		if *budget <= 0 {
+			break
+		}
+	}
+	return out
 }
 
 func retainEvidence(values []EvidenceRef, budget *int) []EvidenceRef {

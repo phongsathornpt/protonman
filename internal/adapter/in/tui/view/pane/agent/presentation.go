@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	agentuistate "github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
 	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
@@ -52,15 +53,28 @@ func AgentRows(snapshot AgentsSnapshot) []string {
 		now = time.Now()
 	}
 	for _, st := range visible {
-		header := AgentDisplayProfile(st) + "  " + textview.PadRight(string(st.State), 9) + " " + FormatElapsed(AgentDisplayDuration(st, now))
+		activityLabel := agentuistate.ActivityForState(st.Profile, st.State).String()
+		currentActivity := strings.TrimSpace(snapshot.Activity[st.ID])
+		showCurrentActivity := currentActivity != "" && (!st.State.Terminal() || strings.HasPrefix(currentActivity, agentuistate.ActivityIntegrated.Label()))
+		if showCurrentActivity {
+			activityLabel = strings.TrimSpace(strings.SplitN(currentActivity, " · ", 2)[0])
+		}
+		if activityLabel == "" {
+			activityLabel = string(st.State)
+		}
+		header := AgentDisplayProfile(st) + "  " + textview.PadRight(activityLabel, 10) + " " + FormatElapsed(AgentDisplayDuration(st, now))
 		rows = append(rows, tuistyle.CommandStyle.Render(strings.TrimSpace(header)))
 		if task := strings.TrimSpace(st.Task); task != "" {
 			rows = append(rows, "  "+textview.TruncateEllipsis(task, max(12, snapshot.Width-8)))
 		}
+		if len(st.DependsOn) > 0 {
+			deps := "deps · " + strings.Join(st.DependsOn, ", ")
+			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(deps, max(12, snapshot.Width-8))))
+		}
 		if label := AgentModelLabel(st); label != "" {
 			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(label, max(12, snapshot.Width-8))))
 		}
-		if activity := strings.TrimSpace(snapshot.Activity[st.ID]); activity != "" && !st.State.Terminal() {
+		if activity := currentActivity; activity != "" && showCurrentActivity {
 			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(activity, max(12, snapshot.Width-8))))
 		} else if reason := strings.TrimSpace(st.Reason); reason != "" {
 			rows = append(rows, tuistyle.ErrorStyle.Render("  "+textview.TruncateEllipsis(reason, max(12, snapshot.Width-8))))

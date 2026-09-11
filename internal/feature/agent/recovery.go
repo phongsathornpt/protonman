@@ -57,11 +57,13 @@ func (c *Coordinator) RecoverLifecycle(
 				status.Version = 1
 			}
 			request := record.Request
+			request.DependsOn = append([]string(nil), request.DependsOn...)
 			request.SessionID = sessionID
 			request.ID = status.ID
 			request.ParentID = status.ParentID
 			request.Profile = status.Profile
 			request.Task = status.Task
+			status.DependsOn = append([]string(nil), request.DependsOn...)
 			result := Result{SessionID: sessionID, AgentID: status.ID, Profile: status.Profile, Provider: status.Provider, Model: status.Model}
 			if record.Result != nil {
 				result = cloneResult(*record.Result)
@@ -131,6 +133,7 @@ func (c *Coordinator) installRecoveredEntry(status AgentStatus, request Request,
 func requestFromLifecycleEvent(event LifecycleEvent, status AgentStatus) Request {
 	if event.Request != nil {
 		request := *event.Request
+		request.DependsOn = append([]string(nil), request.DependsOn...)
 		request.SessionID = status.SessionID
 		request.ID = status.ID
 		request.ParentID = status.ParentID
@@ -140,7 +143,7 @@ func requestFromLifecycleEvent(event LifecycleEvent, status AgentStatus) Request
 	}
 	return Request{
 		SessionID: status.SessionID, ID: status.ID, ParentID: status.ParentID,
-		Profile: status.Profile, Task: status.Task, ResumedFrom: status.ResumedFrom,
+		Profile: status.Profile, Task: status.Task, Optional: status.Optional, ResumedFrom: status.ResumedFrom,
 	}
 }
 func resultFromLifecycleEvent(event LifecycleEvent, status AgentStatus) (Result, error) {

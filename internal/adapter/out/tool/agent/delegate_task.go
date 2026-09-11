@@ -17,10 +17,12 @@ type delegateTaskHandler struct {
 }
 
 type delegateTaskInput struct {
-	Task           string `json:"task"`
-	Profile        string `json:"profile"`
-	Context        string `json:"context,omitempty"`
-	TimeoutSeconds int64  `json:"timeout_seconds,omitempty"`
+	Task           string   `json:"task"`
+	Profile        string   `json:"profile"`
+	Context        string   `json:"context,omitempty"`
+	DependsOn      []string `json:"depends_on,omitempty"`
+	Optional       bool     `json:"optional,omitempty"`
+	TimeoutSeconds int64    `json:"timeout_seconds,omitempty"`
 }
 
 // NewDelegateTask creates a tool.Handler that delegates a task to a specialized subagent.
@@ -35,7 +37,7 @@ func NewDelegateTask(coordinator *agent.Coordinator, parentIDs ...string) tool.H
 func (delegateTaskHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                   tool.NameSubagent,
-		Description:            "Spawn a specialized subagent asynchronously and return its agent_id immediately. Use subagent action=wait when delegated work reaches the critical path; it waits for session agent activity and never cancels children on observation timeout.",
+		Description:            "Spawn a specialized subagent asynchronously and return its agent_id immediately. Results required for the parent are delivered automatically. Use depends_on to gate a child on already-spawned children from the same parent turn. Set optional=true only for speculative work that must not block parent completion.",
 		Kind:                   tool.KindAgent,
 		Mutability:             tool.MutabilityMutating,
 		Safety:                 tool.SafetyContract{MutationDomain: tool.MutationDomainAgentState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
@@ -57,6 +59,14 @@ func (delegateTaskHandler) Definition() tool.Definition {
 				"context": map[string]any{
 					"type":        "string",
 					"description": "Optional background information, hints, or specific file paths to focus on.",
+				},
+				"depends_on": map[string]any{
+					"type": "array", "maxItems": agent.MaxAgentDependencies, "items": map[string]any{"type": "string"},
+					"description": "Agent IDs already spawned by this parent turn that must complete successfully before this child starts.",
+				},
+				"optional": map[string]any{
+					"type":        "boolean",
+					"description": "Speculative work that may be integrated if ready but does not block the parent final response and is canceled when the parent completes.",
 				},
 				"timeout_seconds": map[string]any{
 					"type":        "integer",
@@ -126,6 +136,8 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 		Profile:   profile,
 		Task:      task,
 		Context:   strings.TrimSpace(input.Context),
+		DependsOn: append([]string(nil), input.DependsOn...),
+		Optional:  input.Optional,
 	}
 	if input.TimeoutSeconds > 0 {
 		req.Timeout = time.Duration(input.TimeoutSeconds) * time.Second
@@ -139,6 +151,7 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 		"agent_id": handle.ID,
 		"profile":  handle.Profile,
 		"status":   agent.StateQueued,
+		"optional": input.Optional,
 	})
 	if err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "encode subagent handle", err)

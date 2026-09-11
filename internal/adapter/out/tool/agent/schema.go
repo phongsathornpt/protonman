@@ -16,6 +16,14 @@ func agentEvidenceSchema() map[string]any {
 	}, "required": []any{"tool"}, "additionalProperties": false}
 }
 
+func agentFindingSchema() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{
+		"claim":      map[string]any{"type": "string"},
+		"confidence": map[string]any{"type": "string", "enum": []any{"high", "medium", "low"}},
+		"evidence":   map[string]any{"type": "array", "items": agentEvidenceSchema()},
+	}, "required": []any{"claim"}, "additionalProperties": false}
+}
+
 func agentVerificationSchema() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
 		"mutated": map[string]any{"type": "boolean"}, "verified": map[string]any{"type": "boolean"}, "verifier": map[string]any{"type": "string"},
@@ -26,6 +34,9 @@ func agentResultSchema() map[string]any {
 	result := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
+			"conclusion":            map[string]any{"type": "string"},
+			"findings":              map[string]any{"type": "array", "items": agentFindingSchema()},
+			"blockers":              map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			"summary":               map[string]any{"type": "string"},
 			"provider":              map[string]any{"type": "string"},
 			"model":                 map[string]any{"type": "string"},
@@ -38,7 +49,7 @@ func agentResultSchema() map[string]any {
 			"total_duration_ms":     map[string]any{"type": "integer", "minimum": 0},
 			"error":                 map[string]any{"type": "string"},
 		},
-		"required":             []any{"summary", "rounds", "verification", "evidence", "changed_targets", "queue_duration_ms", "execution_duration_ms", "total_duration_ms"},
+		"required":             []any{"conclusion", "findings", "blockers", "summary", "rounds", "verification", "evidence", "changed_targets", "queue_duration_ms", "execution_duration_ms", "total_duration_ms"},
 		"additionalProperties": false,
 	}
 	return map[string]any{"oneOf": []any{result, map[string]any{"type": "null"}}}
@@ -55,6 +66,8 @@ func agentStatusSchema() map[string]any {
 			"provider":     map[string]any{"type": "string"},
 			"model":        map[string]any{"type": "string"},
 			"task":         map[string]any{"type": "string"},
+			"depends_on":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"optional":     map[string]any{"type": "boolean"},
 			"state":        agentStateSchema(),
 			"version":      map[string]any{"type": "integer", "minimum": 1},
 			"start_time":   map[string]any{"type": "string"},
@@ -76,6 +89,7 @@ func delegateTaskOutputSchema() map[string]any {
 			"agent_id": map[string]any{"type": "string"},
 			"profile":  map[string]any{"type": "string", "enum": agent.SubagentProfileNames()},
 			"status":   agentStateSchema(),
+			"optional": map[string]any{"type": "boolean"},
 		},
 		"required":             []any{"agent_id", "profile", "status"},
 		"additionalProperties": false,
@@ -91,8 +105,7 @@ func agentLifecycleOutputSchema(action subagentAction) map[string]any {
 			"events":    map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
 			"cursor":    map[string]any{"type": "integer", "minimum": 0},
 			"truncated": map[string]any{"type": "boolean"},
-			"agents":    map[string]any{"type": "array", "items": agentStatusSchema()},
-		}, "required": []any{"timed_out", "event", "events", "cursor", "truncated", "agents"}, "additionalProperties": false}
+		}, "required": []any{"timed_out", "event", "events", "cursor", "truncated"}, "additionalProperties": false}
 	case "resume":
 		return resumeAgentOutputSchema()
 	case "get", "cancel":

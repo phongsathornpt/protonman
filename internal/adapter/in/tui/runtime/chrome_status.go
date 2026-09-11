@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
 	agentpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/agent"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -18,18 +19,19 @@ func (m bubbleModel) statusView() string {
 	if !m.busy {
 		return ""
 	}
-	activeAgents, _, _, _ := agentActivityCounts(m.turnAgentSnapshot())
+	agentSnapshot := m.turnAgentSnapshot()
+	activeAgents, _, _, _ := agentActivityCounts(agentSnapshot)
 	activity := strings.TrimSpace(m.activity)
 	if activeAgents > 0 {
 		label := "agent"
 		if activeAgents != 1 {
 			label = "agents"
 		}
+		dota := dominantAgentActivity(agentSnapshot, m.agentActivity)
 		if activity == "canceling" {
-			activity = fmt.Sprintf("stopping %d %s", activeAgents, label)
-		} else {
-			activity = fmt.Sprintf("%d %s working", activeAgents, label)
+			dota = agentui.ActivityRetreating.Label()
 		}
+		activity = fmt.Sprintf("%s · %d %s", dota, activeAgents, label)
 	}
 	if activity == "" || activity == "ready" {
 		activity = "analyzing"
@@ -58,6 +60,58 @@ func (m bubbleModel) statusView() string {
 	contentWidth := maxInt(1, maxWidth-2-len([]rune(meta)))
 	activity = truncateWithEllipsis(activity, contentWidth)
 	return indicator + " " + systemStyle.Render(activity) + mutedStyle.Render(meta)
+}
+
+func dominantAgentActivity(snapshot []agent.AgentStatus, activities map[string]AgentActivity) string {
+	type ranked struct {
+		label string
+		rank  int
+	}
+	best := ranked{label: agentui.ActivityWaiting.Label(), rank: 0}
+	for _, st := range snapshot {
+		if st.State.Terminal() {
+			continue
+		}
+		a := activities[st.ID]
+		if a.String() == "" {
+			a = agentui.ActivityForState(st.Profile, st.State)
+		}
+		rank := agentActivityRank(a.Intent)
+		if rank > best.rank {
+			best = ranked{label: a.Intent.Label(), rank: rank}
+		}
+	}
+	if strings.TrimSpace(best.label) == "" {
+		return agentui.ActivityRoaming.Label()
+	}
+	return best.label
+}
+
+func agentActivityRank(intent agentui.ActivityIntent) int {
+	switch intent {
+	case agentui.ActivityRetreating:
+		return 90
+	case agentui.ActivityCare:
+		return 80
+	case agentui.ActivityDefending:
+		return 70
+	case agentui.ActivityPushing:
+		return 60
+	case agentui.ActivityGanking:
+		return 50
+	case agentui.ActivitySticking, agentui.ActivityIntegrated:
+		return 45
+	case agentui.ActivitySkilling:
+		return 40
+	case agentui.ActivityFarming:
+		return 30
+	case agentui.ActivityRoaming:
+		return 20
+	case agentui.ActivityWaiting:
+		return 10
+	default:
+		return 0
+	}
 }
 
 func (m bubbleModel) turnAgentSnapshot() []agent.AgentStatus {

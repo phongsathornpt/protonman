@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -114,7 +115,7 @@ func TestStatusViewShowsSubagentCoordinationDuringBusyTurn(t *testing.T) {
 	m.activity = "thinking"
 	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", State: agent.StateRunning}, {ID: "reviewer-2", State: agent.StateQueued}}
 	got := m.statusView()
-	if !strings.Contains(got, "working") || !strings.Contains(got, "2 agents") {
+	if !strings.Contains(got, "Roaming") || !strings.Contains(got, "2 agents") {
 		t.Fatalf("status view=%q", got)
 	}
 }
@@ -127,7 +128,7 @@ func TestStatusViewCombinesRootAndSubagentProgress(t *testing.T) {
 	m.turnProgress = turnProgress{Round: 3, ToolCalls: 8}
 	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", State: agent.StateRunning}}
 	got := m.statusView()
-	for _, want := range []string{"working", "1 agent"} {
+	for _, want := range []string{"Roaming", "1 agent"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("status view=%q, want %q", got, want)
 		}
@@ -148,7 +149,7 @@ func TestStatusViewAvoidsDuplicatingAgentPaneDetail(t *testing.T) {
 	m.busy = true
 	m.agentSnapshot = []agent.AgentStatus{{ID: "explorer-1", State: agent.StateRunning}, {ID: "reviewer-2", State: agent.StateQueued}}
 	got := m.statusView()
-	if !strings.Contains(got, "2 agents working") {
+	if !strings.Contains(got, "Roaming · 2 agents") {
 		t.Fatalf("status=%q", got)
 	}
 	for _, duplicate := range []string{"1 running", "1 queued", "using grep", "round", "tools"} {
@@ -202,7 +203,7 @@ func TestCancelActiveTurnCancelsOnlyOwnedSubagents(t *testing.T) {
 	if otherStatus.State == agent.StateCanceling || otherStatus.State == agent.StateCanceled {
 		t.Fatalf("other state=%s, want unaffected", otherStatus.State)
 	}
-	if got := m.statusView(); !strings.Contains(got, "stopping 1 agent") {
+	if got := m.statusView(); !strings.Contains(got, "B · 1 agent") {
 		t.Fatalf("status=%q", got)
 	}
 }
@@ -286,7 +287,7 @@ func TestAgentWaitTimeoutDoesNotLeakRPCTranscript(t *testing.T) {
 		}
 	}
 	run := m.historyState.AgentRun("int-7")
-	if run == nil || run.Activity != "" || run.State != agent.StateRunning {
+	if run == nil || run.Activity != "Roaming" || run.State != agent.StateRunning {
 		t.Fatalf("run state=%#v", run)
 	}
 }
@@ -567,5 +568,75 @@ func TestAgentRuntimeStatePreservesReasoningPreferenceAcrossRestart(t *testing.T
 	}
 	if !restarted.reasoningPreferenceSet || restarted.reasoningPreferenceSource != reasoningPreferenceSession || !restarted.reasoningCompatibilityFallback {
 		t.Fatalf("restart preference metadata lost: set=%v source=%v fallback=%v", restarted.reasoningPreferenceSet, restarted.reasoningPreferenceSource, restarted.reasoningCompatibilityFallback)
+	}
+}
+
+func TestAgentsPaneUsesDotaActivityVocabulary(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.resize(120, 40)
+	m.agentSnapshot = []agent.AgentStatus{
+		{ID: "agi-w8", Profile: agent.ProfileAgility, Task: "queued", State: agent.StateQueued},
+		{ID: "int-skill", Profile: agent.ProfileIntelligence, Task: "reason", State: agent.StateRunning},
+		{ID: "str-push", Profile: agent.ProfileStrength, Task: "implement", State: agent.StateRunning},
+		{ID: "agi-fail", Profile: agent.ProfileAgility, Task: "failed", State: agent.StateFailed, Reason: "boom"},
+		{ID: "str-b", Profile: agent.ProfileStrength, Task: "cancel", State: agent.StateCanceled},
+		{ID: "agi-ready", Profile: agent.ProfileAgility, Task: "done", State: agent.StateCompleted},
+	}
+	joined := strings.Join(agentInspectionRows(newPaneRenderContext(m)), "\n")
+	for _, want := range []string{"W8", "Skilling", "Pushing", "Care", "B", "Ready"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("agents pane missing %q: %q", want, joined)
+		}
+	}
+}
+
+func TestStatusViewPrefersHighestSignalAgentActivity(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.resize(100, 30)
+	m.busy = true
+	m.agentSnapshot = []agent.AgentStatus{
+		{ID: "agi-1", Profile: agent.ProfileAgility, State: agent.StateRunning},
+		{ID: "str-2", Profile: agent.ProfileStrength, State: agent.StateRunning},
+	}
+	m.agentActivity["agi-1"] = AgentActivity{Intent: agentui.ActivityFarming, Label: "Farming · session.go"}
+	m.agentActivity["str-2"] = AgentActivity{Intent: agentui.ActivityDefending, Label: "Defending · go test ./..."}
+	if got := m.statusView(); !strings.Contains(got, "Defending · 2 agents") {
+		t.Fatalf("status=%q, want defending priority", got)
+	}
+}
+
+func TestConsumedResultProjectsIntegratedActivityForCompletedAgent(t *testing.T) {
+	release := make(chan struct{})
+	close(release)
+	coord := agent.NewCoordinator(nil, nil, nil, nil, agent.WithRunnerFactory(func(agent.Profile, *toolcall.Service) (turn.Runner, error) {
+		return blockingAgentViewRunner{release: release}, nil
+	}))
+	defer coord.Close()
+	handle, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileAgility, Task: "inspect flow"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := coord.Wait(context.Background(), handle.ID, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.agents = app.NewAgents(coord)
+	m.updateAgentLifecycle(agentLifecycleMsg{event: agent.Event{
+		Kind: agent.EventAgentResultConsumed, AgentID: handle.ID, Profile: agent.ProfileAgility, ResultVersion: 1,
+	}})
+	if got := m.agentActivity[handle.ID].Intent; got != agentui.ActivityIntegrated {
+		t.Fatalf("activity=%q, want integrated", got)
+	}
+}
+
+func TestSyncAgentSnapshotPrunesStaleIntegratedActivity(t *testing.T) {
+	coord := agent.NewCoordinator(nil, nil, nil, nil)
+	defer coord.Close()
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.agents = app.NewAgents(coord)
+	m.agentActivity["expired-agent"] = AgentActivity{Intent: agentui.ActivityIntegrated, Label: "Integrated"}
+	m.syncAgentSnapshot()
+	if _, ok := m.agentActivity["expired-agent"]; ok {
+		t.Fatal("stale integrated activity survived authoritative snapshot pruning")
 	}
 }

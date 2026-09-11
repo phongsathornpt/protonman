@@ -17,7 +17,7 @@ func (c *Coordinator) GetRef(ref AgentRef) (AgentStatus, bool) {
 	if entry == nil || entry.status.SessionID != ref.SessionID {
 		return AgentStatus{}, false
 	}
-	return entry.status, true
+	return cloneAgentStatus(entry.status), true
 }
 
 // LookupRef returns one session-owned status and terminal result.
@@ -30,7 +30,7 @@ func (c *Coordinator) LookupRef(ref AgentRef) (AgentStatus, *Result, bool) {
 	if entry == nil || entry.status.SessionID != ref.SessionID {
 		return AgentStatus{}, nil, false
 	}
-	status := entry.status
+	status := cloneAgentStatus(entry.status)
 	if !status.State.Terminal() {
 		return status, nil, true
 	}
@@ -49,6 +49,69 @@ func (c *Coordinator) ListSession(sessionID string) []AgentStatus {
 		}
 	}
 	return out
+}
+
+// HasLiveForTurn reports whether one parent turn still owns non-terminal children.
+func (c *Coordinator) HasLiveForTurn(ref TurnRef) bool {
+	return c.hasLiveForTurn(ref, false)
+}
+
+// HasBlockingLiveForTurn reports whether the turn owns non-terminal children whose
+// results are required before the parent may commit its final response. Optional
+// speculative children are intentionally excluded from this completion barrier.
+func (c *Coordinator) HasBlockingLiveForTurn(ref TurnRef) bool {
+	return c.hasLiveForTurn(ref, true)
+}
+
+func (c *Coordinator) hasLiveForTurn(ref TurnRef, blockingOnly bool) bool {
+	if c == nil {
+		return false
+	}
+	ref = ref.normalized()
+	c.pruneExpired()
+	c.agentsMu.RLock()
+	defer c.agentsMu.RUnlock()
+	for _, entry := range c.agents {
+		if ref.SessionID != "" && entry.status.SessionID != ref.SessionID {
+			continue
+		}
+		if ref.TurnID != "" && entry.status.ParentID != ref.TurnID {
+			continue
+		}
+		if blockingOnly && entry.status.Optional {
+			continue
+		}
+		if !entry.status.State.Terminal() {
+			return true
+		}
+	}
+	return false
+}
+
+// CancelOptionalByTurn cancels speculative children that are still live when the
+// owning parent turn commits. Their completed results remain retained and any
+// result that became ready before completion can still be integrated normally.
+func (c *Coordinator) CancelOptionalByTurn(ref TurnRef) int {
+	ref = ref.normalized()
+	if ref.TurnID == "" {
+		return 0
+	}
+	c.agentsMu.Lock()
+	cancels := make([]func(), 0)
+	for _, entry := range c.agents {
+		if entry.status.SessionID != ref.SessionID || entry.status.ParentID != ref.TurnID || !entry.status.Optional || entry.status.State.Terminal() || entry.status.State == StateCanceling {
+			continue
+		}
+		if err := c.persistAndApplyTransition(c.rootCtx, entry, LifecycleAgentCancelRequested, time.Now(), "optional child no longer needed after parent completion"); err != nil {
+			continue
+		}
+		cancels = append(cancels, entry.cancel)
+	}
+	c.agentsMu.Unlock()
+	for _, cancel := range cancels {
+		cancel()
+	}
+	return len(cancels)
 }
 
 // CancelRef requests cancellation only when the agent belongs to ref.SessionID.

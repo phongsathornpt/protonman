@@ -7,15 +7,18 @@ import (
 )
 
 var (
-	ErrNotFound          = errors.New("subagent not found")
-	ErrCoordinatorClosed = errors.New("subagent coordinator is closed")
-	ErrSubagentsDisabled = errors.New("subagents are disabled")
-	ErrLiveLimit         = errors.New("maximum live subagents reached")
-	ErrNotResumable      = errors.New("subagent is not resumable")
-	ErrInvalidTransition = errors.New("invalid subagent lifecycle transition")
-	ErrShutdownTimeout   = errors.New("subagent coordinator shutdown timed out")
-	ErrQueueTimeout      = errors.New("subagent queue timed out")
-	ErrExecutionTimeout  = errors.New("subagent execution timed out")
+	ErrNotFound           = errors.New("subagent not found")
+	ErrCoordinatorClosed  = errors.New("subagent coordinator is closed")
+	ErrSubagentsDisabled  = errors.New("subagents are disabled")
+	ErrLiveLimit          = errors.New("maximum live subagents reached")
+	ErrNotResumable       = errors.New("subagent is not resumable")
+	ErrInvalidTransition  = errors.New("invalid subagent lifecycle transition")
+	ErrShutdownTimeout    = errors.New("subagent coordinator shutdown timed out")
+	ErrQueueTimeout       = errors.New("subagent queue timed out")
+	ErrExecutionTimeout   = errors.New("subagent execution timed out")
+	ErrDependencyNotFound = errors.New("subagent dependency not found")
+	ErrDependencyScope    = errors.New("subagent dependency belongs to another turn")
+	ErrDependencyFailed   = errors.New("subagent dependency did not complete successfully")
 )
 
 type ShutdownTimeoutError struct {

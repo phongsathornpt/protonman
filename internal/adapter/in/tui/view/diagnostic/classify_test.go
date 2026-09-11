@@ -3,7 +3,11 @@ package diagnostic
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
+
+	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 func TestClassifyRuntimeDeadlineIsNotNetworkTimeout(t *testing.T) {
@@ -27,5 +31,27 @@ func TestClassifyProviderStreamTimeoutRemainsNetworkTimeout(t *testing.T) {
 	got := Classify(errors.New("ProviderHeaderTimeoutError: upstream response timeout"), "", "")
 	if got.Kind != KindStreamTimeout {
 		t.Fatalf("kind = %q, want %q", got.Kind, KindStreamTimeout)
+	}
+}
+
+func TestClassifyEmptyModelResponseIsActionable(t *testing.T) {
+	err := fmt.Errorf("turn failed: %w", applicationturn.ErrEmptyResponse)
+	got := Classify(err, "opencode", "nemotron-3.5-lightning-free")
+	if got.Kind != KindEmptyResponse || !got.Retryable {
+		t.Fatalf("classification = %+v, want retryable empty response", got)
+	}
+	if UserCode(got.Kind) != "EMPTY_RESPONSE" {
+		t.Fatalf("user code = %q", UserCode(got.Kind))
+	}
+}
+
+func TestClassifyIncompleteModelStreamIsRetryableStreamFailure(t *testing.T) {
+	err := fmt.Errorf("read model stream: %w", sdk.ErrIncompleteStream)
+	got := Classify(err, "opencode", "nemotron-3.5-lightning-free")
+	if got.Kind != KindStreamTimeout || !got.Retryable {
+		t.Fatalf("classification = %+v, want retryable stream timeout", got)
+	}
+	if got.Badge != "STREAM_INCOMPLETE" {
+		t.Fatalf("badge = %q", got.Badge)
 	}
 }

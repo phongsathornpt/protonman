@@ -134,13 +134,26 @@ func protectionMetric(kind toolcall.ProtectionEventKind) string {
 
 // ObserveAgent records one redacted subagent orchestration event and its counter.
 func (o *SlogObserver) ObserveAgent(ctx context.Context, kind, agentID, parentID, profile string) {
+	o.ObserveAgentMetric(ctx, kind, agentID, parentID, profile, 0, 0)
+}
+
+// ObserveAgentMetric records redacted orchestration measurements without task or result content.
+func (o *SlogObserver) ObserveAgentMetric(ctx context.Context, kind, agentID, parentID, profile string, bytes int64, count int) {
 	if o == nil {
 		return
 	}
-	metric := kind + "_total"
 	switch kind {
 	case "agent_wait_timeout", "agent_completed", "agent_failed", "agent_canceled", "agent_interrupted", "agent_resumed", "agent_persistence_failure":
-		o.increment(metric)
+		o.increment(kind + "_total")
+	case "subagent_result_bytes", "subagent_result_consumed_bytes", "subagent_duplicate_result_bytes", "subagent_wait_snapshot_bytes":
+		if bytes > 0 {
+			o.add(kind, uint64(bytes))
+		}
+	case "subagent_synthesis_agents":
+		if count > 0 {
+			o.add(kind, uint64(count))
+		}
+		o.increment("subagent_synthesis_batches_total")
 	default:
 		return
 	}
@@ -154,12 +167,22 @@ func (o *SlogObserver) ObserveAgent(ctx context.Context, kind, agentID, parentID
 	if profile != "" {
 		attrs = append(attrs, slog.String("profile", profile))
 	}
+	if bytes > 0 {
+		attrs = append(attrs, slog.Int64("bytes", bytes))
+	}
+	if count > 0 {
+		attrs = append(attrs, slog.Int("count", count))
+	}
 	o.logger.LogAttrs(ctx, slog.LevelInfo, "protonman agent event", attrs...)
 }
 
 func (o *SlogObserver) increment(name string) {
+	o.add(name, 1)
+}
+
+func (o *SlogObserver) add(name string, value uint64) {
 	o.mu.Lock()
-	o.counters[name]++
+	o.counters[name] += value
 	o.mu.Unlock()
 }
 

@@ -57,13 +57,21 @@ func (c *Coordinator) persistentSnapshotLocked(sessionID string) PersistentSnaps
 			continue
 		}
 		status := entry.status
+		status.DependsOn = append([]string(nil), status.DependsOn...)
 		request := entry.request
+		request.DependsOn = append([]string(nil), request.DependsOn...)
 		request.Task = truncatePersistentText(request.Task, maxPersistentTaskBytes)
 		request.Context = truncatePersistentText(request.Context, maxPersistentContextBytes)
 		status.Task = request.Task
 		record := PersistentAgent{Status: status, Request: request}
 		if entry.status.State.Terminal() {
-			result := cloneResult(entry.result)
+			result := entry.result
+			if c.resultStore != nil {
+				if stored, ok := c.resultStore.Get(entry.resultRef); ok {
+					result = stored
+				}
+			}
+			result = cloneResult(result)
 			record.Result = &result
 		}
 		agents = append(agents, record)
@@ -124,7 +132,14 @@ func (c *Coordinator) RestorePersistentSnapshot(snapshot PersistentSnapshot) err
 		started := make(chan struct{})
 		close(done)
 		close(started)
-		c.agents[status.ID] = &agentEntry{status: status, request: request, result: result, cancel: func() {}, done: done, started: started}
+		entry := &agentEntry{status: status, request: request, result: result, cancel: func() {}, done: done, started: started}
+		if status.State.Terminal() && record.Result != nil {
+			entry.resultRef = ResultRef{SessionID: status.SessionID, AgentID: status.ID, Version: status.Version}
+			if c.resultStore != nil {
+				c.resultStore.Put(entry.resultRef, result)
+			}
+		}
+		c.agents[status.ID] = entry
 		c.raiseSequenceForID(status.ID)
 		if interrupted {
 			interruptedEvents = append(interruptedEvents, MetricEvent{Kind: MetricInterrupted, SessionID: status.SessionID, AgentID: status.ID, ParentID: status.ParentID, Profile: status.Profile})
@@ -139,10 +154,25 @@ func (c *Coordinator) RestorePersistentSnapshot(snapshot PersistentSnapshot) err
 }
 
 func cloneResult(result Result) Result {
+	result = normalizeResultCompatibility(result)
+	result.Findings = cloneFindings(result.Findings)
+	result.Blockers = append([]string(nil), result.Blockers...)
 	result.Evidence = append([]EvidenceRef(nil), result.Evidence...)
 	result.ChangedTargets = append([]string(nil), result.ChangedTargets...)
 	result.Err = nil
 	return result
+}
+
+func cloneFindings(values []Finding) []Finding {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]Finding, len(values))
+	for i, value := range values {
+		out[i] = value
+		out[i].Evidence = append([]EvidenceRef(nil), value.Evidence...)
+	}
+	return out
 }
 
 func (c *Coordinator) raiseSequenceForID(id string) {

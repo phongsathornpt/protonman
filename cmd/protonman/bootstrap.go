@@ -131,6 +131,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	}
 	type agentTelemetryObserver interface {
 		ObserveAgent(context.Context, string, string, string, string)
+		ObserveAgentMetric(context.Context, string, string, string, string, int64, int)
 	}
 	agentTelemetry, _ := observer.(agentTelemetryObserver)
 	sessionID, state, found, err := resolveSession(ctx, stateStore, workDir, options)
@@ -153,7 +154,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		agent.WithResultTTL(loadedConfig.Agent.CompletedResultTTL),
 		agent.WithMetricObserver(func(metricCtx context.Context, ev agent.MetricEvent) {
 			if agentTelemetry != nil {
-				agentTelemetry.ObserveAgent(metricCtx, string(ev.Kind), ev.AgentID, ev.ParentID, string(ev.Profile))
+				agentTelemetry.ObserveAgentMetric(metricCtx, string(ev.Kind), ev.AgentID, ev.ParentID, string(ev.Profile), ev.Bytes, ev.Count)
 			}
 		}),
 		agent.WithEventSink(func(eventCtx context.Context, ev agent.Event) error {

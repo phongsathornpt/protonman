@@ -299,9 +299,22 @@ func (m *bubbleModel) nextAgentEvent() tea.Cmd {
 func (m *bubbleModel) syncAgentSnapshot() {
 	if !m.agents.Available() {
 		m.agentSnapshot = nil
+		clear(m.agentActivity)
 		return
 	}
 	m.agentSnapshot = m.agents.List()
+	if len(m.agentActivity) == 0 {
+		return
+	}
+	retained := make(map[string]struct{}, len(m.agentSnapshot))
+	for _, status := range m.agentSnapshot {
+		retained[status.ID] = struct{}{}
+	}
+	for id := range m.agentActivity {
+		if _, ok := retained[id]; !ok {
+			delete(m.agentActivity, id)
+		}
+	}
 }
 
 func (m *bubbleModel) modelIDKnown(provider, modelID string) bool {

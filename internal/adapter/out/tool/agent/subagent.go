@@ -45,7 +45,7 @@ func NewSubagent(coordinator *agent.Coordinator, parentIDs ...string) tool.Handl
 func (h subagentHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                   tool.NameSubagent,
-		Description:            "Subagent capability. Use action=spawn, wait, get, list, cancel, or resume to manage specialized concurrent agents.",
+		Description:            "Subagent capability for specialized concurrent work. Use action=spawn to delegate; completed results are delivered automatically to the owning turn. wait/get/list are diagnostic lifecycle inspection, while cancel/resume explicitly control existing work.",
 		Kind:                   tool.KindAgent,
 		Mutability:             tool.MutabilityMutating,
 		Safety:                 tool.SafetyContract{MutationDomain: tool.MutationDomainAgentState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
@@ -69,11 +69,13 @@ func subagentInputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"action":          map[string]any{"type": "string", "enum": []string{"spawn", "wait", "get", "list", "cancel", "resume"}, "description": "Subagent operation to perform"},
+			"action":          map[string]any{"type": "string", "enum": []string{"spawn", "wait", "get", "list", "cancel", "resume"}, "description": "Operation: spawn delegates work with automatic result delivery; wait/get/list are diagnostic inspection; cancel/resume explicitly control existing work"},
 			"task":            map[string]any{"type": "string", "description": "Task for action=spawn"},
 			"profile":         map[string]any{"type": "string", "enum": agent.SubagentProfileNames(), "description": agent.SubagentProfileSchemaDescription()},
 			"context":         map[string]any{"type": "string", "description": "Optional background context for action=spawn"},
-			"timeout_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 86400, "description": "Optional timeout for spawn or wait"},
+			"depends_on":      map[string]any{"type": "array", "maxItems": agent.MaxAgentDependencies, "items": map[string]any{"type": "string"}, "description": "For action=spawn only: already-spawned same-turn agent IDs that must complete successfully first"},
+			"optional":        map[string]any{"type": "boolean", "description": "For action=spawn only: speculative work that may be integrated if ready but does not block parent completion"},
+			"timeout_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 86400, "description": "Optional child runtime timeout for spawn or bounded diagnostic timeout for wait"},
 			"agent_id":        map[string]any{"type": "string", "description": "Target agent for get, cancel, or resume"},
 		},
 		"required":             []string{"action"},

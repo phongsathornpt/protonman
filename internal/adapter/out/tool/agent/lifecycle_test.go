@@ -55,8 +55,12 @@ func TestWaitAgentTimeoutDoesNotCancelChild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(res.StructuredOutput), `"timed_out":false`) || !strings.Contains(string(res.StructuredOutput), "finished") || !strings.Contains(string(res.StructuredOutput), h.ID) {
+	structured := string(res.StructuredOutput)
+	if !strings.Contains(structured, `"timed_out":false`) || !strings.Contains(structured, h.ID) {
 		t.Fatalf("completion output = %s structured=%s", res.Output, res.StructuredOutput)
+	}
+	if strings.Contains(structured, "finished") {
+		t.Fatalf("wait leaked retained child result: %s", structured)
 	}
 }
 

@@ -108,6 +108,8 @@ type AgentStatus struct {
 	Provider    string    `json:"provider,omitempty"`
 	Model       string    `json:"model,omitempty"`
 	Task        string    `json:"task"`
+	DependsOn   []string  `json:"depends_on,omitempty"`
+	Optional    bool      `json:"optional,omitempty"`
 	State       State     `json:"state"`
 	Version     uint64    `json:"version"`
 	StartTime   time.Time `json:"start_time"`
@@ -116,6 +118,11 @@ type AgentStatus struct {
 	Reason      string    `json:"reason,omitempty"`
 	ResumedFrom string    `json:"resumed_from,omitempty"`
 	ResumedAs   string    `json:"resumed_as,omitempty"`
+}
+
+func cloneAgentStatus(status AgentStatus) AgentStatus {
+	status.DependsOn = append([]string(nil), status.DependsOn...)
+	return status
 }
 
 type childToolRuntime struct {
@@ -133,10 +140,12 @@ type agentEntry struct {
 	languageModel   sdk.LanguageModel
 	reasoningEffort sdk.ReasoningEffort
 	toolRuntime     childToolRuntime
+	dependencies    []*agentEntry
 	cancel          context.CancelFunc
 	done            chan struct{}
 	started         chan struct{}
 	result          Result
+	resultRef       ResultRef
 	err             error
 }
 
@@ -167,27 +176,30 @@ type Coordinator struct {
 	rootCtx     context.Context
 	rootStop    context.CancelFunc
 
-	maxToolCalls        int
-	reasoningEffort     sdk.ReasoningEffort
-	maxLiveAgents       int
-	maxRetainedAgents   int
-	maxRuntime          time.Duration
-	waitTimeout         time.Duration
-	defaultQueueTimeout time.Duration
-	resultTTL           time.Duration
-	closeTimeout        time.Duration
-	eventSink           EventSink
-	runnerFactory       RunnerFactory
-	metricObserver      MetricObserver
-	lifecycleStore      LifecycleEventStore
-	eventQueue          chan Event
-	closeOnce           sync.Once
-	closeDone           chan struct{}
-	eventMu             sync.RWMutex
-	subscribers         map[uint64]chan Event
-	subscriberSeq       uint64
-	activityMu          sync.Mutex
-	activityMailboxes   map[string]*activityMailbox
+	maxToolCalls         int
+	reasoningEffort      sdk.ReasoningEffort
+	maxLiveAgents        int
+	maxRetainedAgents    int
+	maxRuntime           time.Duration
+	waitTimeout          time.Duration
+	defaultQueueTimeout  time.Duration
+	resultTTL            time.Duration
+	closeTimeout         time.Duration
+	eventSink            EventSink
+	runnerFactory        RunnerFactory
+	metricObserver       MetricObserver
+	lifecycleStore       LifecycleEventStore
+	resultStore          ResultStore
+	eventQueue           chan Event
+	closeOnce            sync.Once
+	closeDone            chan struct{}
+	eventMu              sync.RWMutex
+	subscribers          map[uint64]chan Event
+	subscriberSeq        uint64
+	activityMu           sync.Mutex
+	activityMailboxes    map[string]*activityMailbox
+	resultEventMu        sync.Mutex
+	resultEventMailboxes map[string]*resultEventMailbox
 
 	seq     uint64
 	closed  atomic.Bool
@@ -325,6 +337,15 @@ func WithLifecycleEventStore(store LifecycleEventStore) Option {
 	return func(c *Coordinator) { c.lifecycleStore = store }
 }
 
+// WithResultStore configures the canonical immutable subagent result store.
+func WithResultStore(store ResultStore) Option {
+	return func(c *Coordinator) {
+		if store != nil {
+			c.resultStore = store
+		}
+	}
+}
+
 // WithEventSink attaches an observer for subagent lifecycle events.
 func WithEventSink(sink EventSink) Option {
 	return func(c *Coordinator) {
@@ -402,6 +423,8 @@ func NewCoordinator(
 		toolExecutionTimeout:  toolcall.DefaultExecutionTimeout,
 		subscribers:           make(map[uint64]chan Event),
 		activityMailboxes:     make(map[string]*activityMailbox),
+		resultEventMailboxes:  make(map[string]*resultEventMailbox),
+		resultStore:           newMemoryResultStore(),
 		eventQueue:            make(chan Event, defaultEventQueueSize),
 		closeDone:             make(chan struct{}),
 	}

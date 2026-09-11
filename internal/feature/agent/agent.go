@@ -131,6 +131,8 @@ type ActivityWaitResult struct {
 }
 
 // Request is the invocation payload for a delegated subagent.
+const MaxAgentDependencies = 64
+
 type Request struct {
 	SessionID    string        `json:"session_id,omitempty"`
 	ID           string        `json:"id,omitempty"`
@@ -138,6 +140,8 @@ type Request struct {
 	Profile      Profile       `json:"profile"`
 	Task         string        `json:"task"`
 	Context      string        `json:"context,omitempty"`
+	DependsOn    []string      `json:"depends_on,omitempty"`
+	Optional     bool          `json:"optional,omitempty"`
 	Timeout      time.Duration `json:"timeout,omitempty"`
 	QueueTimeout time.Duration `json:"queue_timeout,omitempty"`
 	ResumedFrom  string        `json:"resumed_from,omitempty"`
@@ -157,6 +161,9 @@ func (r Request) Validate() error {
 	if r.QueueTimeout < 0 {
 		return errors.New("subagent queue timeout cannot be negative")
 	}
+	if len(r.DependsOn) > MaxAgentDependencies {
+		return fmt.Errorf("subagent dependencies exceed limit %d", MaxAgentDependencies)
+	}
 	return nil
 }
 
@@ -170,6 +177,13 @@ type EvidenceRef struct {
 	Target string `json:"target,omitempty"`
 }
 
+// Finding is one semantic child conclusion tied to runtime-observed evidence.
+type Finding struct {
+	Claim      string        `json:"claim"`
+	Confidence string        `json:"confidence,omitempty"`
+	Evidence   []EvidenceRef `json:"evidence,omitempty"`
+}
+
 // Result is the bounded final output returned from a subagent to its caller.
 type Result struct {
 	SessionID      string                 `json:"session_id,omitempty"`
@@ -177,7 +191,10 @@ type Result struct {
 	Profile        Profile                `json:"profile"`
 	Provider       string                 `json:"provider,omitempty"`
 	Model          string                 `json:"model,omitempty"`
-	Summary        string                 `json:"summary"`
+	Conclusion     string                 `json:"conclusion,omitempty"`
+	Findings       []Finding              `json:"findings,omitempty"`
+	Blockers       []string               `json:"blockers,omitempty"`
+	Summary        string                 `json:"summary,omitempty"` // Deprecated compatibility alias for Conclusion.
 	Rounds         int                    `json:"rounds"`
 	Verification   turn.VerificationState `json:"verification"`
 	Evidence       []EvidenceRef          `json:"evidence"`
@@ -198,6 +215,10 @@ const (
 	EventAgentStarted EventKind = "agent_started"
 	// EventAgentProgress forwards intermediate text or activity updates.
 	EventAgentProgress EventKind = "agent_progress"
+	// EventAgentResultAvailable announces that a versioned immutable result can be loaded.
+	EventAgentResultAvailable EventKind = "agent_result_available"
+	// EventAgentResultConsumed marks successful delivery of a versioned result to the parent runtime context.
+	EventAgentResultConsumed EventKind = "agent_result_consumed"
 	// EventAgentCompleted marks successful completion of a subagent run.
 	EventAgentCompleted EventKind = "agent_completed"
 	// EventAgentFailed marks a terminal failure or cancellation.
@@ -213,6 +234,7 @@ type Event struct {
 	Profile       Profile       `json:"profile"`
 	Message       string        `json:"message,omitempty"`
 	Call          *tool.Call    `json:"call,omitempty"`
+	ResultVersion uint64        `json:"result_version,omitempty"`
 	QueueDuration time.Duration `json:"queue_duration,omitempty"`
 	Duration      time.Duration `json:"duration,omitempty"`
 	TotalDuration time.Duration `json:"total_duration,omitempty"`
