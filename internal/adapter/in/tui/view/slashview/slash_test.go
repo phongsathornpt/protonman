@@ -28,6 +28,8 @@ func TestParseContext(t *testing.T) {
 		{value: "/skills pd", ok: true, kind: ContextSkill, lead: "/skills ", query: "pd"},
 		{value: "/skills toggle pdf", ok: true, kind: ContextSkill, lead: "/skills toggle ", query: "pdf"},
 		{value: "/skills toggle", ok: false},
+		{value: "/low ", ok: true, kind: ContextLowConcurrency, lead: "/low ", query: ""},
+		{value: "/low a", ok: true, kind: ContextLowConcurrency, lead: "/low ", query: "a"},
 		{value: "/skill pd", ok: false},
 		{value: "/model free", ok: false},
 		{value: "plain", ok: false},
@@ -92,5 +94,16 @@ func TestCatalogDeclaresArgumentModes(t *testing.T) {
 	clear, ok := LookupCommand("clear")
 	if !ok || clear.Argument != ArgumentNone {
 		t.Fatalf("clear spec = %#v, ok=%v", clear, ok)
+	}
+}
+
+func TestLowConcurrencyArgumentMatches(t *testing.T) {
+	context, ok := ParseContext("/low a")
+	if !ok {
+		t.Fatal("ParseContext returned false")
+	}
+	matches := Matches(context, Catalog(), nil)
+	if len(matches) != 1 || matches[0].Name != "auto" {
+		t.Fatalf("matches = %#v, want auto", matches)
 	}
 }

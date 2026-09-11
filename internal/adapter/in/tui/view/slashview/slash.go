@@ -125,6 +125,7 @@ type ContextKind uint8
 const (
 	ContextCommand ContextKind = iota
 	ContextSkill
+	ContextLowConcurrency
 )
 
 type Context struct {
@@ -140,6 +141,10 @@ func ParseContext(value string) (Context, bool) {
 	}
 	prefix := value[:1]
 	body := value[1:]
+	if strings.HasPrefix(body, "low ") {
+		rest := strings.TrimSpace(strings.TrimPrefix(body, "low "))
+		return Context{Kind: ContextLowConcurrency, Prefix: prefix, Lead: prefix + "low ", Query: rest}, true
+	}
 	for _, cmd := range []string{"skills"} {
 		if !strings.HasPrefix(body, cmd+" ") {
 			continue
@@ -170,6 +175,20 @@ type Skill struct {
 }
 
 func Matches(context Context, catalog []Command, skills []Skill) []Command {
+	if context.Kind == ContextLowConcurrency {
+		options := []Command{
+			{Name: "auto", Description: "use provider/model recommendation"},
+			{Name: "on", Description: "force low concurrency for this model"},
+			{Name: "off", Description: "disable low concurrency"},
+		}
+		matches := make([]Command, 0, len(options))
+		for _, option := range options {
+			if context.Query == "" || FuzzyContains(option.Name, context.Query) {
+				matches = append(matches, option)
+			}
+		}
+		return matches
+	}
 	if context.Kind == ContextSkill {
 		matches := make([]Command, 0, len(skills))
 		for _, skill := range skills {

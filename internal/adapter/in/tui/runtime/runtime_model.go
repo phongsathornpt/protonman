@@ -148,6 +148,8 @@ type presentationModelState struct {
 	layout             layoutState
 	welcomeCache       welcomeCardCache
 	keyboardCapability keyboardCapability
+	transientNotice    string
+	transientNoticeID  uint64
 }
 
 type bubbleModel struct {

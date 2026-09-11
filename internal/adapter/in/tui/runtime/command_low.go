@@ -11,12 +11,7 @@ import (
 func (m *bubbleModel) handleLowConcurrencyCommand(argument string) tea.Cmd {
 	raw := strings.TrimSpace(argument)
 	if raw == "" {
-		effective := "off"
-		if m.lowConcurrencyEffective() {
-			effective = "on"
-		}
-		m.appendLine(mutedStyle.Render(fmt.Sprintf("  low concurrency · %s · effective %s", m.lowConcurrencyMode, effective)))
-		m.refreshViewport()
+		m.openLowConcurrencyPane()
 		return nil
 	}
 	if m.busy {
@@ -29,15 +24,22 @@ func (m *bubbleModel) handleLowConcurrencyCommand(argument string) tea.Cmd {
 		m.appendError(err.Error())
 		return nil
 	}
+	return m.applyLowConcurrencySetting(next)
+}
+
+func (m *bubbleModel) applyLowConcurrencySetting(next model.LowConcurrencySetting) tea.Cmd {
+	if m.busy {
+		m.appendError("cannot change low concurrency mode while a turn is running")
+		return nil
+	}
 	m.lowConcurrencyMode = next
 	m.reconfigureRunner()
 	effective := "off"
 	if m.lowConcurrencyEffective() {
 		effective = "on"
 	}
-	m.appendLine(mutedStyle.Render(fmt.Sprintf("  low concurrency · %s · effective %s", next, effective)))
 	m.refreshViewport()
-	return nil
+	return m.showTransientNotice(fmt.Sprintf("low concurrency · %s · effective %s", next, effective))
 }
 
 func (m *bubbleModel) lowConcurrencyEffective() bool {

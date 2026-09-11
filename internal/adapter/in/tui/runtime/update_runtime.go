@@ -136,6 +136,12 @@ func (m *bubbleModel) updateRuntimeEvent(msg tea.Msg) (tea.Cmd, bool) {
 		return m.updateProviderDeleted(message), true
 	case permissionRuleSavedMsg:
 		return m.updatePermissionRuleSaved(message), true
+	case transientNoticeExpiredMsg:
+		if message.id == m.transientNoticeID {
+			m.transientNotice = ""
+			m.refreshFrameChromeOnly()
+		}
+		return nil, true
 	case turnmsg.Delta:
 		return m.updateTurnDelta(message), true
 	case turnmsg.EventsClosed:

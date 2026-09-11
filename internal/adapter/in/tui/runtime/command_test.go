@@ -918,13 +918,18 @@ func TestLowCommandControlsSessionLowConcurrencyMode(t *testing.T) {
 	if got := m.lowConcurrencyMode; got != model.LowConcurrencyAuto {
 		t.Fatalf("initial low concurrency = %s, want auto", got)
 	}
+	before := plainTranscript(m)
 	m.executeCommand("/low")
 	if got := m.lowConcurrencyMode; got != model.LowConcurrencyAuto {
 		t.Fatalf("/low inspect mutated mode to %s", got)
 	}
-	if got := plainTranscript(m); !strings.Contains(got, "low concurrency · auto · effective on") {
-		t.Fatalf("/low status missing effective state: %q", got)
+	if !m.panes.bottom.has(lowConcurrencyViewID) {
+		t.Fatal("/low did not open low concurrency picker")
 	}
+	if got := plainTranscript(m); got != before {
+		t.Fatalf("/low picker polluted transcript: before=%q after=%q", before, got)
+	}
+	m.panes.bottom.remove(lowConcurrencyViewID)
 	m.executeCommand("/low on")
 	if got := m.lowConcurrencyMode; got != model.LowConcurrencyOn {
 		t.Fatalf("/low on = %s, want on", got)
@@ -937,8 +942,11 @@ func TestLowCommandControlsSessionLowConcurrencyMode(t *testing.T) {
 	if got := m.lowConcurrencyMode; got != model.LowConcurrencyAuto {
 		t.Fatalf("/low auto = %s, want auto", got)
 	}
-	if got := plainTranscript(m); !strings.Contains(got, "low concurrency · auto") {
-		t.Fatalf("low command feedback missing: %q", got)
+	if got := plainTranscript(m); got != before {
+		t.Fatalf("low setting feedback polluted transcript: %q", got)
+	}
+	if !strings.Contains(m.transientNotice, "low concurrency · auto · effective on") {
+		t.Fatalf("low setting transient notice = %q", m.transientNotice)
 	}
 }
 
