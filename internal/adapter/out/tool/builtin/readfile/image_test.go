@@ -6,6 +6,7 @@ import (
 	"errors"
 	"image"
 	"image/color"
+	"image/gif"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -229,5 +230,82 @@ func TestContextReaderStopsAfterCancellation(t *testing.T) {
 	cancel()
 	if _, err := reader.Read(buf); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled read error = %v, want context.Canceled", err)
+	}
+}
+
+func TestReadImageIgnoresFullyTransparentPixelsInVisualStats(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	path := filepath.Join(ws.Root(), "transparent.png")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img := image.NewNRGBA(image.Rect(0, 0, 4, 1))
+	for x := 0; x < 3; x++ {
+		img.SetNRGBA(x, 0, color.NRGBA{R: 255, A: 0})
+	}
+	img.SetNRGBA(3, 0, color.NRGBA{R: 255, A: 255})
+	if err := png.Encode(file, img); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "transparent", "read", map[string]any{"path": "transparent.png", "view": "image"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Analysis struct {
+			Brightness struct {
+				Count int `json:"count"`
+			} `json:"brightness"`
+			DominantColors []dominantColor `json:"dominant_colors"`
+		} `json:"analysis"`
+	}
+	if err := json.Unmarshal(result.StructuredOutput, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Analysis.Brightness.Count != 1 {
+		t.Fatalf("visible brightness samples = %d, want 1", got.Analysis.Brightness.Count)
+	}
+	if len(got.Analysis.DominantColors) != 1 || got.Analysis.DominantColors[0].RGB[0] < 240 {
+		t.Fatalf("dominant colors = %#v, want visible red only", got.Analysis.DominantColors)
+	}
+}
+
+func TestReadGIFDeclaresFirstFrameAnalysisScope(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	path := filepath.Join(ws.Root(), "animated.gif")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	palette := color.Palette{color.Black, color.White}
+	first := image.NewPaletted(image.Rect(0, 0, 2, 1), palette)
+	second := image.NewPaletted(image.Rect(0, 0, 2, 1), palette)
+	second.SetColorIndex(0, 0, 1)
+	if err := gif.EncodeAll(file, &gif.GIF{Image: []*image.Paletted{first, second}, Delay: []int{1, 1}}); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "gif", "read", map[string]any{"path": "animated.gif", "view": "image"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Metadata struct {
+			AnalysisScope string `json:"analysis_scope"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(result.StructuredOutput, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Metadata.AnalysisScope != "first_frame" {
+		t.Fatalf("analysis scope = %q, want first_frame", got.Metadata.AnalysisScope)
 	}
 }

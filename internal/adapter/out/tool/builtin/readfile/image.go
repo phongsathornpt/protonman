@@ -29,10 +29,11 @@ const (
 )
 
 type imageMetadata struct {
-	Format string `json:"format"`
-	Width  int    `json:"width"`
-	Height int    `json:"height"`
-	Opaque bool   `json:"opaque"`
+	Format        string `json:"format"`
+	Width         int    `json:"width"`
+	Height        int    `json:"height"`
+	Opaque        bool   `json:"opaque"`
+	AnalysisScope string `json:"analysis_scope,omitempty"`
 }
 
 type dominantColor struct {
@@ -98,21 +99,25 @@ func readImageArtifact(ctx context.Context, file *os.File, info os.FileInfo, inp
 			x := bounds.Min.X + stratifiedCoordinate(bounds.Dx(), cols, col, row, 0x9e3779b97f4a7c15)
 			y := bounds.Min.Y + stratifiedCoordinate(bounds.Dy(), rows, row, col, 0xbf58476d1ce4e5b9)
 			r16, g16, b16, a16 := img.At(x, y).RGBA()
+			samples++
+			if a16 == 0 {
+				currentRow = append(currentRow, math.NaN())
+				continue
+			}
 			r, g, b := unpremultiplyRGBA(r16, g16, b16, a16)
 			brightness := 0.2126*float64(r) + 0.7152*float64(g) + 0.0722*float64(b)
-			samples++
 			brightnessStats.Add(brightness)
 			regionCol := col * imageRegionCols / cols
 			regionRow := row * imageRegionRows / rows
 			regionStats[regionRow*imageRegionCols+regionCol].Add(brightness)
 			index := len(currentRow)
-			if index > 0 {
+			if index > 0 && !math.IsNaN(currentRow[index-1]) {
 				edgeComparisons++
 				if math.Abs(brightness-currentRow[index-1]) >= 24 {
 					edgeHits++
 				}
 			}
-			if index < len(previousRow) {
+			if index < len(previousRow) && !math.IsNaN(previousRow[index]) {
 				edgeComparisons++
 				if math.Abs(brightness-previousRow[index]) >= 24 {
 					edgeHits++
@@ -162,6 +167,9 @@ func readImageArtifact(ctx context.Context, file *os.File, info os.FileInfo, inp
 	}
 	analysis := imageAnalysis{Samples: samples, Brightness: summary, DominantColors: colors, Regions: regions, EdgeDensity: edgeDensity, ASCIIPreview: imageASCIIPreview(img, imageASCIIWidth, imageASCIIHeight)}
 	metadata := imageMetadata{Format: format, Width: config.Width, Height: config.Height, Opaque: opaque}
+	if format == "gif" {
+		metadata.AnalysisScope = "first_frame"
+	}
 	output := fmt.Sprintf("image %s %dx%d · sampled %d px · brightness mean %.1f min %.1f max %.1f", format, config.Width, config.Height, samples, summary.Mean, summary.Min, summary.Max)
 	if len(colors) > 0 {
 		output += fmt.Sprintf(" · dominant %s", colors[0].Hex)
@@ -278,8 +286,13 @@ func imageASCIIPreview(img image.Image, width, height int) string {
 		y := bounds.Min.Y + row*bounds.Dy()/height
 		for col := 0; col < width; col++ {
 			x := bounds.Min.X + col*bounds.Dx()/width
-			r16, g16, b16, _ := img.At(x, y).RGBA()
-			brightness := 0.2126*float64(r16>>8) + 0.7152*float64(g16>>8) + 0.0722*float64(b16>>8)
+			r16, g16, b16, a16 := img.At(x, y).RGBA()
+			if a16 == 0 {
+				out.WriteByte(' ')
+				continue
+			}
+			r, g, b := unpremultiplyRGBA(r16, g16, b16, a16)
+			brightness := 0.2126*float64(r) + 0.7152*float64(g) + 0.0722*float64(b)
 			index := int(brightness * float64(len(ramp)-1) / 255.0)
 			out.WriteByte(ramp[index])
 		}
