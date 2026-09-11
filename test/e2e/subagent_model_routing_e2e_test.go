@@ -20,7 +20,8 @@ func TestE2ESubagentUsesConfiguredProjectModelRoute(t *testing.T) {
 	primary.AddTextResponse("Delegation complete from automatic child result.")
 
 	child.AddToolCallResponse("child-read-1", "read", `{"path":"hello.txt"}`)
-	child.AddTextResponse("Child inspected hello.txt.")
+	child.AddTextResponse(`Child inspected hello.txt.
+<proton-subagent-result>{"conclusion":"Child inspected hello.txt.","findings":[{"claim":"hello.txt was inspected","confidence":"high","evidence":[{"tool":"read","target":"hello.txt"},{"tool":"read","target":"missing.txt"}]}],"blockers":[]}</proton-subagent-result>`)
 
 	userConfig := fmt.Sprintf(`[model]
 default = "universal-model"
@@ -73,6 +74,9 @@ reasoning_effort = "low"
 		if got, _ := request["reasoning_effort"].(string); got != "low" {
 			t.Fatalf("child request %d reasoning_effort = %q, want low", i, got)
 		}
+		if !requestMessagesContain(request, `<proton-system-prompt version="10">`) {
+			t.Fatalf("child request %d missing Prompt ABI v10: %#v", i, request["messages"])
+		}
 	}
 
 	primaryRequests := primary.Requests()
@@ -80,8 +84,26 @@ reasoning_effort = "low"
 		t.Fatalf("primary requests = %d, want 2-3 event-driven rounds without lifecycle polling", len(primaryRequests))
 	}
 	finalRequest := primaryRequests[len(primaryRequests)-1]
-	if !requestMessagesContain(finalRequest, "Child inspected hello.txt.") || !requestMessagesContain(finalRequest, "proton-runtime-context") {
+	runtimeContext := ""
+	for _, message := range requestMessages(t, finalRequest) {
+		content, _ := message["content"].(string)
+		if strings.Contains(content, `proton-runtime-context kind="subagent-results"`) {
+			runtimeContext = content
+			break
+		}
+	}
+	if runtimeContext == "" {
 		t.Fatalf("final primary request missing automatically delivered child result: %#v", finalRequest["messages"])
+	}
+	for _, want := range []string{`"conclusion":"Child inspected hello.txt."`, `"claim":"hello.txt was inspected"`, `"confidence":"high"`, `"tool":"read"`, `"target":"hello.txt"`} {
+		if !strings.Contains(runtimeContext, want) {
+			t.Fatalf("runtime context missing %q: %s", want, runtimeContext)
+		}
+	}
+	for _, forbidden := range []string{`<proton-subagent-result>`, `"summary"`, `missing.txt`} {
+		if strings.Contains(runtimeContext, forbidden) {
+			t.Fatalf("runtime context leaked %q: %s", forbidden, runtimeContext)
+		}
 	}
 	for i, request := range primaryRequests {
 		if got, _ := request["model"].(string); got != "universal-model" {
