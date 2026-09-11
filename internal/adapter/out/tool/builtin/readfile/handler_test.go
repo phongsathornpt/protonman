@@ -248,3 +248,32 @@ func TestReadFileDirectorySuggestsListDirRecovery(t *testing.T) {
 		t.Fatalf("recovery path = %#v", got)
 	}
 }
+
+func TestReadFileHonorsCanceledContextBeforeFilesystemWork(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := New(ws).Execute(ctx, newJSONCall(t, "read-canceled", "read", map[string]any{"path": "missing.png", "view": "image"}))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Execute() error = %v, want context.Canceled", err)
+	}
+	failure := tool.FailureFromError(err)
+	if failure == nil || failure.Code != tool.ErrorCodeCanceled {
+		t.Fatalf("failure = %#v, want canceled", failure)
+	}
+}
+
+func TestReadFileRejectsMalformedArguments(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	call := tool.Call{ID: "read-malformed", Name: "read", Arguments: json.RawMessage(`{"path":`)}
+
+	_, err := New(ws).Execute(context.Background(), call)
+	if err == nil {
+		t.Fatal("Execute() error = nil, want malformed argument rejection")
+	}
+	failure := tool.FailureFromError(err)
+	if failure == nil || failure.Code != tool.ErrorCodeInvalidArguments {
+		t.Fatalf("failure = %#v, want invalid_arguments", failure)
+	}
+}

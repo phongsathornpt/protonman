@@ -21,6 +21,9 @@ func New(workspaceRoot *workspace.Workspace) tool.Handler {
 }
 
 func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
+	if err := ctx.Err(); err != nil {
+		return tool.Result{}, err
+	}
 	if h.workspace == nil {
 		return tool.Result{}, fmt.Errorf("read workspace is required")
 	}
