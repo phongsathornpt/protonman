@@ -55,6 +55,7 @@ func agentStatusSchema() map[string]any {
 			"provider":     map[string]any{"type": "string"},
 			"model":        map[string]any{"type": "string"},
 			"task":         map[string]any{"type": "string"},
+			"depends_on":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			"optional":     map[string]any{"type": "boolean"},
 			"state":        agentStateSchema(),
 			"version":      map[string]any{"type": "integer", "minimum": 1},

@@ -65,6 +65,10 @@ func AgentRows(snapshot AgentsSnapshot) []string {
 		if task := strings.TrimSpace(st.Task); task != "" {
 			rows = append(rows, "  "+textview.TruncateEllipsis(task, max(12, snapshot.Width-8)))
 		}
+		if len(st.DependsOn) > 0 {
+			deps := "deps · " + strings.Join(st.DependsOn, ", ")
+			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(deps, max(12, snapshot.Width-8))))
+		}
 		if label := AgentModelLabel(st); label != "" {
 			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(label, max(12, snapshot.Width-8))))
 		}

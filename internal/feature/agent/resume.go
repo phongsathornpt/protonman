@@ -46,6 +46,7 @@ func (c *Coordinator) Resume(ctx context.Context, id, parentID string) (Handle, 
 
 	req.ID = ""
 	req.ParentID = parentID
+	req.DependsOn = nil
 	req.ResumedFrom = id
 	if strings.TrimSpace(req.Context) == "" {
 		req.Context = resumeSafetyContext

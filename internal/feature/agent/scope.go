@@ -17,7 +17,7 @@ func (c *Coordinator) GetRef(ref AgentRef) (AgentStatus, bool) {
 	if entry == nil || entry.status.SessionID != ref.SessionID {
 		return AgentStatus{}, false
 	}
-	return entry.status, true
+	return cloneAgentStatus(entry.status), true
 }
 
 // LookupRef returns one session-owned status and terminal result.
@@ -30,7 +30,7 @@ func (c *Coordinator) LookupRef(ref AgentRef) (AgentStatus, *Result, bool) {
 	if entry == nil || entry.status.SessionID != ref.SessionID {
 		return AgentStatus{}, nil, false
 	}
-	status := entry.status
+	status := cloneAgentStatus(entry.status)
 	if !status.State.Terminal() {
 		return status, nil, true
 	}

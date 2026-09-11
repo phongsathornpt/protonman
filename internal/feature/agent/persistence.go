@@ -57,7 +57,9 @@ func (c *Coordinator) persistentSnapshotLocked(sessionID string) PersistentSnaps
 			continue
 		}
 		status := entry.status
+		status.DependsOn = append([]string(nil), status.DependsOn...)
 		request := entry.request
+		request.DependsOn = append([]string(nil), request.DependsOn...)
 		request.Task = truncatePersistentText(request.Task, maxPersistentTaskBytes)
 		request.Context = truncatePersistentText(request.Context, maxPersistentContextBytes)
 		status.Task = request.Task

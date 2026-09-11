@@ -73,6 +73,7 @@ func subagentInputSchema() map[string]any {
 			"task":            map[string]any{"type": "string", "description": "Task for action=spawn"},
 			"profile":         map[string]any{"type": "string", "enum": agent.SubagentProfileNames(), "description": agent.SubagentProfileSchemaDescription()},
 			"context":         map[string]any{"type": "string", "description": "Optional background context for action=spawn"},
+			"depends_on":      map[string]any{"type": "array", "maxItems": agent.MaxAgentDependencies, "items": map[string]any{"type": "string"}, "description": "For action=spawn only: already-spawned same-turn agent IDs that must complete successfully first"},
 			"optional":        map[string]any{"type": "boolean", "description": "For action=spawn only: speculative work that may be integrated if ready but does not block parent completion"},
 			"timeout_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 86400, "description": "Optional child runtime timeout for spawn or bounded diagnostic timeout for wait"},
 			"agent_id":        map[string]any{"type": "string", "description": "Target agent for get, cancel, or resume"},

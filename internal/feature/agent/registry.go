@@ -254,7 +254,7 @@ func (c *Coordinator) Get(id string) (AgentStatus, bool) {
 	if !ok {
 		return AgentStatus{}, false
 	}
-	return entry.status, true
+	return cloneAgentStatus(entry.status), true
 }
 
 // Lookup returns one retained status and, when terminal, its result.
@@ -266,7 +266,7 @@ func (c *Coordinator) Lookup(id string) (AgentStatus, *Result, bool) {
 	if !ok {
 		return AgentStatus{}, nil, false
 	}
-	status := entry.status
+	status := cloneAgentStatus(entry.status)
 	if !status.State.Terminal() {
 		return status, nil, true
 	}
@@ -287,7 +287,7 @@ func (c *Coordinator) Active() []AgentStatus {
 	out := make([]AgentStatus, 0, len(c.agents))
 	for _, entry := range c.agents {
 		if !entry.status.State.Terminal() {
-			out = append(out, entry.status)
+			out = append(out, cloneAgentStatus(entry.status))
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -306,7 +306,7 @@ func (c *Coordinator) List() []AgentStatus {
 	defer c.agentsMu.RUnlock()
 	out := make([]AgentStatus, 0, len(c.agents))
 	for _, entry := range c.agents {
-		out = append(out, entry.status)
+		out = append(out, cloneAgentStatus(entry.status))
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].StartTime.Equal(out[j].StartTime) {

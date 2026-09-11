@@ -131,6 +131,8 @@ type ActivityWaitResult struct {
 }
 
 // Request is the invocation payload for a delegated subagent.
+const MaxAgentDependencies = 64
+
 type Request struct {
 	SessionID    string        `json:"session_id,omitempty"`
 	ID           string        `json:"id,omitempty"`
@@ -138,6 +140,7 @@ type Request struct {
 	Profile      Profile       `json:"profile"`
 	Task         string        `json:"task"`
 	Context      string        `json:"context,omitempty"`
+	DependsOn    []string      `json:"depends_on,omitempty"`
 	Optional     bool          `json:"optional,omitempty"`
 	Timeout      time.Duration `json:"timeout,omitempty"`
 	QueueTimeout time.Duration `json:"queue_timeout,omitempty"`
@@ -157,6 +160,9 @@ func (r Request) Validate() error {
 	}
 	if r.QueueTimeout < 0 {
 		return errors.New("subagent queue timeout cannot be negative")
+	}
+	if len(r.DependsOn) > MaxAgentDependencies {
+		return fmt.Errorf("subagent dependencies exceed limit %d", MaxAgentDependencies)
 	}
 	return nil
 }

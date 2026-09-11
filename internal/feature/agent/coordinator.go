@@ -108,6 +108,7 @@ type AgentStatus struct {
 	Provider    string    `json:"provider,omitempty"`
 	Model       string    `json:"model,omitempty"`
 	Task        string    `json:"task"`
+	DependsOn   []string  `json:"depends_on,omitempty"`
 	Optional    bool      `json:"optional,omitempty"`
 	State       State     `json:"state"`
 	Version     uint64    `json:"version"`
@@ -117,6 +118,11 @@ type AgentStatus struct {
 	Reason      string    `json:"reason,omitempty"`
 	ResumedFrom string    `json:"resumed_from,omitempty"`
 	ResumedAs   string    `json:"resumed_as,omitempty"`
+}
+
+func cloneAgentStatus(status AgentStatus) AgentStatus {
+	status.DependsOn = append([]string(nil), status.DependsOn...)
+	return status
 }
 
 type childToolRuntime struct {
@@ -134,6 +140,7 @@ type agentEntry struct {
 	languageModel   sdk.LanguageModel
 	reasoningEffort sdk.ReasoningEffort
 	toolRuntime     childToolRuntime
+	dependencies    []*agentEntry
 	cancel          context.CancelFunc
 	done            chan struct{}
 	started         chan struct{}

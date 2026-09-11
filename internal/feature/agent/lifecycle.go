@@ -25,6 +25,7 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	}
 	req.SessionID = strings.TrimSpace(req.SessionID)
 	req.ParentID = strings.TrimSpace(req.ParentID)
+	req.DependsOn = normalizeDependencyIDs(req.DependsOn)
 	if err := req.Validate(); err != nil {
 		return Handle{}, fmt.Errorf("invalid subagent request: %w", err)
 	}
@@ -67,11 +68,17 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 		return Handle{}, fmt.Errorf("subagent %q already exists", id)
 	}
 
+	dependencies, dependencyErr := c.resolveDependenciesLocked(req)
+	if dependencyErr != nil {
+		c.agentsMu.Unlock()
+		return Handle{}, dependencyErr
+	}
+
 	queuedAt := time.Now()
 	runCtx, runCancel := context.WithCancel(c.rootCtx)
 	queuedEvent := LifecycleEvent{
 		Kind: LifecycleAgentQueued, Version: 1, At: queuedAt, SessionID: req.SessionID, ParentID: req.ParentID,
-		AgentID: id, Profile: req.Profile, Task: req.Task, Optional: req.Optional, Provider: providerName, Model: modelID, ResumedFrom: req.ResumedFrom,
+		AgentID: id, Profile: req.Profile, Task: req.Task, DependsOn: append([]string(nil), req.DependsOn...), Optional: req.Optional, Provider: providerName, Model: modelID, ResumedFrom: req.ResumedFrom,
 		Request: &req,
 	}
 	if err := c.persistLifecycleEvent(ctx, queuedEvent); err != nil {
@@ -91,7 +98,7 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	}
 	entry := &agentEntry{
 		request: req, languageModel: boundModel, reasoningEffort: boundReasoning, toolRuntime: runtimeSpec, status: queuedStatus,
-		cancel: runCancel, done: make(chan struct{}), started: make(chan struct{}),
+		dependencies: dependencies, cancel: runCancel, done: make(chan struct{}), started: make(chan struct{}),
 	}
 	c.agents[id] = entry
 	// Add while admission is still serialized with Close so Wait can never
@@ -109,10 +116,16 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 	defer entry.cancel()
 	defer close(entry.done)
 
+	if err := c.waitDependencies(runCtx, entry.dependencies); err != nil {
+		c.finishEntry(entry, req, queuedAt, time.Time{}, time.Time{}, err)
+		return
+	}
+
 	executionTimeout := req.Timeout
 	if executionTimeout == 0 || (c.maxRuntime > 0 && executionTimeout > c.maxRuntime) {
 		executionTimeout = c.maxRuntime
 	}
+	queueStartedAt := time.Now()
 	queueTimeout := req.QueueTimeout
 	if queueTimeout == 0 {
 		queueTimeout = c.defaultQueueTimeout
@@ -131,7 +144,7 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 		if errors.Is(err, context.DeadlineExceeded) && runCtx.Err() == nil {
 			err = queueTimeoutError()
 		}
-		c.finishEntry(entry, req, queuedAt, time.Time{}, err)
+		c.finishEntry(entry, req, queuedAt, queueStartedAt, time.Time{}, err)
 		return
 	}
 	defer func() { <-c.sem }()
@@ -141,13 +154,13 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 		if errors.Is(err, context.DeadlineExceeded) && runCtx.Err() == nil {
 			err = queueTimeoutError()
 		}
-		c.finishEntry(entry, req, queuedAt, time.Time{}, err)
+		c.finishEntry(entry, req, queuedAt, queueStartedAt, time.Time{}, err)
 		return
 	}
 	defer releaseWorkspace()
 	queueCancel()
 	if err := runCtx.Err(); err != nil {
-		c.finishEntry(entry, req, queuedAt, time.Time{}, err)
+		c.finishEntry(entry, req, queuedAt, queueStartedAt, time.Time{}, err)
 		return
 	}
 
@@ -155,17 +168,17 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 	c.agentsMu.Lock()
 	if entry.status.State == StateCanceling || runCtx.Err() != nil {
 		c.agentsMu.Unlock()
-		c.finishEntry(entry, req, queuedAt, time.Time{}, context.Canceled)
+		c.finishEntry(entry, req, queuedAt, queueStartedAt, time.Time{}, context.Canceled)
 		return
 	}
 	if transitionErr := c.persistAndApplyTransition(runCtx, entry, LifecycleAgentStarted, startedAt, ""); transitionErr != nil {
 		c.agentsMu.Unlock()
-		c.finishEntry(entry, req, queuedAt, time.Time{}, transitionErr)
+		c.finishEntry(entry, req, queuedAt, queueStartedAt, time.Time{}, transitionErr)
 		return
 	}
 	close(entry.started)
 	c.agentsMu.Unlock()
-	queueDuration := startedAt.Sub(queuedAt)
+	queueDuration := startedAt.Sub(queueStartedAt)
 
 	execCtx := runCtx
 	execCancel := func() {}
@@ -206,9 +219,12 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 	emitDone()
 }
 
-func (c *Coordinator) finishEntry(entry *agentEntry, req Request, queuedAt, startedAt time.Time, err error) {
+func (c *Coordinator) finishEntry(entry *agentEntry, req Request, admittedAt, queueStartedAt, startedAt time.Time, err error) {
 	now := time.Now()
-	res := Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile, Provider: entry.status.Provider, Model: entry.status.Model, QueueDuration: now.Sub(queuedAt), TotalDuration: now.Sub(queuedAt), Err: err}
+	res := Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile, Provider: entry.status.Provider, Model: entry.status.Model, TotalDuration: now.Sub(admittedAt), Err: err}
+	if !queueStartedAt.IsZero() {
+		res.QueueDuration = now.Sub(queueStartedAt)
+	}
 	if !startedAt.IsZero() {
 		res.Duration = now.Sub(startedAt)
 	}

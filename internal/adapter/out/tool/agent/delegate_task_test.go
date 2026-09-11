@@ -215,6 +215,10 @@ func TestDelegateTaskExecute(t *testing.T) {
 		if optional, ok := props["optional"].(map[string]any); !ok || optional["type"] != "boolean" {
 			t.Fatalf("optional schema = %#v, want boolean", props["optional"])
 		}
+		dependsOn, ok := props["depends_on"].(map[string]any)
+		if !ok || dependsOn["type"] != "array" || dependsOn["maxItems"] != agent.MaxAgentDependencies {
+			t.Fatalf("depends_on schema = %#v", props["depends_on"])
+		}
 		enums, ok := profileProp["enum"].([]string)
 		if !ok {
 			t.Fatal("expected enum slice in profile property")

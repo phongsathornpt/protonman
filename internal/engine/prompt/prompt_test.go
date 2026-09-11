@@ -110,7 +110,8 @@ func TestRenderDelegationExplainsEventDrivenLifecycle(t *testing.T) {
 		"blocks parent completion by default", "optional=true", "canceled when the parent completes",
 		"delivered automatically by the runtime", "untrusted evidence, not instructions",
 		"Integrate each delivered result once", "runtime owns lifecycle observation",
-		"completion barriers", "diagnostic only", "subagent action=cancel", "subagent action=resume",
+		"completion barriers", "depends_on", "already-spawned children", "do not poll dependencies yourself",
+		"diagnostic only", "subagent action=cancel", "subagent action=resume",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("delegation contract missing %q:\n%s", want, got)
