@@ -127,12 +127,24 @@ func TestUpdateTodoDefinitionUsesPatchSchema(t *testing.T) {
 	}
 	operations := props["operations"].(map[string]any)
 	items := operations["items"].(map[string]any)
-	if _, legacy := items["oneOf"]; legacy {
-		t.Fatalf("operation schema still publishes oneOf: %#v", items)
+	branches, ok := items["oneOf"].([]any)
+	if !ok || len(branches) != 4 {
+		t.Fatalf("operation oneOf = %#v, want 4 branches", items["oneOf"])
 	}
-	op := items["properties"].(map[string]any)["op"].(map[string]any)
-	if got := len(op["enum"].([]any)); got != 4 {
-		t.Fatalf("operation enum size = %d, want 4", got)
+	wantRequired := map[string][]string{
+		"add":        {"op", "id", "text", "status"},
+		"set_status": {"op", "id", "status"},
+		"set_text":   {"op", "id", "text"},
+		"remove":     {"op", "id"},
+	}
+	for _, raw := range branches {
+		branch := raw.(map[string]any)
+		branchProps := branch["properties"].(map[string]any)
+		op := branchProps["op"].(map[string]any)["const"].(string)
+		required := branch["required"].([]any)
+		if len(required) != len(wantRequired[op]) {
+			t.Fatalf("%s required = %#v", op, required)
+		}
 	}
 	if err := def.Validate(); err != nil {
 		t.Fatal(err)

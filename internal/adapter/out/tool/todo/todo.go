@@ -44,14 +44,26 @@ func todoCapabilityInputSchema() map[string]any {
 	update := todoUpdateInputSchema()
 	props, _ := update["properties"].(map[string]any)
 	return map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"action":            map[string]any{"type": "string", "enum": []string{"get", "update"}, "description": "Task-plan operation to perform"},
-			"expected_revision": props["expected_revision"],
-			"operations":        props["operations"],
+		"oneOf": []any{
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"action": map[string]any{"type": "string", "const": "get", "description": "Read the current task snapshot and revision"},
+				},
+				"required":             []any{"action"},
+				"additionalProperties": false,
+			},
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"action":            map[string]any{"type": "string", "const": "update", "description": "Atomically patch the task plan"},
+					"expected_revision": props["expected_revision"],
+					"operations":        props["operations"],
+				},
+				"required":             []any{"action", "expected_revision", "operations"},
+				"additionalProperties": false,
+			},
 		},
-		"required":             []string{"action"},
-		"additionalProperties": false,
 	}
 }
 
