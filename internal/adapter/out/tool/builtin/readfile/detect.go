@@ -35,10 +35,13 @@ func detectArtifact(file *os.File, path string) (artifactInfo, error) {
 	}
 	header = header[:n]
 	mimeType := http.DetectContentType(header)
+	if len(header) >= 12 && string(header[:4]) == "RIFF" && string(header[8:12]) == "WEBP" {
+		mimeType = "image/webp"
+	}
 	ext := strings.ToLower(filepath.Ext(path))
 
 	switch {
-	case mimeType == "image/png" || mimeType == "image/jpeg" || mimeType == "image/gif":
+	case mimeType == "image/png" || mimeType == "image/jpeg" || mimeType == "image/gif" || mimeType == "image/webp":
 		return artifactInfo{Kind: artifactImage, MIMEType: mimeType}, nil
 	case ext == ".json" || mimeType == "application/json":
 		return artifactInfo{Kind: artifactJSON, MIMEType: "application/json"}, nil

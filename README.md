@@ -279,7 +279,7 @@ Protonman registers a suite of workspace-safe tools:
 
 | Tool | Category | Description |
 | :--- | :--- | :--- |
-| `read` | File System | Read UTF-8 workspace files with byte pagination or bounded 1-based line ranges/line numbers, plus snapshot-bound byte continuations |
+| `read` | File System | Read UTF-8 workspace files with bounded byte/line pagination, or inspect image, structured-data, and metadata views; image analysis supports PNG, JPEG, GIF first-frame, and WebP with bounded decode/sample budgets |
 | `edit` | File System | Workspace edits via `write`, `replace`, `patch`, and `restore` actions with existing checkpoint safeguards |
 | `grep` | Search | Regex search with include globs plus snapshot-bound cursor pagination that resumes from the prior match location |
 | `find` | Search | Recursive workspace path discovery by glob with type/depth filters and snapshot-bound pagination |
@@ -455,7 +455,7 @@ Execution safety notes:
 - Legacy `subagent_timeout` is accepted as an alias for `subagent_max_runtime` with a deprecation warning.
 - `[runtime]` centralizes model, tool, discovery, web-fetch, and catalog-cache time bounds. The loop refuses construction if every global termination bound is disabled.
 - Repeating the same deterministic tool call with the same semantic arguments and result twice without an intervening mutation triggers a text-only synthesis round instead of continuing the tool loop; identical retryable failures are capped at three attempts.
-- Truncated `read`, `grep`, `find`, and `ls` results include `next_offset` plus a snapshot-bound `continuation`; send both on the next page to detect stale file, query, or directory state. `grep` continuations also carry a validated cursor so deep pages resume near the prior match instead of rescanning earlier files. Plain `offset` remains supported for compatibility. `read` also supports bounded 1-based `start_line`/`end_line` selection with optional `line_numbers` for source inspection without shell `nl`/`sed`.
+- Truncated `read`, `grep`, `find`, and `ls` results include `next_offset` plus a snapshot-bound `continuation`; send both on the next page to detect stale file, query, or directory state. `grep` continuations also carry a validated cursor so deep pages resume near the prior match instead of rescanning earlier files. Plain `offset` remains supported for compatibility. `read` also supports bounded 1-based `start_line`/`end_line` selection with optional `line_numbers`, plus `image`, `structured`, and `metadata` artifact views. Image inspection uses bounded encoded-size, pixel, and sample budgets; GIF analysis is explicitly first-frame only.
 
 ### Environment Variables
 

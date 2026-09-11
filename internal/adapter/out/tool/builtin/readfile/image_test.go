@@ -309,3 +309,36 @@ func TestReadGIFDeclaresFirstFrameAnalysisScope(t *testing.T) {
 		t.Fatalf("analysis scope = %q, want first_frame", got.Metadata.AnalysisScope)
 	}
 }
+
+func TestReadFileAutoAnalyzesWebP(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	fixture, err := os.ReadFile("testdata/red.webp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ws.Root(), "red.webp"), fixture, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "webp", "read", map[string]any{"path": "red.webp"}))
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(result.Output, "image webp 1x1") {
+		t.Fatalf("Output = %q", result.Output)
+	}
+	var got struct {
+		Kind     string `json:"kind"`
+		MIMEType string `json:"mime_type"`
+		Metadata struct {
+			Format string `json:"format"`
+			Width  int    `json:"width"`
+			Height int    `json:"height"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(result.StructuredOutput, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Kind != "image" || got.MIMEType != "image/webp" || got.Metadata.Format != "webp" || got.Metadata.Width != 1 || got.Metadata.Height != 1 {
+		t.Fatalf("structured WebP result = %+v", got)
+	}
+}

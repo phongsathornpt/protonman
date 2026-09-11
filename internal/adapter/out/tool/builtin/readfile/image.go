@@ -15,6 +15,7 @@ import (
 
 	baseanalysis "github.com/phongsathornpt/protonman/internal/base/analysis"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
+	_ "golang.org/x/image/webp"
 )
 
 const (
