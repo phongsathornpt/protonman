@@ -372,18 +372,18 @@ func TestModelLayerFileStructure(t *testing.T) {
 		t.Fatalf("read internal/adapter/out/model: %v", err)
 	}
 	expected := map[string]bool{
-		"client_factory.go":      true,
-		"client_factory_test.go": true,
-		"model_profile.go":       true,
-		"model_test.go":          true,
-		"provider_catalog.go":    true,
-		"provider_discovery.go":  true,
-		"provider_preset.go":     true,
-		"provider_test.go":       true,
-		"sdk_adapter.go":         true,
-		"sdk_adapter_test.go":    true,
-		"slow_mode.go":           true,
-		"slow_mode_test.go":      true,
+		"client_factory.go":            true,
+		"client_factory_test.go":       true,
+		"model_profile.go":             true,
+		"model_test.go":                true,
+		"provider_catalog.go":          true,
+		"provider_discovery.go":        true,
+		"provider_preset.go":           true,
+		"provider_test.go":             true,
+		"sdk_adapter.go":               true,
+		"sdk_adapter_test.go":          true,
+		"low_concurrency_mode.go":      true,
+		"low_concurrency_mode_test.go": true,
 	}
 	for _, entry := range entries {
 		if !expected[entry.Name()] {

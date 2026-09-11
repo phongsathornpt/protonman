@@ -12,20 +12,20 @@ import (
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
-type slowModeBlockingModel struct {
+type lowConcurrencyBlockingModel struct {
 	mu      sync.Mutex
 	active  int
 	maxSeen int
-	started chan *slowModeBlockingStream
+	started chan *lowConcurrencyBlockingStream
 }
 
-func (*slowModeBlockingModel) Provider() string { return DefaultOpenCodeName }
-func (*slowModeBlockingModel) ModelID() string  { return "test-free" }
-func (*slowModeBlockingModel) Capabilities() sdk.ModelCapabilities {
+func (*lowConcurrencyBlockingModel) Provider() string { return DefaultOpenCodeName }
+func (*lowConcurrencyBlockingModel) ModelID() string  { return "test-free" }
+func (*lowConcurrencyBlockingModel) Capabilities() sdk.ModelCapabilities {
 	return sdk.ModelCapabilities{Streaming: true}
 }
-func (m *slowModeBlockingModel) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
-	stream := &slowModeBlockingStream{owner: m, done: make(chan struct{})}
+func (m *lowConcurrencyBlockingModel) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
+	stream := &lowConcurrencyBlockingStream{owner: m, done: make(chan struct{})}
 	m.mu.Lock()
 	m.active++
 	if m.active > m.maxSeen {
@@ -36,13 +36,13 @@ func (m *slowModeBlockingModel) Stream(context.Context, sdk.Request) (sdk.Stream
 	return stream, nil
 }
 
-type slowModeBlockingStream struct {
-	owner *slowModeBlockingModel
+type lowConcurrencyBlockingStream struct {
+	owner *lowConcurrencyBlockingModel
 	done  chan struct{}
 	once  sync.Once
 }
 
-func (s *slowModeBlockingStream) Next(ctx context.Context) (sdk.Event, error) {
+func (s *lowConcurrencyBlockingStream) Next(ctx context.Context) (sdk.Event, error) {
 	select {
 	case <-s.done:
 		return sdk.Event{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}, nil
@@ -50,7 +50,7 @@ func (s *slowModeBlockingStream) Next(ctx context.Context) (sdk.Event, error) {
 		return sdk.Event{}, ctx.Err()
 	}
 }
-func (s *slowModeBlockingStream) Close() error {
+func (s *lowConcurrencyBlockingStream) Close() error {
 	s.once.Do(func() {
 		s.owner.mu.Lock()
 		s.owner.active--
@@ -60,8 +60,8 @@ func (s *slowModeBlockingStream) Close() error {
 	return nil
 }
 
-func testSlowModePolicy() runtimepolicy.OpenCodeFreeSlowModePolicy {
-	return runtimepolicy.OpenCodeFreeSlowModePolicy{
+func testLowConcurrencyPolicy() runtimepolicy.OpenCodeFreeLowConcurrencyPolicy {
+	return runtimepolicy.OpenCodeFreeLowConcurrencyPolicy{
 		InitialInterval: time.Millisecond,
 		MinInterval:     time.Millisecond,
 		MaxInterval:     50 * time.Millisecond,
@@ -75,12 +75,12 @@ func testSlowModePolicy() runtimepolicy.OpenCodeFreeSlowModePolicy {
 	}
 }
 
-func TestOpenCodeFreeSlowModeStartsAtOneConcurrentGeneration(t *testing.T) {
-	base := &slowModeBlockingModel{started: make(chan *slowModeBlockingStream, 2)}
-	policy := testSlowModePolicy()
+func TestOpenCodeFreeLowConcurrencyModeStartsAtOneConcurrentGeneration(t *testing.T) {
+	base := &lowConcurrencyBlockingModel{started: make(chan *lowConcurrencyBlockingStream, 2)}
+	policy := testLowConcurrencyPolicy()
 	policy.QueueCapacity = 2
-	controller := newOpenCodeFreeSlowController(policy)
-	model := &openCodeFreeSlowModel{base: base, controller: controller}
+	controller := newOpenCodeFreeLowConcurrencyController(policy)
+	model := &openCodeFreeLowConcurrencyModel{base: base, controller: controller}
 	streams := make(chan sdk.Stream, 2)
 
 	for range 2 {
@@ -114,10 +114,10 @@ func TestOpenCodeFreeSlowModeStartsAtOneConcurrentGeneration(t *testing.T) {
 	}
 }
 
-func TestOpenCodeFreeSlowModeBoundsWaitingQueue(t *testing.T) {
-	base := &slowModeBlockingModel{started: make(chan *slowModeBlockingStream, 2)}
-	controller := newOpenCodeFreeSlowController(testSlowModePolicy())
-	model := &openCodeFreeSlowModel{base: base, controller: controller}
+func TestOpenCodeFreeLowConcurrencyModeBoundsWaitingQueue(t *testing.T) {
+	base := &lowConcurrencyBlockingModel{started: make(chan *lowConcurrencyBlockingStream, 2)}
+	controller := newOpenCodeFreeLowConcurrencyController(testLowConcurrencyPolicy())
+	model := &openCodeFreeLowConcurrencyModel{base: base, controller: controller}
 	first, err := model.Stream(context.Background(), sdk.Request{})
 	if err != nil {
 		t.Fatal(err)
@@ -141,7 +141,7 @@ func TestOpenCodeFreeSlowModeBoundsWaitingQueue(t *testing.T) {
 
 	_, err = model.Stream(context.Background(), sdk.Request{})
 	var providerErr *sdk.ProviderError
-	if !errors.As(err, &providerErr) || providerErr.Code != "slow_mode_queue_full" || providerErr.Retryable {
+	if !errors.As(err, &providerErr) || providerErr.Code != "low_concurrency_queue_full" || providerErr.Retryable {
 		t.Fatalf("queue-full error = %#v", err)
 	}
 	_ = first.Close()
@@ -150,18 +150,18 @@ func TestOpenCodeFreeSlowModeBoundsWaitingQueue(t *testing.T) {
 	}
 }
 
-type slowModeSequenceModel struct {
+type lowConcurrencySequenceModel struct {
 	mu     sync.Mutex
 	starts []time.Time
 	errors []error
 }
 
-func (*slowModeSequenceModel) Provider() string { return DefaultOpenCodeName }
-func (*slowModeSequenceModel) ModelID() string  { return "test-free" }
-func (*slowModeSequenceModel) Capabilities() sdk.ModelCapabilities {
+func (*lowConcurrencySequenceModel) Provider() string { return DefaultOpenCodeName }
+func (*lowConcurrencySequenceModel) ModelID() string  { return "test-free" }
+func (*lowConcurrencySequenceModel) Capabilities() sdk.ModelCapabilities {
 	return sdk.ModelCapabilities{Streaming: true}
 }
-func (m *slowModeSequenceModel) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
+func (m *lowConcurrencySequenceModel) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.starts = append(m.starts, time.Now())
@@ -175,16 +175,16 @@ func (m *slowModeSequenceModel) Stream(context.Context, sdk.Request) (sdk.Stream
 	return &emptyRetryTestStream{err: io.EOF}, nil
 }
 
-func TestOpenCodeFreeSlowModeBacksOffAfterRateLimit(t *testing.T) {
-	policy := testSlowModePolicy()
+func TestOpenCodeFreeLowConcurrencyModeBacksOffAfterRateLimit(t *testing.T) {
+	policy := testLowConcurrencyPolicy()
 	policy.InitialInterval = 5 * time.Millisecond
 	policy.MinInterval = 5 * time.Millisecond
 	policy.MaxInterval = 40 * time.Millisecond
 	policy.BackoffPercent = 200
-	base := &slowModeSequenceModel{errors: []error{
+	base := &lowConcurrencySequenceModel{errors: []error{
 		sdk.NewProviderError(DefaultOpenCodeName, 429, "rate_limit", "slow down"), nil,
 	}}
-	model := &openCodeFreeSlowModel{base: base, controller: newOpenCodeFreeSlowController(policy)}
+	model := &openCodeFreeLowConcurrencyModel{base: base, controller: newOpenCodeFreeLowConcurrencyController(policy)}
 
 	if _, err := model.Stream(context.Background(), sdk.Request{}); err == nil {
 		t.Fatal("first request should be rate limited")

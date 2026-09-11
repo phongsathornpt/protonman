@@ -34,34 +34,34 @@ const (
 )
 
 const (
-	SessionPersistenceTimeout       = 5 * time.Second
-	AgentCloseTimeout               = 5 * time.Second
-	AgentEventEmitTimeout           = 100 * time.Millisecond
-	AgentLifecycleEmitTimeout       = 5 * time.Second
-	SandboxCommandWaitDelay         = 2 * time.Second
-	TerminalEmitTimeout             = 5 * time.Second
-	ProtectionObserverTimeout       = time.Second
-	ModelRetryMaxRetries            = 4
-	ModelRetryBackoffStep           = 5 * time.Second
-	ModelRetrySecondDelay           = 15 * time.Second
-	ModelRetryThirdDelay            = 30 * time.Second
-	ModelRetryLastDelay             = 60 * time.Second
-	ModelRetryPostFirstGap          = 0 // legacy exponential-policy field
-	ModelRetryMaxBackoff            = 60 * time.Second
-	ModelRetryMaxRetryAfter         = 30 * time.Second
-	OpenCodeFreeFirstEventTimeout   = 30 * time.Second
-	OpenCodeFreeIdleEventTimeout    = 60 * time.Second
-	OpenCodeFreeStreamMaxDuration   = 5 * time.Minute
-	OpenCodeFreeSlowInitialInterval = time.Second
-	OpenCodeFreeSlowMinInterval     = 600 * time.Millisecond
-	OpenCodeFreeSlowMaxInterval     = 5 * time.Second
-	OpenCodeFreeSlowQueueCapacity   = 48
-	OpenCodeFreeSlowMinConcurrency  = 1
-	OpenCodeFreeSlowMaxConcurrency  = 2
-	OpenCodeFreeSlowHealthySamples  = 15
-	OpenCodeFreeSlowPromoteQueue    = 4
-	OpenCodeFreeSlowRecoveryPercent = 95
-	OpenCodeFreeSlowBackoffPercent  = 175
+	SessionPersistenceTimeout                 = 5 * time.Second
+	AgentCloseTimeout                         = 5 * time.Second
+	AgentEventEmitTimeout                     = 100 * time.Millisecond
+	AgentLifecycleEmitTimeout                 = 5 * time.Second
+	SandboxCommandWaitDelay                   = 2 * time.Second
+	TerminalEmitTimeout                       = 5 * time.Second
+	ProtectionObserverTimeout                 = time.Second
+	ModelRetryMaxRetries                      = 4
+	ModelRetryBackoffStep                     = 5 * time.Second
+	ModelRetrySecondDelay                     = 15 * time.Second
+	ModelRetryThirdDelay                      = 30 * time.Second
+	ModelRetryLastDelay                       = 60 * time.Second
+	ModelRetryPostFirstGap                    = 0 // legacy exponential-policy field
+	ModelRetryMaxBackoff                      = 60 * time.Second
+	ModelRetryMaxRetryAfter                   = 30 * time.Second
+	OpenCodeFreeFirstEventTimeout             = 30 * time.Second
+	OpenCodeFreeIdleEventTimeout              = 60 * time.Second
+	OpenCodeFreeStreamMaxDuration             = 5 * time.Minute
+	OpenCodeFreeLowConcurrencyInitialInterval = time.Second
+	OpenCodeFreeLowConcurrencyMinInterval     = 600 * time.Millisecond
+	OpenCodeFreeLowConcurrencyMaxInterval     = 5 * time.Second
+	OpenCodeFreeLowConcurrencyQueueCapacity   = 48
+	OpenCodeFreeLowConcurrencyMinConcurrency  = 1
+	OpenCodeFreeLowConcurrencyMaxConcurrency  = 2
+	OpenCodeFreeLowConcurrencyHealthySamples  = 15
+	OpenCodeFreeLowConcurrencyPromoteQueue    = 4
+	OpenCodeFreeLowConcurrencyRecoveryPercent = 95
+	OpenCodeFreeLowConcurrencyBackoffPercent  = 175
 )
 
 // ModelRetrySchedule returns a fresh copy of the authoritative local retry
@@ -75,9 +75,9 @@ func ModelRetrySchedule() []time.Duration {
 	}
 }
 
-// OpenCodeFreeSlowModePolicy is the single source of truth for OpenCode free-model
+// OpenCodeFreeLowConcurrencyPolicy is the single source of truth for OpenCode free-model
 // admission and pacing. Keep product tuning here rather than in adapters/tests.
-type OpenCodeFreeSlowModePolicy struct {
+type OpenCodeFreeLowConcurrencyPolicy struct {
 	InitialInterval time.Duration
 	MinInterval     time.Duration
 	MaxInterval     time.Duration
@@ -90,17 +90,17 @@ type OpenCodeFreeSlowModePolicy struct {
 	BackoffPercent  int
 }
 
-func OpenCodeFreeSlowMode() OpenCodeFreeSlowModePolicy {
-	return OpenCodeFreeSlowModePolicy{
-		InitialInterval: OpenCodeFreeSlowInitialInterval,
-		MinInterval:     OpenCodeFreeSlowMinInterval,
-		MaxInterval:     OpenCodeFreeSlowMaxInterval,
-		QueueCapacity:   OpenCodeFreeSlowQueueCapacity,
-		MinConcurrency:  OpenCodeFreeSlowMinConcurrency,
-		MaxConcurrency:  OpenCodeFreeSlowMaxConcurrency,
-		HealthySamples:  OpenCodeFreeSlowHealthySamples,
-		PromoteQueue:    OpenCodeFreeSlowPromoteQueue,
-		RecoveryPercent: OpenCodeFreeSlowRecoveryPercent,
-		BackoffPercent:  OpenCodeFreeSlowBackoffPercent,
+func OpenCodeFreeLowConcurrencyMode() OpenCodeFreeLowConcurrencyPolicy {
+	return OpenCodeFreeLowConcurrencyPolicy{
+		InitialInterval: OpenCodeFreeLowConcurrencyInitialInterval,
+		MinInterval:     OpenCodeFreeLowConcurrencyMinInterval,
+		MaxInterval:     OpenCodeFreeLowConcurrencyMaxInterval,
+		QueueCapacity:   OpenCodeFreeLowConcurrencyQueueCapacity,
+		MinConcurrency:  OpenCodeFreeLowConcurrencyMinConcurrency,
+		MaxConcurrency:  OpenCodeFreeLowConcurrencyMaxConcurrency,
+		HealthySamples:  OpenCodeFreeLowConcurrencyHealthySamples,
+		PromoteQueue:    OpenCodeFreeLowConcurrencyPromoteQueue,
+		RecoveryPercent: OpenCodeFreeLowConcurrencyRecoveryPercent,
+		BackoffPercent:  OpenCodeFreeLowConcurrencyBackoffPercent,
 	}
 }

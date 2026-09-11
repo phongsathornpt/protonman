@@ -125,7 +125,7 @@ network, provider, and terminal concerns remain in adapters/platform packages.
 Driven adapters implement infrastructure-facing ports:
 
 - `config/`: layered TOML loading, merge, provenance, and persistence.
-- `model/`: provider presets, discovery, catalog normalization, SDK adaptation, and narrowly scoped provider-specific wrappers. OpenCode free models use a shared endpoint+model slow-mode scheduler here for bounded admission, low concurrency, adaptive pacing, and replay-safe stream recovery; provider-neutral SDK behavior remains outside this policy.
+- `model/`: provider presets, discovery, catalog normalization, SDK adaptation, and narrowly scoped provider-specific wrappers. OpenCode free models use a shared endpoint+model low-concurrency scheduler here for bounded admission, low concurrency, adaptive pacing, and replay-safe stream recovery; provider-neutral SDK behavior remains outside this policy.
 - `sessionfs/`: file-backed session repository and agent lifecycle persistence.
 - `tool/agent/`: subagent lifecycle tool and capability publication.
 - `tool/builtin/`: workspace coding tools (`read`, `math`, `grep`, `find`, `ls`, `git`, `bash`, `edit`).

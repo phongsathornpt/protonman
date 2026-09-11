@@ -159,7 +159,7 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 	}
 	model = withSessionID(model, sessionID)
 	if freeStreamRecovery {
-		model = withOpenCodeFreeSlowMode(model, openCodeFreeSlowRoute(cfg.baseURL, cfg.modelID), runtimepolicy.OpenCodeFreeSlowMode())
+		model = withOpenCodeFreeLowConcurrencyMode(model, openCodeFreeLowConcurrencyRoute(cfg.baseURL, cfg.modelID), runtimepolicy.OpenCodeFreeLowConcurrencyMode())
 		model = withStreamRetryPolicyConfig(model, runtimepolicy.ModelRetryMaxRetries, retryPolicy,
 			runtimepolicy.OpenCodeFreeFirstEventTimeout,
 			runtimepolicy.OpenCodeFreeIdleEventTimeout,
