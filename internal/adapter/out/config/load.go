@@ -10,8 +10,6 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
-	"github.com/phongsathornpt/protonman/internal/core/permission"
-	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
 )
 
 func Load(ctx context.Context, options Options) (Snapshot, error) {
@@ -39,39 +37,7 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 		return Snapshot{}, err
 	}
 
-	snapshot := Snapshot{
-		Permission: permission.Config{
-			Rules:   make([]permission.Rule, 0),
-			Default: permission.ActionAsk,
-		},
-		Mode:           permission.ModeAsk,
-		ProtectedPaths: make([]string, 0),
-		Sandbox:        sandbox.NameOff,
-		Providers:      make(map[string]ProviderConfig),
-		Agent: AgentConfig{
-			SubagentsEnabled:     true,
-			Subagents:            make(map[string]SubagentModelConfig),
-			MaxToolCalls:         DefaultMaxToolCalls,
-			MaxLiveSubagents:     DefaultMaxLiveSubagents,
-			MaxRetainedSubagents: DefaultMaxRetainedSubagents,
-			SubagentMaxRuntime:   DefaultSubagentMaxRuntime,
-			SubagentWaitTimeout:  DefaultSubagentWaitTimeout,
-			SubagentQueueTimeout: DefaultSubagentQueueTimeout,
-			CompletedResultTTL:   DefaultCompletedResultTTL,
-		},
-		Runtime: DefaultRuntimeConfig(),
-		Provenance: map[string]ValueSource{
-			FieldModelDefault:          SourceDefault,
-			FieldModelProvider:         SourceDefault,
-			FieldAgentProfile:          SourceDefault,
-			FieldAgentSubagentsEnabled: SourceDefault,
-			FieldAgentReasoningEffort:  SourceDefault,
-			FieldAgentMaxToolCalls:     SourceDefault,
-			FieldUIPermissionMode:      SourceDefault,
-		},
-		Sources:  make([]string, 0, 2),
-		Warnings: make([]string, 0),
-	}
+	snapshot := DefaultSnapshot()
 
 	dirs, err := appdirs.Resolve(homeDir)
 	if err != nil {

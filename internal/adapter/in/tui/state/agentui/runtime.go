@@ -2,6 +2,7 @@ package agentui
 
 import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -14,7 +15,7 @@ type RuntimeState struct {
 }
 
 func NewRuntimeState(cfg config.AgentConfig, configured bool) RuntimeState {
-	state := RuntimeState{MaxToolCalls: config.DefaultMaxToolCalls, SubagentsEnabled: true}
+	state := RuntimeState{MaxToolCalls: runtimepolicy.TurnMaxToolCalls, SubagentsEnabled: true}
 	if configured {
 		state.MaxToolCalls = cfg.MaxToolCalls
 		state.Profile = cfg.Profile

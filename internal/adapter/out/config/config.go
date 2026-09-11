@@ -11,23 +11,6 @@ import (
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
-const (
-	// DefaultMaxToolCalls is the fallback cumulative tool-call limit per turn.
-	DefaultMaxToolCalls = runtimepolicy.TurnMaxToolCalls
-	// DefaultSubagentMaxRuntime is the hard safety ceiling for one spawned subagent.
-	DefaultSubagentMaxRuntime = runtimepolicy.AgentMaxRuntime
-	// DefaultSubagentWaitTimeout bounds one parent wait without canceling the child.
-	DefaultSubagentWaitTimeout = runtimepolicy.AgentWaitTimeout
-	// DefaultSubagentQueueTimeout bounds waiting for concurrency/workspace capacity.
-	DefaultSubagentQueueTimeout = runtimepolicy.AgentQueueTimeout
-	// DefaultMaxLiveSubagents bounds queued and running subagents.
-	DefaultMaxLiveSubagents = runtimepolicy.AgentMaxLive
-	// DefaultMaxRetainedSubagents bounds terminal lifecycle records kept for later turns.
-	DefaultMaxRetainedSubagents = runtimepolicy.AgentMaxRetained
-	// DefaultCompletedResultTTL retains terminal results for later turns.
-	DefaultCompletedResultTTL = runtimepolicy.AgentResultTTL
-)
-
 // Options controls which configuration layers are considered.
 type Options struct {
 	// HomeDir is the user's home directory. An empty value resolves through

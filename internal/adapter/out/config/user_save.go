@@ -1,13 +1,10 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
-
-	"github.com/pelletier/go-toml/v2"
 
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -153,50 +150,13 @@ func modifyUserConfigFile(homeDir string, returnIfNotExist bool, mutate func(*fi
 	}
 	userPath := dirs.Config
 
-	var doc fileDocument
-	data, err := os.ReadFile(userPath)
-	if err == nil {
-		if err := toml.Unmarshal(data, &doc); err != nil {
-			return fmt.Errorf("decode existing config %q: %w", userPath, err)
-		}
-	} else if errors.Is(err, os.ErrNotExist) {
-		if returnIfNotExist {
-			return nil
-		}
-	} else {
-		return fmt.Errorf("read config file %q: %w", userPath, err)
+	doc, exists, err := readDocument(userPath, "config file", false)
+	if err != nil {
+		return err
 	}
-
+	if !exists && returnIfNotExist {
+		return nil
+	}
 	mutate(&doc)
-
-	encoded, err := toml.Marshal(doc)
-	if err != nil {
-		return fmt.Errorf("encode config toml: %w", err)
-	}
-
-	tempFile, err := os.CreateTemp(userDir, ".config-*.tmp")
-	if err != nil {
-		return fmt.Errorf("create temporary config: %w", err)
-	}
-	tempPath := tempFile.Name()
-	defer func() {
-		_ = os.Remove(tempPath)
-	}()
-
-	if _, err := tempFile.Write(encoded); err != nil {
-		_ = tempFile.Close()
-		return fmt.Errorf("write temporary config: %w", err)
-	}
-	if err := tempFile.Chmod(0o600); err != nil {
-		_ = tempFile.Close()
-		return fmt.Errorf("protect temporary config: %w", err)
-	}
-	if err := tempFile.Close(); err != nil {
-		return fmt.Errorf("close temporary config: %w", err)
-	}
-
-	if err := os.Rename(tempPath, userPath); err != nil {
-		return fmt.Errorf("persist config: %w", err)
-	}
-	return nil
+	return writeDocumentAtomic(userDir, userPath, "config", 0o600, doc)
 }
