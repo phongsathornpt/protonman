@@ -30,31 +30,33 @@ type lowConcurrencyRequest struct {
 	grant chan struct{}
 }
 
-type openCodeFreeLowConcurrencyController struct {
+type lowConcurrencyController struct {
+	provider  string
 	policy    runtimepolicy.LowConcurrencyPolicy
 	admission chan struct{}
 	requests  chan *lowConcurrencyRequest
 	done      chan lowConcurrencyCompletion
 }
 
-var openCodeFreeLowConcurrencyControllers = struct {
+var lowConcurrencyControllers = struct {
 	sync.Mutex
-	byRoute map[string]*openCodeFreeLowConcurrencyController
-}{byRoute: make(map[string]*openCodeFreeLowConcurrencyController)}
+	byRoute map[string]*lowConcurrencyController
+}{byRoute: make(map[string]*lowConcurrencyController)}
 
-func openCodeFreeLowConcurrencyControllerFor(route string, policy runtimepolicy.LowConcurrencyPolicy) *openCodeFreeLowConcurrencyController {
-	openCodeFreeLowConcurrencyControllers.Lock()
-	defer openCodeFreeLowConcurrencyControllers.Unlock()
-	if controller := openCodeFreeLowConcurrencyControllers.byRoute[route]; controller != nil {
+func lowConcurrencyControllerFor(provider, route string, policy runtimepolicy.LowConcurrencyPolicy) *lowConcurrencyController {
+	lowConcurrencyControllers.Lock()
+	defer lowConcurrencyControllers.Unlock()
+	if controller := lowConcurrencyControllers.byRoute[route]; controller != nil {
 		return controller
 	}
-	controller := newOpenCodeFreeLowConcurrencyController(policy)
-	openCodeFreeLowConcurrencyControllers.byRoute[route] = controller
+	controller := newLowConcurrencyController(provider, policy)
+	lowConcurrencyControllers.byRoute[route] = controller
 	return controller
 }
 
-func newOpenCodeFreeLowConcurrencyController(policy runtimepolicy.LowConcurrencyPolicy) *openCodeFreeLowConcurrencyController {
-	controller := &openCodeFreeLowConcurrencyController{
+func newLowConcurrencyController(provider string, policy runtimepolicy.LowConcurrencyPolicy) *lowConcurrencyController {
+	controller := &lowConcurrencyController{
+		provider:  strings.TrimSpace(provider),
 		policy:    policy,
 		admission: make(chan struct{}, policy.QueueCapacity),
 		requests:  make(chan *lowConcurrencyRequest),
@@ -64,13 +66,13 @@ func newOpenCodeFreeLowConcurrencyController(policy runtimepolicy.LowConcurrency
 	return controller
 }
 
-func (c *openCodeFreeLowConcurrencyController) acquire(ctx context.Context) error {
+func (c *lowConcurrencyController) acquire(ctx context.Context) error {
 	select {
 	case c.admission <- struct{}{}:
 	default:
 		return &sdk.ProviderError{
-			Provider: DefaultOpenCodeName, Kind: sdk.ErrorOverloaded,
-			Code: "low_concurrency_queue_full", Message: "free model request queue is full", Retryable: false,
+			Provider: c.provider, Kind: sdk.ErrorOverloaded,
+			Code: "low_concurrency_queue_full", Message: "low concurrency request queue is full", Retryable: false,
 		}
 	}
 
@@ -91,11 +93,11 @@ func (c *openCodeFreeLowConcurrencyController) acquire(ctx context.Context) erro
 	}
 }
 
-func (c *openCodeFreeLowConcurrencyController) complete(completion lowConcurrencyCompletion) {
+func (c *lowConcurrencyController) complete(completion lowConcurrencyCompletion) {
 	c.done <- completion
 }
 
-func (c *openCodeFreeLowConcurrencyController) run() {
+func (c *lowConcurrencyController) run() {
 	policy := c.policy
 	interval := policy.InitialInterval
 	limit := policy.MinConcurrency
@@ -193,29 +195,29 @@ func scaleLowConcurrencyDuration(value time.Duration, percent int, floor, ceilin
 	return scaled
 }
 
-type openCodeFreeLowConcurrencyModel struct {
+type lowConcurrencyModel struct {
 	base       sdk.LanguageModel
-	controller *openCodeFreeLowConcurrencyController
+	controller *lowConcurrencyController
 }
 
-func withLowConcurrencyMode(base sdk.LanguageModel, route string, policy runtimepolicy.LowConcurrencyPolicy) sdk.LanguageModel {
+func withLowConcurrencyMode(base sdk.LanguageModel, provider, route string, policy runtimepolicy.LowConcurrencyPolicy) sdk.LanguageModel {
 	if base == nil {
 		return nil
 	}
-	return &openCodeFreeLowConcurrencyModel{base: base, controller: openCodeFreeLowConcurrencyControllerFor(route, policy)}
+	return &lowConcurrencyModel{base: base, controller: lowConcurrencyControllerFor(provider, route, policy)}
 }
 
-func (m *openCodeFreeLowConcurrencyModel) Provider() string { return m.base.Provider() }
-func (m *openCodeFreeLowConcurrencyModel) ModelID() string  { return m.base.ModelID() }
-func (m *openCodeFreeLowConcurrencyModel) Capabilities() sdk.ModelCapabilities {
+func (m *lowConcurrencyModel) Provider() string { return m.base.Provider() }
+func (m *lowConcurrencyModel) ModelID() string  { return m.base.ModelID() }
+func (m *lowConcurrencyModel) Capabilities() sdk.ModelCapabilities {
 	return m.base.Capabilities()
 }
-func (m *openCodeFreeLowConcurrencyModel) ContextWindow() int { return sdk.ModelContextWindow(m.base) }
-func (m *openCodeFreeLowConcurrencyModel) TokenLimits() sdk.TokenLimits {
+func (m *lowConcurrencyModel) ContextWindow() int { return sdk.ModelContextWindow(m.base) }
+func (m *lowConcurrencyModel) TokenLimits() sdk.TokenLimits {
 	return sdk.ModelTokenLimits(m.base)
 }
 
-func (m *openCodeFreeLowConcurrencyModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
+func (m *lowConcurrencyModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
 	if err := m.controller.acquire(ctx); err != nil {
 		return nil, err
 	}
@@ -226,18 +228,18 @@ func (m *openCodeFreeLowConcurrencyModel) Stream(ctx context.Context, request sd
 	}
 	if stream == nil {
 		m.controller.complete(lowConcurrencyCompletion{outcome: lowConcurrencyFailure})
-		return nil, errors.New("open free model stream: nil stream")
+		return nil, errors.New("low concurrency model stream: nil stream")
 	}
-	return &openCodeFreeLowConcurrencyStream{base: stream, controller: m.controller}, nil
+	return &lowConcurrencyStream{base: stream, controller: m.controller}, nil
 }
 
-type openCodeFreeLowConcurrencyStream struct {
+type lowConcurrencyStream struct {
 	base       sdk.Stream
-	controller *openCodeFreeLowConcurrencyController
+	controller *lowConcurrencyController
 	once       sync.Once
 }
 
-func (s *openCodeFreeLowConcurrencyStream) Next(ctx context.Context) (sdk.Event, error) {
+func (s *lowConcurrencyStream) Next(ctx context.Context) (sdk.Event, error) {
 	event, err := s.base.Next(ctx)
 	if err != nil {
 		completion := classifyLowConcurrencyCompletion(err)
@@ -253,12 +255,12 @@ func (s *openCodeFreeLowConcurrencyStream) Next(ctx context.Context) (sdk.Event,
 	return event, nil
 }
 
-func (s *openCodeFreeLowConcurrencyStream) Close() error {
+func (s *lowConcurrencyStream) Close() error {
 	s.finish(lowConcurrencyCompletion{outcome: lowConcurrencyFailure})
 	return s.base.Close()
 }
 
-func (s *openCodeFreeLowConcurrencyStream) finish(completion lowConcurrencyCompletion) {
+func (s *lowConcurrencyStream) finish(completion lowConcurrencyCompletion) {
 	s.once.Do(func() { s.controller.complete(completion) })
 }
 
@@ -277,6 +279,6 @@ func classifyLowConcurrencyCompletion(err error) lowConcurrencyCompletion {
 	return completion
 }
 
-func openCodeFreeLowConcurrencyRoute(baseURL, modelID string) string {
-	return strings.TrimRight(strings.ToLower(strings.TrimSpace(baseURL)), "/") + "|" + strings.ToLower(strings.TrimSpace(modelID))
+func lowConcurrencyRoute(provider, baseURL, modelID string) string {
+	return strings.ToLower(strings.TrimSpace(provider)) + "|" + strings.TrimRight(strings.ToLower(strings.TrimSpace(baseURL)), "/") + "|" + strings.ToLower(strings.TrimSpace(modelID))
 }

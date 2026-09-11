@@ -77,7 +77,7 @@ func TestAnthropicSDKAdapterSendsSessionIdentityWhenPresent(t *testing.T) {
 	}))
 	defer server.Close()
 
-	model := newSDKAnthropicLanguageModel(server.URL, "", "claude-test", WithSessionID(" session-anthropic "))
+	model := newSDKAnthropicLanguageModel("anthropic", server.URL, "", "claude-test", WithSessionID(" session-anthropic "))
 	stream, err := model.Stream(context.Background(), sdk.Request{
 		Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}},
 		Metadata: sdk.RequestMetadata{SessionID: "caller-session"},
@@ -632,7 +632,7 @@ func TestLowConcurrencySettingControlsOpenCodeWrapper(t *testing.T) {
 	if !ok {
 		t.Fatalf("free auto type = %T, want retry wrapper", freeAuto)
 	}
-	if _, ok := retryAuto.base.(*openCodeFreeLowConcurrencyModel); !ok {
+	if _, ok := retryAuto.base.(*lowConcurrencyModel); !ok {
 		t.Fatalf("free auto inner type = %T, want low concurrency wrapper", retryAuto.base)
 	}
 
@@ -641,23 +641,28 @@ func TestLowConcurrencySettingControlsOpenCodeWrapper(t *testing.T) {
 	if !ok {
 		t.Fatalf("free off type = %T, want retry wrapper", freeOff)
 	}
-	if _, ok := retryOff.base.(*openCodeFreeLowConcurrencyModel); ok {
+	if _, ok := retryOff.base.(*lowConcurrencyModel); ok {
 		t.Fatalf("free off unexpectedly retained low concurrency wrapper: %T", retryOff.base)
 	}
 
 	paidAuto := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "paid-model")
-	if _, ok := paidAuto.(*openCodeFreeLowConcurrencyModel); ok {
+	if _, ok := paidAuto.(*lowConcurrencyModel); ok {
 		t.Fatalf("paid auto unexpectedly enabled low concurrency: %T", paidAuto)
 	}
 
 	paidOn := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "paid-model", WithLowConcurrencyMode(LowConcurrencyOn))
-	if _, ok := paidOn.(*openCodeFreeLowConcurrencyModel); !ok {
+	if _, ok := paidOn.(*lowConcurrencyModel); !ok {
 		t.Fatalf("paid on type = %T, want low concurrency wrapper", paidOn)
 	}
 
 	nonOpenCode := newSDKOpenAILanguageModel(DefaultOpenAIName, "https://api.openai.com/v1", "key", "gpt-test", WithLowConcurrencyMode(LowConcurrencyOn))
-	if _, ok := nonOpenCode.(*openCodeFreeLowConcurrencyModel); ok {
-		t.Fatalf("non-OpenCode model unexpectedly enabled low concurrency: %T", nonOpenCode)
+	if _, ok := nonOpenCode.(*lowConcurrencyModel); !ok {
+		t.Fatalf("non-OpenCode on type = %T, want low concurrency wrapper", nonOpenCode)
+	}
+
+	anthropicOn := newSDKAnthropicLanguageModel(DefaultAnthropicName, "https://api.anthropic.com", "key", "claude-test", WithLowConcurrencyMode(LowConcurrencyOn))
+	if _, ok := anthropicOn.(*lowConcurrencyModel); !ok {
+		t.Fatalf("anthropic on type = %T, want low concurrency wrapper", anthropicOn)
 	}
 }
 

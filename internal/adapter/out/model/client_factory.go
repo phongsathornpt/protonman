@@ -118,7 +118,7 @@ func NewProviderLanguageModel(
 	opts = append([]ClientOption{withResolvedModelProfile(builtinProfile)}, opts...)
 	switch protocol {
 	case ProviderProtocolAnthropic:
-		return newSDKAnthropicLanguageModel(baseURL, apiKey, modelID, opts...)
+		return newSDKAnthropicLanguageModel(providerName, baseURL, apiKey, modelID, opts...)
 	default:
 		return newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID, opts...)
 	}

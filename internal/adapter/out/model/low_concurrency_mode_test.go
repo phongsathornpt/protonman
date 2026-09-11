@@ -79,8 +79,8 @@ func TestLowConcurrencyModeStartsAtOneConcurrentGeneration(t *testing.T) {
 	base := &lowConcurrencyBlockingModel{started: make(chan *lowConcurrencyBlockingStream, 2)}
 	policy := testLowConcurrencyPolicy()
 	policy.QueueCapacity = 2
-	controller := newOpenCodeFreeLowConcurrencyController(policy)
-	model := &openCodeFreeLowConcurrencyModel{base: base, controller: controller}
+	controller := newLowConcurrencyController("test", policy)
+	model := &lowConcurrencyModel{base: base, controller: controller}
 	streams := make(chan sdk.Stream, 2)
 
 	for range 2 {
@@ -116,8 +116,8 @@ func TestLowConcurrencyModeStartsAtOneConcurrentGeneration(t *testing.T) {
 
 func TestLowConcurrencyModeBoundsWaitingQueue(t *testing.T) {
 	base := &lowConcurrencyBlockingModel{started: make(chan *lowConcurrencyBlockingStream, 2)}
-	controller := newOpenCodeFreeLowConcurrencyController(testLowConcurrencyPolicy())
-	model := &openCodeFreeLowConcurrencyModel{base: base, controller: controller}
+	controller := newLowConcurrencyController("test", testLowConcurrencyPolicy())
+	model := &lowConcurrencyModel{base: base, controller: controller}
 	first, err := model.Stream(context.Background(), sdk.Request{})
 	if err != nil {
 		t.Fatal(err)
@@ -184,7 +184,7 @@ func TestLowConcurrencyModeBacksOffAfterRateLimit(t *testing.T) {
 	base := &lowConcurrencySequenceModel{errors: []error{
 		sdk.NewProviderError(DefaultOpenCodeName, 429, "rate_limit", "slow down"), nil,
 	}}
-	model := &openCodeFreeLowConcurrencyModel{base: base, controller: newOpenCodeFreeLowConcurrencyController(policy)}
+	model := &lowConcurrencyModel{base: base, controller: newLowConcurrencyController("test", policy)}
 
 	if _, err := model.Stream(context.Background(), sdk.Request{}); err == nil {
 		t.Fatal("first request should be rate limited")

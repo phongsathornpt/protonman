@@ -6,7 +6,7 @@ import (
 )
 
 // LowConcurrencySetting controls whether the low-concurrency wrapper is applied.
-// Auto preserves provider policy: OpenCode free models use it, other routes do not.
+// Auto preserves provider/model policy; On forces the wrapper for any provider/model.
 type LowConcurrencySetting uint8
 
 const (
@@ -39,16 +39,13 @@ func ParseLowConcurrencySetting(raw string) (LowConcurrencySetting, error) {
 	}
 }
 
-func (s LowConcurrencySetting) Enabled(isOpenCode, freeModel bool) bool {
-	if !isOpenCode {
-		return false
-	}
+func (s LowConcurrencySetting) Enabled(autoRecommended bool) bool {
 	switch s {
 	case LowConcurrencyOn:
 		return true
 	case LowConcurrencyOff:
 		return false
 	default:
-		return freeModel
+		return autoRecommended
 	}
 }

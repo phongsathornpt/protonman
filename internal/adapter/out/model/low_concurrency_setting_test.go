@@ -18,19 +18,19 @@ func TestParseLowConcurrencySetting(t *testing.T) {
 }
 
 func TestLowConcurrencySettingEnabled(t *testing.T) {
-	if !LowConcurrencyAuto.Enabled(true, true) {
+	if !LowConcurrencyAuto.Enabled(true) {
 		t.Fatal("auto should enable OpenCode free")
 	}
-	if LowConcurrencyAuto.Enabled(true, false) {
+	if LowConcurrencyAuto.Enabled(false) {
 		t.Fatal("auto should not enable OpenCode paid")
 	}
-	if !LowConcurrencyOn.Enabled(true, false) {
+	if !LowConcurrencyOn.Enabled(false) {
 		t.Fatal("on should force OpenCode paid")
 	}
-	if LowConcurrencyOff.Enabled(true, true) {
+	if LowConcurrencyOff.Enabled(true) {
 		t.Fatal("off should disable OpenCode free")
 	}
-	if LowConcurrencyOn.Enabled(false, true) {
-		t.Fatal("on must stay scoped to OpenCode")
+	if !LowConcurrencyOn.Enabled(false) {
+		t.Fatal("on should force any provider/model")
 	}
 }
