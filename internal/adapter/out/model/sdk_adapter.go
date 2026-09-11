@@ -138,6 +138,7 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 		UserAgent: cfg.userAgent, Headers: headers, MaxRetries: providerMaxRetries,
 		RetryBackoff: retryPolicy.BaseBackoff, RetryPostFirstGap: retryPolicy.PostFirstRetryGap,
 		MaxRetryBackoff: retryPolicy.MaxBackoff, MaxRetryAfter: retryPolicy.MaxRetryAfter,
+		RetryDelays: retryPolicy.RetryDelays,
 	})
 	modelOptions := make([]sdkopenai.ModelOption, 0, 1)
 	if usesResponsesAPI(cfg.modelID, cfg.baseURL) {
@@ -180,6 +181,7 @@ func newSDKAnthropicLanguageModel(baseURL, apiKey, modelID string, opts ...Clien
 		UserAgent: cfg.userAgent, MaxRetries: runtimepolicy.ModelRetryMaxRetries,
 		RetryBackoff: retryPolicy.BaseBackoff, RetryPostFirstGap: retryPolicy.PostFirstRetryGap,
 		MaxRetryBackoff: retryPolicy.MaxBackoff, MaxRetryAfter: retryPolicy.MaxRetryAfter,
+		RetryDelays: retryPolicy.RetryDelays,
 	})
 	var model sdk.LanguageModel = provider.Model(cfg.modelID)
 	if cfg.vision != nil {
@@ -228,6 +230,7 @@ func modelRetryPolicy() sdk.RetryPolicy {
 		PostFirstRetryGap: runtimepolicy.ModelRetryPostFirstGap,
 		MaxBackoff:        runtimepolicy.ModelRetryMaxBackoff,
 		MaxRetryAfter:     runtimepolicy.ModelRetryMaxRetryAfter,
+		RetryDelays:       runtimepolicy.ModelRetrySchedule(),
 	}
 }
 
@@ -255,6 +258,7 @@ type emptyStreamRetryModel struct {
 func withEmptyStreamRetry(base sdk.LanguageModel, maxRetries int, backoff time.Duration) sdk.LanguageModel {
 	policy := modelRetryPolicy()
 	policy.BaseBackoff = backoff
+	policy.RetryDelays = nil
 	return withStreamRetryPolicyConfig(base, maxRetries, policy,
 		runtimepolicy.OpenCodeFreeFirstEventTimeout,
 		runtimepolicy.OpenCodeFreeIdleEventTimeout,
@@ -278,6 +282,9 @@ func streamRetryPolicy(backoff, postFirstRetryGap time.Duration) sdk.RetryPolicy
 	policy := modelRetryPolicy()
 	policy.BaseBackoff = backoff
 	policy.PostFirstRetryGap = postFirstRetryGap
+	// Test and explicit stream callers that override the backoff use the
+	// legacy formula; the production model policy keeps the exact schedule.
+	policy.RetryDelays = nil
 	return policy
 }
 

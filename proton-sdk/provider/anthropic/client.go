@@ -29,6 +29,7 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 		PostFirstRetryGap: m.provider.options.RetryPostFirstGap,
 		MaxBackoff:        m.provider.options.MaxRetryBackoff,
 		MaxRetryAfter:     m.provider.options.MaxRetryAfter,
+		RetryDelays:       m.provider.options.RetryDelays,
 	}
 	var lastErr error
 	for attempt := 0; ; attempt++ {

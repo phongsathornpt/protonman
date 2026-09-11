@@ -611,6 +611,15 @@ func TestOpenCodeFreeModelFactoryEnablesEmptyStreamRetry(t *testing.T) {
 	if retryModel.maxRetries != runtimepolicy.ModelRetryMaxRetries {
 		t.Fatalf("free model max retries = %d, want runtime policy %d", retryModel.maxRetries, runtimepolicy.ModelRetryMaxRetries)
 	}
+	wantSchedule := runtimepolicy.ModelRetrySchedule()
+	if len(retryModel.retryPolicy.RetryDelays) != len(wantSchedule) {
+		t.Fatalf("free model retry schedule = %v, want %v", retryModel.retryPolicy.RetryDelays, wantSchedule)
+	}
+	for index, want := range wantSchedule {
+		if got := retryModel.retryPolicy.RetryDelays[index]; got != want {
+			t.Fatalf("free model retry delay %d = %v, want %v", index+1, got, want)
+		}
+	}
 	paid := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "paid-model", WithSessionID("session-1"))
 	if _, ok := paid.(*emptyStreamRetryModel); ok {
 		t.Fatalf("paid model unexpectedly enabled empty stream retry: %T", paid)

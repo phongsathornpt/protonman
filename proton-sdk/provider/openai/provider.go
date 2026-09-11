@@ -23,6 +23,7 @@ type ProviderOptions struct {
 	RetryPostFirstGap time.Duration
 	MaxRetryBackoff   time.Duration
 	MaxRetryAfter     time.Duration
+	RetryDelays       []time.Duration
 }
 
 type Provider struct {
@@ -54,6 +55,7 @@ func NewProvider(options ProviderOptions) *Provider {
 		options.MaxRetryAfter = sdk.DefaultRetryMaxAfter
 	}
 	options.Headers = options.Headers.Clone()
+	options.RetryDelays = append([]time.Duration(nil), options.RetryDelays...)
 	return &Provider{options: options}
 }
 

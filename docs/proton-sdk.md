@@ -67,8 +67,10 @@ provider code, message, and retryability. HTTP and streaming errors use the same
 error type, so callers can use `errors.As` instead of parsing provider strings.
 
 Retry and bounded backoff policy belongs to the SDK/provider boundary rather than the
-turn engine. `RetryPolicy.PostFirstRetryGap` adds an explicit cooldown only after the
-first retry; provider `Retry-After` metadata still takes precedence over local timing.
+turn engine. `RetryPolicy.RetryDelays` defines the exact 1-based local retry schedule;
+the SDK's zero-value policy uses its default schedule, while custom policies without an
+explicit schedule retain the bounded exponential fallback. Provider `Retry-After`
+metadata still takes precedence over local timing.
 Callers that need user-visible progress can attach `WithRetryObserver` to the request
 context; `RetryEvent` reports provider/model, reason, retry index/budget, phase
 (`waiting` or `cooldown`), delay, and the exact `RetryAt` deadline before the wait

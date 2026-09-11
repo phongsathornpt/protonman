@@ -107,6 +107,7 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 		PostFirstRetryGap: m.provider.options.RetryPostFirstGap,
 		MaxBackoff:        m.provider.options.MaxRetryBackoff,
 		MaxRetryAfter:     m.provider.options.MaxRetryAfter,
+		RetryDelays:       m.provider.options.RetryDelays,
 	}
 	for attempt := 0; ; attempt++ {
 		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))

@@ -9,16 +9,26 @@ import (
 // Default retry timing used when a caller does not provide a value. Product
 // runtimes should pass their explicit policy at the composition boundary.
 const (
-	DefaultRetryBaseBackoff = 500 * time.Millisecond
-	DefaultRetryMaxBackoff  = 8 * time.Second
+	DefaultRetryBaseBackoff = 5 * time.Second
+	DefaultRetryMaxBackoff  = 60 * time.Second
 	DefaultRetryMaxAfter    = 30 * time.Second
 )
+
+var defaultRetryDelays = [...]time.Duration{
+	5 * time.Second,
+	15 * time.Second,
+	30 * time.Second,
+	60 * time.Second,
+}
 
 type RetryPolicy struct {
 	BaseBackoff       time.Duration
 	PostFirstRetryGap time.Duration
 	MaxBackoff        time.Duration
 	MaxRetryAfter     time.Duration
+	// RetryDelays, when provided, is the exact 1-based retry schedule. Once
+	// the schedule is exhausted, its final delay is reused.
+	RetryDelays []time.Duration
 }
 
 type RetryDecision struct {
@@ -46,14 +56,28 @@ func DecideRetry(err error, retryIndex int, policy RetryPolicy) RetryDecision {
 }
 
 // RetryDelay returns the bounded local retry delay for a 1-based retry index.
-// PostFirstRetryGap is added only after the first retry, allowing callers to
-// create an explicit cooldown before subsequent attempts without affecting the
-// first recovery attempt.
+// An explicit RetryDelays schedule takes precedence over the legacy
+// exponential calculation. PostFirstRetryGap is retained for callers using
+// that legacy calculation and is added only after the first retry.
 func RetryDelay(retryIndex int, policy RetryPolicy) time.Duration {
 	if retryIndex < 1 {
 		retryIndex = 1
 	}
 	policy = normalizeRetryPolicy(policy)
+	if len(policy.RetryDelays) > 0 {
+		index := retryIndex - 1
+		if index >= len(policy.RetryDelays) {
+			index = len(policy.RetryDelays) - 1
+		}
+		delay := policy.RetryDelays[index]
+		if delay <= 0 {
+			return 0
+		}
+		if delay >= policy.MaxBackoff {
+			return policy.MaxBackoff
+		}
+		return delay
+	}
 	if policy.BaseBackoff >= policy.MaxBackoff {
 		return policy.MaxBackoff
 	}
@@ -78,6 +102,9 @@ func RetryDelay(retryIndex int, policy RetryPolicy) time.Duration {
 }
 
 func normalizeRetryPolicy(policy RetryPolicy) RetryPolicy {
+	useDefaultSchedule := len(policy.RetryDelays) == 0 &&
+		policy.BaseBackoff <= 0 && policy.PostFirstRetryGap <= 0 &&
+		policy.MaxBackoff <= 0 && policy.MaxRetryAfter <= 0
 	if policy.BaseBackoff <= 0 {
 		policy.BaseBackoff = DefaultRetryBaseBackoff
 	}
@@ -86,6 +113,11 @@ func normalizeRetryPolicy(policy RetryPolicy) RetryPolicy {
 	}
 	if policy.MaxRetryAfter <= 0 {
 		policy.MaxRetryAfter = DefaultRetryMaxAfter
+	}
+	if useDefaultSchedule {
+		policy.RetryDelays = append([]time.Duration(nil), defaultRetryDelays[:]...)
+	} else if len(policy.RetryDelays) > 0 {
+		policy.RetryDelays = append([]time.Duration(nil), policy.RetryDelays...)
 	}
 	return policy
 }

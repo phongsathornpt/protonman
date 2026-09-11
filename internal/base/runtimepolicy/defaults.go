@@ -41,12 +41,26 @@ const (
 	SandboxCommandWaitDelay       = 2 * time.Second
 	TerminalEmitTimeout           = 5 * time.Second
 	ProtectionObserverTimeout     = time.Second
-	ModelRetryMaxRetries          = 2
-	ModelRetryBackoffStep         = 500 * time.Millisecond
-	ModelRetryPostFirstGap        = 1 * time.Second
-	ModelRetryMaxBackoff          = 8 * time.Second
+	ModelRetryMaxRetries          = 4
+	ModelRetryBackoffStep         = 5 * time.Second
+	ModelRetrySecondDelay         = 15 * time.Second
+	ModelRetryThirdDelay          = 30 * time.Second
+	ModelRetryLastDelay           = 60 * time.Second
+	ModelRetryPostFirstGap        = 0 // legacy exponential-policy field
+	ModelRetryMaxBackoff          = 60 * time.Second
 	ModelRetryMaxRetryAfter       = 30 * time.Second
 	OpenCodeFreeFirstEventTimeout = 30 * time.Second
 	OpenCodeFreeIdleEventTimeout  = 60 * time.Second
 	OpenCodeFreeStreamMaxDuration = 5 * time.Minute
 )
+
+// ModelRetrySchedule returns a fresh copy of the authoritative local retry
+// schedule so callers cannot mutate runtime defaults through a returned slice.
+func ModelRetrySchedule() []time.Duration {
+	return []time.Duration{
+		ModelRetryBackoffStep,
+		ModelRetrySecondDelay,
+		ModelRetryThirdDelay,
+		ModelRetryLastDelay,
+	}
+}
