@@ -699,14 +699,18 @@ When implementing a change, place it according to ownership:
 | model/tool turn behavior | `internal/engine/turn` |
 | permission execution pipeline | `internal/engine/toolcall` + `internal/core/permission` |
 | user/project TOML persistence | `internal/adapter/out/config`, exposed via `internal/app` |
-
-Configuration invariants: `internal/base/runtimepolicy` is the single source of truth for product runtime defaults; `internal/adapter/out/config.DefaultSnapshot()` is the only constructor for a fresh effective config snapshot. Do not add alias constants for runtime defaults inside config or TUI packages. User/project TOML mutation must reuse the shared atomic document persistence primitive in `internal/adapter/out/config/store.go`; keep project symlink/scope validation and distinct file permissions at the scope boundary. Persisted TOML structs are a compatibility boundary: do not embed runtime `ProviderConfig`/`ModelConfig` directly in `fileDocument`; convert explicitly at load/save boundaries.
 | terminal interaction/rendering | `internal/adapter/in/tui` |
 | provider model discovery/adaptation | `internal/adapter/out/model` |
 | provider wire protocol | `proton-sdk/provider/*` |
 | session persistence | `internal/adapter/out/sessionfs` |
 | reusable low-level defaults/helpers | `internal/base/*` only if truly dependency-free |
 | composition/wiring | `cmd/protonman` |
+
+### Configuration invariants
+
+`internal/base/runtimepolicy` is the single source of truth for product runtime defaults. `internal/adapter/out/config.DefaultSnapshot()` is the only constructor for a fresh effective config snapshot; do not add alias constants for runtime defaults inside config or TUI packages.
+
+User and project TOML mutation must reuse the shared atomic document persistence primitive in `internal/adapter/out/config/store.go`, while preserving scope-specific security checks and file modes. Persisted TOML structs are a compatibility boundary: never embed runtime `ProviderConfig` or `ModelConfig` directly in `fileDocument`; use explicit conversion at load/save boundaries. See `docs/settings.md` for the current settings architecture and migration rules.
 
 ## Implementation Style
 
