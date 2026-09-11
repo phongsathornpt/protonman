@@ -919,8 +919,15 @@ func TestLowCommandControlsSessionLowConcurrencyMode(t *testing.T) {
 		t.Fatalf("initial low concurrency = %s, want auto", got)
 	}
 	m.executeCommand("/low")
+	if got := m.lowConcurrencyMode; got != model.LowConcurrencyAuto {
+		t.Fatalf("/low inspect mutated mode to %s", got)
+	}
+	if got := plainTranscript(m); !strings.Contains(got, "low concurrency · auto · effective on") {
+		t.Fatalf("/low status missing effective state: %q", got)
+	}
+	m.executeCommand("/low on")
 	if got := m.lowConcurrencyMode; got != model.LowConcurrencyOn {
-		t.Fatalf("/low = %s, want on", got)
+		t.Fatalf("/low on = %s, want on", got)
 	}
 	m.executeCommand("/low off")
 	if got := m.lowConcurrencyMode; got != model.LowConcurrencyOff {

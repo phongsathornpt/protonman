@@ -112,5 +112,10 @@ func (ui *BubbleTeaUI) ReasoningEffort() sdk.ReasoningEffort {
 	return ui.finalReasoningEffort
 }
 
+// LowConcurrencyMode returns the latest session-local low-concurrency override.
+func (ui *BubbleTeaUI) LowConcurrencyMode() string {
+	return ui.lowConcurrencyMode.String()
+}
+
 // Run starts Bubble Tea with raw input, alternate-screen rendering, and mouse
 // cell motion. Bubble Tea owns terminal restoration even on program failure.

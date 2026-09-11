@@ -26,6 +26,9 @@ func NormalizeLoadedState(sessionID string, state State) (State, error) {
 	if err := validateReasoningSetting(state.ReasoningEffort); err != nil {
 		return State{}, fmt.Errorf("session reasoning effort: %w", err)
 	}
+	if err := validateLowConcurrencySetting(state.LowConcurrencyMode); err != nil {
+		return State{}, fmt.Errorf("session low concurrency mode: %w", err)
+	}
 	if err := validateMessages(state.Messages); err != nil {
 		return State{}, fmt.Errorf("session messages: %w", err)
 	}
@@ -85,6 +88,9 @@ func PrepareStateForSave(sessionID string, state State, existing *State, now tim
 	if err := validateReasoningSetting(state.ReasoningEffort); err != nil {
 		return State{}, fmt.Errorf("session reasoning effort: %w", err)
 	}
+	if err := validateLowConcurrencySetting(state.LowConcurrencyMode); err != nil {
+		return State{}, fmt.Errorf("session low concurrency mode: %w", err)
+	}
 	if err := validateMessages(state.Messages); err != nil {
 		return State{}, fmt.Errorf("session messages: %w", err)
 	}
@@ -123,4 +129,13 @@ func Preview(messages []Message) string {
 		return text
 	}
 	return ""
+}
+
+func validateLowConcurrencySetting(value string) error {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "auto", "on", "off":
+		return nil
+	default:
+		return fmt.Errorf("invalid low concurrency mode %q", value)
+	}
 }

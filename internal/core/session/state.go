@@ -44,6 +44,8 @@ type State struct {
 	AgentProfile string `json:"agent_profile,omitempty"`
 	// ReasoningEffort records the session reasoning override ("auto" preserves provider/profile defaults).
 	ReasoningEffort string `json:"reasoning_effort,omitempty"`
+	// LowConcurrencyMode records the TUI low-concurrency override: auto, on, or off.
+	LowConcurrencyMode string `json:"low_concurrency_mode,omitempty"`
 	// Messages is the redacted conversation transcript. Tool arguments are
 	// never stored.
 	Messages []Message `json:"messages,omitempty"`

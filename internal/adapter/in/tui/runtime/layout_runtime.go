@@ -83,29 +83,52 @@ func (m *bubbleModel) footerView() string {
 func (m *bubbleModel) idleContextFooter() string {
 	const inset = " "
 	width := maxInt(1, m.layout.width-len(inset)*3)
-	model := strings.TrimSpace(m.activeModel)
-	if model == "" {
-		model = "unselected"
+	modelName := strings.TrimSpace(m.activeModel)
+	if modelName == "" {
+		modelName = "unselected"
 	}
-	suffix := " · " + reasoningEffortLabel(m.reasoningEffort) + " · " + m.permissionModeLabel()
-	if low := m.lowConcurrencyFooterLabel(); low != "" {
-		suffix += " · " + low
+	permission := m.permissionModeLabel()
+	reasoning := reasoningEffortLabel(m.reasoningEffort)
+	low := m.lowConcurrencyFooterLabel()
+
+	rightCandidates := []string{}
+	if low != "" {
+		rightCandidates = append(rightCandidates,
+			modelName+" · "+reasoning+" · "+permission+" · "+low,
+			modelName+" · "+permission+" · "+low,
+			modelName+" · "+low,
+			low,
+		)
+	} else {
+		rightCandidates = append(rightCandidates,
+			modelName+" · "+reasoning+" · "+permission,
+			modelName+" · "+permission,
+			modelName,
+		)
 	}
-	for _, left := range []string{"? for shortcuts", "? shortcuts", "?"} {
-		modelWidth := width - ansi.StringWidth(left) - ansi.StringWidth(suffix) - 1
-		if modelWidth < 8 {
-			continue
+	for _, left := range []string{"? for shortcuts", "? shortcuts", "?", ""} {
+		for _, right := range rightCandidates {
+			available := width - ansi.StringWidth(left)
+			if left != "" {
+				available--
+			}
+			if available <= 0 {
+				continue
+			}
+			if ansi.StringWidth(right) > available {
+				if strings.Contains(right, modelName) && available >= 8 {
+					right = strings.Replace(right, modelName, truncateWithEllipsis(modelName, maxInt(1, available-(ansi.StringWidth(right)-ansi.StringWidth(modelName)))), 1)
+				}
+			}
+			if ansi.StringWidth(right) > available {
+				continue
+			}
+			if left == "" {
+				return inset + mutedStyle.Render(right)
+			}
+			spaces := strings.Repeat(" ", maxInt(1, width-ansi.StringWidth(left)-ansi.StringWidth(right)))
+			return inset + mutedStyle.Render(left+spaces+right)
 		}
-		right := truncateWithEllipsis(model, modelWidth) + suffix
-		spaces := strings.Repeat(" ", maxInt(1, width-ansi.StringWidth(left)-ansi.StringWidth(right)))
-		return inset + mutedStyle.Render(left+spaces+right)
 	}
-	if width <= 2 {
-		return inset + mutedStyle.Render(truncateWithEllipsis("?", width))
-	}
-	left := "?"
-	modelWidth := maxInt(1, width-ansi.StringWidth(left)-1)
-	right := truncateWithEllipsis(model, modelWidth)
-	spaces := strings.Repeat(" ", maxInt(1, width-ansi.StringWidth(left)-ansi.StringWidth(right)))
-	return inset + mutedStyle.Render(left+spaces+right)
+	return inset + mutedStyle.Render(truncateWithEllipsis(modelName, width))
 }

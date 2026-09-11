@@ -131,6 +131,7 @@ func run(ctx context.Context, args []string) error {
 		tui.WithSessions(app.NewSessions(runtimeState.stateStore), workspaceKey(runtimeState.workDir)),
 		tui.WithInitialMessages(session.ToModelMessages(runtimeState.state.Messages)),
 		tui.WithActiveGoal(runtimeState.state.ActiveGoal),
+		tui.WithLowConcurrencyMode(runtimeState.state.LowConcurrencyMode),
 		tui.WithSkills(runtimeState.skills),
 		tui.WithModelConfig(runtimeState.config.Model, runtimeState.config.Providers),
 		tui.WithAgentConfig(runtimeState.config.Agent),
@@ -148,17 +149,18 @@ func run(ctx context.Context, args []string) error {
 		activeSkills = runtimeState.skills.ActivatedList()
 	}
 	saveErr := runtimeState.stateStore.Save(ctx, runtimeState.sessionID, session.State{
-		SessionID:       runtimeState.sessionID,
-		Revision:        runtimeState.state.Revision,
-		WorkspaceKey:    runtimeState.state.WorkspaceKey,
-		WorkspaceName:   runtimeState.state.WorkspaceName,
-		CreatedAt:       runtimeState.state.CreatedAt,
-		PermissionMode:  runtimeState.service.Mode().String(),
-		ActiveSkills:    activeSkills,
-		ActiveGoal:      bubbleUI.ActiveGoal(),
-		AgentProfile:    bubbleUI.AgentProfile(),
-		ReasoningEffort: reasoningSetting(bubbleUI.ReasoningEffort()),
-		Messages:        session.FromModelMessages(bubbleUI.SessionState()),
+		SessionID:          runtimeState.sessionID,
+		Revision:           runtimeState.state.Revision,
+		WorkspaceKey:       runtimeState.state.WorkspaceKey,
+		WorkspaceName:      runtimeState.state.WorkspaceName,
+		CreatedAt:          runtimeState.state.CreatedAt,
+		PermissionMode:     runtimeState.service.Mode().String(),
+		ActiveSkills:       activeSkills,
+		ActiveGoal:         bubbleUI.ActiveGoal(),
+		AgentProfile:       bubbleUI.AgentProfile(),
+		ReasoningEffort:    reasoningSetting(bubbleUI.ReasoningEffort()),
+		LowConcurrencyMode: bubbleUI.LowConcurrencyMode(),
+		Messages:           session.FromModelMessages(bubbleUI.SessionState()),
 	})
 	if runErr != nil && saveErr != nil {
 		return fmt.Errorf("run terminal UI: %v; save session: %w", runErr, saveErr)

@@ -1462,7 +1462,34 @@ func TestIdleContextFooterShowsLowConcurrencyStateForOpenCode(t *testing.T) {
 	m.activeModel = "nemotron-3.5-lightning-free"
 	m.lowConcurrencyMode = model.LowConcurrencyOn
 	footer := ansi.Strip(m.idleContextFooter())
-	if !strings.Contains(footer, "low:on") {
+	if !strings.Contains(footer, "LOW") {
 		t.Fatalf("footer missing low concurrency state: %q", footer)
+	}
+}
+
+func TestIdleContextFooterKeepsLowIndicatorOnNarrowTerminal(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(24, 24)
+	m.activeProvider = model.DefaultOpenCodeName
+	m.activeModel = "nemotron-3.5-lightning-free"
+	m.lowConcurrencyMode = model.LowConcurrencyOn
+	footer := ansi.Strip(m.idleContextFooter())
+	if !strings.Contains(footer, "LOW") {
+		t.Fatalf("narrow footer dropped effective low concurrency state: %q", footer)
+	}
+}
+
+func TestStatusViewKeepsActiveGoalVisible(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(48, 24)
+	m.activeGoal = "finish provider-neutral low concurrency mode safely"
+	idle := ansi.Strip(m.statusView())
+	if !strings.Contains(idle, "Goal") || !strings.Contains(idle, "finish provider-neutral") {
+		t.Fatalf("idle status missing active goal: %q", idle)
+	}
+	m.busy = true
+	busy := ansi.Strip(m.statusView())
+	if !strings.Contains(busy, "Goal") || !strings.Contains(busy, "finish provider-neutral") {
+		t.Fatalf("busy status missing active goal: %q", busy)
 	}
 }

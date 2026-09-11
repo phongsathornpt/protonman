@@ -25,7 +25,7 @@ func Catalog() []Command {
 	return []Command{
 		{Name: "help", Description: "list commands"},
 		{Name: "permission", Description: "select permission mode"},
-		{Name: "low", Description: "toggle low concurrency mode", Argument: ArgumentWord},
+		{Name: "low", Description: "inspect or set low concurrency mode", Argument: ArgumentWord},
 		{Name: "model", Description: "open model setup or select active model", Argument: ArgumentWord},
 		{Name: "provider", Description: "select or configure model providers", Argument: ArgumentRest},
 		{Name: "skills", Description: "browse, activate, or toggle agent skills", Argument: ArgumentRest},

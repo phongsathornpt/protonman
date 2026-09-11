@@ -9,46 +9,62 @@ import (
 )
 
 func (m *bubbleModel) handleLowConcurrencyCommand(argument string) tea.Cmd {
+	raw := strings.TrimSpace(argument)
+	if raw == "" {
+		effective := "off"
+		if m.lowConcurrencyEffective() {
+			effective = "on"
+		}
+		m.appendLine(mutedStyle.Render(fmt.Sprintf("  low concurrency · %s · effective %s", m.lowConcurrencyMode, effective)))
+		m.refreshViewport()
+		return nil
+	}
 	if m.busy {
 		m.appendError("cannot change low concurrency mode while a turn is running")
 		return nil
 	}
 
-	raw := strings.TrimSpace(argument)
-	var next model.LowConcurrencySetting
-	var err error
-	if raw == "" {
-		if m.lowConcurrencyMode == model.LowConcurrencyOn {
-			next = model.LowConcurrencyOff
-		} else {
-			next = model.LowConcurrencyOn
-		}
-	} else {
-		next, err = model.ParseLowConcurrencySetting(raw)
-		if err != nil {
-			m.appendError(err.Error())
-			return nil
-		}
+	next, err := model.ParseLowConcurrencySetting(raw)
+	if err != nil {
+		m.appendError(err.Error())
+		return nil
 	}
-
 	m.lowConcurrencyMode = next
 	m.reconfigureRunner()
-	m.appendLine(mutedStyle.Render(fmt.Sprintf("  low concurrency · %s", next)))
+	effective := "off"
+	if m.lowConcurrencyEffective() {
+		effective = "on"
+	}
+	m.appendLine(mutedStyle.Render(fmt.Sprintf("  low concurrency · %s · effective %s", next, effective)))
 	m.refreshViewport()
 	return nil
 }
 
-func (m *bubbleModel) lowConcurrencyFooterLabel() string {
+func (m *bubbleModel) lowConcurrencyEffective() bool {
+	if strings.TrimSpace(m.activeModel) == "" {
+		return false
+	}
+	if m.lowConcurrencyMode == model.LowConcurrencyOn {
+		return true
+	}
+	if m.lowConcurrencyMode == model.LowConcurrencyOff {
+		return false
+	}
 	providerName := strings.TrimSpace(m.activeProvider)
 	if providerName == "" {
 		providerName = model.DefaultOpenCodeName
 	}
-	if strings.EqualFold(providerName, model.DefaultOpenCodeName) {
-		return "low:" + m.lowConcurrencyMode.String()
-	}
 	provider, ok := m.providers[strings.ToLower(providerName)]
-	if !ok || !model.IsProvider(model.DefaultOpenCodeName, providerName, provider.BaseURL) {
-		return ""
+	baseURL := ""
+	if ok {
+		baseURL = provider.BaseURL
 	}
-	return "low:" + m.lowConcurrencyMode.String()
+	return model.IsProvider(model.DefaultOpenCodeName, providerName, baseURL) && model.IsFreeModel(m.activeModel)
+}
+
+func (m *bubbleModel) lowConcurrencyFooterLabel() string {
+	if m.lowConcurrencyEffective() {
+		return "LOW"
+	}
+	return ""
 }

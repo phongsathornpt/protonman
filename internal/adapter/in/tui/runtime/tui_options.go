@@ -112,6 +112,18 @@ func WithProjectContext(trusted bool, sources []string, provenance map[string]co
 	}
 }
 
+// WithLowConcurrencyMode restores the session-local low-concurrency override.
+func WithLowConcurrencyMode(raw string) BubbleTeaOption {
+	return func(ui *BubbleTeaUI) error {
+		setting, err := model.ParseLowConcurrencySetting(raw)
+		if err != nil {
+			return err
+		}
+		ui.lowConcurrencyMode = setting
+		return nil
+	}
+}
+
 // WithCoordinator attaches the subagent coordinator to the TUI so permission
 // mode, interactive prompts, and model client changes are synchronized.
 func WithCoordinator(coordinator *agent.Coordinator) BubbleTeaOption {
