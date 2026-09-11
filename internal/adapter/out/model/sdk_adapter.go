@@ -267,7 +267,7 @@ func (m *emptyStreamRetryModel) Stream(ctx context.Context, request sdk.Request)
 		maxRetries: m.maxRetries, backoff: m.backoff, postFirstRetryGap: m.postFirstRetryGap,
 		firstEventTimeout: m.firstEventTimeout, idleEventTimeout: m.idleEventTimeout, maxStreamDuration: m.maxStreamDuration,
 	}
-	if err := retry.openAttempt(); err != nil {
+	if err := retry.openWithRetry(ctx); err != nil {
 		return nil, err
 	}
 	return retry, nil
@@ -316,10 +316,10 @@ func (s *emptyStreamRetry) Next(ctx context.Context) (sdk.Event, error) {
 					continue
 				}
 				s.stopAttemptTimers()
-				return sdk.Event{}, fmt.Errorf("%w: %v", sdk.ErrIncompleteStream, timeoutCause)
+				return sdk.Event{}, fmt.Errorf("%w: %w", sdk.ErrIncompleteStream, timeoutCause)
 			}
-			if errors.Is(err, sdk.ErrIncompleteStream) && s.progress.replaySafe() && s.retries < s.maxRetries {
-				if retryErr := s.retry(ctx, "incomplete_stream"); retryErr != nil {
+			if reason, retryable := retryableStreamError(err); retryable && s.progress.replaySafe() && s.retries < s.maxRetries {
+				if retryErr := s.retry(ctx, reason); retryErr != nil {
 					return sdk.Event{}, retryErr
 				}
 				continue
@@ -383,6 +383,35 @@ func (s *emptyStreamRetry) Next(ctx context.Context) (sdk.Event, error) {
 
 func (s *emptyStreamRetry) retry(ctx context.Context, reason string) error {
 	_ = s.closeAttempt()
+	s.progress = streamProgressEmpty
+	s.pending = nil
+	s.queue = nil
+	if err := s.scheduleRetry(ctx, reason); err != nil {
+		return err
+	}
+	if err := s.openWithRetry(ctx); err != nil {
+		return fmt.Errorf("retry empty model stream: %w", err)
+	}
+	return nil
+}
+
+func (s *emptyStreamRetry) openWithRetry(ctx context.Context) error {
+	for {
+		err := s.openAttempt()
+		if err == nil {
+			return nil
+		}
+		reason, retryable := retryableStreamError(err)
+		if !retryable || s.retries >= s.maxRetries {
+			return err
+		}
+		if retryErr := s.scheduleRetry(ctx, reason); retryErr != nil {
+			return retryErr
+		}
+	}
+}
+
+func (s *emptyStreamRetry) scheduleRetry(ctx context.Context, reason string) error {
 	s.retries++
 	delay := time.Duration(0)
 	if s.backoff > 0 {
@@ -402,13 +431,33 @@ func (s *emptyStreamRetry) retry(ctx context.Context, reason string) error {
 	if err := waitForEmptyStreamRetry(ctx, delay); err != nil {
 		return fmt.Errorf("wait to retry empty model stream: %w", err)
 	}
-	if err := s.openAttempt(); err != nil {
-		return fmt.Errorf("retry empty model stream: %w", err)
-	}
-	s.progress = streamProgressEmpty
-	s.pending = nil
-	s.queue = nil
 	return nil
+}
+
+func retryableStreamError(err error) (string, bool) {
+	if err == nil {
+		return "", false
+	}
+	if isStreamTimeoutCause(err) {
+		return streamTimeoutReason(err), true
+	}
+	if errors.Is(err, sdk.ErrIncompleteStream) {
+		return "incomplete_stream", true
+	}
+	var providerErr *sdk.ProviderError
+	if !errors.As(err, &providerErr) || providerErr == nil || !providerErr.Retryable {
+		return "", false
+	}
+	switch providerErr.Kind {
+	case sdk.ErrorTransport:
+		return "provider_transport", true
+	case sdk.ErrorOverloaded:
+		return "provider_overloaded", true
+	case sdk.ErrorRateLimit:
+		return "provider_rate_limit", true
+	default:
+		return "provider_stream_error", true
+	}
 }
 
 func (s *emptyStreamRetry) openAttempt() error {
@@ -435,7 +484,7 @@ func (s *emptyStreamRetry) openAttempt() error {
 		cause := context.Cause(attemptCtx)
 		cancel(nil)
 		if isStreamTimeoutCause(cause) {
-			return fmt.Errorf("%w: %v", sdk.ErrIncompleteStream, cause)
+			return fmt.Errorf("%w: %w", sdk.ErrIncompleteStream, cause)
 		}
 		return err
 	}

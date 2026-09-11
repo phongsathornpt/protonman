@@ -208,6 +208,41 @@ func TestEmptyStreamRetryRecoversFromIncompleteStreamBeforeOutput(t *testing.T) 
 	}
 }
 
+func TestStreamRetryRecoversFromRetryableProviderStreamError(t *testing.T) {
+	providerErr := sdk.NewProviderError(DefaultOpenCodeName, 0, "ProviderResponseStreamError", "upstream stream failed")
+	base := &emptyRetryTestModel{streams: []sdk.Stream{
+		&emptyRetryTestStream{err: providerErr},
+		&emptyRetryTestStream{events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "recovered"},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		}},
+	}}
+	stream, err := withStreamRetryPolicy(base, 2, 0, 0, 0, 0).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := sdk.CollectStep(context.Background(), stream)
+	if err != nil || result.Text != "recovered" || base.requests != 2 {
+		t.Fatalf("result=%q requests=%d err=%v, want recovered/2", result.Text, base.requests, err)
+	}
+}
+
+func TestStreamRetryDoesNotReplayRetryableProviderErrorAfterVisibleText(t *testing.T) {
+	providerErr := sdk.NewProviderError(DefaultOpenCodeName, 0, "ProviderResponseStreamError", "upstream stream failed")
+	base := &emptyRetryTestModel{streams: []sdk.Stream{
+		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "partial"}}, err: providerErr},
+		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "duplicate"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	}}
+	stream, err := withStreamRetryPolicy(base, 2, 0, 0, 0, 0).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = sdk.CollectStep(context.Background(), stream)
+	if !errors.Is(err, providerErr) || base.requests != 1 {
+		t.Fatalf("err=%v requests=%d, want original provider error/1", err, base.requests)
+	}
+}
+
 func TestEmptyStreamRetryReplaysToolOnlyAttemptWithoutDuplicatingCall(t *testing.T) {
 	toolCall := sdk.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}
 	base := &emptyRetryTestModel{streams: []sdk.Stream{
@@ -344,6 +379,41 @@ func (m *noOutputTimeoutTestModel) Stream(ctx context.Context, _ sdk.Request) (s
 		}}, nil
 	}
 	return &contextWaitTestStream{ctx: ctx}, nil
+}
+
+type openTimeoutRetryTestModel struct {
+	attempts  int
+	recoverOn int
+}
+
+func (*openTimeoutRetryTestModel) Provider() string { return DefaultOpenCodeName }
+func (*openTimeoutRetryTestModel) ModelID() string  { return "nemotron-3.5-lightning-free" }
+func (*openTimeoutRetryTestModel) Capabilities() sdk.ModelCapabilities {
+	return sdk.ModelCapabilities{Streaming: true}
+}
+func (m *openTimeoutRetryTestModel) Stream(ctx context.Context, _ sdk.Request) (sdk.Stream, error) {
+	m.attempts++
+	if m.attempts >= m.recoverOn {
+		return &emptyRetryTestStream{events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "recovered"},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		}}, nil
+	}
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestStreamRetryRecoversWhenOpeningStreamTimesOut(t *testing.T) {
+	base := &openTimeoutRetryTestModel{recoverOn: 3}
+	model := withStreamRetryPolicy(base, 2, 0, 5*time.Millisecond, 0, 0)
+	stream, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := sdk.CollectStep(context.Background(), stream)
+	if err != nil || result.Text != "recovered" || base.attempts != 3 {
+		t.Fatalf("result=%q attempts=%d err=%v, want recovered/3", result.Text, base.attempts, err)
+	}
 }
 
 type contextWaitTestStream struct {

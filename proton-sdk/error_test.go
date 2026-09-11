@@ -29,6 +29,15 @@ func TestProviderErrorClassification(t *testing.T) {
 	}
 }
 
+func TestProviderStreamErrorsAreRetryableTransport(t *testing.T) {
+	for _, code := range []string{"ProviderHeaderTimeoutError", "ProviderResponseStreamError"} {
+		err := NewProviderError("opencode", 0, code, code)
+		if err.Kind != ErrorTransport || !err.Retryable {
+			t.Fatalf("code=%q error=%#v, want retryable transport", code, err)
+		}
+	}
+}
+
 func TestTransportErrorUnwrapsCause(t *testing.T) {
 	cause := fmt.Errorf("network down")
 	err := NewTransportError("test", cause)

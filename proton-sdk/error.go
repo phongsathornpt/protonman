@@ -88,6 +88,11 @@ func classifyProviderError(status int, code, message string) ErrorKind {
 		return ErrorRateLimit
 	case strings.Contains(value, "overloaded"):
 		return ErrorOverloaded
+	case strings.Contains(value, "providerheadertimeouterror"),
+		strings.Contains(value, "providerresponsestreamerror"),
+		strings.Contains(value, "header timeout"),
+		strings.Contains(value, "response stream error"):
+		return ErrorTransport
 	case strings.Contains(value, "invalid_request"):
 		return ErrorInvalidRequest
 	}
