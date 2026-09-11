@@ -1506,3 +1506,31 @@ func TestLoopPublishesUnifiedReadFileSourceSchemaForGemini(t *testing.T) {
 		t.Fatalf("Gemini schema retained unsupported additionalProperties: %#v", published.InputSchema)
 	}
 }
+
+type retryObserverClient struct{}
+
+func (*retryObserverClient) Provider() string { return "test" }
+func (*retryObserverClient) ModelID() string  { return "retry-observer" }
+func (*retryObserverClient) Capabilities() sdk.ModelCapabilities {
+	return sdk.ModelCapabilities{Streaming: true}
+}
+func (*retryObserverClient) Stream(ctx context.Context, _ sdk.Request) (sdk.Stream, error) {
+	sdk.ObserveRetry(ctx, sdk.RetryEvent{Provider: "test", ModelID: "retry-observer", Reason: "overloaded", Attempt: 1, MaxRetries: 2, Delay: time.Second})
+	return &scriptedStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "ok"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}}, nil
+}
+
+func TestLoopForwardsModelRetryLifecycleEvent(t *testing.T) {
+	loop, _ := newTestLoop(t, &retryObserverClient{}, permission.ActionAllow)
+	var events []Event
+	_, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "hi"}}, func(_ context.Context, event Event) error {
+		events = append(events, event)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	retry := findEvent(events, EventRetryScheduled)
+	if retry.Kind != EventRetryScheduled || retry.Retry.Attempt != 1 || retry.Retry.MaxRetries != 2 || retry.Retry.Reason != "overloaded" || retry.Retry.RetryAt.IsZero() {
+		t.Fatalf("retry event = %+v", retry)
+	}
+}

@@ -50,6 +50,7 @@ type agentLifecycleMsg struct{ event agent.Event }
 type turnProgress struct {
 	Round     int
 	ToolCalls int
+	Retry     sdk.RetryEvent
 }
 
 type reasoningPreferenceSource uint8

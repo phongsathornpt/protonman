@@ -33,11 +33,12 @@ type Result = turn.Result
 type Sink = turn.Sink
 
 const (
-	EventTextDelta  = turn.EventTextDelta
-	EventToolCall   = turn.EventToolCall
-	EventToolResult = turn.EventToolResult
-	EventCompleted  = turn.EventCompleted
-	EventFailed     = turn.EventFailed
+	EventTextDelta      = turn.EventTextDelta
+	EventToolCall       = turn.EventToolCall
+	EventToolResult     = turn.EventToolResult
+	EventRetryScheduled = turn.EventRetryScheduled
+	EventCompleted      = turn.EventCompleted
+	EventFailed         = turn.EventFailed
 )
 
 var (

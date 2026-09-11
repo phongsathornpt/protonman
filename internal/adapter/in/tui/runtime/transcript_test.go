@@ -9,9 +9,11 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"math"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestHistoryStateStreamsAssistantIntoActiveCell(t *testing.T) {
@@ -636,5 +638,18 @@ func TestInitialMessagesRestoreIntoHistoryAndNextTurn(t *testing.T) {
 	}
 	if len(m.messages) != 2 {
 		t.Fatalf("provider history length = %d, want 2", len(m.messages))
+	}
+}
+
+func TestRetryLifecycleUpdatesAndClearsTUIProgress(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	retry := sdk.RetryEvent{Reason: "overloaded", Attempt: 1, MaxRetries: 2, RetryAt: time.Now().Add(2 * time.Second)}
+	m.applyTurnEvent(turn.Event{Kind: turn.EventRetryScheduled, Round: 1, Retry: retry})
+	if m.activity != "retrying" || m.turnProgress.Retry.Attempt != 1 {
+		t.Fatalf("retry progress = %+v activity=%q", m.turnProgress.Retry, m.activity)
+	}
+	m.applyTurnEvent(turn.Event{Kind: turn.EventTextDelta, Round: 1, Text: "recovered"})
+	if !m.turnProgress.Retry.RetryAt.IsZero() || m.activity != "synthesizing" {
+		t.Fatalf("retry state not cleared after model output: %+v activity=%q", m.turnProgress.Retry, m.activity)
 	}
 }

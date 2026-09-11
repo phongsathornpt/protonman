@@ -10,6 +10,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 func (m bubbleModel) statusView() string {
@@ -38,13 +39,16 @@ func (m bubbleModel) statusView() string {
 	}
 	meta := ""
 	if activeAgents == 0 {
-		if running, ok := m.ensureHistoryState().LastRunningTool(); ok && activity == "analyzing" {
+		if retryActivity, retryMeta, ok := modelRetryStatus(m.turnProgress.Retry, time.Now()); ok {
+			activity = retryActivity
+			meta = retryMeta
+		} else if running, ok := m.ensureHistoryState().LastRunningTool(); ok && activity == "analyzing" {
 			activity = tool.DisplayName(strings.TrimSpace(running.Name))
 			if target := strings.TrimSpace(running.Target); target != "" {
 				activity += " " + target
 			}
 		}
-		if m.turnProgress.ToolCalls > 0 {
+		if meta == "" && m.turnProgress.ToolCalls > 0 {
 			label := "tool"
 			if m.turnProgress.ToolCalls != 1 {
 				label = "tools"
@@ -165,4 +169,52 @@ func (m *bubbleModel) infoView() string {
 
 func formatElapsed(duration time.Duration) string {
 	return agentpane.FormatElapsed(duration)
+}
+
+func modelRetryStatus(retry sdk.RetryEvent, now time.Time) (string, string, bool) {
+	if retry.Attempt <= 0 || retry.RetryAt.IsZero() {
+		return "", "", false
+	}
+	remaining := retry.RetryAt.Sub(now)
+	wait := "now"
+	if remaining > 0 {
+		if remaining < time.Second {
+			wait = "<1s"
+		} else {
+			seconds := int((remaining + time.Second - 1) / time.Second)
+			wait = fmt.Sprintf("%ds", seconds)
+		}
+	}
+	activity := "retrying " + wait
+	if wait != "now" {
+		activity = "retrying in " + wait
+	}
+	meta := fmt.Sprintf(" · retry %d", retry.Attempt)
+	if retry.MaxRetries > 0 {
+		meta += fmt.Sprintf("/%d", retry.MaxRetries)
+	}
+	if reason := retryReasonLabel(retry.Reason); reason != "" {
+		meta += " · " + reason
+	}
+	return activity, meta, true
+}
+
+func retryReasonLabel(reason string) string {
+	switch strings.TrimSpace(reason) {
+	case "incomplete_stream":
+		return "stream incomplete"
+	case "first_event_timeout":
+		return "first response timeout"
+	case "idle_event_timeout":
+		return "stream idle"
+	case "max_stream_duration":
+		return "stream limit"
+	case "rate_limit":
+		return "rate limited"
+	case "overloaded":
+		return "provider overloaded"
+	case "transport":
+		return "network retry"
+	}
+	return strings.ReplaceAll(strings.TrimSpace(reason), "_", " ")
 }

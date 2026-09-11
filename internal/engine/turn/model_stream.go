@@ -21,6 +21,9 @@ func (l *Loop) streamRound(
 	sink Sink,
 ) (model.Message, []model.ToolCall, error) {
 	startedAt := time.Now()
+	ctx = sdk.WithRetryObserver(ctx, func(retryCtx context.Context, retry sdk.RetryEvent) {
+		_ = emit(retryCtx, sink, Event{Kind: EventRetryScheduled, Round: round, Retry: retry})
+	})
 	slog.DebugContext(ctx, "model round stream opening",
 		"round", round,
 		"message_count", len(request.Messages),

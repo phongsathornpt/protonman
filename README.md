@@ -258,7 +258,7 @@ Configure providers directly inside the TUI with `/provider` or via `~/.protonma
 
 `proton-sdk` owns provider-neutral agent messages, tools, streaming events, usage/finish metadata, model registry, middleware, and provider wire adapters. The Protonman CLI keeps permission policy, tool execution, sessions, and turn orchestration outside the SDK. See [`docs/proton-sdk.md`](docs/proton-sdk.md) for the agent-first SDK contract and provider extension boundaries.
 
-For OpenCode free models, Protonman retries a stream only when no visible text or tool call has been emitted yet. Recovery is bounded to two retries with backoff and a 30-second no-output watchdog per attempt; once visible output has started, an incomplete stream is surfaced instead of replayed to avoid duplicate output or tool calls. The TUI exposes exhausted empty-response recovery as `EMPTY_RESPONSE` and an abruptly terminated provider stream as `STREAM_INCOMPLETE`; both are presented as retryable provider failures.
+For OpenCode free models, Protonman retries a stream only when no visible text or tool call has been emitted yet. Recovery is bounded to two retries with backoff and a 30-second no-output watchdog per attempt; once visible output has started, an incomplete stream is surfaced instead of replayed to avoid duplicate output or tool calls. During provider or replay-safe stream backoff, the TUI shows a live countdown such as `retrying in 3s · retry 1/2 · stream incomplete`, driven by the retry deadline used by the request itself. Exhausted empty-response recovery is exposed as `EMPTY_RESPONSE`, while an abruptly terminated provider stream is `STREAM_INCOMPLETE`; both are presented as retryable provider failures.
 
 ---
 

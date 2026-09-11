@@ -746,3 +746,35 @@ func TestResponsesFunctionCallNormalizesFinishReason(t *testing.T) {
 		t.Fatalf("result = %#v", result)
 	}
 }
+
+func TestOpenAIRetryPublishesRetryObserverEvent(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts == 1 {
+			http.Error(w, "temporary", http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
+	}))
+	defer server.Close()
+
+	var retries []sdk.RetryEvent
+	ctx := sdk.WithRetryObserver(context.Background(), func(_ context.Context, event sdk.RetryEvent) {
+		retries = append(retries, event)
+	})
+	model := NewProvider(ProviderOptions{ProviderName: "opencode", BaseURL: server.URL, MaxRetries: 1, RetryBackoff: 5 * time.Millisecond}).Model("test-model")
+	stream, err := model.Stream(ctx, sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	if attempts != 2 || len(retries) != 1 {
+		t.Fatalf("attempts=%d retries=%+v", attempts, retries)
+	}
+	got := retries[0]
+	if got.Provider != "opencode" || got.ModelID != "test-model" || got.Reason != string(sdk.ErrorOverloaded) || got.Attempt != 1 || got.MaxRetries != 1 || got.Delay != 5*time.Millisecond || got.RetryAt.IsZero() {
+		t.Fatalf("retry event = %+v", got)
+	}
+}

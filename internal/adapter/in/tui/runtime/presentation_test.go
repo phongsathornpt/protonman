@@ -1426,3 +1426,19 @@ func TestPaneKeyboardHelpStaysSingleLine(t *testing.T) {
 		}
 	}
 }
+
+func TestModelRetryStatusCountsDownFromRetryDeadline(t *testing.T) {
+	now := time.Now()
+	retry := sdk.RetryEvent{Reason: "incomplete_stream", Attempt: 1, MaxRetries: 2, RetryAt: now.Add(2500 * time.Millisecond)}
+	activity, meta, ok := modelRetryStatus(retry, now)
+	if !ok || activity != "retrying in 3s" {
+		t.Fatalf("activity=%q ok=%v, want countdown", activity, ok)
+	}
+	if meta != " · retry 1/2 · stream incomplete" {
+		t.Fatalf("meta=%q", meta)
+	}
+	activity, _, ok = modelRetryStatus(retry, now.Add(2200*time.Millisecond))
+	if !ok || activity != "retrying in <1s" {
+		t.Fatalf("subsecond activity=%q ok=%v", activity, ok)
+	}
+}

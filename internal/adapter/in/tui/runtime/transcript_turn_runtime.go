@@ -7,6 +7,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 func (m *bubbleModel) applyTurnEvents(events []app.Event) {
@@ -43,9 +44,14 @@ func (m *bubbleModel) applyTurnEvent(event app.Event) {
 	}
 	switch event.Kind {
 	case app.EventTextDelta:
+		m.turnProgress.Retry = sdk.RetryEvent{}
 		m.activity = "synthesizing"
 		m.appendAssistantDelta(event.Text)
+	case app.EventRetryScheduled:
+		m.turnProgress.Retry = event.Retry
+		m.activity = "retrying"
 	case app.EventToolCall:
+		m.turnProgress.Retry = sdk.RetryEvent{}
 		m.turnProgress.ToolCalls++
 		m.appendToolCall(event.Call)
 	case app.EventToolResult:
@@ -60,8 +66,10 @@ func (m *bubbleModel) applyTurnEvent(event app.Event) {
 		m.syncTodoSnapshot()
 		m.activity = "analyzing"
 	case app.EventCompleted:
+		m.turnProgress.Retry = sdk.RetryEvent{}
 		m.ensureHistoryState().CommitActive()
 	case app.EventFailed:
+		m.turnProgress.Retry = sdk.RetryEvent{}
 		m.appendTurnFailure(event.Err)
 	}
 }

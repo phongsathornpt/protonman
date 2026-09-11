@@ -149,6 +149,8 @@ const (
 	EventToolCall EventKind = "tool_call"
 	// EventToolResult reports the terminal result of a permission-aware call.
 	EventToolResult EventKind = "tool_result"
+	// EventRetryScheduled reports a bounded model/provider retry before its wait begins.
+	EventRetryScheduled EventKind = "retry_scheduled"
 	// EventCompleted marks a final model response with no further tool calls.
 	EventCompleted EventKind = "completed"
 	// EventFailed reports a terminal loop failure.
@@ -162,6 +164,7 @@ type Event struct {
 	Text    string
 	Call    tool.Call
 	Result  tool.Result
+	Retry   sdk.RetryEvent
 	Message model.Message
 	Err     error
 }

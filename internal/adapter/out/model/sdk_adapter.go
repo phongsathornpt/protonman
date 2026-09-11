@@ -384,6 +384,10 @@ func (s *emptyStreamRetry) retry(ctx context.Context, reason string) error {
 		"reason", reason, "retry", s.retries, "max_retries", s.maxRetries,
 		"delay_ms", delay.Milliseconds(),
 	)
+	sdk.ObserveRetry(ctx, sdk.RetryEvent{
+		Provider: s.base.Provider(), ModelID: s.base.ModelID(), Reason: reason,
+		Attempt: s.retries, MaxRetries: s.maxRetries, Delay: delay,
+	})
 	if err := waitForEmptyStreamRetry(ctx, delay); err != nil {
 		return fmt.Errorf("wait to retry empty model stream: %w", err)
 	}
