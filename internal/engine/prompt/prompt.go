@@ -6,7 +6,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
-const Version = "11"
+const Version = "12"
 
 type ToolCapabilities struct {
 	Tasks  bool
@@ -229,7 +229,9 @@ func groundingSection(evidence string) string {
 func activeGoalSection(goal string) string {
 	return `# Active Goal
 - ` + goal + `
-- Keep this goal stable across conversation compaction and use it to resolve ambiguity in older compacted context.`
+- Treat this as the persistent objective for the current session and use it to resolve ambiguity in older compacted context.
+- Continue making concrete progress until the goal is completed, blocked by unavailable capabilities or permissions, or explicitly changed or cleared.
+- For implementation goals, inspect, modify, and verify the repository rather than only describing a solution.`
 }
 
 func projectSection(project string) string {

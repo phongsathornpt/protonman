@@ -244,7 +244,7 @@ waiting writer. Preserve this fairness property when touching scheduler code.
 
 System prompt composition lives in `internal/engine/prompt` and is capability-driven.
 Do not maintain separate large root prompts per provider or agent mode. The managed
-prompt currently uses Prompt ABI v11 and deterministic cache-aware section ordering;
+prompt currently uses Prompt ABI v12 and deterministic cache-aware section ordering;
 `docs/system-prompt.md` is the source of truth for prompt topology and prefix-cache
 invariants.
 
@@ -422,18 +422,29 @@ provenance field, user persistence method, project persistence method, runtime
 application path, TUI rendering, and tests for precedence.
 
 TUI-local agent runtime state survives Bubble Tea program restarts. A UI restart
-must not silently reset profile, reasoning effort, max tool calls, or subagent
-enablement to startup config.
+must not silently reset the active goal, profile, reasoning effort, max tool calls,
+or subagent enablement to startup config. The active goal is durable session state,
+restored before rebuilding the managed conversation prompt.
 
 ## Sessions and TODO Ownership
 
-A session ID is the durable ownership boundary for conversation state and tasks:
+A session ID is the durable ownership boundary for conversation state, the active
+goal, and tasks:
 
 ```text
 ~/.protonman/sessions/<session-id>/
-  state.json
-  todo.md
+  state.json   # messages, active goal, and other session controls
+  todo.md      # durable task plan
 ```
+
+`ActiveGoal` is persisted in `state.json`, restored on resume, and preserved across
+Bubble Tea program restarts. `/goal <detail>` both sets the persistent goal and starts
+an execution turn for that goal; bare `/goal` inspects it and `/goal clear` removes it
+without starting a model turn.
+
+Task plans are still session-owned rather than goal-scoped in the current implementation;
+do not document goal-to-TODO generation/supersession semantics as implemented until the
+runtime actually enforces them.
 
 `todo action=get|update` is bound to the active session repository. ACP uses
 session-specific registry overlays so concurrent sessions cannot share task state.
@@ -507,7 +518,7 @@ Streams must be closed exactly once on success and every failure/cancellation
 path. Preserve the original processing error over a secondary close error when
 both occur.
 
-`internal/adapter/out/model` may add provider-specific recovery around an SDK model when the behavior cannot be expressed as a provider-neutral SDK invariant. OpenCode free-model empty-stream recovery is intentionally narrow: retry only before any visible text/tool-call output, preserve the same session identity on every attempt, cap recovery at two retries with bounded backoff and a 30-second no-output watchdog, discard metadata from abandoned attempts, and surface the final incomplete/empty response instead of replaying after visible output. User-facing diagnostics distinguish exhausted empty output (`EMPTY_RESPONSE`) from an incomplete stream (`STREAM_INCOMPLETE`).
+`internal/adapter/out/model` may add provider-specific recovery around an SDK model when the behavior cannot be expressed as a provider-neutral SDK invariant. OpenCode free models also use a process-wide low-concurrency scheduler keyed by endpoint and model: bound the waiting queue, start at one concurrent generation, pace starts, promote to at most two only after sustained healthy pressure, and demote/back off immediately on congestion. All low-concurrency tuning values must come from `internal/base/runtimepolicy`; do not duplicate product literals in the adapter. Empty-stream recovery is intentionally narrow: retry only before any visible text/tool-call output, preserve the same session identity on every attempt, use the authoritative bounded retry schedule, discard metadata from abandoned attempts, and surface the final incomplete/empty response instead of replaying after visible output. User-facing diagnostics distinguish exhausted empty output (`EMPTY_RESPONSE`) from an incomplete stream (`STREAM_INCOMPLETE`).
 
 ## Turn Engine
 
@@ -546,8 +557,8 @@ Current important slash commands are intentionally canonical and small:
 /provider
 /skills
 /agents
-/goal
-/todo
+/goal      # inspect, set+execute, or clear the persistent session goal
+/todo      # inspect the session task-plan pane
 /clear
 /call
 /quit
@@ -776,7 +787,7 @@ Before declaring a task complete, verify the relevant subset of:
 - subagent enable/disable behavior remains consistent at config, registry, prompt, and execution layers
 - existing delegated work remains manageable after disabling new delegation
 - session/TODO ownership cannot leak across sessions
-- TUI state survives expected restarts/reconfiguration
+- active goal and other TUI session controls survive expected restarts/reconfiguration
 - provider-specific compatibility does not weaken canonical contracts globally
 - targeted tests pass after the final mutation
 - broader tests are run when blast radius warrants them

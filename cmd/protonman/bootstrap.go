@@ -297,7 +297,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	provider := loadedConfig.Providers[providerKey]
 	initialRunner, _ := app.BuildConversation(service, skillRegistry, app.NewAgentsForSession(coordinator, sessionID), app.ConversationSpec{
 		ProviderName: providerKey, ProviderType: provider.Type, BaseURL: provider.BaseURL, APIKey: provider.APIKey,
-		ModelID: loadedConfig.Model.Default, SessionID: sessionID, Workspace: workDir, WorkspacePolicy: workspaceRoot, AgentProfile: loadedConfig.Agent.Profile,
+		ModelID: loadedConfig.Model.Default, SessionID: sessionID, Workspace: workDir, WorkspacePolicy: workspaceRoot, ActiveGoal: state.ActiveGoal, AgentProfile: loadedConfig.Agent.Profile,
 		ReasoningEffort: loadedConfig.Agent.ReasoningEffort, MaxToolCalls: loadedConfig.Agent.MaxToolCalls,
 		RequestTimeout: loadedConfig.Runtime.ModelRequestTimeout, TurnTimeout: loadedConfig.Runtime.TurnTimeout, RoundTimeout: loadedConfig.Runtime.RoundTimeout,
 	})

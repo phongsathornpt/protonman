@@ -62,6 +62,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 			bModel.agentSnapshot = ui.agents.List()
 		}
 		bModel.todoStore = ui.todoStore
+		bModel.activeGoal = ui.activeGoal
 		bModel.todoRevision = todoSnapshot.Revision
 		bModel.skills = ui.skills
 		bModel.activeModel = ui.modelConfig.Default
@@ -108,6 +109,8 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		ui.modelConfig.Provider = bModel.activeProvider
 		ui.finalAgentProfile = bModel.agentProfile
 		ui.finalReasoningEffort = bModel.reasoningEffort
+		ui.activeGoal = bModel.activeGoal
+		ui.finalActiveGoal = bModel.activeGoal
 
 		if panicVal != nil {
 			slog.DebugContext(ctx, "tui program panicked",

@@ -84,3 +84,27 @@ func walkProductionGoFiles(t *testing.T, root string, visit func(path, value str
 		t.Fatal(err)
 	}
 }
+
+func TestLowConcurrencyPolicyDoesNotEscapeRuntimePolicy(t *testing.T) {
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve test file")
+	}
+	root := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", ".."))
+	path := filepath.Join(root, "internal", "adapter", "out", "model", "low_concurrency_mode.go")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	for _, forbidden := range []string{
+		"LowConcurrencyPolicy{",
+		"time.Millisecond",
+		"time.Second",
+		"time.Minute",
+	} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("low-concurrency product policy escaped runtimepolicy into %s: %q", filepath.ToSlash(path), forbidden)
+		}
+	}
+}

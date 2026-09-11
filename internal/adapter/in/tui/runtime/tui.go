@@ -27,6 +27,8 @@ type BubbleTeaUI struct {
 	agents                  app.Agents
 	workDir                 string
 	initialMessages         []model.Message
+	activeGoal              string
+	finalActiveGoal         string
 	finalMessages           []model.Message
 	finalAgentProfile       string
 	finalReasoningEffort    sdk.ReasoningEffort
@@ -72,6 +74,7 @@ func NewBubbleTea(
 		}
 	}
 	ui.finalMessages = model.SnapshotMessages(ui.initialMessages)
+	ui.finalActiveGoal = ui.activeGoal
 	ui.finalAgentProfile = ui.agentConfig.Profile
 	ui.finalReasoningEffort = ui.agentConfig.ReasoningEffort
 	return ui, nil
@@ -91,6 +94,11 @@ func (ui *BubbleTeaUI) PermissionPrompt(
 // storage with the live Bubble Tea model.
 func (ui *BubbleTeaUI) SessionState() []model.Message {
 	return model.CloneMessages(ui.finalMessages)
+}
+
+// ActiveGoal returns the latest persistent objective selected by the TUI.
+func (ui *BubbleTeaUI) ActiveGoal() string {
+	return ui.finalActiveGoal
 }
 
 // AgentProfile returns the latest named profile selected by the TUI.

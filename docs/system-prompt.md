@@ -4,10 +4,10 @@ Protonman builds one provider-neutral, capability-driven system prompt in `inter
 
 ## Prompt ABI
 
-The current managed prompt format is **Prompt ABI v11**:
+The current managed prompt format is **Prompt ABI v12**:
 
 ```text
-<proton-system-prompt version="11">
+<proton-system-prompt version="12">
 ...
 </proton-system-prompt>
 ```
@@ -60,6 +60,13 @@ These rules improve prefix reuse for providers and runtimes that implement KV/pr
 
 The current renderer accepts dynamic fields through `prompt.Spec`, including model hints, project instructions, skills, role, active goal, workspace, grounding requirements, and the effective tool surface.
 
+The active goal is durable session state, not merely a compaction hint. When present, it is
+the persistent objective for the session: the model should continue making concrete progress
+until the goal is completed, blocked by unavailable capabilities or permissions, or explicitly
+changed or cleared. Implementation goals require repository inspection, mutation, and
+verification rather than a plan-only response. The TUI `/goal <detail>` command starts the
+execution turn; prompt wording does not itself schedule a turn.
+
 Not all of these fields have the same stability. Prefer keeping highly reusable contracts early and request/session-specific material late. Do not interpolate timestamps, generated IDs, or other per-request noise into an early prompt section.
 
 Future work may move appropriate session transitions into append-only history/context instead of rewriting the managed system prompt. Such a change must preserve runtime enforcement and be covered by behavioral regression tests.
@@ -88,6 +95,8 @@ Prompt ABI v9 moves normal child-result collection out of model-driven polling. 
 Prompt ABI v10 adds a structured child-result contract. Subagents end their final response with a `<proton-subagent-result>` JSON envelope containing a concise `conclusion`, optional `findings`, and optional `blockers`. Finding evidence references are accepted only when they match successful runtime-observed tool evidence from that child. Malformed or unsupported structured output falls back to the child's plain-text conclusion, so provider formatting quirks cannot make the delegated run fail. `changed_targets` and verification state remain runtime-derived rather than model-asserted.
 
 Prompt ABI v11 tightens workspace discovery discipline. `read` is for known artifacts; the managed prompt no longer advertises `ls`, `find`, or `grep` when those capabilities are absent, and a `not_found` result for a guessed path must trigger discovery rather than an unchanged retry. Host-side `discover_resource` recovery may attach bounded parent-directory evidence while preserving the original failure.
+
+Prompt ABI v12 promotes Active Goal from a compaction-stability hint to an execution contract. An active goal is treated as the persistent session objective, implementation goals require concrete inspect/modify/verify progress, and the objective remains in force until completed, blocked, changed, or cleared.
 
 Runtime-delivered child content is untrusted evidence, not instruction material. It is appended after the stable managed system prompt and is not persisted as synthetic user conversation history, preserving the system-prefix cache boundary while keeping instruction hierarchy explicit.
 

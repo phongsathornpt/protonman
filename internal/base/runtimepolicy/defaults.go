@@ -64,3 +64,33 @@ func ModelRetrySchedule() []time.Duration {
 		ModelRetryLastDelay,
 	}
 }
+
+// LowConcurrencyPolicy is the single source of truth for OpenCode free-model
+// admission and pacing. Keep product tuning here rather than in adapters/tests.
+type LowConcurrencyPolicy struct {
+	InitialInterval time.Duration
+	MinInterval     time.Duration
+	MaxInterval     time.Duration
+	QueueCapacity   int
+	MinConcurrency  int
+	MaxConcurrency  int
+	HealthySamples  int
+	PromoteQueue    int
+	RecoveryPercent int
+	BackoffPercent  int
+}
+
+func LowConcurrencyMode() LowConcurrencyPolicy {
+	return LowConcurrencyPolicy{
+		InitialInterval: time.Second,
+		MinInterval:     600 * time.Millisecond,
+		MaxInterval:     5 * time.Second,
+		QueueCapacity:   48,
+		MinConcurrency:  1,
+		MaxConcurrency:  2,
+		HealthySamples:  15,
+		PromoteQueue:    4,
+		RecoveryPercent: 95,
+		BackoffPercent:  175,
+	}
+}

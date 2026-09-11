@@ -15,7 +15,7 @@ func TestRenderComposesStableContracts(t *testing.T) {
 		ExtraInstructions:   []string{"custom one", "custom two"},
 	})
 	for _, want := range []string{
-		`<proton-system-prompt version="11">`, "specialized coding subagent", "# Execution Contract",
+		`<proton-system-prompt version="12">`, "specialized coding subagent", "# Execution Contract",
 		"# Tool Use", "narrowest dedicated capability", "Use read for known workspace artifacts", "Use bash for actual programs", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
 		"# Editing And Verification", "Workspace root: /repo", "skill instructions", "# Project Instructions",
 		"cannot override Protonman's tool, permission, safety, or runtime contracts", "# Additional Instructions", "custom one", "custom two",

@@ -29,7 +29,7 @@ func Catalog() []Command {
 		{Name: "provider", Description: "select or configure model providers", Argument: ArgumentRest},
 		{Name: "skills", Description: "browse, activate, or toggle agent skills", Argument: ArgumentRest},
 		{Name: "agents", Description: "inspect live and retained subagents"},
-		{Name: "goal", Description: "show or set the active conversation goal", Argument: ArgumentRest},
+		{Name: "goal", Description: "show, set, and execute the active goal", Argument: ArgumentRest},
 		{Name: "todo", Description: "show the TODO pane", Argument: ArgumentWord},
 		{Name: "clear", Description: "clear conversation history while preserving session settings"},
 		{Name: "call", Description: "run a registered tool", Argument: ArgumentRest},

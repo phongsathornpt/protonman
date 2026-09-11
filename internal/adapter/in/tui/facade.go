@@ -12,6 +12,7 @@ var WithModelConfig = runtimeui.WithModelConfig
 var WithSkills = runtimeui.WithSkills
 var WithWorkDir = runtimeui.WithWorkDir
 var WithInitialMessages = runtimeui.WithInitialMessages
+var WithActiveGoal = runtimeui.WithActiveGoal
 var WithSessionID = runtimeui.WithSessionID
 var WithSessions = runtimeui.WithSessions
 var WithAgentConfig = runtimeui.WithAgentConfig

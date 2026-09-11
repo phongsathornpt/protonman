@@ -38,6 +38,8 @@ type State struct {
 	PermissionMode string `json:"permission_mode"`
 	// ActiveSkills records skills activated in this session.
 	ActiveSkills []string `json:"active_skills,omitempty"`
+	// ActiveGoal records the persistent objective for this session without persisting a generated system prompt.
+	ActiveGoal string `json:"active_goal,omitempty"`
 	// AgentProfile records the active named coding profile without persisting a generated system prompt.
 	AgentProfile string `json:"agent_profile,omitempty"`
 	// ReasoningEffort records the session reasoning override ("auto" preserves provider/profile defaults).
@@ -300,6 +302,18 @@ func truncateStoredContent(content string) string {
 		content = content[:len(content)-1]
 	}
 	return content
+}
+
+func normalizeActiveGoal(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) <= maxStoredContent {
+		return value
+	}
+	value = value[:maxStoredContent]
+	for len(value) > 0 && !utf8.ValidString(value) {
+		value = value[:len(value)-1]
+	}
+	return value
 }
 
 func validateReasoningSetting(value string) error {
