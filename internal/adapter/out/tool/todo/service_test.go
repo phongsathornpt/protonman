@@ -112,6 +112,27 @@ func TestTodoServiceRejectsOperationFieldsOutsideSelectedOp(t *testing.T) {
 	}
 }
 
+func TestTodoServiceRejectsStringEncodedUpdateFields(t *testing.T) {
+	store, _ := tododomain.NewStore(nil)
+	registry, err := builtin.NewRegistry(NewTodo(store))
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, _ := permission.NewPolicy(permission.Config{})
+	service, err := toolcall.NewService(registry, policy, toolcall.WithMode(permission.ModeAlwaysApprove))
+	if err != nil {
+		t.Fatal(err)
+	}
+	call, _ := tool.NewCall("todo-string-fields", "todo", json.RawMessage(`{"action":"update","expected_revision":"0","operations":"[{\"op\":\"add\",\"id\":\"a\",\"text\":\"inspect\",\"status\":\"pending\"}]"}`))
+	result, err := service.Call(context.Background(), call)
+	if err == nil || result.Failure == nil || result.Failure.Code != tool.ErrorCodeInvalidArguments {
+		t.Fatalf("result=%#v err=%v, want invalid arguments", result, err)
+	}
+	if result.Failure.Diagnostic == "" {
+		t.Fatalf("missing schema diagnostic: %#v", result.Failure)
+	}
+}
+
 func TestTodoServiceRejectsUpdateWithoutRevisionBeforeExecution(t *testing.T) {
 	store, _ := tododomain.NewStore(nil)
 	registry, err := builtin.NewRegistry(NewTodo(store))

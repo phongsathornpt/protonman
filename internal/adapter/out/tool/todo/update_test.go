@@ -113,6 +113,30 @@ func TestUpdateTodoReportsTextUpdates(t *testing.T) {
 	}
 }
 
+func TestTodoCapabilityDefinitionUsesClosedTypedRootSchema(t *testing.T) {
+	def := NewTodo(nil).Definition()
+	if def.InputSchema["type"] != "object" {
+		t.Fatalf("input schema type = %#v, want object", def.InputSchema["type"])
+	}
+	if def.InputSchema["additionalProperties"] != false {
+		t.Fatalf("additionalProperties = %#v, want false", def.InputSchema["additionalProperties"])
+	}
+	props := def.InputSchema["properties"].(map[string]any)
+	if got := props["expected_revision"].(map[string]any)["type"]; got != "integer" {
+		t.Fatalf("expected_revision type = %#v, want integer", got)
+	}
+	if got := props["operations"].(map[string]any)["type"]; got != "array" {
+		t.Fatalf("operations type = %#v, want array", got)
+	}
+	branches, ok := def.InputSchema["oneOf"].([]any)
+	if !ok || len(branches) != 2 {
+		t.Fatalf("oneOf = %#v, want get/update branches", def.InputSchema["oneOf"])
+	}
+	if err := def.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestUpdateTodoDefinitionUsesPatchSchema(t *testing.T) {
 	def := newUpdateTodo(nil).Definition()
 	if def.Kind != tool.KindTask || def.Mutability != tool.MutabilityMutating || len(def.OutputSchema) == 0 {
