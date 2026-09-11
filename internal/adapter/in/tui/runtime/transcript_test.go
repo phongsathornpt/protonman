@@ -280,6 +280,17 @@ func TestErrorCellDiagnosticRenderingIsInline(t *testing.T) {
 	}
 }
 
+func TestErrorCellIncompleteStreamUsesDistinctStableCode(t *testing.T) {
+	cell := &ErrorCell{ErrorKind: ErrorKindStreamIncomplete, Title: "Provider Stream Ended Early", Badge: "STREAM_INCOMPLETE", Text: "provider closed before terminal event"}
+	rendered := ansi.Strip(strings.Join(cell.RenderWidth(80), "\n"))
+	if rendered != "× Provider Stream Ended Early · STREAM_INCOMPLETE" {
+		t.Fatalf("incomplete stream diagnostic = %q", rendered)
+	}
+	if strings.Contains(rendered, "STREAM_TIMEOUT") {
+		t.Fatalf("incomplete stream rendered as timeout: %q", rendered)
+	}
+}
+
 func TestErrorCellServerOverloadedUsesStableCode(t *testing.T) {
 	cell := &ErrorCell{ErrorKind: ErrorKindServerOverloaded, Title: "Provider Server Overloaded", Badge: "503 SERVER_ERROR", Text: "upstream unavailable"}
 	rendered := ansi.Strip(strings.Join(cell.RenderWidth(80), "\n"))

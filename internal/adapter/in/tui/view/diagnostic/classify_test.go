@@ -45,13 +45,24 @@ func TestClassifyEmptyModelResponseIsActionable(t *testing.T) {
 	}
 }
 
-func TestClassifyIncompleteModelStreamIsRetryableStreamFailure(t *testing.T) {
+func TestClassifyIncompleteModelStreamIsDistinctFromTimeout(t *testing.T) {
 	err := fmt.Errorf("read model stream: %w", sdk.ErrIncompleteStream)
+	got := Classify(err, "opencode", "nemotron-3.5-lightning-free")
+	if got.Kind != KindStreamIncomplete || !got.Retryable {
+		t.Fatalf("classification = %+v, want retryable incomplete stream", got)
+	}
+	if got.Badge != "STREAM_INCOMPLETE" || UserCode(got.Kind) != "STREAM_INCOMPLETE" {
+		t.Fatalf("badge=%q user_code=%q", got.Badge, UserCode(got.Kind))
+	}
+}
+
+func TestClassifyBoundedIncompleteStreamTimeoutRemainsTimeout(t *testing.T) {
+	err := fmt.Errorf("read model stream: %w: opencode free model stream became idle before completion", sdk.ErrIncompleteStream)
 	got := Classify(err, "opencode", "nemotron-3.5-lightning-free")
 	if got.Kind != KindStreamTimeout || !got.Retryable {
 		t.Fatalf("classification = %+v, want retryable stream timeout", got)
 	}
-	if got.Badge != "STREAM_INCOMPLETE" {
-		t.Fatalf("badge = %q", got.Badge)
+	if UserCode(got.Kind) != "STREAM_TIMEOUT" {
+		t.Fatalf("user code = %q", UserCode(got.Kind))
 	}
 }

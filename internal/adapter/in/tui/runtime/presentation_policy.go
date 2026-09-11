@@ -23,6 +23,7 @@ const (
 	ErrorKindQuotaExceeded    = diagnostic.Kind("quota_exceeded")
 	ErrorKindServerOverloaded = diagnostic.Kind("server_overloaded")
 	ErrorKindStreamTimeout    = diagnostic.Kind("stream_timeout")
+	ErrorKindStreamIncomplete = diagnostic.Kind("stream_incomplete")
 	ErrorKindEmptyResponse    = diagnostic.Kind("empty_response")
 	ErrorKindInvalidPrompt    = diagnostic.Kind("invalid_prompt")
 	ErrorKindMCPFailed        = diagnostic.Kind("mcp_failed")

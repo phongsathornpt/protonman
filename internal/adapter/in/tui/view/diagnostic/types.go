@@ -12,6 +12,7 @@ const (
 	KindQuotaExceeded    Kind = "quota_exceeded"
 	KindServerOverloaded Kind = "server_overloaded"
 	KindStreamTimeout    Kind = "stream_timeout"
+	KindStreamIncomplete Kind = "stream_incomplete"
 	KindEmptyResponse    Kind = "empty_response"
 	KindRuntimeTimeout   Kind = "runtime_timeout"
 	KindInvalidPrompt    Kind = "invalid_prompt"
@@ -58,6 +59,8 @@ func UserCode(kind Kind) string {
 		return "PROVIDER_OVERLOADED"
 	case KindStreamTimeout:
 		return "STREAM_TIMEOUT"
+	case KindStreamIncomplete:
+		return "STREAM_INCOMPLETE"
 	case KindEmptyResponse:
 		return "EMPTY_RESPONSE"
 	case KindRuntimeTimeout:
