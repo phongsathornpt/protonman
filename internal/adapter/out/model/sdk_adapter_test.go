@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -203,6 +204,49 @@ func TestEmptyStreamRetryRecoversFromIncompleteStreamBeforeOutput(t *testing.T) 
 	result, err := sdk.CollectStep(context.Background(), stream)
 	if err != nil || result.Text != "ok" || base.requests != 2 {
 		t.Fatalf("result=%q requests=%d err=%v", result.Text, base.requests, err)
+	}
+}
+
+func TestEmptyStreamRetryReplaysToolOnlyAttemptWithoutDuplicatingCall(t *testing.T) {
+	toolCall := sdk.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}
+	base := &emptyRetryTestModel{streams: []sdk.Stream{
+		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventToolCall, ToolCall: toolCall}}, err: sdk.ErrIncompleteStream},
+		&emptyRetryTestStream{events: []sdk.Event{
+			{Kind: sdk.EventToolCall, ToolCall: toolCall},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
+		}},
+	}}
+	stream, err := withEmptyStreamRetry(base, 2, 0).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "inspect"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := sdk.CollectStep(context.Background(), stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base.requests != 2 || len(result.ToolCalls) != 1 || result.ToolCalls[0].ID != toolCall.ID {
+		t.Fatalf("result=%+v requests=%d, want one replayed tool call across two attempts", result, base.requests)
+	}
+}
+
+func TestEmptyStreamRetryFlushesBufferedToolCallOnTerminalFinish(t *testing.T) {
+	toolCall := sdk.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}
+	base := &emptyRetryTestModel{streams: []sdk.Stream{
+		&emptyRetryTestStream{events: []sdk.Event{
+			{Kind: sdk.EventToolCall, ToolCall: toolCall},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
+		}},
+	}}
+	stream, err := withEmptyStreamRetry(base, 2, 0).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "inspect"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := sdk.CollectStep(context.Background(), stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base.requests != 1 || len(result.ToolCalls) != 1 || result.FinishReason != sdk.FinishToolCalls {
+		t.Fatalf("result=%+v requests=%d, want one buffered tool call and terminal finish", result, base.requests)
 	}
 }
 

@@ -206,6 +206,18 @@ const (
 
 var errOpenCodeFreeNoOutputTimeout = errors.New("opencode free model produced no output before timeout")
 
+type streamRetryProgress uint8
+
+const (
+	streamProgressEmpty streamRetryProgress = iota
+	streamProgressBufferedTool
+	streamProgressCommittedText
+)
+
+func (p streamRetryProgress) replaySafe() bool {
+	return p != streamProgressCommittedText
+}
+
 type emptyStreamRetryModel struct {
 	base            sdk.LanguageModel
 	maxRetries      int
@@ -255,7 +267,7 @@ type emptyStreamRetry struct {
 	backoff         time.Duration
 	noOutputTimeout time.Duration
 	retries         int
-	observedOutput  bool
+	progress        streamRetryProgress
 	pending         []sdk.Event
 	queue           []sdk.Event
 }
@@ -273,7 +285,7 @@ func (s *emptyStreamRetry) Next(ctx context.Context) (sdk.Event, error) {
 
 		event, err := s.stream.Next(s.attemptCtx)
 		if err != nil {
-			if s.noOutputTimedOut() && !s.observedOutput {
+			if s.noOutputTimedOut() && s.progress == streamProgressEmpty {
 				if s.retries < s.maxRetries {
 					if retryErr := s.retry(ctx, "no_output_timeout"); retryErr != nil {
 						return sdk.Event{}, retryErr
@@ -283,7 +295,7 @@ func (s *emptyStreamRetry) Next(ctx context.Context) (sdk.Event, error) {
 				s.stopNoOutputTimer()
 				return sdk.Event{}, fmt.Errorf("%w: %v", sdk.ErrIncompleteStream, errOpenCodeFreeNoOutputTimeout)
 			}
-			if errors.Is(err, sdk.ErrIncompleteStream) && !s.observedOutput && s.retries < s.maxRetries {
+			if errors.Is(err, sdk.ErrIncompleteStream) && s.progress.replaySafe() && s.retries < s.maxRetries {
 				if retryErr := s.retry(ctx, "incomplete_stream"); retryErr != nil {
 					return sdk.Event{}, retryErr
 				}
@@ -293,23 +305,36 @@ func (s *emptyStreamRetry) Next(ctx context.Context) (sdk.Event, error) {
 			return sdk.Event{}, err
 		}
 
-		if !s.observedOutput && !streamEventHasOutput(event) && event.Kind != sdk.EventFinish {
-			s.pending = append(s.pending, event)
-			continue
-		}
-		if streamEventHasOutput(event) {
-			s.observedOutput = true
-			s.stopNoOutputTimer()
-			if len(s.pending) > 0 {
-				s.queue = append(s.queue, s.pending...)
-				s.pending = nil
-				s.queue = append(s.queue, event)
+		switch streamEventProgress(event) {
+		case streamProgressCommittedText:
+			if s.progress != streamProgressCommittedText {
+				s.progress = streamProgressCommittedText
+				s.stopNoOutputTimer()
+				if len(s.pending) > 0 {
+					s.queue = append(s.queue, s.pending...)
+					s.pending = nil
+					s.queue = append(s.queue, event)
+					continue
+				}
+			}
+		case streamProgressBufferedTool:
+			if s.progress != streamProgressCommittedText {
+				s.progress = streamProgressBufferedTool
+				s.stopNoOutputTimer()
+				s.pending = append(s.pending, event)
+				continue
+			}
+		default:
+			if s.progress != streamProgressCommittedText && event.Kind != sdk.EventFinish {
+				s.pending = append(s.pending, event)
 				continue
 			}
 		}
+
 		if event.Kind == sdk.EventFinish {
 			s.stopNoOutputTimer()
-			if !s.observedOutput {
+			switch s.progress {
+			case streamProgressEmpty:
 				if event.FinishReason == sdk.FinishStop && s.retries < s.maxRetries {
 					s.pending = nil
 					if retryErr := s.retry(ctx, "empty_finish"); retryErr != nil {
@@ -323,6 +348,11 @@ func (s *emptyStreamRetry) Next(ctx context.Context) (sdk.Event, error) {
 					s.queue = append(s.queue, event)
 					continue
 				}
+			case streamProgressBufferedTool:
+				s.queue = append(s.queue, s.pending...)
+				s.pending = nil
+				s.queue = append(s.queue, event)
+				continue
 			}
 		}
 		return event, nil
@@ -333,7 +363,7 @@ func (s *emptyStreamRetry) retry(ctx context.Context, reason string) error {
 	_ = s.closeAttempt()
 	s.retries++
 	delay := time.Duration(s.retries) * s.backoff
-	slog.WarnContext(ctx, "opencode free model returned no output; retrying stream",
+	slog.WarnContext(ctx, "opencode free model stream is replay-safe; retrying",
 		"provider", s.base.Provider(), "model", s.base.ModelID(),
 		"reason", reason, "retry", s.retries, "max_retries", s.maxRetries,
 		"delay_ms", delay.Milliseconds(),
@@ -344,7 +374,7 @@ func (s *emptyStreamRetry) retry(ctx context.Context, reason string) error {
 	if err := s.openAttempt(); err != nil {
 		return fmt.Errorf("retry empty model stream: %w", err)
 	}
-	s.observedOutput = false
+	s.progress = streamProgressEmpty
 	s.pending = nil
 	s.queue = nil
 	return nil
@@ -414,15 +444,16 @@ func (s *emptyStreamRetry) Close() error {
 	return s.closeAttempt()
 }
 
-func streamEventHasOutput(event sdk.Event) bool {
+func streamEventProgress(event sdk.Event) streamRetryProgress {
 	switch event.Kind {
 	case sdk.EventTextDelta:
-		return event.Text != ""
+		if event.Text != "" {
+			return streamProgressCommittedText
+		}
 	case sdk.EventToolCallStart, sdk.EventToolCallDelta, sdk.EventToolCallEnd, sdk.EventToolCall:
-		return true
-	default:
-		return false
+		return streamProgressBufferedTool
 	}
+	return streamProgressEmpty
 }
 
 func waitForEmptyStreamRetry(ctx context.Context, delay time.Duration) error {
