@@ -105,10 +105,16 @@ func (c *lowConcurrencyController) run() {
 	active := 0
 	var pending []*lowConcurrencyRequest
 	var nextDispatch time.Time
+	var blockedUntil time.Time
 
 	for {
 		pending = pruneLowConcurrencyRequests(pending, c.admission)
-		if len(pending) > 0 && active < limit && (nextDispatch.IsZero() || !time.Now().Before(nextDispatch)) {
+		now := time.Now()
+		readyAt := nextDispatch
+		if blockedUntil.After(readyAt) {
+			readyAt = blockedUntil
+		}
+		if len(pending) > 0 && active < limit && (readyAt.IsZero() || !now.Before(readyAt)) {
 			request := pending[0]
 			pending = pending[1:]
 			select {
@@ -123,8 +129,8 @@ func (c *lowConcurrencyController) run() {
 
 		var timer *time.Timer
 		var timerC <-chan time.Time
-		if len(pending) > 0 && active < limit && !nextDispatch.IsZero() {
-			wait := time.Until(nextDispatch)
+		if len(pending) > 0 && active < limit && !readyAt.IsZero() {
+			wait := time.Until(readyAt)
 			if wait < 0 {
 				wait = 0
 			}
@@ -142,6 +148,9 @@ func (c *lowConcurrencyController) run() {
 			switch completion.outcome {
 			case lowConcurrencySuccess:
 				healthy++
+				if !blockedUntil.IsZero() && !time.Now().Before(blockedUntil) {
+					blockedUntil = time.Time{}
+				}
 				if interval > policy.MinInterval {
 					interval = scaleLowConcurrencyDuration(interval, policy.RecoveryPercent, policy.MinInterval, policy.MaxInterval)
 				}
@@ -153,10 +162,14 @@ func (c *lowConcurrencyController) run() {
 				healthy = 0
 				limit = policy.MinConcurrency
 				interval = scaleLowConcurrencyDuration(interval, policy.BackoffPercent, policy.MinInterval, policy.MaxInterval)
-				if completion.retryAfter > interval {
-					interval = min(completion.retryAfter, policy.MaxInterval)
+				now := time.Now()
+				nextDispatch = now.Add(interval)
+				if completion.retryAfter > 0 {
+					candidate := now.Add(completion.retryAfter)
+					if candidate.After(blockedUntil) {
+						blockedUntil = candidate
+					}
 				}
-				nextDispatch = time.Now().Add(interval)
 			default:
 				healthy = 0
 			}
@@ -169,16 +182,16 @@ func (c *lowConcurrencyController) run() {
 }
 
 func pruneLowConcurrencyRequests(pending []*lowConcurrencyRequest, admission chan struct{}) []*lowConcurrencyRequest {
-	for len(pending) > 0 {
+	kept := pending[:0]
+	for _, request := range pending {
 		select {
-		case <-pending[0].ctx.Done():
+		case <-request.ctx.Done():
 			<-admission
-			pending = pending[1:]
 		default:
-			return pending
+			kept = append(kept, request)
 		}
 	}
-	return pending
+	return kept
 }
 
 func scaleLowConcurrencyDuration(value time.Duration, percent int, floor, ceiling time.Duration) time.Duration {
