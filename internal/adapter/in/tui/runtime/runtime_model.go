@@ -130,8 +130,9 @@ type projectModelState struct {
 }
 
 type executionPolicyState struct {
-	maxToolCalls  int
-	runtimeConfig config.RuntimeConfig
+	maxToolCalls       int
+	runtimeConfig      config.RuntimeConfig
+	lowConcurrencyMode model.LowConcurrencySetting
 }
 
 type presentationModelState struct {

@@ -18,6 +18,8 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		m.appendHelp()
 	case "permission":
 		m.openPermissionModePane()
+	case "low":
+		return m.handleLowConcurrencyCommand(argument)
 	case "skills":
 		return m.handleSkillsCommand(argument, parts)
 	case "goal":

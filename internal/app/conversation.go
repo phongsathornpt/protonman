@@ -107,6 +107,7 @@ type ConversationSpec struct {
 	TurnTimeout     time.Duration
 	RoundTimeout    time.Duration
 	RemoteModel     *model.RemoteModel
+	LowConcurrency  model.LowConcurrencySetting
 }
 
 // BuildConversation centralizes model, prompt, and turn-loop construction for
@@ -127,7 +128,7 @@ func BuildConversation(service *toolcall.Service, skills *skill.Registry, agents
 		return nil, nil
 	}
 	baseURL := model.ResolveProviderBaseURLForProtocol(providerName, spec.ProviderType, spec.BaseURL)
-	clientOptions := []model.ClientOption{model.WithRequestTimeout(spec.RequestTimeout), model.WithAgentProfile(spec.AgentProfile)}
+	clientOptions := []model.ClientOption{model.WithRequestTimeout(spec.RequestTimeout), model.WithAgentProfile(spec.AgentProfile), model.WithLowConcurrencyMode(spec.LowConcurrency)}
 	if spec.RemoteModel != nil {
 		clientOptions = append(clientOptions, model.WithRemoteModelProfile(providerName, *spec.RemoteModel))
 	}

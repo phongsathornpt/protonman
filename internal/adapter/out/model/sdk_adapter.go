@@ -110,6 +110,7 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 	headers := agentHeaders(cfg)
 	isOpenCode := IsProvider(DefaultOpenCodeName, providerName, cfg.baseURL)
 	freeStreamRecovery := isOpenCode && IsFreeModel(cfg.modelID)
+	lowConcurrencyEnabled := cfg.lowConcurrency.Enabled(isOpenCode, IsFreeModel(cfg.modelID))
 	retryPolicy := modelRetryPolicy()
 	providerMaxRetries := runtimepolicy.ModelRetryMaxRetries
 	if freeStreamRecovery {
@@ -158,8 +159,10 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 		model = withContextWindow(model, *cfg.contextWindow)
 	}
 	model = withSessionID(model, sessionID)
-	if freeStreamRecovery {
+	if lowConcurrencyEnabled {
 		model = withLowConcurrencyMode(model, openCodeFreeLowConcurrencyRoute(cfg.baseURL, cfg.modelID), runtimepolicy.LowConcurrencyMode())
+	}
+	if freeStreamRecovery {
 		model = withStreamRetryPolicyConfig(model, runtimepolicy.ModelRetryMaxRetries, retryPolicy,
 			runtimepolicy.OpenCodeFreeFirstEventTimeout,
 			runtimepolicy.OpenCodeFreeIdleEventTimeout,

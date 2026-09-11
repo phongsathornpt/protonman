@@ -32,6 +32,7 @@ type BubbleTeaUI struct {
 	finalMessages           []model.Message
 	finalAgentProfile       string
 	finalReasoningEffort    sdk.ReasoningEffort
+	lowConcurrencyMode      model.LowConcurrencySetting
 	modelConfig             config.ModelConfig
 	agentConfig             config.AgentConfig
 	hasAgentConfig          bool

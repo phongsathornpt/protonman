@@ -67,6 +67,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		bModel.skills = ui.skills
 		bModel.activeModel = ui.modelConfig.Default
 		bModel.activeProvider = ui.modelConfig.Provider
+		bModel.lowConcurrencyMode = ui.lowConcurrencyMode
 		bModel.providers = ui.providers
 		bModel.sessionID = ui.sessionID
 		bModel.sessions = ui.sessions
@@ -109,6 +110,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		ui.modelConfig.Provider = bModel.activeProvider
 		ui.finalAgentProfile = bModel.agentProfile
 		ui.finalReasoningEffort = bModel.reasoningEffort
+		ui.lowConcurrencyMode = bModel.lowConcurrencyMode
 		ui.activeGoal = bModel.activeGoal
 		ui.finalActiveGoal = bModel.activeGoal
 

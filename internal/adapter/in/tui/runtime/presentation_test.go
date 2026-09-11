@@ -1454,3 +1454,15 @@ func TestModelRetryStatusShowsCooldownAfterFirstRetry(t *testing.T) {
 		t.Fatalf("meta=%q", meta)
 	}
 }
+
+func TestIdleContextFooterShowsLowConcurrencyStateForOpenCode(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(100, 24)
+	m.activeProvider = model.DefaultOpenCodeName
+	m.activeModel = "nemotron-3.5-lightning-free"
+	m.lowConcurrencyMode = model.LowConcurrencyOn
+	footer := ansi.Strip(m.idleContextFooter())
+	if !strings.Contains(footer, "low:on") {
+		t.Fatalf("footer missing low concurrency state: %q", footer)
+	}
+}

@@ -4,7 +4,7 @@ import "testing"
 
 func TestCatalogContainsCanonicalCommandsOnly(t *testing.T) {
 	catalog := Catalog()
-	want := []string{"help", "permission", "model", "provider", "skills", "agents", "goal", "todo", "clear", "call", "quit"}
+	want := []string{"help", "permission", "low", "model", "provider", "skills", "agents", "goal", "todo", "clear", "call", "quit"}
 	if len(catalog) != len(want) {
 		t.Fatalf("catalog size = %d, want %d: %#v", len(catalog), len(want), catalog)
 	}

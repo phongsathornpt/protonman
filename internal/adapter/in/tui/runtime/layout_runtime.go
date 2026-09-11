@@ -88,6 +88,9 @@ func (m *bubbleModel) idleContextFooter() string {
 		model = "unselected"
 	}
 	suffix := " · " + reasoningEffortLabel(m.reasoningEffort) + " · " + m.permissionModeLabel()
+	if low := m.lowConcurrencyFooterLabel(); low != "" {
+		suffix += " · " + low
+	}
 	for _, left := range []string{"? for shortcuts", "? shortcuts", "?"} {
 		modelWidth := width - ansi.StringWidth(left) - ansi.StringWidth(suffix) - 1
 		if modelWidth < 8 {

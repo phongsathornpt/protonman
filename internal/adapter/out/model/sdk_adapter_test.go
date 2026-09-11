@@ -626,6 +626,41 @@ func TestOpenCodeFreeModelFactoryEnablesEmptyStreamRetry(t *testing.T) {
 	}
 }
 
+func TestLowConcurrencySettingControlsOpenCodeWrapper(t *testing.T) {
+	freeAuto := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "nemotron-3.5-lightning-free")
+	retryAuto, ok := freeAuto.(*emptyStreamRetryModel)
+	if !ok {
+		t.Fatalf("free auto type = %T, want retry wrapper", freeAuto)
+	}
+	if _, ok := retryAuto.base.(*openCodeFreeLowConcurrencyModel); !ok {
+		t.Fatalf("free auto inner type = %T, want low concurrency wrapper", retryAuto.base)
+	}
+
+	freeOff := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "nemotron-3.5-lightning-free", WithLowConcurrencyMode(LowConcurrencyOff))
+	retryOff, ok := freeOff.(*emptyStreamRetryModel)
+	if !ok {
+		t.Fatalf("free off type = %T, want retry wrapper", freeOff)
+	}
+	if _, ok := retryOff.base.(*openCodeFreeLowConcurrencyModel); ok {
+		t.Fatalf("free off unexpectedly retained low concurrency wrapper: %T", retryOff.base)
+	}
+
+	paidAuto := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "paid-model")
+	if _, ok := paidAuto.(*openCodeFreeLowConcurrencyModel); ok {
+		t.Fatalf("paid auto unexpectedly enabled low concurrency: %T", paidAuto)
+	}
+
+	paidOn := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "paid-model", WithLowConcurrencyMode(LowConcurrencyOn))
+	if _, ok := paidOn.(*openCodeFreeLowConcurrencyModel); !ok {
+		t.Fatalf("paid on type = %T, want low concurrency wrapper", paidOn)
+	}
+
+	nonOpenCode := newSDKOpenAILanguageModel(DefaultOpenAIName, "https://api.openai.com/v1", "key", "gpt-test", WithLowConcurrencyMode(LowConcurrencyOn))
+	if _, ok := nonOpenCode.(*openCodeFreeLowConcurrencyModel); ok {
+		t.Fatalf("non-OpenCode model unexpectedly enabled low concurrency: %T", nonOpenCode)
+	}
+}
+
 func TestOpenCodeFreeFactoryUsesOneRetryBudget(t *testing.T) {
 	attempts := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

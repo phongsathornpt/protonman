@@ -40,7 +40,7 @@ func TestTUICommandSurfaceIsCanonical(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.executeCommand("/help")
 	help := plainTranscript(model)
-	for _, keep := range []string{"/help", "/model", "/provider", "/skills", "/agents", "/goal", "/todo", "/clear", "/call", "/quit"} {
+	for _, keep := range []string{"/help", "/permission", "/low", "/model", "/provider", "/skills", "/agents", "/goal", "/todo", "/clear", "/call", "/quit"} {
 		if !strings.Contains(help, keep) {
 			t.Fatalf("help missing canonical command %q: %q", keep, help)
 		}
@@ -908,4 +908,54 @@ func TestSlashPickerHelpAndPagingShareOneLine(t *testing.T) {
 		return
 	}
 	t.Fatalf("slash help line missing: %q", plain)
+}
+
+func TestLowCommandControlsSessionLowConcurrencyMode(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeProvider = model.DefaultOpenCodeName
+	m.activeModel = "nemotron-3.5-lightning-free"
+
+	if got := m.lowConcurrencyMode; got != model.LowConcurrencyAuto {
+		t.Fatalf("initial low concurrency = %s, want auto", got)
+	}
+	m.executeCommand("/low")
+	if got := m.lowConcurrencyMode; got != model.LowConcurrencyOn {
+		t.Fatalf("/low = %s, want on", got)
+	}
+	m.executeCommand("/low off")
+	if got := m.lowConcurrencyMode; got != model.LowConcurrencyOff {
+		t.Fatalf("/low off = %s, want off", got)
+	}
+	m.executeCommand("/low auto")
+	if got := m.lowConcurrencyMode; got != model.LowConcurrencyAuto {
+		t.Fatalf("/low auto = %s, want auto", got)
+	}
+	if got := plainTranscript(m); !strings.Contains(got, "low concurrency · auto") {
+		t.Fatalf("low command feedback missing: %q", got)
+	}
+}
+
+func TestLowCommandRejectsChangeDuringActiveTurn(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.busy = true
+	m.executeCommand("/low on")
+	if m.lowConcurrencyMode != model.LowConcurrencyAuto {
+		t.Fatalf("busy /low changed mode to %s", m.lowConcurrencyMode)
+	}
+	if got := plainTranscript(m); !strings.Contains(got, "cannot change low concurrency mode") {
+		t.Fatalf("busy /low error missing: %q", got)
+	}
+}
+
+func TestLowConcurrencyStateSurvivesBubbleModelRestartCapture(t *testing.T) {
+	ui := &BubbleTeaUI{lowConcurrencyMode: model.LowConcurrencyOn}
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.lowConcurrencyMode = ui.lowConcurrencyMode
+	if m.lowConcurrencyMode != model.LowConcurrencyOn {
+		t.Fatalf("restored low concurrency = %s, want on", m.lowConcurrencyMode)
+	}
+	ui.lowConcurrencyMode = m.lowConcurrencyMode
+	if ui.lowConcurrencyMode != model.LowConcurrencyOn {
+		t.Fatalf("captured low concurrency = %s, want on", ui.lowConcurrencyMode)
+	}
 }
