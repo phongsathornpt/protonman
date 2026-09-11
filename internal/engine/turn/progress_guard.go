@@ -15,12 +15,13 @@ const (
 )
 
 type progressObservation struct {
-	epoch       uint64
-	resultHash  [sha256.Size]byte
-	count       int
-	failure     bool
-	retryable   bool
-	failureCode tool.ErrorCode
+	epoch          uint64
+	resultHash     [sha256.Size]byte
+	count          int
+	failure        bool
+	retryable      bool
+	failureCode    tool.ErrorCode
+	failurePayload *tool.Failure
 }
 
 type progressGuard struct {
@@ -104,12 +105,16 @@ func (g *progressGuard) observe(execution executedCall) (stalled bool, tracked b
 			observation.failure = true
 			observation.retryable = execution.result.Failure.Retryable
 			observation.failureCode = execution.result.Failure.Code
+			observation.failurePayload = cloneProgressFailure(execution.result.Failure)
 		}
 		g.observations[callHash] = observation
 		return false, true, nil
 	}
 
 	observation.count++
+	if execution.result.Failure != nil {
+		observation.failurePayload = cloneProgressFailure(execution.result.Failure)
+	}
 	g.observations[callHash] = observation
 	limit := g.maxIdenticalResults
 	if execution.result.Failure != nil && execution.result.Failure.Retryable {
@@ -144,22 +149,18 @@ func (g *progressGuard) suppress(call tool.Call) (*executedCall, error) {
 		return nil, nil
 	}
 
-	code := tool.ErrorCodeNoProgress
-	message := "identical tool call was suppressed after repeated no-progress results"
-	denied := false
-	if observation.failure && !observation.retryable {
-		code = observation.failureCode
-		message = "identical tool call was suppressed after a previous non-retryable failure"
-		denied = code == tool.ErrorCodePermissionDenied
+	failure := cloneProgressFailure(observation.failurePayload)
+	if failure == nil {
+		failure = &tool.Failure{
+			Code:    tool.ErrorCodeNoProgress,
+			Message: "identical tool call was suppressed after repeated no-progress results",
+		}
 	}
 	result := tool.Result{
 		CallID:   call.ID,
 		ToolName: call.Name,
-		Denied:   denied,
-		Failure: &tool.Failure{
-			Code:    code,
-			Message: message,
-		},
+		Denied:   failure.Code == tool.ErrorCodePermissionDenied,
+		Failure:  failure,
 	}
 	reason := "no_progress"
 	if observation.failure && !observation.retryable {
@@ -206,12 +207,18 @@ func semanticCallHash(call tool.Call) ([sha256.Size]byte, error) {
 
 func noProgressResultHash(result tool.Result) ([sha256.Size]byte, error) {
 	if result.Failure != nil {
+		evidenceHash := [sha256.Size]byte{}
+		if evidence := result.Failure.RecoveryEvidence; evidence != nil {
+			evidenceHash = sha256.Sum256(append(append(append([]byte(evidence.Output+"\x00"), evidence.StructuredOutput...), []byte("\x00"+evidence.SHA256)...), byte(boolByte(evidence.Truncated))))
+		}
 		payload, err := json.Marshal(struct {
-			Code      tool.ErrorCode `json:"code"`
-			Retryable bool           `json:"retryable"`
+			Code         tool.ErrorCode    `json:"code"`
+			Retryable    bool              `json:"retryable"`
+			Recovery     *tool.Recovery    `json:"recovery,omitempty"`
+			EvidenceHash [sha256.Size]byte `json:"evidence_hash,omitempty"`
 		}{
-			Code:      result.Failure.Code,
-			Retryable: result.Failure.Retryable,
+			Code: result.Failure.Code, Retryable: result.Failure.Retryable,
+			Recovery: result.Failure.Recovery, EvidenceHash: evidenceHash,
 		})
 		if err != nil {
 			return [sha256.Size]byte{}, fmt.Errorf("encode semantic tool failure: %w", err)
@@ -219,6 +226,35 @@ func noProgressResultHash(result tool.Result) ([sha256.Size]byte, error) {
 		return sha256.Sum256(payload), nil
 	}
 	return semanticResultHash(result)
+}
+
+func boolByte(value bool) byte {
+	if value {
+		return 1
+	}
+	return 0
+}
+
+func cloneProgressFailure(failure *tool.Failure) *tool.Failure {
+	if failure == nil {
+		return nil
+	}
+	clone := *failure
+	if failure.Recovery != nil {
+		recovery := *failure.Recovery
+		recovery.Arguments = append(json.RawMessage(nil), failure.Recovery.Arguments...)
+		clone.Recovery = &recovery
+	}
+	if failure.RecoveryEvidence != nil {
+		evidence := *failure.RecoveryEvidence
+		evidence.StructuredOutput = append(json.RawMessage(nil), failure.RecoveryEvidence.StructuredOutput...)
+		if failure.RecoveryEvidence.Pagination != nil {
+			pagination := *failure.RecoveryEvidence.Pagination
+			evidence.Pagination = &pagination
+		}
+		clone.RecoveryEvidence = &evidence
+	}
+	return &clone
 }
 
 func semanticResultHash(result tool.Result) ([sha256.Size]byte, error) {
