@@ -722,6 +722,22 @@ func TestSkillsPickerMouseWheelNavigation(t *testing.T) {
 	}
 }
 
+func TestLowConcurrencyPickerMouseWheelNavigation(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.executeCommand("/low")
+	view := m.panes.bottom.find(lowConcurrencyViewID).(*lowConcurrencyPaneView)
+	updated, _ := m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	m = updated.(*bubbleModel)
+	if got := view.index; got != 1 {
+		t.Fatalf("expected index 1 after wheel down, got %d", got)
+	}
+	updated, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	m = updated.(*bubbleModel)
+	if got := view.index; got != 0 {
+		t.Fatalf("expected index 0 after wheel up, got %d", got)
+	}
+}
+
 func TestHistoryStateTrimO1(t *testing.T) {
 	state := NewHistoryState(10)
 	for i := 1; i <= 15; i++ {

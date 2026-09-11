@@ -133,15 +133,16 @@ func isManagedSystemPrompt(text string) bool {
 
 // Summary is a bounded, display-oriented view of one persisted session.
 type Summary struct {
-	ID              string    `json:"id"`
-	WorkspaceKey    string    `json:"workspace_key,omitempty"`
-	WorkspaceName   string    `json:"workspace_name,omitempty"`
-	CreatedAt       time.Time `json:"created_at,omitempty"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	AgentProfile    string    `json:"agent_profile,omitempty"`
-	ReasoningEffort string    `json:"reasoning_effort,omitempty"`
-	MessageCount    int       `json:"message_count"`
-	Preview         string    `json:"preview,omitempty"`
+	ID                 string    `json:"id"`
+	WorkspaceKey       string    `json:"workspace_key,omitempty"`
+	WorkspaceName      string    `json:"workspace_name,omitempty"`
+	CreatedAt          time.Time `json:"created_at,omitempty"`
+	UpdatedAt          time.Time `json:"updated_at"`
+	AgentProfile       string    `json:"agent_profile,omitempty"`
+	ReasoningEffort    string    `json:"reasoning_effort,omitempty"`
+	LowConcurrencyMode string    `json:"low_concurrency_mode,omitempty"`
+	MessageCount       int       `json:"message_count"`
+	Preview            string    `json:"preview,omitempty"`
 }
 
 // ListOptions bounds session discovery and optionally filters by workspace identity.
