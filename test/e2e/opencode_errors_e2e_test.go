@@ -103,7 +103,7 @@ func TestE2EOpenCodeRateLimitAndOverloadErrors(t *testing.T) {
 	// 1. 429 Rate Limit (persistent to exhaust retries)
 	server429 := newMockLLMServer(t)
 	server429.SetupWorkspaceConfig(t, home)
-	server429.AddPersistentErrorResponse(429, `{"error":{"message":"Rate limit reached: 60 requests per minute"}}`, "application/json")
+	server429.AddPersistentErrorResponseWithHeaders(429, `{"error":{"message":"Rate limit reached: 60 requests per minute"}}`, "application/json", map[string]string{"X-RateLimit-Reset": "1ms"})
 
 	res429 := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Trigger 429"},

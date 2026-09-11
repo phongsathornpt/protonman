@@ -33,13 +33,18 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	coverDir = os.Getenv("PROTON_COVERDIR")
-	if coverDir == "" {
-		coverDir = filepath.Join(tempDir, "coverdata")
+	coverageEnabled := os.Getenv("PROTON_E2E_COVERAGE") == "1"
+	buildArgs := []string{"build", "-o", binPath, "./cmd/protonman"}
+	if coverageEnabled {
+		coverDir = os.Getenv("PROTON_COVERDIR")
+		if coverDir == "" {
+			coverDir = filepath.Join(tempDir, "coverdata")
+		}
+		_ = os.MkdirAll(coverDir, 0o755)
+		buildArgs = []string{"build", "-cover", "-o", binPath, "./cmd/protonman"}
 	}
-	_ = os.MkdirAll(coverDir, 0o755)
 
-	buildCmd := exec.Command("go", "build", "-cover", "-o", binPath, "./cmd/protonman")
+	buildCmd := exec.Command("go", buildArgs...)
 	buildCmd.Dir = repoRoot
 	buildCmd.Env = os.Environ()
 	output, err := buildCmd.CombinedOutput()
@@ -51,7 +56,7 @@ func TestMain(m *testing.M) {
 	protonBin = binPath
 	code := m.Run()
 
-	if os.Getenv("PROTON_E2E_COVERAGE") == "1" {
+	if coverageEnabled {
 		percentCmd := exec.Command("go", "tool", "covdata", "percent", "-i="+coverDir)
 		if out, err := percentCmd.CombinedOutput(); err == nil && len(out) > 0 {
 			fmt.Println("\n=== E2E Subprocess Coverage Summary ===")

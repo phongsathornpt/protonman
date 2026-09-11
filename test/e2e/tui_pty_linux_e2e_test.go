@@ -34,6 +34,23 @@ func (b *safeBuffer) String() string {
 	return b.b.String()
 }
 
+func waitForPTYOutput(t *testing.T, output *safeBuffer, timeout time.Duration, description string, ready func(string) bool) string {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(5 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		view := output.String()
+		if ready(view) {
+			return view
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s; output: %q", description, view)
+		}
+		<-ticker.C
+	}
+}
+
 func TestE2ETUIStartupAndExitWithRealPTY(t *testing.T) {
 	for _, size := range []struct {
 		name       string
@@ -239,27 +256,23 @@ func TestE2ETUIResizeDuringRunningTool(t *testing.T) {
 		t.Fatal("timed out waiting for initial TUI output")
 	}
 
-	time.Sleep(120 * time.Millisecond)
 	command := "!for i in $(seq 1 12); do echo live-$i; sleep 0.04; done"
 	if _, err := master.Write([]byte(command)); err != nil {
 		t.Fatalf("type long-running tool: %v", err)
 	}
-	time.Sleep(30 * time.Millisecond)
 	if _, err := master.Write([]byte{'\r'}); err != nil {
 		t.Fatalf("submit long-running tool: %v", err)
 	}
-	time.Sleep(100 * time.Millisecond)
+	waitForPTYOutput(t, &output, 2*time.Second, "running tool output", func(view string) bool { return strings.Contains(view, "live-1") })
 	for _, size := range []struct{ cols, rows uint16 }{{48, 12}, {110, 32}, {30, 9}, {88, 22}} {
 		if err := unix.IoctlSetWinsize(int(master.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Col: size.cols, Row: size.rows}); err != nil {
 			t.Fatalf("resize PTY during tool to %dx%d: %v", size.cols, size.rows, err)
 		}
-		time.Sleep(45 * time.Millisecond)
 	}
 	if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
 		t.Fatalf("TUI exited while tool was running: %v\noutput: %q", err, output.String())
 	}
-	time.Sleep(500 * time.Millisecond)
-	view := output.String()
+	view := waitForPTYOutput(t, &output, 2*time.Second, "running tool completion", func(view string) bool { return strings.Contains(view, "live-12") })
 	if !strings.Contains(view, "live-12") {
 		t.Fatalf("running tool output missing terminal line after resize: %q", view)
 	}
@@ -315,21 +328,20 @@ func TestE2ETUIResizeAndPasteDuringRunningTool(t *testing.T) {
 			}
 		}
 	}()
-	time.Sleep(150 * time.Millisecond)
-	_, _ = master.Write([]byte("!for i in $(seq 1 20); do printf 'tick-%02d\\r' $i; sleep 0.03; done; echo live-done"))
-	time.Sleep(30 * time.Millisecond)
+	waitForPTYOutput(t, &output, 2*time.Second, "initial TUI output", func(view string) bool { return view != "" })
+	_, _ = master.Write([]byte("!marker=done; for i in $(seq 1 20); do printf 'tick-%02d\\r' $i; sleep 0.03; done; echo live-$marker"))
 	_, _ = master.Write([]byte{'\r'})
-	time.Sleep(120 * time.Millisecond)
+	waitForPTYOutput(t, &output, 2*time.Second, "running tool output", func(view string) bool { return strings.Contains(view, "tick-01") })
 	_, _ = master.Write([]byte("\x1b[200~draft ไทย 東京\nsecond line\x1b[201~"))
 	for _, size := range []struct{ cols, rows uint16 }{{40, 10}, {100, 30}, {24, 8}, {80, 20}} {
 		if err := unix.IoctlSetWinsize(int(master.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Col: size.cols, Row: size.rows}); err != nil {
 			t.Fatalf("resize PTY during paste/tool to %dx%d: %v", size.cols, size.rows, err)
 		}
-		time.Sleep(35 * time.Millisecond)
 	}
-	time.Sleep(650 * time.Millisecond)
-	view := output.String()
-	for _, want := range []string{"live-done", "draft ไทย 東京", "second line"} {
+	view := waitForPTYOutput(t, &output, 2*time.Second, "tool completion and pasted text", func(view string) bool {
+		return strings.Contains(view, "tool completed") && strings.Contains(view, "draft ไทย 東京") && strings.Contains(view, "second line")
+	})
+	for _, want := range []string{"tool completed", "tick-01", "draft ไทย 東京", "second line"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("combined PTY stress missing %q: %q", want, view)
 		}
@@ -339,9 +351,9 @@ func TestE2ETUIResizeAndPasteDuringRunningTool(t *testing.T) {
 			t.Fatalf("combined PTY stress contains %q", unwanted)
 		}
 	}
-	_, _ = master.Write([]byte{3})
-	time.Sleep(40 * time.Millisecond)
-	_, _ = master.Write([]byte{3})
+	if err := cmd.Process.Kill(); err != nil && !strings.Contains(err.Error(), "process already finished") {
+		t.Fatalf("terminate combined PTY stress: %v", err)
+	}
 	_ = cmd.Wait()
 	_ = master.Close()
 	select {
