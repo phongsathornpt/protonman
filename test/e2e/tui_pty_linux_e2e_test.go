@@ -641,7 +641,7 @@ func TestE2ETUIKeyboardProtocolFromRealPTY(t *testing.T) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, protonBin)
 	cmd.Dir = ws
-	cmd.Env = append(os.Environ(), "PROTONMAN_HOME="+home, "PROTONMAN_DEBUG_KEYS=1", "TERM=xterm-256color")
+	cmd.Env = append(os.Environ(), "PROTONMAN_HOME="+home, "PROTONMAN_DEBUG_KEYS=1", "PROTONMAN_DEBUG_LOG=stderr", "TERM=xterm-256color")
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
 	if err := cmd.Start(); err != nil {
@@ -686,11 +686,13 @@ func TestE2ETUIKeyboardProtocolFromRealPTY(t *testing.T) {
 	}
 	plain := output.String()
 	for _, want := range []string{
-		"tui keyboard capability changed from=unknown to=disambiguated",
-		"key=ctrl+enter",
-		"keyboard=disambiguated",
-		"key=ctrl+j",
-		"key=enter",
+		`"msg":"tui keyboard capability changed"`,
+		`"from":"unknown"`,
+		`"to":"disambiguated"`,
+		`"key":"ctrl+enter"`,
+		`"keyboard":"disambiguated"`,
+		`"key":"ctrl+j"`,
+		`"key":"enter"`,
 	} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("PTY keyboard diagnostics missing %q: %q", want, plain)

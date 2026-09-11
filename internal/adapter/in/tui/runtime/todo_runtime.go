@@ -106,12 +106,12 @@ type todoListItem struct {
 func (i todoListItem) FilterValue() string { return i.item.Text + " " + i.item.ID }
 func (i todoListItem) Description() string { return "id: " + strings.TrimSpace(i.item.ID) }
 func (i todoListItem) Title() string {
-	glyph := "○ "
+	glyph := glyphTodoPending
 	switch i.item.Status {
 	case tododomain.StatusInProgress:
-		glyph = "● "
+		glyph = glyphTodoActive
 	case tododomain.StatusCompleted:
-		glyph = "✓ "
+		glyph = glyphToolSuccess
 	}
 	return glyph + i.item.Text
 }
@@ -220,9 +220,18 @@ func (v *todoPaneView) Render(ctx paneRenderContext) string {
 		}
 		listRows = append(listRows, prefix+style.Render(truncateWithEllipsis(item.Title(), maxInt(1, ctx.width-8))))
 	}
-	status := fmt.Sprintf("%d/%d done", completed, len(ctx.todos))
-	if selected, ok := v.picker.SelectedItem().(todoListItem); ok {
-		status = selected.item.ID + " · " + status
+	status := ""
+	if len(ctx.todos) == 0 {
+		listRows = []string{
+			mutedStyle.Render("No tasks in this session."),
+			mutedStyle.Render("Tasks appear here as Universal plans multi-step work."),
+		}
+		help = paneKeyboardHelp(ctx.width-4, "esc/q", "Go Back")
+	} else {
+		status = fmt.Sprintf("%d/%d done", completed, len(ctx.todos))
+		if selected, ok := v.picker.SelectedItem().(todoListItem); ok {
+			status = selected.item.ID + " · " + status
+		}
 	}
 	rows := paneSection("Tasks", listRows, help, status, ctx.width)
 	return renderModalRows(ctx, accentAssistant, rows)

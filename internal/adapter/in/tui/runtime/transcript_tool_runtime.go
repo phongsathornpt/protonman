@@ -44,7 +44,7 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 			state.CompleteToolCall(result.CallID, name, completed)
 			return
 		}
-		suggestions := transcriptutil.ToolFailureSuggestions(name, result.Failure.Code)
+		suggestions := transcriptutil.ToolFailureSuggestions(name, result.Failure)
 		title := tool.DisplayName(name)
 		badge := string(result.Failure.Code)
 		text := result.Failure.Message

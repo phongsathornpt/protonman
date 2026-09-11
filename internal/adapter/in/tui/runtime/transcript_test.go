@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transcriptutil"
@@ -329,17 +330,32 @@ func TestToolCellReadDetailFollowsDensity(t *testing.T) {
 }
 
 func TestToolFailureSuggestions(t *testing.T) {
-	notFoundSugg := transcriptutil.ToolFailureSuggestions("read", tool.ErrorCodeNotFound)
+	notFoundSugg := transcriptutil.ToolFailureSuggestions("read", &tool.Failure{Code: tool.ErrorCodeNotFound})
 	if len(notFoundSugg) == 0 {
 		t.Fatalf("expected suggestions for read not found error")
 	}
-	protectedSugg := transcriptutil.ToolFailureSuggestions("read", tool.ErrorCodeProtectedPath)
+	protectedSugg := transcriptutil.ToolFailureSuggestions("read", &tool.Failure{Code: tool.ErrorCodeProtectedPath})
 	if len(protectedSugg) == 0 || !strings.Contains(protectedSugg[0], "workspace protection rules") {
 		t.Fatalf("expected suggestions for protected path error")
 	}
-	escapeSugg := transcriptutil.ToolFailureSuggestions("read", tool.ErrorCodeOutsideWorkspace)
+	escapeSugg := transcriptutil.ToolFailureSuggestions("read", &tool.Failure{Code: tool.ErrorCodeOutsideWorkspace})
 	if len(escapeSugg) != 1 || escapeSugg[0] != "use . or a workspace-relative path" {
 		t.Fatalf("expected actionable suggestions for outside workspace error: %#v", escapeSugg)
+	}
+}
+
+func TestToolFailureSuggestionsUseDiscoveryEvidence(t *testing.T) {
+	failure := &tool.Failure{
+		Code: tool.ErrorCodeNotFound,
+		Recovery: &tool.Recovery{
+			Action: tool.RecoveryDiscoverResource, Tool: tool.NameLS,
+			Arguments: json.RawMessage(`{"path":"internal/base/runtimepolicy"}`),
+		},
+		RecoveryEvidence: &tool.RecoveryEvidence{Action: tool.RecoveryDiscoverResource, Tool: tool.NameLS, Output: "defaults.go"},
+	}
+	suggestions := transcriptutil.ToolFailureSuggestions(tool.NameRead, failure)
+	if len(suggestions) != 1 || !strings.Contains(suggestions[0], `inspected "internal/base/runtimepolicy"`) || !strings.Contains(suggestions[0], "use a discovered path") {
+		t.Fatalf("discovery suggestions = %#v", suggestions)
 	}
 }
 
@@ -649,7 +665,7 @@ func TestRetryLifecycleUpdatesAndClearsTUIProgress(t *testing.T) {
 		t.Fatalf("retry progress = %+v activity=%q", m.turnProgress.Retry, m.activity)
 	}
 	m.applyTurnEvent(turn.Event{Kind: turn.EventTextDelta, Round: 1, Text: "recovered"})
-	if !m.turnProgress.Retry.RetryAt.IsZero() || m.activity != "synthesizing" {
+	if !m.turnProgress.Retry.RetryAt.IsZero() || m.activity != "" {
 		t.Fatalf("retry state not cleared after model output: %+v activity=%q", m.turnProgress.Retry, m.activity)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -18,6 +19,20 @@ type readFileHandler struct {
 
 func New(workspaceRoot *workspace.Workspace) tool.Handler {
 	return readFileHandler{workspace: workspaceRoot}
+}
+
+func missingReadPathError(path string, cause error) error {
+	parent := filepath.Dir(filepath.Clean(path))
+	if strings.TrimSpace(parent) == "" {
+		parent = "."
+	}
+	recoveryArgs, err := json.Marshal(map[string]any{"path": parent})
+	if err != nil {
+		return tool.WrapToolError(tool.ErrorCodeNotFound, fmt.Sprintf("not found: %q", path), cause)
+	}
+	return tool.WrapToolError(tool.ErrorCodeNotFound, fmt.Sprintf("not found: %q", path), cause).WithRecovery(tool.Recovery{
+		Action: tool.RecoveryDiscoverResource, Tool: tool.NameLS, Arguments: recoveryArgs,
+	})
 }
 
 func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
@@ -76,6 +91,9 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	}
 	path, err := h.workspace.ResolveExistingRead(ctx, input.Path)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return tool.Result{}, missingReadPathError(input.Path, err)
+		}
 		return tool.Result{}, err
 	}
 

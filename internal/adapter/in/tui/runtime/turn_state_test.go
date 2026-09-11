@@ -12,7 +12,7 @@ func TestTurnStateLifecycle(t *testing.T) {
 	started := time.Unix(123, 0)
 	state := turnModelState{}
 	state.beginTurn("turn-1", started)
-	if !state.busy || state.activeTurnOwner != "turn-1" || state.activity != "analyzing" || !state.busyStarted.Equal(started) {
+	if !state.busy || state.activeTurnOwner != "turn-1" || state.activity != "" || !state.busyStarted.Equal(started) {
 		t.Fatalf("started state = %+v", state)
 	}
 	ctx, cancel := context.WithCancel(context.Background())

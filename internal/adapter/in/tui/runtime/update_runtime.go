@@ -98,6 +98,10 @@ func (m *bubbleModel) updateAnimationEvent(msg tea.Msg) (tea.Cmd, bool) {
 		m.refreshFrameChromeOnly()
 		return command, true
 	case cursor.BlinkMsg:
+		if m.reducedMotion {
+			// Reduced motion keeps the caret static and never re-arms the loop.
+			return nil, true
+		}
 		prompt := m.panes.bottom.prompt()
 		updated, command := prompt.Update(message)
 		*prompt = updated

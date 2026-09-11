@@ -6,7 +6,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
-const Version = "10"
+const Version = "11"
 
 type ToolCapabilities struct {
 	Tasks  bool
@@ -135,7 +135,17 @@ func toolDisciplineSection(spec Spec) string {
 		lines = append(lines, "- Workspace filesystem paths are relative to the workspace root. Use . for the workspace root; never use / or another absolute filesystem path with workspace tools.")
 	}
 	if hasTool(spec, "read") {
-		lines = append(lines, "- Use read for known workspace artifacts. Use grep for workspace content search and find for path discovery.")
+		lines = append(lines, "- Use read for known workspace artifacts; do not guess filenames from package or directory names.")
+		discovery := make([]string, 0, 2)
+		if hasTool(spec, "ls") {
+			discovery = append(discovery, "inspect the parent directory with ls")
+		}
+		if hasTool(spec, "find") {
+			discovery = append(discovery, "discover the filename with find")
+		}
+		if len(discovery) > 0 {
+			lines = append(lines, "- If read returns not_found for a guessed path, do not retry the same path unchanged; "+strings.Join(discovery, " or ")+" before reading again.")
+		}
 	}
 	if hasTool(spec, tool.NameGrep) || hasTool(spec, "find") || hasTool(spec, "ls") {
 		parts := make([]string, 0, 3)

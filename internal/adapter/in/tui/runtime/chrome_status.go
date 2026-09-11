@@ -34,18 +34,23 @@ func (m bubbleModel) statusView() string {
 		}
 		activity = fmt.Sprintf("%s · %d %s", dota, activeAgents, label)
 	}
-	if activity == "" || activity == "ready" {
-		activity = "analyzing"
-	}
 	meta := ""
 	if activeAgents == 0 {
+		// Only an explicit label (a named call, cancellation, or background
+		// operation) outranks the derived signals. Everything else resolves
+		// deterministically: retry countdown, then the running tool, then the
+		// active profile's intent. No generic assistant busy word is invented.
+		explicit := activity != "" && activity != "ready"
 		if retryActivity, retryMeta, ok := modelRetryStatus(m.turnProgress.Retry, time.Now()); ok {
-			activity = retryActivity
-			meta = retryMeta
-		} else if running, ok := m.ensureHistoryState().LastRunningTool(); ok && activity == "analyzing" {
-			activity = tool.DisplayName(strings.TrimSpace(running.Name))
-			if target := strings.TrimSpace(running.Target); target != "" {
-				activity += " " + target
+			activity, meta = retryActivity, retryMeta
+		} else if !explicit {
+			if running, ok := m.ensureHistoryState().LastRunningTool(); ok {
+				activity = tool.DisplayName(strings.TrimSpace(running.Name))
+				if target := strings.TrimSpace(running.Target); target != "" {
+					activity += " " + target
+				}
+			} else {
+				activity = m.rootActivityLabel()
 			}
 		}
 		if meta == "" && m.turnProgress.ToolCalls > 0 {
@@ -57,13 +62,24 @@ func (m bubbleModel) statusView() string {
 		}
 	}
 	indicator := brandMarkStyle.Render("◌")
-	if spin := m.spinner.View(); spin != "" {
+	if spin := m.spinnerIndicator(); spin != "" {
 		indicator = spin
 	}
 	maxWidth := maxInt(1, m.layout.width-2)
 	contentWidth := maxInt(1, maxWidth-2-len([]rune(meta)))
 	activity = truncateWithEllipsis(activity, contentWidth)
 	return indicator + " " + systemStyle.Render(activity) + mutedStyle.Render(meta)
+}
+
+// rootActivityLabel is the deterministic busy label for the primary agent when
+// no tool, retry, or explicit activity is available. It comes from the active
+// profile's activity vocabulary rather than a generic assistant word.
+func (m bubbleModel) rootActivityLabel() string {
+	profile, err := agent.ParseProfile(strings.TrimSpace(m.agentProfile))
+	if err != nil || !profile.Valid() {
+		profile = agent.ProfileUniversal
+	}
+	return agentui.ActivityForState(profile, agent.StateRunning).String()
 }
 
 func dominantAgentActivity(snapshot []agent.AgentStatus, activities map[string]AgentActivity) string {
@@ -186,7 +202,13 @@ func modelRetryStatus(retry sdk.RetryEvent, now time.Time) (string, string, bool
 		}
 	}
 	activity := "retrying " + wait
-	if wait != "now" {
+	if retry.Phase == sdk.RetryPhaseCooldown {
+		if wait == "now" {
+			activity = "cooldown complete"
+		} else {
+			activity = "cooling down " + wait
+		}
+	} else if wait != "now" {
 		activity = "retrying in " + wait
 	}
 	meta := fmt.Sprintf(" · retry %d", retry.Attempt)
@@ -202,19 +224,19 @@ func modelRetryStatus(retry sdk.RetryEvent, now time.Time) (string, string, bool
 func retryReasonLabel(reason string) string {
 	switch strings.TrimSpace(reason) {
 	case "incomplete_stream":
-		return "stream incomplete"
+		return "stream interrupted"
 	case "first_event_timeout":
-		return "first response timeout"
+		return "provider slow"
 	case "idle_event_timeout":
-		return "stream idle"
+		return "stream stalled"
 	case "max_stream_duration":
 		return "stream limit"
 	case "rate_limit":
 		return "rate limited"
 	case "overloaded":
-		return "provider overloaded"
+		return "provider busy"
 	case "transport":
-		return "network retry"
+		return "connection interrupted"
 	}
 	return strings.ReplaceAll(strings.TrimSpace(reason), "_", " ")
 }

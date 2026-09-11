@@ -69,7 +69,7 @@ func (m *bubbleModel) updateProviderSaved(message providerSavedMsg) tea.Cmd {
 				return nil
 			}
 		}
-		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to save provider: %v", message.err)))
+		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to save provider: %v · run /provider to retry", message.err)))
 	} else {
 		providerName := strings.TrimSpace(message.providerName)
 		providerKey := strings.ToLower(providerName)
@@ -111,7 +111,7 @@ func (m *bubbleModel) updateModelSetupApplied(message modelSetupAppliedMsg) tea.
 	}
 	m.activeModelSetup = 0
 	if message.err != nil {
-		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to set active model: %v", message.err)))
+		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to set active model: %v · run /model to retry", message.err)))
 	} else {
 		m.activeModel = message.modelID
 		if message.providerName != "" {
@@ -139,7 +139,7 @@ func (m *bubbleModel) updateProviderActiveSelected(message providerActiveSelecte
 	}
 	m.activeProviderSelect = 0
 	if message.err != nil {
-		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to switch provider: %v", message.err)))
+		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to switch provider: %v · run /provider to retry", message.err)))
 	} else {
 		previousModel := m.activeModel
 		m.activeProvider = message.providerName
@@ -169,7 +169,7 @@ func (m *bubbleModel) updateProviderDeleted(message providerDeletedMsg) tea.Cmd 
 	}
 	m.activeProviderDelete = 0
 	if message.err != nil {
-		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to remove provider %s: %v", message.providerName, message.err)))
+		m.appendLine(errorStyle.Render(fmt.Sprintf("Failed to remove provider %s: %v · run /provider to retry", message.providerName, message.err)))
 	} else {
 		delete(m.providers, strings.ToLower(message.providerName))
 		m.modelCatalogs.Delete(message.providerName)

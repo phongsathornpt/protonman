@@ -47,8 +47,8 @@ type bottomPane struct {
 	views    []bottomPaneView
 }
 
-func newBottomPane(hasRunner bool) *bottomPane {
-	input := newPrompt(hasRunner)
+func newBottomPane(hasRunner bool, reducedMotion bool) *bottomPane {
+	input := newPrompt(hasRunner, reducedMotion)
 	return &bottomPane{composer: composerState{input: input, history: make([]string, 0), historyPos: 0}, views: make([]bottomPaneView, 0)}
 }
 
@@ -201,7 +201,7 @@ func (p *bottomPane) composerVisible() bool {
 	return top == nil || top.PresentationMode() != paneBlocking
 }
 
-func newPrompt(hasRunner bool) textarea.Model {
+func newPrompt(hasRunner bool, reducedMotion bool) textarea.Model {
 	prompt := textarea.New()
 	prompt.Placeholder = promptPlaceholder(hasRunner, permission.ModeAsk, false)
 	prompt.CharLimit = 0
@@ -214,6 +214,11 @@ func newPrompt(hasRunner bool) textarea.Model {
 	styles := prompt.Styles()
 	styles.Focused.CursorLine = lipgloss.NewStyle()
 	styles.Blurred.CursorLine = lipgloss.NewStyle()
+	// A static caret keeps the insertion point visible without self-running
+	// motion; bubbles maps Blink=false to its visible non-blinking cursor mode.
+	if reducedMotion {
+		styles.Cursor.Blink = false
+	}
 	prompt.SetStyles(styles)
 	applyPromptChrome(&prompt, false)
 	_ = prompt.Focus()

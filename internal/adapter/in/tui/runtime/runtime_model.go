@@ -16,6 +16,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/base/envconfig"
 	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
@@ -138,6 +139,7 @@ type presentationModelState struct {
 	help               help.Model
 	keys               bubbleKeyMap
 	planMode           bool
+	reducedMotion      bool
 	panes              paneState
 	showWelcome        bool
 	nextID             uint64
@@ -181,11 +183,12 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	spin := spinner.New()
 	spin.Spinner = spinner.Dot
 	spin.Style = brandStyle
+	reducedMotion := envconfig.Bool(envconfig.ReducedMotion)
 	pane := viewport.New(viewport.WithWidth(defaultBubbleWidth), viewport.WithHeight(defaultBubbleHeight-6))
 	disableViewportKeys(&pane)
 	transcriptPane := viewport.New(viewport.WithWidth(defaultBubbleWidth-8), viewport.WithHeight(defaultBubbleHeight-8))
 	disableViewportKeys(&transcriptPane)
-	bottom := newBottomPane(runner != nil)
+	bottom := newBottomPane(runner != nil, reducedMotion)
 	helpView := help.New()
 	helpView.SetWidth(defaultBubbleWidth - 2)
 	helpView.ShortSeparator = glyphSep
@@ -204,13 +207,14 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 			workDir: workDir,
 		},
 		presentationModelState: presentationModelState{
-			viewport:    pane,
-			spinner:     spin,
-			help:        helpView,
-			keys:        newBubbleKeyMap(),
-			panes:       paneState{bottom: bottom, transcript: transcriptPane},
-			showWelcome: true,
-			layout:      layoutState{width: defaultBubbleWidth, height: defaultBubbleHeight},
+			viewport:      pane,
+			spinner:       spin,
+			help:          helpView,
+			keys:          newBubbleKeyMap(),
+			panes:         paneState{bottom: bottom, transcript: transcriptPane},
+			showWelcome:   true,
+			reducedMotion: reducedMotion,
+			layout:        layoutState{width: defaultBubbleWidth, height: defaultBubbleHeight},
 		},
 		conversationModelState: conversationModelState{
 			historyState:          NewHistoryState(maxBubbleScrollback),
@@ -280,7 +284,22 @@ func (k bubbleKeyMap) FullHelp() [][]key.Binding {
 }
 
 func (m *bubbleModel) Init() tea.Cmd {
-	return tea.Batch(m.bridge.Next(), textarea.Blink, m.nextAgentEvent())
+	commands := []tea.Cmd{m.bridge.Next()}
+	// Reduced motion keeps the caret steady, so the blink loop never starts.
+	if !m.reducedMotion {
+		commands = append(commands, textarea.Blink)
+	}
+	commands = append(commands, m.nextAgentEvent())
+	return tea.Batch(commands...)
+}
+
+// spinnerIndicator returns the animated busy frame, or an empty string when
+// reduced motion is requested so callers fall back to the static brand mark.
+func (m *bubbleModel) spinnerIndicator() string {
+	if m == nil || m.reducedMotion {
+		return ""
+	}
+	return m.spinner.View()
 }
 
 func (m *bubbleModel) nextAgentEvent() tea.Cmd {

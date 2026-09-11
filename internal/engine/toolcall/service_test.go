@@ -1142,6 +1142,50 @@ func TestServiceRefreshResourcePreservesOriginalFailureAndAttachesEvidence(t *te
 	}
 }
 
+func TestServiceDiscoverResourcePreservesNotFoundAndAttachesEvidence(t *testing.T) {
+	recoveryArgs := json.RawMessage(`{"path":"internal/base/runtimepolicy"}`)
+	reader := &fakeHandler{definition: tool.Definition{
+		Name: "read", Description: "fake reader", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
+		Safety: workspaceReadSafety(),
+	}, firstErr: tool.NewToolError(tool.ErrorCodeNotFound, `not found: "internal/base/runtimepolicy/runtimepolicy.go"`).WithRecovery(tool.Recovery{
+		Action: tool.RecoveryDiscoverResource, Tool: "ls", Arguments: recoveryArgs,
+	})}
+	lister := &fakeHandler{definition: tool.Definition{
+		Name: "ls", Description: "fake lister", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly,
+		Safety: workspaceReadSafety(), PermissionDetailKey: "path",
+		InputSchema: map[string]any{
+			"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}},
+			"additionalProperties": false,
+		},
+	}}
+	policy, err := permission.NewPolicy(permission.Config{Default: permission.ActionAllow})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewService(recoveryRegistry{handlers: []tool.Handler{reader, lister}}, policy, WithMode(permission.ModeAlwaysApprove))
+	if err != nil {
+		t.Fatal(err)
+	}
+	call, _ := tool.NewCall("read-missing", "read", json.RawMessage(`{"path":"internal/base/runtimepolicy/runtimepolicy.go"}`))
+	result, err := service.Call(context.Background(), call)
+	if err == nil {
+		t.Fatal("Call() error = nil, want original not_found")
+	}
+	if reader.calls != 1 || lister.calls != 1 {
+		t.Fatalf("handler calls read=%d ls=%d, want 1 and 1", reader.calls, lister.calls)
+	}
+	if result.Failure == nil || result.Failure.Code != tool.ErrorCodeNotFound {
+		t.Fatalf("result failure = %#v, want not_found", result.Failure)
+	}
+	evidence := result.Failure.RecoveryEvidence
+	if evidence == nil || evidence.Action != tool.RecoveryDiscoverResource || evidence.Tool != "ls" || evidence.Output != "executed" {
+		t.Fatalf("discovery evidence = %#v", evidence)
+	}
+	if result.Output != "" || result.ToolName != "read" || result.CallID != call.ID {
+		t.Fatalf("discovery masqueraded as read success: %#v", result)
+	}
+}
+
 func TestServiceRecoversWithDedicatedWorkspaceReadTool(t *testing.T) {
 	recoveryArgs := json.RawMessage(`{"path":"screen.png","view":"image"}`)
 	bash := &fakeHandler{definition: tool.Definition{

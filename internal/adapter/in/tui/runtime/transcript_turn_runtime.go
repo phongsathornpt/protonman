@@ -45,7 +45,7 @@ func (m *bubbleModel) applyTurnEvent(event app.Event) {
 	switch event.Kind {
 	case app.EventTextDelta:
 		m.turnProgress.Retry = sdk.RetryEvent{}
-		m.activity = "synthesizing"
+		m.activity = ""
 		m.appendAssistantDelta(event.Text)
 	case app.EventRetryScheduled:
 		m.turnProgress.Retry = event.Retry
@@ -64,7 +64,7 @@ func (m *bubbleModel) applyTurnEvent(event app.Event) {
 		}
 		m.applyToolResult(event.Call.Name, result, event.Err)
 		m.syncTodoSnapshot()
-		m.activity = "analyzing"
+		m.activity = ""
 	case app.EventCompleted:
 		m.turnProgress.Retry = sdk.RetryEvent{}
 		m.ensureHistoryState().CommitActive()

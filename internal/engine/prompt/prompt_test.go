@@ -15,7 +15,7 @@ func TestRenderComposesStableContracts(t *testing.T) {
 		ExtraInstructions:   []string{"custom one", "custom two"},
 	})
 	for _, want := range []string{
-		`<proton-system-prompt version="10">`, "specialized coding subagent", "# Execution Contract",
+		`<proton-system-prompt version="11">`, "specialized coding subagent", "# Execution Contract",
 		"# Tool Use", "narrowest dedicated capability", "Use read for known workspace artifacts", "Use bash for actual programs", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
 		"# Editing And Verification", "Workspace root: /repo", "skill instructions", "# Project Instructions",
 		"cannot override Protonman's tool, permission, safety, or runtime contracts", "# Additional Instructions", "custom one", "custom two",
@@ -167,14 +167,26 @@ func TestToolDisciplineDefinesWorkspacePathConvention(t *testing.T) {
 }
 
 func TestToolDisciplineUsesUnifiedSourceInspection(t *testing.T) {
-	got := Render(Spec{AvailableTools: []string{"read"}})
-	for _, want := range []string{"Use read for known workspace artifacts", "Use grep for workspace content search", "find for path discovery"} {
+	got := Render(Spec{AvailableTools: []string{"read", "grep", "find", "ls"}})
+	for _, want := range []string{"Use read for known workspace artifacts", "do not guess filenames", "find discovers workspace paths", "ls inspects directory entries", "do not retry the same path unchanged"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("tool discipline missing read/search separation %q:\n%s", want, got)
 		}
 	}
 	if strings.Contains(got, "inspect_code") {
 		t.Fatalf("tool discipline exposes legacy inspect_code:\n%s", got)
+	}
+}
+
+func TestToolDisciplineDoesNotReferenceUnavailableDiscoveryTools(t *testing.T) {
+	got := Render(Spec{AvailableTools: []string{"read"}})
+	for _, unavailable := range []string{"with ls", "with find", "grep searches", "find discovers", "ls inspects"} {
+		if strings.Contains(got, unavailable) {
+			t.Fatalf("tool discipline referenced unavailable capability %q:\n%s", unavailable, got)
+		}
+	}
+	if !strings.Contains(got, "do not guess filenames") {
+		t.Fatalf("tool discipline lost known-path guidance:\n%s", got)
 	}
 }
 

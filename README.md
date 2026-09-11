@@ -258,7 +258,7 @@ Configure providers directly inside the TUI with `/provider` or via `~/.protonma
 
 `proton-sdk` owns provider-neutral agent messages, tools, streaming events, usage/finish metadata, model registry, middleware, and provider wire adapters. The Protonman CLI keeps permission policy, tool execution, sessions, and turn orchestration outside the SDK. See [`docs/proton-sdk.md`](docs/proton-sdk.md) for the agent-first SDK contract and provider extension boundaries.
 
-For OpenCode free models, Protonman retries a stream only when no visible text or tool call has been emitted yet. Recovery is bounded to two retries with backoff and a 30-second no-output watchdog per attempt; once visible output has started, an incomplete stream is surfaced instead of replayed to avoid duplicate output or tool calls. During provider or replay-safe stream backoff, the TUI shows a live countdown such as `retrying in 3s · retry 1/2 · stream incomplete`, driven by the retry deadline used by the request itself. Exhausted empty-response recovery is exposed as `EMPTY_RESPONSE`, while an abruptly terminated provider stream is `STREAM_INCOMPLETE`; both are presented as retryable provider failures.
+For OpenCode free models, Protonman retries a stream only when no visible text or tool call has been emitted yet. Recovery is bounded to two retries with a 500ms first backoff, then an explicit 2s cooldown before the final retry, plus a 30-second no-output watchdog per attempt; once visible output has started, an incomplete stream is surfaced instead of replayed to avoid duplicate output or tool calls. During provider or replay-safe stream backoff, the TUI shows user-facing state such as `retrying in <1s · retry 1/2 · provider slow` and `cooling down 2s · retry 2/2 · provider slow`, driven by the retry deadline used by the request itself. Internal retry diagnostics stay out of the interactive transcript unless debug logging is explicitly enabled. Exhausted empty-response recovery is exposed as `EMPTY_RESPONSE`, while an abruptly terminated provider stream is `STREAM_INCOMPLETE`; both are presented as retryable provider failures.
 
 ---
 
@@ -365,7 +365,7 @@ subagents_enabled = true
 max_tool_calls = 100
 max_live_subagents = 16
 max_retained_subagents = 64
-subagent_queue_timeout = "30s"
+subagent_queue_timeout = "2m"
 subagent_wait_timeout = "30s"
 subagent_max_runtime = "30m"
 completed_result_ttl = "24h"

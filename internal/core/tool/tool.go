@@ -242,6 +242,7 @@ type RecoveryAction string
 const (
 	RecoveryRestartPagination RecoveryAction = "restart_pagination"
 	RecoveryRefreshResource   RecoveryAction = "refresh_resource"
+	RecoveryDiscoverResource  RecoveryAction = "discover_resource"
 	RecoveryUseDedicatedTool  RecoveryAction = "use_dedicated_tool"
 )
 

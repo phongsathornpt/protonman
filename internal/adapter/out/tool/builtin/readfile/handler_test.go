@@ -217,6 +217,16 @@ func TestReadFileMissingTargetIsNotFound(t *testing.T) {
 	if strings.Contains(failure.Message, "execution_error") {
 		t.Fatalf("missing path leaked execution_error semantics: %q", failure.Message)
 	}
+	if failure.Recovery == nil || failure.Recovery.Action != tool.RecoveryDiscoverResource || failure.Recovery.Tool != tool.NameLS {
+		t.Fatalf("recovery = %#v, want parent-directory discovery", failure.Recovery)
+	}
+	var args map[string]any
+	if err := json.Unmarshal(failure.Recovery.Arguments, &args); err != nil {
+		t.Fatalf("decode recovery arguments: %v", err)
+	}
+	if got := args["path"]; got != "worker/src/infrastructure" {
+		t.Fatalf("recovery parent = %#v, want worker/src/infrastructure", got)
+	}
 }
 
 func TestReadFileDirectorySuggestsListDirRecovery(t *testing.T) {

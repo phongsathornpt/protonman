@@ -32,7 +32,7 @@ func (readFileHandler) Definition() tool.Definition {
 			"properties": map[string]any{
 				"path": map[string]any{
 					"type":        "string",
-					"description": "Workspace-relative artifact path. Use ls/find/grep to discover files; absolute paths are outside the workspace",
+					"description": "Workspace-relative artifact path. Use ls/find/grep to discover files instead of guessing filenames; absolute paths are outside the workspace",
 				},
 				"view": map[string]any{
 					"type":        "string",

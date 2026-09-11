@@ -485,8 +485,8 @@ func (s *Service) recoverCall(ctx context.Context, telemetry callTelemetry, hand
 	switch failure.Recovery.Action {
 	case tool.RecoveryRestartPagination:
 		return s.recoverPagination(ctx, telemetry, handler, definition, validators, call, failure.Recovery)
-	case tool.RecoveryRefreshResource:
-		return s.recoverRefreshResource(ctx, telemetry, call, err, failure.Recovery, recoveryDepth)
+	case tool.RecoveryRefreshResource, tool.RecoveryDiscoverResource:
+		return s.recoverResourceEvidence(ctx, telemetry, call, err, failure.Recovery, recoveryDepth)
 	case tool.RecoveryUseDedicatedTool:
 		return s.recoverDedicatedTool(ctx, telemetry, call, failure.Recovery, recoveryDepth)
 	default:
@@ -516,7 +516,7 @@ func (s *Service) recoverPagination(ctx context.Context, telemetry callTelemetry
 	return result, retryErr, true
 }
 
-func (s *Service) recoverRefreshResource(ctx context.Context, telemetry callTelemetry, call tool.Call, originalErr error, recovery *tool.Recovery, recoveryDepth int) (tool.Result, error, bool) {
+func (s *Service) recoverResourceEvidence(ctx context.Context, telemetry callTelemetry, call tool.Call, originalErr error, recovery *tool.Recovery, recoveryDepth int) (tool.Result, error, bool) {
 	if recoveryDepth > 0 || recovery == nil || strings.TrimSpace(recovery.Tool) == "" {
 		return tool.Result{}, nil, false
 	}

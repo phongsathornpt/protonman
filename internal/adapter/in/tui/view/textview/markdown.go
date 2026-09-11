@@ -10,15 +10,40 @@ import (
 )
 
 var (
-	markdownHeadingStyle = tuistyle.MarkdownHeadingStyle
-	markdownCodeStyle    = tuistyle.MarkdownCodeStyle
-	markdownQuoteStyle   = tuistyle.MarkdownQuoteStyle
-	markdownBulletStyle  = tuistyle.MarkdownBulletStyle
-	markdownBoldStyle    = tuistyle.MarkdownBoldStyle
-	markdownCodeInline   SimpleANSIStyle
-	markdownBoldInline   SimpleANSIStyle
-	markdownLinkInline   SimpleANSIStyle
+	markdownH1Style     = tuistyle.MarkdownHeadingStyle
+	markdownH2Style     = tuistyle.MarkdownH2Style
+	markdownH3Style     = tuistyle.MarkdownH3Style
+	markdownItalicStyle = tuistyle.MarkdownItalicStyle
+	markdownCodeStyle   = tuistyle.MarkdownCodeStyle
+	markdownQuoteStyle  = tuistyle.MarkdownQuoteStyle
+	markdownBulletStyle = tuistyle.MarkdownBulletStyle
+	markdownBoldStyle   = tuistyle.MarkdownBoldStyle
+	markdownCodeInline  SimpleANSIStyle
+	markdownBoldInline  SimpleANSIStyle
+	markdownLinkInline  SimpleANSIStyle
+	markdownEmInline    SimpleANSIStyle
 )
+
+// proseWidth caps prose measure so long model output stays readable on wide
+// terminals. Fenced code deliberately keeps the full available width because
+// its alignment carries meaning.
+func proseWidth(width int) int {
+	if width > tuistyle.MeasureProse {
+		return tuistyle.MeasureProse
+	}
+	return width
+}
+
+func markdownHeadingStyleForLevel(level int) lipgloss.Style {
+	switch {
+	case level <= 1:
+		return markdownH1Style
+	case level == 2:
+		return markdownH2Style
+	default:
+		return markdownH3Style
+	}
+}
 
 type SimpleANSIStyle struct {
 	once     sync.Once
@@ -102,11 +127,11 @@ func RenderMarkdownLine(raw string, width int, state *MarkdownState) []string {
 	if trimmed == "" {
 		return []string{""}
 	}
-	if heading, ok := markdownHeading(trimmed); ok {
-		return RenderMarkdownWrapped(heading, width, markdownHeadingStyle)
+	if heading, level, ok := markdownHeading(trimmed); ok {
+		return RenderMarkdownWrapped(heading, width, markdownHeadingStyleForLevel(level))
 	}
 	if quote, ok := markdownQuote(trimmed); ok {
-		wrapped := WrapLines(quote, max(1, width-4))
+		wrapped := WrapLines(quote, max(1, proseWidth(width)-4))
 		out := make([]string, 0, len(wrapped))
 		for _, part := range wrapped {
 			out = append(out, markdownQuoteStyle.Render("  │ "+part))
@@ -114,7 +139,7 @@ func RenderMarkdownLine(raw string, width int, state *MarkdownState) []string {
 		return out
 	}
 	if marker, item, ok := markdownListItem(trimmed); ok {
-		itemWidth := max(1, width-lipgloss.Width(marker)-2)
+		itemWidth := max(1, proseWidth(width)-lipgloss.Width(marker)-2)
 		wrapped := WrapLines(item, itemWidth)
 		out := make([]string, 0, len(wrapped))
 		for index, part := range wrapped {
@@ -130,7 +155,7 @@ func RenderMarkdownLine(raw string, width int, state *MarkdownState) []string {
 }
 
 func RenderMarkdownBodyWrapped(text string, width int) []string {
-	wrapped := WrapLines(text, width)
+	wrapped := WrapLines(text, proseWidth(width))
 	for index := range wrapped {
 		wrapped[index] = tuistyle.BodyStyle.Render(styleInlineMarkdown(wrapped[index]))
 	}
@@ -138,22 +163,22 @@ func RenderMarkdownBodyWrapped(text string, width int) []string {
 }
 
 func RenderMarkdownWrapped(text string, width int, style lipgloss.Style) []string {
-	wrapped := WrapLines(text, width)
+	wrapped := WrapLines(text, proseWidth(width))
 	for index := range wrapped {
 		wrapped[index] = style.Render(styleInlineMarkdown(wrapped[index]))
 	}
 	return wrapped
 }
 
-func markdownHeading(line string) (string, bool) {
+func markdownHeading(line string) (string, int, bool) {
 	count := 0
 	for count < len(line) && line[count] == '#' {
 		count++
 	}
 	if count == 0 || count > 6 || count >= len(line) || line[count] != ' ' {
-		return "", false
+		return "", 0, false
 	}
-	return strings.TrimSpace(line[count:]), true
+	return strings.TrimSpace(line[count:]), count, true
 }
 
 func markdownQuote(line string) (string, bool) {
@@ -208,6 +233,12 @@ func styleInlineMarkdown(text string) string {
 				index = end + 2
 				continue
 			}
+		case text[index] == '*':
+			if end := emphasisEnd(text, index); end > index+1 {
+				markdownEmInline.WriteTo(&out, markdownItalicStyle, text[index+1:end])
+				index = end + 1
+				continue
+			}
 		case text[index] == '[':
 			if close := strings.IndexByte(text[index+1:], ']'); close >= 0 {
 				close += index + 1
@@ -225,6 +256,27 @@ func styleInlineMarkdown(text string) string {
 		index++
 	}
 	return out.String()
+}
+
+// emphasisEnd returns the closing delimiter index for a single-asterisk
+// emphasis span, or -1 when the asterisk is not a valid opener. Code spans win
+// over emphasis, and space-padded asterisks stay literal.
+func emphasisEnd(text string, open int) int {
+	if open+1 >= len(text) || text[open+1] == ' ' || text[open+1] == '*' {
+		return -1
+	}
+	for index := open + 1; index < len(text); index++ {
+		switch text[index] {
+		case '`':
+			return -1
+		case '*':
+			if text[index-1] == ' ' {
+				return -1
+			}
+			return index
+		}
+	}
+	return -1
 }
 
 func TrimTrailingBlankLines(lines []string) []string {

@@ -6,6 +6,13 @@ import (
 	"time"
 )
 
+type RetryPhase string
+
+const (
+	RetryPhaseWaiting  RetryPhase = "waiting"
+	RetryPhaseCooldown RetryPhase = "cooldown"
+)
+
 // RetryEvent describes one bounded model retry before the retry wait begins.
 type RetryEvent struct {
 	Provider   string
@@ -13,6 +20,7 @@ type RetryEvent struct {
 	Reason     string
 	Attempt    int
 	MaxRetries int
+	Phase      RetryPhase
 	Delay      time.Duration
 	RetryAt    time.Time
 }
@@ -52,6 +60,13 @@ func ObserveRetry(ctx context.Context, event RetryEvent) {
 	}
 	if event.Delay < 0 {
 		event.Delay = 0
+	}
+	if event.Phase == "" {
+		if event.Attempt > 1 {
+			event.Phase = RetryPhaseCooldown
+		} else {
+			event.Phase = RetryPhaseWaiting
+		}
 	}
 	if event.RetryAt.IsZero() {
 		event.RetryAt = time.Now().Add(event.Delay)

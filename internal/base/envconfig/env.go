@@ -13,6 +13,10 @@ const (
 	Telemetry    = "PROTONMAN_TELEMETRY"
 	DebugLog     = "PROTONMAN_DEBUG_LOG"
 	ForceTTY     = "PROTONMAN_FORCE_TTY"
+	// ReducedMotion replaces the TUI's self-running animation (the busy spinner
+	// and the caret blink) with static indicators that carry the same meaning.
+	// Functional signals, including activity text and retry countdowns, stay live.
+	ReducedMotion = "PROTONMAN_REDUCED_MOTION"
 )
 
 // Value reads one canonical Protonman environment variable.

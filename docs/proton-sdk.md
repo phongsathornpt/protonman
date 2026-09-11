@@ -67,12 +67,14 @@ provider code, message, and retryability. HTTP and streaming errors use the same
 error type, so callers can use `errors.As` instead of parsing provider strings.
 
 Retry and bounded backoff policy belongs to the SDK/provider boundary rather than the
-turn engine. Callers that need user-visible progress can attach `WithRetryObserver` to
-the request context; `RetryEvent` reports provider/model, reason, retry index/budget,
-delay, and the exact `RetryAt` deadline before the wait begins. Observers are additive
-and do not alter retry policy. Model streams must be closed exactly once on success and
-on every failure/cancellation path; when processing and close both fail, preserve the
-original processing failure as the primary error.
+turn engine. `RetryPolicy.PostFirstRetryGap` adds an explicit cooldown only after the
+first retry; provider `Retry-After` metadata still takes precedence over local timing.
+Callers that need user-visible progress can attach `WithRetryObserver` to the request
+context; `RetryEvent` reports provider/model, reason, retry index/budget, phase
+(`waiting` or `cooldown`), delay, and the exact `RetryAt` deadline before the wait
+begins. Observers are additive and do not alter retry policy. Model streams must be
+closed exactly once on success and on every failure/cancellation path; when processing
+and close both fail, preserve the original processing failure as the primary error.
 
 ## Providers
 
