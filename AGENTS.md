@@ -515,7 +515,7 @@ Important turn responsibilities include:
 - deadline propagation
 - reasoning policy
 - mutation verification state
-- event-driven subagent result delivery and completion barriers
+- event-driven subagent result delivery, completion barriers, and redacted synthesis-efficiency telemetry (`subagent_result_bytes`, consumed/duplicate bytes, synthesis agents, and wait-snapshot bytes)
 
 At least one global termination bound must remain active. Do not accidentally
 construct an unbounded model/tool loop by disabling both tool-count and time bounds.

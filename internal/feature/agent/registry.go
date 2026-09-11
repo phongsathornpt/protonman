@@ -113,7 +113,7 @@ func (c *Coordinator) waitActivity(ctx context.Context, ref TurnRef, after *uint
 	}
 
 	if result, notify := consume(); len(result.Events) > 0 {
-		result.Agents = c.activitySnapshot(ref)
+		c.attachActivitySnapshot(ctx, ref, &result)
 		return result, nil
 	} else {
 		waitCtx := ctx
@@ -125,18 +125,29 @@ func (c *Coordinator) waitActivity(ctx context.Context, ref TurnRef, after *uint
 		select {
 		case <-notify:
 			result, _ := consume()
-			result.Agents = c.activitySnapshot(ref)
+			c.attachActivitySnapshot(ctx, ref, &result)
 			return result, nil
 		case <-waitCtx.Done():
 			if errors.Is(waitCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
 				c.observeMetric(ctx, MetricEvent{Kind: MetricWaitTimeout, SessionID: ref.SessionID, ParentID: ref.TurnID})
-				result.Agents = c.activitySnapshot(ref)
+				c.attachActivitySnapshot(ctx, ref, &result)
 				result.TimedOut = true
 				return result, nil
 			}
 			return ActivityWaitResult{}, waitCtx.Err()
 		}
 	}
+}
+
+func (c *Coordinator) attachActivitySnapshot(ctx context.Context, ref TurnRef, result *ActivityWaitResult) {
+	if result == nil {
+		return
+	}
+	result.Agents = c.activitySnapshot(ref)
+	c.observeMetric(ctx, MetricEvent{
+		Kind: MetricWaitSnapshotBytes, SessionID: ref.SessionID, ParentID: ref.TurnID,
+		Bytes: metricJSONBytes(result.Agents), Count: len(result.Agents),
+	})
 }
 
 func activityEventsAfter(mailbox *activityMailbox, after uint64) ([]Event, uint64, bool) {

@@ -246,6 +246,13 @@ func (c *Coordinator) emitStoredResult(ctx context.Context, entry *agentEntry, r
 	if version == 0 {
 		return
 	}
+	ref := ResultRef{SessionID: req.SessionID, AgentID: req.ID, Version: version}
+	if stored, ok := c.LookupResult(ref); ok {
+		c.observeMetric(ctx, MetricEvent{
+			Kind: MetricResultBytes, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID,
+			Profile: req.Profile, Bytes: metricJSONBytes(stored), Count: 1,
+		})
+	}
 	c.emit(ctx, Event{
 		Kind: EventAgentResultAvailable, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID,
 		Profile: req.Profile, ResultVersion: version, QueueDuration: res.QueueDuration,

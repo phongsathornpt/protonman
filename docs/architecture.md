@@ -144,7 +144,7 @@ nor a protocol adapter:
 
 - `checkpoint/`: bounded pre-mutation checkpoint persistence.
 - `sandbox/`: OS-specific confinement and process launch behavior.
-- `telemetry/`: runtime telemetry infrastructure.
+- `telemetry/`: runtime telemetry infrastructure. Subagent orchestration reports redacted result-size, consumed-size, duplicate-suppression, synthesis-batch, and diagnostic wait-snapshot measurements without task or model-output content.
 
 ## 9. Foundational Utilities (`internal/base/`)
 

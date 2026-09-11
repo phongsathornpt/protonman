@@ -137,3 +137,34 @@ func TestSlogObserverCountsRedactedAgentLifecycle(t *testing.T) {
 		}
 	}
 }
+
+func TestSlogObserverCountsAgentSynthesisMeasurements(t *testing.T) {
+	var output bytes.Buffer
+	observer, err := NewSlogObserver(slog.New(slog.NewJSONHandler(&output, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	observer.ObserveAgentMetric(context.Background(), "subagent_result_bytes", "agility-1", "turn-1", "agility", 120, 1)
+	observer.ObserveAgentMetric(context.Background(), "subagent_result_consumed_bytes", "agility-1", "turn-1", "agility", 100, 1)
+	observer.ObserveAgentMetric(context.Background(), "subagent_duplicate_result_bytes", "agility-1", "turn-1", "agility", 40, 1)
+	observer.ObserveAgentMetric(context.Background(), "subagent_wait_snapshot_bytes", "", "turn-1", "", 64, 2)
+	observer.ObserveAgentMetric(context.Background(), "subagent_synthesis_agents", "", "turn-1", "", 0, 3)
+
+	counters := observer.Counters()
+	want := map[string]uint64{
+		"subagent_result_bytes": 120, "subagent_result_consumed_bytes": 100,
+		"subagent_duplicate_result_bytes": 40, "subagent_wait_snapshot_bytes": 64,
+		"subagent_synthesis_agents": 3, "subagent_synthesis_batches_total": 1,
+	}
+	for name, expected := range want {
+		if counters[name] != expected {
+			t.Fatalf("%s=%d want=%d counters=%#v", name, counters[name], expected, counters)
+		}
+	}
+	logLine := output.String()
+	for _, expected := range []string{`"event_kind":"subagent_synthesis_agents"`, `"bytes":120`, `"count":3`} {
+		if !strings.Contains(logLine, expected) {
+			t.Fatalf("synthesis telemetry missing %q: %s", expected, logLine)
+		}
+	}
+}

@@ -65,7 +65,7 @@ func (s *SynthesisCoordinator) DrainReady(ref TurnRef) (SynthesisBatch, error) {
 	state := s.stateFor(ref)
 	state.mu.Lock()
 	defer state.mu.Unlock()
-	results, err := s.resolveUnseenLocked(state, s.source.ResultRefsForTurn(ref))
+	results, err := s.resolveUnseenLocked(context.Background(), state, ref, s.source.ResultRefsForTurn(ref))
 	if err != nil {
 		return SynthesisBatch{}, err
 	}
@@ -92,7 +92,7 @@ func (s *SynthesisCoordinator) Drain(ctx context.Context, ref TurnRef, timeout t
 		refs = mergeResultRefs(refs, s.source.ResultRefsForTurn(ref))
 	}
 
-	results, err := s.resolveUnseenLocked(state, refs)
+	results, err := s.resolveUnseenLocked(ctx, state, ref, refs)
 	if err != nil {
 		return SynthesisBatch{}, err
 	}
@@ -132,11 +132,17 @@ func mergeResultRefs(primary, fallback []ResultRef) []ResultRef {
 	}
 	return out
 }
-func (s *SynthesisCoordinator) resolveUnseenLocked(state *synthesisConsumerState, refs []ResultRef) ([]SynthesisResult, error) {
+func (s *SynthesisCoordinator) resolveUnseenLocked(ctx context.Context, state *synthesisConsumerState, turn TurnRef, refs []ResultRef) ([]SynthesisResult, error) {
 	results := make([]SynthesisResult, 0, len(refs))
 	for _, resultRef := range refs {
 		resultRef = resultRef.normalized()
 		if _, seen := state.delivered[resultRef]; seen {
+			if result, ok := s.source.LookupResult(resultRef); ok {
+				s.source.observeMetric(ctx, MetricEvent{
+					Kind: MetricDuplicateResultBytes, SessionID: turn.SessionID, AgentID: resultRef.AgentID,
+					ParentID: turn.TurnID, Profile: result.Profile, Bytes: metricJSONBytes(result), Count: 1,
+				})
+			}
 			continue
 		}
 		result, ok := s.source.LookupResult(resultRef)
@@ -145,6 +151,15 @@ func (s *SynthesisCoordinator) resolveUnseenLocked(state *synthesisConsumerState
 		}
 		state.delivered[resultRef] = struct{}{}
 		results = append(results, SynthesisResult{Ref: resultRef, Result: result})
+		s.source.observeMetric(ctx, MetricEvent{
+			Kind: MetricResultConsumedBytes, SessionID: turn.SessionID, AgentID: resultRef.AgentID,
+			ParentID: turn.TurnID, Profile: result.Profile, Bytes: metricJSONBytes(result), Count: 1,
+		})
+	}
+	if len(results) > 0 {
+		s.source.observeMetric(ctx, MetricEvent{
+			Kind: MetricSynthesisAgents, SessionID: turn.SessionID, ParentID: turn.TurnID, Count: len(results),
+		})
 	}
 	return results, nil
 }
