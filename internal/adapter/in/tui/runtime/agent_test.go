@@ -604,3 +604,27 @@ func TestStatusViewPrefersHighestSignalAgentActivity(t *testing.T) {
 		t.Fatalf("status=%q, want defending priority", got)
 	}
 }
+
+func TestConsumedResultProjectsIntegratedActivityForCompletedAgent(t *testing.T) {
+	release := make(chan struct{})
+	close(release)
+	coord := agent.NewCoordinator(nil, nil, nil, nil, agent.WithRunnerFactory(func(agent.Profile, *toolcall.Service) (turn.Runner, error) {
+		return blockingAgentViewRunner{release: release}, nil
+	}))
+	defer coord.Close()
+	handle, err := coord.Spawn(context.Background(), agent.Request{Profile: agent.ProfileAgility, Task: "inspect flow"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := coord.Wait(context.Background(), handle.ID, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	m := newTestBubbleModel(t, permission.ModeAsk, nil)
+	m.agents = app.NewAgents(coord)
+	m.updateAgentLifecycle(agentLifecycleMsg{event: agent.Event{
+		Kind: agent.EventAgentResultConsumed, AgentID: handle.ID, Profile: agent.ProfileAgility, ResultVersion: 1,
+	}})
+	if got := m.agentActivity[handle.ID].Intent; got != agentui.ActivityIntegrated {
+		t.Fatalf("activity=%q, want integrated", got)
+	}
+}

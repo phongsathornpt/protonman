@@ -86,6 +86,11 @@ func (c AgentRunCell) detail() string {
 		if summary := strings.TrimSpace(c.Summary); summary != "" {
 			return summary
 		}
+		if c.State == agent.StateCompleted {
+			if activity := strings.TrimSpace(c.Activity); activity != "" {
+				return activity
+			}
+		}
 		switch c.State {
 		case agent.StateCanceled:
 			return "canceled"

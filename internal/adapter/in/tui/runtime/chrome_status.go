@@ -99,7 +99,7 @@ func agentActivityRank(intent agentui.ActivityIntent) int {
 		return 60
 	case agentui.ActivityGanking:
 		return 50
-	case agentui.ActivitySticking:
+	case agentui.ActivitySticking, agentui.ActivityIntegrated:
 		return 45
 	case agentui.ActivitySkilling:
 		return 40

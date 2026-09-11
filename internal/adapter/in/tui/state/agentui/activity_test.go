@@ -47,6 +47,8 @@ func TestActivityFromEventProjectsToolSemantics(t *testing.T) {
 		{agent.Event{Kind: agent.EventAgentProgress, Profile: agent.ProfileStrength, Call: call("edit", `{"action":"write","file_path":"session.go","content":"x"}`)}, ActivityPushing},
 		{agent.Event{Kind: agent.EventAgentProgress, Profile: agent.ProfileStrength, Call: call("bash", `{"command":"go test -race ./..."}`)}, ActivityDefending},
 		{agent.Event{Kind: agent.EventAgentResultAvailable, Profile: agent.ProfileAgility}, ActivitySticking},
+		{agent.Event{Kind: agent.EventAgentResultConsumed, Profile: agent.ProfileAgility}, ActivityIntegrated},
+		{agent.Event{Kind: agent.EventAgentResultConsumed, Profile: agent.ProfileAgility, Err: context.Canceled}, ActivityRetreating},
 		{agent.Event{Kind: agent.EventAgentFailed, Profile: agent.ProfileAgility, Err: context.Canceled}, ActivityRetreating},
 	}
 	for _, tc := range cases {

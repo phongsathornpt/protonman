@@ -28,6 +28,7 @@ type synthesisConsumerState struct {
 	mu        sync.Mutex
 	cursor    EventCursor
 	delivered map[ResultRef]struct{}
+	consumed  map[ResultRef]struct{}
 }
 
 // SynthesisCoordinator converts low-level result-availability events into
@@ -48,7 +49,7 @@ func (s *SynthesisCoordinator) stateFor(ref TurnRef) *synthesisConsumerState {
 	defer s.mu.Unlock()
 	state := s.states[key]
 	if state == nil {
-		state = &synthesisConsumerState{delivered: make(map[ResultRef]struct{})}
+		state = &synthesisConsumerState{delivered: make(map[ResultRef]struct{}), consumed: make(map[ResultRef]struct{})}
 		s.states[key] = state
 	}
 	return state
@@ -103,6 +104,44 @@ func (s *SynthesisCoordinator) Drain(ctx context.Context, ref TurnRef, timeout t
 	}, nil
 }
 
+// MarkConsumed acknowledges that a resolved batch was successfully encoded for
+// parent runtime delivery. Consumption is idempotent per versioned result.
+func (s *SynthesisCoordinator) MarkConsumed(ctx context.Context, batch SynthesisBatch) {
+	if s == nil || s.source == nil || len(batch.Results) == 0 {
+		return
+	}
+	turn := batch.Turn.normalized()
+	state := s.stateFor(turn)
+	type consumedResult struct {
+		ref    ResultRef
+		result Result
+	}
+	consumed := make([]consumedResult, 0, len(batch.Results))
+	state.mu.Lock()
+	for _, item := range batch.Results {
+		ref := item.Ref.normalized()
+		if !ref.valid() {
+			continue
+		}
+		if _, ok := state.consumed[ref]; ok {
+			continue
+		}
+		state.consumed[ref] = struct{}{}
+		consumed = append(consumed, consumedResult{ref: ref, result: item.Result})
+	}
+	state.mu.Unlock()
+	for _, item := range consumed {
+		s.source.observeMetric(ctx, MetricEvent{
+			Kind: MetricResultConsumedBytes, SessionID: turn.SessionID, AgentID: item.ref.AgentID,
+			ParentID: turn.TurnID, Profile: item.result.Profile, Bytes: metricJSONBytes(item.result), Count: 1,
+		})
+		s.source.emit(ctx, Event{
+			Kind: EventAgentResultConsumed, SessionID: turn.SessionID, ParentID: turn.TurnID,
+			AgentID: item.ref.AgentID, Profile: item.result.Profile, ResultVersion: item.ref.Version, Err: item.result.Err,
+		})
+	}
+}
+
 func resultRefsFromEvents(events []Event) []ResultRef {
 	refs := make([]ResultRef, 0, len(events))
 	for _, event := range events {
@@ -151,10 +190,6 @@ func (s *SynthesisCoordinator) resolveUnseenLocked(ctx context.Context, state *s
 		}
 		state.delivered[resultRef] = struct{}{}
 		results = append(results, SynthesisResult{Ref: resultRef, Result: result})
-		s.source.observeMetric(ctx, MetricEvent{
-			Kind: MetricResultConsumedBytes, SessionID: turn.SessionID, AgentID: resultRef.AgentID,
-			ParentID: turn.TurnID, Profile: result.Profile, Bytes: metricJSONBytes(result), Count: 1,
-		})
 	}
 	if len(results) > 0 {
 		s.source.observeMetric(ctx, MetricEvent{

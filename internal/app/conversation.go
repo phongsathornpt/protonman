@@ -215,7 +215,7 @@ func (p *subagentRuntimeContextProvider) Drain(ctx context.Context) ([]model.Mes
 	if err != nil {
 		return nil, err
 	}
-	return synthesisBatchMessages(batch)
+	return p.consumeBatch(ctx, batch)
 }
 
 func (p *subagentRuntimeContextProvider) Await(ctx context.Context) ([]model.Message, error) {
@@ -232,7 +232,7 @@ func (p *subagentRuntimeContextProvider) Await(ctx context.Context) ([]model.Mes
 			return nil, err
 		}
 		if len(ready.Results) > 0 {
-			return synthesisBatchMessages(ready)
+			return p.consumeBatch(ctx, ready)
 		}
 		if !p.coordinator.HasBlockingLiveForTurn(ref) {
 			return nil, nil
@@ -242,9 +242,20 @@ func (p *subagentRuntimeContextProvider) Await(ctx context.Context) ([]model.Mes
 			return nil, err
 		}
 		if len(batch.Results) > 0 {
-			return synthesisBatchMessages(batch)
+			return p.consumeBatch(ctx, batch)
 		}
 	}
+}
+
+func (p *subagentRuntimeContextProvider) consumeBatch(ctx context.Context, batch agent.SynthesisBatch) ([]model.Message, error) {
+	messages, err := synthesisBatchMessages(batch)
+	if err != nil {
+		return nil, err
+	}
+	if len(messages) > 0 {
+		p.synthesis.MarkConsumed(ctx, batch)
+	}
+	return messages, nil
 }
 
 func (p *subagentRuntimeContextProvider) Finalize(ctx context.Context) {

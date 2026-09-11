@@ -105,3 +105,50 @@ func TestSynthesisCoordinatorRecoversWhenResultStreamTruncates(t *testing.T) {
 		t.Fatalf("recovered results = %d, want %d", len(batch.Results), count)
 	}
 }
+
+func TestSynthesisCoordinatorMarksConsumedOnceWithoutRequeue(t *testing.T) {
+	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil)
+	defer coord.Close()
+	turnRef := TurnRef{SessionID: "session-a", TurnID: "turn-consumed"}
+	resultRef := ResultRef{SessionID: turnRef.SessionID, AgentID: "agility-consumed", Version: 1}
+	coord.resultStore.Put(resultRef, Result{
+		SessionID: turnRef.SessionID, AgentID: resultRef.AgentID,
+		Profile: ProfileAgility, Conclusion: "done",
+	})
+	coord.recordResultEvent(Event{
+		Kind: EventAgentResultAvailable, SessionID: turnRef.SessionID, ParentID: turnRef.TurnID,
+		AgentID: resultRef.AgentID, Profile: ProfileAgility, ResultVersion: resultRef.Version,
+	})
+
+	events, unsubscribe := coord.Subscribe(4)
+	defer unsubscribe()
+	synth := NewSynthesisCoordinator(coord)
+	batch, err := synth.Drain(context.Background(), turnRef, time.Second)
+	if err != nil || len(batch.Results) != 1 {
+		t.Fatalf("drain=%+v err=%v", batch, err)
+	}
+	synth.MarkConsumed(context.Background(), batch)
+	synth.MarkConsumed(context.Background(), batch)
+
+	select {
+	case event := <-events:
+		if event.Kind != EventAgentResultConsumed || event.AgentID != resultRef.AgentID || event.ResultVersion != 1 {
+			t.Fatalf("consumed event=%+v", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("missing consumed event")
+	}
+	select {
+	case event := <-events:
+		t.Fatalf("duplicate consumed event=%+v", event)
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	stream, err := coord.WaitResultEventsAfter(context.Background(), turnRef, 0, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stream.Events) != 1 || stream.Events[0].Kind != EventAgentResultAvailable {
+		t.Fatalf("result stream=%+v, want availability event only", stream.Events)
+	}
+}

@@ -44,6 +44,8 @@ func TestSynthesisMetricsMeasureDeliveryAndSuppression(t *testing.T) {
 	if err != nil || len(batch.Results) != 1 {
 		t.Fatalf("first drain=%+v err=%v", batch, err)
 	}
+	synth.MarkConsumed(context.Background(), batch)
+	synth.MarkConsumed(context.Background(), batch)
 	batch, err = synth.DrainReady(ref)
 	if err != nil || len(batch.Results) != 0 {
 		t.Fatalf("second drain=%+v err=%v", batch, err)

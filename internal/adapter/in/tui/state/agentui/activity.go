@@ -22,6 +22,7 @@ const (
 	ActivityCare       ActivityIntent = "care"
 	ActivityRetreating ActivityIntent = "retreating"
 	ActivitySticking   ActivityIntent = "sticking"
+	ActivityIntegrated ActivityIntent = "integrated"
 	ActivityDefending  ActivityIntent = "defending"
 	ActivityReady      ActivityIntent = "ready"
 )
@@ -46,6 +47,8 @@ func (i ActivityIntent) Label() string {
 		return "B"
 	case ActivitySticking:
 		return "Sticking"
+	case ActivityIntegrated:
+		return "Integrated"
 	case ActivityDefending:
 		return "Defending"
 	case ActivityReady:
@@ -86,6 +89,14 @@ func ActivityFromEvent(ev agent.Event) Activity {
 		return activity(defaultIntent(ev.Profile), "", "", "")
 	case agent.EventAgentResultAvailable:
 		return activity(ActivitySticking, "", "", "")
+	case agent.EventAgentResultConsumed:
+		if errors.Is(ev.Err, context.Canceled) {
+			return activity(ActivityRetreating, "", "", "")
+		}
+		if ev.Err != nil {
+			return activity(ActivityCare, "", "", "")
+		}
+		return activity(ActivityIntegrated, "", "", "")
 	case agent.EventAgentFailed:
 		if errors.Is(ev.Err, context.Canceled) {
 			return activity(ActivityRetreating, "", "", "")

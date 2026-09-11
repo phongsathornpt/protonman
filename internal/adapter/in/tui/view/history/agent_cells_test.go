@@ -18,3 +18,11 @@ func TestAgentRunCellInterruptedIsRecoverableWarning(t *testing.T) {
 		t.Fatalf("fallback render = %q", got)
 	}
 }
+
+func TestAgentRunCellCompletedShowsIntegratedActivity(t *testing.T) {
+	cell := AgentRunCell{Profile: agent.ProfileAgility, Task: "inspect flow", State: agent.StateCompleted, Activity: "Integrated"}
+	got := strings.Join(cell.RenderWidth(80), "\n")
+	if !strings.Contains(got, "Integrated") {
+		t.Fatalf("render = %q", got)
+	}
+}

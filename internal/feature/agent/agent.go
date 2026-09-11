@@ -217,6 +217,8 @@ const (
 	EventAgentProgress EventKind = "agent_progress"
 	// EventAgentResultAvailable announces that a versioned immutable result can be loaded.
 	EventAgentResultAvailable EventKind = "agent_result_available"
+	// EventAgentResultConsumed marks successful delivery of a versioned result to the parent runtime context.
+	EventAgentResultConsumed EventKind = "agent_result_consumed"
 	// EventAgentCompleted marks successful completion of a subagent run.
 	EventAgentCompleted EventKind = "agent_completed"
 	// EventAgentFailed marks a terminal failure or cancellation.

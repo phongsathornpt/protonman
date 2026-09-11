@@ -139,3 +139,44 @@ func TestSubagentRuntimeContextOptionalChildIsNonBlockingAndFinalized(t *testing
 	status, _ := coord.Get(handle.ID)
 	t.Fatalf("optional child remained live after finalization: %+v", status)
 }
+
+func TestSubagentRuntimeContextMarksDeliveredResultConsumed(t *testing.T) {
+	coord := agent.NewCoordinator(nil, nil, nil, nil,
+		agent.WithRunnerFactory(func(agent.Profile, *toolcall.Service) (turn.Runner, error) {
+			return immediateRuntimeAgentRunner{}, nil
+		}),
+	)
+	defer coord.Close()
+	ref := agent.TurnRef{SessionID: "session-consumed", TurnID: "turn-consumed"}
+	ctx := agent.WithTurnRef(context.Background(), ref)
+	handle, err := coord.Spawn(ctx, agent.Request{
+		SessionID: ref.SessionID, ParentID: ref.TurnID, Profile: agent.ProfileAgility, Task: "inspect",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := coord.Wait(ctx, handle.ID, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	events, unsubscribe := coord.Subscribe(4)
+	defer unsubscribe()
+	provider := newSubagentRuntimeContextProvider(NewAgents(coord))
+	messages, err := provider.Drain(ctx)
+	if err != nil || len(messages) != 1 {
+		t.Fatalf("messages=%#v err=%v", messages, err)
+	}
+	select {
+	case event := <-events:
+		if event.Kind != agent.EventAgentResultConsumed || event.AgentID != handle.ID || event.ResultVersion == 0 {
+			t.Fatalf("consumed event=%+v", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("missing result-consumed event")
+	}
+}
+
+type immediateRuntimeAgentRunner struct{}
+
+func (immediateRuntimeAgentRunner) Run(context.Context, []model.Message, turn.Sink) (turn.Result, error) {
+	return turn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "done"}}, nil
+}

@@ -54,8 +54,10 @@ func AgentRows(snapshot AgentsSnapshot) []string {
 	}
 	for _, st := range visible {
 		activityLabel := agentuistate.ActivityForState(st.Profile, st.State).String()
-		if current := strings.TrimSpace(snapshot.Activity[st.ID]); current != "" && !st.State.Terminal() {
-			activityLabel = strings.TrimSpace(strings.SplitN(current, " · ", 2)[0])
+		currentActivity := strings.TrimSpace(snapshot.Activity[st.ID])
+		showCurrentActivity := currentActivity != "" && (!st.State.Terminal() || strings.HasPrefix(currentActivity, agentuistate.ActivityIntegrated.Label()))
+		if showCurrentActivity {
+			activityLabel = strings.TrimSpace(strings.SplitN(currentActivity, " · ", 2)[0])
 		}
 		if activityLabel == "" {
 			activityLabel = string(st.State)
@@ -72,7 +74,7 @@ func AgentRows(snapshot AgentsSnapshot) []string {
 		if label := AgentModelLabel(st); label != "" {
 			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(label, max(12, snapshot.Width-8))))
 		}
-		if activity := strings.TrimSpace(snapshot.Activity[st.ID]); activity != "" && !st.State.Terminal() {
+		if activity := currentActivity; activity != "" && showCurrentActivity {
 			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(activity, max(12, snapshot.Width-8))))
 		} else if reason := strings.TrimSpace(st.Reason); reason != "" {
 			rows = append(rows, tuistyle.ErrorStyle.Render("  "+textview.TruncateEllipsis(reason, max(12, snapshot.Width-8))))
