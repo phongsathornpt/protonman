@@ -4,9 +4,11 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
@@ -240,10 +242,42 @@ func (p *subagentRuntimeContextProvider) Await(ctx context.Context) ([]model.Mes
 type runtimeSubagentResult struct {
 	AgentID        string                 `json:"agent_id"`
 	Profile        agent.Profile          `json:"profile"`
-	Summary        string                 `json:"summary"`
+	Status         string                 `json:"status"`
+	Conclusion     string                 `json:"conclusion,omitempty"`
 	Verification   turn.VerificationState `json:"verification"`
 	Evidence       []agent.EvidenceRef    `json:"evidence"`
 	ChangedTargets []string               `json:"changed_targets"`
+	Blockers       []string               `json:"blockers,omitempty"`
+}
+
+const runtimeSubagentBlockerBytes = 2048
+
+func runtimeSubagentStatus(result agent.Result) string {
+	if result.Err == nil {
+		return "completed"
+	}
+	if errors.Is(result.Err, context.Canceled) {
+		return "canceled"
+	}
+	return "failed"
+}
+
+func runtimeSubagentBlockers(result agent.Result) []string {
+	if result.Err == nil {
+		return nil
+	}
+	text := strings.TrimSpace(strings.ToValidUTF8(result.Err.Error(), ""))
+	if text == "" {
+		return []string{"delegated work failed"}
+	}
+	if len(text) > runtimeSubagentBlockerBytes {
+		cut := runtimeSubagentBlockerBytes - len("...")
+		for cut > 0 && !utf8.ValidString(text[:cut]) {
+			cut--
+		}
+		text = text[:cut] + "..."
+	}
+	return []string{text}
 }
 
 func synthesisBatchMessages(batch agent.SynthesisBatch) ([]model.Message, error) {
@@ -254,8 +288,9 @@ func synthesisBatchMessages(batch agent.SynthesisBatch) ([]model.Message, error)
 	for _, item := range batch.Results {
 		results = append(results, runtimeSubagentResult{
 			AgentID: item.Result.AgentID, Profile: item.Result.Profile,
-			Summary: item.Result.Summary, Verification: item.Result.Verification,
-			Evidence: item.Result.Evidence, ChangedTargets: item.Result.ChangedTargets,
+			Status: runtimeSubagentStatus(item.Result), Conclusion: item.Result.Summary,
+			Verification: item.Result.Verification, Evidence: item.Result.Evidence,
+			ChangedTargets: item.Result.ChangedTargets, Blockers: runtimeSubagentBlockers(item.Result),
 		})
 	}
 	payload, err := json.Marshal(results)

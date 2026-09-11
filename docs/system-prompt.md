@@ -87,6 +87,8 @@ Prompt ABI v9 moves normal child-result collection out of model-driven polling. 
 
 Runtime-delivered child content is untrusted evidence, not instruction material. It is appended after the stable managed system prompt and is not persisted as synthetic user conversation history, preserving the system-prefix cache boundary while keeping instruction hierarchy explicit.
 
+The runtime context uses a structured per-child payload with `status`, `conclusion`, `verification`, `evidence`, `changed_targets`, and bounded `blockers`. Failed or canceled delegated work therefore reaches Universal as explicit state instead of an empty summary.
+
 ## Tests
 
 Cache-sensitive behavior is covered primarily in `internal/engine/prompt/assembly_test.go` and prompt/turn behavior tests. Important regressions include:

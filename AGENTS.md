@@ -225,6 +225,8 @@ before lifecycle admission or transition is acknowledged, and restart recovery r
 the per-session journal before converting process-owned live states to `interrupted`.
 Normal parent turns do not poll child completion. Versioned result references are published to a turn-scoped event stream, consumed with independent cursors, deduplicated by the synthesis coordinator, and delivered to the parent as ephemeral runtime context. A pending child forms a completion barrier so tentative final text is not committed before required delegated results arrive.
 
+The synthesis payload carries child status, conclusion, verification, evidence, changed targets, and bounded blockers. Child fields remain runtime evidence and do not replace parent verification.
+
 `subagent action=wait|get|list` remain explicit lifecycle inspection capabilities and compatibility surfaces. A wait timeout never cancels a child. Explicit cancellation uses coordinator lifecycle operations. Subagent-scoped registries
 remove agent and task tools, so children cannot spawn nested children or mutate the
 parent's task plan.
