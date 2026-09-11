@@ -507,6 +507,9 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	turnContext, cancelTurn := l.newTurnContext(ctx)
 	defer cancelTurn()
 	ctx = workspace.WithMutationSession(turnContext)
+	if l.runtimeContext != nil {
+		defer l.runtimeContext.Finalize(ctx)
+	}
 	if sink == nil {
 		sink = func(context.Context, Event) error { return nil }
 	}
@@ -735,9 +738,6 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				Rounds:       round,
 				Verification: verification,
 				Messages:     turnMessages,
-			}
-			if l.runtimeContext != nil {
-				l.runtimeContext.Finalize(ctx)
 			}
 			if err := emit(ctx, sink, Event{
 				Kind:    EventCompleted,

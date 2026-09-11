@@ -266,7 +266,10 @@ func (p *subagentRuntimeContextProvider) Finalize(ctx context.Context) {
 	if ref.TurnID == "" {
 		return
 	}
-	p.coordinator.CancelOptionalByTurn(ref)
+	p.coordinator.CancelByTurn(ref)
+	if p.synthesis != nil {
+		p.synthesis.Release(ref)
+	}
 }
 
 type runtimeSubagentResult struct {

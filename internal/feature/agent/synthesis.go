@@ -55,6 +55,18 @@ func (s *SynthesisCoordinator) stateFor(ref TurnRef) *synthesisConsumerState {
 	return state
 }
 
+// Release discards turn-scoped synthesis cursor and deduplication state after
+// the owning parent turn terminates. Retained agent results remain queryable.
+func (s *SynthesisCoordinator) Release(ref TurnRef) {
+	if s == nil {
+		return
+	}
+	key := activityScopeKey(ref.normalized())
+	s.mu.Lock()
+	delete(s.states, key)
+	s.mu.Unlock()
+}
+
 // DrainReady resolves all currently retained, previously unseen results for one
 // parent turn without waiting for a new event. The retained projection is the
 // authoritative recovery path when delivery raced the caller between rounds.

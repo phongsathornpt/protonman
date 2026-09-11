@@ -180,3 +180,35 @@ type immediateRuntimeAgentRunner struct{}
 func (immediateRuntimeAgentRunner) Run(context.Context, []model.Message, turn.Sink) (turn.Result, error) {
 	return turn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "done"}}, nil
 }
+
+func TestSubagentRuntimeContextFinalizeCancelsRequiredChild(t *testing.T) {
+	coord := agent.NewCoordinator(nil, nil, nil, nil,
+		agent.WithRunnerFactory(func(agent.Profile, *toolcall.Service) (turn.Runner, error) {
+			return blockingRuntimeAgentRunner{}, nil
+		}),
+	)
+	defer coord.Close()
+	ref := agent.TurnRef{SessionID: "session-required", TurnID: "turn-required"}
+	ctx := agent.WithTurnRef(context.Background(), ref)
+	handle, err := coord.Spawn(ctx, agent.Request{
+		SessionID: ref.SessionID, ParentID: ref.TurnID, Profile: agent.ProfileStrength, Task: "required child",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := newSubagentRuntimeContextProvider(NewAgents(coord))
+	provider.Finalize(ctx)
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		status, ok := coord.Get(handle.ID)
+		if ok && status.State.Terminal() {
+			if status.State != agent.StateCanceled {
+				t.Fatalf("required child state=%s, want canceled", status.State)
+			}
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	status, _ := coord.Get(handle.ID)
+	t.Fatalf("required child remained live after parent finalization: %+v", status)
+}

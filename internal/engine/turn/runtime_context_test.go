@@ -202,3 +202,18 @@ func TestLoopIntegratesOptionalResultThatBecomesReadyDuringBufferedRound(t *test
 		t.Fatalf("finalized=%d, want 1", provider.finalized)
 	}
 }
+
+func TestLoopFinalizesRuntimeContextOnModelFailure(t *testing.T) {
+	provider := &testRuntimeContextProvider{}
+	client := &scriptedClient{}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithRuntimeContextProvider(provider))
+	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "fail"}}, nil); err == nil {
+		t.Fatal("expected model failure")
+	}
+	provider.mu.Lock()
+	finalized := provider.finalized
+	provider.mu.Unlock()
+	if finalized != 1 {
+		t.Fatalf("runtime context finalized=%d, want 1", finalized)
+	}
+}

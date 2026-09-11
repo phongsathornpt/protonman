@@ -152,3 +152,18 @@ func TestSynthesisCoordinatorMarksConsumedOnceWithoutRequeue(t *testing.T) {
 		t.Fatalf("result stream=%+v, want availability event only", stream.Events)
 	}
 }
+
+func TestSynthesisCoordinatorReleaseDropsTurnState(t *testing.T) {
+	synth := NewSynthesisCoordinator(NewCoordinator(nil, emptyRegistry{}, nil, nil))
+	defer synth.source.Close()
+	ref := TurnRef{SessionID: "session-release", TurnID: "turn-release"}
+	_ = synth.stateFor(ref)
+	if len(synth.states) != 1 {
+		t.Fatalf("states=%d, want 1", len(synth.states))
+	}
+	synth.Release(ref)
+	synth.Release(ref)
+	if len(synth.states) != 0 {
+		t.Fatalf("states=%d after release, want 0", len(synth.states))
+	}
+}

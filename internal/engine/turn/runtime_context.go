@@ -22,8 +22,8 @@ type RuntimeContextProvider interface {
 	// Pending reports whether the current turn still owns asynchronous work
 	// whose result is required before final completion.
 	Pending(context.Context) bool
-	// Finalize releases non-blocking asynchronous work after the parent response
-	// has been committed and no consumer remains for late speculative results.
+	// Finalize releases turn-scoped asynchronous work and consumer state after
+	// the parent turn terminates, whether by completion, failure, or cancellation.
 	Finalize(context.Context)
 }
 
