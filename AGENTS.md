@@ -541,12 +541,14 @@ Current important slash commands are intentionally canonical and small:
 
 ```text
 /help
+/permission
 /model
 /provider
 /skills
 /agents
+/goal
 /todo
-/transcript [clear]
+/clear
 /call
 /quit
 ```

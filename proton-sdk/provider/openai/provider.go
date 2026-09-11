@@ -45,13 +45,13 @@ func NewProvider(options ProviderOptions) *Provider {
 		options.MaxRetries = 0
 	}
 	if options.RetryBackoff <= 0 {
-		options.RetryBackoff = 500 * time.Millisecond
+		options.RetryBackoff = sdk.DefaultRetryBaseBackoff
 	}
 	if options.MaxRetryBackoff <= 0 {
-		options.MaxRetryBackoff = 8 * time.Second
+		options.MaxRetryBackoff = sdk.DefaultRetryMaxBackoff
 	}
 	if options.MaxRetryAfter <= 0 {
-		options.MaxRetryAfter = 30 * time.Second
+		options.MaxRetryAfter = sdk.DefaultRetryMaxAfter
 	}
 	options.Headers = options.Headers.Clone()
 	return &Provider{options: options}

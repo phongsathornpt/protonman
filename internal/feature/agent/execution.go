@@ -111,6 +111,7 @@ func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, langu
 		loopOptions := []turn.Option{
 			turn.WithSystemPromptSpec(promptSpec),
 			turn.WithMaxToolCalls(c.maxToolCalls),
+			turn.WithWorkspacePolicy(c.workspace),
 		}
 		if spec, ok := SpecForProfile(req.Profile); ok {
 			loopOptions = append(loopOptions, turn.WithGroundingEvidence(spec.GroundingEvidence), turn.WithReasoningEffort(spec.Reasoning))

@@ -41,7 +41,7 @@ func (l *Loop) prepareTurnInput(ctx context.Context, messages []model.Message) (
 	}
 	projectInstructions := ""
 	if l.promptSpec != nil {
-		loaded, err := prompt.LoadProjectInstructions(l.promptSpec.Workspace)
+		loaded, err := prompt.LoadProjectInstructionsWithPolicy(ctx, l.workspacePolicy, l.promptSpec.Workspace)
 		if err != nil {
 			slog.WarnContext(ctx, "project instructions unavailable", "error", err)
 		} else {

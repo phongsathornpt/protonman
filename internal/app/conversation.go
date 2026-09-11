@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/core/workspace"
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
@@ -97,6 +98,7 @@ type ConversationSpec struct {
 	ModelID         string
 	SessionID       string
 	Workspace       string
+	WorkspacePolicy *workspace.Workspace
 	ActiveGoal      string
 	AgentProfile    string
 	ReasoningEffort sdk.ReasoningEffort
@@ -139,6 +141,9 @@ func BuildConversation(service *toolcall.Service, skills *skill.Registry, agents
 		return nil, err
 	}
 	loopOptions = append([]turn.Option{turn.WithSystemPromptSpec(promptSpec)}, loopOptions...)
+	if spec.WorkspacePolicy != nil {
+		loopOptions = append(loopOptions, turn.WithWorkspacePolicy(spec.WorkspacePolicy))
+	}
 	if skills != nil {
 		loopOptions = append(loopOptions, turn.WithSkillRegistry(skills))
 	}

@@ -9,6 +9,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"sync"
 
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
@@ -30,6 +31,8 @@ type stream struct {
 	terminal   error
 	metadata   sdk.ProviderMetadata
 	includeRaw bool
+	closeOnce  sync.Once
+	closeErr   error
 }
 
 func newStream(body io.ReadCloser, metadata sdk.ProviderMetadata, includeRaw bool) *stream {
@@ -259,8 +262,10 @@ func mapStopReason(reason string) sdk.FinishReason {
 }
 
 func (s *stream) Close() error {
-	if s.closer != nil {
-		return s.closer.Close()
-	}
-	return nil
+	s.closeOnce.Do(func() {
+		if s.closer != nil {
+			s.closeErr = s.closer.Close()
+		}
+	})
+	return s.closeErr
 }

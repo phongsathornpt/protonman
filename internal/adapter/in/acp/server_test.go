@@ -237,6 +237,27 @@ func TestACPSessionListAndDelete(t *testing.T) {
 	}
 }
 
+func TestACPSessionListRejectsMalformedParams(t *testing.T) {
+	server := newTestServer(t, permission.ModeAsk)
+
+	_, _, err := server.dispatch(context.Background(), RPCRequest{
+		Method: "session/list",
+		Params: json.RawMessage(`{"cwd":`),
+	}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "decode session/list") {
+		t.Fatalf("session/list error = %v, want decode failure", err)
+	}
+
+	for _, params := range []json.RawMessage{nil, json.RawMessage(`{}`)} {
+		if _, _, err := server.dispatch(context.Background(), RPCRequest{
+			Method: "session/list",
+			Params: params,
+		}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("session/list with params %q error = %v, want success", string(params), err)
+		}
+	}
+}
+
 func TestACPSessionLoadAndReplay(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "acp-replay-*")
 	if err != nil {

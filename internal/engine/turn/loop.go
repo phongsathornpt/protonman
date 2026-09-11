@@ -209,6 +209,17 @@ func WithSystemPromptSpec(spec prompt.Spec) Option {
 	}
 }
 
+// WithWorkspacePolicy supplies the workspace safety boundary used for
+// policy-checked reads that the turn performs itself, such as loading
+// project instructions. The loop never mutates through this policy; tool
+// execution keeps its own mutation gate in the tool-call service.
+func WithWorkspacePolicy(policy *workspace.Workspace) Option {
+	return func(loop *Loop) error {
+		loop.workspacePolicy = policy
+		return nil
+	}
+}
+
 // WithExplicitReasoningEffort sets a user-selected reasoning level. Known
 // unsupported levels fail locally rather than being silently clamped.
 func WithExplicitReasoningEffort(effort sdk.ReasoningEffort) Option {
@@ -386,6 +397,7 @@ type Loop struct {
 	reasoningEffort               sdk.ReasoningEffort
 	reasoningExplicit             bool
 	promptSpec                    *prompt.Spec
+	workspacePolicy               *workspace.Workspace
 	skills                        []skill.CatalogItem
 	skillRegistry                 *skill.Registry
 	runtimeContext                RuntimeContextProvider

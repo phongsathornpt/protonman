@@ -650,15 +650,15 @@ func TestClassifyOpenCodeErrorContextOverflow(t *testing.T) {
 		if len(classified.Suggestions) == 0 {
 			t.Errorf("for %q: expected suggestions for context overflow", raw)
 		}
-		foundCompact := false
+		foundClear := false
 		for _, s := range classified.Suggestions {
-			if strings.Contains(s, "/compact") {
-				foundCompact = true
+			if strings.Contains(s, "/clear") {
+				foundClear = true
 				break
 			}
 		}
-		if !foundCompact {
-			t.Errorf("for %q: expected suggestion mentioning /compact", raw)
+		if !foundClear {
+			t.Errorf("for %q: expected suggestion mentioning /clear", raw)
 		}
 	}
 }

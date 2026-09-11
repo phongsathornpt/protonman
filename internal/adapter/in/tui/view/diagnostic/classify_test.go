@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
@@ -64,5 +65,34 @@ func TestClassifyBoundedIncompleteStreamTimeoutRemainsTimeout(t *testing.T) {
 	}
 	if UserCode(got.Kind) != "STREAM_TIMEOUT" {
 		t.Fatalf("user code = %q", UserCode(got.Kind))
+	}
+}
+
+func TestClassifySuggestionsReferenceKnownSlashCommands(t *testing.T) {
+	known := map[string]bool{}
+	for _, command := range []string{
+		"help", "permission", "model", "provider", "skills",
+		"agents", "goal", "todo", "clear", "call", "quit",
+	} {
+		known[command] = true
+	}
+	cases := []error{
+		errors.New("model foobar is not supported by provider test"),
+		errors.New("input token count exceeds the maximum context length"),
+		errors.New("unauthorized: invalid api key"),
+	}
+	for _, err := range cases {
+		got := Classify(err, "test", "test-model")
+		for _, suggestion := range got.Suggestions {
+			for _, word := range strings.Fields(suggestion) {
+				if !strings.HasPrefix(word, "/") {
+					continue
+				}
+				name := strings.Trim(strings.TrimPrefix(word, "/"), ".,:;()")
+				if !known[name] {
+					t.Errorf("Classify(%v) suggests unknown command %q", err, word)
+				}
+			}
+		}
 	}
 }

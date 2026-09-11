@@ -17,6 +17,9 @@ import (
 )
 
 func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
+	// Admission checks ctx before taking the admission lock; Close cancels
+	// only children admitted before it runs, so a caller racing Close must
+	// re-check admission (or observe cancellation) after Spawn returns.
 	if ctx == nil {
 		ctx = context.Background()
 	}

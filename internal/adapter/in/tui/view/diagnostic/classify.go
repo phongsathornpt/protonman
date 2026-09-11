@@ -230,8 +230,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 			Badge:   "CONTEXT_OVERFLOW",
 			Message: "Input token count exceeds the maximum context length for this model.",
 			Suggestions: []string{
-				"Run /compact to summarize conversation history and free up tokens",
-				"Start a fresh conversation from the session launcher",
+				"Run /clear to start a fresh conversation while preserving session settings",
 				"Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)",
 			},
 			RawDetails: raw,

@@ -280,10 +280,6 @@ func (r *Registry) Lookup(name string) (tool.Handler, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	handler, ok := r.handlers[name]
-	if ok {
-		return handler, true
-	}
-	handler, ok = r.handlers[name]
 	return handler, ok
 }
 
@@ -292,9 +288,6 @@ func (r *Registry) CompiledValidators(name string) (input, output *sdk.ToolSchem
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	validators, ok := r.validators[name]
-	if !ok {
-		validators, ok = r.validators[name]
-	}
 	if !ok {
 		return nil, nil, false
 	}

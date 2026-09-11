@@ -64,16 +64,29 @@ func TestRenderOmitsUnavailableContracts(t *testing.T) {
 	}
 }
 
-func TestIsManagedRecognizesCurrentAndLegacyPrompts(t *testing.T) {
+func TestIsManagedRecognizesCurrentAndMarkedLegacyPrompts(t *testing.T) {
 	if !IsManaged(Render(Spec{})) {
 		t.Fatal("current rendered prompt not recognized")
 	}
-	for _, legacy := range []string{
+	marked := "<!-- proton:abi<=6 -->\nYou are Protonman, an autonomous coding agent operating inside a real workspace.\nlegacy"
+	if !IsManaged(marked) {
+		t.Fatalf("ABI-marked legacy prompt not recognized: %q", marked)
+	}
+	for _, unmarked := range []string{
 		"You are Protonman, an autonomous coding agent operating inside a real workspace.\nlegacy",
 		"You are Proton, an autonomous coding agent operating inside a real workspace.\nlegacy",
+		"You are an Explorer subagent in Protonman.\nlegacy",
+		"You are a Worker subagent in Protonman.\nlegacy",
+		"You are a Code Reviewer subagent in Protonman.\nlegacy",
+		"You are Protonman in POW Mode\nlegacy",
+		"You are Protonman in DEX Mode\nlegacy",
+		"You are Protonman in INT Mode\nlegacy",
+		"You are an Explorer subagent in Proton.\nlegacy",
+		"You are Proton in POW Mode\nlegacy",
+		"<!-- proton:abi<=6>",
 	} {
-		if !IsManaged(legacy) {
-			t.Fatalf("legacy root prompt not recognized: %q", legacy)
+		if IsManaged(unmarked) {
+			t.Fatalf("unmarked legacy prompt classified as managed: %q", unmarked)
 		}
 	}
 	if IsManaged("custom system instruction") {

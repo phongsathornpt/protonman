@@ -5,6 +5,15 @@ import (
 	"time"
 )
 
+// Default retry timing. These are the SDK-owned canonical values; the CLI
+// runtime policy mirrors them (see internal/base/runtimepolicy) and the
+// cross-boundary mapping is pinned by TestRetryDefaultsMatchRuntimePolicy.
+const (
+	DefaultRetryBaseBackoff = 500 * time.Millisecond
+	DefaultRetryMaxBackoff  = 8 * time.Second
+	DefaultRetryMaxAfter    = 30 * time.Second
+)
+
 type RetryPolicy struct {
 	BaseBackoff       time.Duration
 	PostFirstRetryGap time.Duration
@@ -27,13 +36,13 @@ func DecideRetry(err error, retryIndex int, policy RetryPolicy) RetryDecision {
 		retryIndex = 1
 	}
 	if policy.BaseBackoff <= 0 {
-		policy.BaseBackoff = 500 * time.Millisecond
+		policy.BaseBackoff = DefaultRetryBaseBackoff
 	}
 	if policy.MaxBackoff <= 0 {
-		policy.MaxBackoff = 8 * time.Second
+		policy.MaxBackoff = DefaultRetryMaxBackoff
 	}
 	if policy.MaxRetryAfter <= 0 {
-		policy.MaxRetryAfter = 30 * time.Second
+		policy.MaxRetryAfter = DefaultRetryMaxAfter
 	}
 	if providerErr.RateLimit != nil && providerErr.RateLimit.RetryAfter > 0 {
 		if providerErr.RateLimit.RetryAfter > policy.MaxRetryAfter {
@@ -53,10 +62,10 @@ func RetryDelay(retryIndex int, policy RetryPolicy) time.Duration {
 		retryIndex = 1
 	}
 	if policy.BaseBackoff <= 0 {
-		policy.BaseBackoff = 500 * time.Millisecond
+		policy.BaseBackoff = DefaultRetryBaseBackoff
 	}
 	if policy.MaxBackoff <= 0 {
-		policy.MaxBackoff = 8 * time.Second
+		policy.MaxBackoff = DefaultRetryMaxBackoff
 	}
 	delay := policy.BaseBackoff
 	for i := 1; i < retryIndex && delay < policy.MaxBackoff; i++ {

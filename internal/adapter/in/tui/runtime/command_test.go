@@ -556,6 +556,33 @@ func TestSlashAutocompleteUsesBubblesListPresentation(t *testing.T) {
 	}
 }
 
+func TestSlashPaneRenderIsSideEffectFree(t *testing.T) {
+	model := newTestSkillsModel(t, 5)
+	model.panes.bottom.prompt().SetValue("/skills ")
+	if !model.slashOpen() {
+		t.Fatal("expected slash open for /skills ")
+	}
+	model.syncSlashView()
+	view := model.slashState()
+	if view == nil {
+		t.Fatal("expected slash pane state")
+	}
+	first := view.Render(newPaneRenderContext(model))
+	matchesBefore := append([]slashCommand(nil), view.matches...)
+	indexBefore := view.picker.Index()
+	second := view.Render(newPaneRenderContext(model))
+	if first != second {
+		t.Fatalf("repeated Render diverged:\n%s\n---\n%s", first, second)
+	}
+	if len(view.matches) != len(matchesBefore) || view.picker.Index() != indexBefore {
+		t.Fatal("Render mutated slash pane state")
+	}
+	unsynced := &slashPaneView{}
+	if got := unsynced.Render(newPaneRenderContext(model)); got != "" {
+		t.Fatalf("unsynced slash Render = %q, want empty", got)
+	}
+}
+
 func TestSkillsCommandUsesPickerAsOnlyListSurface(t *testing.T) {
 	model := newTestSkillsModel(t, 25)
 	model.executeCommand("/skills")
