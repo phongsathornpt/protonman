@@ -69,8 +69,12 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	if lineMode && input.View != "auto" && input.View != "text" {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read line selection requires text view")
 	}
-	if lineMode && (input.Offset != 0 || input.Continuation != "") {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read line selection cannot be combined with offset or continuation")
+	if lineMode {
+		// Line selection is the stronger read intent. Models can legitimately carry
+		// byte-pagination metadata from an earlier page while narrowing to known
+		// lines; discard that stale mode instead of failing the read.
+		input.Offset = 0
+		input.Continuation = ""
 	}
 	if input.View == "image" || input.View == "structured" || input.View == "metadata" {
 		if input.Offset != 0 || input.Continuation != "" || input.Limit != 0 {

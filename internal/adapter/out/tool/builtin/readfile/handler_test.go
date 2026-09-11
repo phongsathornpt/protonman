@@ -72,16 +72,25 @@ func TestReadFileLineRangeCanReadFromStartThroughEndLine(t *testing.T) {
 	}
 }
 
-func TestReadFileRejectsMixedByteAndLinePagination(t *testing.T) {
+func TestReadFileLineSelectionTakesPrecedenceOverBytePagination(t *testing.T) {
 	ws := newTestWorkspace(t, nil)
-	if err := os.WriteFile(filepath.Join(ws.Root(), "lines.txt"), []byte("a\nb\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ws.Root(), "lines.txt"), []byte("a\nb\nc\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := New(ws).Execute(context.Background(), newJSONCall(t, "read-lines-bad", "read", map[string]any{
-		"path": "lines.txt", "offset": 1, "start_line": 2,
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "read-lines-mixed", "read", map[string]any{
+		"path": "lines.txt", "offset": 1, "continuation": "stale-page-token", "start_line": 2, "end_line": 2,
 	}))
-	if err == nil || !strings.Contains(err.Error(), "cannot be combined") {
-		t.Fatalf("Execute() error = %v, want mixed pagination rejection", err)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result.Output != "b\n" {
+		t.Fatalf("Output = %q, want line-selection result", result.Output)
+	}
+	if result.NextOffset != nil || result.Continuation != "" {
+		t.Fatalf("mixed read leaked byte-pagination metadata: %+v", result)
+	}
+	if result.Pagination != nil && result.Pagination.Kind != "line" {
+		t.Fatalf("mixed read did not normalize to line mode: %+v", result.Pagination)
 	}
 }
 
