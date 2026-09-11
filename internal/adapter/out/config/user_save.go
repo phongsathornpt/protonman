@@ -24,7 +24,7 @@ func SaveUserProviderConfig(homeDir string, provider ProviderConfig, defaultMode
 func SaveUserProviderConfigWithOptions(homeDir string, provider ProviderConfig, options ProviderSaveOptions) error {
 	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
 		if doc.Providers == nil {
-			doc.Providers = make(map[string]ProviderConfig)
+			doc.Providers = make(map[string]fileProvider)
 		}
 		previousKey := strings.ToLower(strings.TrimSpace(options.PreviousName))
 		providerKey := strings.ToLower(strings.TrimSpace(provider.Name))
@@ -34,7 +34,7 @@ func SaveUserProviderConfigWithOptions(homeDir string, provider ProviderConfig, 
 		if previousKey != "" && previousKey != providerKey {
 			delete(doc.Providers, previousKey)
 		}
-		doc.Providers[providerKey] = provider
+		doc.Providers[providerKey] = fileProviderFromConfig(provider)
 
 		if options.Activate {
 			if options.DefaultModel != "" {

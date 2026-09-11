@@ -1,14 +1,34 @@
 package config
 
 type fileDocument struct {
-	Permission filePermission            `toml:"permission"`
-	Workspace  fileWorkspace             `toml:"workspace"`
-	UI         fileUI                    `toml:"ui"`
-	Sandbox    fileSandbox               `toml:"sandbox"`
-	Providers  map[string]ProviderConfig `toml:"providers,omitempty"`
-	Model      ModelConfig               `toml:"model,omitempty"`
-	Agent      fileAgent                 `toml:"agent,omitempty"`
-	Runtime    fileRuntime               `toml:"runtime,omitempty"`
+	Permission filePermission          `toml:"permission"`
+	Workspace  fileWorkspace           `toml:"workspace"`
+	UI         fileUI                  `toml:"ui"`
+	Sandbox    fileSandbox             `toml:"sandbox"`
+	Providers  map[string]fileProvider `toml:"providers,omitempty"`
+	Model      fileModel               `toml:"model,omitempty"`
+	Agent      fileAgent               `toml:"agent,omitempty"`
+	Runtime    fileRuntime             `toml:"runtime,omitempty"`
+}
+
+type fileProvider struct {
+	Name    string `toml:"name"`
+	Type    string `toml:"type"`
+	BaseURL string `toml:"base_url"`
+	APIKey  string `toml:"api_key"`
+}
+
+type fileModel struct {
+	Default  string `toml:"default"`
+	Provider string `toml:"provider"`
+}
+
+func fileProviderFromConfig(provider ProviderConfig) fileProvider {
+	return fileProvider{Name: provider.Name, Type: provider.Type, BaseURL: provider.BaseURL, APIKey: provider.APIKey}
+}
+
+func (provider fileProvider) config() ProviderConfig {
+	return ProviderConfig{Name: provider.Name, Type: provider.Type, BaseURL: provider.BaseURL, APIKey: provider.APIKey}
 }
 
 type fileAgent struct {
