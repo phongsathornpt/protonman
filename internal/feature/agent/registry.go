@@ -56,18 +56,25 @@ func (c *Coordinator) Wait(ctx context.Context, id string, timeout time.Duration
 // WaitActivity waits for the next terminal subagent lifecycle activity across all parents.
 // Observation timeout is non-fatal and never mutates child state.
 func (c *Coordinator) WaitActivity(ctx context.Context, timeout time.Duration) (ActivityWaitResult, error) {
-	return c.waitActivity(ctx, TurnRef{}, nil, timeout)
+	return c.waitActivity(ctx, TurnRef{}, nil, timeout, true)
 }
 
 // WaitActivityForTurn consumes the next ordered activity batch for one turn.
 func (c *Coordinator) WaitActivityForTurn(ctx context.Context, ref TurnRef, timeout time.Duration) (ActivityWaitResult, error) {
-	return c.waitActivity(ctx, ref.normalized(), nil, timeout)
+	return c.waitActivity(ctx, ref.normalized(), nil, timeout, true)
+}
+
+// WaitActivityDeltaForTurn consumes lifecycle deltas without attaching a full
+// retained-agent snapshot. Model-facing diagnostic wait uses this path to avoid
+// re-sending state that list/get can inspect explicitly.
+func (c *Coordinator) WaitActivityDeltaForTurn(ctx context.Context, ref TurnRef, timeout time.Duration) (ActivityWaitResult, error) {
+	return c.waitActivity(ctx, ref.normalized(), nil, timeout, false)
 }
 
 // WaitActivityAfter reads activity after an explicit cursor without advancing the
 // compatibility cursor. Independent waiters can therefore observe the same stream.
 func (c *Coordinator) WaitActivityAfter(ctx context.Context, ref TurnRef, after uint64, timeout time.Duration) (ActivityWaitResult, error) {
-	return c.waitActivity(ctx, ref.normalized(), &after, timeout)
+	return c.waitActivity(ctx, ref.normalized(), &after, timeout, true)
 }
 
 func activityScopeKey(ref TurnRef) string {
@@ -78,7 +85,7 @@ func activityScopeKey(ref TurnRef) string {
 	return ref.SessionID + "\x00" + ref.TurnID
 }
 
-func (c *Coordinator) waitActivity(ctx context.Context, ref TurnRef, after *uint64, timeout time.Duration) (ActivityWaitResult, error) {
+func (c *Coordinator) waitActivity(ctx context.Context, ref TurnRef, after *uint64, timeout time.Duration, includeSnapshot bool) (ActivityWaitResult, error) {
 	defer c.pruneActivityMailboxes(time.Now())
 	if ctx == nil {
 		ctx = context.Background()
@@ -113,7 +120,9 @@ func (c *Coordinator) waitActivity(ctx context.Context, ref TurnRef, after *uint
 	}
 
 	if result, notify := consume(); len(result.Events) > 0 {
-		c.attachActivitySnapshot(ctx, ref, &result)
+		if includeSnapshot {
+			c.attachActivitySnapshot(ctx, ref, &result)
+		}
 		return result, nil
 	} else {
 		waitCtx := ctx
@@ -125,12 +134,16 @@ func (c *Coordinator) waitActivity(ctx context.Context, ref TurnRef, after *uint
 		select {
 		case <-notify:
 			result, _ := consume()
-			c.attachActivitySnapshot(ctx, ref, &result)
+			if includeSnapshot {
+				c.attachActivitySnapshot(ctx, ref, &result)
+			}
 			return result, nil
 		case <-waitCtx.Done():
 			if errors.Is(waitCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
 				c.observeMetric(ctx, MetricEvent{Kind: MetricWaitTimeout, SessionID: ref.SessionID, ParentID: ref.TurnID})
-				c.attachActivitySnapshot(ctx, ref, &result)
+				if includeSnapshot {
+					c.attachActivitySnapshot(ctx, ref, &result)
+				}
 				result.TimedOut = true
 				return result, nil
 			}

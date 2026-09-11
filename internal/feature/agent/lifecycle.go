@@ -215,7 +215,7 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 		eventKind = EventAgentFailed
 	}
 	emitCtx, emitDone := contextutil.DetachedTimeout(execCtx, runtimepolicy.AgentLifecycleEmitTimeout)
-	c.emit(emitCtx, Event{Kind: eventKind, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: res.Summary, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: runErr})
+	c.emit(emitCtx, Event{Kind: eventKind, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: runErr})
 	emitDone()
 }
 

@@ -94,8 +94,7 @@ func agentLifecycleOutputSchema(action subagentAction) map[string]any {
 			"events":    map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
 			"cursor":    map[string]any{"type": "integer", "minimum": 0},
 			"truncated": map[string]any{"type": "boolean"},
-			"agents":    map[string]any{"type": "array", "items": agentStatusSchema()},
-		}, "required": []any{"timed_out", "event", "events", "cursor", "truncated", "agents"}, "additionalProperties": false}
+		}, "required": []any{"timed_out", "event", "events", "cursor", "truncated"}, "additionalProperties": false}
 	case "resume":
 		return resumeAgentOutputSchema()
 	case "get", "cancel":

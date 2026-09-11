@@ -138,7 +138,7 @@ func TestPruneActivityMailboxesExpiresInactiveTurn(t *testing.T) {
 	}
 }
 
-func TestRecordActivityCompactsRetainedPayload(t *testing.T) {
+func TestRecordActivityDropsResultPayloadAndCompactsDiagnostics(t *testing.T) {
 	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil)
 	defer coord.Close()
 	call, err := tool.NewCall("call-1", "read", []byte(`{"payload":"`+strings.Repeat("x", 32*1024)+`"}`))
@@ -157,8 +157,8 @@ func TestRecordActivityCompactsRetainedPayload(t *testing.T) {
 	if result.Event == nil {
 		t.Fatal("expected retained terminal activity")
 	}
-	if len(result.Event.Message) > runtimepolicy.AgentActivityMessageBytes {
-		t.Fatalf("message bytes=%d", len(result.Event.Message))
+	if result.Event.Message != "" {
+		t.Fatalf("terminal activity retained result message: %q", result.Event.Message)
 	}
 	if result.Event.Call == nil || len(result.Event.Call.Arguments) != 0 {
 		t.Fatalf("retained call payload = %#v", result.Event.Call)

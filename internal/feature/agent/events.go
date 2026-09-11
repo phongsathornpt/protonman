@@ -114,7 +114,7 @@ func (c *Coordinator) recordActivity(ev Event) {
 }
 
 func compactActivityEvent(ev Event) Event {
-	ev.Message = truncatePersistentText(ev.Message, runtimepolicy.AgentActivityMessageBytes)
+	ev.Message = ""
 	if ev.Call != nil {
 		call := *ev.Call
 		call.Arguments = nil

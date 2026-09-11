@@ -121,7 +121,7 @@ func (h agentLifecycleHandler) wait(ctx context.Context, call tool.Call) (tool.R
 		}
 	}
 	turnRef := agent.TurnRefFromContext(ctx)
-	wr, err := h.coordinator.WaitActivityForTurn(ctx, turnRef, timeout)
+	wr, err := h.coordinator.WaitActivityDeltaForTurn(ctx, turnRef, timeout)
 	if err != nil {
 		return tool.Result{}, classifyAgentError("wait for subagent activity", err)
 	}
@@ -131,7 +131,7 @@ func (h agentLifecycleHandler) wait(ctx context.Context, call tool.Call) (tool.R
 	}
 	return agentJSONResult(call, summary, map[string]any{
 		"timed_out": wr.TimedOut, "event": wr.Event, "events": wr.Events,
-		"cursor": wr.Cursor, "truncated": wr.Truncated, "agents": wr.Agents,
+		"cursor": wr.Cursor, "truncated": wr.Truncated,
 	})
 }
 
