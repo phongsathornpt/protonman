@@ -273,7 +273,8 @@ func (s *FileStore) ListSummaries(ctx context.Context, options ListOptions) ([]S
 		summaries = append(summaries, Summary{
 			ID: id, WorkspaceKey: state.WorkspaceKey, WorkspaceName: state.WorkspaceName,
 			CreatedAt: state.CreatedAt, UpdatedAt: state.UpdatedAt, AgentProfile: state.AgentProfile,
-			ReasoningEffort: state.ReasoningEffort, MessageCount: len(state.Messages), Preview: session.Preview(state.Messages),
+			ReasoningEffort: state.ReasoningEffort, LowConcurrencyMode: state.LowConcurrencyMode,
+			MessageCount: len(state.Messages), Preview: session.Preview(state.Messages),
 		})
 	}
 	sort.Slice(summaries, func(i, j int) bool {

@@ -130,8 +130,9 @@ type projectModelState struct {
 }
 
 type executionPolicyState struct {
-	maxToolCalls  int
-	runtimeConfig config.RuntimeConfig
+	maxToolCalls       int
+	runtimeConfig      config.RuntimeConfig
+	lowConcurrencyMode model.LowConcurrencySetting
 }
 
 type presentationModelState struct {
@@ -147,6 +148,8 @@ type presentationModelState struct {
 	layout             layoutState
 	welcomeCache       welcomeCardCache
 	keyboardCapability keyboardCapability
+	transientNotice    string
+	transientNoticeID  uint64
 }
 
 type bubbleModel struct {

@@ -63,3 +63,22 @@ func TestSessionStatePreservesActiveGoal(t *testing.T) {
 		t.Fatalf("active goal = %q", loaded.ActiveGoal)
 	}
 }
+
+func TestSessionStatePreservesLowConcurrencyMode(t *testing.T) {
+	state := State{PermissionMode: "ask", LowConcurrencyMode: "on"}
+	prepared, err := PrepareStateForSave("low-mode", state, nil, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := NormalizeLoadedState("low-mode", prepared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.LowConcurrencyMode != "on" {
+		t.Fatalf("low concurrency mode = %q, want on", loaded.LowConcurrencyMode)
+	}
+	state.LowConcurrencyMode = "turbo"
+	if _, err := PrepareStateForSave("bad-low-mode", state, nil, time.Now()); err == nil {
+		t.Fatal("invalid low concurrency mode accepted")
+	}
+}

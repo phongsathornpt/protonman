@@ -18,7 +18,7 @@ func (m bubbleModel) statusView() string {
 		return warningStyle.Render(truncateWithEllipsis("action required · permission", maxInt(1, m.layout.width-2)))
 	}
 	if !m.busy {
-		return ""
+		return m.goalStatusView()
 	}
 	agentSnapshot := m.turnAgentSnapshot()
 	activeAgents, _, _, _ := agentActivityCounts(agentSnapshot)
@@ -68,7 +68,22 @@ func (m bubbleModel) statusView() string {
 	maxWidth := maxInt(1, m.layout.width-2)
 	contentWidth := maxInt(1, maxWidth-2-len([]rune(meta)))
 	activity = truncateWithEllipsis(activity, contentWidth)
-	return indicator + " " + systemStyle.Render(activity) + mutedStyle.Render(meta)
+	busyLine := indicator + " " + systemStyle.Render(activity) + mutedStyle.Render(meta)
+	if goal := m.goalStatusView(); goal != "" {
+		return goal + "\n" + busyLine
+	}
+	return busyLine
+}
+
+func (m bubbleModel) goalStatusView() string {
+	goal := strings.TrimSpace(m.activeGoal)
+	if goal == "" {
+		return ""
+	}
+	maxWidth := maxInt(1, m.layout.width-2)
+	prefix := "Goal  "
+	goalWidth := maxInt(1, maxWidth-len(prefix))
+	return mutedStyle.Render(prefix) + systemStyle.Render(truncateWithEllipsis(goal, goalWidth))
 }
 
 // rootActivityLabel is the deterministic busy label for the primary agent when

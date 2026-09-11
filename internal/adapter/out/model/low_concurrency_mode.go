@@ -30,31 +30,33 @@ type lowConcurrencyRequest struct {
 	grant chan struct{}
 }
 
-type openCodeFreeLowConcurrencyController struct {
+type lowConcurrencyController struct {
+	provider  string
 	policy    runtimepolicy.LowConcurrencyPolicy
 	admission chan struct{}
 	requests  chan *lowConcurrencyRequest
 	done      chan lowConcurrencyCompletion
 }
 
-var openCodeFreeLowConcurrencyControllers = struct {
+var lowConcurrencyControllers = struct {
 	sync.Mutex
-	byRoute map[string]*openCodeFreeLowConcurrencyController
-}{byRoute: make(map[string]*openCodeFreeLowConcurrencyController)}
+	byRoute map[string]*lowConcurrencyController
+}{byRoute: make(map[string]*lowConcurrencyController)}
 
-func openCodeFreeLowConcurrencyControllerFor(route string, policy runtimepolicy.LowConcurrencyPolicy) *openCodeFreeLowConcurrencyController {
-	openCodeFreeLowConcurrencyControllers.Lock()
-	defer openCodeFreeLowConcurrencyControllers.Unlock()
-	if controller := openCodeFreeLowConcurrencyControllers.byRoute[route]; controller != nil {
+func lowConcurrencyControllerFor(provider, route string, policy runtimepolicy.LowConcurrencyPolicy) *lowConcurrencyController {
+	lowConcurrencyControllers.Lock()
+	defer lowConcurrencyControllers.Unlock()
+	if controller := lowConcurrencyControllers.byRoute[route]; controller != nil {
 		return controller
 	}
-	controller := newOpenCodeFreeLowConcurrencyController(policy)
-	openCodeFreeLowConcurrencyControllers.byRoute[route] = controller
+	controller := newLowConcurrencyController(provider, policy)
+	lowConcurrencyControllers.byRoute[route] = controller
 	return controller
 }
 
-func newOpenCodeFreeLowConcurrencyController(policy runtimepolicy.LowConcurrencyPolicy) *openCodeFreeLowConcurrencyController {
-	controller := &openCodeFreeLowConcurrencyController{
+func newLowConcurrencyController(provider string, policy runtimepolicy.LowConcurrencyPolicy) *lowConcurrencyController {
+	controller := &lowConcurrencyController{
+		provider:  strings.TrimSpace(provider),
 		policy:    policy,
 		admission: make(chan struct{}, policy.QueueCapacity),
 		requests:  make(chan *lowConcurrencyRequest),
@@ -64,13 +66,13 @@ func newOpenCodeFreeLowConcurrencyController(policy runtimepolicy.LowConcurrency
 	return controller
 }
 
-func (c *openCodeFreeLowConcurrencyController) acquire(ctx context.Context) error {
+func (c *lowConcurrencyController) acquire(ctx context.Context) error {
 	select {
 	case c.admission <- struct{}{}:
 	default:
 		return &sdk.ProviderError{
-			Provider: DefaultOpenCodeName, Kind: sdk.ErrorOverloaded,
-			Code: "low_concurrency_queue_full", Message: "free model request queue is full", Retryable: false,
+			Provider: c.provider, Kind: sdk.ErrorOverloaded,
+			Code: "low_concurrency_queue_full", Message: "low concurrency request queue is full", Retryable: false,
 		}
 	}
 
@@ -91,11 +93,11 @@ func (c *openCodeFreeLowConcurrencyController) acquire(ctx context.Context) erro
 	}
 }
 
-func (c *openCodeFreeLowConcurrencyController) complete(completion lowConcurrencyCompletion) {
+func (c *lowConcurrencyController) complete(completion lowConcurrencyCompletion) {
 	c.done <- completion
 }
 
-func (c *openCodeFreeLowConcurrencyController) run() {
+func (c *lowConcurrencyController) run() {
 	policy := c.policy
 	interval := policy.InitialInterval
 	limit := policy.MinConcurrency
@@ -103,10 +105,16 @@ func (c *openCodeFreeLowConcurrencyController) run() {
 	active := 0
 	var pending []*lowConcurrencyRequest
 	var nextDispatch time.Time
+	var blockedUntil time.Time
 
 	for {
 		pending = pruneLowConcurrencyRequests(pending, c.admission)
-		if len(pending) > 0 && active < limit && (nextDispatch.IsZero() || !time.Now().Before(nextDispatch)) {
+		now := time.Now()
+		readyAt := nextDispatch
+		if blockedUntil.After(readyAt) {
+			readyAt = blockedUntil
+		}
+		if len(pending) > 0 && active < limit && (readyAt.IsZero() || !now.Before(readyAt)) {
 			request := pending[0]
 			pending = pending[1:]
 			select {
@@ -121,8 +129,8 @@ func (c *openCodeFreeLowConcurrencyController) run() {
 
 		var timer *time.Timer
 		var timerC <-chan time.Time
-		if len(pending) > 0 && active < limit && !nextDispatch.IsZero() {
-			wait := time.Until(nextDispatch)
+		if len(pending) > 0 && active < limit && !readyAt.IsZero() {
+			wait := time.Until(readyAt)
 			if wait < 0 {
 				wait = 0
 			}
@@ -140,6 +148,9 @@ func (c *openCodeFreeLowConcurrencyController) run() {
 			switch completion.outcome {
 			case lowConcurrencySuccess:
 				healthy++
+				if !blockedUntil.IsZero() && !time.Now().Before(blockedUntil) {
+					blockedUntil = time.Time{}
+				}
 				if interval > policy.MinInterval {
 					interval = scaleLowConcurrencyDuration(interval, policy.RecoveryPercent, policy.MinInterval, policy.MaxInterval)
 				}
@@ -151,10 +162,14 @@ func (c *openCodeFreeLowConcurrencyController) run() {
 				healthy = 0
 				limit = policy.MinConcurrency
 				interval = scaleLowConcurrencyDuration(interval, policy.BackoffPercent, policy.MinInterval, policy.MaxInterval)
-				if completion.retryAfter > interval {
-					interval = min(completion.retryAfter, policy.MaxInterval)
+				now := time.Now()
+				nextDispatch = now.Add(interval)
+				if completion.retryAfter > 0 {
+					candidate := now.Add(completion.retryAfter)
+					if candidate.After(blockedUntil) {
+						blockedUntil = candidate
+					}
 				}
-				nextDispatch = time.Now().Add(interval)
 			default:
 				healthy = 0
 			}
@@ -167,16 +182,16 @@ func (c *openCodeFreeLowConcurrencyController) run() {
 }
 
 func pruneLowConcurrencyRequests(pending []*lowConcurrencyRequest, admission chan struct{}) []*lowConcurrencyRequest {
-	for len(pending) > 0 {
+	kept := pending[:0]
+	for _, request := range pending {
 		select {
-		case <-pending[0].ctx.Done():
+		case <-request.ctx.Done():
 			<-admission
-			pending = pending[1:]
 		default:
-			return pending
+			kept = append(kept, request)
 		}
 	}
-	return pending
+	return kept
 }
 
 func scaleLowConcurrencyDuration(value time.Duration, percent int, floor, ceiling time.Duration) time.Duration {
@@ -193,29 +208,29 @@ func scaleLowConcurrencyDuration(value time.Duration, percent int, floor, ceilin
 	return scaled
 }
 
-type openCodeFreeLowConcurrencyModel struct {
+type lowConcurrencyModel struct {
 	base       sdk.LanguageModel
-	controller *openCodeFreeLowConcurrencyController
+	controller *lowConcurrencyController
 }
 
-func withLowConcurrencyMode(base sdk.LanguageModel, route string, policy runtimepolicy.LowConcurrencyPolicy) sdk.LanguageModel {
+func withLowConcurrencyMode(base sdk.LanguageModel, provider, route string, policy runtimepolicy.LowConcurrencyPolicy) sdk.LanguageModel {
 	if base == nil {
 		return nil
 	}
-	return &openCodeFreeLowConcurrencyModel{base: base, controller: openCodeFreeLowConcurrencyControllerFor(route, policy)}
+	return &lowConcurrencyModel{base: base, controller: lowConcurrencyControllerFor(provider, route, policy)}
 }
 
-func (m *openCodeFreeLowConcurrencyModel) Provider() string { return m.base.Provider() }
-func (m *openCodeFreeLowConcurrencyModel) ModelID() string  { return m.base.ModelID() }
-func (m *openCodeFreeLowConcurrencyModel) Capabilities() sdk.ModelCapabilities {
+func (m *lowConcurrencyModel) Provider() string { return m.base.Provider() }
+func (m *lowConcurrencyModel) ModelID() string  { return m.base.ModelID() }
+func (m *lowConcurrencyModel) Capabilities() sdk.ModelCapabilities {
 	return m.base.Capabilities()
 }
-func (m *openCodeFreeLowConcurrencyModel) ContextWindow() int { return sdk.ModelContextWindow(m.base) }
-func (m *openCodeFreeLowConcurrencyModel) TokenLimits() sdk.TokenLimits {
+func (m *lowConcurrencyModel) ContextWindow() int { return sdk.ModelContextWindow(m.base) }
+func (m *lowConcurrencyModel) TokenLimits() sdk.TokenLimits {
 	return sdk.ModelTokenLimits(m.base)
 }
 
-func (m *openCodeFreeLowConcurrencyModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
+func (m *lowConcurrencyModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
 	if err := m.controller.acquire(ctx); err != nil {
 		return nil, err
 	}
@@ -226,18 +241,18 @@ func (m *openCodeFreeLowConcurrencyModel) Stream(ctx context.Context, request sd
 	}
 	if stream == nil {
 		m.controller.complete(lowConcurrencyCompletion{outcome: lowConcurrencyFailure})
-		return nil, errors.New("open free model stream: nil stream")
+		return nil, errors.New("low concurrency model stream: nil stream")
 	}
-	return &openCodeFreeLowConcurrencyStream{base: stream, controller: m.controller}, nil
+	return &lowConcurrencyStream{base: stream, controller: m.controller}, nil
 }
 
-type openCodeFreeLowConcurrencyStream struct {
+type lowConcurrencyStream struct {
 	base       sdk.Stream
-	controller *openCodeFreeLowConcurrencyController
+	controller *lowConcurrencyController
 	once       sync.Once
 }
 
-func (s *openCodeFreeLowConcurrencyStream) Next(ctx context.Context) (sdk.Event, error) {
+func (s *lowConcurrencyStream) Next(ctx context.Context) (sdk.Event, error) {
 	event, err := s.base.Next(ctx)
 	if err != nil {
 		completion := classifyLowConcurrencyCompletion(err)
@@ -253,12 +268,12 @@ func (s *openCodeFreeLowConcurrencyStream) Next(ctx context.Context) (sdk.Event,
 	return event, nil
 }
 
-func (s *openCodeFreeLowConcurrencyStream) Close() error {
+func (s *lowConcurrencyStream) Close() error {
 	s.finish(lowConcurrencyCompletion{outcome: lowConcurrencyFailure})
 	return s.base.Close()
 }
 
-func (s *openCodeFreeLowConcurrencyStream) finish(completion lowConcurrencyCompletion) {
+func (s *lowConcurrencyStream) finish(completion lowConcurrencyCompletion) {
 	s.once.Do(func() { s.controller.complete(completion) })
 }
 
@@ -277,6 +292,6 @@ func classifyLowConcurrencyCompletion(err error) lowConcurrencyCompletion {
 	return completion
 }
 
-func openCodeFreeLowConcurrencyRoute(baseURL, modelID string) string {
-	return strings.TrimRight(strings.ToLower(strings.TrimSpace(baseURL)), "/") + "|" + strings.ToLower(strings.TrimSpace(modelID))
+func lowConcurrencyRoute(provider, baseURL, modelID string) string {
+	return strings.ToLower(strings.TrimSpace(provider)) + "|" + strings.TrimRight(strings.ToLower(strings.TrimSpace(baseURL)), "/") + "|" + strings.ToLower(strings.TrimSpace(modelID))
 }

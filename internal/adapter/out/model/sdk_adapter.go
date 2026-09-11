@@ -110,6 +110,7 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 	headers := agentHeaders(cfg)
 	isOpenCode := IsProvider(DefaultOpenCodeName, providerName, cfg.baseURL)
 	freeStreamRecovery := isOpenCode && IsFreeModel(cfg.modelID)
+	lowConcurrencyEnabled := cfg.lowConcurrency.Enabled(isOpenCode && IsFreeModel(cfg.modelID))
 	retryPolicy := modelRetryPolicy()
 	providerMaxRetries := runtimepolicy.ModelRetryMaxRetries
 	if freeStreamRecovery {
@@ -158,8 +159,10 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 		model = withContextWindow(model, *cfg.contextWindow)
 	}
 	model = withSessionID(model, sessionID)
+	if lowConcurrencyEnabled {
+		model = withLowConcurrencyMode(model, providerName, lowConcurrencyRoute(providerName, cfg.baseURL, cfg.modelID), runtimepolicy.LowConcurrencyMode())
+	}
 	if freeStreamRecovery {
-		model = withLowConcurrencyMode(model, openCodeFreeLowConcurrencyRoute(cfg.baseURL, cfg.modelID), runtimepolicy.LowConcurrencyMode())
 		model = withStreamRetryPolicyConfig(model, runtimepolicy.ModelRetryMaxRetries, retryPolicy,
 			runtimepolicy.OpenCodeFreeFirstEventTimeout,
 			runtimepolicy.OpenCodeFreeIdleEventTimeout,
@@ -168,7 +171,7 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 	return withModelProfile(model, cfg.profile)
 }
 
-func newSDKAnthropicLanguageModel(baseURL, apiKey, modelID string, opts ...ClientOption) sdk.LanguageModel {
+func newSDKAnthropicLanguageModel(providerName, baseURL, apiKey, modelID string, opts ...ClientOption) sdk.LanguageModel {
 	cfg := newClientConfig(baseURL, apiKey, modelID)
 	for _, opt := range opts {
 		if opt != nil {
@@ -197,7 +200,11 @@ func newSDKAnthropicLanguageModel(baseURL, apiKey, modelID string, opts ...Clien
 	if cfg.contextWindow != nil {
 		model = withContextWindow(model, *cfg.contextWindow)
 	}
-	return withModelProfile(withSessionID(model, sessionID), cfg.profile)
+	model = withSessionID(model, sessionID)
+	if cfg.lowConcurrency.Enabled(false) {
+		model = withLowConcurrencyMode(model, providerName, lowConcurrencyRoute(providerName, cfg.baseURL, cfg.modelID), runtimepolicy.LowConcurrencyMode())
+	}
+	return withModelProfile(model, cfg.profile)
 }
 
 func usesResponsesAPI(modelID, baseURL string) bool {

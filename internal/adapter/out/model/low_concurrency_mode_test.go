@@ -79,8 +79,8 @@ func TestLowConcurrencyModeStartsAtOneConcurrentGeneration(t *testing.T) {
 	base := &lowConcurrencyBlockingModel{started: make(chan *lowConcurrencyBlockingStream, 2)}
 	policy := testLowConcurrencyPolicy()
 	policy.QueueCapacity = 2
-	controller := newOpenCodeFreeLowConcurrencyController(policy)
-	model := &openCodeFreeLowConcurrencyModel{base: base, controller: controller}
+	controller := newLowConcurrencyController("test", policy)
+	model := &lowConcurrencyModel{base: base, controller: controller}
 	streams := make(chan sdk.Stream, 2)
 
 	for range 2 {
@@ -116,8 +116,8 @@ func TestLowConcurrencyModeStartsAtOneConcurrentGeneration(t *testing.T) {
 
 func TestLowConcurrencyModeBoundsWaitingQueue(t *testing.T) {
 	base := &lowConcurrencyBlockingModel{started: make(chan *lowConcurrencyBlockingStream, 2)}
-	controller := newOpenCodeFreeLowConcurrencyController(testLowConcurrencyPolicy())
-	model := &openCodeFreeLowConcurrencyModel{base: base, controller: controller}
+	controller := newLowConcurrencyController("test", testLowConcurrencyPolicy())
+	model := &lowConcurrencyModel{base: base, controller: controller}
 	first, err := model.Stream(context.Background(), sdk.Request{})
 	if err != nil {
 		t.Fatal(err)
@@ -184,7 +184,7 @@ func TestLowConcurrencyModeBacksOffAfterRateLimit(t *testing.T) {
 	base := &lowConcurrencySequenceModel{errors: []error{
 		sdk.NewProviderError(DefaultOpenCodeName, 429, "rate_limit", "slow down"), nil,
 	}}
-	model := &openCodeFreeLowConcurrencyModel{base: base, controller: newOpenCodeFreeLowConcurrencyController(policy)}
+	model := &lowConcurrencyModel{base: base, controller: newLowConcurrencyController("test", policy)}
 
 	if _, err := model.Stream(context.Background(), sdk.Request{}); err == nil {
 		t.Fatal("first request should be rate limited")
@@ -204,5 +204,61 @@ func TestLowConcurrencyModeBacksOffAfterRateLimit(t *testing.T) {
 	}
 	if gap := starts[1].Sub(starts[0]); gap < 9*time.Millisecond {
 		t.Fatalf("post-rate-limit gap = %v, want about 10ms or more", gap)
+	}
+}
+
+func TestPruneLowConcurrencyRequestsRemovesCanceledEntriesAnywhere(t *testing.T) {
+	admission := make(chan struct{}, 3)
+	for range 3 {
+		admission <- struct{}{}
+	}
+	liveA, cancelA := context.WithCancel(context.Background())
+	defer cancelA()
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	liveB, cancelB := context.WithCancel(context.Background())
+	defer cancelB()
+	pending := []*lowConcurrencyRequest{
+		{ctx: liveA, grant: make(chan struct{})},
+		{ctx: canceled, grant: make(chan struct{})},
+		{ctx: liveB, grant: make(chan struct{})},
+	}
+	got := pruneLowConcurrencyRequests(pending, admission)
+	if len(got) != 2 || got[0].ctx != liveA || got[1].ctx != liveB {
+		t.Fatalf("pruned requests = %#v, want both live entries in order", got)
+	}
+	if len(admission) != 2 {
+		t.Fatalf("admission tokens = %d, want 2 after canceled entry release", len(admission))
+	}
+}
+
+func TestLowConcurrencyModeHonorsRetryAfterBeyondPacingMax(t *testing.T) {
+	policy := testLowConcurrencyPolicy()
+	policy.InitialInterval = 5 * time.Millisecond
+	policy.MinInterval = 5 * time.Millisecond
+	policy.MaxInterval = 10 * time.Millisecond
+	providerErr := sdk.NewProviderError(DefaultOpenCodeName, 429, "rate_limit", "slow down")
+	providerErr.RateLimit = &sdk.RateLimitInfo{RetryAfter: 35 * time.Millisecond}
+	base := &lowConcurrencySequenceModel{errors: []error{providerErr, nil}}
+	model := &lowConcurrencyModel{base: base, controller: newLowConcurrencyController("test", policy)}
+
+	if _, err := model.Stream(context.Background(), sdk.Request{}); err == nil {
+		t.Fatal("first request should be rate limited")
+	}
+	stream, err := model.Stream(context.Background(), sdk.Request{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = stream.Next(context.Background())
+	_ = stream.Close()
+
+	base.mu.Lock()
+	starts := append([]time.Time(nil), base.starts...)
+	base.mu.Unlock()
+	if len(starts) != 2 {
+		t.Fatalf("starts = %d, want 2", len(starts))
+	}
+	if gap := starts[1].Sub(starts[0]); gap < 30*time.Millisecond {
+		t.Fatalf("post-rate-limit gap = %v, want shared Retry-After cooldown", gap)
 	}
 }

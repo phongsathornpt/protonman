@@ -65,8 +65,8 @@ func ModelRetrySchedule() []time.Duration {
 	}
 }
 
-// LowConcurrencyPolicy is the single source of truth for OpenCode free-model
-// admission and pacing. Keep product tuning here rather than in adapters/tests.
+// LowConcurrencyPolicy is the single source of truth for provider-neutral
+// low-concurrency admission and pacing. Keep product tuning here rather than in adapters/tests.
 type LowConcurrencyPolicy struct {
 	InitialInterval time.Duration
 	MinInterval     time.Duration

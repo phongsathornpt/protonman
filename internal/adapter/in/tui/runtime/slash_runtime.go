@@ -31,6 +31,7 @@ type slashContext = slashview.Context
 const (
 	slashKindCommand = slashview.ContextCommand
 	slashKindSkill   = slashview.ContextSkill
+	slashKindLow     = slashview.ContextLowConcurrency
 )
 
 func (m bubbleModel) parseSlashContext() (slashContext, bool) {
@@ -123,7 +124,7 @@ func (m *bubbleModel) acceptSlash(run bool) (applied bool, command tea.Cmd) {
 	context, _ := m.parseSlashContext()
 	prompt := m.panes.bottom.prompt()
 	var insertion string
-	if context.Kind == slashKindSkill {
+	if context.Kind == slashKindSkill || context.Kind == slashKindLow {
 		insertion = context.Lead + selected.Name
 	} else {
 		insertion = context.Prefix + selected.Name

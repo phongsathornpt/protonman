@@ -32,6 +32,7 @@ type BubbleTeaUI struct {
 	finalMessages           []model.Message
 	finalAgentProfile       string
 	finalReasoningEffort    sdk.ReasoningEffort
+	lowConcurrencyMode      model.LowConcurrencySetting
 	modelConfig             config.ModelConfig
 	agentConfig             config.AgentConfig
 	hasAgentConfig          bool
@@ -109,6 +110,11 @@ func (ui *BubbleTeaUI) AgentProfile() string {
 // ReasoningEffort returns the latest explicit session reasoning override.
 func (ui *BubbleTeaUI) ReasoningEffort() sdk.ReasoningEffort {
 	return ui.finalReasoningEffort
+}
+
+// LowConcurrencyMode returns the latest session-local low-concurrency override.
+func (ui *BubbleTeaUI) LowConcurrencyMode() string {
+	return ui.lowConcurrencyMode.String()
 }
 
 // Run starts Bubble Tea with raw input, alternate-screen rendering, and mouse

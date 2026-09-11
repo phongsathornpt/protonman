@@ -67,15 +67,17 @@ func (m *bubbleModel) updateMouseEvent(message tea.MouseMsg) tea.Cmd {
 		m.panes.transcript, command = m.panes.transcript.Update(message)
 		return command
 	}
-	if m.panes.bottom.has(skillsViewID) {
-		if view, ok := m.panes.bottom.find(skillsViewID).(*skillsPaneView); ok {
+	if top := m.panes.bottom.top(); top != nil {
+		if view, ok := top.(isolatedPaneKeyHandler); ok {
+			var keyCode rune
 			switch mouse.Button {
 			case tea.MouseWheelUp:
-				result := view.HandlePaneKey(newPaneRenderContext(m), tea.KeyPressMsg{Code: tea.KeyUp})
-				m.requestRelayout()
-				return result.cmd
+				keyCode = tea.KeyUp
 			case tea.MouseWheelDown:
-				result := view.HandlePaneKey(newPaneRenderContext(m), tea.KeyPressMsg{Code: tea.KeyDown})
+				keyCode = tea.KeyDown
+			}
+			if keyCode != 0 {
+				result := view.HandlePaneKey(newPaneRenderContext(m), tea.KeyPressMsg{Code: keyCode})
 				m.requestRelayout()
 				return result.cmd
 			}
@@ -136,6 +138,12 @@ func (m *bubbleModel) updateRuntimeEvent(msg tea.Msg) (tea.Cmd, bool) {
 		return m.updateProviderDeleted(message), true
 	case permissionRuleSavedMsg:
 		return m.updatePermissionRuleSaved(message), true
+	case transientNoticeExpiredMsg:
+		if message.id == m.transientNoticeID {
+			m.transientNotice = ""
+			m.refreshFrameChromeOnly()
+		}
+		return nil, true
 	case turnmsg.Delta:
 		return m.updateTurnDelta(message), true
 	case turnmsg.EventsClosed:

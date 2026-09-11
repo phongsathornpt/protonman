@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -21,6 +22,7 @@ const (
 	paneActionPermissionActivity
 	paneActionPermissionResolve
 	paneActionSetPermissionMode
+	paneActionSetLowConcurrency
 	paneActionScrollLines
 	paneActionScrollPage
 	paneActionProviderDelete
@@ -42,6 +44,7 @@ type paneAction struct {
 	activity       string
 	permission     permissionOption
 	permissionMode permissionModeChoice
+	lowConcurrency model.LowConcurrencySetting
 	scrollLines    int
 	key            tea.KeyPressMsg
 	providerItem   providerSelectItem
@@ -98,6 +101,9 @@ func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
 	case paneActionSetPermissionMode:
 		m.panes.bottom.remove(permissionModeViewID)
 		m.applyPermissionModeChoice(action.permissionMode)
+	case paneActionSetLowConcurrency:
+		m.panes.bottom.remove(lowConcurrencyViewID)
+		return m.applyLowConcurrencySetting(action.lowConcurrency)
 	case paneActionScrollLines:
 		m.scrollConversationLines(action.scrollLines)
 	case paneActionScrollPage:

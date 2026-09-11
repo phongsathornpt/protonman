@@ -14,20 +14,21 @@ import (
 
 // clientConfig contains CLI-owned settings used to construct proton-sdk provider models.
 type clientConfig struct {
-	baseURL       string
-	apiKey        string
-	modelID       string
-	sessionID     string
-	clientName    string
-	userAgent     string
-	agentType     agentidentity.Type
-	agentProfile  string
-	httpClient    *http.Client
-	vision        *bool
-	tools         *bool
-	contextWindow *int
-	tokenLimits   *sdk.TokenLimits
-	profile       *modelprofile.Resolved
+	baseURL        string
+	apiKey         string
+	modelID        string
+	sessionID      string
+	clientName     string
+	userAgent      string
+	agentType      agentidentity.Type
+	agentProfile   string
+	httpClient     *http.Client
+	vision         *bool
+	tools          *bool
+	contextWindow  *int
+	tokenLimits    *sdk.TokenLimits
+	profile        *modelprofile.Resolved
+	lowConcurrency LowConcurrencySetting
 }
 
 // ClientOption configures provider model construction.
@@ -67,6 +68,10 @@ func WithContextWindow(tokens int) ClientOption {
 			c.contextWindow = &tokens
 		}
 	}
+}
+
+func WithLowConcurrencyMode(setting LowConcurrencySetting) ClientOption {
+	return func(c *clientConfig) { c.lowConcurrency = setting }
 }
 
 func WithRequestTimeout(timeout time.Duration) ClientOption {
@@ -113,7 +118,7 @@ func NewProviderLanguageModel(
 	opts = append([]ClientOption{withResolvedModelProfile(builtinProfile)}, opts...)
 	switch protocol {
 	case ProviderProtocolAnthropic:
-		return newSDKAnthropicLanguageModel(baseURL, apiKey, modelID, opts...)
+		return newSDKAnthropicLanguageModel(providerName, baseURL, apiKey, modelID, opts...)
 	default:
 		return newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID, opts...)
 	}

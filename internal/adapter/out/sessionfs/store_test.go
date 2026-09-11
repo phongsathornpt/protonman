@@ -457,12 +457,13 @@ func TestFileStorePersistsIdentityAndListsSummaries(t *testing.T) {
 	}
 	ctx := context.Background()
 	if err := store.Save(ctx, "workspace-abc-first", State{
-		PermissionMode:  permission.ModeAsk.String(),
-		WorkspaceKey:    "abc",
-		WorkspaceName:   "proton",
-		AgentProfile:    "intelligence",
-		ReasoningEffort: "high",
-		Messages:        []Message{{Role: model.RoleUser, Content: "  Refactor   the session store safely  "}},
+		PermissionMode:     permission.ModeAsk.String(),
+		WorkspaceKey:       "abc",
+		WorkspaceName:      "proton",
+		AgentProfile:       "intelligence",
+		ReasoningEffort:    "high",
+		LowConcurrencyMode: "on",
+		Messages:           []Message{{Role: model.RoleUser, Content: "  Refactor   the session store safely  "}},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -481,7 +482,7 @@ func TestFileStorePersistsIdentityAndListsSummaries(t *testing.T) {
 		t.Fatalf("summaries = %d, want 1", len(summaries))
 	}
 	got := summaries[0]
-	if got.ID != "workspace-abc-first" || got.Preview != "Refactor the session store safely" || got.MessageCount != 1 {
+	if got.ID != "workspace-abc-first" || got.Preview != "Refactor the session store safely" || got.MessageCount != 1 || got.LowConcurrencyMode != "on" {
 		t.Fatalf("summary = %+v", got)
 	}
 }
