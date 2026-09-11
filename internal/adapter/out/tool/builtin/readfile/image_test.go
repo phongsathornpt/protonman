@@ -93,3 +93,17 @@ func TestImageDimensionsWithinSafeAnalysisLimit(t *testing.T) {
 		})
 	}
 }
+
+func TestReadFileExplicitImageViewRejectsNonImage(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	if err := os.WriteFile(filepath.Join(ws.Root(), "notes.txt"), []byte("not an image\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := New(ws).Execute(context.Background(), newJSONCall(t, "image-text", "read", map[string]any{
+		"path": "notes.txt", "view": "image",
+	}))
+	if err == nil || !strings.Contains(err.Error(), "is not a supported image") {
+		t.Fatalf("Execute() error = %v, want supported-image rejection", err)
+	}
+}
