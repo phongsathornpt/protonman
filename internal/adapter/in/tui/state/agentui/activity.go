@@ -58,6 +58,34 @@ func (i ActivityIntent) Label() string {
 	}
 }
 
+type LegendItem struct {
+	Label   string
+	Meaning string
+}
+
+// Legend returns the presentation legend mapping Dota 2 status calls to agent activity meanings.
+func Legend() []LegendItem {
+	return []LegendItem{
+		{Label: "W8", Meaning: "queued"},
+		{Label: "Roaming", Meaning: "exploring"},
+		{Label: "Farming", Meaning: "gathering evidence"},
+		{Label: "Skilling", Meaning: "reasoning"},
+		{Label: "Ganking", Meaning: "searching"},
+		{Label: "Pushing", Meaning: "implementing"},
+		{Label: "Defending", Meaning: "verifying"},
+		{Label: "Sticking", Meaning: "result ready"},
+		{Label: "Integrated", Meaning: "result consumed"},
+		{Label: "Care", Meaning: "warning / failed"},
+		{Label: "B", Meaning: "canceling / retreat"},
+		{Label: "Ready", Meaning: "completed"},
+	}
+}
+
+// LegendCompact returns a single-line summary of the status labels for help and pane displays.
+func LegendCompact() string {
+	return "W8 queued · Roam explore · Farm read · Skill think · Gank search · Push edit · Defend test · B cancel · Ready done"
+}
+
 type Activity struct {
 	Intent   ActivityIntent
 	ToolName string

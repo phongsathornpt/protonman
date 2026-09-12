@@ -84,6 +84,9 @@ func AgentRows(snapshot AgentsSnapshot) []string {
 	if hidden := len(retained) - len(visible); hidden > 0 {
 		rows = append(rows, tuistyle.MutedStyle.Render(fmt.Sprintf("… %d more retained", hidden)))
 	}
+	if panecommon.ModeForHeight(snapshot.Height) != panecommon.LayoutTiny && snapshot.Width >= 40 {
+		rows = append(rows, "", tuistyle.MutedStyle.Render(textview.TruncateEllipsis("Status: "+agentuistate.LegendCompact(), max(12, snapshot.Width-4))))
+	}
 	return rows
 }
 

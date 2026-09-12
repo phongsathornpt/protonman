@@ -3,6 +3,7 @@ package agentui
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -55,5 +56,29 @@ func TestActivityFromEventProjectsToolSemantics(t *testing.T) {
 		if got := ActivityFromEvent(tc.event).Intent; got != tc.want {
 			t.Fatalf("event %s activity=%q, want %q", tc.event.Kind, got, tc.want)
 		}
+	}
+}
+
+func TestLegendCoversAllPresentationIntents(t *testing.T) {
+	legend := Legend()
+	if len(legend) != 12 {
+		t.Fatalf("Legend() returned %d items, want 12", len(legend))
+	}
+	expectedLabels := map[string]bool{
+		"W8": true, "Roaming": true, "Farming": true, "Skilling": true,
+		"Ganking": true, "Pushing": true, "Defending": true, "Sticking": true,
+		"Integrated": true, "Care": true, "B": true, "Ready": true,
+	}
+	for _, item := range legend {
+		if !expectedLabels[item.Label] {
+			t.Errorf("unexpected legend label %q", item.Label)
+		}
+		if item.Meaning == "" {
+			t.Errorf("empty meaning for label %q", item.Label)
+		}
+	}
+	compact := LegendCompact()
+	if !strings.Contains(compact, "W8 queued") || !strings.Contains(compact, "Ready done") {
+		t.Fatalf("LegendCompact() missing expected phrases: %q", compact)
 	}
 }
