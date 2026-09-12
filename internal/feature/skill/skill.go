@@ -59,6 +59,9 @@ type Skill struct {
 	AllowedTools  []string       `json:"allowed_tools,omitempty"`
 	Instructions  string         `json:"instructions"`
 	Resources     []string       `json:"resources,omitempty"`
+	ComputedHash  string         `json:"computed_hash,omitempty"`
+	Locked        bool           `json:"locked,omitempty"`
+	LockStatus    string         `json:"lock_status,omitempty"`
 }
 
 // Validate checks that the skill satisfies specification constraints.
@@ -123,19 +126,25 @@ func ValidateDescription(desc string) error {
 
 // CatalogItem represents a concise summary of an available skill for Tier 1 progressive disclosure.
 type CatalogItem struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Location    string `json:"location"`
-	Scope       Scope  `json:"scope"`
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	Location     string `json:"location"`
+	Scope        Scope  `json:"scope"`
+	ComputedHash string `json:"computed_hash,omitempty"`
+	Locked       bool   `json:"locked,omitempty"`
+	LockStatus   string `json:"lock_status,omitempty"`
 }
 
 // ToCatalogItem extracts a CatalogItem from the Skill.
 func (s Skill) ToCatalogItem() CatalogItem {
 	return CatalogItem{
-		Name:        s.Name,
-		Description: s.Description,
-		Location:    s.Location,
-		Scope:       s.Scope,
+		Name:         s.Name,
+		Description:  s.Description,
+		Location:     s.Location,
+		Scope:        s.Scope,
+		ComputedHash: s.ComputedHash,
+		Locked:       s.Locked,
+		LockStatus:   s.LockStatus,
 	}
 }
 

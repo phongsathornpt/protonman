@@ -12,12 +12,13 @@ import (
 )
 
 const (
-	RootDirName    = ".protonman"
-	ConfigFileName = "config.toml"
-	SessionsDir    = "sessions"
-	CheckpointsDir = "checkpoints"
-	SkillsDir      = "skills"
-	LogsDir        = "logs"
+	RootDirName        = ".protonman"
+	ConfigFileName     = "config.toml"
+	SessionsDir        = "sessions"
+	CheckpointsDir     = "checkpoints"
+	SkillsDir          = "skills"
+	LogsDir            = "logs"
+	SkillsLockFileName = "skills-lock.json"
 )
 
 // Dirs is the resolved Protonman filesystem layout for one user home.
@@ -130,6 +131,14 @@ func ProjectConfig(workDir string) string { return filepath.Join(ProjectRoot(wor
 
 // ProjectSkills returns the canonical project-local skills directory for new data.
 func ProjectSkills(workDir string) string { return filepath.Join(ProjectRoot(workDir), SkillsDir) }
+
+// ProjectSkillsLock returns the path to the workspace root skills-lock.json.
+func ProjectSkillsLock(workDir string) string { return filepath.Join(workDir, SkillsLockFileName) }
+
+// ProtonmanSkillsLock returns the path to the project-local .protonman/skills-lock.json.
+func ProtonmanSkillsLock(workDir string) string {
+	return filepath.Join(ProjectRoot(workDir), SkillsLockFileName)
+}
 
 // ResolveRuntimeLayout resolves user-global, workspace, and project-local paths once.
 func ResolveRuntimeLayout(explicitHome, workDir string) (RuntimeLayout, error) {

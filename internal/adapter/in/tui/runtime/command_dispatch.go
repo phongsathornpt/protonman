@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -12,6 +13,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 )
 
@@ -378,6 +380,90 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 		m.refreshViewport()
 		return nil
 	}
+	if trimmedArg == "check" || trimmedArg == "verify" {
+		lockPath := m.skills.ProjectLockPath()
+		if lockPath == "" {
+			lockPath = filepath.Join(m.workDir, skill.LockFileName)
+		}
+		lock, err := skill.ReadLockFile(lockPath)
+		if err != nil || len(lock.Skills) == 0 {
+			m.appendLine(fmt.Sprintf("No project skill lock found (%s).", lockPath))
+			m.appendLine("Use /skills lock to generate a lockfile for project skills.")
+			m.refreshViewport()
+			return nil
+		}
+
+		projectSkills := make([]skill.Skill, 0)
+		for _, s := range m.skills.List() {
+			if s.Scope == skill.ScopeProject {
+				projectSkills = append(projectSkills, s)
+			}
+		}
+		report := skill.VerifyProjectSkills(lock, projectSkills)
+		report.LockPath = lockPath
+		m.skills.SetProjectLock(lockPath, &report)
+
+		m.appendLine(fmt.Sprintf("Project Skill Lock (%s):", report.LockPath))
+		verified, drifted, missing, unlocked := report.Summary()
+		m.appendLine(fmt.Sprintf("  Summary: %d verified, %d drifted, %d missing, %d unlocked", verified, drifted, missing, unlocked))
+		for _, res := range report.Results {
+			switch res.Status {
+			case skill.LockStatusVerified:
+				m.appendLine(fmt.Sprintf("  [verified] %s (%s)", res.Name, shortHash(res.ComputedHash)))
+			case skill.LockStatusDrifted:
+				m.appendError(fmt.Sprintf("  [drifted]  %s: expected %s, got %s", res.Name, shortHash(res.ExpectedHash), shortHash(res.ComputedHash)))
+			case skill.LockStatusMissing:
+				m.appendError(fmt.Sprintf("  [missing]  %s: expected %s (not on disk)", res.Name, shortHash(res.ExpectedHash)))
+			case skill.LockStatusUnlocked:
+				m.appendLine(fmt.Sprintf("  [unlocked] %s: on disk but not locked", res.Name))
+			}
+		}
+		if report.IsClean() {
+			m.appendLine("All locked skills verified cleanly.")
+		}
+		m.refreshViewport()
+		return nil
+	}
+	if trimmedArg == "lock" {
+		projectSkills := make([]skill.Skill, 0)
+		for _, s := range m.skills.List() {
+			if s.Scope == skill.ScopeProject {
+				projectSkills = append(projectSkills, s)
+			}
+		}
+		if len(projectSkills) == 0 {
+			m.appendError("No project skills found to lock. Only project-scoped skills can be locked.")
+			m.refreshViewport()
+			return nil
+		}
+
+		lockPath := m.skills.ProjectLockPath()
+		if lockPath == "" {
+			lockPath = filepath.Join(m.workDir, skill.LockFileName)
+		}
+
+		existingLock, _ := skill.ReadLockFile(lockPath)
+		newLock, err := skill.GenerateProjectLock(projectSkills, &existingLock)
+		if err != nil {
+			m.appendError(fmt.Sprintf("generate project skill lock: %v", err))
+			m.refreshViewport()
+			return nil
+		}
+
+		if err := skill.WriteLockFile(lockPath, newLock); err != nil {
+			m.appendError(fmt.Sprintf("write project skill lock: %v", err))
+			m.refreshViewport()
+			return nil
+		}
+
+		report := skill.VerifyProjectSkills(newLock, projectSkills)
+		report.LockPath = lockPath
+		m.skills.SetProjectLock(lockPath, &report)
+
+		m.appendLine(fmt.Sprintf("Locked %d project skill(s) to %s.", len(newLock.Skills), lockPath))
+		m.refreshViewport()
+		return nil
+	}
 	if trimmedArg == "toggle" {
 		if len(parts) < 3 || strings.TrimSpace(parts[2]) == "" {
 			m.appendError("usage: /skills toggle <name>")
@@ -486,4 +572,11 @@ func (m *bubbleModel) startBash(command string) tea.Cmd {
 		return nil
 	}
 	return m.startTool(call)
+}
+
+func shortHash(h string) string {
+	if len(h) <= 12 {
+		return h
+	}
+	return h[:12]
 }

@@ -134,6 +134,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		fmt.Fprintln(os.Stderr, "warning:", warning)
 	}
 	skillRegistry := skill.NewRegistry(skillsResult.Skills...)
+	skillRegistry.SetProjectLock(skillsResult.LockPath, skillsResult.LockReport)
 	policy, err := permission.NewPolicy(loadedConfig.Permission)
 	if err != nil {
 		return nil, fmt.Errorf("create permission policy: %w", err)

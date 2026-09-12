@@ -22,8 +22,10 @@ type Options struct {
 
 // DiscoveryResult contains discovered skills and any non-fatal diagnostic warnings.
 type DiscoveryResult struct {
-	Skills   []Skill
-	Warnings []string
+	Skills     []Skill
+	Warnings   []string
+	LockPath   string
+	LockReport *ProjectLockReport
 }
 
 // Discover scans user-level and project-level directories for Agent Skills.
@@ -115,6 +117,60 @@ func Discover(ctx context.Context, opts Options) (DiscoveryResult, error) {
 		}
 
 		scanDirectory(dir, ScopeProject, projectSkills, &result.Warnings)
+	}
+
+	// 3. Project skill lock verification (skills-lock.json)
+	if projectScope.Available && opts.ProjectTrusted {
+		lockPath, hasLock := ResolveProjectLockPath(workDir, &projectScope)
+		result.LockPath = lockPath
+		if hasLock {
+			lock, err := ReadLockFile(lockPath)
+			if err != nil {
+				result.Warnings = append(result.Warnings, fmt.Sprintf(
+					"failed to read project skill lock %q: %v", lockPath, err,
+				))
+			} else {
+				projSkillsList := make([]Skill, 0, len(projectSkills))
+				for _, s := range projectSkills {
+					projSkillsList = append(projSkillsList, s)
+				}
+				report := VerifyProjectSkills(lock, projSkillsList)
+				report.LockPath = lockPath
+				result.LockReport = &report
+
+				for _, res := range report.Results {
+					if s, ok := projectSkills[res.Name]; ok {
+						s.ComputedHash = res.ComputedHash
+						s.Locked = (res.Status == LockStatusVerified || res.Status == LockStatusDrifted)
+						s.LockStatus = res.Status
+						projectSkills[res.Name] = s
+					}
+					if res.Status == LockStatusDrifted {
+						result.Warnings = append(result.Warnings, fmt.Sprintf(
+							"warning: project skill %q integrity mismatch: computed hash %s != locked hash %s (possible drift or tampering)",
+							res.Name, res.ComputedHash, res.ExpectedHash,
+						))
+					} else if res.Status == LockStatusMissing {
+						result.Warnings = append(result.Warnings, fmt.Sprintf(
+							"warning: locked project skill %q is missing from project skills directory",
+							res.Name,
+						))
+					}
+				}
+			}
+		} else {
+			for name, s := range projectSkills {
+				if s.ComputedHash == "" && s.BaseDir != "" {
+					h, err := ComputeSkillFolderHash(s.BaseDir)
+					if err == nil {
+						s.ComputedHash = h
+					}
+				}
+				s.Locked = false
+				s.LockStatus = LockStatusUnlocked
+				projectSkills[name] = s
+			}
+		}
 	}
 
 	// Merge: user skills first, then project skills override
