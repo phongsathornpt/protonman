@@ -6,8 +6,8 @@ import (
 )
 
 // Section is one deterministic contribution to the model-facing system prompt.
-// Orders are intentionally sparse so new stable sections can be inserted without
-// moving volatile sections toward the reusable prefix.
+// Orders are intentionally sparse so stable and semi-stable sections stay in the
+// reusable prefix while turn/session volatility is pushed toward the suffix.
 type Section struct {
 	Name  string
 	Order int
@@ -19,18 +19,19 @@ const (
 
 	orderExecution        = 0
 	orderToolDiscipline   = 100
+	orderWorkspace        = 200
 	orderTaskCoordination = 300
 	orderDelegation       = 400
 	orderMCP              = 500
 	orderVerification     = 600
-	orderGrounding        = 800
 
 	orderProjectInstructions    = 3000
 	orderAdditionalInstructions = 4000
-	orderSkills                 = 5000
-	orderRole                   = 6000
-	orderActiveGoal             = 7000
-	orderWorkspace              = 8000
+
+	orderRole       = 7000
+	orderActiveGoal = 8000
+	orderSkills     = 9000
+	orderGrounding  = 10000
 )
 
 func renderSections(sections []Section) string {

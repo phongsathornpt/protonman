@@ -17,40 +17,50 @@ func TestRenderSectionsUsesDeterministicOrder(t *testing.T) {
 	}
 }
 
-func TestRenderPlacesVolatileWorkspaceAfterReusableSections(t *testing.T) {
+func TestRenderPlacesVolatileContextAfterReusablePrefix(t *testing.T) {
 	got := Render(Spec{
 		Role:                "bounded implementation role",
 		ActiveGoal:          "finish prompt cache work",
 		Workspace:           "/volatile/workspace",
+		GroundingEvidence:   "workspace",
 		ProjectInstructions: "project-stable instructions",
+		ExtraInstructions:   []string{"session-stable instruction"},
 		Skills:              "session skill context",
 		Capabilities:        ToolCapabilities{Tasks: true, Agents: true},
 		Mutations:           MutationCapabilities{Source: true},
 		AvailableTools:      []string{"read", "edit", "bash", "todo", "subagent"},
 	})
 
-	workspace := strings.Index(got, "# Workspace")
-	if workspace < 0 {
-		t.Fatalf("workspace section missing:\n%s", got)
+	role := strings.Index(got, "# Role")
+	if role < 0 {
+		t.Fatalf("role section missing:\n%s", got)
 	}
 	for _, marker := range []string{
 		"# Execution Contract",
 		"# Tool Use",
+		"# Workspace",
 		"# Task Coordination",
 		"# Delegation Protocol",
 		"# Editing And Verification",
 		"# Project Instructions",
-		"# Skills",
-		"# Role",
-		"# Active Goal",
+		"# Additional Instructions",
 	} {
 		index := strings.Index(got, marker)
 		if index < 0 {
 			t.Fatalf("section %q missing:\n%s", marker, got)
 		}
-		if index >= workspace {
-			t.Fatalf("section %q begins at %d after volatile workspace at %d:\n%s", marker, index, workspace, got)
+		if index >= role {
+			t.Fatalf("reusable section %q begins at %d after volatile suffix starts at %d:\n%s", marker, index, role, got)
 		}
+	}
+
+	last := role
+	for _, marker := range []string{"# Active Goal", "# Skills", "# Grounding Contract"} {
+		index := strings.Index(got, marker)
+		if index <= last {
+			t.Fatalf("volatile section %q is not ordered after previous boundary in prompt:\n%s", marker, got)
+		}
+		last = index
 	}
 }
 
@@ -72,7 +82,7 @@ func TestModelPromptHintsDoNotAffectCanonicalPrompt(t *testing.T) {
 	}
 }
 
-func TestWorkspaceChangePreservesPromptPrefixUntilWorkspaceSection(t *testing.T) {
+func TestWorkspaceValueDoesNotAffectCanonicalPrompt(t *testing.T) {
 	base := Spec{
 		Role:                "bounded role",
 		ActiveGoal:          "keep goal stable",
@@ -85,15 +95,8 @@ func TestWorkspaceChangePreservesPromptPrefixUntilWorkspaceSection(t *testing.T)
 	right := base
 	right.Workspace = "/repo/b"
 
-	a := Render(left)
-	b := Render(right)
-	prefix := longestCommonPrefix(a, b)
-	workspace := strings.Index(a, "# Workspace")
-	if workspace < 0 {
-		t.Fatalf("workspace section missing:\n%s", a)
-	}
-	if prefix < workspace {
-		t.Fatalf("workspace change diverged at byte %d before workspace section at %d", prefix, workspace)
+	if a, b := Render(left), Render(right); a != b {
+		t.Fatalf("absolute workspace value changed canonical prompt\n--- left ---\n%s\n--- right ---\n%s", a, b)
 	}
 }
 
@@ -177,6 +180,31 @@ func TestSkillStateChangePreservesEarlierPrefix(t *testing.T) {
 	}
 	if prefix < boundary {
 		t.Fatalf("skill change diverged at byte %d before skills section at %d", prefix, boundary)
+	}
+}
+
+func TestGroundingChangePreservesEarlierPromptPrefix(t *testing.T) {
+	base := Spec{
+		ProjectInstructions: "stable project instructions",
+		Role:                "stable role",
+		ActiveGoal:          "stable goal",
+		Skills:              "stable skills",
+		Workspace:           "/repo",
+	}
+	left := base
+	left.GroundingEvidence = "workspace"
+	right := base
+	right.GroundingEvidence = "external"
+
+	a := Render(left)
+	b := Render(right)
+	prefix := longestCommonPrefix(a, b)
+	boundary := strings.Index(a, "# Grounding Contract")
+	if boundary < 0 {
+		t.Fatalf("grounding section missing:\n%s", a)
+	}
+	if prefix < boundary {
+		t.Fatalf("grounding change diverged at byte %d before grounding section at %d", prefix, boundary)
 	}
 }
 

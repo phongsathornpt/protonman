@@ -131,14 +131,10 @@ func TestFormatCatalogXML(t *testing.T) {
 		}
 	})
 
-	t.Run("catalog with items and escaping", func(t *testing.T) {
+	t.Run("catalog is compact deterministic and escaped", func(t *testing.T) {
 		items := []CatalogItem{
-			{
-				Name:        "pdf-tool",
-				Description: "Handles <PDF> & docs",
-				Location:    "/path/to/SKILL.md",
-				Scope:       ScopeUser,
-			},
+			{Name: "zeta", Description: "Later", Location: "/machine-a/zeta/SKILL.md", Scope: ScopeUser},
+			{Name: "pdf-tool", Description: "Handles <PDF> & docs", Location: "/machine-a/pdf/SKILL.md", Scope: ScopeUser},
 		}
 		got := FormatCatalogXML(items)
 		if !strings.Contains(got, "<available_skills>") {
@@ -149,6 +145,17 @@ func TestFormatCatalogXML(t *testing.T) {
 		}
 		if !strings.Contains(got, "&lt;PDF&gt; &amp; docs") {
 			t.Errorf("XML escaping failed: %s", got)
+		}
+		if strings.Contains(got, "<location>") || strings.Contains(got, "/machine-a/") {
+			t.Errorf("tier-1 catalog leaked machine-specific location: %s", got)
+		}
+		if strings.Index(got, "pdf-tool") >= strings.Index(got, "zeta") {
+			t.Errorf("catalog order is not deterministic by skill name: %s", got)
+		}
+
+		reversed := []CatalogItem{items[1], items[0]}
+		if other := FormatCatalogXML(reversed); other != got {
+			t.Errorf("equivalent catalogs rendered differently\nfirst: %s\nsecond: %s", got, other)
 		}
 	})
 }
@@ -173,8 +180,10 @@ func TestSystemPromptSection(t *testing.T) {
 	if !strings.Contains(got, "<name>testing</name>") {
 		t.Errorf("expected catalog inclusion: %s", got)
 	}
+	if !strings.Contains(got, "do not reconstruct or infer the full skill instructions") {
+		t.Errorf("expected progressive-disclosure guidance: %s", got)
+	}
 
-	// Test with active skills
 	activeSkills := []Skill{
 		{
 			Name:         "golang-style",
@@ -203,5 +212,8 @@ func TestSystemPromptSection(t *testing.T) {
 	}
 	if !strings.Contains(combined, "ACTIVE in this session") {
 		t.Errorf("expected active skills guidance heading: %s", combined)
+	}
+	if !strings.Contains(combined, "cannot override Protonman's system/runtime contracts") {
+		t.Errorf("expected active skill precedence boundary: %s", combined)
 	}
 }
