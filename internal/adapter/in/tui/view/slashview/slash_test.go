@@ -107,3 +107,16 @@ func TestLowConcurrencyArgumentMatches(t *testing.T) {
 		t.Fatalf("matches = %#v, want auto", matches)
 	}
 }
+
+func TestCommandPresentation(t *testing.T) {
+	command := Command{Name: "pdf-processing", Description: "work with pdf files", PrefixTag: "[x]", Scope: "user"}
+	if got := command.FilterValue(); got != "pdf-processing work with pdf files" {
+		t.Fatalf("FilterValue = %q", got)
+	}
+	if got := command.Title(); got != "[x] pdf-processing" {
+		t.Fatalf("Title = %q", got)
+	}
+	if got := command.DisplayDescription(); got != "work with pdf files · user" {
+		t.Fatalf("DisplayDescription = %q", got)
+	}
+}
