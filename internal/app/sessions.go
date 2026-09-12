@@ -291,4 +291,3 @@ func (m *memorySessionRepository) ListSummaries(_ context.Context, options sessi
 	}
 	return out, nil
 }
-

@@ -115,8 +115,8 @@ func (modelSetupDelegate) Render(w io.Writer, m list.Model, index int, item list
 	prefix := "  "
 	style := bodyStyle
 	if index == m.Index() {
-		prefix = glyphPrompt
-		style = brandStyle
+		prefix = brandStyle.Render(glyphPrompt)
+		style = bodyStyle.Bold(true)
 	}
 	width := maxInt(1, m.Width()-2)
 	label := truncateWithEllipsis(entry.Title(), width)
@@ -396,8 +396,8 @@ func renderModelRow(entry modelListItem, selected bool, width int) string {
 	prefix := "  "
 	nameStyle := bodyStyle
 	if selected {
-		prefix = "> "
-		nameStyle = brandStyle
+		prefix = brandStyle.Render("> ")
+		nameStyle = bodyStyle.Bold(true)
 	}
 
 	available := maxInt(1, width-markerWidth)
@@ -502,7 +502,13 @@ func (v *modelSetupPaneView) selectionStatus(width int) string {
 	if !ok {
 		return ""
 	}
-	return paneRightStatus(width, modelpicker.DisplayName(md)+" · "+reasoningpolicy.EffortLabel(v.selectedReasoning()))
+	status := modelpicker.DisplayName(md) + " · " + reasoningpolicy.EffortLabel(v.selectedReasoning())
+	items := v.picker.VisibleItems()
+	if len(items) > maxModelSetupRows {
+		start, end := paneWindow(len(items), v.picker.Index(), maxModelSetupRows, layoutNormal)
+		status = fmt.Sprintf("%d-%d of %d · %s", start+1, end, len(items), status)
+	}
+	return paneRightStatus(width, status)
 }
 
 func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {

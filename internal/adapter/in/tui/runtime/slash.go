@@ -129,8 +129,8 @@ func (v *slashPaneView) commandRows(ctx paneRenderContext) []string {
 		prefix := "  "
 		nameStyle := bodyStyle
 		if i == v.picker.Index() {
-			prefix = glyphPrompt
-			nameStyle = brandStyle
+			prefix = brandStyle.Render(glyphPrompt)
+			nameStyle = bodyStyle.Bold(true)
 		}
 		name := entry.Title()
 		description := entry.Description()

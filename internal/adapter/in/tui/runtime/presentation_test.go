@@ -321,6 +321,28 @@ func TestTodoPaneUtilizesAvailableWidthWithoutPrematureTruncation(t *testing.T) 
 	}
 }
 
+func TestSkillsPaneUnifiedSelectionStyle(t *testing.T) {
+	m := newTestSkillsModel(t, 2)
+	m.resize(80, 20)
+	view := &skillsPaneView{}
+	rendered := view.Render(newPaneRenderContext(m))
+	wantPrompt := brandStyle.Render(glyphPrompt)
+	if !strings.Contains(rendered, wantPrompt) {
+		t.Fatalf("skills pane missing brand prompt cursor: %q", rendered)
+	}
+}
+
+func TestPermissionModeSelectionStyle(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 20)
+	view := &permissionModePaneView{index: 0}
+	rendered := view.Render(newPaneRenderContext(m))
+	wantPrompt := brandStyle.Render(glyphPrompt)
+	if !strings.Contains(rendered, wantPrompt) {
+		t.Fatalf("permission pane missing brand prompt cursor: %q", rendered)
+	}
+}
+
 func TestCoreGlyphsHaveStableSingleCellWidth(t *testing.T) {
 	glyphs := map[string]string{"prompt": glyphPrompt, "mark": glyphMark, "success": glyphToolSuccess, "error": glyphToolError, "denied": glyphToolDenied, "web": glyphWeb, "read": glyphRead, "dir": glyphDir, "search": glyphSearch, "exec": glyphExec, "edit": glyphEdit, "skill": glyphSkill, "agent": glyphAgent, "generic": glyphGeneric, "todo_pending": glyphTodoPending, "todo_active": glyphTodoActive}
 	for name, glyph := range glyphs {

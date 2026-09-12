@@ -1358,4 +1358,3 @@ func TestResumeCurrentSessionClosesPane(t *testing.T) {
 		t.Fatalf("expected already in session message: %q", plainTranscript(m))
 	}
 }
-

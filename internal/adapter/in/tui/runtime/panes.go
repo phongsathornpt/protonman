@@ -93,8 +93,8 @@ func (v *lowConcurrencyPaneView) Render(ctx paneRenderContext) string {
 		marker := "  "
 		style := mutedStyle
 		if i == v.index {
-			marker = "> "
-			style = userStyle
+			marker = brandStyle.Render(glyphPrompt)
+			style = bodyStyle.Bold(true)
 		}
 		rows = append(rows, marker+style.Render(choice.label)+"  "+mutedStyle.Render(choice.desc))
 	}
@@ -166,8 +166,8 @@ func (v *permissionModePaneView) Render(ctx paneRenderContext) string {
 		marker := "  "
 		style := mutedStyle
 		if i == v.index {
-			marker = "> "
-			style = userStyle
+			marker = brandStyle.Render(glyphPrompt)
+			style = bodyStyle.Bold(true)
 		}
 		rows = append(rows, marker+style.Render(label))
 	}
@@ -292,9 +292,11 @@ func (skillSetupDelegate) Render(w io.Writer, m list.Model, index int, item list
 	if !ok {
 		return
 	}
-	prefix, style := "  ", bodyStyle
+	prefix := "  "
+	style := bodyStyle
 	if index == m.Index() {
-		prefix, style = "> ", brandStyle
+		prefix = brandStyle.Render(glyphPrompt)
+		style = bodyStyle.Bold(true)
 	}
 	_, _ = fmt.Fprint(w, prefix+style.Render(truncateWithEllipsis(entry.Title(), maxInt(1, m.Width()-2))))
 }
@@ -373,7 +375,11 @@ func (v *skillsPaneView) Render(ctx paneRenderContext) string {
 		help = paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "enter/space", "Toggle", "/", "Filter", "esc", "Close")
 	}
 	items := v.picker.VisibleItems()
-	start, end := paneWindow(len(items), v.picker.Index(), 7, layoutModeForHeight(ctx.height))
+	maxVisible := maxInt(3, minInt(8, ctx.height-6))
+	if layoutModeForHeight(ctx.height) == layoutTiny {
+		maxVisible = minInt(2, maxVisible)
+	}
+	start, end := paneWindow(len(items), v.picker.Index(), maxVisible, layoutModeForHeight(ctx.height))
 	listRows := make([]string, 0, end-start+1)
 	if v.picker.SettingFilter() || v.picker.IsFiltered() {
 		listRows = append(listRows, mutedStyle.Render("Search: ")+userStyle.Render(v.picker.FilterValue()))
@@ -383,13 +389,18 @@ func (v *skillsPaneView) Render(ctx paneRenderContext) string {
 		if !ok {
 			continue
 		}
-		prefix, style := "  ", bodyStyle
+		prefix := "  "
+		style := bodyStyle
 		if index == v.picker.Index() {
-			prefix, style = "> ", brandStyle
+			prefix = brandStyle.Render(glyphPrompt)
+			style = bodyStyle.Bold(true)
 		}
 		listRows = append(listRows, prefix+style.Render(truncateWithEllipsis(item.Title(), maxInt(1, ctx.width-8))))
 	}
 	status := fmt.Sprintf("%d/%d active", active, len(ctx.skillItems))
+	if len(items) > end-start {
+		status = fmt.Sprintf("%d-%d of %d · %s", start+1, end, len(items), status)
+	}
 	if selected, ok := v.picker.SelectedItem().(skillListItem); ok {
 		status = selected.name + " · " + status
 	}
@@ -446,9 +457,9 @@ const sessionResumeViewID = "session-resume"
 
 type sessionResumeDelegate struct{}
 
-func (sessionResumeDelegate) Height() int                         { return 1 }
-func (sessionResumeDelegate) Spacing() int                        { return 0 }
-func (sessionResumeDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
+func (sessionResumeDelegate) Height() int                                  { return 1 }
+func (sessionResumeDelegate) Spacing() int                                 { return 0 }
+func (sessionResumeDelegate) Update(tea.Msg, *list.Model) tea.Cmd          { return nil }
 func (sessionResumeDelegate) Render(io.Writer, list.Model, int, list.Item) {}
 
 type sessionListItem struct {
@@ -516,9 +527,11 @@ func (v *sessionResumePaneView) Render(ctx paneRenderContext) string {
 		if !ok {
 			continue
 		}
-		prefix, style := "  ", bodyStyle
+		prefix := "  "
+		style := bodyStyle
 		if index == v.picker.Index() {
-			prefix, style = "> ", brandStyle
+			prefix = brandStyle.Render(glyphPrompt)
+			style = bodyStyle.Bold(true)
 		}
 		idLabel := item.summary.ID
 		if item.isCurrent {
@@ -545,6 +558,9 @@ func (v *sessionResumePaneView) Render(ctx paneRenderContext) string {
 	}
 
 	status := fmt.Sprintf("%d sessions", len(v.items))
+	if len(items) > end-start {
+		status = fmt.Sprintf("%d-%d of %d · %s", start+1, end, len(items), status)
+	}
 	if selected, ok := v.selectedItem(); ok {
 		preview := strings.TrimSpace(selected.summary.Preview)
 		if preview != "" {
