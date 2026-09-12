@@ -7,16 +7,6 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 )
 
-func providerKeyPlaceholder(p model.SupportedProviderPreset) string {
-	if strings.TrimSpace(p.KeyPlaceholder) != "" {
-		return p.KeyPlaceholder
-	}
-	if !p.RequiresKey {
-		return "API key (optional)…"
-	}
-	return "API key…"
-}
-
 func (v *providerPaneView) isOpenCode() bool {
 	return model.IsProvider(model.DefaultOpenCodeName, v.nameInput.Value(), v.endpointInput.Value())
 }
@@ -41,7 +31,7 @@ func (v *providerPaneView) applyPreset(preset string) {
 		if !strings.EqualFold(previousName, p.ID) {
 			v.apiKeyInput.SetValue("")
 		}
-		v.apiKeyInput.Placeholder = providerKeyPlaceholder(*p)
+		v.apiKeyInput.Placeholder = providerdomain.KeyPlaceholder(*p)
 		v.presetID = p.ID
 		v.requiresAPIKey = p.RequiresKey
 		v.providerType = string(p.Protocol)
@@ -53,26 +43,11 @@ func (v *providerPaneView) applyPreset(preset string) {
 }
 
 func (v *providerPaneView) protocolLabel() string {
-	label := strings.ToLower(strings.TrimSpace(v.providerType))
-	if label == "" {
-		label = string(model.ProviderProtocolOpenAI)
-	}
-	if v.presetID == "" {
-		return label + " · ctrl+r to switch"
-	}
-	return label
+	return providerdomain.ProtocolLabel(v.providerType, v.presetID)
 }
 
 func (v *providerPaneView) toggleProtocol() {
-	if v.presetID != "" {
-		return
-	}
-	switch model.ProviderProtocol(strings.ToLower(strings.TrimSpace(v.providerType))) {
-	case model.ProviderProtocolAnthropic:
-		v.providerType = string(model.ProviderProtocolOpenAI)
-	default:
-		v.providerType = string(model.ProviderProtocolAnthropic)
-	}
+	v.providerType = providerdomain.ToggleProtocol(v.providerType, v.presetID)
 }
 
 func (v *providerPaneView) clearValidation() {

@@ -98,7 +98,7 @@ func newProviderPaneViewWithPreset(preset string) *providerPaneView {
 		endpoint = p.BaseURL
 		requiresAPIKey = p.RequiresKey
 		providerType = string(p.Protocol)
-		keyPlaceholder = providerKeyPlaceholder(*p)
+		keyPlaceholder = providerdomain.KeyPlaceholder(*p)
 		if p.ID == model.DefaultOpenCodeName {
 			filterFree = true
 		}
