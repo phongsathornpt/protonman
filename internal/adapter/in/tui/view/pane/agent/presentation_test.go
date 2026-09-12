@@ -64,3 +64,18 @@ func TestAgentRowsTruncatesOverlongIdentifier(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentRowsIncludesStatusLegend(t *testing.T) {
+	rows := AgentRows(AgentsSnapshot{
+		Width: 80, Height: 30, SubagentsEnabled: true, Now: time.Now(),
+		Retained: []featureagent.AgentStatus{{
+			ID: "agility-1", Profile: featureagent.ProfileAgility, Task: "inspect",
+			State: featureagent.StateRunning, StartTime: time.Now(),
+		}},
+	})
+	joined := strings.Join(rows, "\n")
+	if !strings.Contains(joined, "Status: W8 queued") {
+		t.Fatalf("expected legend in normal height pane, got: %s", joined)
+	}
+}
+

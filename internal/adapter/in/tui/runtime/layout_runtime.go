@@ -71,7 +71,7 @@ func (m *bubbleModel) footerView() string {
 			return ""
 		}
 		if m.slashOpen() {
-			return ""
+			return m.shortcutHint()
 		}
 		// Overlay panes own keyboard focus and render their own contextual help.
 		// Keep the composer visible for continuity, but do not show send/newline

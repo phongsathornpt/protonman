@@ -9,6 +9,7 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -44,6 +45,10 @@ func (*shortcutsPaneView) Render(ctx paneRenderContext) string {
 		shortcutRow(keys.ToggleSkills),
 		shortcutRow(keys.CyclePermission),
 		shortcutRow(keys.Quit),
+	}
+	if layoutModeForHeight(ctx.height) == layoutNormal && ctx.subagentsEnabled {
+		legend := truncateWithEllipsis("Status: "+agentui.LegendCompact(), maxInt(12, ctx.width-8))
+		rows = append(rows, "", mutedStyle.Render(legend))
 	}
 	help := paneKeyboardHelp(ctx.width-4, "esc/?", "Go Back")
 	return renderModalRows(ctx, accentAssistant, paneSection("Shortcuts", rows, help, "", ctx.width))
@@ -534,8 +539,11 @@ func (v *sessionResumePaneView) Render(ctx paneRenderContext) string {
 			style = bodyStyle.Bold(true)
 		}
 		idLabel := item.summary.ID
+		currentTag := ""
+		currentTagWidth := 0
 		if item.isCurrent {
-			idLabel += " [current]"
+			currentTag = " " + successStyle.Render("[current]")
+			currentTagWidth = len(" [current]")
 		}
 		updated := item.summary.UpdatedAt.Local().Format("01/02 15:04")
 		profile := item.summary.AgentProfile
@@ -547,13 +555,13 @@ func (v *sessionResumePaneView) Render(ctx paneRenderContext) string {
 			meta = fmt.Sprintf("%s · %d msgs · %s", updated, item.summary.MessageCount, profile)
 		}
 		metaWidth := len([]rune(meta))
-		rem := contentWidth - metaWidth - 4
+		rem := contentWidth - metaWidth - currentTagWidth - 4
 		if rem < 10 {
 			rem = 10
 		}
 		idFormatted := truncateWithEllipsis(idLabel, rem)
-		gap := maxInt(2, contentWidth-len([]rune(idFormatted))-metaWidth-2)
-		line := prefix + style.Render(idFormatted) + strings.Repeat(" ", gap) + mutedStyle.Render(meta)
+		gap := maxInt(2, contentWidth-len([]rune(idFormatted))-currentTagWidth-metaWidth-2)
+		line := prefix + style.Render(idFormatted) + currentTag + strings.Repeat(" ", gap) + mutedStyle.Render(meta)
 		listRows = append(listRows, line)
 	}
 
