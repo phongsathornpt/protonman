@@ -63,7 +63,7 @@ These rules improve prefix reuse for providers and runtimes that implement KV/pr
 
 The current renderer accepts dynamic fields through `prompt.Spec`, including project instructions, skills, role, active goal, workspace policy, grounding requirements, and the effective tool surface.
 
-`ModelPromptHints` is retained only as a temporary source-compatibility shim. `Render` intentionally ignores it. Do not add new model- or provider-specific prompt hints through `ExtraInstructions` or another indirect path.
+`ModelPromptHints` and model-profile `AgentPolicy.PromptHints` remain only as temporary source-compatibility fields. They are semantically inert: model-profile clone/merge boundaries discard prompt hints, `WithSystemPromptSpec` clears model prompt hints before storing the spec, and `Render` ignores the field entirely. Do not add new model- or provider-specific prompt hints through `ExtraInstructions` or another indirect path. The compatibility fields should be removed only together with their remaining callers/tests so the repository does not pass through a half-migrated state.
 
 The active goal is durable session state, not merely a compaction hint. When present, it is the persistent objective for the session: the model should continue making concrete progress until the goal is completed, blocked by unavailable capabilities or permissions, or explicitly changed or cleared. Implementation goals require repository inspection, mutation, and verification rather than a plan-only response. The TUI `/goal <detail>` command starts the execution turn; prompt wording does not itself schedule a turn.
 
@@ -136,7 +136,7 @@ Cache- and routing-sensitive behavior is covered primarily in `internal/engine/p
 - equivalent tool sets render equivalent guidance regardless of input order;
 - dynamic tool namespace replacement publishes canonical name order;
 - workspace, project instructions, skills, role, and active-goal changes preserve the expected earlier prefix;
-- model-specific compatibility hints cannot change rendered prompt output;
+- the canonical prompt has no model-guidance section and legacy compatibility hints are discarded before they can affect runtime prompt composition;
 - root/subagent identities and capability-conditioned contracts remain behaviorally correct;
 - delegation routing distinguishes local work, AGILITY exploration, STRENGTH implementation, and INTELLIGENCE cross-cutting reasoning;
 - delegation preserves runtime-owned result delivery and completion semantics;
