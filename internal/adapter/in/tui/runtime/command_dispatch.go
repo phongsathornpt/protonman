@@ -199,12 +199,25 @@ func (m *bubbleModel) resumeSession(targetID string) tea.Cmd {
 		return nil
 	}
 
+	if m.panes.bottom.has(sessionResumeViewID) {
+		m.panes.bottom.remove(sessionResumeViewID)
+	}
+	if targetID == m.sessionID {
+		m.appendMuted("already in session " + targetID)
+		m.refreshViewport()
+		m.requestRelayout()
+		return nil
+	}
+
 	var detail *app.SessionDetail
 	var err error
 	if strings.EqualFold(targetID, "latest") {
 		detail, err = m.sessions.LatestDetail(m.ctx, m.workspaceKey)
+		if err != nil || detail == nil {
+			detail, err = m.sessions.LatestDetail(m.ctx, "")
+		}
 	} else {
-		detail, err = m.sessions.LoadDetail(m.ctx, targetID, m.workspaceKey)
+		detail, err = m.sessions.LoadDetail(m.ctx, targetID, "")
 	}
 	if err != nil {
 		m.appendError("failed to resume session: " + err.Error())
@@ -212,10 +225,6 @@ func (m *bubbleModel) resumeSession(targetID string) tea.Cmd {
 	}
 	if detail == nil {
 		m.appendError("session not found")
-		return nil
-	}
-	if detail.ID == m.sessionID {
-		m.appendMuted("already in session " + detail.ID)
 		return nil
 	}
 

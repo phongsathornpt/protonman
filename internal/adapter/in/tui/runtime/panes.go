@@ -444,82 +444,148 @@ func (v *skillsPaneView) refreshItems(ctx paneRenderContext) tea.Cmd {
 
 const sessionResumeViewID = "session-resume"
 
+type sessionResumeDelegate struct{}
+
+func (sessionResumeDelegate) Height() int                         { return 1 }
+func (sessionResumeDelegate) Spacing() int                        { return 0 }
+func (sessionResumeDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
+func (sessionResumeDelegate) Render(io.Writer, list.Model, int, list.Item) {}
+
+type sessionListItem struct {
+	summary   app.SessionSummary
+	isCurrent bool
+}
+
+func (s sessionListItem) FilterValue() string {
+	return s.summary.ID + " " + s.summary.WorkspaceName + " " + s.summary.AgentProfile + " " + s.summary.Preview
+}
+
+func (s sessionListItem) Title() string {
+	return s.summary.ID
+}
+
+func (s sessionListItem) Description() string {
+	return s.summary.Preview
+}
+
 type sessionResumePaneView struct {
-	items []app.SessionSummary
-	index int
+	picker      list.Model
+	items       []sessionListItem
+	initialized bool
 }
 
 func (*sessionResumePaneView) ID() string                             { return sessionResumeViewID }
 func (*sessionResumePaneView) PresentationMode() panePresentationMode { return paneBelowComposer }
 
+func (v *sessionResumePaneView) selectedItem() (sessionListItem, bool) {
+	if v == nil || !v.initialized || len(v.items) == 0 {
+		return sessionListItem{}, false
+	}
+	item, ok := v.picker.SelectedItem().(sessionListItem)
+	return item, ok
+}
+
+const maxSessionResumeRows = 7
+
+func sessionResumeListWidth(ctx paneRenderContext) int {
+	return maxInt(12, ctx.width-8)
+}
+
+func sessionResumeListHeight(ctx paneRenderContext) int {
+	return maxInt(4, min(maxSessionResumeRows, ctx.height-6))
+}
+
 func (v *sessionResumePaneView) Render(ctx paneRenderContext) string {
-	if len(v.items) == 0 {
-		rows := []string{mutedStyle.Render("No previous sessions found for this workspace.")}
+	if !v.initialized || len(v.items) == 0 {
+		rows := []string{mutedStyle.Render("No sessions found.")}
 		help := paneKeyboardHelp(ctx.width-4, "esc/q", "Go Back")
-		return renderModalRows(ctx, accentAssistant, paneSection("Resume Session", rows, help, "", ctx.width))
+		return renderModalRows(ctx, accentAssistant, paneSection("Sessions", rows, help, "0 sessions", ctx.width))
 	}
+	v.picker.SetSize(sessionResumeListWidth(ctx), sessionResumeListHeight(ctx))
+	help := paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "enter", "Resume", "/", "Filter", "esc/q", "Close")
 
-	rows := make([]string, 0, len(v.items))
-	maxVisible := 8
-	start := 0
-	if v.index >= maxVisible {
-		start = v.index - maxVisible + 1
+	items := v.picker.VisibleItems()
+	start, end := paneWindow(len(items), v.picker.Index(), maxSessionResumeRows, layoutModeForHeight(ctx.height))
+	listRows := make([]string, 0, end-start+1)
+	if v.picker.SettingFilter() || v.picker.IsFiltered() {
+		listRows = append(listRows, mutedStyle.Render("Search: ")+userStyle.Render(v.picker.FilterValue()))
 	}
-	end := start + maxVisible
-	if end > len(v.items) {
-		end = len(v.items)
-	}
-
-	for i := start; i < end; i++ {
-		item := v.items[i]
-		marker := "  "
-		style := mutedStyle
-		if i == v.index {
-			marker = "> "
-			style = userStyle
+	contentWidth := maxInt(20, ctx.width-8)
+	for index := start; index < end; index++ {
+		item, ok := items[index].(sessionListItem)
+		if !ok {
+			continue
 		}
-		updated := item.UpdatedAt.Local().Format("01/02 15:04")
-		preview := strings.TrimSpace(item.Preview)
-		if len(preview) > 40 {
-			preview = preview[:37] + "..."
+		prefix, style := "  ", bodyStyle
+		if index == v.picker.Index() {
+			prefix, style = "> ", brandStyle
 		}
-		if preview == "" {
-			preview = "-"
+		idLabel := item.summary.ID
+		if item.isCurrent {
+			idLabel += " [current]"
 		}
-		profile := item.AgentProfile
+		updated := item.summary.UpdatedAt.Local().Format("01/02 15:04")
+		profile := item.summary.AgentProfile
 		if profile == "" {
 			profile = "universal"
 		}
-		line := fmt.Sprintf("%s%s  %s  %s  %s", marker, style.Render(item.ID), mutedStyle.Render(updated), mutedStyle.Render(profile), mutedStyle.Render(preview))
-		rows = append(rows, line)
+		meta := fmt.Sprintf("%s · %s", updated, profile)
+		if item.summary.MessageCount > 0 {
+			meta = fmt.Sprintf("%s · %d msgs · %s", updated, item.summary.MessageCount, profile)
+		}
+		metaWidth := len([]rune(meta))
+		rem := contentWidth - metaWidth - 4
+		if rem < 10 {
+			rem = 10
+		}
+		idFormatted := truncateWithEllipsis(idLabel, rem)
+		gap := maxInt(2, contentWidth-len([]rune(idFormatted))-metaWidth-2)
+		line := prefix + style.Render(idFormatted) + strings.Repeat(" ", gap) + mutedStyle.Render(meta)
+		listRows = append(listRows, line)
 	}
 
-	help := paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "enter", "Resume", "esc/q", "Go Back")
-	return renderModalRows(ctx, accentAssistant, paneSection("Resume Session", rows, help, "", ctx.width))
+	status := fmt.Sprintf("%d sessions", len(v.items))
+	if selected, ok := v.selectedItem(); ok {
+		preview := strings.TrimSpace(selected.summary.Preview)
+		if preview != "" {
+			status = selected.summary.ID + " · " + truncateWithEllipsis(preview, 40)
+		} else {
+			status = selected.summary.ID
+		}
+	}
+	rows := paneSection("Sessions", listRows, help, status, ctx.width)
+	return renderModalRows(ctx, accentAssistant, rows)
 }
 
 func (v *sessionResumePaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
+	if !v.initialized || len(v.items) == 0 {
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: sessionResumeViewID}}
+	}
 	switch {
 	case key.Matches(message, paneutil.Keys.Close):
-		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: sessionResumeViewID}}
-	case key.Matches(message, paneutil.Keys.Up):
-		if v.index > 0 {
-			v.index--
+		if !v.picker.SettingFilter() && !v.picker.IsFiltered() {
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: sessionResumeViewID}}
 		}
-		return paneKeyResult{handled: true}
-	case key.Matches(message, paneutil.Keys.Down):
-		if v.index < len(v.items)-1 {
-			v.index++
-		}
-		return paneKeyResult{handled: true}
 	case key.Matches(message, paneutil.Keys.Confirm):
-		if len(v.items) > 0 && v.index >= 0 && v.index < len(v.items) {
-			return paneKeyResult{handled: true, action: paneAction{kind: paneActionResumeSession, sessionID: v.items[v.index].ID}}
+		if !v.picker.SettingFilter() {
+			if selected, ok := v.selectedItem(); ok {
+				return paneKeyResult{handled: true, action: paneAction{kind: paneActionResumeSession, sessionID: selected.summary.ID}}
+			}
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: sessionResumeViewID}}
 		}
-		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: sessionResumeViewID}}
-	default:
-		return paneKeyResult{handled: true}
+	case key.Matches(message, paneutil.Keys.Escape):
+		if !v.picker.SettingFilter() && !v.picker.IsFiltered() {
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: sessionResumeViewID}}
+		}
+	case message.Text == "q":
+		if !v.picker.SettingFilter() {
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: sessionResumeViewID}}
+		}
 	}
+
+	updated, cmd := v.picker.Update(message)
+	v.picker = updated
+	return paneKeyResult{handled: true, cmd: cmd}
 }
 
 func (m *bubbleModel) openSessionResumePane() {
@@ -533,23 +599,43 @@ func (m *bubbleModel) openSessionResumePane() {
 		return
 	}
 	summaries, err := m.sessions.ListSummaries(m.ctx, app.SessionListOptions{
-		WorkspaceKey: m.workspaceKey,
-		Limit:        30,
+		Limit: 0,
 	})
 	if err != nil {
 		m.appendError("failed to list sessions: " + err.Error())
 		return
 	}
-	filtered := make([]app.SessionSummary, 0, len(summaries))
-	for _, s := range summaries {
-		if s.ID != m.sessionID {
-			filtered = append(filtered, s)
-		}
-	}
-	if len(filtered) == 0 {
-		m.appendMuted("no previous sessions found for workspace")
+	if len(summaries) == 0 {
+		m.appendMuted("no sessions found")
 		return
 	}
-	m.panes.bottom.push(&sessionResumePaneView{items: filtered, index: 0})
+
+	items := make([]sessionListItem, 0, len(summaries))
+	initialIndex := 0
+	for i, s := range summaries {
+		isCurrent := s.ID == m.sessionID
+		if isCurrent && initialIndex == 0 {
+			initialIndex = i
+		}
+		items = append(items, sessionListItem{
+			summary:   s,
+			isCurrent: isCurrent,
+		})
+	}
+
+	listItems := make([]list.Item, 0, len(items))
+	for _, item := range items {
+		listItems = append(listItems, item)
+	}
+
+	picker := paneutil.NewMinimalList(listItems, sessionResumeDelegate{}, defaultBubbleWidth-8, 7)
+	picker.InfiniteScrolling = true
+	picker.Select(initialIndex)
+
+	m.panes.bottom.push(&sessionResumePaneView{
+		picker:      picker,
+		items:       items,
+		initialized: true,
+	})
 	m.requestRelayout()
 }

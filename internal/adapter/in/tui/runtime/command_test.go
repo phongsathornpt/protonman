@@ -1196,7 +1196,7 @@ func TestResumeCommandOpensPicker(t *testing.T) {
 		t.Fatal("session resume pane is nil")
 	}
 	view, ok := pane.(*sessionResumePaneView)
-	if !ok || len(view.items) != 1 || view.items[0].ID != "prev-sess-1" {
+	if !ok || len(view.items) != 1 || view.items[0].summary.ID != "prev-sess-1" {
 		t.Fatalf("unexpected session resume pane items: %+v", view)
 	}
 }
@@ -1256,26 +1256,25 @@ func TestResumeCommandLatest(t *testing.T) {
 	}
 }
 
-func TestResumeCommandCrossWorkspaceRejected(t *testing.T) {
+func TestResumeCommandAnySession(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	sessService := app.NewMemorySessions()
 	ctx := context.Background()
 	_ = sessService.SaveCurrent(ctx, app.SessionDetail{
-		ID:           "foreign-sess",
+		ID:           "other-sess",
 		WorkspaceKey: "other-workspace",
-		ActiveGoal:   "foreign goal",
+		ActiveGoal:   "other goal",
 	})
 	m.sessions = sessService
 	m.workspaceKey = "my-workspace"
 	m.sessionID = "current-sess"
 
-	m.executeCommand("/resume foreign-sess")
-	if m.sessionID != "current-sess" {
-		t.Fatalf("sessionID changed across workspace boundary: %q", m.sessionID)
+	m.executeCommand("/resume other-sess")
+	if m.sessionID != "other-sess" {
+		t.Fatalf("sessionID = %q, want other-sess", m.sessionID)
 	}
-	transcript := plainTranscript(m)
-	if !strings.Contains(transcript, "belongs to another workspace") {
-		t.Fatalf("cross-workspace resume error missing: %q", transcript)
+	if m.activeGoal != "other goal" {
+		t.Fatalf("activeGoal = %q, want other goal", m.activeGoal)
 	}
 }
 
@@ -1313,8 +1312,8 @@ func TestResumePaneNavigationAndSelect(t *testing.T) {
 	if !res.handled {
 		t.Fatal("Down key not handled")
 	}
-	if view.index != 1 {
-		t.Fatalf("view.index after Down = %d, want 1", view.index)
+	if view.picker.Index() != 1 {
+		t.Fatalf("view.picker.Index() after Down = %d, want 1", view.picker.Index())
 	}
 
 	// Confirm (Enter) on second item
@@ -1324,11 +1323,39 @@ func TestResumePaneNavigationAndSelect(t *testing.T) {
 	}
 	_ = m.applyPaneAction(res.action)
 
-	if m.sessionID != view.items[1].ID {
-		t.Fatalf("m.sessionID after resume = %q, want %q", m.sessionID, view.items[1].ID)
+	if m.sessionID != view.items[1].summary.ID {
+		t.Fatalf("m.sessionID after resume = %q, want %q", m.sessionID, view.items[1].summary.ID)
 	}
 	if m.panes.bottom.has(sessionResumeViewID) {
 		t.Fatal("session resume pane still open after resume")
+	}
+}
+
+func TestResumeCurrentSessionClosesPane(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	sessService := app.NewMemorySessions()
+	ctx := context.Background()
+	_ = sessService.SaveCurrent(ctx, app.SessionDetail{
+		ID:           "current-sess",
+		WorkspaceKey: "ws-test",
+		ActiveGoal:   "my goal",
+	})
+	m.sessions = sessService
+	m.workspaceKey = "ws-test"
+	m.sessionID = "current-sess"
+
+	m.executeCommand("/resume")
+	if !m.panes.bottom.has(sessionResumeViewID) {
+		t.Fatal("session resume pane not opened")
+	}
+
+	// Resume current session directly
+	m.executeCommand("/resume current-sess")
+	if m.panes.bottom.has(sessionResumeViewID) {
+		t.Fatal("session resume pane still open after selecting current session")
+	}
+	if !strings.Contains(plainTranscript(m), "already in session current-sess") {
+		t.Fatalf("expected already in session message: %q", plainTranscript(m))
 	}
 }
 
