@@ -553,6 +553,7 @@ Current important slash commands are intentionally canonical and small:
 ```text
 /help
 /permission
+/low       # inspect or set provider-neutral low concurrency mode
 /model
 /provider
 /skills
@@ -599,6 +600,14 @@ the root to apply instead of mutating the root model directly. Root runtime stat
 by ownership: agent, turn, model selection, session, project, conversation, TODO,
 presentation, and execution policy. Preserve these boundaries instead of adding new flat
 fields to `bubbleModel` without a clear orchestration-level reason.
+
+`internal/adapter/in/tui/runtime` is an orchestration shell, not a default home for new
+TUI behavior. Cohesive policy, projection, parsing, and state-calculation logic belongs in
+focused subpackages such as `modelcatalog`, `modelpicker`, `modelsetup`, `provider`,
+`permissionpolicy`, `reasoningpolicy`, `transcriptutil`, or the owning `view/*` package.
+Runtime subpackages must never import the root `runtime` package. The architecture suite
+maintains a ratcheting production-file budget for the runtime root; do not raise that budget
+to land new code. Extract ownership or consolidate an existing shell instead.
 
 When changing TUI behavior, test at the smallest useful layer:
 
@@ -786,7 +795,7 @@ Before declaring a task complete, verify the relevant subset of:
 
 - requested behavior is implemented, not merely planned
 - final diff is focused and contains no accidental files
-- architecture boundaries still hold
+- architecture boundaries still hold, including TUI runtime ownership and structural-budget guards
 - tool input/output contracts still validate
 - security/trust boundaries remain fail-closed
 - cancellation/deadline/resource limits still propagate correctly

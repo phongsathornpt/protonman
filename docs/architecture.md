@@ -70,6 +70,19 @@ immutable presentation snapshots, and pane interactions return typed actions for
 to apply instead of mutating it directly. Transcript cells use one width-aware render
 contract so viewport width remains the rendering source of truth.
 
+The `internal/adapter/in/tui/runtime` root is intentionally a thin orchestration shell.
+Pure catalog/filtering/projection/policy logic belongs in focused runtime subpackages or in
+the owning `view/*` package. Current examples include `modelcatalog`, `modelpicker`,
+`modelsetup`, `provider`, `permissionpolicy`, `reasoningpolicy`, and `transcriptutil`.
+A runtime subpackage must not import the root `runtime` package; dependencies flow from the
+root shell into focused helpers, never back upward. This keeps Bubble Tea wiring from
+becoming a package-wide dependency magnet.
+
+The runtime-root production-file count is guarded as a ratchet in the architecture tests.
+The refactor that introduced this rule reduced the root from 68 production files to 60.
+The budget is a regression guard, not a target architecture: do not raise it to accommodate
+new behavior. Prefer extracting cohesive ownership or consolidating an existing shell.
+
 ## 3. Application Layer (`internal/app/`)
 
 The application layer exposes use cases needed by inbound adapters and hides concrete
@@ -206,6 +219,8 @@ Key invariants include:
 4. Tool implementations live under `internal/adapter/out/tool/`.
 5. `proton-sdk` has zero dependencies on CLI-owned `internal/*` or `cmd/*` packages.
 6. Composition/wiring remains in `cmd/protonman` rather than leaking into domain packages.
+7. The TUI runtime root stays within its ratcheting production-file budget.
+8. Focused `tui/runtime/*` subpackages never import the root `tui/runtime` package.
 
 Run `go test ./test/architecture` whenever moving packages or changing dependency direction.
 

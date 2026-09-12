@@ -490,6 +490,21 @@ func TestInternalTopLevelCleanArchitectureDirectories(t *testing.T) {
 	}
 }
 
+func TestTUIRuntimeSubpackagesDoNotImportRuntimeRoot(t *testing.T) {
+	packages := listPackages(t)
+	runtimeRoot := modulePath + "/internal/adapter/in/tui/runtime"
+	for importPath, pkg := range packages {
+		if !strings.HasPrefix(importPath, runtimeRoot+"/") {
+			continue
+		}
+		for _, imported := range pkg.Imports {
+			if imported == runtimeRoot {
+				t.Errorf("TUI runtime subpackage %s must not import root runtime package %s; keep dependencies flowing from orchestration shell into focused ownership packages", importPath, runtimeRoot)
+			}
+		}
+	}
+}
+
 func TestTUIRuntimeRootStaysWithinStructuralBudget(t *testing.T) {
 	root := repositoryRoot(t)
 	runtimeRoot := filepath.Join(root, "internal", "adapter", "in", "tui", "runtime")
