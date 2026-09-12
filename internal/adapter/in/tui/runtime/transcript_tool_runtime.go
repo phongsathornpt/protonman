@@ -44,7 +44,8 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 			state.CompleteToolCall(result.CallID, name, completed)
 			return
 		}
-		suggestions := transcriptutil.ToolFailureSuggestions(name, result.Failure)
+		target := m.runningToolTarget(result.CallID, name)
+		suggestions := transcriptutil.ToolFailureSuggestions(name, target, result.Failure)
 		title := tool.DisplayName(name)
 		badge := string(result.Failure.Code)
 		text := result.Failure.Message
@@ -57,7 +58,7 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 			text = "The task plan changed while this update was being prepared."
 			suggestions = []string{"Refresh tasks with todo action=get, then retry the update."}
 		}
-		errorCell := &ErrorCell{ErrorKind: ErrorKindToolFailed, Title: title, Badge: badge, Text: text, Code: result.Failure.Code, Suggestions: suggestions}
+		errorCell := &ErrorCell{ErrorKind: ErrorKindToolFailed, Title: title, Target: target, Badge: badge, Text: text, Code: result.Failure.Code, Suggestions: suggestions}
 		state.CompleteToolCall(result.CallID, name, errorCell)
 		return
 	}
@@ -141,6 +142,16 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 	}
 	summary := summarizeToolOutput(name, toolKind, target, body, result.ExitCode, result.Truncated)
 	return &ToolCell{CallID: callID, Name: name, Body: body, Target: target, ToolKind: toolKind, Summary: summary, ExitCode: result.ExitCode, Truncated: result.Truncated, Denied: result.Denied, FailureCode: failureCode, ShowDetail: minimalToolShowsDetail(toolKind, result.Denied, failureCode != "")}
+}
+
+func (m *bubbleModel) runningToolTarget(callID, name string) string {
+	switch cell := m.runningToolCell(callID, name).(type) {
+	case *ToolCell:
+		return cell.Target
+	case *AgentToolCell:
+		return cell.Target
+	}
+	return ""
 }
 
 func (m *bubbleModel) runningToolCell(callID string, name string) HistoryCell {

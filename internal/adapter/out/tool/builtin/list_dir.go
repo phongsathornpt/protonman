@@ -27,6 +27,16 @@ type listDirInput struct {
 	Continuation string `json:"continuation,omitempty"`
 }
 
+type listDirEntry struct {
+	Name string `json:"name"`
+	Kind string `json:"kind"`
+}
+
+type listDirOutput struct {
+	Path    string         `json:"path"`
+	Entries []listDirEntry `json:"entries"`
+}
+
 // NewListDir returns the protected-aware directory listing adapter.
 func NewListDir(workspaceRoot *workspace.Workspace) tool.Handler {
 	return listDirHandler{workspace: workspaceRoot}
@@ -68,6 +78,26 @@ func (listDirHandler) Definition() tool.Definition {
 			"additionalProperties": false,
 		},
 		InputAliases: map[string][]string{"path": {"dir_path", "directory"}},
+		OutputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"path": map[string]any{"type": "string"},
+				"entries": map[string]any{
+					"type": "array",
+					"items": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"name": map[string]any{"type": "string"},
+							"kind": map[string]any{"type": "string"},
+						},
+						"required":             []string{"name", "kind"},
+						"additionalProperties": false,
+					},
+				},
+			},
+			"required":             []string{"path", "entries"},
+			"additionalProperties": false,
+		},
 	}
 }
 
@@ -133,6 +163,7 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 	}
 	var output strings.Builder
 	output.Grow(allocHint * 48)
+	structuredEntries := make([]listDirEntry, 0, allocHint)
 
 	emitted := 0
 	visibleSeen := 0
@@ -182,6 +213,7 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 				}
 			}
 			output.WriteByte('\n')
+			structuredEntries = append(structuredEntries, listDirEntry{Name: entry.Name(), Kind: "link"})
 			emitted++
 			continue
 		}
@@ -192,6 +224,7 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 			output.WriteString(entry.Name())
 			output.WriteByte('/')
 			output.WriteByte('\n')
+			structuredEntries = append(structuredEntries, listDirEntry{Name: entry.Name(), Kind: "directory"})
 			emitted++
 			continue
 		}
@@ -201,6 +234,7 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 			output.WriteString("sock ")
 			output.WriteString(entry.Name())
 			output.WriteByte('\n')
+			structuredEntries = append(structuredEntries, listDirEntry{Name: entry.Name(), Kind: "socket"})
 			emitted++
 			continue
 		}
@@ -208,6 +242,7 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 			output.WriteString("fifo ")
 			output.WriteString(entry.Name())
 			output.WriteByte('\n')
+			structuredEntries = append(structuredEntries, listDirEntry{Name: entry.Name(), Kind: "fifo"})
 			emitted++
 			continue
 		}
@@ -215,6 +250,7 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 			output.WriteString("dev  ")
 			output.WriteString(entry.Name())
 			output.WriteByte('\n')
+			structuredEntries = append(structuredEntries, listDirEntry{Name: entry.Name(), Kind: "device"})
 			emitted++
 			continue
 		}
@@ -226,6 +262,7 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 			output.WriteString("file ")
 			output.WriteString(entry.Name())
 			output.WriteString(" (unknown size)\n")
+			structuredEntries = append(structuredEntries, listDirEntry{Name: entry.Name(), Kind: "file"})
 			emitted++
 			continue
 		}
@@ -235,6 +272,7 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 		output.WriteString(" (")
 		output.WriteString(formatFileSize(info.Size()))
 		output.WriteString(")\n")
+		structuredEntries = append(structuredEntries, listDirEntry{Name: entry.Name(), Kind: "file"})
 		emitted++
 	}
 
@@ -249,12 +287,18 @@ func (h listDirHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 		output.WriteString(fmt.Sprintf("[directory output truncated; continue with offset=%d]\n", next))
 	}
 
+	structuredOutput, err := json.Marshal(listDirOutput{Path: targetPath, Entries: structuredEntries})
+	if err != nil {
+		return tool.Result{}, fmt.Errorf("encode ls structured output: %w", err)
+	}
+
 	return tool.Result{
-		CallID:     call.ID,
-		ToolName:   call.Name,
-		Output:     output.String(),
-		Truncated:  truncated,
-		NextOffset: nextOffset,
+		CallID:           call.ID,
+		ToolName:         call.Name,
+		Output:           output.String(),
+		StructuredOutput: structuredOutput,
+		Truncated:        truncated,
+		NextOffset:       nextOffset,
 		Continuation: func() string {
 			if truncated {
 				return continuation

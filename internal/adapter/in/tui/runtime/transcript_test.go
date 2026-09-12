@@ -305,6 +305,23 @@ func TestErrorCellServerOverloadedUsesStableCode(t *testing.T) {
 	}
 }
 
+func TestErrorCellToolFailureKeepsTargetAndDiscoveryCompact(t *testing.T) {
+	cell := &ErrorCell{
+		ErrorKind: ErrorKindToolFailed, Title: "Read", Target: "internal/base/runtimepolicy/runtimepolicy.go",
+		Code: tool.ErrorCodeNotFound, Badge: string(tool.ErrorCodeNotFound), Text: `not found: "internal/base/runtimepolicy/runtimepolicy.go"`,
+		Suggestions: []string{`searched "internal/base/runtimepolicy"`, "defaults.go", "doc.go", "hardcode_guard_test.go"},
+	}
+	rendered := ansi.Strip(strings.Join(cell.RenderWidth(80), "\n"))
+	for _, want := range []string{"× Read · not found", "internal/base/runtimepolicy/runtimepolicy.go", `↳ searched "internal/base/runtimepolicy"`, "defaults.go", "doc.go", "hardcode_guard_test.go"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("rendered tool failure missing %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "[not_found]") || strings.Contains(rendered, "Read: not found:") {
+		t.Fatalf("rendered tool failure kept noisy legacy format:\n%s", rendered)
+	}
+}
+
 func TestErrorCellFallbackRendering(t *testing.T) {
 	cell := &ErrorCell{Title: "read", Text: "file not found"}
 	rendered := strings.Join(cell.RenderWidth(80), "\n")
@@ -330,15 +347,15 @@ func TestToolCellReadDetailFollowsDensity(t *testing.T) {
 }
 
 func TestToolFailureSuggestions(t *testing.T) {
-	notFoundSugg := transcriptutil.ToolFailureSuggestions("read", &tool.Failure{Code: tool.ErrorCodeNotFound})
+	notFoundSugg := transcriptutil.ToolFailureSuggestions("read", "", &tool.Failure{Code: tool.ErrorCodeNotFound})
 	if len(notFoundSugg) == 0 {
 		t.Fatalf("expected suggestions for read not found error")
 	}
-	protectedSugg := transcriptutil.ToolFailureSuggestions("read", &tool.Failure{Code: tool.ErrorCodeProtectedPath})
+	protectedSugg := transcriptutil.ToolFailureSuggestions("read", "", &tool.Failure{Code: tool.ErrorCodeProtectedPath})
 	if len(protectedSugg) == 0 || !strings.Contains(protectedSugg[0], "workspace protection rules") {
 		t.Fatalf("expected suggestions for protected path error")
 	}
-	escapeSugg := transcriptutil.ToolFailureSuggestions("read", &tool.Failure{Code: tool.ErrorCodeOutsideWorkspace})
+	escapeSugg := transcriptutil.ToolFailureSuggestions("read", "", &tool.Failure{Code: tool.ErrorCodeOutsideWorkspace})
 	if len(escapeSugg) != 1 || escapeSugg[0] != "use . or a workspace-relative path" {
 		t.Fatalf("expected actionable suggestions for outside workspace error: %#v", escapeSugg)
 	}
@@ -351,11 +368,34 @@ func TestToolFailureSuggestionsUseDiscoveryEvidence(t *testing.T) {
 			Action: tool.RecoveryDiscoverResource, Tool: tool.NameLS,
 			Arguments: json.RawMessage(`{"path":"internal/base/runtimepolicy"}`),
 		},
-		RecoveryEvidence: &tool.RecoveryEvidence{Action: tool.RecoveryDiscoverResource, Tool: tool.NameLS, Output: "defaults.go"},
+		RecoveryEvidence: &tool.RecoveryEvidence{
+			Action: tool.RecoveryDiscoverResource, Tool: tool.NameLS, Output: "defaults.go",
+			StructuredOutput: json.RawMessage(`{"path":"internal/base/runtimepolicy","entries":[{"name":"defaults.go","kind":"file"},{"name":"doc.go","kind":"file"},{"name":"hardcode_guard_test.go","kind":"file"},{"name":"more.go","kind":"file"}]}`),
+		},
 	}
-	suggestions := transcriptutil.ToolFailureSuggestions(tool.NameRead, failure)
-	if len(suggestions) != 1 || !strings.Contains(suggestions[0], `inspected "internal/base/runtimepolicy"`) || !strings.Contains(suggestions[0], "use a discovered path") {
-		t.Fatalf("discovery suggestions = %#v", suggestions)
+	suggestions := transcriptutil.ToolFailureSuggestions(tool.NameRead, "internal/base/runtimepolicy/runtimepolicy.go", failure)
+	want := []string{`searched "internal/base/runtimepolicy"`, "defaults.go", "doc.go", "hardcode_guard_test.go", "+1 more"}
+	if fmt.Sprint(suggestions) != fmt.Sprint(want) {
+		t.Fatalf("discovery suggestions = %#v, want %#v", suggestions, want)
+	}
+}
+
+func TestToolFailureSuggestionsRankNearbyFilenames(t *testing.T) {
+	failure := &tool.Failure{
+		Code: tool.ErrorCodeNotFound,
+		Recovery: &tool.Recovery{
+			Action: tool.RecoveryDiscoverResource, Tool: tool.NameLS,
+			Arguments: json.RawMessage(`{"path":"internal/base/runtimepolicy"}`),
+		},
+		RecoveryEvidence: &tool.RecoveryEvidence{
+			Action: tool.RecoveryDiscoverResource, Tool: tool.NameLS,
+			StructuredOutput: json.RawMessage(`{"entries":[{"name":"z_misc.go","kind":"file"},{"name":"runtimepolicy_test.go","kind":"file"},{"name":"runtime_policy.go","kind":"file"},{"name":"runtimepolicy.md","kind":"file"}]}`),
+		},
+	}
+	suggestions := transcriptutil.ToolFailureSuggestions(tool.NameRead, "internal/base/runtimepolicy/runtimepolicy.go", failure)
+	want := []string{`searched "internal/base/runtimepolicy"`, "runtimepolicy.md", "runtimepolicy_test.go", "runtime_policy.go", "+1 more"}
+	if fmt.Sprint(suggestions) != fmt.Sprint(want) {
+		t.Fatalf("ranked suggestions = %#v, want %#v", suggestions, want)
 	}
 }
 

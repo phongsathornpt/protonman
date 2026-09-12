@@ -22,6 +22,7 @@ func (c SystemCell) LineCount() int     { return len(c.RawLines()) }
 // ErrorCell renders a failed operation or classified OpenCode error.
 type ErrorCell struct {
 	Title       string
+	Target      string
 	Text        string
 	Code        tool.ErrorCode
 	ErrorKind   diagnostic.Kind
@@ -68,27 +69,32 @@ func (c ErrorCell) renderCompactDiagnostic(width int) []string {
 }
 
 func (c ErrorCell) renderCompactToolFailure(width int) []string {
-	badge := c.Badge
+	badge := strings.TrimSpace(c.Badge)
 	if badge == "" && c.Code != "" {
 		badge = string(c.Code)
 	}
-	title := c.Title
+	badge = strings.ReplaceAll(strings.ToLower(badge), "_", " ")
+	title := strings.TrimSpace(c.Title)
 	if title == "" {
 		title = "tool"
 	}
 
-	header := tuistyle.GlyphToolError
+	header := tuistyle.GlyphToolError + title
 	if badge != "" {
-		header += "[" + badge + "] "
+		header += tuistyle.GlyphSep + badge
 	}
-	header += title
-	if text := strings.TrimSpace(c.Text); text != "" {
-		header += ": " + text
-	}
-
 	lines := styledWrappedLines(header, width, tuistyle.ErrorStyle)
-	for _, suggestion := range c.Suggestions {
-		lines = append(lines, styledWrappedLines("→ "+suggestion, width, tuistyle.MutedStyle)...)
+	if target := strings.TrimSpace(c.Target); target != "" {
+		lines = append(lines, styledWrappedLines("  "+target, width, tuistyle.MutedStyle)...)
+	} else if text := strings.TrimSpace(c.Text); text != "" {
+		lines = append(lines, styledWrappedLines("  "+text, width, tuistyle.MutedStyle)...)
+	}
+	for index, suggestion := range c.Suggestions {
+		prefix := "    "
+		if index == 0 {
+			prefix = "  ↳ "
+		}
+		lines = append(lines, styledWrappedLines(prefix+suggestion, width, tuistyle.MutedStyle)...)
 	}
 	return lines
 }
@@ -105,7 +111,11 @@ func (c ErrorCell) RawLines() []string {
 
 	var lines []string
 	if c.Badge != "" || len(c.Suggestions) > 0 || (c.ErrorKind != "" && c.ErrorKind != diagnostic.KindGeneric) {
-		lines = append(lines, fmt.Sprintf("[%s] %s: %s", badge, title, c.Text))
+		detail := c.Text
+		if strings.TrimSpace(c.Target) != "" {
+			detail = strings.TrimSpace(c.Target) + ": " + detail
+		}
+		lines = append(lines, fmt.Sprintf("[%s] %s: %s", badge, title, detail))
 		for _, s := range c.Suggestions {
 			lines = append(lines, "  • "+s)
 		}

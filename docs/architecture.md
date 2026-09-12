@@ -219,6 +219,8 @@ Resource and security limits are enforced at the owning boundary, while work occ
 - session grants are reusable only for matching normal-risk read-only semantics.
 - checkpoints are bounded by count, bytes, and age.
 - `read`, `find`, and `git` enforce scan/output/process limits before unbounded buffering.
+- missing `read` targets recover by inspecting the nearest existing readable ancestor; discovery evidence is returned as structured `ls` entries as well as compatibility text so the model and TUI share one recovery source of truth.
+- repeated identical terminal read failures are suppressed by the turn progress guard until a successful mutation advances the workspace epoch.
 - workspace file authorization and opening must not introduce symlink/TOCTOU escapes.
 - model-originated tools execute through `internal/engine/toolcall.Service`.
 

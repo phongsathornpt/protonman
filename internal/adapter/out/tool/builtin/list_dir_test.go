@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -179,5 +180,30 @@ func TestListDirContinuationSurvivesDirectoryMutation(t *testing.T) {
 	}
 	if strings.TrimSpace(second.Output) == "" {
 		t.Fatalf("second output = %q", second.Output)
+	}
+}
+
+func TestListDirStructuredOutputMatchesVisibleEntries(t *testing.T) {
+	ws := newTestWorkspace(t, []string{"secret.txt"})
+	writeTestFile(t, ws.Root(), "alpha.go", "package alpha")
+	if err := os.Mkdir(filepath.Join(ws.Root(), "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, ws.Root(), "secret.txt", "hidden")
+	result := executeJSON(t, NewListDir(ws), "list-structured", map[string]any{"path": "."})
+	var got listDirOutput
+	if err := json.Unmarshal(result.StructuredOutput, &got); err != nil {
+		t.Fatalf("decode structured output: %v", err)
+	}
+	if got.Path != "." {
+		t.Fatalf("structured path = %q, want .", got.Path)
+	}
+	if len(got.Entries) != 2 {
+		t.Fatalf("structured entries = %#v, want 2 visible entries", got.Entries)
+	}
+	for _, forbidden := range []string{"secret.txt"} {
+		if strings.Contains(string(result.StructuredOutput), forbidden) {
+			t.Fatalf("protected entry leaked in structured output: %s", result.StructuredOutput)
+		}
 	}
 }

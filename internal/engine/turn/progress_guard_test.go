@@ -151,6 +151,35 @@ func TestProgressGuardTracksRepeatedNonRetryableFailure(t *testing.T) {
 	}
 }
 
+func TestProgressGuardSuppressesRepeatedMissingReadWithDiscoveryEvidence(t *testing.T) {
+	guard := newProgressGuard([]tool.Definition{{Name: "read", Kind: tool.KindRead}}, 2)
+	call := tool.Call{ID: "missing-1", Name: "read", Arguments: json.RawMessage(`{"path":"internal/base/runtimepolicy/runtimepolicy.go"}`)}
+	failure := &tool.Failure{
+		Code:     tool.ErrorCodeNotFound,
+		Message:  `not found: "internal/base/runtimepolicy/runtimepolicy.go"`,
+		Recovery: &tool.Recovery{Action: tool.RecoveryDiscoverResource, Tool: tool.NameLS, Arguments: json.RawMessage(`{"path":"internal/base/runtimepolicy"}`)},
+		RecoveryEvidence: &tool.RecoveryEvidence{
+			Action: tool.RecoveryDiscoverResource, Tool: tool.NameLS,
+			StructuredOutput: json.RawMessage(`{"path":"internal/base/runtimepolicy","entries":[{"name":"defaults.go","kind":"file"}]}`),
+		},
+	}
+	first := executedCall{call: call, result: tool.Result{CallID: call.ID, ToolName: call.Name, Failure: failure}, err: fmt.Errorf("missing")}
+	if stalled, err := guard.observeRound([]executedCall{first}); err != nil || stalled {
+		t.Fatalf("first missing read stalled=%v err=%v", stalled, err)
+	}
+	call.ID = "missing-2"
+	suppressed, err := guard.suppress(call)
+	if err != nil || suppressed == nil {
+		t.Fatalf("second missing read suppress=%#v err=%v", suppressed, err)
+	}
+	if suppressed.suppressionReason != "terminal_failure" {
+		t.Fatalf("suppression reason=%q, want terminal_failure", suppressed.suppressionReason)
+	}
+	if got := suppressed.result.Failure; got == nil || got.RecoveryEvidence == nil || len(got.RecoveryEvidence.StructuredOutput) == 0 {
+		t.Fatalf("suppressed result lost discovery evidence: %#v", suppressed.result)
+	}
+}
+
 func TestProgressGuardSuppressionPreservesActionableFailureRecovery(t *testing.T) {
 	guard := newProgressGuard([]tool.Definition{{Name: "edit", Kind: tool.KindEdit}}, 2)
 	call := tool.Call{ID: "edit-1", Name: "edit", Arguments: json.RawMessage(`{"file_path":"a.txt","content":"new"}`)}
