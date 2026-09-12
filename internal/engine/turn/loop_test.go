@@ -52,8 +52,8 @@ func TestLoopBuildsEffectiveSystemPromptFromRuntime(t *testing.T) {
 		t.Fatalf("first role = %q, want system", system.Role)
 	}
 	for _, want := range []string{
-		`<proton-system-prompt version="12">`, "specialized coding subagent",
-		"Workspace root: " + workspace, "custom project instruction", "Inspect the assigned code carefully.", "follow project rules",
+		`<proton-system-prompt version="14">`, "specialized coding subagent",
+		"Workspace tool root: .", "custom project instruction", "Inspect the assigned code carefully.", "follow project rules",
 	} {
 		if !strings.Contains(system.Content, want) {
 			t.Fatalf("system prompt missing %q:\n%s", want, system.Content)
@@ -287,6 +287,80 @@ func TestLoopStopsWhenToolCallBatchExceedsCumulativeLimit(t *testing.T) {
 	}
 	if !strings.Contains(result.Message.Content, MaxToolCallsFallback) {
 		t.Fatalf("result content = %q, want max-tool-call fallback", result.Message.Content)
+	}
+}
+
+type stagnantFailureHandler struct {
+	definition tool.Definition
+	calls      int
+}
+
+func (h *stagnantFailureHandler) Definition() tool.Definition { return h.definition }
+
+func (h *stagnantFailureHandler) Execute(_ context.Context, call tool.Call) (tool.Result, error) {
+	h.calls++
+	return tool.Result{
+		CallID: call.ID, ToolName: call.Name,
+		Failure: &tool.Failure{Code: tool.ErrorCodeExecution, Message: "test failure"},
+	}, nil
+}
+
+func TestLoopForcesSynthesisAfterUniqueStagnantCalls(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{events: []sdk.Event{{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "stagnant-a", Name: "read", Arguments: json.RawMessage(`{"path":"a.go"}`)}}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+		{events: []sdk.Event{{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "stagnant-b", Name: "read", Arguments: json.RawMessage(`{"path":"b.go"}`)}}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "I could not make further progress."}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	}}
+	handler := &stagnantFailureHandler{definition: readFileDefinition()}
+	loop := newLoopForHandler(t, client, handler, permission.ActionAllow, permission.ModeAsk)
+	loop.maxStagnantToolCalls = 2
+	loop.emergencyMaxToolCalls = 100
+	loop.maxToolCalls = 0
+
+	result, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect two files"}}, nil)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if handler.calls != 2 {
+		t.Fatalf("handler calls = %d, want 2", handler.calls)
+	}
+	if len(client.requests) != 3 || len(client.requests[2].Tools) != 0 {
+		t.Fatalf("requests = %d final tools = %d, want 3 requests and tools disabled", len(client.requests), len(client.requests[2].Tools))
+	}
+	last := client.requests[2].Messages[len(client.requests[2].Messages)-1]
+	if last.Role != model.RoleSystem || last.Content != SafetyBudgetPrompt {
+		t.Fatalf("final safety prompt = %#v", last)
+	}
+	if result.Message.Content != "I could not make further progress." {
+		t.Fatalf("final content = %q", result.Message.Content)
+	}
+}
+
+func TestLoopAllowsGroundingCallThatReachesSafetyCeiling(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{events: []sdk.Event{
+			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "grounding-read", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		}},
+		{events: []sdk.Event{
+			{Kind: sdk.EventTextDelta, Text: "Grounding completed at the safety boundary."},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		}},
+	}}
+	loop, handler := newTestLoop(t, client, permission.ActionAllow, WithGroundingEvidence(tool.EvidenceWorkspace), WithMaxToolCalls(1))
+
+	result, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect the repository"}}, nil)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(handler.calls) != 1 {
+		t.Fatalf("handler calls = %d, want 1", len(handler.calls))
+	}
+	if len(client.requests) != 2 || len(client.requests[1].Tools) != 0 {
+		t.Fatalf("requests = %d final tools = %d, want synthesis after boundary grounding", len(client.requests), len(client.requests[1].Tools))
+	}
+	if result.Message.Content != "Grounding completed at the safety boundary." {
+		t.Fatalf("final content = %q", result.Message.Content)
 	}
 }
 
@@ -1193,7 +1267,7 @@ func TestLoopDynamicActiveSkillsWithRegistry(t *testing.T) {
 	}
 }
 
-func TestNewLoopRejectsAllGlobalBoundsDisabled(t *testing.T) {
+func TestNewLoopUsesProgressSafetyBoundsWhenLegacyLimitsDisabled(t *testing.T) {
 	policy, err := permission.NewPolicy(permission.Config{})
 	if err != nil {
 		t.Fatalf("NewPolicy() error = %v", err)
@@ -1205,14 +1279,12 @@ func TestNewLoopRejectsAllGlobalBoundsDisabled(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
 		events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}},
 	}}}
-	_, err = NewLoop(
-		client,
-		service,
-		WithMaxToolCalls(0),
-		WithTurnTimeout(0),
-	)
-	if !errors.Is(err, ErrInvalidLoop) {
-		t.Fatalf("NewLoop() error = %v, want ErrInvalidLoop", err)
+	loop, err := NewLoop(client, service, WithMaxToolCalls(0), WithTurnTimeout(0))
+	if err != nil {
+		t.Fatalf("NewLoop() error = %v", err)
+	}
+	if loop.maxStagnantToolCalls <= 0 || loop.emergencyMaxToolCalls <= 0 {
+		t.Fatalf("progress safety bounds = stagnant:%d emergency:%d", loop.maxStagnantToolCalls, loop.emergencyMaxToolCalls)
 	}
 }
 

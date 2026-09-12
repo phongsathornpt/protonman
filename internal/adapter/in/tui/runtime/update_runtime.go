@@ -117,7 +117,7 @@ func (m *bubbleModel) updateAnimationEvent(msg tea.Msg) (tea.Cmd, bool) {
 		if !m.busy {
 			return nil, true
 		}
-		m.refreshFrameChromeOnly()
+		m.refreshFrameLayout()
 		return command, true
 	case cursor.BlinkMsg:
 		if m.reducedMotion {
@@ -128,7 +128,7 @@ func (m *bubbleModel) updateAnimationEvent(msg tea.Msg) (tea.Cmd, bool) {
 			if handler, ok := top.(isolatedPaneMsgHandler); ok {
 				result := handler.HandlePaneMsg(newPaneRenderContext(m), message)
 				if result.handled {
-					m.refreshFrameChromeOnly()
+					m.refreshFrameLayout()
 					return result.cmd, true
 				}
 			}
@@ -137,7 +137,7 @@ func (m *bubbleModel) updateAnimationEvent(msg tea.Msg) (tea.Cmd, bool) {
 		if prompt != nil {
 			updated, command := prompt.Update(message)
 			*prompt = updated
-			m.refreshFrameChromeOnly()
+			m.refreshFrameLayout()
 			return command, true
 		}
 		return nil, true
@@ -204,7 +204,7 @@ func (m *bubbleModel) updateRuntimeEvent(msg tea.Msg) (tea.Cmd, bool) {
 	case transientnotice.Expired:
 		if message.ID == m.transientNoticeID {
 			m.transientNotice = ""
-			m.refreshFrameChromeOnly()
+			m.refreshFrameLayout()
 		}
 		return nil, true
 	case turnmsg.Delta:

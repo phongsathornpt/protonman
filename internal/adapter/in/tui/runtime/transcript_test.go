@@ -650,7 +650,6 @@ func TestEditToolUsesStructuredPatchCell(t *testing.T) {
 func TestTranscriptRawRichTogglePreservesRelativeScrollPosition(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
-	m.showWelcome = false
 	for i := 0; i < 80; i++ {
 		m.appendUser(fmt.Sprintf("question %02d", i))
 		m.appendAssistant("answer with **markdown** and some detail")

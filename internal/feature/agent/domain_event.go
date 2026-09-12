@@ -43,6 +43,7 @@ type LifecycleEvent struct {
 	AgentID     string             `json:"agent_id"`
 	Profile     Profile            `json:"profile"`
 	Task        string             `json:"task,omitempty"`
+	TaskID      string             `json:"task_id,omitempty"`
 	DependsOn   []string           `json:"depends_on,omitempty"`
 	Optional    bool               `json:"optional,omitempty"`
 	Provider    string             `json:"provider,omitempty"`
@@ -84,7 +85,7 @@ func nextLifecycleEvent(status AgentStatus, kind LifecycleEventKind, at time.Tim
 	return LifecycleEvent{
 		Kind: kind, Version: status.Version + 1, At: at,
 		SessionID: status.SessionID, ParentID: status.ParentID, AgentID: status.ID,
-		Profile: status.Profile, Task: status.Task, DependsOn: append([]string(nil), status.DependsOn...), Optional: status.Optional, Provider: status.Provider, Model: status.Model,
+		Profile: status.Profile, Task: status.Task, TaskID: status.TaskID, DependsOn: append([]string(nil), status.DependsOn...), Optional: status.Optional, Provider: status.Provider, Model: status.Model,
 		Reason: reason, ResumedFrom: status.ResumedFrom, ResumedAs: status.ResumedAs,
 	}
 }
@@ -108,7 +109,7 @@ func applyLifecycleEvent(status AgentStatus, event LifecycleEvent) (AgentStatus,
 		}
 		status = AgentStatus{
 			SessionID: event.SessionID, ID: event.AgentID, ParentID: event.ParentID,
-			Profile: event.Profile, Provider: event.Provider, Model: event.Model, Task: event.Task, DependsOn: append([]string(nil), event.DependsOn...), Optional: event.Optional,
+			Profile: event.Profile, Provider: event.Provider, Model: event.Model, Task: event.Task, TaskID: event.TaskID, DependsOn: append([]string(nil), event.DependsOn...), Optional: event.Optional,
 			State: StateQueued, StartTime: event.At, ResumedFrom: event.ResumedFrom,
 		}
 	} else {

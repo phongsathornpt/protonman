@@ -107,7 +107,7 @@ func SaveUserReasoningEffort(homeDir string, effort sdk.ReasoningEffort) error {
 	})
 }
 
-// SaveUserMaxToolCalls updates the cumulative tool-call limit in ~/.protonman/config.toml.
+// SaveUserMaxToolCalls updates the optional hard tool-call ceiling override in ~/.protonman/config.toml. Zero keeps progress-aware defaults.
 func SaveUserMaxToolCalls(homeDir string, maxToolCalls int) error {
 	if maxToolCalls < 0 {
 		return fmt.Errorf("max tool calls cannot be negative")

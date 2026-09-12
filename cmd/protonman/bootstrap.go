@@ -49,6 +49,21 @@ type appRuntime struct {
 	application  app.Services
 }
 
+func reconcileDelegatedTaskStatus(ctx context.Context, sessionsRoot, sessionID, taskID string, status tododomain.Status) error {
+	resources, err := session.ResolveResources(sessionsRoot, strings.TrimSpace(sessionID))
+	if err != nil {
+		return fmt.Errorf("resolve delegated task session resources: %w", err)
+	}
+	store, err := tododomain.OpenMarkdownStore(ctx, resources.Todo)
+	if err != nil {
+		return fmt.Errorf("open delegated task todo store: %w", err)
+	}
+	if _, _, err := tododomain.ReconcileStatus(ctx, store, taskID, status); err != nil {
+		return fmt.Errorf("reconcile delegated task: %w", err)
+	}
+	return nil
+}
+
 func (r *appRuntime) Close() {
 	if r != nil && r.coordinator != nil {
 		_ = r.coordinator.Close()
@@ -170,6 +185,22 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 			}
 			persistCtx, done := contextutil.DetachedTimeout(eventCtx, runtimepolicy.SessionPersistenceTimeout)
 			defer done()
+			if strings.TrimSpace(ev.TaskID) != "" {
+				status := tododomain.Status("")
+				switch ev.Kind {
+				case agent.EventAgentQueued, agent.EventAgentStarted:
+					status = tododomain.StatusInProgress
+				case agent.EventAgentCompleted:
+					status = tododomain.StatusCompleted
+				case agent.EventAgentFailed:
+					status = tododomain.StatusPending
+				}
+				if status.Valid() {
+					if taskErr := reconcileDelegatedTaskStatus(persistCtx, dirs.Sessions, ownerSession, ev.TaskID, status); taskErr != nil {
+						slog.Warn("reconcile delegated task status", "session_id", ownerSession, "agent_id", ev.AgentID, "task_id", ev.TaskID, "status", status, "error", taskErr)
+					}
+				}
+			}
 			var persistErr error
 			if ev.Kind == agent.EventAgentCompleted || ev.Kind == agent.EventAgentFailed {
 				persistErr = coordinator.CompactLifecycleSession(persistCtx, ownerSession)
@@ -242,6 +273,9 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	todoStore, err := tododomain.OpenMarkdownStore(ctx, resources.Todo)
 	if err != nil {
 		return nil, fmt.Errorf("open session todo store: %w", err)
+	}
+	if _, _, err := todoStore.BindGoal(ctx, state.ActiveGoal); err != nil {
+		return nil, fmt.Errorf("bind session todo store to active goal: %w", err)
 	}
 	baseRegistry, err := builtin.NewDefaultRegistry(workspaceRoot,
 		builtin.WithCheckpointStore(checkpointStore),
@@ -345,8 +379,22 @@ func (r *appRuntime) registryForSession(sessionID string) (tool.Registry, error)
 	if err != nil {
 		return nil, err
 	}
-	store, err := tododomain.OpenMarkdownStore(context.Background(), resources.Todo)
+	ctx := context.Background()
+	store, err := tododomain.OpenMarkdownStore(ctx, resources.Todo)
 	if err != nil {
+		return nil, err
+	}
+	goal := ""
+	if r.stateStore != nil {
+		state, found, loadErr := r.stateStore.Load(ctx, sessionID)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		if found {
+			goal = state.ActiveGoal
+		}
+	}
+	if _, _, err := store.BindGoal(ctx, goal); err != nil {
 		return nil, err
 	}
 	return tool.NewOverlayRegistry(r.registry, todotool.NewTodoForSession(store, sessionID))

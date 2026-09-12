@@ -35,7 +35,6 @@ func promptPlaceholder(hasRunner bool, mode permission.Mode, planMode bool) stri
 func (m *bubbleModel) resetTranscript() {
 	m.ensureHistoryState().Reset()
 	m.conversationViewport.setFollowing(true)
-	m.showWelcome = true
 	m.refreshTranscriptViewport(true)
 }
 
@@ -190,7 +189,7 @@ func (m bubbleModel) statusView() string {
 		return warningStyle.Render(truncateWithEllipsis("action required · permission", maxInt(1, m.layout.width-2)))
 	}
 	if !m.busy {
-		return m.goalStatusView()
+		return ""
 	}
 	agentSnapshot := m.turnAgentSnapshot()
 	activeAgents, _, _, _ := agentActivityCounts(agentSnapshot)
@@ -241,115 +240,47 @@ func (m bubbleModel) statusView() string {
 	contentWidth := maxInt(1, maxWidth-2-len([]rune(meta)))
 	activity = truncateWithEllipsis(activity, contentWidth)
 	busyLine := indicator + " " + systemStyle.Render(activity) + mutedStyle.Render(meta)
-	if goal := m.goalStatusView(); goal != "" {
-		return goal + "\n" + busyLine
-	}
 	return busyLine
 }
 
-func (m bubbleModel) goalStatusView() string {
-	goal := strings.TrimSpace(m.activeGoal)
-	if goal == "" {
-		return ""
-	}
-	maxWidth := maxInt(1, m.layout.width-2)
-	prefix := "Goal  "
-	goalWidth := maxInt(1, maxWidth-len(prefix))
-	return mutedStyle.Render(prefix) + systemStyle.Render(truncateWithEllipsis(goal, goalWidth))
+type sessionHeaderCache struct {
+	workDir     string
+	branch      string
+	branchValid bool
 }
 
-type welcomeCardCache struct {
-	workDir        string
-	branch         string
-	branchValid    bool
-	activeModel    string
-	activeGoal     string
-	lowConcurrency bool
-	width          int
-	height         int
-	rendered       string
-	renderValid    bool
-}
-
-func (m *bubbleModel) welcomeCard() string {
-	if m == nil {
+func (m *bubbleModel) sessionHeaderView() string {
+	if m == nil || m.layout.height < 10 {
 		return ""
 	}
-	cache := &m.welcomeCache
+	if m.panes.bottom != nil && m.panes.bottom.top() != nil && m.layout.height < 18 {
+		return ""
+	}
+	cache := &m.sessionHeaderCache
 	if cache.workDir != m.workDir {
-		*cache = welcomeCardCache{workDir: m.workDir}
+		*cache = sessionHeaderCache{workDir: m.workDir}
 	}
 	if !cache.branchValid {
 		cache.branch = transcriptutil.DetectGitBranch(m.workDir)
 		cache.branchValid = true
-		cache.renderValid = false
 	}
-	lowConcurrency := m.lowConcurrencyEffective()
-	if cache.renderValid && cache.width == m.layout.width && cache.height == m.layout.height &&
-		cache.activeModel == m.activeModel && cache.activeGoal == m.activeGoal && cache.lowConcurrency == lowConcurrency {
-		return cache.rendered
-	}
-	cache.rendered = m.renderWelcomeCard(cache.branch)
-	cache.activeModel = m.activeModel
-	cache.activeGoal = m.activeGoal
-	cache.lowConcurrency = lowConcurrency
-	cache.width = m.layout.width
-	cache.height = m.layout.height
-	cache.renderValid = true
-	return cache.rendered
+	return renderSessionHeader(sessionHeaderModel{
+		Width:          maxInt(1, m.layout.width-2),
+		Model:          m.activeModel,
+		LowConcurrency: m.lowConcurrencyEffective(),
+		GoalActive:     strings.TrimSpace(m.activeGoal) != "",
+		Branch:         cache.branch,
+		Workspace:      transcriptutil.FormatWorkspaceDisplay(m.workDir),
+		Compact:        m.layout.height < 18,
+		Minimal:        m.layout.height < 10,
+	})
 }
 
-func (m *bubbleModel) invalidateWelcomeBranch() {
+func (m *bubbleModel) invalidateSessionHeaderBranch() {
 	if m == nil {
 		return
 	}
-	m.welcomeCache.branchValid = false
-	m.welcomeCache.renderValid = false
-}
-
-func (m *bubbleModel) renderWelcomeCard(branch string) string {
-	width := maxInt(1, m.layout.width-2)
-	brand := brandLockup(width)
-	lines := strings.Split(brand, "\n")
-
-	if len(lines) == 4 && width >= 40 {
-		if meta := m.welcomeHeaderMeta(); meta != "" {
-			lines[1] += "    " + mutedStyle.Render(truncateWithEllipsis(meta, maxInt(1, width-12)))
-		}
-		context := strings.TrimSpace(branch)
-		if context == "" {
-			context = transcriptutil.FormatWorkspaceDisplay(m.workDir)
-		}
-		if context != "" {
-			lines[3] += "    " + mutedStyle.Render(truncateWithEllipsis(context, maxInt(1, width-12)))
-		}
-		return strings.Join(lines, "\n")
-	}
-
-	rows := []string{brand}
-	if ws := transcriptutil.FormatWorkspaceDisplay(m.workDir); ws != "" {
-		workspace := truncateWithEllipsis(ws, width)
-		if branch != "" {
-			suffix := " · " + branch
-			workspace = truncateWithEllipsis(ws, maxInt(1, width-len(suffix))) + suffix
-		}
-		rows = append(rows, mutedStyle.Render(workspace))
-	}
-	return strings.Join(rows, "\n")
-}
-
-func (m *bubbleModel) welcomeHeaderMeta() string {
-	parts := make([]string, 0, 3)
-	if modelName := strings.TrimSpace(m.activeModel); modelName != "" {
-		parts = append(parts, modelName)
-	}
-	if m.lowConcurrencyEffective() {
-		parts = append(parts, "low")
-	}
-	if strings.TrimSpace(m.activeGoal) != "" {
-		parts = append(parts, "goal active")
-	}
-	return strings.Join(parts, " · ")
+	m.sessionHeaderCache.branchValid = false
 }
 
 // rootActivityLabel is the deterministic busy label for the primary agent when

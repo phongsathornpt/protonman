@@ -18,6 +18,13 @@ var compactLogoLines = [...]string{
 	` /|__|\`,
 }
 
+// CompactLogoLines returns a copy of the canonical four-line terminal mark.
+// Layout code owns the text column next to it so brand, model, and branch stay
+// vertically aligned instead of inheriting per-line logo widths.
+func CompactLogoLines() []string {
+	return append([]string(nil), compactLogoLines[:]...)
+}
+
 // BrandLockup renders Protonman's compact character mark. The product name is
 // kept separate from the artwork so cramped terminals can fall back cleanly.
 func BrandLockup(width int) string {

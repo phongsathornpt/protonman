@@ -139,6 +139,7 @@ type Request struct {
 	ParentID     string        `json:"parent_id,omitempty"`
 	Profile      Profile       `json:"profile"`
 	Task         string        `json:"task"`
+	TaskID       string        `json:"task_id,omitempty"`
 	Context      string        `json:"context,omitempty"`
 	DependsOn    []string      `json:"depends_on,omitempty"`
 	Optional     bool          `json:"optional,omitempty"`
@@ -232,6 +233,7 @@ type Event struct {
 	AgentID       string        `json:"agent_id"`
 	ParentID      string        `json:"parent_id,omitempty"`
 	Profile       Profile       `json:"profile"`
+	TaskID        string        `json:"task_id,omitempty"`
 	Message       string        `json:"message,omitempty"`
 	Call          *tool.Call    `json:"call,omitempty"`
 	ResultVersion uint64        `json:"result_version,omitempty"`

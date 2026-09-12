@@ -128,66 +128,34 @@ func TestRunningToolUsesTranscriptAsProgressSurface(t *testing.T) {
 	}
 }
 
-func TestWelcomeCardContainsBrandOnly(t *testing.T) {
+func TestSessionHeaderProjectsRuntimeState(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.workDir = "/a/very/long/workspace/path/that/does/not/fit/in/a/narrow/terminal"
-	m.activeModel = "provider/a-very-long-model-name-that-does-not-fit"
-	m.activeProvider = "provider-name"
-	m.resize(32, 14)
-	card := m.welcomeCard()
-	if !strings.Contains(card, ` /|__|\`) || !strings.Contains(card, "protonMAN") {
-		t.Fatalf("welcome card missing Protonman brand: %q", card)
-	}
-	for _, unwanted := range []string{m.workDir, m.activeModel, m.activeProvider, "Ask anything", "No model selected"} {
-		if unwanted != "" && strings.Contains(card, unwanted) {
-			t.Fatalf("welcome card leaked runtime metadata %q: %q", unwanted, card)
-		}
-	}
-	for _, line := range strings.Split(card, "\n") {
-		if got := lipgloss.Width(line); got > 32 {
-			t.Fatalf("welcome line width = %d, want <= 32: %q", got, line)
-		}
-	}
-}
-
-func TestWelcomeCardNormalModeStaysMinimal(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.workDir = "/tmp/test-workspace"
-	m.activeModel = "provider/some-model"
-	m.resize(80, 24)
-	card := m.welcomeCard()
-	if !strings.Contains(card, `  /__\`) || !strings.Contains(card, "protonMAN") || !strings.Contains(card, "/tmp/test-workspace") {
-		t.Fatalf("minimal welcome missing identity or workspace: %q", card)
-	}
-	for _, unwanted := range []string{"Quick Actions", "/help", "/model", "Tip:"} {
-		if strings.Contains(card, unwanted) {
-			t.Fatalf("minimal welcome leaked %q: %q", unwanted, card)
-		}
-	}
-}
-
-func TestWelcomeHeaderMatchesCompactSessionLayout(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.resize(80, 24)
 	m.activeModel = "qwen3.8-27b"
 	m.activeGoal = "refactor TUI branding"
 	m.lowConcurrencyMode = model.LowConcurrencyOn
+	m.resize(80, 24)
 
-	plain := ansi.Strip(m.renderWelcomeCard("feat/tui-brand"))
-	lines := strings.Split(plain, "\n")
-	if len(lines) != 4 {
-		t.Fatalf("welcome header lines = %d, want 4: %q", len(lines), plain)
-	}
-	if !strings.Contains(lines[0], "protonMAN") {
-		t.Fatalf("brand line missing protonMAN: %q", lines[0])
-	}
-	for _, want := range []string{"qwen3.8-27b", "low", "goal active"} {
-		if !strings.Contains(lines[1], want) {
-			t.Fatalf("session metadata missing %q: %q", want, lines[1])
+	plain := ansi.Strip(m.sessionHeaderView())
+	for _, want := range []string{"protonMAN", "qwen3.8-27b", "low", "goal active"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("session header missing %q: %q", want, plain)
 		}
 	}
-	if !strings.Contains(lines[3], "feat/tui-brand") {
-		t.Fatalf("branch missing from logo baseline: %q", lines[3])
+}
+
+func TestSessionHeaderFitsNarrowTerminal(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeModel = "provider/a-very-long-model-name-that-does-not-fit"
+	m.lowConcurrencyMode = model.LowConcurrencyOn
+	m.resize(32, 14)
+	header := m.sessionHeaderView()
+	if !strings.Contains(header, "protonMAN") {
+		t.Fatalf("session header missing brand: %q", header)
+	}
+	for _, line := range strings.Split(header, "\n") {
+		if got := lipgloss.Width(line); got > 30 {
+			t.Fatalf("header line width = %d, want <= 30: %q", got, line)
+		}
 	}
 }
 
@@ -1418,28 +1386,29 @@ func TestPromptPlaceholderReflectsRunnerState(t *testing.T) {
 	}
 }
 
-func TestIdleFooterShowsModelReasoningAndPermissionMode(t *testing.T) {
+func TestIdleFooterShowsInteractionContextOnly(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeModel = "nemotron-3.5-lightning-free"
 	m.reasoningEffort = sdk.ReasoningDefault
 	m.resize(80, 24)
 	footer := ansi.Strip(m.idleContextFooter())
-	if !strings.Contains(footer, "nemotron-3.5-lightning-free · auto · ask") {
-		t.Fatalf("footer missing model/reasoning/permission context: %q", footer)
+	for _, want := range []string{"? for shortcuts", "auto", "ask"} {
+		if !strings.Contains(footer, want) {
+			t.Fatalf("footer missing %q: %q", want, footer)
+		}
+	}
+	if strings.Contains(footer, m.activeModel) {
+		t.Fatalf("footer duplicated model owned by session header: %q", footer)
 	}
 }
 
 func TestIdleFooterKeepsShortcutHintInAlwaysApprove(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAlwaysApprove, emptyTodoItems())
-	m.activeModel = "muse-spark-1.3-contributor-free"
 	m.reasoningEffort = sdk.ReasoningDefault
 	m.resize(72, 24)
 	footer := ansi.Strip(m.idleContextFooter())
-	if !strings.Contains(footer, "? for shortcuts") {
-		t.Fatalf("footer dropped shortcut hint in always-approve mode: %q", footer)
-	}
-	if !strings.Contains(footer, " · auto · auto") {
-		t.Fatalf("footer did not use compact permission label: %q", footer)
+	if !strings.Contains(footer, "? for shortcuts") || !strings.Contains(footer, "auto") {
+		t.Fatalf("footer lost compact interaction context: %q", footer)
 	}
 }
 
@@ -1483,41 +1452,30 @@ func TestModelRetryStatusShowsCooldownAfterFirstRetry(t *testing.T) {
 	}
 }
 
-func TestIdleContextFooterShowsLowConcurrencyStateForOpenCode(t *testing.T) {
+func TestSessionHeaderOwnsLowConcurrencyState(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(100, 24)
 	m.activeProvider = model.DefaultOpenCodeName
 	m.activeModel = "nemotron-3.5-lightning-free"
 	m.lowConcurrencyMode = model.LowConcurrencyOn
-	footer := ansi.Strip(m.idleContextFooter())
-	if !strings.Contains(footer, "LOW") {
-		t.Fatalf("footer missing low concurrency state: %q", footer)
+	header := ansi.Strip(m.sessionHeaderView())
+	if !strings.Contains(header, "low") {
+		t.Fatalf("session header missing low concurrency state: %q", header)
+	}
+	if strings.Contains(ansi.Strip(m.idleContextFooter()), "LOW") {
+		t.Fatalf("footer duplicated low concurrency state: %q", ansi.Strip(m.idleContextFooter()))
 	}
 }
 
-func TestIdleContextFooterKeepsLowIndicatorOnNarrowTerminal(t *testing.T) {
+func TestSessionHeaderOwnsActiveGoalState(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.resize(24, 24)
-	m.activeProvider = model.DefaultOpenCodeName
-	m.activeModel = "nemotron-3.5-lightning-free"
-	m.lowConcurrencyMode = model.LowConcurrencyOn
-	footer := ansi.Strip(m.idleContextFooter())
-	if !strings.Contains(footer, "LOW") {
-		t.Fatalf("narrow footer dropped effective low concurrency state: %q", footer)
-	}
-}
-
-func TestStatusViewKeepsActiveGoalVisible(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.resize(48, 24)
+	m.resize(80, 24)
 	m.activeGoal = "finish provider-neutral low concurrency mode safely"
-	idle := ansi.Strip(m.statusView())
-	if !strings.Contains(idle, "Goal") || !strings.Contains(idle, "finish provider-neutral") {
-		t.Fatalf("idle status missing active goal: %q", idle)
+	header := ansi.Strip(m.sessionHeaderView())
+	if !strings.Contains(header, "goal active") {
+		t.Fatalf("session header missing active goal state: %q", header)
 	}
-	m.busy = true
-	busy := ansi.Strip(m.statusView())
-	if !strings.Contains(busy, "Goal") || !strings.Contains(busy, "finish provider-neutral") {
-		t.Fatalf("busy status missing active goal: %q", busy)
+	if got := ansi.Strip(m.statusView()); got != "" {
+		t.Fatalf("idle status duplicated active goal: %q", got)
 	}
 }

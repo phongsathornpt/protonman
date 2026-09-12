@@ -113,6 +113,64 @@ func TestProgressGuardMutationResetsReadObservation(t *testing.T) {
 	}
 }
 
+func TestProgressGuardTaskMutationDoesNotResetRepositoryObservation(t *testing.T) {
+	guard := newProgressGuard([]tool.Definition{
+		{Name: "read", Kind: tool.KindRead, Mutability: tool.MutabilityReadOnly},
+		{Name: "todo", Kind: tool.KindTask, Mutability: tool.MutabilityMutating, Safety: tool.SafetyContract{MutationDomain: tool.MutationDomainTaskState}},
+	}, 2)
+	read := executedCall{
+		call:   tool.Call{ID: "r1", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)},
+		result: tool.Result{CallID: "r1", ToolName: "read", Output: "same"},
+	}
+	if stalled, err := guard.observeRound([]executedCall{read}); err != nil || stalled {
+		t.Fatalf("first read stalled=%v err=%v", stalled, err)
+	}
+	taskUpdate := executedCall{
+		call:   tool.Call{ID: "t1", Name: "todo", Arguments: json.RawMessage(`{"action":"update","expected_revision":0,"operations":[{"op":"add","id":"x","text":"x","status":"pending"}]}`)},
+		result: tool.Result{CallID: "t1", ToolName: "todo", Output: "task plan revision 1"},
+	}
+	if stalled, err := guard.observeRound([]executedCall{taskUpdate}); err != nil || stalled {
+		t.Fatalf("task update stalled=%v err=%v", stalled, err)
+	}
+	read.call.ID = "r2"
+	if stalled, err := guard.observeRound([]executedCall{read}); err != nil || !stalled {
+		t.Fatalf("second identical read after task metadata mutation stalled=%v err=%v, want stalled", stalled, err)
+	}
+}
+
+func TestProgressGuardTracksRepeatedTaskReads(t *testing.T) {
+	guard := newProgressGuard([]tool.Definition{{
+		Name: "todo", Kind: tool.KindTask, Mutability: tool.MutabilityReadOnly,
+	}}, 2)
+	call := tool.Call{ID: "t1", Name: "todo", Arguments: json.RawMessage(`{"action":"get"}`)}
+	first := executedCall{call: call, result: tool.Result{CallID: "t1", ToolName: "todo", Output: "task snapshot revision 1"}}
+	if stalled, err := guard.observeRound([]executedCall{first}); err != nil || stalled {
+		t.Fatalf("first todo read stalled=%v err=%v", stalled, err)
+	}
+	call.ID = "t2"
+	second := executedCall{call: call, result: tool.Result{CallID: "t2", ToolName: "todo", Output: "task snapshot revision 1"}}
+	if stalled, err := guard.observeRound([]executedCall{second}); err != nil || !stalled {
+		t.Fatalf("second identical todo read stalled=%v err=%v, want stalled", stalled, err)
+	}
+}
+
+func TestProgressGuardTracksRepeatedTaskMetadataMutation(t *testing.T) {
+	guard := newProgressGuard([]tool.Definition{{
+		Name: "todo", Kind: tool.KindTask, Mutability: tool.MutabilityMutating,
+		Safety: tool.SafetyContract{MutationDomain: tool.MutationDomainTaskState},
+	}}, 2)
+	call := tool.Call{ID: "t1", Name: "todo", Arguments: json.RawMessage(`{"action":"update","expected_revision":1,"operations":[{"op":"set_status","id":"x","status":"in_progress"}]}`)}
+	first := executedCall{call: call, result: tool.Result{CallID: "t1", ToolName: "todo", Output: "task plan revision 1 · no changes"}}
+	if stalled, err := guard.observeRound([]executedCall{first}); err != nil || stalled {
+		t.Fatalf("first todo update stalled=%v err=%v", stalled, err)
+	}
+	call.ID = "t2"
+	second := executedCall{call: call, result: tool.Result{CallID: "t2", ToolName: "todo", Output: "task plan revision 1 · no changes"}}
+	if stalled, err := guard.observeRound([]executedCall{second}); err != nil || !stalled {
+		t.Fatalf("second identical todo update stalled=%v err=%v, want stalled", stalled, err)
+	}
+}
+
 func TestProgressGuardChangedResultIsProgress(t *testing.T) {
 	guard := newProgressGuard([]tool.Definition{{Name: "read", Kind: tool.KindRead}}, 2)
 	call := tool.Call{ID: "r1", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)}

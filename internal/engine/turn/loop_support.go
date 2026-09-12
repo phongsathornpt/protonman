@@ -12,13 +12,6 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 )
 
-func shouldWarnSoftToolBudget(used, max int, warned bool) bool {
-	if warned || max <= 0 || used <= 0 {
-		return false
-	}
-	return used*5 >= max*3
-}
-
 func (l *Loop) newTurnContext(parent context.Context) (context.Context, context.CancelFunc) {
 	if l.turnTimeout > 0 {
 		return context.WithTimeout(parent, l.turnTimeout)

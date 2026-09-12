@@ -166,7 +166,11 @@ func (v *slashPaneView) selectionStatus(width int) string {
 func (v *slashPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	v.sync(ctx)
 	switch {
-	case key.Matches(message, paneutil.Keys.Nav):
+	// The slash pane renders below the composer and shares the draft with it,
+	// so it may only claim navigation keys that cannot be typed. Matching the
+	// modal paneutil.Keys.Nav here would swallow "j"/"k"/"g"/"G" from the
+	// command being typed (for example "/goal" becoming "/oal").
+	case key.Matches(message, paneutil.Keys.CompletionNav):
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
 		return paneKeyResult{handled: true, cmd: cmd}
@@ -174,7 +178,7 @@ func (v *slashPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPres
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionAcceptSlash}}
 	case key.Matches(message, paneutil.Keys.Confirm):
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionAcceptSlash, runSlash: true}}
-	case key.Matches(message, paneutil.Keys.Close):
+	case key.Matches(message, paneutil.Keys.CompletionClose):
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: slashViewID}}
 	default:
 		return paneKeyResult{}

@@ -2,15 +2,18 @@ package runtime
 
 import (
 	"context"
+	"io"
+	"path/filepath"
+	"testing"
 
 	tea "charm.land/bubbletea/v2"
-	"io"
-	"testing"
+	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -93,5 +96,75 @@ func TestStartTurnPreservesActiveTurnOwnership(t *testing.T) {
 	}
 	if m.activeTurnOwner != "turn-existing" || m.turnEvents != originalEvents {
 		t.Fatalf("startTurn overwrote active ownership: owner=%q events_same=%v", m.activeTurnOwner, m.turnEvents == originalEvents)
+	}
+}
+
+func TestSetActiveGoalSupersedesBoundTodoPlan(t *testing.T) {
+	ctx := context.Background()
+	store, err := tododomain.OpenMarkdownStore(ctx, filepath.Join(t.TempDir(), "todo.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, _, err := store.BindGoal(ctx, "old goal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	withTask, err := store.CompareAndReplace(ctx, bound.Revision, []tododomain.Item{{ID: "old", Text: "old task", Status: tododomain.StatusInProgress}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read", Kind: tool.KindRead}}}
+	service := newBehaviorService(t, registry, permission.ModeAsk)
+	runner, err := turn.NewLoop(&goalTestModel{}, service, turn.WithSystemPromptSpec(prompt.Spec{ActiveGoal: "old goal"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := newBubbleModel(ctx, service, registry, withTask.Items, runner, newPermissionBridge(), "")
+	m.todoStore = store
+	m.todoRevision = withTask.Revision
+	m.activeGoal = "old goal"
+	if err := m.setActiveGoal("new goal"); err != nil {
+		t.Fatal(err)
+	}
+	if m.activeGoal != "new goal" {
+		t.Fatalf("active goal=%q", m.activeGoal)
+	}
+	if len(m.todo) != 0 || len(store.Snapshot().Items) != 0 {
+		t.Fatalf("stale todo survived goal change: model=%+v store=%+v", m.todo, store.Snapshot())
+	}
+}
+
+func TestCompletedGoalResultClearsPersistentGoal(t *testing.T) {
+	ctx := context.Background()
+	store, err := tododomain.OpenMarkdownStore(ctx, filepath.Join(t.TempDir(), "todo.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, _, err := store.BindGoal(ctx, "finish work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed, err := store.CompareAndReplace(ctx, bound.Revision, []tododomain.Item{{ID: "done", Text: "finish work", Status: tododomain.StatusCompleted}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read", Kind: tool.KindRead}}}
+	service := newBehaviorService(t, registry, permission.ModeAsk)
+	runner, err := turn.NewLoop(&goalTestModel{}, service, turn.WithSystemPromptSpec(prompt.Spec{ActiveGoal: "finish work"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := newBubbleModel(ctx, service, registry, completed.Items, runner, newPermissionBridge(), "")
+	m.todoStore = store
+	m.todoRevision = completed.Revision
+	m.todoLifecycle.CompletionFresh = true
+	m.activeGoal = "finish work"
+	m.busy = true
+	m.updateTurnDone(turnmsg.Done{Result: turn.Result{GoalCompleted: true}})
+	if m.activeGoal != "" {
+		t.Fatalf("active goal after completed result = %q", m.activeGoal)
+	}
+	if m.todoLifecycle.CompletionFresh || !m.todoLifecycle.CompletionDismissed {
+		t.Fatalf("todo completion lifecycle = %+v", m.todoLifecycle)
 	}
 }

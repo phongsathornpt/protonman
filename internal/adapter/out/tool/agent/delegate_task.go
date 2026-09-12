@@ -18,6 +18,7 @@ type delegateTaskHandler struct {
 
 type delegateTaskInput struct {
 	Task           string   `json:"task"`
+	TaskID         string   `json:"task_id,omitempty"`
 	Profile        string   `json:"profile"`
 	Context        string   `json:"context,omitempty"`
 	DependsOn      []string `json:"depends_on,omitempty"`
@@ -50,6 +51,10 @@ func (delegateTaskHandler) Definition() tool.Definition {
 				"task": map[string]any{
 					"type":        "string",
 					"description": "Clear description of what the subagent should investigate or do.",
+				},
+				"task_id": map[string]any{
+					"type": "string", "pattern": `^[A-Za-z0-9._:-]{1,128}$`,
+					"description": "Optional ID from the current TODO plan. When present, runtime lifecycle events own that task's execution status.",
 				},
 				"profile": map[string]any{
 					"type":        "string",
@@ -135,6 +140,7 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 		ParentID:  turnRef.TurnID,
 		Profile:   profile,
 		Task:      task,
+		TaskID:    strings.TrimSpace(input.TaskID),
 		Context:   strings.TrimSpace(input.Context),
 		DependsOn: append([]string(nil), input.DependsOn...),
 		Optional:  input.Optional,
@@ -152,6 +158,7 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 		"profile":  handle.Profile,
 		"status":   agent.StateQueued,
 		"optional": input.Optional,
+		"task_id":  strings.TrimSpace(input.TaskID),
 	})
 	if err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "encode subagent handle", err)

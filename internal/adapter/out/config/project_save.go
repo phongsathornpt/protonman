@@ -50,7 +50,7 @@ func SaveProjectReasoningEffort(workDir string, effort sdk.ReasoningEffort) erro
 	})
 }
 
-// SaveProjectMaxToolCalls updates the project-local cumulative tool-call limit.
+// SaveProjectMaxToolCalls updates the project-local hard tool-call ceiling override. Zero keeps progress-aware defaults.
 func SaveProjectMaxToolCalls(workDir string, maxToolCalls int) error {
 	if maxToolCalls < 0 {
 		return fmt.Errorf("max tool calls cannot be negative")

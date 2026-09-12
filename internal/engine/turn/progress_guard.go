@@ -77,11 +77,12 @@ func (g *progressGuard) observe(execution executedCall) (stalled bool, tracked b
 		return false, false, nil
 	}
 
-	if execution.err == nil && potentiallyMutating(definition, execution.call) {
+	semantics := tool.EffectiveCallSemantics(definition, execution.call.Arguments)
+	if execution.err == nil && advancesProgressEpoch(semantics) {
 		g.epoch++
 		return false, false, nil
 	}
-	if !shouldTrackNoProgress(definition, execution.result) {
+	if !shouldTrackNoProgress(semantics, execution.result) {
 		return false, false, nil
 	}
 
@@ -181,11 +182,18 @@ func (g *progressGuard) suppress(call tool.Call) (*executedCall, error) {
 	}, nil
 }
 
-func shouldTrackNoProgress(definition tool.Definition, result tool.Result) bool {
+func shouldTrackNoProgress(semantics tool.CallSemantics, result tool.Result) bool {
 	if result.Failure != nil {
 		return true
 	}
-	return definition.Kind == tool.KindRead || definition.Kind == tool.KindGrep
+	if semantics.Safety.MutationDomain == tool.MutationDomainTaskState {
+		return true
+	}
+	return semantics.Mutability == tool.MutabilityReadOnly
+}
+
+func advancesProgressEpoch(semantics tool.CallSemantics) bool {
+	return semantics.Mutability != tool.MutabilityReadOnly && semantics.Safety.MutationDomain != tool.MutationDomainTaskState
 }
 
 func potentiallyMutating(definition tool.Definition, call tool.Call) bool {

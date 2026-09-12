@@ -84,6 +84,50 @@ func (s *MarkdownStore) Reload(ctx context.Context) (Snapshot, error) {
 	return s.mem.setSnapshot(revision, items), nil
 }
 
+func (s *MarkdownStore) BindGoal(ctx context.Context, goal string) (Snapshot, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return Snapshot{}, false, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	target := goalFingerprint(goal)
+	var out Snapshot
+	changed := false
+	err := withFileLock(ctx, s.path, func() error {
+		revision, diskItems, content, err := readMarkdownSnapshot(s.path)
+		if err != nil {
+			return err
+		}
+		current, present, err := parseGoalBinding(content)
+		if err != nil {
+			return err
+		}
+		if present && current == target {
+			out = s.mem.setSnapshot(revision, diskItems)
+			return nil
+		}
+		if !present && target == goalUnboundMarker {
+			// Preserve legacy/unbound plans while no active goal exists so the
+			// first non-empty goal can adopt them instead of treating them as stale.
+			out = s.mem.setSnapshot(revision, diskItems)
+			return nil
+		}
+		nextItems := CloneItems(diskItems)
+		if present && target != goalUnboundMarker && current != target {
+			nextItems = nil
+		}
+		nextRevision := revision + 1
+		next := renderGoalBinding(renderDocumentState(content, nextRevision, nextItems), target)
+		if err := writeAtomic(ctx, s.path, []byte(next)); err != nil {
+			return err
+		}
+		out = s.mem.setSnapshot(nextRevision, nextItems)
+		changed = true
+		return nil
+	})
+	return out, changed, err
+}
+
 func (s *MarkdownStore) CompareAndPatch(ctx context.Context, expectedRevision uint64, operations []Operation) (Snapshot, Snapshot, error) {
 	if err := ctx.Err(); err != nil {
 		return Snapshot{}, Snapshot{}, err
@@ -163,6 +207,9 @@ func readMarkdownSnapshot(path string) (uint64, []Item, string, error) {
 	}
 	revision, items, err := parseDocumentState(string(content))
 	if err != nil {
+		return 0, nil, "", err
+	}
+	if _, _, err := parseGoalBinding(string(content)); err != nil {
 		return 0, nil, "", err
 	}
 	return revision, items, string(content), nil

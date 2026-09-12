@@ -6,7 +6,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
-const Version = "12"
+const Version = "14"
 
 type ToolCapabilities struct {
 	Tasks  bool
@@ -207,16 +207,12 @@ func hasTool(spec Spec, name string) bool {
 	return false
 }
 
-func workspaceSection(spec Spec) string {
-	lines := []string{"# Workspace"}
-	if root := strings.TrimSpace(spec.Workspace); root != "" {
-		lines = append(lines, "- Workspace root: "+root)
-	}
-	lines = append(lines,
-		"- Inspect relevant code and nearby conventions before making repository-dependent claims.",
-		"- Read narrowly first and broaden only when needed.",
-	)
-	return strings.Join(lines, "\n")
+func workspaceSection(_ Spec) string {
+	return `# Workspace
+- Workspace tool root: .
+- Treat all workspace-tool paths as relative to this root; the runtime owns the absolute filesystem location.
+- Inspect relevant code and nearby conventions before making repository-dependent claims.
+- Read narrowly first and broaden only when needed.`
 }
 
 func groundingSection(evidence string) string {
@@ -229,8 +225,10 @@ func groundingSection(evidence string) string {
 func activeGoalSection(goal string) string {
 	return `# Active Goal
 - ` + goal + `
-- Treat this as the persistent objective for the current session and use it to resolve ambiguity in older compacted context.
-- Continue making concrete progress until the goal is completed, blocked by unavailable capabilities or permissions, or explicitly changed or cleared.
+- Treat this as the persistent session objective and use it to resolve ambiguity in older compacted context.
+- The user's current explicit request controls the immediate turn. Use this goal for continuity, but do not let it override a newer unrelated request.
+- Continue concrete progress on this goal when the current request pursues it or does not establish a different immediate objective.
+- The goal remains active until completed, blocked by unavailable capabilities or permissions, or explicitly changed or cleared.
 - For implementation goals, inspect, modify, and verify the repository rather than only describing a solution.`
 }
 
@@ -261,15 +259,17 @@ func taskSection(spec Spec) string {
 		"# Task Coordination",
 		"- The todo capability is coordination metadata, not repository evidence.",
 		"- Use todo only for meaningful multi-step work where persistent progress helps; do not create a task plan for a trivial single-step request.",
-		"- Use todo action=get to read the latest task snapshot before changing an existing plan, then use its exact revision for todo action=update.",
+		"- Keep a known current task revision. Use todo action=get when no current snapshot/revision is known; successful todo action=update returns the next revision and may be used for the next patch.",
 		"- On a revision conflict, call todo action=get again and reconsider the patch; never retry stale operations blindly.",
 		"- Preserve tasks that the requested change does not affect.",
+		"- Task metadata changes do not count as implementation, repository, or verification progress.",
 		"- Mark work in progress or complete only when the underlying execution state actually changes.",
 	}
 	if strings.TrimSpace(spec.Role) == "" && spec.Capabilities.Agents {
 		lines = append(lines,
 			"- The primary agent owns task-plan updates; subagents do not mutate the parent task plan.",
-			"- Keep tracked task status aligned with delegated work from the parent.",
+			"- When delegating work that corresponds to a tracked TODO item, pass that item's id as subagent task_id so runtime lifecycle events own its execution status.",
+			"- Keep tracked task status aligned with delegated work from the parent; do not manually race runtime-owned task_id transitions.",
 			"- Independent delegated tasks may be in progress concurrently.",
 		)
 	}

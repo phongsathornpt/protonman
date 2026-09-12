@@ -168,6 +168,14 @@ func (m *bubbleModel) updateTurnDone(message turnmsg.Done) tea.Cmd {
 		m.conversation.DropTrailingUserMessage()
 	}
 	m.appendTurnFailure(message.Err)
+	if message.Err == nil && message.Result.GoalCompleted && m.activeGoal != "" {
+		if err := m.setActiveGoal(""); err != nil {
+			m.appendError("complete active goal: " + err.Error())
+		} else {
+			m.appendMuted("goal · completed")
+			m.retireCompletedTodoForNextTurn()
+		}
+	}
 	m.requestRelayout()
 	if message.Err != nil {
 		m.conversation.ClearQueue()

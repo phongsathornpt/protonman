@@ -12,6 +12,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 )
 
 func (m *bubbleModel) executeCommand(line string) tea.Cmd {
@@ -109,20 +110,30 @@ func (m *bubbleModel) handleGoalCommand(argument string) tea.Cmd {
 			return nil
 		}
 		m.appendMuted("goal · " + goal)
-		m.showWelcome = false
 		return m.startTurn(goal)
 	}
 }
 
 func (m *bubbleModel) setActiveGoal(goal string) error {
 	goal = strings.TrimSpace(goal)
+	nextRunner := m.runner
 	if m.runner != nil {
 		runner, err := app.CloneConversationWithGoal(m.runner, goal)
 		if err != nil {
 			return err
 		}
-		m.runner = runner
+		nextRunner = runner
 	}
+	if binder, ok := m.todoStore.(tododomain.GoalBoundRepository); ok {
+		snapshot, _, err := binder.BindGoal(m.ctx, goal)
+		if err != nil {
+			return fmt.Errorf("bind task plan to goal: %w", err)
+		}
+		if m.applyTodoSnapshot(snapshot) {
+			m.requestRelayout()
+		}
+	}
+	m.runner = nextRunner
 	m.activeGoal = goal
 	return nil
 }
@@ -133,7 +144,6 @@ func (m *bubbleModel) clearConversation() {
 	}
 	m.conversationViewport = conversationViewportState{mode: viewportFollowing}
 	m.ensureHistoryState().Reset()
-	m.showWelcome = true
 	m.panes.showTranscript = false
 	m.refreshTranscriptViewport(true)
 	m.refreshViewport()
@@ -212,7 +222,7 @@ func (m *bubbleModel) showTransientNotice(text string) tea.Cmd {
 	m.transientNoticeID++
 	id := m.transientNoticeID
 	m.transientNotice = strings.TrimSpace(text)
-	m.refreshFrameChromeOnly()
+	m.refreshFrameLayout()
 	return transientnotice.ExpireAfter(id, transientnotice.DefaultDuration)
 }
 

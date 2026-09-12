@@ -543,9 +543,9 @@ func TestModelSetupInfoViewAndWelcome(t *testing.T) {
 	if info != "" {
 		t.Fatalf("idle infoView = %q, want no persistent model metadata", info)
 	}
-	welcome := bModel.welcomeCard()
+	welcome := bModel.sessionHeaderView()
 	if !strings.Contains(welcome, "deepseek-v4-flash-vision-exp") {
-		t.Fatalf("welcomeCard missing active model from compact session header: %s", welcome)
+		t.Fatalf("sessionHeaderView missing active model: %s", welcome)
 	}
 }
 

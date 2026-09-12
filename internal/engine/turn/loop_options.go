@@ -87,8 +87,8 @@ func WithRequireInitialToolUse(required bool) Option {
 	return WithGroundingEvidence(tool.EvidenceNone)
 }
 
-// WithMaxToolCalls bounds the cumulative number of tool calls per turn.
-// A value of 0 disables this count bound; other turn bounds still apply.
+// WithMaxToolCalls configures an optional cumulative hard-cap override.
+// Zero uses the progress-aware stagnant-call budget and emergency ceiling.
 func WithMaxToolCalls(calls int) Option {
 	return func(loop *Loop) error {
 		if calls < 0 {

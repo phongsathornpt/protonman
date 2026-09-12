@@ -9,6 +9,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/diagnostic"
 	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
+	tuipresentation "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/presentation"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
@@ -20,6 +21,12 @@ func brandLockup(width int) string {
 
 func brandLockupWidth(width int) int {
 	return tuistyle.BrandLockupWidth(width)
+}
+
+type sessionHeaderModel = tuipresentation.SessionHeaderModel
+
+func renderSessionHeader(model sessionHeaderModel) string {
+	return tuipresentation.RenderSessionHeader(model)
 }
 
 const (

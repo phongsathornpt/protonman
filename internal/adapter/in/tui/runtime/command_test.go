@@ -871,6 +871,52 @@ func TestSlashCompletionUsesInlineCommandGrammar(t *testing.T) {
 	}
 }
 
+func TestSlashCompletionTypingPreservesPrintableKeys(t *testing.T) {
+	// The slash pane renders below the composer and shares its draft, so every
+	// printable key the user types must reach the textarea. Regression: vim-style
+	// navigation bindings ("j", "k", "g", "G") and the "q" close key used to be
+	// claimed by the picker, so typing "/goal" produced "/oal".
+	for _, want := range []string{"/goal", "/todo", "/quit", "/agents", "/skills", "/help"} {
+		m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+		m.resize(80, 24)
+		for _, ch := range want {
+			updated, _ := m.Update(testText(string(ch)))
+			m = updated.(*bubbleModel)
+		}
+		if got := m.panes.bottom.prompt().Value(); got != want {
+			t.Fatalf("typing %q produced composer value %q", want, got)
+		}
+		if !m.slashOpen() {
+			t.Fatalf("slash completion closed while typing %q", want)
+		}
+	}
+}
+
+func TestSlashCompletionKeepsNavigationAndCloseWorking(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.panes.bottom.prompt().SetValue("/")
+	m.syncSlashView()
+	if !m.slashOpen() {
+		t.Fatal("slash completion did not open")
+	}
+	updated, _ := m.Update(testKey(tea.KeyDown))
+	m = updated.(*bubbleModel)
+	if got := m.slashState().picker.Index(); got != 1 {
+		t.Fatalf("down did not move slash selection: index=%d", got)
+	}
+	updated, _ = m.Update(testKey(tea.KeyUp))
+	m = updated.(*bubbleModel)
+	if got := m.slashState().picker.Index(); got != 0 {
+		t.Fatalf("up did not move slash selection: index=%d", got)
+	}
+	updated, _ = m.Update(testKey(tea.KeyEnter))
+	m = updated.(*bubbleModel)
+	if m.panes.bottom.has(slashViewID) {
+		t.Fatal("enter did not accept and close slash completion")
+	}
+}
+
 func TestSlashPickerRendersBelowComposerLikeModelPicker(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(100, 30)

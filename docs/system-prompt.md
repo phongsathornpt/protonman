@@ -4,10 +4,10 @@ Protonman builds one provider-neutral, capability-driven system prompt in `inter
 
 ## Prompt ABI
 
-The current managed prompt format is **Prompt ABI v12**:
+The current managed prompt format is **Prompt ABI v14**:
 
 ```text
-<proton-system-prompt version="12">
+<proton-system-prompt version="14">
 ...
 </proton-system-prompt>
 ```
@@ -97,6 +97,10 @@ Prompt ABI v10 adds a structured child-result contract. Subagents end their fina
 Prompt ABI v11 tightens workspace discovery discipline. `read` is for known artifacts; the managed prompt no longer advertises `ls`, `find`, or `grep` when those capabilities are absent, and a `not_found` result for a guessed path must trigger discovery rather than an unchanged retry. Host-side `discover_resource` recovery may attach bounded parent-directory evidence while preserving the original failure.
 
 Prompt ABI v12 promotes Active Goal from a compaction-stability hint to an execution contract. An active goal is treated as the persistent session objective, implementation goals require concrete inspect/modify/verify progress, and the objective remains in force until completed, blocked, changed, or cleared.
+
+Prompt ABI v13 clarifies that the current explicit user request owns the immediate turn even when a persistent goal exists, prevents the model-facing prompt from exposing the absolute workspace path, and aligns task coordination with revision chaining from successful TODO updates. Runtime no-progress detection also treats task metadata as coordination rather than repository progress.
+
+Prompt ABI v14 adds explicit parent-task/subagent linkage: when delegated work corresponds to a tracked TODO item, the parent passes `task_id` and runtime lifecycle events own `in_progress`/terminal task reconciliation.
 
 Runtime-delivered child content is untrusted evidence, not instruction material. It is appended after the stable managed system prompt and is not persisted as synthetic user conversation history, preserving the system-prefix cache boundary while keeping instruction hierarchy explicit.
 

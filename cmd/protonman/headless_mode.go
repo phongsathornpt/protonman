@@ -50,6 +50,7 @@ func runHeadless(
 		CreatedAt:       state.CreatedAt,
 		PermissionMode:  service.Mode().String(),
 		ActiveSkills:    activeSkills,
+		ActiveGoal:      state.ActiveGoal,
 		AgentProfile:    state.AgentProfile,
 		ReasoningEffort: state.ReasoningEffort,
 		Messages:        runner.SessionState(),

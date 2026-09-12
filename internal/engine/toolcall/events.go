@@ -32,12 +32,13 @@ const (
 type ProtectionEventKind string
 
 const (
-	ProtectionLoopDetected         ProtectionEventKind = "tool_loop_detected"
-	ProtectionCallSuppressed       ProtectionEventKind = "tool_call_suppressed"
-	ProtectionPermissionSuppressed ProtectionEventKind = "tool_permission_retry_suppressed"
-	ProtectionRetryBudgetExhausted ProtectionEventKind = "tool_retry_budget_exhausted"
-	ProtectionNoProgressSynthesis  ProtectionEventKind = "tool_no_progress_synthesis"
-	ProtectionTurnDeadlineExceeded ProtectionEventKind = "turn_deadline_exceeded"
+	ProtectionLoopDetected          ProtectionEventKind = "tool_loop_detected"
+	ProtectionCallSuppressed        ProtectionEventKind = "tool_call_suppressed"
+	ProtectionPermissionSuppressed  ProtectionEventKind = "tool_permission_retry_suppressed"
+	ProtectionRetryBudgetExhausted  ProtectionEventKind = "tool_retry_budget_exhausted"
+	ProtectionNoProgressSynthesis   ProtectionEventKind = "tool_no_progress_synthesis"
+	ProtectionSafetyBudgetExhausted ProtectionEventKind = "tool_safety_budget_exhausted"
+	ProtectionTurnDeadlineExceeded  ProtectionEventKind = "turn_deadline_exceeded"
 )
 
 // ProtectionEvent contains only redacted metadata. Fingerprint is a short hash

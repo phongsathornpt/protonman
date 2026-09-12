@@ -28,7 +28,7 @@ func NewTodoForSession(store tododomain.Repository, sessionID string) tool.Handl
 func (h todoHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:        tool.NameTodo,
-		Description: "Task-plan capability. Use action=get to read the current revision and tasks, or action=update to atomically patch tasks using expected_revision and operations.",
+		Description: "Task-plan capability. Use action=get when the current revision is unknown, or action=update to atomically patch tasks using the latest known expected_revision and operations. A successful update returns the next revision.",
 		Kind:        tool.KindTask,
 		Mutability:  tool.MutabilityMutating,
 		Safety:      tool.SafetyContract{MutationDomain: tool.MutationDomainTaskState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
@@ -46,7 +46,7 @@ func todoCapabilityInputSchema() map[string]any {
 	action := map[string]any{
 		"type":        "string",
 		"enum":        []any{"get", "update"},
-		"description": "Use get first to read the current revision and tasks; use update only with that integer revision and an operations JSON array.",
+		"description": "Use get when the current revision is unknown; use update with the latest integer revision returned by get or a prior successful update and an operations JSON array.",
 	}
 	get := map[string]any{
 		"type": "object",

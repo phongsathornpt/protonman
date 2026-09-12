@@ -34,6 +34,7 @@ func (m *bubbleModel) updateAgentLifecycle(message agentLifecycleMsg) tea.Cmd {
 	}
 	m.syncAgentSnapshot()
 	m.syncAgentRunSnapshot(message.event.AgentID)
+	m.syncTodoSnapshot()
 	if deliveredActivity.String() != "" {
 		if run := m.ensureHistoryState().AgentRun(message.event.AgentID); run != nil {
 			run.Activity = deliveredActivity.String()

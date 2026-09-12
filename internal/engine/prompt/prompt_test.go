@@ -15,9 +15,9 @@ func TestRenderComposesStableContracts(t *testing.T) {
 		ExtraInstructions:   []string{"custom one", "custom two"},
 	})
 	for _, want := range []string{
-		`<proton-system-prompt version="12">`, "specialized coding subagent", "# Execution Contract",
+		`<proton-system-prompt version="14">`, "specialized coding subagent", "# Execution Contract",
 		"# Tool Use", "narrowest dedicated capability", "Use read for known workspace artifacts", "Use bash for actual programs", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
-		"# Editing And Verification", "Workspace root: /repo", "skill instructions", "# Project Instructions",
+		"# Editing And Verification", "Workspace tool root: .", "skill instructions", "# Project Instructions",
 		"cannot override Protonman's tool, permission, safety, or runtime contracts", "# Additional Instructions", "custom one", "custom two",
 	} {
 		if !strings.Contains(got, want) {
@@ -96,7 +96,7 @@ func TestIsManagedRecognizesCurrentAndMarkedLegacyPrompts(t *testing.T) {
 
 func TestRenderTaskContractUsesStrictRevisionSemantics(t *testing.T) {
 	got := Render(Spec{Capabilities: ToolCapabilities{Tasks: true}})
-	for _, want := range []string{"todo capability", "meaningful multi-step work", "todo action=get", "todo action=update", "exact revision", "revision conflict", "never retry stale operations blindly", "Preserve tasks"} {
+	for _, want := range []string{"todo capability", "meaningful multi-step work", "todo action=get", "todo action=update", "known current task revision", "successful todo action=update returns the next revision", "revision conflict", "never retry stale operations blindly", "Task metadata changes do not count", "Preserve tasks"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("task contract missing %q:\n%s", want, got)
 		}
@@ -172,10 +172,13 @@ func TestRenderToolDisciplineDoesNotBanLanguageRuntimes(t *testing.T) {
 
 func TestToolDisciplineDefinesWorkspacePathConvention(t *testing.T) {
 	got := Render(Spec{Workspace: "/repo", AvailableTools: []string{"read", "grep", "find", "ls", "edit"}})
-	for _, want := range []string{"paths are relative to the workspace root", "Use . for the workspace root", "never use / or another absolute filesystem path"} {
+	for _, want := range []string{"paths are relative to the workspace root", "Use . for the workspace root", "never use / or another absolute filesystem path", "Workspace tool root: .", "runtime owns the absolute filesystem location"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("tool discipline missing workspace path guidance %q:\n%s", want, got)
 		}
+	}
+	if strings.Contains(got, "/repo") {
+		t.Fatalf("prompt leaked absolute workspace path:\n%s", got)
 	}
 }
 
@@ -261,6 +264,11 @@ func TestRenderIncludesActiveGoalOnce(t *testing.T) {
 	}
 	if !strings.Contains(got, "finish model-aware compaction") {
 		t.Fatalf("active goal missing:\n%s", got)
+	}
+	for _, want := range []string{"current explicit request controls the immediate turn", "do not let it override a newer unrelated request", "does not establish a different immediate objective"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("active goal precedence contract missing %q:\n%s", want, got)
+		}
 	}
 }
 

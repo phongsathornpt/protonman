@@ -10,16 +10,22 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 )
 
-func finalizeMaxToolCallResponse(
+func finalizeSafetyBudgetResponse(
 	ctx context.Context,
 	sink Sink,
 	round int,
 	assistant model.Message,
 ) (model.Message, error) {
-	slog.DebugContext(ctx, "turn ignored tool calls after max tool calls",
+	slog.DebugContext(ctx, "turn ignored tool calls after safety budget exhaustion",
 		"round", round,
 	)
-	return finalizeDisabledToolCallResponse(ctx, sink, round, assistant, MaxToolCallsFallback, "max-tool-calls")
+	return finalizeDisabledToolCallResponse(ctx, sink, round, assistant, SafetyBudgetFallback, "safety-budget")
+}
+
+// finalizeMaxToolCallResponse remains as a compatibility wrapper for older tests
+// and internal callers while max_tool_calls is treated as a hard safety override.
+func finalizeMaxToolCallResponse(ctx context.Context, sink Sink, round int, assistant model.Message) (model.Message, error) {
+	return finalizeSafetyBudgetResponse(ctx, sink, round, assistant)
 }
 
 func finalizeNoProgressToolCallResponse(

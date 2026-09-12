@@ -64,7 +64,6 @@ func BenchmarkHistoryStateRenderLinesAt100Cells(b *testing.B) {
 func BenchmarkRefreshViewport100Cells(b *testing.B) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
 	m.resize(80, 24)
-	m.showWelcome = false
 	for i := 0; i < 50; i++ {
 		m.historyState.Append(&UserCell{Text: fmt.Sprintf("Question %d", i)})
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("Answer %d with **markdown** and `code`.", i)})
@@ -131,7 +130,6 @@ func BenchmarkHistoryStateRenderJoinedActiveMarkdown20KB(b *testing.B) {
 func BenchmarkRefreshViewportStreamingLongHistory(b *testing.B) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
 	m.resize(100, 30)
-	m.showWelcome = false
 	m.busy = true
 	m.conversationViewport.setFollowing(true)
 	for i := 0; i < 500; i++ {
@@ -175,7 +173,6 @@ func BenchmarkApplyTurnTextDeltaLongHistory(b *testing.B) {
 func BenchmarkRefreshViewportScrolledLongHistory(b *testing.B) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
 	m.resize(100, 30)
-	m.showWelcome = false
 	for i := 0; i < 500; i++ {
 		m.historyState.Append(&UserCell{Text: fmt.Sprintf("Question %d with enough text for scrolling", i)})
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("Answer %d with **markdown** and `code`.\nMore detail.", i)})

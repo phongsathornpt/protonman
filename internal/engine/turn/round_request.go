@@ -79,8 +79,9 @@ func (l *Loop) prepareRoundRequest(
 	reasoning modelprofile.ReasoningResolution,
 	grounding groundingState,
 	caps sdk.ModelCapabilities,
-	toolCallsUsed int,
+	safetyBudget *progressSafetyBudget,
 	forceNoProgressSynthesis bool,
+	forceSafetyBudgetSynthesis bool,
 	softToolBudgetWarned bool,
 	resolved resolvedModelState,
 ) (sdk.Request, toolDispatchState, bool, error) {
@@ -91,6 +92,9 @@ func (l *Loop) prepareRoundRequest(
 	if forceNoProgressSynthesis {
 		dispatch.reason = toolDispatchDisabledNoProgress
 		reqMessages = append(reqMessages, model.Message{Role: model.RoleSystem, Content: NoProgressPrompt})
+	} else if forceSafetyBudgetSynthesis || (safetyBudget != nil && safetyBudget.exhausted()) {
+		dispatch.reason = toolDispatchDisabledSafetyBudget
+		reqMessages = append(reqMessages, model.Message{Role: model.RoleSystem, Content: SafetyBudgetPrompt})
 	} else {
 		tools = l.tools.Definitions()
 		if grounding.pending() {
@@ -102,18 +106,14 @@ func (l *Loop) prepareRoundRequest(
 			dispatch.reason = toolDispatchDisabledModelTools
 		case len(tools) == 0:
 			dispatch.reason = toolDispatchDisabledNoTools
-		case l.maxToolCalls > 0 && toolCallsUsed >= l.maxToolCalls:
-			tools = nil
-			dispatch.reason = toolDispatchDisabledMaxCalls
-			reqMessages = append(reqMessages, model.Message{Role: model.RoleSystem, Content: MaxToolCallsPrompt})
 		default:
 			dispatch.reason = toolDispatchEnabled
-			if l.maxToolCalls > 0 {
-				dispatch.remainingToolCalls = l.maxToolCalls - toolCallsUsed
+			if safetyBudget != nil {
+				dispatch.remainingSafetyCalls = safetyBudget.remainingHardLimit()
 			}
 		}
 	}
-	if shouldWarnSoftToolBudget(toolCallsUsed, l.maxToolCalls, softToolBudgetWarned) && dispatch.enabled() {
+	if safetyBudget != nil && safetyBudget.shouldWarn(softToolBudgetWarned) && dispatch.enabled() {
 		reqMessages = append(reqMessages, model.Message{Role: model.RoleSystem, Content: SoftToolBudgetPrompt})
 		softToolBudgetWarned = true
 	}
@@ -141,8 +141,19 @@ func (l *Loop) prepareRoundRequest(
 		"enabled", dispatch.enabled(),
 		"reason", dispatch.reason,
 		"published_tools", len(tools),
-		"tool_calls_used", toolCallsUsed,
-		"remaining_tool_calls", dispatch.remainingToolCalls,
+		"tool_calls_used", func() int {
+			if safetyBudget != nil {
+				return safetyBudget.totalCalls
+			}
+			return 0
+		}(),
+		"stagnant_tool_calls", func() int {
+			if safetyBudget != nil {
+				return safetyBudget.stagnantCalls
+			}
+			return 0
+		}(),
+		"remaining_safety_calls", dispatch.remainingSafetyCalls,
 	)
 
 	sdkTools := make([]sdk.Tool, 0, len(tools))

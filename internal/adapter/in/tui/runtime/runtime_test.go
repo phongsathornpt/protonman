@@ -379,7 +379,6 @@ func newBehaviorService(t *testing.T, registry tool.Registry, mode permission.Mo
 
 func TestRenderedViewportReflectsContentAndScroll(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.showWelcome = false
 	m.resize(80, 12)
 	for i := 0; i < 30; i++ {
 		m.appendLine(fmt.Sprintf("cache-line-%02d", i))
@@ -425,7 +424,6 @@ func TestSpinnerTickSkipsViewportRefreshForStreamingAssistant(t *testing.T) {
 func TestViewportTailOnlyHydratesBeforePageUp(t *testing.T) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
 	m.resize(80, 18)
-	m.showWelcome = false
 	m.busy = true
 	m.conversationViewport.setFollowing(true)
 	for i := 0; i < 40; i++ {
@@ -455,7 +453,6 @@ func TestViewportTailOnlyHydratesBeforePageUp(t *testing.T) {
 
 func TestStreamingAssistantResizeStressPreservesViewportMode(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.showWelcome = false
 	m.busy = true
 	m.resize(80, 24)
 	for i := 0; i < 50; i++ {
@@ -891,7 +888,6 @@ func TestRefreshViewportDoesNotRenderHiddenTranscriptOverlay(t *testing.T) {
 
 func TestMouseWheelOnlyScrollsInsideTranscriptViewport(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.showWelcome = false
 	m.resize(80, 20)
 	for i := 0; i < 60; i++ {
 		m.appendLine(fmt.Sprintf("line-%02d", i))
@@ -915,7 +911,6 @@ func TestMouseWheelOnlyScrollsInsideTranscriptViewport(t *testing.T) {
 func TestScrolledViewportDefersActiveTailRefreshUntilScroll(t *testing.T) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
 	m.resize(80, 18)
-	m.showWelcome = false
 	for i := 0; i < 40; i++ {
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nmore detail", i)})
 	}
@@ -937,7 +932,6 @@ func TestScrolledViewportDefersActiveTailRefreshUntilScroll(t *testing.T) {
 func TestPageDownHydratesDeferredTail(t *testing.T) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
 	m.resize(80, 18)
-	m.showWelcome = false
 	for i := 0; i < 40; i++ {
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nmore detail", i)})
 	}
@@ -969,18 +963,18 @@ func TestWelcomeCardCachesGitBranchUntilInvalidated(t *testing.T) {
 	}
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), workDir)
 	m.resize(80, 24)
-	first := testPlain(m.welcomeCard())
+	first := testPlain(m.sessionHeaderView())
 	if !strings.Contains(first, "main") {
 		t.Fatalf("initial welcome branch missing: %q", first)
 	}
 	if err := os.WriteFile(head, []byte("ref: refs/heads/dev\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if cached := testPlain(m.welcomeCard()); !strings.Contains(cached, "main") {
+	if cached := testPlain(m.sessionHeaderView()); !strings.Contains(cached, "main") {
 		t.Fatalf("welcome card unexpectedly reread git metadata: %q", cached)
 	}
-	m.invalidateWelcomeBranch()
-	if refreshed := testPlain(m.welcomeCard()); !strings.Contains(refreshed, "dev") {
+	m.invalidateSessionHeaderBranch()
+	if refreshed := testPlain(m.sessionHeaderView()); !strings.Contains(refreshed, "dev") {
 		t.Fatalf("invalidated welcome branch did not refresh: %q", refreshed)
 	}
 }
@@ -989,7 +983,6 @@ func TestScrollingRendersSingleComposer(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.runner = fakeConversation{}
 	m.syncPromptPlaceholder()
-	m.showWelcome = false
 	m.resize(90, 20)
 	for i := 0; i < 60; i++ {
 		m.appendLine(fmt.Sprintf("history-%02d", i))

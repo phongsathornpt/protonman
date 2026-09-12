@@ -144,10 +144,9 @@ type presentationModelState struct {
 	planMode           bool
 	reducedMotion      bool
 	panes              paneState
-	showWelcome        bool
 	nextID             uint64
 	layout             layoutState
-	welcomeCache       welcomeCardCache
+	sessionHeaderCache sessionHeaderCache
 	keyboardCapability keyboardCapability
 	transientNotice    string
 	transientNoticeID  uint64
@@ -214,7 +213,6 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 			help:          helpView,
 			keys:          newBubbleKeyMap(),
 			panes:         paneState{bottom: bottom, transcript: transcriptPane},
-			showWelcome:   true,
 			reducedMotion: reducedMotion,
 			layout:        layoutState{width: defaultBubbleWidth, height: defaultBubbleHeight},
 		},

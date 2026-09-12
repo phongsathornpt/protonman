@@ -1,12 +1,18 @@
 package todo
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
 )
 
-const revisionMarkerPrefix = "<!-- proton:todo version=1 revision="
+const (
+	revisionMarkerPrefix = "<!-- proton:todo version=1 revision="
+	goalMarkerPrefix     = "<!-- proton:todo-goal sha256="
+	goalUnboundMarker    = "none"
+)
 
 func parseDocument(content string) ([]Item, error) {
 	startCount := strings.Count(content, managedStart)
@@ -136,4 +142,59 @@ func renderDocumentState(content string, revision uint64, items []Item) string {
 		return marker + "\n"
 	}
 	return rendered + "\n" + marker + "\n"
+}
+
+func goalFingerprint(goal string) string {
+	goal = strings.TrimSpace(goal)
+	if goal == "" {
+		return goalUnboundMarker
+	}
+	hash := sha256.Sum256([]byte(goal))
+	return hex.EncodeToString(hash[:])
+}
+
+func parseGoalBinding(content string) (string, bool, error) {
+	count := strings.Count(content, goalMarkerPrefix)
+	if count == 0 {
+		return "", false, nil
+	}
+	if count != 1 {
+		return "", false, fmt.Errorf("invalid proton todo goal marker count")
+	}
+	start := strings.Index(content, goalMarkerPrefix)
+	valueStart := start + len(goalMarkerPrefix)
+	end := strings.Index(content[valueStart:], " -->")
+	if end < 0 {
+		return "", false, fmt.Errorf("invalid proton todo goal marker")
+	}
+	value := strings.TrimSpace(content[valueStart : valueStart+end])
+	if value == goalUnboundMarker {
+		return value, true, nil
+	}
+	decoded, err := hex.DecodeString(value)
+	if err != nil || len(decoded) != sha256.Size || value != strings.ToLower(value) {
+		return "", false, fmt.Errorf("invalid proton todo goal fingerprint %q", value)
+	}
+	return value, true, nil
+}
+
+func renderGoalBinding(content, fingerprint string) string {
+	marker := goalMarkerPrefix + fingerprint + " -->"
+	if start := strings.Index(content, goalMarkerPrefix); start >= 0 {
+		if end := strings.Index(content[start:], "-->"); end >= 0 {
+			end = start + end + len("-->")
+			return content[:start] + marker + content[end:]
+		}
+	}
+	if start := strings.Index(content, managedStart); start >= 0 {
+		return content[:start] + marker + "\n" + content[start:]
+	}
+	if content == "" {
+		return marker + "\n"
+	}
+	sep := "\n"
+	if strings.HasSuffix(content, "\n") {
+		sep = ""
+	}
+	return content + sep + marker + "\n"
 }

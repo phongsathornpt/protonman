@@ -170,7 +170,6 @@ func (m *bubbleModel) dispatch(line string) tea.Cmd {
 		}
 		return m.executeCommand(line)
 	}
-	m.showWelcome = false
 	m.appendUser(line)
 	return m.startTurn(line)
 }
@@ -178,7 +177,6 @@ func (m *bubbleModel) dispatch(line string) tea.Cmd {
 func (m *bubbleModel) dispatchBang(command string) tea.Cmd {
 	slog.DebugContext(m.ctx, "tui direct bash submitted", "command_bytes", len(command))
 	m.panes.bottom.recordHistory("!" + command)
-	m.showWelcome = false
 	m.appendUser("!" + command)
 	return m.startBash(command)
 }

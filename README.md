@@ -310,7 +310,7 @@ Session state and task plans are private user data, not workspace files. Each se
   todo.md
 ```
 
-`state.json` and `todo.md` both use durable revisions. Session saves and task patches reject stale writers instead of silently accepting last-writer-wins updates. Workspace `TODO.md` files are never used as Protonman's internal task store. Legacy flat session JSON files remain readable and migrate to the aggregate layout on the next successful save.
+`state.json` and `todo.md` both use durable revisions. Session saves and task patches reject stale writers instead of silently accepting last-writer-wins updates. The managed TODO document also stores a goal fingerprint: a legacy unbound plan is adopted by the current goal once, while changing to a different non-empty goal atomically supersedes the prior plan so stale tasks cannot silently leak across objectives. Clearing a goal preserves the current plan until another goal supersedes it. Workspace `TODO.md` files are never used as Protonman's internal task store. Legacy flat session JSON files remain readable and migrate to the aggregate layout on the next successful save.
 
 ---
 
@@ -368,7 +368,7 @@ profile = "off"
 # Agent execution boundaries
 [agent]
 subagents_enabled = true
-max_tool_calls = 100
+max_tool_calls = 0 # default: progress-aware safety budget; set >0 only for a stricter hard ceiling
 max_live_subagents = 16
 max_retained_subagents = 64
 subagent_queue_timeout = "2m"
@@ -439,7 +439,7 @@ api_key = "your_anthropic_api_key"
 
 Execution safety notes:
 
-- `max_tool_calls = 0` disables the cumulative tool-call-count bound; turn and tool timeouts still provide independent safety ceilings.
+- `max_tool_calls = 0` is the default and uses the progress-aware safety budget: successful meaningful work resets the stagnant-call window, 24 stagnant calls force text-only synthesis, and a separate 512-call emergency ceiling bounds pathological unique-call loops. Set `max_tool_calls > 0` only to impose a stricter cumulative hard ceiling.
 - `bash` accepts `command`, optional workspace-relative `cwd`, and optional `timeout_seconds` (1-120). A per-call timeout can shorten but never extend the caller/tool-service deadline.
 - Bash effect analysis is conservative: proven read-only shell commands may run in plan mode, while mutating or unknown commands remain blocked. Simple redirections/composition and common filesystem/git commands publish proven `affected_paths`; unknown scripts remain fail-closed.
 - Bash results preserve compatibility `output` while also exposing bounded `stdout`, `stderr`, per-stream byte counts/truncation flags, exit code, and stable failure codes. Cancellation terminates the command process tree through the sandbox launcher.
@@ -459,7 +459,7 @@ Execution safety notes:
 - `subagent_max_runtime` is the hard child-lifetime safety ceiling after execution starts. `subagent action=spawn` `timeout_seconds` may request a shorter ceiling but cannot extend the configured maximum.
 - `max_live_subagents` prevents unbounded queued/running work; `max_retained_subagents` caps terminal records even inside the TTL window, while `completed_result_ttl` bounds how long results remain queryable.
 - Legacy `subagent_timeout` is accepted as an alias for `subagent_max_runtime` with a deprecation warning.
-- `[runtime]` centralizes model, tool, discovery, web-fetch, and catalog-cache time bounds. The loop refuses construction if every global termination bound is disabled.
+- `[runtime]` centralizes model, tool, discovery, web-fetch, and catalog-cache time bounds. Turn safety remains bounded even when `turn_timeout` and the cumulative override are zero because the progress-aware stagnant-call and emergency ceilings remain active.
 - Repeating the same deterministic tool call with the same semantic arguments and result twice without an intervening mutation triggers a text-only synthesis round instead of continuing the tool loop; identical retryable failures are capped at three attempts.
 - Truncated `read`, `grep`, `find`, and `ls` results include `next_offset` plus a snapshot-bound `continuation`; send both on the next page to detect stale file, query, or directory state. `grep` continuations also carry a validated cursor so deep pages resume near the prior match instead of rescanning earlier files. Plain `offset` remains supported for compatibility. `read` also supports bounded 1-based `start_line`/`end_line` selection with optional `line_numbers`, plus `image`, `structured`, and `metadata` artifact views. Image inspection uses bounded encoded-size, pixel, and sample budgets; GIF analysis is explicitly first-frame only.
 
@@ -471,7 +471,7 @@ Execution safety notes:
 | `PROTONMAN_TRUST_PROJECT` | Set to `1`, `true`, or `on` to trust and load project-local `.protonman/` configs and skills |
 | `PROTONMAN_SESSION_ID` | Explicit session identifier to resume or create |
 | `PROTONMAN_SANDBOX` | Override sandbox profile (`off`, `workspace`, `read-only`, `strict`) |
-| `PROTONMAN_TELEMETRY` | Set to `stderr` for redacted JSON tool lifecycle and loop-protection telemetry, including suppression, retry-budget, stale-continuation, turn-deadline, and event-driven subagent synthesis byte/batch counters |
+| `PROTONMAN_TELEMETRY` | Set to `stderr` for redacted JSON tool lifecycle and loop-protection telemetry, including suppression, retry-budget, safety-budget exhaustion, stale-continuation, turn-deadline, and event-driven subagent synthesis byte/batch counters |
 | `PROTONMAN_DEBUG_LOG` | Set to a file path or `stderr` for opt-in JSON development diagnostics; disabled by default |
 | `PROTONMAN_FORCE_TTY` | Test/development override for terminal detection; normal CLI use should leave it unset |
 

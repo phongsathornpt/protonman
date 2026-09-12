@@ -23,7 +23,6 @@ type toolResultMsg struct {
 }
 
 func (m *bubbleModel) startTool(call tool.Call) tea.Cmd {
-	m.showWelcome = false
 	slog.DebugContext(m.ctx, "tui direct tool started", "call_id", call.ID, "tool_name", call.Name, "argument_bytes", len(call.Arguments))
 	m.conversation.AppendMessages(model.Message{ID: model.NewMessageID(), Role: model.RoleAssistant, ToolCalls: []model.ToolCall{{ID: call.ID, Name: call.Name, Arguments: append([]byte(nil), call.Arguments...)}}})
 	ctx, cancel := context.WithCancel(m.ctx)
