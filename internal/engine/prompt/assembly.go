@@ -23,7 +23,6 @@ const (
 	orderDelegation       = 400
 	orderMCP              = 500
 	orderVerification     = 600
-	orderModelGuidance    = 700
 	orderGrounding        = 800
 
 	orderProjectInstructions    = 3000

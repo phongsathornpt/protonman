@@ -23,10 +23,12 @@ type MutationCapabilities struct {
 }
 
 type Spec struct {
-	Role                string
-	ActiveGoal          string
-	Profile             string
-	Workspace           string
+	Role       string
+	ActiveGoal string
+	Profile    string
+	Workspace  string
+	// ModelPromptHints is retained temporarily for source compatibility.
+	// Render intentionally ignores it: Protonman uses one model-agnostic system prompt.
 	ModelPromptHints    []string
 	AvailableTools      []string
 	GroundingEvidence   string
@@ -58,9 +60,6 @@ func Render(spec Spec) string {
 	}
 	if spec.Mutations.Source {
 		sections = append(sections, Section{Name: "verification", Order: orderVerification, Text: verificationSection()})
-	}
-	if section := modelSection(spec); section != "" {
-		sections = append(sections, Section{Name: "model-guidance", Order: orderModelGuidance, Text: section})
 	}
 	if project := strings.TrimSpace(spec.ProjectInstructions); project != "" {
 		sections = append(sections, Section{Name: "project-instructions", Order: orderProjectInstructions, Text: projectSection(project)})
@@ -310,17 +309,4 @@ func verificationSection() string {
 - Preserve unrelated user work.
 - After the final mutation, run the narrowest meaningful verifier available.
 - Never claim verification that did not run successfully after the final change.`
-}
-
-func modelSection(spec Spec) string {
-	parts := make([]string, 0, len(spec.ModelPromptHints))
-	for _, hint := range spec.ModelPromptHints {
-		if text := strings.TrimSpace(hint); text != "" {
-			parts = append(parts, "- "+text)
-		}
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return "# Model Guidance\n" + strings.Join(parts, "\n")
 }

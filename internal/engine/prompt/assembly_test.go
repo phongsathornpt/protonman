@@ -22,7 +22,6 @@ func TestRenderPlacesVolatileWorkspaceAfterReusableSections(t *testing.T) {
 		Role:                "bounded implementation role",
 		ActiveGoal:          "finish prompt cache work",
 		Workspace:           "/volatile/workspace",
-		ModelPromptHints:    []string{"model-stable guidance"},
 		ProjectInstructions: "project-stable instructions",
 		Skills:              "session skill context",
 		Capabilities:        ToolCapabilities{Tasks: true, Agents: true},
@@ -40,7 +39,6 @@ func TestRenderPlacesVolatileWorkspaceAfterReusableSections(t *testing.T) {
 		"# Task Coordination",
 		"# Delegation Protocol",
 		"# Editing And Verification",
-		"# Model Guidance",
 		"# Project Instructions",
 		"# Skills",
 		"# Role",
@@ -56,11 +54,28 @@ func TestRenderPlacesVolatileWorkspaceAfterReusableSections(t *testing.T) {
 	}
 }
 
+func TestModelPromptHintsDoNotAffectCanonicalPrompt(t *testing.T) {
+	base := Spec{
+		ProjectInstructions: "stable project instructions",
+		AvailableTools:      []string{"read", "bash"},
+		Workspace:           "/repo",
+	}
+	left := base
+	left.ModelPromptHints = []string{"gemini-specific guidance"}
+	right := base
+	right.ModelPromptHints = []string{"different-model guidance"}
+	if a, b := Render(left), Render(right); a != b {
+		t.Fatalf("model prompt hints changed canonical prompt\n--- left ---\n%s\n--- right ---\n%s", a, b)
+	}
+	if got := Render(left); strings.Contains(got, "# Model Guidance") || strings.Contains(got, "gemini-specific guidance") {
+		t.Fatalf("deprecated model prompt hints leaked into canonical prompt:\n%s", got)
+	}
+}
+
 func TestWorkspaceChangePreservesPromptPrefixUntilWorkspaceSection(t *testing.T) {
 	base := Spec{
 		Role:                "bounded role",
 		ActiveGoal:          "keep goal stable",
-		ModelPromptHints:    []string{"stable model guidance"},
 		ProjectInstructions: "stable project instructions",
 		Skills:              "stable skills",
 		AvailableTools:      []string{"read", "bash"},
@@ -97,9 +112,8 @@ func longestCommonPrefix(a, b string) int {
 
 func TestProjectInstructionsChangePreservesEarlierPrefix(t *testing.T) {
 	base := Spec{
-		ModelPromptHints: []string{"stable model guidance"},
-		AvailableTools:   []string{"read", "bash"},
-		Workspace:        "/repo",
+		AvailableTools: []string{"read", "bash"},
+		Workspace:      "/repo",
 	}
 	left := base
 	left.ProjectInstructions = "project rules alpha"
@@ -203,7 +217,6 @@ func TestPromptRenderIsByteStableAcrossEquivalentSpecs(t *testing.T) {
 		Role:                "stable role",
 		ActiveGoal:          "stable goal",
 		Workspace:           "/repo",
-		ModelPromptHints:    []string{"hint one", "hint two"},
 		AvailableTools:      []string{"read", "bash", "web"},
 		GroundingEvidence:   "workspace",
 		Capabilities:        ToolCapabilities{Tasks: true, Agents: true, MCP: true},
