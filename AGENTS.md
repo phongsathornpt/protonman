@@ -426,6 +426,21 @@ must not silently reset the active goal, profile, reasoning effort, max tool cal
 or subagent enablement to startup config. The active goal is durable session state,
 restored before rebuilding the managed conversation prompt.
 
+## Skills and Lockfile Management
+
+Skills live in global `~/.protonman/skills/` or project `<workspace>/.protonman/skills/` (and detected `.agents/skills/`).
+
+Active skills are persisted in layered configuration under `[skills] active = [...]`:
+- Selection in the interactive picker (`Ctrl+S` or `/skills`) or slash command (`/skills <name>`, `/skills toggle`, `/skills deactivate`) persists the active skill list.
+- If a project-local `<workspace>/.protonman/` directory exists, the active skill list is saved to `.protonman/config.toml` (project scope).
+- Otherwise, it saves to `~/.protonman/config.toml` (user scope).
+
+Lockfiles pin project skill content hashes:
+- Canonical project lockfile location is `.protonman/skills-lock.json`. Legacy root `skills-lock.json` and `.agents/skills-lock.json` are discovered for backward compatibility.
+- Legacy lockfile locations are automatically migrated to `.protonman/skills-lock.json` when the `.protonman/` directory exists, with the source file safely backed up as `.bak`.
+- Older or unversioned lockfiles (v0) are automatically upgraded to `CurrentLockVersion = 1` during read/migration.
+- Activating a skill dynamically authorizes its `BaseDir` in `workspace.Workspace` read roots, allowing built-in tools (`read`, `grep`, `bash`, etc.) to access bundled resources without boundary violations.
+
 ## Sessions and TODO Ownership
 
 A session ID is the durable ownership boundary for conversation state, the active

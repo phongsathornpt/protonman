@@ -121,10 +121,19 @@ func Discover(ctx context.Context, opts Options) (DiscoveryResult, error) {
 
 	// 3. Project skill lock verification (skills-lock.json)
 	if projectScope.Available && opts.ProjectTrusted {
+		if targetPath, migrated, migErr := MigrateProjectLockLocation(workDir, &projectScope); migErr == nil && migrated {
+			result.LockPath = targetPath
+		}
 		lockPath, hasLock := ResolveProjectLockPath(workDir, &projectScope)
 		result.LockPath = lockPath
 		if hasLock {
 			lock, err := ReadLockFile(lockPath)
+			if err != nil {
+				if migLock, migrated, migErr := MigrateLockFile(lockPath); migErr == nil && migrated {
+					lock = migLock
+					err = nil
+				}
+			}
 			if err != nil {
 				result.Warnings = append(result.Warnings, fmt.Sprintf(
 					"failed to read project skill lock %q: %v", lockPath, err,

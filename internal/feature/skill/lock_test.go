@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 )
 
 func TestComputeSkillFolderHash(t *testing.T) {
@@ -407,4 +409,112 @@ func TestDiscoverWithProjectLock(t *testing.T) {
 			t.Errorf("expected drift warning, got warnings: %v", res.Warnings)
 		}
 	})
+}
+
+func TestMigrateLockFile(t *testing.T) {
+	dir := t.TempDir()
+
+	t.Run("migrates v0 unversioned lock file with legacy keys", func(t *testing.T) {
+		lockPath := filepath.Join(dir, "legacy-lock.json")
+		legacyContent := `{
+			"skills": {
+				"My-Skill": {
+					"source": "local",
+					"source_type": "git",
+					"computed_hash": "AABBCCDD",
+					"skill_path": "skills/my-skill"
+				}
+			}
+		}`
+		if err := os.WriteFile(lockPath, []byte(legacyContent), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		lock, migrated, err := MigrateLockFile(lockPath)
+		if err != nil {
+			t.Fatalf("MigrateLockFile failed: %v", err)
+		}
+		if !migrated {
+			t.Fatal("expected migrated = true")
+		}
+		if lock.Version != CurrentLockVersion {
+			t.Fatalf("lock version = %d, want %d", lock.Version, CurrentLockVersion)
+		}
+		entry, ok := lock.Skills["my-skill"]
+		if !ok {
+			t.Fatal("expected normalized lowercase key 'my-skill'")
+		}
+		if entry.SourceType != "git" || entry.ComputedHash != "aabbccdd" || entry.SkillPath != "skills/my-skill" {
+			t.Fatalf("entry fields not unmarshaled correctly: %+v", entry)
+		}
+
+		diskLock, err := ReadLockFile(lockPath)
+		if err != nil {
+			t.Fatalf("ReadLockFile on migrated file failed: %v", err)
+		}
+		if diskLock.Version != CurrentLockVersion {
+			t.Fatalf("disk lock version = %d, want %d", diskLock.Version, CurrentLockVersion)
+		}
+	})
+
+	t.Run("leaves current version unchanged", func(t *testing.T) {
+		currentPath := filepath.Join(dir, "current-lock.json")
+		lock := NewLockFile()
+		lock.Skills["test"] = LockEntry{Source: "test", ComputedHash: "1234"}
+		if err := WriteLockFile(currentPath, lock); err != nil {
+			t.Fatal(err)
+		}
+
+		_, migrated, err := MigrateLockFile(currentPath)
+		if err != nil {
+			t.Fatalf("MigrateLockFile failed: %v", err)
+		}
+		if migrated {
+			t.Fatal("expected migrated = false for current version")
+		}
+	})
+}
+
+func TestMigrateProjectLockLocation(t *testing.T) {
+	workDir := t.TempDir()
+	scope := appdirs.ProjectScope{
+		Root:      filepath.Join(workDir, ".protonman"),
+		Available: true,
+	}
+	if err := os.MkdirAll(scope.Root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	rootLockPath := filepath.Join(workDir, "skills-lock.json")
+	lock := NewLockFile()
+	lock.Skills["foo"] = LockEntry{Source: "foo", ComputedHash: "abcd"}
+	if err := WriteLockFile(rootLockPath, lock); err != nil {
+		t.Fatal(err)
+	}
+
+	targetPath, migrated, err := MigrateProjectLockLocation(workDir, &scope)
+	if err != nil {
+		t.Fatalf("MigrateProjectLockLocation failed: %v", err)
+	}
+	if !migrated {
+		t.Fatal("expected migrated = true")
+	}
+	if targetPath != filepath.Join(scope.Root, "skills-lock.json") {
+		t.Fatalf("targetPath = %q", targetPath)
+	}
+
+	targetLock, err := ReadLockFile(targetPath)
+	if err != nil {
+		t.Fatalf("ReadLockFile failed: %v", err)
+	}
+	if _, ok := targetLock.Skills["foo"]; !ok {
+		t.Fatal("expected skill 'foo' in migrated lockfile")
+	}
+
+	if _, err := os.Stat(rootLockPath + ".bak"); err != nil {
+		t.Fatalf("expected backup file %s.bak to exist: %v", rootLockPath, err)
+	}
+	if _, err := os.Stat(rootLockPath); !os.IsNotExist(err) {
+		t.Fatalf("expected original %s to be moved: err=%v", rootLockPath, err)
+	}
 }

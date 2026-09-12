@@ -47,6 +47,32 @@ type LockEntry struct {
 	SkillPath    string `json:"skillPath,omitempty"`
 }
 
+// UnmarshalJSON implements custom JSON unmarshaling to support both camelCase
+// (standard) and snake_case (legacy) field names in skills-lock.json.
+func (e *LockEntry) UnmarshalJSON(data []byte) error {
+	type rawEntry LockEntry
+	var entry struct {
+		rawEntry
+		LegacySourceType   string `json:"source_type"`
+		LegacyComputedHash string `json:"computed_hash"`
+		LegacySkillPath    string `json:"skill_path"`
+	}
+	if err := json.Unmarshal(data, &entry); err != nil {
+		return err
+	}
+	*e = LockEntry(entry.rawEntry)
+	if e.SourceType == "" && entry.LegacySourceType != "" {
+		e.SourceType = entry.LegacySourceType
+	}
+	if e.ComputedHash == "" && entry.LegacyComputedHash != "" {
+		e.ComputedHash = entry.LegacyComputedHash
+	}
+	if e.SkillPath == "" && entry.LegacySkillPath != "" {
+		e.SkillPath = entry.LegacySkillPath
+	}
+	return nil
+}
+
 // LockFile represents the project-level skills-lock.json structure.
 type LockFile struct {
 	Version int                  `json:"version"`
@@ -65,11 +91,11 @@ func NewLockFile() LockFile {
 // or returns the default root project path where a new lockfile should be written.
 func ResolveProjectLockPath(workDir string, projectScope *appdirs.ProjectScope) (string, bool) {
 	candidates := make([]string, 0, 3)
-	if strings.TrimSpace(workDir) != "" {
-		candidates = append(candidates, filepath.Join(workDir, LockFileName))
-	}
 	if projectScope != nil && projectScope.Available && projectScope.Root != "" {
 		candidates = append(candidates, filepath.Join(projectScope.Root, LockFileName))
+	}
+	if strings.TrimSpace(workDir) != "" {
+		candidates = append(candidates, filepath.Join(workDir, LockFileName))
 	}
 	if strings.TrimSpace(workDir) != "" {
 		candidates = append(candidates, filepath.Join(workDir, ".agents", LockFileName))
@@ -83,7 +109,97 @@ func ResolveProjectLockPath(workDir string, projectScope *appdirs.ProjectScope) 
 	}
 
 	defaultPath := filepath.Join(workDir, LockFileName)
+	if projectScope != nil && projectScope.Available && projectScope.Root != "" {
+		if info, err := os.Stat(projectScope.Root); err == nil && info.IsDir() {
+			defaultPath = filepath.Join(projectScope.Root, LockFileName)
+		}
+	}
 	return defaultPath, false
+}
+
+// MigrateLockFile reads a lock file from disk, upgrades older or unversioned schemas
+// to CurrentLockVersion, and rewrites the file atomically if migrated.
+func MigrateLockFile(filePath string) (LockFile, bool, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return NewLockFile(), false, fmt.Errorf("read skill lock file %q for migration: %w", filePath, err)
+	}
+
+	var raw struct {
+		Version int                  `json:"version"`
+		Skills  map[string]LockEntry `json:"skills"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return NewLockFile(), false, fmt.Errorf("parse skill lock file %q for migration: %w", filePath, err)
+	}
+
+	if raw.Version < 0 {
+		return NewLockFile(), false, fmt.Errorf("%w: got %d, want >= 0", ErrInvalidLockVersion, raw.Version)
+	}
+	if raw.Version > CurrentLockVersion {
+		return NewLockFile(), false, fmt.Errorf("%w: got %d, want <= %d", ErrInvalidLockVersion, raw.Version, CurrentLockVersion)
+	}
+
+	migrated := raw.Version < CurrentLockVersion
+	lock := LockFile{
+		Version: CurrentLockVersion,
+		Skills:  make(map[string]LockEntry, len(raw.Skills)),
+	}
+	for k, v := range raw.Skills {
+		cleanKey := strings.ToLower(strings.TrimSpace(k))
+		v.ComputedHash = strings.ToLower(strings.TrimSpace(v.ComputedHash))
+		lock.Skills[cleanKey] = v
+	}
+
+	if migrated {
+		if err := WriteLockFile(filePath, lock); err != nil {
+			return lock, true, fmt.Errorf("write migrated skill lock file %q: %w", filePath, err)
+		}
+	}
+
+	return lock, migrated, nil
+}
+
+// MigrateProjectLockLocation migrates an existing workspace root or .agents lockfile
+// into .protonman/skills-lock.json when the .protonman directory exists and has no lockfile yet.
+func MigrateProjectLockLocation(workDir string, projectScope *appdirs.ProjectScope) (string, bool, error) {
+	if projectScope == nil || !projectScope.Available || projectScope.Root == "" {
+		return "", false, nil
+	}
+	info, err := os.Stat(projectScope.Root)
+	if err != nil || !info.IsDir() {
+		return "", false, nil
+	}
+
+	targetPath := filepath.Join(projectScope.Root, LockFileName)
+	if _, err := os.Stat(targetPath); err == nil {
+		return targetPath, false, nil
+	}
+
+	candidates := []string{
+		filepath.Join(workDir, LockFileName),
+		filepath.Join(workDir, ".agents", LockFileName),
+	}
+	for _, sourcePath := range candidates {
+		sInfo, sErr := os.Stat(sourcePath)
+		if sErr == nil && !sInfo.IsDir() {
+			lock, _, mErr := MigrateLockFile(sourcePath)
+			if mErr != nil {
+				var rErr error
+				lock, rErr = ReadLockFile(sourcePath)
+				if rErr != nil {
+					continue
+				}
+			}
+			if err := WriteLockFile(targetPath, lock); err != nil {
+				return "", false, fmt.Errorf("write migrated lock to %q: %w", targetPath, err)
+			}
+			_ = os.Rename(sourcePath, sourcePath+".bak")
+			return targetPath, true, nil
+		}
+	}
+
+	return targetPath, false, nil
 }
 
 // ReadLockFile reads and parses a skills-lock.json file.
