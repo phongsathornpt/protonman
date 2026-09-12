@@ -3,13 +3,13 @@ package runtime
 import (
 	"fmt"
 	"io"
-	"sort"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
-	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	providerdomain "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/provider"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 )
 
 const providerSelectViewID = "provider_select"
@@ -153,46 +153,25 @@ func newProviderSelectPaneView(m *bubbleModel) *providerSelectPaneView {
 		m.activeProviderDelete = 0
 		m.configMutationGate.invalidate()
 	}
-	items := make([]providerSelectItem, 0)
-	configuredMap := make(map[string]bool)
-	if m != nil && len(m.providers) > 0 {
-		names := make([]string, 0, len(m.providers))
-		for name := range m.providers {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			cfg := m.providers[name]
-			isActive := strings.EqualFold(name, m.activeProvider)
-			isFree := model.IsProvider(model.DefaultOpenCodeName, name, cfg.BaseURL)
-			dispName := cfg.Name
-			if dispName == "" {
-				dispName = name
-			}
-			if p := model.LookupPreset(name); p != nil {
-				dispName = p.Name
-			}
-			items = append(items, providerSelectItem{kind: providerItemConfigured, name: name, displayName: dispName, baseURL: cfg.BaseURL, apiKey: cfg.APIKey, isConfigured: true, isActive: isActive, isFree: isFree, presetID: name})
-			configuredMap[strings.ToLower(name)] = true
-		}
+	providers := map[string]config.ProviderConfig(nil)
+	activeProvider := ""
+	if m != nil {
+		providers = m.providers
+		activeProvider = m.activeProvider
 	}
-	for _, preset := range model.SupportedPresets {
-		if !configuredMap[strings.ToLower(preset.ID)] {
-			isActive := m != nil && strings.EqualFold(preset.ID, m.activeProvider)
-			items = append(items, providerSelectItem{kind: providerItemPreset, name: preset.ID, displayName: preset.Name, baseURL: preset.BaseURL, description: preset.Description, presetID: preset.ID, isConfigured: false, isActive: isActive, isFree: !preset.RequiresKey})
-		}
-	}
-	items = append(items, providerSelectItem{kind: providerItemCustom, name: "custom", displayName: "+ Custom Gateway / Proxy", description: "Any OpenAI-compatible or Anthropic Messages base URL", isConfigured: false, isActive: false})
-	selectedIndex := 0
-	for i, it := range items {
-		if it.isActive {
-			selectedIndex = i
-			break
-		}
+	entries := providerdomain.BuildSelectionEntries(providers, activeProvider)
+	items := make([]providerSelectItem, 0, len(entries))
+	for _, entry := range entries {
+		items = append(items, providerSelectItem{
+			kind: providerItemKind(entry.Kind), name: entry.Name, displayName: entry.DisplayName,
+			baseURL: entry.BaseURL, apiKey: entry.APIKey, description: entry.Description,
+			presetID: entry.PresetID, isConfigured: entry.IsConfigured,
+			isActive: entry.IsActive, isFree: entry.IsFree,
+		})
 	}
 	view := &providerSelectPaneView{items: items}
 	view.initPicker()
-	view.picker.Select(selectedIndex)
+	view.picker.Select(providerdomain.ActiveSelectionIndex(entries))
 	return view
 }
 
