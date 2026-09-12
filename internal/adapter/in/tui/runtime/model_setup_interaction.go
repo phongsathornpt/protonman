@@ -4,6 +4,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelpicker"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/providerio"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
@@ -210,7 +211,7 @@ func (v *modelSetupPaneView) selectionStatus(width int) string {
 	if !ok {
 		return ""
 	}
-	return paneRightStatus(width, modelDisplayName(md)+" · "+reasoningEffortLabel(v.selectedReasoning()))
+	return paneRightStatus(width, modelpicker.DisplayName(md)+" · "+reasoningEffortLabel(v.selectedReasoning()))
 }
 
 func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {

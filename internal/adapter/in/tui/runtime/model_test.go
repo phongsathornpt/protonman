@@ -1287,7 +1287,7 @@ func TestModelSetupCurrentMarkerUsesProviderModelPair(t *testing.T) {
 }
 
 func TestModelDisplayNameHumanizesIdentifier(t *testing.T) {
-	got := modelDisplayName(domainmodel.RemoteModel{ID: "nemotron-3.5-lightning-free"})
+	got := modelpicker.DisplayName(domainmodel.RemoteModel{ID: "nemotron-3.5-lightning-free"})
 	if got != "Nemotron 3.5 Lightning" {
 		t.Fatalf("display name = %q", got)
 	}

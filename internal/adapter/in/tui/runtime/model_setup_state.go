@@ -92,7 +92,7 @@ func (i modelListItem) FilterValue() string {
 }
 
 func (i modelListItem) Title() string {
-	return modelDisplayName(i.model)
+	return modelpicker.DisplayName(i.model)
 }
 
 func (i modelListItem) Metadata() []string {
@@ -104,29 +104,6 @@ func (i modelListItem) Metadata() []string {
 		metadata = append(metadata, "(current)")
 	}
 	return metadata
-}
-
-func modelDisplayName(md model.RemoteModel) string {
-	if name := strings.TrimSpace(md.Name); name != "" {
-		return name
-	}
-	id := strings.TrimSpace(md.ID)
-	if model.IsFreeModel(id) {
-		id = strings.TrimSuffix(strings.TrimSuffix(id, "-free"), "_free")
-	}
-	parts := strings.FieldsFunc(id, func(r rune) bool { return r == '-' || r == '_' })
-	for index, part := range parts {
-		runes := []rune(part)
-		if len(runes) == 0 {
-			continue
-		}
-		runes[0] = []rune(strings.ToUpper(string(runes[0])))[0]
-		parts[index] = string(runes)
-	}
-	if label := strings.Join(parts, " "); label != "" {
-		return label
-	}
-	return md.ID
 }
 
 type modelSetupDelegate struct{}
@@ -269,13 +246,13 @@ func (v *modelSetupPaneView) resetSelection(activeModel string) {
 		_ = v.picker.SetItems(items)
 	}
 	v.picker.GoToStart()
-	for i, item := range v.picker.VisibleItems() {
-		md, ok := item.(modelListItem)
-		if ok && strings.EqualFold(md.model.ID, activeModel) {
-			v.picker.Select(i)
-			break
+	models := make([]model.RemoteModel, 0, len(v.picker.VisibleItems()))
+	for _, item := range v.picker.VisibleItems() {
+		if md, ok := item.(modelListItem); ok {
+			models = append(models, md.model)
 		}
 	}
+	v.picker.Select(modelpicker.ActiveModelIndex(models, activeModel))
 	v.syncPickerProjection()
 }
 
