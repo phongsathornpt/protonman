@@ -85,6 +85,20 @@ func TestLoopCompletesActiveGoalWhenTrackedPlanIsComplete(t *testing.T) {
 	}
 }
 
+func TestLoopCompletesActiveGoalFromInitialCompletedTaskPlanWithoutCallingTodo(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{
+		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "Done."}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	}}
+	loop, _ := newGoalTodoLoop(t, client, `{"revision":4,"items":[{"id":"a","text":"first","status":"completed"}]}`)
+	result, err := loop.Run(context.Background(), []sdk.Message{{Role: sdk.RoleUser, Content: "finish"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.GoalCompleted {
+		t.Fatal("already-completed task plan did not complete the active goal when turn needed no todo calls")
+	}
+}
+
 func TestGoalCompletionRequiresVerificationAfterMutation(t *testing.T) {
 	loop := &Loop{promptSpec: &prompt.Spec{ActiveGoal: "ship change"}}
 	plan := taskPlanProgress{observed: true, total: 1, completed: 1}

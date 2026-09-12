@@ -2,9 +2,12 @@ package runtime
 
 import (
 	"context"
-	"github.com/phongsathornpt/protonman/internal/core/permission"
-	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 )
 
 type fixedTodoRepository struct{ snapshot tododomain.Snapshot }
@@ -61,5 +64,36 @@ func TestOpeningTodoPaneReloadsDurableSnapshot(t *testing.T) {
 	}
 	if m.todoRevision != 2 || len(m.todo) != 1 || m.todo[0].Text != "fresh" || m.todo[0].Status != tododomain.StatusInProgress {
 		t.Fatalf("todo revision=%d items=%+v", m.todoRevision, m.todo)
+	}
+}
+
+func TestAgentLifecycleWithTaskIDSchedulesTodoReload(t *testing.T) {
+	repo := &reloadableTodoRepository{
+		fixedTodoRepository: fixedTodoRepository{snapshot: tododomain.Snapshot{Revision: 1, Items: []tododomain.Item{{ID: "task-1", Text: "work", Status: tododomain.StatusPending}}}},
+		reloaded:            tododomain.Snapshot{Revision: 2, Items: []tododomain.Item{{ID: "task-1", Text: "work", Status: tododomain.StatusInProgress}}},
+	}
+	m := newTestBubbleModel(t, permission.ModeAsk, repo.snapshot.Items)
+	m.todoStore = repo
+	m.todoRevision = repo.snapshot.Revision
+	cmd := m.updateAgentLifecycle(agentLifecycleMsg{event: agent.Event{Kind: agent.EventAgentStarted, AgentID: "worker-1", TaskID: "task-1"}})
+	if cmd == nil {
+		t.Fatal("expected batch or reload command")
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, subCmd := range batch {
+			if subCmd != nil {
+				if rmsg := subCmd(); rmsg != nil {
+					if _, handled := m.updateRuntimeEvent(rmsg); handled {
+						break
+					}
+				}
+			}
+		}
+	} else if _, handled := m.updateRuntimeEvent(msg); !handled {
+		t.Fatal("reload command was not handled")
+	}
+	if m.todoRevision != 2 || m.todo[0].Status != tododomain.StatusInProgress {
+		t.Fatalf("todo status after lifecycle reload = %v, want in_progress", m.todo[0].Status)
 	}
 }

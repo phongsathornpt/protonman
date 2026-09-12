@@ -41,6 +41,9 @@ func TestValidateItemsRejectsUnsafeMarkdownFields(t *testing.T) {
 		{ID: "bad]id", Text: "safe", Status: StatusPending},
 		{ID: "safe", Text: "line one\nline two", Status: StatusPending},
 		{ID: "safe", Text: managedEnd, Status: StatusPending},
+		{ID: "safe", Text: revisionMarkerPrefix + "99 -->", Status: StatusPending},
+		{ID: "safe", Text: goalMarkerPrefix + "none -->", Status: StatusPending},
+		{ID: "safe", Text: "injection <!-- proton:todo -->", Status: StatusPending},
 	}
 	for _, item := range tests {
 		if err := ValidateItems([]Item{item}); err == nil {

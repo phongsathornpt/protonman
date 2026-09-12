@@ -21,41 +21,48 @@ func (p *taskPlanProgress) observe(executions []executedCall) {
 		if execution.call.Name != tool.NameTodo || execution.err != nil || execution.result.Denied || execution.result.Failure != nil || len(execution.result.StructuredOutput) == 0 {
 			continue
 		}
-		var envelope struct {
-			Items      json.RawMessage `json:"items"`
-			Total      *int            `json:"total"`
-			Pending    *int            `json:"pending"`
-			InProgress *int            `json:"in_progress"`
-			Completed  *int            `json:"completed"`
-		}
-		if err := json.Unmarshal(execution.result.StructuredOutput, &envelope); err != nil {
-			continue
-		}
-		if envelope.Total != nil && envelope.Pending != nil && envelope.InProgress != nil && envelope.Completed != nil {
-			p.observed = true
-			p.total, p.pending, p.inProgress, p.completed = *envelope.Total, *envelope.Pending, *envelope.InProgress, *envelope.Completed
-			continue
-		}
-		if len(envelope.Items) == 0 || string(envelope.Items) == "null" {
-			continue
-		}
-		var items []struct {
-			Status string `json:"status"`
-		}
-		if err := json.Unmarshal(envelope.Items, &items); err != nil {
-			continue
-		}
+		p.observeSnapshot(execution.result.StructuredOutput)
+	}
+}
+
+func (p *taskPlanProgress) observeSnapshot(structured []byte) {
+	if len(structured) == 0 {
+		return
+	}
+	var envelope struct {
+		Items      json.RawMessage `json:"items"`
+		Total      *int            `json:"total"`
+		Pending    *int            `json:"pending"`
+		InProgress *int            `json:"in_progress"`
+		Completed  *int            `json:"completed"`
+	}
+	if err := json.Unmarshal(structured, &envelope); err != nil {
+		return
+	}
+	if envelope.Total != nil && envelope.Pending != nil && envelope.InProgress != nil && envelope.Completed != nil {
 		p.observed = true
-		p.total, p.pending, p.inProgress, p.completed = len(items), 0, 0, 0
-		for _, item := range items {
-			switch strings.TrimSpace(item.Status) {
-			case "pending":
-				p.pending++
-			case "in_progress":
-				p.inProgress++
-			case "completed":
-				p.completed++
-			}
+		p.total, p.pending, p.inProgress, p.completed = *envelope.Total, *envelope.Pending, *envelope.InProgress, *envelope.Completed
+		return
+	}
+	if len(envelope.Items) == 0 || string(envelope.Items) == "null" {
+		return
+	}
+	var items []struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(envelope.Items, &items); err != nil {
+		return
+	}
+	p.observed = true
+	p.total, p.pending, p.inProgress, p.completed = len(items), 0, 0, 0
+	for _, item := range items {
+		switch strings.TrimSpace(item.Status) {
+		case "pending":
+			p.pending++
+		case "in_progress":
+			p.inProgress++
+		case "completed":
+			p.completed++
 		}
 	}
 }

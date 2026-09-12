@@ -41,6 +41,11 @@ func (m *bubbleModel) applyTodoSnapshot(snapshot tododomain.Snapshot) bool {
 		m.todoLifecycle.CompletionFresh = false
 		m.todoLifecycle.CompletionDismissed = false
 	}
+	if m.panes.bottom != nil {
+		if v, _ := m.panes.bottom.find(todoInspectViewID).(*todoPaneView); v != nil {
+			_ = v.refreshItems(newPaneRenderContext(m))
+		}
+	}
 	return true
 }
 
@@ -137,6 +142,7 @@ func (todoSetupDelegate) Render(w io.Writer, m list.Model, index int, item list.
 type todoPaneView struct {
 	picker      list.Model
 	initialized bool
+	lastItems   []tododomain.Item
 }
 
 func (*todoPaneView) ID() string                             { return todoInspectViewID }
@@ -149,8 +155,19 @@ func (v *todoPaneView) ensurePicker(ctx paneRenderContext) {
 	v.picker = paneutil.NewMinimalList(todoListItems(ctx.todos), todoSetupDelegate{}, maxInt(12, ctx.width-8), maxInt(5, minInt(14, ctx.height-4)))
 	v.picker.SetFilteringEnabled(false)
 	v.picker.SetStatusBarItemName("task", "tasks")
+	v.lastItems = tododomain.CloneItems(ctx.todos)
 	v.initialized = true
 	v.syncTitle(ctx)
+}
+
+func (v *todoPaneView) refreshItems(ctx paneRenderContext) tea.Cmd {
+	if !v.initialized {
+		return nil
+	}
+	v.lastItems = tododomain.CloneItems(ctx.todos)
+	cmd := v.picker.SetItems(todoListItems(ctx.todos))
+	v.syncTitle(ctx)
+	return cmd
 }
 
 func todoListItems(items []tododomain.Item) []list.Item {
@@ -199,8 +216,9 @@ func (v *todoPaneView) Render(ctx paneRenderContext) string {
 	if !v.initialized {
 		return ""
 	}
-	_ = v.picker.SetItems(todoListItems(ctx.todos))
-	v.syncTitle(ctx)
+	if !slices.Equal(v.lastItems, ctx.todos) {
+		v.refreshItems(ctx)
+	}
 	v.picker.SetSize(maxInt(12, ctx.width-8), maxInt(4, minInt(8, ctx.height-6)))
 	completed, _, _ := todopane.TodoCounts(ctx.todos)
 	help := ""

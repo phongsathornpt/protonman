@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"log/slog"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -42,7 +43,13 @@ func (m *bubbleModel) updateAgentLifecycle(message agentLifecycleMsg) tea.Cmd {
 		}
 	}
 	m.requestRelayout()
-	return m.nextAgentEvent()
+	nextCmd := m.nextAgentEvent()
+	if strings.TrimSpace(message.event.TaskID) != "" {
+		if reloadCmd := m.reloadTodoSnapshotCmd(); reloadCmd != nil {
+			return tea.Batch(nextCmd, reloadCmd)
+		}
+	}
+	return nextCmd
 }
 
 func (m *bubbleModel) updatePermissionRequest(message permissionRequestMsg) tea.Cmd {

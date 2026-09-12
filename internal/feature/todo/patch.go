@@ -122,7 +122,7 @@ func ApplyPatch(items []Item, operations []Operation) ([]Item, error) {
 			if position >= 0 {
 				return nil, fmt.Errorf("todo operation %d: id %q already exists", index, operation.ID)
 			}
-			item := Item{ID: operation.ID, Text: operation.Text, Status: operation.Status}
+			item := Item{ID: operation.ID, Text: strings.TrimSpace(operation.Text), Status: operation.Status}
 			if err := ValidateItems([]Item{item}); err != nil {
 				return nil, fmt.Errorf("todo operation %d: %w", index, err)
 			}
@@ -145,7 +145,7 @@ func ApplyPatch(items []Item, operations []Operation) ([]Item, error) {
 			if operation.Status != "" {
 				return nil, fmt.Errorf("todo operation %d: set_text does not accept status", index)
 			}
-			next[position].Text = operation.Text
+			next[position].Text = strings.TrimSpace(operation.Text)
 			if err := ValidateItems(next); err != nil {
 				return nil, fmt.Errorf("todo operation %d: %w", index, err)
 			}

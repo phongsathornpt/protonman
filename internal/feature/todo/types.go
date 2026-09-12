@@ -55,7 +55,7 @@ func ValidateItems(items []Item) error {
 		if text == "" {
 			return fmt.Errorf("todo item %q: text is required", id)
 		}
-		if strings.ContainsAny(item.Text, "\r\n") || strings.Contains(item.Text, managedStart) || strings.Contains(item.Text, managedEnd) {
+		if strings.ContainsAny(item.Text, "\r\n") || strings.Contains(item.Text, "<!-- proton:") {
 			return fmt.Errorf("todo item %q: text must be a single safe markdown line", id)
 		}
 		if !item.Status.Valid() {
