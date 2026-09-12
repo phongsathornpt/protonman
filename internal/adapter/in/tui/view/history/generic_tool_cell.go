@@ -59,7 +59,7 @@ func (c ToolCell) RenderWidth(width int) []string {
 			targetStr = " " + toolview.FormatPathWidth(c.Target, toolTargetWidth(width, c.Name, tuistyle.GlyphSep+string(c.FailureCode)))
 		}
 		headerLine = tuistyle.ErrorStyle.Render(tuistyle.GlyphToolError) + tuistyle.MutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + tuistyle.ErrorStyle.Render(tuistyle.GlyphSep+string(c.FailureCode))
-	} else if strings.TrimSpace(c.Name) == tool.NameSkill {
+	} else if isSkillTool(c.Name) {
 		target := c.Target
 		if target == "" {
 			if skillName := toolview.ExtractSkillContentName(c.Body); skillName != "" {
@@ -171,10 +171,14 @@ func (c ToolCell) historyToolID() string    { return c.CallID }
 func (c ToolCell) historyToolName() string  { return c.Name }
 func (c ToolCell) historyToolRunning() bool { return c.Running }
 func (c ToolCell) bodyLines() []string {
-	if strings.TrimSpace(c.Name) == tool.NameSkill {
+	if isSkillTool(c.Name) {
 		return formatSkillToolBody(c.Body, c.ExitCode, c.Truncated, c.Denied, c.FailureCode)
 	}
 	return resultBodyLines(c.Body, c.ExitCode, c.Truncated, c.Denied, c.FailureCode)
+}
+
+func isSkillTool(name string) bool {
+	return strings.TrimSpace(name) == tool.NameSkill
 }
 
 func formatSkillToolBody(body string, exitCode *int, truncated bool, denied bool, failureCode tool.ErrorCode) []string {
@@ -184,8 +188,71 @@ func formatSkillToolBody(body string, exitCode *int, truncated bool, denied bool
 	if failureCode != "" {
 		return []string{"failure: " + string(failureCode)}
 	}
+	var lines []string
+	if dir := extractSkillDirectory(body); dir != "" {
+		lines = append(lines, "directory: "+dir)
+	}
+	if res := extractSkillResources(body); len(res) > 0 {
+		if len(res) <= 3 {
+			lines = append(lines, fmt.Sprintf("resources: %s", strings.Join(res, ", ")))
+		} else {
+			lines = append(lines, fmt.Sprintf("resources: %d files (%s, …)", len(res), strings.Join(res[:2], ", ")))
+		}
+	}
+	if len(lines) > 0 {
+		return lines
+	}
 	if skillName := toolview.ExtractSkillContentName(body); skillName != "" {
-		return []string{fmt.Sprintf("[x] Activated skill %q", skillName)}
+		return []string{fmt.Sprintf("instructions loaded for %q", skillName)}
 	}
 	return resultBodyLines(body, exitCode, truncated, denied, failureCode)
+}
+
+func extractSkillDirectory(body string) string {
+	const marker = "Skill directory: "
+	if idx := strings.Index(body, marker); idx != -1 {
+		rest := body[idx+len(marker):]
+		if end := strings.IndexByte(rest, '\n'); end != -1 {
+			return strings.TrimSpace(rest[:end])
+		}
+		return strings.TrimSpace(rest)
+	}
+	return ""
+}
+
+func extractSkillResources(body string) []string {
+	var res []string
+	startTag := "<file>"
+	endTag := "</file>"
+	cur := body
+	for {
+		s := strings.Index(cur, startTag)
+		if s == -1 {
+			break
+		}
+		e := strings.Index(cur[s:], endTag)
+		if e == -1 {
+			break
+		}
+		item := strings.TrimSpace(cur[s+len(startTag) : s+e])
+		if item != "" {
+			res = append(res, item)
+		}
+		cur = cur[s+e+len(endTag):]
+	}
+	if len(res) > 0 {
+		return res
+	}
+	if idx := strings.Index(body, "Resources:\n"); idx != -1 {
+		lines := strings.Split(body[idx:], "\n")
+		for _, line := range lines[1:] {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "- ") {
+				res = append(res, strings.TrimPrefix(line, "- "))
+			} else if line != "" && !strings.HasPrefix(line, "-") {
+				break
+			}
+		}
+	}
+	return res
 }

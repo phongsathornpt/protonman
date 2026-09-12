@@ -9,6 +9,11 @@ type fileDocument struct {
 	Model      fileModel               `toml:"model,omitempty"`
 	Agent      fileAgent               `toml:"agent,omitempty"`
 	Runtime    fileRuntime             `toml:"runtime,omitempty"`
+	Skills     *fileSkills             `toml:"skills,omitempty"`
+}
+
+type fileSkills struct {
+	Active []string `toml:"active"`
 }
 
 type fileProvider struct {

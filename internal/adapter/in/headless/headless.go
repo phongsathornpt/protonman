@@ -407,9 +407,13 @@ func (r *Runner) handleSkillsCommand(argument string, parts []string, output io.
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "[x] Activated skill %s [%s]: %s", s.Name, s.Scope, s.Description)
 	if len(s.Resources) > 0 {
-		builder.WriteString("\nBundled resources:")
-		for _, res := range s.Resources {
-			fmt.Fprintf(&builder, "\n  - %s", res)
+		if len(s.Resources) <= 5 {
+			builder.WriteString("\nBundled resources:")
+			for _, res := range s.Resources {
+				fmt.Fprintf(&builder, "\n  - %s", res)
+			}
+		} else {
+			fmt.Fprintf(&builder, "\nBundled resources: %s and %d more", strings.Join(s.Resources[:3], ", "), len(s.Resources)-3)
 		}
 	}
 	return writeEvent(output, format, Event{

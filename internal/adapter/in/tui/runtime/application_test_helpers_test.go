@@ -70,6 +70,9 @@ func (s testUserSettingsStore) SaveMaxToolCalls(maxToolCalls int) error {
 func (s testUserSettingsStore) SavePermissionRule(rule permission.Rule) error {
 	return config.SaveUserPermissionRule(s.home(), rule)
 }
+func (s testUserSettingsStore) SaveActiveSkills(activeSkills []string) error {
+	return config.SaveUserActiveSkills(s.home(), activeSkills)
+}
 
 func attachTestApplication(t testing.TB, m *bubbleModel) {
 	t.Helper()

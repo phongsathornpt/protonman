@@ -21,6 +21,7 @@ type ProjectSettingsRepository interface {
 	SaveMaxToolCalls(string, int) error
 	SavePermissionMode(string, permission.Mode) error
 	SavePermissionRule(string, permission.Rule) error
+	SaveActiveSkills(string, []string) error
 }
 
 // Projects owns project-local configuration mutations and lifecycle use cases.
@@ -78,4 +79,11 @@ func (p Projects) SavePermissionRule(workDir string, rule permission.Rule) error
 		return fmt.Errorf("project settings repository is unavailable")
 	}
 	return p.repository.SavePermissionRule(workDir, rule)
+}
+
+func (p Projects) SaveActiveSkills(workDir string, activeSkills []string) error {
+	if p.repository == nil {
+		return fmt.Errorf("project settings repository is unavailable")
+	}
+	return p.repository.SaveActiveSkills(workDir, activeSkills)
 }

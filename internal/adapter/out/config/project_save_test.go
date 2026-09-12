@@ -187,3 +187,38 @@ func TestConcurrentProjectConfigMutationsDoNotLoseFields(t *testing.T) {
 		t.Fatalf("max tool calls = %d, want concurrent update preserved", snapshot.Agent.MaxToolCalls)
 	}
 }
+
+func TestSaveProjectAndUserActiveSkillsRoundTrip(t *testing.T) {
+	workDir := t.TempDir()
+	homeDir := t.TempDir()
+
+	// Test user active skills save and load
+	if err := SaveUserActiveSkills(homeDir, []string{"user-skill-1", "user-skill-2"}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Skills.Active) != 2 || snapshot.Skills.Active[0] != "user-skill-1" || snapshot.Skills.Active[1] != "user-skill-2" {
+		t.Fatalf("unexpected user active skills: %#v", snapshot.Skills.Active)
+	}
+	if snapshot.Provenance[FieldSkillsActive] != SourceUser {
+		t.Fatalf("user skills provenance = %q", snapshot.Provenance[FieldSkillsActive])
+	}
+
+	// Test project active skills save and load (overrides user skills)
+	if err := SaveProjectActiveSkills(workDir, []string{"proj-skill-a"}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir, ProjectTrusted: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Skills.Active) != 1 || snapshot.Skills.Active[0] != "proj-skill-a" {
+		t.Fatalf("unexpected project active skills: %#v", snapshot.Skills.Active)
+	}
+	if snapshot.Provenance[FieldSkillsActive] != SourceProject {
+		t.Fatalf("project skills provenance = %q", snapshot.Provenance[FieldSkillsActive])
+	}
+}

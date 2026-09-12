@@ -140,6 +140,16 @@ func ProtonmanSkillsLock(workDir string) string {
 	return filepath.Join(ProjectRoot(workDir), SkillsLockFileName)
 }
 
+// HasProjectRoot reports whether the project-local .protonman directory exists and is distinct from user-global state.
+func HasProjectRoot(homeDir, workDir string) bool {
+	scope, err := ResolveProjectScope(homeDir, workDir)
+	if err != nil || !scope.Available {
+		return false
+	}
+	info, err := os.Stat(scope.Root)
+	return err == nil && info.IsDir()
+}
+
 // ResolveRuntimeLayout resolves user-global, workspace, and project-local paths once.
 func ResolveRuntimeLayout(explicitHome, workDir string) (RuntimeLayout, error) {
 	userDirs, err := Resolve(explicitHome)

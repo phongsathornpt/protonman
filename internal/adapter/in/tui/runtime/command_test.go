@@ -461,6 +461,74 @@ func TestSlashSkills(t *testing.T) {
 		}
 		model.panes.bottom.remove(skillsViewID)
 	})
+	t.Run("skill selection persists to project if .protonman exists else global", func(t *testing.T) {
+		homeDir := t.TempDir()
+		t.Setenv("PROTONMAN_HOME", homeDir)
+
+		// 1. Without .protonman in project: saves to global
+		noProjectDir := t.TempDir()
+		m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+		m.workDir = noProjectDir
+		s1 := skill.Skill{Name: "global-skill", Description: "Global", Scope: skill.ScopeUser}
+		m.skills = skill.NewRegistry(s1)
+		attachTestApplication(t, m)
+
+		m.executeCommand("/skills global-skill")
+		if !m.skills.IsActivated("global-skill") {
+			t.Fatal("expected global-skill to be activated")
+		}
+
+		snap, err := config.Load(context.Background(), config.Options{HomeDir: homeDir, WorkDir: noProjectDir})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(snap.Skills.Active) != 1 || snap.Skills.Active[0] != "global-skill" {
+			t.Fatalf("expected global skills to have global-skill, got: %v", snap.Skills.Active)
+		}
+		if snap.Provenance[config.FieldSkillsActive] != config.SourceUser {
+			t.Fatalf("expected provenance user, got: %s", snap.Provenance[config.FieldSkillsActive])
+		}
+
+		// 2. With .protonman in project: saves to project
+		projectDir := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(projectDir, ".protonman"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		m2 := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+		m2.workDir = projectDir
+		s2 := skill.Skill{Name: "project-skill", Description: "Project", Scope: skill.ScopeProject}
+		m2.skills = skill.NewRegistry(s2)
+		attachTestApplication(t, m2)
+
+		m2.executeCommand("/skills project-skill")
+		if !m2.skills.IsActivated("project-skill") {
+			t.Fatal("expected project-skill to be activated")
+		}
+
+		snap2, err := config.Load(context.Background(), config.Options{HomeDir: homeDir, WorkDir: projectDir, ProjectTrusted: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(snap2.Skills.Active) != 1 || snap2.Skills.Active[0] != "project-skill" {
+			t.Fatalf("expected project skills to have project-skill, got: %v", snap2.Skills.Active)
+		}
+		if snap2.Provenance[config.FieldSkillsActive] != config.SourceProject {
+			t.Fatalf("expected provenance project, got: %s", snap2.Provenance[config.FieldSkillsActive])
+		}
+
+		// 3. Toggle via picker pane in project
+		m2.applyPaneAction(paneAction{kind: paneActionToggleSkill, skillName: "project-skill"})
+		if m2.skills.IsActivated("project-skill") {
+			t.Fatal("expected project-skill to be deactivated after toggle")
+		}
+		snap3, err := config.Load(context.Background(), config.Options{HomeDir: homeDir, WorkDir: projectDir, ProjectTrusted: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(snap3.Skills.Active) != 0 {
+			t.Fatalf("expected project skills to be empty after deactivating, got: %v", snap3.Skills.Active)
+		}
+	})
 }
 
 func newTestSkillsModel(t *testing.T, count int) *bubbleModel {

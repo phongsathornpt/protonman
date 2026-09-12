@@ -84,6 +84,13 @@ func SaveProjectPermissionRule(workDir string, rule permission.Rule) error {
 	})
 }
 
+// SaveProjectActiveSkills updates the project-local active skills list.
+func SaveProjectActiveSkills(workDir string, activeSkills []string) error {
+	return modifyProjectConfigFile(workDir, func(doc *fileDocument) {
+		doc.Skills = &fileSkills{Active: append([]string(nil), activeSkills...)}
+	})
+}
+
 func appendRuleToDocument(doc *fileDocument, rule permission.Rule) {
 	patternModeStr := ""
 	if rule.PatternMode == permission.PatternModeDomain {

@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -83,10 +84,23 @@ func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
 		if m.skills == nil {
 			return nil
 		}
-		_, _ = m.skills.Toggle(action.skillName)
-		if view, _ := m.panes.bottom.find(skillsViewID).(*skillsPaneView); view != nil {
-			return view.refreshItems(newPaneRenderContext(m))
+		active, err := m.skills.Toggle(action.skillName)
+		if err != nil {
+			m.appendError(err.Error())
+			m.refreshViewport()
+			return nil
 		}
+		m.persistActiveSkills()
+		state := "Deactivated"
+		if active {
+			state = "Activated"
+		}
+		noticeCmd := m.showTransientNotice(fmt.Sprintf("%s skill %q", state, action.skillName))
+		if view, _ := m.panes.bottom.find(skillsViewID).(*skillsPaneView); view != nil {
+			refreshCmd := view.refreshItems(newPaneRenderContext(m))
+			return tea.Batch(noticeCmd, refreshCmd)
+		}
+		return noticeCmd
 	case paneActionReloadModels:
 		if view, _ := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView); view != nil {
 			return view.loadProvider(m, action.runSlash)
@@ -215,7 +229,12 @@ func newPaneRenderContext(m *bubbleModel) paneRenderContext {
 	}
 	if m.skills != nil {
 		for _, item := range m.skills.List() {
-			ctx.skillItems = append(ctx.skillItems, skillListItem{name: item.Name, active: m.skills.IsActivated(item.Name)})
+			ctx.skillItems = append(ctx.skillItems, skillListItem{
+				name:        item.Name,
+				description: item.Description,
+				scope:       string(item.Scope),
+				active:      m.skills.IsActivated(item.Name),
+			})
 		}
 	}
 

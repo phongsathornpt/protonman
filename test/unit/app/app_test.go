@@ -165,6 +165,19 @@ func TestProjectsUseCase(t *testing.T) {
 	if err := projects.SaveReasoningEffort(tmpDir, sdk.ReasoningHigh); err != nil {
 		t.Fatalf("SaveReasoningEffort error = %v", err)
 	}
+	if err := projects.SaveActiveSkills(tmpDir, []string{"alpha-skill"}); err != nil {
+		t.Fatalf("SaveActiveSkills error = %v", err)
+	}
+}
+
+func TestUserSettingsUseCase(t *testing.T) {
+	homeDir := t.TempDir()
+	store := config.NewUserSettingsStore(homeDir)
+	userSettings := app.NewUserSettings(store)
+
+	if err := userSettings.SaveActiveSkills([]string{"global-skill"}); err != nil {
+		t.Fatalf("userSettings.SaveActiveSkills error = %v", err)
+	}
 }
 
 func TestModelsUseCase(t *testing.T) {

@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -477,6 +478,10 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 			m.refreshViewport()
 			return nil
 		}
+		m.persistActiveSkills()
+		if view, _ := m.panes.bottom.find(skillsViewID).(*skillsPaneView); view != nil {
+			_ = view.refreshItems(newPaneRenderContext(m))
+		}
 		state := "deactivated"
 		box := "[ ]"
 		if active {
@@ -505,6 +510,10 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 			return nil
 		}
 		m.skills.Deactivate(target)
+		m.persistActiveSkills()
+		if view, _ := m.panes.bottom.find(skillsViewID).(*skillsPaneView); view != nil {
+			_ = view.refreshItems(newPaneRenderContext(m))
+		}
 		m.appendLine(fmt.Sprintf("[ ] Skill %q deactivated.", target))
 		m.refreshViewport()
 		return nil
@@ -529,11 +538,19 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 		m.refreshViewport()
 		return nil
 	}
+	m.persistActiveSkills()
+	if view, _ := m.panes.bottom.find(skillsViewID).(*skillsPaneView); view != nil {
+		_ = view.refreshItems(newPaneRenderContext(m))
+	}
 	m.appendLine(fmt.Sprintf("[x] Activated skill %s [%s]: %s", s.Name, s.Scope, s.Description))
 	if len(s.Resources) > 0 {
-		m.appendLine("Bundled resources:")
-		for _, r := range s.Resources {
-			m.appendLine("  - " + r)
+		if len(s.Resources) <= 5 {
+			m.appendLine("Bundled resources:")
+			for _, r := range s.Resources {
+				m.appendLine("  - " + r)
+			}
+		} else {
+			m.appendLine(fmt.Sprintf("Bundled resources: %s and %d more", strings.Join(s.Resources[:3], ", "), len(s.Resources)-3))
 		}
 	}
 	m.refreshViewport()
@@ -572,6 +589,25 @@ func (m *bubbleModel) startBash(command string) tea.Cmd {
 		return nil
 	}
 	return m.startTool(call)
+}
+
+func (m *bubbleModel) persistActiveSkills() {
+	if m == nil || m.skills == nil {
+		return
+	}
+	active := m.skills.ActivatedList()
+	slices.Sort(active)
+	// First condition: if have .protonman folder in project save here first
+	if appdirs.HasProjectRoot("", m.workDir) {
+		if err := m.application.Projects.SaveActiveSkills(m.workDir, active); err != nil {
+			m.appendError(fmt.Sprintf("Failed to save project skill list: %v", err))
+		}
+		return
+	}
+	// Else save in global
+	if err := m.application.UserSettings.SaveActiveSkills(active); err != nil {
+		m.appendError(fmt.Sprintf("Failed to save global skill list: %v", err))
+	}
 }
 
 func shortHash(h string) string {

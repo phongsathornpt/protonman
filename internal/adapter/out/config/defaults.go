@@ -42,5 +42,6 @@ func defaultProvenance() map[string]ValueSource {
 		FieldAgentReasoningEffort:  SourceDefault,
 		FieldAgentMaxToolCalls:     SourceDefault,
 		FieldUIPermissionMode:      SourceDefault,
+		FieldSkillsActive:          SourceDefault,
 	}
 }

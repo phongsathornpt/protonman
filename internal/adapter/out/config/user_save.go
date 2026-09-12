@@ -130,6 +130,13 @@ func SaveUserPermissionRule(homeDir string, rule permission.Rule) error {
 	})
 }
 
+// SaveUserActiveSkills updates the active skills list in ~/.protonman/config.toml.
+func SaveUserActiveSkills(homeDir string, activeSkills []string) error {
+	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
+		doc.Skills = &fileSkills{Active: append([]string(nil), activeSkills...)}
+	})
+}
+
 func modifyUserConfigFile(homeDir string, returnIfNotExist bool, mutate func(*fileDocument)) error {
 	userConfigMutationMu.Lock()
 	defer userConfigMutationMu.Unlock()
