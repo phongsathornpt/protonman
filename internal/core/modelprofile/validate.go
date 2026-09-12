@@ -38,7 +38,7 @@ func cloneProfile(profile Profile) Profile {
 	profile.Match.ExactIDs = append([]string(nil), profile.Match.ExactIDs...)
 	profile.Match.Prefixes = append([]string(nil), profile.Match.Prefixes...)
 	profile.Reasoning.Levels = append(profile.Reasoning.Levels[:0:0], profile.Reasoning.Levels...)
-	profile.AgentPolicy = AgentPolicy{}
+	profile.AgentPolicy.PromptHints = nil
 	return profile
 }
 
