@@ -13,6 +13,14 @@ import (
 // BubbleTeaOption configures the Bubble Tea fullscreen adapter.
 type BubbleTeaOption func(*BubbleTeaUI) error
 
+// WithApplicationServices attaches application use cases required by the TUI.
+func WithApplicationServices(services app.Services) BubbleTeaOption {
+	return func(ui *BubbleTeaUI) error {
+		ui.application = services
+		return nil
+	}
+}
+
 // WithBubbleTeaRunner connects ordinary prompt input to the model/tool loop.
 func WithBubbleTeaRunner(runner app.Conversation) BubbleTeaOption {
 	return func(ui *BubbleTeaUI) error {

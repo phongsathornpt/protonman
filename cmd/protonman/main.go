@@ -126,6 +126,7 @@ func run(ctx context.Context, args []string) error {
 		runtimeState.service,
 		runtimeState.registry,
 		runtimeState.todoStore,
+		tui.WithApplicationServices(runtimeState.application),
 		tui.WithWorkDir(runtimeState.workDir),
 		tui.WithSessionID(runtimeState.sessionID),
 		tui.WithSessions(app.NewSessions(runtimeState.stateStore), workspaceKey(runtimeState.workDir)),

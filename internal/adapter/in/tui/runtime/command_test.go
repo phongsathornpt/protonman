@@ -412,6 +412,7 @@ func newTestSkillsModel(t *testing.T, count int) *bubbleModel {
 	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read", Kind: tool.KindRead}}}
 	service := newBehaviorService(t, registry, permission.ModeAsk)
 	model := newBubbleModel(context.Background(), service, registry, nil, nil, newPermissionBridge(), "")
+	attachTestApplication(t, model)
 	model.resize(80, 24)
 	skills := make([]skill.Skill, 0, count)
 	for i := 1; i <= count; i++ {

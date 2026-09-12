@@ -10,7 +10,6 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionpolicy"
 	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	permissionpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/permission"
-	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
@@ -325,7 +324,7 @@ func (m *bubbleModel) resolvePermission(option permissionOption) tea.Cmd {
 			_ = m.service.AddRule(rule)
 			workDir := m.workDir
 			saveCmd = func() tea.Msg {
-				err := (app.Projects{}).SavePermissionRule(workDir, rule)
+				err := m.application.Projects.SavePermissionRule(workDir, rule)
 				return permissionRuleSavedMsg{scope: "project", rule: rule, err: err}
 			}
 		}
@@ -338,7 +337,7 @@ func (m *bubbleModel) resolvePermission(option permissionOption) tea.Cmd {
 		if rule, ok := permission.RuleFromRequest(request); ok {
 			_ = m.service.AddRule(rule)
 			saveCmd = func() tea.Msg {
-				err := (app.UserSettings{}).SavePermissionRule(rule)
+				err := m.application.UserSettings.SavePermissionRule(rule)
 				return permissionRuleSavedMsg{scope: "global", rule: rule, err: err}
 			}
 		}

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
@@ -30,7 +31,8 @@ func TestBuildSubagentModelResolverBuildsConfiguredOverride(t *testing.T) {
 		Overrides: map[string]config.SubagentModelConfig{
 			"strength": {Provider: "OPENAI", Model: "gpt-test-coder"},
 		},
-		SessionID: "session-test",
+		SessionID:    "session-test",
+		ModelFactory: model.Factory{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -63,6 +65,7 @@ func TestBuildSubagentModelResolverRejectsMissingProvider(t *testing.T) {
 		Overrides: map[string]config.SubagentModelConfig{
 			"intelligence": {Provider: "missing", Model: "reasoner"},
 		},
+		ModelFactory: model.Factory{},
 	})
 	if err == nil || !strings.Contains(err.Error(), "provider \"missing\" is not configured") {
 		t.Fatalf("error = %v, want missing provider error", err)
@@ -77,6 +80,7 @@ func TestBuildSubagentModelResolverRejectsMissingCredentials(t *testing.T) {
 		Overrides: map[string]config.SubagentModelConfig{
 			"intelligence": {Provider: "anthropic", Model: "claude-test"},
 		},
+		ModelFactory: model.Factory{},
 	})
 	if err == nil || !strings.Contains(err.Error(), "requires credentials") {
 		t.Fatalf("error = %v, want credentials error", err)

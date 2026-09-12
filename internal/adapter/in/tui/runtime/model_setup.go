@@ -16,6 +16,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/providerio"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -602,12 +603,12 @@ func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyP
 	}
 }
 
-func persistModelSetupCmd(operationID asyncOperationID, gate *asyncOperationGate, providerName, modelID string, reasoning sdk.ReasoningEffort, unverified bool) tea.Cmd {
+func persistModelSetupCmd(providers app.Providers, operationID asyncOperationID, gate *asyncOperationGate, providerName, modelID string, reasoning sdk.ReasoningEffort, unverified bool) tea.Cmd {
 	return func() tea.Msg {
 		if gate != nil && !gate.current(operationID) {
 			return modelSetupAppliedMsg{operationID: operationID, providerName: providerName, modelID: modelID, reasoning: reasoning, unverified: unverified, err: errStaleConfigMutation}
 		}
-		err := providerio.SelectModel(providerName, modelID)
+		err := providerio.SelectModel(providers, providerName, modelID)
 		return modelSetupAppliedMsg{operationID: operationID, providerName: providerName, modelID: modelID, reasoning: reasoning, unverified: unverified, err: err}
 	}
 }

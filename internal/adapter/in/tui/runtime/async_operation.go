@@ -45,7 +45,7 @@ func (m *bubbleModel) beginProviderSave(request providerSaveRequest) tea.Cmd {
 	id := nextAsyncOperationID()
 	m.activeProviderSave = id
 	m.configMutationGate.activate(id)
-	return saveProviderCmd(id, m.configMutationGate, request)
+	return saveProviderCmd(m.application.Providers, id, m.configMutationGate, request)
 }
 
 func (m *bubbleModel) beginProviderSelect(providerName string) tea.Cmd {
@@ -53,7 +53,7 @@ func (m *bubbleModel) beginProviderSelect(providerName string) tea.Cmd {
 	m.activeProviderSelect = id
 	m.configMutationGate.activate(id)
 	reconciledModel := m.reconciledModelForProvider(providerName)
-	return saveActiveProviderCmd(id, m.configMutationGate, providerName, reconciledModel)
+	return saveActiveProviderCmd(m.application.Providers, id, m.configMutationGate, providerName, reconciledModel)
 }
 
 func (m *bubbleModel) reconciledModelForProvider(providerName string) string {
@@ -80,7 +80,7 @@ func (m *bubbleModel) beginProviderDelete(providerName string) tea.Cmd {
 	id := nextAsyncOperationID()
 	m.activeProviderDelete = id
 	m.configMutationGate.activate(id)
-	return deleteProviderCmd(id, m.configMutationGate, providerName)
+	return deleteProviderCmd(m.application.Providers, id, m.configMutationGate, providerName)
 }
 
 func (m *bubbleModel) beginModelSetup(providerName, modelID string, unverified bool) tea.Cmd {
@@ -91,7 +91,7 @@ func (m *bubbleModel) beginModelSetupSelect(providerName, modelID string, reason
 	id := nextAsyncOperationID()
 	m.activeModelSetup = id
 	m.configMutationGate.activate(id)
-	return persistModelSetupCmd(id, m.configMutationGate, providerName, modelID, reasoning, unverified)
+	return persistModelSetupCmd(m.application.Providers, id, m.configMutationGate, providerName, modelID, reasoning, unverified)
 }
 
 func (m *bubbleModel) pushProviderPane(view *providerPaneView) {

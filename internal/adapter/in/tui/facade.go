@@ -7,6 +7,7 @@ type BubbleTeaUI = runtimeui.BubbleTeaUI
 type BubbleTeaOption = runtimeui.BubbleTeaOption
 
 var NewBubbleTea = runtimeui.NewBubbleTea
+var WithApplicationServices = runtimeui.WithApplicationServices
 var WithBubbleTeaRunner = runtimeui.WithBubbleTeaRunner
 var WithModelConfig = runtimeui.WithModelConfig
 var WithSkills = runtimeui.WithSkills

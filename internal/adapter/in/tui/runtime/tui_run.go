@@ -55,6 +55,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 			ui.workDir,
 			currentMessages,
 		)
+		bModel.application = ui.application
 		bModel.agents = ui.agents
 		cancelAgentEvents := func() {}
 		if ui.agents.Available() {

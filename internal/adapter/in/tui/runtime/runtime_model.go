@@ -153,12 +153,13 @@ type presentationModelState struct {
 }
 
 type bubbleModel struct {
-	ctx      context.Context
-	service  *toolcall.Service
-	registry tool.Registry
-	skills   *skill.Registry
-	runner   app.Conversation
-	bridge   *permissionBridge
+	ctx         context.Context
+	service     *toolcall.Service
+	registry    tool.Registry
+	skills      *skill.Registry
+	runner      app.Conversation
+	application app.Services
+	bridge      *permissionBridge
 	agentModelState
 	turnModelState
 	modelSetupState

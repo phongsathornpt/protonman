@@ -8,10 +8,11 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 )
 
-func (v *modelSetupPaneView) beginFetch(parent context.Context, providerName string, cfg config.ProviderConfig, timeouts ...time.Duration) tea.Cmd {
+func (v *modelSetupPaneView) beginFetch(parent context.Context, models app.Models, providerName string, cfg config.ProviderConfig, timeouts ...time.Duration) tea.Cmd {
 	discoveryTimeout := runtimepolicy.ModelDiscoveryTimeout
 	if len(timeouts) > 0 && timeouts[0] > 0 {
 		discoveryTimeout = timeouts[0]
@@ -31,7 +32,7 @@ func (v *modelSetupPaneView) beginFetch(parent context.Context, providerName str
 	v.models = nil
 	v.allModels = nil
 	v.picker.GoToStart()
-	return fetchProviderModelsCmd(providerFetchRequest{ctx: ctx, requestID: v.fetchRequestID, providerName: providerName, providerType: cfg.Type, baseURL: cfg.BaseURL, apiKey: cfg.APIKey, discoveryTimeout: discoveryTimeout})
+	return fetchProviderModelsCmd(models, providerFetchRequest{ctx: ctx, requestID: v.fetchRequestID, providerName: providerName, providerType: cfg.Type, baseURL: cfg.BaseURL, apiKey: cfg.APIKey, discoveryTimeout: discoveryTimeout})
 }
 
 func (v *modelSetupPaneView) cancelFetch() {
@@ -63,7 +64,7 @@ func (v *modelSetupPaneView) loadProvider(m *bubbleModel, force bool) tea.Cmd {
 	cfg, configured := m.providers[modelcatalog.NormalizeProviderKey(providerName)]
 	if configured {
 		if model.ProviderHasUsableAuth(providerName, cfg.BaseURL, cfg.APIKey) {
-			return v.beginFetch(m.ctx, providerName, cfg, m.runtimeConfig.ModelDiscoveryTimeout)
+			return v.beginFetch(m.ctx, m.application.Models, providerName, cfg, m.runtimeConfig.ModelDiscoveryTimeout)
 		}
 	}
 	v.setModels(nil, m.activeProvider, m.activeModel)

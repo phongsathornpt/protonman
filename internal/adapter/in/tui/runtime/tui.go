@@ -23,6 +23,7 @@ type BubbleTeaUI struct {
 	skills                  *skill.Registry
 	todoStore               tododomain.Repository
 	runner                  app.Conversation
+	application             app.Services
 	bridge                  *permissionBridge
 	agents                  app.Agents
 	workDir                 string

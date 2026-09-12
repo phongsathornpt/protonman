@@ -37,6 +37,7 @@ func TestE2ESubagentCapabilityChangesPublishedToolsBetweenTurns(t *testing.T) {
 		APIKey:       "mock-api-key",
 		ModelID:      "mock-model",
 		MaxToolCalls: 8,
+		ModelFactory: model.Factory{},
 	})
 	if err != nil {
 		t.Fatal(err)

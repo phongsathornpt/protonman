@@ -9,6 +9,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/providerio"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 )
 
@@ -43,7 +44,7 @@ type providerFetchRequest struct {
 	discoveryTimeout time.Duration
 }
 
-func (v *providerPaneView) beginFetch(parent context.Context, timeouts ...time.Duration) tea.Cmd {
+func (v *providerPaneView) beginFetch(parent context.Context, models app.Models, timeouts ...time.Duration) tea.Cmd {
 	discoveryTimeout := runtimepolicy.ModelDiscoveryTimeout
 	if len(timeouts) > 0 && timeouts[0] > 0 {
 		discoveryTimeout = timeouts[0]
@@ -61,7 +62,7 @@ func (v *providerPaneView) beginFetch(parent context.Context, timeouts ...time.D
 	v.fetchCancel = cancel
 	v.fetchRequestID = nextAsyncOperationID()
 	v.state = providerStateFetching
-	return fetchProviderModelsCmd(providerFetchRequest{
+	return fetchProviderModelsCmd(models, providerFetchRequest{
 		ctx:              ctx,
 		requestID:        v.fetchRequestID,
 		providerName:     strings.TrimSpace(v.nameInput.Value()),
@@ -80,9 +81,9 @@ func (v *providerPaneView) cancelFetch() {
 	v.fetchCancel = nil
 }
 
-func fetchProviderModelsCmd(request providerFetchRequest) tea.Cmd {
+func fetchProviderModelsCmd(models app.Models, request providerFetchRequest) tea.Cmd {
 	return func() tea.Msg {
-		models, err := providerio.Discover(request.ctx, providerio.FetchRequest{
+		discovered, err := providerio.Discover(request.ctx, models, providerio.FetchRequest{
 			ProviderName: request.providerName,
 			ProviderType: request.providerType,
 			BaseURL:      request.baseURL,
@@ -93,7 +94,7 @@ func fetchProviderModelsCmd(request providerFetchRequest) tea.Cmd {
 			providerName: request.providerName,
 			baseURL:      request.baseURL,
 			apiKey:       request.apiKey,
-			models:       models,
+			models:       discovered,
 			requestID:    request.requestID,
 			err:          err,
 		}
@@ -110,12 +111,12 @@ type providerSaveRequest struct {
 	activate     bool
 }
 
-func saveProviderCmd(operationID asyncOperationID, gate *asyncOperationGate, request providerSaveRequest) tea.Cmd {
+func saveProviderCmd(providers app.Providers, operationID asyncOperationID, gate *asyncOperationGate, request providerSaveRequest) tea.Cmd {
 	return func() tea.Msg {
 		if !gate.current(operationID) {
 			return providerSavedMsg{operationID: operationID, err: errStaleConfigMutation}
 		}
-		err := providerio.Save(providerio.SaveRequest{
+		err := providerio.Save(providers, providerio.SaveRequest{
 			ProviderName: request.providerName,
 			ProviderType: request.providerType,
 			PreviousName: request.previousName,

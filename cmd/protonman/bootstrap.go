@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/sessionfs"
 	agenttool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/agent"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin"
@@ -45,6 +46,7 @@ type appRuntime struct {
 	service      *toolcall.Service
 	skills       *skill.Registry
 	runner       app.Conversation
+	application  app.Services
 }
 
 func (r *appRuntime) Close() {
@@ -67,7 +69,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	}
 	originalSelection := loadedConfig.Model
 	reconciled, selectionChanged := config.ReconcileModelSelection(originalSelection, loadedConfig.Providers)
-	loadedConfig.Model, loadedConfig.Providers = app.ResolvePrimaryModelDefaults(reconciled, loadedConfig.Providers)
+	loadedConfig.Model, loadedConfig.Providers = model.ResolvePrimaryModelDefaults(reconciled, loadedConfig.Providers)
 	if selectionChanged {
 		loadedConfig.Provenance[config.FieldModelProvider] = config.SourceDefault
 		loadedConfig.Provenance[config.FieldModelDefault] = config.SourceDefault
@@ -204,6 +206,13 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		}
 		persistDone()
 	}
+	application := app.Services{
+		Models:       app.NewModels(model.Catalog{}),
+		Providers:    app.NewProviders(config.NewUserProviderRepository(homeDir)),
+		Projects:     app.NewProjects(config.ProjectSettingsStore{}),
+		UserSettings: app.NewUserSettings(config.NewUserSettingsStore(homeDir)),
+		ModelFactory: model.Factory{},
+	}
 	failed := true
 	defer func() {
 		if failed {
@@ -215,6 +224,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		Overrides:      loadedConfig.Agent.Subagents,
 		SessionID:      sessionID,
 		RequestTimeout: loadedConfig.Runtime.ModelRequestTimeout,
+		ModelFactory:   application.ModelFactory,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("configure subagent models: %w", err)
@@ -299,10 +309,10 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		ProviderName: providerKey, ProviderType: provider.Type, BaseURL: provider.BaseURL, APIKey: provider.APIKey,
 		ModelID: loadedConfig.Model.Default, SessionID: sessionID, Workspace: workDir, WorkspacePolicy: workspaceRoot, ActiveGoal: state.ActiveGoal, AgentProfile: loadedConfig.Agent.Profile,
 		ReasoningEffort: loadedConfig.Agent.ReasoningEffort, MaxToolCalls: loadedConfig.Agent.MaxToolCalls,
-		RequestTimeout: loadedConfig.Runtime.ModelRequestTimeout, TurnTimeout: loadedConfig.Runtime.TurnTimeout, RoundTimeout: loadedConfig.Runtime.RoundTimeout,
+		RequestTimeout: loadedConfig.Runtime.ModelRequestTimeout, TurnTimeout: loadedConfig.Runtime.TurnTimeout, RoundTimeout: loadedConfig.Runtime.RoundTimeout, ModelFactory: application.ModelFactory,
 	})
 	failed = false
-	return &appRuntime{workDir: workDir, config: loadedConfig, coordinator: coordinator, todoStore: todoStore, registry: registry, stateStore: stateStore, sessionsRoot: dirs.Sessions, sessionID: sessionID, state: state, service: service, skills: skillRegistry, runner: initialRunner}, nil
+	return &appRuntime{workDir: workDir, config: loadedConfig, coordinator: coordinator, todoStore: todoStore, registry: registry, stateStore: stateStore, sessionsRoot: dirs.Sessions, sessionID: sessionID, state: state, service: service, skills: skillRegistry, runner: initialRunner, application: application}, nil
 }
 
 func applyAgentProfile(loadedConfig *config.Snapshot, state *session.State, requested string) error {

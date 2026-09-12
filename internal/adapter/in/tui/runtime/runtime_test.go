@@ -46,7 +46,9 @@ func newTestBubbleModel(t *testing.T, mode permission.Mode, todo []tododomain.It
 	t.Helper()
 	registry, _ := newBubbleTestRegistry()
 	service := newBubbleTestService(t, registry, mode, permission.Config{})
-	return newBubbleModel(context.Background(), service, registry, todo, nil, newPermissionBridge(), "/tmp/proton")
+	model := newBubbleModel(context.Background(), service, registry, todo, nil, newPermissionBridge(), "/tmp/proton")
+	attachTestApplication(t, model)
+	return model
 }
 
 func emptyTodoItems() []tododomain.Item {

@@ -107,7 +107,7 @@ func TestModelSetupLoadingHidesPreviousProviderModels(t *testing.T) {
 	view := newModelSetupPaneView(m)
 	m.panes.bottom.push(view)
 	view.providerIndex = 1
-	_ = view.beginFetch(m.ctx, "beta", m.providers["beta"])
+	_ = view.beginFetch(m.ctx, app.NewModels(model.Catalog{}), "beta", m.providers["beta"])
 	rendered := view.Render(newPaneRenderContext(m))
 	if !strings.Contains(rendered, "Loading") {
 		t.Fatalf("loading state not rendered: %q", rendered)
@@ -151,7 +151,7 @@ func TestModelSetupBeginFetchCancelsPreviousRequest(t *testing.T) {
 	view.fetchCancel = func() {
 		canceled = true
 	}
-	_ = view.beginFetch(m.ctx, "protonman", config.ProviderConfig{Name: "protonman", APIKey: "key"})
+	_ = view.beginFetch(m.ctx, app.NewModels(model.Catalog{}), "protonman", config.ProviderConfig{Name: "protonman", APIKey: "key"})
 	if !canceled {
 		t.Fatal("previous model fetch was not canceled")
 	}
@@ -1156,7 +1156,7 @@ func TestStaleModelSetupDoesNotMutateReopenedPane(t *testing.T) {
 func TestModelFetchRequiresRuntimeContext(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	v := newModelSetupPaneView(m)
-	cmd := v.beginFetch(nil, "protonman", config.ProviderConfig{Name: "protonman"})
+	cmd := v.beginFetch(nil, app.NewModels(model.Catalog{}), "protonman", config.ProviderConfig{Name: "protonman"})
 	if cmd != nil {
 		t.Fatalf("nil-context model fetch command = %v, want nil", cmd)
 	}

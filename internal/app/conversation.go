@@ -10,7 +10,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/core/modelcatalog"
+	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
@@ -25,7 +26,7 @@ import (
 // must snapshot before retaining or mutating them. Inbound adapters depend on this
 // port instead of the concrete turn loop.
 type Conversation interface {
-	Run(context.Context, []model.Message, turn.Sink) (turn.Result, error)
+	Run(context.Context, []sdk.Message, turn.Sink) (turn.Result, error)
 }
 
 // Event and Result are application-level aliases used by inbound adapters.
@@ -106,8 +107,9 @@ type ConversationSpec struct {
 	RequestTimeout  time.Duration
 	TurnTimeout     time.Duration
 	RoundTimeout    time.Duration
-	RemoteModel     *model.RemoteModel
-	LowConcurrency  model.LowConcurrencySetting
+	ModelFactory    LanguageModelFactory
+	RemoteModel     *modelcatalog.RemoteModel
+	LowConcurrency  modelconfig.LowConcurrencySetting
 }
 
 // BuildConversation centralizes model, prompt, and turn-loop construction for
@@ -120,22 +122,17 @@ func BuildConversation(service *toolcall.Service, skills *skill.Registry, agents
 	if modelID == "" {
 		return nil, nil
 	}
-	providerName := strings.TrimSpace(spec.ProviderName)
-	if providerName == "" {
-		providerName = model.DefaultProtonmanName
+	if spec.ModelFactory == nil {
+		return nil, fmt.Errorf("build conversation: language-model factory is required")
 	}
-	if !model.ProviderHasUsableAuth(providerName, spec.BaseURL, spec.APIKey) {
+	languageModel := spec.ModelFactory.Build(LanguageModelRequest{
+		ProviderName: spec.ProviderName, ProviderType: spec.ProviderType, BaseURL: spec.BaseURL, APIKey: spec.APIKey,
+		ModelID: modelID, SessionID: spec.SessionID, AgentProfile: spec.AgentProfile, RequestTimeout: spec.RequestTimeout,
+		RemoteModel: spec.RemoteModel, LowConcurrency: spec.LowConcurrency,
+	})
+	if languageModel == nil {
 		return nil, nil
 	}
-	baseURL := model.ResolveProviderBaseURLForProtocol(providerName, spec.ProviderType, spec.BaseURL)
-	clientOptions := []model.ClientOption{model.WithRequestTimeout(spec.RequestTimeout), model.WithAgentProfile(spec.AgentProfile), model.WithLowConcurrencyMode(spec.LowConcurrency)}
-	if spec.RemoteModel != nil {
-		clientOptions = append(clientOptions, model.WithRemoteModelProfile(providerName, *spec.RemoteModel))
-	}
-	if strings.TrimSpace(spec.SessionID) != "" {
-		clientOptions = append(clientOptions, model.WithSessionID(spec.SessionID))
-	}
-	languageModel := model.NewProviderLanguageModel(providerName, spec.ProviderType, baseURL, spec.APIKey, modelID, clientOptions...)
 	agents.SetLanguageModel(languageModel)
 	promptSpec, loopOptions, err := primaryConversationPolicy(spec)
 	if err != nil {
@@ -211,7 +208,7 @@ func (p *subagentRuntimeContextProvider) Pending(ctx context.Context) bool {
 	return ref.TurnID != "" && p.coordinator.HasBlockingLiveForTurn(ref)
 }
 
-func (p *subagentRuntimeContextProvider) Drain(ctx context.Context) ([]model.Message, error) {
+func (p *subagentRuntimeContextProvider) Drain(ctx context.Context) ([]sdk.Message, error) {
 	if p == nil || p.synthesis == nil {
 		return nil, nil
 	}
@@ -226,7 +223,7 @@ func (p *subagentRuntimeContextProvider) Drain(ctx context.Context) ([]model.Mes
 	return p.consumeBatch(ctx, batch)
 }
 
-func (p *subagentRuntimeContextProvider) Await(ctx context.Context) ([]model.Message, error) {
+func (p *subagentRuntimeContextProvider) Await(ctx context.Context) ([]sdk.Message, error) {
 	if p == nil || p.synthesis == nil || p.coordinator == nil {
 		return nil, nil
 	}
@@ -255,7 +252,7 @@ func (p *subagentRuntimeContextProvider) Await(ctx context.Context) ([]model.Mes
 	}
 }
 
-func (p *subagentRuntimeContextProvider) consumeBatch(ctx context.Context, batch agent.SynthesisBatch) ([]model.Message, error) {
+func (p *subagentRuntimeContextProvider) consumeBatch(ctx context.Context, batch agent.SynthesisBatch) ([]sdk.Message, error) {
 	messages, err := synthesisBatchMessages(batch)
 	if err != nil {
 		return nil, err
@@ -343,7 +340,7 @@ func runtimeSubagentConclusion(result agent.Result) string {
 	return strings.TrimSpace(result.Summary)
 }
 
-func synthesisBatchMessages(batch agent.SynthesisBatch) ([]model.Message, error) {
+func synthesisBatchMessages(batch agent.SynthesisBatch) ([]sdk.Message, error) {
 	if len(batch.Results) == 0 {
 		return nil, nil
 	}
@@ -366,5 +363,5 @@ func synthesisBatchMessages(batch agent.SynthesisBatch) ([]model.Message, error)
 		string(payload),
 		"</proton-runtime-context>",
 	}, "\n")
-	return []model.Message{{ID: model.NewMessageID(), Role: model.RoleUser, Content: content}}, nil
+	return []sdk.Message{{ID: sdk.NewMessageID(), Role: sdk.RoleUser, Content: content}}, nil
 }

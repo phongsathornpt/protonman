@@ -314,22 +314,22 @@ func (v *providerSelectPaneView) HandlePaneKey(_ paneRenderContext, message tea.
 	}
 }
 
-func saveActiveProviderCmd(operationID asyncOperationID, gate *asyncOperationGate, providerName, reconciledModel string) tea.Cmd {
+func saveActiveProviderCmd(providers app.Providers, operationID asyncOperationID, gate *asyncOperationGate, providerName, reconciledModel string) tea.Cmd {
 	return func() tea.Msg {
 		if !gate.current(operationID) {
 			return providerActiveSelectedMsg{operationID: operationID, providerName: providerName, reconciledModel: reconciledModel, err: errStaleConfigMutation}
 		}
-		err := (app.Providers{}).Activate(providerName, reconciledModel)
+		err := providers.Activate(providerName, reconciledModel)
 		return providerActiveSelectedMsg{operationID: operationID, providerName: providerName, reconciledModel: reconciledModel, err: err}
 	}
 }
 
-func deleteProviderCmd(operationID asyncOperationID, gate *asyncOperationGate, providerName string) tea.Cmd {
+func deleteProviderCmd(providers app.Providers, operationID asyncOperationID, gate *asyncOperationGate, providerName string) tea.Cmd {
 	return func() tea.Msg {
 		if !gate.current(operationID) {
 			return providerDeletedMsg{operationID: operationID, providerName: providerName, err: errStaleConfigMutation}
 		}
-		err := (app.Providers{}).Delete(providerName)
+		err := providers.Delete(providerName)
 		return providerDeletedMsg{operationID: operationID, providerName: providerName, err: err}
 	}
 }

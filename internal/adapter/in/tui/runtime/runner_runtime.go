@@ -70,7 +70,7 @@ func (m *bubbleModel) reconfigureRunner() {
 	prov, ok := m.providers[strings.ToLower(provName)]
 	hasValidAuth := ok && model.ProviderHasUsableAuth(provName, prov.BaseURL, prov.APIKey)
 	if !hasValidAuth {
-		loaded, err := (app.Providers{}).LoadConfigured(m.ctx, m.workDir)
+		loaded, err := m.application.Providers.LoadConfigured(m.ctx, m.workDir)
 		if err == nil {
 			if m.providers == nil {
 				m.providers = make(map[string]config.ProviderConfig)
@@ -95,7 +95,7 @@ func (m *bubbleModel) reconfigureRunner() {
 	if resolved, ok := m.activeRemoteModel(); ok {
 		remote = &resolved
 	}
-	conversation, err := app.BuildConversation(m.service, m.skills, m.agents, app.ConversationSpec{ProviderName: provName, ProviderType: prov.Type, BaseURL: prov.BaseURL, APIKey: prov.APIKey, ModelID: m.activeModel, SessionID: sessID, Workspace: m.workDir, ActiveGoal: m.activeGoal, AgentProfile: m.agentProfile, ReasoningEffort: m.reasoningEffort, MaxToolCalls: m.maxToolCalls, RequestTimeout: m.runtimeConfig.ModelRequestTimeout, TurnTimeout: m.runtimeConfig.TurnTimeout, RoundTimeout: m.runtimeConfig.RoundTimeout, RemoteModel: remote, LowConcurrency: m.lowConcurrencyMode})
+	conversation, err := app.BuildConversation(m.service, m.skills, m.agents, app.ConversationSpec{ProviderName: provName, ProviderType: prov.Type, BaseURL: prov.BaseURL, APIKey: prov.APIKey, ModelID: m.activeModel, SessionID: sessID, Workspace: m.workDir, ActiveGoal: m.activeGoal, AgentProfile: m.agentProfile, ReasoningEffort: m.reasoningEffort, MaxToolCalls: m.maxToolCalls, RequestTimeout: m.runtimeConfig.ModelRequestTimeout, TurnTimeout: m.runtimeConfig.TurnTimeout, RoundTimeout: m.runtimeConfig.RoundTimeout, ModelFactory: m.application.ModelFactory, RemoteModel: remote, LowConcurrency: m.lowConcurrencyMode})
 	if err != nil {
 		m.appendError("failed to configure model runner: " + err.Error())
 		m.runner = nil

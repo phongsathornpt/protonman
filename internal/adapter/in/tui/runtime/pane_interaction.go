@@ -151,7 +151,7 @@ func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
 		}
 	case paneActionProviderFetch:
 		if view, _ := m.panes.bottom.find(providerViewID).(*providerPaneView); view != nil {
-			return view.beginFetch(m.ctx, m.runtimeConfig.ModelDiscoveryTimeout)
+			return view.beginFetch(m.ctx, m.application.Models, m.runtimeConfig.ModelDiscoveryTimeout)
 		}
 	case paneActionProviderSave:
 		return m.beginProviderSave(action.providerSave)

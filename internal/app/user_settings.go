@@ -1,42 +1,51 @@
 package app
 
 import (
-	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"fmt"
+
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
+// UserSettingsRepository persists portable user-level preferences.
+type UserSettingsRepository interface {
+	SaveSubagentsEnabled(bool) error
+	SaveReasoningEffort(sdk.ReasoningEffort) error
+	SaveMaxToolCalls(int) error
+	SavePermissionRule(permission.Rule) error
+}
+
 // UserSettings owns mutations to portable user-level Protonman preferences.
-type UserSettings struct{}
+type UserSettings struct{ repository UserSettingsRepository }
 
-func (UserSettings) SaveSubagentsEnabled(enabled bool) error {
-	homeDir, err := userHomeDir()
-	if err != nil {
-		return err
-	}
-	return config.SaveUserSubagentsEnabled(homeDir, enabled)
+func NewUserSettings(repository UserSettingsRepository) UserSettings {
+	return UserSettings{repository: repository}
 }
 
-func (UserSettings) SaveReasoningEffort(effort sdk.ReasoningEffort) error {
-	homeDir, err := userHomeDir()
-	if err != nil {
-		return err
+func (u UserSettings) SaveSubagentsEnabled(enabled bool) error {
+	if u.repository == nil {
+		return fmt.Errorf("user settings repository is unavailable")
 	}
-	return config.SaveUserReasoningEffort(homeDir, effort)
+	return u.repository.SaveSubagentsEnabled(enabled)
 }
 
-func (UserSettings) SaveMaxToolCalls(maxToolCalls int) error {
-	homeDir, err := userHomeDir()
-	if err != nil {
-		return err
+func (u UserSettings) SaveReasoningEffort(effort sdk.ReasoningEffort) error {
+	if u.repository == nil {
+		return fmt.Errorf("user settings repository is unavailable")
 	}
-	return config.SaveUserMaxToolCalls(homeDir, maxToolCalls)
+	return u.repository.SaveReasoningEffort(effort)
 }
 
-func (UserSettings) SavePermissionRule(rule permission.Rule) error {
-	homeDir, err := userHomeDir()
-	if err != nil {
-		return err
+func (u UserSettings) SaveMaxToolCalls(maxToolCalls int) error {
+	if u.repository == nil {
+		return fmt.Errorf("user settings repository is unavailable")
 	}
-	return config.SaveUserPermissionRule(homeDir, rule)
+	return u.repository.SaveMaxToolCalls(maxToolCalls)
+}
+
+func (u UserSettings) SavePermissionRule(rule permission.Rule) error {
+	if u.repository == nil {
+		return fmt.Errorf("user settings repository is unavailable")
+	}
+	return u.repository.SavePermissionRule(rule)
 }

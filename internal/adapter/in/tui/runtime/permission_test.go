@@ -49,6 +49,7 @@ func TestBubbleModelPermissionModalRespondsToSessionGrant(t *testing.T) {
 	registry, _ := newBubbleTestRegistry()
 	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
 	model := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, bridge, "")
+	attachTestApplication(t, model)
 	response := make(chan permissionResponse, 1)
 	model.openPermission(permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "printf safe", Effect: tool.CommandEffectReadOnly, Risk: tool.CommandRiskNormal}, response: response})
 	updated, command := model.Update(testText("s"))
@@ -310,6 +311,7 @@ func TestBubbleModelPermissionModalAllowsAndSavesProjectRule(t *testing.T) {
 	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
 	workDir := t.TempDir()
 	model := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, bridge, workDir)
+	attachTestApplication(t, model)
 	model.projectTrusted = true
 
 	response := make(chan permissionResponse, 1)
@@ -384,6 +386,7 @@ func TestBubbleModelPermissionModalAllowsAndSavesGlobalRule(t *testing.T) {
 	registry, _ := newBubbleTestRegistry()
 	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
 	model := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, bridge, t.TempDir())
+	attachTestApplication(t, model)
 
 	response := make(chan permissionResponse, 1)
 	model.openPermission(permissionRequest{

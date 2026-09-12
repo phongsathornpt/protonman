@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
-	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
+	"github.com/phongsathornpt/protonman/internal/core/modelcatalog"
+	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
 )
 
 type FetchRequest struct {
@@ -18,7 +18,7 @@ type FetchRequest struct {
 	Timeout      time.Duration
 }
 
-func Discover(ctx context.Context, request FetchRequest) ([]model.RemoteModel, error) {
+func Discover(ctx context.Context, models app.Models, request FetchRequest) ([]modelcatalog.RemoteModel, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -28,7 +28,7 @@ func Discover(ctx context.Context, request FetchRequest) ([]model.RemoteModel, e
 	}
 	bounded, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	return (app.Models{}).Discover(bounded, app.ModelDiscoveryRequest{
+	return models.Discover(bounded, app.ModelDiscoveryRequest{
 		ProviderName: request.ProviderName,
 		ProviderType: request.ProviderType,
 		BaseURL:      request.BaseURL,
@@ -47,21 +47,17 @@ type SaveRequest struct {
 	Activate     bool
 }
 
-func Save(request SaveRequest) error {
-	provider := config.ProviderConfig{
-		Name:    request.ProviderName,
-		Type:    request.ProviderType,
-		BaseURL: request.BaseURL,
-		APIKey:  request.APIKey,
+func Save(providers app.Providers, request SaveRequest) error {
+	provider := modelconfig.Provider{
+		Name: request.ProviderName, Type: request.ProviderType,
+		BaseURL: request.BaseURL, APIKey: request.APIKey,
 	}
-	return (app.Providers{}).Save(app.ProviderSaveRequest{
-		Provider:     provider,
-		DefaultModel: request.DefaultModel,
-		PreviousName: request.PreviousName,
-		Activate:     request.Activate,
+	return providers.Save(app.ProviderSaveRequest{
+		Provider: provider, DefaultModel: request.DefaultModel,
+		PreviousName: request.PreviousName, Activate: request.Activate,
 	})
 }
 
-func SelectModel(providerName, modelID string) error {
-	return (app.Providers{}).SelectModel(providerName, modelID)
+func SelectModel(providers app.Providers, providerName, modelID string) error {
+	return providers.SelectModel(providerName, modelID)
 }

@@ -313,6 +313,22 @@ func TestApplicationDoesNotExposeAgentCoordinatorEscapeHatch(t *testing.T) {
 	assertNoSourceMatch(t, "internal/app", `func \(.*Agents\) Coordinator\(\)`, true, "application exposes concrete agent coordinator escape hatch")
 }
 
+func TestApplicationDoesNotDependOnAdapters(t *testing.T) {
+	packages := listPackages(t)
+	appPrefix := modulePath + "/internal/app"
+	adapterPrefix := modulePath + "/internal/adapter/"
+	for importPath, pkg := range packages {
+		if importPath != appPrefix && !strings.HasPrefix(importPath, appPrefix+"/") {
+			continue
+		}
+		for _, imported := range pkg.Imports {
+			if strings.HasPrefix(imported, adapterPrefix) {
+				t.Errorf("application package %s imports adapter %s; depend on core/application ports and wire concrete adapters in composition root", importPath, imported)
+			}
+		}
+	}
+}
+
 func TestApplicationDoesNotDependOnInboundAdapters(t *testing.T) {
 	packages := listPackages(t)
 	assertNoImports(t, packages, modulePath+"/internal/app", []string{
@@ -352,9 +368,11 @@ func TestApplicationLayerFileStructure(t *testing.T) {
 		"appdirs":              true,
 		"conversation.go":      true,
 		"conversation_test.go": true,
+		"model_factory.go":     true,
 		"models.go":            true,
 		"projects.go":          true,
 		"providers.go":         true,
+		"services.go":          true,
 		"sessions.go":          true,
 		"user_settings.go":     true,
 	}
@@ -372,7 +390,10 @@ func TestModelLayerFileStructure(t *testing.T) {
 		t.Fatalf("read internal/adapter/out/model: %v", err)
 	}
 	expected := map[string]bool{
+		"catalog_adapter.go":              true,
 		"client_factory.go":               true,
+		"defaults.go":                     true,
+		"factory.go":                      true,
 		"client_factory_test.go":          true,
 		"model_profile.go":                true,
 		"model_test.go":                   true,

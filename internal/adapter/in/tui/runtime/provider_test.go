@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"strings"
@@ -673,7 +674,7 @@ func TestProviderFetchInheritsParentCancellation(t *testing.T) {
 	view.endpointInput.SetValue("http://127.0.0.1:1")
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	msg := view.beginFetch(ctx)()
+	msg := view.beginFetch(ctx, app.NewModels(model.Catalog{}))()
 	fetched, ok := msg.(modelsFetchedMsg)
 	if !ok {
 		t.Fatalf("fetch message = %T, want modelsFetchedMsg", msg)
@@ -689,9 +690,9 @@ func TestProviderViewIgnoresStaleFetchResults(t *testing.T) {
 	view := bModel.panes.bottom.find(providerViewID).(*providerPaneView)
 	view.nameInput.SetValue("custom")
 	view.endpointInput.SetValue("https://api.example.com/v1")
-	view.beginFetch(context.Background())
+	view.beginFetch(context.Background(), app.NewModels(model.Catalog{}))
 	firstRequestID := view.fetchRequestID
-	view.beginFetch(context.Background())
+	view.beginFetch(context.Background(), app.NewModels(model.Catalog{}))
 	secondRequestID := view.fetchRequestID
 	if secondRequestID <= firstRequestID {
 		t.Fatalf("expected fetch request ID to advance, got %d then %d", firstRequestID, secondRequestID)
@@ -1019,7 +1020,7 @@ func TestProviderFetchResultDoesNotCrossReopenedPane(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	old := newProviderPaneView()
 	m.panes.bottom.push(old)
-	_ = old.beginFetch(m.ctx)
+	_ = old.beginFetch(m.ctx, app.NewModels(model.Catalog{}))
 	oldID := old.fetchRequestID
 	m.panes.bottom.remove(providerViewID)
 
@@ -1100,7 +1101,7 @@ func TestProviderActivationFailureDoesNotMutateRuntimeState(t *testing.T) {
 
 func TestProviderFetchRequiresRuntimeContext(t *testing.T) {
 	v := newProviderPaneView()
-	if cmd := v.beginFetch(nil); cmd != nil {
+	if cmd := v.beginFetch(nil, app.NewModels(model.Catalog{})); cmd != nil {
 		t.Fatalf("nil-context fetch command = %v, want nil", cmd)
 	}
 	if v.state != providerStateError || !strings.Contains(v.errorMessage, "runtime context") {

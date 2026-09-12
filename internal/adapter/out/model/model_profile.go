@@ -106,18 +106,6 @@ func ResolveModelProfile(providerName, modelID string, remote *RemoteModel) mode
 	return modelprofile.ResolveBuiltin(providerName, modelID, metadata)
 }
 
-func (m RemoteModel) ProfileMetadata() modelprofile.CatalogMetadata {
-	return modelprofile.CatalogMetadata{
-		Tools:              m.ToolSupport,
-		Vision:             m.VisionSupport,
-		ToolChoiceRequired: m.ToolChoiceRequired,
-		ContextWindow:      m.ContextWindow,
-		MaxInputTokens:     m.MaxInputTokens,
-		MaxOutputTokens:    m.MaxOutputTokens,
-		Reasoning:          modelprofile.NormalizeCatalogReasoning(m.Reasoning),
-	}
-}
-
 func withResolvedModelProfile(profile modelprofile.Resolved) ClientOption {
 	return func(c *clientConfig) {
 		cloned := cloneResolvedModelProfile(profile)
