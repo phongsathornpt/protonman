@@ -111,10 +111,11 @@ type conversationModelState struct {
 }
 
 type todoModelState struct {
-	todo          []tododomain.Item
-	todoStore     tododomain.Repository
-	todoRevision  uint64
-	todoLifecycle todoLifecycleState
+	todo               []tododomain.Item
+	todoStore          tododomain.Repository
+	todoHandlerFactory TodoHandlerFactory
+	todoRevision       uint64
+	todoLifecycle      todoLifecycleState
 }
 
 type sessionModelState struct {

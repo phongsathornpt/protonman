@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -102,6 +103,85 @@ func TestSessionsUseCase(t *testing.T) {
 	_, _, err = sessions.Load(ctx, "test-sess")
 	if err == nil {
 		t.Fatal("Load with error = nil, want error")
+	}
+}
+
+func TestSessionsDetailUseCases(t *testing.T) {
+	repo := &mockSessionRepo{
+		state: session.State{
+			SessionID:      "sess-123",
+			WorkspaceKey:   "ws-alpha",
+			WorkspaceName:  "alpha",
+			PermissionMode: "ask",
+			ActiveGoal:     "build feature",
+			AgentProfile:   "universal",
+			Messages: []session.Message{
+				{Role: sdk.RoleUser, Content: "hello"},
+				{Role: sdk.RoleAssistant, Content: "world"},
+			},
+		},
+		exists: true,
+	}
+	sessions := app.NewSessions(repo)
+	ctx := context.Background()
+
+	// LoadDetail success
+	detail, err := sessions.LoadDetail(ctx, "sess-123", "ws-alpha")
+	if err != nil {
+		t.Fatalf("LoadDetail error: %v", err)
+	}
+	if detail.ID != "sess-123" || detail.ActiveGoal != "build feature" || len(detail.Messages) != 2 {
+		t.Fatalf("LoadDetail unexpected: %+v", detail)
+	}
+
+	// LoadDetail workspace mismatch
+	_, err = sessions.LoadDetail(ctx, "sess-123", "ws-beta")
+	if err == nil || !strings.Contains(err.Error(), "belongs to another workspace") {
+		t.Fatalf("expected workspace mismatch error, got: %v", err)
+	}
+
+	// LoadDetail not found
+	repo.exists = false
+	_, err = sessions.LoadDetail(ctx, "sess-missing", "ws-alpha")
+	if err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("expected not found error, got: %v", err)
+	}
+	repo.exists = true
+
+	// LatestDetail
+	latest, err := sessions.LatestDetail(ctx, "ws-alpha")
+	if err != nil {
+		t.Fatalf("LatestDetail error: %v", err)
+	}
+	if latest.ID != "latest-id" {
+		t.Fatalf("LatestDetail ID = %q, want latest-id", latest.ID)
+	}
+
+	// SaveCurrent
+	err = sessions.SaveCurrent(ctx, app.SessionDetail{
+		ID:             "sess-saved",
+		WorkspaceKey:   "ws-alpha",
+		PermissionMode: "ask",
+		ActiveGoal:     "updated goal",
+		Messages: []sdk.Message{
+			{Role: sdk.RoleUser, Content: "new user msg"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("SaveCurrent error: %v", err)
+	}
+	if repo.savedID != "sess-saved" || repo.savedState.ActiveGoal != "updated goal" || len(repo.savedState.Messages) != 1 {
+		t.Fatalf("SaveCurrent did not store expected state: %+v", repo.savedState)
+	}
+
+	// OpenTodoStore
+	sessionsWithRoot := sessions.WithSessionsRoot(t.TempDir())
+	todoRepo, err := sessionsWithRoot.OpenTodoStore(ctx, "sess-todo", "goal-abc")
+	if err != nil {
+		t.Fatalf("OpenTodoStore error: %v", err)
+	}
+	if todoRepo == nil {
+		t.Fatal("OpenTodoStore returned nil repo")
 	}
 }
 

@@ -5,6 +5,7 @@ import runtimeui "github.com/phongsathornpt/protonman/internal/adapter/in/tui/ru
 
 type BubbleTeaUI = runtimeui.BubbleTeaUI
 type BubbleTeaOption = runtimeui.BubbleTeaOption
+type TodoHandlerFactory = runtimeui.TodoHandlerFactory
 
 var NewBubbleTea = runtimeui.NewBubbleTea
 var WithApplicationServices = runtimeui.WithApplicationServices
@@ -17,6 +18,7 @@ var WithActiveGoal = runtimeui.WithActiveGoal
 var WithLowConcurrencyMode = runtimeui.WithLowConcurrencyMode
 var WithSessionID = runtimeui.WithSessionID
 var WithSessions = runtimeui.WithSessions
+var WithTodoHandlerFactory = runtimeui.WithTodoHandlerFactory
 var WithAgentConfig = runtimeui.WithAgentConfig
 var WithRuntimeConfig = runtimeui.WithRuntimeConfig
 var WithProjectContext = runtimeui.WithProjectContext

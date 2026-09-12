@@ -166,6 +166,7 @@ Type `/` at the prompt to trigger autocomplete, or prefix a canonical command wi
 | `/agents` | Inspect live and retained subagents | `/agents` |
 | `/goal [detail|clear]` | Show, set, and execute the persistent session goal | `/goal finish retry recovery` |
 | `/todo [show|hide]` | Show or hide the task-plan pane | `/todo` |
+| `/resume [id|latest]` | Resume previous session or open session picker | `/resume latest` |
 | `/transcript [clear]` | Open or clear the transcript | `/transcript clear` |
 | `/call <tool> <json>` | Directly execute a tool with JSON arguments | `/call read {"path":"README.md"}` |
 | `/quit` | Exit Protonman cleanly | `/quit` |

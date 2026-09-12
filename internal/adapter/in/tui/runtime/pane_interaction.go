@@ -27,6 +27,7 @@ const (
 	paneActionPermissionResolve
 	paneActionSetPermissionMode
 	paneActionSetLowConcurrency
+	paneActionResumeSession
 	paneActionScrollLines
 	paneActionScrollPage
 	paneActionProviderDelete
@@ -40,6 +41,7 @@ const (
 type paneAction struct {
 	kind           paneActionKind
 	paneID         string
+	sessionID      string
 	reasoning      sdk.ReasoningEffort
 	runSlash       bool
 	skillName      string
@@ -129,6 +131,9 @@ func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
 	case paneActionSetLowConcurrency:
 		m.panes.bottom.remove(lowConcurrencyViewID)
 		return m.applyLowConcurrencySetting(action.lowConcurrency)
+	case paneActionResumeSession:
+		m.panes.bottom.remove(sessionResumeViewID)
+		return m.resumeSession(action.sessionID)
 	case paneActionScrollLines:
 		m.scrollConversationLines(action.scrollLines)
 	case paneActionScrollPage:

@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
@@ -437,4 +438,118 @@ func (v *skillsPaneView) refreshItems(ctx paneRenderContext) tea.Cmd {
 	cmd := v.picker.SetItems(skillListItems(ctx.skillItems))
 	v.syncTitle(ctx)
 	return cmd
+}
+
+// --- Session Resume Pane ---
+
+const sessionResumeViewID = "session-resume"
+
+type sessionResumePaneView struct {
+	items []app.SessionSummary
+	index int
+}
+
+func (*sessionResumePaneView) ID() string                             { return sessionResumeViewID }
+func (*sessionResumePaneView) PresentationMode() panePresentationMode { return paneBelowComposer }
+
+func (v *sessionResumePaneView) Render(ctx paneRenderContext) string {
+	if len(v.items) == 0 {
+		rows := []string{mutedStyle.Render("No previous sessions found for this workspace.")}
+		help := paneKeyboardHelp(ctx.width-4, "esc/q", "Go Back")
+		return renderModalRows(ctx, accentAssistant, paneSection("Resume Session", rows, help, "", ctx.width))
+	}
+
+	rows := make([]string, 0, len(v.items))
+	maxVisible := 8
+	start := 0
+	if v.index >= maxVisible {
+		start = v.index - maxVisible + 1
+	}
+	end := start + maxVisible
+	if end > len(v.items) {
+		end = len(v.items)
+	}
+
+	for i := start; i < end; i++ {
+		item := v.items[i]
+		marker := "  "
+		style := mutedStyle
+		if i == v.index {
+			marker = "> "
+			style = userStyle
+		}
+		updated := item.UpdatedAt.Local().Format("01/02 15:04")
+		preview := strings.TrimSpace(item.Preview)
+		if len(preview) > 40 {
+			preview = preview[:37] + "..."
+		}
+		if preview == "" {
+			preview = "-"
+		}
+		profile := item.AgentProfile
+		if profile == "" {
+			profile = "universal"
+		}
+		line := fmt.Sprintf("%s%s  %s  %s  %s", marker, style.Render(item.ID), mutedStyle.Render(updated), mutedStyle.Render(profile), mutedStyle.Render(preview))
+		rows = append(rows, line)
+	}
+
+	help := paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "enter", "Resume", "esc/q", "Go Back")
+	return renderModalRows(ctx, accentAssistant, paneSection("Resume Session", rows, help, "", ctx.width))
+}
+
+func (v *sessionResumePaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
+	switch {
+	case key.Matches(message, paneutil.Keys.Close):
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: sessionResumeViewID}}
+	case key.Matches(message, paneutil.Keys.Up):
+		if v.index > 0 {
+			v.index--
+		}
+		return paneKeyResult{handled: true}
+	case key.Matches(message, paneutil.Keys.Down):
+		if v.index < len(v.items)-1 {
+			v.index++
+		}
+		return paneKeyResult{handled: true}
+	case key.Matches(message, paneutil.Keys.Confirm):
+		if len(v.items) > 0 && v.index >= 0 && v.index < len(v.items) {
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionResumeSession, sessionID: v.items[v.index].ID}}
+		}
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: sessionResumeViewID}}
+	default:
+		return paneKeyResult{handled: true}
+	}
+}
+
+func (m *bubbleModel) openSessionResumePane() {
+	if m == nil || m.sessions == nil {
+		m.appendError("session service is unavailable")
+		return
+	}
+	if m.panes.bottom.has(sessionResumeViewID) {
+		m.panes.bottom.remove(sessionResumeViewID)
+		m.requestRelayout()
+		return
+	}
+	summaries, err := m.sessions.ListSummaries(m.ctx, app.SessionListOptions{
+		WorkspaceKey: m.workspaceKey,
+		Limit:        30,
+	})
+	if err != nil {
+		m.appendError("failed to list sessions: " + err.Error())
+		return
+	}
+	filtered := make([]app.SessionSummary, 0, len(summaries))
+	for _, s := range summaries {
+		if s.ID != m.sessionID {
+			filtered = append(filtered, s)
+		}
+	}
+	if len(filtered) == 0 {
+		m.appendMuted("no previous sessions found for workspace")
+		return
+	}
+	m.panes.bottom.push(&sessionResumePaneView{items: filtered, index: 0})
+	m.requestRelayout()
 }
