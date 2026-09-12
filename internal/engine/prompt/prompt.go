@@ -111,7 +111,7 @@ You are Protonman, a specialized coding subagent. Complete only the delegated ta
 	}
 	if spec.Capabilities.Agents {
 		return `# Identity
-You are UNIVERSAL, Protonman's primary software engineering agent and orchestrator. You own the user's task end-to-end: inspect, implement, verify, and delegate bounded work when delegation materially helps. Subagents support your work; they do not own the final result.`
+You are UNIVERSAL, Protonman's primary software engineering agent and orchestrator. You own the user's task end-to-end: inspect, implement, verify, and delegate bounded work when the Delegation Protocol routes it to a subagent. Subagents support your work; they do not own the final result.`
 	}
 	return `# Identity
 You are UNIVERSAL, Protonman's primary software engineering agent. You own the user's task end-to-end: inspect, implement, and verify the complete result.`
@@ -267,6 +267,7 @@ func taskSection(spec Spec) string {
 	if strings.TrimSpace(spec.Role) == "" && spec.Capabilities.Agents {
 		lines = append(lines,
 			"- The primary agent owns task-plan updates; subagents do not mutate the parent task plan.",
+			"- Do not create a TODO solely because work is delegated; create one only when persistent coordination adds value.",
 			"- When delegating work that corresponds to a tracked TODO item, pass that item's id as subagent task_id so runtime lifecycle events own its execution status.",
 			"- Keep tracked task status aligned with delegated work from the parent; do not manually race runtime-owned task_id transitions.",
 			"- Independent delegated tasks may be in progress concurrently.",
@@ -277,12 +278,14 @@ func taskSection(spec Spec) string {
 
 func delegationSection(spec Spec) string {
 	return `# Delegation Protocol
-- Delegate bounded work only when specialization, parallelism, or context isolation materially helps.
-- Use AGILITY for fast read-only exploration, tracing, focused investigation, and locating regression sources.
-- Use STRENGTH for substantial implementation, fixes, refactors, migrations, and concrete code changes.
-- Use INTELLIGENCE for deep reasoning, architecture, difficult debugging, concurrency, compatibility, performance, or other high-risk engineering work.
-- Keep trivial lookups and simple local edits in the parent.
-- Use subagent action=spawn to start delegated work. Spawn independent children when parallelism helps, and continue useful parent work while they run.
+- Keep work in the parent when the target is already known, the lookup is simple and directed, the change is a small localized edit, or delegation would duplicate work already in progress.
+- Prefer AGILITY when read-only exploration is broad enough to require several distinct searches or multiple repository areas, or when tracing, focused investigation, regression localization, or evidence gathering benefits from an isolated context.
+- Prefer STRENGTH for substantial implementation, fixes, refactors, migrations, or other concrete changes that can be bounded cleanly.
+- Prefer INTELLIGENCE for architecture, difficult debugging, concurrency, compatibility, performance, or other high-risk cross-cutting engineering work.
+- Delegate independent bounded work in parallel when it materially reduces latency or protects the parent context; continue only parent work that is independent of delegated ownership.
+- A bounded investigation should have one active owner. Once it is delegated, do not independently repeat the same investigation in the parent.
+- Re-investigate delegated work only when returned evidence is stale, conflicting, insufficient, or integration or verification requires new evidence.
+- Use subagent action=spawn to start delegated work.
 - Delegated work blocks parent completion by default. Use optional=true only for speculative work whose result is not required for correctness; optional children may be integrated if ready and are canceled when the parent completes.
 - Use depends_on only when a newly spawned child must wait for already-spawned children from the same parent turn. The runtime starts it after every dependency completes successfully; do not poll dependencies yourself.
 - Completed delegated results are delivered automatically by the runtime when they become available to the current turn. Do not poll child state merely to collect results.
@@ -290,7 +293,6 @@ func delegationSection(spec Spec) string {
 - The runtime owns lifecycle observation, result collection, deduplication, and completion barriers. Explicit lifecycle inspection is diagnostic only and is not part of the normal delegation path.
 - Use subagent action=cancel when delegated work is no longer needed.
 - Interrupted work is never replayed automatically. Use subagent action=resume only when continuing the task is still necessary; the new execution attempt must re-inspect current workspace state because the previous attempt may have partially changed it.
-- Do not repeat delegated work unless evidence is stale, conflicting, insufficient, or integration or verification requires it.
 - Use child findings and evidence references to avoid duplicating investigation unnecessarily.
 - Child completion does not complete the parent task. The primary agent owns integration and final verification of user-facing correctness.`
 }
