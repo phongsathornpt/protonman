@@ -84,9 +84,9 @@ jobs:
           remove_file("internal/core/modelprofile/prompt_policy_compat_test.go")
           remove_file("internal/engine/turn/prompt_policy_compat_test.go")
 
-          replace("internal/engine/prompt/prompt_test.go", '<proton-system-prompt version=\\"14\\">', '<proton-system-prompt version=\\"15\\">')
-          replace("internal/engine/turn/loop_test.go", '<proton-system-prompt version=\\"14\\">', '<proton-system-prompt version=\\"15\\">')
-          replace("test/e2e/subagent_model_routing_e2e_test.go", '<proton-system-prompt version=\\"14\\">', '<proton-system-prompt version=\\"15\\">')
+          replace("internal/engine/prompt/prompt_test.go", '<proton-system-prompt version="14">', '<proton-system-prompt version="15">')
+          replace("internal/engine/turn/loop_test.go", '<proton-system-prompt version="14">', '<proton-system-prompt version="15">')
+          replace("test/e2e/subagent_model_routing_e2e_test.go", '<proton-system-prompt version="14">', '<proton-system-prompt version="15">')
           replace("test/e2e/subagent_model_routing_e2e_test.go", 'Prompt ABI v14', 'Prompt ABI v15')
 
           replace(
