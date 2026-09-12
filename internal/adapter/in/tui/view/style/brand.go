@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	ProductName          = "protonMAN"
-	MinCompactBrandWidth = 24
+	ProductName           = "protonMAN"
+	MinCompactBrandWidth  = 24
+	CompactLogoTextColumn = 11
 )
 
 var compactLogoLines = [...]string{
@@ -25,24 +26,46 @@ func CompactLogoLines() []string {
 	return append([]string(nil), compactLogoLines[:]...)
 }
 
+// CompactLogoWidth returns the maximum visual cell width of the four-line mark.
+func CompactLogoWidth() int {
+	maxWidth := 0
+	for _, line := range compactLogoLines {
+		maxWidth = max(maxWidth, ansi.StringWidth(line))
+	}
+	return maxWidth
+}
+
+// CompactBrand renders Protonman's single-line compact brand identity,
+// showing the single-cell mark glyph and product name when space permits,
+// or falling back to the truncated product name on cramped widths.
+func CompactBrand(width int) string {
+	if width <= 0 {
+		return ""
+	}
+	minGlyphWidth := ansi.StringWidth(GlyphBrand + " " + ProductName)
+	if width >= minGlyphWidth {
+		return BrandMarkStyle.Render(GlyphBrand) + " " + BrandStyle.Render(ProductName)
+	}
+	return BrandStyle.Render(ansi.Truncate(ProductName, width, ""))
+}
+
 // BrandLockup renders Protonman's compact character mark. The product name is
-// kept separate from the artwork so cramped terminals can fall back cleanly.
+// aligned at CompactLogoTextColumn so text aligns consistently with the logo.
 func BrandLockup(width int) string {
 	if width <= 0 {
 		return ""
 	}
 	if width < MinCompactBrandWidth {
-		if width >= ansi.StringWidth(GlyphBrand+" "+ProductName) {
-			return BrandMarkStyle.Render(GlyphBrand) + " " + BrandStyle.Render(ProductName)
-		}
-		return BrandStyle.Render(ansi.Truncate(ProductName, width, ""))
+		return CompactBrand(width)
 	}
 
 	lines := make([]string, len(compactLogoLines))
 	for i, line := range compactLogoLines {
 		lines[i] = BrandMarkStyle.Render(line)
 	}
-	lines[0] += "    " + BrandStyle.Render(ProductName)
+	gap := max(0, CompactLogoTextColumn-ansi.StringWidth(compactLogoLines[0]))
+	available := max(1, width-CompactLogoTextColumn)
+	lines[0] += strings.Repeat(" ", gap) + BrandStyle.Render(ansi.Truncate(ProductName, available, ""))
 	return strings.Join(lines, "\n")
 }
 

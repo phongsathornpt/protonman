@@ -22,6 +22,38 @@ func TestBrandLockupUsesCompactLogoAtBreakpoint(t *testing.T) {
 		if !strings.Contains(lines[0], ProductName) {
 			t.Fatalf("width %d missing product name: %q", width, got)
 		}
+		// ProductName must start at CompactLogoTextColumn (column 11)
+		idx := strings.Index(lines[0], ProductName)
+		if idx != CompactLogoTextColumn {
+			t.Fatalf("width %d ProductName at column %d, want %d: %q", width, idx, CompactLogoTextColumn, lines[0])
+		}
+	}
+}
+
+func TestCompactLogoGeometry(t *testing.T) {
+	if got := CompactLogoWidth(); got != 7 {
+		t.Fatalf("CompactLogoWidth() = %d, want 7", got)
+	}
+	if CompactLogoTextColumn != CompactLogoWidth()+4 {
+		t.Fatalf("CompactLogoTextColumn = %d, want CompactLogoWidth() + 4 = %d", CompactLogoTextColumn, CompactLogoWidth()+4)
+	}
+}
+
+func TestCompactBrand(t *testing.T) {
+	if got := CompactBrand(0); got != "" {
+		t.Fatalf("CompactBrand(0) = %q, want empty", got)
+	}
+	if got := ansi.Strip(CompactBrand(4)); got != "prot" {
+		t.Fatalf("CompactBrand(4) = %q, want prot", got)
+	}
+	if got := ansi.Strip(CompactBrand(10)); got != ProductName {
+		t.Fatalf("CompactBrand(10) = %q, want %q", got, ProductName)
+	}
+	if got := ansi.Strip(CompactBrand(11)); got != GlyphBrand+" "+ProductName {
+		t.Fatalf("CompactBrand(11) = %q, want %q", got, GlyphBrand+" "+ProductName)
+	}
+	if got := ansi.Strip(CompactBrand(80)); got != GlyphBrand+" "+ProductName {
+		t.Fatalf("CompactBrand(80) = %q, want %q", got, GlyphBrand+" "+ProductName)
 	}
 }
 

@@ -951,7 +951,7 @@ func TestPageDownHydratesDeferredTail(t *testing.T) {
 		t.Fatalf("hydrated viewport did not include active tail: before=%d after=%d", beforeLines, m.viewport.TotalLineCount())
 	}
 }
-func TestWelcomeCardCachesGitBranchUntilInvalidated(t *testing.T) {
+func TestSessionHeaderCachesGitBranchUntilInvalidated(t *testing.T) {
 	workDir := t.TempDir()
 	gitDir := filepath.Join(workDir, ".git")
 	if err := os.MkdirAll(gitDir, 0o755); err != nil {
@@ -965,17 +965,17 @@ func TestWelcomeCardCachesGitBranchUntilInvalidated(t *testing.T) {
 	m.resize(80, 24)
 	first := testPlain(m.sessionHeaderView())
 	if !strings.Contains(first, "main") {
-		t.Fatalf("initial welcome branch missing: %q", first)
+		t.Fatalf("initial session header branch missing: %q", first)
 	}
 	if err := os.WriteFile(head, []byte("ref: refs/heads/dev\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if cached := testPlain(m.sessionHeaderView()); !strings.Contains(cached, "main") {
-		t.Fatalf("welcome card unexpectedly reread git metadata: %q", cached)
+		t.Fatalf("session header unexpectedly reread git metadata: %q", cached)
 	}
 	m.invalidateSessionHeaderBranch()
 	if refreshed := testPlain(m.sessionHeaderView()); !strings.Contains(refreshed, "dev") {
-		t.Fatalf("invalidated welcome branch did not refresh: %q", refreshed)
+		t.Fatalf("invalidated session header branch did not refresh: %q", refreshed)
 	}
 }
 
