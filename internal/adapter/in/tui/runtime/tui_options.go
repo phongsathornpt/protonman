@@ -52,7 +52,7 @@ func WithSkills(skills *skill.Registry) BubbleTeaOption {
 	}
 }
 
-// WithWorkDir sets the workspace path shown on the welcome card.
+// WithWorkDir sets the workspace path shown in the session header.
 func WithWorkDir(dir string) BubbleTeaOption {
 	return func(ui *BubbleTeaUI) error {
 		ui.workDir = dir

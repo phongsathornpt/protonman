@@ -9,7 +9,7 @@ import (
 
 const (
 	fullSessionHeaderWidth  = 40
-	sessionHeaderTextColumn = 11
+	sessionHeaderTextColumn = tuistyle.CompactLogoTextColumn
 )
 
 type SessionHeaderModel struct {
@@ -29,7 +29,7 @@ func RenderSessionHeader(model SessionHeaderModel) string {
 		return ""
 	}
 	if model.Minimal {
-		return tuistyle.BrandStyle.Render(ansi.Truncate(tuistyle.ProductName, width, ""))
+		return tuistyle.CompactBrand(width)
 	}
 	if model.Compact || width < fullSessionHeaderWidth {
 		return renderCompactSessionHeader(model)
@@ -52,23 +52,24 @@ func RenderSessionHeader(model SessionHeaderModel) string {
 		}
 		gap := max(0, sessionHeaderTextColumn-ansi.StringWidth(mark))
 		available := max(1, width-sessionHeaderTextColumn)
-		text := ansi.Truncate(right[i], available, "")
 		if i == 0 {
+			text := ansi.Truncate(right[i], available, "")
 			lines[i] += strings.Repeat(" ", gap) + tuistyle.BrandStyle.Render(text)
 			continue
 		}
+		text := ansi.Truncate(right[i], available, "…")
 		lines[i] += strings.Repeat(" ", gap) + tuistyle.MutedStyle.Render(text)
 	}
 	return strings.Join(lines, "\n")
 }
 
 func renderCompactSessionHeader(model SessionHeaderModel) string {
-	brand := tuistyle.BrandStyle.Render(ansi.Truncate(tuistyle.ProductName, model.Width, ""))
+	brand := tuistyle.CompactBrand(model.Width)
 	meta := sessionHeaderMeta(model)
 	if meta == "" || model.Width < 12 {
 		return brand
 	}
-	return brand + "\n" + tuistyle.MutedStyle.Render(ansi.Truncate(meta, model.Width, ""))
+	return brand + "\n" + tuistyle.MutedStyle.Render(ansi.Truncate(meta, model.Width, "…"))
 }
 
 func sessionHeaderMeta(model SessionHeaderModel) string {

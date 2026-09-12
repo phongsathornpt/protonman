@@ -272,7 +272,7 @@ func (m *bubbleModel) sessionHeaderView() string {
 		Branch:         cache.branch,
 		Workspace:      transcriptutil.FormatWorkspaceDisplay(m.workDir),
 		Compact:        m.layout.height < 18,
-		Minimal:        m.layout.height < 10,
+		Minimal:        m.layout.height < 14,
 	})
 }
 

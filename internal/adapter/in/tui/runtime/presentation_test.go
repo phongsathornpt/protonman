@@ -159,6 +159,19 @@ func TestSessionHeaderFitsNarrowTerminal(t *testing.T) {
 	}
 }
 
+func TestSessionHeaderTinyTerminalUsesMinimalMode(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeModel = "provider/model"
+	m.resize(32, 12)
+	header := m.sessionHeaderView()
+	if !strings.Contains(header, "protonMAN") {
+		t.Fatalf("session header missing brand: %q", header)
+	}
+	if strings.Contains(header, "\n") {
+		t.Fatalf("tiny terminal header should be single line: %q", header)
+	}
+}
+
 func TestFormatWorkspaceDisplay(t *testing.T) {
 	if got := transcriptutil.FormatWorkspaceDisplay(""); got != "" {
 		t.Fatalf("expected empty, got %q", got)
@@ -942,13 +955,13 @@ func TestCompletedTodoPaneIsHidden(t *testing.T) {
 	}
 }
 
-func TestWelcomeSitsAtTopWithoutFloatingBox(t *testing.T) {
+func TestSessionHeaderSitsAtTopWithoutFloatingBox(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
 	view := testPlain(model.View().Content)
 	plain := sanitizeBubbleText(view)
 	if idx := strings.Index(plain, `/\`); idx < 0 || idx > 8 {
-		t.Fatalf("welcome is not at the top of the view: %q", plain[:minInt(80, len(plain))])
+		t.Fatalf("session header is not at the top of the view: %q", plain[:minInt(80, len(plain))])
 	}
 	if strings.Count(view, "╭") > 1 {
 		t.Fatalf("idle view has extra boxes: %s", view)
@@ -1289,7 +1302,7 @@ func TestRefreshViewportPreservesScrollWhenNotFollowing(t *testing.T) {
 	}
 }
 
-func TestWelcomeCardReprintsAfterClear(t *testing.T) {
+func TestSessionHeaderPersistsAfterClear(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
 	model.appendLine("gone")
@@ -1301,7 +1314,7 @@ func TestWelcomeCardReprintsAfterClear(t *testing.T) {
 		t.Fatal("clear left transcript body")
 	}
 	if !strings.Contains(view, "protonMAN") || !strings.Contains(view, `  /__\`) {
-		t.Fatalf("clear did not reprint welcome: %s", view)
+		t.Fatalf("clear removed session header: %s", view)
 	}
 }
 
