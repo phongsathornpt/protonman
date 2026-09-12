@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelpicker"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelsetup"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
@@ -271,10 +272,10 @@ func (v *modelSetupPaneView) syncPickerProjection() {
 }
 
 func (v *modelSetupPaneView) activeProviderName() string {
-	if v == nil || v.providerIndex < 0 || v.providerIndex >= len(v.providerNames) {
+	if v == nil {
 		return model.DefaultOpenCodeName
 	}
-	return v.providerNames[v.providerIndex]
+	return modelsetup.ActiveProviderName(v.providerNames, v.providerIndex)
 }
 
 func (v *modelSetupPaneView) selectedRemoteModel() (model.RemoteModel, bool) {
@@ -307,15 +308,8 @@ func (v *modelSetupPaneView) syncReasoningForSelection(desired sdk.ReasoningEffo
 	if len(choices) == 0 {
 		choices = []sdk.ReasoningEffort{sdk.ReasoningDefault}
 	}
-	idx := 0
-	for i, effort := range choices {
-		if effort == desired {
-			idx = i
-			break
-		}
-	}
 	v.reasoningChoices = choices
-	v.reasoningIndex = idx
+	v.reasoningIndex = modelsetup.ReasoningIndex(choices, desired)
 }
 
 func (v *modelSetupPaneView) selectedReasoning() sdk.ReasoningEffort {
