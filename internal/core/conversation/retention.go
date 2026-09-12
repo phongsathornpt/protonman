@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
+	"github.com/phongsathornpt/protonman/internal/base/strutil"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
@@ -414,18 +415,7 @@ func decodedJSONStringLen(raw string) (int, bool) {
 }
 
 func truncateUTF8(value string, limit int, marker string) string {
-	if limit <= 0 || len(value) <= limit {
-		return value
-	}
-	if len(marker) >= limit {
-		return marker[:limit]
-	}
-	prefixLimit := limit - len(marker) - 1
-	value = value[:prefixLimit]
-	for len(value) > 0 && !utf8.ValidString(value) {
-		value = value[:len(value)-1]
-	}
-	return strings.TrimRight(value, "\n") + "\n" + marker
+	return strutil.TruncateBytesWithMarker(value, limit, marker)
 }
 
 func buildSpans(messages []sdk.Message, start int) []messageSpan {

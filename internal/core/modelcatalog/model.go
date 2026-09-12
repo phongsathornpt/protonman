@@ -10,18 +10,19 @@ import (
 
 // RemoteModel describes a model discovered from a provider catalog.
 type RemoteModel struct {
-	ID                 string                          `json:"id"`
-	Name               string                          `json:"name"`
-	ContextWindow      int                             `json:"context_window,omitempty"`
-	MaxInputTokens     int                             `json:"max_input_tokens,omitempty"`
-	MaxOutputTokens    int                             `json:"max_output_tokens,omitempty"`
-	Provider           string                          `json:"provider,omitempty"`
-	Features           []string                        `json:"features,omitempty"`
-	ToolSupport        *bool                           `json:"tool_support,omitempty"`
-	VisionSupport      *bool                           `json:"vision_support,omitempty"`
-	ToolChoiceRequired *bool                           `json:"tool_choice_required,omitempty"`
+	ID                 string                         `json:"id"`
+	Name               string                         `json:"name"`
+	ContextWindow      int                            `json:"context_window,omitempty"`
+	MaxInputTokens     int                            `json:"max_input_tokens,omitempty"`
+	MaxOutputTokens    int                            `json:"max_output_tokens,omitempty"`
+	Provider           string                         `json:"provider,omitempty"`
+	Features           []string                       `json:"features,omitempty"`
+	ToolSupport        *bool                          `json:"tool_support,omitempty"`
+	VisionSupport      *bool                          `json:"vision_support,omitempty"`
+	ToolChoiceRequired *bool                          `json:"tool_choice_required,omitempty"`
 	Reasoning          *modelprofile.CatalogReasoning `json:"reasoning,omitempty"`
 }
+
 // DiscoveryRequest describes one provider catalog lookup.
 type DiscoveryRequest struct {
 	ProviderName string

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
 	crashview "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/crash"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transcriptutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/execview"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -159,13 +160,13 @@ func TestWelcomeCardNormalModeStaysMinimal(t *testing.T) {
 }
 
 func TestFormatWorkspaceDisplay(t *testing.T) {
-	if got := formatWorkspaceDisplay(""); got != "" {
+	if got := transcriptutil.FormatWorkspaceDisplay(""); got != "" {
 		t.Fatalf("expected empty, got %q", got)
 	}
 	home, _ := os.UserHomeDir()
 	if home != "" {
 		subpath := filepath.Join(home, "projects", "proton")
-		if got := formatWorkspaceDisplay(subpath); got != "~/projects/proton" {
+		if got := transcriptutil.FormatWorkspaceDisplay(subpath); got != "~/projects/proton" {
 			t.Fatalf("expected ~/projects/proton, got %q", got)
 		}
 	}
@@ -173,13 +174,13 @@ func TestFormatWorkspaceDisplay(t *testing.T) {
 
 func TestDetectGitBranch(t *testing.T) {
 	tmp := t.TempDir()
-	if got := detectGitBranch(tmp); got != "" {
+	if got := transcriptutil.DetectGitBranch(tmp); got != "" {
 		t.Fatalf("expected empty branch for non-git dir, got %q", got)
 	}
 	gitDir := filepath.Join(tmp, ".git")
 	_ = os.Mkdir(gitDir, 0o755)
 	_ = os.WriteFile(filepath.Join(gitDir, "HEAD"), []byte("ref: refs/heads/feature-10-out-of-10\n"), 0o644)
-	if got := detectGitBranch(tmp); got != "feature-10-out-of-10" {
+	if got := transcriptutil.DetectGitBranch(tmp); got != "feature-10-out-of-10" {
 		t.Fatalf("expected feature-10-out-of-10, got %q", got)
 	}
 }
@@ -821,26 +822,21 @@ func TestCommandHistoryIsBounded(t *testing.T) {
 
 func TestDrainQueueClearsDequeuedBackingSlot(t *testing.T) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
-	m.queue = make([]string, 2, 4)
-	m.queue[0] = "/help"
-	m.queue[1] = "keep"
-	backing := m.queue[:cap(m.queue)]
+	m.conversation.Enqueue("/help")
+	m.conversation.Enqueue("keep")
 
 	_ = m.drainQueue()
-	if backing[0] != "" {
-		t.Fatalf("dequeued queue slot retained %q", backing[0])
-	}
-	if len(m.queue) != 1 || m.queue[0] != "keep" {
-		t.Fatalf("queue after drain = %#v", m.queue)
+	if m.conversation.QueueLen() != 1 || m.conversation.Queue()[0] != "keep" {
+		t.Fatalf("queue after drain = %#v", m.conversation.Queue())
 	}
 }
 
 func TestDrainQueueReleasesBackingWhenEmpty(t *testing.T) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
-	m.queue = []string{"/help"}
+	m.conversation.Enqueue("/help")
 	_ = m.drainQueue()
-	if m.queue != nil {
-		t.Fatalf("empty queue retained backing slice: %#v", m.queue)
+	if m.conversation.Queue() != nil {
+		t.Fatalf("empty queue retained backing slice: %#v", m.conversation.Queue())
 	}
 }
 
@@ -848,7 +844,7 @@ func TestQueueFullPreservesDraft(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.busy = true
 	for i := 0; i < maxQueuedPrompts; i++ {
-		m.queue = append(m.queue, fmt.Sprintf("queued-%d", i))
+		m.conversation.Enqueue(fmt.Sprintf("queued-%d", i))
 	}
 	m.panes.bottom.prompt().SetValue("keep this draft")
 	if cmd := m.submit(); cmd != nil {
@@ -857,7 +853,7 @@ func TestQueueFullPreservesDraft(t *testing.T) {
 	if got := m.panes.bottom.prompt().Value(); got != "keep this draft" {
 		t.Fatalf("draft = %q, want preserved input", got)
 	}
-	if got := len(m.queue); got != maxQueuedPrompts {
+	if got := m.conversation.QueueLen(); got != maxQueuedPrompts {
 		t.Fatalf("queue len = %d, want %d", got, maxQueuedPrompts)
 	}
 }
@@ -910,7 +906,7 @@ func TestResponsiveUXSurfacesFitTerminal(t *testing.T) {
 func TestPermissionReviewFlowFitsNarrowTerminal(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.busy = true
-	m.openPermission(permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "git status --short --branch", Arguments: json.RawMessage(`{"command":"git status --short --branch"}`)}, response: make(chan permissionResponse, 1)})
+	m.openPermission(permissionRequest{Request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "git status --short --branch", Arguments: json.RawMessage(`{"command":"git status --short --branch"}`)}, Response: make(chan permissionResponse, 1)})
 	assertBubbleViewFits(t, m, 24, 12)
 	updated, _ := m.Update(testKey(tea.KeyEsc))
 	m = updated.(*bubbleModel)

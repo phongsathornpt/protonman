@@ -25,7 +25,7 @@ type toolResultMsg struct {
 func (m *bubbleModel) startTool(call tool.Call) tea.Cmd {
 	m.showWelcome = false
 	slog.DebugContext(m.ctx, "tui direct tool started", "call_id", call.ID, "tool_name", call.Name, "argument_bytes", len(call.Arguments))
-	m.conversationModelState.appendMessages(model.Message{ID: model.NewMessageID(), Role: model.RoleAssistant, ToolCalls: []model.ToolCall{{ID: call.ID, Name: call.Name, Arguments: append([]byte(nil), call.Arguments...)}}})
+	m.conversation.AppendMessages(model.Message{ID: model.NewMessageID(), Role: model.RoleAssistant, ToolCalls: []model.ToolCall{{ID: call.ID, Name: call.Name, Arguments: append([]byte(nil), call.Arguments...)}}})
 	ctx, cancel := context.WithCancel(m.ctx)
 	m.turnModelState.beginTool("running "+call.Name, time.Now(), cancel)
 	m.appendToolCall(call)
@@ -54,7 +54,7 @@ func (m *bubbleModel) appendModelToolResult(call tool.Call, result tool.Result) 
 	if err != nil {
 		content = []byte(fmt.Sprintf(`{"call_id":%q,"tool_name":%q,"error":{"code":"execution_error","message":%q}}`, call.ID, call.Name, err.Error()))
 	}
-	m.conversationModelState.appendMessages(model.Message{ID: model.NewMessageID(), Role: model.RoleTool, Content: string(content), ToolCallID: result.CallID, ToolName: result.ToolName})
+	m.conversation.AppendMessages(model.Message{ID: model.NewMessageID(), Role: model.RoleTool, Content: string(content), ToolCallID: result.CallID, ToolName: result.ToolName})
 }
 
 func (m *bubbleModel) reconfigureRunner() {

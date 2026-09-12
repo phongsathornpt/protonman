@@ -3,6 +3,8 @@ package runtime
 import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/keyboardpolicy"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 )
 
 var composerKeys = struct {
@@ -33,7 +35,9 @@ func (m *bubbleModel) handleInterruptKey() tea.Cmd {
 	}
 	if m.busy && m.turnCancel != nil {
 		m.cancelActiveTurn()
-		m.conversationModelState.clearQueue()
+		if m.conversation != nil {
+			m.conversation.ClearQueue()
+		}
 		return nil
 	}
 	prompt := m.panes.bottom.prompt()
@@ -115,16 +119,28 @@ func (m *bubbleModel) handleGlobalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 	}
 }
 
+type composerKeyAction = keyboardpolicy.Action
+
+const (
+	composerKeyActionNone    = keyboardpolicy.None
+	composerKeyActionSubmit  = keyboardpolicy.Submit
+	composerKeyActionNewline = keyboardpolicy.Newline
+)
+
+func (m *bubbleModel) composerAction(message tea.KeyPressMsg) composerKeyAction {
+	return keyboardpolicy.Classify(message, m.keys.Newline, m.keys.Submit)
+}
+
 func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 	prompt := m.panes.bottom.prompt()
 	if message.Text == "?" && prompt.Value() == "" && !m.panes.bottom.bashMode() {
 		m.openShortcutsPane()
 		return nil
 	}
-	if key.Matches(message, paneKeys.Tab) && m.busy {
+	if key.Matches(message, paneutil.Keys.Tab) && m.busy {
 		return m.withSpinner(m.submit())
 	}
-	if key.Matches(message, paneKeys.Escape) {
+	if key.Matches(message, paneutil.Keys.Escape) {
 		if m.panes.bottom.bashMode() {
 			m.setBashMode(false)
 		}

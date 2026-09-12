@@ -73,15 +73,15 @@ contract so viewport width remains the rendering source of truth.
 The `internal/adapter/in/tui/runtime` root is intentionally a thin orchestration shell.
 Pure catalog/filtering/projection/policy logic belongs in focused runtime subpackages or in
 the owning `view/*` package. Current examples include `modelcatalog`, `modelpicker`,
-`modelsetup`, `provider`, `permissionpolicy`, `reasoningpolicy`, and `transcriptutil`.
+`modelsetup`, `provider`, `permissionpolicy`, `permissionbridge`, `reasoningpolicy`, `projectconfig`, `keyboardpolicy`, `paneutil`, `transientnotice`, `transcriptutil`, `cmdpolicy`, and `conversation`.
 A runtime subpackage must not import the root `runtime` package; dependencies flow from the
 root shell into focused helpers, never back upward. This keeps Bubble Tea wiring from
 becoming a package-wide dependency magnet.
 
 The runtime-root production-file count is guarded as a ratchet in the architecture tests.
-The refactor that introduced this rule reduced the root from 68 production files to 60.
-The budget is a regression guard, not a target architecture: do not raise it to accommodate
-new behavior. Prefer extracting cohesive ownership or consolidating an existing shell.
+The refactor that introduced this rule reduced the root from 68 production files to 60,
+and subsequent ownership extraction reduced the ratchet to 32. The budget is a regression
+guard, not a target architecture: do not raise it to accommodate new behavior. Prefer extracting cohesive ownership or consolidating an existing shell.
 
 ## 3. Application Layer (`internal/app/`)
 
@@ -172,6 +172,7 @@ or `cmd/*` packages. Current responsibilities include:
 - `glob/`
 - `pathutil/`
 - `runtimepolicy/`
+- `strutil/`
 
 Only truly dependency-free reusable policy/helpers belong here.
 

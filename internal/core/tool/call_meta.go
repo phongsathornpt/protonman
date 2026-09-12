@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/phongsathornpt/protonman/internal/base/strutil"
 )
 
 // ArgumentsMap decodes the raw JSON arguments into a generic map.
@@ -117,14 +119,14 @@ func TruncateRunes(s string, maxRunes int) string {
 	if maxRunes <= 0 {
 		return ""
 	}
-	runes := []rune(s)
-	if len(runes) <= maxRunes {
-		return s
+	if maxRunes == 1 {
+		runes := []rune(s)
+		if len(runes) == 0 {
+			return ""
+		}
+		return string(runes[:1])
 	}
-	if maxRunes <= 1 {
-		return string(runes[:maxRunes])
-	}
-	return string(runes[:maxRunes-1]) + "…"
+	return strutil.TruncateRunesWithEllipsis(s, maxRunes)
 }
 
 // ParsePatchPaths extracts affected file paths from Codex-style patches and unified diffs.

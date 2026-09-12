@@ -3,6 +3,7 @@ package runtime
 import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
 )
 
 type conversationViewportMode uint8
@@ -18,7 +19,7 @@ type conversationViewportState struct {
 	staleTail         bool
 	committedRevision uint64
 	activeRevision    uint64
-	lineAnchors       []ScrollAnchor
+	lineAnchors       []tuihistory.ScrollAnchor
 }
 
 func (s conversationViewportState) following() bool {
@@ -80,7 +81,7 @@ func (m *bubbleModel) setViewportContent(content string, fullHistory bool) {
 		return
 	}
 	prefix := m.historyViewportPrefixLines()
-	m.conversationViewport.lineAnchors = make([]ScrollAnchor, prefix+len(historyAnchors))
+	m.conversationViewport.lineAnchors = make([]tuihistory.ScrollAnchor, prefix+len(historyAnchors))
 	copy(m.conversationViewport.lineAnchors[prefix:], historyAnchors)
 }
 

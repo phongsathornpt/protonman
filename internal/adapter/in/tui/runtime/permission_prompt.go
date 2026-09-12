@@ -3,10 +3,12 @@ package runtime
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionbridge"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionpolicy"
 	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	permissionpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/permission"
@@ -39,7 +41,7 @@ func (v *permissionPaneView) options(m *bubbleModel) []permissionOptionItem {
 		projectTrusted = m.projectTrusted
 		hasWorkDir = m.workDir != ""
 	}
-	return permissionpolicy.Options(v.pending.request, projectTrusted, hasWorkDir)
+	return permissionpolicy.Options(v.pending.Request, projectTrusted, hasWorkDir)
 }
 
 func shortcutHintFor(options []permissionOptionItem) string {
@@ -59,7 +61,7 @@ func (v *permissionPaneView) Render(ctx paneRenderContext) string {
 }
 
 func (v *permissionPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
-	options := permissionpolicy.Options(v.pending.request, ctx.projectTrusted, ctx.hasWorkDir)
+	options := permissionpolicy.Options(v.pending.Request, ctx.projectTrusted, ctx.hasWorkDir)
 	if v.index >= len(options) {
 		v.index = len(options) - 1
 	}
@@ -68,17 +70,17 @@ func (v *permissionPaneView) HandlePaneKey(ctx paneRenderContext, message tea.Ke
 	}
 	if v.parked {
 		switch {
-		case key.Matches(message, paneKeys.Tab):
+		case key.Matches(message, paneutil.Keys.Tab):
 			v.parked = false
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionPermissionActivity, activity: "waiting for permission"}}
-		case key.Matches(message, paneKeys.Page):
+		case key.Matches(message, paneutil.Keys.Page):
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionScrollPage, key: message}}
-		case key.Matches(message, paneKeys.Up):
+		case key.Matches(message, paneutil.Keys.Up):
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionScrollLines, scrollLines: -1}}
-		case key.Matches(message, paneKeys.Down):
+		case key.Matches(message, paneutil.Keys.Down):
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionScrollLines, scrollLines: 1}}
 		case message.Text == "y" || message.Text == "s" || message.Text == "p" || message.Text == "g" || message.Text == "n" ||
-			(message.Text >= "1" && message.Text <= "5") || key.Matches(message, paneKeys.Confirm):
+			(message.Text >= "1" && message.Text <= "5") || key.Matches(message, paneutil.Keys.Confirm):
 			// Decisions remain available while reviewing the transcript.
 		default:
 			return paneKeyResult{handled: true}
@@ -89,15 +91,15 @@ func (v *permissionPaneView) HandlePaneKey(ctx paneRenderContext, message tea.Ke
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionPermissionResolve, permission: option}}
 	}
 	switch {
-	case key.Matches(message, paneKeys.Escape):
+	case key.Matches(message, paneutil.Keys.Escape):
 		v.parked = true
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionPermissionActivity, activity: "permission pending — tab to review"}}
-	case key.Matches(message, paneKeys.Up):
+	case key.Matches(message, paneutil.Keys.Up):
 		if v.index > 0 {
 			v.index--
 		}
 		return paneKeyResult{handled: true}
-	case key.Matches(message, paneKeys.Down):
+	case key.Matches(message, paneutil.Keys.Down):
 		if v.index < len(options)-1 {
 			v.index++
 		}
@@ -133,7 +135,7 @@ func (v *permissionPaneView) HandlePaneKey(ctx paneRenderContext, message tea.Ke
 		return paneKeyResult{handled: true}
 	case message.Text == "n":
 		return resolve(optionDeny)
-	case key.Matches(message, paneKeys.Confirm):
+	case key.Matches(message, paneutil.Keys.Confirm):
 		if len(options) == 0 {
 			return paneKeyResult{handled: true}
 		}
@@ -144,8 +146,8 @@ func (v *permissionPaneView) HandlePaneKey(ctx paneRenderContext, message tea.Ke
 }
 
 func (v *permissionPaneView) card(ctx paneRenderContext) string {
-	request := v.pending.request
-	options := permissionpolicy.Options(v.pending.request, ctx.projectTrusted, ctx.hasWorkDir)
+	request := v.pending.Request
+	options := permissionpolicy.Options(v.pending.Request, ctx.projectTrusted, ctx.hasWorkDir)
 	labels := make([]string, 0, len(options))
 	for _, option := range options {
 		labels = append(labels, option.Label)
@@ -249,8 +251,10 @@ func (v *permissionPaneView) card(ctx paneRenderContext) string {
 	return renderModalRows(ctx, paneToneColor(result.Tone), rows)
 }
 
-type permissionRequestMsg struct{ request permissionRequest }
-type permissionBridgeClosedMsg struct{}
+type permissionRequest = permissionbridge.Request
+type permissionResponse = permissionbridge.Response
+type permissionRequestMsg = permissionbridge.RequestMsg
+type permissionBridgeClosedMsg = permissionbridge.ClosedMsg
 
 type permissionRuleSavedMsg struct {
 	scope string
@@ -297,54 +301,30 @@ func (m *bubbleModel) resolvePermission(option permissionOption) tea.Cmd {
 	if view == nil {
 		return nil
 	}
-	var resolution permission.Resolution
+	decision := permissionpolicy.Resolve(option)
+	resolution := decision.Resolution
 	var saveCmd tea.Cmd
-	request := view.pending.request
+	request := view.pending.Request
 
-	switch option {
-	case optionAllowOnce:
-		resolution = permission.Resolution{
-			Action: permission.ActionAllow,
-			Scope:  permission.GrantScopeOnce,
-			Reason: "user allowed one call",
-		}
-	case optionAllowSession:
-		resolution = permission.Resolution{
-			Action: permission.ActionAllow,
-			Scope:  permission.GrantScopeSession,
-			Reason: "user allowed this exact request for the session",
-		}
-	case optionAllowProject:
-		resolution = permission.Resolution{
-			Action: permission.ActionAllow,
-			Scope:  permission.GrantScopeOnce,
-			Reason: "user allowed call and saved rule to project",
-		}
+	if decision.Persist != permissionpolicy.PersistNone {
 		if rule, ok := permission.RuleFromRequest(request); ok {
 			_ = m.service.AddRule(rule)
-			workDir := m.workDir
-			saveCmd = func() tea.Msg {
-				err := m.application.Projects.SavePermissionRule(workDir, rule)
-				return permissionRuleSavedMsg{scope: "project", rule: rule, err: err}
+			switch decision.Persist {
+			case permissionpolicy.PersistProject:
+				workDir := m.workDir
+				saveCmd = func() tea.Msg {
+					err := m.application.Projects.SavePermissionRule(workDir, rule)
+					return permissionRuleSavedMsg{scope: string(decision.Persist), rule: rule, err: err}
+				}
+			case permissionpolicy.PersistGlobal:
+				saveCmd = func() tea.Msg {
+					err := m.application.UserSettings.SavePermissionRule(rule)
+					return permissionRuleSavedMsg{scope: string(decision.Persist), rule: rule, err: err}
+				}
 			}
 		}
-	case optionAllowGlobal:
-		resolution = permission.Resolution{
-			Action: permission.ActionAllow,
-			Scope:  permission.GrantScopeOnce,
-			Reason: "user allowed call and saved rule globally",
-		}
-		if rule, ok := permission.RuleFromRequest(request); ok {
-			_ = m.service.AddRule(rule)
-			saveCmd = func() tea.Msg {
-				err := m.application.UserSettings.SavePermissionRule(rule)
-				return permissionRuleSavedMsg{scope: "global", rule: rule, err: err}
-			}
-		}
-	default:
-		resolution = permission.Resolution{Action: permission.ActionDeny, Reason: "user denied one call"}
 	}
-	view.pending.response <- permissionResponse{resolution: resolution}
+	view.pending.Respond(resolution)
 	m.panes.bottom.remove(permissionViewID)
 	m.requestRelayout()
 	m.reconcileLayout()

@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	"io"
 	"strings"
 
@@ -113,7 +114,7 @@ func (v *providerSelectPaneView) initPicker() {
 	for _, item := range v.items {
 		items = append(items, item)
 	}
-	v.picker = newMinimalList(items, providerSelectDelegate{}, defaultBubbleWidth-8, defaultBubbleHeight-8)
+	v.picker = paneutil.NewMinimalList(items, providerSelectDelegate{}, defaultBubbleWidth-8, defaultBubbleHeight-8)
 	v.picker.SetStatusBarItemName("provider", "providers")
 	v.picker.FilterInput.Prompt = "Search: "
 	v.picker.InfiniteScrolling = false
@@ -257,14 +258,14 @@ func (v *providerSelectPaneView) HandlePaneKey(_ paneRenderContext, message tea.
 	}
 	if v.deleteConfirm {
 		switch {
-		case key.Matches(message, paneKeys.Confirm):
+		case key.Matches(message, paneutil.Keys.Confirm):
 			item, ok := v.selectedItem()
 			v.deleteConfirm = false
 			if !ok {
 				return paneKeyResult{handled: true}
 			}
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionProviderDelete, providerItem: item}}
-		case key.Matches(message, paneKeys.Escape):
+		case key.Matches(message, paneutil.Keys.Escape):
 			v.deleteConfirm = false
 			return paneKeyResult{handled: true}
 		default:
@@ -272,7 +273,7 @@ func (v *providerSelectPaneView) HandlePaneKey(_ paneRenderContext, message tea.
 		}
 	}
 	switch {
-	case key.Matches(message, paneKeys.Close):
+	case key.Matches(message, paneutil.Keys.Close):
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: providerSelectViewID}}
 	case key.Matches(message, providerSelectKeys.Add):
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionOpenProviderEditor}}
@@ -294,13 +295,13 @@ func (v *providerSelectPaneView) HandlePaneKey(_ paneRenderContext, message tea.
 	case key.Matches(message, providerSelectKeys.Filter):
 		v.picker.SetFilterState(list.Filtering)
 		return paneKeyResult{handled: true}
-	case key.Matches(message, paneKeys.Nav):
+	case key.Matches(message, paneutil.Keys.Nav):
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
 		return paneKeyResult{handled: true, cmd: cmd}
 	case message.Text >= "1" && message.Text <= "9":
 		return paneKeyResult{handled: true}
-	case key.Matches(message, paneKeys.Confirm):
+	case key.Matches(message, paneutil.Keys.Confirm):
 		item, ok := v.selectedItem()
 		if !ok {
 			return paneKeyResult{handled: true}

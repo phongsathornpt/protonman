@@ -2,15 +2,26 @@ package runtime
 
 import (
 	"context"
+	"fmt"
+	"image/color"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelpicker"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	providerdomain "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/provider"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
+	providerpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/provider"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 )
 
 const providerViewID = "add_provider"
@@ -215,7 +226,7 @@ var providerEditorKeys = struct {
 func (v *providerPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	switch v.state {
 	case providerStateFetching:
-		if key.Matches(message, paneKeys.Escape) {
+		if key.Matches(message, paneutil.Keys.Escape) {
 			v.cancelFetch()
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: providerViewID}}
 		}
@@ -252,7 +263,7 @@ func (v *providerPaneView) syncInputFocus() {
 func (v *providerPaneView) handleModelSelectKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	v.ensureModelPicker(ctx)
 	switch {
-	case key.Matches(message, paneKeys.Escape):
+	case key.Matches(message, paneutil.Keys.Escape):
 		v.state = providerStateInput
 		v.focusIndex = int(providerFieldAPIKey)
 		v.syncInputFocus()
@@ -271,7 +282,7 @@ func (v *providerPaneView) handleModelSelectKey(ctx paneRenderContext, message t
 			v.modelPicker.Select(idx)
 		}
 		return paneKeyResult{handled: true}
-	case key.Matches(message, paneKeys.Confirm):
+	case key.Matches(message, paneutil.Keys.Confirm):
 		item, ok := v.modelPicker.SelectedItem().(providerEditorModelItem)
 		if !ok {
 			return paneKeyResult{handled: true}
@@ -279,7 +290,7 @@ func (v *providerPaneView) handleModelSelectKey(ctx paneRenderContext, message t
 		v.selectedModel = item.model.ID
 		v.state = providerStateSaving
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionProviderSave, providerSave: v.providerSaveRequest(item.model.ID)}}
-	case key.Matches(message, paneKeys.Nav):
+	case key.Matches(message, paneutil.Keys.Nav):
 		updated, cmd := v.modelPicker.Update(message)
 		v.modelPicker = updated
 		return paneKeyResult{handled: true, cmd: cmd}
@@ -290,10 +301,10 @@ func (v *providerPaneView) handleModelSelectKey(ctx paneRenderContext, message t
 
 func (v *providerPaneView) handleSaveErrorKey(message tea.KeyPressMsg) paneKeyResult {
 	switch {
-	case key.Matches(message, paneKeys.Confirm):
+	case key.Matches(message, paneutil.Keys.Confirm):
 		v.state = providerStateSaving
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionProviderSave, providerSave: v.providerSaveRequest(v.selectedModel)}}
-	case key.Matches(message, paneKeys.Escape):
+	case key.Matches(message, paneutil.Keys.Escape):
 		v.state = providerStateSelectModel
 		v.errorMessage = ""
 		return paneKeyResult{handled: true}
@@ -304,9 +315,9 @@ func (v *providerPaneView) handleSaveErrorKey(message tea.KeyPressMsg) paneKeyRe
 
 func (v *providerPaneView) handleOverwriteKey(message tea.KeyPressMsg) paneKeyResult {
 	switch {
-	case key.Matches(message, paneKeys.Confirm):
+	case key.Matches(message, paneutil.Keys.Confirm):
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionProviderFetch}}
-	case key.Matches(message, paneKeys.Escape):
+	case key.Matches(message, paneutil.Keys.Escape):
 		v.state = providerStateInput
 		v.focusIndex = int(providerFieldName)
 		v.syncInputFocus()
@@ -317,7 +328,7 @@ func (v *providerPaneView) handleOverwriteKey(message tea.KeyPressMsg) paneKeyRe
 }
 
 func (v *providerPaneView) handleProviderErrorKey(message tea.KeyPressMsg) paneKeyResult {
-	if key.Matches(message, paneKeys.Confirm, paneKeys.Escape) {
+	if key.Matches(message, paneutil.Keys.Confirm, paneutil.Keys.Escape) {
 		v.state = providerStateInput
 		v.clearValidation()
 		v.focusIndex = int(providerFieldAPIKey)
@@ -328,7 +339,7 @@ func (v *providerPaneView) handleProviderErrorKey(message tea.KeyPressMsg) paneK
 
 func (v *providerPaneView) handleInputKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	switch {
-	case key.Matches(message, paneKeys.Escape):
+	case key.Matches(message, paneutil.Keys.Escape):
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: providerViewID}}
 	case key.Matches(message, providerEditorKeys.Protonman):
 		v.applyPreset(model.DefaultProtonmanName)
@@ -356,7 +367,7 @@ func (v *providerPaneView) handleInputKey(ctx paneRenderContext, message tea.Key
 		v.focusIndex = (v.focusIndex + 2) % 3
 		v.syncInputFocus()
 		return paneKeyResult{handled: true}
-	case key.Matches(message, paneKeys.Confirm):
+	case key.Matches(message, paneutil.Keys.Confirm):
 		if !v.validateDraft() {
 			return paneKeyResult{handled: true}
 		}
@@ -386,6 +397,132 @@ func (v *providerPaneView) updateFocusedInput(message tea.KeyPressMsg) tea.Cmd {
 	return cmd
 }
 
+type modelsFetchedMsg struct {
+	providerName string
+	baseURL      string
+	apiKey       string
+	models       []model.RemoteModel
+	requestID    asyncOperationID
+	err          error
+}
+
+type providerSavedMsg struct {
+	operationID  asyncOperationID
+	providerName string
+	providerType string
+	previousName string
+	baseURL      string
+	apiKey       string
+	modelID      string
+	activated    bool
+	err          error
+}
+
+type providerFetchRequest struct {
+	ctx              context.Context
+	requestID        asyncOperationID
+	providerName     string
+	providerType     string
+	baseURL          string
+	apiKey           string
+	discoveryTimeout time.Duration
+}
+
+func (v *providerPaneView) beginFetch(parent context.Context, models app.Models, timeouts ...time.Duration) tea.Cmd {
+	discoveryTimeout := runtimepolicy.ModelDiscoveryTimeout
+	if len(timeouts) > 0 && timeouts[0] > 0 {
+		discoveryTimeout = timeouts[0]
+	}
+	if v.fetchCancel != nil {
+		v.fetchCancel()
+	}
+	if parent == nil {
+		v.fetchRequestID = 0
+		v.state = providerStateError
+		v.errorMessage = errMissingRuntimeContext.Error()
+		return nil
+	}
+	ctx, cancel := context.WithCancel(parent)
+	v.fetchCancel = cancel
+	v.fetchRequestID = nextAsyncOperationID()
+	v.state = providerStateFetching
+	return fetchProviderModelsCmd(models, providerFetchRequest{
+		ctx:              ctx,
+		requestID:        v.fetchRequestID,
+		providerName:     strings.TrimSpace(v.nameInput.Value()),
+		providerType:     v.providerType,
+		baseURL:          strings.TrimSpace(v.endpointInput.Value()),
+		apiKey:           strings.TrimSpace(v.apiKeyInput.Value()),
+		discoveryTimeout: discoveryTimeout,
+	})
+}
+
+func (v *providerPaneView) cancelFetch() {
+	if v.fetchCancel == nil {
+		return
+	}
+	v.fetchCancel()
+	v.fetchCancel = nil
+}
+
+func fetchProviderModelsCmd(models app.Models, request providerFetchRequest) tea.Cmd {
+	return func() tea.Msg {
+		discovered, err := providerdomain.Discover(request.ctx, models, providerdomain.FetchRequest{
+			ProviderName: request.providerName,
+			ProviderType: request.providerType,
+			BaseURL:      request.baseURL,
+			APIKey:       request.apiKey,
+			Timeout:      request.discoveryTimeout,
+		})
+		return modelsFetchedMsg{
+			providerName: request.providerName,
+			baseURL:      request.baseURL,
+			apiKey:       request.apiKey,
+			models:       discovered,
+			requestID:    request.requestID,
+			err:          err,
+		}
+	}
+}
+
+type providerSaveRequest struct {
+	providerName string
+	providerType string
+	previousName string
+	baseURL      string
+	apiKey       string
+	defaultModel string
+	activate     bool
+}
+
+func saveProviderCmd(providers app.Providers, operationID asyncOperationID, gate *asyncOperationGate, request providerSaveRequest) tea.Cmd {
+	return func() tea.Msg {
+		if !gate.current(operationID) {
+			return providerSavedMsg{operationID: operationID, err: errStaleConfigMutation}
+		}
+		err := providerdomain.Save(providers, providerdomain.SaveRequest{
+			ProviderName: request.providerName,
+			ProviderType: request.providerType,
+			PreviousName: request.previousName,
+			BaseURL:      request.baseURL,
+			APIKey:       request.apiKey,
+			DefaultModel: request.defaultModel,
+			Activate:     request.activate,
+		})
+		return providerSavedMsg{
+			operationID:  operationID,
+			providerName: request.providerName,
+			providerType: request.providerType,
+			previousName: request.previousName,
+			baseURL:      request.baseURL,
+			apiKey:       request.apiKey,
+			modelID:      request.defaultModel,
+			activated:    request.activate,
+			err:          err,
+		}
+	}
+}
+
 func (v *providerPaneView) providerSaveRequest(modelID string) providerSaveRequest {
 	return providerSaveRequest{
 		providerName: strings.TrimSpace(v.nameInput.Value()),
@@ -396,4 +533,192 @@ func (v *providerPaneView) providerSaveRequest(modelID string) providerSaveReque
 		defaultModel: modelID,
 		activate:     v.activateOnSave,
 	}
+}
+
+type providerEditorModelItem struct {
+	model       model.RemoteModel
+	title       string
+	description string
+}
+
+func (i providerEditorModelItem) FilterValue() string { return i.title + " " + i.description }
+func (i providerEditorModelItem) Title() string       { return i.title }
+func (i providerEditorModelItem) Description() string { return i.description }
+
+func providerEditorListItems(v *providerPaneView) []list.Item {
+	if v == nil {
+		return nil
+	}
+	models := v.currentModels()
+	items := make([]list.Item, 0, len(models))
+	providerName := strings.TrimSpace(v.nameInput.Value())
+	for _, md := range models {
+		resolved := model.ResolveRemoteMetadata(providerName, md)
+		title := strings.TrimSpace(md.ID)
+		if name := strings.TrimSpace(md.Name); name != "" && !strings.EqualFold(name, title) {
+			if title == "" {
+				title = name
+			} else {
+				title = fmt.Sprintf("%s (%s)", name, title)
+			}
+		}
+		parts := make([]string, 0, 4)
+		if model.IsFreeModel(md.ID) {
+			parts = append(parts, "free")
+		}
+		if limits := modelpicker.FormatTokenLimits(resolved.Profile.ContextWindow, resolved.Profile.MaxInputTokens, resolved.Profile.MaxOutputTokens); limits != "" {
+			parts = append(parts, limits)
+		}
+		if len(resolved.Features) > 0 {
+			parts = append(parts, strings.Join(resolved.Features, ", "))
+		}
+		if reasoning := reasoningpolicy.Summary(providerName, md, false); reasoning != "" {
+			parts = append(parts, reasoning)
+		}
+		items = append(items, providerEditorModelItem{model: md, title: title, description: strings.Join(parts, " · ")})
+	}
+	return items
+}
+
+func (v *providerPaneView) ensureModelPicker(ctx paneRenderContext) {
+	if v == nil {
+		return
+	}
+	items := providerEditorListItems(v)
+	if !v.modelPickerSet {
+		delegate := list.NewDefaultDelegate()
+		delegate.SetSpacing(0)
+		v.modelPicker = paneutil.NewMinimalList(items, delegate, maxInt(20, ctx.width-8), maxInt(6, minInt(20, ctx.height-4)))
+		v.modelPicker.SetFilteringEnabled(false)
+		v.modelPicker.SetStatusBarItemName("model", "models")
+		v.modelPicker.InfiniteScrolling = true
+		v.modelPickerSet = true
+	} else {
+		_ = v.modelPicker.SetItems(items)
+	}
+	visibleRows := 7
+	switch layoutModeForHeight(ctx.height) {
+	case layoutTiny:
+		visibleRows = 2
+	case layoutCompact:
+		visibleRows = 4
+	}
+	v.modelPicker.SetSize(maxInt(20, ctx.width-8), visibleRows)
+}
+
+func (v *providerPaneView) Render(ctx paneRenderContext) string {
+	v.resizeInputs(ctx.width)
+	if v.state == providerStateSelectModel {
+		v.ensureModelPicker(ctx)
+		items := v.modelPicker.VisibleItems()
+		start, end := paneWindow(len(items), v.modelPicker.Index(), 7, layoutModeForHeight(ctx.height))
+		listRows := make([]string, 0, end-start)
+		for index := start; index < end; index++ {
+			item, ok := items[index].(providerEditorModelItem)
+			if !ok {
+				continue
+			}
+			prefix, style := "  ", bodyStyle
+			if index == v.modelPicker.Index() {
+				prefix, style = "> ", brandStyle
+			}
+			listRows = append(listRows, prefix+style.Render(truncateWithEllipsis(item.title, maxInt(1, providerModalContentWidth(ctx)-4))))
+		}
+		help := paneKeyboardHelp(providerModalContentWidth(ctx), "↑/↓", "Navigate", "enter", "Select", "esc", "Go Back")
+		status := ""
+		if item, ok := v.modelPicker.SelectedItem().(providerEditorModelItem); ok {
+			status = item.title
+		}
+		title := "Select Model"
+		if v.filterFreeOnly {
+			title += " · Free"
+		}
+		return renderProviderModal(ctx, accentAssistant, paneSection(title, listRows, help, status, providerModalContentWidth(ctx)+4))
+	}
+	rows, tone := providerpane.ProviderEditorRows(providerEditorSnapshot(ctx, v))
+	if len(rows) > 1 && layoutModeForHeight(ctx.height) != layoutTiny {
+		rows = appendPaneGroup(rows[:1], rows[1:]...)
+	}
+	help := providerEditorKeyboardHelp(providerModalContentWidth(ctx), v.state, v.isEditing, v.activateOnSave)
+	if help != "" {
+		rows = appendPaneGroup(rows, help)
+	}
+	status := strings.TrimSpace(v.nameInput.Value())
+	if v.isEditing && !v.activateOnSave && v.state == providerStateInput {
+		status = strings.TrimSpace(status + " · active stays")
+	}
+	if status != "" {
+		rows = append(rows, paneRightStatus(providerModalContentWidth(ctx)+4, status))
+	}
+	return renderProviderModal(ctx, paneToneColor(tone), rows)
+}
+
+func providerEditorKeyboardHelp(width int, state providerPaneState, editing, activateOnSave bool) string {
+	switch state {
+	case providerStateFetching:
+		return paneKeyboardHelp(width, "esc", "Cancel")
+	case providerStateConfirmOverwrite:
+		return paneKeyboardHelp(width, "enter", "Overwrite", "esc", "Go Back", "ctrl+c", "Cancel")
+	case providerStateSaveError:
+		return paneKeyboardHelp(width, "enter", "Retry", "esc", "Go Back", "ctrl+c", "Cancel")
+	case providerStateError:
+		return paneKeyboardHelp(width, "enter", "Go Back", "esc", "Go Back")
+	case providerStateSaving:
+		return ""
+	default:
+		action := "Connect"
+		if editing && !activateOnSave {
+			action = "Save"
+		}
+		return paneKeyboardHelp(width, "tab", "Fields", "ctrl+r", "Protocol", "enter", action, "esc", "Go Back")
+	}
+}
+
+func (v *providerPaneView) resizeInputs(width int) {
+	inputWidth := maxInt(8, width-18)
+	v.nameInput.SetWidth(inputWidth)
+	v.endpointInput.SetWidth(inputWidth)
+	v.apiKeyInput.SetWidth(inputWidth)
+}
+
+func providerEditorSnapshot(ctx paneRenderContext, v *providerPaneView) providerpane.ProviderEditorSnapshot {
+	if v == nil {
+		return providerpane.ProviderEditorSnapshot{}
+	}
+	fieldErrors := [3]string{v.fieldErrors[providerFieldName], v.fieldErrors[providerFieldEndpoint], v.fieldErrors[providerFieldAPIKey]}
+	return providerpane.ProviderEditorSnapshot{Width: ctx.width, Height: ctx.height, State: providerEditorPaneState(v.state), Name: v.nameInput.Value(), Endpoint: v.endpointInput.Value(), Spinner: ctx.spinner, UserConfigPath: appdirs.UserConfigDisplay(), ErrorMessage: v.errorMessage, IsEditing: v.isEditing, ActivateOnSave: v.activateOnSave, ProviderType: v.providerType, ProtocolLabel: v.protocolLabel(), RequiresAPIKey: v.requiresAPIKey, NameInput: v.nameInput.View(), EndpointInput: v.endpointInput.View(), APIKeyInput: v.apiKeyInput.View(), FieldErrors: fieldErrors}
+}
+
+func providerEditorPaneState(state providerPaneState) providerpane.ProviderEditorState {
+	switch state {
+	case providerStateFetching:
+		return providerpane.ProviderEditorFetching
+	case providerStateConfirmOverwrite:
+		return providerpane.ProviderEditorConfirmOverwrite
+	case providerStateSaving:
+		return providerpane.ProviderEditorSaving
+	case providerStateSaveError:
+		return providerpane.ProviderEditorSaveError
+	case providerStateError:
+		return providerpane.ProviderEditorError
+	default:
+		return providerpane.ProviderEditorInput
+	}
+}
+
+func renderProviderModal(ctx paneRenderContext, border color.Color, rows []string) string {
+	contentWidth := providerModalContentWidth(ctx)
+	wrappedRows := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if row == "" || lipgloss.Width(row) <= contentWidth {
+			wrappedRows = append(wrappedRows, row)
+			continue
+		}
+		wrappedRows = append(wrappedRows, strings.Split(wrapWords(row, contentWidth), "\n")...)
+	}
+	return renderModalRows(ctx, border, wrappedRows)
+}
+
+func providerModalContentWidth(ctx paneRenderContext) int {
+	return maxInt(1, maxInt(1, ctx.width-4)-6)
 }

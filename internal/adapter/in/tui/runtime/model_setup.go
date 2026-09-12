@@ -13,10 +13,13 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelpicker"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelsetup"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/providerio"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
+	providerdomain "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/provider"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -136,7 +139,7 @@ func (v *modelSetupPaneView) initPicker() {
 	if v == nil || v.pickerReady {
 		return
 	}
-	v.picker = newMinimalList(nil, modelSetupDelegate{}, defaultBubbleWidth-8, maxModelSetupRows)
+	v.picker = paneutil.NewMinimalList(nil, modelSetupDelegate{}, defaultBubbleWidth-8, maxModelSetupRows)
 	v.picker.SetStatusBarItemName("model", "models")
 	v.picker.FilterInput.Prompt = "Search: "
 	v.picker.SetShowFilter(false)
@@ -267,11 +270,6 @@ func (v *modelSetupPaneView) selectedRemoteModel() (model.RemoteModel, bool) {
 	return item.model, true
 }
 
-func reasoningChoicesForModel(providerName string, md model.RemoteModel) []sdk.ReasoningEffort {
-	profile := model.ResolveModelProfile(providerName, md.ID, &md)
-	return reasoningpolicy.Choices(profile)
-}
-
 func (v *modelSetupPaneView) syncReasoningForSelection(desired sdk.ReasoningEffort) {
 	if v == nil {
 		return
@@ -282,7 +280,7 @@ func (v *modelSetupPaneView) syncReasoningForSelection(desired sdk.ReasoningEffo
 		v.reasoningIndex = 0
 		return
 	}
-	choices := reasoningChoicesForModel(v.activeProviderName(), md)
+	choices := modelsetup.ReasoningChoices(v.activeProviderName(), md)
 	if len(choices) == 0 {
 		choices = []sdk.ReasoningEffort{sdk.ReasoningDefault}
 	}
@@ -291,31 +289,17 @@ func (v *modelSetupPaneView) syncReasoningForSelection(desired sdk.ReasoningEffo
 }
 
 func (v *modelSetupPaneView) selectedReasoning() sdk.ReasoningEffort {
-	if v == nil || len(v.reasoningChoices) == 0 {
+	if v == nil {
 		return sdk.ReasoningDefault
 	}
-	if v.reasoningIndex < 0 || v.reasoningIndex >= len(v.reasoningChoices) {
-		return sdk.ReasoningDefault
-	}
-	return v.reasoningChoices[v.reasoningIndex]
+	return modelsetup.SelectedReasoning(v.reasoningChoices, v.reasoningIndex)
 }
 
 func (v *modelSetupPaneView) moveReasoning(delta int) {
-	if v == nil || len(v.reasoningChoices) == 0 {
+	if v == nil {
 		return
 	}
-	v.reasoningIndex = (v.reasoningIndex + delta + len(v.reasoningChoices)) % len(v.reasoningChoices)
-	v.reasoningPreference = v.selectedReasoning()
-}
-
-func reasoningForModel(providerName string, md model.RemoteModel, desired sdk.ReasoningEffort) sdk.ReasoningEffort {
-	choices := reasoningChoicesForModel(providerName, md)
-	for _, effort := range choices {
-		if effort == desired {
-			return desired
-		}
-	}
-	return sdk.ReasoningDefault
+	v.reasoningIndex, v.reasoningPreference = modelsetup.MoveReasoning(v.reasoningChoices, v.reasoningIndex, delta)
 }
 
 var modelSetupKeys = struct {
@@ -577,7 +561,7 @@ func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyP
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionReloadModels}}
 		}
 		return paneKeyResult{handled: true}
-	case key.Matches(message, paneKeys.Nav):
+	case key.Matches(message, paneutil.Keys.Nav):
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
 		v.syncPickerProjection()
@@ -588,11 +572,11 @@ func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyP
 		targetIdx := int(message.Text[0]-'1') + pageOffset
 		if targetIdx >= 0 && targetIdx < len(v.models) {
 			selected := v.models[targetIdx]
-			reasoning := reasoningForModel(v.activeProviderName(), selected, v.reasoningPreference)
+			reasoning := modelsetup.CompatibleReasoning(v.activeProviderName(), selected, v.reasoningPreference)
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionApplyModelSetup, providerName: v.activeProviderName(), modelID: selected.ID, reasoning: reasoning}}
 		}
 		return paneKeyResult{handled: true}
-	case key.Matches(message, paneKeys.Confirm):
+	case key.Matches(message, paneutil.Keys.Confirm):
 		item, ok := v.picker.SelectedItem().(modelListItem)
 		if !ok {
 			return paneKeyResult{handled: true}
@@ -608,7 +592,86 @@ func persistModelSetupCmd(providers app.Providers, operationID asyncOperationID,
 		if gate != nil && !gate.current(operationID) {
 			return modelSetupAppliedMsg{operationID: operationID, providerName: providerName, modelID: modelID, reasoning: reasoning, unverified: unverified, err: errStaleConfigMutation}
 		}
-		err := providerio.SelectModel(providers, providerName, modelID)
+		err := providerdomain.SelectModel(providers, providerName, modelID)
 		return modelSetupAppliedMsg{operationID: operationID, providerName: providerName, modelID: modelID, reasoning: reasoning, unverified: unverified, err: err}
 	}
+}
+
+func (v *modelSetupPaneView) beginFetch(parent context.Context, models app.Models, providerName string, cfg config.ProviderConfig, timeouts ...time.Duration) tea.Cmd {
+	discoveryTimeout := runtimepolicy.ModelDiscoveryTimeout
+	if len(timeouts) > 0 && timeouts[0] > 0 {
+		discoveryTimeout = timeouts[0]
+	}
+	v.cancelFetch()
+	if parent == nil {
+		v.fetchRequestID = 0
+		v.loading = false
+		v.err = errMissingRuntimeContext
+		return nil
+	}
+	ctx, cancel := context.WithCancel(parent)
+	v.fetchCancel = cancel
+	v.fetchRequestID = nextAsyncOperationID()
+	v.loading = true
+	v.err = nil
+	v.models = nil
+	v.allModels = nil
+	v.picker.GoToStart()
+	return fetchProviderModelsCmd(models, providerFetchRequest{ctx: ctx, requestID: v.fetchRequestID, providerName: providerName, providerType: cfg.Type, baseURL: cfg.BaseURL, apiKey: cfg.APIKey, discoveryTimeout: discoveryTimeout})
+}
+
+func (v *modelSetupPaneView) cancelFetch() {
+	if v == nil || v.fetchCancel == nil {
+		return
+	}
+	v.fetchCancel()
+	v.fetchCancel = nil
+}
+
+func (v *modelSetupPaneView) loadProvider(m *bubbleModel, force bool) tea.Cmd {
+	if v == nil || m == nil {
+		return nil
+	}
+	providerName := v.activeProviderName()
+	v.cancelFetch()
+	v.loading = false
+	v.err = nil
+	if !force {
+		if models, ok := m.modelCatalogs.FreshModels(providerName, time.Now(), m.runtimeConfig.ModelCatalogTTL); ok {
+			if cfg, configured := m.providers[modelcatalog.NormalizeProviderKey(providerName)]; configured {
+				models = modelcatalog.VisibleForAccess(providerName, cfg.BaseURL, cfg.APIKey, models)
+			}
+			v.setModels(models, m.activeProvider, m.activeModel)
+			v.syncReasoningForSelection(v.reasoningPreference)
+			return nil
+		}
+	}
+	cfg, configured := m.providers[modelcatalog.NormalizeProviderKey(providerName)]
+	if configured {
+		if model.ProviderHasUsableAuth(providerName, cfg.BaseURL, cfg.APIKey) {
+			return v.beginFetch(m.ctx, m.application.Models, providerName, cfg, m.runtimeConfig.ModelDiscoveryTimeout)
+		}
+	}
+	v.setModels(nil, m.activeProvider, m.activeModel)
+	v.syncReasoningForSelection(v.reasoningPreference)
+	return nil
+}
+
+func (m *bubbleModel) openModelSetupPane() tea.Cmd {
+	if m == nil || m.panes.bottom.has(modelSetupViewID) {
+		return nil
+	}
+	view := newModelSetupPaneView(m)
+	m.panes.bottom.push(view)
+	m.requestRelayout()
+	return view.loadProvider(m, false)
+}
+
+func (m *bubbleModel) toggleModelSetupPane() tea.Cmd {
+	if m.panes.bottom.has(modelSetupViewID) {
+		m.panes.bottom.remove(modelSetupViewID)
+		m.requestRelayout()
+		return nil
+	}
+	return m.openModelSetupPane()
 }

@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	"io"
 	"strings"
 
@@ -145,7 +146,7 @@ func (v *todoPaneView) ensurePicker(ctx paneRenderContext) {
 	if v.initialized {
 		return
 	}
-	v.picker = newMinimalList(todoListItems(ctx.todos), todoSetupDelegate{}, maxInt(12, ctx.width-8), maxInt(5, minInt(14, ctx.height-4)))
+	v.picker = paneutil.NewMinimalList(todoListItems(ctx.todos), todoSetupDelegate{}, maxInt(12, ctx.width-8), maxInt(5, minInt(14, ctx.height-4)))
 	v.picker.SetFilteringEnabled(false)
 	v.picker.SetStatusBarItemName("task", "tasks")
 	v.initialized = true
@@ -185,7 +186,7 @@ func (v *todoPaneView) syncTitle(ctx paneRenderContext) {
 
 func (v *todoPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	v.ensurePicker(ctx)
-	if key.Matches(message, paneKeys.Close, paneKeys.Confirm) {
+	if key.Matches(message, paneutil.Keys.Close, paneutil.Keys.Confirm) {
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: todoInspectViewID}}
 	}
 	updated, cmd := v.picker.Update(message)

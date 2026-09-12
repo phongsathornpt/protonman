@@ -553,11 +553,11 @@ func TestTodoConflictRendersTaskSpecificGuidance(t *testing.T) {
 
 func TestClearTranscriptPreservesProviderHistory(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.messages = []model.Message{{Role: model.RoleUser, Content: "keep context"}}
+	m.conversation.SetMessages([]model.Message{{Role: model.RoleUser, Content: "keep context"}})
 	m.appendUser("visible message")
 	m.resetTranscript()
-	if len(m.messages) != 1 {
-		t.Fatalf("clear changed provider history length = %d, want 1", len(m.messages))
+	if len(m.conversation.Messages()) != 1 {
+		t.Fatalf("clear changed provider history length = %d, want 1", len(m.conversation.Messages()))
 	}
 }
 
@@ -1048,18 +1048,18 @@ func TestClosingTranscriptOverlayReleasesViewportContent(t *testing.T) {
 
 func TestLiveConversationRetentionKeepsToolProtocolGroup(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.conversationRetention = conversation.RetentionPolicy{MaxMessages: 3}
-	m.messages = []model.Message{
+	m.conversation.SetRetention(conversation.RetentionPolicy{MaxMessages: 3})
+	m.conversation.SetMessages([]model.Message{
 		{Role: model.RoleUser, Content: "old"},
 		{Role: model.RoleAssistant, ToolCalls: []model.ToolCall{{ID: "call-1", Name: "read", Arguments: []byte(`{"path":"README.md"}`)}}},
 		{Role: model.RoleTool, ToolCallID: "call-1", ToolName: "read", Content: "result"},
 		{Role: model.RoleUser, Content: "latest"},
+	})
+	m.conversation.RetainMessages()
+	if len(m.conversation.Messages()) != 3 {
+		t.Fatalf("retained message count=%d, want 3: %#v", len(m.conversation.Messages()), m.conversation.Messages())
 	}
-	m.conversationModelState.retainMessages()
-	if len(m.messages) != 3 {
-		t.Fatalf("retained message count=%d, want 3: %#v", len(m.messages), m.messages)
-	}
-	if m.messages[0].Role != model.RoleAssistant || m.messages[1].Role != model.RoleTool || m.messages[2].Content != "latest" {
-		t.Fatalf("live retention split protocol group: %#v", m.messages)
+	if m.conversation.Messages()[0].Role != model.RoleAssistant || m.conversation.Messages()[1].Role != model.RoleTool || m.conversation.Messages()[2].Content != "latest" {
+		t.Fatalf("live retention split protocol group: %#v", m.conversation.Messages())
 	}
 }

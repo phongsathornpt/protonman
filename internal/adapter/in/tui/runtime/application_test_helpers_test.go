@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionbridge"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -15,6 +16,10 @@ import (
 )
 
 type testProviderRepository struct{ fallbackHome string }
+
+func newPermissionBridge() *permissionbridge.Bridge {
+	return permissionbridge.New()
+}
 
 func (r testProviderRepository) home() string {
 	if home := strings.TrimSpace(os.Getenv("PROTONMAN_HOME")); home != "" {

@@ -18,3 +18,11 @@ func TestReasoningIndexMatchesDesiredEffort(t *testing.T) {
 		t.Fatalf("reasoning index = %d, want 2", got)
 	}
 }
+
+func TestMoveReasoningWrapsSelection(t *testing.T) {
+	choices := []sdk.ReasoningEffort{sdk.ReasoningDefault, sdk.ReasoningLow, sdk.ReasoningHigh}
+	index, effort := MoveReasoning(choices, 0, -1)
+	if index != 2 || effort != sdk.ReasoningHigh {
+		t.Fatalf("move = %d/%q, want 2/high", index, effort)
+	}
+}

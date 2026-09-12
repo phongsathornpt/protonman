@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionbridge"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -24,7 +25,7 @@ type BubbleTeaUI struct {
 	todoStore               tododomain.Repository
 	runner                  app.Conversation
 	application             app.Services
-	bridge                  *permissionBridge
+	bridge                  *permissionbridge.Bridge
 	agents                  app.Agents
 	workDir                 string
 	initialMessages         []model.Message
@@ -65,7 +66,7 @@ func NewBubbleTea(
 		service:   service,
 		registry:  registry,
 		todoStore: todoStore,
-		bridge:    newPermissionBridge(),
+		bridge:    permissionbridge.New(),
 	}
 	for _, option := range options {
 		if option == nil {

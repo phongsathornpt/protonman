@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	"io"
 	"strings"
 
@@ -71,7 +72,7 @@ func (v *slashPaneView) sync(ctx paneRenderContext) {
 		items = append(items, slashListItem{command: command})
 	}
 	if !v.ready {
-		v.picker = newMinimalList(items, slashCommandDelegate{}, maxInt(20, ctx.width-4), maxSlashRows)
+		v.picker = paneutil.NewMinimalList(items, slashCommandDelegate{}, maxInt(20, ctx.width-4), maxSlashRows)
 		v.picker.SetFilteringEnabled(false)
 		// Slash completion owns navigation through list.Update; help lives in the shared composer footer.
 		v.picker.InfiniteScrolling = true
@@ -165,15 +166,15 @@ func (v *slashPaneView) selectionStatus(width int) string {
 func (v *slashPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	v.sync(ctx)
 	switch {
-	case key.Matches(message, paneKeys.Nav):
+	case key.Matches(message, paneutil.Keys.Nav):
 		updated, cmd := v.picker.Update(message)
 		v.picker = updated
 		return paneKeyResult{handled: true, cmd: cmd}
-	case key.Matches(message, paneKeys.Tab):
+	case key.Matches(message, paneutil.Keys.Tab):
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionAcceptSlash}}
-	case key.Matches(message, paneKeys.Confirm):
+	case key.Matches(message, paneutil.Keys.Confirm):
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionAcceptSlash, runSlash: true}}
-	case key.Matches(message, paneKeys.Close):
+	case key.Matches(message, paneutil.Keys.Close):
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: slashViewID}}
 	default:
 		return paneKeyResult{}

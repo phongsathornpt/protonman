@@ -698,8 +698,8 @@ func TestInitialMessagesRestoreIntoHistoryAndNextTurn(t *testing.T) {
 	if !strings.Contains(plain, "previous question") || !strings.Contains(plain, "previous answer") {
 		t.Fatalf("restored transcript = %q", plain)
 	}
-	if len(m.messages) != 2 {
-		t.Fatalf("provider history length = %d, want 2", len(m.messages))
+	if len(m.conversation.Messages()) != 2 {
+		t.Fatalf("provider history length = %d, want 2", len(m.conversation.Messages()))
 	}
 }
 

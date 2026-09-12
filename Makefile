@@ -72,11 +72,11 @@ bench:
 
 ## bench-cpu: Run benchmarks with CPU profiling to cpu.pprof
 bench-cpu:
-	go test -run=^$$ -bench=. -benchmem -cpuprofile=cpu.pprof ./internal/permission/...
+	go test -run=^$$ -bench=. -benchmem -cpuprofile=cpu.pprof ./internal/core/permission/...
 
 ## bench-mem: Run benchmarks with memory profiling to mem.pprof
 bench-mem:
-	go test -run=^$$ -bench=. -benchmem -memprofile=mem.pprof ./internal/permission/...
+	go test -run=^$$ -bench=. -benchmem -memprofile=mem.pprof ./internal/core/permission/...
 
 ## fmt: Format all Go source files
 fmt:

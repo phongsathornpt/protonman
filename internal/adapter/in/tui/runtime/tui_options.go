@@ -3,6 +3,7 @@ package runtime
 import (
 	"strings"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/projectconfig"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -115,7 +116,7 @@ func WithProjectContext(trusted bool, sources []string, provenance map[string]co
 	return func(ui *BubbleTeaUI) error {
 		ui.projectTrusted = trusted
 		ui.projectConfigSources = append([]string(nil), sources...)
-		ui.projectConfigProvenance = cloneProjectConfigProvenance(provenance)
+		ui.projectConfigProvenance = projectconfig.CloneProvenance(provenance)
 		return nil
 	}
 }

@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"strings"
 
+	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
+	tuipresentation "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/presentation"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/toolview"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -83,20 +86,20 @@ func (m *bubbleModel) appendTurnFailure(err error) {
 		text := "turn cancelled"
 		cells := m.ensureHistoryState().Cells()
 		if n := len(cells); n > 0 {
-			if last, ok := cells[n-1].(*SystemCell); ok && last.Text == text {
+			if last, ok := cells[n-1].(*tuihistory.SystemCell); ok && last.Text == text {
 				return
 			}
 		}
-		m.ensureHistoryState().Append(&SystemCell{Text: text})
+		m.ensureHistoryState().Append(&tuihistory.SystemCell{Text: text})
 		return
 	}
 	cells := m.ensureHistoryState().Cells()
 	if n := len(cells); n > 0 {
-		if last, ok := cells[n-1].(*ErrorCell); ok && last.Text == classified.Message && last.Title == classified.Title {
+		if last, ok := cells[n-1].(*tuihistory.ErrorCell); ok && last.Text == classified.Message && last.Title == classified.Title {
 			return
 		}
 	}
-	m.ensureHistoryState().Append(&ErrorCell{ErrorKind: classified.Kind, Title: classified.Title, Badge: classified.Badge, Text: classified.Message, Suggestions: classified.Suggestions, RawDetails: classified.RawDetails, Retryable: classified.Retryable})
+	m.ensureHistoryState().Append(&tuihistory.ErrorCell{ErrorKind: classified.Kind, Title: classified.Title, Badge: classified.Badge, Text: classified.Message, Suggestions: classified.Suggestions, RawDetails: classified.RawDetails, Retryable: classified.Retryable})
 }
 
 func (m *bubbleModel) appendTurnResult(events []app.Event, result app.Result, err error) {
@@ -147,21 +150,21 @@ func (m *bubbleModel) loadInitialMessages(messages []model.Message) {
 						text = text[:idx]
 					}
 				}
-				state.Append(&UserCell{Text: text})
+				state.Append(&tuihistory.UserCell{Text: text})
 			}
 		case model.RoleAssistant:
 			if text != "" {
-				state.Append(&AssistantCell{Text: message.Content})
+				state.Append(&tuihistory.AssistantCell{Text: message.Content})
 			}
 		case model.RoleTool:
 			if text != "" || message.ToolName != "" {
 				kind := tool.KindForName(message.ToolName)
-				summary := summarizeToolOutput(message.ToolName, kind, "", message.Content, nil, false)
-				state.Append(&ToolCell{Name: message.ToolName, Body: message.Content, ToolKind: kind, Summary: summary, ShowDetail: minimalToolShowsDetail(kind, false, false)})
+				summary := toolview.SummarizeOutput(message.ToolName, kind, "", message.Content, nil, false)
+				state.Append(&tuihistory.ToolCell{Name: message.ToolName, Body: message.Content, ToolKind: kind, Summary: summary, ShowDetail: tuipresentation.MinimalPolicy().ToolDetail(kind, false, false) != tuipresentation.DetailSummary})
 			}
 		case model.RoleSystem:
 			if text != "" {
-				state.Append(&SystemCell{Text: message.Content})
+				state.Append(&tuihistory.SystemCell{Text: message.Content})
 			}
 		}
 	}

@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	"math"
 	"strings"
 
@@ -72,7 +73,7 @@ func (m *bubbleModel) transcriptOverlayView() string {
 var transcriptRawToggleKey = key.NewBinding(key.WithKeys("r"))
 
 func (m *bubbleModel) updateTranscriptKey(message tea.KeyPressMsg) tea.Cmd {
-	if key.Matches(message, m.keys.Transcript, paneKeys.Close) {
+	if key.Matches(message, m.keys.Transcript, paneutil.Keys.Close) {
 		m.closeTranscriptOverlay()
 		return nil
 	}
@@ -88,7 +89,7 @@ func (m *bubbleModel) updateTranscriptKey(message tea.KeyPressMsg) tea.Cmd {
 		m.refreshTranscriptViewport(false)
 		return nil
 	}
-	if key.Matches(message, paneKeys.Nav) {
+	if key.Matches(message, paneutil.Keys.Nav) {
 		updated, command := m.panes.transcript.Update(message)
 		m.panes.transcript = updated
 		return command

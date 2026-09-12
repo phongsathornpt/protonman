@@ -56,8 +56,8 @@ func TestGoalCommandStartsExecutionTurn(t *testing.T) {
 	if !m.busy {
 		t.Fatal("/goal with detail did not mark the turn busy")
 	}
-	if len(m.messages) != 1 || m.messages[0].Content != "implement retry recovery" {
-		t.Fatalf("goal execution messages = %#v", m.messages)
+	if len(m.conversation.Messages()) != 1 || m.conversation.Messages()[0].Content != "implement retry recovery" {
+		t.Fatalf("goal execution messages = %#v", m.conversation.Messages())
 	}
 }
 

@@ -604,7 +604,8 @@ fields to `bubbleModel` without a clear orchestration-level reason.
 `internal/adapter/in/tui/runtime` is an orchestration shell, not a default home for new
 TUI behavior. Cohesive policy, projection, parsing, and state-calculation logic belongs in
 focused subpackages such as `modelcatalog`, `modelpicker`, `modelsetup`, `provider`,
-`permissionpolicy`, `reasoningpolicy`, `transcriptutil`, or the owning `view/*` package.
+`permissionpolicy`, `permissionbridge`, `reasoningpolicy`, `projectconfig`, `keyboardpolicy`, `paneutil`,
+`transientnotice`, `transcriptutil`, `cmdpolicy`, `conversation`, or the owning `view/*` package.
 Runtime subpackages must never import the root `runtime` package. The architecture suite
 maintains a ratcheting production-file budget for the runtime root; do not raise that budget
 to land new code. Extract ownership or consolidate an existing shell instead.

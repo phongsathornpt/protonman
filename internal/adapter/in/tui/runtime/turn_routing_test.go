@@ -30,7 +30,7 @@ func TestTurnDeltaDrainsBufferedTerminalInOrder(t *testing.T) {
 	if !strings.Contains(plain, "hello world") {
 		t.Fatalf("drained transcript missing ordered text: %q", plain)
 	}
-	if len(m.messages) != 1 || m.messages[0].Content != "hello world" {
-		t.Fatalf("terminal result messages = %#v", m.messages)
+	if len(m.conversation.Messages()) != 1 || m.conversation.Messages()[0].Content != "hello world" {
+		t.Fatalf("terminal result messages = %#v", m.conversation.Messages())
 	}
 }

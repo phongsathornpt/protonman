@@ -1,12 +1,16 @@
 package runtime
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
+	tuiconv "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/conversation"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
 )
 
 const keyboardDebugEnv = "PROTONMAN_DEBUG_KEYS"
@@ -82,4 +86,99 @@ func (m *bubbleModel) debugKeyPress(message tea.KeyPressMsg) {
 		"term", os.Getenv("TERM"),
 		"term_program", os.Getenv("TERM_PROGRAM"),
 	)
+}
+
+const (
+	maxQueuedPrompts     = 32
+	maxQueuePreviewRunes = 160
+)
+
+func (m *bubbleModel) submit() tea.Cmd {
+	prompt := m.panes.bottom.prompt()
+	line := strings.TrimSpace(prompt.Value())
+	if m.panes.bottom.bashMode() {
+		if line == "" {
+			m.resetPrompt()
+			m.panes.bottom.remove(slashViewID)
+			m.setBashMode(false)
+			return nil
+		}
+		if m.busy || m.hasPermissionView() {
+			if !m.enqueuePrompt("!" + line) {
+				return nil
+			}
+			m.resetPrompt()
+			m.panes.bottom.remove(slashViewID)
+			m.refreshViewport()
+			return nil
+		}
+		m.resetPrompt()
+		m.panes.bottom.remove(slashViewID)
+		m.setBashMode(false)
+		return m.dispatchBang(line)
+	}
+	if line == "" {
+		if prompt.Value() != "" {
+			m.resetPrompt()
+		}
+		return nil
+	}
+	if m.busy || m.hasPermissionView() {
+		if !m.enqueuePrompt(line) {
+			return nil
+		}
+		m.resetPrompt()
+		m.panes.bottom.remove(slashViewID)
+		m.refreshViewport()
+		return nil
+	}
+	m.resetPrompt()
+	m.panes.bottom.remove(slashViewID)
+	return m.dispatch(line)
+}
+
+func (m *bubbleModel) enqueuePrompt(line string) bool {
+	if m.conversation == nil || !m.conversation.Enqueue(line) {
+		m.appendMuted(fmt.Sprintf("queue full (%d); finish or cancel the active turn before adding more", tuiconv.DefaultMaxQueuedPrompts))
+		m.refreshViewport()
+		return false
+	}
+	m.appendMuted(fmt.Sprintf("queued (%d): %s", m.conversation.QueueLen(), tuiconv.QueuePreview(line, maxQueuePreviewRunes)))
+	return true
+}
+
+func (m *bubbleModel) drainQueue() tea.Cmd {
+	if m.busy || m.hasPermissionView() || m.conversation == nil || m.conversation.QueueLen() == 0 {
+		return nil
+	}
+	line, ok := m.conversation.Dequeue()
+	if !ok {
+		return nil
+	}
+	if strings.HasPrefix(line, "!") && !isCommandLine(line) {
+		return m.dispatchBang(strings.TrimPrefix(line, "!"))
+	}
+	return m.dispatch(line)
+}
+
+func (m *bubbleModel) dispatch(line string) tea.Cmd {
+	m.panes.bottom.recordHistory(line)
+	if isCommandLine(line) {
+		parsed := parseCommand(line)
+		if spec, ok := slashview.LookupCommand(parsed.Name); ok && spec.EchoUser {
+			m.appendUser(line)
+		}
+		return m.executeCommand(line)
+	}
+	m.showWelcome = false
+	m.appendUser(line)
+	return m.startTurn(line)
+}
+
+func (m *bubbleModel) dispatchBang(command string) tea.Cmd {
+	slog.DebugContext(m.ctx, "tui direct bash submitted", "command_bytes", len(command))
+	m.panes.bottom.recordHistory("!" + command)
+	m.showWelcome = false
+	m.appendUser("!" + command)
+	return m.startBash(command)
 }

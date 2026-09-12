@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	crashview "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/crash"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/projectconfig"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 )
@@ -75,7 +76,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		bModel.workspaceKey = ui.workspaceKey
 		bModel.projectTrusted = ui.projectTrusted
 		bModel.projectConfigSources = append([]string(nil), ui.projectConfigSources...)
-		bModel.projectConfigProvenance = cloneProjectConfigProvenance(ui.projectConfigProvenance)
+		bModel.projectConfigProvenance = projectconfig.CloneProvenance(ui.projectConfigProvenance)
 		if ui.hasRuntimeConfig {
 			bModel.runtimeConfig = ui.runtimeConfig
 		}
@@ -135,13 +136,13 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 		}
 
 		if modelState, ok := finalModel.(*bubbleModel); ok {
-			ui.finalMessages = model.SnapshotMessages(modelState.messages)
+			ui.finalMessages = modelState.conversation.SnapshotMessages()
 			ui.finalAgentProfile = modelState.agentProfile
 			ui.finalReasoningEffort = modelState.reasoningEffort
-			currentMessages = model.SnapshotMessages(modelState.messages)
+			currentMessages = modelState.conversation.SnapshotMessages()
 			slog.DebugContext(ctx, "tui program returned",
 				"duration_ms", time.Since(startedAt).Milliseconds(),
-				"message_count", len(modelState.messages),
+				"message_count", len(modelState.conversation.Messages()),
 				"busy", modelState.busy,
 			)
 		} else {

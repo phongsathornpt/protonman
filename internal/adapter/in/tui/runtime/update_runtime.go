@@ -5,6 +5,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transientnotice"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 )
 
@@ -138,8 +139,8 @@ func (m *bubbleModel) updateRuntimeEvent(msg tea.Msg) (tea.Cmd, bool) {
 		return m.updateProviderDeleted(message), true
 	case permissionRuleSavedMsg:
 		return m.updatePermissionRuleSaved(message), true
-	case transientNoticeExpiredMsg:
-		if message.id == m.transientNoticeID {
+	case transientnotice.Expired:
+		if message.ID == m.transientNoticeID {
 			m.transientNotice = ""
 			m.refreshFrameChromeOnly()
 		}
