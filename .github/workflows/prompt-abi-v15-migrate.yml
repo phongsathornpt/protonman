@@ -1,0 +1,162 @@
+name: Prompt ABI v15 migration
+
+on:
+  push:
+    branches:
+      - refactor/prompt-abi-v15-cleanup
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: refactor/prompt-abi-v15-cleanup
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Apply atomic migration
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new, expected=1):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != expected:
+                  raise SystemExit(f"{path}: expected {expected} occurrences, found {count}: {old!r}")
+              p.write_text(text.replace(old, new))
+
+          def remove_file(path):
+              p = Path(path)
+              if not p.exists():
+                  raise SystemExit(f"missing expected compatibility file: {path}")
+              p.unlink()
+
+          replace("internal/engine/prompt/prompt.go", 'const Version = "14"', 'const Version = "15"')
+          replace(
+              "internal/engine/prompt/prompt.go",
+              '\t// ModelPromptHints is retained temporarily for source compatibility.\n\t// Render intentionally ignores it: Protonman uses one model-agnostic system prompt.\n\tModelPromptHints    []string\n',
+              '',
+          )
+          replace(
+              "internal/engine/turn/loop.go",
+              '\t\tspec.ModelPromptHints = append([]string(nil), l.promptSpec.ModelPromptHints...)\n',
+              '',
+          )
+          replace("internal/engine/turn/loop_options.go", '\t\tclone.ModelPromptHints = nil\n', '')
+
+          replace("internal/core/modelprofile/profile.go", '\tPromptHints        MetadataSource\n', '')
+          replace(
+              "internal/core/modelprofile/profile.go",
+              '\t\t{"prompt_hints", p.PromptHints}, {"tool_schema_dialect", p.ToolSchemaDialect},\n',
+              '\t\t{"tool_schema_dialect", p.ToolSchemaDialect},\n',
+          )
+          replace(
+              "internal/core/modelprofile/profile.go",
+              'type AgentPolicy struct {\n\tPromptHints []string\n}\n\n',
+              '',
+          )
+          replace("internal/core/modelprofile/profile.go", '\tAgentPolicy     AgentPolicy\n', '', expected=2)
+          replace("internal/core/modelprofile/validate.go", '\tprofile.AgentPolicy.PromptHints = nil\n', '')
+          replace("internal/adapter/out/model/model_profile.go", '\tprofile.AgentPolicy.PromptHints = nil\n', '')
+
+          replace(
+              "internal/core/modelprofile/profile_test.go",
+              'if got.Provenance.ToolSchemaDialect != MetadataSourceBuiltin || got.Provenance.PromptHints != MetadataSourceUnknown {',
+              'if got.Provenance.ToolSchemaDialect != MetadataSourceBuiltin {',
+          )
+          replace(
+              "internal/core/modelprofile/profile_test.go",
+              'func TestGeminiDoesNotDuplicateGenericPromptHints(t *testing.T) {\n\tgot := ResolveBuiltin("gateway", "gemini-3.8-flash", CatalogMetadata{})\n\tif len(got.AgentPolicy.PromptHints) != 0 {\n\t\tt.Fatalf("Gemini prompt hints = %v, want generic tool policy only", got.AgentPolicy.PromptHints)\n\t}\n}\n\n',
+              '',
+          )
+
+          remove_file("internal/core/modelprofile/prompt_policy_compat_test.go")
+          remove_file("internal/engine/turn/prompt_policy_compat_test.go")
+
+          replace("internal/engine/prompt/prompt_test.go", '<proton-system-prompt version=\\"14\\">', '<proton-system-prompt version=\\"15\\">')
+          replace("internal/engine/turn/loop_test.go", '<proton-system-prompt version=\\"14\\">', '<proton-system-prompt version=\\"15\\">')
+          replace("test/e2e/subagent_model_routing_e2e_test.go", '<proton-system-prompt version=\\"14\\">', '<proton-system-prompt version=\\"15\\">')
+          replace("test/e2e/subagent_model_routing_e2e_test.go", 'Prompt ABI v14', 'Prompt ABI v15')
+
+          replace(
+              "docs/system-prompt.md",
+              'The current managed prompt format is **Prompt ABI v14**:\n\n```text\n<proton-system-prompt version="14">',
+              'The current managed prompt format is **Prompt ABI v15**:\n\n```text\n<proton-system-prompt version="15">',
+          )
+          replace(
+              "docs/system-prompt.md",
+              '`ModelPromptHints` and model-profile `AgentPolicy.PromptHints` remain only as temporary source-compatibility fields. They are semantically inert: model-profile clone/merge boundaries discard prompt hints, `WithSystemPromptSpec` clears model prompt hints before storing the spec, and `Render` ignores the field entirely. Do not add new model- or provider-specific prompt hints through `ExtraInstructions` or another indirect path. The compatibility fields should be removed only together with their remaining callers/tests so the repository does not pass through a half-migrated state.',
+              'Model/provider identity is not represented by a natural-language prompt-policy field. Model profiles carry runtime capability, reasoning, token-limit, compaction, and protocol-compatibility facts only. Do not reintroduce model- or provider-specific prompt prose through `ExtraInstructions` or another indirect path.',
+          )
+          replace(
+              "docs/system-prompt.md",
+              'Prompt ABI v14 adds explicit parent-task/subagent linkage: when delegated work corresponds to a tracked TODO item, the parent passes `task_id` and runtime lifecycle events own `in_progress`/terminal task reconciliation.\n',
+              'Prompt ABI v14 adds explicit parent-task/subagent linkage: when delegated work corresponds to a tracked TODO item, the parent passes `task_id` and runtime lifecycle events own `in_progress`/terminal task reconciliation.\n\nPrompt ABI v15 removes the legacy model-specific natural-language prompt-policy surface. Model/provider identity remains runtime metadata only, and the canonical managed prompt is model agnostic by construction.\n',
+          )
+
+          replace(
+              "docs/architecture.md",
+              'The managed prompt currently uses Prompt ABI v14;',
+              'The managed prompt currently uses Prompt ABI v15;',
+          )
+          replace(
+              "AGENTS.md",
+              'prompt currently uses Prompt ABI v14 and deterministic cache-aware section ordering;',
+              'prompt currently uses Prompt ABI v15 and deterministic cache-aware section ordering;',
+          )
+          replace(
+              "AGENTS.md",
+              '- model profile -> provider/model guidance hints\n',
+              '- model profiles -> runtime capability, reasoning, token-limit, compaction, and protocol-compatibility metadata only; model/provider identity must not inject natural-language prompt policy\n',
+          )
+
+          forbidden = ["ModelPromptHints", "AgentPolicy", "PromptHints", "prompt_hints"]
+          roots = [Path("internal"), Path("test"), Path("docs"), Path("AGENTS.md")]
+          leftovers = []
+          for root in roots:
+              files = [root] if root.is_file() else list(root.rglob("*.go")) + list(root.rglob("*.md"))
+              for p in files:
+                  text = p.read_text(errors="ignore")
+                  for token in forbidden:
+                      if token in text:
+                          leftovers.append(f"{p}: {token}")
+          if leftovers:
+              raise SystemExit("legacy prompt-policy references remain:\n" + "\n".join(leftovers))
+          PY
+
+          gofmt -w \
+            internal/engine/prompt/prompt.go \
+            internal/engine/turn/loop.go \
+            internal/engine/turn/loop_options.go \
+            internal/core/modelprofile/profile.go \
+            internal/core/modelprofile/validate.go \
+            internal/adapter/out/model/model_profile.go \
+            internal/core/modelprofile/profile_test.go \
+            internal/engine/prompt/prompt_test.go \
+            internal/engine/turn/loop_test.go \
+            test/e2e/subagent_model_routing_e2e_test.go
+
+          git diff --check
+          go test ./internal/core/modelprofile/... ./internal/adapter/out/model/... ./internal/engine/prompt/... ./internal/engine/turn/... ./test/e2e/...
+          make lint
+
+      - name: Commit migration
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && { echo "migration produced no changes"; exit 1; }
+          git commit -m "refactor(prompt): finalize ABI v15 cleanup"
+          git push origin HEAD:refactor/prompt-abi-v15-cleanup
