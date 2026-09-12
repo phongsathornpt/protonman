@@ -136,9 +136,10 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 				return nil, ctx.Err()
 			}
 			providerErr = sdk.NewTransportError(m.Provider(), requestErr)
-		} else if resp.StatusCode == http.StatusOK {
-			return newStream(resp.Body, responseMetadata(m.Provider(), resp.Header), request.Options.IncludeRawChunks, m.Provider()), nil
 		} else {
+			if resp.StatusCode == http.StatusOK {
+				return newStream(resp.Body, responseMetadata(m.Provider(), resp.Header), request.Options.IncludeRawChunks, m.Provider()), nil
+			}
 			body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 			resp.Body.Close()
 			providerErr = providerError(m.Provider(), resp.StatusCode, body, resp.Header)

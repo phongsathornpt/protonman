@@ -58,9 +58,10 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 				return nil, ctx.Err()
 			}
 			lastErr = sdk.NewTransportError("anthropic", err)
-		} else if resp.StatusCode == http.StatusOK {
-			return newStream(resp.Body, anthropicResponseMetadata(resp.Header), request.Options.IncludeRawChunks), nil
 		} else {
+			if resp.StatusCode == http.StatusOK {
+				return newStream(resp.Body, anthropicResponseMetadata(resp.Header), request.Options.IncludeRawChunks), nil
+			}
 			data, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 			resp.Body.Close()
 			providerErr := anthropicHTTPError(resp.StatusCode, data)

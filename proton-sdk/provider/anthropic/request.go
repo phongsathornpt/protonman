@@ -95,7 +95,7 @@ func buildRequest(modelID string, request sdk.Request, defaultMaxTokens int) (re
 		body.Thinking = &thinking{Type: "adaptive"}
 		body.OutputConfig = &outputConfig{Effort: effort}
 	}
-	var systems []string
+	systems := []string{}
 	for _, source := range request.Messages {
 		switch source.Role {
 		case sdk.RoleSystem:

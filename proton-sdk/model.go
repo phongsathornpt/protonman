@@ -170,7 +170,11 @@ func ValidMessageID(id string) bool {
 		return false
 	}
 	for _, r := range id {
-		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-' || r == '.' || r == ':' {
+		isLower := r >= 'a' && r <= 'z'
+		isUpper := r >= 'A' && r <= 'Z'
+		isDigit := r >= '0' && r <= '9'
+		isPunct := r == '_' || r == '-' || r == '.' || r == ':'
+		if isLower || isUpper || isDigit || isPunct {
 			continue
 		}
 		return false

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "golang-code-review": {
+      "source": "local",
+      "sourceType": "project",
+      "computedHash": "1fa9d5fb967d509bfb523729e9bef7b47852fb0edee54f80ebd5db2d1113040f",
+      "skillPath": ".protonman/skills/golang-code-review"
+    }
+  }
+}

@@ -152,7 +152,7 @@ func NormalizeArguments(definition Definition, arguments json.RawMessage) json.R
 		if trimmed == "" || trimmed == "null" {
 			return json.RawMessage(`{}`)
 		}
-		var object map[string]json.RawMessage
+		object := map[string]json.RawMessage{}
 		if json.Unmarshal([]byte(trimmed), &object) == nil && object != nil {
 			return json.RawMessage(`{}`)
 		}
@@ -161,7 +161,7 @@ func NormalizeArguments(definition Definition, arguments json.RawMessage) json.R
 	if len(definition.InputAliases) == 0 {
 		return append(json.RawMessage(nil), arguments...)
 	}
-	var object map[string]json.RawMessage
+	object := map[string]json.RawMessage{}
 	if json.Unmarshal([]byte(trimmed), &object) != nil || object == nil {
 		return append(json.RawMessage(nil), arguments...)
 	}
