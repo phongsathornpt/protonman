@@ -1,25 +1,20 @@
-# Protonman project configuration
+[permission]
+default = ''
+rules = []
+
+[workspace]
+protected_paths = []
+
+[ui]
+permission_mode = ''
+
+[sandbox]
+profile = ''
 
 [agent]
-profile = "universal"
 subagents_enabled = true
-reasoning_effort = "auto"
+profile = 'universal'
+reasoning_effort = 'auto'
 
-# Optional specialized routes. Provider names resolve from the effective
-# user + trusted-project provider configuration. Uncomment a profile and
-# replace the model placeholder to bind that subagent to a dedicated model.
-
-# [agent.subagents.strength]
-# provider = "protonman"
-# model = "coding-model-id"
-# reasoning_effort = "medium"
-
-# [agent.subagents.agility]
-# provider = "protonman"
-# model = "fast-model-id"
-# reasoning_effort = "low"
-
-# [agent.subagents.intelligence]
-# provider = "protonman"
-# model = "reasoning-model-id"
-# reasoning_effort = "high"
+[skills]
+active = ['golang-code-style', 'golang-design-patterns', 'golang-error-handling', 'golang-performance', 'golang-pro', 'golang-code-review']

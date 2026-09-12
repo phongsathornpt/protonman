@@ -13,6 +13,7 @@ type UserSettingsRepository interface {
 	SaveReasoningEffort(sdk.ReasoningEffort) error
 	SaveMaxToolCalls(int) error
 	SavePermissionRule(permission.Rule) error
+	SaveActiveSkills([]string) error
 }
 
 // UserSettings owns mutations to portable user-level Protonman preferences.
@@ -48,4 +49,11 @@ func (u UserSettings) SavePermissionRule(rule permission.Rule) error {
 		return fmt.Errorf("user settings repository is unavailable")
 	}
 	return u.repository.SavePermissionRule(rule)
+}
+
+func (u UserSettings) SaveActiveSkills(activeSkills []string) error {
+	if u.repository == nil {
+		return fmt.Errorf("user settings repository is unavailable")
+	}
+	return u.repository.SaveActiveSkills(activeSkills)
 }

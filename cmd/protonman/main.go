@@ -116,7 +116,18 @@ func run(ctx context.Context, args []string) error {
 		}
 	}
 	if headlessPrompt != "" {
-		return runHeadless(ctx, runtimeState.service, runtimeState.registry, runtimeState.skills, runtimeState.stateStore, runtimeState.sessionID, runtimeState.state, headlessPrompt, options.output, runtimeState.runner, app.NewAgents(runtimeState.coordinator))
+		return runHeadless(ctx, headlessInvocation{
+			service:       runtimeState.service,
+			registry:      runtimeState.registry,
+			skillRegistry: runtimeState.skills,
+			stateStore:    runtimeState.stateStore,
+			sessionID:     runtimeState.sessionID,
+			state:         runtimeState.state,
+			prompt:        headlessPrompt,
+			outputFormat:  options.output,
+			turnRunner:    runtimeState.runner,
+			agents:        app.NewAgents(runtimeState.coordinator),
+		})
 	}
 	if !stdinIsTerminal() || !stdoutIsTerminal() {
 		return fmt.Errorf("refusing to start the TUI without a terminal; use -p, --headless, or --acp")
@@ -145,7 +156,7 @@ func run(ctx context.Context, args []string) error {
 		return fmt.Errorf("create Bubble Tea UI: %w", uiErr)
 	}
 	runErr := bubbleUI.Run(ctx)
-	var activeSkills []string
+	activeSkills := []string{}
 	if runtimeState.skills != nil {
 		activeSkills = runtimeState.skills.ActivatedList()
 	}

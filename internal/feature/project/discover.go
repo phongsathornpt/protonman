@@ -33,6 +33,8 @@ type State struct {
 	SkillsPath   string
 	SkillsExists bool
 	SkillCount   int
+	LockPath     string
+	LockExists   bool
 }
 
 // Discover inspects the project-local .protonman directory.
@@ -63,9 +65,24 @@ func Discover(ctx context.Context, opts Options) (State, error) {
 		Trusted:    opts.Trusted,
 		ConfigPath: scope.Config,
 		SkillsPath: scope.Skills,
+		LockPath:   appdirs.ProjectSkillsLock(absWorkDir),
 	}
 	if !scope.Available {
 		return state, nil
+	}
+	// Check .protonman/skills-lock.json first, then root skills-lock.json
+	pmLock := appdirs.ProtonmanSkillsLock(absWorkDir)
+	pmExists, err := isFile(pmLock)
+	if err != nil {
+		return State{}, fmt.Errorf("inspect protonman skill lock: %w", err)
+	}
+	if pmExists {
+		state.LockPath = pmLock
+		state.LockExists = true
+	} else {
+		if state.LockExists, err = isFile(state.LockPath); err != nil {
+			return State{}, fmt.Errorf("inspect project skill lock: %w", err)
+		}
 	}
 	if state.Exists, err = isDir(state.ProtonDir); err != nil {
 		return State{}, fmt.Errorf("inspect project protonman directory: %w", err)

@@ -228,9 +228,101 @@ func (r *Runner) handleSkillsCommand(argument string, parts []string, output io.
 			if r.skills.IsActivated(s.Name) {
 				box = "[x]"
 			}
-			fmt.Fprintf(&builder, "\n  %s %s [%s]: %s", box, s.Name, s.Scope, s.Description)
+			lockTag := ""
+			if s.Locked {
+				if s.LockStatus == skill.LockStatusVerified {
+					lockTag = " [locked]"
+				} else if s.LockStatus == skill.LockStatusDrifted {
+					lockTag = " [drift]"
+				}
+			}
+			fmt.Fprintf(&builder, "\n  %s %s [%s]%s: %s", box, s.Name, s.Scope, lockTag, s.Description)
 		}
 		return writeEvent(output, format, Event{Kind: EventKindText, Text: builder.String()})
+	}
+
+	if trimmedArg == "check" || trimmedArg == "verify" {
+		lockPath := r.skills.ProjectLockPath()
+		if lockPath == "" {
+			lockPath = skill.LockFileName
+		}
+		lock, err := skill.ReadLockFile(lockPath)
+		if err != nil || len(lock.Skills) == 0 {
+			return writeEvent(output, format, Event{
+				Kind: EventKindText,
+				Text: fmt.Sprintf("No project skill lock found (%s).\nUse /skills lock to generate a lockfile for project skills.", lockPath),
+			})
+		}
+
+		projectSkills := make([]skill.Skill, 0)
+		for _, s := range r.skills.List() {
+			if s.Scope == skill.ScopeProject {
+				projectSkills = append(projectSkills, s)
+			}
+		}
+		report := skill.VerifyProjectSkills(lock, projectSkills)
+		report.LockPath = lockPath
+		r.skills.SetProjectLock(lockPath, &report)
+
+		var builder strings.Builder
+		fmt.Fprintf(&builder, "Project Skill Lock (%s):", report.LockPath)
+		verified, drifted, missing, unlocked := report.Summary()
+		fmt.Fprintf(&builder, "\n  Summary: %d verified, %d drifted, %d missing, %d unlocked", verified, drifted, missing, unlocked)
+		for _, res := range report.Results {
+			switch res.Status {
+			case skill.LockStatusVerified:
+				fmt.Fprintf(&builder, "\n  [verified] %s (%s)", res.Name, shortHash(res.ComputedHash))
+			case skill.LockStatusDrifted:
+				fmt.Fprintf(&builder, "\n  [drifted]  %s: expected %s, got %s", res.Name, shortHash(res.ExpectedHash), shortHash(res.ComputedHash))
+			case skill.LockStatusMissing:
+				fmt.Fprintf(&builder, "\n  [missing]  %s: expected %s (not on disk)", res.Name, shortHash(res.ExpectedHash))
+			case skill.LockStatusUnlocked:
+				fmt.Fprintf(&builder, "\n  [unlocked] %s: on disk but not locked", res.Name)
+			}
+		}
+		if report.IsClean() {
+			builder.WriteString("\nAll locked skills verified cleanly.")
+		}
+		return writeEvent(output, format, Event{Kind: EventKindText, Text: builder.String()})
+	}
+
+	if trimmedArg == "lock" {
+		projectSkills := make([]skill.Skill, 0)
+		for _, s := range r.skills.List() {
+			if s.Scope == skill.ScopeProject {
+				projectSkills = append(projectSkills, s)
+			}
+		}
+		if len(projectSkills) == 0 {
+			return writeEvent(output, format, Event{
+				Kind:  EventKindFailed,
+				Error: "No project skills found to lock. Only project-scoped skills can be locked.",
+			})
+		}
+
+		lockPath := r.skills.ProjectLockPath()
+		if lockPath == "" {
+			lockPath = skill.LockFileName
+		}
+
+		existingLock, _ := skill.ReadLockFile(lockPath)
+		newLock, err := skill.GenerateProjectLock(projectSkills, &existingLock)
+		if err != nil {
+			return err
+		}
+
+		if err := skill.WriteLockFile(lockPath, newLock); err != nil {
+			return err
+		}
+
+		report := skill.VerifyProjectSkills(newLock, projectSkills)
+		report.LockPath = lockPath
+		r.skills.SetProjectLock(lockPath, &report)
+
+		return writeEvent(output, format, Event{
+			Kind: EventKindText,
+			Text: fmt.Sprintf("Locked %d project skill(s) to %s.", len(newLock.Skills), lockPath),
+		})
 	}
 
 	if trimmedArg == "active" {
@@ -315,9 +407,13 @@ func (r *Runner) handleSkillsCommand(argument string, parts []string, output io.
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "[x] Activated skill %s [%s]: %s", s.Name, s.Scope, s.Description)
 	if len(s.Resources) > 0 {
-		builder.WriteString("\nBundled resources:")
-		for _, res := range s.Resources {
-			fmt.Fprintf(&builder, "\n  - %s", res)
+		if len(s.Resources) <= 5 {
+			builder.WriteString("\nBundled resources:")
+			for _, res := range s.Resources {
+				fmt.Fprintf(&builder, "\n  - %s", res)
+			}
+		} else {
+			fmt.Fprintf(&builder, "\nBundled resources: %s and %d more", strings.Join(s.Resources[:3], ", "), len(s.Resources)-3)
 		}
 	}
 	return writeEvent(output, format, Event{
@@ -459,6 +555,13 @@ func (r *Runner) runTurn(
 	}
 	r.retainMessages()
 	return writeEvent(output, format, Event{Kind: EventKindDone})
+}
+
+func shortHash(h string) string {
+	if len(h) <= 12 {
+		return h
+	}
+	return h[:12]
 }
 
 // EventKind identifies one headless output record.

@@ -60,25 +60,26 @@ func (c *Coordinator) WaitResultEventsAfter(
 		}
 		return ResultEventBatch{Events: events, Cursor: EventCursor(cursor), Truncated: truncated}, nil
 	}
-	if batch, notify := consume(); len(batch.Events) > 0 {
+	batch, notify := consume()
+	if len(batch.Events) > 0 {
 		return batch, nil
-	} else {
-		waitCtx := ctx
-		cancel := func() {}
-		if timeout > 0 {
-			waitCtx, cancel = context.WithTimeout(ctx, timeout)
+	}
+
+	waitCtx := ctx
+	cancel := func() {}
+	if timeout > 0 {
+		waitCtx, cancel = context.WithTimeout(ctx, timeout)
+	}
+	defer cancel()
+	select {
+	case <-notify:
+		batch, _ := consume()
+		return batch, nil
+	case <-waitCtx.Done():
+		if errors.Is(waitCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+			return ResultEventBatch{Events: []Event{}, Cursor: after, TimedOut: true}, nil
 		}
-		defer cancel()
-		select {
-		case <-notify:
-			batch, _ := consume()
-			return batch, nil
-		case <-waitCtx.Done():
-			if errors.Is(waitCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
-				return ResultEventBatch{Events: []Event{}, Cursor: after, TimedOut: true}, nil
-			}
-			return ResultEventBatch{}, waitCtx.Err()
-		}
+		return ResultEventBatch{}, waitCtx.Err()
 	}
 }
 

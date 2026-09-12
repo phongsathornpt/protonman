@@ -179,6 +179,10 @@ func mergeDocument(document fileDocument, snapshot *Snapshot, source ValueSource
 		}
 		target.set(d)
 	}
+	if document.Skills != nil {
+		snapshot.Skills.Active = append([]string(nil), document.Skills.Active...)
+		snapshot.Provenance[FieldSkillsActive] = source
+	}
 	return nil
 }
 

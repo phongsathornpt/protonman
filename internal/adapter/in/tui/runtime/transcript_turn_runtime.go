@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
@@ -145,7 +146,11 @@ func (m *bubbleModel) loadInitialMessages(messages []model.Message) {
 		switch message.Role {
 		case model.RoleUser:
 			if text != "" {
-				if strings.HasPrefix(text, "Activated skill ") {
+				cleanText := text
+				if strings.HasPrefix(cleanText, "[x] ") {
+					cleanText = strings.TrimPrefix(cleanText, "[x] ")
+				}
+				if strings.HasPrefix(cleanText, "Activated skill ") {
 					if idx := strings.Index(text, "\n"); idx != -1 {
 						text = text[:idx]
 					}
@@ -159,8 +164,14 @@ func (m *bubbleModel) loadInitialMessages(messages []model.Message) {
 		case model.RoleTool:
 			if text != "" || message.ToolName != "" {
 				kind := tool.KindForName(message.ToolName)
-				summary := toolview.SummarizeOutput(message.ToolName, kind, "", message.Content, nil, false)
-				state.Append(&tuihistory.ToolCell{Name: message.ToolName, Body: message.Content, ToolKind: kind, Summary: summary, ShowDetail: tuipresentation.MinimalPolicy().ToolDetail(kind, false, false) != tuipresentation.DetailSummary})
+				target := ""
+				if strings.TrimSpace(message.ToolName) == tool.NameSkill {
+					if skillName := toolview.ExtractSkillContentName(message.Content); skillName != "" {
+						target = fmt.Sprintf("%q", skillName)
+					}
+				}
+				summary := toolview.SummarizeOutput(message.ToolName, kind, target, message.Content, nil, false)
+				state.Append(&tuihistory.ToolCell{CallID: message.ToolCallID, Name: message.ToolName, Body: message.Content, Target: target, ToolKind: kind, Summary: summary, ShowDetail: tuipresentation.MinimalPolicy().ToolDetail(kind, false, false) != tuipresentation.DetailSummary})
 			}
 		case model.RoleSystem:
 			if text != "" {

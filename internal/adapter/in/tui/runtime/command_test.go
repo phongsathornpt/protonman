@@ -1,9 +1,14 @@
 package runtime
 
 import (
-	tea "charm.land/bubbletea/v2"
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
@@ -13,8 +18,6 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
-	"strings"
-	"testing"
 )
 
 func TestSlashDropdownFiltersAndTabAccepts(t *testing.T) {
@@ -321,6 +324,59 @@ func TestSlashSkills(t *testing.T) {
 			t.Fatalf("expected skill to be deactivated via /skills disable")
 		}
 	})
+	t.Run("skills lock and check in tui", func(t *testing.T) {
+		origSkills := model.skills
+		origWorkDir := model.workDir
+		defer func() {
+			model.skills = origSkills
+			model.workDir = origWorkDir
+		}()
+
+		tempDir := t.TempDir()
+		skillDir := filepath.Join(tempDir, "git-helper")
+		if err := os.MkdirAll(skillDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("instructions"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		projSkill := skill.Skill{
+			Name:        "git-helper",
+			Description: "Git helper tools",
+			Scope:       skill.ScopeProject,
+			BaseDir:     skillDir,
+			Location:    filepath.Join(skillDir, "SKILL.md"),
+		}
+		model.skills = skill.NewRegistry(projSkill)
+		model.workDir = tempDir
+
+		model.executeCommand("/skills check")
+		view := model.viewport.View()
+		if !strings.Contains(view, "No project skill lock found") {
+			t.Fatalf("expected no lock message, got: %s", view)
+		}
+
+		model.executeCommand("/skills lock")
+		view = model.viewport.View()
+		if !strings.Contains(view, "Locked 1 project skill(s)") {
+			t.Fatalf("expected locked message, got: %s", view)
+		}
+
+		model.executeCommand("/skills check")
+		view = model.viewport.View()
+		if !strings.Contains(view, "[verified] git-helper") || !strings.Contains(view, "All locked skills verified cleanly") {
+			t.Fatalf("expected verified message, got: %s", view)
+		}
+
+		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("modified"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		model.executeCommand("/skills check")
+		view = model.viewport.View()
+		if !strings.Contains(view, "[drifted]  git-helper") {
+			t.Fatalf("expected drifted message, got: %s", view)
+		}
+	})
 	t.Run("skill name autocomplete in composer", func(t *testing.T) {
 		model.panes.bottom.remove(skillsViewID)
 		model.panes.bottom.prompt().SetValue("/skills ")
@@ -404,6 +460,74 @@ func TestSlashSkills(t *testing.T) {
 			t.Fatalf("'t' key did not toggle skill active status")
 		}
 		model.panes.bottom.remove(skillsViewID)
+	})
+	t.Run("skill selection persists to project if .protonman exists else global", func(t *testing.T) {
+		homeDir := t.TempDir()
+		t.Setenv("PROTONMAN_HOME", homeDir)
+
+		// 1. Without .protonman in project: saves to global
+		noProjectDir := t.TempDir()
+		m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+		m.workDir = noProjectDir
+		s1 := skill.Skill{Name: "global-skill", Description: "Global", Scope: skill.ScopeUser}
+		m.skills = skill.NewRegistry(s1)
+		attachTestApplication(t, m)
+
+		m.executeCommand("/skills global-skill")
+		if !m.skills.IsActivated("global-skill") {
+			t.Fatal("expected global-skill to be activated")
+		}
+
+		snap, err := config.Load(context.Background(), config.Options{HomeDir: homeDir, WorkDir: noProjectDir})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(snap.Skills.Active) != 1 || snap.Skills.Active[0] != "global-skill" {
+			t.Fatalf("expected global skills to have global-skill, got: %v", snap.Skills.Active)
+		}
+		if snap.Provenance[config.FieldSkillsActive] != config.SourceUser {
+			t.Fatalf("expected provenance user, got: %s", snap.Provenance[config.FieldSkillsActive])
+		}
+
+		// 2. With .protonman in project: saves to project
+		projectDir := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(projectDir, ".protonman"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		m2 := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+		m2.workDir = projectDir
+		s2 := skill.Skill{Name: "project-skill", Description: "Project", Scope: skill.ScopeProject}
+		m2.skills = skill.NewRegistry(s2)
+		attachTestApplication(t, m2)
+
+		m2.executeCommand("/skills project-skill")
+		if !m2.skills.IsActivated("project-skill") {
+			t.Fatal("expected project-skill to be activated")
+		}
+
+		snap2, err := config.Load(context.Background(), config.Options{HomeDir: homeDir, WorkDir: projectDir, ProjectTrusted: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(snap2.Skills.Active) != 1 || snap2.Skills.Active[0] != "project-skill" {
+			t.Fatalf("expected project skills to have project-skill, got: %v", snap2.Skills.Active)
+		}
+		if snap2.Provenance[config.FieldSkillsActive] != config.SourceProject {
+			t.Fatalf("expected provenance project, got: %s", snap2.Provenance[config.FieldSkillsActive])
+		}
+
+		// 3. Toggle via picker pane in project
+		m2.applyPaneAction(paneAction{kind: paneActionToggleSkill, skillName: "project-skill"})
+		if m2.skills.IsActivated("project-skill") {
+			t.Fatal("expected project-skill to be deactivated after toggle")
+		}
+		snap3, err := config.Load(context.Background(), config.Options{HomeDir: homeDir, WorkDir: projectDir, ProjectTrusted: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(snap3.Skills.Active) != 0 {
+			t.Fatalf("expected project skills to be empty after deactivating, got: %v", snap3.Skills.Active)
+		}
 	})
 }
 

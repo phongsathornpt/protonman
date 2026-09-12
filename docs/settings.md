@@ -63,6 +63,21 @@ atomic rename
 
 The shared primitive does not erase scope-specific security rules. User config remains `0600`; project config remains `0644` and must preserve project-scope and symlink rejection checks.
 
+## Skills configuration and persistence
+
+Active skills can be configured in both user and project configuration:
+
+```toml
+[skills]
+active = ["my-skill", "another-skill"]
+```
+
+When a user activates or deactivates a skill interactively (e.g. via `/skills` or `Ctrl+S`):
+- If a project-local `.protonman/` directory exists in the workspace, the active list is persisted to `.protonman/config.toml` (project scope).
+- Otherwise, it falls back to `~/.protonman/config.toml` (user scope).
+
+Project configuration takes precedence over user configuration during layered load.
+
 ## Current refactor status
 
 Implemented:

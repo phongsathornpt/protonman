@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -411,6 +413,73 @@ func TestHeadlessSkillsCommands(t *testing.T) {
 		}
 		if !strings.Contains(out.String(), "[ ] Skill \"pdf-processing\" is not active.") {
 			t.Fatalf("output = %q, want not active message", out.String())
+		}
+	})
+
+	t.Run("skills lock and check commands", func(t *testing.T) {
+		tempDir := t.TempDir()
+		skillDir := filepath.Join(tempDir, "git-helper")
+		if err := os.MkdirAll(skillDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("git helper instructions"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		skills := skill.NewRegistry(
+			skill.Skill{
+				Name:        "git-helper",
+				Description: "Git helper tools",
+				Scope:       skill.ScopeProject,
+				BaseDir:     skillDir,
+				Location:    filepath.Join(skillDir, "SKILL.md"),
+			},
+		)
+		lockPath := filepath.Join(tempDir, "skills-lock.json")
+		skills.SetProjectLock(lockPath, nil)
+
+		runner, err := New(service, registry, nil, WithSkills(skills))
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+
+		// Initially check: no lock found
+		var out bytes.Buffer
+		if err := runner.Run(context.Background(), "/skills check", &out, FormatText); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		if !strings.Contains(out.String(), "No project skill lock found") {
+			t.Fatalf("output = %q, want no lock found message", out.String())
+		}
+
+		// Lock project skills
+		out.Reset()
+		if err := runner.Run(context.Background(), "/skills lock", &out, FormatText); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		if !strings.Contains(out.String(), "Locked 1 project skill(s)") {
+			t.Fatalf("output = %q, want locked 1 skill message", out.String())
+		}
+
+		// Check after locking: verified
+		out.Reset()
+		if err := runner.Run(context.Background(), "/skills check", &out, FormatText); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		if !strings.Contains(out.String(), "[verified] git-helper") || !strings.Contains(out.String(), "All locked skills verified cleanly") {
+			t.Fatalf("output = %q, want verified message", out.String())
+		}
+
+		// Modify skill on disk: check detects drift
+		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("modified content"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		out.Reset()
+		if err := runner.Run(context.Background(), "/skills check", &out, FormatText); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		if !strings.Contains(out.String(), "[drifted]  git-helper") {
+			t.Fatalf("output = %q, want drifted message", out.String())
 		}
 	})
 

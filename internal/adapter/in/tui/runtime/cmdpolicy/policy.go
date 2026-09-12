@@ -88,7 +88,7 @@ func Usage(kind Kind) string {
 	case KindCall:
 		return "usage: /call <tool> <json>"
 	case KindSkills:
-		return "usage: /skills [toggle|activate|deactivate] <name>"
+		return "usage: /skills [toggle|activate|deactivate|check|lock] <name>"
 	default:
 		return ""
 	}

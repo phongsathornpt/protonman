@@ -62,6 +62,10 @@ func (s *UserSettingsStore) SavePermissionRule(rule permission.Rule) error {
 	return SaveUserPermissionRule(s.homeDir, rule)
 }
 
+func (s *UserSettingsStore) SaveActiveSkills(activeSkills []string) error {
+	return SaveUserActiveSkills(s.homeDir, activeSkills)
+}
+
 // ProjectSettingsStore persists trusted project-local preferences.
 type ProjectSettingsStore struct{}
 
@@ -87,4 +91,8 @@ func (ProjectSettingsStore) SavePermissionMode(workDir string, mode permission.M
 
 func (ProjectSettingsStore) SavePermissionRule(workDir string, rule permission.Rule) error {
 	return SaveProjectPermissionRule(workDir, rule)
+}
+
+func (ProjectSettingsStore) SaveActiveSkills(workDir string, activeSkills []string) error {
+	return SaveProjectActiveSkills(workDir, activeSkills)
 }

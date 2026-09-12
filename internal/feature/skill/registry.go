@@ -28,6 +28,8 @@ type Registry struct {
 	order            []string
 	activated        map[string]bool
 	activationLimits ActivationLimits
+	lockPath         string
+	lockReport       *ProjectLockReport
 }
 
 // NewRegistry creates a registry populated with the provided skills.
@@ -43,6 +45,37 @@ func NewRegistry(skills ...Skill) *Registry {
 	return r
 }
 
+// SetProjectLock attaches project lockfile metadata to the registry.
+func (r *Registry) SetProjectLock(path string, report *ProjectLockReport) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.lockPath = path
+	r.lockReport = report
+}
+
+// ProjectLockReport returns the current project lock report, if any.
+func (r *Registry) ProjectLockReport() *ProjectLockReport {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.lockReport
+}
+
+// ProjectLockPath returns the path to the project lock file, if any.
+func (r *Registry) ProjectLockPath() string {
+	if r == nil {
+		return ""
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.lockPath
+}
+
 // Fork creates an isolated activation session over the same immutable skill catalog.
 // Skill definitions are copied so child activation state never leaks to the parent.
 func (r *Registry) Fork() *Registry {
@@ -52,9 +85,12 @@ func (r *Registry) Fork() *Registry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	fork := &Registry{
-		skills:    make(map[string]Skill, len(r.skills)),
-		order:     append([]string(nil), r.order...),
-		activated: make(map[string]bool),
+		skills:           make(map[string]Skill, len(r.skills)),
+		order:            append([]string(nil), r.order...),
+		activated:        make(map[string]bool),
+		activationLimits: r.activationLimits,
+		lockPath:         r.lockPath,
+		lockReport:       r.lockReport,
 	}
 	for name, item := range r.skills {
 		fork.skills[name] = item

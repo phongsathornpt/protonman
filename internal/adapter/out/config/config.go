@@ -103,7 +103,13 @@ const (
 	FieldAgentReasoningEffort  = "agent.reasoning_effort"
 	FieldAgentMaxToolCalls     = "agent.max_tool_calls"
 	FieldUIPermissionMode      = "ui.permission_mode"
+	FieldSkillsActive          = "skills.active"
 )
+
+// SkillsConfig specifies configured skill settings.
+type SkillsConfig struct {
+	Active []string `toml:"active,omitempty"`
+}
 
 // Snapshot is the effective configuration after layered loading.
 type Snapshot struct {
@@ -121,6 +127,8 @@ type Snapshot struct {
 	Model ModelConfig
 	// Agent defines execution bounds and subagent policy.
 	Agent AgentConfig
+	// Skills defines active skills preference.
+	Skills SkillsConfig
 	// Runtime defines shared execution and network policies.
 	Runtime RuntimeConfig
 	// Sources lists files that were loaded successfully.

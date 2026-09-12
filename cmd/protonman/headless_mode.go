@@ -13,46 +13,54 @@ import (
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
 )
 
-func runHeadless(
-	ctx context.Context,
-	service *toolcall.Service,
-	registry tool.Registry,
-	skillRegistry *skill.Registry,
-	stateStore session.Repository,
-	sessionID string,
-	state session.State,
-	prompt string,
-	outputFormat string,
-	turnRunner app.Conversation,
-	agents app.Agents,
-) error {
-	format, err := headless.ParseFormat(outputFormat)
+type headlessInvocation struct {
+	service       *toolcall.Service
+	registry      tool.Registry
+	skillRegistry *skill.Registry
+	stateStore    session.Repository
+	sessionID     string
+	state         session.State
+	prompt        string
+	outputFormat  string
+	turnRunner    app.Conversation
+	agents        app.Agents
+}
+
+func runHeadless(ctx context.Context, inv headlessInvocation) error {
+	format, err := headless.ParseFormat(inv.outputFormat)
 	if err != nil {
 		return err
 	}
-	runner, err := headless.New(service, registry, turnRunner, headless.WithSkills(skillRegistry), headless.WithSessionID(sessionID), headless.WithAgents(agents.ForSession(sessionID)))
+	runner, err := headless.New(
+		inv.service,
+		inv.registry,
+		inv.turnRunner,
+		headless.WithSkills(inv.skillRegistry),
+		headless.WithSessionID(inv.sessionID),
+		headless.WithAgents(inv.agents.ForSession(inv.sessionID)),
+	)
 	if err != nil {
 		return fmt.Errorf("create headless runner: %w", err)
 	}
-	if err := runner.LoadSession(state); err != nil {
+	if err := runner.LoadSession(inv.state); err != nil {
 		return fmt.Errorf("restore session transcript: %w", err)
 	}
-	runErr := runner.Run(ctx, prompt, os.Stdout, format)
-	var activeSkills []string
-	if skillRegistry != nil {
-		activeSkills = skillRegistry.ActivatedList()
+	runErr := runner.Run(ctx, inv.prompt, os.Stdout, format)
+	activeSkills := []string{}
+	if inv.skillRegistry != nil {
+		activeSkills = inv.skillRegistry.ActivatedList()
 	}
-	saveErr := stateStore.Save(ctx, sessionID, session.State{
-		SessionID:       sessionID,
-		Revision:        state.Revision,
-		WorkspaceKey:    state.WorkspaceKey,
-		WorkspaceName:   state.WorkspaceName,
-		CreatedAt:       state.CreatedAt,
-		PermissionMode:  service.Mode().String(),
+	saveErr := inv.stateStore.Save(ctx, inv.sessionID, session.State{
+		SessionID:       inv.sessionID,
+		Revision:        inv.state.Revision,
+		WorkspaceKey:    inv.state.WorkspaceKey,
+		WorkspaceName:   inv.state.WorkspaceName,
+		CreatedAt:       inv.state.CreatedAt,
+		PermissionMode:  inv.service.Mode().String(),
 		ActiveSkills:    activeSkills,
-		ActiveGoal:      state.ActiveGoal,
-		AgentProfile:    state.AgentProfile,
-		ReasoningEffort: state.ReasoningEffort,
+		ActiveGoal:      inv.state.ActiveGoal,
+		AgentProfile:    inv.state.AgentProfile,
+		ReasoningEffort: inv.state.ReasoningEffort,
 		Messages:        runner.SessionState(),
 	})
 	if runErr != nil && saveErr != nil {

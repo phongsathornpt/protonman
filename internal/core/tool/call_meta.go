@@ -14,7 +14,7 @@ func (c Call) ArgumentsMap() map[string]any {
 	if len(c.Arguments) == 0 {
 		return make(map[string]any)
 	}
-	var args map[string]any
+	args := map[string]any{}
 	if err := json.Unmarshal(c.Arguments, &args); err != nil || args == nil {
 		return make(map[string]any)
 	}
@@ -134,7 +134,7 @@ func ParsePatchPaths(patch string) []string {
 	if strings.TrimSpace(patch) == "" {
 		return nil
 	}
-	var paths []string
+	paths := []string{}
 	seen := make(map[string]struct{})
 	addPath := func(p string) {
 		p = strings.TrimSpace(p)

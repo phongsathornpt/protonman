@@ -56,12 +56,27 @@ func KindGlyph(kind tool.Kind, name string) string {
 func ExtractSkillContentName(body string) string {
 	for _, quote := range []string{`name="`, `name='`} {
 		idx := strings.Index(body, quote)
-		if idx == -1 {
-			continue
+		if idx != -1 {
+			rest := body[idx+len(quote):]
+			if end := strings.IndexAny(rest, `"'`); end != -1 {
+				return rest[:end]
+			}
 		}
-		rest := body[idx+len(quote):]
-		if end := strings.IndexAny(rest, `"'`); end != -1 {
-			return rest[:end]
+	}
+	trimmed := strings.TrimSpace(body)
+	for _, prefix := range []string{"Activated skill ", "[x] Activated skill ", "Skill "} {
+		if strings.HasPrefix(trimmed, prefix) {
+			rest := strings.TrimSpace(strings.TrimPrefix(trimmed, prefix))
+			if strings.HasPrefix(rest, `"`) {
+				rest = rest[1:]
+				if end := strings.Index(rest, `"`); end != -1 {
+					return rest[:end]
+				}
+			}
+			fields := strings.Fields(rest)
+			if len(fields) > 0 {
+				return strings.Trim(fields[0], `":'[],`)
+			}
 		}
 	}
 	return ""

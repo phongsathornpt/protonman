@@ -119,36 +119,37 @@ func (c *Coordinator) waitActivity(ctx context.Context, ref TurnRef, after *uint
 		return ActivityWaitResult{Event: &last, Events: events, Cursor: nextCursor, Truncated: truncated}, nil
 	}
 
-	if result, notify := consume(); len(result.Events) > 0 {
+	result, notify := consume()
+	if len(result.Events) > 0 {
 		if includeSnapshot {
 			c.attachActivitySnapshot(ctx, ref, &result)
 		}
 		return result, nil
-	} else {
-		waitCtx := ctx
-		cancel := func() {}
-		if timeout > 0 {
-			waitCtx, cancel = context.WithTimeout(ctx, timeout)
+	}
+
+	waitCtx := ctx
+	cancel := func() {}
+	if timeout > 0 {
+		waitCtx, cancel = context.WithTimeout(ctx, timeout)
+	}
+	defer cancel()
+	select {
+	case <-notify:
+		result, _ := consume()
+		if includeSnapshot {
+			c.attachActivitySnapshot(ctx, ref, &result)
 		}
-		defer cancel()
-		select {
-		case <-notify:
-			result, _ := consume()
+		return result, nil
+	case <-waitCtx.Done():
+		if errors.Is(waitCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+			c.observeMetric(ctx, MetricEvent{Kind: MetricWaitTimeout, SessionID: ref.SessionID, ParentID: ref.TurnID})
 			if includeSnapshot {
 				c.attachActivitySnapshot(ctx, ref, &result)
 			}
+			result.TimedOut = true
 			return result, nil
-		case <-waitCtx.Done():
-			if errors.Is(waitCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
-				c.observeMetric(ctx, MetricEvent{Kind: MetricWaitTimeout, SessionID: ref.SessionID, ParentID: ref.TurnID})
-				if includeSnapshot {
-					c.attachActivitySnapshot(ctx, ref, &result)
-				}
-				result.TimedOut = true
-				return result, nil
-			}
-			return ActivityWaitResult{}, waitCtx.Err()
 		}
+		return ActivityWaitResult{}, waitCtx.Err()
 	}
 }
 

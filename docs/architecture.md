@@ -134,7 +134,7 @@ Feature packages own cohesive product behavior built on core contracts:
 
 - `agent/`: canonical profiles, dependency-aware scheduling, lifecycle/events, delegation policy, required-vs-optional completion barriers, and versioned result delivery/consumption acknowledgement. Result availability drives the synthesis stream; the separate `agent_result_consumed` event is emitted only after successful parent-context encoding and never feeds back into that stream. Dependency edges reference already-admitted children in the same parent turn, so the runtime forms an acyclic execution graph by construction.
 - `project/`: project discovery/trust behavior.
-- `skill/`: skill discovery and activation domain behavior.
+- `skill/`: skill discovery, activation domain behavior, lockfile verification, and schema migration (supporting both `.protonman/skills-lock.json` and legacy root locks with atomic backup). Dynamic read roots authorize active skill directories for tool access.
 - `todo/`: session task-plan state, durable active-goal binding/supersession, and optimistic concurrency.
 
 Feature packages are not presentation or persistence dumping grounds. Concrete filesystem,

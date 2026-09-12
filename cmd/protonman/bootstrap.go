@@ -134,6 +134,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		fmt.Fprintln(os.Stderr, "warning:", warning)
 	}
 	skillRegistry := skill.NewRegistry(skillsResult.Skills...)
+	skillRegistry.SetProjectLock(skillsResult.LockPath, skillsResult.LockReport)
 	policy, err := permission.NewPolicy(loadedConfig.Permission)
 	if err != nil {
 		return nil, fmt.Errorf("create permission policy: %w", err)
@@ -298,9 +299,30 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		if err != nil {
 			return nil, fmt.Errorf("restore session %q: %w", sessionID, err)
 		}
-		for _, name := range state.ActiveSkills {
-			if activateErr := skillRegistry.Activate(name); activateErr != nil {
-				return nil, fmt.Errorf("restore active skill %q: %w", name, activateErr)
+		if len(state.ActiveSkills) > 0 {
+			for _, name := range state.ActiveSkills {
+				if activateErr := skillRegistry.Activate(name); activateErr != nil {
+					return nil, fmt.Errorf("restore active skill %q: %w", name, activateErr)
+				}
+				if s, ok := skillRegistry.Lookup(name); ok && s.BaseDir != "" && workspaceRoot != nil {
+					_ = workspaceRoot.AddReadRoot(s.BaseDir)
+				}
+			}
+		} else if len(loadedConfig.Skills.Active) > 0 {
+			for _, name := range loadedConfig.Skills.Active {
+				if activateErr := skillRegistry.Activate(name); activateErr == nil {
+					if s, ok := skillRegistry.Lookup(name); ok && s.BaseDir != "" && workspaceRoot != nil {
+						_ = workspaceRoot.AddReadRoot(s.BaseDir)
+					}
+				}
+			}
+		}
+	} else if len(loadedConfig.Skills.Active) > 0 {
+		for _, name := range loadedConfig.Skills.Active {
+			if activateErr := skillRegistry.Activate(name); activateErr == nil {
+				if s, ok := skillRegistry.Lookup(name); ok && s.BaseDir != "" && workspaceRoot != nil {
+					_ = workspaceRoot.AddReadRoot(s.BaseDir)
+				}
 			}
 		}
 	}
