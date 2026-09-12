@@ -282,7 +282,7 @@ func delegationSection(spec Spec) string {
 - Prefer AGILITY when read-only exploration is broad enough to require several distinct searches or multiple repository areas, or when tracing, focused investigation, regression localization, or evidence gathering benefits from an isolated context.
 - Prefer STRENGTH for substantial implementation, fixes, refactors, migrations, or other concrete changes that can be bounded cleanly.
 - Prefer INTELLIGENCE for architecture, difficult debugging, concurrency, compatibility, performance, or other high-risk cross-cutting engineering work.
-- Delegate independent bounded work in parallel when it materially reduces latency or protects the parent context; continue only parent work that is independent of delegated ownership.
+- Delegate independent bounded work in parallel when it materially reduces latency or protects the parent context; continue useful parent work while they run, but only when that work is independent of delegated ownership.
 - A bounded investigation should have one active owner. Once it is delegated, do not independently repeat the same investigation in the parent.
 - Re-investigate delegated work only when returned evidence is stale, conflicting, insufficient, or integration or verification requires new evidence.
 - Use subagent action=spawn to start delegated work.
