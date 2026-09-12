@@ -58,7 +58,7 @@ func newModelSetupPaneView(m *bubbleModel) *modelSetupPaneView {
 		providerName := providers[providerIdx]
 		modelsList, hasFreshCatalog = m.modelCatalogs.FreshModels(providerName, time.Now(), m.runtimeConfig.ModelCatalogTTL)
 		if cfg, ok := m.providers[modelcatalog.NormalizeProviderKey(providerName)]; ok {
-			modelsList = visibleModelsForAccess(providerName, cfg.BaseURL, cfg.APIKey, modelsList)
+			modelsList = modelcatalog.VisibleForAccess(providerName, cfg.BaseURL, cfg.APIKey, modelsList)
 		}
 	}
 	if !hasFreshCatalog {

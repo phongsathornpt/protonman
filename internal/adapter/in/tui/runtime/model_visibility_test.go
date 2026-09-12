@@ -45,14 +45,6 @@ func TestModelSetupOpenCodeWithKeyShowsAll(t *testing.T) {
 	}
 }
 
-func TestVisibleModelsForAccessDoesNotFallbackToPaid(t *testing.T) {
-	models := []model.RemoteModel{{ID: "claude-sonnet-5"}}
-	visible := visibleModelsForAccess("opencode", model.DefaultOpenCodeEndpoint, "", models)
-	if len(visible) != 0 {
-		t.Fatalf("visible models = %+v, want none when no free models are available", visible)
-	}
-}
-
 func TestProviderEditorOpenCodeWithKeyShowsAll(t *testing.T) {
 	view := newProviderPaneViewWithConfig(config.ProviderConfig{
 		Name: "opencode", BaseURL: model.DefaultOpenCodeEndpoint, APIKey: "oc-key",

@@ -44,7 +44,7 @@ func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) tea.Cmd {
 				m.modelCatalogs.Set(message.providerName, message.models)
 				models := m.modelCatalogs.Models(message.providerName)
 				if cfg, configured := m.providers[modelcatalog.NormalizeProviderKey(message.providerName)]; configured {
-					models = visibleModelsForAccess(message.providerName, cfg.BaseURL, cfg.APIKey, models)
+					models = modelcatalog.VisibleForAccess(message.providerName, cfg.BaseURL, cfg.APIKey, models)
 				}
 				mv.setModels(models, m.activeProvider, m.activeModel)
 				mv.syncReasoningForSelection(mv.reasoningPreference)

@@ -1,4 +1,4 @@
-package runtime
+package modelcatalog
 
 import (
 	"strings"
@@ -6,7 +6,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 )
 
-func visibleModelsForAccess(providerName, baseURL, apiKey string, models []model.RemoteModel) []model.RemoteModel {
+// VisibleForAccess filters a provider catalog to models available to the current access mode.
+func VisibleForAccess(providerName, baseURL, apiKey string, models []model.RemoteModel) []model.RemoteModel {
 	if !model.IsProvider(model.DefaultOpenCodeName, providerName, baseURL) || strings.TrimSpace(apiKey) != "" {
 		return models
 	}

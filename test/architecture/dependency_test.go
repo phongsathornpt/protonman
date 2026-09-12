@@ -490,6 +490,26 @@ func TestInternalTopLevelCleanArchitectureDirectories(t *testing.T) {
 	}
 }
 
+func TestTUIRuntimeRootStaysWithinStructuralBudget(t *testing.T) {
+	root := repositoryRoot(t)
+	runtimeRoot := filepath.Join(root, "internal", "adapter", "in", "tui", "runtime")
+	entries, err := os.ReadDir(runtimeRoot)
+	if err != nil {
+		t.Fatalf("read TUI runtime root: %v", err)
+	}
+	const maxProductionFiles = 67
+	productionFiles := 0
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		productionFiles++
+	}
+	if productionFiles > maxProductionFiles {
+		t.Fatalf("TUI runtime root has %d production files; structural budget is %d; extract ownership into focused subpackages instead of growing the root", productionFiles, maxProductionFiles)
+	}
+}
+
 func TestNoLingeringRootDirectories(t *testing.T) {
 	root := repositoryRoot(t)
 	formerRootDirs := []string{
