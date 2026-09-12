@@ -42,6 +42,10 @@ func newStream(body io.ReadCloser, metadata sdk.ProviderMetadata, includeRaw boo
 	return &stream{reader: bufio.NewReader(body), closer: body, chatCalls: map[int]*accumulatedToolCall{}, responseCalls: map[string]*accumulatedToolCall{}, metadata: metadata, includeRaw: includeRaw, provider: provider}
 }
 
+type cachedTokenDetails struct {
+	CachedTokens int64 `json:"cached_tokens"`
+}
+
 type chatChunk struct {
 	Choices []struct {
 		Delta struct {
@@ -58,9 +62,10 @@ type chatChunk struct {
 		FinishReason *string `json:"finish_reason,omitempty"`
 	} `json:"choices"`
 	Usage *struct {
-		PromptTokens     int64 `json:"prompt_tokens"`
-		CompletionTokens int64 `json:"completion_tokens"`
-		TotalTokens      int64 `json:"total_tokens"`
+		PromptTokens        int64               `json:"prompt_tokens"`
+		CompletionTokens    int64               `json:"completion_tokens"`
+		TotalTokens         int64               `json:"total_tokens"`
+		PromptTokensDetails *cachedTokenDetails `json:"prompt_tokens_details,omitempty"`
 	} `json:"usage,omitempty"`
 	Error *struct {
 		Message  string         `json:"message"`
@@ -90,9 +95,10 @@ type responsesChunk struct {
 			Metadata map[string]any `json:"metadata,omitempty"`
 		} `json:"error,omitempty"`
 		Usage *struct {
-			InputTokens  int64 `json:"input_tokens"`
-			OutputTokens int64 `json:"output_tokens"`
-			TotalTokens  int64 `json:"total_tokens"`
+			InputTokens        int64               `json:"input_tokens"`
+			OutputTokens       int64               `json:"output_tokens"`
+			TotalTokens        int64               `json:"total_tokens"`
+			InputTokensDetails *cachedTokenDetails `json:"input_tokens_details,omitempty"`
 		} `json:"usage,omitempty"`
 	} `json:"response,omitempty"`
 	Error *struct {
@@ -101,6 +107,13 @@ type responsesChunk struct {
 		Code     string         `json:"code,omitempty"`
 		Metadata map[string]any `json:"metadata,omitempty"`
 	} `json:"error,omitempty"`
+}
+
+func cachedInputTokens(details *cachedTokenDetails) int64 {
+	if details == nil {
+		return 0
+	}
+	return details.CachedTokens
 }
 
 func (s *stream) Next(ctx context.Context) (sdk.Event, error) {
@@ -203,7 +216,12 @@ func (s *stream) processChat(payload string) error {
 		return providerStreamError(s.provider, chunk.Error.Code, chunk.Error.Type, chunk.Error.Message, chunk.Error.Metadata)
 	}
 	if chunk.Usage != nil {
-		s.queue = append(s.queue, sdk.Event{Kind: sdk.EventUsage, Usage: sdk.Usage{InputTokens: chunk.Usage.PromptTokens, OutputTokens: chunk.Usage.CompletionTokens, TotalTokens: chunk.Usage.TotalTokens}})
+		s.queue = append(s.queue, sdk.Event{Kind: sdk.EventUsage, Usage: sdk.Usage{
+			InputTokens:       chunk.Usage.PromptTokens,
+			OutputTokens:      chunk.Usage.CompletionTokens,
+			TotalTokens:       chunk.Usage.TotalTokens,
+			CachedInputTokens: cachedInputTokens(chunk.Usage.PromptTokensDetails),
+		}})
 	}
 	for _, choice := range chunk.Choices {
 		if choice.Delta.Content != "" {
@@ -281,7 +299,12 @@ func (s *stream) processResponses(payload string) error {
 	case "response.completed":
 		if chunk.Response != nil && chunk.Response.Usage != nil {
 			u := chunk.Response.Usage
-			s.queue = append(s.queue, sdk.Event{Kind: sdk.EventUsage, Usage: sdk.Usage{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens, TotalTokens: u.TotalTokens}})
+			s.queue = append(s.queue, sdk.Event{Kind: sdk.EventUsage, Usage: sdk.Usage{
+				InputTokens:       u.InputTokens,
+				OutputTokens:      u.OutputTokens,
+				TotalTokens:       u.TotalTokens,
+				CachedInputTokens: cachedInputTokens(u.InputTokensDetails),
+			}})
 		}
 		reason := sdk.FinishStop
 		if s.hasToolCalls || len(s.responseCalls) > 0 {

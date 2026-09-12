@@ -31,9 +31,6 @@ func (l *Loop) currentSkillPromptSection() string {
 
 func (l *Loop) effectivePromptSpec(definitions []tool.Definition, extras []string) prompt.Spec {
 	spec := *l.promptSpec
-	if profile, ok := model.ResolvedModelProfile(l.languageModel); ok {
-		spec.ModelPromptHints = append([]string(nil), profile.AgentPolicy.PromptHints...)
-	}
 	spec.Capabilities = prompt.ToolCapabilities{}
 	spec.Mutations = prompt.MutationCapabilities{}
 	spec.AvailableTools = make([]string, 0, len(definitions))

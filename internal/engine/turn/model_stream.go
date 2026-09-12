@@ -60,6 +60,13 @@ func (l *Loop) streamRound(
 	return assistant, calls, nil
 }
 
+func promptCacheHitPercent(usage sdk.Usage) float64 {
+	if usage.InputTokens <= 0 || usage.CachedInputTokens <= 0 {
+		return 0
+	}
+	return float64(usage.CachedInputTokens) * 100 / float64(usage.InputTokens)
+}
+
 func consumeSDKStream(ctx context.Context, round int, stream sdk.Stream, sink Sink) (model.Message, []model.ToolCall, error) {
 	var text strings.Builder
 	calls := make([]model.ToolCall, 0)
@@ -84,6 +91,15 @@ func consumeSDKStream(ctx context.Context, round int, stream sdk.Stream, sink Si
 			call := event.ToolCall
 			call.Arguments = append(json.RawMessage(nil), call.Arguments...)
 			calls = append(calls, call)
+		case sdk.EventUsage:
+			slog.DebugContext(ctx, "model round token usage",
+				"round", round,
+				"input_tokens", event.Usage.InputTokens,
+				"cached_input_tokens", event.Usage.CachedInputTokens,
+				"cache_hit_percent", promptCacheHitPercent(event.Usage),
+				"output_tokens", event.Usage.OutputTokens,
+				"total_tokens", event.Usage.TotalTokens,
+			)
 		case sdk.EventFinish:
 			if text.Len() == 0 && len(calls) == 0 {
 				return model.Message{}, nil, fmt.Errorf("model stream round %d: %w", round, ErrEmptyResponse)

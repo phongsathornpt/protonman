@@ -149,6 +149,34 @@ func TestRegistryReplaceNamespaceIsAtomic(t *testing.T) {
 	}
 }
 
+func TestRegistryReplaceNamespacePublishesCanonicalOrder(t *testing.T) {
+	registry, err := NewRegistry(
+		namedSchemaHandler{name: "read"},
+		namedSchemaHandler{name: "mcp.db.old"},
+		namedSchemaHandler{name: "edit"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.ReplaceNamespace("mcp.db.", []tool.Handler{
+		namedSchemaHandler{name: "mcp.db.zeta"},
+		namedSchemaHandler{name: "mcp.db.alpha"},
+		namedSchemaHandler{name: "mcp.db.middle"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	definitions := registry.Definitions()
+	if len(definitions) != 5 {
+		t.Fatalf("definitions = %d, want 5", len(definitions))
+	}
+	want := []string{"read", "mcp.db.alpha", "mcp.db.middle", "mcp.db.zeta", "edit"}
+	for i, name := range want {
+		if definitions[i].Name != name {
+			t.Fatalf("definition[%d] = %q, want %q; definitions=%#v", i, definitions[i].Name, name, definitions)
+		}
+	}
+}
+
 func TestRegistryReplaceNamespaceCanRemoveAllTools(t *testing.T) {
 	registry, _ := NewRegistry(namedSchemaHandler{name: "mcp.db.old"}, namedSchemaHandler{name: "read"})
 	if err := registry.ReplaceNamespace("mcp.db.", nil); err != nil {

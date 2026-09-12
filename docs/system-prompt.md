@@ -2,6 +2,8 @@
 
 Protonman builds one provider-neutral, capability-driven system prompt in `internal/engine/prompt` for every model request. The prompt is intentionally deterministic and ordered for prefix-cache reuse. Provider adapters may encode the resulting message differently on the wire, but they must not silently change its semantics.
 
+Model identity and provider identity are not natural-language prompt inputs. Differences between Gemini, GPT, Qwen, Claude-compatible providers, and other model families belong in runtime capability resolution, schema publication, reasoning policy, transport compatibility, and provider adapters rather than model-specific prose injected into the system prompt.
+
 ## Prompt ABI
 
 The current managed prompt format is **Prompt ABI v14**:
@@ -26,19 +28,19 @@ The current topology is intentionally ordered from the most reusable material to
 Identity
 Execution Contract
 Tool Use
+Workspace
 Task Coordination          (when task tools are visible)
 Delegation Protocol        (when agent tools are visible)
 External MCP Tools         (when MCP tools are visible)
 Editing And Verification   (when workspace mutation is possible)
-Model Guidance             (when the model profile supplies hints)
-Grounding Contract         (when grounding is required)
 
 Project Instructions
 Additional Instructions
-Skills
+
 Role                       (subagents / scoped roles)
 Active Goal
-Workspace                  (most volatile built-in section)
+Skills
+Grounding Contract         (when grounding is required)
 ```
 
 The exact numeric order is an internal implementation detail. The behavioral invariant is that stable, reusable instructions precede progressively more dynamic context unless instruction precedence requires otherwise.
@@ -48,26 +50,24 @@ The exact numeric order is an internal implementation detail. The behavioral inv
 Changes should preserve these invariants:
 
 1. Equivalent semantic inputs render byte-identical prompt output.
-2. Section order never depends on map iteration, plugin registration order, or other nondeterministic runtime state.
-3. Volatile values such as workspace paths remain after reusable system, capability, and project instructions when semantics permit.
-4. Changing one dynamic section should not change bytes before that section's intended cache boundary.
-5. Tool guidance reflects the effective tool surface. The prompt must not advertise a capability the model cannot call.
-6. Runtime enforcement remains authoritative. Prompt wording never substitutes for permission, sandbox, safety, grounding, or mutation enforcement.
+2. Section order never depends on map iteration, plugin registration order, provider discovery order, or other nondeterministic runtime state.
+3. Model identity and provider identity never inject natural-language guidance into the canonical system prompt.
+4. Volatile session material remains after reusable system, capability, and project instructions when semantics permit.
+5. Changing one dynamic section should not change bytes before that section's intended cache boundary.
+6. Tool guidance reflects the effective tool surface. The prompt must not advertise a capability the model cannot call.
+7. Runtime enforcement remains authoritative. Prompt wording never substitutes for permission, sandbox, safety, grounding, mutation, or tool-admission enforcement.
 
 These rules improve prefix reuse for providers and runtimes that implement KV/prefix caching. They are still useful when a provider does not expose cache statistics because deterministic prompt construction reduces accidental request drift.
 
 ## Dynamic inputs
 
-The current renderer accepts dynamic fields through `prompt.Spec`, including model hints, project instructions, skills, role, active goal, workspace, grounding requirements, and the effective tool surface.
+The current renderer accepts dynamic fields through `prompt.Spec`, including project instructions, skills, role, active goal, workspace policy, grounding requirements, and the effective tool surface.
 
-The active goal is durable session state, not merely a compaction hint. When present, it is
-the persistent objective for the session: the model should continue making concrete progress
-until the goal is completed, blocked by unavailable capabilities or permissions, or explicitly
-changed or cleared. Implementation goals require repository inspection, mutation, and
-verification rather than a plan-only response. The TUI `/goal <detail>` command starts the
-execution turn; prompt wording does not itself schedule a turn.
+`ModelPromptHints` is retained only as a temporary source-compatibility shim. `Render` intentionally ignores it. Do not add new model- or provider-specific prompt hints through `ExtraInstructions` or another indirect path.
 
-Not all of these fields have the same stability. Prefer keeping highly reusable contracts early and request/session-specific material late. Do not interpolate timestamps, generated IDs, or other per-request noise into an early prompt section.
+The active goal is durable session state, not merely a compaction hint. When present, it is the persistent objective for the session: the model should continue making concrete progress until the goal is completed, blocked by unavailable capabilities or permissions, or explicitly changed or cleared. Implementation goals require repository inspection, mutation, and verification rather than a plan-only response. The TUI `/goal <detail>` command starts the execution turn; prompt wording does not itself schedule a turn.
+
+Not all dynamic fields have the same stability. Prefer keeping highly reusable contracts early and request/session-specific material late. Do not interpolate timestamps, generated IDs, request IDs, provider names, model IDs, absolute host paths, or other per-request noise into an early prompt section.
 
 Future work may move appropriate session transitions into append-only history/context instead of rewriting the managed system prompt. Such a change must preserve runtime enforcement and be covered by behavioral regression tests.
 
@@ -79,8 +79,27 @@ When changing tool publication:
 
 - keep canonical tool names and schemas stable when capability semantics are unchanged;
 - avoid arbitrary order changes;
+- canonicalize dynamic namespace replacement so external discovery order does not churn the published prefix;
 - do not expose unauthorized tools merely to improve cache reuse;
 - prefer stable capability profiles for subagents over ad hoc tool sets when that does not weaken isolation or correctness.
+
+Provider-specific cache routing hints or cache-breakpoint features belong in provider adapters. They must not fork the canonical prompt or change its semantics.
+
+## Delegation routing
+
+Universal is the primary owner of the user's task. The Delegation Protocol uses task characteristics rather than model identity to decide whether work stays local or moves to a specialized child.
+
+Keep work in Universal when the target is already known, the lookup is simple and directed, the edit is small and localized, or delegation would duplicate work already in progress.
+
+Prefer specialized children when the work can be bounded cleanly and isolation materially improves execution:
+
+- **AGILITY** for broad read-only exploration that spans several distinct searches or repository areas, tracing, focused investigation, regression localization, and evidence gathering;
+- **STRENGTH** for substantial bounded implementation, fixes, refactors, migrations, and concrete code changes;
+- **INTELLIGENCE** for architecture, difficult debugging, concurrency, compatibility, performance, and other high-risk cross-cutting engineering work.
+
+Independent bounded work may run concurrently. A bounded investigation should have one active owner: once investigation is delegated, Universal should continue only independent parent work rather than repeating the same exploration. Re-investigation is justified only when returned evidence is stale, conflicting, insufficient, or integration/verification requires fresh evidence.
+
+Todo state is coordination metadata, not a prerequisite for delegation. Do not create a TODO solely because work is delegated. When delegated work already corresponds to a tracked TODO item, pass `task_id` so runtime lifecycle events own the execution-state transition.
 
 ## Subagents
 
@@ -89,6 +108,8 @@ Subagents reuse the common Protonman execution/tool contracts and append special
 A subagent's role or delegated task must not weaken the parent-independent runtime contracts. Specialized tool registries remain authoritative even when prompt text shares a common prefix.
 
 Do not copy the complete parent conversation into a child merely for convenience. Delegation should pass the bounded context necessary for the child task. Child findings return to the parent as context; the parent still owns integration and final verification.
+
+Skill activation also follows a single-source rule. The `skill` tool returns a compact activation receipt; full active-skill instructions are injected by the managed prompt on the following model context instead of being duplicated in both the tool result and system prompt.
 
 Prompt ABI v9 moves normal child-result collection out of model-driven polling. The runtime observes versioned result events, deduplicates them per parent turn, and injects completed child results as ephemeral runtime context. `wait`, `get`, and `list` remain lifecycle inspection capabilities, but the managed prompt does not prescribe them for normal result collection. Delegated work blocks completion by default; `optional=true` is reserved for speculative work that may be integrated if ready but must not delay the parent. The runtime keeps optional work active for safe tentative-output buffering and cancels any still-live optional child when the parent commits. `depends_on` expresses a dependency on already-spawned children in the same parent turn; the runtime waits for those dependencies and only starts the child after all complete successfully, so the model must not poll dependency state.
 
@@ -108,13 +129,17 @@ The runtime context uses a structured per-child payload with `status`, `conclusi
 
 ## Tests
 
-Cache-sensitive behavior is covered primarily in `internal/engine/prompt/assembly_test.go` and prompt/turn behavior tests. Important regressions include:
+Cache- and routing-sensitive behavior is covered primarily in `internal/engine/prompt/assembly_test.go`, `internal/engine/prompt/delegation_routing_test.go`, and prompt/turn behavior tests. Important regressions include:
 
 - deterministic section ordering;
 - repeated rendering is byte-stable;
 - equivalent tool sets render equivalent guidance regardless of input order;
+- dynamic tool namespace replacement publishes canonical name order;
 - workspace, project instructions, skills, role, and active-goal changes preserve the expected earlier prefix;
+- model-specific compatibility hints cannot change rendered prompt output;
 - root/subagent identities and capability-conditioned contracts remain behaviorally correct;
+- delegation routing distinguishes local work, AGILITY exploration, STRENGTH implementation, and INTELLIGENCE cross-cutting reasoning;
+- delegation preserves runtime-owned result delivery and completion semantics;
 - the turn engine publishes the managed prompt as the model-facing system message.
 
-When adding or moving a dynamic section, add a divergence-boundary regression test rather than relying only on substring assertions.
+When adding or moving a dynamic section, add a divergence-boundary regression test rather than relying only on substring assertions. When changing delegation policy, prefer semantic-anchor tests over exact full-section snapshots so wording can evolve without weakening the routing contract.

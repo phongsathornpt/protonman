@@ -12,7 +12,6 @@ func TestE2ESkillDiscoveryAndActivation(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 
-	// Create user-level skill
 	skillDir := filepath.Join(home, ".protonman", "skills", "sample-skill")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -38,11 +37,11 @@ Execute test workflows efficiently.
 	if result.exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0; stderr = %s", result.exitCode, result.stderr)
 	}
-	if !strings.Contains(result.stdout, `<skill_content name="sample-skill">`) {
-		t.Fatalf("stdout missing skill_content: %s", result.stdout)
+	if !strings.Contains(result.stdout, "Activated skill") || !strings.Contains(result.stdout, "sample-skill") {
+		t.Fatalf("stdout missing compact activation acknowledgement: %s", result.stdout)
 	}
-	if !strings.Contains(result.stdout, "Execute test workflows efficiently.") {
-		t.Fatalf("stdout missing skill instructions: %s", result.stdout)
+	if strings.Contains(result.stdout, "Execute test workflows efficiently.") || strings.Contains(result.stdout, "<skill_content") {
+		t.Fatalf("stdout leaked full skill instructions: %s", result.stdout)
 	}
 }
 
@@ -50,7 +49,6 @@ func TestE2ESkillProjectTrustGating(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 
-	// Create project-level skill in workspace
 	skillDir := filepath.Join(ws, ".protonman", "skills", "project-skill")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -72,11 +70,9 @@ description: Project specific skill
 			env:  []string{"PROTONMAN_HOME=" + home},
 		})
 
-		// Should emit warning on stderr
 		if !strings.Contains(result.stderr, "skipping project skills") || !strings.Contains(result.stderr, "PROTONMAN_TRUST_PROJECT=1") {
 			t.Fatalf("expected trust warning on stderr, got: %s", result.stderr)
 		}
-		// skill should fail since skill is not loaded
 		if !strings.Contains(result.stdout, "skill \\\"project-skill\\\" not found") && !strings.Contains(result.stderr, "not found") {
 			t.Fatalf("expected skill not found, got stdout: %s, stderr: %s", result.stdout, result.stderr)
 		}
@@ -92,8 +88,11 @@ description: Project specific skill
 		if result.exitCode != 0 {
 			t.Fatalf("exit code = %d, want 0; stderr = %s", result.exitCode, result.stderr)
 		}
-		if !strings.Contains(result.stdout, `<skill_content name="project-skill">`) {
-			t.Fatalf("expected skill_content in stdout, got: %s", result.stdout)
+		if !strings.Contains(result.stdout, "Activated skill") || !strings.Contains(result.stdout, "project-skill") {
+			t.Fatalf("expected compact skill activation acknowledgement, got: %s", result.stdout)
+		}
+		if strings.Contains(result.stdout, "# Project Skill Content") || strings.Contains(result.stdout, "<skill_content") {
+			t.Fatalf("trusted activation leaked full skill instructions: %s", result.stdout)
 		}
 	})
 }
@@ -102,7 +101,6 @@ func TestE2EMultiSkillDiscoveryAndActivation(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 
-	// Create 3 user skills in PROTONMAN_HOME
 	for _, name := range []string{"skill-alpha", "skill-beta", "skill-gamma"} {
 		skillDir := filepath.Join(home, ".protonman", "skills", name)
 		if err := os.MkdirAll(skillDir, 0o755); err != nil {
@@ -114,7 +112,6 @@ func TestE2EMultiSkillDiscoveryAndActivation(t *testing.T) {
 		}
 	}
 
-	// 1. Activate skill-alpha
 	result := runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call skill {"name":"skill-alpha"}`},
 		dir:  ws,
@@ -123,11 +120,10 @@ func TestE2EMultiSkillDiscoveryAndActivation(t *testing.T) {
 	if result.exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0; stderr = %s", result.exitCode, result.stderr)
 	}
-	if !strings.Contains(result.stdout, `<skill_content name="skill-alpha">`) {
-		t.Fatalf("stdout missing skill-alpha content: %s", result.stdout)
+	if !strings.Contains(result.stdout, "Activated skill") || !strings.Contains(result.stdout, "skill-alpha") {
+		t.Fatalf("stdout missing skill-alpha activation: %s", result.stdout)
 	}
 
-	// 2. Activate skill-gamma
 	result = runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call skill {"name":"skill-gamma"}`},
 		dir:  ws,
@@ -136,11 +132,10 @@ func TestE2EMultiSkillDiscoveryAndActivation(t *testing.T) {
 	if result.exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0; stderr = %s", result.exitCode, result.stderr)
 	}
-	if !strings.Contains(result.stdout, `<skill_content name="skill-gamma">`) {
-		t.Fatalf("stdout missing skill-gamma content: %s", result.stdout)
+	if !strings.Contains(result.stdout, "Activated skill") || !strings.Contains(result.stdout, "skill-gamma") {
+		t.Fatalf("stdout missing skill-gamma activation: %s", result.stdout)
 	}
 
-	// 3. Attempt unknown skill: should report available skills
 	result = runProton(t, runOptions{
 		args: []string{"-y", "-p", `/call skill {"name":"skill-delta"}`},
 		dir:  ws,
@@ -155,7 +150,6 @@ func TestE2ESkillSessionPersistenceAndHeadlessParity(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 
-	// Create user skill in PROTONMAN_HOME
 	skillDir := filepath.Join(home, ".protonman", "skills", "code-reviewer")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -171,7 +165,6 @@ Review code thoroughly.
 		t.Fatal(err)
 	}
 
-	// 1. Check initial headless /skills list (unchecked)
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "/skills"},
 		dir:  ws,
@@ -184,7 +177,6 @@ Review code thoroughly.
 		t.Fatalf("stdout missing unchecked skill list: %s", res.stdout)
 	}
 
-	// 2. Activate skill using mixed case (case-insensitivity test)
 	res = runProton(t, runOptions{
 		args: []string{"-y", "-p", "/skill Code-Reviewer"},
 		dir:  ws,
@@ -196,12 +188,10 @@ Review code thoroughly.
 	if !strings.Contains(res.stdout, "[x] Activated skill code-reviewer [user]: Automated code review guide") {
 		t.Fatalf("stdout missing activation confirmation: %s", res.stdout)
 	}
-	// Verify raw instructions are not flooded into stdout
 	if strings.Contains(res.stdout, "Review code thoroughly.") {
 		t.Fatalf("expected stdout not to flood raw instructions, got: %s", res.stdout)
 	}
 
-	// 3. New process run in same workspace: verify skill activation persisted across CLI runs
 	res = runProton(t, runOptions{
 		args: []string{"-y", "--resume", "-p", "/skills active"},
 		dir:  ws,
@@ -214,7 +204,6 @@ Review code thoroughly.
 		t.Fatalf("expected active skill to persist across CLI sessions, got: %s", res.stdout)
 	}
 
-	// 4. Toggle skill to inactive
 	res = runProton(t, runOptions{
 		args: []string{"-y", "--resume", "-p", "/skill toggle code-reviewer"},
 		dir:  ws,
@@ -227,7 +216,6 @@ Review code thoroughly.
 		t.Fatalf("expected deactivated message: %s", res.stdout)
 	}
 
-	// 5. Verify deactivation persisted across CLI runs
 	res = runProton(t, runOptions{
 		args: []string{"-y", "--resume", "-p", "/skills active"},
 		dir:  ws,
@@ -245,7 +233,6 @@ func TestE2EUnifiedSkillSlashCommand(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 
-	// Create a user skill in PROTONMAN_HOME
 	skillDir := filepath.Join(home, ".protonman", "skills", "linter")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -261,7 +248,6 @@ Lint cleanly.
 		t.Fatal(err)
 	}
 
-	// 1. /skill without arguments lists skills (unified alias)
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "/skill"},
 		dir:  ws,
@@ -274,7 +260,6 @@ Lint cleanly.
 		t.Fatalf("expected /skill without args to list skills, got: %s", res.stdout)
 	}
 
-	// 2. /skills <name> activates the skill
 	res = runProton(t, runOptions{
 		args: []string{"-y", "-p", "/skills linter"},
 		dir:  ws,
@@ -287,7 +272,6 @@ Lint cleanly.
 		t.Fatalf("expected /skills linter to activate skill, got: %s", res.stdout)
 	}
 
-	// 3. /skills toggle <name> in resumed session deactivates the skill
 	res = runProton(t, runOptions{
 		args: []string{"-y", "--resume", "-p", "/skills toggle linter"},
 		dir:  ws,
