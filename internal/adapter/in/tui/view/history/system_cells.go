@@ -79,24 +79,36 @@ func (c ErrorCell) renderCompactToolFailure(width int) []string {
 		title = "tool"
 	}
 
-	header := tuistyle.GlyphToolError + title
+	header := tuistyle.ErrorStyle.Render(tuistyle.GlyphToolError + title)
 	if badge != "" {
-		header += tuistyle.GlyphSep + badge
+		header += tuistyle.MutedStyle.Render(tuistyle.GlyphSep + badge)
 	}
-	lines := styledWrappedLines(header, width, tuistyle.ErrorStyle)
+	lines := wrapStyledLines(header, width)
 	if target := strings.TrimSpace(c.Target); target != "" {
-		lines = append(lines, styledWrappedLines("  "+target, width, tuistyle.MutedStyle)...)
+		lines = append(lines, indentedMutedLines(target, width, "  ", "  ")...)
 	} else if text := strings.TrimSpace(c.Text); text != "" {
-		lines = append(lines, styledWrappedLines("  "+text, width, tuistyle.MutedStyle)...)
+		lines = append(lines, indentedMutedLines(text, width, "  ", "  ")...)
 	}
-	for index, suggestion := range c.Suggestions {
-		prefix := "    "
-		if index == 0 {
-			prefix = "  ↳ "
-		}
-		lines = append(lines, styledWrappedLines(prefix+suggestion, width, tuistyle.MutedStyle)...)
+	for _, suggestion := range c.Suggestions {
+		lines = append(lines, indentedMutedLines(suggestion, width, "  ↳ ", "    ")...)
 	}
 	return lines
+}
+
+func indentedMutedLines(text string, width int, firstPrefix, continuationPrefix string) []string {
+	contentWidth := width - len([]rune(firstPrefix))
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
+	wrapped := safeWrappedLines(strings.TrimSpace(text), contentWidth)
+	for i := range wrapped {
+		prefix := continuationPrefix
+		if i == 0 {
+			prefix = firstPrefix
+		}
+		wrapped[i] = tuistyle.MutedStyle.Render(prefix + wrapped[i])
+	}
+	return wrapped
 }
 
 func (c ErrorCell) RawLines() []string {

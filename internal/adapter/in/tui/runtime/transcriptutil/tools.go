@@ -70,7 +70,6 @@ func readNotFoundSuggestions(target string, failure *tool.Failure) []string {
 	if evidence == nil || evidence.Action != tool.RecoveryDiscoverResource || evidence.Tool != tool.NameLS {
 		return []string{fmt.Sprintf("search %q for nearby files", parent)}
 	}
-	suggestions := []string{fmt.Sprintf("searched %q", parent)}
 	var discovered struct {
 		Entries []struct {
 			Name string `json:"name"`
@@ -78,7 +77,7 @@ func readNotFoundSuggestions(target string, failure *tool.Failure) []string {
 		} `json:"entries"`
 	}
 	if len(evidence.StructuredOutput) == 0 || json.Unmarshal(evidence.StructuredOutput, &discovered) != nil {
-		return suggestions
+		return []string{fmt.Sprintf("searched %s", parent)}
 	}
 	type candidate struct {
 		name  string
@@ -117,21 +116,24 @@ func readNotFoundSuggestions(target string, failure *tool.Failure) []string {
 		return strings.ToLower(candidates[i].name) < strings.ToLower(candidates[j].name)
 	})
 	const visibleCandidates = 3
+	visible := make([]string, 0, visibleCandidates+1)
 	for _, candidate := range candidates {
-		if len(suggestions)-1 >= visibleCandidates {
+		if len(visible) >= visibleCandidates {
 			break
 		}
 		name := candidate.name
 		if candidate.kind == "directory" {
 			name += "/"
 		}
-		suggestions = append(suggestions, name)
+		visible = append(visible, name)
 	}
-	remaining := len(candidates) - (len(suggestions) - 1)
-	if remaining > 0 {
-		suggestions = append(suggestions, fmt.Sprintf("+%d more", remaining))
+	if remaining := len(candidates) - len(visible); remaining > 0 {
+		visible = append(visible, fmt.Sprintf("+%d more", remaining))
 	}
-	return suggestions
+	if len(visible) == 0 {
+		return []string{fmt.Sprintf("searched %s · no nearby entries", parent)}
+	}
+	return []string{fmt.Sprintf("nearby in %s: %s", parent, strings.Join(visible, " · "))}
 }
 
 func ExecFailureUsesExecCell(code tool.ErrorCode) bool {

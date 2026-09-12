@@ -320,6 +320,12 @@ func TestErrorCellToolFailureKeepsTargetAndDiscoveryCompact(t *testing.T) {
 	if strings.Contains(rendered, "[not_found]") || strings.Contains(rendered, "Read: not found:") {
 		t.Fatalf("rendered tool failure kept noisy legacy format:\n%s", rendered)
 	}
+	narrow := ansi.Strip(strings.Join(cell.RenderWidth(42), "\n"))
+	for _, line := range strings.Split(narrow, "\n") {
+		if strings.HasPrefix(strings.TrimLeft(line, " "), "internal/base") && !strings.HasPrefix(line, "  ") {
+			t.Fatalf("wrapped target lost indentation: %q", line)
+		}
+	}
 }
 
 func TestErrorCellFallbackRendering(t *testing.T) {
@@ -374,7 +380,7 @@ func TestToolFailureSuggestionsUseDiscoveryEvidence(t *testing.T) {
 		},
 	}
 	suggestions := transcriptutil.ToolFailureSuggestions(tool.NameRead, "internal/base/runtimepolicy/runtimepolicy.go", failure)
-	want := []string{`searched "internal/base/runtimepolicy"`, "defaults.go", "doc.go", "hardcode_guard_test.go", "+1 more"}
+	want := []string{"nearby in internal/base/runtimepolicy: defaults.go · doc.go · hardcode_guard_test.go · +1 more"}
 	if fmt.Sprint(suggestions) != fmt.Sprint(want) {
 		t.Fatalf("discovery suggestions = %#v, want %#v", suggestions, want)
 	}
@@ -393,7 +399,7 @@ func TestToolFailureSuggestionsRankNearbyFilenames(t *testing.T) {
 		},
 	}
 	suggestions := transcriptutil.ToolFailureSuggestions(tool.NameRead, "internal/base/runtimepolicy/runtimepolicy.go", failure)
-	want := []string{`searched "internal/base/runtimepolicy"`, "runtimepolicy.md", "runtimepolicy_test.go", "runtime_policy.go", "+1 more"}
+	want := []string{"nearby in internal/base/runtimepolicy: runtimepolicy.md · runtimepolicy_test.go · runtime_policy.go · +1 more"}
 	if fmt.Sprint(suggestions) != fmt.Sprint(want) {
 		t.Fatalf("ranked suggestions = %#v, want %#v", suggestions, want)
 	}
