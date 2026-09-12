@@ -34,10 +34,6 @@ func mergeProfile(dst *Resolved, src Profile) {
 		dst.MaxOutputTokens = src.MaxOutputTokens
 		dst.Provenance.MaxOutputTokens = MetadataSourceBuiltin
 	}
-	if len(src.AgentPolicy.PromptHints) > 0 {
-		dst.AgentPolicy.PromptHints = append([]string(nil), src.AgentPolicy.PromptHints...)
-		dst.Provenance.PromptHints = MetadataSourceBuiltin
-	}
 	if src.Compaction != (CompactionPolicy{}) {
 		dst.Compaction = src.Compaction
 	}
