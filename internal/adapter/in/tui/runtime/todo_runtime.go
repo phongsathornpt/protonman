@@ -122,6 +122,17 @@ func (i todoListItem) Title() string {
 	return glyph + i.item.Text
 }
 
+func todoStatusGlyph(status tododomain.Status) string {
+	switch status {
+	case tododomain.StatusCompleted:
+		return successStyle.Render(glyphToolSuccess)
+	case tododomain.StatusInProgress:
+		return planStyle.Render(glyphTodoActive)
+	default:
+		return mutedStyle.Render(glyphTodoPending)
+	}
+}
+
 type todoSetupDelegate struct{}
 
 func (todoSetupDelegate) Height() int                         { return 1 }
@@ -132,11 +143,16 @@ func (todoSetupDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	if !ok {
 		return
 	}
-	prefix, style := "  ", bodyStyle
+	prefix := "  "
+	textStyle := bodyStyle
 	if index == m.Index() {
-		prefix, style = "> ", brandStyle
+		prefix = brandStyle.Render(glyphPrompt)
+		textStyle = bodyStyle.Bold(true)
 	}
-	_, _ = fmt.Fprint(w, prefix+style.Render(truncateWithEllipsis(entry.Title(), maxInt(1, m.Width()-2))))
+	glyph := todoStatusGlyph(entry.item.Status)
+	availWidth := maxInt(1, m.Width()-4)
+	text := textStyle.Render(truncateWithEllipsis(entry.item.Text, availWidth))
+	_, _ = fmt.Fprint(w, prefix+glyph+text)
 }
 
 type todoPaneView struct {
@@ -223,36 +239,53 @@ func (v *todoPaneView) Render(ctx paneRenderContext) string {
 	completed, _, _ := todopane.TodoCounts(ctx.todos)
 	help := ""
 	if layoutModeForHeight(ctx.height) != layoutTiny {
-		help = paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "enter", "Close", "esc/q", "Go Back")
+		help = paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "esc/enter", "Close")
 	}
 	items := v.picker.VisibleItems()
-	start, end := paneWindow(len(items), v.picker.Index(), 7, layoutModeForHeight(ctx.height))
+	maxVisible := maxInt(3, minInt(10, ctx.height-6))
+	if layoutModeForHeight(ctx.height) == layoutTiny {
+		maxVisible = minInt(2, maxVisible)
+	}
+	start, end := paneWindow(len(items), v.picker.Index(), maxVisible, layoutModeForHeight(ctx.height))
 	listRows := make([]string, 0, end-start)
+	availTextWidth := maxInt(1, ctx.width-10)
 	for index := start; index < end; index++ {
 		item, ok := items[index].(todoListItem)
 		if !ok {
 			continue
 		}
-		prefix, style := "  ", bodyStyle
+		prefix := "  "
+		textStyle := bodyStyle
 		if index == v.picker.Index() {
-			prefix, style = "> ", brandStyle
+			prefix = brandStyle.Render(glyphPrompt)
+			textStyle = bodyStyle.Bold(true)
 		}
-		listRows = append(listRows, prefix+style.Render(truncateWithEllipsis(item.Title(), maxInt(1, ctx.width-8))))
+		glyph := todoStatusGlyph(item.item.Status)
+		text := textStyle.Render(truncateWithEllipsis(item.item.Text, availTextWidth))
+		listRows = append(listRows, prefix+glyph+text)
 	}
-	status := ""
+	footer := ""
 	if len(ctx.todos) == 0 {
 		listRows = []string{
 			mutedStyle.Render("No tasks in this session."),
 			mutedStyle.Render("Tasks appear here as Universal plans multi-step work."),
 		}
-		help = paneKeyboardHelp(ctx.width-4, "esc/q", "Go Back")
+		footer = paneKeyboardHelp(ctx.width-4, "esc/q", "Go Back")
 	} else {
-		status = fmt.Sprintf("%d/%d done", completed, len(ctx.todos))
+		status := fmt.Sprintf("%d/%d done", completed, len(ctx.todos))
+		if len(items) > end-start {
+			status = fmt.Sprintf("%d-%d of %d · %s", start+1, end, len(items), status)
+		}
 		if selected, ok := v.picker.SelectedItem().(todoListItem); ok {
-			status = selected.item.ID + " · " + status
+			status = "id: " + selected.item.ID + " · " + status
+		}
+		if layoutModeForHeight(ctx.height) != layoutTiny {
+			footer = paneHelpStatusLine(maxInt(1, ctx.width-6), help, status)
+		} else if status != "" {
+			footer = paneRightStatus(ctx.width, status)
 		}
 	}
-	rows := paneSection("Tasks", listRows, help, status, ctx.width)
+	rows := paneSection("Tasks", listRows, footer, "", ctx.width)
 	return renderModalRows(ctx, accentAssistant, rows)
 }
 
