@@ -28,3 +28,19 @@ func TestProtocolPolicy(t *testing.T) {
 		t.Fatalf("preset toggle changed protocol to %q", got)
 	}
 }
+
+func TestNormalizePresetID(t *testing.T) {
+	cases := map[string]string{
+		"1":        model.DefaultProtonmanName,
+		"2":        model.DefaultOpenCodeName,
+		"3":        model.DefaultOllamaName,
+		"4":        model.DefaultOpenAIName,
+		"5":        model.DefaultAnthropicName,
+		" OpenAI ": model.DefaultOpenAIName,
+	}
+	for input, want := range cases {
+		if got := NormalizePresetID(input); got != want {
+			t.Fatalf("NormalizePresetID(%q) = %q, want %q", input, got, want)
+		}
+	}
+}

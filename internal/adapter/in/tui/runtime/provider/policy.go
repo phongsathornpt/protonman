@@ -6,6 +6,23 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 )
 
+func NormalizePresetID(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "1":
+		return model.DefaultProtonmanName
+	case "2":
+		return model.DefaultOpenCodeName
+	case "3":
+		return model.DefaultOllamaName
+	case "4":
+		return model.DefaultOpenAIName
+	case "5":
+		return model.DefaultAnthropicName
+	default:
+		return strings.ToLower(strings.TrimSpace(raw))
+	}
+}
+
 func KeyPlaceholder(p model.SupportedProviderPreset) string {
 	if strings.TrimSpace(p.KeyPlaceholder) != "" {
 		return p.KeyPlaceholder

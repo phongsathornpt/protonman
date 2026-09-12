@@ -12,18 +12,7 @@ func (v *providerPaneView) isOpenCode() bool {
 }
 
 func (v *providerPaneView) applyPreset(preset string) {
-	preset = strings.ToLower(strings.TrimSpace(preset))
-	if preset == "1" {
-		preset = model.DefaultProtonmanName
-	} else if preset == "2" {
-		preset = model.DefaultOpenCodeName
-	} else if preset == "3" {
-		preset = model.DefaultOllamaName
-	} else if preset == "4" {
-		preset = model.DefaultOpenAIName
-	} else if preset == "5" {
-		preset = model.DefaultAnthropicName
-	}
+	preset = providerdomain.NormalizePresetID(preset)
 	if p := model.LookupPreset(preset); p != nil {
 		previousName := strings.TrimSpace(v.nameInput.Value())
 		v.nameInput.SetValue(p.ID)
