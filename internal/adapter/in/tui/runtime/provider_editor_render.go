@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
 	"strings"
 
 	"charm.land/bubbles/v2/list"
@@ -50,7 +51,7 @@ func providerEditorListItems(v *providerPaneView) []list.Item {
 		if len(resolved.Features) > 0 {
 			parts = append(parts, strings.Join(resolved.Features, ", "))
 		}
-		if reasoning := remoteModelReasoningSummary(providerName, md, false); reasoning != "" {
+		if reasoning := reasoningpolicy.Summary(providerName, md, false); reasoning != "" {
 			parts = append(parts, reasoning)
 		}
 		items = append(items, providerEditorModelItem{model: md, title: title, description: strings.Join(parts, " · ")})

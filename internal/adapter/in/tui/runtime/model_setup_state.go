@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
 	"io"
 	"strings"
 	"time"
@@ -149,7 +150,7 @@ func (i modelListItem) Description() string {
 	if len(resolved.Features) > 0 {
 		parts = append(parts, strings.Join(resolved.Features, ", "))
 	}
-	if reasoning := remoteModelReasoningSummary(i.providerName, i.model, true); reasoning != "" {
+	if reasoning := reasoningpolicy.Summary(i.providerName, i.model, true); reasoning != "" {
 		parts = append(parts, reasoning)
 	}
 	return strings.Join(parts, " · ")
@@ -289,7 +290,7 @@ func (v *modelSetupPaneView) selectedRemoteModel() (model.RemoteModel, bool) {
 
 func reasoningChoicesForModel(providerName string, md model.RemoteModel) []sdk.ReasoningEffort {
 	profile := model.ResolveModelProfile(providerName, md.ID, &md)
-	return reasoningChoices(profile)
+	return reasoningpolicy.Choices(profile)
 }
 
 func (v *modelSetupPaneView) syncReasoningForSelection(desired sdk.ReasoningEffort) {

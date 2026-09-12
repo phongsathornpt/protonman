@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -193,10 +194,10 @@ func TestInfoViewKeepsIdleChromeEmpty(t *testing.T) {
 
 func TestRemoteModelReasoningSummaryUsesResolvedProfile(t *testing.T) {
 	md := model.RemoteModel{ID: "gemini-3.8-flash"}
-	if got := remoteModelReasoningSummary("protonman", md, true); got != "reasoning low/medium/high (default medium)" {
+	if got := reasoningpolicy.Summary("protonman", md, true); got != "reasoning low/medium/high (default medium)" {
 		t.Fatalf("summary = %q", got)
 	}
-	if got := remoteModelReasoningSummary("custom", model.RemoteModel{ID: "future-model"}, true); got != "" {
+	if got := reasoningpolicy.Summary("custom", model.RemoteModel{ID: "future-model"}, true); got != "" {
 		t.Fatalf("unknown summary = %q, want empty", got)
 	}
 }

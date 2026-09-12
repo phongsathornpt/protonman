@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -88,7 +89,7 @@ func (m *bubbleModel) idleContextFooter() string {
 		modelName = "unselected"
 	}
 	permission := m.permissionModeLabel()
-	reasoning := reasoningEffortLabel(m.reasoningEffort)
+	reasoning := reasoningpolicy.EffortLabel(m.reasoningEffort)
 	low := m.lowConcurrencyFooterLabel()
 
 	rightCandidates := []string{}

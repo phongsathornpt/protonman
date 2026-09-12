@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelpicker"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/providerio"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"strings"
@@ -155,13 +156,13 @@ func (v *modelSetupPaneView) effortLayout() (string, string) {
 		choices = []sdk.ReasoningEffort{sdk.ReasoningDefault}
 	}
 	if len(choices) <= 1 {
-		return "Effort    " + brandStyle.Render(reasoningEffortLabel(choices[0])), ""
+		return "Effort    " + brandStyle.Render(reasoningpolicy.EffortLabel(choices[0])), ""
 	}
 
 	labels := make([]string, len(choices))
 	slotWidth := 5
 	for i, effort := range choices {
-		labels[i] = reasoningEffortLabel(effort)
+		labels[i] = reasoningpolicy.EffortLabel(effort)
 		if width := len([]rune(labels[i])) + 2; width > slotWidth {
 			slotWidth = width
 		}
@@ -211,7 +212,7 @@ func (v *modelSetupPaneView) selectionStatus(width int) string {
 	if !ok {
 		return ""
 	}
-	return paneRightStatus(width, modelpicker.DisplayName(md)+" · "+reasoningEffortLabel(v.selectedReasoning()))
+	return paneRightStatus(width, modelpicker.DisplayName(md)+" · "+reasoningpolicy.EffortLabel(v.selectedReasoning()))
 }
 
 func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {

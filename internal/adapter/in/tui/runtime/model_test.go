@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelpicker"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -1551,7 +1552,7 @@ func TestEffortLayoutAlignsLabelsWithTrackSlots(t *testing.T) {
 		t.Fatalf("dot positions = %v in %q", dots, track)
 	}
 	for i, effort := range view.reasoningChoices {
-		label := reasoningEffortLabel(effort)
+		label := reasoningpolicy.EffortLabel(effort)
 		start := strings.Index(string(labelRunes), label)
 		if start < 0 {
 			t.Fatalf("label %q missing from %q", label, labels)
