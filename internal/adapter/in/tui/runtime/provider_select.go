@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	providerdomain "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/provider"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/app"
 )
 
 const providerSelectViewID = "provider_select"
@@ -50,35 +51,20 @@ type providerSelectItem struct {
 	isFree       bool
 }
 
+func (i providerSelectItem) selectionEntry() providerdomain.SelectionEntry {
+	return providerdomain.SelectionEntry{
+		Kind: providerdomain.SelectionKind(i.kind), Name: i.name, DisplayName: i.displayName,
+		BaseURL: i.baseURL, APIKey: i.apiKey, Description: i.description, PresetID: i.presetID,
+		IsConfigured: i.isConfigured, IsActive: i.isActive, IsFree: i.isFree,
+	}
+}
+
 func (i providerSelectItem) FilterValue() string {
-	return strings.Join([]string{i.name, i.displayName, i.baseURL, i.description}, " ")
+	return providerdomain.FilterValue(i.selectionEntry())
 }
-
-func (i providerSelectItem) Title() string {
-	label := i.displayName
-	status := "setup"
-	if i.isActive {
-		status = "active"
-	} else if i.isConfigured {
-		status = "saved"
-	} else if i.kind == providerItemCustom {
-		status = "custom"
-	}
-	label += " · " + status
-	if i.isFree {
-		label += " · free"
-	}
-	if i.isActive {
-		label = "✓ " + label
-	}
-	return label
-}
-
+func (i providerSelectItem) Title() string { return providerdomain.Title(i.selectionEntry()) }
 func (i providerSelectItem) Description() string {
-	if strings.TrimSpace(i.baseURL) != "" {
-		return i.baseURL
-	}
-	return i.description
+	return providerdomain.Description(i.selectionEntry())
 }
 
 type providerSelectDelegate struct{}
@@ -99,12 +85,7 @@ func (providerSelectDelegate) Render(w io.Writer, m list.Model, index int, item 
 	if entry.isFree {
 		label += "  FREE"
 	}
-	marker := ""
-	if entry.isActive {
-		marker = "(current)"
-	} else if entry.isConfigured {
-		marker = "saved"
-	}
+	marker := providerdomain.Marker(entry.selectionEntry())
 	width := maxInt(1, m.Width()-2)
 	if marker != "" {
 		markerWidth := len([]rune(marker))
@@ -237,12 +218,7 @@ func (v *providerSelectPaneView) Render(ctx paneRenderContext) string {
 		if item.isFree {
 			label += "  FREE"
 		}
-		marker := ""
-		if item.isActive {
-			marker = "(current)"
-		} else if item.isConfigured {
-			marker = "saved"
-		}
+		marker := providerdomain.Marker(item.selectionEntry())
 		lineWidth := maxInt(1, providerModalContentWidth(ctx)-2)
 		if marker != "" {
 			markerWidth := len([]rune(marker))
@@ -254,4 +230,106 @@ func (v *providerSelectPaneView) Render(ctx paneRenderContext) string {
 		}
 	}
 	return renderProviderModal(ctx, accentAssistant, paneSection("Providers", listRows, help, status, providerModalContentWidth(ctx)+4))
+}
+
+var providerSelectKeys = struct {
+	Add, Models, Edit, Delete, Filter key.Binding
+}{
+	Add:    key.NewBinding(key.WithKeys("a", "c")),
+	Models: key.NewBinding(key.WithKeys("m")),
+	Edit:   key.NewBinding(key.WithKeys("e")),
+	Delete: key.NewBinding(key.WithKeys("d")),
+	Filter: key.NewBinding(key.WithKeys("/")),
+}
+
+func (v *providerSelectPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
+	v.initPicker()
+	if v.deleteConfirm {
+		item, ok := v.selectedItem()
+		if !ok || !item.isConfigured {
+			v.deleteConfirm = false
+		}
+	}
+	if v.picker.SettingFilter() {
+		updated, cmd := v.picker.Update(message)
+		v.picker = updated
+		return paneKeyResult{handled: true, cmd: cmd}
+	}
+	if v.deleteConfirm {
+		switch {
+		case key.Matches(message, paneKeys.Confirm):
+			item, ok := v.selectedItem()
+			v.deleteConfirm = false
+			if !ok {
+				return paneKeyResult{handled: true}
+			}
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionProviderDelete, providerItem: item}}
+		case key.Matches(message, paneKeys.Escape):
+			v.deleteConfirm = false
+			return paneKeyResult{handled: true}
+		default:
+			return paneKeyResult{handled: true}
+		}
+	}
+	switch {
+	case key.Matches(message, paneKeys.Close):
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: providerSelectViewID}}
+	case key.Matches(message, providerSelectKeys.Add):
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionOpenProviderEditor}}
+	case key.Matches(message, providerSelectKeys.Models):
+		if item, ok := v.selectedItem(); ok && item.isConfigured {
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionProviderModels, providerItem: item}}
+		}
+		return paneKeyResult{handled: true}
+	case key.Matches(message, providerSelectKeys.Edit):
+		if item, ok := v.selectedItem(); ok {
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionProviderEdit, providerItem: item}}
+		}
+		return paneKeyResult{handled: true}
+	case key.Matches(message, providerSelectKeys.Delete):
+		if item, ok := v.selectedItem(); ok && item.isConfigured {
+			v.deleteConfirm = true
+		}
+		return paneKeyResult{handled: true}
+	case key.Matches(message, providerSelectKeys.Filter):
+		v.picker.SetFilterState(list.Filtering)
+		return paneKeyResult{handled: true}
+	case key.Matches(message, paneKeys.Nav):
+		updated, cmd := v.picker.Update(message)
+		v.picker = updated
+		return paneKeyResult{handled: true, cmd: cmd}
+	case message.Text >= "1" && message.Text <= "9":
+		return paneKeyResult{handled: true}
+	case key.Matches(message, paneKeys.Confirm):
+		item, ok := v.selectedItem()
+		if !ok {
+			return paneKeyResult{handled: true}
+		}
+		if item.isConfigured {
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionProviderActivate, providerItem: item}}
+		}
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionProviderEdit, providerItem: item}}
+	default:
+		return paneKeyResult{}
+	}
+}
+
+func saveActiveProviderCmd(operationID asyncOperationID, gate *asyncOperationGate, providerName, reconciledModel string) tea.Cmd {
+	return func() tea.Msg {
+		if !gate.current(operationID) {
+			return providerActiveSelectedMsg{operationID: operationID, providerName: providerName, reconciledModel: reconciledModel, err: errStaleConfigMutation}
+		}
+		err := (app.Providers{}).Activate(providerName, reconciledModel)
+		return providerActiveSelectedMsg{operationID: operationID, providerName: providerName, reconciledModel: reconciledModel, err: err}
+	}
+}
+
+func deleteProviderCmd(operationID asyncOperationID, gate *asyncOperationGate, providerName string) tea.Cmd {
+	return func() tea.Msg {
+		if !gate.current(operationID) {
+			return providerDeletedMsg{operationID: operationID, providerName: providerName, err: errStaleConfigMutation}
+		}
+		err := (app.Providers{}).Delete(providerName)
+		return providerDeletedMsg{operationID: operationID, providerName: providerName, err: err}
+	}
 }
