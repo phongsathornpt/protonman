@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -214,7 +215,8 @@ func (r *Registry) RegisterBatch(handlers []tool.Handler) error {
 }
 
 // ReplaceNamespace atomically swaps every registered handler whose name starts
-// with prefix. Handlers outside the namespace are preserved unchanged.
+// with prefix. Dynamic namespace publication is canonicalized by tool name so
+// provider discovery order cannot churn model-facing tool definitions.
 func (r *Registry) ReplaceNamespace(prefix string, handlers []tool.Handler) error {
 	prefix = strings.TrimSpace(prefix)
 	if prefix == "" {
@@ -236,6 +238,9 @@ func (r *Registry) ReplaceNamespace(prefix string, handlers []tool.Handler) erro
 		seen[item.name] = struct{}{}
 		prepared = append(prepared, item)
 	}
+	sort.SliceStable(prepared, func(i, j int) bool {
+		return prepared[i].name < prepared[j].name
+	})
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
