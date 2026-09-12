@@ -111,13 +111,13 @@ func newProviderPaneViewWithPreset(preset string) *providerPaneView {
 	if draft.Endpoint != "" {
 		endpointIn.SetValue(draft.Endpoint)
 	}
-	endpointIn.CharLimit = 256
+	endpointIn.CharLimit = 2048
 	keyIn := textinput.New()
 	keyIn.Prompt = glyphPrompt
 	keyIn.Placeholder = draft.KeyPlaceholder
 	keyIn.EchoMode = textinput.EchoPassword
 	keyIn.EchoCharacter = '•'
-	keyIn.CharLimit = 256
+	keyIn.CharLimit = 4096
 	pv := &providerPaneView{
 		state: providerStateInput, focusIndex: int(draft.FocusField), presetID: draft.PresetID,
 		providerType: draft.ProviderType, requiresAPIKey: draft.RequiresAPIKey,
@@ -244,6 +244,26 @@ func (v *providerPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyP
 	default:
 		return v.handleInputKey(ctx, message)
 	}
+}
+
+func (v *providerPaneView) HandlePanePaste(_ paneRenderContext, message tea.PasteMsg) paneKeyResult {
+	if v.state != providerStateInput {
+		return paneKeyResult{}
+	}
+	clean := tea.PasteMsg{Content: strings.TrimSpace(message.Content)}
+	if clean.Content == "" {
+		return paneKeyResult{handled: true}
+	}
+	cmd := v.updateFocusedInput(clean)
+	return paneKeyResult{handled: true, cmd: cmd}
+}
+
+func (v *providerPaneView) HandlePaneMsg(_ paneRenderContext, msg tea.Msg) paneKeyResult {
+	if v.state != providerStateInput {
+		return paneKeyResult{}
+	}
+	cmd := v.updateFocusedInput(msg)
+	return paneKeyResult{handled: true, cmd: cmd}
 }
 
 func (v *providerPaneView) syncInputFocus() {
@@ -381,18 +401,39 @@ func (v *providerPaneView) handleInputKey(ctx paneRenderContext, message tea.Key
 	}
 }
 
-func (v *providerPaneView) updateFocusedInput(message tea.KeyPressMsg) tea.Cmd {
+func (v *providerPaneView) updateFocusedInput(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd
 	switch v.focusIndex {
 	case int(providerFieldName):
 		v.clearFieldError(providerFieldName)
-		v.nameInput, cmd = v.nameInput.Update(message)
+		v.nameInput, cmd = v.nameInput.Update(msg)
+		if err, ok := msg.(error); ok && err != nil {
+			v.fieldErrors[providerFieldName] = "clipboard unavailable"
+		} else if v.nameInput.Err != nil {
+			v.fieldErrors[providerFieldName] = "clipboard unavailable"
+			v.nameInput.Err = nil
+		}
 	case int(providerFieldEndpoint):
 		v.clearFieldError(providerFieldEndpoint)
-		v.endpointInput, cmd = v.endpointInput.Update(message)
+		v.endpointInput, cmd = v.endpointInput.Update(msg)
+		if err, ok := msg.(error); ok && err != nil {
+			v.fieldErrors[providerFieldEndpoint] = "clipboard unavailable"
+		} else if v.endpointInput.Err != nil {
+			v.fieldErrors[providerFieldEndpoint] = "clipboard unavailable"
+			v.endpointInput.Err = nil
+		}
 	case int(providerFieldAPIKey):
 		v.clearFieldError(providerFieldAPIKey)
-		v.apiKeyInput, cmd = v.apiKeyInput.Update(message)
+		v.apiKeyInput, cmd = v.apiKeyInput.Update(msg)
+		if strings.ContainsAny(v.apiKeyInput.Value(), " \t\r\n") {
+			v.apiKeyInput.SetValue(strings.TrimSpace(v.apiKeyInput.Value()))
+		}
+		if err, ok := msg.(error); ok && err != nil {
+			v.fieldErrors[providerFieldAPIKey] = "clipboard unavailable (use terminal paste: Ctrl+Shift+V)"
+		} else if v.apiKeyInput.Err != nil {
+			v.fieldErrors[providerFieldAPIKey] = "clipboard unavailable (use terminal paste: Ctrl+Shift+V)"
+			v.apiKeyInput.Err = nil
+		}
 	}
 	return cmd
 }

@@ -26,19 +26,26 @@ import (
 )
 
 func TestBrandLockupResponsive(t *testing.T) {
-	wide := brandLockup(80)
+	wide := ansi.Strip(brandLockup(80))
 	lines := strings.Split(wide, "\n")
-	if len(lines) != 2 {
-		t.Fatalf("wide brand lines = %d, want 2: %q", len(lines), wide)
+	if len(lines) != 4 {
+		t.Fatalf("wide brand lines = %d, want 4: %q", len(lines), wide)
 	}
-	if !strings.Contains(ansi.Strip(lines[0]), glyphBrand) || !strings.Contains(ansi.Strip(wide), "█▀█") {
-		t.Fatalf("wide brand missing mark/ascii wordmark: %q", wide)
+	wantLogo := []string{`   /\`, `  /__\`, ` <____>`, ` /|__|\`}
+	for i, want := range wantLogo {
+		if !strings.HasPrefix(lines[i], want) {
+			t.Fatalf("wide brand line %d = %q, want prefix %q", i, lines[i], want)
+		}
+	}
+	if !strings.Contains(lines[0], "protonMAN") {
+		t.Fatalf("wide brand missing product name: %q", wide)
 	}
 	if got := brandLockupWidth(80); got > 80 {
 		t.Fatalf("wide brand width = %d, terminal width 80", got)
 	}
+
 	narrow := ansi.Strip(brandLockup(20))
-	if strings.Contains(narrow, "█") || !strings.Contains(narrow, "protonMAN") {
+	if strings.Contains(narrow, `/__\`) || !strings.Contains(narrow, "protonMAN") {
 		t.Fatalf("narrow brand = %q, want compact protonMAN fallback", narrow)
 	}
 	if got := brandLockupWidth(20); got > 20 {
@@ -128,7 +135,7 @@ func TestWelcomeCardContainsBrandOnly(t *testing.T) {
 	m.activeProvider = "provider-name"
 	m.resize(32, 14)
 	card := m.welcomeCard()
-	if !strings.Contains(card, glyphBrand) || !strings.Contains(card, "protonMAN") {
+	if !strings.Contains(card, ` /|__|\`) || !strings.Contains(card, "protonMAN") {
 		t.Fatalf("welcome card missing Protonman brand: %q", card)
 	}
 	for _, unwanted := range []string{m.workDir, m.activeModel, m.activeProvider, "Ask anything", "No model selected"} {
@@ -149,7 +156,7 @@ func TestWelcomeCardNormalModeStaysMinimal(t *testing.T) {
 	m.activeModel = "provider/some-model"
 	m.resize(80, 24)
 	card := m.welcomeCard()
-	if !strings.Contains(card, glyphBrand) || !strings.Contains(card, "█▀█") || !strings.Contains(card, "/tmp/test-workspace") {
+	if !strings.Contains(card, `  /__\`) || !strings.Contains(card, "protonMAN") || !strings.Contains(card, "/tmp/test-workspace") {
 		t.Fatalf("minimal welcome missing identity or workspace: %q", card)
 	}
 	for _, unwanted := range []string{"Quick Actions", "/help", "/model", "Tip:", "some-model"} {
@@ -947,7 +954,7 @@ func TestWelcomeSitsAtTopWithoutFloatingBox(t *testing.T) {
 	model.resize(80, 24)
 	view := testPlain(model.View().Content)
 	plain := sanitizeBubbleText(view)
-	if idx := strings.Index(plain, glyphBrand); idx < 0 || idx > 8 {
+	if idx := strings.Index(plain, `/\`); idx < 0 || idx > 8 {
 		t.Fatalf("welcome is not at the top of the view: %q", plain[:minInt(80, len(plain))])
 	}
 	if strings.Count(view, "╭") > 1 {
@@ -1218,7 +1225,7 @@ func TestBubbleModelRendersComponentLayout(t *testing.T) {
 	model.appendLine("assistant: ready")
 	model.refreshViewport()
 	view := testPlain(model.View().Content)
-	for _, expected := range []string{glyphBrand, "█▀█", "/tmp/proton", "assistant: ready", "> "} {
+	for _, expected := range []string{"protonMAN", `  /__\`, "/tmp/proton", "assistant: ready", "> "} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("Bubble Tea view does not contain %q: %s", expected, view)
 		}
@@ -1260,7 +1267,7 @@ func TestEmptyStateWithoutRunnerGuidesSlashCommands(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
 	view := testPlain(model.View().Content)
-	for _, expected := range []string{"Message or /command", glyphBrand, "█▀█"} {
+	for _, expected := range []string{"Message or /command", "protonMAN", `  /__\`} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("empty state view does not contain %q: %s", expected, view)
 		}
@@ -1300,7 +1307,7 @@ func TestWelcomeCardReprintsAfterClear(t *testing.T) {
 	if strings.Contains(plainTranscript(model), "gone") {
 		t.Fatal("clear left transcript body")
 	}
-	if !strings.Contains(view, glyphBrand) || !strings.Contains(view, "█▀█") {
+	if !strings.Contains(view, "protonMAN") || !strings.Contains(view, `  /__\`) {
 		t.Fatalf("clear did not reprint welcome: %s", view)
 	}
 }

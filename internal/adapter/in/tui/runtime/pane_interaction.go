@@ -64,6 +64,14 @@ type isolatedPaneKeyHandler interface {
 	HandlePaneKey(paneRenderContext, tea.KeyPressMsg) paneKeyResult
 }
 
+type isolatedPanePasteHandler interface {
+	HandlePanePaste(paneRenderContext, tea.PasteMsg) paneKeyResult
+}
+
+type isolatedPaneMsgHandler interface {
+	HandlePaneMsg(paneRenderContext, tea.Msg) paneKeyResult
+}
+
 func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
 	switch action.kind {
 	case paneActionClose:

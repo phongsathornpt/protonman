@@ -1211,3 +1211,114 @@ func TestProviderRenameInvalidatesOldCatalogOnly(t *testing.T) {
 		t.Fatalf("fresh renamed catalog = %#v, want new-model", models)
 	}
 }
+
+func TestProviderViewPasteAPIKey(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/provider add")
+	// Tab to endpoint (1), then to API key (2)
+	bModel.Update(testKey(tea.KeyTab))
+	bModel.Update(testKey(tea.KeyTab))
+	view := bModel.panes.bottom.find(providerViewID).(*providerPaneView)
+	if view.focusIndex != int(providerFieldAPIKey) {
+		t.Fatalf("expected focus on API key (index 2), got %d", view.focusIndex)
+	}
+
+	// Paste API key with leading/trailing whitespace and newline
+	updated, _ := bModel.Update(tea.PasteMsg{Content: "  sk-proj-testkey123456789\r\n"})
+	bModel = updated.(*bubbleModel)
+	view = bModel.panes.bottom.find(providerViewID).(*providerPaneView)
+	if got := view.apiKeyInput.Value(); got != "sk-proj-testkey123456789" {
+		t.Fatalf("expected API key to be pasted and trimmed, got %q", got)
+	}
+}
+
+func TestProviderViewPasteLongAPIKey(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/provider add")
+	bModel.Update(testKey(tea.KeyTab))
+	bModel.Update(testKey(tea.KeyTab))
+
+	// API key of 500+ characters (would be truncated with old 256 limit)
+	longKey := "sk-" + strings.Repeat("a", 500)
+	updated, _ := bModel.Update(tea.PasteMsg{Content: longKey})
+	bModel = updated.(*bubbleModel)
+	view := bModel.panes.bottom.find(providerViewID).(*providerPaneView)
+	if got := view.apiKeyInput.Value(); got != longKey {
+		t.Fatalf("expected full long API key (%d chars), got %d chars: %q", len(longKey), len(got), got)
+	}
+}
+
+func TestProviderViewPasteEndpointAndName(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/provider add")
+
+	// Initially focused on Name (0)
+	view := bModel.panes.bottom.find(providerViewID).(*providerPaneView)
+	if view.focusIndex != int(providerFieldName) {
+		t.Fatalf("expected focus on Name (index 0), got %d", view.focusIndex)
+	}
+	updated, _ := bModel.Update(tea.PasteMsg{Content: "  custom-provider  \n"})
+	bModel = updated.(*bubbleModel)
+	view = bModel.panes.bottom.find(providerViewID).(*providerPaneView)
+	if got := view.nameInput.Value(); got != "custom-provider" {
+		t.Fatalf("expected provider name pasted and trimmed, got %q", got)
+	}
+
+	// Tab to Endpoint (1)
+	bModel.Update(testKey(tea.KeyTab))
+	view = bModel.panes.bottom.find(providerViewID).(*providerPaneView)
+	if view.focusIndex != int(providerFieldEndpoint) {
+		t.Fatalf("expected focus on Endpoint (index 1), got %d", view.focusIndex)
+	}
+	updated, _ = bModel.Update(tea.PasteMsg{Content: "  https://api.custom.example/v1  \n"})
+	bModel = updated.(*bubbleModel)
+	view = bModel.panes.bottom.find(providerViewID).(*providerPaneView)
+	if got := view.endpointInput.Value(); got != "https://api.custom.example/v1" {
+		t.Fatalf("expected endpoint pasted and trimmed, got %q", got)
+	}
+}
+
+func TestProviderViewCtrlVPasteHandling(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/provider add")
+	bModel.Update(testKey(tea.KeyTab))
+	bModel.Update(testKey(tea.KeyTab))
+
+	// Send Ctrl+V key press
+	updated, cmd := bModel.Update(testCtrl('v'))
+	bModel = updated.(*bubbleModel)
+	if cmd == nil {
+		t.Fatal("expected non-nil command for Ctrl+V (textinput.Paste)")
+	}
+
+	// Delivering a PasteMsg (or mock async message) updates the API key
+	updated, _ = bModel.Update(tea.PasteMsg{Content: "sk-mock-key-via-ctrl-v"})
+	bModel = updated.(*bubbleModel)
+	view := bModel.panes.bottom.find(providerViewID).(*providerPaneView)
+	if got := view.apiKeyInput.Value(); got != "sk-mock-key-via-ctrl-v" {
+		t.Fatalf("expected API key pasted via Ctrl+V flow, got %q", got)
+	}
+}
+
+func TestProviderViewPasteIgnoredInNonInputState(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/provider add")
+	view := bModel.panes.bottom.find(providerViewID).(*providerPaneView)
+	view.state = providerStateFetching
+
+	updated, _ := bModel.Update(tea.PasteMsg{Content: "should-not-paste"})
+	bModel = updated.(*bubbleModel)
+	view = bModel.panes.bottom.find(providerViewID).(*providerPaneView)
+	if got := view.nameInput.Value(); got == "should-not-paste" {
+		t.Fatal("paste should be ignored while fetching")
+	}
+}
+
+func TestProviderViewClipboardUnavailableFeedback(t *testing.T) {
+	view := newProviderPaneViewWithPreset(model.DefaultProtonmanName)
+	view.focusIndex = int(providerFieldAPIKey)
+	_ = view.updateFocusedInput(fmt.Errorf("no clipboard utility"))
+	if view.fieldErrors[providerFieldAPIKey] == "" || !strings.Contains(view.fieldErrors[providerFieldAPIKey], "clipboard unavailable") {
+		t.Fatalf("expected helpful clipboard unavailable error, got %q", view.fieldErrors[providerFieldAPIKey])
+	}
+}

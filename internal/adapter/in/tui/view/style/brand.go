@@ -6,26 +6,37 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-const MinASCIIBrandWidth = 48
+const (
+	ProductName          = "protonMAN"
+	MinCompactBrandWidth = 24
+)
 
-var asciiBrandLines = [...]string{
-	"█▀█ █▀▄ █▀█ ▀█▀ █▀█ █▄ █ █▀▄▀█ ▄▀█ █▄ █",
-	"█▀▀ █▀▄ █▄█  █  █▄█ █ ▀█ █ ▀ █ █▀█ █ ▀█",
+var compactLogoLines = [...]string{
+	`   /\`,
+	`  /__\`,
+	` <____>`,
+	` /|__|\`,
 }
 
-// BrandLockup renders a compact two-line terminal wordmark, with a narrow
-// fallback that cannot wrap on cramped terminals.
+// BrandLockup renders Protonman's compact character mark. The product name is
+// kept separate from the artwork so cramped terminals can fall back cleanly.
 func BrandLockup(width int) string {
-	if width < MinASCIIBrandWidth {
-		if width >= ansi.StringWidth(GlyphBrand+" protonMAN") {
-			return BrandMarkStyle.Render(GlyphBrand) + " " + BrandStyle.Render("protonMAN")
+	if width <= 0 {
+		return ""
+	}
+	if width < MinCompactBrandWidth {
+		if width >= ansi.StringWidth(GlyphBrand+" "+ProductName) {
+			return BrandMarkStyle.Render(GlyphBrand) + " " + BrandStyle.Render(ProductName)
 		}
-		return BrandStyle.Render("protonMAN")
+		return BrandStyle.Render(ansi.Truncate(ProductName, width, ""))
 	}
 
-	first := BrandMarkStyle.Render(GlyphBrand) + "  " + BrandStyle.Render(asciiBrandLines[0])
-	second := "   " + BrandStyle.Render(asciiBrandLines[1])
-	return first + "\n" + second
+	lines := make([]string, len(compactLogoLines))
+	for i, line := range compactLogoLines {
+		lines[i] = BrandMarkStyle.Render(line)
+	}
+	lines[0] += "    " + BrandStyle.Render(ProductName)
+	return strings.Join(lines, "\n")
 }
 
 func BrandLockupWidth(width int) int {
