@@ -14,6 +14,7 @@ func TestClassifyCommands(t *testing.T) {
 		{"/provider add", KindProvider, "provider", "add"},
 		{"/low on", KindLow, "low", "on"},
 		{"/clear", KindClear, "clear", ""},
+		{"/resume abc", KindResume, "resume", "abc"},
 		{"/todo show", KindTodo, "todo", "show"},
 		{"/goal fix bug", KindGoal, "goal", "fix"},
 		{"/quit", KindQuit, "quit", ""},

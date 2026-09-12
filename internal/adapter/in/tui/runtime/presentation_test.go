@@ -237,6 +237,112 @@ func TestFocusedTodoPaneBoundsAndScrollsLargePlans(t *testing.T) {
 	}
 }
 
+func TestTodoPaneRendersSemanticColorsAndPreservesCheckmarkWhenSelected(t *testing.T) {
+	items := []tododomain.Item{
+		{ID: "done-task", Text: "Completed work", Status: tododomain.StatusCompleted},
+		{ID: "active-task", Text: "Active work", Status: tododomain.StatusInProgress},
+		{ID: "pending-task", Text: "Pending work", Status: tododomain.StatusPending},
+	}
+	m := newTestBubbleModel(t, permission.ModeAsk, items)
+	m.resize(80, 24)
+	view := &todoPaneView{}
+	rendered := view.Render(newPaneRenderContext(m))
+
+	// Completed task checkmark must be rendered in green success style
+	wantCompletedGlyph := successStyle.Render(glyphToolSuccess)
+	if !strings.Contains(rendered, wantCompletedGlyph) {
+		t.Fatalf("rendered pane missing green success glyph: %q", rendered)
+	}
+
+	// Active task glyph must be rendered in plan style
+	wantActiveGlyph := planStyle.Render(glyphTodoActive)
+	if !strings.Contains(rendered, wantActiveGlyph) {
+		t.Fatalf("rendered pane missing active plan glyph: %q", rendered)
+	}
+
+	// Pending task glyph must be rendered in muted style
+	wantPendingGlyph := mutedStyle.Render(glyphTodoPending)
+	if !strings.Contains(rendered, wantPendingGlyph) {
+		t.Fatalf("rendered pane missing muted pending glyph: %q", rendered)
+	}
+
+	// Selection prompt glyph must be rendered for the selected item
+	wantPrompt := brandStyle.Render(glyphPrompt)
+	if !strings.Contains(rendered, wantPrompt) {
+		t.Fatalf("rendered pane missing prompt cursor: %q", rendered)
+	}
+}
+
+func TestTodoPanePaginationAndIDLabel(t *testing.T) {
+	items := make([]tododomain.Item, 20)
+	for i := range items {
+		status := tododomain.StatusPending
+		if i < 5 {
+			status = tododomain.StatusCompleted
+		}
+		items[i] = tododomain.Item{ID: fmt.Sprintf("task-%02d", i), Text: fmt.Sprintf("Task %02d description", i), Status: status}
+	}
+	m := newTestBubbleModel(t, permission.ModeAsk, items)
+	m.resize(80, 14)
+	view := &todoPaneView{}
+	rendered := view.Render(newPaneRenderContext(m))
+
+	plain := ansi.Strip(rendered)
+	if !strings.Contains(plain, "id: task-") {
+		t.Fatalf("rendered pane missing explicit 'id:' prefix: %q", plain)
+	}
+	if !strings.Contains(plain, "of 20") {
+		t.Fatalf("rendered pane missing pagination indicator: %q", plain)
+	}
+	if !strings.Contains(plain, "5/20 done") {
+		t.Fatalf("rendered pane missing completion count: %q", plain)
+	}
+	if !strings.Contains(plain, "↑/↓ navigate") {
+		t.Fatalf("rendered pane missing navigation help: %q", plain)
+	}
+	if !strings.Contains(plain, "esc/enter close") {
+		t.Fatalf("rendered pane missing close help: %q", plain)
+	}
+}
+
+func TestTodoPaneUtilizesAvailableWidthWithoutPrematureTruncation(t *testing.T) {
+	longText := "Task with exactly forty-five chars of description"
+	items := []tododomain.Item{
+		{ID: "wide-task", Text: longText, Status: tododomain.StatusPending},
+	}
+	m := newTestBubbleModel(t, permission.ModeAsk, items)
+	m.resize(80, 14)
+	view := &todoPaneView{}
+	rendered := view.Render(newPaneRenderContext(m))
+
+	plain := ansi.Strip(rendered)
+	if !strings.Contains(plain, longText) {
+		t.Fatalf("pane prematurely truncated text %q on 80-col terminal: %q", longText, plain)
+	}
+}
+
+func TestSkillsPaneUnifiedSelectionStyle(t *testing.T) {
+	m := newTestSkillsModel(t, 2)
+	m.resize(80, 20)
+	view := &skillsPaneView{}
+	rendered := view.Render(newPaneRenderContext(m))
+	wantPrompt := brandStyle.Render(glyphPrompt)
+	if !strings.Contains(rendered, wantPrompt) {
+		t.Fatalf("skills pane missing brand prompt cursor: %q", rendered)
+	}
+}
+
+func TestPermissionModeSelectionStyle(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 20)
+	view := &permissionModePaneView{index: 0}
+	rendered := view.Render(newPaneRenderContext(m))
+	wantPrompt := brandStyle.Render(glyphPrompt)
+	if !strings.Contains(rendered, wantPrompt) {
+		t.Fatalf("permission pane missing brand prompt cursor: %q", rendered)
+	}
+}
+
 func TestCoreGlyphsHaveStableSingleCellWidth(t *testing.T) {
 	glyphs := map[string]string{"prompt": glyphPrompt, "mark": glyphMark, "success": glyphToolSuccess, "error": glyphToolError, "denied": glyphToolDenied, "web": glyphWeb, "read": glyphRead, "dir": glyphDir, "search": glyphSearch, "exec": glyphExec, "edit": glyphEdit, "skill": glyphSkill, "agent": glyphAgent, "generic": glyphGeneric, "todo_pending": glyphTodoPending, "todo_active": glyphTodoActive}
 	for name, glyph := range glyphs {

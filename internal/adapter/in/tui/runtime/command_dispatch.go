@@ -13,9 +13,11 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 func (m *bubbleModel) executeCommand(line string) tea.Cmd {
@@ -35,6 +37,8 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		return m.executeConversationCommand(cmd.Name, cmd.Rest)
 	case cmdpolicy.KindClear, cmdpolicy.KindTodo:
 		return m.executeConversationCommand(cmd.Name, cmd.Argument)
+	case cmdpolicy.KindResume:
+		return m.handleResumeCommand(cmd.Argument, cmd.Rest)
 	case cmdpolicy.KindModel:
 		return m.executeModelCommand(cmd.Argument)
 	case cmdpolicy.KindProvider:
@@ -151,6 +155,183 @@ func (m *bubbleModel) clearConversation() {
 	m.refreshTranscriptViewport(true)
 	m.refreshViewport()
 	m.appendMuted("conversation cleared")
+}
+
+// Resume command (/resume)
+
+func (m *bubbleModel) handleResumeCommand(argument, rest string) tea.Cmd {
+	if m.busy {
+		m.appendError("cannot switch session while a turn is running")
+		return nil
+	}
+	if m.sessions == nil {
+		m.appendError("session service is unavailable")
+		return nil
+	}
+	arg := strings.TrimSpace(rest)
+	if arg == "" {
+		arg = strings.TrimSpace(argument)
+	}
+	if strings.HasPrefix(strings.ToLower(arg), "session ") {
+		arg = strings.TrimSpace(arg[len("session "):])
+	} else if strings.EqualFold(arg, "session") {
+		arg = ""
+	}
+	if arg == "" {
+		m.openSessionResumePane()
+		return nil
+	}
+	return m.resumeSession(arg)
+}
+
+func (m *bubbleModel) resumeSession(targetID string) tea.Cmd {
+	targetID = strings.TrimSpace(targetID)
+	if targetID == "" {
+		m.appendError("session id cannot be empty")
+		return nil
+	}
+	if m.busy {
+		m.appendError("cannot switch session while a turn is running")
+		return nil
+	}
+	if m.sessions == nil {
+		m.appendError("session service is unavailable")
+		return nil
+	}
+
+	if m.panes.bottom.has(sessionResumeViewID) {
+		m.panes.bottom.remove(sessionResumeViewID)
+	}
+	if targetID == m.sessionID {
+		m.appendMuted("already in session " + targetID)
+		m.refreshViewport()
+		m.requestRelayout()
+		return nil
+	}
+
+	var detail *app.SessionDetail
+	var err error
+	if strings.EqualFold(targetID, "latest") {
+		detail, err = m.sessions.LatestDetail(m.ctx, m.workspaceKey)
+		if err != nil || detail == nil {
+			detail, err = m.sessions.LatestDetail(m.ctx, "")
+		}
+	} else {
+		detail, err = m.sessions.LoadDetail(m.ctx, targetID, "")
+	}
+	if err != nil {
+		m.appendError("failed to resume session: " + err.Error())
+		return nil
+	}
+	if detail == nil {
+		m.appendError("session not found")
+		return nil
+	}
+
+	// Persist outgoing session
+	if m.sessionID != "" {
+		var activeSkills []string
+		if m.skills != nil {
+			activeSkills = m.skills.ActivatedList()
+		}
+		permMode := "ask"
+		if m.service != nil {
+			permMode = m.service.Mode().String()
+		}
+		effortStr := "auto"
+		if m.reasoningEffort != "" {
+			effortStr = string(m.reasoningEffort)
+		}
+		var currentMsgs []model.Message
+		if m.conversation != nil {
+			currentMsgs = m.conversation.SnapshotMessages()
+		}
+		_ = m.sessions.SaveCurrent(m.ctx, app.SessionDetail{
+			ID:                 m.sessionID,
+			WorkspaceKey:       m.workspaceKey,
+			PermissionMode:     permMode,
+			ActiveSkills:       activeSkills,
+			ActiveGoal:         m.activeGoal,
+			AgentProfile:       m.agentProfile,
+			ReasoningEffort:    effortStr,
+			LowConcurrencyMode: m.lowConcurrencyMode.String(),
+			Messages:           currentMsgs,
+		})
+	}
+
+	// Apply incoming controls
+	m.sessionID = detail.ID
+	m.activeGoal = detail.ActiveGoal
+	if detail.AgentProfile != "" {
+		m.agentProfile = detail.AgentProfile
+	}
+	if detail.ReasoningEffort != "" {
+		if effort, parseErr := sdk.ParseReasoningEffort(detail.ReasoningEffort); parseErr == nil {
+			m.reasoningEffort = effort
+		}
+	}
+	if detail.LowConcurrencyMode != "" {
+		if setting, parseErr := model.ParseLowConcurrencySetting(detail.LowConcurrencyMode); parseErr == nil {
+			m.lowConcurrencyMode = setting
+		}
+	}
+	if detail.PermissionMode != "" {
+		if mode, parseErr := permission.ParseMode(detail.PermissionMode); parseErr == nil {
+			_ = m.setPermissionMode(mode)
+		}
+	}
+	if m.skills != nil && len(detail.ActiveSkills) > 0 {
+		for _, name := range detail.ActiveSkills {
+			_ = m.skills.Activate(name)
+		}
+	}
+
+	// Rebind TODO store
+	todoStore, todoErr := m.sessions.OpenTodoStore(m.ctx, detail.ID, detail.ActiveGoal)
+	if todoErr == nil && todoStore != nil {
+		m.todoStore = todoStore
+		if m.todoHandlerFactory != nil {
+			handler := m.todoHandlerFactory(todoStore, detail.ID)
+			if reg, ok := m.registry.(tool.Registrar); ok {
+				_ = reg.Register(handler)
+			}
+		}
+		m.applyTodoSnapshot(todoStore.Snapshot())
+	}
+
+	// Rebind agents for session
+	if m.agents.Available() {
+		m.agents = m.agents.ForSession(detail.ID)
+		m.agentSnapshot = m.agents.List()
+	}
+	m.agentActivity = make(map[string]AgentActivity)
+	m.activity = "ready"
+
+	// Reset history and load messages
+	if m.conversation != nil {
+		m.conversation.Reset()
+		if len(detail.Messages) > 0 {
+			m.conversation.SetMessages(model.SnapshotMessages(detail.Messages))
+		}
+	}
+	m.ensureHistoryState().Reset()
+	m.loadInitialMessages(detail.Messages)
+	m.conversationViewport = conversationViewportState{mode: viewportFollowing}
+	m.panes.showTranscript = false
+	m.refreshTranscriptViewport(true)
+
+	// Reconfigure runner
+	m.reconfigureRunner()
+
+	// Close session resume pane if open
+	if m.panes.bottom.has(sessionResumeViewID) {
+		m.panes.bottom.remove(sessionResumeViewID)
+	}
+
+	m.appendMuted("resumed session " + detail.ID)
+	m.refreshViewport()
+	m.requestRelayout()
+	return nil
 }
 
 // Low concurrency command (/low)

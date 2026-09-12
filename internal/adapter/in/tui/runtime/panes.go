@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
@@ -92,8 +93,8 @@ func (v *lowConcurrencyPaneView) Render(ctx paneRenderContext) string {
 		marker := "  "
 		style := mutedStyle
 		if i == v.index {
-			marker = "> "
-			style = userStyle
+			marker = brandStyle.Render(glyphPrompt)
+			style = bodyStyle.Bold(true)
 		}
 		rows = append(rows, marker+style.Render(choice.label)+"  "+mutedStyle.Render(choice.desc))
 	}
@@ -165,8 +166,8 @@ func (v *permissionModePaneView) Render(ctx paneRenderContext) string {
 		marker := "  "
 		style := mutedStyle
 		if i == v.index {
-			marker = "> "
-			style = userStyle
+			marker = brandStyle.Render(glyphPrompt)
+			style = bodyStyle.Bold(true)
 		}
 		rows = append(rows, marker+style.Render(label))
 	}
@@ -291,9 +292,11 @@ func (skillSetupDelegate) Render(w io.Writer, m list.Model, index int, item list
 	if !ok {
 		return
 	}
-	prefix, style := "  ", bodyStyle
+	prefix := "  "
+	style := bodyStyle
 	if index == m.Index() {
-		prefix, style = "> ", brandStyle
+		prefix = brandStyle.Render(glyphPrompt)
+		style = bodyStyle.Bold(true)
 	}
 	_, _ = fmt.Fprint(w, prefix+style.Render(truncateWithEllipsis(entry.Title(), maxInt(1, m.Width()-2))))
 }
@@ -372,7 +375,11 @@ func (v *skillsPaneView) Render(ctx paneRenderContext) string {
 		help = paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "enter/space", "Toggle", "/", "Filter", "esc", "Close")
 	}
 	items := v.picker.VisibleItems()
-	start, end := paneWindow(len(items), v.picker.Index(), 7, layoutModeForHeight(ctx.height))
+	maxVisible := maxInt(3, minInt(8, ctx.height-6))
+	if layoutModeForHeight(ctx.height) == layoutTiny {
+		maxVisible = minInt(2, maxVisible)
+	}
+	start, end := paneWindow(len(items), v.picker.Index(), maxVisible, layoutModeForHeight(ctx.height))
 	listRows := make([]string, 0, end-start+1)
 	if v.picker.SettingFilter() || v.picker.IsFiltered() {
 		listRows = append(listRows, mutedStyle.Render("Search: ")+userStyle.Render(v.picker.FilterValue()))
@@ -382,13 +389,18 @@ func (v *skillsPaneView) Render(ctx paneRenderContext) string {
 		if !ok {
 			continue
 		}
-		prefix, style := "  ", bodyStyle
+		prefix := "  "
+		style := bodyStyle
 		if index == v.picker.Index() {
-			prefix, style = "> ", brandStyle
+			prefix = brandStyle.Render(glyphPrompt)
+			style = bodyStyle.Bold(true)
 		}
 		listRows = append(listRows, prefix+style.Render(truncateWithEllipsis(item.Title(), maxInt(1, ctx.width-8))))
 	}
 	status := fmt.Sprintf("%d/%d active", active, len(ctx.skillItems))
+	if len(items) > end-start {
+		status = fmt.Sprintf("%d-%d of %d · %s", start+1, end, len(items), status)
+	}
 	if selected, ok := v.picker.SelectedItem().(skillListItem); ok {
 		status = selected.name + " · " + status
 	}
@@ -437,4 +449,209 @@ func (v *skillsPaneView) refreshItems(ctx paneRenderContext) tea.Cmd {
 	cmd := v.picker.SetItems(skillListItems(ctx.skillItems))
 	v.syncTitle(ctx)
 	return cmd
+}
+
+// --- Session Resume Pane ---
+
+const sessionResumeViewID = "session-resume"
+
+type sessionResumeDelegate struct{}
+
+func (sessionResumeDelegate) Height() int                                  { return 1 }
+func (sessionResumeDelegate) Spacing() int                                 { return 0 }
+func (sessionResumeDelegate) Update(tea.Msg, *list.Model) tea.Cmd          { return nil }
+func (sessionResumeDelegate) Render(io.Writer, list.Model, int, list.Item) {}
+
+type sessionListItem struct {
+	summary   app.SessionSummary
+	isCurrent bool
+}
+
+func (s sessionListItem) FilterValue() string {
+	return s.summary.ID + " " + s.summary.WorkspaceName + " " + s.summary.AgentProfile + " " + s.summary.Preview
+}
+
+func (s sessionListItem) Title() string {
+	return s.summary.ID
+}
+
+func (s sessionListItem) Description() string {
+	return s.summary.Preview
+}
+
+type sessionResumePaneView struct {
+	picker      list.Model
+	items       []sessionListItem
+	initialized bool
+}
+
+func (*sessionResumePaneView) ID() string                             { return sessionResumeViewID }
+func (*sessionResumePaneView) PresentationMode() panePresentationMode { return paneBelowComposer }
+
+func (v *sessionResumePaneView) selectedItem() (sessionListItem, bool) {
+	if v == nil || !v.initialized || len(v.items) == 0 {
+		return sessionListItem{}, false
+	}
+	item, ok := v.picker.SelectedItem().(sessionListItem)
+	return item, ok
+}
+
+const maxSessionResumeRows = 7
+
+func sessionResumeListWidth(ctx paneRenderContext) int {
+	return maxInt(12, ctx.width-8)
+}
+
+func sessionResumeListHeight(ctx paneRenderContext) int {
+	return maxInt(4, min(maxSessionResumeRows, ctx.height-6))
+}
+
+func (v *sessionResumePaneView) Render(ctx paneRenderContext) string {
+	if !v.initialized || len(v.items) == 0 {
+		rows := []string{mutedStyle.Render("No sessions found.")}
+		help := paneKeyboardHelp(ctx.width-4, "esc/q", "Go Back")
+		return renderModalRows(ctx, accentAssistant, paneSection("Sessions", rows, help, "0 sessions", ctx.width))
+	}
+	v.picker.SetSize(sessionResumeListWidth(ctx), sessionResumeListHeight(ctx))
+	help := paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "enter", "Resume", "/", "Filter", "esc/q", "Close")
+
+	items := v.picker.VisibleItems()
+	start, end := paneWindow(len(items), v.picker.Index(), maxSessionResumeRows, layoutModeForHeight(ctx.height))
+	listRows := make([]string, 0, end-start+1)
+	if v.picker.SettingFilter() || v.picker.IsFiltered() {
+		listRows = append(listRows, mutedStyle.Render("Search: ")+userStyle.Render(v.picker.FilterValue()))
+	}
+	contentWidth := maxInt(20, ctx.width-8)
+	for index := start; index < end; index++ {
+		item, ok := items[index].(sessionListItem)
+		if !ok {
+			continue
+		}
+		prefix := "  "
+		style := bodyStyle
+		if index == v.picker.Index() {
+			prefix = brandStyle.Render(glyphPrompt)
+			style = bodyStyle.Bold(true)
+		}
+		idLabel := item.summary.ID
+		if item.isCurrent {
+			idLabel += " [current]"
+		}
+		updated := item.summary.UpdatedAt.Local().Format("01/02 15:04")
+		profile := item.summary.AgentProfile
+		if profile == "" {
+			profile = "universal"
+		}
+		meta := fmt.Sprintf("%s · %s", updated, profile)
+		if item.summary.MessageCount > 0 {
+			meta = fmt.Sprintf("%s · %d msgs · %s", updated, item.summary.MessageCount, profile)
+		}
+		metaWidth := len([]rune(meta))
+		rem := contentWidth - metaWidth - 4
+		if rem < 10 {
+			rem = 10
+		}
+		idFormatted := truncateWithEllipsis(idLabel, rem)
+		gap := maxInt(2, contentWidth-len([]rune(idFormatted))-metaWidth-2)
+		line := prefix + style.Render(idFormatted) + strings.Repeat(" ", gap) + mutedStyle.Render(meta)
+		listRows = append(listRows, line)
+	}
+
+	status := fmt.Sprintf("%d sessions", len(v.items))
+	if len(items) > end-start {
+		status = fmt.Sprintf("%d-%d of %d · %s", start+1, end, len(items), status)
+	}
+	if selected, ok := v.selectedItem(); ok {
+		preview := strings.TrimSpace(selected.summary.Preview)
+		if preview != "" {
+			status = selected.summary.ID + " · " + truncateWithEllipsis(preview, 40)
+		} else {
+			status = selected.summary.ID
+		}
+	}
+	rows := paneSection("Sessions", listRows, help, status, ctx.width)
+	return renderModalRows(ctx, accentAssistant, rows)
+}
+
+func (v *sessionResumePaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
+	if !v.initialized || len(v.items) == 0 {
+		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: sessionResumeViewID}}
+	}
+	switch {
+	case key.Matches(message, paneutil.Keys.Close):
+		if !v.picker.SettingFilter() && !v.picker.IsFiltered() {
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: sessionResumeViewID}}
+		}
+	case key.Matches(message, paneutil.Keys.Confirm):
+		if !v.picker.SettingFilter() {
+			if selected, ok := v.selectedItem(); ok {
+				return paneKeyResult{handled: true, action: paneAction{kind: paneActionResumeSession, sessionID: selected.summary.ID}}
+			}
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: sessionResumeViewID}}
+		}
+	case key.Matches(message, paneutil.Keys.Escape):
+		if !v.picker.SettingFilter() && !v.picker.IsFiltered() {
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: sessionResumeViewID}}
+		}
+	case message.Text == "q":
+		if !v.picker.SettingFilter() {
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: sessionResumeViewID}}
+		}
+	}
+
+	updated, cmd := v.picker.Update(message)
+	v.picker = updated
+	return paneKeyResult{handled: true, cmd: cmd}
+}
+
+func (m *bubbleModel) openSessionResumePane() {
+	if m == nil || m.sessions == nil {
+		m.appendError("session service is unavailable")
+		return
+	}
+	if m.panes.bottom.has(sessionResumeViewID) {
+		m.panes.bottom.remove(sessionResumeViewID)
+		m.requestRelayout()
+		return
+	}
+	summaries, err := m.sessions.ListSummaries(m.ctx, app.SessionListOptions{
+		Limit: 0,
+	})
+	if err != nil {
+		m.appendError("failed to list sessions: " + err.Error())
+		return
+	}
+	if len(summaries) == 0 {
+		m.appendMuted("no sessions found")
+		return
+	}
+
+	items := make([]sessionListItem, 0, len(summaries))
+	initialIndex := 0
+	for i, s := range summaries {
+		isCurrent := s.ID == m.sessionID
+		if isCurrent && initialIndex == 0 {
+			initialIndex = i
+		}
+		items = append(items, sessionListItem{
+			summary:   s,
+			isCurrent: isCurrent,
+		})
+	}
+
+	listItems := make([]list.Item, 0, len(items))
+	for _, item := range items {
+		listItems = append(listItems, item)
+	}
+
+	picker := paneutil.NewMinimalList(listItems, sessionResumeDelegate{}, defaultBubbleWidth-8, 7)
+	picker.InfiniteScrolling = true
+	picker.Select(initialIndex)
+
+	m.panes.bottom.push(&sessionResumePaneView{
+		picker:      picker,
+		items:       items,
+		initialized: true,
+	})
+	m.requestRelayout()
 }

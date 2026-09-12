@@ -7,8 +7,10 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
+	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 )
 
 // BubbleTeaOption configures the Bubble Tea fullscreen adapter.
@@ -89,6 +91,17 @@ func WithSessions(sessions *app.Sessions, workspaceKey string) BubbleTeaOption {
 	return func(ui *BubbleTeaUI) error {
 		ui.sessions = sessions
 		ui.workspaceKey = workspaceKey
+		return nil
+	}
+}
+
+// TodoHandlerFactory builds a session-bound task tool handler.
+type TodoHandlerFactory func(store tododomain.Repository, sessionID string) tool.Handler
+
+// WithTodoHandlerFactory configures the factory used to rebind the todo tool on session switch.
+func WithTodoHandlerFactory(factory TodoHandlerFactory) BubbleTeaOption {
+	return func(ui *BubbleTeaUI) error {
+		ui.todoHandlerFactory = factory
 		return nil
 	}
 }

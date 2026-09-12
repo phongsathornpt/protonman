@@ -64,6 +64,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 			bModel.agentSnapshot = ui.agents.List()
 		}
 		bModel.todoStore = ui.todoStore
+		bModel.todoHandlerFactory = ui.todoHandlerFactory
 		bModel.activeGoal = ui.activeGoal
 		bModel.todoRevision = todoSnapshot.Revision
 		bModel.skills = ui.skills

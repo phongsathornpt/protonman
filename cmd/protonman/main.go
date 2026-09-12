@@ -14,6 +14,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/acp"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui"
 	mcpadapter "github.com/phongsathornpt/protonman/internal/adapter/out/tool/mcp"
+	todotool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/todo"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
 	"github.com/phongsathornpt/protonman/internal/base/envconfig"
@@ -140,7 +141,8 @@ func run(ctx context.Context, args []string) error {
 		tui.WithApplicationServices(runtimeState.application),
 		tui.WithWorkDir(runtimeState.workDir),
 		tui.WithSessionID(runtimeState.sessionID),
-		tui.WithSessions(app.NewSessions(runtimeState.stateStore), workspaceKey(runtimeState.workDir)),
+		tui.WithSessions(app.NewSessions(runtimeState.stateStore).WithSessionsRoot(runtimeState.sessionsRoot), workspaceKey(runtimeState.workDir)),
+		tui.WithTodoHandlerFactory(todotool.NewTodoForSession),
 		tui.WithInitialMessages(session.ToModelMessages(runtimeState.state.Messages)),
 		tui.WithActiveGoal(runtimeState.state.ActiveGoal),
 		tui.WithLowConcurrencyMode(runtimeState.state.LowConcurrencyMode),

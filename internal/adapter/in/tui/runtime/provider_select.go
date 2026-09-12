@@ -78,9 +78,11 @@ func (providerSelectDelegate) Render(w io.Writer, m list.Model, index int, item 
 	if !ok {
 		return
 	}
-	prefix, style := "  ", bodyStyle
+	prefix := "  "
+	textStyle := bodyStyle
 	if index == m.Index() {
-		prefix, style = "> ", brandStyle
+		prefix = brandStyle.Render(glyphPrompt)
+		textStyle = bodyStyle.Bold(true)
 	}
 	label := entry.displayName
 	if entry.isFree {
@@ -92,11 +94,11 @@ func (providerSelectDelegate) Render(w io.Writer, m list.Model, index int, item 
 		markerWidth := len([]rune(marker))
 		label = truncateWithEllipsis(label, maxInt(1, width-markerWidth-2))
 		gap := maxInt(2, width-len([]rune(label))-markerWidth)
-		label += strings.Repeat(" ", gap) + mutedStyle.Render(marker)
+		_, _ = fmt.Fprint(w, prefix+textStyle.Render(label)+strings.Repeat(" ", gap)+mutedStyle.Render(marker))
 	} else {
 		label = truncateWithEllipsis(label, width)
+		_, _ = fmt.Fprint(w, prefix+textStyle.Render(label))
 	}
-	_, _ = fmt.Fprint(w, prefix+style.Render(label))
 }
 
 type providerSelectPaneView struct {
@@ -202,6 +204,13 @@ func (v *providerSelectPaneView) Render(ctx paneRenderContext) string {
 	}
 	items := v.picker.VisibleItems()
 	start, end := paneWindow(len(items), v.picker.Index(), maxProviderListRows, layoutModeForHeight(ctx.height))
+	if len(items) > end-start {
+		if status != "" {
+			status = fmt.Sprintf("%d-%d of %d · %s", start+1, end, len(items), status)
+		} else {
+			status = fmt.Sprintf("%d-%d of %d", start+1, end, len(items))
+		}
+	}
 	listRows := make([]string, 0, end-start+1)
 	if v.picker.SettingFilter() || v.picker.IsFiltered() {
 		listRows = append(listRows, mutedStyle.Render("Search: ")+userStyle.Render(v.picker.FilterValue()))
@@ -211,9 +220,11 @@ func (v *providerSelectPaneView) Render(ctx paneRenderContext) string {
 		if !ok {
 			continue
 		}
-		prefix, style := "  ", bodyStyle
+		prefix := "  "
+		textStyle := bodyStyle
 		if index == v.picker.Index() {
-			prefix, style = "> ", brandStyle
+			prefix = brandStyle.Render(glyphPrompt)
+			textStyle = bodyStyle.Bold(true)
 		}
 		label := item.displayName
 		if item.isFree {
@@ -225,9 +236,9 @@ func (v *providerSelectPaneView) Render(ctx paneRenderContext) string {
 			markerWidth := len([]rune(marker))
 			label = truncateWithEllipsis(label, maxInt(1, lineWidth-markerWidth-2))
 			gap := maxInt(2, lineWidth-len([]rune(label))-markerWidth)
-			listRows = append(listRows, prefix+style.Render(label)+strings.Repeat(" ", gap)+mutedStyle.Render(marker))
+			listRows = append(listRows, prefix+textStyle.Render(label)+strings.Repeat(" ", gap)+mutedStyle.Render(marker))
 		} else {
-			listRows = append(listRows, prefix+style.Render(truncateWithEllipsis(label, lineWidth)))
+			listRows = append(listRows, prefix+textStyle.Render(truncateWithEllipsis(label, lineWidth)))
 		}
 	}
 	return renderProviderModal(ctx, accentAssistant, paneSection("Providers", listRows, help, status, providerModalContentWidth(ctx)+4))

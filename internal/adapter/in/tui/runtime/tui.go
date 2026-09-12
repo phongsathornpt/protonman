@@ -23,6 +23,7 @@ type BubbleTeaUI struct {
 	registry                tool.Registry
 	skills                  *skill.Registry
 	todoStore               tododomain.Repository
+	todoHandlerFactory      TodoHandlerFactory
 	runner                  app.Conversation
 	application             app.Services
 	bridge                  *permissionbridge.Bridge

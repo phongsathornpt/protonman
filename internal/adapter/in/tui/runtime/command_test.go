@@ -14,6 +14,7 @@ import (
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
@@ -44,7 +45,7 @@ func TestTUICommandSurfaceIsCanonical(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.executeCommand("/help")
 	help := plainTranscript(model)
-	for _, keep := range []string{"/help", "/permission", "/low", "/model", "/provider", "/skills", "/agents", "/goal", "/todo", "/clear", "/call", "/quit"} {
+	for _, keep := range []string{"/help", "/permission", "/low", "/model", "/provider", "/skills", "/agents", "/goal", "/todo", "/clear", "/resume", "/call", "/quit"} {
 		if !strings.Contains(help, keep) {
 			t.Fatalf("help missing canonical command %q: %q", keep, help)
 		}
@@ -1161,5 +1162,199 @@ func TestLowConcurrencyStateSurvivesBubbleModelRestartCapture(t *testing.T) {
 	ui.lowConcurrencyMode = m.lowConcurrencyMode
 	if ui.lowConcurrencyMode != model.LowConcurrencyOn {
 		t.Fatalf("captured low concurrency = %s, want on", ui.lowConcurrencyMode)
+	}
+}
+
+func TestResumeCommandBusyRejection(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.busy = true
+	m.executeCommand("/resume")
+	if got := plainTranscript(m); !strings.Contains(got, "cannot switch session while a turn is running") {
+		t.Fatalf("busy /resume error missing: %q", got)
+	}
+}
+
+func TestResumeCommandOpensPicker(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	sessService := app.NewMemorySessions()
+	ctx := context.Background()
+	_ = sessService.SaveCurrent(ctx, app.SessionDetail{
+		ID:           "prev-sess-1",
+		WorkspaceKey: "ws-test",
+		ActiveGoal:   "earlier goal",
+	})
+	m.sessions = sessService
+	m.workspaceKey = "ws-test"
+	m.sessionID = "current-sess"
+
+	m.executeCommand("/resume")
+	if !m.panes.bottom.has(sessionResumeViewID) {
+		t.Fatal("/resume did not open session resume picker pane")
+	}
+	pane := m.panes.bottom.find(sessionResumeViewID)
+	if pane == nil {
+		t.Fatal("session resume pane is nil")
+	}
+	view, ok := pane.(*sessionResumePaneView)
+	if !ok || len(view.items) != 1 || view.items[0].summary.ID != "prev-sess-1" {
+		t.Fatalf("unexpected session resume pane items: %+v", view)
+	}
+}
+
+func TestResumeCommandDirectID(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	sessService := app.NewMemorySessions()
+	ctx := context.Background()
+	_ = sessService.SaveCurrent(ctx, app.SessionDetail{
+		ID:           "target-sess",
+		WorkspaceKey: "ws-test",
+		ActiveGoal:   "resumed objective",
+		Messages: []model.Message{
+			{Role: model.RoleUser, Content: "earlier user request"},
+		},
+	})
+	m.sessions = sessService
+	m.workspaceKey = "ws-test"
+	m.sessionID = "current-sess"
+	m.activeGoal = "current goal"
+
+	m.executeCommand("/resume target-sess")
+	if m.sessionID != "target-sess" {
+		t.Fatalf("sessionID = %q, want target-sess", m.sessionID)
+	}
+	if m.activeGoal != "resumed objective" {
+		t.Fatalf("activeGoal = %q, want resumed objective", m.activeGoal)
+	}
+	transcript := plainTranscript(m)
+	if !strings.Contains(transcript, "earlier user request") {
+		t.Fatalf("transcript missing resumed message: %q", transcript)
+	}
+	if !strings.Contains(transcript, "resumed session target-sess") {
+		t.Fatalf("transcript missing confirmation: %q", transcript)
+	}
+}
+
+func TestResumeCommandLatest(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	sessService := app.NewMemorySessions()
+	ctx := context.Background()
+	_ = sessService.SaveCurrent(ctx, app.SessionDetail{
+		ID:           "workspace-ws-test-latest",
+		WorkspaceKey: "ws-test",
+		ActiveGoal:   "latest goal",
+	})
+	m.sessions = sessService
+	m.workspaceKey = "ws-test"
+	m.sessionID = "current-sess"
+
+	m.executeCommand("/resume latest")
+	if m.sessionID != "workspace-ws-test-latest" {
+		t.Fatalf("sessionID = %q, want workspace-ws-test-latest", m.sessionID)
+	}
+	if m.activeGoal != "latest goal" {
+		t.Fatalf("activeGoal = %q, want latest goal", m.activeGoal)
+	}
+}
+
+func TestResumeCommandAnySession(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	sessService := app.NewMemorySessions()
+	ctx := context.Background()
+	_ = sessService.SaveCurrent(ctx, app.SessionDetail{
+		ID:           "other-sess",
+		WorkspaceKey: "other-workspace",
+		ActiveGoal:   "other goal",
+	})
+	m.sessions = sessService
+	m.workspaceKey = "my-workspace"
+	m.sessionID = "current-sess"
+
+	m.executeCommand("/resume other-sess")
+	if m.sessionID != "other-sess" {
+		t.Fatalf("sessionID = %q, want other-sess", m.sessionID)
+	}
+	if m.activeGoal != "other goal" {
+		t.Fatalf("activeGoal = %q, want other goal", m.activeGoal)
+	}
+}
+
+func TestResumePaneNavigationAndSelect(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	sessService := app.NewMemorySessions()
+	ctx := context.Background()
+	_ = sessService.SaveCurrent(ctx, app.SessionDetail{
+		ID:           "sess-1",
+		WorkspaceKey: "ws-test",
+		ActiveGoal:   "goal-1",
+	})
+	_ = sessService.SaveCurrent(ctx, app.SessionDetail{
+		ID:           "sess-2",
+		WorkspaceKey: "ws-test",
+		ActiveGoal:   "goal-2",
+	})
+	m.sessions = sessService
+	m.workspaceKey = "ws-test"
+	m.sessionID = "current-sess"
+
+	m.executeCommand("/resume")
+	if !m.panes.bottom.has(sessionResumeViewID) {
+		t.Fatal("session resume pane not opened")
+	}
+
+	pane := m.panes.bottom.find(sessionResumeViewID)
+	view, ok := pane.(*sessionResumePaneView)
+	if !ok || len(view.items) != 2 {
+		t.Fatalf("unexpected items in resume view: %+v", view)
+	}
+
+	// Down arrow to second item
+	res := view.HandlePaneKey(newPaneRenderContext(m), tea.KeyPressMsg{Code: tea.KeyDown})
+	if !res.handled {
+		t.Fatal("Down key not handled")
+	}
+	if view.picker.Index() != 1 {
+		t.Fatalf("view.picker.Index() after Down = %d, want 1", view.picker.Index())
+	}
+
+	// Confirm (Enter) on second item
+	res = view.HandlePaneKey(newPaneRenderContext(m), tea.KeyPressMsg{Code: tea.KeyEnter})
+	if !res.handled || res.action.kind != paneActionResumeSession {
+		t.Fatalf("unexpected confirm action: %+v", res.action)
+	}
+	_ = m.applyPaneAction(res.action)
+
+	if m.sessionID != view.items[1].summary.ID {
+		t.Fatalf("m.sessionID after resume = %q, want %q", m.sessionID, view.items[1].summary.ID)
+	}
+	if m.panes.bottom.has(sessionResumeViewID) {
+		t.Fatal("session resume pane still open after resume")
+	}
+}
+
+func TestResumeCurrentSessionClosesPane(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	sessService := app.NewMemorySessions()
+	ctx := context.Background()
+	_ = sessService.SaveCurrent(ctx, app.SessionDetail{
+		ID:           "current-sess",
+		WorkspaceKey: "ws-test",
+		ActiveGoal:   "my goal",
+	})
+	m.sessions = sessService
+	m.workspaceKey = "ws-test"
+	m.sessionID = "current-sess"
+
+	m.executeCommand("/resume")
+	if !m.panes.bottom.has(sessionResumeViewID) {
+		t.Fatal("session resume pane not opened")
+	}
+
+	// Resume current session directly
+	m.executeCommand("/resume current-sess")
+	if m.panes.bottom.has(sessionResumeViewID) {
+		t.Fatal("session resume pane still open after selecting current session")
+	}
+	if !strings.Contains(plainTranscript(m), "already in session current-sess") {
+		t.Fatalf("expected already in session message: %q", plainTranscript(m))
 	}
 }

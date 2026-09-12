@@ -659,9 +659,11 @@ func (v *providerPaneView) Render(ctx paneRenderContext) string {
 			if !ok {
 				continue
 			}
-			prefix, style := "  ", bodyStyle
+			prefix := "  "
+			style := bodyStyle
 			if index == v.modelPicker.Index() {
-				prefix, style = "> ", brandStyle
+				prefix = brandStyle.Render(glyphPrompt)
+				style = bodyStyle.Bold(true)
 			}
 			listRows = append(listRows, prefix+style.Render(truncateWithEllipsis(item.title, maxInt(1, providerModalContentWidth(ctx)-4))))
 		}
@@ -669,6 +671,13 @@ func (v *providerPaneView) Render(ctx paneRenderContext) string {
 		status := ""
 		if item, ok := v.modelPicker.SelectedItem().(providerEditorModelItem); ok {
 			status = item.title
+		}
+		if len(items) > end-start {
+			if status != "" {
+				status = fmt.Sprintf("%d-%d of %d · %s", start+1, end, len(items), status)
+			} else {
+				status = fmt.Sprintf("%d-%d of %d", start+1, end, len(items))
+			}
 		}
 		title := "Select Model"
 		if v.filterFreeOnly {

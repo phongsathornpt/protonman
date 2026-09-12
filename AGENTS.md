@@ -580,6 +580,7 @@ Current important slash commands are intentionally canonical and small:
 /agents
 /goal      # inspect, set+execute, or clear the persistent session goal
 /todo      # inspect the session task-plan pane
+/resume    # resume previous session or open session picker
 /clear
 /call
 /quit

@@ -21,6 +21,7 @@ const (
 	KindProvider
 	KindAgents
 	KindCall
+	KindResume
 	KindQuit
 )
 
@@ -64,6 +65,8 @@ func Classify(line string) Command {
 		kind = KindAgents
 	case "call":
 		kind = KindCall
+	case "resume":
+		kind = KindResume
 	case "quit":
 		kind = KindQuit
 	default:
@@ -87,6 +90,8 @@ func Usage(kind Kind) string {
 		return "usage: /todo [show|hide]"
 	case KindCall:
 		return "usage: /call <tool> <json>"
+	case KindResume:
+		return "usage: /resume [session-id|latest]"
 	case KindSkills:
 		return "usage: /skills [toggle|activate|deactivate|check|lock] <name>"
 	default:
