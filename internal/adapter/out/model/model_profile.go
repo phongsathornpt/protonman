@@ -169,5 +169,6 @@ func (m *profiledLanguageModel) ResolvedModelProfile() modelprofile.Resolved {
 
 func cloneResolvedModelProfile(profile modelprofile.Resolved) modelprofile.Resolved {
 	profile.Reasoning.Levels = append([]sdk.ReasoningEffort(nil), profile.Reasoning.Levels...)
+	profile.AgentPolicy = modelprofile.AgentPolicy{}
 	return profile
 }
