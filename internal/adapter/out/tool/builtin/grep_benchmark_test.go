@@ -59,7 +59,7 @@ func BenchmarkGrepCursorDeepPageMedium(b *testing.B) {
 	call, _ := tool.NewCall("bench", "grep", args)
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if _, err := handler.Execute(context.Background(), call); err != nil {
 			b.Fatal(err)
 		}
@@ -77,7 +77,7 @@ func BenchmarkGrepDeepPageMedium(b *testing.B) {
 	call, _ := tool.NewCall("bench", "grep", args)
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if _, err := handler.Execute(context.Background(), call); err != nil {
 			b.Fatal(err)
 		}

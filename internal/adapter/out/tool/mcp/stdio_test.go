@@ -83,6 +83,9 @@ func TestMCPStdioHelperProcess(t *testing.T) {
 			os.Exit(4)
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		os.Exit(5)
+	}
 	os.Exit(0)
 }
 

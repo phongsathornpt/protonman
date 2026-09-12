@@ -21,6 +21,24 @@ type Command struct {
 	Scope       string
 }
 
+func (c Command) FilterValue() string {
+	return c.Name + " " + c.Description
+}
+
+func (c Command) Title() string {
+	if c.PrefixTag != "" {
+		return c.PrefixTag + " " + c.Name
+	}
+	return "/" + c.Name
+}
+
+func (c Command) DisplayDescription() string {
+	if c.Scope != "" {
+		return c.Description + " · " + c.Scope
+	}
+	return c.Description
+}
+
 func Catalog() []Command {
 	return []Command{
 		{Name: "help", Description: "list commands"},

@@ -244,7 +244,7 @@ waiting writer. Preserve this fairness property when touching scheduler code.
 
 System prompt composition lives in `internal/engine/prompt` and is capability-driven.
 Do not maintain separate large root prompts per provider or agent mode. The managed
-prompt currently uses Prompt ABI v12 and deterministic cache-aware section ordering;
+prompt currently uses Prompt ABI v14 and deterministic cache-aware section ordering;
 `docs/system-prompt.md` is the source of truth for prompt topology and prefix-cache
 invariants.
 
@@ -442,9 +442,11 @@ Bubble Tea program restarts. `/goal <detail>` both sets the persistent goal and 
 an execution turn for that goal; bare `/goal` inspects it and `/goal clear` removes it
 without starting a model turn.
 
-Task plans are still session-owned rather than goal-scoped in the current implementation;
-do not document goal-to-TODO generation/supersession semantics as implemented until the
-runtime actually enforces them.
+Task plans remain physically session-owned, but the durable TODO document is bound to the
+active goal by a managed fingerprint. Legacy unbound plans are adopted by the current goal
+once; changing to a different non-empty goal atomically supersedes the previous plan. Clearing
+a goal preserves the current plan, and a later different goal supersedes it. Keep this binding
+inside the TODO repository rather than reimplementing it in presentation adapters.
 
 `todo action=get|update` is bound to the active session repository. ACP uses
 session-specific registry overlays so concurrent sessions cannot share task state.
@@ -539,8 +541,11 @@ Important turn responsibilities include:
 - mutation verification state
 - event-driven subagent result delivery, completion barriers, and redacted synthesis-efficiency telemetry (`subagent_result_bytes`, consumed/duplicate bytes, synthesis agents, and wait-snapshot bytes)
 
-At least one global termination bound must remain active. Do not accidentally
-construct an unbounded model/tool loop by disabling both tool-count and time bounds.
+Turn execution uses progress-aware safety bounds rather than a fixed productivity quota.
+Meaningful successful work resets the stagnant-call window; status/task churn and failures do
+not. The runtime also keeps an independent emergency total-call ceiling. `max_tool_calls > 0`
+is a compatibility/configuration override that may impose a stricter hard ceiling; zero uses
+the progress-aware defaults. Do not remove every runtime safety bound.
 
 ## TUI Conventions
 
@@ -553,6 +558,7 @@ Current important slash commands are intentionally canonical and small:
 ```text
 /help
 /permission
+/low       # inspect or set provider-neutral low concurrency mode
 /model
 /provider
 /skills
@@ -582,11 +588,13 @@ same execution/result model where possible.
 
 Minimal TUI presentation follows semantic density rather than blanket suppression.
 Routine read/search operations stay compact, mutations retain material effects, and
-denied/failed operations retain diagnostic detail. The composer metadata owns the
-active model/profile/workspace/mode context; transient busy status should prefer the
-active tool and target. Scrolling must preserve a single composer and semantic
-transcript position while streaming updates continue. Idle footer help should expose
-primary actions only; secondary shortcuts belong in contextual views or `/help`.
+denied/failed operations retain diagnostic detail. The fixed session header owns stable
+session identity such as the active model, effective low-concurrency state, active-goal
+indicator, and git/workspace context. The conversation viewport owns transcript content
+only and must never embed branding or fixed session metadata. Transient busy status should
+prefer the active tool and target, while the footer is reserved for interaction context
+such as shortcuts, reasoning, and permission mode. Scrolling must preserve a single
+composer and semantic transcript position while streaming updates continue.
 
 TUI rendering is intentionally side-effect free. `View()` and pane `Render` methods must
 only read presentation snapshots; they must not resize viewports, alter scroll position,
@@ -599,6 +607,15 @@ the root to apply instead of mutating the root model directly. Root runtime stat
 by ownership: agent, turn, model selection, session, project, conversation, TODO,
 presentation, and execution policy. Preserve these boundaries instead of adding new flat
 fields to `bubbleModel` without a clear orchestration-level reason.
+
+`internal/adapter/in/tui/runtime` is an orchestration shell, not a default home for new
+TUI behavior. Cohesive policy, projection, parsing, and state-calculation logic belongs in
+focused subpackages such as `modelcatalog`, `modelpicker`, `modelsetup`, `provider`,
+`permissionpolicy`, `permissionbridge`, `reasoningpolicy`, `projectconfig`, `keyboardpolicy`, `paneutil`,
+`transientnotice`, `transcriptutil`, `cmdpolicy`, `conversation`, or the owning `view/*` package.
+Runtime subpackages must never import the root `runtime` package. The architecture suite
+maintains a ratcheting production-file budget for the runtime root; do not raise that budget
+to land new code. Extract ownership or consolidate an existing shell instead.
 
 When changing TUI behavior, test at the smallest useful layer:
 
@@ -614,7 +631,9 @@ more stable.
 Canonical defaults live in `internal/base/runtimepolicy`, not duplicated literals.
 Important current defaults include:
 
-- turn tool calls: 100
+- cumulative `max_tool_calls` override: disabled by default (`0`)
+- stagnant tool-call window: 24 calls without meaningful progress
+- emergency total tool-call ceiling: 512
 - turn timeout: disabled by default (`0`); configure explicitly when a whole-turn ceiling is required
 - round timeout: 5m
 - tool permission timeout: 2m
@@ -786,7 +805,7 @@ Before declaring a task complete, verify the relevant subset of:
 
 - requested behavior is implemented, not merely planned
 - final diff is focused and contains no accidental files
-- architecture boundaries still hold
+- architecture boundaries still hold, including TUI runtime ownership and structural-budget guards
 - tool input/output contracts still validate
 - security/trust boundaries remain fail-closed
 - cancellation/deadline/resource limits still propagate correctly

@@ -4,7 +4,10 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
+	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
 )
 
 func (m *bubbleModel) View() tea.View {
@@ -30,7 +33,11 @@ func (m *bubbleModel) renderedViewport() string {
 
 func (m *bubbleModel) liveView() string {
 	frame := m.layout.frame
-	parts := []string{m.renderedViewport()}
+	parts := make([]string, 0, 6)
+	if frame.header != "" {
+		parts = append(parts, frame.header)
+	}
+	parts = append(parts, m.renderedViewport())
 	if frame.status != "" {
 		parts = append(parts, frame.status)
 	}
@@ -83,44 +90,20 @@ func (m *bubbleModel) footerView() string {
 func (m *bubbleModel) idleContextFooter() string {
 	const inset = " "
 	width := maxInt(1, m.layout.width-len(inset)*3)
-	modelName := strings.TrimSpace(m.activeModel)
-	if modelName == "" {
-		modelName = "unselected"
-	}
 	permission := m.permissionModeLabel()
-	reasoning := reasoningEffortLabel(m.reasoningEffort)
-	low := m.lowConcurrencyFooterLabel()
-
-	rightCandidates := []string{}
-	if low != "" {
-		rightCandidates = append(rightCandidates,
-			modelName+" · "+reasoning+" · "+permission+" · "+low,
-			modelName+" · "+permission+" · "+low,
-			modelName+" · "+low,
-			low,
-		)
-	} else {
-		rightCandidates = append(rightCandidates,
-			modelName+" · "+reasoning+" · "+permission,
-			modelName+" · "+permission,
-			modelName,
-		)
+	reasoning := reasoningpolicy.EffortLabel(m.reasoningEffort)
+	rightCandidates := []string{permission}
+	if reasoning != "" && reasoning != permission {
+		rightCandidates = append([]string{reasoning + " · " + permission}, rightCandidates...)
 	}
+
 	for _, left := range []string{"? for shortcuts", "? shortcuts", "?", ""} {
 		for _, right := range rightCandidates {
 			available := width - ansi.StringWidth(left)
 			if left != "" {
 				available--
 			}
-			if available <= 0 {
-				continue
-			}
-			if ansi.StringWidth(right) > available {
-				if strings.Contains(right, modelName) && available >= 8 {
-					right = strings.Replace(right, modelName, truncateWithEllipsis(modelName, maxInt(1, available-(ansi.StringWidth(right)-ansi.StringWidth(modelName)))), 1)
-				}
-			}
-			if ansi.StringWidth(right) > available {
+			if available <= 0 || ansi.StringWidth(right) > available {
 				continue
 			}
 			if left == "" {
@@ -130,5 +113,126 @@ func (m *bubbleModel) idleContextFooter() string {
 			return inset + mutedStyle.Render(left+spaces+right)
 		}
 	}
-	return inset + mutedStyle.Render(truncateWithEllipsis(modelName, width))
+	return inset + mutedStyle.Render(truncateWithEllipsis(permission, width))
+}
+
+func (m *bubbleModel) resize(width int, height int) {
+	if width <= 0 {
+		width = defaultBubbleWidth
+	}
+	if height <= 0 {
+		height = defaultBubbleHeight
+	}
+	m.layout.width = width
+	m.layout.height = height
+	m.help.SetWidth(maxInt(1, width-2))
+	prompt := m.panes.bottom.prompt()
+	prompt.SetWidth(composerUsableWidth(width))
+	m.panes.transcript.SetWidth(maxInt(1, width-10))
+	m.panes.transcript.SetHeight(maxInt(1, height-10))
+	if view, _ := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView); view != nil {
+		view.resize(width, height)
+	}
+	if m.historyState != nil {
+		m.historyState.SetWidth(width)
+	}
+	m.requestRelayout()
+	m.reconcileLayout()
+	m.refreshTranscriptViewport(false)
+}
+
+type layoutState struct {
+	width      int
+	height     int
+	frame      frameLayout
+	generation uint64
+	dirty      bool
+}
+
+type frameLayout struct {
+	generation uint64
+	header     string
+	status     string
+	top        string
+	composer   string
+	footer     string
+	height     int
+}
+
+func (m *bubbleModel) buildFrameLayout() frameLayout {
+	frame := frameLayout{}
+	if header := m.sessionHeaderView(); header != "" {
+		separator := mutedStyle.Render(strings.Repeat("─", maxInt(1, m.layout.width)))
+		frame.header = header + "\n" + separator
+	}
+	frame.status = m.statusView()
+	frame.top = m.panes.bottom.renderTop(m)
+	frame.footer = m.footerView()
+	for _, part := range []string{frame.header, frame.status, frame.top} {
+		if part != "" {
+			frame.height += lipgloss.Height(part)
+		}
+	}
+	if m.panes.bottom.composerVisible() {
+		frame.composer = m.promptView()
+		frame.height += m.panes.bottom.prompt().Height() + 2
+	}
+	if frame.footer != "" {
+		frame.height += lipgloss.Height(frame.footer)
+	}
+
+	return frame
+}
+
+type viewportScrollSnapshot struct {
+	follow      bool
+	yOffset     int
+	anchor      tuihistory.ScrollAnchor
+	anchorValid bool
+}
+
+func (m *bubbleModel) requestRelayout() {
+	m.layout.dirty = true
+}
+
+func (m *bubbleModel) reconcileLayout() {
+	if m == nil || !m.layout.dirty {
+		return
+	}
+	m.layout.dirty = false
+	scroll := m.captureViewportScroll()
+	m.applyFrameLayout(scroll, m.buildFrameLayout())
+}
+
+func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame frameLayout) {
+	m.layout.generation++
+	frame.generation = m.layout.generation
+	m.layout.frame = frame
+	viewportHeight := m.layout.height - frame.height
+	if viewportHeight < 1 {
+		viewportHeight = 1
+	}
+	if m.viewport.Width() != m.layout.width || m.viewport.Height() != viewportHeight {
+		m.viewport.SetWidth(m.layout.width)
+		m.viewport.SetHeight(viewportHeight)
+	}
+	m.refreshViewportWithScroll(scroll)
+}
+
+func (m *bubbleModel) refreshFrameLayout() {
+	if m == nil {
+		return
+	}
+	frame := m.buildFrameLayout()
+	if frame.height != m.layout.frame.height {
+		m.requestRelayout()
+		return
+	}
+	m.layout.generation++
+	frame.generation = m.layout.generation
+	m.layout.frame = frame
+}
+
+func (m *bubbleModel) refreshViewport() {
+	m.refreshViewportWithScroll(m.captureViewportScroll())
 }

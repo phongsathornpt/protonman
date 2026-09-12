@@ -70,6 +70,26 @@ immutable presentation snapshots, and pane interactions return typed actions for
 to apply instead of mutating it directly. Transcript cells use one width-aware render
 contract so viewport width remains the rendering source of truth.
 
+The terminal frame is split into fixed layout regions and one scrollable conversation
+viewport. The fixed session header renders branding plus stable session metadata such as
+model, effective low-concurrency state, goal activity, and branch/workspace context. The
+viewport contains transcript/history only; header height is accounted for by frame layout
+and never participates in scroll-anchor calculations. Status rows carry transient runtime
+activity, while composer/footer regions own input and interaction context.
+
+The `internal/adapter/in/tui/runtime` root is intentionally a thin orchestration shell.
+Pure catalog/filtering/projection/policy logic belongs in focused runtime subpackages or in
+the owning `view/*` package. Current examples include `modelcatalog`, `modelpicker`,
+`modelsetup`, `provider`, `permissionpolicy`, `permissionbridge`, `reasoningpolicy`, `projectconfig`, `keyboardpolicy`, `paneutil`, `transientnotice`, `transcriptutil`, `cmdpolicy`, and `conversation`.
+A runtime subpackage must not import the root `runtime` package; dependencies flow from the
+root shell into focused helpers, never back upward. This keeps Bubble Tea wiring from
+becoming a package-wide dependency magnet.
+
+The runtime-root production-file count is guarded as a ratchet in the architecture tests.
+The refactor that introduced this rule reduced the root from 68 production files to 60,
+and subsequent ownership extraction reduced the ratchet to 32. The budget is a regression
+guard, not a target architecture: do not raise it to accommodate new behavior. Prefer extracting cohesive ownership or consolidating an existing shell.
+
 ## 3. Application Layer (`internal/app/`)
 
 The application layer exposes use cases needed by inbound adapters and hides concrete
@@ -89,10 +109,10 @@ Important boundaries include:
 
 The engine is orchestration, not an outbound adapter:
 
-- `prompt/` composes capability-driven system prompts using deterministic, cache-aware ordered sections. The managed prompt currently uses Prompt ABI v12; see [`system-prompt.md`](system-prompt.md) for ordering and prefix-cache invariants.
+- `prompt/` composes capability-driven system prompts using deterministic, cache-aware ordered sections. The managed prompt currently uses Prompt ABI v14; see [`system-prompt.md`](system-prompt.md) for ordering and prefix-cache invariants.
 - `toolcall/` validates and authorizes model-originated tool calls before execution.
 - `turn/` owns the bounded multi-round model/tool state machine, streaming, grounding,
-  tool-result budgets, repeated-call protection, reasoning policy, verification state, and ephemeral event-driven runtime context delivery. Runtime-context finalization is a terminal-turn invariant: it runs on success, failure, and cancellation so turn-owned asynchronous work and consumer state cannot outlive their parent.
+  progress-aware tool safety budgets, tool-result budgets, repeated-call protection, reasoning policy, verification state, and ephemeral event-driven runtime context delivery. Runtime-context finalization is a terminal-turn invariant: it runs on success, failure, and cancellation so turn-owned asynchronous work and consumer state cannot outlive their parent.
 
 Inbound adapters must use `app.Conversation` rather than importing `engine/turn` directly.
 
@@ -115,7 +135,7 @@ Feature packages own cohesive product behavior built on core contracts:
 - `agent/`: canonical profiles, dependency-aware scheduling, lifecycle/events, delegation policy, required-vs-optional completion barriers, and versioned result delivery/consumption acknowledgement. Result availability drives the synthesis stream; the separate `agent_result_consumed` event is emitted only after successful parent-context encoding and never feeds back into that stream. Dependency edges reference already-admitted children in the same parent turn, so the runtime forms an acyclic execution graph by construction.
 - `project/`: project discovery/trust behavior.
 - `skill/`: skill discovery and activation domain behavior.
-- `todo/`: session task-plan state and optimistic concurrency.
+- `todo/`: session task-plan state, durable active-goal binding/supersession, and optimistic concurrency.
 
 Feature packages are not presentation or persistence dumping grounds. Concrete filesystem,
 network, provider, and terminal concerns remain in adapters/platform packages.
@@ -159,6 +179,7 @@ or `cmd/*` packages. Current responsibilities include:
 - `glob/`
 - `pathutil/`
 - `runtimepolicy/`
+- `strutil/`
 
 Only truly dependency-free reusable policy/helpers belong here.
 
@@ -179,9 +200,11 @@ through `/goal <detail>` is an execution entry point: it updates the managed con
 and immediately starts a normal model/tool turn with the goal text as the user objective.
 Inspecting or clearing the goal does not start a turn.
 
-The current TODO repository remains session-scoped rather than goal-scoped. Goal-to-plan
-binding, plan supersession, and goal-completion gating are therefore not architectural
-invariants yet and must not be assumed by adapters or documentation.
+The TODO repository remains physically session-scoped but binds its managed plan to the
+active goal using a durable goal fingerprint. A legacy unbound plan is adopted by the current
+goal once. Changing to another non-empty goal atomically supersedes the old plan; clearing the
+goal preserves the plan until a later goal supersedes it. Goal completion itself remains an
+execution/runtime concern rather than being inferred from task metadata alone.
 
 `sessionfs` may also maintain session-owned agent lifecycle projection/journal resources.
 Their filenames are persistence details, but their ownership is not: concurrent sessions
@@ -206,6 +229,8 @@ Key invariants include:
 4. Tool implementations live under `internal/adapter/out/tool/`.
 5. `proton-sdk` has zero dependencies on CLI-owned `internal/*` or `cmd/*` packages.
 6. Composition/wiring remains in `cmd/protonman` rather than leaking into domain packages.
+7. The TUI runtime root stays within its ratcheting production-file budget.
+8. Focused `tui/runtime/*` subpackages never import the root `tui/runtime` package.
 
 Run `go test ./test/architecture` whenever moving packages or changing dependency direction.
 
@@ -219,6 +244,9 @@ Resource and security limits are enforced at the owning boundary, while work occ
 - session grants are reusable only for matching normal-risk read-only semantics.
 - checkpoints are bounded by count, bytes, and age.
 - `read`, `find`, and `git` enforce scan/output/process limits before unbounded buffering.
+- missing `read` targets recover by inspecting the nearest existing readable ancestor; discovery evidence is returned as structured `ls` entries as well as compatibility text so the model and TUI share one recovery source of truth.
+- repeated identical terminal read failures are suppressed by the turn progress guard until meaningful execution advances progress.
+- task/status metadata cannot reset repository-progress protection; a separate stagnant-call window forces synthesis after prolonged non-progress, while an emergency total-call ceiling bounds unique-call runaway behavior.
 - workspace file authorization and opening must not introduce symlink/TOCTOU escapes.
 - model-originated tools execute through `internal/engine/toolcall.Service`.
 

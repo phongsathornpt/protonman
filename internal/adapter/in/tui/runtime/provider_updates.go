@@ -7,7 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
-	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 )
 
 func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) tea.Cmd {
@@ -44,7 +44,7 @@ func (m *bubbleModel) updateModelsFetched(message modelsFetchedMsg) tea.Cmd {
 				m.modelCatalogs.Set(message.providerName, message.models)
 				models := m.modelCatalogs.Models(message.providerName)
 				if cfg, configured := m.providers[modelcatalog.NormalizeProviderKey(message.providerName)]; configured {
-					models = visibleModelsForAccess(message.providerName, cfg.BaseURL, cfg.APIKey, models)
+					models = modelcatalog.VisibleForAccess(message.providerName, cfg.BaseURL, cfg.APIKey, models)
 				}
 				mv.setModels(models, m.activeProvider, m.activeModel)
 				mv.syncReasoningForSelection(mv.reasoningPreference)
@@ -174,7 +174,7 @@ func (m *bubbleModel) updateProviderDeleted(message providerDeletedMsg) tea.Cmd 
 		delete(m.providers, strings.ToLower(message.providerName))
 		m.modelCatalogs.Delete(message.providerName)
 		if strings.EqualFold(m.activeProvider, message.providerName) {
-			selection, providers := app.ResolvePrimaryModelDefaults(config.ModelConfig{}, m.providers)
+			selection, providers := model.ResolvePrimaryModelDefaults(config.ModelConfig{}, m.providers)
 			m.providers = providers
 			m.activeProvider = selection.Provider
 			m.activeModel = selection.Default

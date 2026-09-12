@@ -11,8 +11,11 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
+	tuiconv "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/conversation"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionbridge"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
+	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -101,12 +104,10 @@ type modelSetupState struct {
 }
 
 type conversationModelState struct {
-	historyState          *HistoryState
-	queue                 []string
-	conversationViewport  conversationViewportState
-	messages              []model.Message
-	conversationRetention conversation.RetentionPolicy
-	activeGoal            string
+	historyState         *tuihistory.HistoryState
+	conversationViewport conversationViewportState
+	conversation         *tuiconv.State
+	activeGoal           string
 }
 
 type todoModelState struct {
@@ -143,22 +144,22 @@ type presentationModelState struct {
 	planMode           bool
 	reducedMotion      bool
 	panes              paneState
-	showWelcome        bool
 	nextID             uint64
 	layout             layoutState
-	welcomeCache       welcomeCardCache
+	sessionHeaderCache sessionHeaderCache
 	keyboardCapability keyboardCapability
 	transientNotice    string
 	transientNoticeID  uint64
 }
 
 type bubbleModel struct {
-	ctx      context.Context
-	service  *toolcall.Service
-	registry tool.Registry
-	skills   *skill.Registry
-	runner   app.Conversation
-	bridge   *permissionBridge
+	ctx         context.Context
+	service     *toolcall.Service
+	registry    tool.Registry
+	skills      *skill.Registry
+	runner      app.Conversation
+	application app.Services
+	bridge      *permissionbridge.Bridge
 	agentModelState
 	turnModelState
 	modelSetupState
@@ -183,7 +184,7 @@ type bubbleKeyMap struct {
 	ToggleModel     key.Binding
 }
 
-func newBubbleModel(ctx context.Context, service *toolcall.Service, registry tool.Registry, todo []tododomain.Item, runner app.Conversation, bridge *permissionBridge, workDir string, initialMessages ...[]model.Message) *bubbleModel {
+func newBubbleModel(ctx context.Context, service *toolcall.Service, registry tool.Registry, todo []tododomain.Item, runner app.Conversation, bridge *permissionbridge.Bridge, workDir string, initialMessages ...[]model.Message) *bubbleModel {
 	spin := spinner.New()
 	spin.Spinner = spinner.Dot
 	spin.Style = brandStyle
@@ -196,11 +197,7 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	helpView := help.New()
 	helpView.SetWidth(defaultBubbleWidth - 2)
 	helpView.ShortSeparator = glyphSep
-	messages := []model.Message(nil)
 	retention := conversation.DefaultRetentionPolicy()
-	if len(initialMessages) > 0 {
-		messages = conversation.Retain(model.SnapshotMessages(initialMessages[0]), retention)
-	}
 	ui := &bubbleModel{
 		ctx:      ctx,
 		service:  service,
@@ -216,16 +213,13 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 			help:          helpView,
 			keys:          newBubbleKeyMap(),
 			panes:         paneState{bottom: bottom, transcript: transcriptPane},
-			showWelcome:   true,
 			reducedMotion: reducedMotion,
 			layout:        layoutState{width: defaultBubbleWidth, height: defaultBubbleHeight},
 		},
 		conversationModelState: conversationModelState{
-			historyState:          NewHistoryState(maxBubbleScrollback),
-			queue:                 make([]string, 0),
-			conversationViewport:  conversationViewportState{mode: viewportFollowing},
-			messages:              messages,
-			conversationRetention: retention,
+			historyState:         tuihistory.NewHistoryState(maxBubbleScrollback),
+			conversationViewport: conversationViewportState{mode: viewportFollowing},
+			conversation:         tuiconv.NewState(retention, initialMessages...),
 		},
 		todoModelState: todoModelState{
 			todo: append([]tododomain.Item{}, todo...),
@@ -245,7 +239,7 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	if allTodoCompleted(ui.todo) {
 		ui.todoLifecycle.CompletionFresh = true
 	}
-	ui.loadInitialMessages(messages)
+	ui.loadInitialMessages(ui.conversation.Messages())
 	ui.syncPromptPlaceholder()
 	ui.requestRelayout()
 	ui.reconcileLayout()

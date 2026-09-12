@@ -21,10 +21,13 @@ func New(workspaceRoot *workspace.Workspace) tool.Handler {
 	return readFileHandler{workspace: workspaceRoot}
 }
 
-func missingReadPathError(path string, cause error) error {
+func (h readFileHandler) missingReadPathError(ctx context.Context, path string, cause error) error {
 	parent := filepath.Dir(filepath.Clean(path))
 	if strings.TrimSpace(parent) == "" {
 		parent = "."
+	}
+	if nearest, err := h.workspace.NearestExistingReadAncestor(ctx, parent); err == nil {
+		parent = nearest
 	}
 	recoveryArgs, err := json.Marshal(map[string]any{"path": parent})
 	if err != nil {
@@ -96,7 +99,7 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	path, err := h.workspace.ResolveExistingRead(ctx, input.Path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return tool.Result{}, missingReadPathError(input.Path, err)
+			return tool.Result{}, h.missingReadPathError(ctx, input.Path, err)
 		}
 		return tool.Result{}, err
 	}
@@ -105,7 +108,7 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 	if err != nil {
 		switch {
 		case errors.Is(err, os.ErrNotExist):
-			return tool.Result{}, tool.WrapToolError(tool.ErrorCodeNotFound, fmt.Sprintf("not found: %q", input.Path), err)
+			return tool.Result{}, h.missingReadPathError(ctx, input.Path, err)
 		case errors.Is(err, os.ErrPermission):
 			return tool.Result{}, tool.WrapToolError(tool.ErrorCodePermissionDenied, fmt.Sprintf("cannot read path: %q", input.Path), err)
 		default:

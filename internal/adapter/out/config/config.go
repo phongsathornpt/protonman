@@ -6,6 +6,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
+	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
@@ -26,13 +27,8 @@ type Options struct {
 	ProjectScope *appdirs.ProjectScope
 }
 
-// ProviderConfig specifies an AI model provider connection.
-type ProviderConfig struct {
-	Name    string `toml:"name"`
-	Type    string `toml:"type"`
-	BaseURL string `toml:"base_url"`
-	APIKey  string `toml:"api_key"`
-}
+// ProviderConfig is the persisted provider connection schema.
+type ProviderConfig = modelconfig.Provider
 
 // ProviderSaveOptions controls how a provider update affects model defaults.
 type ProviderSaveOptions struct {
@@ -44,19 +40,11 @@ type ProviderSaveOptions struct {
 	Activate bool
 }
 
-// ModelConfig specifies default model settings.
-type ModelConfig struct {
-	Default  string `toml:"default"`
-	Provider string `toml:"provider"`
-}
+// ModelConfig is the persisted active model selection.
+type ModelConfig = modelconfig.Selection
 
-// SubagentModelConfig contains per-profile runtime overrides for one specialized subagent.
-// Provider/model may be omitted together to inherit Universal dynamically while still overriding reasoning.
-type SubagentModelConfig struct {
-	Provider        string              `toml:"provider"`
-	Model           string              `toml:"model"`
-	ReasoningEffort sdk.ReasoningEffort `toml:"reasoning_effort"`
-}
+// SubagentModelConfig is the persisted per-profile model/reasoning override.
+type SubagentModelConfig = modelconfig.SubagentRoute
 
 // AgentConfig specifies autonomous agent execution settings.
 type AgentConfig struct {

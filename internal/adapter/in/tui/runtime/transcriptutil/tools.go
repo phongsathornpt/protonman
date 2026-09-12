@@ -3,6 +3,8 @@ package transcriptutil
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -29,7 +31,7 @@ func EditPresentation(call tool.Call) (string, []string) {
 	return summary, paths
 }
 
-func ToolFailureSuggestions(toolName string, failure *tool.Failure) []string {
+func ToolFailureSuggestions(toolName, target string, failure *tool.Failure) []string {
 	if failure == nil {
 		return nil
 	}
@@ -37,7 +39,7 @@ func ToolFailureSuggestions(toolName string, failure *tool.Failure) []string {
 	switch failure.Code {
 	case tool.ErrorCodeNotFound:
 		if strings.TrimSpace(toolName) == tool.NameRead {
-			suggestions = append(suggestions, readNotFoundSuggestion(failure))
+			suggestions = append(suggestions, readNotFoundSuggestions(target, failure)...)
 		}
 	case tool.ErrorCodeProtectedPath:
 		suggestions = append(suggestions, "This path is shielded by workspace protection rules")
@@ -51,24 +53,87 @@ func ToolFailureSuggestions(toolName string, failure *tool.Failure) []string {
 	return suggestions
 }
 
-func readNotFoundSuggestion(failure *tool.Failure) string {
-	const fallback = "inspect the parent directory or discover the filename before reading again"
+func readNotFoundSuggestions(target string, failure *tool.Failure) []string {
+	const fallback = "inspect the parent directory before reading again"
 	if failure == nil || failure.Recovery == nil ||
 		failure.Recovery.Action != tool.RecoveryDiscoverResource || failure.Recovery.Tool != tool.NameLS {
-		return fallback
+		return []string{fallback}
 	}
 	var args struct {
 		Path string `json:"path"`
 	}
 	if json.Unmarshal(failure.Recovery.Arguments, &args) != nil || strings.TrimSpace(args.Path) == "" {
-		return fallback
+		return []string{fallback}
 	}
 	parent := strings.TrimSpace(args.Path)
-	if evidence := failure.RecoveryEvidence; evidence != nil &&
-		evidence.Action == tool.RecoveryDiscoverResource && evidence.Tool == tool.NameLS {
-		return fmt.Sprintf("inspected %q for nearby files; use a discovered path before reading again", parent)
+	evidence := failure.RecoveryEvidence
+	if evidence == nil || evidence.Action != tool.RecoveryDiscoverResource || evidence.Tool != tool.NameLS {
+		return []string{fmt.Sprintf("search %q for nearby files", parent)}
 	}
-	return fmt.Sprintf("inspect %q or discover the filename before reading again", parent)
+	var discovered struct {
+		Entries []struct {
+			Name string `json:"name"`
+			Kind string `json:"kind"`
+		} `json:"entries"`
+	}
+	if len(evidence.StructuredOutput) == 0 || json.Unmarshal(evidence.StructuredOutput, &discovered) != nil {
+		return []string{fmt.Sprintf("searched %s", parent)}
+	}
+	type candidate struct {
+		name  string
+		kind  string
+		score int
+	}
+	missingName := strings.ToLower(filepath.Base(strings.TrimSpace(target)))
+	missingStem := strings.TrimSuffix(missingName, filepath.Ext(missingName))
+	candidates := make([]candidate, 0, len(discovered.Entries))
+	for _, entry := range discovered.Entries {
+		name := strings.TrimSpace(entry.Name)
+		if name == "" {
+			continue
+		}
+		lower := strings.ToLower(name)
+		stem := strings.TrimSuffix(lower, filepath.Ext(lower))
+		score := 0
+		switch {
+		case missingName != "" && lower == missingName:
+			score = 100
+		case missingStem != "" && stem == missingStem:
+			score = 90
+		case missingStem != "" && strings.HasPrefix(stem, missingStem):
+			score = 80
+		case missingStem != "" && strings.Contains(stem, missingStem):
+			score = 70
+		case missingStem != "" && strings.Contains(missingStem, stem):
+			score = 60
+		}
+		candidates = append(candidates, candidate{name: name, kind: entry.Kind, score: score})
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].score != candidates[j].score {
+			return candidates[i].score > candidates[j].score
+		}
+		return strings.ToLower(candidates[i].name) < strings.ToLower(candidates[j].name)
+	})
+	const visibleCandidates = 3
+	visible := make([]string, 0, visibleCandidates+1)
+	for _, candidate := range candidates {
+		if len(visible) >= visibleCandidates {
+			break
+		}
+		name := candidate.name
+		if candidate.kind == "directory" {
+			name += "/"
+		}
+		visible = append(visible, name)
+	}
+	if remaining := len(candidates) - len(visible); remaining > 0 {
+		visible = append(visible, fmt.Sprintf("+%d more", remaining))
+	}
+	if len(visible) == 0 {
+		return []string{fmt.Sprintf("searched %s · no nearby entries", parent)}
+	}
+	return []string{fmt.Sprintf("nearby in %s: %s", parent, strings.Join(visible, " · "))}
 }
 
 func ExecFailureUsesExecCell(code tool.ErrorCode) bool {

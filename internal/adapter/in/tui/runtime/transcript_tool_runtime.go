@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transcriptutil"
+	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
+	tuipresentation "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/presentation"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/toolview"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
@@ -18,7 +21,7 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 	if name == "bash" {
 		// Shell commands may change HEAD or switch worktrees. Refresh the cached
 		// welcome metadata once after completion instead of reading .git during View.
-		m.invalidateWelcomeBranch()
+		m.invalidateSessionHeaderBranch()
 	}
 	if name == "" {
 		name = m.lastRunningToolName()
@@ -44,7 +47,8 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 			state.CompleteToolCall(result.CallID, name, completed)
 			return
 		}
-		suggestions := transcriptutil.ToolFailureSuggestions(name, result.Failure)
+		target := m.runningToolTarget(result.CallID, name)
+		suggestions := transcriptutil.ToolFailureSuggestions(name, target, result.Failure)
 		title := tool.DisplayName(name)
 		badge := string(result.Failure.Code)
 		text := result.Failure.Message
@@ -57,12 +61,12 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 			text = "The task plan changed while this update was being prepared."
 			suggestions = []string{"Refresh tasks with todo action=get, then retry the update."}
 		}
-		errorCell := &ErrorCell{ErrorKind: ErrorKindToolFailed, Title: title, Badge: badge, Text: text, Code: result.Failure.Code, Suggestions: suggestions}
+		errorCell := &tuihistory.ErrorCell{ErrorKind: ErrorKindToolFailed, Title: title, Target: target, Badge: badge, Text: text, Code: result.Failure.Code, Suggestions: suggestions}
 		state.CompleteToolCall(result.CallID, name, errorCell)
 		return
 	}
 	if err != nil && !errors.Is(err, context.Canceled) && transcriptutil.FailureCode(result) != tool.ErrorCodeCanceled {
-		errorCell := &ErrorCell{ErrorKind: ErrorKindToolFailed, Title: tool.DisplayName(name), Text: err.Error()}
+		errorCell := &tuihistory.ErrorCell{ErrorKind: ErrorKindToolFailed, Title: tool.DisplayName(name), Text: err.Error()}
 		if result.Failure != nil {
 			errorCell.Badge = string(result.Failure.Code)
 			detail := result.Failure.Message
@@ -106,7 +110,7 @@ func (m *bubbleModel) finalizeRunningTools(err error) {
 	}
 }
 
-func (m *bubbleModel) completedToolCell(callID string, name string, body string, result tool.Result) HistoryCell {
+func (m *bubbleModel) completedToolCell(callID string, name string, body string, result tool.Result) tuihistory.HistoryCell {
 	var failureCode tool.ErrorCode
 	if result.Failure != nil {
 		failureCode = result.Failure.Code
@@ -115,17 +119,17 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 	var toolKind tool.Kind
 	if running := m.runningToolCell(callID, name); running != nil {
 		switch typed := running.(type) {
-		case *ExecCell:
+		case *tuihistory.ExecCell:
 			duration := time.Duration(0)
 			if !typed.StartedAt.IsZero() {
 				duration = time.Since(typed.StartedAt)
 			}
-			return &ExecCell{CallID: typed.CallID, Name: typed.Name, Command: typed.Command, StartedAt: typed.StartedAt, Duration: duration, Body: body, Stdout: result.Stdout, Stderr: result.Stderr, ExitCode: result.ExitCode, Truncated: result.Truncated, StdoutTruncated: result.StdoutTruncated, StderrTruncated: result.StderrTruncated, Denied: result.Denied, FailureCode: failureCode}
-		case *PatchCell:
-			return &PatchCell{CallID: typed.CallID, Name: typed.Name, Summary: typed.Summary, Paths: append([]string{}, typed.Paths...), Body: body, Truncated: result.Truncated, Denied: result.Denied, FailureCode: failureCode}
-		case *AgentToolCell:
-			return &AgentToolCell{CallID: typed.CallID, Name: typed.Name, Target: typed.Target, Summary: summarizeToolOutput(typed.Name, tool.KindAgent, typed.Target, body, result.ExitCode, result.Truncated)}
-		case *ToolCell:
+			return &tuihistory.ExecCell{CallID: typed.CallID, Name: typed.Name, Command: typed.Command, StartedAt: typed.StartedAt, Duration: duration, Body: body, Stdout: result.Stdout, Stderr: result.Stderr, ExitCode: result.ExitCode, Truncated: result.Truncated, StdoutTruncated: result.StdoutTruncated, StderrTruncated: result.StderrTruncated, Denied: result.Denied, FailureCode: failureCode}
+		case *tuihistory.PatchCell:
+			return &tuihistory.PatchCell{CallID: typed.CallID, Name: typed.Name, Summary: typed.Summary, Paths: append([]string{}, typed.Paths...), Body: body, Truncated: result.Truncated, Denied: result.Denied, FailureCode: failureCode}
+		case *tuihistory.AgentToolCell:
+			return &tuihistory.AgentToolCell{CallID: typed.CallID, Name: typed.Name, Target: typed.Target, Summary: toolview.SummarizeOutput(typed.Name, tool.KindAgent, typed.Target, body, result.ExitCode, result.Truncated)}
+		case *tuihistory.ToolCell:
 			callID = typed.CallID
 			name = typed.Name
 			target = typed.Target
@@ -139,11 +143,21 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 			toolKind = tool.KindForName(name)
 		}
 	}
-	summary := summarizeToolOutput(name, toolKind, target, body, result.ExitCode, result.Truncated)
-	return &ToolCell{CallID: callID, Name: name, Body: body, Target: target, ToolKind: toolKind, Summary: summary, ExitCode: result.ExitCode, Truncated: result.Truncated, Denied: result.Denied, FailureCode: failureCode, ShowDetail: minimalToolShowsDetail(toolKind, result.Denied, failureCode != "")}
+	summary := toolview.SummarizeOutput(name, toolKind, target, body, result.ExitCode, result.Truncated)
+	return &tuihistory.ToolCell{CallID: callID, Name: name, Body: body, Target: target, ToolKind: toolKind, Summary: summary, ExitCode: result.ExitCode, Truncated: result.Truncated, Denied: result.Denied, FailureCode: failureCode, ShowDetail: tuipresentation.MinimalPolicy().ToolDetail(toolKind, result.Denied, failureCode != "") != tuipresentation.DetailSummary}
 }
 
-func (m *bubbleModel) runningToolCell(callID string, name string) HistoryCell {
+func (m *bubbleModel) runningToolTarget(callID, name string) string {
+	switch cell := m.runningToolCell(callID, name).(type) {
+	case *tuihistory.ToolCell:
+		return cell.Target
+	case *tuihistory.AgentToolCell:
+		return cell.Target
+	}
+	return ""
+}
+
+func (m *bubbleModel) runningToolCell(callID string, name string) tuihistory.HistoryCell {
 	return m.ensureHistoryState().FindRunningTool(callID, name)
 }
 

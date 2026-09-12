@@ -9,7 +9,6 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
-	"github.com/phongsathornpt/protonman/internal/app"
 )
 
 func TestE2EHeadlessAskModeFailsClosedWithoutPrompt(t *testing.T) {
@@ -383,7 +382,7 @@ func TestE2EProviderSwitchAndSelect(t *testing.T) {
 	if snap4.Model.Provider != "" || snap4.Model.Default != "" {
 		t.Fatalf("expected low-level delete to clear active selection, got %+v", snap4.Model)
 	}
-	resolved, _ := app.ResolvePrimaryModelDefaults(snap4.Model, snap4.Providers)
+	resolved, _ := model.ResolvePrimaryModelDefaults(snap4.Model, snap4.Providers)
 	if resolved.Provider != model.DefaultOpenCodeName || resolved.Default != model.DefaultOpenCodeModel {
 		t.Fatalf("application fallback = %+v, want OpenCode default", resolved)
 	}

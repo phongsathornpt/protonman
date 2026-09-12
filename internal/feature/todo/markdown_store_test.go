@@ -303,3 +303,121 @@ func TestMarkdownStoreCompareAndPatchRefreshesAndCommitsAtomically(t *testing.T)
 		t.Fatalf("stale before=%+v after=%+v snapshot=%+v", staleBefore, staleAfter, second.Snapshot())
 	}
 }
+
+func TestMarkdownStoreBindGoalAdoptsLegacyPlanThenSupersedesOnGoalChange(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session", "todo.md")
+	legacy := revisionMarkerPrefix + "4 -->\n" + managedStart + "\n- [~] [old] legacy task\n" + managedEnd + "\n"
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adopted, changed, err := store.BindGoal(context.Background(), "finish legacy work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed || adopted.Revision != 5 || len(adopted.Items) != 1 || adopted.Items[0].ID != "old" {
+		t.Fatalf("adopted=%+v changed=%v", adopted, changed)
+	}
+	superseded, changed, err := store.BindGoal(context.Background(), "new objective")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed || superseded.Revision != 6 || len(superseded.Items) != 0 {
+		t.Fatalf("superseded=%+v changed=%v", superseded, changed)
+	}
+}
+
+func TestMarkdownStoreLegacyPlanRemainsUnboundUntilFirstGoal(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session", "todo.md")
+	legacy := revisionMarkerPrefix + "7 -->\n" + managedStart + "\n- [ ] [legacy] preserve me\n" + managedEnd + "\n"
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unchanged, changed, err := store.BindGoal(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed || unchanged.Revision != 7 || len(unchanged.Items) != 1 {
+		t.Fatalf("empty-goal bind changed legacy plan: snapshot=%+v changed=%v", unchanged, changed)
+	}
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(contents), goalMarkerPrefix) {
+		t.Fatalf("empty-goal startup prematurely bound legacy plan: %s", contents)
+	}
+	adopted, changed, err := store.BindGoal(context.Background(), "first goal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed || adopted.Revision != 8 || len(adopted.Items) != 1 || adopted.Items[0].ID != "legacy" {
+		t.Fatalf("first goal did not adopt legacy plan: snapshot=%+v changed=%v", adopted, changed)
+	}
+}
+
+func TestMarkdownStoreBindGoalSameGoalIsStable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session", "todo.md")
+	store, err := OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, changed, err := store.BindGoal(context.Background(), "ship feature")
+	if err != nil || !changed {
+		t.Fatalf("first bind=%+v changed=%v err=%v", first, changed, err)
+	}
+	withTask, err := store.CompareAndReplace(context.Background(), first.Revision, []Item{{ID: "ship", Text: "ship feature", Status: StatusInProgress}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	same, changed, err := store.BindGoal(context.Background(), "  ship feature  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed || same.Revision != withTask.Revision || len(same.Items) != 1 {
+		t.Fatalf("same=%+v changed=%v want revision=%d", same, changed, withTask.Revision)
+	}
+}
+
+func TestMarkdownStoreClearingGoalPreservesPlanButNextGoalSupersedesIt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session", "todo.md")
+	store, err := OpenMarkdownStore(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, _, err := store.BindGoal(context.Background(), "first goal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	withTask, err := store.CompareAndReplace(context.Background(), bound.Revision, []Item{{ID: "a", Text: "first task", Status: StatusPending}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleared, changed, err := store.BindGoal(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed || cleared.Revision != withTask.Revision+1 || len(cleared.Items) != 1 {
+		t.Fatalf("cleared=%+v changed=%v", cleared, changed)
+	}
+	next, changed, err := store.BindGoal(context.Background(), "second goal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed || len(next.Items) != 0 {
+		t.Fatalf("next=%+v changed=%v", next, changed)
+	}
+}

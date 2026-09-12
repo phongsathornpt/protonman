@@ -2,7 +2,7 @@ package runtime
 
 import (
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
+	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
 )
 
 type conversationViewportMode uint8
@@ -18,7 +18,7 @@ type conversationViewportState struct {
 	staleTail         bool
 	committedRevision uint64
 	activeRevision    uint64
-	lineAnchors       []ScrollAnchor
+	lineAnchors       []tuihistory.ScrollAnchor
 }
 
 func (s conversationViewportState) following() bool {
@@ -79,9 +79,7 @@ func (m *bubbleModel) setViewportContent(content string, fullHistory bool) {
 	if len(historyAnchors) == 0 {
 		return
 	}
-	prefix := m.historyViewportPrefixLines()
-	m.conversationViewport.lineAnchors = make([]ScrollAnchor, prefix+len(historyAnchors))
-	copy(m.conversationViewport.lineAnchors[prefix:], historyAnchors)
+	m.conversationViewport.lineAnchors = append([]tuihistory.ScrollAnchor(nil), historyAnchors...)
 }
 
 func (m *bubbleModel) captureViewportScroll() viewportScrollSnapshot {
@@ -96,10 +94,7 @@ func (m *bubbleModel) captureViewportScroll() viewportScrollSnapshot {
 			return scroll
 		}
 	}
-	historyLine := m.viewport.YOffset() - m.historyViewportPrefixLines()
-	if historyLine < 0 {
-		return scroll
-	}
+	historyLine := m.viewport.YOffset()
 	scroll.anchor = m.historyState.CaptureScrollAnchor(historyLine)
 	_, scroll.anchorValid = m.historyState.ResolveScrollAnchor(scroll.anchor)
 	return scroll
@@ -115,7 +110,7 @@ func (m *bubbleModel) restoreViewportScroll(scroll viewportScrollSnapshot) {
 	yOffset := scroll.yOffset
 	if scroll.anchorValid && m.historyState != nil {
 		if historyLine, ok := m.historyState.ResolveScrollAnchor(scroll.anchor); ok {
-			yOffset = m.historyViewportPrefixLines() + historyLine
+			yOffset = historyLine
 		}
 	}
 	if m.viewport.YOffset() != yOffset {
@@ -123,23 +118,11 @@ func (m *bubbleModel) restoreViewportScroll(scroll viewportScrollSnapshot) {
 	}
 }
 
-func (m *bubbleModel) historyViewportPrefixLines() int {
-	if !m.showWelcome || m.historyState == nil || m.historyState.RenderContent() == "" {
-		return 0
-	}
-	return lipgloss.Height(m.welcomeCard())
-}
-
 func (m *bubbleModel) fullViewportContent() string {
-	content := m.historyState.RenderContent()
-	if !m.showWelcome {
-		return content
+	if m == nil || m.historyState == nil {
+		return ""
 	}
-	welcome := m.welcomeCard()
-	if content == "" {
-		return welcome
-	}
-	return welcome + "\n" + content
+	return m.historyState.RenderContent()
 }
 
 func (m *bubbleModel) hydrateViewportForScroll() {

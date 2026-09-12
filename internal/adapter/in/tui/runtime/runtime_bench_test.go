@@ -18,7 +18,7 @@ func BenchmarkHistoryStateRenderLines50Cells(b *testing.B) {
 
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		lines := state.RenderLines()
 		if len(lines) == 0 {
 			b.Fatal("expected rendered lines")
@@ -30,7 +30,7 @@ func BenchmarkSanitizeBubbleText(b *testing.B) {
 	input := "\x1b[31mRed text\x1b[0m with \t tabs \r\n and \x07 bells"
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = sanitizeBubbleText(input)
 	}
 }
@@ -43,7 +43,7 @@ func BenchmarkHistoryStateRenderLinesActiveMarkdown20KB(b *testing.B) {
 	state.AppendAssistantDelta(strings.Repeat("A paragraph with **bold text**, `inline code`, and [a link](https://example.com).\n", 250))
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = state.RenderLines()
 	}
 }
@@ -56,7 +56,7 @@ func BenchmarkHistoryStateRenderLinesAt100Cells(b *testing.B) {
 	}
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = state.RenderLinesAt(68)
 	}
 }
@@ -64,14 +64,13 @@ func BenchmarkHistoryStateRenderLinesAt100Cells(b *testing.B) {
 func BenchmarkRefreshViewport100Cells(b *testing.B) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
 	m.resize(80, 24)
-	m.showWelcome = false
 	for i := 0; i < 50; i++ {
 		m.historyState.Append(&UserCell{Text: fmt.Sprintf("Question %d", i)})
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("Answer %d with **markdown** and `code`.", i)})
 	}
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		m.refreshViewport()
 	}
 }
@@ -79,7 +78,7 @@ func BenchmarkRefreshViewport100Cells(b *testing.B) {
 func BenchmarkAssistantStreamingMarkdown20KB(b *testing.B) {
 	chunk := "A paragraph with **bold text**, `inline code`, and [a link](https://example.com).\n"
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		state := NewHistoryState(50000)
 		for j := 0; j < 250; j++ {
 			state.AppendAssistantDelta(chunk)
@@ -96,7 +95,7 @@ func BenchmarkHistoryStateRaw100Cells(b *testing.B) {
 	_ = state.Raw()
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = state.Raw()
 	}
 }
@@ -110,7 +109,7 @@ func BenchmarkHistoryStateRenderContentActiveMarkdown20KB(b *testing.B) {
 	_ = state.RenderContent()
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = state.RenderContent()
 	}
 }
@@ -123,7 +122,7 @@ func BenchmarkHistoryStateRenderJoinedActiveMarkdown20KB(b *testing.B) {
 	state.AppendAssistantDelta(strings.Repeat("A paragraph with **bold text**, `inline code`, and [a link](https://example.com).\n", 250))
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = strings.Join(state.RenderLines(), "\n")
 	}
 }
@@ -131,7 +130,6 @@ func BenchmarkHistoryStateRenderJoinedActiveMarkdown20KB(b *testing.B) {
 func BenchmarkRefreshViewportStreamingLongHistory(b *testing.B) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
 	m.resize(100, 30)
-	m.showWelcome = false
 	m.busy = true
 	m.conversationViewport.setFollowing(true)
 	for i := 0; i < 500; i++ {
@@ -141,7 +139,7 @@ func BenchmarkRefreshViewportStreamingLongHistory(b *testing.B) {
 	m.historyState.AppendAssistantDelta(strings.Repeat("streaming **tail** with `code` and details\n", 250))
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		m.refreshViewport()
 	}
 }
@@ -149,7 +147,7 @@ func BenchmarkRefreshViewportStreamingLongHistory(b *testing.B) {
 func BenchmarkAssistantStreamingTailContent20KB(b *testing.B) {
 	chunk := "A paragraph with **bold text**, `inline code`, and [a link](https://example.com).\n"
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		state := NewHistoryState(50000)
 		state.SetWidth(100)
 		for j := 0; j < 250; j++ {
@@ -167,7 +165,7 @@ func BenchmarkApplyTurnTextDeltaLongHistory(b *testing.B) {
 	}
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		m.applyTurnEvent(applicationturn.Event{Kind: applicationturn.EventTextDelta, Text: "x"})
 	}
 }
@@ -175,7 +173,6 @@ func BenchmarkApplyTurnTextDeltaLongHistory(b *testing.B) {
 func BenchmarkRefreshViewportScrolledLongHistory(b *testing.B) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
 	m.resize(100, 30)
-	m.showWelcome = false
 	for i := 0; i < 500; i++ {
 		m.historyState.Append(&UserCell{Text: fmt.Sprintf("Question %d with enough text for scrolling", i)})
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("Answer %d with **markdown** and `code`.\nMore detail.", i)})
@@ -185,7 +182,7 @@ func BenchmarkRefreshViewportScrolledLongHistory(b *testing.B) {
 	m.viewport.SetYOffset(maxInt(0, m.viewport.TotalLineCount()/2))
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		m.refreshViewport()
 	}
 }
@@ -201,7 +198,7 @@ func BenchmarkViewBusyLongHistory(b *testing.B) {
 	m.refreshViewport()
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = m.View().Content
 	}
 }
@@ -212,7 +209,7 @@ func BenchmarkRelayoutLongPrompt(b *testing.B) {
 	m.panes.bottom.prompt().SetValue(strings.Repeat("long prompt with unicode ภาษาไทย 東京 and enough text to wrap ", 12))
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		m.requestRelayout()
 		m.reconcileLayout()
 	}

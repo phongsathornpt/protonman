@@ -108,6 +108,7 @@ type AgentStatus struct {
 	Provider    string    `json:"provider,omitempty"`
 	Model       string    `json:"model,omitempty"`
 	Task        string    `json:"task"`
+	TaskID      string    `json:"task_id,omitempty"`
 	DependsOn   []string  `json:"depends_on,omitempty"`
 	Optional    bool      `json:"optional,omitempty"`
 	State       State     `json:"state"`

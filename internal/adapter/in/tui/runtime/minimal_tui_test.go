@@ -18,7 +18,7 @@ func TestMinimalIdleChromeUsesContextFooter(t *testing.T) {
 		t.Fatalf("idle status = %q, want empty", got)
 	}
 	footer := ansi.Strip(m.footerView())
-	for _, want := range []string{"? for shortcuts", "unselected", "auto"} {
+	for _, want := range []string{"? for shortcuts", "auto", "ask"} {
 		if !strings.Contains(footer, want) {
 			t.Fatalf("idle context footer missing %q: %q", want, footer)
 		}
@@ -33,7 +33,7 @@ func TestPlanModeKeepsIdleContextFooter(t *testing.T) {
 	m.setPlanEnabled(true)
 
 	footer := ansi.Strip(m.footerView())
-	for _, want := range []string{"? for shortcuts", "glm-5.3-flash", "auto", "plan"} {
+	for _, want := range []string{"? for shortcuts", "auto", "plan"} {
 		if !strings.Contains(footer, want) {
 			t.Fatalf("plan context footer missing %q: %q", want, footer)
 		}
@@ -65,21 +65,21 @@ func TestContextualHelpUsesBubblesBindings(t *testing.T) {
 	}
 }
 
-func TestMinimalWelcomeHidesAfterConversationStarts(t *testing.T) {
+func TestSessionHeaderPersistsAfterConversationStarts(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
 	m.runner = fakeConversation{}
 	m.panes.bottom.prompt().SetValue("hello")
 	_ = m.submit()
-	if m.showWelcome {
-		t.Fatal("welcome remained visible after conversation started")
+	header := ansi.Strip(m.sessionHeaderView())
+	if !strings.Contains(header, "protonMAN") {
+		t.Fatalf("session header disappeared after conversation started: %q", header)
 	}
 }
 
 func TestMinimalSmallTerminalFitsAndRendersUnicode(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(40, 10)
-	m.showWelcome = false
 	m.appendUser("สวัสดี 日本語")
 	m.appendAssistant("ตอบกลับ ภาษาไทย テスト")
 	m.refreshViewport()
@@ -100,7 +100,6 @@ func TestMinimalScrollKeepsSingleComposer(t *testing.T) {
 	m.resize(60, 16)
 	m.runner = fakeConversation{}
 	m.syncPromptPlaceholder()
-	m.showWelcome = false
 	for i := 0; i < 40; i++ {
 		m.appendLine("history")
 	}
@@ -115,11 +114,10 @@ func TestMinimalScrollKeepsSingleComposer(t *testing.T) {
 func TestMinimalBusyChromeKeepsContextFooterStable(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
-	m.showWelcome = false
 	m.activeModel = "glm-5.3-flash"
 	m.busy = true
 	m.activity = "running tests"
-	frame := m.buildFrameChrome()
+	frame := m.buildFrameLayout()
 	if got := lipgloss.Height(frame.status); got != 1 {
 		t.Fatalf("busy activity rows=%d, want 1: %q", got, frame.status)
 	}
@@ -127,7 +125,7 @@ func TestMinimalBusyChromeKeepsContextFooterStable(t *testing.T) {
 		t.Fatalf("busy frame leaked persistent pane: top=%q", frame.top)
 	}
 	footer := ansi.Strip(frame.footer)
-	for _, want := range []string{"? for shortcuts", "glm-5.3-flash", "auto", "ask"} {
+	for _, want := range []string{"? for shortcuts", "auto", "ask"} {
 		if !strings.Contains(footer, want) {
 			t.Fatalf("busy context footer missing %q: %q", want, footer)
 		}
@@ -137,8 +135,8 @@ func TestMinimalBusyChromeKeepsContextFooterStable(t *testing.T) {
 			t.Fatalf("busy footer leaked transient help %q: %q", noise, footer)
 		}
 	}
-	if frame.height > 6 {
-		t.Fatalf("busy chrome height=%d, want <=6", frame.height)
+	if frame.height > 11 {
+		t.Fatalf("busy frame height=%d, want <=11", frame.height)
 	}
 }
 
@@ -166,7 +164,7 @@ func TestMinimalComposerKeepsContextInFooter(t *testing.T) {
 		t.Fatalf("composer should stay visually empty and focused on input: %q", prompt)
 	}
 	footer := ansi.Strip(m.footerView())
-	for _, want := range []string{"? for shortcuts", "glm-5.3-flash", "high"} {
+	for _, want := range []string{"? for shortcuts", "high", "ask"} {
 		if !strings.Contains(footer, want) {
 			t.Fatalf("context footer missing %q: %q", want, footer)
 		}
@@ -208,7 +206,6 @@ func TestProviderEditorModelPickerFitsResponsiveTerminals(t *testing.T) {
 func TestMinimalBusyStatusPrefersActiveToolName(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
-	m.showWelcome = false
 	m.busy = true
 	m.activity = ""
 	m.ensureHistoryState().StartToolCell(&ToolCell{CallID: "tool-1", Name: "read", Target: "internal/tui.go", Running: true})
@@ -265,7 +262,6 @@ func TestMinimalIdleFooterHidesSecondaryShortcuts(t *testing.T) {
 func TestViewIsPureAndIdempotent(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(60, 16)
-	m.showWelcome = false
 	m.appendLine("history")
 	m.refreshViewport()
 
@@ -285,7 +281,6 @@ func TestViewIsPureAndIdempotent(t *testing.T) {
 
 func TestMinimalVeryNarrowUnicodeFrameStaysWithinTerminal(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.showWelcome = false
 	m.resize(16, 8)
 	m.appendUser("ภาษาไทย 👨‍💻 e\u0301 東京")
 	m.appendAssistant("ตอบกลับ テスト café")
@@ -317,5 +312,40 @@ func TestIdleQuestionMarkOpensShortcutPane(t *testing.T) {
 	}
 	if got := m.panes.bottom.prompt().Value(); got != "" {
 		t.Fatalf("? leaked into composer: %q", got)
+	}
+}
+
+func TestSessionHeaderStaysFixedWhileScrolling(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeModel = "qwen3.8-27b"
+	m.activeGoal = "refactor TUI branding"
+	m.lowConcurrencyMode = model.LowConcurrencyOn
+	m.resize(80, 24)
+	for i := 0; i < 40; i++ {
+		m.appendLine("history")
+	}
+	m.refreshViewport()
+	before := ansi.Strip(m.layout.frame.header)
+	m.viewport.PageUp()
+	m.conversationViewport.setFollowing(false)
+	after := ansi.Strip(m.View().Content)
+	if before == "" || !strings.HasPrefix(after, before) {
+		t.Fatalf("scrolling moved or removed fixed session header: header=%q view=%q", before, after)
+	}
+}
+
+func TestClearConversationKeepsSessionHeader(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeModel = "qwen3.8-27b"
+	m.activeGoal = "refactor TUI branding"
+	m.lowConcurrencyMode = model.LowConcurrencyOn
+	m.resize(80, 24)
+	m.appendLine("history")
+	m.clearConversation()
+	header := ansi.Strip(m.sessionHeaderView())
+	for _, want := range []string{"protonMAN", "qwen3.8-27b", "low", "goal active"} {
+		if !strings.Contains(header, want) {
+			t.Fatalf("clear removed session header state %q: %q", want, header)
+		}
 	}
 }

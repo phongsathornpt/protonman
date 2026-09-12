@@ -2,105 +2,66 @@ package app
 
 import (
 	"context"
-	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
-	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
-	"strings"
-)
+	"fmt"
 
-// ResolvePrimaryModelDefaults guarantees a usable built-in default when the
-// persisted primary model selection is incomplete. Explicit selections win.
-func ResolvePrimaryModelDefaults(selection config.ModelConfig, providers map[string]config.ProviderConfig) (config.ModelConfig, map[string]config.ProviderConfig) {
-	if providers == nil {
-		providers = make(map[string]config.ProviderConfig)
-	}
-	providerName := strings.ToLower(strings.TrimSpace(selection.Provider))
-	if providerName == "" {
-		providerName = model.DefaultOpenCodeName
-	}
-	if providerName == model.DefaultOpenCodeName {
-		if _, ok := providers[providerName]; !ok {
-			providers[providerName] = config.ProviderConfig{
-				Name: model.DefaultOpenCodeName, Type: string(model.ProviderProtocolOpenAI), BaseURL: model.DefaultOpenCodeEndpoint,
-			}
-		}
-		if strings.TrimSpace(selection.Default) == "" {
-			selection.Default = model.DefaultOpenCodeModel
-		}
-	}
-	selection.Provider = providerName
-	return selection, providers
-}
+	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
+)
 
 // ProviderSaveRequest describes a persisted user provider update.
 type ProviderSaveRequest struct {
-	Provider     config.ProviderConfig
+	Provider     modelconfig.Provider
 	DefaultModel string
 	PreviousName string
 	Activate     bool
 }
 
+// ProviderRepository is the outbound persistence port for user provider state.
+type ProviderRepository interface {
+	SaveProvider(modelconfig.Provider, string, string, bool) error
+	SaveModelSelection(string, string) error
+	DeleteProvider(string) error
+	LoadProviders(context.Context, string) (map[string]modelconfig.Provider, error)
+}
+
 // Providers owns user-provider configuration mutations for inbound adapters.
-type Providers struct{}
+type Providers struct{ repository ProviderRepository }
 
-func (Providers) Save(request ProviderSaveRequest) error {
-	homeDir, err := userHomeDir()
-	if err != nil {
-		return err
-	}
-	return config.SaveUserProviderConfigWithOptions(homeDir, request.Provider, config.ProviderSaveOptions{
-		DefaultModel: request.DefaultModel,
-		PreviousName: request.PreviousName,
-		Activate:     request.Activate,
-	})
+func NewProviders(repository ProviderRepository) Providers {
+	return Providers{repository: repository}
 }
 
-func (Providers) Select(providerName string) error {
-	return (Providers{}).Activate(providerName, "")
+func (p Providers) Save(request ProviderSaveRequest) error {
+	if p.repository == nil {
+		return fmt.Errorf("provider repository is unavailable")
+	}
+	return p.repository.SaveProvider(request.Provider, request.DefaultModel, request.PreviousName, request.Activate)
 }
 
-// Activate atomically persists the active provider and an optional reconciled model.
-func (Providers) Activate(providerName, modelID string) error {
-	homeDir, err := userHomeDir()
-	if err != nil {
-		return err
-	}
-	return config.SaveUserModelSelection(homeDir, providerName, modelID)
+func (p Providers) Select(providerName string) error {
+	return p.Activate(providerName, "")
 }
 
-func (Providers) SelectModel(providerName, modelID string) error {
-	homeDir, err := userHomeDir()
-	if err != nil {
-		return err
+func (p Providers) Activate(providerName, modelID string) error {
+	if p.repository == nil {
+		return fmt.Errorf("provider repository is unavailable")
 	}
-	return config.SaveUserModelSelection(homeDir, providerName, modelID)
+	return p.repository.SaveModelSelection(providerName, modelID)
 }
 
-func (Providers) Delete(providerName string) error {
-	homeDir, err := userHomeDir()
-	if err != nil {
-		return err
-	}
-	return config.DeleteUserProviderConfig(homeDir, providerName)
+func (p Providers) SelectModel(providerName, modelID string) error {
+	return p.Activate(providerName, modelID)
 }
 
-func userHomeDir() (string, error) {
-	dirs, err := appdirs.Resolve("")
-	if err != nil {
-		return "", err
+func (p Providers) Delete(providerName string) error {
+	if p.repository == nil {
+		return fmt.Errorf("provider repository is unavailable")
 	}
-	return dirs.Home, nil
+	return p.repository.DeleteProvider(providerName)
 }
 
-// LoadConfigured reloads provider configuration for a workspace using the user layer.
-func (Providers) LoadConfigured(ctx context.Context, workDir string) (map[string]config.ProviderConfig, error) {
-	dirs, err := appdirs.Resolve("")
-	if err != nil {
-		return nil, err
+func (p Providers) LoadConfigured(ctx context.Context, workDir string) (map[string]modelconfig.Provider, error) {
+	if p.repository == nil {
+		return nil, fmt.Errorf("provider repository is unavailable")
 	}
-	snapshot, err := config.Load(ctx, config.Options{HomeDir: dirs.Home, WorkDir: workDir})
-	if err != nil {
-		return nil, err
-	}
-	return snapshot.Providers, nil
+	return p.repository.LoadProviders(ctx, workDir)
 }

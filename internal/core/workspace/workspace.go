@@ -281,6 +281,27 @@ func (w *Workspace) ResolveExistingRead(ctx context.Context, input string) (stri
 	return path, nil
 }
 
+// NearestExistingReadAncestor returns the closest existing readable ancestor of input.
+// It preserves the caller's path form so recovery tools can reuse it directly.
+func (w *Workspace) NearestExistingReadAncestor(ctx context.Context, input string) (string, error) {
+	candidate := filepath.Clean(strings.TrimSpace(input))
+	if candidate == "" {
+		candidate = "."
+	}
+	for {
+		if _, err := w.ResolveExistingRead(ctx, candidate); err == nil {
+			return candidate, nil
+		} else if failure := tool.FailureFromError(err); failure == nil || failure.Code != tool.ErrorCodeNotFound {
+			return "", err
+		}
+		parent := filepath.Dir(candidate)
+		if parent == candidate {
+			return ".", nil
+		}
+		candidate = parent
+	}
+}
+
 // CheckAbsoluteRead validates an absolute path discovered or requested for read operations.
 // It allows paths inside the workspace root or inside any authorized read roots,
 // while checking for protected paths and symlink boundary escapes.

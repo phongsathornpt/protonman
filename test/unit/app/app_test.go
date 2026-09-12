@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
@@ -130,7 +132,7 @@ func TestAgentsUseCaseNilSafe(t *testing.T) {
 
 func TestProjectsUseCase(t *testing.T) {
 	tmpDir := t.TempDir()
-	projects := app.Projects{}
+	projects := app.NewProjects(config.ProjectSettingsStore{})
 
 	// Init in tmpDir
 	res, err := projects.Init(context.Background(), tmpDir)
@@ -166,7 +168,7 @@ func TestProjectsUseCase(t *testing.T) {
 }
 
 func TestModelsUseCase(t *testing.T) {
-	models := app.Models{}
+	models := app.NewModels(model.Catalog{})
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 

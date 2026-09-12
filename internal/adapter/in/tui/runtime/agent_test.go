@@ -420,7 +420,6 @@ func TestAgentProgressKeepsFrameWithinTerminal(t *testing.T) {
 
 func TestRelayoutDoesNotReenableFollowTailAfterUserScroll(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.showWelcome = false
 	m.resize(80, 24)
 	for i := 0; i < 80; i++ {
 		m.appendLine(fmt.Sprintf("line-%02d", i))
@@ -441,7 +440,6 @@ func TestRelayoutDoesNotReenableFollowTailAfterUserScroll(t *testing.T) {
 
 func TestRefreshViewportPreservesLogicalAnchorAcrossCellExpansion(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.showWelcome = false
 	m.resize(80, 16)
 	run := &AgentRunCell{AgentID: "worker-1", Profile: agent.ProfileStrength, Task: "fix failures", State: agent.StateRunning}
 	m.historyState.Append(run)
@@ -466,7 +464,6 @@ func TestRefreshViewportPreservesLogicalAnchorAcrossCellExpansion(t *testing.T) 
 
 func TestScrolledViewportSurvivesLiveAgentChromeStress(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.showWelcome = false
 	m.resize(90, 24)
 	run := &AgentRunCell{AgentID: "worker-1", Profile: agent.ProfileStrength, Task: "fix TDZ and bun adapter", State: agent.StateRunning, StartedAt: time.Now()}
 	m.historyState.Append(run)

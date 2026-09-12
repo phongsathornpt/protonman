@@ -142,7 +142,7 @@ func BenchmarkRetainLongToolHeavyConversation(b *testing.B) {
 	policy := DefaultRetentionPolicy()
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		retained := Retain(messages, policy)
 		if len(retained) > policy.MaxMessages {
 			b.Fatalf("retained %d messages > %d", len(retained), policy.MaxMessages)
@@ -158,7 +158,7 @@ func BenchmarkRetainRecentConversation(b *testing.B) {
 	policy := DefaultRetentionPolicy()
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = Retain(messages, policy)
 	}
 }

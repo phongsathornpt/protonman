@@ -52,11 +52,15 @@ func TestWithinUsesPathBoundaries(t *testing.T) {
 
 func TestCanonicalNormalizesParentTraversal(t *testing.T) {
 	root := t.TempDir()
+	canonicalRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	got, err := Canonical(filepath.Join(root, "a", "..", "b"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(root, "b")
+	want := filepath.Join(canonicalRoot, "b")
 	if got != want {
 		t.Fatalf("Canonical() = %q, want %q", got, want)
 	}

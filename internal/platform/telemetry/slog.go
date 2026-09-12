@@ -125,6 +125,8 @@ func protectionMetric(kind toolcall.ProtectionEventKind) string {
 		return "tool_retry_budget_exhausted_total"
 	case toolcall.ProtectionNoProgressSynthesis:
 		return "tool_no_progress_synthesis_total"
+	case toolcall.ProtectionSafetyBudgetExhausted:
+		return "tool_safety_budget_exhausted_total"
 	case toolcall.ProtectionTurnDeadlineExceeded:
 		return "turn_deadline_exceeded_total"
 	default:

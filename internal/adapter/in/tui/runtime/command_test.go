@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -79,8 +80,8 @@ func TestClearCommandResetsConversationButPreservesSessionControls(t *testing.T)
 	m.activeProvider = "opencode"
 	m.activeModel = "model-x"
 	m.reasoningEffort = sdk.ReasoningHigh
-	m.messages = []model.Message{{Role: model.RoleUser, Content: "old context"}}
-	m.queue = []string{"queued prompt"}
+	m.conversation.SetMessages([]model.Message{{Role: model.RoleUser, Content: "old context"}})
+	m.conversation.Enqueue("queued prompt")
 	m.conversationViewport.tailOnly = true
 	m.conversationViewport.staleTail = true
 	m.conversationViewport.lineAnchors = []ScrollAnchor{{}}
@@ -88,8 +89,8 @@ func TestClearCommandResetsConversationButPreservesSessionControls(t *testing.T)
 	m.appendUser("old context")
 
 	m.executeCommand("/clear")
-	if len(m.messages) != 0 || len(m.queue) != 0 {
-		t.Fatalf("conversation state not cleared: messages=%d queue=%d", len(m.messages), len(m.queue))
+	if len(m.conversation.Messages()) != 0 || m.conversation.QueueLen() != 0 {
+		t.Fatalf("conversation state not cleared: messages=%d queue=%d", len(m.conversation.Messages()), m.conversation.QueueLen())
 	}
 	if m.activeGoal != "finish compaction" || m.activeProvider != "opencode" || m.activeModel != "model-x" || m.reasoningEffort != sdk.ReasoningHigh {
 		t.Fatalf("session controls changed: goal=%q provider=%q model=%q reasoning=%q", m.activeGoal, m.activeProvider, m.activeModel, m.reasoningEffort)
@@ -193,10 +194,10 @@ func TestInfoViewKeepsIdleChromeEmpty(t *testing.T) {
 
 func TestRemoteModelReasoningSummaryUsesResolvedProfile(t *testing.T) {
 	md := model.RemoteModel{ID: "gemini-3.8-flash"}
-	if got := remoteModelReasoningSummary("protonman", md, true); got != "reasoning low/medium/high (default medium)" {
+	if got := reasoningpolicy.Summary("protonman", md, true); got != "reasoning low/medium/high (default medium)" {
 		t.Fatalf("summary = %q", got)
 	}
-	if got := remoteModelReasoningSummary("custom", model.RemoteModel{ID: "future-model"}, true); got != "" {
+	if got := reasoningpolicy.Summary("custom", model.RemoteModel{ID: "future-model"}, true); got != "" {
 		t.Fatalf("unknown summary = %q, want empty", got)
 	}
 }
@@ -296,13 +297,13 @@ func TestSlashSkills(t *testing.T) {
 		if !strings.Contains(model.viewport.View(), "Active Agent Skills (1):") {
 			t.Fatalf("expected /skills active to list active skills")
 		}
-		initialMsgCount := len(model.messages)
+		initialMsgCount := len(model.conversation.Messages())
 		model.executeCommand("/skills pdf-processing")
 		if !strings.Contains(model.viewport.View(), "is already active") {
 			t.Fatalf("expected already active message on duplicate activation")
 		}
-		if len(model.messages) != initialMsgCount {
-			t.Fatalf("messages count increased on duplicate activation: %d != %d", len(model.messages), initialMsgCount)
+		if len(model.conversation.Messages()) != initialMsgCount {
+			t.Fatalf("messages count increased on duplicate activation: %d != %d", len(model.conversation.Messages()), initialMsgCount)
 		}
 		model.executeCommand("/skills deactivate pdf-processing")
 		if model.skills.IsActivated("pdf-processing") {
@@ -379,7 +380,7 @@ func TestSlashSkills(t *testing.T) {
 		}
 	})
 	t.Run("skill activation does not append user message and does not flood instructions", func(t *testing.T) {
-		model.messages = nil
+		model.conversation.SetMessages(nil)
 		model.skills.Deactivate("pdf-processing")
 		model.executeCommand("/skills pdf-processing")
 		content := model.viewport.View()
@@ -389,8 +390,8 @@ func TestSlashSkills(t *testing.T) {
 		if strings.Contains(content, "# PDF Processing Guide") {
 			t.Fatalf("did not expect raw instructions markdown in viewport")
 		}
-		if len(model.messages) != 0 {
-			t.Fatalf("expected 0 messages appended to model.messages, got %d", len(model.messages))
+		if len(model.conversation.Messages()) != 0 {
+			t.Fatalf("expected 0 messages appended to model.messages, got %d", len(model.conversation.Messages()))
 		}
 	})
 	t.Run("t shortcut toggles skill in bottom-pane picker", func(t *testing.T) {
@@ -411,6 +412,7 @@ func newTestSkillsModel(t *testing.T, count int) *bubbleModel {
 	registry := behaviorRegistry{handler: &countingHandler{definition: tool.Definition{Name: "read", Kind: tool.KindRead}}}
 	service := newBehaviorService(t, registry, permission.ModeAsk)
 	model := newBubbleModel(context.Background(), service, registry, nil, nil, newPermissionBridge(), "")
+	attachTestApplication(t, model)
 	model.resize(80, 24)
 	skills := make([]skill.Skill, 0, count)
 	for i := 1; i <= count; i++ {
@@ -656,11 +658,11 @@ func TestTranscriptOverlayQAndCtrlC(t *testing.T) {
 
 func TestMessageHistoryIntegrityOnTurnCancel(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
-	bModel.messages = append(bModel.messages, model.Message{Role: model.RoleUser, Content: "do something that will be cancelled"})
+	bModel.conversation.AppendMessages(model.Message{Role: model.RoleUser, Content: "do something that will be cancelled"})
 	updated, _ := bModel.Update(turnmsg.Done{Err: context.Canceled})
 	bModel = updated.(*bubbleModel)
-	if len(bModel.messages) != 0 {
-		t.Fatalf("expected orphan user message to be rolled back on cancellation, got len=%d: %#v", len(bModel.messages), bModel.messages)
+	if len(bModel.conversation.Messages()) != 0 {
+		t.Fatalf("expected orphan user message to be rolled back on cancellation, got len=%d: %#v", len(bModel.conversation.Messages()), bModel.conversation.Messages())
 	}
 }
 
@@ -671,14 +673,15 @@ func TestQueueClearedOnTurnCancel(t *testing.T) {
 	model.turnCancel = func() {
 		cancelled = true
 	}
-	model.queue = []string{"next queued command 1", "next queued command 2"}
+	model.conversation.Enqueue("next queued command 1")
+	model.conversation.Enqueue("next queued command 2")
 	updated, _ := model.Update(testCtrl('c'))
 	model = updated.(*bubbleModel)
 	if !cancelled {
 		t.Fatal("expected turnCancel to be called")
 	}
-	if len(model.queue) != 0 {
-		t.Fatalf("expected queue to be cleared on cancel, got: %v", model.queue)
+	if model.conversation.QueueLen() != 0 {
+		t.Fatalf("expected queue to be cleared on cancel, got: %v", model.conversation.Queue())
 	}
 }
 
@@ -865,6 +868,52 @@ func TestSlashCompletionUsesInlineCommandGrammar(t *testing.T) {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("slash completion missing %q: %q", want, plain)
 		}
+	}
+}
+
+func TestSlashCompletionTypingPreservesPrintableKeys(t *testing.T) {
+	// The slash pane renders below the composer and shares its draft, so every
+	// printable key the user types must reach the textarea. Regression: vim-style
+	// navigation bindings ("j", "k", "g", "G") and the "q" close key used to be
+	// claimed by the picker, so typing "/goal" produced "/oal".
+	for _, want := range []string{"/goal", "/todo", "/quit", "/agents", "/skills", "/help"} {
+		m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+		m.resize(80, 24)
+		for _, ch := range want {
+			updated, _ := m.Update(testText(string(ch)))
+			m = updated.(*bubbleModel)
+		}
+		if got := m.panes.bottom.prompt().Value(); got != want {
+			t.Fatalf("typing %q produced composer value %q", want, got)
+		}
+		if !m.slashOpen() {
+			t.Fatalf("slash completion closed while typing %q", want)
+		}
+	}
+}
+
+func TestSlashCompletionKeepsNavigationAndCloseWorking(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.panes.bottom.prompt().SetValue("/")
+	m.syncSlashView()
+	if !m.slashOpen() {
+		t.Fatal("slash completion did not open")
+	}
+	updated, _ := m.Update(testKey(tea.KeyDown))
+	m = updated.(*bubbleModel)
+	if got := m.slashState().picker.Index(); got != 1 {
+		t.Fatalf("down did not move slash selection: index=%d", got)
+	}
+	updated, _ = m.Update(testKey(tea.KeyUp))
+	m = updated.(*bubbleModel)
+	if got := m.slashState().picker.Index(); got != 0 {
+		t.Fatalf("up did not move slash selection: index=%d", got)
+	}
+	updated, _ = m.Update(testKey(tea.KeyEnter))
+	m = updated.(*bubbleModel)
+	if m.panes.bottom.has(slashViewID) {
+		t.Fatal("enter did not accept and close slash completion")
 	}
 }
 

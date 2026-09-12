@@ -35,7 +35,7 @@ func BenchmarkReadFile64KB(b *testing.B) {
 
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := handler.Execute(ctx, call)
 		if err != nil {
 			b.Fatalf("Execute: %v", err)
@@ -74,7 +74,7 @@ func BenchmarkGrep100Files(b *testing.B) {
 
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		res, err := handler.Execute(ctx, call)
 		if err != nil {
 			b.Fatalf("grep: %v", err)
@@ -107,7 +107,7 @@ func BenchmarkListDir500Entries(b *testing.B) {
 
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := handler.Execute(ctx, call)
 		if err != nil {
 			b.Fatalf("ls: %v", err)

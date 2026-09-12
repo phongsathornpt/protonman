@@ -233,8 +233,32 @@ func TestReadFileMissingTargetIsNotFound(t *testing.T) {
 	if err := json.Unmarshal(failure.Recovery.Arguments, &args); err != nil {
 		t.Fatalf("decode recovery arguments: %v", err)
 	}
-	if got := args["path"]; got != "worker/src/infrastructure" {
-		t.Fatalf("recovery parent = %#v, want worker/src/infrastructure", got)
+	if got := args["path"]; got != "." {
+		t.Fatalf("recovery parent = %#v, want nearest existing ancestor .", got)
+	}
+}
+
+func TestReadFileMissingTargetDiscoversNearestExistingAncestor(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	if err := os.MkdirAll(filepath.Join(ws.Root(), "worker/src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := New(ws).Execute(context.Background(), newJSONCall(t, "read-missing-nested", "read", map[string]any{
+		"path": "worker/src/infrastructure/store.rs",
+	}))
+	if err == nil {
+		t.Fatal("Execute() error = nil, want missing target failure")
+	}
+	failure := tool.FailureFromError(err)
+	if failure == nil || failure.Recovery == nil {
+		t.Fatalf("failure = %#v, want recovery", failure)
+	}
+	var args map[string]any
+	if err := json.Unmarshal(failure.Recovery.Arguments, &args); err != nil {
+		t.Fatal(err)
+	}
+	if got := args["path"]; got != "worker/src" {
+		t.Fatalf("recovery parent = %#v, want worker/src", got)
 	}
 }
 

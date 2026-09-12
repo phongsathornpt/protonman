@@ -1,9 +1,7 @@
 package turn
 
 import (
-	"strings"
-	"unicode/utf8"
-
+	"github.com/phongsathornpt/protonman/internal/base/strutil"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
@@ -129,22 +127,5 @@ func truncateRecoveryEvidenceResult(result tool.Result, allowed int) tool.Result
 }
 
 func truncateUTF8WithMarker(value string, limit int, marker string) string {
-	value = strings.ToValidUTF8(value, "�")
-	if limit <= 0 {
-		return ""
-	}
-	if len(marker) >= limit {
-		return marker[:limit]
-	}
-	prefixLimit := limit - len(marker) - 1
-	if prefixLimit <= 0 {
-		return marker
-	}
-	if len(value) > prefixLimit {
-		value = value[:prefixLimit]
-		for len(value) > 0 && !utf8.ValidString(value) {
-			value = value[:len(value)-1]
-		}
-	}
-	return strings.TrimRight(value, "\n") + "\n" + marker
+	return strutil.TruncateBytesWithMarker(value, limit, marker)
 }

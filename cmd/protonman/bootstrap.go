@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/sessionfs"
 	agenttool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/agent"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin"
@@ -45,6 +46,22 @@ type appRuntime struct {
 	service      *toolcall.Service
 	skills       *skill.Registry
 	runner       app.Conversation
+	application  app.Services
+}
+
+func reconcileDelegatedTaskStatus(ctx context.Context, sessionsRoot, sessionID, taskID string, status tododomain.Status) error {
+	resources, err := session.ResolveResources(sessionsRoot, strings.TrimSpace(sessionID))
+	if err != nil {
+		return fmt.Errorf("resolve delegated task session resources: %w", err)
+	}
+	store, err := tododomain.OpenMarkdownStore(ctx, resources.Todo)
+	if err != nil {
+		return fmt.Errorf("open delegated task todo store: %w", err)
+	}
+	if _, _, err := tododomain.ReconcileStatus(ctx, store, taskID, status); err != nil {
+		return fmt.Errorf("reconcile delegated task: %w", err)
+	}
+	return nil
 }
 
 func (r *appRuntime) Close() {
@@ -67,7 +84,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	}
 	originalSelection := loadedConfig.Model
 	reconciled, selectionChanged := config.ReconcileModelSelection(originalSelection, loadedConfig.Providers)
-	loadedConfig.Model, loadedConfig.Providers = app.ResolvePrimaryModelDefaults(reconciled, loadedConfig.Providers)
+	loadedConfig.Model, loadedConfig.Providers = model.ResolvePrimaryModelDefaults(reconciled, loadedConfig.Providers)
 	if selectionChanged {
 		loadedConfig.Provenance[config.FieldModelProvider] = config.SourceDefault
 		loadedConfig.Provenance[config.FieldModelDefault] = config.SourceDefault
@@ -168,6 +185,22 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 			}
 			persistCtx, done := contextutil.DetachedTimeout(eventCtx, runtimepolicy.SessionPersistenceTimeout)
 			defer done()
+			if strings.TrimSpace(ev.TaskID) != "" {
+				status := tododomain.Status("")
+				switch ev.Kind {
+				case agent.EventAgentQueued, agent.EventAgentStarted:
+					status = tododomain.StatusInProgress
+				case agent.EventAgentCompleted:
+					status = tododomain.StatusCompleted
+				case agent.EventAgentFailed:
+					status = tododomain.StatusPending
+				}
+				if status.Valid() {
+					if taskErr := reconcileDelegatedTaskStatus(persistCtx, dirs.Sessions, ownerSession, ev.TaskID, status); taskErr != nil {
+						slog.Warn("reconcile delegated task status", "session_id", ownerSession, "agent_id", ev.AgentID, "task_id", ev.TaskID, "status", status, "error", taskErr)
+					}
+				}
+			}
 			var persistErr error
 			if ev.Kind == agent.EventAgentCompleted || ev.Kind == agent.EventAgentFailed {
 				persistErr = coordinator.CompactLifecycleSession(persistCtx, ownerSession)
@@ -204,6 +237,13 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		}
 		persistDone()
 	}
+	application := app.Services{
+		Models:       app.NewModels(model.Catalog{}),
+		Providers:    app.NewProviders(config.NewUserProviderRepository(homeDir)),
+		Projects:     app.NewProjects(config.ProjectSettingsStore{}),
+		UserSettings: app.NewUserSettings(config.NewUserSettingsStore(homeDir)),
+		ModelFactory: model.Factory{},
+	}
 	failed := true
 	defer func() {
 		if failed {
@@ -215,6 +255,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		Overrides:      loadedConfig.Agent.Subagents,
 		SessionID:      sessionID,
 		RequestTimeout: loadedConfig.Runtime.ModelRequestTimeout,
+		ModelFactory:   application.ModelFactory,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("configure subagent models: %w", err)
@@ -232,6 +273,9 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	todoStore, err := tododomain.OpenMarkdownStore(ctx, resources.Todo)
 	if err != nil {
 		return nil, fmt.Errorf("open session todo store: %w", err)
+	}
+	if _, _, err := todoStore.BindGoal(ctx, state.ActiveGoal); err != nil {
+		return nil, fmt.Errorf("bind session todo store to active goal: %w", err)
 	}
 	baseRegistry, err := builtin.NewDefaultRegistry(workspaceRoot,
 		builtin.WithCheckpointStore(checkpointStore),
@@ -299,10 +343,10 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		ProviderName: providerKey, ProviderType: provider.Type, BaseURL: provider.BaseURL, APIKey: provider.APIKey,
 		ModelID: loadedConfig.Model.Default, SessionID: sessionID, Workspace: workDir, WorkspacePolicy: workspaceRoot, ActiveGoal: state.ActiveGoal, AgentProfile: loadedConfig.Agent.Profile,
 		ReasoningEffort: loadedConfig.Agent.ReasoningEffort, MaxToolCalls: loadedConfig.Agent.MaxToolCalls,
-		RequestTimeout: loadedConfig.Runtime.ModelRequestTimeout, TurnTimeout: loadedConfig.Runtime.TurnTimeout, RoundTimeout: loadedConfig.Runtime.RoundTimeout,
+		RequestTimeout: loadedConfig.Runtime.ModelRequestTimeout, TurnTimeout: loadedConfig.Runtime.TurnTimeout, RoundTimeout: loadedConfig.Runtime.RoundTimeout, ModelFactory: application.ModelFactory,
 	})
 	failed = false
-	return &appRuntime{workDir: workDir, config: loadedConfig, coordinator: coordinator, todoStore: todoStore, registry: registry, stateStore: stateStore, sessionsRoot: dirs.Sessions, sessionID: sessionID, state: state, service: service, skills: skillRegistry, runner: initialRunner}, nil
+	return &appRuntime{workDir: workDir, config: loadedConfig, coordinator: coordinator, todoStore: todoStore, registry: registry, stateStore: stateStore, sessionsRoot: dirs.Sessions, sessionID: sessionID, state: state, service: service, skills: skillRegistry, runner: initialRunner, application: application}, nil
 }
 
 func applyAgentProfile(loadedConfig *config.Snapshot, state *session.State, requested string) error {
@@ -335,8 +379,22 @@ func (r *appRuntime) registryForSession(sessionID string) (tool.Registry, error)
 	if err != nil {
 		return nil, err
 	}
-	store, err := tododomain.OpenMarkdownStore(context.Background(), resources.Todo)
+	ctx := context.Background()
+	store, err := tododomain.OpenMarkdownStore(ctx, resources.Todo)
 	if err != nil {
+		return nil, err
+	}
+	goal := ""
+	if r.stateStore != nil {
+		state, found, loadErr := r.stateStore.Load(ctx, sessionID)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		if found {
+			goal = state.ActiveGoal
+		}
+	}
+	if _, _, err := store.BindGoal(ctx, goal); err != nil {
 		return nil, err
 	}
 	return tool.NewOverlayRegistry(r.registry, todotool.NewTodoForSession(store, sessionID))

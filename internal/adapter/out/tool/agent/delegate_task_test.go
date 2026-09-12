@@ -56,6 +56,7 @@ func TestDelegateTaskExecute(t *testing.T) {
 		args, _ := json.Marshal(map[string]any{
 			"profile": "agility",
 			"task":    "search for auth middleware",
+			"task_id": "inspect-auth",
 		})
 		call, err := tool.NewCall("call-1", "subagent", args)
 		if err != nil {
@@ -71,13 +72,18 @@ func TestDelegateTaskExecute(t *testing.T) {
 		}
 		var spawned struct {
 			AgentID string      `json:"agent_id"`
+			TaskID  string      `json:"task_id"`
 			Status  agent.State `json:"status"`
 		}
 		if err := json.Unmarshal(res.StructuredOutput, &spawned); err != nil {
 			t.Fatalf("decode spawn output: %v", err)
 		}
-		if spawned.AgentID == "" || (spawned.Status != agent.StateQueued && spawned.Status != agent.StateRunning) {
+		if spawned.AgentID == "" || spawned.TaskID != "inspect-auth" || (spawned.Status != agent.StateQueued && spawned.Status != agent.StateRunning) {
 			t.Fatalf("spawn output = %s", res.StructuredOutput)
+		}
+		status, ok := coord.Get(spawned.AgentID)
+		if !ok || status.TaskID != "inspect-auth" {
+			t.Fatalf("agent status task linkage = %+v found=%v", status, ok)
 		}
 		wr, err := coord.Wait(context.Background(), spawned.AgentID, time.Second)
 		if err != nil || wr.Result == nil || !strings.Contains(wr.Result.Summary, "found 2 occurrences of auth middleware") {

@@ -165,7 +165,7 @@ func TestResolveExistingReadAcceptsWorkspaceAndReadRootTargets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	workspaceFile := filepath.Join(root, "inside.txt")
+	workspaceFile := filepath.Join(ws.Root(), "inside.txt")
 	if err := os.WriteFile(workspaceFile, []byte("inside"), 0o600); err != nil {
 		t.Fatal(err)
 	}

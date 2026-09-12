@@ -34,7 +34,7 @@ func TestPermissionBridgeRoundTrip(t *testing.T) {
 	if !ok {
 		t.Fatalf("bridge message = %T, want permissionRequestMsg", message)
 	}
-	pending.request.response <- permissionResponse{resolution: permission.Resolution{Action: permission.ActionAllow}}
+	pending.Request.Respond(permission.Resolution{Action: permission.ActionAllow})
 	if got := <-resultCh; got.Action != permission.ActionAllow {
 		t.Fatalf("permission action = %s, want allow", got.Action)
 	}
@@ -49,8 +49,9 @@ func TestBubbleModelPermissionModalRespondsToSessionGrant(t *testing.T) {
 	registry, _ := newBubbleTestRegistry()
 	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
 	model := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, bridge, "")
+	attachTestApplication(t, model)
 	response := make(chan permissionResponse, 1)
-	model.openPermission(permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "printf safe", Effect: tool.CommandEffectReadOnly, Risk: tool.CommandRiskNormal}, response: response})
+	model.openPermission(permissionRequest{Request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "printf safe", Effect: tool.CommandEffectReadOnly, Risk: tool.CommandRiskNormal}, Response: response})
 	updated, command := model.Update(testText("s"))
 	if command != nil {
 		t.Fatalf("permission update command = %v, want nil", command)
@@ -61,11 +62,11 @@ func TestBubbleModelPermissionModalRespondsToSessionGrant(t *testing.T) {
 	}
 	select {
 	case result := <-response:
-		if result.resolution.Action != permission.ActionAllow {
-			t.Fatalf("permission action = %s, want allow", result.resolution.Action)
+		if result.Resolution.Action != permission.ActionAllow {
+			t.Fatalf("permission action = %s, want allow", result.Resolution.Action)
 		}
-		if result.resolution.Scope != permission.GrantScopeSession {
-			t.Fatalf("permission scope = %v, want session", result.resolution.Scope)
+		if result.Resolution.Scope != permission.GrantScopeSession {
+			t.Fatalf("permission scope = %v, want session", result.Resolution.Scope)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("permission modal did not send a response")
@@ -77,7 +78,7 @@ func TestPermissionCardOverlaysTranscript(t *testing.T) {
 	model.resize(80, 24)
 	model.appendLine("assistant: ready")
 	model.refreshViewport()
-	model.openPermission(permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "rm -rf tmp", Arguments: json.RawMessage(`{"command":"rm -rf tmp"}`)}, response: make(chan permissionResponse, 1)})
+	model.openPermission(permissionRequest{Request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "rm -rf tmp", Arguments: json.RawMessage(`{"command":"rm -rf tmp"}`)}, Response: make(chan permissionResponse, 1)})
 	if !strings.Contains(plainTranscript(model), "assistant: ready") {
 		t.Fatalf("overlay replaced the transcript: %#v", model.historyState.Cells())
 	}
@@ -96,7 +97,7 @@ func TestPermissionEscParksForScroll(t *testing.T) {
 	response := make(chan permissionResponse, 1)
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
-	model.openPermission(permissionRequest{request: permission.Request{ToolName: "read", ToolKind: permission.ToolRead, Detail: "README.md"}, response: response})
+	model.openPermission(permissionRequest{Request: permission.Request{ToolName: "read", ToolKind: permission.ToolRead, Detail: "README.md"}, Response: response})
 	updated, command := model.Update(testKey(tea.KeyEsc))
 	if command != nil {
 		t.Fatalf("esc review command = %v, want nil", command)
@@ -129,8 +130,8 @@ func TestPermissionEscParksForScroll(t *testing.T) {
 	}
 	select {
 	case result := <-response:
-		if result.resolution.Action != permission.ActionDeny {
-			t.Fatalf("permission action = %s, want deny", result.resolution.Action)
+		if result.Resolution.Action != permission.ActionDeny {
+			t.Fatalf("permission action = %s, want deny", result.Resolution.Action)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("deny did not send a response")
@@ -145,7 +146,7 @@ func TestPermissionCtrlCCancelsTurnInsteadOfDenying(t *testing.T) {
 	model.turnCancel = func() {
 		canceled = true
 	}
-	model.openPermission(permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "pwd", Arguments: json.RawMessage(`{"command":"pwd"}`)}, response: response})
+	model.openPermission(permissionRequest{Request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "pwd", Arguments: json.RawMessage(`{"command":"pwd"}`)}, Response: response})
 	updated, command := model.Update(testCtrl('c'))
 	model = updated.(*bubbleModel)
 	if command != nil {
@@ -166,7 +167,7 @@ func TestPermissionPaneFitsNarrowResponsiveTerminals(t *testing.T) {
 		m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 		m.resize(size[0], size[1])
 		command := "rm -rf /workspace/project/a/very/long/path/that/should/not/overflow/the/terminal"
-		m.openPermission(permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: command, Arguments: json.RawMessage(fmt.Sprintf(`{"command":%q}`, command))}, response: make(chan permissionResponse, 1)})
+		m.openPermission(permissionRequest{Request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: command, Arguments: json.RawMessage(fmt.Sprintf(`{"command":%q}`, command))}, Response: make(chan permissionResponse, 1)})
 		view := m.View().Content
 		if got := lipgloss.Width(view); got > size[0] {
 			t.Fatalf("permission frame width=%d exceeds %d at %dx%d", got, size[0], size[0], size[1])
@@ -192,7 +193,7 @@ func TestPermissionBashRiskPresentationUsesCommandEffect(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			model.panes.bottom.remove(permissionViewID)
-			model.openPermission(permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: tc.command, Arguments: json.RawMessage(fmt.Sprintf(`{"command":%q}`, tc.command))}, response: make(chan permissionResponse, 1)})
+			model.openPermission(permissionRequest{Request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: tc.command, Arguments: json.RawMessage(fmt.Sprintf(`{"command":%q}`, tc.command))}, Response: make(chan permissionResponse, 1)})
 			view := model.View().Content
 			if !strings.Contains(view, tc.want) {
 				t.Fatalf("view missing %q:\n%s", tc.want, view)
@@ -204,7 +205,7 @@ func TestPermissionBashRiskPresentationUsesCommandEffect(t *testing.T) {
 func TestPermissionOptionListEnterAndNumbers(t *testing.T) {
 	response := make(chan permissionResponse, 1)
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	model.openPermission(permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "ls", Effect: tool.CommandEffectReadOnly, Risk: tool.CommandRiskNormal}, response: response})
+	model.openPermission(permissionRequest{Request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "ls", Effect: tool.CommandEffectReadOnly, Risk: tool.CommandRiskNormal}, Response: response})
 	updated, _ := model.Update(testKey(tea.KeyDown))
 	model = updated.(*bubbleModel)
 	if model.permissionView().index != 1 {
@@ -217,20 +218,20 @@ func TestPermissionOptionListEnterAndNumbers(t *testing.T) {
 	}
 	select {
 	case result := <-response:
-		if result.resolution.Scope != permission.GrantScopeSession {
-			t.Fatalf("enter on session row scope = %v", result.resolution.Scope)
+		if result.Resolution.Scope != permission.GrantScopeSession {
+			t.Fatalf("enter on session row scope = %v", result.Resolution.Scope)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("enter did not resolve permission")
 	}
 	response = make(chan permissionResponse, 1)
-	model.openPermission(permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Effect: tool.CommandEffectReadOnly, Risk: tool.CommandRiskNormal}, response: response})
+	model.openPermission(permissionRequest{Request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Effect: tool.CommandEffectReadOnly, Risk: tool.CommandRiskNormal}, Response: response})
 	updated, _ = model.Update(testText("3"))
 	model = updated.(*bubbleModel)
 	select {
 	case result := <-response:
-		if result.resolution.Action != permission.ActionDeny {
-			t.Fatalf("number 3 action = %s, want deny", result.resolution.Action)
+		if result.Resolution.Action != permission.ActionDeny {
+			t.Fatalf("number 3 action = %s, want deny", result.Resolution.Action)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("number shortcut did not resolve")
@@ -265,7 +266,7 @@ func TestShiftTabCyclesAskPlanAlwaysApprove(t *testing.T) {
 func TestPermissionBashPresentationShowsCwdAndEffectReason(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(100, 30)
-	model.openPermission(permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "git status --short", Arguments: json.RawMessage(`{"command":"git status --short","cwd":"internal/agent"}`)}, response: make(chan permissionResponse, 1)})
+	model.openPermission(permissionRequest{Request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "git status --short", Arguments: json.RawMessage(`{"command":"git status --short","cwd":"internal/agent"}`)}, Response: make(chan permissionResponse, 1)})
 	view := model.View().Content
 	for _, want := range []string{"Cwd: internal/agent", "Effect: read_only", "git status is read only"} {
 		if !strings.Contains(view, want) {
@@ -276,7 +277,7 @@ func TestPermissionBashPresentationShowsCwdAndEffectReason(t *testing.T) {
 
 func TestPermissionRequestLivesInBottomPane(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.openPermission(permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "pwd"}, response: make(chan permissionResponse, 1)})
+	m.openPermission(permissionRequest{Request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "pwd"}, Response: make(chan permissionResponse, 1)})
 	if top := m.panes.bottom.top(); top == nil || top.ID() != permissionViewID {
 		t.Fatalf("top view = %#v, want permission", top)
 	}
@@ -288,15 +289,15 @@ func TestPermissionRequestLivesInBottomPane(t *testing.T) {
 func TestStalePermissionRequestAfterTurnEndIsDenied(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	response := make(chan permissionResponse, 1)
-	updated, _ := model.Update(permissionRequestMsg{request: permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash}, response: response}})
+	updated, _ := model.Update(permissionRequestMsg{Request: permissionRequest{Request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash}, Response: response}})
 	model = updated.(*bubbleModel)
 	if model.hasPermissionView() {
 		t.Fatal("stale permission request opened a modal after the turn ended")
 	}
 	select {
 	case result := <-response:
-		if result.resolution.Action != permission.ActionDeny {
-			t.Fatalf("stale permission action = %s, want deny", result.resolution.Action)
+		if result.Resolution.Action != permission.ActionDeny {
+			t.Fatalf("stale permission action = %s, want deny", result.Resolution.Action)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("stale permission request was not resolved")
@@ -310,18 +311,19 @@ func TestBubbleModelPermissionModalAllowsAndSavesProjectRule(t *testing.T) {
 	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
 	workDir := t.TempDir()
 	model := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, bridge, workDir)
+	attachTestApplication(t, model)
 	model.projectTrusted = true
 
 	response := make(chan permissionResponse, 1)
 	model.openPermission(permissionRequest{
-		request: permission.Request{
+		Request: permission.Request{
 			ToolName: "bash",
 			ToolKind: permission.ToolBash,
 			Detail:   "git status --short",
 			Effect:   tool.CommandEffectReadOnly,
 			Risk:     tool.CommandRiskNormal,
 		},
-		response: response,
+		Response: response,
 	})
 
 	// Press 'p' to allow and save to project
@@ -337,8 +339,8 @@ func TestBubbleModelPermissionModalAllowsAndSavesProjectRule(t *testing.T) {
 	// Verify response was sent as allow once
 	select {
 	case res := <-response:
-		if res.resolution.Action != permission.ActionAllow {
-			t.Fatalf("permission action = %s, want allow", res.resolution.Action)
+		if res.Resolution.Action != permission.ActionAllow {
+			t.Fatalf("permission action = %s, want allow", res.Resolution.Action)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("no response received")
@@ -384,17 +386,18 @@ func TestBubbleModelPermissionModalAllowsAndSavesGlobalRule(t *testing.T) {
 	registry, _ := newBubbleTestRegistry()
 	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
 	model := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, bridge, t.TempDir())
+	attachTestApplication(t, model)
 
 	response := make(chan permissionResponse, 1)
 	model.openPermission(permissionRequest{
-		request: permission.Request{
+		Request: permission.Request{
 			ToolName: "read",
 			ToolKind: permission.ToolRead,
 			Detail:   "README.md",
 			Effect:   tool.CommandEffectReadOnly,
 			Risk:     tool.CommandRiskNormal,
 		},
-		response: response,
+		Response: response,
 	})
 
 	// Press 'g' to allow and save globally
@@ -410,8 +413,8 @@ func TestBubbleModelPermissionModalAllowsAndSavesGlobalRule(t *testing.T) {
 	// Verify response was sent as allow once
 	select {
 	case res := <-response:
-		if res.resolution.Action != permission.ActionAllow {
-			t.Fatalf("permission action = %s, want allow", res.resolution.Action)
+		if res.Resolution.Action != permission.ActionAllow {
+			t.Fatalf("permission action = %s, want allow", res.Resolution.Action)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("no response received")
@@ -447,14 +450,14 @@ func TestBubbleModelPermissionModalProjectOptionHiddenWhenUntrusted(t *testing.T
 	model.resize(100, 30)
 
 	model.openPermission(permissionRequest{
-		request: permission.Request{
+		Request: permission.Request{
 			ToolName: "bash",
 			ToolKind: permission.ToolBash,
 			Detail:   "git status",
 			Effect:   tool.CommandEffectReadOnly,
 			Risk:     tool.CommandRiskNormal,
 		},
-		response: make(chan permissionResponse, 1),
+		Response: make(chan permissionResponse, 1),
 	})
 
 	view := model.View().Content
@@ -500,8 +503,8 @@ func TestPermissionBridgeConcurrentPrompts(t *testing.T) {
 		if !ok {
 			t.Fatalf("bridge message = %T, want permissionRequestMsg", msg)
 		}
-		seen[pending.request.request.CallID] = true
-		pending.request.response <- permissionResponse{resolution: permission.Resolution{Action: permission.ActionAllow}}
+		seen[pending.Request.Request.CallID] = true
+		pending.Request.Respond(permission.Resolution{Action: permission.ActionAllow})
 	}
 	if !seen["a"] || !seen["b"] {
 		t.Fatalf("concurrent prompts lost request: %#v", seen)

@@ -9,7 +9,6 @@ import (
 	"io"
 	"strings"
 
-	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/base/envconfig"
@@ -20,6 +19,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 // Option configures the headless runner.
@@ -94,7 +94,7 @@ type Runner struct {
 	registry  tool.Registry
 	skills    *skill.Registry
 	runner    app.Conversation
-	messages  []model.Message
+	messages  []sdk.Message
 	retention conversation.RetentionPolicy
 	nextID    uint64
 	turnSeq   uint64
@@ -115,7 +115,7 @@ func New(service *toolcall.Service, registry tool.Registry, runner app.Conversat
 		service:   service,
 		registry:  registry,
 		runner:    runner,
-		messages:  make([]model.Message, 0),
+		messages:  make([]sdk.Message, 0),
 		retention: conversation.DefaultRetentionPolicy(),
 	}
 	for _, opt := range options {
@@ -127,18 +127,18 @@ func New(service *toolcall.Service, registry tool.Registry, runner app.Conversat
 }
 
 // Messages returns a copy of the in-memory transcript.
-func (r *Runner) Messages() []model.Message {
-	return model.CloneMessages(r.messages)
+func (r *Runner) Messages() []sdk.Message {
+	return sdk.CloneMessages(r.messages)
 }
 
 // SetMessages replaces the transcript used for later turns.
-func (r *Runner) SetMessages(messages []model.Message) error {
+func (r *Runner) SetMessages(messages []sdk.Message) error {
 	for _, message := range messages {
 		if err := message.Validate(); err != nil {
 			return fmt.Errorf("load headless transcript: %w", err)
 		}
 	}
-	r.messages = conversation.Retain(model.CloneMessages(messages), r.retention)
+	r.messages = conversation.Retain(sdk.CloneMessages(messages), r.retention)
 	return nil
 }
 
@@ -364,21 +364,21 @@ func (r *Runner) runCall(
 	if marshalErr != nil {
 		marshalErr = fmt.Errorf("encode headless tool result: %w", marshalErr)
 	}
-	r.messages = append(r.messages, model.Message{
-		ID:      model.NewMessageID(),
-		Role:    model.RoleUser,
+	r.messages = append(r.messages, sdk.Message{
+		ID:      sdk.NewMessageID(),
+		Role:    sdk.RoleUser,
 		Content: fmt.Sprintf("/call %s", call.Name),
-	}, model.Message{
-		ID:   model.NewMessageID(),
-		Role: model.RoleAssistant,
-		ToolCalls: []model.ToolCall{{
+	}, sdk.Message{
+		ID:   sdk.NewMessageID(),
+		Role: sdk.RoleAssistant,
+		ToolCalls: []sdk.ToolCall{{
 			ID:        call.ID,
 			Name:      call.Name,
 			Arguments: append(json.RawMessage(nil), call.Arguments...),
 		}},
-	}, model.Message{
-		ID:         model.NewMessageID(),
-		Role:       model.RoleTool,
+	}, sdk.Message{
+		ID:         sdk.NewMessageID(),
+		Role:       sdk.RoleTool,
 		Content:    string(resultContent),
 		ToolName:   call.Name,
 		ToolCallID: call.ID,
@@ -416,12 +416,12 @@ func (r *Runner) runTurn(
 	if r.runner == nil {
 		return fmt.Errorf("model client is not configured; use /help or /call")
 	}
-	r.messages = append(r.messages, model.Message{ID: model.NewMessageID(), Role: model.RoleUser, Content: prompt})
+	r.messages = append(r.messages, sdk.Message{ID: sdk.NewMessageID(), Role: sdk.RoleUser, Content: prompt})
 	r.retainMessages()
 	r.turnSeq++
 	turnID := fmt.Sprintf("headless-turn-%d", r.turnSeq)
 	turnCtx := agent.WithTurnRef(ctx, agent.TurnRef{SessionID: r.sessionID, TurnID: turnID})
-	result, err := r.runner.Run(turnCtx, model.SnapshotMessages(r.messages), func(_ context.Context, event app.Event) error {
+	result, err := r.runner.Run(turnCtx, append([]sdk.Message(nil), r.messages...), func(_ context.Context, event app.Event) error {
 		switch event.Kind {
 		case app.EventTextDelta:
 			return writeEvent(output, format, Event{Kind: EventKindText, Text: event.Text})
@@ -446,9 +446,9 @@ func (r *Runner) runTurn(
 		r.messages = append(r.messages, result.Message)
 	}
 	if err != nil {
-		if (!result.ReplaySafe || len(result.Messages) == 0) && len(r.messages) > 0 && r.messages[len(r.messages)-1].Role == model.RoleUser && r.messages[len(r.messages)-1].Content == prompt {
+		if (!result.ReplaySafe || len(result.Messages) == 0) && len(r.messages) > 0 && r.messages[len(r.messages)-1].Role == sdk.RoleUser && r.messages[len(r.messages)-1].Content == prompt {
 			last := len(r.messages) - 1
-			r.messages[last] = model.Message{}
+			r.messages[last] = sdk.Message{}
 			r.messages = r.messages[:last]
 		}
 		r.retainMessages()

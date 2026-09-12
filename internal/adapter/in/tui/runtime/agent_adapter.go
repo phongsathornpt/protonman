@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -91,7 +92,7 @@ type agentsPaneView struct{}
 func (*agentsPaneView) ID() string                             { return agentsViewID }
 func (*agentsPaneView) PresentationMode() panePresentationMode { return paneBelowComposer }
 func (*agentsPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
-	if key.Matches(message, paneKeys.Close, paneKeys.Confirm) {
+	if key.Matches(message, paneutil.Keys.Close, paneutil.Keys.Confirm) {
 		return paneKeyResult{handled: true, action: paneAction{kind: paneActionClose, paneID: agentsViewID}}
 	}
 	return paneKeyResult{}

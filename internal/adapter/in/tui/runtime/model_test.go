@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelpicker"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -106,7 +107,7 @@ func TestModelSetupLoadingHidesPreviousProviderModels(t *testing.T) {
 	view := newModelSetupPaneView(m)
 	m.panes.bottom.push(view)
 	view.providerIndex = 1
-	_ = view.beginFetch(m.ctx, "beta", m.providers["beta"])
+	_ = view.beginFetch(m.ctx, app.NewModels(model.Catalog{}), "beta", m.providers["beta"])
 	rendered := view.Render(newPaneRenderContext(m))
 	if !strings.Contains(rendered, "Loading") {
 		t.Fatalf("loading state not rendered: %q", rendered)
@@ -150,7 +151,7 @@ func TestModelSetupBeginFetchCancelsPreviousRequest(t *testing.T) {
 	view.fetchCancel = func() {
 		canceled = true
 	}
-	_ = view.beginFetch(m.ctx, "protonman", config.ProviderConfig{Name: "protonman", APIKey: "key"})
+	_ = view.beginFetch(m.ctx, app.NewModels(model.Catalog{}), "protonman", config.ProviderConfig{Name: "protonman", APIKey: "key"})
 	if !canceled {
 		t.Fatal("previous model fetch was not canceled")
 	}
@@ -542,9 +543,9 @@ func TestModelSetupInfoViewAndWelcome(t *testing.T) {
 	if info != "" {
 		t.Fatalf("idle infoView = %q, want no persistent model metadata", info)
 	}
-	welcome := bModel.welcomeCard()
-	if strings.Contains(welcome, "deepseek-v4-flash-vision-exp") {
-		t.Fatalf("welcomeCard duplicated model already shown in status bar: %s", welcome)
+	welcome := bModel.sessionHeaderView()
+	if !strings.Contains(welcome, "deepseek-v4-flash-vision-exp") {
+		t.Fatalf("sessionHeaderView missing active model: %s", welcome)
 	}
 }
 
@@ -632,8 +633,8 @@ func TestSubmitWhileBusyQueuesDraft(t *testing.T) {
 	if got := model.panes.bottom.prompt().Value(); got != "" {
 		t.Fatalf("busy submit cleared prompt = %q, want empty", got)
 	}
-	if len(model.queue) != 1 || model.queue[0] != ":help" {
-		t.Fatalf("queue = %#v, want [:help]", model.queue)
+	if model.conversation.QueueLen() != 1 || model.conversation.Queue()[0] != ":help" {
+		t.Fatalf("queue = %#v, want [:help]", model.conversation.Queue())
 	}
 	if !strings.Contains(plainTranscript(model), "queued (1): :help") {
 		t.Fatalf("scrollback missing queue notice: %#v", model.historyState.Cells())
@@ -642,8 +643,8 @@ func TestSubmitWhileBusyQueuesDraft(t *testing.T) {
 	if command := model.drainQueue(); command != nil {
 		t.Fatalf("queued :help command = %v, want nil", command)
 	}
-	if len(model.queue) != 0 {
-		t.Fatalf("queue after drain = %#v, want empty", model.queue)
+	if model.conversation.QueueLen() != 0 {
+		t.Fatalf("queue after drain = %#v, want empty", model.conversation.Queue())
 	}
 	if !strings.Contains(plainTranscript(model), "/help") {
 		t.Fatalf("drained :help did not render: %#v", model.historyState.Cells())
@@ -725,11 +726,11 @@ func TestTurnDoneAppendsProducedToolHistory(t *testing.T) {
 	message := m.startTurn("inspect")()
 	updated, _ := m.Update(message)
 	m = updated.(*bubbleModel)
-	if got, want := len(m.messages), 4; got != want {
+	if got, want := len(m.conversation.Messages()), 4; got != want {
 		t.Fatalf("provider history length = %d, want %d", got, want)
 	}
-	if m.messages[1].Role != domainmodel.RoleAssistant || m.messages[2].Role != domainmodel.RoleTool {
-		t.Fatalf("provider history = %#v, want assistant/tool exchange", m.messages)
+	if m.conversation.Messages()[1].Role != domainmodel.RoleAssistant || m.conversation.Messages()[2].Role != domainmodel.RoleTool {
+		t.Fatalf("provider history = %#v, want assistant/tool exchange", m.conversation.Messages())
 	}
 }
 
@@ -747,11 +748,11 @@ func TestTurnDonePreservesReplaySafeCheckpointOnFailure(t *testing.T) {
 	message := m.startTurn("inspect")()
 	updated, _ := m.Update(message)
 	m = updated.(*bubbleModel)
-	if got, want := len(m.messages), 3; got != want {
+	if got, want := len(m.conversation.Messages()), 3; got != want {
 		t.Fatalf("provider history length = %d, want %d", got, want)
 	}
-	if m.messages[0].Role != domainmodel.RoleUser || m.messages[1].Role != domainmodel.RoleAssistant || m.messages[2].Role != domainmodel.RoleTool {
-		t.Fatalf("provider history = %#v, want user plus replay-safe assistant/tool checkpoint", m.messages)
+	if m.conversation.Messages()[0].Role != domainmodel.RoleUser || m.conversation.Messages()[1].Role != domainmodel.RoleAssistant || m.conversation.Messages()[2].Role != domainmodel.RoleTool {
+		t.Fatalf("provider history = %#v, want user plus replay-safe assistant/tool checkpoint", m.conversation.Messages())
 	}
 }
 
@@ -1155,7 +1156,8 @@ func TestStaleModelSetupDoesNotMutateReopenedPane(t *testing.T) {
 func TestModelFetchRequiresRuntimeContext(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	v := newModelSetupPaneView(m)
-	cmd := v.beginFetch(nil, "protonman", config.ProviderConfig{Name: "protonman"})
+	var nilCtx context.Context
+	cmd := v.beginFetch(nilCtx, app.NewModels(model.Catalog{}), "protonman", config.ProviderConfig{Name: "protonman"})
 	if cmd != nil {
 		t.Fatalf("nil-context model fetch command = %v, want nil", cmd)
 	}
@@ -1287,7 +1289,7 @@ func TestModelSetupCurrentMarkerUsesProviderModelPair(t *testing.T) {
 }
 
 func TestModelDisplayNameHumanizesIdentifier(t *testing.T) {
-	got := modelDisplayName(domainmodel.RemoteModel{ID: "nemotron-3.5-lightning-free"})
+	got := modelpicker.DisplayName(domainmodel.RemoteModel{ID: "nemotron-3.5-lightning-free"})
 	if got != "Nemotron 3.5 Lightning" {
 		t.Fatalf("display name = %q", got)
 	}
@@ -1551,7 +1553,7 @@ func TestEffortLayoutAlignsLabelsWithTrackSlots(t *testing.T) {
 		t.Fatalf("dot positions = %v in %q", dots, track)
 	}
 	for i, effort := range view.reasoningChoices {
-		label := reasoningEffortLabel(effort)
+		label := reasoningpolicy.EffortLabel(effort)
 		start := strings.Index(string(labelRunes), label)
 		if start < 0 {
 			t.Fatalf("label %q missing from %q", label, labels)

@@ -46,7 +46,9 @@ func newTestBubbleModel(t *testing.T, mode permission.Mode, todo []tododomain.It
 	t.Helper()
 	registry, _ := newBubbleTestRegistry()
 	service := newBubbleTestService(t, registry, mode, permission.Config{})
-	return newBubbleModel(context.Background(), service, registry, todo, nil, newPermissionBridge(), "/tmp/proton")
+	model := newBubbleModel(context.Background(), service, registry, todo, nil, newPermissionBridge(), "/tmp/proton")
+	attachTestApplication(t, model)
+	return model
 }
 
 func emptyTodoItems() []tododomain.Item {
@@ -377,7 +379,6 @@ func newBehaviorService(t *testing.T, registry tool.Registry, mode permission.Mo
 
 func TestRenderedViewportReflectsContentAndScroll(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
-	m.showWelcome = false
 	m.resize(80, 12)
 	for i := 0; i < 30; i++ {
 		m.appendLine(fmt.Sprintf("cache-line-%02d", i))
@@ -423,7 +424,6 @@ func TestSpinnerTickSkipsViewportRefreshForStreamingAssistant(t *testing.T) {
 func TestViewportTailOnlyHydratesBeforePageUp(t *testing.T) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
 	m.resize(80, 18)
-	m.showWelcome = false
 	m.busy = true
 	m.conversationViewport.setFollowing(true)
 	for i := 0; i < 40; i++ {
@@ -453,7 +453,6 @@ func TestViewportTailOnlyHydratesBeforePageUp(t *testing.T) {
 
 func TestStreamingAssistantResizeStressPreservesViewportMode(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.showWelcome = false
 	m.busy = true
 	m.resize(80, 24)
 	for i := 0; i < 50; i++ {
@@ -551,11 +550,11 @@ func TestTodoConflictRendersTaskSpecificGuidance(t *testing.T) {
 
 func TestClearTranscriptPreservesProviderHistory(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.messages = []model.Message{{Role: model.RoleUser, Content: "keep context"}}
+	m.conversation.SetMessages([]model.Message{{Role: model.RoleUser, Content: "keep context"}})
 	m.appendUser("visible message")
 	m.resetTranscript()
-	if len(m.messages) != 1 {
-		t.Fatalf("clear changed provider history length = %d, want 1", len(m.messages))
+	if len(m.conversation.Messages()) != 1 {
+		t.Fatalf("clear changed provider history length = %d, want 1", len(m.conversation.Messages()))
 	}
 }
 
@@ -889,7 +888,6 @@ func TestRefreshViewportDoesNotRenderHiddenTranscriptOverlay(t *testing.T) {
 
 func TestMouseWheelOnlyScrollsInsideTranscriptViewport(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.showWelcome = false
 	m.resize(80, 20)
 	for i := 0; i < 60; i++ {
 		m.appendLine(fmt.Sprintf("line-%02d", i))
@@ -913,7 +911,6 @@ func TestMouseWheelOnlyScrollsInsideTranscriptViewport(t *testing.T) {
 func TestScrolledViewportDefersActiveTailRefreshUntilScroll(t *testing.T) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
 	m.resize(80, 18)
-	m.showWelcome = false
 	for i := 0; i < 40; i++ {
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nmore detail", i)})
 	}
@@ -935,7 +932,6 @@ func TestScrolledViewportDefersActiveTailRefreshUntilScroll(t *testing.T) {
 func TestPageDownHydratesDeferredTail(t *testing.T) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
 	m.resize(80, 18)
-	m.showWelcome = false
 	for i := 0; i < 40; i++ {
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("answer %d\nmore detail", i)})
 	}
@@ -967,18 +963,18 @@ func TestWelcomeCardCachesGitBranchUntilInvalidated(t *testing.T) {
 	}
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), workDir)
 	m.resize(80, 24)
-	first := testPlain(m.welcomeCard())
-	if !strings.Contains(first, "· main") {
+	first := testPlain(m.sessionHeaderView())
+	if !strings.Contains(first, "main") {
 		t.Fatalf("initial welcome branch missing: %q", first)
 	}
 	if err := os.WriteFile(head, []byte("ref: refs/heads/dev\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if cached := testPlain(m.welcomeCard()); !strings.Contains(cached, "· main") {
+	if cached := testPlain(m.sessionHeaderView()); !strings.Contains(cached, "main") {
 		t.Fatalf("welcome card unexpectedly reread git metadata: %q", cached)
 	}
-	m.invalidateWelcomeBranch()
-	if refreshed := testPlain(m.welcomeCard()); !strings.Contains(refreshed, "· dev") {
+	m.invalidateSessionHeaderBranch()
+	if refreshed := testPlain(m.sessionHeaderView()); !strings.Contains(refreshed, "dev") {
 		t.Fatalf("invalidated welcome branch did not refresh: %q", refreshed)
 	}
 }
@@ -987,7 +983,6 @@ func TestScrollingRendersSingleComposer(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.runner = fakeConversation{}
 	m.syncPromptPlaceholder()
-	m.showWelcome = false
 	m.resize(90, 20)
 	for i := 0; i < 60; i++ {
 		m.appendLine(fmt.Sprintf("history-%02d", i))
@@ -1046,18 +1041,18 @@ func TestClosingTranscriptOverlayReleasesViewportContent(t *testing.T) {
 
 func TestLiveConversationRetentionKeepsToolProtocolGroup(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.conversationRetention = conversation.RetentionPolicy{MaxMessages: 3}
-	m.messages = []model.Message{
+	m.conversation.SetRetention(conversation.RetentionPolicy{MaxMessages: 3})
+	m.conversation.SetMessages([]model.Message{
 		{Role: model.RoleUser, Content: "old"},
 		{Role: model.RoleAssistant, ToolCalls: []model.ToolCall{{ID: "call-1", Name: "read", Arguments: []byte(`{"path":"README.md"}`)}}},
 		{Role: model.RoleTool, ToolCallID: "call-1", ToolName: "read", Content: "result"},
 		{Role: model.RoleUser, Content: "latest"},
+	})
+	m.conversation.RetainMessages()
+	if len(m.conversation.Messages()) != 3 {
+		t.Fatalf("retained message count=%d, want 3: %#v", len(m.conversation.Messages()), m.conversation.Messages())
 	}
-	m.conversationModelState.retainMessages()
-	if len(m.messages) != 3 {
-		t.Fatalf("retained message count=%d, want 3: %#v", len(m.messages), m.messages)
-	}
-	if m.messages[0].Role != model.RoleAssistant || m.messages[1].Role != model.RoleTool || m.messages[2].Content != "latest" {
-		t.Fatalf("live retention split protocol group: %#v", m.messages)
+	if m.conversation.Messages()[0].Role != model.RoleAssistant || m.conversation.Messages()[1].Role != model.RoleTool || m.conversation.Messages()[2].Content != "latest" {
+		t.Fatalf("live retention split protocol group: %#v", m.conversation.Messages())
 	}
 }

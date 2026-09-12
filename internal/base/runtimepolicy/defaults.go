@@ -12,7 +12,9 @@ const (
 	AgentActivityMessageBytes             = 4 * 1024
 	AgentActivityErrorBytes               = 1024
 	AgentResultTTL                        = 24 * time.Hour
-	TurnMaxToolCalls                      = 100
+	TurnMaxToolCalls                      = 0
+	TurnMaxStagnantToolCalls              = 24
+	TurnEmergencyMaxToolCalls             = 512
 	TurnToolResultBytesPerRound           = 4 * 1024 * 1024
 	TurnToolResultBytesPerTurn            = 12 * 1024 * 1024
 	ConversationMaxMessages               = 256

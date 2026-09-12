@@ -313,6 +313,22 @@ func TestApplicationDoesNotExposeAgentCoordinatorEscapeHatch(t *testing.T) {
 	assertNoSourceMatch(t, "internal/app", `func \(.*Agents\) Coordinator\(\)`, true, "application exposes concrete agent coordinator escape hatch")
 }
 
+func TestApplicationDoesNotDependOnAdapters(t *testing.T) {
+	packages := listPackages(t)
+	appPrefix := modulePath + "/internal/app"
+	adapterPrefix := modulePath + "/internal/adapter/"
+	for importPath, pkg := range packages {
+		if importPath != appPrefix && !strings.HasPrefix(importPath, appPrefix+"/") {
+			continue
+		}
+		for _, imported := range pkg.Imports {
+			if strings.HasPrefix(imported, adapterPrefix) {
+				t.Errorf("application package %s imports adapter %s; depend on core/application ports and wire concrete adapters in composition root", importPath, imported)
+			}
+		}
+	}
+}
+
 func TestApplicationDoesNotDependOnInboundAdapters(t *testing.T) {
 	packages := listPackages(t)
 	assertNoImports(t, packages, modulePath+"/internal/app", []string{
@@ -352,9 +368,11 @@ func TestApplicationLayerFileStructure(t *testing.T) {
 		"appdirs":              true,
 		"conversation.go":      true,
 		"conversation_test.go": true,
+		"model_factory.go":     true,
 		"models.go":            true,
 		"projects.go":          true,
 		"providers.go":         true,
+		"services.go":          true,
 		"sessions.go":          true,
 		"user_settings.go":     true,
 	}
@@ -372,7 +390,10 @@ func TestModelLayerFileStructure(t *testing.T) {
 		t.Fatalf("read internal/adapter/out/model: %v", err)
 	}
 	expected := map[string]bool{
+		"catalog_adapter.go":              true,
 		"client_factory.go":               true,
+		"defaults.go":                     true,
+		"factory.go":                      true,
 		"client_factory_test.go":          true,
 		"model_profile.go":                true,
 		"model_test.go":                   true,
@@ -487,6 +508,41 @@ func TestInternalTopLevelCleanArchitectureDirectories(t *testing.T) {
 		if !expected[entry.Name()] {
 			t.Errorf("unexpected directory at internal root: %s (should be organized into Clean Architecture groups)", entry.Name())
 		}
+	}
+}
+
+func TestTUIRuntimeSubpackagesDoNotImportRuntimeRoot(t *testing.T) {
+	packages := listPackages(t)
+	runtimeRoot := modulePath + "/internal/adapter/in/tui/runtime"
+	for importPath, pkg := range packages {
+		if !strings.HasPrefix(importPath, runtimeRoot+"/") {
+			continue
+		}
+		for _, imported := range pkg.Imports {
+			if imported == runtimeRoot {
+				t.Errorf("TUI runtime subpackage %s must not import root runtime package %s; keep dependencies flowing from orchestration shell into focused ownership packages", importPath, runtimeRoot)
+			}
+		}
+	}
+}
+
+func TestTUIRuntimeRootStaysWithinStructuralBudget(t *testing.T) {
+	root := repositoryRoot(t)
+	runtimeRoot := filepath.Join(root, "internal", "adapter", "in", "tui", "runtime")
+	entries, err := os.ReadDir(runtimeRoot)
+	if err != nil {
+		t.Fatalf("read TUI runtime root: %v", err)
+	}
+	const maxProductionFiles = 32
+	productionFiles := 0
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		productionFiles++
+	}
+	if productionFiles > maxProductionFiles {
+		t.Fatalf("TUI runtime root has %d production files; structural budget is %d; extract ownership into focused subpackages instead of growing the root", productionFiles, maxProductionFiles)
 	}
 }
 

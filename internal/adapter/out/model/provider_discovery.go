@@ -11,25 +11,11 @@ import (
 	"time"
 
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
-	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
+	"github.com/phongsathornpt/protonman/internal/core/modelcatalog"
 )
 
-// RemoteModel describes a model discovered from an OpenAI or protonman endpoint.
-type RemoteModel struct {
-	ID              string   `json:"id"`
-	Name            string   `json:"name"`
-	ContextWindow   int      `json:"context_window,omitempty"`
-	MaxInputTokens  int      `json:"max_input_tokens,omitempty"`
-	MaxOutputTokens int      `json:"max_output_tokens,omitempty"`
-	Provider        string   `json:"provider,omitempty"`
-	Features        []string `json:"features,omitempty"`
-	// ToolSupport and VisionSupport are tri-state capability metadata. Nil means
-	// the catalog did not provide authoritative support information.
-	ToolSupport        *bool                          `json:"tool_support,omitempty"`
-	VisionSupport      *bool                          `json:"vision_support,omitempty"`
-	ToolChoiceRequired *bool                          `json:"tool_choice_required,omitempty"`
-	Reasoning          *modelprofile.CatalogReasoning `json:"reasoning,omitempty"`
-}
+// RemoteModel is provider-neutral discovered model metadata.
+type RemoteModel = modelcatalog.RemoteModel
 
 // IsFreeModel reports whether a given model ID represents an OpenCode free-tier model.
 func IsFreeModel(id string) bool {

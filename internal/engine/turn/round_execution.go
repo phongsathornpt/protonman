@@ -68,17 +68,17 @@ func (l *Loop) runRound(
 			dispatch:   dispatch,
 		}, nil
 	}
-	if dispatch.remainingToolCalls > 0 && len(requestedCalls) > dispatch.remainingToolCalls {
-		slog.DebugContext(parent, "turn tool call budget exceeded",
+	if dispatch.remainingSafetyCalls > 0 && len(requestedCalls) > dispatch.remainingSafetyCalls {
+		slog.DebugContext(parent, "turn tool safety budget exceeded",
 			"round", round,
 			"requested_tool_calls", len(requestedCalls),
-			"remaining_tool_calls", dispatch.remainingToolCalls,
+			"remaining_safety_calls", dispatch.remainingSafetyCalls,
 		)
 		return roundOutcome{
 			assistant:  assistant,
 			executions: []executedCall{},
 			dispatch: toolDispatchState{
-				reason: toolDispatchDisabledMaxCalls,
+				reason: toolDispatchDisabledSafetyBudget,
 			},
 		}, nil
 	}

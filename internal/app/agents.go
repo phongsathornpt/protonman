@@ -6,8 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
-	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
@@ -23,10 +22,11 @@ type Agents struct {
 // SubagentModelResolverSpec contains immutable runtime inputs used to build
 // configured per-profile subagent language models.
 type SubagentModelResolverSpec struct {
-	Providers      map[string]config.ProviderConfig
-	Overrides      map[string]config.SubagentModelConfig
+	Providers      map[string]modelconfig.Provider
+	Overrides      map[string]modelconfig.SubagentRoute
 	SessionID      string
 	RequestTimeout time.Duration
+	ModelFactory   LanguageModelFactory
 }
 
 // BuildSubagentModelResolver validates configured provider/model pairs and
@@ -49,16 +49,17 @@ func BuildSubagentModelResolver(spec SubagentModelResolverSpec) (*agent.ModelRes
 		if !ok {
 			return nil, fmt.Errorf("agent.subagents.%s: provider %q is not configured", profile, configured.Provider)
 		}
-		if !model.ProviderHasUsableAuth(providerKey, provider.BaseURL, provider.APIKey) {
+		if spec.ModelFactory == nil {
+			return nil, fmt.Errorf("agent.subagents.%s: language-model factory is unavailable", profile)
+		}
+		languageModel := spec.ModelFactory.Build(LanguageModelRequest{
+			ProviderName: providerKey, ProviderType: provider.Type, BaseURL: provider.BaseURL, APIKey: provider.APIKey,
+			ModelID: configured.Model, SessionID: spec.SessionID, AgentProfile: string(profile), RequestTimeout: spec.RequestTimeout,
+		})
+		if languageModel == nil {
 			return nil, fmt.Errorf("agent.subagents.%s: provider %q requires credentials", profile, providerKey)
 		}
-		opts := []model.ClientOption{model.WithRequestTimeout(spec.RequestTimeout), model.WithAgentProfile(string(profile))}
-		if strings.TrimSpace(spec.SessionID) != "" {
-			opts = append(opts, model.WithSessionID(spec.SessionID))
-		}
-		overrides[profile] = model.NewProviderLanguageModel(
-			providerKey, provider.Type, provider.BaseURL, provider.APIKey, configured.Model, opts...,
-		)
+		overrides[profile] = languageModel
 	}
 	if len(overrides) == 0 {
 		return nil, nil
@@ -68,7 +69,7 @@ func BuildSubagentModelResolver(spec SubagentModelResolverSpec) (*agent.ModelRes
 
 // BuildSubagentReasoningResolver validates and snapshots per-profile reasoning overrides.
 // Profiles configured as auto/default inherit the current global/profile policy.
-func BuildSubagentReasoningResolver(configured map[string]config.SubagentModelConfig) (*agent.ReasoningResolver, error) {
+func BuildSubagentReasoningResolver(configured map[string]modelconfig.SubagentRoute) (*agent.ReasoningResolver, error) {
 	if len(configured) == 0 {
 		return nil, nil
 	}
@@ -88,7 +89,7 @@ func BuildSubagentReasoningResolver(configured map[string]config.SubagentModelCo
 	return agent.NewReasoningResolver(overrides)
 }
 
-func lookupProvider(providers map[string]config.ProviderConfig, requested string) (string, config.ProviderConfig, bool) {
+func lookupProvider(providers map[string]modelconfig.Provider, requested string) (string, modelconfig.Provider, bool) {
 	requested = strings.TrimSpace(requested)
 	if provider, ok := providers[requested]; ok {
 		return requested, provider, true
@@ -98,7 +99,7 @@ func lookupProvider(providers map[string]config.ProviderConfig, requested string
 			return key, provider, true
 		}
 	}
-	return "", config.ProviderConfig{}, false
+	return "", modelconfig.Provider{}, false
 }
 
 func NewAgents(coordinator *agent.Coordinator) Agents { return Agents{coordinator: coordinator} }

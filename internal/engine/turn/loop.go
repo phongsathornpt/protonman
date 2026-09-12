@@ -12,8 +12,6 @@ import (
 	"time"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
-	"github.com/phongsathornpt/protonman/internal/base/contextutil"
-	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
@@ -26,9 +24,11 @@ const (
 	terminalEmitTimeout       = runtimepolicy.TerminalEmitTimeout
 	protectionObserverTimeout = runtimepolicy.ProtectionObserverTimeout
 
-	// DefaultMaxToolCalls is the default cumulative maximum number of tool
-	// calls per turn.
-	DefaultMaxToolCalls = runtimepolicy.TurnMaxToolCalls
+	// DefaultMaxToolCalls is the compatibility hard-cap override. Zero uses the
+	// progress-aware runtime safety budget instead of a cumulative productivity quota.
+	DefaultMaxToolCalls          = runtimepolicy.TurnMaxToolCalls
+	DefaultMaxStagnantToolCalls  = runtimepolicy.TurnMaxStagnantToolCalls
+	DefaultEmergencyMaxToolCalls = runtimepolicy.TurnEmergencyMaxToolCalls
 	// DefaultTurnTimeout bounds one complete model/tool turn.
 	DefaultTurnTimeout = runtimepolicy.TurnTimeout
 	// DefaultRoundTimeout bounds a turn round when callers do not provide a
@@ -41,28 +41,33 @@ const (
 	skillPromptMarker                 = "<!-- proton:skill-catalog -->"
 )
 
-// MaxToolCallsPrompt is injected when the turn reaches the cumulative tool
-// call limit to compel a final synthesis response without tools.
-const MaxToolCallsPrompt = `CRITICAL - MAXIMUM TOOL CALLS REACHED
+// SafetyBudgetPrompt is injected when progress-aware tool safety bounds are
+// exhausted. Productive tool work resets the stagnant budget; the emergency
+// ceiling remains an independent runaway guard.
+const SafetyBudgetPrompt = `CRITICAL - TOOL SAFETY BUDGET REACHED
 
-The maximum cumulative number of tool calls allowed for this turn has been reached. Tools are disabled until next user input. Respond with text only.
+The runtime safety budget for this turn has been reached. Tools are disabled until next user input. Respond with text only.
 
 STRICT REQUIREMENTS:
-1. Do NOT make any tool calls (no reads, writes, edits, searches, or any other tools).
-2. MUST provide a clear text response summarizing what was accomplished so far.
-3. List any remaining tasks that were not completed.
-4. Provide recommendations for what the user or next step should do.
+1. Do NOT make any tool calls.
+2. Summarize concrete progress and evidence gathered so far.
+3. List only genuinely unfinished work or blockers.
+4. Do not claim unverified work is complete.
 
 Respond with text ONLY.`
 
-// MaxToolCallsFallback is used when a provider ignores MaxToolCallsPrompt or
-// requests more calls than the remaining budget.
-const MaxToolCallsFallback = "I reached the maximum number of tool calls before producing a final response. The last tool request was not executed. Review the work so far or start a new turn."
+const SafetyBudgetFallback = "I stopped tool execution after the runtime safety budget was reached. The last tool request was not executed. I preserved the completed work and evidence from earlier rounds."
 
-// SoftToolBudgetPrompt nudges the model toward completion before the hard tool-call budget is exhausted.
-const SoftToolBudgetPrompt = `TOOL BUDGET NOTICE
+// Deprecated compatibility aliases for callers/tests that still reference the
+// previous cumulative-tool-limit terminology.
+const MaxToolCallsPrompt = SafetyBudgetPrompt
+const MaxToolCallsFallback = SafetyBudgetFallback
 
-A substantial portion of this turn's tool-call budget has been used. Reassess whether the requested outcome is already complete. Prioritize only required work and verification, avoid optional exploration, and finish as soon as the task is complete.`
+// SoftToolBudgetPrompt nudges the model toward completion when repeated tool
+// activity is consuming the stagnant-progress window.
+const SoftToolBudgetPrompt = `TOOL PROGRESS NOTICE
+
+Tool activity is consuming the no-progress safety window. Reassess whether the requested outcome is already complete. Prioritize required implementation and verification, avoid status polling or optional exploration, and change strategy if current calls are not producing new evidence or state.`
 
 // NoProgressPrompt is injected when deterministic tool calls repeatedly return
 // the same result without any intervening workspace mutation.
@@ -101,37 +106,6 @@ var (
 	// ErrContextBudgetExceeded indicates that the request cannot fit the active model context safely.
 	ErrContextBudgetExceeded = errors.New("model context budget exceeded")
 )
-
-type toolDispatchReason string
-
-const (
-	toolDispatchEnabled            toolDispatchReason = "enabled"
-	toolDispatchDisabledMaxCalls   toolDispatchReason = "max_tool_calls"
-	toolDispatchDisabledNoProgress toolDispatchReason = "no_progress"
-	toolDispatchDisabledNoTools    toolDispatchReason = "no_tools"
-	toolDispatchDisabledModelTools toolDispatchReason = "model_tools_unsupported"
-)
-
-type toolDispatchState struct {
-	reason              toolDispatchReason
-	remainingToolCalls  int
-	providerToCanonical map[string]string
-	canonicalNames      map[string]struct{}
-}
-
-func (s toolDispatchState) canonicalToolName(name string) string {
-	if canonical, ok := s.providerToCanonical[name]; ok {
-		return canonical
-	}
-	if _, ok := s.canonicalNames[name]; ok {
-		return name
-	}
-	return name
-}
-
-func (s toolDispatchState) enabled() bool {
-	return s.reason == toolDispatchEnabled
-}
 
 type roundOutcome struct {
 	assistant  model.Message
@@ -179,9 +153,10 @@ type Runner interface {
 
 // Result contains the latest replay-safe turn checkpoint. On success, Message is the final assistant response. On failure, Message may be empty while Messages, Rounds, and Verification describe only fully committed rounds.
 type Result struct {
-	Message      model.Message
-	Rounds       int
-	Verification VerificationState
+	Message       model.Message
+	Rounds        int
+	Verification  VerificationState
+	GoalCompleted bool
 	// ReplaySafe is true when Messages is a complete checkpoint that may be
 	// persisted even if Run returns an error.
 	ReplaySafe bool
@@ -192,200 +167,12 @@ type Result struct {
 	Messages []model.Message
 }
 
-// Option configures a Loop.
-type Option func(*Loop) error
-
-// WithSystemPromptSpec enables deterministic runtime prompt composition.
-// The loop fills model, tool, skill, and execution-limit sections from the
-// actual request environment on every round.
-func WithSystemPromptSpec(spec prompt.Spec) Option {
-	return func(loop *Loop) error {
-		clone := spec
-		clone.ModelPromptHints = append([]string(nil), spec.ModelPromptHints...)
-		clone.AvailableTools = append([]string(nil), spec.AvailableTools...)
-		clone.ExtraInstructions = append([]string(nil), spec.ExtraInstructions...)
-		loop.promptSpec = &clone
-		return nil
-	}
-}
-
-// WithWorkspacePolicy supplies the workspace safety boundary used for
-// policy-checked reads that the turn performs itself, such as loading
-// project instructions. The loop never mutates through this policy; tool
-// execution keeps its own mutation gate in the tool-call service.
-func WithWorkspacePolicy(policy *workspace.Workspace) Option {
-	return func(loop *Loop) error {
-		loop.workspacePolicy = policy
-		return nil
-	}
-}
-
-// WithExplicitReasoningEffort sets a user-selected reasoning level. Known
-// unsupported levels fail locally rather than being silently clamped.
-func WithExplicitReasoningEffort(effort sdk.ReasoningEffort) Option {
-	return func(loop *Loop) error {
-		if !effort.Valid() {
-			return fmt.Errorf("%w: unsupported reasoning effort %q", ErrInvalidLoop, effort)
-		}
-		loop.reasoningEffort = effort
-		loop.reasoningExplicit = true
-		return nil
-	}
-}
-
-// WithReasoningEffort sets a portable reasoning preference. The loop only
-// forwards it when the resolved model profile confirms reasoning support.
-func WithReasoningEffort(effort sdk.ReasoningEffort) Option {
-	return func(loop *Loop) error {
-		if !effort.Valid() {
-			return fmt.Errorf("%w: unsupported reasoning effort %q", ErrInvalidLoop, effort)
-		}
-		loop.reasoningEffort = effort
-		return nil
-	}
-}
-
-// WithGroundingEvidence requires one successful empirical observation of the
-// requested evidence kind before broader tools or final synthesis are allowed.
-func WithGroundingEvidence(evidence tool.EvidenceKind) Option {
-	return func(loop *Loop) error {
-		switch evidence {
-		case tool.EvidenceNone, tool.EvidenceWorkspace, tool.EvidenceExternal:
-			loop.groundingEvidence = evidence
-			return nil
-		default:
-			return fmt.Errorf("%w: unsupported grounding evidence %q", ErrInvalidLoop, evidence)
-		}
-	}
-}
-
-// WithRequireInitialToolUse is retained for internal compatibility. Required
-// initial tool use now means successful workspace grounding, not any tool call.
-func WithRequireInitialToolUse(required bool) Option {
-	if required {
-		return WithGroundingEvidence(tool.EvidenceWorkspace)
-	}
-	return WithGroundingEvidence(tool.EvidenceNone)
-}
-
-// WithMaxToolCalls bounds the cumulative number of tool calls per turn.
-// A value of 0 disables this count bound; other turn bounds still apply.
-func WithMaxToolCalls(calls int) Option {
-	return func(loop *Loop) error {
-		if calls < 0 {
-			return fmt.Errorf("%w: max tool calls cannot be negative", ErrInvalidLoop)
-		}
-		loop.maxToolCalls = calls
-		return nil
-	}
-}
-
-// WithMaxIdenticalNoProgressResults bounds repeated identical deterministic
-// tool results before Protonman forces a text-only synthesis round. Zero disables
-// semantic no-progress detection.
-func WithMaxIdenticalNoProgressResults(limit int) Option {
-	return func(loop *Loop) error {
-		if limit < 0 {
-			return fmt.Errorf("%w: max identical no-progress results cannot be negative", ErrInvalidLoop)
-		}
-		loop.maxIdenticalNoProgressResults = limit
-		return nil
-	}
-}
-
-func WithMaxToolResultBytesPerRound(limit int) Option {
-	return func(loop *Loop) error {
-		if limit < 0 {
-			return fmt.Errorf("%w: max tool-result bytes per round cannot be negative", ErrInvalidLoop)
-		}
-		loop.maxToolResultBytesPerRound = limit
-		return nil
-	}
-}
-
-func WithMaxToolResultBytesPerTurn(limit int) Option {
-	return func(loop *Loop) error {
-		if limit < 0 {
-			return fmt.Errorf("%w: max tool-result bytes per turn cannot be negative", ErrInvalidLoop)
-		}
-		loop.maxToolResultBytesPerTurn = limit
-		return nil
-	}
-}
-
-// WithTurnTimeout bounds one complete model/tool turn. Zero disables this
-// bound, which is only valid when another global execution limit remains set.
-func WithTurnTimeout(timeout time.Duration) Option {
-	return func(loop *Loop) error {
-		if timeout < 0 {
-			return fmt.Errorf("%w: turn timeout cannot be negative", ErrInvalidLoop)
-		}
-		loop.turnTimeout = timeout
-		return nil
-	}
-}
-
-// WithRoundTimeout bounds one model response and its tool calls.
-func WithRoundTimeout(timeout time.Duration) Option {
-	return func(loop *Loop) error {
-		if timeout < 0 {
-			return fmt.Errorf("%w: round timeout cannot be negative", ErrInvalidLoop)
-		}
-		loop.roundTimeout = timeout
-		return nil
-	}
-}
-
-// WithToolTimeout bounds one individual tool call. Zero disables this bound.
-func WithToolTimeout(timeout time.Duration) Option {
-	return func(loop *Loop) error {
-		if timeout < 0 {
-			return fmt.Errorf("%w: tool timeout cannot be negative", ErrInvalidLoop)
-		}
-		loop.toolTimeout = timeout
-		return nil
-	}
-}
-
-// WithMaxParallelReads bounds the read-only worker pool. One disables parallel dispatch.
-func WithMaxParallelReads(limit int) Option {
-	return func(loop *Loop) error {
-		if limit <= 0 {
-			return fmt.Errorf("%w: max parallel reads must be positive", ErrInvalidLoop)
-		}
-		loop.maxParallelReads = limit
-		return nil
-	}
-}
-
-// WithSkillCatalog supplies discovered skills for progressive disclosure in model requests.
-func WithSkillCatalog(skills []skill.CatalogItem) Option {
-	return func(loop *Loop) error {
-		loop.skills = append([]skill.CatalogItem{}, skills...)
-		return nil
-	}
-}
-
-// WithSkillRegistry supplies a skill registry for dynamic progressive disclosure and active skill injection.
-func WithSkillRegistry(registry *skill.Registry) Option {
-	return func(loop *Loop) error {
-		loop.skillRegistry = registry
-		return nil
-	}
-}
-
-// Loop coordinates model streaming and permission-aware tool dispatch.
-func shouldWarnSoftToolBudget(used, max int, warned bool) bool {
-	if warned || max <= 0 || used <= 0 {
-		return false
-	}
-	return used*5 >= max*3
-}
-
 type Loop struct {
 	languageModel                 sdk.LanguageModel
 	tools                         *toolcall.Service
 	maxToolCalls                  int
+	maxStagnantToolCalls          int
+	emergencyMaxToolCalls         int
 	maxIdenticalNoProgressResults int
 	turnTimeout                   time.Duration
 	roundTimeout                  time.Duration
@@ -420,6 +207,8 @@ func NewLoop(languageModel sdk.LanguageModel, tools *toolcall.Service, options .
 		languageModel:                 languageModel,
 		tools:                         tools,
 		maxToolCalls:                  defaultMaxToolCalls,
+		maxStagnantToolCalls:          DefaultMaxStagnantToolCalls,
+		emergencyMaxToolCalls:         DefaultEmergencyMaxToolCalls,
 		maxIdenticalNoProgressResults: defaultMaxIdenticalNoProgressResults,
 		turnTimeout:                   DefaultTurnTimeout,
 		roundTimeout:                  DefaultRoundTimeout,
@@ -435,8 +224,8 @@ func NewLoop(languageModel sdk.LanguageModel, tools *toolcall.Service, options .
 			return nil, err
 		}
 	}
-	if loop.maxToolCalls == 0 && loop.turnTimeout == 0 {
-		return nil, fmt.Errorf("%w: at least one of max tool calls or turn timeout must be bounded", ErrInvalidLoop)
+	if loop.maxToolCalls == 0 && loop.turnTimeout == 0 && loop.maxStagnantToolCalls == 0 && loop.emergencyMaxToolCalls == 0 {
+		return nil, fmt.Errorf("%w: at least one turn safety bound must be active", ErrInvalidLoop)
 	}
 	return loop, nil
 }
@@ -564,13 +353,23 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	checkpoint := func() Result {
 		return Result{Rounds: committedRounds, Verification: committedVerification, Messages: turnMessages, ReplaySafe: len(turnMessages) > 0}
 	}
-	toolCallsUsed := 0
 	softToolBudgetWarned := false
 	definitions := l.tools.Definitions()
+	definitionsByName := make(map[string]tool.Definition, len(definitions))
+	for _, definition := range definitions {
+		definitionsByName[definition.Name] = definition
+	}
+	hardToolLimit := l.emergencyMaxToolCalls
+	if l.maxToolCalls > 0 && (hardToolLimit == 0 || l.maxToolCalls < hardToolLimit) {
+		hardToolLimit = l.maxToolCalls
+	}
+	safetyBudget := newProgressSafetyBudget(l.maxStagnantToolCalls, hardToolLimit)
 	progress := newProgressGuard(definitions, l.maxIdenticalNoProgressResults)
 	resultBudget := newToolResultBudget(l.maxToolResultBytesPerRound, l.maxToolResultBytesPerTurn)
 	verification := VerificationState{}
+	taskPlan := taskPlanProgress{}
 	forceNoProgressSynthesis := false
+	forceSafetyBudgetSynthesis := false
 	grounding := newGroundingState(l.groundingEvidence)
 	if grounding.pending() {
 		if !caps.Tools {
@@ -630,8 +429,8 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 
 		request, dispatch, warned, err := l.prepareRoundRequest(
 			ctx, history, definitions, promptExtras, projectInstructions,
-			reasoningResolution, grounding, caps, toolCallsUsed,
-			forceNoProgressSynthesis, softToolBudgetWarned, resolvedModel,
+			reasoningResolution, grounding, caps, safetyBudget,
+			forceNoProgressSynthesis, forceSafetyBudgetSynthesis, softToolBudgetWarned, resolvedModel,
 		)
 		softToolBudgetWarned = warned
 		if err != nil {
@@ -660,18 +459,18 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		}
 		assistant := outcome.assistant
 		executions := outcome.executions
-		maxToolCallsFallback := false
+		safetyBudgetFallback := false
 		noProgressFallback := false
 		if len(assistant.ToolCalls) > 0 && !outcome.dispatch.enabled() {
 			switch outcome.dispatch.reason {
-			case toolDispatchDisabledMaxCalls:
-				assistant, err = finalizeMaxToolCallResponse(ctx, sink, round, assistant)
+			case toolDispatchDisabledSafetyBudget:
+				assistant, err = finalizeSafetyBudgetResponse(ctx, sink, round, assistant)
 				if err != nil {
-					terminalReason = "max_tool_calls_fallback_failed"
+					terminalReason = "safety_budget_fallback_failed"
 					return l.failWithResult(ctx, sink, round, checkpoint(), err)
 				}
-				maxToolCallsFallback = true
-				terminalReason = "max_tool_calls_fallback"
+				safetyBudgetFallback = true
+				terminalReason = "safety_budget_fallback"
 			case toolDispatchDisabledNoProgress:
 				assistant, err = finalizeNoProgressToolCallResponse(ctx, sink, round, assistant)
 				if err != nil {
@@ -694,11 +493,28 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			terminalReason = "unresolved_tool_call"
 			return l.failWithResult(ctx, sink, round, checkpoint(), err)
 		}
-		toolCallsUsed += len(executions)
+		if safetyBudget.observeRound(executions, definitionsByName) {
+			softToolBudgetWarned = false
+		}
 		if grounding.observe(executions, definitions) {
 			slog.DebugContext(ctx, "turn workspace grounding satisfied", "round", round, "evidence", grounding.evidence)
 		}
+		if safetyBudget.exhausted() {
+			if grounding.pending() {
+				terminalReason = "grounding_safety_budget_exhausted"
+				return l.failWithResult(ctx, sink, round, checkpoint(), fmt.Errorf("%w: runtime safety budget exhausted before required %s grounding", ErrGroundingUnavailable, grounding.evidence))
+			}
+			forceSafetyBudgetSynthesis = true
+			l.observeProtection(ctx, toolcall.ProtectionEvent{Kind: toolcall.ProtectionSafetyBudgetExhausted, Time: time.Now(), Round: round, Reason: safetyBudget.exhaustedReason()})
+			slog.DebugContext(ctx, "turn tool safety budget exhausted",
+				"round", round,
+				"reason", safetyBudget.exhaustedReason(),
+				"tool_calls", safetyBudget.totalCalls,
+				"stagnant_tool_calls", safetyBudget.stagnantCalls,
+			)
+		}
 		verification.observe(executions, definitions)
+		taskPlan.observe(executions)
 		if stalled, observeErr := progress.observeRound(executions); observeErr != nil {
 			terminalReason = "progress_guard_failed"
 			return l.failWithResult(ctx, sink, round, checkpoint(), observeErr)
@@ -711,7 +527,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				"tool_calls", len(executions),
 			)
 		}
-		if grounding.pending() && len(executions) == 0 && !maxToolCallsFallback && !noProgressFallback {
+		if grounding.pending() && len(executions) == 0 && !safetyBudgetFallback && !noProgressFallback {
 			if err := bufferedEvents.flush(ctx, sink); err != nil {
 				terminalReason = "runtime_event_flush_failed"
 				return l.failWithResult(ctx, sink, round, checkpoint(), err)
@@ -747,8 +563,8 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			history = append(history, assistant)
 			turnMessages = append(turnMessages, assistant)
 			terminalReason = "completed"
-			if maxToolCallsFallback {
-				terminalReason = "max_tool_calls_fallback"
+			if safetyBudgetFallback {
+				terminalReason = "safety_budget_fallback"
 			} else if noProgressFallback {
 				terminalReason = "no_progress_fallback"
 			}
@@ -756,14 +572,16 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				"round", round,
 				"assistant_bytes", len(assistant.Content),
 				"tool_calls", len(executions),
-				"tool_calls_used", toolCallsUsed,
+				"tool_calls_used", safetyBudget.totalCalls,
+				"stagnant_tool_calls", safetyBudget.stagnantCalls,
 			)
 			result := Result{
-				Message:      assistant,
-				Rounds:       round,
-				Verification: verification,
-				ReplaySafe:   true,
-				Messages:     turnMessages,
+				Message:       assistant,
+				Rounds:        round,
+				Verification:  verification,
+				GoalCompleted: l.goalCompleted(taskPlan, verification),
+				ReplaySafe:    true,
+				Messages:      turnMessages,
 			}
 			if err := emit(ctx, sink, Event{
 				Kind:    EventCompleted,
@@ -787,116 +605,14 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		}
 		history = append(history, assistant)
 		history = append(history, toolMessages...)
+		if l.hasActiveGoal() {
+			if progressPrompt := goalProgressPrompt(taskPlan, verification); progressPrompt != "" {
+				history = append(history, model.Message{Role: model.RoleSystem, Content: progressPrompt})
+			}
+		}
 		turnMessages = append(turnMessages, assistant)
 		turnMessages = append(turnMessages, toolMessages...)
 		committedRounds = round
 		committedVerification = verification
 	}
-}
-
-func (l *Loop) newTurnContext(parent context.Context) (context.Context, context.CancelFunc) {
-	if l.turnTimeout > 0 {
-		return context.WithTimeout(parent, l.turnTimeout)
-	}
-	return context.WithCancel(parent)
-}
-
-func (l *Loop) newRoundContext(parent context.Context) (context.Context, context.CancelFunc) {
-	if l.roundTimeout > 0 {
-		return context.WithTimeout(parent, l.roundTimeout)
-	}
-	return context.WithCancel(parent)
-}
-
-func (l *Loop) observeSuppression(ctx context.Context, round int, execution executedCall) {
-	event := toolcall.ProtectionEvent{
-		Kind: toolcall.ProtectionCallSuppressed, Time: time.Now(), Round: round,
-		ToolName: execution.call.Name, Reason: execution.suppressionReason,
-		Fingerprint: execution.semanticFingerprint, RepeatCount: execution.repeatCount,
-		Retryable: execution.retryable,
-	}
-	if execution.result.Failure != nil {
-		event.ErrorCode = execution.result.Failure.Code
-	}
-	for _, definition := range l.tools.Definitions() {
-		if definition.Name == execution.call.Name {
-			event.ToolKind = permission.ToolKind(definition.Kind)
-			break
-		}
-	}
-	l.observeProtection(ctx, event)
-	specific := event
-	switch execution.suppressionReason {
-	case "permission_retry":
-		specific.Kind = toolcall.ProtectionPermissionSuppressed
-	case "retry_budget_exhausted":
-		specific.Kind = toolcall.ProtectionRetryBudgetExhausted
-	default:
-		return
-	}
-	l.observeProtection(ctx, specific)
-}
-
-func (l *Loop) observeProtection(ctx context.Context, event toolcall.ProtectionEvent) {
-	if l == nil || l.tools == nil {
-		return
-	}
-	l.tools.ObserveProtection(ctx, event)
-}
-
-func (l *Loop) fail(ctx context.Context, sink Sink, round int, err error) (Result, error) {
-	return l.failWithResult(ctx, sink, round, Result{}, err)
-}
-
-func (l *Loop) failWithResult(ctx context.Context, sink Sink, round int, result Result, err error) (Result, error) {
-	if errors.Is(err, context.DeadlineExceeded) && errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		observeCtx, observeCancel := contextutil.DetachedTimeout(ctx, protectionObserverTimeout)
-		l.observeProtection(observeCtx, toolcall.ProtectionEvent{Kind: toolcall.ProtectionTurnDeadlineExceeded, Time: time.Now(), Round: round, Reason: "turn_deadline"})
-		observeCancel()
-	}
-	slog.DebugContext(ctx, "turn failed",
-		"round", round,
-		"error_type", fmt.Sprintf("%T", err),
-		"context_error", ctx.Err() != nil,
-	)
-	emitContext := ctx
-	emitCancel := func() {}
-	if ctx.Err() != nil {
-		// A terminal failure still needs to reach adapters after cancellation,
-		// but detached cleanup must remain bounded.
-		emitContext, emitCancel = contextutil.DetachedTimeout(ctx, terminalEmitTimeout)
-	}
-	defer emitCancel()
-	if emitErr := emit(emitContext, sink, Event{
-		Kind:  EventFailed,
-		Round: round,
-		Err:   err,
-	}); emitErr != nil {
-		slog.DebugContext(emitContext, "turn failure event failed",
-			"round", round,
-			"error_type", fmt.Sprintf("%T", emitErr),
-		)
-		return result, emitErr
-	}
-	return result, err
-}
-
-func emit(ctx context.Context, sink Sink, event Event) error {
-	if err := ctx.Err(); err != nil {
-		slog.DebugContext(ctx, "turn event emission cancelled",
-			"event_kind", event.Kind,
-			"round", event.Round,
-			"error_type", fmt.Sprintf("%T", err),
-		)
-		return fmt.Errorf("emit model/tool event: %w", err)
-	}
-	if err := sink(ctx, event); err != nil {
-		slog.DebugContext(ctx, "turn event sink failed",
-			"event_kind", event.Kind,
-			"round", event.Round,
-			"error_type", fmt.Sprintf("%T", err),
-		)
-		return fmt.Errorf("emit model/tool event: %w", err)
-	}
-	return nil
 }

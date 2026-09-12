@@ -81,7 +81,7 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	runCtx, runCancel := context.WithCancel(c.rootCtx)
 	queuedEvent := LifecycleEvent{
 		Kind: LifecycleAgentQueued, Version: 1, At: queuedAt, SessionID: req.SessionID, ParentID: req.ParentID,
-		AgentID: id, Profile: req.Profile, Task: req.Task, DependsOn: append([]string(nil), req.DependsOn...), Optional: req.Optional, Provider: providerName, Model: modelID, ResumedFrom: req.ResumedFrom,
+		AgentID: id, Profile: req.Profile, Task: req.Task, TaskID: req.TaskID, DependsOn: append([]string(nil), req.DependsOn...), Optional: req.Optional, Provider: providerName, Model: modelID, ResumedFrom: req.ResumedFrom,
 		Request: &req,
 	}
 	if err := c.persistLifecycleEvent(ctx, queuedEvent); err != nil {
@@ -109,7 +109,7 @@ func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
 	c.wg.Add(1)
 	c.agentsMu.Unlock()
 
-	c.emit(runCtx, Event{Kind: EventAgentQueued, SessionID: req.SessionID, AgentID: id, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task})
+	c.emit(runCtx, Event{Kind: EventAgentQueued, SessionID: req.SessionID, AgentID: id, ParentID: req.ParentID, Profile: req.Profile, TaskID: req.TaskID, Message: req.Task})
 	go c.runEntry(runCtx, entry, req, queuedAt)
 	return Handle{SessionID: req.SessionID, ID: id, Profile: req.Profile}, nil
 }
@@ -190,7 +190,7 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 	}
 	defer execCancel()
 
-	c.emit(execCtx, Event{Kind: EventAgentStarted, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, Message: req.Task, QueueDuration: queueDuration})
+	c.emit(execCtx, Event{Kind: EventAgentStarted, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, TaskID: req.TaskID, Message: req.Task, QueueDuration: queueDuration})
 	res, runErr := c.executeWithRuntime(execCtx, req, entry.languageModel, entry.reasoningEffort, entry.toolRuntime)
 	if errors.Is(runErr, context.DeadlineExceeded) && runCtx.Err() == nil && execCtx.Err() != nil {
 		runErr = executionTimeoutError()
@@ -218,7 +218,7 @@ func (c *Coordinator) runEntry(runCtx context.Context, entry *agentEntry, req Re
 		eventKind = EventAgentFailed
 	}
 	emitCtx, emitDone := contextutil.DetachedTimeout(execCtx, runtimepolicy.AgentLifecycleEmitTimeout)
-	c.emit(emitCtx, Event{Kind: eventKind, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: runErr})
+	c.emit(emitCtx, Event{Kind: eventKind, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, TaskID: req.TaskID, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: runErr})
 	emitDone()
 }
 
@@ -236,7 +236,7 @@ func (c *Coordinator) finishEntry(entry *agentEntry, req Request, admittedAt, qu
 		res.Err = transitionErr
 	}
 	c.emitStoredResult(c.rootCtx, entry, req, res)
-	c.emit(c.rootCtx, Event{Kind: EventAgentFailed, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: err})
+	c.emit(c.rootCtx, Event{Kind: EventAgentFailed, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID, Profile: req.Profile, TaskID: req.TaskID, QueueDuration: res.QueueDuration, Duration: res.Duration, TotalDuration: res.TotalDuration, Err: err})
 	if startedAt.IsZero() {
 		close(entry.started)
 	}
@@ -258,7 +258,7 @@ func (c *Coordinator) emitStoredResult(ctx context.Context, entry *agentEntry, r
 	}
 	c.emit(ctx, Event{
 		Kind: EventAgentResultAvailable, SessionID: req.SessionID, AgentID: req.ID, ParentID: req.ParentID,
-		Profile: req.Profile, ResultVersion: version, QueueDuration: res.QueueDuration,
+		Profile: req.Profile, TaskID: req.TaskID, ResultVersion: version, QueueDuration: res.QueueDuration,
 		Duration: res.Duration, TotalDuration: res.TotalDuration,
 	})
 }

@@ -125,5 +125,8 @@ func TestACPStdioMCPHelperProcess(t *testing.T) {
 		}
 		_ = encoder.Encode(map[string]any{"jsonrpc": "2.0", "id": request.ID, "result": result})
 	}
+	if err := scanner.Err(); err != nil {
+		os.Exit(4)
+	}
 	os.Exit(0)
 }

@@ -34,6 +34,7 @@ func (m *bubbleModel) updateAgentLifecycle(message agentLifecycleMsg) tea.Cmd {
 	}
 	m.syncAgentSnapshot()
 	m.syncAgentRunSnapshot(message.event.AgentID)
+	m.syncTodoSnapshot()
 	if deliveredActivity.String() != "" {
 		if run := m.ensureHistoryState().AgentRun(message.event.AgentID); run != nil {
 			run.Activity = deliveredActivity.String()
@@ -46,10 +47,10 @@ func (m *bubbleModel) updateAgentLifecycle(message agentLifecycleMsg) tea.Cmd {
 
 func (m *bubbleModel) updatePermissionRequest(message permissionRequestMsg) tea.Cmd {
 	if !m.busy {
-		message.request.response <- permissionResponse{resolution: permission.Resolution{Action: permission.ActionDeny, Reason: "turn is no longer active"}, err: context.Canceled}
+		message.Request.Respond(permission.Resolution{Action: permission.ActionDeny, Reason: "turn is no longer active"}, context.Canceled)
 		return m.bridge.Next()
 	}
-	m.openPermission(message.request)
+	m.openPermission(message.Request)
 	m.requestRelayout()
 	return m.bridge.Next()
 }

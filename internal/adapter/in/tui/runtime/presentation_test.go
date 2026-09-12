@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
 	crashview "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/crash"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transcriptutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/execview"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -25,19 +26,26 @@ import (
 )
 
 func TestBrandLockupResponsive(t *testing.T) {
-	wide := brandLockup(80)
+	wide := ansi.Strip(brandLockup(80))
 	lines := strings.Split(wide, "\n")
-	if len(lines) != 2 {
-		t.Fatalf("wide brand lines = %d, want 2: %q", len(lines), wide)
+	if len(lines) != 4 {
+		t.Fatalf("wide brand lines = %d, want 4: %q", len(lines), wide)
 	}
-	if !strings.Contains(ansi.Strip(lines[0]), glyphBrand) || !strings.Contains(ansi.Strip(wide), "█▀█") {
-		t.Fatalf("wide brand missing mark/ascii wordmark: %q", wide)
+	wantLogo := []string{`   /\`, `  /__\`, ` <____>`, ` /|__|\`}
+	for i, want := range wantLogo {
+		if !strings.HasPrefix(lines[i], want) {
+			t.Fatalf("wide brand line %d = %q, want prefix %q", i, lines[i], want)
+		}
+	}
+	if !strings.Contains(lines[0], "protonMAN") {
+		t.Fatalf("wide brand missing product name: %q", wide)
 	}
 	if got := brandLockupWidth(80); got > 80 {
 		t.Fatalf("wide brand width = %d, terminal width 80", got)
 	}
+
 	narrow := ansi.Strip(brandLockup(20))
-	if strings.Contains(narrow, "█") || !strings.Contains(narrow, "protonMAN") {
+	if strings.Contains(narrow, `/__\`) || !strings.Contains(narrow, "protonMAN") {
 		t.Fatalf("narrow brand = %q, want compact protonMAN fallback", narrow)
 	}
 	if got := brandLockupWidth(20); got > 20 {
@@ -120,52 +128,45 @@ func TestRunningToolUsesTranscriptAsProgressSurface(t *testing.T) {
 	}
 }
 
-func TestWelcomeCardContainsBrandOnly(t *testing.T) {
+func TestSessionHeaderProjectsRuntimeState(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.workDir = "/a/very/long/workspace/path/that/does/not/fit/in/a/narrow/terminal"
-	m.activeModel = "provider/a-very-long-model-name-that-does-not-fit"
-	m.activeProvider = "provider-name"
-	m.resize(32, 14)
-	card := m.welcomeCard()
-	if !strings.Contains(card, glyphBrand) || !strings.Contains(card, "protonMAN") {
-		t.Fatalf("welcome card missing Protonman brand: %q", card)
-	}
-	for _, unwanted := range []string{m.workDir, m.activeModel, m.activeProvider, "Ask anything", "No model selected"} {
-		if unwanted != "" && strings.Contains(card, unwanted) {
-			t.Fatalf("welcome card leaked runtime metadata %q: %q", unwanted, card)
-		}
-	}
-	for _, line := range strings.Split(card, "\n") {
-		if got := lipgloss.Width(line); got > 32 {
-			t.Fatalf("welcome line width = %d, want <= 32: %q", got, line)
+	m.activeModel = "qwen3.8-27b"
+	m.activeGoal = "refactor TUI branding"
+	m.lowConcurrencyMode = model.LowConcurrencyOn
+	m.resize(80, 24)
+
+	plain := ansi.Strip(m.sessionHeaderView())
+	for _, want := range []string{"protonMAN", "qwen3.8-27b", "low", "goal active"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("session header missing %q: %q", want, plain)
 		}
 	}
 }
 
-func TestWelcomeCardNormalModeStaysMinimal(t *testing.T) {
+func TestSessionHeaderFitsNarrowTerminal(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.workDir = "/tmp/test-workspace"
-	m.activeModel = "provider/some-model"
-	m.resize(80, 24)
-	card := m.welcomeCard()
-	if !strings.Contains(card, glyphBrand) || !strings.Contains(card, "█▀█") || !strings.Contains(card, "/tmp/test-workspace") {
-		t.Fatalf("minimal welcome missing identity or workspace: %q", card)
+	m.activeModel = "provider/a-very-long-model-name-that-does-not-fit"
+	m.lowConcurrencyMode = model.LowConcurrencyOn
+	m.resize(32, 14)
+	header := m.sessionHeaderView()
+	if !strings.Contains(header, "protonMAN") {
+		t.Fatalf("session header missing brand: %q", header)
 	}
-	for _, unwanted := range []string{"Quick Actions", "/help", "/model", "Tip:", "some-model"} {
-		if strings.Contains(card, unwanted) {
-			t.Fatalf("minimal welcome leaked %q: %q", unwanted, card)
+	for _, line := range strings.Split(header, "\n") {
+		if got := lipgloss.Width(line); got > 30 {
+			t.Fatalf("header line width = %d, want <= 30: %q", got, line)
 		}
 	}
 }
 
 func TestFormatWorkspaceDisplay(t *testing.T) {
-	if got := formatWorkspaceDisplay(""); got != "" {
+	if got := transcriptutil.FormatWorkspaceDisplay(""); got != "" {
 		t.Fatalf("expected empty, got %q", got)
 	}
 	home, _ := os.UserHomeDir()
 	if home != "" {
 		subpath := filepath.Join(home, "projects", "proton")
-		if got := formatWorkspaceDisplay(subpath); got != "~/projects/proton" {
+		if got := transcriptutil.FormatWorkspaceDisplay(subpath); got != "~/projects/proton" {
 			t.Fatalf("expected ~/projects/proton, got %q", got)
 		}
 	}
@@ -173,13 +174,13 @@ func TestFormatWorkspaceDisplay(t *testing.T) {
 
 func TestDetectGitBranch(t *testing.T) {
 	tmp := t.TempDir()
-	if got := detectGitBranch(tmp); got != "" {
+	if got := transcriptutil.DetectGitBranch(tmp); got != "" {
 		t.Fatalf("expected empty branch for non-git dir, got %q", got)
 	}
 	gitDir := filepath.Join(tmp, ".git")
 	_ = os.Mkdir(gitDir, 0o755)
 	_ = os.WriteFile(filepath.Join(gitDir, "HEAD"), []byte("ref: refs/heads/feature-10-out-of-10\n"), 0o644)
-	if got := detectGitBranch(tmp); got != "feature-10-out-of-10" {
+	if got := transcriptutil.DetectGitBranch(tmp); got != "feature-10-out-of-10" {
 		t.Fatalf("expected feature-10-out-of-10, got %q", got)
 	}
 }
@@ -821,26 +822,21 @@ func TestCommandHistoryIsBounded(t *testing.T) {
 
 func TestDrainQueueClearsDequeuedBackingSlot(t *testing.T) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
-	m.queue = make([]string, 2, 4)
-	m.queue[0] = "/help"
-	m.queue[1] = "keep"
-	backing := m.queue[:cap(m.queue)]
+	m.conversation.Enqueue("/help")
+	m.conversation.Enqueue("keep")
 
 	_ = m.drainQueue()
-	if backing[0] != "" {
-		t.Fatalf("dequeued queue slot retained %q", backing[0])
-	}
-	if len(m.queue) != 1 || m.queue[0] != "keep" {
-		t.Fatalf("queue after drain = %#v", m.queue)
+	if m.conversation.QueueLen() != 1 || m.conversation.Queue()[0] != "keep" {
+		t.Fatalf("queue after drain = %#v", m.conversation.Queue())
 	}
 }
 
 func TestDrainQueueReleasesBackingWhenEmpty(t *testing.T) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
-	m.queue = []string{"/help"}
+	m.conversation.Enqueue("/help")
 	_ = m.drainQueue()
-	if m.queue != nil {
-		t.Fatalf("empty queue retained backing slice: %#v", m.queue)
+	if m.conversation.Queue() != nil {
+		t.Fatalf("empty queue retained backing slice: %#v", m.conversation.Queue())
 	}
 }
 
@@ -848,7 +844,7 @@ func TestQueueFullPreservesDraft(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.busy = true
 	for i := 0; i < maxQueuedPrompts; i++ {
-		m.queue = append(m.queue, fmt.Sprintf("queued-%d", i))
+		m.conversation.Enqueue(fmt.Sprintf("queued-%d", i))
 	}
 	m.panes.bottom.prompt().SetValue("keep this draft")
 	if cmd := m.submit(); cmd != nil {
@@ -857,7 +853,7 @@ func TestQueueFullPreservesDraft(t *testing.T) {
 	if got := m.panes.bottom.prompt().Value(); got != "keep this draft" {
 		t.Fatalf("draft = %q, want preserved input", got)
 	}
-	if got := len(m.queue); got != maxQueuedPrompts {
+	if got := m.conversation.QueueLen(); got != maxQueuedPrompts {
 		t.Fatalf("queue len = %d, want %d", got, maxQueuedPrompts)
 	}
 }
@@ -910,7 +906,7 @@ func TestResponsiveUXSurfacesFitTerminal(t *testing.T) {
 func TestPermissionReviewFlowFitsNarrowTerminal(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.busy = true
-	m.openPermission(permissionRequest{request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "git status --short --branch", Arguments: json.RawMessage(`{"command":"git status --short --branch"}`)}, response: make(chan permissionResponse, 1)})
+	m.openPermission(permissionRequest{Request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "git status --short --branch", Arguments: json.RawMessage(`{"command":"git status --short --branch"}`)}, Response: make(chan permissionResponse, 1)})
 	assertBubbleViewFits(t, m, 24, 12)
 	updated, _ := m.Update(testKey(tea.KeyEsc))
 	m = updated.(*bubbleModel)
@@ -951,7 +947,7 @@ func TestWelcomeSitsAtTopWithoutFloatingBox(t *testing.T) {
 	model.resize(80, 24)
 	view := testPlain(model.View().Content)
 	plain := sanitizeBubbleText(view)
-	if idx := strings.Index(plain, glyphBrand); idx < 0 || idx > 8 {
+	if idx := strings.Index(plain, `/\`); idx < 0 || idx > 8 {
 		t.Fatalf("welcome is not at the top of the view: %q", plain[:minInt(80, len(plain))])
 	}
 	if strings.Count(view, "╭") > 1 {
@@ -1222,7 +1218,7 @@ func TestBubbleModelRendersComponentLayout(t *testing.T) {
 	model.appendLine("assistant: ready")
 	model.refreshViewport()
 	view := testPlain(model.View().Content)
-	for _, expected := range []string{glyphBrand, "█▀█", "/tmp/proton", "assistant: ready", "> "} {
+	for _, expected := range []string{"protonMAN", `  /__\`, "/tmp/proton", "assistant: ready", "> "} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("Bubble Tea view does not contain %q: %s", expected, view)
 		}
@@ -1264,7 +1260,7 @@ func TestEmptyStateWithoutRunnerGuidesSlashCommands(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
 	view := testPlain(model.View().Content)
-	for _, expected := range []string{"Message or /command", glyphBrand, "█▀█"} {
+	for _, expected := range []string{"Message or /command", "protonMAN", `  /__\`} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("empty state view does not contain %q: %s", expected, view)
 		}
@@ -1304,7 +1300,7 @@ func TestWelcomeCardReprintsAfterClear(t *testing.T) {
 	if strings.Contains(plainTranscript(model), "gone") {
 		t.Fatal("clear left transcript body")
 	}
-	if !strings.Contains(view, glyphBrand) || !strings.Contains(view, "█▀█") {
+	if !strings.Contains(view, "protonMAN") || !strings.Contains(view, `  /__\`) {
 		t.Fatalf("clear did not reprint welcome: %s", view)
 	}
 }
@@ -1390,28 +1386,29 @@ func TestPromptPlaceholderReflectsRunnerState(t *testing.T) {
 	}
 }
 
-func TestIdleFooterShowsModelReasoningAndPermissionMode(t *testing.T) {
+func TestIdleFooterShowsInteractionContextOnly(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeModel = "nemotron-3.5-lightning-free"
 	m.reasoningEffort = sdk.ReasoningDefault
 	m.resize(80, 24)
 	footer := ansi.Strip(m.idleContextFooter())
-	if !strings.Contains(footer, "nemotron-3.5-lightning-free · auto · ask") {
-		t.Fatalf("footer missing model/reasoning/permission context: %q", footer)
+	for _, want := range []string{"? for shortcuts", "auto", "ask"} {
+		if !strings.Contains(footer, want) {
+			t.Fatalf("footer missing %q: %q", want, footer)
+		}
+	}
+	if strings.Contains(footer, m.activeModel) {
+		t.Fatalf("footer duplicated model owned by session header: %q", footer)
 	}
 }
 
 func TestIdleFooterKeepsShortcutHintInAlwaysApprove(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAlwaysApprove, emptyTodoItems())
-	m.activeModel = "muse-spark-1.3-contributor-free"
 	m.reasoningEffort = sdk.ReasoningDefault
 	m.resize(72, 24)
 	footer := ansi.Strip(m.idleContextFooter())
-	if !strings.Contains(footer, "? for shortcuts") {
-		t.Fatalf("footer dropped shortcut hint in always-approve mode: %q", footer)
-	}
-	if !strings.Contains(footer, " · auto · auto") {
-		t.Fatalf("footer did not use compact permission label: %q", footer)
+	if !strings.Contains(footer, "? for shortcuts") || !strings.Contains(footer, "auto") {
+		t.Fatalf("footer lost compact interaction context: %q", footer)
 	}
 }
 
@@ -1455,41 +1452,30 @@ func TestModelRetryStatusShowsCooldownAfterFirstRetry(t *testing.T) {
 	}
 }
 
-func TestIdleContextFooterShowsLowConcurrencyStateForOpenCode(t *testing.T) {
+func TestSessionHeaderOwnsLowConcurrencyState(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(100, 24)
 	m.activeProvider = model.DefaultOpenCodeName
 	m.activeModel = "nemotron-3.5-lightning-free"
 	m.lowConcurrencyMode = model.LowConcurrencyOn
-	footer := ansi.Strip(m.idleContextFooter())
-	if !strings.Contains(footer, "LOW") {
-		t.Fatalf("footer missing low concurrency state: %q", footer)
+	header := ansi.Strip(m.sessionHeaderView())
+	if !strings.Contains(header, "low") {
+		t.Fatalf("session header missing low concurrency state: %q", header)
+	}
+	if strings.Contains(ansi.Strip(m.idleContextFooter()), "LOW") {
+		t.Fatalf("footer duplicated low concurrency state: %q", ansi.Strip(m.idleContextFooter()))
 	}
 }
 
-func TestIdleContextFooterKeepsLowIndicatorOnNarrowTerminal(t *testing.T) {
+func TestSessionHeaderOwnsActiveGoalState(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.resize(24, 24)
-	m.activeProvider = model.DefaultOpenCodeName
-	m.activeModel = "nemotron-3.5-lightning-free"
-	m.lowConcurrencyMode = model.LowConcurrencyOn
-	footer := ansi.Strip(m.idleContextFooter())
-	if !strings.Contains(footer, "LOW") {
-		t.Fatalf("narrow footer dropped effective low concurrency state: %q", footer)
-	}
-}
-
-func TestStatusViewKeepsActiveGoalVisible(t *testing.T) {
-	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.resize(48, 24)
+	m.resize(80, 24)
 	m.activeGoal = "finish provider-neutral low concurrency mode safely"
-	idle := ansi.Strip(m.statusView())
-	if !strings.Contains(idle, "Goal") || !strings.Contains(idle, "finish provider-neutral") {
-		t.Fatalf("idle status missing active goal: %q", idle)
+	header := ansi.Strip(m.sessionHeaderView())
+	if !strings.Contains(header, "goal active") {
+		t.Fatalf("session header missing active goal state: %q", header)
 	}
-	m.busy = true
-	busy := ansi.Strip(m.statusView())
-	if !strings.Contains(busy, "Goal") || !strings.Contains(busy, "finish provider-neutral") {
-		t.Fatalf("busy status missing active goal: %q", busy)
+	if got := ansi.Strip(m.statusView()); got != "" {
+		t.Fatalf("idle status duplicated active goal: %q", got)
 	}
 }

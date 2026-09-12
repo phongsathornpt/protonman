@@ -36,13 +36,13 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 		return nil
 	}
 	m.retireCompletedTodoForNextTurn()
-	m.conversationModelState.appendMessages(model.Message{ID: model.NewMessageID(), Role: model.RoleUser, Content: prompt})
+	m.conversation.AppendMessages(model.Message{ID: model.NewMessageID(), Role: model.RoleUser, Content: prompt})
 	m.turnModelState.beginTurn(fmt.Sprintf("tui-turn-%d", tuiTurnOwnerSeq.Add(1)), time.Now())
 	m.requestRelayout()
 	ctx, cancel := context.WithCancel(m.ctx)
 	ctx = agent.WithTurnRef(ctx, agent.TurnRef{SessionID: m.sessionID, TurnID: m.activeTurnOwner})
 	events := make(chan tea.Msg, 32)
-	history := model.SnapshotMessages(m.messages)
+	history := m.conversation.SnapshotMessages()
 	startedAt := time.Now()
 	slog.DebugContext(ctx, "tui turn started", "prompt_bytes", len(prompt), "history_messages", len(history))
 	go func() {
@@ -161,17 +161,62 @@ func (m *bubbleModel) updateTurnDone(message turnmsg.Done) tea.Cmd {
 	}
 	m.historyState.CommitActive()
 	if len(message.Result.Messages) > 0 && (message.Err == nil || message.Result.ReplaySafe) {
-		m.conversationModelState.appendMessages(message.Result.Messages...)
+		m.conversation.AppendMessages(message.Result.Messages...)
 	} else if message.Err == nil && message.Result.Message.Content != "" {
-		m.conversationModelState.appendMessages(message.Result.Message)
+		m.conversation.AppendMessages(message.Result.Message)
 	} else if message.Err != nil {
-		m.conversationModelState.dropTrailingUserMessage()
+		m.conversation.DropTrailingUserMessage()
 	}
 	m.appendTurnFailure(message.Err)
+	if message.Err == nil && message.Result.GoalCompleted && m.activeGoal != "" {
+		if err := m.setActiveGoal(""); err != nil {
+			m.appendError("complete active goal: " + err.Error())
+		} else {
+			m.appendMuted("goal · completed")
+			m.retireCompletedTodoForNextTurn()
+		}
+	}
 	m.requestRelayout()
 	if message.Err != nil {
-		m.conversationModelState.clearQueue()
+		m.conversation.ClearQueue()
 		return nil
 	}
 	return m.withSpinner(m.drainQueue())
+}
+
+func (s *turnModelState) beginTurn(owner string, started time.Time) {
+	s.turnProgress = turnProgress{}
+	s.activeTurnOwner = owner
+	s.busy = true
+	s.busyStarted = started
+	s.activity = ""
+}
+
+func (s *turnModelState) bindTurn(cancel context.CancelFunc, events <-chan tea.Msg) {
+	s.turnCancel = cancel
+	s.turnEvents = events
+}
+
+func (s *turnModelState) finishTurn() {
+	s.busy = false
+	s.busyStarted = time.Time{}
+	s.activity = "ready"
+	s.turnCancel = nil
+	s.turnEvents = nil
+	s.activeTurnOwner = ""
+}
+
+func (s *turnModelState) beginTool(activity string, started time.Time, cancel context.CancelFunc) {
+	s.turnProgress = turnProgress{}
+	s.activeTurnOwner = ""
+	s.busy = true
+	s.busyStarted = started
+	s.activity = activity
+	s.turnCancel = cancel
+	s.turnEvents = nil
+}
+
+func (s *turnModelState) finishTool() {
+	s.finishTurn()
+	s.turnProgress = turnProgress{}
 }
