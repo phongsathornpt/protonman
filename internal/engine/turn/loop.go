@@ -368,6 +368,13 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	resultBudget := newToolResultBudget(l.maxToolResultBytesPerRound, l.maxToolResultBytesPerTurn)
 	verification := VerificationState{}
 	taskPlan := taskPlanProgress{}
+	if l.hasActiveGoal() && l.tools != nil {
+		if getCall, err := tool.NewCall("init:todo-get", tool.NameTodo, []byte(`{"action":"get"}`)); err == nil {
+			if res, err := l.tools.Call(ctx, getCall); err == nil && res.Failure == nil && !res.Denied {
+				taskPlan.observeSnapshot(res.StructuredOutput)
+			}
+		}
+	}
 	forceNoProgressSynthesis := false
 	forceSafetyBudgetSynthesis := false
 	grounding := newGroundingState(l.groundingEvidence)

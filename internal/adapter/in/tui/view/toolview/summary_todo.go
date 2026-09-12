@@ -25,6 +25,7 @@ func summarizeTodoUpdate(body string) string {
 		Changes    struct {
 			Added     int `json:"added"`
 			Removed   int `json:"removed"`
+			Updated   int `json:"updated"`
 			Started   int `json:"started"`
 			Completed int `json:"completed"`
 			Reopened  int `json:"reopened"`
@@ -39,6 +40,9 @@ func summarizeTodoUpdate(body string) string {
 	}
 	if payload.Changes.Started > 0 {
 		parts = append(parts, fmt.Sprintf("%d started", payload.Changes.Started))
+	}
+	if payload.Changes.Updated > 0 {
+		parts = append(parts, fmt.Sprintf("%d updated", payload.Changes.Updated))
 	}
 	if payload.Changes.Added > 0 {
 		parts = append(parts, fmt.Sprintf("%d added", payload.Changes.Added))

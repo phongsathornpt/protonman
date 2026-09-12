@@ -77,11 +77,16 @@ func (s *MarkdownStore) Reload(ctx context.Context) (Snapshot, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	revision, items, _, err := readMarkdownSnapshot(s.path)
-	if err != nil {
-		return Snapshot{}, err
-	}
-	return s.mem.setSnapshot(revision, items), nil
+	var out Snapshot
+	err := withFileLock(ctx, s.path, func() error {
+		revision, items, _, err := readMarkdownSnapshot(s.path)
+		if err != nil {
+			return err
+		}
+		out = s.mem.setSnapshot(revision, items)
+		return nil
+	})
+	return out, err
 }
 
 func (s *MarkdownStore) BindGoal(ctx context.Context, goal string) (Snapshot, bool, error) {

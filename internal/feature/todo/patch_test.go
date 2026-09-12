@@ -36,6 +36,23 @@ func TestApplyPatchSupportsExplicitAddEditAndRemove(t *testing.T) {
 	}
 }
 
+func TestApplyPatchTrimsWhitespace(t *testing.T) {
+	before := []Item{{ID: "a", Text: "original", Status: StatusPending}}
+	after, err := ApplyPatch(before, []Operation{
+		{Op: PatchSetText, ID: "a", Text: "  trimmed text  "},
+		{Op: PatchAdd, ID: "b", Text: "  new task text  ", Status: StatusPending},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after[0].Text != "trimmed text" {
+		t.Fatalf("after[0].Text = %q, want 'trimmed text'", after[0].Text)
+	}
+	if after[1].Text != "new task text" {
+		t.Fatalf("after[1].Text = %q, want 'new task text'", after[1].Text)
+	}
+}
+
 func TestApplyPatchRejectsImplicitOrAmbiguousMutations(t *testing.T) {
 	before := []Item{{ID: "a", Text: "one", Status: StatusPending}}
 	tests := [][]Operation{
