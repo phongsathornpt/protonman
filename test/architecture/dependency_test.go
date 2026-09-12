@@ -497,7 +497,7 @@ func TestTUIRuntimeRootStaysWithinStructuralBudget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read TUI runtime root: %v", err)
 	}
-	const maxProductionFiles = 67
+	const maxProductionFiles = 66
 	productionFiles := 0
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
