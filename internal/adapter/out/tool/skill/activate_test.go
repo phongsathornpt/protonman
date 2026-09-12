@@ -46,24 +46,22 @@ func TestActivateSkillExecute(t *testing.T) {
 			t.Fatalf("expected success, got failure: %+v", result.Failure)
 		}
 
-		// Check output contents
-		if !strings.Contains(result.Output, `<skill_content name="pdf-processing">`) {
-			t.Errorf("missing skill_content tag: %s", result.Output)
+		if !strings.Contains(result.Output, `Activated skill "pdf-processing"`) {
+			t.Errorf("missing activation acknowledgement: %s", result.Output)
 		}
-		if !strings.Contains(result.Output, "Run scripts/extract.py to extract text.") {
-			t.Errorf("missing instructions in output: %s", result.Output)
+		if !strings.Contains(result.Output, "full instructions are loaded into the next model context") {
+			t.Errorf("missing next-context guidance: %s", result.Output)
+		}
+		if strings.Contains(result.Output, s.Instructions) || strings.Contains(result.Output, "<skill_content") {
+			t.Errorf("activation output duplicated full instructions: %s", result.Output)
 		}
 		if !strings.Contains(result.Output, "Skill directory: /home/user/.agents/skills/pdf-processing") {
 			t.Errorf("missing skill directory in output: %s", result.Output)
 		}
-		if !strings.Contains(result.Output, "<file>scripts/extract.py</file>") {
-			t.Errorf("missing bundled resource in output: %s", result.Output)
-		}
-		if !strings.Contains(result.Output, "</skill_content>") {
-			t.Errorf("missing closing skill_content tag: %s", result.Output)
+		if !strings.Contains(result.Output, "- scripts/extract.py") || !strings.Contains(result.Output, "- references/guide.md") {
+			t.Errorf("missing bundled resources in output: %s", result.Output)
 		}
 
-		// Check that it was marked activated
 		if !skillReg.IsActivated("pdf-processing") {
 			t.Errorf("expected skill to be marked activated in registry")
 		}
@@ -123,7 +121,6 @@ func TestActivateSkillAuthorizesReadRootsForFileTools(t *testing.T) {
 	readHandler := readfile.New(ws)
 	writeHandler := builtin.NewWriteFile(ws, skillCheckpointStore{})
 
-	// 1. Before activation, reading reference.txt fails with outside workspace
 	readArgs, _ := json.Marshal(map[string]any{"path": skillFilePath})
 	readCall, _ := tool.NewCall("read-before", "read", readArgs)
 	_, err = readHandler.Execute(ctx, readCall)
@@ -131,7 +128,6 @@ func TestActivateSkillAuthorizesReadRootsForFileTools(t *testing.T) {
 		t.Fatal("expected read before activation to fail")
 	}
 
-	// 2. Activate the skill
 	activateArgs, _ := json.Marshal(map[string]any{"name": "doc-helper"})
 	activateCall, _ := tool.NewCall("act-1", "skill", activateArgs)
 	actRes, err := activateHandler.Execute(ctx, activateCall)
@@ -139,7 +135,6 @@ func TestActivateSkillAuthorizesReadRootsForFileTools(t *testing.T) {
 		t.Fatalf("skill failed: %v, failure: %+v", err, actRes.Failure)
 	}
 
-	// 3. After activation, read succeeds with absolute path
 	readRes, err := readHandler.Execute(ctx, readCall)
 	if err != nil || readRes.Failure != nil {
 		t.Fatalf("read after activation failed: %v, failure: %+v", err, readRes.Failure)
@@ -148,7 +143,6 @@ func TestActivateSkillAuthorizesReadRootsForFileTools(t *testing.T) {
 		t.Errorf("read output = %q, want 'skill reference text'", readRes.Output)
 	}
 
-	// 4. After activation, read succeeds with relative path fallback
 	relReadArgs, _ := json.Marshal(map[string]any{"path": "reference.txt"})
 	relReadCall, _ := tool.NewCall("read-rel", "read", relReadArgs)
 	relReadRes, err := readHandler.Execute(ctx, relReadCall)
@@ -159,7 +153,6 @@ func TestActivateSkillAuthorizesReadRootsForFileTools(t *testing.T) {
 		t.Errorf("relative read output = %q, want 'skill reference text'", relReadRes.Output)
 	}
 
-	// 5. edit must STILL fail with outside workspace (read-only confinement!)
 	writeArgs, _ := json.Marshal(map[string]any{
 		"file_path": skillFilePath,
 		"content":   "malicious overwrite",
