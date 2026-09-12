@@ -544,8 +544,8 @@ func TestModelSetupInfoViewAndWelcome(t *testing.T) {
 		t.Fatalf("idle infoView = %q, want no persistent model metadata", info)
 	}
 	welcome := bModel.welcomeCard()
-	if strings.Contains(welcome, "deepseek-v4-flash-vision-exp") {
-		t.Fatalf("welcomeCard duplicated model already shown in status bar: %s", welcome)
+	if !strings.Contains(welcome, "deepseek-v4-flash-vision-exp") {
+		t.Fatalf("welcomeCard missing active model from compact session header: %s", welcome)
 	}
 }
 
@@ -1156,7 +1156,8 @@ func TestStaleModelSetupDoesNotMutateReopenedPane(t *testing.T) {
 func TestModelFetchRequiresRuntimeContext(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
 	v := newModelSetupPaneView(m)
-	cmd := v.beginFetch(nil, app.NewModels(model.Catalog{}), "protonman", config.ProviderConfig{Name: "protonman"})
+	var nilCtx context.Context
+	cmd := v.beginFetch(nilCtx, app.NewModels(model.Catalog{}), "protonman", config.ProviderConfig{Name: "protonman"})
 	if cmd != nil {
 		t.Fatalf("nil-context model fetch command = %v, want nil", cmd)
 	}

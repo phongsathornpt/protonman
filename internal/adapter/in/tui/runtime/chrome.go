@@ -259,13 +259,16 @@ func (m bubbleModel) goalStatusView() string {
 }
 
 type welcomeCardCache struct {
-	workDir     string
-	branch      string
-	branchValid bool
-	width       int
-	height      int
-	rendered    string
-	renderValid bool
+	workDir        string
+	branch         string
+	branchValid    bool
+	activeModel    string
+	activeGoal     string
+	lowConcurrency bool
+	width          int
+	height         int
+	rendered       string
+	renderValid    bool
 }
 
 func (m *bubbleModel) welcomeCard() string {
@@ -281,10 +284,15 @@ func (m *bubbleModel) welcomeCard() string {
 		cache.branchValid = true
 		cache.renderValid = false
 	}
-	if cache.renderValid && cache.width == m.layout.width && cache.height == m.layout.height {
+	lowConcurrency := m.lowConcurrencyEffective()
+	if cache.renderValid && cache.width == m.layout.width && cache.height == m.layout.height &&
+		cache.activeModel == m.activeModel && cache.activeGoal == m.activeGoal && cache.lowConcurrency == lowConcurrency {
 		return cache.rendered
 	}
 	cache.rendered = m.renderWelcomeCard(cache.branch)
+	cache.activeModel = m.activeModel
+	cache.activeGoal = m.activeGoal
+	cache.lowConcurrency = lowConcurrency
 	cache.width = m.layout.width
 	cache.height = m.layout.height
 	cache.renderValid = true
@@ -300,9 +308,26 @@ func (m *bubbleModel) invalidateWelcomeBranch() {
 }
 
 func (m *bubbleModel) renderWelcomeCard(branch string) string {
-	rows := []string{brandLockup(maxInt(1, m.layout.width-2))}
+	width := maxInt(1, m.layout.width-2)
+	brand := brandLockup(width)
+	lines := strings.Split(brand, "\n")
+
+	if len(lines) == 4 && width >= 40 {
+		if meta := m.welcomeHeaderMeta(); meta != "" {
+			lines[1] += "    " + mutedStyle.Render(truncateWithEllipsis(meta, maxInt(1, width-12)))
+		}
+		context := strings.TrimSpace(branch)
+		if context == "" {
+			context = transcriptutil.FormatWorkspaceDisplay(m.workDir)
+		}
+		if context != "" {
+			lines[3] += "    " + mutedStyle.Render(truncateWithEllipsis(context, maxInt(1, width-12)))
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	rows := []string{brand}
 	if ws := transcriptutil.FormatWorkspaceDisplay(m.workDir); ws != "" {
-		width := maxInt(1, m.layout.width-2)
 		workspace := truncateWithEllipsis(ws, width)
 		if branch != "" {
 			suffix := " · " + branch
@@ -311,6 +336,20 @@ func (m *bubbleModel) renderWelcomeCard(branch string) string {
 		rows = append(rows, mutedStyle.Render(workspace))
 	}
 	return strings.Join(rows, "\n")
+}
+
+func (m *bubbleModel) welcomeHeaderMeta() string {
+	parts := make([]string, 0, 3)
+	if modelName := strings.TrimSpace(m.activeModel); modelName != "" {
+		parts = append(parts, modelName)
+	}
+	if m.lowConcurrencyEffective() {
+		parts = append(parts, "low")
+	}
+	if strings.TrimSpace(m.activeGoal) != "" {
+		parts = append(parts, "goal active")
+	}
+	return strings.Join(parts, " · ")
 }
 
 // rootActivityLabel is the deterministic busy label for the primary agent when

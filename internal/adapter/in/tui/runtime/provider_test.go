@@ -1101,7 +1101,8 @@ func TestProviderActivationFailureDoesNotMutateRuntimeState(t *testing.T) {
 
 func TestProviderFetchRequiresRuntimeContext(t *testing.T) {
 	v := newProviderPaneView()
-	if cmd := v.beginFetch(nil, app.NewModels(model.Catalog{})); cmd != nil {
+	var nilCtx context.Context
+	if cmd := v.beginFetch(nilCtx, app.NewModels(model.Catalog{})); cmd != nil {
 		t.Fatalf("nil-context fetch command = %v, want nil", cmd)
 	}
 	if v.state != providerStateError || !strings.Contains(v.errorMessage, "runtime context") {

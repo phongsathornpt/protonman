@@ -60,7 +60,7 @@ func BenchmarkCloneMessagesLargeToolHistory(b *testing.B) {
 	}
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = CloneMessages(messages)
 	}
 }
@@ -73,7 +73,7 @@ func BenchmarkSnapshotMessagesLargeToolHistory(b *testing.B) {
 	}
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = SnapshotMessages(messages)
 	}
 }

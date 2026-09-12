@@ -159,10 +159,35 @@ func TestWelcomeCardNormalModeStaysMinimal(t *testing.T) {
 	if !strings.Contains(card, `  /__\`) || !strings.Contains(card, "protonMAN") || !strings.Contains(card, "/tmp/test-workspace") {
 		t.Fatalf("minimal welcome missing identity or workspace: %q", card)
 	}
-	for _, unwanted := range []string{"Quick Actions", "/help", "/model", "Tip:", "some-model"} {
+	for _, unwanted := range []string{"Quick Actions", "/help", "/model", "Tip:"} {
 		if strings.Contains(card, unwanted) {
 			t.Fatalf("minimal welcome leaked %q: %q", unwanted, card)
 		}
+	}
+}
+
+func TestWelcomeHeaderMatchesCompactSessionLayout(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.activeModel = "qwen3.8-27b"
+	m.activeGoal = "refactor TUI branding"
+	m.lowConcurrencyMode = model.LowConcurrencyOn
+
+	plain := ansi.Strip(m.renderWelcomeCard("feat/tui-brand"))
+	lines := strings.Split(plain, "\n")
+	if len(lines) != 4 {
+		t.Fatalf("welcome header lines = %d, want 4: %q", len(lines), plain)
+	}
+	if !strings.Contains(lines[0], "protonMAN") {
+		t.Fatalf("brand line missing protonMAN: %q", lines[0])
+	}
+	for _, want := range []string{"qwen3.8-27b", "low", "goal active"} {
+		if !strings.Contains(lines[1], want) {
+			t.Fatalf("session metadata missing %q: %q", want, lines[1])
+		}
+	}
+	if !strings.Contains(lines[3], "feat/tui-brand") {
+		t.Fatalf("branch missing from logo baseline: %q", lines[3])
 	}
 }
 

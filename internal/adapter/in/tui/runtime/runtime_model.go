@@ -11,9 +11,9 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
+	tuiconv "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/conversation"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionbridge"
-	tuiconv "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/conversation"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
 	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
@@ -104,10 +104,10 @@ type modelSetupState struct {
 }
 
 type conversationModelState struct {
-	historyState          *tuihistory.HistoryState
-	conversationViewport  conversationViewportState
-	conversation          *tuiconv.State
-	activeGoal            string
+	historyState         *tuihistory.HistoryState
+	conversationViewport conversationViewportState
+	conversation         *tuiconv.State
+	activeGoal           string
 }
 
 type todoModelState struct {

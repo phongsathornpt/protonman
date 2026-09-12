@@ -101,7 +101,7 @@ func TestE2ETurnLoopContinuesBeyondLegacyRoundLimit(t *testing.T) {
 	const toolRounds = 25
 	for i := 1; i <= toolRounds; i++ {
 		name := fmt.Sprintf("round-%02d.txt", i)
-		if err := os.WriteFile(filepath.Join(ws, name), []byte(fmt.Sprintf("round %d", i)), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(ws, name), fmt.Appendf(nil, "round %d", i), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		server.AddToolCallResponse(
