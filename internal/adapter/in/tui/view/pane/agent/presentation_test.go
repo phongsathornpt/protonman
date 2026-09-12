@@ -78,4 +78,3 @@ func TestAgentRowsIncludesStatusLegend(t *testing.T) {
 		t.Fatalf("expected legend in normal height pane, got: %s", joined)
 	}
 }
-

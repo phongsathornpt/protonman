@@ -82,4 +82,3 @@ func TestLegendCoversAllPresentationIntents(t *testing.T) {
 		t.Fatalf("LegendCompact() missing expected phrases: %q", compact)
 	}
 }
-
