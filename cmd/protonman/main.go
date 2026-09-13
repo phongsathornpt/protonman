@@ -95,9 +95,14 @@ func run(ctx context.Context, args []string) error {
 	defer runtimeState.Close()
 
 	if options.acp {
+		memories, memoryErr := buildACPMemories(ctx)
+		if memoryErr != nil {
+			return memoryErr
+		}
 		server, serverErr := acp.New(
 			runtimeState.service, runtimeState.registry, runtimeState.runner,
 			acp.WithSessions(app.NewSessions(runtimeState.stateStore)),
+			acp.WithMemories(memories),
 			acp.WithAgents(app.NewAgents(runtimeState.coordinator)),
 			acp.WithSessionRegistryFactory(func(sessionID, _ string) (tool.Registry, error) {
 				return runtimeState.registryForSession(sessionID)
