@@ -20,9 +20,11 @@ import (
 )
 
 type sessionItem struct {
-	ID    string `json:"sessionId"`
-	Title string `json:"title"`
-	Cwd   string `json:"cwd"`
+	ID            string `json:"sessionId"`
+	Title         string `json:"title"`
+	Cwd           string `json:"cwd"`
+	WorkspaceKey  string `json:"workspaceKey"`
+	WorkspaceName string `json:"workspaceName"`
 }
 
 type application struct {
@@ -32,6 +34,7 @@ type application struct {
 
 	mu                sync.Mutex
 	state             desktopstate.State
+	sidebarRows       []sidebarRow
 	transcripts       map[string]*strings.Builder
 	permissionWaiters map[string]chan string
 
@@ -87,47 +90,68 @@ func Run(ctx context.Context) error {
 		func() int {
 			ui.mu.Lock()
 			defer ui.mu.Unlock()
-			return len(ui.state.Sessions)
+			return len(ui.sidebarRows)
 		},
 		func() fyne.CanvasObject {
 			title := widget.NewLabel("Session")
-			subtitle := widget.NewLabel("workspace")
+			subtitle := widget.NewLabel("")
 			subtitle.Importance = widget.LowImportance
 			return container.NewVBox(title, subtitle)
 		},
 		func(id widget.ListItemID, object fyne.CanvasObject) {
 			ui.mu.Lock()
-			if id < 0 || id >= len(ui.state.Sessions) {
+			if id < 0 || id >= len(ui.sidebarRows) {
 				ui.mu.Unlock()
 				return
 			}
-			s := ui.state.Sessions[id]
+			row := ui.sidebarRows[id]
+			var session desktopstate.SessionState
+			if row.Kind == sidebarSessionRow {
+				for _, candidate := range ui.state.Sessions {
+					if candidate.ID == row.SessionID {
+						session = candidate
+						break
+					}
+				}
+			}
 			ui.mu.Unlock()
 
 			box := object.(*fyne.Container)
 			title := box.Objects[0].(*widget.Label)
 			subtitle := box.Objects[1].(*widget.Label)
-			if strings.TrimSpace(s.Title) == "" {
-				title.SetText("Session " + shortID(s.ID))
+			if row.Kind == sidebarWorkspaceRow {
+				title.SetText("▾ " + row.WorkspaceName)
+				subtitle.SetText(fmt.Sprintf("%d sessions", row.SessionCount))
+				return
+			}
+			if strings.TrimSpace(session.Title) == "" {
+				title.SetText("↳ Session " + shortID(session.ID))
 			} else {
-				title.SetText(s.Title)
+				title.SetText("↳ " + session.Title)
 			}
-			workspace := s.Workspace
-			if strings.TrimSpace(workspace) == "" {
-				workspace = "No workspace"
+			status := "ready"
+			if session.Status != desktopstate.TaskIdle {
+				status = string(session.Status)
 			}
-			if s.Status != desktopstate.TaskIdle {
-				workspace += " · " + string(s.Status)
-			}
-			subtitle.SetText(workspace)
+			subtitle.SetText(status)
 		},
 	)
 	ui.list.OnSelected = func(id widget.ListItemID) {
 		ui.mu.Lock()
-		if id >= 0 && id < len(ui.state.Sessions) {
-			selected := ui.state.Sessions[id].ID
-			ui.state = desktopstate.Reduce(ui.state, desktopstate.Event{Kind: desktopstate.EventSessionSelected, SessionID: selected})
+		if id < 0 || id >= len(ui.sidebarRows) {
+			ui.mu.Unlock()
+			return
 		}
+		row := ui.sidebarRows[id]
+		if row.Kind != sidebarSessionRow {
+			activeIndex := sidebarRowIndexForSession(ui.sidebarRows, ui.state.ActiveSessionID)
+			ui.mu.Unlock()
+			if activeIndex >= 0 {
+				fyne.Do(func() { ui.list.Select(widget.ListItemID(activeIndex)) })
+			}
+			return
+		}
+		ui.state = desktopstate.Reduce(ui.state, desktopstate.Event{Kind: desktopstate.EventSessionSelected, SessionID: row.SessionID})
 		ui.mu.Unlock()
 		ui.refreshActiveView()
 		ui.refreshPermissionView()
@@ -194,7 +218,14 @@ func (a *application) refreshSessions() {
 	}
 	sessions := make([]desktopstate.SessionState, 0, len(result.Sessions))
 	for _, session := range result.Sessions {
-		projected := desktopstate.SessionState{ID: session.ID, Title: session.Title, Workspace: session.Cwd, Status: desktopstate.TaskIdle}
+		projected := desktopstate.SessionState{
+			ID:            session.ID,
+			Title:         session.Title,
+			Workspace:     session.Cwd,
+			WorkspaceKey:  strings.TrimSpace(session.WorkspaceKey),
+			WorkspaceName: strings.TrimSpace(session.WorkspaceName),
+			Status:        desktopstate.TaskIdle,
+		}
 		if previous, ok := old[session.ID]; ok {
 			projected.Status = previous.Status
 			projected.Timeline = previous.Timeline
@@ -202,6 +233,15 @@ func (a *application) refreshSessions() {
 			if strings.TrimSpace(projected.Workspace) == "" {
 				projected.Workspace = previous.Workspace
 			}
+			if projected.WorkspaceKey == "" {
+				projected.WorkspaceKey = previous.WorkspaceKey
+			}
+			if projected.WorkspaceName == "" {
+				projected.WorkspaceName = previous.WorkspaceName
+			}
+		}
+		if projected.WorkspaceName == "" {
+			projected.WorkspaceName = inferredWorkspaceName(projected.Title, projected.ID)
 		}
 		sessions = append(sessions, projected)
 		if a.transcripts[session.ID] == nil {
@@ -209,6 +249,7 @@ func (a *application) refreshSessions() {
 		}
 	}
 	a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventSessionsReplaced, Sessions: sessions})
+	a.sidebarRows = buildSidebarRows(a.state.Sessions)
 	a.mu.Unlock()
 	fyne.Do(func() { a.list.Refresh() })
 	a.refreshActiveView()
@@ -237,7 +278,11 @@ func (a *application) newSession() {
 		a.refreshSessions()
 		a.mu.Lock()
 		a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventSessionSelected, SessionID: result.SessionID})
+		index := sidebarRowIndexForSession(a.sidebarRows, result.SessionID)
 		a.mu.Unlock()
+		if index >= 0 {
+			fyne.Do(func() { a.list.Select(widget.ListItemID(index)) })
+		}
 		a.refreshActiveView()
 		a.refreshPermissionView()
 	}()
@@ -355,13 +400,7 @@ func (a *application) selectNextPermission() {
 	}
 	sessionID := a.state.PermissionInbox[0].SessionID
 	a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventSessionSelected, SessionID: sessionID})
-	index := -1
-	for i := range a.state.Sessions {
-		if a.state.Sessions[i].ID == sessionID {
-			index = i
-			break
-		}
-	}
+	index := sidebarRowIndexForSession(a.sidebarRows, sessionID)
 	a.mu.Unlock()
 	if index >= 0 {
 		fyne.Do(func() { a.list.Select(widget.ListItemID(index)) })
