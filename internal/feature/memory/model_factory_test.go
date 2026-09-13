@@ -40,7 +40,7 @@ func (s *captureStream) Next(context.Context) (sdk.Event, error) {
 }
 func (*captureStream) Close() error { return nil }
 
-func TestMemoryModelInjectsContextBeforeCurrentUserWithoutMutatingInput(t *testing.T) {
+func TestMemoryModelPrependsContextToCurrentUserWithoutMutatingInput(t *testing.T) {
 	now := time.Now().UTC()
 	repo := &fakeRepository{workspace: []corememory.Entry{{
 		ID: "mem-1", Scope: corememory.ScopeWorkspace, Kind: corememory.KindProcedure,
@@ -63,16 +63,16 @@ func TestMemoryModelInjectsContextBeforeCurrentUserWithoutMutatingInput(t *testi
 		t.Fatalf("requests = %d, want 1", len(base.requests))
 	}
 	got := base.requests[0].Messages
-	if len(got) != 3 {
-		t.Fatalf("messages = %+v, want injected context", got)
+	if len(got) != 2 {
+		t.Fatalf("messages = %+v, want role sequence preserved", got)
 	}
-	if got[1].Role != sdk.RoleAssistant || !strings.Contains(got[1].Content, "<proton-memory-context>") || !strings.Contains(got[1].Content, "Run go test ./...") {
-		t.Fatalf("memory message = %+v", got[1])
+	if got[1].Role != sdk.RoleUser || got[1].ID != "user-1" {
+		t.Fatalf("current user identity changed: %+v", got[1])
 	}
-	if got[2].ID != "user-1" {
-		t.Fatalf("current user moved incorrectly: %+v", got)
+	if !strings.HasPrefix(got[1].Content, "<proton-memory-context>") || !strings.Contains(got[1].Content, "Run go test ./...") || !strings.HasSuffix(got[1].Content, "please run test verification") {
+		t.Fatalf("decorated user message = %q", got[1].Content)
 	}
-	if len(messages) != 2 {
+	if len(messages) != 2 || messages[1].Content != "please run test verification" {
 		t.Fatalf("input messages mutated: %+v", messages)
 	}
 }
