@@ -95,7 +95,7 @@ func (m *bubbleModel) modeChipFor(mode permission.Mode) string {
 
 type contextualHelp []key.Binding
 
-func (h contextualHelp) ShortHelp() []key.Binding   { return h }
+func (h contextualHelp) ShortHelp() []key.Binding  { return h }
 func (h contextualHelp) FullHelp() [][]key.Binding { return [][]key.Binding{h} }
 
 func (m bubbleModel) shortcutHint() string {
