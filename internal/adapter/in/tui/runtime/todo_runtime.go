@@ -9,6 +9,7 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	todopane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/todo"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
@@ -287,7 +288,7 @@ func (v *todoPaneView) Render(ctx paneRenderContext) string {
 		}
 	}
 	rows := paneSection("Tasks", listRows, footer, "", ctx.width)
-	return renderModalRows(ctx, tuistyle.ColorBorderFocus, rows)
+	return renderModalRows(ctx, panecommon.ToneColor(panecommon.ToneAssistant), rows)
 }
 
 func (m *bubbleModel) openTodoPane() tea.Cmd {
