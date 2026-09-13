@@ -29,6 +29,30 @@ func TestSessionHeaderUsesSharedLayoutProfile(t *testing.T) {
 	}
 }
 
+func TestFrameReservesStatusRowToKeepComposerStable(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+
+	idleHeight := m.layout.frame.height
+	idleViewportHeight := m.viewport.Height()
+	if m.layout.frame.status == "" || strings.TrimSpace(m.layout.frame.status) != "" {
+		t.Fatalf("idle frame should reserve a blank status row: %q", m.layout.frame.status)
+	}
+
+	m.busy = true
+	m.activity = "running tests"
+	m.busyStarted = time.Now().Add(-time.Second)
+	m.requestRelayout()
+	m.reconcileLayout()
+
+	if got := m.layout.frame.height; got != idleHeight {
+		t.Fatalf("frame height changed from idle %d to busy %d", idleHeight, got)
+	}
+	if got := m.viewport.Height(); got != idleViewportHeight {
+		t.Fatalf("viewport height changed from idle %d to busy %d", idleViewportHeight, got)
+	}
+}
+
 func TestStatusViewIncludesElapsedRuntime(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
