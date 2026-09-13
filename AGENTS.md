@@ -244,7 +244,7 @@ waiting writer. Preserve this fairness property when touching scheduler code.
 
 System prompt composition lives in `internal/engine/prompt` and is capability-driven.
 Do not maintain separate large root prompts per provider or agent mode. The managed
-prompt currently uses Prompt ABI v14 and deterministic cache-aware section ordering;
+prompt currently uses Prompt ABI v15 and deterministic cache-aware section ordering;
 `docs/system-prompt.md` is the source of truth for prompt topology and prefix-cache
 invariants.
 
@@ -261,7 +261,7 @@ Prompt sections are derived from the effective tool surface:
 - grounding profile -> Grounding Contract
 - active skills -> Skills section
 - repository instructions -> Project Instructions
-- model profile -> provider/model guidance hints
+- model profiles -> runtime capability, reasoning, token-limit, compaction, and protocol-compatibility metadata only; model/provider identity must not inject natural-language prompt policy
 
 Do not hard-code claims that a capability exists. If the model cannot call a
 capability, the prompt should normally omit instructions for it.

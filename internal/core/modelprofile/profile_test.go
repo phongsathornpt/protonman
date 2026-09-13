@@ -246,7 +246,7 @@ func TestResolvedProfileTracksFieldProvenance(t *testing.T) {
 	if got.Provenance.Vision != MetadataSourceBuiltin || got.Provenance.ContextWindow != MetadataSourceBuiltin {
 		t.Fatalf("builtin provenance = %+v", got.Provenance)
 	}
-	if got.Provenance.ToolSchemaDialect != MetadataSourceBuiltin || got.Provenance.PromptHints != MetadataSourceUnknown {
+	if got.Provenance.ToolSchemaDialect != MetadataSourceBuiltin {
 		t.Fatalf("policy provenance = %+v", got.Provenance)
 	}
 }
@@ -273,13 +273,6 @@ func TestMetadataProvenanceSummaryIsDeterministic(t *testing.T) {
 	want := "tools=catalog,context_window=builtin,tool_schema_dialect=builtin"
 	if got != want {
 		t.Fatalf("Summary() = %q, want %q", got, want)
-	}
-}
-
-func TestGeminiDoesNotDuplicateGenericPromptHints(t *testing.T) {
-	got := ResolveBuiltin("gateway", "gemini-3.8-flash", CatalogMetadata{})
-	if len(got.AgentPolicy.PromptHints) != 0 {
-		t.Fatalf("Gemini prompt hints = %v, want generic tool policy only", got.AgentPolicy.PromptHints)
 	}
 }
 

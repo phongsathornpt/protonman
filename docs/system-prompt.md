@@ -6,10 +6,10 @@ Model identity and provider identity are not natural-language prompt inputs. Dif
 
 ## Prompt ABI
 
-The current managed prompt format is **Prompt ABI v14**:
+The current managed prompt format is **Prompt ABI v15**:
 
 ```text
-<proton-system-prompt version="14">
+<proton-system-prompt version="15">
 ...
 </proton-system-prompt>
 ```
@@ -63,7 +63,7 @@ These rules improve prefix reuse for providers and runtimes that implement KV/pr
 
 The current renderer accepts dynamic fields through `prompt.Spec`, including project instructions, skills, role, active goal, workspace policy, grounding requirements, and the effective tool surface.
 
-`ModelPromptHints` and model-profile `AgentPolicy.PromptHints` remain only as temporary source-compatibility fields. They are semantically inert: model-profile clone/merge boundaries discard prompt hints, `WithSystemPromptSpec` clears model prompt hints before storing the spec, and `Render` ignores the field entirely. Do not add new model- or provider-specific prompt hints through `ExtraInstructions` or another indirect path. The compatibility fields should be removed only together with their remaining callers/tests so the repository does not pass through a half-migrated state.
+Model/provider identity is not represented by a natural-language prompt-policy field. Model profiles carry runtime capability, reasoning, token-limit, compaction, and protocol-compatibility facts only. Do not reintroduce model- or provider-specific prompt prose through `ExtraInstructions` or another indirect path.
 
 The active goal is durable session state, not merely a compaction hint. When present, it is the persistent objective for the session: the model should continue making concrete progress until the goal is completed, blocked by unavailable capabilities or permissions, or explicitly changed or cleared. Implementation goals require repository inspection, mutation, and verification rather than a plan-only response. The TUI `/goal <detail>` command starts the execution turn; prompt wording does not itself schedule a turn.
 
@@ -122,6 +122,8 @@ Prompt ABI v12 promotes Active Goal from a compaction-stability hint to an execu
 Prompt ABI v13 clarifies that the current explicit user request owns the immediate turn even when a persistent goal exists, prevents the model-facing prompt from exposing the absolute workspace path, and aligns task coordination with revision chaining from successful TODO updates. Runtime no-progress detection also treats task metadata as coordination rather than repository progress.
 
 Prompt ABI v14 adds explicit parent-task/subagent linkage: when delegated work corresponds to a tracked TODO item, the parent passes `task_id` and runtime lifecycle events own `in_progress`/terminal task reconciliation.
+
+Prompt ABI v15 removes the legacy model-specific natural-language prompt-policy surface. Model/provider identity remains runtime metadata only, and the canonical managed prompt is model agnostic by construction.
 
 Runtime-delivered child content is untrusted evidence, not instruction material. It is appended after the stable managed system prompt and is not persisted as synthetic user conversation history, preserving the system-prefix cache boundary while keeping instruction hierarchy explicit.
 

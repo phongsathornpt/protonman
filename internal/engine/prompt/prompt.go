@@ -6,7 +6,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
-const Version = "14"
+const Version = "15"
 
 type ToolCapabilities struct {
 	Tasks  bool
@@ -23,13 +23,10 @@ type MutationCapabilities struct {
 }
 
 type Spec struct {
-	Role       string
-	ActiveGoal string
-	Profile    string
-	Workspace  string
-	// ModelPromptHints is retained temporarily for source compatibility.
-	// Render intentionally ignores it: Protonman uses one model-agnostic system prompt.
-	ModelPromptHints    []string
+	Role                string
+	ActiveGoal          string
+	Profile             string
+	Workspace           string
 	AvailableTools      []string
 	GroundingEvidence   string
 	Capabilities        ToolCapabilities

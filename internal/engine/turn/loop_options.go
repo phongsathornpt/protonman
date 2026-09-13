@@ -20,7 +20,6 @@ type Option func(*Loop) error
 func WithSystemPromptSpec(spec prompt.Spec) Option {
 	return func(loop *Loop) error {
 		clone := spec
-		clone.ModelPromptHints = nil
 		clone.AvailableTools = append([]string(nil), spec.AvailableTools...)
 		clone.ExtraInstructions = append([]string(nil), spec.ExtraInstructions...)
 		loop.promptSpec = &clone
