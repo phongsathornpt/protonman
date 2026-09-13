@@ -1,9 +1,12 @@
 package model
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
+
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 func TestCloneMessagesCopiesToolArguments(t *testing.T) {
@@ -49,6 +52,36 @@ func TestContentPartsAndTextContent(t *testing.T) {
 	cloned := CloneMessages([]Message{msg2})
 	if len(cloned[0].Parts) != 3 || cloned[0].Parts[1].Data != "iVBORw0KGgo=" {
 		t.Fatalf("cloned parts = %#v", cloned[0].Parts)
+	}
+}
+
+type metadataTestModel struct{}
+
+func (*metadataTestModel) Provider() string { return "test" }
+func (*metadataTestModel) ModelID() string  { return "model" }
+func (*metadataTestModel) Capabilities() sdk.ModelCapabilities {
+	return sdk.ModelCapabilities{Streaming: true}
+}
+func (*metadataTestModel) Metadata() sdk.ModelMetadata {
+	return sdk.ModelMetadata{TokenLimits: sdk.TokenLimits{
+		ContextWindow: 1000, MaxInputTokens: 800, MaxOutputTokens: 200,
+	}}
+}
+func (*metadataTestModel) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
+	return nil, nil
+}
+
+func TestModelDecoratorsPreserveCanonicalMetadata(t *testing.T) {
+	base := sdk.LanguageModel(&metadataTestModel{})
+	wrapped := withSessionID(base, "session")
+	wrapped = withContextWindow(wrapped, 1200)
+
+	metadata := sdk.ModelMetadataOf(wrapped)
+	if metadata.TokenLimits.ContextWindow != 1200 {
+		t.Fatalf("context window = %d, want 1200", metadata.TokenLimits.ContextWindow)
+	}
+	if metadata.TokenLimits.MaxInputTokens != 800 || metadata.TokenLimits.MaxOutputTokens != 200 {
+		t.Fatalf("token limits changed through decorators: %#v", metadata.TokenLimits)
 	}
 }
 

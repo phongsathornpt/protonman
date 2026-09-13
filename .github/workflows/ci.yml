@@ -28,6 +28,8 @@ jobs:
           cache: true
       - name: Lint
         run: make lint
+      - name: Architecture
+        run: make test-architecture
       - name: Test
         run: make test
       - name: Build

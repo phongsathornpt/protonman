@@ -2,27 +2,17 @@ package protonsdk
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"strings"
 )
 
-// StepResult is the normalized output of one model step in an agent loop.
-type StepResult struct {
-	Text             string
-	ToolCalls        []ToolCall
-	Usage            Usage
-	FinishReason     FinishReason
-	ProviderMetadata ProviderMetadata
-}
-
-// CollectStep consumes one model stream until its terminal event and builds the
-// provider-neutral result an agent loop needs for its next decision.
-func CollectStep(ctx context.Context, stream Stream) (result StepResult, err error) {
+// Collect consumes one model stream until its terminal event and builds a
+// provider-neutral response.
+func Collect(ctx context.Context, stream Stream) (result Response, err error) {
 	if stream == nil {
-		return StepResult{}, fmt.Errorf("%w: stream is required", ErrInvalidRequest)
+		return Response{}, fmt.Errorf("%w: stream is required", ErrInvalidRequest)
 	}
 	defer func() {
 		if closeErr := stream.Close(); err == nil && closeErr != nil {
@@ -35,12 +25,12 @@ func CollectStep(ctx context.Context, stream Stream) (result StepResult, err err
 		event, err := stream.Next(ctx)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				return StepResult{}, ErrIncompleteStream
+				return Response{}, ErrIncompleteStream
 			}
-			return StepResult{}, err
+			return Response{}, err
 		}
 		if err := event.Validate(); err != nil {
-			return StepResult{}, err
+			return Response{}, err
 		}
 		switch event.Kind {
 		case EventTextDelta:
@@ -58,18 +48,13 @@ func CollectStep(ctx context.Context, stream Stream) (result StepResult, err err
 	}
 }
 
+// CollectStep is retained for source compatibility with earlier SDK releases.
+// Deprecated: use Collect.
+func CollectStep(ctx context.Context, stream Stream) (StepResult, error) {
+	return Collect(ctx, stream)
+}
+
 func cloneToolCall(call ToolCall) ToolCall {
 	call.Arguments = append([]byte(nil), call.Arguments...)
 	return call
-}
-
-func cloneProviderMetadata(metadata ProviderMetadata) ProviderMetadata {
-	if len(metadata) == 0 {
-		return nil
-	}
-	cloned := make(ProviderMetadata, len(metadata))
-	for key, value := range metadata {
-		cloned[key] = append(json.RawMessage(nil), value...)
-	}
-	return cloned
 }

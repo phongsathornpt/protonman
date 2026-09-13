@@ -15,7 +15,8 @@ const (
 	DefaultMaxTokens  = 4096
 )
 
-type ProviderOptions struct {
+// Config configures the Anthropic Messages protocol provider.
+type Config struct {
 	BaseURL           string
 	APIKey            string
 	APIVersion        string
@@ -31,9 +32,13 @@ type ProviderOptions struct {
 	DefaultMaxTokens  int
 }
 
-type Provider struct{ options ProviderOptions }
+// ProviderOptions is retained as a compatibility alias.
+// Deprecated: use Config.
+type ProviderOptions = Config
 
-func NewProvider(options ProviderOptions) *Provider {
+type Provider struct{ options Config }
+
+func NewProvider(options Config) *Provider {
 	options.BaseURL = strings.TrimRight(strings.TrimSpace(options.BaseURL), "/")
 	if options.BaseURL == "" {
 		options.BaseURL = DefaultBaseURL
@@ -73,10 +78,14 @@ type LanguageModel struct {
 	modelID  string
 }
 
-var _ sdk.LanguageModel = (*LanguageModel)(nil)
+var (
+	_ sdk.LanguageModel = (*LanguageModel)(nil)
+	_ sdk.MetadataModel = (*LanguageModel)(nil)
+)
 
 func (m *LanguageModel) Provider() string { return "anthropic" }
 func (m *LanguageModel) ModelID() string  { return m.modelID }
 func (m *LanguageModel) Capabilities() sdk.ModelCapabilities {
 	return sdk.ModelCapabilities{Streaming: true, Tools: true, Vision: true, ProviderOptions: true, ToolResultErrors: true, RawChunks: true}
 }
+func (m *LanguageModel) Metadata() sdk.ModelMetadata { return sdk.ModelMetadata{} }

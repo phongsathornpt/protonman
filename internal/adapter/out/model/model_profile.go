@@ -154,11 +154,14 @@ func (m *profiledLanguageModel) ModelID() string  { return m.base.ModelID() }
 func (m *profiledLanguageModel) Capabilities() sdk.ModelCapabilities {
 	return m.base.Capabilities()
 }
+func (m *profiledLanguageModel) Metadata() sdk.ModelMetadata {
+	return sdk.ModelMetadataOf(m.base)
+}
 func (m *profiledLanguageModel) ContextWindow() int {
-	return sdk.ModelTokenLimits(m.base).ContextWindow
+	return m.Metadata().TokenLimits.ContextWindow
 }
 func (m *profiledLanguageModel) TokenLimits() sdk.TokenLimits {
-	return sdk.ModelTokenLimits(m.base)
+	return m.Metadata().TokenLimits
 }
 func (m *profiledLanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
 	return m.base.Stream(ctx, request)
@@ -170,4 +173,45 @@ func (m *profiledLanguageModel) ResolvedModelProfile() modelprofile.Resolved {
 func cloneResolvedModelProfile(profile modelprofile.Resolved) modelprofile.Resolved {
 	profile.Reasoning.Levels = append([]sdk.ReasoningEffort(nil), profile.Reasoning.Levels...)
 	return profile
+}
+
+var (
+	_ sdk.MetadataModel = (*sessionBoundModel)(nil)
+	_ sdk.MetadataModel = (*profiledLanguageModel)(nil)
+	_ sdk.MetadataModel = (*lowConcurrencyModel)(nil)
+	_ sdk.MetadataModel = (*emptyStreamRetryModel)(nil)
+	_ sdk.MetadataModel = (*capabilityOverrideModel)(nil)
+)
+
+func (m *sessionBoundModel) Metadata() sdk.ModelMetadata {
+	return sdk.ModelMetadataOf(m.base)
+}
+
+func (m *lowConcurrencyModel) Metadata() sdk.ModelMetadata {
+	return sdk.ModelMetadataOf(m.base)
+}
+
+func (m *emptyStreamRetryModel) Metadata() sdk.ModelMetadata {
+	return sdk.ModelMetadataOf(m.base)
+}
+
+func (m *capabilityOverrideModel) Metadata() sdk.ModelMetadata {
+	metadata := sdk.ModelMetadataOf(m.base)
+	limits := metadata.TokenLimits
+	if m.tokenLimits != nil {
+		if m.tokenLimits.ContextWindow > 0 {
+			limits.ContextWindow = m.tokenLimits.ContextWindow
+		}
+		if m.tokenLimits.MaxInputTokens > 0 {
+			limits.MaxInputTokens = m.tokenLimits.MaxInputTokens
+		}
+		if m.tokenLimits.MaxOutputTokens > 0 {
+			limits.MaxOutputTokens = m.tokenLimits.MaxOutputTokens
+		}
+	}
+	if m.contextWindow != nil && *m.contextWindow > 0 {
+		limits.ContextWindow = *m.contextWindow
+	}
+	metadata.TokenLimits = limits
+	return metadata
 }

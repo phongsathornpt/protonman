@@ -11,7 +11,8 @@ import (
 
 const DefaultBaseURL = "https://api.openai.com/v1"
 
-type ProviderOptions struct {
+// Config configures the OpenAI protocol provider.
+type Config struct {
 	ProviderName      string
 	BaseURL           string
 	APIKey            string
@@ -26,11 +27,15 @@ type ProviderOptions struct {
 	RetryDelays       []time.Duration
 }
 
+// ProviderOptions is retained as a compatibility alias.
+// Deprecated: use Config.
+type ProviderOptions = Config
+
 type Provider struct {
-	options ProviderOptions
+	options Config
 }
 
-func NewProvider(options ProviderOptions) *Provider {
+func NewProvider(options Config) *Provider {
 	options.ProviderName = strings.ToLower(strings.TrimSpace(options.ProviderName))
 	if options.ProviderName == "" {
 		options.ProviderName = "openai"
@@ -81,10 +86,14 @@ type LanguageModel struct {
 	useResponsesAPI bool
 }
 
-var _ sdk.LanguageModel = (*LanguageModel)(nil)
+var (
+	_ sdk.LanguageModel = (*LanguageModel)(nil)
+	_ sdk.MetadataModel = (*LanguageModel)(nil)
+)
 
 func (m *LanguageModel) Provider() string { return m.provider.options.ProviderName }
 func (m *LanguageModel) ModelID() string  { return m.modelID }
 func (m *LanguageModel) Capabilities() sdk.ModelCapabilities {
 	return sdk.ModelCapabilities{Streaming: true, Tools: true, Vision: true, ProviderOptions: true, RawChunks: true}
 }
+func (m *LanguageModel) Metadata() sdk.ModelMetadata { return sdk.ModelMetadata{} }
