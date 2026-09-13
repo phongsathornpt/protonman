@@ -72,7 +72,7 @@ func (r *Retriever) Retrieve(ctx context.Context, query Query) ([]corememory.Ent
 		entry corememory.Entry
 		score float64
 	}
-	matches := make([]scored, 0, len(entries))
+	byIdentity := make(map[string]scored, len(entries))
 	for _, entry := range entries {
 		if stale(entry, now, r.policy) {
 			continue
@@ -89,7 +89,17 @@ func (r *Retriever) Retrieve(ctx context.Context, query Query) ([]corememory.Ent
 		if entry.UsageCount > 0 {
 			score += math.Log2(float64(entry.UsageCount)+1) * 0.2
 		}
-		matches = append(matches, scored{entry: entry, score: score})
+		candidate := scored{entry: entry, score: score}
+		identity := memoryIdentity(entry.Kind, entry.Key)
+		current, exists := byIdentity[identity]
+		if !exists || preferRetrievedMemory(candidate, current) {
+			byIdentity[identity] = candidate
+		}
+	}
+
+	matches := make([]scored, 0, len(byIdentity))
+	for _, match := range byIdentity {
+		matches = append(matches, match)
 	}
 	sort.Slice(matches, func(i, j int) bool {
 		if matches[i].score != matches[j].score {
@@ -127,6 +137,22 @@ func (r *Retriever) Retrieve(ctx context.Context, query Query) ([]corememory.Ent
 		}
 	}
 	return selected, nil
+}
+
+func preferRetrievedMemory(candidate, current struct {
+	entry corememory.Entry
+	score float64
+}) bool {
+	if candidate.entry.Scope != current.entry.Scope {
+		return candidate.entry.Scope == corememory.ScopeWorkspace
+	}
+	if candidate.score != current.score {
+		return candidate.score > current.score
+	}
+	if !candidate.entry.UpdatedAt.Equal(current.entry.UpdatedAt) {
+		return candidate.entry.UpdatedAt.After(current.entry.UpdatedAt)
+	}
+	return candidate.entry.ID < current.entry.ID
 }
 
 func relevance(entry corememory.Entry, queryTokens map[string]struct{}) float64 {
