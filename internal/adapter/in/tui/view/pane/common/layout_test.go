@@ -9,11 +9,11 @@ func TestModeForSize(t *testing.T) {
 		height int
 		want   LayoutMode
 	}{
-		{name: "wide", width: 120, height: 32, want: LayoutNormal},
-		{name: "compact width", width: 80, height: 32, want: LayoutCompact},
-		{name: "compact height", width: 120, height: 18, want: LayoutCompact},
-		{name: "tiny width", width: 48, height: 32, want: LayoutTiny},
-		{name: "tiny height", width: 120, height: 12, want: LayoutTiny},
+		{name: "wide", width: 80, height: 24, want: LayoutNormal},
+		{name: "compact width", width: 32, height: 24, want: LayoutCompact},
+		{name: "compact height", width: 80, height: 18, want: LayoutCompact},
+		{name: "tiny width", width: 20, height: 24, want: LayoutTiny},
+		{name: "tiny height", width: 80, height: 12, want: LayoutTiny},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -45,11 +45,11 @@ func TestResolveProfile(t *testing.T) {
 		wantMode      LayoutMode
 		wantHeader    bool
 	}{
-		{name: "wide", width: 120, height: 32, wantMode: LayoutNormal, wantHeader: true},
-		{name: "compact", width: 80, height: 32, wantMode: LayoutCompact, wantHeader: true},
-		{name: "tiny", width: 48, height: 32, wantMode: LayoutTiny, wantHeader: true},
-		{name: "very short terminal", width: 120, height: 9, wantMode: LayoutTiny, wantHeader: false},
-		{name: "bottom view on short terminal", width: 120, height: 17, hasBottomView: true, wantMode: LayoutCompact, wantHeader: false},
+		{name: "wide", width: 80, height: 24, wantMode: LayoutNormal, wantHeader: true},
+		{name: "compact", width: 32, height: 24, wantMode: LayoutCompact, wantHeader: true},
+		{name: "tiny", width: 20, height: 24, wantMode: LayoutTiny, wantHeader: true},
+		{name: "very short terminal", width: 80, height: 9, wantMode: LayoutTiny, wantHeader: false},
+		{name: "bottom view on short terminal", width: 80, height: 17, hasBottomView: true, wantMode: LayoutCompact, wantHeader: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
