@@ -130,17 +130,16 @@ func (m *bubbleModel) resize(width int, height int) {
 	m.layout.width = width
 	m.layout.height = height
 	profile := m.layoutProfile()
-	contentWidth := profile.ContentWidth(width)
-	m.help.SetWidth(contentWidth)
+	m.help.SetWidth(profile.ContentWidth(width))
 	prompt := m.panes.bottom.prompt()
-	prompt.SetWidth(contentWidth)
+	prompt.SetWidth(composerUsableWidth(width))
 	m.panes.transcript.SetWidth(maxInt(1, width-10))
 	m.panes.transcript.SetHeight(maxInt(1, height-10))
 	if view, _ := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView); view != nil {
 		view.resize(width, height)
 	}
 	if m.historyState != nil {
-		m.historyState.SetWidth(contentWidth)
+		m.historyState.SetWidth(width)
 	}
 	m.requestRelayout()
 	m.reconcileLayout()
@@ -178,17 +177,16 @@ func (m *bubbleModel) layoutProfile() panecommon.Profile {
 func (m *bubbleModel) buildFrameLayout() frameLayout {
 	frame := frameLayout{}
 	profile := m.layoutProfile()
-	contentWidth := profile.ContentWidth(m.layout.width)
 	if profile.ShowHeader {
 		if header := m.sessionHeaderView(); header != "" {
-			frame.header = header + "\n" + chromeDivider(contentWidth)
+			frame.header = header + "\n" + chromeDivider(m.layout.width)
 		}
 	}
 	frame.status = m.statusView()
 	frame.top = m.panes.bottom.renderTop(m)
 	frame.footer = m.footerView()
 	if m.panes.bottom.composerVisible() {
-		frame.divider = chromeDivider(contentWidth)
+		frame.divider = chromeDivider(m.layout.width)
 		frame.composer = composerContentView(m.promptView())
 	}
 	for _, part := range []string{frame.header, frame.divider, frame.status, frame.top, frame.composer, frame.footer} {
@@ -240,9 +238,8 @@ func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame fram
 	m.layout.frame = frame
 	m.layout.geometry = panecommon.ResolveFrameGeometry(m.layout.width, m.layout.height, frame.height)
 	viewportHeight := m.layout.geometry.ViewportHeight
-	viewportWidth := m.layoutProfile().ContentWidth(m.layout.width)
-	if m.viewport.Width() != viewportWidth || m.viewport.Height() != viewportHeight {
-		m.viewport.SetWidth(viewportWidth)
+	if m.viewport.Width() != m.layout.width || m.viewport.Height() != viewportHeight {
+		m.viewport.SetWidth(m.layout.width)
 		m.viewport.SetHeight(viewportHeight)
 	}
 	m.refreshViewportWithScroll(scroll)
