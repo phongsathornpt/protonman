@@ -12,6 +12,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transcriptutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/runtimeui"
+	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
 	agentpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/agent"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -93,7 +95,7 @@ func (m *bubbleModel) modeChipFor(mode permission.Mode) string {
 
 type contextualHelp []key.Binding
 
-func (h contextualHelp) ShortHelp() []key.Binding  { return h }
+func (h contextualHelp) ShortHelp() []key.Binding   { return h }
 func (h contextualHelp) FullHelp() [][]key.Binding { return [][]key.Binding{h} }
 
 func (m bubbleModel) shortcutHint() string {
@@ -185,69 +187,77 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 	m.agents.SetCallGuard(guard)
 }
 
+func (m bubbleModel) runtimeStatusState(now time.Time) runtimeui.State {
+	agentSnapshot := m.turnAgentSnapshot()
+	activeAgents, _, _, _ := agentActivityCounts(agentSnapshot)
+	agentActivity := ""
+	if activeAgents > 0 {
+		agentActivity = dominantAgentActivity(agentSnapshot, m.agentActivity)
+		if strings.TrimSpace(m.activity) == "canceling" {
+			agentActivity = agentui.ActivityRetreating.Label()
+		}
+	}
+
+	runningTool := ""
+	if running, ok := m.ensureHistoryState().LastRunningTool(); ok {
+		runningTool = tool.DisplayName(strings.TrimSpace(running.Name))
+		if target := strings.TrimSpace(running.Target); target != "" {
+			runningTool += " " + target
+		}
+	}
+
+	_, streaming := m.ensureHistoryState().Active().(*tuihistory.AssistantCell)
+	return runtimeui.Project(runtimeui.Input{
+		Busy:              m.busy,
+		PermissionPending: m.hasPermissionView(),
+		Canceling:         strings.TrimSpace(m.activity) == "canceling",
+		Streaming:         streaming,
+		Retry:             m.turnProgress.Retry,
+		RunningTool:       runningTool,
+		ExplicitActivity:  m.activity,
+		FallbackActivity:  m.rootActivityLabel(),
+		AgentActivity:     agentActivity,
+		ActiveAgents:      activeAgents,
+		ToolCalls:         m.turnProgress.ToolCalls,
+		StartedAt:         m.busyStarted,
+		Now:               now,
+	})
+}
+
 func (m bubbleModel) statusView() string {
 	profile := m.layoutProfile()
 	maxWidth := profile.ContentWidth(m.layout.width)
-	if m.hasPermissionView() {
-		return warningStyle.Render(truncateWithEllipsis("action required · permission", maxInt(1, maxWidth)))
-	}
-	if !m.busy {
+	state := m.runtimeStatusState(time.Now())
+	if state.Phase == runtimeui.PhaseIdle {
 		return ""
 	}
-	agentSnapshot := m.turnAgentSnapshot()
-	activeAgents, _, _, _ := agentActivityCounts(agentSnapshot)
-	activity := strings.TrimSpace(m.activity)
-	if activeAgents > 0 {
-		label := "agent"
-		if activeAgents != 1 {
-			label = "agents"
+
+	meta := state.MetaText()
+	if state.Phase == runtimeui.PhaseWaitingForInput {
+		line := state.Activity
+		if meta != "" {
+			line += " · " + meta
 		}
-		dota := dominantAgentActivity(agentSnapshot, m.agentActivity)
-		if activity == "canceling" {
-			dota = agentui.ActivityRetreating.Label()
-		}
-		activity = fmt.Sprintf("%s · %d %s", dota, activeAgents, label)
+		return warningStyle.Render(truncateWithEllipsis(line, maxInt(1, maxWidth)))
 	}
-	meta := ""
-	if activeAgents == 0 {
-		// Only an explicit label (a named call, cancellation, or background
-		// operation) outranks the derived signals. Everything else resolves
-		// deterministically: retry countdown, then the running tool, then the
-		// active profile's intent. No generic assistant busy word is invented.
-		explicit := activity != "" && activity != "ready"
-		if retryActivity, retryMeta, ok := modelRetryStatus(m.turnProgress.Retry, time.Now()); ok {
-			activity, meta = retryActivity, retryMeta
-		} else if !explicit {
-			if running, ok := m.ensureHistoryState().LastRunningTool(); ok {
-				activity = tool.DisplayName(strings.TrimSpace(running.Name))
-				if target := strings.TrimSpace(running.Target); target != "" {
-					activity += " " + target
-				}
-			} else {
-				activity = m.rootActivityLabel()
-			}
-		}
-		if meta == "" && m.turnProgress.ToolCalls > 0 {
-			label := "tool"
-			if m.turnProgress.ToolCalls != 1 {
-				label = "tools"
-			}
-			meta = fmt.Sprintf(" · %d %s", m.turnProgress.ToolCalls, label)
-		}
-	}
-	if !m.busyStarted.IsZero() {
-		if elapsed := formatElapsed(time.Since(m.busyStarted)); elapsed != "" {
-			meta += " · " + elapsed
-		}
-	}
+
 	indicator := brandMarkStyle.Render("◌")
 	if spin := m.spinnerIndicator(); spin != "" {
 		indicator = spin
 	}
-	contentWidth := maxInt(1, maxWidth-2-ansi.StringWidth(meta))
-	activity = truncateWithEllipsis(activity, contentWidth)
-	busyLine := indicator + " " + systemStyle.Render(activity) + mutedStyle.Render(meta)
-	return busyLine
+
+	suffix := ""
+	if meta != "" {
+		const minimumActivityWidth = 8
+		metaBudget := maxInt(0, maxWidth-2-minimumActivityWidth-3)
+		if metaBudget > 0 {
+			meta = truncateWithEllipsis(meta, metaBudget)
+			suffix = " · " + meta
+		}
+	}
+	contentWidth := maxInt(1, maxWidth-2-ansi.StringWidth(suffix))
+	activity := truncateWithEllipsis(state.Activity, contentWidth)
+	return indicator + " " + systemStyle.Render(activity) + mutedStyle.Render(suffix)
 }
 
 type sessionHeaderCache struct {
@@ -408,56 +418,16 @@ func formatElapsed(duration time.Duration) string {
 	return agentpane.FormatElapsed(duration)
 }
 
+// modelRetryStatus is retained as a compatibility seam for focused runtime
+// tests; retry wording itself is owned by state/runtimeui.
 func modelRetryStatus(retry sdk.RetryEvent, now time.Time) (string, string, bool) {
-	if retry.Attempt <= 0 || retry.RetryAt.IsZero() {
+	activity, metaParts, ok := runtimeui.RetryStatus(retry, now)
+	if !ok {
 		return "", "", false
 	}
-	remaining := retry.RetryAt.Sub(now)
-	wait := "now"
-	if remaining > 0 {
-		if remaining < time.Second {
-			wait = "<1s"
-		} else {
-			seconds := int((remaining + time.Second - 1) / time.Second)
-			wait = fmt.Sprintf("%ds", seconds)
-		}
-	}
-	activity := "retrying " + wait
-	if retry.Phase == sdk.RetryPhaseCooldown {
-		if wait == "now" {
-			activity = "cooldown complete"
-		} else {
-			activity = "cooling down " + wait
-		}
-	} else if wait != "now" {
-		activity = "retrying in " + wait
-	}
-	meta := fmt.Sprintf(" · retry %d", retry.Attempt)
-	if retry.MaxRetries > 0 {
-		meta += fmt.Sprintf("/%d", retry.MaxRetries)
-	}
-	if reason := retryReasonLabel(retry.Reason); reason != "" {
-		meta += " · " + reason
+	meta := strings.Join(metaParts, " · ")
+	if meta != "" {
+		meta = " · " + meta
 	}
 	return activity, meta, true
-}
-
-func retryReasonLabel(reason string) string {
-	switch strings.TrimSpace(reason) {
-	case "incomplete_stream":
-		return "stream interrupted"
-	case "first_event_timeout":
-		return "provider slow"
-	case "idle_event_timeout":
-		return "stream stalled"
-	case "max_stream_duration":
-		return "stream limit"
-	case "rate_limit":
-		return "rate limited"
-	case "overloaded":
-		return "provider busy"
-	case "transport":
-		return "connection interrupted"
-	}
-	return strings.ReplaceAll(strings.TrimSpace(reason), "_", " ")
 }
