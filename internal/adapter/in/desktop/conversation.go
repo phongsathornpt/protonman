@@ -65,6 +65,7 @@ func (a *application) handleEvent(event acpclient.Event) {
 		}
 		if raw.Update.Kind == "tool_call_update" && terminalToolStatus(raw.Update.Status) {
 			a.refreshSessionContext(raw.SessionID, true)
+			a.refreshSessionMemory(raw.SessionID, true)
 		}
 	}
 }
@@ -141,6 +142,7 @@ func (a *application) refreshActiveView() {
 	a.mu.Unlock()
 	if activeID != "" {
 		a.refreshSessionContext(activeID, false)
+		a.refreshSessionMemory(activeID, false)
 	}
 	a.renderActiveView()
 }
@@ -156,6 +158,7 @@ func (a *application) renderActiveView() {
 	for _, session := range a.state.Sessions {
 		if session.ID == activeID {
 			markdown += renderSessionContext(session.Context)
+			markdown += renderMemory(session.Context.Memory)
 			markdown += renderTimeline(session.Timeline)
 			markdown += renderSubagents(session.Subagents)
 			break
