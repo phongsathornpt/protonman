@@ -1,14 +1,14 @@
 package runtime
 
 const (
-	wideLayoutMinWidth      = 96
-	wideLayoutMinHeight     = 20
-	compactLayoutMinWidth   = 56
-	compactLayoutMinHeight  = 14
-	headerVisibleMinHeight  = 10
-	overlayHeaderMinHeight  = 18
-	defaultHorizontalInset  = 1
-	minimumViewportHeight   = 1
+	wideLayoutMinWidth     = 96
+	wideLayoutMinHeight    = 20
+	compactLayoutMinWidth  = 56
+	compactLayoutMinHeight = 14
+	headerVisibleMinHeight = 10
+	overlayHeaderMinHeight = 18
+	defaultHorizontalInset = 1
+	minimumViewportHeight  = 1
 )
 
 type layoutMode uint8
