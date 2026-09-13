@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
@@ -65,6 +66,23 @@ func TestRenderHeaderKeepsSemanticOrderAndWidth(t *testing.T) {
 	}
 	if width := ansi.StringWidth(RenderHeader(header, 42)); width > 42 {
 		t.Fatalf("header width = %d, want <= 42", width)
+	}
+}
+
+func TestRenderHeaderUsesStateStyles(t *testing.T) {
+	running := RenderHeader(ProjectHeader(HeaderInput{Name: tool.NameRead, Kind: tool.KindRead, Running: true}), 80)
+	if !strings.Contains(running, tuistyle.FocusStyle.Render(KindGlyph(tool.KindRead, tool.NameRead))) {
+		t.Fatalf("running header does not use focus style: %q", running)
+	}
+
+	denied := RenderHeader(ProjectHeader(HeaderInput{Name: tool.NameRead, Kind: tool.KindRead, Denied: true}), 80)
+	if !strings.Contains(denied, tuistyle.ErrorStyle.Render(tuistyle.GlyphToolDenied)) {
+		t.Fatalf("denied header does not use error style: %q", denied)
+	}
+
+	success := RenderHeader(ProjectHeader(HeaderInput{Name: tool.NameRead, Kind: tool.KindRead}), 80)
+	if !strings.Contains(success, tuistyle.SuccessStyle.Render(tuistyle.GlyphToolSuccess)) {
+		t.Fatalf("success header does not use success style: %q", success)
 	}
 }
 
