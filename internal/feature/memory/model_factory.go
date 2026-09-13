@@ -31,13 +31,13 @@ func newModelFactory(next modelclient.Factory, repository corememory.Repository,
 		return next
 	}
 	return &modelFactory{
-		next: next,
-		repository: repository,
-		sessions: sessions,
+		next:             next,
+		repository:       repository,
+		sessions:         sessions,
 		currentSessionID: strings.TrimSpace(currentSessionID),
-		retriever: NewRetriever(repository, policy),
-		workspaceKey: strings.TrimSpace(workspaceKey),
-		policy: policy,
+		retriever:        NewRetriever(repository, policy),
+		workspaceKey:     strings.TrimSpace(workspaceKey),
+		policy:           policy,
 	}
 }
 
@@ -63,10 +63,10 @@ func (f *modelFactory) Build(request modelclient.Request) sdk.LanguageModel {
 		})
 	}
 	model := &memoryLanguageModel{
-		base: base,
-		retriever: f.retriever,
+		base:         base,
+		retriever:    f.retriever,
 		workspaceKey: f.workspaceKey,
-		policy: f.policy,
+		policy:       f.policy,
 	}
 	if carrier, ok := base.(interface{ ResolvedModelProfile() modelprofile.Resolved }); ok {
 		return &profiledMemoryLanguageModel{memoryLanguageModel: model, profile: carrier}
@@ -85,11 +85,11 @@ type memoryLanguageModel struct {
 	lastContext  string
 }
 
-func (m *memoryLanguageModel) Provider() string { return m.base.Provider() }
-func (m *memoryLanguageModel) ModelID() string  { return m.base.ModelID() }
+func (m *memoryLanguageModel) Provider() string                    { return m.base.Provider() }
+func (m *memoryLanguageModel) ModelID() string                     { return m.base.ModelID() }
 func (m *memoryLanguageModel) Capabilities() sdk.ModelCapabilities { return m.base.Capabilities() }
-func (m *memoryLanguageModel) ContextWindow() int { return sdk.ModelContextWindow(m.base) }
-func (m *memoryLanguageModel) TokenLimits() sdk.TokenLimits { return sdk.ModelTokenLimits(m.base) }
+func (m *memoryLanguageModel) ContextWindow() int                  { return sdk.ModelContextWindow(m.base) }
+func (m *memoryLanguageModel) TokenLimits() sdk.TokenLimits        { return sdk.ModelTokenLimits(m.base) }
 
 func (m *memoryLanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
 	index, queryKey, queryText := currentUserQuery(request.Messages)
@@ -102,7 +102,7 @@ func (m *memoryLanguageModel) Stream(ctx context.Context, request sdk.Request) (
 	}
 	request.Messages = sdk.CloneMessages(request.Messages)
 	message := sdk.Message{
-		ID: sdk.NewMessageID(),
+		ID:   sdk.NewMessageID(),
 		Role: sdk.RoleAssistant,
 		Content: strings.Join([]string{
 			"<proton-memory-context>",
