@@ -52,6 +52,8 @@ var (
 	CommandStyle         = lipgloss.NewStyle().Foreground(CommandColor)
 	FocusStyle           = lipgloss.NewStyle().Foreground(ColorFocus)
 	SelectionStyle       = lipgloss.NewStyle().Bold(true).Foreground(ColorFocus)
+	ActivityStyle        = lipgloss.NewStyle().Bold(true).Foreground(ColorFocus)
+	PaneTitleStyle       = lipgloss.NewStyle().Bold(true).Foreground(ColorTextPrimary)
 	PromptIdleStyle      = lipgloss.NewStyle().Foreground(ColorTextPrimary).BorderForeground(ColorBorder)
 	PromptFocusedStyle   = lipgloss.NewStyle().Foreground(ColorTextPrimary).BorderForeground(ColorBorderFocus)
 	PromptWarningStyle   = lipgloss.NewStyle().Foreground(ColorTextPrimary).BorderForeground(ColorWarning)
