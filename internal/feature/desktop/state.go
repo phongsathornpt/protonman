@@ -46,6 +46,25 @@ type SubagentState struct {
 	Status  string
 }
 
+// TodoItemState is one revisioned durable task rendered by Desktop.
+type TodoItemState struct {
+	ID     string
+	Text   string
+	Status string
+}
+
+// TodoState is the reducer-owned projection of a session TODO snapshot.
+type TodoState struct {
+	Revision uint64
+	Items    []TodoItemState
+}
+
+// SessionContextState contains inspectable durable goal and TODO state.
+type SessionContextState struct {
+	Goal string
+	Todo TodoState
+}
+
 // PermissionOption is one user-selectable decision for a pending permission request.
 type PermissionOption struct {
 	ID   string
@@ -72,6 +91,7 @@ type SessionState struct {
 	Status        TaskStatus
 	Timeline      []TimelineItem
 	Subagents     []SubagentState
+	Context       SessionContextState
 }
 
 // State owns desktop session state independently from Fyne widgets.
@@ -96,6 +116,7 @@ const (
 	EventTimelineAppended
 	EventTimelineUpserted
 	EventSubagentUpserted
+	EventSessionContextUpdated
 )
 
 // Event is a typed reducer input. Only fields relevant to Kind are consumed.
@@ -105,6 +126,7 @@ type Event struct {
 	Sessions   []SessionState
 	Item       TimelineItem
 	Subagent   SubagentState
+	Context    SessionContextState
 	Permission PermissionRequest
 	RequestID  string
 }
@@ -151,6 +173,10 @@ func Reduce(current State, event Event) State {
 		if session := sessionByID(&next, event.SessionID); session != nil {
 			upsertSubagent(session, event.Subagent)
 		}
+	case EventSessionContextUpdated:
+		if session := sessionByID(&next, event.SessionID); session != nil {
+			session.Context = cloneSessionContext(event.Context)
+		}
 	}
 
 	return next
@@ -167,8 +193,14 @@ func cloneSessions(sessions []SessionState) []SessionState {
 	for i := range out {
 		out[i].Timeline = slices.Clone(out[i].Timeline)
 		out[i].Subagents = slices.Clone(out[i].Subagents)
+		out[i].Context = cloneSessionContext(out[i].Context)
 	}
 	return out
+}
+
+func cloneSessionContext(context SessionContextState) SessionContextState {
+	context.Todo.Items = slices.Clone(context.Todo.Items)
+	return context
 }
 
 func clonePermissions(items []PermissionRequest) []PermissionRequest {
