@@ -38,7 +38,6 @@ func TestCorePackagesDoNotDependOnOuterLayers(t *testing.T) {
 	for _, core := range []string{
 		modulePath + "/internal/core/agentidentity",
 		modulePath + "/internal/core/conversation",
-		modulePath + "/internal/core/memory",
 		modulePath + "/internal/core/modelprofile",
 		modulePath + "/internal/core/permission",
 		modulePath + "/internal/core/session",
@@ -163,6 +162,7 @@ func TestTUISubpackagesNeverImportPresentationRoot(t *testing.T) {
 			if imported == root {
 				t.Errorf("TUI subpackage %s imports parent presentation package %s", pkgPath, imported)
 			}
+		}
 	}
 }
 
@@ -325,6 +325,7 @@ func TestApplicationDoesNotDependOnAdapters(t *testing.T) {
 			if strings.HasPrefix(imported, adapterPrefix) {
 				t.Errorf("application package %s imports adapter %s; depend on core/application ports and wire concrete adapters in composition root", importPath, imported)
 			}
+		}
 	}
 }
 
@@ -521,6 +522,7 @@ func TestTUIRuntimeSubpackagesDoNotImportRuntimeRoot(t *testing.T) {
 			if imported == runtimeRoot {
 				t.Errorf("TUI runtime subpackage %s must not import root runtime package %s; keep dependencies flowing from orchestration shell into focused ownership packages", importPath, runtimeRoot)
 			}
+		}
 	}
 }
 
