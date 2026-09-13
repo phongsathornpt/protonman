@@ -19,4 +19,6 @@ type Repository interface {
 	Load(context.Context, Scope, string) ([]Entry, error)
 	Replace(context.Context, Scope, string, []Entry) error
 	RecordUsage(context.Context, []UsageRef, time.Time) error
+	ProcessedRevision(context.Context, string) (uint64, bool, error)
+	MarkProcessed(context.Context, string, uint64) error
 }
