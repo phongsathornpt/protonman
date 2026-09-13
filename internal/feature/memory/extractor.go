@@ -68,7 +68,11 @@ func (e *Extractor) Run(ctx context.Context) error {
 		}
 		state, found, loadErr := e.sessions.Load(ctx, summary.ID)
 		if loadErr != nil {
-			return fmt.Errorf("load session %q for memory extraction: %w", summary.ID, loadErr)
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return fmt.Errorf("load session %q for memory extraction: %w", summary.ID, ctxErr)
+			}
+			slog.WarnContext(ctx, "skip session after memory extraction load failure", "session_id", summary.ID, "error", loadErr)
+			continue
 		}
 		if !found || (state.WorkspaceKey != "" && state.WorkspaceKey != e.workspaceKey) {
 			continue
@@ -80,17 +84,21 @@ func (e *Extractor) Run(ctx context.Context) error {
 		if alreadyProcessed && revision >= state.Revision {
 			continue
 		}
-		processed++
 		transcript := buildExtractionTranscript(summary.ID, state, e.policy.MaxExtractionInputBytes)
 		if transcript == "" {
 			if err := e.memories.MarkProcessed(ctx, summary.ID, state.Revision); err != nil {
 				return fmt.Errorf("mark empty session %q processed: %w", summary.ID, err)
 			}
+			processed++
 			continue
 		}
 		candidates, extractErr := runExtractionModel(ctx, e.model, transcript)
 		if extractErr != nil {
-			return fmt.Errorf("extract memory from session %q: %w", summary.ID, extractErr)
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return fmt.Errorf("extract memory from session %q: %w", summary.ID, ctxErr)
+			}
+			slog.WarnContext(ctx, "skip session after memory extraction failure", "session_id", summary.ID, "revision", state.Revision, "error", extractErr)
+			continue
 		}
 		candidates = validateCandidateEvidence(candidates, state)
 		if err := mergeCandidates(ctx, e.memories, e.workspaceKey, candidates, extractionEvidence{
@@ -103,6 +111,7 @@ func (e *Extractor) Run(ctx context.Context) error {
 		if err := e.memories.MarkProcessed(ctx, summary.ID, state.Revision); err != nil {
 			return fmt.Errorf("mark session %q processed: %w", summary.ID, err)
 		}
+		processed++
 	}
 	return nil
 }
