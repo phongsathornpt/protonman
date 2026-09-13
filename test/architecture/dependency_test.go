@@ -163,7 +163,6 @@ func TestTUISubpackagesNeverImportPresentationRoot(t *testing.T) {
 			if imported == root {
 				t.Errorf("TUI subpackage %s imports parent presentation package %s", pkgPath, imported)
 			}
-		}
 	}
 }
 
@@ -326,7 +325,6 @@ func TestApplicationDoesNotDependOnAdapters(t *testing.T) {
 			if strings.HasPrefix(imported, adapterPrefix) {
 				t.Errorf("application package %s imports adapter %s; depend on core/application ports and wire concrete adapters in composition root", importPath, imported)
 			}
-		}
 	}
 }
 
@@ -350,6 +348,7 @@ func TestSDKDoesNotDependOnCLIInternals(t *testing.T) {
 			if strings.HasPrefix(imported, modulePath+"/internal/") || strings.HasPrefix(imported, modulePath+"/cmd/") {
 				t.Errorf("%s imports CLI-owned package %s", path, imported)
 			}
+		}
 	}
 }
 
@@ -522,7 +521,6 @@ func TestTUIRuntimeSubpackagesDoNotImportRuntimeRoot(t *testing.T) {
 			if imported == runtimeRoot {
 				t.Errorf("TUI runtime subpackage %s must not import root runtime package %s; keep dependencies flowing from orchestration shell into focused ownership packages", importPath, runtimeRoot)
 			}
-		}
 	}
 }
 
