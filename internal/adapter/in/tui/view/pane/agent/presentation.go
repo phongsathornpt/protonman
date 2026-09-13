@@ -99,10 +99,12 @@ func agentStateStyle(state agent.State) lipgloss.Style {
 		return tuistyle.ErrorStyle
 	case agent.StateCanceling, agent.StateInterrupted:
 		return tuistyle.WarningStyle
-	case agent.StateQueued, agent.StateCanceled:
+	case agent.StateQueued, agent.StateCanceled, agent.StateResumed:
 		return tuistyle.MutedStyle
-	default:
+	case agent.StateRunning, agent.StateResuming:
 		return tuistyle.ActivityStyle
+	default:
+		return tuistyle.MutedStyle
 	}
 }
 

@@ -128,12 +128,16 @@ func (c AgentRunCell) statePresentation() (string, lipgloss.Style) {
 		return tuistyle.GlyphAgent, tuistyle.WarningStyle
 	case agent.StateQueued:
 		return "○ ", tuistyle.MutedStyle
-	default:
+	case agent.StateResumed:
+		return tuistyle.GlyphAgent, tuistyle.MutedStyle
+	case agent.StateRunning, agent.StateResuming:
 		indicator := tuistyle.GlyphAgent
 		if c.Spinner != "" {
 			indicator = c.Spinner + " "
 		}
 		return indicator, tuistyle.FocusStyle
+	default:
+		return tuistyle.GlyphAgent, tuistyle.MutedStyle
 	}
 }
 

@@ -15,12 +15,14 @@ func TestAgentRunCellStatePresentationUsesSemanticLifecycleColors(t *testing.T) 
 		want  any
 	}{
 		{name: "running", state: agent.StateRunning, want: tuistyle.FocusStyle.GetForeground()},
+		{name: "resuming", state: agent.StateResuming, want: tuistyle.FocusStyle.GetForeground()},
 		{name: "queued", state: agent.StateQueued, want: tuistyle.MutedStyle.GetForeground()},
 		{name: "completed", state: agent.StateCompleted, want: tuistyle.SuccessStyle.GetForeground()},
 		{name: "failed", state: agent.StateFailed, want: tuistyle.ErrorStyle.GetForeground()},
 		{name: "canceled", state: agent.StateCanceled, want: tuistyle.MutedStyle.GetForeground()},
 		{name: "interrupted", state: agent.StateInterrupted, want: tuistyle.WarningStyle.GetForeground()},
 		{name: "canceling", state: agent.StateCanceling, want: tuistyle.WarningStyle.GetForeground()},
+		{name: "resumed", state: agent.StateResumed, want: tuistyle.MutedStyle.GetForeground()},
 	}
 
 	for _, tt := range tests {

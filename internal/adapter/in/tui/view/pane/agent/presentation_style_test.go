@@ -15,12 +15,14 @@ func TestAgentStateStyleUsesLifecycleSemantics(t *testing.T) {
 		want  any
 	}{
 		{"running", featureagent.StateRunning, tuistyle.ColorFocus},
+		{"resuming", featureagent.StateResuming, tuistyle.ColorFocus},
 		{"queued", featureagent.StateQueued, tuistyle.ColorTextMuted},
 		{"completed", featureagent.StateCompleted, tuistyle.ColorSuccess},
 		{"failed", featureagent.StateFailed, tuistyle.ColorDanger},
 		{"canceling", featureagent.StateCanceling, tuistyle.ColorWarning},
 		{"interrupted", featureagent.StateInterrupted, tuistyle.ColorWarning},
 		{"canceled", featureagent.StateCanceled, tuistyle.ColorTextMuted},
+		{"resumed", featureagent.StateResumed, tuistyle.ColorTextMuted},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
