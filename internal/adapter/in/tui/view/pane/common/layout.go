@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	wideLayoutMinWidth     = 96
-	compactLayoutMinWidth  = 56
+	wideLayoutMinWidth     = 40
+	compactLayoutMinWidth  = 24
 	headerVisibleMinHeight = 10
 	overlayHeaderMinHeight = 18
 	defaultHorizontalInset = 1
