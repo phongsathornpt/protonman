@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/runtimeui"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 func TestSessionHeaderUsesSharedLayoutProfile(t *testing.T) {
@@ -61,6 +63,54 @@ func TestFlexibleViewportKeepsComposerPositionStableAcrossActivity(t *testing.T)
 	}
 	if busyViewportHeight != idleViewportHeight-1 {
 		t.Fatalf("busy viewport height = %d, want idle height %d minus one status row", busyViewportHeight, idleViewportHeight)
+	}
+}
+
+func TestRuntimeStatusProjectionDistinguishesStreamingAndToolWork(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.busy = true
+	now := time.Now()
+	m.busyStarted = now.Add(-3 * time.Second)
+
+	m.historyState.AppendAssistantDelta("streaming")
+	streaming := m.runtimeStatusState(now)
+	if streaming.Phase != runtimeui.PhaseStreaming || streaming.Activity != "streaming response" {
+		t.Fatalf("streaming state = %#v", streaming)
+	}
+
+	m.historyState.StartTool("read")
+	m.activity = "running read"
+	m.turnProgress.ToolCalls = 2
+	toolState := m.runtimeStatusState(now)
+	if toolState.Phase != runtimeui.PhaseToolRunning || toolState.Activity != "running read" {
+		t.Fatalf("tool state = %#v", toolState)
+	}
+	if got := toolState.MetaText(); !strings.Contains(got, "2 tools") || !strings.Contains(got, "3s") {
+		t.Fatalf("tool meta = %q", got)
+	}
+}
+
+func TestRuntimeStatusProjectionRetryOutranksToolWork(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.busy = true
+	now := time.Now()
+	m.historyState.StartTool("read")
+	m.activity = "running read"
+	m.turnProgress.Retry = sdk.RetryEvent{
+		Attempt:    2,
+		MaxRetries: 4,
+		Reason:     "idle_event_timeout",
+		RetryAt:    now.Add(2 * time.Second),
+	}
+
+	state := m.runtimeStatusState(now)
+	if state.Phase != runtimeui.PhaseRetryWaiting || state.Activity != "retrying in 2s" {
+		t.Fatalf("retry state = %#v", state)
+	}
+	if got := state.MetaText(); !strings.Contains(got, "retry 2/4") || !strings.Contains(got, "stream stalled") {
+		t.Fatalf("retry meta = %q", got)
 	}
 }
 
