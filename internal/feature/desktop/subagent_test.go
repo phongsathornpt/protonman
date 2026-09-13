@@ -41,7 +41,7 @@ func TestReduceDoesNotAliasSubagents(t *testing.T) {
 		ID:        "s1",
 		Subagents: []SubagentState{{ID: "a1", Profile: "agility"}},
 	}}}
-	next := Reduce(original, Event{})
+	next := Reduce(original, Event{Kind: EventSessionSelected, SessionID: "s1"})
 	next.Sessions[0].Subagents[0].Profile = "changed"
 	if original.Sessions[0].Subagents[0].Profile != "agility" {
 		t.Fatal("subagent state aliased between reducer states")
