@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -12,7 +13,7 @@ import (
 
 func TestRuntimeLayoutCanonicalTerminalInvariants(t *testing.T) {
 	for _, size := range [][2]int{{60, 16}, {72, 20}, {80, 24}, {100, 30}, {120, 32}, {160, 50}} {
-		t.Run(strings.ReplaceAll(strings.Join([]string{itoa(size[0]), "x", itoa(size[1])}, ""), " ", ""), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%dx%d", size[0], size[1]), func(t *testing.T) {
 			m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 			m.runner = fakeConversation{}
 			m.panes.bottom.setHasRunner(true)
@@ -114,18 +115,4 @@ func assertRenderedFrameFits(t *testing.T, view string, width, height int) {
 			t.Fatalf("line %d width = %d exceeds terminal width %d: %q", lineNumber+1, got, width, ansi.Strip(line))
 		}
 	}
-}
-
-func itoa(value int) string {
-	if value == 0 {
-		return "0"
-	}
-	var digits [20]byte
-	index := len(digits)
-	for value > 0 {
-		index--
-		digits[index] = byte('0' + value%10)
-		value /= 10
-	}
-	return string(digits[index:])
 }
