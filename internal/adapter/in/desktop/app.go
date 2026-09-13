@@ -17,6 +17,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/acpclient"
+	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
 type sessionItem struct {
@@ -30,16 +31,16 @@ type application struct {
 
 	client *acpclient.Client
 
-	mu        sync.Mutex
-	sessions  []sessionItem
-	activeID  string
-	transcript strings.Builder
+	mu          sync.Mutex
+	state       desktopstate.State
+	transcripts map[string]*strings.Builder
 
-	status    *widget.Label
-	list      *widget.List
-	chat      *widget.RichText
-	composer  *widget.Entry
-	send      *widget.Button
+	status   *widget.Label
+	list     *widget.List
+	chat     *widget.RichText
+	composer *widget.Entry
+	send     *widget.Button
+	stop     *widget.Button
 }
 
 // Run starts Protonman Desktop. The desktop is deliberately a thin ACP client;
@@ -50,19 +51,21 @@ func Run(ctx context.Context) error {
 	w := a.NewWindow("Protonman")
 	w.Resize(fyne.NewSize(1220, 780))
 
-	ui := &application{ctx: ctx}
+	ui := &application{ctx: ctx, transcripts: make(map[string]*strings.Builder)}
 	ui.status = widget.NewLabel("Connecting to Protonman…")
 	ui.chat = widget.NewRichTextFromMarkdown("")
 	ui.composer = widget.NewEntry()
 	ui.composer.SetPlaceHolder("Message protonMAN…")
 	ui.send = widget.NewButton("Send", ui.sendPrompt)
+	ui.stop = widget.NewButtonWithIcon("", theme.MediaStopIcon(), ui.cancelPrompt)
 	ui.send.Disable()
+	ui.stop.Disable()
 
 	ui.list = widget.NewList(
 		func() int {
 			ui.mu.Lock()
 			defer ui.mu.Unlock()
-			return len(ui.sessions)
+			return len(ui.state.Sessions)
 		},
 		func() fyne.CanvasObject {
 			title := widget.NewLabel("Session")
@@ -72,11 +75,11 @@ func Run(ctx context.Context) error {
 		},
 		func(id widget.ListItemID, object fyne.CanvasObject) {
 			ui.mu.Lock()
-			if id < 0 || id >= len(ui.sessions) {
+			if id < 0 || id >= len(ui.state.Sessions) {
 				ui.mu.Unlock()
 				return
 			}
-			s := ui.sessions[id]
+			s := ui.state.Sessions[id]
 			ui.mu.Unlock()
 			box := object.(*fyne.Container)
 			title := box.Objects[0].(*widget.Label)
@@ -86,23 +89,24 @@ func Run(ctx context.Context) error {
 			} else {
 				title.SetText(s.Title)
 			}
-			if strings.TrimSpace(s.Cwd) == "" {
-				subtitle.SetText("No workspace")
-			} else {
-				subtitle.SetText(s.Cwd)
+			workspace := s.Workspace
+			if strings.TrimSpace(workspace) == "" {
+				workspace = "No workspace"
 			}
+			if s.Status != desktopstate.TaskIdle {
+				workspace += " · " + string(s.Status)
+			}
+			subtitle.SetText(workspace)
 		},
 	)
 	ui.list.OnSelected = func(id widget.ListItemID) {
 		ui.mu.Lock()
-		if id >= 0 && id < len(ui.sessions) {
-			ui.activeID = ui.sessions[id].ID
+		if id >= 0 && id < len(ui.state.Sessions) {
+			selected := ui.state.Sessions[id].ID
+			ui.state = desktopstate.Reduce(ui.state, desktopstate.Event{Kind: desktopstate.EventSessionSelected, SessionID: selected})
 		}
-		active := ui.activeID
 		ui.mu.Unlock()
-		if active != "" {
-			ui.send.Enable()
-		}
+		ui.refreshActiveView()
 	}
 
 	search := widget.NewEntry()
@@ -117,7 +121,8 @@ func Run(ctx context.Context) error {
 		ui.list,
 	)
 
-	header := container.NewBorder(nil, nil, nil, ui.status,
+	headerActions := container.NewHBox(ui.stop, ui.status)
+	header := container.NewBorder(nil, nil, nil, headerActions,
 		container.NewVBox(
 			widget.NewLabelWithStyle("protonMAN", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabel("Coding agent · ACP"),
@@ -152,7 +157,7 @@ func (a *application) connect() {
 
 	var initResult struct {
 		ProtocolVersion int `json:"protocolVersion"`
-		AgentInfo struct {
+		AgentInfo       struct {
 			Version string `json:"version"`
 		} `json:"agentInfo"`
 	}
@@ -189,10 +194,28 @@ func (a *application) refreshSessions() {
 		a.setStatus("Session list failed · " + err.Error())
 		return
 	}
+
 	a.mu.Lock()
-	a.sessions = result.Sessions
+	old := make(map[string]desktopstate.SessionState, len(a.state.Sessions))
+	for _, session := range a.state.Sessions {
+		old[session.ID] = session
+	}
+	sessions := make([]desktopstate.SessionState, 0, len(result.Sessions))
+	for _, session := range result.Sessions {
+		projected := desktopstate.SessionState{ID: session.ID, Title: session.Title, Workspace: session.Cwd, Status: desktopstate.TaskIdle}
+		if previous, ok := old[session.ID]; ok {
+			projected.Status = previous.Status
+			projected.Timeline = previous.Timeline
+		}
+		sessions = append(sessions, projected)
+		if a.transcripts[session.ID] == nil {
+			a.transcripts[session.ID] = &strings.Builder{}
+		}
+	}
+	a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventSessionsReplaced, Sessions: sessions})
 	a.mu.Unlock()
 	fyne.Do(func() { a.list.Refresh() })
+	a.refreshActiveView()
 }
 
 func (a *application) newSession() {
@@ -208,11 +231,11 @@ func (a *application) newSession() {
 			a.setStatus("New session failed · " + err.Error())
 			return
 		}
-		a.mu.Lock()
-		a.activeID = result.SessionID
-		a.mu.Unlock()
 		a.refreshSessions()
-		fyne.Do(func() { a.send.Enable() })
+		a.mu.Lock()
+		a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventSessionSelected, SessionID: result.SessionID})
+		a.mu.Unlock()
+		a.refreshActiveView()
 	}()
 }
 
@@ -222,26 +245,58 @@ func (a *application) sendPrompt() {
 		return
 	}
 	a.mu.Lock()
-	sessionID := a.activeID
-	a.mu.Unlock()
-	if sessionID == "" {
+	sessionID := a.state.ActiveSessionID
+	if sessionID == "" || a.sessionBusyLocked(sessionID) {
+		a.mu.Unlock()
 		return
 	}
+	a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventPromptStarted, SessionID: sessionID})
+	a.mu.Unlock()
+
 	a.composer.SetText("")
-	a.appendTranscript("\n\n> " + text + "\n\n")
-	a.send.Disable()
+	a.appendTranscript(sessionID, "\n\n> "+text+"\n\n")
+	a.refreshActiveView()
+	fyne.Do(func() { a.list.Refresh() })
+
 	go func() {
 		var result struct {
 			StopReason string `json:"stopReason"`
 		}
 		err := a.client.Call(a.ctx, "session/prompt", map[string]any{
 			"sessionId": sessionID,
-			"prompt": []map[string]any{{"type": "text", "text": text}},
+			"prompt":    []map[string]any{{"type": "text", "text": text}},
 		}, &result)
+
+		a.mu.Lock()
+		kind := desktopstate.EventPromptCompleted
 		if err != nil {
-			a.appendTranscript("\n\n**Error:** " + err.Error() + "\n")
+			kind = desktopstate.EventPromptFailed
 		}
-		fyne.Do(func() { a.send.Enable() })
+		a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: kind, SessionID: sessionID})
+		a.mu.Unlock()
+		if err != nil {
+			a.appendTranscript(sessionID, "\n\n**Error:** "+err.Error()+"\n")
+		}
+		fyne.Do(func() { a.list.Refresh() })
+		a.refreshActiveView()
+	}()
+}
+
+func (a *application) cancelPrompt() {
+	if a.client == nil {
+		return
+	}
+	a.mu.Lock()
+	sessionID := a.state.ActiveSessionID
+	busy := a.sessionBusyLocked(sessionID)
+	a.mu.Unlock()
+	if sessionID == "" || !busy {
+		return
+	}
+	go func() {
+		if err := a.client.Call(a.ctx, "session/cancel", map[string]any{"sessionId": sessionID}, nil); err != nil {
+			a.setStatus("Cancel failed · " + err.Error())
+		}
 	}()
 }
 
@@ -250,7 +305,8 @@ func (a *application) handleEvent(event acpclient.Event) {
 		return
 	}
 	var payload struct {
-		Update struct {
+		SessionID string `json:"sessionId"`
+		Update    struct {
 			Kind   string `json:"sessionUpdate"`
 			Title  string `json:"title"`
 			Status string `json:"status"`
@@ -262,27 +318,79 @@ func (a *application) handleEvent(event acpclient.Event) {
 	if json.Unmarshal(event.Params, &payload) != nil {
 		return
 	}
+	if payload.SessionID == "" {
+		return
+	}
 	switch payload.Update.Kind {
 	case "agent_message_chunk":
-		a.appendTranscript(payload.Update.Content.Text)
+		a.appendTranscript(payload.SessionID, payload.Update.Content.Text)
 	case "tool_call":
-		a.appendTranscript("\n\n`◐ " + payload.Update.Title + "`\n\n")
+		a.appendTranscript(payload.SessionID, "\n\n`◐ "+payload.Update.Title+"`\n\n")
 	case "tool_call_update":
 		if payload.Update.Title != "" {
-			a.appendTranscript("\n`✓ " + payload.Update.Title + "`\n")
+			a.appendTranscript(payload.SessionID, "\n`✓ "+payload.Update.Title+"`\n")
 		}
 	}
 }
 
-func (a *application) appendTranscript(text string) {
+func (a *application) appendTranscript(sessionID, text string) {
 	a.mu.Lock()
-	a.transcript.WriteString(text)
-	markdown := a.transcript.String()
+	builder := a.transcripts[sessionID]
+	if builder == nil {
+		builder = &strings.Builder{}
+		a.transcripts[sessionID] = builder
+	}
+	builder.WriteString(text)
+	active := a.state.ActiveSessionID == sessionID
+	markdown := builder.String()
 	a.mu.Unlock()
+	if !active {
+		return
+	}
 	fyne.Do(func() {
 		a.chat.ParseMarkdown(markdown)
 		a.chat.Refresh()
 	})
+}
+
+func (a *application) refreshActiveView() {
+	a.mu.Lock()
+	activeID := a.state.ActiveSessionID
+	busy := a.sessionBusyLocked(activeID)
+	markdown := ""
+	if transcript := a.transcripts[activeID]; transcript != nil {
+		markdown = transcript.String()
+	}
+	a.mu.Unlock()
+	fyne.Do(func() {
+		a.chat.ParseMarkdown(markdown)
+		a.chat.Refresh()
+		if activeID == "" || busy {
+			a.send.Disable()
+		} else {
+			a.send.Enable()
+		}
+		if busy {
+			a.stop.Enable()
+		} else {
+			a.stop.Disable()
+		}
+	})
+}
+
+func (a *application) sessionBusyLocked(sessionID string) bool {
+	for _, session := range a.state.Sessions {
+		if session.ID != sessionID {
+			continue
+		}
+		switch session.Status {
+		case desktopstate.TaskQueued, desktopstate.TaskRunning, desktopstate.TaskWaitingPermission, desktopstate.TaskWaitingUser:
+			return true
+		default:
+			return false
+		}
+	}
+	return false
 }
 
 func (a *application) setStatus(text string) {
