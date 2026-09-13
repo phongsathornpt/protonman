@@ -34,11 +34,14 @@ func (m *bubbleModel) renderedViewport() string {
 
 func (m *bubbleModel) liveView() string {
 	frame := m.layout.frame
-	parts := make([]string, 0, 6)
+	parts := make([]string, 0, 7)
 	if frame.header != "" {
 		parts = append(parts, frame.header)
 	}
 	parts = append(parts, m.renderedViewport())
+	if frame.divider != "" {
+		parts = append(parts, frame.divider)
+	}
 	if frame.status != "" {
 		parts = append(parts, frame.status)
 	}
@@ -127,16 +130,17 @@ func (m *bubbleModel) resize(width int, height int) {
 	m.layout.width = width
 	m.layout.height = height
 	profile := m.layoutProfile()
-	m.help.SetWidth(profile.ContentWidth(width))
+	contentWidth := profile.ContentWidth(width)
+	m.help.SetWidth(contentWidth)
 	prompt := m.panes.bottom.prompt()
-	prompt.SetWidth(composerUsableWidth(width))
+	prompt.SetWidth(contentWidth)
 	m.panes.transcript.SetWidth(maxInt(1, width-10))
 	m.panes.transcript.SetHeight(maxInt(1, height-10))
 	if view, _ := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView); view != nil {
 		view.resize(width, height)
 	}
 	if m.historyState != nil {
-		m.historyState.SetWidth(width)
+		m.historyState.SetWidth(contentWidth)
 	}
 	m.requestRelayout()
 	m.reconcileLayout()
@@ -155,6 +159,7 @@ type layoutState struct {
 type frameLayout struct {
 	generation uint64
 	header     string
+	divider    string
 	status     string
 	top        string
 	composer   string
@@ -173,29 +178,40 @@ func (m *bubbleModel) layoutProfile() panecommon.Profile {
 func (m *bubbleModel) buildFrameLayout() frameLayout {
 	frame := frameLayout{}
 	profile := m.layoutProfile()
+	contentWidth := profile.ContentWidth(m.layout.width)
 	if profile.ShowHeader {
 		if header := m.sessionHeaderView(); header != "" {
-			separator := mutedStyle.Render(strings.Repeat("─", maxInt(1, m.layout.width)))
-			frame.header = header + "\n" + separator
+			frame.header = header + "\n" + chromeDivider(contentWidth)
 		}
 	}
 	frame.status = m.statusView()
 	frame.top = m.panes.bottom.renderTop(m)
 	frame.footer = m.footerView()
-	for _, part := range []string{frame.header, frame.status, frame.top} {
+	if m.panes.bottom.composerVisible() {
+		frame.divider = chromeDivider(contentWidth)
+		frame.composer = composerContentView(m.promptView())
+	}
+	for _, part := range []string{frame.header, frame.divider, frame.status, frame.top, frame.composer, frame.footer} {
 		if part != "" {
 			frame.height += lipgloss.Height(part)
 		}
 	}
-	if m.panes.bottom.composerVisible() {
-		frame.composer = m.promptView()
-		frame.height += m.panes.bottom.prompt().Height() + 2
-	}
-	if frame.footer != "" {
-		frame.height += lipgloss.Height(frame.footer)
-	}
-
 	return frame
+}
+
+func chromeDivider(width int) string {
+	return mutedStyle.Render(strings.Repeat("─", maxInt(1, width)))
+}
+
+func composerContentView(view string) string {
+	if view == "" {
+		return ""
+	}
+	lines := strings.Split(view, "\n")
+	if len(lines) <= 2 {
+		return view
+	}
+	return strings.Join(lines[1:len(lines)-1], "\n")
 }
 
 type viewportScrollSnapshot struct {
@@ -224,8 +240,9 @@ func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame fram
 	m.layout.frame = frame
 	m.layout.geometry = panecommon.ResolveFrameGeometry(m.layout.width, m.layout.height, frame.height)
 	viewportHeight := m.layout.geometry.ViewportHeight
-	if m.viewport.Width() != m.layout.width || m.viewport.Height() != viewportHeight {
-		m.viewport.SetWidth(m.layout.width)
+	viewportWidth := m.layoutProfile().ContentWidth(m.layout.width)
+	if m.viewport.Width() != viewportWidth || m.viewport.Height() != viewportHeight {
+		m.viewport.SetWidth(viewportWidth)
 		m.viewport.SetHeight(viewportHeight)
 	}
 	m.refreshViewportWithScroll(scroll)
