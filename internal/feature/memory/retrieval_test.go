@@ -13,6 +13,7 @@ type fakeRepository struct {
 	global    []corememory.Entry
 	workspace []corememory.Entry
 	used      []corememory.UsageRef
+	processed map[string]uint64
 }
 
 func (r *fakeRepository) Load(_ context.Context, scope corememory.Scope, _ string) ([]corememory.Entry, error) {
@@ -28,6 +29,21 @@ func (r *fakeRepository) Replace(context.Context, corememory.Scope, string, []co
 
 func (r *fakeRepository) RecordUsage(_ context.Context, refs []corememory.UsageRef, _ time.Time) error {
 	r.used = append(r.used, refs...)
+	return nil
+}
+
+func (r *fakeRepository) ProcessedRevision(_ context.Context, sessionID string) (uint64, bool, error) {
+	revision, ok := r.processed[sessionID]
+	return revision, ok, nil
+}
+
+func (r *fakeRepository) MarkProcessed(_ context.Context, sessionID string, revision uint64) error {
+	if r.processed == nil {
+		r.processed = make(map[string]uint64)
+	}
+	if revision > r.processed[sessionID] {
+		r.processed[sessionID] = revision
+	}
 	return nil
 }
 
