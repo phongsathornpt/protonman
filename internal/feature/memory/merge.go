@@ -12,6 +12,8 @@ import (
 	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 )
 
+const memoryReplacementConfidenceSlack = 0.10
+
 type extractionEvidence struct {
 	SessionID       string
 	SessionRevision uint64
@@ -143,14 +145,16 @@ func mergeEntries(existing, incoming []corememory.Entry, limit int) []corememory
 			byID[next.ID] = next
 			continue
 		}
-		if next.Confidence >= current.Confidence {
+		newer := next.UpdatedAt.After(current.UpdatedAt)
+		nearConfidence := next.Confidence >= current.Confidence-memoryReplacementConfidenceSlack
+		if next.Confidence >= current.Confidence || (newer && nearConfidence && next.Confidence >= minExtractionConfidence) {
 			current.Value = next.Value
 			current.Confidence = next.Confidence
 		}
 		if current.CreatedAt.IsZero() || (!next.CreatedAt.IsZero() && next.CreatedAt.Before(current.CreatedAt)) {
 			current.CreatedAt = next.CreatedAt
 		}
-		if next.UpdatedAt.After(current.UpdatedAt) {
+		if newer {
 			current.UpdatedAt = next.UpdatedAt
 		}
 		current.Keywords = unionStrings(current.Keywords, next.Keywords)
