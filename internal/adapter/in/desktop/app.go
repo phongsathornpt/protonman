@@ -31,16 +31,22 @@ type application struct {
 
 	client *acpclient.Client
 
-	mu          sync.Mutex
-	state       desktopstate.State
-	transcripts map[string]*strings.Builder
+	mu                sync.Mutex
+	state             desktopstate.State
+	transcripts       map[string]*strings.Builder
+	permissionWaiters map[string]chan string
 
-	status   *widget.Label
-	list     *widget.List
-	chat     *widget.RichText
-	composer *widget.Entry
-	send     *widget.Button
-	stop     *widget.Button
+	status            *widget.Label
+	list              *widget.List
+	chat              *widget.RichText
+	composer          *widget.Entry
+	send              *widget.Button
+	stop              *widget.Button
+	permissionInbox   *widget.Button
+	permissionPanel   *fyne.Container
+	permissionTitle   *widget.Label
+	permissionDetail  *widget.Label
+	permissionActions *fyne.Container
 }
 
 // Run starts Protonman Desktop. The desktop is deliberately a thin ACP client;
@@ -51,13 +57,30 @@ func Run(ctx context.Context) error {
 	w := a.NewWindow("Protonman")
 	w.Resize(fyne.NewSize(1220, 780))
 
-	ui := &application{ctx: ctx, transcripts: make(map[string]*strings.Builder)}
+	ui := &application{
+		ctx:               ctx,
+		transcripts:       make(map[string]*strings.Builder),
+		permissionWaiters: make(map[string]chan string),
+	}
 	ui.status = widget.NewLabel("Connecting to Protonman…")
 	ui.chat = widget.NewRichTextFromMarkdown("")
 	ui.composer = widget.NewEntry()
 	ui.composer.SetPlaceHolder("Message protonMAN…")
 	ui.send = widget.NewButton("Send", ui.sendPrompt)
 	ui.stop = widget.NewButtonWithIcon("", theme.MediaStopIcon(), ui.cancelPrompt)
+	ui.permissionInbox = widget.NewButton("Permissions 0", ui.selectNextPermission)
+	ui.permissionTitle = widget.NewLabelWithStyle("Permission required", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	ui.permissionDetail = widget.NewLabel("")
+	ui.permissionDetail.Wrapping = fyne.TextWrapWord
+	ui.permissionActions = container.NewHBox()
+	ui.permissionPanel = container.NewVBox(
+		widget.NewSeparator(),
+		ui.permissionTitle,
+		ui.permissionDetail,
+		ui.permissionActions,
+		widget.NewSeparator(),
+	)
+	ui.permissionPanel.Hide()
 	ui.send.Disable()
 	ui.stop.Disable()
 
@@ -107,6 +130,7 @@ func Run(ctx context.Context) error {
 		}
 		ui.mu.Unlock()
 		ui.refreshActiveView()
+		ui.refreshPermissionView()
 	}
 
 	search := widget.NewEntry()
@@ -115,7 +139,7 @@ func Run(ctx context.Context) error {
 	sidebarHeader := container.NewBorder(nil, nil, nil, newTask, widget.NewLabelWithStyle("protonMAN", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
 	sidebar := container.NewBorder(
 		container.NewVBox(sidebarHeader, search),
-		container.NewVBox(widget.NewSeparator(), widget.NewLabel("Desktop via ACP")),
+		container.NewVBox(widget.NewSeparator(), ui.permissionInbox, widget.NewLabel("Desktop via ACP")),
 		nil,
 		nil,
 		ui.list,
@@ -129,7 +153,8 @@ func Run(ctx context.Context) error {
 		),
 	)
 	composer := container.NewBorder(nil, nil, nil, ui.send, ui.composer)
-	conversation := container.NewBorder(header, composer, nil, nil, container.NewVScroll(ui.chat))
+	conversationBody := container.NewBorder(ui.permissionPanel, nil, nil, nil, container.NewVScroll(ui.chat))
+	conversation := container.NewBorder(header, composer, nil, nil, conversationBody)
 
 	split := container.NewHSplit(sidebar, conversation)
 	split.Offset = 0.29
@@ -153,6 +178,7 @@ func (a *application) connect() {
 		a.setStatus("Disconnected · " + err.Error())
 		return
 	}
+	client.SetRequestHandler(a.handleRequest)
 	a.client = client
 
 	var initResult struct {
@@ -216,6 +242,7 @@ func (a *application) refreshSessions() {
 	a.mu.Unlock()
 	fyne.Do(func() { a.list.Refresh() })
 	a.refreshActiveView()
+	a.refreshPermissionView()
 }
 
 func (a *application) newSession() {
@@ -236,6 +263,7 @@ func (a *application) newSession() {
 		a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventSessionSelected, SessionID: result.SessionID})
 		a.mu.Unlock()
 		a.refreshActiveView()
+		a.refreshPermissionView()
 	}()
 }
 
@@ -376,6 +404,68 @@ func (a *application) refreshActiveView() {
 			a.stop.Disable()
 		}
 	})
+}
+
+func (a *application) refreshPermissionView() {
+	a.mu.Lock()
+	activeID := a.state.ActiveSessionID
+	count := len(a.state.PermissionInbox)
+	var current *desktopstate.PermissionRequest
+	for i := range a.state.PermissionInbox {
+		if a.state.PermissionInbox[i].SessionID == activeID {
+			item := a.state.PermissionInbox[i]
+			current = &item
+			break
+		}
+	}
+	a.mu.Unlock()
+
+	fyne.Do(func() {
+		a.permissionInbox.SetText(fmt.Sprintf("Permissions %d", count))
+		if current == nil {
+			a.permissionPanel.Hide()
+			return
+		}
+		a.permissionTitle.SetText("Permission required · " + current.Title)
+		detail := current.Detail
+		if strings.TrimSpace(detail) == "" {
+			detail = "Review the requested tool action before continuing."
+		}
+		a.permissionDetail.SetText(detail)
+		a.permissionActions.Objects = nil
+		for _, option := range current.Options {
+			option := option
+			requestID := current.RequestID
+			a.permissionActions.Add(widget.NewButton(option.Name, func() {
+				a.resolvePermission(requestID, option.ID)
+			}))
+		}
+		a.permissionActions.Refresh()
+		a.permissionPanel.Show()
+	})
+}
+
+func (a *application) selectNextPermission() {
+	a.mu.Lock()
+	if len(a.state.PermissionInbox) == 0 {
+		a.mu.Unlock()
+		return
+	}
+	sessionID := a.state.PermissionInbox[0].SessionID
+	a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventSessionSelected, SessionID: sessionID})
+	index := -1
+	for i := range a.state.Sessions {
+		if a.state.Sessions[i].ID == sessionID {
+			index = i
+			break
+		}
+	}
+	a.mu.Unlock()
+	if index >= 0 {
+		fyne.Do(func() { a.list.Select(widget.ListItemID(index)) })
+	}
+	a.refreshActiveView()
+	a.refreshPermissionView()
 }
 
 func (a *application) sessionBusyLocked(sessionID string) bool {
