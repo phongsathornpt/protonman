@@ -30,6 +30,7 @@ type SessionRegistryFactory func(sessionID string, cwd string) (tool.Registry, e
 type MCPRegistryConfigurer func(ctx context.Context, cwd string, registry tool.Registry, servers []MCPServerConfig) (io.Closer, error)
 
 func WithSessions(sessions *app.Sessions) Option { return func(server *Server) { server.sessionService = sessions } }
+func WithMemories(memories *app.Memories) Option { return func(server *Server) { server.memories = memories } }
 func WithAgents(agents app.Agents) Option { return func(server *Server) { server.agents = agents } }
 func WithRunnerFactory(factory RunnerFactory) Option { return func(s *Server) { s.runnerFactory = factory } }
 func WithSessionRegistryFactory(factory SessionRegistryFactory) Option { return func(s *Server) { s.sessionRegistryFactory = factory } }
@@ -42,6 +43,7 @@ type Server struct {
 	sessionRegistryFactory SessionRegistryFactory
 	mcpRegistryConfigurer  MCPRegistryConfigurer
 	sessionService         *app.Sessions
+	memories               *app.Memories
 	agents                 app.Agents
 	mu                     sync.Mutex
 	writeMu                sync.Mutex
@@ -221,6 +223,12 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		var params ProtonmanSessionContextParams
 		if err := json.Unmarshal(request.Params, &params); err != nil { return nil, nil, fmt.Errorf("decode %s: %w", methodSessionContext, err) }
 		result, err := s.sessionContext(ctx, params.SessionID)
+		if err != nil { return nil, nil, err }
+		return result, nil, nil
+	case methodSessionMemory:
+		var params ProtonmanSessionMemoryParams
+		if err := json.Unmarshal(request.Params, &params); err != nil { return nil, nil, fmt.Errorf("decode %s: %w", methodSessionMemory, err) }
+		result, err := s.sessionMemory(ctx, params.SessionID)
 		if err != nil { return nil, nil, err }
 		return result, nil, nil
 	case "session/delete":
