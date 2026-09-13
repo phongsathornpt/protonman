@@ -353,7 +353,7 @@ func appendPaneGroup(out []string, group ...string) []string {
 }
 
 func paneSection(title string, rows []string, help string, status string, width int) []string {
-	out := []string{brandStyle.Render(title)}
+	out := []string{tuistyle.PaneTitleStyle.Render(title)}
 	out = appendPaneGroup(out, rows...)
 	if help != "" {
 		out = appendPaneGroup(out, help)
@@ -365,14 +365,5 @@ func paneSection(title string, rows []string, help string, status string, width 
 }
 
 func paneToneColor(tone panecommon.Tone) color.Color {
-	switch tone {
-	case panecommon.ToneUser:
-		return accentUser
-	case panecommon.ToneError:
-		return accentError
-	case panecommon.ToneWarning:
-		return warningColor
-	default:
-		return accentAssistant
-	}
+	return panecommon.ToneColor(tone)
 }
