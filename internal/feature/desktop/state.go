@@ -211,7 +211,7 @@ func upsertTimeline(session *SessionState, item TimelineItem) {
 	if item.ID != "" {
 		for i := range session.Timeline {
 			if session.Timeline[i].ID == item.ID && session.Timeline[i].Kind == item.Kind {
-				session.Timeline[i] = item
+				session.Timeline[i] = MergeTimelineItem(session.Timeline[i], item)
 				return
 			}
 		}
