@@ -18,8 +18,8 @@ func TestFinalVisualPolishUsesSingleWorkDivider(t *testing.T) {
 	if frame.divider == "" {
 		t.Fatal("composer region is missing its work divider")
 	}
-	if got, want := ansi.StringWidth(frame.divider), m.layoutProfile().ContentWidth(80); got != want {
-		t.Fatalf("divider width = %d, want %d", got, want)
+	if got := ansi.StringWidth(frame.divider); got != 80 {
+		t.Fatalf("divider width = %d, want terminal width 80", got)
 	}
 	if strings.Contains(ansi.Strip(frame.composer), "──") {
 		t.Fatalf("composer retained nested border chrome: %q", ansi.Strip(frame.composer))
@@ -29,20 +29,16 @@ func TestFinalVisualPolishUsesSingleWorkDivider(t *testing.T) {
 	}
 }
 
-func TestFinalVisualPolishSharesContentWidth(t *testing.T) {
-	for _, width := range []int{24, 40, 60, 80, 120} {
-		m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-		m.runner = fakeConversation{}
-		m.panes.bottom.setHasRunner(true)
-		m.resize(width, 24)
+func TestFinalVisualPolishHasTwoSectionRules(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.runner = fakeConversation{}
+	m.panes.bottom.setHasRunner(true)
+	m.resize(80, 24)
 
-		want := m.layoutProfile().ContentWidth(width)
-		if got := m.viewport.Width(); got != want {
-			t.Fatalf("viewport width at %d columns = %d, want %d", width, got, want)
-		}
-		if got := m.panes.bottom.prompt().Width(); got != want {
-			t.Fatalf("composer width at %d columns = %d, want %d", width, got, want)
-		}
+	view := ansi.Strip(m.View().Content)
+	rule := strings.Repeat("─", 80)
+	if got := strings.Count(view, rule); got != 2 {
+		t.Fatalf("section rule count = %d, want header + work rules; view=%q", got, view)
 	}
 }
 
@@ -61,13 +57,17 @@ func TestFinalVisualPolishOrdersDividerBeforeLiveStatus(t *testing.T) {
 
 	view := ansi.Strip(m.View().Content)
 	work := strings.Index(view, "WORK_SENTINEL")
-	divider := strings.Index(view[work+len("WORK_SENTINEL"):], strings.Repeat("─", 8))
 	status := strings.Index(view, "STATUS_SENTINEL")
 	composer := strings.Index(view, "> ")
-	if work < 0 || divider < 0 || status < 0 || composer < 0 {
+	if work < 0 || status < 0 || composer < 0 {
 		t.Fatalf("final chrome markers missing: %q", view)
 	}
-	divider += work + len("WORK_SENTINEL")
+	tail := view[work+len("WORK_SENTINEL"):]
+	relativeDivider := strings.Index(tail, strings.Repeat("─", 8))
+	if relativeDivider < 0 {
+		t.Fatalf("work divider missing after transcript content: %q", view)
+	}
+	divider := work + len("WORK_SENTINEL") + relativeDivider
 	if !(work < divider && divider < status && status < composer) {
 		t.Fatalf("final chrome order changed: work=%d divider=%d status=%d composer=%d", work, divider, status, composer)
 	}
