@@ -17,6 +17,7 @@ const (
 	SessionsDir        = "sessions"
 	CheckpointsDir     = "checkpoints"
 	SkillsDir          = "skills"
+	MemoryDir          = "memory"
 	LogsDir            = "logs"
 	SkillsLockFileName = "skills-lock.json"
 )
@@ -29,6 +30,7 @@ type Dirs struct {
 	Sessions    string
 	Checkpoints string
 	Skills      string
+	Memory      string
 	Logs        string
 }
 
@@ -72,6 +74,7 @@ func dirsForRoot(home, root string) Dirs {
 		Sessions:    filepath.Join(root, SessionsDir),
 		Checkpoints: filepath.Join(root, CheckpointsDir),
 		Skills:      filepath.Join(root, SkillsDir),
+		Memory:      filepath.Join(root, MemoryDir),
 		Logs:        filepath.Join(root, LogsDir),
 	}
 }
@@ -112,6 +115,15 @@ func UserSkillsDisplay() string {
 		return "~/.protonman/skills/"
 	}
 	return displayPath(dirs.Skills) + string(filepath.Separator)
+}
+
+// UserMemoryDisplay returns the effective durable-memory directory shown to users.
+func UserMemoryDisplay() string {
+	dirs, err := Resolve("")
+	if err != nil {
+		return "~/.protonman/memory/"
+	}
+	return displayPath(dirs.Memory) + string(filepath.Separator)
 }
 
 // UserMCPLogsDisplay returns the effective MCP log directory shown to users.
