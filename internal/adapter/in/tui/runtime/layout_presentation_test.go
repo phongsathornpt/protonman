@@ -29,14 +29,20 @@ func TestSessionHeaderUsesSharedLayoutProfile(t *testing.T) {
 	}
 }
 
-func TestFrameReservesStatusRowToKeepComposerStable(t *testing.T) {
+func TestFlexibleViewportKeepsComposerPositionStableAcrossActivity(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
 
-	idleHeight := m.layout.frame.height
+	partHeight := func(part string) int {
+		if part == "" {
+			return 0
+		}
+		return strings.Count(part, "\n") + 1
+	}
 	idleViewportHeight := m.viewport.Height()
-	if m.layout.frame.status == "" || strings.TrimSpace(m.layout.frame.status) != "" {
-		t.Fatalf("idle frame should reserve a blank status row: %q", m.layout.frame.status)
+	idlePreComposerHeight := idleViewportHeight + partHeight(m.layout.frame.status)
+	if m.layout.frame.status != "" {
+		t.Fatalf("idle status = %q, want empty", m.layout.frame.status)
 	}
 
 	m.busy = true
@@ -45,11 +51,16 @@ func TestFrameReservesStatusRowToKeepComposerStable(t *testing.T) {
 	m.requestRelayout()
 	m.reconcileLayout()
 
-	if got := m.layout.frame.height; got != idleHeight {
-		t.Fatalf("frame height changed from idle %d to busy %d", idleHeight, got)
+	busyViewportHeight := m.viewport.Height()
+	busyPreComposerHeight := busyViewportHeight + partHeight(m.layout.frame.status)
+	if m.layout.frame.status == "" {
+		t.Fatal("busy frame should render a status row")
 	}
-	if got := m.viewport.Height(); got != idleViewportHeight {
-		t.Fatalf("viewport height changed from idle %d to busy %d", idleViewportHeight, got)
+	if busyPreComposerHeight != idlePreComposerHeight {
+		t.Fatalf("pre-composer height changed from idle %d to busy %d", idlePreComposerHeight, busyPreComposerHeight)
+	}
+	if busyViewportHeight != idleViewportHeight-1 {
+		t.Fatalf("busy viewport height = %d, want idle height %d minus one status row", busyViewportHeight, idleViewportHeight)
 	}
 }
 
