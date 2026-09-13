@@ -250,7 +250,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		Providers:    app.NewProviders(config.NewUserProviderRepository(homeDir)),
 		Projects:     app.NewProjects(config.ProjectSettingsStore{}),
 		UserSettings: app.NewUserSettings(config.NewUserSettingsStore(homeDir)),
-		ModelFactory: memoryfeature.NewModelFactory(baseModelFactory, memoryStore, workspaceKey(workDir), runtimepolicy.DurableMemory()),
+		ModelFactory: memoryfeature.NewPrimaryModelFactory(baseModelFactory, memoryStore, stateStore, sessionID, workspaceKey(workDir), runtimepolicy.DurableMemory()),
 	}
 	failed := true
 	defer func() {
