@@ -8,20 +8,18 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/key"
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transcriptutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/runtimeui"
 	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
 	agentpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/agent"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
-
-var promptBorderStyle = lipgloss.NewStyle().Foreground(promptBorder)
 
 func promptPlaceholder(hasRunner bool, mode permission.Mode, planMode bool) string {
 	if !hasRunner {
@@ -56,9 +54,19 @@ func (m *bubbleModel) promptView() string {
 	if m.panes.bottom == nil || m.panes.bottom.prompt() == nil {
 		return ""
 	}
+	prompt := m.panes.bottom.prompt()
+	dividerStyle := tuistyle.PromptDividerIdle
+	switch {
+	case m.permissionView() != nil:
+		dividerStyle = tuistyle.PromptDividerWarning
+	case m.service != nil && m.service.Mode() == permission.ModeDeny:
+		dividerStyle = tuistyle.PromptDividerError
+	case prompt.Focused():
+		dividerStyle = tuistyle.PromptDividerFocused
+	}
 	usableWidth := composerUsableWidth(m.layout.width)
-	border := promptBorderStyle.Render(strings.Repeat("─", usableWidth))
-	return border + "\n" + m.panes.bottom.prompt().View() + "\n" + border
+	border := dividerStyle.Render(strings.Repeat("─", usableWidth))
+	return border + "\n" + prompt.View() + "\n" + border
 }
 
 func (m *bubbleModel) modeChip() string {
