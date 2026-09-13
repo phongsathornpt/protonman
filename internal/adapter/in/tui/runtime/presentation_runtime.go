@@ -9,6 +9,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transcriptutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
 	agentpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/agent"
@@ -70,7 +71,7 @@ func (m *bubbleModel) modeChipFor(mode permission.Mode) string {
 	if m.planMode {
 		return planStyle.Render("mode: plan · read-only")
 	}
-	if m.layout.width < 40 {
+	if m.layoutProfile().Mode != layoutNormal {
 		switch mode {
 		case permission.ModeAlwaysApprove:
 			return warningStyle.Render("auto")
@@ -101,7 +102,7 @@ func (m bubbleModel) shortcutHint() string {
 	}
 	helpView := m.help
 	helpView.ShowAll = false
-	helpView.SetWidth(maxInt(1, m.layout.width-2))
+	helpView.SetWidth(m.layoutProfile().ContentWidth(m.layout.width))
 	if m.slashOpen() {
 		return helpView.View(contextualHelp{
 			key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "accept")),
@@ -185,8 +186,10 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 }
 
 func (m bubbleModel) statusView() string {
+	profile := m.layoutProfile()
+	maxWidth := profile.ContentWidth(m.layout.width)
 	if m.hasPermissionView() {
-		return warningStyle.Render(truncateWithEllipsis("action required · permission", maxInt(1, m.layout.width-2)))
+		return warningStyle.Render(truncateWithEllipsis("action required · permission", maxInt(1, maxWidth)))
 	}
 	if !m.busy {
 		return ""
@@ -232,12 +235,16 @@ func (m bubbleModel) statusView() string {
 			meta = fmt.Sprintf(" · %d %s", m.turnProgress.ToolCalls, label)
 		}
 	}
+	if !m.busyStarted.IsZero() {
+		if elapsed := formatElapsed(time.Since(m.busyStarted)); elapsed != "" {
+			meta += " · " + elapsed
+		}
+	}
 	indicator := brandMarkStyle.Render("◌")
 	if spin := m.spinnerIndicator(); spin != "" {
 		indicator = spin
 	}
-	maxWidth := maxInt(1, m.layout.width-2)
-	contentWidth := maxInt(1, maxWidth-2-len([]rune(meta)))
+	contentWidth := maxInt(1, maxWidth-2-ansi.StringWidth(meta))
 	activity = truncateWithEllipsis(activity, contentWidth)
 	busyLine := indicator + " " + systemStyle.Render(activity) + mutedStyle.Render(meta)
 	return busyLine
@@ -250,10 +257,11 @@ type sessionHeaderCache struct {
 }
 
 func (m *bubbleModel) sessionHeaderView() string {
-	if m == nil || m.layout.height < 10 {
+	if m == nil {
 		return ""
 	}
-	if m.panes.bottom != nil && m.panes.bottom.top() != nil && m.layout.height < 18 {
+	profile := m.layoutProfile()
+	if !profile.ShowHeader {
 		return ""
 	}
 	cache := &m.sessionHeaderCache
@@ -265,14 +273,14 @@ func (m *bubbleModel) sessionHeaderView() string {
 		cache.branchValid = true
 	}
 	return renderSessionHeader(sessionHeaderModel{
-		Width:          maxInt(1, m.layout.width-2),
+		Width:          profile.ContentWidth(m.layout.width),
 		Model:          m.activeModel,
 		LowConcurrency: m.lowConcurrencyEffective(),
 		GoalActive:     strings.TrimSpace(m.activeGoal) != "",
 		Branch:         cache.branch,
 		Workspace:      transcriptutil.FormatWorkspaceDisplay(m.workDir),
-		Compact:        m.layout.height < 18,
-		Minimal:        m.layout.height < 14,
+		Compact:        profile.CompactHeader(),
+		Minimal:        profile.MinimalHeader(),
 	})
 }
 
@@ -375,11 +383,12 @@ func agentActivityCounts(snapshot []agent.AgentStatus) (active, running, queued,
 }
 
 func (m *bubbleModel) infoView() string {
+	width := m.layoutProfile().ContentWidth(m.layout.width)
 	if view := m.permissionView(); view != nil {
 		if view.parked {
-			return paneKeyboardHelp(maxInt(1, m.layout.width-2), "tab", "Review", "y", "Once", "s", "Session", "n", "Deny")
+			return paneKeyboardHelp(width, "tab", "Review", "y", "Once", "s", "Session", "n", "Deny")
 		}
-		return paneKeyboardHelp(maxInt(1, m.layout.width-2), "y", "Once", "s", "Session", "n", "Deny", "esc", "Review")
+		return paneKeyboardHelp(width, "y", "Once", "s", "Session", "n", "Deny", "esc", "Review")
 	}
 	if m.planMode {
 		return planStyle.Render("plan · read-only")
