@@ -143,8 +143,10 @@ func (a *application) refreshActiveView() {
 	if activeID != "" {
 		a.refreshSessionContext(activeID, false)
 		a.refreshSessionMemory(activeID, false)
+		a.refreshSessionRuntime(activeID, false)
 	}
 	a.renderActiveView()
+	a.renderRuntimeControls()
 }
 
 func (a *application) renderActiveView() {

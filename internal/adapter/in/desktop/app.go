@@ -49,6 +49,12 @@ type application struct {
 	permissionTitle   *widget.Label
 	permissionDetail  *widget.Label
 	permissionActions *fyne.Container
+	modelProvider     *widget.Entry
+	modelID           *widget.Entry
+	applyModel        *widget.Button
+	reasoningSelect   *widget.Select
+	lowSelect         *widget.Select
+	runtimeSync       bool
 }
 
 // Run starts Protonman Desktop. The desktop is deliberately a thin ACP client;
@@ -85,6 +91,21 @@ func Run(ctx context.Context) error {
 	ui.permissionPanel.Hide()
 	ui.send.Disable()
 	ui.stop.Disable()
+	ui.modelProvider = widget.NewEntry()
+	ui.modelProvider.SetPlaceHolder("provider")
+	ui.modelID = widget.NewEntry()
+	ui.modelID.SetPlaceHolder("model")
+	ui.applyModel = widget.NewButton("Apply", ui.setRuntimeModel)
+	ui.reasoningSelect = widget.NewSelect([]string{"auto", "none", "minimal", "low", "medium", "high", "xhigh", "max"}, func(value string) {
+		if !ui.runtimeSync {
+			ui.setRuntimeReasoning(value)
+		}
+	})
+	ui.lowSelect = widget.NewSelect([]string{"auto", "on", "off"}, func(value string) {
+		if !ui.runtimeSync {
+			ui.setRuntimeLowConcurrency(value)
+		}
+	})
 
 	ui.list = widget.NewList(
 		func() int {
@@ -169,8 +190,9 @@ func Run(ctx context.Context) error {
 		ui.list,
 	)
 
+	runtimeControls := container.NewHBox(ui.modelProvider, ui.modelID, ui.applyModel, widget.NewLabel("Reasoning"), ui.reasoningSelect, widget.NewLabel("Low"), ui.lowSelect)
 	headerActions := container.NewHBox(ui.stop, ui.status)
-	header := container.NewBorder(nil, nil, nil, headerActions,
+	header := container.NewBorder(runtimeControls, nil, nil, headerActions,
 		container.NewVBox(
 			widget.NewLabelWithStyle("protonMAN", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			widget.NewLabel("Coding agent · ACP"),
@@ -230,6 +252,8 @@ func (a *application) refreshSessions() {
 			projected.Status = previous.Status
 			projected.Timeline = previous.Timeline
 			projected.Subagents = previous.Subagents
+			projected.Context = previous.Context
+			projected.Runtime = previous.Runtime
 			if strings.TrimSpace(projected.Workspace) == "" {
 				projected.Workspace = previous.Workspace
 			}

@@ -77,6 +77,14 @@ type MemoryState struct {
 	Global       []MemoryEntryState
 }
 
+// RuntimeSettingsState is the reducer-owned session runtime selection.
+type RuntimeSettingsState struct {
+	Provider       string
+	Model          string
+	Reasoning      string
+	LowConcurrency string
+}
+
 // SessionContextState contains inspectable durable goal, TODO, and memory state.
 type SessionContextState struct {
 	Goal   string
@@ -111,6 +119,7 @@ type SessionState struct {
 	Timeline      []TimelineItem
 	Subagents     []SubagentState
 	Context       SessionContextState
+	Runtime       RuntimeSettingsState
 }
 
 // State owns desktop session state independently from Fyne widgets.
@@ -137,6 +146,7 @@ const (
 	EventSubagentUpserted
 	EventSessionContextUpdated
 	EventSessionMemoryUpdated
+	EventSessionRuntimeUpdated
 )
 
 // Event is a typed reducer input. Only fields relevant to Kind are consumed.
@@ -148,6 +158,7 @@ type Event struct {
 	Subagent   SubagentState
 	Context    SessionContextState
 	Memory     MemoryState
+	Runtime    RuntimeSettingsState
 	Permission PermissionRequest
 	RequestID  string
 }
@@ -203,6 +214,10 @@ func Reduce(current State, event Event) State {
 	case EventSessionMemoryUpdated:
 		if session := sessionByID(&next, event.SessionID); session != nil {
 			session.Context.Memory = cloneMemoryState(event.Memory)
+		}
+	case EventSessionRuntimeUpdated:
+		if session := sessionByID(&next, event.SessionID); session != nil {
+			session.Runtime = event.Runtime
 		}
 	}
 
