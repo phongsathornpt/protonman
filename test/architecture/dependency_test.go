@@ -38,6 +38,7 @@ func TestCorePackagesDoNotDependOnOuterLayers(t *testing.T) {
 	for _, core := range []string{
 		modulePath + "/internal/core/agentidentity",
 		modulePath + "/internal/core/conversation",
+		modulePath + "/internal/core/memory",
 		modulePath + "/internal/core/modelprofile",
 		modulePath + "/internal/core/permission",
 		modulePath + "/internal/core/session",
@@ -349,7 +350,6 @@ func TestSDKDoesNotDependOnCLIInternals(t *testing.T) {
 			if strings.HasPrefix(imported, modulePath+"/internal/") || strings.HasPrefix(imported, modulePath+"/cmd/") {
 				t.Errorf("%s imports CLI-owned package %s", path, imported)
 			}
-		}
 	}
 }
 
