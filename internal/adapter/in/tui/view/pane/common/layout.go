@@ -150,8 +150,14 @@ func CompactRows(rows []string) []string {
 }
 
 func RenderModal(width, height int, border color.Color, rows []string) string {
+	mode := ModeForHeight(height)
 	style := tuistyle.ModalStyle.BorderForeground(border).MaxWidth(max(1, width-4))
-	if ModeForHeight(height) != LayoutNormal {
+	if mode == LayoutTiny {
+		// Every column matters on tiny terminals. Drop decorative horizontal
+		// padding and let content consume the full terminal width so short titles
+		// remain readable instead of being needlessly truncated.
+		style = style.Padding(0).MaxWidth(max(1, width))
+	} else if mode == LayoutCompact {
 		style = style.Padding(0, 1)
 	}
 	return style.Render(strings.Join(rows, "\n"))
