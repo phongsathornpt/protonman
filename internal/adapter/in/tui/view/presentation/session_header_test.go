@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 )
 
 func TestRenderSessionHeaderFull(t *testing.T) {
@@ -15,6 +16,24 @@ func TestRenderSessionHeaderFull(t *testing.T) {
 		" /|__|\\    feat/tui-brand"
 	if got != want {
 		t.Fatalf("session header mismatch:\n got: %q\nwant: %q", got, want)
+	}
+}
+
+func TestRenderSessionHeaderMetaUsesSemanticHierarchy(t *testing.T) {
+	got := renderSessionHeaderMeta(SessionHeaderModel{
+		Model:          "qwen3.8-27b",
+		LowConcurrency: true,
+		GoalActive:     true,
+	}, 80)
+
+	if !strings.Contains(got, tuistyle.SystemStyle.Render("qwen3.8-27b")) {
+		t.Fatalf("model does not use system style: %q", got)
+	}
+	if !strings.Contains(got, tuistyle.MutedStyle.Render("low")) {
+		t.Fatalf("low-concurrency flag does not use muted style: %q", got)
+	}
+	if !strings.Contains(got, tuistyle.FocusStyle.Render("goal active")) {
+		t.Fatalf("goal flag does not use focus style: %q", got)
 	}
 }
 
