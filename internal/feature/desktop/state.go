@@ -64,9 +64,9 @@ type SessionState struct {
 
 // State owns desktop session state independently from Fyne widgets.
 type State struct {
-	ActiveSessionID  string
-	Sessions         []SessionState
-	PermissionInbox  []PermissionRequest
+	ActiveSessionID string
+	Sessions        []SessionState
+	PermissionInbox []PermissionRequest
 }
 
 // EventKind identifies a reducer transition.
@@ -82,6 +82,7 @@ const (
 	EventPermissionRequested
 	EventPermissionResolved
 	EventTimelineAppended
+	EventTimelineUpserted
 )
 
 // Event is a typed reducer input. Only fields relevant to Kind are consumed.
@@ -127,6 +128,10 @@ func Reduce(current State, event Event) State {
 	case EventTimelineAppended:
 		if session := sessionByID(&next, event.SessionID); session != nil {
 			session.Timeline = append(session.Timeline, event.Item)
+		}
+	case EventTimelineUpserted:
+		if session := sessionByID(&next, event.SessionID); session != nil {
+			upsertTimeline(session, event.Item)
 		}
 	}
 
@@ -200,4 +205,16 @@ func setStatus(state *State, id string, status TaskStatus) {
 	if session := sessionByID(state, id); session != nil {
 		session.Status = status
 	}
+}
+
+func upsertTimeline(session *SessionState, item TimelineItem) {
+	if item.ID != "" {
+		for i := range session.Timeline {
+			if session.Timeline[i].ID == item.ID && session.Timeline[i].Kind == item.Kind {
+				session.Timeline[i] = item
+				return
+			}
+		}
+	}
+	session.Timeline = append(session.Timeline, item)
 }
