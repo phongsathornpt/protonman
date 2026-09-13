@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/memoryfs"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/sessionfs"
 	agenttool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/agent"
@@ -26,6 +27,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
+	memoryfeature "github.com/phongsathornpt/protonman/internal/feature/memory"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 	"github.com/phongsathornpt/protonman/internal/platform/checkpoint"
@@ -143,6 +145,10 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	if err != nil {
 		return nil, fmt.Errorf("create session store: %w", err)
 	}
+	memoryStore, err := memoryfs.NewFileStore(dirs.Memory)
+	if err != nil {
+		return nil, fmt.Errorf("create memory store: %w", err)
+	}
 	observer, err := configuredTelemetryObserver()
 	if err != nil {
 		return nil, err
@@ -238,12 +244,13 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		}
 		persistDone()
 	}
+	baseModelFactory := model.Factory{}
 	application := app.Services{
 		Models:       app.NewModels(model.Catalog{}),
 		Providers:    app.NewProviders(config.NewUserProviderRepository(homeDir)),
 		Projects:     app.NewProjects(config.ProjectSettingsStore{}),
 		UserSettings: app.NewUserSettings(config.NewUserSettingsStore(homeDir)),
-		ModelFactory: model.Factory{},
+		ModelFactory: memoryfeature.NewModelFactory(baseModelFactory, memoryStore, workspaceKey(workDir), runtimepolicy.DurableMemory()),
 	}
 	failed := true
 	defer func() {
@@ -256,7 +263,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		Overrides:      loadedConfig.Agent.Subagents,
 		SessionID:      sessionID,
 		RequestTimeout: loadedConfig.Runtime.ModelRequestTimeout,
-		ModelFactory:   application.ModelFactory,
+		ModelFactory:   baseModelFactory,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("configure subagent models: %w", err)
