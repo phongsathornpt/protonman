@@ -245,6 +245,8 @@ func (m bubbleModel) statusView() string {
 	if spin := m.spinnerIndicator(); spin != "" {
 		indicator = spin
 	}
+	prefix := indicator + " "
+	prefixWidth := ansi.StringWidth(prefix)
 
 	activityText := state.Activity
 	if (state.Phase == runtimeui.PhaseDelegating || state.Phase == runtimeui.PhaseCanceling) && len(state.Meta) > 0 {
@@ -259,15 +261,15 @@ func (m bubbleModel) statusView() string {
 	suffix := ""
 	if meta != "" {
 		const minimumActivityWidth = 8
-		metaBudget := maxInt(0, maxWidth-2-minimumActivityWidth-3)
+		metaBudget := maxInt(0, maxWidth-prefixWidth-minimumActivityWidth-3)
 		if metaBudget > 0 {
 			meta = truncateWithEllipsis(meta, metaBudget)
 			suffix = " · " + meta
 		}
 	}
-	contentWidth := maxInt(1, maxWidth-2-ansi.StringWidth(suffix))
+	contentWidth := maxInt(1, maxWidth-prefixWidth-ansi.StringWidth(suffix))
 	activity := truncateWithEllipsis(activityText, contentWidth)
-	return indicator + " " + systemStyle.Render(activity) + mutedStyle.Render(suffix)
+	return prefix + systemStyle.Render(activity) + mutedStyle.Render(suffix)
 }
 
 type sessionHeaderCache struct {
