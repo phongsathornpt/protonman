@@ -1,0 +1,148 @@
+package desktop
+
+import "slices"
+
+// TaskStatus is the durable UI-facing lifecycle of a desktop session turn.
+type TaskStatus string
+
+const (
+	TaskIdle              TaskStatus = "idle"
+	TaskQueued            TaskStatus = "queued"
+	TaskRunning           TaskStatus = "running"
+	TaskWaitingPermission TaskStatus = "waiting_permission"
+	TaskWaitingUser       TaskStatus = "waiting_user"
+	TaskPaused            TaskStatus = "paused"
+	TaskCompleted         TaskStatus = "completed"
+	TaskFailed            TaskStatus = "failed"
+)
+
+// TimelineKind identifies one visible conversation/progress item.
+type TimelineKind string
+
+const (
+	TimelineUser       TimelineKind = "user"
+	TimelineAssistant  TimelineKind = "assistant"
+	TimelineTool       TimelineKind = "tool"
+	TimelineSubagent   TimelineKind = "subagent"
+	TimelinePermission TimelineKind = "permission"
+	TimelineStatus     TimelineKind = "status"
+)
+
+// TimelineItem is presentation-neutral desktop timeline state.
+type TimelineItem struct {
+	Kind   TimelineKind
+	ID     string
+	Title  string
+	Text   string
+	Status string
+}
+
+// SessionState is the desktop projection of one ACP session.
+type SessionState struct {
+	ID        string
+	Title     string
+	Workspace string
+	Status    TaskStatus
+	Timeline  []TimelineItem
+}
+
+// State owns desktop session state independently from Fyne widgets.
+type State struct {
+	ActiveSessionID string
+	Sessions        []SessionState
+}
+
+// EventKind identifies a reducer transition.
+type EventKind uint8
+
+const (
+	EventSessionsReplaced EventKind = iota
+	EventSessionSelected
+	EventPromptQueued
+	EventPromptStarted
+	EventPromptCompleted
+	EventPromptFailed
+	EventPermissionRequested
+	EventPermissionResolved
+	EventTimelineAppended
+)
+
+// Event is a typed reducer input. Only fields relevant to Kind are consumed.
+type Event struct {
+	Kind      EventKind
+	SessionID string
+	Sessions  []SessionState
+	Item      TimelineItem
+}
+
+// Reduce applies one event and returns a new state without aliasing caller-owned slices.
+func Reduce(current State, event Event) State {
+	next := cloneState(current)
+
+	switch event.Kind {
+	case EventSessionsReplaced:
+		next.Sessions = cloneSessions(event.Sessions)
+		if next.ActiveSessionID != "" && !hasSession(next.Sessions, next.ActiveSessionID) {
+			next.ActiveSessionID = ""
+		}
+	case EventSessionSelected:
+		if hasSession(next.Sessions, event.SessionID) {
+			next.ActiveSessionID = event.SessionID
+		}
+	case EventPromptQueued:
+		setStatus(&next, event.SessionID, TaskQueued)
+	case EventPromptStarted:
+		setStatus(&next, event.SessionID, TaskRunning)
+	case EventPromptCompleted:
+		setStatus(&next, event.SessionID, TaskCompleted)
+	case EventPromptFailed:
+		setStatus(&next, event.SessionID, TaskFailed)
+	case EventPermissionRequested:
+		setStatus(&next, event.SessionID, TaskWaitingPermission)
+	case EventPermissionResolved:
+		setStatus(&next, event.SessionID, TaskRunning)
+	case EventTimelineAppended:
+		if session := sessionByID(&next, event.SessionID); session != nil {
+			session.Timeline = append(session.Timeline, event.Item)
+		}
+	}
+
+	return next
+}
+
+func cloneState(state State) State {
+	state.Sessions = cloneSessions(state.Sessions)
+	return state
+}
+
+func cloneSessions(sessions []SessionState) []SessionState {
+	out := slices.Clone(sessions)
+	for i := range out {
+		out[i].Timeline = slices.Clone(out[i].Timeline)
+	}
+	return out
+}
+
+func hasSession(sessions []SessionState, id string) bool {
+	for i := range sessions {
+		if sessions[i].ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func sessionByID(state *State, id string) *SessionState {
+	for i := range state.Sessions {
+		if state.Sessions[i].ID == id {
+			return &state.Sessions[i]
+		}
+	}
+	return nil
+}
+
+func setStatus(state *State, id string, status TaskStatus) {
+	if session := sessionByID(state, id); session != nil {
+		session.Status = status
+	}
+}
