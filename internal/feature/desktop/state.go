@@ -64,12 +64,14 @@ type PermissionRequest struct {
 
 // SessionState is the desktop projection of one ACP session.
 type SessionState struct {
-	ID        string
-	Title     string
-	Workspace string
-	Status    TaskStatus
-	Timeline  []TimelineItem
-	Subagents []SubagentState
+	ID            string
+	Title         string
+	Workspace     string
+	WorkspaceKey  string
+	WorkspaceName string
+	Status        TaskStatus
+	Timeline      []TimelineItem
+	Subagents     []SubagentState
 }
 
 // State owns desktop session state independently from Fyne widgets.
