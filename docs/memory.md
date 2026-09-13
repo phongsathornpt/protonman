@@ -15,6 +15,7 @@ Memory is deliberately separate from conversation retention and compaction. Comp
 7. Extracted memories require valid persisted message IDs as provenance.
 8. Processing is idempotent per persisted session revision.
 9. Canonical managed system-prompt bytes do not change because memory changes.
+10. Durable-memory decoration must preserve the provider-visible message-role sequence.
 
 ## Filesystem layout
 
@@ -71,9 +72,11 @@ The extraction pass:
 8. Merges accepted candidates transactionally into workspace/global indexes.
 9. Marks the session revision processed only after the merge succeeds. A valid no-op extraction is also marked processed.
 
-A failed extraction does not block the interactive model turn. The background pass has its own timeout and will retry a still-unprocessed revision on a later process start.
+Session-local load/model failures are logged and skipped so one bad historical session cannot abort the rest of the extraction queue. Failed revisions remain unprocessed and therefore retry on a later pass. Context cancellation and durable-store failures still terminate the pass because continuing would not be safe or useful.
 
-### Promotion rules
+The background pass never blocks the interactive model turn and has its own timeout.
+
+### Promotion and replacement rules
 
 Repository facts, procedures, failures, and decisions are workspace-scoped.
 
@@ -84,26 +87,30 @@ A preference can become global when either:
 
 Promotion removes the equivalent workspace preference so retrieval does not inject duplicate guidance.
 
+For an existing memory ID, a newer value replaces the current value when its confidence is at least as high, or when it is newer and within the bounded replacement-confidence slack while still above the extraction confidence floor. A much lower-confidence candidate cannot overwrite a high-confidence value, but its newer evidence timestamp may still refresh provenance metadata.
+
 ## Retrieval read path
 
-`internal/feature/memory.Retriever` loads the current workspace index plus the global preference index. It tokenizes the current user query, scores matching memory deterministically, filters stale facts, and returns a bounded top set.
+`internal/feature/memory.Retriever` loads the current workspace index plus the global preference index. It tokenizes the current user query, filters English stop-words, scores matching memory deterministically, filters stale facts, and returns a bounded top set.
+
+Lexical relevance is evaluated before any workspace, confidence, or usage bonus is applied. This prevents weak common-word matches from accumulating usage and permanently biasing future rankings.
 
 Ranking favors:
 
 1. lexical matches in memory keys;
 2. keyword matches;
-3. value matches;
+3. low-weight value matches;
 4. workspace-local entries;
 5. confidence;
 6. previous successful usage.
 
-Selected entries update best-effort usage metadata. Failure to update usage counters never fails the user turn.
+Value-only overlap is intentionally too weak to qualify unless the lexical evidence is substantial. Selected entries update best-effort usage metadata only after they pass the relevance threshold. Failure to update usage counters never fails the user turn.
 
 ## Model-request injection
 
 Memory does not become an `Additional Instructions` section and does not modify the managed system prompt. The primary model factory decorates provider requests after the turn engine has already produced the canonical request.
 
-For a relevant current user query, the decorator inserts one bounded assistant-role historical-evidence message immediately before the current user message:
+For a relevant current user query, the decorator clones the request and prepends one bounded historical-evidence block to the **current user message content**:
 
 ```text
 <proton-memory-context>
@@ -112,9 +119,15 @@ Historical memory from prior root sessions follows...
   ...
 </memory-context>
 </proton-memory-context>
+
+<current user content>
 ```
 
-The inserted message exists only in the provider request. It is not appended to turn history, not returned in `turn.Result.Messages`, and therefore not persisted by the session store. Repeated model rounds for the same stable user message reuse the same retrieved context rather than incrementing usage repeatedly.
+No additional assistant/user message is inserted. The provider-visible message-role sequence therefore remains unchanged, including on providers that strictly require alternating user/assistant turns.
+
+The decorated content exists only in the provider request. It is not appended to turn history, not returned in `turn.Result.Messages`, and therefore not persisted by the session store. Repeated model rounds for the same stable user message reuse the same retrieved context rather than incrementing usage repeatedly.
+
+A historical message that merely contains the memory marker does not disable future retrieval. Only an already-decorated current user turn suppresses duplicate decoration.
 
 The primary runtime uses `NewPrimaryModelFactory`. The subagent model resolver intentionally keeps the undecorated base model factory, preserving child isolation.
 
