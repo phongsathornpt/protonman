@@ -30,7 +30,8 @@ type sessionItem struct {
 type application struct {
 	ctx context.Context
 
-	client *acpclient.Client
+	client     *acpclient.Client
+	desktopApp fyne.App
 
 	mu                sync.Mutex
 	state             desktopstate.State
@@ -78,6 +79,7 @@ func Run(ctx context.Context) error {
 
 	ui := &application{
 		ctx:               ctx,
+		desktopApp:        a,
 		transcripts:       make(map[string]*strings.Builder),
 		permissionWaiters: make(map[string]chan string),
 		preferences:       a.Preferences(),
@@ -370,6 +372,7 @@ func (a *application) sendPrompt() {
 		if err != nil {
 			a.appendTranscript(sessionID, "\n\n**Error:** "+err.Error()+"\n")
 		}
+		a.notifyTurnFinished(sessionID, err)
 		fyne.Do(func() { a.list.Refresh() })
 		a.refreshActiveView()
 	}()

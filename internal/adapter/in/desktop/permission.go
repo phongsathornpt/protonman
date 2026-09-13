@@ -48,6 +48,7 @@ func (a *application) handleRequest(ctx context.Context, request acpclient.Reque
 	a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventPermissionRequested, SessionID: params.SessionID, Permission: item})
 	a.mu.Unlock()
 	a.refreshPermissionView()
+	a.notifyPermission(item)
 
 	select {
 	case <-ctx.Done():
