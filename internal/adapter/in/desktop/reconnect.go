@@ -95,14 +95,16 @@ func (a *application) resumeKnownSessions(client *acpclient.Client) {
 	a.mu.Lock()
 	sessions := append([]desktopstate.SessionState(nil), a.state.Sessions...)
 	a.mu.Unlock()
+	mcpServers := a.mcpServersPayload()
 	for _, session := range sessions {
 		if strings.TrimSpace(session.ID) == "" {
 			continue
 		}
-		_ = client.Call(a.ctx, "session/resume", map[string]any{
-			"sessionId": session.ID,
-			"cwd":       session.Workspace,
-		}, nil)
+		params := map[string]any{"sessionId": session.ID, "cwd": session.Workspace}
+		if len(mcpServers) > 0 {
+			params["mcpServers"] = mcpServers
+		}
+		_ = client.Call(a.ctx, "session/resume", params, nil)
 	}
 }
 

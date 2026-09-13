@@ -85,6 +85,14 @@ type RuntimeSettingsState struct {
 	LowConcurrency string
 }
 
+// MCPIntegrationState is one Desktop-managed ACP MCP server definition.
+type MCPIntegrationState struct {
+	Name    string
+	Command string
+	Args    []string
+	Env     []string
+}
+
 // SessionContextState contains inspectable durable goal, TODO, and memory state.
 type SessionContextState struct {
 	Goal   string
@@ -127,6 +135,7 @@ type State struct {
 	ActiveSessionID string
 	Sessions        []SessionState
 	PermissionInbox []PermissionRequest
+	Integrations    []MCPIntegrationState
 }
 
 // EventKind identifies a reducer transition.
@@ -147,20 +156,22 @@ const (
 	EventSessionContextUpdated
 	EventSessionMemoryUpdated
 	EventSessionRuntimeUpdated
+	EventIntegrationsReplaced
 )
 
 // Event is a typed reducer input. Only fields relevant to Kind are consumed.
 type Event struct {
-	Kind       EventKind
-	SessionID  string
-	Sessions   []SessionState
-	Item       TimelineItem
-	Subagent   SubagentState
-	Context    SessionContextState
-	Memory     MemoryState
-	Runtime    RuntimeSettingsState
-	Permission PermissionRequest
-	RequestID  string
+	Kind         EventKind
+	SessionID    string
+	Sessions     []SessionState
+	Item         TimelineItem
+	Subagent     SubagentState
+	Context      SessionContextState
+	Memory       MemoryState
+	Runtime      RuntimeSettingsState
+	Integrations []MCPIntegrationState
+	Permission   PermissionRequest
+	RequestID    string
 }
 
 // Reduce applies one event and returns a new state without aliasing caller-owned slices.
@@ -219,6 +230,8 @@ func Reduce(current State, event Event) State {
 		if session := sessionByID(&next, event.SessionID); session != nil {
 			session.Runtime = event.Runtime
 		}
+	case EventIntegrationsReplaced:
+		next.Integrations = cloneIntegrations(event.Integrations)
 	}
 
 	return next
@@ -227,6 +240,7 @@ func Reduce(current State, event Event) State {
 func cloneState(state State) State {
 	state.Sessions = cloneSessions(state.Sessions)
 	state.PermissionInbox = clonePermissions(state.PermissionInbox)
+	state.Integrations = cloneIntegrations(state.Integrations)
 	return state
 }
 
@@ -250,6 +264,15 @@ func cloneMemoryState(memory MemoryState) MemoryState {
 	memory.Workspace = slices.Clone(memory.Workspace)
 	memory.Global = slices.Clone(memory.Global)
 	return memory
+}
+
+func cloneIntegrations(items []MCPIntegrationState) []MCPIntegrationState {
+	out := slices.Clone(items)
+	for i := range out {
+		out[i].Args = slices.Clone(out[i].Args)
+		out[i].Env = slices.Clone(out[i].Env)
+	}
+	return out
 }
 
 func clonePermissions(items []PermissionRequest) []PermissionRequest {

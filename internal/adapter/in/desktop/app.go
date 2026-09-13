@@ -37,24 +37,35 @@ type application struct {
 	sidebarRows       []sidebarRow
 	transcripts       map[string]*strings.Builder
 	permissionWaiters map[string]chan string
+	preferences       fyne.Preferences
 
-	status            *widget.Label
-	list              *widget.List
-	chat              *widget.RichText
-	composer          *widget.Entry
-	send              *widget.Button
-	stop              *widget.Button
-	permissionInbox   *widget.Button
-	permissionPanel   *fyne.Container
-	permissionTitle   *widget.Label
-	permissionDetail  *widget.Label
-	permissionActions *fyne.Container
-	modelProvider     *widget.Entry
-	modelID           *widget.Entry
-	applyModel        *widget.Button
-	reasoningSelect   *widget.Select
-	lowSelect         *widget.Select
-	runtimeSync       bool
+	status               *widget.Label
+	list                 *widget.List
+	chat                 *widget.RichText
+	composer             *widget.Entry
+	send                 *widget.Button
+	stop                 *widget.Button
+	permissionInbox      *widget.Button
+	permissionPanel      *fyne.Container
+	permissionTitle      *widget.Label
+	permissionDetail     *widget.Label
+	permissionActions    *fyne.Container
+	modelProvider        *widget.Entry
+	modelID              *widget.Entry
+	applyModel           *widget.Button
+	reasoningSelect      *widget.Select
+	lowSelect            *widget.Select
+	runtimeSync          bool
+	integrationButton    *widget.Button
+	integrationPanel     *fyne.Container
+	integrationSummary   *widget.Label
+	integrationName      *widget.Entry
+	integrationCommand   *widget.Entry
+	integrationArgs      *widget.Entry
+	integrationEnv       *widget.Entry
+	integrationSave      *widget.Button
+	integrationRemove    *widget.Button
+	integrationReconnect *widget.Button
 }
 
 // Run starts Protonman Desktop. The desktop is deliberately a thin ACP client;
@@ -69,6 +80,7 @@ func Run(ctx context.Context) error {
 		ctx:               ctx,
 		transcripts:       make(map[string]*strings.Builder),
 		permissionWaiters: make(map[string]chan string),
+		preferences:       a.Preferences(),
 	}
 	ui.status = widget.NewLabel("Connecting to Protonman…")
 	ui.chat = widget.NewRichTextFromMarkdown("")
@@ -106,6 +118,7 @@ func Run(ctx context.Context) error {
 			ui.setRuntimeLowConcurrency(value)
 		}
 	})
+	ui.initIntegrationControls()
 
 	ui.list = widget.NewList(
 		func() int {
@@ -184,7 +197,7 @@ func Run(ctx context.Context) error {
 	sidebarHeader := container.NewBorder(nil, nil, nil, newTask, widget.NewLabelWithStyle("protonMAN", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
 	sidebar := container.NewBorder(
 		container.NewVBox(sidebarHeader, search),
-		container.NewVBox(widget.NewSeparator(), ui.permissionInbox, widget.NewLabel("Desktop via ACP")),
+		container.NewVBox(widget.NewSeparator(), ui.integrationButton, ui.integrationPanel, ui.permissionInbox, widget.NewLabel("Desktop via ACP")),
 		nil,
 		nil,
 		ui.list,
@@ -290,7 +303,11 @@ func (a *application) newSession() {
 		var result struct {
 			SessionID string `json:"sessionId"`
 		}
-		if err := client.Call(a.ctx, "session/new", map[string]any{"cwd": cwd}, &result); err != nil {
+		params := map[string]any{"cwd": cwd}
+		if servers := a.mcpServersPayload(); len(servers) > 0 {
+			params["mcpServers"] = servers
+		}
+		if err := client.Call(a.ctx, "session/new", params, &result); err != nil {
 			if a.clientIsCurrent(client) {
 				a.setStatus("New session failed · " + err.Error())
 			}
