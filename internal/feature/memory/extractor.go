@@ -32,13 +32,13 @@ func NewExtractor(sessions session.Repository, memories corememory.Repository, m
 		policy = runtimepolicy.DurableMemory()
 	}
 	return &Extractor{
-		sessions: sessions,
-		memories: memories,
-		model: model,
+		sessions:         sessions,
+		memories:         memories,
+		model:            model,
 		currentSessionID: strings.TrimSpace(currentSessionID),
-		workspaceKey: strings.TrimSpace(workspaceKey),
-		policy: policy,
-		now: func() time.Time { return time.Now().UTC() },
+		workspaceKey:     strings.TrimSpace(workspaceKey),
+		policy:           policy,
+		now:              func() time.Time { return time.Now().UTC() },
 	}
 }
 
@@ -94,9 +94,9 @@ func (e *Extractor) Run(ctx context.Context) error {
 		}
 		candidates = validateCandidateEvidence(candidates, state)
 		if err := mergeCandidates(ctx, e.memories, e.workspaceKey, candidates, extractionEvidence{
-			SessionID: summary.ID,
+			SessionID:       summary.ID,
 			SessionRevision: state.Revision,
-			ObservedAt: state.UpdatedAt,
+			ObservedAt:      state.UpdatedAt,
 		}, e.policy); err != nil {
 			return fmt.Errorf("merge memory from session %q: %w", summary.ID, err)
 		}
