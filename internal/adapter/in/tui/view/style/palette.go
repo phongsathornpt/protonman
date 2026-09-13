@@ -10,19 +10,19 @@ import (
 // semantic tokens from semantic.go instead of reaching into this palette.
 // That keeps component intent stable when the visual palette changes.
 type Palette struct {
-	Canvas       color.Color
-	TextPrimary  color.Color
+	Canvas        color.Color
+	TextPrimary   color.Color
 	TextSecondary color.Color
-	TextMuted    color.Color
-	Brand        color.Color
-	BrandHover   color.Color
-	BrandStrong  color.Color
-	Success      color.Color
-	Warning      color.Color
-	Danger       color.Color
-	Info         color.Color
-	Border       color.Color
-	BorderSubtle color.Color
+	TextMuted     color.Color
+	Brand         color.Color
+	BrandHover    color.Color
+	BrandStrong   color.Color
+	Success       color.Color
+	Warning       color.Color
+	Danger        color.Color
+	Info          color.Color
+	Border        color.Color
+	BorderSubtle  color.Color
 }
 
 // DefaultDarkPalette is the canonical Protonman terminal palette.
