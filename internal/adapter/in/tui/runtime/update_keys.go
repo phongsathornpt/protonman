@@ -15,8 +15,18 @@ var composerKeys = struct {
 	HistoryDown: key.NewBinding(key.WithKeys("down")),
 }
 
-func (m *bubbleModel) matchesPriorityGlobalShortcut(message tea.KeyPressMsg) bool {
-	return key.Matches(message, m.keys.ToggleTodo) || key.Matches(message, m.keys.Transcript) || key.Matches(message, m.keys.CyclePermission) || key.Matches(message, m.keys.ToggleSkills) || key.Matches(message, m.keys.ToggleModel)
+func (m *bubbleModel) semanticKeyBindings() keyboardpolicy.Bindings {
+	return keyboardpolicy.Bindings{
+		Submit:          m.keys.Submit,
+		Newline:         m.keys.Newline,
+		CyclePermission: m.keys.CyclePermission,
+		ToggleTodo:      m.keys.ToggleTodo,
+		Transcript:      m.keys.Transcript,
+		ToggleSkills:    m.keys.ToggleSkills,
+		ToggleModel:     m.keys.ToggleModel,
+		PageUp:          m.keys.PageUp,
+		PageDown:        m.keys.PageDown,
+	}
 }
 
 func (m *bubbleModel) handleInterruptKey() tea.Cmd {
@@ -52,8 +62,11 @@ func (m *bubbleModel) handleInterruptKey() tea.Cmd {
 }
 
 func (m *bubbleModel) updateKey(message tea.KeyPressMsg) tea.Cmd {
+	bindings := m.semanticKeyBindings()
+	priorityAction := bindings.Priority(message)
+
 	// Shift+Tab is reserved for global permission cycling, even in blocking panes.
-	if key.Matches(message, m.keys.CyclePermission) {
+	if priorityAction == keyboardpolicy.CyclePermission {
 		m.cyclePermission()
 		return nil
 	}
@@ -64,16 +77,16 @@ func (m *bubbleModel) updateKey(message tea.KeyPressMsg) tea.Cmd {
 		}
 		return nil
 	}
-	if m.matchesPriorityGlobalShortcut(message) {
-		if handled, command := m.handleGlobalKey(message); handled {
+	if priorityAction != keyboardpolicy.None {
+		if handled, command := m.handleGlobalAction(priorityAction, message); handled {
 			return m.withSpinner(command)
 		}
 	}
 	if handled, command := m.handlePaneKey(message); handled {
 		return m.withSpinner(command)
 	}
-	if key.Matches(message, m.keys.PageUp) || key.Matches(message, m.keys.PageDown) {
-		if handled, command := m.handleGlobalKey(message); handled {
+	if navigationAction := bindings.Navigation(message); navigationAction != keyboardpolicy.None {
+		if handled, command := m.handleGlobalAction(navigationAction, message); handled {
 			return m.withSpinner(command)
 		}
 	}
@@ -99,20 +112,18 @@ func (m *bubbleModel) handlePaneKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
 	return false, nil
 }
 
-func (m *bubbleModel) handleGlobalKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
-	switch {
-	case key.Matches(message, m.keys.Transcript):
+func (m *bubbleModel) handleGlobalAction(action keyboardpolicy.Action, message tea.KeyPressMsg) (bool, tea.Cmd) {
+	switch action {
+	case keyboardpolicy.Transcript:
 		m.openTranscriptOverlay()
 		return true, nil
-	case key.Matches(message, m.keys.ToggleSkills):
+	case keyboardpolicy.ToggleSkills:
 		return true, m.toggleSkillsPane()
-	case key.Matches(message, m.keys.ToggleModel):
+	case keyboardpolicy.ToggleModel:
 		return true, m.toggleModelSetupPane()
-	case key.Matches(message, m.keys.ToggleTodo):
+	case keyboardpolicy.ToggleTodo:
 		return true, m.toggleTodoPane()
-	case key.Matches(message, m.keys.PageUp):
-		return true, m.updateConversationViewport(message)
-	case key.Matches(message, m.keys.PageDown):
+	case keyboardpolicy.PageUp, keyboardpolicy.PageDown:
 		return true, m.updateConversationViewport(message)
 	default:
 		return false, nil
@@ -128,7 +139,7 @@ const (
 )
 
 func (m *bubbleModel) composerAction(message tea.KeyPressMsg) composerKeyAction {
-	return keyboardpolicy.Classify(message, m.keys.Newline, m.keys.Submit)
+	return m.semanticKeyBindings().Composer(message)
 }
 
 func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
