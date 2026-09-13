@@ -38,6 +38,9 @@ type middlewareModel struct {
 func (m *middlewareModel) Provider() string                { return m.base.Provider() }
 func (m *middlewareModel) ModelID() string                 { return m.base.ModelID() }
 func (m *middlewareModel) Capabilities() ModelCapabilities { return m.base.Capabilities() }
+func (m *middlewareModel) Metadata() ModelMetadata         { return ModelMetadataOf(m.base) }
+func (m *middlewareModel) TokenLimits() TokenLimits        { return ModelTokenLimits(m.base) }
+func (m *middlewareModel) ContextWindow() int              { return ModelContextWindow(m.base) }
 func (m *middlewareModel) Stream(ctx context.Context, request Request) (Stream, error) {
 	return m.stream(ctx, request)
 }

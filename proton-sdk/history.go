@@ -1,23 +1,29 @@
 package protonsdk
 
-// AppendAssistantStep appends the normalized assistant output of one model step
-// to conversation history. Text and tool calls stay on the same logical
-// assistant message; provider adapters may split them on the wire if required.
-func AppendAssistantStep(messages []Message, result StepResult) []Message {
+// AppendAssistantResponse appends a normalized assistant response to conversation
+// history. Text and tool calls stay on the same logical assistant message;
+// provider adapters may split them on the wire if required.
+func AppendAssistantResponse(messages []Message, response Response) []Message {
 	next := CloneMessages(messages)
-	if result.Text == "" && len(result.ToolCalls) == 0 {
+	if response.Text == "" && len(response.ToolCalls) == 0 {
 		return next
 	}
 	assistant := Message{
 		ID:        NewMessageID(),
 		Role:      RoleAssistant,
-		Content:   result.Text,
-		ToolCalls: make([]ToolCall, 0, len(result.ToolCalls)),
+		Content:   response.Text,
+		ToolCalls: make([]ToolCall, 0, len(response.ToolCalls)),
 	}
-	for _, call := range result.ToolCalls {
+	for _, call := range response.ToolCalls {
 		assistant.ToolCalls = append(assistant.ToolCalls, cloneToolCall(call))
 	}
 	return append(next, assistant)
+}
+
+// AppendAssistantStep is retained for source compatibility with earlier SDK releases.
+// Deprecated: use AppendAssistantResponse.
+func AppendAssistantStep(messages []Message, result StepResult) []Message {
+	return AppendAssistantResponse(messages, result)
 }
 
 // AppendToolResults appends tool execution outputs in model-history order.

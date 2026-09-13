@@ -34,11 +34,11 @@ func (s *eventStream) Close() error {
 
 func TestCollectStep(t *testing.T) {
 	stream := &eventStream{events: []Event{
-		{Kind: EventTextStart},
-		{Kind: EventTextDelta, Text: "hello "},
-		{Kind: EventTextDelta, Text: "world"},
-		{Kind: EventToolCall, ToolCall: ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
-		{Kind: EventFinish, FinishReason: FinishStop},
+		NewTextStartEvent(),
+		NewTextDeltaEvent("hello "),
+		NewTextDeltaEvent("world"),
+		NewToolCallEvent(ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}),
+		NewFinishEvent(FinishStop, nil),
 	}}
 	result, err := CollectStep(context.Background(), stream)
 	if err != nil {
@@ -56,7 +56,7 @@ func TestCollectStep(t *testing.T) {
 }
 
 func TestCollectStepRejectsIncompleteStream(t *testing.T) {
-	stream := &eventStream{events: []Event{{Kind: EventTextDelta, Text: "partial"}}}
+	stream := &eventStream{events: []Event{NewTextDeltaEvent("partial")}}
 	_, err := CollectStep(context.Background(), stream)
 	if !errors.Is(err, ErrIncompleteStream) {
 		t.Fatalf("error = %v, want ErrIncompleteStream", err)
@@ -68,10 +68,7 @@ func TestCollectStepRejectsIncompleteStream(t *testing.T) {
 
 func TestCollectStepReturnsCloseErrorAfterSuccessfulFinish(t *testing.T) {
 	closeErr := errors.New("close failed")
-	stream := &eventStream{
-		events:   []Event{{Kind: EventFinish, FinishReason: FinishStop}},
-		closeErr: closeErr,
-	}
+	stream := &eventStream{events: []Event{NewFinishEvent(FinishStop, nil)}, closeErr: closeErr}
 	_, err := CollectStep(context.Background(), stream)
 	if !errors.Is(err, closeErr) {
 		t.Fatalf("error = %v, want close error", err)
@@ -99,9 +96,9 @@ func TestCollectStepPreservesProcessingErrorOverCloseError(t *testing.T) {
 
 func TestCollectStepIncludesUsageAndFinishReason(t *testing.T) {
 	stream := &eventStream{events: []Event{
-		{Kind: EventTextDelta, Text: "done"},
-		{Kind: EventUsage, Usage: Usage{InputTokens: 4, OutputTokens: 1, TotalTokens: 5}},
-		{Kind: EventFinish, FinishReason: FinishStop},
+		NewTextDeltaEvent("done"),
+		NewUsageEvent(Usage{InputTokens: 4, OutputTokens: 1, TotalTokens: 5}),
+		NewFinishEvent(FinishStop, nil),
 	}}
 	result, err := CollectStep(context.Background(), stream)
 	if err != nil {

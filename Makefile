@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := tui
 
-.PHONY: all tui run dev build install run-bin clean test test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint tag tag-push help
+.PHONY: all tui run dev build install run-bin clean test test-architecture test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint tag tag-push help
 
 # Binary configuration
 BIN_DIR := bin
@@ -53,6 +53,11 @@ run-bin: run
 ## test: Run the complete repository test suite
 test:
 	go test ./...
+
+## test-architecture: Run architecture and SDK ownership regression guards
+test-architecture:
+	go test ./test/architecture/...
+	go test ./proton-sdk/... -run 'Ownership|Architecture|Contract'
 
 ## test-race: Run all tests with race detector
 test-race:

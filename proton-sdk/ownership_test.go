@@ -11,12 +11,17 @@ import (
 	"testing"
 )
 
-func TestProviderProtocolOwnership(t *testing.T) {
+func repositoryRoot(t *testing.T) string {
+	t.Helper()
 	_, currentFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("resolve test file")
 	}
-	root := filepath.Clean(filepath.Join(filepath.Dir(currentFile), ".."))
+	return filepath.Clean(filepath.Join(filepath.Dir(currentFile), ".."))
+}
+
+func TestProviderProtocolOwnership(t *testing.T) {
+	root := repositoryRoot(t)
 	goMod, err := os.ReadFile(filepath.Join(root, "go.mod"))
 	if err != nil {
 		t.Fatal(err)
@@ -58,6 +63,43 @@ func TestProviderProtocolOwnership(t *testing.T) {
 			t.Fatalf("legacy protocol implementation returned: internal/adapter/out/model/%s", legacy)
 		} else if !os.IsNotExist(err) {
 			t.Fatal(err)
+		}
+	}
+}
+
+func TestSDKDoesNotOwnAgentLoopPolicy(t *testing.T) {
+	root := repositoryRoot(t)
+	sdkDir := filepath.Join(root, "proton-sdk")
+	forbidden := map[string]bool{
+		"StepContext": true, "StopCondition": true, "StopAfterSteps": true,
+		"StopWhenNoToolCalls": true, "ShouldStop": true,
+	}
+	set := token.NewFileSet()
+	entries, err := os.ReadDir(sdkDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(set, filepath.Join(sdkDir, entry.Name()), nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, decl := range file.Decls {
+			switch node := decl.(type) {
+			case *ast.GenDecl:
+				for _, spec := range node.Specs {
+					if typeSpec, ok := spec.(*ast.TypeSpec); ok && forbidden[typeSpec.Name.Name] {
+						t.Fatalf("agent-loop policy %s must live outside proton-sdk", typeSpec.Name.Name)
+					}
+				}
+			case *ast.FuncDecl:
+				if forbidden[node.Name.Name] {
+					t.Fatalf("agent-loop policy %s must live outside proton-sdk", node.Name.Name)
+				}
+			}
 		}
 	}
 }
