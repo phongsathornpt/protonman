@@ -58,7 +58,7 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 		return PermissionRender{Rows: []string{
 			titleStyle.Render(textview.TruncateEllipsis(snapshot.Title, contentWidth)),
 			tuistyle.MutedStyle.Render(textview.TruncateEllipsis(snapshot.ToolName+" · "+snapshot.Detail, contentWidth)),
-			tuistyle.BrandStyle.Render(tuistyle.GlyphPrompt + selected),
+			tuistyle.SelectionStyle.Render(tuistyle.GlyphPrompt + selected),
 		}, Tone: snapshot.Tone}
 	}
 	maxWidth := max(1, snapshot.Width-8)
@@ -82,7 +82,7 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 		marker := "  "
 		if i == index {
 			marker = tuistyle.GlyphPrompt
-			rows = append(rows, tuistyle.BrandStyle.Render(marker+option))
+			rows = append(rows, tuistyle.SelectionStyle.Render(marker+option))
 			continue
 		}
 		rows = append(rows, tuistyle.MutedStyle.Render(marker+option))
