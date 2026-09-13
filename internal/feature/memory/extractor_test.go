@@ -81,7 +81,7 @@ func TestExtractorPersistsWorkspaceMemoryAndRevision(t *testing.T) {
 		Messages: []session.Message{{ID: "m1", Role: sdk.RoleUser, Content: "Run go test ./... before finishing."}},
 	}
 	sessions := &extractionSessionRepo{
-		states: map[string]session.State{"previous": state},
+		states:    map[string]session.State{"previous": state},
 		summaries: []session.Summary{{ID: "previous", WorkspaceKey: "ws", UpdatedAt: state.UpdatedAt}},
 	}
 	memories := &fakeRepository{}
