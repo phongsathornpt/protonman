@@ -95,6 +95,8 @@ For an existing memory ID, a newer value replaces the current value when its con
 
 Lexical relevance is evaluated before any workspace, confidence, or usage bonus is applied. This prevents weak common-word matches from accumulating usage and permanently biasing future rankings.
 
+After stale/relevance filtering, entries with the same normalized `(kind, key)` are deduplicated across scopes. A workspace-local entry wins over an equivalent global entry so project-specific guidance cannot be duplicated or diluted by a broader preference.
+
 Ranking favors:
 
 1. lexical matches in memory keys;
@@ -102,7 +104,7 @@ Ranking favors:
 3. low-weight value matches;
 4. workspace-local entries;
 5. confidence;
-6. previous successful usage.
+6. previous retrieval usage.
 
 Value-only overlap is intentionally too weak to qualify unless the lexical evidence is substantial. Selected entries update best-effort usage metadata only after they pass the relevance threshold. Failure to update usage counters never fails the user turn.
 
