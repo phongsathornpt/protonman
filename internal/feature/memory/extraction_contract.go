@@ -33,7 +33,7 @@ Evidence rules:
 - assistant text alone is weak evidence and must not become a durable fact without support
 
 Return exactly one JSON object and no markdown:
-{"memories":[{"scope":"workspace|global","kind":"preference|repo_fact|procedure|failure|decision","key":"short retrieval key","value":"concise durable fact","keywords":["keyword"],"confidence":0.0,"message_ids":["msg_id"],"explicit":false}]}`
+{"memories":[{"scope":"workspace|global","kind":"preference|repo_fact|procedure|failure|decision","key":"short retrieval key","value":"concise durable fact","keywords":["keyword"],"confidence":0.0,"message_ids":["msg_id"],"explicit":false}]}
 
 An empty result is valid and preferred over weak memory:
 {"memories":[]}`
