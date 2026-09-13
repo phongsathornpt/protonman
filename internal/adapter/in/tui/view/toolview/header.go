@@ -134,7 +134,9 @@ func FailureLabel(name string, kind tool.Kind, code tool.ErrorCode) string {
 }
 
 // RenderHeader renders one tool header while keeping state grammar and visual
-// width policy in the same presentation package.
+// width policy in the same presentation package. State color is deliberately
+// concentrated in the glyph/meta so labels and paths remain calm during long
+// agent runs.
 func RenderHeader(header Header, width int) string {
 	width = max(1, width)
 	label := textview.Sanitize(header.Label)
@@ -159,11 +161,11 @@ func RenderHeader(header Header, width int) string {
 	labelStyle := tuistyle.MutedStyle
 	switch header.State {
 	case HeaderRunning:
-		glyphStyle = tuistyle.ToolStyle
-		metaStyle = tuistyle.ToolStyle
+		glyphStyle = tuistyle.FocusStyle
+		metaStyle = tuistyle.FocusStyle
 	case HeaderDenied:
-		glyphStyle = tuistyle.WarningStyle
-		metaStyle = tuistyle.WarningStyle
+		glyphStyle = tuistyle.ErrorStyle
+		metaStyle = tuistyle.ErrorStyle
 	case HeaderFailure:
 		glyphStyle = tuistyle.ErrorStyle
 		metaStyle = tuistyle.ErrorStyle

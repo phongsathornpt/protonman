@@ -16,6 +16,9 @@ func TestSemanticStylesUseThemePalette(t *testing.T) {
 	}{
 		{"assistant", AssistantStyle.GetForeground(), ColorTextPrimary},
 		{"body", BodyStyle.GetForeground(), ColorTextPrimary},
+		{"muted", MutedStyle.GetForeground(), ColorTextMuted},
+		{"info", InfoStyle.GetForeground(), ColorInfo},
+		{"focus", FocusStyle.GetForeground(), ColorFocus},
 		{"tool target", ToolTargetStyle.GetForeground(), ColorTextSecondary},
 		{"diff hunk", DiffHunkStyle.GetForeground(), ColorTextSecondary},
 		{"markdown heading", MarkdownHeadingStyle.GetForeground(), ColorTextPrimary},
@@ -24,6 +27,30 @@ func TestSemanticStylesUseThemePalette(t *testing.T) {
 	for _, tt := range tests {
 		if !reflect.DeepEqual(tt.got, tt.want) {
 			t.Errorf("%s foreground = %#v, want %#v", tt.name, tt.got, tt.want)
+		}
+	}
+}
+
+func TestSemanticTokensResolveFromDefaultPalette(t *testing.T) {
+	tests := []struct {
+		name string
+		got  color.Color
+		want color.Color
+	}{
+		{"text primary", ColorTextPrimary, DefaultDarkPalette.TextPrimary},
+		{"text secondary", ColorTextSecondary, DefaultDarkPalette.TextSecondary},
+		{"text muted", ColorTextMuted, DefaultDarkPalette.TextMuted},
+		{"brand", ColorPrimary, DefaultDarkPalette.Brand},
+		{"success", ColorSuccess, DefaultDarkPalette.Success},
+		{"warning", ColorWarning, DefaultDarkPalette.Warning},
+		{"danger", ColorDanger, DefaultDarkPalette.Danger},
+		{"info", ColorInfo, DefaultDarkPalette.Info},
+		{"border", ColorBorder, DefaultDarkPalette.Border},
+		{"focus border", ColorBorderFocus, DefaultDarkPalette.Brand},
+	}
+	for _, tt := range tests {
+		if !reflect.DeepEqual(tt.got, tt.want) {
+			t.Errorf("%s token = %#v, want %#v", tt.name, tt.got, tt.want)
 		}
 	}
 }
@@ -71,12 +98,13 @@ func TestPaletteMeetsContrastFloor(t *testing.T) {
 	textTokens := map[string]color.Color{
 		"text primary":   ColorTextPrimary,
 		"text secondary": ColorTextSecondary,
-		"text tertiary":  ColorTextTertiary,
+		"text muted":     ColorTextMuted,
 		"primary":        ColorPrimary,
 		"primary hover":  ColorPrimaryHover,
 		"success":        ColorSuccess,
 		"warning":        ColorWarning,
 		"danger":         ColorDanger,
+		"info":           ColorInfo,
 	}
 	for name, token := range textTokens {
 		if ratio := contrastRatio(token, darkCanvasHex); ratio < 4.5 {
@@ -86,14 +114,14 @@ func TestPaletteMeetsContrastFloor(t *testing.T) {
 }
 
 // TestTextRampPreservesHierarchy guards the grey test: lightness must fall
-// monotonically from primary to secondary to tertiary so the ramp survives
+// monotonically from primary to secondary to muted so the ramp survives
 // without hue.
 func TestTextRampPreservesHierarchy(t *testing.T) {
 	primary := relativeLuminance(ColorTextPrimary)
 	secondary := relativeLuminance(ColorTextSecondary)
-	tertiary := relativeLuminance(ColorTextTertiary)
-	if !(primary > secondary && secondary > tertiary) {
-		t.Fatalf("text ramp collapsed: primary=%.3f secondary=%.3f tertiary=%.3f", primary, secondary, tertiary)
+	muted := relativeLuminance(ColorTextMuted)
+	if !(primary > secondary && secondary > muted) {
+		t.Fatalf("text ramp collapsed: primary=%.3f secondary=%.3f muted=%.3f", primary, secondary, muted)
 	}
 }
 

@@ -120,11 +120,11 @@ func (c AgentRunCell) statePresentation() (string, lipgloss.Style) {
 	switch c.State {
 	case agent.StateCompleted:
 		return tuistyle.GlyphToolSuccess, tuistyle.SuccessStyle
-	case agent.StateFailed, agent.StateCanceled:
+	case agent.StateFailed:
 		return tuistyle.GlyphToolError, tuistyle.ErrorStyle
-	case agent.StateInterrupted:
-		return tuistyle.GlyphAgent, tuistyle.WarningStyle
-	case agent.StateCanceling:
+	case agent.StateCanceled:
+		return tuistyle.GlyphToolError, tuistyle.MutedStyle
+	case agent.StateInterrupted, agent.StateCanceling:
 		return tuistyle.GlyphAgent, tuistyle.WarningStyle
 	case agent.StateQueued:
 		return "○ ", tuistyle.MutedStyle
@@ -133,7 +133,7 @@ func (c AgentRunCell) statePresentation() (string, lipgloss.Style) {
 		if c.Spinner != "" {
 			indicator = c.Spinner + " "
 		}
-		return indicator, tuistyle.ToolStyle
+		return indicator, tuistyle.FocusStyle
 	}
 }
 
