@@ -37,6 +37,22 @@ type TimelineItem struct {
 	Status string
 }
 
+// PermissionOption is one user-selectable decision for a pending permission request.
+type PermissionOption struct {
+	ID   string
+	Name string
+	Kind string
+}
+
+// PermissionRequest is the desktop projection of an ACP server-to-client permission request.
+type PermissionRequest struct {
+	RequestID string
+	SessionID string
+	Title     string
+	Detail    string
+	Options   []PermissionOption
+}
+
 // SessionState is the desktop projection of one ACP session.
 type SessionState struct {
 	ID        string
@@ -48,8 +64,9 @@ type SessionState struct {
 
 // State owns desktop session state independently from Fyne widgets.
 type State struct {
-	ActiveSessionID string
-	Sessions        []SessionState
+	ActiveSessionID  string
+	Sessions         []SessionState
+	PermissionInbox  []PermissionRequest
 }
 
 // EventKind identifies a reducer transition.
@@ -69,10 +86,12 @@ const (
 
 // Event is a typed reducer input. Only fields relevant to Kind are consumed.
 type Event struct {
-	Kind      EventKind
-	SessionID string
-	Sessions  []SessionState
-	Item      TimelineItem
+	Kind       EventKind
+	SessionID  string
+	Sessions   []SessionState
+	Item       TimelineItem
+	Permission PermissionRequest
+	RequestID  string
 }
 
 // Reduce applies one event and returns a new state without aliasing caller-owned slices.
@@ -99,8 +118,12 @@ func Reduce(current State, event Event) State {
 		setStatus(&next, event.SessionID, TaskFailed)
 	case EventPermissionRequested:
 		setStatus(&next, event.SessionID, TaskWaitingPermission)
+		if event.Permission.RequestID != "" && !hasPermission(next.PermissionInbox, event.Permission.RequestID) {
+			next.PermissionInbox = append(next.PermissionInbox, clonePermission(event.Permission))
+		}
 	case EventPermissionResolved:
 		setStatus(&next, event.SessionID, TaskRunning)
+		next.PermissionInbox = removePermission(next.PermissionInbox, event.RequestID)
 	case EventTimelineAppended:
 		if session := sessionByID(&next, event.SessionID); session != nil {
 			session.Timeline = append(session.Timeline, event.Item)
@@ -112,6 +135,7 @@ func Reduce(current State, event Event) State {
 
 func cloneState(state State) State {
 	state.Sessions = cloneSessions(state.Sessions)
+	state.PermissionInbox = clonePermissions(state.PermissionInbox)
 	return state
 }
 
@@ -123,6 +147,19 @@ func cloneSessions(sessions []SessionState) []SessionState {
 	return out
 }
 
+func clonePermissions(items []PermissionRequest) []PermissionRequest {
+	out := slices.Clone(items)
+	for i := range out {
+		out[i] = clonePermission(out[i])
+	}
+	return out
+}
+
+func clonePermission(item PermissionRequest) PermissionRequest {
+	item.Options = slices.Clone(item.Options)
+	return item
+}
+
 func hasSession(sessions []SessionState, id string) bool {
 	for i := range sessions {
 		if sessions[i].ID == id {
@@ -130,6 +167,24 @@ func hasSession(sessions []SessionState, id string) bool {
 		}
 	}
 	return false
+}
+
+func hasPermission(items []PermissionRequest, id string) bool {
+	for i := range items {
+		if items[i].RequestID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func removePermission(items []PermissionRequest, id string) []PermissionRequest {
+	for i := range items {
+		if items[i].RequestID == id {
+			return append(items[:i:i], items[i+1:]...)
+		}
+	}
+	return items
 }
 
 func sessionByID(state *State, id string) *SessionState {
