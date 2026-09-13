@@ -135,9 +135,17 @@ func (a *application) currentClient() *acpclient.Client {
 }
 
 func (a *application) clientIsCurrent(client *acpclient.Client) bool {
+	if client == nil {
+		return false
+	}
+	select {
+	case <-client.Done():
+		return false
+	default:
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return client != nil && a.client == client
+	return a.client == client
 }
 
 func waitReconnect(ctx context.Context, delay time.Duration) bool {
