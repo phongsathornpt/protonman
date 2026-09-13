@@ -151,7 +151,7 @@ func CompactRows(rows []string) []string {
 }
 
 func RenderModal(width, height int, border color.Color, rows []string) string {
-	mode := ModeForHeight(height)
+	mode := ModeForSize(width, height)
 	style := tuistyle.ModalStyle.BorderForeground(border).MaxWidth(max(1, width-4))
 	if mode == LayoutTiny {
 		// Every cell matters on tiny terminals. Remove decorative horizontal

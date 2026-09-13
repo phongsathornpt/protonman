@@ -29,6 +29,8 @@ func TestPermissionViewResponsiveModes(t *testing.T) {
 		{"normal", 80, 24, panecommon.LayoutNormal},
 		{"compact", 32, 18, panecommon.LayoutCompact},
 		{"tiny", 20, 12, panecommon.LayoutTiny},
+		{"narrow-compact", 32, 24, panecommon.LayoutCompact},
+		{"narrow-tiny", 20, 24, panecommon.LayoutTiny},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := panecommon.ModeForSize(tc.width, tc.height); got != tc.mode {
@@ -41,6 +43,16 @@ func TestPermissionViewResponsiveModes(t *testing.T) {
 			plain := ansi.Strip(strings.Join(rendered.Rows, "\n"))
 			if !strings.Contains(plain, "Allow session") || !strings.Contains(plain, "› Allow session") {
 				t.Fatalf("selected option missing: %q", plain)
+			}
+			switch tc.mode {
+			case panecommon.LayoutTiny:
+				if len(rendered.Rows) != 3 {
+					t.Fatalf("tiny permission rows = %d, want 3", len(rendered.Rows))
+				}
+			case panecommon.LayoutCompact:
+				if !strings.Contains(plain, "more lines truncated") {
+					t.Fatalf("compact permission did not truncate details: %q", plain)
+				}
 			}
 			modal := panecommon.RenderToneModal(tc.width, tc.height, rendered.Tone, rendered.Rows)
 			for _, line := range strings.Split(modal, "\n") {

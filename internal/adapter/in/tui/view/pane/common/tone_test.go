@@ -32,12 +32,18 @@ func TestRenderToneModalFitsResponsiveWidths(t *testing.T) {
 		name   string
 		width  int
 		height int
+		mode   LayoutMode
 	}{
-		{"normal", 80, 24},
-		{"compact", 32, 18},
-		{"tiny", 20, 12},
+		{"normal", 80, 24, LayoutNormal},
+		{"compact", 32, 18, LayoutCompact},
+		{"tiny", 20, 12, LayoutTiny},
+		{"narrow-compact", 32, 24, LayoutCompact},
+		{"narrow-tiny", 20, 24, LayoutTiny},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			if got := ModeForSize(tc.width, tc.height); got != tc.mode {
+				t.Fatalf("mode = %v, want %v", got, tc.mode)
+			}
 			got := RenderToneModal(tc.width, tc.height, ToneWarning, []string{"Permission required", "Allow once"})
 			if !strings.Contains(ansi.Strip(got), "Permission required") {
 				t.Fatalf("modal missing content: %q", ansi.Strip(got))
