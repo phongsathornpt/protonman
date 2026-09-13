@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
 	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 )
 
 func (m *bubbleModel) View() tea.View {
@@ -89,7 +90,7 @@ func (m *bubbleModel) footerView() string {
 
 func (m *bubbleModel) idleContextFooter() string {
 	const inset = " "
-	width := maxInt(1, m.layoutProfile().contentWidth(m.layout.width)-1)
+	width := maxInt(1, m.layoutProfile().ContentWidth(m.layout.width)-1)
 	permission := m.permissionModeLabel()
 	reasoning := reasoningpolicy.EffortLabel(m.reasoningEffort)
 	rightCandidates := []string{permission}
@@ -126,7 +127,7 @@ func (m *bubbleModel) resize(width int, height int) {
 	m.layout.width = width
 	m.layout.height = height
 	profile := m.layoutProfile()
-	m.help.SetWidth(profile.contentWidth(width))
+	m.help.SetWidth(profile.ContentWidth(width))
 	prompt := m.panes.bottom.prompt()
 	prompt.SetWidth(composerUsableWidth(width))
 	m.panes.transcript.SetWidth(maxInt(1, width-10))
@@ -146,7 +147,7 @@ type layoutState struct {
 	width      int
 	height     int
 	frame      frameLayout
-	geometry   frameGeometry
+	geometry   panecommon.FrameGeometry
 	generation uint64
 	dirty      bool
 }
@@ -161,18 +162,18 @@ type frameLayout struct {
 	height     int
 }
 
-func (m *bubbleModel) layoutProfile() layoutProfile {
+func (m *bubbleModel) layoutProfile() panecommon.Profile {
 	if m == nil {
-		return resolveLayoutProfile(defaultBubbleWidth, defaultBubbleHeight, false)
+		return panecommon.ResolveProfile(defaultBubbleWidth, defaultBubbleHeight, false)
 	}
 	hasBottomView := m.panes.bottom != nil && m.panes.bottom.top() != nil
-	return resolveLayoutProfile(m.layout.width, m.layout.height, hasBottomView)
+	return panecommon.ResolveProfile(m.layout.width, m.layout.height, hasBottomView)
 }
 
 func (m *bubbleModel) buildFrameLayout() frameLayout {
 	frame := frameLayout{}
 	profile := m.layoutProfile()
-	if profile.showHeader {
+	if profile.ShowHeader {
 		if header := m.sessionHeaderView(); header != "" {
 			separator := mutedStyle.Render(strings.Repeat("─", maxInt(1, m.layout.width)))
 			frame.header = header + "\n" + separator
@@ -221,8 +222,8 @@ func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame fram
 	m.layout.generation++
 	frame.generation = m.layout.generation
 	m.layout.frame = frame
-	m.layout.geometry = resolveFrameGeometry(m.layout.width, m.layout.height, frame.height)
-	viewportHeight := m.layout.geometry.viewportHeight
+	m.layout.geometry = panecommon.ResolveFrameGeometry(m.layout.width, m.layout.height, frame.height)
+	viewportHeight := m.layout.geometry.ViewportHeight
 	if m.viewport.Width() != m.layout.width || m.viewport.Height() != viewportHeight {
 		m.viewport.SetWidth(m.layout.width)
 		m.viewport.SetHeight(viewportHeight)
@@ -242,7 +243,7 @@ func (m *bubbleModel) refreshFrameLayout() {
 	m.layout.generation++
 	frame.generation = m.layout.generation
 	m.layout.frame = frame
-	m.layout.geometry = resolveFrameGeometry(m.layout.width, m.layout.height, frame.height)
+	m.layout.geometry = panecommon.ResolveFrameGeometry(m.layout.width, m.layout.height, frame.height)
 }
 
 func (m *bubbleModel) refreshViewport() {
