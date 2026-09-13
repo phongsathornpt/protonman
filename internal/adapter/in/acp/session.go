@@ -776,16 +776,20 @@ func (s *Session) saveState(ctx context.Context) error {
 	if reasoningEffort != sdk.ReasoningDefault {
 		reasoningSetting = string(reasoningEffort)
 	}
+	runtimeSettings := sessionRuntimeFor(s)
 
 	err := s.sessionService.Save(ctx, s.id, session.State{
-		SessionID:       s.id,
-		Revision:        stateRevision,
-		WorkspaceKey:    s.workspaceKey,
-		WorkspaceName:   s.workspaceName,
-		PermissionMode:  s.service.Mode().String(),
-		ReasoningEffort: reasoningSetting,
-		Messages:        session.FromModelMessages(messages),
-		UpdatedAt:       time.Now().UTC(),
+		SessionID:          s.id,
+		Revision:           stateRevision,
+		WorkspaceKey:       s.workspaceKey,
+		WorkspaceName:      s.workspaceName,
+		PermissionMode:     s.service.Mode().String(),
+		ModelProvider:      runtimeSettings.Provider,
+		ModelID:            runtimeSettings.Model,
+		ReasoningEffort:    reasoningSetting,
+		LowConcurrencyMode: runtimeSettings.LowConcurrency,
+		Messages:           session.FromModelMessages(messages),
+		UpdatedAt:          time.Now().UTC(),
 	})
 	if err != nil {
 		return err

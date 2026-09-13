@@ -47,7 +47,7 @@ type sessionRuntimeControl struct {
 	build    SessionRuntimeBuilder
 }
 
-var sessionRuntimeControls sync.Map // map[*Server]sessionRuntimeControl
+var sessionRuntimeControls sync.Map   // map[*Server]sessionRuntimeControl
 var sessionRuntimeSelections sync.Map // map[*Session]SessionRuntimeSettings
 
 // WithSessionRuntimeControls enables typed model/reasoning/low-concurrency

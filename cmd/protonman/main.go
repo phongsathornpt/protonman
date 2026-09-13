@@ -104,6 +104,7 @@ func run(ctx context.Context, args []string) error {
 			acp.WithSessions(app.NewSessions(runtimeState.stateStore)),
 			acp.WithMemories(memories),
 			acp.WithAgents(app.NewAgents(runtimeState.coordinator)),
+			acpSessionRuntimeOption(runtimeState),
 			acp.WithSessionRegistryFactory(func(sessionID, _ string) (tool.Registry, error) {
 				return runtimeState.registryForSession(sessionID)
 			}),

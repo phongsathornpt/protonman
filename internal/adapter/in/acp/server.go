@@ -198,6 +198,9 @@ func decodeRequest(line []byte) (RPCRequest, *RPCResponse) {
 }
 
 func (s *Server) handleRequest(ctx context.Context, request RPCRequest, output io.Writer) error {
+	if result, handled, err := s.dispatchSessionRuntime(ctx, request); handled {
+		return s.writeResponse(output, request.ID, result, nil, err)
+	}
 	result, notify, err := s.dispatch(ctx, request, output)
 	return s.writeResponse(output, request.ID, result, notify, err)
 }
@@ -432,6 +435,9 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 					return nil, fmt.Errorf("restore session reasoning %q: %w", sessionID, err)
 				}
 			}
+			if err := restoreSessionRuntime(ctx, s, sess, state); err != nil {
+				return nil, fmt.Errorf("restore session runtime %q: %w", sessionID, err)
+			}
 		}
 	}
 	s.mu.Lock()
@@ -479,6 +485,7 @@ func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, m
 		runner = created
 	}
 	sess := NewSession(sessionID, cwd, service, registry, runner, s.sessionService, s.agents.ForSession(sessionID))
+	bindSessionRuntime(s, sess)
 	sess.mcpServers = cloneMCPServerConfigs(mcpServers)
 	sess.resource = mcpResource
 	return sess, nil
