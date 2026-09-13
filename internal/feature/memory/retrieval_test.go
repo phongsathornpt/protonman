@@ -23,8 +23,28 @@ func (r *fakeRepository) Load(_ context.Context, scope corememory.Scope, _ strin
 	return append([]corememory.Entry(nil), r.global...), nil
 }
 
-func (r *fakeRepository) Replace(context.Context, corememory.Scope, string, []corememory.Entry) error {
+func (r *fakeRepository) Replace(_ context.Context, scope corememory.Scope, _ string, entries []corememory.Entry) error {
+	if scope == corememory.ScopeWorkspace {
+		r.workspace = append([]corememory.Entry(nil), entries...)
+	} else {
+		r.global = append([]corememory.Entry(nil), entries...)
+	}
 	return nil
+}
+
+func (r *fakeRepository) Update(_ context.Context, scope corememory.Scope, _ string, update corememory.UpdateFunc) error {
+	if update == nil {
+		return nil
+	}
+	current := r.global
+	if scope == corememory.ScopeWorkspace {
+		current = r.workspace
+	}
+	next, err := update(append([]corememory.Entry(nil), current...))
+	if err != nil {
+		return err
+	}
+	return r.Replace(context.Background(), scope, "", next)
 }
 
 func (r *fakeRepository) RecordUsage(_ context.Context, refs []corememory.UsageRef, _ time.Time) error {
