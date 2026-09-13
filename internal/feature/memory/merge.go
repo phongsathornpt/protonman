@@ -45,8 +45,7 @@ func mergeCandidates(ctx context.Context, repository corememory.Repository, work
 		if err := repository.Update(ctx, corememory.ScopeWorkspace, workspaceKey, func(existing []corememory.Entry) ([]corememory.Entry, error) {
 			filtered := existing[:0]
 			for _, entry := range existing {
-				identity := strings.ToLower(strings.TrimSpace(string(entry.Kind) + "|" + entry.Key))
-				if _, ok := promoted[identity]; ok {
+				if _, ok := promoted[memoryIdentity(entry.Kind, entry.Key)]; ok {
 					continue
 				}
 				filtered = append(filtered, entry)
@@ -80,7 +79,7 @@ func effectiveCandidateScope(item candidate, workspace []corememory.Entry, sessi
 	sessions := map[string]struct{}{sessionID: {}}
 	identity := candidateIdentity(item)
 	for _, entry := range workspace {
-		if strings.ToLower(strings.TrimSpace(string(entry.Kind)+"|"+entry.Key)) != identity {
+		if memoryIdentity(entry.Kind, entry.Key) != identity {
 			continue
 		}
 		for _, ref := range entry.Evidence {
@@ -125,7 +124,11 @@ func candidateEntry(item candidate, scope corememory.Scope, workspaceKey string,
 }
 
 func candidateIdentity(item candidate) string {
-	return strings.ToLower(strings.TrimSpace(string(item.Kind) + "|" + item.Key))
+	return memoryIdentity(item.Kind, item.Key)
+}
+
+func memoryIdentity(kind corememory.Kind, key string) string {
+	return strings.ToLower(strings.TrimSpace(string(kind))) + "|" + strings.ToLower(strings.TrimSpace(key))
 }
 
 func stableMemoryID(scope corememory.Scope, workspaceKey string, kind corememory.Kind, key string) string {
