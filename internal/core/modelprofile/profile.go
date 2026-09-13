@@ -52,7 +52,6 @@ type MetadataProvenance struct {
 	ContextWindow      MetadataSource
 	MaxInputTokens     MetadataSource
 	MaxOutputTokens    MetadataSource
-	PromptHints        MetadataSource
 	ToolSchemaDialect  MetadataSource
 }
 
@@ -65,7 +64,7 @@ func (p MetadataProvenance) Summary() string {
 		{"reasoning_levels", p.ReasoningLevels}, {"reasoning_default", p.ReasoningDefault},
 		{"tool_choice_required", p.ToolChoiceRequired}, {"context_window", p.ContextWindow},
 		{"max_input_tokens", p.MaxInputTokens}, {"max_output_tokens", p.MaxOutputTokens},
-		{"prompt_hints", p.PromptHints}, {"tool_schema_dialect", p.ToolSchemaDialect},
+		{"tool_schema_dialect", p.ToolSchemaDialect},
 	}
 	parts := make([]string, 0, len(fields))
 	for _, field := range fields {
@@ -125,10 +124,6 @@ type CompatibilityPolicy struct {
 	ToolSchemaDialect ToolSchemaDialect
 }
 
-type AgentPolicy struct {
-	PromptHints []string
-}
-
 // CompactionPolicy controls when conversation history is compacted relative to
 // the model's effective input budget. Zero-valued ratios inherit tier defaults.
 type CompactionPolicy struct {
@@ -150,7 +145,6 @@ type Profile struct {
 	MaxInputTokens  int
 	MaxOutputTokens int
 	Compatibility   CompatibilityPolicy
-	AgentPolicy     AgentPolicy
 	Compaction      CompactionPolicy
 }
 
@@ -208,7 +202,6 @@ type Resolved struct {
 	MaxInputTokens  int
 	MaxOutputTokens int
 	Compatibility   CompatibilityPolicy
-	AgentPolicy     AgentPolicy
 	Compaction      CompactionPolicy
 	Provenance      MetadataProvenance
 }

@@ -52,7 +52,7 @@ func TestLoopBuildsEffectiveSystemPromptFromRuntime(t *testing.T) {
 		t.Fatalf("first role = %q, want system", system.Role)
 	}
 	for _, want := range []string{
-		`<proton-system-prompt version="14">`, "specialized coding subagent",
+		`<proton-system-prompt version="15">`, "specialized coding subagent",
 		"Workspace tool root: .", "custom project instruction", "Inspect the assigned code carefully.", "follow project rules",
 	} {
 		if !strings.Contains(system.Content, want) {

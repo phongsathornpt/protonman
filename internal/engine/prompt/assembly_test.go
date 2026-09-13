@@ -64,21 +64,14 @@ func TestRenderPlacesVolatileContextAfterReusablePrefix(t *testing.T) {
 	}
 }
 
-func TestModelPromptHintsDoNotAffectCanonicalPrompt(t *testing.T) {
-	base := Spec{
+func TestCanonicalPromptContainsNoModelGuidanceSection(t *testing.T) {
+	got := Render(Spec{
 		ProjectInstructions: "stable project instructions",
 		AvailableTools:      []string{"read", "bash"},
 		Workspace:           "/repo",
-	}
-	left := base
-	left.ModelPromptHints = []string{"gemini-specific guidance"}
-	right := base
-	right.ModelPromptHints = []string{"different-model guidance"}
-	if a, b := Render(left), Render(right); a != b {
-		t.Fatalf("model prompt hints changed canonical prompt\n--- left ---\n%s\n--- right ---\n%s", a, b)
-	}
-	if got := Render(left); strings.Contains(got, "# Model Guidance") || strings.Contains(got, "gemini-specific guidance") {
-		t.Fatalf("deprecated model prompt hints leaked into canonical prompt:\n%s", got)
+	})
+	if strings.Contains(got, "# Model Guidance") {
+		t.Fatalf("canonical prompt contains model-specific guidance section:\n%s", got)
 	}
 }
 

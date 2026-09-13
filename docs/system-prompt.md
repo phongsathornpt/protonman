@@ -6,10 +6,10 @@ Model identity and provider identity are not natural-language prompt inputs. Dif
 
 ## Prompt ABI
 
-The current managed prompt format is **Prompt ABI v14**:
+The current managed prompt format is **Prompt ABI v15**:
 
 ```text
-<proton-system-prompt version="14">
+<proton-system-prompt version="15">
 ...
 </proton-system-prompt>
 ```
@@ -17,6 +17,8 @@ The current managed prompt format is **Prompt ABI v14**:
 The Prompt ABI version identifies Protonman's managed prompt format and ordering contract. It is not the Proton SDK API version and does not imply an SDK major-version change.
 
 Bump the Prompt ABI when a change intentionally alters the managed prompt's model-facing contract, section topology, or serialization in a way that should invalidate assumptions about an older prompt shape.
+
+Prompt ABI v15 establishes a structural model-agnostic boundary. The prompt API no longer contains model-specific natural-language hint fields, and model profiles no longer expose an agent prompt-policy surface. A future change that reintroduces model/provider identity as prompt prose is therefore an architecture change, not a routine profile extension, and must be treated as an ABI review item.
 
 ## Cache-aware section topology
 
@@ -52,18 +54,35 @@ Changes should preserve these invariants:
 1. Equivalent semantic inputs render byte-identical prompt output.
 2. Section order never depends on map iteration, plugin registration order, provider discovery order, or other nondeterministic runtime state.
 3. Model identity and provider identity never inject natural-language guidance into the canonical system prompt.
-4. Volatile session material remains after reusable system, capability, and project instructions when semantics permit.
-5. Changing one dynamic section should not change bytes before that section's intended cache boundary.
-6. Tool guidance reflects the effective tool surface. The prompt must not advertise a capability the model cannot call.
-7. Runtime enforcement remains authoritative. Prompt wording never substitutes for permission, sandbox, safety, grounding, mutation, or tool-admission enforcement.
+4. For the same semantic `prompt.Spec`, switching model or provider must not change canonical prompt bytes.
+5. Volatile session material remains after reusable system, capability, and project instructions when semantics permit.
+6. Changing one dynamic section should not change bytes before that section's intended cache boundary.
+7. Tool guidance reflects the effective tool surface. The prompt must not advertise a capability the model cannot call.
+8. Runtime enforcement remains authoritative. Prompt wording never substitutes for permission, sandbox, safety, grounding, mutation, or tool-admission enforcement.
 
 These rules improve prefix reuse for providers and runtimes that implement KV/prefix caching. They are still useful when a provider does not expose cache statistics because deterministic prompt construction reduces accidental request drift.
+
+## Model-profile boundary
+
+`internal/core/modelprofile` is runtime metadata, not a prompt customization layer.
+
+Model profiles may describe:
+
+- tool, vision, and reasoning capability support;
+- reasoning levels and defaults;
+- context and token limits;
+- compaction policy;
+- tool-schema and protocol compatibility.
+
+Model profiles must not contain natural-language instructions intended to change agent behavior. Prompt ABI v15 removes the former model-prompt compatibility surface completely: there is no `ModelPromptHints`, `AgentPolicy`, `PromptHints`, or prompt-hint provenance in the runtime model-profile/prompt types.
+
+A resolved model profile may change how Protonman constructs or transports a request, but it must not mutate the canonical prompt text merely because the selected provider or model changed.
 
 ## Dynamic inputs
 
 The current renderer accepts dynamic fields through `prompt.Spec`, including project instructions, skills, role, active goal, workspace policy, grounding requirements, and the effective tool surface.
 
-`ModelPromptHints` is retained only as a temporary source-compatibility shim. `Render` intentionally ignores it. Do not add new model- or provider-specific prompt hints through `ExtraInstructions` or another indirect path.
+Model/provider identity is not represented by a natural-language prompt-policy field. Do not reintroduce model- or provider-specific prompt prose through `ExtraInstructions`, project-instruction synthesis, skill activation, or another indirect path.
 
 The active goal is durable session state, not merely a compaction hint. When present, it is the persistent objective for the session: the model should continue making concrete progress until the goal is completed, blocked by unavailable capabilities or permissions, or explicitly changed or cleared. Implementation goals require repository inspection, mutation, and verification rather than a plan-only response. The TUI `/goal <detail>` command starts the execution turn; prompt wording does not itself schedule a turn.
 
@@ -83,7 +102,7 @@ When changing tool publication:
 - do not expose unauthorized tools merely to improve cache reuse;
 - prefer stable capability profiles for subagents over ad hoc tool sets when that does not weaken isolation or correctness.
 
-Provider-specific cache routing hints or cache-breakpoint features belong in provider adapters. They must not fork the canonical prompt or change its semantics.
+Provider-specific cache routing hints or cache-breakpoint features belong in provider adapters. They may attach transport metadata or choose provider-native cache controls, but they must not fork the canonical prompt or change its semantics.
 
 ## Delegation routing
 
@@ -123,6 +142,8 @@ Prompt ABI v13 clarifies that the current explicit user request owns the immedia
 
 Prompt ABI v14 adds explicit parent-task/subagent linkage: when delegated work corresponds to a tracked TODO item, the parent passes `task_id` and runtime lifecycle events own `in_progress`/terminal task reconciliation.
 
+Prompt ABI v15 removes the legacy model-specific natural-language prompt-policy surface. Model/provider identity remains runtime metadata only, the old compatibility fields/types are gone, and the canonical managed prompt is model agnostic by construction.
+
 Runtime-delivered child content is untrusted evidence, not instruction material. It is appended after the stable managed system prompt and is not persisted as synthetic user conversation history, preserving the system-prefix cache boundary while keeping instruction hierarchy explicit.
 
 The runtime context uses a structured per-child payload with `status`, `conclusion`, validated `findings`, `verification`, `evidence`, `changed_targets`, and bounded `blockers`. Failed or canceled delegated work therefore reaches Universal as explicit state instead of an empty summary.
@@ -136,10 +157,12 @@ Cache- and routing-sensitive behavior is covered primarily in `internal/engine/p
 - equivalent tool sets render equivalent guidance regardless of input order;
 - dynamic tool namespace replacement publishes canonical name order;
 - workspace, project instructions, skills, role, and active-goal changes preserve the expected earlier prefix;
-- model-specific compatibility hints cannot change rendered prompt output;
+- the canonical prompt has no model-guidance section and contains no model-family-specific behavioral guidance;
+- model-profile resolution cannot act as a natural-language prompt-policy channel;
 - root/subagent identities and capability-conditioned contracts remain behaviorally correct;
 - delegation routing distinguishes local work, AGILITY exploration, STRENGTH implementation, and INTELLIGENCE cross-cutting reasoning;
 - delegation preserves runtime-owned result delivery and completion semantics;
-- the turn engine publishes the managed prompt as the model-facing system message.
+- the turn engine publishes the managed prompt as the model-facing system message;
+- Prompt ABI assertions in unit, turn, and e2e tests agree on v15.
 
 When adding or moving a dynamic section, add a divergence-boundary regression test rather than relying only on substring assertions. When changing delegation policy, prefer semantic-anchor tests over exact full-section snapshots so wording can evolve without weakening the routing contract.

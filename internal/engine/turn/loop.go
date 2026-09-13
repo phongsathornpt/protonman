@@ -289,7 +289,6 @@ func (l *Loop) CloneWithTools(tools *toolcall.Service) (*Loop, error) {
 	clone.tools = tools
 	if l.promptSpec != nil {
 		spec := *l.promptSpec
-		spec.ModelPromptHints = append([]string(nil), l.promptSpec.ModelPromptHints...)
 		spec.AvailableTools = append([]string(nil), l.promptSpec.AvailableTools...)
 		spec.ExtraInstructions = append([]string(nil), l.promptSpec.ExtraInstructions...)
 		clone.promptSpec = &spec
