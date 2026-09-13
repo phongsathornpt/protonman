@@ -63,6 +63,9 @@ func (a *application) handleEvent(event acpclient.Event) {
 		if active {
 			a.refreshActiveView()
 		}
+		if raw.Update.Kind == "tool_call_update" && terminalToolStatus(raw.Update.Status) {
+			a.refreshSessionContext(raw.SessionID, true)
+		}
 	}
 }
 
@@ -135,6 +138,16 @@ func (a *application) appendTranscript(sessionID, text string) {
 func (a *application) refreshActiveView() {
 	a.mu.Lock()
 	activeID := a.state.ActiveSessionID
+	a.mu.Unlock()
+	if activeID != "" {
+		a.refreshSessionContext(activeID, false)
+	}
+	a.renderActiveView()
+}
+
+func (a *application) renderActiveView() {
+	a.mu.Lock()
+	activeID := a.state.ActiveSessionID
 	busy := a.sessionBusyLocked(activeID)
 	markdown := ""
 	if transcript := a.transcripts[activeID]; transcript != nil {
@@ -142,6 +155,7 @@ func (a *application) refreshActiveView() {
 	}
 	for _, session := range a.state.Sessions {
 		if session.ID == activeID {
+			markdown += renderSessionContext(session.Context)
 			markdown += renderTimeline(session.Timeline)
 			markdown += renderSubagents(session.Subagents)
 			break
@@ -163,6 +177,15 @@ func (a *application) refreshActiveView() {
 			a.stop.Disable()
 		}
 	})
+}
+
+func terminalToolStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "completed", "failed", "canceled", "interrupted":
+		return true
+	default:
+		return false
+	}
 }
 
 func renderTimeline(items []desktopstate.TimelineItem) string {
