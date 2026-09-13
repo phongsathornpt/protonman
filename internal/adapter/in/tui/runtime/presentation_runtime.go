@@ -246,6 +246,16 @@ func (m bubbleModel) statusView() string {
 		indicator = spin
 	}
 
+	activityText := state.Activity
+	if (state.Phase == runtimeui.PhaseDelegating || state.Phase == runtimeui.PhaseCanceling) && len(state.Meta) > 0 {
+		agentMeta := state.Meta[0]
+		if strings.HasSuffix(agentMeta, " agent") || strings.HasSuffix(agentMeta, " agents") {
+			activityText += " · " + agentMeta
+			state.Meta = state.Meta[1:]
+			meta = state.MetaText()
+		}
+	}
+
 	suffix := ""
 	if meta != "" {
 		const minimumActivityWidth = 8
@@ -256,7 +266,7 @@ func (m bubbleModel) statusView() string {
 		}
 	}
 	contentWidth := maxInt(1, maxWidth-2-ansi.StringWidth(suffix))
-	activity := truncateWithEllipsis(state.Activity, contentWidth)
+	activity := truncateWithEllipsis(activityText, contentWidth)
 	return indicator + " " + systemStyle.Render(activity) + mutedStyle.Render(suffix)
 }
 
