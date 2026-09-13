@@ -11,10 +11,10 @@ import (
 func permissionFixture(width, height int) PermissionSnapshot {
 	return PermissionSnapshot{
 		Width: width, Height: height, Index: 1,
-		Title: "Permission required — modifies workspace",
-		Tone: panecommon.ToneError, ToolName: "Edit", ToolKind: "edit",
-		Detail: "internal/adapter/in/tui/runtime/presentation_runtime.go",
-		Options: []string{"Allow once", "Allow session", "Deny"},
+		Title:        "Permission required — modifies workspace",
+		Tone:         panecommon.ToneError, ToolName: "Edit", ToolKind: "edit",
+		Detail:       "internal/adapter/in/tui/runtime/presentation_runtime.go",
+		Options:      []string{"Allow once", "Allow session", "Deny"},
 		ShortcutHint: "y once · s session · n deny",
 	}
 }
