@@ -11,6 +11,17 @@ type ModelCapabilities struct {
 	RawChunks        bool
 }
 
+// Satisfies reports whether the model can execute a request with the supplied
+// provider-neutral requirements. Request requirements are derived before
+// provider-specific lowering.
+func (c ModelCapabilities) Satisfies(requirements RequestRequirements) bool {
+	return (!requirements.Streaming || c.Streaming) &&
+		(!requirements.Tools || c.Tools) &&
+		(!requirements.Vision || c.Vision) &&
+		(!requirements.ProviderOptions || c.ProviderOptions) &&
+		(!requirements.RawChunks || c.RawChunks)
+}
+
 // TokenLimits describes independently published model token constraints.
 type TokenLimits struct {
 	ContextWindow   int

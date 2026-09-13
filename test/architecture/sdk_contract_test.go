@@ -9,7 +9,9 @@ import (
 
 var (
 	_ = sdk.Request{}
+	_ = sdk.RequestRequirements{}
 	_ = sdk.Response{}
+	_ = sdk.ResponseAccumulator{}
 	_ = sdk.Message{}
 	_ = sdk.Tool{}
 	_ = sdk.Event{}
@@ -45,4 +47,15 @@ func TestCanonicalSDKMetadataContract(t *testing.T) {
 		t.Fatal("canonical SDK model must support MetadataModel in this contract fixture")
 	}
 	_ = metadataModel.Metadata()
+}
+
+func TestCanonicalSDKRequestRequirementContract(t *testing.T) {
+	request := sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hello"}}}
+	requirements := request.Requirements()
+	if !requirements.Streaming {
+		t.Fatal("Go SDK requests must require the streaming execution contract")
+	}
+	if !(sdk.ModelCapabilities{Streaming: true}).Satisfies(requirements) {
+		t.Fatal("streaming model should satisfy a text-only canonical request")
+	}
 }

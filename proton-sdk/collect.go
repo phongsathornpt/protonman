@@ -5,11 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 )
 
 // Collect consumes one model stream until its terminal event and builds a
-// provider-neutral response.
+// provider-neutral response through the canonical response accumulator.
 func Collect(ctx context.Context, stream Stream) (result Response, err error) {
 	if stream == nil {
 		return Response{}, fmt.Errorf("%w: stream is required", ErrInvalidRequest)
@@ -20,7 +19,7 @@ func Collect(ctx context.Context, stream Stream) (result Response, err error) {
 		}
 	}()
 
-	var text strings.Builder
+	var accumulator ResponseAccumulator
 	for {
 		event, err := stream.Next(ctx)
 		if err != nil {
@@ -29,21 +28,11 @@ func Collect(ctx context.Context, stream Stream) (result Response, err error) {
 			}
 			return Response{}, err
 		}
-		if err := event.Validate(); err != nil {
+		if err := accumulator.Absorb(event); err != nil {
 			return Response{}, err
 		}
-		switch event.Kind {
-		case EventTextDelta:
-			text.WriteString(event.Text)
-		case EventToolCall:
-			result.ToolCalls = append(result.ToolCalls, cloneToolCall(event.ToolCall))
-		case EventUsage:
-			result.Usage = event.Usage
-		case EventFinish:
-			result.Text = text.String()
-			result.ProviderMetadata = cloneProviderMetadata(event.ProviderMetadata)
-			result.FinishReason = event.FinishReason
-			return result, nil
+		if event.Kind == EventFinish {
+			return accumulator.Finish()
 		}
 	}
 }
