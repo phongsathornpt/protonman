@@ -59,10 +59,29 @@ type TodoState struct {
 	Items    []TodoItemState
 }
 
-// SessionContextState contains inspectable durable goal and TODO state.
+// MemoryEntryState is the read-only Desktop projection of one durable memory.
+type MemoryEntryState struct {
+	ID         string
+	Scope      string
+	Kind       string
+	Key        string
+	Value      string
+	Confidence float64
+	UsageCount uint64
+}
+
+// MemoryState contains workspace-local and global durable memory independently.
+type MemoryState struct {
+	WorkspaceKey string
+	Workspace    []MemoryEntryState
+	Global       []MemoryEntryState
+}
+
+// SessionContextState contains inspectable durable goal, TODO, and memory state.
 type SessionContextState struct {
-	Goal string
-	Todo TodoState
+	Goal   string
+	Todo   TodoState
+	Memory MemoryState
 }
 
 // PermissionOption is one user-selectable decision for a pending permission request.
@@ -117,6 +136,7 @@ const (
 	EventTimelineUpserted
 	EventSubagentUpserted
 	EventSessionContextUpdated
+	EventSessionMemoryUpdated
 )
 
 // Event is a typed reducer input. Only fields relevant to Kind are consumed.
@@ -127,6 +147,7 @@ type Event struct {
 	Item       TimelineItem
 	Subagent   SubagentState
 	Context    SessionContextState
+	Memory     MemoryState
 	Permission PermissionRequest
 	RequestID  string
 }
@@ -175,7 +196,13 @@ func Reduce(current State, event Event) State {
 		}
 	case EventSessionContextUpdated:
 		if session := sessionByID(&next, event.SessionID); session != nil {
+			memory := cloneMemoryState(session.Context.Memory)
 			session.Context = cloneSessionContext(event.Context)
+			session.Context.Memory = memory
+		}
+	case EventSessionMemoryUpdated:
+		if session := sessionByID(&next, event.SessionID); session != nil {
+			session.Context.Memory = cloneMemoryState(event.Memory)
 		}
 	}
 
@@ -200,7 +227,14 @@ func cloneSessions(sessions []SessionState) []SessionState {
 
 func cloneSessionContext(context SessionContextState) SessionContextState {
 	context.Todo.Items = slices.Clone(context.Todo.Items)
+	context.Memory = cloneMemoryState(context.Memory)
 	return context
+}
+
+func cloneMemoryState(memory MemoryState) MemoryState {
+	memory.Workspace = slices.Clone(memory.Workspace)
+	memory.Global = slices.Clone(memory.Global)
+	return memory
 }
 
 func clonePermissions(items []PermissionRequest) []PermissionRequest {
