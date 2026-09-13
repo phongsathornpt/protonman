@@ -77,7 +77,7 @@ jobs:
           replace(
               "internal/adapter/in/desktop/app.go",
               '\truntimeSync       bool\n}',
-              '\truntimeSync         bool\n\tintegrationButton   *widget.Button\n\tintegrationPanel    *fyne.Container\n\tintegrationSummary  *widget.Label\n\tintegrationName     *widget.Entry\n\tintegrationCommand  *widget.Entry\n\tintegrationArgs     *widget.Entry\n\tintegrationEnv      *widget.Entry\n\tintegrationSave     *widget.Button\n\tintegrationRemove   *widget.Button\n\tintegrationReconnect *widget.Button\n}',
+              '\truntimeSync          bool\n\tintegrationButton    *widget.Button\n\tintegrationPanel     *fyne.Container\n\tintegrationSummary   *widget.Label\n\tintegrationName      *widget.Entry\n\tintegrationCommand   *widget.Entry\n\tintegrationArgs      *widget.Entry\n\tintegrationEnv       *widget.Entry\n\tintegrationSave      *widget.Button\n\tintegrationRemove    *widget.Button\n\tintegrationReconnect *widget.Button\n}',
           )
           replace(
               "internal/adapter/in/desktop/app.go",
@@ -123,6 +123,7 @@ jobs:
               "sort"
               "strings"
 
+              "fyne.io/fyne/v2"
               "fyne.io/fyne/v2/container"
               "fyne.io/fyne/v2/widget"
 
@@ -140,7 +141,7 @@ jobs:
                   }
               })
               a.integrationSummary = widget.NewLabel("No MCP integrations")
-              a.integrationSummary.Wrapping = 1
+              a.integrationSummary.Wrapping = fyne.TextWrapWord
               a.integrationName = widget.NewEntry()
               a.integrationName.SetPlaceHolder("name")
               a.integrationCommand = widget.NewEntry()
@@ -418,7 +419,7 @@ jobs:
           gofmt -w internal/feature/desktop/state.go internal/feature/desktop/mcp_test.go internal/adapter/in/desktop/app.go internal/adapter/in/desktop/reconnect.go internal/adapter/in/desktop/mcp_integrations.go
           go test ./internal/feature/desktop
           sudo apt-get update >/dev/null
-          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev >/dev/null
+          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev wayland-protocols >/dev/null
           go test -tags desktop ./internal/adapter/in/desktop ./cmd/protonman-desktop
           rm -f .github/workflows/desktop-mcp-ui-apply.yml
           git config user.name github-actions[bot]
