@@ -54,6 +54,31 @@ func (s *FileStore) Replace(ctx context.Context, scope memory.Scope, workspaceKe
 	})
 }
 
+func (s *FileStore) Update(ctx context.Context, scope memory.Scope, workspaceKey string, update memory.UpdateFunc) error {
+	if update == nil {
+		return nil
+	}
+	dir, err := s.scopeDir(scope, workspaceKey)
+	if err != nil {
+		return err
+	}
+	return s.withScopeLock(ctx, dir, func() error {
+		entries, err := s.loadUnlocked(dir, scope, workspaceKey)
+		if err != nil {
+			return err
+		}
+		next, err := update(append([]memory.Entry(nil), entries...))
+		if err != nil {
+			return err
+		}
+		prepared, err := validateEntries(scope, workspaceKey, next)
+		if err != nil {
+			return err
+		}
+		return s.writeUnlocked(ctx, dir, prepared)
+	})
+}
+
 func (s *FileStore) RecordUsage(ctx context.Context, refs []memory.UsageRef, at time.Time) error {
 	return s.recordUsage(ctx, refs, at)
 }
