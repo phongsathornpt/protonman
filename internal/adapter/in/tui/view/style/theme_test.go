@@ -20,7 +20,7 @@ func TestSemanticStylesUseThemePalette(t *testing.T) {
 		{"info", InfoStyle.GetForeground(), ColorInfo},
 		{"focus", FocusStyle.GetForeground(), ColorFocus},
 		{"prompt divider idle", PromptDividerIdle.GetForeground(), ColorBorder},
-		{"prompt divider focus", PromptDividerFocus.GetForeground(), ColorBorderFocus},
+		{"prompt divider focus", PromptDividerFocused.GetForeground(), ColorBorderFocus},
 		{"prompt divider warning", PromptDividerWarning.GetForeground(), ColorWarning},
 		{"prompt divider error", PromptDividerError.GetForeground(), ColorDanger},
 		{"todo pending", TodoPendingStyle.GetForeground(), ColorTextMuted},
