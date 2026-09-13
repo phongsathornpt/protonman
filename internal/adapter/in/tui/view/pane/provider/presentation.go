@@ -43,7 +43,7 @@ func ProviderEditorRows(snapshot ProviderEditorSnapshot) ([]string, panecommon.T
 	switch snapshot.State {
 	case ProviderEditorFetching:
 		return []string{
-			tuistyle.BrandStyle.Render("Connecting · " + snapshot.Name),
+			tuistyle.ActivityStyle.Render("Connecting · " + snapshot.Name),
 			fmt.Sprintf("%s %s", snapshot.Spinner, snapshot.Endpoint),
 		}, panecommon.ToneAssistant
 	case ProviderEditorSaving:
@@ -52,7 +52,7 @@ func ProviderEditorRows(snapshot ProviderEditorSnapshot) ([]string, panecommon.T
 			description = "  Keeping the current active provider and model"
 		}
 		return []string{
-			tuistyle.BrandStyle.Render("Saving · " + snapshot.Name),
+			tuistyle.ActivityStyle.Render("Saving · " + snapshot.Name),
 			tuistyle.MutedStyle.Render(strings.TrimSpace(description)),
 		}, panecommon.ToneAssistant
 	case ProviderEditorSaveError:
@@ -76,7 +76,7 @@ func ProviderEditorRows(snapshot ProviderEditorSnapshot) ([]string, panecommon.T
 }
 
 func providerInputRows(snapshot ProviderEditorSnapshot) []string {
-	rows := []string{tuistyle.BrandStyle.Render(providerInputTitle(snapshot, true))}
+	rows := []string{tuistyle.PaneTitleStyle.Render(providerInputTitle(snapshot, true))}
 	return append(rows, providerInputFields(snapshot, true)...)
 }
 
