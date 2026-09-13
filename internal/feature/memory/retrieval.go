@@ -14,10 +14,18 @@ import (
 	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 )
 
+const minLexicalRelevance = 2.0
+
+var retrievalStopWords = map[string]struct{}{
+	"a": {}, "an": {}, "and": {}, "are": {}, "as": {}, "at": {}, "be": {}, "but": {}, "by": {},
+	"do": {}, "for": {}, "from": {}, "how": {}, "if": {}, "in": {}, "is": {}, "it": {}, "not": {},
+	"of": {}, "on": {}, "or": {}, "so": {}, "that": {}, "the": {}, "this": {}, "to": {}, "was": {},
+	"we": {}, "what": {}, "when": {}, "where": {}, "which": {}, "who": {}, "why": {}, "with": {},
+}
+
 type Query struct {
 	WorkspaceKey string
 	Text         string
-	ActiveGoal   string
 	Now          time.Time
 }
 
@@ -56,7 +64,7 @@ func (r *Retriever) Retrieve(ctx context.Context, query Query) ([]corememory.Ent
 	}
 	entries = append(entries, globalEntries...)
 
-	queryTokens := tokenSet(query.Text + " " + query.ActiveGoal)
+	queryTokens := tokenSet(query.Text)
 	if len(queryTokens) == 0 {
 		return nil, nil
 	}
@@ -69,10 +77,11 @@ func (r *Retriever) Retrieve(ctx context.Context, query Query) ([]corememory.Ent
 		if stale(entry, now, r.policy) {
 			continue
 		}
-		score := relevance(entry, queryTokens)
-		if score <= 0 {
+		lexicalScore := relevance(entry, queryTokens)
+		if lexicalScore < minLexicalRelevance {
 			continue
 		}
+		score := lexicalScore
 		if entry.Scope == corememory.ScopeWorkspace {
 			score += 2
 		}
@@ -133,7 +142,7 @@ func relevance(entry corememory.Entry, queryTokens map[string]struct{}) float64 
 			score += 2
 		}
 		if _, ok := valueTokens[token]; ok {
-			score += 1
+			score += 0.1
 		}
 	}
 	return score
@@ -146,6 +155,9 @@ func tokenSet(value string) map[string]struct{} {
 	out := make(map[string]struct{}, len(parts))
 	for _, part := range parts {
 		if len(part) < 2 {
+			continue
+		}
+		if _, stop := retrievalStopWords[part]; stop {
 			continue
 		}
 		out[part] = struct{}{}
