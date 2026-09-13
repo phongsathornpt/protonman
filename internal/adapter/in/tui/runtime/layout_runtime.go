@@ -179,13 +179,7 @@ func (m *bubbleModel) buildFrameLayout() frameLayout {
 			frame.header = header + "\n" + separator
 		}
 	}
-	composerVisible := m.panes.bottom != nil && m.panes.bottom.composerVisible()
 	frame.status = m.statusView()
-	if frame.status == "" && composerVisible {
-		// Reserve the status row even while idle so starting, retrying, or
-		// finishing a turn never pushes the composer up or down by one row.
-		frame.status = " "
-	}
 	frame.top = m.panes.bottom.renderTop(m)
 	frame.footer = m.footerView()
 	for _, part := range []string{frame.header, frame.status, frame.top} {
@@ -193,7 +187,7 @@ func (m *bubbleModel) buildFrameLayout() frameLayout {
 			frame.height += lipgloss.Height(part)
 		}
 	}
-	if composerVisible {
+	if m.panes.bottom.composerVisible() {
 		frame.composer = m.promptView()
 		frame.height += m.panes.bottom.prompt().Height() + 2
 	}
