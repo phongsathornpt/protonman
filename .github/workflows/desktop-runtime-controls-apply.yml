@@ -1,0 +1,94 @@
+name: Desktop runtime controls apply
+
+on:
+  push:
+    branches:
+      - feat/desktop-app
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/desktop-app
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Wire ACP runtime controls
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"pattern not found in {path}: {old[:80]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          replace(
+              "internal/core/session/state.go",
+              '\t// ReasoningEffort records the session reasoning override ("auto" preserves provider/profile defaults).\n\tReasoningEffort string `json:"reasoning_effort,omitempty"`\n',
+              '\t// ModelProvider records the session-local provider override.\n\tModelProvider string `json:"model_provider,omitempty"`\n\t// ModelID records the session-local model override.\n\tModelID string `json:"model_id,omitempty"`\n\t// ReasoningEffort records the session reasoning override ("auto" preserves provider/profile defaults).\n\tReasoningEffort string `json:"reasoning_effort,omitempty"`\n',
+          )
+
+          replace(
+              "internal/adapter/in/acp/server.go",
+              'func (s *Server) handleRequest(ctx context.Context, request RPCRequest, output io.Writer) error {\n\tresult, notify, err := s.dispatch(ctx, request, output)\n',
+              'func (s *Server) handleRequest(ctx context.Context, request RPCRequest, output io.Writer) error {\n\tif result, handled, err := s.dispatchSessionRuntime(ctx, request); handled {\n\t\treturn s.writeResponse(output, request.ID, result, nil, err)\n\t}\n\tresult, notify, err := s.dispatch(ctx, request, output)\n',
+          )
+
+          replace(
+              "internal/adapter/in/acp/server.go",
+              '\t\t\tif strings.TrimSpace(state.ReasoningEffort) != "" {\n\t\t\t\teffort, parseErr := sdk.ParseReasoningEffort(state.ReasoningEffort)\n\t\t\t\tif parseErr != nil {\n\t\t\t\t\treturn nil, fmt.Errorf("restore session reasoning %q: %w", sessionID, parseErr)\n\t\t\t\t}\n\t\t\t\tif err := sess.SetReasoningEffort(effort); err != nil {\n\t\t\t\t\treturn nil, fmt.Errorf("restore session reasoning %q: %w", sessionID, err)\n\t\t\t\t}\n\t\t\t}\n',
+              '\t\t\tif strings.TrimSpace(state.ReasoningEffort) != "" {\n\t\t\t\teffort, parseErr := sdk.ParseReasoningEffort(state.ReasoningEffort)\n\t\t\t\tif parseErr != nil {\n\t\t\t\t\treturn nil, fmt.Errorf("restore session reasoning %q: %w", sessionID, parseErr)\n\t\t\t\t}\n\t\t\t\tif err := sess.SetReasoningEffort(effort); err != nil {\n\t\t\t\t\treturn nil, fmt.Errorf("restore session reasoning %q: %w", sessionID, err)\n\t\t\t\t}\n\t\t\t}\n\t\t\tif err := restoreSessionRuntime(ctx, s, sess, state); err != nil {\n\t\t\t\treturn nil, fmt.Errorf("restore session runtime %q: %w", sessionID, err)\n\t\t\t}\n',
+          )
+
+          replace(
+              "internal/adapter/in/acp/server.go",
+              '\tsess := NewSession(sessionID, cwd, service, registry, runner, s.sessionService, s.agents.ForSession(sessionID))\n\tsess.mcpServers = cloneMCPServerConfigs(mcpServers)\n',
+              '\tsess := NewSession(sessionID, cwd, service, registry, runner, s.sessionService, s.agents.ForSession(sessionID))\n\tbindSessionRuntime(s, sess)\n\tsess.mcpServers = cloneMCPServerConfigs(mcpServers)\n',
+          )
+
+          replace(
+              "internal/adapter/in/acp/session.go",
+              '\treasoningSetting := "auto"\n\tif reasoningEffort != sdk.ReasoningDefault {\n\t\treasoningSetting = string(reasoningEffort)\n\t}\n\n\terr := s.sessionService.Save(ctx, s.id, session.State{\n',
+              '\treasoningSetting := "auto"\n\tif reasoningEffort != sdk.ReasoningDefault {\n\t\treasoningSetting = string(reasoningEffort)\n\t}\n\truntimeSettings := sessionRuntimeFor(s)\n\n\terr := s.sessionService.Save(ctx, s.id, session.State{\n',
+          )
+
+          replace(
+              "internal/adapter/in/acp/session.go",
+              '\t\tPermissionMode:  s.service.Mode().String(),\n\t\tReasoningEffort: reasoningSetting,\n\t\tMessages:        session.FromModelMessages(messages),\n',
+              '\t\tPermissionMode:     s.service.Mode().String(),\n\t\tModelProvider:      runtimeSettings.Provider,\n\t\tModelID:            runtimeSettings.Model,\n\t\tReasoningEffort:    reasoningSetting,\n\t\tLowConcurrencyMode: runtimeSettings.LowConcurrency,\n\t\tMessages:           session.FromModelMessages(messages),\n',
+          )
+
+          replace(
+              "cmd/protonman/main.go",
+              '\t\t\tacp.WithMemories(memories),\n\t\t\tacp.WithAgents(app.NewAgents(runtimeState.coordinator)),\n',
+              '\t\t\tacp.WithMemories(memories),\n\t\t\tacp.WithAgents(app.NewAgents(runtimeState.coordinator)),\n\t\t\tacpSessionRuntimeOption(runtimeState),\n',
+          )
+          PY
+
+          gofmt -w \
+            cmd/protonman/acp_runtime.go \
+            cmd/protonman/main.go \
+            internal/core/session/state.go \
+            internal/adapter/in/acp/server.go \
+            internal/adapter/in/acp/session.go \
+            internal/adapter/in/acp/session_runtime.go \
+            internal/adapter/in/acp/session_runtime_test.go
+
+          go test ./internal/adapter/in/acp ./internal/core/session ./cmd/protonman
+          rm -f .github/workflows/desktop-runtime-controls-apply.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "feat(desktop): wire typed session runtime controls"
+          git push origin HEAD:feat/desktop-app
