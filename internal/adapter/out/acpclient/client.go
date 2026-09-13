@@ -17,6 +17,8 @@ import (
 
 var ErrClosed = errors.New("ACP client is closed")
 
+var ErrMethodNotHandled = errors.New("ACP reverse request method is not handled")
+
 type RPCError struct {
 	Code    int             `json:"code"`
 	Message string          `json:"message"`
@@ -36,7 +38,18 @@ type Event struct {
 	Params json.RawMessage
 }
 
+// Request is a server-to-client JSON-RPC request that requires a response.
+type Request struct {
+	ID     json.RawMessage
+	Method string
+	Params json.RawMessage
+}
+
+// RequestHandler handles server-to-client ACP requests such as permission prompts.
+type RequestHandler func(context.Context, Request) (any, error)
+
 type Client struct {
+	ctx    context.Context
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
 	cancel context.CancelFunc
@@ -44,6 +57,7 @@ type Client struct {
 	writeMu sync.Mutex
 	mu      sync.Mutex
 	pending map[uint64]chan response
+	handler RequestHandler
 	nextID  atomic.Uint64
 	onEvent func(Event)
 	closed  chan struct{}
@@ -91,7 +105,7 @@ func Start(ctx context.Context, binary string, onEvent func(Event)) (*Client, er
 	}
 
 	client := &Client{
-		cmd: cmd, stdin: stdin, cancel: cancel, onEvent: onEvent,
+		ctx: procCtx, cmd: cmd, stdin: stdin, cancel: cancel, onEvent: onEvent,
 		pending: make(map[uint64]chan response), closed: make(chan struct{}),
 	}
 	go client.readLoop(stdout)
@@ -101,6 +115,14 @@ func Start(ctx context.Context, binary string, onEvent func(Event)) (*Client, er
 		client.shutdown(err)
 	}()
 	return client, nil
+}
+
+// SetRequestHandler installs the handler for server-to-client JSON-RPC requests.
+// It may be replaced while the client is running.
+func (c *Client) SetRequestHandler(handler RequestHandler) {
+	c.mu.Lock()
+	c.handler = handler
+	c.mu.Unlock()
 }
 
 func (c *Client) Call(ctx context.Context, method string, params any, result any) error {
@@ -186,8 +208,13 @@ func (c *Client) readLoop(r io.Reader) {
 			continue
 		}
 		if msg.Method != "" {
+			if len(msg.ID) > 0 && string(msg.ID) != "null" {
+				request := Request{ID: append(json.RawMessage(nil), msg.ID...), Method: msg.Method, Params: append(json.RawMessage(nil), msg.Params...)}
+				go c.handleRequest(request)
+				continue
+			}
 			if c.onEvent != nil {
-				c.onEvent(Event{ID: msg.ID, Method: msg.Method, Params: msg.Params})
+				c.onEvent(Event{Method: msg.Method, Params: append(json.RawMessage(nil), msg.Params...)})
 			}
 			continue
 		}
@@ -213,6 +240,42 @@ func (c *Client) readLoop(r io.Reader) {
 	} else {
 		c.shutdown(io.EOF)
 	}
+}
+
+func (c *Client) handleRequest(request Request) {
+	c.mu.Lock()
+	handler := c.handler
+	c.mu.Unlock()
+
+	if handler == nil {
+		_ = c.write(envelope{
+			JSONRPC: "2.0",
+			ID:      request.ID,
+			Error:   &RPCError{Code: -32601, Message: ErrMethodNotHandled.Error() + ": " + request.Method},
+		})
+		return
+	}
+
+	result, err := handler(c.ctx, request)
+	if err != nil {
+		_ = c.write(envelope{
+			JSONRPC: "2.0",
+			ID:      request.ID,
+			Error:   &RPCError{Code: -32000, Message: err.Error()},
+		})
+		return
+	}
+
+	resultJSON, err := json.Marshal(result)
+	if err != nil {
+		_ = c.write(envelope{
+			JSONRPC: "2.0",
+			ID:      request.ID,
+			Error:   &RPCError{Code: -32603, Message: "encode reverse request result: " + err.Error()},
+		})
+		return
+	}
+	_ = c.write(envelope{JSONRPC: "2.0", ID: request.ID, Result: resultJSON})
 }
 
 func (c *Client) removePending(id uint64) {
