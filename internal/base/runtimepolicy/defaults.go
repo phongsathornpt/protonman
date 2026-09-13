@@ -56,6 +56,30 @@ const (
 	OpenCodeFreeStreamMaxDuration = 5 * time.Minute
 )
 
+// MemoryPolicy is the single source of truth for durable-memory retrieval,
+// promotion, and bounded startup extraction work.
+type MemoryPolicy struct {
+	MaxEntriesPerTurn          int
+	MaxContextBytes            int
+	MaxIndexEntries            int
+	MaxExtractionSessions      int
+	GlobalPromotionMinSessions int
+	StaleRepoFactAge           time.Duration
+	StaleFailureAge            time.Duration
+}
+
+func DurableMemory() MemoryPolicy {
+	return MemoryPolicy{
+		MaxEntriesPerTurn:          6,
+		MaxContextBytes:            6 * 1024,
+		MaxIndexEntries:            4096,
+		MaxExtractionSessions:      4,
+		GlobalPromotionMinSessions: 2,
+		StaleRepoFactAge:           30 * 24 * time.Hour,
+		StaleFailureAge:            60 * 24 * time.Hour,
+	}
+}
+
 // ModelRetrySchedule returns a fresh copy of the authoritative local retry
 // schedule so callers cannot mutate runtime defaults through a returned slice.
 func ModelRetrySchedule() []time.Duration {
