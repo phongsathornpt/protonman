@@ -123,6 +123,11 @@ func (m *bubbleModel) submit() tea.Cmd {
 		}
 		return nil
 	}
+	if strings.HasPrefix(line, "/") {
+		m.resetPrompt()
+		m.panes.bottom.remove(slashViewID)
+		return m.dispatch(line)
+	}
 	if m.busy || m.hasPermissionView() {
 		if !m.enqueuePrompt(line) {
 			return nil
