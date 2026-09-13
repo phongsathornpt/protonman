@@ -89,7 +89,7 @@ func (m *bubbleModel) footerView() string {
 
 func (m *bubbleModel) idleContextFooter() string {
 	const inset = " "
-	width := maxInt(1, m.layout.width-len(inset)*3)
+	width := maxInt(1, m.layoutProfile().contentWidth(m.layout.width)-1)
 	permission := m.permissionModeLabel()
 	reasoning := reasoningpolicy.EffortLabel(m.reasoningEffort)
 	rightCandidates := []string{permission}
@@ -125,7 +125,8 @@ func (m *bubbleModel) resize(width int, height int) {
 	}
 	m.layout.width = width
 	m.layout.height = height
-	m.help.SetWidth(maxInt(1, width-2))
+	profile := m.layoutProfile()
+	m.help.SetWidth(profile.contentWidth(width))
 	prompt := m.panes.bottom.prompt()
 	prompt.SetWidth(composerUsableWidth(width))
 	m.panes.transcript.SetWidth(maxInt(1, width-10))
@@ -145,6 +146,7 @@ type layoutState struct {
 	width      int
 	height     int
 	frame      frameLayout
+	geometry   frameGeometry
 	generation uint64
 	dirty      bool
 }
@@ -159,11 +161,22 @@ type frameLayout struct {
 	height     int
 }
 
+func (m *bubbleModel) layoutProfile() layoutProfile {
+	if m == nil {
+		return resolveLayoutProfile(defaultBubbleWidth, defaultBubbleHeight, false)
+	}
+	hasBottomView := m.panes.bottom != nil && m.panes.bottom.top() != nil
+	return resolveLayoutProfile(m.layout.width, m.layout.height, hasBottomView)
+}
+
 func (m *bubbleModel) buildFrameLayout() frameLayout {
 	frame := frameLayout{}
-	if header := m.sessionHeaderView(); header != "" {
-		separator := mutedStyle.Render(strings.Repeat("─", maxInt(1, m.layout.width)))
-		frame.header = header + "\n" + separator
+	profile := m.layoutProfile()
+	if profile.showHeader {
+		if header := m.sessionHeaderView(); header != "" {
+			separator := mutedStyle.Render(strings.Repeat("─", maxInt(1, m.layout.width)))
+			frame.header = header + "\n" + separator
+		}
 	}
 	frame.status = m.statusView()
 	frame.top = m.panes.bottom.renderTop(m)
@@ -208,10 +221,8 @@ func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame fram
 	m.layout.generation++
 	frame.generation = m.layout.generation
 	m.layout.frame = frame
-	viewportHeight := m.layout.height - frame.height
-	if viewportHeight < 1 {
-		viewportHeight = 1
-	}
+	m.layout.geometry = resolveFrameGeometry(m.layout.width, m.layout.height, frame.height)
+	viewportHeight := m.layout.geometry.viewportHeight
 	if m.viewport.Width() != m.layout.width || m.viewport.Height() != viewportHeight {
 		m.viewport.SetWidth(m.layout.width)
 		m.viewport.SetHeight(viewportHeight)
@@ -231,6 +242,7 @@ func (m *bubbleModel) refreshFrameLayout() {
 	m.layout.generation++
 	frame.generation = m.layout.generation
 	m.layout.frame = frame
+	m.layout.geometry = resolveFrameGeometry(m.layout.width, m.layout.height, frame.height)
 }
 
 func (m *bubbleModel) refreshViewport() {
