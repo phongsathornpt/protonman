@@ -42,11 +42,10 @@ func TestPermissionViewResponsiveModes(t *testing.T) {
 			if !strings.Contains(plain, "Allow session") || !strings.Contains(plain, "› Allow session") {
 				t.Fatalf("selected option missing: %q", plain)
 			}
-			for _, row := range rendered.Rows {
-				for _, line := range strings.Split(row, "\n") {
-					if width := ansi.StringWidth(line); width > tc.width {
-						t.Fatalf("row width=%d terminal=%d: %q", width, tc.width, ansi.Strip(line))
-					}
+			modal := panecommon.RenderToneModal(tc.width, tc.height, rendered.Tone, rendered.Rows)
+			for _, line := range strings.Split(modal, "\n") {
+				if width := ansi.StringWidth(line); width > tc.width {
+					t.Fatalf("modal width=%d terminal=%d: %q", width, tc.width, ansi.Strip(line))
 				}
 			}
 		})
