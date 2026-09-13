@@ -16,31 +16,14 @@ func (a *application) handleEvent(event acpclient.Event) {
 	if event.Method != "session/update" {
 		return
 	}
-	var payload struct {
-		SessionID string `json:"sessionId"`
-		Update struct {
-			Kind       string `json:"sessionUpdate"`
-			ToolCallID string `json:"toolCallId"`
-			Title      string `json:"title"`
-			Status     string `json:"status"`
-			Content    []struct {
-				Content struct {
-					Text string `json:"text"`
-				} `json:"content"`
-			} `json:"content"`
-			MessageContent struct {
-				Text string `json:"text"`
-			} `json:"-"`
-		} `json:"update"`
-	}
 	var raw struct {
 		SessionID string `json:"sessionId"`
 		Update struct {
-			Kind       string `json:"sessionUpdate"`
-			ToolCallID string `json:"toolCallId"`
-			Title      string `json:"title"`
-			Status     string `json:"status"`
-			Content json.RawMessage `json:"content"`
+			Kind       string          `json:"sessionUpdate"`
+			ToolCallID string          `json:"toolCallId"`
+			Title      string          `json:"title"`
+			Status     string          `json:"status"`
+			Content    json.RawMessage `json:"content"`
 		} `json:"update"`
 	}
 	if json.Unmarshal(event.Params, &raw) != nil || raw.SessionID == "" {
@@ -49,21 +32,21 @@ func (a *application) handleEvent(event acpclient.Event) {
 
 	text := sessionUpdateText(raw.Update.Content)
 	update := desktopstate.SessionUpdate{
-		SessionID: raw.SessionID,
-		Kind: raw.Update.Kind,
+		SessionID:  raw.SessionID,
+		Kind:       raw.Update.Kind,
 		ToolCallID: raw.Update.ToolCallID,
-		Title: raw.Update.Title,
-		Status: raw.Update.Status,
-		Text: text,
+		Title:      raw.Update.Title,
+		Status:     raw.Update.Status,
+		Text:       text,
 	}
 
 	if raw.Update.Kind == "agent_message_chunk" {
 		a.appendTranscript(raw.SessionID, text)
 		return
 	}
-	if event, ok := desktopstate.TimelineEvent(update); ok {
+	if reduced, ok := desktopstate.TimelineEvent(update); ok {
 		a.mu.Lock()
-		a.state = desktopstate.Reduce(a.state, event)
+		a.state = desktopstate.Reduce(a.state, reduced)
 		active := a.state.ActiveSessionID == raw.SessionID
 		a.mu.Unlock()
 		if active {
