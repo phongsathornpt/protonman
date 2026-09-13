@@ -12,6 +12,8 @@ import (
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
+const subagentSessionUpdate = "protonman_subagent_update"
+
 func (a *application) handleEvent(event acpclient.Event) {
 	if event.Method != "session/update" {
 		return
@@ -24,9 +26,18 @@ func (a *application) handleEvent(event acpclient.Event) {
 			Title      string          `json:"title"`
 			Status     string          `json:"status"`
 			Content    json.RawMessage `json:"content"`
+			AgentID    string          `json:"agentId"`
+			Profile    string          `json:"profile"`
+			Task       string          `json:"task"`
+			Summary    string          `json:"summary"`
 		} `json:"update"`
 	}
 	if json.Unmarshal(event.Params, &raw) != nil || raw.SessionID == "" {
+		return
+	}
+
+	if raw.Update.Kind == subagentSessionUpdate {
+		a.reduceSubagentUpdate(raw.SessionID, raw.Update.AgentID, raw.Update.Profile, raw.Update.Task, raw.Update.Summary, raw.Update.Status)
 		return
 	}
 
@@ -52,6 +63,29 @@ func (a *application) handleEvent(event acpclient.Event) {
 		if active {
 			a.refreshActiveView()
 		}
+	}
+}
+
+func (a *application) reduceSubagentUpdate(sessionID, agentID, profile, task, summary, status string) {
+	if strings.TrimSpace(agentID) == "" {
+		return
+	}
+	a.mu.Lock()
+	a.state = desktopstate.Reduce(a.state, desktopstate.Event{
+		Kind:      desktopstate.EventSubagentUpserted,
+		SessionID: sessionID,
+		Subagent: desktopstate.SubagentState{
+			ID:      agentID,
+			Profile: strings.ToLower(strings.TrimSpace(profile)),
+			Task:    strings.TrimSpace(task),
+			Summary: strings.TrimSpace(summary),
+			Status:  strings.TrimSpace(status),
+		},
+	})
+	active := a.state.ActiveSessionID == sessionID
+	a.mu.Unlock()
+	if active {
+		a.refreshActiveView()
 	}
 }
 
@@ -109,6 +143,7 @@ func (a *application) refreshActiveView() {
 	for _, session := range a.state.Sessions {
 		if session.ID == activeID {
 			markdown += renderTimeline(session.Timeline)
+			markdown += renderSubagents(session.Subagents)
 			break
 		}
 	}
@@ -139,13 +174,7 @@ func renderTimeline(items []desktopstate.TimelineItem) string {
 		if out.Len() == 0 {
 			out.WriteString("\n\n### Activity\n")
 		}
-		marker := "◐"
-		switch item.Status {
-		case "completed":
-			marker = "✓"
-		case "failed":
-			marker = "×"
-		}
+		marker := statusMarker(item.Status)
 		title := strings.TrimSpace(item.Title)
 		if title == "" {
 			title = "Tool call"
@@ -156,4 +185,52 @@ func renderTimeline(items []desktopstate.TimelineItem) string {
 		}
 	}
 	return out.String()
+}
+
+func renderSubagents(items []desktopstate.SubagentState) string {
+	if len(items) == 0 {
+		return ""
+	}
+	var out strings.Builder
+	out.WriteString("\n\n### Teammates\n")
+	for _, item := range items {
+		label := subagentLabel(item.Profile)
+		out.WriteString("\n**" + statusMarker(item.Status) + " " + label + "**")
+		if status := strings.TrimSpace(item.Status); status != "" {
+			out.WriteString(" · `" + status + "`")
+		}
+		if task := strings.TrimSpace(item.Task); task != "" {
+			out.WriteString("\n\n" + task)
+		}
+		if summary := strings.TrimSpace(item.Summary); summary != "" && summary != item.Task {
+			out.WriteString("\n\n_" + summary + "_")
+		}
+	}
+	return out.String()
+}
+
+func subagentLabel(profile string) string {
+	switch strings.ToLower(strings.TrimSpace(profile)) {
+	case "strength":
+		return "STRENGTH"
+	case "agility":
+		return "AGILITY"
+	case "intelligence":
+		return "INTELLIGENCE"
+	default:
+		return "SUBAGENT"
+	}
+}
+
+func statusMarker(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "completed":
+		return "✓"
+	case "failed", "canceled", "interrupted":
+		return "×"
+	case "queued":
+		return "○"
+	default:
+		return "◐"
+	}
 }
