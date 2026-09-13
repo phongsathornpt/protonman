@@ -105,7 +105,7 @@ func Project(input Input) State {
 		return appendElapsed(state, true, input.StartedAt, now)
 	}
 
-	if activity, retryMeta, ok := retryStatus(input.Retry, now); ok {
+	if activity, retryMeta, ok := RetryStatus(input.Retry, now); ok {
 		state := State{Phase: PhaseRetryWaiting, Activity: activity, Meta: retryMeta}
 		return appendElapsed(state, true, input.StartedAt, now)
 	}
@@ -119,8 +119,14 @@ func Project(input Input) State {
 		return appendElapsed(state, true, input.StartedAt, now)
 	}
 
-	if runningTool := strings.TrimSpace(input.RunningTool); runningTool != "" {
-		state := State{Phase: PhaseToolRunning, Activity: runningTool}
+	explicit := strings.TrimSpace(input.ExplicitActivity)
+	runningTool := strings.TrimSpace(input.RunningTool)
+	if runningTool != "" {
+		activity := runningTool
+		if explicit != "" && explicit != "ready" {
+			activity = explicit
+		}
+		state := State{Phase: PhaseToolRunning, Activity: activity}
 		state.Meta = appendToolCount(state.Meta, input.ToolCalls)
 		return appendElapsed(state, true, input.StartedAt, now)
 	}
@@ -131,7 +137,7 @@ func Project(input Input) State {
 		return appendElapsed(state, true, input.StartedAt, now)
 	}
 
-	activity := strings.TrimSpace(input.ExplicitActivity)
+	activity := explicit
 	if activity == "" || activity == "ready" {
 		activity = strings.TrimSpace(input.FallbackActivity)
 	}
@@ -175,7 +181,8 @@ func agentCount(count int) string {
 	return fmt.Sprintf("%d %s", count, label)
 }
 
-func retryStatus(retry sdk.RetryEvent, now time.Time) (string, []string, bool) {
+// RetryStatus normalizes retry countdown and reason copy for every TUI surface.
+func RetryStatus(retry sdk.RetryEvent, now time.Time) (string, []string, bool) {
 	if retry.Attempt <= 0 || retry.RetryAt.IsZero() {
 		return "", nil, false
 	}
