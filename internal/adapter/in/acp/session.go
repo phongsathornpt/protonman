@@ -173,6 +173,8 @@ func (s *Session) ExecutePrompt(
 	s.cancel = cancel
 	s.mu.Unlock()
 
+	stopSubagentNotifications := s.startSubagentNotifications(promptCtx, notifier)
+	defer stopSubagentNotifications()
 	defer func() {
 		s.mu.Lock()
 		s.active = false
@@ -402,7 +404,7 @@ func (s *Session) ReplayHistory(notifier func(RPCNotification) error) error {
 			return err
 		}
 	}
-	return nil
+	return s.replaySubagents(notifier)
 }
 
 func (s *Session) handleSlashCommand(
