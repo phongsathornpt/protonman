@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 )
 
@@ -40,8 +41,8 @@ func (slashCommandDelegate) Render(w io.Writer, m list.Model, index int, item li
 	prefix := "  "
 	nameStyle := bodyStyle
 	if index == m.Index() {
-		prefix = glyphPrompt
-		nameStyle = brandStyle
+		prefix = tuistyle.SelectionStyle.Render(glyphPrompt)
+		nameStyle = tuistyle.SelectionStyle
 	}
 	name := entry.Title()
 	description := entry.Description()
@@ -129,8 +130,8 @@ func (v *slashPaneView) commandRows(ctx paneRenderContext) []string {
 		prefix := "  "
 		nameStyle := bodyStyle
 		if i == v.picker.Index() {
-			prefix = brandStyle.Render(glyphPrompt)
-			nameStyle = bodyStyle.Bold(true)
+			prefix = tuistyle.SelectionStyle.Render(glyphPrompt)
+			nameStyle = tuistyle.SelectionStyle
 		}
 		name := entry.Title()
 		description := entry.Description()
