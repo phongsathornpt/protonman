@@ -173,6 +173,9 @@ func (m *bubbleModel) dispatch(line string) tea.Cmd {
 		if spec, ok := slashview.LookupCommand(parsed.Name); ok && spec.EchoUser {
 			m.appendUser(line)
 		}
+		if m.rejectBlockedSlashCommand(line) {
+			return nil
+		}
 		return m.executeCommand(line)
 	}
 	m.appendUser(line)
