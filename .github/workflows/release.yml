@@ -36,17 +36,17 @@ jobs:
       - name: Test installer
         run: ./test/install/install_test.sh
 
-  build:
+  build-cli:
     needs: verify
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - target: protonman-linux-amd64
+          - target: protonman-cli-linux-amd64
             goos: linux
             goarch: amd64
-          - target: protonman-darwin-arm64
+          - target: protonman-cli-darwin-arm64
             goos: darwin
             goarch: arm64
     steps:
@@ -57,7 +57,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Build artifact
+      - name: Build CLI artifact
         shell: bash
         env:
           GOOS: ${{ matrix.goos }}
@@ -84,13 +84,87 @@ jobs:
       - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.target }}
-          path: |
-            dist/*.tar.gz
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  build-desktop:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: protonman-desktop-linux-amd64
+            runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - target: protonman-desktop-darwin-arm64
+            runner: macos-14
+            goos: darwin
+            goarch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install Linux desktop dependencies
+        if: matrix.goos == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
+      - name: Build Desktop artifact
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          set -euo pipefail
+          version="$GITHUB_REF_NAME"
+          plain_version="${version#v}"
+          package="protonman-desktop_${plain_version}_${GOOS}_${GOARCH}"
+
+          mkdir -p "dist/$package/libexec"
+
+          CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build \
+            -trimpath \
+            -ldflags "-s -w -X github.com/phongsathornpt/protonman/internal/base/buildinfo.version=$version" \
+            -o "dist/$package/libexec/protonman" \
+            ./cmd/protonman
+
+          CGO_ENABLED=1 GOOS="$GOOS" GOARCH="$GOARCH" go build \
+            -tags desktop \
+            -trimpath \
+            -ldflags "-s -w -X github.com/phongsathornpt/protonman/internal/base/buildinfo.version=$version" \
+            -o "dist/$package/protonman-desktop" \
+            ./cmd/protonman-desktop
+
+          cat >"dist/$package/run.sh" <<'EOF'
+          #!/bin/sh
+          set -eu
+          root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+          export PROTONMAN_BINARY="$root/libexec/protonman"
+          exec "$root/protonman-desktop" "$@"
+          EOF
+          chmod +x "dist/$package/run.sh"
+
+          (cd "dist/$package" && tar -czf "../${package}.tar.gz" protonman-desktop libexec/protonman run.sh)
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*.tar.gz
           if-no-files-found: error
           retention-days: 7
 
   release:
-    needs: build
+    needs:
+      - build-cli
+      - build-desktop
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -108,6 +182,8 @@ jobs:
           expected=(
             "protonman_${plain_version}_linux_amd64.tar.gz"
             "protonman_${plain_version}_darwin_arm64.tar.gz"
+            "protonman-desktop_${plain_version}_linux_amd64.tar.gz"
+            "protonman-desktop_${plain_version}_darwin_arm64.tar.gz"
           )
           for asset in "${expected[@]}"; do
             if [[ ! -f "$asset" ]]; then
@@ -132,6 +208,8 @@ jobs:
           assets=(
             "dist/protonman_${plain_version}_linux_amd64.tar.gz"
             "dist/protonman_${plain_version}_darwin_arm64.tar.gz"
+            "dist/protonman-desktop_${plain_version}_linux_amd64.tar.gz"
+            "dist/protonman-desktop_${plain_version}_darwin_arm64.tar.gz"
             "dist/checksums.txt"
             "dist/install.sh"
           )
