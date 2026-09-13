@@ -10,6 +10,8 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	providerdomain "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/provider"
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/app"
 )
@@ -81,8 +83,8 @@ func (providerSelectDelegate) Render(w io.Writer, m list.Model, index int, item 
 	prefix := "  "
 	textStyle := bodyStyle
 	if index == m.Index() {
-		prefix = brandStyle.Render(glyphPrompt)
-		textStyle = bodyStyle.Bold(true)
+		prefix = tuistyle.SelectionStyle.Render(glyphPrompt)
+		textStyle = tuistyle.SelectionStyle
 	}
 	label := entry.displayName
 	if entry.isFree {
@@ -186,7 +188,7 @@ func (v *providerSelectPaneView) Render(ctx paneRenderContext) string {
 				rows = append(rows, warningStyle.Render("This is the active provider."))
 			}
 			help := paneKeyboardHelp(ctx.width-4, "enter", "Remove", "esc", "Cancel")
-			return renderProviderModal(ctx, warningColor, paneSection("Remove Provider?", rows, help, "", ctx.width))
+			return renderProviderModal(ctx, panecommon.ToneColor(panecommon.ToneWarning), paneSection("Remove Provider?", rows, help, "", ctx.width))
 		}
 	}
 	help := ""
@@ -223,8 +225,8 @@ func (v *providerSelectPaneView) Render(ctx paneRenderContext) string {
 		prefix := "  "
 		textStyle := bodyStyle
 		if index == v.picker.Index() {
-			prefix = brandStyle.Render(glyphPrompt)
-			textStyle = bodyStyle.Bold(true)
+			prefix = tuistyle.SelectionStyle.Render(glyphPrompt)
+			textStyle = tuistyle.SelectionStyle
 		}
 		label := item.displayName
 		if item.isFree {
@@ -241,7 +243,7 @@ func (v *providerSelectPaneView) Render(ctx paneRenderContext) string {
 			listRows = append(listRows, prefix+textStyle.Render(truncateWithEllipsis(label, lineWidth)))
 		}
 	}
-	return renderProviderModal(ctx, accentAssistant, paneSection("Providers", listRows, help, status, providerModalContentWidth(ctx)+4))
+	return renderProviderModal(ctx, panecommon.ToneColor(panecommon.ToneAssistant), paneSection("Providers", listRows, help, status, providerModalContentWidth(ctx)+4))
 }
 
 var providerSelectKeys = struct {
