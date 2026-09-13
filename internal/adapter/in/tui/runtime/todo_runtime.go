@@ -148,7 +148,7 @@ func (todoSetupDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	prefix := "  "
 	textStyle := bodyStyle
 	if index == m.Index() {
-		prefix = tuistyle.FocusStyle.Render(glyphPrompt)
+		prefix = tuistyle.SelectionStyle.Render(glyphPrompt)
 		textStyle = tuistyle.TodoSelectedStyle
 	}
 	glyph := todoStatusGlyph(entry.item.Status)
@@ -259,7 +259,7 @@ func (v *todoPaneView) Render(ctx paneRenderContext) string {
 		prefix := "  "
 		textStyle := bodyStyle
 		if index == v.picker.Index() {
-			prefix = tuistyle.FocusStyle.Render(glyphPrompt)
+			prefix = tuistyle.SelectionStyle.Render(glyphPrompt)
 			textStyle = tuistyle.TodoSelectedStyle
 		}
 		glyph := todoStatusGlyph(item.item.Status)
