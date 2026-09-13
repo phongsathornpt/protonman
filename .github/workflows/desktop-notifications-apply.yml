@@ -33,26 +33,10 @@ jobs:
                   raise SystemExit(f"pattern not found in {path}: {old[:120]!r}")
               p.write_text(text.replace(old, new, 1))
 
-          replace(
-              "internal/adapter/in/desktop/app.go",
-              '\tclient *acpclient.Client\n',
-              '\tclient     *acpclient.Client\n\tdesktopApp fyne.App\n',
-          )
-          replace(
-              "internal/adapter/in/desktop/app.go",
-              '\t\tctx:               ctx,\n\t\ttranscripts:       make(map[string]*strings.Builder),\n',
-              '\t\tctx:               ctx,\n\t\tdesktopApp:        a,\n\t\ttranscripts:       make(map[string]*strings.Builder),\n',
-          )
-          replace(
-              "internal/adapter/in/desktop/app.go",
-              '\t\tif err != nil {\n\t\t\ta.appendTranscript(sessionID, "\\n\\n**Error:** "+err.Error()+"\\n")\n\t\t}\n\t\tfyne.Do(func() { a.list.Refresh() })\n',
-              '\t\tif err != nil {\n\t\t\ta.appendTranscript(sessionID, "\\n\\n**Error:** "+err.Error()+"\\n")\n\t\t}\n\t\ta.notifyTurnFinished(sessionID, err)\n\t\tfyne.Do(func() { a.list.Refresh() })\n',
-          )
-          replace(
-              "internal/adapter/in/desktop/permission.go",
-              '\ta.mu.Unlock()\n\ta.refreshPermissionView()\n\n\tselect {\n',
-              '\ta.mu.Unlock()\n\ta.refreshPermissionView()\n\ta.notifyPermission(item)\n\n\tselect {\n',
-          )
+          replace("internal/adapter/in/desktop/app.go", '\tclient *acpclient.Client\n', '\tclient     *acpclient.Client\n\tdesktopApp fyne.App\n')
+          replace("internal/adapter/in/desktop/app.go", '\t\tctx:               ctx,\n\t\ttranscripts:       make(map[string]*strings.Builder),\n', '\t\tctx:               ctx,\n\t\tdesktopApp:        a,\n\t\ttranscripts:       make(map[string]*strings.Builder),\n')
+          replace("internal/adapter/in/desktop/app.go", '\t\tif err != nil {\n\t\t\ta.appendTranscript(sessionID, "\\n\\n**Error:** "+err.Error()+"\\n")\n\t\t}\n\t\tfyne.Do(func() { a.list.Refresh() })\n', '\t\tif err != nil {\n\t\t\ta.appendTranscript(sessionID, "\\n\\n**Error:** "+err.Error()+"\\n")\n\t\t}\n\t\ta.notifyTurnFinished(sessionID, err)\n\t\tfyne.Do(func() { a.list.Refresh() })\n')
+          replace("internal/adapter/in/desktop/permission.go", '\ta.mu.Unlock()\n\ta.refreshPermissionView()\n\n\tselect {\n', '\ta.mu.Unlock()\n\ta.refreshPermissionView()\n\ta.notifyPermission(item)\n\n\tselect {\n')
           PY
 
           cat > internal/adapter/in/desktop/notifications.go <<'EOF'
@@ -87,7 +71,6 @@ jobs:
               active := a.state.ActiveSessionID == sessionID
               label := sessionNotificationLabelLocked(a.state, sessionID)
               a.mu.Unlock()
-
               if turnErr == nil && active {
                   return
               }
@@ -126,10 +109,11 @@ jobs:
           func compactNotificationText(text string) string {
               text = strings.Join(strings.Fields(strings.TrimSpace(text)), " ")
               const max = 160
-              if len(text) <= max {
+              runes := []rune(text)
+              if len(runes) <= max {
                   return text
               }
-              return fmt.Sprintf("%s…", text[:max-1])
+              return fmt.Sprintf("%s…", string(runes[:max-1]))
           }
 
           func (a *application) sendNativeNotification(title, content string) {
@@ -154,6 +138,7 @@ jobs:
               "errors"
               "strings"
               "testing"
+              "unicode/utf8"
 
               desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
           )
@@ -168,8 +153,8 @@ jobs:
           func TestCompactNotificationTextBoundsErrors(t *testing.T) {
               input := strings.Repeat("failure ", 40)
               got := compactNotificationText(errors.New(input).Error())
-              if len(got) > 160 {
-                  t.Fatalf("notification text length = %d", len(got))
+              if utf8.RuneCountInString(got) > 160 {
+                  t.Fatalf("notification text rune count = %d", utf8.RuneCountInString(got))
               }
               if strings.Contains(got, "  ") || strings.Contains(got, "\n") {
                   t.Fatalf("notification text not compacted: %q", got)
