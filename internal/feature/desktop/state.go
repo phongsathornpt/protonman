@@ -37,6 +37,15 @@ type TimelineItem struct {
 	Status string
 }
 
+// SubagentState is the desktop projection of a delegated agent participant.
+type SubagentState struct {
+	ID      string
+	Profile string
+	Task    string
+	Summary string
+	Status  string
+}
+
 // PermissionOption is one user-selectable decision for a pending permission request.
 type PermissionOption struct {
 	ID   string
@@ -60,6 +69,7 @@ type SessionState struct {
 	Workspace string
 	Status    TaskStatus
 	Timeline  []TimelineItem
+	Subagents []SubagentState
 }
 
 // State owns desktop session state independently from Fyne widgets.
@@ -83,6 +93,7 @@ const (
 	EventPermissionResolved
 	EventTimelineAppended
 	EventTimelineUpserted
+	EventSubagentUpserted
 )
 
 // Event is a typed reducer input. Only fields relevant to Kind are consumed.
@@ -91,6 +102,7 @@ type Event struct {
 	SessionID  string
 	Sessions   []SessionState
 	Item       TimelineItem
+	Subagent   SubagentState
 	Permission PermissionRequest
 	RequestID  string
 }
@@ -133,6 +145,10 @@ func Reduce(current State, event Event) State {
 		if session := sessionByID(&next, event.SessionID); session != nil {
 			upsertTimeline(session, event.Item)
 		}
+	case EventSubagentUpserted:
+		if session := sessionByID(&next, event.SessionID); session != nil {
+			upsertSubagent(session, event.Subagent)
+		}
 	}
 
 	return next
@@ -148,6 +164,7 @@ func cloneSessions(sessions []SessionState) []SessionState {
 	out := slices.Clone(sessions)
 	for i := range out {
 		out[i].Timeline = slices.Clone(out[i].Timeline)
+		out[i].Subagents = slices.Clone(out[i].Subagents)
 	}
 	return out
 }
@@ -217,4 +234,29 @@ func upsertTimeline(session *SessionState, item TimelineItem) {
 		}
 	}
 	session.Timeline = append(session.Timeline, item)
+}
+
+func upsertSubagent(session *SessionState, next SubagentState) {
+	if next.ID != "" {
+		for i := range session.Subagents {
+			if session.Subagents[i].ID == next.ID {
+				previous := session.Subagents[i]
+				if next.Profile == "" {
+					next.Profile = previous.Profile
+				}
+				if next.Task == "" {
+					next.Task = previous.Task
+				}
+				if next.Summary == "" {
+					next.Summary = previous.Summary
+				}
+				if next.Status == "" {
+					next.Status = previous.Status
+				}
+				session.Subagents[i] = next
+				return
+			}
+		}
+	}
+	session.Subagents = append(session.Subagents, next)
 }
