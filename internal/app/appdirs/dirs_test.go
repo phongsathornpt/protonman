@@ -25,6 +25,9 @@ func TestResolveExplicitHomeUsesProtonmanRoot(t *testing.T) {
 	if dirs.Config != filepath.Join(home, RootDirName, ConfigFileName) {
 		t.Fatalf("Config = %q", dirs.Config)
 	}
+	if dirs.Memory != filepath.Join(home, RootDirName, MemoryDir) {
+		t.Fatalf("Memory = %q", dirs.Memory)
+	}
 }
 
 func TestResolveIgnoresLegacyProtonDirectory(t *testing.T) {
@@ -53,6 +56,9 @@ func TestResolveEnvironmentHomeUsesProtonmanRoot(t *testing.T) {
 	}
 	if dirs.Home != home || dirs.Root != filepath.Join(home, RootDirName) {
 		t.Fatalf("dirs = %+v", dirs)
+	}
+	if got, want := UserMemoryDisplay(), filepath.Join(home, RootDirName, MemoryDir)+string(filepath.Separator); got != want {
+		t.Fatalf("UserMemoryDisplay() = %q, want %q", got, want)
 	}
 }
 
