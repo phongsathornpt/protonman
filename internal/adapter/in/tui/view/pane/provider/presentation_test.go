@@ -15,33 +15,33 @@ func TestProviderEditorRowsUseSemanticStateStyles(t *testing.T) {
 		wantFirst string
 	}{
 		{
-			name: "fetching",
-			snapshot: ProviderEditorSnapshot{State: ProviderEditorFetching, Name: "OpenAI"},
-			wantTone: panecommon.ToneAssistant,
+			name:      "fetching",
+			snapshot:  ProviderEditorSnapshot{State: ProviderEditorFetching, Name: "OpenAI"},
+			wantTone:  panecommon.ToneAssistant,
 			wantFirst: tuistyle.ActivityStyle.Render("Connecting · OpenAI"),
 		},
 		{
-			name: "saving",
-			snapshot: ProviderEditorSnapshot{State: ProviderEditorSaving, Name: "OpenAI"},
-			wantTone: panecommon.ToneAssistant,
+			name:      "saving",
+			snapshot:  ProviderEditorSnapshot{State: ProviderEditorSaving, Name: "OpenAI"},
+			wantTone:  panecommon.ToneAssistant,
 			wantFirst: tuistyle.ActivityStyle.Render("Saving · OpenAI"),
 		},
 		{
-			name: "input",
-			snapshot: ProviderEditorSnapshot{State: ProviderEditorInput},
-			wantTone: panecommon.ToneAssistant,
+			name:      "input",
+			snapshot:  ProviderEditorSnapshot{State: ProviderEditorInput},
+			wantTone:  panecommon.ToneAssistant,
 			wantFirst: tuistyle.PaneTitleStyle.Render("Add provider"),
 		},
 		{
-			name: "overwrite warning",
-			snapshot: ProviderEditorSnapshot{State: ProviderEditorConfirmOverwrite, Name: "OpenAI"},
-			wantTone: panecommon.ToneWarning,
+			name:      "overwrite warning",
+			snapshot:  ProviderEditorSnapshot{State: ProviderEditorConfirmOverwrite, Name: "OpenAI"},
+			wantTone:  panecommon.ToneWarning,
 			wantFirst: tuistyle.WarningStyle.Render("Provider exists · OpenAI"),
 		},
 		{
-			name: "connection error",
-			snapshot: ProviderEditorSnapshot{State: ProviderEditorError, ErrorMessage: "boom"},
-			wantTone: panecommon.ToneError,
+			name:      "connection error",
+			snapshot:  ProviderEditorSnapshot{State: ProviderEditorError, ErrorMessage: "boom"},
+			wantTone:  panecommon.ToneError,
 			wantFirst: tuistyle.ErrorStyle.Render("Connection failed"),
 		},
 	}
