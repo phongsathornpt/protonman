@@ -8,6 +8,8 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 )
 
 func (m *bubbleModel) openTranscriptOverlay() {
@@ -63,11 +65,11 @@ func (m *bubbleModel) transcriptOverlayView() string {
 	if m.panes.rawTranscript {
 		mode = "raw"
 	}
-	header := brandStyle.Render("Transcript") + mutedStyle.Render(" · "+mode)
+	header := tuistyle.PaneTitleStyle.Render("Transcript") + mutedStyle.Render(" · "+mode)
 	footer := mutedStyle.Render("esc/ctrl+t close · r raw/rich · pgup/pgdn scroll")
 	body := lipgloss.JoinVertical(lipgloss.Left, header, m.panes.transcript.View(), footer)
 	width := maxInt(1, m.layout.width-6)
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accentAssistant).Padding(0, 1).Width(width).Render(body)
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(panecommon.ToneColor(panecommon.ToneAssistant)).Padding(0, 1).Width(width).Render(body)
 }
 
 var transcriptRawToggleKey = key.NewBinding(key.WithKeys("r"))
