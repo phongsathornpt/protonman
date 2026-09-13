@@ -10,17 +10,31 @@ import (
 	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 	"github.com/phongsathornpt/protonman/internal/core/modelclient"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
+	"github.com/phongsathornpt/protonman/internal/core/session"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
-// NewModelFactory decorates a primary-session model factory with bounded memory
-// retrieval. Composition roots should keep subagent factories undecorated.
+// NewModelFactory decorates a model factory with bounded memory retrieval only.
 func NewModelFactory(next modelclient.Factory, repository corememory.Repository, workspaceKey string, policy runtimepolicy.MemoryPolicy) modelclient.Factory {
+	return newModelFactory(next, repository, nil, "", workspaceKey, policy)
+}
+
+// NewPrimaryModelFactory decorates the root-session model factory with retrieval
+// and starts one bounded extraction pass after the first usable primary model is built.
+// Subagent factories must remain undecorated.
+func NewPrimaryModelFactory(next modelclient.Factory, repository corememory.Repository, sessions session.Repository, currentSessionID, workspaceKey string, policy runtimepolicy.MemoryPolicy) modelclient.Factory {
+	return newModelFactory(next, repository, sessions, currentSessionID, workspaceKey, policy)
+}
+
+func newModelFactory(next modelclient.Factory, repository corememory.Repository, sessions session.Repository, currentSessionID, workspaceKey string, policy runtimepolicy.MemoryPolicy) modelclient.Factory {
 	if next == nil || repository == nil {
 		return next
 	}
 	return &modelFactory{
 		next: next,
+		repository: repository,
+		sessions: sessions,
+		currentSessionID: strings.TrimSpace(currentSessionID),
 		retriever: NewRetriever(repository, policy),
 		workspaceKey: strings.TrimSpace(workspaceKey),
 		policy: policy,
@@ -28,16 +42,25 @@ func NewModelFactory(next modelclient.Factory, repository corememory.Repository,
 }
 
 type modelFactory struct {
-	next         modelclient.Factory
-	retriever    *Retriever
-	workspaceKey string
-	policy       runtimepolicy.MemoryPolicy
+	next             modelclient.Factory
+	repository       corememory.Repository
+	sessions         session.Repository
+	currentSessionID string
+	retriever        *Retriever
+	workspaceKey     string
+	policy           runtimepolicy.MemoryPolicy
+	extractionOnce   sync.Once
 }
 
 func (f *modelFactory) Build(request modelclient.Request) sdk.LanguageModel {
 	base := f.next.Build(request)
 	if base == nil {
 		return nil
+	}
+	if f.sessions != nil && f.currentSessionID != "" {
+		f.extractionOnce.Do(func() {
+			NewExtractor(f.sessions, f.repository, base, f.currentSessionID, f.workspaceKey, f.policy).StartBackground()
+		})
 	}
 	model := &memoryLanguageModel{
 		base: base,
