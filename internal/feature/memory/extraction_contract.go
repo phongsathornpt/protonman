@@ -55,19 +55,17 @@ type candidate struct {
 
 func parseExtractionOutput(raw string) ([]candidate, error) {
 	raw = strings.TrimSpace(raw)
-	if strings.HasPrefix(raw, "```") {
-		lines := strings.Split(raw, "\n")
-		if len(lines) >= 3 {
-			lines = lines[1:]
-			if strings.TrimSpace(lines[len(lines)-1]) == "```" {
-				lines = lines[:len(lines)-1]
-			}
-			raw = strings.TrimSpace(strings.Join(lines, "\n"))
-		}
-	}
 	var output extractionOutput
 	if err := json.Unmarshal([]byte(raw), &output); err != nil {
-		return nil, fmt.Errorf("decode memory extraction: %w", err)
+		start := strings.IndexByte(raw, '{')
+		end := strings.LastIndexByte(raw, '}')
+		if start < 0 || end <= start {
+			return nil, fmt.Errorf("decode memory extraction: %w", err)
+		}
+		candidateJSON := strings.TrimSpace(raw[start : end+1])
+		if decodeErr := json.Unmarshal([]byte(candidateJSON), &output); decodeErr != nil {
+			return nil, fmt.Errorf("decode memory extraction: %w", decodeErr)
+		}
 	}
 	clean := make([]candidate, 0, len(output.Memories))
 	for _, item := range output.Memories {
