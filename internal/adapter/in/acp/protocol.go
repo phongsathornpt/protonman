@@ -210,11 +210,11 @@ type SessionListParams struct {
 // are Protonman extensions used by native clients to group persisted sessions
 // without requiring an absolute workspace path.
 type SessionInfo struct {
-	SessionID    string `json:"sessionId"`
-	Cwd          string `json:"cwd,omitempty"`
-	Title        string `json:"title,omitempty"`
-	UpdatedAt    string `json:"updatedAt,omitempty"`
-	WorkspaceKey string `json:"workspaceKey,omitempty"`
+	SessionID     string `json:"sessionId"`
+	Cwd           string `json:"cwd,omitempty"`
+	Title         string `json:"title,omitempty"`
+	UpdatedAt     string `json:"updatedAt,omitempty"`
+	WorkspaceKey  string `json:"workspaceKey,omitempty"`
 	WorkspaceName string `json:"workspaceName,omitempty"`
 }
 

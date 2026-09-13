@@ -12,8 +12,8 @@ func TestSessionMemoryUpdatedPreservesGoalTodoAndOwnsSlices(t *testing.T) {
 	}}}
 	memory := MemoryState{
 		WorkspaceKey: "ws-1",
-		Workspace: []MemoryEntryState{{ID: "m1", Scope: "workspace", Kind: "repo_fact", Key: "path", Value: "repo root", Confidence: 0.9}},
-		Global: []MemoryEntryState{{ID: "m2", Scope: "global", Kind: "preference", Key: "style", Value: "concise", Confidence: 0.95}},
+		Workspace:    []MemoryEntryState{{ID: "m1", Scope: "workspace", Kind: "repo_fact", Key: "path", Value: "repo root", Confidence: 0.9}},
+		Global:       []MemoryEntryState{{ID: "m2", Scope: "global", Kind: "preference", Key: "style", Value: "concise", Confidence: 0.95}},
 	}
 
 	next := Reduce(state, Event{Kind: EventSessionMemoryUpdated, SessionID: "s1", Memory: memory})
@@ -34,14 +34,14 @@ func TestSessionMemoryUpdatedPreservesGoalTodoAndOwnsSlices(t *testing.T) {
 
 func TestSessionContextUpdatedPreservesMemory(t *testing.T) {
 	state := State{Sessions: []SessionState{{
-		ID: "s1",
+		ID:      "s1",
 		Context: SessionContextState{Memory: MemoryState{Workspace: []MemoryEntryState{{ID: "m1", Value: "keep"}}}},
 	}}}
 
 	next := Reduce(state, Event{
 		Kind:      EventSessionContextUpdated,
 		SessionID: "s1",
-		Context: SessionContextState{Goal: "new goal", Todo: TodoState{Revision: 4}},
+		Context:   SessionContextState{Goal: "new goal", Todo: TodoState{Revision: 4}},
 	})
 
 	if next.Sessions[0].Context.Goal != "new goal" {

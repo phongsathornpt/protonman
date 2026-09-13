@@ -8,7 +8,7 @@ func TestReduceSessionContextUpdated(t *testing.T) {
 		Goal: "finish desktop",
 		Todo: TodoState{
 			Revision: 3,
-			Items: []TodoItemState{{ID: "a", Text: "wire inspector", Status: "in_progress"}},
+			Items:    []TodoItemState{{ID: "a", Text: "wire inspector", Status: "in_progress"}},
 		},
 	}
 

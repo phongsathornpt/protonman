@@ -17,11 +17,11 @@ func newTestClient(t *testing.T) (*Client, *bufferWriteCloser) {
 	ctx, cancel := context.WithCancel(context.Background())
 	writer := &bufferWriteCloser{}
 	return &Client{
-		ctx: ctx,
-		stdin: writer,
-		cancel: cancel,
+		ctx:     ctx,
+		stdin:   writer,
+		cancel:  cancel,
 		pending: make(map[uint64]chan response),
-		closed: make(chan struct{}),
+		closed:  make(chan struct{}),
 	}, writer
 }
 

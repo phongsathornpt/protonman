@@ -55,10 +55,10 @@ func (s *Server) sessionMemory(ctx context.Context, sessionID string) (Protonman
 		return ProtonmanSessionMemoryResult{}, err
 	}
 	return ProtonmanSessionMemoryResult{
-		SessionID: sessionID,
+		SessionID:    sessionID,
 		WorkspaceKey: snapshot.WorkspaceKey,
-		Workspace: projectMemoryEntries(snapshot.Workspace),
-		Global: projectMemoryEntries(snapshot.Global),
+		Workspace:    projectMemoryEntries(snapshot.Workspace),
+		Global:       projectMemoryEntries(snapshot.Global),
 	}, nil
 }
 
@@ -66,11 +66,11 @@ func projectMemoryEntries(entries []app.MemoryEntry) []ProtonmanMemoryEntry {
 	out := make([]ProtonmanMemoryEntry, 0, len(entries))
 	for _, entry := range entries {
 		out = append(out, ProtonmanMemoryEntry{
-			ID: entry.ID,
-			Scope: entry.Scope,
-			Kind: entry.Kind,
-			Key: entry.Key,
-			Value: entry.Value,
+			ID:         entry.ID,
+			Scope:      entry.Scope,
+			Kind:       entry.Kind,
+			Key:        entry.Key,
+			Value:      entry.Value,
 			Confidence: entry.Confidence,
 			UsageCount: entry.UsageCount,
 		})

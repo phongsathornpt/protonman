@@ -81,11 +81,11 @@ func notifySubagent(notifier func(RPCNotification) error, sessionID, agentID, pr
 		"sessionId": sessionID,
 		"update": map[string]any{
 			"sessionUpdate": sessionUpdateSubagent,
-			"agentId": agentID,
-			"profile": profile,
-			"task": task,
-			"status": status,
-			"summary": summary,
+			"agentId":       agentID,
+			"profile":       profile,
+			"task":          task,
+			"status":        status,
+			"summary":       summary,
 		},
 	}})
 }

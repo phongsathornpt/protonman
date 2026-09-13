@@ -20,7 +20,7 @@ func (a *application) handleEvent(event acpclient.Event) {
 	}
 	var raw struct {
 		SessionID string `json:"sessionId"`
-		Update struct {
+		Update    struct {
 			Kind       string          `json:"sessionUpdate"`
 			ToolCallID string          `json:"toolCallId"`
 			Title      string          `json:"title"`

@@ -69,13 +69,13 @@ func (a *application) superviseConnection() {
 func (a *application) initializeClient(client *acpclient.Client) error {
 	var result struct {
 		ProtocolVersion int `json:"protocolVersion"`
-		AgentInfo struct {
+		AgentInfo       struct {
 			Version string `json:"version"`
 		} `json:"agentInfo"`
 	}
 	if err := client.Call(a.ctx, "initialize", map[string]any{
-		"protocolVersion": 1,
-		"clientInfo": map[string]any{"name": "protonman-desktop", "title": "Protonman Desktop"},
+		"protocolVersion":    1,
+		"clientInfo":         map[string]any{"name": "protonman-desktop", "title": "Protonman Desktop"},
 		"clientCapabilities": map[string]any{},
 	}, &result); err != nil {
 		return err

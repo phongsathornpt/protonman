@@ -22,16 +22,24 @@ func (r *memoryInspectorRepo) Load(_ context.Context, scope corememory.Scope, wo
 	}
 	return nil, nil
 }
-func (r *memoryInspectorRepo) Replace(context.Context, corememory.Scope, string, []corememory.Entry) error { return nil }
-func (r *memoryInspectorRepo) Update(context.Context, corememory.Scope, string, corememory.UpdateFunc) error { return nil }
-func (r *memoryInspectorRepo) RecordUsage(context.Context, []corememory.UsageRef, time.Time) error { return nil }
-func (r *memoryInspectorRepo) ProcessedRevision(context.Context, string) (uint64, bool, error) { return 0, false, nil }
+func (r *memoryInspectorRepo) Replace(context.Context, corememory.Scope, string, []corememory.Entry) error {
+	return nil
+}
+func (r *memoryInspectorRepo) Update(context.Context, corememory.Scope, string, corememory.UpdateFunc) error {
+	return nil
+}
+func (r *memoryInspectorRepo) RecordUsage(context.Context, []corememory.UsageRef, time.Time) error {
+	return nil
+}
+func (r *memoryInspectorRepo) ProcessedRevision(context.Context, string) (uint64, bool, error) {
+	return 0, false, nil
+}
 func (r *memoryInspectorRepo) MarkProcessed(context.Context, string, uint64) error { return nil }
 
 func TestMemoriesInspectProjectsWorkspaceAndGlobalWithoutUsageMutation(t *testing.T) {
 	repo := &memoryInspectorRepo{
 		workspace: []corememory.Entry{{ID: "w1", Scope: corememory.ScopeWorkspace, Kind: corememory.KindRepoFact, Key: "path", Value: "repo root", WorkspaceKey: "ws-1", Confidence: .9, UsageCount: 2}},
-		global: []corememory.Entry{{ID: "g1", Scope: corememory.ScopeGlobal, Kind: corememory.KindPreference, Key: "style", Value: "concise", Confidence: .95, UsageCount: 4}},
+		global:    []corememory.Entry{{ID: "g1", Scope: corememory.ScopeGlobal, Kind: corememory.KindPreference, Key: "style", Value: "concise", Confidence: .95, UsageCount: 4}},
 	}
 	service := NewMemories(repo)
 	got, err := service.Inspect(context.Background(), " ws-1 ")

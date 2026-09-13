@@ -14,12 +14,12 @@ import (
 const requestPermissionMethod = "session/request_permission"
 
 type permissionParams struct {
-	SessionID string `json:"sessionId"`
+	SessionID string         `json:"sessionId"`
 	ToolCall  map[string]any `json:"toolCall"`
 	Options   []struct {
 		OptionID string `json:"optionId"`
-		Name string `json:"name"`
-		Kind string `json:"kind"`
+		Name     string `json:"name"`
+		Kind     string `json:"kind"`
 	} `json:"options"`
 }
 

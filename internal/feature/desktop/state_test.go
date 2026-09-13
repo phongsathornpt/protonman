@@ -50,7 +50,7 @@ func TestReduceSessionSelectionRequiresKnownSession(t *testing.T) {
 
 func TestReduceDoesNotAliasTimeline(t *testing.T) {
 	original := State{Sessions: []SessionState{{
-		ID: "s1",
+		ID:       "s1",
 		Timeline: []TimelineItem{{Kind: TimelineStatus, Text: "original"}},
 	}}}
 

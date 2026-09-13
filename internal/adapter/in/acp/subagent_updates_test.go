@@ -25,7 +25,7 @@ func TestNotifySubagentBuildsStructuredSessionUpdate(t *testing.T) {
 	}
 	var payload struct {
 		SessionID string `json:"sessionId"`
-		Update struct {
+		Update    struct {
 			Kind    string `json:"sessionUpdate"`
 			AgentID string `json:"agentId"`
 			Profile string `json:"profile"`
