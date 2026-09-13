@@ -4,7 +4,6 @@ package desktop
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -104,6 +103,7 @@ func Run(ctx context.Context) error {
 			}
 			s := ui.state.Sessions[id]
 			ui.mu.Unlock()
+
 			box := object.(*fyne.Container)
 			title := box.Objects[0].(*widget.Label)
 			subtitle := box.Objects[1].(*widget.Label)
@@ -232,6 +232,7 @@ func (a *application) refreshSessions() {
 		if previous, ok := old[session.ID]; ok {
 			projected.Status = previous.Status
 			projected.Timeline = previous.Timeline
+			projected.Subagents = previous.Subagents
 		}
 		sessions = append(sessions, projected)
 		if a.transcripts[session.ID] == nil {
@@ -283,7 +284,6 @@ func (a *application) sendPrompt() {
 
 	a.composer.SetText("")
 	a.appendTranscript(sessionID, "\n\n> "+text+"\n\n")
-	a.refreshActiveView()
 	fyne.Do(func() { a.list.Refresh() })
 
 	go func() {
@@ -326,84 +326,6 @@ func (a *application) cancelPrompt() {
 			a.setStatus("Cancel failed · " + err.Error())
 		}
 	}()
-}
-
-func (a *application) handleEvent(event acpclient.Event) {
-	if event.Method != "session/update" {
-		return
-	}
-	var payload struct {
-		SessionID string `json:"sessionId"`
-		Update    struct {
-			Kind   string `json:"sessionUpdate"`
-			Title  string `json:"title"`
-			Status string `json:"status"`
-			Content struct {
-				Text string `json:"text"`
-			} `json:"content"`
-		} `json:"update"`
-	}
-	if json.Unmarshal(event.Params, &payload) != nil {
-		return
-	}
-	if payload.SessionID == "" {
-		return
-	}
-	switch payload.Update.Kind {
-	case "agent_message_chunk":
-		a.appendTranscript(payload.SessionID, payload.Update.Content.Text)
-	case "tool_call":
-		a.appendTranscript(payload.SessionID, "\n\n`◐ "+payload.Update.Title+"`\n\n")
-	case "tool_call_update":
-		if payload.Update.Title != "" {
-			a.appendTranscript(payload.SessionID, "\n`✓ "+payload.Update.Title+"`\n")
-		}
-	}
-}
-
-func (a *application) appendTranscript(sessionID, text string) {
-	a.mu.Lock()
-	builder := a.transcripts[sessionID]
-	if builder == nil {
-		builder = &strings.Builder{}
-		a.transcripts[sessionID] = builder
-	}
-	builder.WriteString(text)
-	active := a.state.ActiveSessionID == sessionID
-	markdown := builder.String()
-	a.mu.Unlock()
-	if !active {
-		return
-	}
-	fyne.Do(func() {
-		a.chat.ParseMarkdown(markdown)
-		a.chat.Refresh()
-	})
-}
-
-func (a *application) refreshActiveView() {
-	a.mu.Lock()
-	activeID := a.state.ActiveSessionID
-	busy := a.sessionBusyLocked(activeID)
-	markdown := ""
-	if transcript := a.transcripts[activeID]; transcript != nil {
-		markdown = transcript.String()
-	}
-	a.mu.Unlock()
-	fyne.Do(func() {
-		a.chat.ParseMarkdown(markdown)
-		a.chat.Refresh()
-		if activeID == "" || busy {
-			a.send.Disable()
-		} else {
-			a.send.Enable()
-		}
-		if busy {
-			a.stop.Enable()
-		} else {
-			a.stop.Disable()
-		}
-	})
 }
 
 func (a *application) refreshPermissionView() {
