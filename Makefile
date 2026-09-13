@@ -1,11 +1,12 @@
 .DEFAULT_GOAL := tui
 
-.PHONY: all tui run dev build install run-bin clean test test-architecture test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint tag tag-push help
+.PHONY: all tui desktop desktop-run run dev build install run-bin clean test test-architecture test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint tag tag-push help
 
 # Binary configuration
 BIN_DIR := bin
 BIN_NAME := protonman
 BINARY := $(BIN_DIR)/$(BIN_NAME)
+DESKTOP_BINARY := $(BIN_DIR)/protonman-desktop
 INSTALL_DIR ?= $(HOME)/.local/bin
 INSTALL_BINARY := $(INSTALL_DIR)/$(BIN_NAME)
 GO_SOURCES := $(shell find cmd internal proton-sdk -type f -name '*.go' ! -name '*_test.go')
@@ -19,6 +20,14 @@ GO_ENV := GOTMPDIR="$(GO_TMPDIR)"
 
 ## tui: Run Protonman TUI from the cached binary (default)
 tui: run
+
+## desktop: Build the Fyne desktop client
+# Linux requires the normal Fyne desktop development packages (OpenGL/X11).
+desktop: $(DESKTOP_BINARY)
+
+## desktop-run: Build and run the Fyne desktop client against the local CLI
+desktop-run: $(BINARY) $(DESKTOP_BINARY)
+	PROTONMAN_BINARY="$(abspath $(BINARY))" ./$(DESKTOP_BINARY)
 
 ## run: Build Protonman only when sources changed, then run it
 run: $(BINARY)
@@ -40,6 +49,10 @@ $(VERSION_STAMP):
 $(BINARY): $(GO_SOURCES) go.mod go.sum Makefile $(VERSION_STAMP)
 	@mkdir -p $(BIN_DIR) "$(GO_TMPDIR)"
 	$(GO_ENV) go build -trimpath -ldflags "$(BUILD_LDFLAGS)" -o $(BINARY) ./cmd/protonman
+
+$(DESKTOP_BINARY): $(GO_SOURCES) go.mod go.sum Makefile $(VERSION_STAMP)
+	@mkdir -p $(BIN_DIR) "$(GO_TMPDIR)"
+	$(GO_ENV) go build -tags desktop -trimpath -ldflags "$(BUILD_LDFLAGS)" -o $(DESKTOP_BINARY) ./cmd/protonman-desktop
 
 ## install: Build from the current source tree and install into ~/.local/bin by default
 install: build
