@@ -162,62 +162,28 @@ func Run(ctx context.Context) error {
 
 	go ui.connect()
 	w.ShowAndRun()
-	if ui.client != nil {
-		_ = ui.client.Close()
+	if client := ui.currentClient(); client != nil {
+		_ = client.Close()
 	}
 	return nil
 }
 
 func (a *application) connect() {
-	binary := strings.TrimSpace(os.Getenv("PROTONMAN_BINARY"))
-	if binary == "" {
-		binary = "protonman"
-	}
-	client, err := acpclient.Start(a.ctx, binary, a.handleEvent)
-	if err != nil {
-		a.setStatus("Disconnected · " + err.Error())
-		return
-	}
-	client.SetRequestHandler(a.handleRequest)
-	a.client = client
-
-	var initResult struct {
-		ProtocolVersion int `json:"protocolVersion"`
-		AgentInfo       struct {
-			Version string `json:"version"`
-		} `json:"agentInfo"`
-	}
-	if err := client.Call(a.ctx, "initialize", map[string]any{
-		"protocolVersion": 1,
-		"clientInfo": map[string]any{
-			"name": "protonman-desktop", "title": "Protonman Desktop",
-		},
-		"clientCapabilities": map[string]any{},
-	}, &initResult); err != nil {
-		a.setStatus("ACP initialize failed · " + err.Error())
-		return
-	}
-	if initResult.ProtocolVersion != 1 {
-		a.setStatus(fmt.Sprintf("Unsupported ACP v%d", initResult.ProtocolVersion))
-		return
-	}
-	version := strings.TrimPrefix(initResult.AgentInfo.Version, "v")
-	if version == "" {
-		version = "connected"
-	}
-	a.setStatus("Protonman " + version + " · ACP v1")
-	a.refreshSessions()
+	a.superviseConnection()
 }
 
 func (a *application) refreshSessions() {
-	if a.client == nil {
+	client := a.currentClient()
+	if client == nil {
 		return
 	}
 	var result struct {
 		Sessions []sessionItem `json:"sessions"`
 	}
-	if err := a.client.Call(a.ctx, "session/list", map[string]any{}, &result); err != nil {
-		a.setStatus("Session list failed · " + err.Error())
+	if err := client.Call(a.ctx, "session/list", map[string]any{}, &result); err != nil {
+		if a.clientIsCurrent(client) {
+			a.setStatus("Session list failed · " + err.Error())
+		}
 		return
 	}
 
@@ -233,6 +199,9 @@ func (a *application) refreshSessions() {
 			projected.Status = previous.Status
 			projected.Timeline = previous.Timeline
 			projected.Subagents = previous.Subagents
+			if strings.TrimSpace(projected.Workspace) == "" {
+				projected.Workspace = previous.Workspace
+			}
 		}
 		sessions = append(sessions, projected)
 		if a.transcripts[session.ID] == nil {
@@ -247,7 +216,8 @@ func (a *application) refreshSessions() {
 }
 
 func (a *application) newSession() {
-	if a.client == nil {
+	client := a.currentClient()
+	if client == nil {
 		return
 	}
 	cwd, _ := os.Getwd()
@@ -255,8 +225,13 @@ func (a *application) newSession() {
 		var result struct {
 			SessionID string `json:"sessionId"`
 		}
-		if err := a.client.Call(a.ctx, "session/new", map[string]any{"cwd": cwd}, &result); err != nil {
-			a.setStatus("New session failed · " + err.Error())
+		if err := client.Call(a.ctx, "session/new", map[string]any{"cwd": cwd}, &result); err != nil {
+			if a.clientIsCurrent(client) {
+				a.setStatus("New session failed · " + err.Error())
+			}
+			return
+		}
+		if !a.clientIsCurrent(client) {
 			return
 		}
 		a.refreshSessions()
@@ -270,7 +245,8 @@ func (a *application) newSession() {
 
 func (a *application) sendPrompt() {
 	text := strings.TrimSpace(a.composer.Text)
-	if text == "" || a.client == nil {
+	client := a.currentClient()
+	if text == "" || client == nil {
 		return
 	}
 	a.mu.Lock()
@@ -290,11 +266,14 @@ func (a *application) sendPrompt() {
 		var result struct {
 			StopReason string `json:"stopReason"`
 		}
-		err := a.client.Call(a.ctx, "session/prompt", map[string]any{
+		err := client.Call(a.ctx, "session/prompt", map[string]any{
 			"sessionId": sessionID,
 			"prompt":    []map[string]any{{"type": "text", "text": text}},
 		}, &result)
 
+		if !a.clientIsCurrent(client) {
+			return
+		}
 		a.mu.Lock()
 		kind := desktopstate.EventPromptCompleted
 		if err != nil {
@@ -311,7 +290,8 @@ func (a *application) sendPrompt() {
 }
 
 func (a *application) cancelPrompt() {
-	if a.client == nil {
+	client := a.currentClient()
+	if client == nil {
 		return
 	}
 	a.mu.Lock()
@@ -322,7 +302,7 @@ func (a *application) cancelPrompt() {
 		return
 	}
 	go func() {
-		if err := a.client.Call(a.ctx, "session/cancel", map[string]any{"sessionId": sessionID}, nil); err != nil {
+		if err := client.Call(a.ctx, "session/cancel", map[string]any{"sessionId": sessionID}, nil); err != nil && a.clientIsCurrent(client) {
 			a.setStatus("Cancel failed · " + err.Error())
 		}
 	}()
