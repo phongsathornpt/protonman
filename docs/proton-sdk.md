@@ -32,6 +32,7 @@ without nested `message.Message` or `stream.Event` APIs.
 proton-sdk/
   language_model.go
   request.go
+  requirements.go
   response.go
   message.go
   content.go
@@ -79,12 +80,46 @@ Canonical event constructors such as `NewTextDeltaEvent`, `NewToolCallEvent`,
 struct literals when producing normalized streams. Constructors reduce accidental
 mixed event payloads while `Event.Validate` remains the runtime contract check.
 
+## Canonical Request Requirements
+
+`Request.Requirements()` derives provider-neutral execution requirements before
+provider-specific lowering, while `ModelCapabilities.Satisfies` checks whether a
+model can execute those requirements.
+
+The current contract derives only capabilities that providers and model profiles
+can publish authoritatively today:
+
+- streaming;
+- function/tool protocol support;
+- vision input;
+- provider-option escape hatches;
+- raw stream chunks.
+
+```go
+requirements := request.Requirements()
+if !model.Capabilities().Satisfies(requirements) {
+    // reject or choose another model before provider lowering
+}
+```
+
+Because the `LanguageModel` contract currently exposes streaming execution only,
+`RequestRequirements.Streaming` is always true. Richer capability families such
+as reasoning controls, provider tools, and stateful response IDs should be added
+only when provider and model-profile layers can publish those semantics end to
+end. Do not add capability fields whose zero value would silently make valid
+models look unsupported.
+
 ## Collected Responses
 
-`Response` is the canonical normalized output collected from a model stream.
+`Response` is the canonical normalized output collected from one model stream.
 Use `Collect` to consume a stream through its terminal event and
 `AppendAssistantResponse` when adding the normalized assistant output back to
 provider-neutral conversation history.
+
+`ResponseAccumulator` owns normalized response reconstruction independently from
+stream transport. `Collect` owns stream I/O and close behavior, while the
+accumulator owns ordered text accumulation, complete tool calls, usage snapshots,
+finish state, and provider metadata.
 
 `StepResult`, `CollectStep`, and `AppendAssistantStep` remain deprecated
 compatibility surfaces for existing callers and delegate to the canonical
