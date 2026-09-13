@@ -1,0 +1,428 @@
+name: Desktop MCP integrations apply
+
+on:
+  push:
+    branches:
+      - feat/desktop-app
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/desktop-app
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Apply MCP integrations UI
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"pattern not found in {path}: {old[:120]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          replace(
+              "internal/feature/desktop/state.go",
+              '// SessionContextState contains inspectable durable goal, TODO, and memory state.\ntype SessionContextState struct {\n',
+              '// MCPIntegrationState is one Desktop-managed ACP MCP server definition.\ntype MCPIntegrationState struct {\n\tName    string\n\tCommand string\n\tArgs    []string\n\tEnv     []string\n}\n\n// SessionContextState contains inspectable durable goal, TODO, and memory state.\ntype SessionContextState struct {\n',
+          )
+          replace(
+              "internal/feature/desktop/state.go",
+              '\tPermissionInbox []PermissionRequest\n}',
+              '\tPermissionInbox []PermissionRequest\n\tIntegrations     []MCPIntegrationState\n}',
+          )
+          replace(
+              "internal/feature/desktop/state.go",
+              '\tEventSessionRuntimeUpdated\n)',
+              '\tEventSessionRuntimeUpdated\n\tEventIntegrationsReplaced\n)',
+          )
+          replace(
+              "internal/feature/desktop/state.go",
+              '\tRuntime    RuntimeSettingsState\n\tPermission PermissionRequest\n',
+              '\tRuntime      RuntimeSettingsState\n\tIntegrations []MCPIntegrationState\n\tPermission   PermissionRequest\n',
+          )
+          replace(
+              "internal/feature/desktop/state.go",
+              '\tcase EventSessionRuntimeUpdated:\n\t\tif session := sessionByID(&next, event.SessionID); session != nil {\n\t\t\tsession.Runtime = event.Runtime\n\t\t}\n\t}\n',
+              '\tcase EventSessionRuntimeUpdated:\n\t\tif session := sessionByID(&next, event.SessionID); session != nil {\n\t\t\tsession.Runtime = event.Runtime\n\t\t}\n\tcase EventIntegrationsReplaced:\n\t\tnext.Integrations = cloneIntegrations(event.Integrations)\n\t}\n',
+          )
+          replace(
+              "internal/feature/desktop/state.go",
+              '\tstate.PermissionInbox = clonePermissions(state.PermissionInbox)\n\treturn state\n}',
+              '\tstate.PermissionInbox = clonePermissions(state.PermissionInbox)\n\tstate.Integrations = cloneIntegrations(state.Integrations)\n\treturn state\n}',
+          )
+          replace(
+              "internal/feature/desktop/state.go",
+              'func clonePermissions(items []PermissionRequest) []PermissionRequest {\n',
+              'func cloneIntegrations(items []MCPIntegrationState) []MCPIntegrationState {\n\tout := slices.Clone(items)\n\tfor i := range out {\n\t\tout[i].Args = slices.Clone(out[i].Args)\n\t\tout[i].Env = slices.Clone(out[i].Env)\n\t}\n\treturn out\n}\n\nfunc clonePermissions(items []PermissionRequest) []PermissionRequest {\n',
+          )
+
+          replace(
+              "internal/adapter/in/desktop/app.go",
+              '\tpermissionWaiters map[string]chan string\n',
+              '\tpermissionWaiters map[string]chan string\n\tpreferences       fyne.Preferences\n',
+          )
+          replace(
+              "internal/adapter/in/desktop/app.go",
+              '\truntimeSync       bool\n}',
+              '\truntimeSync         bool\n\tintegrationButton   *widget.Button\n\tintegrationPanel    *fyne.Container\n\tintegrationSummary  *widget.Label\n\tintegrationName     *widget.Entry\n\tintegrationCommand  *widget.Entry\n\tintegrationArgs     *widget.Entry\n\tintegrationEnv      *widget.Entry\n\tintegrationSave     *widget.Button\n\tintegrationRemove   *widget.Button\n\tintegrationReconnect *widget.Button\n}',
+          )
+          replace(
+              "internal/adapter/in/desktop/app.go",
+              '\t\tctx:               ctx,\n\t\ttranscripts:       make(map[string]*strings.Builder),\n\t\tpermissionWaiters: make(map[string]chan string),\n',
+              '\t\tctx:               ctx,\n\t\ttranscripts:       make(map[string]*strings.Builder),\n\t\tpermissionWaiters: make(map[string]chan string),\n\t\tpreferences:       a.Preferences(),\n',
+          )
+          replace(
+              "internal/adapter/in/desktop/app.go",
+              '\tui.lowSelect = widget.NewSelect([]string{"auto", "on", "off"}, func(value string) {\n\t\tif !ui.runtimeSync {\n\t\t\tui.setRuntimeLowConcurrency(value)\n\t\t}\n\t})\n\n\tui.list = widget.NewList(',
+              '\tui.lowSelect = widget.NewSelect([]string{"auto", "on", "off"}, func(value string) {\n\t\tif !ui.runtimeSync {\n\t\t\tui.setRuntimeLowConcurrency(value)\n\t\t}\n\t})\n\tui.initIntegrationControls()\n\n\tui.list = widget.NewList(',
+          )
+          replace(
+              "internal/adapter/in/desktop/app.go",
+              '\t\tcontainer.NewVBox(widget.NewSeparator(), ui.permissionInbox, widget.NewLabel("Desktop via ACP")),\n',
+              '\t\tcontainer.NewVBox(widget.NewSeparator(), ui.integrationButton, ui.integrationPanel, ui.permissionInbox, widget.NewLabel("Desktop via ACP")),\n',
+          )
+          replace(
+              "internal/adapter/in/desktop/app.go",
+              '\t\tif err := client.Call(a.ctx, "session/new", map[string]any{"cwd": cwd}, &result); err != nil {\n',
+              '\t\tparams := map[string]any{"cwd": cwd}\n\t\tif servers := a.mcpServersPayload(); len(servers) > 0 {\n\t\t\tparams["mcpServers"] = servers\n\t\t}\n\t\tif err := client.Call(a.ctx, "session/new", params, &result); err != nil {\n',
+          )
+
+          replace(
+              "internal/adapter/in/desktop/reconnect.go",
+              '\tfor _, session := range sessions {\n',
+              '\tmcpServers := a.mcpServersPayload()\n\tfor _, session := range sessions {\n',
+          )
+          replace(
+              "internal/adapter/in/desktop/reconnect.go",
+              '\t\t_ = client.Call(a.ctx, "session/resume", map[string]any{\n\t\t\t"sessionId": session.ID,\n\t\t\t"cwd":       session.Workspace,\n\t\t}, nil)\n',
+              '\t\tparams := map[string]any{"sessionId": session.ID, "cwd": session.Workspace}\n\t\tif len(mcpServers) > 0 {\n\t\t\tparams["mcpServers"] = mcpServers\n\t\t}\n\t\t_ = client.Call(a.ctx, "session/resume", params, nil)\n',
+          )
+          PY
+
+          cat > internal/adapter/in/desktop/mcp_integrations.go <<'EOF'
+          //go:build desktop
+
+          package desktop
+
+          import (
+              "encoding/json"
+              "fmt"
+              "sort"
+              "strings"
+
+              "fyne.io/fyne/v2/container"
+              "fyne.io/fyne/v2/widget"
+
+              desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
+          )
+
+          const mcpPreferencesKey = "mcp.integrations.v1"
+
+          func (a *application) initIntegrationControls() {
+              a.integrationButton = widget.NewButton("MCP Integrations 0", func() {
+                  if a.integrationPanel.Visible() {
+                      a.integrationPanel.Hide()
+                  } else {
+                      a.integrationPanel.Show()
+                  }
+              })
+              a.integrationSummary = widget.NewLabel("No MCP integrations")
+              a.integrationSummary.Wrapping = 1
+              a.integrationName = widget.NewEntry()
+              a.integrationName.SetPlaceHolder("name")
+              a.integrationCommand = widget.NewEntry()
+              a.integrationCommand.SetPlaceHolder("command")
+              a.integrationArgs = widget.NewEntry()
+              a.integrationArgs.SetPlaceHolder(`args JSON, e.g. ["--stdio"]`)
+              a.integrationEnv = widget.NewEntry()
+              a.integrationEnv.SetPlaceHolder(`env JSON, e.g. ["TOKEN=..."]`)
+              a.integrationSave = widget.NewButton("Save", a.saveIntegration)
+              a.integrationRemove = widget.NewButton("Remove", a.removeIntegration)
+              a.integrationReconnect = widget.NewButton("Reconnect ACP", a.reconnectWithIntegrations)
+              a.integrationPanel = container.NewVBox(
+                  a.integrationSummary,
+                  a.integrationName,
+                  a.integrationCommand,
+                  a.integrationArgs,
+                  a.integrationEnv,
+                  container.NewHBox(a.integrationSave, a.integrationRemove, a.integrationReconnect),
+              )
+              a.integrationPanel.Hide()
+              a.loadIntegrations()
+          }
+
+          func (a *application) loadIntegrations() {
+              if a.preferences == nil {
+                  return
+              }
+              raw := strings.TrimSpace(a.preferences.String(mcpPreferencesKey))
+              if raw == "" {
+                  a.renderIntegrations()
+                  return
+              }
+              var items []desktopstate.MCPIntegrationState
+              if err := json.Unmarshal([]byte(raw), &items); err != nil {
+                  a.setStatus("MCP preferences ignored · " + err.Error())
+                  return
+              }
+              items, err := normalizeIntegrations(items)
+              if err != nil {
+                  a.setStatus("MCP preferences ignored · " + err.Error())
+                  return
+              }
+              a.mu.Lock()
+              a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventIntegrationsReplaced, Integrations: items})
+              a.mu.Unlock()
+              a.renderIntegrations()
+          }
+
+          func (a *application) saveIntegration() {
+              name := strings.TrimSpace(a.integrationName.Text)
+              command := strings.TrimSpace(a.integrationCommand.Text)
+              if name == "" || command == "" {
+                  a.setStatus("MCP integration requires name and command")
+                  return
+              }
+              args, err := parseStringList(a.integrationArgs.Text)
+              if err != nil {
+                  a.setStatus("Invalid MCP args · " + err.Error())
+                  return
+              }
+              env, err := parseStringList(a.integrationEnv.Text)
+              if err != nil {
+                  a.setStatus("Invalid MCP env · " + err.Error())
+                  return
+              }
+
+              a.mu.Lock()
+              items := cloneMCPIntegrations(a.state.Integrations)
+              replaced := false
+              for i := range items {
+                  if items[i].Name == name {
+                      items[i] = desktopstate.MCPIntegrationState{Name: name, Command: command, Args: args, Env: env}
+                      replaced = true
+                      break
+                  }
+              }
+              if !replaced {
+                  items = append(items, desktopstate.MCPIntegrationState{Name: name, Command: command, Args: args, Env: env})
+              }
+              sort.Slice(items, func(i, j int) bool { return items[i].Name < items[j].Name })
+              a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventIntegrationsReplaced, Integrations: items})
+              a.mu.Unlock()
+              if err := a.persistIntegrations(items); err != nil {
+                  a.setStatus("Save MCP integration failed · " + err.Error())
+                  return
+              }
+              a.renderIntegrations()
+              a.setStatus("MCP integration saved · new sessions use updated config")
+          }
+
+          func (a *application) removeIntegration() {
+              name := strings.TrimSpace(a.integrationName.Text)
+              if name == "" {
+                  a.setStatus("Enter an MCP integration name to remove")
+                  return
+              }
+              a.mu.Lock()
+              items := cloneMCPIntegrations(a.state.Integrations)
+              out := items[:0]
+              found := false
+              for _, item := range items {
+                  if item.Name == name {
+                      found = true
+                      continue
+                  }
+                  out = append(out, item)
+              }
+              if found {
+                  a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventIntegrationsReplaced, Integrations: out})
+              }
+              a.mu.Unlock()
+              if !found {
+                  a.setStatus("MCP integration not found · " + name)
+                  return
+              }
+              if err := a.persistIntegrations(out); err != nil {
+                  a.setStatus("Remove MCP integration failed · " + err.Error())
+                  return
+              }
+              a.renderIntegrations()
+              a.setStatus("MCP integration removed · new sessions use updated config")
+          }
+
+          func (a *application) reconnectWithIntegrations() {
+              a.mu.Lock()
+              busy := false
+              for _, session := range a.state.Sessions {
+                  if a.sessionBusyLocked(session.ID) {
+                      busy = true
+                      break
+                  }
+              }
+              a.mu.Unlock()
+              if busy {
+                  a.setStatus("Cannot reconnect ACP while a session is active")
+                  return
+              }
+              client := a.currentClient()
+              if client == nil {
+                  a.setStatus("MCP integrations saved · waiting for ACP")
+                  return
+              }
+              a.setStatus("Reconnecting ACP with MCP integrations…")
+              go func() { _ = client.Close() }()
+          }
+
+          func (a *application) persistIntegrations(items []desktopstate.MCPIntegrationState) error {
+              if a.preferences == nil {
+                  return fmt.Errorf("desktop preferences are unavailable")
+              }
+              payload, err := json.Marshal(items)
+              if err != nil {
+                  return err
+              }
+              a.preferences.SetString(mcpPreferencesKey, string(payload))
+              return nil
+          }
+
+          func (a *application) renderIntegrations() {
+              a.mu.Lock()
+              items := cloneMCPIntegrations(a.state.Integrations)
+              a.mu.Unlock()
+              names := make([]string, 0, len(items))
+              for _, item := range items {
+                  names = append(names, item.Name)
+              }
+              summary := "No MCP integrations"
+              if len(names) > 0 {
+                  summary = strings.Join(names, " · ")
+              }
+              a.integrationButton.SetText(fmt.Sprintf("MCP Integrations %d", len(items)))
+              a.integrationSummary.SetText(summary)
+          }
+
+          func (a *application) mcpServersPayload() []map[string]any {
+              a.mu.Lock()
+              items := cloneMCPIntegrations(a.state.Integrations)
+              a.mu.Unlock()
+              servers := make([]map[string]any, 0, len(items))
+              for _, item := range items {
+                  server := map[string]any{"name": item.Name, "command": item.Command}
+                  if len(item.Args) > 0 {
+                      server["args"] = append([]string(nil), item.Args...)
+                  }
+                  if len(item.Env) > 0 {
+                      server["env"] = append([]string(nil), item.Env...)
+                  }
+                  servers = append(servers, server)
+              }
+              return servers
+          }
+
+          func parseStringList(raw string) ([]string, error) {
+              raw = strings.TrimSpace(raw)
+              if raw == "" {
+                  return nil, nil
+              }
+              var values []string
+              if err := json.Unmarshal([]byte(raw), &values); err != nil {
+                  return nil, fmt.Errorf("expected a JSON string array: %w", err)
+              }
+              out := values[:0]
+              for _, value := range values {
+                  value = strings.TrimSpace(value)
+                  if value != "" {
+                      out = append(out, value)
+                  }
+              }
+              return append([]string(nil), out...), nil
+          }
+
+          func normalizeIntegrations(items []desktopstate.MCPIntegrationState) ([]desktopstate.MCPIntegrationState, error) {
+              seen := make(map[string]struct{}, len(items))
+              out := make([]desktopstate.MCPIntegrationState, 0, len(items))
+              for _, item := range items {
+                  item.Name = strings.TrimSpace(item.Name)
+                  item.Command = strings.TrimSpace(item.Command)
+                  if item.Name == "" || item.Command == "" {
+                      return nil, fmt.Errorf("integration name and command must be non-empty")
+                  }
+                  if _, exists := seen[item.Name]; exists {
+                      return nil, fmt.Errorf("duplicate integration %q", item.Name)
+                  }
+                  seen[item.Name] = struct{}{}
+                  item.Args = trimStringList(item.Args)
+                  item.Env = trimStringList(item.Env)
+                  out = append(out, item)
+              }
+              sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+              return out, nil
+          }
+
+          func trimStringList(values []string) []string {
+              out := make([]string, 0, len(values))
+              for _, value := range values {
+                  if value = strings.TrimSpace(value); value != "" {
+                      out = append(out, value)
+                  }
+              }
+              return out
+          }
+
+          func cloneMCPIntegrations(items []desktopstate.MCPIntegrationState) []desktopstate.MCPIntegrationState {
+              out := make([]desktopstate.MCPIntegrationState, len(items))
+              for i, item := range items {
+                  out[i] = item
+                  out[i].Args = append([]string(nil), item.Args...)
+                  out[i].Env = append([]string(nil), item.Env...)
+              }
+              return out
+          }
+          EOF
+
+          cat > internal/feature/desktop/mcp_test.go <<'EOF'
+          package desktop
+
+          import "testing"
+
+          func TestReduceReplacesMCPIntegrationsWithoutAliasing(t *testing.T) {
+              source := []MCPIntegrationState{{Name: "files", Command: "mcp-files", Args: []string{"--stdio"}, Env: []string{"TOKEN=x"}}}
+              state := Reduce(State{}, Event{Kind: EventIntegrationsReplaced, Integrations: source})
+              source[0].Args[0] = "changed"
+              source[0].Env[0] = "changed"
+              if state.Integrations[0].Args[0] != "--stdio" || state.Integrations[0].Env[0] != "TOKEN=x" {
+                  t.Fatalf("reducer aliased integration input: %#v", state.Integrations[0])
+              }
+              next := Reduce(state, Event{})
+              next.Integrations[0].Args[0] = "next"
+              if state.Integrations[0].Args[0] != "--stdio" {
+                  t.Fatalf("reducer state clone aliased integration args: %#v", state.Integrations[0])
+              }
+          }
+          EOF
+
+          gofmt -w internal/feature/desktop/state.go internal/feature/desktop/mcp_test.go internal/adapter/in/desktop/app.go internal/adapter/in/desktop/reconnect.go internal/adapter/in/desktop/mcp_integrations.go
+          go test ./internal/feature/desktop
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev >/dev/null
+          go test -tags desktop ./internal/adapter/in/desktop ./cmd/protonman-desktop
+          rm -f .github/workflows/desktop-mcp-ui-apply.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "feat(desktop): add MCP integrations UI"
+          git push origin HEAD:feat/desktop-app
