@@ -2,7 +2,6 @@ package history
 
 import (
 	"fmt"
-	"github.com/charmbracelet/x/ansi"
 	"strings"
 
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
@@ -34,58 +33,35 @@ type ToolCell struct {
 
 func (ToolCell) Kind() HistoryCellKind { return HistoryCellTool }
 func (c ToolCell) RenderWidth(width int) []string {
-	var headerLine string
+	summary := c.Summary
+	if summary == "" && c.Body != "" && !c.Running && !c.Denied && c.FailureCode == "" {
+		summary = toolview.SummarizeOutput(c.Name, c.ToolKind, c.Target, c.Body, c.ExitCode, c.Truncated)
+	}
 
-	if c.Running {
-		glyph := toolview.KindGlyph(c.ToolKind, c.Name)
-		indicator := " …"
-		if c.Spinner != "" {
-			indicator = " " + c.Spinner
-		}
-		targetStr := ""
-		if strings.TrimSpace(c.Target) != "" {
-			targetStr = " " + toolview.FormatPathWidth(c.Target, toolTargetWidth(width, c.Name, indicator))
-		}
-		headerLine = tuistyle.ToolStyle.Render(glyph) + tuistyle.MutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + tuistyle.ToolStyle.Render(indicator)
-	} else if c.Denied {
-		targetStr := ""
-		if strings.TrimSpace(c.Target) != "" {
-			targetStr = " " + toolview.FormatPathWidth(c.Target, toolTargetWidth(width, c.Name, tuistyle.GlyphSep+"denied"))
-		}
-		headerLine = tuistyle.WarningStyle.Render(tuistyle.GlyphToolDenied) + tuistyle.MutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + tuistyle.WarningStyle.Render(tuistyle.GlyphSep+"denied")
-	} else if c.FailureCode != "" {
-		targetStr := ""
-		if strings.TrimSpace(c.Target) != "" {
-			targetStr = " " + toolview.FormatPathWidth(c.Target, toolTargetWidth(width, c.Name, tuistyle.GlyphSep+string(c.FailureCode)))
-		}
-		headerLine = tuistyle.ErrorStyle.Render(tuistyle.GlyphToolError) + tuistyle.MutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + tuistyle.ErrorStyle.Render(tuistyle.GlyphSep+string(c.FailureCode))
-	} else if isSkillTool(c.Name) {
-		target := c.Target
+	label := ""
+	target := c.Target
+	if isSkillTool(c.Name) && !c.Running && !c.Denied && c.FailureCode == "" {
+		label = "Activated skill"
 		if target == "" {
 			if skillName := toolview.ExtractSkillContentName(c.Body); skillName != "" {
 				target = fmt.Sprintf("%q", skillName)
 			}
 		}
-		if target != "" {
-			headerLine = tuistyle.SuccessStyle.Render(tuistyle.GlyphToolSuccess) + tuistyle.MutedStyle.Render("Activated skill ") + tuistyle.ToolTargetStyle.Render(target)
-		} else {
-			headerLine = tuistyle.SuccessStyle.Render(tuistyle.GlyphToolSuccess) + tuistyle.MutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name)))
-		}
-	} else {
-		summary := c.Summary
-		if summary == "" && c.Body != "" {
-			summary = toolview.SummarizeOutput(c.Name, c.ToolKind, c.Target, c.Body, c.ExitCode, c.Truncated)
-		}
-		targetStr := ""
-		if strings.TrimSpace(c.Target) != "" {
-			targetStr = " " + toolview.FormatPathWidth(c.Target, toolTargetWidth(width, c.Name, ""))
-		}
-		summaryStr := ""
-		if summary != "" {
-			summaryStr = tuistyle.ToolSummaryStyle.Render(tuistyle.GlyphSep + summary)
-		}
-		headerLine = tuistyle.SuccessStyle.Render(tuistyle.GlyphToolSuccess) + tuistyle.MutedStyle.Render(sanitizeBubbleText(tool.DisplayName(c.Name))) + targetStr + summaryStr
+		summary = ""
 	}
+
+	header := toolview.ProjectHeader(toolview.HeaderInput{
+		Name:        c.Name,
+		Kind:        c.ToolKind,
+		Label:       label,
+		Target:      target,
+		Summary:     summary,
+		Running:     c.Running,
+		Denied:      c.Denied,
+		FailureCode: c.FailureCode,
+		Spinner:     c.Spinner,
+	})
+	headerLine := toolview.RenderHeader(header, width)
 
 	out := make([]string, 0, 1)
 	for _, line := range wrapStyledLines(headerLine, max(1, width)) {
@@ -117,10 +93,6 @@ func (c ToolCell) RenderWidth(width int) []string {
 	}
 
 	return out
-}
-func toolTargetWidth(width int, name, suffix string) int {
-	reserved := ansi.StringWidth(tool.DisplayName(name)) + ansi.StringWidth(suffix) + 4
-	return max(6, width-reserved)
 }
 
 func routineToolAggregationKey(cell HistoryCell) string {
