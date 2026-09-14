@@ -2,13 +2,14 @@ package runtime
 
 import (
 	"fmt"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	"io"
+	"os"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
@@ -187,7 +188,17 @@ func (v *slashPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPres
 }
 
 func isCommandLine(line string) bool {
-	return slashview.IsCommandLine(line)
+	if !slashview.IsCommandLine(line) {
+		return false
+	}
+	trimmed := strings.TrimSpace(line)
+	if _, err := os.Stat(trimmed); err == nil {
+		parsed := slashview.ParseCommand(trimmed)
+		if _, ok := slashview.LookupCommand(parsed.Name); !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func splitCommand(line string) (string, string, []string) {

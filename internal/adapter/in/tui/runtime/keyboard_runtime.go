@@ -124,12 +124,12 @@ func (m *bubbleModel) submit() tea.Cmd {
 		}
 		return nil
 	}
-	if strings.HasPrefix(line, "/") {
+	line = normalizePastedPath(line, m.workDir)
+	if strings.HasPrefix(line, "/") && isCommandLine(line) {
 		m.resetPrompt()
 		m.panes.bottom.remove(slashViewID)
 		return m.dispatch(line)
 	}
-	line = normalizePastedPath(line, m.workDir)
 	if m.busy || m.hasPermissionView() {
 		if !m.enqueuePrompt(line) {
 			return nil

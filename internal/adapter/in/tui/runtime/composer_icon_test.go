@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
 func TestBottomPaneUsesProvidedComposerIcon(t *testing.T) {
@@ -80,5 +81,76 @@ func TestNormalizePastedPath(t *testing.T) {
 	code := "func main() {\n  fmt.Println(\"ok\")\n}"
 	if got := normalizePastedPath(code, tempDir); got != code {
 		t.Fatalf("got %q, want %q", got, code)
+	}
+
+	// 7. Unquoted path inside workspace becomes relative
+	if got := normalizePastedPath(filePath, tempDir); got != "sample image.png" {
+		t.Fatalf("got %q, want 'sample image.png'", got)
+	}
+
+	// 8. Trailing newline trimmed
+	withNewline := filePath + "\n"
+	if got := normalizePastedPath(withNewline, tempDir); got != "sample image.png" {
+		t.Fatalf("got %q, want 'sample image.png'", got)
+	}
+	withCRLF := filePath + "\r\n"
+	if got := normalizePastedPath(withCRLF, tempDir); got != "sample image.png" {
+		t.Fatalf("got %q, want 'sample image.png'", got)
+	}
+
+	// 9. External file outside workspace is cleaned and unquoted
+	otherDir := t.TempDir()
+	outsideFile := filepath.Join(otherDir, "external image.png")
+	if err := os.WriteFile(outsideFile, []byte("fake"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cleanedOutside := filepath.Clean(outsideFile)
+	if got := normalizePastedPath(outsideFile, tempDir); got != cleanedOutside {
+		t.Fatalf("got %q, want %q", got, cleanedOutside)
+	}
+	quotedOutside := fmt.Sprintf("'%s'", outsideFile)
+	if got := normalizePastedPath(quotedOutside, tempDir); got != cleanedOutside {
+		t.Fatalf("got %q, want %q", got, cleanedOutside)
+	}
+}
+
+func TestSubmitDroppedImagePathDoesNotTriggerUnknownCommand(t *testing.T) {
+	wsDir := t.TempDir()
+	insideFile := filepath.Join(wsDir, "screenshot.png")
+	if err := os.WriteFile(insideFile, []byte("fake"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	otherDir := t.TempDir()
+	outsideFile := filepath.Join(otherDir, "desktop.png")
+	if err := os.WriteFile(outsideFile, []byte("fake"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test case 1: Dropped absolute path inside workspace (unquoted)
+	m := newTestBubbleModel(t, permission.ModeAlwaysApprove, emptyTodoItems())
+	m.workDir = wsDir
+	m.panes.bottom.prompt().SetValue(insideFile)
+	m.submit()
+	if strings.Contains(plainTranscript(m), "unknown command") {
+		t.Fatalf("inside image path triggered unknown command: %s", plainTranscript(m))
+	}
+
+	// Test case 2: Dropped absolute path outside workspace (unquoted)
+	m2 := newTestBubbleModel(t, permission.ModeAlwaysApprove, emptyTodoItems())
+	m2.workDir = wsDir
+	m2.panes.bottom.prompt().SetValue(outsideFile)
+	m2.submit()
+	if strings.Contains(plainTranscript(m2), "unknown command") {
+		t.Fatalf("outside image path triggered unknown command: %s", plainTranscript(m2))
+	}
+
+	// Test case 3: Dropped quoted path outside workspace
+	m3 := newTestBubbleModel(t, permission.ModeAlwaysApprove, emptyTodoItems())
+	m3.workDir = wsDir
+	m3.panes.bottom.prompt().SetValue("'" + outsideFile + "'")
+	m3.submit()
+	if strings.Contains(plainTranscript(m3), "unknown command") {
+		t.Fatalf("quoted outside image path triggered unknown command: %s", plainTranscript(m3))
 	}
 }

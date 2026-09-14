@@ -120,3 +120,46 @@ func TestCommandPresentation(t *testing.T) {
 		t.Fatalf("DisplayDescription = %q", got)
 	}
 }
+
+func TestIsCommandLineDistinguishesFilePathsAndCommands(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		// Valid slash commands (known and unknown)
+		{"/help", true},
+		{":help", true},
+		{"/quit", true},
+		{":quit", true},
+		{"/skills active", true},
+		{"/model gpt-4o", true},
+		{"/definitely-missing", true},
+		{"/unknown-cmd arg1 arg2", true},
+
+		// File paths (Unix absolute paths, extensions, slashes)
+		{"/Users/alice/Desktop/screenshot.png", false},
+		{"/home/user/pictures/photo.jpg", false},
+		{"/image.png", false},
+		{"/foo/bar", false},
+		{"/var/log/syslog", false},
+		{"/path/to/diagram.webp what is this?", false},
+
+		// Non-command prefixes
+		{"// comment", false},
+		{":: comment", false},
+		{"/", false},
+		{":", false},
+		{"/ ", false},
+		{"/:", false},
+		{"plain text", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := IsCommandLine(tt.input)
+			if got != tt.want {
+				t.Errorf("IsCommandLine(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}

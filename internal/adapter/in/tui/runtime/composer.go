@@ -297,11 +297,11 @@ func (m *bubbleModel) historyNext() {
 }
 
 func normalizePastedPath(content string, workDir string) string {
-	if strings.Contains(content, "\n") || strings.Contains(content, "\r") {
-		return content
-	}
 	trimmed := strings.TrimSpace(content)
 	if trimmed == "" {
+		return content
+	}
+	if strings.Contains(trimmed, "\n") || strings.Contains(trimmed, "\r") {
 		return content
 	}
 
@@ -328,6 +328,13 @@ func normalizePastedPath(content string, workDir string) string {
 			if workDir != "" {
 				if rel, err := filepath.Rel(workDir, cand); err == nil && !strings.HasPrefix(rel, "..") {
 					return rel
+				}
+				if evalWorkDir, err := filepath.EvalSymlinks(workDir); err == nil {
+					if evalCand, err := filepath.EvalSymlinks(cand); err == nil {
+						if rel, err := filepath.Rel(evalWorkDir, evalCand); err == nil && !strings.HasPrefix(rel, "..") {
+							return rel
+						}
+					}
 				}
 			}
 			return cand

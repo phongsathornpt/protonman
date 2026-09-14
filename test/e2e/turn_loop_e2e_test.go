@@ -326,9 +326,17 @@ func requestMessagesContain(request map[string]any, needle string) bool {
 		if !ok {
 			continue
 		}
-		content, _ := message["content"].(string)
-		if strings.Contains(content, needle) {
+		if content, ok := message["content"].(string); ok && strings.Contains(content, needle) {
 			return true
+		}
+		if parts, ok := message["content"].([]any); ok {
+			for _, part := range parts {
+				if partMap, ok := part.(map[string]any); ok {
+					if text, ok := partMap["text"].(string); ok && strings.Contains(text, needle) {
+						return true
+					}
+				}
+			}
 		}
 	}
 	return false
