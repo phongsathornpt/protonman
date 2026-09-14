@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	reconnectInitialDelay = time.Second
-	reconnectMaxDelay     = 8 * time.Second
+	reconnectInitialDelay  = time.Second
+	reconnectMaxDelay      = 8 * time.Second
+	reconnectRequestTimeout = 15 * time.Second
 )
 
 func (a *application) superviseConnection() {
@@ -60,7 +61,7 @@ func (a *application) superviseConnection() {
 		a.setClient(client)
 		delay = reconnectInitialDelay
 		a.resumeKnownSessions(ctx, client)
-		a.refreshSessions()
+		go a.refreshSessions()
 
 		select {
 		case <-ctx.Done():
@@ -103,7 +104,7 @@ func (a *application) initializeClient(ctx context.Context, client *acpclient.Cl
 			Version string `json:"version"`
 		} `json:"agentInfo"`
 	}
-	if err := client.Call(ctx, "initialize", map[string]any{
+	if err := callReconnectRPC(ctx, client, "initialize", map[string]any{
 		"protocolVersion":    1,
 		"clientInfo":         map[string]any{"name": "protonman-desktop", "title": "Protonman Desktop"},
 		"clientCapabilities": map[string]any{},
@@ -139,10 +140,16 @@ func (a *application) resumeKnownSessions(ctx context.Context, client *acpclient
 		if len(mcpServers) > 0 {
 			params["mcpServers"] = mcpServers
 		}
-		if err := client.Call(ctx, "session/resume", params, nil); err != nil && ctx.Err() == nil {
+		if err := callReconnectRPC(ctx, client, "session/resume", params, nil); err != nil && ctx.Err() == nil {
 			a.setStatus("Session resume failed · " + err.Error())
 		}
 	}
+}
+
+func callReconnectRPC(ctx context.Context, client *acpclient.Client, method string, params any, result any) error {
+	callCtx, cancel := context.WithTimeout(ctx, reconnectRequestTimeout)
+	defer cancel()
+	return client.Call(callCtx, method, params, result)
 }
 
 func (a *application) markDisconnected(client *acpclient.Client) {
