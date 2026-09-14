@@ -164,8 +164,9 @@ func sameMCPServerConfigs(left, right []MCPServerConfig) bool {
 
 type SessionNewParams struct {
 	MetaCarrier
-	Cwd        string            `json:"cwd,omitempty"`
-	MCPServers []MCPServerConfig `json:"mcpServers,omitempty"`
+	Cwd                   string            `json:"cwd,omitempty"`
+	AdditionalDirectories []string          `json:"additionalDirectories,omitempty"`
+	MCPServers            []MCPServerConfig `json:"mcpServers,omitempty"`
 }
 
 type SessionNewResult struct {
@@ -176,16 +177,18 @@ type SessionNewResult struct {
 
 type SessionLoadParams struct {
 	MetaCarrier
-	SessionID  string            `json:"sessionId"`
-	Cwd        string            `json:"cwd,omitempty"`
-	MCPServers []MCPServerConfig `json:"mcpServers,omitempty"`
+	SessionID             string            `json:"sessionId"`
+	Cwd                   string            `json:"cwd,omitempty"`
+	AdditionalDirectories []string          `json:"additionalDirectories,omitempty"`
+	MCPServers            []MCPServerConfig `json:"mcpServers,omitempty"`
 }
 
 type SessionResumeParams struct {
 	MetaCarrier
-	SessionID  string            `json:"sessionId"`
-	Cwd        string            `json:"cwd,omitempty"`
-	MCPServers []MCPServerConfig `json:"mcpServers,omitempty"`
+	SessionID             string            `json:"sessionId"`
+	Cwd                   string            `json:"cwd,omitempty"`
+	AdditionalDirectories []string          `json:"additionalDirectories,omitempty"`
+	MCPServers            []MCPServerConfig `json:"mcpServers,omitempty"`
 }
 
 type SessionSetModeParams struct {
@@ -211,12 +214,13 @@ type SessionListParams struct {
 
 type SessionInfo struct {
 	MetaCarrier
-	SessionID     string `json:"sessionId"`
-	Cwd           string `json:"cwd,omitempty"`
-	Title         string `json:"title,omitempty"`
-	UpdatedAt     string `json:"updatedAt,omitempty"`
-	WorkspaceKey  string `json:"workspaceKey,omitempty"`
-	WorkspaceName string `json:"workspaceName,omitempty"`
+	SessionID             string   `json:"sessionId"`
+	Cwd                   string   `json:"cwd,omitempty"`
+	AdditionalDirectories []string `json:"additionalDirectories,omitempty"`
+	Title                 string   `json:"title,omitempty"`
+	UpdatedAt             string   `json:"updatedAt,omitempty"`
+	WorkspaceKey          string   `json:"workspaceKey,omitempty"`
+	WorkspaceName         string   `json:"workspaceName,omitempty"`
 }
 
 type SessionListResult struct {
