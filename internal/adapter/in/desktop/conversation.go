@@ -126,6 +126,9 @@ func (a *application) appendTranscript(sessionID, text string) {
 	if text == "" {
 		return
 	}
+	if stageSessionHistoryChunk(a, sessionID, text) {
+		return
+	}
 	a.mu.Lock()
 	builder := a.transcripts[sessionID]
 	if builder == nil {
