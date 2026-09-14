@@ -26,3 +26,13 @@ type Set struct {
 	TodoActive  string
 	Brand       string
 }
+
+// OrUnicode returns icons when a concrete profile was supplied, otherwise the
+// compatibility Unicode profile. This lets icon-aware presentation models add
+// optional Set fields without reintroducing mutable package globals.
+func OrUnicode(icons Set) Set {
+	if icons == (Set{}) {
+		return Unicode
+	}
+	return icons
+}
