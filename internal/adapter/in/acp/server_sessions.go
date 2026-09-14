@@ -49,7 +49,7 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 		s.mu.Unlock()
 	}
 
-	sess, err := s.newSession(ctx, sessionID, cwd, mcpServers, additionalDirectories)
+	sess, err := s.newSession(ctx, sessionID, cwd, additionalDirectories, mcpServers)
 	if err != nil {
 		return nil, err
 	}
@@ -99,12 +99,13 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 }
 
 // newSession retains the historic four-argument call shape used by package
-// tests while allowing ACP directory roots to be supplied as one optional fifth
-// argument. New production call sites should always provide the root list.
-func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, mcpServers []MCPServerConfig, directorySets ...[]string) (*Session, error) {
-	var additionalDirectories []string
-	if len(directorySets) > 0 {
-		additionalDirectories = cloneDirectories(directorySets[0])
+// tests while allowing MCP configuration as an optional fifth argument. The
+// fourth argument is the ACP full additional-root list; nil preserves the old
+// no-extra-roots behavior.
+func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, additionalDirectories []string, mcpSets ...[]MCPServerConfig) (*Session, error) {
+	var mcpServers []MCPServerConfig
+	if len(mcpSets) > 0 {
+		mcpServers = mcpSets[0]
 	}
 	registry := s.registry
 	var mcpResource io.Closer
