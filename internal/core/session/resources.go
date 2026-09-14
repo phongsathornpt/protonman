@@ -14,6 +14,7 @@ const (
 	TodoFileName        = "todo.md"
 	AgentsFileName      = "agents.json"
 	AgentEventsFileName = "agent-events.jsonl"
+	AttachmentsDirName  = "attachments"
 )
 
 // Resources are the durable files owned by one Protonman session.
@@ -23,6 +24,7 @@ type Resources struct {
 	Todo        string
 	Agents      string
 	AgentEvents string
+	Attachments string
 }
 
 // ResolveResources returns paths below sessionsRoot for a validated session ID.
@@ -34,6 +36,7 @@ func ResolveResources(sessionsRoot, sessionID string) (Resources, error) {
 	return Resources{
 		Root: root, State: filepath.Join(root, StateFileName), Todo: filepath.Join(root, TodoFileName),
 		Agents: filepath.Join(root, AgentsFileName), AgentEvents: filepath.Join(root, AgentEventsFileName),
+		Attachments: filepath.Join(root, AttachmentsDirName),
 	}, nil
 }
 
