@@ -44,16 +44,6 @@ func (f chatFunction) MarshalJSON() ([]byte, error) {
 	return providerutil.MarshalWithOptions(base, f.ProviderOptions, "name", "description", "parameters")
 }
 
-type chatRequest struct {
-	Model           string              `json:"model"`
-	Messages        []chatMessage       `json:"messages"`
-	Stream          bool                `json:"stream"`
-	Tools           []chatTool          `json:"tools,omitempty"`
-	ToolChoice      string              `json:"tool_choice,omitempty"`
-	MaxTokens       int                 `json:"max_tokens,omitempty"`
-	ReasoningEffort sdk.ReasoningEffort `json:"reasoning_effort,omitempty"`
-	EnableThinking  *bool               `json:"enable_thinking,omitempty"`
-}
 type responsesTool struct {
 	Type            string          `json:"type"`
 	Name            string          `json:"name"`
@@ -98,7 +88,7 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 		for _, message := range request.Messages {
 			switch message.Role {
 			case sdk.RoleUser, sdk.RoleSystem:
-				input = append(input, map[string]any{"role": string(message.Role), "content": message.TextContent()})
+				input = append(input, map[string]any{"role": string(message.Role), "content": responsesMessageContent(message)})
 			case sdk.RoleAssistant:
 				if text := strings.TrimSpace(message.TextContent()); text != "" {
 					input = append(input, map[string]any{"role": "assistant", "content": text})
@@ -162,6 +152,37 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 		return "", nil, fmt.Errorf("marshal chat request: %w", err)
 	}
 	return endpoint, encoded, nil
+}
+
+func responsesMessageContent(message sdk.Message) any {
+	if len(message.Parts) == 0 {
+		return message.TextContent()
+	}
+	content := make([]map[string]any, 0, len(message.Parts))
+	for _, part := range message.Parts {
+		switch part.Type {
+		case sdk.ContentPartText:
+			if part.Text != "" {
+				content = append(content, map[string]any{"type": "input_text", "text": part.Text})
+			}
+		case sdk.ContentPartImage:
+			if part.Data == "" {
+				continue
+			}
+			mime := strings.TrimSpace(part.MIMEType)
+			if mime == "" {
+				mime = "image/png"
+			}
+			content = append(content, map[string]any{
+				"type":      "input_image",
+				"image_url": fmt.Sprintf("data:%s;base64,%s", mime, part.Data),
+			})
+		}
+	}
+	if len(content) == 0 {
+		return message.TextContent()
+	}
+	return content
 }
 
 func (m *LanguageModel) qwenChatReasoning(effort sdk.ReasoningEffort) (sdk.ReasoningEffort, *bool) {
