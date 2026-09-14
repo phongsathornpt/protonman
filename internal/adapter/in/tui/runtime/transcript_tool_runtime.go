@@ -117,6 +117,7 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 	}
 	var target string
 	var toolKind tool.Kind
+	icons := m.icons
 	if running := m.runningToolCell(callID, name); running != nil {
 		switch typed := running.(type) {
 		case *tuihistory.ExecCell:
@@ -134,6 +135,7 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 			name = typed.Name
 			target = typed.Target
 			toolKind = typed.ToolKind
+			icons = typed.Icons
 		}
 	}
 	if toolKind == "" {
@@ -144,7 +146,7 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 		}
 	}
 	summary := toolview.SummarizeOutput(name, toolKind, target, body, result.ExitCode, result.Truncated)
-	return &tuihistory.ToolCell{CallID: callID, Name: name, Body: body, Target: target, ToolKind: toolKind, Summary: summary, ExitCode: result.ExitCode, Truncated: result.Truncated, Denied: result.Denied, FailureCode: failureCode, ShowDetail: tuipresentation.MinimalPolicy().ToolDetail(toolKind, result.Denied, failureCode != "") != tuipresentation.DetailSummary}
+	return &tuihistory.ToolCell{CallID: callID, Name: name, Body: body, Target: target, ToolKind: toolKind, Summary: summary, ExitCode: result.ExitCode, Truncated: result.Truncated, Denied: result.Denied, FailureCode: failureCode, ShowDetail: tuipresentation.MinimalPolicy().ToolDetail(toolKind, result.Denied, failureCode != "") != tuipresentation.DetailSummary, Icons: icons}
 }
 
 func (m *bubbleModel) runningToolTarget(callID, name string) string {
