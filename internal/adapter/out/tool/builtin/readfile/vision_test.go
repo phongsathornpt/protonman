@@ -9,9 +9,11 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/phongsathornpt/protonman/internal/feature/imageprep"
 )
 
-func TestVisionTargetDimensions(t *testing.T) {
+func TestVisionTargetDimensionsUsesPatchBudget(t *testing.T) {
 	for _, tc := range []struct {
 		name                  string
 		width, height         int
@@ -25,18 +27,18 @@ func TestVisionTargetDimensions(t *testing.T) {
 			wantHeight: 600,
 		},
 		{
-			name:       "dimension exceeds max 1568",
+			name:       "long side caps at 2048",
 			width:      4000,
 			height:     2000,
-			wantWidth:  1568,
-			wantHeight: 784,
+			wantWidth:  2048,
+			wantHeight: 1024,
 		},
 		{
-			name:       "pixels exceed max 1.6M",
+			name:       "patch budget caps square image",
 			width:      2000,
 			height:     2000,
-			wantWidth:  1264,
-			wantHeight: 1264,
+			wantWidth:  1600,
+			wantHeight: 1600,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -44,60 +46,31 @@ func TestVisionTargetDimensions(t *testing.T) {
 			if gotW != tc.wantWidth || gotH != tc.wantHeight {
 				t.Fatalf("visionTargetDimensions(%d, %d) = (%d, %d), want (%d, %d)", tc.width, tc.height, gotW, gotH, tc.wantWidth, tc.wantHeight)
 			}
-			if int64(gotW)*int64(gotH) > maxVisionPixels {
-				t.Fatalf("pixel area %d exceeds max %d", gotW*gotH, maxVisionPixels)
+			if gotW > imageprep.DefaultMaxDimension || gotH > imageprep.DefaultMaxDimension {
+				t.Fatalf("dimension (%d, %d) exceeds max %d", gotW, gotH, imageprep.DefaultMaxDimension)
 			}
-			if gotW > maxVisionDimension || gotH > maxVisionDimension {
-				t.Fatalf("dimension (%d, %d) exceeds max %d", gotW, gotH, maxVisionDimension)
+			patchesWide := (gotW + imageprep.PatchSize - 1) / imageprep.PatchSize
+			patchesHigh := (gotH + imageprep.PatchSize - 1) / imageprep.PatchSize
+			if patchesWide*patchesHigh > imageprep.DefaultMaxPatches {
+				t.Fatalf("patches %d exceed max %d", patchesWide*patchesHigh, imageprep.DefaultMaxPatches)
 			}
 		})
 	}
 }
 
-func TestEstimateVisionTokens(t *testing.T) {
+func TestEstimateVisionTokensUsesProviderNeutralPatches(t *testing.T) {
 	est1 := estimateVisionTokens(10, 10)
-	if est1.OpenAI != 255 || est1.Anthropic != 1 {
-		t.Fatalf("estimateVisionTokens(10, 10) = %+v, want OpenAI 255, Anthropic 1", est1)
+	if est1.OpenAI != 1 || est1.Anthropic != 1 {
+		t.Fatalf("estimateVisionTokens(10, 10) = %+v, want one patch", est1)
 	}
 
 	est2 := estimateVisionTokens(512, 512)
-	if est2.OpenAI != 255 || est2.Anthropic != 350 {
-		t.Fatalf("estimateVisionTokens(512, 512) = %+v, want OpenAI 255, Anthropic 350", est2)
-	}
-
-	est3 := estimateVisionTokens(1568, 784)
-	if est3.OpenAI != 1445 || est3.Anthropic != 1639 {
-		t.Fatalf("estimateVisionTokens(1568, 784) = %+v, want OpenAI 1445, Anthropic 1639", est3)
+	if est2.OpenAI != 256 || est2.Anthropic != 256 {
+		t.Fatalf("estimateVisionTokens(512, 512) = %+v, want 256 patches", est2)
 	}
 }
 
-func TestFlattenToOpaqueCompositesOverWhite(t *testing.T) {
-	// Create a 4x4 image: half transparent red, half fully transparent
-	img := image.NewNRGBA(image.Rect(0, 0, 4, 4))
-	for y := 0; y < 2; y++ {
-		for x := 0; x < 4; x++ {
-			img.SetNRGBA(x, y, color.NRGBA{R: 255, G: 0, B: 0, A: 128}) // 50% transparent red
-		}
-	}
-	for y := 2; y < 4; y++ {
-		for x := 0; x < 4; x++ {
-			img.SetNRGBA(x, y, color.NRGBA{R: 0, G: 0, B: 0, A: 0}) // fully transparent
-		}
-	}
-
-	flattened := flattenToOpaque(img, img.Bounds())
-	if flattened.Bounds() != img.Bounds() {
-		t.Fatalf("bounds mismatch: %v vs %v", flattened.Bounds(), img.Bounds())
-	}
-
-	// Bottom row (was fully transparent) should now be pure white (255, 255, 255, 255)
-	c := flattened.RGBAAt(0, 3)
-	if c.R != 255 || c.G != 255 || c.B != 255 || c.A != 255 {
-		t.Fatalf("expected white pixel for transparent region, got %+v", c)
-	}
-}
-
-func TestReadImagePopulatesImageAttachment(t *testing.T) {
+func TestReadImagePopulatesSharedPreparedAttachment(t *testing.T) {
 	ws := newTestWorkspace(t, nil)
 	path := filepath.Join(ws.Root(), "vision.png")
 	file, err := os.Create(path)
