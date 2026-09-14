@@ -32,32 +32,35 @@ type application struct {
 	client     *acpclient.Client
 	desktopApp fyne.App
 
-	mu                sync.Mutex
-	state             desktopstate.State
-	sidebarRows       []sidebarRow
-	sidebarQuery      string
-	transcripts       map[string]*strings.Builder
-	permissionWaiters map[string]chan string
-	preferences       fyne.Preferences
+	mu                    sync.Mutex
+	state                 desktopstate.State
+	sidebarRows           []sidebarRow
+	sidebarQuery          string
+	transcripts           map[string]*strings.Builder
+	conversationSessionID string
+	permissionWaiters     map[string]chan string
+	preferences           fyne.Preferences
 
-	status            *widget.Label
-	list              *widget.List
-	chat              *widget.RichText
-	composer          *widget.Entry
-	send              *widget.Button
-	stop              *widget.Button
-	sessionTitle      *widget.Label
-	sessionMeta       *widget.Label
-	contextToggle     *widget.Button
-	contextDrawer     *fyne.Container
-	contextContent    *widget.RichText
-	runtimeSummary    *widget.Button
-	runtimePanel      *fyne.Container
-	permissionInbox   *widget.Button
-	permissionPanel   *fyne.Container
-	permissionTitle   *widget.Label
-	permissionDetail  *widget.Label
-	permissionActions *fyne.Container
+	status             *widget.Label
+	list               *widget.List
+	sessionSearch      *widget.Entry
+	chat               *widget.RichText
+	conversationScroll fyne.CanvasObject
+	composer           *widget.Entry
+	send               *widget.Button
+	stop               *widget.Button
+	sessionTitle       *widget.Label
+	sessionMeta        *widget.Label
+	contextToggle      *widget.Button
+	contextDrawer      *fyne.Container
+	contextContent     *widget.RichText
+	runtimeSummary     *widget.Button
+	runtimePanel       *fyne.Container
+	permissionInbox    *widget.Button
+	permissionPanel    *fyne.Container
+	permissionTitle    *widget.Label
+	permissionDetail   *widget.Label
+	permissionActions  *fyne.Container
 
 	modelProvider   *widget.Entry
 	modelID         *widget.Entry
@@ -351,11 +354,18 @@ func (a *application) selectNextPermission() {
 	}
 	sessionID := a.state.PermissionInbox[0].SessionID
 	a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventSessionSelected, SessionID: sessionID})
+	a.sidebarQuery = ""
+	a.rebuildSidebarRowsLocked()
 	index := sidebarRowIndexForSession(a.sidebarRows, sessionID)
 	a.mu.Unlock()
-	if index >= 0 {
-		fyne.Do(func() { a.list.Select(widget.ListItemID(index)) })
-	}
+	fyne.Do(func() {
+		if a.sessionSearch != nil && a.sessionSearch.Text != "" {
+			a.sessionSearch.SetText("")
+		}
+		if index >= 0 {
+			a.list.Select(widget.ListItemID(index))
+		}
+	})
 	a.refreshActiveView()
 	a.refreshPermissionView()
 }
