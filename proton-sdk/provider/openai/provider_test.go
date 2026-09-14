@@ -99,6 +99,58 @@ func TestChatStreamToolLifecycle(t *testing.T) {
 	}
 }
 
+func TestChatStreamToolResultWithImage(t *testing.T) {
+	var receivedBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"saw image\"},\"finish_reason\":\"stop\"}]}\n\n")
+	}))
+	defer server.Close()
+
+	provider := NewProvider(ProviderOptions{BaseURL: server.URL + "/v1"})
+	req := sdk.Request{
+		Messages: []sdk.Message{
+			{Role: sdk.RoleAssistant, ToolCalls: []sdk.ToolCall{{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"test.png"}`)}}},
+			{
+				Role:       sdk.RoleTool,
+				ToolCallID: "call-1",
+				ToolName:   "read",
+				Parts: []sdk.ContentPart{
+					{Type: sdk.ContentPartText, Text: "image analysis summary"},
+					{Type: sdk.ContentPartImage, MIMEType: "image/png", Data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="},
+				},
+			},
+		},
+	}
+	stream, err := provider.Model("test-model").Stream(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+	_ = collectEvents(t, stream)
+
+	messages, ok := receivedBody["messages"].([]any)
+	if !ok || len(messages) != 2 {
+		t.Fatalf("unexpected received messages: %#v", receivedBody["messages"])
+	}
+	toolMsg, ok := messages[1].(map[string]any)
+	if !ok || toolMsg["role"] != "tool" || toolMsg["tool_call_id"] != "call-1" {
+		t.Fatalf("unexpected tool message: %#v", toolMsg)
+	}
+	contentParts, ok := toolMsg["content"].([]any)
+	if !ok || len(contentParts) != 2 {
+		t.Fatalf("unexpected content parts: %#v", toolMsg["content"])
+	}
+	p0 := contentParts[0].(map[string]any)
+	if p0["type"] != "text" || p0["text"] != "image analysis summary" {
+		t.Fatalf("part 0 mismatch: %#v", p0)
+	}
+	p1 := contentParts[1].(map[string]any)
+	if p1["type"] != "image_url" {
+		t.Fatalf("part 1 mismatch: %#v", p1)
+	}
+}
+
 func TestResponsesAPIRequestAndStream(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/responses" {

@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 func TestReadFileAutoAnalyzesPNG(t *testing.T) {
@@ -340,5 +342,127 @@ func TestReadFileAutoAnalyzesWebP(t *testing.T) {
 	}
 	if got.Kind != "image" || got.MIMEType != "image/webp" || got.Metadata.Format != "webp" || got.Metadata.Width != 1 || got.Metadata.Height != 1 {
 		t.Fatalf("structured WebP result = %+v", got)
+	}
+}
+
+func TestReadImageFullyTransparentOutputsNotice(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	path := filepath.Join(ws.Root(), "all_transparent.png")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img := image.NewNRGBA(image.Rect(0, 0, 4, 4))
+	for y := 0; y < 4; y++ {
+		for x := 0; x < 4; x++ {
+			img.SetNRGBA(x, y, color.NRGBA{R: 255, G: 0, B: 0, A: 0})
+		}
+	}
+	if err := png.Encode(file, img); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "all-trans", "read", map[string]any{"path": "all_transparent.png", "view": "image"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result.Output, "transparent (no visible pixels)") {
+		t.Fatalf("expected transparent notice in Output, got: %q", result.Output)
+	}
+	if strings.Contains(result.Output, "brightness mean") {
+		t.Fatalf("expected no brightness stats for 100%% transparent image, got: %q", result.Output)
+	}
+}
+
+func TestReadImageContextCancellationClassifiesAsCanceled(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	path := filepath.Join(ws.Root(), "cancel.png")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(file, image.NewRGBA(image.Rect(0, 0, 10, 10))); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately before execution
+
+	_, err = New(ws).Execute(ctx, newJSONCall(t, "cancel", "read", map[string]any{"path": "cancel.png", "view": "image"}))
+	if err == nil {
+		t.Fatal("expected error on canceled context, got nil")
+	}
+	failure := tool.FailureFromError(err)
+	if failure == nil || failure.Code != tool.ErrorCodeCanceled {
+		t.Fatalf("expected ErrorCodeCanceled, got failure = %#v, err = %v", failure, err)
+	}
+}
+
+func TestImageOpaqueFastPath(t *testing.T) {
+	ctx := context.Background()
+
+	// JPEG YCbCr is always opaque.
+	ycbcr := image.NewYCbCr(image.Rect(0, 0, 8, 8), image.YCbCrSubsampleRatio420)
+	opaque, err := imageOpaque(ctx, ycbcr)
+	if err != nil || !opaque {
+		t.Fatalf("YCbCr image opaque = %v, err = %v; want true, nil", opaque, err)
+	}
+
+	// RGBA with opaque pixels.
+	rgba := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	for i := range rgba.Pix {
+		rgba.Pix[i] = 0xff
+	}
+	opaque, err = imageOpaque(ctx, rgba)
+	if err != nil || !opaque {
+		t.Fatalf("RGBA image opaque = %v, err = %v; want true, nil", opaque, err)
+	}
+
+	// RGBA with a transparent pixel.
+	rgba.Pix[3] = 0x00 // first pixel alpha
+	opaque, err = imageOpaque(ctx, rgba)
+	if err != nil || opaque {
+		t.Fatalf("RGBA with alpha=0 opaque = %v, err = %v; want false, nil", opaque, err)
+	}
+}
+
+func TestImageASCIIPreviewPreservesAspectRatio(t *testing.T) {
+	// 1000x100 banner (10:1 wide aspect ratio).
+	banner := image.NewRGBA(image.Rect(0, 0, 1000, 100))
+	for y := 0; y < 100; y++ {
+		for x := 0; x < 1000; x++ {
+			banner.SetRGBA(x, y, color.RGBA{R: 255, G: 255, B: 255, A: 255})
+		}
+	}
+	preview := imageASCIIPreview(banner, 48, 16)
+	lines := strings.Split(strings.TrimSuffix(preview, "\n"), "\n")
+	// For a 10:1 image, height should be small (around 2 rows), not stretched to 16.
+	if len(lines) > 4 {
+		t.Fatalf("banner ASCII preview height = %d rows, want <= 4 rows for 10:1 aspect ratio", len(lines))
+	}
+
+	// 100x1000 portrait (1:10 tall aspect ratio).
+	portrait := image.NewRGBA(image.Rect(0, 0, 100, 1000))
+	for y := 0; y < 1000; y++ {
+		for x := 0; x < 100; x++ {
+			portrait.SetRGBA(x, y, color.RGBA{R: 255, G: 255, B: 255, A: 255})
+		}
+	}
+	previewPortrait := imageASCIIPreview(portrait, 48, 16)
+	linesPortrait := strings.Split(strings.TrimSuffix(previewPortrait, "\n"), "\n")
+	// For a 1:10 image, width should be narrow (around 1-4 cols), height maxed out at 16.
+	if len(linesPortrait) != 16 {
+		t.Fatalf("portrait ASCII preview height = %d rows, want 16 rows", len(linesPortrait))
+	}
+	if len(linesPortrait[0]) > 6 {
+		t.Fatalf("portrait ASCII preview width = %d cols, want <= 6 cols for 1:10 aspect ratio", len(linesPortrait[0]))
 	}
 }

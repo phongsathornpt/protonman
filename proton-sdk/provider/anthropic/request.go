@@ -45,7 +45,7 @@ type contentBlock struct {
 	Name      string          `json:"name,omitempty"`
 	Input     json.RawMessage `json:"input,omitempty"`
 	ToolUseID string          `json:"tool_use_id,omitempty"`
-	Content   string          `json:"content,omitempty"`
+	Content   any             `json:"content,omitempty"`
 	IsError   bool            `json:"is_error,omitempty"`
 	Source    *imageSource    `json:"source,omitempty"`
 }
@@ -108,7 +108,7 @@ func buildRequest(modelID string, request sdk.Request, defaultMaxTokens int) (re
 			body.Messages = append(body.Messages, message{Role: "assistant", Content: assistantContent(source)})
 		case sdk.RoleTool:
 			body.Messages = append(body.Messages, message{Role: "user", Content: []contentBlock{{
-				Type: "tool_result", ToolUseID: source.ToolCallID, Content: source.TextContent(), IsError: source.ToolResultIsError,
+				Type: "tool_result", ToolUseID: source.ToolCallID, Content: toolResultContent(source), IsError: source.ToolResultIsError,
 			}}})
 		}
 	}
@@ -147,6 +147,48 @@ func userContent(source sdk.Message) []contentBlock {
 			}
 			blocks = append(blocks, contentBlock{Type: "image", Source: &imageSource{Type: "base64", MediaType: mediaType, Data: part.Data}})
 		}
+	}
+	return blocks
+}
+
+func toolResultContent(source sdk.Message) any {
+	if len(source.Parts) == 0 {
+		return source.TextContent()
+	}
+	hasImage := false
+	for _, part := range source.Parts {
+		if part.Type == sdk.ContentPartImage {
+			hasImage = true
+			break
+		}
+	}
+	if !hasImage {
+		return source.TextContent()
+	}
+	blocks := make([]contentBlock, 0, len(source.Parts))
+	for _, part := range source.Parts {
+		switch part.Type {
+		case sdk.ContentPartText:
+			if part.Text != "" {
+				blocks = append(blocks, contentBlock{Type: "text", Text: part.Text})
+			}
+		case sdk.ContentPartImage:
+			mediaType := strings.TrimSpace(part.MIMEType)
+			if mediaType == "" {
+				mediaType = "image/png"
+			}
+			blocks = append(blocks, contentBlock{
+				Type: "image",
+				Source: &imageSource{
+					Type:      "base64",
+					MediaType: mediaType,
+					Data:      part.Data,
+				},
+			})
+		}
+	}
+	if len(blocks) == 0 {
+		return source.TextContent()
 	}
 	return blocks
 }

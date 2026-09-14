@@ -484,6 +484,14 @@ type Pagination struct {
 	Continuation string `json:"continuation,omitempty"`
 }
 
+// ImageAttachment represents an optional multimodal image produced by a tool.
+type ImageAttachment struct {
+	MIMEType string `json:"mime_type"`
+	Data     string `json:"data,omitempty"`
+	Width    int    `json:"width,omitempty"`
+	Height   int    `json:"height,omitempty"`
+}
+
 // Result is the model-facing output of a tool execution.
 type Result struct {
 	// CallID identifies the originating call.
@@ -517,6 +525,8 @@ type Result struct {
 	Continuation string `json:"continuation,omitempty"`
 	// Pagination is the canonical machine-readable continuation state.
 	Pagination *Pagination `json:"pagination,omitempty"`
+	// Image is populated when a tool produces an image for multimodal vision models.
+	Image *ImageAttachment `json:"image,omitempty"`
 	// Failure is populated when a tool call fails or is denied.
 	Failure *Failure `json:"error,omitempty"`
 	// SHA256 identifies the complete file content when a tool can prove a full-file snapshot.
@@ -555,6 +565,11 @@ func (r Result) ModelPayload() Result {
 	if r.Output != "" {
 		r.Stdout = ""
 		r.Stderr = ""
+	}
+	if r.Image != nil && r.Image.Data != "" {
+		img := *r.Image
+		img.Data = ""
+		r.Image = &img
 	}
 	if r.Failure != nil {
 		failure := *r.Failure

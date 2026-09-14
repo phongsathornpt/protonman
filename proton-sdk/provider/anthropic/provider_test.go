@@ -158,6 +158,36 @@ func TestAnthropicMapsToolResultToUserBlock(t *testing.T) {
 	}
 }
 
+func TestAnthropicMapsToolResultWithImageBlock(t *testing.T) {
+	body, err := buildRequest("claude-test", sdk.Request{Messages: []sdk.Message{
+		{Role: sdk.RoleAssistant, ToolCalls: []sdk.ToolCall{{ID: "toolu_1", Name: "read", Arguments: json.RawMessage(`{"path":"screen.png"}`)}}},
+		{Role: sdk.RoleTool, ToolCallID: "toolu_1", ToolName: "read", Parts: []sdk.ContentPart{
+			{Type: sdk.ContentPartText, Text: "image analysis summary"},
+			{Type: sdk.ContentPartImage, MIMEType: "image/png", Data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="},
+		}},
+	}}, DefaultMaxTokens)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Messages) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(body.Messages))
+	}
+	toolResult := body.Messages[1].Content[0]
+	if toolResult.Type != "tool_result" || toolResult.ToolUseID != "toolu_1" {
+		t.Fatalf("unexpected tool result: %#v", toolResult)
+	}
+	blocks, ok := toolResult.Content.([]contentBlock)
+	if !ok || len(blocks) != 2 {
+		t.Fatalf("expected []contentBlock of len 2, got %#v", toolResult.Content)
+	}
+	if blocks[0].Type != "text" || blocks[0].Text != "image analysis summary" {
+		t.Fatalf("block 0 text mismatch: %#v", blocks[0])
+	}
+	if blocks[1].Type != "image" || blocks[1].Source == nil || blocks[1].Source.MediaType != "image/png" || blocks[1].Source.Data == "" {
+		t.Fatalf("block 1 image mismatch: %#v", blocks[1])
+	}
+}
+
 func TestAnthropicHTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"type":"error","error":{"type":"authentication_error","message":"bad key"}}`, http.StatusUnauthorized)
