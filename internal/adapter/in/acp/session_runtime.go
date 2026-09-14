@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
+	"weak"
 
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
@@ -48,7 +50,7 @@ type sessionRuntimeControl struct {
 }
 
 var sessionRuntimeControls sync.Map   // map[*Server]sessionRuntimeControl
-var sessionRuntimeSelections sync.Map // map[*Session]SessionRuntimeSettings
+var sessionRuntimeSelections sync.Map // map[weak.Pointer[Session]]SessionRuntimeSettings
 
 // WithSessionRuntimeControls enables typed model/reasoning/low-concurrency
 // methods without coupling ACP to concrete provider configuration adapters.
@@ -251,9 +253,14 @@ func bindSessionRuntime(server *Server, sess *Session) {
 	if !ok {
 		return
 	}
+	key := weak.Make(sess)
+	runtime.AddCleanup(sess, func(key weak.Pointer[Session]) {
+		sessionRuntimeSelections.Delete(key)
+	}, key)
 	settings := control.defaults
 	settings.Reasoning = reasoningSetting(sess.ReasoningEffort())
 	storeSessionRuntime(sess, settings)
+	runtime.KeepAlive(sess)
 }
 
 func restoreSessionRuntime(ctx context.Context, server *Server, sess *Session, persisted session.State) error {
@@ -296,7 +303,7 @@ func sessionRuntimeFor(sess *Session) SessionRuntimeSettings {
 }
 
 func sessionRuntimeForLocked(sess *Session) SessionRuntimeSettings {
-	if value, ok := sessionRuntimeSelections.Load(sess); ok {
+	if value, ok := sessionRuntimeSelections.Load(weak.Make(sess)); ok {
 		if settings, ok := value.(SessionRuntimeSettings); ok {
 			settings.Reasoning = reasoningSetting(sess.reasoningEffort)
 			return normalizeSessionRuntime(settings)
@@ -306,7 +313,7 @@ func sessionRuntimeForLocked(sess *Session) SessionRuntimeSettings {
 }
 
 func storeSessionRuntime(sess *Session, settings SessionRuntimeSettings) {
-	sessionRuntimeSelections.Store(sess, normalizeSessionRuntime(settings))
+	sessionRuntimeSelections.Store(weak.Make(sess), normalizeSessionRuntime(settings))
 }
 
 func runtimeResult(sess *Session) ProtonmanSessionRuntimeResult {
