@@ -6,11 +6,19 @@ import (
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 )
 
-func TestBottomPaneUsesProvidedPromptIcon(t *testing.T) {
+func TestBottomPaneUsesProvidedComposerIcon(t *testing.T) {
 	pane := newBottomPane(true, false)
 	pane.setIcons(tuistyle.NerdIcons)
-	if got := pane.prompt().Prompt; got != tuistyle.NerdIcons.Prompt {
-		t.Fatalf("prompt = %q, want Nerd prompt %q", got, tuistyle.NerdIcons.Prompt)
+	if got := pane.prompt().Prompt; got != tuistyle.NerdIcons.Composer {
+		t.Fatalf("prompt = %q, want Nerd composer %q", got, tuistyle.NerdIcons.Composer)
+	}
+}
+
+func TestUnicodeProfilePreservesHistoricalComposerPrompt(t *testing.T) {
+	pane := newBottomPane(true, false)
+	pane.setIcons(tuistyle.UnicodeIcons)
+	if got := pane.prompt().Prompt; got != "> " {
+		t.Fatalf("unicode composer = %q, want historical prompt", got)
 	}
 }
 
@@ -22,7 +30,7 @@ func TestBashModePreservesCommandPromptAcrossIconProfiles(t *testing.T) {
 		t.Fatalf("bash prompt = %q, want existing command affordance", got)
 	}
 	pane.setBashMode(false)
-	if got := pane.prompt().Prompt; got != tuistyle.NerdIcons.Prompt {
-		t.Fatalf("restored prompt = %q, want Nerd prompt %q", got, tuistyle.NerdIcons.Prompt)
+	if got := pane.prompt().Prompt; got != tuistyle.NerdIcons.Composer {
+		t.Fatalf("restored prompt = %q, want Nerd composer %q", got, tuistyle.NerdIcons.Composer)
 	}
 }
