@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	tuiicon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/icon"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
@@ -20,34 +21,41 @@ func ExtractTarget(name string, kind tool.Kind, args json.RawMessage) (string, t
 	return target, kind
 }
 
-// KindGlyph returns the appropriate category glyph for a tool.
+// KindGlyph returns the current compatibility glyph for a tool. New icon-aware
+// renderers should call KindGlyphWithSet with the runtime-resolved icon set.
 func KindGlyph(kind tool.Kind, name string) string {
+	return KindGlyphWithSet(tuiicon.Unicode, kind, name)
+}
+
+// KindGlyphWithSet returns the semantic category glyph for a tool from the
+// supplied icon profile. Tool presentation no longer owns raw glyph literals.
+func KindGlyphWithSet(icons tuiicon.Set, kind tool.Kind, name string) string {
 	switch kind {
 	case tool.KindWeb:
-		return tuistyle.GlyphWeb
+		return icons.Web
 	case tool.KindRead:
 		if strings.TrimSpace(name) == tool.NameLS {
-			return tuistyle.GlyphDir
+			return icons.Dir
 		}
-		return tuistyle.GlyphRead
+		return icons.Read
 	case tool.KindGrep:
-		return tuistyle.GlyphSearch
+		return icons.Search
 	case tool.KindGit:
-		return "⌥ "
+		return icons.Git
 	case tool.KindBash:
-		return tuistyle.GlyphExec
+		return icons.Exec
 	case tool.KindEdit:
-		return tuistyle.GlyphEdit
+		return icons.Edit
 	case tool.KindTask:
-		return tuistyle.GlyphTodoActive
+		return icons.TodoActive
 	case tool.KindAgent:
-		return tuistyle.GlyphAgent
+		return icons.Agent
 	}
 
 	if strings.TrimSpace(name) == tool.NameSkill {
-		return tuistyle.GlyphSkill
+		return icons.Skill
 	}
-	return tuistyle.GlyphGeneric
+	return icons.Generic
 }
 
 // SummarizeOutput produces a concise, high-signal semantic analysis summary
