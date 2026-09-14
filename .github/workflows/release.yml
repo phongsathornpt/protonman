@@ -128,7 +128,9 @@ jobs:
           plain_version="${version#v}"
           package="protonman-desktop_${plain_version}_${GOOS}_${GOARCH}"
 
-          mkdir -p "dist/$package/libexec"
+          mkdir -p "dist/$package/libexec" "dist/$package/share/fonts" "dist/$package/licenses/nerd-fonts"
+          sh scripts/fetch-nerd-font.sh "dist/$package/share/fonts/SymbolsNerdFontMono-Regular.ttf"
+          cp third_party/nerd-fonts/LICENSE "dist/$package/licenses/nerd-fonts/LICENSE"
 
           CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build \
             -trimpath \
@@ -152,7 +154,7 @@ jobs:
           EOF
           chmod +x "dist/$package/run.sh"
 
-          (cd "dist/$package" && tar -czf "../${package}.tar.gz" protonman-desktop libexec/protonman run.sh)
+          (cd "dist/$package" && tar -czf "../${package}.tar.gz" protonman-desktop libexec/protonman run.sh share/fonts licenses/nerd-fonts)
 
       - uses: actions/upload-artifact@v6
         with:
