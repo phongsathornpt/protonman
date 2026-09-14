@@ -60,7 +60,7 @@ func ProjectHeader(input HeaderInput) Header {
 	switch {
 	case input.Running:
 		header.State = HeaderRunning
-		header.Glyph = KindGlyphWithIcons(icons, input.Kind, input.Name)
+		header.Glyph = KindGlyphWithTarget(icons, input.Kind, input.Name, input.Target)
 		header.Meta = strings.TrimSpace(input.Spinner)
 		if header.Meta == "" {
 			header.Meta = "…"

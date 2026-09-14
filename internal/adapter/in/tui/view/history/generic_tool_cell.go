@@ -79,6 +79,11 @@ func (c ToolCell) RenderWidth(width int) []string {
 			}
 		}
 		if c.Preview != "" {
+			imageGlyph := c.Icons.Image
+			if imageGlyph == "" {
+				imageGlyph = tuistyle.ASCIIImage
+			}
+			out = append(out, tuistyle.ToolExcerptStyle.Render("  ↳ "+strings.TrimSpace(imageGlyph)+" preview"))
 			previewLines := strings.Split(c.Preview, "\n")
 			for _, line := range previewLines {
 				out = append(out, tuistyle.ToolExcerptStyle.Render("  "+line))

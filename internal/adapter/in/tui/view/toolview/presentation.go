@@ -26,8 +26,12 @@ func KindGlyph(kind tool.Kind, name string) string {
 	case tool.KindWeb:
 		return tuistyle.GlyphWeb
 	case tool.KindRead:
-		if strings.TrimSpace(name) == tool.NameLS {
+		trimmedName := strings.TrimSpace(name)
+		if trimmedName == tool.NameLS {
 			return tuistyle.GlyphDir
+		}
+		if trimmedName == "image" || trimmedName == "img2llm" || trimmedName == "image2llm" {
+			return tuistyle.GlyphImage
 		}
 		return tuistyle.GlyphRead
 	case tool.KindGrep:

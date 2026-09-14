@@ -1,6 +1,7 @@
 package toolview
 
 import (
+	"path/filepath"
 	"strings"
 
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
@@ -16,8 +17,15 @@ func KindGlyphWithIcons(icons tuistyle.IconSet, kind tool.Kind, name string) str
 	case tool.KindWeb:
 		return icons.Web
 	case tool.KindRead:
-		if strings.TrimSpace(name) == tool.NameLS {
+		trimmedName := strings.TrimSpace(name)
+		if trimmedName == tool.NameLS {
 			return icons.Dir
+		}
+		if trimmedName == "image" || trimmedName == "img2llm" || trimmedName == "image2llm" {
+			if icons.Image != "" {
+				return icons.Image
+			}
+			return tuistyle.ASCIIImage
 		}
 		return icons.Read
 	case tool.KindGrep:
@@ -37,4 +45,31 @@ func KindGlyphWithIcons(icons tuistyle.IconSet, kind tool.Kind, name string) str
 		return icons.Skill
 	}
 	return icons.Generic
+}
+
+// KindGlyphWithTarget returns the semantic glyph for a tool using the supplied
+// terminal icon profile, taking the target artifact kind into consideration.
+func KindGlyphWithTarget(icons tuistyle.IconSet, kind tool.Kind, name string, target string) string {
+	icons = tuistyle.OrUnicodeIcons(icons)
+	if (kind == tool.KindRead || strings.TrimSpace(name) == tool.NameRead) && isImageArtifactPath(target) {
+		if icons.Image != "" {
+			return icons.Image
+		}
+		return tuistyle.ASCIIImage
+	}
+	return KindGlyphWithIcons(icons, kind, name)
+}
+
+func isImageArtifactPath(target string) bool {
+	clean := strings.TrimSpace(target)
+	clean = strings.Trim(clean, "\"'`")
+	if clean == "" {
+		return false
+	}
+	switch strings.ToLower(filepath.Ext(clean)) {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".ico", ".tiff", ".tif":
+		return true
+	default:
+		return false
+	}
 }

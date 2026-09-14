@@ -92,3 +92,38 @@ func TestProjectHeaderAllowsSpecializedLabel(t *testing.T) {
 		t.Fatalf("header = %#v", header)
 	}
 }
+
+func TestProjectHeaderUsesImageIconForImageTargetWhenRunning(t *testing.T) {
+	headerUnicode := ProjectHeader(HeaderInput{
+		Name:    tool.NameRead,
+		Kind:    tool.KindRead,
+		Target:  "chart.png",
+		Running: true,
+		Icons:   tuistyle.UnicodeIcons,
+	})
+	if headerUnicode.Glyph != tuistyle.UnicodeImage {
+		t.Fatalf("glyph = %q, want %q", headerUnicode.Glyph, tuistyle.UnicodeImage)
+	}
+
+	headerNerd := ProjectHeader(HeaderInput{
+		Name:    tool.NameRead,
+		Kind:    tool.KindRead,
+		Target:  "photo.jpg",
+		Running: true,
+		Icons:   tuistyle.NerdIcons,
+	})
+	if headerNerd.Glyph != tuistyle.NerdIcons.Image {
+		t.Fatalf("glyph = %q, want %q", headerNerd.Glyph, tuistyle.NerdIcons.Image)
+	}
+
+	headerASCII := ProjectHeader(HeaderInput{
+		Name:    tool.NameRead,
+		Kind:    tool.KindRead,
+		Target:  "screenshot.webp",
+		Running: true,
+		Icons:   tuistyle.ASCIIIcons,
+	})
+	if headerASCII.Glyph != tuistyle.ASCIIIcons.Image {
+		t.Fatalf("glyph = %q, want %q", headerASCII.Glyph, tuistyle.ASCIIIcons.Image)
+	}
+}

@@ -466,3 +466,50 @@ func TestImageASCIIPreviewPreservesAspectRatio(t *testing.T) {
 		t.Fatalf("portrait ASCII preview width = %d cols, want <= 6 cols for 1:10 aspect ratio", len(linesPortrait[0]))
 	}
 }
+
+func TestReadImageEnrichesOutputWithVisionAttachmentMetadata(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	path := filepath.Join(ws.Root(), "meta_vision.png")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+	for y := 0; y < 10; y++ {
+		for x := 0; x < 10; x++ {
+			img.Set(x, y, color.RGBA{R: 10, G: 20, B: 30, A: 255})
+		}
+	}
+	if err := png.Encode(file, img); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "call-meta", "read", map[string]any{"path": "meta_vision.png", "view": "image"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result.Output, "attached: ~1 tokens") {
+		t.Fatalf("expected attached token note in Output, got: %q", result.Output)
+	}
+
+	var env struct {
+		Metadata struct {
+			AttachedWidth   int                  `json:"attached_width"`
+			AttachedHeight  int                  `json:"attached_height"`
+			EstimatedTokens *VisionTokenEstimate `json:"estimated_tokens"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(result.StructuredOutput, &env); err != nil {
+		t.Fatalf("failed to unmarshal structured output: %v", err)
+	}
+	if env.Metadata.AttachedWidth != 10 || env.Metadata.AttachedHeight != 10 {
+		t.Fatalf("unexpected attached dimensions: %dx%d", env.Metadata.AttachedWidth, env.Metadata.AttachedHeight)
+	}
+	if env.Metadata.EstimatedTokens == nil || env.Metadata.EstimatedTokens.OpenAI != 255 {
+		t.Fatalf("unexpected estimated tokens: %+v", env.Metadata.EstimatedTokens)
+	}
+}

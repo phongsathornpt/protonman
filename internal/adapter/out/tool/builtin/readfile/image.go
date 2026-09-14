@@ -31,11 +31,14 @@ const (
 )
 
 type imageMetadata struct {
-	Format        string `json:"format"`
-	Width         int    `json:"width"`
-	Height        int    `json:"height"`
-	Opaque        bool   `json:"opaque"`
-	AnalysisScope string `json:"analysis_scope,omitempty"`
+	Format          string               `json:"format"`
+	Width           int                  `json:"width"`
+	Height          int                  `json:"height"`
+	Opaque          bool                 `json:"opaque"`
+	AnalysisScope   string               `json:"analysis_scope,omitempty"`
+	AttachedWidth   int                  `json:"attached_width,omitempty"`
+	AttachedHeight  int                  `json:"attached_height,omitempty"`
+	EstimatedTokens *VisionTokenEstimate `json:"estimated_tokens,omitempty"`
 }
 
 type dominantColor struct {
@@ -178,11 +181,24 @@ func readImageArtifact(ctx context.Context, file *os.File, info os.FileInfo, inp
 		edgeDensity = float64(edgeHits) / float64(edgeComparisons)
 	}
 	analysis := imageAnalysis{Samples: samples, Brightness: summary, DominantColors: colors, Regions: regions, EdgeDensity: edgeDensity, ASCIIPreview: imageASCIIPreview(img, imageASCIIWidth, imageASCIIHeight)}
+	attachment, estimate := prepareVisionAttachment(ctx, file, info, img, format, artifact.MIMEType)
 	metadata := imageMetadata{Format: format, Width: config.Width, Height: config.Height, Opaque: opaque}
+	if attachment != nil {
+		metadata.AttachedWidth = attachment.Width
+		metadata.AttachedHeight = attachment.Height
+		metadata.EstimatedTokens = &estimate
+	}
 	if format == "gif" {
 		metadata.AnalysisScope = "first_frame"
 	}
 	output := fmt.Sprintf("image %s %dx%d · sampled %d px", format, config.Width, config.Height, samples)
+	if attachment != nil {
+		if attachment.Width != config.Width || attachment.Height != config.Height {
+			output += fmt.Sprintf(" (attached: %dx%d %s, ~%d tokens)", attachment.Width, attachment.Height, attachment.MIMEType, estimate.Anthropic)
+		} else {
+			output += fmt.Sprintf(" (attached: ~%d tokens)", estimate.Anthropic)
+		}
+	}
 	if summary.Count > 0 {
 		output += fmt.Sprintf(" · brightness mean %.1f min %.1f max %.1f", summary.Mean, summary.Min, summary.Max)
 	} else {
@@ -191,7 +207,6 @@ func readImageArtifact(ctx context.Context, file *os.File, info os.FileInfo, inp
 	if len(colors) > 0 {
 		output += fmt.Sprintf(" · dominant %s", colors[0].Hex)
 	}
-	attachment := prepareVisionAttachment(ctx, file, info, img, format, artifact.MIMEType)
 	return artifactResultWithImage(call, artifactEnvelope{Kind: artifactImage, Path: input.Path, MIMEType: artifact.MIMEType, SizeBytes: info.Size(), Metadata: metadata, Analysis: analysis}, output, attachment)
 }
 

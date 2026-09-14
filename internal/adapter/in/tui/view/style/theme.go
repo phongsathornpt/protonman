@@ -14,6 +14,7 @@ const (
 	GlyphToolDenied  = UnicodeToolDenied
 	GlyphWeb         = UnicodeWeb
 	GlyphRead        = UnicodeRead
+	GlyphImage       = UnicodeImage
 	GlyphDir         = UnicodeDir
 	GlyphSearch      = UnicodeSearch
 	GlyphExec        = UnicodeExec
