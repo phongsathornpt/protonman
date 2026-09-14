@@ -19,8 +19,9 @@ type updateTodoHandler struct {
 }
 
 type updateTodoInput struct {
-	ExpectedRevision *uint64                `json:"expected_revision"`
-	Operations       []tododomain.Operation `json:"operations"`
+	ExpectedRevision       *uint64                `json:"expectedRevision"`
+	LegacyExpectedRevision *uint64                `json:"expected_revision,omitempty"`
+	Operations             []tododomain.Operation `json:"operations"`
 }
 
 func newUpdateTodo(store tododomain.Repository) tool.Handler {
@@ -38,6 +39,9 @@ func (updateTodoHandler) Definition() tool.Definition {
 		Kind:         tool.KindTask,
 		Mutability:   tool.MutabilityMutating,
 		Safety:       tool.SafetyContract{MutationDomain: tool.MutationDomainTaskState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
+		InputAliases: map[string][]string{
+			"expectedRevision": {"expected_revision"},
+		},
 		InputSchema:  todoUpdateInputSchema(),
 		OutputSchema: todoUpdateOutputSchema(),
 	}
@@ -47,6 +51,9 @@ func (h updateTodoHandler) PermissionDetail(arguments json.RawMessage) string {
 	var input updateTodoInput
 	if err := json.Unmarshal(arguments, &input); err != nil {
 		return "task patch"
+	}
+	if input.ExpectedRevision == nil && input.LegacyExpectedRevision != nil {
+		input.ExpectedRevision = input.LegacyExpectedRevision
 	}
 	if input.ExpectedRevision == nil {
 		return fmt.Sprintf("%d task operations", len(input.Operations))
@@ -62,8 +69,11 @@ func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 	if err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode todo update arguments", err)
 	}
+	if input.ExpectedRevision == nil && input.LegacyExpectedRevision != nil {
+		input.ExpectedRevision = input.LegacyExpectedRevision
+	}
 	if input.ExpectedRevision == nil {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_revision is required; call todo with action=get first")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expectedRevision is required; call todo with action=get first")
 	}
 	if len(input.Operations) == 0 {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "operations must contain at least one explicit todo patch")

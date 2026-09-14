@@ -13,11 +13,43 @@ import (
 )
 
 type agentIDInput struct {
-	AgentID string `json:"agent_id"`
+	AgentID string `json:"agentId"`
+}
+
+func (in *agentIDInput) UnmarshalJSON(data []byte) error {
+	type alias agentIDInput
+	var aux struct {
+		alias
+		LegacyAgentID string `json:"agent_id"`
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	*in = agentIDInput(aux.alias)
+	if in.AgentID == "" {
+		in.AgentID = aux.LegacyAgentID
+	}
+	return nil
 }
 
 type waitAgentInput struct {
-	TimeoutSeconds int64 `json:"timeout_seconds,omitempty"`
+	TimeoutSeconds int64 `json:"timeoutSeconds,omitempty"`
+}
+
+func (in *waitAgentInput) UnmarshalJSON(data []byte) error {
+	type alias waitAgentInput
+	var aux struct {
+		alias
+		LegacyTimeoutSeconds int64 `json:"timeout_seconds"`
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	*in = waitAgentInput(aux.alias)
+	if in.TimeoutSeconds == 0 {
+		in.TimeoutSeconds = aux.LegacyTimeoutSeconds
+	}
+	return nil
 }
 
 type agentLifecycleHandler struct {
@@ -48,14 +80,16 @@ func (h agentLifecycleHandler) Definition() tool.Definition {
 		def.Description = "Diagnostic lifecycle wait for the next subagent completion/failure activity. Normal delegated results are delivered automatically; a wait timeout is non-fatal and never cancels children."
 		def.Mutability = tool.MutabilityReadOnly
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
+		def.InputAliases = map[string][]string{"timeoutSeconds": {"timeout_seconds"}}
 		def.InputSchema = map[string]any{"type": "object", "properties": map[string]any{
-			"timeout_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 3600},
+			"timeoutSeconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 3600},
 		}, "additionalProperties": false}
 	case subagentActionGet:
 		def.Description = "Diagnostically inspect one retained subagent and its terminal result when available; normal result collection is automatic."
 		def.Mutability = tool.MutabilityReadOnly
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
-		def.PermissionDetailKey = "agent_id"
+		def.PermissionDetailKey = "agentId"
+		def.InputAliases = map[string][]string{"agentId": {"agent_id"}}
 		def.InputSchema = agentIDSchema()
 	case subagentActionList:
 		def.Description = "Diagnostically list retained subagents and their lifecycle states; normal orchestration does not require polling this list."
@@ -66,13 +100,15 @@ func (h agentLifecycleHandler) Definition() tool.Definition {
 		def.Description = "Explicitly restart an interrupted retained subagent as a fresh child after re-checking current workspace state."
 		def.Mutability = tool.MutabilityMutating
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainAgentState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
-		def.PermissionDetailKey = "agent_id"
+		def.PermissionDetailKey = "agentId"
+		def.InputAliases = map[string][]string{"agentId": {"agent_id"}}
 		def.InputSchema = agentIDSchema()
 	case subagentActionCancel:
 		def.Description = "Explicitly cancel a queued or running subagent."
 		def.Mutability = tool.MutabilityMutating
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainAgentState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
-		def.PermissionDetailKey = "agent_id"
+		def.PermissionDetailKey = "agentId"
+		def.InputAliases = map[string][]string{"agentId": {"agent_id"}}
 		def.InputSchema = agentIDSchema()
 	}
 	def.OutputSchema = agentLifecycleOutputSchema(h.action)
@@ -81,8 +117,8 @@ func (h agentLifecycleHandler) Definition() tool.Definition {
 
 func agentIDSchema() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
-		"agent_id": map[string]any{"type": "string"},
-	}, "required": []string{"agent_id"}, "additionalProperties": false}
+		"agentId": map[string]any{"type": "string"},
+	}, "required": []string{"agentId"}, "additionalProperties": false}
 }
 
 func (h agentLifecycleHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {

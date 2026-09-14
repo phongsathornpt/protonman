@@ -122,14 +122,14 @@ func TestTodoCapabilityDefinitionUsesClosedTypedRootSchema(t *testing.T) {
 		t.Fatalf("additionalProperties = %#v, want false", def.InputSchema["additionalProperties"])
 	}
 	props := def.InputSchema["properties"].(map[string]any)
-	if got := props["expected_revision"].(map[string]any)["type"]; got != "integer" {
-		t.Fatalf("expected_revision type = %#v, want integer", got)
+	if got := props["expectedRevision"].(map[string]any)["type"]; got != "integer" {
+		t.Fatalf("expectedRevision type = %#v, want integer", got)
 	}
 	if got := props["operations"].(map[string]any)["type"]; got != "array" {
 		t.Fatalf("operations type = %#v, want array", got)
 	}
-	if _, ok := props["session_id"]; !ok {
-		t.Fatalf("session_id echo is not tolerated: %#v", props)
+	if _, ok := props["sessionId"]; !ok {
+		t.Fatalf("sessionId echo is not tolerated: %#v", props)
 	}
 	// A strict oneOf cannot express "get takes nothing, update takes both
 	// fields", so the contract is published as a single conditional requirement.
@@ -152,7 +152,7 @@ func TestTodoCapabilityDefinitionUsesClosedTypedRootSchema(t *testing.T) {
 	then := branch["then"].(map[string]any)
 	required := then["required"].([]any)
 	if len(required) != 2 {
-		t.Fatalf("then required = %#v, want expected_revision and operations", required)
+		t.Fatalf("then required = %#v, want expectedRevision and operations", required)
 	}
 	if err := def.Validate(); err != nil {
 		t.Fatal(err)

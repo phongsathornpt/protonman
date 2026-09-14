@@ -37,7 +37,23 @@ type bashHandler struct {
 type bashInput struct {
 	Command        string `json:"command"`
 	Cwd            string `json:"cwd,omitempty"`
-	TimeoutSeconds int64  `json:"timeout_seconds,omitempty"`
+	TimeoutSeconds int64  `json:"timeoutSeconds,omitempty"`
+}
+
+func (in *bashInput) UnmarshalJSON(data []byte) error {
+	type alias bashInput
+	var aux struct {
+		alias
+		LegacyTimeoutSeconds int64 `json:"timeout_seconds"`
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	*in = bashInput(aux.alias)
+	if in.TimeoutSeconds == 0 {
+		in.TimeoutSeconds = aux.LegacyTimeoutSeconds
+	}
+	return nil
 }
 
 // NewBash returns the permission-gated shell command adapter.
@@ -63,6 +79,9 @@ func (bashHandler) Definition() tool.Definition {
 		Safety:                 tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyDynamic, CheckpointPolicy: tool.CheckpointPolicyWhenKnown, Boundary: tool.BoundaryPolicySandbox},
 		PermissionDetailKey:    "command",
 		ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded,
+		InputAliases: map[string][]string{
+			"timeoutSeconds": {"timeout_seconds"},
+		},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -74,7 +93,7 @@ func (bashHandler) Definition() tool.Definition {
 					"type":        "string",
 					"description": "Optional workspace-relative working directory",
 				},
-				"timeout_seconds": map[string]any{
+				"timeoutSeconds": map[string]any{
 					"type": "integer", "minimum": 0,
 					"description": "Optional shorter execution timeout in seconds; cannot extend the caller deadline",
 				},

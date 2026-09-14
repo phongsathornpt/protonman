@@ -34,7 +34,23 @@ type restoreCheckpointHandler struct {
 }
 
 type restoreCheckpointInput struct {
-	CheckpointID string `json:"checkpoint_id"`
+	CheckpointID string `json:"checkpointId"`
+}
+
+func (in *restoreCheckpointInput) UnmarshalJSON(data []byte) error {
+	type alias restoreCheckpointInput
+	var aux struct {
+		alias
+		LegacyCheckpointID string `json:"checkpoint_id"`
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	*in = restoreCheckpointInput(aux.alias)
+	if in.CheckpointID == "" {
+		in.CheckpointID = aux.LegacyCheckpointID
+	}
+	return nil
 }
 
 // NewCheckpointRestore returns the permission-gated checkpoint restore adapter.
@@ -49,13 +65,16 @@ func (restoreCheckpointHandler) Definition() tool.Definition {
 		Kind:                tool.KindEdit,
 		Mutability:          tool.MutabilityMutating,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyWholeFile, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceWrite},
-		PermissionDetailKey: "checkpoint_id",
+		PermissionDetailKey: "checkpointId",
+		InputAliases: map[string][]string{
+			"checkpointId": {"checkpoint_id"},
+		},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"checkpoint_id": map[string]any{"type": "string"},
+				"checkpointId": map[string]any{"type": "string"},
 			},
-			"required":             []string{"checkpoint_id"},
+			"required":             []string{"checkpointId"},
 			"additionalProperties": false,
 		},
 	}

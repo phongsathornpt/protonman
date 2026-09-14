@@ -121,7 +121,7 @@ func TestBashUsesCallerBoundedExecutionTimeout(t *testing.T) {
 	if definition.ExecutionTimeoutPolicy != tool.ExecutionTimeoutCallerBounded {
 		t.Fatalf("ExecutionTimeoutPolicy = %q, want caller bounded", definition.ExecutionTimeoutPolicy)
 	}
-	timeoutSchema := definition.InputSchema["properties"].(map[string]any)["timeout_seconds"].(map[string]any)
+	timeoutSchema := definition.InputSchema["properties"].(map[string]any)["timeoutSeconds"].(map[string]any)
 	if _, ok := timeoutSchema["maximum"]; ok {
 		t.Fatalf("timeout_seconds schema unexpectedly has a hard maximum: %#v", timeoutSchema)
 	}

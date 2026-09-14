@@ -221,9 +221,13 @@ func TestDelegateTaskExecute(t *testing.T) {
 		if optional, ok := props["optional"].(map[string]any); !ok || optional["type"] != "boolean" {
 			t.Fatalf("optional schema = %#v, want boolean", props["optional"])
 		}
-		dependsOn, ok := props["depends_on"].(map[string]any)
+		dependsOn, ok := props["dependsOn"].(map[string]any)
 		if !ok || dependsOn["type"] != "array" || dependsOn["maxItems"] != agent.MaxAgentDependencies {
-			t.Fatalf("depends_on schema = %#v", props["depends_on"])
+			t.Fatalf("dependsOn schema = %#v", props["dependsOn"])
+		}
+		taskId, ok := props["taskId"].(map[string]any)
+		if !ok || taskId["type"] != "string" {
+			t.Fatalf("taskId schema = %#v", props["taskId"])
 		}
 		enums, ok := profileProp["enum"].([]string)
 		if !ok {
@@ -349,5 +353,18 @@ func TestSubagentDefinitionDescribesEventDrivenResultDelivery(t *testing.T) {
 		if !strings.Contains(description, want) {
 			t.Fatalf("subagent action description missing %q: %q", want, description)
 		}
+	}
+	for _, requiredCamelKey := range []string{"taskId", "dependsOn", "timeoutSeconds", "agentId"} {
+		if _, exists := props[requiredCamelKey]; !exists {
+			t.Fatalf("subagent input schema missing camelCase property %q", requiredCamelKey)
+		}
+	}
+	normalized := tool.NormalizeArguments(def, json.RawMessage(`{"action":"spawn","task":"search","task_id":"todo-1","depends_on":["agent-1"],"timeout_seconds":60}`))
+	var parsed map[string]any
+	if err := json.Unmarshal(normalized, &parsed); err != nil {
+		t.Fatalf("unmarshal normalized subagent args: %v", err)
+	}
+	if parsed["taskId"] != "todo-1" || parsed["timeoutSeconds"] != float64(60) {
+		t.Fatalf("unexpected normalized subagent args: %s", normalized)
 	}
 }

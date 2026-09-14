@@ -19,9 +19,34 @@ type writeFileHandler struct {
 }
 
 type writeFileInput struct {
-	FilePath       string `json:"file_path"`
+	FilePath       string `json:"filePath"`
 	Content        string `json:"content"`
-	ExpectedSHA256 string `json:"expected_sha256,omitempty"`
+	ExpectedSHA256 string `json:"expectedSha256,omitempty"`
+}
+
+func (in *writeFileInput) UnmarshalJSON(data []byte) error {
+	type alias writeFileInput
+	var aux struct {
+		alias
+		LegacyFilePath       string `json:"file_path"`
+		PathAlias            string `json:"path"`
+		LegacyExpectedSHA256 string `json:"expected_sha256"`
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	*in = writeFileInput(aux.alias)
+	if in.FilePath == "" {
+		if aux.LegacyFilePath != "" {
+			in.FilePath = aux.LegacyFilePath
+		} else {
+			in.FilePath = aux.PathAlias
+		}
+	}
+	if in.ExpectedSHA256 == "" {
+		in.ExpectedSHA256 = aux.LegacyExpectedSHA256
+	}
+	return nil
 }
 
 // NewWriteFile returns the atomic whole-file write adapter.
@@ -47,18 +72,22 @@ func (writeFileHandler) Definition() tool.Definition {
 		Kind:                tool.KindEdit,
 		Mutability:          tool.MutabilityMutating,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyWholeFile, CheckpointPolicy: tool.CheckpointPolicyRequired, Boundary: tool.BoundaryPolicyWorkspaceWrite},
-		PermissionDetailKey: "file_path",
+		PermissionDetailKey: "filePath",
+		InputAliases: map[string][]string{
+			"filePath":       {"file_path", "path", "filepath"},
+			"expectedSha256": {"expected_sha256", "sha256"},
+		},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"file_path": map[string]any{"type": "string"},
-				"content":   map[string]any{"type": "string"},
-				"expected_sha256": map[string]any{
+				"filePath": map[string]any{"type": "string"},
+				"content":  map[string]any{"type": "string"},
+				"expectedSha256": map[string]any{
 					"type":        "string",
 					"description": "SHA-256 from a complete read result; required when overwriting an existing file",
 				},
 			},
-			"required":             []string{"file_path", "content"},
+			"required":             []string{"filePath", "content"},
 			"additionalProperties": false,
 		},
 	}

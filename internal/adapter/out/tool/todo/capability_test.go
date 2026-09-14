@@ -104,9 +104,9 @@ func TestTodoCapabilitySchemaErrorIsActionable(t *testing.T) {
 	validator := capabilityValidator(t)
 	err := validator.Validate(normalizeThroughCapability(t, `{"action":"update","operations":[{"op":"remove","id":"a"}]}`))
 	if err == nil {
-		t.Fatal("missing expected_revision was accepted")
+		t.Fatal("missing expectedRevision was accepted")
 	}
-	if !strings.Contains(err.Error(), "expected_revision") {
+	if !strings.Contains(err.Error(), "expectedRevision") {
 		t.Fatalf("schema error does not name the offending field: %v", err)
 	}
 }

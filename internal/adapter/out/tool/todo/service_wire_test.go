@@ -125,7 +125,7 @@ func TestTodoCapabilityFailureNamesOffendingField(t *testing.T) {
 		t.Fatal("model payload lost the failure")
 	}
 	visible := payload.Failure.Message + " " + payload.Failure.Diagnostic
-	if !strings.Contains(visible, "expected_revision") {
+	if !strings.Contains(visible, "expectedRevision") {
 		t.Fatalf("model-visible failure does not name the field: %q", visible)
 	}
 }

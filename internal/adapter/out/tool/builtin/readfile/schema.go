@@ -1,6 +1,10 @@
 package readfile
 
-import "github.com/phongsathornpt/protonman/internal/core/tool"
+import (
+	"encoding/json"
+
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+)
 
 const (
 	DefaultReadFileBytes = 64 * 1024
@@ -13,9 +17,33 @@ type readFileInput struct {
 	Offset       int64  `json:"offset,omitempty"`
 	Limit        int    `json:"limit,omitempty"`
 	Continuation string `json:"continuation,omitempty"`
-	StartLine    int    `json:"start_line,omitempty"`
-	EndLine      int    `json:"end_line,omitempty"`
-	LineNumbers  bool   `json:"line_numbers,omitempty"`
+	StartLine    int    `json:"startLine,omitempty"`
+	EndLine      int    `json:"endLine,omitempty"`
+	LineNumbers  bool   `json:"lineNumbers,omitempty"`
+}
+
+func (in *readFileInput) UnmarshalJSON(data []byte) error {
+	type alias readFileInput
+	var aux struct {
+		alias
+		LegacyStartLine   int  `json:"start_line"`
+		LegacyEndLine     int  `json:"end_line"`
+		LegacyLineNumbers bool `json:"line_numbers"`
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	*in = readFileInput(aux.alias)
+	if in.StartLine == 0 {
+		in.StartLine = aux.LegacyStartLine
+	}
+	if in.EndLine == 0 {
+		in.EndLine = aux.LegacyEndLine
+	}
+	if !in.LineNumbers {
+		in.LineNumbers = aux.LegacyLineNumbers
+	}
+	return nil
 }
 
 func (readFileHandler) Definition() tool.Definition {
@@ -27,6 +55,11 @@ func (readFileHandler) Definition() tool.Definition {
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead},
 		Evidence:            tool.EvidenceWorkspace,
 		PermissionDetailKey: "path",
+		InputAliases: map[string][]string{
+			"startLine":   {"start_line"},
+			"endLine":     {"end_line"},
+			"lineNumbers": {"line_numbers"},
+		},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -56,17 +89,17 @@ func (readFileHandler) Definition() tool.Definition {
 					"maximum":     MaxReadFileBytes,
 					"description": "Text-only output page size; defaults to 64 KiB, may be increased up to 2 MiB, and may extend to finish one UTF-8 code point",
 				},
-				"start_line": map[string]any{
+				"startLine": map[string]any{
 					"type":        "integer",
 					"minimum":     0,
 					"description": "Text-only 1-based first line; selects line mode and takes precedence over byte offset/continuation",
 				},
-				"end_line": map[string]any{
+				"endLine": map[string]any{
 					"type":        "integer",
 					"minimum":     0,
 					"description": "Text-only 1-based inclusive last line; 0 reads through EOF. Selects line mode and takes precedence over byte offset/continuation",
 				},
-				"line_numbers": map[string]any{
+				"lineNumbers": map[string]any{
 					"type":        "boolean",
 					"description": "Text-only; prefix selected lines with their 1-based line number. Enables line mode and takes precedence over byte offset/continuation",
 				},

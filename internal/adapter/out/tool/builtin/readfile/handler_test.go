@@ -27,7 +27,7 @@ func TestReadSchemaKeepsArtifactContractCompact(t *testing.T) {
 	if view["default"] != "auto" {
 		t.Fatalf("view default = %#v, want auto", view["default"])
 	}
-	for _, field := range []string{"offset", "limit", "continuation", "start_line", "end_line", "line_numbers"} {
+	for _, field := range []string{"offset", "limit", "continuation", "startLine", "endLine", "lineNumbers"} {
 		schema, _ := properties[field].(map[string]any)
 		description, _ := schema["description"].(string)
 		if !strings.Contains(strings.ToLower(description), "text-only") {

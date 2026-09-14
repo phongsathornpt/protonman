@@ -210,9 +210,9 @@ func TestOptionalZeroNumericArgumentsMatchOmittedSemantics(t *testing.T) {
 		{"read", map[string]any{"path": "x", "limit": 0}, map[string]any{"path": "x", "limit": -1}},
 		{"ls", map[string]any{"limit": 0}, map[string]any{"limit": -1}},
 		{"grep", map[string]any{"pattern": "x", "limit": 0}, map[string]any{"pattern": "x", "limit": -1}},
-		{"bash", map[string]any{"command": "true", "timeout_seconds": 0}, map[string]any{"command": "true", "timeout_seconds": -1}},
-		{"subagent_spawn", map[string]any{"action": "spawn", "task": "inspect", "profile": "agility", "timeout_seconds": 0}, map[string]any{"action": "spawn", "task": "inspect", "profile": "agility", "timeout_seconds": -1}},
-		{"subagent_wait", map[string]any{"action": "wait", "timeout_seconds": 0}, map[string]any{"action": "wait", "timeout_seconds": -1}},
+		{"bash", map[string]any{"command": "true", "timeoutSeconds": 0}, map[string]any{"command": "true", "timeoutSeconds": -1}},
+		{"subagent_spawn", map[string]any{"action": "spawn", "task": "inspect", "profile": "agility", "timeoutSeconds": 0}, map[string]any{"action": "spawn", "task": "inspect", "profile": "agility", "timeoutSeconds": -1}},
+		{"subagent_wait", map[string]any{"action": "wait", "timeoutSeconds": 0}, map[string]any{"action": "wait", "timeoutSeconds": -1}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -58,7 +58,7 @@ func TestE2ESubagentDelegationRejectsExcessiveTimeout(t *testing.T) {
 		dir:  ws,
 		env:  []string{"PROTONMAN_HOME=" + home},
 	})
-	if res.exitCode == 0 || !strings.Contains(res.stdout+res.stderr, "timeout_seconds") {
+	if res.exitCode == 0 || (!strings.Contains(res.stdout+res.stderr, "timeoutSeconds") && !strings.Contains(res.stdout+res.stderr, "timeout_seconds")) {
 		t.Fatalf("expected timeout validation error, got: %s %s", res.stdout, res.stderr)
 	}
 }

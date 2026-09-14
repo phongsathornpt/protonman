@@ -17,10 +17,43 @@ type searchReplaceHandler struct {
 }
 
 type searchReplaceInput struct {
-	FilePath   string `json:"file_path"`
-	OldString  string `json:"old_string"`
-	NewString  string `json:"new_string"`
-	ReplaceAll bool   `json:"replace_all"`
+	FilePath   string `json:"filePath"`
+	OldString  string `json:"oldString"`
+	NewString  string `json:"newString"`
+	ReplaceAll bool   `json:"replaceAll"`
+}
+
+func (in *searchReplaceInput) UnmarshalJSON(data []byte) error {
+	type alias searchReplaceInput
+	var aux struct {
+		alias
+		LegacyFilePath   string `json:"file_path"`
+		PathAlias        string `json:"path"`
+		LegacyOldString  string `json:"old_string"`
+		LegacyNewString  string `json:"new_string"`
+		LegacyReplaceAll bool   `json:"replace_all"`
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	*in = searchReplaceInput(aux.alias)
+	if in.FilePath == "" {
+		if aux.LegacyFilePath != "" {
+			in.FilePath = aux.LegacyFilePath
+		} else {
+			in.FilePath = aux.PathAlias
+		}
+	}
+	if in.OldString == "" {
+		in.OldString = aux.LegacyOldString
+	}
+	if in.NewString == "" {
+		in.NewString = aux.LegacyNewString
+	}
+	if !in.ReplaceAll {
+		in.ReplaceAll = aux.LegacyReplaceAll
+	}
+	return nil
 }
 
 // NewSearchReplace returns the exact search-and-replace edit adapter.
@@ -46,19 +79,25 @@ func (searchReplaceHandler) Definition() tool.Definition {
 		Kind:                tool.KindEdit,
 		Mutability:          tool.MutabilityMutating,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyContextual, CheckpointPolicy: tool.CheckpointPolicyRequired, Boundary: tool.BoundaryPolicyWorkspaceWrite},
-		PermissionDetailKey: "file_path",
+		PermissionDetailKey: "filePath",
+		InputAliases: map[string][]string{
+			"filePath":   {"file_path", "path", "filepath"},
+			"oldString":  {"old_string"},
+			"newString":  {"new_string"},
+			"replaceAll": {"replace_all"},
+		},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"file_path":  map[string]any{"type": "string"},
-				"old_string": map[string]any{"type": "string"},
-				"new_string": map[string]any{"type": "string"},
-				"replace_all": map[string]any{
+				"filePath":  map[string]any{"type": "string"},
+				"oldString": map[string]any{"type": "string"},
+				"newString": map[string]any{"type": "string"},
+				"replaceAll": map[string]any{
 					"type":    "boolean",
 					"default": false,
 				},
 			},
-			"required":             []string{"file_path", "old_string", "new_string"},
+			"required":             []string{"filePath", "oldString", "newString"},
 			"additionalProperties": false,
 		},
 	}

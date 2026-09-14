@@ -28,11 +28,15 @@ func NewTodoForSession(store tododomain.Repository, sessionID string) tool.Handl
 func (h todoHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:        tool.NameTodo,
-		Description: "Task-plan capability. Use action=get when the current revision is unknown, or action=update to atomically patch tasks using the latest known expected_revision and operations. A successful update returns the next revision.",
+		Description: "Task-plan capability. Use action=get when the current revision is unknown, or action=update to atomically patch tasks using the latest known expectedRevision and operations. A successful update returns the next revision.",
 		Kind:        tool.KindTask,
 		Mutability:  tool.MutabilityMutating,
 		Safety:      tool.SafetyContract{MutationDomain: tool.MutationDomainTaskState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
 		Semantics:   h.callSemantics,
+		InputAliases: map[string][]string{
+			"expectedRevision": {"expected_revision"},
+			"sessionId":        {"session_id"},
+		},
 		InputSchema: todoCapabilityInputSchema(),
 		OutputSchema: map[string]any{
 			"oneOf": []any{todoSnapshotSchema(), todoUpdateOutputSchema()},
@@ -51,10 +55,10 @@ func todoCapabilityInputSchema() map[string]any {
 	for name, schema := range updateProps {
 		props[name] = schema
 	}
-	// session_id is echoed from the session-bound get snapshot often enough that
+	// sessionId is echoed from the session-bound get snapshot often enough that
 	// rejecting it would fail a well-intentioned call; it is informational here
 	// because the runtime always owns the real session binding.
-	props["session_id"] = map[string]any{"type": "string", "description": "Optional session identity echoed from a todo action=get snapshot. Ignored; the runtime owns session binding."}
+	props["sessionId"] = map[string]any{"type": "string", "description": "Optional session identity echoed from a todo action=get snapshot. Ignored; the runtime owns session binding."}
 	return map[string]any{
 		"type":                 "object",
 		"properties":           props,
@@ -67,7 +71,7 @@ func todoCapabilityInputSchema() map[string]any {
 				"properties": map[string]any{"action": map[string]any{"const": "update"}},
 				"required":   []any{"action"},
 			},
-			"then": map[string]any{"required": []any{"expected_revision", "operations"}},
+			"then": map[string]any{"required": []any{"expectedRevision", "operations"}},
 		}},
 	}
 }
@@ -175,18 +179,20 @@ func (h todoHandler) resolve(arguments json.RawMessage) (json.RawMessage, tool.H
 		return nil, nil, tool.NewToolError(tool.ErrorCodeInvalidArguments, "todo action must be get or update")
 	}
 	delete(object, "action")
-	// session_id is accepted as an informational echo of a get snapshot and is
+	// sessionId is accepted as an informational echo of a get snapshot and is
 	// never forwarded to the patch handler, which does not own session identity.
 	delete(object, "session_id")
+	delete(object, "sessionId")
 	if action == "get" {
 		// operations means the model intended to patch. Failing loudly is safer
 		// than silently discarding an intended mutation.
 		if _, ok := object["operations"]; ok {
 			return nil, nil, tool.NewToolError(tool.ErrorCodeInvalidArguments, "todo action=get does not accept operations; use action=update to patch the task plan")
 		}
-		// expected_revision is a harmless echo of the snapshot the caller just
+		// expectedRevision is a harmless echo of the snapshot the caller just
 		// read, so it is tolerated rather than reported as misuse.
 		delete(object, "expected_revision")
+		delete(object, "expectedRevision")
 		if len(object) != 0 {
 			return nil, nil, tool.NewToolError(tool.ErrorCodeInvalidArguments, "todo action=get does not accept update arguments")
 		}
