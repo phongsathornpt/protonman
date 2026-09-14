@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
@@ -97,6 +98,9 @@ func TestPatchCellRetryPresentation(t *testing.T) {
 	if !strings.Contains(finalFailureLines[0], "failed after 2 attempts") {
 		t.Fatalf("expected 'failed after 2 attempts' in header: %q", finalFailureLines[0])
 	}
+	if !strings.Contains(finalFailureLines[0], "execution failed") {
+		t.Fatalf("expected human-facing 'execution failed' in header: %q", finalFailureLines[0])
+	}
 	if !strings.Contains(finalFailureLines[1], "oldString was not found") {
 		t.Fatalf("expected error excerpt in line 1 on terminal failure, got: %q", finalFailureLines[1])
 	}
@@ -129,5 +133,39 @@ func TestPatchCellRetryPresentation(t *testing.T) {
 	}
 	if !strings.Contains(narrowLines[0], "keyboard_runtime.go") {
 		t.Fatalf("expected target filename preserved in narrow header: %q", narrowLines[0])
+	}
+
+	// 8. Multi-line error excerpt uses 4-space aligned hanging indent
+	multiLineErrCell := &PatchCell{
+		Name:        "edit",
+		Paths:       []string{"main.go"},
+		FailureCode: tool.ErrorCodeExecution,
+		LastError:   "first line of error message that is long enough to wrap onto a second line for testing",
+		Icons:       tuistyle.UnicodeIcons,
+	}
+	// Wrap at 40 columns to force error to wrap
+	wrappedErrLines := multiLineErrCell.RenderWidth(40)
+	if len(wrappedErrLines) < 3 {
+		t.Fatalf("expected header and at least 2 wrapped error lines, got %d: %#v", len(wrappedErrLines), wrappedErrLines)
+	}
+	if !strings.HasPrefix(ansi.Strip(wrappedErrLines[1]), "  ↳ ") {
+		t.Errorf("line 1 want prefix '  ↳ ', got %q", ansi.Strip(wrappedErrLines[1]))
+	}
+	if !strings.HasPrefix(ansi.Strip(wrappedErrLines[2]), "    ") {
+		t.Errorf("continuation line 2 want prefix '    ' (4 spaces hanging indent), got %q", ansi.Strip(wrappedErrLines[2]))
+	}
+
+	// 9. RawLines conveys status
+	runningRaw := (&PatchCell{Name: "edit", Running: true}).RawLines()
+	if len(runningRaw) == 0 || !strings.Contains(runningRaw[0], "[running]") {
+		t.Errorf("running RawLines expected '[running]', got: %#v", runningRaw)
+	}
+	failedRaw := (&PatchCell{Name: "edit", FailureCode: tool.ErrorCodeExecution}).RawLines()
+	if len(failedRaw) == 0 || !strings.Contains(failedRaw[0], "[execution_error]") {
+		t.Errorf("failed RawLines expected '[execution_error]', got: %#v", failedRaw)
+	}
+	deniedRaw := (&PatchCell{Name: "edit", Denied: true}).RawLines()
+	if len(deniedRaw) == 0 || !strings.Contains(deniedRaw[0], "[denied]") {
+		t.Errorf("denied RawLines expected '[denied]', got: %#v", deniedRaw)
 	}
 }

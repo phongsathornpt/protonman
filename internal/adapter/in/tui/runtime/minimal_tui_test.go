@@ -65,6 +65,27 @@ func TestContextualHelpUsesBubblesBindings(t *testing.T) {
 	}
 }
 
+func TestSlashMenuRendersSingleFooterWithoutDuplicateShortcuts(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.panes.bottom.prompt().SetValue("/")
+	m.syncSlashView()
+	m.requestRelayout()
+	m.reconcileLayout()
+
+	view := ansi.Strip(m.View().Content)
+
+	// Verify only one help line exists (no duplicate stacked footers)
+	tabCount := strings.Count(view, "tab")
+	if tabCount != 1 {
+		t.Fatalf("expected exactly 1 'tab' shortcut in view, found %d:\n%s", tabCount, view)
+	}
+	escCount := strings.Count(view, "esc")
+	if escCount != 1 {
+		t.Fatalf("expected exactly 1 'esc' shortcut in view, found %d:\n%s", escCount, view)
+	}
+}
+
 func TestSessionHeaderPersistsAfterConversationStarts(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)

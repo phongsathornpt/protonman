@@ -92,9 +92,9 @@ func (c PatchCell) RenderWidth(width int) []string {
 	} else if c.FailureCode != "" {
 		glyph = icons.ToolError
 		glyphStyle = tuistyle.ErrorStyle
-		failLabel := string(c.FailureCode)
+		failLabel := toolview.FailureLabel(c.Name, tool.KindEdit, c.FailureCode)
 		if c.Attempts > 1 {
-			failLabel = fmt.Sprintf("%s (failed after %d attempts)", c.FailureCode, c.Attempts)
+			failLabel = fmt.Sprintf("%s (failed after %d attempts)", failLabel, c.Attempts)
 		}
 		metaText = tuistyle.GlyphSep + failLabel
 		metaStyle = tuistyle.ErrorStyle
@@ -102,7 +102,7 @@ func (c PatchCell) RenderWidth(width int) []string {
 		glyph = icons.ToolSuccess
 		glyphStyle = tuistyle.SuccessStyle
 		if c.Attempts > 1 {
-			metaText = " " + fmt.Sprintf("(retried %dx)", c.Attempts-1)
+			metaText = tuistyle.GlyphSep + fmt.Sprintf("(retried %dx)", c.Attempts-1)
 			metaStyle = tuistyle.WarningStyle
 		}
 	}
@@ -139,24 +139,33 @@ func (c PatchCell) RenderWidth(width int) []string {
 		}
 	}
 	if hiddenPaths > 0 {
-		out = append(out, tuistyle.ToolFoldStyle.Render(fmt.Sprintf("  … (+%d more files · ctrl+t for full list)", hiddenPaths)))
+		for _, line := range wrapStyledLines(tuistyle.ToolFoldStyle.Render(fmt.Sprintf("  … (+%d more files · ctrl+t for full list)", hiddenPaths)), width) {
+			out = append(out, line)
+		}
 	}
 
 	// 4. Detail lines:
-	// A. If failure (active retry OR terminal failure), show compact error excerpt
+	// A. If failure (active retry OR terminal failure), show compact error excerpt with aligned hanging indent
 	if (c.Retrying || c.FailureCode != "") && c.LastError != "" {
 		compactErr := strings.TrimSpace(c.LastError)
 		if firstLine, _, ok := strings.Cut(compactErr, "\n"); ok {
 			compactErr = firstLine
 		}
-		for _, wrapped := range safeWrappedLines("↳ "+compactErr, max(1, width-2)) {
-			out = append(out, tuistyle.ToolExcerptStyle.Render("  "+wrapped))
+		contentWidth := max(1, width-4)
+		for i, wrapped := range safeWrappedLines(compactErr, contentWidth) {
+			prefix := "    "
+			if i == 0 {
+				prefix = "  ↳ "
+			}
+			out = append(out, tuistyle.ToolExcerptStyle.Render(prefix+wrapped))
 		}
 	} else if !c.Running && c.FailureCode == "" && !c.Denied {
 		// B. If success, show compact checkpoint token if present
 		cpToken := compactCheckpoint(c.CheckpointID, c.Body)
 		if cpToken != "" {
-			out = append(out, tuistyle.ToolExcerptStyle.Render("  ↳ checkpoint "+cpToken))
+			for _, line := range wrapStyledLines(tuistyle.ToolExcerptStyle.Render("  ↳ checkpoint "+cpToken), width) {
+				out = append(out, line)
+			}
 		}
 	}
 
@@ -216,7 +225,15 @@ func (c PatchCell) RawLines() []string {
 	if strings.TrimSpace(c.Summary) != "" && c.Summary != "1 file" {
 		title += " · " + c.Summary
 	}
-	out := []string{tuistyle.GlyphEdit + sanitizeBubbleText(title)}
+	header := tuistyle.GlyphEdit + sanitizeBubbleText(title)
+	if c.Denied {
+		header += " [denied]"
+	} else if c.FailureCode != "" {
+		header += fmt.Sprintf(" [%s]", c.FailureCode)
+	} else if c.Running {
+		header += " [running]"
+	}
+	out := []string{header}
 	for _, path := range c.Paths {
 		out = append(out, sanitizeBubbleText(path))
 	}

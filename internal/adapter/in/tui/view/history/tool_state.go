@@ -226,6 +226,7 @@ func (s *HistoryState) RetryPatchCell(callID string, name string, paths []string
 			}
 		}
 
+		oldLines := historyCellLineCount(patch, s.renderWidth)
 		if patch.Attempts < 1 {
 			patch.Attempts = 1
 		}
@@ -235,6 +236,11 @@ func (s *HistoryState) RetryPatchCell(callID string, name string, paths []string
 		patch.FailureCode = ""
 		patch.LastError = ""
 		patch.Body = ""
+		newLines := historyCellLineCount(patch, s.renderWidth)
+		s.committedLines += (newLines - oldLines)
+		if s.committedLines < 0 {
+			s.committedLines = 0
+		}
 		s.touchCommitted()
 		s.cacheValid = false
 		s.invalidateAlternateRenderCache()
@@ -259,9 +265,15 @@ func (s *HistoryState) FinalizeRetryingTools() {
 	}
 	changed := finalize(s.active)
 	for _, cell := range s.committed {
+		oldLines := historyCellLineCount(cell, s.renderWidth)
 		if finalize(cell) {
 			changed = true
+			newLines := historyCellLineCount(cell, s.renderWidth)
+			s.committedLines += (newLines - oldLines)
 		}
+	}
+	if s.committedLines < 0 {
+		s.committedLines = 0
 	}
 	if changed {
 		s.cacheValid = false

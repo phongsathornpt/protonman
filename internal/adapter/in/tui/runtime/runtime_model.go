@@ -206,6 +206,10 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	helpView := help.New()
 	helpView.SetWidth(defaultBubbleWidth - 2)
 	helpView.ShortSeparator = glyphSep
+	helpView.Styles.ShortKey = tuistyle.SystemStyle
+	helpView.Styles.ShortDesc = tuistyle.MutedStyle
+	helpView.Styles.ShortSeparator = tuistyle.MutedStyle
+	helpView.Styles.Ellipsis = tuistyle.MutedStyle
 	retention := conversation.DefaultRetentionPolicy()
 	ui := &bubbleModel{
 		ctx:      ctx,

@@ -172,3 +172,140 @@ func TestSearchReplaceNearMatchDiagnosticReportsDifferences(t *testing.T) {
 		t.Fatalf("expected difference detail (8080 vs 9090) in error, got: %s", errMsg)
 	}
 }
+
+func TestSearchReplaceCRLFWithWhitespaceTolerancePreservesTrailingLines(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	handler := NewSearchReplace(ws, &recordingCheckpointStore{id: "cp-crlf-ws"})
+
+	// File on disk has CRLF and subsequent code
+	crlfContent := "package main\r\n\r\nfunc compute() int {\r\n    x := 1   \r\n    return x\r\n}\r\n\r\nfunc next() string {\r\n    return \"ok\"\r\n}\r\n"
+	targetFile := "crlf_trailing.go"
+	if err := os.WriteFile(filepath.Join(ws.Root(), targetFile), []byte(crlfContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Model sends clean LF without trailing spaces, no trailing newline
+	oldClean := "func compute() int {\n    x := 1\n    return x\n}"
+	newClean := "func compute() int {\n    x := 42\n    return x\n}"
+
+	_, err := handler.Execute(context.Background(), newJSONCall(t, "call-crlf-ws", "edit", map[string]any{
+		"filePath":  targetFile,
+		"oldString": oldClean,
+		"newString": newClean,
+	}))
+	if err != nil {
+		t.Fatalf("expected CRLF with whitespace tolerance to succeed, got: %v", err)
+	}
+
+	updated, err := os.ReadFile(filepath.Join(ws.Root(), targetFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	contentStr := string(updated)
+	if !strings.Contains(contentStr, "x := 42") {
+		t.Fatalf("missing replacement: %q", contentStr)
+	}
+	// Verify subsequent function next() was not merged onto the same line as closing brace
+	if !strings.Contains(contentStr, "}\r\n\r\nfunc next()") {
+		t.Fatalf("expected closing brace and next function to be separated cleanly by CRLFs, got: %q", contentStr)
+	}
+}
+
+func TestSearchReplaceReplaceAllNonOverlappingMatches(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	handler := NewSearchReplace(ws, &recordingCheckpointStore{id: "cp-overlap"})
+
+	// File has repeated lines
+	fileContent := "line\nline\nline\nline\n"
+	targetFile := "repeat.txt"
+	if err := os.WriteFile(filepath.Join(ws.Root(), targetFile), []byte(fileContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2-line pattern should match [0,1] and [2,3] without overlapping
+	oldPattern := "line\nline"
+	newPattern := "replaced"
+
+	_, err := handler.Execute(context.Background(), newJSONCall(t, "call-rep", "edit", map[string]any{
+		"filePath":   targetFile,
+		"oldString":  oldPattern,
+		"newString":  newPattern,
+		"replaceAll": true,
+	}))
+	if err != nil {
+		t.Fatalf("replaceAll failed: %v", err)
+	}
+
+	updated, err := os.ReadFile(filepath.Join(ws.Root(), targetFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "replaced\nreplaced\n"
+	if string(updated) != want {
+		t.Fatalf("got %q, want %q", string(updated), want)
+	}
+}
+
+func TestSearchReplaceTabIndentationPreservedAcrossMultipleLines(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	handler := NewSearchReplace(ws, &recordingCheckpointStore{id: "cp-multitab"})
+
+	// File on disk uses tabs
+	fileContent := "func process() {\n\ta := 1\n\tb := 2\n\tc := 3\n}\n"
+	targetFile := "multitab.go"
+	if err := os.WriteFile(filepath.Join(ws.Root(), targetFile), []byte(fileContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Model sends spaces on all lines
+	oldSpaces := "func process() {\n    a := 1\n    b := 2\n    c := 3\n}"
+	newSpaces := "func process() {\n    a := 10\n    b := 20\n    c := 30\n}"
+
+	_, err := handler.Execute(context.Background(), newJSONCall(t, "call-multitab", "edit", map[string]any{
+		"filePath":  targetFile,
+		"oldString": oldSpaces,
+		"newString": newSpaces,
+	}))
+	if err != nil {
+		t.Fatalf("edit failed: %v", err)
+	}
+
+	updated, err := os.ReadFile(filepath.Join(ws.Root(), targetFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "func process() {\n\ta := 10\n\tb := 20\n\tc := 30\n}\n"
+	if string(updated) != want {
+		t.Fatalf("got %q, want tabs preserved on all lines %q", string(updated), want)
+	}
+}
+
+func TestSearchReplaceBlankLinesDoNotCauseFalsePositiveNearMatch(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	handler := NewSearchReplace(ws, &recordingCheckpointStore{id: "cp-blank"})
+
+	// File has several blank lines between sections
+	fileContent := "package main\n\n\n\n\nfunc target() {\n    runActual()\n}\n"
+	targetFile := "blank.go"
+	if err := os.WriteFile(filepath.Join(ws.Root(), targetFile), []byte(fileContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Model tries to match something that only differs from target() by one line
+	// and should NOT match the blank lines at the top of the file
+	oldString := "func target() {\n    runTypo()\n}"
+
+	_, err := handler.Execute(context.Background(), newJSONCall(t, "call-blank", "edit", map[string]any{
+		"filePath":  targetFile,
+		"oldString": oldString,
+		"newString": "func target() {\n    runActual()\n}",
+	}))
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	// The diagnostic should point to lines 6-8 (target), not lines 1-5 (blanks)
+	if !strings.Contains(err.Error(), "nearest match at lines 6-8") {
+		t.Fatalf("expected nearest match at lines 6-8, got: %v", err)
+	}
+}

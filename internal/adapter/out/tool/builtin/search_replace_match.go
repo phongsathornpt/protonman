@@ -15,9 +15,10 @@ type replaceMatch struct {
 
 // findReplacements locates all target spans for oldString in content according to
 // multi-tier matching rules:
-//   Tier 1: Exact byte match
-//   Tier 2: CRLF / LF line-ending agnostic match
-//   Tier 3: Whitespace & indentation tolerant match (requires uniqueness unless replaceAll)
+//
+//	Tier 1: Exact byte match
+//	Tier 2: CRLF / LF line-ending agnostic match
+//	Tier 3: Whitespace & indentation tolerant match (requires uniqueness unless replaceAll)
 //
 // If no match is found across all tiers, a descriptive error with near-match diagnostics is returned.
 func findReplacements(content, oldString, newString string, replaceAll bool, filePath string) ([]replaceMatch, error) {

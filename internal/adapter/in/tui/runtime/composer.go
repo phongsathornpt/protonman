@@ -32,11 +32,12 @@ type bottomPaneView interface {
 const maxCommandHistory = 500
 
 type composerState struct {
-	input      textarea.Model
-	history    []string
-	historyPos int
-	draft      string
-	bashMode   bool
+	input         textarea.Model
+	history       []string
+	historyPos    int
+	draft         string
+	historyDrafts map[int]string
+	bashMode      bool
 }
 
 type paneState struct {
@@ -170,33 +171,52 @@ func (p *bottomPane) recordHistory(line string) {
 	}
 	p.composer.historyPos = len(p.composer.history)
 	p.composer.draft = ""
+	p.composer.historyDrafts = nil
+}
+
+func (p *bottomPane) saveHistoryDraft() {
+	if p == nil {
+		return
+	}
+	if p.composer.historyDrafts == nil {
+		p.composer.historyDrafts = make(map[int]string)
+	}
+	p.composer.historyDrafts[p.composer.historyPos] = p.composer.input.Value()
+	if p.composer.historyPos == len(p.composer.history) {
+		p.composer.draft = p.composer.input.Value()
+	}
+}
+
+func (p *bottomPane) restoreHistoryDraft(pos int) {
+	if p == nil {
+		return
+	}
+	if draft, ok := p.composer.historyDrafts[pos]; ok {
+		p.composer.input.SetValue(draft)
+	} else if pos < len(p.composer.history) {
+		p.composer.input.SetValue(p.composer.history[pos])
+	} else {
+		p.composer.input.SetValue(p.composer.draft)
+	}
+	p.composer.input.CursorEnd()
 }
 
 func (p *bottomPane) historyPrevious() {
 	if p == nil || len(p.composer.history) == 0 || p.composer.historyPos == 0 {
 		return
 	}
-	if p.composer.historyPos == len(p.composer.history) {
-		p.composer.draft = p.composer.input.Value()
-	}
+	p.saveHistoryDraft()
 	p.composer.historyPos--
-	p.composer.input.SetValue(p.composer.history[p.composer.historyPos])
-	p.composer.input.CursorEnd()
+	p.restoreHistoryDraft(p.composer.historyPos)
 }
 
 func (p *bottomPane) historyNext() {
 	if p == nil || p.composer.historyPos >= len(p.composer.history) {
 		return
 	}
+	p.saveHistoryDraft()
 	p.composer.historyPos++
-	if p.composer.historyPos == len(p.composer.history) {
-		p.composer.input.SetValue(p.composer.draft)
-		p.composer.input.CursorEnd()
-		p.composer.draft = ""
-		return
-	}
-	p.composer.input.SetValue(p.composer.history[p.composer.historyPos])
-	p.composer.input.CursorEnd()
+	p.restoreHistoryDraft(p.composer.historyPos)
 }
 
 func (p *bottomPane) historyNavigating() bool {
@@ -273,6 +293,9 @@ func (m *bubbleModel) resetPrompt() {
 	}
 	prompt := m.panes.bottom.prompt()
 	prompt.Reset()
+	m.panes.bottom.composer.historyPos = len(m.panes.bottom.composer.history)
+	m.panes.bottom.composer.draft = ""
+	m.panes.bottom.composer.historyDrafts = nil
 	m.requestRelayout()
 }
 

@@ -282,9 +282,12 @@ func paneKeyboardHelp(width int, bindings ...string) string {
 	for i := 0; i+1 < len(bindings); i += 2 {
 		parts = append(parts, systemStyle.Render(bindings[i])+mutedStyle.Render(" "+strings.ToLower(bindings[i+1])))
 	}
-	line := strings.Join(parts, mutedStyle.Render("   "))
-	if ansi.StringWidth(line) <= width {
-		return line
+	var line string
+	for _, sep := range []string{"   ", "  ", " "} {
+		line = strings.Join(parts, mutedStyle.Render(sep))
+		if ansi.StringWidth(line) <= width {
+			return line
+		}
 	}
 	compact := make([]string, 0, len(bindings)/2)
 	for i := 0; i+1 < len(bindings); i += 2 {

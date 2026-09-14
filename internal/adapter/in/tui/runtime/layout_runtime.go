@@ -74,9 +74,6 @@ func (m *bubbleModel) footerView() string {
 		if top.PresentationMode() == paneBlocking {
 			return ""
 		}
-		if m.slashOpen() {
-			return m.shortcutHint()
-		}
 		// Overlay panes own keyboard focus and render their own contextual help.
 		// Keep the composer visible for continuity, but do not show send/newline
 		// hints that are inactive (and often wrong) while the overlay is open.

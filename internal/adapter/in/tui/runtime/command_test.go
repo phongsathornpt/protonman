@@ -645,6 +645,62 @@ func TestComposerDraftPreservedOnHistoryNavigation(t *testing.T) {
 	}
 }
 
+func TestComposerEditedHistoryPreservedOnNavigation(t *testing.T) {
+	model := newTestSkillsModel(t, 2)
+	model.panes.bottom.recordHistory("git status")
+	model.panes.bottom.recordHistory("docker ps")
+	model.panes.bottom.prompt().SetValue("initial draft")
+
+	// Navigate Up to "docker ps"
+	updated, _ := model.Update(testKey(tea.KeyUp))
+	model = updated.(*bubbleModel)
+	if model.panes.bottom.prompt().Value() != "docker ps" {
+		t.Fatalf("expected 'docker ps', got: %q", model.panes.bottom.prompt().Value())
+	}
+
+	// Edit historical entry
+	editedEntry := "docker ps -a --format json"
+	model.panes.bottom.prompt().SetValue(editedEntry)
+
+	// Navigate Up to "git status"
+	updated, _ = model.Update(testKey(tea.KeyUp))
+	model = updated.(*bubbleModel)
+	if model.panes.bottom.prompt().Value() != "git status" {
+		t.Fatalf("expected 'git status', got: %q", model.panes.bottom.prompt().Value())
+	}
+
+	// Navigate back Down to the edited entry
+	updated, _ = model.Update(testKey(tea.KeyDown))
+	model = updated.(*bubbleModel)
+	if model.panes.bottom.prompt().Value() != editedEntry {
+		t.Fatalf("expected preserved edit %q, got: %q", editedEntry, model.panes.bottom.prompt().Value())
+	}
+
+	// Navigate Down to initial draft
+	updated, _ = model.Update(testKey(tea.KeyDown))
+	model = updated.(*bubbleModel)
+	if model.panes.bottom.prompt().Value() != "initial draft" {
+		t.Fatalf("expected 'initial draft', got: %q", model.panes.bottom.prompt().Value())
+	}
+
+	// Navigate Up again to verify edited entry is still intact
+	updated, _ = model.Update(testKey(tea.KeyUp))
+	model = updated.(*bubbleModel)
+	if model.panes.bottom.prompt().Value() != editedEntry {
+		t.Fatalf("expected preserved edit on re-navigation %q, got: %q", editedEntry, model.panes.bottom.prompt().Value())
+	}
+
+	// Escape exits history navigation and resets the prompt
+	updated, _ = model.Update(testKey(tea.KeyEsc))
+	model = updated.(*bubbleModel)
+	if model.panes.bottom.prompt().Value() != "" {
+		t.Fatalf("expected empty prompt after escape, got: %q", model.panes.bottom.prompt().Value())
+	}
+	if model.panes.bottom.historyNavigating() {
+		t.Fatalf("expected history navigation to be inactive after escape")
+	}
+}
+
 func TestSlashAutocompleteWrapAround(t *testing.T) {
 	model := newTestSkillsModel(t, 8)
 	model.panes.bottom.prompt().SetValue("/skills ")
