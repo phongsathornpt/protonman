@@ -192,6 +192,21 @@ func (a *application) selectSessionRow(id widget.ListItemID) {
 	a.refreshPermissionView()
 }
 
+func (a *application) applySidebarQuery(query string) {
+	a.mu.Lock()
+	a.sidebarQuery = strings.TrimSpace(query)
+	a.rebuildSidebarRowsLocked()
+	activeIndex := sidebarRowIndexForSession(a.sidebarRows, a.state.ActiveSessionID)
+	a.mu.Unlock()
+
+	a.list.Refresh()
+	if activeIndex >= 0 {
+		a.list.Select(widget.ListItemID(activeIndex))
+		return
+	}
+	a.list.UnselectAll()
+}
+
 func (a *application) buildDesktopShell() fyne.CanvasObject {
 	sidebar := a.buildSidebar()
 	conversation := a.buildConversationSurface()
@@ -203,8 +218,14 @@ func (a *application) buildDesktopShell() fyne.CanvasObject {
 
 func (a *application) buildSidebar() fyne.CanvasObject {
 	search := widget.NewEntry()
-	search.SetPlaceHolder("Search")
-	newTask := widget.NewButtonWithIcon("", theme.ContentAddIcon(), a.newSession)
+	search.SetPlaceHolder("Search sessions")
+	search.OnChanged = a.applySidebarQuery
+	newTask := widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() {
+		if search.Text != "" {
+			search.SetText("")
+		}
+		a.newSession()
+	})
 	sidebarHeader := container.NewBorder(nil, nil, nil, newTask,
 		newNerdIconText(iconRocket, "protonMAN", fyne.TextStyle{Bold: true}, false),
 	)
