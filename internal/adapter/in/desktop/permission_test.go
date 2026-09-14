@@ -3,6 +3,7 @@
 package desktop
 
 import (
+	"strings"
 	"testing"
 
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
@@ -43,5 +44,27 @@ func TestFinishPermissionStateIgnoresStaleWaiter(t *testing.T) {
 	}
 	if got := a.state.Sessions[0].Status; got != desktopstate.TaskRunning {
 		t.Fatalf("session status = %q, want running", got)
+	}
+}
+
+func TestPermissionDetailIncludesToolArgumentsAndLocations(t *testing.T) {
+	detail := permissionDetail(map[string]any{
+		"title": "Run tests",
+		"kind":  "execute",
+		"rawInput": map[string]any{
+			"command": "go test ./...",
+		},
+		"locations": []map[string]any{{"path": "internal/adapter/in/desktop/permission.go"}},
+	})
+	for _, want := range []string{"go test ./...", "permission.go", "execute"} {
+		if !strings.Contains(detail, want) {
+			t.Fatalf("permission detail %q does not contain %q", detail, want)
+		}
+	}
+}
+
+func TestPermissionDetailFailsClosedWhenRuntimeOmitsDetails(t *testing.T) {
+	if got := permissionDetail(nil); !strings.Contains(got, "not provided") {
+		t.Fatalf("permission detail = %q, want missing-detail warning", got)
 	}
 }
