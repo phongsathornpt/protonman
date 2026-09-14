@@ -55,6 +55,14 @@ func (s *FileStore) Load(ctx context.Context, sessionID string) (State, bool, er
 	if closeErr != nil {
 		return State{}, false, fmt.Errorf("close session state: %w", closeErr)
 	}
+	resources, err := session.ResolveResources(s.root, sessionID)
+	if err != nil {
+		return State{}, false, err
+	}
+	state, err = hydrateImageParts(resources, state)
+	if err != nil {
+		return State{}, false, err
+	}
 	state, err = session.NormalizeLoadedState(sessionID, state)
 	if err != nil {
 		return State{}, false, err
@@ -106,6 +114,10 @@ func (s *FileStore) saveLocked(ctx context.Context, sessionID string, state Stat
 	}
 	if err := os.Chmod(resources.Root, 0o700); err != nil {
 		return fmt.Errorf("protect session directory: %w", err)
+	}
+	prepared, err = externalizeImageParts(resources, prepared)
+	if err != nil {
+		return err
 	}
 	file, err := os.CreateTemp(resources.Root, ".state-*.tmp")
 	if err != nil {
