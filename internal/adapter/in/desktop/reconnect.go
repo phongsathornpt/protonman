@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,30 +22,35 @@ const (
 )
 
 func (a *application) superviseConnection() {
-	binary := strings.TrimSpace(os.Getenv("PROTONMAN_BINARY"))
-	if binary == "" {
-		binary = "protonman"
+	ctx, cancel := context.WithCancel(a.ctx)
+	defer cancel()
+	if a.desktopApp != nil {
+		a.desktopApp.Lifecycle().SetOnStopped(cancel)
 	}
+	binary := resolveACPBinary()
 
 	delay := reconnectInitialDelay
 	for {
-		if a.ctx.Err() != nil {
+		if ctx.Err() != nil {
 			return
 		}
-		client, err := acpclient.Start(a.ctx, binary, a.handleEvent)
+		client, err := acpclient.Start(ctx, binary, a.handleEvent)
 		if err != nil {
 			a.setStatus("Disconnected · retrying · " + err.Error())
-			if !waitReconnect(a.ctx, delay) {
+			if !waitReconnect(ctx, delay) {
 				return
 			}
 			delay = nextReconnectDelay(delay)
 			continue
 		}
 		client.SetRequestHandler(a.handleRequest)
-		if err := a.initializeClient(client); err != nil {
+		if err := a.initializeClient(ctx, client); err != nil {
 			_ = client.Close()
+			if ctx.Err() != nil {
+				return
+			}
 			a.setStatus("ACP reconnect failed · " + err.Error())
-			if !waitReconnect(a.ctx, delay) {
+			if !waitReconnect(ctx, delay) {
 				return
 			}
 			delay = nextReconnectDelay(delay)
@@ -53,27 +59,45 @@ func (a *application) superviseConnection() {
 
 		a.setClient(client)
 		delay = reconnectInitialDelay
-		a.resumeKnownSessions(client)
+		a.resumeKnownSessions(ctx, client)
 		a.refreshSessions()
 
 		select {
-		case <-a.ctx.Done():
+		case <-ctx.Done():
 			_ = client.Close()
 			return
 		case <-client.Done():
+			if ctx.Err() != nil {
+				return
+			}
 			a.markDisconnected(client)
 		}
 	}
 }
 
-func (a *application) initializeClient(client *acpclient.Client) error {
+func resolveACPBinary() string {
+	override := strings.TrimSpace(os.Getenv("PROTONMAN_BINARY"))
+	if override != "" {
+		return override
+	}
+	executable, err := os.Executable()
+	if err == nil {
+		candidate := filepath.Join(filepath.Dir(executable), "libexec", "protonman")
+		if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() {
+			return candidate
+		}
+	}
+	return "protonman"
+}
+
+func (a *application) initializeClient(ctx context.Context, client *acpclient.Client) error {
 	var result struct {
 		ProtocolVersion int `json:"protocolVersion"`
 		AgentInfo       struct {
 			Version string `json:"version"`
 		} `json:"agentInfo"`
 	}
-	if err := client.Call(a.ctx, "initialize", map[string]any{
+	if err := client.Call(ctx, "initialize", map[string]any{
 		"protocolVersion":    1,
 		"clientInfo":         map[string]any{"name": "protonman-desktop", "title": "Protonman Desktop"},
 		"clientCapabilities": map[string]any{},
@@ -91,7 +115,7 @@ func (a *application) initializeClient(client *acpclient.Client) error {
 	return nil
 }
 
-func (a *application) resumeKnownSessions(client *acpclient.Client) {
+func (a *application) resumeKnownSessions(ctx context.Context, client *acpclient.Client) {
 	a.mu.Lock()
 	sessions := append([]desktopstate.SessionState(nil), a.state.Sessions...)
 	a.mu.Unlock()
@@ -104,7 +128,9 @@ func (a *application) resumeKnownSessions(client *acpclient.Client) {
 		if len(mcpServers) > 0 {
 			params["mcpServers"] = mcpServers
 		}
-		_ = client.Call(a.ctx, "session/resume", params, nil)
+		if err := client.Call(ctx, "session/resume", params, nil); err != nil && ctx.Err() == nil {
+			a.setStatus("Session resume failed · " + err.Error())
+		}
 	}
 }
 
