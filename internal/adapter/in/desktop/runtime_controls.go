@@ -11,7 +11,10 @@ import (
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
-const runtimeRefreshInterval = time.Second
+const (
+	runtimeRefreshInterval = time.Second
+	runtimeSummaryMaxRunes = 40
+)
 
 type sessionRuntimeResult struct {
 	SessionID      string `json:"sessionId"`
@@ -190,18 +193,25 @@ func (a *application) renderRuntimeControls() {
 }
 
 func runtimeSummaryText(runtime desktopstate.RuntimeSettingsState) string {
-	summary := strings.TrimSpace(runtime.Model)
-	if summary == "" {
-		summary = strings.TrimSpace(runtime.Provider)
+	base := strings.TrimSpace(runtime.Model)
+	if base == "" {
+		base = strings.TrimSpace(runtime.Provider)
 	}
-	if summary == "" {
-		summary = "Model"
+	if base == "" {
+		base = "Model"
 	}
+
+	suffix := ""
 	if reasoning := strings.TrimSpace(runtime.Reasoning); reasoning != "" && reasoning != "auto" {
-		summary += " · " + reasoning
+		suffix += " · " + reasoning
 	}
 	if low := strings.TrimSpace(runtime.LowConcurrency); low == "on" {
-		summary += " · low"
+		suffix += " · low"
 	}
-	return summary
+
+	baseLimit := runtimeSummaryMaxRunes - len([]rune(suffix))
+	if baseLimit < 8 {
+		baseLimit = 8
+	}
+	return compactText(base, baseLimit) + suffix
 }
