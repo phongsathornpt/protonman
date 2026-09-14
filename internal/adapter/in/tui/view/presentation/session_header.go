@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
+	tuiicon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/icon"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 )
 
@@ -21,6 +22,7 @@ type SessionHeaderModel struct {
 	Workspace      string
 	Compact        bool
 	Minimal        bool
+	Icons          tuiicon.Set
 }
 
 func RenderSessionHeader(model SessionHeaderModel) string {
@@ -29,7 +31,7 @@ func RenderSessionHeader(model SessionHeaderModel) string {
 		return ""
 	}
 	if model.Minimal {
-		return tuistyle.CompactBrand(width)
+		return tuistyle.CompactBrandWithIcons(width, model.Icons)
 	}
 	if model.Compact || width < fullSessionHeaderWidth {
 		return renderCompactSessionHeader(model)
@@ -66,7 +68,7 @@ func RenderSessionHeader(model SessionHeaderModel) string {
 }
 
 func renderCompactSessionHeader(model SessionHeaderModel) string {
-	brand := tuistyle.CompactBrand(model.Width)
+	brand := tuistyle.CompactBrandWithIcons(model.Width, model.Icons)
 	if sessionHeaderMeta(model) == "" || model.Width < 12 {
 		return brand
 	}
