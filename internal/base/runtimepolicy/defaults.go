@@ -14,6 +14,7 @@ const (
 	AgentResultTTL                        = 24 * time.Hour
 	TurnMaxToolCalls                      = 0
 	TurnMaxStagnantToolCalls              = 24
+	TurnMaxConsecutiveStalledRounds       = 3
 	TurnEmergencyMaxToolCalls             = 512
 	TurnToolResultBytesPerRound           = 4 * 1024 * 1024
 	TurnToolResultBytesPerTurn            = 12 * 1024 * 1024
