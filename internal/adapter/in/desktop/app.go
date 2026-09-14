@@ -323,6 +323,11 @@ func (a *application) refreshPermissionView() {
 
 	fyne.Do(func() {
 		a.permissionInbox.SetText(fmt.Sprintf("Permissions %d", count))
+		if count == 0 {
+			a.permissionInbox.Disable()
+		} else {
+			a.permissionInbox.Enable()
+		}
 		if current == nil {
 			a.permissionPanel.Hide()
 			return
