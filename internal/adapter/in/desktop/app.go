@@ -209,6 +209,7 @@ func (a *application) newSession() {
 		if !a.clientIsCurrent(client) {
 			return
 		}
+		markSessionHistoryLoaded(a, result.SessionID)
 		a.refreshSessions()
 		a.mu.Lock()
 		a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventSessionSelected, SessionID: result.SessionID})
