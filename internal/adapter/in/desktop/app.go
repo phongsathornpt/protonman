@@ -35,6 +35,7 @@ type application struct {
 	mu                sync.Mutex
 	state             desktopstate.State
 	sidebarRows       []sidebarRow
+	sidebarQuery      string
 	transcripts       map[string]*strings.Builder
 	permissionWaiters map[string]chan string
 	preferences       fyne.Preferences
@@ -163,7 +164,7 @@ func (a *application) refreshSessions() {
 		}
 	}
 	a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventSessionsReplaced, Sessions: sessions})
-	a.sidebarRows = buildSidebarRows(a.state.Sessions)
+	a.rebuildSidebarRowsLocked()
 	a.mu.Unlock()
 	fyne.Do(func() { a.list.Refresh() })
 	a.refreshActiveView()
