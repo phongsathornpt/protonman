@@ -278,6 +278,7 @@ func (a *application) refreshSessions() {
 				projected.WorkspaceName = previous.WorkspaceName
 			}
 		}
+		projected.Workspace = a.resolveWorkspacePath(projected.WorkspaceKey, projected.Workspace)
 		if projected.WorkspaceName == "" {
 			projected.WorkspaceName = inferredWorkspaceName(projected.Title, projected.ID)
 		}
@@ -299,7 +300,19 @@ func (a *application) newSession() {
 	if client == nil {
 		return
 	}
-	cwd, _ := os.Getwd()
+	cwd := a.activeWorkspacePath()
+	if cwd == "" {
+		workingDirectory, err := os.Getwd()
+		if err != nil {
+			a.setStatus("New session failed · determine workspace: " + err.Error())
+			return
+		}
+		cwd = validWorkspacePath(workingDirectory)
+	}
+	if cwd == "" {
+		a.setStatus("New session failed · workspace path is unavailable")
+		return
+	}
 	go func() {
 		var result struct {
 			SessionID string `json:"sessionId"`
@@ -342,6 +355,18 @@ func (a *application) sendPrompt() {
 		a.mu.Unlock()
 		return
 	}
+	workspace := ""
+	for _, session := range a.state.Sessions {
+		if session.ID == sessionID {
+			workspace = validWorkspacePath(session.Workspace)
+			break
+		}
+	}
+	if workspace == "" {
+		a.mu.Unlock()
+		a.setStatus("Cannot run session · workspace path is unavailable; open the workspace again instead of falling back to the Desktop process directory")
+		return
+	}
 	a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventPromptStarted, SessionID: sessionID})
 	a.mu.Unlock()
 
@@ -350,13 +375,20 @@ func (a *application) sendPrompt() {
 	fyne.Do(func() { a.list.Refresh() })
 
 	go func() {
+		resumeParams := map[string]any{"sessionId": sessionID, "cwd": workspace}
+		if servers := a.mcpServersPayload(); len(servers) > 0 {
+			resumeParams["mcpServers"] = servers
+		}
+		err := client.Call(a.ctx, "session/resume", resumeParams, nil)
 		var result struct {
 			StopReason string `json:"stopReason"`
 		}
-		err := client.Call(a.ctx, "session/prompt", map[string]any{
-			"sessionId": sessionID,
-			"prompt":    []map[string]any{{"type": "text", "text": text}},
-		}, &result)
+		if err == nil {
+			err = client.Call(a.ctx, "session/prompt", map[string]any{
+				"sessionId": sessionID,
+				"prompt":    []map[string]any{{"type": "text", "text": text}},
+			}, &result)
+		}
 
 		if !a.clientIsCurrent(client) {
 			return
