@@ -16,6 +16,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionbridge"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
 	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
+	tuiicon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/icon"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -144,6 +145,7 @@ type presentationModelState struct {
 	keys               bubbleKeyMap
 	planMode           bool
 	reducedMotion      bool
+	icons               tuiicon.Set
 	panes              paneState
 	nextID             uint64
 	layout             layoutState
@@ -215,6 +217,7 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 			keys:          newBubbleKeyMap(),
 			panes:         paneState{bottom: bottom, transcript: transcriptPane},
 			reducedMotion: reducedMotion,
+			icons:         tuiicon.Unicode,
 			layout:        layoutState{width: defaultBubbleWidth, height: defaultBubbleHeight},
 		},
 		conversationModelState: conversationModelState{
