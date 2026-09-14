@@ -1,6 +1,7 @@
 package history
 
 import (
+	tuiicon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/icon"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
@@ -14,15 +15,17 @@ type AgentToolCell struct {
 	Summary string
 	Running bool
 	Spinner string
+	Icons   tuiicon.Set
 }
 
 func (AgentToolCell) Kind() HistoryCellKind { return HistoryCellTool }
 func (c AgentToolCell) RenderWidth(width int) []string {
+	icons := tuiicon.OrUnicode(c.Icons)
 	label := c.presentationLabel(true)
 	if c.Running {
-		return wrapStyledLines(tuistyle.ToolStyle.Render(tuistyle.GlyphAgent)+tuistyle.MutedStyle.Render(sanitizeBubbleText(label)), max(1, width))
+		return wrapStyledLines(tuistyle.ToolStyle.Render(icons.Agent)+tuistyle.MutedStyle.Render(sanitizeBubbleText(label)), max(1, width))
 	}
-	return wrapStyledLines(tuistyle.SuccessStyle.Render(tuistyle.GlyphToolSuccess)+tuistyle.MutedStyle.Render(sanitizeBubbleText(label)), max(1, width))
+	return wrapStyledLines(tuistyle.SuccessStyle.Render(icons.ToolSuccess)+tuistyle.MutedStyle.Render(sanitizeBubbleText(label)), max(1, width))
 }
 func (c AgentToolCell) presentationLabel(includeSpinner bool) string {
 	label := c.Summary
