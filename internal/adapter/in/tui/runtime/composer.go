@@ -174,7 +174,7 @@ func (p *bottomPane) bashMode() bool {
 }
 
 func (p *bottomPane) recordHistory(line string) {
-	if p == nil {
+	if p == nil || strings.TrimSpace(line) == "" {
 		return
 	}
 	p.composer.history = append(p.composer.history, line)
@@ -218,7 +218,7 @@ func (p *bottomPane) restoreHistoryDraft(pos int) {
 }
 
 func (p *bottomPane) historyPrevious() {
-	if p == nil || len(p.composer.history) == 0 || p.composer.historyPos == 0 {
+	if p == nil || len(p.composer.attachments.localImages) > 0 || len(p.composer.history) == 0 || p.composer.historyPos == 0 {
 		return
 	}
 	p.saveHistoryDraft()
@@ -227,7 +227,7 @@ func (p *bottomPane) historyPrevious() {
 }
 
 func (p *bottomPane) historyNext() {
-	if p == nil || p.composer.historyPos >= len(p.composer.history) {
+	if p == nil || len(p.composer.attachments.localImages) > 0 || p.composer.historyPos >= len(p.composer.history) {
 		return
 	}
 	p.saveHistoryDraft()
@@ -236,7 +236,7 @@ func (p *bottomPane) historyNext() {
 }
 
 func (p *bottomPane) historyNavigating() bool {
-	return p != nil && p.composer.historyPos < len(p.composer.history)
+	return p != nil && len(p.composer.attachments.localImages) == 0 && p.composer.historyPos < len(p.composer.history)
 }
 
 func (p *bottomPane) renderTop(m *bubbleModel) string {
