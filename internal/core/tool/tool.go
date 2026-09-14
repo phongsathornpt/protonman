@@ -4,6 +4,8 @@ package tool
 import (
 	"encoding/json"
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 )
 
@@ -158,7 +160,10 @@ func NormalizeArguments(definition Definition, arguments json.RawMessage) json.R
 		}
 		return append(json.RawMessage(nil), arguments...)
 	}
-	if len(definition.InputAliases) == 0 {
+	aliases := len(definition.InputAliases) > 0
+	enums := schemaEnumFields(definition.InputSchema)
+	integers := schemaIntegerFields(definition.InputSchema)
+	if !aliases && len(enums) == 0 && len(integers) == 0 {
 		return append(json.RawMessage(nil), arguments...)
 	}
 	object := map[string]json.RawMessage{}
@@ -166,23 +171,14 @@ func NormalizeArguments(definition Definition, arguments json.RawMessage) json.R
 		return append(json.RawMessage(nil), arguments...)
 	}
 	changed := false
-	for canonical, aliases := range definition.InputAliases {
-		canonicalValue, hasCanonical := object[canonical]
-		for _, alias := range aliases {
-			aliasValue, ok := object[alias]
-			if !ok {
-				continue
-			}
-			if hasCanonical && string(canonicalValue) != string(aliasValue) {
-				return append(json.RawMessage(nil), arguments...)
-			}
-			if !hasCanonical {
-				object[canonical] = aliasValue
-				canonicalValue, hasCanonical = aliasValue, true
-			}
-			delete(object, alias)
-			changed = true
-		}
+	if aliases {
+		changed = applyInputAliases(object, definition.InputAliases) || changed
+	}
+	if len(enums) > 0 {
+		changed = foldEnumFields(object, enums) || changed
+	}
+	if len(integers) > 0 {
+		changed = canonicalIntegerFields(object, integers) || changed
 	}
 	if !changed {
 		return append(json.RawMessage(nil), arguments...)
@@ -192,6 +188,204 @@ func NormalizeArguments(definition Definition, arguments json.RawMessage) json.R
 		return append(json.RawMessage(nil), arguments...)
 	}
 	return encoded
+}
+
+// canonicalIntegerFields rewrites integral JSON numbers such as 3.0 into the
+// integer form 3. JSON Schema treats 3.0 as an integer, so the compiled input
+// validator accepts it, but encoding/json cannot unmarshal it into an int and
+// the handler fails after validation has already passed. Non-integral numbers
+// keep their spelling so the schema reports the type mismatch.
+func canonicalIntegerFields(object map[string]json.RawMessage, fields map[string]struct{}) bool {
+	changed := false
+	for field := range fields {
+		raw, ok := object[field]
+		if !ok {
+			continue
+		}
+		canonical, ok := canonicalIntegralNumber(raw)
+		if !ok {
+			continue
+		}
+		object[field] = canonical
+		changed = true
+	}
+	return changed
+}
+
+// canonicalIntegralNumber converts a JSON number with a zero fraction part into
+// its integer spelling. JSON Schema treats 3.0 and 1e2 as integers, so the
+// compiled input validator accepts them, but encoding/json cannot unmarshal
+// either into an int and the handler then fails after validation has passed.
+// Values outside the int64 range and non-integral values keep their spelling so
+// the schema reports the mismatch.
+func canonicalIntegralNumber(raw json.RawMessage) (json.RawMessage, bool) {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || !strings.ContainsAny(trimmed, ".eE") {
+		return nil, false
+	}
+	value, err := strconv.ParseFloat(trimmed, 64)
+	if err != nil || value != math.Trunc(value) {
+		return nil, false
+	}
+	if value < math.MinInt64 || value > math.MaxInt64 {
+		return nil, false
+	}
+	encoded, err := json.Marshal(int64(value))
+	if err != nil || string(encoded) == trimmed {
+		return nil, false
+	}
+	return encoded, true
+}
+
+// schemaIntegerFields collects the names of root-level integer fields so
+// integral-number spellings can be canonicalized before schema validation.
+func schemaIntegerFields(schema map[string]any) map[string]struct{} {
+	if schema == nil {
+		return nil
+	}
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	fields := map[string]struct{}{}
+	for name, raw := range properties {
+		field, ok := raw.(map[string]any)
+		if !ok || field["type"] != "integer" {
+			continue
+		}
+		fields[name] = struct{}{}
+	}
+	if len(fields) == 0 {
+		return nil
+	}
+	return fields
+}
+
+// applyInputAliases renames compatibility aliases onto their canonical fields.
+// Conflicting aliases leave the payload untouched so the schema rejects it
+// rather than the host silently choosing one of two different values.
+func applyInputAliases(object map[string]json.RawMessage, aliases map[string][]string) bool {
+	changed := false
+	for canonical, names := range aliases {
+		canonicalValue, hasCanonical := object[canonical]
+		for _, alias := range names {
+			aliasValue, ok := object[alias]
+			if !ok {
+				continue
+			}
+			if hasCanonical && string(canonicalValue) != string(aliasValue) {
+				return false
+			}
+			if !hasCanonical {
+				object[canonical] = aliasValue
+				canonicalValue, hasCanonical = aliasValue, true
+			}
+			delete(object, alias)
+			changed = true
+		}
+	}
+	return changed
+}
+
+// foldEnumFields lowercases enumerated string fields so the published enum is
+// never stricter than the handler that dispatches on the value. Handlers match
+// these values case-insensitively, so folding is behavior-preserving. A value is
+// only rewritten when it matches an enum entry case-insensitively; anything else
+// keeps its original spelling for the schema to reject.
+func foldEnumFields(object map[string]json.RawMessage, fields map[string][]string) bool {
+	changed := false
+	for field, values := range fields {
+		raw, ok := object[field]
+		if !ok {
+			continue
+		}
+		var text string
+		if json.Unmarshal(raw, &text) != nil {
+			continue
+		}
+		canonical, ok := matchEnumValue(values, text)
+		if !ok {
+			continue
+		}
+		encoded, err := json.Marshal(canonical)
+		if err != nil || string(encoded) == string(raw) {
+			continue
+		}
+		object[field] = encoded
+		changed = true
+	}
+	return changed
+}
+
+// matchEnumValue returns the canonical enum entry equal to value ignoring case.
+func matchEnumValue(values []string, value string) (string, bool) {
+	trimmed := strings.TrimSpace(value)
+	for _, candidate := range values {
+		if strings.EqualFold(strings.TrimSpace(candidate), trimmed) {
+			return candidate, true
+		}
+	}
+	return "", false
+}
+
+// schemaEnumFields collects root-level string enum fields published by a tool
+// input schema. Nested enums (for example inside an array item schema) are left
+// to the schema because their location is call-specific.
+func schemaEnumFields(schema map[string]any) map[string][]string {
+	if schema == nil {
+		return nil
+	}
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	fields := map[string][]string{}
+	for name, raw := range properties {
+		field, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		typeName, _ := field["type"].(string)
+		if typeName != "" && typeName != "string" {
+			continue
+		}
+		values, ok := enumStrings(field["enum"])
+		if !ok || len(values) == 0 {
+			continue
+		}
+		fields[name] = values
+	}
+	if len(fields) == 0 {
+		return nil
+	}
+	return fields
+}
+
+// enumStrings extracts enum entries that are plain strings and lowercase-simple.
+// Enums with non-string or non-lowercase entries are skipped so unexpected
+// vocabulary is never silently case-folded.
+func enumStrings(raw any) ([]string, bool) {
+	var entries []any
+	switch values := raw.(type) {
+	case []any:
+		entries = values
+	case []string:
+		entries = make([]any, 0, len(values))
+		for _, value := range values {
+			entries = append(entries, value)
+		}
+	default:
+		return nil, false
+	}
+	out := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		text, ok := entry.(string)
+		if !ok || strings.TrimSpace(text) == "" || text != strings.ToLower(text) {
+			return nil, false
+		}
+		out = append(out, text)
+	}
+	return out, true
 }
 
 // Definition describes a registered tool to the model and the UI.
@@ -228,6 +422,35 @@ type Definition struct {
 	// Semantics optionally refines mutability, safety, evidence, and risk for a
 	// concrete call. This is intentionally host-only and is never published to models.
 	Semantics CallSemanticsResolver
+}
+
+// ArgumentNormalizer is an optional handler capability that canonicalizes
+// model-originated arguments beyond what the published JSON schema can express,
+// for example a numeric string where the schema requires an integer. It runs
+// after schema-driven alias normalization and before schema validation, so a
+// handled wire variant reaches the schema in its canonical form instead of
+// failing validation with a message the model cannot act on.
+//
+// Implementations must return nil when no rewrite is needed; the caller then
+// keeps the original bytes verbatim. They must not repair arguments that are
+// genuinely invalid, because the schema is the authority for what a call means.
+type ArgumentNormalizer interface {
+	NormalizeArguments(arguments json.RawMessage) json.RawMessage
+}
+
+// NormalizeArgumentsForHandler applies schema-driven aliasing and then any
+// canonicalization offered by the handler for this call.
+func NormalizeArgumentsForHandler(handler Handler, definition Definition, arguments json.RawMessage) json.RawMessage {
+	normalized := NormalizeArguments(definition, arguments)
+	normalizer, ok := handler.(ArgumentNormalizer)
+	if !ok {
+		return normalized
+	}
+	result := normalizer.NormalizeArguments(normalized)
+	if len(result) == 0 {
+		return normalized
+	}
+	return result
 }
 
 // Validate checks the invariants required for safe registry insertion.
@@ -342,7 +565,11 @@ func (r Result) ModelPayload() Result {
 	return r
 }
 
-const maxModelFailureMessageChars = 240
+// maxModelFailureMessageChars bounds failure text delivered to a model. It is
+// deliberately generous: schema-validation diagnostics name the offending JSON
+// pointer and the mismatch, and truncating that clause removes the only
+// actionable part of the message.
+const maxModelFailureMessageChars = 600
 
 func compactModelFailureMessage(message string) string {
 	message = strings.Join(strings.Fields(message), " ")

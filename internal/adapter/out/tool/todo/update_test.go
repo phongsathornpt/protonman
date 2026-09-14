@@ -128,9 +128,31 @@ func TestTodoCapabilityDefinitionUsesClosedTypedRootSchema(t *testing.T) {
 	if got := props["operations"].(map[string]any)["type"]; got != "array" {
 		t.Fatalf("operations type = %#v, want array", got)
 	}
-	branches, ok := def.InputSchema["oneOf"].([]any)
-	if !ok || len(branches) != 2 {
-		t.Fatalf("oneOf = %#v, want get/update branches", def.InputSchema["oneOf"])
+	if _, ok := props["session_id"]; !ok {
+		t.Fatalf("session_id echo is not tolerated: %#v", props)
+	}
+	// A strict oneOf cannot express "get takes nothing, update takes both
+	// fields", so the contract is published as a single conditional requirement.
+	if _, ok := def.InputSchema["oneOf"]; ok {
+		t.Fatalf("capability schema still uses oneOf: %#v", def.InputSchema["oneOf"])
+	}
+	branches, ok := def.InputSchema["allOf"].([]any)
+	if !ok || len(branches) != 1 {
+		t.Fatalf("allOf = %#v, want one conditional requirement", def.InputSchema["allOf"])
+	}
+	branch := branches[0].(map[string]any)
+	condition, ok := branch["if"].(map[string]any)
+	if !ok {
+		t.Fatalf("conditional requirement missing if clause: %#v", branch)
+	}
+	conditionProps := condition["properties"].(map[string]any)
+	if _, ok := conditionProps["action"]; !ok {
+		t.Fatalf("if clause does not key on action: %#v", condition)
+	}
+	then := branch["then"].(map[string]any)
+	required := then["required"].([]any)
+	if len(required) != 2 {
+		t.Fatalf("then required = %#v, want expected_revision and operations", required)
 	}
 	if err := def.Validate(); err != nil {
 		t.Fatal(err)
@@ -151,24 +173,18 @@ func TestUpdateTodoDefinitionUsesPatchSchema(t *testing.T) {
 	}
 	operations := props["operations"].(map[string]any)
 	items := operations["items"].(map[string]any)
-	branches, ok := items["oneOf"].([]any)
-	if !ok || len(branches) != 4 {
-		t.Fatalf("operation oneOf = %#v, want 4 branches", items["oneOf"])
+	opEnum, ok := items["properties"].(map[string]any)["op"].(map[string]any)["enum"].([]any)
+	if !ok || len(opEnum) != 4 {
+		t.Fatalf("operation op enum = %#v, want 4 kinds", opEnum)
 	}
-	wantRequired := map[string][]string{
-		"add":        {"op", "id", "text", "status"},
-		"set_status": {"op", "id", "status"},
-		"set_text":   {"op", "id", "text"},
-		"remove":     {"op", "id"},
+	if items["additionalProperties"] != false {
+		t.Fatalf("operation additionalProperties = %#v, want false", items["additionalProperties"])
 	}
-	for _, raw := range branches {
-		branch := raw.(map[string]any)
-		branchProps := branch["properties"].(map[string]any)
-		op := branchProps["op"].(map[string]any)["const"].(string)
-		required := branch["required"].([]any)
-		if len(required) != len(wantRequired[op]) {
-			t.Fatalf("%s required = %#v", op, required)
-		}
+	// Per-kind required fields are enforced by ApplyPatch, which can name the
+	// precise defect; the schema only closes the shared envelope.
+	required := items["required"].([]any)
+	if len(required) != 2 {
+		t.Fatalf("operation required = %#v, want op and id", required)
 	}
 	if err := def.Validate(); err != nil {
 		t.Fatal(err)

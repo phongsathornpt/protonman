@@ -227,7 +227,7 @@ func (s *Service) call(ctx context.Context, call tool.Call, recoveryDepth int) (
 		return result, unknownErr
 	}
 	definition := handler.Definition()
-	call.Arguments = tool.NormalizeArguments(definition, call.Arguments)
+	call.Arguments = tool.NormalizeArgumentsForHandler(handler, definition, call.Arguments)
 	telemetry.call.Arguments = append(json.RawMessage(nil), call.Arguments...)
 	telemetry.toolKind = definition.Kind
 	validators, validatorErr := s.validatorsFor(definition)

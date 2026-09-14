@@ -159,6 +159,13 @@ func FailureFromError(err error) *Failure {
 		result.Message = toolErr.Message
 		result.Diagnostic = toolErr.Diagnostic
 		result.Recovery = toolErr.Recovery
+		// Invalid-argument failures are caller-fixable, and the handler's message
+		// alone ("decode ls arguments") names no defect. Surface the wrapped
+		// cause so the model learns which JSON field was wrong instead of
+		// retrying an identical call.
+		if result.Diagnostic == "" && toolErr.Code == ErrorCodeInvalidArguments && toolErr.Cause != nil {
+			result.Diagnostic = toolErr.Cause.Error()
+		}
 	case errors.As(err, &failureCoder):
 		result.Code = failureCoder.FailureCode()
 	case errors.Is(err, ErrInvalidCall):
