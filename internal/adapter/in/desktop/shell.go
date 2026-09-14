@@ -15,10 +15,12 @@ import (
 )
 
 const (
-	sidebarTitleMaxRunes      = 38
-	sidebarMetaMaxRunes       = 28
-	contextDrawerWidth        = 320
-	conversationTailThreshold = 64
+	sidebarTitleMaxRunes        = 38
+	sidebarMetaMaxRunes         = 28
+	contextDrawerPreferredWidth = 320
+	contextDrawerMinWidth       = 220
+	contextDrawerWindowRatio    = 0.30
+	conversationTailThreshold   = 64
 )
 
 func (a *application) initDesktopControls() {
@@ -46,7 +48,6 @@ func (a *application) initDesktopControls() {
 
 func (a *application) initPermissionControls() {
 	a.permissionInbox = widget.NewButton("Permissions 0", a.selectNextPermission)
-	a.permissionInbox.Disable()
 	a.permissionTitle = widget.NewLabelWithStyle("Permission required", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	a.permissionDetail = widget.NewLabel("")
 	a.permissionDetail.Wrapping = fyne.TextWrapWord
@@ -106,7 +107,10 @@ func (a *application) initInspectorControls() {
 		nil,
 		container.NewVScroll(a.contextContent),
 	)
-	a.contextDrawer = container.New(fixedWidthLayout{width: contextDrawerWidth}, drawer)
+	a.contextDrawer = container.New(
+		fixedWidthLayout{width: contextDrawerWidthFor(a.desktopWindowWidth())},
+		drawer,
+	)
 	a.contextDrawer.Hide()
 }
 
@@ -294,6 +298,31 @@ func (a *application) scrollConversationToBottom() {
 	scroll.ScrollToBottom()
 }
 
+func (a *application) desktopWindowWidth() float32 {
+	if a.desktopApp == nil || a.desktopApp.Driver() == nil {
+		return 0
+	}
+	windows := a.desktopApp.Driver().AllWindows()
+	if len(windows) == 0 || windows[0] == nil || windows[0].Canvas() == nil {
+		return 0
+	}
+	return windows[0].Canvas().Size().Width
+}
+
+func contextDrawerWidthFor(windowWidth float32) float32 {
+	if windowWidth <= 0 {
+		return contextDrawerPreferredWidth
+	}
+	width := windowWidth * contextDrawerWindowRatio
+	if width < contextDrawerMinWidth {
+		return contextDrawerMinWidth
+	}
+	if width > contextDrawerPreferredWidth {
+		return contextDrawerPreferredWidth
+	}
+	return width
+}
+
 func (a *application) toggleRuntimePanel() {
 	if a.runtimePanel.Visible() {
 		a.runtimePanel.Hide()
@@ -313,5 +342,7 @@ func (a *application) toggleContextDrawer() {
 	if a.runtimePanel.Visible() {
 		a.runtimePanel.Hide()
 	}
+	a.contextDrawer.Layout = fixedWidthLayout{width: contextDrawerWidthFor(a.desktopWindowWidth())}
+	a.contextDrawer.Refresh()
 	a.contextDrawer.Show()
 }
