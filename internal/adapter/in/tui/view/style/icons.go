@@ -30,6 +30,10 @@ type IconSet struct {
 	TodoActive  string
 	Brand       string
 	Status      string
+	Attachment  string
+	Image       string
+	Link        string
+	Vision      string
 }
 
 // IconMode selects the terminal glyph capability profile.
@@ -67,6 +71,10 @@ const (
 	UnicodeTodoActive  = "● "
 	UnicodeBrand       = "◆"
 	UnicodeStatus      = "◌"
+	UnicodeAttachment  = "📎 "
+	UnicodeImage       = "🖼  "
+	UnicodeLink        = "↗ "
+	UnicodeVision      = "👁  "
 )
 
 // ASCII profile is safe for dumb terminals, redirected output, and logs.
@@ -92,6 +100,10 @@ const (
 	ASCIITodoActive  = "* "
 	ASCIIBrand       = "*"
 	ASCIIStatus      = "o"
+	ASCIIAttachment  = "@ "
+	ASCIIImage       = "# "
+	ASCIILink        = "> "
+	ASCIIVision      = "* "
 )
 
 // Nerd Font profile uses Codicons from Nerd Fonts v3. Protonman supports the
@@ -118,6 +130,10 @@ const (
 	NerdTodoActive  = "\uea71 " // nf-cod-circle_filled
 	NerdBrand       = "\ueb44"  // nf-cod-rocket
 	NerdStatus      = "\ueabc"  // nf-cod-circle
+	NerdAttachment  = "\uf0c6 " // nf-fa-paperclip
+	NerdImage       = "\uf03e " // nf-fa-image
+	NerdLink        = "\ueb15 " // nf-cod-link
+	NerdVision      = "\uea72 " // nf-cod-eye
 )
 
 var (
@@ -128,6 +144,7 @@ var (
 		Exec: UnicodeExec, Edit: UnicodeEdit, Skill: UnicodeSkill, Agent: UnicodeAgent, Git: UnicodeGit,
 		Generic: UnicodeGeneric, TodoPending: UnicodeTodoPending, TodoActive: UnicodeTodoActive,
 		Brand: UnicodeBrand, Status: UnicodeStatus,
+		Attachment: UnicodeAttachment, Image: UnicodeImage, Link: UnicodeLink, Vision: UnicodeVision,
 	}
 	ASCIIIcons = IconSet{
 		Composer: ASCIIComposer, Prompt: ASCIIPrompt, Mark: ASCIIMark, Tool: ASCIITool,
@@ -136,6 +153,7 @@ var (
 		Exec: ASCIIExec, Edit: ASCIIEdit, Skill: ASCIISkill, Agent: ASCIIAgent, Git: ASCIIGit,
 		Generic: ASCIIGeneric, TodoPending: ASCIITodoPending, TodoActive: ASCIITodoActive,
 		Brand: ASCIIBrand, Status: ASCIIStatus,
+		Attachment: ASCIIAttachment, Image: ASCIIImage, Link: ASCIILink, Vision: ASCIIVision,
 	}
 	NerdIcons = IconSet{
 		Composer: NerdComposer, Prompt: NerdPrompt, Mark: NerdMark, Tool: NerdTool,
@@ -144,6 +162,7 @@ var (
 		Exec: NerdExec, Edit: NerdEdit, Skill: NerdSkill, Agent: NerdAgent, Git: NerdGit,
 		Generic: NerdGeneric, TodoPending: NerdTodoPending, TodoActive: NerdTodoActive,
 		Brand: NerdBrand, Status: NerdStatus,
+		Attachment: NerdAttachment, Image: NerdImage, Link: NerdLink, Vision: NerdVision,
 	}
 )
 

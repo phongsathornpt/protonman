@@ -70,3 +70,22 @@ func TestToolCellHeaderStateGrammar(t *testing.T) {
 		})
 	}
 }
+
+func TestToolCellRendersImageASCIIPreviewInDetailView(t *testing.T) {
+	cell := ToolCell{
+		Name:       tool.NameRead,
+		Target:     "screenshot.png",
+		ToolKind:   tool.KindRead,
+		Summary:    "image png 100x100 · sampled 1000 px",
+		ShowDetail: true,
+		Preview:    " .:-=+*#%@\n .:-=+*#%@",
+	}
+	lines := cell.RenderWidth(80)
+	if len(lines) < 2 {
+		t.Fatalf("expected header and preview lines, got %d lines: %#v", len(lines), lines)
+	}
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(joined, ".:-=+*#%@") {
+		t.Fatalf("expected ASCII preview in detail lines, got:\n%s", joined)
+	}
+}

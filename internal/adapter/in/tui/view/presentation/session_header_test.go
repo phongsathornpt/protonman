@@ -37,6 +37,29 @@ func TestRenderSessionHeaderMetaUsesSemanticHierarchy(t *testing.T) {
 	}
 }
 
+func TestRenderSessionHeaderIncludesVisionWhenSupported(t *testing.T) {
+	// Default ASCII profile
+	got := renderSessionHeaderMeta(SessionHeaderModel{
+		Model:  "gpt-4o",
+		Vision: true,
+	}, 80)
+
+	if !strings.Contains(got, "vision") || !strings.Contains(got, "*") {
+		t.Fatalf("expected ASCII vision flag in header: %q", got)
+	}
+
+	// Nerd Font profile
+	nerdGot := renderSessionHeaderMeta(SessionHeaderModel{
+		Model:  "gpt-4o",
+		Vision: true,
+		Icons:  tuistyle.NerdIcons,
+	}, 80)
+
+	if !strings.Contains(nerdGot, "vision") || !strings.Contains(nerdGot, "\uea72") {
+		t.Fatalf("expected Nerd Font vision flag in header: %q", nerdGot)
+	}
+}
+
 func TestRenderSessionHeaderResponsiveWidth(t *testing.T) {
 	for _, width := range []int{8, 20, 24, 39, 40, 60, 80, 120} {
 		got := RenderSessionHeader(SessionHeaderModel{Width: width, Model: "provider/a-very-long-model", LowConcurrency: true, GoalActive: true, Branch: "feat/tui-brand"})

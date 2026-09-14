@@ -15,6 +15,8 @@ import (
 	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
 	agentpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/agent"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
@@ -305,6 +307,7 @@ func (m *bubbleModel) sessionHeaderView() string {
 	return renderSessionHeader(sessionHeaderModel{
 		Width:          profile.ContentWidth(m.layout.width),
 		Model:          m.activeModel,
+		Vision:         m.activeModelSupportsVision(),
 		LowConcurrency: m.lowConcurrencyEffective(),
 		GoalActive:     strings.TrimSpace(m.activeGoal) != "",
 		Branch:         cache.branch,
@@ -313,6 +316,14 @@ func (m *bubbleModel) sessionHeaderView() string {
 		Minimal:        profile.MinimalHeader(),
 		Icons:          m.icons,
 	})
+}
+
+func (m *bubbleModel) activeModelSupportsVision() bool {
+	if m == nil || strings.TrimSpace(m.activeModel) == "" {
+		return false
+	}
+	profile := model.ResolveModelProfile(m.activeProvider, m.activeModel, nil)
+	return profile.Capabilities.Vision == modelprofile.SupportYes
 }
 
 func (m *bubbleModel) invalidateSessionHeaderBranch() {

@@ -24,7 +24,7 @@ func (m *bubbleModel) appendLine(line string) {
 }
 
 func (m *bubbleModel) appendUser(line string) {
-	m.ensureHistoryState().Append(&tuihistory.UserCell{Text: line})
+	m.ensureHistoryState().Append(&tuihistory.UserCell{Text: line, Icons: m.icons})
 }
 
 func (m *bubbleModel) appendAssistant(text string) {

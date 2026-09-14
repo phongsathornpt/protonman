@@ -31,6 +31,23 @@ func EditPresentation(call tool.Call) (string, []string) {
 	return summary, paths
 }
 
+// ExtractImagePreview extracts an ASCII preview from image artifact structured output.
+func ExtractImagePreview(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var env struct {
+		Kind     string `json:"kind"`
+		Analysis struct {
+			ASCIIPreview string `json:"ascii_preview"`
+		} `json:"analysis"`
+	}
+	if err := json.Unmarshal(raw, &env); err == nil && env.Kind == "image" {
+		return strings.TrimSpace(env.Analysis.ASCIIPreview)
+	}
+	return ""
+}
+
 func ToolFailureSuggestions(toolName, target string, failure *tool.Failure) []string {
 	if failure == nil {
 		return nil

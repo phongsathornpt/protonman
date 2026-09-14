@@ -59,7 +59,8 @@ func (m *bubbleModel) updateTerminalEvent(msg tea.Msg) (tea.Cmd, bool) {
 		if prompt == nil {
 			return nil, true
 		}
-		updated, command := prompt.Update(message)
+		cleaned := normalizePastedPath(message.Content, m.workDir)
+		updated, command := prompt.Update(tea.PasteMsg{Content: cleaned})
 		*prompt = updated
 		m.syncSlashView()
 		m.requestRelayout()

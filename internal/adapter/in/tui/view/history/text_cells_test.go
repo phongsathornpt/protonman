@@ -6,6 +6,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 )
 
@@ -123,5 +124,40 @@ func TestAssistantCacheTailStartsOnUTF8Boundary(t *testing.T) {
 	}
 	if len(tail) > 64 {
 		t.Fatalf("assistant cache tail bytes=%d want <=64", len(tail))
+	}
+}
+
+func TestUserCellRendersAttachmentPills(t *testing.T) {
+	// Default ASCII profile
+	cell := UserCell{Text: "[Attached Image: image/png]"}
+	rendered := cell.RenderWidth(80)
+	if len(rendered) == 0 {
+		t.Fatal("expected rendered output for attachment cell")
+	}
+	if !strings.Contains(rendered[0], "#") || !strings.Contains(rendered[0], "image/png") {
+		t.Fatalf("rendered line = %q, want ASCII image attachment icon and mime", rendered[0])
+	}
+
+	fileCell := UserCell{Text: "[Attached File: document.pdf]"}
+	fileRendered := fileCell.RenderWidth(80)
+	if len(fileRendered) == 0 {
+		t.Fatal("expected rendered output for file attachment cell")
+	}
+	if !strings.Contains(fileRendered[0], "@") || !strings.Contains(fileRendered[0], "document.pdf") {
+		t.Fatalf("rendered line = %q, want ASCII file attachment icon and name", fileRendered[0])
+	}
+
+	// Explicit Nerd Font profile
+	nerdCell := UserCell{Text: "[Attached Image: image/png]", Icons: tuistyle.NerdIcons}
+	nerdRendered := nerdCell.RenderWidth(80)
+	if !strings.Contains(nerdRendered[0], "\uf03e") || !strings.Contains(nerdRendered[0], "image/png") {
+		t.Fatalf("rendered line = %q, want FontAwesome image attachment icon and mime", nerdRendered[0])
+	}
+
+	// Explicit Unicode profile
+	unicodeCell := UserCell{Text: "[Attached Image: image/png]", Icons: tuistyle.UnicodeIcons}
+	unicodeRendered := unicodeCell.RenderWidth(80)
+	if !strings.Contains(unicodeRendered[0], "🖼") || !strings.Contains(unicodeRendered[0], "image/png") {
+		t.Fatalf("rendered line = %q, want Unicode image icon", unicodeRendered[0])
 	}
 }

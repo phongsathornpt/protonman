@@ -1,6 +1,9 @@
 package runtime
 
 import (
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"charm.land/bubbles/v2/textarea"
@@ -291,4 +294,49 @@ func (m *bubbleModel) historyPrevious() {
 
 func (m *bubbleModel) historyNext() {
 	m.panes.bottom.historyNext()
+}
+
+func normalizePastedPath(content string, workDir string) string {
+	if strings.Contains(content, "\n") || strings.Contains(content, "\r") {
+		return content
+	}
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" {
+		return content
+	}
+
+	cleanCandidate := func(cand string) string {
+		cand = strings.TrimSpace(cand)
+		if cand == "" {
+			return ""
+		}
+		if (strings.HasPrefix(cand, "'") && strings.HasSuffix(cand, "'") && len(cand) >= 2) ||
+			(strings.HasPrefix(cand, "\"") && strings.HasSuffix(cand, "\"") && len(cand) >= 2) {
+			cand = cand[1 : len(cand)-1]
+		}
+		if strings.HasPrefix(cand, "file://") {
+			cand = strings.TrimPrefix(cand, "file://")
+			if unescaped, err := url.PathUnescape(cand); err == nil {
+				cand = unescaped
+			}
+		}
+		if strings.Contains(cand, `\ `) {
+			cand = strings.ReplaceAll(cand, `\ `, " ")
+		}
+		cand = filepath.Clean(cand)
+		if _, err := os.Stat(cand); err == nil {
+			if workDir != "" {
+				if rel, err := filepath.Rel(workDir, cand); err == nil && !strings.HasPrefix(rel, "..") {
+					return rel
+				}
+			}
+			return cand
+		}
+		return ""
+	}
+
+	if cleaned := cleanCandidate(trimmed); cleaned != "" {
+		return cleaned
+	}
+	return content
 }

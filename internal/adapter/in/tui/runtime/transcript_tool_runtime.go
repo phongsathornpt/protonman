@@ -146,7 +146,8 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 		}
 	}
 	summary := toolview.SummarizeOutput(name, toolKind, target, body, result.ExitCode, result.Truncated)
-	return &tuihistory.ToolCell{CallID: callID, Name: name, Body: body, Target: target, ToolKind: toolKind, Summary: summary, ExitCode: result.ExitCode, Truncated: result.Truncated, Denied: result.Denied, FailureCode: failureCode, ShowDetail: tuipresentation.MinimalPolicy().ToolDetail(toolKind, result.Denied, failureCode != "") != tuipresentation.DetailSummary, Icons: icons}
+	preview := transcriptutil.ExtractImagePreview(result.StructuredOutput)
+	return &tuihistory.ToolCell{CallID: callID, Name: name, Body: body, Target: target, ToolKind: toolKind, Summary: summary, ExitCode: result.ExitCode, Truncated: result.Truncated, Denied: result.Denied, FailureCode: failureCode, ShowDetail: tuipresentation.MinimalPolicy().ToolDetail(toolKind, result.Denied, failureCode != "") != tuipresentation.DetailSummary, Icons: icons, Preview: preview}
 }
 
 func (m *bubbleModel) runningToolTarget(callID, name string) string {

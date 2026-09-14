@@ -129,6 +129,7 @@ func (m *bubbleModel) submit() tea.Cmd {
 		m.panes.bottom.remove(slashViewID)
 		return m.dispatch(line)
 	}
+	line = normalizePastedPath(line, m.workDir)
 	if m.busy || m.hasPermissionView() {
 		if !m.enqueuePrompt(line) {
 			return nil

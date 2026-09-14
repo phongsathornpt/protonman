@@ -15,6 +15,7 @@ const (
 type SessionHeaderModel struct {
 	Width          int
 	Model          string
+	Vision         bool
 	LowConcurrency bool
 	GoalActive     bool
 	Branch         string
@@ -81,9 +82,16 @@ func renderSessionHeaderMeta(model SessionHeaderModel, width int) string {
 	if width <= 0 {
 		return ""
 	}
-	parts := make([]string, 0, 3)
+	parts := make([]string, 0, 4)
 	if name := strings.TrimSpace(model.Model); name != "" {
 		parts = append(parts, tuistyle.SystemStyle.Render(name))
+	}
+	if model.Vision {
+		visionGlyph := model.Icons.Vision
+		if visionGlyph == "" {
+			visionGlyph = tuistyle.ASCIIVision
+		}
+		parts = append(parts, tuistyle.MutedStyle.Render(strings.TrimSpace(visionGlyph)+" vision"))
 	}
 	if model.LowConcurrency {
 		parts = append(parts, tuistyle.MutedStyle.Render("low"))
@@ -99,9 +107,16 @@ func renderSessionHeaderMeta(model SessionHeaderModel, width int) string {
 }
 
 func sessionHeaderMeta(model SessionHeaderModel) string {
-	parts := make([]string, 0, 3)
+	parts := make([]string, 0, 4)
 	if name := strings.TrimSpace(model.Model); name != "" {
 		parts = append(parts, name)
+	}
+	if model.Vision {
+		visionGlyph := model.Icons.Vision
+		if visionGlyph == "" {
+			visionGlyph = tuistyle.ASCIIVision
+		}
+		parts = append(parts, strings.TrimSpace(visionGlyph)+" vision")
 	}
 	if model.LowConcurrency {
 		parts = append(parts, "low")
