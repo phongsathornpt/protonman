@@ -64,11 +64,23 @@ type ToolCall struct {
 	Name string `json:"name"`
 }
 
+// Part is one persisted provider-neutral content part. Image Data is transient
+// process state and is externalized by the filesystem adapter into a bounded
+// sidecar; only Blob is written to state.json.
+type Part struct {
+	Type     sdk.ContentPartType `json:"type"`
+	Text     string              `json:"text,omitempty"`
+	MIMEType string              `json:"mime_type,omitempty"`
+	Data     string              `json:"-"`
+	Blob     string              `json:"blob,omitempty"`
+}
+
 // Message is one persisted conversation turn without tool arguments.
 type Message struct {
 	ID         string     `json:"id,omitempty"`
 	Role       sdk.Role   `json:"role"`
 	Content    string     `json:"content,omitempty"`
+	Parts      []Part     `json:"parts,omitempty"`
 	ToolName   string     `json:"tool_name,omitempty"`
 	ToolCallID string     `json:"tool_call_id,omitempty"`
 	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
@@ -89,6 +101,7 @@ func ToModelMessages(stored []Message) []sdk.Message {
 			ID:      message.ID,
 			Role:    message.Role,
 			Content: message.Content,
+			Parts:   toModelParts(message.Parts),
 		})
 	}
 	return messages
@@ -108,12 +121,39 @@ func FromModelMessages(messages []sdk.Message) []Message {
 			ID:         message.ID,
 			Role:       message.Role,
 			Content:    message.Content,
+			Parts:      fromModelParts(message.Parts),
 			ToolName:   message.ToolName,
 			ToolCallID: message.ToolCallID,
 			ToolCalls:  fromModelToolCalls(message.ToolCalls),
 		})
 	}
 	return compactToolHistory(out)
+}
+
+func toModelParts(parts []Part) []sdk.ContentPart {
+	if len(parts) == 0 {
+		return nil
+	}
+	out := make([]sdk.ContentPart, 0, len(parts))
+	for _, part := range parts {
+		out = append(out, sdk.ContentPart{
+			Type: part.Type, Text: part.Text, MIMEType: part.MIMEType, Data: part.Data,
+		})
+	}
+	return out
+}
+
+func fromModelParts(parts []sdk.ContentPart) []Part {
+	if len(parts) == 0 {
+		return nil
+	}
+	out := make([]Part, 0, len(parts))
+	for _, part := range parts {
+		out = append(out, Part{
+			Type: part.Type, Text: part.Text, MIMEType: part.MIMEType, Data: part.Data,
+		})
+	}
+	return out
 }
 
 func isManagedSystemPrompt(text string) bool {
@@ -295,9 +335,24 @@ func sanitizeMessages(messages []Message) []Message {
 	cleaned := make([]Message, 0, len(messages))
 	for _, message := range messages {
 		message.Content = truncateStoredContent(message.Content)
+		message.Parts = sanitizeParts(message.Parts)
 		cleaned = append(cleaned, message)
 	}
 	return cleaned
+}
+
+func sanitizeParts(parts []Part) []Part {
+	if len(parts) == 0 {
+		return nil
+	}
+	out := make([]Part, 0, len(parts))
+	for _, part := range parts {
+		if part.Type == sdk.ContentPartText {
+			part.Text = truncateStoredContent(part.Text)
+		}
+		out = append(out, part)
+	}
+	return out
 }
 
 func truncateStoredContent(content string) string {
@@ -337,6 +392,7 @@ func validateMessages(messages []Message) error {
 			ID:         message.ID,
 			Role:       message.Role,
 			Content:    message.Content,
+			Parts:      toModelParts(message.Parts),
 			ToolName:   message.ToolName,
 			ToolCallID: message.ToolCallID,
 			ToolCalls:  toModelToolCalls(message.ToolCalls),
