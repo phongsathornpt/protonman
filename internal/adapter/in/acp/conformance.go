@@ -41,8 +41,8 @@ type StableFeature struct {
 
 // StableV1Coverage is the single source of truth for the staged ACP v1
 // conformance migration. False entries are deliberate implementation gaps, not
-// claims of support. Tests and docs should consume this list rather than
-// duplicating capability assumptions.
+// claims of support. Tests and capability serialization consume this list rather
+// than duplicating capability assumptions.
 var StableV1Coverage = []StableFeature{
 	{Name: "initialize", Supported: true, Advertised: true},
 	{Name: "session/new", Supported: true, Advertised: true},
@@ -61,4 +61,13 @@ var StableV1Coverage = []StableFeature{
 	{Name: "authentication", Supported: false, Advertised: false},
 	{Name: "terminal_authentication", Supported: false, Advertised: false},
 	{Name: "request_cancellation", Supported: false, Advertised: false},
+}
+
+func stableFeature(name string) (StableFeature, bool) {
+	for _, feature := range StableV1Coverage {
+		if feature.Name == name {
+			return feature, true
+		}
+	}
+	return StableFeature{}, false
 }
