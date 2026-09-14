@@ -26,7 +26,7 @@ var ErrInvalidRequest = errors.New("invalid request")
 
 type Option func(*Server)
 type RunnerFactory func(*toolcall.Service) (app.Conversation, error)
-type SessionRegistryFactory func(sessionID string, cwd string) (tool.Registry, error)
+type SessionRegistryFactory func(sessionID string, cwd string, additionalDirectories []string) (tool.Registry, error)
 type MCPRegistryConfigurer func(ctx context.Context, cwd string, registry tool.Registry, servers []MCPServerConfig) (io.Closer, error)
 
 func WithSessions(sessions *app.Sessions) Option {
@@ -58,6 +58,7 @@ type Server struct {
 	mu                     sync.Mutex
 	writeMu                sync.Mutex
 	sessions               map[string]*Session
+	sessionDirectories     map[string][]string
 	nextID                 uint64
 }
 
@@ -68,7 +69,12 @@ func New(service *toolcall.Service, registry tool.Registry, runner app.Conversat
 	if registry == nil {
 		return nil, fmt.Errorf("%w: registry is required", ErrInvalidServer)
 	}
-	s := &Server{service: service, registry: registry, sessions: make(map[string]*Session)}
+	s := &Server{
+		service: service,
+		registry: registry,
+		sessions: make(map[string]*Session),
+		sessionDirectories: make(map[string][]string),
+	}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(s)
@@ -244,16 +250,21 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 				return nil, nil, fmt.Errorf("decode session/new: %w", err)
 			}
 		}
+		cwd, directories, err := normalizeSessionDirectories(params.Cwd, params.AdditionalDirectories)
+		if err != nil {
+			return nil, nil, fmt.Errorf("session/new workspace roots: %w", err)
+		}
 		if err := validateMCPServerConfigs(params.MCPServers); err != nil {
 			return nil, nil, fmt.Errorf("session/new MCP servers: %w", err)
 		}
-		sessionID := session.NewID(params.Cwd)
-		sess, err := s.newSession(ctx, sessionID, params.Cwd, params.MCPServers)
+		sessionID := session.NewID(cwd)
+		sess, err := s.newSession(ctx, sessionID, cwd, directories, params.MCPServers)
 		if err != nil {
 			return nil, nil, err
 		}
 		s.mu.Lock()
 		s.sessions[sessionID] = sess
+		s.sessionDirectories[sessionID] = cloneDirectories(directories)
 		s.mu.Unlock()
 		notify := &RPCNotification{JSONRPC: "2.0", Method: "session/update", Params: map[string]any{"sessionId": sessionID, "update": map[string]any{"sessionUpdate": "available_commands_update", "availableCommands": DefaultAvailableCommands()}}}
 		return SessionNewResult{SessionID: sessionID, Modes: DefaultSessionModes(sess.service.Mode().String())}, notify, nil
@@ -266,10 +277,14 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if params.SessionID == "" {
 			return nil, nil, errors.New("sessionId is required")
 		}
+		cwd, directories, err := normalizeSessionDirectories(params.Cwd, params.AdditionalDirectories)
+		if err != nil {
+			return nil, nil, fmt.Errorf("session/load workspace roots: %w", err)
+		}
 		if err := validateMCPServerConfigs(params.MCPServers); err != nil {
 			return nil, nil, fmt.Errorf("session/load MCP servers: %w", err)
 		}
-		sess, err := s.loadOrCreateSession(ctx, params.SessionID, params.Cwd, params.MCPServers)
+		sess, err := s.loadOrCreateSession(ctx, params.SessionID, cwd, directories, params.MCPServers)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -286,10 +301,14 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if params.SessionID == "" {
 			return nil, nil, errors.New("sessionId is required")
 		}
+		cwd, directories, err := normalizeSessionDirectories(params.Cwd, params.AdditionalDirectories)
+		if err != nil {
+			return nil, nil, fmt.Errorf("session/resume workspace roots: %w", err)
+		}
 		if err := validateMCPServerConfigs(params.MCPServers); err != nil {
 			return nil, nil, fmt.Errorf("session/resume MCP servers: %w", err)
 		}
-		_, err := s.loadOrCreateSession(ctx, params.SessionID, params.Cwd, params.MCPServers)
+		_, err = s.loadOrCreateSession(ctx, params.SessionID, cwd, directories, params.MCPServers)
 		return nil, nil, err
 	case "session/set_mode":
 		var params SessionSetModeParams
@@ -411,17 +430,34 @@ func (s *Server) lookupSession(sessionID string) (*Session, bool) {
 	return sess, ok
 }
 
-func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd string, mcpServers []MCPServerConfig) (*Session, error) {
+func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd string, additionalDirectories []string, mcpServers []MCPServerConfig) (*Session, error) {
 	s.mu.Lock()
 	existing, ok := s.sessions[sessionID]
+	currentDirectories := cloneDirectories(s.sessionDirectories[sessionID])
 	s.mu.Unlock()
 	if ok {
+		if cwd != "" && existing.cwd != "" && cwd != existing.cwd {
+			return nil, fmt.Errorf("session %q belongs to cwd %q, not %q", sessionID, existing.cwd, cwd)
+		}
 		if err := existing.matchMCPServers(mcpServers); err != nil {
 			return nil, err
 		}
-		return existing, nil
+		if sameDirectories(currentDirectories, additionalDirectories) {
+			return existing, nil
+		}
+		if sessionIsActive(existing) {
+			return nil, fmt.Errorf("session %q has an active prompt; workspace roots cannot change", sessionID)
+		}
+		if err := existing.Close(); err != nil {
+			return nil, fmt.Errorf("close session %q before workspace reconfiguration: %w", sessionID, err)
+		}
+		s.mu.Lock()
+		delete(s.sessions, sessionID)
+		delete(s.sessionDirectories, sessionID)
+		s.mu.Unlock()
 	}
-	sess, err := s.newSession(ctx, sessionID, cwd, mcpServers)
+
+	sess, err := s.newSession(ctx, sessionID, cwd, additionalDirectories, mcpServers)
 	if err != nil {
 		return nil, err
 	}
@@ -465,15 +501,16 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 	}
 	s.mu.Lock()
 	s.sessions[sessionID] = sess
+	s.sessionDirectories[sessionID] = cloneDirectories(additionalDirectories)
 	s.mu.Unlock()
 	return sess, nil
 }
 
-func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, mcpServers []MCPServerConfig) (*Session, error) {
+func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, additionalDirectories []string, mcpServers []MCPServerConfig) (*Session, error) {
 	registry := s.registry
 	var mcpResource io.Closer
 	if s.sessionRegistryFactory != nil {
-		created, err := s.sessionRegistryFactory(sessionID, cwd)
+		created, err := s.sessionRegistryFactory(sessionID, cwd, cloneDirectories(additionalDirectories))
 		if err != nil {
 			return nil, fmt.Errorf("create registry for session %q: %w", sessionID, err)
 		}
@@ -525,11 +562,12 @@ func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, e
 		seen[id] = true
 		preview := session.Preview(session.FromModelMessages(sess.Messages()))
 		list = append(list, SessionInfo{
-			SessionID:     id,
-			Cwd:           sess.cwd,
-			Title:         sessionListTitle(id, sess.workspaceName, preview),
-			WorkspaceKey:  sess.workspaceKey,
-			WorkspaceName: sess.workspaceName,
+			SessionID:             id,
+			Cwd:                   sess.cwd,
+			AdditionalDirectories: cloneDirectories(s.sessionDirectories[id]),
+			Title:                 sessionListTitle(id, sess.workspaceName, preview),
+			WorkspaceKey:          sess.workspaceKey,
+			WorkspaceName:         sess.workspaceName,
 		})
 	}
 	s.mu.Unlock()
@@ -574,6 +612,7 @@ func (s *Server) closeSession(ctx context.Context, sessionID string) error {
 	sess, ok := s.sessions[sessionID]
 	if ok {
 		delete(s.sessions, sessionID)
+		delete(s.sessionDirectories, sessionID)
 	}
 	s.mu.Unlock()
 	if !ok || sess == nil {
