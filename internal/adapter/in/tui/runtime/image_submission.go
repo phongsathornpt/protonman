@@ -48,6 +48,7 @@ func prepareImageSubmission(input tuiconv.QueuedInput) tea.Cmd {
 
 func (m *bubbleModel) updateImageSubmissionPrepared(message imageSubmissionPreparedMsg) tea.Cmd {
 	m.imagePreparing = false
+	m.activity = "ready"
 	if message.err != nil {
 		m.appendError(message.err.Error())
 		m.restoreSubmissionToComposer(message.input)
