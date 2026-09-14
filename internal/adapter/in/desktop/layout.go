@@ -5,8 +5,9 @@ package desktop
 import "fyne.io/fyne/v2"
 
 // fixedWidthLayout constrains inspector-like side surfaces so their content
-// cannot grow the whole window's minimum width. The child is still laid out
-// at the space assigned by the parent, so wrapped text remains responsive.
+// cannot grow the window's minimum width or height. The child is always resized
+// to the space assigned by the parent, allowing scroll containers and wrapped
+// text to adapt without forcing the outer window larger.
 type fixedWidthLayout struct {
 	width float32
 }
@@ -18,12 +19,6 @@ func (l fixedWidthLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	}
 }
 
-func (l fixedWidthLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
-	height := float32(0)
-	for _, object := range objects {
-		if min := object.MinSize(); min.Height > height {
-			height = min.Height
-		}
-	}
-	return fyne.NewSize(l.width, height)
+func (l fixedWidthLayout) MinSize(_ []fyne.CanvasObject) fyne.Size {
+	return fyne.NewSize(l.width, 0)
 }
