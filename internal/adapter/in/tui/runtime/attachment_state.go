@@ -8,6 +8,8 @@ import (
 
 	"charm.land/bubbles/v2/textarea"
 	tuiconv "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/conversation"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 )
 
 type localImageAttachment struct {
@@ -133,4 +135,24 @@ func localImagePathFromPaste(content, workDir string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+func (m *bubbleModel) currentModelAcceptsImageInput() bool {
+	if m == nil || strings.TrimSpace(m.activeModel) == "" {
+		return true
+	}
+	var remote *model.RemoteModel
+	if candidate, ok := m.activeRemoteModel(); ok {
+		remote = &candidate
+	}
+	profile := model.ResolveModelProfile(m.activeProvider, m.activeModel, remote)
+	return profile.Capabilities.Vision != modelprofile.SupportNo
+}
+
+func (m *bubbleModel) imageInputsNotSupportedMessage() string {
+	modelID := strings.TrimSpace(m.activeModel)
+	if modelID == "" {
+		modelID = "current model"
+	}
+	return fmt.Sprintf("model %s does not support image inputs; remove images or switch models", modelID)
 }
