@@ -10,6 +10,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
+	"github.com/phongsathornpt/protonman/internal/feature/imageprep"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -184,6 +185,16 @@ func (l *Loop) prepareRoundRequest(
 		})
 	}
 	request := sdk.Request{Messages: reqMessages, Tools: sdkTools}
+	if requestContainsImage(request.Messages) {
+		if !caps.Vision {
+			return sdk.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("model %q does not support image input", l.languageModel.ModelID())
+		}
+		prepared, err := imageprep.PrepareMessages(request.Messages, imageprep.DefaultPolicy())
+		if err != nil {
+			return sdk.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("prepare model images: %w", err)
+		}
+		request.Messages = prepared
+	}
 	if grounding.pending() && dispatch.enabled() && len(sdkTools) > 0 && resolved.has &&
 		resolved.profile.Capabilities.ToolChoiceRequired == modelprofile.SupportYes {
 		request.Options.ToolChoice = sdk.ToolChoiceRequired
@@ -220,4 +231,15 @@ func (l *Loop) prepareRoundRequest(
 		return sdk.Request{}, dispatch, softToolBudgetWarned, err
 	}
 	return request, dispatch, softToolBudgetWarned, nil
+}
+
+func requestContainsImage(messages []sdk.Message) bool {
+	for _, message := range messages {
+		for _, part := range message.Parts {
+			if part.Type == sdk.ContentPartImage {
+				return true
+			}
+		}
+	}
+	return false
 }
