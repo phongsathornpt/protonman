@@ -11,6 +11,7 @@ import (
 	todotool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/todo"
 	webtool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/web"
 	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
@@ -74,12 +75,12 @@ func (r *appRuntime) registryForACPSession(sessionID, cwd string, additionalDire
 	}
 	launcher := sandbox.NewOSLauncher(sandboxProfile)
 
-	resources, err := sessionResourcesForACP(r.sessionsRoot, sessionID)
+	resources, err := session.ResolveResources(r.sessionsRoot, sessionID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve ACP session resources: %w", err)
 	}
 	ctx := context.Background()
-	todoStore, err := tododomain.OpenMarkdownStore(ctx, resources.todo)
+	todoStore, err := tododomain.OpenMarkdownStore(ctx, resources.Todo)
 	if err != nil {
 		return nil, fmt.Errorf("open ACP session todo store: %w", err)
 	}
@@ -111,16 +112,4 @@ func (r *appRuntime) registryForACPSession(sessionID, cwd string, additionalDire
 		return nil, fmt.Errorf("create ACP session tool registry: %w", err)
 	}
 	return agenttool.NewCapabilityRegistry(baseRegistry, r.coordinator), nil
-}
-
-type acpSessionResources struct {
-	todo string
-}
-
-func sessionResourcesForACP(sessionsRoot, sessionID string) (acpSessionResources, error) {
-	resources, err := sessionResolveResources(sessionsRoot, sessionID)
-	if err != nil {
-		return acpSessionResources{}, err
-	}
-	return acpSessionResources{todo: resources}, nil
 }
