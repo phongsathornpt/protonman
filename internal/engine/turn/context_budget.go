@@ -16,19 +16,18 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
-const (
-	estimatedBytesPerToken       = 3
-	imagePatchSize               = 32
-	maxEstimatedImagePatchTokens = 10_000
-	fallbackImageTokens          = 2_500
-)
+const estimatedBytesPerToken = 3
 
 func validateContextBudget(languageModel sdk.LanguageModel, request sdk.Request) error {
+	return validateContextBudgetWithVisionPolicy(languageModel, request, modelprofile.DefaultVisionPolicy())
+}
+
+func validateContextBudgetWithVisionPolicy(languageModel sdk.LanguageModel, request sdk.Request, visionPolicy modelprofile.VisionPolicy) error {
 	limits := sdk.ModelTokenLimits(languageModel)
 	if limits.ContextWindow <= 0 && limits.MaxInputTokens <= 0 && limits.MaxOutputTokens <= 0 {
 		return nil
 	}
-	estimated, err := estimateRequestTokens(request)
+	estimated, err := estimateRequestTokensWithVisionPolicy(request, visionPolicy)
 	if err != nil {
 		return fmt.Errorf("estimate model context: %w", err)
 	}
@@ -53,6 +52,11 @@ func validateContextBudget(languageModel sdk.LanguageModel, request sdk.Request)
 }
 
 func estimateRequestTokens(request sdk.Request) (int, error) {
+	return estimateRequestTokensWithVisionPolicy(request, modelprofile.DefaultVisionPolicy())
+}
+
+func estimateRequestTokensWithVisionPolicy(request sdk.Request, visionPolicy modelprofile.VisionPolicy) (int, error) {
+	visionPolicy = modelprofile.EffectiveVisionPolicy(modelprofile.Resolved{VisionPolicy: visionPolicy})
 	transportNeutral := request
 	transportNeutral.Messages = sdk.CloneMessages(request.Messages)
 	imageTokens := 0
@@ -62,7 +66,7 @@ func estimateRequestTokens(request sdk.Request) (int, error) {
 			if part.Type != sdk.ContentPartImage {
 				continue
 			}
-			imageTokens += estimateImageTokens(part.Data)
+			imageTokens += estimateImageTokensWithPolicy(part.Data, visionPolicy)
 			// Base64 is a transport representation, not text consumed by the model.
 			// Keep MIME/type framing in the serialized estimate but remove payload bytes.
 			part.Data = ""
@@ -81,25 +85,58 @@ func estimateRequestTokens(request sdk.Request) (int, error) {
 }
 
 func estimateImageTokens(data string) int {
+	return estimateImageTokensWithPolicy(data, modelprofile.DefaultVisionPolicy())
+}
+
+func estimateImageTokensWithPolicy(data string, policy modelprofile.VisionPolicy) int {
+	policy = modelprofile.EffectiveVisionPolicy(modelprofile.Resolved{VisionPolicy: policy})
 	data = strings.TrimSpace(data)
 	if data == "" {
-		return fallbackImageTokens
+		return policy.FallbackTokens
 	}
 	decoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(data))
 	config, _, err := image.DecodeConfig(decoder)
 	if err != nil || config.Width <= 0 || config.Height <= 0 {
-		return fallbackImageTokens
+		return policy.FallbackTokens
 	}
-	patchesWide := (config.Width + imagePatchSize - 1) / imagePatchSize
-	patchesHigh := (config.Height + imagePatchSize - 1) / imagePatchSize
-	patches := patchesWide * patchesHigh
-	if patches < 1 {
-		return 1
+
+	switch policy.TokenScheme {
+	case modelprofile.VisionTokenAnthropicPixels:
+		// Anthropic documents an approximate width*height/750 image-token rule.
+		pixels := int64(config.Width) * int64(config.Height)
+		tokens := int((pixels + 749) / 750)
+		return max(1, tokens)
+	case modelprofile.VisionTokenGeminiTiles:
+		// Gemini images up to 384px in both dimensions cost 258 tokens. Larger
+		// images are tiled; Google's published rough crop unit is floor(min/1.5).
+		if config.Width <= 384 && config.Height <= 384 {
+			return 258
+		}
+		minSide := min(config.Width, config.Height)
+		crop := max(1, (2*minSide)/3)
+		tilesWide := ceilDiv(config.Width, crop)
+		tilesHigh := ceilDiv(config.Height, crop)
+		return max(258, tilesWide*tilesHigh*258)
+	default:
+		patch := max(1, policy.PatchSize)
+		patchesWide := ceilDiv(config.Width, patch)
+		patchesHigh := ceilDiv(config.Height, patch)
+		patches := patchesWide * patchesHigh
+		if patches < 1 {
+			return 1
+		}
+		if policy.MaxPatches > 0 && patches > policy.MaxPatches {
+			return policy.MaxPatches
+		}
+		return patches
 	}
-	if patches > maxEstimatedImagePatchTokens {
-		return maxEstimatedImagePatchTokens
+}
+
+func ceilDiv(value, divisor int) int {
+	if divisor <= 0 {
+		return 0
 	}
-	return patches
+	return (value + divisor - 1) / divisor
 }
 
 func contextOutputReserve(window, requested int) int {
@@ -141,7 +178,11 @@ func effectiveInputBudget(limits sdk.TokenLimits, requestedOutput int) int {
 }
 
 func compactRequestToModelBudget(request sdk.Request, limits sdk.TokenLimits, policy modelprofile.CompactionPolicy) (sdk.Request, conversation.CompactionDecision, error) {
-	estimated, err := estimateRequestTokens(request)
+	return compactRequestToModelBudgetWithVisionPolicy(request, limits, policy, modelprofile.DefaultVisionPolicy())
+}
+
+func compactRequestToModelBudgetWithVisionPolicy(request sdk.Request, limits sdk.TokenLimits, policy modelprofile.CompactionPolicy, visionPolicy modelprofile.VisionPolicy) (sdk.Request, conversation.CompactionDecision, error) {
+	estimated, err := estimateRequestTokensWithVisionPolicy(request, visionPolicy)
 	if err != nil {
 		return request, conversation.CompactionDecision{}, err
 	}
@@ -152,7 +193,7 @@ func compactRequestToModelBudget(request sdk.Request, limits sdk.TokenLimits, po
 	}
 	fixed := request
 	fixed.Messages = nil
-	fixedTokens, err := estimateRequestTokens(fixed)
+	fixedTokens, err := estimateRequestTokensWithVisionPolicy(fixed, visionPolicy)
 	if err != nil {
 		return request, decision, err
 	}
