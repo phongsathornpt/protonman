@@ -50,7 +50,7 @@ func setNerdIconText(row *fyne.Container, icon nerdIcon, text string) {
 		return
 	}
 	glyph.Text = string(icon)
-	glyph.Refresh()
+	canvas.Refresh(glyph)
 	label.SetText(text)
 }
 
