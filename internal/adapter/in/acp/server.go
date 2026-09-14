@@ -500,7 +500,14 @@ func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, e
 			continue
 		}
 		seen[id] = true
-		list = append(list, SessionInfo{SessionID: id, Cwd: sess.cwd, Title: "Session " + id, WorkspaceKey: sess.workspaceKey, WorkspaceName: sess.workspaceName})
+		preview := session.Preview(session.FromModelMessages(sess.Messages()))
+		list = append(list, SessionInfo{
+			SessionID:     id,
+			Cwd:           sess.cwd,
+			Title:         sessionListTitle(id, sess.workspaceName, preview),
+			WorkspaceKey:  sess.workspaceKey,
+			WorkspaceName: sess.workspaceName,
+		})
 	}
 	s.mu.Unlock()
 	if s.sessionService != nil {
@@ -516,14 +523,27 @@ func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, e
 			if seen[summary.ID] {
 				continue
 			}
-			title := "Session " + summary.ID
-			if summary.WorkspaceName != "" {
-				title = summary.WorkspaceName + " · " + summary.ID
-			}
-			list = append(list, SessionInfo{SessionID: summary.ID, Cwd: cwd, Title: title, WorkspaceKey: summary.WorkspaceKey, WorkspaceName: summary.WorkspaceName, UpdatedAt: summary.UpdatedAt.Format("2006-01-02T15:04:05Z07:00")})
+			list = append(list, SessionInfo{
+				SessionID:     summary.ID,
+				Cwd:           cwd,
+				Title:         sessionListTitle(summary.ID, summary.WorkspaceName, summary.Preview),
+				WorkspaceKey:  summary.WorkspaceKey,
+				WorkspaceName: summary.WorkspaceName,
+				UpdatedAt:     summary.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			})
 		}
 	}
 	return list, nil
+}
+
+func sessionListTitle(id, workspaceName, preview string) string {
+	if preview = strings.TrimSpace(preview); preview != "" {
+		return preview
+	}
+	if workspaceName = strings.TrimSpace(workspaceName); workspaceName != "" {
+		return workspaceName
+	}
+	return "Session " + id
 }
 
 func (s *Server) deleteSession(ctx context.Context, sessionID string) error {

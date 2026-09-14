@@ -19,7 +19,7 @@ import (
 const mcpPreferencesKey = "mcp.integrations.v1"
 
 func (a *application) initIntegrationControls() {
-	a.integrationButton = widget.NewButton("MCP Integrations 0", func() {
+	a.integrationButton = widget.NewButton("MCP 0", func() {
 		if a.integrationPanel.Visible() {
 			a.integrationPanel.Hide()
 		} else {
@@ -203,7 +203,7 @@ func (a *application) renderIntegrations() {
 	if len(names) > 0 {
 		summary = strings.Join(names, " · ")
 	}
-	a.integrationButton.SetText(fmt.Sprintf("MCP Integrations %d", len(items)))
+	a.integrationButton.SetText(fmt.Sprintf("MCP %d", len(items)))
 	a.integrationSummary.SetText(summary)
 }
 

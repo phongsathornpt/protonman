@@ -162,6 +162,7 @@ func (a *application) markDisconnected(client *acpclient.Client) {
 	a.state = desktopstate.MarkDisconnected(a.state)
 	a.permissionWaiters = make(map[string]chan string)
 	a.mu.Unlock()
+	resetLoadingSessionHistories(a)
 	a.setStatus("Disconnected · reconnecting…")
 	fyne.Do(func() { a.list.Refresh() })
 	a.refreshActiveView()

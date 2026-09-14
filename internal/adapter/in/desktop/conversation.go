@@ -51,7 +51,11 @@ func (a *application) handleEvent(event acpclient.Event) {
 		Text:       text,
 	}
 
-	if raw.Update.Kind == "agent_message_chunk" {
+	switch raw.Update.Kind {
+	case "user_message_chunk":
+		a.appendTranscript(raw.SessionID, formatUserTranscript(text))
+		return
+	case "agent_message_chunk":
 		a.appendTranscript(raw.SessionID, text)
 		return
 	}
@@ -122,6 +126,9 @@ func (a *application) appendTranscript(sessionID, text string) {
 	if text == "" {
 		return
 	}
+	if stageSessionHistoryChunk(a, sessionID, text) {
+		return
+	}
 	a.mu.Lock()
 	builder := a.transcripts[sessionID]
 	if builder == nil {
@@ -152,36 +159,53 @@ func (a *application) refreshActiveView() {
 func (a *application) renderActiveView() {
 	a.mu.Lock()
 	activeID := a.state.ActiveSessionID
-	busy := a.sessionBusyLocked(activeID)
-	markdown := ""
-	if transcript := a.transcripts[activeID]; transcript != nil {
-		markdown = transcript.String()
+	promptBusy := a.sessionBusyLocked(activeID)
+	sessionChanged := activeID != a.conversationSessionID
+	a.conversationSessionID = activeID
+	transcript := ""
+	if current := a.transcripts[activeID]; current != nil {
+		transcript = current.String()
 	}
+	markdown := transcript
 	for _, session := range a.state.Sessions {
 		if session.ID == activeID {
-			markdown += renderSessionContext(session.Context)
-			markdown += renderMemory(session.Context.Memory)
-			markdown += renderTimeline(session.Timeline)
-			markdown += renderSubagents(session.Subagents)
+			markdown = renderConversation(transcript, session)
 			break
 		}
 	}
 	a.mu.Unlock()
+	historyLoading := sessionHistoryIsLoading(a, activeID)
 
 	fyne.Do(func() {
+		followTail := sessionChanged || a.shouldFollowConversationTail()
 		a.chat.ParseMarkdown(markdown)
 		a.chat.Refresh()
-		if activeID == "" || busy {
+		if followTail {
+			a.scrollConversationToBottom()
+		}
+		if activeID == "" || promptBusy || historyLoading {
 			a.send.Disable()
 		} else {
 			a.send.Enable()
 		}
-		if busy {
+		if promptBusy {
 			a.stop.Enable()
 		} else {
 			a.stop.Disable()
 		}
 	})
+	a.renderSessionChrome()
+}
+
+// renderConversation intentionally excludes goal, TODO and durable memory.
+// Those are inspector state, not conversation content, and rendering them inline
+// makes the primary chat surface behave like a debug dump.
+func renderConversation(transcript string, session desktopstate.SessionState) string {
+	var out strings.Builder
+	out.WriteString(transcript)
+	out.WriteString(renderTimeline(session.Timeline))
+	out.WriteString(renderSubagents(session.Subagents))
+	return out.String()
 }
 
 func terminalToolStatus(status string) bool {

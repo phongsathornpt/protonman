@@ -25,6 +25,11 @@ func (a *application) notifyPermission(item desktopstate.PermissionRequest) {
 }
 
 func (a *application) notifyTurnFinished(sessionID string, turnErr error) {
+	// session/list now exposes a bounded conversation preview as the display title.
+	// Refresh after each turn so the sidebar/header stop showing synthetic IDs as
+	// soon as the first user prompt has been persisted.
+	a.refreshSessions()
+
 	a.mu.Lock()
 	active := a.state.ActiveSessionID == sessionID
 	label := sessionNotificationLabelLocked(a.state, sessionID)

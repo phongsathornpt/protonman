@@ -11,7 +11,10 @@ import (
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
-const runtimeRefreshInterval = time.Second
+const (
+	runtimeRefreshInterval = time.Second
+	runtimeSummaryMaxRunes = 40
+)
 
 type sessionRuntimeResult struct {
 	SessionID      string `json:"sessionId"`
@@ -159,6 +162,8 @@ func (a *application) renderRuntimeControls() {
 		}
 	}
 	a.mu.Unlock()
+	summary := runtimeSummaryText(runtime)
+
 	fyne.Do(func() {
 		a.runtimeSync = true
 		a.modelProvider.SetText(runtime.Provider)
@@ -169,6 +174,7 @@ func (a *application) renderRuntimeControls() {
 		if runtime.LowConcurrency != "" {
 			a.lowSelect.SetSelected(runtime.LowConcurrency)
 		}
+		a.runtimeSummary.SetText(summary)
 		a.runtimeSync = false
 		if activeID == "" || busy {
 			a.modelProvider.Disable()
@@ -184,4 +190,28 @@ func (a *application) renderRuntimeControls() {
 			a.lowSelect.Enable()
 		}
 	})
+}
+
+func runtimeSummaryText(runtime desktopstate.RuntimeSettingsState) string {
+	base := strings.TrimSpace(runtime.Model)
+	if base == "" {
+		base = strings.TrimSpace(runtime.Provider)
+	}
+	if base == "" {
+		base = "Model"
+	}
+
+	suffix := ""
+	if reasoning := strings.TrimSpace(runtime.Reasoning); reasoning != "" && reasoning != "auto" {
+		suffix += " · " + reasoning
+	}
+	if low := strings.TrimSpace(runtime.LowConcurrency); low == "on" {
+		suffix += " · low"
+	}
+
+	baseLimit := runtimeSummaryMaxRunes - len([]rune(suffix))
+	if baseLimit < 8 {
+		baseLimit = 8
+	}
+	return compactText(base, baseLimit) + suffix
 }

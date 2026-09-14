@@ -3,6 +3,7 @@
 package desktop
 
 import (
+	"sort"
 	"strings"
 
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
@@ -23,9 +24,45 @@ type sidebarRow struct {
 	SessionCount  int
 }
 
+func (a *application) rebuildSidebarRowsLocked() {
+	a.sidebarRows = buildSidebarRows(filterSessions(a.state.Sessions, a.sidebarQuery))
+}
+
+func filterSessions(sessions []desktopstate.SessionState, query string) []desktopstate.SessionState {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return append([]desktopstate.SessionState(nil), sessions...)
+	}
+
+	filtered := make([]desktopstate.SessionState, 0, len(sessions))
+	for _, session := range sessions {
+		haystack := strings.ToLower(strings.Join([]string{
+			session.Title,
+			session.WorkspaceName,
+			session.Workspace,
+			session.WorkspaceKey,
+			session.ID,
+		}, "\n"))
+		if strings.Contains(haystack, query) {
+			filtered = append(filtered, session)
+		}
+	}
+	return filtered
+}
+
 func buildSidebarRows(sessions []desktopstate.SessionState) []sidebarRow {
-	groups := desktopstate.GroupSessionsByWorkspace(sessions)
-	rows := make([]sidebarRow, 0, len(sessions)+len(groups))
+	sorted := append([]desktopstate.SessionState(nil), sessions...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		leftWorkspace := strings.ToLower(strings.TrimSpace(sorted[i].WorkspaceName))
+		rightWorkspace := strings.ToLower(strings.TrimSpace(sorted[j].WorkspaceName))
+		if leftWorkspace != rightWorkspace {
+			return leftWorkspace < rightWorkspace
+		}
+		return sorted[i].ID > sorted[j].ID
+	})
+
+	groups := desktopstate.GroupSessionsByWorkspace(sorted)
+	rows := make([]sidebarRow, 0, len(sorted)+len(groups))
 	for _, group := range groups {
 		rows = append(rows, sidebarRow{
 			Kind:          sidebarWorkspaceRow,
