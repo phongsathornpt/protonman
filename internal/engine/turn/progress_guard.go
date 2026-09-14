@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
@@ -15,7 +16,7 @@ const (
 	// Exact-call suppression should not immediately terminate every tool path.
 	// Give the model a bounded number of consecutive stalled rounds to consume
 	// the synthetic no-progress result and choose a materially different strategy.
-	defaultMaxConsecutiveStalledRounds = 3
+	defaultMaxConsecutiveStalledRounds = runtimepolicy.TurnMaxConsecutiveStalledRounds
 )
 
 type progressObservation struct {
