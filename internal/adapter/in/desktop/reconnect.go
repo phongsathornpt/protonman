@@ -76,14 +76,20 @@ func (a *application) superviseConnection() {
 }
 
 func resolveACPBinary() string {
-	override := strings.TrimSpace(os.Getenv("PROTONMAN_BINARY"))
-	if override != "" {
+	executable, _ := os.Executable()
+	return resolveACPBinaryFor(os.Getenv("PROTONMAN_BINARY"), executable, func(path string) bool {
+		info, err := os.Stat(path)
+		return err == nil && !info.IsDir()
+	})
+}
+
+func resolveACPBinaryFor(override, executable string, isFile func(string) bool) string {
+	if override = strings.TrimSpace(override); override != "" {
 		return override
 	}
-	executable, err := os.Executable()
-	if err == nil {
+	if executable = strings.TrimSpace(executable); executable != "" && isFile != nil {
 		candidate := filepath.Join(filepath.Dir(executable), "libexec", "protonman")
-		if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() {
+		if isFile(candidate) {
 			return candidate
 		}
 	}
