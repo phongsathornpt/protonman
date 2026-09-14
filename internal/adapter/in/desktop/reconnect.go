@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	reconnectInitialDelay  = time.Second
-	reconnectMaxDelay      = 8 * time.Second
+	reconnectInitialDelay   = time.Second
+	reconnectMaxDelay       = 8 * time.Second
 	reconnectRequestTimeout = 15 * time.Second
 )
 
