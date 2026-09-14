@@ -112,6 +112,16 @@ func submissionDisplayText(input tuiconv.QueuedInput) string {
 	return strings.Join(parts, " ")
 }
 
+// submissionHistoryText deliberately excludes attachment placeholders. History
+// is text-only; replaying a visual marker without the underlying attachment is
+// misleading and could cause a later turn to send stale-looking literal text.
+func submissionHistoryText(input tuiconv.QueuedInput) string {
+	if len(input.Attachments) > 0 {
+		return strings.TrimSpace(input.Text)
+	}
+	return strings.TrimSpace(submissionDisplayText(input))
+}
+
 func localImagePathFromPaste(content, workDir string) (string, bool) {
 	if strings.TrimSpace(content) == "" || strings.ContainsAny(content, "\r\n") {
 		return "", false
