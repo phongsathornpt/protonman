@@ -14,7 +14,7 @@ func TestFinishPermissionStateIgnoresStaleWaiter(t *testing.T) {
 	a := &application{
 		permissionWaiters: map[string]chan string{"7": current},
 		state: desktopstate.State{
-			Sessions: []desktopstate.SessionState{{ID: "s1", Status: desktopstate.TaskWaitingPermission}},
+			Sessions:        []desktopstate.SessionState{{ID: "s1", Status: desktopstate.TaskWaitingPermission}},
 			PermissionInbox: []desktopstate.PermissionRequest{{RequestID: "7", SessionID: "s1"}},
 		},
 	}
