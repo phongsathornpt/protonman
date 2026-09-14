@@ -14,6 +14,11 @@ import (
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
+const (
+	sidebarTitleMaxRunes = 38
+	sidebarMetaMaxRunes  = 28
+)
+
 func (a *application) initDesktopControls() {
 	a.status = widget.NewLabel("Connecting to Protonman…")
 	a.status.Wrapping = fyne.TextWrapWord
@@ -140,7 +145,7 @@ func (a *application) bindSessionRow(id widget.ListItemID, object fyne.CanvasObj
 	title := box.Objects[0].(*fyne.Container)
 	subtitle := box.Objects[1].(*fyne.Container)
 	if row.Kind == sidebarWorkspaceRow {
-		setNerdIconText(title, iconFolder, row.WorkspaceName)
+		setNerdIconText(title, iconFolder, compactText(row.WorkspaceName, sidebarTitleMaxRunes))
 		setNerdIconText(subtitle, iconSession, fmt.Sprintf("%d sessions", row.SessionCount))
 		return
 	}
@@ -149,7 +154,7 @@ func (a *application) bindSessionRow(id widget.ListItemID, object fyne.CanvasObj
 	if titleText == "" {
 		titleText = "Session " + shortID(session.ID)
 	}
-	setNerdIconText(title, iconSession, titleText)
+	setNerdIconText(title, iconSession, compactText(titleText, sidebarTitleMaxRunes))
 
 	if session.Status != desktopstate.TaskIdle {
 		setNerdIconText(subtitle, taskStatusIcon(session.Status), string(session.Status))
@@ -159,7 +164,7 @@ func (a *application) bindSessionRow(id widget.ListItemID, object fyne.CanvasObj
 	if workspace == "" {
 		workspace = "workspace"
 	}
-	setNerdIconText(subtitle, iconFolder, workspace)
+	setNerdIconText(subtitle, iconFolder, compactText(workspace, sidebarMetaMaxRunes))
 }
 
 func (a *application) selectSessionRow(id widget.ListItemID) {
