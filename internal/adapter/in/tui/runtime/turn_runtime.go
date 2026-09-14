@@ -21,6 +21,14 @@ var errTurnEventsClosed = errors.New("turn event stream closed before completion
 var tuiTurnOwnerSeq atomic.Uint64
 
 func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
+	return m.startTurnMessage(model.Message{
+		ID:      model.NewMessageID(),
+		Role:    model.RoleUser,
+		Content: prompt,
+	})
+}
+
+func (m *bubbleModel) startTurnMessage(userMessage model.Message) tea.Cmd {
 	if m.busy {
 		m.appendError("a turn is already running")
 		m.requestRelayout()
@@ -35,8 +43,19 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 		m.requestRelayout()
 		return nil
 	}
+	if userMessage.ID == "" {
+		userMessage.ID = model.NewMessageID()
+	}
+	if userMessage.Role == "" {
+		userMessage.Role = model.RoleUser
+	}
+	if userMessage.Role != model.RoleUser {
+		m.appendError("tui turn input must be a user message")
+		m.requestRelayout()
+		return nil
+	}
 	m.retireCompletedTodoForNextTurn()
-	m.conversation.AppendMessages(model.Message{ID: model.NewMessageID(), Role: model.RoleUser, Content: prompt})
+	m.conversation.AppendMessages(userMessage)
 	m.turnModelState.beginTurn(fmt.Sprintf("tui-turn-%d", tuiTurnOwnerSeq.Add(1)), time.Now())
 	m.requestRelayout()
 	ctx, cancel := context.WithCancel(m.ctx)
@@ -44,7 +63,7 @@ func (m *bubbleModel) startTurn(prompt string) tea.Cmd {
 	events := make(chan tea.Msg, 32)
 	history := m.conversation.SnapshotMessages()
 	startedAt := time.Now()
-	slog.DebugContext(ctx, "tui turn started", "prompt_bytes", len(prompt), "history_messages", len(history))
+	slog.DebugContext(ctx, "tui turn started", "prompt_bytes", len(userMessage.Content), "content_parts", len(userMessage.Parts), "history_messages", len(history))
 	go func() {
 		queueTerminal := func(result app.Result, err error) {
 			select {
