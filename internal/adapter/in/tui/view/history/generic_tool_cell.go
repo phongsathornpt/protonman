@@ -29,6 +29,7 @@ type ToolCell struct {
 	ToolKind        tool.Kind
 	Summary         string
 	ShowDetail      bool
+	Icons           tuistyle.IconSet
 }
 
 func (ToolCell) Kind() HistoryCellKind { return HistoryCellTool }
@@ -60,6 +61,7 @@ func (c ToolCell) RenderWidth(width int) []string {
 		Denied:      c.Denied,
 		FailureCode: c.FailureCode,
 		Spinner:     c.Spinner,
+		Icons:       c.Icons,
 	})
 	headerLine := toolview.RenderHeader(header, width)
 
