@@ -145,7 +145,7 @@ type presentationModelState struct {
 	keys               bubbleKeyMap
 	planMode           bool
 	reducedMotion      bool
-	icons               tuiicon.Set
+	icons              tuiicon.Set
 	panes              paneState
 	nextID             uint64
 	layout             layoutState
