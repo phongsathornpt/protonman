@@ -30,29 +30,36 @@ without nested `message.Message` or `stream.Event` APIs.
 
 ```text
 proton-sdk/
-  language_model.go
-  request.go
-  requirements.go
-  response.go
+  model.go
+  model_test.go
   message.go
-  content.go
-  tool.go
-  reasoning.go
+  message_test.go
+  request.go
+  request_test.go
   stream.go
-  usage.go
-  metadata.go
-  capabilities.go
-  collect.go
-  history.go
+  stream_test.go
   error.go
-  middleware.go
+  error_test.go
   registry.go
-  retry.go
-  retry_observer.go
-  rate_limit.go
+  registry_test.go
+  ownership_test.go
+  internal/
+    providerutil/
+      transport.go
+      transport_test.go
   provider/
     openai/
+      provider.go
+      client.go
+      request.go
+      stream.go
+      error.go
     anthropic/
+      provider.go
+      client.go
+      request.go
+      stream.go
+      error.go
 ```
 
 Provider wire request/response types remain private to their provider package.

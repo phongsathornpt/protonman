@@ -3,7 +3,6 @@ package protonsdk
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -18,6 +17,56 @@ const (
 	RoleAssistant Role = "assistant"
 	RoleTool      Role = "tool"
 )
+
+type ContentPartType string
+
+const (
+	ContentPartText  ContentPartType = "text"
+	ContentPartImage ContentPartType = "image"
+)
+
+type ContentPart struct {
+	Type     ContentPartType `json:"type"`
+	Text     string          `json:"text,omitempty"`
+	MIMEType string          `json:"mime_type,omitempty"`
+	Data     string          `json:"data,omitempty"`
+}
+
+// ReasoningEffort is the provider-neutral reasoning intensity requested from a model.
+// The empty value preserves the model/provider default.
+type ReasoningEffort string
+
+const (
+	ReasoningDefault ReasoningEffort = ""
+	ReasoningNone    ReasoningEffort = "none"
+	ReasoningMinimal ReasoningEffort = "minimal"
+	ReasoningLow     ReasoningEffort = "low"
+	ReasoningMedium  ReasoningEffort = "medium"
+	ReasoningHigh    ReasoningEffort = "high"
+	ReasoningXHigh   ReasoningEffort = "xhigh"
+	ReasoningMax     ReasoningEffort = "max"
+)
+
+func ParseReasoningEffort(value string) (ReasoningEffort, error) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "auto" || value == "default" {
+		return ReasoningDefault, nil
+	}
+	effort := ReasoningEffort(value)
+	if !effort.Valid() {
+		return ReasoningDefault, fmt.Errorf("%w: unsupported reasoning effort %q", ErrInvalidRequest, value)
+	}
+	return effort, nil
+}
+
+func (e ReasoningEffort) Valid() bool {
+	switch e {
+	case ReasoningDefault, ReasoningNone, ReasoningMinimal, ReasoningLow, ReasoningMedium, ReasoningHigh, ReasoningXHigh, ReasoningMax:
+		return true
+	default:
+		return false
+	}
+}
 
 type Message struct {
 	// ID is a stable provider-neutral identity for this logical conversation message.
@@ -128,8 +177,7 @@ func CloneMessages(messages []Message) []Message {
 		clone.Parts = append([]ContentPart(nil), message.Parts...)
 		clone.ToolCalls = make([]ToolCall, 0, len(message.ToolCalls))
 		for _, call := range message.ToolCalls {
-			call.Arguments = append(json.RawMessage(nil), call.Arguments...)
-			clone.ToolCalls = append(clone.ToolCalls, call)
+			clone.ToolCalls = append(clone.ToolCalls, call.Clone())
 		}
 		cloned = append(cloned, clone)
 	}
@@ -143,4 +191,50 @@ func validRole(role Role) bool {
 	default:
 		return false
 	}
+}
+
+// AppendAssistantResponse appends a normalized assistant response to conversation
+// history. Text and tool calls stay on the same logical assistant message;
+// provider adapters may split them on the wire if required.
+func AppendAssistantResponse(messages []Message, response Response) []Message {
+	next := CloneMessages(messages)
+	if response.Text == "" && len(response.ToolCalls) == 0 {
+		return next
+	}
+	assistant := Message{
+		ID:        NewMessageID(),
+		Role:      RoleAssistant,
+		Content:   response.Text,
+		ToolCalls: make([]ToolCall, 0, len(response.ToolCalls)),
+	}
+	for _, call := range response.ToolCalls {
+		assistant.ToolCalls = append(assistant.ToolCalls, call.Clone())
+	}
+	return append(next, assistant)
+}
+
+// AppendAssistantStep is retained for source compatibility with earlier SDK releases.
+// Deprecated: use AppendAssistantResponse.
+func AppendAssistantStep(messages []Message, result StepResult) []Message {
+	return AppendAssistantResponse(messages, result)
+}
+
+// AppendToolResults appends tool execution outputs in model-history order.
+func AppendToolResults(messages []Message, results []ToolResult) ([]Message, error) {
+	next := CloneMessages(messages)
+	for _, result := range results {
+		if err := result.Validate(); err != nil {
+			return nil, err
+		}
+		next = append(next, Message{
+			ID:                NewMessageID(),
+			Role:              RoleTool,
+			Content:           result.Content,
+			Parts:             append([]ContentPart(nil), result.Parts...),
+			ToolCallID:        result.ToolCallID,
+			ToolName:          result.ToolName,
+			ToolResultIsError: result.IsError,
+		})
+	}
+	return next, nil
 }
