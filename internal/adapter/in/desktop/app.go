@@ -129,9 +129,8 @@ func Run(ctx context.Context) error {
 			return len(ui.sidebarRows)
 		},
 		func() fyne.CanvasObject {
-			title := widget.NewLabel("Session")
-			subtitle := widget.NewLabel("")
-			subtitle.Importance = widget.LowImportance
+			title := newNerdIconText(iconSession, "Session", fyne.TextStyle{}, false)
+			subtitle := newNerdIconText(iconReady, "ready", fyne.TextStyle{}, true)
 			return container.NewVBox(title, subtitle)
 		},
 		func(id widget.ListItemID, object fyne.CanvasObject) {
@@ -153,23 +152,23 @@ func Run(ctx context.Context) error {
 			ui.mu.Unlock()
 
 			box := object.(*fyne.Container)
-			title := box.Objects[0].(*widget.Label)
-			subtitle := box.Objects[1].(*widget.Label)
+			title := box.Objects[0].(*fyne.Container)
+			subtitle := box.Objects[1].(*fyne.Container)
 			if row.Kind == sidebarWorkspaceRow {
-				title.SetText("▾ " + row.WorkspaceName)
-				subtitle.SetText(fmt.Sprintf("%d sessions", row.SessionCount))
+				setNerdIconText(title, iconFolder, row.WorkspaceName)
+				setNerdIconText(subtitle, iconSession, fmt.Sprintf("%d sessions", row.SessionCount))
 				return
 			}
 			if strings.TrimSpace(session.Title) == "" {
-				title.SetText("↳ Session " + shortID(session.ID))
+				setNerdIconText(title, iconSession, "Session "+shortID(session.ID))
 			} else {
-				title.SetText("↳ " + session.Title)
+				setNerdIconText(title, iconSession, session.Title)
 			}
 			status := "ready"
 			if session.Status != desktopstate.TaskIdle {
 				status = string(session.Status)
 			}
-			subtitle.SetText(status)
+			setNerdIconText(subtitle, taskStatusIcon(session.Status), status)
 		},
 	)
 	ui.list.OnSelected = func(id widget.ListItemID) {
@@ -196,7 +195,7 @@ func Run(ctx context.Context) error {
 	search := widget.NewEntry()
 	search.SetPlaceHolder("Search")
 	newTask := widget.NewButtonWithIcon("", theme.ContentAddIcon(), ui.newSession)
-	sidebarHeader := container.NewBorder(nil, nil, nil, newTask, widget.NewLabelWithStyle("protonMAN", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
+	sidebarHeader := container.NewBorder(nil, nil, nil, newTask, newNerdIconText(iconRocket, "protonMAN", fyne.TextStyle{Bold: true}, false))
 	sidebar := container.NewBorder(
 		container.NewVBox(sidebarHeader, search),
 		container.NewVBox(widget.NewSeparator(), ui.integrationButton, ui.integrationPanel, ui.permissionInbox, widget.NewLabel("Desktop via ACP")),
@@ -209,7 +208,7 @@ func Run(ctx context.Context) error {
 	headerActions := container.NewHBox(ui.stop, ui.status)
 	header := container.NewBorder(runtimeControls, nil, nil, headerActions,
 		container.NewVBox(
-			widget.NewLabelWithStyle("protonMAN", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			newNerdIconText(iconRocket, "protonMAN", fyne.TextStyle{Bold: true}, false),
 			widget.NewLabel("Coding agent · ACP"),
 		),
 	)
