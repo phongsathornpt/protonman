@@ -3,6 +3,7 @@
 package desktop
 
 import (
+	"sort"
 	"strings"
 
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
@@ -50,8 +51,18 @@ func filterSessions(sessions []desktopstate.SessionState, query string) []deskto
 }
 
 func buildSidebarRows(sessions []desktopstate.SessionState) []sidebarRow {
-	groups := desktopstate.GroupSessionsByWorkspace(sessions)
-	rows := make([]sidebarRow, 0, len(sessions)+len(groups))
+	sorted := append([]desktopstate.SessionState(nil), sessions...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		leftWorkspace := strings.ToLower(strings.TrimSpace(sorted[i].WorkspaceName))
+		rightWorkspace := strings.ToLower(strings.TrimSpace(sorted[j].WorkspaceName))
+		if leftWorkspace != rightWorkspace {
+			return leftWorkspace < rightWorkspace
+		}
+		return sorted[i].ID > sorted[j].ID
+	})
+
+	groups := desktopstate.GroupSessionsByWorkspace(sorted)
+	rows := make([]sidebarRow, 0, len(sorted)+len(groups))
 	for _, group := range groups {
 		rows = append(rows, sidebarRow{
 			Kind:          sidebarWorkspaceRow,
