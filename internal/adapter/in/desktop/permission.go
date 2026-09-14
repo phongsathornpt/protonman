@@ -6,12 +6,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/acpclient"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
 const requestPermissionMethod = "session/request_permission"
+
+const maxPermissionDetailBytes = 4096
 
 type permissionParams struct {
 	SessionID string         `json:"sessionId"`
@@ -32,7 +35,12 @@ func (a *application) handleRequest(ctx context.Context, request acpclient.Reque
 		return nil, fmt.Errorf("decode permission request: %w", err)
 	}
 	requestID := string(request.ID)
-	item := desktopstate.PermissionRequest{RequestID: requestID, SessionID: params.SessionID, Title: "Tool permission"}
+	item := desktopstate.PermissionRequest{
+		RequestID: requestID,
+		SessionID: params.SessionID,
+		Title:     "Tool permission",
+		Detail:    permissionDetail(params.ToolCall),
+	}
 	if title, ok := params.ToolCall["title"].(string); ok && title != "" {
 		item.Title = title
 	}
@@ -58,6 +66,25 @@ func (a *application) handleRequest(ctx context.Context, request acpclient.Reque
 		a.finishPermission(requestID, params.SessionID, waiter)
 		return map[string]any{"outcome": map[string]any{"outcome": "selected", "optionId": optionID}}, nil
 	}
+}
+
+func permissionDetail(toolCall map[string]any) string {
+	if len(toolCall) == 0 {
+		return "Tool details were not provided by the runtime."
+	}
+	payload, err := json.MarshalIndent(toolCall, "", "  ")
+	if err != nil {
+		return "Tool details could not be rendered: " + err.Error()
+	}
+	text := strings.TrimSpace(string(payload))
+	if len(text) > maxPermissionDetailBytes {
+		text = text[:maxPermissionDetailBytes]
+		for len(text) > 0 && !strings.HasSuffix(text, "\n") && len(text) > maxPermissionDetailBytes-256 {
+			text = text[:len(text)-1]
+		}
+		text = strings.TrimSpace(text) + "\n… truncated"
+	}
+	return "Tool request:\n" + text
 }
 
 func (a *application) finishPermission(requestID, sessionID string, waiter chan string) {
