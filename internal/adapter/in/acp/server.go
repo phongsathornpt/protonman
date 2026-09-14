@@ -309,7 +309,7 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 			return nil, nil, fmt.Errorf("invalid mode %q: %w", params.ModeID, err)
 		}
 		if err := sess.service.SetMode(mode); err != nil {
-			return nil, nil, fmt.Errorf("set session mode: %w", params.SessionID, err)
+			return nil, nil, fmt.Errorf("set session mode: %w", err)
 		}
 		if err := sess.saveStateDetached(ctx); err != nil {
 			return nil, nil, fmt.Errorf("save session %q: %w", params.SessionID, err)
@@ -502,10 +502,10 @@ func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, e
 		seen[id] = true
 		preview := session.Preview(session.FromModelMessages(sess.Messages()))
 		list = append(list, SessionInfo{
-			SessionID: id,
-			Cwd: sess.cwd,
-			Title: sessionListTitle(id, sess.workspaceName, preview),
-			WorkspaceKey: sess.workspaceKey,
+			SessionID:     id,
+			Cwd:           sess.cwd,
+			Title:         sessionListTitle(id, sess.workspaceName, preview),
+			WorkspaceKey:  sess.workspaceKey,
 			WorkspaceName: sess.workspaceName,
 		})
 	}
@@ -524,12 +524,12 @@ func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, e
 				continue
 			}
 			list = append(list, SessionInfo{
-				SessionID: summary.ID,
-				Cwd: cwd,
-				Title: sessionListTitle(summary.ID, summary.WorkspaceName, summary.Preview),
-				WorkspaceKey: summary.WorkspaceKey,
+				SessionID:     summary.ID,
+				Cwd:           cwd,
+				Title:         sessionListTitle(summary.ID, summary.WorkspaceName, summary.Preview),
+				WorkspaceKey:  summary.WorkspaceKey,
 				WorkspaceName: summary.WorkspaceName,
-				UpdatedAt: summary.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+				UpdatedAt:     summary.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 			})
 		}
 	}
