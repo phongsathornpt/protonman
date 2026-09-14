@@ -47,6 +47,25 @@ func (m *bubbleModel) applyToolResult(name string, result tool.Result, err error
 			state.CompleteToolCall(result.CallID, name, completed)
 			return
 		}
+		if (name == "edit" || m.isEditTool(name)) && !result.Denied {
+			if running := m.runningToolCell(result.CallID, name); running != nil {
+				if patch, ok := running.(*tuihistory.PatchCell); ok {
+					completed := *patch
+					completed.Running = false
+					completed.Retrying = true
+					completed.FailureCode = result.Failure.Code
+					completed.LastError = result.Failure.Message
+					if strings.TrimSpace(result.Failure.Diagnostic) != "" {
+						completed.LastError = result.Failure.Diagnostic
+					}
+					completed.Body = body
+					completed.Truncated = result.Truncated
+					completed.Denied = result.Denied
+					state.CompleteToolCall(result.CallID, name, &completed)
+					return
+				}
+			}
+		}
 		target := m.runningToolTarget(result.CallID, name)
 		suggestions := transcriptutil.ToolFailureSuggestions(name, target, result.Failure)
 		title := tool.DisplayName(name)
@@ -127,7 +146,7 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 			}
 			return &tuihistory.ExecCell{CallID: typed.CallID, Name: typed.Name, Command: typed.Command, StartedAt: typed.StartedAt, Duration: duration, Body: body, Stdout: result.Stdout, Stderr: result.Stderr, ExitCode: result.ExitCode, Truncated: result.Truncated, StdoutTruncated: result.StdoutTruncated, StderrTruncated: result.StderrTruncated, Denied: result.Denied, FailureCode: failureCode, Icons: typed.Icons}
 		case *tuihistory.PatchCell:
-			return &tuihistory.PatchCell{CallID: typed.CallID, Name: typed.Name, Summary: typed.Summary, Paths: append([]string{}, typed.Paths...), Body: body, Truncated: result.Truncated, Denied: result.Denied, FailureCode: failureCode, Icons: typed.Icons}
+			return &tuihistory.PatchCell{CallID: typed.CallID, Name: typed.Name, Summary: typed.Summary, Paths: append([]string{}, typed.Paths...), Body: body, Truncated: result.Truncated, Denied: result.Denied, FailureCode: failureCode, Icons: typed.Icons, Attempts: typed.Attempts, Retrying: false}
 		case *tuihistory.AgentToolCell:
 			return &tuihistory.AgentToolCell{CallID: typed.CallID, Name: typed.Name, Target: typed.Target, Summary: toolview.SummarizeOutput(typed.Name, tool.KindAgent, typed.Target, body, result.ExitCode, result.Truncated), Icons: typed.Icons}
 		case *tuihistory.ToolCell:
@@ -166,4 +185,13 @@ func (m *bubbleModel) runningToolCell(callID string, name string) tuihistory.His
 
 func (m *bubbleModel) lastRunningToolName() string {
 	return m.ensureHistoryState().LastRunningToolName()
+}
+
+func (m *bubbleModel) isEditTool(name string) bool {
+	if m != nil && m.registry != nil {
+		if handler, ok := m.registry.Lookup(name); ok {
+			return handler.Definition().Kind == tool.KindEdit
+		}
+	}
+	return tool.KindForName(name) == tool.KindEdit
 }

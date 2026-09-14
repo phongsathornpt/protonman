@@ -284,6 +284,11 @@ func TestCallAffectedPaths(t *testing.T) {
 			want: []string{"c.txt"},
 		},
 		{
+			name: "edit replace with filePath",
+			call: makeTestCall("edit", map[string]any{"action": "replace", "filePath": "c.txt"}),
+			want: []string{"c.txt"},
+		},
+		{
 			name: "edit patch multi-file patch",
 			call: makeTestCall("edit", map[string]any{"action": "patch",
 				"patch": strings.Join([]string{

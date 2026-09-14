@@ -160,6 +160,7 @@ func (m *bubbleModel) updateTurnDone(message turnmsg.Done) tea.Cmd {
 		m.finalizeRunningTools(message.Err)
 	}
 	m.historyState.CommitActive()
+	m.historyState.FinalizeRetryingTools()
 	if len(message.Result.Messages) > 0 && (message.Err == nil || message.Result.ReplaySafe) {
 		m.conversation.AppendMessages(message.Result.Messages...)
 	} else if message.Err == nil && message.Result.Message.Content != "" {

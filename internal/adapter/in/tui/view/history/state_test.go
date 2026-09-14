@@ -213,3 +213,93 @@ func TestToolHeaderKeepsLongTargetCompactWhenNarrow(t *testing.T) {
 		t.Fatalf("narrow tool header lost useful target suffix: %q", joined)
 	}
 }
+
+func TestHistoryStateRetryPatchCellCoalescesAndDiscardsIntermediateRead(t *testing.T) {
+	state := NewHistoryState(80)
+
+	// 1. Initial edit started and failed
+	state.StartToolCell(&PatchCell{
+		CallID:   "call-1",
+		Name:     "edit",
+		Paths:    []string{"update_runtime.go"},
+		Attempts: 1,
+		Running:  true,
+	})
+	state.CompleteToolCall("call-1", "edit", &PatchCell{
+		CallID:      "call-1",
+		Name:        "edit",
+		Paths:       []string{"update_runtime.go"},
+		Attempts:    1,
+		Running:     false,
+		Retrying:    true,
+		FailureCode: tool.ErrorCodeExecution,
+		LastError:   "oldString not found",
+	})
+
+	// 2. Intermediate recovery read
+	state.StartToolCell(&ToolCell{
+		CallID:   "call-read-1",
+		Name:     "read",
+		Target:   "update_runtime.go",
+		ToolKind: tool.KindRead,
+		Running:  true,
+	})
+	state.CompleteToolCall("call-read-1", "read", &ToolCell{
+		CallID:   "call-read-1",
+		Name:     "read",
+		Target:   "update_runtime.go",
+		ToolKind: tool.KindRead,
+		Summary:  "19 lines",
+	})
+
+	// At this point we have 2 committed cells: failed edit and recovery read
+	if len(state.Committed()) != 2 {
+		t.Fatalf("expected 2 committed cells before retry, got %d", len(state.Committed()))
+	}
+
+	// 3. Retry edit on same file
+	patch, ok := state.RetryPatchCell("call-2", "edit", []string{"update_runtime.go"})
+	if !ok || patch == nil {
+		t.Fatal("expected RetryPatchCell to find and update retrying cell")
+	}
+	if patch.Attempts != 2 {
+		t.Errorf("Attempts = %d, want 2", patch.Attempts)
+	}
+	if !patch.Running {
+		t.Error("expected patch to be running")
+	}
+	if patch.CallID != "call-2" {
+		t.Errorf("CallID = %q, want 'call-2'", patch.CallID)
+	}
+
+	// Intermediate recovery read should have been discarded
+	if len(state.Committed()) != 1 {
+		t.Fatalf("expected intermediate recovery read to be discarded, got %d committed cells", len(state.Committed()))
+	}
+
+	// 4. Complete retry edit successfully
+	state.CompleteToolCall("call-2", "edit", &PatchCell{
+		CallID:   "call-2",
+		Name:     "edit",
+		Paths:    []string{"update_runtime.go"},
+		Attempts: patch.Attempts,
+		Running:  false,
+		Retrying: false,
+	})
+
+	committed := state.Committed()
+	if len(committed) != 1 {
+		t.Fatalf("expected exactly 1 committed cell after retry, got %d", len(committed))
+	}
+	finalPatch, ok := committed[0].(*PatchCell)
+	if !ok {
+		t.Fatalf("committed[0] is %T, want *PatchCell", committed[0])
+	}
+	if finalPatch.Attempts != 2 {
+		t.Errorf("finalPatch.Attempts = %d, want 2", finalPatch.Attempts)
+	}
+	rendered := finalPatch.RenderWidth(80)
+	if len(rendered) == 0 || !strings.Contains(rendered[0], "retried 1x") {
+		t.Fatalf("expected 'retried 1x' in rendered output: %#v", rendered)
+	}
+}

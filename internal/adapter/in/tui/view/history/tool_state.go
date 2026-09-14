@@ -1,5 +1,9 @@
 package history
 
+import (
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+)
+
 func (s *HistoryState) StartTool(name string) {
 	s.StartToolCell(&ToolCell{Name: name, Running: true})
 }
@@ -167,4 +171,100 @@ func runningToolMatches(cell HistoryCell, callID string, name string) bool {
 		return running.historyToolID() == callID
 	}
 	return name != "" && running.historyToolName() == name
+}
+
+// RetryPatchCell attempts to find an existing retrying PatchCell matching the given paths.
+// If found, it updates the cell for the new retry attempt in place and returns true.
+func (s *HistoryState) RetryPatchCell(callID string, name string, paths []string) (*PatchCell, bool) {
+	if s == nil || len(paths) == 0 {
+		return nil, false
+	}
+	matchPaths := func(a, b []string) bool {
+		if len(a) != len(b) {
+			return false
+		}
+		for i := range a {
+			if a[i] != b[i] {
+				return false
+			}
+		}
+		return true
+	}
+
+	// 1. Check if active cell is a retrying PatchCell matching paths
+	if patch, ok := s.active.(*PatchCell); ok && patch.Retrying && matchPaths(patch.Paths, paths) {
+		if patch.Attempts < 1 {
+			patch.Attempts = 1
+		}
+		patch.Attempts++
+		patch.CallID = callID
+		patch.Running = true
+		patch.FailureCode = ""
+		patch.LastError = ""
+		patch.Body = ""
+		s.touchActive()
+		return patch, true
+	}
+
+	// 2. Search backwards in committed cells
+	for i := len(s.committed) - 1; i >= 0; i-- {
+		patch, ok := s.committed[i].(*PatchCell)
+		if !ok || !patch.Retrying || !matchPaths(patch.Paths, paths) {
+			continue
+		}
+		// If an intermediate trailing cell is a recovery read of the same file, discard it
+		if len(paths) == 1 {
+			targetPath := paths[0]
+			for j := len(s.committed) - 1; j > i; j-- {
+				if tc, ok := s.committed[j].(*ToolCell); ok && tc.Target == targetPath && (tc.ToolKind == tool.KindRead || tc.Name == "read") {
+					s.committedLines -= historyCellLineCount(s.committed[j], s.renderWidth)
+					copy(s.committed[j:], s.committed[j+1:])
+					last := len(s.committed) - 1
+					s.committed[last] = nil
+					s.committed = s.committed[:last]
+				}
+			}
+		}
+
+		if patch.Attempts < 1 {
+			patch.Attempts = 1
+		}
+		patch.Attempts++
+		patch.CallID = callID
+		patch.Running = true
+		patch.FailureCode = ""
+		patch.LastError = ""
+		patch.Body = ""
+		s.touchCommitted()
+		s.cacheValid = false
+		s.invalidateAlternateRenderCache()
+		return patch, true
+	}
+
+	return nil, false
+}
+
+// FinalizeRetryingTools transitions any lingering retrying PatchCells to final failure.
+func (s *HistoryState) FinalizeRetryingTools() {
+	if s == nil {
+		return
+	}
+	finalize := func(c HistoryCell) bool {
+		if patch, ok := c.(*PatchCell); ok && patch.Retrying {
+			patch.Retrying = false
+			patch.Running = false
+			return true
+		}
+		return false
+	}
+	changed := finalize(s.active)
+	for _, cell := range s.committed {
+		if finalize(cell) {
+			changed = true
+		}
+	}
+	if changed {
+		s.cacheValid = false
+		s.invalidateAlternateRenderCache()
+	}
 }

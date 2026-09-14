@@ -647,6 +647,128 @@ func TestEditToolUsesStructuredPatchCell(t *testing.T) {
 	}
 }
 
+func TestEditToolRetryCoalescingInSameLine(t *testing.T) {
+	registry := newNamedTestRegistry(tool.Definition{Name: "edit", Description: "apply a workspace patch", Kind: tool.KindEdit, PermissionDetailKey: "patch"})
+	service := newBubbleTestService(t, registry, permission.ModeAlwaysApprove, permission.Config{})
+	m := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, newPermissionBridge(), "")
+
+	// 1. First edit attempt on update_runtime.go
+	call1, err := tool.NewCall("edit-1", "edit", []byte(`{"action":"replace","filePath":"update_runtime.go","oldString":"foo","newString":"bar"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.appendToolCall(call1)
+
+	// 1b. Fail the first attempt
+	m.applyToolResult("edit", tool.Result{
+		CallID:   "edit-1",
+		ToolName: "edit",
+		Failure:  &tool.Failure{Code: tool.ErrorCodeExecution, Message: "execute edit: oldString was not found in \"update_runtime.go\""},
+	}, nil)
+
+	// Verify it was marked as retrying
+	committed := m.historyState.Committed()
+	if len(committed) != 1 {
+		t.Fatalf("expected 1 committed cell after initial failure, got %d", len(committed))
+	}
+	patch1, ok := committed[0].(*PatchCell)
+	if !ok || !patch1.Retrying {
+		t.Fatalf("expected committed cell to be retrying *PatchCell, got %#v", committed[0])
+	}
+
+	// 2. Intermediate recovery read on the same file
+	readCall, err := tool.NewCall("read-1", "read", []byte(`{"path":"update_runtime.go"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.appendToolCall(readCall)
+	m.applyToolResult("read", tool.Result{
+		CallID:   "read-1",
+		ToolName: "read",
+		Output:   "file contents 19 lines",
+	}, nil)
+
+	if len(m.historyState.Committed()) != 2 {
+		t.Fatalf("expected 2 committed cells (failed edit + recovery read), got %d", len(m.historyState.Committed()))
+	}
+
+	// 3. Retry edit on the same file
+	call2, err := tool.NewCall("edit-2", "edit", []byte(`{"action":"replace","filePath":"update_runtime.go","oldString":"actual","newString":"bar"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.appendToolCall(call2)
+
+	// The retry should coalesce into the same line and discard the recovery read
+	if len(m.historyState.Committed()) != 1 {
+		t.Fatalf("expected intermediate read to be discarded and retry coalesced to 1 cell, got %d", len(m.historyState.Committed()))
+	}
+
+	// 3b. Complete the retry successfully
+	m.applyToolResult("edit", tool.Result{
+		CallID:   "edit-2",
+		ToolName: "edit",
+		Output:   "The file update_runtime.go has been updated.",
+	}, nil)
+
+	finalCommitted := m.historyState.Committed()
+	if len(finalCommitted) != 1 {
+		t.Fatalf("expected exactly 1 final committed cell, got %d", len(finalCommitted))
+	}
+	finalPatch, ok := finalCommitted[0].(*PatchCell)
+	if !ok {
+		t.Fatalf("expected final cell to be *PatchCell, got %T", finalCommitted[0])
+	}
+	if finalPatch.Attempts != 2 {
+		t.Errorf("Attempts = %d, want 2", finalPatch.Attempts)
+	}
+	if finalPatch.Retrying {
+		t.Errorf("expected Retrying to be false on completed patch")
+	}
+	rendered := finalPatch.RenderWidth(80)
+	if len(rendered) == 0 || !strings.Contains(rendered[0], "retried 1x") {
+		t.Fatalf("expected 'retried 1x' in rendered header: %q", rendered[0])
+	}
+}
+
+func TestEditToolFinalFailureWhenUnrecovered(t *testing.T) {
+	registry := newNamedTestRegistry(tool.Definition{Name: "edit", Description: "apply a workspace patch", Kind: tool.KindEdit, PermissionDetailKey: "patch"})
+	service := newBubbleTestService(t, registry, permission.ModeAlwaysApprove, permission.Config{})
+	m := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, newPermissionBridge(), "")
+
+	// 1. First attempt fails
+	call1, _ := tool.NewCall("edit-1", "edit", []byte(`{"action":"replace","filePath":"update_runtime.go","oldString":"foo","newString":"bar"}`))
+	m.appendToolCall(call1)
+	m.applyToolResult("edit", tool.Result{CallID: "edit-1", ToolName: "edit", Failure: &tool.Failure{Code: tool.ErrorCodeExecution, Message: "error 1"}}, nil)
+
+	// 2. Retry attempt fails
+	call2, _ := tool.NewCall("edit-2", "edit", []byte(`{"action":"replace","filePath":"update_runtime.go","oldString":"foo","newString":"bar"}`))
+	m.appendToolCall(call2)
+	m.applyToolResult("edit", tool.Result{CallID: "edit-2", ToolName: "edit", Failure: &tool.Failure{Code: tool.ErrorCodeExecution, Message: "error 2"}}, nil)
+
+	// 3. Turn completes without recovery
+	m.historyState.FinalizeRetryingTools()
+
+	committed := m.historyState.Committed()
+	if len(committed) != 1 {
+		t.Fatalf("expected 1 committed cell, got %d", len(committed))
+	}
+	patch, ok := committed[0].(*PatchCell)
+	if !ok {
+		t.Fatalf("expected *PatchCell, got %T", committed[0])
+	}
+	if patch.Attempts != 2 {
+		t.Errorf("Attempts = %d, want 2", patch.Attempts)
+	}
+	if patch.Retrying {
+		t.Errorf("expected Retrying to be false after finalize")
+	}
+	rendered := patch.RenderWidth(80)
+	if len(rendered) == 0 || !strings.Contains(rendered[0], "failed after 2 attempts") {
+		t.Fatalf("expected 'failed after 2 attempts' in header: %q", rendered[0])
+	}
+}
+
 func TestTranscriptRawRichTogglePreservesRelativeScrollPosition(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
