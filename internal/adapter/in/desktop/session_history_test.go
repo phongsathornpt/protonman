@@ -40,7 +40,7 @@ func TestSessionHistoryLoadingState(t *testing.T) {
 }
 
 func TestSessionHistoryReplayCommitsOnlyAfterSuccess(t *testing.T) {
-	a := &application{transcripts: map[string]*strings.Builder{"session-1": {}}}
+	a := &application{transcripts: map[string]*strings.Builder{"session-1": &strings.Builder{}}}
 	a.transcripts["session-1"].WriteString("existing transcript")
 	tracker := sessionHistoryTrackerFor(a)
 	tracker.mu.Lock()
@@ -67,7 +67,7 @@ func TestSessionHistoryReplayCommitsOnlyAfterSuccess(t *testing.T) {
 }
 
 func TestSessionHistoryReplayFailureDiscardsPartialReplay(t *testing.T) {
-	a := &application{transcripts: map[string]*strings.Builder{"session-1": {}}}
+	a := &application{transcripts: map[string]*strings.Builder{"session-1": &strings.Builder{}}}
 	a.transcripts["session-1"].WriteString("known good transcript")
 	tracker := sessionHistoryTrackerFor(a)
 	tracker.mu.Lock()
