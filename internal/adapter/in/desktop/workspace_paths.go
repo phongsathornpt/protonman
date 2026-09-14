@@ -12,6 +12,17 @@ import (
 
 const workspacePathsPreferencesKey = "workspace.paths.v1"
 
+func (a *application) activeWorkspacePath() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, session := range a.state.Sessions {
+		if session.ID == a.state.ActiveSessionID {
+			return validWorkspacePath(session.Workspace)
+		}
+	}
+	return ""
+}
+
 func (a *application) resolveWorkspacePath(workspaceKey, reportedPath string) string {
 	reportedPath = validWorkspacePath(reportedPath)
 	workspaceKey = strings.TrimSpace(workspaceKey)
@@ -64,8 +75,13 @@ func workspacePathMap(raw string) map[string]string {
 			delete(paths, key)
 			continue
 		}
-		paths[strings.TrimSpace(key)] = clean
-		if strings.TrimSpace(key) != key {
+		trimmedKey := strings.TrimSpace(key)
+		if trimmedKey == "" {
+			delete(paths, key)
+			continue
+		}
+		paths[trimmedKey] = clean
+		if trimmedKey != key {
 			delete(paths, key)
 		}
 	}
