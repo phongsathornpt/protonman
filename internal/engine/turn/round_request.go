@@ -184,33 +184,46 @@ func (l *Loop) prepareRoundRequest(
 			Dynamic: definition.Kind == tool.KindMCP,
 		})
 	}
+
+	limits := sdk.ModelTokenLimits(l.languageModel)
+	effectiveProfile := modelprofile.Resolved{
+		ContextWindow:   limits.ContextWindow,
+		MaxInputTokens:  limits.MaxInputTokens,
+		MaxOutputTokens: limits.MaxOutputTokens,
+	}
+	if resolved.has {
+		effectiveProfile = resolved.profile
+	}
+	visionPolicy := modelprofile.EffectiveVisionPolicy(effectiveProfile)
+
 	request := sdk.Request{Messages: reqMessages, Tools: sdkTools}
 	if requestContainsImage(request.Messages) {
 		if !caps.Vision {
 			return sdk.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("model %q does not support image input", l.languageModel.ModelID())
 		}
-		prepared, err := imageprep.PrepareMessages(request.Messages, imageprep.DefaultPolicy())
+		prepared, err := imageprep.PrepareMessages(request.Messages, imageprep.Policy{
+			MaxDimension:   visionPolicy.MaxDimension,
+			MaxPatches:     visionPolicy.MaxPatches,
+			PatchSize:      visionPolicy.PatchSize,
+			MaxOutputBytes: visionPolicy.MaxOutputBytes,
+		})
 		if err != nil {
 			return sdk.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("prepare model images: %w", err)
 		}
 		request.Messages = prepared
+		slog.DebugContext(ctx, "turn model images prepared",
+			"token_scheme", visionPolicy.TokenScheme,
+			"max_dimension", visionPolicy.MaxDimension,
+			"max_patches", visionPolicy.MaxPatches,
+		)
 	}
 	if grounding.pending() && dispatch.enabled() && len(sdkTools) > 0 && resolved.has &&
 		resolved.profile.Capabilities.ToolChoiceRequired == modelprofile.SupportYes {
 		request.Options.ToolChoice = sdk.ToolChoiceRequired
 	}
 	request.Options.ReasoningEffort = reasoning.Effective
-	limits := sdk.ModelTokenLimits(l.languageModel)
-	compactionProfile := modelprofile.Resolved{
-		ContextWindow:   limits.ContextWindow,
-		MaxInputTokens:  limits.MaxInputTokens,
-		MaxOutputTokens: limits.MaxOutputTokens,
-	}
-	if resolved.has {
-		compactionProfile = resolved.profile
-	}
-	compactionPolicy := modelprofile.EffectiveCompactionPolicy(compactionProfile)
-	compactedRequest, compaction, err := compactRequestToModelBudget(request, limits, compactionPolicy)
+	compactionPolicy := modelprofile.EffectiveCompactionPolicy(effectiveProfile)
+	compactedRequest, compaction, err := compactRequestToModelBudgetWithVisionPolicy(request, limits, compactionPolicy, visionPolicy)
 	if err != nil {
 		return sdk.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("compact model context: %w", err)
 	}
@@ -227,7 +240,7 @@ func (l *Loop) prepareRoundRequest(
 	if err := request.Validate(); err != nil {
 		return sdk.Request{}, dispatch, softToolBudgetWarned, err
 	}
-	if err := validateContextBudget(l.languageModel, request); err != nil {
+	if err := validateContextBudgetWithVisionPolicy(l.languageModel, request, visionPolicy); err != nil {
 		return sdk.Request{}, dispatch, softToolBudgetWarned, err
 	}
 	return request, dispatch, softToolBudgetWarned, nil
