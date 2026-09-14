@@ -52,20 +52,30 @@ func (a *application) handleRequest(ctx context.Context, request acpclient.Reque
 
 	select {
 	case <-ctx.Done():
-		a.finishPermission(requestID, params.SessionID)
+		a.finishPermission(requestID, params.SessionID, waiter)
 		return map[string]any{"outcome": map[string]any{"outcome": "cancelled"}}, nil
 	case optionID := <-waiter:
-		a.finishPermission(requestID, params.SessionID)
+		a.finishPermission(requestID, params.SessionID, waiter)
 		return map[string]any{"outcome": map[string]any{"outcome": "selected", "optionId": optionID}}, nil
 	}
 }
 
-func (a *application) finishPermission(requestID, sessionID string) {
+func (a *application) finishPermission(requestID, sessionID string, waiter chan string) {
+	if !a.finishPermissionState(requestID, sessionID, waiter) {
+		return
+	}
+	a.refreshPermissionView()
+}
+
+func (a *application) finishPermissionState(requestID, sessionID string, waiter chan string) bool {
 	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.permissionWaiters[requestID] != waiter {
+		return false
+	}
 	delete(a.permissionWaiters, requestID)
 	a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventPermissionResolved, SessionID: sessionID, RequestID: requestID})
-	a.mu.Unlock()
-	a.refreshPermissionView()
+	return true
 }
 
 func (a *application) resolvePermission(requestID, optionID string) {
