@@ -130,7 +130,12 @@ func (a *application) resumeKnownSessions(ctx context.Context, client *acpclient
 		if strings.TrimSpace(session.ID) == "" {
 			continue
 		}
-		params := map[string]any{"sessionId": session.ID, "cwd": session.Workspace}
+		workspace := a.resolveWorkspacePath(session.WorkspaceKey, session.Workspace)
+		if workspace == "" {
+			a.setStatus("Session resume skipped · workspace path unavailable for " + shortID(session.ID))
+			continue
+		}
+		params := map[string]any{"sessionId": session.ID, "cwd": workspace}
 		if len(mcpServers) > 0 {
 			params["mcpServers"] = mcpServers
 		}
