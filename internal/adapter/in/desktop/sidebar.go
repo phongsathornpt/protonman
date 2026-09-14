@@ -23,6 +23,32 @@ type sidebarRow struct {
 	SessionCount  int
 }
 
+func (a *application) rebuildSidebarRowsLocked() {
+	a.sidebarRows = buildSidebarRows(filterSessions(a.state.Sessions, a.sidebarQuery))
+}
+
+func filterSessions(sessions []desktopstate.SessionState, query string) []desktopstate.SessionState {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return append([]desktopstate.SessionState(nil), sessions...)
+	}
+
+	filtered := make([]desktopstate.SessionState, 0, len(sessions))
+	for _, session := range sessions {
+		haystack := strings.ToLower(strings.Join([]string{
+			session.Title,
+			session.WorkspaceName,
+			session.Workspace,
+			session.WorkspaceKey,
+			session.ID,
+		}, "\n"))
+		if strings.Contains(haystack, query) {
+			filtered = append(filtered, session)
+		}
+	}
+	return filtered
+}
+
 func buildSidebarRows(sessions []desktopstate.SessionState) []sidebarRow {
 	groups := desktopstate.GroupSessionsByWorkspace(sessions)
 	rows := make([]sidebarRow, 0, len(sessions)+len(groups))
