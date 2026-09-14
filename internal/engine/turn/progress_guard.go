@@ -54,8 +54,11 @@ func newProgressGuard(definitions []tool.Definition, maxIdenticalResults int) *p
 }
 
 func (g *progressGuard) observeRound(executions []executedCall) (bool, error) {
-	if g == nil || g.maxIdenticalResults <= 0 || len(executions) == 0 {
+	if g == nil || g.maxIdenticalResults <= 0 {
 		return false, nil
+	}
+	if len(executions) == 0 {
+		return g.shouldSynthesize(false), nil
 	}
 
 	allStalled := true
