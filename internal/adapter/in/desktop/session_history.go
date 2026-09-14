@@ -3,6 +3,7 @@
 package desktop
 
 import (
+	"errors"
 	"strings"
 	"sync"
 )
@@ -21,7 +22,11 @@ type sessionHistoryTracker struct {
 	staging map[string]*strings.Builder
 }
 
-var sessionHistoryTrackers sync.Map // map[*application]*sessionHistoryTracker
+var (
+	sessionHistoryTrackers                  sync.Map // map[*application]*sessionHistoryTracker
+	errSessionHistoryWorkspaceUnavailable = errors.New("workspace path unavailable")
+	errSessionHistoryClientChanged         = errors.New("ACP client changed during history load")
+)
 
 func sessionHistoryTrackerFor(a *application) *sessionHistoryTracker {
 	if existing, ok := sessionHistoryTrackers.Load(a); ok {
@@ -156,23 +161,20 @@ func (a *application) loadSessionHistory(sessionID string) {
 			params["mcpServers"] = servers
 		}
 		err := client.Call(a.ctx, "session/load", params, nil)
-		finishSessionHistoryLoad(a, sessionID, err)
-
 		if !a.clientIsCurrent(client) {
+			if err == nil {
+				err = errSessionHistoryClientChanged
+			}
+			finishSessionHistoryLoad(a, sessionID, err)
 			return
 		}
+		finishSessionHistoryLoad(a, sessionID, err)
 		if err != nil {
 			a.setStatus("Session history failed · " + err.Error())
 		}
 		a.renderActiveView()
 	}()
 }
-
-var errSessionHistoryWorkspaceUnavailable = &sessionHistoryLoadError{"workspace path unavailable"}
-
-type sessionHistoryLoadError struct{ message string }
-
-func (e *sessionHistoryLoadError) Error() string { return e.message }
 
 func formatUserTranscript(text string) string {
 	text = strings.TrimSpace(text)
