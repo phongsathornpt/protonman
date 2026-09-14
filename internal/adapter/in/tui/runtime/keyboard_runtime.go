@@ -197,7 +197,9 @@ func (m *bubbleModel) dispatch(line string) tea.Cmd {
 
 func (m *bubbleModel) dispatchInput(input tuiconv.QueuedInput) tea.Cmd {
 	display := submissionDisplayText(input)
-	m.panes.bottom.recordHistory(display)
+	if history := submissionHistoryText(input); history != "" {
+		m.panes.bottom.recordHistory(history)
+	}
 	if len(input.Attachments) == 0 && isCommandLine(input.Text) {
 		parsed := parseCommand(input.Text)
 		if spec, ok := slashview.LookupCommand(parsed.Name); ok && spec.EchoUser {
