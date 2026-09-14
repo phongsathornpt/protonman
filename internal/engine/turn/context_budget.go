@@ -1,15 +1,27 @@
 package turn
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	_ "golang.org/x/image/webp"
 )
 
-const estimatedBytesPerToken = 3
+const (
+	estimatedBytesPerToken       = 3
+	imagePatchSize               = 32
+	maxEstimatedImagePatchTokens = 10_000
+	fallbackImageTokens          = 2_500
+)
 
 func validateContextBudget(languageModel sdk.LanguageModel, request sdk.Request) error {
 	limits := sdk.ModelTokenLimits(languageModel)
@@ -41,14 +53,53 @@ func validateContextBudget(languageModel sdk.LanguageModel, request sdk.Request)
 }
 
 func estimateRequestTokens(request sdk.Request) (int, error) {
-	payload, err := json.Marshal(request)
+	transportNeutral := request
+	transportNeutral.Messages = sdk.CloneMessages(request.Messages)
+	imageTokens := 0
+	for messageIndex := range transportNeutral.Messages {
+		for partIndex := range transportNeutral.Messages[messageIndex].Parts {
+			part := &transportNeutral.Messages[messageIndex].Parts[partIndex]
+			if part.Type != sdk.ContentPartImage {
+				continue
+			}
+			imageTokens += estimateImageTokens(part.Data)
+			// Base64 is a transport representation, not text consumed by the model.
+			// Keep MIME/type framing in the serialized estimate but remove payload bytes.
+			part.Data = ""
+		}
+	}
+
+	payload, err := json.Marshal(transportNeutral)
 	if err != nil {
 		return 0, err
 	}
-	if len(payload) == 0 {
-		return 0, nil
+	textAndFramingTokens := 0
+	if len(payload) > 0 {
+		textAndFramingTokens = (len(payload) + estimatedBytesPerToken - 1) / estimatedBytesPerToken
 	}
-	return (len(payload) + estimatedBytesPerToken - 1) / estimatedBytesPerToken, nil
+	return textAndFramingTokens + imageTokens, nil
+}
+
+func estimateImageTokens(data string) int {
+	data = strings.TrimSpace(data)
+	if data == "" {
+		return fallbackImageTokens
+	}
+	decoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(data))
+	config, _, err := image.DecodeConfig(decoder)
+	if err != nil || config.Width <= 0 || config.Height <= 0 {
+		return fallbackImageTokens
+	}
+	patchesWide := (config.Width + imagePatchSize - 1) / imagePatchSize
+	patchesHigh := (config.Height + imagePatchSize - 1) / imagePatchSize
+	patches := patchesWide * patchesHigh
+	if patches < 1 {
+		return 1
+	}
+	if patches > maxEstimatedImagePatchTokens {
+		return maxEstimatedImagePatchTokens
+	}
+	return patches
 }
 
 func contextOutputReserve(window, requested int) int {
