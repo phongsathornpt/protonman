@@ -33,8 +33,8 @@ func (a *application) initDesktopControls() {
 	a.composer.SetPlaceHolder("Ask protonMAN… · Shift+Enter to send")
 	a.composer.SetMinRowsVisible(3)
 	a.composer.Wrapping = fyne.TextWrapWord
-	a.composer.OnSubmitted = func(_ string) { a.sendPrompt() }
-	a.send = widget.NewButton("Send", a.sendPrompt)
+	a.composer.OnSubmitted = func(_ string) { a.submitPrompt() }
+	a.send = widget.NewButton("Send", a.submitPrompt)
 	a.stop = widget.NewButtonWithIcon("", theme.MediaStopIcon(), a.cancelPrompt)
 	a.send.Disable()
 	a.stop.Disable()
@@ -196,6 +196,7 @@ func (a *application) selectSessionRow(id widget.ListItemID) {
 	}
 	a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventSessionSelected, SessionID: row.SessionID})
 	a.mu.Unlock()
+	a.loadSessionHistory(row.SessionID)
 	a.refreshActiveView()
 	a.refreshPermissionView()
 }
