@@ -110,7 +110,7 @@ func (a *application) initInspectorControls() {
 		container.NewVScroll(a.contextContent),
 	)
 	a.contextDrawer = container.New(
-		fixedWidthLayout{width: contextDrawerWidthFor(a.desktopWindowWidth())},
+		fixedWidthLayout{width: contextDrawerPreferredWidth},
 		drawer,
 	)
 	a.contextDrawer.Hide()
@@ -264,7 +264,8 @@ func (a *application) buildConversationSurface() fyne.CanvasObject {
 
 	scroll := container.NewVScroll(a.chat)
 	a.conversationScroll = scroll
-	conversationBody := container.NewBorder(a.permissionPanel, nil, nil, a.contextDrawer, scroll)
+	conversationWithDrawer := container.New(responsiveDrawerLayout{}, scroll, a.contextDrawer)
+	conversationBody := container.NewBorder(a.permissionPanel, nil, nil, nil, conversationWithDrawer)
 
 	composer := container.NewBorder(nil, nil, nil, a.send, a.composer)
 	footer := container.NewVBox(composer, a.status)
@@ -300,17 +301,6 @@ func (a *application) scrollConversationToBottom() {
 	scroll.ScrollToBottom()
 }
 
-func (a *application) desktopWindowWidth() float32 {
-	if a.desktopApp == nil || a.desktopApp.Driver() == nil {
-		return 0
-	}
-	windows := a.desktopApp.Driver().AllWindows()
-	if len(windows) == 0 || windows[0] == nil || windows[0].Canvas() == nil {
-		return 0
-	}
-	return windows[0].Canvas().Size().Width
-}
-
 func contextDrawerWidthFor(windowWidth float32) float32 {
 	if windowWidth <= 0 {
 		return contextDrawerPreferredWidth
@@ -342,8 +332,6 @@ func (a *application) toggleContextDrawer() {
 	}
 	a.runtimePanel.Hide()
 	a.integrationPanel.Hide()
-	a.contextDrawer.Layout = fixedWidthLayout{width: contextDrawerWidthFor(a.desktopWindowWidth())}
-	a.contextDrawer.Refresh()
 	a.contextDrawer.Show()
 }
 
