@@ -9,6 +9,7 @@ import (
 // their trailing space so every profile preserves the same layout contract.
 // Brand is the only bare mark because callers compose its spacing.
 type IconSet struct {
+	Composer    string
 	Prompt      string
 	Mark        string
 	Tool        string
@@ -40,8 +41,11 @@ const (
 	IconModeASCII   IconMode = "ascii"
 )
 
-// Unicode profile preserves Protonman's terminal-safe glyphs.
+// Unicode profile preserves Protonman's terminal-safe glyphs. Composer is
+// intentionally the historical ASCII prompt; Prompt is the existing Unicode
+// selection marker used elsewhere in the TUI.
 const (
+	UnicodeComposer    = "> "
 	UnicodePrompt      = "› "
 	UnicodeMark        = "› "
 	UnicodeTool        = "$ "
@@ -65,6 +69,7 @@ const (
 
 // ASCII profile is safe for dumb terminals, redirected output, and logs.
 const (
+	ASCIIComposer    = "> "
 	ASCIIPrompt      = "> "
 	ASCIIMark        = "> "
 	ASCIITool        = "$ "
@@ -89,6 +94,7 @@ const (
 // Nerd Font profile uses Codicons from Nerd Fonts v3. Protonman supports the
 // Nerd Font Mono terminal variant so these PUA glyphs retain a one-cell width.
 const (
+	NerdComposer    = "\ueab6 " // nf-cod-chevron_right
 	NerdPrompt      = "\ueab6 " // nf-cod-chevron_right
 	NerdMark        = "\ueab6 " // nf-cod-chevron_right
 	NerdTool        = "\ueb6d " // nf-cod-tools
@@ -112,21 +118,21 @@ const (
 
 var (
 	UnicodeIcons = IconSet{
-		Prompt: UnicodePrompt, Mark: UnicodeMark, Tool: UnicodeTool,
+		Composer: UnicodeComposer, Prompt: UnicodePrompt, Mark: UnicodeMark, Tool: UnicodeTool,
 		ToolSuccess: UnicodeToolSuccess, ToolError: UnicodeToolError, ToolDenied: UnicodeToolDenied,
 		Web: UnicodeWeb, Read: UnicodeRead, Dir: UnicodeDir, Search: UnicodeSearch,
 		Exec: UnicodeExec, Edit: UnicodeEdit, Skill: UnicodeSkill, Agent: UnicodeAgent, Git: UnicodeGit,
 		Generic: UnicodeGeneric, TodoPending: UnicodeTodoPending, TodoActive: UnicodeTodoActive, Brand: UnicodeBrand,
 	}
 	ASCIIIcons = IconSet{
-		Prompt: ASCIIPrompt, Mark: ASCIIMark, Tool: ASCIITool,
+		Composer: ASCIIComposer, Prompt: ASCIIPrompt, Mark: ASCIIMark, Tool: ASCIITool,
 		ToolSuccess: ASCIIToolSuccess, ToolError: ASCIIToolError, ToolDenied: ASCIIToolDenied,
 		Web: ASCIIWeb, Read: ASCIIRead, Dir: ASCIIDir, Search: ASCIISearch,
 		Exec: ASCIIExec, Edit: ASCIIEdit, Skill: ASCIISkill, Agent: ASCIIAgent, Git: ASCIIGit,
 		Generic: ASCIIGeneric, TodoPending: ASCIITodoPending, TodoActive: ASCIITodoActive, Brand: ASCIIBrand,
 	}
 	NerdIcons = IconSet{
-		Prompt: NerdPrompt, Mark: NerdMark, Tool: NerdTool,
+		Composer: NerdComposer, Prompt: NerdPrompt, Mark: NerdMark, Tool: NerdTool,
 		ToolSuccess: NerdToolSuccess, ToolError: NerdToolError, ToolDenied: NerdToolDenied,
 		Web: NerdWeb, Read: NerdRead, Dir: NerdDir, Search: NerdSearch,
 		Exec: NerdExec, Edit: NerdEdit, Skill: NerdSkill, Agent: NerdAgent, Git: NerdGit,
