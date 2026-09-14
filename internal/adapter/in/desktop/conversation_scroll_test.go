@@ -9,9 +9,12 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	fynetest "fyne.io/fyne/v2/test"
 )
 
 func TestConversationTailFollowPreservesManualScroll(t *testing.T) {
+	fynetest.NewTempApp(t)
+
 	content := canvas.NewRectangle(color.Black)
 	content.SetMinSize(fyne.NewSize(100, 1000))
 	scroll := container.NewVScroll(content)
@@ -30,6 +33,8 @@ func TestConversationTailFollowPreservesManualScroll(t *testing.T) {
 }
 
 func TestConversationTailFollowAllowsSmallContent(t *testing.T) {
+	fynetest.NewTempApp(t)
+
 	content := canvas.NewRectangle(color.Black)
 	content.SetMinSize(fyne.NewSize(100, 120))
 	scroll := container.NewVScroll(content)
