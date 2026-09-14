@@ -26,8 +26,8 @@ func TestProgressGuardEmptyRoundResetsSynthesisEscalation(t *testing.T) {
 	}
 
 	// A round without tool executions is not another stalled tool round. This
-	// matters when completion is deferred while asynchronous runtime context is
-	// being integrated between tool-using rounds.
+	// matters when final synthesis is deferred while runtime context is being
+	// integrated between tool-using rounds.
 	if escalated, err := guard.observeRound(nil); err != nil || escalated {
 		t.Fatalf("empty round escalated=%v err=%v", escalated, err)
 	}
