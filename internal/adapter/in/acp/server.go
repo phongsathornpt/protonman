@@ -376,6 +376,16 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 			return nil, nil, err
 		}
 		return result, nil, nil
+	case methodSessionMemoryForget:
+		var params ProtonmanSessionMemoryForgetParams
+		if err := json.Unmarshal(request.Params, &params); err != nil {
+			return nil, nil, fmt.Errorf("decode %s: %w", methodSessionMemoryForget, err)
+		}
+		result, err := s.sessionMemoryForget(ctx, params)
+		if err != nil {
+			return nil, nil, err
+		}
+		return result, nil, nil
 	case "session/delete":
 		var params SessionDeleteParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
