@@ -29,13 +29,13 @@ type progressObservation struct {
 }
 
 type progressGuard struct {
-	maxIdenticalResults       int
-	maxRetryableFailures      int
-	maxConsecutiveStalled     int
-	consecutiveStalledRounds  int
-	epoch                     uint64
-	observations              map[[sha256.Size]byte]progressObservation
-	definitions               map[string]tool.Definition
+	maxIdenticalResults      int
+	maxRetryableFailures     int
+	maxConsecutiveStalled    int
+	consecutiveStalledRounds int
+	epoch                    uint64
+	observations             map[[sha256.Size]byte]progressObservation
+	definitions              map[string]tool.Definition
 }
 
 func newProgressGuard(definitions []tool.Definition, maxIdenticalResults int) *progressGuard {
@@ -44,11 +44,11 @@ func newProgressGuard(definitions []tool.Definition, maxIdenticalResults int) *p
 		byName[definition.Name] = definition
 	}
 	return &progressGuard{
-		maxIdenticalResults:      maxIdenticalResults,
-		maxRetryableFailures:     defaultMaxIdenticalRetryableFailures,
-		maxConsecutiveStalled:    defaultMaxConsecutiveStalledRounds,
-		observations:             make(map[[sha256.Size]byte]progressObservation),
-		definitions:              byName,
+		maxIdenticalResults:   maxIdenticalResults,
+		maxRetryableFailures:  defaultMaxIdenticalRetryableFailures,
+		maxConsecutiveStalled: defaultMaxConsecutiveStalledRounds,
+		observations:          make(map[[sha256.Size]byte]progressObservation),
+		definitions:           byName,
 	}
 }
 
@@ -75,7 +75,7 @@ func (g *progressGuard) observeRound(executions []executedCall) (bool, error) {
 			allStalled = false
 		}
 	}
-	return tracked && allStalled, nil
+	return g.shouldSynthesize(tracked && allStalled), nil
 }
 
 // shouldSynthesize escalates exact-call no-progress detection to turn-level
