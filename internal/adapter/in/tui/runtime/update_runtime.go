@@ -59,6 +59,12 @@ func (m *bubbleModel) updateTerminalEvent(msg tea.Msg) (tea.Cmd, bool) {
 		if prompt == nil {
 			return nil, true
 		}
+		if path, ok := localImagePathFromPaste(message.Content, m.workDir); ok {
+			m.panes.bottom.attachImage(path)
+			m.syncSlashView()
+			m.requestRelayout()
+			return nil, true
+		}
 		cleaned := normalizePastedPath(message.Content, m.workDir)
 		updated, command := prompt.Update(tea.PasteMsg{Content: cleaned})
 		*prompt = updated
@@ -202,6 +208,8 @@ func (m *bubbleModel) updateRuntimeEvent(msg tea.Msg) (tea.Cmd, bool) {
 		return m.updateProviderDeleted(message), true
 	case permissionRuleSavedMsg:
 		return m.updatePermissionRuleSaved(message), true
+	case imageSubmissionPreparedMsg:
+		return m.updateImageSubmissionPrepared(message), true
 	case transientnotice.Expired:
 		if message.ID == m.transientNoticeID {
 			m.transientNotice = ""
