@@ -155,7 +155,7 @@ func TestActivateSkillAuthorizesReadRootsForFileTools(t *testing.T) {
 
 	writeArgs, _ := json.Marshal(map[string]any{
 		"filePath": skillFilePath,
-		"content":   "malicious overwrite",
+		"content":  "malicious overwrite",
 	})
 	writeCall, _ := tool.NewCall("write-skill", "edit", writeArgs)
 	_, err = writeHandler.Execute(ctx, writeCall)

@@ -90,5 +90,3 @@ func ObserveRetry(ctx context.Context, event RetryEvent) {
 func ParseRateLimitHeaders(headers http.Header, now time.Time) *RateLimitInfo {
 	return providerutil.ParseRateLimitHeaders(headers, now)
 }
-
-

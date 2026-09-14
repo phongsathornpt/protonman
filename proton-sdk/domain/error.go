@@ -9,10 +9,10 @@ import (
 )
 
 var (
-	ErrInvalidRequest   = errors.New("invalid model request")
-	ErrInvalidEvent     = errors.New("invalid model event")
-	ErrIncompleteStream = errors.New("incomplete model stream")
-	ErrInvalidToolInput = errors.New("invalid tool input")
+	ErrInvalidRequest    = errors.New("invalid model request")
+	ErrInvalidEvent      = errors.New("invalid model event")
+	ErrIncompleteStream  = errors.New("incomplete model stream")
+	ErrInvalidToolInput  = errors.New("invalid tool input")
 	ErrInvalidToolOutput = errors.New("invalid tool output")
 )
 

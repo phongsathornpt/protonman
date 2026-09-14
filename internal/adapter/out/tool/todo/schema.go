@@ -78,9 +78,9 @@ func todoUpdateOutputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"sessionId":   map[string]any{"type": "string"},
-			"session_id":  map[string]any{"type": "string"},
-			"revision":    count(), "total": count(), "pending": count(), "inProgress": count(), "in_progress": count(), "completed": count(),
+			"sessionId":  map[string]any{"type": "string"},
+			"session_id": map[string]any{"type": "string"},
+			"revision":   count(), "total": count(), "pending": count(), "inProgress": count(), "in_progress": count(), "completed": count(),
 			"changes": map[string]any{
 				"type": "object",
 				"properties": map[string]any{

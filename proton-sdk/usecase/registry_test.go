@@ -14,8 +14,8 @@ type mockModel struct {
 	modelID  string
 }
 
-func (m *mockModel) Provider() string                      { return m.provider }
-func (m *mockModel) ModelID() string                       { return m.modelID }
+func (m *mockModel) Provider() string                       { return m.provider }
+func (m *mockModel) ModelID() string                        { return m.modelID }
 func (m *mockModel) Capabilities() domain.ModelCapabilities { return domain.ModelCapabilities{} }
 func (m *mockModel) Stream(ctx context.Context, req domain.Request) (port.Stream, error) {
 	return nil, nil

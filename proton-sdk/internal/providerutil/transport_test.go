@@ -18,7 +18,7 @@ import (
 type dummyStream struct{}
 
 func (dummyStream) Next(context.Context) (domain.Event, error) { return domain.Event{}, io.EOF }
-func (dummyStream) Close() error                              { return nil }
+func (dummyStream) Close() error                               { return nil }
 
 func TestExecuteStreamSuccessOnFirstAttempt(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -74,12 +74,12 @@ type middlewareModel struct {
 	stream port.StreamFunc
 }
 
-func (m *middlewareModel) Provider() string                     { return m.base.Provider() }
-func (m *middlewareModel) ModelID() string                      { return m.base.ModelID() }
+func (m *middlewareModel) Provider() string                       { return m.base.Provider() }
+func (m *middlewareModel) ModelID() string                        { return m.base.ModelID() }
 func (m *middlewareModel) Capabilities() domain.ModelCapabilities { return m.base.Capabilities() }
-func (m *middlewareModel) Metadata() domain.ModelMetadata       { return ModelMetadataOf(m.base) }
-func (m *middlewareModel) TokenLimits() domain.TokenLimits      { return ModelTokenLimits(m.base) }
-func (m *middlewareModel) ContextWindow() int                   { return ModelContextWindow(m.base) }
+func (m *middlewareModel) Metadata() domain.ModelMetadata         { return ModelMetadataOf(m.base) }
+func (m *middlewareModel) TokenLimits() domain.TokenLimits        { return ModelTokenLimits(m.base) }
+func (m *middlewareModel) ContextWindow() int                     { return ModelContextWindow(m.base) }
 func (m *middlewareModel) Stream(ctx context.Context, request domain.Request) (port.Stream, error) {
 	return m.stream(ctx, request)
 }

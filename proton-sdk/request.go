@@ -36,5 +36,3 @@ func ValidateToolInput(tool Tool, input json.RawMessage) error {
 func ValidateToolOutput(tool Tool, output json.RawMessage) error {
 	return usecase.ValidateToolOutput(tool, output)
 }
-
-

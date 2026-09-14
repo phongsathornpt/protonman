@@ -126,54 +126,63 @@ func executionSection() string {
 }
 
 func toolDisciplineSection(spec Spec) string {
+	toolSet := make(map[string]struct{}, len(spec.AvailableTools))
+	for _, toolName := range spec.AvailableTools {
+		toolSet[toolName] = struct{}{}
+	}
+	has := func(name string) bool {
+		_, ok := toolSet[name]
+		return ok
+	}
+
 	lines := []string{
 		"# Tool Use",
 		"- Use only tools exposed in the current request. Tool and action identifiers are exact; never prefix, rename, qualify, or invent them.",
 		"- Treat tool errors as observations. Correct invalid calls when possible instead of repeating them blindly.",
 		"- Prefer the narrowest dedicated capability that directly represents the operation; use a tool only when it materially changes evidence, state, implementation, or verification.",
 	}
-	if hasTool(spec, tool.NameRead) || hasTool(spec, tool.NameGrep) || hasTool(spec, tool.NameFind) || hasTool(spec, tool.NameLS) || hasTool(spec, tool.NameEdit) {
+	if has(tool.NameRead) || has(tool.NameGrep) || has(tool.NameFind) || has(tool.NameLS) || has(tool.NameEdit) {
 		lines = append(lines, "- Workspace filesystem paths are relative to the workspace root. Use . for the workspace root; never use / or another absolute filesystem path with workspace tools (external skill assets may use authorized absolute paths).")
 	}
-	if hasTool(spec, tool.NameRead) {
+	if has(tool.NameRead) {
 		lines = append(lines, "- Use read for known workspace artifacts; do not guess filenames from package or directory names. Text supports byte pagination or line selection via startLine and endLine.")
 		discovery := make([]string, 0, 2)
-		if hasTool(spec, tool.NameLS) {
+		if has(tool.NameLS) {
 			discovery = append(discovery, "inspect the parent directory with ls")
 		}
-		if hasTool(spec, tool.NameFind) {
+		if has(tool.NameFind) {
 			discovery = append(discovery, "discover the filename with find")
 		}
 		if len(discovery) > 0 {
 			lines = append(lines, "- If read returns not_found for a guessed path, do not retry the same path unchanged; "+strings.Join(discovery, " or ")+" before reading again.")
 		}
 	}
-	if hasTool(spec, tool.NameGrep) || hasTool(spec, tool.NameFind) || hasTool(spec, tool.NameLS) {
+	if has(tool.NameGrep) || has(tool.NameFind) || has(tool.NameLS) {
 		parts := make([]string, 0, 3)
-		if hasTool(spec, tool.NameGrep) {
+		if has(tool.NameGrep) {
 			parts = append(parts, "grep searches file contents")
 		}
-		if hasTool(spec, tool.NameFind) {
+		if has(tool.NameFind) {
 			parts = append(parts, "find discovers workspace paths")
 		}
-		if hasTool(spec, tool.NameLS) {
+		if has(tool.NameLS) {
 			parts = append(parts, "ls inspects directory entries")
 		}
 		lines = append(lines, "- Repository discovery capabilities: "+strings.Join(parts, "; ")+".")
 	}
-	if hasTool(spec, tool.NameGit) {
+	if has(tool.NameGit) {
 		lines = append(lines, "- Use git action=status for branch/worktree state, diff for changes, log for bounded history, and show for one revision; use bash only for Git operations not exposed by git when bash is available.")
 	}
-	if hasTool(spec, tool.NameMath) {
+	if has(tool.NameMath) {
 		lines = append(lines, "- Use math for deterministic numeric computation.")
 	}
-	if hasTool(spec, tool.NameEdit) {
-		lines = append(lines, "- Use edit action=replace with filePath, oldString, and newString for exact text changes, patch for bounded multi-file changes (enclosed by '*** Begin Patch' and '*** End Patch'), write for complete file creation or replacement with filePath and content, and restore with checkpointId only for Protonman checkpoints.")
+	if has(tool.NameEdit) {
+		lines = append(lines, "- Use edit action=replace with filePath, oldString, and newString (optional replaceAll) for exact text changes, patch for bounded multi-file changes (enclosed by '*** Begin Patch' and '*** End Patch'), write for complete file creation or replacement with filePath and content (expectedSha256 required when overwriting), and restore with checkpointId only for Protonman checkpoints.")
 	}
-	if hasTool(spec, tool.NameWeb) {
+	if has(tool.NameWeb) {
 		lines = append(lines, "- Use web action=search to discover sources and web action=fetch when the target URL is already known; do not recreate equivalent network requests through bash.")
 	}
-	if hasTool(spec, tool.NameBash) {
+	if has(tool.NameBash) {
 		lines = append(lines, "- Use bash for actual programs, builds, tests, package managers, language runtimes, transformations, and shell workflows not represented by an available dedicated capability; pass cwd to execute in a subdirectory.")
 	}
 	lines = append(lines,

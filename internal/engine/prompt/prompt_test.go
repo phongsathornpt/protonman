@@ -211,8 +211,10 @@ func TestToolDisciplineUsesCompactCapabilityActions(t *testing.T) {
 	for _, want := range []string{
 		"git action=status",
 		"edit action=replace",
+		"replaceAll",
 		"patch for bounded multi-file changes",
 		"write for complete file creation or replacement",
+		"expectedSha256",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("tool discipline missing compact capability guidance %q:\n%s", want, got)

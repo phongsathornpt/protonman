@@ -66,4 +66,3 @@ type Registry = usecase.Registry
 type StreamFunc = port.StreamFunc
 type Middleware = port.Middleware
 type MiddlewareFunc = port.MiddlewareFunc
-

@@ -108,7 +108,7 @@ func TestFileToolsRejectTraversalAndProtectedPaths(t *testing.T) {
 				newJSONCall(t, test.name, test.handler.Definition().Name, map[string]any{
 					"filePath": test.path,
 					"path":     test.path,
-					"content":   "should not be written",
+					"content":  "should not be written",
 				}),
 			)
 			if !errors.Is(err, test.wantErr) {
