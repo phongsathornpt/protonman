@@ -198,8 +198,8 @@ func TestE2ETurnLoopForcesSynthesisAfterRepeatedRead(t *testing.T) {
 	if got := requestToolCount(requests[4]); got != 0 {
 		t.Fatalf("forced synthesis request tools = %d, want 0", got)
 	}
-	if !requestMessagesContain(requests[2], `"code":"no_progress"`) {
-		t.Fatalf("first recovery request missing suppressed no-progress result: %#v", requests[2]["messages"])
+	if !requestMessagesContain(requests[3], `"code":"no_progress"`) {
+		t.Fatalf("first recovery request missing suppressed no-progress result: %#v", requests[3]["messages"])
 	}
 	if !requestMessagesContain(requests[4], "TOOL LOOP DETECTED") {
 		t.Fatalf("forced synthesis request missing no-progress prompt: %#v", requests[4]["messages"])
