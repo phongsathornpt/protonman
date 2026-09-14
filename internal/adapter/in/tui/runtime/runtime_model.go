@@ -202,6 +202,7 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	transcriptPane := viewport.New(viewport.WithWidth(defaultBubbleWidth-8), viewport.WithHeight(defaultBubbleHeight-8))
 	disableViewportKeys(&transcriptPane)
 	bottom := newBottomPane(runner != nil, reducedMotion)
+	bottom.setIcons(icons)
 	helpView := help.New()
 	helpView.SetWidth(defaultBubbleWidth - 2)
 	helpView.ShortSeparator = glyphSep
