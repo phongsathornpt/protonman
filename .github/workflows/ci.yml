@@ -35,6 +35,25 @@ jobs:
       - name: Build
         run: make build
 
+  desktop:
+    name: desktop
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install Fyne dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
+      - name: Test Desktop
+        run: go test -tags desktop ./internal/adapter/in/desktop ./cmd/protonman-desktop
+      - name: Build Desktop
+        run: go build -tags desktop ./cmd/protonman-desktop
+
   race:
     name: race
     if: github.event_name == 'pull_request'
