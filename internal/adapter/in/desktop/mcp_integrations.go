@@ -5,6 +5,7 @@ package desktop
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -34,7 +35,7 @@ func (a *application) initIntegrationControls() {
 	a.integrationArgs = widget.NewEntry()
 	a.integrationArgs.SetPlaceHolder(`args JSON, e.g. ["--stdio"]`)
 	a.integrationEnv = widget.NewEntry()
-	a.integrationEnv.SetPlaceHolder(`env JSON, e.g. ["TOKEN=..."]`)
+	a.integrationEnv.SetPlaceHolder(`env keys JSON, e.g. ["TOKEN"]`)
 	a.integrationSave = widget.NewButton("Save", a.saveIntegration)
 	a.integrationRemove = widget.NewButton("Remove", a.removeIntegration)
 	a.integrationReconnect = widget.NewButton("Reconnect ACP", a.reconnectWithIntegrations)
@@ -72,6 +73,11 @@ func (a *application) loadIntegrations() {
 	a.mu.Lock()
 	a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventIntegrationsReplaced, Integrations: items})
 	a.mu.Unlock()
+	// Rewrite legacy KEY=value entries immediately so secrets are not retained in
+	// Desktop preferences. Runtime values are resolved from the process environment.
+	if err := a.persistIntegrations(items); err != nil {
+		a.setStatus("MCP preferences migration failed · " + err.Error())
+	}
 	a.renderIntegrations()
 }
 
@@ -87,7 +93,7 @@ func (a *application) saveIntegration() {
 		a.setStatus("Invalid MCP args · " + err.Error())
 		return
 	}
-	env, err := parseStringList(a.integrationEnv.Text)
+	env, err := parseEnvironmentKeys(a.integrationEnv.Text)
 	if err != nil {
 		a.setStatus("Invalid MCP env · " + err.Error())
 		return
@@ -114,7 +120,7 @@ func (a *application) saveIntegration() {
 		return
 	}
 	a.renderIntegrations()
-	a.setStatus("MCP integration saved · new sessions use updated config")
+	a.setStatus("MCP integration saved · env values resolve at runtime")
 }
 
 func (a *application) removeIntegration() {
@@ -211,8 +217,8 @@ func (a *application) mcpServersPayload() []map[string]any {
 		if len(item.Args) > 0 {
 			server["args"] = append([]string(nil), item.Args...)
 		}
-		if len(item.Env) > 0 {
-			server["env"] = append([]string(nil), item.Env...)
+		if env := resolveEnvironment(item.Env, os.LookupEnv); len(env) > 0 {
+			server["env"] = env
 		}
 		servers = append(servers, server)
 	}
@@ -238,6 +244,19 @@ func parseStringList(raw string) ([]string, error) {
 	return append([]string(nil), out...), nil
 }
 
+func parseEnvironmentKeys(raw string) ([]string, error) {
+	values, err := parseStringList(raw)
+	if err != nil {
+		return nil, err
+	}
+	for _, value := range values {
+		if strings.Contains(value, "=") {
+			return nil, fmt.Errorf("environment values are not stored; set %q in the Desktop process environment and enter only its variable name", strings.TrimSpace(strings.SplitN(value, "=", 2)[0]))
+		}
+	}
+	return normalizeEnvironmentKeys(values)
+}
+
 func normalizeIntegrations(items []desktopstate.MCPIntegrationState) ([]desktopstate.MCPIntegrationState, error) {
 	seen := make(map[string]struct{}, len(items))
 	out := make([]desktopstate.MCPIntegrationState, 0, len(items))
@@ -252,11 +271,70 @@ func normalizeIntegrations(items []desktopstate.MCPIntegrationState) ([]desktops
 		}
 		seen[item.Name] = struct{}{}
 		item.Args = trimStringList(item.Args)
-		item.Env = trimStringList(item.Env)
+		var err error
+		item.Env, err = normalizeEnvironmentKeys(item.Env)
+		if err != nil {
+			return nil, fmt.Errorf("integration %q environment: %w", item.Name, err)
+		}
 		out = append(out, item)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
+}
+
+func normalizeEnvironmentKeys(values []string) ([]string, error) {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		key := value
+		if before, _, found := strings.Cut(value, "="); found {
+			key = strings.TrimSpace(before)
+		}
+		if !validEnvironmentKey(key) {
+			return nil, fmt.Errorf("invalid environment variable name %q", key)
+		}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, key)
+	}
+	return out, nil
+}
+
+func validEnvironmentKey(key string) bool {
+	if key == "" {
+		return false
+	}
+	for i, r := range key {
+		if i == 0 {
+			if !(r == '_' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z') {
+				return false
+			}
+			continue
+		}
+		if !(r == '_' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9') {
+			return false
+		}
+	}
+	return true
+}
+
+func resolveEnvironment(keys []string, lookup func(string) (string, bool)) []string {
+	if lookup == nil {
+		return nil
+	}
+	out := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if value, ok := lookup(key); ok {
+			out = append(out, key+"="+value)
+		}
+	}
+	return out
 }
 
 func trimStringList(values []string) []string {
