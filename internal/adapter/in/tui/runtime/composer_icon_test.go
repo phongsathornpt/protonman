@@ -154,3 +154,128 @@ func TestSubmitDroppedImagePathDoesNotTriggerUnknownCommand(t *testing.T) {
 		t.Fatalf("quoted outside image path triggered unknown command: %s", plainTranscript(m3))
 	}
 }
+
+func TestComposerDetectsImageInputAndSetsImageIcon(t *testing.T) {
+	// ASCII profile
+	paneASCII := newBottomPane(true, false)
+	paneASCII.setIcons(tuistyle.ASCIIIcons)
+	if got := paneASCII.prompt().Prompt; got != "> " {
+		t.Fatalf("initial ASCII prompt = %q, want '> '", got)
+	}
+
+	paneASCII.prompt().SetValue("screenshot.png")
+	paneASCII.syncPromptChrome()
+	if got := paneASCII.prompt().Prompt; got != tuistyle.ASCIIIcons.Image {
+		t.Fatalf("ASCII prompt for screenshot.png = %q, want %q (# )", got, tuistyle.ASCIIIcons.Image)
+	}
+
+	paneASCII.prompt().SetValue("screenshot.png what is this?")
+	paneASCII.syncPromptChrome()
+	if got := paneASCII.prompt().Prompt; got != tuistyle.ASCIIIcons.Image {
+		t.Fatalf("ASCII prompt with trailing query = %q, want %q", got, tuistyle.ASCIIIcons.Image)
+	}
+
+	paneASCII.prompt().SetValue("[Attached Image: chart.png]")
+	paneASCII.syncPromptChrome()
+	if got := paneASCII.prompt().Prompt; got != tuistyle.ASCIIIcons.Image {
+		t.Fatalf("ASCII prompt for attachment marker = %q, want %q", got, tuistyle.ASCIIIcons.Image)
+	}
+
+	paneASCII.prompt().SetValue("hello world")
+	paneASCII.syncPromptChrome()
+	if got := paneASCII.prompt().Prompt; got != "> " {
+		t.Fatalf("ASCII prompt for text = %q, want '> '", got)
+	}
+
+	paneASCII.prompt().SetValue("main.go")
+	paneASCII.syncPromptChrome()
+	if got := paneASCII.prompt().Prompt; got != "> " {
+		t.Fatalf("ASCII prompt for main.go = %q, want '> '", got)
+	}
+
+	// Unicode profile
+	paneUnicode := newBottomPane(true, false)
+	paneUnicode.setIcons(tuistyle.UnicodeIcons)
+	paneUnicode.prompt().SetValue("photo.jpg")
+	paneUnicode.syncPromptChrome()
+	if got := paneUnicode.prompt().Prompt; got != tuistyle.UnicodeIcons.Image {
+		t.Fatalf("Unicode prompt for photo.jpg = %q, want %q (🖼  )", got, tuistyle.UnicodeIcons.Image)
+	}
+
+	// Nerd Font profile
+	paneNerd := newBottomPane(true, false)
+	paneNerd.setIcons(tuistyle.NerdIcons)
+	paneNerd.prompt().SetValue("diagram.webp")
+	paneNerd.syncPromptChrome()
+	if got := paneNerd.prompt().Prompt; got != tuistyle.NerdIcons.Image {
+		t.Fatalf("Nerd prompt for diagram.webp = %q, want %q (\uf03e )", got, tuistyle.NerdIcons.Image)
+	}
+}
+
+func TestComposerBashModeOverridesImageIcon(t *testing.T) {
+	pane := newBottomPane(true, false)
+	pane.setIcons(tuistyle.ASCIIIcons)
+	pane.setBashMode(true)
+	pane.prompt().SetValue("screenshot.png")
+	pane.syncPromptChrome()
+	if got := pane.prompt().Prompt; got != "! " {
+		t.Fatalf("bash mode prompt for image = %q, want '! '", got)
+	}
+}
+
+func TestComposerResetPromptRevertsImageIcon(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAlwaysApprove, emptyTodoItems())
+	m.panes.bottom.setIcons(tuistyle.ASCIIIcons)
+
+	m.panes.bottom.prompt().SetValue("screenshot.png")
+	m.syncSlashView()
+	if got := m.panes.bottom.prompt().Prompt; got != tuistyle.ASCIIIcons.Image {
+		t.Fatalf("prompt after setting image = %q, want %q", got, tuistyle.ASCIIIcons.Image)
+	}
+
+	m.resetPrompt()
+	if got := m.panes.bottom.prompt().Prompt; got != "> " {
+		t.Fatalf("prompt after reset = %q, want '> '", got)
+	}
+}
+
+func TestIsImageInput(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{"", false},
+		{"   ", false},
+		{"hello world", false},
+		{"main.go", false},
+		{"/clear", false},
+		{"!cat image.png", false},
+		{"screenshot.png", true},
+		{"SCREENSHOT.PNG", true},
+		{"photo.jpg", true},
+		{"image.jpeg", true},
+		{"chart.webp", true},
+		{"anim.gif", true},
+		{"icon.bmp", true},
+		{"vector.svg", true},
+		{"favicon.ico", true},
+		{"scan.tiff", true},
+		{"scan.tif", true},
+		{"'quoted image.png'", true},
+		{"\"double quoted.jpg\"", true},
+		{"`backtick.webp`", true},
+		{"file:///path/to/diagram.svg", true},
+		{"my\\ image.png", true},
+		{"[Attached Image: photo.png]", true},
+		{"screenshot.png what is this?", true},
+		{"what is this? screenshot.png", true},
+		{"'path with spaces/pic.png' explain", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := isImageInput(tt.input); got != tt.want {
+				t.Fatalf("isImageInput(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}

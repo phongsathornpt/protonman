@@ -129,7 +129,7 @@ func (p *bottomPane) setIcons(icons tuistyle.IconSet) {
 		return
 	}
 	p.icons = tuistyle.OrUnicodeIcons(icons)
-	applyPromptChrome(&p.composer.input, p.composer.bashMode, p.icons)
+	p.syncPromptChrome()
 }
 
 func (p *bottomPane) setBashMode(on bool) {
@@ -137,7 +137,15 @@ func (p *bottomPane) setBashMode(on bool) {
 		return
 	}
 	p.composer.bashMode = on
-	applyPromptChrome(&p.composer.input, on, p.icons)
+	p.syncPromptChrome()
+}
+
+func (p *bottomPane) syncPromptChrome() {
+	if p == nil {
+		return
+	}
+	isImage := isImageInput(p.composer.input.Value())
+	applyPromptChrome(&p.composer.input, p.composer.bashMode, isImage, p.icons)
 }
 
 func (p *bottomPane) setHasRunner(hasRunner bool) {
@@ -199,6 +207,7 @@ func (p *bottomPane) restoreHistoryDraft(pos int) {
 		p.composer.input.SetValue(p.composer.draft)
 	}
 	p.composer.input.CursorEnd()
+	p.syncPromptChrome()
 }
 
 func (p *bottomPane) historyPrevious() {
@@ -257,12 +266,12 @@ func newPrompt(hasRunner bool, reducedMotion bool) textarea.Model {
 		styles.Cursor.Blink = false
 	}
 	prompt.SetStyles(styles)
-	applyPromptChrome(&prompt, false, tuistyle.UnicodeIcons)
+	applyPromptChrome(&prompt, false, false, tuistyle.UnicodeIcons)
 	_ = prompt.Focus()
 	return prompt
 }
 
-func applyPromptChrome(prompt *textarea.Model, bash bool, icons tuistyle.IconSet) {
+func applyPromptChrome(prompt *textarea.Model, bash bool, isImage bool, icons tuistyle.IconSet) {
 	icons = tuistyle.OrUnicodeIcons(icons)
 	prefix := icons.Composer
 	accent := accentAssistant
@@ -271,6 +280,12 @@ func applyPromptChrome(prompt *textarea.Model, bash bool, icons tuistyle.IconSet
 		// terminal font profile; only the normal assistant prompt is semantic.
 		prefix = "! "
 		accent = commandColor
+	} else if isImage {
+		prefix = icons.Image
+		if prefix == "" {
+			prefix = tuistyle.ASCIIImage
+		}
+		accent = tuistyle.AccentInfo
 	}
 	prompt.Prompt = prefix
 	styles := prompt.Styles()
@@ -296,6 +311,7 @@ func (m *bubbleModel) resetPrompt() {
 	m.panes.bottom.composer.historyPos = len(m.panes.bottom.composer.history)
 	m.panes.bottom.composer.draft = ""
 	m.panes.bottom.composer.historyDrafts = nil
+	m.panes.bottom.syncPromptChrome()
 	m.requestRelayout()
 }
 
@@ -369,4 +385,81 @@ func normalizePastedPath(content string, workDir string) string {
 		return cleaned
 	}
 	return content
+}
+
+func isImageInput(content string) bool {
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" {
+		return false
+	}
+	if strings.HasPrefix(trimmed, "/") || strings.HasPrefix(trimmed, "!") {
+		return false
+	}
+	if (strings.HasPrefix(trimmed, "[Attached Image:") || strings.HasPrefix(trimmed, "[Attached Image ")) && strings.HasSuffix(trimmed, "]") {
+		return true
+	}
+
+	for _, token := range extractCandidateTokens(trimmed) {
+		if hasImageExtension(token) {
+			return true
+		}
+	}
+	return false
+}
+
+func extractCandidateTokens(s string) []string {
+	var tokens []string
+	n := len(s)
+	i := 0
+	for i < n {
+		for i < n && (s[i] == ' ' || s[i] == '\t' || s[i] == '\r' || s[i] == '\n') {
+			i++
+		}
+		if i >= n {
+			break
+		}
+		if s[i] == '\'' || s[i] == '"' || s[i] == '`' {
+			quote := s[i]
+			start := i + 1
+			i++
+			for i < n && s[i] != quote {
+				if s[i] == '\\' && i+1 < n {
+					i += 2
+					continue
+				}
+				i++
+			}
+			tokens = append(tokens, s[start:i])
+			if i < n && s[i] == quote {
+				i++
+			}
+			continue
+		}
+		start := i
+		for i < n && s[i] != ' ' && s[i] != '\t' && s[i] != '\r' && s[i] != '\n' {
+			i++
+		}
+		tokens = append(tokens, s[start:i])
+	}
+	return tokens
+}
+
+func hasImageExtension(cand string) bool {
+	cand = strings.TrimSpace(cand)
+	if strings.HasPrefix(cand, "file://") {
+		cand = strings.TrimPrefix(cand, "file://")
+		if unescaped, err := url.PathUnescape(cand); err == nil {
+			cand = unescaped
+		}
+	}
+	if strings.Contains(cand, `\ `) {
+		cand = strings.ReplaceAll(cand, `\ `, " ")
+	}
+	cand = strings.TrimRight(cand, ".,;:!?)]}\"'`")
+	switch strings.ToLower(filepath.Ext(cand)) {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".ico", ".tiff", ".tif":
+		return true
+	default:
+		return false
+	}
 }

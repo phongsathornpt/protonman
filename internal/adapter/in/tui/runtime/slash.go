@@ -292,6 +292,7 @@ func (m *bubbleModel) syncSlashView() {
 	if m.panes.bottom == nil {
 		return
 	}
+	m.panes.bottom.syncPromptChrome()
 	matches := m.slashMatches()
 	if len(matches) == 0 {
 		m.panes.bottom.remove(slashViewID)
