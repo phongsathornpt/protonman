@@ -17,6 +17,7 @@ import (
 const (
 	sidebarTitleMaxRunes = 38
 	sidebarMetaMaxRunes  = 28
+	contextDrawerWidth   = 320
 )
 
 func (a *application) initDesktopControls() {
@@ -94,13 +95,14 @@ func (a *application) initInspectorControls() {
 	drawerHeader := container.NewBorder(nil, nil, nil, closeButton,
 		widget.NewLabelWithStyle("Context", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 	)
-	a.contextDrawer = container.NewBorder(
+	drawer := container.NewBorder(
 		drawerHeader,
 		nil,
 		widget.NewSeparator(),
 		nil,
 		container.NewVScroll(a.contextContent),
 	)
+	a.contextDrawer = container.New(fixedWidthLayout{width: contextDrawerWidth}, drawer)
 	a.contextDrawer.Hide()
 }
 
