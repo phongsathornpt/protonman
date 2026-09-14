@@ -124,11 +124,11 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 			if !typed.StartedAt.IsZero() {
 				duration = time.Since(typed.StartedAt)
 			}
-			return &tuihistory.ExecCell{CallID: typed.CallID, Name: typed.Name, Command: typed.Command, StartedAt: typed.StartedAt, Duration: duration, Body: body, Stdout: result.Stdout, Stderr: result.Stderr, ExitCode: result.ExitCode, Truncated: result.Truncated, StdoutTruncated: result.StdoutTruncated, StderrTruncated: result.StderrTruncated, Denied: result.Denied, FailureCode: failureCode}
+			return &tuihistory.ExecCell{CallID: typed.CallID, Name: typed.Name, Command: typed.Command, StartedAt: typed.StartedAt, Duration: duration, Body: body, Stdout: result.Stdout, Stderr: result.Stderr, ExitCode: result.ExitCode, Truncated: result.Truncated, StdoutTruncated: result.StdoutTruncated, StderrTruncated: result.StderrTruncated, Denied: result.Denied, FailureCode: failureCode, Icons: typed.Icons}
 		case *tuihistory.PatchCell:
-			return &tuihistory.PatchCell{CallID: typed.CallID, Name: typed.Name, Summary: typed.Summary, Paths: append([]string{}, typed.Paths...), Body: body, Truncated: result.Truncated, Denied: result.Denied, FailureCode: failureCode}
+			return &tuihistory.PatchCell{CallID: typed.CallID, Name: typed.Name, Summary: typed.Summary, Paths: append([]string{}, typed.Paths...), Body: body, Truncated: result.Truncated, Denied: result.Denied, FailureCode: failureCode, Icons: typed.Icons}
 		case *tuihistory.AgentToolCell:
-			return &tuihistory.AgentToolCell{CallID: typed.CallID, Name: typed.Name, Target: typed.Target, Summary: toolview.SummarizeOutput(typed.Name, tool.KindAgent, typed.Target, body, result.ExitCode, result.Truncated)}
+			return &tuihistory.AgentToolCell{CallID: typed.CallID, Name: typed.Name, Target: typed.Target, Summary: toolview.SummarizeOutput(typed.Name, tool.KindAgent, typed.Target, body, result.ExitCode, result.Truncated), Icons: typed.Icons}
 		case *tuihistory.ToolCell:
 			callID = typed.CallID
 			name = typed.Name
