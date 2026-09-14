@@ -87,13 +87,15 @@ func delegateTaskOutputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
+			"agentId":  map[string]any{"type": "string"},
 			"agent_id": map[string]any{"type": "string"},
 			"profile":  map[string]any{"type": "string", "enum": agent.SubagentProfileNames()},
 			"status":   agentStateSchema(),
 			"optional": map[string]any{"type": "boolean"},
+			"taskId":   map[string]any{"type": "string"},
 			"task_id":  map[string]any{"type": "string"},
 		},
-		"required":             []any{"agent_id", "profile", "status"},
+		"required":             []any{"profile", "status"},
 		"additionalProperties": false,
 	}
 }
@@ -127,12 +129,14 @@ func resumeAgentOutputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
+			"resumedFrom":  map[string]any{"type": "string"},
 			"resumed_from": map[string]any{"type": "string"},
+			"agentId":      map[string]any{"type": "string"},
 			"agent_id":     map[string]any{"type": "string"},
 			"profile":      map[string]any{"type": "string", "enum": agent.SubagentProfileNames()},
 			"status":       agentStateSchema(),
 		},
-		"required":             []any{"resumed_from", "agent_id", "profile", "status"},
+		"required":             []any{"profile", "status"},
 		"additionalProperties": false,
 	}
 }

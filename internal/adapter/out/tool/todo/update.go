@@ -19,9 +19,8 @@ type updateTodoHandler struct {
 }
 
 type updateTodoInput struct {
-	ExpectedRevision       *uint64                `json:"expectedRevision"`
-	LegacyExpectedRevision *uint64                `json:"expected_revision,omitempty"`
-	Operations             []tododomain.Operation `json:"operations"`
+	ExpectedRevision *uint64                `json:"expectedRevision"`
+	Operations       []tododomain.Operation `json:"operations"`
 }
 
 func newUpdateTodo(store tododomain.Repository) tool.Handler {
@@ -39,9 +38,6 @@ func (updateTodoHandler) Definition() tool.Definition {
 		Kind:         tool.KindTask,
 		Mutability:   tool.MutabilityMutating,
 		Safety:       tool.SafetyContract{MutationDomain: tool.MutationDomainTaskState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
-		InputAliases: map[string][]string{
-			"expectedRevision": {"expected_revision"},
-		},
 		InputSchema:  todoUpdateInputSchema(),
 		OutputSchema: todoUpdateOutputSchema(),
 	}
@@ -51,9 +47,6 @@ func (h updateTodoHandler) PermissionDetail(arguments json.RawMessage) string {
 	var input updateTodoInput
 	if err := json.Unmarshal(arguments, &input); err != nil {
 		return "task patch"
-	}
-	if input.ExpectedRevision == nil && input.LegacyExpectedRevision != nil {
-		input.ExpectedRevision = input.LegacyExpectedRevision
 	}
 	if input.ExpectedRevision == nil {
 		return fmt.Sprintf("%d task operations", len(input.Operations))
@@ -68,9 +61,6 @@ func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 	input, err := decodeUpdateTodoInput(call.Arguments)
 	if err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode todo update arguments", err)
-	}
-	if input.ExpectedRevision == nil && input.LegacyExpectedRevision != nil {
-		input.ExpectedRevision = input.LegacyExpectedRevision
 	}
 	if input.ExpectedRevision == nil {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expectedRevision is required; call todo with action=get first")
@@ -150,10 +140,11 @@ func encodeTodoUpdateResult(call tool.Call, before []tododomain.Item, snapshot t
 	changes := todoChanges(before, snapshot.Items)
 	payloadValue := map[string]any{
 		"revision": snapshot.Revision, "total": len(snapshot.Items),
-		"pending": counts[tododomain.StatusPending], "in_progress": counts[tododomain.StatusInProgress],
+		"pending": counts[tododomain.StatusPending], "inProgress": counts[tododomain.StatusInProgress], "in_progress": counts[tododomain.StatusInProgress],
 		"completed": counts[tododomain.StatusCompleted], "changes": changes,
 	}
 	if sessionID != "" {
+		payloadValue["sessionId"] = sessionID
 		payloadValue["session_id"] = sessionID
 	}
 	payload, err := json.Marshal(payloadValue)

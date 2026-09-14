@@ -26,30 +26,6 @@ type delegateTaskInput struct {
 	TimeoutSeconds int64    `json:"timeoutSeconds,omitempty"`
 }
 
-func (in *delegateTaskInput) UnmarshalJSON(data []byte) error {
-	type alias delegateTaskInput
-	var aux struct {
-		alias
-		LegacyTaskID         string   `json:"task_id"`
-		LegacyDependsOn      []string `json:"depends_on"`
-		LegacyTimeoutSeconds int64    `json:"timeout_seconds"`
-	}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-	*in = delegateTaskInput(aux.alias)
-	if in.TaskID == "" {
-		in.TaskID = aux.LegacyTaskID
-	}
-	if len(in.DependsOn) == 0 {
-		in.DependsOn = aux.LegacyDependsOn
-	}
-	if in.TimeoutSeconds == 0 {
-		in.TimeoutSeconds = aux.LegacyTimeoutSeconds
-	}
-	return nil
-}
-
 // NewDelegateTask creates a tool.Handler that delegates a task to a specialized subagent.
 func NewDelegateTask(coordinator *agent.Coordinator, parentIDs ...string) tool.Handler {
 	var parentID string
@@ -62,18 +38,13 @@ func NewDelegateTask(coordinator *agent.Coordinator, parentIDs ...string) tool.H
 func (delegateTaskHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                   tool.NameSubagent,
-		Description:            "Spawn a specialized subagent asynchronously and return its agent_id immediately. Results required for the parent are delivered automatically. Use depends_on to gate a child on already-spawned children from the same parent turn. Set optional=true only for speculative work that must not block parent completion.",
+		Description:            "Spawn a specialized subagent asynchronously and return its agentId immediately. Results required for the parent are delivered automatically. Use dependsOn to gate a child on already-spawned children from the same parent turn. Set optional=true only for speculative work that must not block parent completion.",
 		Kind:                   tool.KindAgent,
 		Mutability:             tool.MutabilityMutating,
 		Safety:                 tool.SafetyContract{MutationDomain: tool.MutationDomainAgentState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
 		ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded,
 		PermissionDetailKey:    "task",
 		OutputSchema:           delegateTaskOutputSchema(),
-		InputAliases: map[string][]string{
-			"taskId":         {"task_id"},
-			"dependsOn":      {"depends_on"},
-			"timeoutSeconds": {"timeout_seconds"},
-		},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -152,7 +123,7 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 	}
 
 	if input.TimeoutSeconds < 0 || input.TimeoutSeconds > 86400 {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "timeout_seconds must be between 1 and 86400 when provided")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "timeoutSeconds must be between 1 and 86400 when provided")
 	}
 
 	profile, err := agent.ParseSubagentProfile(input.Profile)
@@ -183,10 +154,12 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "spawn subagent", err)
 	}
 	payload, err := json.Marshal(map[string]any{
+		"agentId":  handle.ID,
 		"agent_id": handle.ID,
 		"profile":  handle.Profile,
 		"status":   agent.StateQueued,
 		"optional": input.Optional,
+		"taskId":   strings.TrimSpace(input.TaskID),
 		"task_id":  strings.TrimSpace(input.TaskID),
 	})
 	if err != nil {

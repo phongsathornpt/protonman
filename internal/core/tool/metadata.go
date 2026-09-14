@@ -21,7 +21,7 @@ type callMetadata struct {
 }
 
 var builtinMetadata = map[string]callMetadata{
-	NameRead:     {Metadata: Metadata{Name: NameRead, Kind: KindRead, DisplayName: "Read"}, title: titleReadFile, target: targetReadFile, affectedPaths: affectedSinglePath("path", "file_path", "file", "filename", "target")},
+	NameRead:     {Metadata: Metadata{Name: NameRead, Kind: KindRead, DisplayName: "Read"}, title: titleReadFile, target: targetReadFile, affectedPaths: affectedSinglePath("path", "filePath", "file_path", "file", "filename", "target")},
 	NameMath:     {Metadata: Metadata{Name: NameMath, Kind: KindCompute, DisplayName: "Calculate"}, title: titleCalculate, target: targetCalculate},
 	NameEdit:     {Metadata: Metadata{Name: NameEdit, Kind: KindEdit, DisplayName: "Edit"}, title: titleEdit, target: targetEdit, affectedPaths: affectedEdit},
 	NameLS:       {Metadata: Metadata{Name: NameLS, Kind: KindRead, DisplayName: "List"}, title: titleListDir, target: targetListDir},
@@ -163,19 +163,19 @@ func affectedEdit(args map[string]any) []string {
 	}
 }
 func titleWriteFile(args map[string]any) string {
-	if path := ExtractString(args, "file_path", "path", "file"); path != "" {
+	if path := ExtractString(args, "filePath", "file_path", "path", "file"); path != "" {
 		return "Write " + path
 	}
 	return "Write file"
 }
 func titleSearchReplace(args map[string]any) string {
-	if path := ExtractString(args, "file_path", "path", "file"); path != "" {
+	if path := ExtractString(args, "filePath", "file_path", "path", "file"); path != "" {
 		return "Edit " + path
 	}
 	return "Search and replace"
 }
 func targetEditPath(args map[string]any) string {
-	return ExtractString(args, "file_path", "path", "file", "filename", "target")
+	return ExtractString(args, "filePath", "file_path", "path", "file", "filename", "target")
 }
 
 func titleApplyPatch(args map[string]any) string {
@@ -185,7 +185,7 @@ func titleApplyPatch(args map[string]any) string {
 	return "Apply patch"
 }
 func targetApplyPatch(args map[string]any) string {
-	if path := ExtractString(args, "path", "file_path", "file"); path != "" {
+	if path := ExtractString(args, "filePath", "path", "file_path", "file"); path != "" {
 		return path
 	}
 	if paths := patchPathsFromArgs(args); len(paths) == 1 {
@@ -196,7 +196,7 @@ func targetApplyPatch(args map[string]any) string {
 	return ""
 }
 func affectedPatch(args map[string]any) []string {
-	if path := ExtractString(args, "path", "file_path", "file", "filename", "target"); path != "" {
+	if path := ExtractString(args, "filePath", "path", "file_path", "file", "filename", "target"); path != "" {
 		return []string{path}
 	}
 	return patchPathsFromArgs(args)
@@ -385,7 +385,9 @@ func titleAgentID(prefix, fallback string) func(map[string]any) string {
 		return fallback
 	}
 }
-func targetAgentID(args map[string]any) string { return ExtractString(args, "agent_id", "id") }
+func targetAgentID(args map[string]any) string {
+	return ExtractString(args, "agentId", "agent_id", "id")
+}
 func titleCheckpointRestore(args map[string]any) string {
 	if id := targetCheckpointRestore(args); id != "" {
 		return "Restore checkpoint " + id
@@ -393,7 +395,7 @@ func titleCheckpointRestore(args map[string]any) string {
 	return "Restore checkpoint"
 }
 func targetCheckpointRestore(args map[string]any) string {
-	return ExtractString(args, "checkpoint_id", "id")
+	return ExtractString(args, "checkpointId", "checkpoint_id", "id")
 }
 func affectedSinglePath(keys ...string) func(map[string]any) []string {
 	return func(args map[string]any) []string {

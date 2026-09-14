@@ -28,23 +28,14 @@ func (in *writeFileInput) UnmarshalJSON(data []byte) error {
 	type alias writeFileInput
 	var aux struct {
 		alias
-		LegacyFilePath       string `json:"file_path"`
-		PathAlias            string `json:"path"`
-		LegacyExpectedSHA256 string `json:"expected_sha256"`
+		PathAlias string `json:"path"`
 	}
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 	*in = writeFileInput(aux.alias)
 	if in.FilePath == "" {
-		if aux.LegacyFilePath != "" {
-			in.FilePath = aux.LegacyFilePath
-		} else {
-			in.FilePath = aux.PathAlias
-		}
-	}
-	if in.ExpectedSHA256 == "" {
-		in.ExpectedSHA256 = aux.LegacyExpectedSHA256
+		in.FilePath = aux.PathAlias
 	}
 	return nil
 }
@@ -74,8 +65,8 @@ func (writeFileHandler) Definition() tool.Definition {
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyWholeFile, CheckpointPolicy: tool.CheckpointPolicyRequired, Boundary: tool.BoundaryPolicyWorkspaceWrite},
 		PermissionDetailKey: "filePath",
 		InputAliases: map[string][]string{
-			"filePath":       {"file_path", "path", "filepath"},
-			"expectedSha256": {"expected_sha256", "sha256"},
+			"filePath":       {"path", "filepath"},
+			"expectedSha256": {"sha256"},
 		},
 		InputSchema: map[string]any{
 			"type": "object",
@@ -103,7 +94,7 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	}
 	input.FilePath = strings.TrimSpace(input.FilePath)
 	if input.FilePath == "" {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "edit write file_path is required")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "edit write filePath is required")
 	}
 	resolvedPath, err := h.workspace.Resolve(ctx, input.FilePath)
 	if err != nil {
@@ -121,12 +112,12 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		decoded, decodeErr := hex.DecodeString(expected)
 		if expected == "" {
 			recoveryArgs, _ := json.Marshal(map[string]any{"path": input.FilePath})
-			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_sha256 is required when overwriting an existing file; call read first").WithRecovery(tool.Recovery{
+			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expectedSha256 is required when overwriting an existing file; call read first").WithRecovery(tool.Recovery{
 				Action: tool.RecoveryRefreshResource, Tool: tool.NameRead, Arguments: recoveryArgs,
 			})
 		}
 		if decodeErr != nil || len(decoded) != sha256.Size {
-			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_sha256 must be a 64-character SHA-256 hex digest")
+			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expectedSha256 must be a 64-character SHA-256 hex digest")
 		}
 		current := sha256.Sum256(existing)
 		if expected != fmt.Sprintf("%x", current[:]) {

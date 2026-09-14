@@ -33,10 +33,6 @@ func (h todoHandler) Definition() tool.Definition {
 		Mutability:  tool.MutabilityMutating,
 		Safety:      tool.SafetyContract{MutationDomain: tool.MutationDomainTaskState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
 		Semantics:   h.callSemantics,
-		InputAliases: map[string][]string{
-			"expectedRevision": {"expected_revision"},
-			"sessionId":        {"session_id"},
-		},
 		InputSchema: todoCapabilityInputSchema(),
 		OutputSchema: map[string]any{
 			"oneOf": []any{todoSnapshotSchema(), todoUpdateOutputSchema()},
@@ -181,7 +177,6 @@ func (h todoHandler) resolve(arguments json.RawMessage) (json.RawMessage, tool.H
 	delete(object, "action")
 	// sessionId is accepted as an informational echo of a get snapshot and is
 	// never forwarded to the patch handler, which does not own session identity.
-	delete(object, "session_id")
 	delete(object, "sessionId")
 	if action == "get" {
 		// operations means the model intended to patch. Failing loudly is safer
@@ -191,7 +186,6 @@ func (h todoHandler) resolve(arguments json.RawMessage) (json.RawMessage, tool.H
 		}
 		// expectedRevision is a harmless echo of the snapshot the caller just
 		// read, so it is tolerated rather than reported as misuse.
-		delete(object, "expected_revision")
 		delete(object, "expectedRevision")
 		if len(object) != 0 {
 			return nil, nil, tool.NewToolError(tool.ErrorCodeInvalidArguments, "todo action=get does not accept update arguments")

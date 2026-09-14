@@ -56,7 +56,7 @@ func TestDelegateTaskExecute(t *testing.T) {
 		args, _ := json.Marshal(map[string]any{
 			"profile": "agility",
 			"task":    "search for auth middleware",
-			"task_id": "inspect-auth",
+			"taskId":  "inspect-auth",
 		})
 		call, err := tool.NewCall("call-1", "subagent", args)
 		if err != nil {
@@ -285,7 +285,7 @@ func TestDelegateTaskAppliesRequestedShorterTimeout(t *testing.T) {
 	)
 	defer coord.Close()
 	handler := NewDelegateTask(coord)
-	args, _ := json.Marshal(map[string]any{"profile": "agility", "task": "short", "timeout_seconds": 1})
+	args, _ := json.Marshal(map[string]any{"profile": "agility", "task": "short", "timeoutSeconds": 1})
 	call, _ := tool.NewCall("short-timeout", "subagent", args)
 	if _, err := handler.Execute(context.Background(), call); err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -298,9 +298,9 @@ func TestDelegateTaskAppliesRequestedShorterTimeout(t *testing.T) {
 
 func TestDelegateTaskRejectsExcessiveTimeoutSeconds(t *testing.T) {
 	handler := NewDelegateTask(agent.NewCoordinator(nil, nil, nil, nil))
-	args, _ := json.Marshal(map[string]any{"profile": "agility", "task": "too long", "timeout_seconds": 86401})
+	args, _ := json.Marshal(map[string]any{"profile": "agility", "task": "too long", "timeoutSeconds": 86401})
 	call, _ := tool.NewCall("bad-timeout", "subagent", args)
-	if _, err := handler.Execute(context.Background(), call); err == nil || !strings.Contains(err.Error(), "timeout_seconds") {
+	if _, err := handler.Execute(context.Background(), call); err == nil || !strings.Contains(err.Error(), "timeoutSeconds") {
 		t.Fatalf("Execute() error = %v, want timeout validation error", err)
 	}
 }
@@ -359,7 +359,7 @@ func TestSubagentDefinitionDescribesEventDrivenResultDelivery(t *testing.T) {
 			t.Fatalf("subagent input schema missing camelCase property %q", requiredCamelKey)
 		}
 	}
-	normalized := tool.NormalizeArguments(def, json.RawMessage(`{"action":"spawn","task":"search","task_id":"todo-1","depends_on":["agent-1"],"timeout_seconds":60}`))
+	normalized := tool.NormalizeArguments(def, json.RawMessage(`{"action":"spawn","task":"search","taskId":"todo-1","dependsOn":["agent-1"],"timeoutSeconds":60}`))
 	var parsed map[string]any
 	if err := json.Unmarshal(normalized, &parsed); err != nil {
 		t.Fatalf("unmarshal normalized subagent args: %v", err)

@@ -1,8 +1,6 @@
 package readfile
 
 import (
-	"encoding/json"
-
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
@@ -22,30 +20,6 @@ type readFileInput struct {
 	LineNumbers  bool   `json:"lineNumbers,omitempty"`
 }
 
-func (in *readFileInput) UnmarshalJSON(data []byte) error {
-	type alias readFileInput
-	var aux struct {
-		alias
-		LegacyStartLine   int  `json:"start_line"`
-		LegacyEndLine     int  `json:"end_line"`
-		LegacyLineNumbers bool `json:"line_numbers"`
-	}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-	*in = readFileInput(aux.alias)
-	if in.StartLine == 0 {
-		in.StartLine = aux.LegacyStartLine
-	}
-	if in.EndLine == 0 {
-		in.EndLine = aux.LegacyEndLine
-	}
-	if !in.LineNumbers {
-		in.LineNumbers = aux.LegacyLineNumbers
-	}
-	return nil
-}
-
 func (readFileHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                tool.NameRead,
@@ -55,11 +29,6 @@ func (readFileHandler) Definition() tool.Definition {
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead},
 		Evidence:            tool.EvidenceWorkspace,
 		PermissionDetailKey: "path",
-		InputAliases: map[string][]string{
-			"startLine":   {"start_line"},
-			"endLine":     {"end_line"},
-			"lineNumbers": {"line_numbers"},
-		},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -77,11 +46,11 @@ func (readFileHandler) Definition() tool.Definition {
 				"offset": map[string]any{
 					"type":        "integer",
 					"minimum":     0,
-					"description": "Text-only byte offset; use next_offset from a truncated text result. Ignored when line selection is requested",
+					"description": "Text-only byte offset; use nextOffset from a truncated text result. Ignored when line selection is requested",
 				},
 				"continuation": map[string]any{
 					"type":        "string",
-					"description": "Text-only snapshot token from a truncated result; send it with next_offset to detect file changes. Ignored when line selection is requested",
+					"description": "Text-only snapshot token from a truncated result; send it with nextOffset to detect file changes. Ignored when line selection is requested",
 				},
 				"limit": map[string]any{
 					"type":        "integer",

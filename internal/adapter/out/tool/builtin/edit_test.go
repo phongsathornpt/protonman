@@ -18,7 +18,7 @@ func TestEditFacadeDispatchesActions(t *testing.T) {
 	}
 
 	_, err := handler.Execute(context.Background(), newJSONCall(t, "edit-write", "edit", map[string]any{
-		"action": "write", "file_path": "a.txt", "content": "alpha",
+		"action": "write", "filePath": "a.txt", "content": "alpha",
 	}))
 	if err != nil {
 		t.Fatalf("write action: %v", err)
@@ -28,7 +28,7 @@ func TestEditFacadeDispatchesActions(t *testing.T) {
 	}
 
 	_, err = handler.Execute(context.Background(), newJSONCall(t, "edit-replace", "edit", map[string]any{
-		"action": "replace", "file_path": "a.txt", "old_string": "alpha", "new_string": "beta",
+		"action": "replace", "filePath": "a.txt", "oldString": "alpha", "newString": "beta",
 	}))
 	if err != nil {
 		t.Fatalf("replace action: %v", err)
@@ -49,7 +49,7 @@ func TestEditFacadeDispatchesActions(t *testing.T) {
 	}
 
 	_, err = handler.Execute(context.Background(), newJSONCall(t, "edit-restore", "edit", map[string]any{
-		"action": "restore", "checkpoint_id": "cp-old",
+		"action": "restore", "checkpointId": "cp-old",
 	}))
 	if err != nil {
 		t.Fatalf("restore action: %v", err)

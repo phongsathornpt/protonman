@@ -44,7 +44,7 @@ func (c Call) Target() string {
 		return spec.target(args)
 	}
 	// Heuristic fallback for arbitrary MCP and custom tools.
-	return ExtractString(args, "url", "file_path", "path", "file", "query", "pattern", "command", "target", "task", "name")
+	return ExtractString(args, "url", "filePath", "file_path", "path", "file", "query", "pattern", "command", "target", "task", "name")
 }
 
 // DisplayName returns a clean, human-readable action label for a tool name.
@@ -83,7 +83,7 @@ func (c Call) AffectedPaths() []string {
 			}
 		}
 	}
-	if path := ExtractString(args, "file_path", "path", "file", "filename", "target", "destination", "move_path"); path != "" {
+	if path := ExtractString(args, "filePath", "file_path", "path", "file", "filename", "target", "destination", "move_path"); path != "" {
 		if kind := KindForName(canonical.Name); kind == KindEdit || kind == KindRead {
 			return []string{path}
 		}

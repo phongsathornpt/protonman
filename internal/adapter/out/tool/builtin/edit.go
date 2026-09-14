@@ -34,39 +34,14 @@ func (in *editInput) UnmarshalJSON(data []byte) error {
 	type alias editInput
 	var aux struct {
 		alias
-		LegacyFilePath       string `json:"file_path"`
-		PathAlias            string `json:"path"`
-		LegacyExpectedSHA256 string `json:"expected_sha256"`
-		LegacyOldString      string `json:"old_string"`
-		LegacyNewString      string `json:"new_string"`
-		LegacyReplaceAll     bool   `json:"replace_all"`
-		LegacyCheckpointID   string `json:"checkpoint_id"`
+		PathAlias string `json:"path"`
 	}
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 	*in = editInput(aux.alias)
 	if in.FilePath == "" {
-		if aux.LegacyFilePath != "" {
-			in.FilePath = aux.LegacyFilePath
-		} else {
-			in.FilePath = aux.PathAlias
-		}
-	}
-	if in.ExpectedSHA256 == "" {
-		in.ExpectedSHA256 = aux.LegacyExpectedSHA256
-	}
-	if in.OldString == "" {
-		in.OldString = aux.LegacyOldString
-	}
-	if in.NewString == "" {
-		in.NewString = aux.LegacyNewString
-	}
-	if !in.ReplaceAll {
-		in.ReplaceAll = aux.LegacyReplaceAll
-	}
-	if in.CheckpointID == "" {
-		in.CheckpointID = aux.LegacyCheckpointID
+		in.FilePath = aux.PathAlias
 	}
 	return nil
 }
@@ -89,12 +64,8 @@ func (h editHandler) Definition() tool.Definition {
 		Safety:      tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyDynamic, CheckpointPolicy: tool.CheckpointPolicyWhenKnown, Boundary: tool.BoundaryPolicyWorkspaceWrite},
 		Semantics:   h.callSemantics,
 		InputAliases: map[string][]string{
-			"filePath":       {"file_path", "path", "filepath"},
-			"expectedSha256": {"expected_sha256", "sha256"},
-			"oldString":      {"old_string"},
-			"newString":      {"new_string"},
-			"replaceAll":     {"replace_all"},
-			"checkpointId":   {"checkpoint_id"},
+			"filePath":       {"path", "filepath"},
+			"expectedSha256": {"sha256"},
 		},
 		InputSchema: map[string]any{
 			"type": "object",

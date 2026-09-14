@@ -194,7 +194,7 @@ func readFileLinesBounded(ctx context.Context, file *os.File, input readFileInpu
 		if text != "" && !strings.HasSuffix(text, "\n") {
 			text += "\n"
 		}
-		text += "[output truncated; narrow start_line/end_line or increase limit]"
+		text += "[output truncated; narrow startLine/endLine or increase limit]"
 	}
 	return tool.Result{
 		CallID:     call.ID,

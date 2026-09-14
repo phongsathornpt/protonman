@@ -55,7 +55,7 @@ func newMemoryIsolationServer(t *testing.T) *memoryIsolationServer {
 			m.mu.Unlock()
 			w.Header().Set("Content-Type", "text/event-stream")
 			if first {
-				writeSSEChunk(w, toolCallChunk("delegate-1", "subagent", `{"action":"spawn","task":"Inspect hello.txt","profile":"agility","timeout_seconds":30}`))
+				writeSSEChunk(w, toolCallChunk("delegate-1", "subagent", `{"action":"spawn","task":"Inspect hello.txt","profile":"agility","timeoutSeconds":30}`))
 			} else {
 				writeSSEChunk(w, textChunk("Delegation complete from automatic child result."))
 			}

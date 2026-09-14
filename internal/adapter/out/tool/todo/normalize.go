@@ -39,12 +39,6 @@ func (taskArgumentNormalizer) NormalizeArguments(arguments json.RawMessage) json
 			changed = true
 		}
 	}
-	if raw, ok := object["expected_revision"]; ok {
-		if canonical, differs := canonicalRevision(raw); differs {
-			object["expected_revision"] = canonical
-			changed = true
-		}
-	}
 	if raw, ok := object["operations"]; ok {
 		if canonical, differs := canonicalOperations(raw); differs {
 			object["operations"] = canonical

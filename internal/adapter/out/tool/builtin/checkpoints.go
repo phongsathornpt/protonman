@@ -37,22 +37,6 @@ type restoreCheckpointInput struct {
 	CheckpointID string `json:"checkpointId"`
 }
 
-func (in *restoreCheckpointInput) UnmarshalJSON(data []byte) error {
-	type alias restoreCheckpointInput
-	var aux struct {
-		alias
-		LegacyCheckpointID string `json:"checkpoint_id"`
-	}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-	*in = restoreCheckpointInput(aux.alias)
-	if in.CheckpointID == "" {
-		in.CheckpointID = aux.LegacyCheckpointID
-	}
-	return nil
-}
-
 // NewCheckpointRestore returns the permission-gated checkpoint restore adapter.
 func NewCheckpointRestore(store checkpoint.Store) tool.Handler {
 	return restoreCheckpointHandler{checkpoints: selectCheckpointStore([]checkpoint.Store{store})}
@@ -66,9 +50,6 @@ func (restoreCheckpointHandler) Definition() tool.Definition {
 		Mutability:          tool.MutabilityMutating,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyWholeFile, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceWrite},
 		PermissionDetailKey: "checkpointId",
-		InputAliases: map[string][]string{
-			"checkpointId": {"checkpoint_id"},
-		},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -87,7 +68,7 @@ func (h restoreCheckpointHandler) Execute(ctx context.Context, call tool.Call) (
 	}
 	input.CheckpointID = strings.TrimSpace(input.CheckpointID)
 	if input.CheckpointID == "" {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "edit restore checkpoint_id is required")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "edit restore checkpointId is required")
 	}
 	if err := h.checkpoints.Restore(ctx, input.CheckpointID); err != nil {
 		return tool.Result{}, fmt.Errorf("restore checkpoint %q: %w", input.CheckpointID, err)

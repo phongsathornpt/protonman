@@ -35,7 +35,7 @@ func TestBuiltinToolSSOTContract(t *testing.T) {
 		},
 		{
 			name:            "edit",
-			args:            map[string]any{"action": "write", "file_path": "pkg/out.go", "content": "package pkg"},
+			args:            map[string]any{"action": "write", "filePath": "pkg/out.go", "content": "package pkg"},
 			wantKind:        tool.KindEdit,
 			wantDisplayName: "Edit",
 			targetSub:       "pkg/out.go",
@@ -43,7 +43,7 @@ func TestBuiltinToolSSOTContract(t *testing.T) {
 		},
 		{
 			name:            "edit",
-			args:            map[string]any{"action": "replace", "file_path": "pkg/out.go", "old_string": "a", "new_string": "b"},
+			args:            map[string]any{"action": "replace", "filePath": "pkg/out.go", "oldString": "a", "newString": "b"},
 			wantKind:        tool.KindEdit,
 			wantDisplayName: "Edit",
 			targetSub:       "pkg/out.go",
@@ -142,7 +142,7 @@ func TestBuiltinToolSSOTContract(t *testing.T) {
 		},
 		{
 			name:            "subagent",
-			args:            map[string]any{"action": "wait", "timeout_seconds": 30},
+			args:            map[string]any{"action": "wait", "timeoutSeconds": 30},
 			wantKind:        tool.KindAgent,
 			wantDisplayName: "Subagent",
 			targetSub:       "subagents",
@@ -150,7 +150,7 @@ func TestBuiltinToolSSOTContract(t *testing.T) {
 		},
 		{
 			name:            "subagent",
-			args:            map[string]any{"action": "get", "agent_id": "agent-99"},
+			args:            map[string]any{"action": "get", "agentId": "agent-99"},
 			wantKind:        tool.KindAgent,
 			wantDisplayName: "Subagent",
 			targetSub:       "agent-99",
@@ -166,7 +166,7 @@ func TestBuiltinToolSSOTContract(t *testing.T) {
 		},
 		{
 			name:            "subagent",
-			args:            map[string]any{"action": "cancel", "agent_id": "agent-99"},
+			args:            map[string]any{"action": "cancel", "agentId": "agent-99"},
 			wantKind:        tool.KindAgent,
 			wantDisplayName: "Subagent",
 			targetSub:       "agent-99",
@@ -174,7 +174,7 @@ func TestBuiltinToolSSOTContract(t *testing.T) {
 		},
 		{
 			name:            "edit",
-			args:            map[string]any{"action": "restore", "checkpoint_id": "chk-42"},
+			args:            map[string]any{"action": "restore", "checkpointId": "chk-42"},
 			wantKind:        tool.KindEdit,
 			wantDisplayName: "Edit",
 			targetSub:       "chk-42",

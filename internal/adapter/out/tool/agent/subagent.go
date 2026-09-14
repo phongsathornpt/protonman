@@ -51,12 +51,6 @@ func (h subagentHandler) Definition() tool.Definition {
 		Safety:                 tool.SafetyContract{MutationDomain: tool.MutationDomainAgentState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
 		ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded,
 		Semantics:              h.callSemantics,
-		InputAliases: map[string][]string{
-			"taskId":         {"task_id"},
-			"dependsOn":      {"depends_on"},
-			"timeoutSeconds": {"timeout_seconds"},
-			"agentId":        {"agent_id"},
-		},
 		InputSchema:            subagentInputSchema(),
 		OutputSchema: map[string]any{
 			"oneOf": []any{

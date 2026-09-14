@@ -39,12 +39,12 @@ func todoCapabilityService(t *testing.T, items []tododomain.Item) *toolcall.Serv
 // not act on because the actionable clause was also truncated.
 func TestTodoCapabilityServiceAcceptsWireVariants(t *testing.T) {
 	calls := map[string]string{
-		"canonical update":  `{"action":"update","expected_revision":0,"operations":[{"op":"set_status","id":"a","status":"in_progress"}]}`,
-		"quoted revision":   `{"action":"update","expected_revision":"0","operations":[{"op":"set_status","id":"a","status":"in_progress"}]}`,
-		"echoed session_id": `{"action":"update","session_id":"session-1","expected_revision":0,"operations":[{"op":"set_status","id":"a","status":"in_progress"}]}`,
-		"uppercase op":      `{"action":"update","expected_revision":0,"operations":[{"op":"SET_STATUS","id":"a","status":"in_progress"}]}`,
-		"uppercase status":  `{"action":"update","expected_revision":0,"operations":[{"op":"set_status","id":"a","status":"IN_PROGRESS"}]}`,
-		"echoed get args":   `{"action":"get","expected_revision":0,"session_id":"session-1"}`,
+		"canonical update":  `{"action":"update","expectedRevision":0,"operations":[{"op":"set_status","id":"a","status":"in_progress"}]}`,
+		"quoted revision":   `{"action":"update","expectedRevision":"0","operations":[{"op":"set_status","id":"a","status":"in_progress"}]}`,
+		"echoed session_id": `{"action":"update","sessionId":"session-1","expectedRevision":0,"operations":[{"op":"set_status","id":"a","status":"in_progress"}]}`,
+		"uppercase op":      `{"action":"update","expectedRevision":0,"operations":[{"op":"SET_STATUS","id":"a","status":"in_progress"}]}`,
+		"uppercase status":  `{"action":"update","expectedRevision":0,"operations":[{"op":"set_status","id":"a","status":"IN_PROGRESS"}]}`,
+		"echoed get args":   `{"action":"get","expectedRevision":0,"sessionId":"session-1"}`,
 	}
 	for name, args := range calls {
 		t.Run(name, func(t *testing.T) {
@@ -84,8 +84,8 @@ func TestTodoCapabilityNormalizesUppercaseAction(t *testing.T) {
 func TestTodoCapabilityServiceRejectsGenuineMisuse(t *testing.T) {
 	calls := map[string]string{
 		"missing revision":  `{"action":"update","operations":[{"op":"remove","id":"a"}]}`,
-		"non-numeric":       `{"action":"update","expected_revision":"abc","operations":[{"op":"remove","id":"a"}]}`,
-		"unknown op":        `{"action":"update","expected_revision":0,"operations":[{"op":"nope","id":"a"}]}`,
+		"non-numeric":       `{"action":"update","expectedRevision":"abc","operations":[{"op":"remove","id":"a"}]}`,
+		"unknown op":        `{"action":"update","expectedRevision":0,"operations":[{"op":"nope","id":"a"}]}`,
 		"unknown action":    `{"action":"delete"}`,
 		"get with ops":      `{"action":"get","operations":[{"op":"remove","id":"a"}]}`,
 		"unknown top-level": `{"action":"get","bogus":1}`,

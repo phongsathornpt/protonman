@@ -40,22 +40,6 @@ type bashInput struct {
 	TimeoutSeconds int64  `json:"timeoutSeconds,omitempty"`
 }
 
-func (in *bashInput) UnmarshalJSON(data []byte) error {
-	type alias bashInput
-	var aux struct {
-		alias
-		LegacyTimeoutSeconds int64 `json:"timeout_seconds"`
-	}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-	*in = bashInput(aux.alias)
-	if in.TimeoutSeconds == 0 {
-		in.TimeoutSeconds = aux.LegacyTimeoutSeconds
-	}
-	return nil
-}
-
 // NewBash returns the permission-gated shell command adapter.
 func NewBash(workspaceRoot *workspace.Workspace, launchers ...sandbox.Launcher) tool.Handler {
 	var launcher sandbox.Launcher
@@ -79,9 +63,6 @@ func (bashHandler) Definition() tool.Definition {
 		Safety:                 tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyDynamic, CheckpointPolicy: tool.CheckpointPolicyWhenKnown, Boundary: tool.BoundaryPolicySandbox},
 		PermissionDetailKey:    "command",
 		ExecutionTimeoutPolicy: tool.ExecutionTimeoutCallerBounded,
-		InputAliases: map[string][]string{
-			"timeoutSeconds": {"timeout_seconds"},
-		},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -142,7 +123,7 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		return tool.Result{}, err
 	}
 	if input.TimeoutSeconds < 0 {
-		err := tool.NewToolError(tool.ErrorCodeInvalidArguments, "bash timeout_seconds cannot be negative")
+		err := tool.NewToolError(tool.ErrorCodeInvalidArguments, "bash timeoutSeconds cannot be negative")
 		logBashFailure(ctx, call, startedAt, "arguments", err)
 		return tool.Result{}, err
 	}
@@ -304,7 +285,7 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		if errors.Is(ctxErr, context.DeadlineExceeded) {
 			message := "bash command deadline exceeded"
 			if requestedTimeout && parentCtx.Err() == nil {
-				message = "bash timeout_seconds exceeded"
+				message = "bash timeoutSeconds exceeded"
 			}
 			return result, tool.WrapToolError(tool.ErrorCodeDeadlineExceeded, message, ctxErr)
 		}

@@ -19,7 +19,7 @@ func dedicatedPythonDiscoveryTool(command, lower string) *dedicatedToolSuggestio
 	if match := pythonPathGlobPattern.FindStringSubmatch(command); len(match) == 4 {
 		args := map[string]any{"path": strings.TrimSpace(match[1]), "pattern": strings.TrimSpace(match[3]), "type": "file"}
 		if strings.EqualFold(match[2], "glob") {
-			args["max_depth"] = 1
+			args["maxDepth"] = 1
 		}
 		return &dedicatedToolSuggestion{
 			tool: "find", args: args,

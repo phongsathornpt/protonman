@@ -35,7 +35,7 @@ func TestListDirCanonicalSchemaHidesCompatibilityAliases(t *testing.T) {
 		}
 	}
 	aliases := def.InputAliases["path"]
-	if len(aliases) != 2 || aliases[0] != "dir_path" || aliases[1] != "directory" {
+	if len(aliases) != 1 || aliases[0] != "directory" {
 		t.Fatalf("path aliases = %#v", aliases)
 	}
 }
@@ -50,13 +50,7 @@ func TestListDirParameterAliases(t *testing.T) {
 
 	handler := NewListDir(ws)
 
-	// 1. dir_path alias
-	res1 := executeJSON(t, handler, "list-alias-1", map[string]any{"dir_path": "sub"})
-	if !strings.Contains(res1.Output, "nested.txt") {
-		t.Fatalf("dir_path alias failed: %s", res1.Output)
-	}
-
-	// 2. directory alias
+	// directory alias
 	res2 := executeJSON(t, handler, "list-alias-2", map[string]any{"directory": "sub"})
 	if !strings.Contains(res2.Output, "nested.txt") {
 		t.Fatalf("directory alias failed: %s", res2.Output)

@@ -42,12 +42,12 @@ func TestTodoCapabilityAcceptsCanonicalCalls(t *testing.T) {
 	validator := capabilityValidator(t)
 	calls := map[string]string{
 		"get":                      `{"action":"get"}`,
-		"update add":               `{"action":"update","expected_revision":0,"operations":[{"op":"add","id":"a","text":"t","status":"pending"}]}`,
-		"update set_status":        `{"action":"update","expected_revision":0,"operations":[{"op":"set_status","id":"a","status":"completed"}]}`,
-		"update set_text":          `{"action":"update","expected_revision":0,"operations":[{"op":"set_text","id":"a","text":"x"}]}`,
-		"update remove":            `{"action":"update","expected_revision":0,"operations":[{"op":"remove","id":"a"}]}`,
-		"update mixed operations":  `{"action":"update","expected_revision":0,"operations":[{"op":"add","id":"a","text":"t","status":"pending"},{"op":"set_status","id":"a","status":"in_progress"},{"op":"remove","id":"a"}]}`,
-		"get with echoed revision": `{"action":"get","expected_revision":0}`,
+		"update add":               `{"action":"update","expectedRevision":0,"operations":[{"op":"add","id":"a","text":"t","status":"pending"}]}`,
+		"update set_status":        `{"action":"update","expectedRevision":0,"operations":[{"op":"set_status","id":"a","status":"completed"}]}`,
+		"update set_text":          `{"action":"update","expectedRevision":0,"operations":[{"op":"set_text","id":"a","text":"x"}]}`,
+		"update remove":            `{"action":"update","expectedRevision":0,"operations":[{"op":"remove","id":"a"}]}`,
+		"update mixed operations":  `{"action":"update","expectedRevision":0,"operations":[{"op":"add","id":"a","text":"t","status":"pending"},{"op":"set_status","id":"a","status":"in_progress"},{"op":"remove","id":"a"}]}`,
+		"get with echoed revision": `{"action":"get","expectedRevision":0}`,
 	}
 	for name, args := range calls {
 		if err := validator.Validate(normalizeThroughCapability(t, args)); err != nil {
@@ -61,13 +61,13 @@ func TestTodoCapabilityAcceptsCanonicalCalls(t *testing.T) {
 func TestTodoCapabilityAcceptsNormalizedWireVariants(t *testing.T) {
 	validator := capabilityValidator(t)
 	calls := map[string]string{
-		"quoted revision":            `{"action":"update","expected_revision":"7","operations":[{"op":"remove","id":"a"}]}`,
-		"echoed session_id":          `{"action":"update","session_id":"session-1","expected_revision":0,"operations":[{"op":"remove","id":"a"}]}`,
-		"uppercase action":           `{"action":"UPDATE","expected_revision":0,"operations":[{"op":"remove","id":"a"}]}`,
-		"uppercase op":               `{"action":"update","expected_revision":0,"operations":[{"op":"REMOVE","id":"a"}]}`,
-		"uppercase status":           `{"action":"update","expected_revision":0,"operations":[{"op":"add","id":"a","text":"t","status":"PENDING"}]}`,
-		"echoed revision with get":   `{"action":"get","session_id":"session-1","expected_revision":0}`,
-		"quoted revision and echoes": `{"action":"update","session_id":"s","expected_revision":"2","operations":[{"op":"SET_STATUS","id":"a","status":"COMPLETED"}]}`,
+		"quoted revision":            `{"action":"update","expectedRevision":"7","operations":[{"op":"remove","id":"a"}]}`,
+		"echoed session_id":          `{"action":"update","sessionId":"session-1","expectedRevision":0,"operations":[{"op":"remove","id":"a"}]}`,
+		"uppercase action":           `{"action":"UPDATE","expectedRevision":0,"operations":[{"op":"remove","id":"a"}]}`,
+		"uppercase op":               `{"action":"update","expectedRevision":0,"operations":[{"op":"REMOVE","id":"a"}]}`,
+		"uppercase status":           `{"action":"update","expectedRevision":0,"operations":[{"op":"add","id":"a","text":"t","status":"PENDING"}]}`,
+		"echoed revision with get":   `{"action":"get","sessionId":"session-1","expectedRevision":0}`,
+		"quoted revision and echoes": `{"action":"update","sessionId":"s","expectedRevision":"2","operations":[{"op":"SET_STATUS","id":"a","status":"COMPLETED"}]}`,
 	}
 	for name, args := range calls {
 		if err := validator.Validate(normalizeThroughCapability(t, args)); err != nil {
@@ -82,13 +82,13 @@ func TestTodoCapabilityStillRejectsGenuineMisuse(t *testing.T) {
 		"missing action":            `{}`,
 		"unknown action":            `{"action":"delete"}`,
 		"update without revision":   `{"action":"update","operations":[{"op":"remove","id":"a"}]}`,
-		"update without operations": `{"action":"update","expected_revision":0}`,
-		"update with no operations": `{"action":"update","expected_revision":0,"operations":[]}`,
-		"non-numeric revision":      `{"action":"update","expected_revision":"abc","operations":[{"op":"remove","id":"a"}]}`,
-		"negative revision":         `{"action":"update","expected_revision":-1,"operations":[{"op":"remove","id":"a"}]}`,
-		"unknown op":                `{"action":"update","expected_revision":0,"operations":[{"op":"nope","id":"a"}]}`,
-		"unknown status":            `{"action":"update","expected_revision":0,"operations":[{"op":"add","id":"a","text":"t","status":"nope"}]}`,
-		"operation without op":      `{"action":"update","expected_revision":0,"operations":[{"id":"a"}]}`,
+		"update without operations": `{"action":"update","expectedRevision":0}`,
+		"update with no operations": `{"action":"update","expectedRevision":0,"operations":[]}`,
+		"non-numeric revision":      `{"action":"update","expectedRevision":"abc","operations":[{"op":"remove","id":"a"}]}`,
+		"negative revision":         `{"action":"update","expectedRevision":-1,"operations":[{"op":"remove","id":"a"}]}`,
+		"unknown op":                `{"action":"update","expectedRevision":0,"operations":[{"op":"nope","id":"a"}]}`,
+		"unknown status":            `{"action":"update","expectedRevision":0,"operations":[{"op":"add","id":"a","text":"t","status":"nope"}]}`,
+		"operation without op":      `{"action":"update","expectedRevision":0,"operations":[{"id":"a"}]}`,
 		"unknown top-level key":     `{"action":"get","unexpected":1}`,
 	}
 	for name, args := range calls {
@@ -134,7 +134,7 @@ func TestTodoPermissionDetailDescribesTaskPatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := NewTodo(store)
-	detail := handler.(todoHandler).PermissionDetail(json.RawMessage(`{"action":"update","expected_revision":3,"operations":[{"op":"remove","id":"a"},{"op":"remove","id":"b"}]}`))
+	detail := handler.(todoHandler).PermissionDetail(json.RawMessage(`{"action":"update","expectedRevision":3,"operations":[{"op":"remove","id":"a"},{"op":"remove","id":"b"}]}`))
 	if !strings.Contains(detail, "2 task operations") || !strings.Contains(detail, "revision 3") {
 		t.Fatalf("permission detail = %q", detail)
 	}

@@ -7,19 +7,19 @@ import (
 
 func TestNormalizeArgumentsCanonicalizesQuotedRevision(t *testing.T) {
 	normalized := (taskArgumentNormalizer{}).NormalizeArguments(
-		json.RawMessage(`{"action":"update","expected_revision":"7","operations":[{"op":"remove","id":"a"}]}`),
+		json.RawMessage(`{"action":"update","expectedRevision":"7","operations":[{"op":"remove","id":"a"}]}`),
 	)
 	var payload map[string]any
 	if err := json.Unmarshal(normalized, &payload); err != nil {
 		t.Fatalf("normalized payload is not JSON: %v (%s)", err, normalized)
 	}
-	if got, ok := payload["expected_revision"].(float64); !ok || got != 7 {
-		t.Fatalf("expected_revision = %#v, want numeric 7", payload["expected_revision"])
+	if got, ok := payload["expectedRevision"].(float64); !ok || got != 7 {
+		t.Fatalf("expectedRevision = %#v, want numeric 7", payload["expectedRevision"])
 	}
 }
 
 func TestNormalizeArgumentsLeavesCanonicalPayloadAlone(t *testing.T) {
-	original := `{"action":"update","expected_revision":3,"operations":[{"op":"remove","id":"a"}]}`
+	original := `{"action":"update","expectedRevision":3,"operations":[{"op":"remove","id":"a"}]}`
 	if normalized := (taskArgumentNormalizer{}).NormalizeArguments(json.RawMessage(original)); normalized != nil {
 		t.Fatalf("normalizer rewrote canonical payload: %s", normalized)
 	}
@@ -27,7 +27,7 @@ func TestNormalizeArgumentsLeavesCanonicalPayloadAlone(t *testing.T) {
 
 func TestNormalizeArgumentsCanonicalizesUppercaseEnums(t *testing.T) {
 	normalized := (taskArgumentNormalizer{}).NormalizeArguments(
-		json.RawMessage(`{"action":"update","expected_revision":0,"operations":[{"op":"ADD","id":"a","text":"t","status":"PENDING"}]}`),
+		json.RawMessage(`{"action":"update","expectedRevision":0,"operations":[{"op":"ADD","id":"a","text":"t","status":"PENDING"}]}`),
 	)
 	var payload struct {
 		Operations []struct {
@@ -45,10 +45,10 @@ func TestNormalizeArgumentsCanonicalizesUppercaseEnums(t *testing.T) {
 
 func TestNormalizeArgumentsPreservesGenuineTypeErrors(t *testing.T) {
 	cases := map[string]string{
-		"non-numeric revision": `{"action":"update","expected_revision":"abc","operations":[{"op":"remove","id":"a"}]}`,
-		"negative revision":    `{"action":"update","expected_revision":"-1","operations":[{"op":"remove","id":"a"}]}`,
-		"unknown op":           `{"action":"update","expected_revision":0,"operations":[{"op":"nope","id":"a"}]}`,
-		"unknown status":       `{"action":"update","expected_revision":0,"operations":[{"op":"add","id":"a","text":"t","status":"nope"}]}`,
+		"non-numeric revision": `{"action":"update","expectedRevision":"abc","operations":[{"op":"remove","id":"a"}]}`,
+		"negative revision":    `{"action":"update","expectedRevision":"-1","operations":[{"op":"remove","id":"a"}]}`,
+		"unknown op":           `{"action":"update","expectedRevision":0,"operations":[{"op":"nope","id":"a"}]}`,
+		"unknown status":       `{"action":"update","expectedRevision":0,"operations":[{"op":"add","id":"a","text":"t","status":"nope"}]}`,
 	}
 	for name, args := range cases {
 		if normalized := (taskArgumentNormalizer{}).NormalizeArguments(json.RawMessage(args)); normalized != nil {

@@ -27,31 +27,14 @@ func (in *searchReplaceInput) UnmarshalJSON(data []byte) error {
 	type alias searchReplaceInput
 	var aux struct {
 		alias
-		LegacyFilePath   string `json:"file_path"`
-		PathAlias        string `json:"path"`
-		LegacyOldString  string `json:"old_string"`
-		LegacyNewString  string `json:"new_string"`
-		LegacyReplaceAll bool   `json:"replace_all"`
+		PathAlias string `json:"path"`
 	}
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 	*in = searchReplaceInput(aux.alias)
 	if in.FilePath == "" {
-		if aux.LegacyFilePath != "" {
-			in.FilePath = aux.LegacyFilePath
-		} else {
-			in.FilePath = aux.PathAlias
-		}
-	}
-	if in.OldString == "" {
-		in.OldString = aux.LegacyOldString
-	}
-	if in.NewString == "" {
-		in.NewString = aux.LegacyNewString
-	}
-	if !in.ReplaceAll {
-		in.ReplaceAll = aux.LegacyReplaceAll
+		in.FilePath = aux.PathAlias
 	}
 	return nil
 }
@@ -81,10 +64,7 @@ func (searchReplaceHandler) Definition() tool.Definition {
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyContextual, CheckpointPolicy: tool.CheckpointPolicyRequired, Boundary: tool.BoundaryPolicyWorkspaceWrite},
 		PermissionDetailKey: "filePath",
 		InputAliases: map[string][]string{
-			"filePath":   {"file_path", "path", "filepath"},
-			"oldString":  {"old_string"},
-			"newString":  {"new_string"},
-			"replaceAll": {"replace_all"},
+			"filePath": {"path", "filepath"},
 		},
 		InputSchema: map[string]any{
 			"type": "object",
@@ -113,10 +93,10 @@ func (h searchReplaceHandler) Execute(ctx context.Context, call tool.Call) (tool
 	}
 	input.FilePath = strings.TrimSpace(input.FilePath)
 	if input.FilePath == "" {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "edit replace file_path is required")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "edit replace filePath is required")
 	}
 	if input.OldString == input.NewString {
-		return tool.Result{}, fmt.Errorf("edit replace old_string and new_string must differ")
+		return tool.Result{}, fmt.Errorf("edit replace oldString and newString must differ")
 	}
 	resolvedPath, err := h.workspace.Resolve(ctx, input.FilePath)
 	if err != nil {
@@ -155,10 +135,10 @@ func (h searchReplaceHandler) Execute(ctx context.Context, call tool.Call) (tool
 	content := string(contents)
 	occurrences := strings.Count(content, input.OldString)
 	if occurrences == 0 {
-		return tool.Result{}, fmt.Errorf("old_string was not found in %q", input.FilePath)
+		return tool.Result{}, fmt.Errorf("oldString was not found in %q", input.FilePath)
 	}
 	if occurrences > 1 && !input.ReplaceAll {
-		return tool.Result{}, fmt.Errorf("old_string matched %d locations; use replace_all for multiple matches", occurrences)
+		return tool.Result{}, fmt.Errorf("oldString matched %d locations; use replaceAll for multiple matches", occurrences)
 	}
 	updated := strings.Replace(content, input.OldString, input.NewString, 1)
 	if input.ReplaceAll {

@@ -12,7 +12,7 @@ import (
 )
 
 func todoPatchArgs(revision uint64, operations ...map[string]any) json.RawMessage {
-	payload, _ := json.Marshal(map[string]any{"expected_revision": revision, "operations": operations})
+	payload, _ := json.Marshal(map[string]any{"expectedRevision": revision, "operations": operations})
 	return payload
 }
 
@@ -233,7 +233,7 @@ func TestUpdateTodoRequiresExpectedRevisionAndOperations(t *testing.T) {
 	h := newUpdateTodo(store)
 	for _, args := range []json.RawMessage{
 		json.RawMessage(`{"operations":[{"op":"add","id":"a","text":"a","status":"pending"}]}`),
-		json.RawMessage(`{"expected_revision":0,"operations":[]}`),
+		json.RawMessage(`{"expectedRevision":0,"operations":[]}`),
 	} {
 		call, _ := tool.NewCall("todo-invalid", "todo", args)
 		_, err := h.Execute(context.Background(), call)
@@ -248,8 +248,8 @@ func TestUpdateTodoRejectsLegacySnapshotAndUnknownFields(t *testing.T) {
 	store, _ := tododomain.NewStore(nil)
 	h := newUpdateTodo(store)
 	for _, args := range []json.RawMessage{
-		json.RawMessage(`{"expected_revision":0,"items":[]}`),
-		json.RawMessage(`{"expected_revision":0,"operations":[{"op":"add","id":"a","text":"a","status":"pending","banana":true}]}`),
+		json.RawMessage(`{"expectedRevision":0,"items":[]}`),
+		json.RawMessage(`{"expectedRevision":0,"operations":[{"op":"add","id":"a","text":"a","status":"pending","banana":true}]}`),
 	} {
 		call, _ := tool.NewCall("todo-legacy", "todo", args)
 		if _, err := h.Execute(context.Background(), call); err == nil {
