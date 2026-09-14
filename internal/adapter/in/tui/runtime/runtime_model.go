@@ -192,6 +192,11 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	spin.Spinner = spinner.Dot
 	spin.Style = brandStyle
 	reducedMotion := envconfig.Bool(envconfig.ReducedMotion)
+	iconMode, err := tuiicon.ParseMode(envconfig.Value(envconfig.Icons))
+	if err != nil {
+		iconMode = tuiicon.ModeAuto
+	}
+	resolvedIcons := tuiicon.Resolve(iconMode, true)
 	pane := viewport.New(viewport.WithWidth(defaultBubbleWidth), viewport.WithHeight(defaultBubbleHeight-6))
 	disableViewportKeys(&pane)
 	transcriptPane := viewport.New(viewport.WithWidth(defaultBubbleWidth-8), viewport.WithHeight(defaultBubbleHeight-8))
@@ -217,7 +222,7 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 			keys:          newBubbleKeyMap(),
 			panes:         paneState{bottom: bottom, transcript: transcriptPane},
 			reducedMotion: reducedMotion,
-			icons:         tuiicon.Unicode,
+			icons:         resolvedIcons,
 			layout:        layoutState{width: defaultBubbleWidth, height: defaultBubbleHeight},
 		},
 		conversationModelState: conversationModelState{
