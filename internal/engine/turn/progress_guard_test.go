@@ -14,20 +14,12 @@ import (
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
-func TestLoopForcesSynthesisAfterRepeatedNoProgressRead(t *testing.T) {
+func TestLoopForcesSynthesisAfterSustainedNoProgressRead(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
-				ID: "read-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`),
-			}},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
-		}},
-		{events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
-				ID: "read-2", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`),
-			}},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
-		}},
+		{events: repeatedReadEvents("read-1")},
+		{events: repeatedReadEvents("read-2")},
+		{events: repeatedReadEvents("read-3")},
+		{events: repeatedReadEvents("read-4")},
 		{events: []sdk.Event{
 			{Kind: sdk.EventTextDelta, Text: "I already have the file contents."},
 			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
@@ -44,23 +36,25 @@ func TestLoopForcesSynthesisAfterRepeatedNoProgressRead(t *testing.T) {
 	if got, want := len(handler.calls), 2; got != want {
 		t.Fatalf("handler calls = %d, want %d", got, want)
 	}
-	if got, want := result.Rounds, 3; got != want {
+	if got, want := result.Rounds, 5; got != want {
 		t.Fatalf("rounds = %d, want %d", got, want)
 	}
-	if got := len(client.requests[2].Tools); got != 0 {
+	if got := len(client.requests[4].Tools); got != 0 {
 		t.Fatalf("synthesis round tools = %d, want 0", got)
 	}
-	last := client.requests[2].Messages[len(client.requests[2].Messages)-1]
+	last := client.requests[4].Messages[len(client.requests[4].Messages)-1]
 	if last.Role != model.RoleSystem || last.Content != NoProgressPrompt {
 		t.Fatalf("synthesis prompt = %#v, want NoProgressPrompt", last)
 	}
 }
 
-func TestLoopIgnoresToolCallAfterNoProgressDetection(t *testing.T) {
+func TestLoopIgnoresToolCallAfterSustainedNoProgressDetection(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: repeatedReadEvents("read-1")},
 		{events: repeatedReadEvents("read-2")},
 		{events: repeatedReadEvents("read-3")},
+		{events: repeatedReadEvents("read-4")},
+		{events: repeatedReadEvents("read-5")},
 	}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow)
 
@@ -81,6 +75,65 @@ func TestLoopIgnoresToolCallAfterNoProgressDetection(t *testing.T) {
 	}
 }
 
+func TestProgressGuardDefersSynthesisWhileExactCallIsSuppressed(t *testing.T) {
+	guard := newProgressGuard([]tool.Definition{{Name: "read", Kind: tool.KindRead}}, 2)
+	call := tool.Call{ID: "r1", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)}
+	first := executedCall{call: call, result: tool.Result{CallID: call.ID, ToolName: call.Name, Output: "same"}}
+	if stalled, err := guard.observeRound([]executedCall{first}); err != nil || stalled {
+		t.Fatalf("first read stalled=%v err=%v", stalled, err)
+	}
+	call.ID = "r2"
+	second := executedCall{call: call, result: tool.Result{CallID: call.ID, ToolName: call.Name, Output: "same"}}
+	if stalled, err := guard.observeRound([]executedCall{second}); err != nil || stalled {
+		t.Fatalf("second read escalated=%v err=%v, want recovery window", stalled, err)
+	}
+	for i := 3; i <= 4; i++ {
+		call.ID = fmt.Sprintf("r%d", i)
+		suppressed, err := guard.suppress(call)
+		if err != nil || suppressed == nil {
+			t.Fatalf("suppressed read %d = %#v err=%v", i, suppressed, err)
+		}
+		escalated, err := guard.observeRound([]executedCall{*suppressed})
+		if err != nil {
+			t.Fatalf("observe suppressed read %d: %v", i, err)
+		}
+		want := i == 4
+		if escalated != want {
+			t.Fatalf("suppressed read %d escalated=%v, want %v", i, escalated, want)
+		}
+	}
+}
+
+func TestProgressGuardDifferentEvidenceResetsSynthesisEscalation(t *testing.T) {
+	guard := newProgressGuard([]tool.Definition{
+		{Name: "read", Kind: tool.KindRead},
+		{Name: "grep", Kind: tool.KindGrep},
+	}, 2)
+	read := tool.Call{ID: "r1", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)}
+	first := executedCall{call: read, result: tool.Result{CallID: read.ID, ToolName: read.Name, Output: "same"}}
+	_, _ = guard.observeRound([]executedCall{first})
+	read.ID = "r2"
+	second := executedCall{call: read, result: tool.Result{CallID: read.ID, ToolName: read.Name, Output: "same"}}
+	if escalated, err := guard.observeRound([]executedCall{second}); err != nil || escalated {
+		t.Fatalf("second read escalated=%v err=%v", escalated, err)
+	}
+	grep := executedCall{
+		call:   tool.Call{ID: "g1", Name: "grep", Arguments: json.RawMessage(`{"pattern":"TODO"}`)},
+		result: tool.Result{CallID: "g1", ToolName: "grep", Output: "new evidence"},
+	}
+	if escalated, err := guard.observeRound([]executedCall{grep}); err != nil || escalated {
+		t.Fatalf("different evidence escalated=%v err=%v", escalated, err)
+	}
+	read.ID = "r3"
+	suppressed, err := guard.suppress(read)
+	if err != nil || suppressed == nil {
+		t.Fatalf("read after alternate evidence suppress=%#v err=%v", suppressed, err)
+	}
+	if escalated, err := guard.observeRound([]executedCall{*suppressed}); err != nil || escalated {
+		t.Fatalf("stall after reset escalated=%v err=%v", escalated, err)
+	}
+}
+
 func TestProgressGuardMutationResetsReadObservation(t *testing.T) {
 	guard := newProgressGuard([]tool.Definition{
 		{Name: "read", Kind: tool.KindRead},
@@ -95,8 +148,8 @@ func TestProgressGuardMutationResetsReadObservation(t *testing.T) {
 		t.Fatalf("first read stalled=%v err=%v", stalled, err)
 	}
 	read.call.ID = "r2"
-	if stalled, err := guard.observeRound([]executedCall{read}); err != nil || !stalled {
-		t.Fatalf("second identical read stalled=%v err=%v, want stalled", stalled, err)
+	if stalled, tracked, err := guard.observe(read); err != nil || !tracked || !stalled {
+		t.Fatalf("second identical read raw stalled=%v tracked=%v err=%v", stalled, tracked, err)
 	}
 
 	write := executedCall{
@@ -133,8 +186,8 @@ func TestProgressGuardTaskMutationDoesNotResetRepositoryObservation(t *testing.T
 		t.Fatalf("task update stalled=%v err=%v", stalled, err)
 	}
 	read.call.ID = "r2"
-	if stalled, err := guard.observeRound([]executedCall{read}); err != nil || !stalled {
-		t.Fatalf("second identical read after task metadata mutation stalled=%v err=%v, want stalled", stalled, err)
+	if stalled, tracked, err := guard.observe(read); err != nil || !tracked || !stalled {
+		t.Fatalf("second identical read after task metadata mutation raw stalled=%v tracked=%v err=%v", stalled, tracked, err)
 	}
 }
 
@@ -149,8 +202,8 @@ func TestProgressGuardTracksRepeatedTaskReads(t *testing.T) {
 	}
 	call.ID = "t2"
 	second := executedCall{call: call, result: tool.Result{CallID: "t2", ToolName: "todo", Output: "task snapshot revision 1"}}
-	if stalled, err := guard.observeRound([]executedCall{second}); err != nil || !stalled {
-		t.Fatalf("second identical todo read stalled=%v err=%v, want stalled", stalled, err)
+	if stalled, tracked, err := guard.observe(second); err != nil || !tracked || !stalled {
+		t.Fatalf("second identical todo read raw stalled=%v tracked=%v err=%v", stalled, tracked, err)
 	}
 }
 
@@ -166,8 +219,8 @@ func TestProgressGuardTracksRepeatedTaskMetadataMutation(t *testing.T) {
 	}
 	call.ID = "t2"
 	second := executedCall{call: call, result: tool.Result{CallID: "t2", ToolName: "todo", Output: "task plan revision 1 · no changes"}}
-	if stalled, err := guard.observeRound([]executedCall{second}); err != nil || !stalled {
-		t.Fatalf("second identical todo update stalled=%v err=%v, want stalled", stalled, err)
+	if stalled, tracked, err := guard.observe(second); err != nil || !tracked || !stalled {
+		t.Fatalf("second identical todo update raw stalled=%v tracked=%v err=%v", stalled, tracked, err)
 	}
 }
 
@@ -204,8 +257,8 @@ func TestProgressGuardTracksRepeatedNonRetryableFailure(t *testing.T) {
 	}
 	call.ID = "r2"
 	second := executedCall{call: call, result: tool.Result{CallID: "r2", ToolName: "read", Failure: failure}}
-	if stalled, err := guard.observeRound([]executedCall{second}); err != nil || !stalled {
-		t.Fatalf("second identical failure stalled=%v err=%v, want stalled", stalled, err)
+	if stalled, tracked, err := guard.observe(second); err != nil || !tracked || !stalled {
+		t.Fatalf("second identical failure raw stalled=%v tracked=%v err=%v", stalled, tracked, err)
 	}
 }
 
@@ -306,22 +359,27 @@ func TestProgressGuardBoundsRetryableFailure(t *testing.T) {
 			Retryable: true,
 		}
 		execution := executedCall{call: call, result: tool.Result{CallID: call.ID, ToolName: call.Name, Failure: failure}}
-		stalled, err := guard.observeRound([]executedCall{execution})
+		stalled, tracked, err := guard.observe(execution)
 		if err != nil {
 			t.Fatalf("retryable failure %d error = %v", i, err)
 		}
+		if !tracked {
+			t.Fatalf("retryable failure %d was not tracked", i)
+		}
 		wantStalled := i == defaultMaxIdenticalRetryableFailures
 		if stalled != wantStalled {
-			t.Fatalf("retryable failure %d stalled=%v, want %v", i, stalled, wantStalled)
+			t.Fatalf("retryable failure %d raw stalled=%v, want %v", i, stalled, wantStalled)
 		}
 	}
 }
 
-func TestLoopForcesSynthesisAfterRetryableFailureBudget(t *testing.T) {
+func TestLoopForcesSynthesisAfterSustainedRetryableFailureBudget(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: repeatedReadEvents("retry-1")},
 		{events: repeatedReadEvents("retry-2")},
 		{events: repeatedReadEvents("retry-3")},
+		{events: repeatedReadEvents("retry-4")},
+		{events: repeatedReadEvents("retry-5")},
 		{events: []sdk.Event{
 			{Kind: sdk.EventTextDelta, Text: "The repeated read timed out, so I stopped retrying."},
 			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
@@ -345,7 +403,7 @@ func TestLoopForcesSynthesisAfterRetryableFailureBudget(t *testing.T) {
 	if got, want := handler.calls, defaultMaxIdenticalRetryableFailures; got != want {
 		t.Fatalf("handler calls = %d, want %d", got, want)
 	}
-	if got, want := result.Rounds, defaultMaxIdenticalRetryableFailures+1; got != want {
+	if got, want := result.Rounds, 6; got != want {
 		t.Fatalf("rounds = %d, want %d", got, want)
 	}
 	if got := len(client.requests[len(client.requests)-1].Tools); got != 0 {
@@ -385,6 +443,8 @@ func TestLoopSuppressesRepeatedPermissionPrompt(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: repeatedReadEvents("deny-1")},
 		{events: repeatedReadEvents("deny-2")},
+		{events: repeatedReadEvents("deny-3")},
+		{events: repeatedReadEvents("deny-4")},
 		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "The read was denied."}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
 	}}
 	handler := &recordingHandler{definition: readFileDefinition()}
@@ -420,11 +480,11 @@ func TestLoopSuppressesRepeatedPermissionPrompt(t *testing.T) {
 	if len(handler.calls) != 0 {
 		t.Fatalf("handler calls = %d, want 0", len(handler.calls))
 	}
-	if result.Rounds != 3 {
-		t.Fatalf("rounds = %d, want 3", result.Rounds)
+	if result.Rounds != 5 {
+		t.Fatalf("rounds = %d, want 5", result.Rounds)
 	}
-	if len(client.requests[2].Tools) != 0 {
-		t.Fatalf("synthesis tools = %d, want 0", len(client.requests[2].Tools))
+	if len(client.requests[4].Tools) != 0 {
+		t.Fatalf("synthesis tools = %d, want 0", len(client.requests[4].Tools))
 	}
 }
 
@@ -449,6 +509,9 @@ func TestProgressGuardSuppressesOnlyStalledCall(t *testing.T) {
 	}
 	if suppressed.result.Failure == nil || suppressed.result.Failure.Code != tool.ErrorCodeNoProgress {
 		t.Fatalf("suppressed failure = %#v", suppressed.result.Failure)
+	}
+	if suppressed.result.Failure.Diagnostic == "" {
+		t.Fatal("suppressed no-progress result did not tell the model to change strategy")
 	}
 	live := tool.Call{ID: "live-1", Name: "grep", Arguments: json.RawMessage(`{"pattern":"TODO"}`)}
 	allowed, err := guard.suppress(live)
@@ -480,8 +543,8 @@ func TestProgressGuardExplicitReadOnlyToolDoesNotResetEpoch(t *testing.T) {
 		t.Fatalf("inspect stalled=%v err=%v", stalled, err)
 	}
 	read.call.ID = "r2"
-	if stalled, err := guard.observeRound([]executedCall{read}); err != nil || !stalled {
-		t.Fatalf("second read stalled=%v err=%v, want stalled without epoch reset", stalled, err)
+	if stalled, tracked, err := guard.observe(read); err != nil || !tracked || !stalled {
+		t.Fatalf("second read raw stalled=%v tracked=%v err=%v", stalled, tracked, err)
 	}
 }
 
@@ -499,8 +562,8 @@ func TestProgressGuardReadOnlyBashDoesNotResetEpoch(t *testing.T) {
 		t.Fatalf("bash stalled=%v err=%v", stalled, err)
 	}
 	read.call.ID = "r2"
-	if stalled, err := guard.observeRound([]executedCall{read}); err != nil || !stalled {
-		t.Fatalf("second read stalled=%v err=%v, want stalled", stalled, err)
+	if stalled, tracked, err := guard.observe(read); err != nil || !tracked || !stalled {
+		t.Fatalf("second read raw stalled=%v tracked=%v err=%v", stalled, tracked, err)
 	}
 }
 
