@@ -307,3 +307,12 @@ func (m *bubbleModel) openTodoPane() tea.Cmd {
 	m.requestRelayout()
 	return m.reloadTodoSnapshotCmd()
 }
+
+func (m *bubbleModel) toggleTodoPane() tea.Cmd {
+	if m.panes.bottom.has(todoInspectViewID) {
+		m.panes.bottom.remove(todoInspectViewID)
+		m.requestRelayout()
+		return nil
+	}
+	return m.openTodoPane()
+}
