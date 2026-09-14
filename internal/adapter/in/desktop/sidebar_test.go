@@ -35,3 +35,25 @@ func TestFilterSessionsEmptyQueryPreservesAllSessions(t *testing.T) {
 		t.Fatal("expected filter to return an independent slice")
 	}
 }
+
+func TestBuildSidebarRowsOrdersWorkspacesAndNewestSessionFirst(t *testing.T) {
+	sessions := []desktopstate.SessionState{
+		{ID: "workspace-a-20260914-090000", WorkspaceKey: "a", WorkspaceName: "zeta"},
+		{ID: "workspace-b-20260914-110000", WorkspaceKey: "b", WorkspaceName: "alpha"},
+		{ID: "workspace-b-20260914-100000", WorkspaceKey: "b", WorkspaceName: "alpha"},
+	}
+
+	rows := buildSidebarRows(sessions)
+	if len(rows) != 5 {
+		t.Fatalf("expected 5 rows, got %d", len(rows))
+	}
+	if rows[0].Kind != sidebarWorkspaceRow || rows[0].WorkspaceName != "alpha" {
+		t.Fatalf("expected alpha workspace first, got %#v", rows[0])
+	}
+	if rows[1].SessionID != "workspace-b-20260914-110000" || rows[2].SessionID != "workspace-b-20260914-100000" {
+		t.Fatalf("expected newest alpha session first, got %#v / %#v", rows[1], rows[2])
+	}
+	if rows[3].Kind != sidebarWorkspaceRow || rows[3].WorkspaceName != "zeta" {
+		t.Fatalf("expected zeta workspace second, got %#v", rows[3])
+	}
+}
