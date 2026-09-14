@@ -6,12 +6,17 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 const (
 	defaultMaxIdenticalNoProgressResults = 2
 	defaultMaxIdenticalRetryableFailures = 3
+	// Exact-call suppression should not immediately terminate every tool path.
+	// Give the model a bounded number of consecutive stalled rounds to consume
+	// the synthetic no-progress result and choose a materially different strategy.
+	defaultMaxConsecutiveStalledRounds = runtimepolicy.TurnMaxConsecutiveStalledRounds
 )
 
 type progressObservation struct {
@@ -25,11 +30,13 @@ type progressObservation struct {
 }
 
 type progressGuard struct {
-	maxIdenticalResults  int
-	maxRetryableFailures int
-	epoch                uint64
-	observations         map[[sha256.Size]byte]progressObservation
-	definitions          map[string]tool.Definition
+	maxIdenticalResults      int
+	maxRetryableFailures     int
+	maxConsecutiveStalled    int
+	consecutiveStalledRounds int
+	epoch                    uint64
+	observations             map[[sha256.Size]byte]progressObservation
+	definitions              map[string]tool.Definition
 }
 
 func newProgressGuard(definitions []tool.Definition, maxIdenticalResults int) *progressGuard {
@@ -38,16 +45,20 @@ func newProgressGuard(definitions []tool.Definition, maxIdenticalResults int) *p
 		byName[definition.Name] = definition
 	}
 	return &progressGuard{
-		maxIdenticalResults:  maxIdenticalResults,
-		maxRetryableFailures: defaultMaxIdenticalRetryableFailures,
-		observations:         make(map[[sha256.Size]byte]progressObservation),
-		definitions:          byName,
+		maxIdenticalResults:   maxIdenticalResults,
+		maxRetryableFailures:  defaultMaxIdenticalRetryableFailures,
+		maxConsecutiveStalled: defaultMaxConsecutiveStalledRounds,
+		observations:          make(map[[sha256.Size]byte]progressObservation),
+		definitions:           byName,
 	}
 }
 
 func (g *progressGuard) observeRound(executions []executedCall) (bool, error) {
-	if g == nil || g.maxIdenticalResults <= 0 || len(executions) == 0 {
+	if g == nil || g.maxIdenticalResults <= 0 {
 		return false, nil
+	}
+	if len(executions) == 0 {
+		return g.shouldSynthesize(false), nil
 	}
 
 	allStalled := true
@@ -68,7 +79,45 @@ func (g *progressGuard) observeRound(executions []executedCall) (bool, error) {
 			allStalled = false
 		}
 	}
-	return tracked && allStalled, nil
+	return g.shouldSynthesize(tracked && allStalled), nil
+}
+
+// shouldSynthesize escalates exact-call no-progress detection to turn-level
+// text-only synthesis only after several consecutive fully stalled rounds.
+// A round that produces any new evidence or state resets the escalation window.
+// This keeps suppression local to the offending fingerprint long enough for the
+// model to switch tools or arguments instead of losing the entire tool surface.
+func (g *progressGuard) shouldSynthesize(stalledRound bool) bool {
+	if g == nil {
+		return stalledRound
+	}
+	if !stalledRound {
+		g.consecutiveStalledRounds = 0
+		return false
+	}
+	g.consecutiveStalledRounds++
+	if g.maxConsecutiveStalled <= 0 {
+		return true
+	}
+	return g.consecutiveStalledRounds >= g.maxConsecutiveStalled
+}
+
+func (g *progressGuard) stalledRoundCount() int {
+	if g == nil {
+		return 0
+	}
+	return g.consecutiveStalledRounds
+}
+
+// observeExternalProgress invalidates exact-call observations when new runtime
+// context arrives. Delegated work can mutate or inspect state outside the parent
+// tool dispatcher, so results observed before that boundary may be stale.
+func (g *progressGuard) observeExternalProgress() {
+	if g == nil {
+		return
+	}
+	g.epoch++
+	g.consecutiveStalledRounds = 0
 }
 
 func (g *progressGuard) observe(execution executedCall) (stalled bool, tracked bool, err error) {
@@ -153,8 +202,9 @@ func (g *progressGuard) suppress(call tool.Call) (*executedCall, error) {
 	failure := cloneProgressFailure(observation.failurePayload)
 	if failure == nil {
 		failure = &tool.Failure{
-			Code:    tool.ErrorCodeNoProgress,
-			Message: "identical tool call was suppressed after repeated no-progress results",
+			Code:       tool.ErrorCodeNoProgress,
+			Message:    "identical tool call was suppressed after repeated no-progress results",
+			Diagnostic: "choose materially different arguments or another tool instead of repeating this operation",
 		}
 	}
 	result := tool.Result{

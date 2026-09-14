@@ -170,6 +170,8 @@ func TestE2ETurnLoopForcesSynthesisAfterRepeatedRead(t *testing.T) {
 	server.SetupWorkspaceConfig(t, home)
 	server.AddToolCallResponse("call_read_loop_1", "read", `{"path":"hello.txt"}`)
 	server.AddToolCallResponse("call_read_loop_2", "read", `{"path":"hello.txt"}`)
+	server.AddToolCallResponse("call_read_loop_3", "read", `{"path":"hello.txt"}`)
+	server.AddToolCallResponse("call_read_loop_4", "read", `{"path":"hello.txt"}`)
 	server.AddTextResponse("I already have enough information from the repeated read.")
 
 	res := runProton(t, runOptions{
@@ -185,17 +187,22 @@ func TestE2ETurnLoopForcesSynthesisAfterRepeatedRead(t *testing.T) {
 	}
 
 	requests := server.Requests()
-	if got, want := len(requests), 3; got != want {
+	if got, want := len(requests), 5; got != want {
 		t.Fatalf("model requests = %d, want %d", got, want)
 	}
-	if requestToolCount(requests[0]) == 0 || requestToolCount(requests[1]) == 0 {
-		t.Fatalf("tool-enabled requests unexpectedly omitted tools: %#v", requests)
+	for i := 0; i < 4; i++ {
+		if got := requestToolCount(requests[i]); got == 0 {
+			t.Fatalf("recovery request %d unexpectedly omitted tools", i+1)
+		}
 	}
-	if got := requestToolCount(requests[2]); got != 0 {
+	if got := requestToolCount(requests[4]); got != 0 {
 		t.Fatalf("forced synthesis request tools = %d, want 0", got)
 	}
-	if !requestMessagesContain(requests[2], "TOOL LOOP DETECTED") {
-		t.Fatalf("forced synthesis request missing no-progress prompt: %#v", requests[2]["messages"])
+	if !requestMessagesContain(requests[3], `"code":"no_progress"`) {
+		t.Fatalf("first recovery request missing suppressed no-progress result: %#v", requests[3]["messages"])
+	}
+	if !requestMessagesContain(requests[4], "TOOL LOOP DETECTED") {
+		t.Fatalf("forced synthesis request missing no-progress prompt: %#v", requests[4]["messages"])
 	}
 }
 
@@ -208,6 +215,8 @@ func TestE2ETurnLoopIgnoresRepeatedToolAfterLoopDetected(t *testing.T) {
 	server.AddToolCallResponse("call_read_ignore_1", "read", `{"path":"hello.txt"}`)
 	server.AddToolCallResponse("call_read_ignore_2", "read", `{"path":"hello.txt"}`)
 	server.AddToolCallResponse("call_read_ignore_3", "read", `{"path":"hello.txt"}`)
+	server.AddToolCallResponse("call_read_ignore_4", "read", `{"path":"hello.txt"}`)
+	server.AddToolCallResponse("call_read_ignore_5", "read", `{"path":"hello.txt"}`)
 
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "Keep reading hello.txt"},
@@ -221,10 +230,15 @@ func TestE2ETurnLoopIgnoresRepeatedToolAfterLoopDetected(t *testing.T) {
 		t.Fatalf("stdout missing loop fallback: %s", res.stdout)
 	}
 	requests := server.Requests()
-	if got, want := len(requests), 3; got != want {
-		t.Fatalf("model requests = %d, want %d; provider should not receive a fourth retry", got, want)
+	if got, want := len(requests), 5; got != want {
+		t.Fatalf("model requests = %d, want %d; provider should not receive a sixth retry", got, want)
 	}
-	if got := requestToolCount(requests[2]); got != 0 {
+	for i := 0; i < 4; i++ {
+		if got := requestToolCount(requests[i]); got == 0 {
+			t.Fatalf("recovery request %d unexpectedly omitted tools", i+1)
+		}
+	}
+	if got := requestToolCount(requests[4]); got != 0 {
 		t.Fatalf("no-progress request tools = %d, want 0", got)
 	}
 }

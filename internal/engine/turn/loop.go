@@ -424,6 +424,8 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				return l.failWithResult(ctx, sink, round, checkpoint(), fmt.Errorf("drain runtime context: %w", runtimeErr))
 			}
 			if len(runtimeMessages) > 0 {
+				progress.observeExternalProgress()
+				forceNoProgressSynthesis = false
 				history = append(history, model.EnsureMessageIDs(runtimeMessages)...)
 				slog.DebugContext(ctx, "turn runtime context injected", "round", round, "message_count", len(runtimeMessages))
 			}
@@ -557,6 +559,8 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			}
 			if deferred {
 				if len(runtimeMessages) > 0 {
+					progress.observeExternalProgress()
+					forceNoProgressSynthesis = false
 					history = append(history, runtimeMessages...)
 				}
 				slog.DebugContext(ctx, "turn final synthesis deferred for runtime context", "round", round, "message_count", len(runtimeMessages))
