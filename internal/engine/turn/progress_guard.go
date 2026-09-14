@@ -109,6 +109,17 @@ func (g *progressGuard) stalledRoundCount() int {
 	return g.consecutiveStalledRounds
 }
 
+// observeExternalProgress invalidates exact-call observations when new runtime
+// context arrives. Delegated work can mutate or inspect state outside the parent
+// tool dispatcher, so results observed before that boundary may be stale.
+func (g *progressGuard) observeExternalProgress() {
+	if g == nil {
+		return
+	}
+	g.epoch++
+	g.consecutiveStalledRounds = 0
+}
+
 func (g *progressGuard) observe(execution executedCall) (stalled bool, tracked bool, err error) {
 	definition, ok := g.definitions[execution.call.Name]
 	if !ok {
