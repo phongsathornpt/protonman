@@ -19,6 +19,17 @@ type MetaCarrier struct {
 	Meta Meta `json:"_meta,omitempty"`
 }
 
+func cloneMeta(meta Meta) Meta {
+	if len(meta) == 0 {
+		return nil
+	}
+	out := make(Meta, len(meta))
+	for key, value := range meta {
+		out[key] = append(json.RawMessage(nil), value...)
+	}
+	return out
+}
+
 // StableFeature describes one stable ACP surface tracked by the conformance
 // suite. Supported means Protonman implements the feature; Advertised means it
 // is exposed through negotiated capabilities where ACP defines one.
@@ -42,6 +53,7 @@ var StableV1Coverage = []StableFeature{
 	{Name: "session/list", Supported: true, Advertised: true},
 	{Name: "session/delete", Supported: true, Advertised: true},
 	{Name: "session/close", Supported: true, Advertised: true},
+	{Name: "session/additional_directories", Supported: false, Advertised: false},
 	{Name: "session/configuration", Supported: false, Advertised: false},
 	{Name: "session/usage", Supported: false, Advertised: false},
 	{Name: "session/info_update", Supported: false, Advertised: false},
