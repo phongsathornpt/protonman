@@ -7,7 +7,7 @@ import (
 
 // IconSet is the semantic icon catalog used by the TUI. Prefix glyphs include
 // their trailing space so every profile preserves the same layout contract.
-// Brand is the only bare mark because callers compose its spacing.
+// Brand and Status are bare marks because callers compose their spacing.
 type IconSet struct {
 	Composer    string
 	Prompt      string
@@ -29,6 +29,7 @@ type IconSet struct {
 	TodoPending string
 	TodoActive  string
 	Brand       string
+	Status      string
 }
 
 // IconMode selects the terminal glyph capability profile.
@@ -65,6 +66,7 @@ const (
 	UnicodeTodoPending = "○ "
 	UnicodeTodoActive  = "● "
 	UnicodeBrand       = "◆"
+	UnicodeStatus      = "◌"
 )
 
 // ASCII profile is safe for dumb terminals, redirected output, and logs.
@@ -89,6 +91,7 @@ const (
 	ASCIITodoPending = "o "
 	ASCIITodoActive  = "* "
 	ASCIIBrand       = "*"
+	ASCIIStatus      = "o"
 )
 
 // Nerd Font profile uses Codicons from Nerd Fonts v3. Protonman supports the
@@ -114,6 +117,7 @@ const (
 	NerdTodoPending = "\ueabc " // nf-cod-circle
 	NerdTodoActive  = "\uea71 " // nf-cod-circle_filled
 	NerdBrand       = "\ueb44"  // nf-cod-rocket
+	NerdStatus      = "\ueabc"  // nf-cod-circle
 )
 
 var (
@@ -122,21 +126,24 @@ var (
 		ToolSuccess: UnicodeToolSuccess, ToolError: UnicodeToolError, ToolDenied: UnicodeToolDenied,
 		Web: UnicodeWeb, Read: UnicodeRead, Dir: UnicodeDir, Search: UnicodeSearch,
 		Exec: UnicodeExec, Edit: UnicodeEdit, Skill: UnicodeSkill, Agent: UnicodeAgent, Git: UnicodeGit,
-		Generic: UnicodeGeneric, TodoPending: UnicodeTodoPending, TodoActive: UnicodeTodoActive, Brand: UnicodeBrand,
+		Generic: UnicodeGeneric, TodoPending: UnicodeTodoPending, TodoActive: UnicodeTodoActive,
+		Brand: UnicodeBrand, Status: UnicodeStatus,
 	}
 	ASCIIIcons = IconSet{
 		Composer: ASCIIComposer, Prompt: ASCIIPrompt, Mark: ASCIIMark, Tool: ASCIITool,
 		ToolSuccess: ASCIIToolSuccess, ToolError: ASCIIToolError, ToolDenied: ASCIIToolDenied,
 		Web: ASCIIWeb, Read: ASCIIRead, Dir: ASCIIDir, Search: ASCIISearch,
 		Exec: ASCIIExec, Edit: ASCIIEdit, Skill: ASCIISkill, Agent: ASCIIAgent, Git: ASCIIGit,
-		Generic: ASCIIGeneric, TodoPending: ASCIITodoPending, TodoActive: ASCIITodoActive, Brand: ASCIIBrand,
+		Generic: ASCIIGeneric, TodoPending: ASCIITodoPending, TodoActive: ASCIITodoActive,
+		Brand: ASCIIBrand, Status: ASCIIStatus,
 	}
 	NerdIcons = IconSet{
 		Composer: NerdComposer, Prompt: NerdPrompt, Mark: NerdMark, Tool: NerdTool,
 		ToolSuccess: NerdToolSuccess, ToolError: NerdToolError, ToolDenied: NerdToolDenied,
 		Web: NerdWeb, Read: NerdRead, Dir: NerdDir, Search: NerdSearch,
 		Exec: NerdExec, Edit: NerdEdit, Skill: NerdSkill, Agent: NerdAgent, Git: NerdGit,
-		Generic: NerdGeneric, TodoPending: NerdTodoPending, TodoActive: NerdTodoActive, Brand: NerdBrand,
+		Generic: NerdGeneric, TodoPending: NerdTodoPending, TodoActive: NerdTodoActive,
+		Brand: NerdBrand, Status: NerdStatus,
 	}
 )
 
