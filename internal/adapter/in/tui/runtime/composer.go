@@ -241,7 +241,7 @@ func newPrompt(hasRunner bool, reducedMotion bool) textarea.Model {
 
 func applyPromptChrome(prompt *textarea.Model, bash bool, icons tuistyle.IconSet) {
 	icons = tuistyle.OrUnicodeIcons(icons)
-	prefix := icons.Prompt
+	prefix := icons.Composer
 	accent := accentAssistant
 	if bash {
 		// Preserve the existing shell-mode affordance independently from the
