@@ -110,13 +110,7 @@ func (s *Server) dispatchSessionRuntime(ctx context.Context, request RPCRequest)
 		if err != nil {
 			return nil, true, err
 		}
-		if err := sess.SetReasoningEffort(effort); err != nil {
-			return nil, true, err
-		}
-		settings := sessionRuntimeFor(sess)
-		settings.Reasoning = reasoningSetting(effort)
-		storeSessionRuntime(sess, settings)
-		if err := sess.saveStateDetached(ctx); err != nil {
+		if err := s.setSessionReasoning(ctx, sess, effort); err != nil {
 			return nil, true, err
 		}
 		return runtimeResult(sess), true, nil
@@ -134,9 +128,9 @@ func (s *Server) dispatchSessionRuntime(ctx context.Context, request RPCRequest)
 		if err != nil {
 			return nil, true, err
 		}
-		next := sessionRuntimeFor(sess)
-		next.LowConcurrency = setting.String()
-		if err := s.reconfigureSessionRuntime(ctx, sess, next); err != nil {
+		if err := s.updateSessionRuntime(ctx, sess, func(next *SessionRuntimeSettings) {
+			next.LowConcurrency = setting.String()
+		}); err != nil {
 			return nil, true, err
 		}
 		return runtimeResult(sess), true, nil
@@ -155,10 +149,10 @@ func (s *Server) dispatchSessionRuntime(ctx context.Context, request RPCRequest)
 		if provider == "" || modelID == "" {
 			return nil, true, fmt.Errorf("provider and model are required")
 		}
-		next := sessionRuntimeFor(sess)
-		next.Provider = provider
-		next.Model = modelID
-		if err := s.reconfigureSessionRuntime(ctx, sess, next); err != nil {
+		if err := s.updateSessionRuntime(ctx, sess, func(next *SessionRuntimeSettings) {
+			next.Provider = provider
+			next.Model = modelID
+		}); err != nil {
 			return nil, true, err
 		}
 		return runtimeResult(sess), true, nil
@@ -179,17 +173,33 @@ func (s *Server) runtimeSession(sessionID string) (*Session, error) {
 	return sess, nil
 }
 
-func (s *Server) reconfigureSessionRuntime(ctx context.Context, sess *Session, next SessionRuntimeSettings) error {
+func (s *Server) setSessionReasoning(ctx context.Context, sess *Session, effort sdk.ReasoningEffort) error {
+	if !effort.Valid() {
+		return fmt.Errorf("invalid reasoning effort %q", effort)
+	}
+	sess.mu.Lock()
+	if sess.active {
+		sess.mu.Unlock()
+		return fmt.Errorf("session %q has an active prompt", sess.id)
+	}
+	clone, err := app.CloneConversationWithReasoning(sess.runner, effort, effort != sdk.ReasoningDefault)
+	if err != nil {
+		sess.mu.Unlock()
+		return err
+	}
+	sess.runner = clone
+	sess.reasoningEffort = effort
+	settings := sessionRuntimeForLocked(sess)
+	settings.Reasoning = reasoningSetting(effort)
+	storeSessionRuntime(sess, settings)
+	sess.mu.Unlock()
+	return sess.saveStateDetached(ctx)
+}
+
+func (s *Server) updateSessionRuntime(ctx context.Context, sess *Session, mutate func(*SessionRuntimeSettings)) error {
 	control, ok := sessionRuntimeControlFor(s)
 	if !ok || control.build == nil {
 		return fmt.Errorf("session runtime reconfiguration is unavailable")
-	}
-	next = normalizeSessionRuntime(next)
-	if _, err := sdk.ParseReasoningEffort(next.Reasoning); err != nil {
-		return err
-	}
-	if _, err := modelconfig.ParseLowConcurrencySetting(next.LowConcurrency); err != nil {
-		return err
 	}
 
 	sess.mu.Lock()
@@ -197,27 +207,43 @@ func (s *Server) reconfigureSessionRuntime(ctx context.Context, sess *Session, n
 		sess.mu.Unlock()
 		return fmt.Errorf("session %q has an active prompt", sess.id)
 	}
-	sess.mu.Unlock()
+	next := sessionRuntimeForLocked(sess)
+	if mutate != nil {
+		mutate(&next)
+	}
+	next = normalizeSessionRuntime(next)
+	if _, err := sdk.ParseReasoningEffort(next.Reasoning); err != nil {
+		sess.mu.Unlock()
+		return err
+	}
+	if _, err := modelconfig.ParseLowConcurrencySetting(next.LowConcurrency); err != nil {
+		sess.mu.Unlock()
+		return err
+	}
 
 	runner, err := control.build(ctx, sess.id, sess.cwd, sess.service, sess.agents, next)
 	if err != nil {
+		sess.mu.Unlock()
 		return err
 	}
 	if runner == nil {
+		sess.mu.Unlock()
 		return fmt.Errorf("runtime builder returned no conversation")
 	}
 
 	effort, _ := sdk.ParseReasoningEffort(next.Reasoning)
-	sess.mu.Lock()
-	if sess.active {
-		sess.mu.Unlock()
-		return fmt.Errorf("session %q became active while reconfiguring", sess.id)
-	}
 	sess.runner = runner
 	sess.reasoningEffort = effort
-	sess.mu.Unlock()
 	storeSessionRuntime(sess, next)
+	sess.mu.Unlock()
 	return sess.saveStateDetached(ctx)
+}
+
+func (s *Server) reconfigureSessionRuntime(ctx context.Context, sess *Session, next SessionRuntimeSettings) error {
+	next = normalizeSessionRuntime(next)
+	return s.updateSessionRuntime(ctx, sess, func(current *SessionRuntimeSettings) {
+		*current = next
+	})
 }
 
 func bindSessionRuntime(server *Server, sess *Session) {
@@ -231,7 +257,8 @@ func bindSessionRuntime(server *Server, sess *Session) {
 }
 
 func restoreSessionRuntime(ctx context.Context, server *Server, sess *Session, persisted session.State) error {
-	settings := sessionRuntimeFor(sess)
+	current := sessionRuntimeFor(sess)
+	settings := current
 	if strings.TrimSpace(persisted.ModelProvider) != "" {
 		settings.Provider = persisted.ModelProvider
 	}
@@ -246,9 +273,8 @@ func restoreSessionRuntime(ctx context.Context, server *Server, sess *Session, p
 		settings.LowConcurrency = setting.String()
 	}
 	settings.Reasoning = reasoningSetting(sess.ReasoningEffort())
-	current := sessionRuntimeFor(sess)
-	storeSessionRuntime(sess, settings)
 	if settings.Provider == current.Provider && settings.Model == current.Model && settings.LowConcurrency == current.LowConcurrency {
+		storeSessionRuntime(sess, settings)
 		return nil
 	}
 	return server.reconfigureSessionRuntime(ctx, sess, settings)
@@ -264,13 +290,19 @@ func sessionRuntimeControlFor(server *Server) (sessionRuntimeControl, bool) {
 }
 
 func sessionRuntimeFor(sess *Session) SessionRuntimeSettings {
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	return sessionRuntimeForLocked(sess)
+}
+
+func sessionRuntimeForLocked(sess *Session) SessionRuntimeSettings {
 	if value, ok := sessionRuntimeSelections.Load(sess); ok {
 		if settings, ok := value.(SessionRuntimeSettings); ok {
-			settings.Reasoning = reasoningSetting(sess.ReasoningEffort())
+			settings.Reasoning = reasoningSetting(sess.reasoningEffort)
 			return normalizeSessionRuntime(settings)
 		}
 	}
-	return SessionRuntimeSettings{Reasoning: reasoningSetting(sess.ReasoningEffort()), LowConcurrency: "auto"}
+	return SessionRuntimeSettings{Reasoning: reasoningSetting(sess.reasoningEffort), LowConcurrency: "auto"}
 }
 
 func storeSessionRuntime(sess *Session, settings SessionRuntimeSettings) {
