@@ -180,6 +180,7 @@ func (a *application) renderActiveView() {
 			a.stop.Disable()
 		}
 	})
+	a.renderSessionChrome()
 }
 
 // renderConversation intentionally excludes goal, TODO and durable memory.
