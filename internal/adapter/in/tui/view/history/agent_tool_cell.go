@@ -14,15 +14,17 @@ type AgentToolCell struct {
 	Summary string
 	Running bool
 	Spinner string
+	Icons   tuistyle.IconSet
 }
 
 func (AgentToolCell) Kind() HistoryCellKind { return HistoryCellTool }
 func (c AgentToolCell) RenderWidth(width int) []string {
+	icons := tuistyle.OrUnicodeIcons(c.Icons)
 	label := c.presentationLabel(true)
 	if c.Running {
-		return wrapStyledLines(tuistyle.ToolStyle.Render(tuistyle.GlyphAgent)+tuistyle.MutedStyle.Render(sanitizeBubbleText(label)), max(1, width))
+		return wrapStyledLines(tuistyle.ToolStyle.Render(icons.Agent)+tuistyle.MutedStyle.Render(sanitizeBubbleText(label)), max(1, width))
 	}
-	return wrapStyledLines(tuistyle.SuccessStyle.Render(tuistyle.GlyphToolSuccess)+tuistyle.MutedStyle.Render(sanitizeBubbleText(label)), max(1, width))
+	return wrapStyledLines(tuistyle.SuccessStyle.Render(icons.ToolSuccess)+tuistyle.MutedStyle.Render(sanitizeBubbleText(label)), max(1, width))
 }
 func (c AgentToolCell) presentationLabel(includeSpinner bool) string {
 	label := c.Summary
