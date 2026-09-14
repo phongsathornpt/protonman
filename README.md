@@ -97,7 +97,7 @@ cat prompt.txt | protonman --headless --output json
 protonman --acp
 
 # Run within a strict OS sandbox profile
-protonman --sandbox strict -p "Analyze local files"
+protonman --sandbox strict -p "Analyze dependencies"
 ```
 
 ---
