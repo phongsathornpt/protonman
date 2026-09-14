@@ -51,7 +51,11 @@ func (a *application) handleEvent(event acpclient.Event) {
 		Text:       text,
 	}
 
-	if raw.Update.Kind == "agent_message_chunk" {
+	switch raw.Update.Kind {
+	case "user_message_chunk":
+		a.appendTranscript(raw.SessionID, formatUserTranscript(text))
+		return
+	case "agent_message_chunk":
 		a.appendTranscript(raw.SessionID, text)
 		return
 	}
@@ -152,7 +156,7 @@ func (a *application) refreshActiveView() {
 func (a *application) renderActiveView() {
 	a.mu.Lock()
 	activeID := a.state.ActiveSessionID
-	busy := a.sessionBusyLocked(activeID)
+	promptBusy := a.sessionBusyLocked(activeID)
 	sessionChanged := activeID != a.conversationSessionID
 	a.conversationSessionID = activeID
 	transcript := ""
@@ -167,6 +171,7 @@ func (a *application) renderActiveView() {
 		}
 	}
 	a.mu.Unlock()
+	historyLoading := sessionHistoryIsLoading(a, activeID)
 
 	fyne.Do(func() {
 		followTail := sessionChanged || a.shouldFollowConversationTail()
@@ -175,12 +180,12 @@ func (a *application) renderActiveView() {
 		if followTail {
 			a.scrollConversationToBottom()
 		}
-		if activeID == "" || busy {
+		if activeID == "" || promptBusy || historyLoading {
 			a.send.Disable()
 		} else {
 			a.send.Enable()
 		}
-		if busy {
+		if promptBusy {
 			a.stop.Enable()
 		} else {
 			a.stop.Disable()
