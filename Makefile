@@ -7,6 +7,8 @@ BIN_DIR := bin
 BIN_NAME := protonman
 BINARY := $(BIN_DIR)/$(BIN_NAME)
 DESKTOP_BINARY := $(BIN_DIR)/protonman-desktop
+NERD_FONT := $(BIN_DIR)/share/fonts/SymbolsNerdFontMono-Regular.ttf
+NERD_FONT_FETCH := scripts/fetch-nerd-font.sh
 INSTALL_DIR ?= $(HOME)/.local/bin
 INSTALL_BINARY := $(INSTALL_DIR)/$(BIN_NAME)
 GO_SOURCES := $(shell find cmd internal proton-sdk -type f -name '*.go' ! -name '*_test.go')
@@ -21,12 +23,12 @@ GO_ENV := GOTMPDIR="$(GO_TMPDIR)"
 ## tui: Run Protonman TUI from the cached binary (default)
 tui: run
 
-## desktop: Build the Fyne desktop client
+## desktop: Build the Fyne desktop client and prepare bundled GUI assets
 # Linux requires the normal Fyne desktop development packages (OpenGL/X11).
-desktop: $(DESKTOP_BINARY)
+desktop: $(DESKTOP_BINARY) $(NERD_FONT)
 
 ## desktop-run: Build and run the Fyne desktop client against the local CLI
-desktop-run: $(BINARY) $(DESKTOP_BINARY)
+desktop-run: $(BINARY) $(DESKTOP_BINARY) $(NERD_FONT)
 	PROTONMAN_BINARY="$(abspath $(BINARY))" ./$(DESKTOP_BINARY)
 
 ## run: Build Protonman only when sources changed, then run it
@@ -53,6 +55,9 @@ $(BINARY): $(GO_SOURCES) go.mod go.sum Makefile $(VERSION_STAMP)
 $(DESKTOP_BINARY): $(GO_SOURCES) go.mod go.sum Makefile $(VERSION_STAMP)
 	@mkdir -p $(BIN_DIR) "$(GO_TMPDIR)"
 	$(GO_ENV) go build -tags desktop -trimpath -ldflags "$(BUILD_LDFLAGS)" -o $(DESKTOP_BINARY) ./cmd/protonman-desktop
+
+$(NERD_FONT): $(NERD_FONT_FETCH)
+	sh $(NERD_FONT_FETCH) "$@"
 
 ## install: Build from the current source tree and install into ~/.local/bin by default
 install: build
